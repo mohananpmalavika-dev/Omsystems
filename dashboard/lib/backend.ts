@@ -1,5 +1,5 @@
 import { demoBranches, demoCameras } from "./demo-data";
-import type { Branch, Camera, LiveSessionResponse } from "./types";
+import type { Branch, Camera, LiveSessionResponse, RecordingJob } from "./types";
 
 export async function listBranches(): Promise<Branch[]> {
   if (isDemoMode()) return demoBranches;
@@ -41,6 +41,18 @@ export async function startLive(cameraId: string): Promise<LiveSessionResponse> 
   );
   if (!mediaResponse.ok) throw new Error(`Media gateway returned ${mediaResponse.status}`);
   return await mediaResponse.json() as LiveSessionResponse;
+}
+
+export async function getRecording(cameraId: string): Promise<RecordingJob> {
+  if (demoMode) return { cameraId, mode: "continuous", enabled: true, status: "recording", retentionDays: 180, postRollSeconds: 30 };
+  return await (await controlFetch(`/v1/cameras/${encodeURIComponent(cameraId)}/recording`)).json() as RecordingJob;
+}
+
+export async function updateRecording(cameraId: string, job: Omit<RecordingJob, "id" | "cameraId" | "status">): Promise<RecordingJob> {
+  if (demoMode) return { cameraId, ...job, status: job.enabled ? "recording" : "disabled" };
+  return await (await controlFetch(`/v1/cameras/${encodeURIComponent(cameraId)}/recording`, {
+    method: "PUT", body: JSON.stringify(job),
+  })).json() as RecordingJob;
 }
 
 function isDemoMode() {

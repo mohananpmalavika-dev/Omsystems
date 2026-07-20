@@ -320,6 +320,32 @@ export interface ConsumedLiveSession {
   profiles: CameraProfile[];
 }
 
+export type RecordingMode = "continuous" | "motion" | "scheduled" | "event" | "manual";
+export type RecordingStatus = "recording" | "scheduled" | "idle" | "error" | "disabled";
+
+/** Configuration is owned by the control plane; the recording engine executes it independently. */
+export interface RecordingJob {
+  id: string;
+  cameraId: string;
+  mode: RecordingMode;
+  enabled: boolean;
+  status: RecordingStatus;
+  retentionDays: number;
+  schedule?: { days: number[]; start: string; end: string } | undefined;
+  postRollSeconds: number;
+  updatedAt: string;
+}
+
+export interface RecordingSegment {
+  id: string;
+  cameraId: string;
+  jobId: string;
+  startedAt: string;
+  endedAt: string;
+  storagePath: string;
+  sizeBytes: number;
+}
+
 export interface AuditEventInput {
   tenantId: string;
   actorUserId: string | null;

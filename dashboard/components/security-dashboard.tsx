@@ -16,6 +16,8 @@ import {
   LayoutDashboard,
   Menu,
   MonitorPlay,
+  Pause,
+  Play,
   MoreHorizontal,
   Search,
   Settings,
@@ -26,10 +28,10 @@ import {
   X,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import type { Branch, Camera as CameraType, LiveSessionResponse } from "@/lib/types";
+import type { Branch, Camera as CameraType, LiveSessionResponse, RecordingJob } from "@/lib/types";
 import { CameraTile } from "./camera-tile";
 
-const layoutOptions = [1, 4, 9, 16] as const;
+const layoutOptions = [1, 4, 9, 16, 25, 36] as const;
 
 export function SecurityDashboard() {
   const [branches, setBranches] = useState<Branch[]>([]);
@@ -37,6 +39,10 @@ export function SecurityDashboard() {
   const [cameras, setCameras] = useState<CameraType[]>([]);
   const [gridSize, setGridSize] = useState<(typeof layoutOptions)[number]>(4);
   const [sessions, setSessions] = useState<Record<string, LiveSessionResponse>>({});
+  const [recordings, setRecordings] = useState<Record<string, RecordingJob>>({});
+  const [recordingLoading, setRecordingLoading] = useState<string | null>(null);
+  const [sequencing, setSequencing] = useState(false);
+  const [sequenceOffset, setSequenceOffset] = useState(0);
   const [loadingCamera, setLoadingCamera] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -65,13 +71,26 @@ export function SecurityDashboard() {
         if (!response.ok) throw new Error("Unable to load cameras");
         return response.json() as Promise<{ data: CameraType[] }>;
       })
-      .then(({ data }) => setCameras(data))
+      .then(async ({ data }) => {
+        setCameras(data);
+        const states = await Promise.all(data.map(async (camera) => {
+          const response = await fetch(`/api/recording/${encodeURIComponent(camera.id)}`);
+          return response.ok ? await response.json() as RecordingJob : undefined;
+        }));
+        setRecordings(Object.fromEntries(states.filter((job): job is RecordingJob => Boolean(job)).map((job) => [job.cameraId, job])));
+      })
       .catch(() => setError("Camera inventory could not be loaded."))
       .finally(() => setLoading(false));
   }, [selectedBranch]);
 
+  useEffect(() => {
+    if (!sequencing || cameras.length <= gridSize) return;
+    const timer = window.setInterval(() => setSequenceOffset((value) => (value + gridSize) % cameras.length), 10_000);
+    return () => window.clearInterval(timer);
+  }, [sequencing, cameras.length, gridSize]);
+
   const activeBranch = branches.find((branch) => branch.id === selectedBranch);
-  const visibleCameras = cameras.slice(0, gridSize);
+  const visibleCameras = Array.from({ length: Math.min(gridSize, cameras.length) }, (_, index) => cameras[(sequenceOffset + index) % cameras.length]!);
   const online = cameras.filter((camera) => camera.status === "online").length;
   const attention = cameras.filter(
     (camera) => camera.status === "offline" || camera.status === "degraded",
@@ -95,6 +114,37 @@ export function SecurityDashboard() {
       setLoadingCamera(null);
     }
   }, []);
+
+  const toggleRecording = useCallback(async (cameraId: string) => {
+    const current = recordings[cameraId] ?? { cameraId, mode: "continuous" as const, enabled: false, status: "disabled" as const, retentionDays: 180, postRollSeconds: 30 };
+    setRecordingLoading(cameraId);
+    try {
+      const response = await fetch(`/api/recording/${encodeURIComponent(cameraId)}`, {
+        method: "PUT", headers: { "content-type": "application/json" },
+        body: JSON.stringify({ mode: current.mode, enabled: !current.enabled, retentionDays: current.retentionDays, postRollSeconds: current.postRollSeconds }),
+      });
+      if (!response.ok) throw new Error("Recording update failed");
+      const updated = await response.json() as RecordingJob;
+      setRecordings((items) => ({ ...items, [cameraId]: updated }));
+    } catch { setError("Recording settings could not be updated."); }
+    finally { setRecordingLoading(null); }
+  }, [recordings]);
+
+  const changeRecordingMode = useCallback(async (cameraId: string, mode: RecordingJob["mode"]) => {
+    const current = recordings[cameraId] ?? { cameraId, mode, enabled: false, status: "disabled" as const, retentionDays: 180, postRollSeconds: 30 };
+    setRecordingLoading(cameraId);
+    try {
+      const response = await fetch(`/api/recording/${encodeURIComponent(cameraId)}`, {
+        method: "PUT", headers: { "content-type": "application/json" },
+        body: JSON.stringify({ mode, enabled: current.enabled, retentionDays: current.retentionDays, postRollSeconds: current.postRollSeconds,
+          ...(mode === "scheduled" ? { schedule: { days: [1, 2, 3, 4, 5], start: "09:00", end: "18:00" } } : {}) }),
+      });
+      if (!response.ok) throw new Error("Recording mode update failed");
+      const updated = await response.json() as RecordingJob;
+      setRecordings((items) => ({ ...items, [cameraId]: updated }));
+    } catch { setError("Recording mode could not be updated."); }
+    finally { setRecordingLoading(null); }
+  }, [recordings]);
 
   const healthPercent = useMemo(
     () => cameras.length ? Math.round((online / cameras.length) * 100) : 0,
@@ -219,6 +269,9 @@ export function SecurityDashboard() {
                 </p>
               </div>
               <div className="layout-picker">
+                <button className={sequencing ? "active" : ""} onClick={() => setSequencing((value) => !value)} aria-label={sequencing ? "Pause camera sequence" : "Start camera sequence"} title={sequencing ? "Pause 10 second camera sequence" : "Start 10 second camera sequence"}>
+                  {sequencing ? <Pause size={16} /> : <Play size={16} />}
+                </button>
                 <span>Layout</span>
                 {layoutOptions.map((size) => (
                   <button
@@ -248,6 +301,10 @@ export function SecurityDashboard() {
                     session={sessions[camera.id]}
                     loading={loadingCamera === camera.id}
                     onStart={() => void startCamera(camera.id)}
+                    recording={recordings[camera.id]}
+                    recordingLoading={recordingLoading === camera.id}
+                    onToggleRecording={() => void toggleRecording(camera.id)}
+                    onChangeRecordingMode={(mode) => void changeRecordingMode(camera.id, mode)}
                   />
                 ))}
               </div>

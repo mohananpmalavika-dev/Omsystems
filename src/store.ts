@@ -9,6 +9,8 @@ import type {
   EdgeAgent,
   LiveSession,
   ConsumedLiveSession,
+  RecordingJob,
+  RecordingSegment,
   ResourceNode,
   User,
 } from "./domain/models.js";
@@ -79,6 +81,8 @@ export class MemoryStore implements ControlPlaneStore {
     string,
     LiveSession & { tokenHash: string; consumed: boolean }
   >();
+  readonly recordingJobs = new Map<string, RecordingJob>();
+  readonly recordingSegments: RecordingSegment[] = [];
 
   async close() {}
 
@@ -215,6 +219,31 @@ export class MemoryStore implements ControlPlaneStore {
       connectionSecretRef: camera.connectionSecretRef,
       profiles: camera.profiles,
     };
+  }
+
+  async getRecordingJob(cameraId: string) {
+    return this.recordingJobs.get(cameraId);
+  }
+
+  async upsertRecordingJob(cameraId: string, input: Omit<RecordingJob, "id" | "cameraId" | "updatedAt">) {
+    const existing = this.recordingJobs.get(cameraId);
+    const job: RecordingJob = {
+      id: existing?.id ?? randomUUID(), cameraId, ...structuredClone(input),
+      updatedAt: new Date().toISOString(),
+    };
+    this.recordingJobs.set(cameraId, job);
+    return job;
+  }
+
+  async listRecordingSegments(cameraId: string, from?: string, to?: string) {
+    return this.recordingSegments.filter((segment) => segment.cameraId === cameraId &&
+      (!from || segment.endedAt >= from) && (!to || segment.startedAt <= to));
+  }
+
+  async createRecordingSegment(input: Omit<RecordingSegment, "id">) {
+    const segment = { id: randomUUID(), ...structuredClone(input) };
+    this.recordingSegments.push(segment);
+    return segment;
   }
 
   async writeAudit(event: AuditEventInput) {

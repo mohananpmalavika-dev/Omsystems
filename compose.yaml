@@ -8,11 +8,26 @@ services:
       DATABASE_URL: postgresql://sentinel:local-development-only@postgres:5432/sentinel
       MEDIA_GATEWAY_SHARED_KEY: development-media-gateway-key-change-me
       EDGE_BRIDGE_SHARED_KEY: ${EDGE_BRIDGE_SHARED_KEY:-}
+      RECORDING_ENGINE_URL: http://recording-engine:8091
+      RECORDING_ENGINE_SHARED_KEY: development-recording-engine-key-change-me
     ports:
       - "8080:8080"
     depends_on:
       postgres:
         condition: service_healthy
+
+  recording-engine:
+    build:
+      context: .
+      dockerfile: recording-engine/Dockerfile
+    environment:
+      HOST: 0.0.0.0
+      PORT: 8091
+      RECORDING_ENGINE_SHARED_KEY: development-recording-engine-key-change-me
+      RECORDING_ROOT: /recordings
+      STREAM_SECRETS_JSON: "${STREAM_SECRETS_JSON:-{}}"
+    volumes:
+      - sentinel-recordings:/recordings
 
   media-gateway:
     build:
@@ -86,3 +101,4 @@ services:
 
 volumes:
   sentinel-postgres:
+  sentinel-recordings:

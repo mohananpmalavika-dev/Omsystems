@@ -15,6 +15,9 @@ import type {
   EdgeAgent,
   LiveSession,
   ConsumedLiveSession,
+  RecordingJob,
+  RecordingSegment,
+  RecordingMode,
   NodeType,
   ResourceNode,
   User,
@@ -161,6 +164,10 @@ export interface ControlPlaneStore {
   ): Promise<Camera | undefined>;
   createLiveSession(cameraId: string, userId: string): Promise<LiveSession>;
   consumeLiveSession(token: string): Promise<ConsumedLiveSession | undefined>;
+  getRecordingJob(cameraId: string): Promise<RecordingJob | undefined>;
+  upsertRecordingJob(cameraId: string, input: Omit<RecordingJob, "id" | "cameraId" | "updatedAt">): Promise<RecordingJob>;
+  listRecordingSegments(cameraId: string, from?: string, to?: string): Promise<RecordingSegment[]>;
+  createRecordingSegment(input: Omit<RecordingSegment, "id">): Promise<RecordingSegment>;
   writeAudit(event: AuditEventInput): Promise<void>;
 }
 

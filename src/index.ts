@@ -13,6 +13,10 @@ const app = await buildApp({
   store,
   authMode: config.AUTH_MODE,
   mediaGatewaySharedKey: config.MEDIA_GATEWAY_SHARED_KEY,
+  ...(config.RECORDING_ENGINE_URL && config.RECORDING_ENGINE_SHARED_KEY ? {
+    recordingEngineUrl: config.RECORDING_ENGINE_URL,
+    recordingEngineSharedKey: config.RECORDING_ENGINE_SHARED_KEY,
+  } : {}),
   ...(config.EDGE_BRIDGE_SHARED_KEY
     ? { edgeBridgeSharedKey: config.EDGE_BRIDGE_SHARED_KEY }
     : {}),

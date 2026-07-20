@@ -24,6 +24,8 @@
     "media:dev": "npm run dev --workspace @sentinel/media-gateway",
     "media:typecheck": "npm run typecheck --workspace @sentinel/media-gateway",
     "media:test": "npm run test --workspace @sentinel/media-gateway",
+    "recording:dev": "npm run dev --workspace @sentinel/recording-engine",
+    "recording:typecheck": "npm run typecheck --workspace @sentinel/recording-engine",
     "dashboard:dev": "npm run dev --workspace @sentinel/dashboard",
     "dashboard:typecheck": "npm run typecheck --workspace @sentinel/dashboard",
     "dashboard:build": "npm run build --workspace @sentinel/dashboard"

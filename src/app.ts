@@ -43,11 +43,20 @@ const capabilitiesSchema = z.object({
   audio: z.boolean(),
   events: z.boolean(),
 });
+const recordingJobSchema = z.object({
+  mode: z.enum(["continuous", "motion", "scheduled", "event", "manual"]),
+  enabled: z.boolean().default(true),
+  retentionDays: z.number().int().min(1).max(3650).default(180),
+  schedule: z.object({ days: z.array(z.number().int().min(0).max(6)).min(1), start: z.string().regex(/^\d{2}:\d{2}$/), end: z.string().regex(/^\d{2}:\d{2}$/) }).optional(),
+  postRollSeconds: z.number().int().min(0).max(3600).default(30),
+});
 
 export async function buildApp(options?: {
   logger?: boolean;
   store?: ControlPlaneStore;
   mediaGatewaySharedKey?: string;
+  recordingEngineUrl?: string;
+  recordingEngineSharedKey?: string;
   edgeBridgeSharedKey?: string;
   authMode?: "development" | "session" | "oidc";
 }): Promise<FastifyInstance> {
@@ -266,6 +275,68 @@ export async function buildApp(options?: {
       sessionId: session.id,
     });
     return reply.code(201).send(session);
+  });
+
+  app.get("/v1/cameras/:id/recording", async (request, reply) => {
+    const { id } = idParams.parse(request.params);
+    const camera = await store.getCamera(id);
+    if (!camera) return reply.code(404).send({ error: "camera_not_found" });
+    if (!(await requireAccess(request, reply, store, "recording:view", camera.nodeId))) return;
+    return (await store.getRecordingJob(id)) ?? {
+      cameraId: id, mode: "continuous", enabled: false, status: "disabled",
+      retentionDays: 180, postRollSeconds: 30,
+    };
+  });
+
+  app.put("/v1/cameras/:id/recording", async (request, reply) => {
+    const { id } = idParams.parse(request.params);
+    const camera = await store.getCamera(id);
+    if (!camera) return reply.code(404).send({ error: "camera_not_found" });
+    if (!(await requireAccess(request, reply, store, "device:configure", camera.nodeId))) return;
+    const input = recordingJobSchema.parse(request.body);
+    if (input.mode === "scheduled" && !input.schedule) {
+      return reply.code(400).send({ error: "schedule_required" });
+    }
+    const status = !input.enabled ? "disabled" : input.mode === "continuous" || input.mode === "manual" ? "recording" : "scheduled";
+    const job = await store.upsertRecordingJob(id, { ...input, status });
+    if (options?.recordingEngineUrl && options.recordingEngineSharedKey) {
+      const response = await fetch(new URL("/internal/jobs", options.recordingEngineUrl), {
+        method: "PUT", headers: { "content-type": "application/json", "x-recording-engine-key": options.recordingEngineSharedKey },
+        body: JSON.stringify({ cameraId: id, connectionSecretRef: camera.connectionSecretRef, job }),
+      });
+      if (!response.ok) return reply.code(503).send({ error: "recording_engine_unavailable" });
+    }
+    await audit(request, store, "recording.configured", camera.nodeId, "success", { mode: job.mode, enabled: job.enabled });
+    return reply.code(200).send(job);
+  });
+
+  app.get("/v1/cameras/:id/recordings", async (request, reply) => {
+    const { id } = idParams.parse(request.params);
+    const query = z.object({ from: z.string().datetime().optional(), to: z.string().datetime().optional() }).parse(request.query);
+    const camera = await store.getCamera(id);
+    if (!camera) return reply.code(404).send({ error: "camera_not_found" });
+    if (!(await requireAccess(request, reply, store, "recording:view", camera.nodeId))) return;
+    return { data: await store.listRecordingSegments(id, query.from, query.to) };
+  });
+
+  app.post("/v1/cameras/:id/recording/events", async (request, reply) => {
+    const { id } = idParams.parse(request.params);
+    const body = z.object({ type: z.enum(["motion", "event"]), metadata: z.record(z.unknown()).optional() }).parse(request.body);
+    const camera = await store.getCamera(id);
+    if (!camera) return reply.code(404).send({ error: "camera_not_found" });
+    if (!(await requireAccess(request, reply, store, "device:configure", camera.nodeId))) return;
+    const job = await store.getRecordingJob(id);
+    if (!job?.enabled || job.mode !== body.type) {
+      return reply.code(409).send({ error: "recording_mode_not_triggerable" });
+    }
+    if (options?.recordingEngineUrl && options.recordingEngineSharedKey) {
+      const response = await fetch(new URL(`/internal/jobs/${encodeURIComponent(id)}/trigger`, options.recordingEngineUrl), {
+        method: "POST", headers: { "content-type": "application/json", "x-recording-engine-key": options.recordingEngineSharedKey }, body: JSON.stringify(body),
+      });
+      if (!response.ok) return reply.code(503).send({ error: "recording_engine_unavailable" });
+    }
+    await audit(request, store, `recording.${body.type}_triggered`, camera.nodeId, "success", body.metadata);
+    return reply.code(202).send({ cameraId: id, triggered: body.type });
   });
 
   app.post("/internal/live-sessions/consume", async (request, reply) => {
