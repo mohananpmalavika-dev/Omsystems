@@ -38,3 +38,15 @@ export interface LiveSessionResponse {
     bearerToken: string;
   };
 }
+
+export type RecordingMode = "continuous" | "motion" | "scheduled" | "event" | "manual";
+export type RecordingStatus = "recording" | "scheduled" | "idle" | "error" | "disabled";
+export interface RecordingJob {
+  id?: string;
+  cameraId: string;
+  mode: RecordingMode;
+  enabled: boolean;
+  status: RecordingStatus;
+  retentionDays: number;
+  postRollSeconds: number;
+}

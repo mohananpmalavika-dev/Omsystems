@@ -7,10 +7,14 @@ import {
   Maximize2,
   Move3D,
   Radio,
+  CircleStop,
+  Camera as SnapshotIcon,
+  ZoomIn,
+  ZoomOut,
   Volume2,
 } from "lucide-react";
-import { useRef } from "react";
-import type { Camera, LiveSessionResponse } from "@/lib/types";
+import { useRef, useState } from "react";
+import type { Camera, LiveSessionResponse, RecordingJob, RecordingMode } from "@/lib/types";
 import { HlsPlayer } from "./hls-player";
 
 export function CameraTile({
@@ -19,39 +23,70 @@ export function CameraTile({
   loading,
   onStart,
   index,
+  recording,
+  recordingLoading,
+  onToggleRecording,
+  onChangeRecordingMode,
 }: {
   camera: Camera;
   session?: LiveSessionResponse;
   loading: boolean;
   onStart: () => void;
   index: number;
+  recording?: RecordingJob;
+  recordingLoading?: boolean;
+  onToggleRecording: () => void;
+  onChangeRecordingMode: (mode: RecordingMode) => void;
 }) {
   const tileRef = useRef<HTMLElement>(null);
   const isActive = Boolean(session);
+  const [zoom, setZoom] = useState(1);
+
+  const takeSnapshot = () => {
+    const video = tileRef.current?.querySelector("video");
+    if (!video || !video.videoWidth) return;
+    const canvas = document.createElement("canvas");
+    canvas.width = video.videoWidth; canvas.height = video.videoHeight;
+    canvas.getContext("2d")?.drawImage(video, 0, 0, canvas.width, canvas.height);
+    const link = document.createElement("a");
+    link.href = canvas.toDataURL("image/jpeg", 0.92);
+    link.download = `${camera.name.replace(/[^a-z0-9]+/gi, "-").toLowerCase()}-${Date.now()}.jpg`;
+    link.click();
+  };
 
   return (
     <article className="camera-tile" ref={tileRef}>
-      <div className="feed-stage">
-        {session?.hls ? (
-          <HlsPlayer
-            url={session.hls.url}
-            bearerToken={session.hls.bearerToken}
-            cameraName={camera.name}
-          />
-        ) : (
+      <div className="feed-stage" onWheel={(event) => {
+        if (!event.ctrlKey && !event.metaKey) return;
+        event.preventDefault();
+        setZoom((value) => Math.max(1, Math.min(3, Number((value + (event.deltaY < 0 ? 0.15 : -0.15)).toFixed(2)))));
+      }}>
+        <div className="zoom-stage" style={{ transform: `scale(${zoom})` }}>
+          {session?.hls ? (
+            <HlsPlayer
+              url={session.hls.url}
+              bearerToken={session.hls.bearerToken}
+              cameraName={camera.name}
+            />
+          ) : (
           <div className={`simulated-feed feed-${(index % 4) + 1}`}>
             <div className="feed-vignette" />
             <div className="feed-perspective" />
             <CameraIcon size={31} strokeWidth={1.25} />
             <span>{isActive ? "Secure demo feed" : "Ready for live view"}</span>
           </div>
-        )}
+          )}
+        </div>
 
         <div className="tile-topline">
           <span className={`status-pill ${camera.status}`}>
             <i />
             {camera.status === "online" ? "Live" : camera.status}
           </span>
+          <button className={`recording-pill ${recording?.enabled ? "active" : ""}`} onClick={onToggleRecording} disabled={recordingLoading} title={recording?.enabled ? "Stop recording" : "Start continuous recording"}>
+            {recording?.enabled ? <CircleStop size={12} /> : <Radio size={12} />}
+            {recordingLoading ? "…" : recording?.enabled ? "REC" : "REC OFF"}
+          </button>
           <span className="tile-time">
             {new Date().toLocaleTimeString([], {
               hour: "2-digit",
@@ -90,7 +125,11 @@ export function CameraTile({
           >
             <Maximize2 size={15} />
           </button>
+          <button aria-label="Zoom out" title="Zoom out" onClick={() => setZoom((value) => Math.max(1, Number((value - 0.25).toFixed(2))))} disabled={zoom === 1}><ZoomOut size={15} /></button>
+          <button aria-label="Zoom in" title="Zoom in" onClick={() => setZoom((value) => Math.min(3, Number((value + 0.25).toFixed(2))))}><ZoomIn size={15} /></button>
+          <button aria-label="Take snapshot" title="Take snapshot" onClick={takeSnapshot} disabled={!session?.hls}><SnapshotIcon size={15} /></button>
         </div>
+        {zoom > 1 && <button className="zoom-reset" onClick={() => setZoom(1)}>Zoom {Math.round(zoom * 100)}% · Reset</button>}
       </div>
       <footer className="camera-meta">
         <div>
@@ -101,6 +140,9 @@ export function CameraTile({
           <Expand size={13} />
           CH {String(camera.channel).padStart(2, "0")}
         </div>
+        <select className="recording-mode" aria-label={`${camera.name} recording mode`} value={recording?.mode ?? "continuous"} onChange={(event) => onChangeRecordingMode(event.target.value as RecordingMode)} disabled={recordingLoading}>
+          <option value="continuous">24/7</option><option value="motion">Motion</option><option value="scheduled">Schedule</option><option value="event">Event</option><option value="manual">Manual</option>
+        </select>
       </footer>
     </article>
   );

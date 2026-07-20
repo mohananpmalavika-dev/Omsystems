@@ -15,6 +15,11 @@ const configSchema = z.object({
     (value) => value === "" ? undefined : value,
     z.string().min(32).optional(),
   ),
+  RECORDING_ENGINE_URL: z.string().url().optional(),
+  RECORDING_ENGINE_SHARED_KEY: z.preprocess(
+    (value) => value === "" ? undefined : value,
+    z.string().min(32).optional(),
+  ),
 });
 
 export type AppConfig = z.infer<typeof configSchema>;

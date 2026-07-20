@@ -17,6 +17,7 @@ import { EdgeAgentRepository } from "./edge-agent-repository.js";
 import { InfrastructureRepository } from "./infrastructure-repository.js";
 import { ResourceRepository } from "./resource-repository.js";
 import { UserRepository } from "./user-repository.js";
+import { RecordingRepository } from "./recording-repository.js";
 
 export class PostgresStore
   extends InfrastructureRepository
@@ -27,6 +28,7 @@ export class PostgresStore
   private readonly cameras: CameraRepository;
   private readonly agents: EdgeAgentRepository;
   private readonly audits: AuditRepository;
+  private readonly recordings: RecordingRepository;
 
   constructor(pool: Pool) {
     super(pool);
@@ -35,6 +37,7 @@ export class PostgresStore
     this.cameras = new CameraRepository(pool);
     this.agents = new EdgeAgentRepository(pool);
     this.audits = new AuditRepository(pool);
+    this.recordings = new RecordingRepository(pool);
   }
 
   async close() { await this.pool.end(); }
@@ -74,5 +77,9 @@ export class PostgresStore
   async consumeLiveSession(token: string) {
     return this.cameras.consumeLiveSession(token);
   }
+  async getRecordingJob(cameraId: string) { return this.recordings.getJob(cameraId); }
+  async upsertRecordingJob(cameraId: string, input: any) { return this.recordings.upsertJob(cameraId, input); }
+  async listRecordingSegments(cameraId: string, from?: string, to?: string) { return this.recordings.listSegments(cameraId, from, to); }
+  async createRecordingSegment(input: any) { return this.recordings.createSegment(input); }
   async writeAudit(event: AuditEventInput) { await this.audits.write(event); }
 }
