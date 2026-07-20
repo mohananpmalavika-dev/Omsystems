@@ -40,12 +40,12 @@ node scripts/run-migrations.mjs status
 🚀 Starting database migrations...
 ✅ Connected to database
 ℹ️  Found 0 previously executed migrations
-📋 Executing 8 pending migration(s):
+📋 Executing 9 pending migration(s):
 ✅ 001_initial.sql (245ms)
 ✅ 002_edge_and_media_contract.sql (123ms)
 ✅ 004_cctv_infrastructure.sql (312ms) ← CCTV tables
-✅ 004_b_cctv_infrastructure_seed.sql (45ms) ← CCTV seed
-✨ Successfully executed 8 migration(s) in 1155ms
+✅ 005_cctv_infrastructure_seed.sql (45ms) ← CCTV seed
+✨ Successfully executed 9 migration(s) in 1155ms
 ```
 
 ---
@@ -264,10 +264,11 @@ Located in `database/migrations/`:
 | `002_edge_and_media_contract.sql` | Edge agents | edge_agents, camera_discoveries, live_sessions |
 | `003_pilot_seed.sql` | Demo data | Sample branches and cameras |
 | `004_cctv_infrastructure.sql` | **CCTV tables** | camera_specifications, compliance, requirements |
-| `004_b_cctv_infrastructure_seed.sql` | **CCTV seeds** | Standard requirements function |
-| `005_organizational_hierarchy_enhancement.sql` | Org hierarchy | Enhanced organization structure |
-| `006_employee_management_and_auth.sql` | Auth | Employee and authentication tables |
-| `007_granular_camera_permissions.sql` | Permissions | Camera-level permissions |
+| `005_cctv_infrastructure_seed.sql` | **CCTV seeds** | Standard requirements function |
+| `006_organizational_node_types.sql` | Org node types | Adds headquarters, zone, and area enum values |
+| `007_organizational_hierarchy.sql` | Org hierarchy | Enhanced organization structure |
+| `008_employee_management_and_auth.sql` | Auth | Employee and authentication tables |
+| `009_granular_camera_permissions.sql` | Permissions | Camera-level permissions |
 
 ---
 
@@ -285,7 +286,7 @@ Before deploying:
 After deploying:
 
 - [ ] Check Render build logs
-- [ ] Verify all 8 migrations ran
+- [ ] Verify all 9 migrations ran
 - [ ] Test API health endpoint
 - [ ] Run init script
 - [ ] Verify CCTV tables exist

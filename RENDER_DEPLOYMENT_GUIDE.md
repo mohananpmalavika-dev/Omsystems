@@ -4,6 +4,13 @@ Complete guide to deploy Sentinel Grid with CCTV Infrastructure to Render.
 
 ---
 
+> **Current pilot topology:** `render.yaml` deploys one `sentinel-grid-ops`
+> dashboard/BFF service. The control-plane API and camera media stay on the
+> branch/network host and are connected through the tunnel URLs managed by
+> `deploy/publish-render-live.ps1`. The separate database/API/dashboard steps
+> later in this guide describe an optional standalone-cloud topology; they are
+> not created by the current blueprint.
+
 ## 🚀 Quick Deploy (5 Minutes)
 
 ### Prerequisites
@@ -29,51 +36,41 @@ Complete guide to deploy Sentinel Grid with CCTV Infrastructure to Render.
 
 3. **Deploy**
    - Click "Apply"
-   - Render will create:
-     - PostgreSQL database
-     - Backend API service
-     - Frontend dashboard
+   - Render will create the `sentinel-grid-ops` dashboard/BFF service.
+   - Keep the control-plane and media tunnel environment variables configured
+     on that service.
    - Wait 5-10 minutes for deployment
 
 4. **Verify**
-   - Check API: `https://sentinel-grid-api.onrender.com/health`
-   - Check Dashboard: `https://sentinel-grid-dashboard.onrender.com`
+   - Check health: `https://<your-service>.onrender.com/api/health`
+   - Open the dashboard: `https://<your-service>.onrender.com`
 
 ---
 
 ## 📋 What Gets Deployed
 
-### Services Created
+### Services in the Current Blueprint
 
-1. **sentinel-grid-db** (PostgreSQL)
-   - Free tier: 256 MB RAM, 1 GB storage
-   - Automatic backups
-   - All migrations run automatically
+1. **sentinel-grid-ops** (Dashboard and BFF)
+   - Node.js 22 and Next.js
+   - Health check at `/api/health`
+   - Proxies authenticated control-plane calls without exposing the bridge key
+   - Connects to the existing control-plane and media tunnels
 
-2. **sentinel-grid-api** (Backend)
-   - Node.js 22
-   - Auto-scales on free tier
-   - Health checks enabled
-   - Database migrations run on deploy
+### Optional Standalone API Migration Execution
 
-3. **sentinel-grid-dashboard** (Frontend)
-   - Next.js application
-   - Static site generation
-   - Connected to backend API
-
-### Automatic Migration Execution
-
-The deployment process automatically:
+When you deploy the optional standalone API service, its startup process:
 1. Creates database schema
 2. Runs all migrations in order:
    - `001_initial.sql` - Base tables
    - `002_edge_and_media_contract.sql` - Edge agent support
    - `003_pilot_seed.sql` - Demo data
    - `004_cctv_infrastructure.sql` - **CCTV infrastructure tables**
-   - `004_b_cctv_infrastructure_seed.sql` - **CCTV seed data**
-   - `005_organizational_hierarchy_enhancement.sql` - Org enhancements
-   - `006_employee_management_and_auth.sql` - Auth tables
-   - `007_granular_camera_permissions.sql` - Permissions
+   - `005_cctv_infrastructure_seed.sql` - **CCTV seed data**
+   - `006_organizational_node_types.sql` - Organizational node enum values
+   - `007_organizational_hierarchy.sql` - Org enhancements
+   - `008_employee_management_and_auth.sql` - Auth tables
+   - `009_granular_camera_permissions.sql` - Permissions
 3. Tracks executed migrations to prevent re-runs
 4. Shows execution time and status
 
@@ -329,7 +326,7 @@ psql $DATABASE_URL
 
 # Manually run CCTV migrations
 \i database/migrations/004_cctv_infrastructure.sql
-\i database/migrations/004_b_cctv_infrastructure_seed.sql
+\i database/migrations/005_cctv_infrastructure_seed.sql
 
 # Verify tables exist
 \dt camera*
@@ -422,18 +419,18 @@ Migration logs show:
 ✅ Connected to database
 
 ℹ️  Found 0 previously executed migrations
-ℹ️  Found 8 total migration files
+ℹ️  Found 9 total migration files
 
-📋 Executing 8 pending migration(s):
+📋 Executing 9 pending migration(s):
 
    Running: 001_initial.sql... ✅ 001_initial.sql (245ms)
    Running: 002_edge_and_media_contract.sql... ✅ 002_edge_and_media_contract.sql (123ms)
    Running: 003_pilot_seed.sql... ✅ 003_pilot_seed.sql (89ms)
    Running: 004_cctv_infrastructure.sql... ✅ 004_cctv_infrastructure.sql (312ms)
-   Running: 004_b_cctv_infrastructure_seed.sql... ✅ 004_b_cctv_infrastructure_seed.sql (45ms)
+   Running: 005_cctv_infrastructure_seed.sql... ✅ 005_cctv_infrastructure_seed.sql (45ms)
    ...
 
-✨ Successfully executed 8 migration(s) in 1234ms
+✨ Successfully executed 9 migration(s) in 1234ms
 ✅ Database is up to date! 🎉
 ```
 
@@ -546,7 +543,7 @@ If deployment fails:
 After successful deployment:
 
 - [ ] Verify all services are running (green status)
-- [ ] Check migration logs show all 8 migrations executed
+- [ ] Check migration logs show all 9 migrations executed
 - [ ] Test backend API health endpoint
 - [ ] Test dashboard loads correctly
 - [ ] Verify database tables exist (including CCTV tables)

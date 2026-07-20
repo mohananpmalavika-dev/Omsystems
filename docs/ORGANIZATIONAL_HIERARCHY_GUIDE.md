@@ -237,9 +237,9 @@ GET    /v1/cameras/:id/access-summary     # Get access summary
 
 ## Database Migrations
 
-### Migration 005: Organizational Hierarchy Enhancement
+### Migration 007: Organizational Hierarchy Enhancement
 
-**File**: `database/migrations/005_organizational_hierarchy_enhancement.sql`
+**File**: `database/migrations/007_organizational_hierarchy.sql`
 
 **Features**:
 - Adds `headquarters`, `zone`, and `area` node types
@@ -248,9 +248,9 @@ GET    /v1/cameras/:id/access-summary     # Get access summary
 - Creates helper functions: `get_node_hierarchy_path()`, `get_descendant_nodes()`
 - Creates view: `organizational_hierarchy_view` with statistics
 
-### Migration 006: Employee Management & Authentication
+### Migration 008: Employee Management & Authentication
 
-**File**: `database/migrations/006_employee_management_and_auth.sql`
+**File**: `database/migrations/008_employee_management_and_auth.sql`
 
 **Features**:
 - Enhances `users` table with authentication fields
@@ -264,9 +264,9 @@ GET    /v1/cameras/:id/access-summary     # Get access summary
 - Implements account lockout mechanism (5 attempts = 30min lock)
 - Auto-grants role-based permissions via trigger
 
-### Migration 007: Granular Camera Permissions
+### Migration 009: Granular Camera Permissions
 
-**File**: `database/migrations/007_granular_camera_permissions.sql`
+**File**: `database/migrations/009_granular_camera_permissions.sql`
 
 **Features**:
 - Creates `camera_sensitivity_level` enum
@@ -292,7 +292,7 @@ GET    /v1/cameras/:id/access-summary     # Get access summary
    ↓
 3. Check account status (active/locked/suspended)
    ↓
-4. Verify password hash (bcrypt)
+4. Verify password hash (scrypt)
    ↓
 5. Generate access token (64 bytes, SHA256 hash)
    ↓
