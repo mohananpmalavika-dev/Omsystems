@@ -60,8 +60,6 @@ async function fetchApi<T>(
 export const authApi = {
   login: async (username: string, password: string, tenantSlug?: string) => {
     const response = await fetchApi<{
-      accessToken: string;
-      refreshToken: string;
       expiresIn: number;
       user: any;
     }>('/v1/auth/login', {
@@ -69,10 +67,10 @@ export const authApi = {
       body: JSON.stringify({ username, password, tenantSlug }),
     });
 
-    // Store tokens
+    // Tokens are held by the BFF in HttpOnly cookies. Retain only display data.
     if (typeof window !== 'undefined') {
-      localStorage.setItem('accessToken', response.accessToken);
-      localStorage.setItem('refreshToken', response.refreshToken);
+      localStorage.removeItem('accessToken');
+      localStorage.removeItem('refreshToken');
       localStorage.setItem('user', JSON.stringify(response.user));
     }
 
@@ -97,25 +95,12 @@ export const authApi = {
     }),
 
   refreshToken: async () => {
-    const refreshToken = typeof window !== 'undefined'
-      ? localStorage.getItem('refreshToken')
-      : null;
-
-    if (!refreshToken) {
-      throw new Error('No refresh token available');
-    }
-
     const response = await fetchApi<{
-      accessToken: string;
       expiresIn: number;
     }>('/v1/auth/refresh', {
       method: 'POST',
-      body: JSON.stringify({ refreshToken }),
+      body: '{}',
     });
-
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('accessToken', response.accessToken);
-    }
 
     return response;
   },

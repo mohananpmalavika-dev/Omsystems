@@ -1,15 +1,22 @@
+import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { startLive } from "@/lib/backend";
 
 export const dynamic = "force-dynamic";
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
     const body = z.object({ cameraId: z.string().min(1) }).parse(
       await request.json(),
     );
-    return NextResponse.json(await startLive(body.cameraId), { status: 201 });
+    return NextResponse.json(
+      await startLive(
+        body.cameraId,
+        request.cookies.get("sentinel_access")?.value,
+      ),
+      { status: 201 },
+    );
   } catch {
     return NextResponse.json(
       { error: "live_session_unavailable" },
