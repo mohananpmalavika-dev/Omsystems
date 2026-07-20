@@ -1,17 +1,22 @@
 import { demoBranches, demoCameras } from "./demo-data";
 import type { Branch, Camera, LiveSessionResponse } from "./types";
 
-export async function listBranches(): Promise<Branch[]> {
+export async function listBranches(employeeSession?: string): Promise<Branch[]> {
   if (isDemoMode()) return demoBranches;
-  const response = await controlFetch("/v1/branches");
+  const response = await controlFetch("/v1/branches", undefined, employeeSession);
   const body = await response.json() as { data: Branch[] };
   return body.data;
 }
 
-export async function listCameras(branchId: string): Promise<Camera[]> {
+export async function listCameras(
+  branchId: string,
+  employeeSession?: string,
+): Promise<Camera[]> {
   if (isDemoMode()) return demoCameras(branchId);
   const response = await controlFetch(
     `/v1/branches/${encodeURIComponent(branchId)}/cameras`,
+    undefined,
+    employeeSession,
   );
   const body = await response.json() as { data: Camera[] };
   return body.data.map((camera) => ({
@@ -20,11 +25,15 @@ export async function listCameras(branchId: string): Promise<Camera[]> {
   }));
 }
 
-export async function startLive(cameraId: string): Promise<LiveSessionResponse> {
+export async function startLive(
+  cameraId: string,
+  employeeSession?: string,
+): Promise<LiveSessionResponse> {
   if (isDemoMode()) return { demo: true, cameraId };
   const permission = await controlFetch(
     `/v1/cameras/${encodeURIComponent(cameraId)}/live-sessions`,
     { method: "POST", body: "{}" },
+    employeeSession,
   );
   const controlSession = await permission.json() as { token: string };
   const mediaResponse = await fetch(
@@ -47,7 +56,11 @@ function isDemoMode() {
   return runtimeEnv("DASHBOARD_DEMO_MODE", "true") !== "false";
 }
 
-async function controlFetch(path: string, init?: RequestInit) {
+async function controlFetch(
+  path: string,
+  init?: RequestInit,
+  employeeSession?: string,
+) {
   const response = await fetch(new URL(
     path,
     runtimeEnv("CONTROL_PLANE_INTERNAL_URL", "http://localhost:8080"),
@@ -55,10 +68,14 @@ async function controlFetch(path: string, init?: RequestInit) {
     ...init,
     headers: {
       ...bridgeHeaders(),
-      "x-user-id": runtimeEnv(
-        "DASHBOARD_DEV_USER_ID",
-        "user-south-operator",
-      ),
+      ...(employeeSession
+        ? { authorization: `Bearer ${employeeSession}` }
+        : {
+            "x-user-id": runtimeEnv(
+              "DASHBOARD_DEV_USER_ID",
+              "user-global-admin",
+            ),
+          }),
       ...init?.headers,
     },
     cache: "no-store",

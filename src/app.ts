@@ -51,7 +51,10 @@ export async function buildApp(options?: {
   edgeBridgeSharedKey?: string;
   authMode?: "development" | "session" | "oidc";
 }): Promise<FastifyInstance> {
-  const app = Fastify({ logger: options?.logger ?? false });
+  const app = Fastify({
+    logger: options?.logger ?? false,
+    trustProxy: Boolean(options?.edgeBridgeSharedKey),
+  });
   const store = options?.store ?? new MemoryStore();
   const mediaGatewaySharedKey =
     options?.mediaGatewaySharedKey ??

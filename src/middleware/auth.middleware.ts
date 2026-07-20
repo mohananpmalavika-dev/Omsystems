@@ -359,7 +359,10 @@ export class RateLimiter {
         return;
       }
 
-      const identifier = request.ip;
+      const forwarded = request.headers["x-forwarded-for"];
+      const identifier = typeof forwarded === "string"
+        ? forwarded.split(",")[0]!.trim()
+        : request.ip;
       const result = this.check(identifier);
 
       if (!result.allowed) {

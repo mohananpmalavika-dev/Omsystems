@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import { z } from "zod";
 import type {
+  AuthenticationStore,
   ControlPlaneStore,
   UserManagementStore,
 } from "../control-plane-store.js";
@@ -82,7 +83,7 @@ const userIdSchema = z.object({ id: z.string().uuid() });
 
 export async function registerUserRoutes(
   app: FastifyInstance,
-  store: ControlPlaneStore & UserManagementStore,
+  store: ControlPlaneStore & UserManagementStore & AuthenticationStore,
 ) {
   // List users
   app.get("/v1/users", async (request) => {
@@ -132,7 +133,12 @@ export async function registerUserRoutes(
       { ...query, managerUserId: request.currentUser.id },
     );
 
-    return result;
+    const data = result.data.filter(
+      (user: any) =>
+        user.id === request.currentUser.id ||
+        canManageRole(request.currentUser.role, user.role),
+    );
+    return { data, total: data.length };
   });
 
   // Get user by ID
@@ -293,7 +299,10 @@ export async function registerUserRoutes(
     const body = assignOrgSchema.parse(request.body);
 
     // Check permission
-    if (!(await hasPermission(request, store, "user:manage", body.scopeNodeId))) {
+    if (
+      !(await hasPermissionForUser(request, store, "user:manage", id)) ||
+      !(await hasPermission(request, store, "user:manage", body.scopeNodeId))
+    ) {
       return reply.code(403).send({ error: "forbidden" });
     }
 
@@ -329,6 +338,12 @@ export async function registerUserRoutes(
 
       // Check permission
       if (
+        !(await hasPermissionForUser(
+          request,
+          store,
+          "user:manage",
+          params.id,
+        )) ||
         !(await hasPermission(request, store, "user:manage", params.nodeId))
       ) {
         return reply.code(403).send({ error: "forbidden" });
@@ -383,6 +398,7 @@ export async function registerUserRoutes(
     const newPasswordHash = await hashPassword(body.newPassword);
 
     await store.updateUserPassword(id, newPasswordHash);
+    await store.deleteAllUserSessions(id);
 
     await store.writeAudit({
       tenantId: request.currentUser.tenantId,
@@ -416,6 +432,7 @@ export async function registerUserRoutes(
     const passwordHash = await hashPassword(body.newPassword);
 
     await store.updateUserPassword(id, passwordHash, true); // Force password change on next login
+    await store.deleteAllUserSessions(id);
 
     await store.writeAudit({
       tenantId: request.currentUser.tenantId,
@@ -520,6 +537,7 @@ async function hasPermissionForUser(
 ): Promise<boolean> {
   const target = await store.getUserDetails(targetUserId);
   if (!target || target.tenantId !== request.currentUser.tenantId) return false;
+  if (!canManageRole(request.currentUser.role, target.role)) return false;
   const primary = target.organizations?.find(
     (assignment: any) => assignment.isPrimary,
   ) ?? target.organizations?.[0];
@@ -546,6 +564,15 @@ function canAssignRole(
   targetRole: keyof typeof roleRank,
 ) {
   if (!actorRole) return false;
+  if (actorRole === "super_admin") return true;
+  return roleRank[actorRole] > roleRank[targetRole];
+}
+
+function canManageRole(
+  actorRole: keyof typeof roleRank | undefined,
+  targetRole: keyof typeof roleRank | undefined,
+) {
+  if (!actorRole || !targetRole) return false;
   if (actorRole === "super_admin") return true;
   return roleRank[actorRole] > roleRank[targetRole];
 }

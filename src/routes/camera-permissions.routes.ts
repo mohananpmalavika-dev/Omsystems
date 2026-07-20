@@ -3,6 +3,7 @@ import { z } from "zod";
 import type {
   CameraPermissionStore,
   ControlPlaneStore,
+  UserManagementStore,
 } from "../control-plane-store.js";
 
 const cameraSpecificGrantSchema = z.object({
@@ -64,7 +65,7 @@ const updateCameraSensitivitySchema = z.object({
 
 export async function registerCameraPermissionRoutes(
   app: FastifyInstance,
-  store: ControlPlaneStore & CameraPermissionStore,
+  store: ControlPlaneStore & CameraPermissionStore & UserManagementStore,
 ) {
   // ===== Camera-Specific Grants =====
 
@@ -75,13 +76,20 @@ export async function registerCameraPermissionRoutes(
     // Check permission
     if (
       params.userId !== request.currentUser.id &&
-      !(await hasPermission(request, store, "user:manage"))
+      !(await canManageUser(request, store, params.userId))
     ) {
       return reply.code(403).send({ error: "forbidden" });
     }
 
     const grants = await store.listCameraSpecificGrants(params.userId);
-    return { data: grants };
+    if (params.userId === request.currentUser.id) return { data: grants };
+    const visible = await Promise.all(
+      grants.map(async (grant: any) => ({
+        grant,
+        allowed: await canConfigureCamera(request, store, grant.cameraId),
+      })),
+    );
+    return { data: visible.filter((item) => item.allowed).map((item) => item.grant) };
   });
 
   // List camera-specific grants for a camera
@@ -168,8 +176,12 @@ export async function registerCameraPermissionRoutes(
       })
       .parse(request.query);
 
-    // Check permission
-    if (!(await hasPermission(request, store, "device:configure"))) {
+    if (query.userId) {
+      if (
+        query.userId !== request.currentUser.id &&
+        !(await canManageUser(request, store, query.userId))
+      ) return { data: [] };
+    } else if (!(await hasPermission(request, store, "device:configure"))) {
       return { data: [] };
     }
 
@@ -178,7 +190,22 @@ export async function registerCameraPermissionRoutes(
       query,
     );
 
-    return { data: requests };
+    if (query.userId === request.currentUser.id) return { data: requests };
+    const visible = await Promise.all(
+      requests.map(async (accessRequest: any) => ({
+        accessRequest,
+        allowed: await canConfigureCamera(
+          request,
+          store,
+          accessRequest.cameraId,
+        ),
+      })),
+    );
+    return {
+      data: visible
+        .filter((item) => item.allowed)
+        .map((item) => item.accessRequest),
+    };
   });
 
   // Get my access requests
@@ -203,6 +230,23 @@ export async function registerCameraPermissionRoutes(
     const cameraNode = await store.getNode(camera.nodeId);
     if (cameraNode?.tenantId !== request.currentUser.tenantId) {
       return reply.code(404).send({ error: "camera_not_found" });
+    }
+    const currentDecision = await store.checkCameraAccess(
+      request.currentUser.id,
+      body.cameraId,
+      "live:view",
+    );
+    if (currentDecision.allowed) {
+      return reply.code(409).send({
+        error: "access_already_granted",
+        message: "You already have access to this camera",
+      });
+    }
+    if (!currentDecision.requiresApproval) {
+      return reply.code(403).send({
+        error: "access_not_requestable",
+        message: currentDecision.reason,
+      });
     }
 
     // Check if user already has active request
@@ -653,4 +697,40 @@ async function canConfigureCamera(
   return camera
     ? hasPermission(request, store, "device:configure", camera.nodeId)
     : false;
+}
+
+async function canManageUser(
+  request: FastifyRequest,
+  store: ControlPlaneStore & UserManagementStore,
+  userId: string,
+) {
+  const target = await store.getUserDetails(userId);
+  if (!target || target.tenantId !== request.currentUser.tenantId) return false;
+  if (!canManageRole(request.currentUser.role, target.role)) return false;
+  const assignment = target.organizations?.find(
+    (item: any) => item.isPrimary,
+  ) ?? target.organizations?.[0];
+  return assignment?.scopeNodeId
+    ? hasPermission(request, store, "user:manage", assignment.scopeNodeId)
+    : false;
+}
+
+const roleRank: Record<string, number> = {
+  viewer: 10,
+  operator: 20,
+  security_officer: 25,
+  auditor: 30,
+  branch_manager: 40,
+  area_manager: 50,
+  region_manager: 60,
+  zone_manager: 70,
+  hq_admin: 80,
+  company_admin: 90,
+  super_admin: 100,
+};
+
+function canManageRole(actorRole?: string, targetRole?: string) {
+  if (!actorRole || !targetRole) return false;
+  if (actorRole === "super_admin") return true;
+  return (roleRank[actorRole] ?? 0) > (roleRank[targetRole] ?? 0);
 }

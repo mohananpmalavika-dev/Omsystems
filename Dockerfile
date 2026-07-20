@@ -7,7 +7,7 @@ COPY media-gateway/package.json ./media-gateway/package.json
 RUN npm ci
 COPY tsconfig.json ./
 COPY src ./src
-RUN npm run build
+RUN npm run build && npm prune --omit=dev
 
 FROM node:22-alpine
 ENV NODE_ENV=production
@@ -16,7 +16,7 @@ COPY package*.json ./
 COPY dashboard/package.json ./dashboard/package.json
 COPY edge-agent/package.json ./edge-agent/package.json
 COPY media-gateway/package.json ./media-gateway/package.json
-RUN npm ci --omit=dev
+COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist
 COPY scripts/run-migrations.mjs ./scripts/run-migrations.mjs
 COPY database/migrations ./database/migrations
