@@ -18,6 +18,7 @@ import { InfrastructureRepository } from "./infrastructure-repository.js";
 import { ResourceRepository } from "./resource-repository.js";
 import { UserRepository } from "./user-repository.js";
 import { RecordingRepository } from "./recording-repository.js";
+import { LiveOperationsRepository } from "./live-operations-repository.js";
 
 export class PostgresStore
   extends InfrastructureRepository
@@ -29,6 +30,7 @@ export class PostgresStore
   private readonly agents: EdgeAgentRepository;
   private readonly audits: AuditRepository;
   private readonly recordings: RecordingRepository;
+  private readonly liveOperations: LiveOperationsRepository;
 
   constructor(pool: Pool) {
     super(pool);
@@ -38,6 +40,7 @@ export class PostgresStore
     this.agents = new EdgeAgentRepository(pool);
     this.audits = new AuditRepository(pool);
     this.recordings = new RecordingRepository(pool);
+    this.liveOperations = new LiveOperationsRepository(pool);
   }
 
   async close() { await this.pool.end(); }
@@ -99,6 +102,21 @@ export class PostgresStore
   }
   async markRecordingSegmentsDeleted(tenantId: string, externalId: string, segmentIds: string[]) {
     return this.recordings.markSegmentsDeleted(tenantId, externalId, segmentIds);
+  }
+  async listLiveBookmarks(cameraId: string, limit: number) {
+    return this.liveOperations.listBookmarks(cameraId, limit);
+  }
+  async createLiveBookmark(input: any) {
+    return this.liveOperations.createBookmark(input);
+  }
+  async listLiveIncidents(cameraId: string, limit: number) {
+    return this.liveOperations.listIncidents(cameraId, limit);
+  }
+  async createLiveIncident(input: any) {
+    return this.liveOperations.createIncident(input);
+  }
+  async updateLiveIncidentStatus(id: string, tenantId: string, cameraId: string, status: any) {
+    return this.liveOperations.updateIncidentStatus(id, tenantId, cameraId, status);
   }
   async writeAudit(event: AuditEventInput) { await this.audits.write(event); }
 }

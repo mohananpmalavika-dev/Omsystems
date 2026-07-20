@@ -1,12 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { FastifyInstance } from "fastify";
 import { buildApp } from "../src/app.js";
+import { MemoryStore } from "../src/store.js";
 
 describe("control-plane API", () => {
   let app: FastifyInstance;
+  let store: MemoryStore;
 
   beforeEach(async () => {
-    app = await buildApp();
+    store = new MemoryStore();
+    app = await buildApp({ store });
   });
 
   afterEach(async () => {
@@ -153,5 +156,96 @@ describe("control-plane API", () => {
     });
     expect(sessionResponse.statusCode).toBe(201);
     expect(sessionResponse.json().token).toHaveLength(43);
+  });
+
+  it("creates bookmarks and protects incident recording windows", async () => {
+    const headers = { "x-user-id": "user-global-admin" };
+    const bookmarkResponse = await app.inject({
+      method: "POST",
+      url: "/v1/cameras/cam-001/bookmarks",
+      headers,
+      payload: {
+        bookmarkedAt: "2026-07-21T10:00:00.000Z",
+        reason: "unauthorized-entry",
+        notes: "Person entered through the restricted door",
+        priority: "high",
+      },
+    });
+    expect(bookmarkResponse.statusCode).toBe(201);
+    expect(bookmarkResponse.json()).toMatchObject({
+      cameraId: "cam-001",
+      reason: "unauthorized-entry",
+      priority: "high",
+    });
+
+    const incidentResponse = await app.inject({
+      method: "POST",
+      url: "/v1/cameras/cam-001/incidents",
+      headers,
+      payload: {
+        occurredAt: "2026-07-21T10:05:00.000Z",
+        title: "Restricted entrance opened",
+        notes: "Operator observed an unknown person",
+        priority: "P1",
+        preRollSeconds: 60,
+        postRollSeconds: 300,
+      },
+    });
+    expect(incidentResponse.statusCode).toBe(201);
+    expect(incidentResponse.json()).toMatchObject({
+      cameraId: "cam-001",
+      priority: "P1",
+      status: "new",
+      recordingFrom: "2026-07-21T10:04:00.000Z",
+      recordingTo: "2026-07-21T10:10:00.000Z",
+    });
+    const incident = incidentResponse.json();
+    expect(store.recordingLegalHolds).toContainEqual(expect.objectContaining({
+      id: incident.legalHoldId,
+      cameraId: "cam-001",
+      fromAt: incident.recordingFrom,
+      toAt: incident.recordingTo,
+    }));
+    expect(store.liveBookmarks).toContainEqual(expect.objectContaining({
+      id: incident.bookmarkId,
+      incidentId: incident.id,
+      priority: "critical",
+    }));
+    expect(store.auditEvents.map((event) => event.action)).toEqual(
+      expect.arrayContaining(["live.bookmark_created", "live.incident_created"]),
+    );
+
+    const listResponse = await app.inject({
+      method: "GET",
+      url: "/v1/cameras/cam-001/incidents",
+      headers,
+    });
+    expect(listResponse.statusCode).toBe(200);
+    expect(listResponse.json().data).toHaveLength(1);
+
+    const updateResponse = await app.inject({
+      method: "PATCH",
+      url: `/v1/cameras/cam-001/incidents/${incident.id}`,
+      headers,
+      payload: { status: "investigating" },
+    });
+    expect(updateResponse.statusCode).toBe(200);
+    expect(updateResponse.json().status).toBe("investigating");
+  });
+
+  it("denies incident creation without alarm acknowledgement permission", async () => {
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/cameras/cam-001/incidents",
+      headers: { "x-user-id": "user-branch-manager" },
+      payload: {
+        title: "Test incident",
+        priority: "P3",
+        preRollSeconds: 60,
+        postRollSeconds: 300,
+      },
+    });
+    expect(response.statusCode).toBe(403);
+    expect(store.liveIncidents).toHaveLength(0);
   });
 });

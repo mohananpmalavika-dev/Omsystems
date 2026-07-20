@@ -21,6 +21,12 @@ import type {
   RecordingSegment,
   RecordingStorageNode,
   RecordingMode,
+  LiveBookmark,
+  LiveBookmarkReason,
+  LiveIncident,
+  LiveIncidentPriority,
+  LiveIncidentStatus,
+  LivePriority,
   NodeType,
   ResourceNode,
   User,
@@ -225,6 +231,36 @@ export interface ControlPlaneStore {
     storageNodeExternalId: string,
     segmentIds: string[],
   ): Promise<number>;
+  listLiveBookmarks(cameraId: string, limit: number): Promise<LiveBookmark[]>;
+  createLiveBookmark(input: {
+    tenantId: string;
+    cameraId: string;
+    operatorId: string;
+    bookmarkedAt: string;
+    reason: LiveBookmarkReason;
+    notes?: string | undefined;
+    priority: LivePriority;
+    recordingSegmentId?: string | undefined;
+    snapshotReference?: string | undefined;
+  }): Promise<LiveBookmark>;
+  listLiveIncidents(cameraId: string, limit: number): Promise<LiveIncident[]>;
+  createLiveIncident(input: {
+    tenantId: string;
+    cameraId: string;
+    createdBy: string;
+    title: string;
+    notes?: string | undefined;
+    priority: LiveIncidentPriority;
+    occurredAt: string;
+    preRollSeconds: number;
+    postRollSeconds: number;
+  }): Promise<LiveIncident>;
+  updateLiveIncidentStatus(
+    id: string,
+    tenantId: string,
+    cameraId: string,
+    status: LiveIncidentStatus,
+  ): Promise<LiveIncident | undefined>;
   writeAudit(event: AuditEventInput): Promise<void>;
 }
 

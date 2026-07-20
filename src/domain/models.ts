@@ -405,6 +405,61 @@ export interface RecordingHealthEvent {
   resolvedAt?: string | undefined;
 }
 
+export type LiveBookmarkReason =
+  | "suspicious-activity"
+  | "cash-discrepancy"
+  | "unauthorized-entry"
+  | "customer-dispute"
+  | "equipment-failure"
+  | "safety-incident"
+  | "other";
+
+export type LivePriority = "low" | "medium" | "high" | "critical";
+
+export interface LiveBookmark {
+  id: string;
+  tenantId: string;
+  cameraId: string;
+  operatorId: string;
+  bookmarkedAt: string;
+  reason: LiveBookmarkReason;
+  notes?: string | undefined;
+  priority: LivePriority;
+  incidentId?: string | undefined;
+  recordingSegmentId?: string | undefined;
+  snapshotReference?: string | undefined;
+  createdAt: string;
+}
+
+export type LiveIncidentPriority = "P1" | "P2" | "P3" | "P4" | "P5";
+export type LiveIncidentStatus =
+  | "new"
+  | "acknowledged"
+  | "investigating"
+  | "escalated"
+  | "resolved"
+  | "false-alarm";
+
+export interface LiveIncident {
+  id: string;
+  tenantId: string;
+  cameraId: string;
+  createdBy: string;
+  title: string;
+  notes?: string | undefined;
+  priority: LiveIncidentPriority;
+  status: LiveIncidentStatus;
+  occurredAt: string;
+  recordingFrom: string;
+  recordingTo: string;
+  preRollSeconds: number;
+  postRollSeconds: number;
+  bookmarkId: string;
+  legalHoldId: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface AuditEventInput {
   tenantId: string;
   actorUserId: string | null;

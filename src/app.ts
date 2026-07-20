@@ -19,6 +19,7 @@ import { registerCameraPermissionRoutes } from "./routes/camera-permissions.rout
 import { registerCctvInfrastructureRoutes } from "./routes/cctv-infrastructure.js";
 import { registerOrganizationRoutes } from "./routes/organization.routes.js";
 import { registerUserRoutes } from "./routes/user.routes.js";
+import { registerLiveOperationsRoutes } from "./routes/live-operations.routes.js";
 import { MemoryStore } from "./store.js";
 
 declare module "fastify" {
@@ -649,6 +650,7 @@ export async function buildApp(options?: {
     await registerCameraPermissionRoutes(app, extendedStore);
     await registerCctvInfrastructureRoutes(app, extendedStore);
   }
+  await registerLiveOperationsRoutes(app, store);
 
   app.setErrorHandler((error, _request, reply) => {
     if (error instanceof z.ZodError) {

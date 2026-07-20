@@ -44,7 +44,9 @@ async function fetchApi<T>(
     }));
 
     throw new ApiError(
-      error.message || 'Request failed',
+      error.message || (typeof error.error === 'string'
+        ? error.error.replaceAll('_', ' ')
+        : 'Request failed'),
       response.status,
       error
     );
@@ -243,6 +245,32 @@ export const cameraInventoryApi = {
     fetchApi<any>(
       `/v1/branches/${encodeURIComponent(branchId)}/cameras`,
       { method: 'POST', body: JSON.stringify(data) }
+    ),
+};
+
+export const liveOperationsApi = {
+  listBookmarks: (cameraId: string, limit = 50) =>
+    fetchApi<{ data: any[] }>(
+      `/v1/cameras/${encodeURIComponent(cameraId)}/bookmarks?limit=${limit}`
+    ),
+  createBookmark: (cameraId: string, data: any) =>
+    fetchApi<any>(`/v1/cameras/${encodeURIComponent(cameraId)}/bookmarks`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  listIncidents: (cameraId: string, limit = 50) =>
+    fetchApi<{ data: any[] }>(
+      `/v1/cameras/${encodeURIComponent(cameraId)}/incidents?limit=${limit}`
+    ),
+  createIncident: (cameraId: string, data: any) =>
+    fetchApi<any>(`/v1/cameras/${encodeURIComponent(cameraId)}/incidents`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  updateIncidentStatus: (cameraId: string, incidentId: string, status: string) =>
+    fetchApi<any>(
+      `/v1/cameras/${encodeURIComponent(cameraId)}/incidents/${encodeURIComponent(incidentId)}`,
+      { method: 'PATCH', body: JSON.stringify({ status }) }
     ),
 };
 

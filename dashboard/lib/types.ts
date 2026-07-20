@@ -62,6 +62,48 @@ export interface RecordingJob {
   schedule?: { days: number[]; start: string; end: string };
 }
 
+export type LiveBookmarkReason =
+  | "suspicious-activity"
+  | "cash-discrepancy"
+  | "unauthorized-entry"
+  | "customer-dispute"
+  | "equipment-failure"
+  | "safety-incident"
+  | "other";
+
+export interface LiveBookmark {
+  id: string;
+  cameraId: string;
+  operatorId: string;
+  bookmarkedAt: string;
+  reason: LiveBookmarkReason;
+  notes?: string;
+  priority: "low" | "medium" | "high" | "critical";
+  incidentId?: string;
+  recordingSegmentId?: string;
+  snapshotReference?: string;
+  createdAt: string;
+}
+
+export interface LiveIncident {
+  id: string;
+  cameraId: string;
+  createdBy: string;
+  title: string;
+  notes?: string;
+  priority: "P1" | "P2" | "P3" | "P4" | "P5";
+  status: "new" | "acknowledged" | "investigating" | "escalated" | "resolved" | "false-alarm";
+  occurredAt: string;
+  recordingFrom: string;
+  recordingTo: string;
+  preRollSeconds: number;
+  postRollSeconds: number;
+  bookmarkId: string;
+  legalHoldId: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface EdgeAgent {
   id: string;
   branchId: string;

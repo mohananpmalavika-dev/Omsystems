@@ -1,12 +1,14 @@
 "use client";
 
 import {
+  BookmarkPlus,
   Camera as CameraIcon,
   Expand,
   LoaderCircle,
   Maximize2,
   Move3D,
   Radio,
+  Siren,
   CircleStop,
   Camera as SnapshotIcon,
   ZoomIn,
@@ -27,6 +29,8 @@ export function CameraTile({
   recordingLoading,
   onToggleRecording,
   onChangeRecordingMode,
+  onBookmark,
+  onCreateIncident,
 }: {
   camera: Camera;
   session?: LiveSessionResponse;
@@ -37,6 +41,8 @@ export function CameraTile({
   recordingLoading?: boolean;
   onToggleRecording: () => void;
   onChangeRecordingMode: (mode: RecordingMode) => void;
+  onBookmark: () => void;
+  onCreateIncident: () => void;
 }) {
   const tileRef = useRef<HTMLElement>(null);
   const isActive = Boolean(session);
@@ -108,6 +114,12 @@ export function CameraTile({
         )}
 
         <div className="tile-actions">
+          <button aria-label="Bookmark live video" title="Bookmark live video" onClick={onBookmark} disabled={!isActive}>
+            <BookmarkPlus size={15} />
+          </button>
+          <button aria-label="Create incident" title="Create incident and protect recording" onClick={onCreateIncident} disabled={!isActive}>
+            <Siren size={15} />
+          </button>
           {camera.capabilities.audio && (
             <button aria-label="Audio available" title="Audio available">
               <Volume2 size={15} />

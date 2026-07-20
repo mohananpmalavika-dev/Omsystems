@@ -57,6 +57,8 @@ async function verifySchema() {
       "camera_specific_grants",
       "camera_specifications",
       "organizational_hierarchy_rules",
+      "live_bookmarks",
+      "live_incidents",
       "recording_health_events",
       "recording_jobs",
       "recording_legal_holds",
@@ -102,8 +104,8 @@ async function verifySchema() {
     const migrations = await client.query(
       "SELECT count(*)::integer AS count FROM schema_migrations",
     );
-    if (migrations.rows[0]?.count !== 10) {
-      throw new Error(`Expected 10 applied migrations, found ${migrations.rows[0]?.count}`);
+    if (migrations.rows[0]?.count !== 11) {
+      throw new Error(`Expected 11 applied migrations, found ${migrations.rows[0]?.count}`);
     }
 
     const pilot = await client.query(`
@@ -231,7 +233,7 @@ async function verifyBaselineRecovery() {
     const result = await verification.query(
       "SELECT count(*)::integer AS count FROM schema_migrations",
     );
-    if (result.rows[0]?.count !== 10) {
+    if (result.rows[0]?.count !== 11) {
       throw new Error("Existing-schema baseline did not recover all migrations");
     }
   } finally {

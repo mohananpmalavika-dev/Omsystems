@@ -142,6 +142,12 @@ button { cursor: pointer; }
   font-size: 12px;
 }
 .error-banner button { margin-left: auto; color: inherit; border: 0; background: none; }
+.success-banner {
+  display: flex; align-items: center; gap: 8px; margin-bottom: 16px; padding: 11px 14px;
+  color: #157455; background: #eaf8f2; border: 1px solid #ccecdf; border-radius: 9px;
+  font-size: 12px;
+}
+.success-banner button { margin-left: auto; color: inherit; border: 0; background: none; }
 .summary-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
 .summary-card {
   min-height: 111px; position: relative; display: flex; align-items: center; gap: 13px;
@@ -509,6 +515,7 @@ select, textarea { font: inherit; }
   min-height: 31px; display: inline-flex; align-items: center; gap: 6px; padding: 0 10px;
   color: white; border-radius: 7px; background: #2878ff; text-decoration: none; font-size: 10px; font-weight: 650;
 }
+.tile-actions button:disabled { opacity: .38; cursor: not-allowed; }
 .device-manager { display: grid; gap: 16px; }
 .device-toolbar, .device-toolbar-actions, .device-card-heading, .device-message,
 .remote-camera-note, .gateway-row, .camera-inventory-row { display: flex; align-items: center; }
@@ -556,6 +563,32 @@ select, textarea { font: inherit; }
 .form-row.form-row-three { grid-template-columns: repeat(3,minmax(0,1fr)); }
 .capability-checks { display: flex; flex-wrap: wrap; gap: 9px; }
 .capability-checks label { display: flex; align-items: center; gap: 6px; padding: 8px 10px; border: 1px solid #dde4ec; border-radius: 8px; font-size: 10px; }
+.live-event-modal { width: min(720px,100%); }
+.live-event-camera {
+  display: flex; align-items: center; gap: 10px; margin-bottom: 18px; padding: 12px;
+  color: #315f9f; border: 1px solid #dce7f7; border-radius: 9px; background: #f4f8fe;
+}
+.live-event-camera strong, .live-event-camera span { display: block; }
+.live-event-camera strong { color: #34445a; font-size: 11px; }
+.live-event-camera span { margin-top: 3px; color: #718198; font-size: 9px; }
+.incident-panel { margin-top: 18px; padding: 18px; border: 1px solid var(--line); border-radius: 12px; background: white; }
+.incident-panel .section-heading { margin-bottom: 12px; }
+.incident-panel .section-heading p { margin: 4px 0 0; color: var(--muted); font-size: 10px; }
+.incident-total { padding: 5px 8px; color: #9d3f3f; border-radius: 8px; background: #fff0f0; font-size: 9px; font-weight: 700; }
+.incident-empty { min-height: 105px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px; color: #779184; text-align: center; }
+.incident-empty strong { color: #53675c; font-size: 11px; }
+.incident-empty span { color: #87948d; font-size: 9px; }
+.incident-list { display: grid; gap: 7px; }
+.incident-row { min-height: 55px; display: flex; align-items: center; gap: 10px; padding: 8px 10px; border: 1px solid #e6eaf0; border-radius: 9px; }
+.incident-priority { min-width: 31px; padding: 5px 6px; color: #66758a; border-radius: 7px; background: #eef1f5; text-align: center; font-size: 9px; font-weight: 800; }
+.incident-priority.p1 { color: #a92f38; background: #ffe8ea; }
+.incident-priority.p2 { color: #a15c17; background: #fff0dd; }
+.incident-copy { min-width: 0; flex: 1; }
+.incident-copy strong, .incident-copy span { display: block; }
+.incident-copy strong { font-size: 10px; }
+.incident-copy span { margin-top: 3px; color: #7d8999; font-size: 8px; }
+.evidence-hold { display: inline-flex; align-items: center; gap: 4px; color: #157455; font-size: 8px; }
+.incident-row select { min-width: 120px; min-height: 31px; padding: 0 7px; border: 1px solid #dce2ea; border-radius: 7px; background: white; font-size: 9px; }
 .login-footer { position: fixed; bottom: 7px; color: #8a95a5; font-size: 9px; }
 
 @media (max-width: 700px) {
@@ -573,4 +606,8 @@ select, textarea { font: inherit; }
   .device-scope { align-items: stretch; flex-direction: column; }
   .device-scope select { width: 100%; min-width: 0; }
   .device-columns, .form-row.form-row-three { grid-template-columns: 1fr; }
+  .incident-row { align-items: flex-start; flex-wrap: wrap; }
+  .incident-copy { min-width: calc(100% - 50px); }
+  .evidence-hold { margin-left: 41px; }
+  .incident-row select { margin-left: auto; }
 }

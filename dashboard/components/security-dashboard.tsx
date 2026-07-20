@@ -29,8 +29,10 @@ import {
   X,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import type { Branch, Camera as CameraType, LiveSessionResponse, RecordingJob } from "@/lib/types";
+import type { Branch, Camera as CameraType, LiveIncident, LiveSessionResponse, RecordingJob } from "@/lib/types";
+import { liveOperationsApi } from "@/lib/api-client";
 import { CameraTile } from "./camera-tile";
+import { LiveEventForm } from "./live-event-form";
 
 const layoutOptions = [1, 4, 9, 16, 25, 36] as const;
 
@@ -58,6 +60,13 @@ export function SecurityDashboard() {
   const [loading, setLoading] = useState(true);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [incidents, setIncidents] = useState<LiveIncident[]>([]);
+  const [liveAction, setLiveAction] = useState<{
+    action: "bookmark" | "incident";
+    camera: CameraType;
+  }>();
+  const [liveActionSaving, setLiveActionSaving] = useState(false);
 
   useEffect(() => {
     void fetch("/api/branches")
@@ -89,6 +98,14 @@ export function SecurityDashboard() {
           return response.ok ? await response.json() as RecordingJob : undefined;
         }));
         setRecordings(Object.fromEntries(states.filter((job): job is RecordingJob => Boolean(job)).map((job) => [job.cameraId, job])));
+        const incidentLists = await Promise.all(data.map(async (camera) => {
+          try {
+            return (await liveOperationsApi.listIncidents(camera.id, 50)).data as LiveIncident[];
+          } catch {
+            return [];
+          }
+        }));
+        setIncidents(incidentLists.flat());
       })
       .catch(() => setError("Camera inventory could not be loaded."))
       .finally(() => setLoading(false));
@@ -161,6 +178,57 @@ export function SecurityDashboard() {
     () => cameras.length ? Math.round((online / cameras.length) * 100) : 0,
     [cameras.length, online],
   );
+  const openIncidents = incidents.filter(
+    (incident) => incident.status !== "resolved" && incident.status !== "false-alarm",
+  );
+  const highPriorityIncidents = openIncidents.filter(
+    (incident) => incident.priority === "P1" || incident.priority === "P2",
+  ).length;
+
+  const submitLiveAction = useCallback(async (payload: Record<string, unknown>) => {
+    if (!liveAction) return;
+    setLiveActionSaving(true);
+    setError(null);
+    setNotice(null);
+    try {
+      if (liveAction.action === "bookmark") {
+        await liveOperationsApi.createBookmark(liveAction.camera.id, payload);
+        setNotice(`Bookmark saved for ${liveAction.camera.name}.`);
+      } else {
+        const incident = await liveOperationsApi.createIncident(
+          liveAction.camera.id,
+          payload,
+        ) as LiveIncident;
+        setIncidents((current) => [incident, ...current]);
+        setNotice(`Incident created and its recording window is protected.`);
+      }
+      setLiveAction(undefined);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Live operation failed.");
+    } finally {
+      setLiveActionSaving(false);
+    }
+  }, [liveAction]);
+
+  const changeIncidentStatus = useCallback(async (
+    incident: LiveIncident,
+    status: LiveIncident["status"],
+  ) => {
+    setError(null);
+    try {
+      const updated = await liveOperationsApi.updateIncidentStatus(
+        incident.cameraId,
+        incident.id,
+        status,
+      ) as LiveIncident;
+      setIncidents((current) => current.map((item) =>
+        item.id === updated.id ? updated : item
+      ));
+      setNotice(`Incident status changed to ${status.replace("-", " ")}.`);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Incident update failed.");
+    }
+  }, []);
 
   return (
     <div className="app-shell">
@@ -183,7 +251,7 @@ export function SecurityDashboard() {
           <p>OPERATIONS</p>
           <a href="#" className="active"><LayoutDashboard size={18} />Overview</a>
           <a href="#live-wall"><MonitorPlay size={18} />Live wall<span className="nav-count">8</span></a>
-          <a href="#"><Siren size={18} />Incidents<span className="alert-count">3</span></a>
+          <a href="#incidents"><Siren size={18} />Incidents<span className="alert-count">{openIncidents.length}</span></a>
           <a href="#"><Activity size={18} />Health</a>
           <p>MANAGEMENT</p>
           <a href="/admin"><Building2 size={18} />Organization</a>
@@ -232,12 +300,18 @@ export function SecurityDashboard() {
               <button onClick={() => setError(null)}><X size={15} /></button>
             </div>
           )}
+          {notice && (
+            <div className="success-banner">
+              <ShieldCheck size={17} />{notice}
+              <button onClick={() => setNotice(null)}><X size={15} /></button>
+            </div>
+          )}
 
           <section className="summary-grid" aria-label="Operations summary">
             <SummaryCard label="Monitored branches" value="500" detail="Across 12 regions" icon={<Building2 />} tone="blue" />
             <SummaryCard label="Cameras online" value="3,742" detail="98.4% availability" icon={<Camera />} tone="green" progress={98} />
             <SummaryCard label="Needs attention" value="24" detail="8 offline · 16 degraded" icon={<AlertTriangle />} tone="amber" />
-            <SummaryCard label="Open incidents" value="3" detail="1 high priority" icon={<Siren />} tone="red" />
+            <SummaryCard label="Open incidents" value={String(openIncidents.length)} detail={`${highPriorityIncidents} high priority`} icon={<Siren />} tone="red" />
           </section>
 
           <section className="branch-panel">
@@ -319,13 +393,77 @@ export function SecurityDashboard() {
                     recordingLoading={recordingLoading === camera.id}
                     onToggleRecording={() => void toggleRecording(camera.id)}
                     onChangeRecordingMode={(mode) => void changeRecordingMode(camera.id, mode)}
+                    onBookmark={() => setLiveAction({ action: "bookmark", camera })}
+                    onCreateIncident={() => setLiveAction({ action: "incident", camera })}
                   />
                 ))}
               </div>
             )}
           </section>
+
+          <section className="incident-panel" id="incidents">
+            <div className="section-heading">
+              <div>
+                <span className="eyebrow">OPERATOR WORKFLOW</span>
+                <h2>Active incidents</h2>
+                <p>Recording windows created here remain protected by legal hold.</p>
+              </div>
+              <span className="incident-total">{openIncidents.length} open</span>
+            </div>
+            {openIncidents.length === 0 ? (
+              <div className="incident-empty">
+                <ShieldCheck size={22} />
+                <strong>No active incidents</strong>
+                <span>Create one from an active camera tile when operator attention is required.</span>
+              </div>
+            ) : (
+              <div className="incident-list">
+                {openIncidents.map((incident) => {
+                  const incidentCamera = cameras.find(
+                    (item) => item.id === incident.cameraId,
+                  );
+                  return (
+                    <article className="incident-row" key={incident.id}>
+                      <span className={`incident-priority ${incident.priority.toLowerCase()}`}>
+                        {incident.priority}
+                      </span>
+                      <div className="incident-copy">
+                        <strong>{incident.title}</strong>
+                        <span>{incidentCamera?.name ?? "Camera"} · {new Date(incident.occurredAt).toLocaleString()}</span>
+                      </div>
+                      <span className="evidence-hold"><ShieldCheck size={13} />Evidence protected</span>
+                      <select
+                        aria-label={`Status for ${incident.title}`}
+                        value={incident.status}
+                        onChange={(event) => void changeIncidentStatus(
+                          incident,
+                          event.target.value as LiveIncident["status"],
+                        )}
+                      >
+                        <option value="new">New</option>
+                        <option value="acknowledged">Acknowledged</option>
+                        <option value="investigating">Investigating</option>
+                        <option value="escalated">Escalated</option>
+                        <option value="resolved">Resolved</option>
+                        <option value="false-alarm">False alarm</option>
+                      </select>
+                    </article>
+                  );
+                })}
+              </div>
+            )}
+          </section>
         </div>
       </main>
+      {liveAction && (
+        <LiveEventForm
+          action={liveAction.action}
+          camera={liveAction.camera}
+          saving={liveActionSaving}
+          onCancel={() => setLiveAction(undefined)}
+          onSubmit={submitLiveAction}
+        />
+      )}
     </div>
   );
 }

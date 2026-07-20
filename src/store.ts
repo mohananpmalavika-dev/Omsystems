@@ -7,6 +7,8 @@ import type {
   CameraStatus,
   DiscoveredCamera,
   EdgeAgent,
+  LiveBookmark,
+  LiveIncident,
   LiveSession,
   ConsumedLiveSession,
   RecordingJob,
@@ -89,6 +91,8 @@ export class MemoryStore implements ControlPlaneStore {
   readonly recordingLegalHolds: RecordingLegalHold[] = [];
   readonly recordingStorageNodes = new Map<string, RecordingStorageNode>();
   readonly recordingHealthEvents: RecordingHealthEvent[] = [];
+  readonly liveBookmarks: LiveBookmark[] = [];
+  readonly liveIncidents: LiveIncident[] = [];
 
   async close() {}
 
@@ -378,6 +382,124 @@ export class MemoryStore implements ControlPlaneStore {
       }
     }
     return updated;
+  }
+
+  async listLiveBookmarks(cameraId: string, limit: number) {
+    return this.liveBookmarks
+      .filter((bookmark) => bookmark.cameraId === cameraId)
+      .sort((left, right) => right.bookmarkedAt.localeCompare(left.bookmarkedAt))
+      .slice(0, limit);
+  }
+
+  async createLiveBookmark(
+    input: Parameters<ControlPlaneStore["createLiveBookmark"]>[0],
+  ) {
+    if (!this.cameras.has(input.cameraId)) throw new Error("camera_not_found");
+    const bookmark: LiveBookmark = {
+      id: randomUUID(),
+      tenantId: input.tenantId,
+      cameraId: input.cameraId,
+      operatorId: input.operatorId,
+      bookmarkedAt: input.bookmarkedAt,
+      reason: input.reason,
+      priority: input.priority,
+      ...(input.notes ? { notes: input.notes } : {}),
+      ...(input.recordingSegmentId
+        ? { recordingSegmentId: input.recordingSegmentId }
+        : {}),
+      ...(input.snapshotReference
+        ? { snapshotReference: input.snapshotReference }
+        : {}),
+      createdAt: new Date().toISOString(),
+    };
+    this.liveBookmarks.push(bookmark);
+    return bookmark;
+  }
+
+  async listLiveIncidents(cameraId: string, limit: number) {
+    return this.liveIncidents
+      .filter((incident) => incident.cameraId === cameraId)
+      .sort((left, right) => right.occurredAt.localeCompare(left.occurredAt))
+      .slice(0, limit);
+  }
+
+  async createLiveIncident(
+    input: Parameters<ControlPlaneStore["createLiveIncident"]>[0],
+  ) {
+    if (!this.cameras.has(input.cameraId)) throw new Error("camera_not_found");
+    const occurredAt = new Date(input.occurredAt);
+    const recordingFrom = new Date(
+      occurredAt.getTime() - input.preRollSeconds * 1000,
+    ).toISOString();
+    const recordingTo = new Date(
+      occurredAt.getTime() + input.postRollSeconds * 1000,
+    ).toISOString();
+    const incidentId = randomUUID();
+    const legalHoldId = randomUUID();
+    const bookmarkId = randomUUID();
+    const now = new Date().toISOString();
+    const bookmark: LiveBookmark = {
+      id: bookmarkId,
+      tenantId: input.tenantId,
+      cameraId: input.cameraId,
+      operatorId: input.createdBy,
+      bookmarkedAt: input.occurredAt,
+      reason: "suspicious-activity",
+      priority: input.priority === "P1" ? "critical"
+        : input.priority === "P2" ? "high"
+        : input.priority === "P3" ? "medium" : "low",
+      incidentId,
+      ...(input.notes ? { notes: input.notes } : {}),
+      createdAt: now,
+    };
+    const incident: LiveIncident = {
+      id: incidentId,
+      tenantId: input.tenantId,
+      cameraId: input.cameraId,
+      createdBy: input.createdBy,
+      title: input.title,
+      ...(input.notes ? { notes: input.notes } : {}),
+      priority: input.priority,
+      status: "new",
+      occurredAt: input.occurredAt,
+      recordingFrom,
+      recordingTo,
+      preRollSeconds: input.preRollSeconds,
+      postRollSeconds: input.postRollSeconds,
+      bookmarkId,
+      legalHoldId,
+      createdAt: now,
+      updatedAt: now,
+    };
+    this.recordingLegalHolds.push({
+      id: legalHoldId,
+      tenantId: input.tenantId,
+      cameraId: input.cameraId,
+      fromAt: recordingFrom,
+      toAt: recordingTo,
+      reason: `Live incident ${input.priority}: ${input.title}`,
+      createdBy: input.createdBy,
+      createdAt: now,
+    });
+    this.liveBookmarks.push(bookmark);
+    this.liveIncidents.push(incident);
+    return incident;
+  }
+
+  async updateLiveIncidentStatus(
+    id: string,
+    inputTenantId: string,
+    cameraId: string,
+    status: LiveIncident["status"],
+  ) {
+    const incident = this.liveIncidents.find((item) =>
+      item.id === id && item.tenantId === inputTenantId &&
+      item.cameraId === cameraId
+    );
+    if (!incident) return undefined;
+    incident.status = status;
+    incident.updatedAt = new Date().toISOString();
+    return incident;
   }
 
   async writeAudit(event: AuditEventInput) {
