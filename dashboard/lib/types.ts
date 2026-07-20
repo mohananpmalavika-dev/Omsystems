@@ -49,4 +49,15 @@ export interface RecordingJob {
   status: RecordingStatus;
   retentionDays: number;
   postRollSeconds: number;
+  segmentDurationSeconds: number;
+  hotRetentionDays: number;
+  warmRetentionDays: number;
+  coldRetentionDays: number;
+  maxBitrateKbps?: number;
+  critical: boolean;
+  backupRequired: boolean;
+  automaticDeletionEnabled: boolean;
+  evidenceProtection: boolean;
+  recordMainStream: boolean;
+  schedule?: { days: number[]; start: string; end: string };
 }

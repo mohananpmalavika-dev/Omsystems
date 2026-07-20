@@ -10,7 +10,10 @@ import type {
   LiveSession,
   ConsumedLiveSession,
   RecordingJob,
+  RecordingHealthEvent,
+  RecordingLegalHold,
   RecordingSegment,
+  RecordingStorageNode,
   ResourceNode,
   User,
 } from "./domain/models.js";
@@ -83,6 +86,9 @@ export class MemoryStore implements ControlPlaneStore {
   >();
   readonly recordingJobs = new Map<string, RecordingJob>();
   readonly recordingSegments: RecordingSegment[] = [];
+  readonly recordingLegalHolds: RecordingLegalHold[] = [];
+  readonly recordingStorageNodes = new Map<string, RecordingStorageNode>();
+  readonly recordingHealthEvents: RecordingHealthEvent[] = [];
 
   async close() {}
 
@@ -240,10 +246,130 @@ export class MemoryStore implements ControlPlaneStore {
       (!from || segment.endedAt >= from) && (!to || segment.startedAt <= to));
   }
 
-  async createRecordingSegment(input: Omit<RecordingSegment, "id">) {
-    const segment = { id: randomUUID(), ...structuredClone(input) };
+  async createRecordingSegment(input: Omit<RecordingSegment, "id" | "createdAt">) {
+    const existing = this.recordingSegments.find((item) =>
+      item.cameraId === input.cameraId && item.storagePath === input.storagePath
+    );
+    if (existing) {
+      Object.assign(existing, structuredClone(input));
+      return existing;
+    }
+    const segment: RecordingSegment = {
+      id: randomUUID(), ...structuredClone(input), createdAt: new Date().toISOString(),
+    };
     this.recordingSegments.push(segment);
     return segment;
+  }
+
+  async updateRecordingJobStatus(cameraId: string, status: RecordingJob["status"]) {
+    const job = this.recordingJobs.get(cameraId);
+    if (!job) return undefined;
+    job.status = status;
+    job.updatedAt = new Date().toISOString();
+    return job;
+  }
+
+  async listRecordingLegalHolds(cameraId: string) {
+    return this.recordingLegalHolds.filter((hold) => hold.cameraId === cameraId);
+  }
+
+  async createRecordingLegalHold(input: {
+    tenantId: string; cameraId: string; fromAt: string; toAt: string;
+    reason: string; createdBy: string;
+  }) {
+    const hold: RecordingLegalHold = {
+      id: randomUUID(), ...structuredClone(input), createdAt: new Date().toISOString(),
+    };
+    this.recordingLegalHolds.push(hold);
+    return hold;
+  }
+
+  async releaseRecordingLegalHold(
+    id: string,
+    inputTenantId: string,
+    cameraId: string,
+    releasedBy: string,
+  ) {
+    const hold = this.recordingLegalHolds.find((item) =>
+      item.id === id && item.tenantId === inputTenantId &&
+      item.cameraId === cameraId && !item.releasedAt
+    );
+    if (!hold) return undefined;
+    hold.releasedBy = releasedBy;
+    hold.releasedAt = new Date().toISOString();
+    return hold;
+  }
+
+  async upsertRecordingStorageNode(input: {
+    tenantId: string; externalId: string; name: string;
+    scopeNodeId?: string | undefined;
+    supportedTiers: Array<"hot" | "warm" | "cold">;
+    capacityBytes: number; usedBytes: number; availableBytes: number;
+    status: "healthy" | "warning" | "critical" | "offline";
+    temperatureCelsius?: number | undefined; writeMbps?: number | undefined;
+  }) {
+    const key = `${input.tenantId}:${input.externalId}`;
+    const existing = this.recordingStorageNodes.get(key);
+    const node: RecordingStorageNode = {
+      id: existing?.id ?? randomUUID(), ...structuredClone(input),
+      lastSeenAt: new Date().toISOString(),
+    };
+    this.recordingStorageNodes.set(key, node);
+    return node;
+  }
+
+  async createRecordingHealthEvent(input: {
+    tenantId: string; cameraId?: string | undefined;
+    storageNodeExternalId?: string | undefined; eventType: string;
+    severity: "info" | "warning" | "critical"; message: string;
+    details?: Record<string, unknown> | undefined;
+  }) {
+    const event: RecordingHealthEvent = {
+      id: randomUUID(), ...structuredClone(input), details: input.details ?? {},
+      occurredAt: new Date().toISOString(),
+    };
+    this.recordingHealthEvents.push(event);
+    return event;
+  }
+
+  async listRecordingRetentionCandidates(
+    inputTenantId: string,
+    storageNodeExternalId: string,
+    limit: number,
+  ) {
+    const now = Date.now();
+    return this.recordingSegments.filter((segment) => {
+      const camera = this.cameras.get(segment.cameraId);
+      const node = camera ? this.nodes.get(camera.nodeId) : undefined;
+      const job = this.recordingJobs.get(segment.cameraId);
+      if (!node || node.tenantId !== inputTenantId || !job ||
+          !job.automaticDeletionEnabled || segment.status !== "ready" ||
+          segment.storageNodeExternalId !== storageNodeExternalId ||
+          Date.parse(segment.endedAt) >= now - job.retentionDays * 86_400_000) return false;
+      return !this.recordingLegalHolds.some((hold) =>
+        hold.cameraId === segment.cameraId && !hold.releasedAt &&
+        hold.fromAt < segment.endedAt && hold.toAt > segment.startedAt
+      );
+    }).slice(0, limit);
+  }
+
+  async markRecordingSegmentsDeleted(
+    inputTenantId: string,
+    storageNodeExternalId: string,
+    segmentIds: string[],
+  ) {
+    let updated = 0;
+    for (const segment of this.recordingSegments) {
+      const camera = this.cameras.get(segment.cameraId);
+      const node = camera ? this.nodes.get(camera.nodeId) : undefined;
+      if (node?.tenantId === inputTenantId &&
+          segment.storageNodeExternalId === storageNodeExternalId &&
+          segmentIds.includes(segment.id) && segment.status !== "deleted") {
+        segment.status = "deleted";
+        updated += 1;
+      }
+    }
+    return updated;
   }
 
   async writeAudit(event: AuditEventInput) {

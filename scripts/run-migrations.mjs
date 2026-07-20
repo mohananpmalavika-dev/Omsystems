@@ -94,7 +94,12 @@ async function baselineExistingCoreSchema(client, files) {
       to_regclass('public.camera_specific_grants') IS NOT NULL
         AND to_regclass('public.camera_access_summary') IS NOT NULL
         AND to_regprocedure('public.check_camera_access(uuid,uuid,text)') IS NOT NULL
-        AS has_camera_permissions
+        AS has_camera_permissions,
+      to_regclass('public.recording_jobs') IS NOT NULL
+        AND to_regclass('public.recording_segments') IS NOT NULL
+        AND to_regclass('public.recording_legal_holds') IS NOT NULL
+        AND to_regclass('public.recording_storage_nodes') IS NOT NULL
+        AS has_recording
   `);
   const existing = state.rows[0];
   if (!existing?.has_initial) return;
@@ -128,6 +133,9 @@ async function baselineExistingCoreSchema(client, files) {
   }
   if (existing.has_camera_permissions && files.includes("009_granular_camera_permissions.sql")) {
     baseline.push("009_granular_camera_permissions.sql");
+  }
+  if (existing.has_recording && files.includes("010_recording_storage.sql")) {
+    baseline.push("010_recording_storage.sql");
   }
 
   for (const filename of baseline) {

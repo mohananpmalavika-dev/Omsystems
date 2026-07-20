@@ -12,6 +12,8 @@ import {
 } from "./control-plane-store.js";
 import { actions, type Action, type Camera } from "./domain/models.js";
 import { createAuthMiddleware, RateLimiter } from "./middleware/auth.middleware.js";
+import { buildPlaybackTimeline } from "./recording/playback-timeline.js";
+import { calculateRecordingStorage } from "./recording/storage-calculator.js";
 import { registerAuthRoutes } from "./routes/auth.routes.js";
 import { registerCameraPermissionRoutes } from "./routes/camera-permissions.routes.js";
 import { registerCctvInfrastructureRoutes } from "./routes/cctv-infrastructure.js";
@@ -49,6 +51,37 @@ const recordingJobSchema = z.object({
   retentionDays: z.number().int().min(1).max(3650).default(180),
   schedule: z.object({ days: z.array(z.number().int().min(0).max(6)).min(1), start: z.string().regex(/^\d{2}:\d{2}$/), end: z.string().regex(/^\d{2}:\d{2}$/) }).optional(),
   postRollSeconds: z.number().int().min(0).max(3600).default(30),
+  segmentDurationSeconds: z.number().int().min(10).max(300).default(60),
+  hotRetentionDays: z.number().int().min(0).max(3650).default(30),
+  warmRetentionDays: z.number().int().min(0).max(3650).default(60),
+  coldRetentionDays: z.number().int().min(0).max(3650).default(90),
+  maxBitrateKbps: z.number().int().min(64).max(100_000).optional(),
+  critical: z.boolean().default(false),
+  backupRequired: z.boolean().default(false),
+  automaticDeletionEnabled: z.boolean().default(true),
+  evidenceProtection: z.boolean().default(true),
+  recordMainStream: z.boolean().default(true),
+});
+
+const storageCalculatorSchema = z.object({
+  cameraCount: z.number().int().min(1).max(100_000),
+  bitrateMbps: z.number().positive().max(1_000),
+  recordingHoursPerDay: z.number().positive().max(24).default(24),
+  retentionDays: z.number().int().min(1).max(3650).default(180),
+  metadataAndIndexPercent: z.number().min(0).max(100).default(15),
+  safetyReservePercent: z.number().min(0).max(100).default(0),
+  raidUsablePercent: z.number().min(10).max(100).default(75),
+  backupCopies: z.number().int().min(0).max(10).default(1),
+});
+
+const internalSegmentSchema = z.object({
+  tenantId: z.string().min(1), cameraId: z.string().min(1), jobId: z.string().min(1),
+  startedAt: z.string().datetime(), endedAt: z.string().datetime(),
+  storagePath: z.string().min(1).max(2_000), sizeBytes: z.number().int().nonnegative(),
+  storageNodeExternalId: z.string().min(1).max(200),
+  storageTier: z.enum(["hot", "warm", "cold"]).default("hot"),
+  checksumSha256: z.string().regex(/^[a-f0-9]{64}$/).optional(),
+  codec: z.string().max(50).optional(),
 });
 
 export async function buildApp(options?: {
@@ -84,7 +117,8 @@ export async function buildApp(options?: {
   app.addHook("preHandler", async (request, reply) => {
     if (
       request.url === "/health" ||
-      request.url === "/internal/live-sessions/consume"
+      request.url === "/internal/live-sessions/consume" ||
+      request.url.startsWith("/internal/recording/")
     ) return;
 
     if (
@@ -284,10 +318,17 @@ export async function buildApp(options?: {
     const { id } = idParams.parse(request.params);
     const camera = await store.getCamera(id);
     if (!camera) return reply.code(404).send({ error: "camera_not_found" });
-    if (!(await requireAccess(request, reply, store, "recording:view", camera.nodeId))) return;
+    if (!(await requireCameraActionAccess(
+      request, reply, store, camera, "recording:view",
+    ))) return;
     return (await store.getRecordingJob(id)) ?? {
       cameraId: id, mode: "continuous", enabled: false, status: "disabled",
       retentionDays: 180, postRollSeconds: 30,
+      segmentDurationSeconds: 60, hotRetentionDays: 30,
+      warmRetentionDays: 60, coldRetentionDays: 90,
+      critical: false, backupRequired: false,
+      automaticDeletionEnabled: true, evidenceProtection: true,
+      recordMainStream: true,
     };
   });
 
@@ -300,14 +341,42 @@ export async function buildApp(options?: {
     if (input.mode === "scheduled" && !input.schedule) {
       return reply.code(400).send({ error: "schedule_required" });
     }
-    const status = !input.enabled ? "disabled" : input.mode === "continuous" || input.mode === "manual" ? "recording" : "scheduled";
-    const job = await store.upsertRecordingJob(id, { ...input, status });
+    if (input.hotRetentionDays + input.warmRetentionDays +
+        input.coldRetentionDays !== input.retentionDays) {
+      return reply.code(400).send({ error: "storage_tiers_must_equal_retention" });
+    }
+    const requestedStatus = !input.enabled
+      ? "disabled"
+      : input.mode === "scheduled"
+        ? "scheduled"
+        : "idle";
+    let job = await store.upsertRecordingJob(id, { ...input, status: requestedStatus });
     if (options?.recordingEngineUrl && options.recordingEngineSharedKey) {
       const response = await fetch(new URL("/internal/jobs", options.recordingEngineUrl), {
         method: "PUT", headers: { "content-type": "application/json", "x-recording-engine-key": options.recordingEngineSharedKey },
-        body: JSON.stringify({ cameraId: id, connectionSecretRef: camera.connectionSecretRef, job }),
+        body: JSON.stringify({
+          tenantId: request.currentUser.tenantId,
+          branchId: camera.branchId,
+          cameraId: id,
+          connectionSecretRef: camera.connectionSecretRef,
+          job,
+        }),
       });
-      if (!response.ok) return reply.code(503).send({ error: "recording_engine_unavailable" });
+      if (!response.ok) {
+        job = await store.upsertRecordingJob(id, { ...input, status: "error" });
+        return reply.code(503).send({ error: "recording_engine_unavailable" });
+      }
+      const engine = z.object({ active: z.boolean() }).parse(await response.json());
+      const actualStatus = !input.enabled
+        ? "disabled"
+        : engine.active
+          ? "recording"
+          : input.mode === "scheduled"
+            ? "scheduled"
+            : "idle";
+      if (job.status !== actualStatus) {
+        job = await store.upsertRecordingJob(id, { ...input, status: actualStatus });
+      }
     }
     await audit(request, store, "recording.configured", camera.nodeId, "success", { mode: job.mode, enabled: job.enabled });
     return reply.code(200).send(job);
@@ -318,7 +387,9 @@ export async function buildApp(options?: {
     const query = z.object({ from: z.string().datetime().optional(), to: z.string().datetime().optional() }).parse(request.query);
     const camera = await store.getCamera(id);
     if (!camera) return reply.code(404).send({ error: "camera_not_found" });
-    if (!(await requireAccess(request, reply, store, "recording:view", camera.nodeId))) return;
+    if (!(await requireCameraActionAccess(
+      request, reply, store, camera, "recording:view",
+    ))) return;
     return { data: await store.listRecordingSegments(id, query.from, query.to) };
   });
 
@@ -332,14 +403,193 @@ export async function buildApp(options?: {
     if (!job?.enabled || job.mode !== body.type) {
       return reply.code(409).send({ error: "recording_mode_not_triggerable" });
     }
-    if (options?.recordingEngineUrl && options.recordingEngineSharedKey) {
-      const response = await fetch(new URL(`/internal/jobs/${encodeURIComponent(id)}/trigger`, options.recordingEngineUrl), {
-        method: "POST", headers: { "content-type": "application/json", "x-recording-engine-key": options.recordingEngineSharedKey }, body: JSON.stringify(body),
-      });
-      if (!response.ok) return reply.code(503).send({ error: "recording_engine_unavailable" });
+    if (!options?.recordingEngineUrl || !options.recordingEngineSharedKey) {
+      return reply.code(503).send({ error: "recording_engine_not_configured" });
     }
+    const response = await fetch(new URL(`/internal/jobs/${encodeURIComponent(id)}/trigger`, options.recordingEngineUrl), {
+      method: "POST", headers: { "content-type": "application/json", "x-recording-engine-key": options.recordingEngineSharedKey }, body: JSON.stringify(body),
+    });
+    if (!response.ok) return reply.code(503).send({ error: "recording_engine_unavailable" });
     await audit(request, store, `recording.${body.type}_triggered`, camera.nodeId, "success", body.metadata);
     return reply.code(202).send({ cameraId: id, triggered: body.type });
+  });
+
+  app.get("/v1/cameras/:id/playback", async (request, reply) => {
+    const { id } = idParams.parse(request.params);
+    const query = z.object({
+      from: z.string().datetime(), to: z.string().datetime(),
+    }).parse(request.query);
+    const from = Date.parse(query.from);
+    const to = Date.parse(query.to);
+    if (to <= from || to - from > 31 * 86_400_000) {
+      return reply.code(400).send({ error: "invalid_playback_window" });
+    }
+    const camera = await store.getCamera(id);
+    if (!camera) return reply.code(404).send({ error: "camera_not_found" });
+    if (!(await requireCameraActionAccess(
+      request, reply, store, camera, "recording:view",
+    ))) return;
+    const segments = await store.listRecordingSegments(id, query.from, query.to);
+    return buildPlaybackTimeline(segments, query.from, query.to);
+  });
+
+  app.post("/v1/recording/storage-calculator", async (request) => {
+    return calculateRecordingStorage(storageCalculatorSchema.parse(request.body));
+  });
+
+  app.get("/v1/cameras/:id/recording/legal-holds", async (request, reply) => {
+    const { id } = idParams.parse(request.params);
+    const camera = await store.getCamera(id);
+    if (!camera) return reply.code(404).send({ error: "camera_not_found" });
+    if (!(await requireCameraActionAccess(
+      request, reply, store, camera, "recording:view",
+    ))) return;
+    return { data: await store.listRecordingLegalHolds(id) };
+  });
+
+  app.post("/v1/cameras/:id/recording/legal-holds", async (request, reply) => {
+    const { id } = idParams.parse(request.params);
+    const body = z.object({
+      fromAt: z.string().datetime(), toAt: z.string().datetime(),
+      reason: z.string().trim().min(3).max(1_000),
+    }).parse(request.body);
+    if (Date.parse(body.toAt) <= Date.parse(body.fromAt)) {
+      return reply.code(400).send({ error: "invalid_legal_hold_window" });
+    }
+    const camera = await store.getCamera(id);
+    if (!camera) return reply.code(404).send({ error: "camera_not_found" });
+    if (!(await requireCameraActionAccess(
+      request, reply, store, camera, "evidence:export",
+    ))) return;
+    const hold = await store.createRecordingLegalHold({
+      tenantId: request.currentUser.tenantId, cameraId: id,
+      fromAt: body.fromAt, toAt: body.toAt, reason: body.reason,
+      createdBy: request.currentUser.id,
+    });
+    await audit(request, store, "recording.legal_hold_created", camera.nodeId,
+      "success", { legalHoldId: hold.id, fromAt: hold.fromAt, toAt: hold.toAt });
+    return reply.code(201).send(hold);
+  });
+
+  app.delete("/v1/cameras/:id/recording/legal-holds/:holdId", async (request, reply) => {
+    const params = z.object({
+      id: z.string().min(1), holdId: z.string().min(1),
+    }).parse(request.params);
+    const camera = await store.getCamera(params.id);
+    if (!camera) return reply.code(404).send({ error: "camera_not_found" });
+    if (!(await requireCameraActionAccess(
+      request, reply, store, camera, "evidence:export",
+    ))) return;
+    const hold = await store.releaseRecordingLegalHold(
+      params.holdId, request.currentUser.tenantId, params.id,
+      request.currentUser.id,
+    );
+    if (!hold) {
+      return reply.code(404).send({ error: "legal_hold_not_found" });
+    }
+    await audit(request, store, "recording.legal_hold_released", camera.nodeId,
+      "success", { legalHoldId: hold.id });
+    return hold;
+  });
+
+  app.post("/internal/recording/segments", async (request, reply) => {
+    if (!requireRecordingEngineIdentity(request, reply, options?.recordingEngineSharedKey)) return;
+    const input = internalSegmentSchema.parse(request.body);
+    if (Date.parse(input.endedAt) <= Date.parse(input.startedAt)) {
+      return reply.code(400).send({ error: "invalid_segment_window" });
+    }
+    const camera = await store.getCamera(input.cameraId);
+    const node = camera ? await store.getNode(camera.nodeId) : undefined;
+    const job = camera ? await store.getRecordingJob(camera.id) : undefined;
+    if (!camera || !node || node.tenantId !== input.tenantId || job?.id !== input.jobId) {
+      return reply.code(404).send({ error: "recording_job_not_found" });
+    }
+    const segment = await store.createRecordingSegment({
+      ...input, status: "ready",
+    });
+    return reply.code(201).send(segment);
+  });
+
+  app.put("/internal/recording/storage-nodes/:externalId", async (request, reply) => {
+    if (!requireRecordingEngineIdentity(request, reply, options?.recordingEngineSharedKey)) return;
+    const { externalId } = z.object({ externalId: z.string().min(1).max(200) })
+      .parse(request.params);
+    const input = z.object({
+      tenantId: z.string().min(1), name: z.string().min(1).max(200),
+      scopeNodeId: z.string().min(1).optional(),
+      supportedTiers: z.array(z.enum(["hot", "warm", "cold"])).min(1),
+      capacityBytes: z.number().int().nonnegative(),
+      usedBytes: z.number().int().nonnegative(),
+      availableBytes: z.number().int().nonnegative(),
+      status: z.enum(["healthy", "warning", "critical", "offline"]),
+      temperatureCelsius: z.number().min(-100).max(200).optional(),
+      writeMbps: z.number().nonnegative().optional(),
+    }).parse(request.body);
+    if (input.usedBytes + input.availableBytes > input.capacityBytes * 1.01) {
+      return reply.code(400).send({ error: "invalid_storage_capacity" });
+    }
+    if (input.scopeNodeId) {
+      const scope = await store.getNode(input.scopeNodeId);
+      if (!scope || scope.tenantId !== input.tenantId) {
+        return reply.code(400).send({ error: "invalid_storage_scope" });
+      }
+    }
+    return store.upsertRecordingStorageNode({ externalId, ...input });
+  });
+
+  app.post("/internal/recording/health", async (request, reply) => {
+    if (!requireRecordingEngineIdentity(request, reply, options?.recordingEngineSharedKey)) return;
+    const input = z.object({
+      tenantId: z.string().min(1), cameraId: z.string().min(1).optional(),
+      storageNodeExternalId: z.string().min(1).max(200).optional(),
+      eventType: z.string().min(1).max(100),
+      severity: z.enum(["info", "warning", "critical"]),
+      message: z.string().min(1).max(1_000),
+      details: z.record(z.unknown()).optional(),
+    }).parse(request.body);
+    if (input.cameraId) {
+      const camera = await store.getCamera(input.cameraId);
+      const node = camera ? await store.getNode(camera.nodeId) : undefined;
+      if (!node || node.tenantId !== input.tenantId) {
+        return reply.code(400).send({ error: "invalid_health_event_target" });
+      }
+    }
+    const event = await store.createRecordingHealthEvent(input);
+    if (input.cameraId) {
+      const nextStatus = input.eventType === "recording_started"
+        ? "recording"
+        : input.eventType === "recording_stopped"
+          ? "error"
+          : input.eventType === "recording_idle"
+            ? "idle"
+            : input.eventType === "recording_scheduled"
+              ? "scheduled"
+              : undefined;
+      if (nextStatus) await store.updateRecordingJobStatus(input.cameraId, nextStatus);
+    }
+    return reply.code(201).send(event);
+  });
+
+  app.get("/internal/recording/retention-candidates", async (request, reply) => {
+    if (!requireRecordingEngineIdentity(request, reply, options?.recordingEngineSharedKey)) return;
+    const query = z.object({
+      tenantId: z.string().min(1), storageNodeExternalId: z.string().min(1),
+      limit: z.coerce.number().int().min(1).max(1_000).default(200),
+    }).parse(request.query);
+    return { data: await store.listRecordingRetentionCandidates(
+      query.tenantId, query.storageNodeExternalId, query.limit,
+    ) };
+  });
+
+  app.post("/internal/recording/segments/deleted", async (request, reply) => {
+    if (!requireRecordingEngineIdentity(request, reply, options?.recordingEngineSharedKey)) return;
+    const input = z.object({
+      tenantId: z.string().min(1), storageNodeExternalId: z.string().min(1),
+      segmentIds: z.array(z.string().min(1)).min(1).max(1_000),
+    }).parse(request.body);
+    return { deleted: await store.markRecordingSegmentsDeleted(
+      input.tenantId, input.storageNodeExternalId, input.segmentIds,
+    ) };
   });
 
   app.post("/internal/live-sessions/consume", async (request, reply) => {
@@ -492,6 +742,47 @@ async function requireCameraAccess(
     requiresApproval: decision.requiresApproval,
   });
   return false;
+}
+
+async function requireCameraActionAccess(
+  request: FastifyRequest,
+  reply: FastifyReply,
+  store: ControlPlaneStore,
+  camera: Camera,
+  action: Action,
+) {
+  if (!hasExtendedInfrastructure(store)) {
+    return requireAccess(request, reply, store, action, camera.nodeId);
+  }
+  const decision = await store.checkCameraAccess(
+    request.currentUser.id,
+    camera.id,
+    action,
+  );
+  if (decision.allowed) return true;
+  await reply.code(403).send({
+    error: decision.requiresApproval ? "approval_required" : "forbidden",
+    reason: decision.reason,
+    requiresApproval: decision.requiresApproval,
+  });
+  return false;
+}
+
+function requireRecordingEngineIdentity(
+  request: FastifyRequest,
+  reply: FastifyReply,
+  expected: string | undefined,
+) {
+  if (!expected) {
+    void reply.code(503).send({ error: "recording_engine_not_configured" });
+    return false;
+  }
+  const supplied = request.headers["x-recording-engine-key"];
+  if (typeof supplied !== "string" || !secureEqual(supplied, expected)) {
+    void reply.code(401).send({ error: "invalid_recording_engine_identity" });
+    return false;
+  }
+  return true;
 }
 
 async function audit(

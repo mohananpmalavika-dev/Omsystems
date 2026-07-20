@@ -71,6 +71,7 @@ When you deploy the optional standalone API service, its startup process:
    - `007_organizational_hierarchy.sql` - Org enhancements
    - `008_employee_management_and_auth.sql` - Auth tables
    - `009_granular_camera_permissions.sql` - Permissions
+   - `010_recording_storage.sql` - Recording, storage tiers and evidence holds
 3. Tracks executed migrations to prevent re-runs
 4. Shows execution time and status
 
@@ -419,9 +420,9 @@ Migration logs show:
 ✅ Connected to database
 
 ℹ️  Found 0 previously executed migrations
-ℹ️  Found 9 total migration files
+ℹ️  Found 10 total migration files
 
-📋 Executing 9 pending migration(s):
+📋 Executing 10 pending migration(s):
 
    Running: 001_initial.sql... ✅ 001_initial.sql (245ms)
    Running: 002_edge_and_media_contract.sql... ✅ 002_edge_and_media_contract.sql (123ms)
@@ -430,7 +431,7 @@ Migration logs show:
    Running: 005_cctv_infrastructure_seed.sql... ✅ 005_cctv_infrastructure_seed.sql (45ms)
    ...
 
-✨ Successfully executed 9 migration(s) in 1234ms
+✨ Successfully executed 10 migration(s) in 1329ms
 ✅ Database is up to date! 🎉
 ```
 
@@ -543,7 +544,7 @@ If deployment fails:
 After successful deployment:
 
 - [ ] Verify all services are running (green status)
-- [ ] Check migration logs show all 9 migrations executed
+- [ ] Check migration logs show all 10 migrations executed
 - [ ] Test backend API health endpoint
 - [ ] Test dashboard loads correctly
 - [ ] Verify database tables exist (including CCTV tables)

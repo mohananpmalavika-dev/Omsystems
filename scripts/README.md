@@ -40,12 +40,13 @@ node scripts/run-migrations.mjs status
 🚀 Starting database migrations...
 ✅ Connected to database
 ℹ️  Found 0 previously executed migrations
-📋 Executing 9 pending migration(s):
+📋 Executing 10 pending migration(s):
 ✅ 001_initial.sql (245ms)
 ✅ 002_edge_and_media_contract.sql (123ms)
 ✅ 004_cctv_infrastructure.sql (312ms) ← CCTV tables
 ✅ 005_cctv_infrastructure_seed.sql (45ms) ← CCTV seed
-✨ Successfully executed 9 migration(s) in 1155ms
+✅ 010_recording_storage.sql (95ms) ← Recording and storage
+✨ Successfully executed 10 migration(s) in 1250ms
 ```
 
 ---
@@ -269,6 +270,7 @@ Located in `database/migrations/`:
 | `007_organizational_hierarchy.sql` | Org hierarchy | Enhanced organization structure |
 | `008_employee_management_and_auth.sql` | Auth | Employee and authentication tables |
 | `009_granular_camera_permissions.sql` | Permissions | Camera-level permissions |
+| `010_recording_storage.sql` | Recording | Policies, segments, storage nodes, legal holds, replication and health |
 
 ---
 
@@ -286,7 +288,7 @@ Before deploying:
 After deploying:
 
 - [ ] Check Render build logs
-- [ ] Verify all 9 migrations ran
+- [ ] Verify all 10 migrations ran
 - [ ] Test API health endpoint
 - [ ] Run init script
 - [ ] Verify CCTV tables exist

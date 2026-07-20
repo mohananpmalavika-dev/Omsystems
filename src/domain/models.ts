@@ -331,6 +331,17 @@ export interface RecordingJob {
   enabled: boolean;
   status: RecordingStatus;
   retentionDays: number;
+  /** Fixed segment size. Short segments limit corruption and improve playback indexing. */
+  segmentDurationSeconds: number;
+  hotRetentionDays: number;
+  warmRetentionDays: number;
+  coldRetentionDays: number;
+  maxBitrateKbps?: number | undefined;
+  critical: boolean;
+  backupRequired: boolean;
+  automaticDeletionEnabled: boolean;
+  evidenceProtection: boolean;
+  recordMainStream: boolean;
   schedule?: { days: number[]; start: string; end: string } | undefined;
   postRollSeconds: number;
   updatedAt: string;
@@ -344,6 +355,54 @@ export interface RecordingSegment {
   endedAt: string;
   storagePath: string;
   sizeBytes: number;
+  storageNodeExternalId: string;
+  storageTier: "hot" | "warm" | "cold";
+  status: "ready" | "moving" | "deleted" | "error";
+  checksumSha256?: string | undefined;
+  codec?: string | undefined;
+  createdAt: string;
+}
+
+export interface RecordingLegalHold {
+  id: string;
+  tenantId: string;
+  cameraId: string;
+  fromAt: string;
+  toAt: string;
+  reason: string;
+  createdBy: string;
+  createdAt: string;
+  releasedBy?: string | undefined;
+  releasedAt?: string | undefined;
+}
+
+export interface RecordingStorageNode {
+  id: string;
+  tenantId: string;
+  externalId: string;
+  name: string;
+  scopeNodeId?: string | undefined;
+  supportedTiers: Array<"hot" | "warm" | "cold">;
+  capacityBytes: number;
+  usedBytes: number;
+  availableBytes: number;
+  status: "healthy" | "warning" | "critical" | "offline";
+  temperatureCelsius?: number | undefined;
+  writeMbps?: number | undefined;
+  lastSeenAt: string;
+}
+
+export interface RecordingHealthEvent {
+  id: string;
+  tenantId: string;
+  cameraId?: string | undefined;
+  storageNodeExternalId?: string | undefined;
+  eventType: string;
+  severity: "info" | "warning" | "critical";
+  message: string;
+  details: Record<string, unknown>;
+  occurredAt: string;
+  resolvedAt?: string | undefined;
 }
 
 export interface AuditEventInput {

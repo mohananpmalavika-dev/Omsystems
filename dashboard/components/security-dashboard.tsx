@@ -33,6 +33,16 @@ import { CameraTile } from "./camera-tile";
 
 const layoutOptions = [1, 4, 9, 16, 25, 36] as const;
 
+function defaultRecording(cameraId: string, mode: RecordingJob["mode"] = "continuous"): RecordingJob {
+  return {
+    cameraId, mode, enabled: false, status: "disabled", retentionDays: 180,
+    postRollSeconds: 30, segmentDurationSeconds: 60, hotRetentionDays: 30,
+    warmRetentionDays: 60, coldRetentionDays: 90, critical: false,
+    backupRequired: false, automaticDeletionEnabled: true,
+    evidenceProtection: true, recordMainStream: true,
+  };
+}
+
 export function SecurityDashboard() {
   const [branches, setBranches] = useState<Branch[]>([]);
   const [selectedBranch, setSelectedBranch] = useState<string>("");
@@ -116,12 +126,12 @@ export function SecurityDashboard() {
   }, []);
 
   const toggleRecording = useCallback(async (cameraId: string) => {
-    const current = recordings[cameraId] ?? { cameraId, mode: "continuous" as const, enabled: false, status: "disabled" as const, retentionDays: 180, postRollSeconds: 30 };
+    const current = recordings[cameraId] ?? defaultRecording(cameraId);
     setRecordingLoading(cameraId);
     try {
       const response = await fetch(`/api/recording/${encodeURIComponent(cameraId)}`, {
         method: "PUT", headers: { "content-type": "application/json" },
-        body: JSON.stringify({ mode: current.mode, enabled: !current.enabled, retentionDays: current.retentionDays, postRollSeconds: current.postRollSeconds }),
+        body: JSON.stringify({ ...current, enabled: !current.enabled }),
       });
       if (!response.ok) throw new Error("Recording update failed");
       const updated = await response.json() as RecordingJob;
@@ -131,12 +141,12 @@ export function SecurityDashboard() {
   }, [recordings]);
 
   const changeRecordingMode = useCallback(async (cameraId: string, mode: RecordingJob["mode"]) => {
-    const current = recordings[cameraId] ?? { cameraId, mode, enabled: false, status: "disabled" as const, retentionDays: 180, postRollSeconds: 30 };
+    const current = recordings[cameraId] ?? defaultRecording(cameraId, mode);
     setRecordingLoading(cameraId);
     try {
       const response = await fetch(`/api/recording/${encodeURIComponent(cameraId)}`, {
         method: "PUT", headers: { "content-type": "application/json" },
-        body: JSON.stringify({ mode, enabled: current.enabled, retentionDays: current.retentionDays, postRollSeconds: current.postRollSeconds,
+        body: JSON.stringify({ ...current, mode,
           ...(mode === "scheduled" ? { schedule: { days: [1, 2, 3, 4, 5], start: "09:00", end: "18:00" } } : {}) }),
       });
       if (!response.ok) throw new Error("Recording mode update failed");

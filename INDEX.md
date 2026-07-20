@@ -44,6 +44,7 @@ Welcome! This index helps you find the right document for your needs.
 | [PROJECT_OVERVIEW.md](PROJECT_OVERVIEW.md) | Complete system overview | 20 min | Developers |
 | [docs/architecture.md](docs/architecture.md) | System design & boundaries | 15 min | Technical |
 | [docs/cctv-infrastructure-standards.md](docs/cctv-infrastructure-standards.md) | Camera infrastructure standards | 30 min | Technical |
+| [docs/recording-storage.md](docs/recording-storage.md) | Recording, retention, capacity and legal holds | 15 min | Technical |
 | [CCTV_INFRASTRUCTURE_INTEGRATION.md](CCTV_INFRASTRUCTURE_INTEGRATION.md) | CCTV integration guide | 20 min | Developers |
 | [CCTV_IMPLEMENTATION_SUMMARY.md](CCTV_IMPLEMENTATION_SUMMARY.md) | CCTV implementation summary | 10 min | Everyone |
 

@@ -79,7 +79,23 @@ export class PostgresStore
   }
   async getRecordingJob(cameraId: string) { return this.recordings.getJob(cameraId); }
   async upsertRecordingJob(cameraId: string, input: any) { return this.recordings.upsertJob(cameraId, input); }
+  async updateRecordingJobStatus(cameraId: string, status: any) {
+    return this.recordings.updateJobStatus(cameraId, status);
+  }
   async listRecordingSegments(cameraId: string, from?: string, to?: string) { return this.recordings.listSegments(cameraId, from, to); }
   async createRecordingSegment(input: any) { return this.recordings.createSegment(input); }
+  async listRecordingLegalHolds(cameraId: string) { return this.recordings.listLegalHolds(cameraId); }
+  async createRecordingLegalHold(input: any) { return this.recordings.createLegalHold(input); }
+  async releaseRecordingLegalHold(id: string, tenantId: string, cameraId: string, releasedBy: string) {
+    return this.recordings.releaseLegalHold(id, tenantId, cameraId, releasedBy);
+  }
+  async upsertRecordingStorageNode(input: any) { return this.recordings.upsertStorageNode(input); }
+  async createRecordingHealthEvent(input: any) { return this.recordings.createHealthEvent(input); }
+  async listRecordingRetentionCandidates(tenantId: string, externalId: string, limit: number) {
+    return this.recordings.listRetentionCandidates(tenantId, externalId, limit);
+  }
+  async markRecordingSegmentsDeleted(tenantId: string, externalId: string, segmentIds: string[]) {
+    return this.recordings.markSegmentsDeleted(tenantId, externalId, segmentIds);
+  }
   async writeAudit(event: AuditEventInput) { await this.audits.write(event); }
 }

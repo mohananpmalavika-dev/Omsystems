@@ -52,16 +52,41 @@ export async function startLive(
   return await mediaResponse.json() as LiveSessionResponse;
 }
 
-export async function getRecording(cameraId: string): Promise<RecordingJob> {
-  if (demoMode) return { cameraId, mode: "continuous", enabled: true, status: "recording", retentionDays: 180, postRollSeconds: 30 };
-  return await (await controlFetch(`/v1/cameras/${encodeURIComponent(cameraId)}/recording`)).json() as RecordingJob;
+export async function getRecording(
+  cameraId: string,
+  employeeSession?: string,
+): Promise<RecordingJob> {
+  if (isDemoMode()) return demoRecording(cameraId);
+  return await (await controlFetch(
+    `/v1/cameras/${encodeURIComponent(cameraId)}/recording`,
+    undefined,
+    employeeSession,
+  )).json() as RecordingJob;
 }
 
-export async function updateRecording(cameraId: string, job: Omit<RecordingJob, "id" | "cameraId" | "status">): Promise<RecordingJob> {
-  if (demoMode) return { cameraId, ...job, status: job.enabled ? "recording" : "disabled" };
+export async function updateRecording(
+  cameraId: string,
+  job: Partial<Omit<RecordingJob, "id" | "cameraId" | "status">> &
+    Pick<RecordingJob, "mode" | "enabled">,
+  employeeSession?: string,
+): Promise<RecordingJob> {
+  if (isDemoMode()) return {
+    ...demoRecording(cameraId), ...job,
+    status: job.enabled ? "recording" : "disabled",
+  };
   return await (await controlFetch(`/v1/cameras/${encodeURIComponent(cameraId)}/recording`, {
     method: "PUT", body: JSON.stringify(job),
-  })).json() as RecordingJob;
+  }, employeeSession)).json() as RecordingJob;
+}
+
+function demoRecording(cameraId: string): RecordingJob {
+  return {
+    cameraId, mode: "continuous", enabled: true, status: "recording",
+    retentionDays: 180, postRollSeconds: 30, segmentDurationSeconds: 60,
+    hotRetentionDays: 30, warmRetentionDays: 60, coldRetentionDays: 90,
+    critical: false, backupRequired: false, automaticDeletionEnabled: true,
+    evidenceProtection: true, recordMainStream: true,
+  };
 }
 
 function isDemoMode() {

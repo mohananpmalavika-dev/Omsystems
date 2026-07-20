@@ -5,7 +5,8 @@
   "workspaces": [
     "dashboard",
     "edge-agent",
-    "media-gateway"
+    "media-gateway",
+    "recording-engine"
   ],
   "description": "Hybrid CCTV control plane for multi-branch organizations",
   "type": "module",

@@ -16,7 +16,10 @@ import type {
   LiveSession,
   ConsumedLiveSession,
   RecordingJob,
+  RecordingHealthEvent,
+  RecordingLegalHold,
   RecordingSegment,
+  RecordingStorageNode,
   RecordingMode,
   NodeType,
   ResourceNode,
@@ -166,8 +169,61 @@ export interface ControlPlaneStore {
   consumeLiveSession(token: string): Promise<ConsumedLiveSession | undefined>;
   getRecordingJob(cameraId: string): Promise<RecordingJob | undefined>;
   upsertRecordingJob(cameraId: string, input: Omit<RecordingJob, "id" | "cameraId" | "updatedAt">): Promise<RecordingJob>;
+  updateRecordingJobStatus(
+    cameraId: string,
+    status: RecordingJob["status"],
+  ): Promise<RecordingJob | undefined>;
   listRecordingSegments(cameraId: string, from?: string, to?: string): Promise<RecordingSegment[]>;
-  createRecordingSegment(input: Omit<RecordingSegment, "id">): Promise<RecordingSegment>;
+  createRecordingSegment(
+    input: Omit<RecordingSegment, "id" | "createdAt">,
+  ): Promise<RecordingSegment>;
+  listRecordingLegalHolds(cameraId: string): Promise<RecordingLegalHold[]>;
+  createRecordingLegalHold(input: {
+    tenantId: string;
+    cameraId: string;
+    fromAt: string;
+    toAt: string;
+    reason: string;
+    createdBy: string;
+  }): Promise<RecordingLegalHold>;
+  releaseRecordingLegalHold(
+    id: string,
+    tenantId: string,
+    cameraId: string,
+    releasedBy: string,
+  ): Promise<RecordingLegalHold | undefined>;
+  upsertRecordingStorageNode(input: {
+    tenantId: string;
+    externalId: string;
+    name: string;
+    scopeNodeId?: string | undefined;
+    supportedTiers: Array<"hot" | "warm" | "cold">;
+    capacityBytes: number;
+    usedBytes: number;
+    availableBytes: number;
+    status: "healthy" | "warning" | "critical" | "offline";
+    temperatureCelsius?: number | undefined;
+    writeMbps?: number | undefined;
+  }): Promise<RecordingStorageNode>;
+  createRecordingHealthEvent(input: {
+    tenantId: string;
+    cameraId?: string | undefined;
+    storageNodeExternalId?: string | undefined;
+    eventType: string;
+    severity: "info" | "warning" | "critical";
+    message: string;
+    details?: Record<string, unknown> | undefined;
+  }): Promise<RecordingHealthEvent>;
+  listRecordingRetentionCandidates(
+    tenantId: string,
+    storageNodeExternalId: string,
+    limit: number,
+  ): Promise<RecordingSegment[]>;
+  markRecordingSegmentsDeleted(
+    tenantId: string,
+    storageNodeExternalId: string,
+    segmentIds: string[],
+  ): Promise<number>;
   writeAudit(event: AuditEventInput): Promise<void>;
 }
 

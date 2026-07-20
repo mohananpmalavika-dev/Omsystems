@@ -24,10 +24,18 @@ services:
       HOST: 0.0.0.0
       PORT: 8091
       RECORDING_ENGINE_SHARED_KEY: development-recording-engine-key-change-me
+      CONTROL_PLANE_URL: http://api:8080
       RECORDING_ROOT: /recordings
+      STORAGE_NODE_EXTERNAL_ID: local-recorder-01
+      STORAGE_NODE_NAME: Local Recording Node
+      STORAGE_NODE_TIERS: hot,warm,cold
+      RETENTION_SWEEP_SECONDS: 300
+      EVIDENCE_CHECKSUM_ENABLED: "true"
       STREAM_SECRETS_JSON: "${STREAM_SECRETS_JSON:-{}}"
     volumes:
       - sentinel-recordings:/recordings
+    depends_on:
+      - api
 
   media-gateway:
     build:

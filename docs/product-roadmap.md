@@ -15,7 +15,7 @@ independently while sharing one device, identity, audit and workflow foundation.
    - permission-scoped 1/4/9/16 grids, video walls, PTZ and snapshots
 3. Recording and playback
    - continuous, scheduled, event and edge recording
-   - configurable hot/cold retention tiers
+   - configurable hot/warm/cold retention tiers with legal-hold protection
    - timeline search, synchronized playback and authorized export
 4. Alerts and incidents
    - rules, priority, escalation, acknowledgement and case workflow

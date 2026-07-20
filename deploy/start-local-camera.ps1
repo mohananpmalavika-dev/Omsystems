@@ -58,7 +58,8 @@ try {
   }
   $env:DASHBOARD_DEV_USER_ID = "user-global-admin"
 
-  & docker compose up -d --build --force-recreate api media-gateway dashboard
+  & docker compose up -d --build --force-recreate `
+    api media-gateway recording-engine dashboard
   if ($LASTEXITCODE -ne 0) {
     throw "Docker Compose could not start the camera services"
   }

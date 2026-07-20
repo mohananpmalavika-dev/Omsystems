@@ -59,12 +59,18 @@ This repository currently implements the first security-critical slice:
 - audit writes for branch, device and viewing-session actions;
 - one-time control-plane viewing-token consumption;
 - an on-demand MediaMTX gateway producing protected HLS and WebRTC/WHEP URLs;
+- an independent FFmpeg recording engine with 60-second indexed segments,
+  automatic restart and durable callback retries;
+- configurable hot/warm/cold retention policy, storage health, legal holds and
+  legal-hold-aware deletion;
+- playback timeline gap detection and a centralized storage calculator;
 - tests proving default-deny and deny-overrides-allow behavior.
 
-Video transport is intentionally not handled by the business API. A later edge
-media gateway will own stream brokering and recording synchronization. The
-first edge-agent prototype now handles WS-Discovery, ONVIF inspection and local
-`ffprobe` validation.
+Video transport remains outside the business API: MediaMTX owns protected live
+delivery and the recording engine owns durable segment writing. The first
+edge-agent prototype handles WS-Discovery, ONVIF inspection and local `ffprobe`
+validation. See [docs/recording-storage.md](docs/recording-storage.md) for the
+recording/storage architecture and deployment contract.
 
 ## 📦 Project Status
 
@@ -139,6 +145,9 @@ must use signed OIDC tokens from the company's identity provider.
 | PATCH | `/v1/cameras/:id/status` | Update camera health |
 | GET | `/v1/cameras/:id/capabilities` | Read profiles and capabilities |
 | POST | `/v1/cameras/:id/live-sessions` | Create a 60-second viewing token |
+| GET/PUT | `/v1/cameras/:id/recording` | Read or configure camera recording policy |
+| GET | `/v1/cameras/:id/playback` | Indexed playback timeline and recording gaps |
+| POST | `/v1/recording/storage-calculator` | Calculate primary, RAID and backup capacity |
 
 The browser then exchanges that one-time token with the media gateway:
 
