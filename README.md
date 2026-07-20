@@ -1,5 +1,48 @@
 # Sentinel Grid
 
+🎥 Hybrid CCTV monitoring platform for 500 branches and 3,000-4,000 mixed-vendor cameras.
+
+---
+
+## 🎯 New Here? Start With These
+
+| If You Want To... | Read This First | Time |
+|-------------------|-----------------|------|
+| **Understand quickly** | [START_HERE.md](START_HERE.md) | 2 min |
+| **Test with cameras** | [QUICK_START_2_CAMERAS.md](QUICK_START_2_CAMERAS.md) | 10 min |
+| **Deploy to production** | [PRODUCTION_READINESS_GAPS.md](PRODUCTION_READINESS_GAPS.md) | 30 min |
+| **Find any document** | [INDEX.md](INDEX.md) | Ref |
+
+**Complete analysis:** [COMPLETE_ANALYSIS_SUMMARY.md](COMPLETE_ANALYSIS_SUMMARY.md)
+
+---
+
+## 🚀 Quick Start (Choose One)
+
+### 1. Test with Your Cameras (20 minutes)
+```powershell
+.\deploy\one-click-deploy.ps1
+# Choose option 4, then follow QUICK_START_2_CAMERAS.md
+```
+
+### 2. Deploy to Cloud (2 hours)
+```powershell
+.\deploy\one-click-deploy.ps1
+# Choose option 1 (Vercel) then option 2 (Railway)
+```
+
+### 3. Self-Host Everything (30 minutes)
+```powershell
+.\deploy\one-click-deploy.ps1
+# Choose option 3
+```
+
+**📚 New here?** Read [GETTING_STARTED.md](GETTING_STARTED.md) first!
+
+---
+
+## 📋 What's This Project?
+
 Initial control-plane foundation for a hybrid CCTV monitoring platform serving
 500 branches and approximately 3,000–4,000 mixed-vendor cameras.
 
@@ -23,11 +66,35 @@ media gateway will own stream brokering and recording synchronization. The
 first edge-agent prototype now handles WS-Discovery, ONVIF inspection and local
 `ffprobe` validation.
 
-## Run locally
+## 📦 Project Status
 
-Prerequisites: Node.js 22 or newer.
+✅ **Working:** Core functionality, authorization, live streaming, camera discovery  
+⚠️ **In Progress:** OIDC authentication, production hardening  
+📋 **Documentation:** Complete setup, deployment, and security guides available
+
+---
+
+## 🎯 Quick Links
+
+| Document | Purpose | Time |
+|----------|---------|------|
+| [GETTING_STARTED.md](GETTING_STARTED.md) | Choose your deployment path | 5 min |
+| [QUICK_START_2_CAMERAS.md](QUICK_START_2_CAMERAS.md) | Test with real cameras | 10 min |
+| [DEPLOYMENT_OPTIONS.md](DEPLOYMENT_OPTIONS.md) | Cloud deployment guide | 15 min |
+| [PRODUCTION_READINESS_GAPS.md](PRODUCTION_READINESS_GAPS.md) | Security & production checklist | 30 min |
+| [CRITICAL_FIXES_CHECKLIST.md](CRITICAL_FIXES_CHECKLIST.md) | Pre-launch tasks | 10 min |
+
+---
+
+## Run Locally
+
+Prerequisites: Node.js 22 or newer, Docker Desktop
 
 ```powershell
+# Quick start
+.\deploy\one-click-deploy.ps1
+
+# Or manually
 npm.cmd install
 npm.cmd test
 npm.cmd run dev
@@ -104,7 +171,29 @@ Example access check:
 5. Add the alarm workflow, recording and playback.
 
 See [docs/architecture.md](docs/architecture.md) for system boundaries and the
-first pilot topology.
+first pilot topology, and [docs/product-roadmap.md](docs/product-roadmap.md)
+for the module plan and physical-camera acceptance gate.
+
+## Operations dashboard
+
+The Next.js dashboard is in `dashboard/`. It provides:
+
+- regional branch selection and camera-health summaries;
+- responsive 1/4/9/16-camera layouts;
+- same-origin control-plane and media-gateway adapters;
+- HLS.js playback with path-scoped bearer authentication;
+- a demo mode for hosted previews without exposing a private camera network.
+
+```powershell
+npm.cmd run dashboard:dev
+npm.cmd exec --workspace @sentinel/dashboard playwright test
+npm.cmd run dashboard:build
+```
+
+Set `DASHBOARD_DEMO_MODE=false`, `CONTROL_PLANE_INTERNAL_URL`,
+`MEDIA_GATEWAY_INTERNAL_URL`, and `DASHBOARD_DEV_USER_ID` to connect a local
+dashboard container to the pilot backend. Production identity will replace the
+development user setting with OIDC claims.
 
 ## Pilot camera discovery
 

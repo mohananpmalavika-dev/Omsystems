@@ -23,10 +23,10 @@ services:
       CONTROL_PLANE_URL: http://api:8080
       MEDIA_GATEWAY_SHARED_KEY: development-media-gateway-key-change-me
       MEDIAMTX_API_URL: http://mediamtx:9997
-      PUBLIC_HLS_BASE_URL: http://localhost:8888
-      PUBLIC_WEBRTC_BASE_URL: http://localhost:8889
+      PUBLIC_HLS_BASE_URL: ${PUBLIC_HLS_BASE_URL:-http://localhost:8888}
+      PUBLIC_WEBRTC_BASE_URL: ${PUBLIC_WEBRTC_BASE_URL:-http://localhost:8889}
       MEDIA_ACCESS_TTL_SECONDS: 300
-      STREAM_SECRETS_JSON: "{}"
+      STREAM_SECRETS_JSON: "${STREAM_SECRETS_JSON:-{}}"
     ports:
       - "8090:8090"
     depends_on:
@@ -37,11 +37,16 @@ services:
     build:
       context: .
       dockerfile: dashboard/Dockerfile
+      args:
+        DASHBOARD_DEMO_MODE: "false"
+        CONTROL_PLANE_INTERNAL_URL: http://api:8080
+        MEDIA_GATEWAY_INTERNAL_URL: http://media-gateway:8090
+        DASHBOARD_DEV_USER_ID: ${DASHBOARD_DEV_USER_ID:-user-global-admin}
     environment:
       DASHBOARD_DEMO_MODE: "false"
       CONTROL_PLANE_INTERNAL_URL: http://api:8080
       MEDIA_GATEWAY_INTERNAL_URL: http://media-gateway:8090
-      DASHBOARD_DEV_USER_ID: user-south-operator
+      DASHBOARD_DEV_USER_ID: ${DASHBOARD_DEV_USER_ID:-user-global-admin}
     ports:
       - "3000:3000"
     depends_on:

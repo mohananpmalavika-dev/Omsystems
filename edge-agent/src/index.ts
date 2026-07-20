@@ -18,7 +18,18 @@ const agent = await gateway.register(
 await gateway.heartbeat(agent.id, config.EDGE_AGENT_VERSION);
 
 console.log(`Edge agent ${agent.id} registered; scanning the branch LAN`);
-const endpoints = await discoverOnvifDevices(config.DISCOVERY_TIMEOUT_MS);
+const configuredEndpoints = config.ONVIF_ENDPOINTS
+  .split(",")
+  .map((value) => value.trim())
+  .filter(Boolean);
+const endpoints = configuredEndpoints.length > 0
+  ? configuredEndpoints.map((serviceUrl) => ({
+      endpointReference: null,
+      xaddrs: [serviceUrl],
+      scopes: [],
+      remoteAddress: new URL(serviceUrl).hostname,
+    }))
+  : await discoverOnvifDevices(config.DISCOVERY_TIMEOUT_MS);
 console.log(`Discovered ${endpoints.length} ONVIF endpoint(s)`);
 
 for (const endpoint of endpoints) {
@@ -49,7 +60,7 @@ for (const endpoint of endpoints) {
     }
 
     const parsedServiceUrl = new URL(serviceUrl);
-    await gateway.submitDiscovery(config.BRANCH_ID, {
+    const discovery = await gateway.submitDiscovery(config.BRANCH_ID, {
       edgeAgentId: agent.id,
       vendor,
       model: device.model,
@@ -59,7 +70,10 @@ for (const endpoint of endpoints) {
       profiles,
       capabilities: device.capabilities,
     });
-    console.log(`Submitted ${device.manufacturer} ${device.model}`, compatibilityNotes(vendor));
+    console.log(
+      `Submitted ${device.manufacturer} ${device.model} as discovery ${discovery.id}`,
+      compatibilityNotes(vendor),
+    );
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     console.error(`Failed to inspect ${endpoint.remoteAddress}: ${message}`);

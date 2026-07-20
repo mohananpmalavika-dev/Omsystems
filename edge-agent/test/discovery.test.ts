@@ -35,6 +35,15 @@ describe("ONVIF edge utilities", () => {
     expect(redactStreamUri(secured)).toBe("rtsp://192.168.10.20/live");
   });
 
+  it("redacts credentials embedded in vendor-specific RTSP paths", () => {
+    const redacted = redactStreamUri(
+      "rtsp://operator:secret@192.168.10.20/user=operator_password=opaque_channel=0.sdp",
+    );
+    expect(redacted).not.toContain("operator");
+    expect(redacted).not.toContain("secret");
+    expect(redacted).not.toContain("opaque");
+  });
+
   it("normalizes the supported pilot brands", () => {
     expect(normalizeVendor("HIKVISION")).toBe("hikvision");
     expect(normalizeVendor("CP Plus")).toBe("cp-plus");

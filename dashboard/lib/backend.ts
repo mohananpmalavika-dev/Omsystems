@@ -1,20 +1,15 @@
 import { demoBranches, demoCameras } from "./demo-data";
 import type { Branch, Camera, LiveSessionResponse } from "./types";
 
-const demoMode = process.env.DASHBOARD_DEMO_MODE !== "false";
-const controlPlaneUrl = process.env.CONTROL_PLANE_INTERNAL_URL ?? "http://localhost:8080";
-const mediaGatewayUrl = process.env.MEDIA_GATEWAY_INTERNAL_URL ?? "http://localhost:8090";
-const developmentUserId = process.env.DASHBOARD_DEV_USER_ID ?? "user-south-operator";
-
 export async function listBranches(): Promise<Branch[]> {
-  if (demoMode) return demoBranches;
+  if (isDemoMode()) return demoBranches;
   const response = await controlFetch("/v1/branches");
   const body = await response.json() as { data: Branch[] };
   return body.data;
 }
 
 export async function listCameras(branchId: string): Promise<Camera[]> {
-  if (demoMode) return demoCameras(branchId);
+  if (isDemoMode()) return demoCameras(branchId);
   const response = await controlFetch(
     `/v1/branches/${encodeURIComponent(branchId)}/cameras`,
   );
@@ -26,14 +21,17 @@ export async function listCameras(branchId: string): Promise<Camera[]> {
 }
 
 export async function startLive(cameraId: string): Promise<LiveSessionResponse> {
-  if (demoMode) return { demo: true, cameraId };
+  if (isDemoMode()) return { demo: true, cameraId };
   const permission = await controlFetch(
     `/v1/cameras/${encodeURIComponent(cameraId)}/live-sessions`,
-    { method: "POST" },
+    { method: "POST", body: "{}" },
   );
   const controlSession = await permission.json() as { token: string };
   const mediaResponse = await fetch(
-    new URL("/v1/live/start", mediaGatewayUrl),
+    new URL(
+      "/v1/live/start",
+      runtimeEnv("MEDIA_GATEWAY_INTERNAL_URL", "http://localhost:8090"),
+    ),
     {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -45,16 +43,31 @@ export async function startLive(cameraId: string): Promise<LiveSessionResponse> 
   return await mediaResponse.json() as LiveSessionResponse;
 }
 
+function isDemoMode() {
+  return runtimeEnv("DASHBOARD_DEMO_MODE", "true") !== "false";
+}
+
 async function controlFetch(path: string, init?: RequestInit) {
-  const response = await fetch(new URL(path, controlPlaneUrl), {
+  const response = await fetch(new URL(
+    path,
+    runtimeEnv("CONTROL_PLANE_INTERNAL_URL", "http://localhost:8080"),
+  ), {
     ...init,
     headers: {
       "content-type": "application/json",
-      "x-user-id": developmentUserId,
+      "x-user-id": runtimeEnv(
+        "DASHBOARD_DEV_USER_ID",
+        "user-south-operator",
+      ),
       ...init?.headers,
     },
     cache: "no-store",
   });
   if (!response.ok) throw new Error(`Control plane returned ${response.status}`);
   return response;
+}
+
+function runtimeEnv(name: string, fallback: string) {
+  const value = Reflect.get(process.env, name) as string | undefined;
+  return value ?? fallback;
 }

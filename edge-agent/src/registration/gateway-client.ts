@@ -35,7 +35,7 @@ export class GatewayClient {
   }
 
   async submitDiscovery(branchId: string, payload: DiscoveredCameraPayload) {
-    return this.request(
+    return this.request<{ id: string }>(
       `/v1/branches/${encodeURIComponent(branchId)}/cameras/discovered`,
       { method: "POST", body: JSON.stringify(payload) },
     );

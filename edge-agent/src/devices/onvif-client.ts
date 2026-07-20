@@ -38,20 +38,20 @@ export class OnvifClient {
   ) {}
 
   async inspect(): Promise<OnvifDeviceDetails> {
-    const [info, capabilities] = await Promise.all([
-      this.call(
-        this.deviceServiceUrl,
-        "http://www.onvif.org/ver10/device/wsdl/GetDeviceInformation",
-        `<tds:GetDeviceInformation/>`,
-        `xmlns:tds="http://www.onvif.org/ver10/device/wsdl"`,
-      ),
-      this.call(
-        this.deviceServiceUrl,
-        "http://www.onvif.org/ver10/device/wsdl/GetCapabilities",
-        `<tds:GetCapabilities><tds:Category>All</tds:Category></tds:GetCapabilities>`,
-        `xmlns:tds="http://www.onvif.org/ver10/device/wsdl"`,
-      ),
-    ]);
+    // Several embedded ONVIF implementations reject concurrent SOAP requests.
+    // Keep device inspection sequential for broad camera compatibility.
+    const info = await this.call(
+      this.deviceServiceUrl,
+      "http://www.onvif.org/ver10/device/wsdl/GetDeviceInformation",
+      `<tds:GetDeviceInformation/>`,
+      `xmlns:tds="http://www.onvif.org/ver10/device/wsdl"`,
+    );
+    const capabilities = await this.call(
+      this.deviceServiceUrl,
+      "http://www.onvif.org/ver10/device/wsdl/GetCapabilities",
+      `<tds:GetCapabilities><tds:Category>All</tds:Category></tds:GetCapabilities>`,
+      `xmlns:tds="http://www.onvif.org/ver10/device/wsdl"`,
+    );
 
     const infoResponse = findRecord(info, "GetDeviceInformationResponse");
     const caps = findRecord(capabilities, "Capabilities");
@@ -125,7 +125,7 @@ export class OnvifClient {
       });
       const text = await response.text();
       if (!response.ok) {
-        throw new Error(`ONVIF request failed (${response.status}): ${text.slice(0, 300)}`);
+        throw new Error(`ONVIF request failed (${response.status}): ${text.slice(0, 1200)}`);
       }
       const parsed = this.parser.parse(text) as unknown;
       const fault = findRecord(parsed, "Fault");
@@ -151,6 +151,15 @@ export function redactStreamUri(uri: string): string {
   const parsed = new URL(uri);
   parsed.username = "";
   parsed.password = "";
+  parsed.pathname = parsed.pathname.replace(
+    /([/_](?:user|username|password)=)[^_/?&]*/gi,
+    "$1[redacted]",
+  );
+  for (const key of [...parsed.searchParams.keys()]) {
+    if (/^(?:user|username|password)$/i.test(key)) {
+      parsed.searchParams.set(key, "[redacted]");
+    }
+  }
   return parsed.toString();
 }
 

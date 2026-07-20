@@ -149,10 +149,10 @@ export class CameraRepository {
     await client.query(
       `INSERT INTO resource_nodes
          (id, tenant_id, parent_id, node_type, name, path)
-       SELECT $1, tenant_id, id, 'camera', $3,
+       SELECT $1::uuid, tenant_id, id, 'camera', $3,
               path || text2ltree(replace($1::text, '-', '_'))
        FROM resource_nodes
-       WHERE id = $2 AND node_type = 'branch'`,
+       WHERE id = $2::uuid AND node_type = 'branch'`,
       [nodeId, branchId, input.name],
     );
     const result = await client.query<CameraRow>(
@@ -174,9 +174,9 @@ export class CameraRepository {
 
   async updateStatus(id: string, status: CameraStatus) {
     const result = await this.pool.query<CameraRow>(
-      `UPDATE cameras SET status = $2, last_seen_at = CASE
-         WHEN $2 = 'online' THEN now() ELSE last_seen_at END
-       WHERE id = $1
+      `UPDATE cameras SET status = $2::camera_status, last_seen_at = CASE
+         WHEN $2::camera_status = 'online' THEN now() ELSE last_seen_at END
+       WHERE id = $1::uuid
        RETURNING id::text, model AS name, resource_node_id::text,
                  branch_node_id::text, vendor, model, channel, protocol, status, profiles,
                  capabilities, connection_secret_ref`,

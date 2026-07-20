@@ -1,4 +1,4 @@
-FROM node:22-bookworm-slim AS build
+FROM node:22-alpine AS build
 WORKDIR /app
 COPY package*.json ./
 COPY dashboard/package.json ./dashboard/package.json
@@ -9,10 +9,8 @@ COPY edge-agent/tsconfig.json ./edge-agent/tsconfig.json
 COPY edge-agent/src ./edge-agent/src
 RUN npm run build --workspace @sentinel/edge-agent
 
-FROM node:22-bookworm-slim
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends ffmpeg ca-certificates \
-    && rm -rf /var/lib/apt/lists/*
+FROM node:22-alpine
+RUN apk add --no-cache ffmpeg ca-certificates
 ENV NODE_ENV=production
 WORKDIR /app
 COPY package*.json ./
