@@ -1,0 +1,22 @@
+import { buildApp } from "./app.js";
+import { loadConfig } from "./config.js";
+import { createPool } from "./database/pool.js";
+import { PostgresStore } from "./database/postgres-store.js";
+import { MemoryStore } from "./store.js";
+
+const config = loadConfig();
+const store = config.DATABASE_URL
+  ? new PostgresStore(createPool(config.DATABASE_URL))
+  : new MemoryStore();
+const app = await buildApp({
+  logger: true,
+  store,
+  mediaGatewaySharedKey: config.MEDIA_GATEWAY_SHARED_KEY,
+});
+
+try {
+  await app.listen({ host: config.HOST, port: config.PORT });
+} catch (error) {
+  app.log.error(error);
+  process.exit(1);
+}

@@ -1,0 +1,42 @@
+import { describe, expect, it } from "vitest";
+import { parseProbeMatch } from "../src/discovery/onvif-discovery.js";
+import {
+  attachCredentials,
+  redactStreamUri,
+} from "../src/devices/onvif-client.js";
+import { normalizeVendor } from "../src/devices/compatibility-registry.js";
+
+describe("ONVIF edge utilities", () => {
+  it("parses WS-Discovery probe matches", () => {
+    const result = parseProbeMatch(`<?xml version="1.0"?>
+      <s:Envelope xmlns:s="http://www.w3.org/2003/05/soap-envelope"
+        xmlns:d="http://schemas.xmlsoap.org/ws/2005/04/discovery"
+        xmlns:a="http://schemas.xmlsoap.org/ws/2004/08/addressing">
+        <s:Body><d:ProbeMatches><d:ProbeMatch>
+          <a:EndpointReference><a:Address>urn:uuid:camera-1</a:Address></a:EndpointReference>
+          <d:Scopes>onvif://www.onvif.org/type/video_encoder</d:Scopes>
+          <d:XAddrs>http://192.168.10.20/onvif/device_service</d:XAddrs>
+        </d:ProbeMatch></d:ProbeMatches></s:Body>
+      </s:Envelope>`, "192.168.10.20");
+
+    expect(result).toMatchObject({
+      endpointReference: "urn:uuid:camera-1",
+      remoteAddress: "192.168.10.20",
+      xaddrs: ["http://192.168.10.20/onvif/device_service"],
+    });
+  });
+
+  it("adds credentials only for the local probe and can redact them", () => {
+    const secured = attachCredentials("rtsp://192.168.10.20/live", {
+      username: "operator",
+      password: "secret value",
+    });
+    expect(secured).toContain("operator:secret%20value@");
+    expect(redactStreamUri(secured)).toBe("rtsp://192.168.10.20/live");
+  });
+
+  it("normalizes the supported pilot brands", () => {
+    expect(normalizeVendor("HIKVISION")).toBe("hikvision");
+    expect(normalizeVendor("CP Plus")).toBe("cp-plus");
+  });
+});

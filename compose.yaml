@@ -1,0 +1,78 @@
+services:
+  api:
+    build: .
+    environment:
+      HOST: 0.0.0.0
+      PORT: 8080
+      AUTH_MODE: development
+      DATABASE_URL: postgresql://sentinel:local-development-only@postgres:5432/sentinel
+      MEDIA_GATEWAY_SHARED_KEY: development-media-gateway-key-change-me
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  media-gateway:
+    build:
+      context: .
+      dockerfile: media-gateway/Dockerfile
+    environment:
+      HOST: 0.0.0.0
+      PORT: 8090
+      CONTROL_PLANE_URL: http://api:8080
+      MEDIA_GATEWAY_SHARED_KEY: development-media-gateway-key-change-me
+      MEDIAMTX_API_URL: http://mediamtx:9997
+      PUBLIC_HLS_BASE_URL: http://localhost:8888
+      PUBLIC_WEBRTC_BASE_URL: http://localhost:8889
+      MEDIA_ACCESS_TTL_SECONDS: 300
+      STREAM_SECRETS_JSON: "{}"
+    ports:
+      - "8090:8090"
+    depends_on:
+      - api
+      - mediamtx
+
+  dashboard:
+    build:
+      context: .
+      dockerfile: dashboard/Dockerfile
+    environment:
+      DASHBOARD_DEMO_MODE: "false"
+      CONTROL_PLANE_INTERNAL_URL: http://api:8080
+      MEDIA_GATEWAY_INTERNAL_URL: http://media-gateway:8090
+      DASHBOARD_DEV_USER_ID: user-south-operator
+    ports:
+      - "3000:3000"
+    depends_on:
+      - api
+      - media-gateway
+
+  mediamtx:
+    image: bluenviron/mediamtx:1.19.2
+    volumes:
+      - ./media-gateway/mediamtx.yml:/mediamtx.yml:ro
+    ports:
+      - "8888:8888"
+      - "8889:8889"
+      - "8189:8189/udp"
+
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: sentinel
+      POSTGRES_USER: sentinel
+      POSTGRES_PASSWORD: local-development-only
+    ports:
+      - "5432:5432"
+    volumes:
+      - sentinel-postgres:/var/lib/postgresql/data
+      - ./database/migrations:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sentinel -d sentinel"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  sentinel-postgres:
