@@ -18,6 +18,7 @@ import {
   MonitorPlay,
   Pause,
   Play,
+  Plus,
   MoreHorizontal,
   Search,
   Settings,
@@ -279,6 +280,9 @@ export function SecurityDashboard() {
                 </p>
               </div>
               <div className="layout-picker">
+                <a className="add-camera-link" href="/admin?tab=devices">
+                  <Plus size={15} /> Add camera
+                </a>
                 <button className={sequencing ? "active" : ""} onClick={() => setSequencing((value) => !value)} aria-label={sequencing ? "Pause camera sequence" : "Start camera sequence"} title={sequencing ? "Pause 10 second camera sequence" : "Start 10 second camera sequence"}>
                   {sequencing ? <Pause size={16} /> : <Play size={16} />}
                 </button>

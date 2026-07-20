@@ -61,3 +61,12 @@ export interface RecordingJob {
   recordMainStream: boolean;
   schedule?: { days: number[]; start: string; end: string };
 }
+
+export interface EdgeAgent {
+  id: string;
+  branchId: string;
+  name: string;
+  version: string;
+  status: "pending" | "online" | "offline";
+  lastSeenAt: string | null;
+}

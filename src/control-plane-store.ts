@@ -149,6 +149,7 @@ export interface ControlPlaneStore {
     name: string,
     version: string,
   ): Promise<EdgeAgent>;
+  listEdgeAgentsByBranch(branchId: string): Promise<EdgeAgent[]>;
   heartbeatEdgeAgent(
     id: string,
     version: string,

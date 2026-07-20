@@ -219,10 +219,30 @@ export const userApi = {
 };
 
 export const cameraInventoryApi = {
-  listBranches: () => fetchApi<{ data: any[] }>('/v1/branches'),
+  listBranches: (action: 'live:view' | 'device:configure' = 'live:view') =>
+    fetchApi<{ data: any[] }>(`/v1/branches?action=${encodeURIComponent(action)}`),
   listByBranch: (branchId: string) =>
     fetchApi<{ data: any[] }>(
       `/v1/branches/${encodeURIComponent(branchId)}/cameras`
+    ),
+  listGateways: (branchId: string) =>
+    fetchApi<{ data: any[] }>(
+      `/v1/branches/${encodeURIComponent(branchId)}/edge-agents`
+    ),
+  registerGateway: (branchId: string, data: { name: string; version: string }) =>
+    fetchApi<any>(
+      `/v1/branches/${encodeURIComponent(branchId)}/edge-agents/register`,
+      { method: 'POST', body: JSON.stringify(data) }
+    ),
+  submitDiscovery: (branchId: string, data: any) =>
+    fetchApi<any>(
+      `/v1/branches/${encodeURIComponent(branchId)}/cameras/discovered`,
+      { method: 'POST', body: JSON.stringify(data) }
+    ),
+  approveCamera: (branchId: string, data: any) =>
+    fetchApi<any>(
+      `/v1/branches/${encodeURIComponent(branchId)}/cameras`,
+      { method: 'POST', body: JSON.stringify(data) }
     ),
 };
 

@@ -14,14 +14,14 @@ const gateway = new GatewayClient(
   config.DEV_USER_ID,
   config.EDGE_BRIDGE_SHARED_KEY,
 );
-const agent = await gateway.register(
+const agentId = config.EDGE_AGENT_ID ?? (await gateway.register(
   config.BRANCH_ID,
   config.EDGE_AGENT_NAME,
   config.EDGE_AGENT_VERSION,
-);
-await gateway.heartbeat(agent.id, config.EDGE_AGENT_VERSION);
+)).id;
+await gateway.heartbeat(agentId, config.EDGE_AGENT_VERSION);
 
-console.log(`Edge agent ${agent.id} registered; scanning the branch LAN`);
+console.log(`Edge agent ${agentId} registered; scanning the branch LAN`);
 const configuredEndpoints = config.ONVIF_ENDPOINTS
   .split(",")
   .map((value) => value.trim())
@@ -65,7 +65,7 @@ for (const endpoint of endpoints) {
 
     const parsedServiceUrl = new URL(serviceUrl);
     const discovery = await gateway.submitDiscovery(config.BRANCH_ID, {
-      edgeAgentId: agent.id,
+      edgeAgentId: agentId,
       vendor,
       model: device.model,
       ipAddress: endpoint.remoteAddress,

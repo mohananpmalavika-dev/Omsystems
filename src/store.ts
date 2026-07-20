@@ -145,6 +145,12 @@ export class MemoryStore implements ControlPlaneStore {
     return agent;
   }
 
+  async listEdgeAgentsByBranch(branchId: string) {
+    return [...this.edgeAgents.values()].filter(
+      (agent) => agent.branchId === branchId,
+    );
+  }
+
   async heartbeatEdgeAgent(id: string, version: string) {
     const agent = this.edgeAgents.get(id);
     if (!agent) return undefined;
@@ -153,6 +159,8 @@ export class MemoryStore implements ControlPlaneStore {
   }
 
   async createDiscovery(branchId: string, input: CameraDiscoveryInput) {
+    const agent = this.edgeAgents.get(input.edgeAgentId);
+    if (!agent || agent.branchId !== branchId) throw new Error("invalid_edge_agent");
     const discovery: DiscoveredCamera = {
       id: randomUUID(), branchId, ...structuredClone(input),
       status: "pending", discoveredAt: new Date().toISOString(),

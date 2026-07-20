@@ -57,6 +57,24 @@ describe("control-plane API", () => {
     expect(response.body).not.toContain("connectionSecretRef");
   });
 
+  it("lists only branches the employee may configure", async () => {
+    const allowed = await app.inject({
+      method: "GET",
+      url: "/v1/branches?action=device%3Aconfigure",
+      headers: { "x-user-id": "user-global-admin" },
+    });
+    expect(allowed.statusCode).toBe(200);
+    expect(allowed.json().data).toHaveLength(1);
+
+    const denied = await app.inject({
+      method: "GET",
+      url: "/v1/branches?action=device%3Aconfigure",
+      headers: { "x-user-id": "user-south-operator" },
+    });
+    expect(denied.statusCode).toBe(200);
+    expect(denied.json().data).toHaveLength(0);
+  });
+
   it("supports edge registration, discovery, approval and live sessions", async () => {
     const headers = { "x-user-id": "user-global-admin" };
     const agentResponse = await app.inject({
@@ -67,6 +85,21 @@ describe("control-plane API", () => {
     });
     expect(agentResponse.statusCode).toBe(201);
     const agent = agentResponse.json();
+
+    const agentList = await app.inject({
+      method: "GET",
+      url: "/v1/branches/branch-blr-001/edge-agents",
+      headers,
+    });
+    expect(agentList.statusCode).toBe(200);
+    expect(agentList.json().data).toEqual([agent]);
+
+    const deniedAgentList = await app.inject({
+      method: "GET",
+      url: "/v1/branches/branch-blr-001/edge-agents",
+      headers: { "x-user-id": "user-south-operator" },
+    });
+    expect(deniedAgentList.statusCode).toBe(403);
 
     const heartbeat = await app.inject({
       method: "POST",

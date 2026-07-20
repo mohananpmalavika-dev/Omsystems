@@ -39,6 +39,18 @@ export class EdgeAgentRepository {
     return mapAgent(result.rows[0]);
   }
 
+  async listByBranch(branchId: string) {
+    const result = await this.pool.query<AgentRow>(
+      `SELECT id::text, branch_node_id::text, name, version, status,
+              last_seen_at
+       FROM edge_agents
+       WHERE branch_node_id = $1
+       ORDER BY name, created_at`,
+      [branchId],
+    );
+    return result.rows.map(mapAgent);
+  }
+
   async heartbeat(id: string, version: string) {
     const result = await this.pool.query<AgentRow>(
       `UPDATE edge_agents
@@ -65,6 +77,10 @@ export class EdgeAgentRepository {
        SELECT n.tenant_id, n.id, $2, $3, $4, $5::inet, $6, $7, $8::jsonb,
               $9::jsonb
        FROM resource_nodes n
+       JOIN edge_agents agent
+         ON agent.id = $2
+        AND agent.branch_node_id = n.id
+        AND agent.tenant_id = n.tenant_id
        WHERE n.id = $1 AND n.node_type = 'branch'
        RETURNING id::text, discovered_at`,
       [

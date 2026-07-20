@@ -30,6 +30,9 @@ declare module "fastify" {
 const idParams = z.object({ id: z.string().min(1) });
 const branchParams = z.object({ branchId: z.string().min(1) });
 const edgeAgentParams = z.object({ id: z.string().min(1) });
+const branchListQuery = z.object({
+  action: z.enum(actions).default("live:view"),
+});
 const cameraStatusSchema = z.object({
   status: z.enum(["online", "offline", "degraded", "unknown"]),
 });
@@ -161,13 +164,16 @@ export async function buildApp(options?: {
 
   app.get("/v1/me", async (request) => request.currentUser);
 
-  app.get("/v1/branches", async (request) => ({
-    data: await store.listAccessibleNodes(
-      request.currentUser,
-      "live:view",
-      "branch",
-    ),
-  }));
+  app.get("/v1/branches", async (request) => {
+    const { action } = branchListQuery.parse(request.query);
+    return {
+      data: await store.listAccessibleNodes(
+        request.currentUser,
+        action,
+        "branch",
+      ),
+    };
+  });
 
   app.post("/v1/branches", async (request, reply) => {
     const body = z.object({
@@ -237,6 +243,12 @@ export async function buildApp(options?: {
       edgeAgentId: agent.id,
     });
     return reply.code(201).send(agent);
+  });
+
+  app.get("/v1/branches/:branchId/edge-agents", async (request, reply) => {
+    const { branchId } = branchParams.parse(request.params);
+    if (!(await requireAccess(request, reply, store, "device:configure", branchId))) return;
+    return { data: await store.listEdgeAgentsByBranch(branchId) };
   });
 
   app.post("/v1/edge-agents/:id/heartbeat", async (request, reply) => {

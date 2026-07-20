@@ -3,6 +3,7 @@ import { z } from "zod";
 const schema = z.object({
   CONTROL_PLANE_URL: z.string().url(),
   BRANCH_ID: z.string().min(1),
+  EDGE_AGENT_ID: z.string().min(1).optional(),
   EDGE_AGENT_NAME: z.string().min(2),
   EDGE_AGENT_VERSION: z.string().default("0.1.0"),
   DEV_USER_ID: z.string().min(1),

@@ -1,8 +1,9 @@
 "use client";
 
-import { ArrowLeft, Building2, ShieldCheck, Users } from "lucide-react";
-import { useState } from "react";
+import { ArrowLeft, Building2, Camera, ShieldCheck, Users } from "lucide-react";
+import { useEffect, useState } from "react";
 import { CameraPermissionManager } from "@/components/camera-permission-manager";
+import { DeviceManager } from "@/components/device-manager";
 import { OrganizationTree } from "@/components/organization-tree";
 import { OrgNodeForm } from "@/components/org-node-form";
 import { UserForm } from "@/components/user-form";
@@ -17,13 +18,18 @@ type SelectedRecord = {
 };
 
 export default function AdminPage() {
-  const [tab, setTab] = useState<"organization" | "users">("organization");
+  const [tab, setTab] = useState<"organization" | "users" | "devices">("organization");
   const [revision, setRevision] = useState(0);
   const [parentNode, setParentNode] = useState<SelectedRecord | undefined>();
   const [editNode, setEditNode] = useState<SelectedRecord | undefined>();
   const [editUser, setEditUser] = useState<SelectedRecord | undefined>();
   const [creatingUser, setCreatingUser] = useState(false);
   const [permissionUser, setPermissionUser] = useState<SelectedRecord | undefined>();
+
+  useEffect(() => {
+    const requested = new URLSearchParams(window.location.search).get("tab");
+    if (requested === "users" || requested === "devices") setTab(requested);
+  }, []);
 
   const refresh = () => {
     setParentNode(undefined);
@@ -73,6 +79,12 @@ export default function AdminPage() {
         >
           <Users size={16} /> Employees & permissions
         </button>
+        <button
+          className={tab === "devices" ? "active" : ""}
+          onClick={() => setTab("devices")}
+        >
+          <Camera size={16} /> Branch cameras
+        </button>
       </nav>
 
       <section className="admin-panel">
@@ -91,7 +103,7 @@ export default function AdminPage() {
               onDeleteNode={(node) => void deleteNode(node)}
             />
           </>
-        ) : (
+        ) : tab === "users" ? (
           <UserList
             key={`users-${revision}`}
             onCreateUser={() => setCreatingUser(true)}
@@ -99,6 +111,8 @@ export default function AdminPage() {
             onDeleteUser={(user) => void deleteUser(user)}
             onSelectUser={(user) => setPermissionUser(user)}
           />
+        ) : (
+          <DeviceManager />
         )}
       </section>
 
