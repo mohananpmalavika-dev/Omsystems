@@ -1,4 +1,7 @@
 services:
+  # The existing production service is intentionally kept as one dashboard/BFF.
+  # It connects to the current control-plane and media tunnels through env vars
+  # managed by deploy/publish-render-live.ps1.
   - type: web
     name: sentinel-grid-ops
     runtime: node

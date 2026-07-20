@@ -6,7 +6,7 @@ const configSchema = z.object({
   LOG_LEVEL: z
     .enum(["fatal", "error", "warn", "info", "debug", "trace", "silent"])
     .default("info"),
-  AUTH_MODE: z.enum(["development", "oidc"]).default("development"),
+  AUTH_MODE: z.enum(["development", "session", "oidc"]).default("development"),
   DATABASE_URL: z.string().url().optional(),
   MEDIA_GATEWAY_SHARED_KEY: z.string().min(32).default(
     "development-media-gateway-key-change-me",

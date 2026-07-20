@@ -69,28 +69,11 @@ export class CameraRepository {
     const result = await this.pool.query<CameraRow>(
       `${selectCamera}
        WHERE cameras.branch_node_id = $2
-         AND EXISTS (
-           SELECT 1
-           FROM resource_nodes target
-           JOIN access_grants g ON g.user_id = $1 AND g.action = $3
-           JOIN resource_nodes scope ON scope.id = g.scope_node_id
-           WHERE target.id = cameras.resource_node_id
-             AND g.effect = 'allow'
-             AND target.path <@ scope.path
-             AND (g.valid_from IS NULL OR g.valid_from <= now())
-             AND (g.valid_until IS NULL OR g.valid_until > now())
-         )
-         AND NOT EXISTS (
-           SELECT 1
-           FROM resource_nodes target
-           JOIN access_grants g ON g.user_id = $1 AND g.action = $3
-           JOIN resource_nodes scope ON scope.id = g.scope_node_id
-           WHERE target.id = cameras.resource_node_id
-             AND g.effect = 'deny'
-             AND target.path <@ scope.path
-             AND (g.valid_from IS NULL OR g.valid_from <= now())
-             AND (g.valid_until IS NULL OR g.valid_until > now())
-         )`,
+         AND (
+           SELECT access.allowed
+           FROM check_camera_access($1::uuid, cameras.id, $3) AS access
+           LIMIT 1
+         ) = true`,
       [userId, branchId, action],
     );
     return result.rows.map(mapCamera);

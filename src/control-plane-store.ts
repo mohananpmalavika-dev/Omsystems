@@ -1,9 +1,14 @@
 import type {
   Action,
   AuditEventInput,
+  BranchCameraCoverageGap,
+  BranchCameraRequirement,
   Camera,
   CameraCapabilities,
+  CameraComplianceSummary,
+  CameraInstallationCompliance,
   CameraProfile,
+  CameraSpecifications,
   CameraStatus,
   CameraVendor,
   DiscoveredCamera,
@@ -33,6 +38,79 @@ export interface CameraApprovalInput {
   channel: number;
   protocol: Camera["protocol"];
   connectionSecretRef: string;
+}
+
+export interface CameraSpecificationsInput {
+  resolutionMp: number;
+  resolutionWidth: number;
+  resolutionHeight: number;
+  frameRate: number;
+  videoCodec: string;
+  bitrateKbps?: number | undefined;
+  fieldOfViewHorizontal?: number | undefined;
+  fieldOfViewVertical?: number | undefined;
+  focalLengthMm?: number | undefined;
+  lensType?: string | undefined;
+  hasNightVision: boolean;
+  irDistanceMeters?: number | undefined;
+  hasWdr: boolean;
+  minIlluminationLux?: number | undefined;
+  weatherproofRating?: string | undefined;
+  operatingTempMin?: number | undefined;
+  operatingTempMax?: number | undefined;
+  vandalResistant: boolean;
+  powerConsumptionWatts?: number | undefined;
+  powerSupplyType?: string | undefined;
+  poeClass?: string | undefined;
+  storageDays: number;
+  avgStoragePerDayGb?: number | undefined;
+  hasTwoWayAudio: boolean;
+  hasMotionDetection: boolean;
+  hasAnalytics: boolean;
+  analyticsFeatures: string[];
+}
+
+export interface CameraComplianceInput {
+  meetsResolutionRequirement: boolean;
+  meetsFrameRateRequirement: boolean;
+  meetsCoverageRequirement: boolean;
+  meetsRetentionRequirement: boolean;
+  properLighting: boolean;
+  properAngle: boolean;
+  complianceNotes?: string | undefined;
+  lastInspectionDate?: string | undefined;
+  nextInspectionDate?: string | undefined;
+  inspectorName?: string | undefined;
+  audioRecordingCompliant: boolean;
+  privacyMaskConfigured: boolean;
+  signageInstalled: boolean;
+}
+
+export interface CameraDetailsUpdate {
+  locationType?: Camera["locationType"] | undefined;
+  physicalType?: Camera["physicalType"] | undefined;
+  installationDate?: string | undefined;
+  warrantyExpiresAt?: string | undefined;
+  serialNumber?: string | undefined;
+  macAddress?: string | undefined;
+  firmwareVersion?: string | undefined;
+  ipAddress?: string | undefined;
+  installationNotes?: string | undefined;
+}
+
+export interface BranchCameraRequirementInput {
+  locationType: string;
+  requiredCount: number;
+  minResolutionMp: number;
+  minFrameRate: number;
+  requiresNightVision: boolean;
+  requiresAudio: boolean;
+  requiresPtz: boolean;
+  requiresLpr: boolean;
+  priority: number;
+  isRegulatoryRequirement: boolean;
+  complianceStandard?: string | undefined;
+  notes?: string | undefined;
 }
 
 export interface ControlPlaneStore {
@@ -84,4 +162,157 @@ export interface ControlPlaneStore {
   createLiveSession(cameraId: string, userId: string): Promise<LiveSession>;
   consumeLiveSession(token: string): Promise<ConsumedLiveSession | undefined>;
   writeAudit(event: AuditEventInput): Promise<void>;
+}
+
+export interface CctvInfrastructureStore {
+  getCameraSpecifications(cameraId: string): Promise<CameraSpecifications | undefined>;
+  upsertCameraSpecifications(
+    cameraId: string,
+    input: CameraSpecificationsInput,
+  ): Promise<CameraSpecifications>;
+  getCameraCompliance(cameraId: string): Promise<CameraInstallationCompliance | undefined>;
+  upsertCameraCompliance(
+    cameraId: string,
+    input: CameraComplianceInput,
+  ): Promise<CameraInstallationCompliance>;
+  updateCameraDetails(
+    cameraId: string,
+    details: CameraDetailsUpdate,
+  ): Promise<Camera>;
+  getBranchCameraRequirements(branchId: string): Promise<BranchCameraRequirement[]>;
+  upsertBranchCameraRequirement(
+    branchId: string,
+    input: BranchCameraRequirementInput,
+  ): Promise<BranchCameraRequirement>;
+  initializeBranchCameraRequirements(branchId: string): Promise<void>;
+  getBranchCoverageGaps(branchId: string): Promise<BranchCameraCoverageGap[]>;
+  getBranchComplianceSummary(branchId: string): Promise<CameraComplianceSummary[]>;
+  getCamerasDueForInspection(daysAhead: number): Promise<CameraComplianceSummary[]>;
+}
+
+export interface OrganizationStore {
+  getOrganizationTree(tenantId: string): Promise<any[]>;
+  getOrganizationStatistics(tenantId: string): Promise<any>;
+  listOrganizationNodes(
+    tenantId: string,
+    type?: string,
+    parentId?: string,
+    includeInactive?: boolean,
+  ): Promise<any[]>;
+  getOrganizationNodeDetails(id: string): Promise<any>;
+  getNodeHierarchyPath(id: string): Promise<any[]>;
+  getDescendantNodes(id: string, includeInactive?: boolean): Promise<any[]>;
+  createOrganizationNode(tenantId: string, input: any): Promise<any>;
+  updateOrganizationNode(id: string, input: any): Promise<any>;
+  deactivateOrganizationNode(id: string): Promise<void>;
+  validateHierarchyRelationship(parentNodeId: string, childNodeType: string): Promise<boolean>;
+}
+
+export interface UserManagementStore {
+  getUserById(id: string): Promise<any>;
+  getUserDetails(id: string): Promise<any>;
+  getUserWithPassword(id: string): Promise<any>;
+  findUserByUsername(username: string, tenantSlug?: string): Promise<any>;
+  findUserByEmail(email: string, tenantSlug?: string): Promise<any>;
+  listUsers(tenantId: string, filters: any): Promise<any>;
+  createUser(tenantId: string, input: any): Promise<any>;
+  updateUser(id: string, input: any): Promise<any>;
+  deactivateUser(id: string): Promise<void>;
+  updateUserPassword(id: string, passwordHash: string, mustChange?: boolean): Promise<void>;
+  unlockUserAccount(id: string): Promise<void>;
+  assignUserToOrganization(
+    userId: string,
+    scopeNodeId: string,
+    isPrimary: boolean,
+    assignedBy: string,
+  ): Promise<any>;
+  removeUserOrganizationAssignment(userId: string, nodeId: string): Promise<void>;
+  getUserCameraAccessOverview(userId: string): Promise<any>;
+  getUserAuditLog(userId: string, limit: number, offset: number): Promise<any>;
+}
+
+export interface AuthenticationStore {
+  checkAccountLockout(userId: string): Promise<boolean>;
+  recordFailedLogin(userId: string): Promise<void>;
+  recordSuccessfulLogin(userId: string, ipAddress?: string): Promise<void>;
+  createUserSession(
+    userId: string,
+    tenantId: string,
+    accessTokenHash: string,
+    refreshTokenHash: string,
+    ipAddress?: string,
+    userAgent?: string,
+  ): Promise<any>;
+  findSessionByAccessToken(tokenHash: string): Promise<any>;
+  findSessionByRefreshToken(tokenHash: string): Promise<any>;
+  updateSessionAccessToken(
+    sessionId: string,
+    newTokenHash: string,
+    ipAddress?: string,
+    userAgent?: string,
+  ): Promise<void>;
+  updateSessionActivity(sessionId: string): Promise<void>;
+  getUserSession(sessionId: string): Promise<any>;
+  listUserSessions(userId: string): Promise<any[]>;
+  deleteUserSession(sessionId: string): Promise<void>;
+  deleteAllUserSessions(userId: string): Promise<void>;
+  createPasswordResetToken(userId: string, tokenHash: string): Promise<any>;
+  findPasswordResetToken(tokenHash: string): Promise<any>;
+  markPasswordResetTokenUsed(tokenId: string): Promise<void>;
+}
+
+export interface CameraPermissionStore {
+  checkCameraAccess(
+    userId: string,
+    cameraId: string,
+    action: string,
+  ): Promise<{ allowed: boolean; reason: string; requiresApproval: boolean }>;
+  listCameraSpecificGrants(userId: string): Promise<any[]>;
+  listCameraGrants(cameraId: string): Promise<any[]>;
+  createCameraSpecificGrant(tenantId: string, input: any, grantedBy: string): Promise<any>;
+  deleteCameraSpecificGrant(id: string): Promise<void>;
+  listCameraAccessRequests(tenantId: string, filters: any): Promise<any[]>;
+  getCameraAccessRequest(id: string): Promise<any>;
+  createCameraAccessRequest(tenantId: string, userId: string, input: any): Promise<any>;
+  reviewCameraAccessRequest(
+    id: string,
+    reviewerId: string,
+    status: string,
+    notes?: string,
+  ): Promise<any>;
+  revokeCameraAccessRequest(id: string): Promise<void>;
+  listTimeBasedRestrictions(tenantId: string, filters: any): Promise<any[]>;
+  createTimeBasedRestriction(tenantId: string, input: any): Promise<any>;
+  deleteTimeBasedRestriction(id: string): Promise<void>;
+  listCameraAccessGroups(tenantId: string, scopeNodeId?: string): Promise<any[]>;
+  getCameraAccessGroupDetails(id: string): Promise<any>;
+  createCameraAccessGroup(tenantId: string, input: any): Promise<any>;
+  addCameraToAccessGroup(groupId: string, cameraId: string, addedBy: string): Promise<void>;
+  removeCameraFromAccessGroup(groupId: string, cameraId: string): Promise<void>;
+  assignUserToAccessGroup(
+    groupId: string,
+    userId: string,
+    effect: string,
+    assignedBy: string,
+  ): Promise<void>;
+  removeUserFromAccessGroup(groupId: string, userId: string): Promise<void>;
+  updateCameraSensitivity(cameraId: string, input: any): Promise<any>;
+  getCameraAccessSummary(cameraId: string): Promise<any>;
+}
+
+export type ExtendedControlPlaneStore = ControlPlaneStore &
+  CctvInfrastructureStore &
+  OrganizationStore &
+  UserManagementStore &
+  AuthenticationStore &
+  CameraPermissionStore;
+
+export function hasExtendedInfrastructure(
+  store: ControlPlaneStore,
+): store is ExtendedControlPlaneStore {
+  const candidate = store as Partial<ExtendedControlPlaneStore>;
+  return typeof candidate.getOrganizationTree === "function" &&
+    typeof candidate.getCameraSpecifications === "function" &&
+    typeof candidate.findUserByUsername === "function" &&
+    typeof candidate.checkCameraAccess === "function";
 }

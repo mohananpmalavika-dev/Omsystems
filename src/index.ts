@@ -11,6 +11,7 @@ const store = config.DATABASE_URL
 const app = await buildApp({
   logger: true,
   store,
+  authMode: config.AUTH_MODE,
   mediaGatewaySharedKey: config.MEDIA_GATEWAY_SHARED_KEY,
   ...(config.EDGE_BRIDGE_SHARED_KEY
     ? { edgeBridgeSharedKey: config.EDGE_BRIDGE_SHARED_KEY }

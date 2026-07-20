@@ -125,8 +125,8 @@ export function SecurityDashboard() {
           <a href="#"><Siren size={18} />Incidents<span className="alert-count">3</span></a>
           <a href="#"><Activity size={18} />Health</a>
           <p>MANAGEMENT</p>
-          <a href="#"><Building2 size={18} />Branches</a>
-          <a href="#"><Camera size={18} />Devices</a>
+          <a href="/admin"><Building2 size={18} />Organization</a>
+          <a href="/admin?tab=users"><Camera size={18} />Access control</a>
           <a href="#"><FileVideo2 size={18} />Evidence</a>
           <a href="#"><Download size={18} />Exports</a>
         </nav>

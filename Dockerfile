@@ -18,6 +18,8 @@ COPY edge-agent/package.json ./edge-agent/package.json
 COPY media-gateway/package.json ./media-gateway/package.json
 RUN npm ci --omit=dev
 COPY --from=build /app/dist ./dist
+COPY scripts/run-migrations.mjs ./scripts/run-migrations.mjs
+COPY database/migrations ./database/migrations
 EXPOSE 8080
 USER node
-CMD ["node", "dist/src/index.js"]
+CMD ["sh", "-c", "node scripts/run-migrations.mjs && node dist/src/index.js"]

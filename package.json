@@ -12,9 +12,12 @@
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "build": "tsc -p tsconfig.json",
-    "start": "node dist/index.js",
+    "start": "node dist/src/index.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
+    "migrate": "node scripts/run-migrations.mjs",
+    "migrate:status": "node scripts/run-migrations.mjs status",
+    "migrate:test": "node scripts/test-migrations-local.mjs",
     "edge:dev": "npm run dev --workspace @sentinel/edge-agent",
     "edge:typecheck": "npm run typecheck --workspace @sentinel/edge-agent",
     "edge:test": "npm run test --workspace @sentinel/edge-agent",

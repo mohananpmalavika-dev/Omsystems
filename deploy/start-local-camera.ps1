@@ -3,23 +3,39 @@ param(
   [string]$OnvifUrl = "http://192.168.29.58:8899/onvif/device_service",
   [string]$SecretReference = "local://pilot/camera-01",
   [string]$PublicHost = "192.168.29.100",
-  [string]$ProfileName = "subStream"
+  [string]$ProfileName = "subStream",
+  [string]$PublicHlsBaseUrl = "",
+  [string]$PublicWebRtcBaseUrl = "",
+  [string]$CameraUsername = "",
+  [object]$CameraPassword
 )
 
 $ErrorActionPreference = "Stop"
-$cameraUsername = Read-Host "Camera username"
-$securePassword = Read-Host "Camera password" -AsSecureString
+$cameraUsername = if ($CameraUsername) {
+  $CameraUsername
+} else {
+  Read-Host "Camera username"
+}
+$securePassword = if ($CameraPassword) {
+  if ($CameraPassword -is [Security.SecureString]) {
+    $CameraPassword
+  } else {
+    ConvertTo-SecureString ([string]$CameraPassword) -AsPlainText -Force
+  }
+} else {
+  Read-Host "Camera password" -AsSecureString
+}
 $passwordPointer = [Runtime.InteropServices.Marshal]::SecureStringToBSTR(
   $securePassword
 )
 
 try {
-  $cameraPassword =
+  $plainCameraPassword =
     [Runtime.InteropServices.Marshal]::PtrToStringBSTR($passwordPointer)
 
   $env:CAMERA_ONVIF_URL = $OnvifUrl
   $env:CAMERA_USERNAME = $cameraUsername
-  $env:CAMERA_PASSWORD = $cameraPassword
+  $env:CAMERA_PASSWORD = $plainCameraPassword
   $env:CAMERA_PROFILE_NAME = $ProfileName
 
   $sourceUri = & node .\edge-agent\scripts\resolve-camera-stream.mjs
@@ -30,11 +46,19 @@ try {
   $env:STREAM_SECRETS_JSON = @{
     $SecretReference = $sourceUri
   } | ConvertTo-Json -Compress
-  $env:PUBLIC_HLS_BASE_URL = "http://${PublicHost}:8888"
-  $env:PUBLIC_WEBRTC_BASE_URL = "http://${PublicHost}:8889"
+  $env:PUBLIC_HLS_BASE_URL = if ($PublicHlsBaseUrl) {
+    $PublicHlsBaseUrl
+  } else {
+    "http://${PublicHost}:8888"
+  }
+  $env:PUBLIC_WEBRTC_BASE_URL = if ($PublicWebRtcBaseUrl) {
+    $PublicWebRtcBaseUrl
+  } else {
+    "http://${PublicHost}:8889"
+  }
   $env:DASHBOARD_DEV_USER_ID = "user-global-admin"
 
-  & docker compose up -d --force-recreate media-gateway dashboard
+  & docker compose up -d --build --force-recreate api media-gateway dashboard
   if ($LASTEXITCODE -ne 0) {
     throw "Docker Compose could not start the camera services"
   }

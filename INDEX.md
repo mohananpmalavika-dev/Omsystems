@@ -43,12 +43,17 @@ Welcome! This index helps you find the right document for your needs.
 |----------|---------|------|----------|
 | [PROJECT_OVERVIEW.md](PROJECT_OVERVIEW.md) | Complete system overview | 20 min | Developers |
 | [docs/architecture.md](docs/architecture.md) | System design & boundaries | 15 min | Technical |
+| [docs/cctv-infrastructure-standards.md](docs/cctv-infrastructure-standards.md) | Camera infrastructure standards | 30 min | Technical |
+| [CCTV_INFRASTRUCTURE_INTEGRATION.md](CCTV_INFRASTRUCTURE_INTEGRATION.md) | CCTV integration guide | 20 min | Developers |
+| [CCTV_IMPLEMENTATION_SUMMARY.md](CCTV_IMPLEMENTATION_SUMMARY.md) | CCTV implementation summary | 10 min | Everyone |
 
 ### Deployment & Operations
 
 | Document | Purpose | Time | Audience |
 |----------|---------|------|----------|
 | [DEPLOYMENT_OPTIONS.md](DEPLOYMENT_OPTIONS.md) | Cloud deployment guide | 15 min | DevOps |
+| [RENDER_DEPLOYMENT_GUIDE.md](RENDER_DEPLOYMENT_GUIDE.md) | Render-specific deployment | 20 min | DevOps |
+| [DEPLOYMENT_CHECKLIST.md](DEPLOYMENT_CHECKLIST.md) | Step-by-step checklist | 10 min | DevOps |
 | [deploy/one-click-deploy.ps1](deploy/one-click-deploy.ps1) | Automated deployment | - | Scripts |
 | [deploy/one-click-deploy.sh](deploy/one-click-deploy.sh) | Automated deployment (Linux) | - | Scripts |
 
@@ -120,7 +125,9 @@ c:\Omsystems\
 ├── CRITICAL_FIXES_CHECKLIST.md  ← Pre-launch tasks
 ├── QUICK_FIX_SNIPPETS.md        ← Copy-paste solutions
 ├── QUICK_START_2_CAMERAS.md     ← Camera testing guide
-└── DEPLOYMENT_OPTIONS.md        ← Cloud deployment guide
+├── DEPLOYMENT_OPTIONS.md        ← Cloud deployment guide
+├── CCTV_INFRASTRUCTURE_INTEGRATION.md ← CCTV integration guide
+└── CCTV_IMPLEMENTATION_SUMMARY.md     ← CCTV implementation summary
 ```
 
 ### Deployment Scripts
@@ -133,7 +140,9 @@ deploy/
 ### Technical Docs
 ```
 docs/
-└── architecture.md              ← System design document
+├── architecture.md              ← System design document
+├── cctv-infrastructure-standards.md  ← Camera infrastructure standards
+└── product-roadmap.md           ← Feature development timeline
 ```
 
 ### Source Code

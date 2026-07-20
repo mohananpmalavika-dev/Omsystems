@@ -6,8 +6,17 @@ import Fastify, {
 } from "fastify";
 import { z } from "zod";
 import { timingSafeEqual } from "node:crypto";
-import type { ControlPlaneStore } from "./control-plane-store.js";
+import {
+  hasExtendedInfrastructure,
+  type ControlPlaneStore,
+} from "./control-plane-store.js";
 import { actions, type Action, type Camera } from "./domain/models.js";
+import { createAuthMiddleware, RateLimiter } from "./middleware/auth.middleware.js";
+import { registerAuthRoutes } from "./routes/auth.routes.js";
+import { registerCameraPermissionRoutes } from "./routes/camera-permissions.routes.js";
+import { registerCctvInfrastructureRoutes } from "./routes/cctv-infrastructure.js";
+import { registerOrganizationRoutes } from "./routes/organization.routes.js";
+import { registerUserRoutes } from "./routes/user.routes.js";
 import { MemoryStore } from "./store.js";
 
 declare module "fastify" {
@@ -40,6 +49,7 @@ export async function buildApp(options?: {
   store?: ControlPlaneStore;
   mediaGatewaySharedKey?: string;
   edgeBridgeSharedKey?: string;
+  authMode?: "development" | "session" | "oidc";
 }): Promise<FastifyInstance> {
   const app = Fastify({ logger: options?.logger ?? false });
   const store = options?.store ?? new MemoryStore();
@@ -50,6 +60,15 @@ export async function buildApp(options?: {
   await app.register(cors, { origin: false });
 
   app.decorateRequest("currentUser");
+  const extendedStore = hasExtendedInfrastructure(store) ? store : undefined;
+  const sessionAuth = extendedStore
+    ? createAuthMiddleware({
+        store: extendedStore,
+        developmentMode: (options?.authMode ?? "development") === "development",
+      })
+    : undefined;
+  const loginRateLimiter = new RateLimiter(20, 15 * 60 * 1000);
+
   app.addHook("preHandler", async (request, reply) => {
     if (
       request.url === "/health" ||
@@ -66,7 +85,15 @@ export async function buildApp(options?: {
       return reply.code(401).send({ error: "invalid_bridge_identity" });
     }
 
-    // Development identity only. OIDC middleware will replace this boundary.
+    if ((request.routeOptions.config as unknown as Record<string, unknown>)?.noAuth) {
+      return loginRateLimiter.middleware()(request, reply);
+    }
+
+    if (sessionAuth) {
+      return sessionAuth(request, reply);
+    }
+
+    // Memory-store development identity for local tests.
     const identity = request.headers["x-user-id"];
     if (typeof identity !== "string") {
       return reply.code(401).send({
@@ -140,7 +167,7 @@ export async function buildApp(options?: {
     const { id } = idParams.parse(request.params);
     const camera = await store.getCamera(id);
     if (!camera) return reply.code(404).send({ error: "camera_not_found" });
-    if (!(await requireAccess(request, reply, store, "live:view", camera.nodeId))) return;
+    if (!(await requireCameraAccess(request, reply, store, camera))) return;
     return safeCamera(camera);
   });
 
@@ -148,7 +175,7 @@ export async function buildApp(options?: {
     const { id } = idParams.parse(request.params);
     const camera = await store.getCamera(id);
     if (!camera) return reply.code(404).send({ error: "camera_not_found" });
-    if (!(await requireAccess(request, reply, store, "live:view", camera.nodeId))) return;
+    if (!(await requireCameraAccess(request, reply, store, camera))) return;
     return { cameraId: camera.id, capabilities: camera.capabilities, profiles: camera.profiles };
   });
 
@@ -230,7 +257,7 @@ export async function buildApp(options?: {
     const { id } = idParams.parse(request.params);
     const camera = await store.getCamera(id);
     if (!camera) return reply.code(404).send({ error: "camera_not_found" });
-    if (!(await requireAccess(request, reply, store, "live:view", camera.nodeId))) {
+    if (!(await requireCameraAccess(request, reply, store, camera))) {
       await audit(request, store, "live_session.created", camera.nodeId, "denied");
       return;
     }
@@ -279,6 +306,14 @@ export async function buildApp(options?: {
     return decision;
   });
 
+  if (extendedStore) {
+    await registerAuthRoutes(app, extendedStore);
+    await registerOrganizationRoutes(app, extendedStore);
+    await registerUserRoutes(app, extendedStore);
+    await registerCameraPermissionRoutes(app, extendedStore);
+    await registerCctvInfrastructureRoutes(app, extendedStore);
+  }
+
   app.setErrorHandler((error, _request, reply) => {
     if (error instanceof z.ZodError) {
       return reply.code(400).send({
@@ -288,6 +323,31 @@ export async function buildApp(options?: {
     }
     if (error instanceof Error && error.message === "invalid_parent") {
       return reply.code(400).send({ error: "invalid_parent" });
+    }
+    if (
+      error instanceof Error &&
+      [
+        "invalid_camera_grant_target",
+        "invalid_camera_access_target",
+        "invalid_time_restriction_target",
+      ].includes(error.message)
+    ) {
+      return reply.code(400).send({ error: error.message });
+    }
+    if (error instanceof Error && error.message === "camera_not_found") {
+      return reply.code(404).send({ error: "camera_not_found" });
+    }
+    const databaseCode = (error as { code?: string }).code;
+    if (databaseCode === "23505") {
+      return reply.code(409).send({ error: "resource_conflict" });
+    }
+    if (
+      databaseCode === "23503" ||
+      databaseCode === "23514" ||
+      databaseCode === "22P02" ||
+      databaseCode === "P0001"
+    ) {
+      return reply.code(400).send({ error: "invalid_request" });
     }
     app.log.error(error);
     return reply.code(500).send({ error: "internal_error" });
@@ -333,6 +393,31 @@ async function requireAccess(
     return false;
   }
   return true;
+}
+
+async function requireCameraAccess(
+  request: FastifyRequest,
+  reply: FastifyReply,
+  store: ControlPlaneStore,
+  camera: Camera,
+) {
+  if (!hasExtendedInfrastructure(store)) {
+    return requireAccess(request, reply, store, "live:view", camera.nodeId);
+  }
+
+  const decision = await store.checkCameraAccess(
+    request.currentUser.id,
+    camera.id,
+    "live:view",
+  );
+  if (decision.allowed) return true;
+
+  await reply.code(403).send({
+    error: decision.requiresApproval ? "approval_required" : "forbidden",
+    reason: decision.reason,
+    requiresApproval: decision.requiresApproval,
+  });
+  return false;
 }
 
 async function audit(

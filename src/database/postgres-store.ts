@@ -14,17 +14,22 @@ import type {
 import { AuditRepository } from "./audit-repository.js";
 import { CameraRepository } from "./camera-repository.js";
 import { EdgeAgentRepository } from "./edge-agent-repository.js";
+import { InfrastructureRepository } from "./infrastructure-repository.js";
 import { ResourceRepository } from "./resource-repository.js";
 import { UserRepository } from "./user-repository.js";
 
-export class PostgresStore implements ControlPlaneStore {
+export class PostgresStore
+  extends InfrastructureRepository
+  implements ControlPlaneStore
+{
   private readonly users: UserRepository;
   private readonly resources: ResourceRepository;
   private readonly cameras: CameraRepository;
   private readonly agents: EdgeAgentRepository;
   private readonly audits: AuditRepository;
 
-  constructor(private readonly pool: Pool) {
+  constructor(pool: Pool) {
+    super(pool);
     this.users = new UserRepository(pool);
     this.resources = new ResourceRepository(pool);
     this.cameras = new CameraRepository(pool);
