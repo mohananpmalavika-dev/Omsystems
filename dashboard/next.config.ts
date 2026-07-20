@@ -1,7 +1,9 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  output: "standalone",
+  ...(process.env.SITES_BUILD === "true"
+    ? {}
+    : { output: "standalone" as const }),
   poweredByHeader: false,
   allowedDevOrigins: ["127.0.0.1"],
 };

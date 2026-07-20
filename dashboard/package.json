@@ -2,9 +2,11 @@
   "name": "@sentinel/dashboard",
   "version": "0.1.0",
   "private": true,
+  "type": "module",
   "scripts": {
     "dev": "next dev --hostname 0.0.0.0 --port 3000",
     "build": "next build",
+    "build:sites": "cross-env SITES_BUILD=true vinext build",
     "start": "next start --hostname 0.0.0.0 --port 3000",
     "typecheck": "tsc --noEmit"
   },
@@ -16,10 +18,17 @@
     "react-dom": "^19.2.0"
   },
   "devDependencies": {
+    "@mdx-js/rollup": "^3.0.0",
     "@playwright/test": "^1.61.1",
     "@types/node": "^22.13.4",
     "@types/react": "^19.0.8",
     "@types/react-dom": "^19.0.3",
-    "typescript": "^5.7.3"
+    "@vitejs/plugin-react": "^6.0.3",
+    "@vitejs/plugin-rsc": "^0.5.26",
+    "cross-env": "^10.1.0",
+    "react-server-dom-webpack": "^19.2.6",
+    "typescript": "^5.7.3",
+    "vinext": "^1.0.0-beta.2",
+    "vite": "^8.1.5"
   }
 }
