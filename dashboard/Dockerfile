@@ -10,10 +10,11 @@ RUN npm run build --workspace @sentinel/dashboard
 
 FROM node:22-alpine
 ENV NODE_ENV=production
+ENV HOSTNAME=0.0.0.0
 WORKDIR /app
 COPY --from=build /app/dashboard/.next/standalone ./
 COPY --from=build /app/dashboard/.next/static ./dashboard/.next/static
 COPY --from=build /app/dashboard/public ./dashboard/public
-EXPOSE 3000
+EXPOSE 10000
 USER node
 CMD ["node", "dashboard/server.js"]

@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: sentinel-grid-ops
+    runtime: node
+    plan: free
+    region: singapore
+    buildCommand: npm ci && npm run dashboard:build
+    startCommand: npm run start --workspace @sentinel/dashboard -- --hostname 0.0.0.0 --port $PORT
+    healthCheckPath: /api/health
+    autoDeployTrigger: commit
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: DASHBOARD_DEMO_MODE
+        value: "true"
