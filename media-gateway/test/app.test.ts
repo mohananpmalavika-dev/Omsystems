@@ -82,4 +82,32 @@ describe("authorized media startup", () => {
     });
     expect(denied.statusCode).toBe(401);
   });
+
+  it("protects live startup with the edge bridge identity", async () => {
+    const bridgeKey = "b".repeat(43);
+    app = await buildMediaGateway({
+      controlPlane: {
+        consumeLiveSession: vi.fn(async () => {
+          throw new Error("must not be called without bridge authentication");
+        }),
+      },
+      router: {
+        ensurePath: vi.fn(async () => undefined),
+        removePath: vi.fn(async () => undefined),
+      },
+      secrets: { resolve: vi.fn(async () => undefined) },
+      publicHlsBaseUrl: "https://media.example/hls",
+      publicWebRtcBaseUrl: "https://media.example/webrtc",
+      accessTtlMs: 60_000,
+      edgeBridgeSharedKey: bridgeKey,
+    });
+
+    const denied = await app.inject({
+      method: "POST",
+      url: "/v1/live/start",
+      payload: { controlPlaneToken: "a".repeat(43) },
+    });
+    expect(denied.statusCode).toBe(401);
+    expect(denied.json().error).toBe("invalid_bridge_identity");
+  });
 });

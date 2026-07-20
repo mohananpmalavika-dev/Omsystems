@@ -34,7 +34,7 @@ export async function startLive(cameraId: string): Promise<LiveSessionResponse> 
     ),
     {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: bridgeHeaders(),
       body: JSON.stringify({ controlPlaneToken: controlSession.token }),
       cache: "no-store",
     },
@@ -54,7 +54,7 @@ async function controlFetch(path: string, init?: RequestInit) {
   ), {
     ...init,
     headers: {
-      "content-type": "application/json",
+      ...bridgeHeaders(),
       "x-user-id": runtimeEnv(
         "DASHBOARD_DEV_USER_ID",
         "user-south-operator",
@@ -70,4 +70,12 @@ async function controlFetch(path: string, init?: RequestInit) {
 function runtimeEnv(name: string, fallback: string) {
   const value = Reflect.get(process.env, name) as string | undefined;
   return value ?? fallback;
+}
+
+function bridgeHeaders() {
+  const key = runtimeEnv("EDGE_BRIDGE_SHARED_KEY", "");
+  return {
+    "content-type": "application/json",
+    ...(key ? { "x-edge-bridge-key": key } : {}),
+  };
 }

@@ -11,6 +11,10 @@ const configSchema = z.object({
   MEDIA_GATEWAY_SHARED_KEY: z.string().min(32).default(
     "development-media-gateway-key-change-me",
   ),
+  EDGE_BRIDGE_SHARED_KEY: z.preprocess(
+    (value) => value === "" ? undefined : value,
+    z.string().min(32).optional(),
+  ),
 });
 
 export type AppConfig = z.infer<typeof configSchema>;

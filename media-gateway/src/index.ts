@@ -15,6 +15,9 @@ const app = await buildMediaGateway({
   publicHlsBaseUrl: config.PUBLIC_HLS_BASE_URL,
   publicWebRtcBaseUrl: config.PUBLIC_WEBRTC_BASE_URL,
   accessTtlMs: config.MEDIA_ACCESS_TTL_SECONDS * 1000,
+  ...(config.EDGE_BRIDGE_SHARED_KEY
+    ? { edgeBridgeSharedKey: config.EDGE_BRIDGE_SHARED_KEY }
+    : {}),
   logger: true,
 });
 

@@ -7,6 +7,7 @@ services:
       AUTH_MODE: development
       DATABASE_URL: postgresql://sentinel:local-development-only@postgres:5432/sentinel
       MEDIA_GATEWAY_SHARED_KEY: development-media-gateway-key-change-me
+      EDGE_BRIDGE_SHARED_KEY: ${EDGE_BRIDGE_SHARED_KEY:-}
     ports:
       - "8080:8080"
     depends_on:
@@ -27,6 +28,7 @@ services:
       PUBLIC_WEBRTC_BASE_URL: ${PUBLIC_WEBRTC_BASE_URL:-http://localhost:8889}
       MEDIA_ACCESS_TTL_SECONDS: 300
       STREAM_SECRETS_JSON: "${STREAM_SECRETS_JSON:-{}}"
+      EDGE_BRIDGE_SHARED_KEY: ${EDGE_BRIDGE_SHARED_KEY:-}
     ports:
       - "8090:8090"
     depends_on:
@@ -47,6 +49,9 @@ services:
       CONTROL_PLANE_INTERNAL_URL: http://api:8080
       MEDIA_GATEWAY_INTERNAL_URL: http://media-gateway:8090
       DASHBOARD_DEV_USER_ID: ${DASHBOARD_DEV_USER_ID:-user-global-admin}
+      EDGE_BRIDGE_SHARED_KEY: ${EDGE_BRIDGE_SHARED_KEY:-}
+      DASHBOARD_ACCESS_USERNAME: ${DASHBOARD_ACCESS_USERNAME:-}
+      DASHBOARD_ACCESS_PASSWORD: ${DASHBOARD_ACCESS_PASSWORD:-}
     ports:
       - "3000:3000"
     depends_on:

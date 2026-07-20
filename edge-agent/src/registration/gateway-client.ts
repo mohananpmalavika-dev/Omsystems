@@ -18,6 +18,7 @@ export class GatewayClient {
   constructor(
     private readonly baseUrl: string,
     private readonly developmentUserId: string,
+    private readonly edgeBridgeSharedKey?: string,
   ) {}
 
   async register(branchId: string, name: string, version: string) {
@@ -47,6 +48,9 @@ export class GatewayClient {
       headers: {
         "content-type": "application/json",
         "x-user-id": this.developmentUserId,
+        ...(this.edgeBridgeSharedKey
+          ? { "x-edge-bridge-key": this.edgeBridgeSharedKey }
+          : {}),
       },
     });
     const body = await response.json() as T | { error?: string };

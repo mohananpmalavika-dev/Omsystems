@@ -1,4 +1,5 @@
 import Fastify from "fastify";
+import { timingSafeEqual } from "node:crypto";
 import { z } from "zod";
 import { AccessRegistry } from "./access-registry.js";
 import { GatewayError } from "./control-plane-client.js";
@@ -15,10 +16,24 @@ export async function buildMediaGateway(options: {
   publicHlsBaseUrl: string;
   publicWebRtcBaseUrl: string;
   accessTtlMs: number;
+  edgeBridgeSharedKey?: string;
   logger?: boolean;
 }) {
   const app = Fastify({ logger: options.logger ?? false });
   const access = new AccessRegistry(options.router, options.accessTtlMs);
+
+  app.addHook("preHandler", async (request, reply) => {
+    if (
+      request.url === "/v1/live/start" &&
+      options.edgeBridgeSharedKey &&
+      !secureEqualHeader(
+        request.headers["x-edge-bridge-key"],
+        options.edgeBridgeSharedKey,
+      )
+    ) {
+      return reply.code(401).send({ error: "invalid_bridge_identity" });
+    }
+  });
 
   app.get("/health", async () => ({
     status: "ok",
@@ -93,4 +108,12 @@ function safeIdentifier(value: string) {
 
 function stripSlash(value: string) {
   return value.replace(/\/+$/, "");
+}
+
+function secureEqualHeader(value: string | string[] | undefined, expected: string) {
+  if (typeof value !== "string") return false;
+  const supplied = Buffer.from(value);
+  const configured = Buffer.from(expected);
+  return supplied.length === configured.length &&
+    timingSafeEqual(supplied, configured);
 }

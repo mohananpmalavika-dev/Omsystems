@@ -39,6 +39,7 @@ export async function buildApp(options?: {
   logger?: boolean;
   store?: ControlPlaneStore;
   mediaGatewaySharedKey?: string;
+  edgeBridgeSharedKey?: string;
 }): Promise<FastifyInstance> {
   const app = Fastify({ logger: options?.logger ?? false });
   const store = options?.store ?? new MemoryStore();
@@ -54,6 +55,16 @@ export async function buildApp(options?: {
       request.url === "/health" ||
       request.url === "/internal/live-sessions/consume"
     ) return;
+
+    if (
+      options?.edgeBridgeSharedKey &&
+      !secureEqualHeader(
+        request.headers["x-edge-bridge-key"],
+        options.edgeBridgeSharedKey,
+      )
+    ) {
+      return reply.code(401).send({ error: "invalid_bridge_identity" });
+    }
 
     // Development identity only. OIDC middleware will replace this boundary.
     const identity = request.headers["x-user-id"];
@@ -290,6 +301,10 @@ function secureEqual(left: string, right: string) {
   const rightBuffer = Buffer.from(right);
   return leftBuffer.length === rightBuffer.length &&
     timingSafeEqual(leftBuffer, rightBuffer);
+}
+
+function secureEqualHeader(value: string | string[] | undefined, expected: string) {
+  return typeof value === "string" && secureEqual(value, expected);
 }
 
 function safeCamera(camera: Camera) {

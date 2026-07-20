@@ -18,6 +18,32 @@ describe("control-plane API", () => {
     expect(response.statusCode).toBe(401);
   });
 
+  it("requires the edge bridge identity when configured", async () => {
+    const bridgeKey = "b".repeat(43);
+    const bridgedApp = await buildApp({ edgeBridgeSharedKey: bridgeKey });
+    try {
+      const denied = await bridgedApp.inject({
+        method: "GET",
+        url: "/v1/branches",
+        headers: { "x-user-id": "user-global-admin" },
+      });
+      expect(denied.statusCode).toBe(401);
+      expect(denied.json().error).toBe("invalid_bridge_identity");
+
+      const allowed = await bridgedApp.inject({
+        method: "GET",
+        url: "/v1/branches",
+        headers: {
+          "x-user-id": "user-global-admin",
+          "x-edge-bridge-key": bridgeKey,
+        },
+      });
+      expect(allowed.statusCode).toBe(200);
+    } finally {
+      await bridgedApp.close();
+    }
+  });
+
   it("filters cameras according to camera-group restrictions", async () => {
     const response = await app.inject({
       method: "GET",

@@ -12,6 +12,10 @@ const schema = z.object({
   DISCOVERY_TIMEOUT_MS: z.coerce.number().int().min(500).max(30_000).default(5000),
   ONVIF_TIMEOUT_MS: z.coerce.number().int().min(500).max(30_000).default(8000),
   FFPROBE_PATH: z.string().default("ffprobe"),
+  EDGE_BRIDGE_SHARED_KEY: z.preprocess(
+    (value) => value === "" ? undefined : value,
+    z.string().min(32).optional(),
+  ),
 });
 
 export function loadEdgeConfig(environment: NodeJS.ProcessEnv = process.env) {

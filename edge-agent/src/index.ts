@@ -9,7 +9,11 @@ import { GatewayClient } from "./registration/gateway-client.js";
 import { probeRtsp } from "./streaming/rtsp-probe.js";
 
 const config = loadEdgeConfig();
-const gateway = new GatewayClient(config.CONTROL_PLANE_URL, config.DEV_USER_ID);
+const gateway = new GatewayClient(
+  config.CONTROL_PLANE_URL,
+  config.DEV_USER_ID,
+  config.EDGE_BRIDGE_SHARED_KEY,
+);
 const agent = await gateway.register(
   config.BRANCH_ID,
   config.EDGE_AGENT_NAME,
