@@ -111,7 +111,15 @@ async function proxyControlRequest(request: NextRequest, context: RouteContext) 
         "cache-control": "no-store",
       },
     });
-  } catch {
+  } catch (error) {
+    const cause = error instanceof Error && error.cause instanceof Error
+      ? error.cause
+      : undefined;
+    console.error("Control-plane proxy request failed", {
+      message: error instanceof Error ? error.message : "unknown error",
+      cause: cause?.message,
+      code: cause && "code" in cause ? cause.code : undefined,
+    });
     return Response.json(
       { error: "control_plane_unavailable" },
       { status: 502 },

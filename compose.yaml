@@ -25,7 +25,7 @@ services:
       PORT: 8091
       RECORDING_ENGINE_SHARED_KEY: development-recording-engine-key-change-me
       ANALYTICS_ENGINE_SHARED_KEY: development-analytics-engine-key-change-me
-      CONTROL_PLANE_URL: http://api:8080
+      CONTROL_PLANE_URL: ${CONTROL_PLANE_URL:-http://api:8080}
       RECORDING_ROOT: /recordings
       STORAGE_NODE_EXTERNAL_ID: local-recorder-01
       STORAGE_NODE_NAME: Local Recording Node
@@ -60,7 +60,7 @@ services:
     environment:
       HOST: 0.0.0.0
       PORT: 8090
-      CONTROL_PLANE_URL: http://api:8080
+      CONTROL_PLANE_URL: ${CONTROL_PLANE_URL:-http://api:8080}
       MEDIA_GATEWAY_SHARED_KEY: development-media-gateway-key-change-me
       MEDIAMTX_API_URL: http://mediamtx:9997
       PUBLIC_HLS_BASE_URL: ${PUBLIC_HLS_BASE_URL:-http://localhost:8888}

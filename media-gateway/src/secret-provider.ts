@@ -8,10 +8,13 @@ export class EnvironmentSecretProvider implements StreamSecretProvider {
     if (!isStringRecord(parsed)) {
       throw new Error("STREAM_SECRETS_JSON must be a string-to-string object");
     }
+    const allowedProtocols = new Set(["rtsp:", "rtsps:", "http:", "https:"]);
     for (const value of Object.values(parsed)) {
       const protocol = new URL(value).protocol;
-      if (protocol !== "rtsp:" && protocol !== "rtsps:") {
-        throw new Error("Stream secrets must contain RTSP or RTSPS URLs");
+      if (!allowedProtocols.has(protocol)) {
+        throw new Error(
+          "Stream secrets must contain RTSP, RTSPS, HTTP, or HTTPS URLs",
+        );
       }
     }
     this.secrets = Object.freeze(parsed);
