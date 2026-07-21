@@ -325,16 +325,17 @@ export class EvidenceRepository {
 function mapEvidenceCase(row: any): EvidenceCase {
   return {
     id: row.id,
+    tenantId: row.tenant_id,
     caseNumber: row.case_number,
     title: row.title,
-    description: row.description,
+    description: row.description ?? undefined,
     status: row.status,
     createdBy: row.created_by,
     createdAt: row.created_at.toISOString(),
-    updatedAt: row.updated_at?.toISOString(),
-    itemCount: 0,
+    closedAt: row.updated_at?.toISOString(),
+    reason: row.reason ?? undefined,
     relatedIncidents: [],
-    legalHoldCount: 0,
+    legalHoldItems: [],
   };
 }
 
@@ -343,15 +344,14 @@ function mapEvidenceItem(row: any): EvidenceItem {
     id: row.id,
     caseId: row.case_id,
     type: row.type,
-    cameraId: row.camera_id,
+    cameraId: row.camera_id ?? undefined,
     startTime: row.start_time?.toISOString(),
     endTime: row.end_time?.toISOString(),
     description: row.description,
     addedBy: row.added_by,
-    hash: row.hash,
-    fileSize: row.file_size,
-    verificationStatus: "pending",
-    timestamp: row.created_at.toISOString(),
+    addedAt: row.created_at.toISOString(),
+    hash: row.hash ?? undefined,
+    fileSize: row.file_size ?? undefined,
   };
 }
 
@@ -359,57 +359,59 @@ function mapEvidenceExport(row: any): EvidenceExport {
   return {
     id: row.id,
     caseId: row.case_id,
-    format: row.format,
-    reason: row.reason,
     exportedBy: row.exported_by,
+    reason: row.reason,
+    format: row.format,
     status: row.status,
-    details: row.details ? JSON.parse(row.details) : {},
-    createdAt: row.created_at.toISOString(),
-    updatedAt: row.updated_at?.toISOString(),
+    requestedAt: row.created_at.toISOString(),
+    completedAt: row.updated_at?.toISOString(),
+    downloadUrl: row.details ? JSON.parse(row.details).downloadUrl : undefined,
+    expiresAt: row.details ? JSON.parse(row.details).expiresAt : undefined,
+    manifestId: row.details ? JSON.parse(row.details).manifestId : undefined,
+    checksumSha256: row.details ? JSON.parse(row.details).checksumSha256 : undefined,
+    errors: row.details ? (JSON.parse(row.details).errors ?? []) : [],
   };
 }
 
 function mapEvidenceManifest(row: any): EvidenceManifest {
   return {
-    id: row.id,
+    evidenceId: row.id,
     caseId: row.case_id,
+    exportedBy: row.exported_by,
+    exportedAt: row.created_at.toISOString(),
     sourceSegments: JSON.parse(row.source_segments),
     destinationFile: JSON.parse(row.destination_file),
     timestamp: JSON.parse(row.timestamp),
-    exportedBy: row.exported_by,
-    signature: row.signature,
-    createdAt: row.created_at.toISOString(),
+    signature: row.signature ?? undefined,
   };
 }
 
 function mapChainOfCustodyEvent(row: any): ChainOfCustodyEvent {
   return {
     id: row.id,
-    evidenceId: row.evidence_id,
+    evidenceId: row.evidence_id ?? undefined,
     action: row.action,
     performedBy: row.performed_by,
-    reason: row.reason,
-    sourceIp: row.source_ip,
+    performedAt: row.created_at.toISOString(),
+    sourceIp: row.source_ip ?? undefined,
+    reason: row.reason ?? undefined,
+    previousHash: row.previous_hash ?? undefined,
     eventHash: row.event_hash,
-    signature: row.signature,
-    createdAt: row.created_at.toISOString(),
+    signature: row.signature ?? undefined,
   };
 }
 
 function mapRecordingLegalHold(row: any): RecordingLegalHold {
   return {
     id: row.id,
-    caseNumber: row.case_number,
+    tenantId: row.tenant_id ?? undefined,
+    cameraId: row.camera_id ?? undefined,
+    fromAt: (row.from_at ?? row.start_time)?.toISOString(),
+    toAt: (row.to_at ?? row.end_time)?.toISOString(),
     reason: row.reason,
-    requestedBy: row.requested_by,
-    cameraIds: JSON.parse(row.camera_ids),
-    startTime: row.start_time.toISOString(),
-    endTime: row.end_time.toISOString(),
-    reviewDate: row.review_date?.toISOString(),
-    expiryDate: row.expiry_date?.toISOString(),
-    status: row.status,
-    releasedBy: row.released_by,
-    releasedAt: row.released_at?.toISOString(),
+    createdBy: row.created_by ?? row.requested_by,
     createdAt: row.created_at.toISOString(),
+    releasedBy: row.released_by ?? undefined,
+    releasedAt: row.released_at?.toISOString(),
   };
 }

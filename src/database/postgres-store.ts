@@ -20,6 +20,8 @@ import { UserRepository } from "./user-repository.js";
 import { RecordingRepository } from "./recording-repository.js";
 import { LiveOperationsRepository } from "./live-operations-repository.js";
 import { AnalyticsRepository } from "./analytics-repository.js";
+import { EvidenceRepository } from "./evidence-repository.js";
+import IncidentRepository from "./incident-repository.js";
 
 export class PostgresStore
   extends InfrastructureRepository
@@ -33,6 +35,8 @@ export class PostgresStore
   private readonly recordings: RecordingRepository;
   private readonly liveOperations: LiveOperationsRepository;
   private readonly analytics: AnalyticsRepository;
+  private readonly evidence: EvidenceRepository;
+  private readonly incidents: IncidentRepository;
 
   constructor(pool: Pool) {
     super(pool);
@@ -44,6 +48,8 @@ export class PostgresStore
     this.recordings = new RecordingRepository(pool);
     this.liveOperations = new LiveOperationsRepository(pool);
     this.analytics = new AnalyticsRepository(pool);
+    this.evidence = new EvidenceRepository(pool);
+    this.incidents = new IncidentRepository(pool);
   }
 
   async close() { await this.pool.end(); }
@@ -101,6 +107,24 @@ export class PostgresStore
   async releaseRecordingLegalHold(id: string, tenantId: string, cameraId: string, releasedBy: string) {
     return this.recordings.releaseLegalHold(id, tenantId, cameraId, releasedBy);
   }
+  // Evidence repository delegations
+  async createEvidenceCase(input: any) { return this.evidence.createCase(input); }
+  async getEvidenceCase(id: string) { return this.evidence.getCase(id); }
+  async listEvidenceCases(tenantId: string, filters?: any) { return this.evidence.listCases(tenantId, filters); }
+  async updateEvidenceCaseStatus(id: string, status: any) { return this.evidence.updateCaseStatus(id, status); }
+  async addEvidenceItem(caseId: string, input: any) { return this.evidence.addItem(caseId, input); }
+  async listEvidenceItems(caseId: string) { return this.evidence.listItems(caseId); }
+  async getEvidenceItem(itemId: string) { return this.evidence.getItem(itemId); }
+  async requestEvidenceExport(caseId: string, input: any) { return this.evidence.requestExport(caseId, input); }
+  async getEvidenceExport(exportId: string) { return this.evidence.getExport(exportId); }
+  async updateEvidenceExportStatus(exportId: string, status: any, details?: any) { return this.evidence.updateExportStatus(exportId, status, details); }
+  async createEvidenceManifest(input: any) { return this.evidence.createManifest(input); }
+  async getEvidenceManifest(id: string) { return this.evidence.getManifest(id); }
+  async recordCustodyEvent(input: any) { return this.evidence.recordCustodyEvent(input); }
+  async getCustodyLog(evidenceId: string) { return this.evidence.getCustodyLog(evidenceId); }
+  async createLegalHold(input: any) { return this.evidence.createLegalHold(input); }
+  async releaseLegalHold(id: string, releasedBy: string) { return this.evidence.releaseLegalHold(id, releasedBy); }
+  async getLegalHold(id: string) { return this.evidence.getLegalHold(id); }
   async upsertRecordingStorageNode(input: any) { return this.recordings.upsertStorageNode(input); }
   async createRecordingHealthEvent(input: any) { return this.recordings.createHealthEvent(input); }
   async listRecordingRetentionCandidates(tenantId: string, externalId: string, limit: number) {
@@ -141,6 +165,16 @@ export class PostgresStore
   async getAnalyticsAlert(id: string, tenantId: string) {
     return this.analytics.getAlert(id, tenantId);
   }
+  // Incident delegations
+  async createIncident(input: any) { return this.incidents.createIncident(input); }
+  async getIncident(id: string) { return this.incidents.getIncident(id); }
+  async listIncidents(tenantId: string, filters?: any) { return this.incidents.listIncidents(tenantId, filters); }
+  async updateIncidentStatus(id: string, status: any, changedBy?: string, notes?: string) { return this.incidents.updateStatus(id, status, changedBy, notes); }
+  async assignIncident(id: string, userId: string) { return this.incidents.assignIncident(id, userId); }
+  async addIncidentCamera(incidentId: string, cameraId: string) { return this.incidents.addCamera(incidentId, cameraId); }
+  async addIncidentVideoRange(incidentId: string, cameraId: string, fromAt: string, toAt: string) { return this.incidents.addVideoRange(incidentId, cameraId, fromAt, toAt); }
+  async listIncidentTimeline(incidentId: string) { return this.incidents.listTimeline(incidentId); }
+  async addIncidentEvent(incidentId: string, eventType: string, details: any, createdBy?: string) { return this.incidents.addEvent(incidentId, eventType, details, createdBy); }
   async transitionAnalyticsAlert(id: string, tenantId: string, input: any) {
     return this.analytics.transitionAlert(id, tenantId, input);
   }

@@ -1,9 +1,8 @@
 services:
-  # The existing production service is intentionally kept as one dashboard/BFF.
-  # It connects to the current control-plane and media tunnels through env vars
-  # managed by deploy/publish-render-live.ps1.
+  # Public dashboard/BFF. Camera media can remain at the branch edge, while
+  # all metadata and authorization calls use the Render-hosted control plane.
   - type: web
-    name: sentinel-grid-ops
+    name: sentinel-grid-monitoring
     runtime: node
     plan: free
     region: singapore
@@ -15,4 +14,40 @@ services:
       - key: NODE_VERSION
         value: "22"
       - key: DASHBOARD_DEMO_MODE
-        value: "true"
+        value: "false"
+      - key: CONTROL_PLANE_INTERNAL_URL
+        sync: false
+      - key: MEDIA_GATEWAY_INTERNAL_URL
+        sync: false
+      - key: EDGE_BRIDGE_SHARED_KEY
+        sync: false
+      - key: DASHBOARD_ACCESS_USERNAME
+        sync: false
+      - key: DASHBOARD_ACCESS_PASSWORD
+        sync: false
+
+  # Public HTTPS ingress is required because branch gateways initiate outbound
+  # discovery/heartbeat requests from networks outside Render. Every non-health
+  # request is still protected by the shared bridge identity and application
+  # authorization.
+  - type: web
+    name: sentinel-grid-control-plane
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: free
+    region: singapore
+    healthCheckPath: /health
+    autoDeployTrigger: commit
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: OMCAMERA
+          property: connectionString
+      - key: AUTH_MODE
+        value: development
+      - key: EDGE_BRIDGE_SHARED_KEY
+        sync: false
+      - key: MEDIA_GATEWAY_SHARED_KEY
+        sync: false
+      - key: ANALYTICS_ENGINE_SHARED_KEY
+        sync: false

@@ -104,6 +104,10 @@ export class MemoryStore implements ControlPlaneStore {
   readonly recordingHealthEvents: RecordingHealthEvent[] = [];
   readonly liveBookmarks: LiveBookmark[] = [];
   readonly liveIncidents: LiveIncident[] = [];
+  readonly incidents: any[] = [];
+  readonly incidentEvents: any[] = [];
+  readonly incidentVideoRanges: any[] = [];
+  readonly incidentCameras: any[] = [];
   readonly analyticsRules: AnalyticsRule[] = [];
   readonly analyticsEvents: AnalyticsEvent[] = [];
   readonly analyticsAlerts: AnalyticsAlert[] = [];
@@ -509,6 +513,90 @@ export class MemoryStore implements ControlPlaneStore {
     this.liveBookmarks.push(bookmark);
     this.liveIncidents.push(incident);
     return incident;
+  }
+
+  // Incident management (investigation)
+  async createIncident(input: {
+    tenantId: string;
+    incidentNumber: string;
+    title: string;
+    description?: string;
+    incidentType?: string;
+    severity?: string;
+    branchId?: string;
+    occurredAt?: string;
+    reportedBy?: string;
+  }) {
+    const now = new Date().toISOString();
+    const incident = {
+      id: randomUUID(),
+      tenantId: input.tenantId,
+      incidentNumber: input.incidentNumber,
+      title: input.title,
+      description: input.description ?? undefined,
+      incidentType: input.incidentType ?? undefined,
+      severity: input.severity ?? undefined,
+      branchId: input.branchId ?? undefined,
+      occurredAt: input.occurredAt ?? now,
+      detectedAt: now,
+      reportedBy: input.reportedBy ?? undefined,
+      assignedTo: undefined,
+      status: 'new',
+      createdAt: now,
+      updatedAt: now,
+    };
+    this.incidents.push(incident);
+    return incident;
+  }
+
+  async getIncident(id: string) {
+    return this.incidents.find((i) => i.id === id);
+  }
+
+  async listIncidents(tenantId: string, filters?: { status?: string; limit?: number }) {
+    const list = this.incidents.filter((i) => i.tenantId === tenantId && (!filters?.status || i.status === filters.status));
+    return list.slice(0, filters?.limit ?? 100);
+  }
+
+  async updateIncidentStatus(id: string, status: any, changedBy?: string, notes?: string) {
+    const incident = this.incidents.find((i) => i.id === id);
+    if (!incident) return undefined;
+    incident.status = status;
+    incident.updatedAt = new Date().toISOString();
+    this.incidentEvents.push({ id: randomUUID(), incidentId: id, eventType: 'status_changed', details: { status, notes }, createdBy: changedBy ?? null, createdAt: new Date().toISOString() });
+    return incident;
+  }
+
+  async assignIncident(id: string, userId: string) {
+    const incident = this.incidents.find((i) => i.id === id);
+    if (!incident) return undefined;
+    incident.assignedTo = userId;
+    incident.updatedAt = new Date().toISOString();
+    this.incidentEvents.push({ id: randomUUID(), incidentId: id, eventType: 'assigned', details: { assignedTo: userId }, createdBy: null, createdAt: new Date().toISOString() });
+    return incident;
+  }
+
+  async addIncidentCamera(incidentId: string, cameraId: string) {
+    const rec = { id: randomUUID(), incidentId, cameraId, addedAt: new Date().toISOString() };
+    this.incidentCameras.push(rec);
+    return;
+  }
+
+  async addIncidentVideoRange(incidentId: string, cameraId: string, fromAt: string, toAt: string) {
+    const rec = { id: randomUUID(), incidentId, cameraId, fromAt, toAt };
+    this.incidentVideoRanges.push(rec);
+    this.incidentEvents.push({ id: randomUUID(), incidentId, eventType: 'video_range_added', details: rec, createdBy: null, createdAt: new Date().toISOString() });
+    return rec;
+  }
+
+  async listIncidentTimeline(incidentId: string) {
+    return this.incidentEvents.filter((e) => e.incidentId === incidentId).sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+  }
+
+  async addIncidentEvent(incidentId: string, eventType: string, details: any, createdBy?: string) {
+    const rec = { id: randomUUID(), incidentId, eventType, details, createdBy: createdBy ?? null, createdAt: new Date().toISOString() };
+    this.incidentEvents.push(rec);
+    return rec;
   }
 
   async updateLiveIncidentStatus(

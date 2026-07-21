@@ -307,6 +307,16 @@ export interface ControlPlaneStore {
     cameraId: string,
     status: LiveIncidentStatus,
   ): Promise<LiveIncident | undefined>;
+  // Incident management (investigation / cases)
+  createIncident(input: any): Promise<any>;
+  getIncident(id: string): Promise<any | undefined>;
+  listIncidents(tenantId: string, filters?: any): Promise<any[]>;
+  updateIncidentStatus(id: string, status: any, changedBy?: string, notes?: string): Promise<any | undefined>;
+  assignIncident(id: string, userId: string): Promise<any | undefined>;
+  addIncidentCamera(incidentId: string, cameraId: string): Promise<void>;
+  addIncidentVideoRange(incidentId: string, cameraId: string, fromAt: string, toAt: string): Promise<any>;
+  listIncidentTimeline(incidentId: string): Promise<any[]>;
+  addIncidentEvent(incidentId: string, eventType: string, details: any, createdBy?: string): Promise<any>;
   listAnalyticsRules(cameraId: string): Promise<AnalyticsRule[]>;
   createAnalyticsRule(
     tenantId: string,

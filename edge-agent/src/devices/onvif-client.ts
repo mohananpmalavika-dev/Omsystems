@@ -168,6 +168,20 @@ function soapEnvelope(
   namespaces: string,
   credentials: OnvifCredentials,
 ) {
+  // A number of ONVIF cameras ship with an enabled admin account and no
+  // password. Those devices accept unauthenticated SOAP requests but reject a
+  // WS-Security PasswordDigest generated from an empty password with HTTP 400.
+  // Omitting the security header in that case preserves password-protected
+  // device behavior while allowing explicitly passwordless cameras to be
+  // inspected and onboarded.
+  if (credentials.password === "") {
+    return `<?xml version="1.0" encoding="UTF-8"?>
+<s:Envelope xmlns:s="http://www.w3.org/2003/05/soap-envelope"
+ ${namespaces}>
+ <s:Body>${body}</s:Body>
+</s:Envelope>`;
+  }
+
   const nonce = randomBytes(20);
   const created = new Date().toISOString();
   const digest = createHash("sha1")
