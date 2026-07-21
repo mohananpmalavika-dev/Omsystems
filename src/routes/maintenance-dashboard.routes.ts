@@ -33,7 +33,7 @@ export async function registerMaintenanceDashboardRoutes(
       assetsDegraded: assets.filter(a => a.status === 'degraded').length,
       
       workOrdersOpen: workOrders.filter(w => w.status !== 'closed').length,
-      workOrdersOverdueSla: workOrders.filter(w => w.status !== 'closed' && w.sla_due_at && new Date(w.sla_due_at) < now).length,
+      workOrdersOverdueSla: workOrders.filter(w => w.status !== 'closed' && w.slaDueAt && new Date(w.slaDueAt) < now).length,
       
       scheduledMaintenanceCount: schedules.filter(s => s.status === 'active').length,
       visitsPending: visits.filter(v => v.status === 'pending').length,
@@ -239,9 +239,9 @@ export async function registerMaintenanceDashboardRoutes(
     const workOrders = await store.listWorkOrders(tenantId);
     
     const now = new Date();
-    const totalOrders = workOrders.filter(w => w.status !== 'cancelled').length;
+    const totalOrders = workOrders.filter(w => w.status !== 'closed').length;
     const onTimeOrders = workOrders.filter(w => 
-      w.status === 'closed' && w.sla_due_at && new Date(w.sla_due_at) >= new Date(w.updated_at)
+      w.status === 'closed' && w.slaDueAt && new Date(w.slaDueAt) >= new Date(w.updatedAt)
     ).length;
     
     return {
@@ -249,7 +249,7 @@ export async function registerMaintenanceDashboardRoutes(
       completedOnTime: onTimeOrders,
       compliancePercentage: totalOrders > 0 ? Math.round((onTimeOrders / totalOrders) * 100) : 100,
       breaches: workOrders.filter(w => 
-        w.status !== 'closed' && w.sla_due_at && new Date(w.sla_due_at) < now
+        w.status !== 'closed' && w.slaDueAt && new Date(w.slaDueAt) < now
       ).length,
     };
   });

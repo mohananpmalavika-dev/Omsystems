@@ -143,6 +143,15 @@ export class MemoryStore implements ControlPlaneStore {
   readonly maintenanceSchedules: any[] = [];
   readonly maintenanceVisits: any[] = [];
   readonly predictiveAlerts: any[] = [];
+  readonly cameraHealth: any[] = [];
+  readonly storageHealth: any[] = [];
+  readonly networkHealth: any[] = [];
+  readonly upsHealth: any[] = [];
+  readonly firmwareInventory: any[] = [];
+  readonly softwareVersions: any[] = [];
+  readonly spareParts: any[] = [];
+  readonly inventoryTransactions: any[] = [];
+  readonly maintenanceReports: any[] = [];
 
   async close() {}
 
@@ -1191,6 +1200,565 @@ export class MemoryStore implements ControlPlaneStore {
 
   async writeAudit(event: AuditEventInput) {
     this.auditEvents.push(structuredClone(event));
+  }
+
+  // ============================================================================
+  // Phase 3-7: Maintenance & Health Monitoring Methods
+  // ============================================================================
+
+  async recordCameraHealth(input: {
+    tenantId: string;
+    cameraId: string;
+    onlineStatus: 'online' | 'offline' | 'degraded';
+    fps?: number;
+    bitrate?: number;
+    streamQuality?: string;
+    temperature?: number;
+    tampering?: boolean;
+    recordingRunning?: boolean;
+    latencyMs?: number;
+    packetLoss?: number;
+  }): Promise<any> {
+    return {
+      id: randomUUID(),
+      ...input,
+      timestamp: new Date().toISOString(),
+      recorded: true,
+    };
+  }
+
+  async recordStorageHealth(input: {
+    tenantId: string;
+    assetId: string;
+    totalCapacityGb: number;
+    usedCapacityGb: number;
+    availableCapacityGb: number;
+    smartStatus?: string;
+    temperature?: number;
+    badSectors?: number;
+    readSpeedMbs?: number;
+    writeSpeedMbs?: number;
+    remainingLifetimeYears?: number;
+    errorCount?: number;
+  }): Promise<any> {
+    return {
+      id: randomUUID(),
+      ...input,
+      timestamp: new Date().toISOString(),
+      usagePercentage: Math.round((input.usedCapacityGb / input.totalCapacityGb) * 100),
+      recorded: true,
+    };
+  }
+
+  async recordNetworkHealth(input: {
+    tenantId: string;
+    branchNodeId?: string;
+    assetId?: string;
+    checkType: string;
+    latencyMs?: number;
+    packetLossPercentage?: number;
+    jitterMs?: number;
+    bandwidthAvailableMbps?: number;
+    rtspAvailable?: boolean;
+    onvifAvailable?: boolean;
+  }): Promise<any> {
+    return {
+      id: randomUUID(),
+      ...input,
+      timestamp: new Date().toISOString(),
+      status: (input.packetLossPercentage || 0) < 1 ? 'healthy' : 'degraded',
+      recorded: true,
+    };
+  }
+
+  async recordUpsHealth(input: {
+    tenantId: string;
+    assetId: string;
+    batteryHealthPercentage: number;
+    runtimeMinutes?: number;
+    chargingStatus?: string;
+    loadPercentage?: number;
+    temperature?: number;
+    alarmStatus?: string;
+  }): Promise<any> {
+    return {
+      id: randomUUID(),
+      ...input,
+      timestamp: new Date().toISOString(),
+      status: input.batteryHealthPercentage < 60 ? 'warning' : 'healthy',
+      recorded: true,
+    };
+  }
+
+  async getHealthCheckSummary(tenantId: string): Promise<any> {
+    return {
+      tenantId,
+      totalAssets: 100,
+      healthyAssets: 98,
+      degradedAssets: 2,
+      criticalAssets: 0,
+      overallStatus: 'healthy',
+      lastUpdated: new Date().toISOString(),
+    };
+  }
+
+  async recordFirmwareVersion(input: {
+    tenantId: string;
+    assetId: string;
+    deviceType: string;
+    currentVersion: string;
+    latestVersion?: string;
+    requiresUpdate?: boolean;
+    criticalUpdate?: boolean;
+  }): Promise<any> {
+    return {
+      id: randomUUID(),
+      ...input,
+      timestamp: new Date().toISOString(),
+      recorded: true,
+    };
+  }
+
+  async listFirmwareUpdatesRequired(tenantId: string): Promise<any[]> {
+    return [
+      {
+        assetId: "asset-001",
+        deviceType: "camera",
+        currentVersion: "2.5.1",
+        latestVersion: "2.6.0",
+        releaseDate: new Date().toISOString(),
+        importance: "high",
+      },
+    ];
+  }
+
+  async recordSoftwareVersion(input: {
+    tenantId: string;
+    componentName: string;
+    environment: string;
+    currentVersion: string;
+    previousVersion?: string;
+    upgradeApprovedBy?: string;
+    upgradeApprovedAt?: string;
+  }): Promise<any> {
+    return {
+      id: randomUUID(),
+      ...input,
+      timestamp: new Date().toISOString(),
+      recorded: true,
+    };
+  }
+
+  async recordSparePart(input: {
+    tenantId: string;
+    partName: string;
+    partCode: string;
+    category: string;
+    vendorId?: string;
+    quantity: number;
+    reorderLevel?: number;
+    unitCost?: number;
+    warrantyMonths?: number;
+    location?: string;
+    branchNodeId?: string;
+  }): Promise<any> {
+    return {
+      id: randomUUID(),
+      ...input,
+      timestamp: new Date().toISOString(),
+      inStock: input.quantity > (input.reorderLevel || 5),
+      recorded: true,
+    };
+  }
+
+  async recordInventoryTransaction(input: {
+    tenantId: string;
+    partId: string;
+    workOrderId?: string;
+    transactionType: 'add' | 'remove' | 'used' | 'damaged';
+    quantity: number;
+    referenceNumber?: string;
+    notes?: string;
+    recordedBy?: string;
+  }): Promise<any> {
+    return {
+      id: randomUUID(),
+      ...input,
+      timestamp: new Date().toISOString(),
+      recorded: true,
+    };
+  }
+
+  async listLowStockParts(tenantId: string): Promise<any[]> {
+    return [
+      {
+        id: "part-001",
+        partName: "Camera Mount Bracket",
+        partCode: "CM-BR-001",
+        currentQuantity: 2,
+        reorderLevel: 5,
+        unitCost: 500,
+        estimatedDelivery: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+      },
+    ];
+  }
+
+  async generateMaintenanceReport(input: {
+    tenantId: string;
+    reportType: string;
+    periodStart: string;
+    periodEnd: string;
+    branchNodeId?: string;
+    assetId?: string;
+  }): Promise<any> {
+    return {
+      id: randomUUID(),
+      ...input,
+      generatedAt: new Date().toISOString(),
+      summary: {
+        totalIncidents: 12,
+        resolved: 10,
+        pending: 2,
+        averageResolutionTime: "4.5 hours",
+      },
+      details: [],
+      metrics: {},
+      recommendations: [],
+    };
+  }
+
+  async listMaintenanceReports(tenantId: string, filters?: { reportType?: string; limit?: number }): Promise<any[]> {
+    return [
+      {
+        id: randomUUID(),
+        tenantId,
+        reportType: filters?.reportType || "general",
+        generatedAt: new Date().toISOString(),
+        periodStart: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
+        periodEnd: new Date().toISOString(),
+      },
+    ];
+  }
+
+  async getMaintenanceComplianceStatus(tenantId: string): Promise<any> {
+    return {
+      tenantId,
+      complianceScore: 92.5,
+      status: "compliant",
+      openIssues: 3,
+      resolvedIssues: 47,
+      lastAudit: new Date(Date.now() - 15 * 24 * 60 * 60 * 1000).toISOString(),
+      nextAudit: new Date(Date.now() + 15 * 24 * 60 * 60 * 1000).toISOString(),
+    };
+  }
+
+  // ============ HEALTH MONITORING ============
+
+  async recordCameraHealth(input: {
+    tenantId: string;
+    cameraId: string;
+    onlineStatus: 'online' | 'offline' | 'degraded';
+    fps?: number;
+    bitrate?: number;
+    streamQuality?: string;
+    temperature?: number;
+    tampering?: boolean;
+    recordingRunning?: boolean;
+    latencyMs?: number;
+    packetLoss?: number;
+  }) {
+    const cameraHealth = {
+      id: randomUUID(),
+      tenantId: input.tenantId,
+      cameraId: input.cameraId,
+      onlineStatus: input.onlineStatus,
+      fps: input.fps,
+      bitrate: input.bitrate,
+      streamQuality: input.streamQuality,
+      temperature: input.temperature,
+      tampering: input.tampering ?? false,
+      recordingRunning: input.recordingRunning,
+      latencyMs: input.latencyMs,
+      packetLoss: input.packetLoss,
+      lastFrameAt: new Date().toISOString(),
+      lastCheckAt: new Date().toISOString(),
+    };
+    this.cameraHealth.push(cameraHealth);
+    return cameraHealth;
+  }
+
+  async recordStorageHealth(input: {
+    tenantId: string;
+    assetId: string;
+    totalCapacityGb: number;
+    usedCapacityGb: number;
+    availableCapacityGb: number;
+    smartStatus?: string;
+    temperature?: number;
+    badSectors?: number;
+    readSpeedMbs?: number;
+    writeSpeedMbs?: number;
+    remainingLifetimeYears?: number;
+    errorCount?: number;
+  }) {
+    const usagePercentage = (input.usedCapacityGb / input.totalCapacityGb) * 100;
+    const status = usagePercentage >= 90 ? 'critical' : usagePercentage >= 80 ? 'warning' : 'healthy';
+    
+    const storageHealth = {
+      id: randomUUID(),
+      tenantId: input.tenantId,
+      assetId: input.assetId,
+      totalCapacityGb: input.totalCapacityGb,
+      usedCapacityGb: input.usedCapacityGb,
+      availableCapacityGb: input.availableCapacityGb,
+      usagePercentage,
+      status,
+      smartStatus: input.smartStatus,
+      temperature: input.temperature,
+      badSectors: input.badSectors,
+      readSpeedMbs: input.readSpeedMbs,
+      writeSpeedMbs: input.writeSpeedMbs,
+      remainingLifetimeYears: input.remainingLifetimeYears,
+      errorCount: input.errorCount,
+      lastCheckAt: new Date().toISOString(),
+    };
+    this.storageHealth.push(storageHealth);
+    return storageHealth;
+  }
+
+  async recordNetworkHealth(input: {
+    tenantId: string;
+    branchNodeId?: string;
+    assetId?: string;
+    checkType: string;
+    latencyMs?: number;
+    packetLossPercentage?: number;
+    jitterMs?: number;
+    bandwidthAvailableMbps?: number;
+    rtspAvailable?: boolean;
+    onvifAvailable?: boolean;
+  }) {
+    const status = (input.packetLossPercentage ?? 0) > 5 ? 'critical' 
+      : (input.packetLossPercentage ?? 0) > 1 ? 'warning' : 'healthy';
+    
+    const networkHealth = {
+      id: randomUUID(),
+      tenantId: input.tenantId,
+      branchNodeId: input.branchNodeId,
+      assetId: input.assetId,
+      checkType: input.checkType,
+      latencyMs: input.latencyMs,
+      packetLossPercentage: input.packetLossPercentage,
+      jitterMs: input.jitterMs,
+      bandwidthAvailableMbps: input.bandwidthAvailableMbps,
+      rtspAvailable: input.rtspAvailable ?? true,
+      onvifAvailable: input.onvifAvailable ?? true,
+      status,
+      lastCheckAt: new Date().toISOString(),
+    };
+    this.networkHealth.push(networkHealth);
+    return networkHealth;
+  }
+
+  async recordUpsHealth(input: {
+    tenantId: string;
+    assetId: string;
+    batteryHealthPercentage: number;
+    runtimeMinutes?: number;
+    chargingStatus?: string;
+    loadPercentage?: number;
+    temperature?: number;
+    alarmStatus?: string;
+  }) {
+    const status = input.batteryHealthPercentage < 70 ? 'critical'
+      : input.batteryHealthPercentage < 85 ? 'warning' : 'healthy';
+    
+    const upsHealth = {
+      id: randomUUID(),
+      tenantId: input.tenantId,
+      assetId: input.assetId,
+      batteryHealthPercentage: input.batteryHealthPercentage,
+      runtimeMinutes: input.runtimeMinutes,
+      chargingStatus: input.chargingStatus,
+      loadPercentage: input.loadPercentage,
+      temperature: input.temperature,
+      alarmStatus: input.alarmStatus,
+      status,
+      lastCheckAt: new Date().toISOString(),
+    };
+    this.upsHealth.push(upsHealth);
+    return upsHealth;
+  }
+
+  async getHealthCheckSummary(tenantId: string) {
+    const now = new Date();
+    const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000).toISOString();
+    
+    const camerasOnline = this.cameraHealth.filter(
+      h => h.tenantId === tenantId && h.lastCheckAt > oneHourAgo && h.onlineStatus === 'online'
+    ).length;
+    
+    const camerasOffline = this.cameraHealth.filter(
+      h => h.tenantId === tenantId && h.lastCheckAt > oneHourAgo && h.onlineStatus === 'offline'
+    ).length;
+    
+    const storageWarnings = this.storageHealth.filter(
+      h => h.tenantId === tenantId && h.lastCheckAt > oneHourAgo && h.status !== 'healthy'
+    ).length;
+    
+    const networkIssues = this.networkHealth.filter(
+      h => h.tenantId === tenantId && h.lastCheckAt > oneHourAgo && h.status !== 'healthy'
+    ).length;
+
+    const totalCameras = this.cameras.size;
+    const healthPercentage = totalCameras > 0 ? Math.round((camerasOnline / totalCameras) * 100) : 100;
+    
+    return {
+      healthPercentage,
+      camerasOnline,
+      camerasOffline,
+      camerasCount: totalCameras,
+      storageAlerts: storageWarnings,
+      networkIssues,
+      recordingIssues: 0,
+      amcExpiring: 0,
+      overdueMaintenanceCount: this.maintenanceVisits.filter(
+        v => v.tenantId === tenantId && v.status === 'pending' && new Date(v.dueAt) < now
+      ).length,
+      openWorkOrders: this.workOrders.filter(
+        w => w.tenantId === tenantId && w.status !== 'closed'
+      ).length,
+    };
+  }
+
+  async listFirmwareUpdatesRequired(tenantId: string) {
+    return this.firmwareInventory.filter(
+      f => f.tenantId === tenantId && f.requiresUpdate
+    ).sort((a, b) => (b.criticalUpdate ? 1 : 0) - (a.criticalUpdate ? 1 : 0));
+  }
+
+  async listLowStockParts(tenantId: string) {
+    return this.spareParts.filter(
+      p => p.tenantId === tenantId && p.reorderLevel && p.quantity <= p.reorderLevel
+    );
+  }
+
+  async generateMaintenanceReport(input: {
+    tenantId: string;
+    reportType: string;
+    periodStart: string;
+    periodEnd: string;
+    branchNodeId?: string;
+    assetId?: string;
+  }) {
+    const periodStart = new Date(input.periodStart);
+    const periodEnd = new Date(input.periodEnd);
+
+    let metrics: any = {};
+
+    switch (input.reportType) {
+      case 'preventive':
+        metrics = {
+          scheduledVisits: this.maintenanceVisits.filter(
+            v => v.tenantId === input.tenantId
+              && new Date(v.dueAt) >= periodStart
+              && new Date(v.dueAt) <= periodEnd
+          ).length,
+          completedVisits: this.maintenanceVisits.filter(
+            v => v.tenantId === input.tenantId
+              && v.status === 'completed'
+              && new Date(v.visited_at ?? new Date()) >= periodStart
+              && new Date(v.visited_at ?? new Date()) <= periodEnd
+          ).length,
+          overdueVisits: this.maintenanceVisits.filter(
+            v => v.tenantId === input.tenantId
+              && v.status !== 'completed'
+              && new Date(v.dueAt) < new Date()
+          ).length,
+        };
+        break;
+
+      case 'corrective':
+        metrics = {
+          totalWorkOrders: this.workOrders.filter(
+            w => w.tenantId === input.tenantId
+              && new Date(w.createdAt) >= periodStart
+              && new Date(w.createdAt) <= periodEnd
+          ).length,
+          closedWorkOrders: this.workOrders.filter(
+            w => w.tenantId === input.tenantId
+              && w.status === 'closed'
+              && new Date(w.updatedAt) >= periodStart
+              && new Date(w.updatedAt) <= periodEnd
+          ).length,
+          openWorkOrders: this.workOrders.filter(
+            w => w.tenantId === input.tenantId && w.status !== 'closed'
+          ).length,
+          averageResolutionHours: 24,
+        };
+        break;
+
+      case 'amc':
+        metrics = {
+          activeContracts: this.amcContracts.filter(
+            c => c.tenantId === input.tenantId && c.status === 'active'
+          ).length,
+          expiringContracts: this.amcContracts.filter(
+            c => c.tenantId === input.tenantId
+              && new Date(c.end_date) <= new Date(Date.now() + 90 * 24 * 60 * 60 * 1000)
+          ).length,
+          totalAnnualCost: this.amcContracts.filter(
+            c => c.tenantId === input.tenantId && c.status === 'active'
+          ).reduce((sum, c) => sum + (c.cost ?? 0), 0),
+        };
+        break;
+    }
+
+    const report = {
+      id: randomUUID(),
+      tenantId: input.tenantId,
+      reportType: input.reportType,
+      periodStart: input.periodStart,
+      periodEnd: input.periodEnd,
+      branchNodeId: input.branchNodeId,
+      assetId: input.assetId,
+      metrics,
+      summary: `${input.reportType} maintenance report for ${input.periodStart} to ${input.periodEnd}`,
+      generatedBy: 'system',
+      generatedAt: new Date().toISOString(),
+      filename: `${input.reportType}-report-${new Date().toISOString().split('T')[0]}.pdf`,
+    };
+    this.maintenanceReports.push(report);
+    return report;
+  }
+
+  async listMaintenanceReports(tenantId: string, filters?: { reportType?: string; limit?: number }) {
+    return this.maintenanceReports.filter(
+      r => r.tenantId === tenantId && (!filters?.reportType || r.reportType === filters.reportType)
+    ).sort((a, b) => b.generatedAt.localeCompare(a.generatedAt))
+      .slice(0, filters?.limit ?? 50);
+  }
+
+  async getMaintenanceComplianceStatus(tenantId: string) {
+    const overdueVisits = this.maintenanceVisits.filter(
+      v => v.tenantId === tenantId && v.status !== 'completed' && new Date(v.dueAt) < new Date()
+    ).length;
+
+    const openWorkOrders = this.workOrders.filter(
+      w => w.tenantId === tenantId && w.status !== 'closed'
+    ).length;
+
+    const criticalAlerts = this.predictiveAlerts.filter(
+      p => p.tenantId === tenantId && p.score > 0.8
+    ).length;
+
+    return {
+      compliant: overdueVisits === 0 && openWorkOrders === 0 && criticalAlerts === 0,
+      overdueMaintenanceCount: overdueVisits,
+      openIssuesCount: openWorkOrders,
+      criticalAlertsCount: criticalAlerts,
+      status: overdueVisits > 0 || openWorkOrders > 5 ? 'non-compliant' : 'compliant',
+    };
   }
 }
 

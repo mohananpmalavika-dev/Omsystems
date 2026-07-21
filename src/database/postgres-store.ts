@@ -206,6 +206,30 @@ export class PostgresStore
   async listAmcContracts(tenantId: string, vendorId?: string) { return this.maintenance.listAmcContracts(tenantId, vendorId); }
   async getAmcContract(id: string) { return this.maintenance.getAmcContract(id); }
   async updateAmcContract(id: string, input: any) { return this.maintenance.updateAmcContract(id, input); }
+  async createMaintenancePlan(input: any) { return this.maintenance.createMaintenancePlan(input); }
+  async listMaintenancePlans(tenantId: string) { return this.maintenance.listMaintenancePlans(tenantId); }
+  async getMaintenancePlan(id: string) { return this.maintenance.getMaintenancePlan(id); }
+  async createMaintenanceSchedule(input: any) { return this.maintenance.createMaintenanceSchedule(input); }
+  async listMaintenanceSchedules(tenantId: string) { return this.maintenance.listMaintenanceSchedules(tenantId); }
+  async createMaintenanceVisit(input: any) { return this.maintenance.createMaintenanceVisit(input); }
+  async listMaintenanceVisits(tenantId: string, filters?: any) { return this.maintenance.listMaintenanceVisits(tenantId, filters); }
+  async updateMaintenanceVisit(id: string, input: any) { return this.maintenance.updateMaintenanceVisit(id, input); }
+  async ingestPredictiveAlert(input: any) { return this.maintenance.ingestPredictiveAlert(input); }
+  async listPredictiveAlerts(tenantId: string) { return this.maintenance.listPredictiveAlerts(tenantId); }
+  async recordCameraHealth(input: any) { return this.maintenance.recordCameraHealth(input); }
+  async recordStorageHealth(input: any) { return this.maintenance.recordStorageHealth(input); }
+  async recordNetworkHealth(input: any) { return this.maintenance.recordNetworkHealth(input); }
+  async recordUpsHealth(input: any) { return this.maintenance.recordUpsHealth(input); }
+  async getHealthCheckSummary(tenantId: string) { return this.maintenance.getHealthCheckSummary(tenantId); }
+  async recordFirmwareVersion(input: any) { return this.maintenance.recordFirmwareVersion(input); }
+  async listFirmwareUpdatesRequired(tenantId: string) { return this.maintenance.listFirmwareUpdatesRequired(tenantId); }
+  async recordSoftwareVersion(input: any) { return this.maintenance.recordSoftwareVersion(input); }
+  async recordSparePart(input: any) { return this.maintenance.recordSparePart(input); }
+  async recordInventoryTransaction(input: any) { return this.maintenance.recordInventoryTransaction(input); }
+  async listLowStockParts(tenantId: string) { return this.maintenance.listLowStockParts(tenantId); }
+  async generateMaintenanceReport(input: any) { return this.maintenance.generateMaintenanceReport(input); }
+  async listMaintenanceReports(tenantId: string, filters?: any) { return this.maintenance.listMaintenanceReports(tenantId, filters); }
+  async getMaintenanceComplianceStatus(tenantId: string) { return this.maintenance.getMaintenanceComplianceStatus(tenantId); }
   // Incident delegations
   async createIncident(input: any) { return this.incidents.createIncident(input); }
   async getIncident(id: string) { return this.incidents.getIncident(id); }

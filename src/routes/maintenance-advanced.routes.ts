@@ -5,10 +5,10 @@
 
 import type { FastifyInstance } from "fastify";
 import type { ControlPlaneStore } from "../control-plane-store.js";
-import { getHealthMonitoring } from "./health-monitor.js";
-import { getReportingEngine } from "./reporting-engine.js";
-import { getFirmwareManager } from "./firmware-manager.js";
-import { getPredictiveEngine } from "./predictive-engine.js";
+import { getHealthMonitoring } from "../maintenance/health-monitor.js";
+import { getReportingEngine } from "../maintenance/reporting-engine.js";
+import { getFirmwareManager } from "../maintenance/firmware-manager.js";
+import { getPredictiveEngine } from "../maintenance/predictive-engine.js";
 
 /**
  * Example integration for Phase 3-7 routes
