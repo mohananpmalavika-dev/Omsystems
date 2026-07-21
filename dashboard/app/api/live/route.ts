@@ -17,7 +17,15 @@ export async function POST(request: NextRequest) {
       ),
       { status: 201 },
     );
-  } catch {
+  } catch (error) {
+    const cause = error instanceof Error && error.cause instanceof Error
+      ? error.cause
+      : undefined;
+    console.error("Live-session startup failed", {
+      message: error instanceof Error ? error.message : "unknown error",
+      cause: cause?.message,
+      code: cause && "code" in cause ? cause.code : undefined,
+    });
     return NextResponse.json(
       { error: "live_session_unavailable" },
       { status: 502 },
