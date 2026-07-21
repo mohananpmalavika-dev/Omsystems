@@ -6,6 +6,7 @@ import { maintenanceApi } from "@/lib/api-client";
 
 export default function NewWorkOrderPage() {
   const router = useRouter();
+<<<<<<< HEAD
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [assetId, setAssetId] = useState("");
@@ -28,10 +29,28 @@ export default function NewWorkOrderPage() {
       setLoading(false);
     }
   }
+=======
+  const [workOrderNumber, setWorkOrderNumber] = useState('WO-' + Date.now());
+  const [problem, setProblem] = useState('');
+  const [severity, setSeverity] = useState('medium');
+  const [error, setError] = useState<string | null>(null);
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    try {
+      await maintenanceApi.createWorkOrder({ workOrderNumber, problem, severity });
+      router.push('/maintenance/workorders');
+    } catch (err: any) {
+      setError(err?.message ?? 'Create failed');
+    }
+  };
+>>>>>>> c3a5c2bcbd7e63f2e57e4b702517ddd24cd20012
 
   return (
     <div style={{ padding: 16 }}>
       <h1>Create Work Order</h1>
+<<<<<<< HEAD
       <form onSubmit={handleSubmit} style={{ maxWidth: 720 }}>
         <div style={{ marginBottom: 8 }}>
           <label>Title<br />
@@ -64,6 +83,25 @@ export default function NewWorkOrderPage() {
         </div>
         {error && <p style={{ color: 'red' }}>{error}</p>}
         <button type="submit" disabled={loading}>{loading ? 'Creating…' : 'Create'}</button>
+=======
+      <form onSubmit={submit}>
+        <div>
+          <label>Work Order Number<input value={workOrderNumber} onChange={(e) => setWorkOrderNumber(e.target.value)} /></label>
+        </div>
+        <div>
+          <label>Problem<textarea value={problem} onChange={(e) => setProblem(e.target.value)} /></label>
+        </div>
+        <div>
+          <label>Severity<select value={severity} onChange={(e)=>setSeverity(e.target.value)}>
+            <option value="critical">critical</option>
+            <option value="high">high</option>
+            <option value="medium">medium</option>
+            <option value="low">low</option>
+          </select></label>
+        </div>
+        {error && <div style={{ color: 'red' }}>{error}</div>}
+        <button type="submit">Create</button>
+>>>>>>> c3a5c2bcbd7e63f2e57e4b702517ddd24cd20012
       </form>
     </div>
   );

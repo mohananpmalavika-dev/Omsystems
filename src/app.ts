@@ -660,6 +660,14 @@ export async function buildApp(options?: {
     await registerCctvInfrastructureRoutes(app, extendedStore);
     await registerComplianceRoutes(app, extendedStore);
     await registerMaintenanceRoutes(app, extendedStore);
+    // start maintenance scheduler when extended store is available
+    try {
+      const { startMaintenanceScheduler } = await import("./maintenance/scheduler.js");
+      const stop = startMaintenanceScheduler(extendedStore, app.log);
+      app.addHook('onClose', async () => stop());
+    } catch (err) {
+      app.log.error('failed to start maintenance scheduler', err);
+    }
   }
   await registerLiveOperationsRoutes(app, store);
   await registerIncidentsRoutes(app, store);

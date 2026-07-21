@@ -248,4 +248,54 @@ export async function registerMaintenanceRoutes(
     if (!contract) return reply.code(404).send({ error: "amc_not_found" });
     return contract;
   });
+
+  // Maintenance plans and schedules
+  app.post("/v1/maintenance/plans", async (request, reply) => {
+    const body = z.object({ name: z.string().min(2), cadence: z.enum(["daily","weekly","monthly","quarterly","annual"]), checklistTemplate: z.record(z.unknown()).optional(), startDate: z.string().optional(), endDate: z.string().optional() }).parse(request.body);
+    const plan = await store.createMaintenancePlan({ tenantId: request.currentUser.tenantId, name: body.name, cadence: body.cadence, checklistTemplate: body.checklistTemplate, startDate: body.startDate, endDate: body.endDate, createdBy: request.currentUser.id });
+    await store.writeAudit({ tenantId: request.currentUser.tenantId, actorUserId: request.currentUser.id, action: 'maintenance.plan_created', resourceNodeId: null, outcome: 'success', details: { planId: plan.id } });
+    return reply.code(201).send(plan);
+  });
+
+  app.get("/v1/maintenance/plans", async (request) => ({ data: await store.listMaintenancePlans(request.currentUser.tenantId) }));
+
+  app.post("/v1/maintenance/schedules", async (request, reply) => {
+    const body = z.object({ planId: z.string().min(1), branchNodeId: z.string().uuid().optional(), assetId: z.string().uuid().optional(), nextRunAt: z.string().datetime(), cadence: z.string().min(1) }).parse(request.body);
+    if (body.branchNodeId && !(await requireBranchAccess(request, reply, store, body.branchNodeId))) return;
+    const sched = await store.createMaintenanceSchedule({ tenantId: request.currentUser.tenantId, planId: body.planId, branchNodeId: body.branchNodeId, assetId: body.assetId, nextRunAt: body.nextRunAt, cadence: body.cadence, createdBy: request.currentUser.id });
+    await store.writeAudit({ tenantId: request.currentUser.tenantId, actorUserId: request.currentUser.id, action: 'maintenance.schedule_created', resourceNodeId: body.branchNodeId ?? null, outcome: 'success', details: { scheduleId: sched.id } });
+    return reply.code(201).send(sched);
+  });
+
+  app.get("/v1/maintenance/schedules", async (request) => ({ data: await store.listMaintenanceSchedules(request.currentUser.tenantId) }));
+
+  app.post("/v1/maintenance/visits", async (request, reply) => {
+    const body = z.object({ scheduleId: z.string().min(1), assignedTo: z.string().optional(), dueAt: z.string().datetime() }).parse(request.body);
+    const visit = await store.createMaintenanceVisit({ tenantId: request.currentUser.tenantId, scheduleId: body.scheduleId, assignedTo: body.assignedTo, dueAt: body.dueAt, createdBy: request.currentUser.id });
+    await store.writeAudit({ tenantId: request.currentUser.tenantId, actorUserId: request.currentUser.id, action: 'maintenance.visit_created', resourceNodeId: null, outcome: 'success', details: { visitId: visit.id } });
+    return reply.code(201).send(visit);
+  });
+
+  app.get("/v1/maintenance/visits", async (request) => {
+    const query = z.object({ status: z.string().optional() }).parse(request.query);
+    return { data: await store.listMaintenanceVisits(request.currentUser.tenantId, { status: query.status }) };
+  });
+
+  app.patch("/v1/maintenance/visits/:id", async (request, reply) => {
+    const { id } = idParams.parse(request.params);
+    const body = z.object({ status: z.string().optional(), assignedTo: z.string().optional(), verification: z.string().optional(), notes: z.string().optional() }).parse(request.body);
+    const updated = await store.updateMaintenanceVisit(id, { ...body, updatedBy: request.currentUser.id });
+    if (!updated) return reply.code(404).send({ error: 'visit_not_found' });
+    return updated;
+  });
+
+  // Predictive alerts ingestion
+  app.post('/v1/maintenance/predictive-alerts', async (request, reply) => {
+    const body = z.object({ assetId: z.string().uuid().optional(), type: z.string().min(1), score: z.number().min(0).max(1), details: z.record(z.unknown()).optional(), detectedAt: z.string().datetime() }).parse(request.body);
+    const rec = await store.ingestPredictiveAlert({ tenantId: request.currentUser.tenantId, assetId: body.assetId, type: body.type, score: body.score, details: body.details, detectedAt: body.detectedAt });
+    await store.writeAudit({ tenantId: request.currentUser.tenantId, actorUserId: request.currentUser.id, action: 'maintenance.predictive_alert_ingested', resourceNodeId: body.assetId ?? null, outcome: 'success', details: { alertId: rec.id } });
+    return reply.code(201).send(rec);
+  });
+
+  app.get('/v1/maintenance/predictive-alerts', async (request) => ({ data: await store.listPredictiveAlerts(request.currentUser.tenantId) }));
 }
