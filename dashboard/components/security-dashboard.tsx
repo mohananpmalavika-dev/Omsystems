@@ -120,9 +120,9 @@ export function SecurityDashboard() {
   const activeBranch = branches.find((branch) => branch.id === selectedBranch);
   const visibleCameras = Array.from({ length: Math.min(gridSize, cameras.length) }, (_, index) => cameras[(sequenceOffset + index) % cameras.length]!);
   const online = cameras.filter((camera) => camera.status === "online").length;
-  const attention = cameras.filter(
-    (camera) => camera.status === "offline" || camera.status === "degraded",
-  ).length;
+  const offline = cameras.filter((camera) => camera.status === "offline").length;
+  const degraded = cameras.filter((camera) => camera.status === "degraded").length;
+  const attention = offline + degraded;
 
   const startCamera = useCallback(async (cameraId: string) => {
     setLoadingCamera(cameraId);
@@ -308,9 +308,9 @@ export function SecurityDashboard() {
           )}
 
           <section className="summary-grid" aria-label="Operations summary">
-            <SummaryCard label="Monitored branches" value="500" detail="Across 12 regions" icon={<Building2 />} tone="blue" />
-            <SummaryCard label="Cameras online" value="3,742" detail="98.4% availability" icon={<Camera />} tone="green" progress={98} />
-            <SummaryCard label="Needs attention" value="24" detail="8 offline · 16 degraded" icon={<AlertTriangle />} tone="amber" />
+            <SummaryCard label="Monitored branches" value={String(branches.length)} detail={branches.length ? `${branches.length} ${branches.length === 1 ? "branch" : "branches"}` : "No branches"} icon={<Building2 />} tone="blue" />
+            <SummaryCard label="Cameras in view" value={String(cameras.length)} detail={`${healthPercent}% healthy`} icon={<Camera />} tone="green" progress={healthPercent} />
+            <SummaryCard label="Needs attention" value={String(attention)} detail={`${offline} offline · ${degraded} degraded`} icon={<AlertTriangle />} tone={attention > 0 ? "amber" : "gray"} />
             <SummaryCard label="Open incidents" value={String(openIncidents.length)} detail={`${highPriorityIncidents} high priority`} icon={<Siren />} tone="red" />
           </section>
 
