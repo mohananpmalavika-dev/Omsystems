@@ -352,27 +352,6 @@ export const maintenanceApi = {
     method: 'PATCH', body: JSON.stringify(data),
   }),
 };
-  listAssessments: (filters?: { frameworkId?: string; branchNodeId?: string; status?: string }) => {
-    const params = new URLSearchParams();
-    filters = filters ?? {};
-    if (filters.frameworkId) params.set('frameworkId', filters.frameworkId);
-    if (filters.branchNodeId) params.set('branchNodeId', filters.branchNodeId);
-    if (filters.status) params.set('status', filters.status);
-    return fetchApi<{ data: any[] }>(`/v1/compliance/assessments?${params}`);
-  },
-  createAssessment: (data: any) => fetchApi<any>('/v1/compliance/assessments', {
-    method: 'POST', body: JSON.stringify(data),
-  }),
-  listCertificates: (assessmentId: string) =>
-    fetchApi<{ data: any[] }>(`/v1/compliance/assessments/${encodeURIComponent(assessmentId)}/certificates`),
-  createCertificate: (assessmentId: string, data: any) =>
-    fetchApi<any>(`/v1/compliance/assessments/${encodeURIComponent(assessmentId)}/certificates`, {
-      method: 'POST', body: JSON.stringify(data),
-    }),
-  getCertificate: (id: string) => fetchApi<any>(`/v1/compliance/certificates/${encodeURIComponent(id)}`),
-  getAssessment: (id: string) => fetchApi<any>(`/v1/compliance/assessments/${encodeURIComponent(id)}`),
-  getPolicy: (id: string) => fetchApi<any>(`/v1/compliance/policies/${encodeURIComponent(id)}`),
-};
 
 export const analyticsApi = {
   listRules: (cameraId: string) =>
