@@ -561,6 +561,129 @@ export interface ControlPlaneStore {
   listComplianceCertificates(assessmentId: string): Promise<ComplianceCertificate[]>;
   getComplianceCertificate(id: string): Promise<ComplianceCertificate | undefined>;
   createComplianceCertificate(input: ComplianceCertificateInput): Promise<ComplianceCertificate>;
+  
+  // Health Monitoring
+  recordCameraHealth(input: {
+    tenantId: string;
+    cameraId: string;
+    onlineStatus: 'online' | 'offline' | 'degraded';
+    fps?: number;
+    bitrate?: number;
+    streamQuality?: string;
+    temperature?: number;
+    tampering?: boolean;
+    recordingRunning?: boolean;
+    latencyMs?: number;
+    packetLoss?: number;
+  }): Promise<any>;
+  
+  recordStorageHealth(input: {
+    tenantId: string;
+    assetId: string;
+    totalCapacityGb: number;
+    usedCapacityGb: number;
+    availableCapacityGb: number;
+    smartStatus?: string;
+    temperature?: number;
+    badSectors?: number;
+    readSpeedMbs?: number;
+    writeSpeedMbs?: number;
+    remainingLifetimeYears?: number;
+    errorCount?: number;
+  }): Promise<any>;
+  
+  recordNetworkHealth(input: {
+    tenantId: string;
+    branchNodeId?: string;
+    assetId?: string;
+    checkType: string;
+    latencyMs?: number;
+    packetLossPercentage?: number;
+    jitterMs?: number;
+    bandwidthAvailableMbps?: number;
+    rtspAvailable?: boolean;
+    onvifAvailable?: boolean;
+  }): Promise<any>;
+  
+  recordUpsHealth(input: {
+    tenantId: string;
+    assetId: string;
+    batteryHealthPercentage: number;
+    runtimeMinutes?: number;
+    chargingStatus?: string;
+    loadPercentage?: number;
+    temperature?: number;
+    alarmStatus?: string;
+  }): Promise<any>;
+  
+  getHealthCheckSummary(tenantId: string): Promise<any>;
+  
+  // Firmware Management
+  recordFirmwareVersion(input: {
+    tenantId: string;
+    assetId: string;
+    deviceType: string;
+    currentVersion: string;
+    latestVersion?: string;
+    requiresUpdate?: boolean;
+    criticalUpdate?: boolean;
+  }): Promise<any>;
+  
+  listFirmwareUpdatesRequired(tenantId: string): Promise<any[]>;
+  
+  // Software Versions
+  recordSoftwareVersion(input: {
+    tenantId: string;
+    componentName: string;
+    environment: string;
+    currentVersion: string;
+    previousVersion?: string;
+    upgradeApprovedBy?: string;
+    upgradeApprovedAt?: string;
+  }): Promise<any>;
+  
+  // Spare Parts
+  recordSparePart(input: {
+    tenantId: string;
+    partName: string;
+    partCode: string;
+    category: string;
+    vendorId?: string;
+    quantity: number;
+    reorderLevel?: number;
+    unitCost?: number;
+    warrantyMonths?: number;
+    location?: string;
+    branchNodeId?: string;
+  }): Promise<any>;
+  
+  recordInventoryTransaction(input: {
+    tenantId: string;
+    partId: string;
+    workOrderId?: string;
+    transactionType: 'add' | 'remove' | 'used' | 'damaged';
+    quantity: number;
+    referenceNumber?: string;
+    notes?: string;
+    recordedBy?: string;
+  }): Promise<any>;
+  
+  listLowStockParts(tenantId: string): Promise<any[]>;
+  
+  // Reporting
+  generateMaintenanceReport(input: {
+    tenantId: string;
+    reportType: string;
+    periodStart: string;
+    periodEnd: string;
+    branchNodeId?: string;
+    assetId?: string;
+  }): Promise<any>;
+  
+  listMaintenanceReports(tenantId: string, filters?: { reportType?: string; limit?: number }): Promise<any[]>;
+  
+  // Compliance Integration
+  getMaintenanceComplianceStatus(tenantId: string): Promise<any>;
 }
 
 export interface CctvInfrastructureStore {
