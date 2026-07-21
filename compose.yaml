@@ -82,7 +82,10 @@ services:
       - media-gateway
 
   mediamtx:
-    image: bluenviron/mediamtx:1.19.2
+    # 1.18+ binds HLS child playlists to a cookie that account-less CDN
+    # tunnels do not reliably forward. Keep the final pre-session security
+    # release until production uses a named tunnel/CDN with cookie support.
+    image: bluenviron/mediamtx:1.17.1
     volumes:
       - ./media-gateway/mediamtx.yml:/mediamtx.yml:ro
     ports:

@@ -76,10 +76,32 @@ export async function buildMediaGateway(options: {
   app.post("/internal/mediamtx/auth", async (request, reply) => {
     const body = z.object({
       token: z.string().default(""),
+      password: z.string().default(""),
       action: z.string(),
       path: z.string().default(""),
+      protocol: z.string().default(""),
+      user: z.string().default(""),
+      query: z.string().default(""),
     }).passthrough().parse(request.body);
-    if (!access.authenticate(body.token, body.path, body.action)) {
+    // MediaMTX can forward a credential through `token`, through `password`
+    // for its documented Basic-auth fallback, or from a `token` query value.
+    // The query form keeps HLS reliable through proxies that do not preserve
+    // opaque Authorization headers; the token remains short-lived and bound
+    // to one camera path.
+    const queryCredential = new URLSearchParams(body.query).get("token") ?? "";
+    const credential = body.token || body.password || queryCredential;
+    if (!access.authenticate(credential, body.path, body.action)) {
+      app.log.warn({
+        mediaAuthDenied: {
+          action: body.action,
+          path: body.path,
+          protocol: body.protocol,
+          tokenLength: body.token.length,
+          passwordLength: body.password.length,
+          userPresent: body.user.length > 0,
+          queryPresent: body.query.length > 0,
+        },
+      }, "Media access denied");
       return reply.code(401).send({ error: "media_access_denied" });
     }
     return reply.code(204).send();

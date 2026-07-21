@@ -25,8 +25,14 @@ export function HlsPlayer({
     const hls = new Hls({
       lowLatencyMode: true,
       backBufferLength: 30,
-      xhrSetup: (xhr) => {
-        xhr.setRequestHeader("Authorization", `Bearer ${bearerToken}`);
+      xhrSetup: (xhr, requestUrl) => {
+        // MediaMTX forwards this short-lived, path-bound value to the media
+        // gateway for every playlist and segment request. Opening the request
+        // here makes sure derived HLS resources receive the token as well.
+        const authorizedUrl = new URL(requestUrl);
+        authorizedUrl.searchParams.set("token", bearerToken);
+        xhr.withCredentials = true;
+        xhr.open("GET", authorizedUrl.toString(), true);
       },
     });
     hls.loadSource(url);

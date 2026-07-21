@@ -71,6 +71,30 @@ describe("authorized media startup", () => {
     });
     expect(allowed.statusCode).toBe(204);
 
+    const allowedPasswordFallback = await app.inject({
+      method: "POST",
+      url: "/internal/mediamtx/auth",
+      payload: {
+        token: "",
+        password: session.hls.bearerToken,
+        action: "read",
+        path: "camera-cam-001",
+      },
+    });
+    expect(allowedPasswordFallback.statusCode).toBe(204);
+
+    const allowedQueryFallback = await app.inject({
+      method: "POST",
+      url: "/internal/mediamtx/auth",
+      payload: {
+        token: "",
+        action: "read",
+        path: "camera-cam-001",
+        query: `token=${encodeURIComponent(session.hls.bearerToken)}`,
+      },
+    });
+    expect(allowedQueryFallback.statusCode).toBe(204);
+
     const denied = await app.inject({
       method: "POST",
       url: "/internal/mediamtx/auth",
