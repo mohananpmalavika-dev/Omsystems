@@ -30,7 +30,8 @@ export class AnalyticsRepository {
 
   async listRules(cameraId: string): Promise<AnalyticsRule[]> {
     const result = await this.pool.query(
-      `${ruleSelection} WHERE rule.camera_id=$1 ORDER BY rule.name`,
+      `${ruleSelection}
+       WHERE rule.camera_id=$1 AND rule.archived_at IS NULL ORDER BY rule.name`,
       [cameraId],
     );
     return result.rows.map(mapRule);
@@ -145,14 +146,12 @@ export class AnalyticsRepository {
 
   async deleteRule(id: string, tenantId: string, cameraId: string) {
     const result = await this.pool.query(
-      `DELETE FROM analytics_rules
-       WHERE id=$1 AND tenant_id=$2 AND camera_id=$3 RETURNING zone_id`,
+      `UPDATE analytics_rules SET enabled=false, archived_at=now(), updated_at=now()
+       WHERE id=$1 AND tenant_id=$2 AND camera_id=$3 AND archived_at IS NULL
+       RETURNING zone_id`,
       [id, tenantId, cameraId],
     );
     if (!result.rows[0]) return false;
-    if (result.rows[0].zone_id) {
-      await this.pool.query("DELETE FROM analytics_zones WHERE id=$1", [result.rows[0].zone_id]);
-    }
     return true;
   }
 
@@ -160,6 +159,10 @@ export class AnalyticsRepository {
     const client = await this.pool.connect();
     try {
       await client.query("BEGIN");
+      await client.query(
+        "SELECT pg_advisory_xact_lock(hashtextextended($1, 0))",
+        [`${input.tenantId}:${input.sourceEventId}`],
+      );
       const camera = await client.query(
         `SELECT camera.id FROM cameras camera
          JOIN resource_nodes node ON node.id=camera.resource_node_id
@@ -186,7 +189,8 @@ export class AnalyticsRepository {
       const candidates = await client.query(
         `${ruleSelection}
          WHERE rule.camera_id=$1 AND rule.tenant_id=$2
-           AND rule.enabled AND rule.detection_type=$3`,
+           AND rule.enabled AND rule.archived_at IS NULL
+           AND rule.detection_type=$3`,
         [input.cameraId, input.tenantId, input.detectionType],
       );
       const rules = sortedMatchingRules(candidates.rows.map(mapRule), input);

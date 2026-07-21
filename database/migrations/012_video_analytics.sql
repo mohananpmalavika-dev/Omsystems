@@ -63,11 +63,14 @@ CREATE TABLE analytics_rules (
   created_by uuid NOT NULL REFERENCES users(id),
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now(),
-  UNIQUE (camera_id, name)
+  archived_at timestamptz
 );
 
 CREATE INDEX analytics_rules_camera_type_idx
-  ON analytics_rules (camera_id, detection_type) WHERE enabled;
+  ON analytics_rules (camera_id, detection_type)
+  WHERE enabled AND archived_at IS NULL;
+CREATE UNIQUE INDEX analytics_rules_camera_name_uidx
+  ON analytics_rules (camera_id, name) WHERE archived_at IS NULL;
 
 CREATE TABLE analytics_events (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
