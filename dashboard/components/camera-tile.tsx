@@ -73,6 +73,7 @@ export function CameraTile({
               url={session.hls.url}
               bearerToken={session.hls.bearerToken}
               cameraName={camera.name}
+              onPlaybackError={onStart}
             />
           ) : (
           <div className={`simulated-feed feed-${(index % 4) + 1}`}>

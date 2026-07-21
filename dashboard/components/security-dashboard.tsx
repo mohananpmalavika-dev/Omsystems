@@ -35,6 +35,7 @@ import { CameraTile } from "./camera-tile";
 import { LiveEventForm } from "./live-event-form";
 
 const layoutOptions = [1, 4, 9, 16, 25, 36] as const;
+const liveSessionRenewalLeadMs = 60_000;
 
 function defaultRecording(cameraId: string, mode: RecordingJob["mode"] = "continuous"): RecordingJob {
   return {
@@ -142,6 +143,20 @@ export function SecurityDashboard() {
       setLoadingCamera(null);
     }
   }, []);
+
+  useEffect(() => {
+    const timers = Object.entries(sessions).flatMap(([cameraId, session]) => {
+      if (!session.expiresAt) return [];
+      const expiresAt = Date.parse(session.expiresAt);
+      if (!Number.isFinite(expiresAt)) return [];
+      const delay = Math.max(
+        1_000,
+        expiresAt - Date.now() - liveSessionRenewalLeadMs,
+      );
+      return [window.setTimeout(() => void startCamera(cameraId), delay)];
+    });
+    return () => timers.forEach((timer) => window.clearTimeout(timer));
+  }, [sessions, startCamera]);
 
   const toggleRecording = useCallback(async (cameraId: string) => {
     const current = recordings[cameraId] ?? defaultRecording(cameraId);
