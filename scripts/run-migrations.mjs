@@ -99,7 +99,14 @@ async function baselineExistingCoreSchema(client, files) {
         AND to_regclass('public.recording_segments') IS NOT NULL
         AND to_regclass('public.recording_legal_holds') IS NOT NULL
         AND to_regclass('public.recording_storage_nodes') IS NOT NULL
-        AS has_recording
+        AS has_recording,
+      to_regclass('public.live_incidents') IS NOT NULL
+        AND to_regclass('public.live_bookmarks') IS NOT NULL
+        AS has_live_operations,
+      to_regclass('public.analytics_rules') IS NOT NULL
+        AND to_regclass('public.analytics_events') IS NOT NULL
+        AND to_regclass('public.analytics_alerts') IS NOT NULL
+        AS has_analytics
   `);
   const existing = state.rows[0];
   if (!existing?.has_initial) return;
@@ -136,6 +143,12 @@ async function baselineExistingCoreSchema(client, files) {
   }
   if (existing.has_recording && files.includes("010_recording_storage.sql")) {
     baseline.push("010_recording_storage.sql");
+  }
+  if (existing.has_live_operations && files.includes("011_live_monitoring_operations.sql")) {
+    baseline.push("011_live_monitoring_operations.sql");
+  }
+  if (existing.has_analytics && files.includes("012_video_analytics.sql")) {
+    baseline.push("012_video_analytics.sql");
   }
 
   for (const filename of baseline) {

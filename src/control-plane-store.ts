@@ -1,5 +1,11 @@
 import type {
   Action,
+  AnalyticsAlert,
+  AnalyticsAlertStatus,
+  AnalyticsDetectionType,
+  AnalyticsDetectedObject,
+  AnalyticsIngestResult,
+  AnalyticsRule,
   AuditEventInput,
   BranchCameraCoverageGap,
   BranchCameraRequirement,
@@ -125,6 +131,45 @@ export interface BranchCameraRequirementInput {
   notes?: string | undefined;
 }
 
+export type AnalyticsRuleInput = Omit<
+  AnalyticsRule,
+  "id" | "tenantId" | "cameraId" | "createdBy" | "createdAt" | "updatedAt"
+>;
+
+export interface AnalyticsAlertFilters {
+  cameraId?: string | undefined;
+  branchId?: string | undefined;
+  status?: AnalyticsAlertStatus | undefined;
+  severity?: AnalyticsAlert["severity"] | undefined;
+  from?: string | undefined;
+  to?: string | undefined;
+  limit: number;
+}
+
+export interface AnalyticsEventInput {
+  tenantId: string;
+  cameraId: string;
+  sourceEventId: string;
+  detectionType: AnalyticsDetectionType;
+  occurredAt: string;
+  endedAt?: string | undefined;
+  confidence: number;
+  durationSeconds: number;
+  modelVersion: string;
+  objects: AnalyticsDetectedObject[];
+  snapshotReference?: string | undefined;
+  clipReference?: string | undefined;
+  metadata?: Record<string, unknown> | undefined;
+}
+
+export interface AnalyticsAlertTransitionInput {
+  status: AnalyticsAlertStatus;
+  actorUserId: string;
+  notes?: string | undefined;
+  falseAlarmReason?: string | undefined;
+  recipients?: string[] | undefined;
+}
+
 export interface ControlPlaneStore {
   close(): Promise<void>;
   getUser(identity: string): Promise<User | undefined>;
@@ -164,6 +209,7 @@ export interface ControlPlaneStore {
     branchId: string,
     input: CameraDiscoveryInput,
   ): Promise<DiscoveredCamera>;
+  listDiscoveredCameras(branchId: string): Promise<DiscoveredCamera[]>;
   approveCamera(
     branchId: string,
     input: CameraApprovalInput,
@@ -261,6 +307,40 @@ export interface ControlPlaneStore {
     cameraId: string,
     status: LiveIncidentStatus,
   ): Promise<LiveIncident | undefined>;
+  listAnalyticsRules(cameraId: string): Promise<AnalyticsRule[]>;
+  createAnalyticsRule(
+    tenantId: string,
+    cameraId: string,
+    createdBy: string,
+    input: AnalyticsRuleInput,
+  ): Promise<AnalyticsRule>;
+  updateAnalyticsRule(
+    id: string,
+    tenantId: string,
+    cameraId: string,
+    input: Partial<AnalyticsRuleInput>,
+  ): Promise<AnalyticsRule | undefined>;
+  deleteAnalyticsRule(
+    id: string,
+    tenantId: string,
+    cameraId: string,
+  ): Promise<boolean>;
+  processAnalyticsEvent(input: AnalyticsEventInput): Promise<AnalyticsIngestResult>;
+  listAnalyticsAlerts(
+    tenantId: string,
+    filters: AnalyticsAlertFilters,
+  ): Promise<AnalyticsAlert[]>;
+  getAnalyticsAlert(id: string, tenantId: string): Promise<AnalyticsAlert | undefined>;
+  transitionAnalyticsAlert(
+    id: string,
+    tenantId: string,
+    input: AnalyticsAlertTransitionInput,
+  ): Promise<AnalyticsAlert | undefined>;
+  linkAnalyticsAlertIncident(
+    id: string,
+    tenantId: string,
+    incidentId: string,
+  ): Promise<AnalyticsAlert | undefined>;
   writeAudit(event: AuditEventInput): Promise<void>;
 }
 

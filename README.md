@@ -64,6 +64,8 @@ This repository currently implements the first security-critical slice:
 - configurable hot/warm/cold retention policy, storage health, legal holds and
   legal-hold-aware deletion;
 - playback timeline gap detection and a centralized storage calculator;
+- an independent analytics adapter, per-camera AI rules, cooldown-based alert
+  deduplication, scoped acknowledgement/escalation, and protected incidents;
 - tests proving default-deny and deny-overrides-allow behavior.
 
 Video transport remains outside the business API: MediaMTX owns protected live
@@ -71,6 +73,8 @@ delivery and the recording engine owns durable segment writing. The first
 edge-agent prototype handles WS-Discovery, ONVIF inspection and local `ffprobe`
 validation. See [docs/recording-storage.md](docs/recording-storage.md) for the
 recording/storage architecture and deployment contract.
+See [docs/video-analytics.md](docs/video-analytics.md) for the Phase 1 analytics
+contract, permissions, model-adapter integration, and operator workflow.
 
 ## 📦 Project Status
 
@@ -148,6 +152,11 @@ must use signed OIDC tokens from the company's identity provider.
 | GET/PUT | `/v1/cameras/:id/recording` | Read or configure camera recording policy |
 | GET | `/v1/cameras/:id/playback` | Indexed playback timeline and recording gaps |
 | POST | `/v1/recording/storage-calculator` | Calculate primary, RAID and backup capacity |
+| GET/POST | `/v1/cameras/:id/analytics/rules` | List or configure camera analytics rules |
+| GET | `/v1/analytics/alerts` | Scoped analytics alert queue and summary |
+| POST | `/v1/analytics/alerts/:id/acknowledge` | Acknowledge an analytics alert |
+| POST | `/v1/analytics/alerts/:id/escalate` | Escalate an analytics alert |
+| POST | `/v1/analytics/alerts/:id/incidents` | Create and protect an incident window |
 
 The browser then exchanges that one-time token with the media gateway:
 

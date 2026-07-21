@@ -2,6 +2,9 @@ import { createHash, randomBytes, randomUUID } from "node:crypto";
 import type {
   AccessGrant,
   Action,
+  AnalyticsAlert,
+  AnalyticsEvent,
+  AnalyticsRule,
   AuditEventInput,
   Camera,
   CameraStatus,
@@ -20,6 +23,11 @@ import type {
   User,
 } from "./domain/models.js";
 import { authorize } from "./domain/authorization.js";
+import {
+  analyticsAlertTitle,
+  isTerminalAlertStatus,
+  sortedMatchingRules,
+} from "./analytics/rule-engine.js";
 import type {
   CameraApprovalInput,
   CameraDiscoveryInput,
@@ -45,12 +53,15 @@ const seedUsers: User[] = [
   { id: "user-branch-manager", displayName: "Bengaluru Branch Manager", tenantId },
 ];
 
-const operatorActions: Action[] = ["live:view", "recording:view", "alarm:acknowledge"];
+const operatorActions: Action[] = [
+  "live:view", "recording:view", "alarm:acknowledge",
+  "analytics:view", "alerts:acknowledge",
+];
 const seedGrants: AccessGrant[] = [
-  { userId: "user-global-admin", scopeNodeId: "company-1", actions: ["live:view", "recording:view", "evidence:export", "ptz:operate", "alarm:acknowledge", "device:configure", "user:manage", "audit:view"], effect: "allow" },
+  { userId: "user-global-admin", scopeNodeId: "company-1", actions: ["live:view", "recording:view", "evidence:export", "ptz:operate", "alarm:acknowledge", "device:configure", "user:manage", "audit:view", "org:manage", "analytics:view", "analytics:configure", "alerts:acknowledge", "alerts:escalate", "analytics:export"], effect: "allow" },
   { userId: "user-south-operator", scopeNodeId: "region-south", actions: operatorActions, effect: "allow" },
-  { userId: "user-branch-manager", scopeNodeId: "branch-blr-001", actions: ["live:view", "recording:view"], effect: "allow" },
-  { userId: "user-branch-manager", scopeNodeId: "group-sensitive-blr-001", actions: ["live:view", "recording:view"], effect: "deny" },
+  { userId: "user-branch-manager", scopeNodeId: "branch-blr-001", actions: ["live:view", "recording:view", "analytics:view", "analytics:configure", "alerts:acknowledge", "alerts:escalate", "analytics:export"], effect: "allow" },
+  { userId: "user-branch-manager", scopeNodeId: "group-sensitive-blr-001", actions: ["live:view", "recording:view", "analytics:view", "analytics:configure", "alerts:acknowledge", "alerts:escalate", "analytics:export"], effect: "deny" },
 ];
 
 const seedCameras: Camera[] = [
@@ -93,6 +104,12 @@ export class MemoryStore implements ControlPlaneStore {
   readonly recordingHealthEvents: RecordingHealthEvent[] = [];
   readonly liveBookmarks: LiveBookmark[] = [];
   readonly liveIncidents: LiveIncident[] = [];
+  readonly analyticsRules: AnalyticsRule[] = [];
+  readonly analyticsEvents: AnalyticsEvent[] = [];
+  readonly analyticsAlerts: AnalyticsAlert[] = [];
+  readonly analyticsAcknowledgements: Array<Record<string, unknown>> = [];
+  readonly analyticsEscalations: Array<Record<string, unknown>> = [];
+  readonly analyticsNotifications: Array<Record<string, unknown>> = [];
 
   async close() {}
 
@@ -171,6 +188,14 @@ export class MemoryStore implements ControlPlaneStore {
     };
     this.discoveries.set(discovery.id, discovery);
     return discovery;
+  }
+
+  async listDiscoveredCameras(branchId: string) {
+    return [...this.discoveries.values()]
+      .filter((discovery) =>
+        discovery.branchId === branchId && discovery.status === "pending"
+      )
+      .sort((left, right) => right.discoveredAt.localeCompare(left.discoveredAt));
   }
 
   async approveCamera(branchId: string, input: CameraApprovalInput) {
@@ -500,6 +525,204 @@ export class MemoryStore implements ControlPlaneStore {
     incident.status = status;
     incident.updatedAt = new Date().toISOString();
     return incident;
+  }
+
+  async listAnalyticsRules(cameraId: string) {
+    return this.analyticsRules
+      .filter((rule) => rule.cameraId === cameraId)
+      .sort((left, right) => left.name.localeCompare(right.name));
+  }
+
+  async createAnalyticsRule(
+    inputTenantId: string,
+    cameraId: string,
+    createdBy: string,
+    input: Parameters<ControlPlaneStore["createAnalyticsRule"]>[3],
+  ) {
+    const camera = this.cameras.get(cameraId);
+    const node = camera ? this.nodes.get(camera.nodeId) : undefined;
+    if (!camera || node?.tenantId !== inputTenantId) throw new Error("camera_not_found");
+    const now = new Date().toISOString();
+    const rule: AnalyticsRule = {
+      id: randomUUID(), tenantId: inputTenantId, cameraId, createdBy,
+      ...structuredClone(input), createdAt: now, updatedAt: now,
+    };
+    this.analyticsRules.push(rule);
+    return rule;
+  }
+
+  async updateAnalyticsRule(
+    id: string,
+    inputTenantId: string,
+    cameraId: string,
+    input: Parameters<ControlPlaneStore["updateAnalyticsRule"]>[3],
+  ) {
+    const rule = this.analyticsRules.find((item) =>
+      item.id === id && item.tenantId === inputTenantId && item.cameraId === cameraId
+    );
+    if (!rule) return undefined;
+    Object.assign(rule, structuredClone(input), { updatedAt: new Date().toISOString() });
+    return rule;
+  }
+
+  async deleteAnalyticsRule(id: string, inputTenantId: string, cameraId: string) {
+    const index = this.analyticsRules.findIndex((rule) =>
+      rule.id === id && rule.tenantId === inputTenantId && rule.cameraId === cameraId
+    );
+    if (index < 0) return false;
+    this.analyticsRules.splice(index, 1);
+    return true;
+  }
+
+  async processAnalyticsEvent(
+    input: Parameters<ControlPlaneStore["processAnalyticsEvent"]>[0],
+  ) {
+    const camera = this.cameras.get(input.cameraId);
+    const node = camera ? this.nodes.get(camera.nodeId) : undefined;
+    if (!camera || node?.tenantId !== input.tenantId) throw new Error("camera_not_found");
+    const duplicate = this.analyticsEvents.find((event) =>
+      event.tenantId === input.tenantId && event.sourceEventId === input.sourceEventId
+    );
+    if (duplicate) {
+      const alerts = this.analyticsAlerts.filter((alert) => alert.eventId === duplicate.id);
+      return {
+        event: { ...duplicate, status: "duplicate" as const },
+        alerts,
+        rules: this.analyticsRules.filter((rule) =>
+          alerts.some((alert) => alert.ruleId === rule.id)
+        ),
+      };
+    }
+
+    const matchingRules = sortedMatchingRules(
+      this.analyticsRules.filter((rule) => rule.cameraId === input.cameraId),
+      input,
+    );
+    const now = new Date().toISOString();
+    const eventId = randomUUID();
+    const alerts: AnalyticsAlert[] = [];
+    let created = 0;
+    for (const rule of matchingRules) {
+      const recent = this.analyticsAlerts.find((alert) => {
+        if (alert.ruleId !== rule.id || alert.cameraId !== input.cameraId ||
+            isTerminalAlertStatus(alert.status)) return false;
+        const elapsed = Date.parse(input.occurredAt) - Date.parse(alert.lastDetectedAt);
+        return elapsed >= 0 && elapsed <= rule.cooldownSeconds * 1_000;
+      });
+      if (recent) {
+        recent.lastDetectedAt = input.occurredAt;
+        recent.occurrenceCount += 1;
+        recent.confidence = Math.max(recent.confidence, input.confidence);
+        recent.updatedAt = now;
+        alerts.push(recent);
+        continue;
+      }
+      const alert: AnalyticsAlert = {
+        id: randomUUID(), tenantId: input.tenantId, cameraId: input.cameraId,
+        ruleId: rule.id, eventId, title: analyticsAlertTitle(rule),
+        description: `Rule \"${rule.name}\" matched on camera ${camera.name}.`,
+        severity: rule.severity, status: "new", confidence: input.confidence,
+        objectClasses: [...new Set(input.objects.map((object) => object.label))],
+        modelVersion: input.modelVersion,
+        ...(input.snapshotReference ? { snapshotReference: input.snapshotReference } : {}),
+        ...(input.clipReference ? { clipReference: input.clipReference } : {}),
+        firstDetectedAt: input.occurredAt, lastDetectedAt: input.occurredAt,
+        occurrenceCount: 1, createdAt: now, updatedAt: now,
+      };
+      this.analyticsAlerts.push(alert);
+      alerts.push(alert);
+      created += 1;
+      for (const recipient of rule.recipients) {
+        this.analyticsNotifications.push({
+          id: randomUUID(), alertId: alert.id, recipient, channel: "configured",
+          status: "queued", createdAt: now,
+        });
+      }
+    }
+    const event: AnalyticsEvent = {
+      id: eventId, tenantId: input.tenantId, cameraId: input.cameraId,
+      sourceEventId: input.sourceEventId,
+      ...(matchingRules[0] ? { ruleId: matchingRules[0].id } : {}),
+      detectionType: input.detectionType, occurredAt: input.occurredAt,
+      ...(input.endedAt ? { endedAt: input.endedAt } : {}),
+      confidence: input.confidence, durationSeconds: input.durationSeconds,
+      modelVersion: input.modelVersion, objects: structuredClone(input.objects),
+      ...(input.snapshotReference ? { snapshotReference: input.snapshotReference } : {}),
+      ...(input.clipReference ? { clipReference: input.clipReference } : {}),
+      metadata: structuredClone(input.metadata ?? {}),
+      status: matchingRules.length === 0 ? "unmatched" : created > 0 ? "accepted" : "suppressed",
+      ...(matchingRules.length === 0 ? { rejectionReason: "no_matching_rule" } : {}),
+      createdAt: now,
+    };
+    this.analyticsEvents.push(event);
+    return { event, alerts, rules: matchingRules };
+  }
+
+  async listAnalyticsAlerts(
+    inputTenantId: string,
+    filters: Parameters<ControlPlaneStore["listAnalyticsAlerts"]>[1],
+  ) {
+    return this.analyticsAlerts
+      .filter((alert) => alert.tenantId === inputTenantId)
+      .filter((alert) => !filters.cameraId || alert.cameraId === filters.cameraId)
+      .filter((alert) => !filters.branchId ||
+        this.cameras.get(alert.cameraId)?.branchId === filters.branchId)
+      .filter((alert) => !filters.status || alert.status === filters.status)
+      .filter((alert) => !filters.severity || alert.severity === filters.severity)
+      .filter((alert) => !filters.from || alert.lastDetectedAt >= filters.from)
+      .filter((alert) => !filters.to || alert.firstDetectedAt <= filters.to)
+      .sort((left, right) => right.lastDetectedAt.localeCompare(left.lastDetectedAt))
+      .slice(0, filters.limit);
+  }
+
+  async getAnalyticsAlert(id: string, inputTenantId: string) {
+    return this.analyticsAlerts.find((alert) =>
+      alert.id === id && alert.tenantId === inputTenantId
+    );
+  }
+
+  async transitionAnalyticsAlert(
+    id: string,
+    inputTenantId: string,
+    input: Parameters<ControlPlaneStore["transitionAnalyticsAlert"]>[2],
+  ) {
+    const alert = await this.getAnalyticsAlert(id, inputTenantId);
+    if (!alert) return undefined;
+    if (isTerminalAlertStatus(alert.status) && alert.status !== input.status) {
+      throw new Error("invalid_alert_transition");
+    }
+    const now = new Date().toISOString();
+    alert.status = input.status;
+    alert.updatedAt = now;
+    if (input.status === "acknowledged") {
+      alert.acknowledgedBy = input.actorUserId;
+      alert.acknowledgedAt = now;
+      this.analyticsAcknowledgements.push({
+        id: randomUUID(), alertId: id, userId: input.actorUserId,
+        notes: input.notes, acknowledgedAt: now,
+      });
+    }
+    if (input.status === "escalated") {
+      this.analyticsEscalations.push({
+        id: randomUUID(), alertId: id, escalatedBy: input.actorUserId,
+        notes: input.notes, recipients: input.recipients ?? [], escalatedAt: now,
+      });
+    }
+    if (input.status === "resolved") alert.resolvedAt = now;
+    if (input.status === "false_alarm") alert.falseAlarmReason = input.falseAlarmReason;
+    return alert;
+  }
+
+  async linkAnalyticsAlertIncident(
+    id: string,
+    inputTenantId: string,
+    incidentId: string,
+  ) {
+    const alert = await this.getAnalyticsAlert(id, inputTenantId);
+    if (!alert) return undefined;
+    alert.incidentId = incidentId;
+    alert.updatedAt = new Date().toISOString();
+    return alert;
   }
 
   async writeAudit(event: AuditEventInput) {

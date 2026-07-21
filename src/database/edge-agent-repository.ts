@@ -105,4 +105,44 @@ export class EdgeAgentRepository {
       discoveredAt: row.discovered_at.toISOString(),
     };
   }
+
+  async listDiscoveries(branchId: string): Promise<DiscoveredCamera[]> {
+    const result = await this.pool.query<{
+      id: string;
+      branch_node_id: string;
+      edge_agent_id: string;
+      vendor: string;
+      model: string;
+      ip_address: string;
+      onvif_port: number;
+      rtsp_port: number;
+      profiles: string;
+      capabilities: string;
+      discovered_at: Date;
+      status: string;
+    }>(
+      `SELECT id::text, branch_node_id::text, edge_agent_id::text, vendor, model,
+              host(ip_address) as ip_address, onvif_port, rtsp_port, profiles,
+              capabilities, discovered_at, status
+       FROM camera_discoveries
+       WHERE branch_node_id = $1 AND status = 'pending'
+       ORDER BY discovered_at DESC`,
+      [branchId],
+    );
+
+    return result.rows.map((row) => ({
+      id: row.id,
+      branchId: row.branch_node_id,
+      edgeAgentId: row.edge_agent_id,
+      vendor: row.vendor as "hikvision" | "cp-plus" | "other",
+      model: row.model,
+      ipAddress: row.ip_address,
+      onvifPort: row.onvif_port,
+      rtspPort: row.rtsp_port,
+      profiles: JSON.parse(row.profiles),
+      capabilities: JSON.parse(row.capabilities),
+      discoveredAt: row.discovered_at.toISOString(),
+      status: row.status as "pending" | "approved" | "rejected",
+    }));
+  }
 }

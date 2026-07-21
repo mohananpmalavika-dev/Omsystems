@@ -19,6 +19,7 @@ import { ResourceRepository } from "./resource-repository.js";
 import { UserRepository } from "./user-repository.js";
 import { RecordingRepository } from "./recording-repository.js";
 import { LiveOperationsRepository } from "./live-operations-repository.js";
+import { AnalyticsRepository } from "./analytics-repository.js";
 
 export class PostgresStore
   extends InfrastructureRepository
@@ -31,6 +32,7 @@ export class PostgresStore
   private readonly audits: AuditRepository;
   private readonly recordings: RecordingRepository;
   private readonly liveOperations: LiveOperationsRepository;
+  private readonly analytics: AnalyticsRepository;
 
   constructor(pool: Pool) {
     super(pool);
@@ -41,6 +43,7 @@ export class PostgresStore
     this.audits = new AuditRepository(pool);
     this.recordings = new RecordingRepository(pool);
     this.liveOperations = new LiveOperationsRepository(pool);
+    this.analytics = new AnalyticsRepository(pool);
   }
 
   async close() { await this.pool.end(); }
@@ -70,6 +73,9 @@ export class PostgresStore
   }
   async createDiscovery(branchId: string, input: CameraDiscoveryInput) {
     return this.agents.createDiscovery(branchId, input);
+  }
+  async listDiscoveredCameras(branchId: string) {
+    return this.agents.listDiscoveries(branchId);
   }
   async approveCamera(branchId: string, input: CameraApprovalInput) {
     return this.cameras.approve(branchId, input);
@@ -118,5 +124,29 @@ export class PostgresStore
   async updateLiveIncidentStatus(id: string, tenantId: string, cameraId: string, status: any) {
     return this.liveOperations.updateIncidentStatus(id, tenantId, cameraId, status);
   }
+  async listAnalyticsRules(cameraId: string) { return this.analytics.listRules(cameraId); }
+  async createAnalyticsRule(tenantId: string, cameraId: string, createdBy: string, input: any) {
+    return this.analytics.createRule(tenantId, cameraId, createdBy, input);
+  }
+  async updateAnalyticsRule(id: string, tenantId: string, cameraId: string, input: any) {
+    return this.analytics.updateRule(id, tenantId, cameraId, input);
+  }
+  async deleteAnalyticsRule(id: string, tenantId: string, cameraId: string) {
+    return this.analytics.deleteRule(id, tenantId, cameraId);
+  }
+  async processAnalyticsEvent(input: any) { return this.analytics.processEvent(input); }
+  async listAnalyticsAlerts(tenantId: string, filters: any) {
+    return this.analytics.listAlerts(tenantId, filters);
+  }
+  async getAnalyticsAlert(id: string, tenantId: string) {
+    return this.analytics.getAlert(id, tenantId);
+  }
+  async transitionAnalyticsAlert(id: string, tenantId: string, input: any) {
+    return this.analytics.transitionAlert(id, tenantId, input);
+  }
+  async linkAnalyticsAlertIncident(id: string, tenantId: string, incidentId: string) {
+    return this.analytics.linkIncident(id, tenantId, incidentId);
+  }
   async writeAudit(event: AuditEventInput) { await this.audits.write(event); }
+
 }

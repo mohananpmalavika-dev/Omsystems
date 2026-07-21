@@ -24,6 +24,7 @@ services:
       HOST: 0.0.0.0
       PORT: 8091
       RECORDING_ENGINE_SHARED_KEY: development-recording-engine-key-change-me
+      ANALYTICS_ENGINE_SHARED_KEY: development-analytics-engine-key-change-me
       CONTROL_PLANE_URL: http://api:8080
       RECORDING_ROOT: /recordings
       STORAGE_NODE_EXTERNAL_ID: local-recorder-01
@@ -34,6 +35,21 @@ services:
       STREAM_SECRETS_JSON: "${STREAM_SECRETS_JSON:-{}}"
     volumes:
       - sentinel-recordings:/recordings
+    depends_on:
+      - api
+
+  analytics-engine:
+    build:
+      context: .
+      dockerfile: analytics-engine/Dockerfile
+    environment:
+      HOST: 0.0.0.0
+      PORT: 8092
+      CONTROL_PLANE_URL: http://api:8080
+      ANALYTICS_ENGINE_SHARED_KEY: development-analytics-engine-key-change-me
+      ANALYTICS_SOURCE_SHARED_KEY: development-analytics-source-key-change-me
+    ports:
+      - "8092:8092"
     depends_on:
       - api
 

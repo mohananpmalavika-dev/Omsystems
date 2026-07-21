@@ -252,6 +252,7 @@ export function SecurityDashboard() {
           <a href="#" className="active"><LayoutDashboard size={18} />Overview</a>
           <a href="#live-wall"><MonitorPlay size={18} />Live wall<span className="nav-count">8</span></a>
           <a href="#incidents"><Siren size={18} />Incidents<span className="alert-count">{openIncidents.length}</span></a>
+          <a href="/analytics"><Activity size={18} />Video analytics</a>
           <a href="#"><Activity size={18} />Health</a>
           <p>MANAGEMENT</p>
           <a href="/admin"><Building2 size={18} />Organization</a>
@@ -310,7 +311,7 @@ export function SecurityDashboard() {
           <section className="summary-grid" aria-label="Operations summary">
             <SummaryCard label="Monitored branches" value={String(branches.length)} detail={branches.length ? `${branches.length} ${branches.length === 1 ? "branch" : "branches"}` : "No branches"} icon={<Building2 />} tone="blue" />
             <SummaryCard label="Cameras in view" value={String(cameras.length)} detail={`${healthPercent}% healthy`} icon={<Camera />} tone="green" progress={healthPercent} />
-            <SummaryCard label="Needs attention" value={String(attention)} detail={`${offline} offline · ${degraded} degraded`} icon={<AlertTriangle />} tone={attention > 0 ? "amber" : "gray"} />
+            <SummaryCard label="Needs attention" value={String(attention)} detail={`${offline} offline · ${degraded} degraded`} icon={<AlertTriangle />} tone={attention > 0 ? "amber" : "blue"} />
             <SummaryCard label="Open incidents" value={String(openIncidents.length)} detail={`${highPriorityIncidents} high priority`} icon={<Siren />} tone="red" />
           </section>
 

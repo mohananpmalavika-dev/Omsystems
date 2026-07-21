@@ -221,11 +221,15 @@ export const userApi = {
 };
 
 export const cameraInventoryApi = {
-  listBranches: (action: 'live:view' | 'device:configure' = 'live:view') =>
+  listBranches: (action: 'live:view' | 'device:configure' | 'analytics:view' = 'live:view') =>
     fetchApi<{ data: any[] }>(`/v1/branches?action=${encodeURIComponent(action)}`),
-  listByBranch: (branchId: string) =>
+  listByBranch: (branchId: string, action: 'live:view' | 'analytics:view' = 'live:view') =>
     fetchApi<{ data: any[] }>(
-      `/v1/branches/${encodeURIComponent(branchId)}/cameras`
+      `/v1/branches/${encodeURIComponent(branchId)}/cameras?action=${encodeURIComponent(action)}`
+    ),
+  listDiscovered: (branchId: string) =>
+    fetchApi<{ data: any[] }>(
+      `/v1/branches/${encodeURIComponent(branchId)}/cameras/discovered`
     ),
   listGateways: (branchId: string) =>
     fetchApi<{ data: any[] }>(
@@ -274,6 +278,50 @@ export const liveOperationsApi = {
     ),
 };
 
+export const analyticsApi = {
+  listRules: (cameraId: string) =>
+    fetchApi<{ data: any[] }>(
+      `/v1/cameras/${encodeURIComponent(cameraId)}/analytics/rules`
+    ),
+  createRule: (cameraId: string, data: any) =>
+    fetchApi<any>(`/v1/cameras/${encodeURIComponent(cameraId)}/analytics/rules`, {
+      method: 'POST', body: JSON.stringify(data),
+    }),
+  updateRule: (cameraId: string, ruleId: string, data: any) =>
+    fetchApi<any>(
+      `/v1/cameras/${encodeURIComponent(cameraId)}/analytics/rules/${encodeURIComponent(ruleId)}`,
+      { method: 'PATCH', body: JSON.stringify(data) }
+    ),
+  deleteRule: (cameraId: string, ruleId: string) =>
+    fetchApi<void>(
+      `/v1/cameras/${encodeURIComponent(cameraId)}/analytics/rules/${encodeURIComponent(ruleId)}`,
+      { method: 'DELETE' }
+    ),
+  listAlerts: (filters?: Record<string, string | number | undefined>) => {
+    const params = new URLSearchParams();
+    Object.entries(filters ?? {}).forEach(([key, value]) => {
+      if (value !== undefined && value !== '') params.set(key, String(value));
+    });
+    return fetchApi<{ data: any[]; summary: any }>(`/v1/analytics/alerts?${params}`);
+  },
+  acknowledge: (alertId: string, notes?: string) =>
+    fetchApi<any>(`/v1/analytics/alerts/${encodeURIComponent(alertId)}/acknowledge`, {
+      method: 'POST', body: JSON.stringify({ notes }),
+    }),
+  escalate: (alertId: string, data: { notes?: string; recipients?: string[] }) =>
+    fetchApi<any>(`/v1/analytics/alerts/${encodeURIComponent(alertId)}/escalate`, {
+      method: 'POST', body: JSON.stringify(data),
+    }),
+  updateAlert: (alertId: string, data: any) =>
+    fetchApi<any>(`/v1/analytics/alerts/${encodeURIComponent(alertId)}`, {
+      method: 'PATCH', body: JSON.stringify(data),
+    }),
+  createIncident: (alertId: string, data: any = {}) =>
+    fetchApi<any>(`/v1/analytics/alerts/${encodeURIComponent(alertId)}/incidents`, {
+      method: 'POST', body: JSON.stringify(data),
+    }),
+};
+
 export const cameraPermissionApi = {
   listUserGrants: (userId: string) => 
     fetchApi<{ data: any[] }>(`/v1/users/${userId}/camera-grants`),
@@ -316,6 +364,88 @@ export const cameraPermissionApi = {
     fetchApi<{ allowed: boolean; reason: string; requiresApproval: boolean }>(
       `/v1/cameras/${cameraId}/check-access?action=${action}`
     ),
+};
+
+export const videoSearchApi = {
+  searchRecordings: (query: { cameraId: string; from: string; to: string; eventType?: string; confidence?: number; limit?: number; offset?: number }) =>
+    fetchApi<any>(`/v1/recordings/search?${new URLSearchParams(Object.entries(query).filter(([, v]) => v != null).map(([k, v]) => [k, String(v)]))}`),
+
+  getTimeline: (cameraId: string, options: { from: string; to: string }) =>
+    fetchApi<any>(`/v1/cameras/${cameraId}/recordings/timeline?from=${encodeURIComponent(options.from)}&to=${encodeURIComponent(options.to)}`),
+
+  getThumbnails: (query: { cameraId: string; from: string; to: string; limit?: number }) =>
+    fetchApi<any>(`/v1/recordings/thumbnails?${new URLSearchParams(Object.entries(query).filter(([, v]) => v != null).map(([k, v]) => [k, String(v)]))}`),
+
+  getSegment: (segmentId: string) =>
+    fetchApi<any>(`/v1/recordings/${segmentId}`),
+
+  createSnapshot: (segmentId: string, data: { timestamp: string; reason: string; notes?: string }) =>
+    fetchApi<any>(`/v1/recordings/${segmentId}/snapshots`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  createBookmark: (data: { cameraId: string; timestamp: string; reason: string; priority: string; incidentId?: string }) =>
+    fetchApi<any>('/v1/recordings/bookmarks', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  getBookmarks: (cameraId: string, options?: { from?: string; to?: string; limit?: number }) =>
+    fetchApi<any>(`/v1/cameras/${cameraId}/recordings/bookmarks?${options ? new URLSearchParams(Object.entries(options).filter(([, v]) => v != null).map(([k, v]) => [k, String(v)])) : ''}`),
+
+  verifySegment: (segmentId: string) =>
+    fetchApi<any>(`/v1/recordings/${segmentId}/verify`, { method: 'POST' }),
+};
+
+export const evidenceApi = {
+  createCase: (data: { caseNumber: string; title: string; description?: string }) =>
+    fetchApi<any>('/v1/evidence/cases', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  getCase: (caseId: string) =>
+    fetchApi<any>(`/v1/evidence/cases/${caseId}`),
+
+  listCases: (filters?: { status?: string; limit?: number }) =>
+    fetchApi<any>(`/v1/evidence/cases?${filters ? new URLSearchParams(Object.entries(filters).filter(([, v]) => v != null).map(([k, v]) => [k, String(v)])) : ''}`),
+
+  addItem: (caseId: string, data: { type: string; description: string; cameraId?: string; startTime?: string; endTime?: string; hash?: string; fileSize?: number }) =>
+    fetchApi<any>(`/v1/evidence/cases/${caseId}/items`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  listItems: (caseId: string) =>
+    fetchApi<any>(`/v1/evidence/cases/${caseId}/items`),
+
+  requestExport: (caseId: string, data: { format: string; reason: string }) =>
+    fetchApi<any>(`/v1/evidence/cases/${caseId}/exports`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  getExport: (exportId: string) =>
+    fetchApi<any>(`/v1/evidence/exports/${exportId}`),
+
+  getCustodyLog: (caseId: string) =>
+    fetchApi<any>(`/v1/evidence/cases/${caseId}/chain-of-custody`),
+
+  createLegalHold: (data: { caseNumber: string; reason: string; cameraIds: string[]; startTime: string; endTime: string; reviewDate?: string; expiryDate?: string }) =>
+    fetchApi<any>('/v1/evidence/legal-holds', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  releaseLegalHold: (holdId: string, data?: { reason?: string }) =>
+    fetchApi<any>(`/v1/evidence/legal-holds/${holdId}/release`, {
+      method: 'POST',
+      body: JSON.stringify(data || {}),
+    }),
+
+  verifyEvidence: (caseId: string) =>
+    fetchApi<any>(`/v1/evidence/verify/${caseId}`, { method: 'POST' }),
 };
 
 export { ApiError };

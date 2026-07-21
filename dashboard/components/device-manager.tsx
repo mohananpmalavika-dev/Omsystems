@@ -62,13 +62,16 @@ export function DeviceManager() {
   const [selectedBranch, setSelectedBranch] = useState("");
   const [gateways, setGateways] = useState<EdgeAgent[]>([]);
   const [cameras, setCameras] = useState<CameraRecord[]>([]);
+  const [discoveredCameras, setDiscoveredCameras] = useState<any[]>([]);
   const [cameraForm, setCameraForm] = useState<CameraForm>(emptyCameraForm);
   const [gatewayName, setGatewayName] = useState("");
   const [showCameraForm, setShowCameraForm] = useState(false);
   const [showGatewayForm, setShowGatewayForm] = useState(false);
+  const [showDiscoveredList, setShowDiscoveredList] = useState(false);
   const [provisionedGateway, setProvisionedGateway] = useState<EdgeAgent>();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [scanning, setScanning] = useState(false);
   const [error, setError] = useState<string>();
   const [notice, setNotice] = useState<string>();
 
@@ -109,12 +112,14 @@ export function DeviceManager() {
     setLoading(true);
     setError(undefined);
     try {
-      const [gatewayResponse, cameraResponse] = await Promise.all([
+      const [gatewayResponse, cameraResponse, discoveredResponse] = await Promise.all([
         cameraInventoryApi.listGateways(branchId),
         cameraInventoryApi.listByBranch(branchId),
+        cameraInventoryApi.listDiscovered(branchId),
       ]);
       setGateways(gatewayResponse.data);
       setCameras(cameraResponse.data);
+      setDiscoveredCameras(discoveredResponse.data);
     } catch (reason) {
       setError(messageOf(reason, "Unable to load devices for this branch."));
     } finally {
@@ -130,7 +135,75 @@ export function DeviceManager() {
       connectionSecretRef: `vault://branches/${selectedBranch}/cameras/new-device`,
     });
     setError(undefined);
-    setShowCameraForm(true);
+    setShowDiscoveredList(true);
+  }
+
+  async function scanNetwork() {
+    if (!selectedBranch) return;
+    setScanning(true);
+    setError(undefined);
+    try {
+      await refreshBranch(selectedBranch);
+      setNotice(`Network scan completed. Found ${discoveredCameras.length} cameras.`);
+    } catch (reason) {
+      setError(messageOf(reason, "Network scan failed."));
+    } finally {
+      setScanning(false);
+    }
+  }
+
+  async function addDiscoveredCamera(discovered: any) {
+    setSaving(true);
+    setError(undefined);
+    try {
+      // Pre-fill the form with discovered camera details
+      setCameraForm({
+        ...emptyCameraForm,
+        edgeAgentId: discovered.edgeAgentId,
+        vendor: discovered.vendor,
+        model: discovered.model,
+        ipAddress: discovered.ipAddress,
+        onvifPort: String(discovered.onvifPort),
+        rtspPort: String(discovered.rtspPort),
+        name: `${discovered.model}@${discovered.ipAddress}`,
+        codec: discovered.profiles[0]?.codec ?? "H264",
+        width: String(discovered.profiles[0]?.width ?? "1920"),
+        height: String(discovered.profiles[0]?.height ?? "1080"),
+        ptz: discovered.capabilities.ptz,
+        audio: discovered.capabilities.audio,
+        events: discovered.capabilities.events,
+        connectionSecretRef: `vault://branches/${selectedBranch}/cameras/new-device`,
+      });
+      
+      // Submit the discovery
+      const discovery = await cameraInventoryApi.submitDiscovery(selectedBranch, {
+        edgeAgentId: discovered.edgeAgentId,
+        vendor: discovered.vendor,
+        model: discovered.model,
+        ipAddress: discovered.ipAddress,
+        onvifPort: discovered.onvifPort,
+        rtspPort: discovered.rtspPort,
+        profiles: discovered.profiles,
+        capabilities: discovered.capabilities,
+      });
+
+      // Approve the camera
+      await cameraInventoryApi.approveCamera(selectedBranch, {
+        discoveryId: discovery.id,
+        name: `${discovered.model}@${discovered.ipAddress}`,
+        channel: 1,
+        protocol: "onvif-t",
+        connectionSecretRef: `vault://branches/${selectedBranch}/cameras/new-device`,
+      });
+
+      setShowDiscoveredList(false);
+      setNotice(`Camera ${discovered.model} was added successfully.`);
+      await refreshBranch(selectedBranch);
+    } catch (reason) {
+      setError(messageOf(reason, "Failed to add discovered camera."));
+    } finally {
+      setSaving(false);
+    }
   }
 
   async function registerGateway(event: React.FormEvent) {
@@ -214,6 +287,9 @@ export function DeviceManager() {
           }} disabled={!selectedBranch}>
             <Router size={15} /> Register gateway
           </button>
+          <button className="secondary-button" onClick={() => void scanNetwork()} disabled={!selectedBranch || gateways.length === 0 || scanning}>
+            <Network size={15} /> {scanning ? "Scanning…" : "Scan network"}
+          </button>
           <button className="primary-button" onClick={openCameraForm} disabled={!selectedBranch || gateways.length === 0}>
             <Plus size={15} /> Add camera
           </button>
@@ -290,7 +366,40 @@ export function DeviceManager() {
           </div>
         </div>
       )}
-
+      {showDiscoveredList && (
+        <div className="modal-overlay">
+          <div className="modal-container">
+            <div className="modal-header"><h2>Add camera to {activeBranch?.name}</h2><button className="icon-button" onClick={() => setShowDiscoveredList(false)}><X size={20} /></button></div>
+            <div className="modal-body">
+              {discoveredCameras.length === 0 ? (
+                <div className="device-empty"><Camera size={30} /><strong>No cameras discovered</strong><span>Run a network scan or configure the gateway's ONVIF endpoints to find cameras.</span></div>
+              ) : (
+                <>
+                  <p className="form-info-banner"><Network size={16} />Select a discovered camera to add it to this branch. Pre-populated details can be edited if needed.</p>
+                  <div className="discovered-cameras-list">
+                    {discoveredCameras.map((camera) => (
+                      <div key={camera.id} className="discovered-camera-item">
+                        <div className="camera-details">
+                          <strong>{camera.model} @ {camera.ipAddress}</strong>
+                          <small>{camera.vendor} · ONVIF port {camera.onvifPort}</small>
+                          <small className="profiles">{camera.profiles.map((p: any) => `${p.codec} ${p.width}x${p.height}`).join(", ")}</small>
+                        </div>
+                        <button className="primary-button" onClick={() => void addDiscoveredCamera(camera)} disabled={saving}>
+                          {saving ? "Adding…" : "Add camera"}
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
+              <div className="modal-actions">
+                <button className="secondary-button" onClick={() => setShowDiscoveredList(false)}>Close</button>
+                <button className="secondary-button" onClick={() => { setShowDiscoveredList(false); setShowCameraForm(true); }}>Manual entry</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
       {showCameraForm && (
         <div className="modal-overlay">
           <div className="modal-container modal-large">

@@ -16,10 +16,12 @@ import { buildPlaybackTimeline } from "./recording/playback-timeline.js";
 import { calculateRecordingStorage } from "./recording/storage-calculator.js";
 import { registerAuthRoutes } from "./routes/auth.routes.js";
 import { registerCameraPermissionRoutes } from "./routes/camera-permissions.routes.js";
+import { registerCameraDiscoveryRoutes } from "./routes/camera-discovery.routes.js";
 import { registerCctvInfrastructureRoutes } from "./routes/cctv-infrastructure.js";
 import { registerOrganizationRoutes } from "./routes/organization.routes.js";
 import { registerUserRoutes } from "./routes/user.routes.js";
 import { registerLiveOperationsRoutes } from "./routes/live-operations.routes.js";
+import { registerAnalyticsRoutes } from "./routes/analytics.routes.js";
 import { MemoryStore } from "./store.js";
 
 declare module "fastify" {
@@ -95,6 +97,7 @@ export async function buildApp(options?: {
   recordingEngineUrl?: string;
   recordingEngineSharedKey?: string;
   edgeBridgeSharedKey?: string;
+  analyticsEngineSharedKey?: string;
   authMode?: "development" | "session" | "oidc";
 }): Promise<FastifyInstance> {
   const app = Fastify({
@@ -122,7 +125,8 @@ export async function buildApp(options?: {
     if (
       request.url === "/health" ||
       request.url === "/internal/live-sessions/consume" ||
-      request.url.startsWith("/internal/recording/")
+      request.url.startsWith("/internal/recording/") ||
+      request.url.startsWith("/internal/analytics/")
     ) return;
 
     if (
@@ -202,16 +206,17 @@ export async function buildApp(options?: {
 
   app.get("/v1/branches/:id/cameras", async (request, reply) => {
     const { id } = idParams.parse(request.params);
+    const { action } = branchListQuery.parse(request.query);
     const branch = await store.getNode(id);
     if (!branch || branch.type !== "branch") {
       return reply.code(404).send({ error: "branch_not_found" });
     }
-    if (!(await requireAccess(request, reply, store, "live:view", branch.id))) return;
+    if (!(await requireAccess(request, reply, store, action, branch.id))) return;
     return {
       data: (await store.listCamerasByBranch(
         request.currentUser,
         id,
-        "live:view",
+        action,
       )).map(safeCamera),
     };
   });
@@ -648,9 +653,18 @@ export async function buildApp(options?: {
     await registerOrganizationRoutes(app, extendedStore);
     await registerUserRoutes(app, extendedStore);
     await registerCameraPermissionRoutes(app, extendedStore);
+    await registerCameraDiscoveryRoutes(app, extendedStore);
     await registerCctvInfrastructureRoutes(app, extendedStore);
   }
   await registerLiveOperationsRoutes(app, store);
+  await registerAnalyticsRoutes(app, store, {
+    ...(options?.analyticsEngineSharedKey
+      ? { analyticsEngineSharedKey: options.analyticsEngineSharedKey } : {}),
+    ...(options?.recordingEngineUrl
+      ? { recordingEngineUrl: options.recordingEngineUrl } : {}),
+    ...(options?.recordingEngineSharedKey
+      ? { recordingEngineSharedKey: options.recordingEngineSharedKey } : {}),
+  });
 
   app.setErrorHandler((error, _request, reply) => {
     if (error instanceof z.ZodError) {
@@ -674,6 +688,9 @@ export async function buildApp(options?: {
     }
     if (error instanceof Error && error.message === "camera_not_found") {
       return reply.code(404).send({ error: "camera_not_found" });
+    }
+    if (error instanceof Error && error.message === "invalid_alert_transition") {
+      return reply.code(409).send({ error: "invalid_alert_transition" });
     }
     const databaseCode = (error as { code?: string }).code;
     if (databaseCode === "23505") {

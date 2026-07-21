@@ -8,6 +8,11 @@ export const actions = [
   "user:manage",
   "audit:view",
   "org:manage",
+  "analytics:view",
+  "analytics:configure",
+  "alerts:acknowledge",
+  "alerts:escalate",
+  "analytics:export",
 ] as const;
 
 export type Action = (typeof actions)[number];
@@ -460,6 +465,142 @@ export interface LiveIncident {
   updatedAt: string;
 }
 
+export type AnalyticsDetectionType =
+  | "motion"
+  | "person"
+  | "vehicle"
+  | "object"
+  | "line-crossing"
+  | "intrusion"
+  | "loitering"
+  | "crowd-density"
+  | "camera-tampering"
+  | "video-loss"
+  | "fire-smoke";
+
+export type AnalyticsSeverity = "P1" | "P2" | "P3" | "P4" | "P5";
+export type AnalyticsAlertStatus =
+  | "new"
+  | "acknowledged"
+  | "investigating"
+  | "escalated"
+  | "resolved"
+  | "false_alarm"
+  | "suppressed";
+
+export interface AnalyticsPoint {
+  /** Horizontal position normalized to the camera frame, from 0 to 1. */
+  x: number;
+  /** Vertical position normalized to the camera frame, from 0 to 1. */
+  y: number;
+}
+
+export interface AnalyticsZone {
+  id: string;
+  name: string;
+  shape: "polygon" | "line";
+  points: AnalyticsPoint[];
+}
+
+export interface AnalyticsSchedule {
+  days: number[];
+  start: string;
+  end: string;
+  timezone: string;
+}
+
+export interface AnalyticsRule {
+  id: string;
+  tenantId: string;
+  cameraId: string;
+  name: string;
+  detectionType: AnalyticsDetectionType;
+  enabled: boolean;
+  zone?: AnalyticsZone | undefined;
+  schedule?: AnalyticsSchedule | undefined;
+  objectClasses: string[];
+  minConfidence: number;
+  minDurationSeconds: number;
+  direction: "any" | "a-to-b" | "b-to-a" | "enter" | "exit";
+  severity: AnalyticsSeverity;
+  cooldownSeconds: number;
+  recipients: string[];
+  escalateAfterSeconds?: number | undefined;
+  recordingPolicy: "none" | "event-recording" | "protect-window";
+  preRollSeconds: number;
+  postRollSeconds: number;
+  modelId?: string | undefined;
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AnalyticsDetectedObject {
+  label: string;
+  confidence: number;
+  trackId?: string | undefined;
+  boundingBox?: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  } | undefined;
+}
+
+export interface AnalyticsEvent {
+  id: string;
+  tenantId: string;
+  cameraId: string;
+  sourceEventId: string;
+  ruleId?: string | undefined;
+  detectionType: AnalyticsDetectionType;
+  occurredAt: string;
+  endedAt?: string | undefined;
+  confidence: number;
+  durationSeconds: number;
+  modelVersion: string;
+  objects: AnalyticsDetectedObject[];
+  snapshotReference?: string | undefined;
+  clipReference?: string | undefined;
+  metadata: Record<string, unknown>;
+  status: "accepted" | "suppressed" | "unmatched" | "duplicate";
+  rejectionReason?: string | undefined;
+  createdAt: string;
+}
+
+export interface AnalyticsAlert {
+  id: string;
+  tenantId: string;
+  cameraId: string;
+  ruleId: string;
+  eventId: string;
+  title: string;
+  description?: string | undefined;
+  severity: AnalyticsSeverity;
+  status: AnalyticsAlertStatus;
+  confidence: number;
+  objectClasses: string[];
+  modelVersion: string;
+  snapshotReference?: string | undefined;
+  clipReference?: string | undefined;
+  firstDetectedAt: string;
+  lastDetectedAt: string;
+  occurrenceCount: number;
+  incidentId?: string | undefined;
+  acknowledgedBy?: string | undefined;
+  acknowledgedAt?: string | undefined;
+  falseAlarmReason?: string | undefined;
+  resolvedAt?: string | undefined;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AnalyticsIngestResult {
+  event: AnalyticsEvent;
+  alerts: AnalyticsAlert[];
+  rules: AnalyticsRule[];
+}
+
 export interface AuditEventInput {
   tenantId: string;
   actorUserId: string | null;
@@ -468,4 +609,182 @@ export interface AuditEventInput {
   outcome: "success" | "denied" | "failure";
   sourceIp?: string;
   details?: Record<string, unknown>;
+}
+
+// Video Search & Retrieval Models
+
+export interface RecordingTimeline {
+  cameraId: string;
+  from: string;
+  to: string;
+  segments: {
+    startTime: string;
+    endTime: string;
+    storageLocation: string;
+    available: boolean;
+    hasMotion?: boolean;
+    events?: string[];
+  }[];
+  gaps: {
+    startTime: string;
+    endTime: string;
+    reason: string;
+  }[];
+  bookmarks: {
+    timestamp: string;
+    reason: string;
+    priority: LivePriority;
+  }[];
+  legalHolds: {
+    caseNumber: string;
+    startTime: string;
+    endTime: string;
+  }[];
+}
+
+export interface RecordingThumbnail {
+  id: string;
+  segmentId: string;
+  cameraId: string;
+  timestamp: string;
+  dataUrl: string;
+  eventType?: string;
+  confidence?: number;
+  reference: string;
+}
+
+export interface Snapshot {
+  id: string;
+  segmentId: string;
+  cameraId: string;
+  timestamp: string;
+  reason: "investigation" | "evidence" | "reference" | "incident" | "audit";
+  notes?: string;
+  operatorId: string;
+  originalHash: string;
+  createdAt: string;
+  reference: string;
+}
+
+export type EvidenceCaseStatus = "open" | "investigating" | "closed" | "archived";
+
+export interface EvidenceCase {
+  id: string;
+  tenantId: string;
+  caseNumber: string;
+  title: string;
+  description?: string;
+  status: EvidenceCaseStatus;
+  createdBy: string;
+  createdAt: string;
+  closedAt?: string;
+  reason?: string;
+  relatedIncidents: string[];
+  legalHoldItems: string[];
+}
+
+export interface EvidenceItem {
+  id: string;
+  caseId: string;
+  type: "recording" | "snapshot" | "exported-video" | "manifest" | "document";
+  cameraId?: string;
+  startTime?: string;
+  endTime?: string;
+  description: string;
+  addedBy: string;
+  addedAt: string;
+  hash?: string;
+  hashAlgorithm?: string;
+  fileSize?: number;
+}
+
+export interface SegmentVerification {
+  segmentId: string;
+  status: "verified" | "mismatch" | "missing" | "pending";
+  recordedHash: string;
+  computedHash?: string;
+  lastVerifiedAt?: string;
+  verificationError?: string;
+}
+
+export type EvidenceExportFormat = "original" | "mp4" | "manifest-only";
+
+export interface EvidenceExport {
+  id: string;
+  caseId: string;
+  exportedBy: string;
+  reason: string;
+  format: EvidenceExportFormat;
+  status: "pending" | "processing" | "ready" | "failed" | "downloaded" | "expired";
+  requestedAt: string;
+  completedAt?: string;
+  downloadUrl?: string;
+  expiresAt?: string;
+  manifestId?: string;
+  checksumSha256?: string;
+  errors?: string[];
+}
+
+export interface EvidenceManifest {
+  evidenceId: string;
+  caseId: string;
+  exportedBy: string;
+  exportedAt: string;
+  sourceSegments: {
+    segmentId: string;
+    cameraId: string;
+    startTime: string;
+    endTime: string;
+    sha256: string;
+  }[];
+  destinationFile: {
+    format: string;
+    sha256: string;
+    fileSize: number;
+  };
+  timestamp: {
+    cameraTime: string;
+    recorderTime: string;
+    clockOffset: number;
+    ntpStatus: string;
+  };
+  signature?: string;
+}
+
+export type CustodyAction =
+  | "recording_created"
+  | "hash_calculated"
+  | "recording_viewed"
+  | "snapshot_captured"
+  | "bookmark_created"
+  | "added_to_case"
+  | "legal_hold_applied"
+  | "exported"
+  | "downloaded"
+  | "verified"
+  | "hold_released"
+  | "archived";
+
+export interface ChainOfCustodyEvent {
+  id: string;
+  evidenceId?: string;
+  action: CustodyAction;
+  performedBy: string;
+  performedAt: string;
+  sourceIp?: string;
+  reason?: string;
+  previousHash?: string;
+  eventHash: string;
+  signature?: string;
+}
+
+export interface RecordingLegalHoldRequest {
+  caseNumber: string;
+  reason: string;
+  requestedBy: string;
+  cameraIds: string[];
+  startTime: string;
+  endTime: string;
+  reviewDate?: string;
+  expiryDate?: string;
 }

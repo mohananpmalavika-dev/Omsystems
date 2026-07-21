@@ -6,7 +6,8 @@
     "dashboard",
     "edge-agent",
     "media-gateway",
-    "recording-engine"
+    "recording-engine",
+    "analytics-engine"
   ],
   "description": "Hybrid CCTV control plane for multi-branch organizations",
   "type": "module",
@@ -27,6 +28,9 @@
     "media:test": "npm run test --workspace @sentinel/media-gateway",
     "recording:dev": "npm run dev --workspace @sentinel/recording-engine",
     "recording:typecheck": "npm run typecheck --workspace @sentinel/recording-engine",
+    "analytics:dev": "npm run dev --workspace @sentinel/analytics-engine",
+    "analytics:typecheck": "npm run typecheck --workspace @sentinel/analytics-engine",
+    "analytics:test": "npm run test --workspace @sentinel/analytics-engine",
     "dashboard:dev": "npm run dev --workspace @sentinel/dashboard",
     "dashboard:typecheck": "npm run typecheck --workspace @sentinel/dashboard",
     "dashboard:build": "npm run build --workspace @sentinel/dashboard"

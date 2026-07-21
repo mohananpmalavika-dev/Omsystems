@@ -112,3 +112,77 @@ export interface EdgeAgent {
   status: "pending" | "online" | "offline";
   lastSeenAt: string | null;
 }
+
+export type AnalyticsDetectionType =
+  | "motion" | "person" | "vehicle" | "object" | "line-crossing"
+  | "intrusion" | "loitering" | "crowd-density" | "camera-tampering"
+  | "video-loss" | "fire-smoke";
+export type AnalyticsSeverity = "P1" | "P2" | "P3" | "P4" | "P5";
+export type AnalyticsAlertStatus =
+  | "new" | "acknowledged" | "investigating" | "escalated"
+  | "resolved" | "false_alarm" | "suppressed";
+
+export interface AnalyticsRule {
+  id: string;
+  tenantId: string;
+  cameraId: string;
+  name: string;
+  detectionType: AnalyticsDetectionType;
+  enabled: boolean;
+  zone?: {
+    id: string;
+    name: string;
+    shape: "polygon" | "line";
+    points: Array<{ x: number; y: number }>;
+  };
+  schedule?: { days: number[]; start: string; end: string; timezone: string };
+  objectClasses: string[];
+  minConfidence: number;
+  minDurationSeconds: number;
+  direction: "any" | "a-to-b" | "b-to-a" | "enter" | "exit";
+  severity: AnalyticsSeverity;
+  cooldownSeconds: number;
+  recipients: string[];
+  escalateAfterSeconds?: number;
+  recordingPolicy: "none" | "event-recording" | "protect-window";
+  preRollSeconds: number;
+  postRollSeconds: number;
+  modelId?: string;
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AnalyticsAlert {
+  id: string;
+  tenantId: string;
+  cameraId: string;
+  ruleId: string;
+  eventId: string;
+  title: string;
+  description?: string;
+  severity: AnalyticsSeverity;
+  status: AnalyticsAlertStatus;
+  confidence: number;
+  objectClasses: string[];
+  modelVersion: string;
+  snapshotReference?: string;
+  clipReference?: string;
+  firstDetectedAt: string;
+  lastDetectedAt: string;
+  occurrenceCount: number;
+  incidentId?: string;
+  acknowledgedAt?: string;
+  falseAlarmReason?: string;
+  resolvedAt?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AnalyticsAlertSummary {
+  total: number;
+  open: number;
+  new: number;
+  critical: number;
+  highPriority: number;
+}

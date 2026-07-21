@@ -52,6 +52,13 @@ async function verifySchema() {
   try {
     const expectedRelations = [
       "branch_camera_requirements",
+      "analytics_acknowledgements",
+      "analytics_alerts",
+      "analytics_events",
+      "analytics_models",
+      "analytics_notifications",
+      "analytics_rules",
+      "analytics_zones",
       "camera_access_requests",
       "camera_installation_compliance",
       "camera_specific_grants",
@@ -104,8 +111,8 @@ async function verifySchema() {
     const migrations = await client.query(
       "SELECT count(*)::integer AS count FROM schema_migrations",
     );
-    if (migrations.rows[0]?.count !== 11) {
-      throw new Error(`Expected 11 applied migrations, found ${migrations.rows[0]?.count}`);
+    if (migrations.rows[0]?.count !== 12) {
+      throw new Error(`Expected 12 applied migrations, found ${migrations.rows[0]?.count}`);
     }
 
     const pilot = await client.query(`
@@ -127,6 +134,20 @@ async function verifySchema() {
     `);
     if (!pilotOrgGrant.rows[0]?.present) {
       throw new Error("Pilot administrator did not receive organization management");
+    }
+
+    const pilotAnalyticsGrants = await client.query(`
+      SELECT count(DISTINCT action)::integer AS count
+      FROM access_grants
+      WHERE user_id='00000000-0000-4000-8000-000000000201'
+        AND action IN (
+          'analytics:view', 'analytics:configure', 'alerts:acknowledge',
+          'alerts:escalate', 'analytics:export'
+        )
+        AND effect='allow'
+    `);
+    if (pilotAnalyticsGrants.rows[0]?.count !== 5) {
+      throw new Error("Pilot administrator did not receive analytics permissions");
     }
 
     await client.query(`
@@ -233,7 +254,7 @@ async function verifyBaselineRecovery() {
     const result = await verification.query(
       "SELECT count(*)::integer AS count FROM schema_migrations",
     );
-    if (result.rows[0]?.count !== 11) {
+    if (result.rows[0]?.count !== 12) {
       throw new Error("Existing-schema baseline did not recover all migrations");
     }
   } finally {

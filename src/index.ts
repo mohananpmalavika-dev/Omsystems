@@ -20,6 +20,9 @@ const app = await buildApp({
   ...(config.EDGE_BRIDGE_SHARED_KEY
     ? { edgeBridgeSharedKey: config.EDGE_BRIDGE_SHARED_KEY }
     : {}),
+  ...(config.ANALYTICS_ENGINE_SHARED_KEY
+    ? { analyticsEngineSharedKey: config.ANALYTICS_ENGINE_SHARED_KEY }
+    : {}),
 });
 
 try {
