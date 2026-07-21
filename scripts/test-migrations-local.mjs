@@ -1,13 +1,17 @@
 #!/usr/bin/env node
 
 import { spawn } from "node:child_process";
-import { resolve } from "node:path";
+import { readdirSync } from "node:fs";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import pg from "pg";
 import { runMigrations, showStatus } from "./run-migrations.mjs";
 
 const { Client } = pg;
 const scriptPath = fileURLToPath(import.meta.url);
+const expectedMigrationCount = readdirSync(
+  join(dirname(scriptPath), "..", "database", "migrations"),
+).filter((filename) => filename.endsWith(".sql")).length;
 const containerName = `sentinel-migration-test-${process.pid}`;
 const databaseUrl = "postgresql://testuser:testpass@127.0.0.1:5433/sentinel_test";
 
@@ -59,10 +63,15 @@ async function verifySchema() {
       "analytics_notifications",
       "analytics_rules",
       "analytics_zones",
+      "chain_of_custody_events",
       "camera_access_requests",
       "camera_installation_compliance",
       "camera_specific_grants",
       "camera_specifications",
+      "evidence_cases",
+      "evidence_exports",
+      "evidence_items",
+      "evidence_manifests",
       "organizational_hierarchy_rules",
       "live_bookmarks",
       "live_incidents",
@@ -111,8 +120,10 @@ async function verifySchema() {
     const migrations = await client.query(
       "SELECT count(*)::integer AS count FROM schema_migrations",
     );
-    if (migrations.rows[0]?.count !== 12) {
-      throw new Error(`Expected 12 applied migrations, found ${migrations.rows[0]?.count}`);
+    if (migrations.rows[0]?.count !== expectedMigrationCount) {
+      throw new Error(
+        `Expected ${expectedMigrationCount} applied migrations, found ${migrations.rows[0]?.count}`,
+      );
     }
 
     const pilot = await client.query(`
@@ -254,7 +265,7 @@ async function verifyBaselineRecovery() {
     const result = await verification.query(
       "SELECT count(*)::integer AS count FROM schema_migrations",
     );
-    if (result.rows[0]?.count !== 12) {
+    if (result.rows[0]?.count !== expectedMigrationCount) {
       throw new Error("Existing-schema baseline did not recover all migrations");
     }
   } finally {

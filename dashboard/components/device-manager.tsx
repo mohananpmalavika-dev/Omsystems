@@ -174,7 +174,7 @@ export function DeviceManager() {
         events: discovered.capabilities.events,
         connectionSecretRef: `vault://branches/${selectedBranch}/cameras/new-device`,
       });
-      
+
       // Submit the discovery
       const discovery = await cameraInventoryApi.submitDiscovery(selectedBranch, {
         edgeAgentId: discovered.edgeAgentId,
