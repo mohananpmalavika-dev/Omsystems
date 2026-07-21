@@ -316,6 +316,10 @@ export class MemoryStore implements ControlPlaneStore {
       (!from || segment.endedAt >= from) && (!to || segment.startedAt <= to));
   }
 
+  async getRecordingSegment(id: string) {
+    return this.recordingSegments.find((segment) => segment.id === id);
+  }
+
   async createRecordingSegment(input: Omit<RecordingSegment, "id" | "createdAt">) {
     const existing = this.recordingSegments.find((item) =>
       item.cameraId === input.cameraId && item.storagePath === input.storagePath
@@ -400,6 +404,13 @@ export class MemoryStore implements ControlPlaneStore {
     };
     this.recordingHealthEvents.push(event);
     return event;
+  }
+
+  async listRecordingHealthEvents(cameraId: string, limit: number) {
+    return this.recordingHealthEvents
+      .filter((event) => event.cameraId === cameraId)
+      .sort((left, right) => right.occurredAt.localeCompare(left.occurredAt))
+      .slice(0, limit);
   }
 
   async listRecordingRetentionCandidates(

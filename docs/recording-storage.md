@@ -1,5 +1,12 @@
 # Recording and storage module
 
+## Production acceptance status
+
+The implementation is **not production-grade by default**. Real-camera
+continuous-recording validation is a release gate; follow
+[Phase 1 — Continuous Recording Acceptance Gate](PHASE_1_CONTINUOUS_RECORDING_ACCEPTANCE.md)
+before making a production-readiness claim.
+
 The recording engine is independent of live viewing. It receives camera policy
 from the control plane, resolves the camera secret locally, and runs FFmpeg even
 when no operator has a live session open.
@@ -71,6 +78,10 @@ Use `POST /v1/recording/storage-calculator` to calculate other scenarios.
 - `GET /v1/cameras/:id/recordings` — query indexed segments.
 - `GET /v1/cameras/:id/playback?from=...&to=...` — ordered timeline,
   coverage percentage, and detected gaps (maximum 31-day query window).
+- `GET /v1/cameras/:id/recording/health` — recent recorder faults and
+  recovery events for an authorized operator.
+- `GET /v1/recording-segments/:id` — authorized segment metadata used by the
+  dashboard's private playback proxy.
 - `GET /v1/cameras/:id/recording/legal-holds` — list evidence holds.
 - `POST /v1/cameras/:id/recording/legal-holds` — protect a time range.
 - `DELETE /v1/cameras/:id/recording/legal-holds/:holdId` — release a hold.
@@ -97,9 +108,28 @@ RECORDING_ROOT=/recordings
 STORAGE_NODE_EXTERNAL_ID=<stable-node-id>
 STORAGE_NODE_NAME=<operator-visible-name>
 STORAGE_NODE_TIERS=hot,warm,cold
+RTSP_IO_TIMEOUT_MS=15000
+MIN_FREE_STORAGE_BYTES=1073741824
 STREAM_SECRETS_JSON=<secret-reference-to-RTSP-map>
 ```
 
 Production should replace the environment JSON secret map with a vault-backed
 secret provider, mount a dedicated recording array at `RECORDING_ROOT`, keep the
 OS on separate storage, and provide a different physical backup destination.
+
+## Operator playback
+
+The dashboard's **Recordings** screen (`/recordings`) lets an authorized user
+choose a branch, camera, and time window; review coverage and recorder faults;
+then play an indexed MP4 segment. The browser never receives a recorder key or
+local filesystem path: the dashboard first checks `recording:view` with the
+control plane, then streams the approved segment through its server-side
+private proxy with HTTP range support for seeking.
+
+Set these dashboard-only runtime variables in addition to the recorder
+configuration:
+
+```text
+RECORDING_ENGINE_INTERNAL_URL=http://recording-engine:8091
+RECORDING_ENGINE_SHARED_KEY=<same recorder service key>
+```

@@ -1,5 +1,5 @@
 import { demoBranches, demoCameras } from "./demo-data";
-import type { Branch, Camera, LiveSessionResponse, RecordingJob } from "./types";
+import type { Branch, Camera, LiveSessionResponse, RecordingJob, RecordingSegment } from "./types";
 
 export async function listBranches(employeeSession?: string): Promise<Branch[]> {
   if (isDemoMode()) return demoBranches;
@@ -77,6 +77,18 @@ export async function updateRecording(
   return await (await controlFetch(`/v1/cameras/${encodeURIComponent(cameraId)}/recording`, {
     method: "PUT", body: JSON.stringify(job),
   }, employeeSession)).json() as RecordingJob;
+}
+
+export async function getRecordingSegment(
+  segmentId: string,
+  employeeSession?: string,
+): Promise<RecordingSegment> {
+  if (isDemoMode()) throw new Error("recording_playback_unavailable_in_demo");
+  return await (await controlFetch(
+    `/v1/recording-segments/${encodeURIComponent(segmentId)}`,
+    undefined,
+    employeeSession,
+  )).json() as RecordingSegment;
 }
 
 function demoRecording(cameraId: string): RecordingJob {

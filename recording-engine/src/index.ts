@@ -27,6 +27,8 @@ const config = z.object({
   STORAGE_NODE_TIERS: z.string().default("hot,warm,cold"),
   STREAM_SECRETS_JSON: z.string().default("{}"),
   RETENTION_SWEEP_SECONDS: z.coerce.number().int().min(60).max(86_400).default(300),
+  RTSP_IO_TIMEOUT_MS: z.coerce.number().int().min(1_000).max(300_000).default(15_000),
+  MIN_FREE_STORAGE_BYTES: z.coerce.number().int().min(0).default(1_073_741_824),
   EVIDENCE_CHECKSUM_ENABLED: z.string().default("true").transform((value) => value !== "false"),
 }).parse(process.env);
 
@@ -132,6 +134,43 @@ app.post("/internal/jobs/:cameraId/trigger", async (request, reply) => {
   return reply.code(202).send({ cameraId, active: true });
 });
 
+app.get("/internal/segments", async (request, reply) => {
+  const { path: storagePath } = z.object({ path: z.string().min(1).max(2_000) })
+    .parse(request.query);
+  const requested = resolve(recordingRoot, storagePath);
+  assertInsideRoot(requested);
+  let details: Awaited<ReturnType<typeof stat>>;
+  try {
+    details = await stat(requested);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      return reply.code(404).send({ error: "recording_segment_not_found" });
+    }
+    throw error;
+  }
+  if (!details.isFile()) return reply.code(404).send({ error: "recording_segment_not_found" });
+  const range = request.headers.range;
+  reply.header("accept-ranges", "bytes");
+  reply.header("content-type", "video/mp4");
+  reply.header("cache-control", "private, no-store");
+  if (!range) {
+    reply.header("content-length", String(details.size));
+    return reply.send(createReadStream(requested));
+  }
+  const match = /^bytes=(\d*)-(\d*)$/.exec(range);
+  if (!match) return reply.code(416).send();
+  const start = match[1] ? Number(match[1]) : 0;
+  const end = match[2] ? Number(match[2]) : details.size - 1;
+  if (!Number.isSafeInteger(start) || !Number.isSafeInteger(end) || start > end || start >= details.size) {
+    return reply.code(416).header("content-range", `bytes */${details.size}`).send();
+  }
+  const boundedEnd = Math.min(end, details.size - 1);
+  reply.code(206);
+  reply.header("content-range", `bytes ${start}-${boundedEnd}/${details.size}`);
+  reply.header("content-length", String(boundedEnd - start + 1));
+  return reply.send(createReadStream(requested, { start, end: boundedEnd }));
+});
+
 app.setErrorHandler((error, _request, reply) => {
   if (error instanceof z.ZodError) {
     return reply.code(400).send({ error: "invalid_request", details: error.flatten() });
@@ -199,6 +238,15 @@ function inSchedule(value: z.infer<typeof scheduleSchema> | undefined) {
 
 async function start(job: ManagedJob) {
   if (workers.has(job.cameraId)) return;
+  const disk = await statfs(recordingRoot);
+  const freeBytes = disk.bavail * disk.bsize;
+  if (freeBytes < config.MIN_FREE_STORAGE_BYTES) {
+    await health(job, "storage_capacity_exhausted", "critical",
+      "Recorder has insufficient free storage to start a safe recording worker", {
+        freeBytes, minimumFreeBytes: config.MIN_FREE_STORAGE_BYTES,
+      });
+    throw new Error("storage_capacity_exhausted");
+  }
   const source = secrets[job.connectionSecretRef];
   if (!source) {
     await health(job, "stream_secret_unavailable", "critical",
@@ -210,6 +258,7 @@ async function start(job: ManagedJob) {
   const outputPattern = join(staging, "%Y%m%d-%H%M%S.mp4");
   const args = [
     "-nostdin", "-hide_banner", "-loglevel", "warning", "-y",
+    "-rw_timeout", String(config.RTSP_IO_TIMEOUT_MS * 1_000),
     "-rtsp_transport", "tcp", "-i", source,
     "-map", "0:v:0", "-c", "copy",
     "-f", "segment", "-segment_time", String(job.job.segmentDurationSeconds),
@@ -257,8 +306,16 @@ async function workerFailed(worker: Worker, reason: string) {
   const cameraId = worker.job.cameraId;
   if (worker.intentionallyStopping) return;
   const details = worker.stderr.length > 0 ? worker.stderr.slice(-5) : undefined;
-  await health(worker.job, "recording_stopped", "critical",
-    "Recording process stopped unexpectedly", { reason, stderr: details });
+  const credentialsRejected = details?.some((line) =>
+    /401|403|unauthori[sz]ed|authentication failed|invalid user|login failed/i.test(line),
+  ) ?? false;
+  await health(worker.job,
+    credentialsRejected ? "invalid_camera_credentials" : "recording_stopped",
+    "critical",
+    credentialsRejected
+      ? "Camera rejected the recording credentials"
+      : "Recording process stopped unexpectedly",
+    { reason, stderr: details });
   if (!shouldRun(worker.job) || restartTimers.has(cameraId)) return;
   const attempt = (restartAttempts.get(cameraId) ?? 0) + 1;
   restartAttempts.set(cameraId, attempt);
@@ -311,15 +368,28 @@ async function indexCompletedSegment(job: ManagedJob, csvLine: string) {
   const checksumSha256 = config.EVIDENCE_CHECKSUM_ENABLED
     ? await checksum(targetPath)
     : undefined;
+  let codec: string | undefined;
+  let status: "ready" | "error" = "ready";
+  try {
+    codec = await probeSegment(targetPath);
+  } catch (error) {
+    status = "error";
+    await health(job, "segment_decode_failed", "critical",
+      "A completed recording segment cannot be decoded", {
+        error: error instanceof Error ? error.message : String(error),
+        storagePath: relativePath,
+      });
+  }
   const indexPayload = {
     tenantId: job.tenantId, cameraId: job.cameraId, jobId: job.job.id,
     startedAt: startedAt.toISOString(), endedAt: endedAt.toISOString(),
     storagePath: relativePath, sizeBytes: details.size,
     storageNodeExternalId: config.STORAGE_NODE_EXTERNAL_ID,
-    storageTier: "hot" as const, checksumSha256,
+    storageTier: "hot" as const, checksumSha256, status, codec,
   };
   try {
     await submitSegmentIndex(indexPayload);
+    if (status === "ready") restartAttempts.set(job.cameraId, 0);
   } catch (error) {
     await writeFile(`${targetPath}.index.json`, JSON.stringify(indexPayload), {
       encoding: "utf8", mode: 0o600,
@@ -427,7 +497,9 @@ const internalIndexPayload = z.object({
   startedAt: z.string(), endedAt: z.string(), storagePath: z.string(),
   sizeBytes: z.number(), storageNodeExternalId: z.string(),
   storageTier: z.enum(["hot", "warm", "cold"]),
+  status: z.enum(["ready", "moving", "deleted", "error"]).default("ready"),
   checksumSha256: z.string().optional(),
+  codec: z.string().optional(),
 });
 
 async function submitSegmentIndex(payload: z.infer<typeof internalIndexPayload>) {
@@ -534,6 +606,27 @@ async function checksum(path: string) {
   const hash = createHash("sha256");
   for await (const chunk of createReadStream(path)) hash.update(chunk);
   return hash.digest("hex");
+}
+
+async function probeSegment(path: string): Promise<string> {
+  return await new Promise((resolveProbe, rejectProbe) => {
+    const child = spawn("ffprobe", [
+      "-v", "error", "-select_streams", "v:0", "-show_entries",
+      "stream=codec_name", "-of", "default=noprint_wrappers=1:nokey=1", path,
+    ], { stdio: ["ignore", "pipe", "pipe"] });
+    let stdout = "";
+    let stderr = "";
+    child.stdout?.setEncoding("utf8");
+    child.stdout?.on("data", (chunk: string) => { stdout += chunk; });
+    child.stderr?.setEncoding("utf8");
+    child.stderr?.on("data", (chunk: string) => { stderr += chunk; });
+    child.once("error", rejectProbe);
+    child.once("exit", (code) => {
+      const codec = stdout.trim().split(/\r?\n/)[0];
+      if (code === 0 && codec) resolveProbe(codec);
+      else rejectProbe(new Error(stderr.trim() || `ffprobe_exit_${code ?? "unknown"}`));
+    });
+  });
 }
 
 function assertInsideRoot(path: string) {

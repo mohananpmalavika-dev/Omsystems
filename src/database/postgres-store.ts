@@ -107,6 +107,7 @@ export class PostgresStore
     return this.recordings.updateJobStatus(cameraId, status);
   }
   async listRecordingSegments(cameraId: string, from?: string, to?: string) { return this.recordings.listSegments(cameraId, from, to); }
+  async getRecordingSegment(id: string) { return this.recordings.getSegment(id); }
   async createRecordingSegment(input: any) { return this.recordings.createSegment(input); }
   async listRecordingLegalHolds(cameraId: string) { return this.recordings.listLegalHolds(cameraId); }
   async createRecordingLegalHold(input: any) { return this.recordings.createLegalHold(input); }
@@ -133,6 +134,9 @@ export class PostgresStore
   async getLegalHold(id: string) { return this.evidence.getLegalHold(id); }
   async upsertRecordingStorageNode(input: any) { return this.recordings.upsertStorageNode(input); }
   async createRecordingHealthEvent(input: any) { return this.recordings.createHealthEvent(input); }
+  async listRecordingHealthEvents(cameraId: string, limit: number) {
+    return this.recordings.listHealthEvents(cameraId, limit);
+  }
   async listRecordingRetentionCandidates(tenantId: string, externalId: string, limit: number) {
     return this.recordings.listRetentionCandidates(tenantId, externalId, limit);
   }

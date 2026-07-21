@@ -89,6 +89,7 @@ const internalSegmentSchema = z.object({
   storagePath: z.string().min(1).max(2_000), sizeBytes: z.number().int().nonnegative(),
   storageNodeExternalId: z.string().min(1).max(200),
   storageTier: z.enum(["hot", "warm", "cold"]).default("hot"),
+  status: z.enum(["ready", "moving", "deleted", "error"]).default("ready"),
   checksumSha256: z.string().regex(/^[a-f0-9]{64}$/).optional(),
   codec: z.string().max(50).optional(),
 });
@@ -414,6 +415,31 @@ export async function buildApp(options?: {
     return { data: await store.listRecordingSegments(id, query.from, query.to) };
   });
 
+  app.get("/v1/cameras/:id/recording/health", async (request, reply) => {
+    const { id } = idParams.parse(request.params);
+    const { limit } = z.object({
+      limit: z.coerce.number().int().min(1).max(200).default(50),
+    }).parse(request.query);
+    const camera = await store.getCamera(id);
+    if (!camera) return reply.code(404).send({ error: "camera_not_found" });
+    if (!(await requireCameraActionAccess(
+      request, reply, store, camera, "recording:view",
+    ))) return;
+    return { data: await store.listRecordingHealthEvents(id, limit) };
+  });
+
+  app.get("/v1/recording-segments/:id", async (request, reply) => {
+    const { id } = idParams.parse(request.params);
+    const segment = await store.getRecordingSegment(id);
+    if (!segment) return reply.code(404).send({ error: "recording_segment_not_found" });
+    const camera = await store.getCamera(segment.cameraId);
+    if (!camera) return reply.code(404).send({ error: "camera_not_found" });
+    if (!(await requireCameraActionAccess(
+      request, reply, store, camera, "recording:view",
+    ))) return;
+    return segment;
+  });
+
   app.post("/v1/cameras/:id/recording/events", async (request, reply) => {
     const { id } = idParams.parse(request.params);
     const body = z.object({ type: z.enum(["motion", "event"]), metadata: z.record(z.unknown()).optional() }).parse(request.body);
@@ -525,9 +551,7 @@ export async function buildApp(options?: {
     if (!camera || !node || node.tenantId !== input.tenantId || job?.id !== input.jobId) {
       return reply.code(404).send({ error: "recording_job_not_found" });
     }
-    const segment = await store.createRecordingSegment({
-      ...input, status: "ready",
-    });
+    const segment = await store.createRecordingSegment(input);
     return reply.code(201).send(segment);
   });
 

@@ -260,6 +260,40 @@ button { cursor: pointer; }
 .recording-pill.active { color: #fff; border-color: #ed5d5d; background: #c33d48; }
 .recording-pill:disabled { opacity: .65; }
 .recording-mode { max-width: 82px; min-height: 25px; margin-left: auto; padding: 0 4px; color: #5e6d80; border: 1px solid #dfe5ed; border-radius: 5px; background: #fff; font-size: 9px; }
+
+.recording-workspace { min-height: 100vh; padding: 34px; background: var(--canvas); }
+.recording-header, .recording-filters, .recording-summary, .recording-content { max-width: 1420px; margin-inline: auto; }
+.recording-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; margin-bottom: 20px; }
+.recording-header h1 { margin: 3px 0 7px; font-size: 27px; }
+.recording-header p { margin: 0; color: var(--muted); font-size: 13px; }
+.recording-filters { display: grid; grid-template-columns: repeat(4, minmax(150px, 1fr)) auto; align-items: end; gap: 12px; padding: 15px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); box-shadow: 0 2px 9px rgba(18,31,52,.04); }
+.recording-filters label { display: grid; gap: 6px; color: #5d697b; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .35px; }
+.recording-filters select, .recording-filters input { min-width: 0; height: 37px; padding: 0 9px; color: var(--ink); border: 1px solid #dce3ec; border-radius: 7px; background: white; font-size: 12px; text-transform: none; letter-spacing: normal; }
+.recording-filters .primary-button { height: 37px; white-space: nowrap; }
+.recording-summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 11px; margin-top: 16px; }
+.recording-summary article, .recording-player-card, .recording-segment-card, .recording-health-card { border: 1px solid var(--line); border-radius: 12px; background: var(--surface); box-shadow: 0 2px 9px rgba(18,31,52,.04); }
+.recording-summary article { display: grid; gap: 5px; min-height: 106px; padding: 15px; }
+.recording-summary span, .recording-summary small { color: #748196; font-size: 10px; }
+.recording-summary strong { font-size: 18px; text-transform: capitalize; }
+.recording-summary .recording-state.recording, .recording-summary .healthy { color: #168561; }
+.recording-summary .recording-state.error, .recording-summary .fault { color: #c23c48; }
+.recording-summary .recording-state.scheduled { color: #a66b12; }
+.recording-content { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(300px, .75fr); gap: 15px; margin-top: 16px; }
+.recording-player-card, .recording-segment-card { min-height: 390px; overflow: hidden; }
+.recording-section-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 56px; padding: 0 16px; border-bottom: 1px solid #edf0f4; color: #758196; font-size: 10px; }
+.recording-section-heading > div { display: flex; align-items: center; gap: 8px; color: var(--ink); }
+.recording-section-heading h2 { margin: 0; font-size: 14px; }
+.recording-player { display: block; width: 100%; max-height: 540px; background: #070c14; }
+.recording-empty { min-height: 280px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; padding: 24px; color: #7d899a; text-align: center; font-size: 12px; }
+.segment-list { max-height: 470px; overflow: auto; }
+.segment-row { width: 100%; display: grid; grid-template-columns: 9px minmax(0,1fr) auto; align-items: center; gap: 10px; padding: 12px 14px; color: var(--ink); border: 0; border-bottom: 1px solid #edf0f4; background: white; text-align: left; }
+.segment-row:hover:not(:disabled), .segment-row.selected { background: #f0f6ff; }
+.segment-row:disabled { cursor: not-allowed; opacity: .58; }
+.segment-row strong, .segment-row small { display: block; }
+.segment-row strong { font-size: 11px; }.segment-row small { margin-top: 3px; color: #8190a2; font-size: 9px; }.segment-row > span:last-child { color: #738196; font-size: 10px; }
+.segment-status { width: 7px; height: 7px; border-radius: 50%; background: #2abb86; }.segment-status.error { background: #e15962; }.segment-status.moving { background: #e2a12c; }
+.recording-health-card { max-width: 1420px; margin: 16px auto 0; overflow: hidden; }
+.health-list { display: grid; }.health-row { display: grid; grid-template-columns: 70px minmax(0,1fr); gap: 12px; align-items: center; padding: 11px 16px; border-bottom: 1px solid #edf0f4; }.health-row > span { padding: 4px 6px; border-radius: 5px; color: #53708a; background: #edf3f8; font-size: 9px; font-weight: 700; text-align: center; text-transform: uppercase; }.health-row.warning > span { color: #9b6410; background: #fff2dc; }.health-row.critical > span { color: #bd3e48; background: #ffeaec; }.health-row strong, .health-row small { display: block; }.health-row strong { font-size: 11px; }.health-row small { margin-top: 3px; color: #8190a2; font-size: 9px; }
 .status-pill i { width: 5px; height: 5px; border-radius: 50%; background: #43d59e; box-shadow: 0 0 7px #43d59e; }
 .status-pill.degraded { color: #ffe3ad; border-color: rgba(235,165,45,.35); }
 .status-pill.degraded i { background: #e8a225; box-shadow: 0 0 7px #e8a225; }
@@ -318,6 +352,9 @@ button { cursor: pointer; }
   .section-heading.live-heading { align-items: flex-start; flex-direction: column; }
   .layout-picker { width: 100%; }
   .layout-picker button { flex: 1; }
+  .recording-workspace { padding: 18px 12px; }
+  .recording-header { flex-direction: column; }
+  .recording-filters, .recording-summary, .recording-content { grid-template-columns: 1fr; }
 }
 
 /* Organization and employee administration */

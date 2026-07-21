@@ -391,6 +391,7 @@ export interface ControlPlaneStore {
     status: RecordingJob["status"],
   ): Promise<RecordingJob | undefined>;
   listRecordingSegments(cameraId: string, from?: string, to?: string): Promise<RecordingSegment[]>;
+  getRecordingSegment(id: string): Promise<RecordingSegment | undefined>;
   createRecordingSegment(
     input: Omit<RecordingSegment, "id" | "createdAt">,
   ): Promise<RecordingSegment>;
@@ -431,6 +432,7 @@ export interface ControlPlaneStore {
     message: string;
     details?: Record<string, unknown> | undefined;
   }): Promise<RecordingHealthEvent>;
+  listRecordingHealthEvents(cameraId: string, limit: number): Promise<RecordingHealthEvent[]>;
   listRecordingRetentionCandidates(
     tenantId: string,
     storageNodeExternalId: string,

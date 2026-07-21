@@ -224,6 +224,22 @@ export interface RecordingJob {
   schedule?: { days: number[]; start: string; end: string };
 }
 
+export interface RecordingSegment {
+  id: string;
+  cameraId: string;
+  jobId: string;
+  startedAt: string;
+  endedAt: string;
+  storagePath: string;
+  sizeBytes: number;
+  storageNodeExternalId: string;
+  storageTier: "hot" | "warm" | "cold";
+  status: "ready" | "moving" | "deleted" | "error";
+  checksumSha256?: string;
+  codec?: string;
+  createdAt: string;
+}
+
 export type LiveBookmarkReason =
   | "suspicious-activity"
   | "cash-discrepancy"

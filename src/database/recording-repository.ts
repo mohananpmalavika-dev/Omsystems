@@ -59,6 +59,14 @@ export class RecordingRepository {
     return result.rows.map(mapSegment);
   }
 
+  async getSegment(id: string): Promise<RecordingSegment | undefined> {
+    const result = await this.pool.query(
+      "SELECT * FROM recording_segments WHERE id=$1 AND status <> 'deleted'",
+      [id],
+    );
+    return result.rows[0] ? mapSegment(result.rows[0]) : undefined;
+  }
+
   async createSegment(input: Omit<RecordingSegment, "id" | "createdAt">) {
     const result = await this.pool.query(
       `INSERT INTO recording_segments (
@@ -177,6 +185,15 @@ export class RecordingRepository {
         input.message, JSON.stringify(input.details ?? {})],
     );
     return mapHealthEvent(result.rows[0]);
+  }
+
+  async listHealthEvents(cameraId: string, limit: number): Promise<RecordingHealthEvent[]> {
+    const result = await this.pool.query(
+      `SELECT * FROM recording_health_events
+       WHERE camera_id=$1 ORDER BY occurred_at DESC LIMIT $2`,
+      [cameraId, limit],
+    );
+    return result.rows.map(mapHealthEvent);
   }
 
   async listRetentionCandidates(

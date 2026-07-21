@@ -78,6 +78,22 @@ describe("recording and storage module", () => {
       },
     });
     expect(indexed.statusCode).toBe(201);
+    const segment = indexed.json() as { id: string; status: string };
+    expect(segment.status).toBe("ready");
+
+    const segmentRead = await app.inject({
+      method: "GET", url: `/v1/recording-segments/${segment.id}`,
+      headers: admin,
+    });
+    expect(segmentRead.statusCode).toBe(200);
+    expect(segmentRead.json().storagePath).toContain("camera/2020");
+
+    const healthHistory = await app.inject({
+      method: "GET", url: "/v1/cameras/cam-001/recording/health?limit=20",
+      headers: admin,
+    });
+    expect(healthHistory.statusCode).toBe(200);
+    expect(healthHistory.json().data).toHaveLength(1);
 
     const held = await app.inject({
       method: "POST", url: "/v1/cameras/cam-001/recording/legal-holds",
