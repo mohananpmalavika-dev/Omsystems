@@ -532,6 +532,20 @@ export interface ControlPlaneStore {
   listAmcContracts(tenantId: string, vendorId?: string): Promise<AmcContract[]>;
   getAmcContract(id: string): Promise<AmcContract | undefined>;
   updateAmcContract(id: string, input: AmcContractUpdate): Promise<AmcContract | undefined>;
+  // Preventive maintenance / scheduling
+  createMaintenancePlan(input: { tenantId: string; name: string; cadence: "daily" | "weekly" | "monthly" | "quarterly" | "annual"; checklistTemplate?: Record<string, any>; startDate?: string; endDate?: string; createdBy: string; }): Promise<any>;
+  listMaintenancePlans(tenantId: string): Promise<any[]>;
+  getMaintenancePlan(id: string): Promise<any | undefined>;
+  // Schedules generated from plans
+  createMaintenanceSchedule(input: { tenantId: string; planId: string; branchNodeId?: string; assetId?: string; nextRunAt: string; cadence: string; createdBy: string; }): Promise<any>;
+  listMaintenanceSchedules(tenantId: string): Promise<any[]>;
+  // Visits and results
+  createMaintenanceVisit(input: { tenantId: string; scheduleId: string; assignedTo?: string; dueAt: string; status?: string; createdBy: string; }): Promise<any>;
+  listMaintenanceVisits(tenantId: string, filters?: any): Promise<any[]>;
+  updateMaintenanceVisit(id: string, input: any): Promise<any | undefined>;
+  // Predictive alerts
+  ingestPredictiveAlert(input: { tenantId: string; assetId?: string; type: string; score: number; details?: Record<string, unknown>; detectedAt: string; }): Promise<any>;
+  listPredictiveAlerts(tenantId: string): Promise<any[]>;
   createComplianceFramework(input: ComplianceFrameworkInput): Promise<ComplianceFramework>;
   listComplianceFrameworks(tenantId: string): Promise<ComplianceFramework[]>;
   getComplianceFramework(id: string): Promise<ComplianceFramework | undefined>;

@@ -139,6 +139,10 @@ export class MemoryStore implements ControlPlaneStore {
   readonly workOrders: any[] = [];
   readonly maintenanceVendors: any[] = [];
   readonly amcContracts: any[] = [];
+  readonly maintenancePlans: any[] = [];
+  readonly maintenanceSchedules: any[] = [];
+  readonly maintenanceVisits: any[] = [];
+  readonly predictiveAlerts: any[] = [];
 
   async close() {}
 
@@ -881,6 +885,65 @@ export class MemoryStore implements ControlPlaneStore {
     };
     this.amcContracts.push(contract);
     return contract;
+  }
+
+  async createMaintenancePlan(input: { tenantId: string; name: string; cadence: string; checklistTemplate?: Record<string, any>; startDate?: string; endDate?: string; createdBy: string; }) {
+    const now = new Date().toISOString();
+    const plan = {
+      id: randomUUID(), tenantId: input.tenantId, name: input.name, cadence: input.cadence,
+      checklistTemplate: input.checklistTemplate ?? {}, startDate: input.startDate, endDate: input.endDate,
+      createdBy: input.createdBy, createdAt: now, updatedAt: now,
+    };
+    this.maintenancePlans.push(plan);
+    return plan;
+  }
+
+  async listMaintenancePlans(tenantId: string) {
+    return this.maintenancePlans.filter((p) => p.tenantId === tenantId);
+  }
+
+  async getMaintenancePlan(id: string) {
+    return this.maintenancePlans.find((p) => p.id === id);
+  }
+
+  async createMaintenanceSchedule(input: { tenantId: string; planId: string; branchNodeId?: string; assetId?: string; nextRunAt: string; cadence: string; createdBy: string; }) {
+    const now = new Date().toISOString();
+    const sched = { id: randomUUID(), tenantId: input.tenantId, planId: input.planId, branchNodeId: input.branchNodeId, assetId: input.assetId, nextRunAt: input.nextRunAt, cadence: input.cadence, createdBy: input.createdBy, createdAt: now, updatedAt: now };
+    this.maintenanceSchedules.push(sched);
+    return sched;
+  }
+
+  async listMaintenanceSchedules(tenantId: string) {
+    return this.maintenanceSchedules.filter((s) => s.tenantId === tenantId);
+  }
+
+  async createMaintenanceVisit(input: { tenantId: string; scheduleId: string; assignedTo?: string; dueAt: string; status?: string; createdBy: string; }) {
+    const now = new Date().toISOString();
+    const visit = { id: randomUUID(), tenantId: input.tenantId, scheduleId: input.scheduleId, assignedTo: input.assignedTo, dueAt: input.dueAt, status: input.status ?? 'pending', createdBy: input.createdBy, createdAt: now, updatedAt: now };
+    this.maintenanceVisits.push(visit);
+    return visit;
+  }
+
+  async listMaintenanceVisits(tenantId: string, filters?: any) {
+    return this.maintenanceVisits.filter((v) => v.tenantId === tenantId && (!filters?.status || v.status === filters.status));
+  }
+
+  async updateMaintenanceVisit(id: string, input: any) {
+    const visit = this.maintenanceVisits.find((v) => v.id === id);
+    if (!visit) return undefined;
+    Object.assign(visit, input, { updatedAt: new Date().toISOString() });
+    return visit;
+  }
+
+  async ingestPredictiveAlert(input: { tenantId: string; assetId?: string; type: string; score: number; details?: Record<string, unknown>; detectedAt: string; }) {
+    const now = new Date().toISOString();
+    const rec = { id: randomUUID(), tenantId: input.tenantId, assetId: input.assetId, type: input.type, score: input.score, details: input.details ?? {}, detectedAt: input.detectedAt, createdAt: now };
+    this.predictiveAlerts.push(rec);
+    return rec;
+  }
+
+  async listPredictiveAlerts(tenantId: string) {
+    return this.predictiveAlerts.filter((p) => p.tenantId === tenantId).sort((a,b)=>b.detectedAt.localeCompare(a.detectedAt));
   }
 
   async listAmcContracts(tenantId: string, vendorId?: string) {
