@@ -6,6 +6,30 @@ import { maintenanceApi } from "@/lib/api-client";
 
 export default function NewWorkOrderPage() {
   const router = useRouter();
+<<<<<<< HEAD
+  const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
+  const [assetId, setAssetId] = useState("");
+  const [priority, setPriority] = useState("medium");
+  const [scheduledAt, setScheduledAt] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setLoading(true);
+    setError(null);
+    try {
+      const payload: any = { title, description: description || undefined, assetId: assetId || undefined, priority, scheduledAt: scheduledAt || undefined };
+      await maintenanceApi.createWorkOrder(payload);
+      router.push('/maintenance/workorders');
+    } catch (err: any) {
+      setError(err?.message || String(err));
+    } finally {
+      setLoading(false);
+    }
+  }
+=======
   const [workOrderNumber, setWorkOrderNumber] = useState('WO-' + Date.now());
   const [problem, setProblem] = useState('');
   const [severity, setSeverity] = useState('medium');
@@ -21,10 +45,45 @@ export default function NewWorkOrderPage() {
       setError(err?.message ?? 'Create failed');
     }
   };
+>>>>>>> c3a5c2bcbd7e63f2e57e4b702517ddd24cd20012
 
   return (
     <div style={{ padding: 16 }}>
       <h1>Create Work Order</h1>
+<<<<<<< HEAD
+      <form onSubmit={handleSubmit} style={{ maxWidth: 720 }}>
+        <div style={{ marginBottom: 8 }}>
+          <label>Title<br />
+            <input value={title} onChange={(e) => setTitle(e.target.value)} required />
+          </label>
+        </div>
+        <div style={{ marginBottom: 8 }}>
+          <label>Description<br />
+            <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={4} />
+          </label>
+        </div>
+        <div style={{ marginBottom: 8 }}>
+          <label>Asset ID (optional)<br />
+            <input value={assetId} onChange={(e) => setAssetId(e.target.value)} />
+          </label>
+        </div>
+        <div style={{ marginBottom: 8 }}>
+          <label>Priority<br />
+            <select value={priority} onChange={(e) => setPriority(e.target.value)}>
+              <option value="low">low</option>
+              <option value="medium">medium</option>
+              <option value="high">high</option>
+            </select>
+          </label>
+        </div>
+        <div style={{ marginBottom: 12 }}>
+          <label>Scheduled At<br />
+            <input type="datetime-local" value={scheduledAt} onChange={(e) => setScheduledAt(e.target.value)} />
+          </label>
+        </div>
+        {error && <p style={{ color: 'red' }}>{error}</p>}
+        <button type="submit" disabled={loading}>{loading ? 'Creating…' : 'Create'}</button>
+=======
       <form onSubmit={submit}>
         <div>
           <label>Work Order Number<input value={workOrderNumber} onChange={(e) => setWorkOrderNumber(e.target.value)} /></label>
@@ -42,6 +101,7 @@ export default function NewWorkOrderPage() {
         </div>
         {error && <div style={{ color: 'red' }}>{error}</div>}
         <button type="submit">Create</button>
+>>>>>>> c3a5c2bcbd7e63f2e57e4b702517ddd24cd20012
       </form>
     </div>
   );

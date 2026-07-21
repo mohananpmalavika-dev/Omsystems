@@ -25,6 +25,7 @@ import { registerAnalyticsRoutes } from "./routes/analytics.routes.js";
 import { registerIncidentsRoutes } from "./routes/incidents.routes.js";
 import { registerComplianceRoutes } from "./routes/compliance.routes.js";
 import { registerMaintenanceRoutes } from "./routes/maintenance.routes.js";
+import { registerMaintenanceDashboardRoutes } from "./routes/maintenance-dashboard.routes.js";
 import { MemoryStore } from "./store.js";
 
 declare module "fastify" {
@@ -684,6 +685,7 @@ export async function buildApp(options?: {
     await registerCctvInfrastructureRoutes(app, extendedStore);
     await registerComplianceRoutes(app, extendedStore);
     await registerMaintenanceRoutes(app, extendedStore);
+    await registerMaintenanceDashboardRoutes(app, extendedStore);
     // start maintenance scheduler when extended store is available
     try {
       const { startMaintenanceScheduler } = await import("./maintenance/scheduler.js");
