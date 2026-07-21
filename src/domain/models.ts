@@ -246,6 +246,198 @@ export interface CameraComplianceSummary {
   complianceStatus: "compliant" | "non-compliant";
 }
 
+export type AssetCategory =
+  | "camera"
+  | "recorder"
+  | "storage"
+  | "network"
+  | "power"
+  | "accessory";
+
+export type AssetStatus =
+  | "operational"
+  | "degraded"
+  | "maintenance_due"
+  | "offline"
+  | "retired";
+
+export interface MaintenanceAsset {
+  id: string;
+  tenantId: string;
+  category: AssetCategory;
+  assetType: string;
+  serialNumber?: string;
+  make?: string;
+  model?: string;
+  firmwareVersion?: string;
+  warrantyExpiresAt?: string;
+  purchaseDate?: string;
+  installationDate?: string;
+  vendorId?: string;
+  branchNodeId?: string;
+  location?: string;
+  mountingHeight?: string;
+  status: AssetStatus;
+  notes?: string;
+  createdBy?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type WorkOrderSeverity = "critical" | "high" | "medium" | "low";
+export type WorkOrderStatus =
+  | "open"
+  | "assigned"
+  | "in_progress"
+  | "resolved"
+  | "closed";
+
+export interface WorkOrder {
+  id: string;
+  tenantId: string;
+  workOrderNumber: string;
+  assetId?: string;
+  branchNodeId?: string;
+  problem: string;
+  severity: WorkOrderSeverity;
+  technician?: string;
+  vendorId?: string;
+  slaDueAt?: string;
+  eta?: string;
+  parts?: string[];
+  cost?: number;
+  rootCause?: string;
+  actionTaken?: string;
+  verification?: string;
+  status: WorkOrderStatus;
+  createdBy?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface MaintenanceVendor {
+  id: string;
+  tenantId: string;
+  name: string;
+  contact?: string;
+  email?: string;
+  phone?: string;
+  address?: string;
+  gstNumber?: string;
+  serviceCenters?: string[];
+  escalationMatrix?: Record<string, unknown>;
+  notes?: string;
+  createdBy?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AmcContract {
+  id: string;
+  tenantId: string;
+  contractNumber: string;
+  vendorId: string;
+  startDate: string;
+  endDate: string;
+  warranty?: string;
+  coverage?: string;
+  exclusions?: string;
+  paymentTerms?: string;
+  cost?: number;
+  renewal?: string;
+  sla?: string;
+  status: string;
+  notes?: string;
+  createdBy?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type ComplianceAssessmentStatus =
+  | "compliant"
+  | "exception"
+  | "non-compliant"
+  | "incomplete";
+
+export type ComplianceCertificateStatus =
+  | "compliant"
+  | "compliant_with_exceptions"
+  | "provisionally_compliant"
+  | "non_compliant"
+  | "incomplete";
+
+export interface ComplianceFramework {
+  id: string;
+  tenantId: string;
+  name: string;
+  source?: string;
+  description?: string;
+  status: string;
+  effectiveDate?: string;
+  reviewDate?: string;
+  createdBy?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CompliancePolicy {
+  id: string;
+  frameworkId: string;
+  tenantId: string;
+  policyName: string;
+  policyBasis?: string;
+  entityType?: string;
+  locationType?: string;
+  cameraType?: string;
+  normalRetentionDays?: number;
+  hotStorageDays?: number;
+  warmStorageDays?: number;
+  coldStorageDays?: number;
+  backupRequired: boolean;
+  legalHoldOverride: boolean;
+  incidentRetentionDays?: number;
+  automaticDeletionEligibility: boolean;
+  approvalAuthority?: string;
+  effectiveDate?: string;
+  reviewDate?: string;
+  notes?: string;
+  createdBy?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ComplianceAssessment {
+  id: string;
+  frameworkId: string;
+  tenantId: string;
+  branchNodeId?: string;
+  assessmentPeriodStart?: string;
+  assessmentPeriodEnd?: string;
+  status: ComplianceAssessmentStatus;
+  summary?: Record<string, unknown>;
+  evidence?: Record<string, unknown>;
+  createdBy?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ComplianceCertificate {
+  id: string;
+  assessmentId: string;
+  tenantId: string;
+  certificateNumber: string;
+  title: string;
+  status: ComplianceCertificateStatus;
+  issuedBy?: string;
+  issuedAt: string;
+  expiryDate?: string;
+  documentHash?: string;
+  signature?: string;
+  metadata?: Record<string, unknown>;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface AccessGrant {
   userId: string;
   scopeNodeId: string;

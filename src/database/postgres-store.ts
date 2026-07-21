@@ -22,6 +22,8 @@ import { LiveOperationsRepository } from "./live-operations-repository.js";
 import { AnalyticsRepository } from "./analytics-repository.js";
 import { EvidenceRepository } from "./evidence-repository.js";
 import IncidentRepository from "./incident-repository.js";
+import { ComplianceRepository } from "./compliance-repository.js";
+import { MaintenanceRepository } from "./maintenance-repository.js";
 
 export class PostgresStore
   extends InfrastructureRepository
@@ -37,6 +39,8 @@ export class PostgresStore
   private readonly analytics: AnalyticsRepository;
   private readonly evidence: EvidenceRepository;
   private readonly incidents: IncidentRepository;
+  private readonly compliance: ComplianceRepository;
+  private readonly maintenance: MaintenanceRepository;
 
   constructor(pool: Pool) {
     super(pool);
@@ -50,6 +54,8 @@ export class PostgresStore
     this.analytics = new AnalyticsRepository(pool);
     this.evidence = new EvidenceRepository(pool);
     this.incidents = new IncidentRepository(pool);
+    this.compliance = new ComplianceRepository(pool);
+    this.maintenance = new MaintenanceRepository(pool);
   }
 
   async close() { await this.pool.end(); }
@@ -165,6 +171,37 @@ export class PostgresStore
   async getAnalyticsAlert(id: string, tenantId: string) {
     return this.analytics.getAlert(id, tenantId);
   }
+  async listComplianceFrameworks(tenantId: string) { return this.compliance.listFrameworks(tenantId); }
+  async getComplianceFramework(id: string) { return this.compliance.getFramework(id); }
+  async createComplianceFramework(input: any) { return this.compliance.createFramework(input); }
+  async updateComplianceFramework(id: string, input: any) { return this.compliance.updateFramework(id, input); }
+  async listCompliancePolicies(tenantId: string, frameworkId?: string) { return this.compliance.listPolicies(tenantId, frameworkId); }
+  async getCompliancePolicy(id: string) { return this.compliance.getPolicy(id); }
+  async createCompliancePolicy(input: any) { return this.compliance.createPolicy(input); }
+  async updateCompliancePolicy(id: string, input: any) { return this.compliance.updatePolicy(id, input); }
+  async listComplianceAssessments(tenantId: string, filters?: any) { return this.compliance.listAssessments(tenantId, filters); }
+  async getComplianceAssessment(id: string) { return this.compliance.getAssessment(id); }
+  async createComplianceAssessment(input: any) { return this.compliance.createAssessment(input); }
+  async updateComplianceAssessment(id: string, input: any) { return this.compliance.updateAssessment(id, input); }
+  async listComplianceCertificates(assessmentId: string) { return this.compliance.listCertificates(assessmentId); }
+  async getComplianceCertificate(id: string) { return this.compliance.getCertificate(id); }
+  async createComplianceCertificate(input: any) { return this.compliance.createCertificate(input); }
+  async createMaintenanceAsset(input: any) { return this.maintenance.createAsset(input); }
+  async listMaintenanceAssets(tenantId: string, category?: string) { return this.maintenance.listAssets(tenantId, category); }
+  async getMaintenanceAsset(id: string) { return this.maintenance.getAsset(id); }
+  async updateMaintenanceAsset(id: string, input: any) { return this.maintenance.updateAsset(id, input); }
+  async createWorkOrder(input: any) { return this.maintenance.createWorkOrder(input); }
+  async listWorkOrders(tenantId: string, status?: string) { return this.maintenance.listWorkOrders(tenantId, status); }
+  async getWorkOrder(id: string) { return this.maintenance.getWorkOrder(id); }
+  async updateWorkOrder(id: string, input: any) { return this.maintenance.updateWorkOrder(id, input); }
+  async createMaintenanceVendor(input: any) { return this.maintenance.createMaintenanceVendor(input); }
+  async listMaintenanceVendors(tenantId: string) { return this.maintenance.listMaintenanceVendors(tenantId); }
+  async getMaintenanceVendor(id: string) { return this.maintenance.getMaintenanceVendor(id); }
+  async updateMaintenanceVendor(id: string, input: any) { return this.maintenance.updateMaintenanceVendor(id, input); }
+  async createAmcContract(input: any) { return this.maintenance.createAmcContract(input); }
+  async listAmcContracts(tenantId: string, vendorId?: string) { return this.maintenance.listAmcContracts(tenantId, vendorId); }
+  async getAmcContract(id: string) { return this.maintenance.getAmcContract(id); }
+  async updateAmcContract(id: string, input: any) { return this.maintenance.updateAmcContract(id, input); }
   // Incident delegations
   async createIncident(input: any) { return this.incidents.createIncident(input); }
   async getIncident(id: string) { return this.incidents.getIncident(id); }

@@ -8,6 +8,14 @@ import type {
   AuditEventInput,
   Camera,
   CameraStatus,
+  MaintenanceAsset,
+  WorkOrder,
+  MaintenanceVendor,
+  AmcContract,
+  ComplianceAssessment,
+  ComplianceCertificate,
+  ComplianceFramework,
+  CompliancePolicy,
   DiscoveredCamera,
   EdgeAgent,
   LiveBookmark,
@@ -32,7 +40,16 @@ import type {
   CameraApprovalInput,
   CameraDiscoveryInput,
   ControlPlaneStore,
+  MaintenanceAssetInput,
+  WorkOrderInput,
+  MaintenanceVendorInput,
+  AmcContractInput,
+  ComplianceAssessmentFilters,
 } from "./control-plane-store.js";
+
+function clean<T extends Record<string, any>>(obj: T) {
+  return Object.fromEntries(Object.entries(obj).filter(([, v]) => v !== undefined)) as Partial<T>;
+}
 
 const tenantId = "omsystems";
 
@@ -108,12 +125,20 @@ export class MemoryStore implements ControlPlaneStore {
   readonly incidentEvents: any[] = [];
   readonly incidentVideoRanges: any[] = [];
   readonly incidentCameras: any[] = [];
+  readonly complianceFrameworks: ComplianceFramework[] = [];
+  readonly compliancePolicies: CompliancePolicy[] = [];
+  readonly complianceAssessments: ComplianceAssessment[] = [];
+  readonly complianceCertificates: ComplianceCertificate[] = [];
   readonly analyticsRules: AnalyticsRule[] = [];
   readonly analyticsEvents: AnalyticsEvent[] = [];
   readonly analyticsAlerts: AnalyticsAlert[] = [];
   readonly analyticsAcknowledgements: Array<Record<string, unknown>> = [];
   readonly analyticsEscalations: Array<Record<string, unknown>> = [];
   readonly analyticsNotifications: Array<Record<string, unknown>> = [];
+  readonly maintenanceAssets: any[] = [];
+  readonly workOrders: any[] = [];
+  readonly maintenanceVendors: any[] = [];
+  readonly amcContracts: any[] = [];
 
   async close() {}
 
@@ -597,6 +622,283 @@ export class MemoryStore implements ControlPlaneStore {
     const rec = { id: randomUUID(), incidentId, eventType, details, createdBy: createdBy ?? null, createdAt: new Date().toISOString() };
     this.incidentEvents.push(rec);
     return rec;
+  }
+
+  async listComplianceFrameworks(tenantId: string) {
+    return this.complianceFrameworks.filter((framework) => framework.tenantId === tenantId);
+  }
+
+  async getComplianceFramework(id: string) {
+    return this.complianceFrameworks.find((framework) => framework.id === id);
+  }
+
+  async createComplianceFramework(input: Parameters<ControlPlaneStore["createComplianceFramework"]>[0]) {
+    const now = new Date().toISOString();
+    const framework: ComplianceFramework = {
+      id: randomUUID(),
+      tenantId: input.tenantId,
+      name: input.name ?? "",
+      status: input.status ?? "active",
+      createdAt: now,
+      updatedAt: now,
+      ...(clean({ source: input.source, description: input.description, effectiveDate: input.effectiveDate, reviewDate: input.reviewDate, createdBy: input.createdBy }) as any),
+    };
+    this.complianceFrameworks.push(framework);
+    return framework;
+  }
+
+  async updateComplianceFramework(id: string, input: Parameters<ControlPlaneStore["updateComplianceFramework"]>[1]) {
+    const framework = this.complianceFrameworks.find((item) => item.id === id);
+    if (!framework) return undefined;
+    Object.assign(framework, {
+      ...input,
+      updatedAt: new Date().toISOString(),
+    });
+    return framework;
+  }
+
+  async listCompliancePolicies(tenantId: string, frameworkId?: string) {
+    return this.compliancePolicies.filter((policy) =>
+      policy.tenantId === tenantId && (!frameworkId || policy.frameworkId === frameworkId),
+    );
+  }
+
+  async getCompliancePolicy(id: string) {
+    return this.compliancePolicies.find((policy) => policy.id === id);
+  }
+
+  async createCompliancePolicy(input: Parameters<ControlPlaneStore["createCompliancePolicy"]>[0]) {
+    const now = new Date().toISOString();
+    const policy: CompliancePolicy = {
+      id: randomUUID(),
+      tenantId: input.tenantId,
+      frameworkId: input.frameworkId,
+      policyName: input.policyName ?? "",
+      backupRequired: input.backupRequired ?? false,
+      legalHoldOverride: input.legalHoldOverride ?? false,
+      automaticDeletionEligibility: input.automaticDeletionEligibility ?? true,
+      createdAt: now,
+      updatedAt: now,
+      ...(clean({ policyBasis: input.policyBasis, entityType: input.entityType, locationType: input.locationType, cameraType: input.cameraType, normalRetentionDays: input.normalRetentionDays, hotStorageDays: input.hotStorageDays, warmStorageDays: input.warmStorageDays, coldStorageDays: input.coldStorageDays, incidentRetentionDays: input.incidentRetentionDays, approvalAuthority: input.approvalAuthority, effectiveDate: input.effectiveDate, reviewDate: input.reviewDate, notes: input.notes, createdBy: input.createdBy }) as any),
+    };
+    this.compliancePolicies.push(policy);
+    return policy;
+  }
+
+  async updateCompliancePolicy(id: string, input: Parameters<ControlPlaneStore["updateCompliancePolicy"]>[1]) {
+    const policy = this.compliancePolicies.find((item) => item.id === id);
+    if (!policy) return undefined;
+    Object.assign(policy, {
+      ...input,
+      updatedAt: new Date().toISOString(),
+    });
+    return policy;
+  }
+
+  async listComplianceAssessments(tenantId: string, filters?: ComplianceAssessmentFilters) {
+    return this.complianceAssessments.filter((assessment) => {
+      if (assessment.tenantId !== tenantId) return false;
+      if (filters?.frameworkId && assessment.frameworkId !== filters.frameworkId) return false;
+      if (filters?.branchNodeId && assessment.branchNodeId !== filters.branchNodeId) return false;
+      if (filters?.status && assessment.status !== filters.status) return false;
+      return true;
+    });
+  }
+
+  async getComplianceAssessment(id: string) {
+    return this.complianceAssessments.find((assessment) => assessment.id === id);
+  }
+
+  async createComplianceAssessment(input: Parameters<ControlPlaneStore["createComplianceAssessment"]>[0]) {
+    const now = new Date().toISOString();
+    const assessment: ComplianceAssessment = {
+      id: randomUUID(),
+      tenantId: input.tenantId,
+      frameworkId: input.frameworkId,
+      status: input.status ?? "incomplete",
+      createdAt: now,
+      updatedAt: now,
+      ...(clean({ branchNodeId: input.branchNodeId, assessmentPeriodStart: input.assessmentPeriodStart, assessmentPeriodEnd: input.assessmentPeriodEnd, summary: input.summary, evidence: input.evidence, createdBy: input.createdBy }) as any),
+    };
+    this.complianceAssessments.push(assessment);
+    return assessment;
+  }
+
+  async updateComplianceAssessment(id: string, input: Parameters<ControlPlaneStore["updateComplianceAssessment"]>[1]) {
+    const assessment = this.complianceAssessments.find((item) => item.id === id);
+    if (!assessment) return undefined;
+    Object.assign(assessment, {
+      ...input,
+      updatedAt: new Date().toISOString(),
+    });
+    return assessment;
+  }
+
+  async listComplianceCertificates(assessmentId: string) {
+    return this.complianceCertificates.filter((certificate) => certificate.assessmentId === assessmentId);
+  }
+
+  async getComplianceCertificate(id: string) {
+    return this.complianceCertificates.find((certificate) => certificate.id === id);
+  }
+
+  async createComplianceCertificate(input: Parameters<ControlPlaneStore["createComplianceCertificate"]>[0]) {
+    const now = new Date().toISOString();
+    const certificate: ComplianceCertificate = {
+      id: randomUUID(),
+      assessmentId: input.assessmentId,
+      tenantId: input.tenantId,
+      certificateNumber: input.certificateNumber,
+      title: input.title ?? "",
+      status: input.status ?? "incomplete",
+      issuedAt: input.issuedAt ?? now,
+      createdAt: now,
+      updatedAt: now,
+      ...(clean({ issuedBy: input.issuedBy, expiryDate: input.expiryDate, documentHash: input.documentHash, signature: input.signature, metadata: input.metadata }) as any),
+    };
+    this.complianceCertificates.push(certificate);
+    return certificate;
+  }
+
+  async createMaintenanceAsset(input: MaintenanceAssetInput): Promise<MaintenanceAsset> {
+    const now = new Date().toISOString();
+    const asset = {
+      id: randomUUID(),
+      tenantId: input.tenantId,
+      category: input.category,
+      assetType: input.assetType,
+      status: input.status ?? "operational",
+      createdBy: input.createdBy,
+      createdAt: now,
+      updatedAt: now,
+      ...(clean({ serialNumber: input.serialNumber, make: input.make, model: input.model, firmwareVersion: input.firmwareVersion, warrantyExpiresAt: input.warrantyExpiresAt, purchaseDate: input.purchaseDate, installationDate: input.installationDate, vendorId: input.vendorId, branchNodeId: input.branchNodeId, location: input.location, mountingHeight: input.mountingHeight, notes: input.notes }) as any),
+    };
+    this.maintenanceAssets.push(asset);
+    return asset;
+  }
+
+  async listMaintenanceAssets(tenantId: string, category?: string) {
+    return this.maintenanceAssets.filter((asset) => asset.tenantId === tenantId && (!category || asset.category === category));
+  }
+
+  async getMaintenanceAsset(id: string) {
+    return this.maintenanceAssets.find((asset) => asset.id === id);
+  }
+
+  async updateMaintenanceAsset(id: string, input: Parameters<ControlPlaneStore["updateMaintenanceAsset"]>[1]) {
+    const asset = this.maintenanceAssets.find((item) => item.id === id);
+    if (!asset) return undefined;
+    Object.assign(asset, {
+      ...input,
+      updatedAt: new Date().toISOString(),
+    });
+    return asset;
+  }
+
+  async createWorkOrder(input: WorkOrderInput): Promise<WorkOrder> {
+    const now = new Date().toISOString();
+    const workOrder = {
+      id: randomUUID(),
+      tenantId: input.tenantId,
+      workOrderNumber: input.workOrderNumber,
+      problem: input.problem,
+      severity: input.severity ?? "medium",
+      status: input.status ?? "open",
+      createdBy: input.createdBy,
+      createdAt: now,
+      updatedAt: now,
+      ...(clean({ assetId: input.assetId, branchNodeId: input.branchNodeId, technician: input.technician, vendorId: input.vendorId, slaDueAt: input.slaDueAt, eta: input.eta, parts: input.parts, cost: input.cost, rootCause: input.rootCause, actionTaken: input.actionTaken, verification: input.verification }) as any),
+    };
+    this.workOrders.push(workOrder);
+    return workOrder;
+  }
+
+  async listWorkOrders(tenantId: string, status?: string) {
+    return this.workOrders.filter((order) => order.tenantId === tenantId && (!status || order.status === status));
+  }
+
+  async getWorkOrder(id: string) {
+    return this.workOrders.find((order) => order.id === id);
+  }
+
+  async updateWorkOrder(id: string, input: Parameters<ControlPlaneStore["updateWorkOrder"]>[1]) {
+    const workOrder = this.workOrders.find((order) => order.id === id);
+    if (!workOrder) return undefined;
+    Object.assign(workOrder, {
+      ...input,
+      updatedAt: new Date().toISOString(),
+    });
+    return workOrder;
+  }
+
+  async createMaintenanceVendor(input: MaintenanceVendorInput): Promise<MaintenanceVendor> {
+    const now = new Date().toISOString();
+    const vendor = {
+      id: randomUUID(),
+      tenantId: input.tenantId,
+      name: input.name,
+      createdBy: input.createdBy,
+      createdAt: now,
+      updatedAt: now,
+      ...(clean({ contact: input.contact, email: input.email, phone: input.phone, address: input.address, gstNumber: input.gstNumber, serviceCenters: input.serviceCenters, escalationMatrix: input.escalationMatrix, notes: input.notes }) as any),
+    };
+    this.maintenanceVendors.push(vendor);
+    return vendor;
+  }
+
+  async listMaintenanceVendors(tenantId: string) {
+    return this.maintenanceVendors.filter((vendor) => vendor.tenantId === tenantId);
+  }
+
+  async getMaintenanceVendor(id: string) {
+    return this.maintenanceVendors.find((vendor) => vendor.id === id);
+  }
+
+  async updateMaintenanceVendor(id: string, input: Parameters<ControlPlaneStore["updateMaintenanceVendor"]>[1]) {
+    const vendor = this.maintenanceVendors.find((item) => item.id === id);
+    if (!vendor) return undefined;
+    Object.assign(vendor, {
+      ...input,
+      updatedAt: new Date().toISOString(),
+    });
+    return vendor;
+  }
+
+  async createAmcContract(input: AmcContractInput): Promise<AmcContract> {
+    const now = new Date().toISOString();
+    const contract = {
+      id: randomUUID(),
+      tenantId: input.tenantId,
+      contractNumber: input.contractNumber,
+      vendorId: input.vendorId,
+      startDate: input.startDate ?? new Date().toISOString(),
+      endDate: input.endDate ?? new Date().toISOString(),
+      status: input.status ?? "active",
+      createdBy: input.createdBy,
+      createdAt: now,
+      updatedAt: now,
+      ...(clean({ startDate: input.startDate, endDate: input.endDate, warranty: input.warranty, coverage: input.coverage, exclusions: input.exclusions, paymentTerms: input.paymentTerms, cost: input.cost, renewal: input.renewal, sla: input.sla, notes: input.notes }) as any),
+    };
+    this.amcContracts.push(contract);
+    return contract;
+  }
+
+  async listAmcContracts(tenantId: string, vendorId?: string) {
+    return this.amcContracts.filter((contract) => contract.tenantId === tenantId && (!vendorId || contract.vendorId === vendorId));
+  }
+
+  async getAmcContract(id: string) {
+    return this.amcContracts.find((contract) => contract.id === id);
+  }
+
+  async updateAmcContract(id: string, input: Parameters<ControlPlaneStore["updateAmcContract"]>[1]) {
+    const contract = this.amcContracts.find((item) => item.id === id);
+    if (!contract) return undefined;
+    Object.assign(contract, {
+      ...input,
+      updatedAt: new Date().toISOString(),
+    });
+    return contract;
   }
 
   async updateLiveIncidentStatus(

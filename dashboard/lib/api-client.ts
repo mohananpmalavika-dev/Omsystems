@@ -239,8 +239,7 @@ export const cameraInventoryApi = {
     fetchApi<any>(
       `/v1/branches/${encodeURIComponent(branchId)}/edge-agents/register`,
       { method: 'POST', body: JSON.stringify(data) }
-    ),
-  submitDiscovery: (branchId: string, data: any) =>
+    ),  submitDiscovery: (branchId: string, data: any) =>
     fetchApi<any>(
       `/v1/branches/${encodeURIComponent(branchId)}/cameras/discovered`,
       { method: 'POST', body: JSON.stringify(data) }
@@ -276,6 +275,103 @@ export const liveOperationsApi = {
       `/v1/cameras/${encodeURIComponent(cameraId)}/incidents/${encodeURIComponent(incidentId)}`,
       { method: 'PATCH', body: JSON.stringify({ status }) }
     ),
+};
+
+export const complianceApi = {
+  listFrameworks: () => fetchApi<{ data: any[] }>('/v1/compliance/frameworks'),
+  createFramework: (data: {
+    name: string;
+    source?: string;
+    description?: string;
+  }) => fetchApi<any>('/v1/compliance/frameworks', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  }),
+  getFramework: (id: string) => fetchApi<any>(`/v1/compliance/frameworks/${encodeURIComponent(id)}`),
+  listPolicies: (frameworkId?: string) => {
+    const params = new URLSearchParams();
+    if (frameworkId) params.set('frameworkId', frameworkId);
+    return fetchApi<{ data: any[] }>(`/v1/compliance/policies?${params}`);
+  },
+  createPolicy: (data: any) => fetchApi<any>('/v1/compliance/policies', {
+    method: 'POST', body: JSON.stringify(data),
+  }),
+  listAssessments: (filters?: { frameworkId?: string; branchNodeId?: string; status?: string }) => {
+    const params = new URLSearchParams();
+    filters = filters ?? {};
+    if (filters.frameworkId) params.set('frameworkId', filters.frameworkId);
+    if (filters.branchNodeId) params.set('branchNodeId', filters.branchNodeId);
+    if (filters.status) params.set('status', filters.status);
+    return fetchApi<{ data: any[] }>(`/v1/compliance/assessments?${params}`);
+  },
+  createAssessment: (data: any) => fetchApi<any>('/v1/compliance/assessments', {
+    method: 'POST', body: JSON.stringify(data),
+  }),
+  listCertificates: (assessmentId: string) =>
+    fetchApi<{ data: any[] }>(`/v1/compliance/assessments/${encodeURIComponent(assessmentId)}/certificates`),
+  createCertificate: (assessmentId: string, data: any) =>
+    fetchApi<any>(`/v1/compliance/assessments/${encodeURIComponent(assessmentId)}/certificates`, {
+      method: 'POST', body: JSON.stringify(data),
+    }),
+  getCertificate: (id: string) => fetchApi<any>(`/v1/compliance/certificates/${encodeURIComponent(id)}`),
+  getAssessment: (id: string) => fetchApi<any>(`/v1/compliance/assessments/${encodeURIComponent(id)}`),
+  getPolicy: (id: string) => fetchApi<any>(`/v1/compliance/policies/${encodeURIComponent(id)}`),
+};
+
+export const maintenanceApi = {
+  listAssets: () => fetchApi<{ data: any[] }>('/v1/maintenance/assets'),
+  getAsset: (id: string) => fetchApi<any>(`/v1/maintenance/assets/${encodeURIComponent(id)}`),
+  createAsset: (data: any) => fetchApi<any>('/v1/maintenance/assets', {
+    method: 'POST', body: JSON.stringify(data),
+  }),
+  updateAsset: (id: string, data: any) => fetchApi<any>(`/v1/maintenance/assets/${encodeURIComponent(id)}`, {
+    method: 'PATCH', body: JSON.stringify(data),
+  }),
+  listWorkOrders: () => fetchApi<{ data: any[] }>('/v1/maintenance/workorders'),
+  getWorkOrder: (id: string) => fetchApi<any>(`/v1/maintenance/workorders/${encodeURIComponent(id)}`),
+  createWorkOrder: (data: any) => fetchApi<any>('/v1/maintenance/workorders', {
+    method: 'POST', body: JSON.stringify(data),
+  }),
+  updateWorkOrder: (id: string, data: any) => fetchApi<any>(`/v1/maintenance/workorders/${encodeURIComponent(id)}`, {
+    method: 'PATCH', body: JSON.stringify(data),
+  }),
+  listVendors: () => fetchApi<{ data: any[] }>('/v1/maintenance/vendors'),
+  getVendor: (id: string) => fetchApi<any>(`/v1/maintenance/vendors/${encodeURIComponent(id)}`),
+  createVendor: (data: any) => fetchApi<any>('/v1/maintenance/vendors', {
+    method: 'POST', body: JSON.stringify(data),
+  }),
+  updateVendor: (id: string, data: any) => fetchApi<any>(`/v1/maintenance/vendors/${encodeURIComponent(id)}`, {
+    method: 'PATCH', body: JSON.stringify(data),
+  }),
+  listAmcContracts: () => fetchApi<{ data: any[] }>('/v1/maintenance/amc'),
+  getAmcContract: (id: string) => fetchApi<any>(`/v1/maintenance/amc/${encodeURIComponent(id)}`),
+  createAmcContract: (data: any) => fetchApi<any>('/v1/maintenance/amc', {
+    method: 'POST', body: JSON.stringify(data),
+  }),
+  updateAmcContract: (id: string, data: any) => fetchApi<any>(`/v1/maintenance/amc/${encodeURIComponent(id)}`, {
+    method: 'PATCH', body: JSON.stringify(data),
+  }),
+};
+  listAssessments: (filters?: { frameworkId?: string; branchNodeId?: string; status?: string }) => {
+    const params = new URLSearchParams();
+    filters = filters ?? {};
+    if (filters.frameworkId) params.set('frameworkId', filters.frameworkId);
+    if (filters.branchNodeId) params.set('branchNodeId', filters.branchNodeId);
+    if (filters.status) params.set('status', filters.status);
+    return fetchApi<{ data: any[] }>(`/v1/compliance/assessments?${params}`);
+  },
+  createAssessment: (data: any) => fetchApi<any>('/v1/compliance/assessments', {
+    method: 'POST', body: JSON.stringify(data),
+  }),
+  listCertificates: (assessmentId: string) =>
+    fetchApi<{ data: any[] }>(`/v1/compliance/assessments/${encodeURIComponent(assessmentId)}/certificates`),
+  createCertificate: (assessmentId: string, data: any) =>
+    fetchApi<any>(`/v1/compliance/assessments/${encodeURIComponent(assessmentId)}/certificates`, {
+      method: 'POST', body: JSON.stringify(data),
+    }),
+  getCertificate: (id: string) => fetchApi<any>(`/v1/compliance/certificates/${encodeURIComponent(id)}`),
+  getAssessment: (id: string) => fetchApi<any>(`/v1/compliance/assessments/${encodeURIComponent(id)}`),
+  getPolicy: (id: string) => fetchApi<any>(`/v1/compliance/policies/${encodeURIComponent(id)}`),
 };
 
 export const analyticsApi = {

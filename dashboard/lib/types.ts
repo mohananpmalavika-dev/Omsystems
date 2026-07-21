@@ -8,6 +8,168 @@ export interface Branch {
   onlineCount?: number;
 }
 
+export interface ComplianceFramework {
+  id: string;
+  tenantId: string;
+  name: string;
+  source?: string;
+  description?: string;
+  status?: string;
+  effectiveDate?: string;
+  reviewDate?: string;
+  createdBy?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface MaintenanceAsset {
+  id: string;
+  tenantId: string;
+  category: "camera" | "recorder" | "storage" | "network" | "power" | "accessory";
+  assetType: string;
+  serialNumber?: string;
+  make?: string;
+  model?: string;
+  firmwareVersion?: string;
+  warrantyExpiresAt?: string;
+  purchaseDate?: string;
+  installationDate?: string;
+  vendorId?: string;
+  branchNodeId?: string;
+  location?: string;
+  mountingHeight?: string;
+  status: "operational" | "degraded" | "maintenance_due" | "offline" | "retired";
+  notes?: string;
+  createdBy?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface WorkOrder {
+  id: string;
+  tenantId: string;
+  workOrderNumber: string;
+  assetId?: string;
+  branchNodeId?: string;
+  problem: string;
+  severity: "critical" | "high" | "medium" | "low";
+  technician?: string;
+  vendorId?: string;
+  slaDueAt?: string;
+  eta?: string;
+  parts?: string[];
+  cost?: number;
+  rootCause?: string;
+  actionTaken?: string;
+  verification?: string;
+  status: "open" | "assigned" | "in_progress" | "resolved" | "closed";
+  createdBy?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface MaintenanceVendor {
+  id: string;
+  tenantId: string;
+  name: string;
+  contact?: string;
+  email?: string;
+  phone?: string;
+  address?: string;
+  gstNumber?: string;
+  serviceCenters?: string[];
+  escalationMatrix?: Record<string, unknown>;
+  notes?: string;
+  createdBy?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AmcContract {
+  id: string;
+  tenantId: string;
+  contractNumber: string;
+  vendorId: string;
+  startDate: string;
+  endDate: string;
+  warranty?: string;
+  coverage?: string;
+  exclusions?: string;
+  paymentTerms?: string;
+  cost?: number;
+  renewal?: string;
+  sla?: string;
+  status: string;
+  notes?: string;
+  createdBy?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CompliancePolicy {
+  id: string;
+  tenantId: string;
+  frameworkId: string;
+  policyName: string;
+  policyBasis?: string;
+  entityType?: string;
+  locationType?: string;
+  cameraType?: string;
+  normalRetentionDays?: number;
+  hotStorageDays?: number;
+  warmStorageDays?: number;
+  coldStorageDays?: number;
+  backupRequired: boolean;
+  legalHoldOverride: boolean;
+  incidentRetentionDays?: number;
+  automaticDeletionEligibility: boolean;
+  approvalAuthority?: string;
+  effectiveDate?: string;
+  reviewDate?: string;
+  notes?: string;
+  createdBy?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ComplianceAssessment {
+  id: string;
+  tenantId: string;
+  frameworkId: string;
+  branchNodeId?: string;
+  assessmentPeriodStart?: string;
+  assessmentPeriodEnd?: string;
+  status: "compliant" | "exception" | "non-compliant" | "incomplete";
+  summary?: Record<string, unknown>;
+  evidence?: Record<string, unknown>;
+  createdBy?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ComplianceCertificate {
+  id: string;
+  assessmentId: string;
+  tenantId: string;
+  certificateNumber: string;
+  title: string;
+  status:
+    | "compliant"
+    | "compliant_with_exceptions"
+    | "provisionally_compliant"
+    | "non_compliant"
+    | "incomplete";
+  issuedBy?: string;
+  issuedAt?: string;
+  expiryDate?: string;
+  documentHash?: string;
+  signature?: string;
+  metadata?: Record<string, unknown>;
+  createdBy?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface Camera {
   id: string;
   name: string;

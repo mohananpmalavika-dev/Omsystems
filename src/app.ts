@@ -22,6 +22,9 @@ import { registerOrganizationRoutes } from "./routes/organization.routes.js";
 import { registerUserRoutes } from "./routes/user.routes.js";
 import { registerLiveOperationsRoutes } from "./routes/live-operations.routes.js";
 import { registerAnalyticsRoutes } from "./routes/analytics.routes.js";
+import { registerIncidentsRoutes } from "./routes/incidents.routes.js";
+import { registerComplianceRoutes } from "./routes/compliance.routes.js";
+import { registerMaintenanceRoutes } from "./routes/maintenance.routes.js";
 import { MemoryStore } from "./store.js";
 
 declare module "fastify" {
@@ -655,8 +658,11 @@ export async function buildApp(options?: {
     await registerCameraPermissionRoutes(app, extendedStore);
     await registerCameraDiscoveryRoutes(app, extendedStore);
     await registerCctvInfrastructureRoutes(app, extendedStore);
+    await registerComplianceRoutes(app, extendedStore);
+    await registerMaintenanceRoutes(app, extendedStore);
   }
   await registerLiveOperationsRoutes(app, store);
+  await registerIncidentsRoutes(app, store);
   await registerAnalyticsRoutes(app, store, {
     ...(options?.analyticsEngineSharedKey
       ? { analyticsEngineSharedKey: options.analyticsEngineSharedKey } : {}),

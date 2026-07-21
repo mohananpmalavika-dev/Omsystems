@@ -17,6 +17,20 @@ import type {
   CameraSpecifications,
   CameraStatus,
   CameraVendor,
+  AssetCategory,
+  AssetStatus,
+  MaintenanceAsset,
+  WorkOrder,
+  WorkOrderSeverity,
+  WorkOrderStatus,
+  MaintenanceVendor,
+  AmcContract,
+  ComplianceAssessment,
+  ComplianceAssessmentStatus,
+  ComplianceCertificate,
+  ComplianceCertificateStatus,
+  ComplianceFramework,
+  CompliancePolicy,
   DiscoveredCamera,
   EdgeAgent,
   LiveSession,
@@ -115,6 +129,156 @@ export interface CameraDetailsUpdate {
   ipAddress?: string | undefined;
   installationNotes?: string | undefined;
 }
+
+export interface ComplianceFrameworkInput {
+  tenantId: string;
+  name: string;
+  source?: string | undefined;
+  description?: string | undefined;
+  status?: string | undefined;
+  effectiveDate?: string | undefined;
+  reviewDate?: string | undefined;
+  createdBy?: string | undefined;
+}
+
+export interface CompliancePolicyInput {
+  frameworkId: string;
+  tenantId: string;
+  policyName: string;
+  policyBasis?: string | undefined;
+  entityType?: string | undefined;
+  locationType?: string | undefined;
+  cameraType?: string | undefined;
+  normalRetentionDays?: number | undefined;
+  hotStorageDays?: number | undefined;
+  warmStorageDays?: number | undefined;
+  coldStorageDays?: number | undefined;
+  backupRequired?: boolean | undefined;
+  legalHoldOverride?: boolean | undefined;
+  incidentRetentionDays?: number | undefined;
+  automaticDeletionEligibility?: boolean | undefined;
+  approvalAuthority?: string | undefined;
+  effectiveDate?: string | undefined;
+  reviewDate?: string | undefined;
+  notes?: string | undefined;
+  createdBy?: string | undefined;
+}
+
+export interface ComplianceAssessmentFilters {
+  frameworkId?: string | undefined;
+  branchNodeId?: string | undefined;
+  status?: string | undefined;
+}
+
+export interface ComplianceAssessmentInput {
+  frameworkId: string;
+  tenantId: string;
+  branchNodeId?: string | undefined;
+  assessmentPeriodStart?: string | undefined;
+  assessmentPeriodEnd?: string | undefined;
+  status?: ComplianceAssessmentStatus | undefined;
+  summary?: Record<string, unknown> | undefined;
+  evidence?: Record<string, unknown> | undefined;
+  createdBy?: string | undefined;
+}
+
+export interface ComplianceCertificateInput {
+  assessmentId: string;
+  tenantId: string;
+  certificateNumber: string;
+  title: string;
+  status: ComplianceCertificateStatus;
+  issuedBy?: string | undefined;
+  issuedAt?: string | undefined;
+  expiryDate?: string | undefined;
+  documentHash?: string | undefined;
+  signature?: string | undefined;
+  metadata?: Record<string, unknown> | undefined;
+}
+
+// AssetCategory and AssetStatus are defined in domain/models and imported above.
+
+export interface MaintenanceAssetInput {
+  tenantId: string;
+  category: AssetCategory;
+  assetType: string;
+  serialNumber?: string;
+  make?: string;
+  model?: string;
+  firmwareVersion?: string;
+  warrantyExpiresAt?: string;
+  purchaseDate?: string;
+  installationDate?: string;
+  vendorId?: string;
+  branchNodeId?: string;
+  location?: string;
+  mountingHeight?: string;
+  status?: AssetStatus;
+  notes?: string;
+  createdBy: string;
+}
+
+export interface MaintenanceAssetUpdate extends Partial<MaintenanceAssetInput> {}
+
+// WorkOrderSeverity and WorkOrderStatus are defined in domain/models and imported above.
+
+export interface WorkOrderInput {
+  tenantId: string;
+  workOrderNumber: string;
+  assetId?: string;
+  branchNodeId?: string;
+  problem: string;
+  severity: WorkOrderSeverity;
+  technician?: string;
+  vendorId?: string;
+  slaDueAt?: string;
+  eta?: string;
+  parts?: string[];
+  cost?: number;
+  rootCause?: string;
+  actionTaken?: string;
+  verification?: string;
+  status?: WorkOrderStatus;
+  createdBy: string;
+}
+
+export interface WorkOrderUpdate extends Partial<WorkOrderInput> {}
+
+export interface MaintenanceVendorInput {
+  tenantId: string;
+  name: string;
+  contact?: string;
+  email?: string;
+  phone?: string;
+  address?: string;
+  gstNumber?: string;
+  serviceCenters?: string[];
+  escalationMatrix?: Record<string, unknown>;
+  notes?: string;
+  createdBy: string;
+}
+
+export interface MaintenanceVendorUpdate extends Partial<MaintenanceVendorInput> {}
+
+export interface AmcContractInput {
+  tenantId: string;
+  contractNumber: string;
+  vendorId: string;
+  startDate: string;
+  endDate: string;
+  warranty?: string;
+  coverage?: string;
+  exclusions?: string;
+  paymentTerms?: string;
+  cost?: number;
+  renewal?: string;
+  sla?: string;
+  status?: string;
+  notes?: string;
+  createdBy?: string;
+}
+
+export interface AmcContractUpdate extends Partial<AmcContractInput> {}
 
 export interface BranchCameraRequirementInput {
   locationType: string;
@@ -352,6 +516,37 @@ export interface ControlPlaneStore {
     incidentId: string,
   ): Promise<AnalyticsAlert | undefined>;
   writeAudit(event: AuditEventInput): Promise<void>;
+  createMaintenanceAsset(input: MaintenanceAssetInput): Promise<MaintenanceAsset>;
+  listMaintenanceAssets(tenantId: string, category?: AssetCategory): Promise<MaintenanceAsset[]>;
+  getMaintenanceAsset(id: string): Promise<MaintenanceAsset | undefined>;
+  updateMaintenanceAsset(id: string, input: MaintenanceAssetUpdate): Promise<MaintenanceAsset | undefined>;
+  createWorkOrder(input: WorkOrderInput): Promise<WorkOrder>;
+  listWorkOrders(tenantId: string, status?: WorkOrderStatus): Promise<WorkOrder[]>;
+  getWorkOrder(id: string): Promise<WorkOrder | undefined>;
+  updateWorkOrder(id: string, input: WorkOrderUpdate): Promise<WorkOrder | undefined>;
+  createMaintenanceVendor(input: MaintenanceVendorInput): Promise<MaintenanceVendor>;
+  listMaintenanceVendors(tenantId: string): Promise<MaintenanceVendor[]>;
+  getMaintenanceVendor(id: string): Promise<MaintenanceVendor | undefined>;
+  updateMaintenanceVendor(id: string, input: MaintenanceVendorUpdate): Promise<MaintenanceVendor | undefined>;
+  createAmcContract(input: AmcContractInput): Promise<AmcContract>;
+  listAmcContracts(tenantId: string, vendorId?: string): Promise<AmcContract[]>;
+  getAmcContract(id: string): Promise<AmcContract | undefined>;
+  updateAmcContract(id: string, input: AmcContractUpdate): Promise<AmcContract | undefined>;
+  createComplianceFramework(input: ComplianceFrameworkInput): Promise<ComplianceFramework>;
+  listComplianceFrameworks(tenantId: string): Promise<ComplianceFramework[]>;
+  getComplianceFramework(id: string): Promise<ComplianceFramework | undefined>;
+  updateComplianceFramework(id: string, input: Partial<ComplianceFrameworkInput>): Promise<ComplianceFramework | undefined>;
+  listCompliancePolicies(tenantId: string, frameworkId?: string): Promise<CompliancePolicy[]>;
+  getCompliancePolicy(id: string): Promise<CompliancePolicy | undefined>;
+  createCompliancePolicy(input: CompliancePolicyInput): Promise<CompliancePolicy>;
+  updateCompliancePolicy(id: string, input: Partial<CompliancePolicyInput>): Promise<CompliancePolicy | undefined>;
+  listComplianceAssessments(tenantId: string, filters?: ComplianceAssessmentFilters): Promise<ComplianceAssessment[]>;
+  getComplianceAssessment(id: string): Promise<ComplianceAssessment | undefined>;
+  createComplianceAssessment(input: ComplianceAssessmentInput): Promise<ComplianceAssessment>;
+  updateComplianceAssessment(id: string, input: Partial<ComplianceAssessmentInput>): Promise<ComplianceAssessment | undefined>;
+  listComplianceCertificates(assessmentId: string): Promise<ComplianceCertificate[]>;
+  getComplianceCertificate(id: string): Promise<ComplianceCertificate | undefined>;
+  createComplianceCertificate(input: ComplianceCertificateInput): Promise<ComplianceCertificate>;
 }
 
 export interface CctvInfrastructureStore {
@@ -469,6 +664,7 @@ export interface CameraPermissionStore {
     reviewerId: string,
     status: string,
     notes?: string,
+    createdBy?: string,
   ): Promise<any>;
   revokeCameraAccessRequest(id: string): Promise<void>;
   listTimeBasedRestrictions(tenantId: string, filters: any): Promise<any[]>;
