@@ -237,33 +237,103 @@ export async function registerEvidenceRoutes(
    * POST /v1/evidence/cases/:caseId/exports
    */
   app.post("/v1/evidence/cases/:caseId/exports", async (request, reply) => {
-    const { caseId } = z.object({ caseId: z.string() }).parse(request.params);
+    const { caseId } = z.object({ caseId: z.string().uuid() }).parse(request.params);
     const body = exportRequestSchema.parse(request.body);
+
+    if (!request.currentUser) {
+      return reply.code(401).send({ error: "unauthenticated" });
+    }
+
+    if (!exportWorker) {
+      return reply.code(501).send({ error: "export_worker_not_enabled" });
+    }
 
     const caseRecord = await store.getEvidenceCase(caseId);
     if (!caseRecord) {
       return reply.code(404).send({ error: "case_not_found" });
     }
 
+    const items = await store.listEvidenceItems(caseId);
+    const cameras = inferRecordingCameras(items);
+    if (cameras.length === 0) {
+      return reply.code(400).send({ error: "no_recording_items", message: "No recording items found for this case." });
+    }
+
+    let accessNodeId = caseRecord.id;
+    const recordingItem = items.find((item) => item.cameraId);
+    if (recordingItem?.cameraId) {
+      const camera = await store.getCamera(recordingItem.cameraId);
+      if (camera) accessNodeId = camera.nodeId;
+    }
+
+    if (!(await hasAccess(request, reply, store, "evidence:export", accessNodeId))) {
+      return;
+    }
+
     try {
-      const exportRequest = await store.requestEvidenceExport(caseId, {
+      const exportType = body.format === "original"
+        ? "original"
+        : body.format === "mp4"
+          ? "viewing-copy"
+          : "investigation-package";
+
+      const exportJob = await exportWorker.createExportJob({
+        caseId,
+        tenantId: request.currentUser.tenantId,
+        exportType,
         format: body.format,
+        cameras,
+        options: {},
+        requestedBy: request.currentUser.id,
         reason: body.reason,
-        exportedBy: request.currentUser?.id ?? "unknown",
+        priority: 100,
       });
 
       await store.recordCustodyEvent({
         evidenceId: caseId,
-        action: "exported",
-        performedBy: request.currentUser?.id ?? "system",
+        action: "export_requested",
+        performedBy: request.currentUser.id,
         sourceIp: request.ip,
         reason: body.reason,
       });
 
-      return exportRequest;
+      return reply.code(201).send(exportJob);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       return reply.code(500).send({ error: "export_request_failed", details: message });
+    }
+  });
+
+  /**
+   * List evidence export jobs for a case
+   * GET /v1/evidence/cases/:caseId/exports
+   */
+  app.get("/v1/evidence/cases/:caseId/exports", async (request, reply) => {
+    const { caseId } = z.object({ caseId: z.string().uuid() }).parse(request.params);
+
+    if (!request.currentUser) {
+      return reply.code(401).send({ error: "unauthenticated" });
+    }
+
+    if (!exportWorker) {
+      return reply.code(501).send({ error: "export_worker_not_enabled" });
+    }
+
+    const caseRecord = await store.getEvidenceCase(caseId);
+    if (!caseRecord) {
+      return reply.code(404).send({ error: "case_not_found" });
+    }
+
+    if (!(await hasAccess(request, reply, store, "evidence:export", caseRecord.id))) {
+      return;
+    }
+
+    try {
+      const jobs = await exportWorker.listExportJobs(caseId, { limit: 50 });
+      return { data: jobs };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      return reply.code(500).send({ error: "export_list_failed", details: message });
     }
   });
 

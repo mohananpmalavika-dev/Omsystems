@@ -47,6 +47,7 @@ import type {
   AmcContractInput,
   ComplianceAssessmentFilters,
 } from "./control-plane-store.js";
+import { IncidentManagementMethods } from "./store-incident-extensions.js";
 
 function clean<T extends Record<string, any>>(obj: T) {
   return Object.fromEntries(Object.entries(obj).filter(([, v]) => v !== undefined)) as Partial<T>;
@@ -69,17 +70,100 @@ const seedUsers: User[] = [
   { id: "user-global-admin", displayName: "Global Administrator", tenantId },
   { id: "user-south-operator", displayName: "South Region Operator", tenantId },
   { id: "user-branch-manager", displayName: "Bengaluru Branch Manager", tenantId },
+  { id: "user-investigator", displayName: "Security Investigator", tenantId },
+  { id: "user-evidence-officer", displayName: "Evidence Officer", tenantId },
 ];
 
 const operatorActions: Action[] = [
   "live:view", "recording:view", "alarm:acknowledge",
   "analytics:view", "alerts:acknowledge",
+  "incident:view", "incident:create",
 ];
+
+const investigatorActions: Action[] = [
+  "live:view", "recording:view",
+  "incident:view", "incident:create", "incident:update", "incident:assign",
+  "investigation:view", "investigation:manage",
+  "evidence:view", "evidence:create", "evidence:preserve",
+  "alerts:acknowledge",
+];
+
+const evidenceOfficerActions: Action[] = [
+  "incident:view",
+  "investigation:view",
+  "evidence:view", "evidence:create", "evidence:preserve", "evidence:export-package", "evidence:approve",
+  "evidence:legal-hold", "evidence:release-hold",
+  "police:update", "insurance:update",
+];
+
 const seedGrants: AccessGrant[] = [
-  { userId: "user-global-admin", scopeNodeId: "company-1", actions: ["live:view", "recording:view", "evidence:export", "ptz:operate", "alarm:acknowledge", "device:configure", "user:manage", "audit:view", "org:manage", "analytics:view", "analytics:configure", "alerts:acknowledge", "alerts:escalate", "analytics:export"], effect: "allow" },
-  { userId: "user-south-operator", scopeNodeId: "region-south", actions: operatorActions, effect: "allow" },
-  { userId: "user-branch-manager", scopeNodeId: "branch-blr-001", actions: ["live:view", "recording:view", "analytics:view", "analytics:configure", "alerts:acknowledge", "alerts:escalate", "analytics:export"], effect: "allow" },
-  { userId: "user-branch-manager", scopeNodeId: "group-sensitive-blr-001", actions: ["live:view", "recording:view", "analytics:view", "analytics:configure", "alerts:acknowledge", "alerts:escalate", "analytics:export"], effect: "deny" },
+  // Global admin has full access
+  { 
+    userId: "user-global-admin", 
+    scopeNodeId: "company-1", 
+    actions: [
+      "live:view", "recording:view", "evidence:export", "ptz:operate", "alarm:acknowledge", 
+      "device:configure", "user:manage", "audit:view", "org:manage", 
+      "analytics:view", "analytics:configure", "alerts:acknowledge", "alerts:escalate", "analytics:export",
+      "incident:create", "incident:view", "incident:update", "incident:assign", "incident:escalate", "incident:close", "incident:reopen",
+      "investigation:view", "investigation:manage", "investigation:enhance",
+      "evidence:create", "evidence:view", "evidence:preserve", "evidence:export-package", "evidence:approve", "evidence:share",
+      "evidence:legal-hold", "evidence:release-hold",
+      "police:update", "insurance:update", "incident-report:approve",
+    ], 
+    effect: "allow" 
+  },
+  
+  // Operator can view and create incidents
+  { 
+    userId: "user-south-operator", 
+    scopeNodeId: "region-south", 
+    actions: operatorActions, 
+    effect: "allow" 
+  },
+  
+  // Branch manager can manage incidents at branch level
+  { 
+    userId: "user-branch-manager", 
+    scopeNodeId: "branch-blr-001", 
+    actions: [
+      "live:view", "recording:view", 
+      "analytics:view", "analytics:configure", "alerts:acknowledge", "alerts:escalate", "analytics:export",
+      "incident:view", "incident:create", "incident:update", "incident:assign", "incident:escalate",
+      "investigation:view",
+      "evidence:view",
+      "police:update", "insurance:update",
+    ], 
+    effect: "allow" 
+  },
+  
+  // Deny sensitive areas for branch manager
+  { 
+    userId: "user-branch-manager", 
+    scopeNodeId: "group-sensitive-blr-001", 
+    actions: [
+      "live:view", "recording:view", 
+      "analytics:view", "analytics:configure", "alerts:acknowledge", "alerts:escalate", "analytics:export",
+      "incident:view", "investigation:view", "evidence:view",
+    ], 
+    effect: "deny" 
+  },
+  
+  // Investigator has investigation and evidence collection permissions
+  { 
+    userId: "user-investigator", 
+    scopeNodeId: "company-1", 
+    actions: investigatorActions, 
+    effect: "allow" 
+  },
+  
+  // Evidence officer manages evidence packages and legal compliance
+  { 
+    userId: "user-evidence-officer", 
+    scopeNodeId: "company-1", 
+    actions: evidenceOfficerActions, 
+    effect: "allow" 
+  },
 ];
 
 const seedCameras: Camera[] = [
@@ -123,10 +207,24 @@ export class MemoryStore implements ControlPlaneStore {
   readonly recordingHealthEvents: RecordingHealthEvent[] = [];
   readonly liveBookmarks: LiveBookmark[] = [];
   readonly liveIncidents: LiveIncident[] = [];
+  // Investigation incidents (full featured)
   readonly incidents: any[] = [];
-  readonly incidentEvents: any[] = [];
-  readonly incidentVideoRanges: any[] = [];
+  readonly incidentParticipants: any[] = [];
   readonly incidentCameras: any[] = [];
+  readonly incidentVideoRanges: any[] = [];
+  readonly incidentEvents: any[] = [];
+  readonly incidentClips: any[] = [];
+  readonly incidentSnapshots: any[] = [];
+  readonly incidentEvidenceItems: any[] = [];
+  readonly incidentEvidencePackages: any[] = [];
+  readonly incidentPoliceIntimations: any[] = [];
+  readonly incidentPoliceEvidenceTransfers: any[] = [];
+  readonly incidentInsuranceClaims: any[] = [];
+  readonly incidentInsuranceDocuments: any[] = [];
+  readonly incidentTasks: any[] = [];
+  readonly incidentNotes: any[] = [];
+  readonly incidentSecureShares: any[] = [];
+  readonly incidentReports: any[] = [];
   readonly complianceFrameworks: ComplianceFramework[] = [];
   readonly compliancePolicies: CompliancePolicy[] = [];
   readonly complianceAssessments: ComplianceAssessment[] = [];
@@ -723,89 +821,77 @@ export class MemoryStore implements ControlPlaneStore {
     return incident;
   }
 
-  // Incident management (investigation)
-  async createIncident(input: {
-    tenantId: string;
-    incidentNumber: string;
-    title: string;
-    description?: string;
-    incidentType?: string;
-    severity?: string;
-    branchId?: string;
-    occurredAt?: string;
-    reportedBy?: string;
-  }) {
-    const now = new Date().toISOString();
-    const incident = {
-      id: randomUUID(),
-      tenantId: input.tenantId,
-      incidentNumber: input.incidentNumber,
-      title: input.title,
-      description: input.description ?? undefined,
-      incidentType: input.incidentType ?? undefined,
-      severity: input.severity ?? undefined,
-      branchId: input.branchId ?? undefined,
-      occurredAt: input.occurredAt ?? now,
-      detectedAt: now,
-      reportedBy: input.reportedBy ?? undefined,
-      assignedTo: undefined,
-      status: 'new',
-      createdAt: now,
-      updatedAt: now,
-    };
-    this.incidents.push(incident);
-    return incident;
-  }
-
-  async getIncident(id: string) {
-    return this.incidents.find((i) => i.id === id);
-  }
-
-  async listIncidents(tenantId: string, filters?: { status?: string; limit?: number }) {
-    const list = this.incidents.filter((i) => i.tenantId === tenantId && (!filters?.status || i.status === filters.status));
-    return list.slice(0, filters?.limit ?? 100);
-  }
-
-  async updateIncidentStatus(id: string, status: any, changedBy?: string, notes?: string) {
-    const incident = this.incidents.find((i) => i.id === id);
-    if (!incident) return undefined;
-    incident.status = status;
-    incident.updatedAt = new Date().toISOString();
-    this.incidentEvents.push({ id: randomUUID(), incidentId: id, eventType: 'status_changed', details: { status, notes }, createdBy: changedBy ?? null, createdAt: new Date().toISOString() });
-    return incident;
-  }
-
-  async assignIncident(id: string, userId: string) {
-    const incident = this.incidents.find((i) => i.id === id);
-    if (!incident) return undefined;
-    incident.assignedTo = userId;
-    incident.updatedAt = new Date().toISOString();
-    this.incidentEvents.push({ id: randomUUID(), incidentId: id, eventType: 'assigned', details: { assignedTo: userId }, createdBy: null, createdAt: new Date().toISOString() });
-    return incident;
-  }
-
-  async addIncidentCamera(incidentId: string, cameraId: string) {
-    const rec = { id: randomUUID(), incidentId, cameraId, addedAt: new Date().toISOString() };
-    this.incidentCameras.push(rec);
-    return;
-  }
-
-  async addIncidentVideoRange(incidentId: string, cameraId: string, fromAt: string, toAt: string) {
-    const rec = { id: randomUUID(), incidentId, cameraId, fromAt, toAt };
-    this.incidentVideoRanges.push(rec);
-    this.incidentEvents.push({ id: randomUUID(), incidentId, eventType: 'video_range_added', details: rec, createdBy: null, createdAt: new Date().toISOString() });
-    return rec;
-  }
-
-  async listIncidentTimeline(incidentId: string) {
-    return this.incidentEvents.filter((e) => e.incidentId === incidentId).sort((a, b) => a.createdAt.localeCompare(b.createdAt));
-  }
-
-  async addIncidentEvent(incidentId: string, eventType: string, details: any, createdBy?: string) {
-    const rec = { id: randomUUID(), incidentId, eventType, details, createdBy: createdBy ?? null, createdAt: new Date().toISOString() };
-    this.incidentEvents.push(rec);
-    return rec;
-  }
+  // Incident management (investigation) - Use mixin methods
+  createIncident = IncidentManagementMethods.createIncident;
+  getIncident = IncidentManagementMethods.getIncident;
+  listIncidents = IncidentManagementMethods.listIncidents;
+  updateIncident = IncidentManagementMethods.updateIncident;
+  updateIncidentStatus = IncidentManagementMethods.updateIncidentStatus;
+  assignIncident = IncidentManagementMethods.assignIncident;
+  escalateIncident = IncidentManagementMethods.escalateIncident;
+  closeIncident = IncidentManagementMethods.closeIncident;
+  reopenIncident = IncidentManagementMethods.reopenIncident;
+  addIncidentParticipant = IncidentManagementMethods.addIncidentParticipant;
+  listIncidentParticipants = IncidentManagementMethods.listIncidentParticipants;
+  updateIncidentParticipant = IncidentManagementMethods.updateIncidentParticipant;
+  removeIncidentParticipant = IncidentManagementMethods.removeIncidentParticipant;
+  addIncidentCamera = IncidentManagementMethods.addIncidentCamera;
+  listIncidentCameras = IncidentManagementMethods.listIncidentCameras;
+  addIncidentVideoRange = IncidentManagementMethods.addIncidentVideoRange;
+  listIncidentVideoRanges = IncidentManagementMethods.listIncidentVideoRanges;
+  preserveIncidentVideoAutomatic = IncidentManagementMethods.preserveIncidentVideoAutomatic;
+  listIncidentTimeline = IncidentManagementMethods.listIncidentTimeline;
+  addIncidentEvent = IncidentManagementMethods.addIncidentEvent;
+  createIncidentClip = IncidentManagementMethods.createIncidentClip;
+  listIncidentClips = IncidentManagementMethods.listIncidentClips;
+  getIncidentClip = IncidentManagementMethods.getIncidentClip;
+  createIncidentSnapshot = IncidentManagementMethods.createIncidentSnapshot;
+  listIncidentSnapshots = IncidentManagementMethods.listIncidentSnapshots;
+  getIncidentSnapshot = IncidentManagementMethods.getIncidentSnapshot;
+  addIncidentEvidenceItem = IncidentManagementMethods.addIncidentEvidenceItem;
+  listIncidentEvidenceItems = IncidentManagementMethods.listIncidentEvidenceItems;
+  createIncidentEvidencePackage = IncidentManagementMethods.createIncidentEvidencePackage;
+  listIncidentEvidencePackages = IncidentManagementMethods.listIncidentEvidencePackages;
+  getIncidentEvidencePackage = IncidentManagementMethods.getIncidentEvidencePackage;
+  approveEvidencePackage = IncidentManagementMethods.approveEvidencePackage;
+  updateEvidencePackageStatus = IncidentManagementMethods.updateEvidencePackageStatus;
+  recordEvidencePackageDownload = IncidentManagementMethods.recordEvidencePackageDownload;
+  createPoliceIntimation = IncidentManagementMethods.createPoliceIntimation;
+  listPoliceIntimations = IncidentManagementMethods.listPoliceIntimations;
+  getPoliceIntimation = IncidentManagementMethods.getPoliceIntimation;
+  updatePoliceIntimation = IncidentManagementMethods.updatePoliceIntimation;
+  recordPoliceEvidenceTransfer = IncidentManagementMethods.recordPoliceEvidenceTransfer;
+  listPoliceEvidenceTransfers = IncidentManagementMethods.listPoliceEvidenceTransfers;
+  createInsuranceClaim = IncidentManagementMethods.createInsuranceClaim;
+  listInsuranceClaims = IncidentManagementMethods.listInsuranceClaims;
+  getInsuranceClaim = IncidentManagementMethods.getInsuranceClaim;
+  updateInsuranceClaim = IncidentManagementMethods.updateInsuranceClaim;
+  addInsuranceDocument = IncidentManagementMethods.addInsuranceDocument;
+  listInsuranceDocuments = IncidentManagementMethods.listInsuranceDocuments;
+  createIncidentTask = IncidentManagementMethods.createIncidentTask;
+  listIncidentTasks = IncidentManagementMethods.listIncidentTasks;
+  updateIncidentTask = IncidentManagementMethods.updateIncidentTask;
+  completeIncidentTask = IncidentManagementMethods.completeIncidentTask;
+  addIncidentNote = IncidentManagementMethods.addIncidentNote;
+  listIncidentNotes = IncidentManagementMethods.listIncidentNotes;
+  updateIncidentNote = IncidentManagementMethods.updateIncidentNote;
+  deleteIncidentNote = IncidentManagementMethods.deleteIncidentNote;
+  createSecureShare = IncidentManagementMethods.createSecureShare;
+  listSecureShares = IncidentManagementMethods.listSecureShares;
+  getSecureShare = IncidentManagementMethods.getSecureShare;
+  getSecureShareByToken = IncidentManagementMethods.getSecureShareByToken;
+  verifySecureShareAccess = IncidentManagementMethods.verifySecureShareAccess;
+  recordSecureShareDownload = IncidentManagementMethods.recordSecureShareDownload;
+  revokeSecureShare = IncidentManagementMethods.revokeSecureShare;
+  createIncidentReport = IncidentManagementMethods.createIncidentReport;
+  listIncidentReports = IncidentManagementMethods.listIncidentReports;
+  getIncidentReport = IncidentManagementMethods.getIncidentReport;
+  updateIncidentReport = IncidentManagementMethods.updateIncidentReport;
+  reviewIncidentReport = IncidentManagementMethods.reviewIncidentReport;
+  approveIncidentReport = IncidentManagementMethods.approveIncidentReport;
+  finalizeIncidentReport = IncidentManagementMethods.finalizeIncidentReport;
+  getIncidentsDashboard = IncidentManagementMethods.getIncidentsDashboard;
+  getIncidentStatistics = IncidentManagementMethods.getIncidentStatistics;
 
   async listComplianceFrameworks(tenantId: string) {
     return this.complianceFrameworks.filter((framework) => framework.tenantId === tenantId);

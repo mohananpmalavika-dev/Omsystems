@@ -288,24 +288,6 @@ export const liveOperationsApi = {
     ),
 };
 
-export const evidenceApi = {
-  listCases: () => fetchApi<{ data: any[] }>('/v1/evidence/cases'),
-  getItems: (caseId: string) =>
-    fetchApi<{ data: any[] }>(`/v1/evidence/cases/${encodeURIComponent(caseId)}/items`),
-  getChainOfCustody: (caseId: string) =>
-    fetchApi<{ data: any[] }>(`/v1/evidence/cases/${encodeURIComponent(caseId)}/chain-of-custody`),
-  listExports: (caseId: string) =>
-    fetchApi<{ data: any[] }>(`/v1/evidence/cases/${encodeURIComponent(caseId)}/exports`),
-  requestExport: (caseId: string, data: any) =>
-    fetchApi<any>(`/v1/evidence/cases/${encodeURIComponent(caseId)}/exports`, {
-      method: 'POST', body: JSON.stringify(data),
-    }),
-  getExportStatus: (exportId: string) =>
-    fetchApi<any>(`/v1/evidence/exports/${encodeURIComponent(exportId)}/status`),
-  getExportManifest: (exportId: string) =>
-    fetchApi<any>(`/v1/evidence/exports/${encodeURIComponent(exportId)}/manifest`),
-};
-
 export const complianceApi = {
   listFrameworks: () => fetchApi<{ data: any[] }>('/v1/compliance/frameworks'),
   createFramework: (data: {
@@ -519,11 +501,20 @@ export const cameraPermissionApi = {
 };
 
 export const videoSearchApi = {
-  searchRecordings: (query: { cameraId: string; from: string; to: string; eventType?: string; confidence?: number; limit?: number; offset?: number }) =>
-    fetchApi<any>(`/v1/recordings/search?${new URLSearchParams(Object.entries(query).filter(([, v]) => v != null).map(([k, v]) => [k, String(v)]))}`),
+  searchRecordings: (query: { cameraId?: string; from: string; to: string; eventType?: string; minConfidence?: number; limit?: number; offset?: number }) => {
+    const params = new URLSearchParams();
+    if (query.cameraId) params.set("cameraId", query.cameraId);
+    params.set("from", query.from);
+    params.set("to", query.to);
+    if (query.eventType) params.set("eventType", query.eventType);
+    if (query.minConfidence !== undefined) params.set("minConfidence", String(query.minConfidence));
+    if (query.limit !== undefined) params.set("limit", String(query.limit));
+    if (query.offset !== undefined) params.set("offset", String(query.offset));
+    return fetchApi<any>(`/v1/recordings/search?${params.toString()}`);
+  },
 
   getTimeline: (cameraId: string, options: { from: string; to: string }) =>
-    fetchApi<any>(`/v1/cameras/${cameraId}/recordings/timeline?from=${encodeURIComponent(options.from)}&to=${encodeURIComponent(options.to)}`),
+    fetchApi<any>(`/v1/recordings/timeline?cameraId=${encodeURIComponent(cameraId)}&from=${encodeURIComponent(options.from)}&to=${encodeURIComponent(options.to)}`),
 
   getThumbnails: (query: { cameraId: string; from: string; to: string; limit?: number }) =>
     fetchApi<any>(`/v1/recordings/thumbnails?${new URLSearchParams(Object.entries(query).filter(([, v]) => v != null).map(([k, v]) => [k, String(v)]))}`),
@@ -572,6 +563,9 @@ export const evidenceApi = {
   listItems: (caseId: string) =>
     fetchApi<any>(`/v1/evidence/cases/${caseId}/items`),
 
+  listExports: (caseId: string) =>
+    fetchApi<{ data: any[] }>(`/v1/evidence/cases/${caseId}/exports`),
+
   requestExport: (caseId: string, data: { format: string; reason: string }) =>
     fetchApi<any>(`/v1/evidence/cases/${caseId}/exports`, {
       method: 'POST',
@@ -583,6 +577,15 @@ export const evidenceApi = {
 
   getCustodyLog: (caseId: string) =>
     fetchApi<any>(`/v1/evidence/cases/${caseId}/chain-of-custody`),
+
+  getChainOfCustody: (caseId: string) =>
+    fetchApi<any>(`/v1/evidence/cases/${caseId}/chain-of-custody`),
+
+  getExportStatus: (exportId: string) =>
+    fetchApi<any>(`/v1/evidence/exports/${exportId}/status`),
+
+  getExportManifest: (exportId: string) =>
+    fetchApi<any>(`/v1/evidence/exports/${exportId}/manifest`),
 
   createLegalHold: (data: { caseNumber: string; reason: string; cameraIds: string[]; startTime: string; endTime: string; reviewDate?: string; expiryDate?: string }) =>
     fetchApi<any>('/v1/evidence/legal-holds', {

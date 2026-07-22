@@ -13,6 +13,27 @@ export const actions = [
   "alerts:acknowledge",
   "alerts:escalate",
   "analytics:export",
+  "incident:create",
+  "incident:view",
+  "incident:update",
+  "incident:assign",
+  "incident:escalate",
+  "incident:close",
+  "incident:reopen",
+  "investigation:view",
+  "investigation:manage",
+  "investigation:enhance",
+  "evidence:create",
+  "evidence:view",
+  "evidence:preserve",
+  "evidence:export-package",
+  "evidence:approve",
+  "evidence:share",
+  "evidence:legal-hold",
+  "evidence:release-hold",
+  "police:update",
+  "insurance:update",
+  "incident-report:approve",
 ] as const;
 
 export type Action = (typeof actions)[number];
@@ -1068,4 +1089,462 @@ export interface RecordingLegalHoldRequest {
   endTime: string;
   reviewDate?: string;
   expiryDate?: string;
+}
+
+// ============ INCIDENT MANAGEMENT & INVESTIGATION ============
+
+export type IncidentType =
+  | "theft-robbery"
+  | "fire-emergency"
+  | "atm-tampering"
+  | "unauthorized-access"
+  | "suspicious-activity"
+  | "accident-injury"
+  | "vandalism"
+  | "customer-dispute"
+  | "cash-shortage-excess"
+  | "teller-dispute"
+  | "vault-violation"
+  | "locker-room-incident"
+  | "employee-misconduct"
+  | "fraud-suspicion"
+  | "cyber-tampering"
+  | "camera-tampering"
+  | "panic-button"
+  | "vehicle-incident"
+  | "lost-property"
+  | "workplace-safety"
+  | "false-alarm"
+  | "other";
+
+export type IncidentSeverity = "P1" | "P2" | "P3" | "P4" | "P5";
+
+export type IncidentStatus =
+  | "draft"
+  | "new"
+  | "acknowledged"
+  | "under-triage"
+  | "assigned"
+  | "under-investigation"
+  | "awaiting-information"
+  | "escalated"
+  | "police-intimated"
+  | "insurance-submitted"
+  | "resolved"
+  | "closed"
+  | "reopened"
+  | "cancelled"
+  | "false-alarm";
+
+export type IncidentDetectionSource =
+  | "manual-operator"
+  | "manual-branch"
+  | "manual-mobile"
+  | "ai-detection"
+  | "external-alarm"
+  | "external-atm"
+  | "external-access-control"
+  | "external-panic"
+  | "external-fire"
+  | "post-event-discovery";
+
+export type IncidentConfidentialityLevel =
+  | "public"
+  | "internal"
+  | "confidential"
+  | "restricted"
+  | "highly-restricted";
+
+export interface Incident {
+  id: string;
+  incidentNumber: string;
+  tenantId: string;
+  branchId?: string;
+  title: string;
+  description?: string;
+  incidentType: IncidentType;
+  severity: IncidentSeverity;
+  status: IncidentStatus;
+  detectionSource: IncidentDetectionSource;
+  occurredAt: string;
+  detectedAt: string;
+  reportedAt?: string;
+  reportedBy?: string;
+  assignedTo?: string;
+  estimatedLoss?: number;
+  injuryDetails?: string;
+  confidentialityLevel: IncidentConfidentialityLevel;
+  legalHoldStatus: boolean;
+  policeRequired: boolean;
+  insuranceRequired: boolean;
+  createdAt: string;
+  updatedAt: string;
+  closedAt?: string;
+}
+
+export type IncidentParticipantRole =
+  | "suspect"
+  | "victim"
+  | "witness"
+  | "customer"
+  | "employee"
+  | "investigator"
+  | "reporter"
+  | "approver"
+  | "other";
+
+export interface IncidentParticipant {
+  id: string;
+  incidentId: string;
+  role: IncidentParticipantRole;
+  personType: "customer" | "employee" | "vendor" | "visitor" | "unknown";
+  name?: string;
+  employeeId?: string;
+  customerId?: string;
+  contactPhone?: string;
+  contactEmail?: string;
+  notes?: string;
+  addedBy: string;
+  addedAt: string;
+}
+
+export interface IncidentCamera {
+  id: string;
+  incidentId: string;
+  cameraId: string;
+  isPrimary: boolean;
+  addedAt: string;
+  addedBy: string;
+}
+
+export interface IncidentVideoRange {
+  id: string;
+  incidentId: string;
+  cameraId: string;
+  fromAt: string;
+  toAt: string;
+  preservedAt: string;
+  preservedBy: string;
+  legalHoldApplied: boolean;
+  legalHoldId?: string;
+  notes?: string;
+}
+
+export type IncidentEventType =
+  | "status_changed"
+  | "assigned"
+  | "escalated"
+  | "video_preserved"
+  | "camera_added"
+  | "clip_created"
+  | "snapshot_taken"
+  | "evidence_exported"
+  | "police_intimated"
+  | "insurance_filed"
+  | "note_added"
+  | "participant_added"
+  | "task_created"
+  | "approval_requested"
+  | "approval_granted"
+  | "approval_rejected";
+
+export interface IncidentEvent {
+  id: string;
+  incidentId: string;
+  eventType: IncidentEventType;
+  description: string;
+  details?: Record<string, unknown>;
+  performedBy?: string;
+  occurredAt: string;
+}
+
+export interface IncidentClip {
+  id: string;
+  incidentId: string;
+  cameraId: string;
+  sourceSegmentIds: string[];
+  startTime: string;
+  endTime: string;
+  clipType: "original-segment" | "investigation-copy" | "export-copy";
+  storagePath?: string;
+  sizeBytes?: number;
+  checksumSha256?: string;
+  format?: string;
+  hasWatermark: boolean;
+  hasTimestamp: boolean;
+  createdBy: string;
+  createdAt: string;
+  notes?: string;
+}
+
+export interface IncidentSnapshot {
+  id: string;
+  incidentId: string;
+  cameraId: string;
+  segmentId?: string;
+  timestamp: string;
+  snapshotType: "original" | "annotated" | "cropped" | "enhanced";
+  storagePath?: string;
+  checksumSha256?: string;
+  description?: string;
+  annotations?: Record<string, unknown>;
+  enhancementDetails?: Record<string, unknown>;
+  createdBy: string;
+  createdAt: string;
+}
+
+export type EvidenceItemType =
+  | "original-video"
+  | "investigation-clip"
+  | "snapshot"
+  | "timeline-report"
+  | "ai-event-log"
+  | "alert-log"
+  | "operator-notes"
+  | "camera-details"
+  | "hash-report"
+  | "chain-of-custody"
+  | "police-document"
+  | "insurance-document"
+  | "external-document";
+
+export interface IncidentEvidenceItem {
+  id: string;
+  incidentId: string;
+  itemType: EvidenceItemType;
+  title: string;
+  description?: string;
+  referenceId?: string;
+  storagePath?: string;
+  checksumSha256?: string;
+  addedBy: string;
+  addedAt: string;
+}
+
+export type EvidencePackageStatus =
+  | "draft"
+  | "pending-approval"
+  | "approved"
+  | "generating"
+  | "ready"
+  | "failed"
+  | "downloaded"
+  | "expired";
+
+export interface IncidentEvidencePackage {
+  id: string;
+  incidentId: string;
+  packageNumber: string;
+  title: string;
+  description?: string;
+  status: EvidencePackageStatus;
+  includeOriginalVideo: boolean;
+  includeInvestigationClips: boolean;
+  includeSnapshots: boolean;
+  includeTimeline: boolean;
+  includeAlertLogs: boolean;
+  includeDocuments: boolean;
+  packagePath?: string;
+  packageSizeBytes?: number;
+  checksumSha256?: string;
+  manifestPath?: string;
+  digitallySigned: boolean;
+  signature?: string;
+  createdBy: string;
+  createdAt: string;
+  approvedBy?: string;
+  approvedAt?: string;
+  generatedAt?: string;
+  expiresAt?: string;
+  downloadedBy?: string;
+  downloadedAt?: string;
+  error?: string;
+}
+
+export type PoliceIntimationStatus =
+  | "required"
+  | "pending-approval"
+  | "approved"
+  | "intimated"
+  | "fir-filed"
+  | "under-investigation"
+  | "charge-sheet-filed"
+  | "closed"
+  | "not-required";
+
+export interface IncidentPoliceIntimation {
+  id: string;
+  incidentId: string;
+  policeStation: string;
+  policeStationAddress?: string;
+  intimationMethod: "in-person" | "email" | "phone" | "portal" | "other";
+  intimatedAt: string;
+  intimatedBy: string;
+  officerName?: string;
+  officerDesignation?: string;
+  officerContact?: string;
+  gdNumber?: string;
+  firNumber?: string;
+  firDate?: string;
+  firCopy?: string;
+  acknowledgementCopy?: string;
+  status: PoliceIntimationStatus;
+  investigationOfficer?: string;
+  investigationOfficerContact?: string;
+  followUpDate?: string;
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface IncidentPoliceEvidenceTransfer {
+  id: string;
+  incidentId: string;
+  policeIntimationId: string;
+  transferDate: string;
+  transferredBy: string;
+  evidencePackageId?: string;
+  evidenceDescription: string;
+  recipientName: string;
+  recipientDesignation?: string;
+  receiptAcknowledgement?: string;
+  transferMethod: "physical-media" | "secure-link" | "portal" | "in-person" | "other";
+  notes?: string;
+  createdAt: string;
+}
+
+export type InsuranceClaimStatus =
+  | "not-required"
+  | "to-be-filed"
+  | "prepared"
+  | "submitted"
+  | "additional-info-required"
+  | "survey-in-progress"
+  | "approved"
+  | "partially-approved"
+  | "rejected"
+  | "settled"
+  | "closed";
+
+export interface IncidentInsuranceClaim {
+  id: string;
+  incidentId: string;
+  insuranceCompany: string;
+  policyNumber: string;
+  claimNumber?: string;
+  dateOfLoss: string;
+  estimatedLoss: number;
+  claimAmount?: number;
+  submittedDate?: string;
+  submittedBy?: string;
+  surveyorName?: string;
+  surveyorContact?: string;
+  surveyDate?: string;
+  status: InsuranceClaimStatus;
+  settlementAmount?: number;
+  settlementDate?: string;
+  rejectionReason?: string;
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface IncidentInsuranceDocument {
+  id: string;
+  incidentId: string;
+  claimId: string;
+  documentType: string;
+  documentTitle: string;
+  documentPath?: string;
+  uploadedBy: string;
+  uploadedAt: string;
+}
+
+export type IncidentTaskStatus = "pending" | "in-progress" | "completed" | "cancelled";
+
+export interface IncidentTask {
+  id: string;
+  incidentId: string;
+  taskName: string;
+  description?: string;
+  assignedTo?: string;
+  dueDate?: string;
+  priority: "low" | "medium" | "high" | "critical";
+  status: IncidentTaskStatus;
+  isMandatory: boolean;
+  completedBy?: string;
+  completedAt?: string;
+  completionNotes?: string;
+  createdBy: string;
+  createdAt: string;
+}
+
+export interface IncidentNote {
+  id: string;
+  incidentId: string;
+  noteType: "general" | "investigation" | "management" | "legal" | "confidential";
+  content: string;
+  createdBy: string;
+  createdAt: string;
+  editedAt?: string;
+}
+
+export type SecureShareStatus = "active" | "downloaded" | "expired" | "revoked";
+
+export interface IncidentSecureShare {
+  id: string;
+  incidentId: string;
+  evidencePackageId?: string;
+  shareToken: string;
+  shareUrl: string;
+  recipientName: string;
+  recipientOrganization: string;
+  recipientEmail?: string;
+  recipientVerified: boolean;
+  purpose: string;
+  oneTimePassword?: string;
+  maxDownloads: number;
+  downloadCount: number;
+  expiresAt: string;
+  status: SecureShareStatus;
+  watermarked: boolean;
+  encrypted: boolean;
+  createdBy: string;
+  createdAt: string;
+  downloadedAt?: string;
+  downloadedBy?: string;
+  downloadIp?: string;
+  revokedAt?: string;
+  revokedBy?: string;
+  revokeReason?: string;
+}
+
+export type IncidentReportStatus = "draft" | "pending-review" | "approved" | "final";
+
+export interface IncidentReport {
+  id: string;
+  incidentId: string;
+  reportNumber: string;
+  reportType: "preliminary" | "investigation" | "final" | "executive-summary";
+  status: IncidentReportStatus;
+  executiveSummary?: string;
+  detailedChronology?: string;
+  findings?: string;
+  rootCause?: string;
+  controlFailures?: string;
+  correctiveActions?: string;
+  preventiveActions?: string;
+  recommendations?: string;
+  conclusions?: string;
+  evidenceIndex?: string;
+  chainOfCustodySummary?: string;
+  unresolvedQuestions?: string;
+  createdBy: string;
+  createdAt: string;
+  reviewedBy?: string;
+  reviewedAt?: string;
+  approvedBy?: string;
+  approvedAt?: string;
+  finalizedAt?: string;
+  reportPath?: string;
 }

@@ -531,16 +531,433 @@ export interface ControlPlaneStore {
     cameraId: string,
     status: LiveIncidentStatus,
   ): Promise<LiveIncident | undefined>;
-  // Incident management (investigation / cases)
-  createIncident(input: any): Promise<any>;
+  // ============ INCIDENT MANAGEMENT & INVESTIGATION ============
+  
+  // Core Incident Operations
+  createIncident(input: {
+    tenantId: string;
+    branchId?: string;
+    title: string;
+    description?: string;
+    incidentType: string;
+    severity: string;
+    detectionSource: string;
+    occurredAt: string;
+    reportedBy?: string;
+    estimatedLoss?: number;
+    injuryDetails?: string;
+    confidentialityLevel?: string;
+    policeRequired?: boolean;
+    insuranceRequired?: boolean;
+  }): Promise<any>;
+  
   getIncident(id: string): Promise<any | undefined>;
-  listIncidents(tenantId: string, filters?: any): Promise<any[]>;
-  updateIncidentStatus(id: string, status: any, changedBy?: string, notes?: string): Promise<any | undefined>;
-  assignIncident(id: string, userId: string): Promise<any | undefined>;
-  addIncidentCamera(incidentId: string, cameraId: string): Promise<void>;
-  addIncidentVideoRange(incidentId: string, cameraId: string, fromAt: string, toAt: string): Promise<any>;
+  
+  listIncidents(tenantId: string, filters?: {
+    status?: string;
+    incidentType?: string;
+    severity?: string;
+    branchId?: string;
+    assignedTo?: string;
+    from?: string;
+    to?: string;
+    limit?: number;
+  }): Promise<any[]>;
+  
+  updateIncident(id: string, input: {
+    title?: string;
+    description?: string;
+    incidentType?: string;
+    severity?: string;
+    estimatedLoss?: number;
+    injuryDetails?: string;
+    confidentialityLevel?: string;
+    policeRequired?: boolean;
+    insuranceRequired?: boolean;
+  }): Promise<any | undefined>;
+  
+  updateIncidentStatus(
+    id: string,
+    status: string,
+    changedBy: string,
+    notes?: string,
+  ): Promise<any | undefined>;
+  
+  assignIncident(id: string, userId: string, assignedBy: string): Promise<any | undefined>;
+  
+  escalateIncident(id: string, escalatedBy: string, reason: string, recipients: string[]): Promise<any | undefined>;
+  
+  closeIncident(id: string, closedBy: string, notes?: string): Promise<any | undefined>;
+  
+  reopenIncident(id: string, reopenedBy: string, reason: string): Promise<any | undefined>;
+  
+  // Incident Participants
+  addIncidentParticipant(input: {
+    incidentId: string;
+    role: string;
+    personType: string;
+    name?: string;
+    employeeId?: string;
+    customerId?: string;
+    contactPhone?: string;
+    contactEmail?: string;
+    notes?: string;
+    addedBy: string;
+  }): Promise<any>;
+  
+  listIncidentParticipants(incidentId: string): Promise<any[]>;
+  
+  updateIncidentParticipant(id: string, input: any): Promise<any | undefined>;
+  
+  removeIncidentParticipant(id: string): Promise<void>;
+  
+  // Incident Cameras and Video
+  addIncidentCamera(
+    incidentId: string,
+    cameraId: string,
+    isPrimary: boolean,
+    addedBy: string,
+  ): Promise<void>;
+  
+  listIncidentCameras(incidentId: string): Promise<any[]>;
+  
+  addIncidentVideoRange(input: {
+    incidentId: string;
+    cameraId: string;
+    fromAt: string;
+    toAt: string;
+    preservedBy: string;
+    applyLegalHold?: boolean;
+    notes?: string;
+  }): Promise<any>;
+  
+  listIncidentVideoRanges(incidentId: string): Promise<any[]>;
+  
+  preserveIncidentVideoAutomatic(input: {
+    incidentId: string;
+    cameraId: string;
+    incidentTime: string;
+    preRollMinutes: number;
+    postRollMinutes: number;
+    preservedBy: string;
+  }): Promise<any>;
+  
+  // Incident Timeline and Events
   listIncidentTimeline(incidentId: string): Promise<any[]>;
-  addIncidentEvent(incidentId: string, eventType: string, details: any, createdBy?: string): Promise<any>;
+  
+  addIncidentEvent(input: {
+    incidentId: string;
+    eventType: string;
+    description: string;
+    details?: Record<string, unknown>;
+    performedBy?: string;
+  }): Promise<any>;
+  
+  // Incident Clips and Snapshots
+  createIncidentClip(input: {
+    incidentId: string;
+    cameraId: string;
+    sourceSegmentIds: string[];
+    startTime: string;
+    endTime: string;
+    clipType: string;
+    storagePath?: string;
+    sizeBytes?: number;
+    checksumSha256?: string;
+    format?: string;
+    hasWatermark: boolean;
+    hasTimestamp: boolean;
+    createdBy: string;
+    notes?: string;
+  }): Promise<any>;
+  
+  listIncidentClips(incidentId: string): Promise<any[]>;
+  
+  getIncidentClip(id: string): Promise<any | undefined>;
+  
+  createIncidentSnapshot(input: {
+    incidentId: string;
+    cameraId: string;
+    segmentId?: string;
+    timestamp: string;
+    snapshotType: string;
+    storagePath?: string;
+    checksumSha256?: string;
+    description?: string;
+    annotations?: Record<string, unknown>;
+    enhancementDetails?: Record<string, unknown>;
+    createdBy: string;
+  }): Promise<any>;
+  
+  listIncidentSnapshots(incidentId: string): Promise<any[]>;
+  
+  getIncidentSnapshot(id: string): Promise<any | undefined>;
+  
+  // Evidence Items and Packages
+  addIncidentEvidenceItem(input: {
+    incidentId: string;
+    itemType: string;
+    title: string;
+    description?: string;
+    referenceId?: string;
+    storagePath?: string;
+    checksumSha256?: string;
+    addedBy: string;
+  }): Promise<any>;
+  
+  listIncidentEvidenceItems(incidentId: string): Promise<any[]>;
+  
+  createIncidentEvidencePackage(input: {
+    incidentId: string;
+    title: string;
+    description?: string;
+    includeOriginalVideo: boolean;
+    includeInvestigationClips: boolean;
+    includeSnapshots: boolean;
+    includeTimeline: boolean;
+    includeAlertLogs: boolean;
+    includeDocuments: boolean;
+    createdBy: string;
+  }): Promise<any>;
+  
+  listIncidentEvidencePackages(incidentId: string): Promise<any[]>;
+  
+  getIncidentEvidencePackage(id: string): Promise<any | undefined>;
+  
+  approveEvidencePackage(id: string, approvedBy: string): Promise<any | undefined>;
+  
+  updateEvidencePackageStatus(
+    id: string,
+    status: string,
+    details?: {
+      packagePath?: string;
+      packageSizeBytes?: number;
+      checksumSha256?: string;
+      manifestPath?: string;
+      signature?: string;
+      error?: string;
+    },
+  ): Promise<any | undefined>;
+  
+  recordEvidencePackageDownload(
+    id: string,
+    downloadedBy: string,
+  ): Promise<any | undefined>;
+  
+  // Police Intimation
+  createPoliceIntimation(input: {
+    incidentId: string;
+    policeStation: string;
+    policeStationAddress?: string;
+    intimationMethod: string;
+    intimatedAt: string;
+    intimatedBy: string;
+    officerName?: string;
+    officerDesignation?: string;
+    officerContact?: string;
+    notes?: string;
+  }): Promise<any>;
+  
+  listPoliceIntimations(incidentId: string): Promise<any[]>;
+  
+  getPoliceIntimation(id: string): Promise<any | undefined>;
+  
+  updatePoliceIntimation(id: string, input: {
+    gdNumber?: string;
+    firNumber?: string;
+    firDate?: string;
+    firCopy?: string;
+    acknowledgementCopy?: string;
+    status?: string;
+    investigationOfficer?: string;
+    investigationOfficerContact?: string;
+    followUpDate?: string;
+    notes?: string;
+  }): Promise<any | undefined>;
+  
+  recordPoliceEvidenceTransfer(input: {
+    incidentId: string;
+    policeIntimationId: string;
+    transferDate: string;
+    transferredBy: string;
+    evidencePackageId?: string;
+    evidenceDescription: string;
+    recipientName: string;
+    recipientDesignation?: string;
+    receiptAcknowledgement?: string;
+    transferMethod: string;
+    notes?: string;
+  }): Promise<any>;
+  
+  listPoliceEvidenceTransfers(incidentId: string): Promise<any[]>;
+  
+  // Insurance Claims
+  createInsuranceClaim(input: {
+    incidentId: string;
+    insuranceCompany: string;
+    policyNumber: string;
+    dateOfLoss: string;
+    estimatedLoss: number;
+    claimAmount?: number;
+    notes?: string;
+  }): Promise<any>;
+  
+  listInsuranceClaims(incidentId: string): Promise<any[]>;
+  
+  getInsuranceClaim(id: string): Promise<any | undefined>;
+  
+  updateInsuranceClaim(id: string, input: {
+    claimNumber?: string;
+    submittedDate?: string;
+    submittedBy?: string;
+    surveyorName?: string;
+    surveyorContact?: string;
+    surveyDate?: string;
+    status?: string;
+    settlementAmount?: number;
+    settlementDate?: string;
+    rejectionReason?: string;
+    notes?: string;
+  }): Promise<any | undefined>;
+  
+  addInsuranceDocument(input: {
+    incidentId: string;
+    claimId: string;
+    documentType: string;
+    documentTitle: string;
+    documentPath?: string;
+    uploadedBy: string;
+  }): Promise<any>;
+  
+  listInsuranceDocuments(incidentId: string, claimId?: string): Promise<any[]>;
+  
+  // Incident Tasks
+  createIncidentTask(input: {
+    incidentId: string;
+    taskName: string;
+    description?: string;
+    assignedTo?: string;
+    dueDate?: string;
+    priority: string;
+    isMandatory: boolean;
+    createdBy: string;
+  }): Promise<any>;
+  
+  listIncidentTasks(incidentId: string): Promise<any[]>;
+  
+  updateIncidentTask(id: string, input: {
+    taskName?: string;
+    description?: string;
+    assignedTo?: string;
+    dueDate?: string;
+    priority?: string;
+    status?: string;
+  }): Promise<any | undefined>;
+  
+  completeIncidentTask(
+    id: string,
+    completedBy: string,
+    completionNotes?: string,
+  ): Promise<any | undefined>;
+  
+  // Incident Notes
+  addIncidentNote(input: {
+    incidentId: string;
+    noteType: string;
+    content: string;
+    createdBy: string;
+  }): Promise<any>;
+  
+  listIncidentNotes(incidentId: string, noteType?: string): Promise<any[]>;
+  
+  updateIncidentNote(id: string, content: string): Promise<any | undefined>;
+  
+  deleteIncidentNote(id: string): Promise<void>;
+  
+  // Secure Sharing with Authorities
+  createSecureShare(input: {
+    incidentId: string;
+    evidencePackageId?: string;
+    recipientName: string;
+    recipientOrganization: string;
+    recipientEmail?: string;
+    purpose: string;
+    maxDownloads: number;
+    expiresAt: string;
+    watermarked: boolean;
+    encrypted: boolean;
+    createdBy: string;
+  }): Promise<any>;
+  
+  listSecureShares(incidentId: string): Promise<any[]>;
+  
+  getSecureShare(id: string): Promise<any | undefined>;
+  
+  getSecureShareByToken(token: string): Promise<any | undefined>;
+  
+  verifySecureShareAccess(
+    token: string,
+    oneTimePassword?: string,
+  ): Promise<{ allowed: boolean; share?: any; error?: string }>;
+  
+  recordSecureShareDownload(input: {
+    id: string;
+    downloadedBy: string;
+    downloadIp?: string;
+  }): Promise<any | undefined>;
+  
+  revokeSecureShare(id: string, revokedBy: string, reason: string): Promise<any | undefined>;
+  
+  // Incident Reports
+  createIncidentReport(input: {
+    incidentId: string;
+    reportType: string;
+    executiveSummary?: string;
+    detailedChronology?: string;
+    findings?: string;
+    rootCause?: string;
+    controlFailures?: string;
+    correctiveActions?: string;
+    preventiveActions?: string;
+    recommendations?: string;
+    conclusions?: string;
+    unresolvedQuestions?: string;
+    createdBy: string;
+  }): Promise<any>;
+  
+  listIncidentReports(incidentId: string): Promise<any[]>;
+  
+  getIncidentReport(id: string): Promise<any | undefined>;
+  
+  updateIncidentReport(id: string, input: any): Promise<any | undefined>;
+  
+  reviewIncidentReport(id: string, reviewedBy: string): Promise<any | undefined>;
+  
+  approveIncidentReport(id: string, approvedBy: string): Promise<any | undefined>;
+  
+  finalizeIncidentReport(
+    id: string,
+    reportPath?: string,
+  ): Promise<any | undefined>;
+  
+  // Dashboard and Analytics
+  getIncidentsDashboard(tenantId: string, filters?: {
+    branchId?: string;
+    from?: string;
+    to?: string;
+  }): Promise<{
+    totalIncidents: number;
+    openIncidents: number;
+    criticalIncidents: number;
+    incidentsByType: Record<string, number>;
+    incidentsBySeverity: Record<string, number>;
+    incidentsByStatus: Record<string, number>;
+    averageResolutionHours: number;
+    policeIntimationsCount: number;
+    insuranceClaimsCount: number;
+  }>;
+  
+  getIncidentStatistics(tenantId: string, period: string): Promise<any>;
   listAnalyticsRules(cameraId: string): Promise<AnalyticsRule[]>;
   createAnalyticsRule(
     tenantId: string,

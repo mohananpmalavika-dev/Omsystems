@@ -52,7 +52,7 @@ export function SyncedPlaybackView({
   const [focusedCamera, setFocusedCamera] = useState<string | null>(null);
   const [currentTimes, setCurrentTimes] = useState<Record<string, number>>({});
   const videoRefs = useRef<Record<string, HTMLVideoElement | null>>({});
-  const syncTimerRef = useRef<NodeJS.Timeout>();
+  const syncTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   // Get grid dimensions from layout
   const getGridDimensions = (layout: GridLayout): { rows: number; cols: number } => {

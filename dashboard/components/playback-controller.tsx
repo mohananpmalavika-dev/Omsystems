@@ -57,7 +57,7 @@ export function PlaybackController({
   const [zoomCenter, setZoomCenter] = useState({ x: 0.5, y: 0.5 });
   const [frameStepMode, setFrameStepMode] = useState(false);
   const [showControls, setShowControls] = useState(true);
-  const controlsTimeoutRef = useRef<NodeJS.Timeout>();
+  const controlsTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Video source URL
   const videoUrl = `/api/recordings/play?segmentId=${encodeURIComponent(segmentId)}`;

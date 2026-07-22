@@ -148,6 +148,38 @@ export async function registerVideoSearchRoutes(
   });
 
   /**
+   * Get thumbnails for a recording range
+   * GET /v1/recordings/thumbnails
+   */
+  app.get("/v1/recordings/thumbnails", async (request, reply) => {
+    const query = z.object({
+      cameraId: z.string().uuid().optional(),
+      from: z.string().datetime(),
+      to: z.string().datetime(),
+      limit: z.coerce.number().int().min(1).max(200).default(100),
+      offset: z.coerce.number().int().min(0).default(0),
+    }).parse(request.query);
+
+    try {
+      const thumbnails = await searchService.getRecordingThumbnails(
+        request.user.tenantId,
+        {
+          cameraId: query.cameraId,
+          from: query.from,
+          to: query.to,
+          limit: query.limit,
+          offset: query.offset,
+        },
+      );
+
+      return { data: thumbnails.data, total: thumbnails.total };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      return reply.code(500).send({ error: "thumbnails_fetch_failed", details: message });
+    }
+  });
+
+  /**
    * Get timeline for a specific camera
    * GET /v1/recordings/timeline
    */

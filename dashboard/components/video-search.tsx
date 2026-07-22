@@ -15,8 +15,8 @@ import {
   Search,
   X,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
-import { liveOperationsApi } from "@/lib/api-client";
+import { useEffect, useMemo, useState, useRef } from "react";
+import { videoSearchApi } from "@/lib/api-client";
 import type { Camera as CameraType, Branch } from "@/lib/types";
 
 interface SearchFilters {
@@ -42,9 +42,23 @@ const defaultFilters: SearchFilters = {
 interface RecordingSegment {
   id: string;
   cameraId: string;
-  startTime: string;
-  endTime: string;
-  storageLocation?: string;
+  startedAt: string;
+  endedAt: string;
+  storagePath?: string;
+  sizeBytes?: number;
+  status?: string;
+  codec?: string;
+}
+
+interface SearchResult {
+  segments: RecordingSegment[];
+  events: Array<{ id: string; timestamp: string; type: string; title: string; severity?: string }>;
+  gaps: Array<{ startTime: string; endTime: string; reason?: string }>;
+  timeline: Array<{ startTime: string; endTime: string; type: "recording" | "gap"; status?: string; segmentId?: string }>;
+  total: number;
+  recordedSeconds: number;
+  requestedSeconds: number;
+  coveragePercent: number;
 }
 
 interface Thumbnail {
@@ -61,9 +75,10 @@ export function VideoSearch() {
   const [filters, setFilters] = useState<SearchFilters>(defaultFilters);
   const [loading, setLoading] = useState(false);
   const [searching, setSearching] = useState(false);
-  const [results, setResults] = useState<RecordingSegment[]>([]);
+  const [results, setResults] = useState<SearchResult | null>(null);
   const [thumbnails, setThumbnails] = useState<Thumbnail[]>([]);
   const [selectedSegment, setSelectedSegment] = useState<RecordingSegment | null>(null);
+  const [timeRange, setTimeRange] = useState<{ from: string; to: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -97,24 +112,27 @@ export function VideoSearch() {
       const from = `${filters.fromDate}T${filters.fromTime}:00Z`;
       const to = `${filters.toDate}T${filters.toTime}:00Z`;
 
-      const searchResponse = await fetch(
-        `/api/control/v1/recordings/search?cameraId=${filters.cameraId}&from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}` +
-        (filters.eventType ? `&eventType=${filters.eventType}` : "") +
-        (filters.confidence ? `&confidence=${filters.confidence}` : "")
-      );
+      const query = {
+        cameraId: filters.cameraId ?? "",
+        from,
+        to,
+        eventType: filters.eventType,
+        minConfidence:
+          filters.confidence !== undefined && filters.confidence !== null
+            ? filters.confidence / 100
+            : undefined,
+      };
 
-      if (!searchResponse.ok) throw new Error("Search failed");
-      const searchData = await searchResponse.json();
-      setResults(searchData.data || []);
+      const searchData = await videoSearchApi.searchRecordings(query);
+      setResults(searchData);
+      setTimeRange({ from, to });
 
-      // Load thumbnails
-      const thumbResponse = await fetch(
-        `/api/control/v1/recordings/thumbnails?cameraId=${filters.cameraId}&from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`
-      );
-      if (thumbResponse.ok) {
-        const thumbData = await thumbResponse.json();
-        setThumbnails(thumbData.data || []);
-      }
+      const thumbData = await videoSearchApi.getThumbnails({
+        cameraId: filters.cameraId ?? "",
+        from,
+        to,
+      });
+      setThumbnails(thumbData.data || []);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Search failed");
     } finally {
@@ -280,13 +298,13 @@ export function VideoSearch() {
       </div>
 
       <div className="results-panel">
-        {results.length === 0 && !searching ? (
+        {!results && !searching ? (
           <div className="empty-state">
             <Camera size={48} />
             <h3>No recordings found</h3>
             <p>Adjust your search filters and try again</p>
           </div>
-        ) : (
+        ) : results ? (
           <>
             {filters.viewMode === "grid" && (
               <div className="thumbnail-grid">
@@ -295,8 +313,8 @@ export function VideoSearch() {
                     key={thumb.id}
                     className="thumbnail-card"
                     onClick={() => {
-                      const segment = results.find((r) =>
-                        thumb.timestamp >= r.startTime && thumb.timestamp <= r.endTime,
+                      const segment = results.segments.find((r) =>
+                        thumb.timestamp >= r.startedAt && thumb.timestamp <= r.endedAt,
                       );
                       if (segment) setSelectedSegment(segment);
                     }}
@@ -314,21 +332,21 @@ export function VideoSearch() {
 
             {filters.viewMode === "list" && (
               <div className="results-list">
-                {results.map((segment) => (
+                {results.segments.map((segment) => (
                   <div
                     key={segment.id}
                     className="result-item"
                     onClick={() => setSelectedSegment(segment)}
                   >
                     <div className="item-time">
-                      {new Date(segment.startTime).toLocaleTimeString()} -
-                      {new Date(segment.endTime).toLocaleTimeString()}
+                      {new Date(segment.startedAt).toLocaleTimeString()} -
+                      {new Date(segment.endedAt).toLocaleTimeString()}
                     </div>
                     <div className="item-details">
                       <span>{camera?.name}</span>
                       <span className="duration">
                         {Math.round(
-                          (new Date(segment.endTime).getTime() - new Date(segment.startTime).getTime()) /
+                          (new Date(segment.endedAt).getTime() - new Date(segment.startedAt).getTime()) /
                             1000,
                         )}
                         s
@@ -339,8 +357,63 @@ export function VideoSearch() {
                 ))}
               </div>
             )}
+
+            {filters.viewMode === "timeline" && (
+              <div className="timeline-view">
+                <div className="timeline-summary">
+                  <div>
+                    <strong>Coverage</strong>
+                    <span>{results.coveragePercent}%</span>
+                  </div>
+                  <div>
+                    <strong>Recorded</strong>
+                    <span>{results.recordedSeconds}s</span>
+                  </div>
+                  <div>
+                    <strong>Requested</strong>
+                    <span>{results.requestedSeconds}s</span>
+                  </div>
+                  <div>
+                    <strong>Segments</strong>
+                    <span>{results.segments.length}</span>
+                  </div>
+                </div>
+
+                <div className="timeline-track">
+                  {results.timeline.map((item) => {
+                    const start = new Date(item.startTime).getTime();
+                    const end = new Date(item.endTime).getTime();
+                    const width = timeRange
+                      ? Math.max(0, ((end - start) / (new Date(timeRange.to).getTime() - new Date(timeRange.from).getTime())) * 100)
+                      : 0;
+                    const left = timeRange
+                      ? Math.max(0, ((start - new Date(timeRange.from).getTime()) / (new Date(timeRange.to).getTime() - new Date(timeRange.from).getTime())) * 100)
+                      : 0;
+
+                    return (
+                      <div
+                        key={`${item.type}-${item.startTime}-${item.endTime}`}
+                        className={`timeline-segment ${item.type}`}
+                        style={{ left: `${left}%`, width: `${width}%` }}
+                        title={`${item.type === "recording" ? "Recording" : "Gap"}: ${new Date(item.startTime).toLocaleTimeString()} - ${new Date(item.endTime).toLocaleTimeString()}`}
+                      />
+                    );
+                  })}
+                </div>
+
+                <div className="timeline-events">
+                  {results.events.map((event) => (
+                    <div key={event.id} className="timeline-event">
+                      <span>{new Date(event.timestamp).toLocaleTimeString()}</span>
+                      <strong>{event.title}</strong>
+                      <small>{event.type}</small>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </>
-        )}
+        ) : null}
 
         {selectedSegment && (
           <VideoPlayerModal
@@ -363,8 +436,58 @@ function VideoPlayerModal({
   camera?: CameraType;
   onClose: () => void;
 }) {
+  const videoRef = useRef<HTMLVideoElement | null>(null);
   const [playing, setPlaying] = useState(false);
   const [speed, setSpeed] = useState(1);
+  const [message, setMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+
+    video.playbackRate = speed;
+    if (playing) {
+      void video.play().catch(() => {
+        setPlaying(false);
+      });
+    } else {
+      video.pause();
+    }
+  }, [playing, speed]);
+
+  const handlePlayToggle = () => {
+    setPlaying((current) => !current);
+  };
+
+  const handleSnapshot = async () => {
+    const video = videoRef.current;
+    if (!video || !camera) return;
+    const timestamp = new Date(
+      new Date(segment.startedAt).getTime() + video.currentTime * 1000,
+    ).toISOString();
+
+    try {
+      const response = await fetch("/api/control/v1/recordings/snapshots", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          segmentId: segment.id,
+          cameraId: camera.id,
+          timestamp,
+          snapshotType: "manual",
+          reason: "Playback review snapshot",
+          notes: "Captured from playback UI",
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Snapshot request failed");
+      }
+      setMessage("Snapshot captured successfully.");
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : "Snapshot failed.");
+    }
+  };
 
   return (
     <div className="modal-overlay" onClick={onClose}>
@@ -378,6 +501,7 @@ function VideoPlayerModal({
 
         <div className="player-container">
           <video
+            ref={videoRef}
             controls
             style={{
               width: "100%",
@@ -393,11 +517,11 @@ function VideoPlayerModal({
 
         <div className="player-controls">
           <div className="time-display">
-            {new Date(segment.startTime).toLocaleString()} - {new Date(segment.endTime).toLocaleString()}
+            {new Date(segment.startedAt).toLocaleString()} - {new Date(segment.endedAt).toLocaleString()}
           </div>
 
           <div className="control-buttons">
-            <button onClick={() => setPlaying(!playing)}>{playing ? "Pause" : "Play"}</button>
+            <button onClick={handlePlayToggle}>{playing ? "Pause" : "Play"}</button>
             <select value={speed} onChange={(e) => setSpeed(Number(e.target.value))}>
               <option value={0.25}>0.25×</option>
               <option value={0.5}>0.5×</option>
@@ -405,15 +529,20 @@ function VideoPlayerModal({
               <option value={2}>2×</option>
               <option value={4}>4×</option>
             </select>
-            <button>
-              <Download size={16} />
-              Export
-            </button>
-            <button>
+            <button onClick={handleSnapshot}>
               <Plus size={16} />
               Snapshot
             </button>
+            <a
+              className="download-button"
+              href={`/api/recordings/play?segmentId=${encodeURIComponent(segment.id)}`}
+              download
+            >
+              <Download size={16} />
+              Download
+            </a>
           </div>
+          {message && <div className="message-banner">{message}</div>}
         </div>
       </div>
     </div>

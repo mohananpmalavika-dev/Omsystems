@@ -1,5 +1,5 @@
 import type { Pool } from "pg";
-import type { RecordingSegment } from "../domain/models.js";
+import type { RecordingSegment, RecordingThumbnail } from "../domain/models.js";
 
 export interface SearchFilters {
   cameraId?: string;
@@ -208,6 +208,68 @@ export class RecordingSearchService {
       recordedSeconds,
       requestedSeconds,
       coveragePercent,
+    };
+  }
+
+  async getRecordingThumbnails(
+    tenantId: string,
+    options: {
+      cameraId?: string;
+      from: string;
+      to: string;
+      limit?: number;
+      offset?: number;
+    },
+  ): Promise<{ data: RecordingThumbnail[]; total: number }> {
+    const params: any[] = [tenantId, options.from, options.to];
+    const conditions = [
+      "rsi.tenant_id = $1",
+      "rsi.started_at >= $2::timestamptz",
+      "rsi.ended_at <= $3::timestamptz",
+      "rsi.thumbnail_path IS NOT NULL",
+    ];
+    let paramIndex = 4;
+
+    if (options.cameraId) {
+      conditions.push(`rsi.camera_id = $${paramIndex}`);
+      params.push(options.cameraId);
+      paramIndex++;
+    }
+
+    const whereClause = conditions.join(" AND ");
+    const countResult = await this.pool.query(
+      `SELECT COUNT(*) as total
+       FROM recording_search_index rsi
+       WHERE ${whereClause}`,
+      params,
+    );
+
+    const result = await this.pool.query(
+      `SELECT rsi.id, rsi.segment_id, rsi.camera_id, rsi.thumbnail_path, rs.started_at as segment_start
+       FROM recording_search_index rsi
+       JOIN recording_segments rs ON rs.id = rsi.segment_id
+       WHERE ${whereClause}
+       ORDER BY rsi.started_at ASC
+       LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`,
+      [...params, options.limit ?? 100, options.offset ?? 0],
+    );
+
+    const thumbnails = result.rows.map((row: any) => ({
+      id: row.id,
+      segmentId: row.segment_id,
+      cameraId: row.camera_id,
+      timestamp: row.segment_start
+        ? new Date(row.segment_start).toISOString()
+        : new Date().toISOString(),
+      dataUrl: row.thumbnail_path,
+      eventType: undefined,
+      confidence: undefined,
+      reference: row.thumbnail_path ?? row.segment_id,
+    }));
+
+    return {
+      data: thumbnails,
+      total: parseInt(countResult.rows[0]?.total ?? "0", 10),
     };
   }
 

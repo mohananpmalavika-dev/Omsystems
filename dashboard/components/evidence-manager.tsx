@@ -16,7 +16,8 @@ import {
   Trash2,
   X,
 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { evidenceApi } from "@/lib/api-client";
 
 interface EvidenceCase {
   id: string;
@@ -53,6 +54,9 @@ export function EvidenceManager() {
   const [cases, setCases] = useState<EvidenceCase[]>([]);
   const [selectedCase, setSelectedCase] = useState<EvidenceCase | null>(null);
   const [items, setItems] = useState<EvidenceItem[]>([]);
+  const [exports, setExports] = useState<any[]>([]);
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
   const [custodyLog, setCustodyLog] = useState<ChainOfCustodyEvent[]>([]);
   const [loading, setLoading] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -231,11 +235,49 @@ export function EvidenceManager() {
               </div>
             </div>
 
+            {/* Export Jobs */}
+            <div className="exports-section">
+              <div className="section-header">
+                <h4>Recent Exports</h4>
+              </div>
+              {exports.length === 0 ? (
+                <div className="empty-state-small">
+                  <p>No exports have been requested for this case yet.</p>
+                </div>
+              ) : (
+                <div className="exports-list">
+                  {exports.map((job) => (
+                    <div key={job.id} className="export-row">
+                      <div>
+                        <span className="export-label">{job.format.toUpperCase()}</span>
+                        <span className="export-reason">{job.reason}</span>
+                      </div>
+                      <div className="export-meta">
+                        <span>{job.status}</span>
+                        <span>{job.progress ?? 0}%</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {exportError && (
+              <div className="error-banner">
+                <AlertTriangle size={16} />
+                {exportError}
+              </div>
+            )}
+
             {/* Actions */}
             <div className="actions-section">
-              <button className="action-button secondary">
+              <button
+                className="action-button secondary"
+                onClick={() => void handleExportRequest()}
+                disabled={exporting}
+              >
                 <Download size={16} />
-                Export Evidence
+                {exporting ? "Requesting export…" : "Export Evidence"}
               </button>
               <button className="action-button secondary">
                 <Shield size={16} />
@@ -260,24 +302,57 @@ export function EvidenceManager() {
     </div>
   );
 
+  useEffect(() => {
+    void loadCases();
+  }, []);
+
+  async function loadCases() {
+    setLoading(true);
+    try {
+      const caseResponse = await evidenceApi.listCases();
+      setCases(caseResponse.data || []);
+    } catch (error) {
+      console.error("Failed to load evidence cases:", error);
+    } finally {
+      setLoading(false);
+    }
+  }
+
   async function loadCaseDetails(caseId: string) {
     setLoading(true);
     try {
-      const itemsResponse = await fetch(`/api/control/v1/evidence/cases/${caseId}/items`);
-      if (itemsResponse.ok) {
-        const itemsData = await itemsResponse.json();
-        setItems(itemsData.data || []);
-      }
+      const [itemsResponse, custodyResponse, exportsResponse] = await Promise.all([
+        evidenceApi.listItems(caseId),
+        evidenceApi.getChainOfCustody(caseId),
+        evidenceApi.listExports(caseId),
+      ]);
 
-      const custodyResponse = await fetch(`/api/control/v1/evidence/cases/${caseId}/chain-of-custody`);
-      if (custodyResponse.ok) {
-        const custodyData = await custodyResponse.json();
-        setCustodyLog(custodyData.data || []);
-      }
+      setItems(itemsResponse.data || []);
+      setCustodyLog(custodyResponse.data || []);
+      setExports(exportsResponse.data || []);
     } catch (error) {
       console.error("Failed to load case details:", error);
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function handleExportRequest() {
+    if (!selectedCase) return;
+
+    setExporting(true);
+    setExportError(null);
+
+    try {
+      await evidenceApi.requestExport(selectedCase.id, {
+        format: "original",
+        reason: "Evidence export requested from dashboard",
+      });
+      await loadCaseDetails(selectedCase.id);
+    } catch (error) {
+      setExportError(error instanceof Error ? error.message : "Failed to request export");
+    } finally {
+      setExporting(false);
     }
   }
 }
