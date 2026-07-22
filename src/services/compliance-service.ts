@@ -80,7 +80,7 @@ export class ComplianceService {
       // Assess each requirement
       for (const requirement of requirements) {
         const result = await this.assessRequirement(
-          requirement.id,
+          String(requirement.id),
           assessment.tenantId,
           assessment.branchNodeId,
           assessment.assessmentPeriodStart,

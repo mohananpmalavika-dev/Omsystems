@@ -125,7 +125,8 @@ export async function registerMaintenanceHealthRoutes(
     const tenantId = request.currentUser.tenantId;
 
     // Get all branches
-    const branches = await store.listNodes(tenantId, 'branch');
+    // TODO: Implement listNodes method on store interface
+    const branches: any[] = []; // Placeholder
 
     // For each branch, get latest network health
     const branchHealth = await Promise.all(

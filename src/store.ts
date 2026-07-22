@@ -238,6 +238,8 @@ export class MemoryStore implements ControlPlaneStore {
   readonly analyticsEscalations: Array<Record<string, unknown>> = [];
   readonly analyticsNotifications: Array<Record<string, unknown>> = [];
   readonly maintenanceAssets: any[] = [];
+  readonly maintenanceVisits: any[] = [];
+  readonly predictiveAlerts: any[] = [];
   readonly deviceInventoryRecords: any[] = [];
   readonly passwordRotations: any[] = [];
   readonly deviceTemplates: any[] = [];
@@ -248,8 +250,6 @@ export class MemoryStore implements ControlPlaneStore {
   readonly amcContracts: any[] = [];
   readonly maintenancePlans: any[] = [];
   readonly maintenanceSchedules: any[] = [];
-  readonly maintenanceVisits: any[] = [];
-  readonly predictiveAlerts: any[] = [];
   readonly cameraHealth: any[] = [];
   readonly storageHealth: any[] = [];
   readonly networkHealth: any[] = [];
@@ -2907,6 +2907,37 @@ export class MemoryStore implements ControlPlaneStore {
 
   async listPredictiveAlerts(tenantId: string): Promise<any[]> {
     return this.predictiveAlerts.filter(a => a.tenantId === tenantId);
+  }
+
+  async updateMaintenanceVisit(id: string, input: any): Promise<any | undefined> {
+    const visit = this.maintenanceVisits.find(v => v.id === id);
+    if (!visit) return undefined;
+    Object.assign(visit, input, { updatedAt: new Date().toISOString() });
+    return visit;
+  }
+
+  async ingestPredictiveAlert(input: { 
+    tenantId: string; 
+    assetId?: string; 
+    type: string; 
+    score: number; 
+    details?: Record<string, unknown>; 
+    detectedAt: string; 
+  }): Promise<any> {
+    const now = new Date().toISOString();
+    const alert = {
+      id: randomUUID(),
+      tenantId: input.tenantId,
+      assetId: input.assetId,
+      type: input.type,
+      score: input.score,
+      details: input.details ?? {},
+      detectedAt: input.detectedAt,
+      createdAt: now,
+      updatedAt: now,
+    };
+    this.predictiveAlerts.push(alert);
+    return alert;
   }
 }
 
