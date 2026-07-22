@@ -21,6 +21,7 @@ import { registerCctvInfrastructureRoutes } from "./routes/cctv-infrastructure.j
 import { registerOrganizationRoutes } from "./routes/organization.routes.js";
 import { registerUserRoutes } from "./routes/user.routes.js";
 import { registerAnalyticsRoutes } from "./routes/analytics.routes.js";
+import { registerAnalyticsMetricsRoutes } from "./routes/analytics-metrics.routes.js";
 import { registerIncidentsRoutes } from "./routes/incidents.routes.js";
 import { registerComplianceRoutes } from "./routes/compliance.routes.js";
 import { registerPrivacyRoutes } from "./routes/privacy.routes.js";
@@ -651,6 +652,12 @@ export async function buildApp(options?: {
       usedBytes: z.number().int().nonnegative(),
       availableBytes: z.number().int().nonnegative(),
       status: z.enum(["healthy", "warning", "critical", "offline"]),
+      storageType: z.enum(["local-disk", "nfs", "smb", "s3", "cloud-archive", "san"]).default("local-disk"),
+      supportedProtocols: z.array(z.string().trim().min(1)).min(1).default(["fs"]),
+      location: z.string().trim().optional(),
+      mountPath: z.string().trim().optional(),
+      readMbps: z.number().nonnegative().optional(),
+      latencyMs: z.number().nonnegative().optional(),
       temperatureCelsius: z.number().min(-100).max(200).optional(),
       writeMbps: z.number().nonnegative().optional(),
     }).parse(request.body);
@@ -673,6 +680,12 @@ export async function buildApp(options?: {
       usedBytes: input.usedBytes,
       availableBytes: input.availableBytes,
       status: input.status,
+      storageType: input.storageType,
+      supportedProtocols: input.supportedProtocols,
+      location: input.location,
+      mountPath: input.mountPath,
+      readMbps: input.readMbps,
+      latencyMs: input.latencyMs,
       temperatureCelsius: input.temperatureCelsius,
       writeMbps: input.writeMbps,
     });
@@ -810,6 +823,7 @@ export async function buildApp(options?: {
     ...(options?.recordingEngineSharedKey
       ? { recordingEngineSharedKey: options.recordingEngineSharedKey } : {}),
   });
+  await registerAnalyticsMetricsRoutes(app, store);
 
   app.setErrorHandler((error, _request, reply) => {
     if (error instanceof z.ZodError) {

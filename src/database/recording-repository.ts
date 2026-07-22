@@ -159,26 +159,42 @@ export class RecordingRepository {
     supportedTiers: Array<"hot" | "warm" | "cold">;
     capacityBytes: number; usedBytes: number; availableBytes: number;
     status: "healthy" | "warning" | "critical" | "offline";
+    storageType?: "local-disk" | "nfs" | "smb" | "s3" | "cloud-archive" | "san";
+    supportedProtocols?: string[];
+    location?: string;
+    mountPath?: string;
     temperatureCelsius?: number | undefined; writeMbps?: number | undefined;
+    readMbps?: number | undefined; latencyMs?: number | undefined;
   }): Promise<RecordingStorageNode> {
     const result = await this.pool.query(
       `INSERT INTO recording_storage_nodes (
          tenant_id, external_id, scope_node_id, name, supported_tiers,
          capacity_bytes, used_bytes, available_bytes, status,
-         temperature_celsius, write_mbps, last_seen_at
-       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,now())
+         storage_type, supported_protocols, location, mount_path,
+         temperature_celsius, write_mbps, read_mbps, latency_ms, last_seen_at
+       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,now())
        ON CONFLICT (tenant_id, external_id) DO UPDATE SET
          scope_node_id=EXCLUDED.scope_node_id, name=EXCLUDED.name,
          supported_tiers=EXCLUDED.supported_tiers,
          capacity_bytes=EXCLUDED.capacity_bytes, used_bytes=EXCLUDED.used_bytes,
          available_bytes=EXCLUDED.available_bytes, status=EXCLUDED.status,
+         storage_type=EXCLUDED.storage_type,
+         supported_protocols=EXCLUDED.supported_protocols,
+         location=EXCLUDED.location,
+         mount_path=EXCLUDED.mount_path,
          temperature_celsius=EXCLUDED.temperature_celsius,
-         write_mbps=EXCLUDED.write_mbps, last_seen_at=now(), updated_at=now()
+         write_mbps=EXCLUDED.write_mbps,
+         read_mbps=EXCLUDED.read_mbps,
+         latency_ms=EXCLUDED.latency_ms,
+         last_seen_at=now(), updated_at=now()
        RETURNING *`,
       [input.tenantId, input.externalId, input.scopeNodeId ?? null, input.name,
         input.supportedTiers, input.capacityBytes, input.usedBytes,
-        input.availableBytes, input.status, input.temperatureCelsius ?? null,
-        input.writeMbps ?? null],
+        input.availableBytes, input.status, input.storageType ?? null,
+        input.supportedProtocols ?? null, input.location ?? null,
+        input.mountPath ?? null, input.temperatureCelsius ?? null,
+        input.writeMbps ?? null, input.readMbps ?? null,
+        input.latencyMs ?? null],
     );
     return mapStorageNode(result.rows[0]);
   }
@@ -481,9 +497,15 @@ function mapStorageNode(row: any): RecordingStorageNode {
     supportedTiers: row.supported_tiers,
     capacityBytes: Number(row.capacity_bytes), usedBytes: Number(row.used_bytes),
     availableBytes: Number(row.available_bytes), status: row.status,
+    storageType: row.storage_type ?? undefined,
+    supportedProtocols: row.supported_protocols ?? undefined,
+    location: row.location ?? undefined,
+    mountPath: row.mount_path ?? undefined,
     temperatureCelsius: row.temperature_celsius == null
       ? undefined : Number(row.temperature_celsius),
     writeMbps: row.write_mbps == null ? undefined : Number(row.write_mbps),
+    readMbps: row.read_mbps == null ? undefined : Number(row.read_mbps),
+    latencyMs: row.latency_ms == null ? undefined : Number(row.latency_ms),
     lastSeenAt: new Date(row.last_seen_at).toISOString(),
   };
 }

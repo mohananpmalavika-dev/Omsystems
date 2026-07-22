@@ -1,6 +1,9 @@
 import { randomUUID, timingSafeEqual } from "node:crypto";
 import Fastify from "fastify";
 import { z } from "zod";
+import { AnalyticsPipeline } from "./analytics-pipeline.js";
+import { NotificationEngine } from "./notification-engine.js";
+import { StreamProcessor } from "./stream-processor.js";
 
 const detectionTypes = [
   "motion", "person", "vehicle", "object", "line-crossing", "intrusion",
@@ -35,6 +38,7 @@ export const detectionSchema = z.object({
 export interface AnalyticsEngineOptions {
   sourceSharedKey: string;
   controlPlaneSharedKey: string;
+  controlPlaneUrl: string;
   submit: (event: z.infer<typeof detectionSchema>) => Promise<unknown>;
   logger?: boolean;
 }
@@ -45,6 +49,19 @@ export function buildAnalyticsEngine(options: AnalyticsEngineOptions) {
     received: 0, accepted: 0, failed: 0,
     lastAcceptedAt: undefined as string | undefined,
   };
+
+  // Initialize analytics pipeline
+  const pipeline = new AnalyticsPipeline();
+  const notificationEngine = new NotificationEngine({
+    controlPlaneUrl: options.controlPlaneUrl,
+    sharedKey: options.controlPlaneSharedKey,
+  });
+  const streamProcessor = new StreamProcessor(pipeline, options.submit);
+
+  // Initialize pipeline on startup
+  void pipeline.initialize().catch((error) => {
+    app.log.error({ error }, "Failed to initialize analytics pipeline");
+  });
 
   app.addHook("preHandler", async (request, reply) => {
     if (request.url === "/health") return;
@@ -57,6 +74,12 @@ export function buildAnalyticsEngine(options: AnalyticsEngineOptions) {
   app.get("/health", async () => ({
     status: "ok", service: "sentinel-analytics-engine",
     ...state,
+    pipeline: pipeline.getHealth(),
+    notifications: notificationEngine.getStatus(),
+    streams: {
+      active: streamProcessor.getActiveStreams().length,
+      stats: streamProcessor.getStats(),
+    },
   }));
 
   app.post("/internal/detections", async (request, reply) => {
@@ -101,6 +124,12 @@ export function buildAnalyticsEngine(options: AnalyticsEngineOptions) {
     }
     app.log.error(error);
     return reply.code(500).send({ error: "analytics_engine_failure" });
+  });
+
+  // Graceful shutdown
+  app.addHook("onClose", async () => {
+    await streamProcessor.stopAllStreams();
+    await pipeline.cleanup();
   });
 
   return app;

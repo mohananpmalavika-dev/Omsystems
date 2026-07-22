@@ -33,6 +33,7 @@ import type { Branch, Camera as CameraType, LiveIncident, LiveSessionResponse, R
 import { liveOperationsApi } from "@/lib/api-client";
 import { CameraTile } from "./camera-tile";
 import { LiveEventForm } from "./live-event-form";
+import { RecordingSettingsPanel } from "./recording-settings-panel";
 
 const layoutOptions = [1, 4, 9, 16, 25, 36] as const;
 const liveSessionRenewalLeadMs = 60_000;
@@ -55,6 +56,7 @@ export function SecurityDashboard() {
   const [sessions, setSessions] = useState<Record<string, LiveSessionResponse>>({});
   const [recordings, setRecordings] = useState<Record<string, RecordingJob>>({});
   const [recordingLoading, setRecordingLoading] = useState<string | null>(null);
+  const [selectedRecordingCameraId, setSelectedRecordingCameraId] = useState<string | null>(null);
   const [sequencing, setSequencing] = useState(false);
   const [sequenceOffset, setSequenceOffset] = useState(0);
   const [loadingCamera, setLoadingCamera] = useState<string | null>(null);
@@ -94,6 +96,7 @@ export function SecurityDashboard() {
       })
       .then(async ({ data }) => {
         setCameras(data);
+        setSelectedRecordingCameraId((current) => current ?? data[0]?.id ?? null);
         const states = await Promise.all(data.map(async (camera) => {
           const response = await fetch(`/api/recording/${encodeURIComponent(camera.id)}`);
           return response.ok ? await response.json() as RecordingJob : undefined;
@@ -172,6 +175,27 @@ export function SecurityDashboard() {
     } catch { setError("Recording settings could not be updated."); }
     finally { setRecordingLoading(null); }
   }, [recordings]);
+
+  const updateRecordingSettings = useCallback(async (
+    cameraId: string,
+    update: Partial<Omit<RecordingJob, "id" | "cameraId" | "status">>,
+  ) => {
+    setRecordingLoading(cameraId);
+    try {
+      const response = await fetch(`/api/recording/${encodeURIComponent(cameraId)}`, {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(update),
+      });
+      if (!response.ok) throw new Error("Recording settings update failed");
+      const updated = await response.json() as RecordingJob;
+      setRecordings((items) => ({ ...items, [cameraId]: updated }));
+    } catch {
+      setError("Recording settings could not be updated.");
+    } finally {
+      setRecordingLoading(null);
+    }
+  }, []);
 
   const changeRecordingMode = useCallback(async (cameraId: string, mode: RecordingJob["mode"]) => {
     const current = recordings[cameraId] ?? defaultRecording(cameraId, mode);
@@ -413,23 +437,7 @@ export function SecurityDashboard() {
                     recordingLoading={recordingLoading === camera.id}
                     onToggleRecording={() => void toggleRecording(camera.id)}
                     onChangeRecordingMode={(mode) => void changeRecordingMode(camera.id, mode)}
-                    onUpdateRecording={async (cameraId, update) => {
-                      setRecordingLoading(cameraId);
-                      try {
-                        const response = await fetch(`/api/recording/${encodeURIComponent(cameraId)}`, {
-                          method: "PUT",
-                          headers: { "content-type": "application/json" },
-                          body: JSON.stringify(update),
-                        });
-                        if (!response.ok) throw new Error("Recording settings update failed");
-                        const updated = await response.json() as RecordingJob;
-                        setRecordings((items) => ({ ...items, [cameraId]: updated }));
-                      } catch {
-                        setError("Recording settings could not be updated.");
-                      } finally {
-                        setRecordingLoading(null);
-                      }
-                    }}
+                    onUpdateRecording={updateRecordingSettings}
                     onBookmark={() => setLiveAction({ action: "bookmark", camera })}
                     onCreateIncident={() => setLiveAction({ action: "incident", camera })}
                   />
@@ -437,6 +445,16 @@ export function SecurityDashboard() {
               </div>
             )}
           </section>
+
+          <RecordingSettingsPanel
+            cameras={cameras}
+            selectedCameraId={selectedRecordingCameraId}
+            recording={selectedRecordingCameraId ? recordings[selectedRecordingCameraId] : undefined}
+            saving={Boolean(selectedRecordingCameraId && recordingLoading === selectedRecordingCameraId)}
+            onSelectCamera={(cameraId) => setSelectedRecordingCameraId(cameraId)}
+            onToggleRecording={toggleRecording}
+            onSave={updateRecordingSettings}
+          />
 
           <section className="incident-panel" id="incidents">
             <div className="section-heading">

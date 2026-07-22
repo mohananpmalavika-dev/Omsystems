@@ -393,7 +393,12 @@ export class MemoryStore implements ControlPlaneStore {
     supportedTiers: Array<"hot" | "warm" | "cold">;
     capacityBytes: number; usedBytes: number; availableBytes: number;
     status: "healthy" | "warning" | "critical" | "offline";
+    storageType?: "local-disk" | "nfs" | "smb" | "s3" | "cloud-archive" | "san";
+    supportedProtocols?: string[];
+    location?: string;
+    mountPath?: string;
     temperatureCelsius?: number | undefined; writeMbps?: number | undefined;
+    readMbps?: number | undefined; latencyMs?: number | undefined;
   }) {
     const key = `${input.tenantId}:${input.externalId}`;
     const existing = this.recordingStorageNodes.get(key);

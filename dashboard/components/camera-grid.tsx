@@ -166,15 +166,45 @@ export function CameraGrid({
   };
 
   const handleToggleRecording = async (cameraId: string) => {
-    const currentJob = recordings.get(cameraId);
-    const newEnabled = !currentJob?.enabled;
+    const currentJob = recordings.get(cameraId) ?? {
+      cameraId,
+      mode: "continuous" as const,
+      enabled: false,
+      status: "disabled" as const,
+      retentionDays: 180,
+      postRollSeconds: 30,
+      segmentDurationSeconds: 60,
+      hotRetentionDays: 30,
+      warmRetentionDays: 60,
+      coldRetentionDays: 90,
+      critical: false,
+      backupRequired: false,
+      automaticDeletionEnabled: true,
+      evidenceProtection: true,
+      recordMainStream: true,
+      preRollSeconds: 30,
+      minMotionDurationSeconds: 0,
+      motionConfidenceThreshold: 0,
+      cooldownSeconds: 60,
+      maxEventDurationSeconds: 0,
+    };
+    const {
+      cameraId: _cameraId,
+      id: _id,
+      status: _status,
+      ...payload
+    } = currentJob;
+    const update = {
+      ...payload,
+      enabled: !currentJob.enabled,
+    };
 
     try {
       const response = await fetch(`/api/recording/${cameraId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ enabled: newEnabled }),
+        body: JSON.stringify(update),
       });
 
       if (response.ok) {
@@ -188,21 +218,20 @@ export function CameraGrid({
 
   const handleChangeRecordingMode = async (cameraId: string, mode: RecordingMode) => {
     const currentJob = recordings.get(cameraId);
-    const update: Record<string, unknown> = { mode };
+    const update: Record<string, unknown> = {
+      mode,
+      enabled: currentJob?.enabled ?? false,
+      preRollSeconds: currentJob?.preRollSeconds ?? 30,
+      postRollSeconds: currentJob?.postRollSeconds ?? 30,
+      minMotionDurationSeconds: currentJob?.minMotionDurationSeconds ?? 0,
+      motionConfidenceThreshold: currentJob?.motionConfidenceThreshold ?? 0,
+      cooldownSeconds: currentJob?.cooldownSeconds ?? 60,
+      maxEventDurationSeconds: currentJob?.maxEventDurationSeconds ?? 0,
+      triggerEventTypes: currentJob?.triggerEventTypes,
+    };
 
     if (mode === "scheduled") {
-      update.schedule = { days: [1, 2, 3, 4, 5], start: "09:00", end: "18:00", timezone: "UTC" };
-    }
-
-    if (currentJob) {
-      update.enabled = currentJob.enabled;
-      update.preRollSeconds = currentJob.preRollSeconds;
-      update.postRollSeconds = currentJob.postRollSeconds;
-      update.minMotionDurationSeconds = currentJob.minMotionDurationSeconds;
-      update.motionConfidenceThreshold = currentJob.motionConfidenceThreshold;
-      update.cooldownSeconds = currentJob.cooldownSeconds;
-      update.maxEventDurationSeconds = currentJob.maxEventDurationSeconds;
-      update.triggerEventTypes = currentJob.triggerEventTypes;
+      update.schedule = currentJob?.schedule ?? { days: [1, 2, 3, 4, 5], start: "09:00", end: "18:00", timezone: "UTC" };
     }
 
     try {

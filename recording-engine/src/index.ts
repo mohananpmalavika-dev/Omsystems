@@ -15,6 +15,7 @@ import { basename, dirname, isAbsolute, join, relative, resolve } from "node:pat
 import { spawn, type ChildProcess } from "node:child_process";
 import Fastify from "fastify";
 import { z } from "zod";
+import { createStorageAdapter, type StorageType } from "./storage-adapter.js";
 
 const config = z.object({
   HOST: z.string().default("0.0.0.0"),
@@ -25,6 +26,9 @@ const config = z.object({
   STORAGE_NODE_EXTERNAL_ID: z.string().min(1).max(200).default(hostname()),
   STORAGE_NODE_NAME: z.string().min(1).max(200).default(`Recorder ${hostname()}`),
   STORAGE_NODE_TIERS: z.string().default("hot,warm,cold"),
+  STORAGE_NODE_TYPE: z.enum(["local-disk", "nfs", "smb", "s3", "cloud-archive", "san"]).default("local-disk"),
+  STORAGE_NODE_PROTOCOLS: z.string().default("fs"),
+  STORAGE_NODE_LOCATION: z.string().trim().optional(),
   STREAM_SECRETS_JSON: z.string().default("{}"),
   RETENTION_SWEEP_SECONDS: z.coerce.number().int().min(60).max(86_400).default(300),
   RTSP_IO_TIMEOUT_MS: z.coerce.number().int().min(1_000).max(300_000).default(15_000),
@@ -108,6 +112,14 @@ const app = Fastify({ logger: true });
 
 await mkdir(recordingRoot, { recursive: true });
 await restoreJobs();
+
+const storageAdapter = createStorageAdapter({
+  recordingRoot,
+  supportedTiers: parseTiers(config.STORAGE_NODE_TIERS),
+  storageType: config.STORAGE_NODE_TYPE as StorageType,
+  supportedProtocols: config.STORAGE_NODE_PROTOCOLS.split(",").map((item) => item.trim()).filter(Boolean),
+  location: config.STORAGE_NODE_LOCATION,
+});
 
 app.addHook("preHandler", async (request, reply) => {
   if (request.url === "/health") return;
@@ -306,12 +318,12 @@ function inSchedule(value: z.infer<typeof scheduleSchema> | undefined) {
 
 async function start(job: ManagedJob) {
   if (workers.has(job.cameraId)) return;
-  const disk = await statfs(recordingRoot);
-  const freeBytes = disk.bavail * disk.bsize;
-  if (freeBytes < config.MIN_FREE_STORAGE_BYTES) {
+  const metrics = await storageAdapter.getMetrics();
+  if (metrics.availableBytes < config.MIN_FREE_STORAGE_BYTES) {
     await health(job, "storage_capacity_exhausted", "critical",
       "Recorder has insufficient free storage to start a safe recording worker", {
-        freeBytes, minimumFreeBytes: config.MIN_FREE_STORAGE_BYTES,
+        availableBytes: metrics.availableBytes,
+        minimumFreeBytes: config.MIN_FREE_STORAGE_BYTES,
       });
     throw new Error("storage_capacity_exhausted");
   }
@@ -321,8 +333,7 @@ async function start(job: ManagedJob) {
       "Camera stream credentials could not be resolved");
     throw new Error("stream_secret_unavailable");
   }
-  const staging = join(recordingRoot, safe(job.cameraId), ".staging");
-  await mkdir(staging, { recursive: true });
+  const staging = await storageAdapter.getStagingPath(job.cameraId);
   const outputPattern = join(staging, "%Y%m%d-%H%M%S.mp4");
   const args = [
     "-nostdin", "-hide_banner", "-loglevel", "warning", "-y",
@@ -445,7 +456,7 @@ async function indexCompletedSegment(job: ManagedJob, csvLine: string) {
       "A gap was detected between recording segments", { gapSeconds });
   }
   lastSegmentEnd.set(job.cameraId, endedAt.getTime());
-  const targetPath = finalSegmentPath(job.cameraId, startedAt, basename(stagingPath));
+  const targetPath = storageAdapter.resolveSegmentTargetPath(job.cameraId, startedAt, basename(stagingPath));
   await mkdir(dirname(targetPath), { recursive: true });
   await rename(stagingPath, targetPath);
   const details = await stat(targetPath);
@@ -487,20 +498,29 @@ async function maintenanceSweep() {
   await retryPendingIndexes();
   const tenantIds = [...new Set([...jobs.values()].map((job) => job.tenantId))];
   if (tenantIds.length === 0) return;
-  const disk = await statfs(recordingRoot);
-  const capacityBytes = disk.blocks * disk.bsize;
-  const availableBytes = disk.bavail * disk.bsize;
-  const usedBytes = Math.max(0, capacityBytes - availableBytes);
+  const metrics = await storageAdapter.getMetrics();
+  const capacityBytes = metrics.capacityBytes;
+  const availableBytes = metrics.availableBytes;
+  const usedBytes = metrics.usedBytes;
   const usedPercent = capacityBytes > 0 ? usedBytes / capacityBytes * 100 : 100;
-  const status = usedPercent >= 95 ? "critical" : usedPercent >= 80 ? "warning" : "healthy";
   for (const tenantId of tenantIds) {
     await reportStorageThreshold(tenantId, usedPercent);
     await controlPlane(`/internal/recording/storage-nodes/${encodeURIComponent(config.STORAGE_NODE_EXTERNAL_ID)}`, {
       method: "PUT",
       body: JSON.stringify({
-        tenantId, name: config.STORAGE_NODE_NAME,
+        tenantId,
+        name: config.STORAGE_NODE_NAME,
         supportedTiers: parseTiers(config.STORAGE_NODE_TIERS),
-        capacityBytes, usedBytes, availableBytes, status,
+        capacityBytes,
+        usedBytes,
+        availableBytes,
+        status: metrics.status,
+        storageType: metrics.storageType,
+        supportedProtocols: metrics.supportedProtocols,
+        location: metrics.location,
+        mountPath: metrics.mountPath,
+        readMbps: metrics.readMbps,
+        latencyMs: metrics.latencyMs,
       }),
     });
     const response = await controlPlane(

@@ -73,8 +73,15 @@ CREATE TABLE IF NOT EXISTS recording_storage_nodes (
   available_bytes bigint NOT NULL DEFAULT 0 CHECK (available_bytes >= 0),
   status text NOT NULL DEFAULT 'healthy'
     CHECK (status IN ('healthy', 'warning', 'critical', 'offline')),
+  storage_type text
+    CHECK (storage_type IN ('local-disk','nfs','smb','s3','cloud-archive','san')),
+  supported_protocols text[] NOT NULL DEFAULT ARRAY['fs']::text[],
+  location text,
+  mount_path text,
   temperature_celsius numeric(5,2),
   write_mbps numeric(10,2),
+  read_mbps numeric(10,2),
+  latency_ms numeric(10,2),
   last_seen_at timestamptz NOT NULL DEFAULT now(),
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now(),

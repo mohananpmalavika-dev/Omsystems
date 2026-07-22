@@ -614,8 +614,14 @@ export interface RecordingStorageNode {
   usedBytes: number;
   availableBytes: number;
   status: "healthy" | "warning" | "critical" | "offline";
+  storageType?: "local-disk" | "nfs" | "smb" | "s3" | "cloud-archive" | "san";
+  supportedProtocols?: string[];
+  location?: string;
+  mountPath?: string;
   temperatureCelsius?: number | undefined;
   writeMbps?: number | undefined;
+  readMbps?: number | undefined;
+  latencyMs?: number | undefined;
   lastSeenAt: string;
 }
 

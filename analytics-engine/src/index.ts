@@ -12,6 +12,7 @@ const config = z.object({
 const app = buildAnalyticsEngine({
   sourceSharedKey: config.ANALYTICS_SOURCE_SHARED_KEY,
   controlPlaneSharedKey: config.ANALYTICS_ENGINE_SHARED_KEY,
+  controlPlaneUrl: config.CONTROL_PLANE_URL,
   submit: createControlPlaneSubmitter({
     controlPlaneUrl: config.CONTROL_PLANE_URL,
     sharedKey: config.ANALYTICS_ENGINE_SHARED_KEY,
