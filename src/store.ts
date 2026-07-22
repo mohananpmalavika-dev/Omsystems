@@ -1520,7 +1520,10 @@ export class MemoryStore implements ControlPlaneStore {
   async getPrivacySummary(tenantId: string): Promise<any> {
     const purposes = this.privacyPurposes.filter((purpose) => purpose.tenantId === tenantId);
     const matchedCameraIds = [...this.cameras.values()]
-      .filter((camera) => camera.tenantId === tenantId)
+      .filter((camera) => {
+        const node = this.nodes.get(camera.nodeId);
+        return node && node.tenantId === tenantId;
+      })
       .map((camera) => camera.id);
     const assignedPurposes = this.cameraPrivacyPurposeAssignments.filter((assignment) =>
       matchedCameraIds.includes(assignment.cameraId),
@@ -1676,7 +1679,7 @@ export class MemoryStore implements ControlPlaneStore {
     discoveredAt: string;
     description?: string;
     remediation?: string;
-    createdBy: string;
+    createdBy?: string;
   }): Promise<any> {
     const breach = {
       id: randomUUID(),

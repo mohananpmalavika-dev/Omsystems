@@ -366,6 +366,12 @@ export const maintenanceApi = {
   }),
 };
 
+export const reportsApi = {
+  getOperationsSummary: () => fetchApi<any>('/v1/reports/summary/operations'),
+  getPrivacySummary: () => fetchApi<any>('/v1/reports/summary/privacy'),
+  getIncidentSummary: () => fetchApi<any>('/v1/reports/summary/incidents'),
+};
+
 export const privacyApi = {
   getSummary: () => fetchApi<any>('/v1/privacy/summary'),
   listPurposes: () => fetchApi<{ data: any[] }>('/v1/privacy/purposes'),

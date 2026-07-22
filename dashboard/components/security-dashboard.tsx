@@ -274,6 +274,7 @@ export function SecurityDashboard() {
           <a href="/admin?tab=users"><Camera size={18} />Access control</a>
           <a href="/compliance"><ShieldCheck size={18} />Compliance</a>
           <a href="/maintenance/privacy"><ShieldCheck size={18} />Privacy</a>
+          <a href="/reports"><FileVideo2 size={18} />Reports</a>
           <a href="/maintenance"><SlidersHorizontal size={18} />Maintenance</a>
           <a href="/recordings"><FileVideo2 size={18} />Recordings</a>
           <a href="#"><Download size={18} />Exports</a>

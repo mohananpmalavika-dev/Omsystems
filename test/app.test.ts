@@ -78,6 +78,47 @@ describe("control-plane API", () => {
     expect(denied.json().data).toHaveLength(0);
   });
 
+  it("returns an operations summary for report dashboards", async () => {
+    const response = await app.inject({
+      method: "GET",
+      url: "/v1/reports/summary/operations",
+      headers: { "x-user-id": "user-global-admin" },
+    });
+    expect(response.statusCode).toBe(200);
+    const json = response.json();
+    expect(json).toHaveProperty("branchCount");
+    expect(json).toHaveProperty("cameraCount");
+    expect(json).toHaveProperty("branchSummaries");
+    expect(Array.isArray(json.branchSummaries)).toBe(true);
+  });
+
+  it("returns a privacy summary for report dashboards", async () => {
+    const response = await app.inject({
+      method: "GET",
+      url: "/v1/reports/summary/privacy",
+      headers: { "x-user-id": "user-global-admin" },
+    });
+    expect(response.statusCode).toBe(200);
+    const json = response.json();
+    expect(json).toHaveProperty("activePurposes");
+    expect(json).toHaveProperty("assignedPurposes");
+    expect(json).toHaveProperty("openBreaches");
+  });
+
+  it("returns an incident summary for report dashboards", async () => {
+    const response = await app.inject({
+      method: "GET",
+      url: "/v1/reports/summary/incidents",
+      headers: { "x-user-id": "user-global-admin" },
+    });
+    expect(response.statusCode).toBe(200);
+    const json = response.json();
+    expect(json).toHaveProperty("incidentCount");
+    expect(json).toHaveProperty("openIncidentCount");
+    expect(json).toHaveProperty("recentIncidents");
+    expect(Array.isArray(json.recentIncidents)).toBe(true);
+  });
+
   it("supports edge registration, discovery, approval and live sessions", async () => {
     const headers = { "x-user-id": "user-global-admin" };
     const agentResponse = await app.inject({
