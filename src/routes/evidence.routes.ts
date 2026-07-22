@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import { z } from "zod";
 import type { ControlPlaneStore } from "../control-plane-store.js";
+import type { ExportWorker } from "../recording/export-worker.js";
 
 const evidenceCaseSchema = z.object({
   caseNumber: z.string().trim().min(2).max(50),
@@ -40,12 +41,52 @@ async function hasAccess(
   action: "recording:view" | "evidence:export" | "evidence:create",
   nodeId: string,
 ): Promise<boolean> {
-  const hasPermission = await store.checkAccess(request.user.userId, action, nodeId);
-  if (!hasPermission) {
+  if (!request.currentUser) {
+    await reply.code(401).send({ error: "unauthenticated" });
+    return false;
+  }
+
+  const decision = await store.checkAccess(
+    request.currentUser,
+    action,
+    nodeId,
+  );
+
+  if (!decision || !decision.allowed) {
     await reply.code(403).send({ error: "access_denied" });
     return false;
   }
+
   return true;
+}
+
+function inferRecordingCameras(items: Array<{ type: string; cameraId?: string; startTime?: string; endTime?: string }>) {
+  const cameras = new Map<string, { cameraId: string; fromTime: string; toTime: string }>();
+
+  for (const item of items) {
+    if (item.type !== "recording" || !item.cameraId || !item.startTime || !item.endTime) {
+      continue;
+    }
+
+    const existing = cameras.get(item.cameraId);
+    if (!existing) {
+      cameras.set(item.cameraId, {
+        cameraId: item.cameraId,
+        fromTime: item.startTime,
+        toTime: item.endTime,
+      });
+      continue;
+    }
+
+    if (item.startTime < existing.fromTime) {
+      existing.fromTime = item.startTime;
+    }
+    if (item.endTime > existing.toTime) {
+      existing.toTime = item.endTime;
+    }
+  }
+
+  return Array.from(cameras.values());
 }
 
 /**
@@ -54,6 +95,7 @@ async function hasAccess(
 export async function registerEvidenceRoutes(
   app: FastifyInstance,
   store: ControlPlaneStore,
+  exportWorker?: ExportWorker,
 ) {
   /**
    * Create evidence case
@@ -64,17 +106,17 @@ export async function registerEvidenceRoutes(
 
     try {
       const caseRecord = await store.createEvidenceCase({
-        tenantId: request.user.tenantId,
+        tenantId: request.currentUser?.tenantId ?? "",
         caseNumber: body.caseNumber,
         title: body.title,
         description: body.description,
-        createdBy: request.user.userId,
+        createdBy: request.currentUser?.id ?? "unknown",
       });
 
       await store.recordCustodyEvent({
         evidenceId: caseRecord.id,
         action: "recording_created",
-        performedBy: request.user.userId,
+        performedBy: request.currentUser?.id ?? "system",
         sourceIp: request.ip,
         reason: `Evidence case created: ${body.caseNumber}`,
       });
@@ -117,7 +159,7 @@ export async function registerEvidenceRoutes(
     }).parse(request.query);
 
     try {
-      const cases = await store.listEvidenceCases(request.user.tenantId, {
+      const cases = await store.listEvidenceCases(request.currentUser?.tenantId ?? "", {
         status: query.status,
         limit: query.limit,
       });
@@ -149,7 +191,7 @@ export async function registerEvidenceRoutes(
         startTime: body.startTime,
         endTime: body.endTime,
         description: body.description,
-        addedBy: request.user.userId,
+        addedBy: request.currentUser?.id ?? "unknown",
         hash: body.hash,
         fileSize: body.fileSize,
       });
@@ -157,7 +199,7 @@ export async function registerEvidenceRoutes(
       await store.recordCustodyEvent({
         evidenceId: caseId,
         action: "added_to_case",
-        performedBy: request.user.userId,
+        performedBy: request.currentUser?.id ?? "system",
         sourceIp: request.ip,
         reason: body.description,
       });
@@ -207,13 +249,13 @@ export async function registerEvidenceRoutes(
       const exportRequest = await store.requestEvidenceExport(caseId, {
         format: body.format,
         reason: body.reason,
-        exportedBy: request.user.userId,
+        exportedBy: request.currentUser?.id ?? "unknown",
       });
 
       await store.recordCustodyEvent({
         evidenceId: caseId,
         action: "exported",
-        performedBy: request.user.userId,
+        performedBy: request.currentUser?.id ?? "system",
         sourceIp: request.ip,
         reason: body.reason,
       });
@@ -287,7 +329,7 @@ export async function registerEvidenceRoutes(
       const hold = await store.createLegalHold({
         caseNumber: body.caseNumber,
         reason: body.reason,
-        requestedBy: request.user.userId,
+        requestedBy: request.currentUser?.id ?? "unknown",
         cameraIds: body.cameraIds,
         startTime: body.startTime,
         endTime: body.endTime,
@@ -297,7 +339,7 @@ export async function registerEvidenceRoutes(
 
       await store.recordCustodyEvent({
         action: "legal_hold_applied",
-        performedBy: request.user.userId,
+        performedBy: request.currentUser?.id ?? "system",
         sourceIp: request.ip,
         reason: body.reason,
       });
@@ -318,14 +360,14 @@ export async function registerEvidenceRoutes(
     const body = z.object({ reason: z.string().trim().max(500).optional() }).parse(request.body);
 
     try {
-      const released = await store.releaseLegalHold(holdId, request.user.userId);
+      const released = await store.releaseLegalHold(holdId, request.currentUser?.id ?? "unknown");
       if (!released) {
         return reply.code(404).send({ error: "hold_not_found" });
       }
 
       await store.recordCustodyEvent({
         action: "hold_released",
-        performedBy: request.user.userId,
+        performedBy: request.currentUser?.id ?? "system",
         sourceIp: request.ip,
         reason: body.reason,
       });
@@ -360,7 +402,7 @@ export async function registerEvidenceRoutes(
       await store.recordCustodyEvent({
         evidenceId: caseId,
         action: "verified",
-        performedBy: request.user.userId,
+        performedBy: request.currentUser?.id ?? "system",
         sourceIp: request.ip,
       });
 
@@ -400,35 +442,34 @@ export async function registerEvidenceRoutes(
       priority: z.number().int().min(1).max(1000).optional(),
     }).parse(request.body);
 
+    if (!request.currentUser) {
+      return reply.code(401).send({ error: "unauthenticated" });
+    }
+
+    if (!exportWorker) {
+      return reply.code(501).send({ error: "export_worker_not_enabled" });
+    }
+
     try {
       const caseRecord = await store.getEvidenceCase(body.caseId);
       if (!caseRecord) {
         return reply.code(404).send({ error: "case_not_found" });
       }
 
-      // Check export permission
       if (!(await hasAccess(request, reply, store, "evidence:export", caseRecord.id))) {
         return;
       }
 
-      // Create export job (would use ExportWorker in production)
-      const exportJob = {
-        id: crypto.randomUUID(),
+      const exportJob = await exportWorker.createExportJob({
         caseId: body.caseId,
+        tenantId: request.currentUser.tenantId,
         exportType: body.exportType,
         format: body.format,
-        status: "pending",
-        requestedBy: request.user.userId,
+        cameras: body.cameras,
+        options: body.options,
+        requestedBy: request.currentUser.id,
         reason: body.reason,
-        createdAt: new Date().toISOString(),
-      };
-
-      await store.recordCustodyEvent({
-        evidenceId: body.caseId,
-        action: "export_requested",
-        performedBy: request.user.userId,
-        sourceIp: request.ip,
-        reason: body.reason,
+        priority: body.priority,
       });
 
       return reply.code(201).send(exportJob);
@@ -440,17 +481,40 @@ export async function registerEvidenceRoutes(
 
   /**
    * Get export job status
-   * GET /v1/evidence/exports/:exportId
+   * GET /v1/evidence/exports/:exportId/status
    */
   app.get("/v1/evidence/exports/:exportId/status", async (request, reply) => {
     const { exportId } = z.object({ exportId: z.string().uuid() }).parse(request.params);
 
     try {
-      // Would fetch from ExportWorker in production
+      if (exportWorker) {
+        const job = await exportWorker.getExportJob(exportId);
+        if (job) {
+          const progress = job.totalSegments
+            ? Math.min(100, Math.round((job.processedSegments / job.totalSegments) * 100))
+            : job.status === "ready"
+              ? 100
+              : 0;
+
+          return {
+            id: job.id,
+            status: job.status,
+            progress,
+            downloadUrl: job.outputPath,
+          };
+        }
+      }
+
+      const exportRecord = await store.getEvidenceExport(exportId);
+      if (!exportRecord) {
+        return reply.code(404).send({ error: "export_not_found" });
+      }
+
       return {
-        id: exportId,
-        status: "ready",
-        progress: 100,
+        id: exportRecord.id,
+        status: exportRecord.status,
+        progress: exportRecord.status === "ready" ? 100 : 0,
+        downloadUrl: exportRecord.downloadUrl,
       };
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -464,17 +528,37 @@ export async function registerEvidenceRoutes(
    */
   app.get("/v1/evidence/exports/:exportId/download", async (request, reply) => {
     const { exportId } = z.object({ exportId: z.string().uuid() }).parse(request.params);
-    const { token } = z.object({ token: z.string() }).parse(request.query);
+    const query = z.object({ token: z.string().optional() }).parse(request.query);
+
+    if (!exportWorker) {
+      return reply.code(501).send({ error: "export_worker_not_enabled" });
+    }
+
+    if (!query.token) {
+      return reply.code(400).send({ error: "missing_download_token" });
+    }
 
     try {
-      // Would validate token and stream file in production
+      const validation = await exportWorker.validateDownload(query.token);
+      if (!validation.valid || !validation.job || validation.job.id !== exportId) {
+        return reply.code(403).send({ error: "invalid_download_token" });
+      }
+
       await store.recordCustodyEvent({
+        evidenceId: exportId,
         action: "export_downloaded",
-        performedBy: request.user.userId,
+        performedBy: request.currentUser?.id ?? "system",
         sourceIp: request.ip,
+        reason: "Export download requested",
       });
 
-      return reply.code(501).send({ error: "not_implemented" });
+      return {
+        id: validation.job.id,
+        status: validation.job.status,
+        outputPath: validation.job.outputPath,
+        downloadToken: query.token,
+        downloadExpiresAt: validation.job.downloadExpiresAt,
+      };
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       return reply.code(500).send({ error: "download_failed", details: message });
@@ -489,12 +573,28 @@ export async function registerEvidenceRoutes(
     const { exportId } = z.object({ exportId: z.string().uuid() }).parse(request.params);
 
     try {
-      // Would fetch manifest from ExportWorker in production
-      return {
-        id: exportId,
-        version: "v1.0",
-        message: "Manifest generation not implemented",
-      };
+      let manifestId: string | undefined;
+
+      if (exportWorker) {
+        const job = await exportWorker.getExportJob(exportId);
+        manifestId = job?.manifestId;
+      }
+
+      if (!manifestId) {
+        const exportRecord = await store.getEvidenceExport(exportId);
+        manifestId = exportRecord?.manifestId;
+      }
+
+      if (!manifestId) {
+        return reply.code(404).send({ error: "manifest_not_found" });
+      }
+
+      const manifest = await store.getEvidenceManifest(manifestId);
+      if (!manifest) {
+        return reply.code(404).send({ error: "manifest_not_found" });
+      }
+
+      return manifest;
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       return reply.code(500).send({ error: "manifest_fetch_failed", details: message });

@@ -288,6 +288,24 @@ export const liveOperationsApi = {
     ),
 };
 
+export const evidenceApi = {
+  listCases: () => fetchApi<{ data: any[] }>('/v1/evidence/cases'),
+  getItems: (caseId: string) =>
+    fetchApi<{ data: any[] }>(`/v1/evidence/cases/${encodeURIComponent(caseId)}/items`),
+  getChainOfCustody: (caseId: string) =>
+    fetchApi<{ data: any[] }>(`/v1/evidence/cases/${encodeURIComponent(caseId)}/chain-of-custody`),
+  listExports: (caseId: string) =>
+    fetchApi<{ data: any[] }>(`/v1/evidence/cases/${encodeURIComponent(caseId)}/exports`),
+  requestExport: (caseId: string, data: any) =>
+    fetchApi<any>(`/v1/evidence/cases/${encodeURIComponent(caseId)}/exports`, {
+      method: 'POST', body: JSON.stringify(data),
+    }),
+  getExportStatus: (exportId: string) =>
+    fetchApi<any>(`/v1/evidence/exports/${encodeURIComponent(exportId)}/status`),
+  getExportManifest: (exportId: string) =>
+    fetchApi<any>(`/v1/evidence/exports/${encodeURIComponent(exportId)}/manifest`),
+};
+
 export const complianceApi = {
   listFrameworks: () => fetchApi<{ data: any[] }>('/v1/compliance/frameworks'),
   createFramework: (data: {

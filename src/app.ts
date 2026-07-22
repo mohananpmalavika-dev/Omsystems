@@ -31,6 +31,7 @@ import { registerPrivacyRoutes } from "./routes/privacy.routes.js";
 import { registerMaintenanceRoutes } from "./routes/maintenance.routes.js";
 import { registerMaintenanceDashboardRoutes } from "./routes/maintenance-dashboard.routes.js";
 import { registerMaintenanceAdvancedRoutes } from "./routes/maintenance-advanced.routes.js";
+import { registerEvidenceRoutes } from "./routes/evidence.routes.js";
 import { registerVideoSearchRoutes } from "./routes/video-search.routes.js";
 import { RecordingSearchService } from "./recording/search-service.js";
 import { PlaybackEngine } from "./recording/playback-engine.js";
@@ -933,6 +934,7 @@ export async function buildApp(options?: {
   }
   await registerPrivacyRoutes(app, store);
   await registerReportsRoutes(app, store);
+  await registerEvidenceRoutes(app, store, exportWorker);
   await registerLiveOperationsRoutes(app, store);
   await registerIncidentsRoutes(app, store);
   await registerAnalyticsRoutes(app, store, {
