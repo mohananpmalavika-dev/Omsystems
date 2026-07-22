@@ -2,7 +2,7 @@ import { buildMediaGateway } from "./app.js";
 import { loadMediaConfig } from "./config.js";
 import { HttpControlPlaneClient } from "./control-plane-client.js";
 import { MediaMtxRouter } from "./media-router.js";
-import { EnvironmentSecretProvider } from "./secret-provider.js";
+import { EnvironmentSecretProvider, HttpStreamSecretProvider } from "./secret-provider.js";
 
 const config = loadMediaConfig();
 const app = await buildMediaGateway({
@@ -11,7 +11,12 @@ const app = await buildMediaGateway({
     config.MEDIA_GATEWAY_SHARED_KEY,
   ),
   router: new MediaMtxRouter(config.MEDIAMTX_API_URL),
-  secrets: new EnvironmentSecretProvider(config.STREAM_SECRETS_JSON),
+  secrets: config.STREAM_SECRET_PROVIDER_URL
+    ? new HttpStreamSecretProvider(
+        config.STREAM_SECRET_PROVIDER_URL,
+        config.STREAM_SECRET_PROVIDER_KEY!,
+      )
+    : new EnvironmentSecretProvider(config.STREAM_SECRETS_JSON),
   mediaMtxHlsUrl: config.MEDIAMTX_HLS_URL,
   publicHlsBaseUrl: config.PUBLIC_HLS_BASE_URL,
   publicWebRtcBaseUrl: config.PUBLIC_WEBRTC_BASE_URL,

@@ -222,8 +222,10 @@ export default function MaintenancePage() {
           <Link href="/maintenance/privacy">Privacy & data</Link>
           <Link href="/reports">Reports</Link>
           <Link href="/maintenance/predictive">Predictive alerts</Link>
-        </div>
-      </section>
-    </div>
+          </div>
+        </section>
+      </div>
+      </div>
+    </AppLayout>
   );
 }

@@ -17,6 +17,13 @@ const schema = z.object({
     (value) => value === "" ? undefined : value,
     z.string().url().optional(),
   ),
+  STREAM_SECRET_STORE_PATH: z.string().default("./data/stream-secrets.json"),
+  STREAM_SECRET_PROVIDER_HOST: z.string().default("127.0.0.1"),
+  STREAM_SECRET_PROVIDER_PORT: z.coerce.number().int().min(1).max(65535).default(8093),
+  EDGE_MEDIA_SHARED_KEY: z.preprocess(
+    (value) => value === "" ? undefined : value,
+    z.string().min(32).optional(),
+  ),
   EDGE_BRIDGE_SHARED_KEY: z.preprocess(
     (value) => value === "" ? undefined : value,
     z.string().min(32).optional(),

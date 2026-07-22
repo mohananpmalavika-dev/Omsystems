@@ -6,6 +6,7 @@ import {
   Shield, Plus, FileText, Calendar, CheckCircle, 
   AlertCircle, Loader2, Search, Filter 
 } from "lucide-react";
+import { AppLayout } from "@/components/app-layout";
 import { complianceApi } from "@/lib/api-client";
 import type { ComplianceFramework } from "@/lib/types";
 
@@ -58,7 +59,8 @@ export default function CompliancePage() {
   );
 
   return (
-    <div className="compliance-page">
+    <AppLayout>
+      <div className="compliance-page">
       {/* Header */}
       <header className="page-header">
         <div className="header-content">
@@ -615,6 +617,7 @@ export default function CompliancePage() {
           }
         }
       `}</style>
-    </div>
+      </div>
+    </AppLayout>
   );
 }

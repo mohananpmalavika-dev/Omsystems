@@ -25,6 +25,26 @@ export class EnvironmentSecretProvider implements StreamSecretProvider {
   }
 }
 
+export class HttpStreamSecretProvider implements StreamSecretProvider {
+  constructor(
+    private readonly baseUrl: string,
+    private readonly sharedKey: string,
+  ) {}
+
+  async resolve(reference: string) {
+    const url = new URL("/v1/secrets/resolve", this.baseUrl);
+    url.searchParams.set("ref", reference);
+    const response = await fetch(url, {
+      headers: { "x-edge-media-key": this.sharedKey },
+      cache: "no-store",
+    });
+    if (response.status === 404) return undefined;
+    if (!response.ok) throw new Error(`Edge secret provider returned ${response.status}`);
+    const body = await response.json() as { sourceUri?: unknown };
+    return typeof body.sourceUri === "string" ? body.sourceUri : undefined;
+  }
+}
+
 function isStringRecord(value: unknown): value is Record<string, string> {
   return typeof value === "object" && value !== null && !Array.isArray(value) &&
     Object.values(value).every((item) => typeof item === "string");

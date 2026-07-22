@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 import Link from "next/link";
+import { AppLayout } from "@/components/app-layout";
 
 type Incident = {
   id: string;
@@ -57,7 +58,9 @@ export default function IncidentsPage() {
   }
 
   return (
-    <div style={{ padding: 16 }}>
+    <AppLayout>
+      <div className="content">
+        <div style={{ padding: 16 }}>
       <h1>Incidents</h1>
 
       <section style={{ marginTop: 16, marginBottom: 24 }}>
@@ -104,6 +107,8 @@ export default function IncidentsPage() {
           </table>
         )}
       </section>
-    </div>
+        </div>
+      </div>
+    </AppLayout>
   );
 }

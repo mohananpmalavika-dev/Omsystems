@@ -4,6 +4,7 @@ import { attachCredentials, OnvifClient } from "./devices/onvif-client.js";
 import { compatibilityNotes, normalizeVendor } from "./devices/compatibility-registry.js";
 import { GatewayClient } from "./registration/gateway-client.js";
 import { probeRtsp } from "./streaming/rtsp-probe.js";
+import { LocalStreamSecretStore, startSecretProvider } from "./streaming/secret-store.js";
 
 const config = loadEdgeConfig();
 const gateway = new GatewayClient(
@@ -16,6 +17,17 @@ const agentId = config.EDGE_AGENT_ID ?? (await gateway.register(
   config.EDGE_AGENT_NAME,
   config.EDGE_AGENT_VERSION,
 )).id;
+const secrets = new LocalStreamSecretStore(config.STREAM_SECRET_STORE_PATH);
+await secrets.load();
+if (config.EDGE_MEDIA_SHARED_KEY) {
+  await startSecretProvider({
+    store: secrets,
+    host: config.STREAM_SECRET_PROVIDER_HOST,
+    port: config.STREAM_SECRET_PROVIDER_PORT,
+    sharedKey: config.EDGE_MEDIA_SHARED_KEY,
+  });
+  console.log(`Local stream-secret provider listening on ${config.STREAM_SECRET_PROVIDER_HOST}:${config.STREAM_SECRET_PROVIDER_PORT}`);
+}
 
 console.log(`Edge agent ${agentId} registered; waiting for branch commands`);
 await gateway.heartbeat(agentId, config.EDGE_AGENT_VERSION, config.PUBLIC_MEDIA_GATEWAY_URL);
@@ -78,9 +90,12 @@ async function scanBranch() {
       const device = await client.inspect();
       const vendor = normalizeVendor(device.manufacturer);
       const profiles = [];
+      let primarySourceUri: string | undefined;
       for (const profile of device.profiles) {
         const uri = await client.getStreamUri(device.mediaServiceUrl, profile.token);
-        const result = await probeRtsp(attachCredentials(uri, credentials), config.FFPROBE_PATH);
+        const sourceUri = attachCredentials(uri, credentials);
+        primarySourceUri ??= sourceUri;
+        const result = await probeRtsp(sourceUri, config.FFPROBE_PATH);
         profiles.push({
           name: profile.name,
           codec: profile.codec,
@@ -99,6 +114,9 @@ async function scanBranch() {
         profiles,
         capabilities: device.capabilities,
       });
+      if (primarySourceUri) {
+        await secrets.set(`edge://${agentId}/${discovery.id}`, primarySourceUri);
+      }
       submitted += 1;
       console.log(`Submitted ${device.manufacturer} ${device.model} as discovery ${discovery.id}`, compatibilityNotes(vendor));
     } catch (error) {
