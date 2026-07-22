@@ -21,7 +21,6 @@ import { registerCctvInfrastructureRoutes } from "./routes/cctv-infrastructure.j
 import { registerOrganizationRoutes } from "./routes/organization.routes.js";
 import { registerUserRoutes } from "./routes/user.routes.js";
 import { registerAnalyticsRoutes } from "./routes/analytics.routes.js";
-import { registerAnalyticsMetricsRoutes } from "./routes/analytics-metrics.routes.js";
 import { registerIncidentsRoutes } from "./routes/incidents.routes.js";
 import { registerComplianceRoutes } from "./routes/compliance.routes.js";
 import { registerPrivacyRoutes } from "./routes/privacy.routes.js";
