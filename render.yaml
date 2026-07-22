@@ -33,7 +33,7 @@ services:
     plan: free
     region: singapore
     buildCommand: cd media-gateway && npm install && npm run build
-    startCommand: cd media-gateway && npm run start
+    startCommand: cd media-gateway && node dist/index.js
     healthCheckPath: /health
     autoDeployTrigger: commit
     envVars:
