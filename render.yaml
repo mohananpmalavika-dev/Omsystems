@@ -16,11 +16,11 @@ services:
       - key: DASHBOARD_DEMO_MODE
         value: "false"
       - key: CONTROL_PLANE_INTERNAL_URL
-        sync: false
+        value: "https://sentinel-grid-control-plane.onrender.com"
       - key: MEDIA_GATEWAY_INTERNAL_URL
         value: "https://sentinel-grid-media-gateway.onrender.com"
       - key: EDGE_BRIDGE_SHARED_KEY
-        sync: false
+        value: "dev-bridge-key-change-in-production"
       - key: DASHBOARD_ACCESS_USERNAME
         sync: false
       - key: DASHBOARD_ACCESS_PASSWORD
@@ -44,9 +44,9 @@ services:
       - key: CONTROL_PLANE_URL
         value: "https://sentinel-grid-control-plane.onrender.com"
       - key: MEDIA_GATEWAY_SHARED_KEY
-        sync: false
+        value: "dev-media-gateway-key-change-in-production"
       - key: EDGE_BRIDGE_SHARED_KEY
-        sync: false
+        value: "dev-bridge-key-change-in-production"
 
   # Public HTTPS ingress is required because branch gateways initiate outbound
   # discovery/heartbeat requests from networks outside Render. Every non-health
@@ -70,8 +70,8 @@ services:
       - key: SKIP_MIGRATION_CHECKSUM_VALIDATION
         value: "true"
       - key: EDGE_BRIDGE_SHARED_KEY
-        sync: false
+        value: "dev-bridge-key-change-in-production"
       - key: MEDIA_GATEWAY_SHARED_KEY
-        sync: false
+        value: "dev-media-gateway-key-change-in-production"
       - key: ANALYTICS_ENGINE_SHARED_KEY
-        sync: false
+        value: "dev-analytics-engine-key-change-in-production"
