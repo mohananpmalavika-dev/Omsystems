@@ -148,7 +148,7 @@ function SummaryRow({ label, value }: { label: string; value: unknown }) {
   return (
     <div style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: "1px solid #f3f4f6" }}>
       <span style={{ color: "#374151" }}>{label}</span>
-      <strong>{value}</strong>
+      <strong>{String(value)}</strong>
     </div>
   );
 }
@@ -157,7 +157,7 @@ function Stat({ label, value }: { label: string; value: unknown }) {
   return (
     <div style={{ minWidth: 0 }}>
       <p style={{ margin: 0, color: "#6b7280", fontSize: 12 }}>{label}</p>
-      <p style={{ margin: "6px 0 0", fontWeight: 700 }}>{value}</p>
+      <p style={{ margin: "6px 0 0", fontWeight: 700 }}>{String(value)}</p>
     </div>
   );
 }
