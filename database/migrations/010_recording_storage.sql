@@ -28,6 +28,18 @@ ALTER TABLE recording_jobs
     CHECK (cold_retention_days BETWEEN 0 AND 3650),
   ADD COLUMN IF NOT EXISTS max_bitrate_kbps integer
     CHECK (max_bitrate_kbps IS NULL OR max_bitrate_kbps BETWEEN 64 AND 100000),
+  ADD COLUMN IF NOT EXISTS pre_roll_seconds integer NOT NULL DEFAULT 30
+    CHECK (pre_roll_seconds BETWEEN 0 AND 3600),
+  ADD COLUMN IF NOT EXISTS min_motion_duration_seconds integer NOT NULL DEFAULT 0
+    CHECK (min_motion_duration_seconds BETWEEN 0 AND 86400),
+  ADD COLUMN IF NOT EXISTS motion_confidence_threshold numeric(5,4) NOT NULL DEFAULT 0
+    CHECK (motion_confidence_threshold BETWEEN 0 AND 1),
+  ADD COLUMN IF NOT EXISTS cooldown_seconds integer NOT NULL DEFAULT 60
+    CHECK (cooldown_seconds BETWEEN 0 AND 86400),
+  ADD COLUMN IF NOT EXISTS max_event_duration_seconds integer NOT NULL DEFAULT 0
+    CHECK (max_event_duration_seconds BETWEEN 0 AND 86400),
+  ADD COLUMN IF NOT EXISTS storage_node_external_id text,
+  ADD COLUMN IF NOT EXISTS trigger_event_types text[],
   ADD COLUMN IF NOT EXISTS critical boolean NOT NULL DEFAULT false,
   ADD COLUMN IF NOT EXISTS backup_required boolean NOT NULL DEFAULT false,
   ADD COLUMN IF NOT EXISTS automatic_deletion_enabled boolean NOT NULL DEFAULT true,
