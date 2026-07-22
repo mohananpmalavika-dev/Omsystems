@@ -21,6 +21,8 @@ import { registerCctvInfrastructureRoutes } from "./routes/cctv-infrastructure.j
 import { registerOrganizationRoutes } from "./routes/organization.routes.js";
 import { registerUserRoutes } from "./routes/user.routes.js";
 import { registerAnalyticsRoutes } from "./routes/analytics.routes.js";
+import { registerReportsRoutes } from "./routes/reports.routes.js";
+import { registerLiveOperationsRoutes } from "./routes/live-operations.routes.js";
 // Disabled incomplete features - Phase 2 analytics not yet ready
 // import { registerAnalyticsMetricsRoutes } from "./routes/analytics-metrics.routes.js";
 // import { registerAnalyticsPhase2Routes } from "./routes/analytics-phase2.routes.js";
@@ -901,7 +903,8 @@ export async function buildApp(options?: {
     }
   }
   await registerPrivacyRoutes(app, store);
-  // await registerLiveOperationsRoutes(app, store);
+  await registerReportsRoutes(app, store);
+  await registerLiveOperationsRoutes(app, store);
   await registerIncidentsRoutes(app, store);
   await registerAnalyticsRoutes(app, store, {
     ...(options?.analyticsEngineSharedKey

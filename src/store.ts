@@ -481,6 +481,12 @@ export class MemoryStore implements ControlPlaneStore {
     return node;
   }
 
+  async listRecordingStorageNodes(tenantId: string) {
+    return [...this.recordingStorageNodes.values()].filter(
+      (node) => node.tenantId === tenantId,
+    );
+  }
+
   async createRecordingHealthEvent(input: {
     tenantId: string; cameraId?: string | undefined;
     storageNodeExternalId?: string | undefined; eventType: string;

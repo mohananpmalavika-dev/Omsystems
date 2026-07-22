@@ -25,6 +25,13 @@ interface ControlRoomStats {
   unacknowledgedAlerts: number;
   recordingCameras: number;
   storageUsagePercent: number;
+  storageSummary: {
+    totalCount: number;
+    warningCount: number;
+    smartIssueCount: number;
+    raidIssueCount: number;
+    writeProbeFailureCount: number;
+  };
 }
 
 export default function ControlRoomPage() {
@@ -38,6 +45,13 @@ export default function ControlRoomPage() {
     unacknowledgedAlerts: 0,
     recordingCameras: 0,
     storageUsagePercent: 0,
+    storageSummary: {
+      totalCount: 0,
+      warningCount: 0,
+      smartIssueCount: 0,
+      raidIssueCount: 0,
+      writeProbeFailureCount: 0,
+    },
   });
   const [activeView, setActiveView] = useState<"grid" | "handover">("grid");
   const [loading, setLoading] = useState(true);
@@ -167,6 +181,20 @@ export default function ControlRoomPage() {
             <div className="stat-label">Storage Used</div>
           </div>
         </div>
+
+        <div className="stat-card storage-health-card">
+          <HardDrive size={24} className="stat-icon text-purple" />
+          <div className="stat-content">
+            <div className="stat-value">{stats.storageSummary.totalCount}</div>
+            <div className="stat-label">Storage Nodes</div>
+            <div className="storage-health-details">
+              <span>{stats.storageSummary.warningCount} warnings</span>
+              <span>{stats.storageSummary.smartIssueCount} SMART</span>
+              <span>{stats.storageSummary.raidIssueCount} RAID</span>
+              <span>{stats.storageSummary.writeProbeFailureCount} probe fail</span>
+            </div>
+          </div>
+        </div>
       </div>
 
       <div className="control-room-nav">
@@ -269,18 +297,18 @@ export default function ControlRoomPage() {
 
         .stats-bar {
           display: grid;
-          grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-          gap: 16px;
-          padding: 24px 32px;
+          grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+          gap: 12px;
+          padding: 20px 28px;
           background: white;
           border-bottom: 1px solid #e5e7eb;
         }
 
         .stat-card {
           display: flex;
-          align-items: center;
-          gap: 16px;
-          padding: 16px;
+          align-items: flex-start;
+          gap: 12px;
+          padding: 14px;
           background: #f9fafb;
           border-radius: 12px;
           transition: all 0.2s;
@@ -315,20 +343,36 @@ export default function ControlRoomPage() {
         .stat-content {
           display: flex;
           flex-direction: column;
-          gap: 4px;
+          gap: 3px;
+          min-width: 0;
         }
 
         .stat-value {
-          font-size: 24px;
+          font-size: 22px;
           font-weight: 700;
           color: #111827;
-          line-height: 1;
+          line-height: 1.1;
         }
 
         .stat-label {
-          font-size: 13px;
+          font-size: 12px;
           color: #6b7280;
           font-weight: 500;
+        }
+
+        .storage-health-details {
+          display: grid;
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          gap: 3px 8px;
+          margin-top: 6px;
+          font-size: 11px;
+          color: #374151;
+        }
+
+        .storage-health-card {
+          background: linear-gradient(135deg, #f5f3ff, #e0e7ff);
+          border-color: #c7d2fe;
+          min-height: 110px;
         }
 
         .control-room-nav {

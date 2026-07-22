@@ -208,6 +208,14 @@ export class RecordingRepository {
     return mapStorageNode(result.rows[0]);
   }
 
+  async listStorageNodes(tenantId: string): Promise<RecordingStorageNode[]> {
+    const result = await this.pool.query(
+      `SELECT * FROM recording_storage_nodes WHERE tenant_id=$1 ORDER BY last_seen_at DESC`,
+      [tenantId],
+    );
+    return result.rows.map(mapStorageNode);
+  }
+
   async createHealthEvent(input: {
     tenantId: string; cameraId?: string | undefined;
     storageNodeExternalId?: string | undefined; eventType: string;

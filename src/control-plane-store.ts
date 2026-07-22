@@ -480,6 +480,7 @@ export interface ControlPlaneStore {
     readMbps?: number | undefined;
     latencyMs?: number | undefined;
   }): Promise<RecordingStorageNode>;
+  listRecordingStorageNodes(tenantId: string): Promise<RecordingStorageNode[]>;
   createRecordingHealthEvent(input: {
     tenantId: string;
     cameraId?: string | undefined;
@@ -763,6 +764,126 @@ export interface ControlPlaneStore {
   
   // Compliance Integration
   getMaintenanceComplianceStatus(tenantId: string): Promise<any>;
+
+  // Compliance Enhanced - Requirements
+  listComplianceRequirements(tenantId: string, filters?: {
+    frameworkId?: string;
+    category?: string;
+    status?: string;
+  }): Promise<any[]>;
+  getComplianceRequirement(id: string): Promise<any | undefined>;
+  createComplianceRequirement(input: any): Promise<any>;
+  updateComplianceRequirement(id: string, input: any): Promise<any | undefined>;
+  deleteComplianceRequirement(id: string): Promise<void>;
+
+  // Compliance Enhanced - Controls
+  listComplianceControls(tenantId: string, filters?: {
+    requirementId?: string;
+    implementationStatus?: string;
+  }): Promise<any[]>;
+  getComplianceControl(id: string): Promise<any | undefined>;
+  createComplianceControl(input: any): Promise<any>;
+  updateComplianceControl(id: string, input: any): Promise<any | undefined>;
+  deleteComplianceControl(id: string): Promise<void>;
+  updateControlTestDates(id: string, input: {
+    lastTestDate: string;
+    nextTestDate: string;
+    effectivenessRating?: number;
+  }): Promise<any | undefined>;
+
+  // Compliance Enhanced - Evidence
+  listComplianceEvidence(tenantId: string, filters?: {
+    requirementId?: string;
+    controlId?: string;
+    assessmentId?: string;
+    validated?: boolean;
+  }): Promise<any[]>;
+  getComplianceEvidence(id: string): Promise<any | undefined>;
+  createComplianceEvidence(input: any): Promise<any>;
+  updateComplianceEvidence(id: string, input: any): Promise<any | undefined>;
+  deleteComplianceEvidence(id: string): Promise<void>;
+  validateComplianceEvidence(id: string, validated: boolean, validatorId: string, notes?: string): Promise<any | undefined>;
+
+  // Compliance Enhanced - Tests
+  listComplianceTests(tenantId: string, filters?: {
+    controlId?: string;
+    status?: string;
+  }): Promise<any[]>;
+  getComplianceTest(id: string): Promise<any | undefined>;
+  createComplianceTest(input: any): Promise<any>;
+  updateComplianceTest(id: string, input: any): Promise<any | undefined>;
+  deleteComplianceTest(id: string): Promise<void>;
+
+  // Compliance Enhanced - Findings
+  listComplianceFindings(tenantId: string, filters?: {
+    assessmentId?: string;
+    severity?: string;
+    status?: string;
+  }): Promise<any[]>;
+  getComplianceFinding(id: string): Promise<any | undefined>;
+  createComplianceFinding(input: any): Promise<any>;
+  updateComplianceFinding(id: string, input: any): Promise<any | undefined>;
+  deleteComplianceFinding(id: string): Promise<void>;
+  closeComplianceFinding(id: string, closedBy: string, notes?: string): Promise<any | undefined>;
+
+  // Compliance Enhanced - Remediation Plans
+  listRemediationPlans(tenantId: string, filters?: {
+    findingId?: string;
+    status?: string;
+  }): Promise<any[]>;
+  getRemediationPlan(id: string): Promise<any | undefined>;
+  createRemediationPlan(input: any): Promise<any>;
+  updateRemediationPlan(id: string, input: any): Promise<any | undefined>;
+  deleteRemediationPlan(id: string): Promise<void>;
+  approveRemediationPlan(id: string, approverId: string): Promise<any | undefined>;
+  verifyRemediationPlan(id: string, verifierId: string, input: {
+    verificationNotes?: string;
+    effectivenessConfirmed: boolean;
+  }): Promise<any | undefined>;
+
+  // Compliance Enhanced - Remediation Actions
+  listRemediationActions(planId: string): Promise<any[]>;
+  getRemediationAction(id: string): Promise<any | undefined>;
+  createRemediationAction(input: any): Promise<any>;
+  updateRemediationAction(id: string, input: any): Promise<any | undefined>;
+  deleteRemediationAction(id: string): Promise<void>;
+  completeRemediationAction(id: string, input: {
+    evidenceUrl?: string;
+    notes?: string;
+  }): Promise<any | undefined>;
+
+  // Compliance Enhanced - Risks
+  listComplianceRisks(tenantId: string, filters?: {
+    frameworkId?: string;
+    category?: string;
+    status?: string;
+  }): Promise<any[]>;
+  getComplianceRisk(id: string): Promise<any | undefined>;
+  createComplianceRisk(input: any): Promise<any>;
+  updateComplianceRisk(id: string, input: any): Promise<any | undefined>;
+  deleteComplianceRisk(id: string): Promise<void>;
+  assessComplianceRisk(id: string, input: {
+    residualLikelihood: string;
+    residualImpact: string;
+    treatmentPlan?: string;
+  }): Promise<any | undefined>;
+  reviewComplianceRisk(id: string, input: {
+    reviewNotes?: string;
+    nextReviewDate: string;
+  }): Promise<any | undefined>;
+
+  // Compliance Enhanced - Dashboard & Reporting
+  getComplianceDashboard(tenantId: string, frameworkId?: string): Promise<any>;
+  getRequirementStatus(id: string): Promise<any>;
+  getFrameworkCoverage(id: string): Promise<any>;
+  getComplianceAuditLog(tenantId: string, filters?: {
+    entityType?: string;
+    entityId?: string;
+    action?: string;
+    from?: string;
+    to?: string;
+    limit?: number;
+  }): Promise<any[]>;
 }
 
 export interface CctvInfrastructureStore {

@@ -148,6 +148,7 @@ export class PostgresStore
   async releaseLegalHold(id: string, releasedBy: string) { return this.evidence.releaseLegalHold(id, releasedBy); }
   async getLegalHold(id: string) { return this.evidence.getLegalHold(id); }
   async upsertRecordingStorageNode(input: any) { return this.recordings.upsertStorageNode(input); }
+  async listRecordingStorageNodes(tenantId: string) { return this.recordings.listStorageNodes(tenantId); }
   async createRecordingHealthEvent(input: any) { return this.recordings.createHealthEvent(input); }
   async listRecordingHealthEvents(cameraId: string, limit: number) {
     return this.recordings.listHealthEvents(cameraId, limit);
