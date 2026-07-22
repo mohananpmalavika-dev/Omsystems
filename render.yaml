@@ -32,8 +32,8 @@ services:
     runtime: node
     plan: free
     region: singapore
-    buildCommand: npm ci && npm run build -w @sentinel/media-gateway
-    startCommand: npm run start -w @sentinel/media-gateway
+    buildCommand: npm ci && cd media-gateway && npm run build
+    startCommand: cd media-gateway && npm run start
     healthCheckPath: /health
     autoDeployTrigger: commit
     envVars:
