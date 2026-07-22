@@ -6,6 +6,7 @@ DO $$ BEGIN
   CREATE TYPE recording_status AS ENUM ('recording', 'scheduled', 'idle', 'error', 'disabled');
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
+
 CREATE TABLE IF NOT EXISTS recording_jobs (
   id uuid PRIMARY KEY,
   camera_id uuid NOT NULL UNIQUE REFERENCES cameras(id) ON DELETE CASCADE,
@@ -28,23 +29,12 @@ ALTER TABLE recording_jobs
     CHECK (cold_retention_days BETWEEN 0 AND 3650),
   ADD COLUMN IF NOT EXISTS max_bitrate_kbps integer
     CHECK (max_bitrate_kbps IS NULL OR max_bitrate_kbps BETWEEN 64 AND 100000),
-  ADD COLUMN IF NOT EXISTS pre_roll_seconds integer NOT NULL DEFAULT 30
-    CHECK (pre_roll_seconds BETWEEN 0 AND 3600),
-  ADD COLUMN IF NOT EXISTS min_motion_duration_seconds integer NOT NULL DEFAULT 0
-    CHECK (min_motion_duration_seconds BETWEEN 0 AND 86400),
-  ADD COLUMN IF NOT EXISTS motion_confidence_threshold numeric(5,4) NOT NULL DEFAULT 0
-    CHECK (motion_confidence_threshold BETWEEN 0 AND 1),
-  ADD COLUMN IF NOT EXISTS cooldown_seconds integer NOT NULL DEFAULT 60
-    CHECK (cooldown_seconds BETWEEN 0 AND 86400),
-  ADD COLUMN IF NOT EXISTS max_event_duration_seconds integer NOT NULL DEFAULT 0
-    CHECK (max_event_duration_seconds BETWEEN 0 AND 86400),
-  ADD COLUMN IF NOT EXISTS storage_node_external_id text,
-  ADD COLUMN IF NOT EXISTS trigger_event_types text[],
   ADD COLUMN IF NOT EXISTS critical boolean NOT NULL DEFAULT false,
   ADD COLUMN IF NOT EXISTS backup_required boolean NOT NULL DEFAULT false,
   ADD COLUMN IF NOT EXISTS automatic_deletion_enabled boolean NOT NULL DEFAULT true,
   ADD COLUMN IF NOT EXISTS evidence_protection boolean NOT NULL DEFAULT true,
   ADD COLUMN IF NOT EXISTS record_main_stream boolean NOT NULL DEFAULT true;
+
 CREATE TABLE IF NOT EXISTS recording_segments (
   id uuid PRIMARY KEY,
   camera_id uuid NOT NULL REFERENCES cameras(id) ON DELETE CASCADE,
@@ -66,6 +56,7 @@ ALTER TABLE recording_segments
 CREATE INDEX IF NOT EXISTS recording_segments_camera_time_idx ON recording_segments (camera_id, started_at DESC);
 CREATE UNIQUE INDEX IF NOT EXISTS recording_segments_camera_path_uidx
   ON recording_segments (camera_id, storage_path);
+
 CREATE TABLE IF NOT EXISTS recording_events (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(), camera_id uuid NOT NULL REFERENCES cameras(id) ON DELETE CASCADE,
   event_type text NOT NULL, occurred_at timestamptz NOT NULL DEFAULT now(), metadata jsonb NOT NULL DEFAULT '{}'::jsonb
@@ -92,6 +83,7 @@ CREATE TABLE IF NOT EXISTS recording_storage_nodes (
 );
 CREATE INDEX IF NOT EXISTS recording_storage_nodes_status_idx
   ON recording_storage_nodes (tenant_id, status, last_seen_at DESC);
+
 CREATE TABLE IF NOT EXISTS recording_retention (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(), tenant_id uuid NOT NULL REFERENCES tenants(id),
   days integer NOT NULL DEFAULT 180 CHECK (days BETWEEN 1 AND 3650), enabled boolean NOT NULL DEFAULT true
@@ -101,6 +93,7 @@ CREATE TABLE IF NOT EXISTS recording_exports (
   requested_by uuid REFERENCES users(id), from_at timestamptz NOT NULL, to_at timestamptz NOT NULL,
   status text NOT NULL DEFAULT 'queued', storage_path text, created_at timestamptz NOT NULL DEFAULT now(), CHECK (to_at > from_at)
 );
+
 CREATE TABLE IF NOT EXISTS recording_legal_holds (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
@@ -118,6 +111,7 @@ CREATE TABLE IF NOT EXISTS recording_legal_holds (
 CREATE INDEX IF NOT EXISTS recording_legal_holds_active_idx
   ON recording_legal_holds (camera_id, from_at, to_at)
   WHERE released_at IS NULL;
+
 CREATE TABLE IF NOT EXISTS recording_replication_jobs (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
@@ -137,6 +131,7 @@ CREATE TABLE IF NOT EXISTS recording_replication_jobs (
 CREATE INDEX IF NOT EXISTS recording_replication_queue_idx
   ON recording_replication_jobs (status, priority, next_attempt_at)
   WHERE status IN ('queued', 'failed');
+
 CREATE TABLE IF NOT EXISTS recording_health_events (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
