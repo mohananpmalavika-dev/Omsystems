@@ -824,8 +824,8 @@ export async function buildApp(options?: {
     ...(options?.recordingEngineSharedKey
       ? { recordingEngineSharedKey: options.recordingEngineSharedKey } : {}),
   });
-  await registerAnalyticsMetricsRoutes(app, store);
-  await registerAnalyticsPhase2Routes(app, store);
+  // await registerAnalyticsMetricsRoutes(app, store);
+  // await registerAnalyticsPhase2Routes(app, store);
 
   app.setErrorHandler((error, _request, reply) => {
     if (error instanceof z.ZodError) {
