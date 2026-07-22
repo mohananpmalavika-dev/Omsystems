@@ -104,16 +104,16 @@ export class PrivacyRepository {
   }
 
   async updatePrivacyPurpose(id: string, input: Partial<PrivacyPurposeInput>) {
-    const values: Array<[string, unknown]> = [
-      ["tenant_id", input.tenantId ?? null],
-      ["name", input.name ?? null],
-      ["lawful_basis", input.lawfulBasis ?? null],
-      ["description", input.description ?? null],
-      ["risk_level", input.riskLevel ?? null],
-      ["data_categories", input.dataCategories ? JSON.stringify(input.dataCategories) : null],
-      ["active", input.active ?? null],
-      ["created_by", input.createdBy ?? null],
-    ].filter(([, value]) => value !== null);
+    const values: Array<[string, unknown]> = [];
+    
+    if (input.tenantId !== undefined) values.push(["tenant_id", input.tenantId]);
+    if (input.name !== undefined) values.push(["name", input.name]);
+    if (input.lawfulBasis !== undefined) values.push(["lawful_basis", input.lawfulBasis]);
+    if (input.description !== undefined) values.push(["description", input.description]);
+    if (input.riskLevel !== undefined) values.push(["risk_level", input.riskLevel]);
+    if (input.dataCategories !== undefined) values.push(["data_categories", JSON.stringify(input.dataCategories)]);
+    if (input.active !== undefined) values.push(["active", input.active]);
+    if (input.createdBy !== undefined) values.push(["created_by", input.createdBy]);
 
     if (values.length === 0) return this.getPrivacyPurpose(id);
 

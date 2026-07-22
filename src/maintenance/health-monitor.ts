@@ -60,7 +60,7 @@ export class HealthMonitoringService {
   private thresholds: Map<string, HealthThreshold[]> = new Map();
   private metricsBuffer: HealthMetric[] = [];
   private alerts: HealthAlert[] = [];
-  private collectionInterval: NodeJS.Timer | null = null;
+  private collectionInterval: NodeJS.Timeout | null = null;
   private readonly BUFFER_SIZE = 1000;
   private readonly COLLECTION_INTERVAL_MS = 30000; // 30 seconds
 

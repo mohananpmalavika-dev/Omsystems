@@ -57,17 +57,44 @@ const capabilitiesSchema = z.object({
   audio: z.boolean(),
   events: z.boolean(),
 });
+const scheduleWindowSchema = z.object({
+  name: z.string().trim().min(1).max(120).optional(),
+  days: z.array(z.number().int().min(0).max(6)).min(1),
+  start: z.string().regex(/^\d{2}:\d{2}$/),
+  end: z.string().regex(/^\d{2}:\d{2}$/),
+  enabled: z.boolean().default(true),
+});
+const scheduleExceptionSchema = z.object({
+  name: z.string().trim().min(1).max(120).optional(),
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  start: z.string().regex(/^\d{2}:\d{2}$/).optional(),
+  end: z.string().regex(/^\d{2}:\d{2}$/).optional(),
+  enabled: z.boolean().default(false),
+  description: z.string().trim().min(1).max(1_000).optional(),
+});
+const recordingScheduleSchema = z.object({
+  timezone: z.string().trim().min(1).max(100).default("UTC"),
+  windows: z.array(scheduleWindowSchema).min(1),
+  exceptions: z.array(scheduleExceptionSchema).optional(),
+});
 const recordingJobSchema = z.object({
   mode: z.enum(["continuous", "motion", "scheduled", "event", "manual"]),
   enabled: z.boolean().default(true),
   retentionDays: z.number().int().min(1).max(3650).default(180),
-  schedule: z.object({ days: z.array(z.number().int().min(0).max(6)).min(1), start: z.string().regex(/^\d{2}:\d{2}$/), end: z.string().regex(/^\d{2}:\d{2}$/) }).optional(),
+  schedule: recordingScheduleSchema.optional(),
+  preRollSeconds: z.number().int().min(0).max(3600).default(30),
   postRollSeconds: z.number().int().min(0).max(3600).default(30),
+  minMotionDurationSeconds: z.number().int().min(0).max(86_400).default(0),
+  motionConfidenceThreshold: z.number().min(0).max(1).default(0),
+  cooldownSeconds: z.number().int().min(0).max(86_400).default(60),
+  maxEventDurationSeconds: z.number().int().min(0).max(86_400).default(0),
   segmentDurationSeconds: z.number().int().min(10).max(300).default(60),
   hotRetentionDays: z.number().int().min(0).max(3650).default(30),
   warmRetentionDays: z.number().int().min(0).max(3650).default(60),
   coldRetentionDays: z.number().int().min(0).max(3650).default(90),
   maxBitrateKbps: z.number().int().min(64).max(100_000).optional(),
+  storageNodeExternalId: z.string().min(1).max(200).optional(),
+  triggerEventTypes: z.array(z.string().trim().min(1).max(100)).optional(),
   critical: z.boolean().default(false),
   backupRequired: z.boolean().default(false),
   automaticDeletionEnabled: z.boolean().default(true),
@@ -348,7 +375,9 @@ export async function buildApp(options?: {
     ))) return;
     return (await store.getRecordingJob(id)) ?? {
       cameraId: id, mode: "continuous", enabled: false, status: "disabled",
-      retentionDays: 180, postRollSeconds: 30,
+      retentionDays: 180, preRollSeconds: 30, postRollSeconds: 30,
+      minMotionDurationSeconds: 0, motionConfidenceThreshold: 0,
+      cooldownSeconds: 60, maxEventDurationSeconds: 0,
       segmentDurationSeconds: 60, hotRetentionDays: 30,
       warmRetentionDays: 60, coldRetentionDays: 90,
       critical: false, backupRequired: false,
@@ -375,7 +404,32 @@ export async function buildApp(options?: {
       : input.mode === "scheduled"
         ? "scheduled"
         : "idle";
-    let job = await store.upsertRecordingJob(id, { ...input, status: requestedStatus });
+    let job = await store.upsertRecordingJob(id, { 
+      ...input, 
+      status: requestedStatus,
+      critical: input.critical,
+      enabled: input.enabled,
+      mode: input.mode,
+      retentionDays: input.retentionDays,
+      schedule: input.schedule,
+      preRollSeconds: input.preRollSeconds,
+      postRollSeconds: input.postRollSeconds,
+      minMotionDurationSeconds: input.minMotionDurationSeconds,
+      motionConfidenceThreshold: input.motionConfidenceThreshold,
+      cooldownSeconds: input.cooldownSeconds,
+      maxEventDurationSeconds: input.maxEventDurationSeconds,
+      segmentDurationSeconds: input.segmentDurationSeconds,
+      hotRetentionDays: input.hotRetentionDays,
+      warmRetentionDays: input.warmRetentionDays,
+      coldRetentionDays: input.coldRetentionDays,
+      maxBitrateKbps: input.maxBitrateKbps,
+      storageNodeExternalId: input.storageNodeExternalId,
+      triggerEventTypes: input.triggerEventTypes,
+      backupRequired: input.backupRequired,
+      automaticDeletionEnabled: input.automaticDeletionEnabled,
+      evidenceProtection: input.evidenceProtection,
+      recordMainStream: input.recordMainStream,
+    });
     if (options?.recordingEngineUrl && options.recordingEngineSharedKey) {
       const response = await fetch(new URL("/internal/jobs", options.recordingEngineUrl), {
         method: "PUT", headers: { "content-type": "application/json", "x-recording-engine-key": options.recordingEngineSharedKey },
@@ -388,7 +442,7 @@ export async function buildApp(options?: {
         }),
       });
       if (!response.ok) {
-        job = await store.upsertRecordingJob(id, { ...input, status: "error" });
+        job = await store.upsertRecordingJob(id, { ...input, status: "error" } as Omit<RecordingJob, "id" | "cameraId" | "updatedAt">);
         return reply.code(503).send({ error: "recording_engine_unavailable" });
       }
       const engine = z.object({ active: z.boolean() }).parse(await response.json());
@@ -400,7 +454,7 @@ export async function buildApp(options?: {
             ? "scheduled"
             : "idle";
       if (job.status !== actualStatus) {
-        job = await store.upsertRecordingJob(id, { ...input, status: actualStatus });
+        job = await store.upsertRecordingJob(id, { ...input, status: actualStatus } as Omit<RecordingJob, "id" | "cameraId" | "updatedAt">);
       }
     }
     await audit(request, store, "recording.configured", camera.nodeId, "success", { mode: job.mode, enabled: job.enabled });
@@ -484,7 +538,17 @@ export async function buildApp(options?: {
   });
 
   app.post("/v1/recording/storage-calculator", async (request) => {
-    return calculateRecordingStorage(storageCalculatorSchema.parse(request.body));
+    const parsed = storageCalculatorSchema.parse(request.body);
+    return calculateRecordingStorage({
+      cameraCount: parsed.cameraCount,
+      bitrateMbps: parsed.bitrateMbps,
+      recordingHoursPerDay: parsed.recordingHoursPerDay,
+      retentionDays: parsed.retentionDays,
+      metadataAndIndexPercent: parsed.metadataAndIndexPercent,
+      safetyReservePercent: parsed.safetyReservePercent,
+      raidUsablePercent: parsed.raidUsablePercent,
+      backupCopies: parsed.backupCopies,
+    });
   });
 
   app.get("/v1/cameras/:id/recording/legal-holds", async (request, reply) => {
@@ -554,7 +618,20 @@ export async function buildApp(options?: {
     if (!camera || !node || node.tenantId !== input.tenantId || job?.id !== input.jobId) {
       return reply.code(404).send({ error: "recording_job_not_found" });
     }
-    const segment = await store.createRecordingSegment(input);
+    const segment = await store.createRecordingSegment({
+      tenantId: input.tenantId,
+      cameraId: input.cameraId,
+      jobId: input.jobId,
+      startedAt: input.startedAt,
+      endedAt: input.endedAt,
+      storagePath: input.storagePath,
+      sizeBytes: input.sizeBytes,
+      storageNodeExternalId: input.storageNodeExternalId,
+      storageTier: input.storageTier,
+      status: input.status,
+      checksumSha256: input.checksumSha256,
+      codec: input.codec,
+    });
     return reply.code(201).send(segment);
   });
 
@@ -582,7 +659,19 @@ export async function buildApp(options?: {
         return reply.code(400).send({ error: "invalid_storage_scope" });
       }
     }
-    return store.upsertRecordingStorageNode({ externalId, ...input });
+    return store.upsertRecordingStorageNode({ 
+      externalId, 
+      tenantId: input.tenantId,
+      name: input.name,
+      scopeNodeId: input.scopeNodeId,
+      supportedTiers: input.supportedTiers,
+      capacityBytes: input.capacityBytes,
+      usedBytes: input.usedBytes,
+      availableBytes: input.availableBytes,
+      status: input.status,
+      temperatureCelsius: input.temperatureCelsius,
+      writeMbps: input.writeMbps,
+    });
   });
 
   app.post("/internal/recording/health", async (request, reply) => {
@@ -602,7 +691,15 @@ export async function buildApp(options?: {
         return reply.code(400).send({ error: "invalid_health_event_target" });
       }
     }
-    const event = await store.createRecordingHealthEvent(input);
+    const event = await store.createRecordingHealthEvent({
+      tenantId: input.tenantId,
+      cameraId: input.cameraId,
+      storageNodeExternalId: input.storageNodeExternalId,
+      eventType: input.eventType,
+      severity: input.severity,
+      message: input.message,
+      details: input.details,
+    });
     if (input.cameraId) {
       const nextStatus = input.eventType === "recording_started"
         ? "recording"
@@ -694,8 +791,8 @@ export async function buildApp(options?: {
       const { startMaintenanceScheduler } = await import("./maintenance/scheduler.js");
       const stop = startMaintenanceScheduler(extendedStore, app.log);
       app.addHook('onClose', async () => stop());
-    } catch (err) {
-      app.log.error('failed to start maintenance scheduler', err);
+    } catch (err: unknown) {
+      app.log.error({ err }, 'failed to start maintenance scheduler');
     }
   }
   await registerPrivacyRoutes(app, store);

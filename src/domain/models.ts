@@ -518,7 +518,30 @@ export interface ConsumedLiveSession {
 }
 
 export type RecordingMode = "continuous" | "motion" | "scheduled" | "event" | "manual";
-export type RecordingStatus = "recording" | "scheduled" | "idle" | "error" | "disabled";
+export type RecordingStatus = "recording" | "scheduled" | "idle" | "error" | "disabled" | "starting" | "degraded" | "interrupted" | "recovering";
+
+export interface RecordingScheduleWindow {
+  name?: string;
+  days: number[];
+  start: string;
+  end: string;
+  enabled?: boolean;
+}
+
+export interface RecordingScheduleException {
+  name?: string;
+  date: string;
+  start?: string;
+  end?: string;
+  enabled: boolean;
+  description?: string;
+}
+
+export interface RecordingSchedule {
+  timezone?: string;
+  windows: RecordingScheduleWindow[];
+  exceptions?: RecordingScheduleException[];
+}
 
 /** Configuration is owned by the control plane; the recording engine executes it independently. */
 export interface RecordingJob {
@@ -539,8 +562,15 @@ export interface RecordingJob {
   automaticDeletionEnabled: boolean;
   evidenceProtection: boolean;
   recordMainStream: boolean;
-  schedule?: { days: number[]; start: string; end: string } | undefined;
+  schedule?: RecordingSchedule | undefined;
+  preRollSeconds: number;
   postRollSeconds: number;
+  minMotionDurationSeconds: number;
+  motionConfidenceThreshold: number;
+  cooldownSeconds: number;
+  maxEventDurationSeconds: number;
+  storageNodeExternalId?: string | undefined;
+  triggerEventTypes?: string[] | undefined;
   updatedAt: string;
 }
 

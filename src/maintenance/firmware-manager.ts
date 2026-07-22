@@ -424,7 +424,7 @@ export class FirmwareUpdateManager {
       totalDevices: devices.length,
       completed: devices.filter((d) => d.updateStatus === "completed").length,
       failed: devices.filter((d) => d.updateStatus === "failed").length,
-      inProgress: devices.filter((d) => d.updateStatus === "in-progress").length,
+      inProgress: devices.filter((d) => d.updateStatus === "downloading" || d.updateStatus === "installing").length,
       pending: devices.filter((d) => d.updateStatus === "pending").length,
       devices,
     };
@@ -458,7 +458,7 @@ export class FirmwareUpdateManager {
         this.recordUpdateHistory(update);
       } else if (status === "failed") {
         update.completedAt = new Date();
-      } else if (status === "in-progress" && !update.startedAt) {
+      } else if ((status === "downloading" || status === "installing") && !update.startedAt) {
         update.startedAt = new Date();
       }
     }

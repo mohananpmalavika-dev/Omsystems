@@ -35,10 +35,25 @@ const config = z.object({
 const recordingRoot = resolve(config.RECORDING_ROOT);
 const persistedJobsPath = join(recordingRoot, ".recording-jobs.json");
 const secrets = z.record(z.string()).parse(JSON.parse(config.STREAM_SECRETS_JSON));
-const scheduleSchema = z.object({
-  days: z.array(z.number().int().min(0).max(6)),
+const scheduleWindowSchema = z.object({
+  name: z.string().trim().min(1).max(120).optional(),
+  days: z.array(z.number().int().min(0).max(6)).min(1),
   start: z.string().regex(/^\d{2}:\d{2}$/),
   end: z.string().regex(/^\d{2}:\d{2}$/),
+  enabled: z.boolean().default(true),
+});
+const scheduleExceptionSchema = z.object({
+  name: z.string().trim().min(1).max(120).optional(),
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  start: z.string().regex(/^\d{2}:\d{2}$/).optional(),
+  end: z.string().regex(/^\d{2}:\d{2}$/).optional(),
+  enabled: z.boolean().default(true),
+  description: z.string().trim().min(1).max(1_000).optional(),
+});
+const scheduleSchema = z.object({
+  timezone: z.string().trim().min(1).max(100).default("UTC"),
+  windows: z.array(scheduleWindowSchema).min(1),
+  exceptions: z.array(scheduleExceptionSchema).optional(),
 });
 const policySchema = z.object({
   id: z.string().min(1),
@@ -46,12 +61,19 @@ const policySchema = z.object({
   enabled: z.boolean(),
   status: z.string(),
   retentionDays: z.number().int().min(1).max(3650),
-  postRollSeconds: z.number().int().min(0).max(3600),
+  preRollSeconds: z.number().int().min(0).max(3600).default(30),
+  postRollSeconds: z.number().int().min(0).max(3600).default(30),
+  minMotionDurationSeconds: z.number().int().min(0).max(86_400).default(0),
+  motionConfidenceThreshold: z.number().min(0).max(1).default(0),
+  cooldownSeconds: z.number().int().min(0).max(86_400).default(60),
+  maxEventDurationSeconds: z.number().int().min(0).max(86_400).default(0),
   segmentDurationSeconds: z.number().int().min(10).max(300).default(60),
   hotRetentionDays: z.number().int().min(0).max(3650).default(30),
   warmRetentionDays: z.number().int().min(0).max(3650).default(60),
   coldRetentionDays: z.number().int().min(0).max(3650).default(90),
   maxBitrateKbps: z.number().int().optional(),
+  storageNodeExternalId: z.string().min(1).max(200).optional(),
+  triggerEventTypes: z.array(z.string().trim().min(1).max(100)).optional(),
   critical: z.boolean().default(false),
   backupRequired: z.boolean().default(false),
   automaticDeletionEnabled: z.boolean().default(true),
@@ -222,18 +244,64 @@ function shouldRun(job: ManagedJob) {
     (job.job.mode !== "scheduled" || inSchedule(job.job.schedule));
 }
 
+function localTimeForTimezone(timezone: string) {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: timezone,
+    hour12: false,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    weekday: "short",
+  }).formatToParts(new Date());
+  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  return {
+    weekday: values.weekday as string,
+    year: Number(values.year),
+    month: Number(values.month),
+    day: Number(values.day),
+    hour: Number(values.hour),
+    minute: Number(values.minute),
+  };
+}
+
+function minutesSinceMidnight(hour: number, minute: number) {
+  return hour * 60 + minute;
+}
+
+function isTimeInRange(minutes: number, start: string, end: string) {
+  const [sh, sm] = start.split(":").map(Number);
+  const [eh, em] = end.split(":").map(Number);
+  const startMinutes = minutesSinceMidnight(sh, sm);
+  const endMinutes = minutesSinceMidnight(eh, em);
+  return startMinutes <= endMinutes
+    ? minutes >= startMinutes && minutes < endMinutes
+    : minutes >= startMinutes || minutes < endMinutes;
+}
+
+function weekdayFromShort(name: string) {
+  return ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].indexOf(name);
+}
+
 function inSchedule(value: z.infer<typeof scheduleSchema> | undefined) {
   if (!value) return false;
-  const now = new Date();
-  if (!value.days.includes(now.getDay())) return false;
-  const minutes = now.getHours() * 60 + now.getMinutes();
-  const [sh, sm] = value.start.split(":").map(Number);
-  const [eh, em] = value.end.split(":").map(Number);
-  const start = sh! * 60 + sm!;
-  const end = eh! * 60 + em!;
-  return start <= end
-    ? minutes >= start && minutes < end
-    : minutes >= start || minutes < end;
+  const local = localTimeForTimezone(value.timezone);
+  const date = `${local.year.toString().padStart(4, "0")}-${local.month.toString().padStart(2, "0")}-${local.day.toString().padStart(2, "0")}`;
+  const currentMinutes = minutesSinceMidnight(local.hour, local.minute);
+  if (value.exceptions) {
+    for (const exception of value.exceptions) {
+      if (!exception.enabled || exception.date !== date) continue;
+      if (!exception.start || !exception.end) return false;
+      if (isTimeInRange(currentMinutes, exception.start, exception.end)) return false;
+    }
+  }
+  const localWeekday = weekdayFromShort(local.weekday);
+  return value.windows.some((window) => {
+    if (!window.enabled) return false;
+    if (!window.days.includes(localWeekday)) return false;
+    return isTimeInRange(currentMinutes, window.start, window.end);
+  });
 }
 
 async function start(job: ManagedJob) {

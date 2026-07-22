@@ -202,7 +202,27 @@ export interface LiveSessionResponse {
 }
 
 export type RecordingMode = "continuous" | "motion" | "scheduled" | "event" | "manual";
-export type RecordingStatus = "recording" | "scheduled" | "idle" | "error" | "disabled";
+export type RecordingStatus = "recording" | "scheduled" | "idle" | "error" | "disabled" | "starting" | "degraded" | "interrupted" | "recovering";
+export interface RecordingScheduleWindow {
+  name?: string;
+  days: number[];
+  start: string;
+  end: string;
+  enabled?: boolean;
+}
+export interface RecordingScheduleException {
+  name?: string;
+  date: string;
+  start?: string;
+  end?: string;
+  enabled: boolean;
+  description?: string;
+}
+export interface RecordingSchedule {
+  timezone?: string;
+  windows: RecordingScheduleWindow[];
+  exceptions?: RecordingScheduleException[];
+}
 export interface RecordingJob {
   id?: string;
   cameraId: string;
@@ -221,7 +241,14 @@ export interface RecordingJob {
   automaticDeletionEnabled: boolean;
   evidenceProtection: boolean;
   recordMainStream: boolean;
-  schedule?: { days: number[]; start: string; end: string };
+  schedule?: RecordingSchedule;
+  preRollSeconds?: number;
+  minMotionDurationSeconds?: number;
+  motionConfidenceThreshold?: number;
+  cooldownSeconds?: number;
+  maxEventDurationSeconds?: number;
+  storageNodeExternalId?: string;
+  triggerEventTypes?: string[];
 }
 
 export interface RecordingSegment {

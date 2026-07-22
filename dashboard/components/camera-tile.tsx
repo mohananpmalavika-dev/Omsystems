@@ -18,6 +18,7 @@ import {
 import { useRef, useState } from "react";
 import type { Camera, LiveSessionResponse, RecordingJob, RecordingMode } from "@/lib/types";
 import { HlsPlayer } from "./hls-player";
+import { PtzControl } from "./ptz-control";
 
 export function CameraTile({
   camera,
@@ -47,6 +48,7 @@ export function CameraTile({
   const tileRef = useRef<HTMLElement>(null);
   const isActive = Boolean(session);
   const [zoom, setZoom] = useState(1);
+  const [showPtzControl, setShowPtzControl] = useState(false);
 
   const takeSnapshot = () => {
     const video = tileRef.current?.querySelector("video");
@@ -127,7 +129,7 @@ export function CameraTile({
             </button>
           )}
           {camera.capabilities.ptz && (
-            <button aria-label="PTZ controls" title="PTZ controls">
+            <button aria-label="PTZ controls" title="PTZ controls" onClick={() => setShowPtzControl(!showPtzControl)} disabled={!isActive}>
               <Move3D size={15} />
             </button>
           )}
@@ -143,6 +145,15 @@ export function CameraTile({
           <button aria-label="Take snapshot" title="Take snapshot" onClick={takeSnapshot} disabled={!session?.hls}><SnapshotIcon size={15} /></button>
         </div>
         {zoom > 1 && <button className="zoom-reset" onClick={() => setZoom(1)}>Zoom {Math.round(zoom * 100)}% · Reset</button>}
+        {showPtzControl && isActive && session?.sessionId && (
+          <div className="ptz-overlay">
+            <PtzControl
+              cameraId={camera.id}
+              sessionId={session.sessionId}
+              onClose={() => setShowPtzControl(false)}
+            />
+          </div>
+        )}
       </div>
       <footer className="camera-meta">
         <div>
