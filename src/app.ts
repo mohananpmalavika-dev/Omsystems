@@ -404,32 +404,11 @@ export async function buildApp(options?: {
       : input.mode === "scheduled"
         ? "scheduled"
         : "idle";
-    let job = await store.upsertRecordingJob(id, { 
-      ...input, 
+    const jobPayload = {
+      ...input,
       status: requestedStatus,
-      critical: input.critical,
-      enabled: input.enabled,
-      mode: input.mode,
-      retentionDays: input.retentionDays,
-      schedule: input.schedule,
-      preRollSeconds: input.preRollSeconds,
-      postRollSeconds: input.postRollSeconds,
-      minMotionDurationSeconds: input.minMotionDurationSeconds,
-      motionConfidenceThreshold: input.motionConfidenceThreshold,
-      cooldownSeconds: input.cooldownSeconds,
-      maxEventDurationSeconds: input.maxEventDurationSeconds,
-      segmentDurationSeconds: input.segmentDurationSeconds,
-      hotRetentionDays: input.hotRetentionDays,
-      warmRetentionDays: input.warmRetentionDays,
-      coldRetentionDays: input.coldRetentionDays,
-      maxBitrateKbps: input.maxBitrateKbps,
-      storageNodeExternalId: input.storageNodeExternalId,
-      triggerEventTypes: input.triggerEventTypes,
-      backupRequired: input.backupRequired,
-      automaticDeletionEnabled: input.automaticDeletionEnabled,
-      evidenceProtection: input.evidenceProtection,
-      recordMainStream: input.recordMainStream,
-    });
+    } as Omit<RecordingJob, "id" | "cameraId" | "updatedAt">;
+    let job = await store.upsertRecordingJob(id, jobPayload);
     if (options?.recordingEngineUrl && options.recordingEngineSharedKey) {
       const response = await fetch(new URL("/internal/jobs", options.recordingEngineUrl), {
         method: "PUT", headers: { "content-type": "application/json", "x-recording-engine-key": options.recordingEngineSharedKey },
@@ -619,7 +598,6 @@ export async function buildApp(options?: {
       return reply.code(404).send({ error: "recording_job_not_found" });
     }
     const segment = await store.createRecordingSegment({
-      tenantId: input.tenantId,
       cameraId: input.cameraId,
       jobId: input.jobId,
       startedAt: input.startedAt,
