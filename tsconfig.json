@@ -21,10 +21,6 @@
     "src/routes/evidence.routes.ts",
     "src/routes/video-search.routes.ts",
     "src/store-maintenance-extensions.ts",
-    "src/routes/maintenance.routes.ts",
-    "src/routes/maintenance-dashboard.routes.ts",
-    "src/routes/maintenance-advanced.routes.ts",
-    "src/routes/live-operations.routes.ts",
-    "src/routes/privacy-compliance.routes.ts"
+    "src/routes/*.disabled"
   ]
 }
