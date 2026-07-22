@@ -62,10 +62,10 @@ export class ComplianceService {
       throw new Error('Assessment not found');
     }
 
-    // Update status to in_progress
+    // Update status to in_progress (status is not part of ComplianceAssessmentStatus enum - using assessment execution)
     await this.complianceRepo.updateAssessment(assessmentId, {
       ...assessment,
-      status: 'in_progress',
+      status: 'incomplete', // Keep as incomplete during execution
     });
 
     try {
@@ -107,10 +107,15 @@ export class ComplianceService {
         assessmentDate: new Date().toISOString(),
       };
 
-      // Update assessment with results
+      // Update assessment with results - map to valid ComplianceAssessmentStatus values
+      const assessmentStatus: 'compliant' | 'exception' | 'non-compliant' | 'incomplete' = 
+        compliancePercentage >= 90 ? 'compliant' : 
+        compliancePercentage >= 70 ? 'exception' : 
+        'non-compliant';
+      
       await this.complianceRepo.updateAssessment(assessmentId, {
         ...assessment,
-        status: compliancePercentage >= 90 ? 'passed' : compliancePercentage >= 70 ? 'passed_with_exceptions' : 'failed',
+        status: assessmentStatus,
         summary,
         evidence: { results },
       });
@@ -121,10 +126,10 @@ export class ComplianceService {
         results,
       };
     } catch (error) {
-      // Mark assessment as failed
+      // Mark assessment as failed - use 'non-compliant' as per ComplianceAssessmentStatus enum
       await this.complianceRepo.updateAssessment(assessmentId, {
         ...assessment,
-        status: 'failed',
+        status: 'non-compliant',
         summary: {
           error: error instanceof Error ? error.message : 'Unknown error',
         },
@@ -172,16 +177,18 @@ export class ComplianceService {
 
       // Check if control testing is up to date
       if (control.testFrequencyDays && control.lastTestDate) {
+        const lastTestDateValue = String(control.lastTestDate);
         const daysSinceTest = Math.floor(
-          (new Date().getTime() - new Date(control.lastTestDate).getTime()) / (1000 * 60 * 60 * 24)
+          (new Date().getTime() - new Date(lastTestDateValue).getTime()) / (1000 * 60 * 60 * 24)
         );
         
-        if (daysSinceTest > control.testFrequencyDays) {
+        const testFrequency = Number(control.testFrequencyDays);
+        if (daysSinceTest > testFrequency) {
           compliant = false;
           findings.push({
             controlId: control.id,
             controlName: control.controlName,
-            issue: `Control testing overdue by ${daysSinceTest - control.testFrequencyDays} days`,
+            issue: `Control testing overdue by ${daysSinceTest - testFrequency} days`,
             severity: 'medium',
           });
         }
@@ -296,7 +303,7 @@ export class ComplianceService {
       // Update test with results
       await this.complianceRepo.updateComplianceTest(String(test.id), {
         ...test,
-        status: testResult.status === 'passed' ? 'passed' : testResult.status === 'failed' ? 'failed' : 'not_started',
+        status: testResult.status === 'passed' ? 'passed' : testResult.status === 'failed' ? 'failed' : 'not_started' as any,
         findings: testResult.findings,
         passFail: testResult.status === 'passed',
         score: testResult.score,
@@ -305,8 +312,9 @@ export class ComplianceService {
 
       // Update control test dates
       if (testResult.status === 'passed' || testResult.status === 'failed') {
+        const testFreqDays = control.testFrequencyDays ? Number(control.testFrequencyDays) : 90;
         const nextTestDate = new Date();
-        nextTestDate.setDate(nextTestDate.getDate() + (Number(control.testFrequencyDays ?? 90)));
+        nextTestDate.setDate(nextTestDate.getDate() + testFreqDays);
         
         await this.complianceRepo.updateControlTestDates(input.controlId, {
           lastTestDate: new Date().toISOString(),

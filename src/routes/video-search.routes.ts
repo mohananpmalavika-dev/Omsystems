@@ -614,7 +614,7 @@ export async function registerVideoSearchRoutes(
         masterCameraId: body.masterCameraId,
         timeOffsets: body.timeOffsets,
         layout: body.layout,
-        createdBy: request.user.userId,
+        createdBy: request.currentUser.id,
       });
 
       return body.id ? group : reply.code(201).send(group);

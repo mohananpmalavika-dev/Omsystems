@@ -181,7 +181,7 @@ export default function IntegrationsPage() {
       {/* Health Status Dashboard */}
       <Grid container spacing={3} sx={{ mb: 3 }}>
         {healthStatus.map((item) => (
-          <Grid item xs={12} sm={6} md={4} lg={3} key={item.id}>
+          <Grid size={{ xs: 12, sm: 6, md: 4, lg: 3 }} key={item.id}>
             <Card>
               <CardContent>
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}>

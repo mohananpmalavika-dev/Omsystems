@@ -104,7 +104,7 @@ export async function registerMaintenanceReportsRoutes(
 
       return reply.code(201).send(report);
     } catch (error) {
-      app.log.error('Failed to generate report:', error);
+      app.log.error({ error }, 'Failed to generate report');
       
       await store.writeAudit({
         tenantId,
@@ -277,7 +277,7 @@ export async function registerMaintenanceReportsRoutes(
 
       return reply.code(201).send(scheduledReport);
     } catch (error) {
-      app.log.error('Failed to create scheduled report:', error);
+      app.log.error({ error }, 'Failed to create scheduled report');
       
       return reply.code(400).send({
         error: 'invalid_schedule',
@@ -366,7 +366,7 @@ export async function registerMaintenanceReportsRoutes(
 
       return updated;
     } catch (error) {
-      app.log.error('Failed to update scheduled report:', error);
+      app.log.error({ error }, 'Failed to update scheduled report');
       
       return reply.code(400).send({
         error: 'invalid_schedule',
