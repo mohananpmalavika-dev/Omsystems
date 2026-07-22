@@ -93,6 +93,14 @@ export interface CameraApprovalInput {
   channel: number;
   protocol: Camera["protocol"];
   connectionSecretRef: string;
+  branchCode?: string;
+  manufacturer?: string;
+  model?: string;
+  serialNumber?: string;
+  ipAddress?: string;
+  onvifPort?: number;
+  rtspPort?: number;
+  streamProfile?: string;
 }
 
 export interface CameraSpecificationsInput {
@@ -514,6 +522,10 @@ export interface ControlPlaneStore {
   ): Promise<DiscoveredCamera>;
   listDiscoveredCameras(branchId: string): Promise<DiscoveredCamera[]>;
   approveCamera(
+    branchId: string,
+    input: CameraApprovalInput,
+  ): Promise<Camera | undefined>;
+  createCameraFromManualRegistration(
     branchId: string,
     input: CameraApprovalInput,
   ): Promise<Camera | undefined>;

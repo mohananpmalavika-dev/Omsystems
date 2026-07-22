@@ -14,11 +14,34 @@ export default function MaintenancePage() {
   const [status, setStatus] = useState<any>(null);
   const [health, setHealth] = useState<any>(null);
   const [firmwareUpdates, setFirmwareUpdates] = useState<any[]>([]);
+  const [firmwareCatalog, setFirmwareCatalog] = useState<any[]>([]);
   const [lowStockParts, setLowStockParts] = useState<any[]>([]);
   const [highRiskAssets, setHighRiskAssets] = useState<any[]>([]);
   const [compliance, setCompliance] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [upgradePlanSubmitting, setUpgradePlanSubmitting] = useState(false);
+  const [upgradePlanResult, setUpgradePlanResult] = useState<any>(null);
+  const [upgradePayload, setUpgradePayload] = useState({
+    firmwareVersionId: "",
+    targetAssets: "",
+    strategy: "single-device" as "single-device" | "test-group" | "canary-rollout" | "branch-by-branch" | "region-by-region" | "scheduled-fleet-rollout" | "emergency-security-rollout",
+    safetyContext: {
+      modelConfirmed: true,
+      exactVersionConfirmed: true,
+      powerConfirmed: true,
+      upsConfirmed: true,
+      networkStable: true,
+      backupCompleted: true,
+      redundancyVerified: true,
+      activeIncidentsPresent: false,
+      alertsSuspended: true,
+      maintenanceWindowApproved: true,
+      rollbackPlanned: true,
+      packageVerified: true,
+      compatibilityVerified: true,
+    },
+  });
 
   useEffect(() => {
     setLoading(true);
@@ -28,14 +51,16 @@ export default function MaintenancePage() {
       maintenanceApi.getDashboardStatus(),
       maintenanceApi.getDashboardHealth(),
       maintenanceApi.listFirmwareUpdatesRequired(),
+      maintenanceApi.listFirmwareCatalog(),
       maintenanceApi.listLowStockParts(),
       maintenanceApi.listHighRiskAssets(),
       maintenanceApi.getMaintenanceMetrics(),
     ])
-      .then(([statusData, healthData, firmware, lowStock, highRisk, metrics]) => {
+      .then(([statusData, healthData, firmware, firmwareCatalogData, lowStock, highRisk, metrics]) => {
         setStatus(statusData);
         setHealth(healthData);
         setFirmwareUpdates(firmware.data ?? []);
+        setFirmwareCatalog(firmwareCatalogData.data ?? []);
         setLowStockParts(lowStock.data ?? []);
         setHighRiskAssets(highRisk.data ?? []);
         setCompliance(metrics ?? null);
@@ -45,6 +70,15 @@ export default function MaintenancePage() {
       })
       .finally(() => setLoading(false));
   }, []);
+
+  useEffect(() => {
+    if (!upgradePayload.firmwareVersionId && firmwareCatalog[0]?.id) {
+      setUpgradePayload((previous) => ({
+        ...previous,
+        firmwareVersionId: firmwareCatalog[0].id,
+      }));
+    }
+  }, [firmwareCatalog, upgradePayload.firmwareVersionId]);
 
   const alertItems = (status?.predictiveAlerts ?? []).slice(0, 6).map((item: any) => ({
     id: item.id,
@@ -61,6 +95,40 @@ export default function MaintenancePage() {
   }));
 
   const recentWorkOrders = (status?.workOrders ?? []).slice(0, 4);
+
+  const handleCreateUpgradePlan = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setUpgradePlanSubmitting(true);
+    setUpgradePlanResult(null);
+    setError(null);
+
+    try {
+      const plan = await maintenanceApi.createFirmwareUpgradePlan({
+        firmwareVersionId: upgradePayload.firmwareVersionId,
+        targetAssets: upgradePayload.targetAssets
+          .split(",")
+          .map((value) => value.trim())
+          .filter(Boolean),
+        strategy: upgradePayload.strategy,
+        safetyContext: upgradePayload.safetyContext,
+      });
+      setUpgradePlanResult(plan);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to create firmware upgrade plan.");
+    } finally {
+      setUpgradePlanSubmitting(false);
+    }
+  };
+
+  const toggleSafetyCheck = (field: keyof typeof upgradePayload.safetyContext) => {
+    setUpgradePayload((previous) => ({
+      ...previous,
+      safetyContext: {
+        ...previous.safetyContext,
+        [field]: !previous.safetyContext[field],
+      },
+    }));
+  };
 
   return (
     <AppLayout>
@@ -171,6 +239,21 @@ export default function MaintenancePage() {
         </div>
 
         <div style={{ padding: 20, border: "1px solid #e2e8f0", borderRadius: 12, background: "#fff" }}>
+          <h2 style={{ marginBottom: 16 }}>Firmware inventory</h2>
+          {firmwareCatalog.length === 0 ? (
+            <p style={{ color: "#4b5563" }}>No firmware packages are registered yet.</p>
+          ) : (
+            <ul style={{ margin: 0, padding: 0, listStyle: "none" }}>
+              {firmwareCatalog.slice(0, 5).map((item) => (
+                <li key={item.id} style={{ marginBottom: 12 }}>
+                  <strong>{item.vendor} {item.model}</strong> • {item.version} • {item.status}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+
+        <div style={{ padding: 20, border: "1px solid #e2e8f0", borderRadius: 12, background: "#fff" }}>
           <h2 style={{ marginBottom: 16 }}>Low stock parts</h2>
           {lowStockParts.length === 0 ? (
             <p style={{ color: "#4b5563" }}>Stock levels are healthy.</p>
@@ -184,6 +267,112 @@ export default function MaintenancePage() {
             </ul>
           )}
         </div>
+      </section>
+
+      <section style={{ padding: 20, border: "1px solid #e2e8f0", borderRadius: 12, background: "#fff", marginBottom: 24 }}>
+        <h2 style={{ marginBottom: 16 }}>Firmware upgrade planner</h2>
+        <p style={{ color: "#4b5563", marginTop: 0, marginBottom: 16 }}>
+          Create a safety-gated rollout plan that checks package verification, compatibility, maintenance windows, and rollback readiness before deployment.
+        </p>
+        <form onSubmit={handleCreateUpgradePlan} style={{ display: "grid", gap: 12 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 12 }}>
+            <label style={{ display: "grid", gap: 6 }}>
+              <span>Firmware version ID</span>
+              <input
+                value={upgradePayload.firmwareVersionId}
+                onChange={(event) => setUpgradePayload((previous) => ({ ...previous, firmwareVersionId: event.target.value }))}
+                placeholder="Select a registered firmware version"
+                style={{ padding: 8, border: "1px solid #d1d5db", borderRadius: 8 }}
+                required
+              />
+            </label>
+            <label style={{ display: "grid", gap: 6 }}>
+              <span>Target assets</span>
+              <input
+                value={upgradePayload.targetAssets}
+                onChange={(event) => setUpgradePayload((previous) => ({ ...previous, targetAssets: event.target.value }))}
+                placeholder="cam-001, cam-002"
+                style={{ padding: 8, border: "1px solid #d1d5db", borderRadius: 8 }}
+                required
+              />
+            </label>
+            <label style={{ display: "grid", gap: 6 }}>
+              <span>Strategy</span>
+              <select
+                value={upgradePayload.strategy}
+                onChange={(event) => setUpgradePayload((previous) => ({ ...previous, strategy: event.target.value as typeof upgradePayload.strategy }))}
+                style={{ padding: 8, border: "1px solid #d1d5db", borderRadius: 8 }}
+              >
+                <option value="single-device">Single device</option>
+                <option value="test-group">Test group</option>
+                <option value="canary-rollout">Canary rollout</option>
+                <option value="branch-by-branch">Branch by branch</option>
+                <option value="region-by-region">Region by region</option>
+                <option value="scheduled-fleet-rollout">Scheduled fleet rollout</option>
+                <option value="emergency-security-rollout">Emergency security rollout</option>
+              </select>
+            </label>
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 8 }}>
+            {[
+              ["modelConfirmed", "Model confirmed"],
+              ["exactVersionConfirmed", "Exact version confirmed"],
+              ["powerConfirmed", "Power confirmed"],
+              ["upsConfirmed", "UPS confirmed"],
+              ["networkStable", "Network stable"],
+              ["backupCompleted", "Backup completed"],
+              ["redundancyVerified", "Redundancy verified"],
+              ["activeIncidentsPresent", "No active incidents"],
+              ["alertsSuspended", "Alerts suspended"],
+              ["maintenanceWindowApproved", "Window approved"],
+              ["rollbackPlanned", "Rollback planned"],
+              ["packageVerified", "Package verified"],
+              ["compatibilityVerified", "Compatibility verified"],
+            ].map(([field, label]) => {
+              const key = field as keyof typeof upgradePayload.safetyContext;
+              return (
+                <label key={field} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <input
+                    type="checkbox"
+                    checked={upgradePayload.safetyContext[key]}
+                    onChange={() => toggleSafetyCheck(key)}
+                  />
+                  <span>{label}</span>
+                </label>
+              );
+            })}
+          </div>
+          <button
+            type="submit"
+            disabled={upgradePlanSubmitting || !upgradePayload.firmwareVersionId || !upgradePayload.targetAssets}
+            style={{ padding: "10px 14px", borderRadius: 8, border: "none", background: "#2563eb", color: "#fff", cursor: "pointer", maxWidth: 220 }}
+          >
+            {upgradePlanSubmitting ? "Creating plan…" : "Create upgrade plan"}
+          </button>
+        </form>
+
+        {upgradePlanResult && (
+          <div style={{ marginTop: 16, padding: 12, border: "1px solid #d1d5db", borderRadius: 10, background: "#f9fafb" }}>
+            <p style={{ margin: "0 0 8px", fontWeight: 700 }}>Plan status: {upgradePlanResult.status}</p>
+            <p style={{ margin: "0 0 8px" }}>Targets: {upgradePlanResult.targetAssets.join(", ")}</p>
+            {upgradePlanResult.safetyChecks?.blockers?.length > 0 && (
+              <div>
+                <p style={{ margin: "0 0 6px", fontWeight: 600 }}>Blockers</p>
+                <ul style={{ margin: 0, paddingLeft: 18 }}>
+                  {upgradePlanResult.safetyChecks.blockers.map((item: string) => <li key={item}>{item}</li>)}
+                </ul>
+              </div>
+            )}
+            {upgradePlanResult.safetyChecks?.warnings?.length > 0 && (
+              <div style={{ marginTop: 8 }}>
+                <p style={{ margin: "0 0 6px", fontWeight: 600 }}>Warnings</p>
+                <ul style={{ margin: 0, paddingLeft: 18 }}>
+                  {upgradePlanResult.safetyChecks.warnings.map((item: string) => <li key={item}>{item}</li>)}
+                </ul>
+              </div>
+            )}
+          </div>
+        )}
       </section>
 
       <section style={{ padding: 20, border: "1px solid #e2e8f0", borderRadius: 12, background: "#fff", marginBottom: 24 }}>

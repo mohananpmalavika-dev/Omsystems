@@ -531,7 +531,7 @@ export interface DiscoveredCamera {
   edgeAgentId: string;
   discoveryMethod: "onvif-ws-discovery" | "configured-ip-range" | "manual-ip-registration" | "csv-bulk-import" | "nvr-dvr-channel-discovery" | "vendor-api-discovery" | "snmp-discovery" | "edge-agent-reported-inventory";
   vendor: CameraVendor;
-  manufacturer: string;
+  manufacturer?: string;
   model: string;
   ipAddress: string;
   macAddress?: string;

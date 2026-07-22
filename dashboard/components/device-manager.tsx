@@ -139,6 +139,8 @@ export function DeviceManager() {
   const [showCameraForm, setShowCameraForm] = useState(false);
   const [showGatewayForm, setShowGatewayForm] = useState(false);
   const [showDiscoveredList, setShowDiscoveredList] = useState(false);
+  const [registrationMode, setRegistrationMode] = useState<"automatic" | "manual" | "bulk">("automatic");
+  const [bulkCsv, setBulkCsv] = useState("");
   const [provisionedGateway, setProvisionedGateway] = useState<EdgeAgent>();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -417,47 +419,73 @@ export function DeviceManager() {
     setSaving(true);
     setError(undefined);
     try {
-      const discovery = await cameraInventoryApi.submitDiscovery(selectedBranch, {
-        edgeAgentId: cameraForm.edgeAgentId,
-        discoveryMethod,
-        vendor: cameraForm.vendor,
-        manufacturer: discoveryManufacturer || cameraForm.vendor,
-        model: cameraForm.model,
-        ipAddress: cameraForm.ipAddress,
-        macAddress: discoveryMacAddress || undefined,
-        serialNumber: discoverySerialNumber || undefined,
-        firmwareVersion: discoveryFirmwareVersion || undefined,
-        onvifSupport: discoveryOnvifSupport,
-        rtspValidated: discoveryRtspValidated,
-        ptzCapability: discoveryPtzCapability || cameraForm.ptz,
-        audioCapability: discoveryAudioCapability || cameraForm.audio,
-        analyticsCapability: discoveryAnalyticsCapability || cameraForm.events,
-        timeSynchronization: discoveryTimeSynchronization,
-        duplicateStatus: discoveryDuplicateStatus,
-        compatibilityStatus: discoveryCompatibilityStatus,
-        hardwareId: discoveryHardwareId || undefined,
-        existingDeviceAssociation: discoveryExistingDeviceAssociation || undefined,
-        onvifPort: Number(cameraForm.onvifPort),
-        rtspPort: Number(cameraForm.rtspPort),
-        profiles: [{
-          name: "main",
-          codec: cameraForm.codec,
-          width: Number(cameraForm.width),
-          height: Number(cameraForm.height),
-        }],
-        capabilities: {
-          ptz: cameraForm.ptz,
-          audio: cameraForm.audio,
-          events: cameraForm.events,
-        },
-      });
-      await cameraInventoryApi.approveCamera(selectedBranch, {
-        discoveryId: discovery.id,
-        name: cameraForm.name,
-        channel: Number(cameraForm.channel),
-        protocol: cameraForm.protocol,
-        connectionSecretRef: cameraForm.connectionSecretRef,
-      });
+      if (registrationMode === "bulk") {
+        await cameraInventoryApi.bulkImport(selectedBranch, bulkCsv);
+        setShowCameraForm(false);
+        setBulkCsv("");
+        setNotice("Bulk camera registrations were imported successfully.");
+        await refreshBranch(selectedBranch);
+        return;
+      }
+
+      if (registrationMode === "manual") {
+        await cameraInventoryApi.approveCamera(selectedBranch, {
+          discoveryId: "",
+          name: cameraForm.name,
+          channel: Number(cameraForm.channel),
+          protocol: cameraForm.protocol,
+          connectionSecretRef: cameraForm.connectionSecretRef,
+          manufacturer: discoveryManufacturer || cameraForm.vendor,
+          model: cameraForm.model,
+          serialNumber: discoverySerialNumber || undefined,
+          ipAddress: cameraForm.ipAddress,
+          onvifPort: Number(cameraForm.onvifPort),
+          rtspPort: Number(cameraForm.rtspPort),
+          streamProfile: "main",
+        });
+      } else {
+        const discovery = await cameraInventoryApi.submitDiscovery(selectedBranch, {
+          edgeAgentId: cameraForm.edgeAgentId,
+          discoveryMethod,
+          vendor: cameraForm.vendor,
+          manufacturer: discoveryManufacturer || cameraForm.vendor,
+          model: cameraForm.model,
+          ipAddress: cameraForm.ipAddress,
+          macAddress: discoveryMacAddress || undefined,
+          serialNumber: discoverySerialNumber || undefined,
+          firmwareVersion: discoveryFirmwareVersion || undefined,
+          onvifSupport: discoveryOnvifSupport,
+          rtspValidated: discoveryRtspValidated,
+          ptzCapability: discoveryPtzCapability || cameraForm.ptz,
+          audioCapability: discoveryAudioCapability || cameraForm.audio,
+          analyticsCapability: discoveryAnalyticsCapability || cameraForm.events,
+          timeSynchronization: discoveryTimeSynchronization,
+          duplicateStatus: discoveryDuplicateStatus,
+          compatibilityStatus: discoveryCompatibilityStatus,
+          hardwareId: discoveryHardwareId || undefined,
+          existingDeviceAssociation: discoveryExistingDeviceAssociation || undefined,
+          onvifPort: Number(cameraForm.onvifPort),
+          rtspPort: Number(cameraForm.rtspPort),
+          profiles: [{
+            name: "main",
+            codec: cameraForm.codec,
+            width: Number(cameraForm.width),
+            height: Number(cameraForm.height),
+          }],
+          capabilities: {
+            ptz: cameraForm.ptz,
+            audio: cameraForm.audio,
+            events: cameraForm.events,
+          },
+        });
+        await cameraInventoryApi.approveCamera(selectedBranch, {
+          discoveryId: discovery.id,
+          name: cameraForm.name,
+          channel: Number(cameraForm.channel),
+          protocol: cameraForm.protocol,
+          connectionSecretRef: cameraForm.connectionSecretRef,
+        });
+      }
       setShowCameraForm(false);
       setNotice(`${cameraForm.name} was added to ${activeBranch?.name ?? "the branch"}.`);
       await refreshBranch(selectedBranch);
@@ -760,9 +788,16 @@ export function DeviceManager() {
             <div className="modal-header"><h2>Add camera to {activeBranch?.name}</h2><button className="icon-button" onClick={() => setShowCameraForm(false)}><X size={20} /></button></div>
             <form className="modal-form" onSubmit={addCamera}>
               <div className="form-info-banner"><Router size={16} />Use the camera’s private branch-network address. Do not enter its password in this form.</div>
+              <div className="form-section"><h3>Registration method</h3><div className="form-row">
+                <div className="form-group"><label htmlFor="registrationMode">Method</label><select id="registrationMode" value={registrationMode} onChange={(event) => setRegistrationMode(event.target.value as "automatic" | "manual" | "bulk")}><option value="automatic">Automatic registration</option><option value="manual">Manual registration</option><option value="bulk">Bulk CSV import</option></select></div>
+              </div><p className="field-help">Automatic uses discovery and approval, manual supports legacy or vendor-specific streams, and bulk accepts branch code, camera name, IP, port, manufacturer, model, serial, stream profile, and secret reference.</p></div>
+              {registrationMode === "bulk" ? (
+                <div className="form-section"><h3>Bulk CSV import</h3><div className="form-group"><label htmlFor="bulkCsv">CSV rows</label><textarea id="bulkCsv" rows={8} value={bulkCsv} onChange={(event) => setBulkCsv(event.target.value)} placeholder="branchCode,cameraName,ip,port,manufacturer,model,serial,streamProfile,secretReference" required /></div></div>
+              ) : (
+                <>
               <div className="form-section"><h3>Location and gateway</h3><div className="form-row">
                 <div className="form-group"><label>Branch</label><input value={activeBranch?.name ?? ""} disabled /></div>
-                <div className="form-group"><label htmlFor="cameraGateway">Edge gateway <span className="required">*</span></label><select id="cameraGateway" value={cameraForm.edgeAgentId} onChange={(event) => setCameraForm((form) => ({ ...form, edgeAgentId: event.target.value }))} required><option value="">Select gateway…</option>{gateways.map((gateway) => <option key={gateway.id} value={gateway.id}>{gateway.name} ({gateway.status})</option>)}</select></div>
+                <div className="form-group"><label htmlFor="cameraGateway">Edge gateway{registrationMode === "automatic" ? <span className="required">*</span> : null}</label><select id="cameraGateway" value={cameraForm.edgeAgentId} onChange={(event) => setCameraForm((form) => ({ ...form, edgeAgentId: event.target.value }))} required={registrationMode === "automatic"}><option value="">Select gateway…</option>{gateways.map((gateway) => <option key={gateway.id} value={gateway.id}>{gateway.name} ({gateway.status})</option>)}</select></div>
               </div></div>
 
               <div className="form-section"><h3>Camera identity</h3><div className="form-row">
@@ -806,7 +841,9 @@ export function DeviceManager() {
                 <div className="form-group"><label htmlFor="streamHeight">Height</label><input id="streamHeight" type="number" min="1" value={cameraForm.height} onChange={(event) => setCameraForm((form) => ({ ...form, height: event.target.value }))} required /></div>
               </div><div className="capability-checks">{([['ptz', 'PTZ control'], ['audio', 'Audio'], ['events', 'Motion/events']] as const).map(([key, label]) => <label key={key}><input type="checkbox" checked={cameraForm[key]} onChange={(event) => setCameraForm((form) => ({ ...form, [key]: event.target.checked }))} />{label}</label>)}</div></div>
 
-              <div className="modal-actions"><button type="button" className="secondary-button" onClick={() => setShowCameraForm(false)}>Cancel</button><button className="primary-button" disabled={saving}>{saving ? "Adding camera…" : "Add camera"}</button></div>
+              </>
+              )}
+              <div className="modal-actions"><button type="button" className="secondary-button" onClick={() => setShowCameraForm(false)}>Cancel</button><button className="primary-button" disabled={saving}>{saving ? (registrationMode === "bulk" ? "Importing…" : "Adding camera…") : registrationMode === "bulk" ? "Import cameras" : "Add camera"}</button></div>
             </form>
           </div>
         </div>

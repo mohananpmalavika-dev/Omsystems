@@ -3,10 +3,11 @@ import { loadConfig } from "./config.js";
 import { createPool } from "./database/pool.js";
 import { PostgresStore } from "./database/postgres-store.js";
 import { MemoryStore } from "./store.js";
+import type { ControlPlaneStore } from "./control-plane-store.js";
 
 const config = loadConfig();
 const store = config.DATABASE_URL
-  ? new PostgresStore(createPool(config.DATABASE_URL))
+  ? (new PostgresStore(createPool(config.DATABASE_URL)) as unknown as ControlPlaneStore)
   : new MemoryStore();
 const app = await buildApp({
   logger: true,

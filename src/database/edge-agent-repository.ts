@@ -218,6 +218,8 @@ export class EdgeAgentRepository {
       id: string;
       branch_node_id: string;
       edge_agent_id: string;
+      discovery_method: string;
+      manufacturer: string;
       vendor: string;
       model: string;
       ip_address: string;
@@ -228,7 +230,8 @@ export class EdgeAgentRepository {
       discovered_at: Date;
       status: string;
     }>(
-      `SELECT id::text, branch_node_id::text, edge_agent_id::text, vendor, model,
+      `SELECT id::text, branch_node_id::text, edge_agent_id::text, 
+              discovery_method, manufacturer, vendor, model,
               host(ip_address) as ip_address, onvif_port, rtsp_port, profiles,
               capabilities, discovered_at, status
        FROM camera_discoveries
@@ -241,6 +244,8 @@ export class EdgeAgentRepository {
       id: row.id,
       branchId: row.branch_node_id,
       edgeAgentId: row.edge_agent_id,
+      discoveryMethod: row.discovery_method as any,
+      manufacturer: row.manufacturer || 'Unknown',
       vendor: row.vendor as "hikvision" | "cp-plus" | "other",
       model: row.model,
       ipAddress: row.ip_address,

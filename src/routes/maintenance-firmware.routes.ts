@@ -19,6 +19,15 @@ export async function registerFirmwareManagementRoutes(
   // ========================================================================
 
   /**
+   * List firmware catalog entries
+   */
+  app.get('/v1/maintenance/firmware/versions', async (request, reply) => {
+    const tenantId = request.currentUser.tenantId;
+    const versions = await firmwareManager.listFirmwareCatalog(tenantId);
+    return reply.code(200).send({ data: versions });
+  });
+
+  /**
    * Register new firmware version
    */
   app.post('/v1/maintenance/firmware/versions', async (request, reply) => {
@@ -38,10 +47,33 @@ export async function registerFirmwareManagementRoutes(
 
     const tenantId = request.currentUser.tenantId;
 
+    const {
+      assetCategory,
+      vendor,
+      model,
+      version: versionName,
+      releaseDate,
+      fileUrl,
+      fileHash,
+      fileSize,
+      releaseNotes,
+      criticality,
+      compatibility,
+    } = body;
+
     const version = await firmwareManager.registerFirmwareVersion({
-      ...body,
+      assetCategory,
+      vendor,
+      model,
+      version: versionName,
       tenantId,
-      releaseDate: new Date(body.releaseDate),
+      releaseDate: new Date(releaseDate),
+      fileUrl,
+      fileHash,
+      fileSize,
+      releaseNotes,
+      criticality,
+      compatibility,
       createdBy: request.currentUser.id,
     });
 
@@ -60,6 +92,16 @@ export async function registerFirmwareManagementRoutes(
     });
 
     return reply.code(201).send(version);
+  });
+
+  /**
+   * Get firmware inventory for a specific asset
+   */
+  app.get('/v1/maintenance/firmware/assets/:assetId', async (request, reply) => {
+    const params = z.object({ assetId: z.string().min(1) }).parse(request.params);
+    const tenantId = request.currentUser.tenantId;
+    const inventory = await firmwareManager.getAssetFirmwareInventory(tenantId, params.assetId);
+    return reply.code(200).send(inventory);
   });
 
   /**
@@ -211,6 +253,63 @@ export async function registerFirmwareManagementRoutes(
     });
 
     return reply.code(200).send({ success: true, message: 'Rollback initiated' });
+  });
+
+  /**
+   * Create an upgrade plan with safety checks
+   */
+  app.post('/v1/maintenance/firmware/upgrade-plans', async (request, reply) => {
+    const body = z.object({
+      firmwareVersionId: z.string().uuid(),
+      targetAssets: z.array(z.string().min(1)).min(1),
+      strategy: z.enum(['single-device', 'test-group', 'canary-rollout', 'branch-by-branch', 'region-by-region', 'scheduled-fleet-rollout', 'emergency-security-rollout']),
+      safetyContext: z.object({
+        modelConfirmed: z.boolean(),
+        exactVersionConfirmed: z.boolean(),
+        powerConfirmed: z.boolean(),
+        upsConfirmed: z.boolean(),
+        networkStable: z.boolean(),
+        backupCompleted: z.boolean(),
+        redundancyVerified: z.boolean(),
+        activeIncidentsPresent: z.boolean(),
+        alertsSuspended: z.boolean(),
+        maintenanceWindowApproved: z.boolean(),
+        rollbackPlanned: z.boolean(),
+        packageVerified: z.boolean(),
+        compatibilityVerified: z.boolean(),
+      }),
+    }).parse(request.body);
+
+    const plan = await firmwareManager.createUpgradePlan({
+      tenantId: request.currentUser.tenantId,
+      firmwareVersionId: body.firmwareVersionId,
+      targetAssets: body.targetAssets,
+      strategy: body.strategy,
+      requestedBy: request.currentUser.id,
+      safetyContext: body.safetyContext,
+    });
+
+    return reply.code(201).send(plan);
+  });
+
+  /**
+   * Approve a planned firmware upgrade
+   */
+  app.post('/v1/maintenance/firmware/upgrade-plans/:id/approve', async (request, reply) => {
+    const params = z.object({ id: z.string().uuid() }).parse(request.params);
+    const body = z.object({ approvedBy: z.string().min(1).optional() }).parse(request.body);
+
+    const approved = await firmwareManager.approveUpgradePlan(params.id, body.approvedBy ?? request.currentUser.id);
+    return reply.code(200).send({ success: approved });
+  });
+
+  /**
+   * Start an approved firmware upgrade plan
+   */
+  app.post('/v1/maintenance/firmware/upgrade-plans/:id/execute', async (request, reply) => {
+    const params = z.object({ id: z.string().uuid() }).parse(request.params);
+    const started = await firmwareManager.executeUpgradePlan(params.id);
+    return reply.code(200).send({ success: started });
   });
 
   /**

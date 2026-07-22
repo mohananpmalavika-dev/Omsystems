@@ -40,6 +40,7 @@ import { registerPredictiveAnalyticsRoutes } from "./routes/maintenance-predicti
 import { registerEvidenceRoutes } from "./routes/evidence.routes.js";
 import { registerVideoSearchRoutes } from "./routes/video-search.routes.js";
 import { registerDeviceInventoryRoutes } from "./routes/device-inventory.routes.js";
+import { parseBulkCameraCsv } from "./services/camera-registration.js";
 import { RecordingSearchService } from "./recording/search-service.js";
 import { PlaybackEngine } from "./recording/playback-engine.js";
 import { SnapshotService } from "./recording/snapshot-service.js";
@@ -490,25 +491,77 @@ export async function buildApp(options?: {
     const { branchId } = branchParams.parse(request.params);
     if (!(await requireAccess(request, reply, store, "device:configure", branchId))) return;
     const parsed = z.object({
-      discoveryId: z.string().min(1),
+      discoveryId: z.string().min(1).optional(),
       name: z.string().trim().min(2).max(120),
       channel: z.number().int().positive(),
       protocol: z.enum(["onvif-t", "onvif-s", "rtsp", "vendor-adapter"]),
       connectionSecretRef: z.string().min(8).max(500),
+      branchCode: z.string().trim().max(80).optional(),
+      manufacturer: z.string().trim().max(120).optional(),
+      model: z.string().trim().max(120).optional(),
+      serialNumber: z.string().trim().max(120).optional(),
+      ipAddress: z.string().trim().max(120).optional(),
+      onvifPort: z.number().int().min(1).max(65535).optional(),
+      rtspPort: z.number().int().min(1).max(65535).optional(),
+      streamProfile: z.string().trim().max(80).optional(),
     }).parse(request.body);
     const approvalInput = {
-      discoveryId: parsed.discoveryId,
+      discoveryId: parsed.discoveryId ?? "",
       name: parsed.name,
       channel: parsed.channel,
       protocol: parsed.protocol,
       connectionSecretRef: parsed.connectionSecretRef,
+      branchCode: parsed.branchCode,
+      manufacturer: parsed.manufacturer,
+      model: parsed.model,
+      serialNumber: parsed.serialNumber,
+      ipAddress: parsed.ipAddress,
+      onvifPort: parsed.onvifPort,
+      rtspPort: parsed.rtspPort,
+      streamProfile: parsed.streamProfile,
     };
-    const camera = await store.approveCamera(branchId, approvalInput);
-    if (!camera) return reply.code(404).send({ error: "discovery_not_found" });
+    const camera = parsed.discoveryId
+      ? await store.approveCamera(branchId, approvalInput)
+      : await store.createCameraFromManualRegistration(branchId, approvalInput);
+    if (!camera) {
+      return reply.code(parsed.discoveryId ? 404 : 400).send({ error: parsed.discoveryId ? "discovery_not_found" : "manual_registration_failed" });
+    }
     await audit(request, store, "camera.approved", camera.nodeId, "success", {
       cameraId: camera.id,
+      registrationMethod: parsed.discoveryId ? "discovery" : "manual",
     });
     return reply.code(201).send(safeCamera(camera));
+  });
+
+  app.post("/v1/branches/:branchId/cameras/bulk-import", async (request, reply) => {
+    const { branchId } = branchParams.parse(request.params);
+    if (!(await requireAccess(request, reply, store, "device:configure", branchId))) return;
+    const parsed = z.object({
+      csv: z.string().trim().min(1),
+    }).parse(request.body);
+    const rows = parseBulkCameraCsv(parsed.csv);
+    const created = [] as Camera[];
+    for (const row of rows) {
+      const camera = await store.createCameraFromManualRegistration(branchId, {
+        discoveryId: "",
+        name: row.cameraName,
+        channel: 1,
+        protocol: "rtsp",
+        connectionSecretRef: row.secretReference,
+        branchCode: row.branchCode,
+        manufacturer: row.manufacturer,
+        model: row.model,
+        serialNumber: row.serial,
+        ipAddress: row.ip,
+        rtspPort: row.port,
+        streamProfile: row.streamProfile,
+      });
+      if (camera) created.push(camera);
+    }
+    await audit(request, store, "camera.bulk_imported", branchId, "success", {
+      count: created.length,
+    });
+    return reply.code(201).send({ data: created.map((camera) => safeCamera(camera)) });
   });
 
   app.patch("/v1/cameras/:id/status", async (request, reply) => {

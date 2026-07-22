@@ -275,6 +275,11 @@ export const cameraInventoryApi = {
       `/v1/branches/${encodeURIComponent(branchId)}/cameras`,
       { method: 'POST', body: JSON.stringify(data) }
     ),
+  bulkImport: (branchId: string, csv: string) =>
+    fetchApi<any>(
+      `/v1/branches/${encodeURIComponent(branchId)}/cameras/bulk-import`,
+      { method: 'POST', body: JSON.stringify({ csv }) }
+    ),
 };
 
 export const cameraApi = {
@@ -388,6 +393,19 @@ export const maintenanceApi = {
   getDashboardHealth: () => fetchApi<any>('/v1/maintenance/dashboard/health'),
   getDashboardStatus: () => fetchApi<any>('/v1/maintenance/dashboard/status'),
   listFirmwareUpdatesRequired: () => fetchApi<{ data: any[] }>('/v1/maintenance/firmware/updates-required'),
+  listFirmwareCatalog: () => fetchApi<{ data: any[] }>('/v1/maintenance/firmware/versions'),
+  createFirmwareUpgradePlan: (data: any) => fetchApi<any>('/v1/maintenance/firmware/upgrade-plans', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  }),
+  approveFirmwareUpgradePlan: (planId: string, approvedBy?: string) => fetchApi<any>(`/v1/maintenance/firmware/upgrade-plans/${encodeURIComponent(planId)}/approve`, {
+    method: 'POST',
+    body: JSON.stringify({ approvedBy }),
+  }),
+  executeFirmwareUpgradePlan: (planId: string) => fetchApi<any>(`/v1/maintenance/firmware/upgrade-plans/${encodeURIComponent(planId)}/execute`, {
+    method: 'POST',
+  }),
+  getAssetFirmwareInventory: (assetId: string) => fetchApi<any>(`/v1/maintenance/firmware/assets/${encodeURIComponent(assetId)}`),
   listLowStockParts: () => fetchApi<{ data: any[] }>('/v1/maintenance/spare-parts/low-stock'),
   listHighRiskAssets: () => fetchApi<{ data: any[] }>('/v1/maintenance/predictive/high-risk'),
   listFailureForecast: () => fetchApi<{ data: any[] }>('/v1/maintenance/predictive/failure-forecast'),

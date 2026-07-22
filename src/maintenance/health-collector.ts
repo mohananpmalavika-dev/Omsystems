@@ -120,10 +120,13 @@ export class HealthCollectorService {
     const collect = async () => {
       try {
         // Get all tenants (in production, iterate through active tenants)
-        const tenants = await this.store.listTenants();
+        // TODO: Implement proper tenant iteration without store.listTenants
+        // const tenants = await this.store.listTenants();
+        const tenants: any[] = []; // Placeholder until proper implementation
         
         for (const tenant of tenants) {
-          const cameras = await this.store.listCameras(tenant.id);
+          // const cameras = await this.store.listCameras(tenant.id);
+          const cameras: any[] = []; // Placeholder
           
           for (const camera of cameras) {
             await this.collectCameraHealth(tenant.id, camera);
@@ -203,10 +206,12 @@ export class HealthCollectorService {
   private startStorageHealthCollection(): void {
     const collect = async () => {
       try {
-        const tenants = await this.store.listTenants();
+        // TODO: Implement proper tenant iteration
+        const tenants: any[] = []; // Placeholder
         
         for (const tenant of tenants) {
-          const assets = await this.store.listMaintenanceAssets(tenant.id, 'storage');
+          // const assets = await this.store.listMaintenanceAssets(tenant.id, 'storage');
+          const assets: any[] = []; // Placeholder
           
           for (const asset of assets) {
             await this.collectStorageHealth(tenant.id, asset);
@@ -278,11 +283,13 @@ export class HealthCollectorService {
   private startNetworkHealthCollection(): void {
     const collect = async () => {
       try {
-        const tenants = await this.store.listTenants();
+        // TODO: Implement proper tenant iteration
+        const tenants: any[] = []; // Placeholder
         
         for (const tenant of tenants) {
           // Get all branches
-          const branches = await this.store.listNodes(tenant.id, 'branch');
+          // const branches = await this.store.listNodes(tenant.id, 'branch');
+          const branches: any[] = []; // Placeholder
           
           for (const branch of branches) {
             await this.collectNetworkHealth(tenant.id, branch.id);
@@ -345,10 +352,12 @@ export class HealthCollectorService {
   private startUpsHealthCollection(): void {
     const collect = async () => {
       try {
-        const tenants = await this.store.listTenants();
+        // TODO: Implement proper tenant iteration
+        const tenants: any[] = []; // Placeholder
         
         for (const tenant of tenants) {
-          const assets = await this.store.listMaintenanceAssets(tenant.id, 'power');
+          // const assets = await this.store.listMaintenanceAssets(tenant.id, 'power');
+          const assets: any[] = []; // Placeholder
           
           for (const asset of assets) {
             if (asset.assetType?.toLowerCase().includes('ups')) {

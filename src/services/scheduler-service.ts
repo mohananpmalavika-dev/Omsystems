@@ -232,6 +232,8 @@ export class SchedulerService {
       startedAt: new Date().toISOString(),
       status: 'running',
     });
+    
+    const jobExecutionId = String(jobExecution.id);
 
     try {
       // Get all active cameras from database
@@ -259,7 +261,7 @@ export class SchedulerService {
         }
       }
 
-      await this.auditRepo.updateComplianceJobExecution(jobExecution.id, {
+      await this.auditRepo.updateComplianceJobExecution(jobExecutionId, {
         status: 'completed',
         completedAt: new Date().toISOString(),
         itemsProcessed: cameras.length,
@@ -272,10 +274,10 @@ export class SchedulerService {
         },
       });
     } catch (error) {
-      await this.auditRepo.updateComplianceJobExecution(jobExecution.id, {
+      await this.auditRepo.updateComplianceJobExecution(jobExecutionId, {
         status: 'failed',
         completedAt: new Date().toISOString(),
-        errorMessage: error instanceof Error ? error.message : 'Unknown error',
+        errorMessage: error instanceof Error ? error.message : String(error || 'Unknown error'),
       });
       throw error;
     }
@@ -292,6 +294,8 @@ export class SchedulerService {
       startedAt: new Date().toISOString(),
       status: 'running',
     });
+
+    const jobExecutionId = String(jobExecution.id);
 
     try {
       // Get all storage nodes
@@ -326,7 +330,7 @@ export class SchedulerService {
         }
       }
 
-      await this.auditRepo.updateComplianceJobExecution(jobExecution.id, {
+      await this.auditRepo.updateComplianceJobExecution(jobExecutionId, {
         status: 'completed',
         completedAt: new Date().toISOString(),
         itemsProcessed: nodes.length,
@@ -334,10 +338,10 @@ export class SchedulerService {
         itemsFailed: nodes.length - succeeded,
       });
     } catch (error) {
-      await this.auditRepo.updateComplianceJobExecution(jobExecution.id, {
+      await this.auditRepo.updateComplianceJobExecution(jobExecutionId, {
         status: 'failed',
         completedAt: new Date().toISOString(),
-        errorMessage: error instanceof Error ? error.message : 'Unknown error',
+        errorMessage: error instanceof Error ? error.message : String(error || 'Unknown error'),
       });
     }
   }
@@ -365,6 +369,8 @@ export class SchedulerService {
       startedAt: new Date().toISOString(),
       status: 'running',
     });
+
+    const jobExecutionId = String(jobExecution.id);
 
     try {
       // Get all cameras
@@ -404,7 +410,7 @@ export class SchedulerService {
         }
       }
 
-      await this.auditRepo.updateComplianceJobExecution(jobExecution.id, {
+      await this.auditRepo.updateComplianceJobExecution(jobExecutionId, {
         status: 'completed',
         completedAt: new Date().toISOString(),
         itemsProcessed: cameras.length,
@@ -412,10 +418,10 @@ export class SchedulerService {
         itemsFailed: failed,
       });
     } catch (error) {
-      await this.auditRepo.updateComplianceJobExecution(jobExecution.id, {
+      await this.auditRepo.updateComplianceJobExecution(jobExecutionId, {
         status: 'failed',
         completedAt: new Date().toISOString(),
-        errorMessage: error instanceof Error ? error.message : 'Unknown error',
+        errorMessage: error instanceof Error ? error.message : String(error || 'Unknown error'),
       });
     }
   }

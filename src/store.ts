@@ -425,8 +425,12 @@ export class MemoryStore implements ControlPlaneStore {
       return existing;
     }
     const discovery: DiscoveredCamera = {
-      id: randomUUID(), branchId, ...normalized,
-      status: "pending", discoveredAt: new Date().toISOString(),
+      id: randomUUID(), 
+      branchId,
+      status: "pending", 
+      discoveredAt: new Date().toISOString(),
+      manufacturer: normalized.manufacturer || normalized.vendor || 'Unknown',
+      ...normalized,
     };
     this.discoveries.set(discovery.id, discovery);
     return discovery;
@@ -456,8 +460,39 @@ export class MemoryStore implements ControlPlaneStore {
       capabilities: discovery.capabilities,
       edgeAgentId: discovery.edgeAgentId,
       connectionSecretRef: input.connectionSecretRef,
+      serialNumber: input.serialNumber ?? discovery.serialNumber,
+      macAddress: input.ipAddress ? undefined : discovery.macAddress,
+      firmwareVersion: discovery.firmwareVersion,
+      ipAddress: input.ipAddress ?? discovery.ipAddress,
     };
     discovery.status = "approved";
+    this.cameras.set(camera.id, camera);
+    return camera;
+  }
+
+  async createCameraFromManualRegistration(branchId: string, input: CameraApprovalInput) {
+    const branch = this.nodes.get(branchId);
+    if (!branch) return undefined;
+    const nodeId = randomUUID();
+    this.nodes.set(nodeId, {
+      id: nodeId, tenantId: branch.tenantId, parentId: branchId, type: "camera",
+      name: input.name, path: [...branch.path, nodeId],
+    });
+    const camera: Camera = {
+      id: randomUUID(), name: input.name, nodeId, branchId,
+      vendor: (input.manufacturer?.toLowerCase() === "hikvision" ? "hikvision" : "other") as Camera["vendor"],
+      model: input.model ?? "manual",
+      channel: input.channel,
+      protocol: input.protocol,
+      status: "unknown",
+      profiles: [{ name: input.streamProfile ?? "main", codec: "H264", width: 1920, height: 1080 }],
+      capabilities: { ptz: false, audio: false, events: true },
+      edgeAgentId: undefined,
+      connectionSecretRef: input.connectionSecretRef,
+      serialNumber: input.serialNumber,
+      ipAddress: input.ipAddress,
+      firmwareVersion: undefined,
+    };
     this.cameras.set(camera.id, camera);
     return camera;
   }

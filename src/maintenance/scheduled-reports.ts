@@ -4,6 +4,7 @@
  */
 
 import cron from 'node-cron';
+import type { ScheduledTask } from 'node-cron';
 import type { ControlPlaneStore } from '../control-plane-store.js';
 import { initReportingEngine, type ReportConfig } from './reporting-engine.js';
 import { v4 as uuidv4 } from 'uuid';
@@ -29,7 +30,7 @@ export interface ScheduledReportConfig {
 export class ScheduledReportsService {
   private store: ControlPlaneStore;
   private logger: any;
-  private schedules: Map<string, cron.ScheduledTask> = new Map();
+  private schedules: Map<string, ScheduledTask> = new Map();
   private scheduledReports: Map<string, ScheduledReportConfig> = new Map();
 
   constructor(store: ControlPlaneStore, logger?: any) {
