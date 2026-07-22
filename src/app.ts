@@ -50,7 +50,7 @@ const cameraProfileSchema = z.object({
   width: z.number().int().positive(),
   height: z.number().int().positive(),
   rtspUri: z.string().min(1).optional(),
-});
+}).strict();
 const capabilitiesSchema = z.object({
   ptz: z.boolean(),
   audio: z.boolean(),
@@ -319,8 +319,18 @@ export async function buildApp(options?: {
       ipAddress: parsed.ipAddress,
       onvifPort: parsed.onvifPort,
       rtspPort: parsed.rtspPort,
-      profiles: parsed.profiles,
-      capabilities: parsed.capabilities,
+      profiles: parsed.profiles.map(p => ({
+        name: p.name,
+        codec: p.codec,
+        width: p.width,
+        height: p.height,
+        rtspUri: p.rtspUri,
+      })),
+      capabilities: {
+        ptz: parsed.capabilities.ptz,
+        audio: parsed.capabilities.audio,
+        events: parsed.capabilities.events,
+      },
     };
     const discovery = await store.createDiscovery(branchId, discoveryInput);
     await audit(request, store, "camera.discovered", branchId, "success", {
