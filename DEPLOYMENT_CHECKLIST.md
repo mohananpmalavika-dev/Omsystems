@@ -1,418 +1,592 @@
-# Render Deployment Checklist
+# Compliance System - Deployment Checklist ✅
 
-Quick checklist for deploying Sentinel Grid with CCTV Infrastructure to Render.
+## Pre-Deployment Checklist
 
----
+### Environment Setup
+- [ ] PostgreSQL 12+ installed and running
+- [ ] Node.js 18+ installed
+- [ ] npm or yarn package manager available
+- [ ] Git repository accessible
+- [ ] Environment variables configured
 
-## ✅ Pre-Deployment (Local)
+### Database Preparation
+- [ ] Database `sentinel` created
+- [ ] User `postgres` has appropriate permissions
+- [ ] Connection string verified: `postgresql://localhost:5432/sentinel`
+- [ ] Previous migrations applied (if any)
 
-### 1. Code Preparation
-
-- [ ] All code changes committed
-- [ ] No syntax errors in migrations
-- [ ] Package.json updated with migration scripts
-- [ ] Environment variables documented
-
-### 2. Test Migrations Locally (Optional but Recommended)
-
-```bash
-# Test with local Docker PostgreSQL
-npm run migrate:test
-```
-
-Expected output:
-```
-✅ Test database started
-✅ Running migrations against test database
-✅ All 8 migrations executed successfully
-✅ CCTV tables verified
-✅ Views verified
-✅ All tests passed!
-```
-
-### 3. Verify Migration Files
-
-```bash
-dir database\migrations
-```
-
-Should see:
-- `001_initial.sql`
-- `002_edge_and_media_contract.sql`
-- `003_pilot_seed.sql`
-- `004_cctv_infrastructure.sql` ✨ NEW
-- `004_b_cctv_infrastructure_seed.sql` ✨ NEW
-- `005_organizational_hierarchy_enhancement.sql`
-- `006_employee_management_and_auth.sql`
-- `007_granular_camera_permissions.sql`
-
-### 4. Generate Secure Keys
-
-```bash
-# Generate keys for production
-node -e "console.log('MEDIA_GATEWAY_SHARED_KEY=' + require('crypto').randomBytes(32).toString('base64'))"
-node -e "console.log('EDGE_BRIDGE_SHARED_KEY=' + require('crypto').randomBytes(32).toString('base64'))"
-```
-
-Save these keys - you'll need them for Render environment variables.
-
-### 5. Push to GitHub
-
-```bash
-git add .
-git commit -m "Add CCTV infrastructure and Render deployment"
-git push origin main
-```
+### Code Repository
+- [ ] Latest code pulled from repository
+- [ ] All dependencies installed (`npm install` in root)
+- [ ] All dependencies installed (`npm install` in dashboard)
+- [ ] No build errors present
 
 ---
 
-## 🚀 Render Deployment
+## Deployment Steps
 
-### Option A: Blueprint (Recommended - Automatic)
+### Step 1: Database Migrations ✅
 
-1. **Go to Render Dashboard**
-   - Visit https://dashboard.render.com
+**Objective:** Apply compliance schema to database
 
-2. **Create New Blueprint**
-   - Click "New" → "Blueprint"
-   - Connect GitHub repository
-   - Select your repository
-   - Render detects `render.yaml` automatically
+```powershell
+# Navigate to project root
+cd c:\Omsystems
 
-3. **Review Configuration**
-   - Verify services:
-     - ✅ sentinel-grid-db (PostgreSQL)
-     - ✅ sentinel-grid-api (Backend)
-     - ✅ sentinel-grid-dashboard (Frontend)
-   - Check environment variables are set
+# Run migration script
+.\scripts\apply-migrations.ps1
 
-4. **Apply Blueprint**
-   - Click "Apply"
-   - Wait for deployment (10-15 minutes)
-
-5. **Monitor Deployment**
-   - Watch build logs for each service
-   - Look for migration success messages
-
-### Option B: Manual Setup (More Control)
-
-Follow the detailed steps in [RENDER_DEPLOYMENT_GUIDE.md](RENDER_DEPLOYMENT_GUIDE.md).
-
----
-
-## 🔧 Post-Deployment Configuration
-
-### 1. Verify Services are Running
-
-- [ ] **Database**: Green status in dashboard
-- [ ] **API**: Green status, health check passing
-- [ ] **Dashboard**: Green status, accessible
-
-### 2. Check API Health
-
-```bash
-# Replace with your actual Render URL
-curl https://sentinel-grid-api.onrender.com/health
+# OR manually apply
+psql -h localhost -U postgres -d sentinel -f "database\migrations\013_analytics_phase2.sql"
+psql -h localhost -U postgres -d sentinel -f "database\migrations\022_compliance_enhancements.sql"
 ```
 
-Expected:
-```json
-{"status":"ok","service":"sentinel-control-plane"}
-```
-
-### 3. Verify Migrations Ran
-
-Check build logs for API service:
-
-Look for:
-```
-🚀 Starting database migrations...
-✅ Connected to database
-📋 Executing 8 pending migration(s):
-✅ 001_initial.sql (245ms)
-✅ 002_edge_and_media_contract.sql (123ms)
-✅ 003_pilot_seed.sql (89ms)
-✅ 004_cctv_infrastructure.sql (312ms) ← CCTV tables
-✅ 004_b_cctv_infrastructure_seed.sql (45ms) ← CCTV seed
-✅ 005_organizational_hierarchy_enhancement.sql (98ms)
-✅ 006_employee_management_and_auth.sql (156ms)
-✅ 007_granular_camera_permissions.sql (87ms)
-✨ Successfully executed 8 migration(s) in 1155ms
-✅ Database is up to date! 🎉
-```
-
-### 4. Verify CCTV Tables in Database
-
-```bash
-# Get database connection string from Render dashboard
-# Use "External Database URL" for remote access
-
-psql $EXTERNAL_DATABASE_URL
-```
-
+**Verification:**
 ```sql
--- Check CCTV tables exist
-\dt camera*
-\dt branch_camera*
+-- Check tables exist
+SELECT table_name FROM information_schema.tables 
+WHERE table_schema = 'public' 
+AND table_name LIKE 'compliance%';
 
 -- Expected tables:
--- cameras
--- camera_discoveries
--- camera_specifications ← NEW
--- camera_installation_compliance ← NEW
--- branch_camera_requirements ← NEW
+-- compliance_requirements
+-- compliance_controls
+-- compliance_evidence
+-- compliance_tests
+-- compliance_findings
+-- compliance_remediation_plans
+-- compliance_remediation_actions
+-- compliance_risks
+-- compliance_audit_log
 
--- Check views
-\dv
-
--- Expected views:
--- branch_camera_coverage_gaps ← NEW
--- camera_compliance_summary ← NEW
-
--- Check migration tracking
-SELECT filename, executed_at FROM schema_migrations ORDER BY executed_at;
-
--- Should show all 8 migrations
+-- Check view exists
+SELECT * FROM compliance_dashboard_view LIMIT 1;
 ```
 
-### 5. Test CCTV API Endpoints
+**Checklist:**
+- [ ] Migration script executed successfully
+- [ ] 9 compliance tables created
+- [ ] 1 dashboard view created
+- [ ] No error messages in output
+- [ ] Tables verified in database
+
+---
+
+### Step 2: Backend API Server ✅
+
+**Objective:** Start the backend API service
 
 ```bash
-# Get branches
-curl https://sentinel-grid-api.onrender.com/v1/branches \
-  -H "x-user-id: user-global-admin"
+# In project root
+npm run dev
 
-# Get branch camera requirements (should be empty initially)
-curl https://sentinel-grid-api.onrender.com/v1/branches/{branchId}/camera-requirements \
-  -H "x-user-id: user-global-admin"
-
-# Initialize standard requirements for a branch
-curl -X POST https://sentinel-grid-api.onrender.com/v1/branches/{branchId}/camera-requirements/initialize \
-  -H "x-user-id: user-global-admin"
-
-# Verify requirements were created
-curl https://sentinel-grid-api.onrender.com/v1/branches/{branchId}/camera-requirements \
-  -H "x-user-id: user-global-admin"
+# OR for production
+npm run build
+npm start
 ```
 
-### 6. Access Dashboard
+**Verification:**
+```bash
+# Test health endpoint
+curl http://localhost:3000/health
 
+# Expected response:
+# {"status":"ok","timestamp":"..."}
+
+# Test compliance endpoints
+curl http://localhost:3000/v1/compliance/requirements \
+  -H "x-user-id: test-user"
+
+# Expected response:
+# {"data":[],"pagination":{...}}
+```
+
+**Checklist:**
+- [ ] Server starts without errors
+- [ ] Port 3000 is accessible
+- [ ] Health endpoint responds
+- [ ] Compliance routes registered
+- [ ] No database connection errors
+- [ ] Server logs show no errors
+
+---
+
+### Step 3: Frontend Dashboard ✅
+
+**Objective:** Start the Next.js frontend
+
+```bash
+# In dashboard directory
+cd dashboard
+npm run dev
+
+# OR for production
+npm run build
+npm start
+```
+
+**Verification:**
+- Open browser to `http://localhost:3001`
+- Verify pages load without errors
+- Check browser console for errors
+
+**Checklist:**
+- [ ] Dashboard starts without errors
+- [ ] Port 3001 is accessible
+- [ ] Home page loads
+- [ ] Compliance pages accessible
+- [ ] No console errors
+- [ ] API calls successful
+
+---
+
+### Step 4: Functionality Testing ✅
+
+#### Test 1: Requirements Page
 ```bash
 # Open in browser
-https://sentinel-grid-dashboard.onrender.com
+http://localhost:3001/compliance/requirements
 ```
 
-Expected:
-- Branch selection screen
-- Camera grid layout
-- Demo mode or live cameras
+**Verify:**
+- [ ] Page loads with purple gradient background
+- [ ] Stats cards display (Total, Active, Draft, Mandatory)
+- [ ] Search bar present
+- [ ] Filter dropdowns work
+- [ ] Empty state shows when no data
+- [ ] "Add Requirement" button visible
 
----
-
-## 🎯 Initialize CCTV Infrastructure
-
-### For Each Branch
-
+#### Test 2: Controls Page
 ```bash
-# 1. Initialize standard camera requirements
-curl -X POST https://sentinel-grid-api.onrender.com/v1/branches/{branchId}/camera-requirements/initialize \
-  -H "x-user-id: user-global-admin"
-
-# 2. Verify requirements created
-curl https://sentinel-grid-api.onrender.com/v1/branches/{branchId}/camera-requirements \
-  -H "x-user-id: user-global-admin"
-
-# 3. Check coverage gaps
-curl https://sentinel-grid-api.onrender.com/v1/branches/{branchId}/coverage-gaps \
-  -H "x-user-id: user-global-admin"
+# Open in browser
+http://localhost:3001/compliance/controls
 ```
 
-### For All Branches (Script)
+**Verify:**
+- [ ] Page loads with blue gradient background
+- [ ] Stats cards display (Total, Implemented, In Progress, Not Implemented)
+- [ ] Filter by type works (Preventive, Detective, Corrective, Deterrent)
+- [ ] Filter by status works
+- [ ] Card layout displays properly
 
+#### Test 3: Findings Page
 ```bash
-# Save this as init-all-branches.sh
-#!/bin/bash
-
-API_URL="https://sentinel-grid-api.onrender.com"
-
-# Get all branch IDs
-BRANCHES=$(curl -s "$API_URL/v1/branches" \
-  -H "x-user-id: user-global-admin" | \
-  jq -r '.data[].id')
-
-# Initialize requirements for each branch
-for BRANCH_ID in $BRANCHES; do
-  echo "Initializing requirements for branch: $BRANCH_ID"
-  curl -X POST "$API_URL/v1/branches/$BRANCH_ID/camera-requirements/initialize" \
-    -H "x-user-id: user-global-admin"
-  echo ""
-done
-
-echo "✅ All branches initialized!"
+# Open in browser
+http://localhost:3001/compliance/findings
 ```
 
----
+**Verify:**
+- [ ] Page loads with red gradient background
+- [ ] Stats cards by severity (Critical, High, Medium, etc.)
+- [ ] Filter by severity works
+- [ ] Filter by status works
+- [ ] Risk score displays
+- [ ] Card layout with color coding
 
-## 📊 Monitoring Setup
-
-### 1. Enable Render Monitoring
-
-- [ ] Set up uptime monitoring in Render
-- [ ] Configure alert emails
-- [ ] Set health check intervals
-
-### 2. Check Logs Regularly
-
+#### Test 4: Evidence Page
 ```bash
-# View API logs
-# Render Dashboard → sentinel-grid-api → Logs
-
-# View database metrics
-# Render Dashboard → sentinel-grid-db → Metrics
+# Open in browser
+http://localhost:3001/compliance/evidence
 ```
 
-### 3. Set Up External Monitoring (Optional)
+**Verify:**
+- [ ] Page loads with green gradient background
+- [ ] Stats cards (Total, Verified, Pending, Expired)
+- [ ] Filter by evidence type works
+- [ ] Verification status displays
+- [ ] Download buttons present
 
-- [ ] UptimeRobot or Pingdom
-- [ ] Error tracking (Sentry, LogRocket)
-- [ ] Performance monitoring (New Relic, DataDog)
-
----
-
-## 🔒 Security Hardening
-
-### 1. Update Environment Variables
-
-- [ ] Change `AUTH_MODE` to `oidc` (after setting up OIDC)
-- [ ] Verify secure keys are set (not default values)
-- [ ] Remove `DASHBOARD_DEV_USER_ID` after OIDC setup
-
-### 2. Database Security
-
-- [ ] Restrict IP allowlist (if not using Internal URL)
-- [ ] Enable SSL certificate verification
-- [ ] Rotate database passwords regularly
-
-### 3. API Security
-
-- [ ] Implement rate limiting
-- [ ] Add CORS restrictions for production domains
-- [ ] Enable request logging and audit trails
-
----
-
-## 🧪 Testing Checklist
-
-### API Tests
-
-- [ ] Health endpoint responds
-- [ ] Authentication works (dev mode)
-- [ ] Branches API returns data
-- [ ] Cameras API returns data
-- [ ] CCTV specifications endpoint works
-- [ ] CCTV compliance endpoint works
-- [ ] Branch requirements endpoint works
-- [ ] Coverage gaps endpoint works
-
-### Dashboard Tests
-
-- [ ] Dashboard loads without errors
-- [ ] Branch selection works
-- [ ] Camera grid displays
-- [ ] Live streaming works (if cameras connected)
-- [ ] Navigation works
-- [ ] Responsive on mobile
-
-### Database Tests
-
-- [ ] All migrations executed
-- [ ] CCTV tables exist
-- [ ] CCTV views exist
-- [ ] Sample queries work
-- [ ] Triggers are active
-
----
-
-## 🚨 Troubleshooting
-
-### Migration Failed
-
+#### Test 5: Risks Page
 ```bash
-# Check which migrations ran
-psql $EXTERNAL_DATABASE_URL -c "SELECT * FROM schema_migrations;"
-
-# Re-run specific migration manually
-psql $EXTERNAL_DATABASE_URL < database/migrations/004_cctv_infrastructure.sql
-
-# Trigger new deploy
-# Render Dashboard → Service → Manual Deploy
+# Open in browser
+http://localhost:3001/compliance/risks
 ```
 
-### Service Won't Start
+**Verify:**
+- [ ] Page loads with orange gradient background
+- [ ] Stats cards (Critical, High, Medium, Treated, Avg Reduction)
+- [ ] Filter by likelihood works
+- [ ] Filter by impact works
+- [ ] Risk score visualization with progress bars
+- [ ] Risk level color coding
 
-1. Check environment variables
-2. Verify DATABASE_URL uses Internal URL
-3. Check build logs for errors
-4. Ensure Node version is 22
+#### Test 6: Dashboard Page
+```bash
+# Open in browser
+http://localhost:3001/compliance/dashboard
+```
 
-### Database Connection Issues
+**Verify:**
+- [ ] Page loads
+- [ ] Framework cards display
+- [ ] Stats and metrics show
+- [ ] No API errors
 
-1. Use Internal URL for service-to-service
-2. Use External URL for local/remote access
-3. Check database is running (green status)
-4. Verify region matches
+#### Test 7: Overview Page (Navigation Hub)
+```bash
+# Open in browser
+http://localhost:3001/compliance/overview
+```
 
-### CCTV Endpoints Return 404
-
-1. Check API service logs
-2. Verify routes are registered
-3. Ensure store methods are implemented
-4. Check migration ran successfully
-
----
-
-## 📋 Documentation Links
-
-- **[RENDER_DEPLOYMENT_GUIDE.md](RENDER_DEPLOYMENT_GUIDE.md)** - Complete deployment guide
-- **[CCTV_INFRASTRUCTURE_INTEGRATION.md](CCTV_INFRASTRUCTURE_INTEGRATION.md)** - CCTV integration details
-- **[CCTV_IMPLEMENTATION_SUMMARY.md](CCTV_IMPLEMENTATION_SUMMARY.md)** - Implementation summary
-- **[CCTV_QUICK_REFERENCE.md](CCTV_QUICK_REFERENCE.md)** - Quick API reference
-
----
-
-## ✅ Final Verification
-
-Before marking as complete:
-
-- [ ] All services show green status
-- [ ] API health check passes
-- [ ] Dashboard is accessible
-- [ ] All 8 migrations executed successfully
-- [ ] CCTV tables and views exist
-- [ ] Sample API calls work
-- [ ] Branch requirements can be initialized
-- [ ] Coverage gaps can be queried
-- [ ] Monitoring is set up
-- [ ] Documentation is reviewed
+**Verify:**
+- [ ] Page loads
+- [ ] All 6 navigation cards present
+- [ ] Links work to each sub-page
+- [ ] Quick stats display
+- [ ] Features section visible
 
 ---
 
-## 🎉 Success Criteria
+### Step 5: API Endpoint Testing ✅
 
-Your deployment is successful when:
+#### Create Sample Data
 
-✅ All services are running (green status)  
-✅ Migrations completed (8/8 executed)  
-✅ API responds to health checks  
-✅ Dashboard loads correctly  
-✅ CCTV endpoints are accessible  
-✅ Branch requirements can be managed  
-✅ Coverage gaps can be tracked  
-✅ Database queries work  
+**Create Framework:**
+```bash
+curl -X POST http://localhost:3000/v1/compliance/frameworks \
+  -H "Content-Type: application/json" \
+  -H "x-user-id: test-admin" \
+  -d '{
+    "name": "ISO 27001:2022",
+    "description": "Information Security Management",
+    "version": "2022",
+    "effectiveDate": "2026-01-01"
+  }'
+```
+
+**Create Requirement:**
+```bash
+curl -X POST http://localhost:3000/v1/compliance/requirements \
+  -H "Content-Type: application/json" \
+  -H "x-user-id: test-admin" \
+  -d '{
+    "frameworkId": "{{framework-id}}",
+    "requirementCode": "A.9.1.1",
+    "title": "Access Control Policy",
+    "description": "Establish access control policy",
+    "category": "Access Control",
+    "isMandatory": true
+  }'
+```
+
+**Create Control:**
+```bash
+curl -X POST http://localhost:3000/v1/compliance/controls \
+  -H "Content-Type: application/json" \
+  -H "x-user-id: test-admin" \
+  -d '{
+    "requirementId": "{{requirement-id}}",
+    "controlCode": "AC-001",
+    "title": "Password Policy",
+    "description": "Enforce strong passwords",
+    "controlType": "preventive",
+    "implementationStatus": "implemented",
+    "testFrequency": "quarterly"
+  }'
+```
+
+**Checklist:**
+- [ ] Framework created successfully
+- [ ] Requirement created and linked
+- [ ] Control created and linked
+- [ ] Data visible in frontend
+- [ ] Audit log entries created
 
 ---
 
-**Estimated Time**: 15-20 minutes for first deploy  
-**Re-deployment Time**: 3-5 minutes  
+### Step 6: Integration Testing ✅
 
-**Ready to deploy?** Follow the checklist from top to bottom! 🚀
+#### End-to-End Workflow Test
+
+**Scenario:** Implement a new compliance requirement
+
+1. **Create Requirement**
+   - [ ] Open Requirements page
+   - [ ] Click "Add Requirement"
+   - [ ] Fill form and submit
+   - [ ] Verify appears in list
+
+2. **Create Control**
+   - [ ] Open Controls page
+   - [ ] Create control for requirement
+   - [ ] Verify control appears
+   - [ ] Check control linked to requirement
+
+3. **Upload Evidence**
+   - [ ] Open Evidence page
+   - [ ] Upload evidence for control
+   - [ ] Verify evidence appears
+   - [ ] Check verification status
+
+4. **Create Finding (if applicable)**
+   - [ ] Open Findings page
+   - [ ] Create finding for control
+   - [ ] Verify appears with correct severity
+   - [ ] Check risk score calculated
+
+5. **Create Risk**
+   - [ ] Open Risks page
+   - [ ] Create risk for requirement
+   - [ ] Perform assessment
+   - [ ] Verify inherent/residual scores
+
+6. **View Dashboard**
+   - [ ] Open Dashboard
+   - [ ] Verify metrics updated
+   - [ ] Check framework coverage
+   - [ ] Confirm all data visible
+
+---
+
+## Performance Checklist
+
+### Database Performance
+- [ ] Indexes created on foreign keys
+- [ ] Query execution time < 100ms for lists
+- [ ] No N+1 query issues
+- [ ] Connection pooling configured
+
+### API Performance
+- [ ] Response time < 200ms for GET requests
+- [ ] Response time < 500ms for POST requests
+- [ ] Pagination implemented
+- [ ] Rate limiting configured (if needed)
+
+### Frontend Performance
+- [ ] Page load time < 2 seconds
+- [ ] No memory leaks
+- [ ] Images optimized
+- [ ] Lazy loading implemented where appropriate
+
+---
+
+## Security Checklist
+
+### Authentication & Authorization
+- [ ] User authentication required (x-user-id header)
+- [ ] Permission checks in place
+- [ ] SQL injection protection (parameterized queries)
+- [ ] Input validation on all endpoints
+
+### Data Protection
+- [ ] Audit logging enabled
+- [ ] Sensitive data encrypted (if applicable)
+- [ ] Soft delete preserves history
+- [ ] CORS configured properly
+
+### API Security
+- [ ] HTTPS enabled (production)
+- [ ] API rate limiting (if needed)
+- [ ] Error messages don't leak sensitive info
+- [ ] Headers secured
+
+---
+
+## Monitoring & Logging
+
+### Backend Logging
+- [ ] API request logging enabled
+- [ ] Error logging configured
+- [ ] Audit log capturing all changes
+- [ ] Log rotation configured
+
+### Frontend Logging
+- [ ] Client-side error tracking
+- [ ] API error handling
+- [ ] User action tracking (if needed)
+
+### Database Logging
+- [ ] Slow query log enabled
+- [ ] Error log monitored
+- [ ] Connection pool metrics
+
+---
+
+## Documentation Checklist
+
+### User Documentation
+- [ ] Quick Reference Guide available
+- [ ] API documentation accessible
+- [ ] User guide for each page
+- [ ] Troubleshooting guide
+
+### Technical Documentation
+- [ ] Database schema documented
+- [ ] API endpoints documented
+- [ ] Code comments in place
+- [ ] Deployment guide complete
+
+### Operational Documentation
+- [ ] Backup procedures documented
+- [ ] Disaster recovery plan
+- [ ] Maintenance procedures
+- [ ] Support contacts
+
+---
+
+## Backup & Recovery
+
+### Backup Strategy
+- [ ] Database backup scheduled
+- [ ] Backup retention policy defined
+- [ ] Backup restoration tested
+- [ ] Off-site backup configured
+
+### Recovery Procedures
+- [ ] Database recovery procedure documented
+- [ ] Application recovery procedure documented
+- [ ] RTO (Recovery Time Objective) defined
+- [ ] RPO (Recovery Point Objective) defined
+
+---
+
+## Production Readiness
+
+### Environment Configuration
+- [ ] Environment variables set
+- [ ] Database connection strings configured
+- [ ] API URLs configured
+- [ ] Logging configured for production
+
+### Scalability
+- [ ] Database connection pooling
+- [ ] API server can scale horizontally
+- [ ] Load balancer configured (if needed)
+- [ ] Caching strategy in place
+
+### Monitoring
+- [ ] Health check endpoints working
+- [ ] Uptime monitoring configured
+- [ ] Performance monitoring in place
+- [ ] Alert system configured
+
+---
+
+## Post-Deployment Verification
+
+### Smoke Tests
+- [ ] All pages accessible
+- [ ] All API endpoints responding
+- [ ] Database queries working
+- [ ] No critical errors in logs
+
+### User Acceptance
+- [ ] Sample data created
+- [ ] User walkthrough completed
+- [ ] Feedback collected
+- [ ] Issues documented
+
+### Performance Validation
+- [ ] Load testing completed
+- [ ] Response times acceptable
+- [ ] Resource usage reasonable
+- [ ] No memory leaks detected
+
+---
+
+## Rollback Plan
+
+### If Issues Occur
+1. [ ] Stop application servers
+2. [ ] Restore database from backup (if needed)
+3. [ ] Revert code to previous version
+4. [ ] Restart servers
+5. [ ] Verify functionality
+6. [ ] Document issues for resolution
+
+---
+
+## Sign-Off
+
+### Technical Lead
+- [ ] Code reviewed and approved
+- [ ] Database migrations verified
+- [ ] API functionality tested
+- [ ] Documentation reviewed
+
+### QA Team
+- [ ] All test cases passed
+- [ ] Performance acceptable
+- [ ] Security validated
+- [ ] User acceptance testing complete
+
+### Operations Team
+- [ ] Deployment procedures verified
+- [ ] Monitoring configured
+- [ ] Backup strategy in place
+- [ ] Support procedures documented
+
+---
+
+## Success Criteria
+
+The deployment is considered successful when:
+
+- ✅ All database tables created without errors
+- ✅ Backend API serving all 60+ endpoints
+- ✅ Frontend dashboard accessible on all pages
+- ✅ Sample data can be created and retrieved
+- ✅ No critical errors in logs
+- ✅ All performance metrics within acceptable range
+- ✅ Security controls verified
+- ✅ Documentation complete
+- ✅ Backup and recovery procedures tested
+- ✅ User acceptance testing passed
+
+---
+
+## Quick Command Reference
+
+### Start Everything
+```bash
+# Terminal 1: Backend
+cd c:\Omsystems
+npm run dev
+
+# Terminal 2: Frontend
+cd c:\Omsystems\dashboard
+npm run dev
+```
+
+### Check Status
+```bash
+# Backend health
+curl http://localhost:3000/health
+
+# Frontend access
+http://localhost:3001/compliance/overview
+
+# Database check
+psql -h localhost -U postgres -d sentinel -c "SELECT COUNT(*) FROM compliance_requirements;"
+```
+
+### Stop Everything
+```bash
+# Ctrl+C in each terminal
+# Or kill processes on ports 3000 and 3001
+```
+
+---
+
+## Support Information
+
+### Common Issues
+- **Port already in use:** Kill process or use different port
+- **Database connection error:** Verify PostgreSQL is running
+- **Migration errors:** Check migration files for syntax errors
+- **API 404 errors:** Verify routes registered in app.ts
+- **Frontend blank page:** Check browser console for errors
+
+### Getting Help
+1. Check logs in console/terminal
+2. Review documentation files
+3. Check browser developer console
+4. Verify environment variables
+5. Test individual components
+
+---
+
+**Deployment Checklist Version:** 1.0  
+**Last Updated:** Now  
+**Status:** Ready for Production Deployment ✅
+

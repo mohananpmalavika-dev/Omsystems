@@ -23,16 +23,20 @@ import { registerUserRoutes } from "./routes/user.routes.js";
 import { registerAnalyticsRoutes } from "./routes/analytics.routes.js";
 import { registerReportsRoutes } from "./routes/reports.routes.js";
 import { registerLiveOperationsRoutes } from "./routes/live-operations.routes.js";
-// Disabled incomplete features - Phase 2 analytics not yet ready
-// import { registerAnalyticsMetricsRoutes } from "./routes/analytics-metrics.routes.js";
-// import { registerAnalyticsPhase2Routes } from "./routes/analytics-phase2.routes.js";
+import { registerAnalyticsPhase2Routes } from "./routes/analytics-phase2.routes.js";
 import { registerIncidentsRoutes } from "./routes/incidents.routes.js";
 import { registerComplianceRoutes } from "./routes/compliance.routes.js";
 import { registerComplianceEnhancedRoutes } from "./routes/compliance-enhanced.routes.js";
 import { registerPrivacyRoutes } from "./routes/privacy.routes.js";
-// import { registerMaintenanceRoutes } from "./routes/maintenance.routes.js";
-// import { registerMaintenanceDashboardRoutes } from "./routes/maintenance-dashboard.routes.js";
-// import { registerMaintenanceAdvancedRoutes } from "./routes/maintenance-advanced.routes.js";
+import { registerMaintenanceRoutes } from "./routes/maintenance.routes.js";
+import { registerMaintenanceDashboardRoutes } from "./routes/maintenance-dashboard.routes.js";
+import { registerMaintenanceAdvancedRoutes } from "./routes/maintenance-advanced.routes.js";
+import { registerVideoSearchRoutes } from "./routes/video-search.routes.js";
+import { RecordingSearchService } from "./recording/search-service.js";
+import { PlaybackEngine } from "./recording/playback-engine.js";
+import { SnapshotService } from "./recording/snapshot-service.js";
+import { ExportWorker } from "./recording/export-worker.js";
+import { ForensicAnalyzer } from "./recording/forensic-analyzer.js";
 import { MemoryStore } from "./store.js";
 
 declare module "fastify" {
@@ -139,6 +143,8 @@ export async function buildApp(options?: {
   edgeBridgeSharedKey?: string;
   analyticsEngineSharedKey?: string;
   authMode?: "development" | "session" | "oidc";
+  recordingRoot?: string;
+  enableExportWorker?: boolean;
 }): Promise<FastifyInstance> {
   const app = Fastify({
     logger: options?.logger ?? false,
@@ -148,6 +154,29 @@ export async function buildApp(options?: {
   const mediaGatewaySharedKey =
     options?.mediaGatewaySharedKey ??
     "development-media-gateway-key-change-me";
+
+  // Initialize video search and forensic services
+  const pool = (store as any).pool; // Access pool from store
+  const recordingRoot = options?.recordingRoot ?? process.env.RECORDING_ROOT ?? "./recordings";
+  
+  let searchService: RecordingSearchService | undefined;
+  let playbackEngine: PlaybackEngine | undefined;
+  let snapshotService: SnapshotService | undefined;
+  let exportWorker: ExportWorker | undefined;
+  let forensicAnalyzer: ForensicAnalyzer | undefined;
+
+  if (pool) {
+    try {
+      searchService = new RecordingSearchService(pool);
+      playbackEngine = new PlaybackEngine(pool);
+      snapshotService = new SnapshotService(pool);
+      exportWorker = new ExportWorker(pool);
+      forensicAnalyzer = new ForensicAnalyzer(pool, recordingRoot);
+      app.log.info("Video search and forensic services initialized");
+    } catch (error) {
+      app.log.warn({ error }, "Failed to initialize video search services");
+    }
+  }
 
   await app.register(cors, { origin: false });
 
@@ -890,9 +919,9 @@ export async function buildApp(options?: {
     await registerCctvInfrastructureRoutes(app, extendedStore);
     await registerComplianceRoutes(app, extendedStore);
     await registerComplianceEnhancedRoutes(app, extendedStore);
-    // await registerMaintenanceRoutes(app, extendedStore);
-    // await registerMaintenanceDashboardRoutes(app, extendedStore);
-    // await registerMaintenanceAdvancedRoutes(app, extendedStore);
+    await registerMaintenanceRoutes(app, extendedStore);
+    await registerMaintenanceDashboardRoutes(app, extendedStore);
+    await registerMaintenanceAdvancedRoutes(app, extendedStore);
     // start maintenance scheduler when extended store is available
     try {
       const { startMaintenanceScheduler } = await import("./maintenance/scheduler.js");
@@ -914,8 +943,26 @@ export async function buildApp(options?: {
     ...(options?.recordingEngineSharedKey
       ? { recordingEngineSharedKey: options.recordingEngineSharedKey } : {}),
   });
-  // await registerAnalyticsMetricsRoutes(app, store);
-  // await registerAnalyticsPhase2Routes(app, store);
+  await registerAnalyticsPhase2Routes(app, store);
+
+  // Register video search routes if services are available
+  if (searchService && playbackEngine && snapshotService) {
+    try {
+      await registerVideoSearchRoutes(app, {
+        searchService,
+        playbackEngine,
+        snapshotService,
+      });
+      app.log.info("Video search routes registered");
+    } catch (error) {
+      app.log.warn({ error }, "Failed to register video search routes");
+    }
+  }
+
+  // Start export worker if enabled
+  if (exportWorker && (options?.enableExportWorker ?? process.env.ENABLE_EXPORT_WORKER !== "false")) {
+    startExportWorker(app, exportWorker, pool);
+  }
 
   app.setErrorHandler((error, _request, reply) => {
     if (error instanceof z.ZodError) {
@@ -1084,4 +1131,44 @@ async function audit(
     sourceIp: request.ip,
     ...(details ? { details } : {}),
   });
+}
+
+/**
+ * Start background export worker for forensic evidence processing
+ */
+function startExportWorker(
+  app: FastifyInstance,
+  worker: ExportWorker,
+  pool: any,
+) {
+  const interval = parseInt(process.env.EXPORT_WORKER_INTERVAL || "10000", 10);
+  
+  const processExports = async () => {
+    try {
+      const pending = await pool.query(
+        `SELECT id FROM forensic_export_jobs 
+         WHERE status IN ('pending', 'queued')
+         ORDER BY priority DESC, created_at ASC
+         LIMIT 1`
+      );
+      
+      for (const job of pending.rows) {
+        try {
+          await worker.processExport(job.id);
+        } catch (error) {
+          app.log.error({ error, jobId: job.id }, "Export job processing failed");
+        }
+      }
+    } catch (error) {
+      app.log.error({ error }, "Export worker error");
+    }
+  };
+
+  const intervalId = setInterval(processExports, interval);
+  
+  app.addHook('onClose', async () => {
+    clearInterval(intervalId);
+  });
+  
+  app.log.info({ interval }, "Export worker started");
 }

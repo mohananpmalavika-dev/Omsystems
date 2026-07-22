@@ -44,7 +44,7 @@ export interface TimelineSegment {
   startTime: string;
   endTime: string;
   type: "recording" | "gap";
-  status?: "ready" | "moving" | "error";
+  status?: "ready" | "moving" | "error" | "deleted";
   hasMotion?: boolean;
   hasEvents?: boolean;
   segmentId?: string;

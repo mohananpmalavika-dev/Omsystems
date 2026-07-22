@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import type { FastifyInstance } from "fastify";
 import { buildApp } from "../src/app.js";
+import { MemoryStore } from "../src/store.js";
 import { buildPlaybackTimeline } from "../src/recording/playback-timeline.js";
 import { calculateRecordingStorage } from "../src/recording/storage-calculator.js";
 
@@ -117,6 +118,264 @@ describe("recording and storage module", () => {
     expect(released.statusCode).toBe(200);
     const afterRelease = await retentionCandidates(app);
     expect(afterRelease.json().data).toHaveLength(1);
+  });
+
+  it("selects the most specific matching compliance policy for retention", async () => {
+    const store = new MemoryStore();
+    const camera = store.cameras.get("cam-001")!;
+    camera.locationType = "cash-counter";
+    camera.physicalType = "bullet-indoor";
+    const app = await buildApp({ store, recordingEngineSharedKey: engineKey });
+    apps.push(app);
+
+    const framework = await store.createComplianceFramework({
+      tenantId: "omsystems",
+      name: "Retention Policy Framework",
+    });
+    await store.createCompliancePolicy({
+      frameworkId: framework.id,
+      tenantId: "omsystems",
+      policyName: "Generic camera retention",
+      entityType: "camera",
+      normalRetentionDays: 1,
+      backupRequired: false,
+      legalHoldOverride: false,
+      automaticDeletionEligibility: true,
+    });
+    await store.createCompliancePolicy({
+      frameworkId: framework.id,
+      tenantId: "omsystems",
+      policyName: "Branch cash-counter retention",
+      entityType: "branch",
+      locationType: "cash-counter",
+      normalRetentionDays: 100,
+      backupRequired: false,
+      legalHoldOverride: false,
+      automaticDeletionEligibility: true,
+    });
+
+    const configured = await app.inject({
+      method: "PUT", url: "/v1/cameras/cam-001/recording", headers: admin,
+      payload: {
+        mode: "continuous", enabled: true, retentionDays: 60,
+        hotRetentionDays: 10, warmRetentionDays: 20, coldRetentionDays: 30,
+        storageNodeExternalId: "recorder-1",
+      },
+    });
+    expect(configured.statusCode).toBe(200);
+
+    const indexed = await app.inject({
+      method: "POST", url: "/internal/recording/segments", headers: { "x-recording-engine-key": engineKey },
+      payload: {
+        tenantId: "omsystems", cameraId: "cam-001", jobId: configured.json().id,
+        startedAt: new Date(Date.now() - 15 * 86_400_000).toISOString(),
+        endedAt: new Date(Date.now() - 15 * 86_400_000 + 60_000).toISOString(),
+        storagePath: "camera/2026/07/01/00/00-00-00.mp4",
+        sizeBytes: 1_000, storageNodeExternalId: "recorder-1",
+        storageTier: "hot",
+      },
+    });
+    expect(indexed.statusCode).toBe(201);
+
+    const response = await retentionCandidates(app);
+    expect(response.json().data).toHaveLength(0);
+  });
+
+  it("blocks deletion when compliance policy disables automatic deletion", async () => {
+    const store = new MemoryStore();
+    const app = await buildApp({ store, recordingEngineSharedKey: engineKey });
+    apps.push(app);
+
+    const framework = await store.createComplianceFramework({
+      tenantId: "omsystems",
+      name: "AutoDelete Policy Framework",
+    });
+    await store.createCompliancePolicy({
+      frameworkId: framework.id,
+      tenantId: "omsystems",
+      policyName: "No auto delete",
+      entityType: "camera",
+      normalRetentionDays: 1,
+      automaticDeletionEligibility: false,
+    });
+
+    const configured = await app.inject({
+      method: "PUT", url: "/v1/cameras/cam-001/recording", headers: admin,
+      payload: {
+        mode: "continuous", enabled: true, retentionDays: 60,
+        hotRetentionDays: 10, warmRetentionDays: 20, coldRetentionDays: 30,
+        storageNodeExternalId: "recorder-1",
+      },
+    });
+    expect(configured.statusCode).toBe(200);
+
+    const indexed = await app.inject({
+      method: "POST", url: "/internal/recording/segments", headers: { "x-recording-engine-key": engineKey },
+      payload: {
+        tenantId: "omsystems", cameraId: "cam-001", jobId: configured.json().id,
+        startedAt: new Date(Date.now() - 15 * 86_400_000).toISOString(),
+        endedAt: new Date(Date.now() - 15 * 86_400_000 + 60_000).toISOString(),
+        storagePath: "camera/2026/07/01/00/00-00.mp4",
+        sizeBytes: 1_000, storageNodeExternalId: "recorder-1",
+        storageTier: "hot",
+      },
+    });
+    expect(indexed.statusCode).toBe(201);
+
+    const response = await retentionCandidates(app);
+    expect(response.json().data).toHaveLength(0);
+  });
+
+  it("blocks deletion when compliance policy requires backup", async () => {
+    const store = new MemoryStore();
+    const app = await buildApp({ store, recordingEngineSharedKey: engineKey });
+    apps.push(app);
+
+    const framework = await store.createComplianceFramework({
+      tenantId: "omsystems",
+      name: "Backup Required Policy Framework",
+    });
+    await store.createCompliancePolicy({
+      frameworkId: framework.id,
+      tenantId: "omsystems",
+      policyName: "Require backup",
+      entityType: "camera",
+      normalRetentionDays: 1,
+      backupRequired: true,
+      automaticDeletionEligibility: true,
+    });
+
+    const configured = await app.inject({
+      method: "PUT", url: "/v1/cameras/cam-001/recording", headers: admin,
+      payload: {
+        mode: "continuous", enabled: true, retentionDays: 60,
+        hotRetentionDays: 10, warmRetentionDays: 20, coldRetentionDays: 30,
+        storageNodeExternalId: "recorder-1",
+      },
+    });
+    expect(configured.statusCode).toBe(200);
+
+    const indexed = await app.inject({
+      method: "POST", url: "/internal/recording/segments", headers: { "x-recording-engine-key": engineKey },
+      payload: {
+        tenantId: "omsystems", cameraId: "cam-001", jobId: configured.json().id,
+        startedAt: new Date(Date.now() - 15 * 86_400_000).toISOString(),
+        endedAt: new Date(Date.now() - 15 * 86_400_000 + 60_000).toISOString(),
+        storagePath: "camera/2026/07/01/00/00-00-00.mp4",
+        sizeBytes: 1_000, storageNodeExternalId: "recorder-1",
+        storageTier: "hot",
+      },
+    });
+    expect(indexed.statusCode).toBe(201);
+
+    const response = await retentionCandidates(app);
+    expect(response.json().data).toHaveLength(0);
+  });
+
+  it("allows deletion through legal hold override when compliance policy permits it", async () => {
+    const store = new MemoryStore();
+    const app = await buildApp({ store, recordingEngineSharedKey: engineKey });
+    apps.push(app);
+
+    const framework = await store.createComplianceFramework({
+      tenantId: "omsystems",
+      name: "Legal Hold Override Framework",
+    });
+    await store.createCompliancePolicy({
+      frameworkId: framework.id,
+      tenantId: "omsystems",
+      policyName: "Override legal hold",
+      entityType: "camera",
+      normalRetentionDays: 1,
+      legalHoldOverride: true,
+      automaticDeletionEligibility: true,
+    });
+
+    const configured = await app.inject({
+      method: "PUT", url: "/v1/cameras/cam-001/recording", headers: admin,
+      payload: {
+        mode: "continuous", enabled: true, retentionDays: 60,
+        hotRetentionDays: 10, warmRetentionDays: 20, coldRetentionDays: 30,
+        storageNodeExternalId: "recorder-1",
+      },
+    });
+    expect(configured.statusCode).toBe(200);
+
+    const indexed = await app.inject({
+      method: "POST", url: "/internal/recording/segments", headers: { "x-recording-engine-key": engineKey },
+      payload: {
+        tenantId: "omsystems", cameraId: "cam-001", jobId: configured.json().id,
+        startedAt: new Date(Date.now() - 15 * 86_400_000).toISOString(),
+        endedAt: new Date(Date.now() - 15 * 86_400_000 + 60_000).toISOString(),
+        storagePath: "camera/2026/07/01/00/00-00.mp4",
+        sizeBytes: 1_000, storageNodeExternalId: "recorder-1",
+        storageTier: "hot",
+      },
+    });
+    expect(indexed.statusCode).toBe(201);
+
+    const held = await app.inject({
+      method: "POST", url: "/v1/cameras/cam-001/recording/legal-holds", headers: admin,
+      payload: {
+        fromAt: new Date(Date.now() - 16 * 86_400_000).toISOString(),
+        toAt: new Date(Date.now() - 14 * 86_400_000).toISOString(),
+        reason: "Open investigation",
+      },
+    });
+    expect(held.statusCode).toBe(201);
+
+    const response = await retentionCandidates(app);
+    expect(response.json().data).toHaveLength(1);
+  });
+
+  it("extends retention for incident video ranges when incident retention days are configured", async () => {
+    const store = new MemoryStore();
+    const app = await buildApp({ store, recordingEngineSharedKey: engineKey });
+    apps.push(app);
+
+    const framework = await store.createComplianceFramework({
+      tenantId: "omsystems",
+      name: "Incident Retention Framework",
+    });
+    await store.createCompliancePolicy({
+      frameworkId: framework.id,
+      tenantId: "omsystems",
+      policyName: "Incident retention",
+      entityType: "camera",
+      normalRetentionDays: 1,
+      incidentRetentionDays: 90,
+      automaticDeletionEligibility: true,
+    });
+
+    const configured = await app.inject({
+      method: "PUT", url: "/v1/cameras/cam-001/recording", headers: admin,
+      payload: {
+        mode: "continuous", enabled: true, retentionDays: 60,
+        hotRetentionDays: 10, warmRetentionDays: 20, coldRetentionDays: 30,
+        storageNodeExternalId: "recorder-1",
+      },
+    });
+    expect(configured.statusCode).toBe(200);
+
+    const segmentStart = new Date(Date.now() - 45 * 86_400_000).toISOString();
+    const segmentEnd = new Date(Date.now() - 45 * 86_400_000 + 60_000).toISOString();
+    const indexed = await app.inject({
+      method: "POST", url: "/internal/recording/segments", headers: { "x-recording-engine-key": engineKey },
+      payload: {
+        tenantId: "omsystems", cameraId: "cam-001", jobId: configured.json().id,
+        startedAt: segmentStart,
+        endedAt: segmentEnd,
+        storagePath: "camera/2026/07/01/00/00-00.mp4",
+        sizeBytes: 1_000, storageNodeExternalId: "recorder-1",
+        storageTier: "hot",
+      },
+    });
+    expect(indexed.statusCode).toBe(201);
+
+    await store.addIncidentVideoRange("incident-1", "cam-001", segmentStart, segmentEnd);
+
+    const response = await retentionCandidates(app);
+    expect(response.json().data).toHaveLength(0);
   });
 
   it("enforces camera recording scope and internal engine authentication", async () => {

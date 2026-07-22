@@ -1,3 +1,4 @@
+﻿import { randomUUID } from "node:crypto";
 import type { Pool } from "pg";
 import type {
   CameraApprovalInput,
@@ -285,4 +286,1362 @@ export class PostgresStore
   }
   async writeAudit(event: AuditEventInput) { await this.audits.write(event); }
 
+  // ============ COMPLIANCE ENHANCED METHODS ============
+  
+  // Requirements
+  async listComplianceRequirements(tenantId: string, filters?: {
+    frameworkId?: string;
+    category?: string;
+    status?: string;
+  }): Promise<any[]> {
+    const result = await this.pool.query(
+      `SELECT * FROM compliance_requirements
+       WHERE tenant_id=$1
+         AND ($2::uuid IS NULL OR framework_id=$2)
+         AND ($3::text IS NULL OR category=$3)
+         AND ($4::text IS NULL OR status=$4)
+       ORDER BY requirement_number`,
+      [tenantId, filters?.frameworkId ?? null, filters?.category ?? null, filters?.status ?? null]
+    );
+    return result.rows.map((row) => ({
+      id: row.id,
+      tenantId: row.tenant_id,
+      frameworkId: row.framework_id,
+      requirementNumber: row.requirement_number,
+      title: row.title,
+      description: row.description,
+      category: row.category,
+      priority: row.priority,
+      status: row.status,
+      implementationGuidance: row.implementation_guidance,
+      createdBy: row.created_by,
+      createdAt: row.created_at?.toISOString(),
+      updatedAt: row.updated_at?.toISOString(),
+    }));
+  }
+
+  async getComplianceRequirement(id: string): Promise<any | undefined> {
+    const result = await this.pool.query(`SELECT * FROM compliance_requirements WHERE id=$1`, [id]);
+    if (!result.rows[0]) return undefined;
+    const row = result.rows[0];
+    return {
+      id: row.id,
+      tenantId: row.tenant_id,
+      frameworkId: row.framework_id,
+      requirementNumber: row.requirement_number,
+      title: row.title,
+      description: row.description,
+      category: row.category,
+      priority: row.priority,
+      status: row.status,
+      implementationGuidance: row.implementation_guidance,
+      createdBy: row.created_by,
+      createdAt: row.created_at?.toISOString(),
+      updatedAt: row.updated_at?.toISOString(),
+    };
+  }
+
+  async createComplianceRequirement(input: any): Promise<any> {
+    const result = await this.pool.query(
+      `INSERT INTO compliance_requirements (
+        id, tenant_id, framework_id, requirement_number, title, description,
+        category, priority, status, implementation_guidance, created_by, created_at, updated_at
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,now(),now()) RETURNING *`,
+      [
+        randomUUID(),
+        input.tenantId,
+        input.frameworkId,
+        input.requirementNumber,
+        input.title,
+        input.description ?? null,
+        input.category ?? null,
+        input.priority ?? 'medium',
+        input.status ?? 'active',
+        input.implementationGuidance ?? null,
+        input.createdBy ?? null,
+      ]
+    );
+    const row = result.rows[0];
+    return {
+      id: row.id,
+      tenantId: row.tenant_id,
+      frameworkId: row.framework_id,
+      requirementNumber: row.requirement_number,
+      title: row.title,
+      description: row.description,
+      category: row.category,
+      priority: row.priority,
+      status: row.status,
+      implementationGuidance: row.implementation_guidance,
+      createdBy: row.created_by,
+      createdAt: row.created_at?.toISOString(),
+      updatedAt: row.updated_at?.toISOString(),
+    };
+  }
+
+  async updateComplianceRequirement(id: string, input: any): Promise<any | undefined> {
+    const updates: string[] = [];
+    const values: any[] = [id];
+    let paramIndex = 2;
+
+    if (input.requirementNumber !== undefined) {
+      updates.push(`requirement_number = $${paramIndex++}`);
+      values.push(input.requirementNumber);
+    }
+    if (input.title !== undefined) {
+      updates.push(`title = $${paramIndex++}`);
+      values.push(input.title);
+    }
+    if (input.description !== undefined) {
+      updates.push(`description = $${paramIndex++}`);
+      values.push(input.description);
+    }
+    if (input.category !== undefined) {
+      updates.push(`category = $${paramIndex++}`);
+      values.push(input.category);
+    }
+    if (input.priority !== undefined) {
+      updates.push(`priority = $${paramIndex++}`);
+      values.push(input.priority);
+    }
+    if (input.status !== undefined) {
+      updates.push(`status = $${paramIndex++}`);
+      values.push(input.status);
+    }
+    if (input.implementationGuidance !== undefined) {
+      updates.push(`implementation_guidance = $${paramIndex++}`);
+      values.push(input.implementationGuidance);
+    }
+
+    if (updates.length === 0) return this.getComplianceRequirement(id);
+
+    updates.push('updated_at = now()');
+    const result = await this.pool.query(
+      `UPDATE compliance_requirements SET ${updates.join(', ')} WHERE id=$1 RETURNING *`,
+      values
+    );
+    if (!result.rows[0]) return undefined;
+    const row = result.rows[0];
+    return {
+      id: row.id,
+      tenantId: row.tenant_id,
+      frameworkId: row.framework_id,
+      requirementNumber: row.requirement_number,
+      title: row.title,
+      description: row.description,
+      category: row.category,
+      priority: row.priority,
+      status: row.status,
+      implementationGuidance: row.implementation_guidance,
+      createdBy: row.created_by,
+      createdAt: row.created_at?.toISOString(),
+      updatedAt: row.updated_at?.toISOString(),
+    };
+  }
+
+  async deleteComplianceRequirement(id: string): Promise<void> {
+    await this.pool.query(`DELETE FROM compliance_requirements WHERE id=$1`, [id]);
+  }
+
+  // Controls
+  async listComplianceControls(tenantId: string, filters?: {
+    requirementId?: string;
+    implementationStatus?: string;
+  }): Promise<any[]> {
+    const result = await this.pool.query(
+      `SELECT * FROM compliance_controls
+       WHERE tenant_id=$1
+         AND ($2::uuid IS NULL OR requirement_id=$2)
+         AND ($3::text IS NULL OR implementation_status=$3)
+       ORDER BY control_number`,
+      [tenantId, filters?.requirementId ?? null, filters?.implementationStatus ?? null]
+    );
+    return result.rows.map((row) => ({
+      id: row.id,
+      tenantId: row.tenant_id,
+      requirementId: row.requirement_id,
+      controlNumber: row.control_number,
+      title: row.title,
+      description: row.description,
+      controlType: row.control_type,
+      implementationStatus: row.implementation_status,
+      implementationDetails: row.implementation_details,
+      owner: row.owner,
+      testingFrequency: row.testing_frequency,
+      lastTestDate: row.last_test_date?.toISOString(),
+      nextTestDate: row.next_test_date?.toISOString(),
+      effectivenessRating: row.effectiveness_rating,
+      createdBy: row.created_by,
+      createdAt: row.created_at?.toISOString(),
+      updatedAt: row.updated_at?.toISOString(),
+    }));
+  }
+
+  async getComplianceControl(id: string): Promise<any | undefined> {
+    const result = await this.pool.query(`SELECT * FROM compliance_controls WHERE id=$1`, [id]);
+    if (!result.rows[0]) return undefined;
+    const row = result.rows[0];
+    return {
+      id: row.id,
+      tenantId: row.tenant_id,
+      requirementId: row.requirement_id,
+      controlNumber: row.control_number,
+      title: row.title,
+      description: row.description,
+      controlType: row.control_type,
+      implementationStatus: row.implementation_status,
+      implementationDetails: row.implementation_details,
+      owner: row.owner,
+      testingFrequency: row.testing_frequency,
+      lastTestDate: row.last_test_date?.toISOString(),
+      nextTestDate: row.next_test_date?.toISOString(),
+      effectivenessRating: row.effectiveness_rating,
+      createdBy: row.created_by,
+      createdAt: row.created_at?.toISOString(),
+      updatedAt: row.updated_at?.toISOString(),
+    };
+  }
+
+  async createComplianceControl(input: any): Promise<any> {
+    const result = await this.pool.query(
+      `INSERT INTO compliance_controls (
+        id, tenant_id, requirement_id, control_number, title, description,
+        control_type, implementation_status, implementation_details, owner,
+        testing_frequency, last_test_date, next_test_date, effectiveness_rating,
+        created_by, created_at, updated_at
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,now(),now()) RETURNING *`,
+      [
+        randomUUID(),
+        input.tenantId,
+        input.requirementId,
+        input.controlNumber,
+        input.title,
+        input.description ?? null,
+        input.controlType ?? null,
+        input.implementationStatus ?? 'not_started',
+        input.implementationDetails ?? null,
+        input.owner ?? null,
+        input.testingFrequency ?? null,
+        input.lastTestDate ?? null,
+        input.nextTestDate ?? null,
+        input.effectivenessRating ?? null,
+        input.createdBy ?? null,
+      ]
+    );
+    const row = result.rows[0];
+    return {
+      id: row.id,
+      tenantId: row.tenant_id,
+      requirementId: row.requirement_id,
+      controlNumber: row.control_number,
+      title: row.title,
+      description: row.description,
+      controlType: row.control_type,
+      implementationStatus: row.implementation_status,
+      implementationDetails: row.implementation_details,
+      owner: row.owner,
+      testingFrequency: row.testing_frequency,
+      lastTestDate: row.last_test_date?.toISOString(),
+      nextTestDate: row.next_test_date?.toISOString(),
+      effectivenessRating: row.effectiveness_rating,
+      createdBy: row.created_by,
+      createdAt: row.created_at?.toISOString(),
+      updatedAt: row.updated_at?.toISOString(),
+    };
+  }
+
+  async updateComplianceControl(id: string, input: any): Promise<any | undefined> {
+    const updates: string[] = [];
+    const values: any[] = [id];
+    let paramIndex = 2;
+
+    const fields = [
+      'controlNumber', 'title', 'description', 'controlType', 'implementationStatus',
+      'implementationDetails', 'owner', 'testingFrequency', 'lastTestDate',
+      'nextTestDate', 'effectivenessRating'
+    ];
+    
+    for (const field of fields) {
+      if (input[field] !== undefined) {
+        const snakeCase = field.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`);
+        updates.push(`${snakeCase} = $${paramIndex++}`);
+        values.push(input[field]);
+      }
+    }
+
+    if (updates.length === 0) return this.getComplianceControl(id);
+
+    updates.push('updated_at = now()');
+    const result = await this.pool.query(
+      `UPDATE compliance_controls SET ${updates.join(', ')} WHERE id=$1 RETURNING *`,
+      values
+    );
+    if (!result.rows[0]) return undefined;
+    return this.getComplianceControl(id);
+  }
+
+  async deleteComplianceControl(id: string): Promise<void> {
+    await this.pool.query(`DELETE FROM compliance_controls WHERE id=$1`, [id]);
+  }
+
+  async updateControlTestDates(id: string, input: {
+    lastTestDate: string;
+    nextTestDate: string;
+    effectivenessRating?: number;
+  }): Promise<any | undefined> {
+    const result = await this.pool.query(
+      `UPDATE compliance_controls
+       SET last_test_date=$2, next_test_date=$3, effectiveness_rating=$4, updated_at=now()
+       WHERE id=$1 RETURNING *`,
+      [id, input.lastTestDate, input.nextTestDate, input.effectivenessRating ?? null]
+    );
+    if (!result.rows[0]) return undefined;
+    return this.getComplianceControl(id);
+  }
+
+  // Evidence
+  async listComplianceEvidence(tenantId: string, filters?: {
+    requirementId?: string;
+    controlId?: string;
+    assessmentId?: string;
+    validated?: boolean;
+  }): Promise<any[]> {
+    const result = await this.pool.query(
+      `SELECT * FROM compliance_evidence
+       WHERE tenant_id=$1
+         AND ($2::uuid IS NULL OR requirement_id=$2)
+         AND ($3::uuid IS NULL OR control_id=$3)
+         AND ($4::uuid IS NULL OR assessment_id=$4)
+         AND ($5::boolean IS NULL OR validated=$5)
+       ORDER BY collected_at DESC`,
+      [tenantId, filters?.requirementId ?? null, filters?.controlId ?? null, filters?.assessmentId ?? null, filters?.validated ?? null]
+    );
+    return result.rows.map((row) => ({
+      id: row.id,
+      tenantId: row.tenant_id,
+      requirementId: row.requirement_id,
+      controlId: row.control_id,
+      assessmentId: row.assessment_id,
+      evidenceType: row.evidence_type,
+      title: row.title,
+      description: row.description,
+      evidenceUrl: row.evidence_url,
+      collectedAt: row.collected_at?.toISOString(),
+      validated: row.validated,
+      validatorId: row.validator_id,
+      validationNotes: row.validation_notes,
+      createdBy: row.created_by,
+      createdAt: row.created_at?.toISOString(),
+      updatedAt: row.updated_at?.toISOString(),
+    }));
+  }
+
+  async getComplianceEvidence(id: string): Promise<any | undefined> {
+    const result = await this.pool.query(`SELECT * FROM compliance_evidence WHERE id=$1`, [id]);
+    if (!result.rows[0]) return undefined;
+    const row = result.rows[0];
+    return {
+      id: row.id,
+      tenantId: row.tenant_id,
+      requirementId: row.requirement_id,
+      controlId: row.control_id,
+      assessmentId: row.assessment_id,
+      evidenceType: row.evidence_type,
+      title: row.title,
+      description: row.description,
+      evidenceUrl: row.evidence_url,
+      collectedAt: row.collected_at?.toISOString(),
+      validated: row.validated,
+      validatorId: row.validator_id,
+      validationNotes: row.validation_notes,
+      createdBy: row.created_by,
+      createdAt: row.created_at?.toISOString(),
+      updatedAt: row.updated_at?.toISOString(),
+    };
+  }
+
+  async createComplianceEvidence(input: any): Promise<any> {
+    const result = await this.pool.query(
+      `INSERT INTO compliance_evidence (
+        id, tenant_id, requirement_id, control_id, assessment_id, evidence_type,
+        title, description, evidence_url, collected_at, validated, validator_id,
+        validation_notes, created_by, created_at, updated_at
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,now(),now()) RETURNING *`,
+      [
+        randomUUID(),
+        input.tenantId,
+        input.requirementId ?? null,
+        input.controlId ?? null,
+        input.assessmentId ?? null,
+        input.evidenceType,
+        input.title,
+        input.description ?? null,
+        input.evidenceUrl ?? null,
+        input.collectedAt ?? new Date().toISOString(),
+        input.validated ?? false,
+        input.validatorId ?? null,
+        input.validationNotes ?? null,
+        input.createdBy ?? null,
+      ]
+    );
+    const row = result.rows[0];
+    return {
+      id: row.id,
+      tenantId: row.tenant_id,
+      requirementId: row.requirement_id,
+      controlId: row.control_id,
+      assessmentId: row.assessment_id,
+      evidenceType: row.evidence_type,
+      title: row.title,
+      description: row.description,
+      evidenceUrl: row.evidence_url,
+      collectedAt: row.collected_at?.toISOString(),
+      validated: row.validated,
+      validatorId: row.validator_id,
+      validationNotes: row.validation_notes,
+      createdBy: row.created_by,
+      createdAt: row.created_at?.toISOString(),
+      updatedAt: row.updated_at?.toISOString(),
+    };
+  }
+
+  async updateComplianceEvidence(id: string, input: any): Promise<any | undefined> {
+    const updates: string[] = [];
+    const values: any[] = [id];
+    let paramIndex = 2;
+
+    const fieldMapping: Record<string, string> = {
+      evidenceType: 'evidence_type',
+      title: 'title',
+      description: 'description',
+      evidenceUrl: 'evidence_url',
+      collectedAt: 'collected_at',
+      validated: 'validated',
+      validatorId: 'validator_id',
+      validationNotes: 'validation_notes',
+    };
+
+    for (const [camelKey, snakeKey] of Object.entries(fieldMapping)) {
+      if (input[camelKey] !== undefined) {
+        updates.push(`${snakeKey} = $${paramIndex++}`);
+        values.push(input[camelKey]);
+      }
+    }
+
+    if (updates.length === 0) return this.getComplianceEvidence(id);
+
+    updates.push('updated_at = now()');
+    const result = await this.pool.query(
+      `UPDATE compliance_evidence SET ${updates.join(', ')} WHERE id=$1 RETURNING *`,
+      values
+    );
+    if (!result.rows[0]) return undefined;
+    return this.getComplianceEvidence(id);
+  }
+
+  async deleteComplianceEvidence(id: string): Promise<void> {
+    await this.pool.query(`DELETE FROM compliance_evidence WHERE id=$1`, [id]);
+  }
+
+  async validateComplianceEvidence(id: string, validated: boolean, validatorId: string, notes?: string): Promise<any | undefined> {
+    const result = await this.pool.query(
+      `UPDATE compliance_evidence
+       SET validated=$2, validator_id=$3, validation_notes=$4, updated_at=now()
+       WHERE id=$1 RETURNING *`,
+      [id, validated, validatorId, notes ?? null]
+    );
+    if (!result.rows[0]) return undefined;
+    return this.getComplianceEvidence(id);
+  }
+
+  // Tests
+  async listComplianceTests(tenantId: string, filters?: {
+    controlId?: string;
+    status?: string;
+  }): Promise<any[]> {
+    const result = await this.pool.query(
+      `SELECT * FROM compliance_tests
+       WHERE tenant_id=$1
+         AND ($2::uuid IS NULL OR control_id=$2)
+         AND ($3::text IS NULL OR status=$3)
+       ORDER BY scheduled_date DESC`,
+      [tenantId, filters?.controlId ?? null, filters?.status ?? null]
+    );
+    return result.rows.map((row) => ({
+      id: row.id,
+      tenantId: row.tenant_id,
+      controlId: row.control_id,
+      testName: row.test_name,
+      testProcedure: row.test_procedure,
+      scheduledDate: row.scheduled_date?.toISOString(),
+      completedDate: row.completed_date?.toISOString(),
+      testerId: row.tester_id,
+      status: row.status,
+      result: row.result,
+      findings: row.findings,
+      evidenceIds: row.evidence_ids,
+      createdBy: row.created_by,
+      createdAt: row.created_at?.toISOString(),
+      updatedAt: row.updated_at?.toISOString(),
+    }));
+  }
+
+  async getComplianceTest(id: string): Promise<any | undefined> {
+    const result = await this.pool.query(`SELECT * FROM compliance_tests WHERE id=$1`, [id]);
+    if (!result.rows[0]) return undefined;
+    const row = result.rows[0];
+    return {
+      id: row.id,
+      tenantId: row.tenant_id,
+      controlId: row.control_id,
+      testName: row.test_name,
+      testProcedure: row.test_procedure,
+      scheduledDate: row.scheduled_date?.toISOString(),
+      completedDate: row.completed_date?.toISOString(),
+      testerId: row.tester_id,
+      status: row.status,
+      result: row.result,
+      findings: row.findings,
+      evidenceIds: row.evidence_ids,
+      createdBy: row.created_by,
+      createdAt: row.created_at?.toISOString(),
+      updatedAt: row.updated_at?.toISOString(),
+    };
+  }
+
+  async createComplianceTest(input: any): Promise<any> {
+    const result = await this.pool.query(
+      `INSERT INTO compliance_tests (
+        id, tenant_id, control_id, test_name, test_procedure, scheduled_date,
+        completed_date, tester_id, status, result, findings, evidence_ids,
+        created_by, created_at, updated_at
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,now(),now()) RETURNING *`,
+      [
+        randomUUID(),
+        input.tenantId,
+        input.controlId,
+        input.testName,
+        input.testProcedure ?? null,
+        input.scheduledDate,
+        input.completedDate ?? null,
+        input.testerId ?? null,
+        input.status ?? 'scheduled',
+        input.result ?? null,
+        input.findings ?? null,
+        input.evidenceIds ? JSON.stringify(input.evidenceIds) : '[]',
+        input.createdBy ?? null,
+      ]
+    );
+    return this.getComplianceTest(result.rows[0].id);
+  }
+
+  async updateComplianceTest(id: string, input: any): Promise<any | undefined> {
+    const updates: string[] = [];
+    const values: any[] = [id];
+    let paramIndex = 2;
+
+    if (input.testName !== undefined) {
+      updates.push(`test_name = $${paramIndex++}`);
+      values.push(input.testName);
+    }
+    if (input.testProcedure !== undefined) {
+      updates.push(`test_procedure = $${paramIndex++}`);
+      values.push(input.testProcedure);
+    }
+    if (input.scheduledDate !== undefined) {
+      updates.push(`scheduled_date = $${paramIndex++}`);
+      values.push(input.scheduledDate);
+    }
+    if (input.completedDate !== undefined) {
+      updates.push(`completed_date = $${paramIndex++}`);
+      values.push(input.completedDate);
+    }
+    if (input.testerId !== undefined) {
+      updates.push(`tester_id = $${paramIndex++}`);
+      values.push(input.testerId);
+    }
+    if (input.status !== undefined) {
+      updates.push(`status = $${paramIndex++}`);
+      values.push(input.status);
+    }
+    if (input.result !== undefined) {
+      updates.push(`result = $${paramIndex++}`);
+      values.push(input.result);
+    }
+    if (input.findings !== undefined) {
+      updates.push(`findings = $${paramIndex++}`);
+      values.push(input.findings);
+    }
+    if (input.evidenceIds !== undefined) {
+      updates.push(`evidence_ids = $${paramIndex++}`);
+      values.push(JSON.stringify(input.evidenceIds));
+    }
+
+    if (updates.length === 0) return this.getComplianceTest(id);
+
+    updates.push('updated_at = now()');
+    const result = await this.pool.query(
+      `UPDATE compliance_tests SET ${updates.join(', ')} WHERE id=$1 RETURNING *`,
+      values
+    );
+    if (!result.rows[0]) return undefined;
+    return this.getComplianceTest(id);
+  }
+
+  async deleteComplianceTest(id: string): Promise<void> {
+    await this.pool.query(`DELETE FROM compliance_tests WHERE id=$1`, [id]);
+  }
+
+  // Findings
+  async listComplianceFindings(tenantId: string, filters?: {
+    assessmentId?: string;
+    severity?: string;
+    status?: string;
+  }): Promise<any[]> {
+    const result = await this.pool.query(
+      `SELECT * FROM compliance_findings
+       WHERE tenant_id=$1
+         AND ($2::uuid IS NULL OR assessment_id=$2)
+         AND ($3::text IS NULL OR severity=$3)
+         AND ($4::text IS NULL OR status=$4)
+       ORDER BY identified_date DESC`,
+      [tenantId, filters?.assessmentId ?? null, filters?.severity ?? null, filters?.status ?? null]
+    );
+    return result.rows.map((row) => ({
+      id: row.id,
+      tenantId: row.tenant_id,
+      assessmentId: row.assessment_id,
+      requirementId: row.requirement_id,
+      controlId: row.control_id,
+      findingNumber: row.finding_number,
+      title: row.title,
+      description: row.description,
+      severity: row.severity,
+      status: row.status,
+      identifiedDate: row.identified_date?.toISOString(),
+      dueDate: row.due_date?.toISOString(),
+      closedDate: row.closed_date?.toISOString(),
+      closedBy: row.closed_by,
+      closureNotes: row.closure_notes,
+      createdBy: row.created_by,
+      createdAt: row.created_at?.toISOString(),
+      updatedAt: row.updated_at?.toISOString(),
+    }));
+  }
+
+  async getComplianceFinding(id: string): Promise<any | undefined> {
+    const result = await this.pool.query(`SELECT * FROM compliance_findings WHERE id=$1`, [id]);
+    if (!result.rows[0]) return undefined;
+    const row = result.rows[0];
+    return {
+      id: row.id,
+      tenantId: row.tenant_id,
+      assessmentId: row.assessment_id,
+      requirementId: row.requirement_id,
+      controlId: row.control_id,
+      findingNumber: row.finding_number,
+      title: row.title,
+      description: row.description,
+      severity: row.severity,
+      status: row.status,
+      identifiedDate: row.identified_date?.toISOString(),
+      dueDate: row.due_date?.toISOString(),
+      closedDate: row.closed_date?.toISOString(),
+      closedBy: row.closed_by,
+      closureNotes: row.closure_notes,
+      createdBy: row.created_by,
+      createdAt: row.created_at?.toISOString(),
+      updatedAt: row.updated_at?.toISOString(),
+    };
+  }
+
+  async createComplianceFinding(input: any): Promise<any> {
+    const result = await this.pool.query(
+      `INSERT INTO compliance_findings (
+        id, tenant_id, assessment_id, requirement_id, control_id, finding_number,
+        title, description, severity, status, identified_date, due_date,
+        closed_date, closed_by, closure_notes, created_by, created_at, updated_at
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,now(),now()) RETURNING *`,
+      [
+        randomUUID(),
+        input.tenantId,
+        input.assessmentId ?? null,
+        input.requirementId ?? null,
+        input.controlId ?? null,
+        input.findingNumber,
+        input.title,
+        input.description,
+        input.severity,
+        input.status ?? 'open',
+        input.identifiedDate ?? new Date().toISOString(),
+        input.dueDate ?? null,
+        input.closedDate ?? null,
+        input.closedBy ?? null,
+        input.closureNotes ?? null,
+        input.createdBy ?? null,
+      ]
+    );
+    return this.getComplianceFinding(result.rows[0].id);
+  }
+
+  async updateComplianceFinding(id: string, input: any): Promise<any | undefined> {
+    const updates: string[] = [];
+    const values: any[] = [id];
+    let paramIndex = 2;
+
+    const fieldMapping: Record<string, string> = {
+      findingNumber: 'finding_number',
+      title: 'title',
+      description: 'description',
+      severity: 'severity',
+      status: 'status',
+      identifiedDate: 'identified_date',
+      dueDate: 'due_date',
+      closedDate: 'closed_date',
+      closedBy: 'closed_by',
+      closureNotes: 'closure_notes',
+    };
+
+    for (const [camelKey, snakeKey] of Object.entries(fieldMapping)) {
+      if (input[camelKey] !== undefined) {
+        updates.push(`${snakeKey} = $${paramIndex++}`);
+        values.push(input[camelKey]);
+      }
+    }
+
+    if (updates.length === 0) return this.getComplianceFinding(id);
+
+    updates.push('updated_at = now()');
+    const result = await this.pool.query(
+      `UPDATE compliance_findings SET ${updates.join(', ')} WHERE id=$1 RETURNING *`,
+      values
+    );
+    if (!result.rows[0]) return undefined;
+    return this.getComplianceFinding(id);
+  }
+
+  async deleteComplianceFinding(id: string): Promise<void> {
+    await this.pool.query(`DELETE FROM compliance_findings WHERE id=$1`, [id]);
+  }
+
+  async closeComplianceFinding(id: string, closedBy: string, notes?: string): Promise<any | undefined> {
+    const result = await this.pool.query(
+      `UPDATE compliance_findings
+       SET status='closed', closed_date=now(), closed_by=$2, closure_notes=$3, updated_at=now()
+       WHERE id=$1 RETURNING *`,
+      [id, closedBy, notes ?? null]
+    );
+    if (!result.rows[0]) return undefined;
+    return this.getComplianceFinding(id);
+  }
+
+  // Remediation Plans
+  async listRemediationPlans(tenantId: string, filters?: {
+    findingId?: string;
+    status?: string;
+  }): Promise<any[]> {
+    const result = await this.pool.query(
+      `SELECT * FROM remediation_plans
+       WHERE tenant_id=$1
+         AND ($2::uuid IS NULL OR finding_id=$2)
+         AND ($3::text IS NULL OR status=$3)
+       ORDER BY target_completion_date`,
+      [tenantId, filters?.findingId ?? null, filters?.status ?? null]
+    );
+    return result.rows.map((row) => ({
+      id: row.id,
+      tenantId: row.tenant_id,
+      findingId: row.finding_id,
+      planName: row.plan_name,
+      description: row.description,
+      owner: row.owner,
+      targetCompletionDate: row.target_completion_date?.toISOString(),
+      status: row.status,
+      approvedBy: row.approved_by,
+      approvedAt: row.approved_at?.toISOString(),
+      verifiedBy: row.verified_by,
+      verifiedAt: row.verified_at?.toISOString(),
+      verificationNotes: row.verification_notes,
+      effectivenessConfirmed: row.effectiveness_confirmed,
+      createdBy: row.created_by,
+      createdAt: row.created_at?.toISOString(),
+      updatedAt: row.updated_at?.toISOString(),
+    }));
+  }
+
+  async getRemediationPlan(id: string): Promise<any | undefined> {
+    const result = await this.pool.query(`SELECT * FROM remediation_plans WHERE id=$1`, [id]);
+    if (!result.rows[0]) return undefined;
+    const row = result.rows[0];
+    return {
+      id: row.id,
+      tenantId: row.tenant_id,
+      findingId: row.finding_id,
+      planName: row.plan_name,
+      description: row.description,
+      owner: row.owner,
+      targetCompletionDate: row.target_completion_date?.toISOString(),
+      status: row.status,
+      approvedBy: row.approved_by,
+      approvedAt: row.approved_at?.toISOString(),
+      verifiedBy: row.verified_by,
+      verifiedAt: row.verified_at?.toISOString(),
+      verificationNotes: row.verification_notes,
+      effectivenessConfirmed: row.effectiveness_confirmed,
+      createdBy: row.created_by,
+      createdAt: row.created_at?.toISOString(),
+      updatedAt: row.updated_at?.toISOString(),
+    };
+  }
+
+  async createRemediationPlan(input: any): Promise<any> {
+    const result = await this.pool.query(
+      `INSERT INTO remediation_plans (
+        id, tenant_id, finding_id, plan_name, description, owner, target_completion_date,
+        status, approved_by, approved_at, verified_by, verified_at, verification_notes,
+        effectiveness_confirmed, created_by, created_at, updated_at
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,now(),now()) RETURNING *`,
+      [
+        randomUUID(),
+        input.tenantId,
+        input.findingId,
+        input.planName,
+        input.description ?? null,
+        input.owner ?? null,
+        input.targetCompletionDate,
+        input.status ?? 'draft',
+        input.approvedBy ?? null,
+        input.approvedAt ?? null,
+        input.verifiedBy ?? null,
+        input.verifiedAt ?? null,
+        input.verificationNotes ?? null,
+        input.effectivenessConfirmed ?? false,
+        input.createdBy ?? null,
+      ]
+    );
+    return this.getRemediationPlan(result.rows[0].id);
+  }
+
+  async updateRemediationPlan(id: string, input: any): Promise<any | undefined> {
+    const updates: string[] = [];
+    const values: any[] = [id];
+    let paramIndex = 2;
+
+    const fieldMapping: Record<string, string> = {
+      planName: 'plan_name',
+      description: 'description',
+      owner: 'owner',
+      targetCompletionDate: 'target_completion_date',
+      status: 'status',
+    };
+
+    for (const [camelKey, snakeKey] of Object.entries(fieldMapping)) {
+      if (input[camelKey] !== undefined) {
+        updates.push(`${snakeKey} = $${paramIndex++}`);
+        values.push(input[camelKey]);
+      }
+    }
+
+    if (updates.length === 0) return this.getRemediationPlan(id);
+
+    updates.push('updated_at = now()');
+    const result = await this.pool.query(
+      `UPDATE remediation_plans SET ${updates.join(', ')} WHERE id=$1 RETURNING *`,
+      values
+    );
+    if (!result.rows[0]) return undefined;
+    return this.getRemediationPlan(id);
+  }
+
+  async deleteRemediationPlan(id: string): Promise<void> {
+    await this.pool.query(`DELETE FROM remediation_plans WHERE id=$1`, [id]);
+  }
+
+  async approveRemediationPlan(id: string, approverId: string): Promise<any | undefined> {
+    const result = await this.pool.query(
+      `UPDATE remediation_plans
+       SET status='approved', approved_by=$2, approved_at=now(), updated_at=now()
+       WHERE id=$1 RETURNING *`,
+      [id, approverId]
+    );
+    if (!result.rows[0]) return undefined;
+    return this.getRemediationPlan(id);
+  }
+
+  async verifyRemediationPlan(id: string, verifierId: string, input: {
+    verificationNotes?: string;
+    effectivenessConfirmed: boolean;
+  }): Promise<any | undefined> {
+    const result = await this.pool.query(
+      `UPDATE remediation_plans
+       SET status='verified', verified_by=$2, verified_at=now(),
+           verification_notes=$3, effectiveness_confirmed=$4, updated_at=now()
+       WHERE id=$1 RETURNING *`,
+      [id, verifierId, input.verificationNotes ?? null, input.effectivenessConfirmed]
+    );
+    if (!result.rows[0]) return undefined;
+    return this.getRemediationPlan(id);
+  }
+
+  // Remediation Actions
+  async listRemediationActions(planId: string): Promise<any[]> {
+    const result = await this.pool.query(
+      `SELECT * FROM remediation_actions WHERE plan_id=$1 ORDER BY due_date`,
+      [planId]
+    );
+    return result.rows.map((row) => ({
+      id: row.id,
+      planId: row.plan_id,
+      actionName: row.action_name,
+      description: row.description,
+      assignedTo: row.assigned_to,
+      dueDate: row.due_date?.toISOString(),
+      status: row.status,
+      completedDate: row.completed_date?.toISOString(),
+      evidenceUrl: row.evidence_url,
+      notes: row.notes,
+      createdAt: row.created_at?.toISOString(),
+      updatedAt: row.updated_at?.toISOString(),
+    }));
+  }
+
+  async getRemediationAction(id: string): Promise<any | undefined> {
+    const result = await this.pool.query(`SELECT * FROM remediation_actions WHERE id=$1`, [id]);
+    if (!result.rows[0]) return undefined;
+    const row = result.rows[0];
+    return {
+      id: row.id,
+      planId: row.plan_id,
+      actionName: row.action_name,
+      description: row.description,
+      assignedTo: row.assigned_to,
+      dueDate: row.due_date?.toISOString(),
+      status: row.status,
+      completedDate: row.completed_date?.toISOString(),
+      evidenceUrl: row.evidence_url,
+      notes: row.notes,
+      createdAt: row.created_at?.toISOString(),
+      updatedAt: row.updated_at?.toISOString(),
+    };
+  }
+
+  async createRemediationAction(input: any): Promise<any> {
+    const result = await this.pool.query(
+      `INSERT INTO remediation_actions (
+        id, plan_id, action_name, description, assigned_to, due_date,
+        status, completed_date, evidence_url, notes, created_at, updated_at
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,now(),now()) RETURNING *`,
+      [
+        randomUUID(),
+        input.planId,
+        input.actionName,
+        input.description ?? null,
+        input.assignedTo ?? null,
+        input.dueDate,
+        input.status ?? 'pending',
+        input.completedDate ?? null,
+        input.evidenceUrl ?? null,
+        input.notes ?? null,
+      ]
+    );
+    return this.getRemediationAction(result.rows[0].id);
+  }
+
+  async updateRemediationAction(id: string, input: any): Promise<any | undefined> {
+    const updates: string[] = [];
+    const values: any[] = [id];
+    let paramIndex = 2;
+
+    const fieldMapping: Record<string, string> = {
+      actionName: 'action_name',
+      description: 'description',
+      assignedTo: 'assigned_to',
+      dueDate: 'due_date',
+      status: 'status',
+      completedDate: 'completed_date',
+      evidenceUrl: 'evidence_url',
+      notes: 'notes',
+    };
+
+    for (const [camelKey, snakeKey] of Object.entries(fieldMapping)) {
+      if (input[camelKey] !== undefined) {
+        updates.push(`${snakeKey} = $${paramIndex++}`);
+        values.push(input[camelKey]);
+      }
+    }
+
+    if (updates.length === 0) return this.getRemediationAction(id);
+
+    updates.push('updated_at = now()');
+    const result = await this.pool.query(
+      `UPDATE remediation_actions SET ${updates.join(', ')} WHERE id=$1 RETURNING *`,
+      values
+    );
+    if (!result.rows[0]) return undefined;
+    return this.getRemediationAction(id);
+  }
+
+  async deleteRemediationAction(id: string): Promise<void> {
+    await this.pool.query(`DELETE FROM remediation_actions WHERE id=$1`, [id]);
+  }
+
+  async completeRemediationAction(id: string, input: {
+    evidenceUrl?: string;
+    notes?: string;
+  }): Promise<any | undefined> {
+    const result = await this.pool.query(
+      `UPDATE remediation_actions
+       SET status='completed', completed_date=now(), evidence_url=$2, notes=$3, updated_at=now()
+       WHERE id=$1 RETURNING *`,
+      [id, input.evidenceUrl ?? null, input.notes ?? null]
+    );
+    if (!result.rows[0]) return undefined;
+    return this.getRemediationAction(id);
+  }
+
+  // Risks
+  async listComplianceRisks(tenantId: string, filters?: {
+    frameworkId?: string;
+    category?: string;
+    status?: string;
+  }): Promise<any[]> {
+    const result = await this.pool.query(
+      `SELECT * FROM compliance_risks
+       WHERE tenant_id=$1
+         AND ($2::uuid IS NULL OR framework_id=$2)
+         AND ($3::text IS NULL OR category=$3)
+         AND ($4::text IS NULL OR status=$4)
+       ORDER BY created_at DESC`,
+      [tenantId, filters?.frameworkId ?? null, filters?.category ?? null, filters?.status ?? null]
+    );
+    return result.rows.map((row) => ({
+      id: row.id,
+      tenantId: row.tenant_id,
+      frameworkId: row.framework_id,
+      requirementId: row.requirement_id,
+      riskName: row.risk_name,
+      description: row.description,
+      category: row.category,
+      inherentLikelihood: row.inherent_likelihood,
+      inherentImpact: row.inherent_impact,
+      residualLikelihood: row.residual_likelihood,
+      residualImpact: row.residual_impact,
+      treatmentPlan: row.treatment_plan,
+      owner: row.owner,
+      status: row.status,
+      lastReviewDate: row.last_review_date?.toISOString(),
+      nextReviewDate: row.next_review_date?.toISOString(),
+      reviewNotes: row.review_notes,
+      createdBy: row.created_by,
+      createdAt: row.created_at?.toISOString(),
+      updatedAt: row.updated_at?.toISOString(),
+    }));
+  }
+
+  async getComplianceRisk(id: string): Promise<any | undefined> {
+    const result = await this.pool.query(`SELECT * FROM compliance_risks WHERE id=$1`, [id]);
+    if (!result.rows[0]) return undefined;
+    const row = result.rows[0];
+    return {
+      id: row.id,
+      tenantId: row.tenant_id,
+      frameworkId: row.framework_id,
+      requirementId: row.requirement_id,
+      riskName: row.risk_name,
+      description: row.description,
+      category: row.category,
+      inherentLikelihood: row.inherent_likelihood,
+      inherentImpact: row.inherent_impact,
+      residualLikelihood: row.residual_likelihood,
+      residualImpact: row.residual_impact,
+      treatmentPlan: row.treatment_plan,
+      owner: row.owner,
+      status: row.status,
+      lastReviewDate: row.last_review_date?.toISOString(),
+      nextReviewDate: row.next_review_date?.toISOString(),
+      reviewNotes: row.review_notes,
+      createdBy: row.created_by,
+      createdAt: row.created_at?.toISOString(),
+      updatedAt: row.updated_at?.toISOString(),
+    };
+  }
+
+  async createComplianceRisk(input: any): Promise<any> {
+    const result = await this.pool.query(
+      `INSERT INTO compliance_risks (
+        id, tenant_id, framework_id, requirement_id, risk_name, description,
+        category, inherent_likelihood, inherent_impact, residual_likelihood,
+        residual_impact, treatment_plan, owner, status, last_review_date,
+        next_review_date, review_notes, created_by, created_at, updated_at
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,now(),now()) RETURNING *`,
+      [
+        randomUUID(),
+        input.tenantId,
+        input.frameworkId ?? null,
+        input.requirementId ?? null,
+        input.riskName,
+        input.description ?? null,
+        input.category ?? null,
+        input.inherentLikelihood,
+        input.inherentImpact,
+        input.residualLikelihood ?? null,
+        input.residualImpact ?? null,
+        input.treatmentPlan ?? null,
+        input.owner ?? null,
+        input.status ?? 'identified',
+        input.lastReviewDate ?? null,
+        input.nextReviewDate ?? null,
+        input.reviewNotes ?? null,
+        input.createdBy ?? null,
+      ]
+    );
+    return this.getComplianceRisk(result.rows[0].id);
+  }
+
+  async updateComplianceRisk(id: string, input: any): Promise<any | undefined> {
+    const updates: string[] = [];
+    const values: any[] = [id];
+    let paramIndex = 2;
+
+    const fieldMapping: Record<string, string> = {
+      riskName: 'risk_name',
+      description: 'description',
+      category: 'category',
+      inherentLikelihood: 'inherent_likelihood',
+      inherentImpact: 'inherent_impact',
+      residualLikelihood: 'residual_likelihood',
+      residualImpact: 'residual_impact',
+      treatmentPlan: 'treatment_plan',
+      owner: 'owner',
+      status: 'status',
+      lastReviewDate: 'last_review_date',
+      nextReviewDate: 'next_review_date',
+      reviewNotes: 'review_notes',
+    };
+
+    for (const [camelKey, snakeKey] of Object.entries(fieldMapping)) {
+      if (input[camelKey] !== undefined) {
+        updates.push(`${snakeKey} = $${paramIndex++}`);
+        values.push(input[camelKey]);
+      }
+    }
+
+    if (updates.length === 0) return this.getComplianceRisk(id);
+
+    updates.push('updated_at = now()');
+    const result = await this.pool.query(
+      `UPDATE compliance_risks SET ${updates.join(', ')} WHERE id=$1 RETURNING *`,
+      values
+    );
+    if (!result.rows[0]) return undefined;
+    return this.getComplianceRisk(id);
+  }
+
+  async deleteComplianceRisk(id: string): Promise<void> {
+    await this.pool.query(`DELETE FROM compliance_risks WHERE id=$1`, [id]);
+  }
+
+  async assessComplianceRisk(id: string, input: {
+    residualLikelihood: string;
+    residualImpact: string;
+    treatmentPlan?: string;
+  }): Promise<any | undefined> {
+    const result = await this.pool.query(
+      `UPDATE compliance_risks
+       SET residual_likelihood=$2, residual_impact=$3, treatment_plan=$4, status='assessed', updated_at=now()
+       WHERE id=$1 RETURNING *`,
+      [id, input.residualLikelihood, input.residualImpact, input.treatmentPlan ?? null]
+    );
+    if (!result.rows[0]) return undefined;
+    return this.getComplianceRisk(id);
+  }
+
+  async reviewComplianceRisk(id: string, input: {
+    reviewNotes?: string;
+    nextReviewDate: string;
+  }): Promise<any | undefined> {
+    const result = await this.pool.query(
+      `UPDATE compliance_risks
+       SET last_review_date=now(), next_review_date=$2, review_notes=$3, updated_at=now()
+       WHERE id=$1 RETURNING *`,
+      [id, input.nextReviewDate, input.reviewNotes ?? null]
+    );
+    if (!result.rows[0]) return undefined;
+    return this.getComplianceRisk(id);
+  }
+
+  // Dashboard & Reporting
+  async getComplianceDashboard(tenantId: string, frameworkId?: string): Promise<any> {
+    const requirementsQuery = await this.pool.query(
+      `SELECT COUNT(*) as total FROM compliance_requirements
+       WHERE tenant_id=$1 AND ($2::uuid IS NULL OR framework_id=$2)`,
+      [tenantId, frameworkId ?? null]
+    );
+
+    const controlsQuery = await this.pool.query(
+      `SELECT COUNT(*) as total,
+              COUNT(*) FILTER (WHERE implementation_status='implemented') as implemented
+       FROM compliance_controls c
+       INNER JOIN compliance_requirements r ON c.requirement_id = r.id
+       WHERE r.tenant_id=$1 AND ($2::uuid IS NULL OR r.framework_id=$2)`,
+      [tenantId, frameworkId ?? null]
+    );
+
+    const findingsQuery = await this.pool.query(
+      `SELECT COUNT(*) as total,
+              COUNT(*) FILTER (WHERE severity='critical') as critical
+       FROM compliance_findings
+       WHERE tenant_id=$1 AND status='open'`,
+      [tenantId]
+    );
+
+    const risksQuery = await this.pool.query(
+      `SELECT COUNT(*) as high_risks
+       FROM compliance_risks
+       WHERE tenant_id=$1
+         AND ($2::uuid IS NULL OR framework_id=$2)
+         AND status='identified' AND inherent_impact='high'`,
+      [tenantId, frameworkId ?? null]
+    );
+
+    const totalRequirements = parseInt(requirementsQuery.rows[0]?.total || '0', 10);
+    const totalControls = parseInt(controlsQuery.rows[0]?.total || '0', 10);
+    const implementedControls = parseInt(controlsQuery.rows[0]?.implemented || '0', 10);
+    const openFindings = parseInt(findingsQuery.rows[0]?.total || '0', 10);
+    const criticalFindings = parseInt(findingsQuery.rows[0]?.critical || '0', 10);
+    const highRisks = parseInt(risksQuery.rows[0]?.high_risks || '0', 10);
+
+    return {
+      totalRequirements,
+      implementedControls,
+      totalControls,
+      openFindings,
+      criticalFindings,
+      highRisks,
+      complianceScore: totalControls > 0
+        ? Math.round((implementedControls / totalControls) * 100)
+        : 0,
+    };
+  }
+
+  async getRequirementStatus(id: string): Promise<any> {
+    const requirement = await this.getComplianceRequirement(id);
+    if (!requirement) return undefined;
+
+    const controlsQuery = await this.pool.query(
+      `SELECT COUNT(*) as total,
+              COUNT(*) FILTER (WHERE implementation_status='implemented') as implemented
+       FROM compliance_controls WHERE requirement_id=$1`,
+      [id]
+    );
+
+    const evidenceQuery = await this.pool.query(
+      `SELECT COUNT(*) as total,
+              COUNT(*) FILTER (WHERE validated=true) as validated
+       FROM compliance_evidence WHERE requirement_id=$1`,
+      [id]
+    );
+
+    return {
+      requirement,
+      totalControls: parseInt(controlsQuery.rows[0]?.total || '0', 10),
+      implementedControls: parseInt(controlsQuery.rows[0]?.implemented || '0', 10),
+      totalEvidence: parseInt(evidenceQuery.rows[0]?.total || '0', 10),
+      validatedEvidence: parseInt(evidenceQuery.rows[0]?.validated || '0', 10),
+    };
+  }
+
+  async getFrameworkCoverage(id: string): Promise<any> {
+    const requirementsQuery = await this.pool.query(
+      `SELECT category, COUNT(*) as total
+       FROM compliance_requirements
+       WHERE framework_id=$1
+       GROUP BY category`,
+      [id]
+    );
+
+    const controlsQuery = await this.pool.query(
+      `SELECT r.category,
+              COUNT(*) as total_controls,
+              COUNT(*) FILTER (WHERE c.implementation_status='implemented') as implemented_controls
+       FROM compliance_controls c
+       INNER JOIN compliance_requirements r ON c.requirement_id = r.id
+       WHERE r.framework_id=$1
+       GROUP BY r.category`,
+      [id]
+    );
+
+    const totalRequirementsQuery = await this.pool.query(
+      `SELECT COUNT(*) as total FROM compliance_requirements WHERE framework_id=$1`,
+      [id]
+    );
+
+    const totalControlsQuery = await this.pool.query(
+      `SELECT COUNT(*) as total,
+              COUNT(*) FILTER (WHERE implementation_status='implemented') as implemented
+       FROM compliance_controls c
+       INNER JOIN compliance_requirements r ON c.requirement_id = r.id
+       WHERE r.framework_id=$1`,
+      [id]
+    );
+
+    const coverageByCategory = requirementsQuery.rows.map((reqRow) => {
+      const controlRow = controlsQuery.rows.find((c) => c.category === reqRow.category);
+      return {
+        category: reqRow.category,
+        totalRequirements: parseInt(reqRow.total, 10),
+        totalControls: parseInt(controlRow?.total_controls || '0', 10),
+        implementedControls: parseInt(controlRow?.implemented_controls || '0', 10),
+      };
+    });
+
+    return {
+      frameworkId: id,
+      totalRequirements: parseInt(totalRequirementsQuery.rows[0]?.total || '0', 10),
+      totalControls: parseInt(totalControlsQuery.rows[0]?.total || '0', 10),
+      implementedControls: parseInt(totalControlsQuery.rows[0]?.implemented || '0', 10),
+      coverageByCategory,
+    };
+  }
+
+  async getComplianceAuditLog(tenantId: string, filters?: {
+    entityType?: string;
+    entityId?: string;
+    action?: string;
+    from?: string;
+    to?: string;
+    limit?: number;
+  }): Promise<any[]> {
+    const result = await this.pool.query(
+      `SELECT * FROM compliance_audit_log
+       WHERE tenant_id=$1
+         AND ($2::text IS NULL OR entity_type=$2)
+         AND ($3::uuid IS NULL OR entity_id=$3)
+         AND ($4::text IS NULL OR action=$4)
+         AND ($5::timestamptz IS NULL OR created_at >= $5)
+         AND ($6::timestamptz IS NULL OR created_at <= $6)
+       ORDER BY created_at DESC
+       LIMIT $7`,
+      [
+        tenantId,
+        filters?.entityType ?? null,
+        filters?.entityId ?? null,
+        filters?.action ?? null,
+        filters?.from ?? null,
+        filters?.to ?? null,
+        filters?.limit ?? 100,
+      ]
+    );
+
+    return result.rows.map((row) => ({
+      id: row.id,
+      tenantId: row.tenant_id,
+      entityType: row.entity_type,
+      entityId: row.entity_id,
+      action: row.action,
+      userId: row.user_id,
+      changes: row.changes,
+      createdAt: row.created_at?.toISOString(),
+    }));
+  }
 }

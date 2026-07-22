@@ -250,18 +250,61 @@ export class RecordingRepository {
   ): Promise<RecordingSegment[]> {
     const result = await this.pool.query(
       `SELECT rs.* FROM recording_segments rs
-       JOIN recording_jobs rj ON rj.id=rs.job_id AND rj.camera_id=rs.camera_id
-       JOIN cameras c ON c.id=rs.camera_id
-       JOIN resource_nodes rn ON rn.id=c.resource_node_id
+       JOIN recording_jobs rj ON rj.id = rs.job_id AND rj.camera_id = rs.camera_id
+       JOIN cameras c ON c.id = rs.camera_id
+       JOIN resource_nodes rn ON rn.id = c.resource_node_id
+       LEFT JOIN LATERAL (
+         SELECT p.*
+         FROM compliance_policies p
+         WHERE p.tenant_id = $1
+           AND (p.entity_type IS NULL OR EXISTS (
+             SELECT 1 FROM resource_nodes ancestor
+             WHERE ancestor.path <@ rn.path
+               AND ancestor.node_type = p.entity_type
+           ))
+           AND (p.location_type IS NULL OR p.location_type = c.location_type)
+           AND (p.camera_type IS NULL OR p.camera_type = c.physical_type)
+         ORDER BY
+           ((p.entity_type IS NOT NULL)::int +
+            (p.location_type IS NOT NULL)::int +
+            (p.camera_type IS NOT NULL)::int) DESC,
+           p.updated_at DESC
+         LIMIT 1
+       ) p ON true
        WHERE rn.tenant_id=$1
          AND rs.storage_node_external_id=$2
          AND rs.status='ready'
          AND rj.automatic_deletion_enabled=true
-         AND rs.ended_at < now() - make_interval(days => rj.retention_days)
+         AND COALESCE(p.automatic_deletion_eligibility, true) = true
+         AND rj.backup_required = false
+         AND COALESCE(p.backup_required, false) = false
+         AND rs.ended_at < now() - make_interval(days => GREATEST(
+           COALESCE(
+             CASE rs.storage_tier
+               WHEN 'hot' THEN COALESCE(p.hot_storage_days, p.normal_retention_days, rj.hot_retention_days)
+               WHEN 'warm' THEN COALESCE(p.warm_storage_days, p.normal_retention_days, rj.warm_retention_days)
+               WHEN 'cold' THEN COALESCE(p.cold_storage_days, p.normal_retention_days, rj.cold_retention_days)
+               ELSE COALESCE(p.normal_retention_days, rj.retention_days)
+             END,
+             rj.retention_days
+           ),
+           CASE
+             WHEN p.incident_retention_days IS NOT NULL
+               AND EXISTS (
+                 SELECT 1 FROM incident_video_ranges ivr
+                 WHERE ivr.camera_id = c.id
+                   AND ivr.from_at < rs.ended_at
+                   AND ivr.to_at > rs.started_at
+               )
+             THEN p.incident_retention_days
+             ELSE 0
+           END
+         )))
          AND NOT EXISTS (
            SELECT 1 FROM recording_legal_holds rlh
            WHERE rlh.camera_id=rs.camera_id AND rlh.released_at IS NULL
              AND rlh.from_at < rs.ended_at AND rlh.to_at > rs.started_at
+             AND COALESCE(p.legal_hold_override, false) = false
          )
        ORDER BY rs.ended_at ASC LIMIT $3`,
       [tenantId, storageNodeExternalId, limit],

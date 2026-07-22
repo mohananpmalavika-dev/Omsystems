@@ -374,4 +374,130 @@ export async function registerEvidenceRoutes(
       return reply.code(500).send({ error: "verification_failed", details: message });
     }
   });
+
+  /**
+   * Request forensic export
+   * POST /v1/evidence/exports
+   */
+  app.post("/v1/evidence/exports", async (request, reply) => {
+    const body = z.object({
+      caseId: z.string().uuid(),
+      exportType: z.enum(["original", "viewing-copy", "multi-camera", "investigation-package"]),
+      format: z.enum(["original", "mp4", "mkv", "manifest-only"]),
+      cameras: z.array(z.object({
+        cameraId: z.string().uuid(),
+        fromTime: z.string().datetime(),
+        toTime: z.string().datetime(),
+      })).min(1),
+      options: z.object({
+        watermark: z.boolean().optional(),
+        timestampOverlay: z.boolean().optional(),
+        audioIncluded: z.boolean().optional(),
+        password: z.string().trim().min(8).max(64).optional(),
+        quality: z.enum(["original", "high", "medium"]).optional(),
+      }).optional(),
+      reason: z.string().trim().min(5).max(1000),
+      priority: z.number().int().min(1).max(1000).optional(),
+    }).parse(request.body);
+
+    try {
+      const caseRecord = await store.getEvidenceCase(body.caseId);
+      if (!caseRecord) {
+        return reply.code(404).send({ error: "case_not_found" });
+      }
+
+      // Check export permission
+      if (!(await hasAccess(request, reply, store, "evidence:export", caseRecord.id))) {
+        return;
+      }
+
+      // Create export job (would use ExportWorker in production)
+      const exportJob = {
+        id: crypto.randomUUID(),
+        caseId: body.caseId,
+        exportType: body.exportType,
+        format: body.format,
+        status: "pending",
+        requestedBy: request.user.userId,
+        reason: body.reason,
+        createdAt: new Date().toISOString(),
+      };
+
+      await store.recordCustodyEvent({
+        evidenceId: body.caseId,
+        action: "export_requested",
+        performedBy: request.user.userId,
+        sourceIp: request.ip,
+        reason: body.reason,
+      });
+
+      return reply.code(201).send(exportJob);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      return reply.code(500).send({ error: "export_request_failed", details: message });
+    }
+  });
+
+  /**
+   * Get export job status
+   * GET /v1/evidence/exports/:exportId
+   */
+  app.get("/v1/evidence/exports/:exportId/status", async (request, reply) => {
+    const { exportId } = z.object({ exportId: z.string().uuid() }).parse(request.params);
+
+    try {
+      // Would fetch from ExportWorker in production
+      return {
+        id: exportId,
+        status: "ready",
+        progress: 100,
+      };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      return reply.code(500).send({ error: "export_status_failed", details: message });
+    }
+  });
+
+  /**
+   * Download export
+   * GET /v1/evidence/exports/:exportId/download
+   */
+  app.get("/v1/evidence/exports/:exportId/download", async (request, reply) => {
+    const { exportId } = z.object({ exportId: z.string().uuid() }).parse(request.params);
+    const { token } = z.object({ token: z.string() }).parse(request.query);
+
+    try {
+      // Would validate token and stream file in production
+      await store.recordCustodyEvent({
+        action: "export_downloaded",
+        performedBy: request.user.userId,
+        sourceIp: request.ip,
+      });
+
+      return reply.code(501).send({ error: "not_implemented" });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      return reply.code(500).send({ error: "download_failed", details: message });
+    }
+  });
+
+  /**
+   * Get export manifest
+   * GET /v1/evidence/exports/:exportId/manifest
+   */
+  app.get("/v1/evidence/exports/:exportId/manifest", async (request, reply) => {
+    const { exportId } = z.object({ exportId: z.string().uuid() }).parse(request.params);
+
+    try {
+      // Would fetch manifest from ExportWorker in production
+      return {
+        id: exportId,
+        version: "v1.0",
+        message: "Manifest generation not implemented",
+      };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      return reply.code(500).send({ error: "manifest_fetch_failed", details: message });
+    }
+  });
 }

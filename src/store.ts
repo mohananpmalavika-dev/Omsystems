@@ -158,6 +158,15 @@ export class MemoryStore implements ControlPlaneStore {
   readonly cameraPrivacyPurposeAssignments: any[] = [];
   readonly cameraPrivacyControls = new Map<string, any>();
   readonly privacyBreaches: any[] = [];
+  readonly complianceRequirements: any[] = [];
+  readonly complianceControls: any[] = [];
+  readonly complianceEvidence: any[] = [];
+  readonly complianceTests: any[] = [];
+  readonly complianceFindings: any[] = [];
+  readonly remediationPlans: any[] = [];
+  readonly remediationActions: any[] = [];
+  readonly complianceRisks: any[] = [];
+  readonly complianceAuditLog: any[] = [];
 
   async close() {}
 
@@ -508,6 +517,57 @@ export class MemoryStore implements ControlPlaneStore {
       .slice(0, limit);
   }
 
+  private findApplicableCompliancePolicy(camera: Camera, node: ResourceNode) {
+    const policies = this.compliancePolicies.filter((policy) => policy.tenantId === node.tenantId)
+      .filter((policy) => {
+        if (policy.entityType) {
+          const matchesEntityType = node.path.some((nodeId) =>
+            this.nodes.get(nodeId)?.type === policy.entityType,
+          );
+          if (!matchesEntityType) return false;
+        }
+        if (policy.locationType && policy.locationType !== camera.locationType) return false;
+        if (policy.cameraType && policy.cameraType !== camera.physicalType) return false;
+        return true;
+      });
+    policies.sort((left, right) => {
+      const leftScore = Number(Boolean(left.entityType)) + Number(Boolean(left.locationType)) + Number(Boolean(left.cameraType));
+      const rightScore = Number(Boolean(right.entityType)) + Number(Boolean(right.locationType)) + Number(Boolean(right.cameraType));
+      if (leftScore !== rightScore) return rightScore - leftScore;
+      return (right.updatedAt ?? right.createdAt).localeCompare(left.updatedAt ?? left.createdAt);
+    });
+    return policies[0];
+  }
+
+  private getPolicyRetentionDays(
+    job: RecordingJob,
+    policy: { normalRetentionDays?: number; hotStorageDays?: number; warmStorageDays?: number; coldStorageDays?: number } | undefined,
+    storageTier: RecordingSegment["storageTier"],
+  ) {
+    const defaultTierDays = storageTier === "hot"
+      ? job.hotRetentionDays
+      : storageTier === "warm"
+        ? job.warmRetentionDays
+        : storageTier === "cold"
+          ? job.coldRetentionDays
+          : job.retentionDays;
+    const policyTierDays = storageTier === "hot"
+      ? policy?.hotStorageDays
+      : storageTier === "warm"
+        ? policy?.warmStorageDays
+        : storageTier === "cold"
+          ? policy?.coldStorageDays
+          : undefined;
+    return policyTierDays ?? policy?.normalRetentionDays ?? defaultTierDays;
+  }
+
+  private overlapsTimeRange(
+    segment: RecordingSegment,
+    range: { fromAt: string; toAt: string },
+  ) {
+    return range.fromAt < segment.endedAt && range.toAt > segment.startedAt;
+  }
+
   async listRecordingRetentionCandidates(
     inputTenantId: string,
     storageNodeExternalId: string,
@@ -518,14 +578,27 @@ export class MemoryStore implements ControlPlaneStore {
       const camera = this.cameras.get(segment.cameraId);
       const node = camera ? this.nodes.get(camera.nodeId) : undefined;
       const job = this.recordingJobs.get(segment.cameraId);
-      if (!node || node.tenantId !== inputTenantId || !job ||
+      if (!camera || !node || node.tenantId !== inputTenantId || !job ||
           !job.automaticDeletionEnabled || segment.status !== "ready" ||
-          segment.storageNodeExternalId !== storageNodeExternalId ||
-          Date.parse(segment.endedAt) >= now - job.retentionDays * 86_400_000) return false;
-      return !this.recordingLegalHolds.some((hold) =>
-        hold.cameraId === segment.cameraId && !hold.releasedAt &&
-        hold.fromAt < segment.endedAt && hold.toAt > segment.startedAt
+          segment.storageNodeExternalId !== storageNodeExternalId) return false;
+      const policy = this.findApplicableCompliancePolicy(camera, node);
+      if (policy?.automaticDeletionEligibility === false) return false;
+      if (job.backupRequired || policy?.backupRequired) return false;
+      const baseRetentionDays = this.getPolicyRetentionDays(job, policy, segment.storageTier);
+      const incidentRetentionDays = policy?.incidentRetentionDays ?? 0;
+      const hasIncidentOverlap = incidentRetentionDays > 0 && this.incidentVideoRanges.some((range) =>
+        range.cameraId === segment.cameraId && this.overlapsTimeRange(segment, range),
       );
+      const retentionDays = hasIncidentOverlap
+        ? Math.max(baseRetentionDays, incidentRetentionDays)
+        : baseRetentionDays;
+      if (Date.parse(segment.endedAt) >= now - retentionDays * 86_400_000) return false;
+      const activeLegalHold = this.recordingLegalHolds.some((hold) =>
+        hold.cameraId === segment.cameraId && !hold.releasedAt &&
+        hold.fromAt < segment.endedAt && hold.toAt > segment.startedAt,
+      );
+      if (activeLegalHold && !policy?.legalHoldOverride) return false;
+      return true;
     }).slice(0, limit);
   }
 
@@ -1906,6 +1979,628 @@ export class MemoryStore implements ControlPlaneStore {
     }
 
     return transaction;
+  }
+
+  // Requirements
+  async listComplianceRequirements(tenantId: string, filters?: {
+    frameworkId?: string;
+    category?: string;
+    status?: string;
+  }): Promise<any[]> {
+    return this.complianceRequirements.filter((req) => {
+      if (req.tenantId !== tenantId) return false;
+      if (filters?.frameworkId && req.frameworkId !== filters.frameworkId) return false;
+      if (filters?.category && req.category !== filters.category) return false;
+      if (filters?.status && req.status !== filters.status) return false;
+      return true;
+    });
+  }
+
+  async getComplianceRequirement(id: string): Promise<any | undefined> {
+    return this.complianceRequirements.find((req) => req.id === id);
+  }
+
+  async createComplianceRequirement(input: any): Promise<any> {
+    const now = new Date().toISOString();
+    const requirement = {
+      id: randomUUID(),
+      tenantId: input.tenantId,
+      frameworkId: input.frameworkId,
+      requirementNumber: input.requirementNumber,
+      title: input.title,
+      description: input.description ?? null,
+      category: input.category ?? null,
+      priority: input.priority ?? 'medium',
+      status: input.status ?? 'active',
+      implementationGuidance: input.implementationGuidance ?? null,
+      createdBy: input.createdBy ?? null,
+      createdAt: now,
+      updatedAt: now,
+    };
+    this.complianceRequirements.push(requirement);
+    return requirement;
+  }
+
+  async updateComplianceRequirement(id: string, input: any): Promise<any | undefined> {
+    const requirement = this.complianceRequirements.find((req) => req.id === id);
+    if (!requirement) return undefined;
+    Object.assign(requirement, input, { updatedAt: new Date().toISOString() });
+    return requirement;
+  }
+
+  async deleteComplianceRequirement(id: string): Promise<void> {
+    const index = this.complianceRequirements.findIndex((req) => req.id === id);
+    if (index >= 0) this.complianceRequirements.splice(index, 1);
+  }
+
+  // Controls
+  async listComplianceControls(tenantId: string, filters?: {
+    requirementId?: string;
+    implementationStatus?: string;
+  }): Promise<any[]> {
+    return this.complianceControls.filter((control) => {
+      if (control.tenantId !== tenantId) return false;
+      if (filters?.requirementId && control.requirementId !== filters.requirementId) return false;
+      if (filters?.implementationStatus && control.implementationStatus !== filters.implementationStatus) return false;
+      return true;
+    });
+  }
+
+  async getComplianceControl(id: string): Promise<any | undefined> {
+    return this.complianceControls.find((control) => control.id === id);
+  }
+
+  async createComplianceControl(input: any): Promise<any> {
+    const now = new Date().toISOString();
+    const control = {
+      id: randomUUID(),
+      tenantId: input.tenantId,
+      requirementId: input.requirementId,
+      controlNumber: input.controlNumber,
+      title: input.title,
+      description: input.description ?? null,
+      controlType: input.controlType ?? null,
+      implementationStatus: input.implementationStatus ?? 'not_started',
+      implementationDetails: input.implementationDetails ?? null,
+      owner: input.owner ?? null,
+      testingFrequency: input.testingFrequency ?? null,
+      lastTestDate: input.lastTestDate ?? null,
+      nextTestDate: input.nextTestDate ?? null,
+      effectivenessRating: input.effectivenessRating ?? null,
+      createdBy: input.createdBy ?? null,
+      createdAt: now,
+      updatedAt: now,
+    };
+    this.complianceControls.push(control);
+    return control;
+  }
+
+  async updateComplianceControl(id: string, input: any): Promise<any | undefined> {
+    const control = this.complianceControls.find((c) => c.id === id);
+    if (!control) return undefined;
+    Object.assign(control, input, { updatedAt: new Date().toISOString() });
+    return control;
+  }
+
+  async deleteComplianceControl(id: string): Promise<void> {
+    const index = this.complianceControls.findIndex((c) => c.id === id);
+    if (index >= 0) this.complianceControls.splice(index, 1);
+  }
+
+  async updateControlTestDates(id: string, input: {
+    lastTestDate: string;
+    nextTestDate: string;
+    effectivenessRating?: number;
+  }): Promise<any | undefined> {
+    const control = this.complianceControls.find((c) => c.id === id);
+    if (!control) return undefined;
+    control.lastTestDate = input.lastTestDate;
+    control.nextTestDate = input.nextTestDate;
+    if (input.effectivenessRating !== undefined) {
+      control.effectivenessRating = input.effectivenessRating;
+    }
+    control.updatedAt = new Date().toISOString();
+    return control;
+  }
+
+  // Evidence
+  async listComplianceEvidence(tenantId: string, filters?: {
+    requirementId?: string;
+    controlId?: string;
+    assessmentId?: string;
+    validated?: boolean;
+  }): Promise<any[]> {
+    return this.complianceEvidence.filter((evidence) => {
+      if (evidence.tenantId !== tenantId) return false;
+      if (filters?.requirementId && evidence.requirementId !== filters.requirementId) return false;
+      if (filters?.controlId && evidence.controlId !== filters.controlId) return false;
+      if (filters?.assessmentId && evidence.assessmentId !== filters.assessmentId) return false;
+      if (filters?.validated !== undefined && evidence.validated !== filters.validated) return false;
+      return true;
+    });
+  }
+
+  async getComplianceEvidence(id: string): Promise<any | undefined> {
+    return this.complianceEvidence.find((evidence) => evidence.id === id);
+  }
+
+  async createComplianceEvidence(input: any): Promise<any> {
+    const now = new Date().toISOString();
+    const evidence = {
+      id: randomUUID(),
+      tenantId: input.tenantId,
+      requirementId: input.requirementId ?? null,
+      controlId: input.controlId ?? null,
+      assessmentId: input.assessmentId ?? null,
+      evidenceType: input.evidenceType,
+      title: input.title,
+      description: input.description ?? null,
+      evidenceUrl: input.evidenceUrl ?? null,
+      collectedAt: input.collectedAt ?? now,
+      validated: input.validated ?? false,
+      validatorId: input.validatorId ?? null,
+      validationNotes: input.validationNotes ?? null,
+      createdBy: input.createdBy ?? null,
+      createdAt: now,
+      updatedAt: now,
+    };
+    this.complianceEvidence.push(evidence);
+    return evidence;
+  }
+
+  async updateComplianceEvidence(id: string, input: any): Promise<any | undefined> {
+    const evidence = this.complianceEvidence.find((e) => e.id === id);
+    if (!evidence) return undefined;
+    Object.assign(evidence, input, { updatedAt: new Date().toISOString() });
+    return evidence;
+  }
+
+  async deleteComplianceEvidence(id: string): Promise<void> {
+    const index = this.complianceEvidence.findIndex((e) => e.id === id);
+    if (index >= 0) this.complianceEvidence.splice(index, 1);
+  }
+
+  async validateComplianceEvidence(id: string, validated: boolean, validatorId: string, notes?: string): Promise<any | undefined> {
+    const evidence = this.complianceEvidence.find((e) => e.id === id);
+    if (!evidence) return undefined;
+    evidence.validated = validated;
+    evidence.validatorId = validatorId;
+    evidence.validationNotes = notes ?? null;
+    evidence.updatedAt = new Date().toISOString();
+    return evidence;
+  }
+
+  // Tests
+  async listComplianceTests(tenantId: string, filters?: {
+    controlId?: string;
+    status?: string;
+  }): Promise<any[]> {
+    return this.complianceTests.filter((test) => {
+      if (test.tenantId !== tenantId) return false;
+      if (filters?.controlId && test.controlId !== filters.controlId) return false;
+      if (filters?.status && test.status !== filters.status) return false;
+      return true;
+    });
+  }
+
+  async getComplianceTest(id: string): Promise<any | undefined> {
+    return this.complianceTests.find((test) => test.id === id);
+  }
+
+  async createComplianceTest(input: any): Promise<any> {
+    const now = new Date().toISOString();
+    const test = {
+      id: randomUUID(),
+      tenantId: input.tenantId,
+      controlId: input.controlId,
+      testName: input.testName,
+      testProcedure: input.testProcedure ?? null,
+      scheduledDate: input.scheduledDate,
+      completedDate: input.completedDate ?? null,
+      testerId: input.testerId ?? null,
+      status: input.status ?? 'scheduled',
+      result: input.result ?? null,
+      findings: input.findings ?? null,
+      evidenceIds: input.evidenceIds ?? [],
+      createdBy: input.createdBy ?? null,
+      createdAt: now,
+      updatedAt: now,
+    };
+    this.complianceTests.push(test);
+    return test;
+  }
+
+  async updateComplianceTest(id: string, input: any): Promise<any | undefined> {
+    const test = this.complianceTests.find((t) => t.id === id);
+    if (!test) return undefined;
+    Object.assign(test, input, { updatedAt: new Date().toISOString() });
+    return test;
+  }
+
+  async deleteComplianceTest(id: string): Promise<void> {
+    const index = this.complianceTests.findIndex((t) => t.id === id);
+    if (index >= 0) this.complianceTests.splice(index, 1);
+  }
+
+  // Findings
+  async listComplianceFindings(tenantId: string, filters?: {
+    assessmentId?: string;
+    severity?: string;
+    status?: string;
+  }): Promise<any[]> {
+    return this.complianceFindings.filter((finding) => {
+      if (finding.tenantId !== tenantId) return false;
+      if (filters?.assessmentId && finding.assessmentId !== filters.assessmentId) return false;
+      if (filters?.severity && finding.severity !== filters.severity) return false;
+      if (filters?.status && finding.status !== filters.status) return false;
+      return true;
+    });
+  }
+
+  async getComplianceFinding(id: string): Promise<any | undefined> {
+    return this.complianceFindings.find((finding) => finding.id === id);
+  }
+
+  async createComplianceFinding(input: any): Promise<any> {
+    const now = new Date().toISOString();
+    const finding = {
+      id: randomUUID(),
+      tenantId: input.tenantId,
+      assessmentId: input.assessmentId ?? null,
+      requirementId: input.requirementId ?? null,
+      controlId: input.controlId ?? null,
+      findingNumber: input.findingNumber,
+      title: input.title,
+      description: input.description,
+      severity: input.severity,
+      status: input.status ?? 'open',
+      identifiedDate: input.identifiedDate ?? now,
+      dueDate: input.dueDate ?? null,
+      closedDate: input.closedDate ?? null,
+      closedBy: input.closedBy ?? null,
+      closureNotes: input.closureNotes ?? null,
+      createdBy: input.createdBy ?? null,
+      createdAt: now,
+      updatedAt: now,
+    };
+    this.complianceFindings.push(finding);
+    return finding;
+  }
+
+  async updateComplianceFinding(id: string, input: any): Promise<any | undefined> {
+    const finding = this.complianceFindings.find((f) => f.id === id);
+    if (!finding) return undefined;
+    Object.assign(finding, input, { updatedAt: new Date().toISOString() });
+    return finding;
+  }
+
+  async deleteComplianceFinding(id: string): Promise<void> {
+    const index = this.complianceFindings.findIndex((f) => f.id === id);
+    if (index >= 0) this.complianceFindings.splice(index, 1);
+  }
+
+  async closeComplianceFinding(id: string, closedBy: string, notes?: string): Promise<any | undefined> {
+    const finding = this.complianceFindings.find((f) => f.id === id);
+    if (!finding) return undefined;
+    finding.status = 'closed';
+    finding.closedDate = new Date().toISOString();
+    finding.closedBy = closedBy;
+    finding.closureNotes = notes ?? null;
+    finding.updatedAt = new Date().toISOString();
+    return finding;
+  }
+
+  // Remediation Plans
+  async listRemediationPlans(tenantId: string, filters?: {
+    findingId?: string;
+    status?: string;
+  }): Promise<any[]> {
+    return this.remediationPlans.filter((plan) => {
+      if (plan.tenantId !== tenantId) return false;
+      if (filters?.findingId && plan.findingId !== filters.findingId) return false;
+      if (filters?.status && plan.status !== filters.status) return false;
+      return true;
+    });
+  }
+
+  async getRemediationPlan(id: string): Promise<any | undefined> {
+    return this.remediationPlans.find((plan) => plan.id === id);
+  }
+
+  async createRemediationPlan(input: any): Promise<any> {
+    const now = new Date().toISOString();
+    const plan = {
+      id: randomUUID(),
+      tenantId: input.tenantId,
+      findingId: input.findingId,
+      planName: input.planName,
+      description: input.description ?? null,
+      owner: input.owner ?? null,
+      targetCompletionDate: input.targetCompletionDate,
+      status: input.status ?? 'draft',
+      approvedBy: input.approvedBy ?? null,
+      approvedAt: input.approvedAt ?? null,
+      verifiedBy: input.verifiedBy ?? null,
+      verifiedAt: input.verifiedAt ?? null,
+      verificationNotes: input.verificationNotes ?? null,
+      effectivenessConfirmed: input.effectivenessConfirmed ?? false,
+      createdBy: input.createdBy ?? null,
+      createdAt: now,
+      updatedAt: now,
+    };
+    this.remediationPlans.push(plan);
+    return plan;
+  }
+
+  async updateRemediationPlan(id: string, input: any): Promise<any | undefined> {
+    const plan = this.remediationPlans.find((p) => p.id === id);
+    if (!plan) return undefined;
+    Object.assign(plan, input, { updatedAt: new Date().toISOString() });
+    return plan;
+  }
+
+  async deleteRemediationPlan(id: string): Promise<void> {
+    const index = this.remediationPlans.findIndex((p) => p.id === id);
+    if (index >= 0) this.remediationPlans.splice(index, 1);
+  }
+
+  async approveRemediationPlan(id: string, approverId: string): Promise<any | undefined> {
+    const plan = this.remediationPlans.find((p) => p.id === id);
+    if (!plan) return undefined;
+    plan.status = 'approved';
+    plan.approvedBy = approverId;
+    plan.approvedAt = new Date().toISOString();
+    plan.updatedAt = new Date().toISOString();
+    return plan;
+  }
+
+  async verifyRemediationPlan(id: string, verifierId: string, input: {
+    verificationNotes?: string;
+    effectivenessConfirmed: boolean;
+  }): Promise<any | undefined> {
+    const plan = this.remediationPlans.find((p) => p.id === id);
+    if (!plan) return undefined;
+    plan.status = 'verified';
+    plan.verifiedBy = verifierId;
+    plan.verifiedAt = new Date().toISOString();
+    plan.verificationNotes = input.verificationNotes ?? null;
+    plan.effectivenessConfirmed = input.effectivenessConfirmed;
+    plan.updatedAt = new Date().toISOString();
+    return plan;
+  }
+
+  // Remediation Actions
+  async listRemediationActions(planId: string): Promise<any[]> {
+    return this.remediationActions.filter((action) => action.planId === planId);
+  }
+
+  async getRemediationAction(id: string): Promise<any | undefined> {
+    return this.remediationActions.find((action) => action.id === id);
+  }
+
+  async createRemediationAction(input: any): Promise<any> {
+    const now = new Date().toISOString();
+    const action = {
+      id: randomUUID(),
+      planId: input.planId,
+      actionName: input.actionName,
+      description: input.description ?? null,
+      assignedTo: input.assignedTo ?? null,
+      dueDate: input.dueDate,
+      status: input.status ?? 'pending',
+      completedDate: input.completedDate ?? null,
+      evidenceUrl: input.evidenceUrl ?? null,
+      notes: input.notes ?? null,
+      createdAt: now,
+      updatedAt: now,
+    };
+    this.remediationActions.push(action);
+    return action;
+  }
+
+  async updateRemediationAction(id: string, input: any): Promise<any | undefined> {
+    const action = this.remediationActions.find((a) => a.id === id);
+    if (!action) return undefined;
+    Object.assign(action, input, { updatedAt: new Date().toISOString() });
+    return action;
+  }
+
+  async deleteRemediationAction(id: string): Promise<void> {
+    const index = this.remediationActions.findIndex((a) => a.id === id);
+    if (index >= 0) this.remediationActions.splice(index, 1);
+  }
+
+  async completeRemediationAction(id: string, input: {
+    evidenceUrl?: string;
+    notes?: string;
+  }): Promise<any | undefined> {
+    const action = this.remediationActions.find((a) => a.id === id);
+    if (!action) return undefined;
+    action.status = 'completed';
+    action.completedDate = new Date().toISOString();
+    action.evidenceUrl = input.evidenceUrl ?? action.evidenceUrl;
+    action.notes = input.notes ?? action.notes;
+    action.updatedAt = new Date().toISOString();
+    return action;
+  }
+
+  // Risks
+  async listComplianceRisks(tenantId: string, filters?: {
+    frameworkId?: string;
+    category?: string;
+    status?: string;
+  }): Promise<any[]> {
+    return this.complianceRisks.filter((risk) => {
+      if (risk.tenantId !== tenantId) return false;
+      if (filters?.frameworkId && risk.frameworkId !== filters.frameworkId) return false;
+      if (filters?.category && risk.category !== filters.category) return false;
+      if (filters?.status && risk.status !== filters.status) return false;
+      return true;
+    });
+  }
+
+  async getComplianceRisk(id: string): Promise<any | undefined> {
+    return this.complianceRisks.find((risk) => risk.id === id);
+  }
+
+  async createComplianceRisk(input: any): Promise<any> {
+    const now = new Date().toISOString();
+    const risk = {
+      id: randomUUID(),
+      tenantId: input.tenantId,
+      frameworkId: input.frameworkId ?? null,
+      requirementId: input.requirementId ?? null,
+      riskName: input.riskName,
+      description: input.description ?? null,
+      category: input.category ?? null,
+      inherentLikelihood: input.inherentLikelihood,
+      inherentImpact: input.inherentImpact,
+      residualLikelihood: input.residualLikelihood ?? null,
+      residualImpact: input.residualImpact ?? null,
+      treatmentPlan: input.treatmentPlan ?? null,
+      owner: input.owner ?? null,
+      status: input.status ?? 'identified',
+      lastReviewDate: input.lastReviewDate ?? null,
+      nextReviewDate: input.nextReviewDate ?? null,
+      reviewNotes: input.reviewNotes ?? null,
+      createdBy: input.createdBy ?? null,
+      createdAt: now,
+      updatedAt: now,
+    };
+    this.complianceRisks.push(risk);
+    return risk;
+  }
+
+  async updateComplianceRisk(id: string, input: any): Promise<any | undefined> {
+    const risk = this.complianceRisks.find((r) => r.id === id);
+    if (!risk) return undefined;
+    Object.assign(risk, input, { updatedAt: new Date().toISOString() });
+    return risk;
+  }
+
+  async deleteComplianceRisk(id: string): Promise<void> {
+    const index = this.complianceRisks.findIndex((r) => r.id === id);
+    if (index >= 0) this.complianceRisks.splice(index, 1);
+  }
+
+  async assessComplianceRisk(id: string, input: {
+    residualLikelihood: string;
+    residualImpact: string;
+    treatmentPlan?: string;
+  }): Promise<any | undefined> {
+    const risk = this.complianceRisks.find((r) => r.id === id);
+    if (!risk) return undefined;
+    risk.residualLikelihood = input.residualLikelihood;
+    risk.residualImpact = input.residualImpact;
+    risk.treatmentPlan = input.treatmentPlan ?? risk.treatmentPlan;
+    risk.status = 'assessed';
+    risk.updatedAt = new Date().toISOString();
+    return risk;
+  }
+
+  async reviewComplianceRisk(id: string, input: {
+    reviewNotes?: string;
+    nextReviewDate: string;
+  }): Promise<any | undefined> {
+    const risk = this.complianceRisks.find((r) => r.id === id);
+    if (!risk) return undefined;
+    risk.lastReviewDate = new Date().toISOString();
+    risk.nextReviewDate = input.nextReviewDate;
+    risk.reviewNotes = input.reviewNotes ?? risk.reviewNotes;
+    risk.updatedAt = new Date().toISOString();
+    return risk;
+  }
+
+  // Dashboard & Reporting
+  async getComplianceDashboard(tenantId: string, frameworkId?: string): Promise<any> {
+    const requirements = this.complianceRequirements.filter((r) => 
+      r.tenantId === tenantId && (!frameworkId || r.frameworkId === frameworkId)
+    );
+    const controls = this.complianceControls.filter((c) => 
+      c.tenantId === tenantId
+    );
+    const findings = this.complianceFindings.filter((f) => 
+      f.tenantId === tenantId && f.status === 'open'
+    );
+    const risks = this.complianceRisks.filter((r) => 
+      r.tenantId === tenantId && (!frameworkId || r.frameworkId === frameworkId)
+    );
+
+    return {
+      totalRequirements: requirements.length,
+      implementedControls: controls.filter((c) => c.implementationStatus === 'implemented').length,
+      totalControls: controls.length,
+      openFindings: findings.length,
+      criticalFindings: findings.filter((f) => f.severity === 'critical').length,
+      highRisks: risks.filter((r) => r.status === 'identified' && r.inherentImpact === 'high').length,
+      complianceScore: controls.length > 0 
+        ? Math.round((controls.filter((c) => c.implementationStatus === 'implemented').length / controls.length) * 100)
+        : 0,
+    };
+  }
+
+  async getRequirementStatus(id: string): Promise<any> {
+    const requirement = this.complianceRequirements.find((r) => r.id === id);
+    if (!requirement) return undefined;
+
+    const controls = this.complianceControls.filter((c) => c.requirementId === id);
+    const evidence = this.complianceEvidence.filter((e) => e.requirementId === id);
+
+    return {
+      requirement,
+      totalControls: controls.length,
+      implementedControls: controls.filter((c) => c.implementationStatus === 'implemented').length,
+      totalEvidence: evidence.length,
+      validatedEvidence: evidence.filter((e) => e.validated).length,
+    };
+  }
+
+  async getFrameworkCoverage(id: string): Promise<any> {
+    const requirements = this.complianceRequirements.filter((r) => r.frameworkId === id);
+    const controls = this.complianceControls.filter((c) => 
+      requirements.some((r) => r.id === c.requirementId)
+    );
+
+    const categories = [...new Set(requirements.map((r) => r.category))];
+    const coverageByCategory = categories.map((category) => {
+      const categoryReqs = requirements.filter((r) => r.category === category);
+      const categoryControls = controls.filter((c) => 
+        categoryReqs.some((r) => r.id === c.requirementId)
+      );
+      return {
+        category,
+        totalRequirements: categoryReqs.length,
+        implementedControls: categoryControls.filter((c) => c.implementationStatus === 'implemented').length,
+        totalControls: categoryControls.length,
+      };
+    });
+
+    return {
+      frameworkId: id,
+      totalRequirements: requirements.length,
+      totalControls: controls.length,
+      implementedControls: controls.filter((c) => c.implementationStatus === 'implemented').length,
+      coverageByCategory,
+    };
+  }
+
+  async getComplianceAuditLog(tenantId: string, filters?: {
+    entityType?: string;
+    entityId?: string;
+    action?: string;
+    from?: string;
+    to?: string;
+    limit?: number;
+  }): Promise<any[]> {
+    return this.complianceAuditLog.filter((log) => {
+      if (log.tenantId !== tenantId) return false;
+      if (filters?.entityType && log.entityType !== filters.entityType) return false;
+      if (filters?.entityId && log.entityId !== filters.entityId) return false;
+      if (filters?.action && log.action !== filters.action) return false;
+      if (filters?.from && log.createdAt < filters.from) return false;
+      if (filters?.to && log.createdAt > filters.to) return false;
+      return true;
+    }).slice(0, filters?.limit ?? 100);
   }
 }
 
