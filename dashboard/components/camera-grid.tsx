@@ -187,12 +187,30 @@ export function CameraGrid({
   };
 
   const handleChangeRecordingMode = async (cameraId: string, mode: RecordingMode) => {
+    const currentJob = recordings.get(cameraId);
+    const update: Record<string, unknown> = { mode };
+
+    if (mode === "scheduled") {
+      update.schedule = { days: [1, 2, 3, 4, 5], start: "09:00", end: "18:00", timezone: "UTC" };
+    }
+
+    if (currentJob) {
+      update.enabled = currentJob.enabled;
+      update.preRollSeconds = currentJob.preRollSeconds;
+      update.postRollSeconds = currentJob.postRollSeconds;
+      update.minMotionDurationSeconds = currentJob.minMotionDurationSeconds;
+      update.motionConfidenceThreshold = currentJob.motionConfidenceThreshold;
+      update.cooldownSeconds = currentJob.cooldownSeconds;
+      update.maxEventDurationSeconds = currentJob.maxEventDurationSeconds;
+      update.triggerEventTypes = currentJob.triggerEventTypes;
+    }
+
     try {
       const response = await fetch(`/api/recording/${cameraId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ mode }),
+        body: JSON.stringify(update),
       });
 
       if (response.ok) {
@@ -201,6 +219,24 @@ export function CameraGrid({
       }
     } catch (error) {
       console.error("Recording mode change error:", error);
+    }
+  };
+
+  const handleUpdateRecording = async (cameraId: string, update: Partial<Omit<RecordingJob, "id" | "cameraId" | "status">>) => {
+    try {
+      const response = await fetch(`/api/recording/${cameraId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify(update),
+      });
+
+      if (response.ok) {
+        const job = await response.json();
+        setRecordings((prev) => new Map(prev).set(cameraId, job));
+      }
+    } catch (error) {
+      console.error("Recording update error:", error);
     }
   };
 
@@ -428,8 +464,10 @@ export function CameraGrid({
                 onStart={() => handleStartLive(camera.id)}
                 index={i}
                 recording={recordings.get(camera.id)}
+                recordingLoading={loading.has(camera.id)}
                 onToggleRecording={() => handleToggleRecording(camera.id)}
                 onChangeRecordingMode={(mode) => handleChangeRecordingMode(camera.id, mode)}
+                onUpdateRecording={handleUpdateRecording}
                 onBookmark={async () => {
                   // Handle bookmark
                 }}

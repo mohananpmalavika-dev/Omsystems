@@ -413,6 +413,23 @@ export function SecurityDashboard() {
                     recordingLoading={recordingLoading === camera.id}
                     onToggleRecording={() => void toggleRecording(camera.id)}
                     onChangeRecordingMode={(mode) => void changeRecordingMode(camera.id, mode)}
+                    onUpdateRecording={async (cameraId, update) => {
+                      setRecordingLoading(cameraId);
+                      try {
+                        const response = await fetch(`/api/recording/${encodeURIComponent(cameraId)}`, {
+                          method: "PUT",
+                          headers: { "content-type": "application/json" },
+                          body: JSON.stringify(update),
+                        });
+                        if (!response.ok) throw new Error("Recording settings update failed");
+                        const updated = await response.json() as RecordingJob;
+                        setRecordings((items) => ({ ...items, [cameraId]: updated }));
+                      } catch {
+                        setError("Recording settings could not be updated.");
+                      } finally {
+                        setRecordingLoading(null);
+                      }
+                    }}
                     onBookmark={() => setLiveAction({ action: "bookmark", camera })}
                     onCreateIncident={() => setLiveAction({ action: "incident", camera })}
                   />

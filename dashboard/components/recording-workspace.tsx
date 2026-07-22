@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertTriangle, CalendarClock, CheckCircle2, Clapperboard, LoaderCircle, Play, RefreshCw, Video } from "lucide-react";
+import { AlertTriangle, CalendarClock, CheckCircle2, Clapperboard, LoaderCircle, Play, RefreshCw, SlidersHorizontal, Video } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import type { Branch, Camera, RecordingJob, RecordingSegment } from "@/lib/types";
 
