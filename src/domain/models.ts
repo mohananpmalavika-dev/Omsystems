@@ -618,6 +618,41 @@ export interface RecordingLegalHold {
   releasedAt?: string | undefined;
 }
 
+export type RecordingRaidStatus = "healthy" | "degraded" | "rebuilding" | "failed" | "unknown";
+export type RecordingHotSpareStatus = "active" | "inactive" | "unknown";
+export type RecordingControllerHealth = "healthy" | "warning" | "critical" | "unknown";
+
+export interface RecordingStorageSmart {
+  overallStatus: "passed" | "failed" | "unknown";
+  reallocatedSectors: number;
+  pendingSectors: number;
+  uncorrectableSectors: number;
+  temperatureCelsius?: number | undefined;
+  powerOnHours?: number | undefined;
+  readErrors: number;
+  writeErrors: number;
+  remainingSsdLifePercent?: number | undefined;
+  interfaceCrcErrors: number;
+}
+
+export interface RecordingStorageRaid {
+  status: RecordingRaidStatus;
+  level?: string | undefined;
+  memberDisks: string[];
+  failedMembers: string[];
+  rebuildProgressPercent?: number | undefined;
+  hotSpareStatus?: RecordingHotSpareStatus | undefined;
+  controllerHealth?: RecordingControllerHealth | undefined;
+}
+
+export interface RecordingStorageProbeResult {
+  status: "passed" | "failed";
+  latencyMs: number;
+  bytesWritten: number;
+  checksum: string;
+  error?: string | undefined;
+}
+
 export interface RecordingStorageNode {
   id: string;
   tenantId: string;
@@ -637,6 +672,9 @@ export interface RecordingStorageNode {
   writeMbps?: number | undefined;
   readMbps?: number | undefined;
   latencyMs?: number | undefined;
+  smart?: RecordingStorageSmart | undefined;
+  raid?: RecordingStorageRaid | undefined;
+  lastWriteProbe?: RecordingStorageProbeResult | undefined;
   lastSeenAt: string;
 }
 

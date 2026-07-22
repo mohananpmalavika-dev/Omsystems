@@ -316,6 +316,7 @@ export interface EdgeAgent {
   version: string;
   status: "pending" | "online" | "offline";
   lastSeenAt: string | null;
+  publicMediaUrl?: string;
 }
 
 export interface EdgeScanJob {

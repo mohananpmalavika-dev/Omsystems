@@ -715,6 +715,34 @@ export async function buildApp(options?: {
       latencyMs: z.number().nonnegative().optional(),
       temperatureCelsius: z.number().min(-100).max(200).optional(),
       writeMbps: z.number().nonnegative().optional(),
+      smart: z.object({
+        overallStatus: z.enum(["passed", "failed", "unknown"]),
+        reallocatedSectors: z.number().int().nonnegative(),
+        pendingSectors: z.number().int().nonnegative(),
+        uncorrectableSectors: z.number().int().nonnegative(),
+        temperatureCelsius: z.number().optional(),
+        powerOnHours: z.number().int().nonnegative().optional(),
+        readErrors: z.number().int().nonnegative(),
+        writeErrors: z.number().int().nonnegative(),
+        remainingSsdLifePercent: z.number().min(0).max(100).optional(),
+        interfaceCrcErrors: z.number().int().nonnegative(),
+      }).optional(),
+      raid: z.object({
+        status: z.enum(["healthy", "degraded", "rebuilding", "failed", "unknown"]),
+        level: z.string().trim().optional(),
+        memberDisks: z.array(z.string().trim().min(1)).default([]),
+        failedMembers: z.array(z.string().trim().min(1)).default([]),
+        rebuildProgressPercent: z.number().min(0).max(100).optional(),
+        hotSpareStatus: z.enum(["active", "inactive", "unknown"]).optional(),
+        controllerHealth: z.enum(["healthy", "warning", "critical", "unknown"]).optional(),
+      }).optional(),
+      lastWriteProbe: z.object({
+        status: z.enum(["passed", "failed"]),
+        latencyMs: z.number().nonnegative(),
+        bytesWritten: z.number().int().nonnegative(),
+        checksum: z.string().min(1),
+        error: z.string().optional(),
+      }).optional(),
     }).parse(request.body);
     if (input.usedBytes + input.availableBytes > input.capacityBytes * 1.01) {
       return reply.code(400).send({ error: "invalid_storage_capacity" });
@@ -743,6 +771,9 @@ export async function buildApp(options?: {
       latencyMs: input.latencyMs,
       temperatureCelsius: input.temperatureCelsius,
       writeMbps: input.writeMbps,
+      smart: input.smart,
+      raid: input.raid,
+      lastWriteProbe: input.lastWriteProbe,
     });
   });
 

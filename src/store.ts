@@ -279,6 +279,17 @@ export class MemoryStore implements ControlPlaneStore {
   async createDiscovery(branchId: string, input: CameraDiscoveryInput) {
     const agent = this.edgeAgents.get(input.edgeAgentId);
     if (!agent || agent.branchId !== branchId) throw new Error("invalid_edge_agent");
+    const existing = [...this.discoveries.values()].find((item) =>
+      item.edgeAgentId === input.edgeAgentId &&
+      item.ipAddress === input.ipAddress &&
+      item.onvifPort === input.onvifPort
+    );
+    if (existing) {
+      Object.assign(existing, structuredClone(input), {
+        discoveredAt: new Date().toISOString(),
+      });
+      return existing;
+    }
     const discovery: DiscoveredCamera = {
       id: randomUUID(), branchId, ...structuredClone(input),
       status: "pending", discoveredAt: new Date().toISOString(),
@@ -456,6 +467,9 @@ export class MemoryStore implements ControlPlaneStore {
     mountPath?: string;
     temperatureCelsius?: number | undefined; writeMbps?: number | undefined;
     readMbps?: number | undefined; latencyMs?: number | undefined;
+    smart?: any;
+    raid?: any;
+    lastWriteProbe?: any;
   }) {
     const key = `${input.tenantId}:${input.externalId}`;
     const existing = this.recordingStorageNodes.get(key);

@@ -188,7 +188,6 @@ export class EdgeAgentRepository {
            rtsp_port = EXCLUDED.rtsp_port,
            profiles = EXCLUDED.profiles,
            capabilities = EXCLUDED.capabilities,
-           status = 'pending',
            discovered_at = now()
        RETURNING id::text, discovered_at`,
       [

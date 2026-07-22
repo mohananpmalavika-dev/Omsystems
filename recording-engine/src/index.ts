@@ -15,7 +15,7 @@ import { basename, dirname, isAbsolute, join, relative, resolve } from "node:pat
 import { spawn, type ChildProcess } from "node:child_process";
 import Fastify from "fastify";
 import { z } from "zod";
-import { createStorageAdapter, type StorageType } from "./storage-adapter.js";
+import { createStorageAdapter, type StorageStatus, type StorageType } from "./storage-adapter.js";
 
 const config = z.object({
   HOST: z.string().default("0.0.0.0"),
@@ -218,12 +218,15 @@ const scheduler = setInterval(() => {
 }, 30_000);
 const retentionWorker = setInterval(() => void maintenanceSweep().catch(logFailure),
   config.RETENTION_SWEEP_SECONDS * 1_000);
+const writeProbeWorker = setInterval(() => void runWriteProbe().catch(logFailure), 60_000);
+
 retentionWorker.unref();
 scheduler.unref();
 
 app.addHook("onClose", async () => {
   clearInterval(scheduler);
   clearInterval(retentionWorker);
+  clearInterval(writeProbeWorker);
   for (const timer of restartTimers.values()) clearTimeout(timer);
   for (const id of workers.keys()) stop(id);
   for (const id of postRollTimers.keys()) clearPostRoll(id);
@@ -521,6 +524,11 @@ async function maintenanceSweep() {
         mountPath: metrics.mountPath,
         readMbps: metrics.readMbps,
         latencyMs: metrics.latencyMs,
+        temperatureCelsius: metrics.temperatureCelsius,
+        writeMbps: metrics.writeMbps,
+        smart: metrics.smart,
+        raid: metrics.raid,
+        lastWriteProbe: metrics.lastWriteProbe,
       }),
     });
     const response = await controlPlane(
@@ -550,6 +558,70 @@ async function maintenanceSweep() {
         }),
       });
     }
+  }
+}
+
+async function runWriteProbe() {
+  const probe = await storageAdapter.runWriteProbe();
+  const metrics = await storageAdapter.getMetrics();
+  const nextMetrics = { ...metrics, lastWriteProbe: probe };
+  const status: StorageStatus = probe.status === "failed" ? "critical" : metrics.status;
+  await controlPlane(`/internal/recording/storage-nodes/${encodeURIComponent(config.STORAGE_NODE_EXTERNAL_ID)}`, {
+    method: "PUT",
+    body: JSON.stringify({
+      tenantId: (jobs.values().next().value?.tenantId) ?? "unknown",
+      name: config.STORAGE_NODE_NAME,
+      supportedTiers: parseTiers(config.STORAGE_NODE_TIERS),
+      capacityBytes: nextMetrics.capacityBytes,
+      usedBytes: nextMetrics.usedBytes,
+      availableBytes: nextMetrics.availableBytes,
+      status,
+      storageType: nextMetrics.storageType,
+      supportedProtocols: nextMetrics.supportedProtocols,
+      location: nextMetrics.location,
+      mountPath: nextMetrics.mountPath,
+      readMbps: nextMetrics.readMbps,
+      latencyMs: nextMetrics.latencyMs,
+      temperatureCelsius: nextMetrics.temperatureCelsius,
+      writeMbps: nextMetrics.writeMbps,
+      smart: nextMetrics.smart,
+      raid: nextMetrics.raid,
+      lastWriteProbe: probe,
+    }),
+  }).catch(logFailure);
+
+  if (probe.status === "failed") {
+    await health({
+      tenantId: (jobs.values().next().value?.tenantId) ?? "unknown",
+      cameraId: "",
+      job: {
+        id: "",
+        cameraId: "",
+        mode: "continuous",
+        enabled: true,
+        status: "idle",
+        retentionDays: 30,
+        segmentDurationSeconds: 60,
+        hotRetentionDays: 30,
+        warmRetentionDays: 60,
+        coldRetentionDays: 90,
+        critical: false,
+        backupRequired: false,
+        automaticDeletionEnabled: true,
+        evidenceProtection: true,
+        recordMainStream: true,
+        preRollSeconds: 0,
+        postRollSeconds: 0,
+        minMotionDurationSeconds: 0,
+        motionConfidenceThreshold: 0,
+        cooldownSeconds: 0,
+        maxEventDurationSeconds: 0,
+        updatedAt: new Date().toISOString(),
+      },
+    } as ManagedJob, "storage_write_probe_failed", "critical",
+      "Storage write probe failed; mounted storage may not be writable", {
+        probe,
+      });
   }
 }
 

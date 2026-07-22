@@ -87,6 +87,8 @@ export function DeviceManager() {
         "CAMERA_USERNAME=<camera-user>",
         "CAMERA_PASSWORD=<camera-password>",
         "PUBLIC_MEDIA_GATEWAY_URL=https://<branch-media-tunnel-host>",
+        "EDGE_MEDIA_SHARED_KEY=<unique-branch-media-key>",
+        "STREAM_SECRET_STORE_PATH=./data/stream-secrets.json",
         "ONVIF_ENDPOINTS=http://<camera-ip>/onvif/device_service",
       ].join("\n")
     : "", [provisionedGateway]);

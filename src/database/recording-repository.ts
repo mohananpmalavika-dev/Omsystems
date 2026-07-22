@@ -165,14 +165,17 @@ export class RecordingRepository {
     mountPath?: string;
     temperatureCelsius?: number | undefined; writeMbps?: number | undefined;
     readMbps?: number | undefined; latencyMs?: number | undefined;
+    smart?: Record<string, unknown> | undefined;
+    raid?: Record<string, unknown> | undefined;
+    lastWriteProbe?: Record<string, unknown> | undefined;
   }): Promise<RecordingStorageNode> {
     const result = await this.pool.query(
       `INSERT INTO recording_storage_nodes (
          tenant_id, external_id, scope_node_id, name, supported_tiers,
          capacity_bytes, used_bytes, available_bytes, status,
          storage_type, supported_protocols, location, mount_path,
-         temperature_celsius, write_mbps, read_mbps, latency_ms, last_seen_at
-       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,now())
+         temperature_celsius, write_mbps, read_mbps, latency_ms, smart, raid, last_write_probe, last_seen_at
+       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,now())
        ON CONFLICT (tenant_id, external_id) DO UPDATE SET
          scope_node_id=EXCLUDED.scope_node_id, name=EXCLUDED.name,
          supported_tiers=EXCLUDED.supported_tiers,
@@ -186,6 +189,9 @@ export class RecordingRepository {
          write_mbps=EXCLUDED.write_mbps,
          read_mbps=EXCLUDED.read_mbps,
          latency_ms=EXCLUDED.latency_ms,
+         smart=EXCLUDED.smart,
+         raid=EXCLUDED.raid,
+         last_write_probe=EXCLUDED.last_write_probe,
          last_seen_at=now(), updated_at=now()
        RETURNING *`,
       [input.tenantId, input.externalId, input.scopeNodeId ?? null, input.name,
@@ -194,7 +200,10 @@ export class RecordingRepository {
         input.supportedProtocols ?? null, input.location ?? null,
         input.mountPath ?? null, input.temperatureCelsius ?? null,
         input.writeMbps ?? null, input.readMbps ?? null,
-        input.latencyMs ?? null],
+        input.latencyMs ?? null,
+        input.smart ? JSON.stringify(input.smart) : null,
+        input.raid ? JSON.stringify(input.raid) : null,
+        input.lastWriteProbe ? JSON.stringify(input.lastWriteProbe) : null],
     );
     return mapStorageNode(result.rows[0]);
   }
@@ -506,6 +515,9 @@ function mapStorageNode(row: any): RecordingStorageNode {
     writeMbps: row.write_mbps == null ? undefined : Number(row.write_mbps),
     readMbps: row.read_mbps == null ? undefined : Number(row.read_mbps),
     latencyMs: row.latency_ms == null ? undefined : Number(row.latency_ms),
+    smart: row.smart ?? undefined,
+    raid: row.raid ?? undefined,
+    lastWriteProbe: row.last_write_probe ?? undefined,
     lastSeenAt: new Date(row.last_seen_at).toISOString(),
   };
 }

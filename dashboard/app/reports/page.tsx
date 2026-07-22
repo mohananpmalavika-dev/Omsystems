@@ -123,6 +123,7 @@ export default function ReportsPage() {
             <p style={{ color: "#4b5563" }}>No recent incidents available.</p>
           )}
         </Panel>
+      </section>
         </div>
       </div>
     </AppLayout>
