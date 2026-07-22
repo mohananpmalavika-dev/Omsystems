@@ -89,6 +89,7 @@ export interface Camera {
   name: string;
   nodeId: string;
   branchId: string;
+  edgeAgentId?: string;
   vendor: CameraVendor;
   model: string;
   channel: number;
@@ -482,6 +483,7 @@ export interface EdgeAgent {
   version: string;
   status: "pending" | "online" | "offline";
   lastSeenAt: string | null;
+  publicMediaUrl?: string;
 }
 
 export interface EdgeScanJob {
@@ -517,6 +519,7 @@ export interface LiveSession {
   userId: string;
   token: string;
   expiresAt: string;
+  mediaGatewayUrl?: string;
 }
 
 export interface ConsumedLiveSession {

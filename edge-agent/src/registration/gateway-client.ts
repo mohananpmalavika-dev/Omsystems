@@ -35,10 +35,16 @@ export class GatewayClient {
     );
   }
 
-  async heartbeat(id: string, version: string) {
+  async heartbeat(id: string, version: string, publicMediaUrl?: string) {
     return this.request(
       `/v1/edge-agents/${encodeURIComponent(id)}/heartbeat`,
-      { method: "POST", body: JSON.stringify({ version }) },
+      {
+        method: "POST",
+        body: JSON.stringify({
+          version,
+          ...(publicMediaUrl ? { publicMediaUrl } : {}),
+        }),
+      },
     );
   }
 

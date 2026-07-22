@@ -16,6 +16,7 @@ type CameraRow = {
   name: string;
   resource_node_id: string;
   branch_node_id: string;
+  edge_agent_id: string | null;
   vendor: CameraVendor;
   model: string;
   channel: number;
@@ -32,6 +33,7 @@ function mapCamera(row: CameraRow): Camera {
     name: row.name,
     nodeId: row.resource_node_id,
     branchId: row.branch_node_id,
+    ...(row.edge_agent_id ? { edgeAgentId: row.edge_agent_id } : {}),
     vendor: row.vendor,
     model: row.model,
     channel: row.channel,
@@ -44,7 +46,7 @@ function mapCamera(row: CameraRow): Camera {
 }
 
 const selectCamera = `SELECT cameras.id::text, cameras.resource_node_id::text,
-  cameras.branch_node_id::text, camera_node.name, cameras.vendor,
+  cameras.branch_node_id::text, cameras.edge_agent_id::text, camera_node.name, cameras.vendor,
   cameras.model, cameras.channel, cameras.protocol, cameras.status,
   cameras.profiles, cameras.capabilities, cameras.connection_secret_ref
   FROM cameras
@@ -89,8 +91,10 @@ export class CameraRepository {
         model: string;
         profiles: CameraProfile[];
         capabilities: CameraCapabilities;
+        edge_agent_id: string;
       }>(
-        `SELECT tenant_id::text, vendor, model, profiles, capabilities
+        `SELECT tenant_id::text, vendor, model, profiles, capabilities,
+                edge_agent_id::text
          FROM camera_discoveries
          WHERE id = $1 AND branch_node_id = $2 AND status = 'pending'
          FOR UPDATE`,
@@ -125,6 +129,7 @@ export class CameraRepository {
       model: string;
       profiles: CameraProfile[];
       capabilities: CameraCapabilities;
+      edge_agent_id: string;
     },
     input: CameraApprovalInput,
   ) {
@@ -140,15 +145,15 @@ export class CameraRepository {
     );
     const result = await client.query<CameraRow>(
       `INSERT INTO cameras
-         (resource_node_id, branch_node_id, vendor, model, channel, protocol,
-          profiles, capabilities, connection_secret_ref)
-       VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8::jsonb, $9)
+         (resource_node_id, branch_node_id, edge_agent_id, vendor, model,
+          channel, protocol, profiles, capabilities, connection_secret_ref)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9::jsonb, $10)
        RETURNING id::text, model AS name, resource_node_id::text,
-                 branch_node_id::text, vendor, model, channel, protocol, status, profiles,
+                 branch_node_id::text, edge_agent_id::text, vendor, model, channel, protocol, status, profiles,
                  capabilities, connection_secret_ref`,
       [
-        nodeId, branchId, source.vendor, source.model, input.channel,
-        input.protocol, JSON.stringify(source.profiles),
+        nodeId, branchId, source.edge_agent_id, source.vendor, source.model,
+        input.channel, input.protocol, JSON.stringify(source.profiles),
         JSON.stringify(source.capabilities), input.connectionSecretRef,
       ],
     );
@@ -179,12 +184,21 @@ export class CameraRepository {
        VALUES ($1, $2, $3, $4, $5)`,
       [id, cameraId, userId, tokenHash, expiresAt],
     );
+    const route = await this.pool.query<{ public_media_url: string | null }>(
+      `SELECT agent.public_media_url
+       FROM cameras camera
+       LEFT JOIN edge_agents agent ON agent.id = camera.edge_agent_id
+       WHERE camera.id = $1`,
+      [cameraId],
+    );
+    const mediaGatewayUrl = route.rows[0]?.public_media_url ?? undefined;
     return {
       id,
       cameraId,
       userId,
       token,
       expiresAt: expiresAt.toISOString(),
+      ...(mediaGatewayUrl ? { mediaGatewayUrl } : {}),
     };
   }
 

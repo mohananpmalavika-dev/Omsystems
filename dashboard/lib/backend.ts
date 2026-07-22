@@ -35,11 +35,16 @@ export async function startLive(
     { method: "POST", body: "{}" },
     employeeSession,
   );
-  const controlSession = await permission.json() as { token: string };
+  const controlSession = await permission.json() as {
+    token: string;
+    mediaGatewayUrl?: string;
+  };
+  const mediaGatewayUrl = controlSession.mediaGatewayUrl ??
+    runtimeEnv("MEDIA_GATEWAY_INTERNAL_URL", "http://localhost:8090");
   const mediaResponse = await fetch(
     new URL(
       "/v1/live/start",
-      runtimeEnv("MEDIA_GATEWAY_INTERNAL_URL", "http://localhost:8090"),
+      mediaGatewayUrl,
     ),
     {
       method: "POST",

@@ -86,6 +86,7 @@ export function DeviceManager() {
         "EDGE_BRIDGE_SHARED_KEY=<enrollment-secret>",
         "CAMERA_USERNAME=<camera-user>",
         "CAMERA_PASSWORD=<camera-password>",
+        "PUBLIC_MEDIA_GATEWAY_URL=https://<branch-media-tunnel-host>",
         "ONVIF_ENDPOINTS=http://<camera-ip>/onvif/device_service",
       ].join("\n")
     : "", [provisionedGateway]);
@@ -134,7 +135,7 @@ export function DeviceManager() {
     setCameraForm({
       ...emptyCameraForm,
       edgeAgentId: preferred?.id ?? "",
-      connectionSecretRef: `vault://branches/${selectedBranch}/cameras/new-device`,
+      connectionSecretRef: `edge://${preferred?.id ?? "gateway"}/manual-camera`,
     });
     setError(undefined);
     setShowDiscoveredList(true);
@@ -193,7 +194,7 @@ export function DeviceManager() {
         ptz: discovered.capabilities.ptz,
         audio: discovered.capabilities.audio,
         events: discovered.capabilities.events,
-        connectionSecretRef: `vault://branches/${selectedBranch}/cameras/new-device`,
+        connectionSecretRef: `edge://${discovered.edgeAgentId}/${discovered.id}`,
       });
 
       // Submit the discovery
@@ -214,7 +215,7 @@ export function DeviceManager() {
         name: `${discovered.model}@${discovered.ipAddress}`,
         channel: 1,
         protocol: "onvif-t",
-        connectionSecretRef: `vault://branches/${selectedBranch}/cameras/new-device`,
+        connectionSecretRef: `edge://${discovered.edgeAgentId}/${discovered.id}`,
       });
 
       setShowDiscoveredList(false);
@@ -465,4 +466,8 @@ function messageOf(reason: unknown, fallback: string) {
   return reason instanceof Error && reason.message !== "Request failed"
     ? reason.message
     : fallback;
+}
+
+function wait(milliseconds: number) {
+  return new Promise((resolve) => window.setTimeout(resolve, milliseconds));
 }

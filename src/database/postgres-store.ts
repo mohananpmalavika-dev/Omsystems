@@ -83,8 +83,8 @@ export class PostgresStore
   async listEdgeAgentsByBranch(branchId: string) {
     return this.agents.listByBranch(branchId);
   }
-  async heartbeatEdgeAgent(id: string, version: string) {
-    return this.agents.heartbeat(id, version);
+  async heartbeatEdgeAgent(id: string, version: string, publicMediaUrl?: string) {
+    return this.agents.heartbeat(id, version, publicMediaUrl);
   }
   async createEdgeScanJob(branchId: string, edgeAgentId?: string) {
     return this.agents.createScanJob(branchId, edgeAgentId);

@@ -69,6 +69,7 @@ export function SecurityDashboard() {
     camera: CameraType;
   }>();
   const [liveActionSaving, setLiveActionSaving] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
 
   useEffect(() => {
     void fetch("/api/branches")
@@ -199,6 +200,17 @@ export function SecurityDashboard() {
       setRecordingLoading(null);
     }
   }, []);
+
+  // Toggle fullscreen mode
+  const toggleFullscreen = useCallback(() => {
+    setIsFullscreen((prev) => !prev);
+    // Scroll to live wall section when entering fullscreen
+    if (!isFullscreen) {
+      setTimeout(() => {
+        document.getElementById('live-wall')?.scrollIntoView({ behavior: 'smooth' });
+      }, 100);
+    }
+  }, [isFullscreen]);
 
   const changeRecordingMode = useCallback(async (cameraId: string, mode: RecordingJob["mode"]) => {
     const current = recordings[cameraId] ?? defaultRecording(cameraId, mode);
@@ -335,9 +347,20 @@ export function SecurityDashboard() {
                 </p>
               </div>
               <div className="layout-picker">
-                <a className="add-camera-link" href="/admin?tab=devices">
-                  <Plus size={15} /> Add camera
-                </a>
+                {!isFullscreen && (
+                  <a className="add-camera-link" href="/admin?tab=devices">
+                    <Plus size={15} /> Add camera
+                  </a>
+                )}
+                <button 
+                  className={isFullscreen ? "active" : ""} 
+                  onClick={toggleFullscreen}
+                  aria-label={isFullscreen ? "Exit fullscreen" : "Enter fullscreen"}
+                  title={isFullscreen ? "Exit fullscreen Live Wall" : "Enter fullscreen Live Wall"}
+                >
+                  {isFullscreen ? <X size={16} /> : <MonitorPlay size={16} />}
+                  {isFullscreen ? "Exit" : "Full"}
+                </button>
                 <button className={sequencing ? "active" : ""} onClick={() => setSequencing((value) => !value)} aria-label={sequencing ? "Pause camera sequence" : "Start camera sequence"} title={sequencing ? "Pause 10 second camera sequence" : "Start 10 second camera sequence"}>
                   {sequencing ? <Pause size={16} /> : <Play size={16} />}
                 </button>

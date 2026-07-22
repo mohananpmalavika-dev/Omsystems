@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 import Link from "next/link";
+import { AppLayout } from "@/components/app-layout";
 import { maintenanceApi } from "@/lib/api-client";
 import {
   AlertList,
@@ -62,7 +63,9 @@ export default function MaintenancePage() {
   const recentWorkOrders = (status?.workOrders ?? []).slice(0, 4);
 
   return (
-    <div style={{ padding: 20, maxWidth: 1300, margin: "0 auto" }}>
+    <AppLayout>
+      <div className="content">
+        <div style={{ padding: 20, maxWidth: 1300, margin: "0 auto" }}>
       <header style={{ marginBottom: 24 }}>
         <h1 style={{ fontSize: 32, marginBottom: 8 }}>Maintenance Dashboard</h1>
         <p style={{ color: "#555" }}>

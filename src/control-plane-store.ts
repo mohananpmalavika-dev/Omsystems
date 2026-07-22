@@ -407,6 +407,7 @@ export interface ControlPlaneStore {
   heartbeatEdgeAgent(
     id: string,
     version: string,
+    publicMediaUrl?: string,
   ): Promise<EdgeAgent | undefined>;
   createEdgeScanJob(branchId: string, edgeAgentId?: string): Promise<EdgeScanJob>;
   getEdgeScanJob(branchId: string, jobId: string): Promise<EdgeScanJob | undefined>;

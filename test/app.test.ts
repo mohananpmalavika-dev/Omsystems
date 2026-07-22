@@ -154,6 +154,34 @@ describe("control-plane API", () => {
     expect(heartbeat.statusCode).toBe(200);
     expect(heartbeat.json().status).toBe("online");
 
+    const requestedScan = await app.inject({
+      method: "POST",
+      url: "/v1/branches/branch-blr-001/scan-jobs",
+      headers,
+      payload: { edgeAgentId: agent.id },
+    });
+    expect(requestedScan.statusCode).toBe(202);
+    const scan = requestedScan.json();
+    expect(scan.status).toBe("queued");
+
+    const claimedScan = await app.inject({
+      method: "GET",
+      url: `/v1/edge-agents/${agent.id}/scan-jobs/next`,
+      headers: { ...headers, "x-edge-agent-version": "0.1.0" },
+    });
+    expect(claimedScan.statusCode).toBe(200);
+    expect(claimedScan.json().id).toBe(scan.id);
+    expect(claimedScan.json().status).toBe("running");
+
+    const completedScan = await app.inject({
+      method: "POST",
+      url: `/v1/edge-agents/${agent.id}/scan-jobs/${scan.id}/complete`,
+      headers,
+      payload: { status: "completed", resultCount: 1 },
+    });
+    expect(completedScan.statusCode).toBe(200);
+    expect(completedScan.json().status).toBe("completed");
+
     const discoveryResponse = await app.inject({
       method: "POST",
       url: "/v1/branches/branch-blr-001/cameras/discovered",

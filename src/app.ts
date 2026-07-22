@@ -296,9 +296,12 @@ export async function buildApp(options?: {
 
   app.post("/v1/edge-agents/:id/heartbeat", async (request, reply) => {
     const { id } = edgeAgentParams.parse(request.params);
-    const body = z.object({ version: z.string().min(1).max(40) }).parse(request.body);
+    const body = z.object({
+      version: z.string().min(1).max(40),
+      publicMediaUrl: z.string().url().optional(),
+    }).parse(request.body);
     // Temporary operator authentication; replace with edge-agent mTLS identity.
-    const agent = await store.heartbeatEdgeAgent(id, body.version);
+    const agent = await store.heartbeatEdgeAgent(id, body.version!, body.publicMediaUrl);
     if (!agent) return reply.code(404).send({ error: "edge_agent_not_found" });
     return agent;
   });
@@ -344,7 +347,11 @@ export async function buildApp(options?: {
       resultCount: z.number().int().nonnegative(),
       error: z.string().max(2_000).optional(),
     }).parse(request.body);
-    const job = await store.completeEdgeScanJob(id, jobId, result);
+    const job = await store.completeEdgeScanJob(id, jobId, {
+      status: result.status!,
+      resultCount: result.resultCount!,
+      ...(result.error ? { error: result.error } : {}),
+    });
     return job ?? reply.code(404).send({ error: "scan_job_not_found" });
   });
 

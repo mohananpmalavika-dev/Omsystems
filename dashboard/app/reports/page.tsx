@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 import Link from "next/link";
+import { AppLayout } from "@/components/app-layout";
 import { reportsApi } from "@/lib/api-client";
 
 export default function ReportsPage() {
@@ -32,7 +33,9 @@ export default function ReportsPage() {
   }, []);
 
   return (
-    <div style={{ padding: 20, maxWidth: 1200, margin: "0 auto" }}>
+    <AppLayout>
+      <div className="content">
+        <div style={{ padding: 20, maxWidth: 1200, margin: "0 auto" }}>
       <header style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 16, marginBottom: 24 }}>
         <div>
           <h1 style={{ fontSize: 32, margin: 0 }}>CCTV Reports</h1>
@@ -120,8 +123,9 @@ export default function ReportsPage() {
             <p style={{ color: "#4b5563" }}>No recent incidents available.</p>
           )}
         </Panel>
-      </section>
-    </div>
+        </div>
+      </div>
+    </AppLayout>
   );
 }
 

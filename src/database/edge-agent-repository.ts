@@ -9,6 +9,7 @@ type AgentRow = {
   version: string;
   status: EdgeAgent["status"];
   last_seen_at: Date | null;
+  public_media_url: string | null;
 };
 
 function mapAgent(row: AgentRow): EdgeAgent {
@@ -19,6 +20,7 @@ function mapAgent(row: AgentRow): EdgeAgent {
     version: row.version,
     status: row.status,
     lastSeenAt: row.last_seen_at?.toISOString() ?? null,
+    ...(row.public_media_url ? { publicMediaUrl: row.public_media_url } : {}),
   };
 }
 
@@ -58,7 +60,7 @@ export class EdgeAgentRepository {
        FROM resource_nodes
        WHERE id = $1 AND node_type = 'branch'
        RETURNING id::text, branch_node_id::text, name, version, status,
-                 last_seen_at`,
+                 last_seen_at, public_media_url`,
       [branchId, name, version],
     );
     if (!result.rows[0]) throw new Error("invalid_branch");
@@ -67,8 +69,10 @@ export class EdgeAgentRepository {
 
   async listByBranch(branchId: string) {
     const result = await this.pool.query<AgentRow>(
-      `SELECT id::text, branch_node_id::text, name, version, status,
-              last_seen_at
+      `SELECT id::text, branch_node_id::text, name, version,
+              CASE WHEN last_seen_at < now() - interval '90 seconds'
+                THEN 'offline'::edge_agent_status ELSE status END AS status,
+              last_seen_at, public_media_url
        FROM edge_agents
        WHERE branch_node_id = $1
        ORDER BY name, created_at`,
@@ -77,14 +81,15 @@ export class EdgeAgentRepository {
     return result.rows.map(mapAgent);
   }
 
-  async heartbeat(id: string, version: string) {
+  async heartbeat(id: string, version: string, publicMediaUrl?: string) {
     const result = await this.pool.query<AgentRow>(
       `UPDATE edge_agents
-       SET version = $2, status = 'online', last_seen_at = now()
+       SET version = $2, status = 'online', last_seen_at = now(),
+           public_media_url = COALESCE($3, public_media_url)
        WHERE id = $1
        RETURNING id::text, branch_node_id::text, name, version, status,
-                 last_seen_at`,
-      [id, version],
+                 last_seen_at, public_media_url`,
+      [id, version, publicMediaUrl ?? null],
     );
     return result.rows[0] ? mapAgent(result.rows[0]) : undefined;
   }

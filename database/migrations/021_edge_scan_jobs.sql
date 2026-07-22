@@ -1,5 +1,8 @@
 CREATE TYPE edge_scan_status AS ENUM ('queued', 'running', 'completed', 'failed');
 
+ALTER TABLE edge_agents ADD COLUMN public_media_url text;
+ALTER TABLE cameras ADD COLUMN edge_agent_id uuid REFERENCES edge_agents(id);
+
 CREATE TABLE edge_scan_jobs (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   tenant_id uuid NOT NULL REFERENCES tenants(id),
@@ -19,3 +22,5 @@ CREATE INDEX edge_scan_jobs_agent_queue_idx
 
 CREATE INDEX edge_scan_jobs_branch_idx
   ON edge_scan_jobs (branch_node_id, requested_at DESC);
+
+CREATE INDEX cameras_edge_agent_idx ON cameras (edge_agent_id);

@@ -18,7 +18,7 @@ const agentId = config.EDGE_AGENT_ID ?? (await gateway.register(
 )).id;
 
 console.log(`Edge agent ${agentId} registered; waiting for branch commands`);
-await gateway.heartbeat(agentId, config.EDGE_AGENT_VERSION);
+await gateway.heartbeat(agentId, config.EDGE_AGENT_VERSION, config.PUBLIC_MEDIA_GATEWAY_URL);
 
 let stopping = false;
 process.once("SIGINT", () => { stopping = true; });
@@ -26,7 +26,7 @@ process.once("SIGTERM", () => { stopping = true; });
 
 while (!stopping) {
   try {
-    await gateway.heartbeat(agentId, config.EDGE_AGENT_VERSION);
+    await gateway.heartbeat(agentId, config.EDGE_AGENT_VERSION, config.PUBLIC_MEDIA_GATEWAY_URL);
     const job = await gateway.claimScanJob(agentId, config.EDGE_AGENT_VERSION);
     if (job) {
       try {

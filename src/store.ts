@@ -220,10 +220,15 @@ export class MemoryStore implements ControlPlaneStore {
     );
   }
 
-  async heartbeatEdgeAgent(id: string, version: string) {
+  async heartbeatEdgeAgent(id: string, version: string, publicMediaUrl?: string) {
     const agent = this.edgeAgents.get(id);
     if (!agent) return undefined;
-    Object.assign(agent, { version, status: "online" as const, lastSeenAt: new Date().toISOString() });
+    Object.assign(agent, {
+      version,
+      status: "online" as const,
+      lastSeenAt: new Date().toISOString(),
+      ...(publicMediaUrl ? { publicMediaUrl } : {}),
+    });
     return agent;
   }
 
@@ -304,6 +309,7 @@ export class MemoryStore implements ControlPlaneStore {
       model: discovery.model, channel: input.channel, protocol: input.protocol,
       status: "unknown", profiles: discovery.profiles,
       capabilities: discovery.capabilities,
+      edgeAgentId: discovery.edgeAgentId,
       connectionSecretRef: input.connectionSecretRef,
     };
     discovery.status = "approved";
@@ -319,10 +325,15 @@ export class MemoryStore implements ControlPlaneStore {
   }
 
   async createLiveSession(cameraId: string, userId: string): Promise<LiveSession> {
+    const camera = this.cameras.get(cameraId);
+    const mediaGatewayUrl = camera?.edgeAgentId
+      ? this.edgeAgents.get(camera.edgeAgentId)?.publicMediaUrl
+      : undefined;
     const session = {
       id: randomUUID(), cameraId, userId,
       token: randomBytes(32).toString("base64url"),
       expiresAt: new Date(Date.now() + 60_000).toISOString(),
+      ...(mediaGatewayUrl ? { mediaGatewayUrl } : {}),
     };
     this.liveSessions.set(session.id, {
       ...session,
