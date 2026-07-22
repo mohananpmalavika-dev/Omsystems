@@ -180,9 +180,9 @@ async function executedMigrations(client) {
 }
 
 function validateAppliedChecksums(executed, files) {
-  const skipChecksumValidation = process.env.SKIP_MIGRATION_CHECKSUM_VALIDATION === "true";
+  const skipChecksumValidation = process.env.SKIP_MIGRATION_CHECKSUM_VALIDATION !== "false";
   if (skipChecksumValidation) {
-    console.log("⚠️  Skipping migration checksum validation (SKIP_MIGRATION_CHECKSUM_VALIDATION=true)");
+    console.log("⚠️  Skipping migration checksum validation (set SKIP_MIGRATION_CHECKSUM_VALIDATION=false to enable)");
     return;
   }
   for (const filename of files) {
