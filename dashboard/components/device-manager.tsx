@@ -17,6 +17,7 @@ import type {
   Branch,
   Camera as CameraRecord,
   EdgeAgent,
+  EdgeScanJob,
 } from "@/lib/types";
 
 type CameraForm = {
@@ -120,6 +121,7 @@ export function DeviceManager() {
       setGateways(gatewayResponse.data);
       setCameras(cameraResponse.data);
       setDiscoveredCameras(discoveredResponse.data);
+      return discoveredResponse.data;
     } catch (reason) {
       setError(messageOf(reason, "Unable to load devices for this branch."));
     } finally {
@@ -140,11 +142,30 @@ export function DeviceManager() {
 
   async function scanNetwork() {
     if (!selectedBranch) return;
+    if (gateways.length === 0) {
+      setProvisionedGateway(undefined);
+      setShowGatewayForm(true);
+      setNotice("Register the on-site gateway first; scans run inside the branch network.");
+      return;
+    }
     setScanning(true);
     setError(undefined);
     try {
-      await refreshBranch(selectedBranch);
-      setNotice(`Network scan completed. Found ${discoveredCameras.length} cameras.`);
+      const preferred = gateways.find((gateway) => gateway.status === "online") ?? gateways[0];
+      let job = await cameraInventoryApi.startScan(selectedBranch, preferred?.id) as EdgeScanJob;
+      const deadline = Date.now() + 120_000;
+      while (job.status === "queued" || job.status === "running") {
+        if (Date.now() >= deadline) {
+          setNotice("Scan queued. It will run when the branch gateway checks in.");
+          return;
+        }
+        await wait(2_000);
+        job = await cameraInventoryApi.getScan(selectedBranch, job.id) as EdgeScanJob;
+      }
+      const discoveries = await refreshBranch(selectedBranch) ?? [];
+      if (job.status === "failed") throw new Error(job.error ?? "Branch gateway scan failed.");
+      setShowDiscoveredList(true);
+      setNotice(`Network scan completed. Found ${job.resultCount || discoveries.length} cameras.`);
     } catch (reason) {
       setError(messageOf(reason, "Network scan failed."));
     } finally {
@@ -287,8 +308,8 @@ export function DeviceManager() {
           }} disabled={!selectedBranch}>
             <Router size={15} /> Register gateway
           </button>
-          <button className="secondary-button" onClick={() => void scanNetwork()} disabled={!selectedBranch || gateways.length === 0 || scanning}>
-            <Network size={15} /> {scanning ? "Scanning…" : "Scan network"}
+          <button className="secondary-button" onClick={() => void scanNetwork()} disabled={!selectedBranch || scanning} title={gateways.length === 0 ? "Register a gateway to scan this branch" : "Run discovery inside this branch network"}>
+            <Network size={15} /> {scanning ? "Scanning…" : gateways.length === 0 ? "Set up scan" : "Scan network"}
           </button>
           <button className="primary-button" onClick={openCameraForm} disabled={!selectedBranch || gateways.length === 0}>
             <Plus size={15} /> Add camera

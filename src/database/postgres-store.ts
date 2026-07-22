@@ -86,6 +86,18 @@ export class PostgresStore
   async heartbeatEdgeAgent(id: string, version: string) {
     return this.agents.heartbeat(id, version);
   }
+  async createEdgeScanJob(branchId: string, edgeAgentId?: string) {
+    return this.agents.createScanJob(branchId, edgeAgentId);
+  }
+  async getEdgeScanJob(branchId: string, jobId: string) {
+    return this.agents.getScanJob(branchId, jobId);
+  }
+  async claimEdgeScanJob(edgeAgentId: string) {
+    return this.agents.claimScanJob(edgeAgentId);
+  }
+  async completeEdgeScanJob(edgeAgentId: string, jobId: string, result: any) {
+    return this.agents.completeScanJob(edgeAgentId, jobId, result);
+  }
   async createDiscovery(branchId: string, input: CameraDiscoveryInput) {
     return this.agents.createDiscovery(branchId, input);
   }

@@ -484,6 +484,18 @@ export interface EdgeAgent {
   lastSeenAt: string | null;
 }
 
+export interface EdgeScanJob {
+  id: string;
+  branchId: string;
+  edgeAgentId: string;
+  status: "queued" | "running" | "completed" | "failed";
+  requestedAt: string;
+  startedAt: string | null;
+  completedAt: string | null;
+  resultCount: number;
+  error: string | null;
+}
+
 export interface DiscoveredCamera {
   id: string;
   branchId: string;

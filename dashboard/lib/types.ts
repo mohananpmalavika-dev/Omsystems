@@ -318,6 +318,18 @@ export interface EdgeAgent {
   lastSeenAt: string | null;
 }
 
+export interface EdgeScanJob {
+  id: string;
+  branchId: string;
+  edgeAgentId: string;
+  status: "queued" | "running" | "completed" | "failed";
+  requestedAt: string;
+  startedAt: string | null;
+  completedAt: string | null;
+  resultCount: number;
+  error: string | null;
+}
+
 export type AnalyticsDetectionType =
   | "motion" | "person" | "vehicle" | "object" | "line-crossing"
   | "intrusion" | "loitering" | "crowd-density" | "camera-tampering"

@@ -800,8 +800,7 @@ select, textarea { font: inherit; }
 }
 
 /* Video Analytics & AI */
-.analytics-shell { min-height: 100vh; padding: 26px 30px 42px; background: var(--canvas); }
-.analytics-header { max-width: 1500px; margin: 0 auto 19px; display: flex; align-items: flex-end; justify-content: space-between; gap: 18px; }
+.analytics-header { max-width: 1500px; margin: 0 auto 19px; display: flex; align-items: flex-end; justify-content: space-between; gap: 18px; padding-top: 26px; }
 .analytics-title { display: flex; align-items: center; gap: 11px; margin-top: 13px; }
 .analytics-title > span { width: 43px; height: 43px; display: grid; place-items: center; color: white; border-radius: 12px; background: linear-gradient(145deg,#5a7cff,#2e59dc); box-shadow: 0 9px 24px rgba(46,89,220,.2); }
 .analytics-title h1 { margin: 0; font-size: 22px; letter-spacing: -.5px; }
@@ -897,8 +896,7 @@ select, textarea { font: inherit; }
   .analytics-summary { grid-template-columns: repeat(2,minmax(0,1fr)); }
 }
 @media (max-width: 650px) {
-  .analytics-shell { padding: 18px 12px 30px; }
-  .analytics-header { align-items: flex-start; flex-direction: column; }
+  .analytics-header { align-items: flex-start; flex-direction: column; padding-top: 18px; }
   .analytics-engine-state { width: 100%; }
   .analytics-summary { grid-template-columns: 1fr 1fr; }
   .analytics-scope-card { align-items: stretch; flex-direction: column; }

@@ -41,6 +41,7 @@ declare module "fastify" {
 const idParams = z.object({ id: z.string().min(1) });
 const branchParams = z.object({ branchId: z.string().min(1) });
 const edgeAgentParams = z.object({ id: z.string().min(1) });
+const edgeScanParams = z.object({ id: z.string().min(1), jobId: z.string().min(1) });
 const branchListQuery = z.object({
   action: z.enum(actions).default("live:view"),
 });
@@ -300,6 +301,51 @@ export async function buildApp(options?: {
     const agent = await store.heartbeatEdgeAgent(id, body.version);
     if (!agent) return reply.code(404).send({ error: "edge_agent_not_found" });
     return agent;
+  });
+
+  app.post("/v1/branches/:branchId/scan-jobs", async (request, reply) => {
+    const { branchId } = branchParams.parse(request.params);
+    if (!(await requireAccess(request, reply, store, "device:configure", branchId))) return;
+    const body = z.object({ edgeAgentId: z.string().min(1).optional() })
+      .parse(request.body ?? {});
+    const agents = await store.listEdgeAgentsByBranch(branchId);
+    if (agents.length === 0) {
+      return reply.code(409).send({ error: "edge_agent_required" });
+    }
+    const job = await store.createEdgeScanJob(branchId, body.edgeAgentId);
+    await audit(request, store, "edge_scan.requested", branchId, "success", {
+      scanJobId: job.id,
+      edgeAgentId: job.edgeAgentId,
+    });
+    return reply.code(202).send(job);
+  });
+
+  app.get("/v1/branches/:branchId/scan-jobs/:jobId", async (request, reply) => {
+    const { branchId, jobId } = z.object({
+      branchId: z.string().min(1), jobId: z.string().min(1),
+    }).parse(request.params);
+    if (!(await requireAccess(request, reply, store, "device:configure", branchId))) return;
+    const job = await store.getEdgeScanJob(branchId, jobId);
+    return job ?? reply.code(404).send({ error: "scan_job_not_found" });
+  });
+
+  app.get("/v1/edge-agents/:id/scan-jobs/next", async (request, reply) => {
+    const { id } = edgeAgentParams.parse(request.params);
+    const agent = await store.heartbeatEdgeAgent(id, request.headers["x-edge-agent-version"] as string || "unknown");
+    if (!agent) return reply.code(404).send({ error: "edge_agent_not_found" });
+    const job = await store.claimEdgeScanJob(id);
+    return job ?? reply.code(204).send();
+  });
+
+  app.post("/v1/edge-agents/:id/scan-jobs/:jobId/complete", async (request, reply) => {
+    const { id, jobId } = edgeScanParams.parse(request.params);
+    const result = z.object({
+      status: z.enum(["completed", "failed"]),
+      resultCount: z.number().int().nonnegative(),
+      error: z.string().max(2_000).optional(),
+    }).parse(request.body);
+    const job = await store.completeEdgeScanJob(id, jobId, result);
+    return job ?? reply.code(404).send({ error: "scan_job_not_found" });
   });
 
   app.post("/v1/branches/:branchId/cameras/discovered", async (request, reply) => {

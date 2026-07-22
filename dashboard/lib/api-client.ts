@@ -240,7 +240,17 @@ export const cameraInventoryApi = {
     fetchApi<any>(
       `/v1/branches/${encodeURIComponent(branchId)}/edge-agents/register`,
       { method: 'POST', body: JSON.stringify(data) }
-    ),  submitDiscovery: (branchId: string, data: any) =>
+    ),
+  startScan: (branchId: string, edgeAgentId?: string) =>
+    fetchApi<any>(
+      `/v1/branches/${encodeURIComponent(branchId)}/scan-jobs`,
+      { method: 'POST', body: JSON.stringify(edgeAgentId ? { edgeAgentId } : {}) }
+    ),
+  getScan: (branchId: string, jobId: string) =>
+    fetchApi<any>(
+      `/v1/branches/${encodeURIComponent(branchId)}/scan-jobs/${encodeURIComponent(jobId)}`
+    ),
+  submitDiscovery: (branchId: string, data: any) =>
     fetchApi<any>(
       `/v1/branches/${encodeURIComponent(branchId)}/cameras/discovered`,
       { method: 'POST', body: JSON.stringify(data) }

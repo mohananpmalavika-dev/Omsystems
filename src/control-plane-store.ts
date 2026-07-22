@@ -33,6 +33,7 @@ import type {
   CompliancePolicy,
   DiscoveredCamera,
   EdgeAgent,
+  EdgeScanJob,
   LiveSession,
   ConsumedLiveSession,
   RecordingJob,
@@ -407,6 +408,14 @@ export interface ControlPlaneStore {
     id: string,
     version: string,
   ): Promise<EdgeAgent | undefined>;
+  createEdgeScanJob(branchId: string, edgeAgentId?: string): Promise<EdgeScanJob>;
+  getEdgeScanJob(branchId: string, jobId: string): Promise<EdgeScanJob | undefined>;
+  claimEdgeScanJob(edgeAgentId: string): Promise<EdgeScanJob | undefined>;
+  completeEdgeScanJob(
+    edgeAgentId: string,
+    jobId: string,
+    result: { status: "completed" | "failed"; resultCount: number; error?: string },
+  ): Promise<EdgeScanJob | undefined>;
   createDiscovery(
     branchId: string,
     input: CameraDiscoveryInput,

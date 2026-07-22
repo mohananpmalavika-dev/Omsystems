@@ -18,6 +18,7 @@ import type {
   CompliancePolicy,
   DiscoveredCamera,
   EdgeAgent,
+  EdgeScanJob,
   LiveBookmark,
   LiveIncident,
   LiveSession,
@@ -108,6 +109,7 @@ export class MemoryStore implements ControlPlaneStore {
   readonly cameras = new Map(seedCameras.map((camera) => [camera.id, structuredClone(camera)]));
   readonly grants = structuredClone(seedGrants);
   readonly edgeAgents = new Map<string, EdgeAgent>();
+  readonly edgeScanJobs = new Map<string, EdgeScanJob>();
   readonly discoveries = new Map<string, DiscoveredCamera>();
   readonly auditEvents: AuditEventInput[] = [];
   readonly liveSessions = new Map<
@@ -223,6 +225,50 @@ export class MemoryStore implements ControlPlaneStore {
     if (!agent) return undefined;
     Object.assign(agent, { version, status: "online" as const, lastSeenAt: new Date().toISOString() });
     return agent;
+  }
+
+  async createEdgeScanJob(branchId: string, edgeAgentId?: string) {
+    const agent = edgeAgentId
+      ? this.edgeAgents.get(edgeAgentId)
+      : [...this.edgeAgents.values()].find((item) => item.branchId === branchId);
+    if (!agent || agent.branchId !== branchId) throw new Error("edge_agent_not_found");
+    const job: EdgeScanJob = {
+      id: randomUUID(), branchId, edgeAgentId: agent.id, status: "queued",
+      requestedAt: new Date().toISOString(), startedAt: null, completedAt: null,
+      resultCount: 0, error: null,
+    };
+    this.edgeScanJobs.set(job.id, job);
+    return job;
+  }
+
+  async getEdgeScanJob(branchId: string, jobId: string) {
+    const job = this.edgeScanJobs.get(jobId);
+    return job?.branchId === branchId ? job : undefined;
+  }
+
+  async claimEdgeScanJob(edgeAgentId: string) {
+    const job = [...this.edgeScanJobs.values()]
+      .filter((item) => item.edgeAgentId === edgeAgentId && item.status === "queued")
+      .sort((a, b) => a.requestedAt.localeCompare(b.requestedAt))[0];
+    if (!job) return undefined;
+    Object.assign(job, { status: "running" as const, startedAt: new Date().toISOString() });
+    return job;
+  }
+
+  async completeEdgeScanJob(
+    edgeAgentId: string,
+    jobId: string,
+    result: { status: "completed" | "failed"; resultCount: number; error?: string },
+  ) {
+    const job = this.edgeScanJobs.get(jobId);
+    if (!job || job.edgeAgentId !== edgeAgentId || job.status !== "running") return undefined;
+    Object.assign(job, {
+      status: result.status,
+      resultCount: result.resultCount,
+      error: result.error ?? null,
+      completedAt: new Date().toISOString(),
+    });
+    return job;
   }
 
   async createDiscovery(branchId: string, input: CameraDiscoveryInput) {

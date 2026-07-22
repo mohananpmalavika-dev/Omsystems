@@ -1,5 +1,5 @@
 import type { Pool } from "pg";
-import type { DiscoveredCamera, EdgeAgent } from "../domain/models.js";
+import type { DiscoveredCamera, EdgeAgent, EdgeScanJob } from "../domain/models.js";
 import type { CameraDiscoveryInput } from "../control-plane-store.js";
 
 type AgentRow = {
@@ -19,6 +19,32 @@ function mapAgent(row: AgentRow): EdgeAgent {
     version: row.version,
     status: row.status,
     lastSeenAt: row.last_seen_at?.toISOString() ?? null,
+  };
+}
+
+type ScanRow = {
+  id: string;
+  branch_node_id: string;
+  edge_agent_id: string;
+  status: EdgeScanJob["status"];
+  requested_at: Date;
+  started_at: Date | null;
+  completed_at: Date | null;
+  result_count: number;
+  error: string | null;
+};
+
+function mapScan(row: ScanRow): EdgeScanJob {
+  return {
+    id: row.id,
+    branchId: row.branch_node_id,
+    edgeAgentId: row.edge_agent_id,
+    status: row.status,
+    requestedAt: row.requested_at.toISOString(),
+    startedAt: row.started_at?.toISOString() ?? null,
+    completedAt: row.completed_at?.toISOString() ?? null,
+    resultCount: row.result_count,
+    error: row.error,
   };
 }
 
@@ -63,6 +89,75 @@ export class EdgeAgentRepository {
     return result.rows[0] ? mapAgent(result.rows[0]) : undefined;
   }
 
+  async createScanJob(branchId: string, edgeAgentId?: string) {
+    const result = await this.pool.query<ScanRow>(
+      `INSERT INTO edge_scan_jobs (tenant_id, branch_node_id, edge_agent_id)
+       SELECT branch.tenant_id, branch.id, agent.id
+       FROM resource_nodes branch
+       JOIN LATERAL (
+         SELECT id
+         FROM edge_agents
+         WHERE branch_node_id = branch.id
+           AND ($2::uuid IS NULL OR id = $2::uuid)
+         ORDER BY CASE status WHEN 'online' THEN 0 ELSE 1 END, last_seen_at DESC NULLS LAST
+         LIMIT 1
+       ) agent ON true
+       WHERE branch.id = $1 AND branch.node_type = 'branch'
+       RETURNING id::text, branch_node_id::text, edge_agent_id::text, status,
+                 requested_at, started_at, completed_at, result_count, error`,
+      [branchId, edgeAgentId ?? null],
+    );
+    if (!result.rows[0]) throw new Error("edge_agent_not_found");
+    return mapScan(result.rows[0]);
+  }
+
+  async getScanJob(branchId: string, jobId: string) {
+    const result = await this.pool.query<ScanRow>(
+      `SELECT id::text, branch_node_id::text, edge_agent_id::text, status,
+              requested_at, started_at, completed_at, result_count, error
+       FROM edge_scan_jobs WHERE id = $1 AND branch_node_id = $2`,
+      [jobId, branchId],
+    );
+    return result.rows[0] ? mapScan(result.rows[0]) : undefined;
+  }
+
+  async claimScanJob(edgeAgentId: string) {
+    const result = await this.pool.query<ScanRow>(
+      `WITH next_job AS (
+         SELECT id FROM edge_scan_jobs
+         WHERE edge_agent_id = $1 AND status = 'queued'
+         ORDER BY requested_at
+         FOR UPDATE SKIP LOCKED LIMIT 1
+       )
+       UPDATE edge_scan_jobs job
+       SET status = 'running', started_at = now()
+       FROM next_job
+       WHERE job.id = next_job.id
+       RETURNING job.id::text, job.branch_node_id::text, job.edge_agent_id::text,
+                 job.status, job.requested_at, job.started_at, job.completed_at,
+                 job.result_count, job.error`,
+      [edgeAgentId],
+    );
+    return result.rows[0] ? mapScan(result.rows[0]) : undefined;
+  }
+
+  async completeScanJob(
+    edgeAgentId: string,
+    jobId: string,
+    result: { status: "completed" | "failed"; resultCount: number; error?: string },
+  ) {
+    const updated = await this.pool.query<ScanRow>(
+      `UPDATE edge_scan_jobs
+       SET status = $3::edge_scan_status, result_count = $4,
+           error = $5, completed_at = now()
+       WHERE id = $1 AND edge_agent_id = $2 AND status = 'running'
+       RETURNING id::text, branch_node_id::text, edge_agent_id::text, status,
+                 requested_at, started_at, completed_at, result_count, error`,
+      [jobId, edgeAgentId, result.status, result.resultCount, result.error ?? null],
+    );
+    return updated.rows[0] ? mapScan(updated.rows[0]) : undefined;
+  }
+
   async createDiscovery(
     branchId: string,
     input: CameraDiscoveryInput,
@@ -82,6 +177,14 @@ export class EdgeAgentRepository {
         AND agent.branch_node_id = n.id
         AND agent.tenant_id = n.tenant_id
        WHERE n.id = $1 AND n.node_type = 'branch'
+       ON CONFLICT (edge_agent_id, ip_address, onvif_port) DO UPDATE
+       SET vendor = EXCLUDED.vendor,
+           model = EXCLUDED.model,
+           rtsp_port = EXCLUDED.rtsp_port,
+           profiles = EXCLUDED.profiles,
+           capabilities = EXCLUDED.capabilities,
+           status = 'pending',
+           discovered_at = now()
        RETURNING id::text, discovered_at`,
       [
         branchId,

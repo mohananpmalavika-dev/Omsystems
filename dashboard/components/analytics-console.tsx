@@ -162,7 +162,7 @@ export function AnalyticsConsole() {
   }, [refreshRules]);
 
   return (
-    <main className="analytics-shell">
+    <>
       <header className="analytics-header">
         <div>
           <a href="/" className="admin-back"><ArrowLeft size={15} /> Security operations</a>
@@ -325,7 +325,7 @@ export function AnalyticsConsole() {
             }
           }} />
       )}
-    </main>
+    </>
   );
 }
 

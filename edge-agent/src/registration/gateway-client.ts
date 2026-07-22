@@ -14,6 +14,13 @@ export interface DiscoveredCameraPayload {
   capabilities: { ptz: boolean; audio: boolean; events: boolean };
 }
 
+export interface EdgeScanJob {
+  id: string;
+  branchId: string;
+  edgeAgentId: string;
+  status: "running";
+}
+
 export class GatewayClient {
   constructor(
     private readonly baseUrl: string,
@@ -42,6 +49,24 @@ export class GatewayClient {
     );
   }
 
+  async claimScanJob(agentId: string, version: string) {
+    return this.request<EdgeScanJob | undefined>(
+      `/v1/edge-agents/${encodeURIComponent(agentId)}/scan-jobs/next`,
+      { method: "GET", headers: { "x-edge-agent-version": version } },
+    );
+  }
+
+  async completeScanJob(
+    agentId: string,
+    jobId: string,
+    result: { status: "completed" | "failed"; resultCount: number; error?: string },
+  ) {
+    return this.request(
+      `/v1/edge-agents/${encodeURIComponent(agentId)}/scan-jobs/${encodeURIComponent(jobId)}/complete`,
+      { method: "POST", body: JSON.stringify(result) },
+    );
+  }
+
   private async request<T = unknown>(path: string, init: RequestInit): Promise<T> {
     const response = await fetch(new URL(path, this.baseUrl), {
       ...init,
@@ -51,9 +76,11 @@ export class GatewayClient {
         ...(this.edgeBridgeSharedKey
           ? { "x-edge-bridge-key": this.edgeBridgeSharedKey }
           : {}),
+        ...init.headers,
       },
     });
-    const body = await response.json() as T | { error?: string };
+    const text = await response.text();
+    const body = (text ? JSON.parse(text) : undefined) as T | { error?: string };
     if (!response.ok) {
       throw new Error(`Control plane ${response.status}: ${JSON.stringify(body)}`);
     }
