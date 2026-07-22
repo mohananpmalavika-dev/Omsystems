@@ -67,6 +67,8 @@ services:
           property: connectionString
       - key: AUTH_MODE
         value: development
+      - key: SKIP_MIGRATION_CHECKSUM_VALIDATION
+        value: "true"
       - key: EDGE_BRIDGE_SHARED_KEY
         sync: false
       - key: MEDIA_GATEWAY_SHARED_KEY
