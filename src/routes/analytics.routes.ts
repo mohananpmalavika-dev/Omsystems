@@ -120,8 +120,14 @@ export async function registerAnalyticsRoutes(
     const input = ruleSchema.parse(request.body);
     const camera = await authorizedCamera(request, reply, store, id, "analytics:configure");
     if (!camera) return;
+    
+    // Filter out undefined values to match AnalyticsRuleInput interface
+    const ruleInput: any = Object.fromEntries(
+      Object.entries(input).filter(([, value]) => value !== undefined)
+    );
+    
     const rule = await store.createAnalyticsRule(
-      request.currentUser.tenantId, id, request.currentUser.id, input,
+      request.currentUser.tenantId, id, request.currentUser.id, ruleInput,
     );
     await audit(request, store, "analytics.rule_created", camera.nodeId, {
       cameraId: id, ruleId: rule.id, detectionType: rule.detectionType,
@@ -239,9 +245,17 @@ export async function registerAnalyticsRoutes(
       ? "analytics:configure" : "alerts:acknowledge";
     const alert = await authorizedAlert(request, reply, store, alertId, action);
     if (!alert) return;
+    
+    // Filter undefined values and ensure required field
+    const transitionInput: any = {
+      status: body.status,
+      actorUserId: request.currentUser.id,
+      ...(body.notes !== undefined && { notes: body.notes }),
+      ...(body.falseAlarmReason !== undefined && { falseAlarmReason: body.falseAlarmReason }),
+    };
+    
     const updated = await store.transitionAnalyticsAlert(
-      alertId, request.currentUser.tenantId,
-      { ...body, actorUserId: request.currentUser.id },
+      alertId, request.currentUser.tenantId, transitionInput,
     );
     await auditAlert(request, store, alert, "analytics.alert_status_changed", {
       status: body.status, falseAlarmReason: body.falseAlarmReason,
@@ -278,7 +292,25 @@ export async function registerAnalyticsRoutes(
   app.post("/internal/analytics/events", async (request, reply) => {
     if (!engineIdentity(request, reply, options.analyticsEngineSharedKey)) return;
     const input = eventSchema.parse(request.body);
-    const result = await store.processAnalyticsEvent(input);
+    
+    // Ensure all required fields are present
+    const eventInput: any = {
+      tenantId: input.tenantId,
+      cameraId: input.cameraId,
+      sourceEventId: input.sourceEventId,
+      detectionType: input.detectionType,
+      occurredAt: input.occurredAt,
+      confidence: input.confidence,
+      durationSeconds: input.durationSeconds,
+      modelVersion: input.modelVersion,
+      objects: input.objects,
+      ...(input.endedAt !== undefined && { endedAt: input.endedAt }),
+      ...(input.snapshotReference !== undefined && { snapshotReference: input.snapshotReference }),
+      ...(input.clipReference !== undefined && { clipReference: input.clipReference }),
+      metadata: input.metadata,
+    };
+    
+    const result = await store.processAnalyticsEvent(eventInput);
     for (let index = 0; index < result.alerts.length; index += 1) {
       const alert = result.alerts[index]!;
       const rule = result.rules.find((item) => item.id === alert.ruleId);

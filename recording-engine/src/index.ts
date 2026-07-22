@@ -309,14 +309,31 @@ async function workerFailed(worker: Worker, reason: string) {
   const credentialsRejected = details?.some((line) =>
     /401|403|unauthori[sz]ed|authentication failed|invalid user|login failed/i.test(line),
   ) ?? false;
-  await health(worker.job,
-    credentialsRejected ? "invalid_camera_credentials" : "recording_stopped",
-    "critical",
-    credentialsRejected
-      ? "Camera rejected the recording credentials"
-      : "Recording process stopped unexpectedly",
-    { reason, stderr: details });
+  const diskFullDetected = details?.some((line) =>
+    /no space left on device|ENOSPC|failed to write|write error/i.test(line),
+  ) ?? false;
+  const eventType = credentialsRejected
+    ? "invalid_camera_credentials"
+    : diskFullDetected
+      ? "storage_capacity_exhausted"
+      : "recording_stopped";
+  const message = credentialsRejected
+    ? "Camera rejected the recording credentials"
+    : diskFullDetected
+      ? "Recording process stopped due to disk-full or storage write error"
+      : "Recording process stopped unexpectedly";
+  await health(worker.job, eventType, "critical", message, {
+    reason, stderr: details,
+  });
   if (!shouldRun(worker.job) || restartTimers.has(cameraId)) return;
+  if (credentialsRejected || diskFullDetected) {
+    const timer = setTimeout(() => {
+      restartTimers.delete(cameraId);
+      void start(worker.job).catch(logFailure);
+    }, 300_000);
+    restartTimers.set(cameraId, timer);
+    return;
+  }
   const attempt = (restartAttempts.get(cameraId) ?? 0) + 1;
   restartAttempts.set(cameraId, attempt);
   const delay = Math.min(60_000, 2 ** Math.min(attempt, 6) * 1_000);

@@ -135,7 +135,12 @@ export async function registerCctvInfrastructureRoutes(
       return;
     }
     
-    const specs = await store.upsertCameraSpecifications(id, body);
+    // Filter out undefined values to match the input interface
+    const specificationsInput: any = Object.fromEntries(
+      Object.entries(body).filter(([, value]) => value !== undefined)
+    );
+    
+    const specs = await store.upsertCameraSpecifications(id, specificationsInput);
     
     await audit(request, store, "camera.specifications_updated", camera.nodeId, "success", {
       cameraId: id,
@@ -176,7 +181,12 @@ export async function registerCctvInfrastructureRoutes(
       return;
     }
     
-    const compliance = await store.upsertCameraCompliance(id, body);
+    // Filter out undefined values to match the input interface
+    const complianceInput: any = Object.fromEntries(
+      Object.entries(body).filter(([, value]) => value !== undefined)
+    );
+    
+    const compliance = await store.upsertCameraCompliance(id, complianceInput);
     
     await audit(request, store, "camera.compliance_updated", camera.nodeId, "success", {
       cameraId: id,
@@ -241,7 +251,12 @@ export async function registerCctvInfrastructureRoutes(
       return;
     }
     
-    const requirement = await store.upsertBranchCameraRequirement(branchId, body);
+    // Filter out undefined values to match the input interface
+    const requirementInput: any = Object.fromEntries(
+      Object.entries(body).filter(([, value]) => value !== undefined)
+    );
+    
+    const requirement = await store.upsertBranchCameraRequirement(branchId, requirementInput);
     
     await audit(request, store, "branch.camera_requirement_updated", branchId, "success", {
       locationType: body.locationType,

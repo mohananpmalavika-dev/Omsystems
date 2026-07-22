@@ -213,7 +213,7 @@ export class ReportingEngine {
       periodStart: config.periodStart,
       periodEnd: config.periodEnd,
       generatedBy: "System",
-      summary: preventiveData,
+      summary: preventiveData as unknown as Record<string, unknown>,
       details: {
         description:
           "Comprehensive preventive maintenance execution report covering all scheduled maintenance activities",
@@ -283,7 +283,7 @@ export class ReportingEngine {
       periodStart: config.periodStart,
       periodEnd: config.periodEnd,
       generatedBy: "System",
-      summary: correctiveData,
+      summary: correctiveData as unknown as Record<string, unknown>,
       details: {
         description:
           "Analysis of reactive maintenance activities including failure analysis and resolution metrics",
@@ -404,7 +404,7 @@ export class ReportingEngine {
       periodStart: config.periodStart,
       periodEnd: config.periodEnd,
       generatedBy: "System",
-      summary: complianceData,
+      summary: complianceData as unknown as Record<string, unknown>,
       details: {
         description:
           "Compliance assessment against ISO 27001 and data protection regulations",
@@ -472,7 +472,7 @@ export class ReportingEngine {
       periodStart: config.periodStart,
       periodEnd: config.periodEnd,
       generatedBy: "System",
-      summary: costAnalysis,
+      summary: costAnalysis as unknown as Record<string, unknown>,
       details: {
         description:
           "Comprehensive analysis of maintenance costs including preventive vs corrective breakdown",
@@ -555,7 +555,7 @@ export class ReportingEngine {
       periodStart: config.periodStart,
       periodEnd: config.periodEnd,
       generatedBy: "System",
-      summary: slaData,
+      summary: slaData as unknown as Record<string, unknown>,
       details: {
         description: "Service Level Agreement compliance and performance metrics",
       },
