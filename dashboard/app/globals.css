@@ -503,7 +503,7 @@ button { cursor: pointer; }
 
 /* Organization and employee administration */
 select, textarea { font: inherit; }
-.admin-shell { min-height: calc(100vh - 79px); padding: 0; margin-left: 0; }
+.admin-shell { min-height: calc(100vh - 79px); padding: 0; background: var(--canvas); }
 .admin-header, .admin-tabs, .admin-panel {
   width: min(1180px, 100%); margin-inline: auto;
 }

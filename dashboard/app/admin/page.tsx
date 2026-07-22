@@ -54,7 +54,7 @@ export default function AdminPage() {
 
   return (
     <AppLayout>
-      <main className="admin-shell">
+      <div className="admin-shell">
       <header className="admin-header">
         <div>
           <a href="/" className="admin-back"><ArrowLeft size={15} /> Security operations</a>
@@ -146,7 +146,7 @@ export default function AdminPage() {
           onClose={() => setPermissionUser(undefined)}
         />
       )}
-      </main>
+      </div>
     </AppLayout>
   );
 }

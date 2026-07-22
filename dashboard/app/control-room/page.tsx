@@ -188,10 +188,18 @@ export default function ControlRoomPage() {
             <div className="stat-value">{stats.storageSummary.totalCount}</div>
             <div className="stat-label">Storage Nodes</div>
             <div className="storage-health-details">
-              <span>{stats.storageSummary.warningCount} warnings</span>
-              <span>{stats.storageSummary.smartIssueCount} SMART</span>
-              <span>{stats.storageSummary.raidIssueCount} RAID</span>
-              <span>{stats.storageSummary.writeProbeFailureCount} probe fail</span>
+              <span className={`health-pill ${stats.storageSummary.warningCount ? "warning-pill" : "ok-pill"}`}>
+                {stats.storageSummary.warningCount} warnings
+              </span>
+              <span className={`health-pill ${stats.storageSummary.smartIssueCount ? "critical-pill" : "ok-pill"}`}>
+                {stats.storageSummary.smartIssueCount} SMART
+              </span>
+              <span className={`health-pill ${stats.storageSummary.raidIssueCount ? "critical-pill" : "ok-pill"}`}>
+                {stats.storageSummary.raidIssueCount} RAID
+              </span>
+              <span className={`health-pill ${stats.storageSummary.writeProbeFailureCount ? "critical-pill" : "ok-pill"}`}>
+                {stats.storageSummary.writeProbeFailureCount} probe fail
+              </span>
             </div>
           </div>
         </div>
@@ -361,18 +369,42 @@ export default function ControlRoomPage() {
         }
 
         .storage-health-details {
-          display: grid;
-          grid-template-columns: repeat(2, minmax(0, 1fr));
-          gap: 3px 8px;
-          margin-top: 6px;
+          display: flex;
+          flex-wrap: wrap;
+          gap: 6px;
+          margin-top: 8px;
+        }
+
+        .health-pill {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          padding: 4px 8px;
+          border-radius: 999px;
           font-size: 11px;
-          color: #374151;
+          font-weight: 600;
+          min-width: fit-content;
+        }
+
+        .health-pill.ok-pill {
+          background: rgba(16, 185, 129, 0.12);
+          color: #047857;
+        }
+
+        .health-pill.warning-pill {
+          background: rgba(245, 158, 11, 0.14);
+          color: #b45309;
+        }
+
+        .health-pill.critical-pill {
+          background: rgba(239, 68, 68, 0.12);
+          color: #991b1b;
         }
 
         .storage-health-card {
-          background: linear-gradient(135deg, #f5f3ff, #e0e7ff);
-          border-color: #c7d2fe;
-          min-height: 110px;
+          background: #eef2ff;
+          border: 1px solid #c7d2fe;
+          align-items: center;
         }
 
         .control-room-nav {

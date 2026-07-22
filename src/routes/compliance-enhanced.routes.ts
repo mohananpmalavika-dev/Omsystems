@@ -748,24 +748,27 @@ export async function registerComplianceEnhancedRoutes(
     const query = z.object({
       frameworkId: z.string().uuid().optional(),
     }).parse(request.query);
-    // TODO: Implement store.getComplianceDashboard
-    return reply.code(501).send({ error: "not_implemented" });
+    const dashboard = await store.getComplianceDashboard(
+      request.currentUser.tenantId,
+      query.frameworkId
+    );
+    return dashboard;
   });
 
   app.get("/v1/compliance/requirements/:id/status", async (request, reply) => {
     if (!(await requireAccess(request, reply, store, "compliance:view"))) return;
     const { id } = idParams.parse(request.params);
-    // TODO: Implement store.getRequirementStatus
-    // Should return: compliance percentage, evidence count, test results, findings
-    return reply.code(501).send({ error: "not_implemented" });
+    const status = await store.getRequirementStatus(id);
+    if (!status) return reply.code(404).send({ error: "requirement_not_found" });
+    return status;
   });
 
   app.get("/v1/compliance/frameworks/:id/coverage", async (request, reply) => {
     if (!(await requireAccess(request, reply, store, "compliance:view"))) return;
     const { id } = idParams.parse(request.params);
-    // TODO: Implement store.getFrameworkCoverage
-    // Should return: requirements met, controls implemented, evidence collected, open findings
-    return reply.code(501).send({ error: "not_implemented" });
+    const coverage = await store.getFrameworkCoverage(id);
+    if (!coverage) return reply.code(404).send({ error: "framework_not_found" });
+    return coverage;
   });
 
   app.get("/v1/compliance/audit-log", async (request, reply) => {
@@ -778,7 +781,10 @@ export async function registerComplianceEnhancedRoutes(
       to: z.string().datetime().optional(),
       limit: z.coerce.number().int().min(1).max(500).default(100),
     }).parse(request.query);
-    // TODO: Implement store.getComplianceAuditLog
-    return reply.code(501).send({ error: "not_implemented" });
+    const logs = await store.getComplianceAuditLog(
+      request.currentUser.tenantId,
+      query
+    );
+    return { data: logs };
   });
 }
