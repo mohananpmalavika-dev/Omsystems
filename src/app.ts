@@ -21,6 +21,7 @@ import { registerCctvInfrastructureRoutes } from "./routes/cctv-infrastructure.j
 import { registerOrganizationRoutes } from "./routes/organization.routes.js";
 import { registerUserRoutes } from "./routes/user.routes.js";
 import { registerAnalyticsRoutes } from "./routes/analytics.routes.js";
+// Disabled incomplete features - Phase 2 analytics not yet ready
 // import { registerAnalyticsMetricsRoutes } from "./routes/analytics-metrics.routes.js";
 // import { registerAnalyticsPhase2Routes } from "./routes/analytics-phase2.routes.js";
 import { registerIncidentsRoutes } from "./routes/incidents.routes.js";
