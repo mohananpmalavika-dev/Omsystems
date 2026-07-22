@@ -85,7 +85,7 @@ CREATE TABLE IF NOT EXISTS health_checks (
 );
 CREATE INDEX IF NOT EXISTS health_checks_tenant_idx ON health_checks (tenant_id, check_type, status);
 CREATE INDEX IF NOT EXISTS health_checks_asset_idx ON health_checks (asset_id, metric_name);
-CREATE INDEX IF NOT EXISTS health_checks_recent ON health_checks (tenant_id, checked_at DESC) WHERE expires_at > now();
+CREATE INDEX IF NOT EXISTS health_checks_recent ON health_checks (tenant_id, checked_at DESC) WHERE expires_at IS NOT NULL;
 
 CREATE TABLE IF NOT EXISTS camera_health (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
