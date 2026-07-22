@@ -26,6 +26,7 @@ import { registerAnalyticsRoutes } from "./routes/analytics.routes.js";
 // import { registerAnalyticsPhase2Routes } from "./routes/analytics-phase2.routes.js";
 import { registerIncidentsRoutes } from "./routes/incidents.routes.js";
 import { registerComplianceRoutes } from "./routes/compliance.routes.js";
+import { registerComplianceEnhancedRoutes } from "./routes/compliance-enhanced.routes.js";
 import { registerPrivacyRoutes } from "./routes/privacy.routes.js";
 // import { registerMaintenanceRoutes } from "./routes/maintenance.routes.js";
 // import { registerMaintenanceDashboardRoutes } from "./routes/maintenance-dashboard.routes.js";
@@ -886,6 +887,7 @@ export async function buildApp(options?: {
     await registerCameraDiscoveryRoutes(app, extendedStore);
     await registerCctvInfrastructureRoutes(app, extendedStore);
     await registerComplianceRoutes(app, extendedStore);
+    await registerComplianceEnhancedRoutes(app, extendedStore);
     // await registerMaintenanceRoutes(app, extendedStore);
     // await registerMaintenanceDashboardRoutes(app, extendedStore);
     // await registerMaintenanceAdvancedRoutes(app, extendedStore);

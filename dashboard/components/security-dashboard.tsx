@@ -284,68 +284,102 @@ export function SecurityDashboard() {
     }
   }, []);
 
-  // Fullscreen mode - show only live wall
+  // Fullscreen mode - show only live wall with redesigned minimal UI
   if (isFullscreen) {
     return (
       <div className="fullscreen-live-wall">
-        {error && (
-          <div className="error-banner">
-            <AlertTriangle size={17} />{error}
-            <button onClick={() => setError(null)}><X size={15} /></button>
-          </div>
-        )}
-        {notice && (
-          <div className="success-banner">
-            <ShieldCheck size={17} />{notice}
-            <button onClick={() => setNotice(null)}><X size={15} /></button>
-          </div>
-        )}
-
-        <section className="live-section fullscreen" id="live-wall">
-          <div className="section-heading live-heading">
-            <div>
-              <span className="eyebrow">LIVE MONITORING</span>
-              <h2>{activeBranch?.name ?? "Select a branch"}</h2>
-              <p>
-                <span className="green-dot" /> {online} online
-                {attention > 0 && <><span className="separator">•</span>{attention} need attention</>}
-                <span className="separator">•</span>{healthPercent}% healthy
-              </p>
+        {/* Top control bar */}
+        <div className="fullscreen-topbar">
+          <div className="fullscreen-info">
+            <h1>{activeBranch?.name ?? "Live Wall"}</h1>
+            <div className="fullscreen-stats">
+              <span className={`status-dot ${online > 0 ? 'online' : ''}`} />
+              <span>{online} online</span>
+              {attention > 0 && (
+                <>
+                  <span className="separator">•</span>
+                  <span className="warning">{attention} attention</span>
+                </>
+              )}
+              <span className="separator">•</span>
+              <span>{cameras.length} cameras</span>
             </div>
-            <div className="layout-picker">
-              <button 
-                className="active" 
-                onClick={toggleFullscreen}
-                aria-label="Exit fullscreen"
-                title="Exit fullscreen Live Wall"
+          </div>
+
+          <div className="fullscreen-controls">
+            {/* Branch selector */}
+            {branches.length > 1 && (
+              <select 
+                value={selectedBranch} 
+                onChange={(e) => setSelectedBranch(e.target.value)}
+                className="branch-selector"
               >
-                <X size={16} />
-                Exit
-              </button>
-              <button className={sequencing ? "active" : ""} onClick={() => setSequencing((value) => !value)} aria-label={sequencing ? "Pause camera sequence" : "Start camera sequence"} title={sequencing ? "Pause 10 second camera sequence" : "Start 10 second camera sequence"}>
-                {sequencing ? <Pause size={16} /> : <Play size={16} />}
-              </button>
-              <span>Layout</span>
+                {branches.map((branch) => (
+                  <option key={branch.id} value={branch.id}>
+                    {branch.name}
+                  </option>
+                ))}
+              </select>
+            )}
+
+            {/* Sequence toggle */}
+            <button 
+              className={`control-btn ${sequencing ? "active" : ""}`}
+              onClick={() => setSequencing((value) => !value)} 
+              title={sequencing ? "Pause camera sequence" : "Start camera sequence"}
+            >
+              {sequencing ? <Pause size={18} /> : <Play size={18} />}
+            </button>
+
+            {/* Layout options */}
+            <div className="layout-controls">
               {layoutOptions.map((size) => (
                 <button
                   key={size}
-                  className={gridSize === size ? "active" : ""}
+                  className={`layout-btn ${gridSize === size ? "active" : ""}`}
                   onClick={() => setGridSize(size)}
-                  aria-label={`${size} camera layout`}
+                  title={`${size} camera layout`}
                 >
-                  {size === 1 ? <MonitorPlay size={16} /> : <Grid2X2 size={16} />}
                   {size}
                 </button>
               ))}
             </div>
-          </div>
 
+            {/* Exit fullscreen */}
+            <button 
+              className="exit-btn" 
+              onClick={toggleFullscreen}
+              title="Exit fullscreen"
+            >
+              <X size={20} />
+            </button>
+          </div>
+        </div>
+
+        {/* Notifications */}
+        {error && (
+          <div className="fullscreen-notification error">
+            <AlertTriangle size={16} />
+            <span>{error}</span>
+            <button onClick={() => setError(null)}><X size={14} /></button>
+          </div>
+        )}
+        {notice && (
+          <div className="fullscreen-notification success">
+            <ShieldCheck size={16} />
+            <span>{notice}</span>
+            <button onClick={() => setNotice(null)}><X size={14} /></button>
+          </div>
+        )}
+
+        {/* Camera grid */}
+        <div className="fullscreen-content">
           {loading ? (
             <div className="loading-grid">
               {Array.from({ length: Math.min(gridSize, 4) }).map((_, index) => <div key={index} />)}
             </div>
           ) : (
-            <div className={`camera-grid grid-${gridSize}`}>
+            <div className={`camera-grid-fullscreen grid-${gridSize}`}>
               {visibleCameras.map((camera, index) => (
                 <CameraTile
                   key={camera.id}
@@ -365,7 +399,7 @@ export function SecurityDashboard() {
               ))}
             </div>
           )}
-        </section>
+        </div>
 
         {liveAction && (
           <LiveEventForm

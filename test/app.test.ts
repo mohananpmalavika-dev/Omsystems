@@ -92,6 +92,63 @@ describe("control-plane API", () => {
     expect(Array.isArray(json.branchSummaries)).toBe(true);
   });
 
+  it("returns dashboard storage health metrics for control-room cards", async () => {
+    await store.upsertRecordingStorageNode({
+      tenantId: "omsystems",
+      externalId: "disk-001",
+      name: "Record-01",
+      supportedTiers: ["hot", "warm", "cold"],
+      capacityBytes: 8_000_000_000,
+      usedBytes: 3_000_000_000,
+      availableBytes: 5_000_000_000,
+      status: "warning",
+      smart: {
+        overallStatus: "failed",
+        reallocatedSectors: 3,
+        pendingSectors: 0,
+        uncorrectableSectors: 0,
+        readErrors: 2,
+        writeErrors: 0,
+        interfaceCrcErrors: 0,
+      },
+      raid: {
+        status: "degraded",
+        level: "RAID1",
+        memberDisks: ["sda", "sdb"],
+        failedMembers: ["sdb"],
+      },
+      lastWriteProbe: {
+        status: "failed",
+        latencyMs: 24,
+        bytesWritten: 128,
+        checksum: "abc123",
+        error: "write probe failed",
+      },
+    });
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/v1/dashboard/stats",
+      headers: { "x-user-id": "user-global-admin" },
+    });
+
+    expect(response.statusCode).toBe(200);
+    const json = response.json();
+    expect(json.storageNodes).toHaveLength(1);
+    expect(json.storageSummary).toMatchObject({
+      warningCount: 1,
+      smartIssueCount: 1,
+      raidIssueCount: 1,
+      writeProbeFailureCount: 1,
+    });
+    expect(json.storageNodes[0]).toMatchObject({
+      externalId: "disk-001",
+      smart: { overallStatus: "failed" },
+      raid: { status: "degraded" },
+      lastWriteProbe: { status: "failed" },
+    });
+  });
+
   it("returns a privacy summary for report dashboards", async () => {
     const response = await app.inject({
       method: "GET",
