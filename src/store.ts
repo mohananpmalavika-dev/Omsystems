@@ -152,6 +152,10 @@ export class MemoryStore implements ControlPlaneStore {
   readonly spareParts: any[] = [];
   readonly inventoryTransactions: any[] = [];
   readonly maintenanceReports: any[] = [];
+  readonly privacyPurposes: any[] = [];
+  readonly cameraPrivacyPurposeAssignments: any[] = [];
+  readonly cameraPrivacyControls = new Map<string, any>();
+  readonly privacyBreaches: any[] = [];
 
   async close() {}
 
@@ -1202,256 +1206,6 @@ export class MemoryStore implements ControlPlaneStore {
     this.auditEvents.push(structuredClone(event));
   }
 
-  // ============================================================================
-  // Phase 3-7: Maintenance & Health Monitoring Methods
-  // ============================================================================
-
-  async recordCameraHealth(input: {
-    tenantId: string;
-    cameraId: string;
-    onlineStatus: 'online' | 'offline' | 'degraded';
-    fps?: number;
-    bitrate?: number;
-    streamQuality?: string;
-    temperature?: number;
-    tampering?: boolean;
-    recordingRunning?: boolean;
-    latencyMs?: number;
-    packetLoss?: number;
-  }): Promise<any> {
-    return {
-      id: randomUUID(),
-      ...input,
-      timestamp: new Date().toISOString(),
-      recorded: true,
-    };
-  }
-
-  async recordStorageHealth(input: {
-    tenantId: string;
-    assetId: string;
-    totalCapacityGb: number;
-    usedCapacityGb: number;
-    availableCapacityGb: number;
-    smartStatus?: string;
-    temperature?: number;
-    badSectors?: number;
-    readSpeedMbs?: number;
-    writeSpeedMbs?: number;
-    remainingLifetimeYears?: number;
-    errorCount?: number;
-  }): Promise<any> {
-    return {
-      id: randomUUID(),
-      ...input,
-      timestamp: new Date().toISOString(),
-      usagePercentage: Math.round((input.usedCapacityGb / input.totalCapacityGb) * 100),
-      recorded: true,
-    };
-  }
-
-  async recordNetworkHealth(input: {
-    tenantId: string;
-    branchNodeId?: string;
-    assetId?: string;
-    checkType: string;
-    latencyMs?: number;
-    packetLossPercentage?: number;
-    jitterMs?: number;
-    bandwidthAvailableMbps?: number;
-    rtspAvailable?: boolean;
-    onvifAvailable?: boolean;
-  }): Promise<any> {
-    return {
-      id: randomUUID(),
-      ...input,
-      timestamp: new Date().toISOString(),
-      status: (input.packetLossPercentage || 0) < 1 ? 'healthy' : 'degraded',
-      recorded: true,
-    };
-  }
-
-  async recordUpsHealth(input: {
-    tenantId: string;
-    assetId: string;
-    batteryHealthPercentage: number;
-    runtimeMinutes?: number;
-    chargingStatus?: string;
-    loadPercentage?: number;
-    temperature?: number;
-    alarmStatus?: string;
-  }): Promise<any> {
-    return {
-      id: randomUUID(),
-      ...input,
-      timestamp: new Date().toISOString(),
-      status: input.batteryHealthPercentage < 60 ? 'warning' : 'healthy',
-      recorded: true,
-    };
-  }
-
-  async getHealthCheckSummary(tenantId: string): Promise<any> {
-    return {
-      tenantId,
-      totalAssets: 100,
-      healthyAssets: 98,
-      degradedAssets: 2,
-      criticalAssets: 0,
-      overallStatus: 'healthy',
-      lastUpdated: new Date().toISOString(),
-    };
-  }
-
-  async recordFirmwareVersion(input: {
-    tenantId: string;
-    assetId: string;
-    deviceType: string;
-    currentVersion: string;
-    latestVersion?: string;
-    requiresUpdate?: boolean;
-    criticalUpdate?: boolean;
-  }): Promise<any> {
-    return {
-      id: randomUUID(),
-      ...input,
-      timestamp: new Date().toISOString(),
-      recorded: true,
-    };
-  }
-
-  async listFirmwareUpdatesRequired(tenantId: string): Promise<any[]> {
-    return [
-      {
-        assetId: "asset-001",
-        deviceType: "camera",
-        currentVersion: "2.5.1",
-        latestVersion: "2.6.0",
-        releaseDate: new Date().toISOString(),
-        importance: "high",
-      },
-    ];
-  }
-
-  async recordSoftwareVersion(input: {
-    tenantId: string;
-    componentName: string;
-    environment: string;
-    currentVersion: string;
-    previousVersion?: string;
-    upgradeApprovedBy?: string;
-    upgradeApprovedAt?: string;
-  }): Promise<any> {
-    return {
-      id: randomUUID(),
-      ...input,
-      timestamp: new Date().toISOString(),
-      recorded: true,
-    };
-  }
-
-  async recordSparePart(input: {
-    tenantId: string;
-    partName: string;
-    partCode: string;
-    category: string;
-    vendorId?: string;
-    quantity: number;
-    reorderLevel?: number;
-    unitCost?: number;
-    warrantyMonths?: number;
-    location?: string;
-    branchNodeId?: string;
-  }): Promise<any> {
-    return {
-      id: randomUUID(),
-      ...input,
-      timestamp: new Date().toISOString(),
-      inStock: input.quantity > (input.reorderLevel || 5),
-      recorded: true,
-    };
-  }
-
-  async recordInventoryTransaction(input: {
-    tenantId: string;
-    partId: string;
-    workOrderId?: string;
-    transactionType: 'add' | 'remove' | 'used' | 'damaged';
-    quantity: number;
-    referenceNumber?: string;
-    notes?: string;
-    recordedBy?: string;
-  }): Promise<any> {
-    return {
-      id: randomUUID(),
-      ...input,
-      timestamp: new Date().toISOString(),
-      recorded: true,
-    };
-  }
-
-  async listLowStockParts(tenantId: string): Promise<any[]> {
-    return [
-      {
-        id: "part-001",
-        partName: "Camera Mount Bracket",
-        partCode: "CM-BR-001",
-        currentQuantity: 2,
-        reorderLevel: 5,
-        unitCost: 500,
-        estimatedDelivery: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
-      },
-    ];
-  }
-
-  async generateMaintenanceReport(input: {
-    tenantId: string;
-    reportType: string;
-    periodStart: string;
-    periodEnd: string;
-    branchNodeId?: string;
-    assetId?: string;
-  }): Promise<any> {
-    return {
-      id: randomUUID(),
-      ...input,
-      generatedAt: new Date().toISOString(),
-      summary: {
-        totalIncidents: 12,
-        resolved: 10,
-        pending: 2,
-        averageResolutionTime: "4.5 hours",
-      },
-      details: [],
-      metrics: {},
-      recommendations: [],
-    };
-  }
-
-  async listMaintenanceReports(tenantId: string, filters?: { reportType?: string; limit?: number }): Promise<any[]> {
-    return [
-      {
-        id: randomUUID(),
-        tenantId,
-        reportType: filters?.reportType || "general",
-        generatedAt: new Date().toISOString(),
-        periodStart: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
-        periodEnd: new Date().toISOString(),
-      },
-    ];
-  }
-
-  async getMaintenanceComplianceStatus(tenantId: string): Promise<any> {
-    return {
-      tenantId,
-      complianceScore: 92.5,
-      status: "compliant",
-      openIssues: 3,
-      resolvedIssues: 47,
-      lastAudit: new Date(Date.now() - 15 * 24 * 60 * 60 * 1000).toISOString(),
-      nextAudit: new Date(Date.now() + 15 * 24 * 60 * 60 * 1000).toISOString(),
-    };
-  }
-
   // ============ HEALTH MONITORING ============
 
   async recordCameraHealth(input: {
@@ -1758,6 +1512,83 @@ export class MemoryStore implements ControlPlaneStore {
       openIssuesCount: openWorkOrders,
       criticalAlertsCount: criticalAlerts,
       status: overdueVisits > 0 || openWorkOrders > 5 ? 'non-compliant' : 'compliant',
+    };
+  }
+
+  // ============ PRIVACY METHODS ============
+
+  async assignCameraPrivacyPurpose(
+    cameraId: string,
+    purposeId: string,
+    assignedBy: string,
+    startDate?: string,
+    endDate?: string,
+    notes?: string,
+  ): Promise<any> {
+    const assignment = {
+      id: randomUUID(),
+      cameraId,
+      purposeId,
+      assignedBy,
+      startDate,
+      endDate,
+      notes,
+      createdAt: new Date().toISOString(),
+    };
+    return assignment;
+  }
+
+  async getCameraPrivacyControls(cameraId: string): Promise<any> {
+    return {
+      cameraId,
+      audioRecordingApproved: false,
+      encryptionEnabled: true,
+      disposalPlan: null,
+      dataProtectionOfficer: null,
+      lastReviewedAt: null,
+      updatedAt: new Date().toISOString(),
+    };
+  }
+
+  async upsertCameraPrivacyControls(cameraId: string, input: any): Promise<any> {
+    return {
+      cameraId,
+      ...input,
+      updatedAt: new Date().toISOString(),
+    };
+  }
+
+  async listPrivacyBreaches(tenantId: string, status?: string): Promise<any[]> {
+    return [];
+  }
+
+  async reportPrivacyBreach(input: {
+    tenantId: string;
+    branchNodeId?: string;
+    cameraId?: string;
+    breachType: string;
+    severity: string;
+    discoveredAt: string;
+    description?: string;
+    remediation?: string;
+    createdBy: string;
+  }): Promise<any> {
+    const breach = {
+      id: randomUUID(),
+      ...input,
+      status: 'reported',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    return breach;
+  }
+
+  async updatePrivacyBreachStatus(id: string, status: string, updatedBy: string): Promise<any> {
+    return {
+      id,
+      status,
+      updatedBy,
+      updatedAt: new Date().toISOString(),
     };
   }
 }
