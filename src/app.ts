@@ -10,7 +10,7 @@ import {
   hasExtendedInfrastructure,
   type ControlPlaneStore,
 } from "./control-plane-store.js";
-import { actions, type Action, type Camera } from "./domain/models.js";
+import { actions, type Action, type Camera, type RecordingJob } from "./domain/models.js";
 import { createAuthMiddleware, RateLimiter } from "./middleware/auth.middleware.js";
 import { buildPlaybackTimeline } from "./recording/playback-timeline.js";
 import { calculateRecordingStorage } from "./recording/storage-calculator.js";
