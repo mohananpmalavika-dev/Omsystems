@@ -26,8 +26,8 @@ import { registerIncidentsRoutes } from "./routes/incidents.routes.js";
 import { registerComplianceRoutes } from "./routes/compliance.routes.js";
 import { registerPrivacyRoutes } from "./routes/privacy.routes.js";
 import { registerMaintenanceRoutes } from "./routes/maintenance.routes.js";
-import { registerMaintenanceDashboardRoutes } from "./routes/maintenance-dashboard.routes.js";
-import { registerMaintenanceAdvancedRoutes } from "./routes/maintenance-advanced.routes.js";
+// import { registerMaintenanceDashboardRoutes } from "./routes/maintenance-dashboard.routes.js";
+// import { registerMaintenanceAdvancedRoutes } from "./routes/maintenance-advanced.routes.js";
 import { MemoryStore } from "./store.js";
 
 declare module "fastify" {
