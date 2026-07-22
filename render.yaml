@@ -14,7 +14,7 @@ services:
       - key: NODE_VERSION
         value: "22"
       - key: DASHBOARD_DEMO_MODE
-        value: "true"
+        value: "false"
       - key: CONTROL_PLANE_INTERNAL_URL
         value: "https://sentinel-grid-control-plane.onrender.com"
       - key: MEDIA_GATEWAY_INTERNAL_URL
