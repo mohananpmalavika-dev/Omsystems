@@ -1,42 +1,42 @@
 "use client";
 
 import {
-  Activity,
   AlertTriangle,
-  Bell,
   Building2,
   Camera,
-  ChevronDown,
-  ChevronRight,
-  CircleUserRound,
-  Command,
-  Download,
-  FileVideo2,
   Grid2X2,
-  LayoutDashboard,
-  Menu,
   MonitorPlay,
   Pause,
   Play,
   Plus,
-  MoreHorizontal,
-  Search,
-  Settings,
   ShieldCheck,
   Siren,
   SlidersHorizontal,
-  Wifi,
   X,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { Branch, Camera as CameraType, LiveIncident, LiveSessionResponse, RecordingJob } from "@/lib/types";
 import { liveOperationsApi } from "@/lib/api-client";
+import { AppLayout } from "./app-layout";
 import { CameraTile } from "./camera-tile";
 import { LiveEventForm } from "./live-event-form";
 import { RecordingSettingsPanel } from "./recording-settings-panel";
 
 const layoutOptions = [1, 4, 9, 16, 25, 36] as const;
 const liveSessionRenewalLeadMs = 60_000;
+
+function liveStartupMessage(code: string) {
+  switch (code) {
+    case "stream_secret_unavailable":
+      return "This camera's RTSP secret is not configured in the media gateway.";
+    case "media_gateway_failure":
+      return "The media router could not start this camera stream.";
+    case "invalid_live_session":
+      return "The live-view authorization expired. Please try again.";
+    default:
+      return "Live view could not start. Check camera and media-gateway health.";
+  }
+}
 
 function defaultRecording(cameraId: string, mode: RecordingJob["mode"] = "continuous"): RecordingJob {
   return {
@@ -61,7 +61,6 @@ export function SecurityDashboard() {
   const [sequenceOffset, setSequenceOffset] = useState(0);
   const [loadingCamera, setLoadingCamera] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [incidents, setIncidents] = useState<LiveIncident[]>([]);
@@ -137,11 +136,15 @@ export function SecurityDashboard() {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ cameraId }),
       });
-      if (!response.ok) throw new Error("Live session failed");
-      const session = await response.json() as LiveSessionResponse;
+      const body = await response.json() as LiveSessionResponse & {
+        error?: string;
+      };
+      if (!response.ok) throw new Error(body.error ?? "live_session_unavailable");
+      const session = body;
       setSessions((current) => ({ ...current, [cameraId]: session }));
-    } catch {
-      setError("Live view could not start. Check camera and media-gateway health.");
+    } catch (error) {
+      const code = error instanceof Error ? error.message : "";
+      setError(liveStartupMessage(code));
     } finally {
       setLoadingCamera(null);
     }
@@ -270,74 +273,8 @@ export function SecurityDashboard() {
   }, []);
 
   return (
-    <div className="app-shell">
-      <aside className={`sidebar ${sidebarOpen ? "open" : ""}`}>
-        <div className="brand">
-          <div className="brand-mark"><ShieldCheck size={23} /></div>
-          <div><strong>Sentinel</strong><span>GRID</span></div>
-          <button className="mobile-close" onClick={() => setSidebarOpen(false)}>
-            <X size={19} />
-          </button>
-        </div>
-
-        <div className="command-search">
-          <Search size={15} />
-          <span>Search anything</span>
-          <kbd><Command size={11} /> K</kbd>
-        </div>
-
-        <nav className="main-nav" aria-label="Main navigation">
-          <p>OPERATIONS</p>
-          <a href="#" className="active"><LayoutDashboard size={18} />Overview</a>
-          <a href="#live-wall"><MonitorPlay size={18} />Live wall<span className="nav-count">8</span></a>
-          <a href="#incidents"><Siren size={18} />Incidents<span className="alert-count">{openIncidents.length}</span></a>
-          <a href="/analytics"><Activity size={18} />Video analytics</a>
-          <a href="#"><Activity size={18} />Health</a>
-          <p>MANAGEMENT</p>
-          <a href="/admin"><Building2 size={18} />Organization</a>
-          <a href="/admin?tab=users"><Camera size={18} />Access control</a>
-          <a href="/compliance"><ShieldCheck size={18} />Compliance</a>
-          <a href="/maintenance/privacy"><ShieldCheck size={18} />Privacy</a>
-          <a href="/reports"><FileVideo2 size={18} />Reports</a>
-          <a href="/maintenance"><SlidersHorizontal size={18} />Maintenance</a>
-          <a href="/recordings"><FileVideo2 size={18} />Recordings</a>
-          <a href="#"><Download size={18} />Exports</a>
-        </nav>
-
-        <div className="sidebar-status">
-          <div className="pulse-icon"><Wifi size={17} /></div>
-          <div><strong>Platform healthy</strong><span>All services operational</span></div>
-          <ChevronRight size={16} />
-        </div>
-        <div className="sidebar-user">
-          <div className="avatar">AR</div>
-          <div><strong>Arun Rao</strong><span>Regional operator</span></div>
-          <MoreHorizontal size={18} />
-        </div>
-      </aside>
-
-      <main className="workspace">
-        <header className="topbar">
-          <button className="menu-button" onClick={() => setSidebarOpen(true)}>
-            <Menu size={20} />
-          </button>
-          <div>
-            <div className="breadcrumbs">
-              Retail Division <ChevronRight size={13} /> South Region
-            </div>
-            <h1>Security operations</h1>
-          </div>
-          <div className="topbar-actions">
-            <div className="timezone">IST <span>•</span> Live</div>
-            <button aria-label="Notifications" className="notification">
-              <Bell size={19} /><i />
-            </button>
-            <button aria-label="Settings"><Settings size={19} /></button>
-            <div className="top-avatar"><CircleUserRound size={21} /></div>
-          </div>
-        </header>
-
-        <div className="content">
+    <AppLayout incidentCount={openIncidents.length} cameraCount={cameras.length}>
+      <div className="content">
           {error && (
             <div className="error-banner">
               <AlertTriangle size={17} />{error}
@@ -509,7 +446,6 @@ export function SecurityDashboard() {
             )}
           </section>
         </div>
-      </main>
       {liveAction && (
         <LiveEventForm
           action={liveAction.action}
@@ -519,7 +455,7 @@ export function SecurityDashboard() {
           onSubmit={submitLiveAction}
         />
       )}
-    </div>
+    </AppLayout>
   );
 }
 

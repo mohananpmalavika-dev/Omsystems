@@ -1,3 +1,5 @@
+FROM bluenviron/mediamtx:1.17.1 AS mediamtx
+
 FROM node:22-alpine AS build
 WORKDIR /app
 COPY package*.json ./
@@ -22,5 +24,8 @@ COPY recording-engine/package.json ./recording-engine/package.json
 COPY analytics-engine/package.json ./analytics-engine/package.json
 RUN npm ci --omit=dev --workspace @sentinel/media-gateway
 COPY --from=build /app/media-gateway/dist ./media-gateway/dist
+COPY --from=mediamtx /mediamtx /usr/local/bin/mediamtx
+COPY media-gateway/mediamtx.render.yml ./media-gateway/mediamtx.render.yml
+COPY --chmod=755 media-gateway/start-render.sh ./media-gateway/start-render.sh
 USER node
-CMD ["node", "media-gateway/dist/src/index.js"]
+CMD ["media-gateway/start-render.sh"]

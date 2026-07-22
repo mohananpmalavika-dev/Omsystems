@@ -15,6 +15,7 @@ export async function buildMediaGateway(options: {
   secrets: StreamSecretProvider;
   publicHlsBaseUrl: string;
   publicWebRtcBaseUrl: string;
+  mediaMtxHlsUrl?: string;
   accessTtlMs: number;
   edgeBridgeSharedKey?: string;
   logger?: boolean;
@@ -39,6 +40,41 @@ export async function buildMediaGateway(options: {
     status: "ok",
     service: "sentinel-media-gateway",
   }));
+
+  // Render exposes one HTTP port per service. Proxy MediaMTX's HLS listener
+  // through the gateway so playlists and segments share that public port.
+  if (options.mediaMtxHlsUrl) {
+    app.route({
+      method: ["GET", "HEAD", "OPTIONS"],
+      url: "/hls/*",
+      handler: async (request, reply) => {
+        const suffix = request.raw.url?.slice("/hls".length) || "/";
+        const target = new URL(suffix, options.mediaMtxHlsUrl);
+        const upstream = await fetch(target, {
+          method: request.method,
+          headers: forwardMediaHeaders(request.headers),
+        });
+        reply.code(upstream.status);
+        for (const name of [
+          "accept-ranges",
+          "access-control-allow-credentials",
+          "access-control-allow-headers",
+          "access-control-allow-methods",
+          "access-control-allow-origin",
+          "cache-control",
+          "content-length",
+          "content-type",
+        ]) {
+          const value = upstream.headers.get(name);
+          if (value) reply.header(name, value);
+        }
+        if (request.method === "HEAD" || upstream.status === 204) {
+          return reply.send();
+        }
+        return reply.send(Buffer.from(await upstream.arrayBuffer()));
+      },
+    });
+  }
 
   app.post("/v1/live/start", async (request, reply) => {
     const body = z.object({
@@ -138,4 +174,13 @@ function secureEqualHeader(value: string | string[] | undefined, expected: strin
   const configured = Buffer.from(expected);
   return supplied.length === configured.length &&
     timingSafeEqual(supplied, configured);
+}
+
+function forwardMediaHeaders(headers: Record<string, unknown>) {
+  const forwarded: Record<string, string> = {};
+  for (const name of ["accept", "origin", "range", "user-agent"]) {
+    const value = headers[name];
+    if (typeof value === "string") forwarded[name] = value;
+  }
+  return forwarded;
 }

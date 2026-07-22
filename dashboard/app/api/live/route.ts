@@ -27,8 +27,18 @@ export async function POST(request: NextRequest) {
       code: cause && "code" in cause ? cause.code : undefined,
     });
     return NextResponse.json(
-      { error: "live_session_unavailable" },
+      { error: publicLiveError(error) },
       { status: 502 },
     );
   }
+}
+
+function publicLiveError(error: unknown) {
+  const code = error instanceof Error ? error.message : "";
+  return new Set([
+    "invalid_live_session",
+    "media_gateway_failure",
+    "media_gateway_unavailable",
+    "stream_secret_unavailable",
+  ]).has(code) ? code : "live_session_unavailable";
 }

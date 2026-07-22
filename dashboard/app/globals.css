@@ -503,7 +503,7 @@ button { cursor: pointer; }
 
 /* Organization and employee administration */
 select, textarea { font: inherit; }
-.admin-shell { min-height: 100vh; padding: 30px; }
+.admin-shell { min-height: 100vh; padding: 30px; margin-left: 252px; }
 .admin-header, .admin-tabs, .admin-panel {
   width: min(1180px, 100%); margin-inline: auto;
 }
@@ -779,7 +779,7 @@ select, textarea { font: inherit; }
 .login-footer { position: fixed; bottom: 7px; color: #8a95a5; font-size: 9px; }
 
 @media (max-width: 700px) {
-  .admin-shell { padding: 18px 12px; }
+  .admin-shell { padding: 18px 12px; margin-left: 0; }
   .admin-panel { padding: 14px; }
   .list-filters, .form-row { grid-template-columns: 1fr; }
   .grant-form { grid-template-columns: 1fr; }

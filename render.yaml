@@ -29,11 +29,10 @@ services:
   # Media Gateway for live streaming
   - type: web
     name: sentinel-grid-media-gateway
-    runtime: node
+    runtime: docker
+    dockerfilePath: ./media-gateway/Dockerfile
     plan: free
     region: singapore
-    buildCommand: cd media-gateway && npm install && npm run build
-    startCommand: cd media-gateway && node dist/index.js
     healthCheckPath: /health
     autoDeployTrigger: commit
     envVars:
@@ -41,8 +40,16 @@ services:
         value: "22"
       - key: PORT
         value: "8090"
+      - key: MEDIAMTX_API_URL
+        value: "http://127.0.0.1:9997"
+      - key: MEDIAMTX_HLS_URL
+        value: "http://127.0.0.1:8888"
+      - key: PUBLIC_HLS_BASE_URL
+        value: "https://sentinel-grid-media-gateway.onrender.com/hls"
       - key: CONTROL_PLANE_URL
         value: "https://sentinel-grid-control-plane.onrender.com"
+      - key: STREAM_SECRETS_JSON
+        sync: false
       - key: MEDIA_GATEWAY_SHARED_KEY
         value: "dev-media-gateway-key-change-in-production"
       - key: EDGE_BRIDGE_SHARED_KEY

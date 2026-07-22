@@ -48,7 +48,15 @@ export async function startLive(
       cache: "no-store",
     },
   );
-  if (!mediaResponse.ok) throw new Error(`Media gateway returned ${mediaResponse.status}`);
+  if (!mediaResponse.ok) {
+    const body = await mediaResponse.json().catch(() => ({})) as {
+      error?: unknown;
+    };
+    const code = typeof body.error === "string"
+      ? body.error
+      : "media_gateway_unavailable";
+    throw new Error(code);
+  }
   return await mediaResponse.json() as LiveSessionResponse;
 }
 

@@ -1,0 +1,26 @@
+logLevel: info
+
+api: yes
+apiAddress: 127.0.0.1:9997
+
+authMethod: http
+authHTTPAddress: http://127.0.0.1:8090/internal/mediamtx/auth
+authHTTPExclude:
+  - action: api
+  - action: metrics
+  - action: pprof
+
+hls: yes
+hlsAddress: 127.0.0.1:8888
+hlsVariant: lowLatency
+hlsAllowOrigins:
+  - "https://sentinel-grid-monitoring.onrender.com"
+
+webrtc: no
+
+pathDefaults:
+  sourceOnDemand: yes
+  sourceOnDemandStartTimeout: 10s
+  sourceOnDemandCloseAfter: 10s
+
+paths: {}

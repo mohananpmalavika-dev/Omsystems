@@ -2,6 +2,7 @@
 
 import { ArrowLeft, Building2, Camera, ShieldCheck, Users } from "lucide-react";
 import { useEffect, useState } from "react";
+import { AppLayout } from "@/components/app-layout";
 import { CameraPermissionManager } from "@/components/camera-permission-manager";
 import { DeviceManager } from "@/components/device-manager";
 import { OrganizationTree } from "@/components/organization-tree";
@@ -52,7 +53,8 @@ export default function AdminPage() {
   };
 
   return (
-    <main className="admin-shell">
+    <AppLayout>
+      <main className="admin-shell">
       <header className="admin-header">
         <div>
           <a href="/" className="admin-back"><ArrowLeft size={15} /> Security operations</a>
@@ -144,6 +146,7 @@ export default function AdminPage() {
           onClose={() => setPermissionUser(undefined)}
         />
       )}
-    </main>
+      </main>
+    </AppLayout>
   );
 }

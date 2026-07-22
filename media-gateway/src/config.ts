@@ -6,6 +6,7 @@ const schema = z.object({
   CONTROL_PLANE_URL: z.string().url(),
   MEDIA_GATEWAY_SHARED_KEY: z.string().min(32),
   MEDIAMTX_API_URL: z.string().url().default("http://localhost:9997"),
+  MEDIAMTX_HLS_URL: z.string().url().default("http://localhost:8888"),
   PUBLIC_HLS_BASE_URL: z.string().url().default("http://localhost:8888"),
   PUBLIC_WEBRTC_BASE_URL: z.string().url().default("http://localhost:8889"),
   MEDIA_ACCESS_TTL_SECONDS: z.coerce.number().int().min(30).max(3600).default(300),

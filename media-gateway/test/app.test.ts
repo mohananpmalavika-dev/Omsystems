@@ -134,4 +134,57 @@ describe("authorized media startup", () => {
     expect(denied.statusCode).toBe(401);
     expect(denied.json().error).toBe("invalid_bridge_identity");
   });
+
+  it("proxies HLS playlists through the gateway public port", async () => {
+    const upstream = await import("node:http").then(({ createServer }) =>
+      createServer((request, response) => {
+        expect(request.url).toBe("/camera-cam-001/index.m3u8?token=session-token");
+        response.writeHead(200, {
+          "content-type": "application/vnd.apple.mpegurl",
+          "access-control-allow-origin": "https://dashboard.example",
+        });
+        response.end("#EXTM3U\n");
+      })
+    );
+    await new Promise<void>((resolve) => upstream.listen(0, "127.0.0.1", resolve));
+    const address = upstream.address();
+    if (!address || typeof address === "string") throw new Error("test server unavailable");
+
+    try {
+      app = await buildMediaGateway({
+        controlPlane: {
+          consumeLiveSession: vi.fn(async () => {
+            throw new Error("not used");
+          }),
+        },
+        router: {
+          ensurePath: vi.fn(async () => undefined),
+          removePath: vi.fn(async () => undefined),
+        },
+        secrets: { resolve: vi.fn(async () => undefined) },
+        publicHlsBaseUrl: "https://media.example/hls",
+        publicWebRtcBaseUrl: "https://media.example/webrtc",
+        mediaMtxHlsUrl: `http://127.0.0.1:${address.port}`,
+        accessTtlMs: 60_000,
+      });
+
+      const response = await app.inject({
+        method: "GET",
+        url: "/hls/camera-cam-001/index.m3u8?token=session-token",
+        headers: { origin: "https://dashboard.example" },
+      });
+      expect(response.statusCode).toBe(200);
+      expect(response.body).toBe("#EXTM3U\n");
+      expect(response.headers["content-type"]).toContain(
+        "application/vnd.apple.mpegurl",
+      );
+      expect(response.headers["access-control-allow-origin"]).toBe(
+        "https://dashboard.example",
+      );
+    } finally {
+      await new Promise<void>((resolve, reject) =>
+        upstream.close((error) => error ? reject(error) : resolve())
+      );
+    }
+  });
 });

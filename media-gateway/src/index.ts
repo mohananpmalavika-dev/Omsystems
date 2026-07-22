@@ -12,6 +12,7 @@ const app = await buildMediaGateway({
   ),
   router: new MediaMtxRouter(config.MEDIAMTX_API_URL),
   secrets: new EnvironmentSecretProvider(config.STREAM_SECRETS_JSON),
+  mediaMtxHlsUrl: config.MEDIAMTX_HLS_URL,
   publicHlsBaseUrl: config.PUBLIC_HLS_BASE_URL,
   publicWebRtcBaseUrl: config.PUBLIC_WEBRTC_BASE_URL,
   accessTtlMs: config.MEDIA_ACCESS_TTL_SECONDS * 1000,
