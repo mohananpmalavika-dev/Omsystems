@@ -284,6 +284,103 @@ export function SecurityDashboard() {
     }
   }, []);
 
+  // Fullscreen mode - show only live wall
+  if (isFullscreen) {
+    return (
+      <div className="fullscreen-live-wall">
+        {error && (
+          <div className="error-banner">
+            <AlertTriangle size={17} />{error}
+            <button onClick={() => setError(null)}><X size={15} /></button>
+          </div>
+        )}
+        {notice && (
+          <div className="success-banner">
+            <ShieldCheck size={17} />{notice}
+            <button onClick={() => setNotice(null)}><X size={15} /></button>
+          </div>
+        )}
+
+        <section className="live-section fullscreen" id="live-wall">
+          <div className="section-heading live-heading">
+            <div>
+              <span className="eyebrow">LIVE MONITORING</span>
+              <h2>{activeBranch?.name ?? "Select a branch"}</h2>
+              <p>
+                <span className="green-dot" /> {online} online
+                {attention > 0 && <><span className="separator">•</span>{attention} need attention</>}
+                <span className="separator">•</span>{healthPercent}% healthy
+              </p>
+            </div>
+            <div className="layout-picker">
+              <button 
+                className="active" 
+                onClick={toggleFullscreen}
+                aria-label="Exit fullscreen"
+                title="Exit fullscreen Live Wall"
+              >
+                <X size={16} />
+                Exit
+              </button>
+              <button className={sequencing ? "active" : ""} onClick={() => setSequencing((value) => !value)} aria-label={sequencing ? "Pause camera sequence" : "Start camera sequence"} title={sequencing ? "Pause 10 second camera sequence" : "Start 10 second camera sequence"}>
+                {sequencing ? <Pause size={16} /> : <Play size={16} />}
+              </button>
+              <span>Layout</span>
+              {layoutOptions.map((size) => (
+                <button
+                  key={size}
+                  className={gridSize === size ? "active" : ""}
+                  onClick={() => setGridSize(size)}
+                  aria-label={`${size} camera layout`}
+                >
+                  {size === 1 ? <MonitorPlay size={16} /> : <Grid2X2 size={16} />}
+                  {size}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {loading ? (
+            <div className="loading-grid">
+              {Array.from({ length: Math.min(gridSize, 4) }).map((_, index) => <div key={index} />)}
+            </div>
+          ) : (
+            <div className={`camera-grid grid-${gridSize}`}>
+              {visibleCameras.map((camera, index) => (
+                <CameraTile
+                  key={camera.id}
+                  camera={camera}
+                  index={index}
+                  session={sessions[camera.id]}
+                  loading={loadingCamera === camera.id}
+                  onStart={() => void startCamera(camera.id)}
+                  recording={recordings[camera.id]}
+                  recordingLoading={recordingLoading === camera.id}
+                  onToggleRecording={() => void toggleRecording(camera.id)}
+                  onChangeRecordingMode={(mode) => void changeRecordingMode(camera.id, mode)}
+                  onUpdateRecording={updateRecordingSettings}
+                  onBookmark={() => setLiveAction({ action: "bookmark", camera })}
+                  onCreateIncident={() => setLiveAction({ action: "incident", camera })}
+                />
+              ))}
+            </div>
+          )}
+        </section>
+
+        {liveAction && (
+          <LiveEventForm
+            action={liveAction.action}
+            camera={liveAction.camera}
+            saving={liveActionSaving}
+            onCancel={() => setLiveAction(undefined)}
+            onSubmit={submitLiveAction}
+          />
+        )}
+      </div>
+    );
+  }
+
+  // Normal mode - show full dashboard
   return (
     <AppLayout incidentCount={openIncidents.length} cameraCount={cameras.length}>
       <div className="content">
@@ -347,11 +444,9 @@ export function SecurityDashboard() {
                 </p>
               </div>
               <div className="layout-picker">
-                {!isFullscreen && (
-                  <a className="add-camera-link" href="/admin?tab=devices">
-                    <Plus size={15} /> Add camera
-                  </a>
-                )}
+                <a className="add-camera-link" href="/admin?tab=devices">
+                  <Plus size={15} /> Add camera
+                </a>
                 <button 
                   className={isFullscreen ? "active" : ""} 
                   onClick={toggleFullscreen}

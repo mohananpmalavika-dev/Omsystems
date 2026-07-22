@@ -1830,3 +1830,104 @@ select, textarea { font: inherit; }
     grid-template-columns: 1fr;
   }
 }
+
+/* Fullscreen Live Wall Mode */
+.fullscreen-live-wall {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  background: var(--navy);
+  overflow-y: auto;
+  padding: 24px;
+}
+
+.fullscreen-live-wall .error-banner,
+.fullscreen-live-wall .success-banner {
+  position: fixed;
+  top: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 101;
+  max-width: 600px;
+}
+
+.fullscreen-live-wall .live-section {
+  margin: 0;
+  padding: 0;
+}
+
+.fullscreen-live-wall .live-section.fullscreen {
+  min-height: calc(100vh - 48px);
+}
+
+.fullscreen-live-wall .section-heading {
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 12px;
+  padding: 20px 24px;
+  margin-bottom: 24px;
+}
+
+.fullscreen-live-wall .camera-grid {
+  gap: 16px;
+  height: auto;
+}
+
+.fullscreen-live-wall .loading-grid {
+  gap: 16px;
+}
+
+/* Adjust camera grid for fullscreen */
+.fullscreen-live-wall .camera-grid.grid-1 {
+  grid-template-columns: 1fr;
+  aspect-ratio: 16 / 9;
+  max-height: calc(100vh - 200px);
+}
+
+.fullscreen-live-wall .camera-grid.grid-4 {
+  grid-template-columns: repeat(2, 1fr);
+  grid-template-rows: repeat(2, 1fr);
+}
+
+.fullscreen-live-wall .camera-grid.grid-9 {
+  grid-template-columns: repeat(3, 1fr);
+  grid-template-rows: repeat(3, 1fr);
+}
+
+.fullscreen-live-wall .camera-grid.grid-16 {
+  grid-template-columns: repeat(4, 1fr);
+  grid-template-rows: repeat(4, 1fr);
+}
+
+.fullscreen-live-wall .camera-grid.grid-25 {
+  grid-template-columns: repeat(5, 1fr);
+  grid-template-rows: repeat(5, 1fr);
+}
+
+.fullscreen-live-wall .camera-grid.grid-36 {
+  grid-template-columns: repeat(6, 1fr);
+  grid-template-rows: repeat(6, 1fr);
+}
+
+/* Ensure camera tiles fill space in fullscreen */
+.fullscreen-live-wall .camera-tile {
+  aspect-ratio: 16 / 9;
+  min-height: 0;
+}
+
+/* Hide scrollbars in fullscreen for cleaner look */
+.fullscreen-live-wall::-webkit-scrollbar {
+  width: 8px;
+}
+
+.fullscreen-live-wall::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.fullscreen-live-wall::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 4px;
+}
+
+.fullscreen-live-wall::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.25);
+}
