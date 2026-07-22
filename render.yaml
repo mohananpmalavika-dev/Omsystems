@@ -18,12 +18,34 @@ services:
       - key: CONTROL_PLANE_INTERNAL_URL
         sync: false
       - key: MEDIA_GATEWAY_INTERNAL_URL
-        sync: false
+        value: "https://sentinel-grid-media-gateway.onrender.com"
       - key: EDGE_BRIDGE_SHARED_KEY
         sync: false
       - key: DASHBOARD_ACCESS_USERNAME
         sync: false
       - key: DASHBOARD_ACCESS_PASSWORD
+        sync: false
+
+  # Media Gateway for live streaming
+  - type: web
+    name: sentinel-grid-media-gateway
+    runtime: node
+    plan: free
+    region: singapore
+    buildCommand: npm ci && npm run build --workspace @sentinel/media-gateway
+    startCommand: npm run start --workspace @sentinel/media-gateway
+    healthCheckPath: /health
+    autoDeployTrigger: commit
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: PORT
+        value: "8090"
+      - key: CONTROL_PLANE_URL
+        value: "https://sentinel-grid-control-plane.onrender.com"
+      - key: MEDIA_GATEWAY_SHARED_KEY
+        sync: false
+      - key: EDGE_BRIDGE_SHARED_KEY
         sync: false
 
   # Public HTTPS ingress is required because branch gateways initiate outbound
