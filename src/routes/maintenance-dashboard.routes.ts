@@ -24,7 +24,7 @@ export async function registerMaintenanceDashboardRoutes(
 
     const now = new Date();
     const overdueVisits = visits.filter(v => v.status !== 'completed' && new Date(v.dueAt) < now).length;
-    const expiringAmcs = amcContracts.filter(c => new Date(c.end_date) < new Date(Date.now() + 90 * 24 * 60 * 60 * 1000)).length;
+    const expiringAmcs = amcContracts.filter(c => new Date(c.endDate) < new Date(Date.now() + 90 * 24 * 60 * 60 * 1000)).length;
 
     return {
       totalAssets: assets.length,
@@ -49,7 +49,8 @@ export async function registerMaintenanceDashboardRoutes(
 
   // Health Monitoring - Camera health details
   app.get("/v1/maintenance/health/cameras", async (request) => {
-    const query = { limit: Math.min(parseInt(request.query.limit as string) || 50, 1000) };
+    const queryParams = request.query as { limit?: string };
+    const query = { limit: Math.min(parseInt(queryParams.limit || '50') || 50, 1000) };
     const tenantId = request.currentUser.tenantId;
     
     // In a real implementation, this would query the camera_health table
@@ -60,7 +61,7 @@ export async function registerMaintenanceDashboardRoutes(
       data: assets.slice(0, query.limit).map(a => ({
         id: a.id,
         name: a.model,
-        serialNumber: a.serial_number,
+        serialNumber: a.serialNumber,
         status: a.status,
         lastCheck: new Date().toISOString(),
         fps: null,
@@ -168,7 +169,8 @@ export async function registerMaintenanceDashboardRoutes(
 
   // Spare Parts - List all parts
   app.get("/v1/maintenance/spare-parts", async (request) => {
-    const query = { category: (request.query.category as string) || undefined };
+    const queryParams = request.query as { category?: string };
+    const query = { category: queryParams.category || undefined };
     const tenantId = request.currentUser.tenantId;
     
     // In a real implementation, query the spare_parts table

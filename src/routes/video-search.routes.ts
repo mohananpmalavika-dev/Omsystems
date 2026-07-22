@@ -105,7 +105,7 @@ export async function registerVideoSearchRoutes(
    */
   app.get("/v1/recordings/search", async (request, reply) => {
     const filters = searchFiltersSchema.parse(request.query);
-    const tenantId = request.user.tenantId;
+    const tenantId = request.currentUser.tenantId;
 
     // Validate time range
     const fromTime = new Date(filters.from).getTime();
@@ -162,7 +162,7 @@ export async function registerVideoSearchRoutes(
 
     try {
       const thumbnails = await searchService.getRecordingThumbnails(
-        request.user.tenantId,
+        request.currentUser.tenantId,
         {
           cameraId: query.cameraId,
           from: query.from,
@@ -194,7 +194,7 @@ export async function registerVideoSearchRoutes(
 
     try {
       const results = await searchService.searchRecordings(
-        request.user.tenantId,
+        request.currentUser.tenantId,
         {
           cameraId: query.cameraId,
           from: query.from,
@@ -225,7 +225,7 @@ export async function registerVideoSearchRoutes(
     const filters = motionSearchSchema.parse(request.query);
 
     try {
-      const results = await searchService.searchByMotion(request.user.tenantId, {
+      const results = await searchService.searchByMotion(request.currentUser.tenantId, {
         cameraId: filters.cameraId,
         from: filters.from,
         to: filters.to,
@@ -251,7 +251,7 @@ export async function registerVideoSearchRoutes(
     const filters = objectSearchSchema.parse(request.query);
 
     try {
-      const results = await searchService.searchByObject(request.user.tenantId, {
+      const results = await searchService.searchByObject(request.currentUser.tenantId, {
         cameraId: filters.cameraId,
         from: filters.from,
         to: filters.to,
@@ -282,7 +282,7 @@ export async function registerVideoSearchRoutes(
 
     try {
       const classes = await searchService.getAvailableObjectClasses(
-        request.user.tenantId,
+        request.currentUser.tenantId,
         query.cameraId,
       );
 
@@ -308,7 +308,7 @@ export async function registerVideoSearchRoutes(
       .parse(request.query);
 
     try {
-      const stats = await searchService.getRecordingStatistics(request.user.tenantId, {
+      const stats = await searchService.getRecordingStatistics(request.currentUser.tenantId, {
         cameraId: query.cameraId,
         branchId: query.branchId,
         from: query.from,
@@ -337,7 +337,7 @@ export async function registerVideoSearchRoutes(
         snapshotType: body.snapshotType,
         reason: body.reason,
         notes: body.notes,
-        operatorId: request.user.userId,
+        operatorId: request.currentUser.id,
         evidenceCaseId: body.evidenceCaseId,
         incidentId: body.incidentId,
         metadata: body.metadata,
@@ -416,9 +416,9 @@ export async function registerVideoSearchRoutes(
 
     try {
       const bookmark = await snapshotService.createBookmark({
-        tenantId: request.user.tenantId,
+        tenantId: request.currentUser.tenantId,
         cameraId: body.cameraId,
-        operatorId: request.user.userId,
+        operatorId: request.currentUser.id,
         timestamp: body.timestamp,
         reason: body.reason,
         priority: body.priority,
@@ -458,7 +458,7 @@ export async function registerVideoSearchRoutes(
 
     try {
       const results = await snapshotService.listBookmarks({
-        tenantId: request.user.tenantId,
+        tenantId: request.currentUser.tenantId,
         cameraId: query.cameraId,
         evidenceCaseId: query.evidenceCaseId,
         incidentId: query.incidentId,
@@ -487,7 +487,7 @@ export async function registerVideoSearchRoutes(
     try {
       const bookmark = await snapshotService.verifyBookmark({
         bookmarkId: id,
-        verifiedBy: request.user.userId,
+        verifiedBy: request.currentUser.id,
       });
 
       if (!bookmark) {
@@ -510,8 +510,8 @@ export async function registerVideoSearchRoutes(
 
     try {
       const session = await playbackEngine.createSession({
-        tenantId: request.user.tenantId,
-        userId: request.user.userId,
+        tenantId: request.currentUser.tenantId,
+        userId: request.currentUser.id,
         cameraId: body.cameraId,
         fromTime: body.fromTime,
         toTime: body.toTime,
@@ -553,7 +553,7 @@ export async function registerVideoSearchRoutes(
 
     try {
       const syncData = await playbackEngine.getSynchronizedPlayback({
-        tenantId: request.user.tenantId,
+        tenantId: request.currentUser.tenantId,
         groupId: body.groupId,
         cameraIds: body.cameraIds,
         masterCameraId: body.masterCameraId,
@@ -576,8 +576,8 @@ export async function registerVideoSearchRoutes(
   app.get("/v1/recordings/playback/groups", async (request, reply) => {
     try {
       const groups = await playbackEngine.listPlaybackGroups(
-        request.user.tenantId,
-        request.user.userId,
+        request.currentUser.tenantId,
+        request.currentUser.id,
       );
 
       return { data: groups };
@@ -607,7 +607,7 @@ export async function registerVideoSearchRoutes(
     try {
       const group = await playbackEngine.savePlaybackGroup({
         id: body.id,
-        tenantId: request.user.tenantId,
+        tenantId: request.currentUser.tenantId,
         name: body.name,
         description: body.description,
         cameraIds: body.cameraIds,

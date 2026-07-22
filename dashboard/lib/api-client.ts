@@ -262,6 +262,14 @@ export const cameraInventoryApi = {
     ),
 };
 
+export const cameraApi = {
+  get: (cameraId: string) => fetchApi<any>(`/v1/cameras/${encodeURIComponent(cameraId)}`),
+};
+
+export const branchApi = {
+  get: (branchId: string) => fetchApi<any>(`/v1/branches/${encodeURIComponent(branchId)}`),
+};
+
 export const liveOperationsApi = {
   listBookmarks: (cameraId: string, limit = 50) =>
     fetchApi<{ data: any[] }>(
@@ -539,6 +547,23 @@ export const videoSearchApi = {
 
   verifySegment: (segmentId: string) =>
     fetchApi<any>(`/v1/recordings/${segmentId}/verify`, { method: 'POST' }),
+};
+
+export const playbackApi = {
+  getSynchronizedPlayback: (query: {
+    cameraIds: string[];
+    masterCameraId?: string;
+    fromTime: string;
+    toTime: string;
+    groupId?: string;
+    layout?: 'grid' | 'stacked' | 'custom';
+  }) =>
+    fetchApi<any>(`/v1/recordings/playback/synchronized`, {
+      method: 'POST',
+      body: JSON.stringify(query),
+    }),
+  listGroups: () =>
+    fetchApi<{ data: any[] }>(`/v1/recordings/playback/groups`),
 };
 
 export const evidenceApi = {

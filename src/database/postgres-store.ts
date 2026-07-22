@@ -272,19 +272,89 @@ export class PostgresStore
   async createIncident(input: any) { return this.incidents.createIncident(input); }
   async getIncident(id: string) { return this.incidents.getIncident(id); }
   async listIncidents(tenantId: string, filters?: any) { return this.incidents.listIncidents(tenantId, filters); }
-  async updateIncidentStatus(id: string, status: any, changedBy?: string, notes?: string) { return this.incidents.updateStatus(id, status, changedBy, notes); }
-  async assignIncident(id: string, userId: string) { return this.incidents.assignIncident(id, userId); }
-  async addIncidentCamera(incidentId: string, cameraId: string) { return this.incidents.addCamera(incidentId, cameraId); }
-  async addIncidentVideoRange(incidentId: string, cameraId: string, fromAt: string, toAt: string) { return this.incidents.addVideoRange(incidentId, cameraId, fromAt, toAt); }
-  async listIncidentTimeline(incidentId: string) { return this.incidents.listTimeline(incidentId); }
-  async addIncidentEvent(incidentId: string, eventType: string, details: any, createdBy?: string) { return this.incidents.addEvent(incidentId, eventType, details, createdBy); }
+  async updateIncident(id: string, updates: any) { throw new Error('Incident management not implemented in PostgresStore - use MemoryStore'); }
+  async updateIncidentStatus(id: string, status: any, changedBy: string, notes?: string) { throw new Error('Incident management not implemented in PostgresStore - use MemoryStore'); }
+  async assignIncident(id: string, userId: string, assignedBy: string) { throw new Error('Incident management not implemented in PostgresStore - use MemoryStore'); }
+  async escalateIncident(id: string, escalatedBy: string, reason: string, recipients?: string[]) { throw new Error('Incident management not implemented in PostgresStore - use MemoryStore'); }
+  async closeIncident(id: string, closedBy: string, notes?: string) { throw new Error('Incident management not implemented in PostgresStore - use MemoryStore'); }
+  async reopenIncident(id: string, reopenedBy: string, reason: string) { throw new Error('Incident management not implemented in PostgresStore - use MemoryStore'); }
+  
+  async addIncidentParticipant(input: any) { throw new Error('Incident management not implemented in PostgresStore - use MemoryStore'); }
+  async listIncidentParticipants(incidentId: string): Promise<any[]> { throw new Error('Incident management not implemented in PostgresStore - use MemoryStore'); }
+  
+  async addIncidentCamera(incidentId: string, cameraId: string, isPrimary: boolean, addedBy: string) { throw new Error('Incident management not implemented in PostgresStore - use MemoryStore'); }
+  async listIncidentCameras(incidentId: string): Promise<any[]> { throw new Error('Incident management not implemented in PostgresStore - use MemoryStore'); }
+  
+  async addIncidentVideoRange(input: any) { throw new Error('Incident management not implemented in PostgresStore - use MemoryStore'); }
+  async preserveIncidentVideoAutomatic(input: any) { throw new Error('Incident management not implemented in PostgresStore - use MemoryStore'); }
+  async listIncidentVideoRanges(incidentId: string): Promise<any[]> { throw new Error('Incident management not implemented in PostgresStore - use MemoryStore'); }
+  
+  async listIncidentTimeline(incidentId: string): Promise<any[]> { throw new Error('Incident management not implemented in PostgresStore - use MemoryStore'); }
+  async addIncidentEvent(input: any) { throw new Error('Incident management not implemented in PostgresStore - use MemoryStore'); }
+  
+  async createIncidentClip(input: any) { throw new Error('Incident management not implemented in PostgresStore - use MemoryStore'); }
+  async listIncidentClips(incidentId: string): Promise<any[]> { throw new Error('Incident management not implemented in PostgresStore - use MemoryStore'); }
+  
+  async createIncidentSnapshot(input: any) { throw new Error('Incident management not implemented in PostgresStore - use MemoryStore'); }
+  async listIncidentSnapshots(incidentId: string): Promise<any[]> { throw new Error('Incident management not implemented in PostgresStore - use MemoryStore'); }
+  
+  async addIncidentEvidenceItem(input: any) { throw new Error('Incident management not implemented in PostgresStore - use MemoryStore'); }
+  async listIncidentEvidenceItems(incidentId: string): Promise<any[]> { throw new Error('Incident management not implemented in PostgresStore - use MemoryStore'); }
+  
+  async createIncidentEvidencePackage(input: any) { throw new Error('Incident management not implemented in PostgresStore - use MemoryStore'); }
+  async getIncidentEvidencePackage(id: string) { throw new Error('Incident management not implemented in PostgresStore - use MemoryStore'); }
+  async listIncidentEvidencePackages(incidentId: string): Promise<any[]> { throw new Error('Incident management not implemented in PostgresStore - use MemoryStore'); }
+  async approveEvidencePackage(id: string, approvedBy: string) { throw new Error('Incident management not implemented in PostgresStore - use MemoryStore'); }
+  async recordEvidencePackageDownload(id: string, downloadedBy: string) { throw new Error('Incident management not implemented in PostgresStore - use MemoryStore'); }
+  
+  async createPoliceIntimation(input: any) { throw new Error('Incident management not implemented in PostgresStore - use MemoryStore'); }
+  async listPoliceIntimations(incidentId: string): Promise<any[]> { throw new Error('Incident management not implemented in PostgresStore - use MemoryStore'); }
+  async updatePoliceIntimation(id: string, updates: any) { throw new Error('Incident management not implemented in PostgresStore - use MemoryStore'); }
+  async recordPoliceEvidenceTransfer(input: any) { throw new Error('Incident management not implemented in PostgresStore - use MemoryStore'); }
+  async listPoliceEvidenceTransfers(intimationId: string): Promise<any[]> { throw new Error('Incident management not implemented in PostgresStore - use MemoryStore'); }
+  
+  async createInsuranceClaim(input: any) { throw new Error('Incident management not implemented in PostgresStore - use MemoryStore'); }
+  async listInsuranceClaims(incidentId: string): Promise<any[]> { throw new Error('Incident management not implemented in PostgresStore - use MemoryStore'); }
+  async updateInsuranceClaim(id: string, updates: any) { throw new Error('Incident management not implemented in PostgresStore - use MemoryStore'); }
+  async addInsuranceDocument(input: any) { throw new Error('Incident management not implemented in PostgresStore - use MemoryStore'); }
+  async listInsuranceDocuments(claimId: string): Promise<any[]> { throw new Error('Incident management not implemented in PostgresStore - use MemoryStore'); }
+  
+  async createIncidentTask(input: any) { throw new Error('Incident management not implemented in PostgresStore - use MemoryStore'); }
+  async listIncidentTasks(incidentId: string): Promise<any[]> { throw new Error('Incident management not implemented in PostgresStore - use MemoryStore'); }
+  async updateIncidentTask(id: string, updates: any) { throw new Error('Incident management not implemented in PostgresStore - use MemoryStore'); }
+  async completeIncidentTask(id: string, completedBy: string, notes?: string) { throw new Error('Incident management not implemented in PostgresStore - use MemoryStore'); }
+  
+  async addIncidentNote(input: any) { throw new Error('Incident management not implemented in PostgresStore - use MemoryStore'); }
+  async listIncidentNotes(incidentId: string): Promise<any[]> { throw new Error('Incident management not implemented in PostgresStore - use MemoryStore'); }
+  async updateIncidentNote(id: string, content: string) { throw new Error('Incident management not implemented in PostgresStore - use MemoryStore'); }
+  async deleteIncidentNote(id: string) { throw new Error('Incident management not implemented in PostgresStore - use MemoryStore'); }
+  
+  async createIncidentSecureShare(input: any) { throw new Error('Incident management not implemented in PostgresStore - use MemoryStore'); }
+  async listIncidentSecureShares(incidentId: string): Promise<any[]> { throw new Error('Incident management not implemented in PostgresStore - use MemoryStore'); }
+  async verifySecureShareToken(token: string, otp: string) { throw new Error('Incident management not implemented in PostgresStore - use MemoryStore'); }
+  async recordSecureShareDownload(input: { id: string; downloadedBy: string; downloadIp?: string }) { throw new Error('Incident management not implemented in PostgresStore - use MemoryStore'); }
+  async revokeSecureShare(id: string, revokedBy: string, reason: string) { throw new Error('Incident management not implemented in PostgresStore - use MemoryStore'); }
+  
+  async createIncidentReport(input: any) { throw new Error('Incident management not implemented in PostgresStore - use MemoryStore'); }
+  async listIncidentReports(incidentId: string): Promise<any[]> { throw new Error('Incident management not implemented in PostgresStore - use MemoryStore'); }
+  async getIncidentReport(id: string) { throw new Error('Incident management not implemented in PostgresStore - use MemoryStore'); }
+  async updateIncidentReport(id: string, updates: any) { throw new Error('Incident management not implemented in PostgresStore - use MemoryStore'); }
+  async submitIncidentReportForReview(id: string, submittedBy: string) { throw new Error('Incident management not implemented in PostgresStore - use MemoryStore'); }
+  async approveIncidentReport(id: string, approvedBy: string, comments?: string) { throw new Error('Incident management not implemented in PostgresStore - use MemoryStore'); }
+  async finalizeIncidentReport(id: string, finalizedBy: string) { throw new Error('Incident management not implemented in PostgresStore - use MemoryStore'); }
+  
+  async getIncidentDashboard(tenantId: string, filters?: any) { throw new Error('Incident management not implemented in PostgresStore - use MemoryStore'); }
+  async getIncidentAnalyticsByType(tenantId: string, from?: string, to?: string) { throw new Error('Incident management not implemented in PostgresStore - use MemoryStore'); }
+  async getIncidentAnalyticsBySeverity(tenantId: string, from?: string, to?: string) { throw new Error('Incident management not implemented in PostgresStore - use MemoryStore'); }
+  async getIncidentAnalyticsByStatus(tenantId: string, from?: string, to?: string) { throw new Error('Incident management not implemented in PostgresStore - use MemoryStore'); }
+  async getIncidentResponseTimes(tenantId: string, from?: string, to?: string) { throw new Error('Incident management not implemented in PostgresStore - use MemoryStore'); }
   async transitionAnalyticsAlert(id: string, tenantId: string, input: any) {
     return this.analytics.transitionAlert(id, tenantId, input);
   }
   async linkAnalyticsAlertIncident(id: string, tenantId: string, incidentId: string) {
     return this.analytics.linkIncident(id, tenantId, incidentId);
   }
-  async writeAudit(event: AuditEventInput) { await this.audits.write(event); }
+  async writeAudit(event: AuditEventInput) { return this.audits.writeAudit(event); }
 
   // ============ COMPLIANCE ENHANCED METHODS ============
   

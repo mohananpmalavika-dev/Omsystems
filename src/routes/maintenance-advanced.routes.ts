@@ -213,8 +213,9 @@ export async function registerMaintenanceAdvancedRoutes(
     request,
     reply
   ) => {
+    const { planId } = request.params as { planId: string };
     const firmwareManager = getFirmwareManager();
-    const status = firmwareManager.getDeploymentStatus(request.params.planId);
+    const status = firmwareManager.getDeploymentStatus(planId);
     return reply.send(status);
   });
 
@@ -222,8 +223,9 @@ export async function registerMaintenanceAdvancedRoutes(
     request,
     reply
   ) => {
+    const { updateId } = request.params as { updateId: string };
     const firmwareManager = getFirmwareManager();
-    const success = firmwareManager.rollbackDevice(request.params.updateId);
+    const success = firmwareManager.rollbackDevice(updateId);
     return reply.send({ success, message: success ? "Rollback initiated" : "Rollback failed" });
   });
 
@@ -242,7 +244,7 @@ export async function registerMaintenanceAdvancedRoutes(
     reply
   ) => {
     const predictiveEngine = getPredictiveEngine();
-    const { deviceId, smartData } = request.body as any;
+    const { deviceId, smartData } = request.body as { deviceId: string; smartData: any };
     const prediction = predictiveEngine.predictStorageFailure(deviceId, smartData);
     return reply.send(prediction);
   });

@@ -38,6 +38,7 @@ const config = z.object({
 
 const recordingRoot = resolve(config.RECORDING_ROOT);
 const persistedJobsPath = join(recordingRoot, ".recording-jobs.json");
+const pendingControlPlanePath = join(recordingRoot, ".pending-control-plane");
 const secrets = z.record(z.string()).parse(JSON.parse(config.STREAM_SECRETS_JSON));
 const scheduleWindowSchema = z.object({
   name: z.string().trim().min(1).max(120).optional(),
@@ -111,6 +112,7 @@ const lastSegmentEnd = new Map<string, number>();
 const app = Fastify({ logger: true });
 
 await mkdir(recordingRoot, { recursive: true });
+await mkdir(pendingControlPlanePath, { recursive: true });
 await restoreJobs();
 
 const storageAdapter = createStorageAdapter({
@@ -667,6 +669,55 @@ async function retryPendingIndexes() {
       logFailure(error);
     }
   }
+}
+
+async function retryPendingControlPlaneRequests() {
+  for (const sidecar of await findControlPlaneSidecars(pendingControlPlanePath)) {
+    try {
+      const payload = z.object({
+        path: z.string(),
+        init: z.object({
+          method: z.string().optional(),
+          body: z.string().optional(),
+          headers: z.record(z.string()).optional(),
+        }),
+      }).parse(JSON.parse(await readFile(sidecar, "utf8")));
+      await controlPlane(payload.path, {
+        method: payload.init.method,
+        body: payload.init.body,
+        headers: payload.init.headers,
+      });
+      await unlink(sidecar);
+    } catch (error) {
+      logFailure(error);
+    }
+  }
+}
+
+async function enqueueControlPlaneRequest(path: string, init: RequestInit) {
+  const marker = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}.control.json`;
+  const filePath = join(pendingControlPlanePath, marker);
+  await writeFile(filePath, JSON.stringify({
+    path,
+    init: {
+      method: init.method,
+      body: typeof init.body === "string" ? init.body : undefined,
+      headers: typeof init.headers === "object" && init.headers !== null
+        ? Object.fromEntries(Object.entries(init.headers as Record<string, string>))
+        : undefined,
+    },
+  }, null, 2), { encoding: "utf8", mode: 0o600 });
+}
+
+async function findControlPlaneSidecars(folder: string): Promise<string[]> {
+  const matches: string[] = [];
+  for (const entry of await readdir(folder, { withFileTypes: true })) {
+    const path = join(folder, entry.name);
+    if (entry.isDirectory()) matches.push(...await findControlPlaneSidecars(path));
+    else if (entry.isFile() && entry.name.endsWith(".control.json")) matches.push(path);
+    if (matches.length >= 1_000) break;
+  }
+  return matches;
 }
 
 const internalIndexPayload = z.object({
