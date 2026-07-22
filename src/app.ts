@@ -20,12 +20,12 @@ import { registerCameraDiscoveryRoutes } from "./routes/camera-discovery.routes.
 import { registerCctvInfrastructureRoutes } from "./routes/cctv-infrastructure.js";
 import { registerOrganizationRoutes } from "./routes/organization.routes.js";
 import { registerUserRoutes } from "./routes/user.routes.js";
-import { registerLiveOperationsRoutes } from "./routes/live-operations.routes.js";
 import { registerAnalyticsRoutes } from "./routes/analytics.routes.js";
 import { registerIncidentsRoutes } from "./routes/incidents.routes.js";
 import { registerComplianceRoutes } from "./routes/compliance.routes.js";
+import { registerComplianceRoutes } from "./routes/compliance.routes.js";
 import { registerPrivacyRoutes } from "./routes/privacy.routes.js";
-import { registerMaintenanceRoutes } from "./routes/maintenance.routes.js";
+// import { registerMaintenanceRoutes } from "./routes/maintenance.routes.js";
 // import { registerMaintenanceDashboardRoutes } from "./routes/maintenance-dashboard.routes.js";
 // import { registerMaintenanceAdvancedRoutes } from "./routes/maintenance-advanced.routes.js";
 import { MemoryStore } from "./store.js";

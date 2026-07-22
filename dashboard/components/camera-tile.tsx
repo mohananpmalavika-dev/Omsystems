@@ -14,6 +14,7 @@ import {
   ZoomIn,
   ZoomOut,
   Volume2,
+  SlidersHorizontal,
 } from "lucide-react";
 import { useRef, useState } from "react";
 import type { Camera, LiveSessionResponse, RecordingJob, RecordingMode } from "@/lib/types";
