@@ -302,7 +302,7 @@ export async function buildApp(options?: {
   app.post("/v1/branches/:branchId/cameras/discovered", async (request, reply) => {
     const { branchId } = branchParams.parse(request.params);
     if (!(await requireAccess(request, reply, store, "device:configure", branchId))) return;
-    const body = z.object({
+    const parsed = z.object({
       edgeAgentId: z.string().min(1),
       vendor: z.enum(["hikvision", "cp-plus", "other"]),
       model: z.string().min(1).max(120),
@@ -312,7 +312,17 @@ export async function buildApp(options?: {
       profiles: z.array(cameraProfileSchema).min(1),
       capabilities: capabilitiesSchema,
     }).parse(request.body);
-    const discovery = await store.createDiscovery(branchId, body);
+    const discoveryInput = {
+      edgeAgentId: parsed.edgeAgentId,
+      vendor: parsed.vendor,
+      model: parsed.model,
+      ipAddress: parsed.ipAddress,
+      onvifPort: parsed.onvifPort,
+      rtspPort: parsed.rtspPort,
+      profiles: parsed.profiles,
+      capabilities: parsed.capabilities,
+    };
+    const discovery = await store.createDiscovery(branchId, discoveryInput);
     await audit(request, store, "camera.discovered", branchId, "success", {
       discoveryId: discovery.id,
       vendor: discovery.vendor,
@@ -324,14 +334,21 @@ export async function buildApp(options?: {
   app.post("/v1/branches/:branchId/cameras", async (request, reply) => {
     const { branchId } = branchParams.parse(request.params);
     if (!(await requireAccess(request, reply, store, "device:configure", branchId))) return;
-    const body = z.object({
+    const parsed = z.object({
       discoveryId: z.string().min(1),
       name: z.string().trim().min(2).max(120),
       channel: z.number().int().positive(),
       protocol: z.enum(["onvif-t", "onvif-s", "rtsp", "vendor-adapter"]),
       connectionSecretRef: z.string().min(8).max(500),
     }).parse(request.body);
-    const camera = await store.approveCamera(branchId, body);
+    const approvalInput = {
+      discoveryId: parsed.discoveryId,
+      name: parsed.name,
+      channel: parsed.channel,
+      protocol: parsed.protocol,
+      connectionSecretRef: parsed.connectionSecretRef,
+    };
+    const camera = await store.approveCamera(branchId, approvalInput);
     if (!camera) return reply.code(404).send({ error: "discovery_not_found" });
     await audit(request, store, "camera.approved", camera.nodeId, "success", {
       cameraId: camera.id,
