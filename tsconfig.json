@@ -21,6 +21,7 @@
     "src/routes/evidence.routes.ts",
     "src/routes/video-search.routes.ts",
     "src/store-maintenance-extensions.ts",
-    "src/routes/*.disabled"
+    "src/routes/*.disabled",
+    "src/maintenance/*.disabled"
   ]
 }
