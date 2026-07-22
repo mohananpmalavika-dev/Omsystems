@@ -221,6 +221,21 @@ export const userApi = {
 
 };
 
+export const deviceInventoryApi = {
+  list: (branch?: string) => {
+    const params = new URLSearchParams();
+    if (branch) params.set('branch', branch);
+    return fetchApi<{ data: any[] }>(`/v1/device-inventory${params.toString() ? `?${params}` : ''}`);
+  },
+  create: (data: any) => fetchApi<any>('/v1/device-inventory', {
+    method: 'POST', body: JSON.stringify(data),
+  }),
+  get: (id: string) => fetchApi<any>(`/v1/device-inventory/${encodeURIComponent(id)}`),
+  update: (id: string, data: any) => fetchApi<any>(`/v1/device-inventory/${encodeURIComponent(id)}`, {
+    method: 'PATCH', body: JSON.stringify(data),
+  }),
+};
+
 export const cameraInventoryApi = {
   listBranches: (action: 'live:view' | 'device:configure' | 'analytics:view' = 'live:view') =>
     fetchApi<{ data: any[] }>(`/v1/branches?action=${encodeURIComponent(action)}`),

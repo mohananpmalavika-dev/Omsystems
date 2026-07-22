@@ -8,6 +8,7 @@ import { z } from "zod";
 import { timingSafeEqual } from "node:crypto";
 import {
   hasExtendedInfrastructure,
+  type CameraDiscoveryInput,
   type ControlPlaneStore,
 } from "./control-plane-store.js";
 import { actions, type Action, type Camera, type RecordingJob } from "./domain/models.js";
@@ -31,8 +32,14 @@ import { registerPrivacyRoutes } from "./routes/privacy.routes.js";
 import { registerMaintenanceRoutes } from "./routes/maintenance.routes.js";
 import { registerMaintenanceDashboardRoutes } from "./routes/maintenance-dashboard.routes.js";
 import { registerMaintenanceAdvancedRoutes } from "./routes/maintenance-advanced.routes.js";
+import { registerMaintenanceHealthRoutes } from "./routes/maintenance-health.routes.js";
+import { registerMaintenanceReportsRoutes } from "./routes/maintenance-reports.routes.js";
+import { registerMaintenanceExportRoutes } from "./routes/maintenance-export.routes.js";
+import { registerFirmwareManagementRoutes } from "./routes/maintenance-firmware.routes.js";
+import { registerPredictiveAnalyticsRoutes } from "./routes/maintenance-predictive.routes.js";
 import { registerEvidenceRoutes } from "./routes/evidence.routes.js";
 import { registerVideoSearchRoutes } from "./routes/video-search.routes.js";
+import { registerDeviceInventoryRoutes } from "./routes/device-inventory.routes.js";
 import { RecordingSearchService } from "./recording/search-service.js";
 import { PlaybackEngine } from "./recording/playback-engine.js";
 import { SnapshotService } from "./recording/snapshot-service.js";
@@ -68,6 +75,11 @@ const capabilitiesSchema = z.object({
   audio: z.boolean(),
   events: z.boolean(),
 });
+const onvifCapabilityTestSchema = z.object({
+  name: z.string().trim().min(1).max(120),
+  status: z.enum(["pass", "fail", "unsupported", "vendor-specific"]),
+  detail: z.string().trim().max(500).optional(),
+}).strict();
 const scheduleWindowSchema = z.object({
   name: z.string().trim().min(1).max(120).optional(),
   days: z.array(z.number().int().min(0).max(6)).min(1),
@@ -393,19 +405,63 @@ export async function buildApp(options?: {
     if (!(await requireAccess(request, reply, store, "device:configure", branchId))) return;
     const parsed = z.object({
       edgeAgentId: z.string().min(1),
-      vendor: z.enum(["hikvision", "cp-plus", "other"]),
-      model: z.string().min(1).max(120),
+      discoveryMethod: z.enum(["onvif-ws-discovery", "configured-ip-range", "manual-ip-registration", "csv-bulk-import", "nvr-dvr-channel-discovery", "vendor-api-discovery", "snmp-discovery", "edge-agent-reported-inventory"]).default("edge-agent-reported-inventory"),
+      vendor: z.enum(["hikvision", "cp-plus", "other"]).default("other"),
+      manufacturer: z.string().trim().min(1).max(120).optional(),
+      model: z.string().trim().min(1).max(120),
       ipAddress: z.string().ip(),
+      macAddress: z.string().trim().max(80).optional(),
+      serialNumber: z.string().trim().max(120).optional(),
+      firmwareVersion: z.string().trim().max(200).optional(),
+      onvifSupport: z.boolean().optional(),
+      onvifEndpointReference: z.string().trim().max(500).optional(),
+      onvifServices: z.array(z.string().trim().min(1).max(120)).optional(),
+      onvifCapabilityTests: z.array(onvifCapabilityTestSchema).optional(),
+      mediaProfiles: z.array(cameraProfileSchema).optional(),
+      rtspValidated: z.boolean().optional(),
+      ptzCapability: z.boolean().optional(),
+      audioCapability: z.boolean().optional(),
+      analyticsCapability: z.boolean().optional(),
+      timeSynchronization: z.enum(["synchronized", "drifted", "unknown"]).optional(),
+      duplicateStatus: z.enum(["unique", "duplicate", "review-required"]).optional(),
+      compatibilityStatus: z.enum(["compatible", "incompatible", "review-required"]).optional(),
+      hardwareId: z.string().trim().max(120).optional(),
+      existingDeviceAssociation: z.string().trim().max(200).optional(),
       onvifPort: z.number().int().min(1).max(65535),
       rtspPort: z.number().int().min(1).max(65535),
       profiles: z.array(cameraProfileSchema).min(1),
       capabilities: capabilitiesSchema,
     }).parse(request.body);
-    const discoveryInput = {
+    const discoveryInput: CameraDiscoveryInput = {
       edgeAgentId: parsed.edgeAgentId,
+      discoveryMethod: parsed.discoveryMethod,
       vendor: parsed.vendor,
+      manufacturer: parsed.manufacturer,
       model: parsed.model,
       ipAddress: parsed.ipAddress,
+      macAddress: parsed.macAddress,
+      serialNumber: parsed.serialNumber,
+      firmwareVersion: parsed.firmwareVersion,
+      onvifSupport: parsed.onvifSupport,
+      onvifEndpointReference: parsed.onvifEndpointReference,
+      onvifServices: parsed.onvifServices,
+      onvifCapabilityTests: parsed.onvifCapabilityTests as CameraDiscoveryInput["onvifCapabilityTests"],
+      mediaProfiles: parsed.mediaProfiles?.map(p => ({
+        name: p.name,
+        codec: p.codec,
+        width: p.width,
+        height: p.height,
+        rtspUri: p.rtspUri,
+      })),
+      rtspValidated: parsed.rtspValidated,
+      ptzCapability: parsed.ptzCapability,
+      audioCapability: parsed.audioCapability,
+      analyticsCapability: parsed.analyticsCapability,
+      timeSynchronization: parsed.timeSynchronization,
+      duplicateStatus: parsed.duplicateStatus,
+      compatibilityStatus: parsed.compatibilityStatus,
+      hardwareId: parsed.hardwareId,
+      existingDeviceAssociation: parsed.existingDeviceAssociation,
       onvifPort: parsed.onvifPort,
       rtspPort: parsed.rtspPort,
       profiles: parsed.profiles.map(p => ({
@@ -911,6 +967,8 @@ export async function buildApp(options?: {
     return decision;
   });
 
+  await registerDeviceInventoryRoutes(app, store);
+
   if (extendedStore) {
     await registerAuthRoutes(app, extendedStore);
     await registerOrganizationRoutes(app, extendedStore);
@@ -923,13 +981,67 @@ export async function buildApp(options?: {
     await registerMaintenanceRoutes(app, extendedStore);
     await registerMaintenanceDashboardRoutes(app, extendedStore);
     await registerMaintenanceAdvancedRoutes(app, extendedStore);
-    // start maintenance scheduler when extended store is available
+    await registerMaintenanceHealthRoutes(app, extendedStore);
+    await registerMaintenanceReportsRoutes(app, extendedStore);
+    await registerMaintenanceExportRoutes(app, extendedStore);
+    await registerFirmwareManagementRoutes(app, extendedStore);
+    await registerPredictiveAnalyticsRoutes(app, extendedStore);
+    
+    // Start maintenance scheduler
     try {
       const { startMaintenanceScheduler } = await import("./maintenance/scheduler.js");
       const stop = startMaintenanceScheduler(extendedStore, app.log);
       app.addHook('onClose', async () => stop());
     } catch (err: unknown) {
       app.log.error({ err }, 'failed to start maintenance scheduler');
+    }
+
+    // Start health collector service
+    try {
+      const { initHealthCollector } = await import("./maintenance/health-collector.js");
+      const healthCollector = initHealthCollector(extendedStore, app.log);
+      healthCollector.start();
+      app.addHook('onClose', async () => healthCollector.stop());
+      app.log.info('Health collector service started');
+    } catch (err: unknown) {
+      app.log.error({ err }, 'failed to start health collector service');
+    }
+
+    // Initialize notification service
+    try {
+      const { initNotificationService } = await import("./services/notification-service.js");
+      const { loadNotificationConfig } = await import("./config/notifications.config.js");
+      const notificationConfig = loadNotificationConfig();
+      const notificationService = initNotificationService(notificationConfig, extendedStore, app.log);
+      app.log.info({
+        emailConfigured: !!notificationConfig.email,
+        smsConfigured: !!notificationConfig.sms,
+        webhookConfigured: !!notificationConfig.webhook,
+      }, 'Notification service initialized');
+    } catch (err: unknown) {
+      app.log.warn({ err }, 'Notification service not configured - alerts will be logged only');
+    }
+
+    // Start alert engine
+    try {
+      const { initAlertEngine } = await import("./maintenance/alert-engine.js");
+      const alertEngine = initAlertEngine(extendedStore, app.log);
+      alertEngine.start();
+      app.addHook('onClose', async () => alertEngine.stop());
+      app.log.info('Alert engine started');
+    } catch (err: unknown) {
+      app.log.error({ err }, 'failed to start alert engine');
+    }
+
+    // Start scheduled reports service
+    try {
+      const { initScheduledReportsService } = await import("./maintenance/scheduled-reports.js");
+      const scheduledReportsService = initScheduledReportsService(extendedStore, app.log);
+      scheduledReportsService.start();
+      app.addHook('onClose', async () => scheduledReportsService.stop());
+      app.log.info('Scheduled reports service started');
+    } catch (err: unknown) {
+      app.log.error({ err }, 'failed to start scheduled reports service');
     }
   }
   await registerPrivacyRoutes(app, store);

@@ -519,13 +519,38 @@ export interface EdgeScanJob {
   error: string | null;
 }
 
+export interface OnvifCapabilityTest {
+  name: string;
+  status: "pass" | "fail" | "unsupported" | "vendor-specific";
+  detail?: string;
+}
+
 export interface DiscoveredCamera {
   id: string;
   branchId: string;
   edgeAgentId: string;
+  discoveryMethod: "onvif-ws-discovery" | "configured-ip-range" | "manual-ip-registration" | "csv-bulk-import" | "nvr-dvr-channel-discovery" | "vendor-api-discovery" | "snmp-discovery" | "edge-agent-reported-inventory";
   vendor: CameraVendor;
+  manufacturer: string;
   model: string;
   ipAddress: string;
+  macAddress?: string;
+  serialNumber?: string;
+  firmwareVersion?: string;
+  onvifSupport?: boolean;
+  onvifEndpointReference?: string;
+  onvifServices?: string[];
+  onvifCapabilityTests?: OnvifCapabilityTest[];
+  mediaProfiles?: CameraProfile[];
+  rtspValidated?: boolean;
+  ptzCapability?: boolean;
+  audioCapability?: boolean;
+  analyticsCapability?: boolean;
+  timeSynchronization?: "synchronized" | "drifted" | "unknown";
+  duplicateStatus?: "unique" | "duplicate" | "review-required";
+  compatibilityStatus?: "compatible" | "incompatible" | "review-required";
+  hardwareId?: string;
+  existingDeviceAssociation?: string;
   onvifPort: number;
   rtspPort: number;
   profiles: CameraProfile[];

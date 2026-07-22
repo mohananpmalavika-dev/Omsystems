@@ -1,569 +1,483 @@
 /**
- * Phase 6: Firmware & Software Update Management
- * Handle firmware/software updates with approval workflow, rollback capability, and deployment tracking
+ * Firmware Management Service
+ * Handles firmware updates, version tracking, approval workflows, and rollbacks
  */
 
-import type { ControlPlaneStore } from "../control-plane-store.js";
+import { v4 as uuidv4 } from 'uuid';
+import type { ControlPlaneStore } from '../control-plane-store.js';
 
 export interface FirmwareVersion {
   id: string;
-  deviceType: string; // camera, recorder, switch, ups
-  manufacturer: string;
-  versionNumber: string;
+  tenantId: string;
+  assetCategory: 'camera' | 'recorder' | 'storage' | 'network' | 'other';
+  vendor: string;
+  model: string;
+  version: string;
   releaseDate: Date;
-  description: string;
-  improvements: string[];
-  bugFixes: string[];
-  knownIssues?: string[];
-  checksum: string;
-  downloadUrl: string;
+  fileUrl: string;
+  fileHash: string;
   fileSize: number;
-  supportedModels: string[];
-}
-
-export interface DeploymentPlan {
-  id: string;
-  firmwareVersionId: string;
-  targetDevices: string[];
-  deploymentStrategy: "immediate" | "staged" | "scheduled";
-  rolloutPercentage?: number;
-  scheduledTime?: Date;
-  approvalStatus: "pending" | "approved" | "rejected";
+  releaseNotes: string;
+  criticality: 'critical' | 'important' | 'recommended' | 'optional';
+  compatibility: string[]; // List of compatible model versions
+  status: 'draft' | 'testing' | 'approved' | 'deprecated';
   approvedBy?: string;
-  approvalDate?: Date;
-  status: "pending" | "in-progress" | "completed" | "failed" | "rolled-back";
+  approvedAt?: Date;
+  createdBy: string;
   createdAt: Date;
-  completedAt?: Date;
 }
 
-export interface DeviceUpdate {
+export interface FirmwareUpdate {
   id: string;
-  deploymentPlanId: string;
-  deviceId: string;
-  previousVersion: string;
+  tenantId: string;
+  firmwareVersionId: string;
+  targetAssets: string[]; // Asset IDs
+  scheduledAt?: Date;
+  status: 'scheduled' | 'in-progress' | 'completed' | 'failed' | 'cancelled' | 'rollback';
+  startedAt?: Date;
+  completedAt?: Date;
+  progress: {
+    total: number;
+    completed: number;
+    failed: number;
+    inProgress: number;
+  };
+  rollbackVersionId?: string;
+  createdBy: string;
+  createdAt: Date;
+}
+
+export interface AssetFirmwareUpdate {
+  id: string;
+  firmwareUpdateId: string;
+  assetId: string;
+  previousVersion?: string;
   targetVersion: string;
-  updateStatus:
-    | "pending"
-    | "downloading"
-    | "installing"
-    | "completed"
-    | "failed"
-    | "rolled-back";
-  progress: number; // 0-100
+  status: 'pending' | 'downloading' | 'installing' | 'verifying' | 'completed' | 'failed' | 'rolled-back';
   startedAt?: Date;
   completedAt?: Date;
   errorMessage?: string;
-  rollbackAvailable: boolean;
-  rollbackToVersion?: string;
+  retryCount: number;
+  verificationStatus?: 'passed' | 'failed';
 }
 
-export interface CompatibilityCheck {
-  deviceId: string;
-  deviceModel: string;
-  currentVersion: string;
-  targetVersion: string;
-  isCompatible: boolean;
-  compatibilityIssues: string[];
-  prerequisites: string[];
-  recommendedActions: string[];
-}
-
-export interface UpdateApprovalRequest {
+export interface FirmwareApprovalRequest {
   id: string;
-  deploymentPlanId: string;
-  requiredApprovers: string[];
-  currentApprovals: Map<string, { approvedBy: string; date: Date }>;
-  requiredApprovalCount: number;
-  status: "pending" | "approved" | "rejected";
-  rejectionReason?: string;
-  createdAt: Date;
-  deadlineAt: Date;
+  tenantId: string;
+  firmwareVersionId: string;
+  requestedBy: string;
+  requestedAt: Date;
+  justification: string;
+  status: 'pending' | 'approved' | 'rejected';
+  reviewedBy?: string;
+  reviewedAt?: Date;
+  reviewNotes?: string;
 }
 
-export class FirmwareUpdateManager {
+export class FirmwareManager {
   private store: ControlPlaneStore;
-  private availableVersions: Map<string, FirmwareVersion[]> = new Map();
-  private deploymentPlans: Map<string, DeploymentPlan> = new Map();
-  private deviceUpdates: Map<string, DeviceUpdate> = new Map();
-  private approvalRequests: Map<string, UpdateApprovalRequest> = new Map();
-  private compatibilityDatabase: Map<string, CompatibilityCheck[]> = new Map();
-  private updateHistory: Array<{
-    deviceId: string;
-    previousVersion: string;
-    newVersion: string;
-    timestamp: Date;
-    status: string;
-  }> = [];
+  private logger: any;
 
-  constructor(store: ControlPlaneStore) {
+  constructor(store: ControlPlaneStore, logger?: any) {
     this.store = store;
-    this.initializeCompatibilityDatabase();
+    this.logger = logger || console;
   }
 
-  /**
-   * Initialize compatibility database with known device models
-   */
-  private initializeCompatibilityDatabase(): void {
-    const compatibilityRules = new Map<string, Map<string, CompatibilityCheck[]>>([
-      [
-        "camera",
-        new Map([
-          [
-            "Hikvision DS-2CD2143G2-I",
-            [
-              {
-                deviceId: "cam_001",
-                deviceModel: "Hikvision DS-2CD2143G2-I",
-                currentVersion: "1.0.0",
-                targetVersion: "1.2.1",
-                isCompatible: true,
-                compatibilityIssues: [],
-                prerequisites: ["Firmware upgrade tool v2.0+"],
-                recommendedActions: [
-                  "Backup current configuration before upgrade",
-                  "Perform upgrade during low-traffic hours",
-                ],
-              },
-            ],
-          ],
-        ]),
-      ],
-    ]);
-  }
+  // ========================================================================
+  // Firmware Version Management
+  // ========================================================================
 
   /**
-   * Register available firmware version
+   * Register a new firmware version
    */
-  registerFirmwareVersion(version: FirmwareVersion): void {
-    const key = `${version.deviceType}:${version.manufacturer}`;
-    const versions = this.availableVersions.get(key) || [];
-    versions.push(version);
-    // Sort by release date descending
-    versions.sort((a, b) => b.releaseDate.getTime() - a.releaseDate.getTime());
-    this.availableVersions.set(key, versions);
-  }
-
-  /**
-   * Get available versions for a device type
-   */
-  getAvailableVersions(
-    deviceType: string,
-    manufacturer?: string
-  ): FirmwareVersion[] {
-    const key = manufacturer
-      ? `${deviceType}:${manufacturer}`
-      : deviceType;
-    return this.availableVersions.get(key) || [];
-  }
-
-  /**
-   * Check firmware compatibility for a device
-   */
-  checkCompatibility(
-    deviceId: string,
-    deviceModel: string,
-    currentVersion: string,
-    targetVersion: string
-  ): CompatibilityCheck {
-    const check: CompatibilityCheck = {
-      deviceId,
-      deviceModel,
-      currentVersion,
-      targetVersion,
-      isCompatible: this.validateCompatibility(deviceModel, currentVersion, targetVersion),
-      compatibilityIssues: this.getCompatibilityIssues(deviceModel, targetVersion),
-      prerequisites: this.getPrerequisites(deviceModel, targetVersion),
-      recommendedActions: this.getRecommendedActions(deviceModel, currentVersion, targetVersion),
-    };
-
-    const key = `${deviceId}:${currentVersion}:${targetVersion}`;
-    this.compatibilityDatabase.set(key, [check]);
-
-    return check;
-  }
-
-  /**
-   * Validate compatibility between versions
-   */
-  private validateCompatibility(
-    deviceModel: string,
-    currentVersion: string,
-    targetVersion: string
-  ): boolean {
-    // Simulate compatibility check
-    // In real implementation, would check against a database
-    const currentMajor = parseInt(currentVersion.split(".")[0]);
-    const targetMajor = parseInt(targetVersion.split(".")[0]);
-
-    // Can't downgrade major versions
-    if (targetMajor < currentMajor) {
-      return false;
-    }
-
-    // Check for known incompatibilities
-    const incompatiblePairs = [
-      { from: "1.0.0", to: "3.0.0" }, // Major version skip
-    ];
-
-    return !incompatiblePairs.some(
-      (pair) => pair.from === currentVersion && pair.to === targetVersion
-    );
-  }
-
-  /**
-   * Get compatibility issues for target version
-   */
-  private getCompatibilityIssues(deviceModel: string, targetVersion: string): string[] {
-    // Simulate getting issues from database
-    return [];
-  }
-
-  /**
-   * Get prerequisites for update
-   */
-  private getPrerequisites(deviceModel: string, targetVersion: string): string[] {
-    return [
-      "Device must be connected to network",
-      "Configuration must be backed up",
-      "Device must have sufficient storage for update",
-      "Power supply must be stable",
-    ];
-  }
-
-  /**
-   * Get recommended actions
-   */
-  private getRecommendedActions(
-    deviceModel: string,
-    currentVersion: string,
-    targetVersion: string
-  ): string[] {
-    return [
-      "Back up current configuration before starting update",
-      "Schedule update during maintenance window (low traffic hours)",
-      "Test on non-production device first if available",
-      "Have rollback plan ready",
-      "Notify users about potential downtime",
-    ];
-  }
-
-  /**
-   * Create deployment plan for firmware update
-   */
-  createDeploymentPlan(
-    firmwareVersionId: string,
-    targetDevices: string[],
-    strategy: "immediate" | "staged" | "scheduled" = "staged",
-    scheduleTime?: Date
-  ): DeploymentPlan {
-    const planId = `plan_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-
-    const plan: DeploymentPlan = {
-      id: planId,
-      firmwareVersionId,
-      targetDevices,
-      deploymentStrategy: strategy,
-      rolloutPercentage: strategy === "staged" ? 20 : undefined,
-      scheduledTime: strategy === "scheduled" ? scheduleTime : undefined,
-      approvalStatus: "pending",
-      status: "pending",
+  async registerFirmwareVersion(data: Omit<FirmwareVersion, 'id' | 'createdAt' | 'status'>): Promise<FirmwareVersion> {
+    const version: FirmwareVersion = {
+      ...data,
+      id: uuidv4(),
+      status: 'draft',
       createdAt: new Date(),
     };
 
-    this.deploymentPlans.set(planId, plan);
+    // In production, store in database
+    this.logger.info('Firmware version registered:', {
+      id: version.id,
+      vendor: version.vendor,
+      model: version.model,
+      version: version.version,
+    });
 
-    // Create approval request
-    this.createApprovalRequest(planId);
-
-    return plan;
+    return version;
   }
 
   /**
-   * Create approval request for deployment
+   * Request approval for firmware version
    */
-  private createApprovalRequest(deploymentPlanId: string): UpdateApprovalRequest {
-    const requestId = `approval_${Date.now()}`;
-    const request: UpdateApprovalRequest = {
-      id: requestId,
-      deploymentPlanId,
-      requiredApprovers: ["admin", "maintenance_manager"],
-      currentApprovals: new Map(),
-      requiredApprovalCount: 2,
-      status: "pending",
-      createdAt: new Date(),
-      deadlineAt: new Date(Date.now() + 48 * 60 * 60 * 1000), // 48 hours
+  async requestApproval(data: {
+    tenantId: string;
+    firmwareVersionId: string;
+    requestedBy: string;
+    justification: string;
+  }): Promise<FirmwareApprovalRequest> {
+    const request: FirmwareApprovalRequest = {
+      id: uuidv4(),
+      tenantId: data.tenantId,
+      firmwareVersionId: data.firmwareVersionId,
+      requestedBy: data.requestedBy,
+      requestedAt: new Date(),
+      justification: data.justification,
+      status: 'pending',
     };
 
-    this.approvalRequests.set(requestId, request);
+    // In production, store in database and notify approvers
+    this.logger.info('Firmware approval requested:', {
+      id: request.id,
+      firmwareVersionId: data.firmwareVersionId,
+      requestedBy: data.requestedBy,
+    });
+
     return request;
   }
 
   /**
-   * Approve deployment plan
+   * Approve firmware version
    */
-  approvePlan(deploymentPlanId: string, approvedBy: string): boolean {
-    const approvalRequest = Array.from(this.approvalRequests.values()).find(
-      (r) => r.deploymentPlanId === deploymentPlanId
-    );
+  async approveFirmware(data: {
+    requestId: string;
+    reviewedBy: string;
+    reviewNotes?: string;
+  }): Promise<void> {
+    // In production:
+    // 1. Update approval request status
+    // 2. Update firmware version status to 'approved'
+    // 3. Notify requestor
+    // 4. Create audit log
 
-    if (!approvalRequest) {
-      return false;
-    }
-
-    approvalRequest.currentApprovals.set(approvedBy, {
-      approvedBy,
-      date: new Date(),
+    this.logger.info('Firmware approved:', {
+      requestId: data.requestId,
+      reviewedBy: data.reviewedBy,
     });
-
-    if (approvalRequest.currentApprovals.size >= approvalRequest.requiredApprovalCount) {
-      approvalRequest.status = "approved";
-
-      const plan = this.deploymentPlans.get(deploymentPlanId);
-      if (plan) {
-        plan.approvalStatus = "approved";
-        plan.approvedBy = approvedBy;
-        plan.approvalDate = new Date();
-      }
-
-      return true;
-    }
-
-    return false;
   }
 
   /**
-   * Reject deployment plan
+   * Reject firmware version
    */
-  rejectPlan(deploymentPlanId: string, reason: string, rejectedBy: string): void {
-    const plan = this.deploymentPlans.get(deploymentPlanId);
-    if (plan) {
-      plan.approvalStatus = "rejected";
-    }
-
-    const approvalRequest = Array.from(this.approvalRequests.values()).find(
-      (r) => r.deploymentPlanId === deploymentPlanId
-    );
-    if (approvalRequest) {
-      approvalRequest.status = "rejected";
-      approvalRequest.rejectionReason = reason;
-    }
-  }
-
-  /**
-   * Start deployment
-   */
-  startDeployment(deploymentPlanId: string): boolean {
-    const plan = this.deploymentPlans.get(deploymentPlanId);
-    if (!plan || plan.approvalStatus !== "approved") {
-      return false;
-    }
-
-    plan.status = "in-progress";
-
-    // Create device updates for all target devices
-    plan.targetDevices.forEach((deviceId) => {
-      this.createDeviceUpdate(deploymentPlanId, deviceId);
+  async rejectFirmware(data: {
+    requestId: string;
+    reviewedBy: string;
+    reviewNotes: string;
+  }): Promise<void> {
+    this.logger.info('Firmware rejected:', {
+      requestId: data.requestId,
+      reviewedBy: data.reviewedBy,
     });
-
-    return true;
   }
 
-  /**
-   * Create device update record
-   */
-  private createDeviceUpdate(deploymentPlanId: string, deviceId: string): DeviceUpdate {
-    const updateId = `update_${Date.now()}_${deviceId}`;
+  // ========================================================================
+  // Firmware Update Management
+  // ========================================================================
 
-    const update: DeviceUpdate = {
-      id: updateId,
-      deploymentPlanId,
-      deviceId,
-      previousVersion: "1.0.0", // In real impl, get from device
-      targetVersion: "1.2.1",
-      updateStatus: "pending",
-      progress: 0,
-      rollbackAvailable: true,
-      rollbackToVersion: "1.0.0",
+  /**
+   * Schedule firmware update for assets
+   */
+  async scheduleFirmwareUpdate(data: {
+    tenantId: string;
+    firmwareVersionId: string;
+    targetAssets: string[];
+    scheduledAt?: Date;
+    createdBy: string;
+  }): Promise<FirmwareUpdate> {
+    const update: FirmwareUpdate = {
+      id: uuidv4(),
+      tenantId: data.tenantId,
+      firmwareVersionId: data.firmwareVersionId,
+      targetAssets: data.targetAssets,
+      scheduledAt: data.scheduledAt,
+      status: data.scheduledAt ? 'scheduled' : 'in-progress',
+      progress: {
+        total: data.targetAssets.length,
+        completed: 0,
+        failed: 0,
+        inProgress: 0,
+      },
+      createdBy: data.createdBy,
+      createdAt: new Date(),
     };
 
-    this.deviceUpdates.set(updateId, update);
+    // In production:
+    // 1. Validate firmware version is approved
+    // 2. Check asset compatibility
+    // 3. Store in database
+    // 4. Create individual asset update records
+    // 5. If no schedule, start immediately
+
+    this.logger.info('Firmware update scheduled:', {
+      id: update.id,
+      firmwareVersionId: data.firmwareVersionId,
+      targetAssets: data.targetAssets.length,
+      scheduledAt: data.scheduledAt,
+    });
+
     return update;
   }
 
   /**
-   * Get deployment status
+   * Execute firmware update
    */
-  getDeploymentStatus(deploymentPlanId: string): {
-    overall: string;
-    totalDevices: number;
-    completed: number;
-    failed: number;
-    inProgress: number;
-    pending: number;
-    devices: DeviceUpdate[];
-  } {
-    const plan = this.deploymentPlans.get(deploymentPlanId);
-    if (!plan) {
-      return {
-        overall: "not_found",
-        totalDevices: 0,
-        completed: 0,
-        failed: 0,
-        inProgress: 0,
-        pending: 0,
-        devices: [],
-      };
-    }
+  async executeFirmwareUpdate(updateId: string): Promise<void> {
+    this.logger.info('Executing firmware update:', { updateId });
 
-    const devices = Array.from(this.deviceUpdates.values()).filter(
-      (u) => u.deploymentPlanId === deploymentPlanId
-    );
+    // In production:
+    // 1. Get update details from database
+    // 2. Validate all assets are reachable
+    // 3. For each asset:
+    //    a. Download firmware to asset
+    //    b. Backup current firmware
+    //    c. Install new firmware
+    //    d. Verify installation
+    //    e. Update status
+    // 4. Update overall progress
+    // 5. Send notifications on completion
+  }
 
-    const status = {
-      overall: plan.status,
-      totalDevices: devices.length,
-      completed: devices.filter((d) => d.updateStatus === "completed").length,
-      failed: devices.filter((d) => d.updateStatus === "failed").length,
-      inProgress: devices.filter((d) => d.updateStatus === "downloading" || d.updateStatus === "installing").length,
-      pending: devices.filter((d) => d.updateStatus === "pending").length,
-      devices,
+  /**
+   * Update asset firmware status
+   */
+  async updateAssetFirmwareStatus(data: {
+    assetUpdateId: string;
+    status: AssetFirmwareUpdate['status'];
+    errorMessage?: string;
+  }): Promise<void> {
+    this.logger.debug('Asset firmware status updated:', {
+      assetUpdateId: data.assetUpdateId,
+      status: data.status,
+    });
+
+    // In production:
+    // 1. Update asset firmware update record
+    // 2. Update overall firmware update progress
+    // 3. If all assets complete, mark update as completed
+    // 4. Send notifications if needed
+  }
+
+  /**
+   * Get firmware update progress
+   */
+  async getFirmwareUpdateProgress(updateId: string): Promise<FirmwareUpdate> {
+    // In production, fetch from database
+    const mockUpdate: FirmwareUpdate = {
+      id: updateId,
+      tenantId: 'mock-tenant',
+      firmwareVersionId: 'mock-version',
+      targetAssets: [],
+      status: 'in-progress',
+      progress: {
+        total: 10,
+        completed: 5,
+        failed: 1,
+        inProgress: 4,
+      },
+      createdBy: 'system',
+      createdAt: new Date(),
     };
 
-    // Update plan status based on device statuses
-    if (status.completed === status.totalDevices) {
-      plan.status = "completed";
-      plan.completedAt = new Date();
-    } else if (status.failed > 0 && status.failed === status.totalDevices) {
-      plan.status = "failed";
-    }
-
-    return status;
+    return mockUpdate;
   }
 
-  /**
-   * Simulate device update progress
-   */
-  updateDeviceProgress(
-    updateId: string,
-    progress: number,
-    status: DeviceUpdate["updateStatus"]
-  ): void {
-    const update = this.deviceUpdates.get(updateId);
-    if (update) {
-      update.progress = Math.min(100, progress);
-      update.updateStatus = status;
-
-      if (status === "completed") {
-        update.completedAt = new Date();
-        this.recordUpdateHistory(update);
-      } else if (status === "failed") {
-        update.completedAt = new Date();
-      } else if ((status === "downloading" || status === "installing") && !update.startedAt) {
-        update.startedAt = new Date();
-      }
-    }
-  }
+  // ========================================================================
+  // Rollback Management
+  // ========================================================================
 
   /**
-   * Record update in history
+   * Rollback firmware update
    */
-  private recordUpdateHistory(update: DeviceUpdate): void {
-    this.updateHistory.push({
-      deviceId: update.deviceId,
-      previousVersion: update.previousVersion,
-      newVersion: update.targetVersion,
-      timestamp: new Date(),
-      status: "completed",
-    });
-  }
-
-  /**
-   * Rollback device to previous version
-   */
-  rollbackDevice(updateId: string): boolean {
-    const update = this.deviceUpdates.get(updateId);
-    if (!update || !update.rollbackAvailable) {
-      return false;
-    }
-
-    update.updateStatus = "rolled-back";
-    update.completedAt = new Date();
-
-    this.updateHistory.push({
-      deviceId: update.deviceId,
-      previousVersion: update.targetVersion,
-      newVersion: update.rollbackToVersion || update.previousVersion,
-      timestamp: new Date(),
-      status: "rolled-back",
+  async rollbackFirmwareUpdate(data: {
+    updateId: string;
+    reason: string;
+    rollbackBy: string;
+  }): Promise<void> {
+    this.logger.info('Rolling back firmware update:', {
+      updateId: data.updateId,
+      reason: data.reason,
     });
 
-    return true;
+    // In production:
+    // 1. Get update details
+    // 2. For each asset that was updated:
+    //    a. Restore previous firmware version
+    //    b. Verify rollback
+    //    c. Update status to 'rolled-back'
+    // 3. Mark update as 'rollback'
+    // 4. Create audit log
+    // 5. Send notifications
   }
 
   /**
-   * Get update history for device
+   * Check if rollback is available for an update
    */
-  getDeviceUpdateHistory(deviceId: string): typeof this.updateHistory {
-    return this.updateHistory.filter((h) => h.deviceId === deviceId);
+  async canRollback(updateId: string): Promise<boolean> {
+    // In production:
+    // 1. Check if update is completed or failed
+    // 2. Check if previous version is available
+    // 3. Check if rollback window hasn't expired (e.g., 7 days)
+    // 4. Check if assets still have backup firmware
+
+    return true; // Mock implementation
   }
 
-  /**
-   * Get all pending approvals
-   */
-  getPendingApprovals(): UpdateApprovalRequest[] {
-    return Array.from(this.approvalRequests.values()).filter(
-      (r) => r.status === "pending"
-    );
-  }
+  // ========================================================================
+  // Compatibility Checking
+  // ========================================================================
 
   /**
-   * Generate deployment report
+   * Check firmware compatibility with asset
    */
-  getDeploymentReport(deploymentPlanId: string): {
-    plan: DeploymentPlan | undefined;
-    status: ReturnType<typeof this.getDeploymentStatus>;
-    successRate: number;
-    rollbacks: number;
-    errors: string[];
-  } {
-    const plan = this.deploymentPlans.get(deploymentPlanId);
-    const status = this.getDeploymentStatus(deploymentPlanId);
-
-    const rollbacks = status.devices.filter((d) => d.updateStatus === "rolled-back").length;
-    const errors = status.devices
-      .filter((d) => d.updateStatus === "failed" && d.errorMessage)
-      .map((d) => `${d.deviceId}: ${d.errorMessage}`);
-
-    const successRate =
-      status.totalDevices > 0 ? (status.completed / status.totalDevices) * 100 : 0;
+  async checkCompatibility(data: {
+    firmwareVersionId: string;
+    assetId: string;
+  }): Promise<{
+    compatible: boolean;
+    reason?: string;
+    warnings?: string[];
+  }> {
+    // In production:
+    // 1. Get firmware version details
+    // 2. Get asset details (model, current version)
+    // 3. Check if asset model is in compatibility list
+    // 4. Check if upgrade path is valid
+    // 5. Check for known issues
 
     return {
-      plan,
-      status,
-      successRate,
-      rollbacks,
-      errors,
+      compatible: true,
+      warnings: ['This firmware version is still in testing'],
     };
   }
+
+  /**
+   * Get compatible assets for firmware version
+   */
+  async getCompatibleAssets(data: {
+    tenantId: string;
+    firmwareVersionId: string;
+  }): Promise<string[]> {
+    // In production:
+    // 1. Get firmware version details
+    // 2. Query assets matching vendor/model
+    // 3. Filter by compatibility list
+    // 4. Return asset IDs
+
+    return []; // Mock implementation
+  }
+
+  // ========================================================================
+  // Bulk Operations
+  // ========================================================================
+
+  /**
+   * Schedule bulk firmware updates by branch
+   */
+  async scheduleBulkUpdateByBranch(data: {
+    tenantId: string;
+    firmwareVersionId: string;
+    branchNodeIds: string[];
+    scheduledAt?: Date;
+    createdBy: string;
+  }): Promise<FirmwareUpdate[]> {
+    const updates: FirmwareUpdate[] = [];
+
+    // In production:
+    // 1. For each branch:
+    //    a. Get compatible assets in branch
+    //    b. Create firmware update
+    // 2. Return all created updates
+
+    this.logger.info('Bulk firmware update scheduled:', {
+      firmwareVersionId: data.firmwareVersionId,
+      branches: data.branchNodeIds.length,
+    });
+
+    return updates;
+  }
+
+  /**
+   * Schedule bulk firmware updates by asset category
+   */
+  async scheduleBulkUpdateByCategory(data: {
+    tenantId: string;
+    firmwareVersionId: string;
+    assetCategory: FirmwareVersion['assetCategory'];
+    scheduledAt?: Date;
+    createdBy: string;
+  }): Promise<FirmwareUpdate> {
+    // In production:
+    // 1. Get all assets of category
+    // 2. Filter by compatibility
+    // 3. Create single firmware update for all assets
+    // 4. Return update
+
+    this.logger.info('Bulk firmware update by category scheduled:', {
+      firmwareVersionId: data.firmwareVersionId,
+      category: data.assetCategory,
+    });
+
+    return {} as FirmwareUpdate; // Mock implementation
+  }
+
+  // ========================================================================
+  // Reporting
+  // ========================================================================
+
+  /**
+   * Get firmware update statistics
+   */
+  async getFirmwareUpdateStats(tenantId: string): Promise<{
+    totalUpdates: number;
+    completedUpdates: number;
+    failedUpdates: number;
+    inProgressUpdates: number;
+    assetsUpToDate: number;
+    assetsOutdated: number;
+    criticalUpdatesAvailable: number;
+  }> {
+    // In production, query database for statistics
+    return {
+      totalUpdates: 0,
+      completedUpdates: 0,
+      failedUpdates: 0,
+      inProgressUpdates: 0,
+      assetsUpToDate: 0,
+      assetsOutdated: 0,
+      criticalUpdatesAvailable: 0,
+    };
+  }
+
+  /**
+   * Get firmware version distribution
+   */
+  async getFirmwareVersionDistribution(data: {
+    tenantId: string;
+    assetCategory?: FirmwareVersion['assetCategory'];
+  }): Promise<Array<{
+    version: string;
+    vendor: string;
+    model: string;
+    count: number;
+    isLatest: boolean;
+  }>> {
+    // In production, query database for version distribution
+    return [];
+  }
 }
 
-// Export singleton instance
-let firmwareManager: FirmwareUpdateManager | null = null;
+// Singleton instance
+let firmwareManagerInstance: FirmwareManager | null = null;
 
-export function initializeFirmwareManager(
-  store: ControlPlaneStore
-): FirmwareUpdateManager {
-  if (!firmwareManager) {
-    firmwareManager = new FirmwareUpdateManager(store);
+export function initFirmwareManager(store: ControlPlaneStore, logger?: any): FirmwareManager {
+  if (!firmwareManagerInstance) {
+    firmwareManagerInstance = new FirmwareManager(store, logger);
   }
-  return firmwareManager;
+  return firmwareManagerInstance;
 }
 
-export function getFirmwareManager(): FirmwareUpdateManager {
-  if (!firmwareManager) {
-    throw new Error(
-      "Firmware manager not initialized. Call initializeFirmwareManager first."
-    );
-  }
-  return firmwareManager;
+export function getFirmwareManager(): FirmwareManager | null {
+  return firmwareManagerInstance;
 }

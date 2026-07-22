@@ -777,6 +777,12 @@ select, textarea { font: inherit; }
 .camera-details small { display: block; margin-top: 4px; color: #7a8799; font-size: 9px; }
 .camera-details .profiles { color: #556376; margin-top: 2px; }
 .discovered-camera-item button { min-width: 120px; }
+.discovery-queue-row { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid #edf0f4; }
+.discovery-queue-meta strong { display: block; font-size: 10px; }
+.discovery-queue-meta small { display: block; margin-top: 3px; color: #7a8799; font-size: 8px; }
+.discovery-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
+.discovery-actions button { min-width: 76px; padding: 6px 8px; font-size: 9px; }
+.discovery-badge { justify-self: end; }
 .login-footer { position: fixed; bottom: 7px; color: #8a95a5; font-size: 9px; }
 
 @media (max-width: 700px) {

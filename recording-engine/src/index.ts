@@ -102,6 +102,17 @@ type Worker = {
   intentionallyStopping: boolean;
 };
 
+type ControlPlaneOptions = { enqueueOnFailure?: boolean };
+
+type PendingControlPlaneRequest = {
+  path: string;
+  init: {
+    method?: string;
+    body?: string;
+    headers?: Record<string, string>;
+  };
+};
+
 const workers = new Map<string, Worker>();
 const jobs = new Map<string, ManagedJob>();
 const postRollTimers = new Map<string, NodeJS.Timeout>();
@@ -500,6 +511,7 @@ async function indexCompletedSegment(job: ManagedJob, csvLine: string) {
 }
 
 async function maintenanceSweep() {
+  await retryPendingControlPlaneRequests();
   await retryPendingIndexes();
   const tenantIds = [...new Set([...jobs.values()].map((job) => job.tenantId))];
   if (tenantIds.length === 0) return;
@@ -532,7 +544,7 @@ async function maintenanceSweep() {
         raid: metrics.raid,
         lastWriteProbe: metrics.lastWriteProbe,
       }),
-    });
+    }, { enqueueOnFailure: true });
     const response = await controlPlane(
       `/internal/recording/retention-candidates?tenantId=${encodeURIComponent(tenantId)}` +
       `&storageNodeExternalId=${encodeURIComponent(config.STORAGE_NODE_EXTERNAL_ID)}&limit=200`,
@@ -558,7 +570,7 @@ async function maintenanceSweep() {
           tenantId, storageNodeExternalId: config.STORAGE_NODE_EXTERNAL_ID,
           segmentIds: deleted,
         }),
-      });
+      }, { enqueueOnFailure: true });
     }
   }
 }
@@ -762,13 +774,13 @@ async function health(
         storageNodeExternalId: config.STORAGE_NODE_EXTERNAL_ID,
         eventType, severity, message, details,
       }),
-    });
+    }, { enqueueOnFailure: true });
   } catch (error) {
     logFailure(error);
   }
 }
 
-async function controlPlane(path: string, init: RequestInit = {}) {
+async function controlPlane(path: string, init: RequestInit = {}, options: ControlPlaneOptions = {}) {
   let lastError: unknown;
   for (let attempt = 1; attempt <= 3; attempt += 1) {
     try {
@@ -788,6 +800,10 @@ async function controlPlane(path: string, init: RequestInit = {}) {
       if (attempt < 3) await new Promise((resolveDelay) =>
         setTimeout(resolveDelay, attempt * 500));
     }
+  }
+  if (options.enqueueOnFailure) {
+    await enqueueControlPlaneRequest(path, init);
+    return new Response(null, { status: 202 });
   }
   throw lastError;
 }

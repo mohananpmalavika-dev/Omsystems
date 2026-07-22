@@ -59,9 +59,28 @@ import type { AuthorizationDecision } from "./domain/authorization.js";
 
 export interface CameraDiscoveryInput {
   edgeAgentId: string;
+  discoveryMethod: "onvif-ws-discovery" | "configured-ip-range" | "manual-ip-registration" | "csv-bulk-import" | "nvr-dvr-channel-discovery" | "vendor-api-discovery" | "snmp-discovery" | "edge-agent-reported-inventory";
   vendor: CameraVendor;
+  manufacturer?: string;
   model: string;
   ipAddress: string;
+  macAddress?: string;
+  serialNumber?: string;
+  firmwareVersion?: string;
+  onvifSupport?: boolean;
+  onvifEndpointReference?: string;
+  onvifServices?: string[];
+  onvifCapabilityTests?: Array<{ name: string; status: "pass" | "fail" | "unsupported" | "vendor-specific"; detail?: string }>;
+  mediaProfiles?: CameraProfile[];
+  rtspValidated?: boolean;
+  ptzCapability?: boolean;
+  audioCapability?: boolean;
+  analyticsCapability?: boolean;
+  timeSynchronization?: "synchronized" | "drifted" | "unknown";
+  duplicateStatus?: "unique" | "duplicate" | "review-required";
+  compatibilityStatus?: "compatible" | "incompatible" | "review-required";
+  hardwareId?: string;
+  existingDeviceAssociation?: string;
   onvifPort: number;
   rtspPort: number;
   profiles: CameraProfile[];
@@ -132,6 +151,71 @@ export interface CameraDetailsUpdate {
   firmwareVersion?: string | undefined;
   ipAddress?: string | undefined;
   installationNotes?: string | undefined;
+}
+
+export type DeviceInventoryLifecycleState =
+  | "discovered"
+  | "pending-approval"
+  | "approved"
+  | "configured"
+  | "operational"
+  | "maintenance"
+  | "suspended"
+  | "decommissioned";
+
+export interface DeviceInventoryRecord {
+  id: string;
+  tenantId: string;
+  deviceId: string;
+  tenant: string;
+  region: string;
+  branch: string;
+  deviceType: string;
+  manufacturer: string;
+  model: string;
+  serialNumber?: string;
+  macAddress?: string;
+  ipAddress?: string;
+  firmwareVersion?: string;
+  onvifVersion?: string;
+  capabilities: string[];
+  credentialReference?: string;
+  installationDate?: string;
+  warranty?: string;
+  amcContract?: string;
+  healthStatus: string;
+  lastCommunication?: string;
+  configurationTemplate?: string;
+  riskClassification: string;
+  lifecycleState: DeviceInventoryLifecycleState;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface DeviceInventoryInput {
+  tenantId: string;
+  deviceId: string;
+  tenant: string;
+  region: string;
+  branch: string;
+  deviceType: string;
+  manufacturer: string;
+  model: string;
+  serialNumber?: string;
+  macAddress?: string;
+  ipAddress?: string;
+  firmwareVersion?: string;
+  onvifVersion?: string;
+  capabilities?: string[];
+  credentialReference?: string;
+  installationDate?: string;
+  warranty?: string;
+  amcContract?: string;
+  healthStatus?: string;
+  lastCommunication?: string;
+  configurationTemplate?: string;
+  riskClassification?: string;
+  lifecycleState?: DeviceInventoryLifecycleState;
 }
 
 export interface ComplianceFrameworkInput {
@@ -401,6 +485,10 @@ export interface ControlPlaneStore {
     parentNodeId: string,
     name: string,
   ): Promise<ResourceNode>;
+  createDeviceInventoryRecord(input: DeviceInventoryInput): Promise<DeviceInventoryRecord>;
+  listDeviceInventory(tenantId: string, branch?: string): Promise<DeviceInventoryRecord[]>;
+  getDeviceInventory(id: string): Promise<DeviceInventoryRecord | undefined>;
+  updateDeviceInventory(id: string, input: Partial<DeviceInventoryInput>): Promise<DeviceInventoryRecord | undefined>;
   registerEdgeAgent(
     branchId: string,
     name: string,

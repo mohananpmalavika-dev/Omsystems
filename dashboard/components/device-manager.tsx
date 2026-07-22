@@ -9,13 +9,15 @@ import {
   Network,
   Plus,
   Router,
+  Search,
   X,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { cameraInventoryApi } from "@/lib/api-client";
+import { cameraInventoryApi, deviceInventoryApi } from "@/lib/api-client";
 import type {
   Branch,
   Camera as CameraRecord,
+  DeviceInventoryRecord,
   EdgeAgent,
   EdgeScanJob,
 } from "@/lib/types";
@@ -58,13 +60,81 @@ const emptyCameraForm: CameraForm = {
   events: true,
 };
 
+type DeviceInventoryForm = {
+  deviceId: string;
+  tenant: string;
+  region: string;
+  branch: string;
+  deviceType: string;
+  manufacturer: string;
+  model: string;
+  serialNumber: string;
+  macAddress: string;
+  ipAddress: string;
+  firmwareVersion: string;
+  onvifVersion: string;
+  capabilities: string;
+  credentialReference: string;
+  installationDate: string;
+  warranty: string;
+  amcContract: string;
+  healthStatus: string;
+  lastCommunication: string;
+  configurationTemplate: string;
+  riskClassification: string;
+  lifecycleState: string;
+};
+
+const emptyInventoryForm: DeviceInventoryForm = {
+  deviceId: "",
+  tenant: "tenant-demo",
+  region: "",
+  branch: "",
+  deviceType: "ip-camera",
+  manufacturer: "",
+  model: "",
+  serialNumber: "",
+  macAddress: "",
+  ipAddress: "",
+  firmwareVersion: "",
+  onvifVersion: "",
+  capabilities: "",
+  credentialReference: "",
+  installationDate: "",
+  warranty: "",
+  amcContract: "",
+  healthStatus: "healthy",
+  lastCommunication: "",
+  configurationTemplate: "default",
+  riskClassification: "medium",
+  lifecycleState: "discovered",
+};
+
 export function DeviceManager() {
   const [branches, setBranches] = useState<Branch[]>([]);
   const [selectedBranch, setSelectedBranch] = useState("");
   const [gateways, setGateways] = useState<EdgeAgent[]>([]);
   const [cameras, setCameras] = useState<CameraRecord[]>([]);
+  const [inventoryRecords, setInventoryRecords] = useState<DeviceInventoryRecord[]>([]);
   const [discoveredCameras, setDiscoveredCameras] = useState<any[]>([]);
+  const [discoveryReviewState, setDiscoveryReviewState] = useState<Record<string, { reviewStatus: "pending" | "duplicate" | "review-required" | "approved" }>>({});
+  const [inventoryForm, setInventoryForm] = useState<DeviceInventoryForm>(emptyInventoryForm);
   const [cameraForm, setCameraForm] = useState<CameraForm>(emptyCameraForm);
+  const [discoveryMethod, setDiscoveryMethod] = useState("edge-agent-reported-inventory");
+  const [discoveryManufacturer, setDiscoveryManufacturer] = useState("");
+  const [discoverySerialNumber, setDiscoverySerialNumber] = useState("");
+  const [discoveryMacAddress, setDiscoveryMacAddress] = useState("");
+  const [discoveryFirmwareVersion, setDiscoveryFirmwareVersion] = useState("");
+  const [discoveryOnvifSupport, setDiscoveryOnvifSupport] = useState(true);
+  const [discoveryRtspValidated, setDiscoveryRtspValidated] = useState(true);
+  const [discoveryPtzCapability, setDiscoveryPtzCapability] = useState(false);
+  const [discoveryAudioCapability, setDiscoveryAudioCapability] = useState(false);
+  const [discoveryAnalyticsCapability, setDiscoveryAnalyticsCapability] = useState(false);
+  const [discoveryTimeSynchronization, setDiscoveryTimeSynchronization] = useState("unknown");
+  const [discoveryDuplicateStatus, setDiscoveryDuplicateStatus] = useState("unique");
+  const [discoveryCompatibilityStatus, setDiscoveryCompatibilityStatus] = useState("compatible");
+  const [discoveryHardwareId, setDiscoveryHardwareId] = useState("");
+  const [discoveryExistingDeviceAssociation, setDiscoveryExistingDeviceAssociation] = useState("");
   const [gatewayName, setGatewayName] = useState("");
   const [showCameraForm, setShowCameraForm] = useState(false);
   const [showGatewayForm, setShowGatewayForm] = useState(false);
@@ -75,8 +145,53 @@ export function DeviceManager() {
   const [scanning, setScanning] = useState(false);
   const [error, setError] = useState<string>();
   const [notice, setNotice] = useState<string>();
+  const [inventorySearch, setInventorySearch] = useState("");
+  const [inventoryDeviceTypeFilter, setInventoryDeviceTypeFilter] = useState("all");
+  const [inventoryLifecycleFilter, setInventoryLifecycleFilter] = useState("all");
+  const [inventoryHealthFilter, setInventoryHealthFilter] = useState("all");
+  const [inventorySort, setInventorySort] = useState<"updated" | "deviceId">("updated");
 
   const activeBranch = branches.find((branch) => branch.id === selectedBranch);
+  const discoveryQueueItems = useMemo(() => discoveredCameras.map((camera) => {
+    const reviewStatus = discoveryReviewState[camera.id]?.reviewStatus ?? (camera.duplicateStatus === "duplicate" ? "duplicate" : camera.duplicateStatus === "review-required" ? "review-required" : "pending");
+    return {
+      ...camera,
+      reviewStatus,
+      badgeLabel: reviewStatus === "duplicate"
+        ? "Duplicate"
+        : reviewStatus === "review-required"
+          ? "Review required"
+          : reviewStatus === "approved"
+            ? "Approved"
+            : "Pending",
+    };
+  }), [discoveredCameras, discoveryReviewState]);
+  const filteredInventoryRecords = useMemo(() => {
+    const query = inventorySearch.trim().toLowerCase();
+    return inventoryRecords.filter((record) => {
+      const matchesType = inventoryDeviceTypeFilter === "all" || record.deviceType === inventoryDeviceTypeFilter;
+      const matchesLifecycle = inventoryLifecycleFilter === "all" || record.lifecycleState === inventoryLifecycleFilter;
+      const matchesHealth = inventoryHealthFilter === "all" || record.healthStatus === inventoryHealthFilter;
+      const searchableText = [
+        record.deviceId,
+        record.deviceType,
+        record.manufacturer,
+        record.model,
+        record.ipAddress,
+        record.serialNumber,
+        record.credentialReference,
+        record.healthStatus,
+        record.lifecycleState,
+      ].filter(Boolean).join(" ").toLowerCase();
+      const matchesSearch = query.length === 0 || searchableText.includes(query);
+      return matchesType && matchesLifecycle && matchesHealth && matchesSearch;
+    }).sort((left, right) => {
+      if (inventorySort === "updated") {
+        return new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime();
+      }
+      return left.deviceId.localeCompare(right.deviceId);
+    });
+  }, [inventoryRecords, inventoryDeviceTypeFilter, inventoryHealthFilter, inventoryLifecycleFilter, inventorySearch, inventorySort]);
   const setupText = useMemo(() => provisionedGateway
     ? [
         "CONTROL_PLANE_URL=<provided-by-platform-admin>",
@@ -107,8 +222,10 @@ export function DeviceManager() {
     if (!selectedBranch) {
       setGateways([]);
       setCameras([]);
+      setInventoryRecords([]);
       return;
     }
+    setInventoryForm((form) => ({ ...form, branch: selectedBranch }));
     void refreshBranch(selectedBranch);
   }, [selectedBranch]);
 
@@ -116,14 +233,31 @@ export function DeviceManager() {
     setLoading(true);
     setError(undefined);
     try {
-      const [gatewayResponse, cameraResponse, discoveredResponse] = await Promise.all([
+      const [gatewayResponse, cameraResponse, discoveredResponse, inventoryResponse] = await Promise.all([
         cameraInventoryApi.listGateways(branchId),
         cameraInventoryApi.listByBranch(branchId),
         cameraInventoryApi.listDiscovered(branchId),
+        deviceInventoryApi.list(branchId),
       ]);
       setGateways(gatewayResponse.data);
       setCameras(cameraResponse.data);
       setDiscoveredCameras(discoveredResponse.data);
+      setDiscoveryReviewState((previous) => {
+        const next = { ...previous };
+        for (const camera of discoveredResponse.data) {
+          if (!next[camera.id]) {
+            next[camera.id] = {
+              reviewStatus: camera.duplicateStatus === "duplicate"
+                ? "duplicate"
+                : camera.duplicateStatus === "review-required"
+                  ? "review-required"
+                  : "pending",
+            };
+          }
+        }
+        return next;
+      });
+      setInventoryRecords(inventoryResponse.data);
       return discoveredResponse.data;
     } catch (reason) {
       setError(messageOf(reason, "Unable to load devices for this branch."));
@@ -176,6 +310,10 @@ export function DeviceManager() {
     }
   }
 
+  function markDiscoveryReviewStatus(discoveryId: string, reviewStatus: "pending" | "duplicate" | "review-required" | "approved") {
+    setDiscoveryReviewState((previous) => ({ ...previous, [discoveryId]: { reviewStatus } }));
+  }
+
   async function addDiscoveredCamera(discovered: any) {
     setSaving(true);
     setError(undefined);
@@ -220,6 +358,7 @@ export function DeviceManager() {
         connectionSecretRef: `edge://${discovered.edgeAgentId}/${discovered.id}`,
       });
 
+      markDiscoveryReviewStatus(discovered.id, "approved");
       setShowDiscoveredList(false);
       setNotice(`Camera ${discovered.model} was added successfully.`);
       await refreshBranch(selectedBranch);
@@ -250,6 +389,28 @@ export function DeviceManager() {
     }
   }
 
+  async function addInventoryRecord(event: React.FormEvent) {
+    event.preventDefault();
+    if (!selectedBranch) return;
+    setSaving(true);
+    setError(undefined);
+    try {
+      const payload = {
+        ...inventoryForm,
+        branch: selectedBranch,
+        capabilities: inventoryForm.capabilities.split(',').map((item) => item.trim()).filter(Boolean),
+      };
+      await deviceInventoryApi.create(payload);
+      setInventoryForm({ ...emptyInventoryForm, branch: selectedBranch, tenant: inventoryForm.tenant || "tenant-demo" });
+      await refreshBranch(selectedBranch);
+      setNotice(`Inventory record ${payload.deviceId || "created"} was saved.`);
+    } catch (reason) {
+      setError(messageOf(reason, "Failed to save device inventory record."));
+    } finally {
+      setSaving(false);
+    }
+  }
+
   async function addCamera(event: React.FormEvent) {
     event.preventDefault();
     if (!selectedBranch) return;
@@ -258,9 +419,24 @@ export function DeviceManager() {
     try {
       const discovery = await cameraInventoryApi.submitDiscovery(selectedBranch, {
         edgeAgentId: cameraForm.edgeAgentId,
+        discoveryMethod,
         vendor: cameraForm.vendor,
+        manufacturer: discoveryManufacturer || cameraForm.vendor,
         model: cameraForm.model,
         ipAddress: cameraForm.ipAddress,
+        macAddress: discoveryMacAddress || undefined,
+        serialNumber: discoverySerialNumber || undefined,
+        firmwareVersion: discoveryFirmwareVersion || undefined,
+        onvifSupport: discoveryOnvifSupport,
+        rtspValidated: discoveryRtspValidated,
+        ptzCapability: discoveryPtzCapability || cameraForm.ptz,
+        audioCapability: discoveryAudioCapability || cameraForm.audio,
+        analyticsCapability: discoveryAnalyticsCapability || cameraForm.events,
+        timeSynchronization: discoveryTimeSynchronization,
+        duplicateStatus: discoveryDuplicateStatus,
+        compatibilityStatus: discoveryCompatibilityStatus,
+        hardwareId: discoveryHardwareId || undefined,
+        existingDeviceAssociation: discoveryExistingDeviceAssociation || undefined,
         onvifPort: Number(cameraForm.onvifPort),
         rtspPort: Number(cameraForm.rtspPort),
         profiles: [{
@@ -369,6 +545,159 @@ export function DeviceManager() {
         </div>
       )}
 
+      <section className="device-card">
+        <div className="device-card-heading"><Search size={18} /><div><h3>Discovery queue</h3><p>{discoveryQueueItems.filter((item) => item.reviewStatus !== "approved").length} pending review</p></div></div>
+        {discoveryQueueItems.length === 0 ? (
+          <div className="device-empty"><Camera size={25} /><strong>No pending discoveries</strong><span>Scan the branch or submit a discovery to populate this queue.</span></div>
+        ) : discoveryQueueItems.map((item) => (
+          <article className="discovery-queue-row" key={item.id}>
+            <div className="discovery-queue-meta">
+              <strong>{item.model} @ {item.ipAddress}</strong>
+              <small>{item.vendor} · {item.discoveryMethod ?? "discovery"} · {item.serialNumber ? `SN ${item.serialNumber}` : "Serial pending"}</small>
+              {item.onvifServices?.length ? <small>Services: {item.onvifServices.join(", ")}</small> : null}
+              {item.onvifCapabilityTests?.length ? <small>Tests: {item.onvifCapabilityTests.filter((test: any) => test.status === "pass").length}/{item.onvifCapabilityTests.length} passed</small> : null}
+            </div>
+            <span className={`inventory-status discovery-badge ${item.reviewStatus === "duplicate" ? "offline" : item.reviewStatus === "review-required" ? "degraded" : item.reviewStatus === "approved" ? "online" : ""}`}>
+              {item.badgeLabel}
+            </span>
+            <div className="discovery-actions">
+              <button type="button" className="secondary-button" onClick={() => void addDiscoveredCamera(item)} disabled={saving}>Approve</button>
+              <button type="button" className="secondary-button" onClick={() => markDiscoveryReviewStatus(item.id, "duplicate")}>Duplicate</button>
+              <button type="button" className="secondary-button" onClick={() => markDiscoveryReviewStatus(item.id, "review-required")}>Review later</button>
+            </div>
+          </article>
+        ))}
+      </section>
+
+      <section className="device-card">
+        <div className="device-card-heading"><Network size={18} /><div><h3>Unified device inventory</h3><p>{inventoryRecords.length} records</p></div></div>
+        <form className="modal-form" onSubmit={addInventoryRecord}>
+          <div className="form-section"><h3>Identity and location</h3><div className="form-row">
+            <div className="form-group"><label htmlFor="inventoryDeviceId">Device ID</label><input id="inventoryDeviceId" value={inventoryForm.deviceId} onChange={(event) => setInventoryForm((form) => ({ ...form, deviceId: event.target.value }))} required /></div>
+            <div className="form-group"><label htmlFor="inventoryTenant">Tenant</label><input id="inventoryTenant" value={inventoryForm.tenant} onChange={(event) => setInventoryForm((form) => ({ ...form, tenant: event.target.value }))} required /></div>
+            <div className="form-group"><label htmlFor="inventoryRegion">Region</label><input id="inventoryRegion" value={inventoryForm.region} onChange={(event) => setInventoryForm((form) => ({ ...form, region: event.target.value }))} required /></div>
+            <div className="form-group"><label htmlFor="inventoryBranch">Branch</label><input id="inventoryBranch" value={inventoryForm.branch || selectedBranch} disabled /></div>
+          </div></div>
+          <div className="form-section"><h3>Hardware and networking</h3><div className="form-row">
+            <div className="form-group"><label htmlFor="inventoryDeviceType">Device type</label><select id="inventoryDeviceType" value={inventoryForm.deviceType} onChange={(event) => setInventoryForm((form) => ({ ...form, deviceType: event.target.value }))}><option value="ip-camera">IP camera</option><option value="analog-camera-dvr">Analog camera via DVR</option><option value="nvr">NVR</option><option value="dvr">DVR</option><option value="encoder">Encoder</option><option value="edge-server">Edge server</option><option value="storage-device">Storage device</option><option value="network-switch">Network switch</option><option value="ups">UPS</option><option value="access-control-panel">Access-control panel</option><option value="alarm-panel">Alarm panel</option></select></div>
+            <div className="form-group"><label htmlFor="inventoryManufacturer">Manufacturer</label><input id="inventoryManufacturer" value={inventoryForm.manufacturer} onChange={(event) => setInventoryForm((form) => ({ ...form, manufacturer: event.target.value }))} required /></div>
+            <div className="form-group"><label htmlFor="inventoryModel">Model</label><input id="inventoryModel" value={inventoryForm.model} onChange={(event) => setInventoryForm((form) => ({ ...form, model: event.target.value }))} required /></div>
+            <div className="form-group"><label htmlFor="inventorySerial">Serial number</label><input id="inventorySerial" value={inventoryForm.serialNumber} onChange={(event) => setInventoryForm((form) => ({ ...form, serialNumber: event.target.value }))} /></div>
+          </div><div className="form-row">
+            <div className="form-group"><label htmlFor="inventoryMac">MAC address</label><input id="inventoryMac" value={inventoryForm.macAddress} onChange={(event) => setInventoryForm((form) => ({ ...form, macAddress: event.target.value }))} /></div>
+            <div className="form-group"><label htmlFor="inventoryIp">IP address</label><input id="inventoryIp" value={inventoryForm.ipAddress} onChange={(event) => setInventoryForm((form) => ({ ...form, ipAddress: event.target.value }))} /></div>
+            <div className="form-group"><label htmlFor="inventoryFirmware">Firmware version</label><input id="inventoryFirmware" value={inventoryForm.firmwareVersion} onChange={(event) => setInventoryForm((form) => ({ ...form, firmwareVersion: event.target.value }))} /></div>
+            <div className="form-group"><label htmlFor="inventoryOnvif">ONVIF version</label><input id="inventoryOnvif" value={inventoryForm.onvifVersion} onChange={(event) => setInventoryForm((form) => ({ ...form, onvifVersion: event.target.value }))} /></div>
+          </div></div>
+          <div className="form-section"><h3>Operational and lifecycle</h3><div className="form-row">
+            <div className="form-group"><label htmlFor="inventoryCapabilities">Capabilities</label><input id="inventoryCapabilities" value={inventoryForm.capabilities} onChange={(event) => setInventoryForm((form) => ({ ...form, capabilities: event.target.value }))} placeholder="ptz,audio,motion" /></div>
+            <div className="form-group"><label htmlFor="inventoryCredential">Credential reference</label><input id="inventoryCredential" value={inventoryForm.credentialReference} onChange={(event) => setInventoryForm((form) => ({ ...form, credentialReference: event.target.value }))} /></div>
+            <div className="form-group"><label htmlFor="inventoryInstallation">Installation date</label><input id="inventoryInstallation" value={inventoryForm.installationDate} onChange={(event) => setInventoryForm((form) => ({ ...form, installationDate: event.target.value }))} /></div>
+            <div className="form-group"><label htmlFor="inventoryWarranty">Warranty</label><input id="inventoryWarranty" value={inventoryForm.warranty} onChange={(event) => setInventoryForm((form) => ({ ...form, warranty: event.target.value }))} /></div>
+          </div><div className="form-row">
+            <div className="form-group"><label htmlFor="inventoryAmc">AMC contract</label><input id="inventoryAmc" value={inventoryForm.amcContract} onChange={(event) => setInventoryForm((form) => ({ ...form, amcContract: event.target.value }))} /></div>
+            <div className="form-group"><label htmlFor="inventoryHealth">Health status</label><input id="inventoryHealth" value={inventoryForm.healthStatus} onChange={(event) => setInventoryForm((form) => ({ ...form, healthStatus: event.target.value }))} /></div>
+            <div className="form-group"><label htmlFor="inventoryLastCommunication">Last communication</label><input id="inventoryLastCommunication" value={inventoryForm.lastCommunication} onChange={(event) => setInventoryForm((form) => ({ ...form, lastCommunication: event.target.value }))} /></div>
+            <div className="form-group"><label htmlFor="inventoryTemplate">Configuration template</label><input id="inventoryTemplate" value={inventoryForm.configurationTemplate} onChange={(event) => setInventoryForm((form) => ({ ...form, configurationTemplate: event.target.value }))} /></div>
+          </div><div className="form-row">
+            <div className="form-group"><label htmlFor="inventoryRisk">Risk classification</label><input id="inventoryRisk" value={inventoryForm.riskClassification} onChange={(event) => setInventoryForm((form) => ({ ...form, riskClassification: event.target.value }))} /></div>
+            <div className="form-group"><label htmlFor="inventoryLifecycle">Lifecycle state</label><select id="inventoryLifecycle" value={inventoryForm.lifecycleState} onChange={(event) => setInventoryForm((form) => ({ ...form, lifecycleState: event.target.value }))}><option value="discovered">Discovered</option><option value="pending-approval">Pending approval</option><option value="approved">Approved</option><option value="configured">Configured</option><option value="operational">Operational</option><option value="maintenance">Maintenance</option><option value="suspended">Suspended</option><option value="decommissioned">Decommissioned</option></select></div>
+          </div></div>
+          <div className="modal-actions"><button type="submit" className="primary-button" disabled={saving}>{saving ? "Saving…" : "Save inventory record"}</button></div>
+        </form>
+
+        <div className="form-section" style={{ marginTop: "1rem" }}>
+          <div className="form-row">
+            <div className="form-group">
+              <label htmlFor="inventorySearch">Search inventory</label>
+              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                <Search size={16} />
+                <input id="inventorySearch" value={inventorySearch} onChange={(event) => setInventorySearch(event.target.value)} placeholder="Search by ID, model, IP, serial, or tag" />
+              </div>
+            </div>
+            <div className="form-group">
+              <label htmlFor="inventoryDeviceTypeFilter">Device type</label>
+              <select id="inventoryDeviceTypeFilter" value={inventoryDeviceTypeFilter} onChange={(event) => setInventoryDeviceTypeFilter(event.target.value)}>
+                <option value="all">All device types</option>
+                <option value="ip-camera">IP camera</option>
+                <option value="analog-camera-dvr">Analog camera via DVR</option>
+                <option value="nvr">NVR</option>
+                <option value="dvr">DVR</option>
+                <option value="encoder">Encoder</option>
+                <option value="edge-server">Edge server</option>
+                <option value="storage-device">Storage device</option>
+                <option value="network-switch">Network switch</option>
+                <option value="ups">UPS</option>
+                <option value="access-control-panel">Access-control panel</option>
+                <option value="alarm-panel">Alarm panel</option>
+              </select>
+            </div>
+            <div className="form-group">
+              <label htmlFor="inventoryLifecycleFilter">Lifecycle state</label>
+              <select id="inventoryLifecycleFilter" value={inventoryLifecycleFilter} onChange={(event) => setInventoryLifecycleFilter(event.target.value)}>
+                <option value="all">All states</option>
+                <option value="discovered">Discovered</option>
+                <option value="pending-approval">Pending approval</option>
+                <option value="approved">Approved</option>
+                <option value="configured">Configured</option>
+                <option value="operational">Operational</option>
+                <option value="maintenance">Maintenance</option>
+                <option value="suspended">Suspended</option>
+                <option value="decommissioned">Decommissioned</option>
+              </select>
+            </div>
+            <div className="form-group">
+              <label htmlFor="inventoryHealthFilter">Health</label>
+              <select id="inventoryHealthFilter" value={inventoryHealthFilter} onChange={(event) => setInventoryHealthFilter(event.target.value)}>
+                <option value="all">All health</option>
+                <option value="healthy">Healthy</option>
+                <option value="warning">Warning</option>
+                <option value="critical">Critical</option>
+                <option value="unknown">Unknown</option>
+              </select>
+            </div>
+            <div className="form-group">
+              <label htmlFor="inventorySort">Sort by</label>
+              <select id="inventorySort" value={inventorySort} onChange={(event) => setInventorySort(event.target.value as "updated" | "deviceId")}>
+                <option value="updated">Last updated</option>
+                <option value="deviceId">Device ID</option>
+              </select>
+            </div>
+          </div>
+          <div className="modal-actions">
+            <span className="field-help">Showing {filteredInventoryRecords.length} of {inventoryRecords.length} records</span>
+            <button type="button" className="secondary-button" onClick={() => {
+              setInventorySearch("");
+              setInventoryDeviceTypeFilter("all");
+              setInventoryLifecycleFilter("all");
+              setInventoryHealthFilter("all");
+              setInventorySort("updated");
+            }}>
+              Clear filters
+            </button>
+          </div>
+        </div>
+
+        {inventoryRecords.length === 0 ? (
+          <div className="device-empty"><Network size={25} /><strong>No inventory records yet</strong><span>Add the first device to establish a branch-wide inventory baseline.</span></div>
+        ) : filteredInventoryRecords.length === 0 ? (
+          <div className="device-empty"><Search size={25} /><strong>No matches</strong><span>Try broadening the search or filters to reveal more inventory entries.</span></div>
+        ) : filteredInventoryRecords.map((record) => (
+          <article className="camera-inventory-row" key={record.id}>
+            <span className="camera-device-icon"><Network size={15} /></span>
+            <div>
+              <strong>{record.deviceId}</strong>
+              <small>{record.deviceType} · {record.manufacturer} {record.model}</small>
+              <small>{record.region} / {record.branch} · {record.ipAddress || "No IP"}</small>
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: "0.35rem", alignItems: "flex-end" }}>
+              <span className={`inventory-status ${record.healthStatus}`}>{record.healthStatus}</span>
+              <span className="inventory-status">{record.lifecycleState}</span>
+            </div>
+          </article>
+        ))}
+      </section>
+
       {showGatewayForm && (
         <div className="modal-overlay">
           <div className="modal-container">
@@ -405,7 +734,8 @@ export function DeviceManager() {
                       <div key={camera.id} className="discovered-camera-item">
                         <div className="camera-details">
                           <strong>{camera.model} @ {camera.ipAddress}</strong>
-                          <small>{camera.vendor} · ONVIF port {camera.onvifPort}</small>
+                          <small>{camera.vendor} · {camera.discoveryMethod ?? "discovery"} · ONVIF port {camera.onvifPort}</small>
+                          <small>{camera.serialNumber ? `SN ${camera.serialNumber}` : "Serial pending"} · {camera.macAddress ?? "MAC pending"}</small>
                           <small className="profiles">{camera.profiles.map((p: any) => `${p.codec} ${p.width}x${p.height}`).join(", ")}</small>
                         </div>
                         <button className="primary-button" onClick={() => void addDiscoveredCamera(camera)} disabled={saving}>
@@ -440,6 +770,27 @@ export function DeviceManager() {
                 <div className="form-group"><label htmlFor="cameraModel">Model <span className="required">*</span></label><input id="cameraModel" value={cameraForm.model} onChange={(event) => setCameraForm((form) => ({ ...form, model: event.target.value }))} required placeholder="DS-2CD2143G2" /></div>
                 <div className="form-group"><label htmlFor="cameraVendor">Brand</label><select id="cameraVendor" value={cameraForm.vendor} onChange={(event) => setCameraForm((form) => ({ ...form, vendor: event.target.value as CameraForm["vendor"] }))}><option value="hikvision">Hikvision</option><option value="cp-plus">CP Plus</option><option value="other">Other / ONVIF</option></select></div>
                 <div className="form-group"><label htmlFor="cameraChannel">Channel</label><input id="cameraChannel" type="number" min="1" value={cameraForm.channel} onChange={(event) => setCameraForm((form) => ({ ...form, channel: event.target.value }))} required /></div>
+              </div></div>
+
+              <div className="form-section"><h3>Discovery details</h3><div className="form-row">
+                <div className="form-group"><label htmlFor="discoveryMethod">Discovery method</label><select id="discoveryMethod" value={discoveryMethod} onChange={(event) => setDiscoveryMethod(event.target.value)}><option value="onvif-ws-discovery">ONVIF WS-Discovery</option><option value="configured-ip-range">Configured IP-range scan</option><option value="manual-ip-registration">Manual IP registration</option><option value="csv-bulk-import">CSV bulk import</option><option value="nvr-dvr-channel-discovery">NVR/DVR channel discovery</option><option value="vendor-api-discovery">Vendor API discovery</option><option value="snmp-discovery">SNMP discovery</option><option value="edge-agent-reported-inventory">Edge-agent-reported inventory</option></select></div>
+                <div className="form-group"><label htmlFor="discoveryManufacturer">Manufacturer</label><input id="discoveryManufacturer" value={discoveryManufacturer} onChange={(event) => setDiscoveryManufacturer(event.target.value)} placeholder="Optional manufacturer" /></div>
+                <div className="form-group"><label htmlFor="discoverySerialNumber">Serial number</label><input id="discoverySerialNumber" value={discoverySerialNumber} onChange={(event) => setDiscoverySerialNumber(event.target.value)} placeholder="Optional serial" /></div>
+                <div className="form-group"><label htmlFor="discoveryMacAddress">MAC address</label><input id="discoveryMacAddress" value={discoveryMacAddress} onChange={(event) => setDiscoveryMacAddress(event.target.value)} placeholder="Optional MAC" /></div>
+              </div><div className="form-row">
+                <div className="form-group"><label htmlFor="discoveryFirmwareVersion">Firmware</label><input id="discoveryFirmwareVersion" value={discoveryFirmwareVersion} onChange={(event) => setDiscoveryFirmwareVersion(event.target.value)} placeholder="Optional firmware" /></div>
+                <div className="form-group"><label htmlFor="discoveryHardwareId">Hardware ID</label><input id="discoveryHardwareId" value={discoveryHardwareId} onChange={(event) => setDiscoveryHardwareId(event.target.value)} placeholder="Optional hardware ID" /></div>
+                <div className="form-group"><label htmlFor="discoveryAssociation">Existing device association</label><input id="discoveryAssociation" value={discoveryExistingDeviceAssociation} onChange={(event) => setDiscoveryExistingDeviceAssociation(event.target.value)} placeholder="Optional existing asset" /></div>
+                <div className="form-group"><label htmlFor="discoveryTimeSync">Time sync</label><select id="discoveryTimeSync" value={discoveryTimeSynchronization} onChange={(event) => setDiscoveryTimeSynchronization(event.target.value)}><option value="unknown">Unknown</option><option value="synchronized">Synchronized</option><option value="drifted">Drifted</option></select></div>
+              </div><div className="form-row">
+                <div className="form-group"><label htmlFor="discoveryDuplicateStatus">Duplicate status</label><select id="discoveryDuplicateStatus" value={discoveryDuplicateStatus} onChange={(event) => setDiscoveryDuplicateStatus(event.target.value)}><option value="unique">Unique</option><option value="duplicate">Duplicate</option><option value="review-required">Review required</option></select></div>
+                <div className="form-group"><label htmlFor="discoveryCompatibilityStatus">Compatibility status</label><select id="discoveryCompatibilityStatus" value={discoveryCompatibilityStatus} onChange={(event) => setDiscoveryCompatibilityStatus(event.target.value)}><option value="compatible">Compatible</option><option value="incompatible">Incompatible</option><option value="review-required">Review required</option></select></div>
+                <div className="form-group"><label htmlFor="discoveryOnvifSupport">ONVIF support</label><select id="discoveryOnvifSupport" value={String(discoveryOnvifSupport)} onChange={(event) => setDiscoveryOnvifSupport(event.target.value === "true")}><option value="true">Yes</option><option value="false">No</option></select></div>
+                <div className="form-group"><label htmlFor="discoveryRtspValidated">RTSP validated</label><select id="discoveryRtspValidated" value={String(discoveryRtspValidated)} onChange={(event) => setDiscoveryRtspValidated(event.target.value === "true")}><option value="true">Yes</option><option value="false">No</option></select></div>
+              </div><div className="form-row">
+                <div className="form-group"><label htmlFor="discoveryPtzCapability">PTZ</label><select id="discoveryPtzCapability" value={String(discoveryPtzCapability)} onChange={(event) => setDiscoveryPtzCapability(event.target.value === "true")}><option value="true">Yes</option><option value="false">No</option></select></div>
+                <div className="form-group"><label htmlFor="discoveryAudioCapability">Audio</label><select id="discoveryAudioCapability" value={String(discoveryAudioCapability)} onChange={(event) => setDiscoveryAudioCapability(event.target.value === "true")}><option value="true">Yes</option><option value="false">No</option></select></div>
+                <div className="form-group"><label htmlFor="discoveryAnalyticsCapability">Analytics</label><select id="discoveryAnalyticsCapability" value={String(discoveryAnalyticsCapability)} onChange={(event) => setDiscoveryAnalyticsCapability(event.target.value === "true")}><option value="true">Yes</option><option value="false">No</option></select></div>
               </div></div>
 
               <div className="form-section"><h3>Network connection</h3><div className="form-row">

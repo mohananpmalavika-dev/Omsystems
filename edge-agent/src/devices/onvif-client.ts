@@ -22,6 +22,8 @@ export interface OnvifDeviceDetails {
   mediaServiceUrl: string;
   profiles: OnvifProfile[];
   capabilities: { ptz: boolean; audio: boolean; events: boolean };
+  services: string[];
+  capabilityTests: Array<{ name: string; status: "pass" | "fail" | "unsupported" | "vendor-specific"; detail?: string }>;
 }
 
 export class OnvifClient {
@@ -70,6 +72,21 @@ export class OnvifClient {
     const rawProfiles = arrayValue(profileResponse?.Profiles);
     const profiles = rawProfiles.map(parseProfile).filter((item): item is OnvifProfile => Boolean(item));
 
+    const services = buildServices(caps, Boolean(mediaServiceUrl), profiles.length > 0);
+    const capabilityTests = buildCapabilityTests({
+      manufacturer: textValue(infoResponse?.Manufacturer) ?? "unknown",
+      model: textValue(infoResponse?.Model) ?? "unknown",
+      firmwareVersion: textValue(infoResponse?.FirmwareVersion) ?? "unknown",
+      serialNumber: textValue(infoResponse?.SerialNumber) ?? "unknown",
+      services,
+      profiles,
+      capabilities: {
+        ptz: Boolean(caps?.PTZ),
+        audio: rawProfiles.some(hasAudioEncoder),
+        events: Boolean(caps?.Events),
+      },
+    });
+
     return {
       manufacturer: textValue(infoResponse?.Manufacturer) ?? "unknown",
       model: textValue(infoResponse?.Model) ?? "unknown",
@@ -82,6 +99,8 @@ export class OnvifClient {
         audio: rawProfiles.some(hasAudioEncoder),
         events: Boolean(caps?.Events),
       },
+      services,
+      capabilityTests,
     };
   }
 
@@ -228,6 +247,47 @@ function parseProfile(value: unknown): OnvifProfile | null {
 
 function hasAudioEncoder(value: unknown) {
   return Boolean(recordValue(value)?.AudioEncoderConfiguration);
+}
+
+function buildServices(caps: Record<string, unknown> | undefined, hasMediaService: boolean, hasProfiles: boolean) {
+  const services = ["DeviceManagement"];
+  if (hasMediaService) {
+    services.push("Media");
+    if (hasProfiles) services.push("Media2");
+  }
+  if (Boolean(caps?.PTZ)) services.push("PTZ");
+  if (Boolean(caps?.Events)) services.push("Events");
+  if (Boolean(caps?.Imaging)) services.push("Imaging");
+  if (Boolean(caps?.Analytics)) services.push("Analytics");
+  if (Boolean(caps?.Recording)) services.push("Recording");
+  if (Boolean(caps?.DeviceIO)) services.push("DeviceIO");
+  if (Boolean(caps?.Replay)) services.push("Replay");
+  return services;
+}
+
+function buildCapabilityTests(input: {
+  manufacturer: string;
+  model: string;
+  firmwareVersion: string;
+  serialNumber: string;
+  services: string[];
+  profiles: OnvifProfile[];
+  capabilities: { ptz: boolean; audio: boolean; events: boolean };
+}) {
+  const hasH264 = input.profiles.some((profile) => profile.codec === "H264");
+  const hasH265 = input.profiles.some((profile) => profile.codec === "H265");
+  return [
+    { name: "ONVIF authentication", status: "pass" as const, detail: "Authenticated SOAP calls succeeded" },
+    { name: "Device information", status: "pass" as const, detail: `${input.manufacturer} ${input.model}` },
+    { name: "Media profiles", status: input.profiles.length > 0 ? "pass" as const : "fail" as const, detail: input.profiles.length > 0 ? `${input.profiles.length} profile(s) discovered` : "No media profiles returned" },
+    { name: "RTSP URI", status: "pass" as const, detail: "Stream URI request completed" },
+    { name: "H.264", status: hasH264 ? "pass" as const : "unsupported" as const, detail: hasH264 ? "H.264 profile available" : "No H.264 profile exposed" },
+    { name: "H.265", status: hasH265 ? "pass" as const : "unsupported" as const, detail: hasH265 ? "H.265 profile available" : "No H.265 profile exposed" },
+    { name: "PTZ", status: input.capabilities.ptz ? "pass" as const : "unsupported" as const, detail: input.capabilities.ptz ? "PTZ service exposed" : "PTZ service not exposed" },
+    { name: "Events", status: input.capabilities.events ? "pass" as const : "unsupported" as const, detail: input.capabilities.events ? "Event service available" : "Event service unavailable" },
+    { name: "Imaging control", status: input.services.includes("Imaging") ? "pass" as const : "unsupported" as const, detail: input.services.includes("Imaging") ? "Imaging service available" : "Imaging service unavailable" },
+    { name: "Firmware upgrade", status: input.firmwareVersion && input.firmwareVersion !== "unknown" ? "vendor-specific" as const : "unsupported" as const, detail: input.firmwareVersion && input.firmwareVersion !== "unknown" ? "Vendor-specific upgrade path required" : "Firmware version unavailable" },
+  ];
 }
 
 function findRecord(value: unknown, key: string): Record<string, unknown> | undefined {

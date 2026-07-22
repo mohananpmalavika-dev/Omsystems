@@ -1,664 +1,766 @@
 /**
- * Phase 5: Advanced Reporting Engine
- * Generate comprehensive maintenance reports including PDF export, cost analysis, and compliance validation
+ * Advanced Reporting Engine
+ * Generates PDF, Excel, and scheduled reports for maintenance module
  */
 
-import type { ControlPlaneStore } from "../control-plane-store.js";
+import type { ControlPlaneStore } from '../control-plane-store.js';
 
 export interface ReportConfig {
-  reportType:
-    | "preventive"
-    | "corrective"
-    | "asset_health"
-    | "compliance"
-    | "cost_analysis"
-    | "sla_performance";
+  id: string;
   tenantId: string;
-  periodStart: Date;
-  periodEnd: Date;
-  branchId?: string;
-  filters?: Record<string, unknown>;
-}
-
-export interface ReportData {
-  reportId: string;
+  reportType: 
+    | 'preventive-maintenance'
+    | 'corrective-maintenance'
+    | 'amc-performance'
+    | 'vendor-performance'
+    | 'sla-compliance'
+    | 'health-summary'
+    | 'cost-analysis'
+    | 'capacity-forecast'
+    | 'predictive-summary';
   title: string;
-  type: string;
-  generatedAt: Date;
   periodStart: Date;
   periodEnd: Date;
+  filters?: {
+    branchNodeId?: string;
+    assetId?: string;
+    vendorId?: string;
+    severity?: string;
+  };
+  format: 'pdf' | 'excel' | 'json';
+  includeCharts?: boolean;
+  includeDetails?: boolean;
   generatedBy: string;
-  summary: Record<string, unknown>;
-  details: Record<string, unknown>;
-  metrics: Record<string, number>;
-  recommendations: string[];
+  generatedAt: Date;
 }
 
-export interface CostAnalysis {
-  totalCost: number;
-  preventiveCost: number;
-  correctiveCost: number;
-  materialsCost: number;
-  laborCost: number;
-  vendorCosts: Record<string, number>;
-  costByComponent: Record<string, number>;
-  costTrend: Array<{ date: Date; cost: number }>;
-  roiAnalysis: {
-    preventiveCostReduction: number;
-    downtimeReduction: number;
-    estimatedSavings: number;
-  };
-}
-
-export interface PreventiveMaintenanceReport {
-  totalPlans: number;
-  completedPlans: number;
-  overduePlans: number;
-  plannedCompliance: number;
-  visitDetails: Array<{
-    planId: string;
-    scheduledDate: Date;
-    completedDate?: Date;
-    technician: string;
-    status: "completed" | "overdue" | "upcoming";
-    checklistItems: number;
-    completedItems: number;
-  }>;
-}
-
-export interface CorrectiveMaintenanceReport {
-  totalWorkOrders: number;
-  resolvedWorkOrders: number;
-  averageResolutionTime: number;
-  mttr: number; // Mean Time to Repair
-  failureAnalysis: Record<string, number>;
-  topFailureModes: Array<{
-    mode: string;
-    count: number;
-    resolution: string;
-  }>;
-  partsList: Array<{
-    partName: string;
-    quantity: number;
-    cost: number;
-    component: string;
-  }>;
-}
-
-export interface ComplianceReport {
-  frameworkName: string;
-  assessmentPeriod: string;
-  overallScore: number;
-  byCategory: Record<string, { score: number; status: string }>;
-  nonCompliantItems: Array<{
-    item: string;
-    requirement: string;
-    current: string;
-    deadline: Date;
-  }>;
-  actionItems: Array<{
-    action: string;
-    owner: string;
-    dueDate: Date;
-    priority: "low" | "medium" | "high" | "critical";
-  }>;
-}
-
-export interface SLAPerformanceReport {
-  totalWorkOrders: number;
-  onTimeCount: number;
-  breachedCount: number;
-  compliancePercentage: number;
-  averageResponseTime: number; // in hours
-  averageResolutionTime: number; // in hours
-  slaTargets: {
-    responseTime: number;
-    resolutionTime: number;
-  };
-  vendorPerformance: Array<{
-    vendorName: string;
-    workOrders: number;
-    onTimeRate: number;
-    averageResponseTime: number;
-  }>;
-  breaches: Array<{
-    workOrderId: string;
-    component: string;
-    breachType: "response" | "resolution";
-    delayHours: number;
-    impactDescription: string;
-  }>;
+export interface GeneratedReport {
+  reportId: string;
+  config: ReportConfig;
+  data: any;
+  summary: string;
+  metrics: Record<string, any>;
+  filename: string;
+  fileSize?: number;
+  downloadUrl?: string;
 }
 
 export class ReportingEngine {
   private store: ControlPlaneStore;
-  private generatedReports: ReportData[] = [];
+  private logger: any;
+  private reports: Map<string, GeneratedReport> = new Map();
 
-  constructor(store: ControlPlaneStore) {
+  constructor(store: ControlPlaneStore, logger?: any) {
     this.store = store;
+    this.logger = logger || console;
   }
 
   /**
-   * Generate comprehensive maintenance report
+   * Generate a report
    */
-  async generateReport(config: ReportConfig): Promise<ReportData> {
-    let reportData: ReportData;
+  async generateReport(config: ReportConfig): Promise<GeneratedReport> {
+    try {
+      this.logger.info('Generating report:', {
+        type: config.reportType,
+        format: config.format,
+        period: `${config.periodStart.toISOString()} to ${config.periodEnd.toISOString()}`,
+      });
 
-    switch (config.reportType) {
-      case "preventive":
-        reportData = await this.generatePreventiveReport(config);
-        break;
-      case "corrective":
-        reportData = await this.generateCorrectiveReport(config);
-        break;
-      case "asset_health":
-        reportData = await this.generateAssetHealthReport(config);
-        break;
-      case "compliance":
-        reportData = await this.generateComplianceReport(config);
-        break;
-      case "cost_analysis":
-        reportData = await this.generateCostAnalysisReport(config);
-        break;
-      case "sla_performance":
-        reportData = await this.generateSLAPerformanceReport(config);
-        break;
-      default:
-        throw new Error(`Unknown report type: ${config.reportType}`);
+      // Collect data based on report type
+      const data = await this.collectReportData(config);
+
+      // Calculate metrics and summary
+      const metrics = this.calculateMetrics(config.reportType, data);
+      const summary = this.generateSummary(config.reportType, metrics);
+
+      // Generate filename
+      const filename = this.generateFilename(config);
+
+      const report: GeneratedReport = {
+        reportId: config.id,
+        config,
+        data,
+        summary,
+        metrics,
+        filename,
+      };
+
+      // Store report
+      this.reports.set(report.reportId, report);
+
+      // Generate file in requested format
+      if (config.format === 'pdf') {
+        await this.generatePDF(report);
+      } else if (config.format === 'excel') {
+        await this.generateExcel(report);
+      }
+
+      // Log to audit
+      await this.store.writeAudit({
+        tenantId: config.tenantId,
+        actorUserId: config.generatedBy,
+        action: 'maintenance.report_generated',
+        resourceNodeId: config.filters?.branchNodeId || null,
+        outcome: 'success',
+        details: {
+          reportType: config.reportType,
+          format: config.format,
+          reportId: report.reportId,
+        },
+      });
+
+      this.logger.info('Report generated successfully:', {
+        reportId: report.reportId,
+        filename: report.filename,
+      });
+
+      return report;
+    } catch (error) {
+      this.logger.error('Failed to generate report:', error);
+      throw error;
     }
-
-    this.generatedReports.push(reportData);
-    return reportData;
   }
 
   /**
-   * Generate preventive maintenance report
+   * Collect data for report
    */
-  private async generatePreventiveReport(
-    config: ReportConfig
-  ): Promise<ReportData> {
-    // Simulate report generation
-    const preventiveData: PreventiveMaintenanceReport = {
-      totalPlans: 45,
-      completedPlans: 42,
-      overduePlans: 2,
-      plannedCompliance: (42 / 45) * 100,
-      visitDetails: [
-        {
-          planId: "plan_001",
-          scheduledDate: new Date(config.periodStart),
-          completedDate: new Date(config.periodStart),
-          technician: "John Smith",
-          status: "completed",
-          checklistItems: 15,
-          completedItems: 15,
-        },
-        {
-          planId: "plan_002",
-          scheduledDate: new Date(config.periodStart.getTime() + 7 * 24 * 60 * 60 * 1000),
-          completedDate: undefined,
-          technician: "Pending",
-          status: "overdue",
-          checklistItems: 12,
-          completedItems: 0,
-        },
-      ],
-    };
+  private async collectReportData(config: ReportConfig): Promise<any> {
+    const { tenantId, reportType, periodStart, periodEnd, filters } = config;
+
+    switch (reportType) {
+      case 'preventive-maintenance':
+        return this.collectPreventiveMaintenanceData(tenantId, periodStart, periodEnd, filters);
+      
+      case 'corrective-maintenance':
+        return this.collectCorrectiveMaintenanceData(tenantId, periodStart, periodEnd, filters);
+      
+      case 'amc-performance':
+        return this.collectAmcPerformanceData(tenantId, periodStart, periodEnd, filters);
+      
+      case 'vendor-performance':
+        return this.collectVendorPerformanceData(tenantId, periodStart, periodEnd, filters);
+      
+      case 'sla-compliance':
+        return this.collectSlaComplianceData(tenantId, periodStart, periodEnd, filters);
+      
+      case 'health-summary':
+        return this.collectHealthSummaryData(tenantId, periodStart, periodEnd, filters);
+      
+      case 'cost-analysis':
+        return this.collectCostAnalysisData(tenantId, periodStart, periodEnd, filters);
+      
+      case 'capacity-forecast':
+        return this.collectCapacityForecastData(tenantId, periodStart, periodEnd, filters);
+      
+      case 'predictive-summary':
+        return this.collectPredictiveSummaryData(tenantId, periodStart, periodEnd, filters);
+      
+      default:
+        throw new Error(`Unknown report type: ${reportType}`);
+    }
+  }
+
+  /**
+   * Collect preventive maintenance data
+   */
+  private async collectPreventiveMaintenanceData(
+    tenantId: string,
+    periodStart: Date,
+    periodEnd: Date,
+    filters?: any
+  ): Promise<any> {
+    const visits = await this.store.listMaintenanceVisits(tenantId);
+    const schedules = await this.store.listMaintenanceSchedules(tenantId);
+
+    // Filter by period
+    const periodVisits = visits.filter(v => {
+      const visitDate = new Date(v.dueAt);
+      return visitDate >= periodStart && visitDate <= periodEnd;
+    });
+
+    // Calculate compliance
+    const scheduledVisits = periodVisits.length;
+    const completedVisits = periodVisits.filter(v => v.status === 'completed').length;
+    const overdueVisits = periodVisits.filter(v => 
+      v.status !== 'completed' && new Date(v.dueAt) < new Date()
+    ).length;
+
+    // Group by branch if available
+    const byBranch = this.groupByBranch(periodVisits, schedules);
 
     return {
-      reportId: `report_${Date.now()}`,
-      title: "Preventive Maintenance Report",
-      type: "preventive",
-      generatedAt: new Date(),
-      periodStart: config.periodStart,
-      periodEnd: config.periodEnd,
-      generatedBy: "System",
-      summary: preventiveData as unknown as Record<string, unknown>,
-      details: {
-        description:
-          "Comprehensive preventive maintenance execution report covering all scheduled maintenance activities",
+      period: { start: periodStart, end: periodEnd },
+      visits: periodVisits,
+      schedules: schedules.length,
+      statistics: {
+        scheduled: scheduledVisits,
+        completed: completedVisits,
+        overdue: overdueVisits,
+        complianceRate: scheduledVisits > 0 ? (completedVisits / scheduledVisits) * 100 : 100,
       },
-      metrics: {
-        "Planned Compliance": preventiveData.plannedCompliance,
-        "Total Plans": preventiveData.totalPlans,
-        "Completed Plans": preventiveData.completedPlans,
-        "Overdue Plans": preventiveData.overduePlans,
-      },
-      recommendations: [
-        "Increase technician availability to clear 2 overdue maintenance plans",
-        "Review maintenance plan frequency for critical cameras",
-        "Implement automated scheduling to reduce manual coordination",
-      ],
+      byBranch,
     };
   }
 
   /**
-   * Generate corrective maintenance report
+   * Collect corrective maintenance data
    */
-  private async generateCorrectiveReport(
-    config: ReportConfig
-  ): Promise<ReportData> {
-    const correctiveData: CorrectiveMaintenanceReport = {
-      totalWorkOrders: 28,
-      resolvedWorkOrders: 25,
-      averageResolutionTime: 4.2,
-      mttr: 4.2,
-      failureAnalysis: {
-        "Camera offline": 8,
-        "Storage full": 5,
-        "Network connectivity": 7,
-        "Power supply issue": 3,
-        "Recording error": 5,
-      },
-      topFailureModes: [
-        {
-          mode: "Camera offline",
-          count: 8,
-          resolution: "Network diagnostics and reconnection",
-        },
-        {
-          mode: "Network connectivity",
-          count: 7,
-          resolution: "Switch configuration and cabling repair",
-        },
-        { mode: "Storage full", count: 5, resolution: "Archive old recordings" },
-      ],
-      partsList: [
-        { partName: "Network Cable", quantity: 12, cost: 240, component: "Network" },
-        { partName: "Power Supply", quantity: 2, cost: 400, component: "Power" },
-        {
-          partName: "Camera Mounting Bracket",
-          quantity: 5,
-          cost: 150,
-          component: "Camera",
-        },
-      ],
-    };
+  private async collectCorrectiveMaintenanceData(
+    tenantId: string,
+    periodStart: Date,
+    periodEnd: Date,
+    filters?: any
+  ): Promise<any> {
+    const workOrders = await this.store.listWorkOrders(tenantId);
 
-    return {
-      reportId: `report_${Date.now()}`,
-      title: "Corrective Maintenance Report",
-      type: "corrective",
-      generatedAt: new Date(),
-      periodStart: config.periodStart,
-      periodEnd: config.periodEnd,
-      generatedBy: "System",
-      summary: correctiveData as unknown as Record<string, unknown>,
-      details: {
-        description:
-          "Analysis of reactive maintenance activities including failure analysis and resolution metrics",
-      },
-      metrics: {
-        "Work Orders Created": correctiveData.totalWorkOrders,
-        "Work Orders Resolved": correctiveData.resolvedWorkOrders,
-        "Average Resolution Time (hours)": correctiveData.averageResolutionTime,
-        MTTR: correctiveData.mttr,
-      },
-      recommendations: [
-        `Network connectivity is top issue - consider network redundancy or equipment upgrade`,
-        `MTTR of ${correctiveData.mttr} hours is above target - prioritize quick parts availability`,
-        `Implement predictive maintenance for cameras to reduce offline incidents`,
-      ],
-    };
-  }
+    // Filter by period
+    const periodWorkOrders = workOrders.filter(wo => {
+      const createdDate = new Date(wo.createdAt);
+      return createdDate >= periodStart && createdDate <= periodEnd;
+    });
 
-  /**
-   * Generate asset health report
-   */
-  private async generateAssetHealthReport(
-    config: ReportConfig
-  ): Promise<ReportData> {
-    const healthData = {
-      totalAssets: 150,
-      healthyAssets: 142,
-      degradedAssets: 6,
-      criticalAssets: 2,
-      averageHealth: 94.7,
-      componentHealthBreakdown: {
-        cameras: { healthy: 95, degraded: 3, critical: 2 },
-        storage: { healthy: 48, degraded: 2, critical: 0 },
-        network: { healthy: 42, degraded: 1, critical: 0 },
-        power: { healthy: 15, degraded: 0, critical: 0 },
-      },
-    };
+    // Calculate statistics
+    const totalOrders = periodWorkOrders.length;
+    const closedOrders = periodWorkOrders.filter(wo => wo.status === 'closed').length;
+    const openOrders = totalOrders - closedOrders;
 
-    return {
-      reportId: `report_${Date.now()}`,
-      title: "Asset Health Report",
-      type: "asset_health",
-      generatedAt: new Date(),
-      periodStart: config.periodStart,
-      periodEnd: config.periodEnd,
-      generatedBy: "System",
-      summary: healthData,
-      details: {
-        description: "Current state of all monitored assets and their health metrics",
-      },
-      metrics: {
-        "Total Assets": healthData.totalAssets,
-        "Healthy Assets": healthData.healthyAssets,
-        "Degraded Assets": healthData.degradedAssets,
-        "Critical Assets": healthData.criticalAssets,
-        "Average Health Score": healthData.averageHealth,
-      },
-      recommendations: [
-        "Investigate 2 critical assets - immediate attention required",
-        "Schedule maintenance for 6 degraded assets within next 7 days",
-        "Implement proactive monitoring to catch issues earlier",
-      ],
-    };
-  }
-
-  /**
-   * Generate compliance report
-   */
-  private async generateComplianceReport(
-    config: ReportConfig
-  ): Promise<ReportData> {
-    const complianceData: ComplianceReport = {
-      frameworkName: "ISO 27001 / Data Protection",
-      assessmentPeriod: `${config.periodStart.toLocaleDateString()} - ${config.periodEnd.toLocaleDateString()}`,
-      overallScore: 87,
-      byCategory: {
-        "Asset Inventory": { score: 95, status: "compliant" },
-        "Maintenance Records": { score: 85, status: "needs improvement" },
-        "Access Control": { score: 90, status: "compliant" },
-        "Incident Response": { score: 75, status: "needs improvement" },
-        "Audit Trail": { score: 88, status: "compliant" },
-      },
-      nonCompliantItems: [
-        {
-          item: "Maintenance record documentation",
-          requirement: "All maintenance must be documented within 24 hours",
-          current: "Some records delayed by 2-3 days",
-          deadline: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
-        },
-        {
-          item: "Incident response procedure",
-          requirement: "Documented response within 4 hours of discovery",
-          current: "Average response time 6 hours",
-          deadline: new Date(Date.now() + 60 * 24 * 60 * 60 * 1000),
-        },
-      ],
-      actionItems: [
-        {
-          action: "Implement automated maintenance logging",
-          owner: "IT Team",
-          dueDate: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
-          priority: "high",
-        },
-        {
-          action: "Train staff on incident response procedures",
-          owner: "Training Team",
-          dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
-          priority: "medium",
-        },
-      ],
-    };
-
-    return {
-      reportId: `report_${Date.now()}`,
-      title: "Compliance Assessment Report",
-      type: "compliance",
-      generatedAt: new Date(),
-      periodStart: config.periodStart,
-      periodEnd: config.periodEnd,
-      generatedBy: "System",
-      summary: complianceData as unknown as Record<string, unknown>,
-      details: {
-        description:
-          "Compliance assessment against ISO 27001 and data protection regulations",
-      },
-      metrics: {
-        "Overall Score": complianceData.overallScore,
-        "Compliant Categories": 3,
-        "Non-Compliant Categories": 2,
-        "Non-Compliant Items": complianceData.nonCompliantItems.length,
-      },
-      recommendations: [
-        "Prioritize implementation of automated maintenance logging",
-        "Conduct incident response drill to improve response time",
-        "Schedule quarterly compliance reviews",
-      ],
-    };
-  }
-
-  /**
-   * Generate cost analysis report
-   */
-  private async generateCostAnalysisReport(
-    config: ReportConfig
-  ): Promise<ReportData> {
-    const costAnalysis: CostAnalysis = {
-      totalCost: 45750,
-      preventiveCost: 18500,
-      correctiveCost: 22250,
-      materialsCost: 12000,
-      laborCost: 28750,
-      vendorCosts: {
-        "TechVendor A": 15000,
-        "TechVendor B": 12500,
-        "PartSupplier C": 18250,
-      },
-      costByComponent: {
-        cameras: 18000,
-        storage: 12500,
-        network: 9750,
-        power: 5500,
-      },
-      costTrend: [
-        { date: config.periodStart, cost: 8000 },
-        {
-          date: new Date(config.periodStart.getTime() + 7 * 24 * 60 * 60 * 1000),
-          cost: 7500,
-        },
-        {
-          date: new Date(config.periodStart.getTime() + 14 * 24 * 60 * 60 * 1000),
-          cost: 8500,
-        },
-      ],
-      roiAnalysis: {
-        preventiveCostReduction: 0.35,
-        downtimeReduction: 0.42,
-        estimatedSavings: 125000,
-      },
-    };
-
-    return {
-      reportId: `report_${Date.now()}`,
-      title: "Maintenance Cost Analysis Report",
-      type: "cost_analysis",
-      generatedAt: new Date(),
-      periodStart: config.periodStart,
-      periodEnd: config.periodEnd,
-      generatedBy: "System",
-      summary: costAnalysis as unknown as Record<string, unknown>,
-      details: {
-        description:
-          "Comprehensive analysis of maintenance costs including preventive vs corrective breakdown",
-      },
-      metrics: {
-        "Total Cost": costAnalysis.totalCost,
-        "Preventive Cost": costAnalysis.preventiveCost,
-        "Corrective Cost": costAnalysis.correctiveCost,
-        "Preventive Ratio": (costAnalysis.preventiveCost / costAnalysis.totalCost) * 100,
-        "Estimated Annual Savings": costAnalysis.roiAnalysis.estimatedSavings,
-      },
-      recommendations: [
-        "Current preventive cost ratio is 40% - industry best practice is 50%",
-        "Increase preventive maintenance investment by 15% for $50k annual savings",
-        "Negotiate volume discount with TechVendor A for $25k additional savings",
-      ],
-    };
-  }
-
-  /**
-   * Generate SLA performance report
-   */
-  private async generateSLAPerformanceReport(
-    config: ReportConfig
-  ): Promise<ReportData> {
-    const slaData: SLAPerformanceReport = {
-      totalWorkOrders: 28,
-      onTimeCount: 25,
-      breachedCount: 3,
-      compliancePercentage: 89.3,
-      averageResponseTime: 1.2,
-      averageResolutionTime: 4.2,
-      slaTargets: {
-        responseTime: 2,
-        resolutionTime: 4,
-      },
-      vendorPerformance: [
-        {
-          vendorName: "TechVendor A",
-          workOrders: 12,
-          onTimeRate: 91.7,
-          averageResponseTime: 1.1,
-        },
-        {
-          vendorName: "TechVendor B",
-          workOrders: 10,
-          onTimeRate: 90,
-          averageResponseTime: 1.3,
-        },
-        {
-          vendorName: "Internal Team",
-          workOrders: 6,
-          onTimeRate: 83.3,
-          averageResponseTime: 1.5,
-        },
-      ],
-      breaches: [
-        {
-          workOrderId: "WO-2024-001",
-          component: "Camera",
-          breachType: "response",
-          delayHours: 0.5,
-          impactDescription: "Response delayed due to staff unavailability",
-        },
-        {
-          workOrderId: "WO-2024-015",
-          component: "Storage",
-          breachType: "resolution",
-          delayHours: 1.2,
-          impactDescription: "Resolution delayed awaiting replacement parts",
-        },
-      ],
-    };
-
-    return {
-      reportId: `report_${Date.now()}`,
-      title: "SLA Performance Report",
-      type: "sla_performance",
-      generatedAt: new Date(),
-      periodStart: config.periodStart,
-      periodEnd: config.periodEnd,
-      generatedBy: "System",
-      summary: slaData as unknown as Record<string, unknown>,
-      details: {
-        description: "Service Level Agreement compliance and performance metrics",
-      },
-      metrics: {
-        "Total Work Orders": slaData.totalWorkOrders,
-        "On-Time Count": slaData.onTimeCount,
-        "Breached Count": slaData.breachedCount,
-        "SLA Compliance": slaData.compliancePercentage,
-        "Average Response Time (hours)": slaData.averageResponseTime,
-        "Average Resolution Time (hours)": slaData.averageResolutionTime,
-      },
-      recommendations: [
-        "Overall SLA compliance at 89.3% - target is 95%",
-        "TechVendor A performing best at 91.7% - consider expanding their scope",
-        "Internal team at 83.3% - consider additional training or staffing",
-        "Parts availability is causing resolution delays - improve inventory planning",
-      ],
-    };
-  }
-
-  /**
-   * Export report to PDF (simulated)
-   */
-  async exportReportToPDF(reportData: ReportData): Promise<Buffer> {
-    // In a real implementation, this would use a library like PDFKit or ReportLab
-    const pdfContent = `
-    MAINTENANCE REPORT
-    Title: ${reportData.title}
-    Generated: ${reportData.generatedAt.toISOString()}
-    Period: ${reportData.periodStart.toISOString()} - ${reportData.periodEnd.toISOString()}
-    
-    SUMMARY
-    ${JSON.stringify(reportData.summary, null, 2)}
-    
-    METRICS
-    ${JSON.stringify(reportData.metrics, null, 2)}
-    
-    RECOMMENDATIONS
-    ${reportData.recommendations.map((r, i) => `${i + 1}. ${r}`).join("\n")}
-    `;
-
-    return Buffer.from(pdfContent, "utf-8");
-  }
-
-  /**
-   * Export report to JSON
-   */
-  async exportReportToJSON(reportData: ReportData): Promise<string> {
-    return JSON.stringify(reportData, null, 2);
-  }
-
-  /**
-   * Export report to CSV
-   */
-  async exportReportToCSV(reportData: ReportData): Promise<string> {
-    let csv = `Report ID,Title,Type,Generated At,Period Start,Period End\n`;
-    csv += `"${reportData.reportId}","${reportData.title}","${reportData.type}","${reportData.generatedAt.toISOString()}","${reportData.periodStart.toISOString()}","${reportData.periodEnd.toISOString()}"\n\n`;
-
-    csv += `Metrics\n`;
-    csv += Object.entries(reportData.metrics)
-      .map(([key, value]) => `"${key}","${value}"`)
-      .join("\n");
-
-    csv += `\n\nRecommendations\n`;
-    csv += reportData.recommendations
-      .map((r, i) => `"${i + 1}","${r}"`)
-      .join("\n");
-
-    return csv;
-  }
-
-  /**
-   * Get all generated reports
-   */
-  getGeneratedReports(): ReportData[] {
-    return this.generatedReports;
-  }
-
-  /**
-   * Get report by ID
-   */
-  getReportById(reportId: string): ReportData | undefined {
-    return this.generatedReports.find((r) => r.reportId === reportId);
-  }
-}
-
-// Export singleton instance
-let reportingEngine: ReportingEngine | null = null;
-
-export function initializeReportingEngine(
-  store: ControlPlaneStore
-): ReportingEngine {
-  if (!reportingEngine) {
-    reportingEngine = new ReportingEngine(store);
-  }
-  return reportingEngine;
-}
-
-export function getReportingEngine(): ReportingEngine {
-  if (!reportingEngine) {
-    throw new Error(
-      "Reporting engine not initialized. Call initializeReportingEngine first."
+    // Calculate average resolution time
+    const closedWithSla = periodWorkOrders.filter(
+      wo => wo.status === 'closed' && wo.slaDueAt && wo.updatedAt
     );
+    const avgResolutionHours = closedWithSla.length > 0
+      ? closedWithSla.reduce((sum, wo) => {
+          const created = new Date(wo.createdAt).getTime();
+          const closed = new Date(wo.updatedAt).getTime();
+          return sum + ((closed - created) / (1000 * 60 * 60));
+        }, 0) / closedWithSla.length
+      : 0;
+
+    // Group by severity
+    const bySeverity = {
+      critical: periodWorkOrders.filter(wo => wo.severity === 'critical').length,
+      high: periodWorkOrders.filter(wo => wo.severity === 'high').length,
+      medium: periodWorkOrders.filter(wo => wo.severity === 'medium').length,
+      low: periodWorkOrders.filter(wo => wo.severity === 'low').length,
+    };
+
+    // Calculate total cost
+    const totalCost = periodWorkOrders.reduce((sum, wo) => sum + (wo.cost || 0), 0);
+
+    return {
+      period: { start: periodStart, end: periodEnd },
+      workOrders: periodWorkOrders,
+      statistics: {
+        total: totalOrders,
+        closed: closedOrders,
+        open: openOrders,
+        avgResolutionHours,
+        totalCost,
+      },
+      bySeverity,
+    };
   }
-  return reportingEngine;
+
+  /**
+   * Collect AMC performance data
+   */
+  private async collectAmcPerformanceData(
+    tenantId: string,
+    periodStart: Date,
+    periodEnd: Date,
+    filters?: any
+  ): Promise<any> {
+    const contracts = await this.store.listAmcContracts(tenantId, filters?.vendorId);
+    const workOrders = await this.store.listWorkOrders(tenantId);
+
+    // Active contracts during period
+    const activeContracts = contracts.filter(c => {
+      const start = new Date(c.startDate);
+      const end = new Date(c.endDate);
+      return start <= periodEnd && end >= periodStart;
+    });
+
+    // Work orders covered by AMC
+    const amcWorkOrders = workOrders.filter(wo => {
+      const created = new Date(wo.createdAt);
+      return created >= periodStart && created <= periodEnd && wo.vendorId;
+    });
+
+    // Calculate response time compliance
+    const onTimeSla = amcWorkOrders.filter(wo => {
+      if (!wo.slaDueAt || !wo.updatedAt || wo.status !== 'closed') return false;
+      return new Date(wo.updatedAt) <= new Date(wo.slaDueAt);
+    }).length;
+
+    const slaCompliance = amcWorkOrders.length > 0
+      ? (onTimeSla / amcWorkOrders.length) * 100
+      : 100;
+
+    // Calculate total AMC cost
+    const totalAmcCost = activeContracts.reduce((sum, c) => sum + (c.cost || 0), 0);
+
+    return {
+      period: { start: periodStart, end: periodEnd },
+      contracts: activeContracts,
+      workOrders: amcWorkOrders,
+      statistics: {
+        activeContracts: activeContracts.length,
+        totalWorkOrders: amcWorkOrders.length,
+        slaCompliance,
+        onTimeSla,
+        totalCost: totalAmcCost,
+      },
+    };
+  }
+
+  /**
+   * Collect vendor performance data
+   */
+  private async collectVendorPerformanceData(
+    tenantId: string,
+    periodStart: Date,
+    periodEnd: Date,
+    filters?: any
+  ): Promise<any> {
+    const vendors = await this.store.listMaintenanceVendors(tenantId);
+    const workOrders = await this.store.listWorkOrders(tenantId);
+
+    const vendorPerformance = vendors.map(vendor => {
+      const vendorWorkOrders = workOrders.filter(wo => {
+        const created = new Date(wo.createdAt);
+        return wo.vendorId === vendor.id && created >= periodStart && created <= periodEnd;
+      });
+
+      const completed = vendorWorkOrders.filter(wo => wo.status === 'closed').length;
+      const onTime = vendorWorkOrders.filter(wo => {
+        if (!wo.slaDueAt || !wo.updatedAt || wo.status !== 'closed') return false;
+        return new Date(wo.updatedAt) <= new Date(wo.slaDueAt);
+      }).length;
+
+      const avgResolutionTime = completed > 0
+        ? vendorWorkOrders
+            .filter(wo => wo.status === 'closed')
+            .reduce((sum, wo) => {
+              const created = new Date(wo.createdAt).getTime();
+              const closed = new Date(wo.updatedAt).getTime();
+              return sum + ((closed - created) / (1000 * 60 * 60));
+            }, 0) / completed
+        : 0;
+
+      const totalCost = vendorWorkOrders.reduce((sum, wo) => sum + (wo.cost || 0), 0);
+
+      return {
+        vendor,
+        statistics: {
+          totalWorkOrders: vendorWorkOrders.length,
+          completed,
+          onTime,
+          slaCompliance: vendorWorkOrders.length > 0 ? (onTime / vendorWorkOrders.length) * 100 : 100,
+          avgResolutionHours: avgResolutionTime,
+          totalCost,
+        },
+      };
+    });
+
+    // Sort by performance score
+    vendorPerformance.sort((a, b) => b.statistics.slaCompliance - a.statistics.slaCompliance);
+
+    return {
+      period: { start: periodStart, end: periodEnd },
+      vendors: vendorPerformance,
+    };
+  }
+
+  /**
+   * Collect SLA compliance data
+   */
+  private async collectSlaComplianceData(
+    tenantId: string,
+    periodStart: Date,
+    periodEnd: Date,
+    filters?: any
+  ): Promise<any> {
+    const workOrders = await this.store.listWorkOrders(tenantId);
+
+    const periodWorkOrders = workOrders.filter(wo => {
+      const created = new Date(wo.createdAt);
+      return created >= periodStart && created <= periodEnd;
+    });
+
+    const withSla = periodWorkOrders.filter(wo => wo.slaDueAt);
+    const closed = withSla.filter(wo => wo.status === 'closed');
+    const onTime = closed.filter(wo => new Date(wo.updatedAt) <= new Date(wo.slaDueAt!));
+    const breached = withSla.filter(wo => 
+      wo.status !== 'closed' && new Date(wo.slaDueAt!) < new Date()
+    );
+
+    // Group by severity
+    const bySeverity = {
+      critical: this.calculateSlaForSeverity(periodWorkOrders, 'critical'),
+      high: this.calculateSlaForSeverity(periodWorkOrders, 'high'),
+      medium: this.calculateSlaForSeverity(periodWorkOrders, 'medium'),
+      low: this.calculateSlaForSeverity(periodWorkOrders, 'low'),
+    };
+
+    return {
+      period: { start: periodStart, end: periodEnd },
+      workOrders: withSla,
+      statistics: {
+        total: withSla.length,
+        closed: closed.length,
+        onTime: onTime.length,
+        breached: breached.length,
+        complianceRate: closed.length > 0 ? (onTime.length / closed.length) * 100 : 100,
+      },
+      bySeverity,
+    };
+  }
+
+  /**
+   * Collect health summary data
+   */
+  private async collectHealthSummaryData(
+    tenantId: string,
+    periodStart: Date,
+    periodEnd: Date,
+    filters?: any
+  ): Promise<any> {
+    // Get current health status
+    const healthSummary = await this.store.getHealthCheckSummary(tenantId);
+
+    // Get alerts during period
+    const alerts = await this.store.listPredictiveAlerts(tenantId);
+    const periodAlerts = alerts.filter(a => {
+      const detected = new Date(a.detectedAt || Date.now());
+      return detected >= periodStart && detected <= periodEnd;
+    });
+
+    // Group alerts by category
+    const alertsByCategory = {
+      critical: periodAlerts.filter(a => a.score > 0.8).length,
+      warning: periodAlerts.filter(a => a.score > 0.5 && a.score <= 0.8).length,
+      info: periodAlerts.filter(a => a.score <= 0.5).length,
+    };
+
+    return {
+      period: { start: periodStart, end: periodEnd },
+      currentHealth: healthSummary,
+      alerts: periodAlerts,
+      statistics: {
+        totalAlerts: periodAlerts.length,
+        alertsByCategory,
+      },
+    };
+  }
+
+  /**
+   * Collect cost analysis data
+   */
+  private async collectCostAnalysisData(
+    tenantId: string,
+    periodStart: Date,
+    periodEnd: Date,
+    filters?: any
+  ): Promise<any> {
+    const workOrders = await this.store.listWorkOrders(tenantId);
+    const contracts = await this.store.listAmcContracts(tenantId);
+    const assets = await this.store.listMaintenanceAssets(tenantId);
+
+    const periodWorkOrders = workOrders.filter(wo => {
+      const created = new Date(wo.createdAt);
+      return created >= periodStart && created <= periodEnd;
+    });
+
+    // Calculate corrective maintenance costs
+    const correctiveCost = periodWorkOrders.reduce((sum, wo) => sum + (wo.cost || 0), 0);
+
+    // Calculate AMC costs (pro-rated for period)
+    const amcCost = contracts
+      .filter(c => c.status === 'active')
+      .reduce((sum, c) => sum + (c.cost || 0), 0);
+
+    // Cost by asset category
+    const costByCategory = this.calculateCostByCategory(periodWorkOrders, assets);
+
+    // Cost trend (monthly breakdown)
+    const costTrend = this.calculateCostTrend(periodWorkOrders, periodStart, periodEnd);
+
+    return {
+      period: { start: periodStart, end: periodEnd },
+      statistics: {
+        correctiveCost,
+        amcCost,
+        totalCost: correctiveCost + amcCost,
+        costPerWorkOrder: periodWorkOrders.length > 0 ? correctiveCost / periodWorkOrders.length : 0,
+      },
+      costByCategory,
+      costTrend,
+    };
+  }
+
+  /**
+   * Collect capacity forecast data
+   */
+  private async collectCapacityForecastData(
+    tenantId: string,
+    periodStart: Date,
+    periodEnd: Date,
+    filters?: any
+  ): Promise<any> {
+    // This would implement forecasting algorithms
+    // For now, return placeholder data
+    return {
+      period: { start: periodStart, end: periodEnd },
+      forecast: {
+        storage: {
+          current: 7500,
+          predicted30Days: 8200,
+          predicted60Days: 8900,
+          predicted90Days: 9500,
+          capacityExhausted: '~120 days',
+        },
+        cameras: {
+          current: 545,
+          predicted12Months: 600,
+          growthRate: 10,
+        },
+      },
+    };
+  }
+
+  /**
+   * Collect predictive summary data
+   */
+  private async collectPredictiveSummaryData(
+    tenantId: string,
+    periodStart: Date,
+    periodEnd: Date,
+    filters?: any
+  ): Promise<any> {
+    const alerts = await this.store.listPredictiveAlerts(tenantId);
+
+    const highRisk = alerts.filter(a => a.score > 0.8);
+    const mediumRisk = alerts.filter(a => a.score > 0.5 && a.score <= 0.8);
+
+    // Group by asset type
+    const byType = {
+      storage: alerts.filter(a => a.type?.includes('storage') || a.type?.includes('disk')).length,
+      ups: alerts.filter(a => a.type?.includes('ups') || a.type?.includes('battery')).length,
+      camera: alerts.filter(a => a.type?.includes('camera')).length,
+      network: alerts.filter(a => a.type?.includes('network')).length,
+    };
+
+    return {
+      period: { start: periodStart, end: periodEnd },
+      alerts,
+      statistics: {
+        total: alerts.length,
+        highRisk: highRisk.length,
+        mediumRisk: mediumRisk.length,
+        lowRisk: alerts.length - highRisk.length - mediumRisk.length,
+      },
+      byType,
+    };
+  }
+
+  /**
+   * Calculate metrics based on report type
+   */
+  private calculateMetrics(reportType: string, data: any): Record<string, any> {
+    // Return data.statistics or calculate custom metrics
+    return data.statistics || {};
+  }
+
+  /**
+   * Generate summary text
+   */
+  private generateSummary(reportType: string, metrics: Record<string, any>): string {
+    switch (reportType) {
+      case 'preventive-maintenance':
+        return `Preventive maintenance compliance: ${metrics.complianceRate?.toFixed(1)}%. ${metrics.completed} of ${metrics.scheduled} visits completed.`;
+      
+      case 'corrective-maintenance':
+        return `${metrics.total} work orders processed. ${metrics.closed} closed, ${metrics.open} remain open. Average resolution time: ${metrics.avgResolutionHours?.toFixed(1)} hours.`;
+      
+      case 'amc-performance':
+        return `${metrics.activeContracts} active AMC contracts. SLA compliance: ${metrics.slaCompliance?.toFixed(1)}%. Total cost: $${metrics.totalCost?.toFixed(2)}.`;
+      
+      case 'vendor-performance':
+        return `Vendor performance analysis covering ${metrics.vendorCount || 'multiple'} vendors.`;
+      
+      case 'sla-compliance':
+        return `SLA compliance rate: ${metrics.complianceRate?.toFixed(1)}%. ${metrics.onTime} on-time, ${metrics.breached} breached.`;
+      
+      case 'health-summary':
+        return `System health overview with ${metrics.totalAlerts} alerts generated.`;
+      
+      case 'cost-analysis':
+        return `Total maintenance cost: $${metrics.totalCost?.toFixed(2)}. Corrective: $${metrics.correctiveCost?.toFixed(2)}, AMC: $${metrics.amcCost?.toFixed(2)}.`;
+      
+      default:
+        return `Report generated successfully.`;
+    }
+  }
+
+  /**
+   * Generate filename
+   */
+  private generateFilename(config: ReportConfig): string {
+    const date = new Date().toISOString().split('T')[0];
+    const type = config.reportType.replace(/-/g, '_');
+    const ext = config.format === 'pdf' ? 'pdf' : config.format === 'excel' ? 'xlsx' : 'json';
+    return `maintenance_${type}_${date}.${ext}`;
+  }
+
+  /**
+   * Generate PDF report (with actual PDF generation)
+   */
+  private async generatePDF(report: GeneratedReport): Promise<void> {
+    try {
+      const { PDFGenerator } = await import('./pdf-generator.js');
+      const pdfGenerator = new PDFGenerator(this.logger);
+      
+      const buffer = await pdfGenerator.generatePDF(report, {
+        includeLogo: false,
+        includeCharts: false,
+        includeDetails: true,
+      });
+      
+      // In production, save to file system or object storage
+      report.fileSize = buffer.length;
+      report.downloadUrl = `/v1/maintenance/reports/${report.reportId}/download`;
+      
+      this.logger.info('PDF generated successfully:', {
+        reportId: report.reportId,
+        size: buffer.length,
+      });
+    } catch (error) {
+      this.logger.error('Failed to generate PDF:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Generate Excel report (with actual Excel generation)
+   */
+  private async generateExcel(report: GeneratedReport): Promise<void> {
+    try {
+      const { ExcelGenerator } = await import('./excel-generator.js');
+      const excelGenerator = new ExcelGenerator(this.logger);
+      
+      const buffer = await excelGenerator.generateExcel(report, {
+        includeCharts: false,
+        includeSummary: true,
+        includeDetails: true,
+        multiSheet: true,
+      });
+      
+      // In production, save to file system or object storage
+      report.fileSize = buffer.length;
+      report.downloadUrl = `/v1/maintenance/reports/${report.reportId}/download`;
+      
+      this.logger.info('Excel generated successfully:', {
+        reportId: report.reportId,
+        size: buffer.length,
+      });
+    } catch (error) {
+      this.logger.error('Failed to generate Excel:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get generated report
+   */
+  getReport(reportId: string): GeneratedReport | undefined {
+    return this.reports.get(reportId);
+  }
+
+  /**
+   * List generated reports
+   */
+  listReports(): GeneratedReport[] {
+    return Array.from(this.reports.values());
+  }
+
+  // ============================================================================
+  // Helper Methods
+  // ============================================================================
+
+  private groupByBranch(visits: any[], schedules: any[]): any {
+    // Group visits by branch from schedules
+    return {};
+  }
+
+  private calculateSlaForSeverity(workOrders: any[], severity: string): any {
+    const filtered = workOrders.filter(wo => wo.severity === severity && wo.slaDueAt);
+    const closed = filtered.filter(wo => wo.status === 'closed');
+    const onTime = closed.filter(wo => new Date(wo.updatedAt) <= new Date(wo.slaDueAt));
+    
+    return {
+      total: filtered.length,
+      onTime: onTime.length,
+      compliance: closed.length > 0 ? (onTime.length / closed.length) * 100 : 100,
+    };
+  }
+
+  private calculateCostByCategory(workOrders: any[], assets: any[]): any {
+    const categories = ['camera', 'recorder', 'storage', 'network', 'power', 'accessory'];
+    
+    return categories.reduce((acc, category) => {
+      const categoryAssets = assets.filter(a => a.category === category);
+      const categoryWorkOrders = workOrders.filter(wo => 
+        categoryAssets.some(a => a.id === wo.assetId)
+      );
+      const cost = categoryWorkOrders.reduce((sum, wo) => sum + (wo.cost || 0), 0);
+      
+      acc[category] = cost;
+      return acc;
+    }, {} as Record<string, number>);
+  }
+
+  private calculateCostTrend(
+    workOrders: any[],
+    periodStart: Date,
+    periodEnd: Date
+  ): any[] {
+    const months: any[] = [];
+    const current = new Date(periodStart);
+    
+    while (current <= periodEnd) {
+      const monthStart = new Date(current);
+      const monthEnd = new Date(current.getFullYear(), current.getMonth() + 1, 0);
+      
+      const monthWorkOrders = workOrders.filter(wo => {
+        const created = new Date(wo.createdAt);
+        return created >= monthStart && created <= monthEnd;
+      });
+      
+      const cost = monthWorkOrders.reduce((sum, wo) => sum + (wo.cost || 0), 0);
+      
+      months.push({
+        month: `${current.getFullYear()}-${String(current.getMonth() + 1).padStart(2, '0')}`,
+        cost,
+        workOrders: monthWorkOrders.length,
+      });
+      
+      current.setMonth(current.getMonth() + 1);
+    }
+    
+    return months;
+  }
+}
+
+// Singleton instance
+let reportingEngineInstance: ReportingEngine | null = null;
+
+export function initReportingEngine(store: ControlPlaneStore, logger?: any): ReportingEngine {
+  if (!reportingEngineInstance) {
+    reportingEngineInstance = new ReportingEngine(store, logger);
+  }
+  return reportingEngineInstance;
+}
+
+export function getReportingEngine(): ReportingEngine | null {
+  return reportingEngineInstance;
 }

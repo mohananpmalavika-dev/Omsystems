@@ -186,6 +186,35 @@ export interface Camera {
   };
 }
 
+export interface DeviceInventoryRecord {
+  id: string;
+  tenantId: string;
+  deviceId: string;
+  tenant: string;
+  region: string;
+  branch: string;
+  deviceType: string;
+  manufacturer: string;
+  model: string;
+  serialNumber?: string;
+  macAddress?: string;
+  ipAddress?: string;
+  firmwareVersion?: string;
+  onvifVersion?: string;
+  capabilities: string[];
+  credentialReference?: string;
+  installationDate?: string;
+  warranty?: string;
+  amcContract?: string;
+  healthStatus: string;
+  lastCommunication?: string;
+  configurationTemplate?: string;
+  riskClassification: string;
+  lifecycleState: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface LiveSessionResponse {
   demo?: boolean;
   sessionId?: string;

@@ -46,6 +46,8 @@ import type {
   MaintenanceVendorInput,
   AmcContractInput,
   ComplianceAssessmentFilters,
+  DeviceInventoryInput,
+  DeviceInventoryRecord,
 } from "./control-plane-store.js";
 import { IncidentManagementMethods } from "./store-incident-extensions.js";
 
@@ -236,6 +238,7 @@ export class MemoryStore implements ControlPlaneStore {
   readonly analyticsEscalations: Array<Record<string, unknown>> = [];
   readonly analyticsNotifications: Array<Record<string, unknown>> = [];
   readonly maintenanceAssets: any[] = [];
+  readonly deviceInventoryRecords: any[] = [];
   readonly workOrders: any[] = [];
   readonly maintenanceVendors: any[] = [];
   readonly amcContracts: any[] = [];
@@ -386,19 +389,43 @@ export class MemoryStore implements ControlPlaneStore {
   async createDiscovery(branchId: string, input: CameraDiscoveryInput) {
     const agent = this.edgeAgents.get(input.edgeAgentId);
     if (!agent || agent.branchId !== branchId) throw new Error("invalid_edge_agent");
-    const existing = [...this.discoveries.values()].find((item) =>
-      item.edgeAgentId === input.edgeAgentId &&
-      item.ipAddress === input.ipAddress &&
-      item.onvifPort === input.onvifPort
-    );
+
+    const normalized = structuredClone(input);
+    const fingerprintCandidates = [
+      normalized.serialNumber,
+      normalized.macAddress,
+      normalized.onvifEndpointReference,
+      normalized.hardwareId,
+      normalized.existingDeviceAssociation,
+      `${normalized.manufacturer ?? ""}::${normalized.model}`,
+    ].filter((candidate): candidate is string => Boolean(candidate && candidate.trim()));
+
+    const existing = [...this.discoveries.values()].find((item) => {
+      const sameBranch = item.branchId === branchId;
+      const sameIp = item.ipAddress === normalized.ipAddress && item.onvifPort === normalized.onvifPort;
+      const sameSerial = Boolean(item.serialNumber && normalized.serialNumber && item.serialNumber === normalized.serialNumber);
+      const sameMac = Boolean(item.macAddress && normalized.macAddress && item.macAddress === normalized.macAddress);
+      const sameOnvif = Boolean(item.onvifEndpointReference && normalized.onvifEndpointReference && item.onvifEndpointReference === normalized.onvifEndpointReference);
+      const sameHardware = Boolean(item.hardwareId && normalized.hardwareId && item.hardwareId === normalized.hardwareId);
+      const sameAssociation = Boolean(item.existingDeviceAssociation && normalized.existingDeviceAssociation && item.existingDeviceAssociation === normalized.existingDeviceAssociation);
+      const sameVendorModel = Boolean(
+        item.manufacturer && normalized.manufacturer &&
+        item.model === normalized.model &&
+        item.manufacturer === normalized.manufacturer &&
+        normalized.hardwareId && item.hardwareId === normalized.hardwareId,
+      );
+      const hasFingerprint = [sameSerial, sameMac, sameOnvif, sameHardware, sameAssociation, sameVendorModel].some(Boolean);
+      return sameBranch && (hasFingerprint || sameIp);
+    });
+
     if (existing) {
-      Object.assign(existing, structuredClone(input), {
+      Object.assign(existing, normalized, {
         discoveredAt: new Date().toISOString(),
       });
       return existing;
     }
     const discovery: DiscoveredCamera = {
-      id: randomUUID(), branchId, ...structuredClone(input),
+      id: randomUUID(), branchId, ...normalized,
       status: "pending", discoveredAt: new Date().toISOString(),
     };
     this.discoveries.set(discovery.id, discovery);
@@ -1027,6 +1054,55 @@ export class MemoryStore implements ControlPlaneStore {
     };
     this.complianceCertificates.push(certificate);
     return certificate;
+  }
+
+  async createDeviceInventoryRecord(input: DeviceInventoryInput): Promise<DeviceInventoryRecord> {
+    const now = new Date().toISOString();
+    const record: DeviceInventoryRecord = {
+      id: randomUUID(),
+      tenantId: input.tenantId,
+      deviceId: input.deviceId,
+      tenant: input.tenant,
+      region: input.region,
+      branch: input.branch,
+      deviceType: input.deviceType,
+      manufacturer: input.manufacturer,
+      model: input.model,
+      serialNumber: input.serialNumber,
+      macAddress: input.macAddress,
+      ipAddress: input.ipAddress,
+      firmwareVersion: input.firmwareVersion,
+      onvifVersion: input.onvifVersion,
+      capabilities: input.capabilities ?? [],
+      credentialReference: input.credentialReference,
+      installationDate: input.installationDate,
+      warranty: input.warranty,
+      amcContract: input.amcContract,
+      healthStatus: input.healthStatus ?? "unknown",
+      lastCommunication: input.lastCommunication,
+      configurationTemplate: input.configurationTemplate,
+      riskClassification: input.riskClassification ?? "medium",
+      lifecycleState: input.lifecycleState ?? "discovered",
+      createdAt: now,
+      updatedAt: now,
+    };
+    this.deviceInventoryRecords.push(record);
+    return record;
+  }
+
+  async listDeviceInventory(tenantId: string, branch?: string) {
+    return this.deviceInventoryRecords.filter((record) => record.tenantId === tenantId && (!branch || record.branch === branch));
+  }
+
+  async getDeviceInventory(id: string) {
+    return this.deviceInventoryRecords.find((record) => record.id === id);
+  }
+
+  async updateDeviceInventory(id: string, input: Parameters<ControlPlaneStore["updateDeviceInventory"]>[1]) {
+    const record = this.deviceInventoryRecords.find((item) => item.id === id);
+    if (!record) return undefined;
+    Object.assign(record, { ...input, updatedAt: new Date().toISOString() });
+    return record;
   }
 
   async createMaintenanceAsset(input: MaintenanceAssetInput): Promise<MaintenanceAsset> {
