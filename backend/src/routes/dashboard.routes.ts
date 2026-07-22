@@ -4,7 +4,8 @@
  */
 
 import { Router, Request, Response } from 'express';
-import { dashboardService } from '../services/dashboard.service';
+import { Pool } from 'pg';
+import { DashboardService } from '../services/dashboard.service';
 
 // Extend Express Request type
 interface AuthRequest extends Request {
@@ -18,7 +19,9 @@ interface AuthRequest extends Request {
   };
 }
 
-const router = Router();
+export function createDashboardRoutes(pool: Pool): Router {
+  const router = Router();
+  const dashboardService = new DashboardService(pool);
 
 /**
  * GET /v1/dashboard/summary
@@ -252,4 +255,7 @@ router.get('/system-health', async (req: AuthRequest, res: Response) => {
   }
 });
 
-export default router;
+  return router;
+}
+
+export default createDashboardRoutes;

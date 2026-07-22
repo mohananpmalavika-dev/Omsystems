@@ -4,7 +4,8 @@
  */
 
 import { Router, Request, Response } from 'express';
-import { reportsService } from '../services/reports.service';
+import { Pool } from 'pg';
+import { ReportsService } from '../services/reports.service';
 
 // Extend Express Request type
 interface AuthRequest extends Request {
@@ -18,7 +19,9 @@ interface AuthRequest extends Request {
   };
 }
 
-const router = Router();
+export function createReportsRoutes(pool: Pool): Router {
+  const router = Router();
+  const reportsService = new ReportsService(pool);
 
 /**
  * GET /v1/reports/camera-health
@@ -461,3 +464,8 @@ router.get('/alerts', async (req: AuthRequest, res: Response) => {
 });
 
 export default router;
+
+ return router;
+}
+
+export default createReportsRoutes;
