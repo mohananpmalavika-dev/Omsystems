@@ -239,9 +239,9 @@ export async function registerMaintenanceDashboardRoutes(
     const workOrders = await store.listWorkOrders(tenantId);
     
     const now = new Date();
-    const totalOrders = workOrders.filter(w => w.status !== 'closed').length;
+    const totalOrders = workOrders.filter(w => w.status !== 'completed').length;
     const onTimeOrders = workOrders.filter(w => 
-      w.status === 'closed' && w.slaDueAt && new Date(w.slaDueAt) >= new Date(w.updatedAt)
+      w.status === 'completed' && w.slaDueAt && w.updatedAt && new Date(w.slaDueAt) >= new Date(w.updatedAt)
     ).length;
     
     return {
@@ -249,7 +249,7 @@ export async function registerMaintenanceDashboardRoutes(
       completedOnTime: onTimeOrders,
       compliancePercentage: totalOrders > 0 ? Math.round((onTimeOrders / totalOrders) * 100) : 100,
       breaches: workOrders.filter(w => 
-        w.status !== 'closed' && w.slaDueAt && new Date(w.slaDueAt) < now
+        w.status !== 'completed' && w.slaDueAt && new Date(w.slaDueAt) < now
       ).length,
     };
   });

@@ -256,9 +256,9 @@ export async function registerMaintenanceRoutes(
       tenantId: request.currentUser.tenantId, 
       name: body.name, 
       cadence: body.cadence, 
-      checklistTemplate: body.checklistTemplate ?? undefined, 
-      startDate: body.startDate ?? undefined, 
-      endDate: body.endDate ?? undefined, 
+      ...(body.checklistTemplate && { checklistTemplate: body.checklistTemplate }),
+      ...(body.startDate && { startDate: body.startDate }),
+      ...(body.endDate && { endDate: body.endDate }),
       createdBy: request.currentUser.id 
     });
     await store.writeAudit({ tenantId: request.currentUser.tenantId, actorUserId: request.currentUser.id, action: 'maintenance.plan_created', resourceNodeId: null, outcome: 'success', details: { planId: plan.id } });
@@ -273,8 +273,8 @@ export async function registerMaintenanceRoutes(
     const sched = await store.createMaintenanceSchedule({ 
       tenantId: request.currentUser.tenantId, 
       planId: body.planId, 
-      branchNodeId: body.branchNodeId ?? undefined, 
-      assetId: body.assetId ?? undefined, 
+      ...(body.branchNodeId && { branchNodeId: body.branchNodeId }),
+      ...(body.assetId && { assetId: body.assetId }),
       nextRunAt: body.nextRunAt, 
       cadence: body.cadence, 
       createdBy: request.currentUser.id 
@@ -290,7 +290,7 @@ export async function registerMaintenanceRoutes(
     const visit = await store.createMaintenanceVisit({ 
       tenantId: request.currentUser.tenantId, 
       scheduleId: body.scheduleId, 
-      assignedTo: body.assignedTo ?? undefined, 
+      ...(body.assignedTo && { assignedTo: body.assignedTo }),
       dueAt: body.dueAt, 
       createdBy: request.currentUser.id 
     });
@@ -316,10 +316,10 @@ export async function registerMaintenanceRoutes(
     const body = z.object({ assetId: z.string().uuid().optional(), type: z.string().min(1), score: z.number().min(0).max(1), details: z.record(z.unknown()).optional(), detectedAt: z.string().datetime() }).parse(request.body);
     const rec = await store.ingestPredictiveAlert({ 
       tenantId: request.currentUser.tenantId, 
-      assetId: body.assetId ?? undefined, 
+      ...(body.assetId && { assetId: body.assetId }),
       type: body.type, 
       score: body.score, 
-      details: body.details ?? undefined, 
+      ...(body.details && { details: body.details }),
       detectedAt: body.detectedAt 
     });
     await store.writeAudit({ tenantId: request.currentUser.tenantId, actorUserId: request.currentUser.id, action: 'maintenance.predictive_alert_ingested', resourceNodeId: body.assetId ?? null, outcome: 'success', details: { alertId: rec.id } });
