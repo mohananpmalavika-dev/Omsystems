@@ -68,7 +68,9 @@ export function createPtzRoutes(
       const cameraNode = await store.getNode(camera.nodeId);
       if (!cameraNode) return res.status(404).json({ error: "node_not_found" });
 
-      const authResult = authorize(user, "ptz:operate", cameraNode, await store.listAccessibleNodes(user, "ptz:operate"), []);
+      const nodes = await store.listAccessibleNodes(user, "ptz:operate");
+      const nodesMap = new Map(nodes.map(n => [n.id, n]));
+      const authResult = authorize(user, "ptz:operate", cameraNode, nodesMap, []);
       if (!authResult.allowed) {
         return res.status(403).json({ error: "forbidden", reason: authResult.reason });
       }
@@ -102,16 +104,12 @@ export function createPtzRoutes(
       // Audit log
       await store.writeAudit({
         tenantId: user.tenantId,
-        eventType: "ptz_command",
-        userId: user.id,
-        resourceType: "camera",
-        resourceId: cameraId,
-        action: "ptz:operate",
+        actorUserId: user.id,
+        action: "ptz.command_executed",
+        resourceNodeId: camera.nodeId,
         outcome: "success",
-        metadata: { command: command.action, direction: command.direction },
-        ipAddress: req.ip,
-        userAgent: req.headers["user-agent"],
-        occurredAt: new Date().toISOString(),
+        details: { command: command.action, direction: command.direction },
+        sourceIp: req.ip,
       });
 
       res.status(200).json({ success: true });
@@ -134,7 +132,9 @@ export function createPtzRoutes(
       const cameraNode = await store.getNode(camera.nodeId);
       if (!cameraNode) return res.status(404).json({ error: "node_not_found" });
 
-      const authResult = authorize(user, "ptz:operate", cameraNode, await store.listAccessibleNodes(user, "ptz:operate"), []);
+      const nodes = await store.listAccessibleNodes(user, "ptz:operate");
+      const nodesMap = new Map(nodes.map(n => [n.id, n]));
+      const authResult = authorize(user, "ptz:operate", cameraNode, nodesMap, []);
       if (!authResult.allowed) {
         return res.status(403).json({ error: "forbidden" });
       }
@@ -231,7 +231,9 @@ export function createPtzRoutes(
       const cameraNode = await store.getNode(camera.nodeId);
       if (!cameraNode) return res.status(404).json({ error: "node_not_found" });
 
-      const authResult = authorize(user, "live:view", cameraNode, await store.listAccessibleNodes(user, "live:view"), []);
+      const nodes = await store.listAccessibleNodes(user, "live:view");
+      const nodesMap = new Map(nodes.map(n => [n.id, n]));
+      const authResult = authorize(user, "live:view", cameraNode, nodesMap, []);
       if (!authResult.allowed) {
         return res.status(403).json({ error: "forbidden" });
       }
@@ -255,7 +257,9 @@ export function createPtzRoutes(
       const cameraNode = await store.getNode(camera.nodeId);
       if (!cameraNode) return res.status(404).json({ error: "node_not_found" });
 
-      const authResult = authorize(user, "ptz:operate", cameraNode, await store.listAccessibleNodes(user, "ptz:operate"), []);
+      const nodes = await store.listAccessibleNodes(user, "ptz:operate");
+      const nodesMap = new Map(nodes.map(n => [n.id, n]));
+      const authResult = authorize(user, "ptz:operate", cameraNode, nodesMap, []);
       if (!authResult.allowed) {
         return res.status(403).json({ error: "forbidden" });
       }
@@ -265,7 +269,10 @@ export function createPtzRoutes(
       const preset = await ptzRepo.createPreset({
         cameraId,
         tenantId: user.tenantId,
-        ...input,
+        presetNumber: input.presetNumber,
+        name: input.name,
+        description: input.description,
+        position: input.position,
         createdBy: user.id,
       });
 
@@ -283,7 +290,13 @@ export function createPtzRoutes(
       const { presetId } = req.params;
       const updates = ptzPresetSchema.partial().parse(req.body);
 
-      const preset = await ptzRepo.updatePreset(presetId, user.tenantId, updates);
+      // Filter undefined values and ensure proper types
+      const updateData: any = {};
+      if (updates.name !== undefined) updateData.name = updates.name;
+      if (updates.description !== undefined) updateData.description = updates.description;
+      if (updates.position !== undefined) updateData.position = updates.position;
+
+      const preset = await ptzRepo.updatePreset(presetId, user.tenantId, updateData);
       if (!preset) {
         return res.status(404).json({ error: "preset_not_found" });
       }
@@ -326,7 +339,9 @@ export function createPtzRoutes(
       const cameraNode = await store.getNode(camera.nodeId);
       if (!cameraNode) return res.status(404).json({ error: "node_not_found" });
 
-      const authResult = authorize(user, "live:view", cameraNode, await store.listAccessibleNodes(user, "live:view"), []);
+      const nodes = await store.listAccessibleNodes(user, "live:view");
+      const nodesMap = new Map(nodes.map(n => [n.id, n]));
+      const authResult = authorize(user, "live:view", cameraNode, nodesMap, []);
       if (!authResult.allowed) {
         return res.status(403).json({ error: "forbidden" });
       }
@@ -350,7 +365,9 @@ export function createPtzRoutes(
       const cameraNode = await store.getNode(camera.nodeId);
       if (!cameraNode) return res.status(404).json({ error: "node_not_found" });
 
-      const authResult = authorize(user, "ptz:operate", cameraNode, await store.listAccessibleNodes(user, "ptz:operate"), []);
+      const nodes = await store.listAccessibleNodes(user, "ptz:operate");
+      const nodesMap = new Map(nodes.map(n => [n.id, n]));
+      const authResult = authorize(user, "ptz:operate", cameraNode, nodesMap, []);
       if (!authResult.allowed) {
         return res.status(403).json({ error: "forbidden" });
       }
@@ -360,7 +377,11 @@ export function createPtzRoutes(
       const patrol = await ptzRepo.createPatrol({
         cameraId,
         tenantId: user.tenantId,
-        ...input,
+        patrolNumber: input.patrolNumber,
+        name: input.name,
+        presets: input.presets,
+        repeat: input.repeat,
+        enabled: input.enabled,
         createdBy: user.id,
       });
 
@@ -378,7 +399,14 @@ export function createPtzRoutes(
       const { patrolId } = req.params;
       const updates = ptzPatrolSchema.partial().parse(req.body);
 
-      const patrol = await ptzRepo.updatePatrol(patrolId, user.tenantId, updates);
+      // Filter undefined values and ensure proper types
+      const updateData: any = {};
+      if (updates.name !== undefined) updateData.name = updates.name;
+      if (updates.presets !== undefined) updateData.presets = updates.presets;
+      if (updates.repeat !== undefined) updateData.repeat = updates.repeat;
+      if (updates.enabled !== undefined) updateData.enabled = updates.enabled;
+
+      const patrol = await ptzRepo.updatePatrol(patrolId, user.tenantId, updateData);
       if (!patrol) {
         return res.status(404).json({ error: "patrol_not_found" });
       }
@@ -421,7 +449,9 @@ export function createPtzRoutes(
       const cameraNode = await store.getNode(camera.nodeId);
       if (!cameraNode) return res.status(404).json({ error: "node_not_found" });
 
-      const authResult = authorize(user, "live:view", cameraNode, await store.listAccessibleNodes(user, "live:view"), []);
+      const nodes = await store.listAccessibleNodes(user, "live:view");
+      const nodesMap = new Map(nodes.map(n => [n.id, n]));
+      const authResult = authorize(user, "live:view", cameraNode, nodesMap, []);
       if (!authResult.allowed) {
         return res.status(403).json({ error: "forbidden" });
       }
