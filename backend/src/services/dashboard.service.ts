@@ -3,7 +3,7 @@
  * Provides aggregated operational metrics for role-based dashboards
  */
 
-import { pool } from '../config/database';
+import type { Pool } from 'pg';
 
 export interface DashboardSummary {
   systemStatus: 'operational' | 'degraded' | 'critical';
@@ -62,6 +62,8 @@ export interface RecentIncident {
 }
 
 export class DashboardService {
+  constructor(private pool: Pool) {}
+
   /**
    * Get dashboard summary for header
    */
@@ -69,7 +71,7 @@ export class DashboardService {
     tenantId: string,
     userScope?: { branchIds?: string[]; regionIds?: string[] }
   ): Promise<DashboardSummary> {
-    const client = await pool.connect();
+    const client = await this.pool.connect();
     
     try {
       // Get system health score
@@ -132,7 +134,7 @@ export class DashboardService {
     tenantId: string,
     userScope?: { branchIds?: string[]; regionIds?: string[] }
   ): Promise<CameraMetrics> {
-    const client = await pool.connect();
+    const client = await this.pool.connect();
     
     try {
       let scopeCondition = '';
@@ -189,7 +191,7 @@ export class DashboardService {
     tenantId: string,
     userScope?: { branchIds?: string[]; regionIds?: string[] }
   ): Promise<RecordingMetrics> {
-    const client = await pool.connect();
+    const client = await this.pool.connect();
     
     try {
       let scopeCondition = '';
@@ -243,7 +245,7 @@ export class DashboardService {
     tenantId: string,
     userScope?: { branchIds?: string[]; regionIds?: string[] }
   ): Promise<StorageMetrics> {
-    const client = await pool.connect();
+    const client = await this.pool.connect();
     
     try {
       let scopeCondition = '';
@@ -302,7 +304,7 @@ export class DashboardService {
     tenantId: string,
     userScope?: { branchIds?: string[]; regionIds?: string[] }
   ): Promise<AlertMetrics> {
-    const client = await pool.connect();
+    const client = await this.pool.connect();
     
     try {
       let scopeCondition = '';
@@ -349,7 +351,7 @@ export class DashboardService {
     limit: number = 10,
     userScope?: { branchIds?: string[]; regionIds?: string[] }
   ): Promise<RecentIncident[]> {
-    const client = await pool.connect();
+    const client = await this.pool.connect();
     
     try {
       let scopeCondition = '';
@@ -410,7 +412,7 @@ export class DashboardService {
     tenantId: string,
     branchNodeId?: string
   ): Promise<any> {
-    const client = await pool.connect();
+    const client = await this.pool.connect();
     
     try {
       const params: any[] = [tenantId];
@@ -483,4 +485,5 @@ export class DashboardService {
   }
 }
 
-export const dashboardService = new DashboardService();
+// Export a factory function instead of a singleton
+export const createDashboardService = (pool: Pool) => new DashboardService(pool);

@@ -6,15 +6,34 @@
 import { Router, Request, Response } from 'express';
 import { reportsService } from '../services/reports.service';
 
+// Extend Express Request type
+interface AuthRequest extends Request {
+  context?: {
+    tenantId: string;
+    userId?: string;
+    userScope?: {
+      branchIds?: string[];
+      regionIds?: string[];
+    };
+  };
+}
+
 const router = Router();
 
 /**
  * GET /v1/reports/camera-health
  * Get camera health report data
  */
-router.get('/camera-health', async (req: Request, res: Response) => {
+router.get('/camera-health', async (req: AuthRequest, res: Response) => {
   try {
-    const { tenantId, userScope } = req.context;
+    const { tenantId, userScope } = req.context || {};
+    
+    if (!tenantId) {
+      return res.status(401).json({
+        success: false,
+        error: 'Unauthorized'
+      });
+    }
     
     const filters: any = {};
     
@@ -57,9 +76,16 @@ router.get('/camera-health', async (req: Request, res: Response) => {
  * GET /v1/reports/recording-status
  * Get recording status report data
  */
-router.get('/recording-status', async (req: Request, res: Response) => {
+router.get('/recording-status', async (req: AuthRequest, res: Response) => {
   try {
-    const { tenantId, userScope } = req.context;
+    const { tenantId, userScope } = req.context || {};
+    
+    if (!tenantId) {
+      return res.status(401).json({
+        success: false,
+        error: 'Unauthorized'
+      });
+    }
     
     const filters: any = {};
     
@@ -101,9 +127,16 @@ router.get('/recording-status', async (req: Request, res: Response) => {
  * GET /v1/reports/storage-utilization
  * Get storage utilization report data
  */
-router.get('/storage-utilization', async (req: Request, res: Response) => {
+router.get('/storage-utilization', async (req: AuthRequest, res: Response) => {
   try {
-    const { tenantId, userScope } = req.context;
+    const { tenantId, userScope } = req.context || {};
+    
+    if (!tenantId) {
+      return res.status(401).json({
+        success: false,
+        error: 'Unauthorized'
+      });
+    }
     
     const filters: any = {};
     
@@ -141,9 +174,16 @@ router.get('/storage-utilization', async (req: Request, res: Response) => {
  * GET /v1/reports/incidents
  * Get incident register report data
  */
-router.get('/incidents', async (req: Request, res: Response) => {
+router.get('/incidents', async (req: AuthRequest, res: Response) => {
   try {
-    const { tenantId, userScope } = req.context;
+    const { tenantId, userScope } = req.context || {};
+    
+    if (!tenantId) {
+      return res.status(401).json({
+        success: false,
+        error: 'Unauthorized'
+      });
+    }
     
     const filters: any = {};
     
@@ -195,9 +235,16 @@ router.get('/incidents', async (req: Request, res: Response) => {
  * GET /v1/reports/footage-access
  * Get footage retrieval log report data
  */
-router.get('/footage-access', async (req: Request, res: Response) => {
+router.get('/footage-access', async (req: AuthRequest, res: Response) => {
   try {
-    const { tenantId, userScope } = req.context;
+    const { tenantId, userScope } = req.context || {};
+    
+    if (!tenantId) {
+      return res.status(401).json({
+        success: false,
+        error: 'Unauthorized'
+      });
+    }
     
     const filters: any = {};
     
@@ -241,9 +288,16 @@ router.get('/footage-access', async (req: Request, res: Response) => {
  * GET /v1/reports/maintenance
  * Get maintenance log report data
  */
-router.get('/maintenance', async (req: Request, res: Response) => {
+router.get('/maintenance', async (req: AuthRequest, res: Response) => {
   try {
-    const { tenantId, userScope } = req.context;
+    const { tenantId, userScope } = req.context || {};
+    
+    if (!tenantId) {
+      return res.status(401).json({
+        success: false,
+        error: 'Unauthorized'
+      });
+    }
     
     const filters: any = {};
     
@@ -287,9 +341,16 @@ router.get('/maintenance', async (req: Request, res: Response) => {
  * GET /v1/reports/downtime
  * Get downtime report data
  */
-router.get('/downtime', async (req: Request, res: Response) => {
+router.get('/downtime', async (req: AuthRequest, res: Response) => {
   try {
-    const { tenantId, userScope } = req.context;
+    const { tenantId, userScope } = req.context || {};
+    
+    if (!tenantId) {
+      return res.status(401).json({
+        success: false,
+        error: 'Unauthorized'
+      });
+    }
     
     const filters: any = {};
     
@@ -338,9 +399,16 @@ router.get('/downtime', async (req: Request, res: Response) => {
  * GET /v1/reports/alerts
  * Get alert summary report data
  */
-router.get('/alerts', async (req: Request, res: Response) => {
+router.get('/alerts', async (req: AuthRequest, res: Response) => {
   try {
-    const { tenantId, userScope } = req.context;
+    const { tenantId, userScope } = req.context || {};
+    
+    if (!tenantId) {
+      return res.status(401).json({
+        success: false,
+        error: 'Unauthorized'
+      });
+    }
     
     const filters: any = {};
     

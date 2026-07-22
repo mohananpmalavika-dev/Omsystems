@@ -8,9 +8,10 @@ const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
  */
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
   try {
+    const params = await context.params;
     const url = `${API_BASE_URL}/v1/compliance/assessments/${params.id}`;
 
     const response = await fetch(url, {
@@ -37,9 +38,10 @@ export async function GET(
  */
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
   try {
+    const params = await context.params;
     const body = await request.json();
     const url = `${API_BASE_URL}/v1/compliance/assessments/${params.id}`;
 

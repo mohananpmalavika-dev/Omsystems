@@ -8,9 +8,10 @@ const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
  */
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
   try {
+    const params = await context.params;
     const url = `${API_BASE_URL}/v1/compliance/assessments/${params.id}/execute`;
 
     const response = await fetch(url, {

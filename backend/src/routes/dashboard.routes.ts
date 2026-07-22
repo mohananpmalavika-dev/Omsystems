@@ -6,15 +6,34 @@
 import { Router, Request, Response } from 'express';
 import { dashboardService } from '../services/dashboard.service';
 
+// Extend Express Request type
+interface AuthRequest extends Request {
+  context?: {
+    tenantId: string;
+    userId?: string;
+    userScope?: {
+      branchIds?: string[];
+      regionIds?: string[];
+    };
+  };
+}
+
 const router = Router();
 
 /**
  * GET /v1/dashboard/summary
  * Get dashboard header summary
  */
-router.get('/summary', async (req: Request, res: Response) => {
+router.get('/summary', async (req: AuthRequest, res: Response) => {
   try {
-    const { tenantId, userScope } = req.context;
+    const { tenantId, userScope } = req.context || {};
+    
+    if (!tenantId) {
+      return res.status(401).json({
+        success: false,
+        error: 'Unauthorized'
+      });
+    }
     
     const summary = await dashboardService.getDashboardSummary(tenantId, userScope);
     
@@ -35,9 +54,16 @@ router.get('/summary', async (req: Request, res: Response) => {
  * GET /v1/dashboard/camera-health
  * Get camera health metrics
  */
-router.get('/camera-health', async (req: Request, res: Response) => {
+router.get('/camera-health', async (req: AuthRequest, res: Response) => {
   try {
-    const { tenantId, userScope } = req.context;
+    const { tenantId, userScope } = req.context || {};
+    
+    if (!tenantId) {
+      return res.status(401).json({
+        success: false,
+        error: 'Unauthorized'
+      });
+    }
     
     const metrics = await dashboardService.getCameraMetrics(tenantId, userScope);
     
@@ -58,9 +84,16 @@ router.get('/camera-health', async (req: Request, res: Response) => {
  * GET /v1/dashboard/recording-status
  * Get recording status metrics
  */
-router.get('/recording-status', async (req: Request, res: Response) => {
+router.get('/recording-status', async (req: AuthRequest, res: Response) => {
   try {
-    const { tenantId, userScope } = req.context;
+    const { tenantId, userScope } = req.context || {};
+    
+    if (!tenantId) {
+      return res.status(401).json({
+        success: false,
+        error: 'Unauthorized'
+      });
+    }
     
     const metrics = await dashboardService.getRecordingMetrics(tenantId, userScope);
     
@@ -81,9 +114,16 @@ router.get('/recording-status', async (req: Request, res: Response) => {
  * GET /v1/dashboard/storage
  * Get storage capacity metrics
  */
-router.get('/storage', async (req: Request, res: Response) => {
+router.get('/storage', async (req: AuthRequest, res: Response) => {
   try {
-    const { tenantId, userScope } = req.context;
+    const { tenantId, userScope } = req.context || {};
+    
+    if (!tenantId) {
+      return res.status(401).json({
+        success: false,
+        error: 'Unauthorized'
+      });
+    }
     
     const metrics = await dashboardService.getStorageMetrics(tenantId, userScope);
     
@@ -112,9 +152,16 @@ router.get('/storage', async (req: Request, res: Response) => {
  * GET /v1/dashboard/alerts
  * Get active alerts metrics
  */
-router.get('/alerts', async (req: Request, res: Response) => {
+router.get('/alerts', async (req: AuthRequest, res: Response) => {
   try {
-    const { tenantId, userScope } = req.context;
+    const { tenantId, userScope } = req.context || {};
+    
+    if (!tenantId) {
+      return res.status(401).json({
+        success: false,
+        error: 'Unauthorized'
+      });
+    }
     
     const metrics = await dashboardService.getAlertMetrics(tenantId, userScope);
     
@@ -135,9 +182,17 @@ router.get('/alerts', async (req: Request, res: Response) => {
  * GET /v1/dashboard/incidents
  * Get recent incidents
  */
-router.get('/incidents', async (req: Request, res: Response) => {
+router.get('/incidents', async (req: AuthRequest, res: Response) => {
   try {
-    const { tenantId, userScope } = req.context;
+    const { tenantId, userScope } = req.context || {};
+    
+    if (!tenantId) {
+      return res.status(401).json({
+        success: false,
+        error: 'Unauthorized'
+      });
+    }
+    
     const limit = req.query.limit ? parseInt(req.query.limit as string) : 10;
     
     const incidents = await dashboardService.getRecentIncidents(tenantId, limit, userScope);
@@ -159,9 +214,17 @@ router.get('/incidents', async (req: Request, res: Response) => {
  * GET /v1/dashboard/system-health
  * Get system health score with component breakdown
  */
-router.get('/system-health', async (req: Request, res: Response) => {
+router.get('/system-health', async (req: AuthRequest, res: Response) => {
   try {
-    const { tenantId, userScope } = req.context;
+    const { tenantId, userScope } = req.context || {};
+    
+    if (!tenantId) {
+      return res.status(401).json({
+        success: false,
+        error: 'Unauthorized'
+      });
+    }
+    
     const branchNodeId = req.query.branchNodeId as string | undefined;
     
     const healthScore = await dashboardService.getSystemHealthScore(

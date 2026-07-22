@@ -3,8 +3,7 @@
  * Handles report generation, scheduling, and delivery
  */
 
-import { pool } from '../config/database';
-import { v4 as uuidv4 } from 'uuid';
+import type { Pool } from 'pg';
 
 export interface ReportDefinition {
   id: string;
@@ -46,6 +45,8 @@ export interface ReportRun {
 }
 
 export class ReportsService {
+  constructor(private pool: Pool) {}
+
   /**
    * Get camera health report data
    */
@@ -53,7 +54,7 @@ export class ReportsService {
     tenantId: string,
     filters: ReportFilter
   ): Promise<any[]> {
-    const client = await pool.connect();
+    const client = await this.pool.connect();
     
     try {
       const params: any[] = [tenantId];
@@ -132,7 +133,7 @@ export class ReportsService {
     tenantId: string,
     filters: ReportFilter
   ): Promise<any[]> {
-    const client = await pool.connect();
+    const client = await this.pool.connect();
     
     try {
       const params: any[] = [tenantId];
@@ -200,7 +201,7 @@ export class ReportsService {
     tenantId: string,
     filters: ReportFilter
   ): Promise<any[]> {
-    const client = await pool.connect();
+    const client = await this.pool.connect();
     
     try {
       const params: any[] = [tenantId];
@@ -269,7 +270,7 @@ export class ReportsService {
     tenantId: string,
     filters: ReportFilter
   ): Promise<any[]> {
-    const client = await pool.connect();
+    const client = await this.pool.connect();
     
     try {
       const params: any[] = [tenantId];
@@ -343,7 +344,7 @@ export class ReportsService {
     tenantId: string,
     filters: ReportFilter
   ): Promise<any[]> {
-    const client = await pool.connect();
+    const client = await this.pool.connect();
     
     try {
       const params: any[] = [tenantId];
@@ -410,7 +411,7 @@ export class ReportsService {
     tenantId: string,
     filters: ReportFilter
   ): Promise<any[]> {
-    const client = await pool.connect();
+    const client = await this.pool.connect();
     
     try {
       const params: any[] = [tenantId];
@@ -476,7 +477,7 @@ export class ReportsService {
     tenantId: string,
     filters: ReportFilter
   ): Promise<any[]> {
-    const client = await pool.connect();
+    const client = await this.pool.connect();
     
     try {
       const params: any[] = [tenantId];
@@ -538,7 +539,7 @@ export class ReportsService {
     tenantId: string,
     filters: ReportFilter
   ): Promise<any[]> {
-    const client = await pool.connect();
+    const client = await this.pool.connect();
     
     try {
       const params: any[] = [tenantId];
@@ -604,7 +605,7 @@ export class ReportsService {
     outputFormat: string,
     requestedBy: string
   ): Promise<string> {
-    const client = await pool.connect();
+    const client = await this.pool.connect();
     
     try {
       const query = `
@@ -642,7 +643,7 @@ export class ReportsService {
     status: string,
     updates: Partial<ReportRun>
   ): Promise<void> {
-    const client = await pool.connect();
+    const client = await this.pool.connect();
     
     try {
       const fields = ['status = $2'];
@@ -690,4 +691,5 @@ export class ReportsService {
   }
 }
 
-export const reportsService = new ReportsService();
+// Export a factory function instead of a singleton
+export const createReportsService = (pool: Pool) => new ReportsService(pool);

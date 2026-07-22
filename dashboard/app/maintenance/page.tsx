@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { AppLayout } from "@/components/app-layout";
-import { maintenanceApi } from "@/lib/api-client";
+import { maintenanceApi, deviceManagementApi } from "@/lib/api-client";
 import {
   AlertList,
   HealthMetricDisplay,
@@ -17,6 +17,8 @@ export default function MaintenancePage() {
   const [firmwareCatalog, setFirmwareCatalog] = useState<any[]>([]);
   const [lowStockParts, setLowStockParts] = useState<any[]>([]);
   const [highRiskAssets, setHighRiskAssets] = useState<any[]>([]);
+  const [pendingRotations, setPendingRotations] = useState<number>(0);
+  const [ipConflictCount, setIpConflictCount] = useState<number>(0);
   const [compliance, setCompliance] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -55,8 +57,10 @@ export default function MaintenancePage() {
       maintenanceApi.listLowStockParts(),
       maintenanceApi.listHighRiskAssets(),
       maintenanceApi.getMaintenanceMetrics(),
+      deviceManagementApi.listPasswordRotations(),
+      deviceManagementApi.getIpConflicts(),
     ])
-      .then(([statusData, healthData, firmware, firmwareCatalogData, lowStock, highRisk, metrics]) => {
+      .then(([statusData, healthData, firmware, firmwareCatalogData, lowStock, highRisk, metrics, rotations, conflicts]) => {
         setStatus(statusData);
         setHealth(healthData);
         setFirmwareUpdates(firmware.data ?? []);
@@ -64,6 +68,8 @@ export default function MaintenancePage() {
         setLowStockParts(lowStock.data ?? []);
         setHighRiskAssets(highRisk.data ?? []);
         setCompliance(metrics ?? null);
+        setPendingRotations((rotations.data ?? []).filter((item: any) => item.status !== "completed").length);
+        setIpConflictCount((conflicts.data ?? []).length);
       })
       .catch((err) => {
         setError(err instanceof Error ? err.message : "Unable to load maintenance dashboard.");
@@ -171,6 +177,16 @@ export default function MaintenancePage() {
         <div style={{ padding: 20, border: "1px solid #e2e8f0", borderRadius: 12, background: "#fff" }}>
           <h2 style={{ marginBottom: 12 }}>Device management</h2>
           <p style={{ margin: 0, color: "#374151" }}>Secure rotation, templates, and IP assignments</p>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 12, marginTop: 16 }}>
+            <div style={{ padding: 14, border: "1px solid #e5e7eb", borderRadius: 10, background: "#fafafa" }}>
+              <p style={{ margin: 0, fontSize: 12, color: "#6b7280" }}>Pending rotations</p>
+              <p style={{ margin: 8, fontSize: 24, fontWeight: 700 }}>{loading ? "…" : pendingRotations}</p>
+            </div>
+            <div style={{ padding: 14, border: "1px solid #e5e7eb", borderRadius: 10, background: "#fafafa" }}>
+              <p style={{ margin: 0, fontSize: 12, color: "#6b7280" }}>IP conflicts</p>
+              <p style={{ margin: 8, fontSize: 24, fontWeight: 700 }}>{loading ? "…" : ipConflictCount}</p>
+            </div>
+          </div>
           <Link href="/maintenance/device-management" style={{ display: "inline-block", marginTop: 16, color: "#2563eb" }}>
             Open device management
           </Link>
