@@ -239,6 +239,10 @@ export class MemoryStore implements ControlPlaneStore {
   readonly analyticsNotifications: Array<Record<string, unknown>> = [];
   readonly maintenanceAssets: any[] = [];
   readonly deviceInventoryRecords: any[] = [];
+  readonly passwordRotations: any[] = [];
+  readonly deviceTemplates: any[] = [];
+  readonly deviceTemplateAssignments: any[] = [];
+  readonly deviceIpAssignments: any[] = [];
   readonly workOrders: any[] = [];
   readonly maintenanceVendors: any[] = [];
   readonly amcContracts: any[] = [];
@@ -1282,84 +1286,96 @@ export class MemoryStore implements ControlPlaneStore {
     return this.maintenancePlans.find((p) => p.id === id);
   }
 
-  async createMaintenanceSchedule(input: { tenantId: string; planId: string; branchNodeId?: string; assetId?: string; nextRunAt: string; cadence: string; createdBy: string; }) {
+  async startPasswordRotation(input: { tenantId: string; deviceId: string; requestedBy: string; reason: string; rotationMode: 'scheduled' | 'emergency'; newPassword: string; }) {
     const now = new Date().toISOString();
-    const sched = { id: randomUUID(), tenantId: input.tenantId, planId: input.planId, branchNodeId: input.branchNodeId, assetId: input.assetId, nextRunAt: input.nextRunAt, cadence: input.cadence, createdBy: input.createdBy, createdAt: now, updatedAt: now };
-    this.maintenanceSchedules.push(sched);
-    return sched;
+    const secretRef = `device-credential://${input.tenantId}/${input.deviceId}/${randomUUID()}`;
+    const rotation = {
+      id: randomUUID(),
+      tenantId: input.tenantId,
+      deviceId: input.deviceId,
+      requestedBy: input.requestedBy,
+      reason: input.reason,
+      rotationMode: input.rotationMode,
+      status: 'pending-verification',
+      secretRef,
+      createdAt: now,
+      updatedAt: now,
+    };
+    this.passwordRotations.push(rotation);
+    return rotation;
   }
 
-  async listMaintenanceSchedules(tenantId: string) {
-    return this.maintenanceSchedules.filter((s) => s.tenantId === tenantId);
+  async listPasswordRotations(tenantId: string) {
+    return this.passwordRotations.filter((item) => item.tenantId === tenantId);
   }
 
-  async createMaintenanceVisit(input: { tenantId: string; scheduleId: string; assignedTo?: string; dueAt: string; status?: string; createdBy: string; }) {
+  async createDeviceTemplate(input: { tenantId: string; name: string; templateType: 'camera-configuration' | 'recording' | 'analytics' | 'privacy' | 'network' | 'security-hardening' | 'location'; category: string; settings: Record<string, unknown>; createdBy: string; }) {
     const now = new Date().toISOString();
-    const visit = { id: randomUUID(), tenantId: input.tenantId, scheduleId: input.scheduleId, assignedTo: input.assignedTo, dueAt: input.dueAt, status: input.status ?? 'pending', createdBy: input.createdBy, createdAt: now, updatedAt: now };
-    this.maintenanceVisits.push(visit);
-    return visit;
+    const template = {
+      id: randomUUID(),
+      tenantId: input.tenantId,
+      name: input.name,
+      templateType: input.templateType,
+      category: input.category,
+      settings: input.settings,
+      status: 'published',
+      createdBy: input.createdBy,
+      createdAt: now,
+      updatedAt: now,
+    };
+    this.deviceTemplates.push(template);
+    return template;
   }
 
-  async listMaintenanceVisits(tenantId: string, filters?: any) {
-    return this.maintenanceVisits.filter((v) => v.tenantId === tenantId && (!filters?.status || v.status === filters.status));
+  async applyDeviceTemplate(input: { tenantId: string; deviceId: string; templateId: string; appliedBy: string; }) {
+    const template = this.deviceTemplates.find((item) => item.id === input.templateId);
+    if (!template) {
+      throw new Error('template_not_found');
+    }
+    const assignment = {
+      id: randomUUID(),
+      tenantId: input.tenantId,
+      deviceId: input.deviceId,
+      templateId: input.templateId,
+      appliedBy: input.appliedBy,
+      status: 'applied',
+      appliedAt: new Date().toISOString(),
+    };
+    this.deviceTemplateAssignments.push(assignment);
+    return assignment;
   }
 
-  async updateMaintenanceVisit(id: string, input: any) {
-    const visit = this.maintenanceVisits.find((v) => v.id === id);
-    if (!visit) return undefined;
-    Object.assign(visit, input, { updatedAt: new Date().toISOString() });
-    return visit;
+  async getDeviceTemplateDrift(deviceId: string, templateId: string) {
+    const template = this.deviceTemplates.find((item) => item.id === templateId);
+    const assignment = this.deviceTemplateAssignments.find((item) => item.deviceId === deviceId && item.templateId === templateId);
+    if (!template) {
+      return { deviceId, templateId, status: 'unsupported' };
+    }
+    if (!assignment) {
+      return { deviceId, templateId, status: 'minor-drift', templateVersion: template.settings };
+    }
+    return { deviceId, templateId, status: 'compliant', templateVersion: template.settings };
   }
 
-  async ingestPredictiveAlert(input: { tenantId: string; assetId?: string; type: string; score: number; details?: Record<string, unknown>; detectedAt: string; }) {
-    const now = new Date().toISOString();
-    const rec = { id: randomUUID(), tenantId: input.tenantId, assetId: input.assetId, type: input.type, score: input.score, details: input.details ?? {}, detectedAt: input.detectedAt, createdAt: now };
-    this.predictiveAlerts.push(rec);
-    return rec;
+  async assignDeviceIpAddress(input: { tenantId: string; deviceId: string; ipAddress: string; subnet: string; assignedBy: string; reservationStatus: 'dhcp' | 'static' | 'reserved'; }) {
+    const existing = this.deviceIpAssignments.find((item) => item.tenantId === input.tenantId && item.ipAddress === input.ipAddress);
+    const assignment = {
+      id: randomUUID(),
+      tenantId: input.tenantId,
+      deviceId: input.deviceId,
+      ipAddress: input.ipAddress,
+      subnet: input.subnet,
+      assignedBy: input.assignedBy,
+      reservationStatus: input.reservationStatus,
+      conflict: Boolean(existing),
+      assignedAt: new Date().toISOString(),
+    };
+    this.deviceIpAssignments.push(assignment);
+    return assignment;
   }
 
-  async listPredictiveAlerts(tenantId: string) {
-    return this.predictiveAlerts.filter((p) => p.tenantId === tenantId).sort((a,b)=>b.detectedAt.localeCompare(a.detectedAt));
-  }
-
-  async listAmcContracts(tenantId: string, vendorId?: string) {
-    return this.amcContracts.filter((contract) => contract.tenantId === tenantId && (!vendorId || contract.vendorId === vendorId));
-  }
-
-  async getAmcContract(id: string) {
-    return this.amcContracts.find((contract) => contract.id === id);
-  }
-
-  async updateAmcContract(id: string, input: Parameters<ControlPlaneStore["updateAmcContract"]>[1]) {
-    const contract = this.amcContracts.find((item) => item.id === id);
-    if (!contract) return undefined;
-    Object.assign(contract, {
-      ...input,
-      updatedAt: new Date().toISOString(),
-    });
-    return contract;
-  }
-
-  async updateLiveIncidentStatus(
-    id: string,
-    inputTenantId: string,
-    cameraId: string,
-    status: LiveIncident["status"],
-  ) {
-    const incident = this.liveIncidents.find((item) =>
-      item.id === id && item.tenantId === inputTenantId &&
-      item.cameraId === cameraId
-    );
-    if (!incident) return undefined;
-    incident.status = status;
-    incident.updatedAt = new Date().toISOString();
-    return incident;
-  }
-
-  async listAnalyticsRules(cameraId: string) {
-    return this.analyticsRules
-      .filter((rule) => rule.cameraId === cameraId)
-      .sort((left, right) => left.name.localeCompare(right.name));
+  async getIpConflicts(tenantId: string) {
+    return this.deviceIpAssignments.filter((item) => item.tenantId === tenantId && item.conflict);
   }
 
   async createAnalyticsRule(

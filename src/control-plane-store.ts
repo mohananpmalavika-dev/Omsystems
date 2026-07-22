@@ -1095,6 +1095,39 @@ export interface ControlPlaneStore {
   writeAudit(event: AuditEventInput): Promise<void>;
   createMaintenanceAsset(input: MaintenanceAssetInput): Promise<MaintenanceAsset>;
   listMaintenanceAssets(tenantId: string, category?: AssetCategory): Promise<MaintenanceAsset[]>;
+  startPasswordRotation(input: {
+    tenantId: string;
+    deviceId: string;
+    requestedBy: string;
+    reason: string;
+    rotationMode: 'scheduled' | 'emergency';
+    newPassword: string;
+  }): Promise<any>;
+  listPasswordRotations(tenantId: string): Promise<any[]>;
+  createDeviceTemplate(input: {
+    tenantId: string;
+    name: string;
+    templateType: 'camera-configuration' | 'recording' | 'analytics' | 'privacy' | 'network' | 'security-hardening' | 'location';
+    category: string;
+    settings: Record<string, unknown>;
+    createdBy: string;
+  }): Promise<any>;
+  applyDeviceTemplate(input: {
+    tenantId: string;
+    deviceId: string;
+    templateId: string;
+    appliedBy: string;
+  }): Promise<any>;
+  getDeviceTemplateDrift(deviceId: string, templateId: string): Promise<any>;
+  assignDeviceIpAddress(input: {
+    tenantId: string;
+    deviceId: string;
+    ipAddress: string;
+    subnet: string;
+    assignedBy: string;
+    reservationStatus: 'dhcp' | 'static' | 'reserved';
+  }): Promise<any>;
+  getIpConflicts(tenantId: string): Promise<any[]>;
   getMaintenanceAsset(id: string): Promise<MaintenanceAsset | undefined>;
   updateMaintenanceAsset(id: string, input: MaintenanceAssetUpdate): Promise<MaintenanceAsset | undefined>;
   createWorkOrder(input: WorkOrderInput): Promise<WorkOrder>;

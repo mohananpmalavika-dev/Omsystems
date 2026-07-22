@@ -40,6 +40,7 @@ import { registerPredictiveAnalyticsRoutes } from "./routes/maintenance-predicti
 import { registerEvidenceRoutes } from "./routes/evidence.routes.js";
 import { registerVideoSearchRoutes } from "./routes/video-search.routes.js";
 import { registerDeviceInventoryRoutes } from "./routes/device-inventory.routes.js";
+import { registerDeviceManagementRoutes } from "./routes/device-management.routes.js";
 import { parseBulkCameraCsv } from "./services/camera-registration.js";
 import { RecordingSearchService } from "./recording/search-service.js";
 import { PlaybackEngine } from "./recording/playback-engine.js";
@@ -1021,8 +1022,8 @@ export async function buildApp(options?: {
   });
 
   await registerDeviceInventoryRoutes(app, store);
-
   if (extendedStore) {
+    await registerDeviceManagementRoutes(app, extendedStore);
     await registerAuthRoutes(app, extendedStore);
     await registerOrganizationRoutes(app, extendedStore);
     await registerUserRoutes(app, extendedStore);

@@ -108,7 +108,7 @@ export default function BranchCompliancePage() {
           <div className="text-3xl font-bold text-green-600">{compliantBranches}</div>
         </div>
         <div className="bg-white rounded-lg shadow p-6">
-          <div className="text-sm text-gray-600 mb-1">At Risk (<80%)</div>
+          <div className="text-sm text-gray-600 mb-1">At Risk (&lt;80%)</div>
           <div className="text-3xl font-bold text-red-600">{atRiskBranches}</div>
         </div>
       </div>

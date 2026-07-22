@@ -236,6 +236,40 @@ export const deviceInventoryApi = {
   }),
 };
 
+export const deviceManagementApi = {
+  startPasswordRotation: (data: {
+    deviceId: string;
+    reason: string;
+    rotationMode: 'scheduled' | 'emergency';
+    newPassword: string;
+  }) => fetchApi<any>('/v1/device-management/password-rotation', {
+    method: 'POST', body: JSON.stringify(data),
+  }),
+  listPasswordRotations: () => fetchApi<{ data: any[] }>('/v1/device-management/password-rotations'),
+  createDeviceTemplate: (data: {
+    name: string;
+    templateType: string;
+    category: string;
+    settings: Record<string, unknown>;
+  }) => fetchApi<any>('/v1/device-management/templates', {
+    method: 'POST', body: JSON.stringify(data),
+  }),
+  listDeviceTemplates: () => fetchApi<{ data: any[] }>('/v1/device-management/templates'),
+  applyDeviceTemplate: (templateId: string, deviceId: string) => fetchApi<any>(`/v1/device-management/templates/${encodeURIComponent(templateId)}/apply`, {
+    method: 'POST', body: JSON.stringify({ deviceId }),
+  }),
+  getDeviceTemplateDrift: (templateId: string, deviceId: string) => fetchApi<any>(`/v1/device-management/templates/${encodeURIComponent(templateId)}/drift?deviceId=${encodeURIComponent(deviceId)}`),
+  assignDeviceIpAddress: (data: {
+    deviceId: string;
+    ipAddress: string;
+    subnet: string;
+    reservationStatus: 'dhcp' | 'static' | 'reserved';
+  }) => fetchApi<any>('/v1/device-management/ip-change', {
+    method: 'POST', body: JSON.stringify(data),
+  }),
+  getIpConflicts: () => fetchApi<{ data: any[] }>('/v1/device-management/ip-conflicts'),
+};
+
 export const cameraInventoryApi = {
   listBranches: (action: 'live:view' | 'device:configure' | 'analytics:view' = 'live:view') =>
     fetchApi<{ data: any[] }>(`/v1/branches?action=${encodeURIComponent(action)}`),
@@ -421,6 +455,73 @@ export const reportsApi = {
   getOperationsSummary: () => fetchApi<any>('/v1/reports/summary/operations'),
   getPrivacySummary: () => fetchApi<any>('/v1/reports/summary/privacy'),
   getIncidentSummary: () => fetchApi<any>('/v1/reports/summary/incidents'),
+  getCameraHealthReport: (filters?: any) => {
+    const params = new URLSearchParams();
+    if (filters?.branchIds) params.append('branchIds', filters.branchIds.join(','));
+    if (filters?.from) params.append('from', filters.from);
+    if (filters?.to) params.append('to', filters.to);
+    return fetchApi<any>(`/v1/reports/camera-health?${params}`);
+  },
+  getRecordingStatusReport: (filters?: any) => {
+    const params = new URLSearchParams();
+    if (filters?.branchIds) params.append('branchIds', filters.branchIds.join(','));
+    if (filters?.from) params.append('from', filters.from);
+    if (filters?.to) params.append('to', filters.to);
+    return fetchApi<any>(`/v1/reports/recording-status?${params}`);
+  },
+  getStorageUtilizationReport: (filters?: any) => {
+    const params = new URLSearchParams();
+    if (filters?.branchIds) params.append('branchIds', filters.branchIds.join(','));
+    return fetchApi<any>(`/v1/reports/storage-utilization?${params}`);
+  },
+  getIncidentRegisterReport: (filters?: any) => {
+    const params = new URLSearchParams();
+    if (filters?.branchIds) params.append('branchIds', filters.branchIds.join(','));
+    if (filters?.from) params.append('from', filters.from);
+    if (filters?.to) params.append('to', filters.to);
+    if (filters?.severity) params.append('severity', filters.severity);
+    if (filters?.status) params.append('status', filters.status);
+    return fetchApi<any>(`/v1/reports/incidents?${params}`);
+  },
+  getFootageAccessReport: (filters?: any) => {
+    const params = new URLSearchParams();
+    if (filters?.branchIds) params.append('branchIds', filters.branchIds.join(','));
+    if (filters?.from) params.append('from', filters.from);
+    if (filters?.to) params.append('to', filters.to);
+    return fetchApi<any>(`/v1/reports/footage-access?${params}`);
+  },
+  getMaintenanceReport: (filters?: any) => {
+    const params = new URLSearchParams();
+    if (filters?.branchIds) params.append('branchIds', filters.branchIds.join(','));
+    if (filters?.from) params.append('from', filters.from);
+    if (filters?.to) params.append('to', filters.to);
+    return fetchApi<any>(`/v1/reports/maintenance?${params}`);
+  },
+  getDowntimeReport: (filters?: any) => {
+    const params = new URLSearchParams();
+    if (filters?.branchIds) params.append('branchIds', filters.branchIds.join(','));
+    if (filters?.from) params.append('from', filters.from);
+    if (filters?.to) params.append('to', filters.to);
+    return fetchApi<any>(`/v1/reports/downtime?${params}`);
+  },
+  getAlertSummaryReport: (filters?: any) => {
+    const params = new URLSearchParams();
+    if (filters?.branchIds) params.append('branchIds', filters.branchIds.join(','));
+    if (filters?.from) params.append('from', filters.from);
+    if (filters?.to) params.append('to', filters.to);
+    return fetchApi<any>(`/v1/reports/alerts?${params}`);
+  },
+};
+
+export const dashboardApi = {
+  getSummary: () => fetchApi<any>('/v1/dashboard/summary'),
+  getCameraHealth: () => fetchApi<any>('/v1/dashboard/camera-health'),
+  getRecordingStatus: () => fetchApi<any>('/v1/dashboard/recording-status'),
+  getStorage: () => fetchApi<any>('/v1/dashboard/storage'),
+  getAlerts: () => fetchApi<any>('/v1/dashboard/alerts'),
+  getIncidents: (limit?: number) => fetchApi<any>(`/v1/dashboard/incidents${limit ? `?limit=${limit}` : ''}`),
+  getSystemHealth: (branchNodeId?: string) => 
+    fetchApi<any>(`/v1/dashboard/system-health${branchNodeId ? `?branchNodeId=${branchNodeId}` : ''}`),
 };
 
 export const privacyApi = {
