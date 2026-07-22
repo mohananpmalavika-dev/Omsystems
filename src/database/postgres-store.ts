@@ -24,6 +24,7 @@ import { EvidenceRepository } from "./evidence-repository.js";
 import IncidentRepository from "./incident-repository.js";
 import { ComplianceRepository } from "./compliance-repository.js";
 import { MaintenanceRepository } from "./maintenance-repository.js";
+import { PrivacyRepository } from "./privacy-repository.js";
 
 export class PostgresStore
   extends InfrastructureRepository
@@ -41,6 +42,7 @@ export class PostgresStore
   private readonly incidents: IncidentRepository;
   private readonly compliance: ComplianceRepository;
   private readonly maintenance: MaintenanceRepository;
+  private readonly privacy: PrivacyRepository;
 
   constructor(pool: Pool) {
     super(pool);
@@ -56,6 +58,7 @@ export class PostgresStore
     this.incidents = new IncidentRepository(pool);
     this.compliance = new ComplianceRepository(pool);
     this.maintenance = new MaintenanceRepository(pool);
+    this.privacy = new PrivacyRepository(pool);
   }
 
   async close() { await this.pool.end(); }
@@ -190,6 +193,27 @@ export class PostgresStore
   async listComplianceCertificates(assessmentId: string) { return this.compliance.listCertificates(assessmentId); }
   async getComplianceCertificate(id: string) { return this.compliance.getCertificate(id); }
   async createComplianceCertificate(input: any) { return this.compliance.createCertificate(input); }
+  async getPrivacySummary(tenantId: string) { return this.privacy.getPrivacySummary(tenantId); }
+  async listPrivacyPurposes(tenantId: string) { return this.privacy.listPrivacyPurposes(tenantId); }
+  async getPrivacyPurpose(id: string) { return this.privacy.getPrivacyPurpose(id); }
+  async createPrivacyPurpose(input: any) { return this.privacy.createPrivacyPurpose(input); }
+  async updatePrivacyPurpose(id: string, input: any) { return this.privacy.updatePrivacyPurpose(id, input); }
+  async listCameraPrivacyPurposes(cameraId: string) { return this.privacy.listCameraPrivacyPurposes(cameraId); }
+  async assignCameraPrivacyPurpose(
+    cameraId: string,
+    purposeId: string,
+    createdBy: string,
+    startDate?: string,
+    endDate?: string,
+    notes?: string,
+  ) {
+    return this.privacy.assignCameraPrivacyPurpose(cameraId, purposeId, createdBy, startDate, endDate, notes);
+  }
+  async getCameraPrivacyControls(cameraId: string) { return this.privacy.getCameraPrivacyControls(cameraId); }
+  async upsertCameraPrivacyControls(cameraId: string, input: any) { return this.privacy.upsertCameraPrivacyControls(cameraId, input); }
+  async listPrivacyBreaches(tenantId: string, status?: string) { return this.privacy.listPrivacyBreaches(tenantId, status); }
+  async reportPrivacyBreach(input: any) { return this.privacy.reportPrivacyBreach(input); }
+  async updatePrivacyBreachStatus(id: string, status: string, changedBy: string) { return this.privacy.updatePrivacyBreachStatus(id, status, changedBy); }
   async createMaintenanceAsset(input: any) { return this.maintenance.createAsset(input); }
   async listMaintenanceAssets(tenantId: string, category?: string) { return this.maintenance.listAssets(tenantId, category); }
   async getMaintenanceAsset(id: string) { return this.maintenance.getAsset(id); }

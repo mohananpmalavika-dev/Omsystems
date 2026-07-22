@@ -9,7 +9,7 @@ import type {
 } from "../control-plane-store.js";
 
 const idParams = z.object({ id: z.string().uuid() });
-const cameraParams = z.object({ cameraId: z.string().uuid() });
+const cameraParams = z.object({ cameraId: z.string().min(1) });
 
 const privacyPurposeSchema = z.object({
   name: z.string().trim().min(2).max(200),

@@ -24,6 +24,7 @@ import { registerLiveOperationsRoutes } from "./routes/live-operations.routes.js
 import { registerAnalyticsRoutes } from "./routes/analytics.routes.js";
 import { registerIncidentsRoutes } from "./routes/incidents.routes.js";
 import { registerComplianceRoutes } from "./routes/compliance.routes.js";
+import { registerPrivacyRoutes } from "./routes/privacy.routes.js";
 import { registerMaintenanceRoutes } from "./routes/maintenance.routes.js";
 import { registerMaintenanceDashboardRoutes } from "./routes/maintenance-dashboard.routes.js";
 import { registerMaintenanceAdvancedRoutes } from "./routes/maintenance-advanced.routes.js";
@@ -697,6 +698,7 @@ export async function buildApp(options?: {
       app.log.error('failed to start maintenance scheduler', err);
     }
   }
+  await registerPrivacyRoutes(app, store);
   await registerLiveOperationsRoutes(app, store);
   await registerIncidentsRoutes(app, store);
   await registerAnalyticsRoutes(app, store, {

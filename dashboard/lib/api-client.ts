@@ -218,6 +218,7 @@ export const userApi = {
   
   getAuditLog: (userId: string, limit = 50, offset = 0) => 
     fetchApi<any>(`/v1/users/${userId}/audit-log?limit=${limit}&offset=${offset}`),
+
 };
 
 export const cameraInventoryApi = {
@@ -362,6 +363,36 @@ export const maintenanceApi = {
   generateReport: (data: any) => fetchApi<any>('/v1/maintenance/reports/generate', {
     method: 'POST',
     body: JSON.stringify(data),
+  }),
+};
+
+export const privacyApi = {
+  getSummary: () => fetchApi<any>('/v1/privacy/summary'),
+  listPurposes: () => fetchApi<{ data: any[] }>('/v1/privacy/purposes'),
+  createPurpose: (data: any) => fetchApi<any>('/v1/privacy/purposes', {
+    method: 'POST', body: JSON.stringify(data),
+  }),
+  updatePurpose: (id: string, data: any) => fetchApi<any>(`/v1/privacy/purposes/${encodeURIComponent(id)}`, {
+    method: 'PATCH', body: JSON.stringify(data),
+  }),
+  listCameraPurposes: (cameraId: string) => fetchApi<{ data: any[] }>(`/v1/privacy/cameras/${encodeURIComponent(cameraId)}/purposes`),
+  assignCameraPurpose: (cameraId: string, data: any) => fetchApi<any>(`/v1/privacy/cameras/${encodeURIComponent(cameraId)}/purposes`, {
+    method: 'POST', body: JSON.stringify(data),
+  }),
+  getCameraControls: (cameraId: string) => fetchApi<any>(`/v1/privacy/cameras/${encodeURIComponent(cameraId)}/control`),
+  updateCameraControls: (cameraId: string, data: any) => fetchApi<any>(`/v1/privacy/cameras/${encodeURIComponent(cameraId)}/control`, {
+    method: 'PUT', body: JSON.stringify(data),
+  }),
+  listBreaches: (status?: string) => {
+    const params = new URLSearchParams();
+    if (status) params.set('status', status);
+    return fetchApi<{ data: any[] }>(`/v1/privacy/breaches?${params}`);
+  },
+  reportBreach: (data: any) => fetchApi<any>('/v1/privacy/breaches', {
+    method: 'POST', body: JSON.stringify(data),
+  }),
+  updateBreachStatus: (id: string, status: string) => fetchApi<any>(`/v1/privacy/breaches/${encodeURIComponent(id)}/status`, {
+    method: 'PATCH', body: JSON.stringify({ status }),
   }),
 };
 

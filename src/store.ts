@@ -1517,6 +1517,95 @@ export class MemoryStore implements ControlPlaneStore {
 
   // ============ PRIVACY METHODS ============
 
+  async getPrivacySummary(tenantId: string): Promise<any> {
+    const purposes = this.privacyPurposes.filter((purpose) => purpose.tenantId === tenantId);
+    const matchedCameraIds = [...this.cameras.values()]
+      .filter((camera) => camera.tenantId === tenantId)
+      .map((camera) => camera.id);
+    const assignedPurposes = this.cameraPrivacyPurposeAssignments.filter((assignment) =>
+      matchedCameraIds.includes(assignment.cameraId),
+    );
+    const controls = [...this.cameraPrivacyControls.values()].filter((control) =>
+      matchedCameraIds.includes(control.cameraId),
+    );
+    const openBreaches = this.privacyBreaches.filter((breach) =>
+      breach.tenantId === tenantId && breach.status !== "closed",
+    );
+
+    return {
+      activePurposes: purposes.filter((purpose) => purpose.active).length,
+      totalPurposes: purposes.length,
+      assignedPurposes: assignedPurposes.length,
+      totalControls: controls.length,
+      openBreaches: openBreaches.length,
+    };
+  }
+
+  async listPrivacyPurposes(tenantId: string): Promise<any[]> {
+    return this.privacyPurposes.filter((purpose) => purpose.tenantId === tenantId);
+  }
+
+  async getPrivacyPurpose(id: string): Promise<any | undefined> {
+    return this.privacyPurposes.find((purpose) => purpose.id === id);
+  }
+
+  async createPrivacyPurpose(input: {
+    tenantId: string;
+    name: string;
+    lawfulBasis: string;
+    description?: string;
+    riskLevel?: string;
+    dataCategories?: string[];
+    active?: boolean;
+    createdBy?: string;
+  }): Promise<any> {
+    const purpose = {
+      id: randomUUID(),
+      tenantId: input.tenantId,
+      name: input.name,
+      lawfulBasis: input.lawfulBasis,
+      description: input.description ?? null,
+      riskLevel: input.riskLevel ?? "medium",
+      dataCategories: input.dataCategories ?? [],
+      active: input.active ?? true,
+      createdBy: input.createdBy ?? null,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    this.privacyPurposes.unshift(purpose);
+    return purpose;
+  }
+
+  async updatePrivacyPurpose(id: string, input: Partial<{
+    tenantId: string;
+    name: string;
+    lawfulBasis: string;
+    description?: string;
+    riskLevel?: string;
+    dataCategories?: string[];
+    active?: boolean;
+    createdBy?: string;
+  }>): Promise<any | undefined> {
+    const purpose = this.privacyPurposes.find((item) => item.id === id);
+    if (!purpose) return undefined;
+    Object.assign(purpose, {
+      tenantId: input.tenantId ?? purpose.tenantId,
+      name: input.name ?? purpose.name,
+      lawfulBasis: input.lawfulBasis ?? purpose.lawfulBasis,
+      description: input.description ?? purpose.description,
+      riskLevel: input.riskLevel ?? purpose.riskLevel,
+      dataCategories: input.dataCategories ?? purpose.dataCategories,
+      active: input.active ?? purpose.active,
+      createdBy: input.createdBy ?? purpose.createdBy,
+      updatedAt: new Date().toISOString(),
+    });
+    return purpose;
+  }
+
+  async listCameraPrivacyPurposes(cameraId: string): Promise<any[]> {
+    return this.cameraPrivacyPurposeAssignments.filter((assignment) => assignment.cameraId === cameraId);
+  }
+
   async assignCameraPrivacyPurpose(
     cameraId: string,
     purposeId: string,
@@ -1530,36 +1619,52 @@ export class MemoryStore implements ControlPlaneStore {
       cameraId,
       purposeId,
       assignedBy,
-      startDate,
-      endDate,
-      notes,
+      startDate: startDate ?? null,
+      endDate: endDate ?? null,
+      notes: notes ?? null,
       createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
     };
+    this.cameraPrivacyPurposeAssignments.unshift(assignment);
     return assignment;
   }
 
   async getCameraPrivacyControls(cameraId: string): Promise<any> {
-    return {
+    return this.cameraPrivacyControls.get(cameraId) ?? {
       cameraId,
       audioRecordingApproved: false,
-      encryptionEnabled: true,
+      encryptionEnabled: false,
       disposalPlan: null,
       dataProtectionOfficer: null,
       lastReviewedAt: null,
+      createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
   }
 
   async upsertCameraPrivacyControls(cameraId: string, input: any): Promise<any> {
-    return {
+    const existing = this.cameraPrivacyControls.get(cameraId) ?? {
+      id: randomUUID(),
       cameraId,
+      audioRecordingApproved: false,
+      encryptionEnabled: false,
+      disposalPlan: null,
+      dataProtectionOfficer: null,
+      lastReviewedAt: null,
+      createdBy: null,
+      createdAt: new Date().toISOString(),
+    };
+    const updated = {
+      ...existing,
       ...input,
       updatedAt: new Date().toISOString(),
     };
+    this.cameraPrivacyControls.set(cameraId, updated);
+    return updated;
   }
 
   async listPrivacyBreaches(tenantId: string, status?: string): Promise<any[]> {
-    return [];
+    return this.privacyBreaches.filter((breach) => breach.tenantId === tenantId && (!status || breach.status === status));
   }
 
   async reportPrivacyBreach(input: {
@@ -1576,22 +1681,157 @@ export class MemoryStore implements ControlPlaneStore {
     const breach = {
       id: randomUUID(),
       ...input,
-      status: 'reported',
+      status: "reported",
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
+    this.privacyBreaches.unshift(breach);
     return breach;
   }
 
   async updatePrivacyBreachStatus(id: string, status: string, updatedBy: string): Promise<any> {
-    return {
-      id,
-      status,
-      updatedBy,
+    const breach = this.privacyBreaches.find((item) => item.id === id);
+    if (!breach) return undefined;
+    breach.status = status;
+    breach.updatedBy = updatedBy;
+    breach.updatedAt = new Date().toISOString();
+    return breach;
+  }
+
+  // ============ FIRMWARE MANAGEMENT ============
+
+  async recordFirmwareVersion(input: {
+    tenantId: string;
+    assetId: string;
+    deviceType: string;
+    currentVersion: string;
+    latestVersion?: string | undefined;
+    requiresUpdate?: boolean | undefined;
+    criticalUpdate?: boolean | undefined;
+  }): Promise<any> {
+    const firmware = {
+      id: randomUUID(),
+      tenantId: input.tenantId,
+      assetId: input.assetId,
+      deviceType: input.deviceType,
+      currentVersion: input.currentVersion,
+      latestVersion: input.latestVersion ?? null,
+      requiresUpdate: input.requiresUpdate ?? false,
+      criticalUpdate: input.criticalUpdate ?? false,
+      createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
+    this.firmwareInventory.unshift(firmware);
+    return firmware;
+  }
+
+  async listFirmwareUpdatesRequired(tenantId: string): Promise<any[]> {
+    return this.firmwareInventory.filter((firmware) => firmware.tenantId === tenantId && firmware.requiresUpdate);
+  }
+
+  async recordSoftwareVersion(input: {
+    tenantId: string;
+    componentName: string;
+    environment: string;
+    currentVersion: string;
+    previousVersion?: string | undefined;
+    upgradeApprovedBy?: string | undefined;
+    upgradeApprovedAt?: string | undefined;
+  }): Promise<any> {
+    const software = {
+      id: randomUUID(),
+      tenantId: input.tenantId,
+      componentName: input.componentName,
+      environment: input.environment,
+      currentVersion: input.currentVersion,
+      previousVersion: input.previousVersion ?? null,
+      upgradeApprovedBy: input.upgradeApprovedBy ?? null,
+      upgradeApprovedAt: input.upgradeApprovedAt ?? null,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    this.softwareVersions.unshift(software);
+    return software;
+  }
+
+  // ============ SPARE PARTS INVENTORY ============
+
+  async recordSparePart(input: {
+    tenantId: string;
+    partName: string;
+    partCode: string;
+    category: string;
+    vendorId?: string | undefined;
+    quantity: number;
+    reorderLevel?: number | undefined;
+    unitCost?: number | undefined;
+    warrantyMonths?: number | undefined;
+    location?: string | undefined;
+    branchNodeId?: string | undefined;
+  }): Promise<any> {
+    const part = {
+      id: randomUUID(),
+      tenantId: input.tenantId,
+      partName: input.partName,
+      partCode: input.partCode,
+      category: input.category,
+      vendorId: input.vendorId ?? null,
+      quantity: input.quantity,
+      reorderLevel: input.reorderLevel ?? 10,
+      unitCost: input.unitCost ?? null,
+      warrantyMonths: input.warrantyMonths ?? null,
+      location: input.location ?? null,
+      branchNodeId: input.branchNodeId ?? null,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    this.spareParts.unshift(part);
+    return part;
+  }
+
+  async recordInventoryTransaction(input: {
+    tenantId: string;
+    partId: string;
+    workOrderId?: string | undefined;
+    transactionType: 'add' | 'remove' | 'used' | 'damaged';
+    quantity: number;
+    referenceNumber?: string | undefined;
+    notes?: string | undefined;
+    recordedBy?: string | undefined;
+  }): Promise<any> {
+    const transaction = {
+      id: randomUUID(),
+      tenantId: input.tenantId,
+      partId: input.partId,
+      workOrderId: input.workOrderId ?? null,
+      transactionType: input.transactionType,
+      quantity: input.quantity,
+      referenceNumber: input.referenceNumber ?? null,
+      notes: input.notes ?? null,
+      recordedBy: input.recordedBy ?? null,
+      createdAt: new Date().toISOString(),
+    };
+    this.inventoryTransactions.unshift(transaction);
+
+    // Update part quantity
+    const part = this.spareParts.find((p) => p.id === input.partId);
+    if (part) {
+      if (input.transactionType === 'add') {
+        part.quantity += input.quantity;
+      } else if (input.transactionType === 'remove' || input.transactionType === 'used' || input.transactionType === 'damaged') {
+        part.quantity -= input.quantity;
+      }
+      part.updatedAt = new Date().toISOString();
+    }
+
+    return transaction;
+  }
+
+  async listLowStockParts(tenantId: string): Promise<any[]> {
+    return this.spareParts.filter((part) => part.tenantId === tenantId && part.quantity <= part.reorderLevel);
   }
 }
+
 
 function hashToken(token: string) {
   return createHash("sha256").update(token).digest("hex");

@@ -196,6 +196,44 @@ export interface ComplianceCertificateInput {
   metadata?: Record<string, unknown> | undefined;
 }
 
+export interface PrivacyPurposeInput {
+  tenantId: string;
+  name: string;
+  lawfulBasis: string;
+  description?: string | undefined;
+  riskLevel?: "low" | "medium" | "high" | "critical" | undefined;
+  dataCategories?: string[] | undefined;
+  active?: boolean | undefined;
+  createdBy?: string | undefined;
+}
+
+export interface CameraPrivacyPurposeAssignmentInput {
+  purposeId: string;
+  startDate?: string | undefined;
+  endDate?: string | undefined;
+  notes?: string | undefined;
+}
+
+export interface CameraPrivacyControlInput {
+  audioRecordingApproved?: boolean | undefined;
+  encryptionEnabled?: boolean | undefined;
+  disposalPlan?: string | undefined;
+  dataProtectionOfficer?: string | undefined;
+  lastReviewedAt?: string | undefined;
+}
+
+export interface PrivacyBreachInput {
+  tenantId: string;
+  branchNodeId?: string | undefined;
+  cameraId?: string | undefined;
+  breachType: string;
+  severity: "low" | "medium" | "high" | "critical";
+  discoveredAt: string;
+  description?: string | undefined;
+  remediation?: string | undefined;
+  createdBy?: string | undefined;
+}
+
 // AssetCategory and AssetStatus are defined in domain/models and imported above.
 
 export interface MaintenanceAssetInput {
@@ -682,7 +720,27 @@ export interface ControlPlaneStore {
     assetId?: string;
   }): Promise<any>;
   
-  listMaintenanceReports(tenantId: string, filters?: { reportType?: string; limit?: number }): Promise<any[]>;
+  listMaintenanceReports(tenantId: string, filters?: { reportType?: string | undefined; limit?: number | undefined } | undefined): Promise<any[]>;
+  
+  getPrivacySummary(tenantId: string): Promise<any>;
+  listPrivacyPurposes(tenantId: string): Promise<any[]>;
+  getPrivacyPurpose(id: string): Promise<any | undefined>;
+  createPrivacyPurpose(input: PrivacyPurposeInput): Promise<any>;
+  updatePrivacyPurpose(id: string, input: Partial<PrivacyPurposeInput>): Promise<any | undefined>;
+  listCameraPrivacyPurposes(cameraId: string): Promise<any[]>;
+  assignCameraPrivacyPurpose(
+    cameraId: string,
+    purposeId: string,
+    assignedBy: string,
+    startDate?: string | undefined,
+    endDate?: string | undefined,
+    notes?: string | undefined,
+  ): Promise<any>;
+  getCameraPrivacyControls(cameraId: string): Promise<any>;
+  upsertCameraPrivacyControls(cameraId: string, input: CameraPrivacyControlInput): Promise<any>;
+  listPrivacyBreaches(tenantId: string, status?: string | undefined): Promise<any[]>;
+  reportPrivacyBreach(input: PrivacyBreachInput): Promise<any>;
+  updatePrivacyBreachStatus(id: string, status: string, changedBy: string): Promise<any | undefined>;
   
   // Compliance Integration
   getMaintenanceComplianceStatus(tenantId: string): Promise<any>;

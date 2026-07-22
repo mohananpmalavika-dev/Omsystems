@@ -228,8 +228,11 @@ export async function registerMaintenanceDashboardRoutes(
 
   // Reports - List reports
   app.get("/v1/maintenance/reports", async (request) => {
-    const query = { reportType: (request.query.reportType as string) || undefined };
-    const reports = await store.listMaintenanceReports(request.currentUser.tenantId, query);
+    const query = request.query as { reportType?: string; limit?: number };
+    const reports = await store.listMaintenanceReports(request.currentUser.tenantId, { 
+      reportType: query.reportType ?? undefined,
+      limit: query.limit ?? undefined
+    });
     return { data: reports };
   });
 
@@ -239,17 +242,18 @@ export async function registerMaintenanceDashboardRoutes(
     const workOrders = await store.listWorkOrders(tenantId);
     
     const now = new Date();
-    const totalOrders = workOrders.filter(w => w.status !== 'completed').length;
-    const onTimeOrders = workOrders.filter(w => 
-      w.status === 'completed' && w.slaDueAt && w.updatedAt && new Date(w.slaDueAt) >= new Date(w.updatedAt)
+    const totalOrders = workOrders.filter(w => w.status !== 'closed').length;
+    const closedOrders = workOrders.filter(w => w.status === 'closed');
+    const onTimeOrders = closedOrders.filter(w => 
+      w.slaDueAt && w.updatedAt && new Date(w.slaDueAt) >= new Date(w.updatedAt)
     ).length;
     
     return {
       totalWorkOrders: totalOrders,
       completedOnTime: onTimeOrders,
-      compliancePercentage: totalOrders > 0 ? Math.round((onTimeOrders / totalOrders) * 100) : 100,
+      compliancePercentage: closedOrders.length > 0 ? Math.round((onTimeOrders / closedOrders.length) * 100) : 100,
       breaches: workOrders.filter(w => 
-        w.status !== 'completed' && w.slaDueAt && new Date(w.slaDueAt) < now
+        w.status !== 'closed' && w.slaDueAt && new Date(w.slaDueAt) < now
       ).length,
     };
   });
