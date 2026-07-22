@@ -351,6 +351,18 @@ export const maintenanceApi = {
   updateAmcContract: (id: string, data: any) => fetchApi<any>(`/v1/maintenance/amc/${encodeURIComponent(id)}`, {
     method: 'PATCH', body: JSON.stringify(data),
   }),
+  getDashboardHealth: () => fetchApi<any>('/v1/maintenance/dashboard/health'),
+  getDashboardStatus: () => fetchApi<any>('/v1/maintenance/dashboard/status'),
+  listFirmwareUpdatesRequired: () => fetchApi<{ data: any[] }>('/v1/maintenance/firmware/updates-required'),
+  listLowStockParts: () => fetchApi<{ data: any[] }>('/v1/maintenance/spare-parts/low-stock'),
+  listHighRiskAssets: () => fetchApi<{ data: any[] }>('/v1/maintenance/predictive/high-risk'),
+  listFailureForecast: () => fetchApi<{ data: any[] }>('/v1/maintenance/predictive/failure-forecast'),
+  getMaintenanceMetrics: () => fetchApi<any>('/v1/maintenance/reports/metrics'),
+  listReports: () => fetchApi<{ data: any[] }>('/v1/maintenance/reports'),
+  generateReport: (data: any) => fetchApi<any>('/v1/maintenance/reports/generate', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  }),
 };
 
 export const analyticsApi = {
