@@ -32,7 +32,7 @@ services:
     runtime: node
     plan: free
     region: singapore
-    buildCommand: npm ci && cd media-gateway && npm run build
+    buildCommand: cd media-gateway && npm install && npm run build
     startCommand: cd media-gateway && npm run start
     healthCheckPath: /health
     autoDeployTrigger: commit
