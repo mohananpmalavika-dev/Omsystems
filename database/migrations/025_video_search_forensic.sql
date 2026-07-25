@@ -354,7 +354,7 @@ SELECT
 FROM cameras c
 JOIN resource_nodes crn ON crn.id = c.resource_node_id
 JOIN resource_nodes rn ON rn.id = c.branch_node_id
-LEFT JOIN recording_segments rs ON rs.recording_job_id IN (
+LEFT JOIN recording_segments rs ON rs.job_id IN (
   SELECT id FROM recording_jobs WHERE camera_id = c.id
 ) AND rs.status <> 'deleted'
 GROUP BY c.id, crn.name, rn.id;
@@ -426,7 +426,7 @@ BEGIN
     FROM recording_jobs rj
     JOIN cameras c ON c.id = rj.camera_id
     JOIN resource_nodes rn ON rn.id = c.resource_node_id
-    WHERE rj.id = NEW.recording_job_id
+    WHERE rj.id = NEW.job_id
     ON CONFLICT (segment_id) DO UPDATE SET
       started_at = EXCLUDED.started_at,
       ended_at = EXCLUDED.ended_at,
