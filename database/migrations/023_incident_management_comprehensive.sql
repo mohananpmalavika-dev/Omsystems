@@ -805,12 +805,19 @@ COMMENT ON FUNCTION expire_old_secure_shares IS 'Marks expired shares as expired
 -- ============ GRANTS ============
 
 -- Grant appropriate permissions (adjust based on your role structure)
-GRANT SELECT, INSERT, UPDATE ON ALL TABLES IN SCHEMA public TO authenticated;
-GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO authenticated;
-GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA public TO authenticated;
-
--- Read-only access for reporting roles
-GRANT SELECT ON active_incidents, critical_incidents TO reporting_role;
+-- Note: These roles may not exist in all deployments, so grants are conditional
+DO $$ 
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') THEN
+    GRANT SELECT, INSERT, UPDATE ON ALL TABLES IN SCHEMA public TO authenticated;
+    GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO authenticated;
+    GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA public TO authenticated;
+  END IF;
+  
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'reporting_role') THEN
+    GRANT SELECT ON active_incidents, critical_incidents TO reporting_role;
+  END IF;
+END $$;
 
 -- ============ MIGRATION COMPLETE ============
 
