@@ -340,7 +340,7 @@ CREATE INDEX saved_search_queries_public_idx
 CREATE OR REPLACE VIEW recording_coverage_summary AS
 SELECT 
   c.id AS camera_id,
-  c.name AS camera_name,
+  crn.name AS camera_name,
   rn.id AS node_id,
   COUNT(rs.id) AS segment_count,
   SUM(rs.size_bytes) AS total_bytes,
@@ -352,9 +352,10 @@ SELECT
   COUNT(CASE WHEN rs.storage_tier = 'warm' THEN 1 END) AS warm_segments,
   COUNT(CASE WHEN rs.storage_tier = 'cold' THEN 1 END) AS cold_segments
 FROM cameras c
-JOIN resource_nodes rn ON rn.id = c.resource_node_id
+JOIN resource_nodes crn ON crn.id = c.resource_node_id
+JOIN resource_nodes rn ON rn.id = c.branch_node_id
 LEFT JOIN recording_segments rs ON rs.camera_id = c.id AND rs.status <> 'deleted'
-GROUP BY c.id, c.name, rn.id;
+GROUP BY c.id, crn.name, rn.id;
 
 -- Evidence Cases with Item Counts
 CREATE OR REPLACE VIEW evidence_cases_summary AS
@@ -380,13 +381,14 @@ GROUP BY ec.id, ec.tenant_id, ec.case_number, ec.title, ec.status, ec.created_at
 CREATE OR REPLACE VIEW active_legal_holds AS
 SELECT 
   rlh.*,
-  c.name AS camera_name,
+  crn.name AS camera_name,
   rn.name AS branch_name,
   u_created.email AS created_by_email,
   u_released.email AS released_by_email
 FROM recording_legal_holds rlh
 JOIN cameras c ON c.id = rlh.camera_id
-JOIN resource_nodes rn ON rn.id = c.resource_node_id
+JOIN resource_nodes crn ON crn.id = c.resource_node_id
+JOIN resource_nodes rn ON rn.id = c.branch_node_id
 LEFT JOIN users u_created ON u_created.id = rlh.created_by
 LEFT JOIN users u_released ON u_released.id = rlh.released_by
 WHERE rlh.released_at IS NULL
