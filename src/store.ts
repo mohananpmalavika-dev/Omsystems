@@ -2939,6 +2939,141 @@ export class MemoryStore implements ControlPlaneStore {
     this.predictiveAlerts.push(alert);
     return alert;
   }
+
+  // Evidence Management Methods
+  readonly evidenceCases: any[] = [];
+  readonly evidenceItems: any[] = [];
+  readonly custodyEvents: any[] = [];
+  readonly evidenceExports: any[] = [];
+  readonly evidenceManifests: any[] = [];
+  readonly evidenceLegalHolds: any[] = [];
+
+  async verifyRecordingSegment(segmentId: string): Promise<{ status: "verified" | "mismatch" | "missing"; hash?: string }> {
+    const segment = await this.getRecordingSegment(segmentId);
+    if (!segment) return { status: "missing" };
+    if (segment.checksumSha256) {
+      return { status: "verified", hash: segment.checksumSha256 };
+    }
+    return { status: "missing" };
+  }
+
+  async createEvidenceCase(input: any): Promise<any> {
+    const now = new Date().toISOString();
+    const caseRecord = {
+      id: randomUUID(),
+      tenantId: input.tenantId,
+      caseNumber: input.caseNumber,
+      title: input.title,
+      description: input.description,
+      status: "open",
+      createdBy: input.createdBy,
+      createdAt: now,
+      updatedAt: now,
+    };
+    this.evidenceCases.push(caseRecord);
+    return caseRecord;
+  }
+
+  async getEvidenceCase(id: string): Promise<any | undefined> {
+    return this.evidenceCases.find(c => c.id === id);
+  }
+
+  async listEvidenceCases(tenantId: string, filters?: any): Promise<any[]> {
+    return this.evidenceCases.filter(c => 
+      c.tenantId === tenantId && (!filters?.status || c.status === filters.status)
+    ).slice(0, filters?.limit ?? 100);
+  }
+
+  async updateEvidenceCaseStatus(id: string, status: any): Promise<any> {
+    const caseRecord = this.evidenceCases.find(c => c.id === id);
+    if (!caseRecord) return undefined;
+    caseRecord.status = status;
+    caseRecord.updatedAt = new Date().toISOString();
+    return caseRecord;
+  }
+
+  async addEvidenceItem(caseId: string, input: any): Promise<any> {
+    const now = new Date().toISOString();
+    const item = {
+      id: randomUUID(),
+      caseId,
+      type: input.type,
+      cameraId: input.cameraId,
+      startTime: input.startTime,
+      endTime: input.endTime,
+      recordingSegmentId: input.recordingSegmentId,
+      description: input.description,
+      addedBy: input.addedBy,
+      hash: input.hash,
+      fileSize: input.fileSize,
+      createdAt: now,
+    };
+    this.evidenceItems.push(item);
+    return item;
+  }
+
+  async listEvidenceItems(caseId: string): Promise<any[]> {
+    return this.evidenceItems.filter(item => item.caseId === caseId);
+  }
+
+  async recordCustodyEvent(input: {
+    evidenceId?: string;
+    action: string;
+    performedBy: string;
+    sourceIp?: string;
+    reason?: string;
+  }): Promise<any> {
+    const now = new Date().toISOString();
+    const event = {
+      id: randomUUID(),
+      evidenceId: input.evidenceId,
+      action: input.action,
+      performedBy: input.performedBy,
+      sourceIp: input.sourceIp,
+      reason: input.reason,
+      occurredAt: now,
+    };
+    this.custodyEvents.push(event);
+    return event;
+  }
+
+  async getCustodyLog(evidenceId: string): Promise<any[]> {
+    return this.custodyEvents.filter(event => event.evidenceId === evidenceId);
+  }
+
+  async createLegalHold(input: any): Promise<any> {
+    const now = new Date().toISOString();
+    const hold = {
+      id: randomUUID(),
+      caseNumber: input.caseNumber,
+      reason: input.reason,
+      requestedBy: input.requestedBy,
+      cameraIds: input.cameraIds,
+      startTime: input.startTime,
+      endTime: input.endTime,
+      reviewDate: input.reviewDate,
+      expiryDate: input.expiryDate,
+      createdAt: now,
+    };
+    this.evidenceLegalHolds.push(hold);
+    return hold;
+  }
+
+  async releaseLegalHold(holdId: string, releasedBy: string): Promise<any | undefined> {
+    const hold = this.evidenceLegalHolds.find(h => h.id === holdId);
+    if (!hold) return undefined;
+    hold.releasedBy = releasedBy;
+    hold.releasedAt = new Date().toISOString();
+    return hold;
+  }
+
+  async getEvidenceExport(exportId: string): Promise<any | undefined> {
+    return this.evidenceExports.find(e => e.id === exportId);
+  }
+
+  async getEvidenceManifest(manifestId: string): Promise<any | undefined> {
+    return this.evidenceManifests.find(m => m.id === manifestId);
+  }
 }
 
 

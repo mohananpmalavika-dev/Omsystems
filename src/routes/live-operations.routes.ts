@@ -72,7 +72,12 @@ export async function registerLiveOperationsRoutes(
       tenantId: request.currentUser.tenantId,
       cameraId: id,
       operatorId: request.currentUser.id,
-      ...body,
+      bookmarkedAt: body.bookmarkedAt,
+      reason: body.reason,
+      notes: body.notes,
+      priority: body.priority,
+      recordingSegmentId: body.recordingSegmentId,
+      snapshotReference: body.snapshotReference,
     });
     await audit(request, store, "live.bookmark_created", camera.nodeId, {
       cameraId: id,
@@ -102,7 +107,12 @@ export async function registerLiveOperationsRoutes(
       tenantId: request.currentUser.tenantId,
       cameraId: id,
       createdBy: request.currentUser.id,
-      ...body,
+      title: body.title,
+      notes: body.notes,
+      priority: body.priority,
+      occurredAt: body.occurredAt,
+      preRollSeconds: body.preRollSeconds,
+      postRollSeconds: body.postRollSeconds,
     });
     await audit(request, store, "live.incident_created", camera.nodeId, {
       cameraId: id,

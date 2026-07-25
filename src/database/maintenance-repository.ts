@@ -439,13 +439,27 @@ export class MaintenanceRepository {
     return camelRow<any>(result.rows[0]);
   }
 
-  async listMaintenanceVisits(tenantId: string, filters?: { status?: string }) {
+  async listMaintenanceVisits(tenantId: string, filters?: {
+    status?: string;
+    startDate?: Date;
+    endDate?: Date;
+    branchNodeId?: string;
+  }) {
     const result = await this.pool.query(
       `SELECT * FROM maintenance_visits
        WHERE tenant_id=$1
          AND ($2::text IS NULL OR status=$2)
+         AND ($3::timestamp IS NULL OR due_at >= $3)
+         AND ($4::timestamp IS NULL OR due_at <= $4)
+         AND ($5::uuid IS NULL OR branch_node_id=$5)
        ORDER BY due_at ASC`,
-      [tenantId, filters?.status ?? null],
+      [
+        tenantId,
+        filters?.status ?? null,
+        filters?.startDate?.toISOString() ?? null,
+        filters?.endDate?.toISOString() ?? null,
+        filters?.branchNodeId ?? null,
+      ],
     );
     return camelRows<any>(result.rows);
   }

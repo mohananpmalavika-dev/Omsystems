@@ -562,10 +562,10 @@ export async function registerAnalyticsPhase2Routes(
         .object({ cameraId: z.string().uuid() })
         .parse(request.params);
 
-      const decision = await store.checkCameraAccess(
-        request.currentUser.id,
+      const decision = await store.checkAccess(
+        request.currentUser,
+        "analytics:view",
         cameraId,
-        "protected-objects:manage",
       );
       if (!decision?.allowed) {
         return reply.code(403).send({ error: "forbidden" });
@@ -595,10 +595,10 @@ export async function registerAnalyticsPhase2Routes(
         .object({ cameraId: z.string().uuid() })
         .parse(request.params);
 
-      const decision = await store.checkCameraAccess(
-        request.currentUser.id,
+      const decision = await store.checkAccess(
+        request.currentUser,
+        "analytics:view",
         cameraId,
-        "protected-objects:manage",
       );
       if (!decision?.allowed) {
         return reply.code(403).send({ error: "forbidden" });

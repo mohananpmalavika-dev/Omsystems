@@ -23,16 +23,16 @@ export async function registerMaintenanceAdvancedRoutes(
   // ============================================================================
 
   app.get("/v1/maintenance/health/summary/:tenantId", async (request, reply) => {
-    const params = { tenantId: request.params as { tenantId: string } };
+    const { tenantId } = request.params as { tenantId: string };
     const healthMonitor = getHealthMonitoring();
-    const summary = await healthMonitor.getHealthSummary(params.tenantId);
+    const summary = await healthMonitor.getHealthSummary(tenantId);
     return reply.send(summary);
   });
 
   app.get("/v1/maintenance/health/metrics/:componentId", async (request, reply) => {
-    const params = { componentId: request.params as { componentId: string } };
+    const { componentId } = request.params as { componentId: string };
     const healthMonitor = getHealthMonitoring();
-    const metrics = healthMonitor.getRecentMetrics(params.componentId, 60);
+    const metrics = healthMonitor.getRecentMetrics(componentId, 60);
     return reply.send(metrics);
   });
 
@@ -67,9 +67,9 @@ export async function registerMaintenanceAdvancedRoutes(
     request,
     reply
   ) => {
-    const params = request.params as { alertId: string };
+    const { alertId } = request.params as { alertId: string };
     const healthMonitor = getHealthMonitoring();
-    healthMonitor.acknowledgeAlert(params.alertId);
+    healthMonitor.acknowledgeAlert(alertId);
     return reply.send({ success: true, message: "Alert acknowledged" });
   });
 
@@ -85,9 +85,9 @@ export async function registerMaintenanceAdvancedRoutes(
   });
 
   app.get("/v1/maintenance/reports/:reportId", async (request, reply) => {
-    const params = request.params as { reportId: string };
+    const { reportId } = request.params as { reportId: string };
     const reportingEngine = getReportingEngine();
-    const report = reportingEngine.getReportById(params.reportId);
+    const report = reportingEngine.getReportById(reportId);
     if (!report) {
       return reply.status(404).send({ error: "Report not found" });
     }
@@ -206,8 +206,8 @@ export async function registerMaintenanceAdvancedRoutes(
   ) => {
     const firmwareManager = getFirmwareManager();
     const { approvedBy } = request.body as any;
-    const params = request.params as { planId: string };
-    const success = firmwareManager.approvePlan(params.planId, approvedBy);
+    const { planId } = request.params as { planId: string };
+    const success = firmwareManager.approvePlan(planId, approvedBy);
     return reply.send({ success, message: success ? "Plan approved" : "Approval failed" });
   });
 
@@ -216,8 +216,8 @@ export async function registerMaintenanceAdvancedRoutes(
     reply
   ) => {
     const firmwareManager = getFirmwareManager();
-    const params = request.params as { planId: string };
-    const success = firmwareManager.startDeployment(params.planId);
+    const { planId } = request.params as { planId: string };
+    const success = firmwareManager.startDeployment(planId);
     return reply.send({ success, message: success ? "Deployment started" : "Deployment start failed" });
   });
 
@@ -310,11 +310,9 @@ export async function registerMaintenanceAdvancedRoutes(
     request,
     reply
   ) => {
-    const params = request.params as { deviceId: string };
+    const { deviceId } = request.params as { deviceId: string };
     const predictiveEngine = getPredictiveEngine();
-    const predictions = predictiveEngine.getActivePredictions(
-      params.deviceId
-    );
+    const predictions = predictiveEngine.getActivePredictions(deviceId);
     return reply.send(predictions);
   });
 

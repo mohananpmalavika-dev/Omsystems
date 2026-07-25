@@ -127,6 +127,7 @@ export class PostgresStore
   }
   async listRecordingSegments(cameraId: string, from?: string, to?: string) { return this.recordings.listSegments(cameraId, from, to); }
   async getRecordingSegment(id: string) { return this.recordings.getSegment(id); }
+  async verifyRecordingSegment(segmentId: string) { return this.recordings.verifyRecordingSegment(segmentId); }
   async createRecordingSegment(input: any) { return this.recordings.createSegment(input); }
   async listRecordingLegalHolds(cameraId: string) { return this.recordings.listLegalHolds(cameraId); }
   async createRecordingLegalHold(input: any) { return this.recordings.createLegalHold(input); }
