@@ -92,6 +92,13 @@ export function buildAnalyticsEngine(options: AnalyticsEngineOptions) {
     });
   });
 
+  // Register advanced analytics API routes
+  void import("./routes/advanced-analytics-api.js").then(module => {
+    module.registerAdvancedAnalyticsRoutes(app, pipeline).catch((error) => {
+      app.log.error({ error }, "Failed to register advanced analytics API routes");
+    });
+  });
+
   app.addHook("preHandler", async (request, reply) => {
     if (request.url === "/health" || request.url.startsWith("/v1/detectors") || request.url.startsWith("/v1/analytics")) {
       return; // Allow public access to monitoring endpoints
