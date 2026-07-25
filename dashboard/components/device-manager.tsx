@@ -717,9 +717,12 @@ export function DeviceManager() {
                         <strong>{item.displayName || item.model || `${item.vendor} device`}</strong>
                         <span>{item.ipAddress} · {item.onvifPort ? `ONVIF ${item.onvifPort}` : "Stream endpoint pending"}</span>
                       </div>
-                      <span className={`inventory-status discovery-badge ${item.reviewStatus === "duplicate" ? "offline" : item.reviewStatus === "review-required" ? "degraded" : item.reviewStatus === "approved" ? "online" : ""}`}>
-                        {item.badgeLabel}
-                      </span>
+                      <div className="discovery-badge-stack">
+                        {item.reviewStatus !== "approved" ? <span className="review-pill">Pending review</span> : null}
+                        <span className={`inventory-status discovery-badge ${item.reviewStatus === "duplicate" ? "offline" : item.reviewStatus === "review-required" ? "degraded" : item.reviewStatus === "approved" ? "online" : ""}`}>
+                          {item.badgeLabel}
+                        </span>
+                      </div>
                     </div>
                     <div className="discovery-chip-row">
                       <span className="discovery-chip">{item.vendor}</span>

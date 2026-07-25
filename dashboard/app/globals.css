@@ -841,6 +841,11 @@ select, textarea { font: inherit; }
 .discovery-inline-editor input {
   min-height: 35px; padding: 0 9px; border: 1px solid #dde4ee; border-radius: 7px; background: white; font-size: 10px;
 }
+.discovery-badge-stack { display: flex; flex-direction: column; align-items: flex-end; gap: 5px; }
+.review-pill {
+  display: inline-flex; align-items: center; padding: 3px 7px; border-radius: 999px;
+  background: #fff4d9; color: #9d5a00; font-size: 8px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em;
+}
 .discovery-badge { justify-self: end; }
 .login-footer { position: fixed; bottom: 7px; color: #8a95a5; font-size: 9px; }
 
