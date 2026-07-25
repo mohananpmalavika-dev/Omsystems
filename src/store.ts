@@ -407,6 +407,9 @@ export class MemoryStore implements ControlPlaneStore {
     const existing = [...this.discoveries.values()].find((item) => {
       const sameBranch = item.branchId === branchId;
       const sameIp = item.ipAddress === normalized.ipAddress && item.onvifPort === normalized.onvifPort;
+      if (item.status === "rejected" && sameBranch && (sameIp || hasFingerprint)) {
+        return true;
+      }
       const sameSerial = Boolean(item.serialNumber && normalized.serialNumber && item.serialNumber === normalized.serialNumber);
       const sameMac = Boolean(item.macAddress && normalized.macAddress && item.macAddress === normalized.macAddress);
       const sameOnvif = Boolean(item.onvifEndpointReference && normalized.onvifEndpointReference && item.onvifEndpointReference === normalized.onvifEndpointReference);
@@ -423,6 +426,9 @@ export class MemoryStore implements ControlPlaneStore {
     });
 
     if (existing) {
+      if (existing.status === "rejected") {
+        return existing;
+      }
       Object.assign(existing, normalized, {
         discoveredAt: new Date().toISOString(),
       });
@@ -434,6 +440,11 @@ export class MemoryStore implements ControlPlaneStore {
       status: "pending", 
       discoveredAt: new Date().toISOString(),
       manufacturer: normalized.manufacturer || normalized.vendor || 'Unknown',
+      ...(normalized.displayName ? { displayName: normalized.displayName } : {}),
+      ...(normalized.statusReason ? { statusReason: normalized.statusReason } : {}),
+      ...(normalized.credentialsRequired !== undefined ? { credentialsRequired: normalized.credentialsRequired } : {}),
+      ...(normalized.streamVerified !== undefined ? { streamVerified: normalized.streamVerified } : {}),
+      ...(normalized.compatibility ? { compatibility: normalized.compatibility } : {}),
       ...normalized,
     };
     this.discoveries.set(discovery.id, discovery);
@@ -446,6 +457,21 @@ export class MemoryStore implements ControlPlaneStore {
         discovery.branchId === branchId && discovery.status === "pending"
       )
       .sort((left, right) => right.discoveredAt.localeCompare(left.discoveredAt));
+  }
+
+  async rejectDiscovery(discoveryId: string, reason?: string) {
+    const discovery = this.discoveries.get(discoveryId);
+    if (!discovery) return undefined;
+    discovery.status = "rejected";
+    if (reason) discovery.statusReason = reason;
+    return discovery;
+  }
+
+  async renameDiscovery(discoveryId: string, displayName: string) {
+    const discovery = this.discoveries.get(discoveryId);
+    if (!discovery) return undefined;
+    discovery.displayName = displayName;
+    return discovery;
   }
 
   async approveCamera(branchId: string, input: CameraApprovalInput) {
@@ -3073,6 +3099,42 @@ export class MemoryStore implements ControlPlaneStore {
 
   async getEvidenceManifest(manifestId: string): Promise<any | undefined> {
     return this.evidenceManifests.find(m => m.id === manifestId);
+  }
+
+  // Device Inventory Management
+  private deviceInventory: any[] = [];
+
+  async listDeviceInventory(tenantId: string, branchNodeId?: string): Promise<any[]> {
+    return this.deviceInventory.filter(d => 
+      d.tenantId === tenantId && (!branchNodeId || d.branch === branchNodeId)
+    );
+  }
+
+  async getDeviceInventory(id: string): Promise<any | null> {
+    return this.deviceInventory.find(d => d.id === id) ?? null;
+  }
+
+  async createDeviceInventoryRecord(input: any): Promise<any> {
+    const record = {
+      id: randomUUID(),
+      ...input,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    this.deviceInventory.push(record);
+    return record;
+  }
+
+  async updateDeviceInventory(id: string, input: any): Promise<any | null> {
+    const index = this.deviceInventory.findIndex(d => d.id === id);
+    if (index === -1) return null;
+    
+    this.deviceInventory[index] = {
+      ...this.deviceInventory[index],
+      ...input,
+      updatedAt: new Date().toISOString(),
+    };
+    return this.deviceInventory[index];
   }
 }
 

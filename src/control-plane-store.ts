@@ -76,6 +76,11 @@ export interface CameraDiscoveryInput {
   ptzCapability?: boolean;
   audioCapability?: boolean;
   analyticsCapability?: boolean;
+  displayName?: string;
+  statusReason?: string;
+  credentialsRequired?: boolean;
+  streamVerified?: boolean;
+  compatibility?: string;
   timeSynchronization?: "synchronized" | "drifted" | "unknown";
   duplicateStatus?: "unique" | "duplicate" | "review-required";
   compatibilityStatus?: "compatible" | "incompatible" | "review-required";
@@ -521,6 +526,8 @@ export interface ControlPlaneStore {
     input: CameraDiscoveryInput,
   ): Promise<DiscoveredCamera>;
   listDiscoveredCameras(branchId: string): Promise<DiscoveredCamera[]>;
+  rejectDiscovery(discoveryId: string, reason?: string): Promise<DiscoveredCamera | undefined>;
+  renameDiscovery(discoveryId: string, displayName: string): Promise<DiscoveredCamera | undefined>;
   approveCamera(
     branchId: string,
     input: CameraApprovalInput,
@@ -1592,6 +1599,12 @@ export interface CameraPermissionStore {
   removeUserFromAccessGroup(groupId: string, userId: string): Promise<void>;
   updateCameraSensitivity(cameraId: string, input: any): Promise<any>;
   getCameraAccessSummary(cameraId: string): Promise<any>;
+
+  // Device Inventory Management
+  listDeviceInventory(tenantId: string, branchNodeId?: string): Promise<any[]>;
+  getDeviceInventory(id: string): Promise<any | null>;
+  createDeviceInventoryRecord(input: any): Promise<any>;
+  updateDeviceInventory(id: string, input: any): Promise<any | null>;
 }
 
 export type ExtendedControlPlaneStore = ControlPlaneStore &
