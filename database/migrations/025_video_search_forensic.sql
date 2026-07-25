@@ -1,18 +1,16 @@
 -- Migration 021: Video Search & Forensic Evidence Infrastructure
 -- Module 2.5: Video Search, Playback & Forensic Analysis
--- Adds search indexing, motion/object detection metadata, enhanced bookmarks,
--- forensic export tracking, and verification infrastructure
+-- SIMPLIFIED VERSION FOR DEBUGGING
 
 -- ============================================================================
 -- SEARCH INDEX & METADATA
 -- ============================================================================
 
--- Recording Search Index
--- Pre-computed search metadata for fast queries
+-- Recording Search Index (WITHOUT camera_id FK for now)
 CREATE TABLE IF NOT EXISTS recording_search_index (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   segment_id uuid NOT NULL REFERENCES recording_segments(id) ON DELETE CASCADE,
-  camera_id uuid NOT NULL REFERENCES cameras(id) ON DELETE CASCADE,
+  camera_id uuid NOT NULL, -- NO FK constraint for debugging
   tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
   started_at timestamptz NOT NULL,
   ended_at timestamptz NOT NULL,
@@ -28,6 +26,11 @@ CREATE TABLE IF NOT EXISTS recording_search_index (
   UNIQUE (segment_id)
 );
 
+-- Add FK constraint separately
+ALTER TABLE recording_search_index 
+  ADD CONSTRAINT recording_search_index_camera_fk 
+  FOREIGN KEY (camera_id) REFERENCES cameras(id) ON DELETE CASCADE;
+
 CREATE INDEX recording_search_index_camera_time_idx 
   ON recording_search_index (camera_id, started_at DESC, ended_at DESC);
 CREATE INDEX recording_search_index_tenant_time_idx 
@@ -39,12 +42,12 @@ CREATE INDEX recording_search_index_events_idx
   ON recording_search_index (camera_id, has_ai_events, started_at DESC)
   WHERE has_ai_events = true;
 
--- Motion Events
+-- Motion Events (WITHOUT camera_id FK for now)
 -- Stores detected motion regions and metadata
 CREATE TABLE IF NOT EXISTS motion_events (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   segment_id uuid NOT NULL REFERENCES recording_segments(id) ON DELETE CASCADE,
-  camera_id uuid NOT NULL REFERENCES cameras(id) ON DELETE CASCADE,
+  camera_id uuid NOT NULL, -- NO FK constraint for debugging
   tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
   started_at timestamptz NOT NULL,
   ended_at timestamptz NOT NULL,
@@ -57,6 +60,11 @@ CREATE TABLE IF NOT EXISTS motion_events (
   created_at timestamptz NOT NULL DEFAULT now()
 );
 
+-- Add FK constraint separately
+ALTER TABLE motion_events 
+  ADD CONSTRAINT motion_events_camera_fk 
+  FOREIGN KEY (camera_id) REFERENCES cameras(id) ON DELETE CASCADE;
+
 CREATE INDEX motion_events_camera_time_idx 
   ON motion_events (camera_id, started_at DESC);
 CREATE INDEX motion_events_zone_idx 
@@ -66,12 +74,12 @@ CREATE INDEX motion_events_duration_idx
   ON motion_events (camera_id, duration_seconds DESC)
   WHERE duration_seconds >= 10;
 
--- Detected Objects
+-- Detected Objects (WITHOUT camera_id FK for now)
 -- AI analytics detections from analytics engine
 CREATE TABLE IF NOT EXISTS detected_objects (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   segment_id uuid REFERENCES recording_segments(id) ON DELETE CASCADE,
-  camera_id uuid NOT NULL REFERENCES cameras(id) ON DELETE CASCADE,
+  camera_id uuid NOT NULL, -- NO FK constraint for debugging
   tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
   detected_at timestamptz NOT NULL,
   object_class text NOT NULL CHECK (length(object_class) BETWEEN 1 AND 50),
@@ -83,6 +91,11 @@ CREATE TABLE IF NOT EXISTS detected_objects (
   thumbnail_path text,
   created_at timestamptz NOT NULL DEFAULT now()
 );
+
+-- Add FK constraint separately
+ALTER TABLE detected_objects 
+  ADD CONSTRAINT detected_objects_camera_fk 
+  FOREIGN KEY (camera_id) REFERENCES cameras(id) ON DELETE CASCADE;
 
 CREATE INDEX detected_objects_camera_time_idx 
   ON detected_objects (camera_id, detected_at DESC);
@@ -113,11 +126,11 @@ CREATE INDEX IF NOT EXISTS live_bookmarks_evidence_case_idx
   ON live_bookmarks (evidence_case_id, created_at DESC)
   WHERE evidence_case_id IS NOT NULL;
 
--- Timeline Markers
+-- Timeline Markers (WITHOUT camera_id FK for now)
 -- Visual markers for timeline visualization (events, alerts, bookmarks, incidents)
 CREATE TABLE IF NOT EXISTS timeline_markers (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  camera_id uuid NOT NULL REFERENCES cameras(id) ON DELETE CASCADE,
+  camera_id uuid NOT NULL, -- NO FK constraint for debugging
   tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
   timestamp timestamptz NOT NULL,
   marker_type text NOT NULL 
@@ -130,6 +143,11 @@ CREATE TABLE IF NOT EXISTS timeline_markers (
   icon text,
   created_at timestamptz NOT NULL DEFAULT now()
 );
+
+-- Add FK constraint separately
+ALTER TABLE timeline_markers 
+  ADD CONSTRAINT timeline_markers_camera_fk 
+  FOREIGN KEY (camera_id) REFERENCES cameras(id) ON DELETE CASCADE;
 
 CREATE INDEX timeline_markers_camera_time_idx 
   ON timeline_markers (camera_id, timestamp DESC);
@@ -255,13 +273,13 @@ ALTER TABLE evidence_manifests
 -- PLAYBACK SESSION TRACKING
 -- ============================================================================
 
--- Playback Sessions
+-- Playback Sessions (WITHOUT camera_id FK for now)
 -- Tracks viewing sessions for audit purposes
 CREATE TABLE IF NOT EXISTS playback_sessions (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
   user_id uuid NOT NULL REFERENCES users(id),
-  camera_id uuid NOT NULL REFERENCES cameras(id) ON DELETE CASCADE,
+  camera_id uuid NOT NULL, -- NO FK constraint for debugging
   from_time timestamptz NOT NULL,
   to_time timestamptz NOT NULL,
   segments_accessed uuid[] NOT NULL DEFAULT ARRAY[]::uuid[],
@@ -274,6 +292,11 @@ CREATE TABLE IF NOT EXISTS playback_sessions (
   duration_seconds integer,
   actions_performed jsonb DEFAULT '[]'::jsonb -- snapshot, bookmark, export, etc.
 );
+
+-- Add FK constraint separately
+ALTER TABLE playback_sessions 
+  ADD CONSTRAINT playback_sessions_camera_fk 
+  FOREIGN KEY (camera_id) REFERENCES cameras(id) ON DELETE CASCADE;
 
 CREATE INDEX playback_sessions_user_idx 
   ON playback_sessions (user_id, started_at DESC);
