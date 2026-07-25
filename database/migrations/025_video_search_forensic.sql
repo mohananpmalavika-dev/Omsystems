@@ -354,7 +354,9 @@ SELECT
 FROM cameras c
 JOIN resource_nodes crn ON crn.id = c.resource_node_id
 JOIN resource_nodes rn ON rn.id = c.branch_node_id
-LEFT JOIN recording_segments rs ON rs.camera_id = c.id AND rs.status <> 'deleted'
+LEFT JOIN recording_segments rs ON rs.recording_job_id IN (
+  SELECT id FROM recording_jobs WHERE camera_id = c.id
+) AND rs.status <> 'deleted'
 GROUP BY c.id, crn.name, rn.id;
 
 -- Evidence Cases with Item Counts
