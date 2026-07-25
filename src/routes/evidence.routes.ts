@@ -60,7 +60,7 @@ async function hasAccess(
   return true;
 }
 
-function inferRecordingCameras(items: Array<{ type: string; cameraId?: string; startTime?: string; endTime?: string }>) {
+function inferRecordingCameras(items: Array<{ type: string; cameraId?: string; startTime?: string; endTime?: string }>): Array<{ cameraId: string; fromTime: string; toTime: string }> {
   const cameras = new Map<string, { cameraId: string; fromTime: string; toTime: string }>();
 
   for (const item of items) {
@@ -534,8 +534,8 @@ export async function registerEvidenceRoutes(
         tenantId: request.currentUser.tenantId,
         exportType: body.exportType,
         format: body.format,
-        cameras: body.cameras,
-        options: body.options,
+        cameras: body.cameras as Array<{ cameraId: string; fromTime: string; toTime: string }>,
+        options: body.options ?? {},
         requestedBy: request.currentUser.id,
         reason: body.reason,
         priority: body.priority,

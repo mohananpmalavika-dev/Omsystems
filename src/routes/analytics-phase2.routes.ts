@@ -6,6 +6,12 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import type { ControlPlaneStore } from "../control-plane-store.js";
+import type { PostgresStore } from "../database/postgres-store.js";
+
+// Type guard to check if store has pool access
+function hasPool(store: ControlPlaneStore): store is ControlPlaneStore & { db: any } {
+  return 'db' in store && store.db !== undefined;
+}
 
 const faceWatchlistSchema = z.object({
   name: z.string().min(2).max(160),
@@ -283,7 +289,11 @@ export async function registerAnalyticsPhase2Routes(
       params.push(query.personId);
     }
 
-    const events = await store.pool.query(
+    if (!hasPool(store)) {
+      return reply.code(501).send({ error: "not_implemented", message: "This endpoint requires PostgreSQL store" });
+    }
+
+    const events = await store.db.query(
       `SELECT fe.id, fe.camera_id, fe.watchlist_id, fe.person_id,
               fe.similarity_score, fe.face_quality, fe.age_estimate,
               fe.gender_estimate, fe.wearing_mask, fe.snapshot_reference,
@@ -482,7 +492,11 @@ export async function registerAnalyticsPhase2Routes(
       params.push(query.entryDirection);
     }
 
-    const events = await store.pool.query(
+    if (!hasPool(store)) {
+      return reply.code(501).send({ error: "not_implemented", message: "This endpoint requires PostgreSQL store" });
+    }
+
+    const events = await store.db.query(
       `SELECT ae.id, ae.camera_id, ae.plate_number, ae.plate_confidence,
               ae.country_code, ae.vehicle_type, ae.vehicle_color,
               ae.entry_direction, ae.snapshot_reference, ae.occurred_at,
@@ -533,7 +547,11 @@ export async function registerAnalyticsPhase2Routes(
         return reply.code(403).send({ error: "forbidden" });
       }
 
-      const sessions = await store.pool.query(
+      if (!hasPool(store)) {
+        return reply.code(501).send({ error: "not_implemented", message: "This endpoint requires PostgreSQL store" });
+      }
+
+      const sessions = await store.db.query(
         `SELECT vs.id, vs.plate_number, vs.entry_at, vs.exit_at,
                 vs.duration_seconds, vs.status,
                 ec.name as entry_camera_name, xc.name as exit_camera_name
@@ -571,7 +589,11 @@ export async function registerAnalyticsPhase2Routes(
         return reply.code(403).send({ error: "forbidden" });
       }
 
-      const objects = await store.pool.query(
+      if (!hasPool(store)) {
+        return reply.code(501).send({ error: "not_implemented", message: "This endpoint requires PostgreSQL store" });
+      }
+
+      const objects = await store.db.query(
         `SELECT id, name, description, object_type, zone, alert_on_removal,
                 alert_severity, removal_threshold_seconds, created_at,
                 last_verified_at
@@ -675,7 +697,11 @@ export async function registerAnalyticsPhase2Routes(
       params.push(query.behaviorType);
     }
 
-    const events = await store.pool.query(
+    if (!hasPool(store)) {
+      return reply.code(501).send({ error: "not_implemented", message: "This endpoint requires PostgreSQL store" });
+    }
+
+    const events = await store.db.query(
       `SELECT be.id, be.camera_id, be.behavior_type, be.confidence,
               be.track_id, be.person_count, be.duration_seconds,
               be.speed_pixels_per_second, be.snapshot_reference,

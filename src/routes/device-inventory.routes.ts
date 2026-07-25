@@ -103,7 +103,27 @@ export async function registerDeviceInventoryRoutes(
     const record = await store.createDeviceInventoryRecord({
       tenantId: request.currentUser.tenantId,
       tenant: body.tenant ?? request.currentUser.tenantId,
-      ...body,
+      deviceId: body.deviceId,
+      region: body.region,
+      branch: body.branch,
+      deviceType: body.deviceType,
+      manufacturer: body.manufacturer,
+      model: body.model,
+      serialNumber: body.serialNumber,
+      macAddress: body.macAddress,
+      ipAddress: body.ipAddress,
+      firmwareVersion: body.firmwareVersion,
+      onvifVersion: body.onvifVersion,
+      capabilities: body.capabilities,
+      credentialReference: body.credentialReference,
+      installationDate: body.installationDate,
+      warranty: body.warranty,
+      amcContract: body.amcContract,
+      healthStatus: body.healthStatus,
+      lastCommunication: body.lastCommunication,
+      configurationTemplate: body.configurationTemplate,
+      riskClassification: body.riskClassification,
+      lifecycleState: body.lifecycleState,
     });
 
     return reply.code(201).send(record);

@@ -346,7 +346,11 @@ export async function registerComplianceEnhancedRoutes(
       nextTestDate: z.string().datetime(),
       effectivenessRating: z.number().int().min(1).max(5).optional(),
     }).parse(request.body);
-    const control = await store.updateControlTestDates(id, body);
+    const control = await store.updateControlTestDates(id, {
+      lastTestDate: body.lastTestDate,
+      nextTestDate: body.nextTestDate,
+      effectivenessRating: body.effectivenessRating,
+    });
     if (!control) return reply.code(404).send({ error: "control_not_found" });
     return control;
   });
@@ -598,7 +602,10 @@ export async function registerComplianceEnhancedRoutes(
       verificationNotes: z.string().optional(),
       effectivenessConfirmed: z.boolean(),
     }).parse(request.body);
-    const plan = await store.verifyRemediationPlan(id, request.currentUser.id, body);
+    const plan = await store.verifyRemediationPlan(id, request.currentUser.id, {
+      verificationNotes: body.verificationNotes,
+      effectivenessConfirmed: body.effectivenessConfirmed,
+    });
     if (!plan) return reply.code(404).send({ error: "plan_not_found" });
     return plan;
   });
@@ -721,7 +728,11 @@ export async function registerComplianceEnhancedRoutes(
       residualImpact: z.enum(["critical", "high", "medium", "low", "negligible"]),
       treatmentPlan: z.string().optional(),
     }).parse(request.body);
-    const risk = await store.assessComplianceRisk(id, body);
+    const risk = await store.assessComplianceRisk(id, {
+      residualLikelihood: body.residualLikelihood,
+      residualImpact: body.residualImpact,
+      treatmentPlan: body.treatmentPlan,
+    });
     if (!risk) return reply.code(404).send({ error: "risk_not_found" });
     return risk;
   });
@@ -734,7 +745,10 @@ export async function registerComplianceEnhancedRoutes(
       reviewNotes: z.string().optional(),
       nextReviewDate: z.string().datetime(),
     }).parse(request.body);
-    const risk = await store.reviewComplianceRisk(id, body);
+    const risk = await store.reviewComplianceRisk(id, {
+      reviewNotes: body.reviewNotes,
+      nextReviewDate: body.nextReviewDate,
+    });
     if (!risk) return reply.code(404).send({ error: "risk_not_found" });
     return risk;
   });

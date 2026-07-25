@@ -48,6 +48,11 @@ export class PostgresStore
   private readonly maintenance: MaintenanceRepository;
   private readonly privacy: PrivacyRepository;
 
+  // Public getter for direct database access (use sparingly)
+  get db() {
+    return this.pool;
+  }
+
   constructor(pool: Pool) {
     super(pool);
     this.users = new UserRepository(pool);
