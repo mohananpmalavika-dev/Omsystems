@@ -51,7 +51,7 @@ CREATE TABLE IF NOT EXISTS motion_events (
   duration_seconds integer NOT NULL,
   confidence numeric(3,2) NOT NULL CHECK (confidence >= 0 AND confidence <= 1),
   motion_area_percent numeric(5,2) CHECK (motion_area_percent >= 0 AND motion_area_percent <= 100),
-  zone_id uuid REFERENCES zones(id) ON DELETE SET NULL,
+  zone_id uuid, -- Future FK: REFERENCES zones(id) ON DELETE SET NULL
   zone_name text,
   region jsonb, -- Bounding box coordinates
   created_at timestamptz NOT NULL DEFAULT now()
@@ -78,7 +78,7 @@ CREATE TABLE IF NOT EXISTS detected_objects (
   confidence numeric(3,2) NOT NULL CHECK (confidence >= 0 AND confidence <= 1),
   bounding_box jsonb NOT NULL, -- {x, y, width, height}
   attributes jsonb, -- color, direction, etc.
-  zone_id uuid REFERENCES zones(id) ON DELETE SET NULL,
+  zone_id uuid, -- Future FK: REFERENCES zones(id) ON DELETE SET NULL
   alert_id uuid REFERENCES alerts(id) ON DELETE SET NULL,
   thumbnail_path text,
   created_at timestamptz NOT NULL DEFAULT now()
