@@ -204,14 +204,7 @@ export async function registerMaintenanceDashboardRoutes(
   // NOTE: Report generation moved to maintenance-reports.routes.ts to avoid duplication
 
   // Reports - List reports
-  app.get("/v1/maintenance/reports", async (request) => {
-    const query = request.query as { reportType?: string; limit?: number };
-    const reports = await store.listMaintenanceReports(request.currentUser.tenantId, { 
-      reportType: query.reportType ?? undefined,
-      limit: query.limit ?? undefined
-    });
-    return { data: reports };
-  });
+  // NOTE: Moved to maintenance-reports.routes.ts to avoid duplication
 
   // Reports - SLA Compliance
   app.get("/v1/maintenance/reports/sla-compliance", async (request) => {

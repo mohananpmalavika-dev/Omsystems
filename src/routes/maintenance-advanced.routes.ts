@@ -132,15 +132,7 @@ export async function registerMaintenanceAdvancedRoutes(
     */
   });
 
-  app.get("/v1/maintenance/reports", async (request, reply) => {
-    // TODO: Implement list reports once reportingEngine has getGeneratedReports method
-    return reply.send([]);
-    /*
-    const reportingEngine = getReportingEngine();
-    const reports = reportingEngine.getGeneratedReports();
-    return reply.send(reports);
-    */
-  });
+  // NOTE: GET /v1/maintenance/reports moved to maintenance-reports.routes.ts to avoid duplication
 
   // ============================================================================
   // Phase 6: Firmware Management Routes
