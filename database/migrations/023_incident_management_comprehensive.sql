@@ -190,9 +190,21 @@ CREATE TABLE IF NOT EXISTS incident_video_ranges (
   CONSTRAINT video_range_dates_check CHECK (from_at < to_at)
 );
 
-CREATE INDEX incident_video_ranges_incident_idx ON incident_video_ranges (incident_id);
-CREATE INDEX incident_video_ranges_camera_idx ON incident_video_ranges (camera_id, from_at, to_at);
-CREATE INDEX incident_video_ranges_legal_hold_idx ON incident_video_ranges (legal_hold_id) WHERE legal_hold_id IS NOT NULL;
+-- Add legal_hold_id column if it doesn't exist (for existing tables)
+DO $$ 
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns 
+    WHERE table_name = 'incident_video_ranges' 
+    AND column_name = 'legal_hold_id'
+  ) THEN
+    ALTER TABLE incident_video_ranges ADD COLUMN legal_hold_id uuid;
+  END IF;
+END $$;
+
+CREATE INDEX IF NOT EXISTS incident_video_ranges_incident_idx ON incident_video_ranges (incident_id);
+CREATE INDEX IF NOT EXISTS incident_video_ranges_camera_idx ON incident_video_ranges (camera_id, from_at, to_at);
+CREATE INDEX IF NOT EXISTS incident_video_ranges_legal_hold_idx ON incident_video_ranges (legal_hold_id) WHERE legal_hold_id IS NOT NULL;
 
 COMMENT ON TABLE incident_video_ranges IS 'Video time ranges preserved for incident investigation';
 
