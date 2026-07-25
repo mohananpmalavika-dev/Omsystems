@@ -184,7 +184,7 @@ CREATE TABLE IF NOT EXISTS incident_video_ranges (
   preserved_at timestamptz NOT NULL DEFAULT now(),
   preserved_by uuid NOT NULL REFERENCES users(id),
   legal_hold_applied boolean NOT NULL DEFAULT false,
-  legal_hold_id uuid REFERENCES recording_legal_holds(id),
+  legal_hold_id uuid, -- Future FK: REFERENCES recording_legal_holds(id)
   notes text CHECK (char_length(notes) <= 500),
   
   CONSTRAINT video_range_dates_check CHECK (from_at < to_at)
