@@ -44,11 +44,15 @@ CREATE TABLE face_watchlist_persons (
 CREATE INDEX face_watchlist_persons_watchlist_idx
   ON face_watchlist_persons (watchlist_id) WHERE archived_at IS NULL;
 
+-- Note: If pgvector extension is available, you can enable it with:
+-- CREATE EXTENSION IF NOT EXISTS vector;
+-- Then alter the table to use vector(512) type instead of bytea
+
 CREATE TABLE face_embeddings (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
   person_id uuid NOT NULL REFERENCES face_watchlist_persons(id) ON DELETE CASCADE,
-  embedding vector(512), -- Face embedding (512-dimensional or 128-dimensional)
+  embedding bytea, -- Face embedding stored as bytes (use vector(512) if pgvector is available)
   quality_score numeric(5,4) CHECK (quality_score BETWEEN 0 AND 1),
   source_image_reference text, -- S3/storage reference to original image
   face_landmarks jsonb, -- Facial landmark points
