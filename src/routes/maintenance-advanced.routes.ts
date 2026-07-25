@@ -77,16 +77,7 @@ export async function registerMaintenanceAdvancedRoutes(
   // Phase 5: Reporting Routes
   // ============================================================================
   // NOTE: Report generation moved to maintenance-reports.routes.ts to avoid duplication
-
-  app.get("/v1/maintenance/reports/:reportId", async (request, reply) => {
-    const { reportId } = request.params as { reportId: string };
-    const reportingEngine = getReportingEngine();
-    const report = reportingEngine.getReportById(reportId);
-    if (!report) {
-      return reply.status(404).send({ error: "Report not found" });
-    }
-    return reply.send(report);
-  });
+  // NOTE: GET /v1/maintenance/reports/:reportId moved to maintenance-reports.routes.ts to avoid duplication
 
   app.get("/v1/maintenance/reports/:reportId/export/pdf", async (
     request,
