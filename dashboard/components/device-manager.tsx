@@ -689,7 +689,7 @@ export function DeviceManager() {
               {scanning ? "Scanning…" : lastScanAt ? "Last scan ready" : "Awaiting scan"}
             </span>
             {lastScanAt ? <span className="scan-time">{new Date(lastScanAt).toLocaleString()}</span> : null}
-            {discoveryQueueItems.length > 0 ? (
+            {pendingReviewCount > 0 ? (
               <button type="button" className="primary-button" onClick={() => void approveAllDiscovered()} disabled={saving || scanning}>
                 {saving ? "Provisioning…" : `Approve all & start (${pendingReviewCount})`}
               </button>
