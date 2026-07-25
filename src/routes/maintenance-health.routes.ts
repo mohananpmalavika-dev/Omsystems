@@ -135,7 +135,7 @@ export async function registerMaintenanceHealthRoutes(
         return {
           branchId: branch.id,
           branchName: branch.name,
-          status: 'healthy' as const,
+          status: 'healthy' as 'healthy' | 'warning' | 'critical',
           latencyMs: 25,
           packetLoss: 0.2,
           jitterMs: 5,

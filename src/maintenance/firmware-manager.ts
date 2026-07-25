@@ -190,8 +190,8 @@ export class FirmwareManager {
     if (maintenanceAsset) {
       return {
         assetType: maintenanceAsset.assetType as FirmwareVersion['assetCategory'],
-        deviceName: maintenanceAsset.name,
-        vendor: maintenanceAsset.vendor,
+        deviceName: maintenanceAsset.assetType || assetId,
+        vendor: maintenanceAsset.vendorId || undefined,
         model: maintenanceAsset.model,
       };
     }

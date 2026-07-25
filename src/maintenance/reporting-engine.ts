@@ -615,7 +615,7 @@ export class ReportingEngine {
   /**
    * Generate PDF report (with actual PDF generation)
    */
-  private async generatePDF(report: GeneratedReport): Promise<void> {
+  private async generatePDF(report: GeneratedReport): Promise<Buffer> {
     try {
       const { PDFGenerator } = await import('./pdf-generator.js');
       const pdfGenerator = new PDFGenerator(this.logger);
@@ -634,6 +634,7 @@ export class ReportingEngine {
         reportId: report.reportId,
         size: buffer.length,
       });
+      return buffer;
     } catch (error) {
       this.logger.error('Failed to generate PDF:', error);
       throw error;
@@ -681,6 +682,38 @@ export class ReportingEngine {
    */
   listReports(): GeneratedReport[] {
     return Array.from(this.reports.values());
+  }
+
+  /**
+   * Get generated reports
+   */
+  getGeneratedReports(): GeneratedReport[] {
+    return this.listReports();
+  }
+
+  /**
+   * Get a report by its id
+   */
+  getReportById(reportId: string): GeneratedReport | undefined {
+    return this.getReport(reportId);
+  }
+
+  /**
+   * Export report to PDF
+   */
+  async exportReportToPDF(report: GeneratedReport): Promise<Buffer> {
+    if (report.config.format !== 'pdf') {
+      return this.generatePDF(report);
+    }
+
+    return this.generatePDF(report);
+  }
+
+  /**
+   * Export report to JSON
+   */
+  async exportReportToJSON(report: GeneratedReport): Promise<string> {
+    return JSON.stringify(report, null, 2);
   }
 
   // ============================================================================

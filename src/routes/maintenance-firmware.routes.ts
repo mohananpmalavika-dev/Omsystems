@@ -280,13 +280,32 @@ export async function registerFirmwareManagementRoutes(
       }).optional(),
     }).parse(request.body);
 
+    const defaultSafetyContext = {
+      modelConfirmed: false,
+      exactVersionConfirmed: false,
+      powerConfirmed: false,
+      upsConfirmed: false,
+      networkStable: false,
+      backupCompleted: false,
+      redundancyVerified: false,
+      activeIncidentsPresent: false,
+      alertsSuspended: false,
+      maintenanceWindowApproved: false,
+      rollbackPlanned: false,
+      packageVerified: false,
+      compatibilityVerified: false,
+    };
+
     const plan = await firmwareManager.createUpgradePlan({
       tenantId: request.currentUser.tenantId,
       firmwareVersionId: body.firmwareVersionId,
       targetAssets: body.targetAssets,
       strategy: body.strategy,
       requestedBy: request.currentUser.id,
-      safetyContext: body.safetyContext,
+      safetyContext: {
+        ...defaultSafetyContext,
+        ...body.safetyContext,
+      },
     });
 
     return reply.code(201).send(plan);

@@ -29,13 +29,14 @@ export async function registerMaintenanceExportRoutes(
 
     try {
       // Fetch alerts from database
-      const alerts = await store.getAlerts({
-        tenantId,
-        startDate: query.startDate ? new Date(query.startDate) : undefined,
-        endDate: query.endDate ? new Date(query.endDate) : undefined,
-        severity: query.severity,
-        category: query.category,
-        status: query.status,
+      const alerts = await store.listAnalyticsAlerts(tenantId, {
+        branchId: undefined,
+        cameraId: undefined,
+        status: query.status as any,
+        severity: query.severity as any,
+        from: query.startDate,
+        to: query.endDate,
+        limit: 1000,
       });
 
       // Format data for CSV
@@ -73,7 +74,7 @@ export async function registerMaintenanceExportRoutes(
 
       return csv;
     } catch (error) {
-      app.log.error('Failed to export alerts:', error);
+      app.log.error({ error }, 'Failed to export alerts:');
       return reply.code(500).send({ error: 'export_failed' });
     }
   });
@@ -95,13 +96,21 @@ export async function registerMaintenanceExportRoutes(
 
     try {
       // Fetch work orders
-      const workOrders = await store.getWorkOrders({
-        tenantId,
-        startDate: query.startDate ? new Date(query.startDate) : undefined,
-        endDate: query.endDate ? new Date(query.endDate) : undefined,
-        status: query.status,
-        severity: query.severity,
-        branchNodeId: query.branchNodeId,
+      const workOrders = await store.listWorkOrders(tenantId, query.status);
+      const filteredWorkOrders = workOrders.filter((wo: any) => {
+        if (query.severity && wo.severity !== query.severity) {
+          return false;
+        }
+        if (query.branchNodeId && wo.branchNodeId !== query.branchNodeId) {
+          return false;
+        }
+        if (query.startDate && new Date(wo.createdAt) < new Date(query.startDate)) {
+          return false;
+        }
+        if (query.endDate && new Date(wo.createdAt) > new Date(query.endDate)) {
+          return false;
+        }
+        return true;
       });
 
       // Format data for CSV
@@ -131,12 +140,12 @@ export async function registerMaintenanceExportRoutes(
         action: 'maintenance.work_orders_exported',
         resourceNodeId: query.branchNodeId || null,
         outcome: 'success',
-        details: { count: workOrders.length },
+        details: { count: filteredWorkOrders.length },
       });
 
       return csv;
     } catch (error) {
-      app.log.error('Failed to export work orders:', error);
+      app.log.error({ error }, 'Failed to export work orders:');
       return reply.code(500).send({ error: 'export_failed' });
     }
   });
