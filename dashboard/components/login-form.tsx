@@ -131,7 +131,7 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
           <div className="login-header">
             <div className="login-brand">
               <ShieldCheck size={32} className="brand-icon" />
-              <h1>Sentinel GRID</h1>
+              <h1>Sentinel Grid</h1>
             </div>
             <p className="login-subtitle">Change Your Password</p>
           </div>
@@ -171,6 +171,7 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
                   className="password-toggle-btn"
                   onClick={() => setShowPassword(!showPassword)}
                   tabIndex={-1}
+                  aria-label={showPassword ? "Hide password" : "Show password"}
                 >
                   {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                 </button>
@@ -202,7 +203,7 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
         </div>
 
         <footer className="login-footer">
-          <p>&copy; 2024 OM Systems. All rights reserved.</p>
+          <p>&copy; 2026 OM Systems. All rights reserved.</p>
         </footer>
       </div>
     );
@@ -214,7 +215,7 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
         <div className="login-header">
           <div className="login-brand">
             <ShieldCheck size={32} className="brand-icon" />
-            <h1>Sentinel GRID</h1>
+            <h1>Sentinel Grid</h1>
           </div>
           <p className="login-subtitle">
             Sign in to access your security dashboard
@@ -264,6 +265,7 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
                 className="password-toggle-btn"
                 onClick={() => setShowPassword(!showPassword)}
                 tabIndex={-1}
+                aria-label={showPassword ? "Hide password" : "Show password"}
               >
                 {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
               </button>
@@ -316,10 +318,10 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
       </div>
 
       <footer className="login-footer">
-        <p>&copy; 2024 OM Systems. All rights reserved.</p>
+        <p>&copy; 2026 OM Systems. All rights reserved.</p>
         <div className="footer-links">
           <a href="/privacy">Privacy Policy</a>
-          <span>•</span>
+          <span>&bull;</span>
           <a href="/terms">Terms of Service</a>
         </div>
       </footer>

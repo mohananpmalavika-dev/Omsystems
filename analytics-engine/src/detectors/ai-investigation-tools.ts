@@ -47,7 +47,7 @@
  * - Enables non-expert investigators
  */
 
-import { BaseDetector, DetectionResult } from './base-detector';
+import { BaseDetector, type DetectionFrame, DetectionResult } from './base-detector';
 
 /**
  * Camera topology (defines camera relationships and connections)
@@ -267,9 +267,27 @@ export class AIInvestigationTools extends BaseDetector {
   };
   
   constructor() {
-    super('ai-investigation-tools');
+    super('ai-investigation-tools', '1.0.0');
   }
   
+  async initialize(): Promise<void> {
+    console.log('[AIInvestigationTools] initialized');
+  }
+
+  async cleanup(): Promise<void> {
+    this.tracks.clear();
+    this.topology.cameras.clear();
+    this.topology.connections.clear();
+  }
+
+  getHealth() {
+    return {
+      status: 'healthy' as const,
+      details: `AI Investigation Tools configured with ${this.topology.cameras.size} cameras`,
+      activeTracks: Array.from(this.tracks.values()).filter((t) => t.active).length
+    };
+  }
+
   /**
    * Configure camera topology
    */
@@ -721,7 +739,61 @@ export class AIInvestigationTools extends BaseDetector {
     this.metrics.investigations++;
     return result;
   }
-  
+
+  /**
+   * Generate an evidence package for investigation
+   */
+  async generateEvidencePackage(
+    incidentId: string,
+    subjectIds: string[],
+    timeRange: { start: Date; end: Date }
+  ): Promise<{
+    snapshots: Buffer[];
+    videoClips: string[];
+    timeline: Array<{ subjectId: string; timestamp: Date; cameraId: string; event: string; confidence: number }>;
+    associatedSubjects: string[];
+    exportPath: string;
+  }> {
+    const snapshots: Buffer[] = [];
+    const videoClips: string[] = [];
+    const timeline: Array<{ subjectId: string; timestamp: Date; cameraId: string; event: string; confidence: number }> = [];
+    const associatedSubjects: string[] = [];
+
+    for (const subjectId of subjectIds) {
+      try {
+        const investigationResult = await this.investigateLastSeen(subjectId);
+        const journey = investigationResult.journeys[0];
+
+        for (const appearance of journey.appearances) {
+          if (appearance.timestamp >= timeRange.start && appearance.timestamp <= timeRange.end) {
+            if (appearance.snapshot) snapshots.push(appearance.snapshot);
+            if (appearance.videoClipPath) videoClips.push(appearance.videoClipPath);
+            timeline.push({
+              subjectId,
+              timestamp: appearance.timestamp,
+              cameraId: appearance.cameraId,
+              event: 'appearance',
+              confidence: appearance.confidence
+            });
+          }
+        }
+
+        const associated = await this.findAssociatedSubjects(subjectId, 60);
+        associatedSubjects.push(...associated.journeys.slice(1).map(j => j.id));
+      } catch (error) {
+        console.warn(`[AIInvestigationTools] Evidence package missing for subject ${subjectId}:`, error);
+      }
+    }
+
+    return {
+      snapshots,
+      videoClips,
+      timeline,
+      associatedSubjects: Array.from(new Set(associatedSubjects)),
+      exportPath: `evidence_${incidentId}_${Date.now()}.json`
+    };
+  }
+
   /**
    * Get all journeys
    */

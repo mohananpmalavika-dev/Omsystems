@@ -2,7 +2,6 @@
 
 import React, { useEffect, useState } from "react";
 import Link from "next/link";
-import { AppLayout } from "@/components/app-layout";
 import { deviceManagementApi } from "@/lib/api-client";
 
 export default function DeviceManagementPage() {
@@ -105,8 +104,7 @@ export default function DeviceManagementPage() {
   };
 
   return (
-    <AppLayout>
-      <div style={{ padding: 20, maxWidth: 1200, margin: "0 auto" }}>
+    <div className="content" style={{ padding: 20, maxWidth: 1200, margin: "0 auto" }}>
         <header style={{ marginBottom: 24 }}>
           <h1>Device Management</h1>
           <p style={{ color: "#555" }}>
@@ -322,7 +320,6 @@ export default function DeviceManagementPage() {
             </table>
           )}
         </section>
-      </div>
-    </AppLayout>
+    </div>
   );
 }

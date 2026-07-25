@@ -48,7 +48,7 @@
  * - Accessibility for executives and managers
  */
 
-import { BaseDetector, DetectionResult } from './base-detector';
+import { BaseDetector, type DetectionFrame, DetectionResult } from './base-detector';
 
 /**
  * Intent types
@@ -192,9 +192,26 @@ export class AIAssistant extends BaseDetector {
   };
   
   constructor() {
-    super('ai-assistant');
+    super('ai-assistant', '1.0.0');
   }
   
+  async initialize(): Promise<void> {
+    console.log('[AIAssistant] initialized');
+  }
+
+  async cleanup(): Promise<void> {
+    this.contexts.clear();
+    this.modules = {};
+  }
+
+  getHealth() {
+    return {
+      status: 'healthy' as const,
+      details: `AIAssistant with ${this.contexts.size} active sessions`,
+      activeSessions: this.contexts.size
+    };
+  }
+
   /**
    * Set module references for integration
    */

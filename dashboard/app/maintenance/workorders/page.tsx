@@ -2,6 +2,8 @@
 
 import React, { useEffect, useState } from "react";
 import Link from "next/link";
+import { ClipboardCheck } from "lucide-react";
+import { ModulePage, ModuleStatus } from "@/components/module-page";
 import { maintenanceApi } from "@/lib/api-client";
 
 export default function WorkOrdersListPage() {
@@ -15,39 +17,49 @@ export default function WorkOrdersListPage() {
   }, []);
 
   return (
-    <div style={{ padding: 16 }}>
-      <h1>Work Orders</h1>
-      <div style={{ marginBottom: 12 }}>
-        <Link href="/maintenance/workorders/new">Create work order</Link>
-      </div>
-      {loading && <p>Loading…</p>}
-      {error && <p style={{ color: 'red' }}>{error}</p>}
-      <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+    <ModulePage
+      eyebrow="Field service"
+      title="Work orders"
+      description="Coordinate corrective and preventive service work across branches, devices, and field teams."
+      icon={ClipboardCheck}
+      actionHref="/maintenance/workorders/new"
+      actionLabel="Create work order"
+      count={items.length}
+      countLabel="work orders"
+      loading={loading}
+      error={error}
+      empty={items.length === 0}
+      emptyTitle="No work orders"
+      emptyDescription="Create a work order when an asset needs inspection, repair, replacement, or planned service."
+    >
+      <div className="module-table-wrap">
+      <table>
         <thead>
           <tr>
-            <th style={{ textAlign: 'left', padding: 8 }}>ID</th>
-            <th style={{ textAlign: 'left', padding: 8 }}>Title</th>
-            <th style={{ textAlign: 'left', padding: 8 }}>Asset</th>
-            <th style={{ textAlign: 'left', padding: 8 }}>Priority</th>
-            <th style={{ textAlign: 'left', padding: 8 }}>Status</th>
-            <th style={{ textAlign: 'left', padding: 8 }}>Actions</th>
+            <th>Order ID</th>
+            <th>Task</th>
+            <th>Asset</th>
+            <th>Priority</th>
+            <th>Status</th>
+            <th><span className="sr-only">Actions</span></th>
           </tr>
         </thead>
         <tbody>
           {items.map((it) => (
-            <tr key={it.id} style={{ borderTop: '1px solid #eee' }}>
-              <td style={{ padding: 8 }}>{it.id}</td>
-              <td style={{ padding: 8 }}>{it.title}</td>
-              <td style={{ padding: 8 }}>{it.assetId ?? '-'}</td>
-              <td style={{ padding: 8 }}>{it.priority ?? '-'}</td>
-              <td style={{ padding: 8 }}>{it.status ?? '-'}</td>
-              <td style={{ padding: 8 }}>
-                <Link href={`/maintenance/workorders/${it.id}`}>View / Edit</Link>
+            <tr key={it.id}>
+              <td><span className="module-id">{it.id}</span></td>
+              <td><strong className="module-row-title">{it.title}</strong></td>
+              <td>{it.assetId ?? 'Not linked'}</td>
+              <td><span className={`module-priority ${(it.priority || '').toLowerCase()}`}>{it.priority ?? 'Normal'}</span></td>
+              <td><ModuleStatus value={it.status} /></td>
+              <td className="module-row-action">
+                <Link href={`/maintenance/workorders/${it.id}`}>View details</Link>
               </td>
             </tr>
           ))}
         </tbody>
       </table>
-    </div>
+      </div>
+    </ModulePage>
   );
 }

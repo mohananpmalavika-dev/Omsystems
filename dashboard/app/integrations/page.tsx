@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { AppLayout } from '@/components/app-layout';
 import {
   Box,
   Card,
@@ -164,7 +165,8 @@ export default function IntegrationsPage() {
   };
 
   return (
-    <Box sx={{ p: 3 }}>
+    <AppLayout>
+    <Box className="integration-page" sx={{ p: 3 }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
         <Typography variant="h4" component="h1">
           Integration & Interoperability
@@ -336,5 +338,6 @@ export default function IntegrationsPage() {
         </CardContent>
       </Card>
     </Box>
+    </AppLayout>
   );
 }

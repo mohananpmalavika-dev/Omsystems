@@ -42,7 +42,7 @@
  * - Enables non-technical staff to search video effectively
  */
 
-import { BaseDetector, DetectionResult } from './base-detector';
+import { BaseDetector, type DetectionFrame, DetectionResult } from './base-detector';
 import * as tf from '@tensorflow/tfjs-node';
 import * as use from '@tensorflow-models/universal-sentence-encoder';
 
@@ -419,7 +419,7 @@ export class AISearchEngine extends BaseDetector {
   };
   
   constructor() {
-    super('ai-search-engine');
+    super('ai-search-engine', '1.0.0');
     this.vectorDB = new VectorDatabase();
   }
   
@@ -826,12 +826,25 @@ export class AISearchEngine extends BaseDetector {
   // BaseDetector Implementation
   // ===========================
   
-  async detect(frame: Buffer, metadata: any): Promise<DetectionResult[]> {
+  async detect(frame: DetectionFrame): Promise<DetectionResult[]> {
     // AI Search Engine is passive - it doesn't actively detect
     // It indexes results from other detectors
     return [];
   }
-  
+
+  async cleanup(): Promise<void> {
+    this.vectorDB = new VectorDatabase();
+    this.initialized = false;
+  }
+
+  getHealth() {
+    return {
+      status: this.initialized ? ('healthy' as const) : ('degraded' as const),
+      details: this.initialized ? 'AI Search Engine ready' : 'AI Search Engine not initialized',
+      indexedFrames: this.vectorDB.getSize()
+    };
+  }
+
   async processStream(streamUrl: string): Promise<void> {
     // Not applicable for search engine
   }

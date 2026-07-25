@@ -2,6 +2,8 @@
 
 import React, { useEffect, useState } from "react";
 import Link from "next/link";
+import { FileClock } from "lucide-react";
+import { ModulePage, ModuleStatus } from "@/components/module-page";
 import { maintenanceApi } from "@/lib/api-client";
 
 export default function AmcContractsListPage() {
@@ -19,42 +21,51 @@ export default function AmcContractsListPage() {
   }, []);
 
   return (
-    <div style={{ padding: 16 }}>
-      <h1>AMC contracts</h1>
-      <div style={{ marginBottom: 12, display: "flex", gap: 12, flexWrap: "wrap" }}>
-        <Link href="/maintenance/amc/new">Create AMC contract</Link>
-        <Link href="/maintenance">Back to maintenance</Link>
-      </div>
-      {loading && <p>Loading…</p>}
-      {error && <p style={{ color: "red" }}>{error}</p>}
-      <table style={{ width: "100%", borderCollapse: "collapse" }}>
+    <ModulePage
+      eyebrow="Coverage & contracts"
+      title="AMC contracts"
+      description="Monitor annual maintenance coverage, renewal windows, provider commitments, and service cost."
+      icon={FileClock}
+      actionHref="/maintenance/amc/new"
+      actionLabel="Create contract"
+      count={contracts.length}
+      countLabel="contracts"
+      loading={loading}
+      error={error}
+      empty={contracts.length === 0}
+      emptyTitle="No active contracts"
+      emptyDescription="Add a maintenance agreement to track coverage periods, vendors, and renewal obligations."
+    >
+      <div className="module-table-wrap">
+      <table>
         <thead>
           <tr>
-            <th style={{ textAlign: "left", padding: 8 }}>Contract</th>
-            <th style={{ textAlign: "left", padding: 8 }}>Vendor</th>
-            <th style={{ textAlign: "left", padding: 8 }}>Status</th>
-            <th style={{ textAlign: "left", padding: 8 }}>Period</th>
-            <th style={{ textAlign: "left", padding: 8 }}>Cost</th>
-            <th style={{ textAlign: "left", padding: 8 }}>Actions</th>
+            <th>Contract</th>
+            <th>Vendor</th>
+            <th>Status</th>
+            <th>Coverage period</th>
+            <th>Contract value</th>
+            <th><span className="sr-only">Actions</span></th>
           </tr>
         </thead>
         <tbody>
           {contracts.map((contract) => (
-            <tr key={contract.id} style={{ borderTop: "1px solid #eee" }}>
-              <td style={{ padding: 8 }}>{contract.contractNumber}</td>
-              <td style={{ padding: 8 }}>{contract.vendorId}</td>
-              <td style={{ padding: 8 }}>{contract.status}</td>
-              <td style={{ padding: 8 }}>
+            <tr key={contract.id}>
+              <td><strong className="module-row-title">{contract.contractNumber}</strong></td>
+              <td><span className="module-id">{contract.vendorId}</span></td>
+              <td><ModuleStatus value={contract.status} /></td>
+              <td>
                 {contract.startDate ?? "-"} {contract.endDate ? `to ${contract.endDate}` : ""}
               </td>
-              <td style={{ padding: 8 }}>{contract.cost ?? "-"}</td>
-              <td style={{ padding: 8 }}>
-                <Link href={`/maintenance/amc/${contract.id}`}>View / Edit</Link>
+              <td>{contract.cost ?? "Not specified"}</td>
+              <td className="module-row-action">
+                <Link href={`/maintenance/amc/${contract.id}`}>View details</Link>
               </td>
             </tr>
           ))}
         </tbody>
       </table>
-    </div>
+      </div>
+    </ModulePage>
   );
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import { AppLayout } from "@/components/app-layout";
 import { SyncedPlaybackView } from "@/components/synced-playback-view";
 import { NotificationsProvider } from "@/components/notifications/NotificationsProvider";
 
@@ -11,16 +12,18 @@ export default function Page() {
   const from = new Date(to.getTime() - 2 * 60 * 1000); // last 2 minutes
 
   return (
-    <NotificationsProvider>
-      <div style={{ padding: 20, height: "100vh" }}>
-        <SyncedPlaybackView
-          streams={[]}
-          cameraIds={cameraIds}
-          fromTime={from.toISOString()}
-          toTime={to.toISOString()}
-          autoLoad={true}
-        />
-      </div>
-    </NotificationsProvider>
+    <AppLayout>
+      <NotificationsProvider>
+        <div className="content synced-playback-page">
+          <SyncedPlaybackView
+            streams={[]}
+            cameraIds={cameraIds}
+            fromTime={from.toISOString()}
+            toTime={to.toISOString()}
+            autoLoad={true}
+          />
+        </div>
+      </NotificationsProvider>
+    </AppLayout>
   );
 }

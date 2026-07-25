@@ -2,6 +2,8 @@
 
 import React, { useEffect, useState } from "react";
 import Link from "next/link";
+import { Handshake } from "lucide-react";
+import { ModulePage, ModuleStatus } from "@/components/module-page";
 import { maintenanceApi } from "@/lib/api-client";
 
 export default function VendorsListPage() {
@@ -15,39 +17,49 @@ export default function VendorsListPage() {
   }, []);
 
   return (
-    <div style={{ padding: 16 }}>
-      <h1>Vendors</h1>
-      <div style={{ marginBottom: 12 }}>
-        <Link href="/maintenance/vendors/new">Add vendor</Link>
-      </div>
-      {loading && <p>Loading…</p>}
-      {error && <p style={{ color: 'red' }}>{error}</p>}
-      <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+    <ModulePage
+      eyebrow="Service network"
+      title="Vendors & partners"
+      description="Manage approved service providers, escalation contacts, and maintenance partners from one directory."
+      icon={Handshake}
+      actionHref="/maintenance/vendors/new"
+      actionLabel="Add vendor"
+      count={vendors.length}
+      countLabel="vendors"
+      loading={loading}
+      error={error}
+      empty={vendors.length === 0}
+      emptyTitle="No vendors onboarded"
+      emptyDescription="Add an approved partner to coordinate field support and equipment servicing."
+    >
+      <div className="module-table-wrap">
+      <table>
         <thead>
           <tr>
-            <th style={{ textAlign: 'left', padding: 8 }}>ID</th>
-            <th style={{ textAlign: 'left', padding: 8 }}>Name</th>
-            <th style={{ textAlign: 'left', padding: 8 }}>Contact</th>
-            <th style={{ textAlign: 'left', padding: 8 }}>Phone</th>
-            <th style={{ textAlign: 'left', padding: 8 }}>Active</th>
-            <th style={{ textAlign: 'left', padding: 8 }}>Actions</th>
+            <th>Vendor ID</th>
+            <th>Partner</th>
+            <th>Primary contact</th>
+            <th>Phone</th>
+            <th>Status</th>
+            <th><span className="sr-only">Actions</span></th>
           </tr>
         </thead>
         <tbody>
           {vendors.map((v) => (
-            <tr key={v.id} style={{ borderTop: '1px solid #eee' }}>
-              <td style={{ padding: 8 }}>{v.id}</td>
-              <td style={{ padding: 8 }}>{v.name}</td>
-              <td style={{ padding: 8 }}>{v.contactName ?? '-'}</td>
-              <td style={{ padding: 8 }}>{v.phone ?? '-'}</td>
-              <td style={{ padding: 8 }}>{v.active ? 'yes' : 'no'}</td>
-              <td style={{ padding: 8 }}>
-                <Link href={`/maintenance/vendors/${v.id}`}>View / Edit</Link>
+            <tr key={v.id}>
+              <td><span className="module-id">{v.id}</span></td>
+              <td><strong className="module-row-title">{v.name}</strong></td>
+              <td>{v.contactName ?? 'Not assigned'}</td>
+              <td>{v.phone ?? 'Not provided'}</td>
+              <td><ModuleStatus value={v.active ? 'Active' : 'Inactive'} /></td>
+              <td className="module-row-action">
+                <Link href={`/maintenance/vendors/${v.id}`}>View details</Link>
               </td>
             </tr>
           ))}
         </tbody>
       </table>
-    </div>
+      </div>
+    </ModulePage>
   );
 }

@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { AppLayout } from "@/components/app-layout";
 import { AlertCard, AlertFilters } from "@/components/maintenance/alert-components";
 
 export default function AlertsPage() {
@@ -90,17 +89,14 @@ export default function AlertsPage() {
 
   if (loading) {
     return (
-      <AppLayout>
-        <div className="content" style={{ padding: 20, textAlign: "center" }}>
-          <p>Loading alerts...</p>
-        </div>
-      </AppLayout>
+      <div className="content" style={{ padding: 20, textAlign: "center" }}>
+        <p>Loading alerts...</p>
+      </div>
     );
   }
 
   return (
-    <AppLayout>
-      <div className="content">
+    <div className="content">
         <div style={{ padding: 20, maxWidth: 1400, margin: "0 auto" }}>
           {/* Header */}
           <header style={{ marginBottom: 24 }}>
@@ -228,7 +224,6 @@ export default function AlertsPage() {
             )}
           </section>
         </div>
-      </div>
-    </AppLayout>
+    </div>
   );
 }

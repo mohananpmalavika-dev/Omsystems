@@ -4,6 +4,7 @@
  */
 
 import type { FastifyInstance } from "fastify";
+import { Buffer } from "node:buffer";
 import { z } from "zod";
 import type { AnalyticsPipeline } from "../analytics-pipeline.js";
 
@@ -167,21 +168,30 @@ export async function registerAdvancedAnalyticsRoutes(
     }).parse(request.query);
 
     const faceAnalytics = pipeline.getFaceAnalytics();
-    const matches = faceAnalytics.getRecognitionMatches(
-      query.category,
-      query.since ? new Date(query.since) : undefined,
-      query.minConfidence
-    );
+    const persons = query.category
+      ? faceAnalytics.getPersonsByCategory(query.category)
+      : [
+          ...faceAnalytics.getPersonsByCategory('vip'),
+          ...faceAnalytics.getPersonsByCategory('employee'),
+          ...faceAnalytics.getPersonsByCategory('blacklist'),
+          ...faceAnalytics.getPersonsByCategory('unknown')
+        ];
+
+    const filtered = query.since
+      ? persons.filter(p => p.addedAt >= new Date(query.since))
+      : persons;
 
     return {
-      count: matches.length,
-      matches: matches.map(m => ({
-        personId: m.personId,
-        category: m.category,
-        confidence: m.confidence,
-        timestamp: m.timestamp,
-        cameraId: m.cameraId,
-        attributes: m.attributes
+      count: filtered.length,
+      persons: filtered.map(p => ({
+        personId: p.personId,
+        name: p.name,
+        category: p.category,
+        department: p.department,
+        accessLevel: p.accessLevel,
+        photoUrl: p.photoUrl,
+        metadata: p.metadata,
+        addedAt: p.addedAt
       }))
     };
   });
@@ -199,7 +209,13 @@ export async function registerAdvancedAnalyticsRoutes(
     }).parse(request.body);
 
     const faceAnalytics = pipeline.getFaceAnalytics();
-    faceAnalytics.addToWatchlist(body);
+    faceAnalytics.addPerson({
+      personId: body.personId,
+      name: body.name,
+      category: body.category,
+      embedding: body.faceEmbedding,
+      metadata: body.metadata
+    });
 
     return { success: true, personId: body.personId };
   });
@@ -209,13 +225,12 @@ export async function registerAdvancedAnalyticsRoutes(
    */
   app.get("/v1/analytics/face/demographics", async (request, reply) => {
     const faceAnalytics = pipeline.getFaceAnalytics();
-    const demographics = faceAnalytics.getDemographics();
+    const stats = faceAnalytics.getDatabaseStats();
 
     return {
-      ageGroups: demographics.ageGroups,
-      genderDistribution: demographics.genderDistribution,
-      emotionDistribution: demographics.emotionDistribution,
-      totalFaces: demographics.totalFaces
+      totalFaces: stats.total,
+      byCategory: stats.byCategory,
+      lastUpdated: stats.lastUpdated
     };
   });
 
@@ -228,18 +243,14 @@ export async function registerAdvancedAnalyticsRoutes(
    */
   app.get("/v1/analytics/safety/ppe-compliance", async (request, reply) => {
     const safetyAnalytics = pipeline.getSafetyAnalytics();
-    const compliance = safetyAnalytics.getPPECompliance();
+    const stats = safetyAnalytics.getComplianceStats();
 
     return {
-      overallCompliance: compliance.overallCompliance,
-      totalWorkers: compliance.totalWorkers,
-      compliantWorkers: compliance.compliantWorkers,
-      violations: compliance.violations.map(v => ({
-        workerId: v.workerId,
-        missingItems: v.missingItems,
-        timestamp: v.timestamp,
-        location: v.location
-      }))
+      totalChecks: stats.totalChecks,
+      compliant: stats.compliant,
+      violations: stats.violations,
+      complianceRate: stats.complianceRate,
+      bySeverity: stats.bySeverity
     };
   });
 
@@ -248,24 +259,25 @@ export async function registerAdvancedAnalyticsRoutes(
    */
   app.get("/v1/analytics/safety/fire-smoke-alerts", async (request, reply) => {
     const query = z.object({
-      severity: z.enum(['low', 'medium', 'high', 'critical']).optional(),
-      active: z.boolean().default(true)
+      severity: z.enum(['low', 'medium', 'high', 'critical']).optional()
     }).parse(request.query);
 
     const safetyAnalytics = pipeline.getSafetyAnalytics();
-    const alerts = safetyAnalytics.getFireSmokeAlerts(query.severity, query.active);
+    const alerts = safetyAnalytics.getActiveHazards()
+      .filter(h => ['fire', 'smoke'].includes(h.hazardType))
+      .filter(h => !query.severity || h.severity === query.severity);
 
     return {
       count: alerts.length,
       alerts: alerts.map(a => ({
-        id: a.id,
-        type: a.type,
+        id: a.hazardId,
+        type: a.hazardType,
         severity: a.severity,
         confidence: a.confidence,
-        timestamp: a.timestamp,
+        timestamp: a.firstDetected,
         location: a.location,
         spreading: a.spreading,
-        affectedArea: a.affectedArea
+        affectedArea: a.location
       }))
     };
   });
@@ -275,16 +287,16 @@ export async function registerAdvancedAnalyticsRoutes(
    */
   app.get("/v1/analytics/safety/hazards", async (request, reply) => {
     const safetyAnalytics = pipeline.getSafetyAnalytics();
-    const hazards = safetyAnalytics.getHazards();
+    const hazards = safetyAnalytics.getActiveHazards();
 
     return {
       count: hazards.length,
       hazards: hazards.map(h => ({
-        type: h.type,
+        type: h.hazardType,
         severity: h.severity,
-        timestamp: h.timestamp,
+        timestamp: h.firstDetected,
         location: h.location,
-        description: h.description
+        description: h.metadata?.description ?? ''
       }))
     };
   });
@@ -298,7 +310,7 @@ export async function registerAdvancedAnalyticsRoutes(
    */
   app.get("/v1/analytics/banking/teller-status", async (request, reply) => {
     const bankingAnalytics = pipeline.getBankingAnalytics();
-    const status = bankingAnalytics.getTellerStatus();
+    const status = bankingAnalytics.getTellerStations();
 
     return {
       stations: status.map(s => ({
@@ -317,17 +329,15 @@ export async function registerAdvancedAnalyticsRoutes(
    */
   app.get("/v1/analytics/banking/vault-security", async (request, reply) => {
     const bankingAnalytics = pipeline.getBankingAnalytics();
-    const status = bankingAnalytics.getVaultSecurity();
+    const status = bankingAnalytics.getVaults();
 
     return {
-      doorStatus: status.doorStatus,
-      dualControlCompliant: status.dualControlCompliant,
-      authorizedPersonsPresent: status.authorizedPersonsPresent,
-      violations: status.violations.map(v => ({
-        type: v.type,
-        timestamp: v.timestamp,
-        severity: v.severity,
-        description: v.description
+      vaults: status.map(v => ({
+        vaultId: v.vaultId,
+        doorStatus: v.doorStatus,
+        lastChecked: v.lastChecked,
+        authorizedPersonsPresent: v.authorizedPersonsPresent,
+        violations: v.violations
       }))
     };
   });
@@ -337,7 +347,7 @@ export async function registerAdvancedAnalyticsRoutes(
    */
   app.get("/v1/analytics/banking/atm-monitoring", async (request, reply) => {
     const bankingAnalytics = pipeline.getBankingAnalytics();
-    const status = bankingAnalytics.getATMMonitoring();
+    const status = bankingAnalytics.getATMs();
 
     return {
       atms: status.map(a => ({
@@ -355,16 +365,22 @@ export async function registerAdvancedAnalyticsRoutes(
    * Get RBI compliance report
    */
   app.get("/v1/analytics/banking/rbi-compliance", async (request, reply) => {
+    const query = z.object({
+      since: z.string().optional(),
+      until: z.string().optional()
+    }).parse(request.query);
+
     const bankingAnalytics = pipeline.getBankingAnalytics();
-    const report = bankingAnalytics.getRBIComplianceReport();
+    const report = bankingAnalytics.generateComplianceReport({
+      start: query.since ? new Date(query.since) : new Date(Date.now() - 24 * 60 * 60 * 1000),
+      end: query.until ? new Date(query.until) : new Date()
+    });
 
     return {
-      overallCompliance: report.overallCompliance,
-      dualControlCompliance: report.dualControlCompliance,
-      vaultSecurityCompliance: report.vaultSecurityCompliance,
-      atmSecurityCompliance: report.atmSecurityCompliance,
-      violations: report.violations,
-      recommendations: report.recommendations
+      period: report.period,
+      tellerCompliance: report.tellerCompliance,
+      vaultSecurity: report.vaultSecurity,
+      atmOperations: report.atmOperations
     };
   });
 
@@ -377,7 +393,7 @@ export async function registerAdvancedAnalyticsRoutes(
    */
   app.get("/v1/analytics/retail/customer-flow", async (request, reply) => {
     const retailAnalytics = pipeline.getRetailAnalytics();
-    const metrics = retailAnalytics.getCustomerFlow();
+    const metrics = retailAnalytics.getFootfallMetrics();
 
     return {
       entries: metrics.entries,
@@ -394,7 +410,7 @@ export async function registerAdvancedAnalyticsRoutes(
    */
   app.get("/v1/analytics/retail/queue-analytics", async (request, reply) => {
     const retailAnalytics = pipeline.getRetailAnalytics();
-    const analytics = retailAnalytics.getQueueAnalytics();
+    const analytics = retailAnalytics.getAllQueueMetrics();
 
     return {
       queues: analytics.map(q => ({
@@ -413,8 +429,16 @@ export async function registerAdvancedAnalyticsRoutes(
    * Get heat map data
    */
   app.get("/v1/analytics/retail/heatmap", async (request, reply) => {
+    const query = z.object({
+      zoneId: z.string().optional()
+    }).parse(request.query);
+
     const retailAnalytics = pipeline.getRetailAnalytics();
-    const heatmap = retailAnalytics.getHeatMap();
+    const heatmap = retailAnalytics.getHeatMap(query.zoneId || 'default');
+
+    if (!heatmap) {
+      return reply.code(404).send({ error: 'Retail heatmap zone not available' });
+    }
 
     return {
       grid: heatmap.grid,
@@ -429,7 +453,7 @@ export async function registerAdvancedAnalyticsRoutes(
    */
   app.get("/v1/analytics/retail/conversion", async (request, reply) => {
     const retailAnalytics = pipeline.getRetailAnalytics();
-    const analytics = retailAnalytics.getConversionAnalytics();
+    const analytics = retailAnalytics.getConversionMetrics();
 
     return {
       conversionRate: analytics.conversionRate,
@@ -459,28 +483,31 @@ export async function registerAdvancedAnalyticsRoutes(
     }).parse(request.body);
 
     const searchEngine = pipeline.getAISearchEngine();
-    const results = await searchEngine.search(
-      body.query,
-      body.timeRange ? {
-        start: new Date(body.timeRange.start),
-        end: new Date(body.timeRange.end)
-      } : undefined,
-      body.cameras,
-      body.limit
-    );
+    const results = await searchEngine.search({
+      query: body.query,
+      timeRange: body.timeRange
+        ? {
+            start: new Date(body.timeRange.start),
+            end: new Date(body.timeRange.end)
+          }
+        : undefined,
+      cameras: body.cameras,
+      limit: body.limit
+    });
 
     return {
       query: body.query,
-      count: results.length,
-      results: results.map(r => ({
+      count: results.results.length,
+      results: results.results.map(r => ({
         frameId: r.frameId,
         cameraId: r.cameraId,
         timestamp: r.timestamp,
         relevanceScore: r.relevanceScore,
         confidence: r.confidence,
-        matches: r.matches
+        detection: r.detection,
+        matchedAttributes: r.matchedAttributes
       })),
-      suggestions: searchEngine.getSuggestions(body.query)
+      suggestions: AISearchEngine.generateSuggestions(body.query)
     };
   });
 
@@ -495,20 +522,21 @@ export async function registerAdvancedAnalyticsRoutes(
     }).parse(request.body);
 
     const searchEngine = pipeline.getAISearchEngine();
-    const results = await searchEngine.searchByImage(
-      body.imageBase64,
-      body.searchType,
-      body.limit
-    );
+    const imageBuffer = Buffer.from(body.imageBase64, 'base64');
+    const results = await searchEngine.searchByImage(imageBuffer, {
+      type: body.searchType,
+      limit: body.limit
+    });
 
     return {
-      count: results.length,
-      results: results.map(r => ({
+      count: results.results.length,
+      results: results.results.map(r => ({
         frameId: r.frameId,
         cameraId: r.cameraId,
         timestamp: r.timestamp,
-        similarity: r.similarity,
-        bbox: r.bbox
+        similarity: r.combinedScore,
+        boundingBox: r.boundingBox,
+        detection: r.detection
       }))
     };
   });
@@ -523,7 +551,7 @@ export async function registerAdvancedAnalyticsRoutes(
   app.post("/v1/analytics/investigation/track-subject", async (request, reply) => {
     const body = z.object({
       subjectId: z.string(),
-      subjectType: z.enum(['person', 'vehicle']),
+      subjectType: z.enum(['person', 'vehicle']).optional(),
       timeRange: z.object({
         start: z.string(),
         end: z.string()
@@ -531,25 +559,24 @@ export async function registerAdvancedAnalyticsRoutes(
     }).parse(request.body);
 
     const investigation = pipeline.getAIInvestigationTools();
-    const journey = await investigation.trackSubject(
-      body.subjectId,
-      body.subjectType,
-      body.timeRange ? {
-        start: new Date(body.timeRange.start),
-        end: new Date(body.timeRange.end)
-      } : undefined
-    );
+    const result = await investigation.investigateCameras(body.subjectId);
+    const journey = result.journeys[0];
 
     return {
       subjectId: body.subjectId,
       journey: {
-        cameras: journey.cameras,
-        timeline: journey.timeline,
+        cameras: journey.path.cameras,
+        timeline: journey.appearances.map(a => ({
+          cameraId: a.cameraId,
+          timestamp: a.timestamp,
+          confidence: a.confidence,
+          type: a.type
+        })),
         entryPoint: journey.entryPoint,
         exitPoint: journey.exitPoint,
-        totalDistance: journey.totalDistance,
-        avgSpeed: journey.avgSpeed,
-        stoppages: journey.stoppages
+        totalDistance: journey.analysis.totalDistance,
+        avgSpeed: journey.analysis.avgSpeed,
+        stoppages: journey.analysis.stoppages
       }
     };
   });
@@ -561,15 +588,17 @@ export async function registerAdvancedAnalyticsRoutes(
     const { subjectId } = z.object({ subjectId: z.string() }).parse(request.params);
 
     const investigation = pipeline.getAIInvestigationTools();
-    const origin = await investigation.findOrigin(subjectId);
+    const originResult = await investigation.investigateOrigin(subjectId);
+    const journey = originResult.journeys[0];
+    const originPoint = journey.entryPoint;
 
     return {
       subjectId,
       origin: {
-        camera: origin.camera,
-        timestamp: origin.timestamp,
-        entryPoint: origin.entryPoint,
-        confidenceScore: origin.confidenceScore
+        camera: originPoint?.cameraId,
+        timestamp: originPoint?.timestamp,
+        entryPoint: originPoint,
+        confidenceScore: originResult.confidence
       }
     };
   });
@@ -709,23 +738,18 @@ export async function registerAdvancedAnalyticsRoutes(
    */
   app.post("/v1/analytics/reports/daily", async (request, reply) => {
     const body = z.object({
-      date: z.string(),
-      includeCategories: z.array(z.string()).optional()
+      date: z.string()
     }).parse(request.body);
 
     const reporting = pipeline.getAIReportingEngine();
-    const report = await reporting.generateDailyReport(
-      new Date(body.date),
-      body.includeCategories
-    );
+    const report = await reporting.generateDailyIncidentSummary(new Date(body.date));
 
     return {
       reportId: report.id,
-      date: report.date,
+      dateRange: report.dateRange,
       summary: report.summary,
       sections: report.sections,
-      insights: report.insights,
-      recommendations: report.recommendations
+      insights: report.insights
     };
   });
 
@@ -738,16 +762,14 @@ export async function registerAdvancedAnalyticsRoutes(
     }).parse(request.body);
 
     const reporting = pipeline.getAIReportingEngine();
-    const report = await reporting.generateWeeklyReport(new Date(body.weekStart));
+    const report = await reporting.generateWeeklyAnalyticsSummary(new Date(body.weekStart));
 
     return {
       reportId: report.id,
-      weekStart: report.weekStart,
-      weekEnd: report.weekEnd,
+      dateRange: report.dateRange,
       summary: report.summary,
-      trends: report.trends,
-      topIncidents: report.topIncidents,
-      performance: report.performance
+      sections: report.sections,
+      insights: report.insights
     };
   });
 
@@ -777,13 +799,18 @@ export async function registerAdvancedAnalyticsRoutes(
     }).parse(request.body);
 
     const reporting = pipeline.getAIReportingEngine();
-    const exportData = await reporting.exportReport(body.reportId, body.format);
+    const report = reporting.getReport(body.reportId);
+    if (!report) {
+      return reply.code(404).send({ error: 'Report not found' });
+    }
+
+    const exported = await reporting.exportReport(report, body.format);
 
     return {
       reportId: body.reportId,
       format: body.format,
-      data: exportData.data,
-      downloadUrl: exportData.downloadUrl
+      data: exported,
+      downloadUrl: null
     };
   });
 
@@ -830,7 +857,7 @@ export async function registerAdvancedAnalyticsRoutes(
     const { sessionId } = z.object({ sessionId: z.string() }).parse(request.params);
 
     const assistant = pipeline.getAIAssistant();
-    const history = assistant.getConversationHistory(sessionId);
+    const history = assistant.getHistory(sessionId);
 
     return {
       sessionId,
@@ -845,7 +872,7 @@ export async function registerAdvancedAnalyticsRoutes(
     const { sessionId } = z.object({ sessionId: z.string() }).parse(request.params);
 
     const assistant = pipeline.getAIAssistant();
-    assistant.clearConversation(sessionId);
+    assistant.clearHistory(sessionId);
 
     return { success: true, sessionId };
   });

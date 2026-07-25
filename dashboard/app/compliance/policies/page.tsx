@@ -1,6 +1,8 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
+import { ScrollText } from "lucide-react";
+import { ModulePage } from "@/components/module-page";
 import { complianceApi } from "@/lib/api-client";
 import type { CompliancePolicy } from "@/lib/types";
 
@@ -20,34 +22,39 @@ export default function CompliancePoliciesPage() {
   }, []);
 
   return (
-    <div style={{ padding: 16 }}>
-      <h1>Compliance policies</h1>
-      <p>Policies define how frameworks apply to cameras, locations, and retention.</p>
-      {error && <p style={{ color: "red" }}>{error}</p>}
-      {loading ? (
-        <p>Loading…</p>
-      ) : policies.length === 0 ? (
-        <p>No compliance policies defined yet.</p>
-      ) : (
-        <table style={{ width: "100%", borderCollapse: "collapse" }}>
+    <ModulePage
+      eyebrow="Governance controls"
+      title="Compliance policies"
+      description="Define how regulatory frameworks apply to camera coverage, data retention, access, and operating locations."
+      icon={ScrollText}
+      count={policies.length}
+      countLabel="policies"
+      loading={loading}
+      error={error}
+      empty={policies.length === 0}
+      emptyTitle="No compliance policies"
+      emptyDescription="Policies created for retention, privacy, access, and evidence handling will appear in this repository."
+    >
+      <div className="module-table-wrap">
+        <table>
           <thead>
             <tr>
-              <th style={{ textAlign: "left", borderBottom: "1px solid #ddd", padding: 8 }}>Policy name</th>
-              <th style={{ textAlign: "left", borderBottom: "1px solid #ddd", padding: 8 }}>Framework</th>
-              <th style={{ textAlign: "left", borderBottom: "1px solid #ddd", padding: 8 }}>Retention</th>
+              <th>Policy name</th>
+              <th>Framework</th>
+              <th>Retention</th>
             </tr>
           </thead>
           <tbody>
             {policies.map((policy) => (
               <tr key={policy.id}>
-                <td style={{ padding: 8 }}>{policy.policyName}</td>
-                <td style={{ padding: 8 }}>{policy.frameworkId}</td>
-                <td style={{ padding: 8 }}>{policy.normalRetentionDays ?? "—"} days</td>
+                <td><strong className="module-row-title">{policy.policyName}</strong></td>
+                <td><span className="module-id">{policy.frameworkId}</span></td>
+                <td>{policy.normalRetentionDays ?? "—"} days</td>
               </tr>
             ))}
           </tbody>
         </table>
-      )}
-    </div>
+      </div>
+    </ModulePage>
   );
 }

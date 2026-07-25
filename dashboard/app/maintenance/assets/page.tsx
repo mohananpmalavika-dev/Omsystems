@@ -2,6 +2,8 @@
 
 import React, { useEffect, useState } from "react";
 import Link from "next/link";
+import { Boxes } from "lucide-react";
+import { ModulePage, ModuleStatus } from "@/components/module-page";
 import { maintenanceApi } from "@/lib/api-client";
 
 export default function AssetsListPage() {
@@ -15,37 +17,47 @@ export default function AssetsListPage() {
   }, []);
 
   return (
-    <div style={{ padding: 16 }}>
-      <h1>Assets</h1>
-      <div style={{ marginBottom: 12 }}>
-        <Link href="/maintenance/assets/new">Create new asset</Link>
-      </div>
-      {loading && <p>Loading…</p>}
-      {error && <p style={{ color: "red" }}>{error}</p>}
-      <table style={{ width: "100%", borderCollapse: "collapse" }}>
+    <ModulePage
+      eyebrow="Fleet operations"
+      title="Asset registry"
+      description="Track every camera, recorder, storage node, network device, and supporting asset across the estate."
+      icon={Boxes}
+      actionHref="/maintenance/assets/new"
+      actionLabel="Register asset"
+      count={assets.length}
+      countLabel="assets"
+      loading={loading}
+      error={error}
+      empty={assets.length === 0}
+      emptyTitle="No assets registered"
+      emptyDescription="Register your first field device to begin lifecycle, ownership, and service tracking."
+    >
+      <div className="module-table-wrap">
+      <table>
         <thead>
           <tr>
-            <th style={{ textAlign: "left", padding: 8 }}>ID</th>
-            <th style={{ textAlign: "left", padding: 8 }}>Type</th>
-            <th style={{ textAlign: "left", padding: 8 }}>Category</th>
-            <th style={{ textAlign: "left", padding: 8 }}>Status</th>
-            <th style={{ textAlign: "left", padding: 8 }}>Actions</th>
+            <th>Asset ID</th>
+            <th>Device type</th>
+            <th>Category</th>
+            <th>Status</th>
+            <th><span className="sr-only">Actions</span></th>
           </tr>
         </thead>
         <tbody>
           {assets.map((a) => (
-            <tr key={a.id} style={{ borderTop: "1px solid #eee" }}>
-              <td style={{ padding: 8 }}>{a.id}</td>
-              <td style={{ padding: 8 }}>{a.assetType}</td>
-              <td style={{ padding: 8 }}>{a.category}</td>
-              <td style={{ padding: 8 }}>{a.status}</td>
-              <td style={{ padding: 8 }}>
-                <Link href={`/maintenance/assets/${a.id}`}>View / Edit</Link>
+            <tr key={a.id}>
+              <td><span className="module-id">{a.id}</span></td>
+              <td><strong className="module-row-title">{a.assetType}</strong></td>
+              <td><span className="module-category">{a.category}</span></td>
+              <td><ModuleStatus value={a.status} /></td>
+              <td className="module-row-action">
+                <Link href={`/maintenance/assets/${a.id}`}>View details</Link>
               </td>
             </tr>
           ))}
         </tbody>
       </table>
-    </div>
+      </div>
+    </ModulePage>
   );
 }

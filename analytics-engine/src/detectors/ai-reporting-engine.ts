@@ -44,7 +44,7 @@
  * - Replaces manual reporting processes
  */
 
-import { BaseDetector, DetectionResult } from './base-detector';
+import { BaseDetector, type DetectionFrame, DetectionResult } from './base-detector';
 
 /**
  * Report configuration
@@ -222,9 +222,27 @@ export class AIReportingEngine extends BaseDetector {
   };
   
   constructor() {
-    super('ai-reporting-engine');
+    super('ai-reporting-engine', '1.0.0');
   }
   
+  async initialize(): Promise<void> {
+    console.log('[AIReportingEngine] initialized');
+  }
+
+  async cleanup(): Promise<void> {
+    this.reportConfigs.clear();
+    this.reportHistory.clear();
+    this.analyticsData.clear();
+  }
+
+  getHealth() {
+    return {
+      status: 'healthy' as const,
+      details: `AI Reporting Engine managing ${this.reportConfigs.size} report configs`,
+      reportHistoryCount: Array.from(this.reportHistory.values()).reduce((sum, reports) => sum + reports.length, 0)
+    };
+  }
+
   /**
    * Add report configuration
    */

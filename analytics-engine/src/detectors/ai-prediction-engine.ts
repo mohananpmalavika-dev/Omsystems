@@ -45,7 +45,7 @@
  * - Replaces predictive analytics platforms ($10K-40K/year)
  */
 
-import { BaseDetector, DetectionResult } from './base-detector';
+import { BaseDetector, type DetectionFrame, DetectionResult } from './base-detector';
 
 /**
  * Time series data point
@@ -200,9 +200,28 @@ export class AIPredictionEngine extends BaseDetector {
   };
   
   constructor() {
-    super('ai-prediction-engine');
+    super('ai-prediction-engine', '1.0.0');
   }
   
+  async initialize(): Promise<void> {
+    console.log('[AIPredictionEngine] initialized');
+  }
+
+  async cleanup(): Promise<void> {
+    this.hardwareHealth.clear();
+    this.storageMetrics.clear();
+    this.incidentPatterns.clear();
+    this.predictions.clear();
+  }
+
+  getHealth() {
+    return {
+      status: 'healthy' as const,
+      details: `AIPredictionEngine tracking ${this.predictions.size} predictions`,
+      predictionCount: this.predictions.size
+    };
+  }
+
   /**
    * Update hardware health
    */
@@ -920,7 +939,7 @@ export class AIPredictionEngine extends BaseDetector {
   // BaseDetector Implementation
   // ===========================
   
-  async detect(frame: Buffer, metadata: any): Promise<DetectionResult[]> {
+  async detect(frame: DetectionFrame): Promise<DetectionResult[]> {
     // Prediction engine runs periodically, not per-frame
     const now = new Date();
     const timeSinceUpdate = (now.getTime() - this.lastUpdate.getTime()) / 1000;
