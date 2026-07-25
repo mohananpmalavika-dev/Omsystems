@@ -671,21 +671,21 @@ GROUP BY n.id, n.tenant_id, n.name;
 -- Compliance Metrics Over Time
 CREATE OR REPLACE VIEW compliance_metrics_daily AS
 SELECT 
-  date_trunc('day', check_timestamp)::date as metric_date,
-  tenant_id,
+  date_trunc('day', chc.check_timestamp)::date as metric_date,
+  chc.tenant_id,
   
   -- Camera health
-  COUNT(DISTINCT camera_id) as cameras_checked,
-  COUNT(DISTINCT camera_id) FILTER (WHERE is_online = true) as cameras_online,
-  AVG(CASE WHEN overall_status = 'healthy' THEN 100 ELSE 0 END) as health_percentage,
+  COUNT(DISTINCT chc.camera_id) as cameras_checked,
+  COUNT(DISTINCT chc.camera_id) FILTER (WHERE chc.is_online = true) as cameras_online,
+  AVG(CASE WHEN chc.overall_status = 'healthy' THEN 100 ELSE 0 END) as health_percentage,
   
   -- Recording availability
-  AVG(recording_availability_percentage) as avg_recording_availability,
+  AVG(rv.recording_availability_percentage) as avg_recording_availability,
   
   -- Storage
-  AVG(utilization_percentage) as avg_storage_utilization,
+  AVG(sh.utilization_percentage) as avg_storage_utilization,
   
-  COUNT(DISTINCT camera_id) FILTER (WHERE overall_status = 'critical') as critical_issues
+  COUNT(DISTINCT chc.camera_id) FILTER (WHERE chc.overall_status = 'critical') as critical_issues
   
 FROM camera_health_checks chc
 LEFT JOIN recording_verification_jobs rv 
@@ -694,7 +694,7 @@ LEFT JOIN recording_verification_jobs rv
 LEFT JOIN storage_health_checks sh 
   ON sh.tenant_id = chc.tenant_id 
   AND date_trunc('day', sh.check_timestamp) = date_trunc('day', chc.check_timestamp)
-GROUP BY date_trunc('day', check_timestamp)::date, tenant_id;
+GROUP BY date_trunc('day', chc.check_timestamp)::date, chc.tenant_id;
 
 -- ============================================================================
 -- SCHEDULED JOB TRACKING
