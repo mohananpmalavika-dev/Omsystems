@@ -73,6 +73,23 @@ END $$;
 -- ============ CORE INCIDENT TABLE (Enhanced) ============
 
 -- Drop and recreate incidents table with comprehensive fields
+-- Drop all incident-related tables explicitly to ensure clean state
+DROP TABLE IF EXISTS incident_reports CASCADE;
+DROP TABLE IF EXISTS incident_secure_shares CASCADE;
+DROP TABLE IF EXISTS incident_notes CASCADE;
+DROP TABLE IF EXISTS incident_tasks CASCADE;
+DROP TABLE IF EXISTS incident_insurance_documents CASCADE;
+DROP TABLE IF EXISTS incident_insurance_claims CASCADE;
+DROP TABLE IF EXISTS incident_police_evidence_transfers CASCADE;
+DROP TABLE IF EXISTS incident_police_intimations CASCADE;
+DROP TABLE IF EXISTS incident_evidence_packages CASCADE;
+DROP TABLE IF EXISTS incident_evidence_items CASCADE;
+DROP TABLE IF EXISTS incident_snapshots CASCADE;
+DROP TABLE IF EXISTS incident_clips CASCADE;
+DROP TABLE IF EXISTS incident_events CASCADE;
+DROP TABLE IF EXISTS incident_video_ranges CASCADE;
+DROP TABLE IF EXISTS incident_cameras CASCADE;
+DROP TABLE IF EXISTS incident_participants CASCADE;
 DROP TABLE IF EXISTS incidents CASCADE;
 
 CREATE TABLE incidents (
