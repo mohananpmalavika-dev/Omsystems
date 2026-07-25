@@ -38,7 +38,7 @@
  * - Replaces retail analytics platforms ($5K-30K/year)
  */
 
-import { BaseDetector, DetectionResult } from './base-detector';
+import { BaseDetector, DetectionResult } from './base-detector.js';
 
 /**
  * Retail zone configuration

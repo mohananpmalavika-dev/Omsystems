@@ -45,7 +45,7 @@
  * - Replaces predictive analytics platforms ($10K-40K/year)
  */
 
-import { BaseDetector, type DetectionFrame, DetectionResult } from './base-detector';
+import { BaseDetector, type DetectionFrame, DetectionResult } from './base-detector.js';
 
 /**
  * Time series data point

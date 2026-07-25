@@ -20,6 +20,7 @@ import { CrowdDensityDetector } from "./detectors/crowd-density-detector.js";
 import { TailgatingDetector } from "./detectors/tailgating-detector.js";
 import { QueueDetector } from "./detectors/queue-detector.js";
 import { HeatMapGenerator } from "./detectors/heatmap-generator.js";
+import { FaceAnalyticsDetector } from "./detectors/face-analytics.js";
 import { FaceDetector } from "./detectors/face-detector.js";
 import { ANPRDetector } from "./detectors/anpr-detector.js";
 import { HumanAnalyticsDetector } from "./detectors/human-analytics.js";
@@ -71,6 +72,7 @@ export class AnalyticsPipeline {
   private queueDetector: QueueDetector;
   private heatMapGenerator: HeatMapGenerator;
   private faceDetector: FaceDetector;
+  private faceAnalytics: FaceAnalyticsDetector;
   private anprDetector: ANPRDetector;
   private humanAnalytics: HumanAnalyticsDetector;
   private vehicleAnalytics: VehicleAnalyticsDetector;
@@ -113,6 +115,7 @@ export class AnalyticsPipeline {
     this.queueDetector = new QueueDetector();
     this.heatMapGenerator = new HeatMapGenerator();
     this.faceDetector = new FaceDetector();
+    this.faceAnalytics = new FaceAnalyticsDetector();
     this.anprDetector = new ANPRDetector();
     this.humanAnalytics = new HumanAnalyticsDetector();
     this.vehicleAnalytics = new VehicleAnalyticsDetector();
@@ -142,6 +145,7 @@ export class AnalyticsPipeline {
       this.queueDetector,
       this.heatMapGenerator,
       this.faceDetector,
+      this.faceAnalytics,
       this.anprDetector,
       this.humanAnalytics,
       this.vehicleAnalytics,
@@ -563,7 +567,7 @@ export class AnalyticsPipeline {
    * Get face analytics module
    */
   getFaceAnalytics() {
-    return this.faceDetector;
+    return this.faceAnalytics;
   }
 
   /**

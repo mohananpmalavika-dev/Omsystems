@@ -11,7 +11,7 @@ export default function CompliancePoliciesPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
+  function loadPolicies() {
     setLoading(true);
     setError(null);
     void complianceApi.listPolicies().then((res) => {
@@ -19,6 +19,10 @@ export default function CompliancePoliciesPage() {
     }).catch((err) => {
       setError(err instanceof Error ? err.message : "Unable to load policies");
     }).finally(() => setLoading(false));
+  }
+
+  useEffect(() => {
+    loadPolicies();
   }, []);
 
   return (
@@ -31,6 +35,7 @@ export default function CompliancePoliciesPage() {
       countLabel="policies"
       loading={loading}
       error={error}
+      onRetry={loadPolicies}
       empty={policies.length === 0}
       emptyTitle="No compliance policies"
       emptyDescription="Policies created for retention, privacy, access, and evidence handling will appear in this repository."

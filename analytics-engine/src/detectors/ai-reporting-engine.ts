@@ -44,7 +44,7 @@
  * - Replaces manual reporting processes
  */
 
-import { BaseDetector, type DetectionFrame, DetectionResult } from './base-detector';
+import { BaseDetector, type DetectionFrame, DetectionResult } from './base-detector.js';
 
 /**
  * Report configuration

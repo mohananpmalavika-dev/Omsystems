@@ -42,9 +42,7 @@
  * - Enables non-technical staff to search video effectively
  */
 
-import { BaseDetector, type DetectionFrame, DetectionResult } from './base-detector';
-import * as tf from '@tensorflow/tfjs-node';
-import * as use from '@tensorflow-models/universal-sentence-encoder';
+import { BaseDetector, type DetectionFrame, DetectionResult } from './base-detector.js';
 
 /**
  * Search query structure

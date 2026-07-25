@@ -6,6 +6,7 @@
 import type { FastifyInstance } from "fastify";
 import { Buffer } from "node:buffer";
 import { z } from "zod";
+import { AISearchEngine } from "../detectors/ai-search-engine.js";
 import type { AnalyticsPipeline } from "../analytics-pipeline.js";
 
 export async function registerAdvancedAnalyticsRoutes(
@@ -29,9 +30,11 @@ export async function registerAdvancedAnalyticsRoutes(
         trackId: t.trackId,
         firstSeen: t.firstSeen,
         lastSeen: t.lastSeen,
-        cameras: t.cameras,
-        totalAppearances: t.totalAppearances,
-        confidence: t.confidence
+        positions: t.positions.length,
+        dwellTimeSeconds: t.dwellTimeSeconds,
+        avgConfidence: t.avgConfidence,
+        currentActivity: t.currentActivity,
+        speed: t.speed
       }))
     };
   });
@@ -41,28 +44,29 @@ export async function registerAdvancedAnalyticsRoutes(
    */
   app.get("/v1/analytics/human/behaviors", async (request, reply) => {
     const query = z.object({
-      type: z.enum([
-        'running', 'loitering', 'fighting', 'falling', 'hands_raised',
-        'sitting', 'standing', 'crawling', 'sleeping', 'abnormal'
-      ]).optional(),
       since: z.string().optional()
     }).parse(request.query);
 
     const humanAnalytics = pipeline.getHumanAnalytics();
-    const behaviors = humanAnalytics.getBehaviorDetections(
-      query.type,
-      query.since ? new Date(query.since) : undefined
-    );
+    const tracks = humanAnalytics.getActiveTracks();
+    const uniqueCount = humanAnalytics.getUniquePersonCount();
+
+    const filteredTracks = query.since
+      ? tracks.filter(t => t.lastSeen >= new Date(query.since))
+      : tracks;
 
     return {
-      count: behaviors.length,
-      behaviors: behaviors.map(b => ({
-        trackId: b.trackId,
-        type: b.type,
-        confidence: b.confidence,
-        timestamp: b.timestamp,
-        duration: b.duration,
-        bbox: b.bbox
+      count: filteredTracks.length,
+      uniquePersons: uniqueCount,
+      tracks: filteredTracks.map(t => ({
+        trackId: t.trackId,
+        firstSeen: t.firstSeen,
+        lastSeen: t.lastSeen,
+        positions: t.positions.length,
+        dwellTimeSeconds: t.dwellTimeSeconds,
+        avgConfidence: t.avgConfidence,
+        currentActivity: t.currentActivity,
+        speed: t.speed
       }))
     };
   });
@@ -71,15 +75,30 @@ export async function registerAdvancedAnalyticsRoutes(
    * Get occupancy metrics
    */
   app.get("/v1/analytics/human/occupancy", async (request, reply) => {
+    const query = z.object({
+      since: z.string().optional()
+    }).parse(request.query);
+
     const humanAnalytics = pipeline.getHumanAnalytics();
-    const metrics = humanAnalytics.getOccupancyMetrics();
+    const tracks = humanAnalytics.getActiveTracks();
+    const uniqueCount = humanAnalytics.getUniquePersonCount();
+
+    const activeSince = query.since
+      ? tracks.filter(t => t.lastSeen >= new Date(query.since)).length
+      : tracks.length;
 
     return {
-      current: metrics.currentOccupancy,
-      unique: metrics.uniquePersons,
-      avgDwellTime: metrics.avgDwellTime,
-      peakOccupancy: metrics.peakOccupancy,
-      peakTime: metrics.peakTime
+      activeTracks: activeSince,
+      uniquePersons: uniqueCount,
+      totalTracked: tracks.length,
+      activeTrackDetails: tracks.slice(0, 20).map(t => ({
+        trackId: t.trackId,
+        firstSeen: t.firstSeen,
+        lastSeen: t.lastSeen,
+        avgConfidence: t.avgConfidence,
+        currentActivity: t.currentActivity,
+        speed: t.speed
+      }))
     };
   });
 
@@ -93,26 +112,23 @@ export async function registerAdvancedAnalyticsRoutes(
   app.get("/v1/analytics/vehicles/anpr", async (request, reply) => {
     const query = z.object({
       plateNumber: z.string().optional(),
-      since: z.string().optional(),
       limit: z.number().int().positive().default(100)
     }).parse(request.query);
 
     const vehicleAnalytics = pipeline.getVehicleAnalytics();
-    const detections = vehicleAnalytics.getANPRDetections(
-      query.plateNumber,
-      query.since ? new Date(query.since) : undefined,
-      query.limit
-    );
+    const tracks = query.plateNumber
+      ? vehicleAnalytics.searchByPlate(query.plateNumber)
+      : vehicleAnalytics.getActiveTracks();
 
     return {
-      count: detections.length,
-      detections: detections.map(d => ({
-        plateNumber: d.plateNumber,
-        confidence: d.confidence,
-        timestamp: d.timestamp,
-        cameraId: d.cameraId,
-        vehicleType: d.vehicleType,
-        color: d.color
+      count: tracks.length,
+      detections: tracks.slice(0, query.limit).map(t => ({
+        plateNumber: t.licensePlate?.number ?? null,
+        confidence: t.avgConfidence,
+        timestamp: t.lastSeen,
+        vehicleType: t.vehicleType,
+        color: t.color,
+        speed: t.speed
       }))
     };
   });
@@ -122,14 +138,21 @@ export async function registerAdvancedAnalyticsRoutes(
    */
   app.get("/v1/analytics/vehicles/traffic-flow", async (request, reply) => {
     const vehicleAnalytics = pipeline.getVehicleAnalytics();
-    const metrics = vehicleAnalytics.getTrafficFlowMetrics();
+    const occupancy = vehicleAnalytics.getParkingOccupancy();
+    const activeTracks = vehicleAnalytics.getActiveTracks();
 
     return {
-      totalVehicles: metrics.totalVehicles,
-      avgSpeed: metrics.avgSpeed,
-      vehiclesByType: metrics.vehiclesByType,
-      congestionLevel: metrics.congestionLevel,
-      flowRate: metrics.flowRate
+      totalVehicles: activeTracks.length,
+      parkingOccupancy: occupancy,
+      vehicles: activeTracks.map(track => ({
+        trackId: track.trackId,
+        firstSeen: track.firstSeen,
+        lastSeen: track.lastSeen,
+        licensePlate: track.licensePlate?.number ?? null,
+        vehicleType: track.vehicleType,
+        color: track.color,
+        avgConfidence: track.avgConfidence
+      }))
     };
   });
 
@@ -137,8 +160,15 @@ export async function registerAdvancedAnalyticsRoutes(
    * Get parking violations
    */
   app.get("/v1/analytics/vehicles/parking-violations", async (request, reply) => {
-    const vehicleAnalytics = pipeline.getVehicleAnalytics();
-    const violations = vehicleAnalytics.getParkingViolations();
+    const smartCity = pipeline.getSmartCityAnalytics();
+    if (!smartCity) {
+      return {
+        count: 0,
+        violations: []
+      };
+    }
+
+    const violations = smartCity.getParkingViolations();
 
     return {
       count: violations.length,

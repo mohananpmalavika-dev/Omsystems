@@ -53,7 +53,7 @@
  * - Increase production efficiency 15-25%
  */
 
-import { BaseDetector, DetectionResult } from './base-detector';
+import { BaseDetector, DetectionResult } from './base-detector.js';
 
 /**
  * Equipment types

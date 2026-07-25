@@ -47,7 +47,7 @@
  * - Enables non-expert investigators
  */
 
-import { BaseDetector, type DetectionFrame, DetectionResult } from './base-detector';
+import { BaseDetector, type DetectionFrame, DetectionResult } from './base-detector.js';
 
 /**
  * Camera topology (defines camera relationships and connections)

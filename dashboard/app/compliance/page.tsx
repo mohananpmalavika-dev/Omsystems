@@ -4,7 +4,7 @@ import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { 
   Shield, Plus, FileText, Calendar, CheckCircle, 
-  AlertCircle, Loader2, Search, Filter 
+  AlertCircle, Loader2, Search, Filter, RefreshCw
 } from "lucide-react";
 import { complianceApi } from "@/lib/api-client";
 import type { ComplianceFramework } from "@/lib/types";
@@ -82,6 +82,19 @@ export default function CompliancePage() {
       </header>
 
       <div className="page-content">
+        {error && !showForm && (
+          <div className="compliance-warning-card" role="alert">
+            <AlertCircle size={20} />
+            <div>
+              <strong>Framework data is temporarily unavailable</strong>
+              <span>{error}</span>
+            </div>
+            <button type="button" onClick={() => void load()}>
+              <RefreshCw size={15} /> Retry
+            </button>
+          </div>
+        )}
+
         {/* Create Framework Card */}
         {showForm && (
           <div className="card create-framework-card">
@@ -244,17 +257,18 @@ export default function CompliancePage() {
 
       <style jsx>{`
         .compliance-page {
-          min-height: 100vh;
-          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-          padding: 2rem;
+          min-height: calc(100vh - 80px);
+          background: radial-gradient(circle at 92% 0%, rgba(53, 111, 246, 0.08), transparent 28rem), #f3f6fa;
+          padding: 1.75rem;
         }
 
         .page-header {
           background: white;
-          border-radius: 12px;
-          padding: 2rem;
-          margin-bottom: 2rem;
-          box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+          border: 1px solid #dce4ee;
+          border-radius: 18px;
+          padding: 1.75rem;
+          margin-bottom: 1.25rem;
+          box-shadow: 0 20px 55px -38px rgba(15, 30, 54, 0.38);
         }
 
         .header-content {
@@ -272,32 +286,33 @@ export default function CompliancePage() {
         }
 
         .header-icon {
-          color: #667eea;
+          color: #356ff6;
         }
 
         .page-header h1 {
           margin: 0;
           font-size: 2rem;
-          color: #1a202c;
+          color: #14213d;
         }
 
         .header-subtitle {
           margin: 0.25rem 0 0;
-          color: #718096;
+          color: #53627a;
           font-size: 0.95rem;
         }
 
         .page-content {
           display: flex;
           flex-direction: column;
-          gap: 2rem;
+          gap: 1.25rem;
         }
 
         .card {
           background: white;
-          border-radius: 12px;
-          padding: 2rem;
-          box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+          border: 1px solid #dce4ee;
+          border-radius: 16px;
+          padding: 1.75rem;
+          box-shadow: 0 1px 2px rgba(15, 30, 54, 0.04), 0 5px 18px rgba(15, 30, 54, 0.035);
         }
 
         .card-header {
@@ -312,7 +327,7 @@ export default function CompliancePage() {
         .card-header h2 {
           margin: 0;
           font-size: 1.5rem;
-          color: #1a202c;
+          color: #14213d;
           display: flex;
           align-items: center;
           gap: 0.5rem;
@@ -322,7 +337,7 @@ export default function CompliancePage() {
           display: inline-flex;
           align-items: center;
           justify-content: center;
-          background: #667eea;
+          background: #356ff6;
           color: white;
           border-radius: 12px;
           padding: 0.25rem 0.75rem;
@@ -334,9 +349,9 @@ export default function CompliancePage() {
           display: flex;
           align-items: center;
           gap: 0.5rem;
-          background: #f7fafc;
-          border: 1px solid #e2e8f0;
-          border-radius: 8px;
+          background: #f7f9fc;
+          border: 1px solid #dce4ee;
+          border-radius: 10px;
           padding: 0.5rem 1rem;
           min-width: 300px;
         }
@@ -363,19 +378,19 @@ export default function CompliancePage() {
 
         .form-group label {
           font-weight: 600;
-          color: #2d3748;
+          color: #53627a;
           font-size: 0.95rem;
         }
 
         .required {
-          color: #e53e3e;
+          color: #dc4650;
         }
 
         .form-input,
         .form-textarea {
           padding: 0.75rem 1rem;
-          border: 1px solid #e2e8f0;
-          border-radius: 8px;
+          border: 1px solid #dce4ee;
+          border-radius: 10px;
           font-size: 1rem;
           transition: all 0.2s;
         }
@@ -383,8 +398,8 @@ export default function CompliancePage() {
         .form-input:focus,
         .form-textarea:focus {
           outline: none;
-          border-color: #667eea;
-          box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+          border-color: #356ff6;
+          box-shadow: 0 0 0 3px rgba(53, 111, 246, 0.12);
         }
 
         .form-textarea {
@@ -404,7 +419,7 @@ export default function CompliancePage() {
           align-items: center;
           gap: 0.5rem;
           padding: 0.75rem 1.5rem;
-          border-radius: 8px;
+          border-radius: 10px;
           font-weight: 600;
           font-size: 0.95rem;
           cursor: pointer;
@@ -413,23 +428,23 @@ export default function CompliancePage() {
         }
 
         .btn-primary {
-          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+          background: linear-gradient(145deg, #467df8, #356ff6);
           color: white;
         }
 
         .btn-primary:hover {
           transform: translateY(-2px);
-          box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+          box-shadow: 0 8px 20px rgba(53, 111, 246, 0.24);
         }
 
         .btn-secondary {
           background: white;
-          color: #4a5568;
-          border: 1px solid #e2e8f0;
+          color: #53627a;
+          border: 1px solid #dce4ee;
         }
 
         .btn-secondary:hover {
-          background: #f7fafc;
+          background: #f7f9fc;
         }
 
         .btn-icon {
@@ -437,13 +452,13 @@ export default function CompliancePage() {
           border: none;
           font-size: 1.5rem;
           cursor: pointer;
-          color: #718096;
+          color: #687890;
           padding: 0.25rem;
           line-height: 1;
         }
 
         .btn-icon:hover {
-          color: #2d3748;
+          color: #14213d;
         }
 
         .alert {
@@ -456,9 +471,9 @@ export default function CompliancePage() {
         }
 
         .alert-error {
-          background: #fff5f5;
-          color: #c53030;
-          border: 1px solid #feb2b2;
+          background: #fff0f1;
+          color: #a13f47;
+          border: 1px solid #f1c9cd;
         }
 
         .loading-state,
@@ -473,7 +488,7 @@ export default function CompliancePage() {
 
         .spinner {
           animation: spin 1s linear infinite;
-          color: #667eea;
+          color: #356ff6;
         }
 
         @keyframes spin {
@@ -487,23 +502,23 @@ export default function CompliancePage() {
 
         .loading-state p {
           margin-top: 1rem;
-          color: #718096;
+          color: #53627a;
         }
 
         .empty-icon {
-          color: #cbd5e0;
+          color: #aebaca;
           margin-bottom: 1rem;
         }
 
         .empty-state h3 {
           margin: 0 0 0.5rem;
-          color: #2d3748;
+          color: #14213d;
           font-size: 1.25rem;
         }
 
         .empty-state p {
           margin: 0 0 1.5rem;
-          color: #718096;
+          color: #53627a;
         }
 
         .frameworks-grid {
@@ -516,7 +531,7 @@ export default function CompliancePage() {
           display: flex;
           gap: 1rem;
           padding: 1.5rem;
-          border: 1px solid #e2e8f0;
+          border: 1px solid #dce4ee;
           border-radius: 12px;
           transition: all 0.2s;
           text-decoration: none;
@@ -527,7 +542,7 @@ export default function CompliancePage() {
         .framework-card:hover {
           transform: translateY(-4px);
           box-shadow: 0 12px 24px rgba(0, 0, 0, 0.1);
-          border-color: #667eea;
+          border-color: #356ff6;
         }
 
         .framework-icon {
@@ -537,7 +552,7 @@ export default function CompliancePage() {
           display: flex;
           align-items: center;
           justify-content: center;
-          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+          background: linear-gradient(145deg, #467df8, #356ff6);
           border-radius: 10px;
           color: white;
         }
@@ -552,20 +567,20 @@ export default function CompliancePage() {
         .framework-content h3 {
           margin: 0;
           font-size: 1.125rem;
-          color: #1a202c;
+          color: #14213d;
         }
 
         .framework-source {
           margin: 0;
           font-size: 0.875rem;
-          color: #667eea;
+          color: #356ff6;
           font-weight: 600;
         }
 
         .framework-description {
           margin: 0;
           font-size: 0.875rem;
-          color: #718096;
+          color: #53627a;
           line-height: 1.5;
           display: -webkit-box;
           -webkit-line-clamp: 2;
@@ -579,7 +594,7 @@ export default function CompliancePage() {
           gap: 0.5rem;
           margin-top: auto;
           font-size: 0.8125rem;
-          color: #a0aec0;
+          color: #687890;
         }
 
         @media (max-width: 768px) {

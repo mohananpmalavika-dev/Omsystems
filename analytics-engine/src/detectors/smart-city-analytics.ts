@@ -46,7 +46,7 @@
  * - Save $50K-200K/year in traffic management costs
  */
 
-import { BaseDetector, DetectionResult } from './base-detector';
+import { BaseDetector, DetectionResult } from './base-detector.js';
 
 /**
  * Traffic flow states

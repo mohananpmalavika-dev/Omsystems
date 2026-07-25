@@ -60,6 +60,7 @@ const navigation: Array<{ label: string; items: NavItem[] }> = [
     label: "Command",
     items: [
       { label: "Operations overview", href: "/", icon: LayoutDashboard },
+      { label: "Operational health", href: "/operations", icon: Gauge },
       { label: "Executive dashboard", href: "/dashboards", icon: BarChart3 },
       { label: "Control room", href: "/control-room", icon: MonitorPlay },
       { label: "Incident response", href: "/incidents", icon: Siren, badge: "incidents" },
@@ -131,6 +132,9 @@ const navigation: Array<{ label: string; items: NavItem[] }> = [
 ];
 
 const pageMeta = [
+  { path: "/operations/alerts", section: "Command", title: "Operational alerts" },
+  { path: "/operations/branches", section: "Command", title: "Branch health" },
+  { path: "/operations", section: "Command", title: "Operational health" },
   { path: "/analytics/dashboard", section: "Intelligence", title: "Analytics dashboard" },
   { path: "/control-room", section: "Command", title: "Control room" },
   { path: "/incidents", section: "Command", title: "Incident response" },

@@ -48,7 +48,7 @@
  * - Accessibility for executives and managers
  */
 
-import { BaseDetector, type DetectionFrame, DetectionResult } from './base-detector';
+import { BaseDetector, type DetectionFrame, DetectionResult } from './base-detector.js';
 
 /**
  * Intent types

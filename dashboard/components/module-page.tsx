@@ -1,7 +1,7 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import type { LucideIcon } from "lucide-react";
-import { AlertTriangle, ArrowRight, LoaderCircle, Plus } from "lucide-react";
+import { AlertTriangle, ArrowRight, LoaderCircle, Plus, RefreshCw } from "lucide-react";
 
 type ModulePageProps = {
   eyebrow: string;
@@ -17,6 +17,7 @@ type ModulePageProps = {
   empty?: boolean;
   emptyTitle?: string;
   emptyDescription?: string;
+  onRetry?: () => void;
   children: ReactNode;
 };
 
@@ -34,6 +35,7 @@ export function ModulePage({
   empty = false,
   emptyTitle = "Nothing here yet",
   emptyDescription = "Create the first record to start tracking this part of your operation.",
+  onRetry,
   children,
 }: ModulePageProps) {
   return (
@@ -70,6 +72,11 @@ export function ModulePage({
             <strong>Data could not be refreshed</strong>
             <span>{error}</span>
           </div>
+          {onRetry && (
+            <button type="button" className="module-retry" onClick={onRetry}>
+              <RefreshCw size={14} /> Retry
+            </button>
+          )}
         </div>
       )}
 
