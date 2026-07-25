@@ -371,12 +371,12 @@ SELECT
   COUNT(DISTINCT ei.id) AS item_count,
   COUNT(DISTINCT CASE WHEN ei.type = 'recording' THEN ei.id END) AS recording_count,
   COUNT(DISTINCT CASE WHEN ei.type = 'snapshot' THEN ei.id END) AS snapshot_count,
-  COUNT(DISTINCT ee.id) AS export_count,
-  COUNT(DISTINCT CASE WHEN ee.status = 'ready' THEN ee.id END) AS ready_export_count,
-  SUM(ee.total_bytes) AS total_export_bytes
+  COUNT(DISTINCT fej.id) AS export_count,
+  COUNT(DISTINCT CASE WHEN fej.status = 'ready' THEN fej.id END) AS ready_export_count,
+  SUM(fej.total_bytes) AS total_export_bytes
 FROM evidence_cases ec
 LEFT JOIN evidence_items ei ON ei.case_id = ec.id
-LEFT JOIN evidence_exports ee ON ee.case_id = ec.id
+LEFT JOIN forensic_export_jobs fej ON fej.case_id = ec.id
 GROUP BY ec.id, ec.tenant_id, ec.case_number, ec.title, ec.status, ec.created_at;
 
 -- Active Legal Holds
