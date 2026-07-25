@@ -439,11 +439,12 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- Trigger to automatically index new segments
-DROP TRIGGER IF EXISTS recording_segment_search_index_trigger ON recording_segments;
-CREATE TRIGGER recording_segment_search_index_trigger
-  AFTER INSERT OR UPDATE OF status ON recording_segments
-  FOR EACH ROW
-  EXECUTE FUNCTION update_recording_search_index();
+-- TEMPORARILY DISABLED TO DEBUG
+-- DROP TRIGGER IF EXISTS recording_segment_search_index_trigger ON recording_segments;
+-- CREATE TRIGGER recording_segment_search_index_trigger
+--   AFTER INSERT OR UPDATE OF status ON recording_segments
+--   FOR EACH ROW
+--   EXECUTE FUNCTION update_recording_search_index();
 
 -- Function to update search index with motion events
 CREATE OR REPLACE FUNCTION update_search_index_motion()
