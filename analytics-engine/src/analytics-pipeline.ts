@@ -1,6 +1,6 @@
 /**
- * Analytics Pipeline
- * Orchestrates detectors and processes frames
+ * Enhanced Analytics Pipeline
+ * Orchestrates all AI detection capabilities
  */
 
 import { randomUUID } from "node:crypto";
@@ -11,6 +11,15 @@ import { CameraHealthDetector } from "./detectors/camera-health-detector.js";
 import { MotionDetector } from "./detectors/motion-detector.js";
 import { ObjectDetector } from "./detectors/object-detector.js";
 import { ZoneDetector } from "./detectors/zone-detector.js";
+import { PersonDetector } from "./detectors/person-detector.js";
+import { VehicleDetector } from "./detectors/vehicle-detector.js";
+import { HelmetDetector } from "./detectors/helmet-detector.js";
+import { FallDetector } from "./detectors/fall-detector.js";
+import { SmokeFireDetector } from "./detectors/smoke-fire-detector.js";
+import { CrowdDensityDetector } from "./detectors/crowd-density-detector.js";
+import { TailgatingDetector } from "./detectors/tailgating-detector.js";
+import { QueueDetector } from "./detectors/queue-detector.js";
+import { HeatMapGenerator } from "./detectors/heatmap-generator.js";
 
 export interface AnalyticsRule {
   id: string;
@@ -30,10 +39,23 @@ export interface AnalyticsRule {
 }
 
 export class AnalyticsPipeline {
+  // Core detectors
   private motionDetector: MotionDetector;
   private objectDetector: ObjectDetector;
   private zoneDetector: ZoneDetector;
   private healthDetector: CameraHealthDetector;
+  
+  // Enhanced detectors
+  private personDetector: PersonDetector;
+  private vehicleDetector: VehicleDetector;
+  private helmetDetector: HelmetDetector;
+  private fallDetector: FallDetector;
+  private smokeFireDetector: SmokeFireDetector;
+  private crowdDensityDetector: CrowdDensityDetector;
+  private tailgatingDetector: TailgatingDetector;
+  private queueDetector: QueueDetector;
+  private heatMapGenerator: HeatMapGenerator;
+  
   private detectors: BaseDetector[];
   private isInitialized = false;
 
@@ -43,16 +65,37 @@ export class AnalyticsPipeline {
   private readonly CACHE_TTL_MS = 30_000; // 30 seconds
 
   constructor() {
+    // Initialize core detectors
     this.motionDetector = new MotionDetector();
     this.objectDetector = new ObjectDetector();
     this.zoneDetector = new ZoneDetector();
     this.healthDetector = new CameraHealthDetector();
+    
+    // Initialize enhanced detectors
+    this.personDetector = new PersonDetector();
+    this.vehicleDetector = new VehicleDetector();
+    this.helmetDetector = new HelmetDetector();
+    this.fallDetector = new FallDetector();
+    this.smokeFireDetector = new SmokeFireDetector();
+    this.crowdDensityDetector = new CrowdDensityDetector();
+    this.tailgatingDetector = new TailgatingDetector();
+    this.queueDetector = new QueueDetector();
+    this.heatMapGenerator = new HeatMapGenerator();
 
     this.detectors = [
       this.motionDetector,
       this.objectDetector,
       this.zoneDetector,
       this.healthDetector,
+      this.personDetector,
+      this.vehicleDetector,
+      this.helmetDetector,
+      this.fallDetector,
+      this.smokeFireDetector,
+      this.crowdDensityDetector,
+      this.tailgatingDetector,
+      this.queueDetector,
+      this.heatMapGenerator,
     ];
   }
 
@@ -68,7 +111,7 @@ export class AnalyticsPipeline {
   }
 
   /**
-   * Process a single frame through the detection pipeline
+   * Process a single frame through the enhanced detection pipeline
    */
   async processFrame(
     frame: DetectionFrame,
@@ -88,30 +131,85 @@ export class AnalyticsPipeline {
       }
     }
 
-    // Step 2: Motion detection (first stage trigger)
+    // Step 2: Motion detection (first stage trigger for optimization)
     const motionResults = await this.motionDetector.detect(frame);
     const hasMotion = motionResults.length > 0;
 
-    // Step 3: Object detection (only if motion detected or forced)
-    let objects: any[] = [];
-    if (hasMotion || this.shouldRunObjectDetection(rules)) {
-      const objectResults = await this.objectDetector.detect(frame);
-      
-      for (const result of objectResults) {
-        objects = objects.concat(result.objects);
-        
+    // Step 3: Person detection (high priority)
+    let persons: any[] = [];
+    if (hasMotion || this.needsPersonDetection(rules)) {
+      const personResults = await this.personDetector.detect(frame);
+      for (const result of personResults) {
+        persons = persons.concat(result.objects);
         if (this.matchesAnyRule(result.detectionType, rules)) {
           events.push(this.createEvent(frame, result));
         }
       }
     }
 
-    // Step 4: Zone-based detection (line crossing, intrusion, loitering)
-    if (objects.length > 0) {
+    // Step 4: Vehicle detection
+    let vehicles: any[] = [];
+    if (hasMotion || this.needsVehicleDetection(rules)) {
+      const vehicleResults = await this.vehicleDetector.detect(frame);
+      for (const result of vehicleResults) {
+        vehicles = vehicles.concat(result.objects);
+        if (this.matchesAnyRule(result.detectionType, rules)) {
+          events.push(this.createEvent(frame, result));
+        }
+      }
+    }
+
+    // Step 5: Specialized detections (run in parallel when applicable)
+    const specializedResults = await Promise.all([
+      // Helmet detection (needs persons + vehicles)
+      persons.length > 0 || vehicles.length > 0 
+        ? this.helmetDetector.detect(frame) 
+        : Promise.resolve([]),
+      
+      // Fall detection (needs persons)
+      persons.length > 0 
+        ? this.fallDetector.detect(frame) 
+        : Promise.resolve([]),
+      
+      // Smoke & fire detection (always check for safety)
+      this.smokeFireDetector.detect(frame),
+      
+      // Crowd density (needs persons)
+      persons.length > 3 
+        ? this.crowdDensityDetector.detect(frame) 
+        : Promise.resolve([]),
+      
+      // Tailgating detection (needs persons in zones)
+      persons.length > 1 
+        ? this.tailgatingDetector.detect(frame) 
+        : Promise.resolve([]),
+      
+      // Queue analysis (needs persons)
+      persons.length > 0 
+        ? this.queueDetector.detect(frame) 
+        : Promise.resolve([]),
+      
+      // Heat map (always generate for analytics)
+      this.heatMapGenerator.detect(frame),
+    ]);
+
+    // Process specialized results
+    for (const results of specializedResults) {
+      for (const result of results) {
+        if (this.matchesAnyRule(result.detectionType, rules) || 
+            result.detectionType.includes("metrics") ||
+            result.detectionType === "heatmap") {
+          events.push(this.createEvent(frame, result));
+        }
+      }
+    }
+
+    // Step 6: Zone-based detection (line crossing, intrusion, loitering)
+    const allObjects = [...persons, ...vehicles];
+    if (allObjects.length > 0) {
       for (const rule of rules) {
         if (!rule.enabled) continue;
-
-        const zoneEvents = await this.processZoneRule(frame, objects, rule);
+        const zoneEvents = await this.processZoneRule(frame, allObjects, rule);
         events.push(...zoneEvents);
       }
     }
@@ -242,6 +340,35 @@ export class AnalyticsPipeline {
   }
 
   /**
+   * Determine if person detection should run
+   */
+  private needsPersonDetection(rules: AnalyticsRule[]): boolean {
+    const personTypes = [
+      "person",
+      "fall",
+      "crowd-density",
+      "tailgating",
+      "queue",
+      "loitering",
+      "intrusion",
+      "line-crossing",
+    ];
+    return rules.some(r => r.enabled && personTypes.includes(r.detectionType));
+  }
+
+  /**
+   * Determine if vehicle detection should run
+   */
+  private needsVehicleDetection(rules: AnalyticsRule[]): boolean {
+    const vehicleTypes = [
+      "vehicle",
+      "helmet",
+      "line-crossing",
+    ];
+    return rules.some(r => r.enabled && vehicleTypes.includes(r.detectionType));
+  }
+
+  /**
    * Determine if object detection should run
    */
   private shouldRunObjectDetection(rules: AnalyticsRule[]): boolean {
@@ -254,6 +381,10 @@ export class AnalyticsPipeline {
       "loitering",
       "crowd-density",
       "fire-smoke",
+      "helmet",
+      "fall",
+      "tailgating",
+      "queue",
     ];
 
     return rules.some(
@@ -296,5 +427,78 @@ export class AnalyticsPipeline {
    */
   getCameraHealth(cameraId: string) {
     return this.healthDetector.getCameraHealth(cameraId);
+  }
+
+  /**
+   * Get person tracks
+   */
+  getPersonTracks() {
+    return this.personDetector.getActiveTracks();
+  }
+
+  /**
+   * Get vehicle tracks
+   */
+  getVehicleTracks() {
+    return this.vehicleDetector.getActiveTracks();
+  }
+
+  /**
+   * Get current heat map
+   */
+  getHeatMap() {
+    return this.heatMapGenerator.getHeatMap();
+  }
+
+  /**
+   * Get crowd metrics
+   */
+  getCrowdMetrics() {
+    return this.crowdDensityDetector.getCurrentMetrics();
+  }
+
+  /**
+   * Configure crowd zones
+   */
+  setCrowdZones(zones: any[]) {
+    this.crowdDensityDetector.setZones(zones);
+  }
+
+  /**
+   * Configure queue zones
+   */
+  setQueueZones(zones: any[]) {
+    this.queueDetector.setQueues(zones);
+  }
+
+  /**
+   * Configure entry zones for tailgating
+   */
+  setEntryZones(zones: any[]) {
+    this.tailgatingDetector.setEntryZones(zones);
+  }
+
+  /**
+   * Get detector by type
+   */
+  getDetector(type: string): BaseDetector | undefined {
+    const detectorMap: Record<string, BaseDetector> = {
+      motion: this.motionDetector,
+      object: this.objectDetector,
+      zone: this.zoneDetector,
+      health: this.healthDetector,
+      person: this.personDetector,
+      vehicle: this.vehicleDetector,
+      helmet: this.helmetDetector,
+      fall: this.fallDetector,
+      smoke: this.smokeFireDetector,
+      fire: this.smokeFireDetector,
+      crowd: this.crowdDensityDetector,
+      tailgating: this.tailgatingDetector,
+      queue: this.queueDetector,
+      heatmap: this.heatMapGenerator,
+    };
+    
+    return detectorMap[type];
   }
 }

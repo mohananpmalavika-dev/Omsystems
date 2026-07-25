@@ -567,6 +567,190 @@ export async function buildApp(options?: {
     return reply.code(201).send(safeCamera(camera));
   });
 
+  app.post("/v1/branches/:branchId/cameras/discovered/approve-all", async (request, reply) => {
+    const { branchId } = branchParams.parse(request.params);
+    if (!(await requireAccess(request, reply, store, "device:configure", branchId))) return;
+    const body = z.object({
+      recordingMode: z.enum(["continuous", "motion"]).default("continuous"),
+      retentionDays: z.number().int().min(1).max(3650).default(180),
+      enableAnalytics: z.boolean().default(true),
+      enableAlerts: z.boolean().default(true),
+    }).parse(request.body ?? {});
+    const discoveries = await store.listDiscoveredCameras(branchId);
+    const currentCameras = await store.listCamerasByBranch(
+      request.currentUser,
+      branchId,
+      "device:configure",
+    );
+    const results: Array<Record<string, unknown>> = [];
+    let nextChannel = currentCameras.reduce(
+      (maximum, camera) => Math.max(maximum, camera.channel),
+      0,
+    ) + 1;
+
+    for (const discovery of discoveries) {
+      const blockedReason = discovery.duplicateStatus === "duplicate"
+        ? "duplicate_camera"
+        : discovery.compatibilityStatus === "incompatible"
+          ? "incompatible_camera"
+          : discovery.credentialsRequired
+            ? "camera_credentials_required"
+            : !discovery.streamVerified
+              ? "stream_not_verified"
+              : undefined;
+      if (blockedReason) {
+        results.push({
+          discoveryId: discovery.id,
+          name: discovery.displayName ?? discovery.model,
+          status: "needs-attention",
+          reason: blockedReason,
+        });
+        continue;
+      }
+
+      try {
+        const camera = await store.approveCamera(branchId, {
+          discoveryId: discovery.id,
+          name: discovery.displayName ??
+            `${discovery.manufacturer ?? discovery.vendor} ${discovery.model}`,
+          channel: nextChannel++,
+          protocol: "onvif-t",
+          connectionSecretRef: `edge://${discovery.edgeAgentId}/${discovery.id}`,
+        });
+        if (!camera) throw new Error("camera_approval_failed");
+        await store.updateCameraStatus(camera.id, "online");
+
+        const hotRetentionDays = Math.min(30, body.retentionDays);
+        const warmRetentionDays = Math.min(
+          60,
+          Math.max(0, body.retentionDays - hotRetentionDays),
+        );
+        const coldRetentionDays = Math.max(
+          0,
+          body.retentionDays - hotRetentionDays - warmRetentionDays,
+        );
+        const recordingInput = recordingJobSchema.parse({
+          mode: body.recordingMode,
+          enabled: true,
+          retentionDays: body.retentionDays,
+          hotRetentionDays,
+          warmRetentionDays,
+          coldRetentionDays,
+        });
+        let recording = await store.upsertRecordingJob(camera.id, {
+          ...recordingInput,
+          status: "idle",
+        } as Omit<RecordingJob, "id" | "cameraId" | "updatedAt">);
+        let recordingStatus: "recording" | "configured" | "failed" = "configured";
+        if (options?.recordingEngineUrl && options.recordingEngineSharedKey) {
+          const engineResponse = await fetch(
+            new URL("/internal/jobs", options.recordingEngineUrl),
+            {
+              method: "PUT",
+              headers: {
+                "content-type": "application/json",
+                "x-recording-engine-key": options.recordingEngineSharedKey,
+              },
+              body: JSON.stringify({
+                tenantId: request.currentUser.tenantId,
+                branchId,
+                cameraId: camera.id,
+                connectionSecretRef: camera.connectionSecretRef,
+                job: recording,
+              }),
+            },
+          );
+          if (engineResponse.ok) {
+            const active = z.object({ active: z.boolean() })
+              .parse(await engineResponse.json()).active;
+            recordingStatus = active ? "recording" : "configured";
+            recording = await store.upsertRecordingJob(camera.id, {
+              ...recordingInput,
+              status: active ? "recording" : "idle",
+            } as Omit<RecordingJob, "id" | "cameraId" | "updatedAt">);
+          } else {
+            recordingStatus = "failed";
+            recording = await store.upsertRecordingJob(camera.id, {
+              ...recordingInput,
+              status: "error",
+            } as Omit<RecordingJob, "id" | "cameraId" | "updatedAt">);
+          }
+        }
+
+        const analyticsRules = [];
+        if (body.enableAnalytics) {
+          const existingRules = await store.listAnalyticsRules(camera.id);
+          const automaticRules = [
+            { name: "Auto · Motion", detectionType: "motion", severity: "P3" },
+            { name: "Auto · Person", detectionType: "person", severity: "P3" },
+            { name: "Auto · Vehicle", detectionType: "vehicle", severity: "P3" },
+            { name: "Auto · Camera tampering", detectionType: "camera-tampering", severity: "P2" },
+            { name: "Auto · Video loss", detectionType: "video-loss", severity: "P1" },
+          ] as const;
+          for (const automatic of automaticRules) {
+            const existing = existingRules.find((rule) => rule.name === automatic.name);
+            analyticsRules.push(existing ?? await store.createAnalyticsRule(
+              request.currentUser.tenantId,
+              camera.id,
+              request.currentUser.id,
+              {
+                ...automatic,
+                enabled: true,
+                objectClasses: [],
+                minConfidence: 0.65,
+                minDurationSeconds: 0,
+                direction: "any",
+                cooldownSeconds: 60,
+                recipients: [],
+                recordingPolicy: "event-recording",
+                preRollSeconds: 30,
+                postRollSeconds: 120,
+              },
+            ));
+          }
+        }
+
+        await audit(request, store, "camera.auto_provisioned", camera.nodeId,
+          "success", {
+            discoveryId: discovery.id,
+            cameraId: camera.id,
+            recordingStatus,
+            analyticsRuleCount: analyticsRules.length,
+            alertsEnabled: body.enableAlerts && analyticsRules.length > 0,
+          });
+        results.push({
+          discoveryId: discovery.id,
+          cameraId: camera.id,
+          name: camera.name,
+          status: recordingStatus === "failed" ? "partial" : "provisioned",
+          stages: {
+            approved: true,
+            recording: recordingStatus,
+            analytics: body.enableAnalytics ? "active" : "disabled",
+            alerts: body.enableAlerts && analyticsRules.length > 0 ? "enabled" : "disabled",
+          },
+        });
+      } catch (error) {
+        results.push({
+          discoveryId: discovery.id,
+          name: discovery.displayName ?? discovery.model,
+          status: "failed",
+          reason: error instanceof Error ? error.message : "auto_provisioning_failed",
+        });
+      }
+    }
+
+    const provisioned = results.filter((result) => result.status === "provisioned").length;
+    const partial = results.filter((result) => result.status === "partial").length;
+    const needsAttention = results.filter((result) => result.status === "needs-attention").length;
+    const failed = results.filter((result) => result.status === "failed").length;
+    return reply.code(failed > 0 && provisioned === 0 ? 207 : 201).send({
+      branchId,
+      summary: { total: results.length, provisioned, partial, needsAttention, failed },
+      results,
+    });
+  });
+
   app.post("/v1/branches/:branchId/cameras/discovered/:discoveryId/reject", async (request, reply) => {
     const { branchId, discoveryId } = z.object({ branchId: z.string().min(1), discoveryId: z.string().min(1) }).parse(request.params);
     if (!(await requireAccess(request, reply, store, "device:configure", branchId))) return;

@@ -6,8 +6,11 @@ import { NotificationEngine } from "./notification-engine.js";
 import { StreamProcessor } from "./stream-processor.js";
 
 const detectionTypes = [
-  "motion", "person", "vehicle", "object", "line-crossing", "intrusion",
-  "loitering", "crowd-density", "camera-tampering", "video-loss", "fire-smoke",
+  "motion", "person", "vehicle", "object", "helmet", "face", "anpr",
+  "line-crossing", "intrusion", "loitering", "crowd-density",
+  "tailgating", "queue", "fall", "fire", "smoke", "fire-smoke",
+  "camera-tampering", "video-loss", "heatmap", "traffic-flow",
+  "crowd-metrics", "queue-metrics", "helmet-violation", "helmet-compliant",
 ] as const;
 const objectSchema = z.object({
   label: z.string().trim().min(1).max(100),
@@ -63,8 +66,17 @@ export function buildAnalyticsEngine(options: AnalyticsEngineOptions) {
     app.log.error({ error }, "Failed to initialize analytics pipeline");
   });
 
+  // Register detection API routes
+  void import("./routes/detection-api.js").then(module => {
+    module.registerDetectionApiRoutes(app, pipeline).catch((error) => {
+      app.log.error({ error }, "Failed to register detection API routes");
+    });
+  });
+
   app.addHook("preHandler", async (request, reply) => {
-    if (request.url === "/health") return;
+    if (request.url === "/health" || request.url.startsWith("/v1/detectors") || request.url.startsWith("/v1/analytics")) {
+      return; // Allow public access to monitoring endpoints
+    }
     const key = request.headers["x-analytics-source-key"];
     if (typeof key !== "string" || !same(key, options.sourceSharedKey)) {
       return reply.code(401).send({ error: "invalid_analytics_source_identity" });

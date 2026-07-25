@@ -1,0 +1,231 @@
+/**
+ * Smoke and Fire Detection
+ * Early warning system for fire hazards
+ */
+
+import { BaseDetector, type DetectionFrame, type DetectionResult } from "./base-detector.js";
+
+export type HazardType = "smoke" | "fire" | "both";
+export type SeverityLevel = "low" | "medium" | "high" | "critical";
+
+export interface FireHazard {
+  type: HazardType;
+  boundingBox: { x: number; y: number; width: number; height: number };
+  confidence: number;
+  severity: SeverityLevel;
+  area: number; // Percentage of frame
+  color?: {
+    dominant: string; // 'gray', 'white', 'orange', 'red'
+    intensity: number;
+  };
+}
+
+export class SmokeFireDetector extends BaseDetector {
+  private isModelLoaded = false;
+  private detectionHistory: Array<{ timestamp: Date; hazards: FireHazard[] }> = [];
+  
+  private readonly MIN_CONFIDENCE = 0.65;
+  private readonly HISTORY_SIZE = 10;
+  private readonly AREA_THRESHOLD_LOW = 0.05; // 5% of frame
+  private readonly AREA_THRESHOLD_HIGH = 0.20; // 20% of frame
+
+  constructor() {
+    super("fire-smoke", "1.0.0");
+  }
+
+  async initialize(): Promise<void> {
+    console.log("Initializing smoke and fire detector...");
+    
+    // TODO: Load specialized fire/smoke detection model
+    // Models trained on fire dataset (e.g., FireNet, FD-YOLOv5)
+    
+    this.isModelLoaded = true;
+    console.log("Smoke and fire detector initialized");
+  }
+
+  async detect(frame: DetectionFrame): Promise<DetectionResult[]> {
+    if (!this.isModelLoaded) {
+      return [];
+    }
+
+    const hazards = await this.detectHazardsInFrame(frame);
+    
+    // Store in history for trend analysis
+    this.detectionHistory.push({
+      timestamp: frame.timestamp,
+      hazards,
+    });
+
+    if (this.detectionHistory.length > this.HISTORY_SIZE) {
+      this.detectionHistory.shift();
+    }
+
+    const results: DetectionResult[] = [];
+
+    // Process fire detections
+    const fires = hazards.filter(h => h.type === "fire" || h.type === "both");
+    if (fires.length > 0) {
+      const maxSeverity = this.getMaxSeverity(fires);
+      
+      results.push({
+        detectionType: "fire",
+        confidence: this.calculateAverageConfidence(fires),
+        objects: fires.map(fire => ({
+          label: "fire",
+          confidence: fire.confidence,
+          boundingBox: fire.boundingBox,
+        })),
+        metadata: {
+          severity: maxSeverity,
+          affectedArea: this.calculateTotalArea(fires),
+          spreading: this.isSpreadingFast(),
+          colorIndicators: fires.map(f => f.color).filter(Boolean),
+        },
+        requiresAlert: true,
+      });
+    }
+
+    // Process smoke detections
+    const smokes = hazards.filter(h => h.type === "smoke" || h.type === "both");
+    if (smokes.length > 0) {
+      const maxSeverity = this.getMaxSeverity(smokes);
+      
+      results.push({
+        detectionType: "smoke",
+        confidence: this.calculateAverageConfidence(smokes),
+        objects: smokes.map(smoke => ({
+          label: "smoke",
+          confidence: smoke.confidence,
+          boundingBox: smoke.boundingBox,
+        })),
+        metadata: {
+          severity: maxSeverity,
+          affectedArea: this.calculateTotalArea(smokes),
+          density: this.estimateSmokeDensity(smokes),
+        },
+        requiresAlert: true,
+      });
+    }
+
+    return results;
+  }
+
+  /**
+   * Detect fire and smoke in frame
+   */
+  private async detectHazardsInFrame(frame: DetectionFrame): Promise<FireHazard[]> {
+    // TODO: Replace with actual ML model inference
+    /*
+    Example implementation:
+    
+    const detections = await this.model.detect(frame);
+    
+    return detections
+      .filter(d => ['smoke', 'fire'].includes(d.class))
+      .filter(d => d.confidence >= this.MIN_CONFIDENCE)
+      .map(d => ({
+        type: d.class as HazardType,
+        boundingBox: d.boundingBox,
+        confidence: d.confidence,
+        severity: this.calculateSeverity(d),
+        area: this.calculateArea(d.boundingBox),
+        color: this.analyzeColor(d, frame),
+      }));
+    */
+    
+    return [];
+  }
+
+  /**
+   * Calculate severity based on area and color
+   */
+  private calculateSeverity(hazard: any): SeverityLevel {
+    const area = hazard.area;
+    
+    if (hazard.type === "fire") {
+      if (area > this.AREA_THRESHOLD_HIGH) return "critical";
+      if (area > this.AREA_THRESHOLD_LOW) return "high";
+      return "medium";
+    } else {
+      // Smoke
+      if (area > this.AREA_THRESHOLD_HIGH) return "high";
+      if (area > this.AREA_THRESHOLD_LOW) return "medium";
+      return "low";
+    }
+  }
+
+  /**
+   * Calculate total affected area
+   */
+  private calculateTotalArea(hazards: FireHazard[]): number {
+    return hazards.reduce((sum, h) => sum + h.area, 0);
+  }
+
+  /**
+   * Check if fire is spreading quickly
+   */
+  private isSpreadingFast(): boolean {
+    if (this.detectionHistory.length < 3) return false;
+
+    const recent = this.detectionHistory.slice(-3);
+    const areas = recent.map(h => this.calculateTotalArea(h.hazards));
+    
+    // Check if area is increasing consistently
+    for (let i = 1; i < areas.length; i++) {
+      if (areas[i]! <= areas[i - 1]!) return false;
+    }
+
+    // Check rate of increase
+    const firstArea = areas[0]!;
+    const lastArea = areas[areas.length - 1]!;
+    const increaseRate = (lastArea - firstArea) / firstArea;
+
+    return increaseRate > 0.5; // 50% increase is considered fast spreading
+  }
+
+  /**
+   * Estimate smoke density
+   */
+  private estimateSmokeDensity(smokes: FireHazard[]): "light" | "moderate" | "heavy" {
+    const avgConfidence = this.calculateAverageConfidence(smokes);
+    const totalArea = this.calculateTotalArea(smokes);
+
+    if (avgConfidence > 0.85 && totalArea > 0.15) return "heavy";
+    if (avgConfidence > 0.70 && totalArea > 0.08) return "moderate";
+    return "light";
+  }
+
+  /**
+   * Get maximum severity from hazards
+   */
+  private getMaxSeverity(hazards: FireHazard[]): SeverityLevel {
+    const severityOrder: SeverityLevel[] = ["low", "medium", "high", "critical"];
+    
+    let maxIndex = 0;
+    for (const hazard of hazards) {
+      const index = severityOrder.indexOf(hazard.severity);
+      if (index > maxIndex) maxIndex = index;
+    }
+
+    return severityOrder[maxIndex]!;
+  }
+
+  private calculateAverageConfidence(hazards: FireHazard[]): number {
+    if (hazards.length === 0) return 0;
+    const sum = hazards.reduce((acc, h) => acc + h.confidence, 0);
+    return sum / hazards.length;
+  }
+
+  async cleanup(): Promise<void> {
+    this.isModelLoaded = false;
+    this.detectionHistory = [];
+    console.log("Smoke and fire detector cleaned up");
+  }
+
+  getHealth() {
+    return {
+      status: this.isModelLoaded ? ("healthy" as const) : ("unhealthy" as const),
+      details: `History: ${this.detectionHistory.length} frames`,
+    };
+  }
+}

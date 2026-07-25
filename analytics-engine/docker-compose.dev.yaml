@@ -1,0 +1,69 @@
+# Development Docker Compose for Analytics Engine
+# Use this for local development and testing
+
+version: '3.8'
+
+services:
+  analytics-engine-dev:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: base  # Use base stage for development
+    container_name: analytics-engine-dev
+    ports:
+      - "8092:8092"
+      - "9092:9092"  # Metrics port
+      - "9229:9229"  # Node debugger port
+    environment:
+      HOST: "0.0.0.0"
+      PORT: "8092"
+      NODE_ENV: "development"
+      CONTROL_PLANE_URL: "http://host.docker.internal:4000"
+      ANALYTICS_ENGINE_SHARED_KEY: "dev-analytics-engine-key-min-32-characters-long"
+      ANALYTICS_SOURCE_SHARED_KEY: "dev-analytics-source-key-min-32-characters-long"
+      
+      # Development settings
+      LOG_LEVEL: "debug"
+      ENABLE_METRICS: "true"
+      
+      # Model paths (mount local models)
+      YOLO_MODEL_PATH: "/app/models/yolov8n.onnx"
+      
+      # Relaxed thresholds for development
+      PERSON_CONFIDENCE_THRESHOLD: "0.4"
+      VEHICLE_CONFIDENCE_THRESHOLD: "0.5"
+      
+    volumes:
+      # Mount source code for hot reload
+      - ./src:/app/src:ro
+      - ./models:/app/models:ro
+      - ./logs:/app/logs
+      # Node modules from container
+      - /app/node_modules
+    command: >
+      sh -c "npm install && npm run dev"
+    networks:
+      - analytics-dev
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8092/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+  # Mock control plane for testing
+  mock-control-plane:
+    image: mockserver/mockserver:latest
+    container_name: mock-control-plane
+    ports:
+      - "4000:1080"
+    environment:
+      MOCKSERVER_INITIALIZATION_JSON_PATH: /config/mock-config.json
+    volumes:
+      - ./test/mock-config.json:/config/mock-config.json:ro
+    networks:
+      - analytics-dev
+
+networks:
+  analytics-dev:
+    driver: bridge

@@ -318,6 +318,16 @@ export const cameraInventoryApi = {
       `/v1/branches/${encodeURIComponent(branchId)}/cameras/discovered/${encodeURIComponent(discoveryId)}/approve`,
       { method: 'POST', body: JSON.stringify(data) }
     ),
+  approveAllDiscovered: (branchId: string, data: {
+    recordingMode?: 'continuous' | 'motion';
+    retentionDays?: number;
+    enableAnalytics?: boolean;
+    enableAlerts?: boolean;
+  } = {}) =>
+    fetchApi<any>(
+      `/v1/branches/${encodeURIComponent(branchId)}/cameras/discovered/approve-all`,
+      { method: 'POST', body: JSON.stringify(data) }
+    ),
   rejectDiscovery: (branchId: string, discoveryId: string, data: { reason?: string }) =>
     fetchApi<any>(
       `/v1/branches/${encodeURIComponent(branchId)}/cameras/discovered/${encodeURIComponent(discoveryId)}/reject`,
