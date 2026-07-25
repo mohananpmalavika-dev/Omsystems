@@ -141,7 +141,9 @@ export function DeviceManager() {
   const [showDiscoveredList, setShowDiscoveredList] = useState(false);
   const [registrationMode, setRegistrationMode] = useState<"automatic" | "manual" | "bulk">("automatic");
   const [selectedDiscoveryId, setSelectedDiscoveryId] = useState<string>();
+  const [previewDiscoveryId, setPreviewDiscoveryId] = useState<string>();
   const [renameDraft, setRenameDraft] = useState("");
+  const [previewNameDraft, setPreviewNameDraft] = useState("");
   const [rejectReason, setRejectReason] = useState("");
   const [bulkCsv, setBulkCsv] = useState("");
   const [provisionedGateway, setProvisionedGateway] = useState<EdgeAgent>();
@@ -364,6 +366,12 @@ export function DeviceManager() {
     setDiscoveryReviewState((previous) => ({ ...previous, [discoveryId]: { reviewStatus } }));
   }
 
+  function previewDiscoveredCamera(discovered: any) {
+    setPreviewDiscoveryId(discovered.id);
+    setPreviewNameDraft(discovered.displayName ?? discovered.model ?? "");
+    setRejectReason("");
+  }
+
   async function approveDiscoveredCamera(discovered: any) {
     setSaving(true);
     setError(undefined);
@@ -376,6 +384,8 @@ export function DeviceManager() {
         connectionSecretRef: `edge://${discovered.edgeAgentId}/${discovered.id}`,
       });
       markDiscoveryReviewStatus(discovered.id, "approved");
+      setPreviewDiscoveryId(undefined);
+      setPreviewNameDraft("");
       setNotice(`${name} was approved and added to monitoring.`);
       await refreshBranch(selectedBranch);
     } catch (reason) {
@@ -391,7 +401,9 @@ export function DeviceManager() {
     try {
       await cameraInventoryApi.renameDiscovery(selectedBranch, discoveryId, { displayName });
       setRenameDraft("");
+      setPreviewNameDraft("");
       setSelectedDiscoveryId(undefined);
+      setPreviewDiscoveryId(undefined);
       setNotice("Discovery name updated.");
       await refreshBranch(selectedBranch);
     } catch (reason) {
@@ -408,6 +420,7 @@ export function DeviceManager() {
       await cameraInventoryApi.rejectDiscovery(selectedBranch, discoveryId, { reason });
       setRejectReason("");
       setSelectedDiscoveryId(undefined);
+      setPreviewDiscoveryId(undefined);
       setNotice("Device was rejected and will stay suppressed on future scans.");
       await refreshBranch(selectedBranch);
     } catch (reason) {
@@ -857,19 +870,30 @@ export function DeviceManager() {
                 <div className="device-empty"><Camera size={30} /><strong>No cameras discovered</strong><span>Run a network scan or configure the gateway's ONVIF endpoints to find cameras.</span></div>
               ) : (
                 <>
-                  <p className="form-info-banner"><Network size={16} />Select a discovered camera to add it to this branch. Pre-populated details can be edited if needed.</p>
+                  <p className="form-info-banner"><Network size={16} />Preview each discovered camera, rename it if needed, and then explicitly approve or reject it.</p>
                   <div className="discovered-cameras-list">
                     {discoveredCameras.map((camera) => (
                       <div key={camera.id} className="discovered-camera-item">
                         <div className="camera-details">
-                          <strong>{camera.model} @ {camera.ipAddress}</strong>
+                          <strong>{camera.displayName || camera.model} @ {camera.ipAddress}</strong>
                           <small>{camera.vendor} · {camera.discoveryMethod ?? "discovery"} · ONVIF port {camera.onvifPort}</small>
                           <small>{camera.serialNumber ? `SN ${camera.serialNumber}` : "Serial pending"} · {camera.macAddress ?? "MAC pending"}</small>
                           <small className="profiles">{camera.profiles.map((p: any) => `${p.codec} ${p.width}x${p.height}`).join(", ")}</small>
                         </div>
-                        <button className="primary-button" onClick={() => void approveDiscoveredCamera(camera)} disabled={saving}>
-                          {saving ? "Adding…" : "Approve"}
-                        </button>
+                        <div className="discovery-card-actions">
+                          <button className="secondary-button" onClick={() => previewDiscoveredCamera(camera)} disabled={saving}>
+                            {previewDiscoveryId === camera.id ? "Previewing" : "Preview"}
+                          </button>
+                        </div>
+                        {previewDiscoveryId === camera.id && (
+                          <div className="discovery-inline-editor" style={{ gridColumn: "1 / -1" }}>
+                            <input value={previewNameDraft} onChange={(event) => setPreviewNameDraft(event.target.value)} placeholder="Display name" />
+                            <button type="button" className="primary-button" onClick={() => void renameDiscoveredCamera(camera.id, previewNameDraft)} disabled={saving || !previewNameDraft.trim()}>Save name</button>
+                            <input value={rejectReason} onChange={(event) => setRejectReason(event.target.value)} placeholder="Reject reason" />
+                            <button type="button" className="secondary-button" onClick={() => void rejectDiscoveredCamera(camera.id, rejectReason)} disabled={saving}>Reject</button>
+                            <button type="button" className="primary-button" onClick={() => void approveDiscoveredCamera(camera)} disabled={saving}>Approve</button>
+                          </div>
+                        )}
                       </div>
                     ))}
                   </div>
