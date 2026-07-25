@@ -6,7 +6,7 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import type { ControlPlaneStore } from '../control-plane-store.js';
-import { initFirmwareManager } from '../maintenance/firmware-manager.js';
+import { initFirmwareManager, type FirmwareUpgradeSafetyContext } from '../maintenance/firmware-manager.js';
 
 export async function registerFirmwareManagementRoutes(
   app: FastifyInstance,
@@ -280,7 +280,7 @@ export async function registerFirmwareManagementRoutes(
       }).optional(),
     }).parse(request.body);
 
-    const defaultSafetyContext = {
+    const defaultSafetyContext: FirmwareUpgradeSafetyContext = {
       modelConfirmed: false,
       exactVersionConfirmed: false,
       powerConfirmed: false,

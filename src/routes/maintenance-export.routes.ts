@@ -65,8 +65,8 @@ export async function registerMaintenanceExportRoutes(
       });
 
       return csv;
-    } catch (error) {
-      app.log.error({ error }, 'Failed to export alerts:');
+    } catch (error: any) {
+      app.log.error({ error }, 'Failed to export alerts');
       return reply.code(500).send({ error: 'export_failed' });
     }
   });
@@ -88,7 +88,7 @@ export async function registerMaintenanceExportRoutes(
 
     try {
       // Fetch work orders
-      const workOrders = await store.listWorkOrders(tenantId, query.status);
+      const workOrders = await store.listWorkOrders(tenantId, query.status as any);
       const filteredWorkOrders = workOrders.filter((wo: any) => {
         if (query.severity && wo.severity !== query.severity) {
           return false;
@@ -136,8 +136,8 @@ export async function registerMaintenanceExportRoutes(
       });
 
       return csv;
-    } catch (error) {
-      app.log.error({ error }, 'Failed to export work orders:');
+    } catch (error: any) {
+      app.log.error({ error }, 'Failed to export work orders');
       return reply.code(500).send({ error: 'export_failed' });
     }
   });
@@ -249,12 +249,7 @@ export async function registerMaintenanceExportRoutes(
     const tenantId = request.currentUser.tenantId;
 
     try {
-      const visits = await store.listMaintenanceVisits(tenantId, {
-        startDate: query.startDate ? new Date(query.startDate) : undefined,
-        endDate: query.endDate ? new Date(query.endDate) : undefined,
-        status: query.status,
-        branchNodeId: query.branchNodeId,
-      } as any);
+      const visits = await store.listMaintenanceVisits(tenantId, query.startDate ? new Date(query.startDate) : undefined, query.endDate ? new Date(query.endDate) : undefined, query.status, query.branchNodeId);
 
       const csvData = visits.map((visit: any) => ({
         'Visit ID': visit.id.slice(0, 8),

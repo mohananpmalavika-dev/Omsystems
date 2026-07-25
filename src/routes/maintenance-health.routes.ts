@@ -128,6 +128,8 @@ export async function registerMaintenanceHealthRoutes(
     // TODO: Implement listNodes method on store interface
     const branches: any[] = []; // Placeholder
 
+    type BranchHealthStatus = 'healthy' | 'warning' | 'critical';
+    
     // For each branch, get latest network health
     const branchHealth = await Promise.all(
       branches.map(async branch => {
@@ -135,7 +137,7 @@ export async function registerMaintenanceHealthRoutes(
         return {
           branchId: branch.id,
           branchName: branch.name,
-          status: 'healthy' as 'healthy' | 'warning' | 'critical',
+          status: 'healthy' as BranchHealthStatus,
           latencyMs: 25,
           packetLoss: 0.2,
           jitterMs: 5,
@@ -149,8 +151,8 @@ export async function registerMaintenanceHealthRoutes(
       summary: {
         total: branches.length,
         healthy: branchHealth.filter(b => b.status === 'healthy').length,
-        warning: branchHealth.filter(b => (b.status as string) === 'warning').length,
-        critical: branchHealth.filter(b => (b.status as string) === 'critical').length,
+        warning: branchHealth.filter(b => b.status === 'warning').length,
+        critical: branchHealth.filter(b => b.status === 'critical').length,
       },
     };
   });
