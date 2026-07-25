@@ -100,7 +100,7 @@ CREATE TABLE IF NOT EXISTS detected_objects (
   bounding_box jsonb NOT NULL, -- {x, y, width, height}
   attributes jsonb, -- color, direction, etc.
   zone_id uuid, -- Future FK: REFERENCES zones(id) ON DELETE SET NULL
-  alert_id uuid REFERENCES alerts(id) ON DELETE SET NULL,
+  alert_id uuid, -- NO FK: REFERENCES alerts(id) ON DELETE SET NULL - alerts table may not exist
   thumbnail_path text,
   created_at timestamptz NOT NULL DEFAULT now()
 );
