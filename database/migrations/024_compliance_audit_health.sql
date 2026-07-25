@@ -108,7 +108,7 @@ CREATE INDEX camera_health_checks_timestamp_idx
 
 -- Latest Camera Health (materialized view)
 CREATE MATERIALIZED VIEW IF NOT EXISTS camera_health_latest AS
-SELECT DISTINCT ON (camera_id)
+SELECT DISTINCT ON (chc.camera_id)
   chc.*,
   crn.name as camera_name,
   n.name as branch_name
@@ -116,7 +116,7 @@ FROM camera_health_checks chc
 JOIN cameras c ON c.id = chc.camera_id
 JOIN resource_nodes crn ON crn.id = c.resource_node_id
 LEFT JOIN resource_nodes n ON n.id = chc.branch_node_id
-ORDER BY camera_id, check_timestamp DESC;
+ORDER BY chc.camera_id, chc.check_timestamp DESC;
 
 CREATE UNIQUE INDEX camera_health_latest_camera_idx 
   ON camera_health_latest (camera_id);
