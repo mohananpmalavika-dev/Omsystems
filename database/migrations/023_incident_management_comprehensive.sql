@@ -75,7 +75,7 @@ END $$;
 -- Drop and recreate incidents table with comprehensive fields
 DROP TABLE IF EXISTS incidents CASCADE;
 
-CREATE TABLE IF NOT EXISTS incidents (
+CREATE TABLE incidents (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   incident_number text NOT NULL UNIQUE,
   tenant_id text NOT NULL,
@@ -131,7 +131,7 @@ COMMENT ON COLUMN incidents.legal_hold_status IS 'Whether any evidence has activ
 
 -- ============ PARTICIPANTS ============
 
-CREATE TABLE IF NOT EXISTS incident_participants (
+CREATE TABLE incident_participants (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   incident_id uuid NOT NULL REFERENCES incidents(id) ON DELETE CASCADE,
   role incident_participant_role NOT NULL,
@@ -161,7 +161,7 @@ COMMENT ON TABLE incident_participants IS 'People involved in incidents (suspect
 
 -- ============ CAMERAS AND VIDEO ============
 
-CREATE TABLE IF NOT EXISTS incident_cameras (
+CREATE TABLE incident_cameras (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   incident_id uuid NOT NULL REFERENCES incidents(id) ON DELETE CASCADE,
   camera_id uuid NOT NULL REFERENCES cameras(id),
@@ -175,7 +175,7 @@ CREATE TABLE IF NOT EXISTS incident_cameras (
 CREATE INDEX incident_cameras_incident_idx ON incident_cameras (incident_id);
 CREATE INDEX incident_cameras_camera_idx ON incident_cameras (camera_id);
 
-CREATE TABLE IF NOT EXISTS incident_video_ranges (
+CREATE TABLE incident_video_ranges (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   incident_id uuid NOT NULL REFERENCES incidents(id) ON DELETE CASCADE,
   camera_id uuid NOT NULL REFERENCES cameras(id),
@@ -190,18 +190,6 @@ CREATE TABLE IF NOT EXISTS incident_video_ranges (
   CONSTRAINT video_range_dates_check CHECK (from_at < to_at)
 );
 
--- Add legal_hold_id column if it doesn't exist (for existing tables)
-DO $$ 
-BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM information_schema.columns 
-    WHERE table_name = 'incident_video_ranges' 
-    AND column_name = 'legal_hold_id'
-  ) THEN
-    ALTER TABLE incident_video_ranges ADD COLUMN legal_hold_id uuid;
-  END IF;
-END $$;
-
 CREATE INDEX IF NOT EXISTS incident_video_ranges_incident_idx ON incident_video_ranges (incident_id);
 CREATE INDEX IF NOT EXISTS incident_video_ranges_camera_idx ON incident_video_ranges (camera_id, from_at, to_at);
 CREATE INDEX IF NOT EXISTS incident_video_ranges_legal_hold_idx ON incident_video_ranges (legal_hold_id) WHERE legal_hold_id IS NOT NULL;
@@ -211,7 +199,7 @@ COMMENT ON TABLE incident_video_ranges IS 'Video time ranges preserved for incid
 
 -- ============ TIMELINE AND EVENTS ============
 
-CREATE TABLE IF NOT EXISTS incident_events (
+CREATE TABLE incident_events (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   incident_id uuid NOT NULL REFERENCES incidents(id) ON DELETE CASCADE,
   event_type incident_event_type NOT NULL,
@@ -229,7 +217,7 @@ COMMENT ON TABLE incident_events IS 'Append-only timeline of all incident activi
 
 -- ============ CLIPS AND SNAPSHOTS ============
 
-CREATE TABLE IF NOT EXISTS incident_clips (
+CREATE TABLE incident_clips (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   incident_id uuid NOT NULL REFERENCES incidents(id) ON DELETE CASCADE,
   camera_id uuid NOT NULL REFERENCES cameras(id),
@@ -254,7 +242,7 @@ CREATE INDEX incident_clips_incident_idx ON incident_clips (incident_id);
 CREATE INDEX incident_clips_camera_idx ON incident_clips (camera_id);
 CREATE INDEX incident_clips_checksum_idx ON incident_clips (checksum_sha256) WHERE checksum_sha256 IS NOT NULL;
 
-CREATE TABLE IF NOT EXISTS incident_snapshots (
+CREATE TABLE incident_snapshots (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   incident_id uuid NOT NULL REFERENCES incidents(id) ON DELETE CASCADE,
   camera_id uuid NOT NULL REFERENCES cameras(id),
@@ -280,7 +268,7 @@ COMMENT ON TABLE incident_snapshots IS 'Still images captured for evidence';
 
 -- ============ EVIDENCE MANAGEMENT ============
 
-CREATE TABLE IF NOT EXISTS incident_evidence_items (
+CREATE TABLE incident_evidence_items (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   incident_id uuid NOT NULL REFERENCES incidents(id) ON DELETE CASCADE,
   item_type text NOT NULL CHECK (char_length(item_type) <= 100),
@@ -296,7 +284,7 @@ CREATE TABLE IF NOT EXISTS incident_evidence_items (
 CREATE INDEX incident_evidence_items_incident_idx ON incident_evidence_items (incident_id);
 CREATE INDEX incident_evidence_items_type_idx ON incident_evidence_items (item_type, incident_id);
 
-CREATE TABLE IF NOT EXISTS incident_evidence_packages (
+CREATE TABLE incident_evidence_packages (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   incident_id uuid NOT NULL REFERENCES incidents(id) ON DELETE CASCADE,
   package_number text NOT NULL UNIQUE,
@@ -342,7 +330,7 @@ COMMENT ON COLUMN incident_evidence_packages.digitally_signed IS 'Whether packag
 
 -- ============ POLICE INTIMATION ============
 
-CREATE TABLE IF NOT EXISTS incident_police_intimations (
+CREATE TABLE incident_police_intimations (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   incident_id uuid NOT NULL REFERENCES incidents(id) ON DELETE CASCADE,
   
@@ -390,7 +378,7 @@ CREATE INDEX incident_police_intimations_fir_idx ON incident_police_intimations 
 
 COMMENT ON TABLE incident_police_intimations IS 'Police notification and FIR tracking';
 
-CREATE TABLE IF NOT EXISTS incident_police_evidence_transfers (
+CREATE TABLE incident_police_evidence_transfers (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   incident_id uuid NOT NULL REFERENCES incidents(id) ON DELETE CASCADE,
   police_intimation_id uuid NOT NULL REFERENCES incident_police_intimations(id) ON DELETE CASCADE,
@@ -422,7 +410,7 @@ COMMENT ON TABLE incident_police_evidence_transfers IS 'Chain of custody for evi
 
 -- ============ INSURANCE CLAIMS ============
 
-CREATE TABLE IF NOT EXISTS incident_insurance_claims (
+CREATE TABLE incident_insurance_claims (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   incident_id uuid NOT NULL REFERENCES incidents(id) ON DELETE CASCADE,
   
@@ -469,7 +457,7 @@ CREATE INDEX incident_insurance_claims_claim_number_idx ON incident_insurance_cl
 
 COMMENT ON TABLE incident_insurance_claims IS 'Insurance claim tracking and settlement';
 
-CREATE TABLE IF NOT EXISTS incident_insurance_documents (
+CREATE TABLE incident_insurance_documents (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   incident_id uuid NOT NULL REFERENCES incidents(id) ON DELETE CASCADE,
   claim_id uuid NOT NULL REFERENCES incident_insurance_claims(id) ON DELETE CASCADE,
@@ -486,7 +474,7 @@ CREATE INDEX incident_insurance_documents_claim_idx ON incident_insurance_docume
 
 -- ============ TASKS AND NOTES ============
 
-CREATE TABLE IF NOT EXISTS incident_tasks (
+CREATE TABLE incident_tasks (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   incident_id uuid NOT NULL REFERENCES incidents(id) ON DELETE CASCADE,
   task_name text NOT NULL CHECK (char_length(task_name) >= 3 AND char_length(task_name) <= 200),
@@ -510,7 +498,7 @@ CREATE INDEX incident_tasks_due_idx ON incident_tasks (due_date) WHERE due_date 
 COMMENT ON TABLE incident_tasks IS 'Corrective and follow-up tasks for incidents';
 COMMENT ON COLUMN incident_tasks.is_mandatory IS 'Whether task must be completed before incident closure';
 
-CREATE TABLE IF NOT EXISTS incident_notes (
+CREATE TABLE incident_notes (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   incident_id uuid NOT NULL REFERENCES incidents(id) ON DELETE CASCADE,
   note_type text NOT NULL DEFAULT 'general' CHECK (note_type IN ('general', 'investigation', 'management', 'legal', 'confidential')),
@@ -529,7 +517,7 @@ COMMENT ON TABLE incident_notes IS 'Investigation notes with confidentiality lev
 
 -- ============ SECURE SHARING WITH AUTHORITIES ============
 
-CREATE TABLE IF NOT EXISTS incident_secure_shares (
+CREATE TABLE incident_secure_shares (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   incident_id uuid NOT NULL REFERENCES incidents(id) ON DELETE CASCADE,
   evidence_package_id uuid REFERENCES incident_evidence_packages(id),
@@ -583,7 +571,7 @@ COMMENT ON COLUMN incident_secure_shares.one_time_password IS '6-digit OTP for a
 
 -- ============ INCIDENT REPORTS ============
 
-CREATE TABLE IF NOT EXISTS incident_reports (
+CREATE TABLE incident_reports (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   incident_id uuid NOT NULL REFERENCES incidents(id) ON DELETE CASCADE,
   report_number text NOT NULL UNIQUE,
