@@ -606,7 +606,7 @@ export function DeviceManager() {
       <div className="device-toolbar">
         <div>
           <h2>Branches & devices</h2>
-          <p>Add ONVIF or RTSP cameras through an on-site branch gateway.</p>
+          <p>Install the Edge Agent, scan the branch network, then approve every camera in one step.</p>
         </div>
         <div className="device-toolbar-actions">
           <button className="secondary-button" onClick={() => {
@@ -615,8 +615,8 @@ export function DeviceManager() {
           }} disabled={!selectedBranch}>
             <Router size={15} /> Register gateway
           </button>
-          <button className="secondary-button" onClick={() => void scanNetwork()} disabled={!selectedBranch || scanning} title={gateways.length === 0 ? "Register a gateway to scan this branch" : "Run discovery inside this branch network"}>
-            <Network size={15} /> {scanning ? "Scanning…" : gateways.length === 0 ? "Set up scan" : "Scan network"}
+          <button className="secondary-button" onClick={() => void scanNetwork()} disabled={!selectedBranch || scanning} title="Find cameras through the Edge Agent inside this branch network">
+            <Network size={15} /> {scanning ? "Scanning…" : "Scan network"}
           </button>
           <button className="primary-button" onClick={openCameraForm} disabled={!selectedBranch || gateways.length === 0}>
             <Plus size={15} /> Add camera
@@ -677,18 +677,23 @@ export function DeviceManager() {
         <div className="device-card-heading"><Search size={18} /><div><h3>Device discovery</h3><p>{pendingReviewCount} awaiting review · {approvedReviewCount} approved</p></div></div>
         <div className={`discovery-status-panel ${scanning ? "scanning" : discoveryQueueItems.length === 0 ? "idle" : "ready"}`}>
           <div className="discovery-status-copy">
-            <strong>{scanning ? "Scan in progress" : discoveryQueueItems.length === 0 ? "Scan ready" : "Discovery queue is ready for review"}</strong>
+            <strong>{scanning ? "Scan in progress" : discoveryQueueItems.length === 0 ? "Scan ready" : "Cameras are ready for automatic provisioning"}</strong>
             <p>{scanning
               ? "The branch gateway is probing the local network and validating camera services."
               : discoveryQueueItems.length === 0
                 ? "Run a network scan to discover cameras automatically and skip manual IP entry."
-                : "Review each candidate, rename it if needed, and approve the right devices into monitoring."}</p>
+                : "Approve all verified cameras to start recording, AI detection, and alerts automatically."}</p>
           </div>
           <div className="discovery-status-actions">
             <span className={`scan-pill ${scanning ? "active" : "idle"}`}>
               {scanning ? "Scanning…" : lastScanAt ? "Last scan ready" : "Awaiting scan"}
             </span>
             {lastScanAt ? <span className="scan-time">{new Date(lastScanAt).toLocaleString()}</span> : null}
+            {discoveryQueueItems.length > 0 ? (
+              <button type="button" className="primary-button" onClick={() => void approveAllDiscovered()} disabled={saving || scanning}>
+                {saving ? "Provisioning…" : `Approve all & start (${pendingReviewCount})`}
+              </button>
+            ) : null}
           </div>
           <div className="discovery-status-metrics">
             <div><span>Found</span><strong>{discoveryQueueItems.length}</strong></div>
@@ -915,7 +920,7 @@ export function DeviceManager() {
                       <strong>{result.name}</strong>
                       {result.stages ? (
                         <span>
-                          ✓ Approved · {result.stages.recording === "recording" ? "✓ Recording" : "◷ Recording configured"} · ✓ AI active · ✓ Alerts enabled
+                          ✓ Approved · {result.stages.recording === "recording" ? "✓ Recording" : result.stages.recording === "failed" ? "! Recording failed" : "◷ Recording configured"} · {result.stages.analytics === "active" ? "✓ AI active" : "AI disabled"} · {result.stages.alerts === "enabled" ? "✓ Alerts enabled" : "Alerts disabled"}
                         </span>
                       ) : (
                         <span>{result.reason?.replaceAll("_", " ") ?? result.status}</span>
@@ -925,7 +930,7 @@ export function DeviceManager() {
                 </div>
               )}
               {discoveredCameras.length === 0 ? (
-                <div className="device-empty"><Camera size={30} /><strong>No cameras discovered</strong><span>Make sure the Edge Agent is online in the camera network, then scan again.</span></div>
+                <div className="device-empty"><Camera size={30} /><strong>{autoProvisionResults.length > 0 ? "Provisioning complete" : "No cameras discovered"}</strong><span>{autoProvisionResults.length > 0 ? "Verified cameras are now configured. Devices needing attention remain clearly identified above." : "Make sure the Edge Agent is online in the camera network, then scan again."}</span></div>
               ) : (
                 <>
                   <p className="form-info-banner"><Network size={16} />Approve all stream-verified cameras in one step. Recording, AI rules, and alerts are enabled automatically.</p>
