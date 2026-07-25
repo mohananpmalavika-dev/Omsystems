@@ -3,6 +3,19 @@
 -- SIMPLIFIED VERSION FOR DEBUGGING
 
 -- ============================================================================
+-- CLEANUP - Drop tables if they exist from previous failed migrations
+-- ============================================================================
+DROP TABLE IF EXISTS export_verification_log CASCADE;
+DROP TABLE IF EXISTS forensic_export_jobs CASCADE;
+DROP TABLE IF EXISTS playback_sessions CASCADE;
+DROP TABLE IF EXISTS playback_groups CASCADE;
+DROP TABLE IF EXISTS saved_search_queries CASCADE;
+DROP TABLE IF EXISTS timeline_markers CASCADE;
+DROP TABLE IF EXISTS detected_objects CASCADE;
+DROP TABLE IF EXISTS motion_events CASCADE;
+DROP TABLE IF EXISTS recording_search_index CASCADE;
+
+-- ============================================================================
 -- SEARCH INDEX & METADATA
 -- ============================================================================
 
