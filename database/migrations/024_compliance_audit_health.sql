@@ -621,7 +621,6 @@ SELECT
   n.id as branch_id,
   n.tenant_id,
   n.name as branch_name,
-  n.node_code as branch_code,
   
   -- Camera counts
   COUNT(DISTINCT c.id) as total_cameras,
@@ -667,7 +666,7 @@ LEFT JOIN maintenance_work_orders mw ON mw.camera_id = c.id
 LEFT JOIN camera_quality_checks cq ON cq.camera_id = c.id 
   AND cq.check_date >= CURRENT_DATE - INTERVAL '30 days'
 WHERE n.node_type = 'branch'
-GROUP BY n.id, n.tenant_id, n.name, n.node_code;
+GROUP BY n.id, n.tenant_id, n.name;
 
 -- Compliance Metrics Over Time
 CREATE OR REPLACE VIEW compliance_metrics_daily AS
