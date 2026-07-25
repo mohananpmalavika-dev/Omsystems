@@ -240,46 +240,10 @@ export async function registerMaintenanceDashboardRoutes(
   // NOTE: Moved to reports.routes.ts to avoid duplication
 
   // Reports - Privacy summary
-  app.get("/v1/reports/summary/privacy", async (request) => {
-    return await store.getPrivacySummary(request.currentUser.tenantId);
-  });
+  // NOTE: Moved to reports.routes.ts to avoid duplication
 
   // Reports - Incident summary
-  app.get("/v1/reports/summary/incidents", async (request) => {
-    const incidents = await store.listIncidents(request.currentUser.tenantId, { limit: 500 });
-    const openIncidents = incidents.filter((incident) =>
-      incident.status !== "resolved" && incident.status !== "closed",
-    );
-
-    const statusCounts = incidents.reduce((acc, incident) => {
-      const status = incident.status ?? "unknown";
-      acc[status] = (acc[status] ?? 0) + 1;
-      return acc;
-    }, {} as Record<string, number>);
-
-    const severityCounts = incidents.reduce((acc, incident) => {
-      const severity = incident.severity ?? "unknown";
-      acc[severity] = (acc[severity] ?? 0) + 1;
-      return acc;
-    }, {} as Record<string, number>);
-
-    const recentIncidents = incidents.slice(0, 10).map((incident) => ({
-      id: incident.id,
-      title: incident.title,
-      status: incident.status,
-      severity: incident.severity,
-      occurredAt: incident.occurredAt,
-      branchId: incident.branchId,
-    }));
-
-    return {
-      incidentCount: incidents.length,
-      openIncidentCount: openIncidents.length,
-      statusCounts,
-      severityCounts,
-      recentIncidents,
-    };
-  });
+  // NOTE: Moved to reports.routes.ts to avoid duplication
 
   // Predictive Maintenance - Get high-risk assets
   app.get("/v1/maintenance/predictive/high-risk", async (request) => {
