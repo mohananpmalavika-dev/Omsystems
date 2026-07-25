@@ -410,17 +410,17 @@ BEGIN
     )
     SELECT 
       NEW.id,
-      NEW.camera_id,
+      rj.camera_id,
       rn.tenant_id,
       NEW.started_at,
       NEW.ended_at,
       EXTRACT(EPOCH FROM (NEW.ended_at - NEW.started_at))::integer,
       rj.mode,
       now()
-    FROM cameras c
+    FROM recording_jobs rj
+    JOIN cameras c ON c.id = rj.camera_id
     JOIN resource_nodes rn ON rn.id = c.resource_node_id
-    LEFT JOIN recording_jobs rj ON rj.camera_id = c.id
-    WHERE c.id = NEW.camera_id
+    WHERE rj.id = NEW.recording_job_id
     ON CONFLICT (segment_id) DO UPDATE SET
       started_at = EXCLUDED.started_at,
       ended_at = EXCLUDED.ended_at,
