@@ -360,10 +360,7 @@ export interface EdgeScanJob {
   error: string | null;
 }
 
-export type AnalyticsDetectionType =
-  | "motion" | "person" | "vehicle" | "object" | "line-crossing"
-  | "intrusion" | "loitering" | "crowd-density" | "camera-tampering"
-  | "video-loss" | "fire-smoke";
+export type AnalyticsDetectionType = string;
 export type AnalyticsSeverity = "P1" | "P2" | "P3" | "P4" | "P5";
 export type AnalyticsAlertStatus =
   | "new" | "acknowledged" | "investigating" | "escalated"

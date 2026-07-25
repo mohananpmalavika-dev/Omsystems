@@ -8,6 +8,7 @@ import {
   type DetectedObject,
   type DetectionFrame,
   type DetectionResult,
+  getInferenceObjects,
   normalizeBoundingBox,
 } from "./base-detector.js";
 
@@ -142,7 +143,7 @@ export class FaceDetector extends BaseDetector {
     if (faceObjects.length > 0) {
       // Face detection event
       results.push({
-        detectionType: "face-detection",
+        detectionType: "face",
         confidence: Math.max(...faceObjects.map((f) => f.confidence)),
         objects: faceObjects,
         metadata: {
@@ -267,8 +268,22 @@ export class FaceDetector extends BaseDetector {
     trackId?: string;
     features?: FaceFeatures;
   }> {
-    // Return empty in production until real model is integrated
-    return [];
+    return getInferenceObjects(frame, ["face"]).map((item) => {
+      const embedding = item.attributes?.embedding;
+      return {
+        confidence: item.confidence,
+        boundingBox: {
+          x: item.boundingBox.x * frame.width,
+          y: item.boundingBox.y * frame.height,
+          width: item.boundingBox.width * frame.width,
+          height: item.boundingBox.height * frame.height,
+        },
+        trackId: item.trackId,
+        ...(Array.isArray(embedding) && embedding.every((value) => typeof value === "number")
+          ? { features: { embedding: embedding as number[], quality: typeof item.attributes?.quality === "number" ? item.attributes.quality : undefined } }
+          : {}),
+      };
+    });
   }
 
   /**

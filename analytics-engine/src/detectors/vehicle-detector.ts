@@ -4,7 +4,7 @@
  */
 
 import { randomUUID } from "node:crypto";
-import { BaseDetector, type DetectionFrame, type DetectionResult } from "./base-detector.js";
+import { BaseDetector, calculateIoU, type DetectionFrame, type DetectionResult, getInferenceObjects } from "./base-detector.js";
 
 export type VehicleType = "car" | "motorcycle" | "bus" | "truck" | "bicycle" | "auto-rickshaw";
 
@@ -16,6 +16,7 @@ export interface VehicleTrack {
   positions: Array<{ x: number; y: number; timestamp: Date }>;
   speed?: number; // pixels per second
   direction?: "north" | "south" | "east" | "west";
+  lastBoundingBox: { x: number; y: number; width: number; height: number };
 }
 
 export class VehicleDetector extends BaseDetector {
@@ -92,7 +93,10 @@ export class VehicleDetector extends BaseDetector {
     );
     */
     
-    return [];
+    const labels = ["car", "motorcycle", "bus", "truck", "bicycle", "auto-rickshaw"];
+    return getInferenceObjects(frame, labels)
+      .filter((item) => item.confidence >= this.MIN_CONFIDENCE)
+      .map((item) => ({ ...item, vehicleType: item.label }));
   }
 
   /**
@@ -114,11 +118,13 @@ export class VehicleDetector extends BaseDetector {
           firstSeen: timestamp,
           lastSeen: timestamp,
           positions: [],
+          lastBoundingBox: detection.boundingBox,
         });
       }
 
       const track = this.tracks.get(trackId)!;
       track.lastSeen = timestamp;
+      track.lastBoundingBox = detection.boundingBox;
 
       const center = {
         x: detection.boundingBox.x + detection.boundingBox.width / 2,
@@ -155,8 +161,17 @@ export class VehicleDetector extends BaseDetector {
    * Find matching track for detection
    */
   private findMatchingTrack(detection: any): string | null {
-    // TODO: Implement proper vehicle tracking (SORT, ByteTrack, etc.)
-    return null;
+    let bestMatch: string | null = null;
+    let bestScore = 0;
+    for (const [trackId, track] of this.tracks) {
+      if (track.vehicleType !== detection.vehicleType) continue;
+      const score = calculateIoU(track.lastBoundingBox, detection.boundingBox);
+      if (score > bestScore && score >= 0.25) {
+        bestScore = score;
+        bestMatch = trackId;
+      }
+    }
+    return bestMatch;
   }
 
   /**

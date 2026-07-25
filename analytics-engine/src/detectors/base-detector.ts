@@ -24,6 +24,47 @@ export interface DetectedObject {
   trackId?: string;
 }
 
+export interface InferenceObject extends DetectedObject {
+  attributes?: Record<string, unknown>;
+}
+
+/**
+ * Reads normalized detections produced by a local/open model worker. Keeping
+ * this contract on the frame lets model runtimes evolve independently from
+ * tracking, rules, alerts, recording, and the frontend.
+ */
+export function getInferenceObjects(
+  frame: DetectionFrame,
+  labels?: string[],
+): InferenceObject[] {
+  const raw = frame.metadata?.detections;
+  if (!Array.isArray(raw)) return [];
+  const allowed = labels ? new Set(labels) : undefined;
+  return raw.flatMap((value) => {
+    if (!value || typeof value !== "object") return [];
+    const item = value as Record<string, unknown>;
+    const box = item.boundingBox as Record<string, unknown> | undefined;
+    if (typeof item.label !== "string" || typeof item.confidence !== "number" ||
+        !box || typeof box.x !== "number" || typeof box.y !== "number" ||
+        typeof box.width !== "number" || typeof box.height !== "number" ||
+        (allowed && !allowed.has(item.label))) return [];
+    return [{
+      label: item.label,
+      confidence: Math.max(0, Math.min(1, item.confidence)),
+      boundingBox: {
+        x: Math.max(0, Math.min(1, box.x)),
+        y: Math.max(0, Math.min(1, box.y)),
+        width: Math.max(0.0001, Math.min(1, box.width)),
+        height: Math.max(0.0001, Math.min(1, box.height)),
+      },
+      ...(typeof item.trackId === "string" ? { trackId: item.trackId } : {}),
+      ...(item.attributes && typeof item.attributes === "object"
+        ? { attributes: item.attributes as Record<string, unknown> }
+        : {}),
+    }];
+  });
+}
+
 export interface DetectionResult {
   detectionType: string;
   confidence: number;

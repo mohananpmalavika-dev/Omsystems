@@ -11,11 +11,15 @@ import type {
   AnalyticsAlertStatus,
   Camera,
 } from "../domain/models.js";
+import {
+  AI_CAPABILITIES,
+  AI_CAPABILITY_DOMAINS,
+  isAiCapability,
+} from "../analytics/capability-catalog.js";
 
-const detectionTypes = [
-  "motion", "person", "vehicle", "object", "line-crossing", "intrusion",
-  "loitering", "crowd-density", "camera-tampering", "video-loss", "fire-smoke",
-] as const;
+const detectionTypeSchema = z.string().trim().min(1).max(120).refine(isAiCapability, {
+  message: "Unknown AI capability",
+});
 const alertStatuses = [
   "new", "acknowledged", "investigating", "escalated", "resolved",
   "false_alarm", "suppressed",
@@ -50,7 +54,7 @@ const scheduleSchema = z.object({
 });
 const ruleSchema = z.object({
   name: z.string().trim().min(2).max(160),
-  detectionType: z.enum(detectionTypes),
+  detectionType: detectionTypeSchema,
   enabled: z.boolean().default(true),
   zone: zoneSchema.optional(),
   schedule: scheduleSchema.optional(),
@@ -80,7 +84,7 @@ const objectSchema = z.object({
 const eventSchema = z.object({
   tenantId: z.string().min(1), cameraId: z.string().min(1),
   sourceEventId: z.string().trim().min(1).max(300),
-  detectionType: z.enum(detectionTypes),
+  detectionType: detectionTypeSchema,
   occurredAt: z.string().datetime(), endedAt: z.string().datetime().optional(),
   confidence: z.number().min(0).max(1),
   durationSeconds: z.number().min(0).max(86_400).default(0),
@@ -108,6 +112,18 @@ export async function registerAnalyticsRoutes(
     recordingEngineSharedKey?: string;
   } = {},
 ) {
+  app.get("/v1/analytics/capabilities", async () => ({
+    service: "sentinel-analytics-engine",
+    pricing: "self-hosted-no-api-fees",
+    domains: AI_CAPABILITY_DOMAINS,
+    summary: {
+      domains: AI_CAPABILITY_DOMAINS.length,
+      capabilities: AI_CAPABILITIES.length,
+      core: AI_CAPABILITIES.filter((item) => item.stage === "core").length,
+      derived: AI_CAPABILITIES.filter((item) => item.stage === "derived").length,
+      openModel: AI_CAPABILITIES.filter((item) => item.stage === "open-model").length,
+    },
+  }));
   app.get("/v1/cameras/:id/analytics/rules", async (request, reply) => {
     const { id } = cameraParams.parse(request.params);
     const camera = await authorizedCamera(request, reply, store, id, "analytics:view");

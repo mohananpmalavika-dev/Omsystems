@@ -4,7 +4,7 @@
  */
 
 import { randomUUID } from "node:crypto";
-import { BaseDetector, type DetectionFrame, type DetectionResult, normalizeBoundingBox } from "./base-detector.js";
+import { BaseDetector, calculateIoU, type DetectionFrame, type DetectionResult, getInferenceObjects } from "./base-detector.js";
 
 export interface PersonTrack {
   trackId: string;
@@ -12,6 +12,7 @@ export interface PersonTrack {
   lastSeen: Date;
   positions: Array<{ x: number; y: number; timestamp: Date }>;
   isStationary: boolean;
+  lastBoundingBox: { x: number; y: number; width: number; height: number };
   enteredAt?: Date;
   exitedAt?: Date;
 }
@@ -22,7 +23,7 @@ export class PersonDetector extends BaseDetector {
   
   // Configuration
   private readonly TRACKING_TIMEOUT_MS = 5000; // 5 seconds
-  private readonly STATIONARY_THRESHOLD_PIXELS = 20;
+  private readonly STATIONARY_THRESHOLD = 0.03;
   private readonly MIN_CONFIDENCE = 0.5;
 
   constructor() {
@@ -91,7 +92,8 @@ export class PersonDetector extends BaseDetector {
     return this.postprocessDetections(boxes, frame.width, frame.height);
     */
     
-    return [];
+    return getInferenceObjects(frame, ["person"])
+      .filter((item) => item.confidence >= this.MIN_CONFIDENCE);
   }
 
   /**
@@ -116,12 +118,14 @@ export class PersonDetector extends BaseDetector {
           lastSeen: timestamp,
           positions: [],
           isStationary: false,
+          lastBoundingBox: detection.boundingBox,
         });
       }
 
       // Update track
       const track = this.tracks.get(trackId)!;
       track.lastSeen = timestamp;
+      track.lastBoundingBox = detection.boundingBox;
       
       const center = {
         x: detection.boundingBox.x + detection.boundingBox.width / 2,
@@ -160,9 +164,13 @@ export class PersonDetector extends BaseDetector {
     let bestMatch: string | null = null;
     let bestScore = 0;
 
-    // Simple nearest-neighbor matching
-    // TODO: Implement proper tracking algorithm (SORT, DeepSORT, etc.)
-    
+    for (const [trackId, track] of this.tracks) {
+      const score = calculateIoU(track.lastBoundingBox, detection.boundingBox);
+      if (score > bestScore && score >= 0.25) {
+        bestScore = score;
+        bestMatch = trackId;
+      }
+    }
     return bestMatch;
   }
 
@@ -181,7 +189,7 @@ export class PersonDetector extends BaseDetector {
         Math.pow(pos.y - firstPos.y, 2)
       );
       
-      if (distance > this.STATIONARY_THRESHOLD_PIXELS) {
+      if (distance > this.STATIONARY_THRESHOLD) {
         return false;
       }
     }

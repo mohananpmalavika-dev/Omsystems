@@ -8,6 +8,7 @@ import {
   type DetectedObject,
   type DetectionFrame,
   type DetectionResult,
+  getInferenceObjects,
   normalizeBoundingBox,
 } from "./base-detector.js";
 
@@ -169,7 +170,7 @@ export class ANPRDetector extends BaseDetector {
       const watchlistMatches = plateObjects.filter((p) => p.watchlistMatch);
       if (watchlistMatches.length > 0) {
         results.push({
-          detectionType: "anpr-watchlist",
+          detectionType: "watchlist-match",
           confidence: 1.0,
           objects: watchlistMatches,
           metadata: {
@@ -273,8 +274,30 @@ export class ANPRDetector extends BaseDetector {
     plateReading: PlateReading;
     vehicle?: VehicleInfo;
   }> {
-    // Return empty in production until real model is integrated
-    return [];
+    return getInferenceObjects(frame, ["license-plate"]).flatMap((item) => {
+      const plateNumber = item.attributes?.plateNumber;
+      if (typeof plateNumber !== "string") return [];
+      const normalized = plateNumber.replace(/[^a-zA-Z0-9]/g, "").toUpperCase();
+      return [{
+        confidence: item.confidence,
+        boundingBox: {
+          x: item.boundingBox.x * frame.width,
+          y: item.boundingBox.y * frame.height,
+          width: item.boundingBox.width * frame.width,
+          height: item.boundingBox.height * frame.height,
+        },
+        trackId: item.trackId,
+        plateReading: {
+          plateNumber: normalized,
+          confidence: item.confidence,
+          country: typeof item.attributes?.country === "string" ? item.attributes.country : this.config.countryCode,
+          characters: [],
+        },
+        vehicle: item.attributes?.vehicle && typeof item.attributes.vehicle === "object"
+          ? item.attributes.vehicle as VehicleInfo
+          : undefined,
+      }];
+    });
   }
 
   /**

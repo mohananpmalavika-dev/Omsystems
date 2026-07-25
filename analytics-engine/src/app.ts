@@ -4,14 +4,14 @@ import { z } from "zod";
 import { AnalyticsPipeline } from "./analytics-pipeline.js";
 import { NotificationEngine } from "./notification-engine.js";
 import { StreamProcessor } from "./stream-processor.js";
+import { 
+  registerMonitoringHooks, 
+  systemMetricsCollector,
+  metricsEndpointHandler,
+  metricsJSONEndpointHandler 
+} from "./monitoring/middleware.js";
+import { logger } from "./monitoring/logger.js";
 
-const detectionTypes = [
-  "motion", "person", "vehicle", "object", "helmet", "face", "anpr",
-  "line-crossing", "intrusion", "loitering", "crowd-density",
-  "tailgating", "queue", "fall", "fire", "smoke", "fire-smoke",
-  "camera-tampering", "video-loss", "heatmap", "traffic-flow",
-  "crowd-metrics", "queue-metrics", "helmet-violation", "helmet-compliant",
-] as const;
 const objectSchema = z.object({
   label: z.string().trim().min(1).max(100),
   confidence: z.number().min(0).max(1),
@@ -24,7 +24,7 @@ const objectSchema = z.object({
 export const detectionSchema = z.object({
   tenantId: z.string().min(1), cameraId: z.string().min(1),
   sourceEventId: z.string().trim().min(1).max(300).default(() => randomUUID()),
-  detectionType: z.enum(detectionTypes),
+  detectionType: z.string().trim().min(1).max(120),
   occurredAt: z.string().datetime().default(() => new Date().toISOString()),
   endedAt: z.string().datetime().optional(),
   confidence: z.number().min(0).max(1),
@@ -53,6 +53,12 @@ export function buildAnalyticsEngine(options: AnalyticsEngineOptions) {
     lastAcceptedAt: undefined as string | undefined,
   };
 
+  // Register monitoring hooks for request tracking, metrics, and logging
+  registerMonitoringHooks(app);
+
+  // Start system metrics collector
+  systemMetricsCollector.start();
+
   // Initialize analytics pipeline
   const pipeline = new AnalyticsPipeline();
   const notificationEngine = new NotificationEngine({
@@ -62,7 +68,10 @@ export function buildAnalyticsEngine(options: AnalyticsEngineOptions) {
   const streamProcessor = new StreamProcessor(pipeline, options.submit);
 
   // Initialize pipeline on startup
-  void pipeline.initialize().catch((error) => {
+  void pipeline.initialize().then(() => {
+    logger.info('Analytics pipeline initialized successfully', undefined, undefined, 'app');
+  }).catch((error) => {
+    logger.error('Failed to initialize analytics pipeline', error as Error, undefined, undefined, 'app');
     app.log.error({ error }, "Failed to initialize analytics pipeline");
   });
 
@@ -79,6 +88,10 @@ export function buildAnalyticsEngine(options: AnalyticsEngineOptions) {
       app.log.error({ error }, "Failed to register advanced analytics API routes");
     });
   });
+
+  // Register monitoring routes
+  app.get("/metrics", metricsEndpointHandler);
+  app.get("/metrics/json", metricsJSONEndpointHandler);
 
   app.addHook("preHandler", async (request, reply) => {
     if (request.url === "/health" || request.url.startsWith("/v1/detectors") || request.url.startsWith("/v1/analytics")) {
@@ -147,8 +160,11 @@ export function buildAnalyticsEngine(options: AnalyticsEngineOptions) {
 
   // Graceful shutdown
   app.addHook("onClose", async () => {
+    logger.info('Shutting down analytics engine', undefined, undefined, 'app');
+    systemMetricsCollector.stop();
     await streamProcessor.stopAllStreams();
     await pipeline.cleanup();
+    logger.info('Analytics engine shutdown complete', undefined, undefined, 'app');
   });
 
   return app;

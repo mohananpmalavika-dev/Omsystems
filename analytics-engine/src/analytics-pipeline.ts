@@ -20,6 +20,8 @@ import { CrowdDensityDetector } from "./detectors/crowd-density-detector.js";
 import { TailgatingDetector } from "./detectors/tailgating-detector.js";
 import { QueueDetector } from "./detectors/queue-detector.js";
 import { HeatMapGenerator } from "./detectors/heatmap-generator.js";
+import { FaceDetector } from "./detectors/face-detector.js";
+import { ANPRDetector } from "./detectors/anpr-detector.js";
 import { HumanAnalytics } from "./detectors/human-analytics.js";
 import { VehicleAnalytics } from "./detectors/vehicle-analytics.js";
 import { FaceAnalytics } from "./detectors/face-analytics.js";
@@ -69,6 +71,8 @@ export class AnalyticsPipeline {
   private tailgatingDetector: TailgatingDetector;
   private queueDetector: QueueDetector;
   private heatMapGenerator: HeatMapGenerator;
+  private faceDetector: FaceDetector;
+  private anprDetector: ANPRDetector;
   
   // Advanced analytics modules
   private humanAnalytics: HumanAnalytics;
@@ -112,6 +116,8 @@ export class AnalyticsPipeline {
     this.tailgatingDetector = new TailgatingDetector();
     this.queueDetector = new QueueDetector();
     this.heatMapGenerator = new HeatMapGenerator();
+    this.faceDetector = new FaceDetector();
+    this.anprDetector = new ANPRDetector();
 
     // Initialize advanced analytics modules
     this.humanAnalytics = new HumanAnalytics();
@@ -140,6 +146,8 @@ export class AnalyticsPipeline {
       this.tailgatingDetector,
       this.queueDetector,
       this.heatMapGenerator,
+      this.faceDetector,
+      this.anprDetector,
       // Advanced analytics
       this.humanAnalytics,
       this.vehicleAnalytics,
@@ -283,6 +291,14 @@ export class AnalyticsPipeline {
       
       // Heat map (always generate for analytics)
       this.heatMapGenerator.detect(frame),
+
+      // Face and plate models are independent and only run when requested.
+      this.needsDetection(rules, ["face", "face-recognition", "unknown-person", "watchlist-match", "vip-detection", "blacklist-detection", "mask-detection", "beard-detection", "glasses-detection", "age-estimation", "gender-estimation", "emotion-recognition"])
+        ? this.faceDetector.detect(frame)
+        : Promise.resolve([]),
+      this.needsDetection(rules, ["anpr", "vehicle-reidentification"])
+        ? this.anprDetector.detect(frame)
+        : Promise.resolve([]),
     ]);
 
     // Process specialized results
@@ -460,6 +476,10 @@ export class AnalyticsPipeline {
     return rules.some(r => r.enabled && vehicleTypes.includes(r.detectionType));
   }
 
+  private needsDetection(rules: AnalyticsRule[], types: string[]): boolean {
+    return rules.some((rule) => rule.enabled && types.includes(rule.detectionType));
+  }
+
   /**
    * Determine if object detection should run
    */
@@ -589,6 +609,9 @@ export class AnalyticsPipeline {
       tailgating: this.tailgatingDetector,
       queue: this.queueDetector,
       heatmap: this.heatMapGenerator,
+      face: this.faceDetector,
+      "face-recognition": this.faceDetector,
+      anpr: this.anprDetector,
       // Advanced analytics
       human: this.humanAnalytics,
       "vehicle-analytics": this.vehicleAnalytics,
