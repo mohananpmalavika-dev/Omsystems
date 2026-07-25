@@ -16,9 +16,12 @@ CREATE TABLE face_watchlists (
   created_by uuid NOT NULL REFERENCES users(id),
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now(),
-  archived_at timestamptz,
-  UNIQUE (tenant_id, name) WHERE archived_at IS NULL
+  archived_at timestamptz
 );
+
+-- Partial unique index for active watchlists
+CREATE UNIQUE INDEX face_watchlists_tenant_name_unique
+  ON face_watchlists (tenant_id, name) WHERE archived_at IS NULL;
 
 CREATE TABLE face_watchlist_persons (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -98,9 +101,12 @@ CREATE TABLE anpr_watchlists (
   created_by uuid NOT NULL REFERENCES users(id),
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now(),
-  archived_at timestamptz,
-  UNIQUE (tenant_id, name) WHERE archived_at IS NULL
+  archived_at timestamptz
 );
+
+-- Partial unique index for active ANPR watchlists
+CREATE UNIQUE INDEX anpr_watchlists_tenant_name_unique
+  ON anpr_watchlists (tenant_id, name) WHERE archived_at IS NULL;
 
 CREATE TABLE anpr_watchlist_plates (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
