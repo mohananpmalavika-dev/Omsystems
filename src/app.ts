@@ -371,20 +371,18 @@ export async function buildApp(options?: {
 
   app.get("/v1/device-scans/:scanId", async (request, reply) => {
     const { scanId } = z.object({ scanId: z.string().min(1) }).parse(request.params);
-    const branchId = request.query.branchId as string | undefined;
-    if (!branchId) return reply.code(400).send({ error: "branch_id_required" });
-    const job = await store.getEdgeScanJob(branchId, scanId);
+    const query = z.object({ branchId: z.string() }).parse(request.query);
+    const job = await store.getEdgeScanJob(query.branchId, scanId);
     if (!job) return reply.code(404).send({ error: "scan_not_found" });
     return job;
   });
 
   app.get("/v1/device-scans/:scanId/results", async (request, reply) => {
     const { scanId } = z.object({ scanId: z.string().min(1) }).parse(request.params);
-    const branchId = request.query.branchId as string | undefined;
-    if (!branchId) return reply.code(400).send({ error: "branch_id_required" });
-    const job = await store.getEdgeScanJob(branchId, scanId);
+    const query = z.object({ branchId: z.string() }).parse(request.query);
+    const job = await store.getEdgeScanJob(query.branchId, scanId);
     if (!job) return reply.code(404).send({ error: "scan_not_found" });
-    const discoveries = await store.listDiscoveredCameras(branchId);
+    const discoveries = await store.listDiscoveredCameras(query.branchId);
     return { data: discoveries.map((item) => ({
       discoveryId: item.id,
       manufacturer: item.manufacturer ?? "Unknown",

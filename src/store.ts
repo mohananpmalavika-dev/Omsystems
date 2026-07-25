@@ -407,9 +407,6 @@ export class MemoryStore implements ControlPlaneStore {
     const existing = [...this.discoveries.values()].find((item) => {
       const sameBranch = item.branchId === branchId;
       const sameIp = item.ipAddress === normalized.ipAddress && item.onvifPort === normalized.onvifPort;
-      if (item.status === "rejected" && sameBranch && (sameIp || hasFingerprint)) {
-        return true;
-      }
       const sameSerial = Boolean(item.serialNumber && normalized.serialNumber && item.serialNumber === normalized.serialNumber);
       const sameMac = Boolean(item.macAddress && normalized.macAddress && item.macAddress === normalized.macAddress);
       const sameOnvif = Boolean(item.onvifEndpointReference && normalized.onvifEndpointReference && item.onvifEndpointReference === normalized.onvifEndpointReference);
@@ -422,6 +419,9 @@ export class MemoryStore implements ControlPlaneStore {
         normalized.hardwareId && item.hardwareId === normalized.hardwareId,
       );
       const hasFingerprint = [sameSerial, sameMac, sameOnvif, sameHardware, sameAssociation, sameVendorModel].some(Boolean);
+      if (item.status === "rejected" && sameBranch && (sameIp || hasFingerprint)) {
+        return true;
+      }
       return sameBranch && (hasFingerprint || sameIp);
     });
 
@@ -1119,48 +1119,6 @@ export class MemoryStore implements ControlPlaneStore {
     };
     this.complianceCertificates.push(certificate);
     return certificate;
-  }
-
-  async createDeviceInventoryRecord(input: DeviceInventoryInput): Promise<DeviceInventoryRecord> {
-    const now = new Date().toISOString();
-    const record: DeviceInventoryRecord = {
-      id: randomUUID(),
-      tenantId: input.tenantId,
-      deviceId: input.deviceId,
-      tenant: input.tenant,
-      region: input.region,
-      branch: input.branch,
-      deviceType: input.deviceType,
-      manufacturer: input.manufacturer,
-      model: input.model,
-      serialNumber: input.serialNumber,
-      macAddress: input.macAddress,
-      ipAddress: input.ipAddress,
-      firmwareVersion: input.firmwareVersion,
-      onvifVersion: input.onvifVersion,
-      capabilities: input.capabilities ?? [],
-      credentialReference: input.credentialReference,
-      installationDate: input.installationDate,
-      warranty: input.warranty,
-      amcContract: input.amcContract,
-      healthStatus: input.healthStatus ?? "unknown",
-      lastCommunication: input.lastCommunication,
-      configurationTemplate: input.configurationTemplate,
-      riskClassification: input.riskClassification ?? "medium",
-      lifecycleState: input.lifecycleState ?? "discovered",
-      createdAt: now,
-      updatedAt: now,
-    };
-    this.deviceInventoryRecords.push(record);
-    return record;
-  }
-
-  async listDeviceInventory(tenantId: string, branch?: string) {
-    return this.deviceInventoryRecords.filter((record) => record.tenantId === tenantId && (!branch || record.branch === branch));
-  }
-
-  async getDeviceInventory(id: string) {
-    return this.deviceInventoryRecords.find((record) => record.id === id);
   }
 
   async updateDeviceInventory(id: string, input: Parameters<ControlPlaneStore["updateDeviceInventory"]>[1]) {
