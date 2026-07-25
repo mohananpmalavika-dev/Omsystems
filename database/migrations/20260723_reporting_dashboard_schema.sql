@@ -207,7 +207,7 @@ CREATE TABLE IF NOT EXISTS camera_health_daily (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
   camera_id UUID NOT NULL REFERENCES cameras(id) ON DELETE CASCADE,
-  branch_node_id UUID NOT NULL REFERENCES organization_nodes(id),
+  branch_node_id UUID NOT NULL REFERENCES resource_nodes(id),
   summary_date DATE NOT NULL,
   online_minutes INT NOT NULL DEFAULT 0,
   offline_minutes INT NOT NULL DEFAULT 0,
@@ -235,7 +235,7 @@ CREATE TABLE IF NOT EXISTS recording_status_daily (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
   camera_id UUID NOT NULL REFERENCES cameras(id) ON DELETE CASCADE,
-  branch_node_id UUID NOT NULL REFERENCES organization_nodes(id),
+  branch_node_id UUID NOT NULL REFERENCES resource_nodes(id),
   summary_date DATE NOT NULL,
   expected_recording_minutes INT NOT NULL,
   available_recording_minutes INT NOT NULL,
@@ -283,7 +283,7 @@ CREATE TABLE IF NOT EXISTS storage_capacity_snapshots (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
   storage_node_id UUID NOT NULL,
-  branch_node_id UUID REFERENCES organization_nodes(id),
+  branch_node_id UUID REFERENCES resource_nodes(id),
   snapshot_time TIMESTAMP WITH TIME ZONE NOT NULL,
   total_capacity_bytes BIGINT NOT NULL,
   used_capacity_bytes BIGINT NOT NULL,
@@ -327,7 +327,7 @@ CREATE INDEX idx_storage_forecasts_node ON storage_forecasts(storage_node_id, fo
 CREATE TABLE IF NOT EXISTS incident_metrics_daily (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
-  branch_node_id UUID REFERENCES organization_nodes(id),
+  branch_node_id UUID REFERENCES resource_nodes(id),
   summary_date DATE NOT NULL,
   total_incidents INT DEFAULT 0,
   critical_incidents INT DEFAULT 0,
@@ -353,7 +353,7 @@ CREATE INDEX idx_incident_metrics_branch ON incident_metrics_daily(branch_node_i
 CREATE TABLE IF NOT EXISTS alert_metrics_daily (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
-  branch_node_id UUID REFERENCES organization_nodes(id),
+  branch_node_id UUID REFERENCES resource_nodes(id),
   summary_date DATE NOT NULL,
   total_alerts INT DEFAULT 0,
   critical_alerts INT DEFAULT 0,
@@ -380,7 +380,7 @@ CREATE INDEX idx_alert_metrics_branch ON alert_metrics_daily(branch_node_id, sum
 CREATE TABLE IF NOT EXISTS maintenance_metrics_daily (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
-  branch_node_id UUID REFERENCES organization_nodes(id),
+  branch_node_id UUID REFERENCES resource_nodes(id),
   summary_date DATE NOT NULL,
   total_work_orders INT DEFAULT 0,
   open_work_orders INT DEFAULT 0,
@@ -408,7 +408,7 @@ CREATE TABLE IF NOT EXISTS downtime_events (
   tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
   asset_id UUID, -- Camera, storage node, or other asset
   asset_type VARCHAR(50) NOT NULL, -- camera, recording, storage, network, power, integration
-  branch_node_id UUID REFERENCES organization_nodes(id),
+  branch_node_id UUID REFERENCES resource_nodes(id),
   downtime_start TIMESTAMP WITH TIME ZONE NOT NULL,
   downtime_end TIMESTAMP WITH TIME ZONE,
   duration_minutes INT,
@@ -435,7 +435,7 @@ CREATE INDEX idx_downtime_events_start ON downtime_events(downtime_start DESC);
 CREATE TABLE IF NOT EXISTS downtime_metrics_daily (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
-  branch_node_id UUID REFERENCES organization_nodes(id),
+  branch_node_id UUID REFERENCES resource_nodes(id),
   asset_type VARCHAR(50) NOT NULL,
   summary_date DATE NOT NULL,
   total_downtime_minutes INT DEFAULT 0,
@@ -458,7 +458,7 @@ CREATE INDEX idx_downtime_metrics_branch ON downtime_metrics_daily(branch_node_i
 CREATE TABLE IF NOT EXISTS system_health_scores (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
-  branch_node_id UUID REFERENCES organization_nodes(id), -- NULL for organization-wide
+  branch_node_id UUID REFERENCES resource_nodes(id), -- NULL for organization-wide
   score_time TIMESTAMP WITH TIME ZONE NOT NULL,
   overall_score DECIMAL(5,2) NOT NULL,
   camera_availability_score DECIMAL(5,2),
@@ -551,7 +551,7 @@ CREATE TABLE IF NOT EXISTS footage_retrieval_log (
   tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
   user_id UUID NOT NULL REFERENCES users(id),
   camera_id UUID NOT NULL REFERENCES cameras(id),
-  branch_node_id UUID NOT NULL REFERENCES organization_nodes(id),
+  branch_node_id UUID NOT NULL REFERENCES resource_nodes(id),
   action_type VARCHAR(50) NOT NULL, -- search, playback, snapshot, clip, export
   recording_start TIMESTAMP WITH TIME ZONE NOT NULL,
   recording_end TIMESTAMP WITH TIME ZONE NOT NULL,
