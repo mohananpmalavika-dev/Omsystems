@@ -543,6 +543,7 @@ export interface ControlPlaneStore {
   ): Promise<RecordingJob | undefined>;
   listRecordingSegments(cameraId: string, from?: string, to?: string): Promise<RecordingSegment[]>;
   getRecordingSegment(id: string): Promise<RecordingSegment | undefined>;
+  verifyRecordingSegment(segmentId: string): Promise<{ status: "verified" | "mismatch" | "missing"; hash?: string }>;
   createRecordingSegment(
     input: Omit<RecordingSegment, "id" | "createdAt">,
   ): Promise<RecordingSegment>;
@@ -1434,6 +1435,26 @@ export interface ControlPlaneStore {
     to?: string;
     limit?: number;
   }): Promise<any[]>;
+
+  // Evidence Management
+  createEvidenceCase(input: any): Promise<any>;
+  getEvidenceCase(id: string): Promise<any | undefined>;
+  listEvidenceCases(tenantId: string, filters?: any): Promise<any[]>;
+  updateEvidenceCaseStatus(id: string, status: any): Promise<any>;
+  addEvidenceItem(caseId: string, input: any): Promise<any>;
+  listEvidenceItems(caseId: string): Promise<any[]>;
+  recordCustodyEvent(input: {
+    evidenceId?: string;
+    action: string;
+    performedBy: string;
+    sourceIp?: string;
+    reason?: string;
+  }): Promise<any>;
+  getCustodyLog(evidenceId: string): Promise<any[]>;
+  createLegalHold(input: any): Promise<any>;
+  releaseLegalHold(holdId: string, releasedBy: string): Promise<any | undefined>;
+  getEvidenceExport(exportId: string): Promise<any | undefined>;
+  getEvidenceManifest(manifestId: string): Promise<any | undefined>;
 }
 
 export interface CctvInfrastructureStore {

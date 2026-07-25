@@ -34,6 +34,13 @@ export const actions = [
   "police:update",
   "insurance:update",
   "incident-report:approve",
+  "face:view",
+  "face:enrol",
+  "face:manage-watchlist",
+  "anpr:view",
+  "anpr:search",
+  "anpr:manage-watchlist",
+  "behavior:view",
 ] as const;
 
 export type Action = (typeof actions)[number];

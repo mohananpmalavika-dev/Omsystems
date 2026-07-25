@@ -66,6 +66,12 @@ export async function registerAnalyticsPhase2Routes(
   app: FastifyInstance,
   store: ControlPlaneStore,
 ) {
+  const pool = (store as any).pool;
+  
+  if (!pool) {
+    app.log.warn('Analytics Phase 2 routes require database pool - routes will be non-functional');
+  }
+  
   // ==================== Face Recognition ====================
 
   /**
@@ -81,7 +87,7 @@ export async function registerAnalyticsPhase2Routes(
       return reply.code(403).send({ error: "forbidden" });
     }
 
-    const watchlists = await store.pool.query(
+    const watchlists = await pool.query(
       `SELECT id, name, description, list_type, enabled, alert_on_match,
               alert_severity, created_at
        FROM face_watchlists
@@ -108,7 +114,7 @@ export async function registerAnalyticsPhase2Routes(
 
     const body = faceWatchlistSchema.parse(request.body);
 
-    const result = await store.pool.query(
+    const result = await pool.query(
       `INSERT INTO face_watchlists
         (tenant_id, name, description, list_type, alert_on_match,
          alert_severity, created_by)
@@ -147,7 +153,7 @@ export async function registerAnalyticsPhase2Routes(
         return reply.code(403).send({ error: "forbidden" });
       }
 
-      const persons = await store.pool.query(
+      const persons = await pool.query(
         `SELECT p.id, p.external_id, p.full_name, p.date_of_birth, p.gender,
                 p.notes, p.enrolled_at, p.last_seen_at, p.match_count,
                 COUNT(e.id) as embedding_count
@@ -191,7 +197,7 @@ export async function registerAnalyticsPhase2Routes(
       // 3. Extract face embeddings
       // 4. Store embeddings in face_embeddings table
 
-      const result = await store.pool.query(
+      const result = await pool.query(
         `INSERT INTO face_watchlist_persons
           (tenant_id, watchlist_id, external_id, full_name, date_of_birth,
            gender, notes, metadata, enrolled_by)
@@ -211,7 +217,7 @@ export async function registerAnalyticsPhase2Routes(
       );
 
       // Log audit trail
-      await store.pool.query(
+      await pool.query(
         `INSERT INTO analytics_audit_log
           (tenant_id, user_id, action, resource_type, resource_id, details)
          VALUES ($1, $2, 'face_enrol', 'face_watchlist_person', $3, $4)`,
@@ -294,7 +300,7 @@ export async function registerAnalyticsPhase2Routes(
     );
 
     // Log audit trail for face searches
-    await store.pool.query(
+    await pool.query(
       `INSERT INTO analytics_audit_log
         (tenant_id, user_id, action, details)
        VALUES ($1, $2, 'face_search', $3)`,
@@ -323,7 +329,7 @@ export async function registerAnalyticsPhase2Routes(
       return reply.code(403).send({ error: "forbidden" });
     }
 
-    const watchlists = await store.pool.query(
+    const watchlists = await pool.query(
       `SELECT id, name, description, list_type, enabled, alert_on_match,
               alert_severity, alert_authorities, created_at
        FROM anpr_watchlists
@@ -350,7 +356,7 @@ export async function registerAnalyticsPhase2Routes(
 
     const body = anprWatchlistSchema.parse(request.body);
 
-    const result = await store.pool.query(
+    const result = await pool.query(
       `INSERT INTO anpr_watchlists
         (tenant_id, name, description, list_type, alert_on_match,
          alert_severity, alert_authorities, created_by)
@@ -392,7 +398,7 @@ export async function registerAnalyticsPhase2Routes(
 
       const body = anprPlateSchema.parse(request.body);
 
-      const result = await store.pool.query(
+      const result = await pool.query(
         `INSERT INTO anpr_watchlist_plates
           (tenant_id, watchlist_id, plate_number, country_code, region_code,
            vehicle_make, vehicle_model, vehicle_color, vehicle_type,
@@ -493,7 +499,7 @@ export async function registerAnalyticsPhase2Routes(
     );
 
     // Log audit trail for ANPR searches
-    await store.pool.query(
+    await pool.query(
       `INSERT INTO analytics_audit_log
         (tenant_id, user_id, action, details, justification)
        VALUES ($1, $2, 'anpr_search', $3, $4)`,
@@ -600,7 +606,7 @@ export async function registerAnalyticsPhase2Routes(
 
       const body = protectedObjectSchema.parse(request.body);
 
-      const result = await store.pool.query(
+      const result = await pool.query(
         `INSERT INTO protected_objects
           (tenant_id, camera_id, name, description, object_type, zone,
            alert_on_removal, alert_severity, removal_threshold_seconds,

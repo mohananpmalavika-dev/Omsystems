@@ -23,14 +23,16 @@ export async function registerMaintenanceAdvancedRoutes(
   // ============================================================================
 
   app.get("/v1/maintenance/health/summary/:tenantId", async (request, reply) => {
+    const params = { tenantId: request.params as { tenantId: string } };
     const healthMonitor = getHealthMonitoring();
-    const summary = await healthMonitor.getHealthSummary(request.params.tenantId);
+    const summary = await healthMonitor.getHealthSummary(params.tenantId);
     return reply.send(summary);
   });
 
   app.get("/v1/maintenance/health/metrics/:componentId", async (request, reply) => {
+    const params = { componentId: request.params as { componentId: string } };
     const healthMonitor = getHealthMonitoring();
-    const metrics = healthMonitor.getRecentMetrics(request.params.componentId, 60);
+    const metrics = healthMonitor.getRecentMetrics(params.componentId, 60);
     return reply.send(metrics);
   });
 
@@ -45,10 +47,11 @@ export async function registerMaintenanceAdvancedRoutes(
     request,
     reply
   ) => {
+    const params = request.params as { componentId: string; metricName: string };
     const healthMonitor = getHealthMonitoring();
     const trend = healthMonitor.analyzeTrend(
-      request.params.componentId,
-      request.params.metricName,
+      params.componentId,
+      params.metricName,
       120
     );
     return reply.send(trend);
@@ -64,8 +67,9 @@ export async function registerMaintenanceAdvancedRoutes(
     request,
     reply
   ) => {
+    const params = request.params as { alertId: string };
     const healthMonitor = getHealthMonitoring();
-    healthMonitor.acknowledgeAlert(request.params.alertId);
+    healthMonitor.acknowledgeAlert(params.alertId);
     return reply.send({ success: true, message: "Alert acknowledged" });
   });
 
@@ -81,8 +85,9 @@ export async function registerMaintenanceAdvancedRoutes(
   });
 
   app.get("/v1/maintenance/reports/:reportId", async (request, reply) => {
+    const params = request.params as { reportId: string };
     const reportingEngine = getReportingEngine();
-    const report = reportingEngine.getReportById(request.params.reportId);
+    const report = reportingEngine.getReportById(params.reportId);
     if (!report) {
       return reply.status(404).send({ error: "Report not found" });
     }
@@ -172,13 +177,11 @@ export async function registerMaintenanceAdvancedRoutes(
     reply
   ) => {
     const firmwareManager = getFirmwareManager();
-    const body = request.body as any;
-    const compatibility = firmwareManager.checkCompatibility(
-      body.deviceId,
-      body.deviceModel,
-      body.currentVersion,
-      body.targetVersion
-    );
+    const body = request.body as { deviceId: string; deviceModel?: string; currentVersion?: string; targetVersion?: string };
+    const compatibility = await firmwareManager.checkCompatibility({
+      firmwareVersionId: body.targetVersion ?? '',
+      assetId: body.deviceId,
+    });
     return reply.send(compatibility);
   });
 
@@ -203,7 +206,8 @@ export async function registerMaintenanceAdvancedRoutes(
   ) => {
     const firmwareManager = getFirmwareManager();
     const { approvedBy } = request.body as any;
-    const success = firmwareManager.approvePlan(request.params.planId, approvedBy);
+    const params = request.params as { planId: string };
+    const success = firmwareManager.approvePlan(params.planId, approvedBy);
     return reply.send({ success, message: success ? "Plan approved" : "Approval failed" });
   });
 
@@ -212,7 +216,8 @@ export async function registerMaintenanceAdvancedRoutes(
     reply
   ) => {
     const firmwareManager = getFirmwareManager();
-    const success = firmwareManager.startDeployment(request.params.planId);
+    const params = request.params as { planId: string };
+    const success = firmwareManager.startDeployment(params.planId);
     return reply.send({ success, message: success ? "Deployment started" : "Deployment start failed" });
   });
 
@@ -305,9 +310,10 @@ export async function registerMaintenanceAdvancedRoutes(
     request,
     reply
   ) => {
+    const params = request.params as { deviceId: string };
     const predictiveEngine = getPredictiveEngine();
     const predictions = predictiveEngine.getActivePredictions(
-      request.params.deviceId
+      params.deviceId
     );
     return reply.send(predictions);
   });

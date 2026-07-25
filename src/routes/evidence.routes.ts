@@ -463,10 +463,9 @@ export async function registerEvidenceRoutes(
       }
 
       const items = await store.listEvidenceItems(caseId);
+      const recordingItems = items.filter((item) => item.type === "recording" && item.recordingSegmentId);
       const verifications = await Promise.all(
-        items
-          .filter((item) => item.type === "recording" && item.hash)
-          .map((item) => store.verifyRecordingSegment(item.hash!)),
+        recordingItems.map((item) => store.verifyRecordingSegment(item.recordingSegmentId!)),
       );
 
       await store.recordCustodyEvent({

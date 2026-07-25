@@ -249,7 +249,12 @@ export async function registerMaintenanceExportRoutes(
     const tenantId = request.currentUser.tenantId;
 
     try {
-      const visits = await store.listMaintenanceVisits(tenantId, query.startDate ? new Date(query.startDate) : undefined, query.endDate ? new Date(query.endDate) : undefined, query.status, query.branchNodeId);
+      const visits = await store.listMaintenanceVisits(tenantId, {
+        startDate: query.startDate ? new Date(query.startDate) : undefined,
+        endDate: query.endDate ? new Date(query.endDate) : undefined,
+        status: query.status,
+        branchNodeId: query.branchNodeId,
+      });
 
       const csvData = visits.map((visit: any) => ({
         'Visit ID': visit.id.slice(0, 8),
