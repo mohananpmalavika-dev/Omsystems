@@ -148,6 +148,7 @@ export function DeviceManager() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [scanning, setScanning] = useState(false);
+  const [lastScanAt, setLastScanAt] = useState<string | null>(null);
   const [error, setError] = useState<string>();
   const [notice, setNotice] = useState<string>();
   const [inventorySearch, setInventorySearch] = useState("");
@@ -296,20 +297,62 @@ export function DeviceManager() {
     setError(undefined);
     try {
       const preferred = gateways.find((gateway) => gateway.status === "online") ?? gateways[0];
-      let job = await cameraInventoryApi.startScan(selectedBranch, preferred?.id) as EdgeScanJob;
+      const scan = await cameraInventoryApi.startScan(selectedBranch, preferred?.id) as { id: string; status: string; branchId: string };
+      setLastScanAt(new Date().toISOString());
       const deadline = Date.now() + 120_000;
+      let job = await cameraInventoryApi.getScan(selectedBranch, scan.id) as EdgeScanJob;
+
       while (job.status === "queued" || job.status === "running") {
         if (Date.now() >= deadline) {
           setNotice("Scan queued. It will run when the branch gateway checks in.");
           return;
         }
-        await wait(2_000);
-        job = await cameraInventoryApi.getScan(selectedBranch, job.id) as EdgeScanJob;
+        await wait(1_500);
+        job = await cameraInventoryApi.getScan(selectedBranch, scan.id) as EdgeScanJob;
       }
-      const discoveries = await refreshBranch(selectedBranch) ?? [];
-      if (job.status === "failed") throw new Error(job.error ?? "Branch gateway scan failed.");
+
+      if (job.status === "failed") {
+        throw new Error(job.error ?? "Branch gateway scan failed.");
+      }
+
+      const results = await cameraInventoryApi.getScanResults(selectedBranch, scan.id);
+      const mappedResults = (results.data ?? []).map((item: any) => ({
+        ...item,
+        id: item.discoveryId ?? item.id,
+        displayName: item.displayName ?? item.model ?? "Camera",
+        vendor: item.manufacturer ?? item.vendor ?? "Unknown",
+        model: item.model ?? "Unknown",
+        ipAddress: item.ipAddress ?? "Pending",
+        onvifPort: item.onvifPort ?? 80,
+        onvifSupport: item.onvifSupported ?? item.onvifSupport ?? true,
+        streamVerified: item.streamVerified ?? false,
+        credentialsRequired: item.credentialsRequired ?? false,
+        compatibility: item.compatibility ?? item.compatibilityStatus ?? "review-required",
+        duplicateStatus: item.duplicate ? "duplicate" : item.duplicateStatus ?? "unique",
+        discoveryMethod: item.discoveryMethod ?? "device-scan",
+        profiles: item.profiles ?? [],
+        statusReason: item.statusReason ?? null,
+        edgeAgentId: item.edgeAgentId ?? preferred?.id ?? "",
+      }));
+
+      setDiscoveredCameras(mappedResults);
+      setDiscoveryReviewState((previous) => {
+        const next = { ...previous };
+        for (const camera of mappedResults) {
+          if (!next[camera.id]) {
+            next[camera.id] = {
+              reviewStatus: camera.duplicateStatus === "duplicate"
+                ? "duplicate"
+                : camera.duplicateStatus === "review-required"
+                  ? "review-required"
+                  : "pending",
+            };
+          }
+        }
+        return next;
+      });
       setShowDiscoveredList(true);
-      setNotice(`Network scan completed. Found ${job.resultCount || discoveries.length} cameras.`);
+      setNotice(`Network scan completed. Found ${job.resultCount || mappedResults.length} cameras.`);
     } catch (reason) {
       setError(messageOf(reason, "Network scan failed."));
     } finally {
@@ -586,6 +629,12 @@ export function DeviceManager() {
               : discoveryQueueItems.length === 0
                 ? "Run a network scan to discover cameras automatically and skip manual IP entry."
                 : "Review each candidate, rename it if needed, and approve the right devices into monitoring."}</p>
+          </div>
+          <div className="discovery-status-actions">
+            <span className={`scan-pill ${scanning ? "active" : "idle"}`}>
+              {scanning ? "Scanning…" : lastScanAt ? "Last scan ready" : "Awaiting scan"}
+            </span>
+            {lastScanAt ? <span className="scan-time">{new Date(lastScanAt).toLocaleString()}</span> : null}
           </div>
           <div className="discovery-status-metrics">
             <div><span>Found</span><strong>{discoveryQueueItems.length}</strong></div>
