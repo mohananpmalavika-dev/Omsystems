@@ -284,6 +284,25 @@ describe("control-plane API", () => {
     expect(sessionResponse.json().token).toHaveLength(43);
   });
 
+  it("publishes the complete AI catalog and answers private operations queries", async () => {
+    const headers = { "x-user-id": "user-global-admin" };
+    const catalog = await app.inject({ method: "GET", url: "/v1/analytics/capabilities", headers });
+    expect(catalog.statusCode).toBe(200);
+    expect(catalog.json().summary.domains).toBe(15);
+    expect(catalog.json().summary.capabilities).toBeGreaterThan(100);
+    expect(catalog.json().domains.map((domain: any) => domain.id)).toEqual(
+      expect.arrayContaining(["human", "vehicle", "face", "banking", "search", "assistant"]),
+    );
+
+    const assistant = await app.inject({
+      method: "POST", url: "/v1/analytics/assistant/query", headers,
+      payload: { query: "Show cameras not recording" },
+    });
+    expect(assistant.statusCode).toBe(200);
+    expect(assistant.json()).toMatchObject({ intent: "cameras-not-recording" });
+    expect(Array.isArray(assistant.json().data)).toBe(true);
+  });
+
   it("auto-provisions every eligible discovery with recording, AI and alerts", async () => {
     const headers = { "x-user-id": "user-global-admin" };
     const agent = (await app.inject({
@@ -351,7 +370,7 @@ describe("control-plane API", () => {
       retentionDays: 180,
     });
     const rules = await store.listAnalyticsRules(provisioned.cameraId);
-    expect(rules).toHaveLength(5);
+    expect(rules).toHaveLength(10);
     expect(rules.every((rule) => rule.enabled)).toBe(true);
   });
 

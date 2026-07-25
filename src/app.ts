@@ -157,6 +157,7 @@ export async function buildApp(options?: {
   recordingEngineSharedKey?: string;
   edgeBridgeSharedKey?: string;
   analyticsEngineSharedKey?: string;
+  analyticsEngineUrl?: string;
   authMode?: "development" | "session" | "oidc";
   recordingRoot?: string;
   enableExportWorker?: boolean;
@@ -684,6 +685,11 @@ export async function buildApp(options?: {
             { name: "Auto · Motion", detectionType: "motion", severity: "P3" },
             { name: "Auto · Person", detectionType: "person", severity: "P3" },
             { name: "Auto · Vehicle", detectionType: "vehicle", severity: "P3" },
+            { name: "Auto · Fire", detectionType: "fire", severity: "P1" },
+            { name: "Auto · Smoke", detectionType: "smoke", severity: "P1" },
+            { name: "Auto · Fall", detectionType: "fall", severity: "P1" },
+            { name: "Auto · Weapon", detectionType: "weapon", severity: "P1" },
+            { name: "Auto · No helmet", detectionType: "no-helmet", severity: "P2" },
             { name: "Auto · Camera tampering", detectionType: "camera-tampering", severity: "P2" },
             { name: "Auto · Video loss", detectionType: "video-loss", severity: "P1" },
           ] as const;
@@ -1389,6 +1395,8 @@ export async function buildApp(options?: {
   await registerAnalyticsRoutes(app, store, {
     ...(options?.analyticsEngineSharedKey
       ? { analyticsEngineSharedKey: options.analyticsEngineSharedKey } : {}),
+    ...(options?.analyticsEngineUrl
+      ? { analyticsEngineUrl: options.analyticsEngineUrl } : {}),
     ...(options?.recordingEngineUrl
       ? { recordingEngineUrl: options.recordingEngineUrl } : {}),
     ...(options?.recordingEngineSharedKey

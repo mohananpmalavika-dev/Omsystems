@@ -24,6 +24,10 @@ const configSchema = z.object({
     (value) => value === "" ? undefined : value,
     z.string().min(32).optional(),
   ),
+  ANALYTICS_ENGINE_URL: z.preprocess(
+    (value) => value === "" ? undefined : value,
+    z.string().url().optional(),
+  ),
 });
 
 export type AppConfig = z.infer<typeof configSchema>;

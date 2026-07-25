@@ -28,6 +28,7 @@ export const AI_CAPABILITY_DOMAINS: AiCapabilityDomain[] = [
     c("person", "Person detection", "core"), c("person-tracking", "Cross-frame person tracking", "derived"),
     c("person-reidentification", "Cross-camera person re-identification"), c("person-counting", "Person counting", "derived"),
     c("occupancy-counting", "Occupancy counting", "derived"), c("dwell-time", "Dwell time", "derived"),
+    c("crowd-density", "Crowd density", "derived"),
     c("running", "Running detection", "derived"), c("fighting", "Fighting detection", "open-model", "P2"),
     c("abnormal-behaviour", "Abnormal behaviour", "open-model", "P2"), c("sleeping-person", "Sleeping person"),
     c("sitting-person", "Sitting person"), c("crawling-person", "Crawling person", "open-model", "P2"),
@@ -53,6 +54,7 @@ export const AI_CAPABILITY_DOMAINS: AiCapabilityDomain[] = [
   ]},
   { id: "safety", name: "Fire & safety", description: "Immediate life-safety and PPE conditions", capabilities: [
     c("fire", "Fire detection", "open-model", "P1"), c("smoke", "Smoke detection", "open-model", "P1"),
+    c("fire-smoke", "Combined fire / smoke detection", "open-model", "P1"),
     c("helmet", "Helmet detection"), c("no-helmet", "No helmet", "open-model", "P2"),
     c("no-safety-vest", "No safety vest", "open-model", "P2"), c("no-gloves", "No gloves", "open-model", "P2"),
     c("no-shoes", "No safety shoes", "open-model", "P2"), c("fire-extinguisher-missing", "Fire extinguisher missing", "open-model", "P1"),
@@ -62,6 +64,7 @@ export const AI_CAPABILITY_DOMAINS: AiCapabilityDomain[] = [
   ]},
   { id: "security", name: "Security analytics", description: "Perimeter, objects, access, and camera integrity", capabilities: [
     c("intrusion", "Intrusion", "derived", "P1"), c("tailgating", "Tailgating", "derived", "P2"),
+    c("motion", "Motion detection", "core"), c("object", "Generic object detection", "open-model"),
     c("loitering", "Loitering", "derived", "P2"), c("line-crossing", "Line crossing", "derived", "P2"),
     c("fence-climbing", "Fence climbing", "open-model", "P1"), c("object-removal", "Object removal", "derived", "P2"),
     c("object-left-behind", "Object left behind", "derived", "P2"), c("camera-tampering", "Camera tampering", "core", "P1"),
@@ -73,6 +76,7 @@ export const AI_CAPABILITY_DOMAINS: AiCapabilityDomain[] = [
   { id: "retail", name: "Retail analytics", description: "Footfall, service, shelf, and customer flow", capabilities: [
     c("customer-counting", "Customer counting", "derived"), c("footfall", "Footfall", "derived"),
     c("queue-length", "Queue length", "derived"), c("queue-wait-time", "Queue waiting time", "derived"),
+    c("queue", "Queue analysis", "derived"),
     c("heatmap", "Heat maps", "derived"), c("shelf-monitoring", "Shelf monitoring"), c("product-pickup", "Product pickup"),
     c("product-return", "Product return"), c("checkout-analytics", "Checkout analytics", "derived"),
     c("customer-flow", "Customer flow", "derived"), c("conversion-analytics", "Conversion analytics", "derived"),
@@ -136,4 +140,3 @@ export const AI_CAPABILITIES = AI_CAPABILITY_DOMAINS.flatMap((domain) =>
 
 const capabilityIds = new Set(AI_CAPABILITIES.map((capability) => capability.id));
 export function isAiCapability(value: string): boolean { return capabilityIds.has(value); }
-

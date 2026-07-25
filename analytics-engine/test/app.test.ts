@@ -47,4 +47,33 @@ describe("analytics engine adapter", () => {
     });
     expect(response.statusCode).toBe(401);
   });
+
+  it("turns open-model frame observations into tracked analytics events", async () => {
+    const submitted: any[] = [];
+    const app = buildAnalyticsEngine({
+      sourceSharedKey: sourceKey,
+      controlPlaneSharedKey: "control-plane-key-that-is-long-enough",
+      submit: async (event) => { submitted.push(event); return { accepted: true }; },
+    });
+    apps.push(app);
+    const response = await app.inject({
+      method: "POST", url: "/internal/frames",
+      headers: { "x-analytics-source-key": sourceKey },
+      payload: {
+        tenantId: "tenant-1", cameraId: "camera-1", width: 1280, height: 720,
+        detections: [{
+          label: "person", confidence: 0.94,
+          boundingBox: { x: 0.2, y: 0.1, width: 0.2, height: 0.7 },
+        }],
+        rules: [{
+          id: "rule-person", cameraId: "camera-1", detectionType: "person",
+          enabled: true, minConfidence: 0.65, minDurationSeconds: 0,
+        }],
+      },
+    });
+    expect(response.statusCode).toBe(202);
+    expect(response.json()).toMatchObject({ detectionsReceived: 1, accepted: 1 });
+    expect(submitted[0]).toMatchObject({ cameraId: "camera-1", detectionType: "person" });
+    expect(submitted[0].objects[0].trackId).toBeTruthy();
+  });
 });

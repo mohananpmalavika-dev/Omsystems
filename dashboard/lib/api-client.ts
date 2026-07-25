@@ -584,6 +584,11 @@ export const privacyApi = {
 };
 
 export const analyticsApi = {
+  capabilities: () => fetchApi<any>('/v1/analytics/capabilities'),
+  engineHealth: () => fetchApi<any>('/v1/analytics/engine-health'),
+  askAssistant: (query: string) => fetchApi<any>('/v1/analytics/assistant/query', {
+    method: 'POST', body: JSON.stringify({ query }),
+  }),
   listRules: (cameraId: string) =>
     fetchApi<{ data: any[] }>(
       `/v1/cameras/${encodeURIComponent(cameraId)}/analytics/rules`

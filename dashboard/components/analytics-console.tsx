@@ -31,6 +31,9 @@ const emptySummary: AnalyticsAlertSummary = {
   total: 0, open: 0, new: 0, critical: 0, highPriority: 0,
 };
 
+type Capability = { id: string; name: string; stage: "core" | "derived" | "open-model"; defaultSeverity: AnalyticsSeverity; description: string };
+type CapabilityDomain = { id: string; name: string; description: string; capabilities: Capability[] };
+
 export function AnalyticsConsole() {
   const [branches, setBranches] = useState<Branch[]>([]);
   const [cameras, setCameras] = useState<CameraType[]>([]);
@@ -44,6 +47,13 @@ export function AnalyticsConsole() {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ kind: "error" | "success"; text: string }>();
   const [showRuleForm, setShowRuleForm] = useState(false);
+  const [newRuleDetection, setNewRuleDetection] = useState<AnalyticsDetectionType>("person");
+  const [capabilityDomains, setCapabilityDomains] = useState<CapabilityDomain[]>([]);
+  const [capabilitySummary, setCapabilitySummary] = useState<{ domains: number; capabilities: number; core: number; derived: number; openModel: number }>();
+  const [engineState, setEngineState] = useState<"checking" | "online" | "offline" | "unconfigured">("checking");
+  const [assistantQuery, setAssistantQuery] = useState("");
+  const [assistantResult, setAssistantResult] = useState<any>();
+  const [assistantLoading, setAssistantLoading] = useState(false);
 
   const refreshAlerts = useCallback(async () => {
     if (!branchId) return;
@@ -64,13 +74,21 @@ export function AnalyticsConsole() {
   }, [cameraId]);
 
   useEffect(() => {
-    void cameraInventoryApi.listBranches("analytics:view")
-      .then(({ data }) => {
+    void Promise.all([cameraInventoryApi.listBranches("analytics:view"), analyticsApi.capabilities()])
+      .then(([{ data }, catalog]) => {
         setBranches(data as Branch[]);
         setBranchId(data[0]?.id ?? "");
+        setCapabilityDomains(catalog.domains ?? []);
+        setCapabilitySummary(catalog.summary);
       })
       .catch((error) => setMessage({ kind: "error", text: readable(error) }))
       .finally(() => setLoading(false));
+  }, []);
+
+  useEffect(() => {
+    void analyticsApi.engineHealth()
+      .then((health) => setEngineState(health.status === "ok" ? "online" : health.status === "unconfigured" ? "unconfigured" : "offline"))
+      .catch((error) => setEngineState(error instanceof Error && error.message.includes("unconfigured") ? "unconfigured" : "offline"));
   }, []);
 
   useEffect(() => {
@@ -101,6 +119,12 @@ export function AnalyticsConsole() {
     [cameras],
   );
   const activeCamera = cameraById.get(cameraId);
+  const capabilityOptions = useMemo(() => capabilityDomains.flatMap((domain) =>
+    domain.capabilities.map((capability) => ({ value: capability.id, label: `${domain.name} · ${capability.name}` })),
+  ), [capabilityDomains]);
+  const capabilityNames = useMemo(() => new Map(capabilityDomains.flatMap((domain) =>
+    domain.capabilities.map((capability) => [capability.id, capability.name] as const),
+  )), [capabilityDomains]);
 
   const mutateAlert = useCallback(async (
     alert: AnalyticsAlert,
@@ -174,9 +198,9 @@ export function AnalyticsConsole() {
             </div>
           </div>
         </div>
-        <div className="analytics-engine-state">
-          <i /> Independent analytics path
-          <small>Live view and recording remain isolated</small>
+        <div className={`analytics-engine-state ${engineState}`}>
+          <i /> AI engine {engineState}
+          <small>Independent from live view and recording</small>
         </div>
       </header>
 
@@ -193,6 +217,55 @@ export function AnalyticsConsole() {
         <Metric icon={<ShieldAlert />} label="Critical P1" value={summary.critical} tone="red" />
         <Metric icon={<Siren />} label="P1 / P2" value={summary.highPriority} tone="amber" />
         <Metric icon={<Activity />} label="Rules on camera" value={rules.filter((rule) => rule.enabled).length} tone="green" />
+      </section>
+
+      <section className="ai-capability-console">
+        <div className="ai-capability-heading">
+          <div>
+            <span className="eyebrow">SELF-HOSTED · NO PER-CAMERA AI FEES</span>
+            <h2>AI capability centre</h2>
+            <p>{capabilitySummary?.capabilities ?? 0} capabilities across {capabilitySummary?.domains ?? 0} independently evolving domains.</p>
+          </div>
+          <div className="ai-stage-legend">
+            <span className="core">{capabilitySummary?.core ?? 0} core</span>
+            <span className="derived">{capabilitySummary?.derived ?? 0} derived</span>
+            <span className="open-model">{capabilitySummary?.openModel ?? 0} open-model</span>
+          </div>
+        </div>
+        <div className="ai-domain-grid">
+          {capabilityDomains.map((domain) => (
+            <details className="ai-domain-card" key={domain.id}>
+              <summary><span><strong>{domain.name}</strong><small>{domain.description}</small></span><b>{domain.capabilities.length}</b></summary>
+              <div className="ai-capability-list">
+                {domain.capabilities.map((capability) => (
+                  <button type="button" key={capability.id} onClick={() => { if (cameraId) { setNewRuleDetection(capability.id); setShowRuleForm(true); } }} title={`${capability.description}. ${capability.stage.replace("-", " ")}`}>
+                    <i className={capability.stage} />{capability.name}
+                  </button>
+                ))}
+              </div>
+            </details>
+          ))}
+        </div>
+        <form className="ai-assistant-bar" onSubmit={(event) => {
+          event.preventDefault();
+          if (!assistantQuery.trim()) return;
+          setAssistantLoading(true);
+          void analyticsApi.askAssistant(assistantQuery).then(setAssistantResult)
+            .catch((error) => setMessage({ kind: "error", text: readable(error) }))
+            .finally(() => setAssistantLoading(false));
+        }}>
+          <BrainCircuit size={18} />
+          <div><strong>AI operations assistant</strong><small>Private deterministic queries; no paid LLM call</small></div>
+          <input value={assistantQuery} onChange={(event) => setAssistantQuery(event.target.value)} placeholder="Show cameras not recording, smoke alerts, or find black SUVs" />
+          <button className="primary-action" disabled={assistantLoading || assistantQuery.trim().length < 3}>{assistantLoading ? "Checking…" : "Ask"}</button>
+        </form>
+        {assistantResult && (
+          <div className="ai-assistant-result">
+            <strong>{assistantResult.answer}</strong>
+            <span>{assistantResult.intent?.replaceAll("-", " ")}</span>
+            {assistantResult.actions?.map((action: any) => <a key={action.href} href={action.href}>{action.label} →</a>)}
+          </div>
+        )}
       </section>
 
       <section className="analytics-scope-card">
@@ -222,7 +295,7 @@ export function AnalyticsConsole() {
               <h2>{activeCamera?.name ?? "Select a camera"}</h2>
               <p>{rules.length} configured rule{rules.length === 1 ? "" : "s"}</p>
             </div>
-            <button className="primary-action" disabled={!cameraId} onClick={() => setShowRuleForm(true)}>
+            <button className="primary-action" disabled={!cameraId} onClick={() => { setNewRuleDetection("person"); setShowRuleForm(true); }}>
               <Plus size={14} /> New rule
             </button>
           </div>
@@ -236,7 +309,7 @@ export function AnalyticsConsole() {
                   <div className="analytics-rule-icon"><CircleDot size={16} /></div>
                   <div>
                     <strong>{rule.name}</strong>
-                    <span>{labelFor(rule.detectionType)} · {Math.round(rule.minConfidence * 100)}% · {rule.cooldownSeconds}s cooldown</span>
+                    <span>{capabilityNames.get(rule.detectionType) ?? labelFor(rule.detectionType)} · {Math.round(rule.minConfidence * 100)}% · {rule.cooldownSeconds}s cooldown</span>
                     <small>{rule.recordingPolicy.replaceAll("-", " ")}{rule.zone ? ` · ${rule.zone.shape} zone` : ""}</small>
                   </div>
                   <span className={`severity-chip ${rule.severity.toLowerCase()}`}>{rule.severity}</span>
@@ -309,7 +382,7 @@ export function AnalyticsConsole() {
       </div>
 
       {showRuleForm && cameraId && (
-        <RuleForm cameraId={cameraId} saving={saving}
+        <RuleForm cameraId={cameraId} saving={saving} initialDetection={newRuleDetection} detectionOptions={capabilityOptions.length ? capabilityOptions : detectionOptions}
           onCancel={() => setShowRuleForm(false)}
           onSave={async (payload) => {
             setSaving(true);
@@ -329,14 +402,16 @@ export function AnalyticsConsole() {
   );
 }
 
-function RuleForm({ cameraId, saving, onCancel, onSave }: {
+function RuleForm({ cameraId, saving, initialDetection, detectionOptions: availableDetections, onCancel, onSave }: {
   cameraId: string;
   saving: boolean;
+  initialDetection: AnalyticsDetectionType;
+  detectionOptions: Array<{ value: AnalyticsDetectionType; label: string }>;
   onCancel: () => void;
   onSave: (payload: Record<string, unknown>) => Promise<void>;
 }) {
   const [name, setName] = useState("Person in restricted area");
-  const [detectionType, setDetectionType] = useState<AnalyticsDetectionType>("person");
+  const [detectionType, setDetectionType] = useState<AnalyticsDetectionType>(initialDetection);
   const [severity, setSeverity] = useState<AnalyticsSeverity>("P2");
   const [confidence, setConfidence] = useState(70);
   const [duration, setDuration] = useState(2);
@@ -391,7 +466,7 @@ function RuleForm({ cameraId, saving, onCancel, onSave }: {
         {formError && <div className="analytics-message error"><AlertTriangle size={15} />{formError}</div>}
         <div className="analytics-form-grid">
           <label className="wide">Rule name<input value={name} onChange={(event) => setName(event.target.value)} required minLength={2} /></label>
-          <label>Detection<select value={detectionType} onChange={(event) => setDetectionType(event.target.value as AnalyticsDetectionType)}>{detectionOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
+          <label>Detection<select value={detectionType} onChange={(event) => setDetectionType(event.target.value as AnalyticsDetectionType)}>{availableDetections.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
           <label>Priority<select value={severity} onChange={(event) => setSeverity(event.target.value as AnalyticsSeverity)}>{["P1", "P2", "P3", "P4", "P5"].map((value) => <option key={value}>{value}</option>)}</select></label>
           <label>Confidence (%)<input type="number" min="1" max="100" value={confidence} onChange={(event) => setConfidence(Number(event.target.value))} /></label>
           <label>Minimum duration (s)<input type="number" min="0" max="86400" value={duration} onChange={(event) => setDuration(Number(event.target.value))} /></label>

@@ -143,7 +143,7 @@ export class IncidentRepository {
   }
 
   async closeIncident(id: string, closedBy: string, notes?: string) {
-    return this.updateIncidentStatus(id, 'closed', closedBy, notes);
+    return this.updateStatus(id, 'closed', closedBy, notes);
   }
 
   async reopenIncident(id: string, reopenedBy: string, reason: string) {
@@ -1005,6 +1005,38 @@ export class IncidentRepository {
     return result.rows[0];
   }
 }
+
+function buildUpdateFields(updates: Record<string, unknown>) {
+  const params: unknown[] = [];
+  const setClauses: string[] = [];
+  for (const [key, value] of Object.entries(updates)) {
+    if (value === undefined) continue;
+    const columnName = key.replace(/[A-Z]/g, (match) => `_${match.toLowerCase()}`);
+    setClauses.push(`${columnName}=$${params.length + 1}`);
+    params.push(value);
+  }
+  return { setClauses, params };
+}
+
+function mapRelatedRow(row: any): any {
+  return Object.fromEntries(Object.entries(row).map(([key, value]) => [
+    key.replace(/_([a-z])/g, (_match, letter: string) => letter.toUpperCase()),
+    value instanceof Date ? value.toISOString() : value === null ? undefined : value,
+  ]));
+}
+
+const mapIncidentVideoRange = mapRelatedRow;
+const mapIncidentEvent = mapRelatedRow;
+const mapIncidentParticipant = mapRelatedRow;
+const mapIncidentCamera = mapRelatedRow;
+const mapIncidentClip = mapRelatedRow;
+const mapIncidentSnapshot = mapRelatedRow;
+const mapIncidentEvidenceItem = mapRelatedRow;
+const mapIncidentEvidencePackage = mapRelatedRow;
+const mapIncidentPoliceIntimation = mapRelatedRow;
+const mapIncidentInsuranceClaim = mapRelatedRow;
+const mapIncidentSecureShare = mapRelatedRow;
+const mapIncidentReport = mapRelatedRow;
 
 function mapIncident(row: any) {
   return {

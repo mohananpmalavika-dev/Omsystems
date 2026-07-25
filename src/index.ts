@@ -24,6 +24,9 @@ const app = await buildApp({
   ...(config.ANALYTICS_ENGINE_SHARED_KEY
     ? { analyticsEngineSharedKey: config.ANALYTICS_ENGINE_SHARED_KEY }
     : {}),
+  ...(config.ANALYTICS_ENGINE_URL
+    ? { analyticsEngineUrl: config.ANALYTICS_ENGINE_URL }
+    : {}),
 });
 
 try {

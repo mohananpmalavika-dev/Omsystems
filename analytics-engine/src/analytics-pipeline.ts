@@ -22,19 +22,6 @@ import { QueueDetector } from "./detectors/queue-detector.js";
 import { HeatMapGenerator } from "./detectors/heatmap-generator.js";
 import { FaceDetector } from "./detectors/face-detector.js";
 import { ANPRDetector } from "./detectors/anpr-detector.js";
-import { HumanAnalytics } from "./detectors/human-analytics.js";
-import { VehicleAnalytics } from "./detectors/vehicle-analytics.js";
-import { FaceAnalytics } from "./detectors/face-analytics.js";
-import { SafetyAnalytics } from "./detectors/safety-analytics.js";
-import { BankingAnalytics } from "./detectors/banking-analytics.js";
-import { AISearchEngine } from "./detectors/ai-search-engine.js";
-import { AIInvestigationTools } from "./detectors/ai-investigation-tools.js";
-import { RetailAnalytics } from "./detectors/retail-analytics.js";
-import { AIPredictionEngine } from "./detectors/ai-prediction-engine.js";
-import { AIReportingEngine } from "./detectors/ai-reporting-engine.js";
-import { AIAssistant } from "./detectors/ai-assistant.js";
-import { IndustrialAnalytics } from "./detectors/industrial-analytics.js";
-import { SmartCityAnalytics } from "./detectors/smart-city-analytics.js";
 import { getModelManager } from "./model-manager.js";
 
 export interface AnalyticsRule {
@@ -74,23 +61,6 @@ export class AnalyticsPipeline {
   private faceDetector: FaceDetector;
   private anprDetector: ANPRDetector;
   
-  // Advanced analytics modules
-  private humanAnalytics: HumanAnalytics;
-  private vehicleAnalytics: VehicleAnalytics;
-  private faceAnalytics: FaceAnalytics;
-  private safetyAnalytics: SafetyAnalytics;
-  private bankingAnalytics: BankingAnalytics;
-  private aiSearchEngine: AISearchEngine;
-  private aiInvestigationTools: AIInvestigationTools;
-  private retailAnalytics: RetailAnalytics;
-  private aiPredictionEngine: AIPredictionEngine;
-  private aiReportingEngine: AIReportingEngine;
-  private aiAssistant: AIAssistant;
-  
-  // Optional niche modules
-  private industrialAnalytics?: IndustrialAnalytics;
-  private smartCityAnalytics?: SmartCityAnalytics;
-  
   private detectors: BaseDetector[];
   private isInitialized = false;
 
@@ -119,19 +89,6 @@ export class AnalyticsPipeline {
     this.faceDetector = new FaceDetector();
     this.anprDetector = new ANPRDetector();
 
-    // Initialize advanced analytics modules
-    this.humanAnalytics = new HumanAnalytics();
-    this.vehicleAnalytics = new VehicleAnalytics();
-    this.faceAnalytics = new FaceAnalytics();
-    this.safetyAnalytics = new SafetyAnalytics();
-    this.bankingAnalytics = new BankingAnalytics();
-    this.aiSearchEngine = new AISearchEngine();
-    this.aiInvestigationTools = new AIInvestigationTools();
-    this.retailAnalytics = new RetailAnalytics();
-    this.aiPredictionEngine = new AIPredictionEngine();
-    this.aiReportingEngine = new AIReportingEngine();
-    this.aiAssistant = new AIAssistant();
-
     this.detectors = [
       this.motionDetector,
       this.objectDetector,
@@ -148,36 +105,7 @@ export class AnalyticsPipeline {
       this.heatMapGenerator,
       this.faceDetector,
       this.anprDetector,
-      // Advanced analytics
-      this.humanAnalytics,
-      this.vehicleAnalytics,
-      this.faceAnalytics,
-      this.safetyAnalytics,
-      this.bankingAnalytics,
-      this.aiSearchEngine,
-      this.aiInvestigationTools,
-      this.retailAnalytics,
-      this.aiPredictionEngine,
-      this.aiReportingEngine,
-      this.aiAssistant,
     ];
-  }
-
-  /**
-   * Enable optional niche modules
-   */
-  enableIndustrialAnalytics(): void {
-    if (!this.industrialAnalytics) {
-      this.industrialAnalytics = new IndustrialAnalytics();
-      this.detectors.push(this.industrialAnalytics);
-    }
-  }
-
-  enableSmartCityAnalytics(): void {
-    if (!this.smartCityAnalytics) {
-      this.smartCityAnalytics = new SmartCityAnalytics();
-      this.detectors.push(this.smartCityAnalytics);
-    }
   }
 
   async initialize(): Promise<void> {
@@ -304,9 +232,7 @@ export class AnalyticsPipeline {
     // Process specialized results
     for (const results of specializedResults) {
       for (const result of results) {
-        if (this.matchesAnyRule(result.detectionType, rules) || 
-            result.detectionType.includes("metrics") ||
-            result.detectionType === "heatmap") {
+        if (this.matchesAnyRule(result.detectionType, rules)) {
           events.push(this.createEvent(frame, result));
         }
       }
@@ -612,118 +538,9 @@ export class AnalyticsPipeline {
       face: this.faceDetector,
       "face-recognition": this.faceDetector,
       anpr: this.anprDetector,
-      // Advanced analytics
-      human: this.humanAnalytics,
-      "vehicle-analytics": this.vehicleAnalytics,
-      face: this.faceAnalytics,
-      safety: this.safetyAnalytics,
-      banking: this.bankingAnalytics,
-      search: this.aiSearchEngine,
-      investigation: this.aiInvestigationTools,
-      retail: this.retailAnalytics,
-      prediction: this.aiPredictionEngine,
-      reporting: this.aiReportingEngine,
-      assistant: this.aiAssistant,
-      industrial: this.industrialAnalytics,
-      "smart-city": this.smartCityAnalytics,
     };
     
     return detectorMap[type];
-  }
-
-  // ============================================================================
-  // Advanced Analytics Module Accessors
-  // ============================================================================
-
-  /**
-   * Get Human Analytics module
-   */
-  getHumanAnalytics(): HumanAnalytics {
-    return this.humanAnalytics;
-  }
-
-  /**
-   * Get Vehicle Analytics module
-   */
-  getVehicleAnalytics(): VehicleAnalytics {
-    return this.vehicleAnalytics;
-  }
-
-  /**
-   * Get Face Analytics module
-   */
-  getFaceAnalytics(): FaceAnalytics {
-    return this.faceAnalytics;
-  }
-
-  /**
-   * Get Safety Analytics module
-   */
-  getSafetyAnalytics(): SafetyAnalytics {
-    return this.safetyAnalytics;
-  }
-
-  /**
-   * Get Banking Analytics module
-   */
-  getBankingAnalytics(): BankingAnalytics {
-    return this.bankingAnalytics;
-  }
-
-  /**
-   * Get AI Search Engine
-   */
-  getAISearchEngine(): AISearchEngine {
-    return this.aiSearchEngine;
-  }
-
-  /**
-   * Get AI Investigation Tools
-   */
-  getAIInvestigationTools(): AIInvestigationTools {
-    return this.aiInvestigationTools;
-  }
-
-  /**
-   * Get Retail Analytics module
-   */
-  getRetailAnalytics(): RetailAnalytics {
-    return this.retailAnalytics;
-  }
-
-  /**
-   * Get AI Prediction Engine
-   */
-  getAIPredictionEngine(): AIPredictionEngine {
-    return this.aiPredictionEngine;
-  }
-
-  /**
-   * Get AI Reporting Engine
-   */
-  getAIReportingEngine(): AIReportingEngine {
-    return this.aiReportingEngine;
-  }
-
-  /**
-   * Get AI Assistant
-   */
-  getAIAssistant(): AIAssistant {
-    return this.aiAssistant;
-  }
-
-  /**
-   * Get Industrial Analytics module (if enabled)
-   */
-  getIndustrialAnalytics(): IndustrialAnalytics | undefined {
-    return this.industrialAnalytics;
-  }
-
-  /**
-   * Get Smart City Analytics module (if enabled)
-   */
-  getSmartCityAnalytics(): SmartCityAnalytics | undefined {
-    return this.smartCityAnalytics;
   }
 
   /**

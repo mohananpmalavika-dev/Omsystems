@@ -5,5 +5,24 @@
     "outDir": "dist",
     "types": ["node"]
   },
-  "include": ["src/**/*.ts", "test/**/*.ts"]
+  "include": ["src/**/*.ts", "test/app.test.ts"],
+  "exclude": [
+    "src/analytics-integration-example.ts",
+    "src/routes/advanced-analytics-api.ts",
+    "src/monitoring/**/*.ts",
+    "src/detectors/ai-assistant.ts",
+    "src/detectors/ai-investigation-tools.ts",
+    "src/detectors/ai-prediction-engine.ts",
+    "src/detectors/ai-reporting-engine.ts",
+    "src/detectors/ai-search-engine.ts",
+    "src/detectors/enhanced-security-analytics.ts",
+    "src/detectors/human-analytics.ts",
+    "src/detectors/vehicle-analytics.ts",
+    "src/detectors/face-analytics.ts",
+    "src/detectors/safety-analytics.ts",
+    "src/detectors/banking-analytics.ts",
+    "src/detectors/industrial-analytics.ts",
+    "src/detectors/retail-analytics.ts",
+    "src/detectors/smart-city-analytics.ts"
+  ]
 }

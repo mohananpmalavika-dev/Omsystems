@@ -2,15 +2,9 @@ import { randomUUID, timingSafeEqual } from "node:crypto";
 import Fastify from "fastify";
 import { z } from "zod";
 import { AnalyticsPipeline } from "./analytics-pipeline.js";
+import type { AnalyticsRule } from "./analytics-pipeline.js";
 import { NotificationEngine } from "./notification-engine.js";
 import { StreamProcessor } from "./stream-processor.js";
-import { 
-  registerMonitoringHooks, 
-  systemMetricsCollector,
-  metricsEndpointHandler,
-  metricsJSONEndpointHandler 
-} from "./monitoring/middleware.js";
-import { logger } from "./monitoring/logger.js";
 
 const objectSchema = z.object({
   label: z.string().trim().min(1).max(100),
@@ -20,6 +14,31 @@ const objectSchema = z.object({
     x: z.number().min(0).max(1), y: z.number().min(0).max(1),
     width: z.number().positive().max(1), height: z.number().positive().max(1),
   }).optional(),
+});
+const frameObjectSchema = objectSchema.extend({
+  boundingBox: z.object({
+    x: z.number().min(0).max(1), y: z.number().min(0).max(1),
+    width: z.number().positive().max(1), height: z.number().positive().max(1),
+  }),
+  attributes: z.record(z.unknown()).optional(),
+});
+const frameRuleSchema = z.object({
+  id: z.string().min(1), cameraId: z.string().min(1), detectionType: z.string().min(1),
+  enabled: z.boolean().default(true), minConfidence: z.number().min(0).max(1).default(0.65),
+  minDurationSeconds: z.number().min(0).default(0), direction: z.string().optional(),
+  objectClasses: z.array(z.string()).optional(),
+  zone: z.object({
+    id: z.string(), name: z.string(), shape: z.enum(["polygon", "line"]),
+    points: z.array(z.object({ x: z.number(), y: z.number() })).min(2),
+  }).optional(),
+});
+const frameSchema = z.object({
+  tenantId: z.string().min(1), cameraId: z.string().min(1),
+  capturedAt: z.string().datetime().default(() => new Date().toISOString()),
+  width: z.number().int().positive(), height: z.number().int().positive(),
+  imageBase64: z.string().default(""), detections: z.array(frameObjectSchema).max(2_000).default([]),
+  rules: z.array(frameRuleSchema).max(500).default([]),
+  metadata: z.record(z.unknown()).default({}),
 });
 export const detectionSchema = z.object({
   tenantId: z.string().min(1), cameraId: z.string().min(1),
@@ -41,7 +60,7 @@ export const detectionSchema = z.object({
 export interface AnalyticsEngineOptions {
   sourceSharedKey: string;
   controlPlaneSharedKey: string;
-  controlPlaneUrl: string;
+  controlPlaneUrl?: string;
   submit: (event: z.infer<typeof detectionSchema>) => Promise<unknown>;
   logger?: boolean;
 }
@@ -53,25 +72,16 @@ export function buildAnalyticsEngine(options: AnalyticsEngineOptions) {
     lastAcceptedAt: undefined as string | undefined,
   };
 
-  // Register monitoring hooks for request tracking, metrics, and logging
-  registerMonitoringHooks(app);
-
-  // Start system metrics collector
-  systemMetricsCollector.start();
-
   // Initialize analytics pipeline
   const pipeline = new AnalyticsPipeline();
   const notificationEngine = new NotificationEngine({
-    controlPlaneUrl: options.controlPlaneUrl,
+    controlPlaneUrl: options.controlPlaneUrl ?? "http://127.0.0.1",
     sharedKey: options.controlPlaneSharedKey,
   });
   const streamProcessor = new StreamProcessor(pipeline, options.submit);
 
   // Initialize pipeline on startup
-  void pipeline.initialize().then(() => {
-    logger.info('Analytics pipeline initialized successfully', undefined, undefined, 'app');
-  }).catch((error) => {
-    logger.error('Failed to initialize analytics pipeline', error as Error, undefined, undefined, 'app');
+  const pipelineReady = pipeline.initialize().catch((error) => {
     app.log.error({ error }, "Failed to initialize analytics pipeline");
   });
 
@@ -81,17 +91,6 @@ export function buildAnalyticsEngine(options: AnalyticsEngineOptions) {
       app.log.error({ error }, "Failed to register detection API routes");
     });
   });
-
-  // Register advanced analytics API routes
-  void import("./routes/advanced-analytics-api.js").then(module => {
-    module.registerAdvancedAnalyticsRoutes(app, pipeline).catch((error) => {
-      app.log.error({ error }, "Failed to register advanced analytics API routes");
-    });
-  });
-
-  // Register monitoring routes
-  app.get("/metrics", metricsEndpointHandler);
-  app.get("/metrics/json", metricsJSONEndpointHandler);
 
   app.addHook("preHandler", async (request, reply) => {
     if (request.url === "/health" || request.url.startsWith("/v1/detectors") || request.url.startsWith("/v1/analytics")) {
@@ -150,6 +149,36 @@ export function buildAnalyticsEngine(options: AnalyticsEngineOptions) {
     });
   });
 
+  // A local open-model worker sends normalized observations here. The engine
+  // owns tracking, zones, rules, alerts and evidence; model runtimes remain
+  // replaceable and do not require a paid cloud API.
+  app.post("/internal/frames", async (request, reply) => {
+    const input = frameSchema.parse(request.body);
+    await pipelineReady;
+    const events = await pipeline.processFrame({
+      tenantId: input.tenantId,
+      cameraId: input.cameraId,
+      timestamp: new Date(input.capturedAt),
+      imageData: input.imageBase64 ? Buffer.from(input.imageBase64, "base64") : Buffer.alloc(0),
+      width: input.width,
+      height: input.height,
+      metadata: { ...input.metadata, detections: input.detections },
+    }, input.rules as AnalyticsRule[]);
+    const submissions = await Promise.allSettled(events.map(options.submit));
+    const accepted = submissions.filter((item) => item.status === "fulfilled").length;
+    state.received += events.length;
+    state.accepted += accepted;
+    state.failed += events.length - accepted;
+    if (accepted > 0) state.lastAcceptedAt = new Date().toISOString();
+    return reply.code(202).send({
+      cameraId: input.cameraId,
+      detectionsReceived: input.detections.length,
+      eventsGenerated: events.length,
+      accepted,
+      failed: events.length - accepted,
+    });
+  });
+
   app.setErrorHandler((error, _request, reply) => {
     if (error instanceof z.ZodError) {
       return reply.code(400).send({ error: "invalid_detection", details: error.flatten() });
@@ -160,11 +189,8 @@ export function buildAnalyticsEngine(options: AnalyticsEngineOptions) {
 
   // Graceful shutdown
   app.addHook("onClose", async () => {
-    logger.info('Shutting down analytics engine', undefined, undefined, 'app');
-    systemMetricsCollector.stop();
     await streamProcessor.stopAllStreams();
     await pipeline.cleanup();
-    logger.info('Analytics engine shutdown complete', undefined, undefined, 'app');
   });
 
   return app;

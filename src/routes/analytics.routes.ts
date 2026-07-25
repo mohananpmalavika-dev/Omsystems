@@ -108,6 +108,7 @@ export async function registerAnalyticsRoutes(
   store: ControlPlaneStore,
   options: {
     analyticsEngineSharedKey?: string;
+    analyticsEngineUrl?: string;
     recordingEngineUrl?: string;
     recordingEngineSharedKey?: string;
   } = {},
@@ -124,6 +125,69 @@ export async function registerAnalyticsRoutes(
       openModel: AI_CAPABILITIES.filter((item) => item.stage === "open-model").length,
     },
   }));
+  app.get("/v1/analytics/engine-health", async (_request, reply) => {
+    if (!options.analyticsEngineUrl) {
+      return reply.code(503).send({ status: "unconfigured", service: "sentinel-analytics-engine" });
+    }
+    try {
+      const response = await fetch(new URL("/health", options.analyticsEngineUrl), {
+        signal: AbortSignal.timeout(5_000),
+      });
+      if (!response.ok) return reply.code(503).send({ status: "unavailable", upstreamStatus: response.status });
+      return await response.json();
+    } catch (error) {
+      return reply.code(503).send({
+        status: "unavailable",
+        message: error instanceof Error ? error.message : "Analytics engine unavailable",
+      });
+    }
+  });
+  app.post("/v1/analytics/assistant/query", async (request) => {
+    const { query } = z.object({ query: z.string().trim().min(3).max(500) }).parse(request.body);
+    const normalized = query.toLowerCase();
+    const branches = await store.listAccessibleNodes(request.currentUser, "analytics:view", "branch");
+    const branchNames = new Map(branches.map((branch) => [branch.id, branch.name]));
+
+    if (/not recording|recording (is )?(off|stopped|failed)/.test(normalized)) {
+      const cameras = (await Promise.all(branches.map((branch) =>
+        store.listCamerasByBranch(request.currentUser, branch.id, "analytics:view")
+      ))).flat();
+      const stopped = [];
+      for (const camera of cameras) {
+        const job = await store.getRecordingJob(camera.id);
+        if (!job || !job.enabled || !["recording", "starting"].includes(job.status)) {
+          stopped.push({ cameraId: camera.id, camera: camera.name, branch: branchNames.get(camera.branchId), status: job?.status ?? "not-configured" });
+        }
+      }
+      return { intent: "cameras-not-recording", answer: `${stopped.length} accessible cameras are not actively recording.`, data: stopped, actions: [{ label: "Open recording health", href: "/audit/recording-verification" }] };
+    }
+
+    if (/smoke|fire|alert/.test(normalized)) {
+      const alerts = await store.listAnalyticsAlerts(request.currentUser.tenantId, { limit: 200 });
+      const terms = ["smoke", "fire"].filter((term) => normalized.includes(term));
+      const matches = alerts.filter((alert) => {
+        const haystack = `${alert.title} ${alert.description ?? ""} ${alert.objectClasses.join(" ")}`.toLowerCase();
+        return terms.length === 0 || terms.some((term) => haystack.includes(term));
+      });
+      return { intent: "alert-search", answer: `Found ${matches.length} matching alerts.`, data: matches.slice(0, 50), actions: [{ label: "Open alert queue", href: "/analytics" }] };
+    }
+
+    if (/branches?.*(incident)|incident.*branches?/.test(normalized)) {
+      const threshold = Number(normalized.match(/(?:more than|over|>)\s*(\d+)/)?.[1] ?? 0);
+      const incidents = await store.listIncidents(request.currentUser.tenantId, { limit: 1000 });
+      const counts = new Map<string, number>();
+      for (const incident of incidents) if (branchNames.has(incident.branchId)) counts.set(incident.branchId, (counts.get(incident.branchId) ?? 0) + 1);
+      const data = [...counts].map(([branchId, count]) => ({ branchId, branch: branchNames.get(branchId), count })).filter((item) => item.count > threshold).sort((a, b) => b.count - a.count);
+      return { intent: "branch-incident-comparison", answer: `${data.length} branches have more than ${threshold} incidents.`, data, actions: [{ label: "Open incidents", href: "/incidents" }] };
+    }
+
+    return {
+      intent: "visual-search",
+      answer: "I prepared this as an attribute-based video search across accessible cameras.",
+      data: { query },
+      actions: [{ label: "Search recorded video", href: `/video-search?q=${encodeURIComponent(query)}` }],
+    };
+  });
   app.get("/v1/cameras/:id/analytics/rules", async (request, reply) => {
     const { id } = cameraParams.parse(request.params);
     const camera = await authorizedCamera(request, reply, store, id, "analytics:view");
