@@ -768,7 +768,7 @@ VALUES
   ('company_admin', 'maintenance:manage', 'company', true, 'Manage company maintenance'),
   ('hq_admin', 'maintenance:manage', 'headquarters', true, 'Manage HQ maintenance'),
   ('branch_manager', 'maintenance:create', 'branch', false, 'Create maintenance work orders'),
-  ('technician', 'maintenance:execute', NULL, false, 'Execute maintenance work orders'),
+  -- ('technician', 'maintenance:execute', NULL, false, 'Execute maintenance work orders'), -- Commented: technician role may not exist in user_role enum
   
   -- Audit logs
   ('super_admin', 'audit:view', NULL, false, 'View all audit logs'),
