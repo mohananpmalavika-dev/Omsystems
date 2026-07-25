@@ -149,8 +149,8 @@ export async function registerMaintenanceHealthRoutes(
       summary: {
         total: branches.length,
         healthy: branchHealth.filter(b => b.status === 'healthy').length,
-        warning: branchHealth.filter(b => b.status === 'warning').length,
-        critical: branchHealth.filter(b => b.status === 'critical').length,
+        warning: branchHealth.filter(b => (b.status as string) === 'warning').length,
+        critical: branchHealth.filter(b => (b.status as string) === 'critical').length,
       },
     };
   });

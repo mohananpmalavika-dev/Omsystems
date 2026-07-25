@@ -120,19 +120,19 @@ export interface AssetFirmwareInventoryRecord {
 }
 
 export interface FirmwareUpgradeSafetyContext {
-  modelConfirmed: boolean;
-  exactVersionConfirmed: boolean;
-  powerConfirmed: boolean;
-  upsConfirmed: boolean;
-  networkStable: boolean;
-  backupCompleted: boolean;
-  redundancyVerified: boolean;
-  activeIncidentsPresent: boolean;
-  alertsSuspended: boolean;
-  maintenanceWindowApproved: boolean;
-  rollbackPlanned: boolean;
-  packageVerified: boolean;
-  compatibilityVerified: boolean;
+  modelConfirmed?: boolean;
+  exactVersionConfirmed?: boolean;
+  powerConfirmed?: boolean;
+  upsConfirmed?: boolean;
+  networkStable?: boolean;
+  backupCompleted?: boolean;
+  redundancyVerified?: boolean;
+  activeIncidentsPresent?: boolean;
+  alertsSuspended?: boolean;
+  maintenanceWindowApproved?: boolean;
+  rollbackPlanned?: boolean;
+  packageVerified?: boolean;
+  compatibilityVerified?: boolean;
 }
 
 export interface FirmwareUpgradePlan {
