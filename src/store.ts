@@ -3082,18 +3082,6 @@ export class MemoryStore implements ControlPlaneStore {
     this.deviceInventory.push(record);
     return record;
   }
-
-  async updateDeviceInventory(id: string, input: any): Promise<any | null> {
-    const index = this.deviceInventory.findIndex(d => d.id === id);
-    if (index === -1) return null;
-    
-    this.deviceInventory[index] = {
-      ...this.deviceInventory[index],
-      ...input,
-      updatedAt: new Date().toISOString(),
-    };
-    return this.deviceInventory[index];
-  }
 }
 
 
