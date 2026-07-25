@@ -72,10 +72,10 @@ export async function registerLiveOperationsRoutes(
       tenantId: request.currentUser.tenantId,
       cameraId: id,
       operatorId: request.currentUser.id,
-      bookmarkedAt: body.bookmarkedAt,
+      bookmarkedAt: body.bookmarkedAt!, // Zod provides default
       reason: body.reason,
       notes: body.notes,
-      priority: body.priority,
+      priority: body.priority, // Zod provides default
       recordingSegmentId: body.recordingSegmentId,
       snapshotReference: body.snapshotReference,
     });
@@ -109,10 +109,10 @@ export async function registerLiveOperationsRoutes(
       createdBy: request.currentUser.id,
       title: body.title,
       notes: body.notes,
-      priority: body.priority,
-      occurredAt: body.occurredAt,
-      preRollSeconds: body.preRollSeconds,
-      postRollSeconds: body.postRollSeconds,
+      priority: body.priority, // Zod provides default
+      occurredAt: body.occurredAt!, // Zod provides default
+      preRollSeconds: body.preRollSeconds, // Zod provides default
+      postRollSeconds: body.postRollSeconds, // Zod provides default
     });
     await audit(request, store, "live.incident_created", camera.nodeId, {
       cameraId: id,
