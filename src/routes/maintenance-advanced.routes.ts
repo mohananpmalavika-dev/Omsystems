@@ -128,16 +128,7 @@ export async function registerMaintenanceAdvancedRoutes(
   // ============================================================================
   // Phase 6: Firmware Management Routes
   // ============================================================================
-
-  app.get("/v1/maintenance/firmware/versions", async (request, reply) => {
-    const firmwareManager = getFirmwareManager();
-    const query = request.query as any;
-    const versions = firmwareManager.getAvailableVersions(
-      query.deviceType,
-      query.manufacturer
-    );
-    return reply.send(versions);
-  });
+  // NOTE: Firmware routes moved to maintenance-firmware.routes.ts to avoid duplication
 
   app.post("/v1/maintenance/firmware/register-version", async (
     request,
