@@ -293,7 +293,7 @@ CREATE INDEX recording_gaps_verification_idx
 CREATE TABLE IF NOT EXISTS storage_health_checks (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
-  storage_node_id uuid REFERENCES infrastructure_nodes(id),
+  storage_node_id uuid, -- Future FK: REFERENCES infrastructure_nodes(id) or resource_nodes(id)
   branch_node_id uuid REFERENCES resource_nodes(id),
   
   check_timestamp timestamptz NOT NULL DEFAULT now(),
@@ -383,7 +383,7 @@ CREATE TABLE IF NOT EXISTS maintenance_work_orders (
   
   -- Target
   camera_id uuid REFERENCES cameras(id) ON DELETE CASCADE,
-  infrastructure_node_id uuid REFERENCES infrastructure_nodes(id),
+  infrastructure_node_id uuid, -- Future FK: REFERENCES infrastructure_nodes(id) or resource_nodes(id)
   branch_node_id uuid REFERENCES resource_nodes(id),
   
   -- Work details
