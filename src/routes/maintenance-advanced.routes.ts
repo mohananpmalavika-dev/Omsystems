@@ -76,13 +76,7 @@ export async function registerMaintenanceAdvancedRoutes(
   // ============================================================================
   // Phase 5: Reporting Routes
   // ============================================================================
-
-  app.post("/v1/maintenance/reports/generate", async (request, reply) => {
-    const reportingEngine = getReportingEngine();
-    const config = request.body as any;
-    const report = await reportingEngine.generateReport(config);
-    return reply.send(report);
-  });
+  // NOTE: Report generation moved to maintenance-reports.routes.ts to avoid duplication
 
   app.get("/v1/maintenance/reports/:reportId", async (request, reply) => {
     const { reportId } = request.params as { reportId: string };

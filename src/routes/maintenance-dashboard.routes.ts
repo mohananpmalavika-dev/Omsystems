@@ -201,32 +201,7 @@ export async function registerMaintenanceDashboardRoutes(
   });
 
   // Reports - Generate report
-  app.post("/v1/maintenance/reports/generate", async (request, reply) => {
-    const body = request.body as {
-      reportType: "preventive" | "corrective" | "amc" | "health" | "trend";
-      periodStart: string;
-      periodEnd: string;
-    };
-    const tenantId = request.currentUser.tenantId;
-
-    const report = await store.generateMaintenanceReport({
-      tenantId,
-      reportType: body.reportType,
-      periodStart: body.periodStart,
-      periodEnd: body.periodEnd,
-    });
-
-    await store.writeAudit({
-      tenantId,
-      actorUserId: request.currentUser.id,
-      action: "maintenance.report_generated",
-      resourceNodeId: "",
-      outcome: "success",
-      details: { reportType: body.reportType },
-    });
-
-    return reply.code(201).send(report);
-  });
+  // NOTE: Report generation moved to maintenance-reports.routes.ts to avoid duplication
 
   // Reports - List reports
   app.get("/v1/maintenance/reports", async (request) => {
