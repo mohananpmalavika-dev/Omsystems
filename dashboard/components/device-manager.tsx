@@ -140,6 +140,9 @@ export function DeviceManager() {
   const [showGatewayForm, setShowGatewayForm] = useState(false);
   const [showDiscoveredList, setShowDiscoveredList] = useState(false);
   const [registrationMode, setRegistrationMode] = useState<"automatic" | "manual" | "bulk">("automatic");
+  const [selectedDiscoveryId, setSelectedDiscoveryId] = useState<string>();
+  const [renameDraft, setRenameDraft] = useState("");
+  const [rejectReason, setRejectReason] = useState("");
   const [bulkCsv, setBulkCsv] = useState("");
   const [provisionedGateway, setProvisionedGateway] = useState<EdgeAgent>();
   const [loading, setLoading] = useState(true);
@@ -194,6 +197,8 @@ export function DeviceManager() {
       return left.deviceId.localeCompare(right.deviceId);
     });
   }, [inventoryRecords, inventoryDeviceTypeFilter, inventoryHealthFilter, inventoryLifecycleFilter, inventorySearch, inventorySort]);
+  const pendingReviewCount = discoveryQueueItems.filter((item) => item.reviewStatus !== "approved").length;
+  const approvedReviewCount = discoveryQueueItems.filter((item) => item.reviewStatus === "approved").length;
   const setupText = useMemo(() => provisionedGateway
     ? [
         "CONTROL_PLANE_URL=<provided-by-platform-admin>",
@@ -316,56 +321,54 @@ export function DeviceManager() {
     setDiscoveryReviewState((previous) => ({ ...previous, [discoveryId]: { reviewStatus } }));
   }
 
-  async function addDiscoveredCamera(discovered: any) {
+  async function approveDiscoveredCamera(discovered: any) {
     setSaving(true);
     setError(undefined);
     try {
-      // Pre-fill the form with discovered camera details
-      setCameraForm({
-        ...emptyCameraForm,
-        edgeAgentId: discovered.edgeAgentId,
-        vendor: discovered.vendor,
-        model: discovered.model,
-        ipAddress: discovered.ipAddress,
-        onvifPort: String(discovered.onvifPort),
-        rtspPort: String(discovered.rtspPort),
-        name: `${discovered.model}@${discovered.ipAddress}`,
-        codec: discovered.profiles[0]?.codec ?? "H264",
-        width: String(discovered.profiles[0]?.width ?? "1920"),
-        height: String(discovered.profiles[0]?.height ?? "1080"),
-        ptz: discovered.capabilities.ptz,
-        audio: discovered.capabilities.audio,
-        events: discovered.capabilities.events,
-        connectionSecretRef: `edge://${discovered.edgeAgentId}/${discovered.id}`,
-      });
-
-      // Submit the discovery
-      const discovery = await cameraInventoryApi.submitDiscovery(selectedBranch, {
-        edgeAgentId: discovered.edgeAgentId,
-        vendor: discovered.vendor,
-        model: discovered.model,
-        ipAddress: discovered.ipAddress,
-        onvifPort: discovered.onvifPort,
-        rtspPort: discovered.rtspPort,
-        profiles: discovered.profiles,
-        capabilities: discovered.capabilities,
-      });
-
-      // Approve the camera
-      await cameraInventoryApi.approveCamera(selectedBranch, {
-        discoveryId: discovery.id,
-        name: `${discovered.model}@${discovered.ipAddress}`,
+      const name = discovered.displayName || discovered.model || `${discovered.vendor} camera`;
+      await cameraInventoryApi.approveDiscovery(selectedBranch, discovered.id, {
+        name,
         channel: 1,
         protocol: "onvif-t",
         connectionSecretRef: `edge://${discovered.edgeAgentId}/${discovered.id}`,
       });
-
       markDiscoveryReviewStatus(discovered.id, "approved");
-      setShowDiscoveredList(false);
-      setNotice(`Camera ${discovered.model} was added successfully.`);
+      setNotice(`${name} was approved and added to monitoring.`);
       await refreshBranch(selectedBranch);
     } catch (reason) {
-      setError(messageOf(reason, "Failed to add discovered camera."));
+      setError(messageOf(reason, "Failed to approve discovered camera."));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function renameDiscoveredCamera(discoveryId: string, displayName: string) {
+    setSaving(true);
+    setError(undefined);
+    try {
+      await cameraInventoryApi.renameDiscovery(selectedBranch, discoveryId, { displayName });
+      setRenameDraft("");
+      setSelectedDiscoveryId(undefined);
+      setNotice("Discovery name updated.");
+      await refreshBranch(selectedBranch);
+    } catch (reason) {
+      setError(messageOf(reason, "Failed to rename discovered camera."));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function rejectDiscoveredCamera(discoveryId: string, reason: string) {
+    setSaving(true);
+    setError(undefined);
+    try {
+      await cameraInventoryApi.rejectDiscovery(selectedBranch, discoveryId, { reason });
+      setRejectReason("");
+      setSelectedDiscoveryId(undefined);
+      setNotice("Device was rejected and will stay suppressed on future scans.");
+      await refreshBranch(selectedBranch);
+    } catch (reason) {
+      setError(messageOf(reason, "Failed to reject discovered camera."));
     } finally {
       setSaving(false);
     }
@@ -573,28 +576,77 @@ export function DeviceManager() {
         </div>
       )}
 
-      <section className="device-card">
-        <div className="device-card-heading"><Search size={18} /><div><h3>Discovery queue</h3><p>{discoveryQueueItems.filter((item) => item.reviewStatus !== "approved").length} pending review</p></div></div>
+      <section className="device-card discovery-section">
+        <div className="device-card-heading"><Search size={18} /><div><h3>Device discovery</h3><p>{pendingReviewCount} awaiting review · {approvedReviewCount} approved</p></div></div>
+        <div className={`discovery-status-panel ${scanning ? "scanning" : discoveryQueueItems.length === 0 ? "idle" : "ready"}`}>
+          <div className="discovery-status-copy">
+            <strong>{scanning ? "Scan in progress" : discoveryQueueItems.length === 0 ? "Scan ready" : "Discovery queue is ready for review"}</strong>
+            <p>{scanning
+              ? "The branch gateway is probing the local network and validating camera services."
+              : discoveryQueueItems.length === 0
+                ? "Run a network scan to discover cameras automatically and skip manual IP entry."
+                : "Review each candidate, rename it if needed, and approve the right devices into monitoring."}</p>
+          </div>
+          <div className="discovery-status-metrics">
+            <div><span>Found</span><strong>{discoveryQueueItems.length}</strong></div>
+            <div><span>Pending</span><strong>{pendingReviewCount}</strong></div>
+            <div><span>Approved</span><strong>{approvedReviewCount}</strong></div>
+          </div>
+        </div>
         {discoveryQueueItems.length === 0 ? (
-          <div className="device-empty"><Camera size={25} /><strong>No pending discoveries</strong><span>Scan the branch or submit a discovery to populate this queue.</span></div>
-        ) : discoveryQueueItems.map((item) => (
-          <article className="discovery-queue-row" key={item.id}>
-            <div className="discovery-queue-meta">
-              <strong>{item.model} @ {item.ipAddress}</strong>
-              <small>{item.vendor} · {item.discoveryMethod ?? "discovery"} · {item.serialNumber ? `SN ${item.serialNumber}` : "Serial pending"}</small>
-              {item.onvifServices?.length ? <small>Services: {item.onvifServices.join(", ")}</small> : null}
-              {item.onvifCapabilityTests?.length ? <small>Tests: {item.onvifCapabilityTests.filter((test: any) => test.status === "pass").length}/{item.onvifCapabilityTests.length} passed</small> : null}
-            </div>
-            <span className={`inventory-status discovery-badge ${item.reviewStatus === "duplicate" ? "offline" : item.reviewStatus === "review-required" ? "degraded" : item.reviewStatus === "approved" ? "online" : ""}`}>
-              {item.badgeLabel}
-            </span>
-            <div className="discovery-actions">
-              <button type="button" className="secondary-button" onClick={() => void addDiscoveredCamera(item)} disabled={saving}>Approve</button>
-              <button type="button" className="secondary-button" onClick={() => markDiscoveryReviewStatus(item.id, "duplicate")}>Duplicate</button>
-              <button type="button" className="secondary-button" onClick={() => markDiscoveryReviewStatus(item.id, "review-required")}>Review later</button>
-            </div>
-          </article>
-        ))}
+          <div className="device-empty"><Camera size={25} /><strong>No pending discoveries</strong><span>Scanning the branch network will surface supported cameras here without manual IP entry.</span></div>
+        ) : (
+          <div className="discovery-camera-list">
+            {discoveryQueueItems.map((item) => {
+              const profileText = Array.isArray(item.profiles) && item.profiles.length > 0
+                ? item.profiles.map((profile: any) => `${profile.codec} ${profile.width}x${profile.height}`).join(" • ")
+                : "Profile data pending";
+              return (
+                <article className={`discovery-camera-card ${item.reviewStatus === "approved" ? "approved" : item.reviewStatus === "duplicate" ? "duplicate" : item.reviewStatus === "review-required" ? "review-required" : "pending"}`} key={item.id}>
+                  <div className="discovery-camera-main">
+                    <div className="discovery-camera-head">
+                      <div>
+                        <strong>{item.displayName || item.model || `${item.vendor} device`}</strong>
+                        <span>{item.ipAddress} · {item.onvifPort ? `ONVIF ${item.onvifPort}` : "Stream endpoint pending"}</span>
+                      </div>
+                      <span className={`inventory-status discovery-badge ${item.reviewStatus === "duplicate" ? "offline" : item.reviewStatus === "review-required" ? "degraded" : item.reviewStatus === "approved" ? "online" : ""}`}>
+                        {item.badgeLabel}
+                      </span>
+                    </div>
+                    <div className="discovery-chip-row">
+                      <span className="discovery-chip">{item.vendor}</span>
+                      <span className="discovery-chip">{item.model || "Model pending"}</span>
+                      <span className="discovery-chip">{item.discoveryMethod ?? "ONVIF discovery"}</span>
+                      <span className={`discovery-chip ${item.onvifSupport ? "positive" : "neutral"}`}>{item.onvifSupport ? "ONVIF supported" : "ONVIF unknown"}</span>
+                      <span className={`discovery-chip ${item.streamVerified ? "positive" : item.credentialsRequired ? "warn" : "neutral"}`}>{item.streamVerified ? "Stream verified" : item.credentialsRequired ? "Credentials required" : "Stream pending"}</span>
+                    </div>
+                    <div className="discovery-details-grid">
+                      <div><span>Serial</span><strong>{item.serialNumber || "Pending"}</strong></div>
+                      <div><span>MAC</span><strong>{item.macAddress || "Pending"}</strong></div>
+                      <div><span>Compatibility</span><strong>{item.compatibility || "Review required"}</strong></div>
+                      <div><span>Profiles</span><strong>{profileText}</strong></div>
+                    </div>
+                    <p className="discovery-footnote">{item.statusReason || (item.credentialsRequired ? "Credentials are required before the stream can be validated end to end." : item.streamVerified ? "The gateway already confirmed a valid media stream." : "The gateway is still validating the camera profile and stream availability.")}</p>
+                    {item.onvifServices?.length ? <p className="discovery-footnote">Services: {item.onvifServices.join(", ")}</p> : null}
+                  </div>
+                  <div className="discovery-card-actions">
+                    <button type="button" className="primary-button" onClick={() => void approveDiscoveredCamera(item)} disabled={saving}>Approve</button>
+                    <button type="button" className="secondary-button" onClick={() => { setSelectedDiscoveryId(item.id); setRenameDraft(item.displayName ?? item.model ?? ""); setRejectReason(""); }}>Rename</button>
+                    <button type="button" className="secondary-button" onClick={() => { setSelectedDiscoveryId(item.id); setRenameDraft(item.displayName ?? item.model ?? ""); setRejectReason(""); }}>Reject</button>
+                  </div>
+                  {selectedDiscoveryId === item.id && (
+                    <div className="discovery-inline-editor">
+                      <input value={renameDraft} onChange={(event) => setRenameDraft(event.target.value)} placeholder="Display name" />
+                      <button type="button" className="primary-button" onClick={() => void renameDiscoveredCamera(item.id, renameDraft)} disabled={saving || !renameDraft.trim()}>Save name</button>
+                      <input value={rejectReason} onChange={(event) => setRejectReason(event.target.value)} placeholder="Reject reason" />
+                      <button type="button" className="secondary-button" onClick={() => void rejectDiscoveredCamera(item.id, rejectReason)} disabled={saving}>Reject device</button>
+                    </div>
+                  )}
+                </article>
+              );
+            })}
+          </div>
+        )}
       </section>
 
       <section className="device-card">
@@ -766,8 +818,8 @@ export function DeviceManager() {
                           <small>{camera.serialNumber ? `SN ${camera.serialNumber}` : "Serial pending"} · {camera.macAddress ?? "MAC pending"}</small>
                           <small className="profiles">{camera.profiles.map((p: any) => `${p.codec} ${p.width}x${p.height}`).join(", ")}</small>
                         </div>
-                        <button className="primary-button" onClick={() => void addDiscoveredCamera(camera)} disabled={saving}>
-                          {saving ? "Adding…" : "Add camera"}
+                        <button className="primary-button" onClick={() => void approveDiscoveredCamera(camera)} disabled={saving}>
+                          {saving ? "Adding…" : "Approve"}
                         </button>
                       </div>
                     ))}

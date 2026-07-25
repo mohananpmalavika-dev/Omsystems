@@ -65,6 +65,57 @@ describe("enhanced device discovery", () => {
     expect(tests.find((t: any) => t.name === "Firmware upgrade")?.status).toBe("vendor-specific");
   });
 
+  it("creates a device scan and exposes discovered results through scan endpoints", async () => {
+    const store = new MemoryStore();
+    const app = await buildApp({ logger: false, store });
+    const headers = { "x-user-id": "user-global-admin" };
+    const agent = await store.registerEdgeAgent("branch-blr-001", "gateway-test", "0.1.0");
+
+    const scanResponse = await app.inject({
+      method: "POST",
+      url: "/v1/branches/branch-blr-001/device-scans",
+      headers,
+      payload: { edgeAgentId: agent.id },
+    });
+
+    expect(scanResponse.statusCode).toBe(202);
+    const scan = scanResponse.json();
+    expect(scan.status).toBe("queued");
+
+    const discoveryResponse = await app.inject({
+      method: "POST",
+      url: "/v1/branches/branch-blr-001/cameras/discovered",
+      headers,
+      payload: {
+        edgeAgentId: agent.id,
+        discoveryMethod: "onvif-ws-discovery",
+        vendor: "hikvision",
+        manufacturer: "Hikvision",
+        model: "DS-2CD-Test",
+        ipAddress: "192.168.10.30",
+        manufacturer: "Hikvision",
+        onvifPort: 80,
+        rtspPort: 554,
+        profiles: [{ name: "main", codec: "H264", width: 1920, height: 1080 }],
+        capabilities: { ptz: false, audio: true, events: true },
+      },
+    });
+
+    expect(discoveryResponse.statusCode).toBe(202);
+
+    const resultsResponse = await app.inject({
+      method: "GET",
+      url: `/v1/device-scans/${scan.id}/results?branchId=branch-blr-001`,
+      headers,
+    });
+
+    expect(resultsResponse.statusCode).toBe(200);
+    const payload = resultsResponse.json();
+    expect(payload.data).toHaveLength(1);
+    expect(payload.data[0].manufacturer).toBe("Hikvision");
+    expect(payload.data[0].model).toBe("DS-2CD-Test");
+  });
+
   it("deduplicates discoveries using serial number and other identifiers", async () => {
     const store = new MemoryStore();
     const app = await buildApp({ logger: false, store });

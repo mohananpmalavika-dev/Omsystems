@@ -558,6 +558,11 @@ export interface DiscoveredCamera {
   compatibilityStatus?: "compatible" | "incompatible" | "review-required";
   hardwareId?: string;
   existingDeviceAssociation?: string;
+  displayName?: string;
+  statusReason?: string;
+  credentialsRequired?: boolean;
+  streamVerified?: boolean;
+  compatibility?: string;
   onvifPort: number;
   rtspPort: number;
   profiles: CameraProfile[];

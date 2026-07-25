@@ -777,11 +777,55 @@ select, textarea { font: inherit; }
 .camera-details small { display: block; margin-top: 4px; color: #7a8799; font-size: 9px; }
 .camera-details .profiles { color: #556376; margin-top: 2px; }
 .discovered-camera-item button { min-width: 120px; }
-.discovery-queue-row { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid #edf0f4; }
-.discovery-queue-meta strong { display: block; font-size: 10px; }
-.discovery-queue-meta small { display: block; margin-top: 3px; color: #7a8799; font-size: 8px; }
-.discovery-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
-.discovery-actions button { min-width: 76px; padding: 6px 8px; font-size: 9px; }
+.discovery-section { gap: 12px; }
+.discovery-status-panel {
+  display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 14px 15px;
+  border: 1px solid #dce7f7; border-radius: 12px; background: linear-gradient(135deg,#f6faff 0%,#eef4ff 100%);
+}
+.discovery-status-panel.scanning { border-color: #9ec7ff; background: linear-gradient(135deg,#f8fbff 0%,#eef5ff 100%); }
+.discovery-status-panel.idle { border-color: #e5d8c4; background: linear-gradient(135deg,#fffaf3 0%,#f8f0e3 100%); }
+.discovery-status-copy strong { display: block; color: #274264; font-size: 11px; }
+.discovery-status-copy p { margin: 4px 0 0; color: #64748b; font-size: 9px; line-height: 1.5; }
+.discovery-status-metrics { display: flex; gap: 8px; }
+.discovery-status-metrics > div {
+  min-width: 72px; padding: 8px 10px; border-radius: 10px; background: rgba(255,255,255,.8);
+  text-align: center; border: 1px solid rgba(41,98,176,.12);
+}
+.discovery-status-metrics span { display: block; color: #6b7a90; font-size: 8px; text-transform: uppercase; letter-spacing: 0.04em; }
+.discovery-status-metrics strong { color: #223b59; font-size: 11px; }
+.discovery-camera-list { display: grid; gap: 10px; margin-top: 2px; }
+.discovery-camera-card {
+  display: grid; gap: 10px; padding: 13px; border: 1px solid #e4ebf5; border-radius: 12px;
+  background: #fbfdff; box-shadow: inset 0 1px 0 rgba(255,255,255,.8);
+}
+.discovery-camera-card.approved { border-color: #cce9dc; background: #f4fcf8; }
+.discovery-camera-card.duplicate { border-color: #f3d9c7; background: #fff8f3; }
+.discovery-camera-card.review-required { border-color: #f4d0b2; background: #fff7ed; }
+.discovery-camera-main { display: grid; gap: 8px; }
+.discovery-camera-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+.discovery-camera-head strong { display: block; font-size: 11px; color: #22354c; }
+.discovery-camera-head span { display: block; margin-top: 3px; color: #748297; font-size: 9px; }
+.discovery-chip-row { display: flex; flex-wrap: wrap; gap: 6px; }
+.discovery-chip {
+  display: inline-flex; align-items: center; padding: 4px 7px; border-radius: 999px;
+  background: #edf3fb; color: #5b6d83; font-size: 8px; font-weight: 650; text-transform: uppercase; letter-spacing: 0.03em;
+}
+.discovery-chip.positive { color: #16704f; background: #e8f7ee; }
+.discovery-chip.warn { color: #a35b14; background: #fff3df; }
+.discovery-chip.neutral { color: #5f6f81; background: #f2f5f8; }
+.discovery-details-grid { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 8px; }
+.discovery-details-grid > div {
+  min-width: 0; padding: 8px 9px; border-radius: 9px; background: #f7f9fc; border: 1px solid #edf2f6;
+}
+.discovery-details-grid span { display: block; color: #73839a; font-size: 8px; text-transform: uppercase; letter-spacing: 0.03em; }
+.discovery-details-grid strong { display: block; margin-top: 3px; color: #31425b; font-size: 9px; line-height: 1.45; }
+.discovery-footnote { margin: 0; color: #6d7889; font-size: 9px; line-height: 1.45; }
+.discovery-card-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.discovery-card-actions button { min-width: 92px; }
+.discovery-inline-editor { display: grid; grid-template-columns: minmax(0,1fr) auto minmax(0,1fr) auto; gap: 8px; align-items: center; }
+.discovery-inline-editor input {
+  min-height: 35px; padding: 0 9px; border: 1px solid #dde4ee; border-radius: 7px; background: white; font-size: 10px;
+}
 .discovery-badge { justify-self: end; }
 .login-footer { position: fixed; bottom: 7px; color: #8a95a5; font-size: 9px; }
 

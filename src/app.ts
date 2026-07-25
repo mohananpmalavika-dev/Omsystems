@@ -353,6 +353,54 @@ export async function buildApp(options?: {
     return agent;
   });
 
+  app.post("/v1/branches/:branchId/device-scans", async (request, reply) => {
+    const { branchId } = branchParams.parse(request.params);
+    if (!(await requireAccess(request, reply, store, "device:configure", branchId))) return;
+    const body = z.object({ edgeAgentId: z.string().min(1).optional() }).parse(request.body ?? {});
+    const agents = await store.listEdgeAgentsByBranch(branchId);
+    if (agents.length === 0) {
+      return reply.code(409).send({ error: "edge_agent_required" });
+    }
+    const job = await store.createEdgeScanJob(branchId, body.edgeAgentId);
+    await audit(request, store, "device_scan.requested", branchId, "success", {
+      scanJobId: job.id,
+      edgeAgentId: job.edgeAgentId,
+    });
+    return reply.code(202).send({ id: job.id, status: job.status, branchId });
+  });
+
+  app.get("/v1/device-scans/:scanId", async (request, reply) => {
+    const { scanId } = z.object({ scanId: z.string().min(1) }).parse(request.params);
+    const branchId = request.query.branchId as string | undefined;
+    if (!branchId) return reply.code(400).send({ error: "branch_id_required" });
+    const job = await store.getEdgeScanJob(branchId, scanId);
+    if (!job) return reply.code(404).send({ error: "scan_not_found" });
+    return job;
+  });
+
+  app.get("/v1/device-scans/:scanId/results", async (request, reply) => {
+    const { scanId } = z.object({ scanId: z.string().min(1) }).parse(request.params);
+    const branchId = request.query.branchId as string | undefined;
+    if (!branchId) return reply.code(400).send({ error: "branch_id_required" });
+    const job = await store.getEdgeScanJob(branchId, scanId);
+    if (!job) return reply.code(404).send({ error: "scan_not_found" });
+    const discoveries = await store.listDiscoveredCameras(branchId);
+    return { data: discoveries.map((item) => ({
+      discoveryId: item.id,
+      manufacturer: item.manufacturer ?? "Unknown",
+      model: item.model,
+      displayName: item.displayName ?? `${item.manufacturer ?? "Unknown"} ${item.model}`,
+      firmwareVersion: item.firmwareVersion,
+      onvifSupported: item.onvifSupport ?? false,
+      streamVerified: item.streamVerified ?? item.rtspValidated ?? false,
+      compatibility: item.compatibility ?? (item.compatibilityStatus ?? "review-required"),
+      duplicate: item.duplicateStatus === "duplicate",
+      status: item.status,
+      ipAddress: item.ipAddress,
+      credentialsRequired: item.credentialsRequired ?? false,
+    })) };
+  });
+
   app.post("/v1/branches/:branchId/scan-jobs", async (request, reply) => {
     const { branchId } = branchParams.parse(request.params);
     if (!(await requireAccess(request, reply, store, "device:configure", branchId))) return;
@@ -429,6 +477,11 @@ export async function buildApp(options?: {
       compatibilityStatus: z.enum(["compatible", "incompatible", "review-required"]).optional(),
       hardwareId: z.string().trim().max(120).optional(),
       existingDeviceAssociation: z.string().trim().max(200).optional(),
+      displayName: z.string().trim().max(200).optional(),
+      statusReason: z.string().trim().max(200).optional(),
+      credentialsRequired: z.boolean().optional(),
+      streamVerified: z.boolean().optional(),
+      compatibility: z.string().trim().max(80).optional(),
       onvifPort: z.number().int().min(1).max(65535),
       rtspPort: z.number().int().min(1).max(65535),
       profiles: z.array(cameraProfileSchema).min(1),
@@ -464,6 +517,11 @@ export async function buildApp(options?: {
       compatibilityStatus: parsed.compatibilityStatus,
       hardwareId: parsed.hardwareId,
       existingDeviceAssociation: parsed.existingDeviceAssociation,
+      displayName: parsed.displayName,
+      statusReason: parsed.statusReason,
+      credentialsRequired: parsed.credentialsRequired,
+      streamVerified: parsed.streamVerified,
+      compatibility: parsed.compatibility,
       onvifPort: parsed.onvifPort,
       rtspPort: parsed.rtspPort,
       profiles: parsed.profiles.map(p => ({
@@ -486,6 +544,49 @@ export async function buildApp(options?: {
       model: discovery.model,
     });
     return reply.code(202).send(discovery);
+  });
+
+  app.post("/v1/branches/:branchId/cameras/discovered/:discoveryId/approve", async (request, reply) => {
+    const { branchId, discoveryId } = z.object({ branchId: z.string().min(1), discoveryId: z.string().min(1) }).parse(request.params);
+    if (!(await requireAccess(request, reply, store, "device:configure", branchId))) return;
+    const parsed = z.object({
+      name: z.string().trim().min(2).max(120),
+      channel: z.number().int().positive().default(1),
+      protocol: z.enum(["onvif-t", "onvif-s", "rtsp", "vendor-adapter"]).default("onvif-t"),
+      connectionSecretRef: z.string().trim().min(8).max(500),
+    }).parse(request.body ?? {});
+    const discovery = (await store.listDiscoveredCameras(branchId)).find((item) => item.id === discoveryId);
+    if (!discovery) return reply.code(404).send({ error: "discovery_not_found" });
+    const camera = await store.approveCamera(branchId, {
+      discoveryId,
+      name: parsed.name,
+      channel: parsed.channel,
+      protocol: parsed.protocol,
+      connectionSecretRef: parsed.connectionSecretRef,
+    });
+    if (!camera) return reply.code(404).send({ error: "discovery_not_found" });
+    await audit(request, store, "camera.approved", branchId, "success", { discoveryId, cameraId: camera.id });
+    return reply.code(201).send(safeCamera(camera));
+  });
+
+  app.post("/v1/branches/:branchId/cameras/discovered/:discoveryId/reject", async (request, reply) => {
+    const { branchId, discoveryId } = z.object({ branchId: z.string().min(1), discoveryId: z.string().min(1) }).parse(request.params);
+    if (!(await requireAccess(request, reply, store, "device:configure", branchId))) return;
+    const parsed = z.object({ reason: z.string().trim().max(200).optional() }).parse(request.body ?? {});
+    const discovery = await store.rejectDiscovery(discoveryId, parsed.reason);
+    if (!discovery) return reply.code(404).send({ error: "discovery_not_found" });
+    await audit(request, store, "camera.discovery_rejected", branchId, "success", { discoveryId, reason: parsed.reason });
+    return { success: true, discovery };
+  });
+
+  app.patch("/v1/branches/:branchId/cameras/discovered/:discoveryId/rename", async (request, reply) => {
+    const { branchId, discoveryId } = z.object({ branchId: z.string().min(1), discoveryId: z.string().min(1) }).parse(request.params);
+    if (!(await requireAccess(request, reply, store, "device:configure", branchId))) return;
+    const parsed = z.object({ displayName: z.string().trim().min(1).max(120) }).parse(request.body ?? {});
+    const discovery = await store.renameDiscovery(discoveryId, parsed.displayName);
+    if (!discovery) return reply.code(404).send({ error: "discovery_not_found" });
+    await audit(request, store, "camera.discovery_renamed", branchId, "success", { discoveryId, displayName: parsed.displayName });
+    return { success: true, discovery };
   });
 
   app.post("/v1/branches/:branchId/cameras", async (request, reply) => {

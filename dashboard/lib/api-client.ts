@@ -309,6 +309,21 @@ export const cameraInventoryApi = {
       `/v1/branches/${encodeURIComponent(branchId)}/cameras`,
       { method: 'POST', body: JSON.stringify(data) }
     ),
+  approveDiscovery: (branchId: string, discoveryId: string, data: any) =>
+    fetchApi<any>(
+      `/v1/branches/${encodeURIComponent(branchId)}/cameras/discovered/${encodeURIComponent(discoveryId)}/approve`,
+      { method: 'POST', body: JSON.stringify(data) }
+    ),
+  rejectDiscovery: (branchId: string, discoveryId: string, data: { reason?: string }) =>
+    fetchApi<any>(
+      `/v1/branches/${encodeURIComponent(branchId)}/cameras/discovered/${encodeURIComponent(discoveryId)}/reject`,
+      { method: 'POST', body: JSON.stringify(data) }
+    ),
+  renameDiscovery: (branchId: string, discoveryId: string, data: { displayName: string }) =>
+    fetchApi<any>(
+      `/v1/branches/${encodeURIComponent(branchId)}/cameras/discovered/${encodeURIComponent(discoveryId)}/rename`,
+      { method: 'PATCH', body: JSON.stringify(data) }
+    ),
   bulkImport: (branchId: string, csv: string) =>
     fetchApi<any>(
       `/v1/branches/${encodeURIComponent(branchId)}/cameras/bulk-import`,
