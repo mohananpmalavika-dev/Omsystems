@@ -380,6 +380,9 @@ LEFT JOIN evidence_exports ee ON ee.case_id = ec.id
 GROUP BY ec.id, ec.tenant_id, ec.case_number, ec.title, ec.status, ec.created_at;
 
 -- Active Legal Holds
+-- Note: This view is commented out because recording_legal_holds table doesn't exist yet
+-- Uncomment and update once the table is created
+/*
 CREATE OR REPLACE VIEW active_legal_holds AS
 SELECT 
   rlh.*,
@@ -395,6 +398,7 @@ LEFT JOIN users u_created ON u_created.id = rlh.created_by
 LEFT JOIN users u_released ON u_released.id = rlh.released_by
 WHERE rlh.released_at IS NULL
 ORDER BY rlh.created_at DESC;
+*/
 
 -- ============================================================================
 -- FUNCTIONS FOR SEARCH OPTIMIZATION
