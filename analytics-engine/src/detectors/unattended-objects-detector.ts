@@ -173,33 +173,33 @@ export class UnattendedObjectsDetector extends BaseDetector {
 
     // Check protected objects for removal
     if (this.config.protectedObjectsEnabled) {
-      for (const [id, protected] of this.protectedObjects.entries()) {
+      for (const [id, protectedObj] of this.protectedObjects.entries()) {
         // Check if protected object is still present
         const stillPresent = relevantObjects.some((obj) =>
-          this.isInZone(obj.boundingBox, protected.zone),
+          this.isInZone(obj.boundingBox, protectedObj.zone),
         );
 
         if (stillPresent) {
-          protected.lastSeen = now;
-          protected.missing = false;
-        } else if (protected.lastSeen) {
+          protectedObj.lastSeen = now;
+          protectedObj.missing = false;
+        } else if (protectedObj.lastSeen) {
           const timeSinceSeen =
-            (now.getTime() - protected.lastSeen.getTime()) / 1000;
+            (now.getTime() - protectedObj.lastSeen.getTime()) / 1000;
 
           if (
-            !protected.missing &&
+            !protectedObj.missing &&
             timeSinceSeen >= this.config.removedThresholdSeconds
           ) {
-            protected.missing = true;
+            protectedObj.missing = true;
             results.push({
               detectionType: "removed-object",
               confidence: 0.95,
               objects: [],
               metadata: {
                 protectedObjectId: id,
-                protectedObjectName: protected.name,
+                protectedObjectName: protectedObj.name,
                 timeSinceSeen: Math.round(timeSinceSeen),
-                zone: protected.zone,
+                zone: protectedObj.zone,
               },
               requiresAlert: true,
             });

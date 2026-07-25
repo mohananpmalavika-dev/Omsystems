@@ -284,6 +284,77 @@ describe("control-plane API", () => {
     expect(sessionResponse.json().token).toHaveLength(43);
   });
 
+  it("auto-provisions every eligible discovery with recording, AI and alerts", async () => {
+    const headers = { "x-user-id": "user-global-admin" };
+    const agent = (await app.inject({
+      method: "POST",
+      url: "/v1/branches/branch-blr-001/edge-agents/register",
+      headers,
+      payload: { name: "BLR Auto Edge", version: "0.1.0" },
+    })).json();
+    const discover = (ipAddress: string, extra: Record<string, unknown> = {}) =>
+      app.inject({
+        method: "POST",
+        url: "/v1/branches/branch-blr-001/cameras/discovered",
+        headers,
+        payload: {
+          edgeAgentId: agent.id,
+          discoveryMethod: "onvif-ws-discovery",
+          vendor: "hikvision",
+          manufacturer: "Hikvision",
+          model: "DS-2CD-Auto",
+          ipAddress,
+          onvifPort: 80,
+          rtspPort: 554,
+          streamVerified: true,
+          rtspValidated: true,
+          credentialsRequired: false,
+          compatibilityStatus: "compatible",
+          duplicateStatus: "unique",
+          profiles: [{ name: "main", codec: "H264", width: 1920, height: 1080 }],
+          capabilities: { ptz: false, audio: true, events: true },
+          ...extra,
+        },
+      });
+    expect((await discover("192.168.10.30")).statusCode).toBe(202);
+    expect((await discover("192.168.10.31", {
+      streamVerified: false,
+      credentialsRequired: true,
+    })).statusCode).toBe(202);
+
+    const provision = await app.inject({
+      method: "POST",
+      url: "/v1/branches/branch-blr-001/cameras/discovered/approve-all",
+      headers,
+      payload: {},
+    });
+    expect(provision.statusCode).toBe(201);
+    expect(provision.json().summary).toEqual({
+      total: 2,
+      provisioned: 1,
+      partial: 0,
+      needsAttention: 1,
+      failed: 0,
+    });
+    const provisioned = provision.json().results.find(
+      (result: any) => result.status === "provisioned",
+    );
+    expect(provisioned.stages).toEqual({
+      approved: true,
+      recording: "configured",
+      analytics: "active",
+      alerts: "enabled",
+    });
+    expect(await store.getRecordingJob(provisioned.cameraId)).toMatchObject({
+      enabled: true,
+      mode: "continuous",
+      retentionDays: 180,
+    });
+    const rules = await store.listAnalyticsRules(provisioned.cameraId);
+    expect(rules).toHaveLength(5);
+    expect(rules.every((rule) => rule.enabled)).toBe(true);
+  });
+
   it("creates bookmarks and protects incident recording windows", async () => {
     const headers = { "x-user-id": "user-global-admin" };
     const bookmarkResponse = await app.inject({

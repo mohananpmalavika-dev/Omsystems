@@ -85,6 +85,20 @@ type DeviceInventoryForm = {
   lifecycleState: string;
 };
 
+type AutoProvisionResult = {
+  discoveryId: string;
+  cameraId?: string;
+  name: string;
+  status: "provisioned" | "partial" | "needs-attention" | "failed";
+  reason?: string;
+  stages?: {
+    approved: boolean;
+    recording: "recording" | "configured" | "failed";
+    analytics: "active" | "disabled";
+    alerts: "enabled" | "disabled";
+  };
+};
+
 const emptyInventoryForm: DeviceInventoryForm = {
   deviceId: "",
   tenant: "tenant-demo",
@@ -151,6 +165,7 @@ export function DeviceManager() {
   const [saving, setSaving] = useState(false);
   const [scanning, setScanning] = useState(false);
   const [lastScanAt, setLastScanAt] = useState<string | null>(null);
+  const [autoProvisionResults, setAutoProvisionResults] = useState<AutoProvisionResult[]>([]);
   const [error, setError] = useState<string>();
   const [notice, setNotice] = useState<string>();
   const [inventorySearch, setInventorySearch] = useState("");
@@ -209,12 +224,9 @@ export function DeviceManager() {
         `EDGE_AGENT_ID=${provisionedGateway.id}`,
         `EDGE_AGENT_NAME=${provisionedGateway.name}`,
         "EDGE_BRIDGE_SHARED_KEY=<enrollment-secret>",
-        "CAMERA_USERNAME=<camera-user>",
-        "CAMERA_PASSWORD=<camera-password>",
         "PUBLIC_MEDIA_GATEWAY_URL=https://<branch-media-tunnel-host>",
         "EDGE_MEDIA_SHARED_KEY=<unique-branch-media-key>",
         "STREAM_SECRET_STORE_PATH=./data/stream-secrets.json",
-        "ONVIF_ENDPOINTS=http://<camera-ip>/onvif/device_service",
       ].join("\n")
     : "", [provisionedGateway]);
 
@@ -390,6 +402,35 @@ export function DeviceManager() {
       await refreshBranch(selectedBranch);
     } catch (reason) {
       setError(messageOf(reason, "Failed to approve discovered camera."));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function approveAllDiscovered() {
+    if (!selectedBranch) return;
+    setSaving(true);
+    setError(undefined);
+    setAutoProvisionResults([]);
+    try {
+      const response = await cameraInventoryApi.approveAllDiscovered(selectedBranch, {
+        recordingMode: "continuous",
+        retentionDays: 180,
+        enableAnalytics: true,
+        enableAlerts: true,
+      }) as { summary: { provisioned: number; partial: number; needsAttention: number; failed: number }; results: AutoProvisionResult[] };
+      setAutoProvisionResults(response.results);
+      for (const result of response.results) {
+        if (result.status === "provisioned" || result.status === "partial") {
+          markDiscoveryReviewStatus(result.discoveryId, "approved");
+        }
+      }
+      setNotice(
+        `${response.summary.provisioned} cameras provisioned · ${response.summary.needsAttention} need attention · ${response.summary.failed} failed.`,
+      );
+      await refreshBranch(selectedBranch);
+    } catch (reason) {
+      setError(messageOf(reason, "Automatic provisioning failed."));
     } finally {
       setSaving(false);
     }
@@ -864,13 +905,30 @@ export function DeviceManager() {
       {showDiscoveredList && (
         <div className="modal-overlay">
           <div className="modal-container">
-            <div className="modal-header"><h2>Add camera to {activeBranch?.name}</h2><button className="icon-button" onClick={() => setShowDiscoveredList(false)}><X size={20} /></button></div>
+            <div className="modal-header"><h2>Cameras found at {activeBranch?.name}</h2><button className="icon-button" onClick={() => setShowDiscoveredList(false)}><X size={20} /></button></div>
             <div className="modal-body">
+              {autoProvisionResults.length > 0 && (
+                <div className="auto-provision-results">
+                  <h3>Automatic provisioning</h3>
+                  {autoProvisionResults.map((result) => (
+                    <div className={`auto-provision-row ${result.status}`} key={result.discoveryId}>
+                      <strong>{result.name}</strong>
+                      {result.stages ? (
+                        <span>
+                          ✓ Approved · {result.stages.recording === "recording" ? "✓ Recording" : "◷ Recording configured"} · ✓ AI active · ✓ Alerts enabled
+                        </span>
+                      ) : (
+                        <span>{result.reason?.replaceAll("_", " ") ?? result.status}</span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
               {discoveredCameras.length === 0 ? (
-                <div className="device-empty"><Camera size={30} /><strong>No cameras discovered</strong><span>Run a network scan or configure the gateway's ONVIF endpoints to find cameras.</span></div>
+                <div className="device-empty"><Camera size={30} /><strong>No cameras discovered</strong><span>Make sure the Edge Agent is online in the camera network, then scan again.</span></div>
               ) : (
                 <>
-                  <p className="form-info-banner"><Network size={16} />Preview each discovered camera, rename it if needed, and then explicitly approve or reject it.</p>
+                  <p className="form-info-banner"><Network size={16} />Approve all stream-verified cameras in one step. Recording, AI rules, and alerts are enabled automatically.</p>
                   <div className="discovered-cameras-list">
                     {discoveredCameras.map((camera) => (
                       <div key={camera.id} className="discovered-camera-item">
@@ -901,7 +959,11 @@ export function DeviceManager() {
               )}
               <div className="modal-actions">
                 <button className="secondary-button" onClick={() => setShowDiscoveredList(false)}>Close</button>
-                <button className="secondary-button" onClick={() => { setShowDiscoveredList(false); setShowCameraForm(true); }}>Manual entry</button>
+                {discoveredCameras.length > 0 && (
+                  <button className="primary-button" onClick={() => void approveAllDiscovered()} disabled={saving}>
+                    {saving ? "Provisioning…" : `Approve all & start (${discoveredCameras.length})`}
+                  </button>
+                )}
               </div>
             </div>
           </div>

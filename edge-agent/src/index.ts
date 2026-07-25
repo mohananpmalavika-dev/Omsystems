@@ -106,12 +106,20 @@ async function scanBranch() {
       const parsedServiceUrl = new URL(serviceUrl);
       const discovery = await gateway.submitDiscovery(config.BRANCH_ID, {
         edgeAgentId: agentId,
+        discoveryMethod: "onvif-ws-discovery",
         vendor,
         manufacturer: device.manufacturer,
         model: device.model,
         ipAddress: endpoint.remoteAddress,
         serialNumber: device.serialNumber,
         firmwareVersion: device.firmwareVersion,
+        displayName: `${device.manufacturer} ${device.model}`,
+        credentialsRequired: false,
+        streamVerified: Boolean(primarySourceUri && profiles.length > 0),
+        rtspValidated: Boolean(primarySourceUri && profiles.length > 0),
+        compatibility: "compatible",
+        duplicateStatus: "unique",
+        compatibilityStatus: "compatible",
         onvifSupport: true,
         onvifServices: device.services,
         onvifCapabilityTests: device.capabilityTests,
@@ -126,7 +134,37 @@ async function scanBranch() {
       submitted += 1;
       console.log(`Submitted ${device.manufacturer} ${device.model} as discovery ${discovery.id}`, compatibilityNotes(vendor));
     } catch (error) {
-      console.error(`Failed to inspect ${endpoint.remoteAddress}: ${error instanceof Error ? error.message : error}`);
+      const message = error instanceof Error ? error.message : String(error);
+      console.error(`Failed to inspect ${endpoint.remoteAddress}: ${message}`);
+      try {
+        const serviceUrl = endpoint.xaddrs[0];
+        if (!serviceUrl) continue;
+        const parsedServiceUrl = new URL(serviceUrl);
+        await gateway.submitDiscovery(config.BRANCH_ID, {
+          edgeAgentId: agentId,
+          discoveryMethod: "onvif-ws-discovery",
+          vendor: "other",
+          manufacturer: "ONVIF",
+          model: `Camera ${endpoint.remoteAddress}`,
+          displayName: `Camera ${endpoint.remoteAddress}`,
+          ipAddress: endpoint.remoteAddress,
+          onvifPort: Number(parsedServiceUrl.port || (parsedServiceUrl.protocol === "https:" ? 443 : 80)),
+          rtspPort: 554,
+          onvifSupport: true,
+          credentialsRequired: /401|403|unauthori|forbidden|credential|auth/i.test(message),
+          streamVerified: false,
+          rtspValidated: false,
+          compatibility: "review-required",
+          duplicateStatus: "unique",
+          compatibilityStatus: "review-required",
+          statusReason: message.slice(0, 500),
+          profiles: [{ name: "unverified", codec: "unknown", width: 1, height: 1 }],
+          capabilities: { ptz: false, audio: false, events: false },
+        });
+        submitted += 1;
+      } catch (submissionError) {
+        console.error(`Failed to report ${endpoint.remoteAddress}: ${submissionError instanceof Error ? submissionError.message : submissionError}`);
+      }
     }
   }
   return submitted;

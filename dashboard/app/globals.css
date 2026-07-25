@@ -772,6 +772,14 @@ select, textarea { font: inherit; }
 .evidence-hold { display: inline-flex; align-items: center; gap: 4px; color: #157455; font-size: 8px; }
 .incident-row select { min-width: 120px; min-height: 31px; padding: 0 7px; border: 1px solid #dce2ea; border-radius: 7px; background: white; font-size: 9px; }
 .discovered-cameras-list { display: grid; gap: 10px; margin: 18px 0; max-height: 400px; overflow-y: auto; }
+.auto-provision-results { display: grid; gap: 8px; padding: 14px; margin-bottom: 14px; border: 1px solid #d7e3f5; border-radius: 12px; background: #f7faff; }
+.auto-provision-results h3 { margin: 0 0 4px; font-size: 13px; }
+.auto-provision-row { display: grid; gap: 3px; padding: 9px 10px; border-radius: 8px; background: #fff; }
+.auto-provision-row strong { font-size: 11px; }
+.auto-provision-row span { color: #61718a; font-size: 10px; }
+.auto-provision-row.provisioned { border-left: 3px solid #22a06b; }
+.auto-provision-row.partial { border-left: 3px solid #d99a24; }
+.auto-provision-row.needs-attention, .auto-provision-row.failed { border-left: 3px solid #d84a4a; }
 .discovered-camera-item { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 15px; padding: 12px; border: 1px solid #dce7f7; border-radius: 9px; background: #f9fbfd; }
 .camera-details strong { display: block; font-size: 11px; }
 .camera-details small { display: block; margin-top: 4px; color: #7a8799; font-size: 9px; }

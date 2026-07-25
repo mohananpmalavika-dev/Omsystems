@@ -1,11 +1,20 @@
 export interface DiscoveredCameraPayload {
   edgeAgentId: string;
+  discoveryMethod?: "onvif-ws-discovery" | "edge-agent-reported-inventory";
   vendor: "hikvision" | "cp-plus" | "other";
   manufacturer?: string;
   model: string;
   ipAddress: string;
   serialNumber?: string;
   firmwareVersion?: string;
+  displayName?: string;
+  statusReason?: string;
+  credentialsRequired?: boolean;
+  streamVerified?: boolean;
+  rtspValidated?: boolean;
+  compatibility?: string;
+  duplicateStatus?: "unique" | "duplicate" | "review-required";
+  compatibilityStatus?: "compatible" | "incompatible" | "review-required";
   onvifSupport?: boolean;
   onvifServices?: string[];
   onvifCapabilityTests?: Array<{ name: string; status: "pass" | "fail" | "unsupported" | "vendor-specific"; detail?: string }>;

@@ -60,7 +60,7 @@ export class FallDetector extends BaseDetector {
         !f.recoveryDetected || f.durationSeconds > 10
       );
 
-      if (activeF alls.length > 0) {
+      if (activeFalls.length > 0) {
         results.push({
           detectionType: "fall",
           confidence: this.calculateAverageConfidence(activeFalls),

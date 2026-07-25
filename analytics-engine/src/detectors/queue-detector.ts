@@ -72,10 +72,11 @@ export class QueueDetector extends BaseDetector {
     const results: DetectionResult[] = [];
 
     // Report queue metrics
-    const problematicQueues = metrics.filter(m => 
-      m.isOverCapacity || 
-      m.estimatedWaitMinutes > m.targetWaitTimeSeconds / 60
-    );
+    const problematicQueues = metrics.filter(m => {
+      const queueConfig = this.queues.find(q => q.zoneId === m.zoneId);
+      return m.isOverCapacity || 
+        (queueConfig && m.estimatedWaitMinutes > queueConfig.targetWaitTimeSeconds / 60);
+    });
 
     if (problematicQueues.length > 0) {
       results.push({
