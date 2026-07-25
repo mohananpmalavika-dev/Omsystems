@@ -72,9 +72,7 @@ export async function registerAnalyticsPhase2Routes(
   app: FastifyInstance,
   store: ControlPlaneStore,
 ) {
-  const pool = (store as any).pool;
-  
-  if (!pool) {
+  if (!hasPool(store)) {
     app.log.warn('Analytics Phase 2 routes require database pool - routes will be non-functional');
   }
   
@@ -93,7 +91,11 @@ export async function registerAnalyticsPhase2Routes(
       return reply.code(403).send({ error: "forbidden" });
     }
 
-    const watchlists = await pool.query(
+    if (!hasPool(store)) {
+      return reply.code(501).send({ error: "not_implemented", message: "This endpoint requires PostgreSQL store" });
+    }
+
+    const watchlists = await store.db.query(
       `SELECT id, name, description, list_type, enabled, alert_on_match,
               alert_severity, created_at
        FROM face_watchlists
@@ -118,9 +120,13 @@ export async function registerAnalyticsPhase2Routes(
       return reply.code(403).send({ error: "forbidden" });
     }
 
+    if (!hasPool(store)) {
+      return reply.code(501).send({ error: "not_implemented", message: "This endpoint requires PostgreSQL store" });
+    }
+
     const body = faceWatchlistSchema.parse(request.body);
 
-    const result = await pool.query(
+    const result = await store.db.query(
       `INSERT INTO face_watchlists
         (tenant_id, name, description, list_type, alert_on_match,
          alert_severity, created_by)
@@ -159,7 +165,11 @@ export async function registerAnalyticsPhase2Routes(
         return reply.code(403).send({ error: "forbidden" });
       }
 
-      const persons = await pool.query(
+      if (!hasPool(store)) {
+        return reply.code(501).send({ error: "not_implemented", message: "This endpoint requires PostgreSQL store" });
+      }
+
+      const persons = await store.db.query(
         `SELECT p.id, p.external_id, p.full_name, p.date_of_birth, p.gender,
                 p.notes, p.enrolled_at, p.last_seen_at, p.match_count,
                 COUNT(e.id) as embedding_count
@@ -196,6 +206,10 @@ export async function registerAnalyticsPhase2Routes(
 
       const body = facePersonSchema.parse(request.body);
 
+      if (!hasPool(store)) {
+        return reply.code(501).send({ error: "not_implemented", message: "This endpoint requires PostgreSQL store" });
+      }
+
       // TODO: Process face images and extract embeddings
       // This would typically involve:
       // 1. Upload face images
@@ -203,7 +217,7 @@ export async function registerAnalyticsPhase2Routes(
       // 3. Extract face embeddings
       // 4. Store embeddings in face_embeddings table
 
-      const result = await pool.query(
+      const result = await store.db.query(
         `INSERT INTO face_watchlist_persons
           (tenant_id, watchlist_id, external_id, full_name, date_of_birth,
            gender, notes, metadata, enrolled_by)
@@ -223,7 +237,7 @@ export async function registerAnalyticsPhase2Routes(
       );
 
       // Log audit trail
-      await pool.query(
+      await store.db.query(
         `INSERT INTO analytics_audit_log
           (tenant_id, user_id, action, resource_type, resource_id, details)
          VALUES ($1, $2, 'face_enrol', 'face_watchlist_person', $3, $4)`,
@@ -264,6 +278,10 @@ export async function registerAnalyticsPhase2Routes(
       return reply.code(403).send({ error: "forbidden" });
     }
 
+    if (!hasPool(store)) {
+      return reply.code(501).send({ error: "not_implemented", message: "This endpoint requires PostgreSQL store" });
+    }
+
     const conditions = ["fe.tenant_id = $1", "fe.similarity_score >= $2"];
     const params: any[] = [request.currentUser.tenantId, query.minSimilarity];
     let paramIndex = 3;
@@ -289,20 +307,17 @@ export async function registerAnalyticsPhase2Routes(
       params.push(query.personId);
     }
 
-    if (!hasPool(store)) {
-      return reply.code(501).send({ error: "not_implemented", message: "This endpoint requires PostgreSQL store" });
-    }
-
     const events = await store.db.query(
       `SELECT fe.id, fe.camera_id, fe.watchlist_id, fe.person_id,
               fe.similarity_score, fe.face_quality, fe.age_estimate,
               fe.gender_estimate, fe.wearing_mask, fe.snapshot_reference,
               fe.occurred_at, p.full_name as person_name,
-              w.name as watchlist_name, c.name as camera_name
+              w.name as watchlist_name, rn.name as camera_name
        FROM face_recognition_events fe
        LEFT JOIN face_watchlist_persons p ON p.id = fe.person_id
        LEFT JOIN face_watchlists w ON w.id = fe.watchlist_id
        LEFT JOIN cameras c ON c.id = fe.camera_id
+       LEFT JOIN resource_nodes rn ON rn.id = c.resource_node_id
        WHERE ${conditions.join(" AND ")}
        ORDER BY fe.occurred_at DESC
        LIMIT $${paramIndex}`,
@@ -310,7 +325,7 @@ export async function registerAnalyticsPhase2Routes(
     );
 
     // Log audit trail for face searches
-    await pool.query(
+    await store.db.query(
       `INSERT INTO analytics_audit_log
         (tenant_id, user_id, action, details)
        VALUES ($1, $2, 'face_search', $3)`,
@@ -339,7 +354,11 @@ export async function registerAnalyticsPhase2Routes(
       return reply.code(403).send({ error: "forbidden" });
     }
 
-    const watchlists = await pool.query(
+    if (!hasPool(store)) {
+      return reply.code(501).send({ error: "not_implemented", message: "This endpoint requires PostgreSQL store" });
+    }
+
+    const watchlists = await store.db.query(
       `SELECT id, name, description, list_type, enabled, alert_on_match,
               alert_severity, alert_authorities, created_at
        FROM anpr_watchlists
@@ -364,9 +383,13 @@ export async function registerAnalyticsPhase2Routes(
       return reply.code(403).send({ error: "forbidden" });
     }
 
+    if (!hasPool(store)) {
+      return reply.code(501).send({ error: "not_implemented", message: "This endpoint requires PostgreSQL store" });
+    }
+
     const body = anprWatchlistSchema.parse(request.body);
 
-    const result = await pool.query(
+    const result = await store.db.query(
       `INSERT INTO anpr_watchlists
         (tenant_id, name, description, list_type, alert_on_match,
          alert_severity, alert_authorities, created_by)
@@ -406,9 +429,13 @@ export async function registerAnalyticsPhase2Routes(
         return reply.code(403).send({ error: "forbidden" });
       }
 
+      if (!hasPool(store)) {
+        return reply.code(501).send({ error: "not_implemented", message: "This endpoint requires PostgreSQL store" });
+      }
+
       const body = anprPlateSchema.parse(request.body);
 
-      const result = await pool.query(
+      const result = await store.db.query(
         `INSERT INTO anpr_watchlist_plates
           (tenant_id, watchlist_id, plate_number, country_code, region_code,
            vehicle_make, vehicle_model, vehicle_color, vehicle_type,
@@ -501,11 +528,12 @@ export async function registerAnalyticsPhase2Routes(
               ae.country_code, ae.vehicle_type, ae.vehicle_color,
               ae.entry_direction, ae.snapshot_reference, ae.occurred_at,
               w.name as watchlist_name, wp.reason as watchlist_reason,
-              c.name as camera_name
+              rn.name as camera_name
        FROM anpr_events ae
        LEFT JOIN anpr_watchlist_plates wp ON wp.id = ae.plate_id
        LEFT JOIN anpr_watchlists w ON w.id = ae.watchlist_id
        LEFT JOIN cameras c ON c.id = ae.camera_id
+       LEFT JOIN resource_nodes rn ON rn.id = c.resource_node_id
        WHERE ${conditions.join(" AND ")}
        ORDER BY ae.occurred_at DESC
        LIMIT $${paramIndex}`,
@@ -513,7 +541,7 @@ export async function registerAnalyticsPhase2Routes(
     );
 
     // Log audit trail for ANPR searches
-    await pool.query(
+    await store.db.query(
       `INSERT INTO analytics_audit_log
         (tenant_id, user_id, action, details, justification)
        VALUES ($1, $2, 'anpr_search', $3, $4)`,
@@ -554,10 +582,12 @@ export async function registerAnalyticsPhase2Routes(
       const sessions = await store.db.query(
         `SELECT vs.id, vs.plate_number, vs.entry_at, vs.exit_at,
                 vs.duration_seconds, vs.status,
-                ec.name as entry_camera_name, xc.name as exit_camera_name
+                rn_entry.name as entry_camera_name, rn_exit.name as exit_camera_name
          FROM anpr_vehicle_sessions vs
          LEFT JOIN cameras ec ON ec.id = vs.entry_camera_id
+         LEFT JOIN resource_nodes rn_entry ON rn_entry.id = ec.resource_node_id
          LEFT JOIN cameras xc ON xc.id = vs.exit_camera_id
+         LEFT JOIN resource_nodes rn_exit ON rn_exit.id = xc.resource_node_id
          WHERE vs.tenant_id = $1 AND vs.plate_number ILIKE $2
          ORDER BY vs.entry_at DESC
          LIMIT 50`,
@@ -626,9 +656,13 @@ export async function registerAnalyticsPhase2Routes(
         return reply.code(403).send({ error: "forbidden" });
       }
 
+      if (!hasPool(store)) {
+        return reply.code(501).send({ error: "not_implemented", message: "This endpoint requires PostgreSQL store" });
+      }
+
       const body = protectedObjectSchema.parse(request.body);
 
-      const result = await pool.query(
+      const result = await store.db.query(
         `INSERT INTO protected_objects
           (tenant_id, camera_id, name, description, object_type, zone,
            alert_on_removal, alert_severity, removal_threshold_seconds,
@@ -705,9 +739,10 @@ export async function registerAnalyticsPhase2Routes(
       `SELECT be.id, be.camera_id, be.behavior_type, be.confidence,
               be.track_id, be.person_count, be.duration_seconds,
               be.speed_pixels_per_second, be.snapshot_reference,
-              be.occurred_at, c.name as camera_name
+              be.occurred_at, rn.name as camera_name
        FROM behavior_events be
        LEFT JOIN cameras c ON c.id = be.camera_id
+       LEFT JOIN resource_nodes rn ON rn.id = c.resource_node_id
        WHERE ${conditions.join(" AND ")}
        ORDER BY be.occurred_at DESC
        LIMIT $${paramIndex}`,

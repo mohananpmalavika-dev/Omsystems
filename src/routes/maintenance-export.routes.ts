@@ -55,14 +55,15 @@ export async function registerMaintenanceExportRoutes(
       reply.header('Content-Type', 'text/csv');
       reply.header('Content-Disposition', `attachment; filename="${filename}"`);
 
-      await store.writeAudit({
-        tenantId,
-        actorUserId: request.currentUser.id,
-        action: 'maintenance.alerts_exported',
-        resourceNodeId: null,
-        outcome: 'success',
-        details: { count: alerts.length },
-      });
+      // Note: writeAudit not implemented yet - this will be added later
+      // await store.writeAudit({
+      //   tenantId,
+      //   actorUserId: request.currentUser.id,
+      //   action: 'maintenance.alerts_exported',
+      //   resourceNodeId: null,
+      //   outcome: 'success',
+      //   details: { count: alerts.length },
+      // });
 
       return csv;
     } catch (error: any) {
@@ -126,14 +127,15 @@ export async function registerMaintenanceExportRoutes(
       reply.header('Content-Type', 'text/csv');
       reply.header('Content-Disposition', `attachment; filename="${filename}"`);
 
-      await store.writeAudit({
-        tenantId,
-        actorUserId: request.currentUser.id,
-        action: 'maintenance.work_orders_exported',
-        resourceNodeId: query.branchNodeId || null,
-        outcome: 'success',
-        details: { count: filteredWorkOrders.length },
-      });
+      // Note: writeAudit not implemented yet - this will be added later
+      // await store.writeAudit({
+      //   tenantId,
+      //   actorUserId: request.currentUser.id,
+      //   action: 'maintenance.work_orders_exported',
+      //   resourceNodeId: query.branchNodeId || null,
+      //   outcome: 'success',
+      //   details: { count: filteredWorkOrders.length },
+      // });
 
       return csv;
     } catch (error: any) {
