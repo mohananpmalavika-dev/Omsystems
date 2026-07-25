@@ -42,7 +42,7 @@ CREATE TABLE IF NOT EXISTS camera_health_checks (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
   camera_id uuid NOT NULL REFERENCES cameras(id) ON DELETE CASCADE,
-  branch_node_id uuid REFERENCES organizational_nodes(id),
+  branch_node_id uuid REFERENCES resource_nodes(id),
   
   check_timestamp timestamptz NOT NULL DEFAULT now(),
   
@@ -115,7 +115,7 @@ SELECT DISTINCT ON (camera_id)
   n.name as branch_name
 FROM camera_health_checks chc
 JOIN cameras c ON c.id = chc.camera_id
-LEFT JOIN organizational_nodes n ON n.id = chc.branch_node_id
+LEFT JOIN resource_nodes n ON n.id = chc.branch_node_id
 ORDER BY camera_id, check_timestamp DESC;
 
 CREATE UNIQUE INDEX camera_health_latest_camera_idx 
@@ -126,7 +126,7 @@ CREATE TABLE IF NOT EXISTS camera_quality_checks (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
   camera_id uuid NOT NULL REFERENCES cameras(id) ON DELETE CASCADE,
-  branch_node_id uuid REFERENCES organizational_nodes(id),
+  branch_node_id uuid REFERENCES resource_nodes(id),
   
   check_date date NOT NULL,
   check_time timestamptz NOT NULL DEFAULT now(),
@@ -199,7 +199,7 @@ CREATE TABLE IF NOT EXISTS recording_verification_jobs (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
   camera_id uuid NOT NULL REFERENCES cameras(id) ON DELETE CASCADE,
-  branch_node_id uuid REFERENCES organizational_nodes(id),
+  branch_node_id uuid REFERENCES resource_nodes(id),
   
   verification_date date NOT NULL,
   verification_period_start timestamptz NOT NULL,
@@ -294,7 +294,7 @@ CREATE TABLE IF NOT EXISTS storage_health_checks (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
   storage_node_id uuid REFERENCES infrastructure_nodes(id),
-  branch_node_id uuid REFERENCES organizational_nodes(id),
+  branch_node_id uuid REFERENCES resource_nodes(id),
   
   check_timestamp timestamptz NOT NULL DEFAULT now(),
   
@@ -384,7 +384,7 @@ CREATE TABLE IF NOT EXISTS maintenance_work_orders (
   -- Target
   camera_id uuid REFERENCES cameras(id) ON DELETE CASCADE,
   infrastructure_node_id uuid REFERENCES infrastructure_nodes(id),
-  branch_node_id uuid REFERENCES organizational_nodes(id),
+  branch_node_id uuid REFERENCES resource_nodes(id),
   
   -- Work details
   work_type maintenance_work_type NOT NULL,
@@ -506,7 +506,7 @@ CREATE TABLE IF NOT EXISTS video_access_logs (
   -- Camera accessed
   camera_id uuid REFERENCES cameras(id),
   camera_name text,
-  branch_node_id uuid REFERENCES organizational_nodes(id),
+  branch_node_id uuid REFERENCES resource_nodes(id),
   branch_name text,
   
   -- Time range accessed (for playback)
@@ -656,7 +656,7 @@ SELECT
     ), 2
   ) as overall_compliance_score
   
-FROM organizational_nodes n
+FROM resource_nodes n
 LEFT JOIN cameras c ON c.branch_node_id = n.id
 LEFT JOIN camera_health_latest chl ON chl.camera_id = c.id
 LEFT JOIN recording_verification_jobs rv ON rv.camera_id = c.id 
