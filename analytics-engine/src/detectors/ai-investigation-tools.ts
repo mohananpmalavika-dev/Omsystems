@@ -848,7 +848,7 @@ export class AIInvestigationTools extends BaseDetector {
       }
       
       // Calculate Re-ID similarity
-      const similarity = this.cosineSimilarity(track.embedding, appearance.embedding);
+      let similarity = this.cosineSimilarity(track.embedding, appearance.embedding);
       
       // Boost similarity if face matches
       if (appearance.attributes.faceId && track.appearances.length > 0) {
@@ -1175,7 +1175,7 @@ export class AIInvestigationTools extends BaseDetector {
   // BaseDetector Implementation
   // ===========================
   
-  async detect(frame: Buffer, metadata: any): Promise<DetectionResult[]> {
+  async detect(frame: DetectionFrame): Promise<DetectionResult[]> {
     // Investigation tools don't actively detect
     // They process appearances from other detectors
     return [];

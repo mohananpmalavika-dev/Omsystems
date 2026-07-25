@@ -46,7 +46,7 @@
  * - Save $50K-200K/year in traffic management costs
  */
 
-import { BaseDetector, DetectionResult } from './base-detector.js';
+import { BaseDetector, type DetectionFrame, type DetectionResult } from './base-detector.js';
 
 /**
  * Traffic flow states
@@ -252,7 +252,28 @@ export class SmartCityAnalytics extends BaseDetector {
   };
   
   constructor() {
-    super('smart-city-analytics');
+    super('smart-city-analytics', '1.0.0');
+  }
+
+  async initialize(): Promise<void> {
+    console.log('Initializing Smart City Analytics detector...');
+  }
+
+  async cleanup(): Promise<void> {
+    this.vehicles.clear();
+    this.junctions.clear();
+    this.parkingSpaces.clear();
+    this.crossings.clear();
+    this.congestionEvents.clear();
+    this.incidents.clear();
+    console.log('Smart City Analytics detector cleaned up');
+  }
+
+  getHealth() {
+    return {
+      status: 'healthy' as const,
+      details: 'Smart city analytics detector is available'
+    };
   }
   
   /**
@@ -755,25 +776,35 @@ export class SmartCityAnalytics extends BaseDetector {
   // BaseDetector Implementation
   // ===========================
   
-  async detect(frame: Buffer, metadata: any): Promise<DetectionResult[]> {
+  async detect(frame: DetectionFrame): Promise<DetectionResult[]> {
     const results: DetectionResult[] = [];
-    const junctionId = metadata.junctionId || 'default';
+    const metadata = frame.metadata ?? {};
+    const junctionId = (metadata as any).junctionId || 'default';
     
     // Detect traffic
-    const vehicles = await this.detectTraffic(frame, junctionId);
+    const vehicles = await this.detectTraffic(frame.imageData, junctionId);
     for (const vehicle of vehicles) {
       results.push({
-        type: 'vehicle',
-        bbox: vehicle.bbox,
+        detectionType: 'vehicle',
         confidence: 0.9,
+        objects: [
+          {
+            label: vehicle.type,
+            confidence: 0.9,
+            boundingBox: vehicle.bbox,
+            trackId: vehicle.trackId
+          }
+        ],
         metadata: {
           trackId: vehicle.trackId,
           vehicleType: vehicle.type,
           speed: vehicle.speed,
           lane: vehicle.lane,
           licensePlate: vehicle.licensePlate,
-          isStopped: vehicle.isStopped
-        }
+          isStopped: vehicle.isStopped,
+          frameMetadata: metadata
+        },
+        requiresAlert: false
       });
     }
     
@@ -781,13 +812,15 @@ export class SmartCityAnalytics extends BaseDetector {
     const parkingSpaces = await this.monitorParking();
     for (const space of parkingSpaces.filter(s => s.hasViolation)) {
       results.push({
-        type: 'parking_violation',
-        bbox: space.bbox,
+        detectionType: 'parking_violation',
         confidence: 0.95,
+        objects: [],
         metadata: {
           spaceId: space.id,
-          violationType: space.violationType
-        }
+          violationType: space.violationType,
+          bbox: space.bbox
+        },
+        requiresAlert: true
       });
     }
     

@@ -1144,4 +1144,11 @@ export class VehicleAnalyticsDetector extends BaseDetector {
     this.speedZones.clear();
     console.log("Vehicle Analytics detector cleaned up");
   }
+
+  getHealth() {
+    return {
+      status: 'healthy' as const,
+      details: 'Vehicle analytics detector is available'
+    };
+  }
 }

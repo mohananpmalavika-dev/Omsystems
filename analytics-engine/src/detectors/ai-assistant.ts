@@ -91,6 +91,7 @@ interface ParsedQuery {
 export interface AssistantResponse {
   success: boolean;
   message: string;
+  intent?: IntentType;
   data?: any;
   suggestions?: string[];
   followUp?: string[];
@@ -278,6 +279,9 @@ export class AIAssistant extends BaseDetector {
           };
       }
       
+      // Attach resolved intent to assistant response
+      response.intent = parsed.intent;
+
       // Store in conversation history
       context.history.push({
         query,
@@ -779,7 +783,7 @@ Just ask naturally - I'll understand!`;
   // BaseDetector Implementation
   // ===========================
   
-  async detect(frame: Buffer, metadata: any): Promise<DetectionResult[]> {
+  async detect(frame: DetectionFrame): Promise<DetectionResult[]> {
     // AI Assistant doesn't process frames
     return [];
   }

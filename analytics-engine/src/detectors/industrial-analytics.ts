@@ -53,7 +53,7 @@
  * - Increase production efficiency 15-25%
  */
 
-import { BaseDetector, DetectionResult } from './base-detector.js';
+import { BaseDetector, type DetectionFrame, type DetectionResult } from './base-detector.js';
 
 /**
  * Equipment types
@@ -225,9 +225,29 @@ export class IndustrialAnalytics extends BaseDetector {
   };
   
   constructor() {
-    super('industrial-analytics');
+    super('industrial-analytics', '1.0.0');
   }
   
+  async initialize(): Promise<void> {
+    console.log('Initializing Industrial Analytics detector...');
+  }
+
+  async cleanup(): Promise<void> {
+    this.equipment.clear();
+    this.workers.clear();
+    this.safetyZones.clear();
+    this.conveyorBelts.clear();
+    this.productionMetrics = [];
+    console.log('Industrial Analytics detector cleaned up');
+  }
+
+  getHealth() {
+    return {
+      status: 'healthy' as const,
+      details: 'Industrial analytics detector is available'
+    };
+  }
+
   /**
    * Detect and track equipment
    */
@@ -676,43 +696,62 @@ export class IndustrialAnalytics extends BaseDetector {
   // BaseDetector Implementation
   // ===========================
   
-  async detect(frame: Buffer, metadata: any): Promise<DetectionResult[]> {
+  async detect(frame: DetectionFrame): Promise<DetectionResult[]> {
     const results: DetectionResult[] = [];
-    
+    const metadata = frame.metadata ?? {};
+
     // Detect equipment
-    const equipment = await this.detectEquipment(frame);
+    const equipment = await this.detectEquipment(frame.imageData, frame.timestamp);
     for (const eq of equipment) {
       results.push({
-        type: 'industrial_equipment',
-        bbox: eq.bbox,
+        detectionType: 'industrial_equipment',
         confidence: eq.confidence,
+        objects: [
+          {
+            label: eq.type,
+            confidence: eq.confidence,
+            boundingBox: eq.bbox,
+            trackId: eq.trackId
+          }
+        ],
         metadata: {
           equipmentType: eq.type,
           state: eq.state,
           trackId: eq.trackId,
           operatingHours: eq.operatingHours,
-          nearWorkers: eq.nearWorkers
-        }
+          nearWorkers: eq.nearWorkers,
+          frameMetadata: metadata
+        },
+        requiresAlert: false
       });
     }
-    
+
     // Monitor workers
-    const workers = await this.monitorWorkerSafety(frame);
+    const workers = await this.monitorWorkerSafety(frame.imageData);
     for (const worker of workers) {
       results.push({
-        type: 'industrial_worker',
-        bbox: worker.bbox,
+        detectionType: 'industrial_worker',
         confidence: 0.9,
+        objects: [
+          {
+            label: 'worker',
+            confidence: 0.9,
+            boundingBox: worker.bbox,
+            trackId: worker.trackId
+          }
+        ],
         metadata: {
           trackId: worker.trackId,
           ppeCompliant: worker.ppeCompliant,
           zone: worker.zone,
           inSafetyZone: worker.inSafetyZone,
-          nearEquipment: worker.nearEquipment
-        }
+          nearEquipment: worker.nearEquipment,
+          frameMetadata: metadata
+        },
+        requiresAlert: false
       });
     }
-    
+
     return results;
   }
   

@@ -38,7 +38,7 @@
  * - Replaces retail analytics platforms ($5K-30K/year)
  */
 
-import { BaseDetector, DetectionResult } from './base-detector.js';
+import { BaseDetector, type DetectionFrame, type DetectionResult } from './base-detector.js';
 
 /**
  * Retail zone configuration
@@ -309,9 +309,29 @@ export class RetailAnalytics extends BaseDetector {
   };
   
   constructor() {
-    super('retail-analytics');
+    super('retail-analytics', '1.0.0');
   }
-  
+
+  async initialize(): Promise<void> {
+    console.log('Initializing Retail Analytics detector...');
+  }
+
+  async cleanup(): Promise<void> {
+    this.zones.clear();
+    this.customers.clear();
+    this.queueMetrics.clear();
+    this.heatMaps.clear();
+    this.shelfMetrics.clear();
+    console.log('Retail Analytics detector cleaned up');
+  }
+
+  getHealth() {
+    return {
+      status: 'healthy' as const,
+      details: 'Retail analytics detector is available'
+    };
+  }
+
   /**
    * Add retail zone
    */
@@ -352,12 +372,13 @@ export class RetailAnalytics extends BaseDetector {
   /**
    * Main detection method
    */
-  async detect(frame: Buffer, metadata: any): Promise<DetectionResult[]> {
+  async detect(frame: DetectionFrame): Promise<DetectionResult[]> {
     const results: DetectionResult[] = [];
+    const metadata = frame.metadata ?? {};
     
     try {
       // Get person detections from metadata
-      const personDetections = metadata.detections?.filter((d: any) => d.type === 'person') || [];
+      const personDetections = (metadata.detections as any[])?.filter((d: any) => d.type === 'person') || [];
       
       // 1. Track customers
       await this.trackCustomers(personDetections, metadata);
@@ -560,16 +581,17 @@ export class RetailAnalytics extends BaseDetector {
         });
         
         results.push({
-          type: 'long_queue',
+          detectionType: 'long_queue',
           confidence: 1.0,
-          bbox: this.polygonToBbox(zone.polygon),
-          attributes: {
+          objects: [],
+          metadata: {
             zone: zone.name,
             queueLength: metrics.currentLength,
             maxLength: zone.config.maxQueueLength,
-            severity: 'high'
+            severity: 'high',
+            bbox: this.polygonToBbox(zone.polygon)
           },
-          timestamp: now
+          requiresAlert: true
         });
       }
       
@@ -582,16 +604,17 @@ export class RetailAnalytics extends BaseDetector {
         });
         
         results.push({
-          type: 'long_wait_time',
+          detectionType: 'long_wait_time',
           confidence: 0.9,
-          bbox: this.polygonToBbox(zone.polygon),
-          attributes: {
+          objects: [],
+          metadata: {
             zone: zone.name,
             waitTime: metrics.currentWaitTime,
             maxWaitTime: zone.config.maxWaitTime,
-            severity: 'medium'
+            severity: 'medium',
+            bbox: this.polygonToBbox(zone.polygon)
           },
-          timestamp: now
+          requiresAlert: true
         });
       }
       
@@ -729,14 +752,15 @@ export class RetailAnalytics extends BaseDetector {
         });
         
         results.push({
-          type: 'shelf_empty',
+          detectionType: 'shelf_empty',
           confidence: 0.85,
-          bbox: this.polygonToBbox(zone.polygon),
-          attributes: {
+          objects: [],
+          metadata: {
             zone: zone.name,
-            severity: 'high'
+            severity: 'high',
+            bbox: this.polygonToBbox(zone.polygon)
           },
-          timestamp: new Date()
+          requiresAlert: true
         });
       }
     }

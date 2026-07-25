@@ -1085,4 +1085,11 @@ export class BankingAnalyticsDetector extends BaseDetector {
     this.dualControlZones.clear();
     console.log("Banking Analytics detector cleaned up");
   }
+
+  getHealth() {
+    return {
+      status: 'healthy' as const,
+      details: 'Banking analytics detector is available'
+    };
+  }
 }

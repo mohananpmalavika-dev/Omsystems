@@ -954,7 +954,7 @@ export class AIReportingEngine extends BaseDetector {
   // BaseDetector Implementation
   // ===========================
   
-  async detect(frame: Buffer, metadata: any): Promise<DetectionResult[]> {
+  async detect(frame: DetectionFrame): Promise<DetectionResult[]> {
     // Reporting engine doesn't actively detect
     // It generates reports on schedule or demand
     return [];

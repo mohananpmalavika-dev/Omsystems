@@ -413,8 +413,8 @@ export class FaceAnalyticsDetector extends BaseDetector {
       const alert: WatchlistAlert = {
         alertId: `alert_${randomUUID().substring(0, 8)}`,
         faceMatch: match,
-        location: frame.metadata?.location || 'Unknown',
-        cameraId: frame.metadata?.cameraId || 'Unknown',
+        location: String(frame.metadata?.location ?? 'Unknown'),
+        cameraId: String(frame.metadata?.cameraId ?? 'Unknown'),
         timestamp: frame.timestamp,
         alertType,
         severity,
@@ -795,6 +795,13 @@ export class FaceAnalyticsDetector extends BaseDetector {
     this.recentMatches.clear();
     this.watchlistAlerts = [];
     console.log("Face Analytics detector cleaned up");
+  }
+
+  getHealth() {
+    return {
+      status: 'healthy' as const,
+      details: 'Face analytics detector is available'
+    };
   }
 
   // ============================================================================

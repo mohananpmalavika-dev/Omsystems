@@ -1041,4 +1041,11 @@ export class SafetyAnalyticsDetector extends BaseDetector {
     this.activeHazards.clear();
     console.log("Safety Analytics detector cleaned up");
   }
+
+  getHealth() {
+    return {
+      status: 'healthy' as const,
+      details: 'Safety analytics detector is available'
+    };
+  }
 }

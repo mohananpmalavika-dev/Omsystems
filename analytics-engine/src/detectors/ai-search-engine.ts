@@ -212,6 +212,7 @@ class VectorDatabase {
     console.log('[VectorDB] Initializing in-memory vector store...');
     
     // Load Universal Sentence Encoder for text embeddings
+    const use = await import('@tensorflow-models/universal-sentence-encoder');
     this.textEncoder = await use.load();
     
     console.log('[VectorDB] Ready');
@@ -420,6 +421,10 @@ export class AISearchEngine extends BaseDetector {
     super('ai-search-engine', '1.0.0');
     this.vectorDB = new VectorDatabase();
   }
+
+  static generateSuggestions(query: string): string[] {
+    return QueryParser.generateSuggestions(query);
+  }
   
   /**
    * Initialize search engine
@@ -585,12 +590,25 @@ export class AISearchEngine extends BaseDetector {
           cameraId: frame.cameraId,
           timestamp: frame.timestamp,
           detection: {
-            type: bestDetection.type,
+            detectionType: bestDetection.type,
             confidence: bestDetection.confidence,
-            bbox: bestDetection.bbox,
-            attributes: bestDetection.attributes,
-            timestamp: frame.timestamp
-          } as DetectionResult,
+            objects: [{
+              label: bestDetection.type,
+              confidence: bestDetection.confidence,
+              boundingBox: {
+                x: bestDetection.bbox[0],
+                y: bestDetection.bbox[1],
+                width: bestDetection.bbox[2] - bestDetection.bbox[0],
+                height: bestDetection.bbox[3] - bestDetection.bbox[1]
+              },
+              ...(bestDetection.attributes ? { attributes: bestDetection.attributes } : {})
+            }],
+            metadata: {
+              attributes: bestDetection.attributes,
+              timestamp: frame.timestamp
+            },
+            requiresAlert: false
+          },
           relevanceScore: vecResult.score,
           confidenceScore: bestDetection.confidence,
           combinedScore: (vecResult.score * 0.7 + bestDetection.confidence * 0.3),

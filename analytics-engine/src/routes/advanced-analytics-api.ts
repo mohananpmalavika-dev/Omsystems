@@ -173,12 +173,14 @@ export async function registerAdvancedAnalyticsRoutes(
     return {
       count: violations.length,
       violations: violations.map(v => ({
-        vehicleId: v.vehicleId,
-        licensePlate: v.licensePlate,
+        spaceId: v.id,
+        occupied: v.occupied,
+        vehicleType: v.vehicle?.type ?? null,
+        licensePlate: v.vehicle?.licensePlate ?? null,
         violationType: v.violationType,
-        timestamp: v.timestamp,
-        duration: v.duration,
-        location: v.location
+        entryTime: v.vehicle?.entryTime ?? null,
+        location: v.location,
+        hasViolation: v.hasViolation
       }))
     };
   });
@@ -347,8 +349,8 @@ export async function registerAdvancedAnalyticsRoutes(
         stationId: s.stationId,
         tellerPresent: s.tellerPresent,
         customerPresent: s.customerPresent,
-        cashTrayStatus: s.cashTrayStatus,
-        unattendedDuration: s.unattendedDuration,
+        cashTrayOpen: s.cashTrayOpen,
+        lastActivity: s.lastActivity,
         violations: s.violations
       }))
     };
@@ -365,8 +367,8 @@ export async function registerAdvancedAnalyticsRoutes(
       vaults: status.map(v => ({
         vaultId: v.vaultId,
         doorStatus: v.doorStatus,
-        lastChecked: v.lastChecked,
-        authorizedPersonsPresent: v.authorizedPersonsPresent,
+        lastDoorChange: v.lastDoorChange,
+        authorizedPersonsPresent: v.currentOccupants.some(p => p.authorized),
         violations: v.violations
       }))
     };
@@ -383,10 +385,12 @@ export async function registerAdvancedAnalyticsRoutes(
       atms: status.map(a => ({
         atmId: a.atmId,
         queueLength: a.queueLength,
-        avgSessionDuration: a.avgSessionDuration,
+        currentUserDuration: a.currentUser?.duration ?? 0,
         tamperingDetected: a.tamperingDetected,
         skimmingDetected: a.skimmingDetected,
-        avgWaitTime: a.avgWaitTime
+        avgWaitTime: a.queuePersons.length > 0
+          ? a.queuePersons.reduce((sum, p) => sum + p.waitTime, 0) / a.queuePersons.length
+          : 0
       }))
     };
   });
@@ -426,12 +430,12 @@ export async function registerAdvancedAnalyticsRoutes(
     const metrics = retailAnalytics.getFootfallMetrics();
 
     return {
-      entries: metrics.entries,
-      exits: metrics.exits,
+      totalEntries: metrics.totalEntries,
+      totalExits: metrics.totalExits,
       currentOccupancy: metrics.currentOccupancy,
       uniqueVisitors: metrics.uniqueVisitors,
-      avgDwellTime: metrics.avgDwellTime,
-      peakHours: metrics.peakHours
+      peakHour: metrics.peakHour,
+      peakDay: metrics.peakDay
     };
   });
 
@@ -444,12 +448,13 @@ export async function registerAdvancedAnalyticsRoutes(
 
     return {
       queues: analytics.map(q => ({
-        queueId: q.queueId,
+        zoneId: q.zoneId,
+        zoneName: q.zoneName,
         currentLength: q.currentLength,
         avgWaitTime: q.avgWaitTime,
         maxWaitTime: q.maxWaitTime,
         abandonmentRate: q.abandonmentRate,
-        serviceRate: q.serviceRate,
+        throughput: q.throughput,
         alerts: q.alerts
       }))
     };
@@ -471,10 +476,11 @@ export async function registerAdvancedAnalyticsRoutes(
     }
 
     return {
-      grid: heatmap.grid,
+      dwellTimeMap: heatmap.dwellTimeMap,
+      trafficMap: heatmap.trafficMap,
       hotspots: heatmap.hotspots,
       coldspots: heatmap.coldspots,
-      trafficPatterns: heatmap.trafficPatterns
+      timePatterns: heatmap.timePatterns
     };
   });
 
@@ -487,10 +493,15 @@ export async function registerAdvancedAnalyticsRoutes(
 
     return {
       conversionRate: analytics.conversionRate,
-      browseToCheckout: analytics.browseToCheckout,
-      avgInteractionTime: analytics.avgInteractionTime,
-      productInteractions: analytics.productInteractions,
-      zoneEngagement: analytics.zoneEngagement
+      avgDwellTime: analytics.avgDwellTime,
+      avgZonesVisited: analytics.avgZonesVisited,
+      avgProductInteractions: analytics.avgProductInteractions,
+      zoneEngagement: Array.from(analytics.zoneEngagement.entries()).map(([zoneId, engagement]) => ({
+        zoneId,
+        visitors: engagement.visitors,
+        avgDwellTime: engagement.avgDwellTime,
+        conversionRate: engagement.conversionRate
+      }))
     };
   });
 
@@ -533,7 +544,7 @@ export async function registerAdvancedAnalyticsRoutes(
         cameraId: r.cameraId,
         timestamp: r.timestamp,
         relevanceScore: r.relevanceScore,
-        confidence: r.confidence,
+        confidenceScore: r.confidenceScore,
         detection: r.detection,
         matchedAttributes: r.matchedAttributes
       })),
@@ -808,12 +819,13 @@ export async function registerAdvancedAnalyticsRoutes(
    */
   app.get("/v1/analytics/reports/dashboard", async (request, reply) => {
     const reporting = pipeline.getAIReportingEngine();
-    const dashboard = reporting.getExecutiveDashboard();
+    const dashboard = await reporting.generateExecutiveDashboard();
 
     return {
+      title: dashboard.title,
+      lastUpdated: dashboard.lastUpdated,
       kpis: dashboard.kpis,
-      alerts: dashboard.alerts,
-      trends: dashboard.trends,
+      activeAlerts: dashboard.activeAlerts,
       widgets: dashboard.widgets,
       quickStats: dashboard.quickStats
     };
@@ -871,9 +883,8 @@ export async function registerAdvancedAnalyticsRoutes(
 
     return {
       query: body.query,
-      response: response.message,
       intent: response.intent,
-      entities: response.entities,
+      response: response.message,
       data: response.data,
       suggestions: response.suggestions,
       success: response.success

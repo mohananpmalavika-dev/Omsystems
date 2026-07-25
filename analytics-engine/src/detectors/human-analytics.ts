@@ -726,6 +726,13 @@ export class HumanAnalyticsDetector extends BaseDetector {
     console.log("Human Analytics detector cleaned up");
   }
 
+  getHealth() {
+    return {
+      status: 'healthy' as const,
+      details: 'Human analytics detector is available'
+    };
+  }
+
   // ============================================================================
   // Public API Methods
   // ============================================================================
