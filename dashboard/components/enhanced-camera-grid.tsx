@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, useRef, useMemo } from "react";
 import {
   Grid2X2,
   Grid3X3,
@@ -10,6 +10,9 @@ import {
   Square,
   Layout,
   Plus,
+  Monitor,
+  Layers,
+  Zap,
 } from "lucide-react";
 import { CameraTile } from "./camera-tile";
 import type { Camera, LiveSessionResponse, RecordingJob, RecordingMode } from "@/lib/types";
@@ -27,22 +30,33 @@ export interface GridLayout {
   }>;
 }
 
-export interface CameraGridProps {
+export interface EnhancedCameraGridProps {
   cameras: Camera[];
   onLayoutChange?: (layout: GridLayout) => void;
   initialLayout?: GridLayout;
+  enableVirtualScrolling?: boolean;
+  enableGPUAcceleration?: boolean;
+  adaptiveLayout?: boolean;
 }
 
-export function CameraGrid({
+interface VisibleRange {
+  start: number;
+  end: number;
+}
+
+export function EnhancedCameraGrid({
   cameras,
   onLayoutChange,
   initialLayout,
-}: CameraGridProps) {
+  enableVirtualScrolling = true,
+  enableGPUAcceleration = true,
+  adaptiveLayout = false,
+}: EnhancedCameraGridProps) {
   const [gridSize, setGridSize] = useState<GridSize>(
     initialLayout?.gridSize || "2x2"
   );
   const [gridPositions, setGridPositions] = useState<
-    Map<number, { camera: Camera; stream: "main" | "sub" }>
+    Map<number, { camera: Camera; stream: "main" | "sub"; priority?: number }>
   >(new Map());
   const [sessions, setSessions] = useState<Map<string, LiveSessionResponse>>(
     new Map()
@@ -54,6 +68,10 @@ export function CameraGrid({
   const [showLayoutMenu, setShowLayoutMenu] = useState(false);
   const [layoutName, setLayoutName] = useState(initialLayout?.name || "");
   const [savedLayouts, setSavedLayouts] = useState<GridLayout[]>([]);
+  const [visibleRange, setVisibleRange] = useState<VisibleRange>({ start: 0, end: 50 });
+  const [draggedCamera, setDraggedCamera] = useState<{ camera: Camera; fromPosition: number } | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const observerRef = useRef<IntersectionObserver | null>(null);
 
   const gridSizeMap = {
     "1x1": 1,
@@ -72,6 +90,54 @@ export function CameraGrid({
 
   const totalPositions = gridSizeMap[gridSize];
 
+  // GPU acceleration classes
+  const gpuAccelClass = enableGPUAcceleration ? "gpu-accelerated" : "";
+
+  // Calculate visible range for virtual scrolling
+  useEffect(() => {
+    if (!enableVirtualScrolling || totalPositions <= 36) {
+      setVisibleRange({ start: 0, end: totalPositions });
+      return;
+    }
+
+    const updateVisibleRange = () => {
+      if (!containerRef.current) return;
+
+      const container = containerRef.current;
+      const scrollTop = container.scrollTop;
+      const clientHeight = container.clientHeight;
+
+      // Calculate approximate tile height based on grid size
+      const cols = parseInt(gridSize.split("x")[0]);
+      const tileWidth = container.clientWidth / cols;
+      const tileHeight = tileWidth * (9 / 16); // 16:9 aspect ratio
+
+      const startIndex = Math.floor(scrollTop / tileHeight) * cols;
+      const endIndex = Math.ceil((scrollTop + clientHeight) / tileHeight) * cols;
+
+      // Add buffer for smooth scrolling
+      const buffer = cols * 2;
+      setVisibleRange({
+        start: Math.max(0, startIndex - buffer),
+        end: Math.min(totalPositions, endIndex + buffer),
+      });
+    };
+
+    updateVisibleRange();
+    const container = containerRef.current;
+    if (container) {
+      container.addEventListener("scroll", updateVisibleRange);
+      window.addEventListener("resize", updateVisibleRange);
+    }
+
+    return () => {
+      if (container) {
+        container.removeEventListener("scroll", updateVisibleRange);
+      }
+      window.removeEventListener("resize", updateVisibleRange);
+    };
+  }, [gridSize, totalPositions, enableVirtualScrolling]);
+
   // Load saved layouts
   useEffect(() => {
     loadSavedLayouts();
@@ -84,26 +150,49 @@ export function CameraGrid({
       initialLayout.positions.forEach((pos) => {
         const camera = cameras.find((c) => c.id === pos.cameraId);
         if (camera) {
-          posMap.set(pos.position, { camera, stream: pos.stream });
+          posMap.set(pos.position, { camera, stream: pos.stream, priority: 0 });
         }
       });
       setGridPositions(posMap);
     }
   }, [initialLayout, cameras]);
 
-  const loadSavedLayouts = async () => {
-    try {
-      const response = await fetch("/api/control/v1/grids/layouts", {
-        credentials: "include",
+  // Adaptive layout: prioritize cameras with alerts
+  useEffect(() => {
+    if (!adaptiveLayout) return;
+
+    const updatePriorities = () => {
+      const newPositions = new Map(gridPositions);
+      let changed = false;
+
+      // Sort cameras by priority (status: offline > alerts > normal)
+      const sortedEntries = Array.from(newPositions.entries()).sort((a, b) => {
+        const priorityA = a[1].camera.status === "offline" ? 3 : 
+                         a[1].camera.status === "alert" ? 2 : 1;
+        const priorityB = b[1].camera.status === "offline" ? 3 : 
+                         b[1].camera.status === "alert" ? 2 : 1;
+        return priorityB - priorityA;
       });
-      if (response.ok) {
-        const layouts = await response.json();
-        setSavedLayouts(layouts);
+
+      // Reassign positions based on priority
+      sortedEntries.forEach(([_, entry], index) => {
+        if (index < totalPositions) {
+          const currentEntry = newPositions.get(index);
+          if (!currentEntry || currentEntry.camera.id !== entry.camera.id) {
+            newPositions.set(index, { ...entry, priority: index });
+            changed = true;
+          }
+        }
+      });
+
+      if (changed) {
+        setGridPositions(newPositions);
       }
-    } catch (error) {
-      console.error("Failed to load layouts:", error);
-    }
-  };
+    };
+
+    const interval = setInterval(updatePriorities, 5000);
+    return () => clearInterval(interval);
+  }, [adaptiveLayout, gridPositions, totalPositions]);
 
   const handleGridSizeChange = (newSize: GridSize) => {
     const newTotalPositions = gridSizeMap[newSize];
@@ -123,7 +212,7 @@ export function CameraGrid({
   const handleCameraAssign = (position: number, camera: Camera | null) => {
     const newPositions = new Map(gridPositions);
     if (camera) {
-      newPositions.set(position, { camera, stream: "main" });
+      newPositions.set(position, { camera, stream: "main", priority: 0 });
     } else {
       newPositions.delete(position);
     }
@@ -137,9 +226,41 @@ export function CameraGrid({
       newPositions.set(position, {
         camera: entry.camera,
         stream: entry.stream === "main" ? "sub" : "main",
+        priority: entry.priority,
       });
       setGridPositions(newPositions);
     }
+  };
+
+  // Drag and drop handlers
+  const handleDragStart = (position: number, camera: Camera) => {
+    setDraggedCamera({ camera, fromPosition: position });
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+  };
+
+  const handleDrop = (toPosition: number) => {
+    if (!draggedCamera) return;
+
+    const newPositions = new Map(gridPositions);
+    const fromEntry = newPositions.get(draggedCamera.fromPosition);
+    const toEntry = newPositions.get(toPosition);
+
+    if (fromEntry) {
+      // Swap positions
+      if (toEntry) {
+        newPositions.set(draggedCamera.fromPosition, toEntry);
+        newPositions.set(toPosition, fromEntry);
+      } else {
+        newPositions.delete(draggedCamera.fromPosition);
+        newPositions.set(toPosition, fromEntry);
+      }
+      setGridPositions(newPositions);
+    }
+
+    setDraggedCamera(null);
   };
 
   const handleStartLive = async (cameraId: string) => {
@@ -275,6 +396,20 @@ export function CameraGrid({
     }
   };
 
+  const loadSavedLayouts = async () => {
+    try {
+      const response = await fetch("/api/control/v1/grids/layouts", {
+        credentials: "include",
+      });
+      if (response.ok) {
+        const layouts = await response.json();
+        setSavedLayouts(layouts);
+      }
+    } catch (error) {
+      console.error("Failed to load layouts:", error);
+    }
+  };
+
   const handleSaveLayout = useCallback(async () => {
     if (!layoutName.trim()) {
       alert("Please enter a layout name");
@@ -329,7 +464,7 @@ export function CameraGrid({
     layout.positions.forEach((pos) => {
       const camera = cameras.find((c) => c.id === pos.cameraId);
       if (camera) {
-        posMap.set(pos.position, { camera, stream: pos.stream });
+        posMap.set(pos.position, { camera, stream: pos.stream, priority: 0 });
       }
     });
     setGridPositions(posMap);
@@ -349,6 +484,17 @@ export function CameraGrid({
     "11x11": "grid-cols-11",
     "12x12": "grid-cols-12",
   };
+
+  // Virtual scrolling: only render visible tiles
+  const visibleTiles = useMemo(() => {
+    if (!enableVirtualScrolling || totalPositions <= 36) {
+      return Array.from({ length: totalPositions }, (_, i) => i);
+    }
+    return Array.from(
+      { length: visibleRange.end - visibleRange.start },
+      (_, i) => i + visibleRange.start
+    );
+  }, [enableVirtualScrolling, totalPositions, visibleRange]);
 
   return (
     <div className="camera-grid-container">
@@ -441,6 +587,27 @@ export function CameraGrid({
         </div>
 
         <div className="grid-actions">
+          <div className="performance-indicators">
+            {enableVirtualScrolling && totalPositions > 36 && (
+              <span className="performance-badge">
+                <Zap size={14} />
+                Virtual Scrolling
+              </span>
+            )}
+            {enableGPUAcceleration && (
+              <span className="performance-badge">
+                <Layers size={14} />
+                GPU Accelerated
+              </span>
+            )}
+            {adaptiveLayout && (
+              <span className="performance-badge">
+                <Monitor size={14} />
+                Adaptive
+              </span>
+            )}
+          </div>
+
           {savedLayouts.length > 0 && (
             <div className="saved-layouts-dropdown">
               <button className="btn-secondary">
@@ -492,14 +659,27 @@ export function CameraGrid({
         </div>
       )}
 
-      <div className={`camera-grid ${gridColumns[gridSize]}`}>
-        {Array.from({ length: totalPositions }, (_, i) => {
+      <div 
+        ref={containerRef}
+        className={`camera-grid ${gridColumns[gridSize]} ${gpuAccelClass}`}
+        style={{
+          gridTemplateRows: enableVirtualScrolling && totalPositions > 36 
+            ? `repeat(${Math.ceil(totalPositions / parseInt(gridSize.split('x')[0]))}, minmax(0, 1fr))`
+            : undefined
+        }}
+      >
+        {visibleTiles.map((i) => {
           const entry = gridPositions.get(i);
           const camera = entry?.camera;
 
           if (!camera) {
             return (
-              <div key={i} className="grid-empty-slot">
+              <div 
+                key={i} 
+                className="grid-empty-slot"
+                onDragOver={handleDragOver}
+                onDrop={() => handleDrop(i)}
+              >
                 <Settings size={24} className="opacity-30" />
                 <select
                   className="camera-selector"
@@ -523,7 +703,14 @@ export function CameraGrid({
           }
 
           return (
-            <div key={i} className="grid-camera-slot">
+            <div 
+              key={i} 
+              className="grid-camera-slot"
+              draggable
+              onDragStart={() => handleDragStart(i, camera)}
+              onDragOver={handleDragOver}
+              onDrop={() => handleDrop(i)}
+            >
               <div className="slot-controls">
                 <button
                   className="stream-toggle"
@@ -579,11 +766,14 @@ export function CameraGrid({
           background: white;
           border-radius: 8px;
           box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+          flex-wrap: wrap;
+          gap: 12px;
         }
 
         .grid-size-selector {
           display: flex;
           gap: 8px;
+          flex-wrap: wrap;
         }
 
         .grid-size-selector button {
@@ -614,6 +804,27 @@ export function CameraGrid({
         .grid-actions {
           display: flex;
           gap: 8px;
+          align-items: center;
+          flex-wrap: wrap;
+        }
+
+        .performance-indicators {
+          display: flex;
+          gap: 6px;
+          flex-wrap: wrap;
+        }
+
+        .performance-badge {
+          display: flex;
+          align-items: center;
+          gap: 4px;
+          padding: 4px 10px;
+          background: #ecfdf5;
+          border: 1px solid #10b981;
+          border-radius: 999px;
+          font-size: 11px;
+          font-weight: 600;
+          color: #047857;
         }
 
         .saved-layouts-dropdown {
@@ -635,6 +846,8 @@ export function CameraGrid({
           border-radius: 6px;
           box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
           min-width: 200px;
+          max-height: 300px;
+          overflow-y: auto;
           z-index: 100;
         }
 
@@ -652,14 +865,6 @@ export function CameraGrid({
 
         .dropdown-item:hover {
           background: #f3f4f6;
-        }
-
-        .dropdown-item:first-child {
-          border-radius: 6px 6px 0 0;
-        }
-
-        .dropdown-item:last-child {
-          border-radius: 0 0 6px 6px;
         }
 
         .btn-primary,
@@ -721,53 +926,24 @@ export function CameraGrid({
           padding: 4px;
         }
 
-        .grid-cols-1 {
-          grid-template-columns: 1fr;
+        .gpu-accelerated {
+          transform: translateZ(0);
+          will-change: transform;
+          backface-visibility: hidden;
         }
 
-        .grid-cols-2 {
-          grid-template-columns: repeat(2, 1fr);
-        }
-
-        .grid-cols-3 {
-          grid-template-columns: repeat(3, 1fr);
-        }
-
-        .grid-cols-4 {
-          grid-template-columns: repeat(4, 1fr);
-        }
-
-        .grid-cols-5 {
-          grid-template-columns: repeat(5, 1fr);
-        }
-
-        .grid-cols-6 {
-          grid-template-columns: repeat(6, 1fr);
-        }
-
-        .grid-cols-7 {
-          grid-template-columns: repeat(7, 1fr);
-        }
-
-        .grid-cols-8 {
-          grid-template-columns: repeat(8, 1fr);
-        }
-
-        .grid-cols-9 {
-          grid-template-columns: repeat(9, 1fr);
-        }
-
-        .grid-cols-10 {
-          grid-template-columns: repeat(10, 1fr);
-        }
-
-        .grid-cols-11 {
-          grid-template-columns: repeat(11, 1fr);
-        }
-
-        .grid-cols-12 {
-          grid-template-columns: repeat(12, 1fr);
-        }
+        .grid-cols-1 { grid-template-columns: 1fr; }
+        .grid-cols-2 { grid-template-columns: repeat(2, 1fr); }
+        .grid-cols-3 { grid-template-columns: repeat(3, 1fr); }
+        .grid-cols-4 { grid-template-columns: repeat(4, 1fr); }
+        .grid-cols-5 { grid-template-columns: repeat(5, 1fr); }
+        .grid-cols-6 { grid-template-columns: repeat(6, 1fr); }
+        .grid-cols-7 { grid-template-columns: repeat(7, 1fr); }
+        .grid-cols-8 { grid-template-columns: repeat(8, 1fr); }
+        .grid-cols-9 { grid-template-columns: repeat(9, 1fr); }
+        .grid-cols-10 { grid-template-columns: repeat(10, 1fr); }
+        .grid-cols-11 { grid-template-columns: repeat(11, 1fr); }
+        .grid-cols-12 { grid-template-columns: repeat(12, 1fr); }
 
         .grid-empty-slot {
           aspect-ratio: 16/9;
@@ -780,6 +956,12 @@ export function CameraGrid({
           gap: 12px;
           background: #f9fafb;
           padding: 16px;
+          transition: all 0.2s;
+        }
+
+        .grid-empty-slot:hover {
+          border-color: #3b82f6;
+          background: #eff6ff;
         }
 
         .camera-selector {
@@ -795,6 +977,14 @@ export function CameraGrid({
         .grid-camera-slot {
           position: relative;
           aspect-ratio: 16/9;
+          cursor: move;
+          transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .grid-camera-slot:hover {
+          transform: scale(1.02);
+          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+          z-index: 10;
         }
 
         .slot-controls {

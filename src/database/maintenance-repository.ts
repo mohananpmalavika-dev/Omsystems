@@ -543,15 +543,17 @@ export class MaintenanceRepository {
     return camelRow<any>(result.rows[0]);
   }
 
-  async recordStorageHealth(input: { tenantId: string; assetId: string; totalCapacityGb: number; usedCapacityGb: number; availableCapacityGb: number; smartStatus?: string; temperature?: number; badSectors?: number; readSpeedMbs?: number; writeSpeedMbs?: number; remainingLifetimeYears?: number; errorCount?: number; status?: 'healthy' | 'warning' | 'critical'; }) {
+  async recordStorageHealth(input: { tenantId: string; assetId: string; totalCapacityGb: number; usedCapacityGb: number; availableCapacityGb: number; smartStatus?: string; temperature?: number; badSectors?: number; readSpeedMbs?: number; writeSpeedMbs?: number; remainingLifetimeYears?: number; errorCount?: number; status?: 'healthy' | 'warning' | 'critical'; reallocatedSectors?: number; pendingSectors?: number; uncorrectableSectors?: number; powerOnHours?: number; model?: string; serialNumber?: string; telemetrySource?: 'real' | 'simulated'; }) {
     const status = input.status ?? ((input.usedCapacityGb / input.totalCapacityGb) >= 0.9 ? 'critical' : (input.usedCapacityGb / input.totalCapacityGb) >= 0.8 ? 'warning' : 'healthy');
     const result = await this.pool.query(
       `INSERT INTO storage_health (
          id, tenant_id, asset_id, total_capacity_gb, used_capacity_gb,
          available_capacity_gb, usage_percentage, status, smart_status,
          temperature, bad_sectors, read_speed_mbs, write_speed_mbs,
-         remaining_lifetime_years, error_count, last_check_at
-       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,now()) RETURNING *`,
+         remaining_lifetime_years, error_count, last_check_at,
+         reallocated_sectors, pending_sectors, uncorrectable_sectors,
+         power_on_hours, model, serial_number, telemetry_source
+       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,now(),$16,$17,$18,$19,$20,$21,$22) RETURNING *`,
       [
         randomUUID(),
         input.tenantId,
@@ -568,6 +570,13 @@ export class MaintenanceRepository {
         input.writeSpeedMbs ?? null,
         input.remainingLifetimeYears ?? null,
         input.errorCount ?? null,
+        input.reallocatedSectors ?? null,
+        input.pendingSectors ?? null,
+        input.uncorrectableSectors ?? null,
+        input.powerOnHours ?? null,
+        input.model ?? null,
+        input.serialNumber ?? null,
+        input.telemetrySource ?? null,
       ],
     );
     return camelRow<any>(result.rows[0]);

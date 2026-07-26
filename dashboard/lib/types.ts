@@ -1,4 +1,4 @@
-export type CameraStatus = "online" | "offline" | "degraded" | "unknown";
+export type CameraStatus = "online" | "offline" | "degraded" | "unknown" | "alert";
 
 export interface Branch {
   id: string;
@@ -183,6 +183,7 @@ export interface Camera {
     ptz: boolean;
     audio: boolean;
     events: boolean;
+    analytics?: string[];
   };
 }
 

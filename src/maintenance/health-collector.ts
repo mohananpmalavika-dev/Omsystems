@@ -5,6 +5,7 @@
  */
 
 import type { ControlPlaneStore } from '../control-plane-store.js';
+import { collectSmartTelemetry } from './smart-collector.js';
 
 export interface HealthMetric {
   componentId: string;
@@ -232,15 +233,23 @@ export class HealthCollectorService {
    */
   private async collectStorageHealth(tenantId: string, asset: any): Promise<void> {
     try {
-      // In production, query SMART data from storage device
-      // Simulate metrics for now
-      const totalCapacityGb = 10000;
-      const usedCapacityGb = 7500 + Math.random() * 1000;
-      const availableCapacityGb = totalCapacityGb - usedCapacityGb;
-      const usagePercentage = (usedCapacityGb / totalCapacityGb) * 100;
-      
-      const temperature = 40 + Math.random() * 20;
-      const badSectors = Math.floor(Math.random() * 20);
+      const totalCapacityGb = Number(asset.totalCapacityGb ?? asset.total_capacity_gb ?? 10000);
+      const usedCapacityGb = Number(asset.usedCapacityGb ?? asset.used_capacity_gb ?? 7500 + Math.random() * 1000);
+      const availableCapacityGb = Math.max(0, totalCapacityGb - usedCapacityGb);
+      const usagePercentage = totalCapacityGb > 0 ? (usedCapacityGb / totalCapacityGb) * 100 : 0;
+
+      const telemetry = await collectSmartTelemetry({
+        devicePath: asset.devicePath ?? asset.device_path,
+        vendor: asset.vendor ?? asset.make ?? asset.assetType,
+        host: asset.host ?? asset.ipAddress ?? asset.ip_address,
+        port: asset.port ?? asset.pollingPort,
+        username: asset.username,
+        password: asset.password,
+        endpoint: asset.endpoint,
+      });
+
+      const temperature = telemetry.temperature ?? 40 + Math.random() * 20;
+      const badSectors = Math.max(0, (telemetry.reallocatedSectors ?? 0) + (telemetry.pendingSectors ?? 0));
       const readSpeedMbs = 150 + Math.random() * 50;
       const writeSpeedMbs = 120 + Math.random() * 40;
 
@@ -256,12 +265,12 @@ export class HealthCollectorService {
         totalCapacityGb,
         usedCapacityGb,
         availableCapacityGb,
-        smartStatus: badSectors < 10 ? 'PASSED' : 'WARNING',
+        smartStatus: telemetry.smartStatus === 'healthy' ? 'PASSED' : telemetry.smartStatus === 'warning' ? 'WARNING' : telemetry.smartStatus === 'critical' ? 'FAILED' : 'UNKNOWN',
         temperature,
         badSectors,
         readSpeedMbs,
         writeSpeedMbs,
-        remainingLifetimeYears: 3 - (badSectors / 100),
+        remainingLifetimeYears: telemetry.powerOnHours ? Math.max(0, 5 - (telemetry.powerOnHours / 87600)) : 3 - (badSectors / 100),
         errorCount: badSectors,
       });
 
@@ -270,6 +279,9 @@ export class HealthCollectorService {
           usagePercentage,
           temperature,
           badSectors,
+          telemetrySource: telemetry.telemetrySource,
+          model: telemetry.model,
+          serialNumber: telemetry.serialNumber,
         });
       }
     } catch (error) {

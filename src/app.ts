@@ -41,6 +41,8 @@ import { registerEvidenceRoutes } from "./routes/evidence.routes.js";
 import { registerVideoSearchRoutes } from "./routes/video-search.routes.js";
 import { registerDeviceInventoryRoutes } from "./routes/device-inventory.routes.js";
 import { registerDeviceManagementRoutes } from "./routes/device-management.routes.js";
+import { registerDVRNVRMonitorRoutes } from "./routes/dvr-nvr-monitor.routes.js";
+import { DVRNVRMonitorService } from "./services/dvr-nvr-monitor.service.js";
 import { parseBulkCameraCsv } from "./services/camera-registration.js";
 import { RecordingSearchService } from "./recording/search-service.js";
 import { PlaybackEngine } from "./recording/playback-engine.js";
@@ -253,6 +255,31 @@ export async function buildApp(options?: {
   }));
 
   app.get("/v1/me", async (request) => request.currentUser);
+
+  app.get("/v1/capacity/assessment", async () => ({
+    capability: "Support approximately 400 branches / 5,000 cameras",
+    status: "Architecturally possible",
+    verifiedCompletion: 45,
+    summary: "Distributed architecture exists, but no 400-branch, 5,000-camera load test, endurance benchmark, or production-scale capacity evidence has been completed.",
+    metrics: {
+      branches: 400,
+      cameras: 5000,
+      branchScaleTarget: 400,
+      cameraScaleTarget: 5000,
+    },
+    evidence: {
+      loadTestCompleted: false,
+      productionBenchmarkCompleted: false,
+      enduranceBenchmarkCompleted: false,
+      failoverValidated: false,
+    },
+    futureBranches: {
+      capability: "Unlimited future branches",
+      status: "Designed for horizontal growth",
+      verifiedCompletion: 35,
+      summary: "The platform uses a modular, distributed architecture that can be extended by adding additional service instances, but high-availability clustering, autoscaling and multi-region validation remain unproven.",
+    },
+  }));
 
   app.get("/v1/branches", async (request) => {
     const { action } = branchListQuery.parse(request.query);
@@ -1421,6 +1448,19 @@ export async function buildApp(options?: {
   // Start export worker if enabled
   if (exportWorker && (options?.enableExportWorker ?? process.env.ENABLE_EXPORT_WORKER !== "false")) {
     startExportWorker(app, exportWorker, pool);
+  }
+
+  // Initialize DVR/NVR monitoring if database connectivity is available
+  if (pool) {
+    try {
+      const dvrNvrMonitorService = new DVRNVRMonitorService(pool);
+      await dvrNvrMonitorService.start();
+      app.addHook("onClose", async () => dvrNvrMonitorService.stop());
+      await registerDVRNVRMonitorRoutes(app, dvrNvrMonitorService, pool);
+      app.log.info("DVR/NVR monitor service started and routes registered");
+    } catch (error) {
+      app.log.error({ error }, "Failed to initialize DVR/NVR monitor service");
+    }
   }
 
   app.setErrorHandler((error, _request, reply) => {

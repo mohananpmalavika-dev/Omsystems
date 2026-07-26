@@ -51,12 +51,38 @@ interface AlertMetrics {
   slaBreached: number;
 }
 
+interface CapacityAssessment {
+  capability: string;
+  status: string;
+  verifiedCompletion: number;
+  summary: string;
+  metrics: {
+    branches: number;
+    cameras: number;
+    branchScaleTarget: number;
+    cameraScaleTarget: number;
+  };
+  evidence: {
+    loadTestCompleted: boolean;
+    productionBenchmarkCompleted: boolean;
+    enduranceBenchmarkCompleted: boolean;
+    failoverValidated: boolean;
+  };
+  futureBranches?: {
+    capability: string;
+    status: string;
+    verifiedCompletion: number;
+    summary: string;
+  };
+}
+
 export default function DashboardPage() {
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
   const [cameraMetrics, setCameraMetrics] = useState<CameraMetrics | null>(null);
   const [recordingMetrics, setRecordingMetrics] = useState<RecordingMetrics | null>(null);
   const [storageMetrics, setStorageMetrics] = useState<StorageMetrics | null>(null);
   const [alertMetrics, setAlertMetrics] = useState<AlertMetrics | null>(null);
+  const [capacityAssessment, setCapacityAssessment] = useState<CapacityAssessment | null>(null);
   const [incidents, setIncidents] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -73,24 +99,26 @@ export default function DashboardPage() {
     try {
       const API_BASE = process.env.NEXT_PUBLIC_API_BASE || '/api/control';
       
-      const [summaryRes, cameraRes, recordingRes, storageRes, alertRes, incidentsRes] = await Promise.all([
+      const [summaryRes, cameraRes, recordingRes, storageRes, alertRes, incidentsRes, capacityRes] = await Promise.all([
         fetch(`${API_BASE}/v1/dashboard/summary`),
         fetch(`${API_BASE}/v1/dashboard/camera-health`),
         fetch(`${API_BASE}/v1/dashboard/recording-status`),
         fetch(`${API_BASE}/v1/dashboard/storage`),
         fetch(`${API_BASE}/v1/dashboard/alerts`),
-        fetch(`${API_BASE}/v1/dashboard/incidents?limit=5`)
+        fetch(`${API_BASE}/v1/dashboard/incidents?limit=5`),
+        fetch(`${API_BASE}/v1/capacity/assessment`)
       ]);
 
       if (!summaryRes.ok) throw new Error('Failed to fetch dashboard data');
 
-      const [summaryData, cameraData, recordingData, storageData, alertData, incidentsData] = await Promise.all([
+      const [summaryData, cameraData, recordingData, storageData, alertData, incidentsData, capacityData] = await Promise.all([
         summaryRes.json(),
         cameraRes.json(),
         recordingRes.json(),
         storageRes.json(),
         alertRes.json(),
-        incidentsRes.json()
+        incidentsRes.json(),
+        capacityRes.json()
       ]);
 
       setSummary(summaryData.data);
@@ -99,6 +127,7 @@ export default function DashboardPage() {
       setStorageMetrics(storageData.data);
       setAlertMetrics(alertData.data);
       setIncidents(incidentsData.data || []);
+      setCapacityAssessment(capacityData?.data ?? capacityData);
       setError(null);
     } catch (err) {
       console.error('Dashboard fetch error:', err);
@@ -195,12 +224,55 @@ export default function DashboardPage() {
               status={getAvailabilityStatus(cameraMetrics?.availabilityPercentage)}
             />
             <MetricCard 
+              label="Scale Readiness" 
+              value={capacityAssessment?.verifiedCompletion ? `${capacityAssessment.verifiedCompletion}%` : '—'}
+              detail={capacityAssessment?.status || 'Pending assessment'}
+              status={getVerificationStatus(capacityAssessment?.verifiedCompletion)}
+            />
+            <MetricCard 
               label="Storage Utilization" 
               value={storageMetrics?.utilizationPercentage ? `${storageMetrics.utilizationPercentage.toFixed(1)}%` : '—'}
               detail={`${storageMetrics?.forecastFullDays || 0} days remaining`}
               status={getStorageStatus(storageMetrics?.utilizationPercentage)}
             />
           </div>
+
+          <DashboardPanel title="Capacity Assessment" icon="📈" style={{ marginBottom: 24 }}>
+            {capacityAssessment ? (
+              <>
+                <p style={{ margin: '0 0 12px', fontSize: 16, fontWeight: 700 }}>{capacityAssessment.capability}</p>
+                <p style={{ margin: '0 0 16px', color: '#6b7280', lineHeight: 1.5 }}>{capacityAssessment.summary}</p>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 12 }}>
+                  <StatBox label="Status" value={capacityAssessment.status} color="#3b82f6" />
+                  <StatBox label="Verified Completion" value={`${capacityAssessment.verifiedCompletion}%`} color="#8b5cf6" />
+                  <StatBox label="Branches Target" value={capacityAssessment.metrics.branches} color="#10b981" />
+                  <StatBox label="Cameras Target" value={capacityAssessment.metrics.cameras} color="#f59e0b" />
+                </div>
+                <div style={{ marginTop: 16, padding: 12, background: '#f9fafb', borderRadius: 8 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+                    <span style={{ color: '#6b7280' }}>Load test completed</span>
+                    <strong>{capacityAssessment.evidence.loadTestCompleted ? 'Yes' : 'No'}</strong>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+                    <span style={{ color: '#6b7280' }}>Production benchmark completed</span>
+                    <strong>{capacityAssessment.evidence.productionBenchmarkCompleted ? 'Yes' : 'No'}</strong>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span style={{ color: '#6b7280' }}>Endurance benchmark completed</span>
+                    <strong>{capacityAssessment.evidence.enduranceBenchmarkCompleted ? 'Yes' : 'No'}</strong>
+                  </div>
+                </div>
+                {capacityAssessment.futureBranches && (
+                  <div style={{ marginTop: 16, padding: 12, background: '#eff6ff', borderRadius: 8 }}>
+                    <div style={{ fontWeight: 700, marginBottom: 6 }}>{capacityAssessment.futureBranches.capability}</div>
+                    <div style={{ color: '#374151', fontSize: 14 }}>{capacityAssessment.futureBranches.summary}</div>
+                  </div>
+                )}
+              </>
+            ) : (
+              <p style={{ color: '#6b7280', margin: 0 }}>Loading capacity assessment...</p>
+            )}
+          </DashboardPanel>
 
           {/* Main Widgets Grid */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 24, marginBottom: 24 }}>
@@ -370,14 +442,15 @@ function MetricCard({ label, value, detail, trend, status }: any) {
   );
 }
 
-function DashboardPanel({ title, icon, children }: any) {
+function DashboardPanel({ title, icon, children, style }: any) {
   return (
     <div style={{ 
       padding: 24, 
       borderRadius: 16, 
       background: '#fff', 
       border: '2px solid #e5e7eb',
-      boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
+      boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+      ...style
     }}>
       <h2 style={{ margin: '0 0 20px', fontSize: 18, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8 }}>
         <span>{icon}</span> {title}
@@ -422,6 +495,13 @@ function getStorageStatus(percentage?: number): 'good' | 'warning' | 'critical' 
   if (!percentage) return 'good';
   if (percentage < 80) return 'good';
   if (percentage < 90) return 'warning';
+  return 'critical';
+}
+
+function getVerificationStatus(percentage?: number): 'good' | 'warning' | 'critical' {
+  if (!percentage) return 'warning';
+  if (percentage >= 80) return 'good';
+  if (percentage >= 45) return 'warning';
   return 'critical';
 }
 

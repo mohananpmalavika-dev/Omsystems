@@ -122,6 +122,7 @@ export class BranchHealthScoringService {
 
   /**
    * Calculate camera component health
+   * Enhanced with quality metrics from camera_health_history
    */
   private async calculateCameraHealth(
     tenantId: string,
@@ -129,17 +130,36 @@ export class BranchHealthScoringService {
   ): Promise<ComponentHealth> {
     const query = `
       SELECT 
-        COUNT(*) as total,
-        COUNT(*) FILTER (WHERE online_status = 'online') as online,
-        COUNT(*) FILTER (WHERE online_status = 'offline') as offline,
-        COUNT(*) FILTER (WHERE online_status = 'degraded') as degraded,
-        AVG(health_score) as avg_health_score,
-        AVG(current_fps::float / NULLIF(expected_fps, 0) * 100) as avg_fps_achievement,
-        AVG(packet_loss_percent) as avg_packet_loss,
-        AVG(latency_ms) as avg_latency
-      FROM cameras
-      WHERE branch_id = $1
-        AND status = 'active'
+        COUNT(DISTINCT c.id) as total,
+        COUNT(DISTINCT c.id) FILTER (WHERE c.status = 'online') as online,
+        COUNT(DISTINCT c.id) FILTER (WHERE c.status = 'offline') as offline,
+        COUNT(DISTINCT c.id) FILTER (WHERE c.status = 'warning') as warning,
+        COUNT(DISTINCT c.id) FILTER (WHERE c.status = 'degraded') as degraded,
+        -- Latest health metrics from camera_health_history
+        AVG(latest.current_fps) as avg_fps,
+        AVG(latest.packet_loss) as avg_packet_loss,
+        AVG(latest.latency_ms) as avg_latency,
+        AVG(latest.current_bitrate) as avg_bitrate,
+        COUNT(DISTINCT c.id) FILTER (WHERE latest.video_loss = true) as video_loss_count,
+        COUNT(DISTINCT c.id) FILTER (WHERE latest.image_frozen = true) as frozen_count,
+        COUNT(DISTINCT c.id) FILTER (WHERE latest.black_screen = true) as black_screen_count,
+        -- Expected values from camera profiles
+        AVG((c.profiles->0->>'frameRate')::float) as avg_expected_fps,
+        -- 24-hour uptime from camera_uptime function
+        AVG(uptime.uptime_percentage) as avg_uptime_24h
+      FROM cameras c
+      LEFT JOIN LATERAL (
+        SELECT *
+        FROM camera_health_history
+        WHERE camera_id = c.id
+        ORDER BY timestamp DESC
+        LIMIT 1
+      ) latest ON true
+      LEFT JOIN LATERAL (
+        SELECT uptime_percentage
+        FROM calculate_camera_uptime(c.id, 24)
+      ) uptime ON true
+      WHERE c.branch_node_id = $1::uuid
     `;
 
     const result = await this.pool.query(query, [branchId]);
@@ -152,32 +172,53 @@ export class BranchHealthScoringService {
 
     const online = parseInt(row.online) || 0;
     const offline = parseInt(row.offline) || 0;
+    const warning = parseInt(row.warning) || 0;
     const degraded = parseInt(row.degraded) || 0;
+    const videoLossCount = parseInt(row.video_loss_count) || 0;
+    const frozenCount = parseInt(row.frozen_count) || 0;
+    const blackScreenCount = parseInt(row.black_screen_count) || 0;
 
-    const avgHealthScore = parseFloat(row.avg_health_score) || 0;
-    const avgFpsAchievement = parseFloat(row.avg_fps_achievement) || 0;
+    const avgFps = parseFloat(row.avg_fps) || 0;
+    const avgExpectedFps = parseFloat(row.avg_expected_fps) || 25;
     const avgPacketLoss = parseFloat(row.avg_packet_loss) || 0;
     const avgLatency = parseFloat(row.avg_latency) || 0;
+    const avgBitrate = parseFloat(row.avg_bitrate) || 0;
+    const avgUptime24h = parseFloat(row.avg_uptime_24h) || 0;
 
     // Calculate availability score (0-40 points)
-    const availabilityScore = (online / total) * 40;
+    // Use 24-hour uptime for more accurate measurement
+    const availabilityScore = avgUptime24h > 0 ? (avgUptime24h / 100) * 40 : (online / total) * 40;
 
-    // Calculate performance score (0-30 points)
-    const performanceScore = Math.min(avgFpsAchievement / 100 * 30, 30);
+    // Calculate performance score based on FPS achievement (0-30 points)
+    const fpsAchievement = avgExpectedFps > 0 ? (avgFps / avgExpectedFps) : 0;
+    const performanceScore = Math.min(fpsAchievement * 30, 30);
 
     // Calculate quality score (0-30 points)
+    // Packet loss: 0% = 15pts, 10% = 0pts
     const packetLossScore = Math.max(0, (1 - avgPacketLoss / 10) * 15);
+    // Latency: 0ms = 15pts, 500ms = 0pts
     const latencyScore = Math.max(0, (1 - avgLatency / 500) * 15);
     const qualityScore = packetLossScore + latencyScore;
 
-    const score = Math.round(availabilityScore + performanceScore + qualityScore);
+    // Deduct points for stream health issues
+    let penaltyScore = 0;
+    if (videoLossCount > 0) penaltyScore += (videoLossCount / total) * 10;
+    if (frozenCount > 0) penaltyScore += (frozenCount / total) * 5;
+    if (blackScreenCount > 0) penaltyScore += (blackScreenCount / total) * 5;
+
+    const score = Math.max(0, Math.round(availabilityScore + performanceScore + qualityScore - penaltyScore));
     const status = this.scoreToStatus(score);
 
     const issues: string[] = [];
     if (offline > 0) issues.push(`${offline} cameras offline`);
     if (degraded > 0) issues.push(`${degraded} cameras degraded`);
+    if (warning > 0) issues.push(`${warning} cameras with warnings`);
+    if (videoLossCount > 0) issues.push(`${videoLossCount} cameras with video loss`);
+    if (frozenCount > 0) issues.push(`${frozenCount} cameras with frozen streams`);
+    if (blackScreenCount > 0) issues.push(`${blackScreenCount} cameras with black screens`);
     if (avgPacketLoss > 5) issues.push(`High packet loss: ${avgPacketLoss.toFixed(1)}%`);
     if (avgLatency > 200) issues.push(`High latency: ${avgLatency.toFixed(0)}ms`);
+    if (avgFps < avgExpectedFps * 0.8) issues.push(`Low FPS: ${avgFps.toFixed(1)}/${avgExpectedFps.toFixed(0)}`);
 
     return {
       score,
@@ -187,11 +228,20 @@ export class BranchHealthScoringService {
         total,
         online,
         offline,
+        warning,
         degraded,
         availability: (online / total) * 100,
-        avgFpsAchievement,
+        uptime24h: avgUptime24h,
+        avgFps,
+        avgExpectedFps,
+        fpsAchievement: fpsAchievement * 100,
         avgPacketLoss,
-        avgLatency
+        avgLatency,
+        avgBitrate,
+        videoLossCount,
+        frozenCount,
+        blackScreenCount,
+        healthIssues: videoLossCount + frozenCount + blackScreenCount,
       },
       issues
     };

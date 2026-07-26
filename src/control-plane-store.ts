@@ -1208,6 +1208,13 @@ export interface ControlPlaneStore {
     writeSpeedMbs?: number;
     remainingLifetimeYears?: number;
     errorCount?: number;
+    reallocatedSectors?: number;
+    pendingSectors?: number;
+    uncorrectableSectors?: number;
+    powerOnHours?: number;
+    model?: string;
+    serialNumber?: string;
+    telemetrySource?: 'real' | 'simulated';
   }): Promise<any>;
   
   recordNetworkHealth(input: {

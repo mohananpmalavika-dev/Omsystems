@@ -49,6 +49,13 @@ async recordStorageHealth(input: {
   writeSpeedMbs?: number;
   remainingLifetimeYears?: number;
   errorCount?: number;
+  reallocatedSectors?: number;
+  pendingSectors?: number;
+  uncorrectableSectors?: number;
+  powerOnHours?: number;
+  model?: string;
+  serialNumber?: string;
+  telemetrySource?: 'real' | 'simulated';
 }) {
   const usagePercentage = (input.usedCapacityGb / input.totalCapacityGb) * 100;
   const status = usagePercentage >= 90 ? 'critical' : usagePercentage >= 80 ? 'warning' : 'healthy';
@@ -69,6 +76,13 @@ async recordStorageHealth(input: {
     writeSpeedMbs: input.writeSpeedMbs,
     remainingLifetimeYears: input.remainingLifetimeYears,
     errorCount: input.errorCount,
+    reallocatedSectors: input.reallocatedSectors,
+    pendingSectors: input.pendingSectors,
+    uncorrectableSectors: input.uncorrectableSectors,
+    powerOnHours: input.powerOnHours,
+    model: input.model,
+    serialNumber: input.serialNumber,
+    telemetrySource: input.telemetrySource,
     lastCheckAt: new Date().toISOString(),
   };
   this.storageHealth.push(storageHealth);

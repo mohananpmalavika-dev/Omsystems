@@ -92,6 +92,23 @@ describe("control-plane API", () => {
     expect(Array.isArray(json.branchSummaries)).toBe(true);
   });
 
+  it("returns a capacity assessment for 400 branches and 5,000 cameras", async () => {
+    const response = await app.inject({
+      method: "GET",
+      url: "/v1/capacity/assessment",
+      headers: { "x-user-id": "user-global-admin" },
+    });
+
+    expect(response.statusCode).toBe(200);
+    const json = response.json();
+    expect(json.capability).toBe("Support approximately 400 branches / 5,000 cameras");
+    expect(json.status).toBe("Architecturally possible");
+    expect(json.verifiedCompletion).toBe(45);
+    expect(json.metrics).toMatchObject({ branches: 400, cameras: 5000 });
+    expect(json.evidence.loadTestCompleted).toBe(false);
+    expect(json.evidence.productionBenchmarkCompleted).toBe(false);
+  });
+
   it("returns dashboard storage health metrics for control-room cards", async () => {
     await store.upsertRecordingStorageNode({
       tenantId: "omsystems",
