@@ -142,9 +142,9 @@ export default function OperationalHealthDashboard() {
           </div>
           <div className="flex items-baseline gap-2 mb-1">
             <span className="text-3xl font-bold">{summary?.totalBranches || 0}</span>
-            <span className="text-sm text-gray-500">total</span>
+            <span className="text-sm text-gray-500">branches</span>
           </div>
-          <div className="flex items-center gap-3 text-xs">
+          <div className="flex flex-wrap gap-3 text-xs">
             <span className="flex items-center gap-1">
               <span>🟢</span> {summary?.healthyBranches || 0}
             </span>
@@ -153,6 +153,9 @@ export default function OperationalHealthDashboard() {
             </span>
             <span className="flex items-center gap-1">
               <span>🔴</span> {summary?.criticalBranches || 0}
+            </span>
+            <span className="flex items-center gap-1">
+              <span>⚫</span> {summary?.unknownBranches || 0}
             </span>
           </div>
         </div>
@@ -204,6 +207,21 @@ export default function OperationalHealthDashboard() {
           </div>
           <div className="text-xs text-gray-500">
             Require immediate attention
+          </div>
+        </div>
+        <div className="stat-card hidden lg:block">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-sm text-gray-600">Edge Agents</span>
+            <Server size={18} className="text-gray-400" />
+          </div>
+          <div className="flex items-baseline gap-2 mb-1">
+            <span className="text-3xl font-bold">{summary?.totalEdgeAgents || 0}</span>
+            <span className="text-sm text-gray-500">total</span>
+          </div>
+          <div className="flex flex-wrap gap-2 text-xs">
+            <span className="text-green-600">{summary?.edgeAgentsOnline || 0} online</span>
+            <span className="text-red-600">{summary?.edgeAgentsOffline || 0} offline</span>
+            <span className="text-amber-600">{summary?.edgeAgentsWarning || 0} warning</span>
           </div>
         </div>
       </div>
@@ -336,7 +354,7 @@ export default function OperationalHealthDashboard() {
           <div className="space-y-3">
             <div className="flex justify-between text-sm">
               <span className="text-gray-600">Total agents</span>
-              <span className="font-medium">{summary?.totalBranches || 0}</span>
+              <span className="font-medium">{summary?.totalEdgeAgents || 0}</span>
             </div>
             <div className="flex justify-between text-sm">
               <span className="text-gray-600">Offline</span>
@@ -345,8 +363,12 @@ export default function OperationalHealthDashboard() {
             <div className="flex justify-between text-sm">
               <span className="text-gray-600">Online</span>
               <span className="font-medium text-green-600">
-                {(summary?.totalBranches || 0) - (summary?.edgeAgentsOffline || 0)}
+                {summary?.edgeAgentsOnline || 0}
               </span>
+            </div>
+            <div className="flex justify-between text-sm">
+              <span className="text-gray-600">Warning</span>
+              <span className="font-medium text-amber-600">{summary?.edgeAgentsWarning || 0}</span>
             </div>
           </div>
           <a href="/operations/edge-agents" className="btn-secondary w-full mt-4">

@@ -18,13 +18,18 @@ export interface HealthSummary {
   healthyBranches: number;
   warningBranches: number;
   criticalBranches: number;
+  unknownBranches: number;
   totalCameras: number;
   camerasOnline: number;
   camerasOffline: number;
   camerasRecording: number;
   recordingFailures: number;
   activeCriticalAlerts: number;
+  totalEdgeAgents: number;
+  edgeAgentsOnline: number;
   edgeAgentsOffline: number;
+  edgeAgentsWarning: number;
+  edgeAgentsUnknown: number;
   timestamp: string;
 }
 

@@ -31,7 +31,8 @@ export class OperationalHealthService {
           COUNT(*) as total_branches,
           COUNT(*) FILTER (WHERE health_status = 'healthy') as healthy_branches,
           COUNT(*) FILTER (WHERE health_status = 'warning') as warning_branches,
-          COUNT(*) FILTER (WHERE health_status = 'critical') as critical_branches
+          COUNT(*) FILTER (WHERE health_status = 'critical') as critical_branches,
+          COUNT(*) FILTER (WHERE health_status = 'unknown') as unknown_branches
         FROM branches
         WHERE tenant_id = $1 ${branchFilter.clause}
       ),
@@ -54,7 +55,11 @@ export class OperationalHealthService {
       ),
       edge_agent_stats AS (
         SELECT 
-          COUNT(*) FILTER (WHERE status = 'offline') as agents_offline
+          COUNT(*) as total_agents,
+          COUNT(*) FILTER (WHERE status = 'online') as agents_online,
+          COUNT(*) FILTER (WHERE status = 'offline') as agents_offline,
+          COUNT(*) FILTER (WHERE status = 'warning') as agents_warning,
+          COUNT(*) FILTER (WHERE status = 'unknown') as agents_unknown
         FROM edge_agents ea
         JOIN branches b ON b.id = ea.branch_id
         WHERE b.tenant_id = $1 ${branchFilter.clause.replace('branches.', 'b.')}
@@ -63,7 +68,7 @@ export class OperationalHealthService {
         bs.*,
         cs.*,
         al.critical_alerts,
-        ea.agents_offline
+        ea.*
       FROM branch_stats bs
       CROSS JOIN camera_stats cs
       CROSS JOIN alert_stats al
@@ -78,13 +83,18 @@ export class OperationalHealthService {
       healthyBranches: parseInt(row.healthy_branches) || 0,
       warningBranches: parseInt(row.warning_branches) || 0,
       criticalBranches: parseInt(row.critical_branches) || 0,
+      unknownBranches: parseInt(row.unknown_branches) || 0,
       totalCameras: parseInt(row.total_cameras) || 0,
       camerasOnline: parseInt(row.cameras_online) || 0,
       camerasOffline: parseInt(row.cameras_offline) || 0,
       camerasRecording: parseInt(row.cameras_recording) || 0,
       recordingFailures: parseInt(row.recording_failures) || 0,
       activeCriticalAlerts: parseInt(row.critical_alerts) || 0,
+      totalEdgeAgents: parseInt(row.total_agents) || 0,
+      edgeAgentsOnline: parseInt(row.agents_online) || 0,
       edgeAgentsOffline: parseInt(row.agents_offline) || 0,
+      edgeAgentsWarning: parseInt(row.agents_warning) || 0,
+      edgeAgentsUnknown: parseInt(row.agents_unknown) || 0,
       timestamp: new Date()
     };
   }
