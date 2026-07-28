@@ -3108,6 +3108,39 @@ button, a { -webkit-tap-highlight-color: transparent; }
 .workspace :where(p) { text-wrap: pretty; }
 .workspace :where(button, a) { transition-duration: .16s; }
 
+.branch-mosaic { position: relative; }
+.branch-mosaic-viewport { scrollbar-width: thin; scrollbar-color: #b8c5d6 #edf1f6; }
+.branch-mosaic-tile { transition: transform .14s ease, box-shadow .14s ease, filter .14s ease; }
+.branch-mosaic-tile:hover { position: relative; z-index: 2; transform: translateY(-1px); filter: saturate(1.08); }
+.branch-mosaic-tile.status-only { border-left-width: 3px; border-radius: 6px; }
+.branch-mosaic-tile.status-only strong { color: #24344d; font-weight: 760; letter-spacing: -.1px; }
+.branch-mosaic-fullscreen {
+  position: fixed !important;
+  inset: 12px;
+  z-index: 80;
+  display: flex;
+  flex-direction: column;
+  margin: 0 !important;
+  padding: 18px !important;
+  border: 1px solid #cbd8e8 !important;
+  border-radius: 18px !important;
+  background:
+    radial-gradient(circle at 92% 0%, rgba(53, 111, 246, .1), transparent 28rem),
+    #f6f8fc !important;
+  box-shadow: 0 32px 100px rgba(5, 18, 38, .32) !important;
+}
+.branch-mosaic-fullscreen .branch-mosaic-viewport { flex: 1; min-height: 0; background: #edf2f8; }
+.branch-mosaic-fullscreen::before {
+  content: "HO SURVEILLANCE WALL";
+  position: absolute;
+  top: 10px;
+  right: 18px;
+  color: #6c7d94;
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: 1.4px;
+}
+
 @media (max-width: 760px) {
   .operations-section .page-container,
   .control-room-section .control-room,

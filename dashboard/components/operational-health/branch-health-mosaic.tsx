@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { AlertTriangle, Camera, Radio, Search, Server, Wifi } from "lucide-react";
+import { AlertTriangle, Camera, Maximize2, Minimize2, Radio, Search, Server, Wifi } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { BranchConnectivityStatus, BranchHealth, HealthStatus } from "@/lib/types/operational-health";
 import { getTimeAgo } from "@/lib/types/operational-health";
@@ -10,12 +10,13 @@ import {
   BRANCH_GRID_LAYOUTS,
   getBranchGridMetrics,
   loadAllBranchHealth,
+  sequenceBranchHealth,
   type BranchGridLayout,
   type BranchHealthPage,
+  type BranchSequence,
 } from "./branch-mosaic-model";
 import type { BranchSummaryFilter } from "./branch-summary-model";
 
-const GAP = 8;
 const VIEWPORT_HEIGHT = 620;
 
 export function BranchHealthMosaic({ filter }: { filter?: BranchSummaryFilter }) {
@@ -28,9 +29,13 @@ export function BranchHealthMosaic({ filter }: { filter?: BranchSummaryFilter })
   const [error, setError] = useState<string | null>(null);
   const [scrollTop, setScrollTop] = useState(0);
   const [layout, setLayout] = useState<BranchGridLayout>("4x4");
+  const [sequence, setSequence] = useState<BranchSequence>("priority");
+  const [fullscreen, setFullscreen] = useState(false);
+  const [viewportHeight, setViewportHeight] = useState(VIEWPORT_HEIGHT);
   const [viewportWidth, setViewportWidth] = useState(1200);
   const viewport = useRef<HTMLDivElement>(null);
   const metrics = getBranchGridMetrics(layout, viewportWidth);
+  const sequencedBranches = useMemo(() => sequenceBranchHealth(branches, sequence), [branches, sequence]);
 
   const load = useCallback(async () => {
     const params = new URLSearchParams();
@@ -83,13 +88,27 @@ export function BranchHealthMosaic({ filter }: { filter?: BranchSummaryFilter })
     return () => observer.disconnect();
   }, []);
 
-  const regions = useMemo(() => [...new Set(branches.map((branch) => branch.region))].sort(), [branches]);
-  const rowCount = Math.ceil(branches.length / metrics.columns);
-  const startRow = Math.max(0, Math.floor(scrollTop / (metrics.rowHeight + GAP)) - 2);
-  const endRow = Math.min(rowCount, startRow + Math.ceil(VIEWPORT_HEIGHT / (metrics.rowHeight + GAP)) + 4);
-  const visible = branches.slice(startRow * metrics.columns, endRow * metrics.columns);
+  useEffect(() => {
+    const updateHeight = () => setViewportHeight(fullscreen ? Math.max(VIEWPORT_HEIGHT, window.innerHeight - 170) : VIEWPORT_HEIGHT);
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setFullscreen(false);
+    };
+    updateHeight();
+    window.addEventListener("resize", updateHeight);
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      window.removeEventListener("resize", updateHeight);
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [fullscreen]);
 
-  return <section id="branch-health-mosaic" className="card mb-6 scroll-mt-4" aria-label="Enterprise branch health mosaic">
+  const regions = useMemo(() => [...new Set(branches.map((branch) => branch.region))].sort(), [branches]);
+  const rowCount = Math.ceil(sequencedBranches.length / metrics.columns);
+  const startRow = Math.max(0, Math.floor(scrollTop / (metrics.rowHeight + metrics.gap)) - 2);
+  const endRow = Math.min(rowCount, startRow + Math.ceil(viewportHeight / (metrics.rowHeight + metrics.gap)) + 4);
+  const visible = sequencedBranches.slice(startRow * metrics.columns, endRow * metrics.columns);
+
+  return <section id="branch-health-mosaic" className={`branch-mosaic card mb-6 scroll-mt-4 ${fullscreen ? "branch-mosaic-fullscreen" : ""}`} aria-label="Enterprise branch health mosaic">
     <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
       <div>
         <h3 className="text-lg font-semibold">Enterprise branch overview</h3>
@@ -109,6 +128,9 @@ export function BranchHealthMosaic({ filter }: { filter?: BranchSummaryFilter })
         <select aria-label="Filter branch region" className="input" value={region} onChange={(event) => setRegion(event.target.value)}>
           <option value="all">All regions</option>{regions.map((item) => <option key={item}>{item}</option>)}
         </select>
+        <select aria-label="Sequence branches" className="input" value={sequence} onChange={(event) => setSequence(event.target.value as BranchSequence)}>
+          <option value="priority">Critical first</option><option value="region">Group by region</option><option value="name">Branch name</option>
+        </select>
         <div className="inline-flex rounded-lg border border-gray-200 bg-white p-1" role="group" aria-label="Branch grid layout">
           {BRANCH_GRID_LAYOUTS.map((option) => <button
             key={option}
@@ -122,13 +144,16 @@ export function BranchHealthMosaic({ filter }: { filter?: BranchSummaryFilter })
             className={`rounded-md px-2.5 py-1.5 text-xs font-semibold ${layout === option ? "bg-blue-600 text-white" : "text-gray-600 hover:bg-gray-100"}`}
           >{option}</button>)}
         </div>
+        <button type="button" className="btn-secondary inline-flex items-center gap-2 px-3 py-2 text-xs font-semibold" onClick={() => setFullscreen((value) => !value)}>
+          {fullscreen ? <Minimize2 size={14}/> : <Maximize2 size={14}/>} {fullscreen ? "Exit HO wall" : "HO wall"}
+        </button>
       </div>
     </div>
     {error && <div role="alert" className="mb-3 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div>}
-    <div ref={viewport} className="overflow-auto rounded-lg border bg-gray-50" style={{ height: VIEWPORT_HEIGHT }} onScroll={(event) => setScrollTop(event.currentTarget.scrollTop)}>
-      <div style={{ height: rowCount * (metrics.rowHeight + GAP), position: "relative" }}>
-        <div className="absolute left-0 right-0 grid p-2" style={{ top: startRow * (metrics.rowHeight + GAP), gap: GAP, gridTemplateColumns: `repeat(${metrics.columns}, minmax(0, 1fr))` }}>
-          {visible.map((branch) => <BranchTile key={branch.id} branch={branch} height={metrics.rowHeight} compact={metrics.compact} ultraCompact={metrics.ultraCompact}/>)}
+    <div ref={viewport} className="branch-mosaic-viewport overflow-auto rounded-lg border bg-gray-50" style={{ height: viewportHeight }} onScroll={(event) => setScrollTop(event.currentTarget.scrollTop)}>
+      <div style={{ height: rowCount * (metrics.rowHeight + metrics.gap), position: "relative" }}>
+        <div className="absolute left-0 right-0 grid p-2" style={{ top: startRow * (metrics.rowHeight + metrics.gap), gap: metrics.gap, gridTemplateColumns: `repeat(${metrics.columns}, minmax(0, 1fr))` }}>
+          {visible.map((branch) => <BranchTile key={branch.id} branch={branch} height={metrics.rowHeight} compact={metrics.compact} ultraCompact={metrics.ultraCompact} statusOnly={metrics.statusOnly}/>)}
         </div>
       </div>
       {!loading && branches.length === 0 && <p className="p-8 text-center text-gray-500">No branches match these filters.</p>}
@@ -136,7 +161,7 @@ export function BranchHealthMosaic({ filter }: { filter?: BranchSummaryFilter })
   </section>;
 }
 
-function BranchTile({ branch, height, compact, ultraCompact }: { branch: BranchHealth; height: number; compact: boolean; ultraCompact: boolean }) {
+function BranchTile({ branch, height, compact, ultraCompact, statusOnly }: { branch: BranchHealth; height: number; compact: boolean; ultraCompact: boolean; statusOnly: boolean }) {
   const tone = branch.healthStatus === "healthy"
     ? "border-l-green-500 bg-green-50"
     : branch.healthStatus === "warning"
@@ -152,8 +177,12 @@ function BranchTile({ branch, height, compact, ultraCompact }: { branch: BranchH
     title={`${branch.name} · DVR/NVR ${recorderLabel} · ${branch.criticalAlerts} active alerts`}
     href={`/operations/branches/${branch.id}`}
     style={{ height }}
-    className={`block overflow-hidden rounded-lg border border-l-4 border-gray-200 px-2.5 py-2 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${tone}`}
+    className={`branch-mosaic-tile block overflow-hidden rounded-lg border border-l-4 border-gray-200 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${statusOnly ? "status-only px-1.5 py-1" : "px-2.5 py-2"} ${tone}`}
   >
+    {statusOnly ? <div className="flex h-full min-w-0 items-center gap-1">
+      <span className={`h-2 w-2 flex-none rounded-full ${statusDot}`}/>
+      <strong className="min-w-0 truncate text-[9px] leading-none">{branch.code || branch.name}</strong>
+    </div> : <>
     <div className="flex items-center justify-between gap-1">
       <div className="min-w-0">
         <h4 className={`${ultraCompact ? "text-[10px]" : "text-xs"} truncate font-semibold`}>{branch.name}</h4>
@@ -173,6 +202,7 @@ function BranchTile({ branch, height, compact, ultraCompact }: { branch: BranchH
     {!compact && <>
       <div className="mt-2 h-1.5 overflow-hidden rounded bg-gray-200"><div className="h-full bg-blue-600" style={{ width: `${branch.healthScore ?? 0}%` }}/></div>
       <p className="mt-1 text-[10px] text-gray-500">{branch.lastHealthCheck ? getTimeAgo(branch.lastHealthCheck) : "Awaiting telemetry"}</p>
+    </>}
     </>}
   </Link>;
 }

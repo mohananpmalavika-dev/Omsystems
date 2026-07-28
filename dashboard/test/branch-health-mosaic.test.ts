@@ -4,16 +4,58 @@ import {
   BRANCH_PAGE_SIZE,
   getBranchGridMetrics,
   loadAllBranchHealth,
+  sequenceBranchHealth,
 } from "../components/operational-health/branch-mosaic-model.js";
 import type { BranchHealth } from "../lib/types/operational-health.js";
 
 describe("centralized branch mosaic model", () => {
-  it("provides the required 4x4, 6x6 and 8x8 operator layouts", () => {
-    expect(BRANCH_GRID_LAYOUTS).toEqual(["4x4", "6x6", "8x8"]);
+  it("provides detailed operator layouts and dense 400-branch HO status layouts", () => {
+    expect(BRANCH_GRID_LAYOUTS).toEqual(["4x4", "6x6", "8x8", "10x10", "16x16", "20x20"]);
     expect(getBranchGridMetrics("4x4", 1200)).toMatchObject({ columns: 4, compact: false });
     expect(getBranchGridMetrics("6x6", 1200)).toMatchObject({ columns: 6, compact: true });
     expect(getBranchGridMetrics("8x8", 1200)).toMatchObject({ columns: 8, ultraCompact: true });
     expect(getBranchGridMetrics("8x8", 600).columns).toBe(2);
+    expect(getBranchGridMetrics("10x10", 1200)).toMatchObject({ columns: 10, statusOnly: true, rowHeight: 48 });
+    expect(getBranchGridMetrics("16x16", 1200)).toMatchObject({ columns: 16, statusOnly: true, rowHeight: 30 });
+    expect(getBranchGridMetrics("20x20", 1200)).toMatchObject({ columns: 20, statusOnly: true, rowHeight: 23, gap: 4 });
+  });
+
+  it("automatically sequences offline, critical-alert and unhealthy branches first", () => {
+    const healthy = branch(1);
+    const alerting = { ...branch(2), criticalAlerts: 2 };
+    const offline = { ...branch(3), internetStatus: "offline" as const };
+    const warning = { ...branch(4), healthStatus: "warning" as const };
+
+    expect(sequenceBranchHealth([healthy, warning, alerting, offline], "priority").map((item) => item.id))
+      .toEqual([offline.id, alerting.id, warning.id, healthy.id]);
+  });
+
+  it("can group 400 branches by region while retaining critical-first order within a region", () => {
+    const branches = Array.from({ length: 400 }, (_, index) => ({
+      ...branch(index),
+      region: index % 2 ? "West" : "North",
+      healthStatus: index === 20 ? "critical" as const : "healthy" as const,
+    }));
+    const sequenced = sequenceBranchHealth(branches, "region");
+
+    expect(sequenced).toHaveLength(400);
+    expect(sequenced[0]).toMatchObject({ region: "North", id: "branch-20" });
+    expect(sequenced.findIndex((item) => item.region === "West")).toBe(200);
+  });
+
+  it("projects a 400-branch live-health snapshot within the HO wall performance budget", () => {
+    const branches = Array.from({ length: 400 }, (_, index) => ({
+      ...branch(index),
+      healthStatus: index % 23 === 0 ? "critical" as const : index % 7 === 0 ? "warning" as const : "healthy" as const,
+      criticalAlerts: index % 31 === 0 ? 1 : 0,
+    }));
+    const startedAt = performance.now();
+    const sequenced = sequenceBranchHealth(branches, "priority");
+    const elapsedMs = performance.now() - startedAt;
+
+    expect(sequenced).toHaveLength(400);
+    expect(sequenced[0]?.healthStatus).toBe("critical");
+    expect(elapsedMs).toBeLessThan(250);
   });
 
   it("loads every server page instead of imposing a 500-branch UI ceiling", async () => {
