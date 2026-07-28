@@ -1,5 +1,5 @@
 # Multi-stage build for analytics engine
-FROM node:22-alpine AS build
+FROM node:22-bookworm-slim AS build
 
 # Build context is project root
 WORKDIR /workspace
@@ -29,11 +29,14 @@ RUN npm run build --workspace @sentinel/analytics-engine
 RUN npm prune --omit=dev --workspace @sentinel/analytics-engine
 
 # Production stage
-FROM node:22-alpine
+FROM node:22-bookworm-slim
+
+RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg \
+    && rm -rf /var/lib/apt/lists/*
 
 # Security: Create non-root user
-RUN addgroup -g 1001 -S analytics && \
-    adduser -u 1001 -S analytics -G analytics
+RUN groupadd --gid 1001 analytics && \
+    useradd --uid 1001 --gid analytics --create-home --shell /usr/sbin/nologin analytics
 
 WORKDIR /app
 

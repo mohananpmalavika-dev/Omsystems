@@ -7,11 +7,12 @@
     "dev": "tsx watch src/index.ts",
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "vitest run test/app.test.ts",
+    "test": "vitest run test/app.test.ts test/inference.test.ts",
     "test:watch": "vitest"
   },
   "dependencies": {
     "fastify": "^5.2.1",
+    "onnxruntime-node": "^1.22.0",
     "zod": "^3.24.2"
   },
   "devDependencies": {

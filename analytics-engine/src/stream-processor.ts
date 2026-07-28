@@ -6,6 +6,7 @@
 import { randomUUID } from "node:crypto";
 import type { DetectionFrame } from "./detectors/base-detector.js";
 import type { AnalyticsPipeline, AnalyticsRule } from "./analytics-pipeline.js";
+import { FfmpegFrameExtractor, type FrameExtractor } from "./frame-extractor.js";
 
 export interface StreamSource {
   cameraId: string;
@@ -31,6 +32,7 @@ export class StreamProcessor {
   constructor(
     private readonly pipeline: AnalyticsPipeline,
     private readonly submitEvent: (event: any) => Promise<unknown>,
+    private readonly frameExtractor: FrameExtractor = new FfmpegFrameExtractor(),
   ) {}
 
   /**
@@ -173,43 +175,14 @@ export class StreamProcessor {
     }
   }
 
-  /**
-   * Fetch a frame from the stream
-   * TODO: Implement actual RTSP/HLS/WebRTC frame extraction
-   */
+  /** Fetch one normalized RGB frame through the configured extractor. */
   private async fetchFrame(
     source: StreamSource,
   ): Promise<DetectionFrame | null> {
     try {
-      // TODO: Replace with actual stream frame extraction
-      // Options:
-      // 1. FFmpeg to extract frames from RTSP
-      // 2. Node-canvas for frame processing
-      // 3. Sharp for image manipulation
-      // 4. WebRTC for real-time streaming
-
-      // PLACEHOLDER: Simulate frame extraction
-      // In production, this would connect to the stream URL and extract frames
-      
-      // For now, return null to prevent actual processing
-      // Remove this return when implementing real stream processing
-      return null;
-
-      // Example implementation would look like:
-      // const frameBuffer = await extractFrameFromRTSP(source.streamUrl);
-      // const { width, height } = await getFrameDimensions(frameBuffer);
-      //
-      // return {
-      //   cameraId: source.cameraId,
-      //   tenantId: source.tenantId,
-      //   timestamp: new Date(),
-      //   imageData: frameBuffer,
-      //   width,
-      //   height,
-      //   metadata: {},
-      // };
+      return await this.frameExtractor.extract(source);
     } catch (error) {
-      console.error(`Failed to fetch frame from ${source.streamUrl}:`, error);
+      console.error(`Failed to fetch frame for camera ${source.cameraId}:`, error);
       return null;
     }
   }

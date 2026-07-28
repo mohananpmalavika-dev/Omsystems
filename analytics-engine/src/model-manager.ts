@@ -343,9 +343,7 @@ export class ModelManager {
    */
   private async loadONNXModel(modelPath: string, config: ModelConfig): Promise<any> {
     try {
-      // In production: Use onnxruntime-node
-      // const ort = await import('onnxruntime-node');
-      
+      const ort = await import('onnxruntime-node');
       const sessionOptions: any = {
         executionProviders: []
       };
@@ -371,19 +369,13 @@ export class ModelManager {
       // Always add CPU as fallback
       sessionOptions.executionProviders.push('cpu');
 
-      // Create inference session
-      // const session = await ort.InferenceSession.create(modelPath, sessionOptions);
-      
-      // For now: Return mock model
-      const session = {
-        inputNames: ['images'],
-        outputNames: ['output0'],
-        modelPath,
-        config,
-        sessionOptions
-      };
-
-      return session;
+      try {
+        return await ort.InferenceSession.create(modelPath, sessionOptions);
+      } catch (error) {
+        if (sessionOptions.executionProviders.length === 1 && sessionOptions.executionProviders[0] === 'cpu') throw error;
+        console.warn(`Accelerated ONNX provider failed for ${config.id}; retrying on CPU`);
+        return await ort.InferenceSession.create(modelPath, { executionProviders: ['cpu'] });
+      }
     } catch (error) {
       console.error('ONNX model loading failed:', error);
       throw error;

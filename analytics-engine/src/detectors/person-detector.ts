@@ -5,6 +5,8 @@
 
 import { randomUUID } from "node:crypto";
 import { BaseDetector, calculateIoU, type DetectionFrame, type DetectionResult, getInferenceObjects } from "./base-detector.js";
+import { getModelManager } from "../model-manager.js";
+import { YoloPersonInference } from "../inference/yolo-person-inference.js";
 
 export interface PersonTrack {
   trackId: string;
@@ -20,6 +22,7 @@ export interface PersonTrack {
 export class PersonDetector extends BaseDetector {
   private tracks = new Map<string, PersonTrack>();
   private isModelLoaded = false;
+  private inference: YoloPersonInference | null = null;
   
   // Configuration
   private readonly TRACKING_TIMEOUT_MS = 5000; // 5 seconds
@@ -33,20 +36,18 @@ export class PersonDetector extends BaseDetector {
   async initialize(): Promise<void> {
     console.log("Initializing person detector...");
     
-    // TODO: Load YOLO/ONNX model for person detection
-    // Example: this.model = await loadModel('person-detection-v2');
-    
-    this.isModelLoaded = true;
+    try {
+      this.inference = new YoloPersonInference(await getModelManager().getModel("yolov8n"));
+      this.isModelLoaded = true;
+      console.log("Person detector loaded yolov8n ONNX model");
+    } catch (error) {
+      this.isModelLoaded = false;
+      console.warn("Person detector running in external-ingestion mode:", error instanceof Error ? error.message : error);
+    }
     this.startTrackingCleanup();
-    console.log("Person detector initialized");
   }
 
   async detect(frame: DetectionFrame): Promise<DetectionResult[]> {
-    if (!this.isModelLoaded) {
-      return [];
-    }
-
-    // TODO: Replace with actual ML inference
     const persons = await this.detectPersonsInFrame(frame);
     
     // Update tracking for each detected person
@@ -79,21 +80,9 @@ export class PersonDetector extends BaseDetector {
    * Detect persons in frame using ML model
    */
   private async detectPersonsInFrame(frame: DetectionFrame): Promise<any[]> {
-    // TODO: Replace with actual YOLO/ONNX inference
-    // For now, return placeholder that simulates detection
-    
-    /*
-    Example ONNX implementation:
-    
-    const tensor = this.preprocessImage(frame.imageData, frame.width, frame.height);
-    const results = await this.session.run({ images: tensor });
-    const boxes = results.output0.data;
-    
-    return this.postprocessDetections(boxes, frame.width, frame.height);
-    */
-    
-    return getInferenceObjects(frame, ["person"])
-      .filter((item) => item.confidence >= this.MIN_CONFIDENCE);
+    const external = getInferenceObjects(frame, ["person"]).filter((item) => item.confidence >= this.MIN_CONFIDENCE);
+    if (external.length > 0 || !this.inference) return external;
+    return this.inference.run(frame);
   }
 
   /**
@@ -244,14 +233,15 @@ export class PersonDetector extends BaseDetector {
 
   async cleanup(): Promise<void> {
     this.tracks.clear();
+    this.inference = null;
     this.isModelLoaded = false;
     console.log("Person detector cleaned up");
   }
 
   getHealth() {
     return {
-      status: this.isModelLoaded ? ("healthy" as const) : ("unhealthy" as const),
-      details: `${this.tracks.size} active tracks`,
+      status: this.isModelLoaded ? ("healthy" as const) : ("degraded" as const),
+      details: this.isModelLoaded ? `Local ONNX inference active; ${this.tracks.size} active tracks` : `External detection ingestion only; ${this.tracks.size} active tracks`,
     };
   }
 }
