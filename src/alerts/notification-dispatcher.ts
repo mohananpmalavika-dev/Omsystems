@@ -11,14 +11,21 @@ import { alertEvents } from "./event-stream.js";
 
 export const NOTIFICATION_MATRIX: Record<string, AlertNotificationChannel[]> = {
   P1: ["dashboard", "sms", "email", "voice"],
-  P2: ["dashboard", "email"],
+  P2: ["dashboard", "sms", "email"],
   P3: ["dashboard"],
   P4: ["log"],
   P5: ["log"],
 };
 
 export interface AlertNotificationSender {
-  send(notification: AlertNotification, alert: AnalyticsAlert): Promise<{ providerId: string }>;
+  send(notification: AlertNotification, alert: AnalyticsAlert): Promise<{
+    providerId: string; deliveryStatus?: "sent" | "delivered";
+  }>;
+}
+export interface BatchAlertNotificationSender extends AlertNotificationSender {
+  sendBatch(items: Array<{ notification: AlertNotification; alert: AnalyticsAlert }>): Promise<Map<string, {
+    providerId: string; deliveryStatus?: "sent" | "delivered";
+  }>>;
 }
 
 export class HttpAlertNotificationSender implements AlertNotificationSender {
@@ -60,13 +67,22 @@ export async function enqueueAlertMatrix(
 ) {
   const policy = await store.getAlertNotificationPolicy(alert.tenantId);
   const channels = NOTIFICATION_MATRIX[alert.severity] ?? ["log"];
+  const now = Date.now();
   const targets = channels.flatMap((channel) => recipientsFor(channel, rule?.recipients ?? [], policy)
-    .map((recipient) => ({ tenantId: alert.tenantId, alertId: alert.id, channel, recipient })));
+    .map((recipient, sequence) => ({ tenantId: alert.tenantId, alertId: alert.id, channel, recipient,
+      ...(channel === "voice" ? {
+        nextAttemptAt: new Date(now + sequence * (policy.escalationAfterSeconds.P1 ?? 30) * 1_000).toISOString(),
+        voiceCall: { provider: "webhook" as const, sequence, status: "queued",
+          events: [{ status: "queued", occurredAt: new Date(now).toISOString() }] },
+      } : {}), ...(channel === "sms" ? { smsDelivery: { provider: "webhook" as const, status: "queued",
+        template: alert.severity, events: [{ status: "queued", occurredAt: new Date(now).toISOString() }] } } : {}),
+    })));
   return store.enqueueAlertNotifications(targets);
 }
 
 export class AlertNotificationDispatcher {
   private draining = false;
+  private readonly smsSentAt = new Map<string, number[]>();
   constructor(private readonly store: ControlPlaneStore, private readonly sender: AlertNotificationSender) {}
 
   async drainOnce(limit = 50) {
@@ -75,23 +91,56 @@ export class AlertNotificationDispatcher {
     let completed = 0;
     try {
       const notifications = await this.store.claimAlertNotifications(limit, new Date().toISOString());
+      const processed = new Set<string>();
       for (const notification of notifications) {
+        if (processed.has(notification.id)) continue;
         const alert = await this.store.getAnalyticsAlert(notification.alertId, notification.tenantId);
         if (!alert) {
           await this.store.completeAlertNotification(notification.id, { status: "dead", error: "alert_not_found" });
           continue;
         }
+        if (notification.channel === "sms" && isBatchSender(this.sender)) {
+          const batch = notifications.filter((item) => !processed.has(item.id) && item.channel === "sms" &&
+            item.tenantId === notification.tenantId && item.alertId === notification.alertId);
+          const allowed = await this.reserveSmsSlots(notification.tenantId, batch.length);
+          const sendable = batch.slice(0, allowed);
+          const deferred = batch.slice(allowed);
+          for (const item of deferred) {
+            processed.add(item.id);
+            await this.store.completeAlertNotification(item.id, { status: "failed", error: "sms_rate_limit_exceeded",
+              nextAttemptAt: new Date(Date.now() + 60_000).toISOString() });
+          }
+          try {
+            const items = (await Promise.all(sendable.map(async (item) => ({ notification: item,
+              alert: await this.store.getAnalyticsAlert(item.alertId, item.tenantId) })))).filter((item): item is {
+                notification: AlertNotification; alert: AnalyticsAlert;
+              } => Boolean(item.alert));
+            const results = await this.sender.sendBatch(items);
+            if (items.some((item) => !results.has(item.notification.id))) throw new Error("sms_batch_result_missing");
+            for (const item of items) {
+              const result = results.get(item.notification.id)!;
+              await this.store.completeAlertNotification(item.notification.id, {
+                status: result.deliveryStatus ?? "delivered", providerId: result.providerId,
+              });
+            }
+          } catch (error) {
+            for (const item of sendable) await this.fail(item, error);
+          }
+          for (const item of batch) { processed.add(item.id); this.publish(item); }
+          completed += batch.length;
+          continue;
+        }
+        if (notification.channel === "voice" && !["new", "escalated"].includes(alert.status)) {
+          await this.store.completeAlertNotification(notification.id, { status: "cancelled", error: "alert_already_acknowledged" });
+          continue;
+        }
         try {
           const result = await this.sender.send(notification, alert);
-          await this.store.completeAlertNotification(notification.id, { status: "delivered", providerId: result.providerId });
-        } catch (error) {
-          const attempts = notification.attempts;
-          const dead = attempts >= 5;
           await this.store.completeAlertNotification(notification.id, {
-            status: dead ? "dead" : "failed",
-            error: error instanceof Error ? error.message : "notification_failed",
-            ...(!dead ? { nextAttemptAt: new Date(Date.now() + Math.min(300, 2 ** attempts * 5) * 1_000).toISOString() } : {}),
+            status: result.deliveryStatus ?? "delivered", providerId: result.providerId,
           });
+        } catch (error) {
+          await this.fail(notification, error);
         }
         completed += 1;
         alertEvents.publish({
@@ -104,6 +153,31 @@ export class AlertNotificationDispatcher {
       this.draining = false;
     }
   }
+
+  private async reserveSmsSlots(tenantId: string, requested: number) {
+    const now = Date.now();
+    const recent = (this.smsSentAt.get(tenantId) ?? []).filter((timestamp) => timestamp > now - 60_000);
+    const policy = await this.store.getAlertNotificationPolicy(tenantId);
+    const allowed = Math.max(0, Math.min(requested, policy.rateLimitPerMinute - recent.length));
+    this.smsSentAt.set(tenantId, [...recent, ...Array.from({ length: allowed }, () => now)]);
+    return allowed;
+  }
+
+  private async fail(notification: AlertNotification, error: unknown) {
+    const dead = notification.attempts >= 5;
+    await this.store.completeAlertNotification(notification.id, { status: dead ? "dead" : "failed",
+      error: error instanceof Error ? error.message : "notification_failed",
+      ...(!dead ? { nextAttemptAt: new Date(Date.now() + Math.min(300, 2 ** notification.attempts * 5) * 1_000).toISOString() } : {}) });
+  }
+
+  private publish(notification: AlertNotification) {
+    alertEvents.publish({ id: randomUUID(), tenantId: notification.tenantId, type: "notification.updated",
+      occurredAt: new Date().toISOString(), alertId: notification.alertId });
+  }
+}
+
+function isBatchSender(sender: AlertNotificationSender): sender is BatchAlertNotificationSender {
+  return typeof (sender as Partial<BatchAlertNotificationSender>).sendBatch === "function";
 }
 
 function recipientsFor(

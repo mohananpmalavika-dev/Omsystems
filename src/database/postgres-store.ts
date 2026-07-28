@@ -448,6 +448,12 @@ export class PostgresStore
   async completeAlertNotification(id: string, result: Parameters<ControlPlaneStore["completeAlertNotification"]>[1]) {
     return this.analytics.completeNotification(id, result);
   }
+  async recordVoiceCallEvent(id: string, event: Parameters<ControlPlaneStore["recordVoiceCallEvent"]>[1]) {
+    return this.analytics.recordVoiceCallEvent(id, event);
+  }
+  async recordSmsDeliveryEvent(id: string, event: Parameters<ControlPlaneStore["recordSmsDeliveryEvent"]>[1]) {
+    return this.analytics.recordSmsDeliveryEvent(id, event);
+  }
   async listAlertNotifications(tenantId: string, alertId?: string) {
     return this.analytics.listNotifications(tenantId, alertId);
   }

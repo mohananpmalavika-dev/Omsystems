@@ -413,6 +413,8 @@ export class AnalyticsRepository {
       ...(row.quiet_hours ? { quietHours: json(row.quiet_hours, undefined) } : {}),
       rateLimitPerMinute: row.rate_limit_per_minute,
       escalationAfterSeconds: json(row.escalation_after_seconds, {}),
+      smsTemplates: json(row.sms_templates, {}),
+      smsTemplateIds: json(row.sms_template_ids, {}),
       updatedAt: iso(row.updated_at),
     };
   }
@@ -420,15 +422,17 @@ export class AnalyticsRepository {
   async upsertNotificationPolicy(policy: AlertNotificationPolicy): Promise<AlertNotificationPolicy> {
     await this.pool.query(
       `INSERT INTO alert_notification_policies
-         (tenant_id, recipient_groups, on_call_schedules, quiet_hours, rate_limit_per_minute, escalation_after_seconds)
-       VALUES ($1,$2,$3,$4,$5,$6)
+         (tenant_id, recipient_groups, on_call_schedules, quiet_hours, rate_limit_per_minute, escalation_after_seconds, sms_templates, sms_template_ids)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
        ON CONFLICT (tenant_id) DO UPDATE SET recipient_groups=EXCLUDED.recipient_groups,
          on_call_schedules=EXCLUDED.on_call_schedules, quiet_hours=EXCLUDED.quiet_hours,
          rate_limit_per_minute=EXCLUDED.rate_limit_per_minute,
-         escalation_after_seconds=EXCLUDED.escalation_after_seconds, updated_at=now()`,
+         escalation_after_seconds=EXCLUDED.escalation_after_seconds, sms_templates=EXCLUDED.sms_templates,
+         sms_template_ids=EXCLUDED.sms_template_ids, updated_at=now()`,
       [policy.tenantId, JSON.stringify(policy.recipientGroups), JSON.stringify(policy.onCallSchedules),
         policy.quietHours ? JSON.stringify(policy.quietHours) : null, policy.rateLimitPerMinute,
-        JSON.stringify(policy.escalationAfterSeconds)],
+        JSON.stringify(policy.escalationAfterSeconds), JSON.stringify(policy.smsTemplates ?? {}),
+        JSON.stringify(policy.smsTemplateIds ?? {})],
     );
     return this.getNotificationPolicy(policy.tenantId);
   }
@@ -441,11 +445,13 @@ export class AnalyticsRepository {
       const created: AlertNotification[] = [];
       for (const target of input) {
         const result = await client.query(
-          `INSERT INTO analytics_notifications (id, tenant_id, alert_id, channel, recipient, next_attempt_at)
-           VALUES ($1,$2,$3,$4,$5,now())
+          `INSERT INTO analytics_notifications (id, tenant_id, alert_id, channel, recipient, next_attempt_at, voice_call, sms_delivery)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
            ON CONFLICT (alert_id, channel, recipient) DO UPDATE SET alert_id=EXCLUDED.alert_id
            RETURNING *`,
-          [randomUUID(), target.tenantId, target.alertId, target.channel, target.recipient],
+          [randomUUID(), target.tenantId, target.alertId, target.channel, target.recipient,
+            target.nextAttemptAt ?? new Date().toISOString(), target.voiceCall ? JSON.stringify(target.voiceCall) : null,
+            target.smsDelivery ? JSON.stringify(target.smsDelivery) : null],
         );
         created.push(mapNotification(result.rows[0]));
       }
@@ -471,15 +477,51 @@ export class AnalyticsRepository {
   }
 
   async completeNotification(id: string, result: {
-    status: "delivered" | "failed" | "dead"; providerId?: string; error?: string; nextAttemptAt?: string;
+    status: "sent" | "delivered" | "failed" | "dead" | "cancelled"; providerId?: string; error?: string; nextAttemptAt?: string;
   }) {
     const updated = await this.pool.query(
       `UPDATE analytics_notifications SET status=$2, provider_id=COALESCE($3,provider_id),
          last_error=$4, next_attempt_at=COALESCE($5,next_attempt_at),
-         sent_at=CASE WHEN $2='delivered' THEN now() ELSE sent_at END,
+         sent_at=CASE WHEN $2 IN ('sent','delivered') THEN now() ELSE sent_at END,
          delivered_at=CASE WHEN $2='delivered' THEN now() ELSE delivered_at END, updated_at=now()
        WHERE id=$1 RETURNING *`,
       [id, result.status, result.providerId ?? null, result.error ?? null, result.nextAttemptAt ?? null],
+    );
+    return updated.rows[0] ? mapNotification(updated.rows[0]) : undefined;
+  }
+
+  async recordVoiceCallEvent(id: string, event: Parameters<import("../control-plane-store.js").ControlPlaneStore["recordVoiceCallEvent"]>[1]) {
+    const updated = await this.pool.query(
+      `UPDATE analytics_notifications SET
+         provider_id=COALESCE($3,provider_id),
+         voice_call=jsonb_set(jsonb_set(
+           COALESCE(voice_call,'{}'::jsonb), '{status}', to_jsonb($2::text), true),
+           '{events}', COALESCE(voice_call->'events','[]'::jsonb) || $4::jsonb, true)
+           || CASE WHEN $9::text IS NULL THEN '{}'::jsonb ELSE jsonb_build_object('provider',$9::text) END
+           || CASE WHEN $5::text IS NULL THEN '{}'::jsonb ELSE jsonb_build_object('acknowledgedAt',$5::text) END
+           || CASE WHEN $6::text IS NULL THEN '{}'::jsonb ELSE jsonb_build_object('acknowledgedBy',$6::text) END
+           || CASE WHEN $7::text IS NULL THEN '{}'::jsonb ELSE jsonb_build_object('recordingUrl',$7::text) END
+           || CASE WHEN $8::integer IS NULL THEN '{}'::jsonb ELSE jsonb_build_object('durationSeconds',$8::integer) END,
+         updated_at=now() WHERE id=$1 RETURNING *`,
+      [id, event.status, event.providerId ?? null,
+        JSON.stringify([{ status: event.status, occurredAt: event.occurredAt, ...(event.detail ? { detail: event.detail } : {}) }]),
+        event.acknowledgedAt ?? null, event.acknowledgedBy ?? null, event.recordingUrl ?? null,
+        event.durationSeconds ?? null, event.provider ?? null],
+    );
+    return updated.rows[0] ? mapNotification(updated.rows[0]) : undefined;
+  }
+
+  async recordSmsDeliveryEvent(id: string, event: Parameters<import("../control-plane-store.js").ControlPlaneStore["recordSmsDeliveryEvent"]>[1]) {
+    const updated = await this.pool.query(
+      `UPDATE analytics_notifications SET provider_id=COALESCE($3,provider_id),
+         sms_delivery=jsonb_set(jsonb_set(COALESCE(sms_delivery,'{}'::jsonb),
+           '{status}',to_jsonb($2::text),true),'{events}',
+           COALESCE(sms_delivery->'events','[]'::jsonb) || $4::jsonb,true)
+           || CASE WHEN $5::text IS NULL THEN '{}'::jsonb ELSE jsonb_build_object('provider',$5::text) END,
+         updated_at=now() WHERE id=$1 RETURNING *`,
+      [id, event.status, event.providerId ?? null,
+        JSON.stringify([{ status: event.status, occurredAt: event.occurredAt, ...(event.detail ? { detail: event.detail } : {}) }]),
+        event.provider ?? null],
     );
     return updated.rows[0] ? mapNotification(updated.rows[0]) : undefined;
   }
@@ -612,6 +654,8 @@ function mapNotification(row: any): AlertNotification {
     ...(row.last_error ? { lastError: row.last_error } : {}),
     ...(row.sent_at ? { sentAt: iso(row.sent_at) } : {}),
     ...(row.delivered_at ? { deliveredAt: iso(row.delivered_at) } : {}),
+    ...(row.voice_call ? { voiceCall: json(row.voice_call, undefined) } : {}),
+    ...(row.sms_delivery ? { smsDelivery: json(row.sms_delivery, undefined) } : {}),
     createdAt: iso(row.created_at), updatedAt: iso(row.updated_at),
   };
 }

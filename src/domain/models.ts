@@ -947,8 +947,28 @@ export interface AlertNotification {
   lastError?: string | undefined;
   sentAt?: string | undefined;
   deliveredAt?: string | undefined;
+  voiceCall?: VoiceCallAudit | undefined;
+  smsDelivery?: SmsDeliveryAudit | undefined;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface SmsDeliveryAudit {
+  provider: "msg91" | "textlocal" | "twilio" | "webhook" | "test";
+  status: string;
+  template: string;
+  events: Array<{ status: string; occurredAt: string; detail?: string | undefined }>;
+}
+
+export interface VoiceCallAudit {
+  provider: "twilio" | "exotel" | "webhook" | "test";
+  sequence: number;
+  status: string;
+  acknowledgedAt?: string | undefined;
+  acknowledgedBy?: string | undefined;
+  recordingUrl?: string | undefined;
+  durationSeconds?: number | undefined;
+  events: Array<{ status: string; occurredAt: string; detail?: string | undefined }>;
 }
 
 export interface AlertNotificationPolicy {
@@ -965,6 +985,8 @@ export interface AlertNotificationPolicy {
   quietHours?: { start: string; end: string; timezone: string } | undefined;
   rateLimitPerMinute: number;
   escalationAfterSeconds: Partial<Record<AnalyticsSeverity, number>>;
+  smsTemplates?: Partial<Record<"P1" | "P2", string>> | undefined;
+  smsTemplateIds?: Partial<Record<"P1" | "P2", string>> | undefined;
   updatedAt: string;
 }
 

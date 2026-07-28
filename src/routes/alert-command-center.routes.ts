@@ -5,6 +5,7 @@ import type { ControlPlaneStore } from "../control-plane-store.js";
 import type { AlertNotificationDispatcher } from "../alerts/notification-dispatcher.js";
 import { NOTIFICATION_MATRIX } from "../alerts/notification-dispatcher.js";
 import { alertEvents } from "../alerts/event-stream.js";
+import { VoiceCallbackTokens, twiml, voiceAlertMessage } from "../alerts/voice-call.js";
 
 const alertIdParams = z.object({ alertId: z.string().uuid() });
 const hhmm = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/);
@@ -31,6 +32,10 @@ const policySchema = z.object({
     P4: z.number().int().min(10).max(86_400).optional(),
     P5: z.number().int().min(10).max(86_400).optional(),
   }).default({ P1: 30, P2: 300, P3: 900 }),
+  smsTemplates: z.object({
+    P1: z.string().trim().min(1).max(480).optional(),
+    P2: z.string().trim().min(1).max(480).optional(),
+  }).default({}),
 });
 
 export async function registerAlertCommandCenterRoutes(
@@ -38,6 +43,7 @@ export async function registerAlertCommandCenterRoutes(
   store: ControlPlaneStore,
   dispatcher: AlertNotificationDispatcher,
   workerKey?: string,
+  voiceTokens = new VoiceCallbackTokens(process.env.ALERT_VOICE_CALLBACK_SECRET ?? "development-voice-callback-secret-change-me"),
 ) {
   app.get("/v1/alerts/command-center", async (request) => {
     const query = z.object({
@@ -134,6 +140,7 @@ export async function registerAlertCommandCenterRoutes(
       } } : {}),
       rateLimitPerMinute: input.rateLimitPerMinute,
       escalationAfterSeconds: input.escalationAfterSeconds,
+      smsTemplates: input.smsTemplates,
       updatedAt: new Date().toISOString(),
     });
     return { data: policy, matrix: NOTIFICATION_MATRIX };
@@ -169,6 +176,92 @@ export async function registerAlertCommandCenterRoutes(
     });
     return notification;
   });
+
+  app.get("/internal/alerts/voice/ivr", async (request, reply) => {
+    const query = z.object({ token: z.string().min(20).max(4_000), Digits: z.coerce.string().optional() }).parse(request.query);
+    const token = query.token;
+    const claims = voiceTokens.verify(token);
+    if (!claims) return reply.code(401).send({ error: "invalid_or_expired_voice_callback" });
+    const notification = (await store.listAlertNotifications(claims.tenantId, claims.alertId))
+      .find((item) => item.id === claims.notificationId && item.channel === "voice");
+    const alert = await store.getAnalyticsAlert(claims.alertId, claims.tenantId);
+    if (!notification || !alert) return reply.code(404).send({ error: "voice_call_not_found" });
+    if (query.Digits === "1") {
+      const now = new Date().toISOString();
+      await store.recordVoiceCallEvent(notification.id, { status: "acknowledged", occurredAt: now,
+        acknowledgedAt: now, acknowledgedBy: notification.recipient, detail: "Recipient pressed 1" });
+      const siblings = await store.listAlertNotifications(claims.tenantId, claims.alertId);
+      await Promise.all(siblings.filter((item) => item.channel === "voice" && item.id !== notification.id &&
+        ["queued", "failed"].includes(item.status)).map((item) =>
+        store.completeAlertNotification(item.id, { status: "cancelled", error: "acknowledged_by_call_tree_recipient" })));
+      publishNotificationUpdated(claims.tenantId, claims.alertId);
+      return reply.type("application/xml").send("<?xml version=\"1.0\" encoding=\"UTF-8\"?><Response><Say>Alert acknowledged. Thank you.</Say><Hangup/></Response>");
+    }
+    const camera = await store.getCamera(alert.cameraId);
+    const branch = camera ? await store.getNode(camera.branchId) : undefined;
+    const action = `${request.protocol}://${request.hostname}/internal/alerts/voice/ivr?token=${encodeURIComponent(token)}`;
+    return reply.type("application/xml").send(twiml(voiceAlertMessage(alert, branch?.name), action));
+  });
+
+  app.get("/internal/alerts/voice/status", async (request, reply) => {
+    const raw = z.object({ token: z.string().min(20).max(4_000), CallStatus: z.string().optional(), Status: z.string().optional(),
+      CallSid: z.string().optional(), Sid: z.string().optional(), CallDuration: z.coerce.number().int().nonnegative().optional() }).parse(request.query);
+    const token = raw.token;
+    const claims = voiceTokens.verify(token);
+    if (!claims) return reply.code(401).send({ error: "invalid_or_expired_voice_callback" });
+    const query = raw;
+    const status = (query.CallStatus ?? query.Status ?? "provider_callback").toLowerCase().replaceAll("-", "_");
+    const notification = await store.recordVoiceCallEvent(claims.notificationId, { status,
+      occurredAt: new Date().toISOString(), providerId: query.CallSid ?? query.Sid,
+      durationSeconds: query.CallDuration, detail: "Provider status callback" });
+    if (!notification) return reply.code(404).send({ error: "voice_call_not_found" });
+    publishNotificationUpdated(claims.tenantId, claims.alertId);
+    return { accepted: true };
+  });
+
+  app.get("/internal/alerts/voice/recording", async (request, reply) => {
+    const raw = z.object({ token: z.string().min(20).max(4_000), RecordingUrl: z.string().url().optional(), RecordingUri: z.string().url().optional(),
+      RecordingStatus: z.string().optional(), RecordingDuration: z.coerce.number().int().nonnegative().optional() }).parse(request.query);
+    const token = raw.token;
+    const claims = voiceTokens.verify(token);
+    if (!claims) return reply.code(401).send({ error: "invalid_or_expired_voice_callback" });
+    const query = raw;
+    const recordingUrl = query.RecordingUrl ?? query.RecordingUri;
+    const notification = await store.recordVoiceCallEvent(claims.notificationId, {
+      status: query.RecordingStatus ?? "recording_available", occurredAt: new Date().toISOString(),
+      recordingUrl, durationSeconds: query.RecordingDuration, detail: "Provider recording callback",
+    });
+    if (!notification) return reply.code(404).send({ error: "voice_call_not_found" });
+    publishNotificationUpdated(claims.tenantId, claims.alertId);
+    return { accepted: true };
+  });
+
+  const smsStatusHandler = async (request: any, reply: any) => {
+    const query = z.object({ token: z.string().min(20).max(4_000), MessageStatus: z.string().optional(),
+      SmsStatus: z.string().optional(), status: z.string().optional(), MessageSid: z.string().optional(),
+      message_id: z.string().optional(), requestId: z.string().optional() }).parse({
+        ...(request.body && typeof request.body === "object" ? request.body : {}), ...request.query,
+      });
+    const claims = voiceTokens.verify(query.token);
+    if (!claims) return reply.code(401).send({ error: "invalid_or_expired_sms_callback" });
+    const status = (query.MessageStatus ?? query.SmsStatus ?? query.status ?? "provider_callback")
+      .toLowerCase().replaceAll("-", "_");
+    const providerId = query.MessageSid ?? query.message_id ?? query.requestId;
+    const notification = await store.recordSmsDeliveryEvent(claims.notificationId, { status,
+      occurredAt: new Date().toISOString(), providerId, detail: "Provider delivery callback" });
+    if (!notification) return reply.code(404).send({ error: "sms_delivery_not_found" });
+    if (["delivered", "delivery_success", "sent"].includes(status)) {
+      await store.completeAlertNotification(notification.id, { status: status === "delivered" ? "delivered" : "sent",
+        ...(providerId ? { providerId } : {}) });
+    } else if (["failed", "undelivered", "rejected", "expired"].includes(status)) {
+      await store.completeAlertNotification(notification.id, { status: "failed", error: `sms_${status}`,
+        nextAttemptAt: new Date(Date.now() + 30_000).toISOString(), ...(providerId ? { providerId } : {}) });
+    }
+    publishNotificationUpdated(claims.tenantId, claims.alertId);
+    return { accepted: true };
+  };
+  app.get("/internal/alerts/sms/status", smsStatusHandler);
+  app.post("/internal/alerts/sms/status", smsStatusHandler);
 }
 
 async function authorizedAlert(store: ControlPlaneStore, user: any, alertId: string, action: "analytics:view" | "alerts:acknowledge") {
@@ -189,6 +282,11 @@ function publishUpdated(alert: NonNullable<Awaited<ReturnType<ControlPlaneStore[
     id: randomUUID(), tenantId: alert.tenantId, type: "alert.updated",
     occurredAt: new Date().toISOString(), alertId: alert.id, alert,
   });
+}
+
+function publishNotificationUpdated(tenantId: string, alertId: string) {
+  alertEvents.publish({ id: randomUUID(), tenantId, type: "notification.updated",
+    occurredAt: new Date().toISOString(), alertId });
 }
 
 function secureEqual(value: string | string[] | undefined, expected: string) {

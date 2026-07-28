@@ -20,7 +20,7 @@ services:
       - key: MEDIA_GATEWAY_INTERNAL_URL
         value: "https://sentinel-grid-media-gateway.onrender.com"
       - key: EDGE_BRIDGE_SHARED_KEY
-        value: "dev-bridge-key-change-in-production"
+        sync: false
       - key: DASHBOARD_ACCESS_USERNAME
         sync: false
       - key: DASHBOARD_ACCESS_PASSWORD
@@ -51,9 +51,9 @@ services:
       - key: STREAM_SECRETS_JSON
         sync: false
       - key: MEDIA_GATEWAY_SHARED_KEY
-        value: "dev-media-gateway-key-change-in-production"
+        sync: false
       - key: EDGE_BRIDGE_SHARED_KEY
-        value: "dev-bridge-key-change-in-production"
+        sync: false
 
   # Independent AI orchestration service. Model workers may run here or at
   # branch edge nodes and submit normalized observations without paid APIs.
@@ -71,7 +71,7 @@ services:
       - key: CONTROL_PLANE_URL
         value: "https://sentinel-grid-control-plane.onrender.com"
       - key: ANALYTICS_ENGINE_SHARED_KEY
-        value: "dev-analytics-engine-key-change-in-production"
+        sync: false
       - key: ANALYTICS_SOURCE_SHARED_KEY
         sync: false
 
@@ -93,14 +93,16 @@ services:
           name: OMCAMERA
           property: connectionString
       - key: AUTH_MODE
-        value: development
+        value: session
       - key: SKIP_MIGRATION_CHECKSUM_VALIDATION
         value: "true"
       - key: EDGE_BRIDGE_SHARED_KEY
-        value: "dev-bridge-key-change-in-production"
+        sync: false
       - key: MEDIA_GATEWAY_SHARED_KEY
-        value: "dev-media-gateway-key-change-in-production"
+        sync: false
       - key: ANALYTICS_ENGINE_SHARED_KEY
-        value: "dev-analytics-engine-key-change-in-production"
+        sync: false
+      - key: REPORT_DOWNLOAD_SECRET
+        sync: false
       - key: ANALYTICS_ENGINE_URL
         value: "https://sentinel-grid-analytics-engine.onrender.com"

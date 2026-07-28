@@ -1140,11 +1140,21 @@ export interface ControlPlaneStore {
   upsertAlertNotificationPolicy(policy: AlertNotificationPolicy): Promise<AlertNotificationPolicy>;
   enqueueAlertNotifications(input: Array<{
     tenantId: string; alertId: string; channel: AlertNotificationChannel; recipient: string;
+    nextAttemptAt?: string; voiceCall?: AlertNotification["voiceCall"]; smsDelivery?: AlertNotification["smsDelivery"];
   }>): Promise<AlertNotification[]>;
   claimAlertNotifications(limit: number, now: string): Promise<AlertNotification[]>;
   completeAlertNotification(id: string, result: {
-    status: "delivered" | "failed" | "dead";
+    status: "sent" | "delivered" | "failed" | "dead" | "cancelled";
     providerId?: string; error?: string; nextAttemptAt?: string;
+  }): Promise<AlertNotification | undefined>;
+  recordVoiceCallEvent(id: string, event: {
+    status: string; occurredAt: string; detail?: string; providerId?: string;
+    provider?: NonNullable<AlertNotification["voiceCall"]>["provider"];
+    acknowledgedAt?: string; acknowledgedBy?: string; recordingUrl?: string; durationSeconds?: number;
+  }): Promise<AlertNotification | undefined>;
+  recordSmsDeliveryEvent(id: string, event: {
+    status: string; occurredAt: string; detail?: string; providerId?: string;
+    provider?: NonNullable<AlertNotification["smsDelivery"]>["provider"];
   }): Promise<AlertNotification | undefined>;
   listAlertNotifications(tenantId: string, alertId?: string): Promise<AlertNotification[]>;
   listOperationalReportSchedules(tenantId: string): Promise<OperationalReportSchedule[]>;

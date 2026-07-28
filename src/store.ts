@@ -69,6 +69,8 @@ function defaultAlertNotificationPolicy(inputTenantId: string): AlertNotificatio
     onCallSchedules: [],
     rateLimitPerMinute: 120,
     escalationAfterSeconds: { P1: 30, P2: 300, P3: 900 },
+    smsTemplates: {},
+    smsTemplateIds: {},
     updatedAt: new Date(0).toISOString(),
   };
 }
@@ -1673,7 +1675,7 @@ export class MemoryStore implements ControlPlaneStore {
       if (existing) { created.push(existing); continue; }
       const notification: AlertNotification = {
         id: randomUUID(), ...target, status: "queued", attempts: 0,
-        nextAttemptAt: now, createdAt: now, updatedAt: now,
+        nextAttemptAt: target.nextAttemptAt ?? now, createdAt: now, updatedAt: now,
       };
       this.analyticsNotifications.push(notification);
       created.push(notification);
@@ -1698,7 +1700,35 @@ export class MemoryStore implements ControlPlaneStore {
     if (result.providerId) item.providerId = result.providerId;
     if (result.error) item.lastError = result.error;
     if (result.nextAttemptAt) item.nextAttemptAt = result.nextAttemptAt;
-    if (result.status === "delivered") { item.sentAt = now; item.deliveredAt = now; }
+    if (["sent", "delivered"].includes(result.status)) item.sentAt = now;
+    if (result.status === "delivered") item.deliveredAt = now;
+    return structuredClone(item);
+  }
+
+  async recordVoiceCallEvent(id: string, event: Parameters<ControlPlaneStore["recordVoiceCallEvent"]>[1]) {
+    const item = this.analyticsNotifications.find((notification) => notification.id === id);
+    if (!item?.voiceCall) return undefined;
+    item.voiceCall.status = event.status;
+    if (event.provider) item.voiceCall.provider = event.provider;
+    item.voiceCall.events.push({ status: event.status, occurredAt: event.occurredAt, ...(event.detail ? { detail: event.detail } : {}) });
+    if (event.providerId) item.providerId = event.providerId;
+    if (event.acknowledgedAt) item.voiceCall.acknowledgedAt = event.acknowledgedAt;
+    if (event.acknowledgedBy) item.voiceCall.acknowledgedBy = event.acknowledgedBy;
+    if (event.recordingUrl) item.voiceCall.recordingUrl = event.recordingUrl;
+    if (event.durationSeconds !== undefined) item.voiceCall.durationSeconds = event.durationSeconds;
+    item.updatedAt = event.occurredAt;
+    return structuredClone(item);
+  }
+
+  async recordSmsDeliveryEvent(id: string, event: Parameters<ControlPlaneStore["recordSmsDeliveryEvent"]>[1]) {
+    const item = this.analyticsNotifications.find((notification) => notification.id === id);
+    if (!item?.smsDelivery) return undefined;
+    item.smsDelivery.status = event.status;
+    if (event.provider) item.smsDelivery.provider = event.provider;
+    item.smsDelivery.events.push({ status: event.status, occurredAt: event.occurredAt,
+      ...(event.detail ? { detail: event.detail } : {}) });
+    if (event.providerId) item.providerId = event.providerId;
+    item.updatedAt = event.occurredAt;
     return structuredClone(item);
   }
 

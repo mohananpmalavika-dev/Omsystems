@@ -52,6 +52,11 @@ import {
   type AlertNotificationSender,
 } from "./alerts/notification-dispatcher.js";
 import {
+  ExotelVoiceProvider, RoutedAlertNotificationSender, TwilioVoiceProvider,
+  VoiceCallbackTokens, VoiceCallNotificationSender,
+} from "./alerts/voice-call.js";
+import { Msg91SmsProvider, SmsNotificationSender, TextLocalSmsProvider, TwilioSmsProvider } from "./alerts/sms.js";
+import {
   HttpOperationalReportEmailSender,
   OperationalReportWorker,
   type OperationalReportEmailSender,
@@ -180,6 +185,7 @@ export async function buildApp(options?: {
   enableExportWorker?: boolean;
   alertWorkerKey?: string;
   alertNotificationSender?: AlertNotificationSender;
+  voiceCallbackSecret?: string;
   reportExportRoot?: string;
   reportDownloadSecret?: string;
   reportWorkerKey?: string;
@@ -196,11 +202,47 @@ export async function buildApp(options?: {
   const mediaGatewaySharedKey =
     options?.mediaGatewaySharedKey ??
     "development-media-gateway-key-change-me";
-  const alertSender = options?.alertNotificationSender ?? new HttpAlertNotificationSender({
+  const standardAlertSender = new HttpAlertNotificationSender({
     ...(process.env.ALERT_SMS_WEBHOOK_URL ? { sms: process.env.ALERT_SMS_WEBHOOK_URL } : {}),
     ...(process.env.ALERT_EMAIL_WEBHOOK_URL ? { email: process.env.ALERT_EMAIL_WEBHOOK_URL } : {}),
     ...(process.env.ALERT_VOICE_WEBHOOK_URL ? { voice: process.env.ALERT_VOICE_WEBHOOK_URL } : {}),
   }, process.env.ALERT_PROVIDER_TOKEN);
+  const voiceProviderName = process.env.ALERT_VOICE_PROVIDER?.toLowerCase();
+  const smsProviderName = process.env.ALERT_SMS_PROVIDER?.toLowerCase();
+  const voiceCallbackSecret = options?.voiceCallbackSecret ?? process.env.ALERT_VOICE_CALLBACK_SECRET;
+  if ((voiceProviderName || smsProviderName) && !voiceCallbackSecret) throw new Error("ALERT_VOICE_CALLBACK_SECRET is required when provider callbacks are enabled");
+  const voiceTokens = new VoiceCallbackTokens(voiceCallbackSecret ?? "development-voice-callback-secret-change-me");
+  let configuredAlertSender: AlertNotificationSender = standardAlertSender;
+  const publicAlertBaseUrl = process.env.ALERT_PUBLIC_BASE_URL ?? "";
+  if ((voiceProviderName || smsProviderName) && !/^https:\/\//i.test(publicAlertBaseUrl)) {
+    throw new Error("ALERT_PUBLIC_BASE_URL must be a provider-reachable HTTPS URL when external notifications are enabled");
+  }
+  if (smsProviderName === "msg91" && process.env.MSG91_AUTH_KEY && process.env.MSG91_SENDER_ID) {
+    configuredAlertSender = new RoutedAlertNotificationSender(standardAlertSender, standardAlertSender,
+      new SmsNotificationSender(store, new Msg91SmsProvider(process.env.MSG91_AUTH_KEY, process.env.MSG91_SENDER_ID,
+        process.env.MSG91_ROUTE, process.env.MSG91_COUNTRY), publicAlertBaseUrl, voiceTokens));
+  } else if (smsProviderName === "textlocal" && process.env.TEXTLOCAL_API_KEY && process.env.TEXTLOCAL_SENDER_ID) {
+    configuredAlertSender = new RoutedAlertNotificationSender(standardAlertSender, standardAlertSender,
+      new SmsNotificationSender(store, new TextLocalSmsProvider(process.env.TEXTLOCAL_API_KEY,
+        process.env.TEXTLOCAL_SENDER_ID), publicAlertBaseUrl, voiceTokens));
+  } else if (smsProviderName === "twilio" && process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN &&
+      (process.env.TWILIO_SMS_FROM_NUMBER || process.env.SMS_FROM)) {
+    configuredAlertSender = new RoutedAlertNotificationSender(standardAlertSender, standardAlertSender,
+      new SmsNotificationSender(store, new TwilioSmsProvider(process.env.TWILIO_ACCOUNT_SID,
+        process.env.TWILIO_AUTH_TOKEN, process.env.TWILIO_SMS_FROM_NUMBER ?? process.env.SMS_FROM!), publicAlertBaseUrl, voiceTokens));
+  } else if (smsProviderName) throw new Error(`Incomplete credentials for ALERT_SMS_PROVIDER=${smsProviderName}`);
+  if (voiceProviderName === "twilio" && process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN && process.env.TWILIO_FROM_NUMBER) {
+    configuredAlertSender = new RoutedAlertNotificationSender(configuredAlertSender,
+      new VoiceCallNotificationSender(store, new TwilioVoiceProvider(process.env.TWILIO_ACCOUNT_SID,
+        process.env.TWILIO_AUTH_TOKEN, process.env.TWILIO_FROM_NUMBER), publicAlertBaseUrl, voiceTokens));
+  } else if (voiceProviderName === "exotel" && process.env.EXOTEL_ACCOUNT_SID && process.env.EXOTEL_API_KEY &&
+      process.env.EXOTEL_API_TOKEN && process.env.EXOTEL_CALLER_ID) {
+    configuredAlertSender = new RoutedAlertNotificationSender(configuredAlertSender,
+      new VoiceCallNotificationSender(store, new ExotelVoiceProvider(process.env.EXOTEL_ACCOUNT_SID,
+        process.env.EXOTEL_API_KEY, process.env.EXOTEL_API_TOKEN, process.env.EXOTEL_CALLER_ID,
+        process.env.EXOTEL_SUBDOMAIN), publicAlertBaseUrl, voiceTokens));
+  }
+  const alertSender = options?.alertNotificationSender ?? configuredAlertSender;
   const alertDispatcher = new AlertNotificationDispatcher(store, alertSender);
   const reportExportRoot = options?.reportExportRoot ?? process.env.REPORT_EXPORT_ROOT ?? "./report-exports";
   const reportDownloadSecret = options?.reportDownloadSecret ?? process.env.REPORT_DOWNLOAD_SECRET ?? "development-report-download-secret-change-me";
@@ -303,6 +345,9 @@ export async function buildApp(options?: {
     } catch {
       return reply.code(503).send({ status: "not-ready", database: "unavailable" });
     }
+  });
+  app.addContentTypeParser("application/x-www-form-urlencoded", { parseAs: "string" }, (_request, body, done) => {
+    done(null, Object.fromEntries(new URLSearchParams(String(body))));
   });
 
   app.get("/metrics", async (_request, reply) => reply.type("text/plain; version=0.0.4").send(runtimeGuard.prometheus()));
@@ -1527,7 +1572,7 @@ export async function buildApp(options?: {
   });
   await registerAnalyticsPhase2Routes(app, store);
   await registerAlertCommandCenterRoutes(app, store, alertDispatcher,
-    options?.alertWorkerKey ?? process.env.ALERT_WORKER_SHARED_KEY);
+    options?.alertWorkerKey ?? process.env.ALERT_WORKER_SHARED_KEY, voiceTokens);
   const alertWorker = setInterval(() => {
     void alertDispatcher.drainOnce().catch((error) => app.log.error({ error }, "Alert outbox drain failed"));
   }, 5_000);
