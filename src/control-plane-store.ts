@@ -60,6 +60,10 @@ import type {
 } from "./domain/models.js";
 import type { AuthorizationDecision } from "./domain/authorization.js";
 import type { OperationalHealthPolicy, OperationalTelemetryEnvelope, VideoWallLayout, VideoWallGridSize } from "./operational-health/types.js";
+import type {
+  OperationalReportSchedule, OperationalReportRun, OperationalReportArtifact,
+  OperationalReportDelivery,
+} from "./reporting/types.js";
 
 export interface CameraDiscoveryInput {
   edgeAgentId: string;
@@ -1143,6 +1147,23 @@ export interface ControlPlaneStore {
     providerId?: string; error?: string; nextAttemptAt?: string;
   }): Promise<AlertNotification | undefined>;
   listAlertNotifications(tenantId: string, alertId?: string): Promise<AlertNotification[]>;
+  listOperationalReportSchedules(tenantId: string): Promise<OperationalReportSchedule[]>;
+  createOperationalReportSchedule(input: Omit<OperationalReportSchedule, "id" | "lastRunAt" | "createdAt" | "updatedAt">): Promise<OperationalReportSchedule>;
+  updateOperationalReportSchedule(id: string, tenantId: string, updates: Partial<Pick<OperationalReportSchedule, "name" | "timezone" | "dailyAt" | "formats" | "recipients" | "filters" | "enabled" | "nextRunAt" | "lastRunAt">>): Promise<OperationalReportSchedule | undefined>;
+  deleteOperationalReportSchedule(id: string, tenantId: string): Promise<boolean>;
+  claimDueOperationalReportSchedules(now: string, limit: number): Promise<OperationalReportSchedule[]>;
+  createOperationalReportRun(input: Omit<OperationalReportRun, "id" | "status" | "progress" | "attempts" | "nextAttemptAt" | "rowCount" | "summary" | "error" | "startedAt" | "completedAt" | "createdAt" | "updatedAt">): Promise<OperationalReportRun>;
+  listOperationalReportRuns(tenantId: string, limit: number): Promise<OperationalReportRun[]>;
+  getOperationalReportRun(id: string, tenantId: string): Promise<OperationalReportRun | undefined>;
+  claimOperationalReportRuns(now: string, limit: number): Promise<OperationalReportRun[]>;
+  updateOperationalReportRun(id: string, updates: Partial<Pick<OperationalReportRun, "status" | "progress" | "nextAttemptAt" | "rowCount" | "summary" | "error" | "startedAt" | "completedAt">>): Promise<OperationalReportRun | undefined>;
+  createOperationalReportArtifact(input: Omit<OperationalReportArtifact, "id" | "createdAt">): Promise<OperationalReportArtifact>;
+  listOperationalReportArtifacts(tenantId: string, runId: string): Promise<OperationalReportArtifact[]>;
+  getOperationalReportArtifact(id: string, tenantId: string): Promise<OperationalReportArtifact | undefined>;
+  enqueueOperationalReportDeliveries(input: Array<{ tenantId: string; runId: string; recipient: string }>): Promise<OperationalReportDelivery[]>;
+  claimOperationalReportDeliveries(now: string, limit: number): Promise<OperationalReportDelivery[]>;
+  completeOperationalReportDelivery(id: string, result: { status: "delivered" | "failed" | "dead"; providerId?: string; error?: string; nextAttemptAt?: string }): Promise<OperationalReportDelivery | undefined>;
+  listOperationalReportDeliveries(tenantId: string, runId: string): Promise<OperationalReportDelivery[]>;
   writeAudit(event: AuditEventInput): Promise<void>;
   createMaintenanceAsset(input: MaintenanceAssetInput): Promise<MaintenanceAsset>;
   listMaintenanceAssets(tenantId: string, category?: AssetCategory): Promise<MaintenanceAsset[]>;

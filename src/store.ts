@@ -53,6 +53,10 @@ import type {
 } from "./control-plane-store.js";
 import { IncidentManagementMethods } from "./store-incident-extensions.js";
 import type { OperationalHealthPolicy, OperationalTelemetryEnvelope, VideoWallGridSize, VideoWallLayout } from "./operational-health/types.js";
+import type {
+  OperationalReportSchedule, OperationalReportRun, OperationalReportArtifact,
+  OperationalReportDelivery,
+} from "./reporting/types.js";
 
 function clean<T extends Record<string, any>>(obj: T) {
   return Object.fromEntries(Object.entries(obj).filter(([, v]) => v !== undefined)) as Partial<T>;
@@ -256,6 +260,11 @@ export class MemoryStore implements ControlPlaneStore {
   readonly analyticsEscalations: Array<Record<string, unknown>> = [];
   readonly analyticsNotifications: AlertNotification[] = [];
   readonly alertNotificationPolicies = new Map<string, AlertNotificationPolicy>();
+  readonly operationalReportSchedules: OperationalReportSchedule[] = [];
+  readonly operationalReportRuns: OperationalReportRun[] = [];
+  readonly operationalReportArtifacts: OperationalReportArtifact[] = [];
+  readonly operationalReportDeliveries: OperationalReportDelivery[] = [];
+  readonly operationalReportScheduleClaims = new Set<string>();
   readonly maintenanceAssets: any[] = [];
   readonly maintenanceVisits: any[] = [];
   readonly predictiveAlerts: any[] = [];
@@ -1697,6 +1706,73 @@ export class MemoryStore implements ControlPlaneStore {
     return this.analyticsNotifications.filter((item) => item.tenantId === inputTenantId &&
       (!alertId || item.alertId === alertId)).map((item) => structuredClone(item));
   }
+
+  async listOperationalReportSchedules(inputTenantId: string) {
+    return this.operationalReportSchedules.filter((item) => item.tenantId === inputTenantId)
+      .sort((a, b) => a.name.localeCompare(b.name)).map((item) => structuredClone(item));
+  }
+
+  async createOperationalReportSchedule(input: Omit<OperationalReportSchedule, "id" | "lastRunAt" | "createdAt" | "updatedAt">) {
+    const now = new Date().toISOString();
+    const item: OperationalReportSchedule = { id: randomUUID(), ...structuredClone(input), lastRunAt: null, createdAt: now, updatedAt: now };
+    this.operationalReportSchedules.push(item); return structuredClone(item);
+  }
+
+  async updateOperationalReportSchedule(id: string, inputTenantId: string, updates: Partial<Pick<OperationalReportSchedule, "name" | "timezone" | "dailyAt" | "formats" | "recipients" | "filters" | "enabled" | "nextRunAt" | "lastRunAt">>) {
+    const item = this.operationalReportSchedules.find((entry) => entry.id === id && entry.tenantId === inputTenantId);
+    if (!item) return undefined;
+    Object.assign(item, structuredClone(updates), { updatedAt: new Date().toISOString() });
+    this.operationalReportScheduleClaims.delete(id); return structuredClone(item);
+  }
+
+  async deleteOperationalReportSchedule(id: string, inputTenantId: string) {
+    const index = this.operationalReportSchedules.findIndex((item) => item.id === id && item.tenantId === inputTenantId);
+    if (index < 0) return false; this.operationalReportSchedules.splice(index, 1); return true;
+  }
+
+  async claimDueOperationalReportSchedules(now: string, limit: number) {
+    const due = this.operationalReportSchedules.filter((item) => item.enabled && item.nextRunAt <= now && !this.operationalReportScheduleClaims.has(item.id)).slice(0, limit);
+    for (const item of due) this.operationalReportScheduleClaims.add(item.id);
+    return structuredClone(due);
+  }
+
+  async createOperationalReportRun(input: Omit<OperationalReportRun, "id" | "status" | "progress" | "attempts" | "nextAttemptAt" | "rowCount" | "summary" | "error" | "startedAt" | "completedAt" | "createdAt" | "updatedAt">) {
+    const now = new Date().toISOString();
+    const item: OperationalReportRun = { id: randomUUID(), ...structuredClone(input), status: "queued", progress: 0, attempts: 0, nextAttemptAt: now, rowCount: null, summary: null, error: null, startedAt: null, completedAt: null, createdAt: now, updatedAt: now };
+    this.operationalReportRuns.push(item); return structuredClone(item);
+  }
+
+  async listOperationalReportRuns(inputTenantId: string, limit: number) {
+    return this.operationalReportRuns.filter((item) => item.tenantId === inputTenantId)
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, limit).map((item) => structuredClone(item));
+  }
+  async getOperationalReportRun(id: string, inputTenantId: string) { const item = this.operationalReportRuns.find((entry) => entry.id === id && entry.tenantId === inputTenantId); return item ? structuredClone(item) : undefined; }
+  async claimOperationalReportRuns(now: string, limit: number) {
+    const items = this.operationalReportRuns.filter((item) => ["queued", "failed"].includes(item.status) && item.nextAttemptAt <= now && item.attempts < item.maxAttempts).slice(0, limit);
+    for (const item of items) { item.status = "running"; item.attempts += 1; item.startedAt ??= now; item.updatedAt = now; }
+    return structuredClone(items);
+  }
+  async updateOperationalReportRun(id: string, updates: Partial<Pick<OperationalReportRun, "status" | "progress" | "nextAttemptAt" | "rowCount" | "summary" | "error" | "startedAt" | "completedAt">>) {
+    const item = this.operationalReportRuns.find((entry) => entry.id === id); if (!item) return undefined;
+    Object.assign(item, structuredClone(updates), { updatedAt: new Date().toISOString() }); return structuredClone(item);
+  }
+  async createOperationalReportArtifact(input: Omit<OperationalReportArtifact, "id" | "createdAt">) {
+    const existing = this.operationalReportArtifacts.find((item) => item.runId === input.runId && item.format === input.format);
+    if (existing) {
+      Object.assign(existing, structuredClone(input), { createdAt: new Date().toISOString() });
+      return structuredClone(existing);
+    }
+    const item: OperationalReportArtifact = { id: randomUUID(), ...structuredClone(input), createdAt: new Date().toISOString() };
+    this.operationalReportArtifacts.push(item); return structuredClone(item);
+  }
+  async listOperationalReportArtifacts(inputTenantId: string, runId: string) { return this.operationalReportArtifacts.filter((item) => item.tenantId === inputTenantId && item.runId === runId).map((item) => structuredClone(item)); }
+  async getOperationalReportArtifact(id: string, inputTenantId: string) { const item = this.operationalReportArtifacts.find((entry) => entry.id === id && entry.tenantId === inputTenantId); return item ? structuredClone(item) : undefined; }
+  async enqueueOperationalReportDeliveries(input: Array<{ tenantId: string; runId: string; recipient: string }>) {
+    const now = new Date().toISOString(); return input.map((target) => { const existing = this.operationalReportDeliveries.find((item) => item.runId === target.runId && item.recipient === target.recipient); if (existing) return structuredClone(existing); const item: OperationalReportDelivery = { id: randomUUID(), ...target, status: "queued", attempts: 0, nextAttemptAt: now, providerId: null, error: null, deliveredAt: null, createdAt: now, updatedAt: now }; this.operationalReportDeliveries.push(item); return structuredClone(item); });
+  }
+  async claimOperationalReportDeliveries(now: string, limit: number) { const items = this.operationalReportDeliveries.filter((item) => ["queued", "failed"].includes(item.status) && item.nextAttemptAt <= now && item.attempts < 5).slice(0, limit); for (const item of items) { item.status = "processing"; item.attempts += 1; item.updatedAt = now; } return structuredClone(items); }
+  async completeOperationalReportDelivery(id: string, result: Parameters<ControlPlaneStore["completeOperationalReportDelivery"]>[1]) { const item = this.operationalReportDeliveries.find((entry) => entry.id === id); if (!item) return undefined; item.status = result.status; item.providerId = result.providerId ?? item.providerId; item.error = result.error ?? null; item.nextAttemptAt = result.nextAttemptAt ?? item.nextAttemptAt; item.deliveredAt = result.status === "delivered" ? new Date().toISOString() : item.deliveredAt; item.updatedAt = new Date().toISOString(); return structuredClone(item); }
+  async listOperationalReportDeliveries(inputTenantId: string, runId: string) { return this.operationalReportDeliveries.filter((item) => item.tenantId === inputTenantId && item.runId === runId).map((item) => structuredClone(item)); }
 
   async linkAnalyticsAlertIncident(
     id: string,

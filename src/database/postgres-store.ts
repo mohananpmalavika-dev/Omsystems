@@ -28,6 +28,7 @@ import { MaintenanceRepository } from "./maintenance-repository.js";
 import { PrivacyRepository } from "./privacy-repository.js";
 import { OperationalHealthRepository } from "./operational-health-repository.js";
 import { GridLayoutRepository } from "./grid-layout-repository.js";
+import { OperationalReportRepository } from "./operational-report-repository.js";
 import type {
   OperationalHealthPolicy,
   OperationalTelemetryEnvelope,
@@ -57,6 +58,7 @@ export class PostgresStore
   private readonly privacy: PrivacyRepository;
   private readonly operationalHealth: OperationalHealthRepository;
   private readonly gridLayouts: GridLayoutRepository;
+  private readonly operationalReports: OperationalReportRepository;
 
   // Public getter for direct database access (use sparingly)
   get db() {
@@ -80,6 +82,7 @@ export class PostgresStore
     this.privacy = new PrivacyRepository(pool);
     this.operationalHealth = new OperationalHealthRepository(pool);
     this.gridLayouts = new GridLayoutRepository(pool);
+    this.operationalReports = new OperationalReportRepository(pool);
   }
 
   async close() { await this.pool.end(); }
@@ -448,6 +451,23 @@ export class PostgresStore
   async listAlertNotifications(tenantId: string, alertId?: string) {
     return this.analytics.listNotifications(tenantId, alertId);
   }
+  async listOperationalReportSchedules(tenantId: string) { return this.operationalReports.listSchedules(tenantId); }
+  async createOperationalReportSchedule(input: Parameters<ControlPlaneStore["createOperationalReportSchedule"]>[0]) { return this.operationalReports.createSchedule(input); }
+  async updateOperationalReportSchedule(id: string, tenantId: string, updates: Parameters<ControlPlaneStore["updateOperationalReportSchedule"]>[2]) { return this.operationalReports.updateSchedule(id, tenantId, updates); }
+  async deleteOperationalReportSchedule(id: string, tenantId: string) { return this.operationalReports.deleteSchedule(id, tenantId); }
+  async claimDueOperationalReportSchedules(now: string, limit: number) { return this.operationalReports.claimDueSchedules(now, limit); }
+  async createOperationalReportRun(input: Parameters<ControlPlaneStore["createOperationalReportRun"]>[0]) { return this.operationalReports.createRun(input); }
+  async listOperationalReportRuns(tenantId: string, limit: number) { return this.operationalReports.listRuns(tenantId, limit); }
+  async getOperationalReportRun(id: string, tenantId: string) { return this.operationalReports.getRun(id, tenantId); }
+  async claimOperationalReportRuns(now: string, limit: number) { return this.operationalReports.claimRuns(now, limit); }
+  async updateOperationalReportRun(id: string, updates: Parameters<ControlPlaneStore["updateOperationalReportRun"]>[1]) { return this.operationalReports.updateRun(id, updates); }
+  async createOperationalReportArtifact(input: Parameters<ControlPlaneStore["createOperationalReportArtifact"]>[0]) { return this.operationalReports.createArtifact(input); }
+  async listOperationalReportArtifacts(tenantId: string, runId: string) { return this.operationalReports.listArtifacts(tenantId, runId); }
+  async getOperationalReportArtifact(id: string, tenantId: string) { return this.operationalReports.getArtifact(id, tenantId); }
+  async enqueueOperationalReportDeliveries(input: Parameters<ControlPlaneStore["enqueueOperationalReportDeliveries"]>[0]) { return this.operationalReports.enqueueDeliveries(input); }
+  async claimOperationalReportDeliveries(now: string, limit: number) { return this.operationalReports.claimDeliveries(now, limit); }
+  async completeOperationalReportDelivery(id: string, result: Parameters<ControlPlaneStore["completeOperationalReportDelivery"]>[1]) { return this.operationalReports.completeDelivery(id, result); }
+  async listOperationalReportDeliveries(tenantId: string, runId: string) { return this.operationalReports.listDeliveries(tenantId, runId); }
   // Audit method removed - not part of AuditRepository interface
 
   // ============ COMPLIANCE ENHANCED METHODS ============

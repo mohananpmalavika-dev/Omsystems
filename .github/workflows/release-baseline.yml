@@ -1,4 +1,4 @@
-name: Phase 3 alert command-center baseline
+name: Phase 5 enterprise readiness baseline
 
 on:
   pull_request:
@@ -16,7 +16,32 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - run: npm run ci:phase3
+      - run: npm run ci:phase5
+
+  security:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
+      - run: npm run security:audit
+      - uses: aquasecurity/trivy-action@0.30.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          format: sarif
+          output: trivy-results.sarif
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "0"
+      - uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with: { sarif_file: trivy-results.sarif }
 
   migrations:
     runs-on: ubuntu-latest

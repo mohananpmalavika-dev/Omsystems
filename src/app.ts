@@ -45,11 +45,17 @@ import { registerDVRNVRMonitorRoutes } from "./routes/dvr-nvr-monitor.routes.js"
 import { registerOperationalHealthRoutes } from "./routes/operational-health.routes.js";
 import { registerVideoWallRoutes } from "./routes/video-wall.routes.js";
 import { registerAlertCommandCenterRoutes } from "./routes/alert-command-center.routes.js";
+import { registerOperationalReportRoutes } from "./routes/operational-reports.routes.js";
 import {
   AlertNotificationDispatcher,
   HttpAlertNotificationSender,
   type AlertNotificationSender,
 } from "./alerts/notification-dispatcher.js";
+import {
+  HttpOperationalReportEmailSender,
+  OperationalReportWorker,
+  type OperationalReportEmailSender,
+} from "./reporting/worker.js";
 import { DVRNVRMonitorService } from "./services/dvr-nvr-monitor.service.js";
 import { parseBulkCameraCsv } from "./services/camera-registration.js";
 import { RecordingSearchService } from "./recording/search-service.js";
@@ -58,6 +64,7 @@ import { SnapshotService } from "./recording/snapshot-service.js";
 import { ExportWorker } from "./recording/export-worker.js";
 import { ForensicAnalyzer } from "./recording/forensic-analyzer.js";
 import { MemoryStore } from "./store.js";
+import { RuntimeGuard } from "./platform/runtime-guard.js";
 
 declare module "fastify" {
   interface FastifyRequest {
@@ -173,12 +180,19 @@ export async function buildApp(options?: {
   enableExportWorker?: boolean;
   alertWorkerKey?: string;
   alertNotificationSender?: AlertNotificationSender;
+  reportExportRoot?: string;
+  reportDownloadSecret?: string;
+  reportWorkerKey?: string;
+  reportEmailSender?: OperationalReportEmailSender;
+  maxInFlightRequests?: number;
 }): Promise<FastifyInstance> {
   const app = Fastify({
     logger: options?.logger ?? false,
     trustProxy: Boolean(options?.edgeBridgeSharedKey),
   });
   const store = options?.store ?? new MemoryStore();
+  const runtimeGuard = new RuntimeGuard(options?.maxInFlightRequests ?? Number(process.env.MAX_IN_FLIGHT_REQUESTS ?? 500));
+  runtimeGuard.register(app);
   const mediaGatewaySharedKey =
     options?.mediaGatewaySharedKey ??
     "development-media-gateway-key-change-me";
@@ -188,6 +202,13 @@ export async function buildApp(options?: {
     ...(process.env.ALERT_VOICE_WEBHOOK_URL ? { voice: process.env.ALERT_VOICE_WEBHOOK_URL } : {}),
   }, process.env.ALERT_PROVIDER_TOKEN);
   const alertDispatcher = new AlertNotificationDispatcher(store, alertSender);
+  const reportExportRoot = options?.reportExportRoot ?? process.env.REPORT_EXPORT_ROOT ?? "./report-exports";
+  const reportDownloadSecret = options?.reportDownloadSecret ?? process.env.REPORT_DOWNLOAD_SECRET ?? "development-report-download-secret-change-me";
+  const reportEmailSender = options?.reportEmailSender ?? new HttpOperationalReportEmailSender(
+    process.env.REPORT_EMAIL_WEBHOOK_URL, process.env.REPORT_EMAIL_PROVIDER_TOKEN,
+    (process.env.REPORT_PUBLIC_BASE_URL ?? "").replace(/\/$/, ""), reportDownloadSecret,
+  );
+  const operationalReportWorker = new OperationalReportWorker(store, reportExportRoot, reportEmailSender);
 
   // Initialize video search and forensic services
   const pool = (store as any).pool; // Access pool from store
@@ -227,10 +248,13 @@ export async function buildApp(options?: {
   app.addHook("preHandler", async (request, reply) => {
     if (
       request.url === "/health" ||
+      request.url === "/ready" ||
+      request.url === "/metrics" ||
       request.url === "/internal/live-sessions/consume" ||
       request.url.startsWith("/internal/recording/") ||
       request.url.startsWith("/internal/analytics/") ||
       request.url.startsWith("/internal/alerts/")
+      || request.url.startsWith("/internal/reports/")
     ) return;
 
     if (
@@ -271,13 +295,25 @@ export async function buildApp(options?: {
     service: "sentinel-control-plane",
   }));
 
+  app.get("/ready", async (_request, reply) => {
+    const databasePool = (store as unknown as { pool?: { query(sql: string): Promise<unknown> } }).pool;
+    try {
+      if (databasePool) await databasePool.query("SELECT 1");
+      return { status: "ready", database: databasePool ? "connected" : "memory" };
+    } catch {
+      return reply.code(503).send({ status: "not-ready", database: "unavailable" });
+    }
+  });
+
+  app.get("/metrics", async (_request, reply) => reply.type("text/plain; version=0.0.4").send(runtimeGuard.prometheus()));
+
   app.get("/v1/me", async (request) => request.currentUser);
 
   app.get("/v1/capacity/assessment", async () => ({
     capability: "Support approximately 400 branches / 5,000 cameras",
-    status: "Architecturally possible",
-    verifiedCompletion: 45,
-    summary: "Distributed architecture exists, but no 400-branch, 5,000-camera load test, endurance benchmark, or production-scale capacity evidence has been completed.",
+    status: "Evidence harness available; production certification pending",
+    verifiedCompletion: 65,
+    summary: "The real API load, resilience and export contracts now produce measured evidence, but no approved 400-branch, 5,000-camera, 100-user 24-hour production-like result is attached yet.",
     metrics: {
       branches: 400,
       cameras: 5000,
@@ -286,6 +322,9 @@ export async function buildApp(options?: {
     },
     evidence: {
       loadTestCompleted: false,
+      contractAccurateHarnessAvailable: true,
+      progressiveStagesSupported: [10, 50, 100, 400],
+      measuredMetricsOnly: true,
       productionBenchmarkCompleted: false,
       enduranceBenchmarkCompleted: false,
       failoverValidated: false,
@@ -1468,6 +1507,10 @@ export async function buildApp(options?: {
   }
   await registerPrivacyRoutes(app, store);
   await registerReportsRoutes(app, store);
+  await registerOperationalReportRoutes(app, store, operationalReportWorker, {
+    downloadSecret: reportDownloadSecret, exportRoot: reportExportRoot,
+    workerKey: options?.reportWorkerKey ?? process.env.REPORT_WORKER_SHARED_KEY,
+  });
   await registerEvidenceRoutes(app, store, exportWorker);
   await registerLiveOperationsRoutes(app, store);
   await registerIncidentsRoutes(app, store);
@@ -1490,6 +1533,11 @@ export async function buildApp(options?: {
   }, 5_000);
   alertWorker.unref();
   app.addHook("onClose", async () => clearInterval(alertWorker));
+  const operationalReportTimer = setInterval(() => {
+    void operationalReportWorker.tick().catch((error) => app.log.error({ error }, "Operational report worker failed"));
+  }, 30_000);
+  operationalReportTimer.unref();
+  app.addHook("onClose", async () => clearInterval(operationalReportTimer));
 
   // Register video search routes if services are available
   if (searchService && playbackEngine && snapshotService) {

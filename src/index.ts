@@ -13,6 +13,7 @@ const app = await buildApp({
   logger: true,
   store,
   authMode: config.AUTH_MODE,
+  maxInFlightRequests: config.MAX_IN_FLIGHT_REQUESTS,
   mediaGatewaySharedKey: config.MEDIA_GATEWAY_SHARED_KEY,
   ...(config.RECORDING_ENGINE_URL && config.RECORDING_ENGINE_SHARED_KEY ? {
     recordingEngineUrl: config.RECORDING_ENGINE_URL,

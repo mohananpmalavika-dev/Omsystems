@@ -1,168 +1,40 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
-import Link from "next/link";
+import { useCallback, useEffect, useState } from "react";
+import { CalendarClock, CheckCircle2, Download, LoaderCircle, Play, RefreshCw, Trash2 } from "lucide-react";
 import { AppLayout } from "@/components/app-layout";
-import { reportsApi } from "@/lib/api-client";
 
-export default function ReportsPage() {
-  const [operations, setOperations] = useState<any>(null);
-  const [privacy, setPrivacy] = useState<any>(null);
-  const [incidents, setIncidents] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+type Format="csv"|"xlsx"|"pdf";
+type Filters={region?:string;branchId?:string;deviceStatus?:string;alertType?:string;severity?:string;alertState?:string;from?:string;to?:string};
+type Schedule={id:string;name:string;timezone:string;dailyAt:string;formats:Format[];recipients:string[];filters:Filters;enabled:boolean;lastRunAt:string|null;nextRunAt:string};
+type Artifact={id:string;format:Format;filename:string;sizeBytes:number;expiresAt:string;downloadUrl:string};
+type Delivery={id:string;recipient:string;status:string;attempts:number;error?:string};
+type Run={id:string;status:string;formats:Format[];filters:Filters;progress:number;attempts:number;rowCount:number|null;summary?:Record<string,number>;error?:string;createdAt:string;artifacts:Artifact[];deliveries:Delivery[]};
 
-  useEffect(() => {
-    setLoading(true);
-    setError(null);
-
-    void Promise.all([
-      reportsApi.getOperationsSummary(),
-      reportsApi.getPrivacySummary(),
-      reportsApi.getIncidentSummary(),
-    ])
-      .then(([operationsData, privacyData, incidentData]) => {
-        setOperations(operationsData);
-        setPrivacy(privacyData);
-        setIncidents(incidentData);
-      })
-      .catch((err) => {
-        setError(err instanceof Error ? err.message : String(err));
-      })
-      .finally(() => setLoading(false));
-  }, []);
-
-  return (
-    <AppLayout>
-      <div className="content">
-        <div style={{ padding: 20, maxWidth: 1200, margin: "0 auto" }}>
-      <header style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 16, marginBottom: 24 }}>
-        <div>
-          <h1 style={{ fontSize: 32, margin: 0 }}>CCTV Reports</h1>
-          <p style={{ color: "#555", maxWidth: 680 }}>
-            Consolidated CCTV operations, privacy and incident metrics for branch security reporting.
-          </p>
-        </div>
-        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-          <Link href="/maintenance" style={{ color: "#2563eb" }}>Back to maintenance</Link>
-          <Link href="/maintenance/privacy" style={{ color: "#2563eb" }}>Privacy dashboard</Link>
-          <Link href="/incidents" style={{ color: "#2563eb" }}>Incidents</Link>
-        </div>
-      </header>
-
-      {error && (
-        <div style={{ marginBottom: 24, padding: 16, background: "#fee", border: "1px solid #fbb", borderRadius: 12, color: "#900" }}>
-          {error}
-        </div>
-      )}
-
-      <section style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 16, marginBottom: 24 }}>
-        <Card label="Branches" value={loading ? "…" : String(operations?.branchCount ?? 0)} />
-        <Card label="Cameras" value={loading ? "…" : String(operations?.cameraCount ?? 0)} detail={`${operations?.healthyCameraPercentage ?? 0}% healthy`} />
-        <Card label="Open incidents" value={loading ? "…" : String(incidents?.openIncidentCount ?? 0)} detail={`${incidents?.criticalIncidentCount ?? 0} critical`} />
-        <Card label="Active privacy purposes" value={loading ? "…" : String(privacy?.activePurposes ?? 0)} detail={`${privacy?.assignedPurposes ?? 0} assigned`} />
-        <Card label="Open privacy breaches" value={loading ? "…" : String(privacy?.openBreaches ?? 0)} />
-      </section>
-
-      <section style={{ display: "grid", gap: 24, marginBottom: 24 }}>
-        <Panel title="Operational summary" loading={loading}>
-          <SummaryRow label="Total branches" value={operations?.branchCount ?? "—"} />
-          <SummaryRow label="Total cameras" value={operations?.cameraCount ?? "—"} />
-          <SummaryRow label="Online" value={operations?.onlineCount ?? "—"} />
-          <SummaryRow label="Offline" value={operations?.offlineCount ?? "—"} />
-          <SummaryRow label="Degraded" value={operations?.degradedCount ?? "—"} />
-        </Panel>
-
-        <Panel title="Privacy summary" loading={loading}>
-          <SummaryRow label="Active purposes" value={privacy?.activePurposes ?? "—"} />
-          <SummaryRow label="Assigned purposes" value={privacy?.assignedPurposes ?? "—"} />
-          <SummaryRow label="Total controls" value={privacy?.totalControls ?? "—"} />
-          <SummaryRow label="Open breaches" value={privacy?.openBreaches ?? "—"} />
-        </Panel>
-
-        <Panel title="Incident summary" loading={loading}>
-          <SummaryRow label="Total incidents" value={incidents?.incidentCount ?? "—"} />
-          <SummaryRow label="Open incidents" value={incidents?.openIncidentCount ?? "—"} />
-          <SummaryRow label="Critical incidents" value={incidents?.criticalIncidentCount ?? "—"} />
-        </Panel>
-      </section>
-
-      <section style={{ display: "grid", gap: 24, marginBottom: 24 }}>
-        <Panel title="Camera status by branch" loading={loading}>
-          {operations?.branchSummaries?.length ? (
-            operations.branchSummaries.map((branch: any) => (
-              <div key={branch.branchId} style={{ padding: 12, borderBottom: "1px solid #e5e7eb" }}>
-                <strong>{branch.branchName}</strong>
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 12, marginTop: 8 }}>
-                  <Stat label="Total" value={branch.totalCameras} />
-                  <Stat label="Online" value={branch.onlineCount} />
-                  <Stat label="Offline" value={branch.offlineCount} />
-                  <Stat label="Degraded" value={branch.degradedCount} />
-                </div>
-              </div>
-            ))
-          ) : (
-            <p style={{ color: "#4b5563" }}>No branch camera details available.</p>
-          )}
-        </Panel>
-
-        <Panel title="Recent incidents" loading={loading}>
-          {incidents?.recentIncidents?.length ? (
-            incidents.recentIncidents.map((incident: any) => (
-              <div key={incident.id} style={{ padding: 12, borderBottom: "1px solid #e5e7eb" }}>
-                <strong>{incident.title}</strong>
-                <p style={{ margin: "6px 0 0", color: "#6b7280" }}>
-                  {incident.severity ? `Severity: ${incident.severity}` : "Severity unknown"} · {incident.status}
-                </p>
-                <p style={{ margin: "6px 0 0", color: "#4b5563" }}>
-                  {incident.occurredAt ? new Date(incident.occurredAt).toLocaleString() : "Date unavailable"}
-                </p>
-              </div>
-            ))
-          ) : (
-            <p style={{ color: "#4b5563" }}>No recent incidents available.</p>
-          )}
-        </Panel>
-      </section>
-        </div>
+export default function ReportsPage(){
+  const[schedules,setSchedules]=useState<Schedule[]>([]);const[runs,setRuns]=useState<Run[]>([]);const[loading,setLoading]=useState(true);const[message,setMessage]=useState("");
+  const[name,setName]=useState("Daily enterprise surveillance");const[timezone,setTimezone]=useState("Asia/Kolkata");const[dailyAt,setDailyAt]=useState("06:30");const[recipients,setRecipients]=useState("");const[formats,setFormats]=useState<Format[]>(["pdf","xlsx","csv"]);const[filters,setFilters]=useState<Filters>({});
+  const load=useCallback(async()=>{const[scheduleResponse,runResponse]=await Promise.all([fetch("/api/control/v1/reports/operational/schedules",{cache:"no-store"}),fetch("/api/control/v1/reports/operational/runs?limit=100",{cache:"no-store"})]);if(scheduleResponse.ok)setSchedules((await scheduleResponse.json()).data??[]);if(runResponse.ok)setRuns((await runResponse.json()).data??[]);setLoading(false);},[]);
+  useEffect(()=>{void load();const timer=setInterval(load,5_000);return()=>clearInterval(timer);},[load]);
+  const payload=()=>({formats,filters:clean(filters),recipients:recipients.split(",").map((item)=>item.trim()).filter(Boolean)});
+  const createSchedule=async()=>{setMessage("");const response=await fetch("/api/control/v1/reports/operational/schedules",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({name,timezone,dailyAt,...payload(),enabled:true})});setMessage(response.ok?"Schedule saved.":"Could not save schedule.");if(response.ok)await load();};
+  const runNow=async()=>{setMessage("");const response=await fetch("/api/control/v1/reports/operational/runs",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(payload())});setMessage(response.ok?"Report queued for generation.":"Could not queue report.");if(response.ok)await load();};
+  const remove=async(id:string)=>{await fetch(`/api/control/v1/reports/operational/schedules/${id}`,{method:"DELETE"});await load();};
+  return <AppLayout><main className="content p-6 space-y-6 max-w-[1500px] mx-auto">
+    <header className="flex flex-wrap justify-between gap-3"><div><p className="text-xs font-semibold tracking-widest text-blue-700">PHASE 4 REPORTING</p><h1 className="text-3xl font-bold">Daily surveillance reports</h1><p className="text-sm text-gray-500">Persistent schedules, segregated exports and auditable delivery history.</p></div><button className="btn-secondary flex gap-2 items-center" onClick={()=>void load()}><RefreshCw size={16}/>Refresh</button></header>
+    {message&&<div className="card py-3 text-sm">{message}</div>}
+    <section className="grid xl:grid-cols-[1fr_1.2fr] gap-5">
+      <div className="card space-y-4"><div><h2 className="text-lg font-semibold">Create report</h2><p className="text-xs text-gray-500">Run immediately or persist as a daily schedule.</p></div>
+        <div className="grid md:grid-cols-2 gap-3"><label className="text-sm">Schedule name<input className="input w-full mt-1" value={name} onChange={(e)=>setName(e.target.value)}/></label><label className="text-sm">Recipients<input className="input w-full mt-1" value={recipients} onChange={(e)=>setRecipients(e.target.value)} placeholder="soc@example.com, manager@example.com"/></label><label className="text-sm">Timezone<input className="input w-full mt-1" value={timezone} onChange={(e)=>setTimezone(e.target.value)}/></label><label className="text-sm">Daily time<input className="input w-full mt-1" type="time" value={dailyAt} onChange={(e)=>setDailyAt(e.target.value)}/></label></div>
+        <div><span className="text-sm">Formats</span><div className="flex gap-2 mt-1">{(["csv","xlsx","pdf"] as Format[]).map((format)=><button key={format} onClick={()=>setFormats((current)=>current.includes(format)?current.filter((item)=>item!==format):[...current,format])} className={`px-3 py-2 rounded border text-sm uppercase ${formats.includes(format)?"bg-blue-700 text-white":"bg-white"}`}>{format}</button>)}</div></div>
+        <div className="grid md:grid-cols-3 gap-3"><Filter label="Region" value={filters.region} set={(value)=>setFilters({...filters,region:value})}/><Filter label="Branch ID" value={filters.branchId} set={(value)=>setFilters({...filters,branchId:value})}/><label className="text-sm">Device status<select className="input w-full mt-1" value={filters.deviceStatus??""} onChange={(e)=>setFilters({...filters,deviceStatus:e.target.value})}><option value="">All</option><option>healthy</option><option>warning</option><option>critical</option><option>unknown</option></select></label><Filter label="Alert type" value={filters.alertType} set={(value)=>setFilters({...filters,alertType:value})}/><label className="text-sm">Severity<select className="input w-full mt-1" value={filters.severity??""} onChange={(e)=>setFilters({...filters,severity:e.target.value})}><option value="">All</option>{["P1","P2","P3","P4"].map((item)=><option key={item}>{item}</option>)}</select></label><Filter label="Alert state" value={filters.alertState} set={(value)=>setFilters({...filters,alertState:value})}/><label className="text-sm">From<input className="input w-full mt-1" type="datetime-local" onChange={(e)=>setFilters({...filters,from:toIso(e.target.value)})}/></label><label className="text-sm">To<input className="input w-full mt-1" type="datetime-local" onChange={(e)=>setFilters({...filters,to:toIso(e.target.value)})}/></label></div>
+        <div className="flex gap-2"><button disabled={!formats.length} onClick={()=>void runNow()} className="btn-primary flex gap-2"><Play size={15}/>Run now</button><button disabled={!formats.length} onClick={()=>void createSchedule()} className="btn-secondary flex gap-2"><CalendarClock size={15}/>Save daily schedule</button></div>
       </div>
-    </AppLayout>
-  );
+      <div className="card"><h2 className="text-lg font-semibold mb-3">Saved schedules</h2>{schedules.length===0?<p className="text-gray-500 text-sm">No saved schedules.</p>:<div className="space-y-2">{schedules.map((schedule)=><div key={schedule.id} className="border rounded-lg p-3 flex justify-between gap-3"><div><strong>{schedule.name}</strong><p className="text-xs text-gray-500">Daily {schedule.dailyAt} / {schedule.timezone} / {schedule.formats.join(", ")}</p><p className="text-xs">Next: {new Date(schedule.nextRunAt).toLocaleString()} / Last: {schedule.lastRunAt?new Date(schedule.lastRunAt).toLocaleString():"Never"}</p><p className="text-xs text-gray-500">{schedule.recipients.join(", ")||"In-app only"}</p></div><button aria-label="Delete schedule" onClick={()=>void remove(schedule.id)}><Trash2 size={17} className="text-red-600"/></button></div>)}</div>}</div>
+    </section>
+    <section className="card overflow-auto"><h2 className="text-lg font-semibold mb-3">Run history</h2>{loading?<p><LoaderCircle className="animate-spin inline"/> Loading…</p>:<table className="w-full text-sm"><thead><tr className="text-left border-b"><th>Requested</th><th>Status</th><th>Scope</th><th>Rows</th><th>Delivery</th><th>Downloads</th></tr></thead><tbody>{runs.map((run)=><tr key={run.id} className="border-b align-top"><td className="py-3">{new Date(run.createdAt).toLocaleString()}</td><td><span className="flex gap-1 items-center">{run.status==="completed"?<CheckCircle2 size={15} className="text-green-600"/>:run.status==="running"?<LoaderCircle size={15} className="animate-spin"/>:null}{run.status} {run.status==="running"?`${run.progress}%`:""}</span>{run.error&&<small className="block text-red-700">{run.error}</small>}</td><td>{Object.entries(run.filters).map(([key,value])=><small key={key} className="block">{key}: {value}</small>)}</td><td>{run.rowCount??"—"}</td><td>{run.deliveries.length?run.deliveries.map((delivery)=><small title={delivery.error} className="block" key={delivery.id}>{delivery.recipient}: {delivery.status} ({delivery.attempts})</small>):"In-app"}</td><td><div className="flex flex-wrap gap-2">{run.artifacts.map((artifact)=><a className="btn-secondary inline-flex gap-1 text-xs" href={artifact.downloadUrl} key={artifact.id}><Download size={13}/>{artifact.format.toUpperCase()}</a>)}</div></td></tr>)}</tbody></table>}</section>
+  </main></AppLayout>;
 }
-
-function Card({ label, value, detail }: { label: string; value: string; detail?: string }) {
-  return (
-    <div style={{ padding: 20, borderRadius: 16, background: "#fff", border: "1px solid #e5e7eb", minHeight: 120 }}>
-      <p style={{ margin: 0, color: "#6b7280", fontSize: 14 }}>{label}</p>
-      <p style={{ margin: "12px 0 0", fontSize: 32, fontWeight: 700 }}>{value}</p>
-      {detail && <p style={{ margin: "8px 0 0", color: "#6b7280" }}>{detail}</p>}
-    </div>
-  );
-}
-
-function Panel({ title, loading, children }: { title: string; loading: boolean; children: React.ReactNode }) {
-  return (
-    <div style={{ padding: 20, borderRadius: 16, background: "#fff", border: "1px solid #e5e7eb" }}>
-      <h2 style={{ margin: "0 0 16px", fontSize: 20 }}>{title}</h2>
-      {loading ? <p>Loading data…</p> : children}
-    </div>
-  );
-}
-
-function SummaryRow({ label, value }: { label: string; value: unknown }) {
-  return (
-    <div style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: "1px solid #f3f4f6" }}>
-      <span style={{ color: "#374151" }}>{label}</span>
-      <strong>{String(value)}</strong>
-    </div>
-  );
-}
-
-function Stat({ label, value }: { label: string; value: unknown }) {
-  return (
-    <div style={{ minWidth: 0 }}>
-      <p style={{ margin: 0, color: "#6b7280", fontSize: 12 }}>{label}</p>
-      <p style={{ margin: "6px 0 0", fontWeight: 700 }}>{String(value)}</p>
-    </div>
-  );
-}
+function Filter({label,value,set}:{label:string;value?:string;set:(value:string)=>void}){return<label className="text-sm">{label}<input className="input w-full mt-1" value={value??""} onChange={(e)=>set(e.target.value)}/></label>}
+function clean(filters:Filters){return Object.fromEntries(Object.entries(filters).filter(([,value])=>value))}
+function toIso(value:string){return value?new Date(value).toISOString():undefined}

@@ -5,6 +5,8 @@
   "type": "module",
   "scripts": {
     "test:control-plane": "tsx src/phase1-control-plane.ts",
+    "test:phase5": "tsx src/phase1-control-plane.ts",
+    "typecheck:phase5": "tsc --noEmit -p tsconfig.phase5.json",
     "test:events": "tsx src/phase2-events.ts",
     "test:recording": "tsx src/phase3-recording.ts",
     "test:failure": "tsx src/phase4-failure.ts",

@@ -793,3 +793,478 @@ CREATE TABLE network_health_history (
   
   gateway_reachable BOOLEAN,
   ping_latency_ms DECIMAL(10,2),
+  packet_loss_percentage DECIMAL(5,2),
+  jitter_ms DECIMAL(10,2),
+  
+  bandwidth_up_mbps DECIMAL(10,2),
+  bandwidth_down_mbps DECIMAL(10,2),
+  
+  isp_status VARCHAR(20),
+  
+  metadata JSONB
+);
+
+-- Notification Log
+CREATE TABLE notification_log (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  alert_id UUID REFERENCES camera_quality_alerts(id),
+  
+  notification_type VARCHAR(20), -- 'sms', 'email', 'voice', 'dashboard', 'webhook'
+  recipient VARCHAR(200),
+  
+  status VARCHAR(20), -- 'pending', 'sent', 'delivered', 'failed'
+  sent_at TIMESTAMP WITH TIME ZONE,
+  delivered_at TIMESTAMP WITH TIME ZONE,
+  
+  error_message TEXT,
+  retry_count INTEGER DEFAULT 0,
+  
+  metadata JSONB
+);
+
+-- Escalation Policies
+CREATE TABLE escalation_policies (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id UUID NOT NULL REFERENCES tenants(id),
+  name VARCHAR(200) NOT NULL,
+  
+  alert_type VARCHAR(50),
+  severity VARCHAR(20),
+  
+  -- Escalation levels
+  levels JSONB NOT NULL, -- [{level: 1, delay_minutes: 0, recipients: []}, ...]
+  
+  enabled BOOLEAN DEFAULT true,
+  
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Branch Summary Materialized View
+CREATE MATERIALIZED VIEW branch_summary AS
+SELECT 
+  rn.id as branch_id,
+  rn.name as branch_name,
+  rn.tenant_id,
+  
+  -- Camera counts
+  COUNT(DISTINCT c.id) as total_cameras,
+  COUNT(DISTINCT c.id) FILTER (WHERE c.status = 'online') as online_cameras,
+  COUNT(DISTINCT c.id) FILTER (WHERE c.status = 'offline') as offline_cameras,
+  
+  -- DVR/NVR status
+  COUNT(DISTINCT d.id) as total_devices,
+  COUNT(DISTINCT d.id) FILTER (WHERE d.status = 'online') as online_devices,
+  
+  -- Active alerts
+  COUNT(DISTINCT a.id) FILTER (WHERE a.status = 'active') as active_alerts,
+  COUNT(DISTINCT a.id) FILTER (WHERE a.status = 'active' AND a.severity = 'critical') as critical_alerts,
+  
+  -- Recording retention
+  AVG(rr.retention_days) as avg_retention_days,
+  COUNT(DISTINCT rr.camera_id) FILTER (WHERE rr.compliance_status = 'violation') as retention_violations,
+  
+  -- Network health
+  MAX(nh.timestamp) as last_network_check,
+  (SELECT gateway_reachable FROM network_health_history 
+   WHERE branch_id = rn.id ORDER BY timestamp DESC LIMIT 1) as network_online,
+  
+  NOW() as last_updated
+  
+FROM resource_nodes rn
+LEFT JOIN cameras c ON c.branch_node_id = rn.id
+LEFT JOIN dvr_nvr_devices d ON d.branch_id = rn.id
+LEFT JOIN camera_quality_alerts a ON a.branch_id = rn.id
+LEFT JOIN recording_retention_status rr ON rr.branch_id = rn.id
+LEFT JOIN network_health_history nh ON nh.branch_id = rn.id
+WHERE rn.type = 'branch'
+GROUP BY rn.id, rn.name, rn.tenant_id;
+
+CREATE UNIQUE INDEX idx_branch_summary_branch ON branch_summary(branch_id);
+```
+
+---
+
+## API Endpoints to Develop
+
+### Dashboard APIs
+
+```typescript
+// Branch Overview
+GET /api/v1/dashboard/overview
+Response: {
+  totalBranches: 400,
+  onlineBranches: 385,
+  offlineBranches: 15,
+  totalCameras: 4000,
+  onlineCameras: 3850,
+  activeAlerts: 45,
+  criticalAlerts: 5
+}
+
+// Branch Grid Data
+GET /api/v1/branches/grid?page=1&limit=64
+Response: {
+  branches: [
+    {
+      id: "uuid",
+      name: "Branch 001",
+      status: "online|offline|warning",
+      cameras: { total: 10, online: 9, offline: 1 },
+      devices: { total: 2, online: 2 },
+      alerts: { active: 2, critical: 0 },
+      network: { status: "online", latency: 45 },
+      retention: { compliant: true, minDays: 45 }
+    }
+  ],
+  pagination: { page: 1, limit: 64, total: 400 }
+}
+
+// Branch Detail
+GET /api/v1/branches/:id/detail
+Response: {
+  branch: { /* branch info */ },
+  cameras: [ /* all cameras with status */ ],
+  devices: [ /* DVR/NVR devices */ ],
+  alerts: [ /* active alerts */ ],
+  health: {
+    networkStatus: { /* network metrics */ },
+    retentionStatus: { /* retention compliance */ },
+    hddHealth: [ /* HDD status for each device */ ]
+  }
+}
+```
+
+### Device Health APIs
+
+```typescript
+// DVR/NVR Status
+GET /api/v1/devices/dvr-nvr?branchId=uuid
+POST /api/v1/devices/dvr-nvr/:id/reboot
+GET /api/v1/devices/dvr-nvr/:id/health-history
+
+// HDD Health
+GET /api/v1/devices/:deviceId/hdd-health
+Response: {
+  devices: [
+    {
+      deviceId: "uuid",
+      hddIndex: 0,
+      totalCapacityGB: 8000,
+      usedCapacityGB: 6200,
+      usagePercentage: 77.5,
+      healthStatus: "good|warning|critical",
+      temperature: 42,
+      predictedFailureDate: "2027-01-15T00:00:00Z"
+    }
+  ]
+}
+
+// Recording Retention
+GET /api/v1/recording/retention?branchId=uuid
+Response: {
+  cameras: [
+    {
+      cameraId: "uuid",
+      cameraName: "Camera 01",
+      retentionDays: 45,
+      requiredDays: 60,
+      complianceStatus: "violation|warning|compliant",
+      oldestRecording: "2026-06-13T00:00:00Z",
+      hasGaps: true,
+      gapCount: 3
+    }
+  ]
+}
+
+// Network Health
+GET /api/v1/network/health?branchId=uuid
+```
+
+### Alert APIs
+
+```typescript
+// Alert Feed (WebSocket)
+WS /api/v1/alerts/stream
+Message: {
+  type: "new_alert",
+  alert: {
+    id: "uuid",
+    branchId: "uuid",
+    branchName: "Branch 001",
+    alertType: "intrusion",
+    severity: "P1",
+    timestamp: "2026-07-28T10:30:00Z",
+    cameraId: "uuid",
+    snapshotUrl: "https://...",
+    videoClipUrl: "https://...",
+    liveStreamUrl: "webrtc://..."
+  }
+}
+
+// Alert Actions
+POST /api/v1/alerts/:id/acknowledge
+POST /api/v1/alerts/:id/escalate
+POST /api/v1/alerts/:id/dismiss
+GET /api/v1/alerts/history?severity=P1&startDate=...&endDate=...
+```
+
+### Report APIs
+
+```typescript
+// Generate Report
+POST /api/v1/reports/generate
+Body: {
+  reportType: "branch_health|camera_status|hdd_health|retention|alerts",
+  format: "pdf|xlsx|csv",
+  filters: {
+    branchIds: ["uuid"],
+    dateRange: { start: "...", end: "..." }
+  }
+}
+Response: {
+  reportId: "uuid",
+  status: "generating",
+  estimatedTime: 30
+}
+
+// Download Report
+GET /api/v1/reports/:id/download
+
+// Schedule Report
+POST /api/v1/reports/schedule
+Body: {
+  reportType: "...",
+  schedule: "daily|weekly|monthly",
+  time: "08:00",
+  recipients: ["email@example.com"],
+  format: "pdf"
+}
+```
+
+---
+
+## Technology Stack Recommendations
+
+### Backend Services
+- **Language**: Node.js / TypeScript
+- **Framework**: Express.js or Fastify
+- **Real-time**: Socket.io or native WebSocket
+- **Queue**: Bull/BullMQ with Redis
+- **Caching**: Redis
+- **ORM**: Prisma (already in use)
+- **Database**: PostgreSQL (already in use)
+
+### Notification Services
+- **SMS**: Twilio, AWS SNS, or Vonage
+- **Voice**: Twilio Voice API
+- **Email**: SendGrid, AWS SES, or Mailgun
+- **Push**: Firebase Cloud Messaging (FCM)
+
+### Frontend
+- **Framework**: React or Next.js
+- **UI Library**: Material-UI, Ant Design, or Chakra UI
+- **Grid Layout**: react-grid-layout
+- **Video**: Video.js, HLS.js, or Shaka Player
+- **WebRTC**: simple-peer or PeerJS
+- **State Management**: Redux Toolkit or Zustand
+- **Real-time**: Socket.io-client
+
+### Video & Storage
+- **Live Streaming**: WebRTC (WHIP/WHEP) or HLS
+- **Video Processing**: FFmpeg
+- **Storage**: MinIO (S3-compatible) or AWS S3
+- **CDN**: CloudFlare or AWS CloudFront
+
+### Monitoring & Observability
+- **Metrics**: Prometheus + Grafana
+- **Logs**: ELK Stack (Elasticsearch, Logstash, Kibana) or Loki
+- **APM**: New Relic, Datadog, or Elastic APM
+- **Error Tracking**: Sentry
+- **Uptime**: Pingdom or UptimeRobot
+
+### DevOps & Infrastructure
+- **Container**: Docker
+- **Orchestration**: Kubernetes or Docker Swarm
+- **CI/CD**: GitHub Actions or GitLab CI
+- **IaC**: Terraform or Pulumi
+- **Load Balancer**: Nginx or HAProxy
+
+---
+
+## Scalability Considerations
+
+### For 400+ Branches (4000+ Cameras)
+
+#### Database Optimization
+- Partitioning: Monthly partitions for health history tables
+- Materialized Views: Refresh every 1-5 minutes
+- Read Replicas: Separate read/write workloads
+- Connection Pooling: PgBouncer for connection management
+- Indexes: Comprehensive indexing strategy
+
+#### Real-Time Updates
+- WebSocket Sharding: Multiple WebSocket servers with sticky sessions
+- Redis Pub/Sub: Event distribution across servers
+- Message Queue: Batch processing for non-critical updates
+- Rate Limiting: Throttle updates to prevent frontend overload
+
+#### Caching Strategy
+- Branch Summary: Cache for 30-60 seconds
+- Device Status: Cache for 15-30 seconds
+- Alert Counts: Real-time (no cache)
+- Reports: Cache generated reports for 24 hours
+- Static Data: CDN with long TTL
+
+#### Horizontal Scaling
+- Stateless Services: All services should be stateless
+- Load Balancing: Distribute across multiple instances
+- Monitoring Services: Shard by branch ID or region
+- Database: Read replicas for query distribution
+
+#### Performance Targets
+- Dashboard Load Time: < 3 seconds
+- Real-time Update Latency: < 500ms
+- Alert Popup Display: < 1 second
+- API Response Time (p95): < 200ms
+- WebSocket Message Throughput: 10,000 msg/sec
+- Concurrent Users: 100+ simultaneous operators
+
+---
+
+## Cost Estimation
+
+### Development Costs
+- **Phase 1-2** (4 weeks): $40,000 - $60,000
+- **Phase 3-4** (4 weeks): $40,000 - $60,000
+- **Phase 5-6** (4 weeks): $30,000 - $45,000
+- **Total Development**: $110,000 - $165,000
+
+### Infrastructure Costs (Monthly)
+- **Database** (PostgreSQL): $500 - $1,000
+- **Application Servers** (4-8 instances): $1,000 - $2,000
+- **Redis Cache** (2 instances): $200 - $400
+- **Storage** (MinIO/S3, 1TB): $100 - $300
+- **CDN** (CloudFlare): $200 - $500
+- **Monitoring** (Prometheus/Grafana): $200 - $400
+- **Notification Services** (Twilio, SendGrid): $500 - $2,000
+  - SMS: ~$0.01 per message
+  - Voice: ~$0.02 per minute
+  - Email: ~$0.0001 per email
+- **Load Balancer**: $100 - $200
+- **Total Monthly**: $2,800 - $6,800
+
+### ROI Benefits
+- **Reduced Manual Monitoring**: 10+ FTE savings
+- **Faster Incident Response**: 60-80% reduction in response time
+- **Prevented Losses**: Early detection of failures
+- **Compliance**: Automated retention compliance
+- **Operational Efficiency**: Centralized vs distributed monitoring
+
+---
+
+## Risk Assessment
+
+### Technical Risks
+
+| Risk | Severity | Mitigation |
+|------|----------|------------|
+| DVR/NVR API compatibility issues | HIGH | Multi-vendor SDK integration, ONVIF fallback |
+| WebSocket connection scalability | MEDIUM | Connection pooling, load balancing, sharding |
+| Database performance at scale | MEDIUM | Partitioning, read replicas, caching |
+| Real-time video streaming latency | MEDIUM | WebRTC for low latency, HLS fallback |
+| Notification delivery failures | LOW | Retry logic, multiple providers, delivery tracking |
+| Storage exhaustion | LOW | Auto-cleanup policies, capacity monitoring |
+
+### Operational Risks
+
+| Risk | Severity | Mitigation |
+|------|----------|------------|
+| User adoption resistance | MEDIUM | Training, gradual rollout, user feedback |
+| Network bandwidth constraints | MEDIUM | Adaptive streaming, compression, bandwidth monitoring |
+| Alert fatigue | HIGH | Smart de-duplication, tunable thresholds, ML-based filtering |
+| System downtime during deployment | LOW | Blue-green deployment, rollback procedures |
+
+---
+
+## Success Metrics (KPIs)
+
+### System Performance
+- ✅ Dashboard loads in < 3 seconds for 400 branches
+- ✅ Real-time updates with < 500ms latency
+- ✅ 99.9% uptime (< 8.76 hours downtime/year)
+- ✅ Support 100+ concurrent users
+- ✅ Alert popup displays within 1 second
+
+### Operational Efficiency
+- ✅ 80% reduction in manual monitoring effort
+- ✅ 60% faster incident response time
+- ✅ 95%+ recording retention compliance
+- ✅ 90%+ alert acknowledgment within 5 minutes
+- ✅ Zero missed critical alerts (P1)
+
+### Business Impact
+- ✅ 10+ FTE cost savings from automation
+- ✅ 50% reduction in equipment downtime
+- ✅ 100% compliance with retention policies
+- ✅ Predictive maintenance preventing 70% of failures
+- ✅ ROI positive within 12-18 months
+
+---
+
+## Next Steps & Recommendations
+
+### Immediate Actions (Week 1)
+1. ✅ Review and approve this gap analysis document
+2. ✅ Prioritize features based on business criticality
+3. ✅ Finalize technology stack selections
+4. ✅ Set up development environment and infrastructure
+5. ✅ Create detailed project schedule with milestones
+6. ✅ Assign development team and responsibilities
+
+### Phase 1 Kickoff (Week 2)
+1. ✅ Database schema design and review
+2. ✅ Service architecture design sessions
+3. ✅ API contract definitions (OpenAPI spec)
+4. ✅ UI/UX mockups and design approval
+5. ✅ Development environment setup
+6. ✅ CI/CD pipeline configuration
+
+### Pilot Program (After Phase 6)
+1. ✅ Select 10-20 pilot branches
+2. ✅ Deploy to staging environment
+3. ✅ Conduct user training sessions
+4. ✅ Gather feedback and iterate
+5. ✅ Performance tuning based on real data
+6. ✅ Gradual rollout to all 400 branches
+
+---
+
+## Conclusion
+
+This gap analysis identifies **7 critical gaps** that need to be filled to achieve the enterprise surveillance monitoring requirements:
+
+1. **Centralized Multi-Branch Dashboard** (CRITICAL)
+2. **DVR/NVR Health Monitoring** (HIGH)
+3. **HDD Health & Status Monitoring** (HIGH)
+4. **Recording Retention Monitoring** (HIGH)
+5. **Internet Connectivity Monitoring** (MEDIUM)
+6. **AI Alert Dashboard with Popup System** (CRITICAL)
+7. **Multi-Channel Notification System** (CRITICAL)
+
+**Key Strengths**: The existing AI analytics engine provides a world-class foundation with 14 production-ready modules. The challenge is now integration and scaling to enterprise requirements.
+
+**Implementation Timeline**: 12 weeks (3 months) for full implementation across 6 phases.
+
+**Estimated Investment**: $110,000 - $165,000 development + $2,800 - $6,800/month operational costs.
+
+**Expected ROI**: 10+ FTE savings, 60-80% faster incident response, 50% reduction in equipment downtime, ROI positive within 12-18 months.
+
+**Recommendation**: Proceed with phased implementation starting with Phase 1 (Foundation) and Phase 2 (Dashboard), as these provide immediate visibility benefits while the alert and notification systems are being built.
+
+---
+
+**Document Version**: 1.0  
+**Created**: July 28, 2026  
+**Author**: Kiro AI Development Team  
+**Status**: Ready for Review and Approval
