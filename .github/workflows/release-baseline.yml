@@ -1,4 +1,4 @@
-name: Phase 0 release baseline
+name: Phase 1 operational health baseline
 
 on:
   pull_request:
@@ -16,7 +16,7 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - run: npm run ci:phase0
+      - run: npm run ci:phase1
 
   migrations:
     runs-on: ubuntu-latest

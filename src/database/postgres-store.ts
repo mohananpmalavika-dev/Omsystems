@@ -26,6 +26,8 @@ import IncidentRepository from "./incident-repository.js";
 import { ComplianceRepository } from "./compliance-repository.js";
 import { MaintenanceRepository } from "./maintenance-repository.js";
 import { PrivacyRepository } from "./privacy-repository.js";
+import { OperationalHealthRepository } from "./operational-health-repository.js";
+import type { OperationalHealthPolicy, OperationalTelemetryEnvelope } from "../operational-health/types.js";
 
 // TODO: PostgresStore is a partial implementation of ControlPlaneStore
 // Some methods from the interface are not yet implemented but are not used in production
@@ -47,6 +49,7 @@ export class PostgresStore
   private readonly compliance: ComplianceRepository;
   private readonly maintenance: MaintenanceRepository;
   private readonly privacy: PrivacyRepository;
+  private readonly operationalHealth: OperationalHealthRepository;
 
   // Public getter for direct database access (use sparingly)
   get db() {
@@ -68,6 +71,7 @@ export class PostgresStore
     this.compliance = new ComplianceRepository(pool);
     this.maintenance = new MaintenanceRepository(pool);
     this.privacy = new PrivacyRepository(pool);
+    this.operationalHealth = new OperationalHealthRepository(pool);
   }
 
   async close() { await this.pool.end(); }
@@ -94,6 +98,18 @@ export class PostgresStore
   }
   async heartbeatEdgeAgent(id: string, version: string, publicMediaUrl?: string) {
     return this.agents.heartbeat(id, version, publicMediaUrl);
+  }
+  async ingestOperationalTelemetry(envelope: OperationalTelemetryEnvelope) {
+    return this.operationalHealth.ingest(envelope);
+  }
+  async listLatestOperationalTelemetry(tenantId: string, branchIds?: string[]) {
+    return this.operationalHealth.listLatest(tenantId, branchIds);
+  }
+  async getOperationalHealthPolicy(tenantId: string, branchId?: string) {
+    return this.operationalHealth.getPolicy(tenantId, branchId);
+  }
+  async upsertOperationalHealthPolicy(tenantId: string, branchId: string | undefined, policy: OperationalHealthPolicy) {
+    return this.operationalHealth.upsertPolicy(tenantId, branchId, policy);
   }
   async createEdgeScanJob(branchId: string, edgeAgentId?: string) {
     return this.agents.createScanJob(branchId, edgeAgentId);

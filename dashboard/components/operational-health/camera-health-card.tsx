@@ -22,14 +22,16 @@ export function CameraHealthCard({
   showRecoveryStatus = false,
   onTriggerRecovery 
 }: CameraHealthCardProps) {
-  const healthStatus = camera.healthScore >= 80 ? 'healthy' : 
+  const healthStatus = camera.healthScore === null ? 'unknown' :
+                       camera.healthScore >= 80 ? 'healthy' :
                        camera.healthScore >= 50 ? 'warning' : 'critical';
 
   // Calculate quality indicators
-  const fpsQuality = camera.currentFps >= camera.expectedFps * 0.9 ? 'good' :
+  const fpsQuality = camera.currentFps === null || camera.expectedFps === null ? 'unknown' :
+                     camera.currentFps >= camera.expectedFps * 0.9 ? 'good' :
                      camera.currentFps >= camera.expectedFps * 0.7 ? 'warning' : 'poor';
   
-  const latencyQuality = camera.latencyMs <= 100 ? 'good' :
+  const latencyQuality = camera.latencyMs === null ? 'unknown' : camera.latencyMs <= 100 ? 'good' :
                          camera.latencyMs <= 200 ? 'warning' : 'poor';
 
   const hasQualityIssues = camera.videoLoss || 
@@ -70,7 +72,7 @@ export function CameraHealthCard({
         </div>
         <div className="flex flex-col items-end gap-1">
           <HealthStatusBadge status={healthStatus} size="sm" />
-          {camera.healthScore > 0 && (
+          {camera.healthScore !== null && camera.healthScore > 0 && (
             <span className="text-xs text-gray-500">{camera.healthScore}/100</span>
           )}
         </div>
@@ -94,7 +96,7 @@ export function CameraHealthCard({
         <div>
           <p className="text-xs text-gray-500 mb-1">Recording</p>
           <p className="text-sm font-medium flex items-center gap-1">
-            {camera.recordingStatus === 'healthy' ? (
+            {camera.recordingStatus === 'healthy' || camera.recordingStatus === 'compliant' ? (
               <Activity size={14} className="text-green-600" />
             ) : (
               <AlertCircle size={14} className="text-red-600" />

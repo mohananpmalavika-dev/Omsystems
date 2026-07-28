@@ -30,7 +30,7 @@ export function BranchHealthCard({ branch, onViewDetails }: BranchHealthCardProp
       </div>
 
       <div className="flex items-center justify-between mb-4">
-        <HealthScoreRing score={branch.healthScore} size={70} strokeWidth={6} />
+        <HealthScoreRing score={branch.healthScore ?? 0} size={70} strokeWidth={6} />
         
         <div className="flex-1 ml-4 space-y-2">
           <div className="flex items-center justify-between text-sm">

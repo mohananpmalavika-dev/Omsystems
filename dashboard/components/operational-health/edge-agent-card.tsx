@@ -12,13 +12,15 @@ interface EdgeAgentCardProps {
 }
 
 export function EdgeAgentCard({ agent, onViewDetails }: EdgeAgentCardProps) {
-  const getResourceColor = (usage: number) => {
+  const getResourceColor = (usage: number | null) => {
+    if (usage === null) return 'text-gray-500';
     if (usage >= 90) return 'text-red-600';
     if (usage >= 75) return 'text-amber-600';
     return 'text-green-600';
   };
 
-  const getResourceBgColor = (usage: number) => {
+  const getResourceBgColor = (usage: number | null) => {
+    if (usage === null) return 'bg-gray-300';
     if (usage >= 90) return 'bg-red-100';
     if (usage >= 75) return 'bg-amber-100';
     return 'bg-green-100';
@@ -64,13 +66,13 @@ export function EdgeAgentCard({ agent, onViewDetails }: EdgeAgentCardProps) {
               CPU
             </span>
             <span className={`font-medium ${getResourceColor(agent.cpuUsage)}`}>
-              {agent.cpuUsage.toFixed(1)}%
+              {agent.cpuUsage === null ? '--' : `${agent.cpuUsage.toFixed(1)}%`}
             </span>
           </div>
           <div className="w-full h-1.5 bg-gray-200 rounded-full overflow-hidden">
             <div
               className={`h-full ${getResourceBgColor(agent.cpuUsage)} transition-all`}
-              style={{ width: `${Math.min(agent.cpuUsage, 100)}%` }}
+              style={{ width: `${Math.min(agent.cpuUsage ?? 0, 100)}%` }}
             />
           </div>
         </div>
@@ -82,13 +84,13 @@ export function EdgeAgentCard({ agent, onViewDetails }: EdgeAgentCardProps) {
               Memory
             </span>
             <span className={`font-medium ${getResourceColor(agent.memoryUsage)}`}>
-              {agent.memoryUsage.toFixed(1)}%
+              {agent.memoryUsage === null ? '--' : `${agent.memoryUsage.toFixed(1)}%`}
             </span>
           </div>
           <div className="w-full h-1.5 bg-gray-200 rounded-full overflow-hidden">
             <div
               className={`h-full ${getResourceBgColor(agent.memoryUsage)} transition-all`}
-              style={{ width: `${Math.min(agent.memoryUsage, 100)}%` }}
+              style={{ width: `${Math.min(agent.memoryUsage ?? 0, 100)}%` }}
             />
           </div>
         </div>
@@ -100,13 +102,13 @@ export function EdgeAgentCard({ agent, onViewDetails }: EdgeAgentCardProps) {
               Disk
             </span>
             <span className={`font-medium ${getResourceColor(agent.diskUsage)}`}>
-              {agent.diskUsage.toFixed(1)}%
+              {agent.diskUsage === null ? '--' : `${agent.diskUsage.toFixed(1)}%`}
             </span>
           </div>
           <div className="w-full h-1.5 bg-gray-200 rounded-full overflow-hidden">
             <div
               className={`h-full ${getResourceBgColor(agent.diskUsage)} transition-all`}
-              style={{ width: `${Math.min(agent.diskUsage, 100)}%` }}
+              style={{ width: `${Math.min(agent.diskUsage ?? 0, 100)}%` }}
             />
           </div>
         </div>
@@ -139,7 +141,7 @@ export function EdgeAgentCard({ agent, onViewDetails }: EdgeAgentCardProps) {
       </div>
 
       {/* Warnings */}
-      {(agent.cpuUsage >= 90 || agent.memoryUsage >= 90 || agent.diskUsage >= 90) && (
+      {((agent.cpuUsage ?? 0) >= 90 || (agent.memoryUsage ?? 0) >= 90 || (agent.diskUsage ?? 0) >= 90) && (
         <div className="mb-3 p-2 bg-amber-50 border border-amber-200 rounded text-xs text-amber-700">
           <AlertCircle size={14} className="inline mr-1" />
           High resource usage detected

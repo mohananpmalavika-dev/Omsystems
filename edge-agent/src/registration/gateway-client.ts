@@ -36,6 +36,19 @@ export interface EdgeScanJob {
   status: "running";
 }
 
+export interface TelemetryPayload {
+  branchId: string;
+  edgeAgentId: string;
+  deviceType: "branch" | "edge-agent" | "recorder" | "camera" | "disk" | "network" | "ups";
+  deviceId: string;
+  observedAt: string;
+  source: "onvif" | "cp-plus-adapter" | "rtsp" | "system" | "recording-engine";
+  quality: "verified" | "estimated" | "unsupported" | "unavailable";
+  idempotencyKey: string;
+  metrics: Record<string, string | number | boolean | null>;
+  reasonCodes: string[];
+}
+
 export class GatewayClient {
   constructor(
     private readonly baseUrl: string,
@@ -60,6 +73,13 @@ export class GatewayClient {
           ...(publicMediaUrl ? { publicMediaUrl } : {}),
         }),
       },
+    );
+  }
+
+  async submitTelemetry(agentId: string, payload: TelemetryPayload) {
+    return this.request<{ accepted: boolean; duplicate: boolean; receivedAt: string }>(
+      `/v1/edge-agents/${encodeURIComponent(agentId)}/telemetry`,
+      { method: "POST", body: JSON.stringify(payload) },
     );
   }
 

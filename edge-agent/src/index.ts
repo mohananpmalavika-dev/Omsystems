@@ -5,6 +5,7 @@ import { compatibilityNotes, normalizeVendor } from "./devices/compatibility-reg
 import { GatewayClient } from "./registration/gateway-client.js";
 import { probeRtsp } from "./streaming/rtsp-probe.js";
 import { LocalStreamSecretStore, startSecretProvider } from "./streaming/secret-store.js";
+import { cpus, freemem, totalmem, uptime } from "node:os";
 
 const config = loadEdgeConfig();
 const gateway = new GatewayClient(
@@ -30,7 +31,7 @@ if (config.EDGE_MEDIA_SHARED_KEY) {
 }
 
 console.log(`Edge agent ${agentId} registered; waiting for branch commands`);
-await gateway.heartbeat(agentId, config.EDGE_AGENT_VERSION, config.PUBLIC_MEDIA_GATEWAY_URL);
+await heartbeatAndReport();
 
 let stopping = false;
 process.once("SIGINT", () => { stopping = true; });
@@ -38,7 +39,7 @@ process.once("SIGTERM", () => { stopping = true; });
 
 while (!stopping) {
   try {
-    await gateway.heartbeat(agentId, config.EDGE_AGENT_VERSION, config.PUBLIC_MEDIA_GATEWAY_URL);
+    await heartbeatAndReport();
     const job = await gateway.claimScanJob(agentId, config.EDGE_AGENT_VERSION);
     if (job) {
       try {
@@ -172,4 +173,36 @@ async function scanBranch() {
 
 function delay(milliseconds: number) {
   return new Promise((resolve) => setTimeout(resolve, milliseconds));
+}
+
+async function heartbeatAndReport() {
+  const startedAt = Date.now();
+  await gateway.heartbeat(agentId, config.EDGE_AGENT_VERSION, config.PUBLIC_MEDIA_GATEWAY_URL);
+  const observedAt = new Date().toISOString();
+  const latencyMs = Date.now() - startedAt;
+  const memoryTotal = totalmem();
+  await Promise.all([
+    gateway.submitTelemetry(agentId, {
+      branchId: config.BRANCH_ID, edgeAgentId: agentId,
+      deviceType: "edge-agent", deviceId: agentId, observedAt, source: "system",
+      quality: "verified", idempotencyKey: `${agentId}:edge-agent:${observedAt}`,
+      metrics: {
+        status: "online", version: config.EDGE_AGENT_VERSION,
+        uptimeSeconds: Math.round(uptime()),
+        memoryUsedPercent: memoryTotal > 0 ? Math.round((1 - freemem() / memoryTotal) * 10_000) / 100 : null,
+        logicalCpuCount: cpus().length,
+      },
+      reasonCodes: ["cpu_utilization_unavailable", "disk_utilization_unavailable"],
+    }),
+    gateway.submitTelemetry(agentId, {
+      branchId: config.BRANCH_ID, edgeAgentId: agentId,
+      deviceType: "network", deviceId: `${config.BRANCH_ID}:internet`, observedAt, source: "system",
+      quality: "verified", idempotencyKey: `${agentId}:network:${observedAt}`,
+      metrics: {
+        status: "online", controlPlaneLatencyMs: latencyMs, lastOnlineAt: observedAt,
+        packetLossPercent: null, jitterMs: null,
+      },
+      reasonCodes: ["packet_loss_unavailable", "jitter_unavailable"],
+    }),
+  ]);
 }

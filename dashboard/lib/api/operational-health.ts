@@ -29,7 +29,7 @@ import {
   CreateWorkOrderPayload
 } from '../types/operational-health';
 
-const API_BASE = '/api/v1/operations';
+const API_BASE = '/api/control/v1/operations';
 
 /**
  * Fetch health summary

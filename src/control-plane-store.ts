@@ -56,6 +56,7 @@ import type {
   User,
 } from "./domain/models.js";
 import type { AuthorizationDecision } from "./domain/authorization.js";
+import type { OperationalHealthPolicy, OperationalTelemetryEnvelope } from "./operational-health/types.js";
 
 export interface CameraDiscoveryInput {
   edgeAgentId: string;
@@ -513,6 +514,19 @@ export interface ControlPlaneStore {
     version: string,
     publicMediaUrl?: string,
   ): Promise<EdgeAgent | undefined>;
+  ingestOperationalTelemetry(
+    envelope: OperationalTelemetryEnvelope,
+  ): Promise<{ accepted: boolean; duplicate: boolean }>;
+  listLatestOperationalTelemetry(
+    tenantId: string,
+    branchIds?: string[],
+  ): Promise<OperationalTelemetryEnvelope[]>;
+  getOperationalHealthPolicy(tenantId: string, branchId?: string): Promise<OperationalHealthPolicy | undefined>;
+  upsertOperationalHealthPolicy(
+    tenantId: string,
+    branchId: string | undefined,
+    policy: OperationalHealthPolicy,
+  ): Promise<OperationalHealthPolicy>;
   createEdgeScanJob(branchId: string, edgeAgentId?: string): Promise<EdgeScanJob>;
   getEdgeScanJob(branchId: string, jobId: string): Promise<EdgeScanJob | undefined>;
   claimEdgeScanJob(edgeAgentId: string): Promise<EdgeScanJob | undefined>;

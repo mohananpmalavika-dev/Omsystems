@@ -88,6 +88,7 @@ const navigation: Array<{ label: string; items: NavItem[] }> = [
       { label: "Device management", href: "/maintenance/device-management", icon: SlidersHorizontal },
       { label: "Asset registry", href: "/maintenance/assets", icon: Boxes },
       { label: "DVR/NVR monitoring", href: "/maintenance/dvr-nvr-monitor", icon: Server },
+      { label: "Operational health", href: "/operations", icon: Wifi },
       { label: "Work orders", href: "/maintenance/workorders", icon: ClipboardCheck },
       { label: "Vendors", href: "/maintenance/vendors", icon: Handshake },
       { label: "AMC contracts", href: "/maintenance/amc", icon: FileClock },

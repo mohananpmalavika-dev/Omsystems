@@ -3,7 +3,7 @@
  */
 
 export type HealthStatus = 'healthy' | 'warning' | 'critical' | 'unknown';
-export type RecordingStatus = 'healthy' | 'at_risk' | 'not_recording' | 'recording_gap' | 'storage_blocked' | 'stream_unavailable' | 'policy_disabled';
+export type RecordingStatus = 'healthy' | 'compliant' | 'breach' | 'unknown' | 'at_risk' | 'not_recording' | 'recording_gap' | 'storage_blocked' | 'stream_unavailable' | 'policy_disabled';
 export type DiskStatus = 'healthy' | 'warning' | 'degraded' | 'failure_predicted' | 'failed' | 'missing';
 export type UPSStatus = 'online' | 'on_battery' | 'offline' | 'overload' | 'unknown';
 export type EdgeAgentStatus = 'online' | 'offline' | 'warning' | 'unknown';
@@ -42,8 +42,8 @@ export interface BranchHealth {
   code: string;
   region: string;
   healthStatus: HealthStatus;
-  healthScore: number;
-  lastHealthCheck: string;
+  healthScore: number | null;
+  lastHealthCheck: string | null;
   totalCameras: number;
   onlineCameras: number;
   recordingCameras: number;
@@ -56,9 +56,9 @@ export interface BranchHealth {
  * Component health scores
  */
 export interface ComponentHealth {
-  score: number;
+  score: number | null;
   status: HealthStatus;
-  lastUpdated: string;
+  lastUpdated: string | null;
 }
 
 /**
@@ -70,8 +70,8 @@ export interface BranchHealthDetail {
   code: string;
   region: string;
   healthStatus: HealthStatus;
-  healthScore: number;
-  lastHealthCheck: string;
+  healthScore: number | null;
+  lastHealthCheck: string | null;
   components: {
     camera: ComponentHealth;
     recording: ComponentHealth;
@@ -90,11 +90,11 @@ export interface EdgeAgentHealth {
   id: string;
   status: EdgeAgentStatus;
   version: string;
-  cpuUsage: number;
-  memoryUsage: number;
-  diskUsage: number;
-  lastHeartbeat: string;
-  uptimeSeconds: number;
+  cpuUsage: number | null;
+  memoryUsage: number | null;
+  diskUsage: number | null;
+  lastHeartbeat: string | null;
+  uptimeSeconds: number | null;
   connectedCameras?: number;
   recordingCameras?: number;
   failedRecordingJobs?: number;
@@ -111,16 +111,16 @@ export interface EdgeAgentHealth {
 export interface CameraHealth {
   id: string;
   name: string;
-  rtspUrl: string;
+  rtspUrl?: string;
   onlineStatus: 'online' | 'offline' | 'warning' | 'degraded' | 'unknown';
   recordingStatus: RecordingStatus;
-  lastHeartbeat: string;
-  currentFps: number;
-  expectedFps: number;
-  currentBitrate: number;
-  latencyMs: number;
-  packetLoss: number;
-  healthScore: number;
+  lastHeartbeat: string | null;
+  currentFps: number | null;
+  expectedFps: number | null;
+  currentBitrate: number | null;
+  latencyMs: number | null;
+  packetLoss: number | null;
+  healthScore: number | null;
   branchId: string;
   branchName: string;
   onvifAvailable: boolean;
@@ -445,7 +445,8 @@ export function getHealthStatusIcon(status: HealthStatus): string {
 /**
  * Format uptime seconds to human-readable string
  */
-export function formatUptime(seconds: number): string {
+export function formatUptime(seconds: number | null): string {
+  if (seconds === null) return '--';
   const days = Math.floor(seconds / 86400);
   const hours = Math.floor((seconds % 86400) / 3600);
   const minutes = Math.floor((seconds % 3600) / 60);
@@ -472,7 +473,8 @@ export function formatBytes(bytes: number | string): string {
 /**
  * Calculate time ago from timestamp
  */
-export function getTimeAgo(timestamp: string): string {
+export function getTimeAgo(timestamp: string | null): string {
+  if (!timestamp) return 'No telemetry';
   const now = new Date();
   const time = new Date(timestamp);
   const seconds = Math.floor((now.getTime() - time.getTime()) / 1000);

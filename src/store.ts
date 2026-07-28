@@ -50,6 +50,7 @@ import type {
   DeviceInventoryRecord,
 } from "./control-plane-store.js";
 import { IncidentManagementMethods } from "./store-incident-extensions.js";
+import type { OperationalHealthPolicy, OperationalTelemetryEnvelope } from "./operational-health/types.js";
 
 function clean<T extends Record<string, any>>(obj: T) {
   return Object.fromEntries(Object.entries(obj).filter(([, v]) => v !== undefined)) as Partial<T>;
@@ -196,6 +197,9 @@ export class MemoryStore implements ControlPlaneStore {
   readonly grants = structuredClone(seedGrants);
   readonly edgeAgents = new Map<string, EdgeAgent>();
   readonly edgeScanJobs = new Map<string, EdgeScanJob>();
+  readonly operationalTelemetry = new Map<string, OperationalTelemetryEnvelope>();
+  readonly operationalTelemetryKeys = new Set<string>();
+  readonly operationalHealthPolicies = new Map<string, OperationalHealthPolicy>();
   readonly discoveries = new Map<string, DiscoveredCamera>();
   readonly auditEvents: AuditEventInput[] = [];
   readonly liveSessions = new Map<
@@ -344,6 +348,41 @@ export class MemoryStore implements ControlPlaneStore {
       ...(publicMediaUrl ? { publicMediaUrl } : {}),
     });
     return agent;
+  }
+
+  async ingestOperationalTelemetry(envelope: OperationalTelemetryEnvelope) {
+    const dedupeKey = `${envelope.tenantId}:${envelope.idempotencyKey}`;
+    if (this.operationalTelemetryKeys.has(dedupeKey)) {
+      return { accepted: true, duplicate: true };
+    }
+    this.operationalTelemetryKeys.add(dedupeKey);
+    const stateKey = `${envelope.tenantId}:${envelope.deviceType}:${envelope.deviceId}`;
+    const current = this.operationalTelemetry.get(stateKey);
+    if (!current || Date.parse(current.observedAt) <= Date.parse(envelope.observedAt)) {
+      this.operationalTelemetry.set(stateKey, structuredClone(envelope));
+    }
+    return { accepted: true, duplicate: false };
+  }
+
+  async listLatestOperationalTelemetry(tenant: string, branchIds?: string[]) {
+    const allowed = branchIds ? new Set(branchIds) : undefined;
+    return [...this.operationalTelemetry.values()]
+      .filter((item) => item.tenantId === tenant && (!allowed || allowed.has(item.branchId)))
+      .map((item) => structuredClone(item));
+  }
+
+  async getOperationalHealthPolicy(tenant: string, branchId?: string) {
+    return this.operationalHealthPolicies.get(`${tenant}:${branchId ?? "*"}`)
+      ?? this.operationalHealthPolicies.get(`${tenant}:*`);
+  }
+
+  async upsertOperationalHealthPolicy(
+    tenant: string,
+    branchId: string | undefined,
+    policy: OperationalHealthPolicy,
+  ) {
+    this.operationalHealthPolicies.set(`${tenant}:${branchId ?? "*"}`, structuredClone(policy));
+    return structuredClone(policy);
   }
 
   async createEdgeScanJob(branchId: string, edgeAgentId?: string) {

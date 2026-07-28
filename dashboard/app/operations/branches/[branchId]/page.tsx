@@ -136,7 +136,7 @@ export default function BranchHealthDetailPage() {
       {/* Overall Health Score */}
       <div className="card mb-6">
         <div className="flex items-center gap-6">
-          <HealthScoreRing score={branch.healthScore} size={120} strokeWidth={10} />
+          <HealthScoreRing score={branch.healthScore ?? 0} size={120} strokeWidth={10} />
           
           <div className="flex-1">
             <h2 className="text-lg font-semibold mb-4">Branch Health Score</h2>
@@ -300,15 +300,15 @@ export default function BranchHealthDetailPage() {
           </div>
           <div>
             <p className="text-sm text-gray-600 mb-1">CPU Usage</p>
-            <p className="text-lg font-semibold">{branch.edgeAgent.cpuUsage.toFixed(1)}%</p>
+            <p className="text-lg font-semibold">{branch.edgeAgent.cpuUsage === null ? '--' : `${branch.edgeAgent.cpuUsage.toFixed(1)}%`}</p>
           </div>
           <div>
             <p className="text-sm text-gray-600 mb-1">Memory Usage</p>
-            <p className="text-lg font-semibold">{branch.edgeAgent.memoryUsage.toFixed(1)}%</p>
+            <p className="text-lg font-semibold">{branch.edgeAgent.memoryUsage === null ? '--' : `${branch.edgeAgent.memoryUsage.toFixed(1)}%`}</p>
           </div>
           <div>
             <p className="text-sm text-gray-600 mb-1">Disk Usage</p>
-            <p className="text-lg font-semibold">{branch.edgeAgent.diskUsage.toFixed(1)}%</p>
+            <p className="text-lg font-semibold">{branch.edgeAgent.diskUsage === null ? '--' : `${branch.edgeAgent.diskUsage.toFixed(1)}%`}</p>
           </div>
           <div>
             <p className="text-sm text-gray-600 mb-1">Last Heartbeat</p>
@@ -317,7 +317,7 @@ export default function BranchHealthDetailPage() {
           <div>
             <p className="text-sm text-gray-600 mb-1">Uptime</p>
             <p className="text-sm font-medium">
-              {Math.floor(branch.edgeAgent.uptimeSeconds / 86400)}d {Math.floor((branch.edgeAgent.uptimeSeconds % 86400) / 3600)}h
+              {branch.edgeAgent.uptimeSeconds === null ? '--' : `${Math.floor(branch.edgeAgent.uptimeSeconds / 86400)}d ${Math.floor((branch.edgeAgent.uptimeSeconds % 86400) / 3600)}h`}
             </p>
           </div>
           <div>

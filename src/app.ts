@@ -42,6 +42,7 @@ import { registerVideoSearchRoutes } from "./routes/video-search.routes.js";
 import { registerDeviceInventoryRoutes } from "./routes/device-inventory.routes.js";
 import { registerDeviceManagementRoutes } from "./routes/device-management.routes.js";
 import { registerDVRNVRMonitorRoutes } from "./routes/dvr-nvr-monitor.routes.js";
+import { registerOperationalHealthRoutes } from "./routes/operational-health.routes.js";
 import { DVRNVRMonitorService } from "./services/dvr-nvr-monitor.service.js";
 import { parseBulkCameraCsv } from "./services/camera-registration.js";
 import { RecordingSearchService } from "./recording/search-service.js";
@@ -1341,6 +1342,7 @@ export async function buildApp(options?: {
   // Core maintenance routes depend only on ControlPlaneStore and must be
   // available for both the in-memory development runtime and PostgreSQL.
   await registerMaintenanceRoutes(app, store);
+  await registerOperationalHealthRoutes(app, store);
   if (extendedStore) {
     await registerDeviceManagementRoutes(app, extendedStore);
     await registerAuthRoutes(app, extendedStore);

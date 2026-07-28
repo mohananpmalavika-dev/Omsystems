@@ -1,8 +1,8 @@
 openapi: 3.1.0
 info:
   title: Sentinel Grid Control Plane
-  version: 0.1.0-phase0
-  description: Authoritative Phase 0 contract for the active Fastify runtime.
+  version: 0.2.0-phase1
+  description: Authoritative Fastify contract including Phase 1 operational health.
 servers:
   - url: /api/control
     description: Dashboard BFF
@@ -110,6 +110,69 @@ paths:
       operationId: getOperationsReportSummary
       responses:
         '200': { description: Active operations summary projection }
+  /v1/edge-agents/{edgeAgentId}/telemetry:
+    post:
+      operationId: ingestOperationalTelemetry
+      parameters:
+        - $ref: '#/components/parameters/EdgeAgentId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/OperationalTelemetryInput' }
+      responses:
+        '202': { description: Telemetry accepted }
+        '200': { description: Duplicate telemetry accepted idempotently }
+        '403': { description: Device or branch scope mismatch }
+  /v1/operations/health/summary:
+    get:
+      operationId: getOperationalHealthSummary
+      responses:
+        '200': { description: Tenant-scoped operational health totals }
+  /v1/operations/health/branches:
+    get:
+      operationId: listBranchHealth
+      parameters:
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Offset'
+      responses:
+        '200': { description: Paginated authorized branch health }
+  /v1/operations/health/branches/{branchId}:
+    get:
+      operationId: getBranchHealth
+      parameters:
+        - $ref: '#/components/parameters/BranchId'
+      responses:
+        '200': { description: Branch, component, camera, retention and edge-agent health }
+        '403': { description: Branch not authorized }
+  /v1/operations/health/cameras:
+    get:
+      operationId: listCameraHealth
+      parameters:
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Offset'
+      responses:
+        '200': { description: Paginated camera health with reason codes }
+  /v1/operations/health/retention:
+    get:
+      operationId: listRetentionVerification
+      responses:
+        '200': { description: Actual continuous playable retention evidence }
+  /v1/operations/health/policy:
+    get:
+      operationId: getOperationalHealthPolicy
+      responses:
+        '200': { description: Effective tenant or branch health policy }
+    put:
+      operationId: putOperationalHealthPolicy
+      responses:
+        '200': { description: Tenant or branch health policy persisted }
+        '403': { description: Policy management not authorized }
+  /v1/operations/alerts:
+    get:
+      operationId: listOperationalHealthAlerts
+      responses:
+        '200': { description: Active health and retention exceptions }
 components:
   parameters:
     BranchId:
@@ -127,6 +190,44 @@ components:
       name: alertId
       required: true
       schema: { type: string }
+    EdgeAgentId:
+      in: path
+      name: edgeAgentId
+      required: true
+      schema: { type: string }
+    Limit:
+      in: query
+      name: limit
+      schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+    Offset:
+      in: query
+      name: offset
+      schema: { type: integer, minimum: 0, default: 0 }
+  schemas:
+    OperationalTelemetryInput:
+      type: object
+      required: [branchId, edgeAgentId, deviceType, deviceId, observedAt, source, quality, idempotencyKey, metrics]
+      properties:
+        branchId: { type: string }
+        edgeAgentId: { type: string }
+        deviceType:
+          type: string
+          enum: [branch, edge-agent, recorder, camera, disk, network, ups]
+        deviceId: { type: string, maxLength: 200 }
+        observedAt: { type: string, format: date-time }
+        source:
+          type: string
+          enum: [onvif, cp-plus-adapter, rtsp, system, recording-engine]
+        quality:
+          type: string
+          enum: [verified, estimated, unsupported, unavailable]
+        idempotencyKey: { type: string, maxLength: 200 }
+        metrics:
+          type: object
+          additionalProperties: { oneOf: [{ type: string }, { type: number }, { type: boolean }, { type: 'null' }] }
+        reasonCodes:
+          type: array
+          items: { type: string }
   securitySchemes:
     bearerSession:
       type: http

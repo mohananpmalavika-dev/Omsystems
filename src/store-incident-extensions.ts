@@ -267,7 +267,22 @@ export const IncidentManagementMethods = {
     return this.incidentCameras.filter((c: any) => c.incidentId === incidentId);
   },
 
-  async addIncidentVideoRange(this: any, input: Parameters<ControlPlaneStore["addIncidentVideoRange"]>[0]) {
+  async addIncidentVideoRange(
+    this: any,
+    inputOrIncidentId: Parameters<ControlPlaneStore["addIncidentVideoRange"]>[0] | string,
+    legacyCameraId?: string,
+    legacyFromAt?: string,
+    legacyToAt?: string,
+  ) {
+    const input = typeof inputOrIncidentId === "string"
+      ? {
+          incidentId: inputOrIncidentId,
+          cameraId: legacyCameraId!,
+          fromAt: legacyFromAt!,
+          toAt: legacyToAt!,
+          preservedBy: "system-retention",
+        }
+      : inputOrIncidentId;
     const now = new Date().toISOString();
     
     const range = {

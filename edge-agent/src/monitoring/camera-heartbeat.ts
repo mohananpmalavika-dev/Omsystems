@@ -48,7 +48,13 @@ export class CameraHeartbeatService {
   private heartbeatInterval: NodeJS.Timeout | null;
   private isRunning: boolean;
 
-  constructor(apiEndpoint: string) {
+  constructor(
+    apiEndpoint: string,
+    private readonly branchId: string,
+    private readonly edgeAgentId: string,
+    private readonly developmentUserId: string,
+    private readonly edgeBridgeSharedKey?: string,
+  ) {
     this.apiEndpoint = apiEndpoint;
     this.cameras = new Map();
     this.lastFrameCounts = new Map();
@@ -158,29 +164,15 @@ export class CameraHeartbeatService {
           responseTimeMs: responseTime,
           streamActive: true,
           videoLoss: false,
-          currentFps: await this.estimateFps(camera.id, camera.rtspUrl),
-          currentBitrate: await this.estimateBitrate(camera.id, camera.rtspUrl),
           currentResolution: probeResult.width && probeResult.height
             ? { width: probeResult.width, height: probeResult.height }
             : camera.expectedResolution,
-          packetLoss: await this.estimatePacketLoss(camera.id, camera.rtspUrl),
           latencyMs: responseTime,
           metadata: {
             codec: probeResult.codec,
           },
         };
 
-        // Check for quality degradation
-        if (heartbeatData.currentFps && heartbeatData.currentFps < camera.expectedFps * 0.7) {
-          heartbeatData.status = "warning";
-        }
-
-        // Check for frozen frames
-        const isFrozen = await this.detectFrozenStream(camera.id, heartbeatData.currentFps || 0);
-        if (isFrozen) {
-          heartbeatData.imageFrozen = true;
-          heartbeatData.status = "warning";
-        }
       } else {
         // Camera is offline
         heartbeatData = {
@@ -223,16 +215,45 @@ export class CameraHeartbeatService {
     cameraId: string,
     data: CameraHeartbeatData
   ): Promise<void> {
-    const url = `${this.apiEndpoint}/api/v1/cameras/${cameraId}/heartbeat`;
+    const observedAt = new Date().toISOString();
+    const url = `${this.apiEndpoint}/v1/edge-agents/${encodeURIComponent(this.edgeAgentId)}/telemetry`;
 
     const response = await fetch(url, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        // Add authentication header if needed
-        // "Authorization": `Bearer ${this.authToken}`,
+        "x-user-id": this.developmentUserId,
+        ...(this.edgeBridgeSharedKey ? { "x-edge-bridge-key": this.edgeBridgeSharedKey } : {}),
       },
-      body: JSON.stringify(data),
+      body: JSON.stringify({
+        branchId: this.branchId,
+        edgeAgentId: this.edgeAgentId,
+        deviceType: "camera",
+        deviceId: cameraId,
+        observedAt,
+        source: "rtsp",
+        quality: "verified",
+        idempotencyKey: `${this.edgeAgentId}:camera:${cameraId}:${observedAt}`,
+        metrics: {
+          status: data.status === "warning" ? "degraded" : data.status,
+          responseTimeMs: data.responseTimeMs,
+          streamActive: data.streamActive,
+          videoLoss: data.videoLoss,
+          width: data.currentResolution?.width ?? null,
+          height: data.currentResolution?.height ?? null,
+          codec: typeof data.metadata?.codec === "string" ? data.metadata.codec : null,
+          fps: null,
+          bitrateKbps: null,
+          packetLossPercent: null,
+          imageFrozen: null,
+          blackScreen: null,
+        },
+        reasonCodes: [
+          ...(data.errorMessage ? ["rtsp_unreachable"] : []),
+          "fps_unavailable", "bitrate_unavailable", "packet_loss_unavailable",
+          "freeze_detection_unavailable", "black_screen_detection_unavailable",
+        ],
+      }),
     });
 
     if (!response.ok) {
@@ -243,40 +264,22 @@ export class CameraHeartbeatService {
   /**
    * Estimate FPS by analyzing stream
    */
-  private async estimateFps(cameraId: string, rtspUrl: string): Promise<number> {
-    // This is a simplified estimation
-    // In production, you would analyze actual frame timestamps
-    // For now, return a mock value based on expected FPS with some variance
-    const camera = this.cameras.get(cameraId);
-    if (!camera) return 25;
-
-    // Add some random variance (±10%)
-    const variance = (Math.random() * 0.2 - 0.1) * camera.expectedFps;
-    return Math.max(0, camera.expectedFps + variance);
+  private async estimateFps(_cameraId: string, _rtspUrl: string): Promise<number | undefined> {
+    return undefined;
   }
 
   /**
    * Estimate bitrate by analyzing stream
    */
-  private async estimateBitrate(cameraId: string, rtspUrl: string): Promise<number> {
-    // This is a simplified estimation
-    // In production, you would measure actual data transfer rate
-    const camera = this.cameras.get(cameraId);
-    if (!camera) return 2000;
-
-    // Add some random variance (±15%)
-    const variance = (Math.random() * 0.3 - 0.15) * camera.expectedBitrate;
-    return Math.max(0, camera.expectedBitrate + variance);
+  private async estimateBitrate(_cameraId: string, _rtspUrl: string): Promise<number | undefined> {
+    return undefined;
   }
 
   /**
    * Estimate packet loss
    */
-  private async estimatePacketLoss(cameraId: string, rtspUrl: string): Promise<number> {
-    // This is a simplified estimation
-    // In production, you would analyze RTP/RTCP statistics
-    // Return a random packet loss between 0-3%
-    return Math.random() * 3;
+  private async estimatePacketLoss(_cameraId: string, _rtspUrl: string): Promise<number | undefined> {
+    return undefined;
   }
 
   /**
@@ -338,9 +341,17 @@ let heartbeatService: CameraHeartbeatService | null = null;
 /**
  * Initialize camera heartbeat service
  */
-export function initializeCameraHeartbeat(apiEndpoint: string): CameraHeartbeatService {
+export function initializeCameraHeartbeat(
+  apiEndpoint: string,
+  branchId: string,
+  edgeAgentId: string,
+  developmentUserId: string,
+  edgeBridgeSharedKey?: string,
+): CameraHeartbeatService {
   if (!heartbeatService) {
-    heartbeatService = new CameraHeartbeatService(apiEndpoint);
+    heartbeatService = new CameraHeartbeatService(
+      apiEndpoint, branchId, edgeAgentId, developmentUserId, edgeBridgeSharedKey,
+    );
   }
   return heartbeatService;
 }
