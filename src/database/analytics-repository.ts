@@ -5,6 +5,8 @@ import type {
   AnalyticsEvent,
   AnalyticsIngestResult,
   AnalyticsRule,
+  AlertNotification,
+  AlertNotificationPolicy,
 } from "../domain/models.js";
 import type {
   AnalyticsAlertFilters,
@@ -251,9 +253,9 @@ export class AnalyticsRepository {
           `INSERT INTO analytics_alerts (
              id, tenant_id, camera_id, rule_id, event_id, title, description,
              severity, confidence, object_classes, model_version,
-             snapshot_reference, clip_reference, first_detected_at,
-             last_detected_at
-           ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$14)
+           snapshot_reference, clip_reference, first_detected_at,
+             last_detected_at, sla_due_at, correlation_key
+           ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$14,$15,$16)
            RETURNING *`,
           [
             alertId, input.tenantId, input.cameraId, rule.id, eventId,
@@ -262,6 +264,11 @@ export class AnalyticsRepository {
             JSON.stringify([...new Set(input.objects.map((object) => object.label))]),
             input.modelVersion, input.snapshotReference ?? null,
             input.clipReference ?? null, input.occurredAt,
+            rule.escalateAfterSeconds
+              ? new Date(Date.parse(input.occurredAt) + rule.escalateAfterSeconds * 1_000).toISOString()
+              : null,
+            typeof input.metadata?.correlationKey === "string"
+              ? input.metadata.correlationKey : `${rule.id}:${input.cameraId}`,
           ],
         );
         alerts.push(mapAlert(inserted.rows[0]));
@@ -339,16 +346,25 @@ export class AnalyticsRepository {
           current.rows[0].status !== input.status) {
         throw new Error("invalid_alert_transition");
       }
+      if (input.expectedVersion !== undefined && current.rows[0].version !== input.expectedVersion) {
+        throw new Error("alert_version_conflict");
+      }
+      if (input.status === "acknowledged" && current.rows[0].acknowledged_at) {
+        throw new Error("alert_already_acknowledged");
+      }
       const updated = await client.query(
         `UPDATE analytics_alerts SET status=$3,
            acknowledged_by=CASE WHEN $3='acknowledged' THEN $4 ELSE acknowledged_by END,
            acknowledged_at=CASE WHEN $3='acknowledged' THEN now() ELSE acknowledged_at END,
            false_alarm_reason=CASE WHEN $3='false_alarm' THEN $5 ELSE false_alarm_reason END,
            resolved_at=CASE WHEN $3='resolved' THEN now() ELSE resolved_at END,
+           assigned_to=COALESCE($6, assigned_to),
+           assigned_at=CASE WHEN $6::uuid IS NOT NULL THEN now() ELSE assigned_at END,
+           version=version+1,
            updated_at=now()
          WHERE id=$1 AND tenant_id=$2 RETURNING *`,
         [id, tenantId, input.status, input.actorUserId,
-          input.falseAlarmReason ?? null],
+          input.falseAlarmReason ?? null, input.assignedTo ?? null],
       );
       if (input.status === "acknowledged") {
         await client.query(
@@ -384,6 +400,96 @@ export class AnalyticsRepository {
       [id, tenantId, incidentId],
     );
     return result.rows[0] ? mapAlert(result.rows[0]) : undefined;
+  }
+
+  async getNotificationPolicy(tenantId: string): Promise<AlertNotificationPolicy> {
+    const result = await this.pool.query("SELECT * FROM alert_notification_policies WHERE tenant_id=$1", [tenantId]);
+    if (!result.rows[0]) return defaultNotificationPolicy(tenantId);
+    const row = result.rows[0];
+    return {
+      tenantId,
+      recipientGroups: json(row.recipient_groups, {}),
+      onCallSchedules: json(row.on_call_schedules, []),
+      ...(row.quiet_hours ? { quietHours: json(row.quiet_hours, undefined) } : {}),
+      rateLimitPerMinute: row.rate_limit_per_minute,
+      escalationAfterSeconds: json(row.escalation_after_seconds, {}),
+      updatedAt: iso(row.updated_at),
+    };
+  }
+
+  async upsertNotificationPolicy(policy: AlertNotificationPolicy): Promise<AlertNotificationPolicy> {
+    await this.pool.query(
+      `INSERT INTO alert_notification_policies
+         (tenant_id, recipient_groups, on_call_schedules, quiet_hours, rate_limit_per_minute, escalation_after_seconds)
+       VALUES ($1,$2,$3,$4,$5,$6)
+       ON CONFLICT (tenant_id) DO UPDATE SET recipient_groups=EXCLUDED.recipient_groups,
+         on_call_schedules=EXCLUDED.on_call_schedules, quiet_hours=EXCLUDED.quiet_hours,
+         rate_limit_per_minute=EXCLUDED.rate_limit_per_minute,
+         escalation_after_seconds=EXCLUDED.escalation_after_seconds, updated_at=now()`,
+      [policy.tenantId, JSON.stringify(policy.recipientGroups), JSON.stringify(policy.onCallSchedules),
+        policy.quietHours ? JSON.stringify(policy.quietHours) : null, policy.rateLimitPerMinute,
+        JSON.stringify(policy.escalationAfterSeconds)],
+    );
+    return this.getNotificationPolicy(policy.tenantId);
+  }
+
+  async enqueueNotifications(input: Parameters<import("../control-plane-store.js").ControlPlaneStore["enqueueAlertNotifications"]>[0]) {
+    if (input.length === 0) return [];
+    const client = await this.pool.connect();
+    try {
+      await client.query("BEGIN");
+      const created: AlertNotification[] = [];
+      for (const target of input) {
+        const result = await client.query(
+          `INSERT INTO analytics_notifications (id, tenant_id, alert_id, channel, recipient, next_attempt_at)
+           VALUES ($1,$2,$3,$4,$5,now())
+           ON CONFLICT (alert_id, channel, recipient) DO UPDATE SET alert_id=EXCLUDED.alert_id
+           RETURNING *`,
+          [randomUUID(), target.tenantId, target.alertId, target.channel, target.recipient],
+        );
+        created.push(mapNotification(result.rows[0]));
+      }
+      await client.query("COMMIT");
+      return created;
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally { client.release(); }
+  }
+
+  async claimNotifications(limit: number, now: string) {
+    const result = await this.pool.query(
+      `WITH candidates AS (
+         SELECT id FROM analytics_notifications
+         WHERE status IN ('queued','failed') AND next_attempt_at <= $1
+         ORDER BY next_attempt_at, created_at FOR UPDATE SKIP LOCKED LIMIT $2
+       ) UPDATE analytics_notifications notification SET status='processing', attempts=attempts+1, updated_at=now()
+         FROM candidates WHERE notification.id=candidates.id RETURNING notification.*`,
+      [now, limit],
+    );
+    return result.rows.map(mapNotification);
+  }
+
+  async completeNotification(id: string, result: {
+    status: "delivered" | "failed" | "dead"; providerId?: string; error?: string; nextAttemptAt?: string;
+  }) {
+    const updated = await this.pool.query(
+      `UPDATE analytics_notifications SET status=$2, provider_id=COALESCE($3,provider_id),
+         last_error=$4, next_attempt_at=COALESCE($5,next_attempt_at),
+         sent_at=CASE WHEN $2='delivered' THEN now() ELSE sent_at END,
+         delivered_at=CASE WHEN $2='delivered' THEN now() ELSE delivered_at END, updated_at=now()
+       WHERE id=$1 RETURNING *`,
+      [id, result.status, result.providerId ?? null, result.error ?? null, result.nextAttemptAt ?? null],
+    );
+    return updated.rows[0] ? mapNotification(updated.rows[0]) : undefined;
+  }
+
+  async listNotifications(tenantId: string, alertId?: string) {
+    const result = await this.pool.query(
+      `SELECT * FROM analytics_notifications WHERE tenant_id=$1 AND ($2::uuid IS NULL OR alert_id=$2)
+       ORDER BY created_at DESC`, [tenantId, alertId ?? null],
+    );
+    return result.rows.map(mapNotification);
   }
 }
 
@@ -488,7 +594,32 @@ function mapAlert(row: any): AnalyticsAlert {
     ...(row.acknowledged_at ? { acknowledgedAt: iso(row.acknowledged_at) } : {}),
     ...(row.false_alarm_reason ? { falseAlarmReason: row.false_alarm_reason } : {}),
     ...(row.resolved_at ? { resolvedAt: iso(row.resolved_at) } : {}),
+    ...(row.assigned_to ? { assignedTo: row.assigned_to } : {}),
+    ...(row.assigned_at ? { assignedAt: iso(row.assigned_at) } : {}),
+    ...(row.sla_due_at ? { slaDueAt: iso(row.sla_due_at) } : {}),
+    ...(row.correlation_key ? { correlationKey: row.correlation_key } : {}),
+    version: Number(row.version ?? 1),
     createdAt: iso(row.created_at), updatedAt: iso(row.updated_at),
+  };
+}
+
+function mapNotification(row: any): AlertNotification {
+  return {
+    id: row.id, tenantId: row.tenant_id, alertId: row.alert_id,
+    channel: row.channel, recipient: row.recipient, status: row.status,
+    attempts: row.attempts, nextAttemptAt: iso(row.next_attempt_at),
+    ...(row.provider_id ? { providerId: row.provider_id } : {}),
+    ...(row.last_error ? { lastError: row.last_error } : {}),
+    ...(row.sent_at ? { sentAt: iso(row.sent_at) } : {}),
+    ...(row.delivered_at ? { deliveredAt: iso(row.delivered_at) } : {}),
+    createdAt: iso(row.created_at), updatedAt: iso(row.updated_at),
+  };
+}
+
+function defaultNotificationPolicy(tenantId: string): AlertNotificationPolicy {
+  return {
+    tenantId, recipientGroups: {}, onCallSchedules: [], rateLimitPerMinute: 120,
+    escalationAfterSeconds: { P1: 30, P2: 300, P3: 900 }, updatedAt: new Date(0).toISOString(),
   };
 }
 

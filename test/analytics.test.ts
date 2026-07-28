@@ -57,7 +57,9 @@ describe("video analytics and alert workflow", () => {
     });
     expect(detection.json().alerts[0].incidentId).toBeTruthy();
     expect(store.recordingLegalHolds).toHaveLength(1);
-    expect(store.analyticsNotifications).toHaveLength(1);
+    expect(store.analyticsNotifications.map((item) => item.channel).sort()).toEqual([
+      "dashboard", "email", "sms", "voice",
+    ]);
 
     const cooldownDetection = await app.inject({
       method: "POST", url: "/internal/analytics/events",

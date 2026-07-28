@@ -28,7 +28,12 @@ import { MaintenanceRepository } from "./maintenance-repository.js";
 import { PrivacyRepository } from "./privacy-repository.js";
 import { OperationalHealthRepository } from "./operational-health-repository.js";
 import { GridLayoutRepository } from "./grid-layout-repository.js";
-import type { OperationalHealthPolicy, OperationalTelemetryEnvelope } from "../operational-health/types.js";
+import type {
+  OperationalHealthPolicy,
+  OperationalTelemetryEnvelope,
+  VideoWallGridSize,
+  VideoWallLayout,
+} from "../operational-health/types.js";
 
 // TODO: PostgresStore is a partial implementation of ControlPlaneStore
 // Some methods from the interface are not yet implemented but are not used in production
@@ -120,7 +125,13 @@ export class PostgresStore
   async listVideoWallLayouts(tenantId: string, userId: string) {
     return this.gridLayouts.listLayouts(tenantId, userId);
   }
-  async createVideoWallLayout(input: any) {
+  async createVideoWallLayout(input: {
+    tenantId: string;
+    userId: string;
+    name: string;
+    gridSize: VideoWallGridSize;
+    cameraPositions: VideoWallLayout["cameraPositions"];
+  }) {
     return this.gridLayouts.createLayout({
       tenantId: input.tenantId, createdBy: input.userId, name: input.name,
       gridSize: input.gridSize, cameraPositions: input.cameraPositions,
@@ -418,6 +429,24 @@ export class PostgresStore
   }
   async linkAnalyticsAlertIncident(id: string, tenantId: string, incidentId: string) {
     return this.analytics.linkIncident(id, tenantId, incidentId);
+  }
+  async getAlertNotificationPolicy(tenantId: string) {
+    return this.analytics.getNotificationPolicy(tenantId);
+  }
+  async upsertAlertNotificationPolicy(policy: import("../domain/models.js").AlertNotificationPolicy) {
+    return this.analytics.upsertNotificationPolicy(policy);
+  }
+  async enqueueAlertNotifications(input: Parameters<ControlPlaneStore["enqueueAlertNotifications"]>[0]) {
+    return this.analytics.enqueueNotifications(input);
+  }
+  async claimAlertNotifications(limit: number, now: string) {
+    return this.analytics.claimNotifications(limit, now);
+  }
+  async completeAlertNotification(id: string, result: Parameters<ControlPlaneStore["completeAlertNotification"]>[1]) {
+    return this.analytics.completeNotification(id, result);
+  }
+  async listAlertNotifications(tenantId: string, alertId?: string) {
+    return this.analytics.listNotifications(tenantId, alertId);
   }
   // Audit method removed - not part of AuditRepository interface
 

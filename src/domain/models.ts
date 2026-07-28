@@ -922,7 +922,49 @@ export interface AnalyticsAlert {
   acknowledgedAt?: string | undefined;
   falseAlarmReason?: string | undefined;
   resolvedAt?: string | undefined;
+  assignedTo?: string | undefined;
+  assignedAt?: string | undefined;
+  slaDueAt?: string | undefined;
+  correlationKey?: string | undefined;
+  version: number;
   createdAt: string;
+  updatedAt: string;
+}
+
+export type AlertNotificationChannel = "dashboard" | "sms" | "email" | "voice" | "log";
+export type AlertNotificationStatus = "queued" | "processing" | "sent" | "delivered" | "failed" | "dead" | "cancelled";
+
+export interface AlertNotification {
+  id: string;
+  tenantId: string;
+  alertId: string;
+  channel: AlertNotificationChannel;
+  recipient: string;
+  status: AlertNotificationStatus;
+  attempts: number;
+  nextAttemptAt: string;
+  providerId?: string | undefined;
+  lastError?: string | undefined;
+  sentAt?: string | undefined;
+  deliveredAt?: string | undefined;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AlertNotificationPolicy {
+  tenantId: string;
+  recipientGroups: Partial<Record<"sms" | "email" | "voice", string[]>>;
+  onCallSchedules: Array<{
+    name: string;
+    days: number[];
+    start: string;
+    end: string;
+    timezone: string;
+    recipients: Partial<Record<"sms" | "email" | "voice", string[]>>;
+  }>;
+  quietHours?: { start: string; end: string; timezone: string } | undefined;
+  rateLimitPerMinute: number;
+  escalationAfterSeconds: Partial<Record<AnalyticsSeverity, number>>;
   updatedAt: string;
 }
 

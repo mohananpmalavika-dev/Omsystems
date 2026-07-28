@@ -1,6 +1,9 @@
 import type {
   Action,
   AnalyticsAlert,
+  AlertNotification,
+  AlertNotificationPolicy,
+  AlertNotificationChannel,
   AnalyticsAlertStatus,
   AnalyticsDetectionType,
   AnalyticsDetectedObject,
@@ -472,6 +475,8 @@ export interface AnalyticsAlertTransitionInput {
   notes?: string | undefined;
   falseAlarmReason?: string | undefined;
   recipients?: string[] | undefined;
+  assignedTo?: string | undefined;
+  expectedVersion?: number | undefined;
 }
 
 export interface ControlPlaneStore {
@@ -1127,6 +1132,17 @@ export interface ControlPlaneStore {
     tenantId: string,
     incidentId: string,
   ): Promise<AnalyticsAlert | undefined>;
+  getAlertNotificationPolicy(tenantId: string): Promise<AlertNotificationPolicy>;
+  upsertAlertNotificationPolicy(policy: AlertNotificationPolicy): Promise<AlertNotificationPolicy>;
+  enqueueAlertNotifications(input: Array<{
+    tenantId: string; alertId: string; channel: AlertNotificationChannel; recipient: string;
+  }>): Promise<AlertNotification[]>;
+  claimAlertNotifications(limit: number, now: string): Promise<AlertNotification[]>;
+  completeAlertNotification(id: string, result: {
+    status: "delivered" | "failed" | "dead";
+    providerId?: string; error?: string; nextAttemptAt?: string;
+  }): Promise<AlertNotification | undefined>;
+  listAlertNotifications(tenantId: string, alertId?: string): Promise<AlertNotification[]>;
   writeAudit(event: AuditEventInput): Promise<void>;
   createMaintenanceAsset(input: MaintenanceAssetInput): Promise<MaintenanceAsset>;
   listMaintenanceAssets(tenantId: string, category?: AssetCategory): Promise<MaintenanceAsset[]>;

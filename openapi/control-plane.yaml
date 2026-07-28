@@ -1,8 +1,8 @@
 openapi: 3.1.0
 info:
   title: Sentinel Grid Control Plane
-  version: 0.3.0-phase2
-  description: Authoritative Fastify contract including Phase 2 dashboard and realtime projection APIs.
+  version: 0.4.0-phase3
+  description: Authoritative Fastify contract including the Phase 3 HO alert command center and notification outbox.
 servers:
   - url: /api/control
     description: Dashboard BFF
@@ -206,6 +206,43 @@ paths:
         '201': { description: Authorized per-user video-wall layout created }
         '400': { description: Invalid or duplicate tile positions }
         '403': { description: User cannot view a referenced camera }
+  /v1/alerts/command-center:
+    get:
+      operationId: listAlertCommandCenter
+      responses:
+        '200': { description: Authorized HO-wide alerts enriched with branch, camera, SLA, evidence and delivery audit }
+  /v1/alerts/events:
+    get:
+      operationId: streamAlertEvents
+      responses:
+        '200':
+          description: Authenticated tenant-scoped alert and notification SSE stream
+          content:
+            text/event-stream: {}
+  /v1/alerts/{alertId}/assign:
+    post:
+      operationId: assignAlert
+      parameters:
+        - $ref: '#/components/parameters/AlertId'
+      responses:
+        '200': { description: Alert assigned using optimistic concurrency }
+        '409': { description: Alert version conflict }
+  /v1/alerts/{alertId}/notifications:
+    get:
+      operationId: listAlertNotificationAttempts
+      parameters:
+        - $ref: '#/components/parameters/AlertId'
+      responses:
+        '200': { description: Provider attempts, IDs, receipts, errors and retry state }
+  /v1/alerts/notification-policy:
+    get:
+      operationId: getAlertNotificationPolicy
+      responses:
+        '200': { description: Recipient groups, on-call schedules, quiet hours, rate and escalation policy }
+    put:
+      operationId: putAlertNotificationPolicy
+      responses:
+        '200': { description: Notification policy persisted; fixed P1-P4 channel matrix returned }
 components:
   parameters:
     BranchId:

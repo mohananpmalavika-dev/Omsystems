@@ -5,6 +5,8 @@ import type {
   AnalyticsAlert,
   AnalyticsEvent,
   AnalyticsRule,
+  AlertNotification,
+  AlertNotificationPolicy,
   AuditEventInput,
   Camera,
   CameraStatus,
@@ -54,6 +56,17 @@ import type { OperationalHealthPolicy, OperationalTelemetryEnvelope, VideoWallGr
 
 function clean<T extends Record<string, any>>(obj: T) {
   return Object.fromEntries(Object.entries(obj).filter(([, v]) => v !== undefined)) as Partial<T>;
+}
+
+function defaultAlertNotificationPolicy(inputTenantId: string): AlertNotificationPolicy {
+  return {
+    tenantId: inputTenantId,
+    recipientGroups: {},
+    onCallSchedules: [],
+    rateLimitPerMinute: 120,
+    escalationAfterSeconds: { P1: 30, P2: 300, P3: 900 },
+    updatedAt: new Date(0).toISOString(),
+  };
 }
 
 const tenantId = "omsystems";
@@ -241,7 +254,8 @@ export class MemoryStore implements ControlPlaneStore {
   readonly analyticsAlerts: AnalyticsAlert[] = [];
   readonly analyticsAcknowledgements: Array<Record<string, unknown>> = [];
   readonly analyticsEscalations: Array<Record<string, unknown>> = [];
-  readonly analyticsNotifications: Array<Record<string, unknown>> = [];
+  readonly analyticsNotifications: AlertNotification[] = [];
+  readonly alertNotificationPolicies = new Map<string, AlertNotificationPolicy>();
   readonly maintenanceAssets: any[] = [];
   readonly maintenanceVisits: any[] = [];
   readonly predictiveAlerts: any[] = [];
@@ -1534,17 +1548,17 @@ export class MemoryStore implements ControlPlaneStore {
         ...(input.snapshotReference ? { snapshotReference: input.snapshotReference } : {}),
         ...(input.clipReference ? { clipReference: input.clipReference } : {}),
         firstDetectedAt: input.occurredAt, lastDetectedAt: input.occurredAt,
-        occurrenceCount: 1, createdAt: now, updatedAt: now,
+        occurrenceCount: 1,
+        ...(rule.escalateAfterSeconds ? {
+          slaDueAt: new Date(Date.parse(input.occurredAt) + rule.escalateAfterSeconds * 1_000).toISOString(),
+        } : {}),
+        correlationKey: typeof input.metadata?.correlationKey === "string"
+          ? input.metadata.correlationKey : `${rule.id}:${input.cameraId}`,
+        version: 1, createdAt: now, updatedAt: now,
       };
       this.analyticsAlerts.push(alert);
       alerts.push(alert);
       created += 1;
-      for (const recipient of rule.recipients) {
-        this.analyticsNotifications.push({
-          id: randomUUID(), alertId: alert.id, recipient, channel: "configured",
-          status: "queued", createdAt: now,
-        });
-      }
     }
     const event: AnalyticsEvent = {
       id: eventId, tenantId: input.tenantId, cameraId: input.cameraId,
@@ -1595,11 +1609,18 @@ export class MemoryStore implements ControlPlaneStore {
   ) {
     const alert = await this.getAnalyticsAlert(id, inputTenantId);
     if (!alert) return undefined;
+    if (input.expectedVersion !== undefined && alert.version !== input.expectedVersion) {
+      throw new Error("alert_version_conflict");
+    }
+    if (input.status === "acknowledged" && alert.acknowledgedAt) {
+      throw new Error("alert_already_acknowledged");
+    }
     if (isTerminalAlertStatus(alert.status) && alert.status !== input.status) {
       throw new Error("invalid_alert_transition");
     }
     const now = new Date().toISOString();
     alert.status = input.status;
+    alert.version += 1;
     alert.updatedAt = now;
     if (input.status === "acknowledged") {
       alert.acknowledgedBy = input.actorUserId;
@@ -1615,9 +1636,66 @@ export class MemoryStore implements ControlPlaneStore {
         notes: input.notes, recipients: input.recipients ?? [], escalatedAt: now,
       });
     }
+    if (input.assignedTo) {
+      alert.assignedTo = input.assignedTo;
+      alert.assignedAt = now;
+    }
     if (input.status === "resolved") alert.resolvedAt = now;
     if (input.status === "false_alarm") alert.falseAlarmReason = input.falseAlarmReason;
     return alert;
+  }
+
+  async getAlertNotificationPolicy(inputTenantId: string) {
+    return structuredClone(this.alertNotificationPolicies.get(inputTenantId) ?? defaultAlertNotificationPolicy(inputTenantId));
+  }
+
+  async upsertAlertNotificationPolicy(policy: AlertNotificationPolicy) {
+    const saved = { ...structuredClone(policy), updatedAt: new Date().toISOString() };
+    this.alertNotificationPolicies.set(policy.tenantId, saved);
+    return structuredClone(saved);
+  }
+
+  async enqueueAlertNotifications(input: Parameters<ControlPlaneStore["enqueueAlertNotifications"]>[0]) {
+    const now = new Date().toISOString();
+    const created: AlertNotification[] = [];
+    for (const target of input) {
+      const existing = this.analyticsNotifications.find((item) => item.alertId === target.alertId &&
+        item.channel === target.channel && item.recipient === target.recipient);
+      if (existing) { created.push(existing); continue; }
+      const notification: AlertNotification = {
+        id: randomUUID(), ...target, status: "queued", attempts: 0,
+        nextAttemptAt: now, createdAt: now, updatedAt: now,
+      };
+      this.analyticsNotifications.push(notification);
+      created.push(notification);
+    }
+    return structuredClone(created);
+  }
+
+  async claimAlertNotifications(limit: number, now: string) {
+    const claimed = this.analyticsNotifications.filter((item) =>
+      ["queued", "failed"].includes(item.status) && item.nextAttemptAt <= now,
+    ).slice(0, limit);
+    for (const item of claimed) { item.status = "processing"; item.attempts += 1; item.updatedAt = now; }
+    return structuredClone(claimed);
+  }
+
+  async completeAlertNotification(id: string, result: Parameters<ControlPlaneStore["completeAlertNotification"]>[1]) {
+    const item = this.analyticsNotifications.find((notification) => notification.id === id);
+    if (!item) return undefined;
+    const now = new Date().toISOString();
+    item.status = result.status;
+    item.updatedAt = now;
+    if (result.providerId) item.providerId = result.providerId;
+    if (result.error) item.lastError = result.error;
+    if (result.nextAttemptAt) item.nextAttemptAt = result.nextAttemptAt;
+    if (result.status === "delivered") { item.sentAt = now; item.deliveredAt = now; }
+    return structuredClone(item);
+  }
+
+  async listAlertNotifications(inputTenantId: string, alertId?: string) {
+    return this.analyticsNotifications.filter((item) => item.tenantId === inputTenantId &&
+      (!alertId || item.alertId === alertId)).map((item) => structuredClone(item));
   }
 
   async linkAnalyticsAlertIncident(

@@ -44,6 +44,12 @@ import { registerDeviceManagementRoutes } from "./routes/device-management.route
 import { registerDVRNVRMonitorRoutes } from "./routes/dvr-nvr-monitor.routes.js";
 import { registerOperationalHealthRoutes } from "./routes/operational-health.routes.js";
 import { registerVideoWallRoutes } from "./routes/video-wall.routes.js";
+import { registerAlertCommandCenterRoutes } from "./routes/alert-command-center.routes.js";
+import {
+  AlertNotificationDispatcher,
+  HttpAlertNotificationSender,
+  type AlertNotificationSender,
+} from "./alerts/notification-dispatcher.js";
 import { DVRNVRMonitorService } from "./services/dvr-nvr-monitor.service.js";
 import { parseBulkCameraCsv } from "./services/camera-registration.js";
 import { RecordingSearchService } from "./recording/search-service.js";
@@ -165,6 +171,8 @@ export async function buildApp(options?: {
   authMode?: "development" | "session" | "oidc";
   recordingRoot?: string;
   enableExportWorker?: boolean;
+  alertWorkerKey?: string;
+  alertNotificationSender?: AlertNotificationSender;
 }): Promise<FastifyInstance> {
   const app = Fastify({
     logger: options?.logger ?? false,
@@ -174,6 +182,12 @@ export async function buildApp(options?: {
   const mediaGatewaySharedKey =
     options?.mediaGatewaySharedKey ??
     "development-media-gateway-key-change-me";
+  const alertSender = options?.alertNotificationSender ?? new HttpAlertNotificationSender({
+    ...(process.env.ALERT_SMS_WEBHOOK_URL ? { sms: process.env.ALERT_SMS_WEBHOOK_URL } : {}),
+    ...(process.env.ALERT_EMAIL_WEBHOOK_URL ? { email: process.env.ALERT_EMAIL_WEBHOOK_URL } : {}),
+    ...(process.env.ALERT_VOICE_WEBHOOK_URL ? { voice: process.env.ALERT_VOICE_WEBHOOK_URL } : {}),
+  }, process.env.ALERT_PROVIDER_TOKEN);
+  const alertDispatcher = new AlertNotificationDispatcher(store, alertSender);
 
   // Initialize video search and forensic services
   const pool = (store as any).pool; // Access pool from store
@@ -215,7 +229,8 @@ export async function buildApp(options?: {
       request.url === "/health" ||
       request.url === "/internal/live-sessions/consume" ||
       request.url.startsWith("/internal/recording/") ||
-      request.url.startsWith("/internal/analytics/")
+      request.url.startsWith("/internal/analytics/") ||
+      request.url.startsWith("/internal/alerts/")
     ) return;
 
     if (
@@ -1465,8 +1480,16 @@ export async function buildApp(options?: {
       ? { recordingEngineUrl: options.recordingEngineUrl } : {}),
     ...(options?.recordingEngineSharedKey
       ? { recordingEngineSharedKey: options.recordingEngineSharedKey } : {}),
+    alertDispatcher,
   });
   await registerAnalyticsPhase2Routes(app, store);
+  await registerAlertCommandCenterRoutes(app, store, alertDispatcher,
+    options?.alertWorkerKey ?? process.env.ALERT_WORKER_SHARED_KEY);
+  const alertWorker = setInterval(() => {
+    void alertDispatcher.drainOnce().catch((error) => app.log.error({ error }, "Alert outbox drain failed"));
+  }, 5_000);
+  alertWorker.unref();
+  app.addHook("onClose", async () => clearInterval(alertWorker));
 
   // Register video search routes if services are available
   if (searchService && playbackEngine && snapshotService) {

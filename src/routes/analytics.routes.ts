@@ -16,6 +16,8 @@ import {
   AI_CAPABILITY_DOMAINS,
   isAiCapability,
 } from "../analytics/capability-catalog.js";
+import { enqueueAlertMatrix, type AlertNotificationDispatcher } from "../alerts/notification-dispatcher.js";
+import { alertEvents } from "../alerts/event-stream.js";
 
 const detectionTypeSchema = z.string().trim().min(1).max(120).refine(isAiCapability, {
   message: "Unknown AI capability",
@@ -111,6 +113,7 @@ export async function registerAnalyticsRoutes(
     analyticsEngineUrl?: string;
     recordingEngineUrl?: string;
     recordingEngineSharedKey?: string;
+    alertDispatcher?: AlertNotificationDispatcher;
   } = {},
 ) {
   app.get("/v1/analytics/capabilities", async () => ({
@@ -276,18 +279,25 @@ export async function registerAnalyticsRoutes(
 
   app.post("/v1/analytics/alerts/:alertId/acknowledge", async (request, reply) => {
     const { alertId } = alertParams.parse(request.params);
-    const { notes } = z.object({
+    const { notes, expectedVersion } = z.object({
       notes: z.string().trim().min(2).max(2_000).optional(),
+      expectedVersion: z.number().int().positive().optional(),
     }).parse(request.body ?? {});
     const alert = await authorizedAlert(
       request, reply, store, alertId, "alerts:acknowledge",
     );
     if (!alert) return;
-    const updated = await store.transitionAnalyticsAlert(
-      alertId, request.currentUser.tenantId,
-      { status: "acknowledged", actorUserId: request.currentUser.id, notes },
-    );
+    let updated;
+    try {
+      updated = await store.transitionAnalyticsAlert(
+        alertId, request.currentUser.tenantId,
+        { status: "acknowledged", actorUserId: request.currentUser.id, notes, expectedVersion },
+      );
+    } catch (error) {
+      return reply.code(409).send({ error: error instanceof Error ? error.message : "alert_conflict" });
+    }
     await auditAlert(request, store, alert, "analytics.alert_acknowledged", { notes });
+    if (updated) publishAlert(updated, "alert.updated");
     return updated;
   });
 
@@ -296,16 +306,23 @@ export async function registerAnalyticsRoutes(
     const body = z.object({
       notes: z.string().trim().min(2).max(2_000).optional(),
       recipients: z.array(z.string().trim().min(1).max(320)).max(50).default([]),
+      expectedVersion: z.number().int().positive().optional(),
     }).parse(request.body ?? {});
     const alert = await authorizedAlert(request, reply, store, alertId, "alerts:escalate");
     if (!alert) return;
-    const updated = await store.transitionAnalyticsAlert(
-      alertId, request.currentUser.tenantId,
-      { status: "escalated", actorUserId: request.currentUser.id, ...body },
-    );
+    let updated;
+    try {
+      updated = await store.transitionAnalyticsAlert(
+        alertId, request.currentUser.tenantId,
+        { status: "escalated", actorUserId: request.currentUser.id, ...body },
+      );
+    } catch (error) {
+      return reply.code(409).send({ error: error instanceof Error ? error.message : "alert_conflict" });
+    }
     await auditAlert(request, store, alert, "analytics.alert_escalated", {
       recipientCount: body.recipients.length,
     });
+    if (updated) publishAlert(updated, "alert.updated");
     return updated;
   });
 
@@ -315,6 +332,7 @@ export async function registerAnalyticsRoutes(
       status: z.enum(["investigating", "resolved", "false_alarm", "suppressed"]),
       notes: z.string().trim().min(2).max(2_000).optional(),
       falseAlarmReason: z.string().trim().min(2).max(1_000).optional(),
+      expectedVersion: z.number().int().positive().optional(),
     }).superRefine((value, context) => {
       if (value.status === "false_alarm" && !value.falseAlarmReason) {
         context.addIssue({ code: "custom", path: ["falseAlarmReason"],
@@ -334,12 +352,18 @@ export async function registerAnalyticsRoutes(
       ...(body.falseAlarmReason !== undefined && { falseAlarmReason: body.falseAlarmReason }),
     };
     
-    const updated = await store.transitionAnalyticsAlert(
-      alertId, request.currentUser.tenantId, transitionInput,
-    );
+    let updated;
+    try {
+      updated = await store.transitionAnalyticsAlert(
+        alertId, request.currentUser.tenantId, transitionInput,
+      );
+    } catch (error) {
+      return reply.code(409).send({ error: error instanceof Error ? error.message : "alert_conflict" });
+    }
     await auditAlert(request, store, alert, "analytics.alert_status_changed", {
       status: body.status, falseAlarmReason: body.falseAlarmReason,
     });
+    if (updated) publishAlert(updated, "alert.updated");
     return updated;
   });
 
@@ -395,6 +419,10 @@ export async function registerAnalyticsRoutes(
       const alert = result.alerts[index]!;
       const rule = result.rules.find((item) => item.id === alert.ruleId);
       if (!rule || alert.eventId !== result.event.id) continue;
+      if (result.event.status === "accepted") {
+        await enqueueAlertMatrix(store, alert, rule);
+        publishAlert(alert, "alert.created");
+      }
       if (rule.recordingPolicy === "event-recording") {
         await triggerRecording(app, options, alert.cameraId,
           input.detectionType === "motion" ? "motion" : "event");
@@ -415,6 +443,10 @@ export async function registerAnalyticsRoutes(
         }
       }
     }
+    if (result.event.status === "accepted" && options.alertDispatcher) {
+      void options.alertDispatcher.drainOnce().catch((error) =>
+        app.log.error({ error }, "Alert notification dispatch failed"));
+    }
     await store.writeAudit({
       tenantId: input.tenantId, actorUserId: null,
       action: "analytics.event_ingested", resourceNodeId: null,
@@ -424,6 +456,13 @@ export async function registerAnalyticsRoutes(
       },
     });
     return reply.code(202).send(result);
+  });
+}
+
+function publishAlert(alert: AnalyticsAlert, type: "alert.created" | "alert.updated") {
+  alertEvents.publish({
+    id: randomUUID(), tenantId: alert.tenantId, type,
+    occurredAt: new Date().toISOString(), alertId: alert.id, alert,
   });
 }
 

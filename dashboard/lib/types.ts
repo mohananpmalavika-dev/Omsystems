@@ -420,6 +420,11 @@ export interface AnalyticsAlert {
   acknowledgedAt?: string;
   falseAlarmReason?: string;
   resolvedAt?: string;
+  assignedTo?: string;
+  assignedAt?: string;
+  slaDueAt?: string;
+  correlationKey?: string;
+  version: number;
   createdAt: string;
   updatedAt: string;
 }
