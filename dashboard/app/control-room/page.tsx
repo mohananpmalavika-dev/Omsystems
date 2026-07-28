@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   AlertTriangle,
   Camera,
@@ -36,6 +36,7 @@ interface ControlRoomStats {
 
 export default function ControlRoomPage() {
   const [cameras, setCameras] = useState<CameraType[]>([]);
+  const [priorityCameraIds, setPriorityCameraIds] = useState<string[]>([]);
   const [stats, setStats] = useState<ControlRoomStats>({
     totalCameras: 0,
     onlineCameras: 0,
@@ -56,6 +57,9 @@ export default function ControlRoomPage() {
   const [activeView, setActiveView] = useState<"grid" | "handover">("grid");
   const [loading, setLoading] = useState(true);
   const [initialLayout, setInitialLayout] = useState<GridLayout | undefined>();
+  const handleActiveStreamsChange = useCallback((activeStreams: number) => {
+    setStats((current) => current.activeStreams === activeStreams ? current : { ...current, activeStreams });
+  }, []);
 
   useEffect(() => {
     loadData();
@@ -65,11 +69,27 @@ export default function ControlRoomPage() {
 
   const loadData = async () => {
     try {
-      await Promise.all([loadCameras(), loadStats()]);
+      await Promise.all([loadCameras(), loadStats(), loadPriorityAlerts()]);
     } catch (error) {
       console.error("Failed to load control room data:", error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadPriorityAlerts = async () => {
+    try {
+      const response = await fetch("/api/control/v1/alerts/alert-center?limit=200", { credentials: "include" });
+      if (!response.ok) return;
+      const body = await response.json();
+      const alerts = Array.isArray(body.data) ? body.data : body.data?.alerts ?? body.alerts ?? [];
+      setPriorityCameraIds(Array.from(new Set<string>(alerts
+        .filter((alert: { severity?: string; status?: string }) =>
+          ["critical", "high", "p1", "p2"].includes(String(alert.severity).toLowerCase()) && alert.status !== "resolved")
+        .map((alert: { cameraId?: string }) => alert.cameraId)
+        .filter((cameraId: unknown): cameraId is string => typeof cameraId === "string"))));
+    } catch (error) {
+      console.error("Failed to load priority alerts:", error);
     }
   };
 
@@ -231,9 +251,11 @@ export default function ControlRoomPage() {
           <EnhancedCameraGrid
             cameras={cameras}
             initialLayout={initialLayout}
-            maxConcurrentStreams={16}
+            maxConcurrentStreams={36}
+            priorityCameraIds={priorityCameraIds}
             enableVirtualScrolling
             enableGPUAcceleration
+            onActiveStreamsChange={handleActiveStreamsChange}
             onLayoutChange={(layout) => {
               console.log("Layout saved:", layout);
             }}

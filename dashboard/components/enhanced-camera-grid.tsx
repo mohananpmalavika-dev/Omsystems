@@ -13,6 +13,7 @@ import {
   Monitor,
   Layers,
   Zap,
+  RotateCw,
 } from "lucide-react";
 import { CameraTile } from "./camera-tile";
 import type { Camera, LiveSessionResponse, RecordingJob, RecordingMode } from "@/lib/types";
@@ -38,6 +39,8 @@ export interface EnhancedCameraGridProps {
   enableGPUAcceleration?: boolean;
   adaptiveLayout?: boolean;
   maxConcurrentStreams?: number;
+  priorityCameraIds?: string[];
+  onActiveStreamsChange?: (count: number) => void;
 }
 
 interface VisibleRange {
@@ -52,7 +55,9 @@ export function EnhancedCameraGrid({
   enableVirtualScrolling = true,
   enableGPUAcceleration = true,
   adaptiveLayout = false,
-  maxConcurrentStreams = 16,
+  maxConcurrentStreams = 36,
+  priorityCameraIds = [],
+  onActiveStreamsChange,
 }: EnhancedCameraGridProps) {
   const [gridSize, setGridSize] = useState<GridSize>(
     initialLayout?.gridSize || "2x2"
@@ -71,6 +76,9 @@ export function EnhancedCameraGrid({
   const [layoutName, setLayoutName] = useState(initialLayout?.name || "");
   const [savedLayouts, setSavedLayouts] = useState<GridLayout[]>([]);
   const [visibleRange, setVisibleRange] = useState<VisibleRange>({ start: 0, end: 50 });
+  const [decoderLimit, setDecoderLimit] = useState(maxConcurrentStreams);
+  const [sequencing, setSequencing] = useState(true);
+  const [sequenceOffset, setSequenceOffset] = useState(0);
   const [draggedCamera, setDraggedCamera] = useState<{ camera: Camera; fromPosition: number } | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const observerRef = useRef<IntersectionObserver | null>(null);
@@ -93,6 +101,20 @@ export function EnhancedCameraGrid({
   };
 
   const totalPositions = gridSizeMap[gridSize];
+  const prioritySet = useMemo(() => new Set(priorityCameraIds), [priorityCameraIds]);
+
+  useEffect(() => onActiveStreamsChange?.(sessions.size), [onActiveStreamsChange, sessions.size]);
+
+  useEffect(() => {
+    const saved = Number(window.localStorage.getItem("sentinel.decoderCapacity"));
+    if ([16, 25, 36, 64].includes(saved)) setDecoderLimit(saved);
+  }, []);
+
+  useEffect(() => {
+    if (!sequencing || gridPositions.size <= decoderLimit) return;
+    const timer = window.setInterval(() => setSequenceOffset((current) => current + decoderLimit), 15_000);
+    return () => window.clearInterval(timer);
+  }, [decoderLimit, gridPositions.size, sequencing]);
 
   // GPU acceleration classes
   const gpuAccelClass = enableGPUAcceleration ? "gpu-accelerated" : "";
@@ -210,6 +232,17 @@ export function EnhancedCameraGrid({
       }
     }
 
+    const dense = newTotalPositions > 16;
+    for (let position = 0; position < Math.min(newTotalPositions, cameras.length); position += 1) {
+      const existing = currentPositions.get(position);
+      if (existing) {
+        if (dense) currentPositions.set(position, { ...existing, stream: "sub" });
+        continue;
+      }
+      const camera = cameras[position];
+      if (camera) currentPositions.set(position, { camera, stream: dense ? "sub" : "main", priority: 0 });
+    }
+
     setGridSize(newSize);
     setGridPositions(currentPositions);
   };
@@ -269,7 +302,7 @@ export function EnhancedCameraGrid({
   };
 
   const handleStartLive = useCallback(async (cameraId: string, stream: "main" | "sub" = "sub") => {
-    if (sessions.has(cameraId) || loading.has(cameraId) || sessions.size + loading.size >= maxConcurrentStreams) return;
+    if (sessions.has(cameraId) || loading.has(cameraId) || sessions.size + loading.size >= decoderLimit) return;
     setLoading((prev) => new Set(prev).add(cameraId));
 
     try {
@@ -296,35 +329,42 @@ export function EnhancedCameraGrid({
         return newSet;
       });
     }
-  }, [loading, maxConcurrentStreams, sessions]);
+  }, [decoderLimit, loading, sessions]);
 
   // Only visible slots own browser decoders. Dense walls start substreams first
   // and cap concurrent sessions even when the saved layout contains 144 slots.
   useEffect(() => {
-    const visibleIds = new Set<string>();
-    const candidates: Array<{ cameraId: string; stream: "main" | "sub" }> = [];
+    const visibleEntries: Array<{ cameraId: string; stream: "main" | "sub"; priority: boolean }> = [];
     for (let position = visibleRange.start; position < visibleRange.end; position += 1) {
       const entry = gridPositions.get(position);
       if (!entry) continue;
-      visibleIds.add(entry.camera.id);
-      if (entry.camera.status === "online" && !sessions.has(entry.camera.id) &&
-          !loading.has(entry.camera.id) && !autoAttempted.current.has(entry.camera.id)) {
-        candidates.push({ cameraId: entry.camera.id, stream: entry.stream });
-      }
+      if (entry.camera.status === "online" || entry.camera.status === "alert") visibleEntries.push({
+        cameraId: entry.camera.id,
+        stream: totalPositions > 16 ? "sub" : entry.stream,
+        priority: prioritySet.has(entry.camera.id) || entry.camera.status === "alert",
+      });
     }
+    const urgent = visibleEntries.filter((entry) => entry.priority);
+    const normal = visibleEntries.filter((entry) => !entry.priority);
+    const rotated = sequencing && normal.length > 0
+      ? [...normal.slice(sequenceOffset % normal.length), ...normal.slice(0, sequenceOffset % normal.length)]
+      : normal;
+    const targetEntries = [...urgent, ...rotated].slice(0, decoderLimit);
+    const targetIds = new Set(targetEntries.map((entry) => entry.cameraId));
     for (const cameraId of autoAttempted.current) {
-      if (!visibleIds.has(cameraId)) autoAttempted.current.delete(cameraId);
+      if (!targetIds.has(cameraId)) autoAttempted.current.delete(cameraId);
     }
     setSessions((current) => {
-      const retained = [...current].filter(([cameraId]) => visibleIds.has(cameraId));
+      const retained = [...current].filter(([cameraId]) => targetIds.has(cameraId));
       return retained.length === current.size ? current : new Map(retained);
     });
-    const available = Math.max(0, maxConcurrentStreams - sessions.size - loading.size);
+    const candidates = targetEntries.filter((entry) => !sessions.has(entry.cameraId) && !loading.has(entry.cameraId) && !autoAttempted.current.has(entry.cameraId));
+    const available = Math.max(0, decoderLimit - sessions.size - loading.size);
     for (const candidate of candidates.slice(0, available)) {
       autoAttempted.current.add(candidate.cameraId);
       void handleStartLive(candidate.cameraId, candidate.stream);
     }
-  }, [gridPositions, handleStartLive, loading, maxConcurrentStreams, sessions, visibleRange]);
+  }, [decoderLimit, gridPositions, handleStartLive, loading, prioritySet, sequenceOffset, sequencing, sessions, totalPositions, visibleRange]);
 
   const handleToggleRecording = async (cameraId: string) => {
     const currentJob = recordings.get(cameraId) ?? {
@@ -629,7 +669,34 @@ export function EnhancedCameraGrid({
         </div>
 
         <div className="grid-actions">
+          <label className="capacity-control" title="Maximum independent browser decoders on this workstation">
+            Decoder capacity
+            <select
+              value={decoderLimit}
+              onChange={(event) => {
+                const value = Number(event.target.value);
+                setDecoderLimit(value);
+                window.localStorage.setItem("sentinel.decoderCapacity", String(value));
+              }}
+            >
+              <option value={16}>16 — standard</option>
+              <option value={25}>25 — enhanced</option>
+              <option value={36}>36 — recommended</option>
+              <option value={64}>64 — certified workstation</option>
+            </select>
+          </label>
+          <button
+            className={`btn-secondary ${sequencing ? "active-control" : ""}`}
+            onClick={() => setSequencing((current) => !current)}
+            title="Rotate cameras every 15 seconds when assigned channels exceed decoder capacity"
+          >
+            <RotateCw size={16} />
+            Sequence {sequencing ? "on" : "off"}
+          </button>
           <div className="performance-indicators">
+            <span className="performance-badge decoder-badge">
+              {sessions.size}/{decoderLimit} live
+            </span>
             {enableVirtualScrolling && totalPositions > 36 && (
               <span className="performance-badge">
                 <Zap size={14} />
@@ -850,6 +917,31 @@ export function EnhancedCameraGrid({
           flex-wrap: wrap;
         }
 
+        .capacity-control {
+          display: flex;
+          align-items: center;
+          gap: 7px;
+          color: #475569;
+          font-size: 12px;
+          font-weight: 700;
+        }
+
+        .capacity-control select {
+          min-height: 34px;
+          padding: 0 28px 0 9px;
+          border: 1px solid #cbd5e1;
+          border-radius: 6px;
+          background: #fff;
+          color: #0f172a;
+          font-size: 12px;
+        }
+
+        .active-control {
+          border-color: #2563eb;
+          background: #eff6ff;
+          color: #1d4ed8;
+        }
+
         .performance-indicators {
           display: flex;
           gap: 6px;
@@ -867,6 +959,12 @@ export function EnhancedCameraGrid({
           font-size: 11px;
           font-weight: 600;
           color: #047857;
+        }
+
+        .decoder-badge {
+          border-color: #60a5fa;
+          background: #eff6ff;
+          color: #1d4ed8;
         }
 
         .saved-layouts-dropdown {
