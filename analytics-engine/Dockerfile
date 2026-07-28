@@ -17,7 +17,9 @@ COPY analytics-engine/package.json analytics-engine/package.json
 COPY analytics-engine/tsconfig.json analytics-engine/tsconfig.json
 
 # Install dependencies for analytics-engine workspace only
-RUN npm ci --workspace @sentinel/analytics-engine
+# Render's current worker is CPU-only. Explicitly skip the optional CUDA bundle;
+# otherwise onnxruntime-node attempts a large provider download during npm ci.
+RUN npm ci --workspace @sentinel/analytics-engine --onnxruntime-node-install-cuda=skip
 
 # Copy analytics-engine source
 COPY analytics-engine/src analytics-engine/src
