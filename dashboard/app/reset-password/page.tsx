@@ -1,12 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { FormEvent, useState } from "react";
+import { FormEvent, useState, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { ShieldCheck } from "lucide-react";
 import { authApi } from "@/lib/api-client";
 
-export default function ResetPasswordPage() {
+function ResetPasswordForm() {
   const token = useSearchParams()?.get("token") ?? "";
   const [password, setPassword] = useState(""); const [confirm, setConfirm] = useState("");
   const [message, setMessage] = useState(token ? "" : "This reset link is invalid.");
@@ -29,4 +29,12 @@ export default function ResetPasswordPage() {
     </form>}
     <p className="login-help"><Link href="/login">Return to sign in</Link></p>
   </section></main>;
+}
+
+export default function ResetPasswordPage() {
+  return (
+    <Suspense fallback={<div className="login-container"><section className="login-card"><div className="login-brand"><ShieldCheck size={32}/><h1>Loading...</h1></div></section></div>}>
+      <ResetPasswordForm />
+    </Suspense>
+  );
 }
