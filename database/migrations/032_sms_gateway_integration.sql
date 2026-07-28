@@ -2,7 +2,8 @@ ALTER TABLE analytics_notifications
   ADD COLUMN IF NOT EXISTS sms_delivery jsonb;
 
 ALTER TABLE alert_notification_policies
-  ADD COLUMN IF NOT EXISTS sms_templates jsonb NOT NULL DEFAULT '{}'::jsonb;
+  ADD COLUMN IF NOT EXISTS sms_templates jsonb NOT NULL DEFAULT '{}'::jsonb,
+  ADD COLUMN IF NOT EXISTS sms_template_ids jsonb NOT NULL DEFAULT '{}'::jsonb;
 
 CREATE INDEX IF NOT EXISTS analytics_notifications_sms_delivery_idx
   ON analytics_notifications (tenant_id, alert_id, (sms_delivery->>'status'))
