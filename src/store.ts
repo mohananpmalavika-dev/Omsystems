@@ -59,6 +59,12 @@ import type {
   OperationalReportDelivery,
 } from "./reporting/types.js";
 
+function correlationCount(metadata?: Record<string, unknown>) {
+  const explicit = metadata?.correlatedDetectionCount;
+  if (typeof explicit === "number" && Number.isFinite(explicit)) return Math.max(0, Math.floor(explicit));
+  return Array.isArray(metadata?.correlatedDetectionTypes) ? metadata.correlatedDetectionTypes.length : 0;
+}
+
 function clean<T extends Record<string, any>>(obj: T) {
   return Object.fromEntries(Object.entries(obj).filter(([, v]) => v !== undefined)) as Partial<T>;
 }

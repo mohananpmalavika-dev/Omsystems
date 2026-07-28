@@ -19,6 +19,13 @@ import {
   isTerminalAlertStatus,
   sortedMatchingRules,
 } from "../analytics/rule-engine.js";
+import { moreSevere, resolveAlertSeverity } from "../analytics/severity-policy.js";
+
+function correlationCount(metadata?: Record<string, unknown>) {
+  const explicit = metadata?.correlatedDetectionCount;
+  if (typeof explicit === "number" && Number.isFinite(explicit)) return Math.max(0, Math.floor(explicit));
+  return Array.isArray(metadata?.correlatedDetectionTypes) ? metadata.correlatedDetectionTypes.length : 0;
+}
 
 const ruleSelection = `
   SELECT rule.*,
@@ -228,6 +235,11 @@ export class AnalyticsRepository {
       const alerts: AnalyticsAlert[] = [];
       let created = 0;
       for (const rule of rules) {
+        const effectiveSeverity = resolveAlertSeverity({
+          configuredSeverity: rule.severity,
+          durationSeconds: input.durationSeconds,
+          correlatedDetectionCount: correlationCount(input.metadata),
+        });
         const recent = await client.query(
           `SELECT * FROM analytics_alerts
            WHERE rule_id=$1 AND camera_id=$2
@@ -241,9 +253,10 @@ export class AnalyticsRepository {
           const updated = await client.query(
             `UPDATE analytics_alerts SET last_detected_at=$2,
                occurrence_count=occurrence_count+1,
-               confidence=GREATEST(confidence,$3), updated_at=now()
+               confidence=GREATEST(confidence,$3), severity=$4, updated_at=now()
              WHERE id=$1 RETURNING *`,
-            [recent.rows[0].id, input.occurredAt, input.confidence],
+            [recent.rows[0].id, input.occurredAt, input.confidence,
+              moreSevere(recent.rows[0].severity, effectiveSeverity)],
           );
           alerts.push(mapAlert(updated.rows[0]));
           continue;
@@ -260,7 +273,7 @@ export class AnalyticsRepository {
           [
             alertId, input.tenantId, input.cameraId, rule.id, eventId,
             analyticsAlertTitle(rule), `Rule \"${rule.name}\" matched.`,
-            rule.severity, input.confidence,
+            effectiveSeverity, input.confidence,
             JSON.stringify([...new Set(input.objects.map((object) => object.label))]),
             input.modelVersion, input.snapshotReference ?? null,
             input.clipReference ?? null, input.occurredAt,
