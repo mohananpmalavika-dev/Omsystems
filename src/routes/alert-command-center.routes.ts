@@ -36,6 +36,10 @@ const policySchema = z.object({
     P1: z.string().trim().min(1).max(480).optional(),
     P2: z.string().trim().min(1).max(480).optional(),
   }).default({}),
+  smsTemplateIds: z.object({
+    P1: z.string().trim().min(1).max(200).optional(),
+    P2: z.string().trim().min(1).max(200).optional(),
+  }).default({}),
 });
 
 export async function registerAlertCommandCenterRoutes(
@@ -141,6 +145,7 @@ export async function registerAlertCommandCenterRoutes(
       rateLimitPerMinute: input.rateLimitPerMinute,
       escalationAfterSeconds: input.escalationAfterSeconds,
       smsTemplates: input.smsTemplates,
+      smsTemplateIds: input.smsTemplateIds,
       updatedAt: new Date().toISOString(),
     });
     return { data: policy, matrix: NOTIFICATION_MATRIX };
@@ -237,12 +242,13 @@ export async function registerAlertCommandCenterRoutes(
   });
 
   const smsStatusHandler = async (request: any, reply: any) => {
-    const query = z.object({ token: z.string().min(20).max(4_000), MessageStatus: z.string().optional(),
+    const query = z.object({ token: z.string().min(20).max(4_000).optional(), clientId: z.string().min(20).max(4_000).optional(), MessageStatus: z.string().optional(),
       SmsStatus: z.string().optional(), status: z.string().optional(), MessageSid: z.string().optional(),
-      message_id: z.string().optional(), requestId: z.string().optional() }).parse({
+      message_id: z.string().optional(), requestId: z.string().optional() }).refine((value) => value.token || value.clientId,
+        "token or clientId is required").parse({
         ...(request.body && typeof request.body === "object" ? request.body : {}), ...request.query,
       });
-    const claims = voiceTokens.verify(query.token);
+    const claims = voiceTokens.verify(query.token ?? query.clientId!);
     if (!claims) return reply.code(401).send({ error: "invalid_or_expired_sms_callback" });
     const status = (query.MessageStatus ?? query.SmsStatus ?? query.status ?? "provider_callback")
       .toLowerCase().replaceAll("-", "_");

@@ -17,9 +17,40 @@ describe("Phase 4 persistent daily reports",()=>{
   afterEach(async()=>{await app.close();await rm(root,{recursive:true,force:true});});
 
   it("persists schedules with timezone, recipients, filters and next-run state",async()=>{
-    const created=await app.inject({method:"POST",url:"/v1/reports/operational/schedules",headers:admin,payload:{name:"Daily South operations",timezone:"Asia/Kolkata",dailyAt:"06:30",formats:["pdf","xlsx","csv"],recipients:["soc@example.com"],filters:{region:"South Region",severity:"P1"},enabled:true}});
-    expect(created.statusCode).toBe(201);expect(created.json()).toMatchObject({name:"Daily South operations",timezone:"Asia/Kolkata",dailyAt:"06:30",lastRunAt:null});expect(Date.parse(created.json().nextRunAt)).toBeGreaterThan(Date.now());
+    const created=await app.inject({method:"POST",url:"/v1/reports/operational/schedules",headers:admin,payload:{name:"Daily South operations",timezone:"Asia/Kolkata",dailyAt:"06:30",template:"branch_health_summary",formats:["pdf","xlsx","csv"],recipients:["soc@example.com"],filters:{region:"South Region",severity:"P1"},enabled:true}});
+    expect(created.statusCode).toBe(201);expect(created.json()).toMatchObject({name:"Daily South operations",timezone:"Asia/Kolkata",dailyAt:"06:30",template:"branch_health_summary",lastRunAt:null});expect(Date.parse(created.json().nextRunAt)).toBeGreaterThan(Date.now());
     const listed=await app.inject({method:"GET",url:"/v1/reports/operational/schedules",headers:admin});expect(listed.json().data).toHaveLength(1);expect(listed.json().data[0].recipients).toEqual(["soc@example.com"]);
+  });
+
+  it("publishes and generates every requested operational report template",async()=>{
+    const catalog=await app.inject({method:"GET",url:"/v1/reports/operational/templates",headers:admin});
+    expect(catalog.statusCode).toBe(200);expect(catalog.json().data).toHaveLength(7);
+    const templates=["branch_health_summary","camera_availability","alert_summary","recorder_status","hdd_health","retention_compliance"];
+    for(const template of templates){
+      const response=await app.inject({method:"POST",url:"/v1/reports/operational/runs",headers:admin,payload:{template,formats:["csv"],filters:{branchId:"branch-blr-001"}}});
+      expect(response.statusCode).toBe(202);const id=response.json().id;
+      await waitFor(async()=> (await store.getOperationalReportRun(id,"omsystems"))?.status==="completed",10_000);
+      const run=await store.getOperationalReportRun(id,"omsystems");const artifacts=await store.listOperationalReportArtifacts("omsystems",id);
+      expect(run).toMatchObject({template,status:"completed",summary:{template}});
+      expect(artifacts[0]?.filename).toMatch(new RegExp(`^${template}-\\d{4}-\\d{2}-\\d{2}\\.csv$`));
+      expect(Date.parse(artifacts[0]!.expiresAt)).toBeGreaterThan(Date.now()+300*86_400_000);
+    }
+  },30_000);
+
+  it("claims a due daily schedule, archives the report and emails configured recipients",async()=>{
+    const created=await app.inject({method:"POST",url:"/v1/reports/operational/schedules",headers:admin,payload:{
+      name:"Daily HDD operations",timezone:"Asia/Kolkata",dailyAt:"06:30",template:"hdd_health",
+      formats:["pdf"],recipients:["storage@example.com"],filters:{branchId:"branch-blr-001"},enabled:true}});
+    const schedule=created.json();
+    await store.updateOperationalReportSchedule(schedule.id,"omsystems",{nextRunAt:new Date(Date.now()-1_000).toISOString()});
+    const drained=await app.inject({method:"POST",url:"/internal/reports/operational/drain",headers:{"x-report-worker-key":workerKey}});
+    expect(drained.statusCode).toBe(200);
+    await waitFor(async()=>store.operationalReportRuns.some((run)=>run.scheduleId===schedule.id&&run.status==="completed"),5_000);
+    const run=store.operationalReportRuns.find((item)=>item.scheduleId===schedule.id)!;
+    const updated=(await store.listOperationalReportSchedules("omsystems")).find((item)=>item.id===schedule.id)!;
+    expect(run.template).toBe("hdd_health");expect(updated.lastRunAt).toBeTruthy();expect(Date.parse(updated.nextRunAt)).toBeGreaterThan(Date.now());
+    expect(store.operationalReportDeliveries.find((item)=>item.runId===run.id)).toMatchObject({recipient:"storage@example.com",status:"delivered"});
+    expect(deliveries).toContain("storage@example.com");
   });
 
   it("generates reconciled CSV, XLSX and PDF artifacts with signed downloads and delivery history",async()=>{

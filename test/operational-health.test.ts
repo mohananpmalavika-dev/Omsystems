@@ -79,6 +79,24 @@ describe("Phase 1 operational health", () => {
     expect(response.json().data.branches[0].unknownComponents).toContain("storage");
   });
 
+  it("returns summary metrics and supports connectivity click-through filtering", async () => {
+    const summary = await app.inject({
+      method: "GET", url: "/v1/operations/health/summary", headers: admin,
+    });
+    expect(summary.statusCode).toBe(200);
+    expect(summary.json().data).toMatchObject({
+      totalBranches: 1, onlineBranches: 0, offlineBranches: 0,
+      overallHealthScore: expect.any(Number),
+    });
+
+    const filtered = await app.inject({
+      method: "GET", url: "/v1/operations/health/branches?connectivity=unknown", headers: admin,
+    });
+    expect(filtered.statusCode).toBe(200);
+    expect(filtered.json().data.total).toBe(1);
+    expect(filtered.json().data.branches[0].internetStatus).toBe("unknown");
+  });
+
   it("persists tenant policy defaults and branch overrides", async () => {
     const policy = { ...defaultOperationalHealthPolicy, retentionDays: 120 };
     const saved = await app.inject({

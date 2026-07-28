@@ -1,6 +1,6 @@
 # Phase 5: Scale proof, security, HA and rollout
 
-Phase 5 provides the repeatable machinery needed to prove the contracted 400-branch/5,000-camera target. It does not label the platform production-certified merely because the harness exists: certification becomes true only when the target inventory, 100 dashboard users, API SLOs, reconnect threshold and a continuous 24-hour execution are all present in one measured evidence file.
+Phase 5 provides the repeatable machinery needed to prove a configured 400-branch camera target. It does not label the platform production-certified merely because the harness exists: certification becomes true only when the full requested camera inventory, 100 dashboard users, API SLOs, reconnect threshold and a continuous 24-hour execution are all present in one measured evidence file.
 
 ## Implemented controls
 
@@ -28,12 +28,12 @@ $env:PHASE5_USER_ID="phase5-load-operator"
 $env:PHASE5_PARENT_NODE_ID="region-scale-test"
 $env:PHASE5_PROVISION="true"
 $env:PHASE5_STAGES="10:300,50:900,100:1800,400:86400"
-$env:PHASE5_CAMERAS="5000"
+$env:PHASE5_CAMERAS="10000"
 $env:PHASE5_DASHBOARD_USERS="100"
 npm.cmd run test:phase5 --prefix load-testing
 ```
 
-The process exits with code `2` when execution completed but contractual certification is still incomplete, and `1` for a harness or target failure. Evidence is written beneath `load-testing/reports`. Preserve its SHA-256 digest and import the approved result into `platform_scale_test_runs`.
+The process exits with code `2` when execution completed but certification for the configured target is still incomplete, and `1` for a harness or target failure. The configured `PHASE5_CAMERAS` value is the certification floor; a 10,000-camera run cannot pass with only 5,000 cameras present. Evidence is written beneath `load-testing/reports`. Preserve its SHA-256 digest and import the approved result into `platform_scale_test_runs`.
 
 ## Rollout gates
 
@@ -42,7 +42,7 @@ The process exits with code `2` when execution completed but contractual certifi
 | 10 branches | Backup and restore drill passed; P1 routing verified | 48 hours | Any tenant leak, data loss, or sustained error rate above 1% |
 | 50 branches | 10-branch SLOs green | 72 hours | p95 above 500 ms for 15 minutes or health freshness below 95% |
 | 100 branches | Provider outage/retry and node-loss exercises passed | 7 days | Notification queue age above 30 seconds for P1 or reconnect below 99% |
-| 400 branches | 24-hour 400/5,000/100-user test approved | 14 days | Availability below 99.9%, integrity failure, or client stop decision |
+| 400 branches | 24-hour 400/configured-camera-target/100-user test approved | 14 days | Availability below 99.9%, integrity failure, or client stop decision |
 
 Rollback uses the prior immutable image digest, pauses new branch enrollment, preserves queues, and restores data only when an integrity incident requires it. Database rollback must use a forward corrective migration unless the incident commander authorizes the tested restore procedure.
 

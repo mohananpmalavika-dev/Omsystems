@@ -526,6 +526,31 @@ export class AnalyticsRepository {
     return updated.rows[0] ? mapNotification(updated.rows[0]) : undefined;
   }
 
+  async reserveSmsRateLimit(tenantId: string, limit: number, requested: number, now: string) {
+    const client = await this.pool.connect();
+    try {
+      await client.query("BEGIN");
+      const windowStart = new Date(new Date(now).setUTCSeconds(0, 0)).toISOString();
+      await client.query(
+        `INSERT INTO sms_rate_limit_windows (tenant_id, window_start, sent_count) VALUES ($1,$2,0)
+         ON CONFLICT (tenant_id,window_start) DO NOTHING`, [tenantId, windowStart]);
+      const result = await client.query(
+        `WITH current AS (
+           SELECT tenant_id,window_start,sent_count FROM sms_rate_limit_windows
+           WHERE tenant_id=$1 AND window_start=$2 FOR UPDATE
+         ), updated AS (
+           UPDATE sms_rate_limit_windows AS limits SET sent_count=LEAST($3, current.sent_count+$4)
+           FROM current WHERE limits.tenant_id=current.tenant_id AND limits.window_start=current.window_start
+           RETURNING current.sent_count AS before_count, limits.sent_count AS after_count
+         ) SELECT after_count-before_count AS allowed FROM updated`,
+        [tenantId, windowStart, limit, requested]);
+      await client.query("COMMIT");
+      return Number(result.rows[0]?.allowed ?? 0);
+    } catch (error) {
+      await client.query("ROLLBACK"); throw error;
+    } finally { client.release(); }
+  }
+
   async listNotifications(tenantId: string, alertId?: string) {
     const result = await this.pool.query(
       `SELECT * FROM analytics_notifications WHERE tenant_id=$1 AND ($2::uuid IS NULL OR alert_id=$2)

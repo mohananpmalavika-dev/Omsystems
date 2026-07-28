@@ -19,7 +19,8 @@ import {
   getHealthStatusIcon,
   getTimeAgo
 } from "@/lib/types/operational-health";
-import { BranchHealthMosaic, HddFleetWidget, InternetFleetWidget, RecorderFleetWidget, RetentionFleetWidget } from "@/components/operational-health";
+import { BranchHealthMosaic, BranchSummaryWidget, HddFleetWidget, InternetFleetWidget, RecorderFleetWidget, RetentionFleetWidget } from "@/components/operational-health";
+import type { BranchSummaryFilter } from "@/components/operational-health";
 import { useOperationalHealthStream } from "@/hooks/useOperationalHealthStream";
 
 export default function OperationalHealthDashboard() {
@@ -28,6 +29,12 @@ export default function OperationalHealthDashboard() {
   const [loading, setLoading] = useState(true);
   const [lastRefresh, setLastRefresh] = useState(new Date());
   const [autoRefresh, setAutoRefresh] = useState(true);
+  const [branchFilter, setBranchFilter] = useState<BranchSummaryFilter>({ kind: "all" });
+
+  const selectBranchFilter = (filter: BranchSummaryFilter) => {
+    setBranchFilter(filter);
+    window.requestAnimationFrame(() => document.getElementById("branch-health-mosaic")?.scrollIntoView({ behavior: "smooth", block: "start" }));
+  };
 
   const fetchHealthData = useCallback(async () => {
     try {
@@ -136,6 +143,8 @@ export default function OperationalHealthDashboard() {
         </div>
       </div>
 
+      {summary && <BranchSummaryWidget summary={summary} onSelect={selectBranchFilter} />}
+
       {/* Top-level KPIs */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         <div className="stat-card">
@@ -229,7 +238,7 @@ export default function OperationalHealthDashboard() {
         </div>
       </div>
 
-      <BranchHealthMosaic />
+      <BranchHealthMosaic filter={branchFilter} />
 
       {/* Critical Alerts Section */}
       {criticalAlerts.length > 0 && (

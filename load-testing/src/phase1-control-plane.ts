@@ -41,7 +41,7 @@ export async function runProgressiveScale(config: ScaleConfig): Promise<ScaleEvi
   const resilience=await exerciseReconnect(client,targets.slice(0,Math.min(100,targets.length)));
   const exportRun=config.runLargeExport?await exerciseExport(client):undefined;
   const evidence:ScaleEvidence={startedAt,completedAt:new Date().toISOString(),target:{branches:requiredBranches,cameras:config.targetCameras,dashboardUsers:config.dashboardUsers},inventory:{branches:targets.length,cameras:cameraCount,edgeAgents:targets.filter((item)=>item.edgeAgentId).length},stages,resilience,...(exportRun?{exportRun}:{}),certification:{apiSloPassed:stages.every((item)=>item.p95Ms<500&&item.p99Ms<1000&&item.errors===0),reconnectSloPassed:resilience.replayAcceptedPercent>=99,endurance24hExecuted:config.stages.some((item)=>item.durationSeconds>=86_400),productionCertified:false}};
-  evidence.certification.productionCertified=evidence.certification.apiSloPassed&&evidence.certification.reconnectSloPassed&&evidence.certification.endurance24hExecuted&&requiredBranches>=400&&cameraCount>=5000&&config.dashboardUsers>=100;
+  evidence.certification.productionCertified=evidence.certification.apiSloPassed&&evidence.certification.reconnectSloPassed&&evidence.certification.endurance24hExecuted&&requiredBranches>=400&&cameraCount>=config.targetCameras&&config.dashboardUsers>=100;
   await mkdir(resolve(config.outputDirectory),{recursive:true});
   await writeFile(resolve(config.outputDirectory,`phase5-scale-${Date.now()}.json`),JSON.stringify(evidence,null,2),"utf8");
   return evidence;

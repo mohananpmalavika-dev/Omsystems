@@ -54,6 +54,7 @@ const paginationSchema = z.object({
   limit: z.coerce.number().int().min(1).max(500).default(50),
   offset: z.coerce.number().int().min(0).default(0),
   status: z.enum(["healthy", "warning", "critical", "unknown"]).optional(),
+  connectivity: z.enum(["online", "degraded", "failover", "offline", "unknown"]).optional(),
   branchId: z.string().optional(),
   region: z.string().trim().max(120).optional(),
   search: z.string().trim().max(120).optional(),
@@ -200,14 +201,21 @@ export async function registerOperationalHealthRoutes(
     const projections = await loadAccessibleProjections(request, store);
     const cameras = projections.flatMap((branch) => branch.cameras);
     const agents = (await Promise.all(projections.map((branch) => store.listEdgeAgentsByBranch(branch.id)))).flat();
+    const scoredBranches = projections.filter((branch) => branch.healthScore !== null);
+    const overallHealthScore = scoredBranches.length > 0
+      ? Math.round((scoredBranches.reduce((sum, branch) => sum + (branch.healthScore ?? 0), 0) / scoredBranches.length) * 10) / 10
+      : 0;
     return {
       success: true,
       data: {
         totalBranches: projections.length,
+        onlineBranches: projections.filter((branch) => branch.internetStatus === "online").length,
+        offlineBranches: projections.filter((branch) => branch.internetStatus === "offline").length,
         healthyBranches: projections.filter((branch) => branch.healthStatus === "healthy").length,
         warningBranches: projections.filter((branch) => branch.healthStatus === "warning").length,
         criticalBranches: projections.filter((branch) => branch.healthStatus === "critical").length,
         unknownBranches: projections.filter((branch) => branch.healthStatus === "unknown").length,
+        overallHealthScore,
         totalCameras: cameras.length,
         camerasOnline: cameras.filter((camera) => camera.onlineStatus === "healthy").length,
         camerasOffline: cameras.filter((camera) => camera.onlineStatus === "critical").length,
@@ -230,6 +238,7 @@ export async function registerOperationalHealthRoutes(
     const query = paginationSchema.parse(request.query);
     let projections = await loadAccessibleProjections(request, store);
     if (query.status) projections = projections.filter((branch) => branch.healthStatus === query.status);
+    if (query.connectivity) projections = projections.filter((branch) => branch.internetStatus === query.connectivity);
     if (query.region) projections = projections.filter((branch) => branch.region === query.region);
     if (query.search) {
       const search = query.search.toLowerCase();

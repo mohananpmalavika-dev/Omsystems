@@ -82,7 +82,6 @@ export async function enqueueAlertMatrix(
 
 export class AlertNotificationDispatcher {
   private draining = false;
-  private readonly smsSentAt = new Map<string, number[]>();
   constructor(private readonly store: ControlPlaneStore, private readonly sender: AlertNotificationSender) {}
 
   async drainOnce(limit = 50) {
@@ -155,12 +154,8 @@ export class AlertNotificationDispatcher {
   }
 
   private async reserveSmsSlots(tenantId: string, requested: number) {
-    const now = Date.now();
-    const recent = (this.smsSentAt.get(tenantId) ?? []).filter((timestamp) => timestamp > now - 60_000);
     const policy = await this.store.getAlertNotificationPolicy(tenantId);
-    const allowed = Math.max(0, Math.min(requested, policy.rateLimitPerMinute - recent.length));
-    this.smsSentAt.set(tenantId, [...recent, ...Array.from({ length: allowed }, () => now)]);
-    return allowed;
+    return this.store.reserveSmsRateLimit(tenantId, policy.rateLimitPerMinute, requested, new Date().toISOString());
   }
 
   private async fail(notification: AlertNotification, error: unknown) {

@@ -11,3 +11,10 @@ CREATE INDEX IF NOT EXISTS analytics_notifications_sms_delivery_idx
 
 COMMENT ON COLUMN alert_notification_policies.sms_templates IS
   'Tenant-managed P1/P2 SMS templates using documented alert placeholders';
+
+CREATE TABLE IF NOT EXISTS sms_rate_limit_windows (
+  tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+  window_start timestamptz NOT NULL,
+  sent_count integer NOT NULL DEFAULT 0 CHECK (sent_count >= 0),
+  PRIMARY KEY (tenant_id, window_start)
+);

@@ -454,6 +454,9 @@ export class PostgresStore
   async recordSmsDeliveryEvent(id: string, event: Parameters<ControlPlaneStore["recordSmsDeliveryEvent"]>[1]) {
     return this.analytics.recordSmsDeliveryEvent(id, event);
   }
+  async reserveSmsRateLimit(tenantId: string, limit: number, requested: number, now: string) {
+    return this.analytics.reserveSmsRateLimit(tenantId, limit, requested, now);
+  }
   async listAlertNotifications(tenantId: string, alertId?: string) {
     return this.analytics.listNotifications(tenantId, alertId);
   }

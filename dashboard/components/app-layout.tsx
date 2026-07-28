@@ -268,11 +268,11 @@ export function AppLayout({ children, incidentCount = 0, cameraCount = 0 }: AppL
             <div><strong>Platform healthy</strong><span>Cloud and edge connected</span></div>
             <ChevronRight size={15} />
           </Link>
-          <div className="sidebar-user">
+          <Link href="/account/security" className="sidebar-user" onClick={closeSidebar}>
             <div className="avatar">SO</div>
             <div><strong>Security operator</strong><span>Regional operations</span></div>
             <Settings size={16} />
-          </div>
+          </Link>
         </div>
       </aside>
 
@@ -294,7 +294,7 @@ export function AppLayout({ children, incidentCount = 0, cameraCount = 0 }: AppL
               <Bell size={18} />
               {incidentCount > 0 && <i />}
             </button>
-            <div className="top-avatar" aria-label="Operator profile"><CircleUserRound size={20} /></div>
+            <Link href="/account/security" className="top-avatar" aria-label="Operator profile and session security"><CircleUserRound size={20} /></Link>
           </div>
         </header>
         {children}

@@ -105,6 +105,12 @@ export async function registerAuthRoutes(
       // Record successful login
       await store.recordSuccessfulLogin(user.id, request.ip);
 
+      await store.writeAudit({
+        tenantId: user.tenantId, actorUserId: user.id, action: "user.login",
+        resourceNodeId: null, outcome: "success", sourceIp: request.ip,
+        details: { sessionId: session.id },
+      });
+
       // Get user details
       const userDetails = await store.getUserDetails(user.id);
 
@@ -242,6 +248,12 @@ export async function registerAuthRoutes(
       // Store reset token
       await store.createPasswordResetToken(user.id, tokenHash);
 
+      await store.writeAudit({
+        tenantId: user.tenantId, actorUserId: user.id,
+        action: "user.password_reset_requested", resourceNodeId: null,
+        outcome: "success", sourceIp: request.ip,
+      });
+
       // Deliberately do not log the reset token. A mail provider can consume
       // it through a dedicated notification adapter in production.
 
@@ -294,6 +306,15 @@ export async function registerAuthRoutes(
       // Invalidate all existing sessions for security
       await store.deleteAllUserSessions(resetToken.userId);
 
+      const resetUser = await store.getUserById(resetToken.userId);
+      if (resetUser) {
+        await store.writeAudit({
+          tenantId: resetUser.tenantId, actorUserId: resetUser.id,
+          action: "user.password_reset_completed", resourceNodeId: null,
+          outcome: "success", sourceIp: request.ip,
+        });
+      }
+
       return {
         success: true,
         message: "Password has been reset successfully. You can now log in.",
@@ -319,6 +340,13 @@ export async function registerAuthRoutes(
     }
 
     await store.deleteUserSession(params.id);
+
+    await store.writeAudit({
+      tenantId: request.currentUser.tenantId,
+      actorUserId: request.currentUser.id,
+      action: "user.session_revoked", resourceNodeId: null,
+      outcome: "success", details: { sessionId: params.id },
+    });
 
     return reply.code(204).send();
   });

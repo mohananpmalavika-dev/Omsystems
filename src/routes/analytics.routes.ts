@@ -18,6 +18,7 @@ import {
 } from "../analytics/capability-catalog.js";
 import { enqueueAlertMatrix, type AlertNotificationDispatcher } from "../alerts/notification-dispatcher.js";
 import { alertEvents } from "../alerts/event-stream.js";
+import { defaultSeverityForDetection } from "../analytics/severity-policy.js";
 
 const detectionTypeSchema = z.string().trim().min(1).max(120).refine(isAiCapability, {
   message: "Unknown AI capability",
@@ -64,7 +65,7 @@ const ruleSchema = z.object({
   minConfidence: z.number().min(0).max(1).default(0.65),
   minDurationSeconds: z.number().min(0).max(86_400).default(0),
   direction: z.enum(["any", "a-to-b", "b-to-a", "enter", "exit"]).default("any"),
-  severity: z.enum(severities).default("P3"),
+  severity: z.enum(severities).optional(),
   cooldownSeconds: z.number().int().min(0).max(86_400).default(60),
   recipients: z.array(z.string().trim().min(1).max(320)).max(50).default([]),
   escalateAfterSeconds: z.number().int().min(30).max(86_400).optional(),
@@ -200,7 +201,8 @@ export async function registerAnalyticsRoutes(
 
   app.post("/v1/cameras/:id/analytics/rules", async (request, reply) => {
     const { id } = cameraParams.parse(request.params);
-    const input = ruleSchema.parse(request.body);
+    const parsedInput = ruleSchema.parse(request.body);
+    const input = { ...parsedInput, severity: parsedInput.severity ?? defaultSeverityForDetection(parsedInput.detectionType) };
     const camera = await authorizedCamera(request, reply, store, id, "analytics:configure");
     if (!camera) return;
     

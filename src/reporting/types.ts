@@ -1,4 +1,6 @@
 export type OperationalReportFormat = "csv" | "xlsx" | "pdf";
+export type OperationalReportTemplate = "comprehensive" | "branch_health_summary" | "camera_availability" |
+  "alert_summary" | "recorder_status" | "hdd_health" | "retention_compliance";
 export type OperationalReportRunStatus = "queued" | "running" | "completed" | "failed" | "dead";
 
 export interface OperationalReportFilters {
@@ -14,6 +16,7 @@ export interface OperationalReportFilters {
 
 export interface OperationalReportSchedule {
   id: string; tenantId: string; name: string; timezone: string; dailyAt: string;
+  template: OperationalReportTemplate;
   formats: OperationalReportFormat[]; recipients: string[]; filters: OperationalReportFilters;
   enabled: boolean; lastRunAt: string | null; nextRunAt: string; createdBy: string;
   createdAt: string; updatedAt: string;
@@ -22,6 +25,7 @@ export interface OperationalReportSchedule {
 export interface OperationalReportRun {
   id: string; tenantId: string; scheduleId: string | null; requestedBy: string;
   status: OperationalReportRunStatus; formats: OperationalReportFormat[];
+  template: OperationalReportTemplate;
   filters: OperationalReportFilters; recipients: string[]; progress: number;
   attempts: number; maxAttempts: number; nextAttemptAt: string; rowCount: number | null;
   summary: Record<string, unknown> | null; error: string | null; startedAt: string | null;

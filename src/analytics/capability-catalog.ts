@@ -74,6 +74,7 @@ export const AI_CAPABILITY_DOMAINS: AiCapabilityDomain[] = [
     c("forced-door-open", "Forced door open", "derived", "P1"), c("restricted-area-violation", "Restricted area violation", "derived", "P1"),
   ]},
   { id: "retail", name: "Retail analytics", description: "Footfall, service, shelf, and customer flow", capabilities: [
+    c("shoplifting", "Shoplifting detection", "open-model", "P2"),
     c("customer-counting", "Customer counting", "derived"), c("footfall", "Footfall", "derived"),
     c("queue-length", "Queue length", "derived"), c("queue-wait-time", "Queue waiting time", "derived"),
     c("queue", "Queue analysis", "derived"),
@@ -82,6 +83,7 @@ export const AI_CAPABILITY_DOMAINS: AiCapabilityDomain[] = [
     c("customer-flow", "Customer flow", "derived"), c("conversion-analytics", "Conversion analytics", "derived"),
   ]},
   { id: "banking", name: "Banking analytics", description: "Branch, ATM, vault, and dual-control scenarios", capabilities: [
+    c("person-in-vault-after-hours", "Person in vault after hours", "derived", "P1"),
     c("cash-counter-monitoring", "Cash counter monitoring", "derived", "P2"), c("teller-presence", "Teller presence", "derived"),
     c("vault-door-monitoring", "Vault door monitoring", "open-model", "P1"), c("atm-queue", "ATM queue", "derived"),
     c("atm-tampering", "ATM tampering", "open-model", "P1"), c("atm-skimming", "ATM skimming detection", "open-model", "P1"),

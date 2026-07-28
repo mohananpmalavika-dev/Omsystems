@@ -217,10 +217,9 @@ export async function buildApp(options?: {
   if ((voiceProviderName || smsProviderName) && !/^https:\/\//i.test(publicAlertBaseUrl)) {
     throw new Error("ALERT_PUBLIC_BASE_URL must be a provider-reachable HTTPS URL when external notifications are enabled");
   }
-  if (smsProviderName === "msg91" && process.env.MSG91_AUTH_KEY && process.env.MSG91_SENDER_ID) {
+  if (smsProviderName === "msg91" && process.env.MSG91_AUTH_KEY) {
     configuredAlertSender = new RoutedAlertNotificationSender(standardAlertSender, standardAlertSender,
-      new SmsNotificationSender(store, new Msg91SmsProvider(process.env.MSG91_AUTH_KEY, process.env.MSG91_SENDER_ID,
-        process.env.MSG91_ROUTE, process.env.MSG91_COUNTRY), publicAlertBaseUrl, voiceTokens));
+      new SmsNotificationSender(store, new Msg91SmsProvider(process.env.MSG91_AUTH_KEY), publicAlertBaseUrl, voiceTokens));
   } else if (smsProviderName === "textlocal" && process.env.TEXTLOCAL_API_KEY && process.env.TEXTLOCAL_SENDER_ID) {
     configuredAlertSender = new RoutedAlertNotificationSender(standardAlertSender, standardAlertSender,
       new SmsNotificationSender(store, new TextLocalSmsProvider(process.env.TEXTLOCAL_API_KEY,
@@ -250,7 +249,8 @@ export async function buildApp(options?: {
     process.env.REPORT_EMAIL_WEBHOOK_URL, process.env.REPORT_EMAIL_PROVIDER_TOKEN,
     (process.env.REPORT_PUBLIC_BASE_URL ?? "").replace(/\/$/, ""), reportDownloadSecret,
   );
-  const operationalReportWorker = new OperationalReportWorker(store, reportExportRoot, reportEmailSender);
+  const operationalReportWorker = new OperationalReportWorker(store, reportExportRoot, reportEmailSender,
+    Number(process.env.REPORT_ARCHIVE_RETENTION_DAYS ?? 365));
 
   // Initialize video search and forensic services
   const pool = (store as any).pool; // Access pool from store

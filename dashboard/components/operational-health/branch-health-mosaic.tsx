@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { AlertTriangle, Camera, Radio, Search, Server, Wifi } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { BranchHealth, HealthStatus } from "@/lib/types/operational-health";
+import type { BranchConnectivityStatus, BranchHealth, HealthStatus } from "@/lib/types/operational-health";
 import { getTimeAgo } from "@/lib/types/operational-health";
 import { useOperationalHealthStream } from "@/hooks/useOperationalHealthStream";
 import {
@@ -13,14 +13,16 @@ import {
   type BranchGridLayout,
   type BranchHealthPage,
 } from "./branch-mosaic-model";
+import type { BranchSummaryFilter } from "./branch-summary-model";
 
 const GAP = 8;
 const VIEWPORT_HEIGHT = 620;
 
-export function BranchHealthMosaic() {
+export function BranchHealthMosaic({ filter }: { filter?: BranchSummaryFilter }) {
   const [branches, setBranches] = useState<BranchHealth[]>([]);
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState<HealthStatus | "all">("all");
+  const [connectivity, setConnectivity] = useState<BranchConnectivityStatus | "all">("all");
   const [region, setRegion] = useState("all");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -34,6 +36,7 @@ export function BranchHealthMosaic() {
     const params = new URLSearchParams();
     if (search.trim()) params.set("search", search.trim());
     if (status !== "all") params.set("status", status);
+    if (connectivity !== "all") params.set("connectivity", connectivity);
     if (region !== "all") params.set("region", region);
     try {
       setError(null);
@@ -52,7 +55,15 @@ export function BranchHealthMosaic() {
     } finally {
       setLoading(false);
     }
-  }, [region, search, status]);
+  }, [connectivity, region, search, status]);
+
+  useEffect(() => {
+    if (!filter) return;
+    setStatus(filter.kind === "health" ? filter.value : "all");
+    setConnectivity(filter.kind === "connectivity" ? filter.value : "all");
+    setScrollTop(0);
+    viewport.current?.scrollTo({ top: 0 });
+  }, [filter]);
 
   useEffect(() => {
     const timer = setTimeout(load, 200);
@@ -78,7 +89,7 @@ export function BranchHealthMosaic() {
   const endRow = Math.min(rowCount, startRow + Math.ceil(VIEWPORT_HEIGHT / (metrics.rowHeight + GAP)) + 4);
   const visible = branches.slice(startRow * metrics.columns, endRow * metrics.columns);
 
-  return <section className="card mb-6" aria-label="Enterprise branch health mosaic">
+  return <section id="branch-health-mosaic" className="card mb-6 scroll-mt-4" aria-label="Enterprise branch health mosaic">
     <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
       <div>
         <h3 className="text-lg font-semibold">Enterprise branch overview</h3>
@@ -91,6 +102,9 @@ export function BranchHealthMosaic() {
         </label>
         <select aria-label="Filter branch status" className="input" value={status} onChange={(event) => setStatus(event.target.value as HealthStatus | "all")}>
           <option value="all">All statuses</option><option value="healthy">Healthy</option><option value="warning">Warning</option><option value="critical">Critical</option><option value="unknown">Unknown</option>
+        </select>
+        <select aria-label="Filter branch connectivity" className="input" value={connectivity} onChange={(event) => setConnectivity(event.target.value as BranchConnectivityStatus | "all")}>
+          <option value="all">All connectivity</option><option value="online">Online</option><option value="degraded">Degraded</option><option value="failover">Failover</option><option value="offline">Offline</option><option value="unknown">Unknown</option>
         </select>
         <select aria-label="Filter branch region" className="input" value={region} onChange={(event) => setRegion(event.target.value)}>
           <option value="all">All regions</option>{regions.map((item) => <option key={item}>{item}</option>)}

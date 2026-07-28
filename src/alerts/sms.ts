@@ -6,7 +6,8 @@ import { VoiceCallbackTokens } from "./voice-call.js";
 export type SmsProviderName = "msg91" | "textlocal" | "twilio" | "webhook" | "test";
 export interface SmsProvider {
   readonly name: SmsProviderName;
-  sendBulk(messages: Array<{ to: string; body: string; statusUrl: string }>): Promise<Array<{ id: string }>>;
+  sendBulk(messages: Array<{ to: string; body: string; statusUrl: string; templateId?: string;
+    variables: Record<string, string> }>): Promise<Array<{ id: string }>>;
 }
 
 const DEFAULT_TEMPLATES = {
@@ -33,11 +34,12 @@ export class SmsNotificationSender implements AlertNotificationSender, BatchAler
       const branch = camera ? await this.store.getNode(camera.branchId) : undefined;
       const template = policy.smsTemplates?.[alert.severity as "P1" | "P2"] ??
         DEFAULT_TEMPLATES[alert.severity as "P1" | "P2"] ?? DEFAULT_TEMPLATES.P2;
+      const variables = { branch: branch?.name ?? "Unknown branch", severity: alert.severity, title: alert.title,
+        camera: camera?.name ?? alert.cameraId, time: alert.firstDetectedAt, alertId: alert.id };
       const token = this.tokens.sign({ notificationId: notification.id, alertId: alert.id, tenantId: alert.tenantId });
-      return { to: notification.recipient, body: renderSmsTemplate(template, {
-        branch: branch?.name ?? "Unknown branch", severity: alert.severity, title: alert.title,
-        camera: camera?.name ?? alert.cameraId, time: alert.firstDetectedAt, alertId: alert.id,
-      }), statusUrl: `${this.publicBaseUrl.replace(/\/$/, "")}/internal/alerts/sms/status?token=${encodeURIComponent(token)}` };
+      return { to: notification.recipient, body: renderSmsTemplate(template, variables), variables,
+        templateId: policy.smsTemplateIds?.[alert.severity as "P1" | "P2"],
+        statusUrl: `${this.publicBaseUrl.replace(/\/$/, "")}/internal/alerts/sms/status?token=${encodeURIComponent(token)}` };
     }));
     const sent = await this.provider.sendBulk(payloads);
     if (sent.length !== items.length) throw new Error("sms_provider_result_count_mismatch");
@@ -55,13 +57,20 @@ export class SmsNotificationSender implements AlertNotificationSender, BatchAler
 
 export class Msg91SmsProvider implements SmsProvider {
   readonly name = "msg91" as const;
-  constructor(private readonly authKey: string, private readonly senderId: string, private readonly route = "4",
-    private readonly country = "91", private readonly fetcher: typeof fetch = fetch) {}
-  async sendBulk(messages: Array<{ to: string; body: string; statusUrl: string }>) {
-    const response = await this.fetcher("https://control.msg91.com/api/v2/sendsms", { method: "POST",
+  constructor(private readonly authKey: string, private readonly fetcher: typeof fetch = fetch) {}
+  async sendBulk(messages: Array<{ to: string; body: string; statusUrl: string; templateId?: string;
+    variables: Record<string, string> }>) {
+    const templateId = messages[0]?.templateId;
+    if (!templateId || messages.some((message) => message.templateId !== templateId)) {
+      throw new Error("msg91_sms_template_id_required");
+    }
+    const response = await this.fetcher("https://control.msg91.com/api/v5/flow", { method: "POST",
       headers: { authkey: this.authKey, "content-type": "application/json" },
-      body: JSON.stringify({ sender: this.senderId, route: this.route, country: this.country,
-        sms: messages.map((message) => ({ message: message.body, to: [message.to], callback_url: message.statusUrl })) }) });
+      body: JSON.stringify({ template_id: templateId, realTimeResponse: "1",
+        recipients: messages.map((message) => ({ mobiles: message.to.replace(/^\+/, ""),
+          VAR1: message.variables.branch, VAR2: message.variables.title, VAR3: message.variables.camera,
+          VAR4: message.variables.time, VAR5: message.variables.alertId, VAR6: message.variables.severity,
+          clientId: new URL(message.statusUrl).searchParams.get("token") })) }) });
     if (!response.ok) throw new Error(`msg91_sms_http_${response.status}`);
     const body = await response.json() as any;
     const id = body.request_id ?? body.requestId;

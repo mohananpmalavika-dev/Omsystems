@@ -2,7 +2,7 @@
 
 > Phase 5 authoritative runner: `src/phase1-control-plane.ts`. It calls the current control-plane contracts and reports only observed measurements. Older phase names in this document are historical; missing scripts are not release evidence.
 
-Run with `npm run test:phase5`. The runner requires enough existing inventory or `PHASE5_PROVISION=true` plus `PHASE5_PARENT_NODE_ID`. It intentionally returns exit code 2 when a test finishes without satisfying the complete 400-branch, 5,000-camera, 100-user, 24-hour certification gate. See `docs/PHASE_5_ENTERPRISE_READINESS.md` for the controlled procedure.
+Run with `npm run test:phase5`. The runner requires enough existing inventory or `PHASE5_PROVISION=true` plus `PHASE5_PARENT_NODE_ID`. It intentionally returns exit code 2 when a test finishes without satisfying the complete 400-branch, configured-camera-target, 100-user, 24-hour certification gate. Set `PHASE5_CAMERAS=10000` for the required 10,000-camera validation. See `docs/PHASE_5_ENTERPRISE_READINESS.md` for the controlled procedure.
 
 **Objective:** Verify platform capacity claims for **400 branches** and **5,000 cameras**
 

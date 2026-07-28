@@ -15,10 +15,13 @@ export type AlertStatus = 'active' | 'acknowledged' | 'assigned' | 'resolved' | 
  */
 export interface HealthSummary {
   totalBranches: number;
+  onlineBranches: number;
+  offlineBranches: number;
   healthyBranches: number;
   warningBranches: number;
   criticalBranches: number;
   unknownBranches: number;
+  overallHealthScore: number;
   totalCameras: number;
   camerasOnline: number;
   camerasOffline: number;
@@ -333,10 +336,13 @@ export interface OperationalAlert {
  */
 export interface BranchHealthFilters {
   status?: HealthStatus;
+  connectivity?: BranchConnectivityStatus;
   region?: string;
   limit?: number;
   offset?: number;
 }
+
+export type BranchConnectivityStatus = 'online' | 'degraded' | 'failover' | 'offline' | 'unknown';
 
 /**
  * Filter options for cameras

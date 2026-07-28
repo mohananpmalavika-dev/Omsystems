@@ -1156,10 +1156,11 @@ export interface ControlPlaneStore {
     status: string; occurredAt: string; detail?: string; providerId?: string;
     provider?: NonNullable<AlertNotification["smsDelivery"]>["provider"];
   }): Promise<AlertNotification | undefined>;
+  reserveSmsRateLimit(tenantId: string, limit: number, requested: number, now: string): Promise<number>;
   listAlertNotifications(tenantId: string, alertId?: string): Promise<AlertNotification[]>;
   listOperationalReportSchedules(tenantId: string): Promise<OperationalReportSchedule[]>;
   createOperationalReportSchedule(input: Omit<OperationalReportSchedule, "id" | "lastRunAt" | "createdAt" | "updatedAt">): Promise<OperationalReportSchedule>;
-  updateOperationalReportSchedule(id: string, tenantId: string, updates: Partial<Pick<OperationalReportSchedule, "name" | "timezone" | "dailyAt" | "formats" | "recipients" | "filters" | "enabled" | "nextRunAt" | "lastRunAt">>): Promise<OperationalReportSchedule | undefined>;
+  updateOperationalReportSchedule(id: string, tenantId: string, updates: Partial<Pick<OperationalReportSchedule, "name" | "timezone" | "dailyAt" | "template" | "formats" | "recipients" | "filters" | "enabled" | "nextRunAt" | "lastRunAt">>): Promise<OperationalReportSchedule | undefined>;
   deleteOperationalReportSchedule(id: string, tenantId: string): Promise<boolean>;
   claimDueOperationalReportSchedules(now: string, limit: number): Promise<OperationalReportSchedule[]>;
   createOperationalReportRun(input: Omit<OperationalReportRun, "id" | "status" | "progress" | "attempts" | "nextAttemptAt" | "rowCount" | "summary" | "error" | "startedAt" | "completedAt" | "createdAt" | "updatedAt">): Promise<OperationalReportRun>;

@@ -90,6 +90,26 @@ export const authApi = {
 
   getCurrentUser: () => fetchApi<any>('/v1/auth/me'),
 
+  requestPasswordReset: (email: string, tenantSlug?: string) =>
+    fetchApi<{ success: boolean; message: string }>('/v1/auth/request-password-reset', {
+      method: 'POST',
+      body: JSON.stringify({ email, tenantSlug: tenantSlug || undefined }),
+    }),
+
+  resetPassword: (token: string, newPassword: string) =>
+    fetchApi<{ success: boolean; message: string }>('/v1/auth/reset-password', {
+      method: 'POST', body: JSON.stringify({ token, newPassword }),
+    }),
+
+  listSessions: () => fetchApi<{ data: Array<{
+    id: string; ipAddress?: string; userAgent?: string; lastActivityAt: string;
+    createdAt: string; expiresAt: string;
+  }> }>('/v1/auth/sessions'),
+
+  revokeSession: (id: string) => fetchApi<void>(`/v1/auth/sessions/${id}`, { method: 'DELETE' }),
+
+  logoutAll: () => fetchApi<{ success: boolean }>('/v1/auth/logout-all', { method: 'POST' }),
+
   changePassword: (userId: string, currentPassword: string, newPassword: string) =>
     fetchApi<{ success: boolean }>(`/v1/users/${userId}/change-password`, {
       method: 'POST',

@@ -39,6 +39,7 @@ import {
   isTerminalAlertStatus,
   sortedMatchingRules,
 } from "./analytics/rule-engine.js";
+import { moreSevere, resolveAlertSeverity } from "./analytics/severity-policy.js";
 import type {
   CameraApprovalInput,
   CameraDiscoveryInput,
@@ -262,6 +263,7 @@ export class MemoryStore implements ControlPlaneStore {
   readonly analyticsEscalations: Array<Record<string, unknown>> = [];
   readonly analyticsNotifications: AlertNotification[] = [];
   readonly alertNotificationPolicies = new Map<string, AlertNotificationPolicy>();
+  readonly smsRateLimitWindows = new Map<string, number>();
   readonly operationalReportSchedules: OperationalReportSchedule[] = [];
   readonly operationalReportRuns: OperationalReportRun[] = [];
   readonly operationalReportArtifacts: OperationalReportArtifact[] = [];
@@ -1535,6 +1537,11 @@ export class MemoryStore implements ControlPlaneStore {
     const alerts: AnalyticsAlert[] = [];
     let created = 0;
     for (const rule of matchingRules) {
+      const effectiveSeverity = resolveAlertSeverity({
+        configuredSeverity: rule.severity,
+        durationSeconds: input.durationSeconds,
+        correlatedDetectionCount: correlationCount(input.metadata),
+      });
       const recent = this.analyticsAlerts.find((alert) => {
         if (alert.ruleId !== rule.id || alert.cameraId !== input.cameraId ||
             isTerminalAlertStatus(alert.status)) return false;
@@ -1545,6 +1552,7 @@ export class MemoryStore implements ControlPlaneStore {
         recent.lastDetectedAt = input.occurredAt;
         recent.occurrenceCount += 1;
         recent.confidence = Math.max(recent.confidence, input.confidence);
+        recent.severity = moreSevere(recent.severity, effectiveSeverity);
         recent.updatedAt = now;
         alerts.push(recent);
         continue;
@@ -1553,7 +1561,7 @@ export class MemoryStore implements ControlPlaneStore {
         id: randomUUID(), tenantId: input.tenantId, cameraId: input.cameraId,
         ruleId: rule.id, eventId, title: analyticsAlertTitle(rule),
         description: `Rule \"${rule.name}\" matched on camera ${camera.name}.`,
-        severity: rule.severity, status: "new", confidence: input.confidence,
+        severity: effectiveSeverity, status: "new", confidence: input.confidence,
         objectClasses: [...new Set(input.objects.map((object) => object.label))],
         modelVersion: input.modelVersion,
         ...(input.snapshotReference ? { snapshotReference: input.snapshotReference } : {}),
@@ -1732,6 +1740,15 @@ export class MemoryStore implements ControlPlaneStore {
     return structuredClone(item);
   }
 
+  async reserveSmsRateLimit(inputTenantId: string, limit: number, requested: number, now: string) {
+    const window = new Date(now).toISOString().slice(0, 16);
+    const key = `${inputTenantId}:${window}`;
+    const used = this.smsRateLimitWindows.get(key) ?? 0;
+    const allowed = Math.max(0, Math.min(requested, limit - used));
+    this.smsRateLimitWindows.set(key, used + allowed);
+    return allowed;
+  }
+
   async listAlertNotifications(inputTenantId: string, alertId?: string) {
     return this.analyticsNotifications.filter((item) => item.tenantId === inputTenantId &&
       (!alertId || item.alertId === alertId)).map((item) => structuredClone(item));
@@ -1748,7 +1765,7 @@ export class MemoryStore implements ControlPlaneStore {
     this.operationalReportSchedules.push(item); return structuredClone(item);
   }
 
-  async updateOperationalReportSchedule(id: string, inputTenantId: string, updates: Partial<Pick<OperationalReportSchedule, "name" | "timezone" | "dailyAt" | "formats" | "recipients" | "filters" | "enabled" | "nextRunAt" | "lastRunAt">>) {
+  async updateOperationalReportSchedule(id: string, inputTenantId: string, updates: Partial<Pick<OperationalReportSchedule, "name" | "timezone" | "dailyAt" | "template" | "formats" | "recipients" | "filters" | "enabled" | "nextRunAt" | "lastRunAt">>) {
     const item = this.operationalReportSchedules.find((entry) => entry.id === id && entry.tenantId === inputTenantId);
     if (!item) return undefined;
     Object.assign(item, structuredClone(updates), { updatedAt: new Date().toISOString() });

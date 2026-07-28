@@ -7,6 +7,8 @@ export { HealthScoreRing } from './health-score-ring';
 export { CameraHealthCard } from './camera-health-card';
 export { BranchHealthCard } from './branch-health-card';
 export { BranchHealthMosaic } from './branch-health-mosaic';
+export { BranchSummaryWidget } from './branch-summary-widget';
+export type { BranchSummaryFilter } from './branch-summary-model';
 export { BranchCameraWall } from './branch-camera-wall';
 export { EdgeAgentCard } from './edge-agent-card';
 export { DiskHealthCard } from './disk-health-card';
