@@ -83,6 +83,18 @@ export class GatewayClient {
     );
   }
 
+  async submitRecorderHdd(agentId: string, payload: {
+    branchId: string; recorderId: string; observedAt: string;
+    source: "onvif" | "cp-plus-adapter" | "system";
+    quality: "verified" | "estimated" | "unsupported" | "unavailable";
+    idempotencyKey: string; hddStatus: Array<Record<string, unknown>>;
+  }) {
+    return this.request(
+      `/v1/edge-agents/${encodeURIComponent(agentId)}/recorder-hdd`,
+      { method: "POST", body: JSON.stringify(payload) },
+    );
+  }
+
   async submitDiscovery(branchId: string, payload: DiscoveredCameraPayload) {
     return this.request<{ id: string }>(
       `/v1/branches/${encodeURIComponent(branchId)}/cameras/discovered`,

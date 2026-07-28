@@ -30,6 +30,23 @@ No generic CP PLUS model is treated as supporting a metric solely because of its
 brand. Vendor SDK documentation and test credentials are external pilot inputs,
 not repository artifacts.
 
+## DVR/NVR polling
+
+- Branch edge agents poll configured Hikvision ISAPI, Dahua CGI, CP PLUS OEM/API,
+  ONVIF or generic HTTP recorder endpoints on a configurable interval.
+- HTTP Basic and MD5 Digest challenge authentication are supported. Credentials
+  remain in the branch edge-agent environment and are never submitted centrally.
+- Recorder identity, firmware, reachability, response latency, available channel
+  inventory and storage payloads are normalized into operational telemetry.
+- A configured recorder is auto-provisioned into the centralized health view on
+  its first telemetry envelope; no control-plane database credentials are needed.
+- ONVIF discovery classifies recorder-like DVR/NVR/XVR/UVR identities separately
+  from cameras and auto-provisions them as recorder telemetry.
+- CP PLUS `systemPath` and `storagePath` are configurable for model- or
+  KVMS-version-specific documented endpoints. Proprietary KVMS Pro operations and
+  recording-state fields must remain `vendor-specific` until CP PLUS supplies the
+  applicable SDK/API contract and pilot credentials.
+
 ## Health policy
 
 The Phase 1 default is 90 seconds to stale, 300 seconds to offline, 90 retention

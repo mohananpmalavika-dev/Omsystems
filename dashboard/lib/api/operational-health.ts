@@ -12,6 +12,7 @@ import {
   DiskHealth,
   NetworkHealth,
   InternetFleetHealth,
+  RecorderFleetHealth,
   UPSHealth,
   EdgeAgentHealth,
   HealthTrend,
@@ -146,6 +147,15 @@ export async function fetchNetworkHealth(branchId?: string): Promise<InternetFle
   const response = await fetch(`${API_BASE}/health/network${params}`);
   if (!response.ok) throw new Error('Failed to fetch network health');
   const data: ApiResponse<InternetFleetHealth> = await response.json();
+  if (!data.success || !data.data) throw new Error(data.error || 'Invalid response');
+  return data.data;
+}
+
+export async function fetchRecordersHealth(branchId?: string): Promise<RecorderFleetHealth> {
+  const params = branchId ? `?branchId=${encodeURIComponent(branchId)}` : '';
+  const response = await fetch(`${API_BASE}/health/recorders${params}`);
+  if (!response.ok) throw new Error('Failed to fetch DVR/NVR health');
+  const data: ApiResponse<RecorderFleetHealth> = await response.json();
   if (!data.success || !data.data) throw new Error(data.error || 'Invalid response');
   return data.data;
 }

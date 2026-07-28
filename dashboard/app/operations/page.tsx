@@ -19,7 +19,7 @@ import {
   getHealthStatusIcon,
   getTimeAgo
 } from "@/lib/types/operational-health";
-import { BranchHealthMosaic, HddFleetWidget, InternetFleetWidget, RetentionFleetWidget } from "@/components/operational-health";
+import { BranchHealthMosaic, HddFleetWidget, InternetFleetWidget, RecorderFleetWidget, RetentionFleetWidget } from "@/components/operational-health";
 import { useOperationalHealthStream } from "@/hooks/useOperationalHealthStream";
 
 export default function OperationalHealthDashboard() {
@@ -383,6 +383,7 @@ export default function OperationalHealthDashboard() {
       </div>
 
       <RetentionFleetWidget />
+      <RecorderFleetWidget />
       <InternetFleetWidget />
       <HddFleetWidget />
 

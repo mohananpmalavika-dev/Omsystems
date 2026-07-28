@@ -13,6 +13,7 @@ export { DiskHealthCard } from './disk-health-card';
 export { HddFleetWidget } from './hdd-fleet-widget';
 export { RetentionFleetWidget } from './retention-fleet-widget';
 export { InternetFleetWidget } from './internet-fleet-widget';
+export { RecorderFleetWidget } from './recorder-fleet-widget';
 export { UPSHealthCard } from './ups-health-card';
 export { AlertCard } from './alert-card';
 export { AlertActionModal } from './alert-action-modal';

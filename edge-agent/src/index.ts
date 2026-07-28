@@ -7,6 +7,7 @@ import { probeRtsp } from "./streaming/rtsp-probe.js";
 import { LocalStreamSecretStore, startSecretProvider } from "./streaming/secret-store.js";
 import { cpus, freemem, totalmem, uptime } from "node:os";
 import { NetworkCounterSampler, probeInternetLink } from "./monitoring/internet-probe.js";
+import { looksLikeRecorder, probeRecorder } from "./monitoring/recorder-probe.js";
 
 const config = loadEdgeConfig();
 const gateway = new GatewayClient(
@@ -21,6 +22,7 @@ const agentId = config.EDGE_AGENT_ID ?? (await gateway.register(
 )).id;
 const secrets = new LocalStreamSecretStore(config.STREAM_SECRET_STORE_PATH);
 const networkCounterSampler = new NetworkCounterSampler();
+let lastRecorderProbeAt = 0;
 await secrets.load();
 if (config.EDGE_MEDIA_SHARED_KEY) {
   await startSecretProvider({
@@ -92,6 +94,24 @@ async function scanBranch() {
       const client = new OnvifClient(serviceUrl, credentials, config.ONVIF_TIMEOUT_MS);
       const device = await client.inspect();
       const vendor = normalizeVendor(device.manufacturer);
+      if (looksLikeRecorder(device, endpoint.scopes)) {
+        const discoveredId = `recorder-${device.serialNumber || endpoint.remoteAddress}`.replace(/[^a-zA-Z0-9_.:-]/g, "-");
+        const observedAt = new Date().toISOString();
+        await gateway.submitTelemetry(agentId, {
+          branchId: config.BRANCH_ID, edgeAgentId: agentId, deviceType: "recorder", deviceId: discoveredId,
+          observedAt, source: "onvif", quality: "verified", idempotencyKey: `${agentId}:recorder-discovery:${discoveredId}:${observedAt}`,
+          metrics: {
+            name: `${device.manufacturer} ${device.model}`, deviceType: /dvr|xvr|uvr/i.test(device.model) ? "dvr" : "nvr",
+            vendor, model: device.model, serialNumber: device.serialNumber ?? "", firmwareVersion: device.firmwareVersion ?? "",
+            ipAddress: endpoint.remoteAddress, protocol: "onvif", reachable: true, status: "online",
+            totalCameras: device.profiles.length || null, connectedCameras: null, recordingStatus: "unknown",
+          },
+          reasonCodes: ["onvif_auto_discovered", "recording_state_vendor_specific"],
+        });
+        submitted += 1;
+        console.log(`Auto-provisioned recorder ${device.manufacturer} ${device.model} as ${discoveredId}`);
+        continue;
+      }
       const profiles = [];
       let primarySourceUri: string | undefined;
       for (const profile of device.profiles) {
@@ -192,6 +212,9 @@ async function heartbeatAndReport() {
     counterSampler: networkCounterSampler,
   })));
   const primaryAvailable = linkResults.some((link) => link.role === "primary" && link.connectivity);
+  const recorderReports = Date.now() - lastRecorderProbeAt >= config.RECORDER_POLL_INTERVAL_MS
+    ? await collectRecorderReports(observedAt) : [];
+  if (recorderReports.length) lastRecorderProbeAt = Date.now();
   await Promise.all([
     gateway.submitTelemetry(agentId, {
       branchId: config.BRANCH_ID, edgeAgentId: agentId,
@@ -217,5 +240,25 @@ async function heartbeatAndReport() {
       },
       reasonCodes,
     }); }),
+    ...recorderReports.flatMap(({ recorder, probe }) => {
+      const source = recorder.vendor === "cp-plus" ? "cp-plus-adapter" as const : recorder.vendor === "onvif" ? "onvif" as const : "system" as const;
+      const submissions: Array<Promise<unknown>> = [gateway.submitTelemetry(agentId, {
+        branchId: config.BRANCH_ID, edgeAgentId: agentId, deviceType: "recorder", deviceId: recorder.id,
+        observedAt, source, quality: "verified", idempotencyKey: `${agentId}:recorder:${recorder.id}:${observedAt}`,
+        metrics: probe.metrics, reasonCodes: probe.reasonCodes,
+      })];
+      if (probe.hddStatus.length) submissions.push(gateway.submitRecorderHdd(agentId, {
+        branchId: config.BRANCH_ID, recorderId: recorder.id, observedAt, source,
+        quality: "verified", idempotencyKey: `${agentId}:recorder-hdd:${recorder.id}:${observedAt}`,
+        hddStatus: probe.hddStatus,
+      }));
+      return submissions;
+    }),
   ]);
+}
+
+async function collectRecorderReports(observedAt: string) {
+  return Promise.all(config.RECORDERS_JSON.map(async (recorder) => ({
+    recorder, observedAt, probe: await probeRecorder(recorder, config.RECORDER_PROBE_TIMEOUT_MS),
+  })));
 }

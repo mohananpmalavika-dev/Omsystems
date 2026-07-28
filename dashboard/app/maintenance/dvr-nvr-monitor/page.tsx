@@ -1,5 +1,5 @@
-import { DVRNVRMonitorDashboard } from "@/components/dvr-nvr-monitor-dashboard";
+import { RecorderFleetWidget } from "@/components/operational-health/recorder-fleet-widget";
 
 export default function Page() {
-  return <DVRNVRMonitorDashboard />;
+  return <div className="page-container"><RecorderFleetWidget detailed /></div>;
 }

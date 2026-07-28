@@ -249,6 +249,21 @@ export interface InternetFleetHealth {
   calculatedAt: string;
 }
 
+export interface RecorderHealth {
+  id: string; branchId: string; branchName: string; branchCode: string; name: string;
+  deviceType: 'dvr' | 'nvr'; vendor: string; model: string; serialNumber: string | null;
+  firmwareVersion: string | null; ipAddress: string | null; protocol: string;
+  status: 'online' | 'offline' | 'degraded' | 'unknown'; reachable: boolean;
+  latencyMs: number | null; uptimeSeconds: number | null; recordingStatus: string;
+  connectedCameras: number | null; totalCameras: number | null;
+  lastCheck: string; quality: string; reasonCodes: string[];
+}
+export interface RecorderFleetHealth {
+  recorders: RecorderHealth[];
+  summary: { total: number; online: number; offline: number; degraded: number; unknown: number; affectedBranches: number };
+  calculatedAt: string;
+}
+
 /**
  * UPS health
  */

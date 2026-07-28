@@ -175,6 +175,25 @@ describe("Phase 1 operational health", () => {
     const alerts = await app.inject({ method: "GET", url: "/v1/operations/alerts?component=network&severity=critical", headers: admin });
     expect(alerts.json().data.alerts.some((alert: { id: string }) => alert.id.includes("internet:branch-blr-001:primary"))).toBe(true);
   });
+
+  it("projects DVR/NVR status and creates an outage alert", async () => {
+    const observedAt = new Date().toISOString();
+    const response = await app.inject({
+      method: "POST", url: `/v1/edge-agents/${agentId}/telemetry`, headers: admin,
+      payload: {
+        branchId: "branch-blr-001", edgeAgentId: agentId, deviceType: "recorder", deviceId: "nvr-main",
+        observedAt, source: "system", quality: "verified", idempotencyKey: `nvr-main:${observedAt}`,
+        metrics: { name: "Main NVR", deviceType: "nvr", vendor: "hikvision", model: "DS-7608", ipAddress: "192.168.1.20", reachable: false, recordingStatus: "unknown" },
+        reasonCodes: [],
+      },
+    });
+    expect(response.statusCode).toBe(202);
+    const recorders = await app.inject({ method: "GET", url: "/v1/operations/health/recorders", headers: admin });
+    expect(recorders.json().data.recorders[0]).toMatchObject({ id: "nvr-main", status: "offline", vendor: "hikvision" });
+    expect(recorders.json().data.summary).toMatchObject({ total: 1, offline: 1, affectedBranches: 1 });
+    const alerts = await app.inject({ method: "GET", url: "/v1/operations/alerts?component=recording&severity=critical", headers: admin });
+    expect(alerts.json().data.alerts.some((alert: { id: string }) => alert.id === "recorder:branch-blr-001:nvr-main")).toBe(true);
+  });
 });
 
 describe("operational health evidence rules", () => {
