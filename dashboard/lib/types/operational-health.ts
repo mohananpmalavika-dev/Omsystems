@@ -47,9 +47,13 @@ export interface BranchHealth {
   totalCameras: number;
   onlineCameras: number;
   recordingCameras: number;
+  totalRecorders?: number;
+  onlineRecorders?: number;
+  recorderStatus?: 'online' | 'offline' | 'warning' | 'unknown';
   criticalAlerts: number;
   edgeAgentStatus: EdgeAgentStatus;
   edgeAgentHeartbeat: string;
+  internetStatus?: 'online' | 'degraded' | 'failover' | 'offline' | 'unknown';
 }
 
 /**
@@ -111,7 +115,18 @@ export interface EdgeAgentHealth {
 export interface CameraHealth {
   id: string;
   name: string;
+  /** Legacy adapter input only; operational-health APIs do not expose credentials. */
   rtspUrl?: string;
+  vendor?: 'hikvision' | 'cp-plus' | 'other';
+  model?: string;
+  channel?: number;
+  ipAddress?: string | null;
+  physicalType?: string | null;
+  capabilities?: {
+    ptz: boolean;
+    audio: boolean;
+    events: boolean;
+  };
   onlineStatus: 'online' | 'offline' | 'warning' | 'degraded' | 'unknown';
   recordingStatus: RecordingStatus;
   lastHeartbeat: string | null;
@@ -128,6 +143,7 @@ export interface CameraHealth {
   videoLoss: boolean;
   tamperingDetected: boolean;
   imageFrozen: boolean;
+  retention?: Omit<RetentionHealth, 'branchId' | 'branchName' | 'cameraName'>;
 }
 
 /**
@@ -140,6 +156,28 @@ export interface RecordingHealth {
   failedRecordings: number;
   avgSegmentInterval: number;
   totalGapSeconds: number;
+}
+
+export type RetentionStatus = 'compliant' | 'at_risk' | 'breach' | 'unknown';
+export interface RetentionHealth {
+  branchId: string;
+  branchName: string;
+  cameraId: string;
+  cameraName: string;
+  configuredDays: number;
+  actualDays: number | null;
+  oldestContinuousAt: string | null;
+  newestPlayableAt: string | null;
+  status: RetentionStatus;
+  marginDays: number | null;
+  shortfallDays: number | null;
+  warningDays: number;
+  dailyChangeDays: number | null;
+  forecastDaysIn7Days: number | null;
+  daysUntilCompliant: number | null;
+  trend: 'improving' | 'stable' | 'declining' | 'unknown';
+  coverageTrend: Array<{ date: string; coveredHours: number; coveragePercent: number }>;
+  reasonCodes: string[];
 }
 
 /**
@@ -188,6 +226,27 @@ export interface NetworkHealth {
   wanDisconnected: number;
   vpnDisconnected: number;
   lastWanDisconnect: string | null;
+}
+
+export interface InternetLinkHealth {
+  id: string; branchId: string; branchName: string; branchCode: string;
+  linkId: string; role: 'primary' | 'backup'; ispName: string; interfaceName: string | null;
+  status: 'online' | 'degraded' | 'offline' | 'unknown'; active: boolean; connectivity: boolean;
+  latencyMs: number | null; jitterMs: number | null; packetLossPercent: number | null;
+  rxMbps: number | null; txMbps: number | null; bandwidthUtilizationPercent: number | null;
+  contractedDownMbps: number | null; contractedUpMbps: number | null;
+  probeTarget: string | null; publicIp: string | null; lastCheck: string; reasonCodes: string[];
+}
+export interface BranchInternetHealth {
+  branchId: string; branchName: string; branchCode: string;
+  status: 'online' | 'degraded' | 'failover' | 'offline' | 'unknown';
+  primary?: InternetLinkHealth; backup?: InternetLinkHealth; activeLinkId: string | null;
+  failoverActive: boolean; links: InternetLinkHealth[];
+}
+export interface InternetFleetHealth {
+  branches: BranchInternetHealth[]; links: InternetLinkHealth[];
+  summary: { totalBranches: number; online: number; degraded: number; failover: number; offline: number; unknown: number };
+  calculatedAt: string;
 }
 
 /**

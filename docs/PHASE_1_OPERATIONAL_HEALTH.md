@@ -11,8 +11,12 @@
 - Stale, unsupported and unavailable evidence is never converted to healthy.
 - Retention uses the oldest gap-free chain of playable `ready` segments and
   highlights values below the effective recording-job policy as a breach.
-- The edge agent reports measured control-plane latency, process-host facts and
-  RTSP reachability. Unmeasured values are sent as `null` with reason codes.
+- The edge agent probes configured primary and backup ISP links, calculates
+  reachability, latency, jitter and packet loss, and samples Linux/Windows
+  interface byte counters for receive/transmit rates and contracted-bandwidth
+  utilization. Unmeasured values are sent as `null` with reason codes.
+- `/v1/operations/health/network` exposes branch link/failover status and the
+  dashboard highlights outages, degraded links and branches operating on backup.
 
 ## CP PLUS capability matrix
 

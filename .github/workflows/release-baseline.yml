@@ -1,4 +1,4 @@
-name: Phase 5 enterprise readiness baseline
+name: Phase 6 testing and deployment baseline
 
 on:
   pull_request:
@@ -16,7 +16,7 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - run: npm run ci:phase5
+      - run: npm run ci:phase6
 
   security:
     runs-on: ubuntu-latest

@@ -4,7 +4,6 @@ import { useCallback, useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { 
   ArrowLeft, 
-  Camera, 
   Activity, 
   HardDrive, 
   Wifi, 
@@ -12,26 +11,24 @@ import {
   Server,
   RefreshCw,
   AlertTriangle,
-  TrendingUp,
   Download
 } from "lucide-react";
 import { 
   BranchHealthDetail,
   CameraHealth,
   OperationalAlert,
-  getTimeAgo,
-  COMPONENT_WEIGHTS 
+  getTimeAgo
 } from "@/lib/types/operational-health";
 import { 
   fetchBranchHealthDetail,
-  fetchCamerasHealth,
+  fetchAllCamerasHealth,
   fetchOperationalAlerts
 } from "@/lib/api/operational-health";
 import { 
   HealthStatusBadge, 
-  HealthScoreRing,
-  CameraHealthCard 
+  HealthScoreRing
 } from "@/components/operational-health";
+import { BranchCameraWall } from "@/components/operational-health/branch-camera-wall";
 import { useOperationalHealthStream } from "@/hooks/useOperationalHealthStream";
 
 export default function BranchHealthDetailPage() {
@@ -51,7 +48,7 @@ export default function BranchHealthDetailPage() {
       
       const [branchData, camerasData, alertsData] = await Promise.all([
         fetchBranchHealthDetail(branchId),
-        fetchCamerasHealth({ branchId, limit: 50 }),
+        fetchAllCamerasHealth({ branchId }),
         fetchOperationalAlerts({ branchId, status: 'active', limit: 20 })
       ]);
       
@@ -334,35 +331,9 @@ export default function BranchHealthDetailPage() {
         </div>
       </div>
 
-      {/* Cameras */}
+      {/* Authorized live camera wall */}
       <div className="mb-6">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-semibold flex items-center gap-2">
-            <Camera size={20} />
-            Cameras ({cameras.length})
-          </h3>
-          <div className="flex items-center gap-2 text-sm">
-            <span className="text-green-600">
-              {cameras.filter(c => c.onlineStatus === 'online').length} online
-            </span>
-            <span className="text-gray-400">•</span>
-            <span className="text-red-600">
-              {cameras.filter(c => c.onlineStatus === 'offline').length} offline
-            </span>
-          </div>
-        </div>
-        
-        {cameras.length > 0 ? (
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {cameras.map((camera) => (
-              <CameraHealthCard key={camera.id} camera={camera} />
-            ))}
-          </div>
-        ) : (
-          <div className="card text-center py-8 text-gray-500">
-            No cameras found for this branch
-          </div>
-        )}
+        <BranchCameraWall branchId={branchId} cameras={cameras} />
       </div>
 
       {/* Component Links */}

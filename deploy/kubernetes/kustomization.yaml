@@ -7,3 +7,4 @@ resources:
   - autoscaling.yaml
   - network-policy.yaml
   - maintenance.yaml
+  - monitoring.yaml

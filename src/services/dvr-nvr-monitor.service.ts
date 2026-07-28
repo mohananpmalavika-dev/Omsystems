@@ -1,6 +1,7 @@
 import { EventEmitter } from "events";
 import type { Pool } from "pg";
 import { logger } from "../utils/logger.js";
+import { normalizeRecorderHddStatus, type NormalizedDiskHealth } from "../operational-health/disk-health.js";
 
 export interface DVRNVRDevice {
   id: string;
@@ -32,12 +33,7 @@ export interface DVRNVRHealthData {
   latencyMs?: number;
   cpuUsage?: number;
   memoryUsage?: number;
-  hddStatus?: Array<{
-    disk: number;
-    capacity: number;
-    used: number;
-    status: "normal" | "warning" | "error";
-  }>;
+  hddStatus?: NormalizedDiskHealth[];
   recordingStatus?: "recording" | "stopped" | "error";
   connectedCameras?: number;
   totalCameras?: number;
@@ -62,6 +58,7 @@ export class DVRNVRMonitorService extends EventEmitter {
   private pollingTimers: Map<string, NodeJS.Timeout>;
   private isRunning: boolean;
   private healthCache: Map<string, DVRNVRHealthData>;
+  private hddAlertStates: Map<string, NormalizedDiskHealth["smartStatus"]>;
 
   constructor(pool: Pool) {
     super();
@@ -70,6 +67,7 @@ export class DVRNVRMonitorService extends EventEmitter {
     this.pollingTimers = new Map();
     this.isRunning = false;
     this.healthCache = new Map();
+    this.hddAlertStates = new Map();
   }
 
   /**
@@ -272,6 +270,7 @@ export class DVRNVRMonitorService extends EventEmitter {
       // Save to database
       await this.saveHealthData(healthData);
       await this.updateDeviceStatus(device);
+      await this.createHddHealthAlerts(device, healthData.hddStatus ?? []);
 
       // Emit status change event
       if (previousStatus !== device.status) {
@@ -402,6 +401,15 @@ export class DVRNVRMonitorService extends EventEmitter {
       }
 
       const data = await response.text();
+      const storageResponse = await fetch(
+        `${baseUrl}/cgi-bin/storageDevice.cgi?action=getDeviceAllInfo`,
+        {
+          method: "GET",
+          headers: { Authorization: this.getBasicAuth(device.credentials) },
+          signal: AbortSignal.timeout(device.timeoutMs),
+        },
+      ).catch(() => null);
+      const storageText = storageResponse?.ok ? await storageResponse.text() : null;
 
       return {
         deviceId: device.id,
@@ -409,6 +417,7 @@ export class DVRNVRMonitorService extends EventEmitter {
         status: "online",
         firmwareVersion: this.extractKeyValue(data, "version"),
         uptime: parseInt(this.extractKeyValue(data, "uptime") || "0"),
+        hddStatus: this.parseRecorderStorageInfo(storageText),
       };
     } catch (error) {
       return {
@@ -424,8 +433,9 @@ export class DVRNVRMonitorService extends EventEmitter {
    * Poll CP Plus device
    */
   private async pollCPPlusDevice(device: DVRNVRDevice): Promise<DVRNVRHealthData> {
-    // CP Plus often uses standard ONVIF or similar HTTP API
-    return this.pollHTTPDevice(device);
+    // CP Plus recorders supported by this adapter expose the OEM storage CGI.
+    // The Dahua-compatible path also retains the normal reachability/system checks.
+    return this.pollDahuaDevice(device);
   }
 
   /**
@@ -488,28 +498,42 @@ export class DVRNVRMonitorService extends EventEmitter {
    */
   private parseHikvisionHDDInfo(xml: string | null): DVRNVRHealthData["hddStatus"] {
     if (!xml) return undefined;
+    const blocks = [...xml.matchAll(/<(?:hdd|HDD)>([\s\S]*?)<\/(?:hdd|HDD)>/g)].map((match) => match[1]);
+    const sources = blocks.length ? blocks : [xml];
+    const raw = sources.map((block, index) => {
+      const read = (tag: string) => block.match(new RegExp(`<${tag}>([^<]+)<\\/${tag}>`, "i"))?.[1];
+      return {
+        diskNo: read("id") ?? index + 1,
+        devicePath: read("name") ?? `HDD ${index + 1}`,
+        model: read("model") ?? read("modelName"),
+        serialNumber: read("serialNumber"),
+        capacity: read("capacity"), freeSpace: read("freeSpace"),
+        state: read("status"), temperature: read("temperature"),
+        powerOnHours: read("powerOnHours"), reallocatedSectors: read("reallocatedSectors"),
+        pendingSectors: read("pendingSectors"), uncorrectableSectors: read("uncorrectableSectors"),
+      };
+    });
+    const disks = normalizeRecorderHddStatus(raw);
+    return disks.length ? disks : undefined;
+  }
 
-    // Simplified parser - in production use proper XML parser
-    const hdds: Array<{ disk: number; capacity: number; used: number; status: "normal" | "warning" | "error" }> = [];
-
-    // Extract HDD information (this is a simplified example)
-    const capacityMatch = xml.match(/<capacity>(\d+)<\/capacity>/);
-    const usedMatch = xml.match(/<freeSpace>(\d+)<\/freeSpace>/);
-
-    if (capacityMatch && usedMatch) {
-      const capacity = parseInt(capacityMatch[1]);
-      const free = parseInt(usedMatch[1]);
-      const used = capacity - free;
-
-      hdds.push({
-        disk: 0,
-        capacity,
-        used,
-        status: (used / capacity) > 0.9 ? "warning" : "normal",
-      });
+  private parseRecorderStorageInfo(payload: string | null): DVRNVRHealthData["hddStatus"] {
+    if (!payload) return undefined;
+    try {
+      const disks = normalizeRecorderHddStatus(JSON.parse(payload));
+      return disks.length ? disks : undefined;
+    } catch {
+      const grouped = new Map<string, Record<string, unknown>>();
+      for (const line of payload.split(/\r?\n/)) {
+        const match = line.match(/(?:Storage|Disk|HDD)(?:\[|\.)(\d+)\]?\.([^=]+)=(.*)$/i);
+        if (!match) continue;
+        const record = grouped.get(match[1]) ?? { diskNo: Number(match[1]) + 1 };
+        record[match[2]] = match[3].trim();
+        grouped.set(match[1], record);
+      }
+      const disks = normalizeRecorderHddStatus([...grouped.values()]);
+      return disks.length ? disks : undefined;
     }
-
-    return hdds.length > 0 ? hdds : undefined;
   }
 
   /**
@@ -632,6 +656,32 @@ export class DVRNVRMonitorService extends EventEmitter {
       logger.info(`Created offline alert for device ${device.id}`);
     } catch (error) {
       logger.error(`Failed to create offline alert for device ${device.id}`, { error });
+    }
+  }
+
+  private async createHddHealthAlerts(device: DVRNVRDevice, disks: NormalizedDiskHealth[]): Promise<void> {
+    for (const disk of disks) {
+      const key = `${device.id}:${disk.serialNumber || disk.id}`;
+      const previous = this.hddAlertStates.get(key);
+      this.hddAlertStates.set(key, disk.smartStatus);
+      if (disk.smartStatus === "healthy" || previous === disk.smartStatus) continue;
+      const critical = ["failure_predicted", "failed", "missing"].includes(disk.smartStatus);
+      try {
+        await this.pool.query(
+          `INSERT INTO incidents (
+            tenant_id, branch_id, incident_type, severity, title, description, status, created_at
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+          [
+            device.tenantId, device.branchId, "hdd_health", critical ? "critical" : "high",
+            `HDD ${disk.smartStatus.replaceAll("_", " ")}: ${device.manufacturer} ${device.model}`,
+            `${disk.devicePath} (${disk.serialNumber}) risk ${disk.failureProbability.toFixed(1)}%. ${disk.reasonCodes.join(", ")}`,
+            "open", new Date(),
+          ],
+        );
+        this.emit("hddAlert", { device, disk, severity: critical ? "critical" : "high" });
+      } catch (error) {
+        logger.error(`Failed to create HDD alert for device ${device.id}`, { error, disk: disk.id });
+      }
     }
   }
 

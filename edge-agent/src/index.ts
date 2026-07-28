@@ -6,6 +6,7 @@ import { GatewayClient } from "./registration/gateway-client.js";
 import { probeRtsp } from "./streaming/rtsp-probe.js";
 import { LocalStreamSecretStore, startSecretProvider } from "./streaming/secret-store.js";
 import { cpus, freemem, totalmem, uptime } from "node:os";
+import { NetworkCounterSampler, probeInternetLink } from "./monitoring/internet-probe.js";
 
 const config = loadEdgeConfig();
 const gateway = new GatewayClient(
@@ -19,6 +20,7 @@ const agentId = config.EDGE_AGENT_ID ?? (await gateway.register(
   config.EDGE_AGENT_VERSION,
 )).id;
 const secrets = new LocalStreamSecretStore(config.STREAM_SECRET_STORE_PATH);
+const networkCounterSampler = new NetworkCounterSampler();
 await secrets.load();
 if (config.EDGE_MEDIA_SHARED_KEY) {
   await startSecretProvider({
@@ -181,6 +183,15 @@ async function heartbeatAndReport() {
   const observedAt = new Date().toISOString();
   const latencyMs = Date.now() - startedAt;
   const memoryTotal = totalmem();
+  const configuredLinks = config.INTERNET_LINKS_JSON.length ? config.INTERNET_LINKS_JSON : [{
+    id: "primary", role: "primary" as const, ispName: "Primary ISP",
+    targets: [config.CONTROL_PLANE_URL],
+  }];
+  const linkResults = await Promise.all(configuredLinks.map((link) => probeInternetLink(link, {
+    timeoutMs: config.INTERNET_PROBE_TIMEOUT_MS, attempts: config.INTERNET_PROBE_ATTEMPTS,
+    counterSampler: networkCounterSampler,
+  })));
+  const primaryAvailable = linkResults.some((link) => link.role === "primary" && link.connectivity);
   await Promise.all([
     gateway.submitTelemetry(agentId, {
       branchId: config.BRANCH_ID, edgeAgentId: agentId,
@@ -194,15 +205,17 @@ async function heartbeatAndReport() {
       },
       reasonCodes: ["cpu_utilization_unavailable", "disk_utilization_unavailable"],
     }),
-    gateway.submitTelemetry(agentId, {
+    ...linkResults.map((link) => {
+      const { reasonCodes, ...linkMetrics } = link;
+      return gateway.submitTelemetry(agentId, {
       branchId: config.BRANCH_ID, edgeAgentId: agentId,
-      deviceType: "network", deviceId: `${config.BRANCH_ID}:internet`, observedAt, source: "system",
-      quality: "verified", idempotencyKey: `${agentId}:network:${observedAt}`,
+      deviceType: "network", deviceId: `${config.BRANCH_ID}:internet:${link.linkId}`, observedAt, source: "system",
+      quality: "verified", idempotencyKey: `${agentId}:network:${link.linkId}:${observedAt}`,
       metrics: {
-        status: "online", controlPlaneLatencyMs: latencyMs, lastOnlineAt: observedAt,
-        packetLossPercent: null, jitterMs: null,
+        ...linkMetrics, active: link.role === "primary" ? primaryAvailable : !primaryAvailable && link.connectivity,
+        controlPlaneLatencyMs: latencyMs, lastOnlineAt: link.connectivity ? observedAt : null,
       },
-      reasonCodes: ["packet_loss_unavailable", "jitter_unavailable"],
-    }),
+      reasonCodes,
+    }); }),
   ]);
 }

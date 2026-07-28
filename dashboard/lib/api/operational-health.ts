@@ -11,6 +11,7 @@ import {
   StorageHealth,
   DiskHealth,
   NetworkHealth,
+  InternetFleetHealth,
   UPSHealth,
   EdgeAgentHealth,
   HealthTrend,
@@ -88,6 +89,16 @@ export async function fetchCamerasHealth(filters?: CameraHealthFilters) {
   return data.data;
 }
 
+export async function fetchAllCamerasHealth(filters?: Omit<CameraHealthFilters, 'limit' | 'offset'>) {
+  const first = await fetchCamerasHealth({ ...filters, limit: 500, offset: 0 });
+  const cameras = [...(first.cameras || [])];
+  for (let offset = 500; offset < first.total; offset += 500) {
+    const page = await fetchCamerasHealth({ ...filters, limit: 500, offset });
+    cameras.push(...(page.cameras || []));
+  }
+  return { ...first, cameras };
+}
+
 /**
  * Fetch recording health
  */
@@ -130,11 +141,11 @@ export async function fetchDisksHealth(filters?: DiskHealthFilters): Promise<Dis
 /**
  * Fetch network health
  */
-export async function fetchNetworkHealth(branchId?: string): Promise<NetworkHealth> {
+export async function fetchNetworkHealth(branchId?: string): Promise<InternetFleetHealth> {
   const params = branchId ? `?branchId=${branchId}` : '';
   const response = await fetch(`${API_BASE}/health/network${params}`);
   if (!response.ok) throw new Error('Failed to fetch network health');
-  const data: ApiResponse<NetworkHealth> = await response.json();
+  const data: ApiResponse<InternetFleetHealth> = await response.json();
   if (!data.success || !data.data) throw new Error(data.error || 'Invalid response');
   return data.data;
 }

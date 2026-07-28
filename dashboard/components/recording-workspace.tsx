@@ -2,6 +2,7 @@
 
 import { AlertTriangle, CalendarClock, CheckCircle2, Clapperboard, LoaderCircle, Play, RefreshCw, SlidersHorizontal, Video } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import type { Branch, Camera, RecordingJob, RecordingSegment } from "@/lib/types";
 
 type HealthEvent = {
@@ -13,6 +14,9 @@ type HealthEvent = {
 };
 
 export function RecordingWorkspace() {
+  const searchParams = useSearchParams();
+  const requestedBranchId = searchParams?.get("branchId") ?? "";
+  const requestedCameraId = searchParams?.get("cameraId") ?? "";
   const [branches, setBranches] = useState<Branch[]>([]);
   const [cameras, setCameras] = useState<Camera[]>([]);
   const [branchId, setBranchId] = useState("");
@@ -31,10 +35,10 @@ export function RecordingWorkspace() {
       .then((response) => response.ok ? response.json() : Promise.reject())
       .then((body: { data: Branch[] }) => {
         setBranches(body.data);
-        setBranchId(body.data[0]?.id ?? "");
+        setBranchId(body.data.some((branch) => branch.id === requestedBranchId) ? requestedBranchId : body.data[0]?.id ?? "");
       })
       .catch(() => setError("Branch directory is unavailable."));
-  }, []);
+  }, [requestedBranchId]);
 
   useEffect(() => {
     if (!branchId) return;
@@ -42,11 +46,11 @@ export function RecordingWorkspace() {
       .then((response) => response.ok ? response.json() : Promise.reject())
       .then((body: { data: Camera[] }) => {
         setCameras(body.data);
-        setCameraId(body.data[0]?.id ?? "");
+        setCameraId(body.data.some((camera) => camera.id === requestedCameraId) ? requestedCameraId : body.data[0]?.id ?? "");
         setSegments([]); setSelected(undefined); setHealth([]); setJob(undefined);
       })
       .catch(() => setError("Cameras for this branch are unavailable."));
-  }, [branchId]);
+  }, [branchId, requestedCameraId]);
 
   const camera = cameras.find((item) => item.id === cameraId);
   const criticalFault = health.find((event) => event.severity === "critical");

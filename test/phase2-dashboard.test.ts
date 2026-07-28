@@ -44,6 +44,50 @@ describe("Phase 2 bulk dashboard contracts", () => {
     expect(response.json().data.total).toBe(1);
   });
 
+  it("projects explicit DVR/NVR counts and status for every branch card", async () => {
+    const agent = await store.registerEdgeAgent("branch-blr-001", "Recorder adapter", "1.0.0");
+    const accepted = await app.inject({
+      method: "POST",
+      url: `/v1/edge-agents/${agent.id}/telemetry`,
+      headers: admin,
+      payload: {
+        branchId: "branch-blr-001",
+        edgeAgentId: agent.id,
+        deviceType: "recorder",
+        deviceId: "nvr-001",
+        observedAt: new Date().toISOString(),
+        source: "cp-plus-adapter",
+        quality: "verified",
+        idempotencyKey: "nvr-001:online",
+        metrics: { status: "online" },
+        reasonCodes: [],
+      },
+    });
+    expect(accepted.statusCode).toBe(202);
+
+    const response = await app.inject({
+      method: "GET", url: "/v1/operations/health/branches?search=Bengaluru", headers: admin,
+    });
+    expect(response.statusCode).toBe(200);
+    expect(response.json().data.branches[0]).toMatchObject({
+      totalRecorders: 1,
+      onlineRecorders: 1,
+      recorderStatus: "online",
+    });
+
+    const cameras = await app.inject({
+      method: "GET", url: "/v1/operations/health/cameras?branchId=branch-blr-001", headers: admin,
+    });
+    expect(cameras.statusCode).toBe(200);
+    expect(cameras.json().data.cameras[0]).toMatchObject({
+      vendor: "hikvision",
+      model: "DS-2CD example",
+      channel: 1,
+      capabilities: { ptz: false, audio: true, events: true },
+    });
+    expect(cameras.body).not.toContain("connectionSecretRef");
+  });
+
   it("persists per-user video-wall layouts and enforces camera authorization", async () => {
     const created = await app.inject({
       method: "POST",

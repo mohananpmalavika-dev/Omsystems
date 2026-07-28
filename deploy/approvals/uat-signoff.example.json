@@ -1,0 +1,9 @@
+{
+  "approved": false,
+  "approvedBy": "",
+  "approvedAt": "",
+  "environment": "production-like",
+  "testCycle": "phase6-uat-001",
+  "openBlockers": [],
+  "evidenceReferences": []
+}

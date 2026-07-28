@@ -28,6 +28,15 @@ const schema = z.object({
     (value) => value === "" ? undefined : value,
     z.string().min(32).optional(),
   ),
+  INTERNET_LINKS_JSON: z.string().default("[]").transform((value, context) => {
+    try { return JSON.parse(value) as unknown; } catch { context.addIssue({ code: z.ZodIssueCode.custom, message: "INTERNET_LINKS_JSON must be valid JSON" }); return z.NEVER; }
+  }).pipe(z.array(z.object({
+    id: z.string().min(1), role: z.enum(["primary", "backup"]), ispName: z.string().min(1),
+    interfaceName: z.string().min(1).optional(), targets: z.array(z.string().url()).min(1),
+    contractedDownMbps: z.number().positive().optional(), contractedUpMbps: z.number().positive().optional(),
+  })).max(4)),
+  INTERNET_PROBE_TIMEOUT_MS: z.coerce.number().int().min(250).max(30_000).default(3000),
+  INTERNET_PROBE_ATTEMPTS: z.coerce.number().int().min(1).max(10).default(3),
 });
 
 export function loadEdgeConfig(environment: NodeJS.ProcessEnv = process.env) {

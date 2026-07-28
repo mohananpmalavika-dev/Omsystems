@@ -13,6 +13,14 @@ import {
   type OperationalTelemetryEnvelope,
 } from "../operational-health/types.js";
 import { operationalHealthEvents } from "../operational-health/event-stream.js";
+import {
+  diskToMetrics,
+  normalizeDiskMetrics,
+  normalizeRecorderHddStatus,
+  projectDiskHealth,
+} from "../operational-health/disk-health.js";
+import { normalizeNetworkMetrics, projectInternetLink, summarizeBranchInternet } from "../operational-health/network-health.js";
+import { normalizeRecorderMetrics, projectRecorderHealth } from "../operational-health/recorder-health.js";
 
 const deviceTypes = ["branch", "edge-agent", "recorder", "camera", "disk", "network", "ups"] as const;
 const sources = ["onvif", "cp-plus-adapter", "rtsp", "system", "recording-engine"] as const;
@@ -30,6 +38,18 @@ const telemetrySchema = z.object({
   metrics: z.record(z.string(), metricValue).default({}),
   reasonCodes: z.array(z.string().min(1).max(100)).max(30).default([]),
 });
+const recorderHddSchema = z.object({
+  branchId: z.string().min(1),
+  recorderId: z.string().min(1).max(200),
+  observedAt: z.string().datetime(),
+  source: z.enum(sources).default("cp-plus-adapter"),
+  quality: z.enum(qualities).default("verified"),
+  idempotencyKey: z.string().min(1).max(200),
+  hddStatus: z.union([
+    z.array(z.record(z.string(), z.unknown())).max(64),
+    z.record(z.string(), z.unknown()),
+  ]),
+});
 const paginationSchema = z.object({
   limit: z.coerce.number().int().min(1).max(500).default(50),
   offset: z.coerce.number().int().min(0).default(0),
@@ -42,13 +62,18 @@ const policySchema = z.object({
   staleAfterSeconds: z.number().int().min(15).max(3600),
   offlineAfterSeconds: z.number().int().min(30).max(86_400),
   retentionDays: z.number().int().min(1).max(3650),
+  retentionWarningDays: z.number().int().min(1).max(365).default(7),
   maxRecordingGapSeconds: z.number().int().min(0).max(86_400),
   cameraWarningPercent: z.number().min(0).max(100),
   cameraCriticalPercent: z.number().min(0).max(100),
   latencyWarningMs: z.number().min(1).max(60_000),
   latencyCriticalMs: z.number().min(1).max(60_000),
+  jitterWarningMs: z.number().min(0).max(60_000).default(30),
+  jitterCriticalMs: z.number().min(0).max(60_000).default(60),
   packetLossWarningPercent: z.number().min(0).max(100),
   packetLossCriticalPercent: z.number().min(0).max(100),
+  bandwidthUtilizationWarningPercent: z.number().min(0).max(100).default(80),
+  bandwidthUtilizationCriticalPercent: z.number().min(0).max(100).default(95),
 }).refine((value) => value.offlineAfterSeconds > value.staleAfterSeconds, {
   message: "offlineAfterSeconds must exceed staleAfterSeconds",
 }).refine((value) => value.cameraCriticalPercent >= value.cameraWarningPercent, {
@@ -57,6 +82,10 @@ const policySchema = z.object({
   message: "latencyCriticalMs must be at least latencyWarningMs",
 }).refine((value) => value.packetLossCriticalPercent >= value.packetLossWarningPercent, {
   message: "packetLossCriticalPercent must be at least packetLossWarningPercent",
+}).refine((value) => value.jitterCriticalMs >= value.jitterWarningMs, {
+  message: "jitterCriticalMs must be at least jitterWarningMs",
+}).refine((value) => value.bandwidthUtilizationCriticalPercent >= value.bandwidthUtilizationWarningPercent, {
+  message: "bandwidthUtilizationCriticalPercent must be at least bandwidthUtilizationWarningPercent",
 });
 
 export async function registerOperationalHealthRoutes(
@@ -88,6 +117,14 @@ export async function registerOperationalHealthRoutes(
       }
     }
     const receivedAt = new Date().toISOString();
+    const normalizedDisk = input.deviceType === "disk"
+      ? normalizeDiskMetrics(input.metrics, input.deviceId)
+      : null;
+    const effectivePolicy = input.deviceType === "network"
+      ? { ...defaultOperationalHealthPolicy, ...((await store.getOperationalHealthPolicy(branch.tenantId, branch.id)) ?? {}) }
+      : null;
+    const normalizedNetwork = effectivePolicy ? normalizeNetworkMetrics(input.metrics, effectivePolicy) : null;
+    const normalizedRecorder = input.deviceType === "recorder" ? normalizeRecorderMetrics(input.metrics) : null;
     const envelope: OperationalTelemetryEnvelope = {
       tenantId: branch.tenantId,
       branchId: input.branchId,
@@ -99,8 +136,8 @@ export async function registerOperationalHealthRoutes(
       source: input.source,
       quality: input.quality,
       idempotencyKey: input.idempotencyKey,
-      metrics: input.metrics,
-      reasonCodes: input.reasonCodes,
+      metrics: normalizedDisk?.metrics ?? normalizedNetwork?.metrics ?? normalizedRecorder?.metrics ?? input.metrics,
+      reasonCodes: [...new Set([...input.reasonCodes, ...(normalizedDisk?.reasonCodes ?? []), ...(normalizedNetwork?.reasonCodes ?? []), ...(normalizedRecorder?.reasonCodes ?? [])])],
     };
     const result = await store.ingestOperationalTelemetry(envelope);
     if (!result.duplicate) {
@@ -111,6 +148,52 @@ export async function registerOperationalHealthRoutes(
       });
     }
     return reply.code(result.duplicate ? 200 : 202).send({ ...result, receivedAt });
+  });
+
+  app.post("/v1/edge-agents/:id/recorder-hdd", async (request, reply) => {
+    const { id } = z.object({ id: z.string().min(1) }).parse(request.params);
+    const input = recorderHddSchema.parse(request.body);
+    const branch = await store.getNode(input.branchId);
+    if (!branch || branch.type !== "branch") return reply.code(404).send({ error: "branch_not_found" });
+    const agents = await store.listEdgeAgentsByBranch(branch.id);
+    if (!agents.some((agent) => agent.id === id)) {
+      return reply.code(403).send({ error: "edge_agent_branch_mismatch" });
+    }
+    const disks = normalizeRecorderHddStatus(input.hddStatus);
+    if (disks.length === 0) return reply.code(422).send({ error: "hdd_status_unparseable" });
+    const receivedAt = new Date().toISOString();
+    const results = [];
+    for (const [index, disk] of disks.entries()) {
+      const deviceId = `${input.recorderId}:disk:${disk.id || index + 1}`;
+      const envelope: OperationalTelemetryEnvelope = {
+        tenantId: branch.tenantId,
+        branchId: branch.id,
+        edgeAgentId: id,
+        deviceType: "disk",
+        deviceId,
+        observedAt: input.observedAt,
+        receivedAt,
+        source: input.source,
+        quality: input.quality,
+        idempotencyKey: `${input.idempotencyKey}:${disk.id || index + 1}`,
+        metrics: diskToMetrics(disk),
+        reasonCodes: disk.reasonCodes,
+      };
+      const result = await store.ingestOperationalTelemetry(envelope);
+      results.push({ deviceId, ...result, smartStatus: disk.smartStatus, failureProbability: disk.failureProbability });
+      if (!result.duplicate) {
+        operationalHealthEvents.publish({
+          id: randomUUID(), tenantId: branch.tenantId, type: "health.updated",
+          occurredAt: receivedAt, branchId: branch.id, deviceType: "disk", deviceId,
+        });
+      }
+    }
+    return reply.code(results.every((item) => item.duplicate) ? 200 : 202).send({
+      accepted: results.filter((item) => !item.duplicate).length,
+      duplicates: results.filter((item) => item.duplicate).length,
+      disks: results,
+      receivedAt,
+    });
   });
 
   app.get("/v1/operations/health/summary", async (request) => {
@@ -129,7 +212,7 @@ export async function registerOperationalHealthRoutes(
         camerasOnline: cameras.filter((camera) => camera.onlineStatus === "healthy").length,
         camerasOffline: cameras.filter((camera) => camera.onlineStatus === "critical").length,
         camerasUnknown: cameras.filter((camera) => camera.onlineStatus === "unknown").length,
-        camerasRecording: cameras.filter((camera) => camera.recordingStatus === "compliant").length,
+        camerasRecording: cameras.filter((camera) => camera.recordingStatus === "compliant" || camera.recordingStatus === "at_risk").length,
         recordingFailures: cameras.filter((camera) => camera.recordingStatus === "breach").length,
         retentionBreaches: projections.reduce((sum, branch) => sum + branch.retentionBreaches, 0),
         activeCriticalAlerts: projections.reduce((sum, branch) => sum + branch.criticalAlerts, 0),
@@ -218,14 +301,97 @@ export async function registerOperationalHealthRoutes(
       cameraName: camera.name,
       ...camera.retention,
     })));
-    return { success: true, data: { items, total: items.length } };
+    return { success: true, data: {
+      items, total: items.length,
+      summary: {
+        compliant: items.filter((item) => item.status === "compliant").length,
+        atRisk: items.filter((item) => item.status === "at_risk").length,
+        breaches: items.filter((item) => item.status === "breach").length,
+        unknown: items.filter((item) => item.status === "unknown").length,
+      },
+      calculatedAt: new Date().toISOString(),
+    } };
+  });
+
+  app.get("/v1/operations/health/disks", async (request) => {
+    const query = z.object({
+      branchId: z.string().optional(),
+      status: z.enum(["healthy", "warning", "degraded", "failure_predicted", "failed", "missing"]).optional(),
+    }).parse(request.query);
+    const projections = await loadAccessibleProjections(request, store, query.branchId ? [query.branchId] : undefined);
+    const branchById = new Map(projections.map((branch) => [branch.id, branch]));
+    const telemetry = await store.listLatestOperationalTelemetry(request.currentUser.tenantId, [...branchById.keys()]);
+    let disks = telemetry
+      .filter((item) => item.deviceType === "disk")
+      .flatMap((item) => {
+        const branch = branchById.get(item.branchId);
+        return branch ? [projectDiskHealth(item, branch)] : [];
+      })
+      .sort((left, right) => right.failureProbability - left.failureProbability || left.branchName.localeCompare(right.branchName));
+    if (query.status) disks = disks.filter((disk) => disk.smartStatus === query.status);
+    return { success: true, data: disks };
+  });
+
+  app.get("/v1/operations/health/network", async (request) => {
+    const query = z.object({ branchId: z.string().optional() }).parse(request.query);
+    const projections = await loadAccessibleProjections(request, store, query.branchId ? [query.branchId] : undefined);
+    const branchById = new Map(projections.map((branch) => [branch.id, branch]));
+    const telemetry = await store.listLatestOperationalTelemetry(request.currentUser.tenantId, [...branchById.keys()]);
+    const links = telemetry.filter((item) => item.deviceType === "network").flatMap((item) => {
+      const branch = branchById.get(item.branchId); return branch ? [projectInternetLink(item, branch)] : [];
+    });
+    const branches = [...branchById.values()].map((branch) => ({
+      branchId: branch.id, branchName: branch.name, branchCode: branch.code,
+      ...summarizeBranchInternet(links.filter((link) => link.branchId === branch.id)),
+    })).sort((left, right) => {
+      const order = { offline: 0, failover: 1, degraded: 2, unknown: 3, online: 4 } as const;
+      return order[left.status] - order[right.status] || left.branchName.localeCompare(right.branchName);
+    });
+    return { success: true, data: {
+      branches, links,
+      summary: {
+        totalBranches: branches.length,
+        online: branches.filter((branch) => branch.status === "online").length,
+        degraded: branches.filter((branch) => branch.status === "degraded").length,
+        failover: branches.filter((branch) => branch.status === "failover").length,
+        offline: branches.filter((branch) => branch.status === "offline").length,
+        unknown: branches.filter((branch) => branch.status === "unknown").length,
+      }, calculatedAt: new Date().toISOString(),
+    } };
+  });
+
+  app.get("/v1/operations/health/recorders", async (request) => {
+    const query = z.object({
+      branchId: z.string().optional(), status: z.enum(["online", "offline", "degraded", "unknown"]).optional(),
+    }).parse(request.query);
+    const projections = await loadAccessibleProjections(request, store, query.branchId ? [query.branchId] : undefined);
+    const branchById = new Map(projections.map((branch) => [branch.id, branch]));
+    const telemetry = await store.listLatestOperationalTelemetry(request.currentUser.tenantId, [...branchById.keys()]);
+    let recorders = telemetry.filter((item) => item.deviceType === "recorder").flatMap((item) => {
+      const branch = branchById.get(item.branchId); return branch ? [projectRecorderHealth(item, branch)] : [];
+    });
+    if (query.status) recorders = recorders.filter((recorder) => recorder.status === query.status);
+    recorders.sort((left, right) => {
+      const rank = { offline: 0, degraded: 1, unknown: 2, online: 3 } as const;
+      return rank[left.status] - rank[right.status] || left.branchName.localeCompare(right.branchName);
+    });
+    return { success: true, data: {
+      recorders,
+      summary: {
+        total: recorders.length, online: recorders.filter((item) => item.status === "online").length,
+        offline: recorders.filter((item) => item.status === "offline").length,
+        degraded: recorders.filter((item) => item.status === "degraded").length,
+        unknown: recorders.filter((item) => item.status === "unknown").length,
+        affectedBranches: new Set(recorders.filter((item) => item.status !== "online").map((item) => item.branchId)).size,
+      }, calculatedAt: new Date().toISOString(),
+    } };
   });
 
   app.get("/v1/operations/health/policy", async (request, reply) => {
     const { branchId } = z.object({ branchId: z.string().optional() }).parse(request.query);
     if (branchId && !(await canViewBranch(request, reply, store, branchId))) return;
     const stored = await store.getOperationalHealthPolicy(request.currentUser.tenantId, branchId);
-    return { success: true, data: stored ?? defaultOperationalHealthPolicy };
+    return { success: true, data: { ...defaultOperationalHealthPolicy, ...(stored ?? {}) } };
   });
 
   app.put("/v1/operations/health/policy", async (request, reply) => {
@@ -273,10 +439,80 @@ export async function registerOperationalHealthRoutes(
       severity: z.enum(["critical", "warning", "info"]).optional(),
       status: z.enum(["active", "acknowledged", "resolved"]).optional(),
       branchId: z.string().optional(),
+      component: z.string().max(100).optional(),
       limit: z.coerce.number().int().min(1).max(200).default(50),
       offset: z.coerce.number().int().min(0).default(0),
     }).parse(request.query);
     const projections = await loadAccessibleProjections(request, store, query.branchId ? [query.branchId] : undefined);
+    const branchById = new Map(projections.map((branch) => [branch.id, branch]));
+    const diskTelemetry = await store.listLatestOperationalTelemetry(request.currentUser.tenantId, [...branchById.keys()]);
+    const diskAlerts = diskTelemetry
+      .filter((item) => item.deviceType === "disk")
+      .flatMap((item) => {
+        const branch = branchById.get(item.branchId);
+        if (!branch) return [];
+        const disk = projectDiskHealth(item, branch);
+        if (disk.smartStatus === "healthy") return [];
+        const critical = ["failure_predicted", "failed", "missing"].includes(disk.smartStatus);
+        return [{
+          id: `hdd:${branch.id}:${disk.id}`,
+          severity: critical ? "critical" as const : "warning" as const,
+          status: "active" as const,
+          componentType: "storage",
+          deviceId: disk.id,
+          title: `HDD ${disk.smartStatus.replaceAll("_", " ")}: ${disk.devicePath}`,
+          description: `${disk.model} has a ${disk.failureProbability.toFixed(1)}% SMART risk score. ${disk.reasonCodes.join(", ")}.`,
+          impact: critical ? "Recording data is at immediate risk of loss." : "Disk degradation may reduce recording reliability.",
+          recommendedAction: critical ? "Verify redundancy and replace the disk immediately." : "Run an extended SMART test and schedule preventive replacement.",
+          branchId: branch.id, branchName: branch.name, branchCode: branch.code,
+          detectedAt: disk.lastCheck,
+          acknowledgedAt: null, acknowledgedBy: null, acknowledgedByName: null,
+          assignedAt: null, assignedTo: null, assignedToName: null,
+          resolvedAt: null, resolvedBy: null, resolvedByName: null, resolution: null,
+          slaDeadline: null, workOrderId: null,
+        }];
+      });
+    const networkAlerts = diskTelemetry
+      .filter((item) => item.deviceType === "network")
+      .flatMap((item) => {
+        const branch = branchById.get(item.branchId); if (!branch) return [];
+        const link = projectInternetLink(item, branch);
+        if (link.status === "online") return [];
+        const offline = link.status === "offline";
+        return [{
+          id: `internet:${branch.id}:${link.linkId}`,
+          severity: offline && link.role === "primary" ? "critical" as const : "warning" as const,
+          status: "active" as const, componentType: "network", deviceId: item.deviceId,
+          title: offline ? `${link.role} internet link offline` : `${link.role} internet link degraded`,
+          description: `${link.ispName}: latency ${link.latencyMs ?? "unknown"}ms, jitter ${link.jitterMs ?? "unknown"}ms, packet loss ${link.packetLossPercent ?? "unknown"}%, utilization ${link.bandwidthUtilizationPercent ?? "unknown"}%.`,
+          impact: offline ? "Remote branch surveillance connectivity is unavailable or running without redundancy." : "Live video and remote operations may be impaired.",
+          recommendedAction: offline ? "Confirm ISP outage and validate backup-link failover immediately." : "Review ISP performance, interface traffic, and bandwidth saturation.",
+          branchId: branch.id, branchName: branch.name, branchCode: branch.code, detectedAt: link.lastCheck,
+          acknowledgedAt: null, acknowledgedBy: null, acknowledgedByName: null,
+          assignedAt: null, assignedTo: null, assignedToName: null,
+          resolvedAt: null, resolvedBy: null, resolvedByName: null, resolution: null,
+          slaDeadline: null, workOrderId: null,
+        }];
+      });
+    const recorderAlerts = diskTelemetry.filter((item) => item.deviceType === "recorder").flatMap((item) => {
+      const branch = branchById.get(item.branchId); if (!branch) return [];
+      const recorder = projectRecorderHealth(item, branch); if (recorder.status === "online") return [];
+      const offline = recorder.status === "offline";
+      return [{
+        id: `recorder:${branch.id}:${recorder.id}`,
+        severity: offline ? "critical" as const : "warning" as const, status: "active" as const,
+        componentType: "recording", deviceId: recorder.id,
+        title: `${recorder.deviceType.toUpperCase()} ${offline ? "offline" : "degraded"}: ${recorder.name}`,
+        description: `${recorder.vendor} ${recorder.model}; recording ${recorder.recordingStatus}; cameras ${recorder.connectedCameras ?? "unknown"}/${recorder.totalCameras ?? "unknown"}.`,
+        impact: offline ? "Live and recorded video from this recorder may be unavailable." : "Some recording channels or recorder functions may be impaired.",
+        recommendedAction: offline ? "Verify recorder power, branch LAN connectivity, and vendor API credentials." : "Inspect recording state and offline channels.",
+        branchId: branch.id, branchName: branch.name, branchCode: branch.code, detectedAt: recorder.lastCheck,
+        acknowledgedAt: null, acknowledgedBy: null, acknowledgedByName: null,
+        assignedAt: null, assignedTo: null, assignedToName: null,
+        resolvedAt: null, resolvedBy: null, resolvedByName: null, resolution: null,
+        slaDeadline: null, workOrderId: null,
+      }];
+    });
     let alerts = projections.flatMap((branch) => {
       const componentAlerts = Object.entries(branch.components)
         .filter(([, component]) => component.status === "critical" || component.status === "warning")
@@ -300,17 +536,17 @@ export async function registerOperationalHealthRoutes(
           slaDeadline: null, workOrderId: null,
         }));
       const retentionAlerts = branch.cameras
-        .filter((camera) => camera.retention?.status === "breach")
+        .filter((camera) => camera.retention?.status === "breach" || camera.retention?.status === "at_risk")
         .map((camera) => ({
           id: `retention:${branch.id}:${camera.id}`,
-          severity: "critical" as const,
+          severity: camera.retention?.status === "breach" ? "critical" as const : "warning" as const,
           status: "active" as const,
           componentType: "retention",
           deviceId: camera.id,
-          title: `Retention below policy: ${camera.name}`,
-          description: `${camera.retention?.actualDays ?? 0} continuous days available; ${camera.retention?.configuredDays} required.`,
-          impact: "Required surveillance footage may be unavailable.",
-          recommendedAction: "Inspect recording gaps and recorder/storage health immediately.",
+          title: camera.retention?.status === "breach" ? `Retention below policy: ${camera.name}` : `Retention approaching threshold: ${camera.name}`,
+          description: `${camera.retention?.actualDays ?? 0} continuous days available; ${camera.retention?.configuredDays} required; seven-day forecast ${camera.retention?.forecastDaysIn7Days ?? "unknown"} days.`,
+          impact: camera.retention?.status === "breach" ? "Required surveillance footage may be unavailable." : "The camera is within the configured early-warning margin.",
+          recommendedAction: camera.retention?.status === "breach" ? "Inspect recording gaps and recorder/storage health immediately." : "Review storage capacity and recording continuity before a breach occurs.",
           branchId: branch.id, branchName: branch.name, branchCode: branch.code,
           detectedAt: camera.retention?.newestPlayableAt ?? new Date().toISOString(),
           acknowledgedAt: null, acknowledgedBy: null, acknowledgedByName: null,
@@ -320,8 +556,10 @@ export async function registerOperationalHealthRoutes(
         }));
       return [...componentAlerts, ...retentionAlerts];
     });
+    alerts = [...diskAlerts, ...networkAlerts, ...recorderAlerts, ...alerts];
     if (query.severity) alerts = alerts.filter((alert) => alert.severity === query.severity);
     if (query.status) alerts = alerts.filter((alert) => alert.status === query.status);
+    if (query.component) alerts = alerts.filter((alert) => alert.componentType === query.component);
     const total = alerts.length;
     return { success: true, data: { alerts: alerts.slice(query.offset, query.offset + query.limit), total, limit: query.limit, offset: query.offset } };
   });
@@ -341,14 +579,15 @@ async function loadAccessibleProjections(
   }
   const telemetry = await store.listLatestOperationalTelemetry(request.currentUser.tenantId, branches.map((branch) => branch.id));
   return Promise.all(branches.map(async (branch) => {
-    const policy = await store.getOperationalHealthPolicy(request.currentUser.tenantId, branch.id)
-      ?? defaultOperationalHealthPolicy;
+    const storedPolicy = await store.getOperationalHealthPolicy(request.currentUser.tenantId, branch.id);
+    const policy = { ...defaultOperationalHealthPolicy, ...(storedPolicy ?? {}) };
     const cameras = await store.listCamerasByBranch(request.currentUser, branch.id, "recording:view");
     const retentions: RetentionVerification[] = await Promise.all(cameras.map(async (camera) => {
       const job = await store.getRecordingJob(camera.id);
       const segments = await store.listRecordingSegments(camera.id);
       return verifyContinuousRetention(camera.id, segments, {
         retentionDays: Math.max(job?.retentionDays ?? 0, policy.retentionDays),
+        retentionWarningDays: policy.retentionWarningDays,
         maxRecordingGapSeconds: policy.maxRecordingGapSeconds,
       });
     }));

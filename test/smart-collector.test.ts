@@ -12,7 +12,7 @@ describe('parseSmartctlJson', () => {
           table: [
             { name: 'Temperature_Celsius', value: 41, raw: { value: 41 } },
             { name: 'Power_On_Hours', value: 8124, raw: { value: 8124 } },
-            { name: 'Reallocated_Sector_Ct', value: 3, raw: { value: 3 } },
+            { name: 'Reallocated_Sector_Ct', value: 98, raw: { value: 3 } },
             { name: 'Current_Pending_Sector', value: 1, raw: { value: 1 } },
             { name: 'Offline_Uncorrectable', value: 2, raw: { value: 2 } },
             { name: 'UDMA_CRC_Error_Count', value: 0, raw: { value: 0 } },

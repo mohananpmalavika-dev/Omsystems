@@ -19,7 +19,7 @@ import {
   getHealthStatusIcon,
   getTimeAgo
 } from "@/lib/types/operational-health";
-import { BranchHealthMosaic } from "@/components/operational-health";
+import { BranchHealthMosaic, HddFleetWidget, InternetFleetWidget, RetentionFleetWidget } from "@/components/operational-health";
 import { useOperationalHealthStream } from "@/hooks/useOperationalHealthStream";
 
 export default function OperationalHealthDashboard() {
@@ -381,6 +381,10 @@ export default function OperationalHealthDashboard() {
           </a>
         </div>
       </div>
+
+      <RetentionFleetWidget />
+      <InternetFleetWidget />
+      <HddFleetWidget />
 
       {/* Additional Component Cards */}
       <div className="grid lg:grid-cols-3 gap-6">

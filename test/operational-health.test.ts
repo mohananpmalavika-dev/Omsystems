@@ -102,6 +102,79 @@ describe("Phase 1 operational health", () => {
     });
     expect(effective.json().data.retentionDays).toBe(180);
   });
+
+  it("normalizes recorder HDD payloads and creates disk-specific alerts", async () => {
+    const accepted = await app.inject({
+      method: "POST", url: `/v1/edge-agents/${agentId}/recorder-hdd`, headers: admin,
+      payload: {
+        branchId: "branch-blr-001", recorderId: "nvr-001",
+        observedAt: new Date().toISOString(), source: "cp-plus-adapter",
+        idempotencyKey: "nvr-001:hdd:one",
+        hddStatus: [
+          { diskNo: 1, model: "SkyHawk 4TB", serial: "BAD-001", state: "failed", temperature: 67, capacityBytes: 4_000_000_000_000 },
+          { diskNo: 2, model: "SkyHawk 4TB", serial: "OK-002", state: "normal", temperature: 39, capacityBytes: 4_000_000_000_000 },
+        ],
+      },
+    });
+    expect(accepted.statusCode).toBe(202);
+    expect(accepted.json()).toMatchObject({ accepted: 2, duplicates: 0 });
+
+    const disks = await app.inject({ method: "GET", url: "/v1/operations/health/disks", headers: admin });
+    expect(disks.statusCode).toBe(200);
+    expect(disks.json().data).toHaveLength(2);
+    expect(disks.json().data[0]).toMatchObject({
+      branchId: "branch-blr-001", smartStatus: "failed", serialNumber: "BAD-001",
+    });
+    expect(disks.json().data[0].failureProbability).toBeGreaterThanOrEqual(80);
+
+    const alerts = await app.inject({
+      method: "GET", url: "/v1/operations/alerts?component=storage&severity=critical", headers: admin,
+    });
+    expect(alerts.statusCode).toBe(200);
+    expect(alerts.json().data.alerts.some((alert: { id: string; deviceId: string }) =>
+      alert.id.startsWith("hdd:") && alert.deviceId === "nvr-001:disk:1",
+    )).toBe(true);
+  });
+
+  it("publishes a warning before retained footage falls below policy", async () => {
+    const now = Date.now();
+    await store.createRecordingSegment({
+      cameraId: "cam-001", jobId: "retention-warning-job",
+      startedAt: new Date(now - 36 * 3_600_000).toISOString(),
+      endedAt: new Date(now).toISOString(), storagePath: "retention-warning",
+      sizeBytes: 1, storageNodeExternalId: "node", storageTier: "hot", status: "ready",
+    });
+    const policy = { ...defaultOperationalHealthPolicy, retentionDays: 1, retentionWarningDays: 1 };
+    expect((await app.inject({ method: "PUT", url: "/v1/operations/health/policy", headers: admin, payload: { branchId: "branch-blr-001", policy } })).statusCode).toBe(200);
+    const response = await app.inject({
+      method: "GET", url: "/v1/operations/alerts?component=retention&severity=warning", headers: admin,
+    });
+    const alert = response.json().data.alerts.find((item: { deviceId: string }) => item.deviceId === "cam-001");
+    expect(alert).toMatchObject({ severity: "warning", componentType: "retention" });
+    expect(alert.title).toContain("approaching threshold");
+  });
+
+  it("tracks primary and backup internet links and detects failover", async () => {
+    const observedAt = new Date().toISOString();
+    const submit = (deviceId: string, metrics: Record<string, unknown>) => app.inject({
+      method: "POST", url: `/v1/edge-agents/${agentId}/telemetry`, headers: admin,
+      payload: {
+        branchId: "branch-blr-001", edgeAgentId: agentId, deviceType: "network", deviceId,
+        observedAt, source: "system", quality: "verified", idempotencyKey: `${deviceId}:${observedAt}`,
+        metrics, reasonCodes: [],
+      },
+    });
+    expect((await submit("internet-primary", { linkId: "primary", role: "primary", ispName: "ISP A", connectivity: false, active: false, packetLossPercent: 100 })).statusCode).toBe(202);
+    expect((await submit("internet-backup", { linkId: "backup", role: "backup", ispName: "ISP B", connectivity: true, active: true, latencyMs: 48, jitterMs: 4, packetLossPercent: 0, bandwidthUtilizationPercent: 35 })).statusCode).toBe(202);
+
+    const network = await app.inject({ method: "GET", url: "/v1/operations/health/network", headers: admin });
+    expect(network.statusCode).toBe(200);
+    expect(network.json().data.branches[0]).toMatchObject({ status: "failover", failoverActive: true, activeLinkId: "backup" });
+    expect(network.json().data.summary.failover).toBe(1);
+
+    const alerts = await app.inject({ method: "GET", url: "/v1/operations/alerts?component=network&severity=critical", headers: admin });
+    expect(alerts.json().data.alerts.some((alert: { id: string }) => alert.id.includes("internet:branch-blr-001:primary"))).toBe(true);
+  });
 });
 
 describe("operational health evidence rules", () => {
@@ -123,6 +196,19 @@ describe("operational health evidence rules", () => {
     expect(verification.status).toBe("breach");
     expect(verification.actualDays).toBe(2);
     expect(verification.reasonCodes).toContain("retention_below_policy");
+    expect(verification.shortfallDays).toBe(1);
+    expect(verification.forecastDaysIn7Days).toBe(9);
+  });
+
+  it("raises an early warning while retention remains just above policy", () => {
+    const now = Date.parse("2026-07-28T00:00:00.000Z");
+    const verification = verifyContinuousRetention("camera", [
+      segment("2026-06-26T00:00:00.000Z", "2026-07-28T00:00:00.000Z", "window"),
+    ], { retentionDays: 30, retentionWarningDays: 3, maxRecordingGapSeconds: 120 }, now + 30_000);
+    expect(verification.status).toBe("at_risk");
+    expect(verification.marginDays).toBe(2);
+    expect(verification.reasonCodes).toContain("retention_approaching_threshold");
+    expect(verification.coverageTrend).toHaveLength(14);
   });
 });
 

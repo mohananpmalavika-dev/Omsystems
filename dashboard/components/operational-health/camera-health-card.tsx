@@ -42,9 +42,11 @@ export function CameraHealthCard({
 
   const isOfflineOrDegraded = camera.onlineStatus === 'offline' || 
                               camera.onlineStatus === 'degraded';
+  const retentionBreach = camera.retention?.status === 'breach';
+  const retentionAtRisk = camera.retention?.status === 'at_risk';
 
   return (
-    <div className="card hover:shadow-md transition-shadow relative overflow-hidden">
+    <div className={`card hover:shadow-md transition-shadow relative overflow-hidden ${retentionBreach ? 'border-2 border-red-500 bg-red-50' : retentionAtRisk ? 'border-2 border-amber-400 bg-amber-50' : ''}`}>
       {/* Quality indicator stripe */}
       {hasQualityIssues && (
         <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-yellow-500 via-orange-500 to-red-500" />
@@ -147,6 +149,14 @@ export function CameraHealthCard({
       </div>
 
       {/* Alert Messages */}
+      {(retentionBreach || retentionAtRisk) && (
+        <div className={`mb-3 rounded border p-2 ${retentionBreach ? 'border-red-300 bg-red-100 text-red-800' : 'border-amber-300 bg-amber-100 text-amber-800'}`}>
+          <div className="flex items-start gap-2 text-xs">
+            <AlertCircle size={14} className="mt-0.5 flex-shrink-0" />
+            <div><strong>{retentionBreach ? 'RETENTION BREACH' : 'Retention early warning'}</strong><div>{camera.retention?.actualDays ?? 0} of {camera.retention?.configuredDays} required days available</div></div>
+          </div>
+        </div>
+      )}
       {(camera.videoLoss || camera.tamperingDetected || camera.imageFrozen) && (
         <div className="mb-3 p-2 bg-red-50 border border-red-200 rounded">
           <div className="flex items-start gap-2">

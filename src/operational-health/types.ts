@@ -35,26 +35,36 @@ export interface OperationalHealthPolicy {
   staleAfterSeconds: number;
   offlineAfterSeconds: number;
   retentionDays: number;
+  retentionWarningDays: number;
   maxRecordingGapSeconds: number;
   cameraWarningPercent: number;
   cameraCriticalPercent: number;
   latencyWarningMs: number;
   latencyCriticalMs: number;
+  jitterWarningMs: number;
+  jitterCriticalMs: number;
   packetLossWarningPercent: number;
   packetLossCriticalPercent: number;
+  bandwidthUtilizationWarningPercent: number;
+  bandwidthUtilizationCriticalPercent: number;
 }
 
 export const defaultOperationalHealthPolicy: OperationalHealthPolicy = {
   staleAfterSeconds: 90,
   offlineAfterSeconds: 300,
   retentionDays: 90,
+  retentionWarningDays: 7,
   maxRecordingGapSeconds: 120,
   cameraWarningPercent: 5,
   cameraCriticalPercent: 10,
   latencyWarningMs: 150,
   latencyCriticalMs: 300,
+  jitterWarningMs: 30,
+  jitterCriticalMs: 60,
   packetLossWarningPercent: 2,
   packetLossCriticalPercent: 5,
+  bandwidthUtilizationWarningPercent: 80,
+  bandwidthUtilizationCriticalPercent: 95,
 };
 
 export type VideoWallGridSize = "1x1" | "2x2" | "3x3" | "4x4" | "5x5" | "6x6" |

@@ -96,12 +96,12 @@ async function collectVendorTelemetry(config: SmartCollectorConfig): Promise<Sma
     }
   }
 
-  if (vendor.includes('dahua')) {
-    const response = await fetch(`${baseUrl}/cgi-bin/magicBox.cgi?action=getSystemInfo`, { headers, signal: AbortSignal.timeout(5000) });
+  if (vendor.includes('dahua') || vendor.includes('cp plus') || vendor.includes('cpplus')) {
+    let response = await fetch(`${baseUrl}/cgi-bin/storageDevice.cgi?action=getDeviceAllInfo`, { headers, signal: AbortSignal.timeout(5000) });
     if (!response.ok) {
-      throw new Error(`Dahua system endpoint returned ${response.status}`);
+      response = await fetch(`${baseUrl}/cgi-bin/magicBox.cgi?action=getSystemInfo`, { headers, signal: AbortSignal.timeout(5000) });
     }
-
+    if (!response.ok) throw new Error(`Recorder storage endpoint returned ${response.status}`);
     const text = await response.text();
     const parsed = parseDahuaStorageText(text);
     if (parsed) {
@@ -122,7 +122,7 @@ async function collectVendorTelemetry(config: SmartCollectorConfig): Promise<Sma
   throw new Error('Vendor endpoint did not yield parseable storage telemetry');
 }
 
-function parseHikvisionStorageXml(xml: string): { smartStatus: SmartTelemetry['smartStatus']; temperature?: number; reallocatedSectors?: number; pendingSectors?: number; uncorrectableSectors?: number; failureProbability?: number } | null {
+export function parseHikvisionStorageXml(xml: string): { smartStatus: SmartTelemetry['smartStatus']; temperature?: number; reallocatedSectors?: number; pendingSectors?: number; uncorrectableSectors?: number; failureProbability?: number } | null {
   const temperature = parseInt(xml.match(/<temperature>(-?\d+)<\/temperature>/i)?.[1] ?? '', 10);
   const reallocated = parseInt(xml.match(/<reallocatedSectors>(\d+)<\/reallocatedSectors>/i)?.[1] ?? '', 10);
   const pending = parseInt(xml.match(/<pendingSectors>(\d+)<\/pendingSectors>/i)?.[1] ?? '', 10);
@@ -151,7 +151,7 @@ function parseHikvisionStorageXml(xml: string): { smartStatus: SmartTelemetry['s
   };
 }
 
-function parseDahuaStorageText(text: string): { smartStatus: SmartTelemetry['smartStatus']; temperature?: number; reallocatedSectors?: number; pendingSectors?: number; uncorrectableSectors?: number; failureProbability?: number } | null {
+export function parseDahuaStorageText(text: string): { smartStatus: SmartTelemetry['smartStatus']; temperature?: number; reallocatedSectors?: number; pendingSectors?: number; uncorrectableSectors?: number; failureProbability?: number } | null {
   const temperature = parseInt(text.match(/temperature\s*[:=]\s*(-?\d+)/i)?.[1] ?? '', 10);
   const reallocated = parseInt(text.match(/reallocated\s*[:=]\s*(\d+)/i)?.[1] ?? '', 10);
   const pending = parseInt(text.match(/pending\s*[:=]\s*(\d+)/i)?.[1] ?? '', 10);
@@ -186,13 +186,18 @@ export function parseSmartctlJson(payload: Record<string, unknown>, devicePath: 
 
   const lookup = (name: string) => attributes.find((attribute) => attribute.name === name);
   const asNumber = (value: unknown) => typeof value === 'number' ? value : Number(value ?? 0);
+  const rawNumber = (name: string) => {
+    const attribute = lookup(name);
+    const raw = attribute?.raw as { value?: unknown } | undefined;
+    return asNumber(raw?.value ?? attribute?.value);
+  };
 
-  const temperature = asNumber(lookup('Temperature_Celsius')?.value);
-  const powerOnHours = asNumber(lookup('Power_On_Hours')?.value);
-  const reallocatedSectors = asNumber(lookup('Reallocated_Sector_Ct')?.value);
-  const pendingSectors = asNumber(lookup('Current_Pending_Sector')?.value);
-  const uncorrectableSectors = asNumber(lookup('Offline_Uncorrectable')?.value);
-  const readErrors = asNumber(lookup('UDMA_CRC_Error_Count')?.value);
+  const temperature = rawNumber('Temperature_Celsius');
+  const powerOnHours = rawNumber('Power_On_Hours');
+  const reallocatedSectors = rawNumber('Reallocated_Sector_Ct');
+  const pendingSectors = rawNumber('Current_Pending_Sector');
+  const uncorrectableSectors = rawNumber('Offline_Uncorrectable');
+  const readErrors = rawNumber('UDMA_CRC_Error_Count');
 
   let smartStatus: SmartTelemetry['smartStatus'] = 'healthy';
   if (!passed || reallocatedSectors > 0 || pendingSectors > 0 || uncorrectableSectors > 0 || temperature > 55) {

@@ -22,7 +22,7 @@ export function DiskHealthCard({ disk }: DiskHealthCardProps) {
     }
   };
 
-  const showWarning = disk.smartStatus === 'failure_predicted' || 
+  const showWarning = ['degraded', 'failure_predicted', 'failed', 'missing'].includes(disk.smartStatus) ||
                       disk.failureProbability > 50 ||
                       disk.temperature > 55;
 
@@ -55,8 +55,10 @@ export function DiskHealthCard({ disk }: DiskHealthCardProps) {
             <AlertTriangle size={16} className="text-red-600 mt-0.5 flex-shrink-0" />
             <div className="text-xs text-red-700">
               {disk.smartStatus === 'failure_predicted' && (
-                <p className="font-medium mb-1">Failure predicted within 7-14 days</p>
+                <p className="font-medium mb-1">SMART indicators predict elevated failure risk</p>
               )}
+              {disk.smartStatus === 'failed' && <p className="font-medium mb-1">SMART failure detected</p>}
+              {disk.smartStatus === 'missing' && <p className="font-medium mb-1">Disk is missing or unavailable</p>}
               {disk.failureProbability > 50 && (
                 <p>Failure probability: {disk.failureProbability.toFixed(1)}%</p>
               )}

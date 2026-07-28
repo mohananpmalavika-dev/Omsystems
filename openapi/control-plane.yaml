@@ -1,8 +1,8 @@
 openapi: 3.1.0
 info:
   title: Sentinel Grid Control Plane
-  version: 0.6.0-phase5
-  description: Authoritative Fastify contract including Phase 5 readiness, measured runtime metrics, backpressure and enterprise scale-evidence controls.
+  version: 0.7.0-phase6
+  description: Authoritative Fastify contract including Phase 6 testing, deployment preflight, monitoring and operational acceptance controls.
 servers:
   - url: /api/control
     description: Dashboard BFF
