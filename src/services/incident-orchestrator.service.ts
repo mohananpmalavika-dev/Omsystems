@@ -239,6 +239,7 @@ export class IncidentOrchestrator {
       ...input,
       incidentNumber,
       detectionSource: 'manual-operator',
+      occurredAt: input.occurredAt ?? new Date().toISOString(),
       reportedBy: input.createdBy,
     });
     
@@ -553,11 +554,17 @@ export class IncidentOrchestrator {
     await this.store.processAnalyticsEvent({
       tenantId: event.tenantId,
       cameraId: event.cameraId,
+      sourceEventId: `verification:${event.cameraId}:${event.detectionTime}:${event.detectionType}`,
       detectionType: event.detectionType,
+      occurredAt: event.detectionTime,
       confidence: event.confidence,
-      detectedAt: event.detectionTime,
-      requiresVerification: true,
-      verificationReason: verification.reason,
+      durationSeconds: 0,
+      modelVersion: 'incident-orchestrator',
+      objects: [],
+      metadata: {
+        requiresVerification: true,
+        verificationReason: verification.reason,
+      },
     });
   }
   

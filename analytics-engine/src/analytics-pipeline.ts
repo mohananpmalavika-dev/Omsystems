@@ -88,7 +88,9 @@ export class AnalyticsPipeline {
   private aiAssistant: AIAssistant;
   
   private detectors: BaseDetector[];
+  private requiredDetectors: Set<BaseDetector>;
   private isInitialized = false;
+  private initializationErrors = new Map<string, string>();
   private industrialAnalyticsEnabled = false;
   private smartCityAnalyticsEnabled = false;
 
@@ -160,6 +162,23 @@ export class AnalyticsPipeline {
       this.industrialAnalytics,
       this.smartCityAnalytics,
     ];
+    this.requiredDetectors = new Set([
+      this.motionDetector,
+      this.objectDetector,
+      this.zoneDetector,
+      this.healthDetector,
+      this.personDetector,
+      this.vehicleDetector,
+      this.helmetDetector,
+      this.fallDetector,
+      this.smokeFireDetector,
+      this.crowdDensityDetector,
+      this.tailgatingDetector,
+      this.queueDetector,
+      this.heatMapGenerator,
+      this.faceDetector,
+      this.anprDetector,
+    ]);
   }
 
   async initialize(): Promise<void> {
@@ -181,7 +200,17 @@ export class AnalyticsPipeline {
     
     // Initialize detectors
     for (const detector of this.detectors) {
-      await detector.initialize();
+      const name = (detector as any).detectionType as string;
+      try {
+        await detector.initialize();
+      } catch (error) {
+        // Optional analytics modules must not take the core frame pipeline
+        // down when their model/runtime dependency is not installed.
+        const message = error instanceof Error ? error.message : String(error);
+        this.initializationErrors.set(name, message);
+        if (this.requiredDetectors.has(detector)) throw error;
+        console.warn(`Analytics detector ${name} is unavailable: ${message}`);
+      }
     }
 
     this.isInitialized = true;
@@ -492,6 +521,7 @@ export class AnalyticsPipeline {
     const health: Record<string, any> = {
       initialized: this.isInitialized,
       detectors: {},
+      initializationErrors: Object.fromEntries(this.initializationErrors),
     };
 
     for (const detector of this.detectors) {
@@ -510,6 +540,7 @@ export class AnalyticsPipeline {
       await detector.cleanup();
     }
     this.isInitialized = false;
+    this.initializationErrors.clear();
     this.rulesCache.clear();
     this.rulesCacheExpiry.clear();
   }

@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useRouter } from 'next/router';
 import {
   Camera,
   ArrowLeft,
@@ -34,8 +34,10 @@ import {
 } from 'recharts';
 
 export function CameraDetailView() {
-  const { cameraId } = useParams<{ cameraId: string }>();
-  const navigate = useNavigate();
+  const router = useRouter();
+  const cameraId = typeof router.query.cameraId === 'string'
+    ? router.query.cameraId
+    : typeof router.query.id === 'string' ? router.query.id : '';
   
   const { camera, qualityMetrics, alerts, isConnected } = useSingleCameraMonitoring(cameraId!);
   
@@ -175,7 +177,7 @@ export function CameraDetailView() {
         {/* Header */}
         <div className="mb-6">
           <button
-            onClick={() => navigate('/cameras')}
+            onClick={() => void router.push('/cameras')}
             className="flex items-center gap-2 text-gray-600 hover:text-gray-900 mb-4"
           >
             <ArrowLeft size={20} />
@@ -385,8 +387,8 @@ export function CameraDetailView() {
                   />
                   <YAxis />
                   <Tooltip
-                    labelFormatter={(ts) => new Date(ts).toLocaleString()}
-                    formatter={(value: number) => [value.toFixed(1), 'FPS']}
+                    labelFormatter={(ts) => new Date(String(ts ?? '')).toLocaleString()}
+                    formatter={(value) => [Number(value ?? 0).toFixed(1), 'FPS']}
                   />
                   <Area
                     type="monotone"
@@ -422,7 +424,7 @@ export function CameraDetailView() {
                   <YAxis yAxisId="left" />
                   <YAxis yAxisId="right" orientation="right" />
                   <Tooltip
-                    labelFormatter={(ts) => new Date(ts).toLocaleString()}
+                    labelFormatter={(ts) => new Date(String(ts ?? '')).toLocaleString()}
                   />
                   <Legend />
                   <Line
@@ -471,8 +473,8 @@ export function CameraDetailView() {
                   />
                   <YAxis hide domain={[0, 1]} />
                   <Tooltip
-                    labelFormatter={(ts) => new Date(ts).toLocaleString()}
-                    formatter={(value: number) => [value === 1 ? 'Online' : 'Offline', 'Status']}
+                    labelFormatter={(ts) => new Date(String(ts ?? '')).toLocaleString()}
+                    formatter={(value) => [Number(value ?? 0) === 1 ? 'Online' : 'Offline', 'Status']}
                   />
                   <Area
                     type="stepAfter"

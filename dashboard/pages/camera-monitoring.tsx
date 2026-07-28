@@ -20,7 +20,7 @@ import {
 } from 'lucide-react';
 import { useCameraMonitoring } from '../hooks/useCameraMonitoring';
 import { CameraHealthCard } from '../components/operational-health/camera-health-card';
-import { Link } from 'react-router-dom';
+import Link from 'next/link';
 
 type StatusFilter = 'all' | 'online' | 'offline' | 'warning' | 'degraded' | 'quality-issues';
 
@@ -302,7 +302,7 @@ export function CameraMonitoringDashboard() {
               return (
                 <Link
                   key={camera.id}
-                  to={`/cameras/${camera.id}`}
+                  href={`/cameras/${camera.id}`}
                   className="block hover:scale-[1.02] transition-transform"
                 >
                   <CameraHealthCard
@@ -311,14 +311,20 @@ export function CameraMonitoringDashboard() {
                       name: camera.name,
                       branchName: '', // Would come from branch data
                       onlineStatus: camera.status,
-                      recordingStatus: camera.streamActive ? 'healthy' : 'stopped',
+                      recordingStatus: camera.streamActive ? 'healthy' : 'stream_unavailable',
+                      rtspUrl: '',
+                      currentBitrate: camera.currentBitrate || 0,
+                      packetLoss: camera.packetLoss || 0,
+                      branchId: selectedBranch || '',
+                      onvifAvailable: camera.status !== 'offline',
+                      streamAvailable: camera.streamActive || false,
                       currentFps: camera.currentFps || 0,
                       expectedFps: metrics?.expectedFps || 25,
                       latencyMs: camera.latencyMs || 0,
                       videoLoss: camera.videoLoss || false,
                       tamperingDetected: false,
                       imageFrozen: camera.imageFrozen || false,
-                      lastHeartbeat: camera.lastSeen || new Date(),
+                      lastHeartbeat: (camera.lastSeen || new Date()).toISOString(),
                       healthScore: metrics?.qualityScore || 0,
                     }}
                     onViewDetails={(id) => {

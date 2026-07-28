@@ -7,7 +7,7 @@ import type { ComplianceAssessment, ComplianceCertificate } from "@/lib/types";
 
 export default function ComplianceAssessmentDetailPage() {
   const pathname = usePathname();
-  const id = pathname.split("/").pop() ?? "";
+  const id = pathname?.split("/").pop() ?? "";
   const [assessment, setAssessment] = useState<ComplianceAssessment | null>(null);
   const [certificates, setCertificates] = useState<ComplianceCertificate[]>([]);
   const [loading, setLoading] = useState(false);

@@ -136,6 +136,8 @@ export interface Camera {
   firmwareVersion?: string;
   ipAddress?: string;
   installationNotes?: string;
+  /** Optional normalized floor-plan coordinates used for nearby-camera workflows. */
+  location?: { x: number; y: number };
   specifications?: CameraSpecifications;
   compliance?: CameraInstallationCompliance;
 }

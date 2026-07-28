@@ -8,7 +8,7 @@ import { privacyApi } from "@/lib/api-client";
 export default function CameraPurposeAssignmentPage() {
   const params = useParams();
   const router = useRouter();
-  const cameraId = String(params.cameraId ?? "");
+  const cameraId = String(params?.cameraId ?? "");
 
   const [purposes, setPurposes] = useState<any[]>([]);
   const [assigned, setAssigned] = useState<any[]>([]);

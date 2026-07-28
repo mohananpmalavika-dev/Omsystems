@@ -31,7 +31,7 @@ export default function IncidentDetailPage() {
   const [activeTab, setActiveTab] = useState<'overview' | 'video' | 'evidence' | 'tasks' | 'timeline' | 'report'>('overview');
   const [error, setError] = useState<string | null>(null);
 
-  const incidentId = params.id as string;
+  const incidentId = typeof params?.id === 'string' ? params.id : '';
 
   async function loadWorkspace() {
     setLoading(true);

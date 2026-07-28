@@ -1122,7 +1122,7 @@ export class MemoryStore implements ControlPlaneStore {
   }
 
   async updateDeviceInventory(id: string, input: Parameters<ControlPlaneStore["updateDeviceInventory"]>[1]) {
-    const record = this.deviceInventoryRecords.find((item) => item.id === id);
+    const record = this.deviceInventory.find((item) => item.id === id);
     if (!record) return undefined;
     Object.assign(record, { ...input, updatedAt: new Date().toISOString() });
     return record;
@@ -3060,7 +3060,7 @@ export class MemoryStore implements ControlPlaneStore {
   }
 
   // Device Inventory Management
-  private deviceInventory: any[] = [];
+  private readonly deviceInventory: any[] = [];
 
   async listDeviceInventory(tenantId: string, branchNodeId?: string): Promise<any[]> {
     return this.deviceInventory.filter(d => 

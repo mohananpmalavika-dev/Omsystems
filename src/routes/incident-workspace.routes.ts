@@ -13,7 +13,6 @@ import { IncidentOrchestrator } from '../services/incident-orchestrator.service.
 // ============ VALIDATION SCHEMAS ============
 
 const processAIEventSchema = z.object({
-  tenantId: z.string(),
   branchId: z.string().uuid().optional(),
   cameraId: z.string().uuid(),
   detectionType: z.string(),
@@ -85,8 +84,16 @@ export async function registerInvestigationWorkspaceRoutes(
     const body = processAIEventSchema.parse(request.body);
     
     const result = await orchestrator.processAIEvent({
-      ...body,
       tenantId: request.currentUser.tenantId,
+      cameraId: body.cameraId,
+      detectionType: body.detectionType,
+      detectionTime: body.detectionTime,
+      confidence: body.confidence,
+      severity: body.severity,
+      ...(body.branchId !== undefined && { branchId: body.branchId }),
+      ...(body.zone !== undefined && { zone: body.zone }),
+      ...(body.trackedObjectId !== undefined && { trackedObjectId: body.trackedObjectId }),
+      ...(body.metadata !== undefined && { metadata: body.metadata }),
     });
     
     await store.writeAudit({
@@ -114,9 +121,15 @@ export async function registerInvestigationWorkspaceRoutes(
     const body = createManualIncidentSchema.parse(request.body);
     
     const result = await orchestrator.createIncidentManual({
-      ...body,
       tenantId: request.currentUser.tenantId,
       createdBy: request.currentUser.id,
+      title: body.title,
+      incidentType: body.incidentType,
+      severity: body.severity,
+      ...(body.description !== undefined && { description: body.description }),
+      ...(body.branchId !== undefined && { branchId: body.branchId }),
+      ...(body.cameraId !== undefined && { cameraId: body.cameraId }),
+      ...(body.occurredAt !== undefined && { occurredAt: body.occurredAt }),
     });
     
     await store.writeAudit({

@@ -307,7 +307,7 @@ export class EvidencePreservationService {
       const branchCameras = await this.store.listCamerasByBranch(
         { tenantId, id: 'system' } as any,
         branchId,
-        'cameras:view'
+        'recording:view'
       );
       
       const nearbyCameras = branchCameras
@@ -378,12 +378,10 @@ export class EvidencePreservationService {
       await this.store.createRecordingLegalHold({
         tenantId: 'system', // Will be set properly in production
         cameraId,
-        holdType: 'incident-evidence',
+        fromAt,
+        toAt,
         reason: `Automatic legal hold for incident ${incidentId}`,
-        appliedBy,
-        startTime: fromAt,
-        endTime: toAt,
-        incidentReference: incidentId,
+        createdBy: appliedBy,
       });
     } catch (error) {
       this.logger?.error(`Failed to apply legal hold for incident ${incidentId}:`, error);
@@ -455,11 +453,9 @@ export class EvidencePreservationService {
     try {
       const event = await this.store.recordCustodyEvent({
         evidenceId: incidentId,
-        evidenceType: 'incident',
         action,
         performedBy,
-        timestamp: new Date().toISOString(),
-        details,
+        reason: JSON.stringify(details),
       });
       
       return event.id;

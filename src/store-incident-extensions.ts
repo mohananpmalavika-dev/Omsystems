@@ -13,7 +13,7 @@ export const IncidentManagementMethods = {
     const now = new Date().toISOString();
     
     // Generate incident number if not provided
-    const incidentNumber = `INC-${input.tenantId.substring(0, 2).toUpperCase()}-${new Date().getFullYear()}-${String(this.incidents.length + 1).padStart(6, '0')}`;
+    const incidentNumber = input.incidentNumber ?? `INC-${input.tenantId.substring(0, 2).toUpperCase()}-${new Date().getFullYear()}-${String(this.incidents.length + 1).padStart(6, '0')}`;
     
     const incident = {
       id: randomUUID(),
@@ -30,6 +30,8 @@ export const IncidentManagementMethods = {
       detectedAt: now,
       reportedAt: now,
       reportedBy: input.reportedBy,
+      aiConfidence: input.aiConfidence,
+      detectionCount: input.detectionCount,
       assignedTo: undefined,
       estimatedLoss: input.estimatedLoss,
       injuryDetails: input.injuryDetails,
@@ -1155,4 +1157,3 @@ export const IncidentManagementMethods = {
     });
   },
 };
-

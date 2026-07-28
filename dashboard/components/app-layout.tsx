@@ -61,7 +61,6 @@ const navigation: Array<{ label: string; items: NavItem[] }> = [
     label: "Command",
     items: [
       { label: "Operations overview", href: "/", icon: LayoutDashboard },
-      { label: "Operational health", href: "/operations", icon: Gauge },
       { label: "Executive dashboard", href: "/dashboards", icon: BarChart3 },
       { label: "Control room", href: "/control-room", icon: MonitorPlay },
       { label: "Incident response", href: "/incidents", icon: Siren, badge: "incidents" },

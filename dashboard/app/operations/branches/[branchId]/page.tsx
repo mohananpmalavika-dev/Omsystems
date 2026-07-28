@@ -36,7 +36,7 @@ import {
 export default function BranchHealthDetailPage() {
   const params = useParams();
   const router = useRouter();
-  const branchId = params.branchId as string;
+  const branchId = typeof params?.branchId === 'string' ? params.branchId : '';
 
   const [branch, setBranch] = useState<BranchHealthDetail | null>(null);
   const [cameras, setCameras] = useState<CameraHealth[]>([]);

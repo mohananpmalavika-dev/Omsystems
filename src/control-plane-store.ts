@@ -645,6 +645,7 @@ export interface ControlPlaneStore {
   createIncident(input: {
     tenantId: string;
     branchId?: string;
+    incidentNumber?: string;
     title: string;
     description?: string;
     incidentType: string;
@@ -657,6 +658,8 @@ export interface ControlPlaneStore {
     confidentialityLevel?: string;
     policeRequired?: boolean;
     insuranceRequired?: boolean;
+    aiConfidence?: number;
+    detectionCount?: number;
   }): Promise<any>;
   
   getIncident(id: string): Promise<any | undefined>;

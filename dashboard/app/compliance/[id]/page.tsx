@@ -8,7 +8,7 @@ import type { ComplianceAssessment, ComplianceFramework, CompliancePolicy } from
 
 export default function ComplianceFrameworkDetailPage() {
   const pathname = usePathname();
-  const id = pathname.split("/").pop() ?? "";
+  const id = pathname?.split("/").pop() ?? "";
   const [framework, setFramework] = useState<ComplianceFramework | null>(null);
   const [policies, setPolicies] = useState<CompliancePolicy[]>([]);
   const [assessments, setAssessments] = useState<ComplianceAssessment[]>([]);

@@ -1,0 +1,135 @@
+openapi: 3.1.0
+info:
+  title: Sentinel Grid Control Plane
+  version: 0.1.0-phase0
+  description: Authoritative Phase 0 contract for the active Fastify runtime.
+servers:
+  - url: /api/control
+    description: Dashboard BFF
+  - url: http://localhost:8080
+    description: Local control plane
+paths:
+  /health:
+    get:
+      operationId: getHealth
+      security: []
+      responses:
+        '200':
+          description: Service health
+  /v1/me:
+    get:
+      operationId: getCurrentUser
+      responses:
+        '200': { description: Current authenticated user }
+        '401': { description: Unauthenticated }
+  /v1/branches:
+    get:
+      operationId: listBranches
+      parameters:
+        - in: query
+          name: action
+          schema: { type: string, default: 'live:view' }
+      responses:
+        '200': { description: Authorized branches }
+    post:
+      operationId: createBranch
+      responses:
+        '201': { description: Branch created }
+  /v1/branches/{branchId}/cameras:
+    parameters:
+      - $ref: '#/components/parameters/BranchId'
+    get:
+      operationId: listBranchCameras
+      responses:
+        '200': { description: Authorized cameras for a branch }
+    post:
+      operationId: createBranchCamera
+      responses:
+        '201': { description: Camera created }
+  /v1/cameras/{cameraId}/live-sessions:
+    post:
+      operationId: createLiveSession
+      parameters:
+        - $ref: '#/components/parameters/CameraId'
+      responses:
+        '201': { description: Short-lived authorized media session }
+  /v1/device-inventory:
+    get:
+      operationId: listDeviceInventory
+      responses:
+        '200': { description: Device inventory }
+    post:
+      operationId: createDeviceInventoryRecord
+      responses:
+        '201': { description: Device inventory record created }
+  /v1/device-inventory/{id}:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema: { type: string }
+    get:
+      operationId: getDeviceInventoryRecord
+      responses:
+        '200': { description: Device inventory record }
+        '404': { description: Not found }
+    patch:
+      operationId: updateDeviceInventoryRecord
+      responses:
+        '200': { description: Device inventory record updated }
+  /v1/maintenance/assets:
+    get:
+      operationId: listMaintenanceAssets
+      responses:
+        '200': { description: Maintenance assets }
+    post:
+      operationId: createMaintenanceAsset
+      responses:
+        '201': { description: Maintenance asset created }
+  /v1/analytics/alerts:
+    get:
+      operationId: listAnalyticsAlerts
+      responses:
+        '200': { description: Authorized analytics alerts }
+  /v1/analytics/alerts/{alertId}/acknowledge:
+    post:
+      operationId: acknowledgeAnalyticsAlert
+      parameters:
+        - $ref: '#/components/parameters/AlertId'
+      responses:
+        '200': { description: Alert acknowledged }
+  /v1/analytics/alerts/{alertId}/escalate:
+    post:
+      operationId: escalateAnalyticsAlert
+      parameters:
+        - $ref: '#/components/parameters/AlertId'
+      responses:
+        '200': { description: Alert escalated }
+  /v1/reports/summary/operations:
+    get:
+      operationId: getOperationsReportSummary
+      responses:
+        '200': { description: Active operations summary projection }
+components:
+  parameters:
+    BranchId:
+      in: path
+      name: branchId
+      required: true
+      schema: { type: string }
+    CameraId:
+      in: path
+      name: cameraId
+      required: true
+      schema: { type: string }
+    AlertId:
+      in: path
+      name: alertId
+      required: true
+      schema: { type: string }
+  securitySchemes:
+    bearerSession:
+      type: http
+      scheme: bearer
+security:
+  - bearerSession: []

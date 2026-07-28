@@ -112,7 +112,7 @@ export interface CameraHealth {
   id: string;
   name: string;
   rtspUrl: string;
-  onlineStatus: 'online' | 'offline';
+  onlineStatus: 'online' | 'offline' | 'warning' | 'degraded' | 'unknown';
   recordingStatus: RecordingStatus;
   lastHeartbeat: string;
   currentFps: number;

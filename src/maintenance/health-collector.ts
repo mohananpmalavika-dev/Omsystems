@@ -279,9 +279,6 @@ export class HealthCollectorService {
           usagePercentage,
           temperature,
           badSectors,
-          telemetrySource: telemetry.telemetrySource,
-          model: telemetry.model,
-          serialNumber: telemetry.serialNumber,
         });
       }
     } catch (error) {
