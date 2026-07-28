@@ -56,7 +56,7 @@ import type {
   User,
 } from "./domain/models.js";
 import type { AuthorizationDecision } from "./domain/authorization.js";
-import type { OperationalHealthPolicy, OperationalTelemetryEnvelope } from "./operational-health/types.js";
+import type { OperationalHealthPolicy, OperationalTelemetryEnvelope, VideoWallLayout, VideoWallGridSize } from "./operational-health/types.js";
 
 export interface CameraDiscoveryInput {
   edgeAgentId: string;
@@ -494,6 +494,11 @@ export interface ControlPlaneStore {
     branchId: string,
     action: Action,
   ): Promise<Camera[]>;
+  listAccessibleCameras(
+    user: User,
+    action: Action,
+    filters: { branchId?: string; search?: string; status?: CameraStatus; limit: number; offset: number },
+  ): Promise<{ cameras: Camera[]; total: number }>;
   createBranch(
     tenantId: string,
     parentNodeId: string,
@@ -527,6 +532,11 @@ export interface ControlPlaneStore {
     branchId: string | undefined,
     policy: OperationalHealthPolicy,
   ): Promise<OperationalHealthPolicy>;
+  listVideoWallLayouts(tenantId: string, userId: string): Promise<VideoWallLayout[]>;
+  createVideoWallLayout(input: {
+    tenantId: string; userId: string; name: string; gridSize: VideoWallGridSize;
+    cameraPositions: VideoWallLayout["cameraPositions"];
+  }): Promise<VideoWallLayout>;
   createEdgeScanJob(branchId: string, edgeAgentId?: string): Promise<EdgeScanJob>;
   getEdgeScanJob(branchId: string, jobId: string): Promise<EdgeScanJob | undefined>;
   claimEdgeScanJob(edgeAgentId: string): Promise<EdgeScanJob | undefined>;

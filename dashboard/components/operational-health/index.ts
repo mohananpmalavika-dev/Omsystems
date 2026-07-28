@@ -6,6 +6,7 @@ export { HealthStatusBadge } from './health-status-badge';
 export { HealthScoreRing } from './health-score-ring';
 export { CameraHealthCard } from './camera-health-card';
 export { BranchHealthCard } from './branch-health-card';
+export { BranchHealthMosaic } from './branch-health-mosaic';
 export { EdgeAgentCard } from './edge-agent-card';
 export { DiskHealthCard } from './disk-health-card';
 export { UPSHealthCard } from './ups-health-card';

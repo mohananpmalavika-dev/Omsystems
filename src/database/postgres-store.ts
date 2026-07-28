@@ -27,6 +27,7 @@ import { ComplianceRepository } from "./compliance-repository.js";
 import { MaintenanceRepository } from "./maintenance-repository.js";
 import { PrivacyRepository } from "./privacy-repository.js";
 import { OperationalHealthRepository } from "./operational-health-repository.js";
+import { GridLayoutRepository } from "./grid-layout-repository.js";
 import type { OperationalHealthPolicy, OperationalTelemetryEnvelope } from "../operational-health/types.js";
 
 // TODO: PostgresStore is a partial implementation of ControlPlaneStore
@@ -50,6 +51,7 @@ export class PostgresStore
   private readonly maintenance: MaintenanceRepository;
   private readonly privacy: PrivacyRepository;
   private readonly operationalHealth: OperationalHealthRepository;
+  private readonly gridLayouts: GridLayoutRepository;
 
   // Public getter for direct database access (use sparingly)
   get db() {
@@ -72,6 +74,7 @@ export class PostgresStore
     this.maintenance = new MaintenanceRepository(pool);
     this.privacy = new PrivacyRepository(pool);
     this.operationalHealth = new OperationalHealthRepository(pool);
+    this.gridLayouts = new GridLayoutRepository(pool);
   }
 
   async close() { await this.pool.end(); }
@@ -86,6 +89,9 @@ export class PostgresStore
   async getCamera(id: string) { return this.cameras.findById(id); }
   async listCamerasByBranch(user: User, branchId: string, action: Action) {
     return this.cameras.listAuthorizedByBranch(user.id, branchId, action);
+  }
+  async listAccessibleCameras(user: User, action: Action, filters: any) {
+    return this.cameras.listAuthorized(user.id, action, filters);
   }
   async createBranch(tenantId: string, parentId: string, name: string) {
     return this.resources.createBranch(tenantId, parentId, name);
@@ -110,6 +116,15 @@ export class PostgresStore
   }
   async upsertOperationalHealthPolicy(tenantId: string, branchId: string | undefined, policy: OperationalHealthPolicy) {
     return this.operationalHealth.upsertPolicy(tenantId, branchId, policy);
+  }
+  async listVideoWallLayouts(tenantId: string, userId: string) {
+    return this.gridLayouts.listLayouts(tenantId, userId);
+  }
+  async createVideoWallLayout(input: any) {
+    return this.gridLayouts.createLayout({
+      tenantId: input.tenantId, createdBy: input.userId, name: input.name,
+      gridSize: input.gridSize, cameraPositions: input.cameraPositions,
+    });
   }
   async createEdgeScanJob(branchId: string, edgeAgentId?: string) {
     return this.agents.createScanJob(branchId, edgeAgentId);

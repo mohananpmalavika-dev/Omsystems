@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { 
   Activity, 
   AlertTriangle, 
@@ -19,6 +19,8 @@ import {
   getHealthStatusIcon,
   getTimeAgo
 } from "@/lib/types/operational-health";
+import { BranchHealthMosaic } from "@/components/operational-health";
+import { useOperationalHealthStream } from "@/hooks/useOperationalHealthStream";
 
 export default function OperationalHealthDashboard() {
   const [summary, setSummary] = useState<HealthSummary | null>(null);
@@ -27,7 +29,7 @@ export default function OperationalHealthDashboard() {
   const [lastRefresh, setLastRefresh] = useState(new Date());
   const [autoRefresh, setAutoRefresh] = useState(true);
 
-  const fetchHealthData = async () => {
+  const fetchHealthData = useCallback(async () => {
     try {
       setLoading(true);
       
@@ -51,7 +53,8 @@ export default function OperationalHealthDashboard() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
+  useOperationalHealthStream(useCallback(() => { void fetchHealthData(); }, [fetchHealthData]));
 
   useEffect(() => {
     fetchHealthData();
@@ -60,7 +63,7 @@ export default function OperationalHealthDashboard() {
       const interval = setInterval(fetchHealthData, 30000); // Refresh every 30 seconds
       return () => clearInterval(interval);
     }
-  }, [autoRefresh]);
+  }, [autoRefresh, fetchHealthData]);
 
   const getBranchHealthStatus = () => {
     if (!summary) return 'unknown';
@@ -225,6 +228,8 @@ export default function OperationalHealthDashboard() {
           </div>
         </div>
       </div>
+
+      <BranchHealthMosaic />
 
       {/* Critical Alerts Section */}
       {criticalAlerts.length > 0 && (

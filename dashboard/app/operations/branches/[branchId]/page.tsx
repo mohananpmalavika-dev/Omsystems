@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { 
   ArrowLeft, 
@@ -32,6 +32,7 @@ import {
   HealthScoreRing,
   CameraHealthCard 
 } from "@/components/operational-health";
+import { useOperationalHealthStream } from "@/hooks/useOperationalHealthStream";
 
 export default function BranchHealthDetailPage() {
   const params = useParams();
@@ -44,7 +45,7 @@ export default function BranchHealthDetailPage() {
   const [loading, setLoading] = useState(true);
   const [lastRefresh, setLastRefresh] = useState(new Date());
 
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     try {
       setLoading(true);
       
@@ -63,11 +64,16 @@ export default function BranchHealthDetailPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [branchId]);
+  useOperationalHealthStream(useCallback((event) => {
+    if (!event.branchId || event.branchId === branchId) void fetchData();
+  }, [branchId, fetchData]));
 
   useEffect(() => {
-    fetchData();
-  }, [branchId]);
+    void fetchData();
+    const timer = setInterval(fetchData, 30_000);
+    return () => clearInterval(timer);
+  }, [fetchData]);
 
   if (loading && !branch) {
     return (

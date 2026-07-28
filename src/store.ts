@@ -50,7 +50,7 @@ import type {
   DeviceInventoryRecord,
 } from "./control-plane-store.js";
 import { IncidentManagementMethods } from "./store-incident-extensions.js";
-import type { OperationalHealthPolicy, OperationalTelemetryEnvelope } from "./operational-health/types.js";
+import type { OperationalHealthPolicy, OperationalTelemetryEnvelope, VideoWallGridSize, VideoWallLayout } from "./operational-health/types.js";
 
 function clean<T extends Record<string, any>>(obj: T) {
   return Object.fromEntries(Object.entries(obj).filter(([, v]) => v !== undefined)) as Partial<T>;
@@ -200,6 +200,7 @@ export class MemoryStore implements ControlPlaneStore {
   readonly operationalTelemetry = new Map<string, OperationalTelemetryEnvelope>();
   readonly operationalTelemetryKeys = new Set<string>();
   readonly operationalHealthPolicies = new Map<string, OperationalHealthPolicy>();
+  readonly videoWallLayouts: VideoWallLayout[] = [];
   readonly discoveries = new Map<string, DiscoveredCamera>();
   readonly auditEvents: AuditEventInput[] = [];
   readonly liveSessions = new Map<
@@ -350,6 +351,25 @@ export class MemoryStore implements ControlPlaneStore {
     return agent;
   }
 
+  async listAccessibleCameras(
+    user: User,
+    action: Action,
+    filters: { branchId?: string; search?: string; status?: CameraStatus; limit: number; offset: number },
+  ) {
+    const search = filters.search?.trim().toLowerCase();
+    const cameras = [...this.cameras.values()].filter((camera) => {
+      if (filters.branchId && camera.branchId !== filters.branchId) return false;
+      if (filters.status && camera.status !== filters.status) return false;
+      if (search && !`${camera.name} ${camera.model} ${camera.id}`.toLowerCase().includes(search)) return false;
+      const node = this.nodes.get(camera.nodeId);
+      return Boolean(node && authorize(user, action, node, this.nodes, this.grants).allowed);
+    }).sort((left, right) => left.name.localeCompare(right.name));
+    return {
+      total: cameras.length,
+      cameras: cameras.slice(filters.offset, filters.offset + filters.limit),
+    };
+  }
+
   async ingestOperationalTelemetry(envelope: OperationalTelemetryEnvelope) {
     const dedupeKey = `${envelope.tenantId}:${envelope.idempotencyKey}`;
     if (this.operationalTelemetryKeys.has(dedupeKey)) {
@@ -383,6 +403,25 @@ export class MemoryStore implements ControlPlaneStore {
   ) {
     this.operationalHealthPolicies.set(`${tenant}:${branchId ?? "*"}`, structuredClone(policy));
     return structuredClone(policy);
+  }
+
+  async listVideoWallLayouts(tenant: string, userId: string) {
+    return this.videoWallLayouts.filter((layout) => layout.tenantId === tenant && layout.createdBy === userId)
+      .map((layout) => structuredClone(layout));
+  }
+
+  async createVideoWallLayout(input: {
+    tenantId: string; userId: string; name: string; gridSize: VideoWallGridSize;
+    cameraPositions: VideoWallLayout["cameraPositions"];
+  }) {
+    const now = new Date().toISOString();
+    const layout: VideoWallLayout = {
+      id: randomUUID(), tenantId: input.tenantId, name: input.name,
+      gridSize: input.gridSize, cameraPositions: structuredClone(input.cameraPositions),
+      isDefault: false, createdBy: input.userId, createdAt: now, updatedAt: now,
+    };
+    this.videoWallLayouts.push(layout);
+    return structuredClone(layout);
   }
 
   async createEdgeScanJob(branchId: string, edgeAgentId?: string) {

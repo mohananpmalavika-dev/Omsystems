@@ -104,11 +104,13 @@ async function proxyControlRequest(request: NextRequest, context: RouteContext) 
       outgoing.cookies.delete("sentinel_refresh");
       return outgoing;
     }
+    const responseType = response.headers.get("content-type") ?? "application/json";
     return new Response(response.body, {
       status: response.status,
       headers: {
-        "content-type": response.headers.get("content-type") ?? "application/json",
-        "cache-control": "no-store",
+        "content-type": responseType,
+        "cache-control": responseType.startsWith("text/event-stream") ? "no-cache, no-transform" : "no-store",
+        ...(responseType.startsWith("text/event-stream") ? { "x-accel-buffering": "no" } : {}),
       },
     });
   } catch (error) {

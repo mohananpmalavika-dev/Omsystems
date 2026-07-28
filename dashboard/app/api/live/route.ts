@@ -7,7 +7,10 @@ export const dynamic = "force-dynamic";
 
 export async function POST(request: NextRequest) {
   try {
-    const body = z.object({ cameraId: z.string().min(1) }).parse(
+    const body = z.object({
+      cameraId: z.string().min(1),
+      profile: z.enum(["main", "sub"]).default("sub"),
+    }).parse(
       await request.json(),
     );
     return NextResponse.json(

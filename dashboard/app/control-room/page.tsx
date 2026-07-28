@@ -12,7 +12,7 @@ import {
   Activity,
   Bell,
 } from "lucide-react";
-import { CameraGrid } from "@/components/camera-grid";
+import { EnhancedCameraGrid, type GridLayout } from "@/components/enhanced-camera-grid";
 import { ShiftHandoverPanel } from "@/components/shift-handover";
 import type { Camera as CameraType } from "@/lib/types";
 
@@ -55,6 +55,7 @@ export default function ControlRoomPage() {
   });
   const [activeView, setActiveView] = useState<"grid" | "handover">("grid");
   const [loading, setLoading] = useState(true);
+  const [initialLayout, setInitialLayout] = useState<GridLayout | undefined>();
 
   useEffect(() => {
     loadData();
@@ -74,26 +75,21 @@ export default function ControlRoomPage() {
 
   const loadCameras = async () => {
     try {
-      const response = await fetch("/api/branches", {
+      const response = await fetch("/api/control/v1/cameras?limit=500&action=live%3Aview", {
         credentials: "include",
       });
 
       if (response.ok) {
-        const branches = await response.json();
-        const allCameras: CameraType[] = [];
-
-        for (const branch of branches) {
-          const cameraResponse = await fetch(`/api/branches/${branch.id}/cameras`, {
-            credentials: "include",
-          });
-
-          if (cameraResponse.ok) {
-            const branchCameras = await cameraResponse.json();
-            allCameras.push(...branchCameras);
-          }
-        }
-
+        const body = await response.json();
+        const allCameras = (body.data ?? []) as CameraType[];
         setCameras(allCameras);
+        setInitialLayout((current) => current ?? ({
+          name: "Substream overview",
+          gridSize: "4x4",
+          positions: allCameras.slice(0, 16).map((camera, position) => ({
+            position, cameraId: camera.id, stream: "sub" as const,
+          })),
+        }));
       }
     } catch (error) {
       console.error("Failed to load cameras:", error);
@@ -102,13 +98,21 @@ export default function ControlRoomPage() {
 
   const loadStats = async () => {
     try {
-      const response = await fetch("/api/control/v1/dashboard/stats", {
+      const response = await fetch("/api/control/v1/operations/health/summary", {
         credentials: "include",
       });
 
       if (response.ok) {
-        const data = await response.json();
-        setStats(data);
+        const body = await response.json();
+        const data = body.data;
+        setStats((current) => ({
+          ...current,
+          totalCameras: data.totalCameras ?? 0,
+          onlineCameras: data.camerasOnline ?? 0,
+          offlineCameras: data.camerasOffline ?? 0,
+          recordingCameras: data.camerasRecording ?? 0,
+          unacknowledgedAlerts: data.activeCriticalAlerts ?? 0,
+        }));
       }
     } catch (error) {
       console.error("Failed to load stats:", error);
@@ -224,8 +228,12 @@ export default function ControlRoomPage() {
 
       <div className="control-room-content">
         {activeView === "grid" ? (
-          <CameraGrid
+          <EnhancedCameraGrid
             cameras={cameras}
+            initialLayout={initialLayout}
+            maxConcurrentStreams={16}
+            enableVirtualScrolling
+            enableGPUAcceleration
             onLayoutChange={(layout) => {
               console.log("Layout saved:", layout);
             }}

@@ -37,6 +37,7 @@ export interface EnhancedCameraGridProps {
   enableVirtualScrolling?: boolean;
   enableGPUAcceleration?: boolean;
   adaptiveLayout?: boolean;
+  maxConcurrentStreams?: number;
 }
 
 interface VisibleRange {
@@ -51,6 +52,7 @@ export function EnhancedCameraGrid({
   enableVirtualScrolling = true,
   enableGPUAcceleration = true,
   adaptiveLayout = false,
+  maxConcurrentStreams = 16,
 }: EnhancedCameraGridProps) {
   const [gridSize, setGridSize] = useState<GridSize>(
     initialLayout?.gridSize || "2x2"
@@ -72,6 +74,8 @@ export function EnhancedCameraGrid({
   const [draggedCamera, setDraggedCamera] = useState<{ camera: Camera; fromPosition: number } | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const observerRef = useRef<IntersectionObserver | null>(null);
+  const autoAttempted = useRef(new Set<string>());
+  const initialLayoutApplied = useRef(false);
 
   const gridSizeMap = {
     "1x1": 1,
@@ -145,7 +149,7 @@ export function EnhancedCameraGrid({
 
   // Initialize from saved layout
   useEffect(() => {
-    if (initialLayout) {
+    if (initialLayout && cameras.length > 0 && !initialLayoutApplied.current) {
       const posMap = new Map();
       initialLayout.positions.forEach((pos) => {
         const camera = cameras.find((c) => c.id === pos.cameraId);
@@ -154,6 +158,7 @@ export function EnhancedCameraGrid({
         }
       });
       setGridPositions(posMap);
+      initialLayoutApplied.current = true;
     }
   }, [initialLayout, cameras]);
 
@@ -263,7 +268,8 @@ export function EnhancedCameraGrid({
     setDraggedCamera(null);
   };
 
-  const handleStartLive = async (cameraId: string) => {
+  const handleStartLive = useCallback(async (cameraId: string, stream: "main" | "sub" = "sub") => {
+    if (sessions.has(cameraId) || loading.has(cameraId) || sessions.size + loading.size >= maxConcurrentStreams) return;
     setLoading((prev) => new Set(prev).add(cameraId));
 
     try {
@@ -271,7 +277,7 @@ export function EnhancedCameraGrid({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ cameraId }),
+        body: JSON.stringify({ cameraId, profile: stream }),
       });
 
       if (response.ok) {
@@ -290,7 +296,35 @@ export function EnhancedCameraGrid({
         return newSet;
       });
     }
-  };
+  }, [loading, maxConcurrentStreams, sessions]);
+
+  // Only visible slots own browser decoders. Dense walls start substreams first
+  // and cap concurrent sessions even when the saved layout contains 144 slots.
+  useEffect(() => {
+    const visibleIds = new Set<string>();
+    const candidates: Array<{ cameraId: string; stream: "main" | "sub" }> = [];
+    for (let position = visibleRange.start; position < visibleRange.end; position += 1) {
+      const entry = gridPositions.get(position);
+      if (!entry) continue;
+      visibleIds.add(entry.camera.id);
+      if (entry.camera.status === "online" && !sessions.has(entry.camera.id) &&
+          !loading.has(entry.camera.id) && !autoAttempted.current.has(entry.camera.id)) {
+        candidates.push({ cameraId: entry.camera.id, stream: entry.stream });
+      }
+    }
+    for (const cameraId of autoAttempted.current) {
+      if (!visibleIds.has(cameraId)) autoAttempted.current.delete(cameraId);
+    }
+    setSessions((current) => {
+      const retained = [...current].filter(([cameraId]) => visibleIds.has(cameraId));
+      return retained.length === current.size ? current : new Map(retained);
+    });
+    const available = Math.max(0, maxConcurrentStreams - sessions.size - loading.size);
+    for (const candidate of candidates.slice(0, available)) {
+      autoAttempted.current.add(candidate.cameraId);
+      void handleStartLive(candidate.cameraId, candidate.stream);
+    }
+  }, [gridPositions, handleStartLive, loading, maxConcurrentStreams, sessions, visibleRange]);
 
   const handleToggleRecording = async (cameraId: string) => {
     const currentJob = recordings.get(cameraId) ?? {
@@ -398,12 +432,15 @@ export function EnhancedCameraGrid({
 
   const loadSavedLayouts = async () => {
     try {
-      const response = await fetch("/api/control/v1/grids/layouts", {
+      const response = await fetch("/api/control/v1/video-wall/layouts", {
         credentials: "include",
       });
       if (response.ok) {
-        const layouts = await response.json();
-        setSavedLayouts(layouts);
+        const body = await response.json();
+        setSavedLayouts((body.data ?? []).map((layout: GridLayout & { cameraPositions?: GridLayout["positions"] }) => ({
+          ...layout,
+          positions: layout.positions ?? layout.cameraPositions ?? [],
+        })));
       }
     } catch (error) {
       console.error("Failed to load layouts:", error);
@@ -429,7 +466,7 @@ export function EnhancedCameraGrid({
     };
 
     try {
-      const response = await fetch("/api/control/v1/grids/layouts", {
+      const response = await fetch("/api/control/v1/video-wall/layouts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
@@ -441,8 +478,13 @@ export function EnhancedCameraGrid({
       });
 
       if (response.ok) {
-        const savedLayout = await response.json();
-        setSavedLayouts((prev) => [...prev, savedLayout]);
+        const savedLayout = await response.json() as GridLayout & {
+          cameraPositions?: GridLayout["positions"];
+        };
+        setSavedLayouts((prev) => [...prev, {
+          ...savedLayout,
+          positions: savedLayout.positions ?? savedLayout.cameraPositions ?? [],
+        }]);
         setShowLayoutMenu(false);
         setLayoutName("");
         onLayoutChange?.(layout);
@@ -731,7 +773,7 @@ export function EnhancedCameraGrid({
                 camera={camera}
                 session={sessions.get(camera.id)}
                 loading={loading.has(camera.id)}
-                onStart={() => handleStartLive(camera.id)}
+                onStart={() => handleStartLive(camera.id, entry.stream)}
                 index={i}
                 recording={recordings.get(camera.id)}
                 recordingLoading={loading.has(camera.id)}

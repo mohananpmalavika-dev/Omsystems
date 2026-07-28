@@ -1,4 +1,5 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
+import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import type { ControlPlaneStore } from "../control-plane-store.js";
 import {
@@ -11,6 +12,7 @@ import {
   type OperationalHealthPolicy,
   type OperationalTelemetryEnvelope,
 } from "../operational-health/types.js";
+import { operationalHealthEvents } from "../operational-health/event-stream.js";
 
 const deviceTypes = ["branch", "edge-agent", "recorder", "camera", "disk", "network", "ups"] as const;
 const sources = ["onvif", "cp-plus-adapter", "rtsp", "system", "recording-engine"] as const;
@@ -29,10 +31,12 @@ const telemetrySchema = z.object({
   reasonCodes: z.array(z.string().min(1).max(100)).max(30).default([]),
 });
 const paginationSchema = z.object({
-  limit: z.coerce.number().int().min(1).max(200).default(50),
+  limit: z.coerce.number().int().min(1).max(500).default(50),
   offset: z.coerce.number().int().min(0).default(0),
   status: z.enum(["healthy", "warning", "critical", "unknown"]).optional(),
   branchId: z.string().optional(),
+  region: z.string().trim().max(120).optional(),
+  search: z.string().trim().max(120).optional(),
 });
 const policySchema = z.object({
   staleAfterSeconds: z.number().int().min(15).max(3600),
@@ -99,6 +103,13 @@ export async function registerOperationalHealthRoutes(
       reasonCodes: input.reasonCodes,
     };
     const result = await store.ingestOperationalTelemetry(envelope);
+    if (!result.duplicate) {
+      operationalHealthEvents.publish({
+        id: randomUUID(), tenantId: envelope.tenantId, type: "health.updated",
+        occurredAt: receivedAt, branchId: envelope.branchId,
+        deviceType: envelope.deviceType, deviceId: envelope.deviceId,
+      });
+    }
     return reply.code(result.duplicate ? 200 : 202).send({ ...result, receivedAt });
   });
 
@@ -136,6 +147,13 @@ export async function registerOperationalHealthRoutes(
     const query = paginationSchema.parse(request.query);
     let projections = await loadAccessibleProjections(request, store);
     if (query.status) projections = projections.filter((branch) => branch.healthStatus === query.status);
+    if (query.region) projections = projections.filter((branch) => branch.region === query.region);
+    if (query.search) {
+      const search = query.search.toLowerCase();
+      projections = projections.filter((branch) =>
+        `${branch.name} ${branch.code} ${branch.region}`.toLowerCase().includes(search),
+      );
+    }
     const total = projections.length;
     const branches = projections.slice(query.offset, query.offset + query.limit).map(({ cameras, ...branch }) => branch);
     return { success: true, data: { branches, total, limit: query.limit, offset: query.offset } };
@@ -218,7 +236,36 @@ export async function registerOperationalHealthRoutes(
       input.branchId,
       input.policy as OperationalHealthPolicy,
     );
+    operationalHealthEvents.publish({
+      id: randomUUID(), tenantId: request.currentUser.tenantId,
+      type: "policy.updated", occurredAt: new Date().toISOString(),
+      ...(input.branchId ? { branchId: input.branchId } : {}),
+    });
     return { success: true, data: policy };
+  });
+
+  app.get("/v1/operations/events", async (request, reply) => {
+    reply.hijack();
+    reply.raw.writeHead(200, {
+      "content-type": "text/event-stream; charset=utf-8",
+      "cache-control": "no-cache, no-transform",
+      connection: "keep-alive",
+      "x-accel-buffering": "no",
+    });
+    reply.raw.write(`event: ready\ndata: ${JSON.stringify({ timestamp: new Date().toISOString() })}\n\n`);
+    const unsubscribe = operationalHealthEvents.subscribe(request.currentUser.tenantId, (event) => {
+      if (!reply.raw.destroyed) {
+        reply.raw.write(`id: ${event.id}\nevent: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`);
+      }
+    });
+    const heartbeat = setInterval(() => {
+      if (!reply.raw.destroyed) reply.raw.write(`: heartbeat ${Date.now()}\n\n`);
+    }, 15_000);
+    heartbeat.unref();
+    request.raw.once("close", () => {
+      clearInterval(heartbeat);
+      unsubscribe();
+    });
   });
 
   app.get("/v1/operations/alerts", async (request) => {
@@ -286,6 +333,8 @@ async function loadAccessibleProjections(
   requestedBranchIds?: string[],
 ) {
   let branches = await store.listAccessibleNodes(request.currentUser, "recording:view", "branch");
+  const regions = await store.listAccessibleNodes(request.currentUser, "recording:view", "region");
+  const regionNames = new Map(regions.map((region) => [region.id, region.name]));
   if (requestedBranchIds) {
     const requested = new Set(requestedBranchIds);
     branches = branches.filter((branch) => requested.has(branch.id));
@@ -309,6 +358,7 @@ async function loadAccessibleProjections(
       telemetry: telemetry.filter((item) => item.branchId === branch.id),
       retentions,
       policy,
+      region: branch.path.map((id) => regionNames.get(id)).find(Boolean),
     });
   }));
 }

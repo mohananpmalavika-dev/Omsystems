@@ -11,7 +11,7 @@ export interface GridLayout {
   tenantId: string;
   name: string;
   description?: string;
-  gridSize: "1x1" | "2x2" | "3x3" | "4x4" | "5x5" | "6x6";
+  gridSize: "1x1" | "2x2" | "3x3" | "4x4" | "5x5" | "6x6" | "7x7" | "8x8" | "9x9" | "10x10" | "11x11" | "12x12";
   cameraPositions: Array<{
     position: number;
     cameraId: string;
@@ -26,12 +26,12 @@ export interface GridLayout {
 export class GridLayoutRepository {
   constructor(private readonly pool: Pool) {}
 
-  async listLayouts(tenantId: string): Promise<GridLayout[]> {
+  async listLayouts(tenantId: string, userId: string): Promise<GridLayout[]> {
     const result = await this.pool.query(
       `SELECT * FROM video_wall_layouts
-       WHERE tenant_id=$1
+       WHERE tenant_id=$1 AND created_by=$2
        ORDER BY is_default DESC, name ASC`,
-      [tenantId]
+      [tenantId, userId]
     );
     return result.rows.map(mapGridLayout);
   }
@@ -187,7 +187,9 @@ function mapGridLayout(row: any): GridLayout {
     name: row.name,
     description: row.description ?? undefined,
     gridSize: row.grid_size,
-    cameraPositions: JSON.parse(row.camera_positions),
+    cameraPositions: typeof row.camera_positions === "string"
+      ? JSON.parse(row.camera_positions)
+      : row.camera_positions,
     isDefault: row.is_default,
     createdBy: row.created_by,
     createdAt: new Date(row.created_at).toISOString(),

@@ -1,4 +1,4 @@
-name: Phase 1 operational health baseline
+name: Phase 2 dashboard and video-wall baseline
 
 on:
   pull_request:
@@ -16,7 +16,7 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - run: npm run ci:phase1
+      - run: npm run ci:phase2
 
   migrations:
     runs-on: ubuntu-latest

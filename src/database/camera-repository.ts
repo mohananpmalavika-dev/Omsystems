@@ -81,6 +81,31 @@ export class CameraRepository {
     return result.rows.map(mapCamera);
   }
 
+  async listAuthorized(
+    userId: string,
+    action: string,
+    filters: { branchId?: string; search?: string; status?: CameraStatus; limit: number; offset: number },
+  ) {
+    const where = `WHERE ($3::uuid IS NULL OR cameras.branch_node_id = $3)
+      AND ($4::camera_status IS NULL OR cameras.status = $4)
+      AND ($5::text IS NULL OR camera_node.name ILIKE '%' || $5 || '%' OR cameras.model ILIKE '%' || $5 || '%')
+      AND (SELECT access.allowed FROM check_camera_access($1::uuid, cameras.id, $2) AS access LIMIT 1) = true`;
+    const values = [userId, action, filters.branchId ?? null, filters.status ?? null, filters.search ?? null];
+    const [items, count] = await Promise.all([
+      this.pool.query<CameraRow>(
+        `${selectCamera} ${where} ORDER BY camera_node.name LIMIT $6 OFFSET $7`,
+        [...values, filters.limit, filters.offset],
+      ),
+      this.pool.query<{ count: string }>(
+        `SELECT count(*)::text AS count FROM cameras
+         JOIN resource_nodes camera_node ON camera_node.id = cameras.resource_node_id
+         ${where}`,
+        values,
+      ),
+    ]);
+    return { cameras: items.rows.map(mapCamera), total: Number(count.rows[0]?.count ?? 0) };
+  }
+
   async approve(branchId: string, input: CameraApprovalInput) {
     const client = await this.pool.connect();
     try {

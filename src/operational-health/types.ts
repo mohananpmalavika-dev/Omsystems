@@ -57,3 +57,16 @@ export const defaultOperationalHealthPolicy: OperationalHealthPolicy = {
   packetLossCriticalPercent: 5,
 };
 
+export type VideoWallGridSize = "1x1" | "2x2" | "3x3" | "4x4" | "5x5" | "6x6" |
+  "7x7" | "8x8" | "9x9" | "10x10" | "11x11" | "12x12";
+export interface VideoWallLayout {
+  id: string;
+  tenantId: string;
+  name: string;
+  gridSize: VideoWallGridSize;
+  cameraPositions: Array<{ position: number; cameraId: string; stream: "main" | "sub" }>;
+  isDefault: boolean;
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+}

@@ -43,6 +43,7 @@ import { registerDeviceInventoryRoutes } from "./routes/device-inventory.routes.
 import { registerDeviceManagementRoutes } from "./routes/device-management.routes.js";
 import { registerDVRNVRMonitorRoutes } from "./routes/dvr-nvr-monitor.routes.js";
 import { registerOperationalHealthRoutes } from "./routes/operational-health.routes.js";
+import { registerVideoWallRoutes } from "./routes/video-wall.routes.js";
 import { DVRNVRMonitorService } from "./services/dvr-nvr-monitor.service.js";
 import { parseBulkCameraCsv } from "./services/camera-registration.js";
 import { RecordingSearchService } from "./recording/search-service.js";
@@ -331,6 +332,37 @@ export async function buildApp(options?: {
         id,
         action,
       )).map(safeCamera),
+    };
+  });
+
+  app.get("/v1/cameras", async (request) => {
+    const query = z.object({
+      action: z.enum(actions).default("live:view"),
+      branchId: z.string().optional(),
+      search: z.string().trim().max(120).optional(),
+      status: z.enum(["online", "offline", "degraded", "unknown"]).optional(),
+      limit: z.coerce.number().int().min(1).max(500).default(200),
+      offset: z.coerce.number().int().min(0).default(0),
+    }).parse(request.query);
+    const result = await store.listAccessibleCameras(request.currentUser, query.action, {
+      limit: query.limit,
+      offset: query.offset,
+      ...(query.branchId ? { branchId: query.branchId } : {}),
+      ...(query.search ? { search: query.search } : {}),
+      ...(query.status ? { status: query.status } : {}),
+    });
+    const branchIds = [...new Set(result.cameras.map((camera) => camera.branchId))];
+    const branches = new Map((await Promise.all(branchIds.map((id) => store.getNode(id))))
+      .filter((node): node is NonNullable<typeof node> => Boolean(node))
+      .map((node) => [node.id, node]));
+    return {
+      data: result.cameras.map((camera) => ({
+        ...safeCamera(camera),
+        branchName: branches.get(camera.branchId)?.name ?? "Unknown branch",
+      })),
+      total: result.total,
+      limit: query.limit,
+      offset: query.offset,
     };
   });
 
@@ -1343,6 +1375,7 @@ export async function buildApp(options?: {
   // available for both the in-memory development runtime and PostgreSQL.
   await registerMaintenanceRoutes(app, store);
   await registerOperationalHealthRoutes(app, store);
+  await registerVideoWallRoutes(app, store);
   if (extendedStore) {
     await registerDeviceManagementRoutes(app, extendedStore);
     await registerAuthRoutes(app, extendedStore);

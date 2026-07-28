@@ -96,6 +96,7 @@ export function projectBranchHealth(input: {
   retentions: RetentionVerification[];
   policy: OperationalHealthPolicy;
   now?: number;
+  region?: string;
 }) {
   const now = input.now ?? Date.now();
   const latestByDevice = new Map(input.telemetry.map((item) => [`${item.deviceType}:${item.deviceId}`, item]));
@@ -132,7 +133,7 @@ export function projectBranchHealth(input: {
     id: input.branch.id,
     name: input.branch.name,
     code: input.branch.id.slice(0, 8),
-    region: "Unassigned",
+    region: input.region ?? "Unassigned",
     healthStatus,
     healthScore: score,
     lastHealthCheck: observed,

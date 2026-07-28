@@ -1,8 +1,8 @@
 openapi: 3.1.0
 info:
   title: Sentinel Grid Control Plane
-  version: 0.2.0-phase1
-  description: Authoritative Fastify contract including Phase 1 operational health.
+  version: 0.3.0-phase2
+  description: Authoritative Fastify contract including Phase 2 dashboard and realtime projection APIs.
 servers:
   - url: /api/control
     description: Dashboard BFF
@@ -46,6 +46,20 @@ paths:
       operationId: createBranchCamera
       responses:
         '201': { description: Camera created }
+  /v1/cameras:
+    get:
+      operationId: listAuthorizedCamerasBulk
+      parameters:
+        - $ref: '#/components/parameters/Limit500'
+        - $ref: '#/components/parameters/Offset'
+        - in: query
+          name: branchId
+          schema: { type: string }
+        - in: query
+          name: search
+          schema: { type: string }
+      responses:
+        '200': { description: Paginated tenant-authorized cameras without an O(branches) browser request pattern }
   /v1/cameras/{cameraId}/live-sessions:
     post:
       operationId: createLiveSession
@@ -173,6 +187,25 @@ paths:
       operationId: listOperationalHealthAlerts
       responses:
         '200': { description: Active health and retention exceptions }
+  /v1/operations/events:
+    get:
+      operationId: streamOperationalHealthEvents
+      responses:
+        '200':
+          description: Authenticated tenant-scoped SSE stream with heartbeat comments
+          content:
+            text/event-stream: {}
+  /v1/video-wall/layouts:
+    get:
+      operationId: listVideoWallLayouts
+      responses:
+        '200': { description: Current user's saved video-wall layouts }
+    post:
+      operationId: createVideoWallLayout
+      responses:
+        '201': { description: Authorized per-user video-wall layout created }
+        '400': { description: Invalid or duplicate tile positions }
+        '403': { description: User cannot view a referenced camera }
 components:
   parameters:
     BranchId:
@@ -203,6 +236,10 @@ components:
       in: query
       name: offset
       schema: { type: integer, minimum: 0, default: 0 }
+    Limit500:
+      in: query
+      name: limit
+      schema: { type: integer, minimum: 1, maximum: 500, default: 200 }
   schemas:
     OperationalTelemetryInput:
       type: object
