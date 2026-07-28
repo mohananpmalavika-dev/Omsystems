@@ -2936,3 +2936,187 @@ button, a { -webkit-tap-highlight-color: transparent; }
   .module-retry, .compliance-warning-card button { margin-left: 29px; }
   .maintenance-section > div[style], .governance-section > div[style] { padding: 18px 14px 34px !important; }
 }
+
+/* Cross-module presentation layer: every authenticated route shares the same
+   calm enterprise canvas, content width and panel language. */
+.operations-section,
+.control-room-section,
+.intelligence-section {
+  min-height: calc(100vh - 80px);
+  background:
+    radial-gradient(circle at 96% 0%, rgba(53, 111, 246, .055), transparent 28rem),
+    linear-gradient(180deg, #f7f9fc 0, var(--canvas) 260px);
+}
+
+.operations-section :where(.page-container),
+.control-room-section :where(.control-room, .control-room-loading),
+.intelligence-section :where(.analytics-dashboard, .content) {
+  width: min(100%, 1680px);
+  margin-inline: auto;
+}
+
+.operations-section .page-container,
+.control-room-section .control-room,
+.intelligence-section .analytics-dashboard {
+  padding: 28px 30px 48px;
+}
+
+.intelligence-console-page {
+  background: transparent !important;
+  padding-bottom: 48px !important;
+}
+
+.intelligence-section .dashboard-header {
+  min-height: 142px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  margin-bottom: 18px;
+  padding: 25px 27px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background:
+    radial-gradient(circle at 92% 0%, rgba(53, 111, 246, .12), transparent 19rem),
+    linear-gradient(145deg, rgba(255, 255, 255, .99), rgba(246, 249, 255, .96));
+  box-shadow: var(--shadow-panel);
+}
+.intelligence-section .dashboard-header h1 {
+  margin: 0;
+  color: var(--ink);
+  font-size: clamp(23px, 2vw, 30px);
+  font-weight: 770;
+  letter-spacing: -.8px;
+}
+.intelligence-section .dashboard-header p { margin: 7px 0 0; color: var(--muted); font-size: 11px; }
+.intelligence-section .dashboard-controls { display: flex; align-items: center; gap: 9px; }
+.intelligence-section .dashboard-controls select { min-width: 145px; min-height: 40px; padding: 0 34px 0 11px; }
+.intelligence-section .dashboard-controls button {
+  min-height: 40px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0 13px;
+  color: #3f516b;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.intelligence-section .dashboard-controls button:hover { color: var(--blue); border-color: #bfd0f2; box-shadow: 0 7px 20px rgba(28, 69, 148, .08); }
+.intelligence-section .dashboard-error {
+  margin-bottom: 16px;
+  padding: 13px 15px;
+  color: #9e3942;
+  border: 1px solid #f1c9cd;
+  border-radius: 11px;
+  background: #fff0f1;
+}
+.intelligence-section .dashboard-loading { min-height: 260px; display: grid; place-items: center; color: #687890; }
+.intelligence-section .dashboard-loading .spin { animation: module-spin .8s linear infinite; }
+.intelligence-section .metrics-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+.intelligence-section .metric-card { min-height: 118px; display: flex; align-items: center; gap: 14px; padding: 18px; }
+.intelligence-section .metric-icon {
+  width: 43px;
+  height: 43px;
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  color: var(--blue);
+  border-radius: 12px;
+  background: #edf3ff;
+}
+.intelligence-section .metric-label { color: #65748a; font-size: 9px; font-weight: 760; letter-spacing: .35px; text-transform: uppercase; }
+.intelligence-section .metric-value { margin-top: 5px; color: #162641; font-size: 25px; font-weight: 770; letter-spacing: -.55px; }
+.intelligence-section .camera-metrics { margin-top: 18px; }
+.intelligence-section .camera-metrics > h2 { margin: 0 0 12px; color: var(--ink); font-size: 16px; }
+.intelligence-section .metric-chart { margin-top: 14px; padding: 20px; border: 1px solid var(--line); border-radius: 15px; background: #fff; box-shadow: var(--shadow-sm); }
+.intelligence-section .metric-chart h3 { margin: 0 0 16px; color: #263750; font-size: 12px; }
+.intelligence-section .chart-container { min-height: 210px; }
+.intelligence-section .chart-summary { display: flex; gap: 18px; margin-top: 13px; padding-top: 13px; color: #66768e; border-top: 1px solid #e7ecf3; font-size: 9px; }
+
+.operations-section :where(.stat-card, .health-card, .panel, .card),
+.control-room-section :where(.stat-card, .camera-grid-container, .shift-handover-panel),
+.intelligence-section :where(.analytics-card, .metric-card, .chart-card, .alert-card) {
+  border: 1px solid var(--line) !important;
+  border-radius: var(--radius) !important;
+  background: rgba(255, 255, 255, .97) !important;
+  box-shadow: var(--shadow-sm) !important;
+}
+
+.operations-section .stat-card,
+.control-room-section .stat-card {
+  position: relative;
+  overflow: hidden;
+  transition: transform .18s ease, border-color .18s ease, box-shadow .18s ease;
+}
+
+.operations-section .stat-card::after,
+.control-room-section .stat-card::after {
+  content: "";
+  position: absolute;
+  right: -32px;
+  bottom: -48px;
+  width: 104px;
+  height: 104px;
+  border-radius: 50%;
+  background: rgba(53, 111, 246, .035);
+  pointer-events: none;
+}
+
+.operations-section .stat-card:hover,
+.control-room-section .stat-card:hover {
+  transform: translateY(-2px);
+  border-color: #ccd9ea !important;
+  box-shadow: var(--shadow-panel) !important;
+}
+
+.control-room-section .control-room-header {
+  min-height: 112px;
+  margin-bottom: 18px;
+  padding: 24px 26px;
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, .08);
+  border-radius: 18px;
+  background:
+    radial-gradient(circle at 90% 0%, rgba(72, 130, 255, .32), transparent 24rem),
+    linear-gradient(145deg, #102a52, #07182f 70%);
+  box-shadow: 0 24px 58px -34px rgba(7, 24, 47, .72);
+}
+
+.control-room-section .control-room-header h1 { color: #fff; letter-spacing: -.7px; }
+.control-room-section .control-room-header p,
+.control-room-section .header-time { color: #a9bad0; }
+.control-room-section .stats-bar { gap: 14px; margin-bottom: 18px; }
+.control-room-section .control-room-nav {
+  padding: 5px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #e9eef5;
+}
+.control-room-section .control-room-nav .nav-button { border-radius: 9px; }
+.control-room-section .control-room-nav .nav-button.active {
+  color: var(--blue-dark);
+  background: #fff;
+  box-shadow: 0 5px 16px rgba(20, 35, 58, .08);
+}
+
+.workspace :where(h1, h2, h3) { text-wrap: balance; }
+.workspace :where(p) { text-wrap: pretty; }
+.workspace :where(button, a) { transition-duration: .16s; }
+
+@media (max-width: 760px) {
+  .operations-section .page-container,
+  .control-room-section .control-room,
+  .intelligence-section .analytics-dashboard { padding: 18px 14px 36px; }
+  .control-room-section .control-room-header { align-items: flex-start; flex-direction: column; padding: 19px; }
+  .control-room-section .stats-bar { grid-template-columns: 1fr 1fr; }
+  .intelligence-section .dashboard-header { align-items: flex-start; flex-direction: column; min-height: 0; padding: 20px; }
+  .intelligence-section .dashboard-controls { width: 100%; flex-wrap: wrap; }
+  .intelligence-section .dashboard-controls select { min-width: 0; flex: 1 1 130px; }
+  .intelligence-section .dashboard-controls button { flex: 1 1 auto; justify-content: center; }
+  .intelligence-section .metrics-grid { grid-template-columns: 1fr; }
+}

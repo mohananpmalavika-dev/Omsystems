@@ -138,6 +138,12 @@ const pageMeta = [
   { path: "/operations/alert-command-center", section: "Command", title: "Alert command center" },
   { path: "/operations/alerts", section: "Command", title: "Operational alerts" },
   { path: "/operations/branches", section: "Command", title: "Branch health" },
+  { path: "/operations/cameras", section: "Fleet operations", title: "Camera health" },
+  { path: "/operations/recording", section: "Fleet operations", title: "Recording health" },
+  { path: "/operations/storage", section: "Fleet operations", title: "Storage health" },
+  { path: "/operations/network", section: "Fleet operations", title: "Network health" },
+  { path: "/operations/ups", section: "Fleet operations", title: "Power health" },
+  { path: "/operations/edge-agents", section: "Fleet operations", title: "Edge agents" },
   { path: "/operations", section: "Command", title: "Operational health" },
   { path: "/analytics/dashboard", section: "Intelligence", title: "Analytics dashboard" },
   { path: "/control-room", section: "Command", title: "Control room" },
@@ -181,6 +187,7 @@ const pageMeta = [
   { path: "/audit/health", section: "Assurance", title: "Camera health audit" },
   { path: "/audit", section: "Governance", title: "Audit assurance" },
   { path: "/integrations", section: "Administration", title: "Integrations" },
+  { path: "/account/security", section: "Account", title: "Profile & session security" },
   { path: "/", section: "Command", title: "Security operations" },
 ];
 
