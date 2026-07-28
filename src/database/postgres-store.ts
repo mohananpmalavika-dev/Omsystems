@@ -170,6 +170,23 @@ export class PostgresStore
   async consumeLiveSession(token: string) {
     return this.cameras.consumeLiveSession(token);
   }
+  async writeAudit(event: AuditEventInput) {
+    await this.pool.query(
+      `INSERT INTO audit_events (
+         tenant_id, actor_user_id, action, resource_node_id,
+         outcome, source_ip, details
+       ) VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb)`,
+      [
+        event.tenantId,
+        event.actorUserId,
+        event.action,
+        event.resourceNodeId,
+        event.outcome,
+        event.sourceIp ?? null,
+        JSON.stringify(event.details ?? {}),
+      ],
+    );
+  }
   async getRecordingJob(cameraId: string) { return this.recordings.getJob(cameraId); }
   async upsertRecordingJob(cameraId: string, input: any) { return this.recordings.upsertJob(cameraId, input); }
   async updateRecordingJobStatus(cameraId: string, status: any) {
