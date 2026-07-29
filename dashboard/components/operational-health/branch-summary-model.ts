@@ -5,10 +5,10 @@ export type BranchSummaryFilter =
   | { kind: "health"; value: HealthStatus }
   | { kind: "connectivity"; value: "online" | "offline" };
 
-export type BranchSummaryTone = "blue" | "green" | "red" | "amber";
+export type BranchSummaryTone = "blue" | "green" | "red" | "amber" | "gray";
 
 export interface BranchSummaryItem {
-  id: "total" | "online" | "offline" | "warning";
+  id: "total" | "online" | "offline" | "warning" | "critical" | "unknown";
   label: string;
   value: number;
   tone: BranchSummaryTone;
@@ -21,6 +21,8 @@ export function getBranchSummaryItems(summary: HealthSummary): BranchSummaryItem
     { id: "online", label: "Online branches", value: summary.onlineBranches, tone: "green", filter: { kind: "connectivity", value: "online" } },
     { id: "offline", label: "Offline branches", value: summary.offlineBranches, tone: "red", filter: { kind: "connectivity", value: "offline" } },
     { id: "warning", label: "Branches with warnings", value: summary.warningBranches, tone: "amber", filter: { kind: "health", value: "warning" } },
+    { id: "critical", label: "Critical branches", value: summary.criticalBranches, tone: "red", filter: { kind: "health", value: "critical" } },
+    { id: "unknown", label: "Unknown branches", value: summary.unknownBranches, tone: "gray", filter: { kind: "health", value: "unknown" } },
   ];
 }
 

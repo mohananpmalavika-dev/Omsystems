@@ -55,6 +55,9 @@ describe("Phase 1 operational health", () => {
     expect(camera.currentFps).toBeNull();
     expect(camera.blackScreen).toBe(true);
     expect(camera.reasonCodes).toContain("fps_unavailable");
+
+    const summary = await app.inject({ method: "GET", url: "/v1/operations/health/summary", headers: admin });
+    expect(summary.json().data).toMatchObject({ camerasOnline: 1, camerasOffline: 0 });
   });
 
   it("returns only an owning agent's camera monitoring assignments and opaque secret references", async () => {

@@ -9,6 +9,8 @@ describe("branch summary widget model", () => {
       { id: "online", label: "Online branches", value: 8, tone: "green", filter: { kind: "connectivity", value: "online" } },
       { id: "offline", label: "Offline branches", value: 2, tone: "red", filter: { kind: "connectivity", value: "offline" } },
       { id: "warning", label: "Branches with warnings", value: 3, tone: "amber", filter: { kind: "health", value: "warning" } },
+      { id: "critical", label: "Critical branches", value: 1, tone: "red", filter: { kind: "health", value: "critical" } },
+      { id: "unknown", label: "Unknown branches", value: 1, tone: "gray", filter: { kind: "health", value: "unknown" } },
     ]);
   });
 
@@ -24,7 +26,7 @@ function summary(): HealthSummary {
   return {
     totalBranches: 12, onlineBranches: 8, offlineBranches: 2,
     healthyBranches: 7, warningBranches: 3, criticalBranches: 1, unknownBranches: 1,
-    overallHealthScore: 82.5, totalCameras: 120, camerasOnline: 110, camerasOffline: 10,
+    overallHealthScore: 82.5, totalCameras: 120, camerasOnline: 110, camerasOffline: 10, camerasUnknown: 0,
     camerasRecording: 108, recordingFailures: 12, activeCriticalAlerts: 1,
     totalEdgeAgents: 12, edgeAgentsOnline: 11, edgeAgentsOffline: 1,
     edgeAgentsWarning: 0, edgeAgentsUnknown: 0, timestamp: "2026-07-28T00:00:00.000Z",

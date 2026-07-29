@@ -7,7 +7,7 @@ import type { InternetFleetHealth, InternetLinkHealth } from "@/lib/types/operat
 import { useOperationalHealthStream } from "@/hooks/useOperationalHealthStream";
 import { internetStatusTone, rankInternetBranches } from "./internet-fleet-model";
 
-export function InternetFleetWidget({ detailed = false }: { detailed?: boolean }) {
+export function InternetFleetWidget({ detailed = false, autoRefresh = true, refreshToken }: { detailed?: boolean; autoRefresh?: boolean; refreshToken?: number }) {
   const [fleet, setFleet] = useState<InternetFleetHealth | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -16,8 +16,13 @@ export function InternetFleetWidget({ detailed = false }: { detailed?: boolean }
     catch (cause) { setError(cause instanceof Error ? cause.message : "Internet health unavailable"); }
     finally { setLoading(false); }
   }, []);
-  useEffect(() => { void load(); const timer = setInterval(load, 30_000); return () => clearInterval(timer); }, [load]);
-  useOperationalHealthStream(useCallback(() => { void load(); }, [load]));
+  useEffect(() => {
+    void load();
+    if (!autoRefresh) return;
+    const timer = setInterval(load, 30_000);
+    return () => clearInterval(timer);
+  }, [autoRefresh, load, refreshToken]);
+  useOperationalHealthStream(useCallback(() => { void load(); }, [load]), refreshToken === undefined);
   const summary = fleet?.summary ?? { totalBranches: 0, online: 0, degraded: 0, failover: 0, offline: 0, unknown: 0 };
   const branches = rankInternetBranches(fleet?.branches ?? []);
   const visible = detailed ? branches : branches.filter((branch) => branch.status !== "online").slice(0, 8);

@@ -25,6 +25,7 @@ export interface HealthSummary {
   totalCameras: number;
   camerasOnline: number;
   camerasOffline: number;
+  camerasUnknown: number;
   camerasRecording: number;
   recordingFailures: number;
   activeCriticalAlerts: number;

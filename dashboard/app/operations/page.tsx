@@ -29,6 +29,9 @@ export default function OperationalHealthDashboard() {
   const [loading, setLoading] = useState(true);
   const [lastRefresh, setLastRefresh] = useState(new Date());
   const [autoRefresh, setAutoRefresh] = useState(true);
+  const [refreshToken, setRefreshToken] = useState(0);
+  const [exporting, setExporting] = useState(false);
+  const [exportMessage, setExportMessage] = useState<string | null>(null);
   const [branchFilter, setBranchFilter] = useState<BranchSummaryFilter>({ kind: "all" });
 
   const selectBranchFilter = (filter: BranchSummaryFilter) => {
@@ -61,16 +64,38 @@ export default function OperationalHealthDashboard() {
       setLoading(false);
     }
   }, []);
-  useOperationalHealthStream(useCallback(() => { void fetchHealthData(); }, [fetchHealthData]));
+  const refreshDashboard = useCallback(() => {
+    setRefreshToken((value) => value + 1);
+    void fetchHealthData();
+  }, [fetchHealthData]);
+  const realtime = useOperationalHealthStream(useCallback(() => { refreshDashboard(); }, [refreshDashboard]));
+
+  const exportSummary = useCallback(async () => {
+    try {
+      setExporting(true);
+      setExportMessage(null);
+      const response = await fetch("/api/control/v1/reports/operational/runs", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ template: "comprehensive", formats: ["xlsx"], recipients: [] }),
+      });
+      if (!response.ok) throw new Error("export_unavailable");
+      setExportMessage("Summary export queued. Download it from Reports when it is ready.");
+    } catch {
+      setExportMessage("Unable to queue the export. Check that you have report-export permission.");
+    } finally {
+      setExporting(false);
+    }
+  }, []);
 
   useEffect(() => {
-    fetchHealthData();
+    void fetchHealthData();
     
     if (autoRefresh) {
-      const interval = setInterval(fetchHealthData, 30000); // Refresh every 30 seconds
+      const interval = setInterval(refreshDashboard, 30_000);
       return () => clearInterval(interval);
     }
-  }, [autoRefresh, fetchHealthData]);
+  }, [autoRefresh, fetchHealthData, refreshDashboard]);
 
   const getBranchHealthStatus = () => {
     if (!summary) return 'unknown';
@@ -80,7 +105,7 @@ export default function OperationalHealthDashboard() {
   };
 
   const getCameraHealthStatus = () => {
-    if (!summary) return 'unknown';
+    if (!summary || summary.totalCameras === 0) return 'unknown';
     const offlinePercent = (summary.camerasOffline / summary.totalCameras) * 100;
     if (offlinePercent > 10) return 'critical';
     if (offlinePercent > 5) return 'warning';
@@ -88,7 +113,7 @@ export default function OperationalHealthDashboard() {
   };
 
   const getRecordingHealthStatus = () => {
-    if (!summary) return 'unknown';
+    if (!summary || summary.totalCameras === 0) return 'unknown';
     const failurePercent = (summary.recordingFailures / summary.totalCameras) * 100;
     if (failurePercent > 10) return 'critical';
     if (failurePercent > 5) return 'warning';
@@ -115,7 +140,7 @@ export default function OperationalHealthDashboard() {
         <div>
           <h2 className="text-sm font-medium text-gray-500 mb-1">System Status</h2>
           <p className="text-xs text-gray-400">
-            Last updated: {getTimeAgo(lastRefresh.toISOString())}
+            Last updated: {getTimeAgo(lastRefresh.toISOString())} · {realtime ? "Live updates connected" : autoRefresh ? "Polling fallback active" : "Polling paused"}
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -129,19 +154,21 @@ export default function OperationalHealthDashboard() {
             Auto-refresh
           </label>
           <button
-            onClick={fetchHealthData}
+            onClick={refreshDashboard}
             disabled={loading}
             className="btn-secondary flex items-center gap-2"
           >
             <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
             Refresh
           </button>
-          <button className="btn-secondary flex items-center gap-2">
+          <button onClick={() => void exportSummary()} disabled={exporting} className="btn-secondary flex items-center gap-2">
             <Download size={16} />
-            Export
+            {exporting ? "Queueing…" : "Export"}
           </button>
         </div>
       </div>
+
+      {exportMessage && <p className="mb-4 rounded border border-blue-200 bg-blue-50 p-3 text-sm text-blue-800">{exportMessage} <a href="/reports" className="font-semibold underline">Open Reports</a></p>}
 
       {summary && <BranchSummaryWidget summary={summary} onSelect={selectBranchFilter} />}
 
@@ -181,12 +208,15 @@ export default function OperationalHealthDashboard() {
             <span className="text-3xl font-bold">{summary?.totalCameras || 0}</span>
             <span className="text-sm text-gray-500">total</span>
           </div>
-          <div className="flex items-center gap-3 text-xs">
+          <div className="flex flex-wrap items-center gap-3 text-xs">
             <span className="text-green-600">
               {summary?.camerasOnline || 0} online
             </span>
             <span className="text-red-600">
               {summary?.camerasOffline || 0} offline
+            </span>
+            <span className="text-gray-600">
+              {summary?.camerasUnknown || 0} unknown
             </span>
           </div>
         </div>
@@ -238,7 +268,7 @@ export default function OperationalHealthDashboard() {
         </div>
       </div>
 
-      <BranchHealthMosaic filter={branchFilter} />
+      <BranchHealthMosaic filter={branchFilter} autoRefresh={autoRefresh} refreshToken={refreshToken} realtime={realtime} />
 
       {/* Critical Alerts Section */}
       {criticalAlerts.length > 0 && (
@@ -279,9 +309,9 @@ export default function OperationalHealthDashboard() {
                     </span>
                   </div>
                 </div>
-                <button className="btn-sm btn-primary whitespace-nowrap">
-                  Acknowledge
-                </button>
+                <a href={alert.branchId ? `/operations/branches/${alert.branchId}` : "/operations/alerts"} className="btn-sm btn-primary whitespace-nowrap">
+                  Review
+                </a>
               </div>
             ))}
           </div>
@@ -391,10 +421,10 @@ export default function OperationalHealthDashboard() {
         </div>
       </div>
 
-      <RetentionFleetWidget />
-      <RecorderFleetWidget />
-      <InternetFleetWidget />
-      <HddFleetWidget />
+      <RetentionFleetWidget autoRefresh={autoRefresh} refreshToken={refreshToken} />
+      <RecorderFleetWidget autoRefresh={autoRefresh} refreshToken={refreshToken} />
+      <InternetFleetWidget autoRefresh={autoRefresh} refreshToken={refreshToken} />
+      <HddFleetWidget autoRefresh={autoRefresh} refreshToken={refreshToken} />
 
       {/* Additional Component Cards */}
       <div className="grid lg:grid-cols-3 gap-6">

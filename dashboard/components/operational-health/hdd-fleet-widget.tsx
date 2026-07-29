@@ -8,7 +8,7 @@ import { useOperationalHealthStream } from "@/hooks/useOperationalHealthStream";
 import { DiskHealthCard } from "./disk-health-card";
 import { rankAtRiskDisks, summarizeHddFleet } from "./hdd-fleet-model";
 
-export function HddFleetWidget({ detailed = false }: { detailed?: boolean }) {
+export function HddFleetWidget({ detailed = false, autoRefresh = true, refreshToken }: { detailed?: boolean; autoRefresh?: boolean; refreshToken?: number }) {
   const [disks, setDisks] = useState<DiskHealth[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -23,8 +23,13 @@ export function HddFleetWidget({ detailed = false }: { detailed?: boolean }) {
       setLoading(false);
     }
   }, []);
-  useEffect(() => { void load(); const timer = setInterval(load, 30_000); return () => clearInterval(timer); }, [load]);
-  useOperationalHealthStream(useCallback(() => { void load(); }, [load]));
+  useEffect(() => {
+    void load();
+    if (!autoRefresh) return;
+    const timer = setInterval(load, 30_000);
+    return () => clearInterval(timer);
+  }, [autoRefresh, load, refreshToken]);
+  useOperationalHealthStream(useCallback(() => { void load(); }, [load]), refreshToken === undefined);
 
   const summary = summarizeHddFleet(disks);
   const atRisk = rankAtRiskDisks(disks, detailed ? disks.length : 6);

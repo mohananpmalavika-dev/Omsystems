@@ -23,7 +23,17 @@ import type { BranchSummaryFilter } from "./branch-summary-model";
 // by showing at most an 8 x 8 (64-tile) view and scrolling through the rest.
 const MIN_VIEWPORT_HEIGHT = 280;
 
-export function BranchHealthMosaic({ filter }: { filter?: BranchSummaryFilter }) {
+export function BranchHealthMosaic({
+  filter,
+  autoRefresh = true,
+  refreshToken,
+  realtime: parentRealtime,
+}: {
+  filter?: BranchSummaryFilter;
+  autoRefresh?: boolean;
+  refreshToken?: number;
+  realtime?: boolean;
+}) {
   const [branches, setBranches] = useState<BranchHealth[]>([]);
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState<HealthStatus | "all">("all");
@@ -77,12 +87,14 @@ export function BranchHealthMosaic({ filter }: { filter?: BranchSummaryFilter })
   useEffect(() => {
     const timer = setTimeout(load, 200);
     return () => clearTimeout(timer);
-  }, [load]);
+  }, [load, refreshToken]);
   useEffect(() => {
+    if (!autoRefresh) return;
     const timer = setInterval(load, 30_000);
     return () => clearInterval(timer);
-  }, [load]);
-  const realtime = useOperationalHealthStream(useCallback(() => { void load(); }, [load]));
+  }, [autoRefresh, load]);
+  const streamRealtime = useOperationalHealthStream(useCallback(() => { void load(); }, [load]), refreshToken === undefined);
+  const realtime = parentRealtime ?? streamRealtime;
 
   useEffect(() => {
     const element = viewport.current;

@@ -14,6 +14,7 @@ const toneClasses: Record<BranchSummaryTone, string> = {
   green: "border-emerald-200 bg-emerald-50 text-emerald-700 hover:border-emerald-400",
   red: "border-red-200 bg-red-50 text-red-700 hover:border-red-400",
   amber: "border-amber-200 bg-amber-50 text-amber-700 hover:border-amber-400",
+  gray: "border-gray-200 bg-gray-50 text-gray-700 hover:border-gray-400",
 };
 
 const icons = {
@@ -21,6 +22,8 @@ const icons = {
   online: Wifi,
   offline: CircleOff,
   warning: AlertTriangle,
+  critical: AlertTriangle,
+  unknown: CircleOff,
 };
 
 export function BranchSummaryWidget({
@@ -42,7 +45,7 @@ export function BranchSummaryWidget({
         </div>
         <span className="text-xs text-gray-400">Live fleet snapshot</span>
       </div>
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 2xl:grid-cols-7">
         {getBranchSummaryItems(summary).map((item) => {
           const Icon = icons[item.id];
           return (

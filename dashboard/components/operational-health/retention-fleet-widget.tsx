@@ -8,7 +8,7 @@ import { rankRetentionExceptions, summarizeRetention } from "./retention-fleet-m
 
 type Policy = Record<string, number> & { retentionDays: number; retentionWarningDays: number };
 
-export function RetentionFleetWidget({ detailed = false }: { detailed?: boolean }) {
+export function RetentionFleetWidget({ detailed = false, autoRefresh = true, refreshToken }: { detailed?: boolean; autoRefresh?: boolean; refreshToken?: number }) {
   const [items, setItems] = useState<RetentionHealth[]>([]);
   const [policy, setPolicy] = useState<Policy | null>(null);
   const [loading, setLoading] = useState(true);
@@ -27,8 +27,13 @@ export function RetentionFleetWidget({ detailed = false }: { detailed?: boolean 
       setMessage(cause instanceof Error ? cause.message : "Unable to load retention health");
     } finally { setLoading(false); }
   }, []);
-  useEffect(() => { void load(); const timer = setInterval(load, 30_000); return () => clearInterval(timer); }, [load]);
-  useOperationalHealthStream(useCallback(() => { void load(); }, [load]));
+  useEffect(() => {
+    void load();
+    if (!autoRefresh) return;
+    const timer = setInterval(load, 30_000);
+    return () => clearInterval(timer);
+  }, [autoRefresh, load, refreshToken]);
+  useOperationalHealthStream(useCallback(() => { void load(); }, [load]), refreshToken === undefined);
 
   const savePolicy = async () => {
     if (!policy) return;
