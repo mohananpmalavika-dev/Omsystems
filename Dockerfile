@@ -1,5 +1,9 @@
 FROM node:22-alpine AS build
 WORKDIR /app
+# onnxruntime-node's CUDA bundle is optional and unavailable on the CPU-only
+# deployment image. Use its supported environment variable so npm ci never
+# attempts the provider download (or treats an .npmrc key as unsupported).
+ENV ONNXRUNTIME_NODE_INSTALL=skip
 COPY package*.json ./
 COPY dashboard/package.json ./dashboard/package.json
 COPY edge-agent/package.json ./edge-agent/package.json
