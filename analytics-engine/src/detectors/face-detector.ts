@@ -82,7 +82,9 @@ export class FaceDetector extends BaseDetector {
     //   await faceapi.nets.ageGenderNet.loadFromDisk(this.config.modelPath);
     // }
 
-    console.log("FaceDetector initialized (simulation mode)");
+    // Face observations can be supplied by a dedicated face-model worker. A
+    // local RetinaFace/ArcFace runtime is deliberately not faked here.
+    console.warn("Face detector accepts normalized face observations; no local face model is provisioned");
     this.isInitialized = true;
   }
 
@@ -91,21 +93,12 @@ export class FaceDetector extends BaseDetector {
       throw new Error("FaceDetector not initialized");
     }
 
-    // TODO: Replace with actual face detection
-    // const detections = await faceapi
-    //   .detectAllFaces(frame.imageData, new faceapi.SsdMobilenetv1Options({
-    //     minConfidence: this.config.detectionConfidence
-    //   }))
-    //   .withFaceLandmarks()
-    //   .withFaceDescriptors();
-
-    // SIMULATION: Return empty for now
-    const simulatedDetections = this.simulateFaceDetection(frame);
+    const normalizedDetections = this.readNormalizedFaceObservations(frame);
 
     const results: DetectionResult[] = [];
     const faceObjects: Array<DetectedObject & { features?: FaceFeatures; match?: WatchlistMatch }> = [];
 
-    for (const detection of simulatedDetections) {
+    for (const detection of normalizedDetections) {
       if (detection.confidence < this.config.detectionConfidence) continue;
 
       const normalizedBox = normalizeBoundingBox(
@@ -260,9 +253,9 @@ export class FaceDetector extends BaseDetector {
   }
 
   /**
-   * SIMULATION: Replace with actual face detection
+   * Normalize observations produced by a dedicated face model worker.
    */
-  private simulateFaceDetection(frame: DetectionFrame): Array<{
+  private readNormalizedFaceObservations(frame: DetectionFrame): Array<{
     confidence: number;
     boundingBox: { x: number; y: number; width: number; height: number };
     trackId?: string;
@@ -329,9 +322,9 @@ export class FaceDetector extends BaseDetector {
 
   getHealth() {
     return {
-      status: this.isInitialized ? ("healthy" as const) : ("unhealthy" as const),
+      status: this.isInitialized ? ("degraded" as const) : ("unhealthy" as const),
       details: this.isInitialized
-        ? `Face detector operational (recognition ${this.config.recognitionEnabled ? "enabled" : "disabled"})`
+        ? `Normalized face observations required (recognition ${this.config.recognitionEnabled ? "enabled" : "disabled"})`
         : "Face detector not initialized",
       metadata: {
         recognitionEnabled: this.config.recognitionEnabled,

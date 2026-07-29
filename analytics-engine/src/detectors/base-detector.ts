@@ -65,6 +65,11 @@ export function getInferenceObjects(
   });
 }
 
+/** Distinguishes an explicitly empty inference result from no inference result. */
+export function hasInferenceObjects(frame: DetectionFrame): boolean {
+  return Array.isArray(frame.metadata?.detections);
+}
+
 export interface DetectionResult {
   detectionType: string;
   confidence: number;

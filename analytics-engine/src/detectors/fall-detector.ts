@@ -3,7 +3,7 @@
  * Detects when a person falls down (for elderly care, hospitals, industrial safety)
  */
 
-import { BaseDetector, type DetectionFrame, type DetectionResult } from "./base-detector.js";
+import { BaseDetector, type DetectionFrame, type DetectionResult, getInferenceObjects } from "./base-detector.js";
 
 export interface FallEvent {
   personTrackId: string;
@@ -37,19 +37,14 @@ export class FallDetector extends BaseDetector {
   async initialize(): Promise<void> {
     console.log("Initializing fall detector...");
     
-    // TODO: Load pose estimation model or fall detection model
-    // Options: OpenPose, MediaPipe Pose, specialized fall detection CNNs
-    
-    this.isModelLoaded = true;
+    // The temporal fallback below consumes tracked person boxes, but it is not
+    // a replacement for a pose/fall model and must be reported as degraded.
+    this.isModelLoaded = false;
     this.startStateCleanup();
     console.log("Fall detector initialized");
   }
 
   async detect(frame: DetectionFrame): Promise<DetectionResult[]> {
-    if (!this.isModelLoaded) {
-      return [];
-    }
-
     const fallEvents = await this.detectFallsInFrame(frame);
     
     const results: DetectionResult[] = [];
@@ -88,33 +83,28 @@ export class FallDetector extends BaseDetector {
    * Detect falls in frame
    */
   private async detectFallsInFrame(frame: DetectionFrame): Promise<FallEvent[]> {
-    // TODO: Replace with actual pose estimation + fall classification
-    /*
-    Example implementation:
-    
-    1. Detect persons in frame
-    2. Extract pose keypoints for each person
-    3. Analyze pose to detect fall characteristics:
-       - Horizontal orientation (lying down)
-       - Rapid vertical movement
-       - Transition from upright to horizontal
-    
-    const persons = await this.personDetector.detect(frame);
-    const poses = await this.poseEstimator.estimatePoses(frame, persons);
-    
-    const fallEvents: FallEvent[] = [];
-    
-    for (const pose of poses) {
-      const fallDetected = this.analyzePoseForFall(pose);
-      if (fallDetected) {
-        fallEvents.push(this.createFallEvent(pose, frame.timestamp));
-      }
+    const persons = getInferenceObjects(frame, ["person"])
+      .filter((person) => person.confidence >= 0.5);
+    const events: FallEvent[] = [];
+    for (const person of persons) {
+      // Tracking IDs are inserted by AnalyticsPipeline before this detector.
+      // The fallback key preserves temporal behavior for direct integrations.
+      const trackId = person.trackId ?? `box:${person.boundingBox.x.toFixed(2)}:${person.boundingBox.y.toFixed(2)}`;
+      if (!this.analyzeBoundingBoxForFall(trackId, person.boundingBox, frame.timestamp)) continue;
+      const state = this.personStates.get(trackId)!;
+      events.push({
+        personTrackId: trackId,
+        boundingBox: person.boundingBox,
+        confidence: person.confidence,
+        fallType: "unknown",
+        impactEstimated: Math.abs(state.velocityY) >= this.VERTICAL_VELOCITY_THRESHOLD,
+        recoveryDetected: this.checkRecovery(trackId, frame.timestamp),
+        durationSeconds: state.fallStartTime
+          ? Math.max(0, (frame.timestamp.getTime() - state.fallStartTime.getTime()) / 1000)
+          : 0,
+      });
     }
-    
-    return fallEvents;
-    */
-    
-    return [];
+    return events;
   }
 
   /**
@@ -213,8 +203,10 @@ export class FallDetector extends BaseDetector {
 
   getHealth() {
     return {
-      status: this.isModelLoaded ? ("healthy" as const) : ("unhealthy" as const),
-      details: `Tracking ${this.personStates.size} persons`,
+      status: this.isModelLoaded ? ("healthy" as const) : ("degraded" as const),
+      details: this.isModelLoaded
+        ? `Pose-model fall inference active; tracking ${this.personStates.size} persons`
+        : `Tracked-box temporal fallback only; tracking ${this.personStates.size} persons. Provision a pose/fall model for production alerts.`,
     };
   }
 }

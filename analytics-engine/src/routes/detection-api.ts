@@ -259,8 +259,7 @@ export async function registerDetectionApiRoutes(
    * Get detector capabilities
    */
   app.get("/v1/detectors/capabilities", async (request, reply) => {
-    return {
-      detectors: [
+    const capabilities = [
         {
           type: "person",
           name: "Person Detection",
@@ -283,13 +282,13 @@ export async function registerDetectionApiRoutes(
           type: "face",
           name: "Face Recognition",
           features: ["watchlist-matching", "age-gender-estimation"],
-          supported: false, // TODO: Implement
+          supported: true,
         },
         {
           type: "anpr",
           name: "License Plate Recognition",
           features: ["plate-reading", "watchlist-matching", "vehicle-sessions"],
-          supported: false, // TODO: Implement
+          supported: true,
         },
         {
           type: "fall",
@@ -351,7 +350,26 @@ export async function registerDetectionApiRoutes(
           features: ["traffic-flow", "hotspot-detection", "pattern-analysis"],
           supported: true,
         },
-      ],
+      ];
+    const healthType: Record<string, string> = {
+      loitering: "zone",
+      intrusion: "zone",
+      "line-crossing": "zone",
+      heatmap: "heatmap",
+      "crowd-density": "crowd",
+    };
+    return {
+      detectors: capabilities.map((capability) => {
+        const health = pipeline.getDetector(healthType[capability.type] ?? capability.type)?.getHealth();
+        return {
+          ...capability,
+          status: health?.status ?? "unhealthy",
+          details: health?.details ?? "Detector is not registered in the active pipeline.",
+          // `supported` means the event contract exists. `available` is the
+          // operational state, including whether a required model is loaded.
+          available: health?.status === "healthy",
+        };
+      }),
     };
   });
 

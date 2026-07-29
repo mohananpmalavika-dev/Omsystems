@@ -88,7 +88,9 @@ export class ANPRDetector extends BaseDetector {
     // this.detectionModel = await loadYOLOPlateDetector(this.config.modelPath);
     // this.ocrModel = await loadOCRModel(this.config.modelPath);
 
-    console.log("ANPRDetector initialized (simulation mode)");
+    // Plate/OCR observations can be supplied by a specialised edge worker. Do
+    // not imply that an OCR model is loaded in this service.
+    console.warn("ANPR detector accepts normalized plate/OCR observations; no local ANPR model is provisioned");
     this.isInitialized = true;
   }
 
@@ -97,22 +99,14 @@ export class ANPRDetector extends BaseDetector {
       throw new Error("ANPRDetector not initialized");
     }
 
-    // TODO: Replace with actual ANPR detection
-    // Step 1: Detect vehicles
-    // Step 2: Detect plate regions on vehicles
-    // Step 3: Run OCR on plate regions
-    // Step 4: Validate plate format
-    // Step 5: Check against watchlist
-
-    // SIMULATION: Return empty for now
-    const simulatedReadings = this.simulateANPR(frame);
+    const normalizedReadings = this.readNormalizedPlateObservations(frame);
 
     const results: DetectionResult[] = [];
     const plateObjects: Array<
       DetectedObject & { plateReading?: PlateReading; vehicle?: VehicleInfo; watchlistMatch?: WatchlistPlate }
     > = [];
 
-    for (const reading of simulatedReadings) {
+    for (const reading of normalizedReadings) {
       if (reading.plateReading.confidence < this.config.ocrConfidence) continue;
 
       // Validate plate format
@@ -265,9 +259,9 @@ export class ANPRDetector extends BaseDetector {
   }
 
   /**
-   * SIMULATION: Replace with actual ANPR
+   * Normalize observations produced by a dedicated plate/OCR model worker.
    */
-  private simulateANPR(frame: DetectionFrame): Array<{
+  private readNormalizedPlateObservations(frame: DetectionFrame): Array<{
     confidence: number;
     boundingBox: { x: number; y: number; width: number; height: number };
     trackId?: string;
@@ -377,9 +371,9 @@ export class ANPRDetector extends BaseDetector {
 
   getHealth() {
     return {
-      status: this.isInitialized ? ("healthy" as const) : ("unhealthy" as const),
+      status: this.isInitialized ? ("degraded" as const) : ("unhealthy" as const),
       details: this.isInitialized
-        ? `ANPR detector operational (watchlist ${this.config.watchlistEnabled ? "enabled" : "disabled"})`
+        ? `Normalized plate/OCR observations required (watchlist ${this.config.watchlistEnabled ? "enabled" : "disabled"})`
         : "ANPR detector not initialized",
       metadata: {
         watchlistEnabled: this.config.watchlistEnabled,

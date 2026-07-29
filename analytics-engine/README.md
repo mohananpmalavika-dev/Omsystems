@@ -220,7 +220,10 @@ ANALYTICS_ENGINE_SHARED_KEY=your-engine-key-here
 CONTROL_PLANE_URL=http://localhost:4000
 
 # Optional: ML Model Configuration
-YOLO_MODEL_PATH=/models/yolov8n.onnx
+# Core ONNX model default: /app/models/detection/yolov8n.onnx
+MODELS_DIR=/app/models
+# Optional legacy/custom location:
+YOLO_MODEL_PATH=/app/models/detection/yolov8n.onnx
 CONFIDENCE_THRESHOLD=0.7
 ```
 
@@ -543,7 +546,7 @@ docker run -d \
   -p 4003:4003 \
   -e CONTROL_PLANE_URL=http://control-plane:4000 \
   -e ANALYTICS_ENGINE_SHARED_KEY=your-key \
-  -v /path/to/models:/models:ro \
+  -v /path/to/models:/app/models:ro \
   aditisentinel/analytics-engine:latest
 ```
 

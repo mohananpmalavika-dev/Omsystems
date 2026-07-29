@@ -4,7 +4,7 @@
  */
 
 import { randomUUID } from "node:crypto";
-import { BaseDetector, calculateIoU, type DetectionFrame, type DetectionResult, getInferenceObjects } from "./base-detector.js";
+import { BaseDetector, calculateIoU, type DetectionFrame, type DetectionResult, getInferenceObjects, hasInferenceObjects } from "./base-detector.js";
 import { getModelManager } from "../model-manager.js";
 import { YoloPersonInference } from "../inference/yolo-person-inference.js";
 
@@ -81,7 +81,9 @@ export class PersonDetector extends BaseDetector {
    */
   private async detectPersonsInFrame(frame: DetectionFrame): Promise<any[]> {
     const external = getInferenceObjects(frame, ["person"]).filter((item) => item.confidence >= this.MIN_CONFIDENCE);
-    if (external.length > 0 || !this.inference) return external;
+    // An explicit empty list is the result of the shared object pass, not a
+    // request to run a second YOLO inference for this frame.
+    if (hasInferenceObjects(frame) || !this.inference) return external;
     return this.inference.run(frame);
   }
 

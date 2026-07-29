@@ -4,7 +4,9 @@
  */
 
 import { randomUUID } from "node:crypto";
-import { BaseDetector, calculateIoU, type DetectionFrame, type DetectionResult, getInferenceObjects } from "./base-detector.js";
+import { BaseDetector, calculateIoU, type DetectionFrame, type DetectionResult, getInferenceObjects, hasInferenceObjects } from "./base-detector.js";
+import { getModelManager } from "../model-manager.js";
+import { YoloCocoInference } from "../inference/yolo-coco-inference.js";
 
 export type VehicleType = "car" | "motorcycle" | "bus" | "truck" | "bicycle" | "auto-rickshaw";
 
@@ -22,6 +24,8 @@ export interface VehicleTrack {
 export class VehicleDetector extends BaseDetector {
   private tracks = new Map<string, VehicleTrack>();
   private isModelLoaded = false;
+  private inference: YoloCocoInference | null = null;
+  private modelLoadError: string | undefined;
 
   private readonly TRACKING_TIMEOUT_MS = 10000; // 10 seconds
   private readonly MIN_CONFIDENCE = 0.6;
@@ -33,19 +37,21 @@ export class VehicleDetector extends BaseDetector {
   async initialize(): Promise<void> {
     console.log("Initializing vehicle detector...");
     
-    // TODO: Load YOLO model trained for vehicle detection
-    // Model should detect: car, motorcycle, bus, truck, bicycle
-    
-    this.isModelLoaded = true;
+    try {
+      this.inference = new YoloCocoInference(await getModelManager().getModel("yolov8n"), this.MIN_CONFIDENCE);
+      this.isModelLoaded = true;
+      this.modelLoadError = undefined;
+      console.log("Vehicle detector loaded shared YOLOv8 ONNX model");
+    } catch (error) {
+      this.inference = null;
+      this.isModelLoaded = false;
+      this.modelLoadError = error instanceof Error ? error.message : String(error);
+      console.warn(`Vehicle detector running in external-ingestion mode: ${this.modelLoadError}`);
+    }
     this.startTrackingCleanup();
-    console.log("Vehicle detector initialized");
   }
 
   async detect(frame: DetectionFrame): Promise<DetectionResult[]> {
-    if (!this.isModelLoaded) {
-      return [];
-    }
-
     const vehicles = await this.detectVehiclesInFrame(frame);
     const tracked = this.updateTracking(vehicles, frame.timestamp);
 
@@ -77,24 +83,14 @@ export class VehicleDetector extends BaseDetector {
    * Detect vehicles in frame using ML model
    */
   private async detectVehiclesInFrame(frame: DetectionFrame): Promise<any[]> {
-    // TODO: Replace with actual YOLO/ONNX inference
-    /*
-    Example implementation:
-    
-    const input = this.preprocessFrame(frame);
-    const outputs = await this.model.run(input);
-    const detections = this.postprocess(outputs);
-    
-    // Filter for vehicle classes
-    const vehicleClasses = ['car', 'motorcycle', 'bus', 'truck', 'bicycle'];
-    return detections.filter(d => 
-      vehicleClasses.includes(d.class) && 
-      d.confidence >= this.MIN_CONFIDENCE
-    );
-    */
-    
     const labels = ["car", "motorcycle", "bus", "truck", "bicycle", "auto-rickshaw"];
-    return getInferenceObjects(frame, labels)
+    const candidates = hasInferenceObjects(frame)
+      ? getInferenceObjects(frame, labels)
+      : this.inference
+        ? await this.inference.run(frame)
+        : [];
+    return candidates
+      .filter((item) => labels.includes(item.label))
       .filter((item) => item.confidence >= this.MIN_CONFIDENCE)
       .map((item) => ({ ...item, vehicleType: item.label }));
   }
@@ -269,14 +265,17 @@ export class VehicleDetector extends BaseDetector {
 
   async cleanup(): Promise<void> {
     this.tracks.clear();
+    this.inference = null;
     this.isModelLoaded = false;
     console.log("Vehicle detector cleaned up");
   }
 
   getHealth() {
     return {
-      status: this.isModelLoaded ? ("healthy" as const) : ("unhealthy" as const),
-      details: `${this.tracks.size} active vehicle tracks`,
+      status: this.isModelLoaded ? ("healthy" as const) : ("degraded" as const),
+      details: this.isModelLoaded
+        ? `Local YOLOv8 ONNX inference active; ${this.tracks.size} active vehicle tracks`
+        : `External normalized detections only; ${this.tracks.size} active vehicle tracks. ${this.modelLoadError ?? "Local model not provisioned"}`,
     };
   }
 }

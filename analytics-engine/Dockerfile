@@ -50,6 +50,7 @@ COPY --from=build --chown=analytics:analytics /workspace/node_modules ./node_mod
 
 # Create models directory for ML models
 RUN mkdir -p /app/models && chown analytics:analytics /app/models
+ENV MODELS_DIR=/app/models
 
 # Switch to non-root user
 USER analytics

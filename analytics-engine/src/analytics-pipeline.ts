@@ -6,7 +6,7 @@
 import { randomUUID } from "node:crypto";
 import type { z } from "zod";
 import type { detectionSchema } from "./app.js";
-import { BaseDetector, type DetectionFrame } from "./detectors/base-detector.js";
+import { BaseDetector, type DetectionFrame, type DetectedObject, type InferenceObject } from "./detectors/base-detector.js";
 import { CameraHealthDetector } from "./detectors/camera-health-detector.js";
 import { MotionDetector } from "./detectors/motion-detector.js";
 import { ObjectDetector } from "./detectors/object-detector.js";
@@ -147,37 +147,16 @@ export class AnalyticsPipeline {
       this.queueDetector,
       this.heatMapGenerator,
       this.faceDetector,
-      this.faceAnalytics,
       this.anprDetector,
-      this.humanAnalytics,
-      this.vehicleAnalytics,
-      this.safetyAnalytics,
-      this.bankingAnalytics,
-      this.retailAnalytics,
-      this.aiSearchEngine,
-      this.aiInvestigationTools,
-      this.aiPredictionEngine,
-      this.aiReportingEngine,
-      this.aiAssistant,
-      this.industrialAnalytics,
-      this.smartCityAnalytics,
     ];
+    // Only deterministic infrastructure is required to accept a frame. Model
+    // capabilities advertise their own degraded state when a model is not
+    // provisioned, so a missing optional model cannot make the health endpoint
+    // claim that an empty detector is operational.
     this.requiredDetectors = new Set([
       this.motionDetector,
-      this.objectDetector,
       this.zoneDetector,
       this.healthDetector,
-      this.personDetector,
-      this.vehicleDetector,
-      this.helmetDetector,
-      this.fallDetector,
-      this.smokeFireDetector,
-      this.crowdDensityDetector,
-      this.tailgatingDetector,
-      this.queueDetector,
-      this.heatMapGenerator,
-      this.faceDetector,
-      this.anprDetector,
     ]);
   }
 
@@ -190,7 +169,7 @@ export class AnalyticsPipeline {
       maxCacheSize: parseInt(process.env.MODEL_CACHE_SIZE_MB || '2048'),
       enableGPU: process.env.ENABLE_GPU_ACCELERATION === 'true',
       cacheEvictionPolicy: 'lru',
-      preloadModels: ['yolov8n', 'deepsort'], // Preload high-priority models
+      preloadModels: ['yolov8n'], // The only model executed by the core frame path.
       autoUnloadAfter: 30
     });
 
@@ -246,10 +225,26 @@ export class AnalyticsPipeline {
     const motionResults = await this.motionDetector.detect(frame);
     const hasMotion = motionResults.length > 0;
 
-    // Step 3: Person detection (high priority)
+    // Step 3: Run exactly one generic-object inference pass. The normalized
+    // objects are supplied to the tracking and rule detectors below, avoiding
+    // duplicate ONNX execution for person and vehicle detection.
+    const shouldDetectObjects = hasMotion || this.needsObjectDetection(rules);
+    let inferenceFrame = frame;
+    if (shouldDetectObjects) {
+      const objectResults = await this.objectDetector.detect(frame);
+      const objects = objectResults.flatMap((result) => result.objects) as InferenceObject[];
+      inferenceFrame = this.withDetections(frame, objects);
+      for (const result of objectResults) {
+        if (this.matchesAnyRule(result.detectionType, rules)) {
+          events.push(this.createEvent(frame, result));
+        }
+      }
+    }
+
+    // Step 4: Person detection and tracking (high priority)
     let persons: any[] = [];
     if (hasMotion || this.needsPersonDetection(rules)) {
-      const personResults = await this.personDetector.detect(frame);
+      const personResults = await this.personDetector.detect(inferenceFrame);
       for (const result of personResults) {
         persons = persons.concat(result.objects);
         if (this.matchesAnyRule(result.detectionType, rules)) {
@@ -258,10 +253,10 @@ export class AnalyticsPipeline {
       }
     }
 
-    // Step 4: Vehicle detection
+    // Step 5: Vehicle detection and tracking
     let vehicles: any[] = [];
     if (hasMotion || this.needsVehicleDetection(rules)) {
-      const vehicleResults = await this.vehicleDetector.detect(frame);
+      const vehicleResults = await this.vehicleDetector.detect(inferenceFrame);
       for (const result of vehicleResults) {
         vehicles = vehicles.concat(result.objects);
         if (this.matchesAnyRule(result.detectionType, rules)) {
@@ -270,45 +265,49 @@ export class AnalyticsPipeline {
       }
     }
 
-    // Step 5: Specialized detections (run in parallel when applicable)
+    // Preserve the track IDs assigned above for temporal specialised detectors
+    // (fall, queue and tailgating) without discarding the remaining objects.
+    const trackedFrame = this.withTrackedObjects(inferenceFrame, persons, vehicles);
+
+    // Step 6: Specialized detections (run in parallel when applicable)
     const specializedResults = await Promise.all([
       // Helmet detection (needs persons + vehicles)
-      persons.length > 0 || vehicles.length > 0 
-        ? this.helmetDetector.detect(frame) 
+      persons.length > 0 || vehicles.length > 0
+        ? this.helmetDetector.detect(trackedFrame)
         : Promise.resolve([]),
       
       // Fall detection (needs persons)
-      persons.length > 0 
-        ? this.fallDetector.detect(frame) 
+      persons.length > 0
+        ? this.fallDetector.detect(trackedFrame)
         : Promise.resolve([]),
       
       // Smoke & fire detection (always check for safety)
-      this.smokeFireDetector.detect(frame),
+      this.smokeFireDetector.detect(trackedFrame),
       
       // Crowd density (needs persons)
-      persons.length > 3 
-        ? this.crowdDensityDetector.detect(frame) 
+      persons.length > 3
+        ? this.crowdDensityDetector.detect(trackedFrame)
         : Promise.resolve([]),
       
       // Tailgating detection (needs persons in zones)
-      persons.length > 1 
-        ? this.tailgatingDetector.detect(frame) 
+      persons.length > 1
+        ? this.tailgatingDetector.detect(trackedFrame)
         : Promise.resolve([]),
       
       // Queue analysis (needs persons)
-      persons.length > 0 
-        ? this.queueDetector.detect(frame) 
+      persons.length > 0
+        ? this.queueDetector.detect(trackedFrame)
         : Promise.resolve([]),
       
       // Heat map (always generate for analytics)
-      this.heatMapGenerator.detect(frame),
+      this.heatMapGenerator.detect(trackedFrame),
 
       // Face and plate models are independent and only run when requested.
       this.needsDetection(rules, ["face", "face-recognition", "unknown-person", "watchlist-match", "vip-detection", "blacklist-detection", "mask-detection", "beard-detection", "glasses-detection", "age-estimation", "gender-estimation", "emotion-recognition"])
-        ? this.faceDetector.detect(frame)
+        ? this.faceDetector.detect(trackedFrame)
         : Promise.resolve([]),
       this.needsDetection(rules, ["anpr", "vehicle-reidentification"])
-        ? this.anprDetector.detect(frame)
+        ? this.anprDetector.detect(trackedFrame)
         : Promise.resolve([]),
     ]);
 
@@ -326,7 +325,7 @@ export class AnalyticsPipeline {
     if (allObjects.length > 0) {
       for (const rule of rules) {
         if (!rule.enabled) continue;
-        const zoneEvents = await this.processZoneRule(frame, allObjects, rule);
+        const zoneEvents = await this.processZoneRule(trackedFrame, allObjects, rule);
         events.push(...zoneEvents);
       }
     }
@@ -466,6 +465,8 @@ export class AnalyticsPipeline {
       "crowd-density",
       "tailgating",
       "queue",
+      "helmet",
+      "no-helmet",
       "loitering",
       "intrusion",
       "line-crossing",
@@ -480,9 +481,43 @@ export class AnalyticsPipeline {
     const vehicleTypes = [
       "vehicle",
       "helmet",
+      "no-helmet",
       "line-crossing",
     ];
     return rules.some(r => r.enabled && vehicleTypes.includes(r.detectionType));
+  }
+
+  private needsObjectDetection(rules: AnalyticsRule[]): boolean {
+    return this.needsDetection(rules, [
+      "object", "person", "vehicle", "helmet", "no-helmet", "fall", "fire", "smoke",
+      "crowd-density", "tailgating", "queue", "loitering", "intrusion", "line-crossing",
+    ]);
+  }
+
+  private withDetections(frame: DetectionFrame, detections: InferenceObject[]): DetectionFrame {
+    return {
+      ...frame,
+      metadata: { ...frame.metadata, detections },
+    };
+  }
+
+  private withTrackedObjects(
+    frame: DetectionFrame,
+    persons: DetectedObject[],
+    vehicles: DetectedObject[],
+  ): DetectionFrame {
+    const existing = Array.isArray(frame.metadata?.detections)
+      ? frame.metadata.detections.filter((item): item is InferenceObject => {
+        if (!item || typeof item !== "object") return false;
+        const label = (item as { label?: unknown }).label;
+        return label !== "person" && !["car", "motorcycle", "bus", "truck", "bicycle", "auto-rickshaw"].includes(String(label));
+      })
+      : [];
+    return this.withDetections(frame, [
+      ...existing,
+      ...persons,
+      ...vehicles,
+    ]);
   }
 
   private needsDetection(rules: AnalyticsRule[], types: string[]): boolean {
@@ -527,6 +562,28 @@ export class AnalyticsPipeline {
     for (const detector of this.detectors) {
       const detectorHealth = detector.getHealth();
       health.detectors[(detector as any).detectionType] = detectorHealth;
+    }
+
+    // These modules are retained for their configuration/API contracts, but
+    // are intentionally not started by the frame pipeline until an explicit
+    // model-backed implementation is provisioned. Reporting them here avoids
+    // the former false-positive "healthy" status for placeholder modules.
+    for (const [name, details] of Object.entries({
+      "face-analytics": "Not started: provision RetinaFace/ArcFace model runtime before enabling.",
+      "human-analytics": "Not started: provision pose and Re-ID model runtimes before enabling.",
+      "vehicle-analytics": "Not started: provision plate/OCR and vehicle Re-ID model runtimes before enabling.",
+      safety: "Not started: provision PPE and hazard model runtimes before enabling.",
+      banking: "Not started: requires configured banking analytics models and zones.",
+      retail: "Not started: requires configured retail analytics models and zones.",
+      "ai-search-engine": "Not started: requires a configured embedding model and vector store.",
+      investigation: "Not started: requires configured investigation data sources.",
+      prediction: "Not started: requires configured historical-data model.",
+      reporting: "Not started: requires configured reporting data sources.",
+      assistant: "Not started: requires configured assistant model/runtime.",
+      industrial: "Not started: enable explicitly after provisioning industrial models.",
+      "smart-city": "Not started: enable explicitly after provisioning smart-city models.",
+    })) {
+      health.detectors[name] = { status: "unhealthy", details };
     }
 
     return health;

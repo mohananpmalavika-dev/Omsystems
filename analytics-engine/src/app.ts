@@ -36,7 +36,10 @@ const frameSchema = z.object({
   tenantId: z.string().min(1), cameraId: z.string().min(1),
   capturedAt: z.string().datetime().default(() => new Date().toISOString()),
   width: z.number().int().positive(), height: z.number().int().positive(),
-  imageBase64: z.string().default(""), detections: z.array(frameObjectSchema).max(2_000).default([]),
+  imageBase64: z.string().default(""),
+  // Omit detections to execute the local ONNX path. Supplying [] explicitly
+  // means an upstream inference worker observed no objects.
+  detections: z.array(frameObjectSchema).max(2_000).optional(),
   rules: z.array(frameRuleSchema).max(500).default([]),
   metadata: z.record(z.unknown()).default({}),
 });
@@ -156,20 +159,29 @@ export function buildAnalyticsEngine(options: AnalyticsEngineOptions) {
     });
   });
 
-  // A local open-model worker sends normalized observations here. The engine
-  // owns tracking, zones, rules, alerts and evidence; model runtimes remain
-  // replaceable and do not require a paid cloud API.
+  // An edge/open-model worker can send normalized observations here. Omitting
+  // `detections` executes the provisioned local ONNX model against RGB24
+  // imageBase64; supplying [] explicitly preserves an upstream empty result.
   app.post("/internal/frames", async (request, reply) => {
     const input = frameSchema.parse(request.body);
     await pipelineReady;
+    const imageData = input.imageBase64 ? Buffer.from(input.imageBase64, "base64") : Buffer.alloc(0);
+    if (input.detections === undefined && imageData.length !== input.width * input.height * 3) {
+      return reply.code(400).send({
+        error: "invalid_rgb24_frame",
+        message: "Omit detections only when imageBase64 contains exactly width * height * 3 RGB24 bytes.",
+      });
+    }
     const events = await pipeline.processFrame({
       tenantId: input.tenantId,
       cameraId: input.cameraId,
       timestamp: new Date(input.capturedAt),
-      imageData: input.imageBase64 ? Buffer.from(input.imageBase64, "base64") : Buffer.alloc(0),
+      imageData,
       width: input.width,
       height: input.height,
-      metadata: { ...input.metadata, detections: input.detections },
+      metadata: input.detections === undefined
+        ? input.metadata
+        : { ...input.metadata, detections: input.detections },
     }, input.rules as AnalyticsRule[]);
     const submissions = await Promise.allSettled(events.map(options.submit));
     const accepted = submissions.filter((item) => item.status === "fulfilled").length;
@@ -179,7 +191,8 @@ export function buildAnalyticsEngine(options: AnalyticsEngineOptions) {
     if (accepted > 0) state.lastAcceptedAt = new Date().toISOString();
     return reply.code(202).send({
       cameraId: input.cameraId,
-      detectionsReceived: input.detections.length,
+      inferenceMode: input.detections === undefined ? "local-onnx" : "normalized-observation",
+      detectionsReceived: input.detections?.length ?? 0,
       eventsGenerated: events.length,
       accepted,
       failed: events.length - accepted,

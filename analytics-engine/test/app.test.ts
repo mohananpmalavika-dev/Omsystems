@@ -76,4 +76,75 @@ describe("analytics engine adapter", () => {
     expect(submitted[0]).toMatchObject({ cameraId: "camera-1", detectionType: "person" });
     expect(submitted[0].objects[0].trackId).toBeTruthy();
   });
+
+  it("turns specialized edge observations into a no-helmet event", async () => {
+    const submitted: any[] = [];
+    const app = buildAnalyticsEngine({
+      sourceSharedKey: sourceKey,
+      controlPlaneSharedKey: "control-plane-key-that-is-long-enough",
+      submit: async (event) => { submitted.push(event); return { accepted: true }; },
+    });
+    apps.push(app);
+    const response = await app.inject({
+      method: "POST", url: "/internal/frames",
+      headers: { "x-analytics-source-key": sourceKey },
+      payload: {
+        tenantId: "tenant-1", cameraId: "camera-helmet", width: 1280, height: 720,
+        detections: [
+          { label: "person", confidence: 0.94, boundingBox: { x: 0.2, y: 0.1, width: 0.2, height: 0.7 } },
+          { label: "motorcycle", confidence: 0.91, boundingBox: { x: 0.18, y: 0.45, width: 0.3, height: 0.3 } },
+          { label: "head", confidence: 0.92, boundingBox: { x: 0.25, y: 0.12, width: 0.08, height: 0.12 } },
+        ],
+        rules: [{
+          id: "rule-no-helmet", cameraId: "camera-helmet", detectionType: "no-helmet",
+          enabled: true, minConfidence: 0.65, minDurationSeconds: 0,
+        }],
+      },
+    });
+
+    expect(response.statusCode).toBe(202);
+    expect(submitted).toHaveLength(1);
+    expect(submitted[0]).toMatchObject({ detectionType: "no-helmet", cameraId: "camera-helmet" });
+  });
+
+  it("uses the local ONNX path when frame observations are omitted", async () => {
+    const app = buildAnalyticsEngine({
+      sourceSharedKey: sourceKey,
+      controlPlaneSharedKey: "control-plane-key-that-is-long-enough",
+      submit: async () => ({ accepted: true }),
+    });
+    apps.push(app);
+    const response = await app.inject({
+      method: "POST", url: "/internal/frames",
+      headers: { "x-analytics-source-key": sourceKey },
+      payload: {
+        tenantId: "tenant-1", cameraId: "camera-local", width: 2, height: 2,
+        imageBase64: Buffer.alloc(2 * 2 * 3, 127).toString("base64"),
+        rules: [{
+          id: "rule-object", cameraId: "camera-local", detectionType: "object",
+          enabled: true, minConfidence: 0.65, minDurationSeconds: 0,
+        }],
+      },
+    });
+
+    expect(response.statusCode).toBe(202);
+    expect(response.json()).toMatchObject({ inferenceMode: "local-onnx", detectionsReceived: 0 });
+  });
+
+  it("rejects a local frame that is not RGB24", async () => {
+    const app = buildAnalyticsEngine({
+      sourceSharedKey: sourceKey,
+      controlPlaneSharedKey: "control-plane-key-that-is-long-enough",
+      submit: async () => ({ accepted: true }),
+    });
+    apps.push(app);
+    const response = await app.inject({
+      method: "POST", url: "/internal/frames",
+      headers: { "x-analytics-source-key": sourceKey },
+      payload: { tenantId: "tenant-1", cameraId: "camera-invalid", width: 2, height: 2 },
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json()).toMatchObject({ error: "invalid_rgb24_frame" });
+  });
 });

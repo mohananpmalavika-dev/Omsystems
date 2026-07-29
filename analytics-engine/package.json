@@ -8,6 +8,7 @@
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run test/app.test.ts test/inference.test.ts",
+    "models:download": "bash scripts/download-models.sh",
     "test:watch": "vitest"
   },
   "dependencies": {

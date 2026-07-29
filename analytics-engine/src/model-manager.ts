@@ -185,7 +185,9 @@ export class ModelManager {
       {
         id: 'yolov8n',
         name: 'YOLOv8 Nano',
-        path: 'yolov8n.onnx',
+        // Matches scripts/download-models.sh. YOLO_MODEL_PATH keeps existing
+        // deployments that mount a model at a custom location working.
+        path: process.env.YOLO_MODEL_PATH || 'detection/yolov8n.onnx',
         type: 'onnx',
         priority: 'high',
         warmup: true,
@@ -285,7 +287,7 @@ export class ModelManager {
     try {
       // Load model based on type
       let model: any;
-      const modelPath = path.join(this.options.modelsDirectory, config.path);
+      const modelPath = this.resolveModelPath(config.path);
 
       // Check if model file exists
       if (!fs.existsSync(modelPath)) {
@@ -338,6 +340,17 @@ export class ModelManager {
     }
   }
 
+  private resolveModelPath(configuredPath: string): string {
+    if (path.isAbsolute(configuredPath)) return configuredPath;
+    const primary = path.join(this.options.modelsDirectory, configuredPath);
+    if (fs.existsSync(primary)) return primary;
+
+    // Support the pre-existing flat /models/yolov8n.onnx layout while the
+    // documented bootstrap layout uses /models/detection/yolov8n.onnx.
+    const legacy = path.join(this.options.modelsDirectory, path.basename(configuredPath));
+    return fs.existsSync(legacy) ? legacy : primary;
+  }
+
   /**
    * Load ONNX model
    */
@@ -386,29 +399,18 @@ export class ModelManager {
    * Load TensorFlow model
    */
   private async loadTensorFlowModel(modelPath: string, config: ModelConfig): Promise<any> {
-    // In production: Use @tensorflow/tfjs-node
-    // const tf = await import('@tensorflow/tfjs-node');
-    // const model = await tf.loadGraphModel(`file://${modelPath}`);
-    
-    // For now: Return mock model
-    return {
-      modelPath,
-      config,
-      type: 'tensorflow'
-    };
+    throw new Error(
+      `TensorFlow model '${config.id}' at '${modelPath}' is not supported by this runtime. Export it to ONNX and configure type 'onnx'.`,
+    );
   }
 
   /**
    * Load PyTorch model
    */
   private async loadPyTorchModel(modelPath: string, config: ModelConfig): Promise<any> {
-    // In production: Use torchjs or ONNX export
-    // For now: Return mock model
-    return {
-      modelPath,
-      config,
-      type: 'pytorch'
-    };
+    throw new Error(
+      `PyTorch model '${config.id}' at '${modelPath}' is not supported by this runtime. Export it to ONNX and configure type 'onnx'.`,
+    );
   }
 
   /**
@@ -481,7 +483,7 @@ export class ModelManager {
    * Estimate model memory usage
    */
   private estimateModelMemory(config: ModelConfig): number {
-    const modelPath = path.join(this.options.modelsDirectory, config.path);
+    const modelPath = this.resolveModelPath(config.path);
     
     try {
       if (fs.existsSync(modelPath)) {

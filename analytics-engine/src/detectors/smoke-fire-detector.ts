@@ -3,7 +3,7 @@
  * Early warning system for fire hazards
  */
 
-import { BaseDetector, type DetectionFrame, type DetectionResult } from "./base-detector.js";
+import { BaseDetector, type DetectionFrame, type DetectionResult, getInferenceObjects } from "./base-detector.js";
 
 export type HazardType = "smoke" | "fire" | "both";
 export type SeverityLevel = "low" | "medium" | "high" | "critical";
@@ -36,18 +36,11 @@ export class SmokeFireDetector extends BaseDetector {
   async initialize(): Promise<void> {
     console.log("Initializing smoke and fire detector...");
     
-    // TODO: Load specialized fire/smoke detection model
-    // Models trained on fire dataset (e.g., FireNet, FD-YOLOv5)
-    
-    this.isModelLoaded = true;
-    console.log("Smoke and fire detector initialized");
+    this.isModelLoaded = false;
+    console.warn("Smoke and fire detector requires normalized observations from a specialised fire/smoke model");
   }
 
   async detect(frame: DetectionFrame): Promise<DetectionResult[]> {
-    if (!this.isModelLoaded) {
-      return [];
-    }
-
     const hazards = await this.detectHazardsInFrame(frame);
     
     // Store in history for trend analysis
@@ -114,26 +107,19 @@ export class SmokeFireDetector extends BaseDetector {
    * Detect fire and smoke in frame
    */
   private async detectHazardsInFrame(frame: DetectionFrame): Promise<FireHazard[]> {
-    // TODO: Replace with actual ML model inference
-    /*
-    Example implementation:
-    
-    const detections = await this.model.detect(frame);
-    
-    return detections
-      .filter(d => ['smoke', 'fire'].includes(d.class))
-      .filter(d => d.confidence >= this.MIN_CONFIDENCE)
-      .map(d => ({
-        type: d.class as HazardType,
-        boundingBox: d.boundingBox,
-        confidence: d.confidence,
-        severity: this.calculateSeverity(d),
-        area: this.calculateArea(d.boundingBox),
-        color: this.analyzeColor(d, frame),
-      }));
-    */
-    
-    return [];
+    return getInferenceObjects(frame, ["smoke", "fire"])
+      .filter((item) => item.confidence >= this.MIN_CONFIDENCE)
+      .map((item) => {
+        const area = item.boundingBox.width * item.boundingBox.height;
+        const type = item.label as HazardType;
+        return {
+          type,
+          boundingBox: item.boundingBox,
+          confidence: item.confidence,
+          area,
+          severity: this.calculateSeverity({ type, area }),
+        };
+      });
   }
 
   /**
@@ -224,8 +210,10 @@ export class SmokeFireDetector extends BaseDetector {
 
   getHealth() {
     return {
-      status: this.isModelLoaded ? ("healthy" as const) : ("unhealthy" as const),
-      details: `History: ${this.detectionHistory.length} frames`,
+      status: this.isModelLoaded ? ("healthy" as const) : ("degraded" as const),
+      details: this.isModelLoaded
+        ? `Local fire/smoke model active; history: ${this.detectionHistory.length} frames`
+        : `Awaiting specialised fire/smoke model; accepts normalized edge-model observations. History: ${this.detectionHistory.length} frames`,
     };
   }
 }

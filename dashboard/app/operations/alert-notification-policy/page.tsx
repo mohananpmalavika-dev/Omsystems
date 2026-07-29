@@ -1,12 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { Bell, Clock3, Plus, Save, Trash2 } from "lucide-react";
 import { ModulePage } from "@/components/module-page";
 import { alertPolicyApi } from "@/lib/api-client";
 import type { AlertNotificationPolicy, AlertNotificationPolicyInput, AlertNotificationPolicySchedule } from "@/lib/types";
-
-const daysOfWeek = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 function normalizeList(value: string | undefined) {
   return value?.split(/[,\n]+/).map((item) => item.trim()).filter(Boolean) ?? [];
@@ -23,6 +21,7 @@ export default function AlertNotificationPolicyPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [matrix, setMatrix] = useState<Record<string, string[]> | null>(null);
 
   const loadPolicy = async () => {
     setLoading(true);
@@ -32,6 +31,7 @@ export default function AlertNotificationPolicyPage() {
     try {
       const response = await alertPolicyApi.get();
       setPolicy(response.data);
+      setMatrix(response.matrix ?? null);
       setInput({
         recipientGroups: response.data.recipientGroups ?? {},
         onCallSchedules: response.data.onCallSchedules ?? [],
@@ -51,13 +51,6 @@ export default function AlertNotificationPolicyPage() {
   useEffect(() => {
     void loadPolicy();
   }, []);
-
-  const strategy = useMemo(() => ({
-    matrix: policy ? ["P1", "P2", "P3", "P4", "P5"].map((severity) => ({
-      severity,
-      channels: policy ? (policy.escalationAfterSeconds ? Object.keys(policy.escalationAfterSeconds) : []) : [],
-    })) : [] as any[],
-  }), [policy]);
 
   const setGroupRecipients = (channel: "email" | "sms" | "voice", value: string) => {
     if (!input) return;
@@ -110,6 +103,7 @@ export default function AlertNotificationPolicyPage() {
     try {
       const response = await alertPolicyApi.update(input);
       setPolicy(response.data);
+      setMatrix(response.matrix ?? null);
       setInput({
         recipientGroups: response.data.recipientGroups ?? {},
         onCallSchedules: response.data.onCallSchedules ?? [],
@@ -161,6 +155,18 @@ export default function AlertNotificationPolicyPage() {
             <label className="field">Email recipients<textarea value={displayList(input.recipientGroups.email)} onChange={(event) => setGroupRecipients("email", event.target.value)} className="field-input" placeholder="one@example.com\nother@example.com" /></label>
             <label className="field">SMS recipients<textarea value={displayList(input.recipientGroups.sms)} onChange={(event) => setGroupRecipients("sms", event.target.value)} className="field-input" placeholder="+919100000001\n+919100000002" /></label>
             <label className="field">Voice recipients<textarea value={displayList(input.recipientGroups.voice)} onChange={(event) => setGroupRecipients("voice", event.target.value)} className="field-input" placeholder="+918888888888\n+918888888889" /></label>
+          </div>
+        </section>
+
+        <section className="card p-5 space-y-4">
+          <header className="flex items-center gap-2 text-sm font-semibold"><Bell size={16} />Notification matrix</header>
+          <div className="grid gap-4 md:grid-cols-5">
+            {matrix ? Object.entries(matrix).map(([severity, channels]) => (
+              <div key={severity} className="rounded border p-3">
+                <div className="text-sm font-semibold">{severity}</div>
+                <div className="text-xs text-slate-600">{channels.join(", ")}</div>
+              </div>
+            )) : <p className="text-sm text-gray-600">Loading notification matrix…</p>}
           </div>
         </section>
 

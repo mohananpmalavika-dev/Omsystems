@@ -6,11 +6,12 @@ This directory contains pre-trained machine learning models for the Analytics En
 
 ### Core Detection Models
 
-1. **YOLOv8n** (`yolov8n.onnx`)
+1. **YOLOv8n** (`detection/yolov8n.onnx`)
    - General purpose object detection
-   - Download: https://github.com/ultralytics/assets/releases/download/v0.0.0/yolov8n.onnx
    - Size: ~6 MB
    - Classes: 80 COCO classes (person, car, truck, etc.)
+   - Provision with `npm run models:download` from `analytics-engine` (requires Bash, Python 3 and an outbound connection), or mount an equivalent model at `/app/models/detection/yolov8n.onnx`.
+   - A legacy flat `/app/models/yolov8n.onnx` mount and `YOLO_MODEL_PATH` are also accepted.
 
 2. **Person Detection** (`person-detection-v2.onnx`)
    - Optimized person detection with pose keypoints

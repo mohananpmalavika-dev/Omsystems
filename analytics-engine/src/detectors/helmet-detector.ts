@@ -4,7 +4,7 @@
  * Critical for construction sites and traffic enforcement
  */
 
-import { BaseDetector, type DetectionFrame, type DetectionResult, calculateIoU } from "./base-detector.js";
+import { BaseDetector, type DetectionFrame, type DetectionResult, calculateIoU, getInferenceObjects } from "./base-detector.js";
 
 export interface HelmetDetection {
   personBoundingBox: { x: number; y: number; width: number; height: number };
@@ -17,27 +17,21 @@ export interface HelmetDetection {
 export class HelmetDetector extends BaseDetector {
   private isModelLoaded = false;
   private readonly MIN_CONFIDENCE = 0.7;
-  private readonly HELMET_IOU_THRESHOLD = 0.3; // Head-helmet overlap threshold
+  private readonly HEAD_REGION_OVERLAP_THRESHOLD = 0.6;
 
   constructor() {
     super("helmet", "1.0.0");
   }
 
   async initialize(): Promise<void> {
-    console.log("Initializing helmet detector...");
-    
-    // TODO: Load helmet detection model
-    // Model should detect: person, motorcycle, bicycle, helmet, head
-    
-    this.isModelLoaded = true;
-    console.log("Helmet detector initialized");
+    // Helmet/head observations need a specialised model. Do not mark this
+    // detector healthy until one is wired in; it can still safely orchestrate
+    // normalized observations supplied by an edge model worker.
+    this.isModelLoaded = false;
+    console.warn("Helmet detector requires normalized helmet and head observations from a specialised model");
   }
 
   async detect(frame: DetectionFrame): Promise<DetectionResult[]> {
-    if (!this.isModelLoaded) {
-      return [];
-    }
-
     const detections = await this.detectHelmetsInFrame(frame);
     
     const results: DetectionResult[] = [];
@@ -45,7 +39,7 @@ export class HelmetDetector extends BaseDetector {
 
     if (violations.length > 0) {
       results.push({
-        detectionType: "helmet-violation",
+        detectionType: "no-helmet",
         confidence: this.calculateAverageConfidence(violations),
         objects: violations.map(detection => ({
           label: "no-helmet",
@@ -86,32 +80,19 @@ export class HelmetDetector extends BaseDetector {
    * Detect helmets in frame
    */
   private async detectHelmetsInFrame(frame: DetectionFrame): Promise<HelmetDetection[]> {
-    // TODO: Replace with actual model inference
-    /*
-    Example implementation:
-    
-    1. Detect persons, motorcycles, bicycles
-    2. Detect helmets and heads
-    3. Match helmets to heads using spatial proximity
-    4. Determine if person on vehicle is wearing helmet
-    
-    const allDetections = await this.model.detect(frame);
-    
-    const persons = allDetections.filter(d => d.class === 'person');
-    const vehicles = allDetections.filter(d => ['motorcycle', 'bicycle'].includes(d.class));
-    const helmets = allDetections.filter(d => d.class === 'helmet');
-    const heads = allDetections.filter(d => d.class === 'head');
-    
-    // Match persons with vehicles
-    const personsOnVehicles = this.matchPersonsToVehicles(persons, vehicles);
-    
-    // Check helmet compliance for each person on vehicle
-    return personsOnVehicles.map(match => 
-      this.checkHelmetCompliance(match, helmets, heads)
-    );
-    */
-    
-    return [];
+    const persons = getInferenceObjects(frame, ["person"])
+      .filter((item) => item.confidence >= this.MIN_CONFIDENCE);
+    const vehicles = getInferenceObjects(frame, ["motorcycle", "bicycle"])
+      .filter((item) => item.confidence >= this.MIN_CONFIDENCE);
+    const helmets = getInferenceObjects(frame, ["helmet"])
+      .filter((item) => item.confidence >= this.MIN_CONFIDENCE);
+    const heads = getInferenceObjects(frame, ["head"])
+      .filter((item) => item.confidence >= this.MIN_CONFIDENCE);
+
+    // A missing helmet alone is not a violation: a high-confidence head
+    // observation is required before reporting a rider as unprotected.
+    return this.matchPersonsToVehicles(persons, vehicles)
+      .map((match) => this.checkHelmetCompliance(match, helmets, heads));
   }
 
   /**
@@ -160,9 +141,7 @@ export class HelmetDetector extends BaseDetector {
     let maxHelmetConfidence = 0;
 
     for (const helmet of helmets) {
-      const iou = calculateIoU(headRegion, helmet.boundingBox);
-      
-      if (iou > this.HELMET_IOU_THRESHOLD) {
+      if (overlapOfCandidate(headRegion, helmet.boundingBox) >= this.HEAD_REGION_OVERLAP_THRESHOLD) {
         helmetDetected = true;
         maxHelmetConfidence = Math.max(maxHelmetConfidence, helmet.confidence);
       }
@@ -178,8 +157,8 @@ export class HelmetDetector extends BaseDetector {
     } else if (!helmetDetected) {
       // Check if we can see the head clearly
       const headVisible = heads.some(head => {
-        const iou = calculateIoU(headRegion, head.boundingBox);
-        return iou > 0.3 && head.confidence >= 0.6;
+        return overlapOfCandidate(headRegion, head.boundingBox) >= this.HEAD_REGION_OVERLAP_THRESHOLD
+          && head.confidence >= 0.6;
       });
 
       if (headVisible) {
@@ -198,7 +177,7 @@ export class HelmetDetector extends BaseDetector {
       personBoundingBox: personBox,
       helmetDetected,
       confidence,
-      vehicleType: match.vehicle.vehicleType,
+      vehicleType: match.vehicle.label as HelmetDetection["vehicleType"],
       riskLevel,
     };
   }
@@ -216,8 +195,24 @@ export class HelmetDetector extends BaseDetector {
 
   getHealth() {
     return {
-      status: this.isModelLoaded ? ("healthy" as const) : ("unhealthy" as const),
-      details: "Helmet detection ready",
+      status: this.isModelLoaded ? ("healthy" as const) : ("degraded" as const),
+      details: this.isModelLoaded
+        ? "Local helmet model active"
+        : "Awaiting specialised helmet/head model; accepts normalized edge-model observations",
     };
   }
+}
+
+/** Portion of a small head/helmet box contained by a person's head region. */
+function overlapOfCandidate(
+  region: { x: number; y: number; width: number; height: number },
+  candidate: { x: number; y: number; width: number; height: number },
+): number {
+  const left = Math.max(region.x, candidate.x);
+  const top = Math.max(region.y, candidate.y);
+  const right = Math.min(region.x + region.width, candidate.x + candidate.width);
+  const bottom = Math.min(region.y + region.height, candidate.y + candidate.height);
+  const intersection = Math.max(0, right - left) * Math.max(0, bottom - top);
+  const candidateArea = candidate.width * candidate.height;
+  return candidateArea > 0 ? intersection / candidateArea : 0;
 }

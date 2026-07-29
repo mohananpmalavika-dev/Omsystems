@@ -420,17 +420,6 @@ export const complianceApi = {
   createPolicy: (data: any) => fetchApi<any>('/v1/compliance/policies', {
     method: 'POST', body: JSON.stringify(data),
   }),
-};
-
-export const alertPolicyApi = {
-  get: () => fetchApi<{ data: AlertNotificationPolicy; matrix?: Record<string, string[]> }>('/v1/alerts/notification-policy'),
-  update: (data: AlertNotificationPolicyInput) => fetchApi<{ data: AlertNotificationPolicy; matrix?: Record<string, string[]> }>('/v1/alerts/notification-policy', {
-    method: 'PUT',
-    body: JSON.stringify(data),
-  }),
-};
-
-export const deviceInventoryApi = {
   listAssessments: (filters?: { frameworkId?: string; branchNodeId?: string; status?: string }) => {
     const params = new URLSearchParams();
     filters = filters ?? {};
@@ -451,6 +440,14 @@ export const deviceInventoryApi = {
   getCertificate: (id: string) => fetchApi<any>(`/v1/compliance/certificates/${encodeURIComponent(id)}`),
   getAssessment: (id: string) => fetchApi<any>(`/v1/compliance/assessments/${encodeURIComponent(id)}`),
   getPolicy: (id: string) => fetchApi<any>(`/v1/compliance/policies/${encodeURIComponent(id)}`),
+};
+
+export const alertPolicyApi = {
+  get: () => fetchApi<{ data: AlertNotificationPolicy; matrix?: Record<string, string[]> }>('/v1/alerts/notification-policy'),
+  update: (data: AlertNotificationPolicyInput) => fetchApi<{ data: AlertNotificationPolicy; matrix?: Record<string, string[]> }>('/v1/alerts/notification-policy', {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  }),
 };
 
 export const maintenanceApi = {

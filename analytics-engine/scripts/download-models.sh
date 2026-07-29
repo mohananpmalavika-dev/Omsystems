@@ -13,7 +13,14 @@ echo "=========================================="
 echo ""
 
 # Configuration
-MODELS_DIR="${MODELS_DIR:-/app/models}"
+if [ -n "${MODELS_DIR:-}" ]; then
+    MODELS_DIR="$MODELS_DIR"
+elif [ -d "/app" ]; then
+    MODELS_DIR="/app/models"
+else
+    # Local `npm run models:download` is run from analytics-engine.
+    MODELS_DIR="$(pwd)/models"
+fi
 TEMP_DIR="/tmp/sentinel-models"
 PYTHON_ENV="sentinel-ml"
 
