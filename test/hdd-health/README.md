@@ -1,6 +1,6 @@
 # HDD Health Compatibility Tests
 
-Automated testing suite for validating SMART data collection and parsing across multiple recorder vendors.
+Automated acceptance suite for validating HDD telemetry against the exact deployed recorder model and firmware. Vendor fixtures validate parser behavior, but do not certify a recorder in the field.
 
 ## Quick Start
 
@@ -22,6 +22,7 @@ npm run test:hdd:all
 
 # Run specific test
 npm run test:hdd:connectivity    # Test network connectivity
+npm run test:hdd:compatibility   # Require the reported model, firmware, and disk count to match deployment
 npm run test:hdd:collect         # Collect SMART data
 npm run test:hdd:thresholds      # Test status thresholds
 npm run test:hdd:parsing         # Test response parsing
@@ -32,6 +33,7 @@ npm run test:hdd:failure-scenarios # Test failure detection
 
 Test reports are saved to `test/hdd-health/reports/`:
 - `hdd-health-test-report-YYYY-MM-DD.md` - Latest test results
+- `hdd-compatibility-evidence-YYYY-MM-DD.json` - Machine-readable model/firmware acceptance evidence
 - Captured API responses in `test/hdd-health/fixtures/`
 
 ## Test Coverage
@@ -44,10 +46,11 @@ Test reports are saved to `test/hdd-health/reports/`:
 ## What Gets Tested
 
 1. **Connectivity** - Network reachability and authentication
-2. **SMART Collection** - Real data retrieval from recorders
-3. **Threshold Validation** - healthy/warning/critical classification
-4. **Response Parsing** - Vendor-specific format handling
-5. **Failure Detection** - Temperature and sector count alerts
+2. **Exact model compatibility** - The recorder-reported model and firmware must exactly match the deployment contract; configured metadata is never accepted as evidence.
+3. **HDD telemetry collection** - Real SMART attributes when exposed, otherwise recorder-reported storage state.
+4. **Threshold validation** - healthy/warning/critical classification
+5. **Response parsing** - Vendor-specific format handling
+6. **Failure detection** - Temperature and sector count alerts
 
 ## Configuration Format
 
@@ -59,6 +62,7 @@ Test reports are saved to `test/hdd-health/reports/`:
       "name": "Display Name",
       "vendor": "hikvision|dahua|cp-plus",
       "model": "DS-7616NI-K2",
+      "expectedFirmware": "V5.7.18 build 240101",
       "host": "192.168.1.10",
       "port": 80,
       "username": "admin",
@@ -68,6 +72,8 @@ Test reports are saved to `test/hdd-health/reports/`:
   ]
 }
 ```
+
+`model`, `expectedFirmware`, and `expectedDisks` are mandatory for an acceptance run. Use the exact values reported by the installed recorder—not a series name, a product family, or a placeholder. A firmware change requires a new acceptance run because vendor storage responses can change by firmware.
 
 ## Example Output
 
@@ -124,12 +130,13 @@ Report saved to: test/hdd-health/reports/hdd-health-test-report-2026-07-29.md
 - Check user has admin permissions
 - Reset recorder password if needed
 
-### No SMART Data
+### No HDD Telemetry
 
 **Symptoms**: `telemetrySource: simulated, smartStatus: unknown`
 
 **Solutions**:
-- Verify recorder model supports SMART API
+- Confirm the model and firmware are listed exactly in `config.json`
+- Verify recorder model supports its documented storage API
 - Check firmware version (upgrade if old)
 - Try alternate API endpoints
 - Contact vendor for API documentation
@@ -160,12 +167,12 @@ fi
 
 ## Adding New Recorder Models
 
-1. Add recorder to `config.json`
-2. Run: `npm run test:hdd:collect`
-3. Review captured response in `fixtures/`
-4. Update parser if new format detected
-5. Re-run all tests: `npm run test:hdd:all`
-6. Document in compatibility matrix
+1. Add the exact model, firmware, and installed disk count to `config.json`.
+2. Run: `npm run test:hdd:compatibility`.
+3. Review the generated compatibility-evidence JSON.
+4. Run: `npm run test:hdd:collect`; review captured response in `fixtures/`.
+5. Update the parser if a new format is detected, then re-run `npm run test:hdd:all`.
+6. Record the passing model/firmware pair in the compatibility matrix.
 
 ## Documentation
 

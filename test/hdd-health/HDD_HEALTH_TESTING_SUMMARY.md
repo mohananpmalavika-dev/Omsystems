@@ -2,7 +2,9 @@
 
 ## Overview
 
-This document summarizes the HDD health compatibility testing implementation for the VMS platform. The testing framework validates SMART data collection and parsing across deployed recorder models from Hikvision, Dahua, and CP PLUS.
+This document summarizes the HDD health compatibility testing implementation for the VMS platform. The framework validates parser behavior and can certify deployed Hikvision, Dahua, and CP PLUS recorders only after an on-site run confirms the exact reported model, firmware, and disk inventory.
+
+> Fixture coverage is not hardware certification. A model/firmware pair remains unverified until `npm run test:hdd:compatibility` passes against that deployed recorder and stores its compatibility-evidence report.
 
 ---
 
@@ -25,6 +27,7 @@ This document summarizes the HDD health compatibility testing implementation for
 - Response parsing verification
 - Failure scenario simulation
 - Comprehensive test reporting
+- Exact model, firmware, and installed-disk acceptance gate
 
 ### 2. Test Categories
 
@@ -34,13 +37,19 @@ This document summarizes the HDD health compatibility testing implementation for
 - Measures latency
 - **Success Criteria**: HTTP 200, latency < 500ms
 
-#### Test 2: SMART Data Collection
+#### Test 2: Exact Deployed Recorder Compatibility
+- Requires a vendor system response, not configured metadata
+- Requires exact reported model and firmware matches
+- Requires the expected number of disks and per-disk identity/state fields
+- Writes a machine-readable acceptance-evidence artifact
+
+#### Test 3: HDD Telemetry Collection
 - Collects real SMART telemetry
 - Validates data completeness
 - Captures API responses for fixtures
 - **Success Criteria**: Real data source, all fields present
 
-#### Test 3: Threshold Validation
+#### Test 4: Threshold Validation
 - Tests status classification logic
 - Validates healthy/warning/critical thresholds
 - **Thresholds**:
@@ -48,13 +57,13 @@ This document summarizes the HDD health compatibility testing implementation for
   - **Warning**: Temp 56-65°C OR any bad sectors
   - **Critical**: Temp >65°C OR >20 reallocated sectors
 
-#### Test 4: API Response Parsing
+#### Test 5: API Response Parsing
 - Tests vendor-specific parsers
 - Validates field extraction
 - Handles edge cases (missing fields, malformed data)
 - **Success Criteria**: All fields extracted correctly
 
-#### Test 5: Failure Detection
+#### Test 6: Failure Detection
 - Simulates disk failures
 - Tests alert triggering
 - Validates failureProbability calculation
@@ -66,7 +75,7 @@ This document summarizes the HDD health compatibility testing implementation for
 
 ### Hikvision
 
-**Status**: ✅ **Fully Tested**
+**Status**: 🟡 Parser fixtures covered; exact model/firmware hardware acceptance pending
 
 **API Endpoint**: `/ISAPI/ContentMgmt/Storage`
 
@@ -102,7 +111,7 @@ This document summarizes the HDD health compatibility testing implementation for
 
 ### Dahua
 
-**Status**: ✅ **Fully Tested**
+**Status**: 🟡 Parser fixtures covered; exact model/firmware hardware acceptance pending
 
 **API Endpoint**: `/cgi-bin/storageDevice.cgi?action=getDeviceAllInfo`
 
@@ -133,7 +142,7 @@ Storage.Disk[0].uncorrectable=0
 
 ### CP PLUS
 
-**Status**: ✅ **Fully Tested**
+**Status**: 🟡 Parser fixtures covered; exact model/firmware hardware acceptance pending
 
 **API Endpoint**: `/cgi-bin/storageDevice.cgi?action=getDeviceAllInfo` (Dahua OEM)
 
@@ -323,9 +332,9 @@ Test Summary:
 
 | Vendor | API Coverage | SMART Data | Temperature | Sectors | Firmware | Status |
 |--------|--------------|------------|-------------|---------|----------|--------|
-| **Hikvision** | 100% | ✅ Yes | ✅ Yes | ✅ Yes | V3.x-V4.x | ✅ Production Ready |
-| **Dahua** | 100% | ✅ Yes | ✅ Yes | ✅ Yes | V3.x-V4.x | ✅ Production Ready |
-| **CP PLUS** | 100% | ✅ Yes | ✅ Yes | ✅ Yes | V1.x-V2.x | ✅ Production Ready |
+| **Hikvision** | Parser fixtures | Vendor-dependent | Vendor-dependent | Vendor-dependent | Must match deployed firmware | Acceptance pending |
+| **Dahua** | Parser fixtures | Vendor-dependent | Vendor-dependent | Vendor-dependent | Must match deployed firmware | Acceptance pending |
+| **CP PLUS** | Parser fixtures | Vendor-dependent | Vendor-dependent | Vendor-dependent | Must match deployed firmware | Acceptance pending |
 | **ONVIF** | N/A | ❌ No | ❌ No | ❌ No | N/A | ⚠️ Limited |
 
 **Legend**:
@@ -340,7 +349,7 @@ Test Summary:
 ### Original Requirement
 > "HDD health (65%): Local SMART, Hikvision storage and Dahua/CP PLUS parsing exist. Compatibility must still be tested against the exact deployed recorder models."
 
-### Current Status: **85% → 95%**
+### Current Status: **65% implementation coverage; hardware certification pending**
 
 **What Was at 65%**:
 - ✅ Code implementation existed
@@ -348,18 +357,16 @@ Test Summary:
 - ❌ No compatibility validation
 - ❌ No documented test procedures
 
-**What's Now at 95%**:
-- ✅ Complete testing framework implemented
-- ✅ Automated test suite with 5 test categories
-- ✅ Configuration management and fixtures
-- ✅ Comprehensive documentation (3 docs)
-- ✅ NPM scripts for easy execution
-- ✅ Test report generation
-- ⚠️ Awaiting physical hardware testing (final 5%)
+**What is now implemented**:
+- Exact model, firmware, and disk-count acceptance gate
+- Vendor system identity evidence (configured metadata cannot certify a parser)
+- Machine-readable compatibility evidence report
+- Healthy and failed Dahua/CP PLUS storage-state parsing
+- Test configuration, fixtures, documentation, and NPM scripts
 
-**Remaining 5%**:
-- Field testing with actual deployed recorders
-- Validation against production firmware versions
+**Remaining work**:
+- Field acceptance against each deployed recorder and its currently installed firmware
+- Store a passing compatibility-evidence report for each model/firmware pair
 - Documentation of model-specific quirks
 - Production deployment verification
 
@@ -415,7 +422,7 @@ Test Summary:
 
 ## Conclusion
 
-The HDD health compatibility testing framework is **95% complete**. All code, documentation, and automated testing infrastructure is production-ready. The remaining 5% requires physical hardware testing against actual deployed recorder models, which can be scheduled based on hardware availability.
+The HDD health parser and acceptance framework are implemented, but HDD compatibility remains unverified until it passes against the exact deployed recorder model and firmware. No generic vendor or model-family result should be presented as production certification.
 
 **Key Achievements**:
 1. ✅ Comprehensive testing framework

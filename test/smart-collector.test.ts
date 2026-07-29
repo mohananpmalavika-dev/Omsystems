@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseSmartctlJson } from '../src/maintenance/smart-collector.js';
+import { parseDahuaStorageText, parseHikvisionStorageXml, parseSmartctlJson } from '../src/maintenance/smart-collector.js';
 
 describe('parseSmartctlJson', () => {
   it('extracts real SMART telemetry from smartctl JSON output', () => {
@@ -23,6 +23,7 @@ describe('parseSmartctlJson', () => {
     );
 
     expect(telemetry.telemetrySource).toBe('real');
+    expect(telemetry.telemetryCapability).toBe('smart');
     expect(telemetry.model).toBe('ST1000LM049-2GH172');
     expect(telemetry.serialNumber).toBe('Z1A2B3C4');
     expect(telemetry.temperature).toBe(41);
@@ -31,5 +32,22 @@ describe('parseSmartctlJson', () => {
     expect(telemetry.pendingSectors).toBe(1);
     expect(telemetry.uncorrectableSectors).toBe(2);
     expect(telemetry.smartStatus).toBe('warning');
+  });
+
+  it('keeps a healthy Dahua or CP PLUS disk-state response as real storage telemetry', () => {
+    const telemetry = parseDahuaStorageText(
+      'Storage[0].Name=Disk1\nStorage[0].State=Normal\nStorage[1].Name=Disk2\nStorage[1].State=Normal',
+    );
+
+    expect(telemetry).toMatchObject({ telemetryCapability: 'storage-status', smartStatus: 'healthy' });
+  });
+
+  it('does not turn a vendor-reported failed disk into healthy telemetry', () => {
+    expect(parseDahuaStorageText('Storage[0].State=Error')).toMatchObject({
+      telemetryCapability: 'storage-status', smartStatus: 'critical',
+    });
+    expect(parseHikvisionStorageXml('<hdd><status>error</status></hdd>')).toMatchObject({
+      telemetryCapability: 'storage-status', smartStatus: 'critical',
+    });
   });
 });

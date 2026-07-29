@@ -17,7 +17,7 @@ describe("vendor recorder probes", () => {
       .mockResolvedValueOnce(new Response("<CMSearchResult><matchList><searchMatchItem><trackID>101</trackID></searchMatchItem></matchList></CMSearchResult>"));
     vi.stubGlobal("fetch", fetcher);
     const probe = await probeRecorder({ id: "hik", name: "Main NVR", deviceType: "nvr", vendor: "hikvision", host: "192.0.2.1", port: 80 }, 1000);
-    expect(probe.metrics).toMatchObject({ reachable: true, status: "online", model: "DS-7608", serialNumber: "ABC1", totalCameras: 2, connectedCameras: 2, recordingStatus: "recording", recordingChannels: 1, recordingStatusSource: "recent-media-search" });
+    expect(probe.metrics).toMatchObject({ reachable: true, status: "online", model: "DS-7608", modelSource: "vendor-system", serialNumber: "ABC1", totalCameras: 2, connectedCameras: 2, recordingStatus: "recording", recordingChannels: 1, recordingStatusSource: "recent-media-search" });
     expect(fetcher.mock.calls[3]?.[0]).toContain("/ISAPI/ContentMgmt/search");
     expect(fetcher.mock.calls[3]?.[1]?.body).toContain("CMSearchDescription");
     expect(probe.hddStatus).toHaveLength(1);
@@ -34,7 +34,7 @@ describe("vendor recorder probes", () => {
       .mockResolvedValueOnce(new Response("OK"));
     vi.stubGlobal("fetch", fetcher);
     const probe = await probeRecorder({ id: "cp", name: "CP DVR", deviceType: "dvr", vendor: "cp-plus", host: "192.0.2.2", port: 80, systemPath: "/documented/system", storagePath: "/documented/storage" }, 1000);
-    expect(probe.metrics).toMatchObject({ reachable: true, protocol: "cp-plus-oem-api", model: "CP-UVR", totalCameras: 1, recordingStatus: "recording", recordingChannels: 1, recordingStatusSource: "recent-media-search" });
+    expect(probe.metrics).toMatchObject({ reachable: true, protocol: "cp-plus-oem-api", model: "CP-UVR", modelSource: "vendor-system", totalCameras: 1, recordingStatus: "recording", recordingChannels: 1, recordingStatusSource: "recent-media-search" });
     expect(fetcher.mock.calls[0]?.[0]).toContain("/documented/system");
     expect(fetcher.mock.calls[5]?.[0]).toContain("action=findNextFile");
   });

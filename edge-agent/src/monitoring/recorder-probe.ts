@@ -60,8 +60,13 @@ async function probeHikvision(config: RecorderConfig, base: string, credentials:
 
   const total = (channelXml.match(/<VideoInputChannel>/gi) ?? []).length || null;
   const connected = (channelXml.match(/<videoInputEnabled>true<\/videoInputEnabled>/gi) ?? []).length || total;
+  const reportedModel = tag(xml, "model");
   return result(config, true, "online", started, {
-    model: tag(xml, "model") ?? config.model ?? "Unknown", serialNumber: tag(xml, "serialNumber") ?? "",
+    model: reportedModel ?? config.model ?? "Unknown",
+    // A configured model is useful operational metadata but cannot certify a
+    // parser. The compatibility runner requires this to be vendor-system.
+    modelSource: reportedModel ? "vendor-system" : "configured",
+    serialNumber: tag(xml, "serialNumber") ?? "",
     firmwareVersion: tag(xml, "firmwareVersion") ?? "", uptimeSeconds: number(tag(xml, "upTime")),
     totalCameras: total, connectedCameras: connected, protocol: "hikvision-isapi",
     recordingStatus: recordingStatus.status,
@@ -99,9 +104,14 @@ async function probeDahuaFamily(config: RecorderConfig, base: string, credential
   // so treating it as current recording state produced false positives.
   const recordingStatus = await getDahuaRecordingStatus(base, credentials, timeout);
 
+  // Different Dahua-family firmware exposes the SKU under different keys.
+  // Prefer an explicit model over a generic device type when both are present.
+  const reportedModel = firstKey(text, ["model", "modelName", "productName", "deviceType"]);
   return result(config, true, "online", started, {
-    model: key(text, "deviceType") ?? config.model ?? "Unknown", serialNumber: key(text, "serialNumber") ?? "",
-    firmwareVersion: key(text, "softwareVersion") ?? key(text, "version") ?? "",
+    model: reportedModel ?? config.model ?? "Unknown",
+    modelSource: reportedModel ? "vendor-system" : "configured",
+    serialNumber: key(text, "serialNumber") ?? "",
+    firmwareVersion: firstKey(text, ["softwareVersion", "firmwareVersion", "version"]) ?? "",
     totalCameras: channelIds.size || null, connectedCameras: null,
     protocol: config.vendor === "cp-plus" ? "cp-plus-oem-api" : "dahua-cgi",
     recordingStatus: recordingStatus.status,
@@ -151,8 +161,11 @@ async function probeOnvif(config: RecorderConfig, base: string, credentials: { u
   // is arriving. Recording Control's GetRecordings only lists configuration.
   const recordingStatus = await getOnvifRecordingStatus(base, config.systemPath ?? "/onvif/device_service", credentials, timeout);
 
+  const reportedModel = tag(xml, "Model");
   return result(config, true, "online", started, {
-    model: tag(xml, "Model") ?? config.model ?? "Unknown", serialNumber: tag(xml, "SerialNumber") ?? "",
+    model: reportedModel ?? config.model ?? "Unknown",
+    modelSource: reportedModel ? "vendor-system" : "configured",
+    serialNumber: tag(xml, "SerialNumber") ?? "",
     firmwareVersion: tag(xml, "FirmwareVersion") ?? "", protocol: "onvif",
     recordingStatus: recordingStatus.status,
     recordingChannels: recordingStatus.recordingChannels,
@@ -247,11 +260,12 @@ function hikvisionTrackIds(channelXml: string) {
 }
 
 function result(config: RecorderConfig, reachable: boolean, status: string, started: number, extra: Record<string, string | number | boolean | null>, hddStatus: Array<Record<string, unknown>>, reasonCodes: string[]): RecorderProbeResult {
-  return { metrics: { name: config.name, deviceType: config.deviceType, vendor: config.vendor, model: config.model ?? "Unknown", ipAddress: config.host, reachable, status, latencyMs: Math.round((performance.now() - started) * 100) / 100, ...extra }, hddStatus, reasonCodes };
+  return { metrics: { name: config.name, deviceType: config.deviceType, vendor: config.vendor, model: config.model ?? "Unknown", modelSource: "configured", ipAddress: config.host, reachable, status, latencyMs: Math.round((performance.now() - started) * 100) / 100, ...extra }, hddStatus, reasonCodes };
 }
 function parseHikvisionDisks(xml: string) { return [...xml.matchAll(/<hdd>([\s\S]*?)<\/hdd>/gi)].map((match, index) => ({ diskNo: tag(match[1]!, "id") ?? index + 1, devicePath: tag(match[1]!, "name") ?? `HDD ${index + 1}`, capacity: tag(match[1]!, "capacity"), freeSpace: tag(match[1]!, "freeSpace"), state: tag(match[1]!, "status"), temperature: tag(match[1]!, "temperature") })); }
 function parseCgiDisks(text: string) { const grouped = new Map<string, Record<string, unknown>>(); for (const line of text.split(/\r?\n/)) { const match = line.match(/(?:Storage|Disk|HDD)(?:\[|\.)(\d+)\]?\.([^=]+)=(.*)$/i); if (!match) continue; const item = grouped.get(match[1]!) ?? { diskNo: Number(match[1]) + 1 }; item[match[2]!] = match[3]!.trim(); grouped.set(match[1]!, item); } return [...grouped.values()]; }
 function tag(xml: string, name: string) { return xml.match(new RegExp(`<(?:[^:>]+:)?${name}>([^<]+)<\\/(?:[^:>]+:)?${name}>`, "i"))?.[1]; }
 function key(text: string, name: string) { return text.match(new RegExp(`(?:^|\\n)${name}=([^\\r\\n]+)`, "i"))?.[1]?.trim(); }
+function firstKey(text: string, names: string[]) { return names.map((name) => key(text, name)).find((value): value is string => Boolean(value)); }
 function number(value: string | undefined) { const parsed = Number(value); return Number.isFinite(parsed) ? parsed : null; }
 function classifyError(error: unknown) { const message = error instanceof Error ? error.message : String(error); return /timeout|abort/i.test(message) ? "recorder_probe_timeout" : "recorder_unreachable"; }

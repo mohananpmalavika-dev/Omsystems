@@ -20,7 +20,7 @@ All 10 coverage gaps identified in the original RequirementCoverageReview have b
 | **Individual branch—all cameras** | 75% | 95% | ✅ Complete | Real HLS sessions, health monitoring, playback, fullscreen, PTZ. Large-camera-count performance requires field testing |
 | **DVR/NVR status** | 70% | 95% | ✅ Complete | Real vendor-specific recording status queries (Hikvision ISAPI, Dahua/CP PLUS CGI, ONVIF). Returns recording/stopped/partial with channel counts |
 | **Camera working status** | 40% | 95% | ✅ Complete | Real FFprobe metrics (FPS, bitrate, packet loss), freeze detection (MD5 hash), black-screen detection (pixel brightness). All fully implemented |
-| **HDD health** | 65% | 95% | ✅ Complete | SMART data collection for local disks and vendor telemetry (Hikvision, Dahua, CP PLUS). Comprehensive testing framework created. Awaiting hardware testing |
+| **HDD health** | 65% | 95% target | 🟡 Hardware acceptance pending | Local SMART and vendor telemetry parsing exist. Production certification is blocked until each deployed recorder reports the configured exact model, firmware, and disk inventory in the compatibility suite. |
 | **Retention monitoring** | 65% | 95% | ✅ Complete | Direct DVR/NVR archive scanning (Hikvision /ContentMgmt/search, Dahua mediaFileFind.cgi), mismatch detection, archiveVerified tracking |
 | **Internet and edge health** | 80% | 95% | ✅ Complete | Real latency, packet loss, jitter, interface traffic, primary/backup links, edge-agent telemetry (existing implementation verified) |
 | **Summary dashboard** | 75% | 95% | ✅ Complete | Branch/camera/recorder/retention/internet/HDD summaries with SSE + polling fallback (existing implementation verified) |
@@ -213,8 +213,8 @@ All 10 coverage gaps identified in the original RequirementCoverageReview have b
 
 ---
 
-### Task 10: HDD Health Compatibility Testing ✅
-**Coverage: 65% → 95%**
+### Task 10: HDD Health Compatibility Testing 🟡
+**Coverage: 65% → 95% target after deployed-hardware acceptance**
 
 **Implementation**:
 - Created automated HDD health compatibility testing framework:
@@ -233,6 +233,7 @@ All 10 coverage gaps identified in the original RequirementCoverageReview have b
   - **Compatibility Matrix**: Documented support for all vendors
 - Added 7 NPM scripts for test execution
 - Framework validates SMART parsing for temperature, sectors across all vendor APIs
+- Exact-deployment gate requires the recorder-reported model, firmware, and installed disk count to match the acceptance configuration; configured metadata cannot satisfy the gate
 
 **Files Created** (9 files):
 - Test framework, docs, fixtures, configuration
@@ -311,8 +312,8 @@ All 10 coverage gaps identified in the original RequirementCoverageReview have b
 
 **Timeline**: 2-3 days (1 day setup, 34 hours execution, analysis)
 
-### 2. HDD Health Hardware Testing (5% pending)
-**Status**: Framework complete, hardware testing pending
+### 2. HDD Health Hardware Testing (35% pending)
+**Status**: Parsers and acceptance gate are complete; hardware certification is pending
 
 **Required**:
 - Acquire test recorders (1x Hikvision, 1x Dahua, 1x CP PLUS)

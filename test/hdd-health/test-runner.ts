@@ -10,18 +10,22 @@ import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { collectSmartTelemetry, type SmartCollectorConfig, type SmartTelemetry } from '../../src/maintenance/smart-collector.js';
 import { probeRecorder, type RecorderConfig } from '../../edge-agent/src/monitoring/recorder-probe.js';
+import { verifyRecorderCompatibility, type CompatibilityCheck, type RecorderCompatibilityTarget } from './compatibility-contract.js';
 
 interface TestConfig {
-  recorders: Array<{
+  recorders: Array<RecorderCompatibilityTarget & {
     id: string;
     name: string;
     vendor: 'hikvision' | 'dahua' | 'cp-plus' | 'onvif';
-    model?: string;
+    /** Exact deployed model as reported by the recorder, not a product family. */
+    model: string;
+    /** Exact deployed firmware, as reported by the recorder system endpoint. */
+    expectedFirmware: string;
     host: string;
     port: number;
     username?: string;
     password?: string;
-    expectedDisks?: number;
+    expectedDisks: number;
     notes?: string;
   }>;
   testSettings?: {
@@ -43,6 +47,18 @@ interface TestResult {
   data?: unknown;
 }
 
+interface CompatibilityEvidence {
+  recorderId: string;
+  name: string;
+  vendor: string;
+  expectedModel: string;
+  expectedFirmware: string;
+  observedModel: string | null;
+  observedFirmware: string | null;
+  observedDisks: number;
+  checks: CompatibilityCheck[];
+}
+
 const COLORS = {
   reset: '\x1b[0m',
   green: '\x1b[32m',
@@ -55,6 +71,7 @@ const COLORS = {
 class HddHealthTester {
   private config: TestConfig;
   private results: TestResult[] = [];
+  private compatibilityEvidence: CompatibilityEvidence[] = [];
   private fixturesDir: string;
   private reportDir: string;
 
@@ -79,9 +96,11 @@ class HddHealthTester {
       collect: () => this.testSmartCollection(),
       thresholds: () => this.testThresholds(),
       parsing: () => this.testParsing(),
+      compatibility: () => this.testDeployedModelCompatibility(),
       failures: () => this.testFailureScenarios(),
       all: async () => {
         await this.testConnectivity();
+        await this.testDeployedModelCompatibility();
         await this.testSmartCollection();
         await this.testThresholds();
         await this.testParsing();
@@ -94,7 +113,7 @@ class HddHealthTester {
 
     if (!testFn) {
       console.error(`${COLORS.red}Unknown test type: ${testType}${COLORS.reset}`);
-      console.log('Available tests: connectivity, collect, thresholds, parsing, failures, all');
+      console.log('Available tests: connectivity, compatibility, collect, thresholds, parsing, failures, all');
       process.exit(1);
     }
 
@@ -170,8 +189,63 @@ class HddHealthTester {
     console.log();
   }
 
+  async testDeployedModelCompatibility(): Promise<void> {
+    console.log(`${COLORS.yellow}Test 2: Deployed Recorder Compatibility${COLORS.reset}`);
+    console.log();
+
+    for (const recorder of this.config.recorders) {
+      const started = Date.now();
+      try {
+        const probe = await probeRecorder(this.toRecorderConfig(recorder), this.config.testSettings?.timeout ?? 10000);
+        const checks = verifyRecorderCompatibility(recorder, probe);
+        const duration = Date.now() - started;
+        const observedModel = this.stringMetric(probe.metrics.model);
+        const observedFirmware = this.stringMetric(probe.metrics.firmwareVersion);
+        this.compatibilityEvidence.push({
+          recorderId: recorder.id,
+          name: recorder.name,
+          vendor: recorder.vendor,
+          expectedModel: recorder.model,
+          expectedFirmware: recorder.expectedFirmware,
+          observedModel: observedModel || null,
+          observedFirmware: observedFirmware || null,
+          observedDisks: probe.hddStatus.length,
+          checks,
+        });
+
+        for (const check of checks) {
+          const color = check.passed ? COLORS.green : COLORS.red;
+          const symbol = check.passed ? 'PASS' : 'FAIL';
+          console.log(`  ${color}${symbol}${COLORS.reset} ${recorder.name} — ${check.name}: ${check.details}`);
+          this.results.push({
+            recorder: recorder.id,
+            vendor: recorder.vendor,
+            test: `compatibility_${check.name}`,
+            status: check.passed ? 'PASS' : 'FAIL',
+            duration,
+            details: check.details,
+          });
+        }
+      } catch (error) {
+        const duration = Date.now() - started;
+        const details = error instanceof Error ? error.message : String(error);
+        console.log(`  ${COLORS.red}FAIL${COLORS.reset} ${recorder.name}: compatibility probe failed: ${details}`);
+        this.results.push({
+          recorder: recorder.id,
+          vendor: recorder.vendor,
+          test: 'compatibility_probe',
+          status: 'FAIL',
+          duration,
+          details,
+        });
+      }
+    }
+
+    console.log();
+  }
+
   async testSmartCollection(): Promise<void> {
-    console.log(`${COLORS.yellow}Test 2: SMART Data Collection${COLORS.reset}`);
+    console.log(`${COLORS.yellow}Test 3: HDD Telemetry Collection${COLORS.reset}`);
     console.log();
 
     for (const recorder of this.config.recorders) {
@@ -200,7 +274,7 @@ class HddHealthTester {
 
         if (telemetry.telemetrySource === 'real' && telemetry.smartStatus !== 'unknown') {
           console.log(`  ${COLORS.green}✓${COLORS.reset} ${recorder.name}:`);
-          console.log(`    Status: ${telemetry.smartStatus}`);
+          console.log(`    Status: ${telemetry.smartStatus} (${telemetry.telemetryCapability})`);
           console.log(`    Temperature: ${telemetry.temperature ?? 'N/A'}°C`);
           console.log(`    Reallocated Sectors: ${telemetry.reallocatedSectors ?? 'N/A'}`);
           console.log(`    Pending Sectors: ${telemetry.pendingSectors ?? 'N/A'}`);
@@ -222,7 +296,7 @@ class HddHealthTester {
             test: 'smart_collection',
             status: 'FAIL',
             duration,
-            details: `Telemetry source: ${telemetry.telemetrySource}`,
+            details: `Telemetry source: ${telemetry.telemetrySource}; capability: ${telemetry.telemetryCapability}`,
             data: telemetry,
           });
         }
@@ -401,6 +475,24 @@ class HddHealthTester {
     return 'healthy';
   }
 
+  private toRecorderConfig(recorder: TestConfig['recorders'][number]): RecorderConfig {
+    return {
+      id: recorder.id,
+      name: recorder.name,
+      deviceType: 'nvr',
+      vendor: recorder.vendor,
+      model: recorder.model,
+      host: recorder.host,
+      port: recorder.port,
+      username: recorder.username,
+      password: recorder.password,
+    };
+  }
+
+  private stringMetric(value: unknown) {
+    return typeof value === 'string' || typeof value === 'number' ? String(value).trim() : '';
+  }
+
   private async printSummary(duration: number): Promise<void> {
     console.log(`${COLORS.blue}========================================${COLORS.reset}`);
     console.log(`${COLORS.blue}  Test Summary${COLORS.reset}`);
@@ -478,11 +570,34 @@ ${this.config.recorders
 
 ---
 
+## Exact Model Compatibility Evidence
+
+${this.compatibilityEvidence.length === 0
+  ? 'No deployed-model compatibility probe was run.'
+  : this.compatibilityEvidence.map((evidence) => `### ${evidence.name}
+- **Expected model**: ${evidence.expectedModel}
+- **Observed model**: ${evidence.observedModel ?? 'Unavailable'}
+- **Expected firmware**: ${evidence.expectedFirmware}
+- **Observed firmware**: ${evidence.observedFirmware ?? 'Unavailable'}
+- **Expected / observed disks**: ${this.config.recorders.find((recorder) => recorder.id === evidence.recorderId)?.expectedDisks ?? 'N/A'} / ${evidence.observedDisks}
+${evidence.checks.map((check) => `- **${check.name}**: ${check.passed ? 'PASS' : 'FAIL'} — ${check.details}`).join('\n')}
+`).join('\n')}
+
+---
+
 **Report generated by HDD Health Test Runner**
 `;
 
     await writeFile(filepath, report);
+    const evidencePath = join(this.reportDir, `hdd-compatibility-evidence-${timestamp}.json`);
+    await writeFile(evidencePath, JSON.stringify({
+      generatedAt: new Date().toISOString(),
+      certified: this.compatibilityEvidence.length > 0
+        && this.compatibilityEvidence.every((evidence) => evidence.checks.every((check) => check.passed)),
+      recorders: this.compatibilityEvidence,
+    }, null, 2));
     console.log(`${COLORS.green}Report saved to: ${filepath}${COLORS.reset}`);
+    console.log(`${COLORS.green}Compatibility evidence saved to: ${evidencePath}${COLORS.reset}`);
   }
 }
 
