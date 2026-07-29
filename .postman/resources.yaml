@@ -1,0 +1,7 @@
+# Use this workspace to collaborate
+workspace:
+  id: 6920a03d-0f06-446c-8b4a-3d5f7a144015
+
+localResources:
+  specs:
+    - ../openapi/control-plane.yaml
