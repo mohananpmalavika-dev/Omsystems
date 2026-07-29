@@ -45,7 +45,10 @@ export function GlobalAlertCenter() {
   const load = useCallback(async () => {
     if (!enabledForRoute) return;
     try {
-      const response = await fetch("/api/control/v1/alerts/command-center?limit=200", { cache: "no-store" });
+      const response = await fetch("/api/control/v1/alerts/command-center?limit=200", {
+        cache: "no-store",
+        credentials: "include",
+      });
       if (!response.ok) return;
       const body = await response.json();
       setAlerts((body.data ?? []) as CommandAlert[]);
@@ -63,7 +66,7 @@ export function GlobalAlertCenter() {
 
   useEffect(() => {
     if (!enabledForRoute) return;
-    const events = new EventSource("/api/control/v1/alerts/events");
+    const events = new EventSource("/api/control/v1/alerts/events", { withCredentials: true });
     for (const type of ["alert.created", "alert.updated", "notification.updated"]) {
       events.addEventListener(type, () => void load());
     }
@@ -93,6 +96,7 @@ export function GlobalAlertCenter() {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ cameraId: alert.cameraId, profile: "sub" }),
+        credentials: "include",
       });
       const body = await response.json() as LiveSessionResponse & { error?: string };
       if (!response.ok) throw new Error(body.error ?? "live_session_unavailable");

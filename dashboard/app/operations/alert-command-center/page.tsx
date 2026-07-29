@@ -18,7 +18,10 @@ export default function AlertCommandCenterPage() {
   const load = useCallback(async () => {
     const params = new URLSearchParams({ limit: "200" });
     if (severity) params.set("severity", severity);
-    const response = await fetch(`/api/control/v1/alerts/command-center?${params}`, { cache: "no-store" });
+    const response = await fetch(`/api/control/v1/alerts/command-center?${params}`, {
+      cache: "no-store",
+      credentials: "include",
+    });
     if (!response.ok) return;
     const body = await response.json();
     const next = (body.data ?? []) as CommandAlert[];
@@ -28,7 +31,7 @@ export default function AlertCommandCenterPage() {
   useEffect(() => { void load(); const timer = setInterval(load, 30_000); return () => clearInterval(timer); }, [load]);
   useEffect(() => { const timer = setInterval(() => tick((value) => value + 1), 1_000); return () => clearInterval(timer); }, []);
   useEffect(() => {
-    const events = new EventSource("/api/control/v1/alerts/events");
+    const events = new EventSource("/api/control/v1/alerts/events", { withCredentials: true });
     events.addEventListener("ready", () => setConnected(true));
     for (const type of ["alert.created", "alert.updated", "notification.updated"]) events.addEventListener(type, () => void load());
     events.onerror = () => setConnected(false);
@@ -46,7 +49,12 @@ export default function AlertCommandCenterPage() {
       const payload = action === "assign"
         ? { assignedTo: "self", expectedVersion: alert.version }
         : { expectedVersion: alert.version, notes: action === "acknowledge" ? "Acknowledged in HO command center" : "Escalated in HO command center" };
-      const response = await fetch(endpoint, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(payload) });
+      const response = await fetch(endpoint, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(payload),
+        credentials: "include",
+      });
       if (response.status === 409) { await load(); return; }
       if (!response.ok) throw new Error("alert_action_failed");
       await load();
@@ -56,7 +64,12 @@ export default function AlertCommandCenterPage() {
   const startLive = async (alert: CommandAlert) => {
     setBusy(true);
     try {
-      const response = await fetch("/api/live", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ cameraId: alert.cameraId, profile: "sub" }) });
+      const response = await fetch("/api/live", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ cameraId: alert.cameraId, profile: "sub" }),
+        credentials: "include",
+      });
       if (response.ok) setSession(await response.json());
     } finally { setBusy(false); }
   };
