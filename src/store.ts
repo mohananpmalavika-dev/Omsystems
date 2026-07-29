@@ -1746,6 +1746,19 @@ export class MemoryStore implements ControlPlaneStore {
     return structuredClone(item);
   }
 
+  async recordEmailDeliveryEvent(id: string, event: Parameters<ControlPlaneStore["recordEmailDeliveryEvent"]>[1]) {
+    const item = this.analyticsNotifications.find((notification) => notification.id === id);
+    if (!item?.emailDelivery) return undefined;
+    item.emailDelivery.status = event.status;
+    if (event.provider) item.emailDelivery.provider = event.provider;
+    item.emailDelivery.events.push({ status: event.status, occurredAt: event.occurredAt,
+      ...(event.detail ? { detail: event.detail } : {}) });
+    if (event.providerId) item.providerId = event.providerId;
+    if (event.subject) item.emailDelivery.subject = event.subject;
+    item.updatedAt = event.occurredAt;
+    return structuredClone(item);
+  }
+
   async reserveSmsRateLimit(inputTenantId: string, limit: number, requested: number, now: string) {
     const window = new Date(now).toISOString().slice(0, 16);
     const key = `${inputTenantId}:${window}`;

@@ -960,6 +960,13 @@ export interface SmsDeliveryAudit {
   events: Array<{ status: string; occurredAt: string; detail?: string | undefined }>;
 }
 
+export interface EmailDeliveryAudit {
+  provider: "smtp" | "sendgrid" | "ses" | "webhook" | "test";
+  status: string;
+  subject: string;
+  events: Array<{ status: string; occurredAt: string; detail?: string }>;
+}
+
 export interface VoiceCallAudit {
   provider: "twilio" | "exotel" | "webhook" | "test";
   sequence: number;
@@ -986,6 +993,7 @@ export interface AlertNotificationPolicy {
   rateLimitPerMinute: number;
   escalationAfterSeconds: Partial<Record<AnalyticsSeverity, number>>;
   smsTemplates?: Partial<Record<"P1" | "P2", string>> | undefined;
+  emailDelivery?: EmailDeliveryAudit | undefined;
   smsTemplateIds?: Partial<Record<"P1" | "P2", string>> | undefined;
   updatedAt: string;
 }

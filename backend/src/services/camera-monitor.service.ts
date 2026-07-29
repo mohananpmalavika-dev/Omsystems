@@ -498,7 +498,7 @@ export class CameraMonitorService extends EventEmitter {
   }
 
   /**
-   * Get video quality metrics
+   * Get video quality metrics using ffprobe
    */
   private async getQualityMetrics(camera: CameraDevice): Promise<{
     fps: number;
@@ -508,18 +508,122 @@ export class CameraMonitorService extends EventEmitter {
     latency: number;
     codec: string;
   } | null> {
-    // This would use ffprobe or similar tool to analyze the stream
-    // For now, return mock data based on expected values
-    // TODO: Implement actual stream analysis
-    
-    return {
-      fps: camera.expectedFps + (Math.random() * 2 - 1),
-      bitrate: camera.expectedBitrate + (Math.random() * 200 - 100),
-      resolution: camera.expectedResolution,
-      packetLoss: Math.random() * 2,
-      latency: Math.random() * 100 + 50,
-      codec: "H264",
-    };
+    try {
+      const { spawn } = await import("child_process");
+      const ffprobePath = process.env.FFPROBE_PATH || "ffprobe";
+      
+      // Use ffprobe to analyze stream metrics
+      const args = [
+        "-v", "error",
+        "-select_streams", "v:0",
+        "-count_packets",
+        "-show_entries", "stream=codec_name,width,height,r_frame_rate,bit_rate",
+        "-show_entries", "packet=pts_time,size",
+        "-read_intervals", "%+2", // Read 2 seconds
+        "-of", "json",
+        camera.rtspUrl
+      ];
+
+      const result = await new Promise<any>((resolve, reject) => {
+        const timeout = setTimeout(() => {
+          child.kill();
+          reject(new Error("ffprobe timeout"));
+        }, 10000);
+
+        const child = spawn(ffprobePath, args);
+        let stdout = "";
+        let stderr = "";
+
+        child.stdout.on("data", (data) => stdout += data.toString());
+        child.stderr.on("data", (data) => stderr += data.toString());
+
+        child.on("close", (code) => {
+          clearTimeout(timeout);
+          if (code !== 0) {
+            reject(new Error(`ffprobe failed: ${stderr}`));
+          } else {
+            try {
+              resolve(JSON.parse(stdout));
+            } catch (error) {
+              reject(new Error("Failed to parse ffprobe output"));
+            }
+          }
+        });
+
+        child.on("error", (error) => {
+          clearTimeout(timeout);
+          reject(error);
+        });
+      });
+
+      // Parse ffprobe output
+      const stream = result.streams?.[0];
+      const packets = result.packets || [];
+
+      if (!stream) {
+        logger.warn(`No stream data from ffprobe for camera ${camera.id}`);
+        return null;
+      }
+
+      // Calculate FPS from r_frame_rate (e.g., "25/1" or "30000/1001")
+      let fps = camera.expectedFps;
+      if (stream.r_frame_rate) {
+        const [num, den] = stream.r_frame_rate.split("/").map(Number);
+        if (den && den !== 0) {
+          fps = num / den;
+        }
+      }
+
+      // Get bitrate (convert from bits/s to kbps)
+      const bitrate = stream.bit_rate 
+        ? Math.round(parseInt(stream.bit_rate) / 1000)
+        : camera.expectedBitrate;
+
+      // Get resolution
+      const resolution = {
+        width: stream.width || camera.expectedResolution.width,
+        height: stream.height || camera.expectedResolution.height
+      };
+
+      // Calculate packet loss from packet timing
+      let packetLoss = 0;
+      if (packets.length > 1) {
+        const expectedPackets = Math.ceil(fps * 2); // 2 seconds of capture
+        const actualPackets = packets.length;
+        packetLoss = Math.max(0, ((expectedPackets - actualPackets) / expectedPackets) * 100);
+      }
+
+      // Calculate latency from packet timing variance
+      let latency = 50; // Default baseline
+      if (packets.length > 10) {
+        const times = packets.map((p: any) => parseFloat(p.pts_time)).filter((t: number) => !isNaN(t));
+        if (times.length > 1) {
+          const intervals = [];
+          for (let i = 1; i < times.length; i++) {
+            intervals.push((times[i] - times[i - 1]) * 1000);
+          }
+          const avgInterval = intervals.reduce((a, b) => a + b, 0) / intervals.length;
+          const variance = intervals.reduce((sum, val) => sum + Math.pow(val - avgInterval, 2), 0) / intervals.length;
+          latency = Math.sqrt(variance);
+        }
+      }
+
+      return {
+        fps: Math.round(fps * 10) / 10,
+        bitrate,
+        resolution,
+        packetLoss: Math.round(packetLoss * 10) / 10,
+        latency: Math.round(latency),
+        codec: stream.codec_name?.toUpperCase() || "H264",
+      };
+
+    } catch (error) {
+      logger.debug(`Failed to get quality metrics for camera ${camera.id}`, { error });
+      
+      // Fallback: return null to indicate metrics unavailable
+      // The health check will still work, just without quality metrics
+      return null;
+    }
   }
 
   /**

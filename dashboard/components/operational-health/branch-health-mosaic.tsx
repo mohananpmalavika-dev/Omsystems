@@ -17,6 +17,7 @@ import {
 } from "./branch-mosaic-model";
 import type { BranchSummaryFilter } from "./branch-summary-model";
 
+// Support for 400+ branches with efficient virtual scrolling and 20x20 grid
 const VIEWPORT_HEIGHT = 620;
 
 export function BranchHealthMosaic({ filter }: { filter?: BranchSummaryFilter }) {

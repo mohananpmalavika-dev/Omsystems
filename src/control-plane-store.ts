@@ -1140,7 +1140,7 @@ export interface ControlPlaneStore {
   upsertAlertNotificationPolicy(policy: AlertNotificationPolicy): Promise<AlertNotificationPolicy>;
   enqueueAlertNotifications(input: Array<{
     tenantId: string; alertId: string; channel: AlertNotificationChannel; recipient: string;
-    nextAttemptAt?: string; voiceCall?: AlertNotification["voiceCall"]; smsDelivery?: AlertNotification["smsDelivery"];
+    nextAttemptAt?: string; voiceCall?: AlertNotification["voiceCall"]; smsDelivery?: AlertNotification["smsDelivery"]; emailDelivery?: AlertNotification["emailDelivery"];
   }>): Promise<AlertNotification[]>;
   claimAlertNotifications(limit: number, now: string): Promise<AlertNotification[]>;
   completeAlertNotification(id: string, result: {
@@ -1155,6 +1155,11 @@ export interface ControlPlaneStore {
   recordSmsDeliveryEvent(id: string, event: {
     status: string; occurredAt: string; detail?: string; providerId?: string;
     provider?: NonNullable<AlertNotification["smsDelivery"]>["provider"];
+  }): Promise<AlertNotification | undefined>;
+  recordEmailDeliveryEvent(id: string, event: {
+    status: string; occurredAt: string; detail?: string; providerId?: string;
+    provider?: NonNullable<AlertNotification["emailDelivery"]>["provider"];
+    subject?: string;
   }): Promise<AlertNotification | undefined>;
   reserveSmsRateLimit(tenantId: string, limit: number, requested: number, now: string): Promise<number>;
   listAlertNotifications(tenantId: string, alertId?: string): Promise<AlertNotification[]>;

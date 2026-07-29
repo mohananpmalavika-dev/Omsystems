@@ -471,6 +471,9 @@ export class PostgresStore
   async recordSmsDeliveryEvent(id: string, event: Parameters<ControlPlaneStore["recordSmsDeliveryEvent"]>[1]) {
     return this.analytics.recordSmsDeliveryEvent(id, event);
   }
+  async recordEmailDeliveryEvent(id: string, event: Parameters<ControlPlaneStore["recordEmailDeliveryEvent"]>[1]) {
+    return this.analytics.recordEmailDeliveryEvent(id, event);
+  }
   async reserveSmsRateLimit(tenantId: string, limit: number, requested: number, now: string) {
     return this.analytics.reserveSmsRateLimit(tenantId, limit, requested, now);
   }

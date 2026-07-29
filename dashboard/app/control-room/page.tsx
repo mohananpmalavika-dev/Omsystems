@@ -251,7 +251,7 @@ export default function ControlRoomPage() {
           <EnhancedCameraGrid
             cameras={cameras}
             initialLayout={initialLayout}
-            maxConcurrentStreams={36}
+            maxConcurrentStreams={64}
             priorityCameraIds={priorityCameraIds}
             enableVirtualScrolling
             enableGPUAcceleration

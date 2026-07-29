@@ -11,7 +11,7 @@ import { alertEvents } from "./event-stream.js";
 
 export const NOTIFICATION_MATRIX: Record<string, AlertNotificationChannel[]> = {
   P1: ["dashboard", "sms", "email", "voice"],
-  P2: ["dashboard", "sms", "email"],
+  P2: ["dashboard", "email"],
   P3: ["dashboard"],
   P4: ["log"],
   P5: ["log"],

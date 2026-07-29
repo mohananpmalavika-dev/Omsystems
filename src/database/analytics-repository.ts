@@ -458,13 +458,13 @@ export class AnalyticsRepository {
       const created: AlertNotification[] = [];
       for (const target of input) {
         const result = await client.query(
-          `INSERT INTO analytics_notifications (id, tenant_id, alert_id, channel, recipient, next_attempt_at, voice_call, sms_delivery)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+          `INSERT INTO analytics_notifications (id, tenant_id, alert_id, channel, recipient, next_attempt_at, voice_call, sms_delivery, email_delivery)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
            ON CONFLICT (alert_id, channel, recipient) DO UPDATE SET alert_id=EXCLUDED.alert_id
            RETURNING *`,
           [randomUUID(), target.tenantId, target.alertId, target.channel, target.recipient,
             target.nextAttemptAt ?? new Date().toISOString(), target.voiceCall ? JSON.stringify(target.voiceCall) : null,
-            target.smsDelivery ? JSON.stringify(target.smsDelivery) : null],
+            target.smsDelivery ? JSON.stringify(target.smsDelivery) : null, target.emailDelivery ? JSON.stringify(target.emailDelivery) : null],
         );
         created.push(mapNotification(result.rows[0]));
       }
@@ -535,6 +535,22 @@ export class AnalyticsRepository {
       [id, event.status, event.providerId ?? null,
         JSON.stringify([{ status: event.status, occurredAt: event.occurredAt, ...(event.detail ? { detail: event.detail } : {}) }]),
         event.provider ?? null],
+    );
+    return updated.rows[0] ? mapNotification(updated.rows[0]) : undefined;
+  }
+
+  async recordEmailDeliveryEvent(id: string, event: Parameters<import("../control-plane-store.js").ControlPlaneStore["recordEmailDeliveryEvent"]>[1]) {
+    const updated = await this.pool.query(
+      `UPDATE analytics_notifications SET provider_id=COALESCE($3,provider_id),
+         email_delivery=jsonb_set(jsonb_set(COALESCE(email_delivery,'{}'::jsonb),
+           '{status}',to_jsonb($2::text),true),'{events}',
+           COALESCE(email_delivery->'events','[]'::jsonb) || $4::jsonb,true)
+           || CASE WHEN $5::text IS NULL THEN '{}'::jsonb ELSE jsonb_build_object('provider',$5::text) END
+           || CASE WHEN $6::text IS NULL THEN '{}'::jsonb ELSE jsonb_build_object('subject',$6::text) END,
+         updated_at=now() WHERE id=$1 RETURNING *`,
+      [id, event.status, event.providerId ?? null,
+        JSON.stringify([{ status: event.status, occurredAt: event.occurredAt, ...(event.detail ? { detail: event.detail } : {}) }]),
+        event.provider ?? null, event.subject ?? null],
     );
     return updated.rows[0] ? mapNotification(updated.rows[0]) : undefined;
   }
@@ -694,6 +710,7 @@ function mapNotification(row: any): AlertNotification {
     ...(row.delivered_at ? { deliveredAt: iso(row.delivered_at) } : {}),
     ...(row.voice_call ? { voiceCall: json(row.voice_call, undefined) } : {}),
     ...(row.sms_delivery ? { smsDelivery: json(row.sms_delivery, undefined) } : {}),
+    ...(row.email_delivery ? { emailDelivery: json(row.email_delivery, undefined) } : {}),
     createdAt: iso(row.created_at), updatedAt: iso(row.updated_at),
   };
 }

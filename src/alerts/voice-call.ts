@@ -63,13 +63,17 @@ export class VoiceCallNotificationSender implements AlertNotificationSender {
 
 export class RoutedAlertNotificationSender implements BatchAlertNotificationSender {
   constructor(private readonly standard: AlertNotificationSender, private readonly voice: AlertNotificationSender,
-    private readonly sms?: AlertNotificationSender) {}
+    private readonly sms?: AlertNotificationSender, private readonly email?: AlertNotificationSender) {}
   send(notification: AlertNotification, alert: AnalyticsAlert) {
     if (notification.channel === "voice") return this.voice.send(notification, alert);
-    return notification.channel === "sms" && this.sms ? this.sms.send(notification, alert) : this.standard.send(notification, alert);
+    if (notification.channel === "sms" && this.sms) return this.sms.send(notification, alert);
+    if (notification.channel === "email" && this.email) return this.email.send(notification, alert);
+    return this.standard.send(notification, alert);
   }
   async sendBatch(items: Array<{ notification: AlertNotification; alert: AnalyticsAlert }>) {
-    const target = items.every((item) => item.notification.channel === "sms") && this.sms ? this.sms : this.standard;
+    const allSms = items.every((item) => item.notification.channel === "sms") && this.sms;
+    const allEmail = items.every((item) => item.notification.channel === "email") && this.email;
+    const target = allSms ? this.sms : allEmail ? this.email : this.standard;
     const batch = target as Partial<BatchAlertNotificationSender>;
     if (typeof batch.sendBatch === "function") return batch.sendBatch(items);
     return new Map(await Promise.all(items.map(async (item) => [item.notification.id,

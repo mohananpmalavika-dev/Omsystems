@@ -4,13 +4,23 @@ import {
   CAMERA_WALL_LAYOUTS,
   cameraPlaybackHref,
   cameraStatusTone,
+  cameraSequenceWindow,
   canStartCamera,
 } from "../components/operational-health/branch-camera-wall-model.js";
 
 describe("branch camera wall model", () => {
   it("provides responsive operator layouts and camera-specific playback navigation", () => {
-    expect(CAMERA_WALL_LAYOUTS).toEqual([2, 3, 4]);
+    expect(CAMERA_WALL_LAYOUTS).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
     expect(cameraPlaybackHref("branch one", "camera/one")).toBe("/recordings?branchId=branch+one&cameraId=camera%2Fone");
+  });
+
+  it("keeps every sequence inside the workstation decoder budget", () => {
+    const cameras = Array.from({ length: 40 }, (_, index) => camera({ id: `camera-${index}` }));
+    expect(cameraSequenceWindow(cameras, 16, 0).map((item) => item.id)).toEqual(cameras.slice(0, 16).map((item) => item.id));
+    expect(cameraSequenceWindow(cameras, 16, 16).map((item) => item.id)).toEqual(cameras.slice(16, 32).map((item) => item.id));
+    cameras[17]!.onlineStatus = "offline";
+    expect(cameraSequenceWindow(cameras, 16, 16)).toHaveLength(16);
+    expect(cameraSequenceWindow(cameras, 16, 16).some((item) => item.id === "camera-17")).toBe(false);
   });
 
   it("only starts reachable cameras and elevates video-quality faults", () => {
