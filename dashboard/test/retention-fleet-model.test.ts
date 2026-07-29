@@ -17,6 +17,7 @@ function item(status: RetentionStatus, branchId: string, shortfallDays: number):
     configuredDays: 30, actualDays: 30 - shortfallDays, oldestContinuousAt: null, newestPlayableAt: null,
     status, marginDays: -shortfallDays, shortfallDays, warningDays: 7, dailyChangeDays: 0,
     forecastDaysIn7Days: 30 - shortfallDays, daysUntilCompliant: null, trend: "stable",
-    coverageTrend: [], reasonCodes: [],
+    coverageTrend: [], dataSource: "platform_index", archiveVerified: false, archiveMismatch: false,
+    archiveRecorderId: null, archiveObservedAt: null, archiveCoverageComplete: null, reasonCodes: [],
   };
 }

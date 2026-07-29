@@ -3,6 +3,8 @@ export type TelemetryDeviceType =
   | "branch"
   | "edge-agent"
   | "recorder"
+  /** Direct, channel-scoped archive evidence reported by an edge recorder probe. */
+  | "archive"
   | "camera"
   | "disk"
   | "network"
@@ -47,6 +49,8 @@ export interface OperationalHealthPolicy {
   packetLossCriticalPercent: number;
   bandwidthUtilizationWarningPercent: number;
   bandwidthUtilizationCriticalPercent: number;
+  edgeAgentWarningPercent: number;
+  edgeAgentCriticalPercent: number;
 }
 
 export const defaultOperationalHealthPolicy: OperationalHealthPolicy = {
@@ -65,6 +69,8 @@ export const defaultOperationalHealthPolicy: OperationalHealthPolicy = {
   packetLossCriticalPercent: 5,
   bandwidthUtilizationWarningPercent: 80,
   bandwidthUtilizationCriticalPercent: 95,
+  edgeAgentWarningPercent: 80,
+  edgeAgentCriticalPercent: 95,
 };
 
 export type VideoWallGridSize = "1x1" | "2x2" | "3x3" | "4x4" | "5x5" | "6x6" |

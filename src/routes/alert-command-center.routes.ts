@@ -268,6 +268,34 @@ export async function registerAlertCommandCenterRoutes(
   };
   app.get("/internal/alerts/sms/status", smsStatusHandler);
   app.post("/internal/alerts/sms/status", smsStatusHandler);
+
+  const emailStatusHandler = async (request: any, reply: any) => {
+    const query = z.object({ token: z.string().min(20).max(4_000).optional(), status: z.string().optional(),
+      email_status: z.string().optional(), provider: z.enum(["smtp", "sendgrid", "ses", "webhook", "test"]).optional(),
+      providerId: z.string().optional(), MessageId: z.string().optional(), message_id: z.string().optional(), subject: z.string().optional() })
+      .parse({ ...(request.body && typeof request.body === "object" ? request.body : {}), ...request.query });
+    const token = query.token;
+    if (!token) return reply.code(401).send({ error: "invalid_or_expired_email_callback" });
+    const claims = voiceTokens.verify(token);
+    if (!claims) return reply.code(401).send({ error: "invalid_or_expired_email_callback" });
+    const status = (query.status ?? query.email_status ?? "provider_callback").toLowerCase().replaceAll("-", "_");
+    const providerId = query.providerId ?? query.MessageId ?? query.message_id;
+    const notification = await store.recordEmailDeliveryEvent(claims.notificationId, {
+      status, occurredAt: new Date().toISOString(), providerId,
+      detail: "Provider delivery callback", provider: query.provider ?? "webhook", subject: query.subject,
+    });
+    if (!notification) return reply.code(404).send({ error: "email_delivery_not_found" });
+    if (["delivered", "processed", "delivery"].includes(status)) {
+      await store.completeAlertNotification(notification.id, { status: "delivered", ...(providerId ? { providerId } : {}) });
+    } else if (["failed", "bounced", "bounce", "dropped", "complaint", "spamreport", "rejected"].includes(status)) {
+      await store.completeAlertNotification(notification.id, { status: "failed", error: `email_${status}`,
+        nextAttemptAt: new Date(Date.now() + 30_000).toISOString(), ...(providerId ? { providerId } : {}) });
+    }
+    publishNotificationUpdated(claims.tenantId, claims.alertId);
+    return { accepted: true };
+  };
+  app.get("/internal/alerts/email/status", emailStatusHandler);
+  app.post("/internal/alerts/email/status", emailStatusHandler);
 }
 
 async function authorizedAlert(store: ControlPlaneStore, user: any, alertId: string, action: "analytics:view" | "alerts:acknowledge") {

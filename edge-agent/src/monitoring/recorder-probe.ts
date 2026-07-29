@@ -6,11 +6,34 @@ export interface RecorderConfig {
   model?: string | undefined; host: string; port: number; secure?: boolean | undefined;
   username?: string | undefined; password?: string | undefined;
   systemPath?: string | undefined; storagePath?: string | undefined;
+  archiveRetention?: {
+    lookbackDays: number;
+    maxResults: number;
+    continuityGapSeconds: number;
+    channels: Array<{ cameraId: string; channel: number }>;
+  } | undefined;
 }
+
+export interface ArchiveRetentionEvidence {
+  cameraId: string;
+  sourceChannel: number;
+  /** `available` means the search returned a complete, channel-scoped timeline. */
+  status: "available" | "empty" | "unavailable";
+  oldestContinuousAt: string | null;
+  newestPlayableAt: string | null;
+  /** The continuous window starts at the configured lookback boundary. */
+  retentionLowerBound: boolean;
+  coverageComplete: boolean;
+  continuityGapSeconds: number;
+  searchStartedAt: string;
+  reasonCodes: string[];
+}
+
 export interface RecorderProbeResult {
   metrics: Record<string, string | number | boolean | null>;
   hddStatus: Array<Record<string, unknown>>;
   reasonCodes: string[];
+  archiveEvidence: ArchiveRetentionEvidence[];
 }
 
 type RecordingStatus = "recording" | "stopped" | "partial" | "unknown";
@@ -23,20 +46,31 @@ interface RecordingProbe {
   source: "recent-media-search" | "recording-summary" | "unavailable";
 }
 
+interface ArchiveSegment {
+  startedAt: number;
+  endedAt: number;
+}
+
+interface ArchiveSearchResult {
+  segments: ArchiveSegment[];
+  coverageComplete: boolean;
+  reasonCodes: string[];
+}
+
 const RECORDING_EVIDENCE_WINDOW_MS = 5 * 60_000;
 
 export function looksLikeRecorder(identity: { model?: string | undefined; manufacturer?: string | undefined }, scopes: string[] = []) {
   return /(?:^|[\s_-])(dvr|nvr|xvr|uvr)(?:$|[\s_-])|video recorder/i.test(`${identity.manufacturer ?? ""} ${identity.model ?? ""} ${scopes.join(" ")}`);
 }
 
-export async function probeRecorder(config: RecorderConfig, timeoutMs: number): Promise<RecorderProbeResult> {
+export async function probeRecorder(config: RecorderConfig, timeoutMs: number, options: { includeArchive?: boolean } = {}): Promise<RecorderProbeResult> {
   const started = performance.now();
   const base = `${config.secure ? "https" : "http"}://${config.host}:${config.port}`;
   const credentials = config.username ? { username: config.username, password: config.password ?? "" } : undefined;
   try {
-    if (config.vendor === "hikvision") return await probeHikvision(config, base, credentials, timeoutMs, started);
-    if (config.vendor === "dahua" || config.vendor === "cp-plus") return await probeDahuaFamily(config, base, credentials, timeoutMs, started);
-    if (config.vendor === "onvif") return await probeOnvif(config, base, credentials, timeoutMs, started);
+    if (config.vendor === "hikvision") return await probeHikvision(config, base, credentials, timeoutMs, started, Boolean(options.includeArchive));
+    if (config.vendor === "dahua" || config.vendor === "cp-plus") return await probeDahuaFamily(config, base, credentials, timeoutMs, started, Boolean(options.includeArchive));
+    if (config.vendor === "onvif") return await probeOnvif(config, base, credentials, timeoutMs, started, Boolean(options.includeArchive));
     const response = await authenticatedFetch(base, { method: "GET" }, credentials, timeoutMs);
     return result(config, response.status < 500, response.status === 401 ? "degraded" : "online", started, {}, [], response.status === 401 ? ["recorder_credentials_rejected"] : ["generic_http_reachability_only"]);
   } catch (error) {
@@ -44,7 +78,7 @@ export async function probeRecorder(config: RecorderConfig, timeoutMs: number): 
   }
 }
 
-async function probeHikvision(config: RecorderConfig, base: string, credentials: { username: string; password: string } | undefined, timeout: number, started: number) {
+async function probeHikvision(config: RecorderConfig, base: string, credentials: { username: string; password: string } | undefined, timeout: number, started: number, includeArchive: boolean) {
   const system = await authenticatedFetch(`${base}${config.systemPath ?? "/ISAPI/System/deviceInfo"}`, { method: "GET" }, credentials, timeout);
   if (system.status === 401 || system.status === 403) return result(config, true, "degraded", started, {}, [], ["recorder_credentials_rejected"]);
   if (!system.ok) throw new Error(`hikvision_http_${system.status}`);
@@ -57,6 +91,9 @@ async function probeHikvision(config: RecorderConfig, base: string, credentials:
   // A recording schedule is not proof that the recorder is currently writing media.
   // Query the last five minutes of the archive instead.
   const recordingStatus = await getHikvisionRecordingStatus(base, credentials, timeout, hikvisionTrackIds(channelXml));
+  const archiveEvidence = includeArchive
+    ? await scanHikvisionArchive(config, base, credentials, timeout)
+    : [];
 
   const total = (channelXml.match(/<VideoInputChannel>/gi) ?? []).length || null;
   const connected = (channelXml.match(/<videoInputEnabled>true<\/videoInputEnabled>/gi) ?? []).length || total;
@@ -72,7 +109,7 @@ async function probeHikvision(config: RecorderConfig, base: string, credentials:
     recordingStatus: recordingStatus.status,
     recordingChannels: recordingStatus.recordingChannels,
     recordingStatusSource: recordingStatus.source,
-  }, parseHikvisionDisks(storageXml), recordingStatus.reasonCodes);
+  }, parseHikvisionDisks(storageXml), recordingStatus.reasonCodes, archiveEvidence);
 }
 
 async function getHikvisionRecordingStatus(base: string, credentials: { username: string; password: string } | undefined, timeout: number, trackIds: string[]): Promise<RecordingProbe> {
@@ -89,7 +126,7 @@ async function getHikvisionRecordingStatus(base: string, credentials: { username
   }
 }
 
-async function probeDahuaFamily(config: RecorderConfig, base: string, credentials: { username: string; password: string } | undefined, timeout: number, started: number) {
+async function probeDahuaFamily(config: RecorderConfig, base: string, credentials: { username: string; password: string } | undefined, timeout: number, started: number, includeArchive: boolean) {
   const system = await authenticatedFetch(`${base}${config.systemPath ?? "/cgi-bin/magicBox.cgi?action=getSystemInfo"}`, { method: "GET" }, credentials, timeout);
   if (system.status === 401 || system.status === 403) return result(config, true, "degraded", started, {}, [], ["recorder_credentials_rejected"]);
   if (!system.ok) throw new Error(`${config.vendor}_http_${system.status}`);
@@ -103,6 +140,9 @@ async function probeDahuaFamily(config: RecorderConfig, base: string, credential
   // Query the archive for newly created media. Record.Enable is a schedule setting,
   // so treating it as current recording state produced false positives.
   const recordingStatus = await getDahuaRecordingStatus(base, credentials, timeout);
+  const archiveEvidence = includeArchive
+    ? await scanDahuaArchive(config, base, credentials, timeout)
+    : [];
 
   // Different Dahua-family firmware exposes the SKU under different keys.
   // Prefer an explicit model over a generic device type when both are present.
@@ -117,7 +157,7 @@ async function probeDahuaFamily(config: RecorderConfig, base: string, credential
     recordingStatus: recordingStatus.status,
     recordingChannels: recordingStatus.recordingChannels,
     recordingStatusSource: recordingStatus.source,
-  }, parseCgiDisks(storageText), recordingStatus.reasonCodes);
+  }, parseCgiDisks(storageText), recordingStatus.reasonCodes, archiveEvidence);
 }
 
 async function getDahuaRecordingStatus(base: string, credentials: { username: string; password: string } | undefined, timeout: number): Promise<RecordingProbe> {
@@ -150,7 +190,206 @@ async function getDahuaRecordingStatus(base: string, credentials: { username: st
   }
 }
 
-async function probeOnvif(config: RecorderConfig, base: string, credentials: { username: string; password: string } | undefined, timeout: number, started: number) {
+/**
+ * Reads the recorder's native archive rather than the platform recording index.
+ * A result is usable only when every page inside the configured lookback window
+ * was read; an incomplete result is deliberately reported as unavailable.
+ */
+async function scanHikvisionArchive(config: RecorderConfig, base: string, credentials: { username: string; password: string } | undefined, timeout: number) {
+  const retention = config.archiveRetention;
+  if (!retention) return [];
+  const searchStartedAt = new Date();
+  const searchFrom = new Date(searchStartedAt.getTime() - retention.lookbackDays * 86_400_000);
+  return mapArchiveChannels(retention.channels, async (mapping) => {
+    try {
+      const result = await searchHikvisionArchive(base, credentials, timeout, 100 + mapping.channel, searchFrom, searchStartedAt, retention.maxResults);
+      return archiveEvidenceFromSearch(mapping, result, retention, searchFrom, searchStartedAt);
+    } catch {
+      return unavailableArchiveEvidence(mapping, retention, searchFrom, searchStartedAt, "hikvision_archive_retention_search_failed");
+    }
+  });
+}
+
+async function searchHikvisionArchive(base: string, credentials: { username: string; password: string } | undefined, timeout: number, trackId: number, from: Date, to: Date, maxResults: number): Promise<ArchiveSearchResult> {
+  const pageSize = Math.min(1_000, maxResults);
+  const segments: ArchiveSegment[] = [];
+  for (let position = 0; segments.length < maxResults; position += pageSize) {
+    const response = await authenticatedFetch(`${base}/ISAPI/ContentMgmt/search`, {
+      method: "POST",
+      headers: { "content-type": "application/xml" },
+      body: hikvisionArchiveSearchBody([String(trackId)], from, to, pageSize, position),
+    }, credentials, timeout);
+    if (!response.ok) throw new Error(`hikvision_archive_${response.status}`);
+    const xml = await response.text();
+    const page = parseHikvisionArchiveSegments(xml);
+    if (page.length === 0) return { segments, coverageComplete: true, reasonCodes: [] };
+    segments.push(...page);
+    const declared = firstFinite(valuesForTag(xml, "numOfMatches").concat(valuesForTag(xml, "totalMatches")).map(Number));
+    if ((declared !== null && segments.length >= declared) || page.length < pageSize) {
+      return { segments, coverageComplete: true, reasonCodes: [] };
+    }
+  }
+  return { segments, coverageComplete: false, reasonCodes: ["hikvision_archive_retention_result_limit"] };
+}
+
+async function scanDahuaArchive(config: RecorderConfig, base: string, credentials: { username: string; password: string } | undefined, timeout: number) {
+  const retention = config.archiveRetention;
+  if (!retention) return [];
+  const searchStartedAt = new Date();
+  const searchFrom = new Date(searchStartedAt.getTime() - retention.lookbackDays * 86_400_000);
+  return mapArchiveChannels(retention.channels, async (mapping) => {
+    try {
+      const result = await searchDahuaArchive(base, credentials, timeout, mapping.channel, searchFrom, searchStartedAt, retention.maxResults);
+      return archiveEvidenceFromSearch(mapping, result, retention, searchFrom, searchStartedAt);
+    } catch {
+      return unavailableArchiveEvidence(mapping, retention, searchFrom, searchStartedAt, "dahua_archive_retention_search_failed");
+    }
+  });
+}
+
+async function searchDahuaArchive(base: string, credentials: { username: string; password: string } | undefined, timeout: number, channel: number, from: Date, to: Date, maxResults: number): Promise<ArchiveSearchResult> {
+  let object: string | undefined;
+  const segments: ArchiveSegment[] = [];
+  try {
+    const factory = await authenticatedFetch(`${base}/cgi-bin/mediaFileFind.cgi?action=factory.create`, { method: "GET" }, credentials, timeout);
+    if (!factory.ok) throw new Error(`dahua_archive_factory_${factory.status}`);
+    object = key(await factory.text(), "object");
+    if (!object) throw new Error("dahua_archive_handle_missing");
+    const query = new URLSearchParams({
+      action: "findFile", object,
+      "condition.Channel": String(channel),
+      "condition.StartTime": dahuaTime(from),
+      "condition.EndTime": dahuaTime(to),
+      "condition.Types[0]": "dav",
+    });
+    const find = await authenticatedFetch(`${base}/cgi-bin/mediaFileFind.cgi?${query}`, { method: "GET" }, credentials, timeout);
+    if (!find.ok) throw new Error(`dahua_archive_find_${find.status}`);
+
+    const pageSize = Math.min(1_000, maxResults);
+    while (segments.length < maxResults) {
+      const next = await authenticatedFetch(`${base}/cgi-bin/mediaFileFind.cgi?${new URLSearchParams({ action: "findNextFile", object, count: String(pageSize) })}`, { method: "GET" }, credentials, timeout);
+      if (!next.ok) throw new Error(`dahua_archive_next_${next.status}`);
+      const text = await next.text();
+      const found = key(text, "found")?.toLowerCase();
+      const page = parseDahuaArchiveSegments(text);
+      if (found !== "1" && found !== "true") return { segments, coverageComplete: true, reasonCodes: [] };
+      if (page.length === 0) return { segments, coverageComplete: false, reasonCodes: ["dahua_archive_retention_unparseable"] };
+      segments.push(...page);
+    }
+    return { segments, coverageComplete: false, reasonCodes: ["dahua_archive_retention_result_limit"] };
+  } finally {
+    if (object) {
+      await authenticatedFetch(`${base}/cgi-bin/mediaFileFind.cgi?${new URLSearchParams({ action: "close", object })}`, { method: "GET" }, credentials, timeout).catch(() => undefined);
+    }
+  }
+}
+
+function archiveEvidenceFromSearch(mapping: { cameraId: string; channel: number }, result: ArchiveSearchResult, retention: NonNullable<RecorderConfig["archiveRetention"]>, searchFrom: Date, searchTo: Date): ArchiveRetentionEvidence {
+  if (!result.coverageComplete) {
+    return {
+      cameraId: mapping.cameraId, sourceChannel: mapping.channel, status: "unavailable",
+      oldestContinuousAt: null, newestPlayableAt: null, retentionLowerBound: false,
+      coverageComplete: false, continuityGapSeconds: retention.continuityGapSeconds,
+      searchStartedAt: searchTo.toISOString(), reasonCodes: result.reasonCodes,
+    };
+  }
+  if (result.segments.length === 0) {
+    return {
+      cameraId: mapping.cameraId, sourceChannel: mapping.channel, status: "empty",
+      oldestContinuousAt: null, newestPlayableAt: null, retentionLowerBound: false,
+      coverageComplete: true, continuityGapSeconds: retention.continuityGapSeconds,
+      searchStartedAt: searchTo.toISOString(), reasonCodes: ["recorder_archive_empty"],
+    };
+  }
+  const continuous = continuousArchiveWindow(result.segments, retention.continuityGapSeconds);
+  return {
+    cameraId: mapping.cameraId, sourceChannel: mapping.channel, status: "available",
+    oldestContinuousAt: new Date(continuous.oldest).toISOString(), newestPlayableAt: new Date(continuous.newest).toISOString(),
+    retentionLowerBound: continuous.oldest <= searchFrom.getTime() + Math.max(1_000, retention.continuityGapSeconds * 1_000),
+    coverageComplete: true, continuityGapSeconds: retention.continuityGapSeconds,
+    searchStartedAt: searchTo.toISOString(), reasonCodes: [],
+  };
+}
+
+function unavailableArchiveEvidence(mapping: { cameraId: string; channel: number }, retention: NonNullable<RecorderConfig["archiveRetention"]>, searchFrom: Date, searchTo: Date, reasonCode: string): ArchiveRetentionEvidence {
+  return {
+    cameraId: mapping.cameraId, sourceChannel: mapping.channel, status: "unavailable",
+    oldestContinuousAt: null, newestPlayableAt: null, retentionLowerBound: false,
+    coverageComplete: false, continuityGapSeconds: retention.continuityGapSeconds,
+    searchStartedAt: searchTo.toISOString(), reasonCodes: [reasonCode],
+  };
+}
+
+function unsupportedArchiveEvidence(config: RecorderConfig, reasonCode: string) {
+  const retention = config.archiveRetention;
+  if (!retention) return [];
+  const now = new Date();
+  const searchFrom = new Date(now.getTime() - retention.lookbackDays * 86_400_000);
+  return retention.channels.map((mapping) => unavailableArchiveEvidence(mapping, retention, searchFrom, now, reasonCode));
+}
+
+function continuousArchiveWindow(segments: ArchiveSegment[], gapSeconds: number) {
+  const ordered = segments
+    .filter((segment) => Number.isFinite(segment.startedAt) && Number.isFinite(segment.endedAt) && segment.endedAt >= segment.startedAt)
+    .sort((left, right) => right.endedAt - left.endedAt);
+  const newest = ordered[0]!.endedAt;
+  let oldest = ordered[0]!.startedAt;
+  let cursor = oldest;
+  for (const segment of ordered.slice(1)) {
+    if (cursor - segment.endedAt > gapSeconds * 1_000) break;
+    oldest = Math.min(oldest, segment.startedAt);
+    cursor = oldest;
+  }
+  return { oldest, newest };
+}
+
+async function mapArchiveChannels<T>(channels: Array<{ cameraId: string; channel: number }>, mapper: (channel: { cameraId: string; channel: number }) => Promise<T>): Promise<T[]> {
+  const results: T[] = [];
+  const pending = [...channels];
+  const workers = Array.from({ length: Math.min(4, channels.length) }, async () => {
+    while (pending.length) {
+      const channel = pending.shift();
+      if (channel) results.push(await mapper(channel));
+    }
+  });
+  await Promise.all(workers);
+  return results;
+}
+
+function parseHikvisionArchiveSegments(xml: string): ArchiveSegment[] {
+  const items = [...xml.matchAll(/<(?:[^:>]+:)?(?:searchMatchItem|matchItem)\b[^>]*>([\s\S]*?)<\/(?:[^:>]+:)?(?:searchMatchItem|matchItem)>/gi)];
+  return items.flatMap((item) => {
+    const startedAt = Date.parse(valuesForTag(item[1]!, "startTime")[0] ?? "");
+    const endedAt = Date.parse(valuesForTag(item[1]!, "endTime")[0] ?? "");
+    return Number.isFinite(startedAt) && Number.isFinite(endedAt) ? [{ startedAt, endedAt }] : [];
+  });
+}
+
+function parseDahuaArchiveSegments(text: string): ArchiveSegment[] {
+  const grouped = new Map<string, { startedAt?: string; endedAt?: string }>();
+  for (const match of text.matchAll(/(?:items|item)\[(\d+)\]\.(StartTime|EndTime)=([^\r\n]+)/gi)) {
+    const item = grouped.get(match[1]!) ?? {};
+    if (match[2]!.toLowerCase() === "starttime") item.startedAt = match[3]!.trim();
+    else item.endedAt = match[3]!.trim();
+    grouped.set(match[1]!, item);
+  }
+  return [...grouped.values()].flatMap((item) => {
+    const startedAt = parseDahuaTimestamp(item.startedAt);
+    const endedAt = parseDahuaTimestamp(item.endedAt);
+    return startedAt !== null && endedAt !== null ? [{ startedAt, endedAt }] : [];
+  });
+}
+
+function parseDahuaTimestamp(value: string | undefined) {
+  const parsed = value ? Date.parse(value.replace(" ", "T")) : Number.NaN;
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function firstFinite(values: number[]) {
+  return values.find((value) => Number.isFinite(value)) ?? null;
+}
+
+async function probeOnvif(config: RecorderConfig, base: string, credentials: { username: string; password: string } | undefined, timeout: number, started: number, includeArchive: boolean) {
   const body = `<?xml version="1.0"?><s:Envelope xmlns:s="http://www.w3.org/2003/05/soap-envelope"><s:Body><GetDeviceInformation xmlns="http://www.onvif.org/ver10/device/wsdl"/></s:Body></s:Envelope>`;
   const response = await authenticatedFetch(`${base}${config.systemPath ?? "/onvif/device_service"}`, { method: "POST", headers: { "content-type": "application/soap+xml" }, body }, credentials, timeout);
   if (response.status === 401 || response.status === 403) return result(config, true, "degraded", started, {}, [], ["recorder_credentials_rejected"]);
@@ -160,6 +399,7 @@ async function probeOnvif(config: RecorderConfig, base: string, credentials: { u
   // The ONVIF Search service's recent DataUntil is portable evidence that media
   // is arriving. Recording Control's GetRecordings only lists configuration.
   const recordingStatus = await getOnvifRecordingStatus(base, config.systemPath ?? "/onvif/device_service", credentials, timeout);
+  const archiveEvidence = includeArchive ? unsupportedArchiveEvidence(config, "onvif_archive_continuity_unsupported") : [];
 
   const reportedModel = tag(xml, "Model");
   return result(config, true, "online", started, {
@@ -171,7 +411,7 @@ async function probeOnvif(config: RecorderConfig, base: string, credentials: { u
     recordingChannels: recordingStatus.recordingChannels,
     recordingStatusSource: recordingStatus.source,
     totalCameras: null, connectedCameras: null,
-  }, [], recordingStatus.reasonCodes);
+  }, [], recordingStatus.reasonCodes, archiveEvidence);
 }
 
 async function getOnvifRecordingStatus(base: string, deviceServicePath: string, credentials: { username: string; password: string } | undefined, timeout: number): Promise<RecordingProbe> {
@@ -190,11 +430,9 @@ function recordingUnavailable(reasonCode: string): RecordingProbe {
   return { status: "unknown", recordingChannels: null, reasonCodes: [reasonCode], source: "unavailable" };
 }
 
-function hikvisionArchiveSearchBody(trackIds: string[]) {
-  const end = new Date();
-  const start = new Date(end.getTime() - RECORDING_EVIDENCE_WINDOW_MS);
+function hikvisionArchiveSearchBody(trackIds: string[], start = new Date(Date.now() - RECORDING_EVIDENCE_WINDOW_MS), end = new Date(), maxResults = 128, searchResultPosition = 0) {
   const tracks = (trackIds.length ? trackIds : ["101"]).map((id) => `<trackID>${id}</trackID>`).join("");
-  return `<?xml version="1.0" encoding="UTF-8"?><CMSearchDescription version="1.0" xmlns="http://www.isapi.org/ver20/XMLSchema"><searchID>sentinel-recorder-health</searchID><trackList>${tracks}</trackList><timeSpanList><timeSpan><startTime>${start.toISOString()}</startTime><endTime>${end.toISOString()}</endTime></timeSpan></timeSpanList><maxResults>128</maxResults><searchResultPosition>0</searchResultPosition></CMSearchDescription>`;
+  return `<?xml version="1.0" encoding="UTF-8"?><CMSearchDescription version="1.0" xmlns="http://www.isapi.org/ver20/XMLSchema"><searchID>sentinel-recorder-health</searchID><trackList>${tracks}</trackList><timeSpanList><timeSpan><startTime>${start.toISOString()}</startTime><endTime>${end.toISOString()}</endTime></timeSpan></timeSpanList><maxResults>${maxResults}</maxResults><searchResultPosition>${searchResultPosition}</searchResultPosition></CMSearchDescription>`;
 }
 
 function parseHikvisionArchiveSearch(xml: string): RecordingProbe {
@@ -259,8 +497,8 @@ function hikvisionTrackIds(channelXml: string) {
   return channelIds.map((id) => String(100 + id));
 }
 
-function result(config: RecorderConfig, reachable: boolean, status: string, started: number, extra: Record<string, string | number | boolean | null>, hddStatus: Array<Record<string, unknown>>, reasonCodes: string[]): RecorderProbeResult {
-  return { metrics: { name: config.name, deviceType: config.deviceType, vendor: config.vendor, model: config.model ?? "Unknown", modelSource: "configured", ipAddress: config.host, reachable, status, latencyMs: Math.round((performance.now() - started) * 100) / 100, ...extra }, hddStatus, reasonCodes };
+function result(config: RecorderConfig, reachable: boolean, status: string, started: number, extra: Record<string, string | number | boolean | null>, hddStatus: Array<Record<string, unknown>>, reasonCodes: string[], archiveEvidence: ArchiveRetentionEvidence[] = []): RecorderProbeResult {
+  return { metrics: { name: config.name, deviceType: config.deviceType, vendor: config.vendor, model: config.model ?? "Unknown", modelSource: "configured", ipAddress: config.host, reachable, status, latencyMs: Math.round((performance.now() - started) * 100) / 100, ...extra }, hddStatus, reasonCodes, archiveEvidence };
 }
 function parseHikvisionDisks(xml: string) { return [...xml.matchAll(/<hdd>([\s\S]*?)<\/hdd>/gi)].map((match, index) => ({ diskNo: tag(match[1]!, "id") ?? index + 1, devicePath: tag(match[1]!, "name") ?? `HDD ${index + 1}`, capacity: tag(match[1]!, "capacity"), freeSpace: tag(match[1]!, "freeSpace"), state: tag(match[1]!, "status"), temperature: tag(match[1]!, "temperature") })); }
 function parseCgiDisks(text: string) { const grouped = new Map<string, Record<string, unknown>>(); for (const line of text.split(/\r?\n/)) { const match = line.match(/(?:Storage|Disk|HDD)(?:\[|\.)(\d+)\]?\.([^=]+)=(.*)$/i); if (!match) continue; const item = grouped.get(match[1]!) ?? { diskNo: Number(match[1]) + 1 }; item[match[2]!] = match[3]!.trim(); grouped.set(match[1]!, item); } return [...grouped.values()]; }

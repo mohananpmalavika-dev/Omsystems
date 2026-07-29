@@ -181,6 +181,12 @@ export interface RetentionHealth {
   daysUntilCompliant: number | null;
   trend: 'improving' | 'stable' | 'declining' | 'unknown';
   coverageTrend: Array<{ date: string; coveredHours: number; coveragePercent: number }>;
+  dataSource: 'platform_index' | 'recorder_archive' | 'none';
+  archiveVerified: boolean;
+  archiveMismatch: boolean;
+  archiveRecorderId: string | null;
+  archiveObservedAt: string | null;
+  archiveCoverageComplete: boolean | null;
   reasonCodes: string[];
 }
 
@@ -238,6 +244,7 @@ export interface InternetLinkHealth {
   status: 'online' | 'degraded' | 'offline' | 'unknown'; active: boolean; connectivity: boolean;
   latencyMs: number | null; jitterMs: number | null; packetLossPercent: number | null;
   rxMbps: number | null; txMbps: number | null; bandwidthUtilizationPercent: number | null;
+  routeVerified: boolean; probeBinding: 'default-route' | 'interface' | 'source-address' | 'unbound' | 'unknown';
   contractedDownMbps: number | null; contractedUpMbps: number | null;
   probeTarget: string | null; publicIp: string | null; lastCheck: string; reasonCodes: string[];
 }

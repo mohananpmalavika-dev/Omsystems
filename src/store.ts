@@ -1740,7 +1740,10 @@ export class MemoryStore implements ControlPlaneStore {
 
   async recordSmsDeliveryEvent(id: string, event: Parameters<ControlPlaneStore["recordSmsDeliveryEvent"]>[1]) {
     const item = this.analyticsNotifications.find((notification) => notification.id === id);
-    if (!item?.smsDelivery) return undefined;
+    if (!item) return undefined;
+    if (!item.smsDelivery) {
+      item.smsDelivery = { provider: event.provider ?? "webhook", status: event.status, template: "unknown", events: [] };
+    }
     item.smsDelivery.status = event.status;
     if (event.provider) item.smsDelivery.provider = event.provider;
     item.smsDelivery.events.push({ status: event.status, occurredAt: event.occurredAt,
@@ -1752,13 +1755,16 @@ export class MemoryStore implements ControlPlaneStore {
 
   async recordEmailDeliveryEvent(id: string, event: Parameters<ControlPlaneStore["recordEmailDeliveryEvent"]>[1]) {
     const item = this.analyticsNotifications.find((notification) => notification.id === id);
-    if (!item?.emailDelivery) return undefined;
+    if (!item) return undefined;
+    if (!item.emailDelivery) {
+      item.emailDelivery = { provider: event.provider ?? "webhook", status: event.status, subject: event.subject ?? "", events: [] };
+    }
     item.emailDelivery.status = event.status;
     if (event.provider) item.emailDelivery.provider = event.provider;
+    if (event.subject) item.emailDelivery.subject = event.subject;
     item.emailDelivery.events.push({ status: event.status, occurredAt: event.occurredAt,
       ...(event.detail ? { detail: event.detail } : {}) });
     if (event.providerId) item.providerId = event.providerId;
-    if (event.subject) item.emailDelivery.subject = event.subject;
     item.updatedAt = event.occurredAt;
     return structuredClone(item);
   }

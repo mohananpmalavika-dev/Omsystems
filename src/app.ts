@@ -222,13 +222,11 @@ export async function buildApp(options?: {
   } else if (emailProviderName === "sendgrid" && process.env.SENDGRID_API_KEY) {
     const provider = new SendGridEmailProvider(process.env.SENDGRID_API_KEY);
     emailAlertSender = new EmailNotificationSender(store, provider);
-  } else if (emailProviderName === "ses") {
-    // SES client will use environment AWS credentials
-    const { SESClient } = await import("@aws-sdk/client-ses");
-    const client = new SESClient({ region: process.env.AWS_REGION ?? "us-east-1" });
-    const provider = new SesEmailProvider(client);
-    emailAlertSender = new EmailNotificationSender(store, provider);
   } else if (emailProviderName) throw new Error(`Incomplete credentials for ALERT_EMAIL_PROVIDER=${emailProviderName}`);
+  if (emailAlertSender) {
+    configuredAlertSender = new RoutedAlertNotificationSender(configuredAlertSender,
+      configuredAlertSender, undefined, emailAlertSender);
+  }
   const publicAlertBaseUrl = process.env.ALERT_PUBLIC_BASE_URL ?? "";
   if ((voiceProviderName || smsProviderName) && !/^https:\/\//i.test(publicAlertBaseUrl)) {
     throw new Error("ALERT_PUBLIC_BASE_URL must be a provider-reachable HTTPS URL when external notifications are enabled");

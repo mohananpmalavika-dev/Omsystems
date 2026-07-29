@@ -11,6 +11,46 @@ Best-effort recording-activity detection across multiple vendors using their doc
 - Recording schedules and enabled track configuration are retained as recorder configuration, not treated as proof of current recording.
 - `stopped` requires a vendor response that explicitly reports a stopped recorder; it is never inferred merely because no file was returned in a short window.
 
+## Retention verification from the recorder archive
+
+Recording activity and retention are different checks. When a recorder has an
+`archiveRetention` configuration, the edge agent periodically reads the
+configured channel's native archive over the requested lookback window and
+reports its continuous time range to the control plane. The control plane uses
+that evidence in preference to its own `recording_segments` index only when the
+scan is complete, fresh (less than 24 hours old), and was calculated with a
+continuity gap no larger than the branch policy permits.
+
+Map channels explicitly because a branch can contain multiple DVRs/NVRs; the
+camera's display channel is not globally unique. Channel numbering is
+vendor-native: Hikvision uses the configured camera channel and converts it to
+the ISAPI track ID (`1` becomes `101`); Dahua and CP PLUS use their CGI channel
+index (commonly zero-based).
+
+```json
+{
+  "id": "branch-nvr-01",
+  "name": "Branch NVR",
+  "deviceType": "nvr",
+  "vendor": "hikvision",
+  "host": "192.0.2.10",
+  "port": 80,
+  "archiveRetention": {
+    "lookbackDays": 400,
+    "maxResults": 20000,
+    "continuityGapSeconds": 30,
+    "channels": [
+      { "cameraId": "approved-control-plane-camera-id", "channel": 1 }
+    ]
+  }
+}
+```
+
+Set `RECORDER_ARCHIVE_SCAN_INTERVAL_MS` to control cadence (six hours by
+default). If a recorder does not support a complete historical archive search,
+the result remains explicitly unavailable and the UI labels any fallback value
+as a platform-index result rather than claiming archive verification.
+
 The endpoints below are compatibility targets. They have fixture coverage in this repository, but model and firmware support must be acceptance-tested against the customer recorder before it is marked supported.
 
 ## Supported Vendors

@@ -5,8 +5,9 @@ import { compatibilityNotes, normalizeVendor } from "./devices/compatibility-reg
 import { GatewayClient } from "./registration/gateway-client.js";
 import { probeRtsp } from "./streaming/rtsp-probe.js";
 import { LocalStreamSecretStore, startSecretProvider } from "./streaming/secret-store.js";
-import { cpus, freemem, totalmem, uptime } from "node:os";
+import { uptime } from "node:os";
 import { NetworkCounterSampler, probeInternetLink } from "./monitoring/internet-probe.js";
+import { EdgeResourceSampler } from "./monitoring/edge-resource-probe.js";
 import { looksLikeRecorder, probeRecorder } from "./monitoring/recorder-probe.js";
 import { initializeCameraHeartbeat } from "./monitoring/camera-heartbeat.js";
 
@@ -23,7 +24,9 @@ const agentId = config.EDGE_AGENT_ID ?? (await gateway.register(
 )).id;
 const secrets = new LocalStreamSecretStore(config.STREAM_SECRET_STORE_PATH);
 const networkCounterSampler = new NetworkCounterSampler();
+const edgeResourceSampler = new EdgeResourceSampler();
 let lastRecorderProbeAt = 0;
+let lastRecorderArchiveScanAt = 0;
 await secrets.load();
 const cameraHeartbeat = initializeCameraHeartbeat(
   config.CONTROL_PLANE_URL,
@@ -222,7 +225,7 @@ async function heartbeatAndReport() {
   }
   const observedAt = new Date().toISOString();
   const latencyMs = Date.now() - startedAt;
-  const memoryTotal = totalmem();
+  const { reasonCodes: edgeResourceReasonCodes, ...edgeResourceMetrics } = await edgeResourceSampler.sample(config.EDGE_HEALTH_DISK_PATH);
   const configuredLinks = config.INTERNET_LINKS_JSON.length ? config.INTERNET_LINKS_JSON : [{
     id: "primary", role: "primary" as const, ispName: "Primary ISP",
     targets: [config.CONTROL_PLANE_URL],
@@ -232,9 +235,11 @@ async function heartbeatAndReport() {
     counterSampler: networkCounterSampler,
   })));
   const primaryAvailable = linkResults.some((link) => link.role === "primary" && link.connectivity);
+  const scanRecorderArchives = Date.now() - lastRecorderArchiveScanAt >= config.RECORDER_ARCHIVE_SCAN_INTERVAL_MS;
   const recorderReports = Date.now() - lastRecorderProbeAt >= config.RECORDER_POLL_INTERVAL_MS
-    ? await collectRecorderReports(observedAt) : [];
+    ? await collectRecorderReports(observedAt, scanRecorderArchives) : [];
   if (recorderReports.length) lastRecorderProbeAt = Date.now();
+  if (scanRecorderArchives && recorderReports.length) lastRecorderArchiveScanAt = Date.now();
   await Promise.all([
     gateway.submitTelemetry(agentId, {
       branchId: config.BRANCH_ID, edgeAgentId: agentId,
@@ -243,10 +248,9 @@ async function heartbeatAndReport() {
       metrics: {
         status: "online", version: config.EDGE_AGENT_VERSION,
         uptimeSeconds: Math.round(uptime()),
-        memoryUsedPercent: memoryTotal > 0 ? Math.round((1 - freemem() / memoryTotal) * 10_000) / 100 : null,
-        logicalCpuCount: cpus().length,
+        ...edgeResourceMetrics,
       },
-      reasonCodes: ["cpu_utilization_unavailable", "disk_utilization_unavailable"],
+      reasonCodes: edgeResourceReasonCodes,
     }),
     ...linkResults.map((link) => {
       const { reasonCodes, ...linkMetrics } = link;
@@ -272,6 +276,11 @@ async function heartbeatAndReport() {
         quality: "verified", idempotencyKey: `${agentId}:recorder-hdd:${recorder.id}:${observedAt}`,
         hddStatus: probe.hddStatus,
       }));
+      if (probe.archiveEvidence.length) submissions.push(gateway.submitRecorderArchive(agentId, {
+        branchId: config.BRANCH_ID, recorderId: recorder.id, observedAt, source,
+        quality: "verified", idempotencyKey: `${agentId}:recorder-archive:${recorder.id}:${observedAt}`,
+        entries: probe.archiveEvidence,
+      }));
       return submissions;
     }),
   ]);
@@ -291,8 +300,8 @@ async function syncCameraHeartbeatConfig() {
   lastCameraConfigSyncAt = Date.now();
 }
 
-async function collectRecorderReports(observedAt: string) {
+async function collectRecorderReports(observedAt: string, includeArchive: boolean) {
   return Promise.all(config.RECORDERS_JSON.map(async (recorder) => ({
-    recorder, observedAt, probe: await probeRecorder(recorder, config.RECORDER_PROBE_TIMEOUT_MS),
+    recorder, observedAt, probe: await probeRecorder(recorder, config.RECORDER_PROBE_TIMEOUT_MS, { includeArchive }),
   })));
 }

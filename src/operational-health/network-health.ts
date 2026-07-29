@@ -11,8 +11,15 @@ export function normalizeNetworkMetrics(
   const jitter = numberMetric(metrics, "jitterMs");
   const packetLoss = numberMetric(metrics, "packetLossPercent");
   const utilization = numberMetric(metrics, "bandwidthUtilizationPercent");
+  const routeVerified = booleanMetric(metrics, "routeVerified");
   const reasons: string[] = [];
   let status: InternetLinkStatus = connectivity ? "online" : "offline";
+  if (routeVerified === false) {
+    return {
+      metrics: { ...metrics, status: "unknown", connectivity },
+      reasonCodes: ["internet_route_unverified"],
+    };
+  }
   if (!connectivity) reasons.push("internet_connectivity_lost");
   if (latency !== null && latency >= policy.latencyCriticalMs) { status = "degraded"; reasons.push("internet_latency_critical"); }
   else if (latency !== null && latency >= policy.latencyWarningMs) { status = "degraded"; reasons.push("internet_latency_high"); }
@@ -45,6 +52,8 @@ export function projectInternetLink(envelope: OperationalTelemetryEnvelope, bran
     jitterMs: metric("jitterMs"), packetLossPercent: metric("packetLossPercent"),
     rxMbps: metric("rxMbps"), txMbps: metric("txMbps"),
     bandwidthUtilizationPercent: metric("bandwidthUtilizationPercent"),
+    routeVerified: booleanMetric(envelope.metrics, "routeVerified") !== false,
+    probeBinding: stringMetric(envelope.metrics, "probeBinding") || "unknown",
     contractedDownMbps: metric("contractedDownMbps"), contractedUpMbps: metric("contractedUpMbps"),
     probeTarget: stringMetric(envelope.metrics, "probeTarget") || null,
     publicIp: stringMetric(envelope.metrics, "publicIp") || null,
@@ -55,9 +64,11 @@ export function projectInternetLink(envelope: OperationalTelemetryEnvelope, bran
 export function summarizeBranchInternet(links: ReturnType<typeof projectInternetLink>[]) {
   const primary = links.find((link) => link.role === "primary");
   const backup = links.find((link) => link.role === "backup");
-  const active = links.find((link) => link.active && link.connectivity) ?? links.find((link) => link.connectivity);
-  const allOffline = links.length > 0 && links.every((link) => !link.connectivity || link.status === "offline");
-  const status = links.length === 0 ? "unknown" as const : allOffline ? "offline" as const
+  const verified = links.filter((link) => link.routeVerified);
+  const active = verified.find((link) => link.active && link.connectivity) ?? verified.find((link) => link.connectivity);
+  const allOffline = verified.length > 0 && verified.every((link) => !link.connectivity || link.status === "offline");
+  const backupRouteUnknown = backup?.routeVerified === false;
+  const status = links.length === 0 || verified.length === 0 ? "unknown" as const : allOffline ? backupRouteUnknown ? "unknown" as const : "offline" as const
     : active?.status === "degraded" ? "degraded" as const
       : primary && !primary.connectivity && backup?.connectivity ? "failover" as const
         : backup && !backup.connectivity ? "degraded" as const : "online" as const;

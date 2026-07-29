@@ -949,6 +949,7 @@ export interface AlertNotification {
   deliveredAt?: string | undefined;
   voiceCall?: VoiceCallAudit | undefined;
   smsDelivery?: SmsDeliveryAudit | undefined;
+  emailDelivery?: EmailDeliveryAudit | undefined;
   createdAt: string;
   updatedAt: string;
 }

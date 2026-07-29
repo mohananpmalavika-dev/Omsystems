@@ -6,6 +6,7 @@ import {
   projectBranchHealth,
   verifyContinuousRetention,
   type RetentionVerification,
+  type RecorderArchiveEvidence,
 } from "../operational-health/service.js";
 import {
   defaultOperationalHealthPolicy,
@@ -21,6 +22,7 @@ import {
 } from "../operational-health/disk-health.js";
 import { normalizeNetworkMetrics, projectInternetLink, summarizeBranchInternet } from "../operational-health/network-health.js";
 import { normalizeRecorderMetrics, projectRecorderHealth } from "../operational-health/recorder-health.js";
+import { normalizeEdgeAgentMetrics } from "../operational-health/edge-agent-health.js";
 
 const deviceTypes = ["branch", "edge-agent", "recorder", "camera", "disk", "network", "ups"] as const;
 const sources = ["onvif", "cp-plus-adapter", "rtsp", "system", "recording-engine"] as const;
@@ -50,6 +52,35 @@ const recorderHddSchema = z.object({
     z.record(z.string(), z.unknown()),
   ]),
 });
+const recorderArchiveSchema = z.object({
+  branchId: z.string().min(1),
+  recorderId: z.string().min(1).max(150),
+  observedAt: z.string().datetime(),
+  source: z.enum(sources).default("system"),
+  quality: z.enum(qualities).default("verified"),
+  idempotencyKey: z.string().min(1).max(140),
+  entries: z.array(z.object({
+    cameraId: z.string().min(1).max(200),
+    sourceChannel: z.number().int().min(0).max(65_535),
+    status: z.enum(["available", "empty", "unavailable"]),
+    oldestContinuousAt: z.string().datetime().nullable(),
+    newestPlayableAt: z.string().datetime().nullable(),
+    retentionLowerBound: z.boolean(),
+    coverageComplete: z.boolean(),
+    continuityGapSeconds: z.number().int().min(0).max(86_400),
+    searchStartedAt: z.string().datetime(),
+    reasonCodes: z.array(z.string().min(1).max(100)).max(30).default([]),
+  })).min(1).max(128).superRefine((entries, context) => {
+    const cameras = new Set<string>();
+    const channels = new Set<number>();
+    entries.forEach((entry, index) => {
+      if (cameras.has(entry.cameraId)) context.addIssue({ code: z.ZodIssueCode.custom, path: [index, "cameraId"], message: "cameraId is duplicated" });
+      if (channels.has(entry.sourceChannel)) context.addIssue({ code: z.ZodIssueCode.custom, path: [index, "sourceChannel"], message: "sourceChannel is duplicated" });
+      cameras.add(entry.cameraId);
+      channels.add(entry.sourceChannel);
+    });
+  }),
+});
 const paginationSchema = z.object({
   limit: z.coerce.number().int().min(1).max(500).default(50),
   offset: z.coerce.number().int().min(0).default(0),
@@ -75,6 +106,8 @@ const policySchema = z.object({
   packetLossCriticalPercent: z.number().min(0).max(100),
   bandwidthUtilizationWarningPercent: z.number().min(0).max(100).default(80),
   bandwidthUtilizationCriticalPercent: z.number().min(0).max(100).default(95),
+  edgeAgentWarningPercent: z.number().min(0).max(100).default(80),
+  edgeAgentCriticalPercent: z.number().min(0).max(100).default(95),
 }).refine((value) => value.offlineAfterSeconds > value.staleAfterSeconds, {
   message: "offlineAfterSeconds must exceed staleAfterSeconds",
 }).refine((value) => value.cameraCriticalPercent >= value.cameraWarningPercent, {
@@ -87,6 +120,8 @@ const policySchema = z.object({
   message: "jitterCriticalMs must be at least jitterWarningMs",
 }).refine((value) => value.bandwidthUtilizationCriticalPercent >= value.bandwidthUtilizationWarningPercent, {
   message: "bandwidthUtilizationCriticalPercent must be at least bandwidthUtilizationWarningPercent",
+}).refine((value) => value.edgeAgentCriticalPercent >= value.edgeAgentWarningPercent, {
+  message: "edgeAgentCriticalPercent must be at least edgeAgentWarningPercent",
 });
 
 export async function registerOperationalHealthRoutes(
@@ -121,10 +156,15 @@ export async function registerOperationalHealthRoutes(
     const normalizedDisk = input.deviceType === "disk"
       ? normalizeDiskMetrics(input.metrics, input.deviceId)
       : null;
-    const effectivePolicy = input.deviceType === "network"
+    const effectivePolicy = input.deviceType === "network" || input.deviceType === "edge-agent"
       ? { ...defaultOperationalHealthPolicy, ...((await store.getOperationalHealthPolicy(branch.tenantId, branch.id)) ?? {}) }
       : null;
-    const normalizedNetwork = effectivePolicy ? normalizeNetworkMetrics(input.metrics, effectivePolicy) : null;
+    const normalizedNetwork = input.deviceType === "network" && effectivePolicy
+      ? normalizeNetworkMetrics(input.metrics, effectivePolicy)
+      : null;
+    const normalizedEdgeAgent = input.deviceType === "edge-agent" && effectivePolicy
+      ? normalizeEdgeAgentMetrics(input.metrics, effectivePolicy)
+      : null;
     const normalizedRecorder = input.deviceType === "recorder" ? normalizeRecorderMetrics(input.metrics) : null;
     const envelope: OperationalTelemetryEnvelope = {
       tenantId: branch.tenantId,
@@ -137,8 +177,8 @@ export async function registerOperationalHealthRoutes(
       source: input.source,
       quality: input.quality,
       idempotencyKey: input.idempotencyKey,
-      metrics: normalizedDisk?.metrics ?? normalizedNetwork?.metrics ?? normalizedRecorder?.metrics ?? input.metrics,
-      reasonCodes: [...new Set([...input.reasonCodes, ...(normalizedDisk?.reasonCodes ?? []), ...(normalizedNetwork?.reasonCodes ?? []), ...(normalizedRecorder?.reasonCodes ?? [])])],
+      metrics: normalizedDisk?.metrics ?? normalizedNetwork?.metrics ?? normalizedEdgeAgent?.metrics ?? normalizedRecorder?.metrics ?? input.metrics,
+      reasonCodes: [...new Set([...input.reasonCodes, ...(normalizedDisk?.reasonCodes ?? []), ...(normalizedNetwork?.reasonCodes ?? []), ...(normalizedEdgeAgent?.reasonCodes ?? []), ...(normalizedRecorder?.reasonCodes ?? [])])],
     };
     const result = await store.ingestOperationalTelemetry(envelope);
     if (!result.duplicate) {
@@ -193,6 +233,52 @@ export async function registerOperationalHealthRoutes(
       accepted: results.filter((item) => !item.duplicate).length,
       duplicates: results.filter((item) => item.duplicate).length,
       disks: results,
+      receivedAt,
+    });
+  });
+
+  app.post("/v1/edge-agents/:id/recorder-archive", async (request, reply) => {
+    const { id } = z.object({ id: z.string().min(1) }).parse(request.params);
+    const input = recorderArchiveSchema.parse(request.body);
+    const branch = await store.getNode(input.branchId);
+    if (!branch || branch.type !== "branch") return reply.code(404).send({ error: "branch_not_found" });
+    const agents = await store.listEdgeAgentsByBranch(branch.id);
+    if (!agents.some((agent) => agent.id === id)) return reply.code(403).send({ error: "edge_agent_branch_mismatch" });
+    const cameras = await Promise.all(input.entries.map((entry) => store.getCamera(entry.cameraId)));
+    if (cameras.some((camera) => !camera || camera.branchId !== branch.id || (camera.edgeAgentId && camera.edgeAgentId !== id))) {
+      return reply.code(403).send({ error: "camera_edge_scope_mismatch" });
+    }
+    const receivedAt = new Date().toISOString();
+    const results = [];
+    for (const entry of input.entries) {
+      const deviceId = `${input.recorderId}:archive:${entry.sourceChannel}`;
+      const envelope: OperationalTelemetryEnvelope = {
+        tenantId: branch.tenantId, branchId: branch.id, edgeAgentId: id,
+        deviceType: "archive", deviceId, observedAt: input.observedAt, receivedAt,
+        source: input.source, quality: input.quality,
+        idempotencyKey: `${input.idempotencyKey}:${entry.sourceChannel}`,
+        metrics: {
+          recorderId: input.recorderId, cameraId: entry.cameraId, sourceChannel: entry.sourceChannel,
+          archiveStatus: entry.status, oldestContinuousAt: entry.oldestContinuousAt,
+          newestPlayableAt: entry.newestPlayableAt, retentionLowerBound: entry.retentionLowerBound,
+          coverageComplete: entry.coverageComplete, continuityGapSeconds: entry.continuityGapSeconds,
+          searchStartedAt: entry.searchStartedAt,
+        },
+        reasonCodes: entry.reasonCodes,
+      };
+      const result = await store.ingestOperationalTelemetry(envelope);
+      results.push({ deviceId, ...result });
+      if (!result.duplicate) {
+        operationalHealthEvents.publish({
+          id: randomUUID(), tenantId: branch.tenantId, type: "health.updated", occurredAt: receivedAt,
+          branchId: branch.id, deviceType: "archive", deviceId,
+        });
+      }
+    }
+    return reply.code(results.every((item) => item.duplicate) ? 200 : 202).send({
+      accepted: results.filter((item) => !item.duplicate).length,
+      duplicates: results.filter((item) => item.duplicate).length,
+      archiveEvidence: results,
       receivedAt,
     });
   });
@@ -587,10 +673,12 @@ async function loadAccessibleProjections(
     branches = branches.filter((branch) => requested.has(branch.id));
   }
   const telemetry = await store.listLatestOperationalTelemetry(request.currentUser.tenantId, branches.map((branch) => branch.id));
+  const calculatedAt = Date.now();
   return Promise.all(branches.map(async (branch) => {
     const storedPolicy = await store.getOperationalHealthPolicy(request.currentUser.tenantId, branch.id);
     const policy = { ...defaultOperationalHealthPolicy, ...(storedPolicy ?? {}) };
     const cameras = await store.listCamerasByBranch(request.currentUser, branch.id, "recording:view");
+    const archiveByCamera = latestArchiveEvidenceByCamera(telemetry.filter((item) => item.branchId === branch.id));
     const retentions: RetentionVerification[] = await Promise.all(cameras.map(async (camera) => {
       const job = await store.getRecordingJob(camera.id);
       const segments = await store.listRecordingSegments(camera.id);
@@ -598,7 +686,7 @@ async function loadAccessibleProjections(
         retentionDays: Math.max(job?.retentionDays ?? 0, policy.retentionDays),
         retentionWarningDays: policy.retentionWarningDays,
         maxRecordingGapSeconds: policy.maxRecordingGapSeconds,
-      });
+      }, calculatedAt, archiveByCamera.get(camera.id));
     }));
     return projectBranchHealth({
       branch,
@@ -606,9 +694,50 @@ async function loadAccessibleProjections(
       telemetry: telemetry.filter((item) => item.branchId === branch.id),
       retentions,
       policy,
+      now: calculatedAt,
       region: branch.path.map((id) => regionNames.get(id)).find(Boolean),
     });
   }));
+}
+
+function latestArchiveEvidenceByCamera(telemetry: OperationalTelemetryEnvelope[]) {
+  const evidence = new Map<string, RecorderArchiveEvidence>();
+  for (const item of telemetry) {
+    if (item.deviceType !== "archive") continue;
+    const metrics = item.metrics;
+    const cameraId = stringMetric(metrics.cameraId);
+    const recorderId = stringMetric(metrics.recorderId);
+    const status = stringMetric(metrics.archiveStatus);
+    const sourceChannel = numberMetric(metrics.sourceChannel);
+    const continuityGapSeconds = numberMetric(metrics.continuityGapSeconds);
+    const coverageComplete = booleanMetric(metrics.coverageComplete);
+    const retentionLowerBound = booleanMetric(metrics.retentionLowerBound);
+    if (!cameraId || !recorderId || (status !== "available" && status !== "empty" && status !== "unavailable")
+      || sourceChannel === null || continuityGapSeconds === null || coverageComplete === null || retentionLowerBound === null) continue;
+    const next: RecorderArchiveEvidence = {
+      recorderId, observedAt: item.observedAt, sourceChannel, status,
+      oldestContinuousAt: nullableStringMetric(metrics.oldestContinuousAt),
+      newestPlayableAt: nullableStringMetric(metrics.newestPlayableAt),
+      retentionLowerBound, coverageComplete, continuityGapSeconds,
+      reasonCodes: item.reasonCodes,
+    };
+    const current = evidence.get(cameraId);
+    if (!current || Date.parse(current.observedAt) < Date.parse(next.observedAt)) evidence.set(cameraId, next);
+  }
+  return evidence;
+}
+
+function stringMetric(value: OperationalTelemetryEnvelope["metrics"][string] | undefined) {
+  return typeof value === "string" ? value : "";
+}
+function nullableStringMetric(value: OperationalTelemetryEnvelope["metrics"][string] | undefined) {
+  return typeof value === "string" ? value : null;
+}
+function numberMetric(value: OperationalTelemetryEnvelope["metrics"][string] | undefined) {
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+function booleanMetric(value: OperationalTelemetryEnvelope["metrics"][string] | undefined) {
+  return typeof value === "boolean" ? value : null;
 }
 
 async function canManagePolicy(

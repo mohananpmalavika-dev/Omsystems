@@ -113,6 +113,22 @@ describe("Phase 1 operational health", () => {
     expect(response.json().data.branches[0].unknownComponents).toContain("storage");
   });
 
+  it("turns measured edge CPU, memory, or disk saturation into branch edge-health warning", async () => {
+    const observedAt = new Date().toISOString();
+    const accepted = await app.inject({
+      method: "POST", url: `/v1/edge-agents/${agentId}/telemetry`, headers: admin,
+      payload: {
+        branchId: "branch-blr-001", edgeAgentId: agentId, deviceType: "edge-agent", deviceId: agentId,
+        observedAt, source: "system", quality: "verified", idempotencyKey: `edge-resource:${observedAt}`,
+        metrics: { status: "online", cpuUsedPercent: 96, memoryUsedPercent: 42, diskUsedPercent: 37 }, reasonCodes: [],
+      },
+    });
+    expect(accepted.statusCode).toBe(202);
+    const branch = await app.inject({ method: "GET", url: "/v1/operations/health/branches/branch-blr-001", headers: admin });
+    expect(branch.json().data).toMatchObject({ edgeAgentStatus: "warning", components: { edgeAgent: { status: "warning" } } });
+    expect(branch.json().data.edgeAgent.cpuUsage).toBe(96);
+  });
+
   it("returns summary metrics and supports connectivity click-through filtering", async () => {
     const summary = await app.inject({
       method: "GET", url: "/v1/operations/health/summary", headers: admin,
@@ -204,6 +220,31 @@ describe("Phase 1 operational health", () => {
     const alert = response.json().data.alerts.find((item: { deviceId: string }) => item.deviceId === "cam-001");
     expect(alert).toMatchObject({ severity: "warning", componentType: "retention" });
     expect(alert.title).toContain("approaching threshold");
+  });
+
+  it("projects complete DVR archive evidence even when the platform has no indexed segments", async () => {
+    const now = Date.now();
+    const policy = { ...defaultOperationalHealthPolicy, retentionDays: 30, retentionWarningDays: 3 };
+    expect((await app.inject({ method: "PUT", url: "/v1/operations/health/policy", headers: admin, payload: { branchId: "branch-blr-001", policy } })).statusCode).toBe(200);
+    const submitted = await app.inject({
+      method: "POST", url: `/v1/edge-agents/${agentId}/recorder-archive`, headers: admin,
+      payload: {
+        branchId: "branch-blr-001", recorderId: "nvr-main", observedAt: new Date(now).toISOString(),
+        source: "system", quality: "verified", idempotencyKey: `nvr-main:archive:${now}`,
+        entries: [{
+          cameraId: "cam-001", sourceChannel: 1, status: "available",
+          oldestContinuousAt: new Date(now - 35 * 86_400_000).toISOString(), newestPlayableAt: new Date(now).toISOString(),
+          retentionLowerBound: false, coverageComplete: true, continuityGapSeconds: 30,
+          searchStartedAt: new Date(now).toISOString(), reasonCodes: [],
+        }],
+      },
+    });
+    expect(submitted.statusCode).toBe(202);
+    const retention = await app.inject({ method: "GET", url: "/v1/operations/health/retention?branchId=branch-blr-001", headers: admin });
+    const camera = retention.json().data.items.find((item: { cameraId: string }) => item.cameraId === "cam-001");
+    expect(camera).toMatchObject({
+      actualDays: 35, status: "compliant", dataSource: "recorder_archive", archiveVerified: true,
+    });
   });
 
   it("tracks primary and backup internet links and detects failover", async () => {
@@ -303,6 +344,22 @@ describe("operational health evidence rules", () => {
     expect(verification.marginDays).toBe(2);
     expect(verification.reasonCodes).toContain("retention_approaching_threshold");
     expect(verification.coverageTrend).toHaveLength(14);
+  });
+
+  it("uses complete, fresh recorder archive evidence when no platform segment was indexed", () => {
+    const now = Date.parse("2026-07-28T00:00:00.000Z");
+    const verification = verifyContinuousRetention("camera", [], {
+      retentionDays: 30, retentionWarningDays: 3, maxRecordingGapSeconds: 120,
+    }, now, {
+      recorderId: "nvr-main", observedAt: new Date(now).toISOString(), sourceChannel: 1,
+      status: "available", oldestContinuousAt: new Date(now - 35 * 86_400_000).toISOString(),
+      newestPlayableAt: new Date(now).toISOString(), retentionLowerBound: false,
+      coverageComplete: true, continuityGapSeconds: 30, reasonCodes: [],
+    });
+    expect(verification).toMatchObject({
+      status: "compliant", actualDays: 35, dataSource: "recorder_archive",
+      archiveVerified: true, archiveRecorderId: "nvr-main", archiveCoverageComplete: true,
+    });
   });
 });
 

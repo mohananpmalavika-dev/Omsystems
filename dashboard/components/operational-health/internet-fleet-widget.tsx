@@ -45,10 +45,12 @@ export function InternetFleetWidget({ detailed = false }: { detailed?: boolean }
 
 function LinkMetrics({ link }: { link: InternetLinkHealth }) {
   const bad = link.status === "offline" || link.status === "degraded";
-  return <div className={`rounded border bg-white/80 p-3 ${bad ? "border-red-200" : "border-emerald-200"}`}>
-    <div className="flex justify-between gap-2"><div><strong className="text-sm">{link.ispName}</strong><span className="ml-2 text-xs uppercase text-gray-500">{link.role}{link.active ? " · active" : ""}</span></div><span className={`text-xs font-semibold uppercase ${bad ? "text-red-700" : "text-emerald-700"}`}>{link.status}</span></div>
+  const unknown = link.status === "unknown";
+  return <div className={`rounded border bg-white/80 p-3 ${bad ? "border-red-200" : unknown ? "border-amber-200" : "border-emerald-200"}`}>
+    <div className="flex justify-between gap-2"><div><strong className="text-sm">{link.ispName}</strong><span className="ml-2 text-xs uppercase text-gray-500">{link.role}{link.active ? " · active" : ""}</span></div><span className={`text-xs font-semibold uppercase ${bad ? "text-red-700" : unknown ? "text-amber-700" : "text-emerald-700"}`}>{link.status}</span></div>
     <div className="mt-2 grid grid-cols-4 gap-2 text-xs"><Metric icon={<Activity size={12}/>} label="Latency" value={format(link.latencyMs, "ms")}/><Metric label="Jitter" value={format(link.jitterMs, "ms")}/><Metric label="Loss" value={format(link.packetLossPercent, "%")}/><Metric icon={<Gauge size={12}/>} label="Load" value={format(link.bandwidthUtilizationPercent, "%")}/></div>
     <p className="mt-2 text-[11px] text-gray-500">Traffic ↓ {format(link.rxMbps, " Mbps")} · ↑ {format(link.txMbps, " Mbps")}{link.interfaceName ? ` · ${link.interfaceName}` : ""}</p>
+    {!link.routeVerified ? <p className="mt-1 text-[11px] font-medium text-amber-800">Route not verified — configure an interface or source address for this backup link.</p> : null}
   </div>;
 }
 function Metric({ label, value, icon }: { label: string; value: string; icon?: React.ReactNode }) { return <div><p className="flex items-center gap-1 text-gray-500">{icon}{label}</p><strong>{value}</strong></div>; }

@@ -20,8 +20,39 @@ export interface RetentionVerification {
   daysUntilCompliant: number | null;
   trend: "improving" | "stable" | "declining" | "unknown";
   coverageTrend: Array<{ date: string; coveredHours: number; coveragePercent: number }>;
+  /** Identifies whether the value came from platform segments or the recorder itself. */
+  dataSource: "platform_index" | "recorder_archive" | "none";
+  archiveVerified: boolean;
+  archiveMismatch: boolean;
+  archiveRecorderId: string | null;
+  archiveObservedAt: string | null;
+  archiveCoverageComplete: boolean | null;
   reasonCodes: string[];
 }
+
+export interface RecorderArchiveEvidence {
+  recorderId: string;
+  observedAt: string;
+  sourceChannel: number;
+  status: "available" | "empty" | "unavailable";
+  oldestContinuousAt: string | null;
+  newestPlayableAt: string | null;
+  retentionLowerBound: boolean;
+  coverageComplete: boolean;
+  continuityGapSeconds: number;
+  reasonCodes: string[];
+}
+
+type RetentionSource = {
+  actualDays: number;
+  oldestContinuousAt: string | null;
+  newestPlayableAt: string | null;
+  coverageTrend: Array<{ date: string; coveredHours: number; coveragePercent: number }>;
+  lowerBound: boolean;
+  dataSource: "platform_index" | "recorder_archive";
+};
+
+const ARCHIVE_EVIDENCE_MAX_AGE_MS = 24 * 3_600_000;
 
 export function telemetryStatus(
   envelope: OperationalTelemetryEnvelope | undefined,
@@ -46,76 +77,179 @@ export function verifyContinuousRetention(
   segments: RecordingSegment[],
   policy: Pick<OperationalHealthPolicy, "retentionDays" | "maxRecordingGapSeconds"> & Partial<Pick<OperationalHealthPolicy, "retentionWarningDays">>,
   now = Date.now(),
+  archiveEvidence?: RecorderArchiveEvidence,
 ): RetentionVerification {
   const warningDays = policy.retentionWarningDays ?? 7;
+  const platform = platformRetentionSource(cameraId, segments, policy.maxRecordingGapSeconds, now);
+  const archive = archiveRetentionSource(archiveEvidence, policy.maxRecordingGapSeconds, now);
+  const archiveMismatch = Boolean(
+    platform && archive.source && !archive.source.lowerBound
+      && Math.abs(platform.actualDays - archive.source.actualDays) > 1,
+  );
+  const archiveMetadata = {
+    archiveVerified: archive.verified,
+    archiveMismatch,
+    archiveRecorderId: archiveEvidence?.recorderId ?? null,
+    archiveObservedAt: archiveEvidence?.observedAt ?? null,
+    archiveCoverageComplete: archiveEvidence?.coverageComplete ?? null,
+  };
+
+  // Direct recorder evidence is authoritative for a mapped channel. A platform
+  // index can be incomplete, delayed, or represent a separate copy of footage.
+  if (archive.empty) {
+    return retentionResult(cameraId, policy, warningDays, now, null, ["recorder_archive_empty"], archiveMetadata);
+  }
+  if (archive.source) {
+    const mismatchReason = archiveMismatch ? ["platform_archive_retention_mismatch"] : [];
+    return retentionResult(cameraId, policy, warningDays, now, archive.source, [...archive.sourceReasonCodes, ...mismatchReason], archiveMetadata);
+  }
+  if (platform) {
+    const reasons = [...archive.reasonCodes, ...(archiveMismatch ? ["platform_archive_retention_mismatch"] : [])];
+    return retentionResult(cameraId, policy, warningDays, now, platform, reasons, archiveMetadata);
+  }
+  return retentionResult(cameraId, policy, warningDays, now, undefined, archive.reasonCodes, archiveMetadata);
+}
+
+function platformRetentionSource(cameraId: string, segments: RecordingSegment[], gapSeconds: number, now: number): RetentionSource | undefined {
   const playable = segments
     .filter((segment) => segment.cameraId === cameraId && segment.status === "ready")
     .filter((segment) => Number.isFinite(Date.parse(segment.startedAt)) && Number.isFinite(Date.parse(segment.endedAt)))
     .sort((left, right) => Date.parse(right.endedAt) - Date.parse(left.endedAt));
-  if (playable.length === 0) {
-    return {
-      cameraId,
-      configuredDays: policy.retentionDays,
-      actualDays: null,
-      oldestContinuousAt: null,
-      newestPlayableAt: null,
-      status: "unknown",
-      marginDays: null, shortfallDays: null, warningDays,
-      dailyChangeDays: null, forecastDaysIn7Days: null, daysUntilCompliant: null,
-      trend: "unknown", coverageTrend: [],
-      reasonCodes: ["recording_evidence_unavailable"],
-    };
-  }
-
-  const newestEnd = Date.parse(playable[0]!.endedAt);
-  const coverageTrend = calculateCoverageTrend(playable, now);
-  if (now - newestEnd > policy.maxRecordingGapSeconds * 1000) {
-    return {
-      cameraId,
-      configuredDays: policy.retentionDays,
-      actualDays: 0,
-      oldestContinuousAt: playable[0]!.startedAt,
-      newestPlayableAt: playable[0]!.endedAt,
-      status: "breach",
-      marginDays: -policy.retentionDays, shortfallDays: policy.retentionDays,
-      warningDays, dailyChangeDays: -1,
-      forecastDaysIn7Days: 0, daysUntilCompliant: null,
-      trend: "declining", coverageTrend,
-      reasonCodes: ["recording_not_current"],
-    };
-  }
-
-  let oldest = Date.parse(playable[0]!.startedAt);
-  let cursor = oldest;
-  for (const segment of playable.slice(1)) {
-    const segmentEnd = Date.parse(segment.endedAt);
-    if (cursor - segmentEnd > policy.maxRecordingGapSeconds * 1000) break;
-    oldest = Math.min(oldest, Date.parse(segment.startedAt));
-    cursor = oldest;
-  }
-  const actualDays = Math.max(0, (newestEnd - oldest) / 86_400_000);
-  const roundedActual = Math.round(actualDays * 100) / 100;
-  const marginDays = Math.round((actualDays - policy.retentionDays) * 100) / 100;
-  const shortfallDays = Math.round(Math.max(0, policy.retentionDays - actualDays) * 100) / 100;
-  const atRisk = actualDays >= policy.retentionDays && marginDays <= warningDays;
-  const compliant = actualDays >= policy.retentionDays && !atRisk;
-  const dailyChangeDays = actualDays < policy.retentionDays ? 1 : 0;
+  if (playable.length === 0) return undefined;
+  const { oldest, newest } = continuousWindow(playable.map((segment) => ({
+    startedAt: Date.parse(segment.startedAt), endedAt: Date.parse(segment.endedAt),
+  })), gapSeconds);
   return {
-    cameraId,
-    configuredDays: policy.retentionDays,
-    actualDays: roundedActual,
+    actualDays: Math.max(0, (newest - oldest) / 86_400_000),
     oldestContinuousAt: new Date(oldest).toISOString(),
-    newestPlayableAt: new Date(newestEnd).toISOString(),
-    status: compliant ? "compliant" : atRisk ? "at_risk" : "breach",
-    marginDays, shortfallDays, warningDays,
-    dailyChangeDays,
-    forecastDaysIn7Days: Math.round((actualDays + dailyChangeDays * 7) * 100) / 100,
-    daysUntilCompliant: shortfallDays > 0 ? Math.ceil(shortfallDays / Math.max(dailyChangeDays, 1)) : 0,
-    trend: dailyChangeDays > 0 ? "improving" : "stable",
-    coverageTrend,
-    reasonCodes: compliant ? [] : atRisk ? ["retention_approaching_threshold"] : ["retention_below_policy"],
+    newestPlayableAt: new Date(newest).toISOString(),
+    coverageTrend: calculateCoverageTrend(playable, now),
+    lowerBound: false,
+    dataSource: "platform_index",
   };
 }
+
+function archiveRetentionSource(evidence: RecorderArchiveEvidence | undefined, policyGapSeconds: number, now: number) {
+  const unavailable = { source: undefined as RetentionSource | undefined, empty: false, verified: false, reasonCodes: [] as string[], sourceReasonCodes: [] as string[] };
+  if (!evidence) return { ...unavailable, reasonCodes: ["recorder_archive_evidence_unavailable"] };
+  const observedAt = Date.parse(evidence.observedAt);
+  if (!Number.isFinite(observedAt) || now - observedAt > ARCHIVE_EVIDENCE_MAX_AGE_MS) {
+    return { ...unavailable, reasonCodes: ["recorder_archive_evidence_stale"] };
+  }
+  if (!evidence.coverageComplete) {
+    return { ...unavailable, reasonCodes: [...evidence.reasonCodes, "recorder_archive_scan_incomplete"] };
+  }
+  if (evidence.continuityGapSeconds > policyGapSeconds) {
+    return { ...unavailable, reasonCodes: ["recorder_archive_continuity_gap_too_large"] };
+  }
+  if (evidence.status === "unavailable") return { ...unavailable, reasonCodes: evidence.reasonCodes.length ? evidence.reasonCodes : ["recorder_archive_evidence_unavailable"] };
+  if (evidence.status === "empty") return { ...unavailable, empty: true, verified: true, reasonCodes: evidence.reasonCodes };
+  const oldest = Date.parse(evidence.oldestContinuousAt ?? "");
+  const newest = Date.parse(evidence.newestPlayableAt ?? "");
+  if (!Number.isFinite(oldest) || !Number.isFinite(newest) || newest < oldest) {
+    return { ...unavailable, reasonCodes: ["recorder_archive_evidence_invalid"] };
+  }
+  return {
+    source: {
+      actualDays: Math.max(0, (newest - oldest) / 86_400_000),
+      oldestContinuousAt: new Date(oldest).toISOString(), newestPlayableAt: new Date(newest).toISOString(),
+      coverageTrend: [], lowerBound: evidence.retentionLowerBound, dataSource: "recorder_archive" as const,
+    },
+    empty: false, verified: true, reasonCodes: [], sourceReasonCodes: evidence.reasonCodes,
+  };
+}
+
+function retentionResult(
+  cameraId: string,
+  policy: Pick<OperationalHealthPolicy, "retentionDays" | "maxRecordingGapSeconds">,
+  warningDays: number,
+  now: number,
+  source: RetentionSource | null | undefined,
+  additionalReasonCodes: string[],
+  archive: Pick<RetentionVerification, "archiveVerified" | "archiveMismatch" | "archiveRecorderId" | "archiveObservedAt" | "archiveCoverageComplete">,
+): RetentionVerification {
+  const unavailable = (): RetentionVerification => ({
+    cameraId, configuredDays: policy.retentionDays, actualDays: null, oldestContinuousAt: null, newestPlayableAt: null,
+    status: "unknown", marginDays: null, shortfallDays: null, warningDays,
+    dailyChangeDays: null, forecastDaysIn7Days: null, daysUntilCompliant: null, trend: "unknown", coverageTrend: [],
+    dataSource: "none", ...archive,
+    reasonCodes: uniqueReasons([...additionalReasonCodes, "recording_evidence_unavailable"]),
+  });
+  if (source === undefined) return unavailable();
+  if (source === null) {
+    return {
+      cameraId, configuredDays: policy.retentionDays, actualDays: 0, oldestContinuousAt: null, newestPlayableAt: null,
+      status: "breach", marginDays: -policy.retentionDays, shortfallDays: policy.retentionDays, warningDays,
+      dailyChangeDays: null, forecastDaysIn7Days: null, daysUntilCompliant: null, trend: "declining", coverageTrend: [],
+      dataSource: "recorder_archive", ...archive,
+      reasonCodes: uniqueReasons([...additionalReasonCodes, "retention_below_policy"]),
+    };
+  }
+  const newest = Date.parse(source.newestPlayableAt ?? "");
+  if (!Number.isFinite(newest)) return unavailable();
+  if (now - newest > policy.maxRecordingGapSeconds * 1_000) {
+    return {
+      cameraId, configuredDays: policy.retentionDays, actualDays: 0,
+      oldestContinuousAt: source.oldestContinuousAt, newestPlayableAt: source.newestPlayableAt,
+      status: "breach", marginDays: -policy.retentionDays, shortfallDays: policy.retentionDays, warningDays,
+      dailyChangeDays: source.dataSource === "platform_index" ? -1 : null,
+      forecastDaysIn7Days: source.dataSource === "platform_index" ? 0 : null,
+      daysUntilCompliant: null, trend: "declining", coverageTrend: source.coverageTrend,
+      dataSource: source.dataSource, ...archive,
+      reasonCodes: uniqueReasons([...additionalReasonCodes, "recording_not_current"]),
+    };
+  }
+  const actualDays = Math.round(source.actualDays * 100) / 100;
+  const marginDays = Math.round((actualDays - policy.retentionDays) * 100) / 100;
+  if (source.lowerBound && actualDays < policy.retentionDays) {
+    return {
+      cameraId, configuredDays: policy.retentionDays, actualDays, oldestContinuousAt: source.oldestContinuousAt, newestPlayableAt: source.newestPlayableAt,
+      status: "unknown", marginDays, shortfallDays: null, warningDays,
+      dailyChangeDays: null, forecastDaysIn7Days: null, daysUntilCompliant: null, trend: "unknown", coverageTrend: source.coverageTrend,
+      dataSource: source.dataSource, ...archive,
+      reasonCodes: uniqueReasons([...additionalReasonCodes, "recorder_archive_lookback_insufficient"]),
+    };
+  }
+  if (source.lowerBound) {
+    return {
+      cameraId, configuredDays: policy.retentionDays, actualDays, oldestContinuousAt: source.oldestContinuousAt, newestPlayableAt: source.newestPlayableAt,
+      status: "compliant", marginDays, shortfallDays: 0, warningDays,
+      dailyChangeDays: null, forecastDaysIn7Days: null, daysUntilCompliant: 0, trend: "unknown", coverageTrend: source.coverageTrend,
+      dataSource: source.dataSource, ...archive,
+      reasonCodes: uniqueReasons([...additionalReasonCodes, "recorder_archive_retention_at_least_lookback"]),
+    };
+  }
+  const shortfallDays = Math.round(Math.max(0, policy.retentionDays - actualDays) * 100) / 100;
+  const atRisk = actualDays >= policy.retentionDays && marginDays <= warningDays;
+  const status = actualDays < policy.retentionDays ? "breach" : atRisk ? "at_risk" : "compliant";
+  const platformForecast = source.dataSource === "platform_index";
+  const dailyChangeDays = platformForecast ? (actualDays < policy.retentionDays ? 1 : 0) : null;
+  return {
+    cameraId, configuredDays: policy.retentionDays, actualDays, oldestContinuousAt: source.oldestContinuousAt, newestPlayableAt: source.newestPlayableAt,
+    status, marginDays, shortfallDays, warningDays,
+    dailyChangeDays,
+    forecastDaysIn7Days: platformForecast ? Math.round((actualDays + dailyChangeDays! * 7) * 100) / 100 : null,
+    daysUntilCompliant: platformForecast && shortfallDays > 0 ? Math.ceil(shortfallDays / Math.max(dailyChangeDays!, 1)) : shortfallDays > 0 ? null : 0,
+    trend: platformForecast ? dailyChangeDays! > 0 ? "improving" : "stable" : "unknown",
+    coverageTrend: source.coverageTrend, dataSource: source.dataSource, ...archive,
+    reasonCodes: uniqueReasons([...additionalReasonCodes, ...(status === "compliant" ? [] : status === "at_risk" ? ["retention_approaching_threshold"] : ["retention_below_policy"])]),
+  };
+}
+
+function continuousWindow(segments: Array<{ startedAt: number; endedAt: number }>, gapSeconds: number) {
+  const ordered = [...segments].sort((left, right) => right.endedAt - left.endedAt);
+  const newest = ordered[0]!.endedAt;
+  let oldest = ordered[0]!.startedAt;
+  let cursor = oldest;
+  for (const segment of ordered.slice(1)) {
+    if (cursor - segment.endedAt > gapSeconds * 1_000) break;
+    oldest = Math.min(oldest, segment.startedAt);
+    cursor = oldest;
+  }
+  return { oldest, newest };
+}
+
+function uniqueReasons(reasons: string[]) { return [...new Set(reasons.filter(Boolean))]; }
 
 function calculateCoverageTrend(segments: RecordingSegment[], now: number) {
   return Array.from({ length: 14 }, (_, index) => {

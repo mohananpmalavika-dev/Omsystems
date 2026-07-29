@@ -76,6 +76,8 @@ export async function enqueueAlertMatrix(
           events: [{ status: "queued", occurredAt: new Date(now).toISOString() }] },
       } : {}), ...(channel === "sms" ? { smsDelivery: { provider: "webhook" as const, status: "queued",
         template: alert.severity, events: [{ status: "queued", occurredAt: new Date(now).toISOString() }] } } : {}),
+      ...(channel === "email" ? { emailDelivery: { provider: "webhook" as const, status: "queued",
+        subject: `${alert.severity} alert: ${alert.title}`, events: [{ status: "queued", occurredAt: new Date(now).toISOString() }] } } : {}),
     })));
   return store.enqueueAlertNotifications(targets);
 }

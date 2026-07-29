@@ -1,3 +1,5 @@
+import type { ArchiveRetentionEvidence } from "../monitoring/recorder-probe.js";
+
 export interface DiscoveredCameraPayload {
   edgeAgentId: string;
   discoveryMethod?: "onvif-ws-discovery" | "edge-agent-reported-inventory";
@@ -111,6 +113,18 @@ export class GatewayClient {
   }) {
     return this.request(
       `/v1/edge-agents/${encodeURIComponent(agentId)}/recorder-hdd`,
+      { method: "POST", body: JSON.stringify(payload) },
+    );
+  }
+
+  async submitRecorderArchive(agentId: string, payload: {
+    branchId: string; recorderId: string; observedAt: string;
+    source: "onvif" | "cp-plus-adapter" | "system";
+    quality: "verified" | "estimated" | "unsupported" | "unavailable";
+    idempotencyKey: string; entries: ArchiveRetentionEvidence[];
+  }) {
+    return this.request(
+      `/v1/edge-agents/${encodeURIComponent(agentId)}/recorder-archive`,
       { method: "POST", body: JSON.stringify(payload) },
     );
   }
