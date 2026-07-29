@@ -8,7 +8,7 @@ export function normalizeRecorderMetrics(metrics: Record<string, TelemetryValue>
   const reasons: string[] = [];
   let status = reachable ? "online" : "offline";
   if (!reachable) reasons.push("recorder_unreachable");
-  if (reachable && (recording === "stopped" || recording === "error")) { status = "degraded"; reasons.push("recorder_not_recording"); }
+  if (reachable && (recording === "stopped" || recording === "error" || recording === "partial")) { status = "degraded"; reasons.push("recorder_not_recording"); }
   if (reachable && connected !== null && total !== null && connected < total) { status = "degraded"; reasons.push("recorder_channels_offline"); }
   return { metrics: { ...metrics, status, reachable }, reasonCodes: reasons.length ? reasons : ["recorder_healthy"] };
 }
@@ -28,6 +28,8 @@ export function projectRecorderHealth(envelope: OperationalTelemetryEnvelope, br
     reachable: booleanMetric(envelope.metrics, "reachable") ?? false,
     latencyMs: numberMetric(envelope.metrics, "latencyMs"), uptimeSeconds: numberMetric(envelope.metrics, "uptimeSeconds"),
     recordingStatus: stringMetric(envelope.metrics, "recordingStatus") || "unknown",
+    recordingChannels: numberMetric(envelope.metrics, "recordingChannels"),
+    recordingStatusSource: stringMetric(envelope.metrics, "recordingStatusSource") || "unavailable",
     connectedCameras: numberMetric(envelope.metrics, "connectedCameras"), totalCameras: numberMetric(envelope.metrics, "totalCameras"),
     lastCheck: envelope.observedAt, quality: envelope.quality, reasonCodes: envelope.reasonCodes,
   };

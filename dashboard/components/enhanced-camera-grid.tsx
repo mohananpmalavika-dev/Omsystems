@@ -16,6 +16,11 @@ import {
   RotateCw,
 } from "lucide-react";
 import { CameraTile } from "./camera-tile";
+import {
+  DECODER_CAPACITY_OPTIONS,
+  clampDecoderLimit,
+  getDecoderCapacityOptions,
+} from "./enhanced-camera-grid-model";
 import type { Camera, LiveSessionResponse, RecordingJob, RecordingMode } from "@/lib/types";
 
 export type GridSize = "1x1" | "2x2" | "3x3" | "4x4" | "5x5" | "6x6" | "7x7" | "8x8" | "9x9" | "10x10" | "11x11" | "12x12";
@@ -76,7 +81,7 @@ export function EnhancedCameraGrid({
   const [layoutName, setLayoutName] = useState(initialLayout?.name || "");
   const [savedLayouts, setSavedLayouts] = useState<GridLayout[]>([]);
   const [visibleRange, setVisibleRange] = useState<VisibleRange>({ start: 0, end: 50 });
-  const [decoderLimit, setDecoderLimit] = useState(maxConcurrentStreams);
+  const [decoderLimit, setDecoderLimit] = useState(() => clampDecoderLimit(maxConcurrentStreams, maxConcurrentStreams));
   const [sequencing, setSequencing] = useState(true);
   const [sequenceOffset, setSequenceOffset] = useState(0);
   const [draggedCamera, setDraggedCamera] = useState<{ camera: Camera; fromPosition: number } | null>(null);
@@ -102,13 +107,23 @@ export function EnhancedCameraGrid({
 
   const totalPositions = gridSizeMap[gridSize];
   const prioritySet = useMemo(() => new Set(priorityCameraIds), [priorityCameraIds]);
+  const decoderCapacityOptions = useMemo(
+    () => getDecoderCapacityOptions(maxConcurrentStreams),
+    [maxConcurrentStreams],
+  );
 
   useEffect(() => onActiveStreamsChange?.(sessions.size), [onActiveStreamsChange, sessions.size]);
 
   useEffect(() => {
     const saved = Number(window.localStorage.getItem("sentinel.decoderCapacity"));
-    if ([16, 25, 36, 64].includes(saved)) setDecoderLimit(saved);
-  }, []);
+    if (DECODER_CAPACITY_OPTIONS.includes(saved as typeof DECODER_CAPACITY_OPTIONS[number])) {
+      setDecoderLimit(clampDecoderLimit(saved, maxConcurrentStreams));
+    }
+  }, [maxConcurrentStreams]);
+
+  useEffect(() => {
+    setDecoderLimit((current) => clampDecoderLimit(current, maxConcurrentStreams));
+  }, [maxConcurrentStreams]);
 
   useEffect(() => {
     if (!sequencing || gridPositions.size <= decoderLimit) return;
@@ -673,18 +688,23 @@ export function EnhancedCameraGrid({
             Decoder capacity
             <select
               value={decoderLimit}
+              disabled={decoderCapacityOptions.length === 1}
               onChange={(event) => {
-                const value = Number(event.target.value);
+                const value = clampDecoderLimit(Number(event.target.value), maxConcurrentStreams);
                 setDecoderLimit(value);
                 window.localStorage.setItem("sentinel.decoderCapacity", String(value));
               }}
             >
-              <option value={16}>16 — standard</option>
-              <option value={25}>25 — enhanced</option>
-              <option value={36}>36 — recommended</option>
-              <option value={64}>64 — certified workstation</option>
+              {decoderCapacityOptions.map((option) => (
+                <option key={option} value={option}>
+                  {option} — {option === 16 ? "standard" : option === 25 ? "enhanced" : option === 36 ? "recommended" : "certified workstation"}
+                </option>
+              ))}
             </select>
           </label>
+          <span className="capacity-control" title="Grid positions may exceed the live-stream decoder cap">
+            {totalPositions} channels · {decoderLimit} live max
+          </span>
           <button
             className={`btn-secondary ${sequencing ? "active-control" : ""}`}
             onClick={() => setSequencing((current) => !current)}

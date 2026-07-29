@@ -8,7 +8,9 @@ import { getTimeAgo } from "@/lib/types/operational-health";
 import { useOperationalHealthStream } from "@/hooks/useOperationalHealthStream";
 import {
   BRANCH_GRID_LAYOUTS,
+  MAX_BRANCH_TILES_PER_VIEW,
   getBranchGridMetrics,
+  getBranchGridViewportHeight,
   loadAllBranchHealth,
   sequenceBranchHealth,
   type BranchGridLayout,
@@ -17,8 +19,9 @@ import {
 } from "./branch-mosaic-model";
 import type { BranchSummaryFilter } from "./branch-summary-model";
 
-// Support for 400+ branches with efficient virtual scrolling and 20x20 grid
-const VIEWPORT_HEIGHT = 620;
+// The API can page through large estates; the operator wall stays actionable
+// by showing at most an 8 x 8 (64-tile) view and scrolling through the rest.
+const MIN_VIEWPORT_HEIGHT = 280;
 
 export function BranchHealthMosaic({ filter }: { filter?: BranchSummaryFilter }) {
   const [branches, setBranches] = useState<BranchHealth[]>([]);
@@ -32,7 +35,7 @@ export function BranchHealthMosaic({ filter }: { filter?: BranchSummaryFilter })
   const [layout, setLayout] = useState<BranchGridLayout>("4x4");
   const [sequence, setSequence] = useState<BranchSequence>("priority");
   const [fullscreen, setFullscreen] = useState(false);
-  const [viewportHeight, setViewportHeight] = useState(VIEWPORT_HEIGHT);
+  const [viewportHeight, setViewportHeight] = useState(() => getBranchGridViewportHeight("4x4"));
   const [viewportWidth, setViewportWidth] = useState(1200);
   const viewport = useRef<HTMLDivElement>(null);
   const metrics = getBranchGridMetrics(layout, viewportWidth);
@@ -90,7 +93,13 @@ export function BranchHealthMosaic({ filter }: { filter?: BranchSummaryFilter })
   }, []);
 
   useEffect(() => {
-    const updateHeight = () => setViewportHeight(fullscreen ? Math.max(VIEWPORT_HEIGHT, window.innerHeight - 170) : VIEWPORT_HEIGHT);
+    const updateHeight = () => {
+      // Fullscreen removes surrounding UI, but must not turn the mosaic into
+      // an unreadable 400-branch wall. Smaller windows may show fewer tiles.
+      const layoutHeight = getBranchGridViewportHeight(layout);
+      const available = Math.max(MIN_VIEWPORT_HEIGHT, window.innerHeight - 170);
+      setViewportHeight(fullscreen ? Math.min(layoutHeight, available) : layoutHeight);
+    };
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") setFullscreen(false);
     };
@@ -101,7 +110,7 @@ export function BranchHealthMosaic({ filter }: { filter?: BranchSummaryFilter })
       window.removeEventListener("resize", updateHeight);
       window.removeEventListener("keydown", onKeyDown);
     };
-  }, [fullscreen]);
+  }, [fullscreen, layout]);
 
   const regions = useMemo(() => [...new Set(branches.map((branch) => branch.region))].sort(), [branches]);
   const rowCount = Math.ceil(sequencedBranches.length / metrics.columns);
@@ -113,7 +122,7 @@ export function BranchHealthMosaic({ filter }: { filter?: BranchSummaryFilter })
     <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
       <div>
         <h3 className="text-lg font-semibold">Enterprise branch overview</h3>
-        <p className="text-xs text-gray-500">{branches.length} branches · {realtime ? "Live updates" : "Polling fallback"}</p>
+        <p className="text-xs text-gray-500">{branches.length} branches · up to {MAX_BRANCH_TILES_PER_VIEW} tiles in view · {realtime ? "Live updates" : "Polling fallback"}</p>
       </div>
       <div className="flex flex-wrap gap-2">
         <label className="relative">

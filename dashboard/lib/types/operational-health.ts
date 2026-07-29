@@ -258,6 +258,7 @@ export interface RecorderHealth {
   firmwareVersion: string | null; ipAddress: string | null; protocol: string;
   status: 'online' | 'offline' | 'degraded' | 'unknown'; reachable: boolean;
   latencyMs: number | null; uptimeSeconds: number | null; recordingStatus: string;
+  recordingChannels?: number | null; recordingStatusSource?: string;
   connectedCameras: number | null; totalCameras: number | null;
   lastCheck: string; quality: string; reasonCodes: string[];
 }

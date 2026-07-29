@@ -1,40 +1,304 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { CalendarClock, CheckCircle2, Download, LoaderCircle, Play, RefreshCw, Trash2 } from "lucide-react";
+import { CalendarClock, CheckCircle2, Download, LoaderCircle, Play, RefreshCw, Trash2, FileText } from "lucide-react";
 import { AppLayout } from "@/components/app-layout";
 
 type Format="csv"|"xlsx"|"pdf";
+type Template="comprehensive"|"branch_health_summary"|"camera_availability"|"alert_summary"|"recorder_status"|"hdd_health"|"retention_compliance";
 type Filters={region?:string;branchId?:string;deviceStatus?:string;alertType?:string;severity?:string;alertState?:string;from?:string;to?:string};
-type Schedule={id:string;name:string;timezone:string;dailyAt:string;formats:Format[];recipients:string[];filters:Filters;enabled:boolean;lastRunAt:string|null;nextRunAt:string};
+type Schedule={id:string;name:string;timezone:string;dailyAt:string;template:Template;formats:Format[];recipients:string[];filters:Filters;enabled:boolean;lastRunAt:string|null;nextRunAt:string};
 type Artifact={id:string;format:Format;filename:string;sizeBytes:number;expiresAt:string;downloadUrl:string};
 type Delivery={id:string;recipient:string;status:string;attempts:number;error?:string};
-type Run={id:string;status:string;formats:Format[];filters:Filters;progress:number;attempts:number;rowCount:number|null;summary?:Record<string,number>;error?:string;createdAt:string;artifacts:Artifact[];deliveries:Delivery[]};
+type Run={id:string;status:string;template:Template;formats:Format[];filters:Filters;progress:number;attempts:number;rowCount:number|null;summary?:Record<string,number>;error?:string;createdAt:string;artifacts:Artifact[];deliveries:Delivery[]};
+
+const REPORT_TEMPLATES: Array<{id: Template; name: string; description: string}> = [
+  {id: "comprehensive", name: "Comprehensive Daily Surveillance", description: "All metrics: branches, cameras, alerts, DVRs, storage, retention"},
+  {id: "branch_health_summary", name: "Branch Health Summary", description: "Per-branch health scores, component status, critical alerts"},
+  {id: "camera_availability", name: "Camera Availability", description: "Camera online/offline status, quality metrics, uptime"},
+  {id: "alert_summary", name: "Alert Summary", description: "Alert counts by severity, acknowledgment times, SLA compliance"},
+  {id: "recorder_status", name: "DVR/NVR Status", description: "Recording state, channel status, storage capacity"},
+  {id: "hdd_health", name: "HDD Health", description: "SMART status, disk failures, temperature, write errors"},
+  {id: "retention_compliance", name: "Retention Compliance", description: "Retention days vs policy, violations, storage projections"},
+];
 
 export default function ReportsPage(){
-  const[schedules,setSchedules]=useState<Schedule[]>([]);const[runs,setRuns]=useState<Run[]>([]);const[loading,setLoading]=useState(true);const[message,setMessage]=useState("");
-  const[name,setName]=useState("Daily enterprise surveillance");const[timezone,setTimezone]=useState("Asia/Kolkata");const[dailyAt,setDailyAt]=useState("06:30");const[recipients,setRecipients]=useState("");const[formats,setFormats]=useState<Format[]>(["pdf","xlsx","csv"]);const[filters,setFilters]=useState<Filters>({});
-  const load=useCallback(async()=>{const[scheduleResponse,runResponse]=await Promise.all([fetch("/api/control/v1/reports/operational/schedules",{cache:"no-store"}),fetch("/api/control/v1/reports/operational/runs?limit=100",{cache:"no-store"})]);if(scheduleResponse.ok)setSchedules((await scheduleResponse.json()).data??[]);if(runResponse.ok)setRuns((await runResponse.json()).data??[]);setLoading(false);},[]);
+  const[schedules,setSchedules]=useState<Schedule[]>([]);
+  const[runs,setRuns]=useState<Run[]>([]);
+  const[loading,setLoading]=useState(true);
+  const[message,setMessage]=useState("");
+  const[name,setName]=useState("Daily enterprise surveillance");
+  const[timezone,setTimezone]=useState("Asia/Kolkata");
+  const[dailyAt,setDailyAt]=useState("06:30");
+  const[recipients,setRecipients]=useState("");
+  const[template,setTemplate]=useState<Template>("comprehensive");
+  const[formats,setFormats]=useState<Format[]>(["pdf","xlsx","csv"]);
+  const[filters,setFilters]=useState<Filters>({});
+  
+  const load=useCallback(async()=>{
+    const[scheduleResponse,runResponse]=await Promise.all([
+      fetch("/api/control/v1/reports/operational/schedules",{cache:"no-store"}),
+      fetch("/api/control/v1/reports/operational/runs?limit=100",{cache:"no-store"})
+    ]);
+    if(scheduleResponse.ok)setSchedules((await scheduleResponse.json()).data??[]);
+    if(runResponse.ok)setRuns((await runResponse.json()).data??[]);
+    setLoading(false);
+  },[]);
+  
   useEffect(()=>{void load();const timer=setInterval(load,5_000);return()=>clearInterval(timer);},[load]);
-  const payload=()=>({formats,filters:clean(filters),recipients:recipients.split(",").map((item)=>item.trim()).filter(Boolean)});
-  const createSchedule=async()=>{setMessage("");const response=await fetch("/api/control/v1/reports/operational/schedules",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({name,timezone,dailyAt,...payload(),enabled:true})});setMessage(response.ok?"Schedule saved.":"Could not save schedule.");if(response.ok)await load();};
-  const runNow=async()=>{setMessage("");const response=await fetch("/api/control/v1/reports/operational/runs",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(payload())});setMessage(response.ok?"Report queued for generation.":"Could not queue report.");if(response.ok)await load();};
-  const remove=async(id:string)=>{await fetch(`/api/control/v1/reports/operational/schedules/${id}`,{method:"DELETE"});await load();};
+  
+  const payload=()=>({template,formats,filters:clean(filters),recipients:recipients.split(",").map((item)=>item.trim()).filter(Boolean)});
+  
+  const createSchedule=async()=>{
+    setMessage("");
+    const response=await fetch("/api/control/v1/reports/operational/schedules",{
+      method:"POST",
+      headers:{"content-type":"application/json"},
+      body:JSON.stringify({name,timezone,dailyAt,...payload(),enabled:true})
+    });
+    setMessage(response.ok?"Schedule saved.":"Could not save schedule.");
+    if(response.ok)await load();
+  };
+  
+  const runNow=async()=>{
+    setMessage("");
+    const response=await fetch("/api/control/v1/reports/operational/runs",{
+      method:"POST",
+      headers:{"content-type":"application/json"},
+      body:JSON.stringify(payload())
+    });
+    setMessage(response.ok?"Report queued for generation.":"Could not queue report.");
+    if(response.ok)await load();
+  };
+  
+  const remove=async(id:string)=>{
+    await fetch(`/api/control/v1/reports/operational/schedules/${id}`,{method:"DELETE"});
+    await load();
+  };
+  
+  const selectedTemplateInfo = REPORT_TEMPLATES.find(t => t.id === template);
+  
   return <AppLayout><main className="content p-6 space-y-6 max-w-[1500px] mx-auto">
-    <header className="flex flex-wrap justify-between gap-3"><div><p className="text-xs font-semibold tracking-widest text-blue-700">PHASE 4 REPORTING</p><h1 className="text-3xl font-bold">Daily surveillance reports</h1><p className="text-sm text-gray-500">Persistent schedules, segregated exports and auditable delivery history.</p></div><button className="btn-secondary flex gap-2 items-center" onClick={()=>void load()}><RefreshCw size={16}/>Refresh</button></header>
-    {message&&<div className="card py-3 text-sm">{message}</div>}
-    <section className="grid xl:grid-cols-[1fr_1.2fr] gap-5">
-      <div className="card space-y-4"><div><h2 className="text-lg font-semibold">Create report</h2><p className="text-xs text-gray-500">Run immediately or persist as a daily schedule.</p></div>
-        <div className="grid md:grid-cols-2 gap-3"><label className="text-sm">Schedule name<input className="input w-full mt-1" value={name} onChange={(e)=>setName(e.target.value)}/></label><label className="text-sm">Recipients<input className="input w-full mt-1" value={recipients} onChange={(e)=>setRecipients(e.target.value)} placeholder="soc@example.com, manager@example.com"/></label><label className="text-sm">Timezone<input className="input w-full mt-1" value={timezone} onChange={(e)=>setTimezone(e.target.value)}/></label><label className="text-sm">Daily time<input className="input w-full mt-1" type="time" value={dailyAt} onChange={(e)=>setDailyAt(e.target.value)}/></label></div>
-        <div><span className="text-sm">Formats</span><div className="flex gap-2 mt-1">{(["csv","xlsx","pdf"] as Format[]).map((format)=><button key={format} onClick={()=>setFormats((current)=>current.includes(format)?current.filter((item)=>item!==format):[...current,format])} className={`px-3 py-2 rounded border text-sm uppercase ${formats.includes(format)?"bg-blue-700 text-white":"bg-white"}`}>{format}</button>)}</div></div>
-        <div className="grid md:grid-cols-3 gap-3"><Filter label="Region" value={filters.region} set={(value)=>setFilters({...filters,region:value})}/><Filter label="Branch ID" value={filters.branchId} set={(value)=>setFilters({...filters,branchId:value})}/><label className="text-sm">Device status<select className="input w-full mt-1" value={filters.deviceStatus??""} onChange={(e)=>setFilters({...filters,deviceStatus:e.target.value})}><option value="">All</option><option>healthy</option><option>warning</option><option>critical</option><option>unknown</option></select></label><Filter label="Alert type" value={filters.alertType} set={(value)=>setFilters({...filters,alertType:value})}/><label className="text-sm">Severity<select className="input w-full mt-1" value={filters.severity??""} onChange={(e)=>setFilters({...filters,severity:e.target.value})}><option value="">All</option>{["P1","P2","P3","P4"].map((item)=><option key={item}>{item}</option>)}</select></label><Filter label="Alert state" value={filters.alertState} set={(value)=>setFilters({...filters,alertState:value})}/><label className="text-sm">From<input className="input w-full mt-1" type="datetime-local" onChange={(e)=>setFilters({...filters,from:toIso(e.target.value)})}/></label><label className="text-sm">To<input className="input w-full mt-1" type="datetime-local" onChange={(e)=>setFilters({...filters,to:toIso(e.target.value)})}/></label></div>
-        <div className="flex gap-2"><button disabled={!formats.length} onClick={()=>void runNow()} className="btn-primary flex gap-2"><Play size={15}/>Run now</button><button disabled={!formats.length} onClick={()=>void createSchedule()} className="btn-secondary flex gap-2"><CalendarClock size={15}/>Save daily schedule</button></div>
+    <header className="flex flex-wrap justify-between gap-3">
+      <div>
+        <p className="text-xs font-semibold tracking-widest text-blue-700">PHASE 4 REPORTING</p>
+        <h1 className="text-3xl font-bold">Daily surveillance reports</h1>
+        <p className="text-sm text-gray-500">Persistent schedules, segregated exports and auditable delivery history.</p>
       </div>
-      <div className="card"><h2 className="text-lg font-semibold mb-3">Saved schedules</h2>{schedules.length===0?<p className="text-gray-500 text-sm">No saved schedules.</p>:<div className="space-y-2">{schedules.map((schedule)=><div key={schedule.id} className="border rounded-lg p-3 flex justify-between gap-3"><div><strong>{schedule.name}</strong><p className="text-xs text-gray-500">Daily {schedule.dailyAt} / {schedule.timezone} / {schedule.formats.join(", ")}</p><p className="text-xs">Next: {new Date(schedule.nextRunAt).toLocaleString()} / Last: {schedule.lastRunAt?new Date(schedule.lastRunAt).toLocaleString():"Never"}</p><p className="text-xs text-gray-500">{schedule.recipients.join(", ")||"In-app only"}</p></div><button aria-label="Delete schedule" onClick={()=>void remove(schedule.id)}><Trash2 size={17} className="text-red-600"/></button></div>)}</div>}</div>
+      <button className="btn-secondary flex gap-2 items-center" onClick={()=>void load()}>
+        <RefreshCw size={16}/>Refresh
+      </button>
+    </header>
+    
+    {message&&<div className="card py-3 text-sm">{message}</div>}
+    
+    <section className="grid xl:grid-cols-[1fr_1.2fr] gap-5">
+      <div className="card space-y-4">
+        <div>
+          <h2 className="text-lg font-semibold">Create report</h2>
+          <p className="text-xs text-gray-500">Run immediately or persist as a daily schedule.</p>
+        </div>
+        
+        {/* Template Selection */}
+        <div>
+          <label className="text-sm font-medium flex items-center gap-2 mb-2">
+            <FileText size={16}/>
+            Report Template
+          </label>
+          <select 
+            className="input w-full" 
+            value={template} 
+            onChange={(e)=>setTemplate(e.target.value as Template)}
+          >
+            {REPORT_TEMPLATES.map((tmpl)=>(
+              <option key={tmpl.id} value={tmpl.id}>{tmpl.name}</option>
+            ))}
+          </select>
+          {selectedTemplateInfo && (
+            <p className="text-xs text-gray-500 mt-1">{selectedTemplateInfo.description}</p>
+          )}
+        </div>
+        
+        <div className="grid md:grid-cols-2 gap-3">
+          <label className="text-sm">
+            Schedule name
+            <input className="input w-full mt-1" value={name} onChange={(e)=>setName(e.target.value)}/>
+          </label>
+          <label className="text-sm">
+            Recipients (email)
+            <input 
+              className="input w-full mt-1" 
+              value={recipients} 
+              onChange={(e)=>setRecipients(e.target.value)} 
+              placeholder="soc@example.com, manager@example.com"
+            />
+          </label>
+          <label className="text-sm">
+            Timezone
+            <input className="input w-full mt-1" value={timezone} onChange={(e)=>setTimezone(e.target.value)}/>
+          </label>
+          <label className="text-sm">
+            Daily time
+            <input className="input w-full mt-1" type="time" value={dailyAt} onChange={(e)=>setDailyAt(e.target.value)}/>
+          </label>
+        </div>
+        
+        <div>
+          <span className="text-sm">Formats</span>
+          <div className="flex gap-2 mt-1">
+            {(["csv","xlsx","pdf"] as Format[]).map((format)=>(
+              <button 
+                key={format} 
+                onClick={()=>setFormats((current)=>
+                  current.includes(format)?current.filter((item)=>item!==format):[...current,format]
+                )} 
+                className={`px-3 py-2 rounded border text-sm uppercase ${formats.includes(format)?"bg-blue-700 text-white":"bg-white"}`}
+              >
+                {format}
+              </button>
+            ))}
+          </div>
+        </div>
+        
+        <div className="grid md:grid-cols-3 gap-3">
+          <Filter label="Region" value={filters.region} set={(value)=>setFilters({...filters,region:value})}/>
+          <Filter label="Branch ID" value={filters.branchId} set={(value)=>setFilters({...filters,branchId:value})}/>
+          <label className="text-sm">
+            Device status
+            <select className="input w-full mt-1" value={filters.deviceStatus??""} onChange={(e)=>setFilters({...filters,deviceStatus:e.target.value})}>
+              <option value="">All</option>
+              <option>healthy</option>
+              <option>warning</option>
+              <option>critical</option>
+              <option>unknown</option>
+            </select>
+          </label>
+          <Filter label="Alert type" value={filters.alertType} set={(value)=>setFilters({...filters,alertType:value})}/>
+          <label className="text-sm">
+            Severity
+            <select className="input w-full mt-1" value={filters.severity??""} onChange={(e)=>setFilters({...filters,severity:e.target.value})}>
+              <option value="">All</option>
+              {["P1","P2","P3","P4"].map((item)=><option key={item}>{item}</option>)}
+            </select>
+          </label>
+          <Filter label="Alert state" value={filters.alertState} set={(value)=>setFilters({...filters,alertState:value})}/>
+          <label className="text-sm">
+            From
+            <input className="input w-full mt-1" type="datetime-local" onChange={(e)=>setFilters({...filters,from:toIso(e.target.value)})}/>
+          </label>
+          <label className="text-sm">
+            To
+            <input className="input w-full mt-1" type="datetime-local" onChange={(e)=>setFilters({...filters,to:toIso(e.target.value)})}/>
+          </label>
+        </div>
+        
+        <div className="flex gap-2">
+          <button disabled={!formats.length} onClick={()=>void runNow()} className="btn-primary flex gap-2">
+            <Play size={15}/>Run now
+          </button>
+          <button disabled={!formats.length} onClick={()=>void createSchedule()} className="btn-secondary flex gap-2">
+            <CalendarClock size={15}/>Save daily schedule
+          </button>
+        </div>
+      </div>
+      
+      <div className="card">
+        <h2 className="text-lg font-semibold mb-3">Saved schedules</h2>
+        {schedules.length===0?<p className="text-gray-500 text-sm">No saved schedules.</p>:(
+          <div className="space-y-2">
+            {schedules.map((schedule)=>(
+              <div key={schedule.id} className="border rounded-lg p-3 flex justify-between gap-3">
+                <div>
+                  <strong>{schedule.name}</strong>
+                  <p className="text-xs text-gray-500">
+                    {REPORT_TEMPLATES.find(t => t.id === schedule.template)?.name || schedule.template} • Daily {schedule.dailyAt} / {schedule.timezone} / {schedule.formats.join(", ")}
+                  </p>
+                  <p className="text-xs">
+                    Next: {new Date(schedule.nextRunAt).toLocaleString()} / Last: {schedule.lastRunAt?new Date(schedule.lastRunAt).toLocaleString():"Never"}
+                  </p>
+                  <p className="text-xs text-gray-500">{schedule.recipients.join(", ")||"In-app only"}</p>
+                </div>
+                <button aria-label="Delete schedule" onClick={()=>void remove(schedule.id)}>
+                  <Trash2 size={17} className="text-red-600"/>
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </section>
-    <section className="card overflow-auto"><h2 className="text-lg font-semibold mb-3">Run history</h2>{loading?<p><LoaderCircle className="animate-spin inline"/> Loading…</p>:<table className="w-full text-sm"><thead><tr className="text-left border-b"><th>Requested</th><th>Status</th><th>Scope</th><th>Rows</th><th>Delivery</th><th>Downloads</th></tr></thead><tbody>{runs.map((run)=><tr key={run.id} className="border-b align-top"><td className="py-3">{new Date(run.createdAt).toLocaleString()}</td><td><span className="flex gap-1 items-center">{run.status==="completed"?<CheckCircle2 size={15} className="text-green-600"/>:run.status==="running"?<LoaderCircle size={15} className="animate-spin"/>:null}{run.status} {run.status==="running"?`${run.progress}%`:""}</span>{run.error&&<small className="block text-red-700">{run.error}</small>}</td><td>{Object.entries(run.filters).map(([key,value])=><small key={key} className="block">{key}: {value}</small>)}</td><td>{run.rowCount??"—"}</td><td>{run.deliveries.length?run.deliveries.map((delivery)=><small title={delivery.error} className="block" key={delivery.id}>{delivery.recipient}: {delivery.status} ({delivery.attempts})</small>):"In-app"}</td><td><div className="flex flex-wrap gap-2">{run.artifacts.map((artifact)=><a className="btn-secondary inline-flex gap-1 text-xs" href={artifact.downloadUrl} key={artifact.id}><Download size={13}/>{artifact.format.toUpperCase()}</a>)}</div></td></tr>)}</tbody></table>}</section>
+    
+    <section className="card overflow-auto">
+      <h2 className="text-lg font-semibold mb-3">Run history</h2>
+      {loading?<p><LoaderCircle className="animate-spin inline"/> Loading…</p>:(
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="text-left border-b">
+              <th className="py-2">Requested</th>
+              <th>Template</th>
+              <th>Status</th>
+              <th>Scope</th>
+              <th>Rows</th>
+              <th>Delivery</th>
+              <th>Downloads</th>
+            </tr>
+          </thead>
+          <tbody>
+            {runs.map((run)=>(
+              <tr key={run.id} className="border-b align-top">
+                <td className="py-3">{new Date(run.createdAt).toLocaleString()}</td>
+                <td className="text-xs">{REPORT_TEMPLATES.find(t => t.id === run.template)?.name || run.template}</td>
+                <td>
+                  <span className="flex gap-1 items-center">
+                    {run.status==="completed"?<CheckCircle2 size={15} className="text-green-600"/>:run.status==="running"?<LoaderCircle size={15} className="animate-spin"/>:null}
+                    {run.status} {run.status==="running"?`${run.progress}%`:""}
+                  </span>
+                  {run.error&&<small className="block text-red-700">{run.error}</small>}
+                </td>
+                <td>
+                  {Object.entries(run.filters).map(([key,value])=>(
+                    <small key={key} className="block">{key}: {value}</small>
+                  ))}
+                </td>
+                <td>{run.rowCount??"—"}</td>
+                <td>
+                  {run.deliveries.length?run.deliveries.map((delivery)=>(
+                    <small title={delivery.error} className="block" key={delivery.id}>
+                      {delivery.recipient}: {delivery.status} ({delivery.attempts})
+                    </small>
+                  )):"In-app"}
+                </td>
+                <td>
+                  <div className="flex flex-wrap gap-2">
+                    {run.artifacts.map((artifact)=>(
+                      <a className="btn-secondary inline-flex gap-1 text-xs" href={artifact.downloadUrl} key={artifact.id}>
+                        <Download size={13}/>{artifact.format.toUpperCase()}
+                      </a>
+                    ))}
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </section>
   </main></AppLayout>;
 }
-function Filter({label,value,set}:{label:string;value?:string;set:(value:string)=>void}){return<label className="text-sm">{label}<input className="input w-full mt-1" value={value??""} onChange={(e)=>set(e.target.value)}/></label>}
-function clean(filters:Filters){return Object.fromEntries(Object.entries(filters).filter(([,value])=>value))}
-function toIso(value:string){return value?new Date(value).toISOString():undefined}
+
+function Filter({label,value,set}:{label:string;value?:string;set:(value:string)=>void}){
+  return (
+    <label className="text-sm">
+      {label}
+      <input className="input w-full mt-1" value={value??""} onChange={(e)=>set(e.target.value)}/>
+    </label>
+  );
+}
+
+function clean(filters:Filters){
+  return Object.fromEntries(Object.entries(filters).filter(([,value])=>value));
+}
+
+function toIso(value:string){
+  return value?new Date(value).toISOString():undefined;
+}

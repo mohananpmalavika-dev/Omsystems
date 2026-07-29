@@ -2,22 +2,25 @@ import { describe, expect, it, vi } from "vitest";
 import {
   BRANCH_GRID_LAYOUTS,
   BRANCH_PAGE_SIZE,
+  MAX_BRANCH_TILES_PER_VIEW,
   getBranchGridMetrics,
+  getBranchGridViewportHeight,
   loadAllBranchHealth,
   sequenceBranchHealth,
 } from "../components/operational-health/branch-mosaic-model.js";
 import type { BranchHealth } from "../lib/types/operational-health.js";
 
 describe("centralized branch mosaic model", () => {
-  it("provides detailed operator layouts and dense 400-branch HO status layouts", () => {
-    expect(BRANCH_GRID_LAYOUTS).toEqual(["4x4", "6x6", "8x8", "10x10", "16x16", "20x20"]);
-    expect(getBranchGridMetrics("4x4", 1200)).toMatchObject({ columns: 4, compact: false });
-    expect(getBranchGridMetrics("6x6", 1200)).toMatchObject({ columns: 6, compact: true });
-    expect(getBranchGridMetrics("8x8", 1200)).toMatchObject({ columns: 8, ultraCompact: true });
+  it("provides 4x4, 6x6, and 8x8 operator layouts capped at 64 tiles", () => {
+    expect(BRANCH_GRID_LAYOUTS).toEqual(["4x4", "6x6", "8x8"]);
+    expect(MAX_BRANCH_TILES_PER_VIEW).toBe(64);
+    expect(getBranchGridMetrics("4x4", 1200)).toMatchObject({ columns: 4, compact: false, tilesPerView: 16 });
+    expect(getBranchGridMetrics("6x6", 1200)).toMatchObject({ columns: 6, compact: true, tilesPerView: 36 });
+    expect(getBranchGridMetrics("8x8", 1200)).toMatchObject({ columns: 8, ultraCompact: true, tilesPerView: 64 });
     expect(getBranchGridMetrics("8x8", 600).columns).toBe(2);
-    expect(getBranchGridMetrics("10x10", 1200)).toMatchObject({ columns: 10, statusOnly: true, rowHeight: 48 });
-    expect(getBranchGridMetrics("16x16", 1200)).toMatchObject({ columns: 16, statusOnly: true, rowHeight: 30 });
-    expect(getBranchGridMetrics("20x20", 1200)).toMatchObject({ columns: 20, statusOnly: true, rowHeight: 23, gap: 4 });
+    expect(getBranchGridViewportHeight("4x4")).toBe(584);
+    expect(getBranchGridViewportHeight("6x6")).toBe(608);
+    expect(getBranchGridViewportHeight("8x8")).toBe(616);
   });
 
   it("automatically sequences offline, critical-alert and unhealthy branches first", () => {
@@ -30,7 +33,7 @@ describe("centralized branch mosaic model", () => {
       .toEqual([offline.id, alerting.id, warning.id, healthy.id]);
   });
 
-  it("can group 400 branches by region while retaining critical-first order within a region", () => {
+  it("can group a large branch estate by region while retaining critical-first order within a region", () => {
     const branches = Array.from({ length: 400 }, (_, index) => ({
       ...branch(index),
       region: index % 2 ? "West" : "North",
@@ -43,7 +46,7 @@ describe("centralized branch mosaic model", () => {
     expect(sequenced.findIndex((item) => item.region === "West")).toBe(200);
   });
 
-  it("projects a 400-branch live-health snapshot within the HO wall performance budget", () => {
+  it("sequences a large branch estate efficiently before virtual scrolling", () => {
     const branches = Array.from({ length: 400 }, (_, index) => ({
       ...branch(index),
       healthStatus: index % 23 === 0 ? "critical" as const : index % 7 === 0 ? "warning" as const : "healthy" as const,

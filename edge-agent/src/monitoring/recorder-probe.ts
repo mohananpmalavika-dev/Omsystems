@@ -13,6 +13,18 @@ export interface RecorderProbeResult {
   reasonCodes: string[];
 }
 
+type RecordingStatus = "recording" | "stopped" | "partial" | "unknown";
+
+interface RecordingProbe {
+  status: RecordingStatus;
+  recordingChannels: number | null;
+  reasonCodes: string[];
+  /** The API used to prove that new media exists, rather than merely reading a schedule. */
+  source: "recent-media-search" | "recording-summary" | "unavailable";
+}
+
+const RECORDING_EVIDENCE_WINDOW_MS = 5 * 60_000;
+
 export function looksLikeRecorder(identity: { model?: string | undefined; manufacturer?: string | undefined }, scopes: string[] = []) {
   return /(?:^|[\s_-])(dvr|nvr|xvr|uvr)(?:$|[\s_-])|video recorder/i.test(`${identity.manufacturer ?? ""} ${identity.model ?? ""} ${scopes.join(" ")}`);
 }
@@ -41,13 +53,35 @@ async function probeHikvision(config: RecorderConfig, base: string, credentials:
   const storageXml = storage?.ok ? await storage.text() : "";
   const channels = await authenticatedFetch(`${base}/ISAPI/System/Video/inputs/channels`, { method: "GET" }, credentials, timeout).catch(() => null);
   const channelXml = channels?.ok ? await channels.text() : "";
+
+  // A recording schedule is not proof that the recorder is currently writing media.
+  // Query the last five minutes of the archive instead.
+  const recordingStatus = await getHikvisionRecordingStatus(base, credentials, timeout, hikvisionTrackIds(channelXml));
+
   const total = (channelXml.match(/<VideoInputChannel>/gi) ?? []).length || null;
   const connected = (channelXml.match(/<videoInputEnabled>true<\/videoInputEnabled>/gi) ?? []).length || total;
   return result(config, true, "online", started, {
     model: tag(xml, "model") ?? config.model ?? "Unknown", serialNumber: tag(xml, "serialNumber") ?? "",
     firmwareVersion: tag(xml, "firmwareVersion") ?? "", uptimeSeconds: number(tag(xml, "upTime")),
-    totalCameras: total, connectedCameras: connected, protocol: "hikvision-isapi", recordingStatus: "unknown",
-  }, parseHikvisionDisks(storageXml), storageXml ? ["recording_state_vendor_specific"] : ["storage_telemetry_unavailable", "recording_state_vendor_specific"]);
+    totalCameras: total, connectedCameras: connected, protocol: "hikvision-isapi",
+    recordingStatus: recordingStatus.status,
+    recordingChannels: recordingStatus.recordingChannels,
+    recordingStatusSource: recordingStatus.source,
+  }, parseHikvisionDisks(storageXml), recordingStatus.reasonCodes);
+}
+
+async function getHikvisionRecordingStatus(base: string, credentials: { username: string; password: string } | undefined, timeout: number, trackIds: string[]): Promise<RecordingProbe> {
+  try {
+    const response = await authenticatedFetch(`${base}/ISAPI/ContentMgmt/search`, {
+      method: "POST",
+      headers: { "content-type": "application/xml" },
+      body: hikvisionArchiveSearchBody(trackIds),
+    }, credentials, timeout);
+    if (!response.ok) return recordingUnavailable("hikvision_recording_search_unavailable");
+    return parseHikvisionArchiveSearch(await response.text());
+  } catch {
+    return recordingUnavailable("hikvision_recording_search_failed");
+  }
 }
 
 async function probeDahuaFamily(config: RecorderConfig, base: string, credentials: { username: string; password: string } | undefined, timeout: number, started: number) {
@@ -60,12 +94,50 @@ async function probeDahuaFamily(config: RecorderConfig, base: string, credential
   const channelResponse = await authenticatedFetch(`${base}/cgi-bin/configManager.cgi?action=getConfig&name=ChannelTitle`, { method: "GET" }, credentials, timeout).catch(() => null);
   const channelText = channelResponse?.ok ? await channelResponse.text() : "";
   const channelIds = new Set([...channelText.matchAll(/ChannelTitle\[(\d+)\]/g)].map((match) => match[1]));
+
+  // Query the archive for newly created media. Record.Enable is a schedule setting,
+  // so treating it as current recording state produced false positives.
+  const recordingStatus = await getDahuaRecordingStatus(base, credentials, timeout);
+
   return result(config, true, "online", started, {
     model: key(text, "deviceType") ?? config.model ?? "Unknown", serialNumber: key(text, "serialNumber") ?? "",
     firmwareVersion: key(text, "softwareVersion") ?? key(text, "version") ?? "",
     totalCameras: channelIds.size || null, connectedCameras: null,
-    protocol: config.vendor === "cp-plus" ? "cp-plus-oem-api" : "dahua-cgi", recordingStatus: "unknown",
-  }, parseCgiDisks(storageText), ["channel_connection_state_unavailable", "recording_state_vendor_specific"]);
+    protocol: config.vendor === "cp-plus" ? "cp-plus-oem-api" : "dahua-cgi",
+    recordingStatus: recordingStatus.status,
+    recordingChannels: recordingStatus.recordingChannels,
+    recordingStatusSource: recordingStatus.source,
+  }, parseCgiDisks(storageText), recordingStatus.reasonCodes);
+}
+
+async function getDahuaRecordingStatus(base: string, credentials: { username: string; password: string } | undefined, timeout: number): Promise<RecordingProbe> {
+  let object: string | undefined;
+  try {
+    const factory = await authenticatedFetch(`${base}/cgi-bin/mediaFileFind.cgi?action=factory.create`, { method: "GET" }, credentials, timeout);
+    if (!factory.ok) return recordingUnavailable("dahua_archive_search_unavailable");
+    object = key(await factory.text(), "object");
+    if (!object) return recordingUnavailable("dahua_archive_search_handle_missing");
+
+    const now = new Date();
+    const query = new URLSearchParams({
+      action: "findFile", object,
+      "condition.StartTime": dahuaTime(new Date(now.getTime() - RECORDING_EVIDENCE_WINDOW_MS)),
+      "condition.EndTime": dahuaTime(now),
+      "condition.Types[0]": "dav",
+    });
+    const find = await authenticatedFetch(`${base}/cgi-bin/mediaFileFind.cgi?${query}`, { method: "GET" }, credentials, timeout);
+    if (!find.ok) return recordingUnavailable("dahua_archive_search_failed");
+
+    const next = await authenticatedFetch(`${base}/cgi-bin/mediaFileFind.cgi?${new URLSearchParams({ action: "findNextFile", object, count: "128" })}`, { method: "GET" }, credentials, timeout);
+    if (!next.ok) return recordingUnavailable("dahua_archive_results_unavailable");
+    return parseDahuaArchiveResults(await next.text());
+  } catch {
+    return recordingUnavailable("dahua_archive_search_failed");
+  } finally {
+    if (object) {
+      await authenticatedFetch(`${base}/cgi-bin/mediaFileFind.cgi?${new URLSearchParams({ action: "close", object })}`, { method: "GET" }, credentials, timeout).catch(() => undefined);
+    }
+  }
 }
 
 async function probeOnvif(config: RecorderConfig, base: string, credentials: { username: string; password: string } | undefined, timeout: number, started: number) {
@@ -74,11 +146,104 @@ async function probeOnvif(config: RecorderConfig, base: string, credentials: { u
   if (response.status === 401 || response.status === 403) return result(config, true, "degraded", started, {}, [], ["recorder_credentials_rejected"]);
   if (!response.ok) throw new Error(`onvif_http_${response.status}`);
   const xml = await response.text();
+
+  // The ONVIF Search service's recent DataUntil is portable evidence that media
+  // is arriving. Recording Control's GetRecordings only lists configuration.
+  const recordingStatus = await getOnvifRecordingStatus(base, config.systemPath ?? "/onvif/device_service", credentials, timeout);
+
   return result(config, true, "online", started, {
     model: tag(xml, "Model") ?? config.model ?? "Unknown", serialNumber: tag(xml, "SerialNumber") ?? "",
-    firmwareVersion: tag(xml, "FirmwareVersion") ?? "", protocol: "onvif", recordingStatus: "unknown",
+    firmwareVersion: tag(xml, "FirmwareVersion") ?? "", protocol: "onvif",
+    recordingStatus: recordingStatus.status,
+    recordingChannels: recordingStatus.recordingChannels,
+    recordingStatusSource: recordingStatus.source,
     totalCameras: null, connectedCameras: null,
-  }, [], ["channel_inventory_vendor_specific", "storage_telemetry_unavailable", "recording_state_vendor_specific"]);
+  }, [], recordingStatus.reasonCodes);
+}
+
+async function getOnvifRecordingStatus(base: string, deviceServicePath: string, credentials: { username: string; password: string } | undefined, timeout: number): Promise<RecordingProbe> {
+  try {
+    const searchEndpoint = await getOnvifSearchEndpoint(base, deviceServicePath, credentials, timeout);
+    const summary = await onvifRecordingSummary(searchEndpoint ? [searchEndpoint] : onvifSearchFallbackEndpoints(base), credentials, timeout);
+    if (!summary) return recordingUnavailable("onvif_recording_search_unavailable");
+    if (hasRecentOnvifRecordingData(summary)) return { status: "recording", recordingChannels: null, reasonCodes: [], source: "recording-summary" };
+    return recordingUnavailable("onvif_no_recent_recording_evidence");
+  } catch {
+    return recordingUnavailable("onvif_recording_probe_failed");
+  }
+}
+
+function recordingUnavailable(reasonCode: string): RecordingProbe {
+  return { status: "unknown", recordingChannels: null, reasonCodes: [reasonCode], source: "unavailable" };
+}
+
+function hikvisionArchiveSearchBody(trackIds: string[]) {
+  const end = new Date();
+  const start = new Date(end.getTime() - RECORDING_EVIDENCE_WINDOW_MS);
+  const tracks = (trackIds.length ? trackIds : ["101"]).map((id) => `<trackID>${id}</trackID>`).join("");
+  return `<?xml version="1.0" encoding="UTF-8"?><CMSearchDescription version="1.0" xmlns="http://www.isapi.org/ver20/XMLSchema"><searchID>sentinel-recorder-health</searchID><trackList>${tracks}</trackList><timeSpanList><timeSpan><startTime>${start.toISOString()}</startTime><endTime>${end.toISOString()}</endTime></timeSpan></timeSpanList><maxResults>128</maxResults><searchResultPosition>0</searchResultPosition></CMSearchDescription>`;
+}
+
+function parseHikvisionArchiveSearch(xml: string): RecordingProbe {
+  const matches = xml.match(/<(?:[^:>]+:)?searchMatchItem\b/gi) ?? [];
+  if (!matches.length) return recordingUnavailable("hikvision_no_recent_recording_evidence");
+  const channels = new Set(valuesForTag(xml, "trackID").concat(valuesForTag(xml, "channelID")));
+  return { status: "recording", recordingChannels: channels.size || null, reasonCodes: [], source: "recent-media-search" };
+}
+
+function parseDahuaArchiveResults(text: string): RecordingProbe {
+  const found = key(text, "found");
+  if (found !== "1" && found?.toLowerCase() !== "true") return recordingUnavailable("dahua_no_recent_recording_evidence");
+  const channels = new Set([...text.matchAll(/(?:items|item)\[\d+\]\.Channel=(\d+)/gi)].map((match) => match[1]!));
+  return { status: "recording", recordingChannels: channels.size || null, reasonCodes: [], source: "recent-media-search" };
+}
+
+function dahuaTime(value: Date) { return value.toISOString().replace("T", " ").replace(/\.\d{3}Z$/, ""); }
+
+async function getOnvifSearchEndpoint(base: string, deviceServicePath: string, credentials: { username: string; password: string } | undefined, timeout: number) {
+  try {
+    const body = `<?xml version="1.0"?><s:Envelope xmlns:s="http://www.w3.org/2003/05/soap-envelope"><s:Body><GetCapabilities xmlns="http://www.onvif.org/ver10/device/wsdl"><Category>All</Category></GetCapabilities></s:Body></s:Envelope>`;
+    const response = await authenticatedFetch(`${base}${deviceServicePath}`, { method: "POST", headers: { "content-type": "application/soap+xml" }, body }, credentials, timeout);
+    if (!response.ok) return null;
+    const search = (await response.text()).match(/<(?:[^:>]+:)?Search\b[^>]*>([\s\S]*?)<\/(?:[^:>]+:)?Search>/i)?.[1];
+    const xAddr = search ? tag(search, "XAddr") : undefined;
+    return xAddr && /^https?:\/\//i.test(xAddr) ? xAddr : null;
+  } catch {
+    return null;
+  }
+}
+
+function onvifSearchFallbackEndpoints(base: string) {
+  return [`${base}/onvif/search_service`, `${base}/onvif/recording_search_service`, `${base}/onvif/Search`];
+}
+
+async function onvifRecordingSummary(endpoints: string[], credentials: { username: string; password: string } | undefined, timeout: number) {
+  const body = `<?xml version="1.0"?><s:Envelope xmlns:s="http://www.w3.org/2003/05/soap-envelope"><s:Body><GetRecordingSummary xmlns="http://www.onvif.org/ver10/search/wsdl"/></s:Body></s:Envelope>`;
+  for (const endpoint of endpoints) {
+    try {
+      const response = await authenticatedFetch(endpoint, { method: "POST", headers: { "content-type": "application/soap+xml" }, body }, credentials, timeout);
+      if (response.ok) return response.text();
+    } catch {
+      // Another advertised/fallback Search endpoint may still be usable.
+    }
+  }
+  return null;
+}
+
+function hasRecentOnvifRecordingData(xml: string) {
+  const numberRecordings = Number(valuesForTag(xml, "NumberRecordings")[0] ?? "");
+  if (Number.isFinite(numberRecordings) && numberRecordings === 0) return false;
+  const dataUntil = valuesForTag(xml, "DataUntil").map((value) => Date.parse(value)).filter(Number.isFinite);
+  return dataUntil.some((value) => value >= Date.now() - RECORDING_EVIDENCE_WINDOW_MS);
+}
+
+function valuesForTag(xml: string, name: string) {
+  return [...xml.matchAll(new RegExp(`<(?:(?:[^:>]+):)?${name}>([^<]+)<\\/(?:(?:[^:>]+):)?${name}>`, "gi"))].map((match) => match[1]!.trim());
+}
+
+function hikvisionTrackIds(channelXml: string) {
+  const channelIds = valuesForTag(channelXml, "id").map(Number).filter((id) => Number.isInteger(id) && id > 0);
+  return channelIds.map((id) => String(100 + id));
 }
 
 function result(config: RecorderConfig, reachable: boolean, status: string, started: number, extra: Record<string, string | number | boolean | null>, hddStatus: Array<Record<string, unknown>>, reasonCodes: string[]): RecorderProbeResult {

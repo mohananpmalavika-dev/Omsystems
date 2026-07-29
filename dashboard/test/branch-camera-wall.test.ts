@@ -2,10 +2,13 @@ import { describe, expect, it } from "vitest";
 import type { CameraHealth } from "../lib/types/operational-health.js";
 import {
   CAMERA_WALL_LAYOUTS,
+  CAMERA_WALL_RENDER_BATCH_SIZE,
   cameraPlaybackHref,
+  cameraRenderWindow,
   cameraStatusTone,
   cameraSequenceWindow,
   canStartCamera,
+  nextCameraRenderCount,
 } from "../components/operational-health/branch-camera-wall-model.js";
 
 describe("branch camera wall model", () => {
@@ -28,6 +31,14 @@ describe("branch camera wall model", () => {
     expect(canStartCamera(camera({ onlineStatus: "offline" }))).toBe(false);
     expect(cameraStatusTone(camera({ onlineStatus: "online", videoLoss: true }))).toBe("critical");
     expect(cameraStatusTone(camera({ onlineStatus: "degraded" }))).toBe("warning");
+  });
+
+  it("keeps a large branch wall bounded until the operator requests more tiles", () => {
+    const cameras = Array.from({ length: 500 }, (_, index) => camera({ id: `camera-${index}` }));
+
+    expect(cameraRenderWindow(cameras, CAMERA_WALL_RENDER_BATCH_SIZE)).toHaveLength(48);
+    expect(nextCameraRenderCount(48, cameras.length)).toBe(96);
+    expect(cameraRenderWindow(cameras, nextCameraRenderCount(480, cameras.length))).toHaveLength(500);
   });
 });
 

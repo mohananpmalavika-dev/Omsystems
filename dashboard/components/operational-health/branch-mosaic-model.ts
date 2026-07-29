@@ -1,9 +1,14 @@
 import type { BranchHealth } from "@/lib/types/operational-health";
 
-export const BRANCH_GRID_LAYOUTS = ["4x4", "6x6", "8x8", "10x10", "16x16", "20x20"] as const;
+/**
+ * Operator-approved branch-wall densities. The mosaic deliberately tops out
+ * at 8 x 8: a dense wall must still leave a branch tile actionable.
+ */
+export const BRANCH_GRID_LAYOUTS = ["4x4", "6x6", "8x8"] as const;
 export type BranchGridLayout = (typeof BRANCH_GRID_LAYOUTS)[number];
 export type BranchSequence = "priority" | "region" | "name";
 
+export const MAX_BRANCH_TILES_PER_VIEW = 64;
 export const BRANCH_PAGE_SIZE = 500;
 
 export interface BranchHealthPage {
@@ -26,22 +31,23 @@ export function getBranchGridMetrics(layout: BranchGridLayout, viewportWidth: nu
     ? 136
     : layout === "6x6"
       ? 92
-      : layout === "8x8"
-        ? 68
-        : layout === "10x10"
-          ? 48
-          : layout === "16x16"
-            ? 30
-            : 23;
-  const statusOnly = requestedColumns >= 10;
+      : 68;
   return {
     columns,
     rowHeight,
-    gap: statusOnly ? 4 : 8,
+    gap: 8,
     compact: layout !== "4x4",
-    ultraCompact: requestedColumns >= 8,
-    statusOnly,
+    ultraCompact: layout === "8x8",
+    statusOnly: false,
+    tilesPerView: requestedColumns ** 2,
   };
+}
+
+/** The exact tile area for the selected square layout, including its padding. */
+export function getBranchGridViewportHeight(layout: BranchGridLayout) {
+  const rows = Number.parseInt(layout, 10);
+  const { gap, rowHeight } = getBranchGridMetrics(layout, Number.POSITIVE_INFINITY);
+  return (rows * rowHeight) + ((rows - 1) * gap) + 16;
 }
 
 const HEALTH_PRIORITY: Record<BranchHealth["healthStatus"], number> = {

@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: vms-test
+  labels:
+    name: vms-test
+    environment: test
+    purpose: scalability-testing

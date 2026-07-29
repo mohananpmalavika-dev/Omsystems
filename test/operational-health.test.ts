@@ -212,6 +212,29 @@ describe("Phase 1 operational health", () => {
     const alerts = await app.inject({ method: "GET", url: "/v1/operations/alerts?component=recording&severity=critical", headers: admin });
     expect(alerts.json().data.alerts.some((alert: { id: string }) => alert.id === "recorder:branch-blr-001:nvr-main")).toBe(true);
   });
+
+  it("projects recorder archive evidence without degrading an active recorder", async () => {
+    const observedAt = new Date().toISOString();
+    const response = await app.inject({
+      method: "POST", url: `/v1/edge-agents/${agentId}/telemetry`, headers: admin,
+      payload: {
+        branchId: "branch-blr-001", edgeAgentId: agentId, deviceType: "recorder", deviceId: "nvr-evidence",
+        observedAt, source: "system", quality: "verified", idempotencyKey: `nvr-evidence:${observedAt}`,
+        metrics: {
+          name: "Archive-verified NVR", deviceType: "nvr", vendor: "hikvision", model: "DS-7608",
+          reachable: true, recordingStatus: "recording", recordingChannels: 8,
+          recordingStatusSource: "recent-media-search", totalCameras: 8,
+        }, reasonCodes: [],
+      },
+    });
+    expect(response.statusCode).toBe(202);
+
+    const recorders = await app.inject({ method: "GET", url: "/v1/operations/health/recorders", headers: admin });
+    expect(recorders.json().data.recorders[0]).toMatchObject({
+      id: "nvr-evidence", status: "online", recordingStatus: "recording",
+      recordingChannels: 8, recordingStatusSource: "recent-media-search",
+    });
+  });
 });
 
 describe("operational health evidence rules", () => {

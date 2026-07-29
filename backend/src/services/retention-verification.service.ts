@@ -22,6 +22,8 @@ export interface CameraRetentionStatus {
   complianceStatus: "compliant" | "warning" | "violation" | "unknown";
   lastVerified: Date;
   issues: RetentionIssue[];
+  archiveVerified: boolean; // Whether DVR/NVR archive was checked
+  archiveMismatch: boolean; // Whether platform and archive data differ significantly
 }
 
 export interface RetentionIssue {
@@ -256,6 +258,7 @@ export class RetentionVerificationService {
 
   /**
    * Calculate actual retention from recording segments
+   * Enhanced to verify DVR/NVR archives in addition to platform-indexed recordings
    */
   private async calculateActualRetention(cameraId: string): Promise<{
     actualRetentionDays: number;
@@ -263,9 +266,12 @@ export class RetentionVerificationService {
     newestDate: Date;
     totalSizeGB: number;
     avgBitrateMbps: number;
+    archiveVerified: boolean;
+    archiveMismatch: boolean;
   } | null> {
     try {
-      const result = await this.pool.query(`
+      // Step 1: Get platform-indexed recordings
+      const platformResult = await this.pool.query(`
         SELECT 
           MIN(started_at) as oldest_date,
           MAX(ended_at) as newest_date,
@@ -278,15 +284,68 @@ export class RetentionVerificationService {
           AND ended_at IS NOT NULL
       `, [cameraId]);
 
-      if (result.rows.length === 0 || !result.rows[0].oldest_date) {
-        return null;
+      // Step 2: Get DVR/NVR archive data (if available)
+      const archiveResult = await this.queryDVRArchive(cameraId);
+
+      // Determine which source has the most comprehensive data
+      let useArchiveData = false;
+      let archiveVerified = false;
+      let archiveMismatch = false;
+
+      if (platformResult.rows.length === 0 || !platformResult.rows[0].oldest_date) {
+        // No platform-indexed data, try archive
+        if (archiveResult) {
+          logger.info(`Using DVR archive data for camera ${cameraId} (no platform segments)`);
+          useArchiveData = true;
+          archiveVerified = true;
+        } else {
+          return null;
+        }
       }
 
-      const row = result.rows[0];
-      const oldestDate = new Date(row.oldest_date);
-      const newestDate = new Date(row.newest_date);
-      const totalSeconds = parseFloat(row.total_seconds) || 0;
-      const totalBytes = BigInt(row.total_bytes || 0);
+      const platformRow = platformResult.rows[0];
+      const platformOldestDate = platformRow?.oldest_date ? new Date(platformRow.oldest_date) : null;
+      const platformNewestDate = platformRow?.newest_date ? new Date(platformRow.newest_date) : null;
+
+      // Compare with archive data if available
+      if (archiveResult && platformOldestDate && platformNewestDate) {
+        archiveVerified = true;
+        
+        // Check for significant mismatches
+        const platformRetentionMs = platformNewestDate.getTime() - platformOldestDate.getTime();
+        const archiveRetentionMs = archiveResult.newestDate.getTime() - archiveResult.oldestDate.getTime();
+        const retentionDiffDays = Math.abs(platformRetentionMs - archiveRetentionMs) / (1000 * 60 * 60 * 24);
+        
+        if (retentionDiffDays > 2) {
+          // Significant mismatch (>2 days difference)
+          archiveMismatch = true;
+          logger.warn(`Retention mismatch for camera ${cameraId}: Platform=${Math.floor(platformRetentionMs / (1000 * 60 * 60 * 24))}d, Archive=${Math.floor(archiveRetentionMs / (1000 * 60 * 60 * 24))}d`);
+          
+          // Use archive data if it shows more retention
+          if (archiveRetentionMs > platformRetentionMs) {
+            useArchiveData = true;
+            logger.info(`Using DVR archive data for camera ${cameraId} (more complete than platform)`);
+          }
+        }
+      }
+
+      // Use selected data source
+      let oldestDate: Date;
+      let newestDate: Date;
+      let totalBytes: bigint;
+      let totalSeconds: number;
+
+      if (useArchiveData && archiveResult) {
+        oldestDate = archiveResult.oldestDate;
+        newestDate = archiveResult.newestDate;
+        totalBytes = BigInt(Math.round(archiveResult.totalSizeGB * 1024 * 1024 * 1024));
+        totalSeconds = archiveResult.totalSeconds;
+      } else {
+        oldestDate = platformOldestDate!;
+        newestDate = platformNewestDate!;
+        totalBytes = BigInt(platformRow.total_bytes || 0);
+        totalSeconds = parseFloat(platformRow.total_seconds) || 0;
+      }
       
       // Calculate actual retention in days
       const retentionMs = newestDate.getTime() - oldestDate.getTime();
@@ -304,9 +363,305 @@ export class RetentionVerificationService {
         newestDate,
         totalSizeGB: parseFloat(totalSizeGB.toFixed(2)),
         avgBitrateMbps: parseFloat(avgBitrateMbps.toFixed(2)),
+        archiveVerified,
+        archiveMismatch,
       };
     } catch (error) {
       logger.error("Failed to calculate actual retention", { error, cameraId });
+      return null;
+    }
+  }
+
+  /**
+   * Query DVR/NVR archive directly to verify recordings
+   */
+  private async queryDVRArchive(cameraId: string): Promise<{
+    oldestDate: Date;
+    newestDate: Date;
+    totalSizeGB: number;
+    totalSeconds: number;
+  } | null> {
+    try {
+      // Get camera's DVR/NVR connection info
+      const cameraInfo = await this.pool.query(`
+        SELECT 
+          c.id,
+          c.channel_number,
+          d.vendor,
+          d.model,
+          d.ip_address,
+          d.port,
+          d.protocol,
+          d.credentials
+        FROM cameras c
+        LEFT JOIN dvrs d ON d.id = c.dvr_id
+        WHERE c.id = $1::uuid
+      `, [cameraId]);
+
+      if (cameraInfo.rows.length === 0 || !cameraInfo.rows[0].vendor) {
+        // Camera not associated with a DVR/NVR
+        return null;
+      }
+
+      const info = cameraInfo.rows[0];
+      const vendor = info.vendor.toLowerCase();
+
+      // Call vendor-specific archive query
+      if (vendor.includes('hikvision')) {
+        return await this.queryHikvisionArchive(info);
+      } else if (vendor.includes('dahua') || vendor.includes('cp plus') || vendor.includes('cpplus')) {
+        return await this.queryDahuaArchive(info);
+      } else {
+        // Vendor not supported for direct archive query
+        logger.debug(`DVR archive query not supported for vendor: ${vendor}`);
+        return null;
+      }
+    } catch (error) {
+      logger.error(`Failed to query DVR archive for camera ${cameraId}`, { error });
+      return null;
+    }
+  }
+
+  /**
+   * Query Hikvision DVR/NVR archive via ISAPI
+   */
+  private async queryHikvisionArchive(dvrInfo: any): Promise<{
+    oldestDate: Date;
+    newestDate: Date;
+    totalSizeGB: number;
+    totalSeconds: number;
+  } | null> {
+    try {
+      const { ip_address, port, credentials, channel_number } = dvrInfo;
+      const auth = credentials ? JSON.parse(credentials) : null;
+      
+      if (!auth || !auth.username) {
+        logger.debug('No credentials available for Hikvision archive query');
+        return null;
+      }
+
+      const baseUrl = `http://${ip_address}:${port || 80}`;
+      
+      // Search for recordings in the last 90 days
+      const endTime = new Date();
+      const startTime = new Date();
+      startTime.setDate(startTime.getDate() - 90);
+
+      const searchXml = `<?xml version="1.0"?>
+<CMSearchDescription>
+  <searchID>C${channel_number || 1}</searchID>
+  <trackIDList>
+    <trackID>${channel_number || 1}01</trackID>
+  </trackIDList>
+  <timeSpanList>
+    <timeSpan>
+      <startTime>${startTime.toISOString()}</startTime>
+      <endTime>${endTime.toISOString()}</endTime>
+    </timeSpan>
+  </timeSpanList>
+  <maxResults>5000</maxResults>
+  <searchResultPostion>0</searchResultPostion>
+  <metadataList>
+    <metadataDescriptor>recordType</metadataDescriptor>
+  </metadataList>
+</CMSearchDescription>`;
+
+      const response = await fetch(`${baseUrl}/ISAPI/ContentMgmt/search`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/xml',
+          'Authorization': `Digest username="${auth.username}", realm="IP Camera", nonce="", uri="/ISAPI/ContentMgmt/search", response=""`
+        },
+        body: searchXml,
+        signal: AbortSignal.timeout(15000)
+      });
+
+      if (!response.ok) {
+        logger.debug(`Hikvision archive search failed: ${response.status}`);
+        return null;
+      }
+
+      const xml = await response.text();
+      return this.parseHikvisionSearchResult(xml);
+    } catch (error) {
+      logger.debug('Hikvision archive query failed', { error });
+      return null;
+    }
+  }
+
+  /**
+   * Parse Hikvision search result XML
+   */
+  private parseHikvisionSearchResult(xml: string): {
+    oldestDate: Date;
+    newestDate: Date;
+    totalSizeGB: number;
+    totalSeconds: number;
+  } | null {
+    try {
+      // Extract all recording segments from XML
+      const matches = [...xml.matchAll(/<matchItem>([\s\S]*?)<\/matchItem>/gi)];
+      
+      if (matches.length === 0) {
+        return null;
+      }
+
+      let oldestDate: Date | null = null;
+      let newestDate: Date | null = null;
+      let totalSizeBytes = 0;
+      let totalSeconds = 0;
+
+      for (const match of matches) {
+        const segment = match[1]!;
+        
+        const startTime = segment.match(/<startTime>([^<]+)<\/startTime>/)?.[1];
+        const endTime = segment.match(/<endTime>([^<]+)<\/endTime>/)?.[1];
+        const playbackURI = segment.match(/<playbackURI>([^<]+)<\/playbackURI>/)?.[1];
+
+        if (startTime && endTime) {
+          const start = new Date(startTime);
+          const end = new Date(endTime);
+
+          if (!oldestDate || start < oldestDate) oldestDate = start;
+          if (!newestDate || end > newestDate) newestDate = end;
+
+          totalSeconds += (end.getTime() - start.getTime()) / 1000;
+        }
+      }
+
+      if (!oldestDate || !newestDate) {
+        return null;
+      }
+
+      // Estimate size based on typical bitrate (2 Mbps average)
+      const estimatedBitrateBps = 2 * 1000 * 1000;
+      totalSizeBytes = (totalSeconds * estimatedBitrateBps) / 8;
+
+      return {
+        oldestDate,
+        newestDate,
+        totalSizeGB: totalSizeBytes / (1024 * 1024 * 1024),
+        totalSeconds,
+      };
+    } catch (error) {
+      logger.error('Failed to parse Hikvision search result', { error });
+      return null;
+    }
+  }
+
+  /**
+   * Query Dahua/CP PLUS DVR/NVR archive via CGI
+   */
+  private async queryDahuaArchive(dvrInfo: any): Promise<{
+    oldestDate: Date;
+    newestDate: Date;
+    totalSizeGB: number;
+    totalSeconds: number;
+  } | null> {
+    try {
+      const { ip_address, port, credentials, channel_number } = dvrInfo;
+      const auth = credentials ? JSON.parse(credentials) : null;
+      
+      if (!auth || !auth.username) {
+        logger.debug('No credentials available for Dahua archive query');
+        return null;
+      }
+
+      const baseUrl = `http://${ip_address}:${port || 80}`;
+      
+      // Query recording files
+      const endTime = new Date();
+      const startTime = new Date();
+      startTime.setDate(startTime.getDate() - 90);
+
+      const startTimeStr = this.formatDahuaTime(startTime);
+      const endTimeStr = this.formatDahuaTime(endTime);
+
+      const url = `${baseUrl}/cgi-bin/mediaFileFind.cgi?action=findFile&condition.Channel=${channel_number || 0}&condition.StartTime=${startTimeStr}&condition.EndTime=${endTimeStr}&condition.Dirs[0]=\\RecordServer`;
+
+      const response = await fetch(url, {
+        headers: {
+          'Authorization': `Digest username="${auth.username}", realm="IP Camera", nonce="", uri="/cgi-bin/mediaFileFind.cgi", response=""`
+        },
+        signal: AbortSignal.timeout(15000)
+      });
+
+      if (!response.ok) {
+        logger.debug(`Dahua archive search failed: ${response.status}`);
+        return null;
+      }
+
+      const text = await response.text();
+      return this.parseDahuaFileList(text);
+    } catch (error) {
+      logger.debug('Dahua archive query failed', { error });
+      return null;
+    }
+  }
+
+  /**
+   * Format date for Dahua CGI (YYYY-MM-DD HH:MM:SS)
+   */
+  private formatDahuaTime(date: Date): string {
+    const pad = (n: number) => n.toString().padStart(2, '0');
+    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
+  }
+
+  /**
+   * Parse Dahua file list response
+   */
+  private parseDahuaFileList(text: string): {
+    oldestDate: Date;
+    newestDate: Date;
+    totalSizeGB: number;
+    totalSeconds: number;
+  } | null {
+    try {
+      const lines = text.split('\n');
+      let oldestDate: Date | null = null;
+      let newestDate: Date | null = null;
+      let totalSizeBytes = 0;
+      let totalSeconds = 0;
+
+      for (const line of lines) {
+        // Example: items[0].StartTime=2026-07-01 00:00:00
+        //          items[0].EndTime=2026-07-01 00:10:00
+        //          items[0].Length=600
+        const startMatch = line.match(/items\[\d+\]\.StartTime=(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})/);
+        const endMatch = line.match(/items\[\d+\]\.EndTime=(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})/);
+        const lengthMatch = line.match(/items\[\d+\]\.Length=(\d+)/);
+
+        if (startMatch) {
+          const start = new Date(startMatch[1]!.replace(' ', 'T'));
+          if (!oldestDate || start < oldestDate) oldestDate = start;
+        }
+
+        if (endMatch) {
+          const end = new Date(endMatch[1]!.replace(' ', 'T'));
+          if (!newestDate || end > newestDate) newestDate = end;
+        }
+
+        if (lengthMatch) {
+          totalSeconds += parseInt(lengthMatch[1]!);
+        }
+      }
+
+      if (!oldestDate || !newestDate) {
+        return null;
+      }
+
+      // Estimate size based on typical bitrate (2 Mbps average)
+      const estimatedBitrateBps = 2 * 1000 * 1000;
+      totalSizeBytes = (totalSeconds * estimatedBitrateBps) / 8;
+
+      return {
+        oldestDate,
+        newestDate,
+        totalSizeGB: totalSizeBytes / (1024 * 1024 * 1024),
+        totalSeconds,
+      };
+    } catch (error) {
+      logger.error('Failed to parse Dahua file list', { error });
       return null;
     }
   }
@@ -412,8 +767,9 @@ export class RetentionVerificationService {
         INSERT INTO retention_verification_log (
           camera_id, verified_at, required_retention_days, actual_retention_days,
           oldest_recording_date, newest_recording_date, total_recordings_gb,
-          average_bitrate_mbps, projected_retention_days, compliance_status, issues
-        ) VALUES ($1::uuid, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+          average_bitrate_mbps, projected_retention_days, compliance_status, issues,
+          archive_verified, archive_mismatch
+        ) VALUES ($1::uuid, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
       `, [
         status.cameraId,
         status.lastVerified,
@@ -426,6 +782,8 @@ export class RetentionVerificationService {
         status.projectedRetentionDays,
         status.complianceStatus,
         JSON.stringify(status.issues),
+        status.archiveVerified,
+        status.archiveMismatch,
       ]);
 
       // Update camera retention status summary
@@ -434,8 +792,9 @@ export class RetentionVerificationService {
           camera_id, required_retention_days, actual_retention_days,
           oldest_recording_date, newest_recording_date, total_recordings_gb,
           projected_retention_days, days_until_policy_violation,
-          compliance_status, last_verified_at, issues
-        ) VALUES ($1::uuid, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+          compliance_status, last_verified_at, issues,
+          archive_verified, archive_mismatch
+        ) VALUES ($1::uuid, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
         ON CONFLICT (camera_id)
         DO UPDATE SET
           required_retention_days = EXCLUDED.required_retention_days,
@@ -447,7 +806,9 @@ export class RetentionVerificationService {
           days_until_policy_violation = EXCLUDED.days_until_policy_violation,
           compliance_status = EXCLUDED.compliance_status,
           last_verified_at = EXCLUDED.last_verified_at,
-          issues = EXCLUDED.issues
+          issues = EXCLUDED.issues,
+          archive_verified = EXCLUDED.archive_verified,
+          archive_mismatch = EXCLUDED.archive_mismatch
       `, [
         status.cameraId,
         status.requiredRetentionDays,
@@ -460,9 +821,15 @@ export class RetentionVerificationService {
         status.complianceStatus,
         status.lastVerified,
         JSON.stringify(status.issues),
+        status.archiveVerified,
+        status.archiveMismatch,
       ]);
 
-      logger.debug("Saved retention status", { cameraId: status.cameraId });
+      logger.debug("Saved retention status", { 
+        cameraId: status.cameraId,
+        archiveVerified: status.archiveVerified,
+        archiveMismatch: status.archiveMismatch 
+      });
     } catch (error) {
       logger.error("Failed to save retention status", { error, cameraId: status.cameraId });
     }

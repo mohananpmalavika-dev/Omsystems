@@ -1,0 +1,90 @@
+# Chaos Mesh Network Partition Scenario
+#
+# Simulates network partition between backend pods to test resilience
+# and data consistency during network failures.
+
+apiVersion: chaos-mesh.org/v1alpha1
+kind: NetworkChaos
+metadata:
+  name: network-partition-backend
+  namespace: vms-test
+spec:
+  action: partition
+  mode: all
+  duration: "5m"
+  selector:
+    namespaces:
+      - vms-test
+    labelSelectors:
+      app: backend
+  direction: both
+  target:
+    mode: all
+    selector:
+      namespaces:
+        - vms-test
+      labelSelectors:
+        app: postgres
+
+---
+
+apiVersion: chaos-mesh.org/v1alpha1
+kind: NetworkChaos
+metadata:
+  name: network-delay-database
+  namespace: vms-test
+spec:
+  action: delay
+  mode: one
+  duration: "10m"
+  selector:
+    namespaces:
+      - vms-test
+    labelSelectors:
+      app: postgres
+  delay:
+    latency: "500ms"
+    correlation: "50"
+    jitter: "100ms"
+
+---
+
+apiVersion: chaos-mesh.org/v1alpha1
+kind: NetworkChaos
+metadata:
+  name: network-loss-redis
+  namespace: vms-test
+spec:
+  action: loss
+  mode: one
+  duration: "5m"
+  selector:
+    namespaces:
+      - vms-test
+    labelSelectors:
+      app: redis
+  loss:
+    loss: "30"
+    correlation: "50"
+
+---
+
+# Bandwidth limitation scenario
+apiVersion: chaos-mesh.org/v1alpha1
+kind: NetworkChaos
+metadata:
+  name: bandwidth-limit-backend
+  namespace: vms-test
+spec:
+  action: bandwidth
+  mode: one
+  duration: "10m"
+  selector:
+    namespaces:
+      - vms-test
+    labelSelectors:
+      app: backend
+  bandwidth:
+    rate: "10mbps"
+    limit: 1000000
+    buffer: 10000

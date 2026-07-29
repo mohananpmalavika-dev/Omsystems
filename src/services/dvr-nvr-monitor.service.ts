@@ -12,7 +12,7 @@ export interface DVRNVRDevice {
   model: string;
   ipAddress: string;
   port: number;
-  protocol: "onvif" | "hikvision-sdk" | "dahua-sdk" | "cpplus-sdk" | "http-api";
+  protocol: "onvif" | "hikvision-isapi" | "dahua-cgi" | "cp-plus-oem-api" | "http-api";
   credentials?: {
     username: string;
     password: string;
@@ -34,7 +34,7 @@ export interface DVRNVRHealthData {
   cpuUsage?: number;
   memoryUsage?: number;
   hddStatus?: NormalizedDiskHealth[];
-  recordingStatus?: "recording" | "stopped" | "error";
+  recordingStatus?: "recording" | "stopped" | "error" | "unknown";
   connectedCameras?: number;
   totalCameras?: number;
   firmwareVersion?: string;
@@ -181,9 +181,9 @@ export class DVRNVRMonitorService extends EventEmitter {
    */
   private getProtocol(manufacturer: string): DVRNVRDevice["protocol"] {
     const lowerManufacturer = manufacturer.toLowerCase();
-    if (lowerManufacturer.includes("hikvision")) return "hikvision-sdk";
-    if (lowerManufacturer.includes("dahua")) return "dahua-sdk";
-    if (lowerManufacturer.includes("cp plus") || lowerManufacturer.includes("cpplus")) return "cpplus-sdk";
+    if (lowerManufacturer.includes("hikvision")) return "hikvision-isapi";
+    if (lowerManufacturer.includes("dahua")) return "dahua-cgi";
+    if (lowerManufacturer.includes("cp plus") || lowerManufacturer.includes("cpplus")) return "cp-plus-oem-api";
     return "onvif"; // Default to ONVIF
   }
 
@@ -236,13 +236,13 @@ export class DVRNVRMonitorService extends EventEmitter {
 
       // Route to appropriate polling method based on protocol
       switch (device.protocol) {
-        case "hikvision-sdk":
+        case "hikvision-isapi":
           healthData = await this.pollHikvisionDevice(device);
           break;
-        case "dahua-sdk":
+        case "dahua-cgi":
           healthData = await this.pollDahuaDevice(device);
           break;
-        case "cpplus-sdk":
+        case "cp-plus-oem-api":
           healthData = await this.pollCPPlusDevice(device);
           break;
         case "onvif":
@@ -364,7 +364,9 @@ export class DVRNVRMonitorService extends EventEmitter {
         firmwareVersion,
         uptime,
         hddStatus: this.parseHikvisionHDDInfo(hddInfo),
-        recordingStatus: "recording",
+        // DeviceInfo and storage endpoints do not prove that media is currently
+        // being written. The edge agent's archive probe is authoritative.
+        recordingStatus: "unknown",
       };
 
       return healthData;

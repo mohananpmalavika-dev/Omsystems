@@ -34,6 +34,8 @@ interface ControlRoomStats {
   };
 }
 
+export const CONTROL_ROOM_MAX_CONCURRENT_STREAMS = 16;
+
 export default function ControlRoomPage() {
   const [cameras, setCameras] = useState<CameraType[]>([]);
   const [priorityCameraIds, setPriorityCameraIds] = useState<string[]>([]);
@@ -251,7 +253,7 @@ export default function ControlRoomPage() {
           <EnhancedCameraGrid
             cameras={cameras}
             initialLayout={initialLayout}
-            maxConcurrentStreams={64}
+            maxConcurrentStreams={CONTROL_ROOM_MAX_CONCURRENT_STREAMS}
             priorityCameraIds={priorityCameraIds}
             enableVirtualScrolling
             enableGPUAcceleration

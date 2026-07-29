@@ -1,0 +1,64 @@
+# Chaos Mesh Pod Failure Scenarios
+#
+# Simulates pod crashes and kills to test automatic recovery,
+# graceful shutdown, and high availability.
+
+apiVersion: chaos-mesh.org/v1alpha1
+kind: PodChaos
+metadata:
+  name: pod-kill-backend-random
+  namespace: vms-test
+spec:
+  action: pod-kill
+  mode: one
+  duration: "30s"
+  selector:
+    namespaces:
+      - vms-test
+    labelSelectors:
+      app: backend
+  gracePeriod: 0  # Immediate kill (simulate crash)
+  scheduler:
+    cron: "@every 5m"  # Kill one pod every 5 minutes
+
+---
+
+apiVersion: chaos-mesh.org/v1alpha1
+kind: PodChaos
+metadata:
+  name: pod-failure-analytics
+  namespace: vms-test
+spec:
+  action: pod-failure
+  mode: fixed
+  value: "1"
+  duration: "10m"
+  selector:
+    namespaces:
+      - vms-test
+    labelSelectors:
+      app: analytics-engine
+  scheduler:
+    cron: "@every 30m"
+
+---
+
+# Container kill scenario (more graceful than pod-kill)
+apiVersion: chaos-mesh.org/v1alpha1
+kind: PodChaos
+metadata:
+  name: container-kill-edge-agent
+  namespace: vms-test
+spec:
+  action: container-kill
+  mode: one
+  duration: "1m"
+  selector:
+    namespaces:
+      - vms-test
+    labelSelectors:
+      app: edge-agent
+  containerNames:
+    - edge-agent
+  scheduler:
+    cron: "@every 15m"

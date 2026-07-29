@@ -21,10 +21,13 @@ import { HlsPlayer } from "@/components/hls-player";
 import { PtzControl } from "@/components/ptz-control";
 import {
   CAMERA_WALL_LAYOUTS,
+  CAMERA_WALL_RENDER_BATCH_SIZE,
   cameraPlaybackHref,
+  cameraRenderWindow,
   cameraStatusTone,
   cameraSequenceWindow,
   canStartCamera,
+  nextCameraRenderCount,
   type CameraWallColumns,
 } from "./branch-camera-wall-model";
 
@@ -32,6 +35,7 @@ const RENEWAL_LEAD_MS = 60_000;
 
 export function BranchCameraWall({ branchId, cameras }: { branchId: string; cameras: CameraHealth[] }) {
   const [columns, setColumns] = useState<CameraWallColumns>(4);
+  const [renderedCameraCount, setRenderedCameraCount] = useState(CAMERA_WALL_RENDER_BATCH_SIZE);
   const [decoderBudget, setDecoderBudget] = useState(16);
   const [sequencing, setSequencing] = useState(true);
   const [sequenceOffset, setSequenceOffset] = useState(0);
@@ -69,6 +73,8 @@ export function BranchCameraWall({ branchId, cameras }: { branchId: string; came
   }, [cameras.length, columns, decoderBudget, loading, sessions]);
 
   const activeWindow = useMemo(() => cameraSequenceWindow(cameras, decoderBudget, sequenceOffset), [cameras, decoderBudget, sequenceOffset]);
+  const renderedCameras = useMemo(() => cameraRenderWindow(cameras, renderedCameraCount), [cameras, renderedCameraCount]);
+  const hasMoreCameras = renderedCameras.length < cameras.length;
 
   const startAll = useCallback(async () => {
     setWallRunning(true);
@@ -110,6 +116,10 @@ export function BranchCameraWall({ branchId, cameras }: { branchId: string; came
   }, [cameras]);
 
   useEffect(() => {
+    setRenderedCameraCount((current) => Math.min(cameras.length, Math.max(Math.min(CAMERA_WALL_RENDER_BATCH_SIZE, cameras.length), current)));
+  }, [cameras.length]);
+
+  useEffect(() => {
     const timers = Object.entries(sessions).flatMap(([cameraId, session]) => {
       if (!session.expiresAt) return [];
       const expiry = Date.parse(session.expiresAt);
@@ -139,7 +149,7 @@ export function BranchCameraWall({ branchId, cameras }: { branchId: string; came
       </div>
     </div>
     {cameras.length === 0 ? <div className="card py-10 text-center text-gray-500">No authorized cameras are registered at this branch.</div> : <div className={`grid gap-4 ${columnClass(columns)}`}>
-      {cameras.map((camera) => <BranchCameraTile
+      {renderedCameras.map((camera) => <BranchCameraTile
         key={camera.id}
         camera={camera}
         branchId={branchId}
@@ -150,6 +160,10 @@ export function BranchCameraWall({ branchId, cameras }: { branchId: string; came
         onStart={() => void startCamera(camera.id, false, Boolean(sessions[camera.id]))}
         onTogglePtz={() => setPtzCameraId((current) => current === camera.id ? null : camera.id)}
       />)}
+    </div>}
+    {cameras.length > CAMERA_WALL_RENDER_BATCH_SIZE && <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
+      <p className="text-sm text-gray-600" aria-live="polite">Showing {renderedCameras.length} of {cameras.length} cameras. Live decoding remains capped by the selected budget.</p>
+      {hasMoreCameras && <button type="button" className="btn-secondary text-sm" onClick={() => setRenderedCameraCount((current) => nextCameraRenderCount(current, cameras.length))}>Show next {Math.min(CAMERA_WALL_RENDER_BATCH_SIZE, cameras.length - renderedCameras.length)} cameras</button>}
     </div>}
   </section>;
 }

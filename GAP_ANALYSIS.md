@@ -92,10 +92,10 @@ interface DVRNVRHealthData {
 ```
 
 **Protocol Support:**
-- ✅ Hikvision SDK/ISAPI
-- ✅ Dahua SDK
-- ✅ CP Plus SDK
-- ✅ ONVIF
+- ✅ Hikvision ISAPI HTTP adapter (not the Hikvision SDK)
+- ✅ Dahua CGI HTTP adapter (not the Dahua SDK)
+- ✅ CP PLUS Dahua-OEM CGI adapter (not a CP PLUS SDK)
+- ✅ ONVIF SOAP adapter
 - ✅ HTTP API fallback
 
 **Polling Features:**
@@ -104,7 +104,7 @@ interface DVRNVRHealthData {
 - ✅ Auto-recovery detection
 - ✅ Timeout handling (10s default)
 
-**Gap:** ✅ **NONE** - Fully implemented
+**Gap:** ⚠️ **Recording activity is best-effort.** The edge agent reports `recording` only when recent archive media is observed. Unsupported endpoints, unavailable credentials, or a lack of recent media remain `unknown`; these integrations do not bundle proprietary vendor SDKs.
 
 ---
 
@@ -140,4 +140,3 @@ interface DVRNVRHealthData {
 ### 3.3 HDD Health/Status
 
 #### Current Platform Status: ✅ **IMPLEMENTED**
-
