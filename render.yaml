@@ -6,7 +6,7 @@ services:
     runtime: node
     plan: free
     region: singapore
-    buildCommand: npm ci && npm run dashboard:build
+    buildCommand: npm ci --workspace @sentinel/dashboard && npm run dashboard:build
     startCommand: npm run start --workspace @sentinel/dashboard -- --hostname 0.0.0.0 --port $PORT
     healthCheckPath: /api/health
     autoDeployTrigger: commit
