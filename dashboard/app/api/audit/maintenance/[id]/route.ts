@@ -12,13 +12,15 @@ export async function GET(
 ) {
   try {
     const params = await context.params;
-    const url = `${API_BASE_URL}/v1/audit/maintenance/${params.id}`;
+    const url = `${API_BASE_URL}/v1/maintenance/workorders/${params.id}`;
 
+    const sessionToken = request.cookies.get('sentinel_access')?.value;
     const response = await fetch(url, {
       headers: {
-        'x-tenant-id': request.headers.get('x-tenant-id') || '',
-        'x-user-id': request.headers.get('x-user-id') || 'system',
+        'Authorization': `Bearer ${sessionToken || ''}`,
+        'Content-Type': 'application/json',
       },
+      credentials: 'include',
     });
 
     const data = await response.json();
@@ -43,16 +45,17 @@ export async function PUT(
   try {
     const params = await context.params;
     const body = await request.json();
-    const url = `${API_BASE_URL}/v1/audit/maintenance/${params.id}`;
+    const url = `${API_BASE_URL}/v1/maintenance/workorders/${params.id}`;
 
+    const sessionToken = request.cookies.get('sentinel_access')?.value;
     const response = await fetch(url, {
       method: 'PUT',
       headers: {
+        'Authorization': `Bearer ${sessionToken || ''}`,
         'Content-Type': 'application/json',
-        'x-tenant-id': request.headers.get('x-tenant-id') || '',
-        'x-user-id': request.headers.get('x-user-id') || 'system',
       },
       body: JSON.stringify(body),
+      credentials: 'include',
     });
 
     const data = await response.json();
