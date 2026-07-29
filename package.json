@@ -55,7 +55,12 @@
     "analytics:test": "npm run test --workspace @sentinel/analytics-engine",
     "dashboard:dev": "npm run dev --workspace @sentinel/dashboard",
     "dashboard:typecheck": "npm run typecheck --workspace @sentinel/dashboard",
-    "dashboard:build": "npm run build --workspace @sentinel/dashboard"
+    "dashboard:build": "npm run build --workspace @sentinel/dashboard",
+    "cameras:delete:all": "node scripts/delete-cameras.mjs --all --confirm",
+    "cameras:delete:dry-run": "node scripts/delete-cameras.mjs --all --dry-run",
+    "cameras:delete:test": "node scripts/delete-cameras.mjs --test --confirm",
+    "cameras:delete:branch": "node scripts/delete-cameras.mjs --branch",
+    "cameras:delete:id": "node scripts/delete-cameras.mjs --id"
   },
   "engines": {
     "node": ">=22"

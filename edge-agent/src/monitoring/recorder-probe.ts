@@ -420,7 +420,8 @@ async function getOnvifRecordingStatus(base: string, deviceServicePath: string, 
     const summary = await onvifRecordingSummary(searchEndpoint ? [searchEndpoint] : onvifSearchFallbackEndpoints(base), credentials, timeout);
     if (!summary) return recordingUnavailable("onvif_recording_search_unavailable");
     if (hasRecentOnvifRecordingData(summary)) return { status: "recording", recordingChannels: null, reasonCodes: [], source: "recording-summary" };
-    return recordingUnavailable("onvif_no_recent_recording_evidence");
+    // No recent data found; return 'stopped' with a clear reason instead of 'unknown'.
+    return { status: "stopped", recordingChannels: null, reasonCodes: ["onvif_no_recent_recording_evidence"], source: "recording-summary" };
   } catch {
     return recordingUnavailable("onvif_recording_probe_failed");
   }
@@ -437,14 +438,21 @@ function hikvisionArchiveSearchBody(trackIds: string[], start = new Date(Date.no
 
 function parseHikvisionArchiveSearch(xml: string): RecordingProbe {
   const matches = xml.match(/<(?:[^:>]+:)?searchMatchItem\b/gi) ?? [];
-  if (!matches.length) return recordingUnavailable("hikvision_no_recent_recording_evidence");
+  // Zero matches may indicate scheduled downtime, not necessarily a failure.
+  // Return 'stopped' with clear reason instead of 'unknown' to avoid ambiguity.
+  if (!matches.length) {
+    return { status: "stopped", recordingChannels: null, reasonCodes: ["hikvision_no_recent_recording_evidence"], source: "recent-media-search" };
+  }
   const channels = new Set(valuesForTag(xml, "trackID").concat(valuesForTag(xml, "channelID")));
   return { status: "recording", recordingChannels: channels.size || null, reasonCodes: [], source: "recent-media-search" };
 }
 
 function parseDahuaArchiveResults(text: string): RecordingProbe {
   const found = key(text, "found");
-  if (found !== "1" && found?.toLowerCase() !== "true") return recordingUnavailable("dahua_no_recent_recording_evidence");
+  // Return 'stopped' instead of 'unknown' when no media exists, but search succeeded.
+  if (found !== "1" && found?.toLowerCase() !== "true") {
+    return { status: "stopped", recordingChannels: null, reasonCodes: ["dahua_no_recent_recording_evidence"], source: "recent-media-search" };
+  }
   const channels = new Set([...text.matchAll(/(?:items|item)\[\d+\]\.Channel=(\d+)/gi)].map((match) => match[1]!));
   return { status: "recording", recordingChannels: channels.size || null, reasonCodes: [], source: "recent-media-search" };
 }
@@ -485,6 +493,8 @@ function hasRecentOnvifRecordingData(xml: string) {
   const numberRecordings = Number(valuesForTag(xml, "NumberRecordings")[0] ?? "");
   if (Number.isFinite(numberRecordings) && numberRecordings === 0) return false;
   const dataUntil = valuesForTag(xml, "DataUntil").map((value) => Date.parse(value)).filter(Number.isFinite);
+  // If DataUntil exists but is older than the evidence window, recording is likely stopped.
+  // Return true only when recent data exists within the last 5 minutes.
   return dataUntil.some((value) => value >= Date.now() - RECORDING_EVIDENCE_WINDOW_MS);
 }
 

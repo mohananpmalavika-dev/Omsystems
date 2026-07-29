@@ -34,7 +34,21 @@ interface ControlRoomStats {
   };
 }
 
-export const CONTROL_ROOM_MAX_CONCURRENT_STREAMS = 16;
+// Dynamic stream limit based on user tier and network capacity
+// Operators can override via settings, but defaults to safe bandwidth allocation
+export const getMaxConcurrentStreams = (userTier: "basic" | "standard" | "premium" | "enterprise" = "standard") => {
+  const limits = {
+    basic: 16,     // 16 streams @ 2 Mbps each = 32 Mbps
+    standard: 32,  // 32 streams = 64 Mbps
+    premium: 64,   // 64 streams = 128 Mbps
+    enterprise: 144, // 144 streams (12×12 grid) = 288 Mbps
+  };
+  return limits[userTier];
+};
+
+export const CONTROL_ROOM_MAX_CONCURRENT_STREAMS = getMaxConcurrentStreams(
+  (process.env.NEXT_PUBLIC_USER_TIER as any) || "standard"
+);
 
 export default function ControlRoomPage() {
   const [cameras, setCameras] = useState<CameraType[]>([]);
