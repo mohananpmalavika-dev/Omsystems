@@ -146,6 +146,7 @@ export interface CameraHealth {
   videoLoss: boolean;
   tamperingDetected: boolean;
   imageFrozen: boolean;
+  blackScreen: boolean;
   retention?: Omit<RetentionHealth, 'branchId' | 'branchName' | 'cameraName'>;
 }
 

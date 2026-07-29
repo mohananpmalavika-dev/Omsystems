@@ -8,6 +8,7 @@ import { LocalStreamSecretStore, startSecretProvider } from "./streaming/secret-
 import { cpus, freemem, totalmem, uptime } from "node:os";
 import { NetworkCounterSampler, probeInternetLink } from "./monitoring/internet-probe.js";
 import { looksLikeRecorder, probeRecorder } from "./monitoring/recorder-probe.js";
+import { initializeCameraHeartbeat } from "./monitoring/camera-heartbeat.js";
 
 const config = loadEdgeConfig();
 const gateway = new GatewayClient(
@@ -24,6 +25,18 @@ const secrets = new LocalStreamSecretStore(config.STREAM_SECRET_STORE_PATH);
 const networkCounterSampler = new NetworkCounterSampler();
 let lastRecorderProbeAt = 0;
 await secrets.load();
+const cameraHeartbeat = initializeCameraHeartbeat(
+  config.CONTROL_PLANE_URL,
+  config.BRANCH_ID,
+  agentId,
+  config.DEV_USER_ID,
+  config.FFPROBE_PATH,
+  config.FFMPEG_PATH,
+  config.EDGE_BRIDGE_SHARED_KEY,
+);
+let lastCameraConfigSyncAt = 0;
+await syncCameraHeartbeatConfig();
+cameraHeartbeat.start(config.CAMERA_HEARTBEAT_INTERVAL_MS);
 if (config.EDGE_MEDIA_SHARED_KEY) {
   await startSecretProvider({
     store: secrets,
@@ -66,6 +79,8 @@ while (!stopping) {
   }
   await delay(5_000);
 }
+
+cameraHeartbeat.stop();
 
 async function scanBranch() {
   const configuredEndpoints = config.ONVIF_ENDPOINTS
@@ -200,6 +215,11 @@ function delay(milliseconds: number) {
 async function heartbeatAndReport() {
   const startedAt = Date.now();
   await gateway.heartbeat(agentId, config.EDGE_AGENT_VERSION, config.PUBLIC_MEDIA_GATEWAY_URL);
+  if (Date.now() - lastCameraConfigSyncAt >= config.CAMERA_CONFIG_REFRESH_MS) {
+    await syncCameraHeartbeatConfig().catch((error) => {
+      console.error("Camera monitoring configuration refresh failed:", error instanceof Error ? error.message : error);
+    });
+  }
   const observedAt = new Date().toISOString();
   const latencyMs = Date.now() - startedAt;
   const memoryTotal = totalmem();
@@ -255,6 +275,20 @@ async function heartbeatAndReport() {
       return submissions;
     }),
   ]);
+}
+
+async function syncCameraHeartbeatConfig() {
+  const cameras = await gateway.listMonitoringCameras(agentId, config.EDGE_AGENT_VERSION);
+  cameraHeartbeat.replaceCameras(cameras.map((camera) => {
+    const rtspUrl = secrets.get(camera.connectionSecretRef);
+    return {
+      id: camera.id,
+      name: camera.name,
+      ...(rtspUrl ? { rtspUrl } : {}),
+      enabled: true,
+    };
+  }));
+  lastCameraConfigSyncAt = Date.now();
 }
 
 async function collectRecorderReports(observedAt: string) {

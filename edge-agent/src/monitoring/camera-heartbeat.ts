@@ -1,224 +1,199 @@
 /**
- * Enhanced Camera Heartbeat Service
- * Sends comprehensive camera status and quality metrics to central platform
+ * Edge-side camera telemetry. All reported quality values are measured from
+ * the local RTSP stream or the local camera network path; no configured camera
+ * profile is substituted when a measurement cannot be obtained.
  */
 
-import { probeRtsp } from "../streaming/rtsp-probe.js";
+import { createHash } from "node:crypto";
+import { measureCameraPacketLoss } from "./camera-packet-loss.js";
+import { captureRtspLumaFrame, measureRtspStream } from "../streaming/rtsp-probe.js";
 import { logger } from "../utils/logger.js";
 
 export interface CameraHeartbeatData {
   cameraId: string;
-  status: "online" | "offline" | "warning" | "degraded";
+  status: "online" | "offline" | "degraded" | "unknown";
   responseTimeMs: number;
-  
-  // Quality metrics
   currentFps?: number;
   currentBitrate?: number;
-  currentResolution?: {
-    width: number;
-    height: number;
-  };
+  currentResolution?: { width: number; height: number };
   packetLoss?: number;
   latencyMs?: number;
-  
-  // Stream health
   streamActive: boolean;
   videoLoss: boolean;
   imageFrozen?: boolean;
   blackScreen?: boolean;
-  
+  codec?: string;
   errorMessage?: string;
-  metadata?: Record<string, any>;
+  reasonCodes: string[];
+  quality: "verified" | "unavailable";
+  metadata?: Record<string, unknown>;
 }
 
 export interface CameraConfig {
   id: string;
   name: string;
-  rtspUrl: string;
-  expectedFps: number;
-  expectedBitrate: number;
-  expectedResolution: { width: number; height: number };
+  /** Undefined when this appliance does not have the matching local secret. */
+  rtspUrl?: string;
+  expectedFps?: number;
+  expectedBitrate?: number;
   enabled: boolean;
 }
 
+type FrameState = { hash: string; identicalSamples: number };
+
+export function assessLumaFrame(previous: FrameState | undefined, frame: Buffer): {
+  state: FrameState;
+  imageFrozen: boolean;
+  blackScreen: boolean;
+  brightness: number;
+} {
+  const brightness = frame.reduce((sum, value) => sum + value, 0) / frame.length;
+  const hash = createHash("sha256").update(frame).digest("hex");
+  const identicalSamples = previous?.hash === hash ? previous.identicalSamples + 1 : 1;
+  return {
+    state: { hash, identicalSamples },
+    // Three successive identical 64x36 luminance samples avoids flagging a
+    // single still image as a frozen stream.
+    imageFrozen: identicalSamples >= 3,
+    blackScreen: brightness <= 10,
+    brightness: Math.round(brightness * 10) / 10,
+  };
+}
+
 export class CameraHeartbeatService {
-  private apiEndpoint: string;
-  private cameras: Map<string, CameraConfig>;
-  private lastFrameCounts: Map<string, number>;
-  private heartbeatInterval: NodeJS.Timeout | null;
-  private isRunning: boolean;
+  private readonly cameras = new Map<string, CameraConfig>();
+  private readonly frameStates = new Map<string, FrameState>();
+  private heartbeatInterval: NodeJS.Timeout | null = null;
+  private isRunning = false;
 
   constructor(
-    apiEndpoint: string,
+    private readonly apiEndpoint: string,
     private readonly branchId: string,
     private readonly edgeAgentId: string,
     private readonly developmentUserId: string,
+    private readonly ffprobePath = "ffprobe",
+    private readonly ffmpegPath = "ffmpeg",
     private readonly edgeBridgeSharedKey?: string,
-  ) {
-    this.apiEndpoint = apiEndpoint;
-    this.cameras = new Map();
-    this.lastFrameCounts = new Map();
-    this.heartbeatInterval = null;
-    this.isRunning = false;
-  }
+  ) {}
 
-  /**
-   * Register a camera for monitoring
-   */
-  registerCamera(camera: CameraConfig): void {
-    this.cameras.set(camera.id, camera);
-    logger.info(`Registered camera for heartbeat monitoring: ${camera.name}`);
-  }
-
-  /**
-   * Unregister a camera
-   */
-  unregisterCamera(cameraId: string): void {
-    this.cameras.delete(cameraId);
-    this.lastFrameCounts.delete(cameraId);
-    logger.info(`Unregistered camera: ${cameraId}`);
-  }
-
-  /**
-   * Start heartbeat monitoring
-   */
-  start(intervalMs: number = 30000): void {
-    if (this.isRunning) {
-      logger.warn("Camera heartbeat service already running");
-      return;
+  replaceCameras(cameras: CameraConfig[]): void {
+    const retainedIds = new Set(cameras.map((camera) => camera.id));
+    this.cameras.clear();
+    for (const camera of cameras) this.cameras.set(camera.id, camera);
+    for (const cameraId of this.frameStates.keys()) {
+      if (!retainedIds.has(cameraId)) this.frameStates.delete(cameraId);
     }
+    logger.info(`Synchronized ${cameras.length} camera(s) for heartbeat monitoring`);
+  }
 
-    logger.info(`Starting camera heartbeat service (interval: ${intervalMs}ms)`);
+  start(intervalMs = 30_000): void {
+    if (this.isRunning) return;
     this.isRunning = true;
-
-    // Send initial heartbeat for all cameras
-    this.sendAllHeartbeats().catch((error) => {
-      logger.error("Failed to send initial heartbeats", { error });
-    });
-
-    // Set up interval for subsequent heartbeats
+    this.sendAllHeartbeats().catch((error: unknown) => logger.error("Failed to send initial camera heartbeats", { error }));
     this.heartbeatInterval = setInterval(() => {
-      this.sendAllHeartbeats().catch((error) => {
-        logger.error("Failed to send heartbeats", { error });
-      });
+      this.sendAllHeartbeats().catch((error: unknown) => logger.error("Failed to send camera heartbeats", { error }));
     }, intervalMs);
   }
 
-  /**
-   * Stop heartbeat monitoring
-   */
   stop(): void {
-    if (!this.isRunning) {
-      return;
-    }
-
-    logger.info("Stopping camera heartbeat service");
     this.isRunning = false;
-
-    if (this.heartbeatInterval) {
-      clearInterval(this.heartbeatInterval);
-      this.heartbeatInterval = null;
-    }
+    if (this.heartbeatInterval) clearInterval(this.heartbeatInterval);
+    this.heartbeatInterval = null;
   }
 
-  /**
-   * Send heartbeat for all registered cameras
-   */
   private async sendAllHeartbeats(): Promise<void> {
-    const cameras = Array.from(this.cameras.values()).filter((c) => c.enabled);
-    
-    if (cameras.length === 0) {
-      return;
-    }
-
-    logger.debug(`Sending heartbeats for ${cameras.length} cameras`);
-
-    // Send heartbeats concurrently with limit
-    const batchSize = 10;
-    for (let i = 0; i < cameras.length; i += batchSize) {
-      const batch = cameras.slice(i, i + batchSize);
-      await Promise.allSettled(
-        batch.map((camera) => this.sendHeartbeat(camera))
-      );
+    const cameras = [...this.cameras.values()].filter((camera) => camera.enabled);
+    const batchSize = 5;
+    for (let index = 0; index < cameras.length; index += batchSize) {
+      await Promise.allSettled(cameras.slice(index, index + batchSize).map((camera) => this.sendHeartbeat(camera)));
     }
   }
 
-  /**
-   * Send heartbeat for a single camera
-   */
   private async sendHeartbeat(camera: CameraConfig): Promise<void> {
-    const startTime = Date.now();
-
+    const startedAt = Date.now();
     try {
-      // Probe RTSP stream
-      const probeResult = await probeRtsp(camera.rtspUrl, "ffprobe", 10000);
-      const responseTime = Date.now() - startTime;
-
-      let heartbeatData: CameraHeartbeatData;
-
-      if (probeResult.reachable) {
-        // Camera is online - collect quality metrics
-        heartbeatData = {
-          cameraId: camera.id,
-          status: "online",
-          responseTimeMs: responseTime,
-          streamActive: true,
-          videoLoss: false,
-          currentResolution: probeResult.width && probeResult.height
-            ? { width: probeResult.width, height: probeResult.height }
-            : camera.expectedResolution,
-          latencyMs: responseTime,
-          metadata: {
-            codec: probeResult.codec,
-          },
-        };
-
-      } else {
-        // Camera is offline
-        heartbeatData = {
-          cameraId: camera.id,
-          status: "offline",
-          responseTimeMs: responseTime,
-          streamActive: false,
-          videoLoss: true,
-          errorMessage: probeResult.error || "Camera not reachable",
-        };
-      }
-
-      // Send to central platform
-      await this.sendToPlatform(camera.id, heartbeatData);
-
-      logger.debug(`Heartbeat sent for camera ${camera.name}: ${heartbeatData.status}`);
+      const data = camera.rtspUrl
+        ? await this.measureCamera(camera, startedAt)
+        : {
+            cameraId: camera.id, status: "unknown" as const, responseTimeMs: Date.now() - startedAt,
+            streamActive: false, videoLoss: false, reasonCodes: ["stream_secret_unavailable"],
+            quality: "unavailable" as const, errorMessage: "Local RTSP secret is unavailable",
+          };
+      await this.sendToPlatform(camera.id, data);
+      logger.debug(`Heartbeat sent for camera ${camera.name}: ${data.status}`);
     } catch (error) {
+      const message = error instanceof Error ? error.message : "Unknown error";
       logger.error(`Failed to send heartbeat for camera ${camera.name}`, { error });
-
-      // Send offline heartbeat
-      const heartbeatData: CameraHeartbeatData = {
-        cameraId: camera.id,
-        status: "offline",
-        responseTimeMs: Date.now() - startTime,
-        streamActive: false,
-        videoLoss: true,
-        errorMessage: error instanceof Error ? error.message : "Unknown error",
-      };
-
-      await this.sendToPlatform(camera.id, heartbeatData).catch(() => {
-        // Ignore errors when sending error heartbeat
-      });
+      await this.sendToPlatform(camera.id, {
+        cameraId: camera.id, status: "offline", responseTimeMs: Date.now() - startedAt,
+        streamActive: false, videoLoss: true, quality: "verified",
+        errorMessage: message, reasonCodes: ["camera_probe_failed"],
+      }).catch(() => undefined);
     }
   }
 
-  /**
-   * Send heartbeat data to central platform
-   */
-  private async sendToPlatform(
-    cameraId: string,
-    data: CameraHeartbeatData
-  ): Promise<void> {
-    const observedAt = new Date().toISOString();
-    const url = `${this.apiEndpoint}/v1/edge-agents/${encodeURIComponent(this.edgeAgentId)}/telemetry`;
+  private async measureCamera(camera: CameraConfig, startedAt: number): Promise<CameraHeartbeatData> {
+    const rtspUrl = camera.rtspUrl!;
+    const stream = await measureRtspStream(rtspUrl, { ffprobePath: this.ffprobePath });
+    const responseTimeMs = Date.now() - startedAt;
+    if (!stream.reachable) {
+      return {
+        cameraId: camera.id, status: "offline", responseTimeMs,
+        streamActive: false, videoLoss: true, quality: "verified",
+        errorMessage: stream.error ?? "Camera RTSP stream is unreachable",
+        reasonCodes: ["rtsp_unreachable"],
+      };
+    }
 
-    const response = await fetch(url, {
+    const [packetLoss, frame] = await Promise.all([
+      measureCameraPacketLoss(rtspUrl),
+      captureRtspLumaFrame(rtspUrl, this.ffmpegPath),
+    ]);
+    const frameHealth = frame ? assessLumaFrame(this.frameStates.get(camera.id), frame) : null;
+    if (frameHealth) this.frameStates.set(camera.id, frameHealth.state);
+
+    const reasonCodes: string[] = [];
+    if (stream.fps === null) reasonCodes.push("fps_unavailable");
+    if (stream.bitrateKbps === null) reasonCodes.push("bitrate_unavailable");
+    if (packetLoss === null) reasonCodes.push("packet_loss_unavailable");
+    if (!frameHealth) {
+      reasonCodes.push("freeze_detection_unavailable", "black_screen_detection_unavailable");
+    } else {
+      if (frameHealth.imageFrozen) reasonCodes.push("frozen_frame_detected");
+      if (frameHealth.blackScreen) reasonCodes.push("black_screen_detected");
+    }
+    const degraded = Boolean(
+      (camera.expectedFps && stream.fps !== null && stream.fps < camera.expectedFps * 0.8) ||
+      (camera.expectedBitrate && stream.bitrateKbps !== null && stream.bitrateKbps < camera.expectedBitrate * 0.7) ||
+      (packetLoss !== null && packetLoss > 5) ||
+      frameHealth?.imageFrozen || frameHealth?.blackScreen,
+    );
+
+    return {
+      cameraId: camera.id,
+      status: degraded ? "degraded" : "online",
+      responseTimeMs,
+      streamActive: true,
+      videoLoss: false,
+      quality: "verified",
+      ...(stream.fps === null ? {} : { currentFps: stream.fps }),
+      ...(stream.bitrateKbps === null ? {} : { currentBitrate: stream.bitrateKbps }),
+      ...(stream.width === null || stream.height === null ? {} : { currentResolution: { width: stream.width, height: stream.height } }),
+      ...(packetLoss === null ? {} : { packetLoss }),
+      ...(frameHealth ? { imageFrozen: frameHealth.imageFrozen, blackScreen: frameHealth.blackScreen } : {}),
+      ...(stream.codec ? { codec: stream.codec } : {}),
+      metadata: {
+        sampleDurationSeconds: stream.sampleDurationSeconds,
+        ...(frameHealth ? { frameBrightness: frameHealth.brightness, freezeSamples: frameHealth.state.identicalSamples } : {}),
+        ...(packetLoss === null ? {} : { packetLossMethod: "icmp" }),
+      },
+      reasonCodes,
+    };
+  }
+
+  private async sendToPlatform(cameraId: string, data: CameraHeartbeatData): Promise<void> {
+    const observedAt = new Date().toISOString();
+    const response = await fetch(`${this.apiEndpoint}/v1/edge-agents/${encodeURIComponent(this.edgeAgentId)}/telemetry`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -232,136 +207,49 @@ export class CameraHeartbeatService {
         deviceId: cameraId,
         observedAt,
         source: "rtsp",
-        quality: "verified",
+        quality: data.quality,
         idempotencyKey: `${this.edgeAgentId}:camera:${cameraId}:${observedAt}`,
         metrics: {
-          status: data.status === "warning" ? "degraded" : data.status,
+          status: data.status,
           responseTimeMs: data.responseTimeMs,
           streamActive: data.streamActive,
           videoLoss: data.videoLoss,
           width: data.currentResolution?.width ?? null,
           height: data.currentResolution?.height ?? null,
-          codec: typeof data.metadata?.codec === "string" ? data.metadata.codec : null,
-          fps: null,
-          bitrateKbps: null,
-          packetLossPercent: null,
-          imageFrozen: null,
-          blackScreen: null,
+          codec: data.codec ?? null,
+          fps: data.currentFps ?? null,
+          bitrateKbps: data.currentBitrate ?? null,
+          packetLossPercent: data.packetLoss ?? null,
+          imageFrozen: data.imageFrozen ?? null,
+          blackScreen: data.blackScreen ?? null,
         },
-        reasonCodes: [
-          ...(data.errorMessage ? ["rtsp_unreachable"] : []),
-          "fps_unavailable", "bitrate_unavailable", "packet_loss_unavailable",
-          "freeze_detection_unavailable", "black_screen_detection_unavailable",
-        ],
+        reasonCodes: data.reasonCodes,
       }),
     });
-
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}: ${await response.text()}`);
-    }
+    if (!response.ok) throw new Error(`HTTP ${response.status}: ${await response.text()}`);
   }
 
-  /**
-   * Estimate FPS by analyzing stream
-   */
-  private async estimateFps(_cameraId: string, _rtspUrl: string): Promise<number | undefined> {
-    return undefined;
-  }
-
-  /**
-   * Estimate bitrate by analyzing stream
-   */
-  private async estimateBitrate(_cameraId: string, _rtspUrl: string): Promise<number | undefined> {
-    return undefined;
-  }
-
-  /**
-   * Estimate packet loss
-   */
-  private async estimatePacketLoss(_cameraId: string, _rtspUrl: string): Promise<number | undefined> {
-    return undefined;
-  }
-
-  /**
-   * Detect frozen stream by comparing frame counts
-   */
-  private async detectFrozenStream(cameraId: string, currentFps: number): Promise<boolean> {
-    // If FPS is very low, consider it frozen
-    if (currentFps < 1) {
-      return true;
-    }
-
-    // Track frame count over time
-    const lastFrameCount = this.lastFrameCounts.get(cameraId) || 0;
-    const currentFrameCount = lastFrameCount + currentFps;
-
-    // If frame count hasn't changed significantly, stream might be frozen
-    const frameDelta = currentFrameCount - lastFrameCount;
-    const isFrozen = frameDelta < 0.5;
-
-    this.lastFrameCounts.set(cameraId, currentFrameCount);
-
-    return isFrozen;
-  }
-
-  /**
-   * Trigger manual heartbeat for a specific camera
-   */
-  async triggerManualHeartbeat(cameraId: string): Promise<void> {
-    const camera = this.cameras.get(cameraId);
-    if (!camera) {
-      throw new Error(`Camera not found: ${cameraId}`);
-    }
-
-    await this.sendHeartbeat(camera);
-  }
-
-  /**
-   * Get monitoring statistics
-   */
-  getStats(): {
-    totalCameras: number;
-    enabledCameras: number;
-    isRunning: boolean;
-  } {
-    const cameras = Array.from(this.cameras.values());
-    return {
-      totalCameras: cameras.length,
-      enabledCameras: cameras.filter((c) => c.enabled).length,
-      isRunning: this.isRunning,
-    };
+  getStats() {
+    const cameras = [...this.cameras.values()];
+    return { totalCameras: cameras.length, enabledCameras: cameras.filter((camera) => camera.enabled).length, isRunning: this.isRunning };
   }
 }
 
-/**
- * Global camera heartbeat service instance
- */
 let heartbeatService: CameraHeartbeatService | null = null;
 
-/**
- * Initialize camera heartbeat service
- */
 export function initializeCameraHeartbeat(
   apiEndpoint: string,
   branchId: string,
   edgeAgentId: string,
   developmentUserId: string,
+  ffprobePath = "ffprobe",
+  ffmpegPath = "ffmpeg",
   edgeBridgeSharedKey?: string,
 ): CameraHeartbeatService {
   if (!heartbeatService) {
     heartbeatService = new CameraHeartbeatService(
-      apiEndpoint, branchId, edgeAgentId, developmentUserId, edgeBridgeSharedKey,
+      apiEndpoint, branchId, edgeAgentId, developmentUserId, ffprobePath, ffmpegPath, edgeBridgeSharedKey,
     );
-  }
-  return heartbeatService;
-}
-
-/**
- * Get camera heartbeat service instance
- */
-export function getCameraHeartbeatService(): CameraHeartbeatService {
-  if (!heartbeatService) {
-    throw new Error("Camera heartbeat service not initialized");
   }
   return heartbeatService;
 }

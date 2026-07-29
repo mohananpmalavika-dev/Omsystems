@@ -62,6 +62,7 @@ function camera(overrides: Partial<CameraHealth>): CameraHealth {
     videoLoss: false,
     tamperingDetected: false,
     imageFrozen: false,
+    blackScreen: false,
     ...overrides,
   };
 }

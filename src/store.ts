@@ -346,6 +346,10 @@ export class MemoryStore implements ControlPlaneStore {
     });
   }
 
+  async listCamerasByEdgeAgent(edgeAgentId: string) {
+    return [...this.cameras.values()].filter((camera) => camera.edgeAgentId === edgeAgentId);
+  }
+
   async createBranch(tenant: string, parentNodeId: string, name: string) {
     const parent = this.nodes.get(parentNodeId);
     if (!parent || parent.tenantId !== tenant) throw new Error("invalid_parent");

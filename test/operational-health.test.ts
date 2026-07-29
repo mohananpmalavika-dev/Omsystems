@@ -31,7 +31,7 @@ describe("Phase 1 operational health", () => {
       source: "rtsp",
       quality: "verified",
       idempotencyKey: "pilot:cam-001:one",
-      metrics: { status: "online", streamActive: true, responseTimeMs: 24 },
+      metrics: { status: "online", streamActive: true, responseTimeMs: 24, blackScreen: true },
       reasonCodes: ["fps_unavailable"],
     };
     const accepted = await app.inject({
@@ -53,7 +53,41 @@ describe("Phase 1 operational health", () => {
     const camera = cameras.json().data.cameras.find((item: { id: string }) => item.id === "cam-001");
     expect(camera.onlineStatus).toBe("online");
     expect(camera.currentFps).toBeNull();
+    expect(camera.blackScreen).toBe(true);
     expect(camera.reasonCodes).toContain("fps_unavailable");
+  });
+
+  it("returns only an owning agent's camera monitoring assignments and opaque secret references", async () => {
+    const discovery = await store.createDiscovery("branch-blr-001", {
+      edgeAgentId: agentId,
+      discoveryMethod: "edge-agent-reported-inventory",
+      vendor: "other",
+      model: "Test camera",
+      ipAddress: "192.168.10.20",
+      onvifPort: 80,
+      rtspPort: 554,
+      profiles: [{ name: "main", codec: "H264", width: 1920, height: 1080 }],
+      capabilities: { ptz: false, audio: false, events: false },
+    });
+    const camera = await store.approveCamera("branch-blr-001", {
+      discoveryId: discovery.id,
+      name: "Front door",
+      channel: 1,
+      protocol: "rtsp",
+      connectionSecretRef: `edge://${agentId}/${discovery.id}`,
+    });
+    expect(camera).toBeDefined();
+
+    const response = await app.inject({
+      method: "GET", url: `/v1/edge-agents/${agentId}/cameras/monitoring`, headers: admin,
+    });
+    expect(response.statusCode).toBe(200);
+    expect(response.json().data).toEqual([{
+      id: camera!.id,
+      name: "Front door",
+      profiles: [{ name: "main", codec: "H264", width: 1920, height: 1080 }],
+      connectionSecretRef: `edge://${agentId}/${discovery.id}`,
+    }]);
   });
 
   it("rejects an edge agent reporting outside its registered branch", async () => {

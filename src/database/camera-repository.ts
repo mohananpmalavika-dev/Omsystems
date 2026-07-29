@@ -81,6 +81,14 @@ export class CameraRepository {
     return result.rows.map(mapCamera);
   }
 
+  async listByEdgeAgent(edgeAgentId: string) {
+    const result = await this.pool.query<CameraRow>(
+      `${selectCamera} WHERE cameras.edge_agent_id = $1::uuid ORDER BY camera_node.name`,
+      [edgeAgentId],
+    );
+    return result.rows.map(mapCamera);
+  }
+
   async listAuthorized(
     userId: string,
     action: string,

@@ -14,7 +14,7 @@ export function canStartCamera(camera: CameraHealth) {
 }
 
 export function cameraStatusTone(camera: CameraHealth) {
-  if (camera.videoLoss || camera.tamperingDetected || camera.imageFrozen) return "critical";
+  if (camera.videoLoss || camera.tamperingDetected || camera.imageFrozen || camera.blackScreen) return "critical";
   if (camera.onlineStatus === "online") return "healthy";
   if (camera.onlineStatus === "warning" || camera.onlineStatus === "degraded") return "warning";
   return "critical";

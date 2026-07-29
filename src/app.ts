@@ -529,6 +529,26 @@ export async function buildApp(options?: {
     return agent;
   });
 
+  // The edge agent receives only the opaque local-secret reference, never the RTSP URI itself.
+  // This route is intentionally scoped to the agent identifier used for its telemetry endpoint.
+  app.get("/v1/edge-agents/:id/cameras/monitoring", async (request, reply) => {
+    const { id } = edgeAgentParams.parse(request.params);
+    const agent = await store.heartbeatEdgeAgent(
+      id,
+      request.headers["x-edge-agent-version"] as string || "unknown",
+    );
+    if (!agent) return reply.code(404).send({ error: "edge_agent_not_found" });
+    const cameras = await store.listCamerasByEdgeAgent(id);
+    return {
+      data: cameras.map((camera) => ({
+        id: camera.id,
+        name: camera.name,
+        profiles: camera.profiles,
+        connectionSecretRef: camera.connectionSecretRef,
+      })),
+    };
+  });
+
   app.post("/v1/branches/:branchId/device-scans", async (request, reply) => {
     const { branchId } = branchParams.parse(request.params);
     if (!(await requireAccess(request, reply, store, "device:configure", branchId))) return;

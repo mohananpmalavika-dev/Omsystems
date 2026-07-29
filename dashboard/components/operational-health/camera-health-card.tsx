@@ -37,6 +37,7 @@ export function CameraHealthCard({
   const hasQualityIssues = camera.videoLoss || 
                            camera.tamperingDetected || 
                            camera.imageFrozen ||
+                           camera.blackScreen ||
                            fpsQuality === 'poor' ||
                            latencyQuality === 'poor';
 
@@ -157,7 +158,7 @@ export function CameraHealthCard({
           </div>
         </div>
       )}
-      {(camera.videoLoss || camera.tamperingDetected || camera.imageFrozen) && (
+      {(camera.videoLoss || camera.tamperingDetected || camera.imageFrozen || camera.blackScreen) && (
         <div className="mb-3 p-2 bg-red-50 border border-red-200 rounded">
           <div className="flex items-start gap-2">
             <AlertCircle size={14} className="text-red-600 flex-shrink-0 mt-0.5" />
@@ -165,6 +166,7 @@ export function CameraHealthCard({
               {camera.videoLoss && <div>• Video loss detected</div>}
               {camera.tamperingDetected && <div>• Tampering detected</div>}
               {camera.imageFrozen && <div>• Image frozen</div>}
+              {camera.blackScreen && <div>• Black screen detected</div>}
             </div>
           </div>
         </div>

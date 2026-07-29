@@ -13,6 +13,9 @@ const schema = z.object({
   DISCOVERY_TIMEOUT_MS: z.coerce.number().int().min(500).max(30_000).default(5000),
   ONVIF_TIMEOUT_MS: z.coerce.number().int().min(500).max(30_000).default(8000),
   FFPROBE_PATH: z.string().default("ffprobe"),
+  FFMPEG_PATH: z.string().default("ffmpeg"),
+  CAMERA_HEARTBEAT_INTERVAL_MS: z.coerce.number().int().min(5_000).max(3_600_000).default(30_000),
+  CAMERA_CONFIG_REFRESH_MS: z.coerce.number().int().min(5_000).max(3_600_000).default(60_000),
   PUBLIC_MEDIA_GATEWAY_URL: z.preprocess(
     (value) => value === "" ? undefined : value,
     z.string().url().optional(),

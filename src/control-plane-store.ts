@@ -503,6 +503,8 @@ export interface ControlPlaneStore {
     branchId: string,
     action: Action,
   ): Promise<Camera[]>;
+  /** Cameras owned by an edge agent. This is used only to configure that agent's local monitoring. */
+  listCamerasByEdgeAgent(edgeAgentId: string): Promise<Camera[]>;
   listAccessibleCameras(
     user: User,
     action: Action,

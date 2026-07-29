@@ -226,6 +226,7 @@ export function projectBranchHealth(input: {
       videoLoss: telemetry?.metrics.videoLoss === true,
       tamperingDetected: telemetry?.metrics.tamperingDetected === true,
       imageFrozen: telemetry?.metrics.imageFrozen === true,
+      blackScreen: telemetry?.metrics.blackScreen === true,
       quality: telemetry?.quality ?? "unavailable",
       metrics: telemetry?.metrics ?? {},
       reasonCodes: [...(telemetry?.reasonCodes ?? ["telemetry_unavailable"]), ...(retention?.reasonCodes ?? [])],

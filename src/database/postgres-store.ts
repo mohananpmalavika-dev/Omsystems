@@ -98,6 +98,9 @@ export class PostgresStore
   async listCamerasByBranch(user: User, branchId: string, action: Action) {
     return this.cameras.listAuthorizedByBranch(user.id, branchId, action);
   }
+  async listCamerasByEdgeAgent(edgeAgentId: string) {
+    return this.cameras.listByEdgeAgent(edgeAgentId);
+  }
   async listAccessibleCameras(user: User, action: Action, filters: any) {
     return this.cameras.listAuthorized(user.id, action, filters);
   }

@@ -49,6 +49,18 @@ export interface TelemetryPayload {
   reasonCodes: string[];
 }
 
+export interface MonitoringCamera {
+  id: string;
+  name: string;
+  connectionSecretRef: string;
+  profiles: Array<{
+    name: string;
+    codec: "H264" | "H265" | "MJPEG" | "unknown";
+    width: number;
+    height: number;
+  }>;
+}
+
 export class GatewayClient {
   constructor(
     private readonly baseUrl: string,
@@ -74,6 +86,14 @@ export class GatewayClient {
         }),
       },
     );
+  }
+
+  async listMonitoringCameras(agentId: string, version: string) {
+    const response = await this.request<{ data: MonitoringCamera[] }>(
+      `/v1/edge-agents/${encodeURIComponent(agentId)}/cameras/monitoring`,
+      { method: "GET", headers: { "x-edge-agent-version": version } },
+    );
+    return response.data;
   }
 
   async submitTelemetry(agentId: string, payload: TelemetryPayload) {

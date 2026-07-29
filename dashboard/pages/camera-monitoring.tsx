@@ -324,6 +324,7 @@ export function CameraMonitoringDashboard() {
                       videoLoss: camera.videoLoss || false,
                       tamperingDetected: false,
                       imageFrozen: camera.imageFrozen || false,
+                      blackScreen: camera.blackScreen || false,
                       lastHeartbeat: (camera.lastSeen || new Date()).toISOString(),
                       healthScore: metrics?.qualityScore || 0,
                     }}
