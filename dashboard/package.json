@@ -20,7 +20,8 @@
     "next": "^16.2.0",
     "next-auth": "^4.24.15",
     "react": "^19.2.0",
-    "react-dom": "^19.2.0"
+    "react-dom": "^19.2.0",
+    "zod": "^3.25.76"
   },
   "devDependencies": {
     "@mdx-js/rollup": "^3.0.0",
