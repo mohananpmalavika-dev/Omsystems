@@ -9,14 +9,25 @@ export async function GET(
   context: { params: Promise<{ id: string }> },
 ) {
   try {
+    const sessionToken = request.cookies.get("sentinel_access")?.value;
+    if (!sessionToken) {
+      return NextResponse.json(
+        { error: "unauthenticated", message: "Session token required" },
+        { status: 401 },
+      );
+    }
     const { id } = await context.params;
     return NextResponse.json({
-      data: await listCameras(
-        id,
-        request.cookies.get("sentinel_access")?.value,
-      ),
+      data: await listCameras(id, sessionToken),
     });
-  } catch {
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "unknown_error";
+    if (message.includes("unauthenticated")) {
+      return NextResponse.json(
+        { error: "unauthenticated", message },
+        { status: 401 },
+      );
+    }
     return NextResponse.json(
       { error: "cameras_unavailable" },
       { status: 502 },

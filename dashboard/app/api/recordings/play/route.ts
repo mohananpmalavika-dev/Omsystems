@@ -6,10 +6,17 @@ export const dynamic = "force-dynamic";
 export async function GET(request: NextRequest) {
   const segmentId = request.nextUrl.searchParams.get("segmentId");
   if (!segmentId) return Response.json({ error: "segment_id_required" }, { status: 400 });
+  const sessionToken = request.cookies.get("sentinel_access")?.value;
+  if (!sessionToken) {
+    return Response.json(
+      { error: "unauthenticated", message: "Session token required" },
+      { status: 401 },
+    );
+  }
   try {
     const segment = await getRecordingSegment(
       segmentId,
-      request.cookies.get("sentinel_access")?.value,
+      sessionToken,
     );
     if (segment.status !== "ready") {
       return Response.json({ error: "recording_segment_unavailable" }, { status: 409 });
@@ -39,7 +46,14 @@ export async function GET(request: NextRequest) {
       if (value) headers.set(name, value);
     }
     return new Response(upstream.body, { status: upstream.status, headers });
-  } catch {
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "";
+    if (message.includes("unauthenticated")) {
+      return Response.json(
+        { error: "unauthenticated", message },
+        { status: 401 },
+      );
+    }
     return Response.json({ error: "recording_playback_unavailable" }, { status: 502 });
   }
 }

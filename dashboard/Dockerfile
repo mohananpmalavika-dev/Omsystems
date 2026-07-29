@@ -22,6 +22,11 @@ RUN --mount=type=cache,target=/root/.cache/next-swc \
 FROM node:22-alpine
 ENV NODE_ENV=production
 ENV HOSTNAME=0.0.0.0
+# Set default runtime environment variables for demo mode
+ENV DASHBOARD_DEMO_MODE=true
+ENV CONTROL_PLANE_INTERNAL_URL=http://localhost:8080
+ENV MEDIA_GATEWAY_INTERNAL_URL=http://localhost:8090
+ENV DASHBOARD_DEV_USER_ID=user-south-operator
 WORKDIR /app
 COPY --from=build /app/dashboard/.next/standalone ./
 COPY --from=build /app/dashboard/.next/static ./dashboard/.next/static

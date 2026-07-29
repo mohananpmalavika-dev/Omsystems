@@ -123,6 +123,9 @@ async function controlFetch(
   init?: RequestInit,
   employeeSession?: string,
 ) {
+  if (!employeeSession) {
+    throw new Error("unauthenticated: no session token provided");
+  }
   const response = await fetch(new URL(
     path,
     runtimeEnv("CONTROL_PLANE_INTERNAL_URL", "http://localhost:8080"),
@@ -130,14 +133,7 @@ async function controlFetch(
     ...init,
     headers: {
       ...bridgeHeaders(),
-      ...(employeeSession
-        ? { authorization: `Bearer ${employeeSession}` }
-        : {
-            "x-user-id": runtimeEnv(
-              "DASHBOARD_DEV_USER_ID",
-              "user-global-admin",
-            ),
-          }),
+      authorization: `Bearer ${employeeSession}`,
       ...init?.headers,
     },
     cache: "no-store",

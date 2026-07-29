@@ -74,6 +74,10 @@ export function SecurityDashboard() {
   useEffect(() => {
     void fetch("/api/branches", { credentials: "include" })
       .then((response) => {
+        if (response.status === 401) {
+          window.location.href = "/auth/login";
+          return Promise.reject("unauthenticated");
+        }
         if (!response.ok) throw new Error("Unable to load branches");
         return response.json() as Promise<{ data: Branch[] }>;
       })
@@ -89,8 +93,12 @@ export function SecurityDashboard() {
     if (!selectedBranch) return;
     setLoading(true);
     setError(null);
-    void fetch(`/api/branches/${encodeURIComponent(selectedBranch)}/cameras`)
+    void fetch(`/api/branches/${encodeURIComponent(selectedBranch)}/cameras`, { credentials: "include" })
       .then((response) => {
+        if (response.status === 401) {
+          window.location.href = "/auth/login";
+          return Promise.reject("unauthenticated");
+        }
         if (!response.ok) throw new Error("Unable to load cameras");
         return response.json() as Promise<{ data: CameraType[] }>;
       })

@@ -105,6 +105,10 @@ export function VideoSearchInterface() {
   async function loadBranches() {
     try {
       const response = await fetch("/api/branches", { credentials: "include" });
+      if (response.status === 401) {
+        window.location.href = "/auth/login";
+        return;
+      }
       if (response.ok) {
         const data = await response.json();
         setBranches(data.data || []);
@@ -120,6 +124,10 @@ export function VideoSearchInterface() {
         `/api/branches/${encodeURIComponent(branchId)}/cameras`,
         { credentials: "include" },
       );
+      if (response.status === 401) {
+        window.location.href = "/auth/login";
+        return;
+      }
       if (response.ok) {
         const data = await response.json();
         setCameras(data.data || []);

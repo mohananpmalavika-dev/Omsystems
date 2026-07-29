@@ -32,7 +32,13 @@ export function RecordingWorkspace() {
 
   useEffect(() => {
     void fetch("/api/branches", { credentials: "include" })
-      .then((response) => response.ok ? response.json() : Promise.reject())
+      .then((response) => {
+        if (response.status === 401) {
+          window.location.href = "/auth/login";
+          return Promise.reject("unauthenticated");
+        }
+        return response.ok ? response.json() : Promise.reject();
+      })
       .then((body: { data: Branch[] }) => {
         setBranches(body.data);
         setBranchId(body.data.some((branch) => branch.id === requestedBranchId) ? requestedBranchId : body.data[0]?.id ?? "");

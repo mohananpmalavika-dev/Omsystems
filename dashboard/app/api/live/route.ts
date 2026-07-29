@@ -7,6 +7,13 @@ export const dynamic = "force-dynamic";
 
 export async function POST(request: NextRequest) {
   try {
+    const sessionToken = request.cookies.get("sentinel_access")?.value;
+    if (!sessionToken) {
+      return NextResponse.json(
+        { error: "unauthenticated", message: "Session token required" },
+        { status: 401 },
+      );
+    }
     const body = z.object({
       cameraId: z.string().min(1),
       profile: z.enum(["main", "sub"]).default("sub"),
@@ -16,7 +23,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       await startLive(
         body.cameraId,
-        request.cookies.get("sentinel_access")?.value,
+        sessionToken,
       ),
       { status: 201 },
     );
