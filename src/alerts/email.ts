@@ -33,18 +33,18 @@ export class NodemailerSmtpProvider implements EmailProvider {
   async send(input: { to: string; subject: string; text?: string; html?: string }) {
     const nodemailer = await import("nodemailer");
     const transport = nodemailer.createTransport(this.config);
-    const info = await transport.sendMail({ to: input.to, subject: input.subject, text: input.text, html: input.html });
+    const info = await transport.sendMail({ from: this.config.from, to: input.to, subject: input.subject, text: input.text, html: input.html });
     return { id: info.messageId ?? (info as any)?.response ?? "nodemailer:unknown" };
   }
 }
 
 export class SendGridEmailProvider implements EmailProvider {
   readonly name = "sendgrid" as const;
-  constructor(private readonly apiKey: string, private readonly fetcher: typeof fetch = fetch) {}
+  constructor(private readonly apiKey: string, private readonly fetcher: typeof fetch = fetch, private readonly from = process.env.ALERT_EMAIL_FROM ?? "alerts@example.com") {}
   async send(input: { to: string; subject: string; text?: string; html?: string }) {
     const payload = {
       personalizations: [{ to: [{ email: input.to }] }],
-      from: { email: process.env.ALERT_EMAIL_FROM ?? "alerts@example.com" },
+      from: { email: this.from },
       subject: input.subject,
       content: [{ type: "text/plain", value: input.text ?? "" }],
     } as any;
@@ -61,13 +61,13 @@ export class SendGridEmailProvider implements EmailProvider {
 
 export class SesEmailProvider implements EmailProvider {
   readonly name = "ses" as const;
-  constructor(private readonly client: any) {}
+  constructor(private readonly client: any, private readonly from = process.env.ALERT_EMAIL_FROM ?? "alerts@example.com") {}
   async send(input: { to: string; subject: string; text?: string; html?: string }) {
     const { SendEmailCommand } = await import("@aws-sdk/client-ses");
     const params = {
       Destination: { ToAddresses: [input.to] },
       Message: { Subject: { Data: input.subject }, Body: { Text: { Data: input.text ?? "" } } },
-      Source: process.env.ALERT_EMAIL_FROM ?? "alerts@example.com",
+      Source: this.from,
     } as any;
     if (input.html) params.Message.Body.Html = { Data: input.html };
     const cmd = new SendEmailCommand(params);

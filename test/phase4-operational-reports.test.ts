@@ -5,7 +5,8 @@ import { join } from "node:path";
 import type { FastifyInstance } from "fastify";
 import { buildApp } from "../src/app.js";
 import { MemoryStore } from "../src/store.js";
-import type { OperationalReportEmailSender } from "../src/reporting/worker.js";
+import { ProviderOperationalReportEmailSender, type OperationalReportEmailSender } from "../src/reporting/worker.js";
+import type { EmailProvider } from "../src/alerts/email.js";
 import type { Camera, ResourceNode } from "../src/domain/models.js";
 
 const admin={"x-user-id":"user-global-admin"};
@@ -20,6 +21,23 @@ describe("Phase 4 persistent daily reports",()=>{
     const created=await app.inject({method:"POST",url:"/v1/reports/operational/schedules",headers:admin,payload:{name:"Daily South operations",timezone:"Asia/Kolkata",dailyAt:"06:30",template:"branch_health_summary",formats:["pdf","xlsx","csv"],recipients:["soc@example.com"],filters:{region:"South Region",severity:"P1"},enabled:true}});
     expect(created.statusCode).toBe(201);expect(created.json()).toMatchObject({name:"Daily South operations",timezone:"Asia/Kolkata",dailyAt:"06:30",template:"branch_health_summary",lastRunAt:null});expect(Date.parse(created.json().nextRunAt)).toBeGreaterThan(Date.now());
     const listed=await app.inject({method:"GET",url:"/v1/reports/operational/schedules",headers:admin});expect(listed.json().data).toHaveLength(1);expect(listed.json().data[0].recipients).toEqual(["soc@example.com"]);
+    const delivery=await app.inject({method:"GET",url:"/v1/reports/operational/delivery-configuration",headers:admin});
+    expect(delivery.json().data).toEqual({configured:true,provider:"custom"});
+  });
+
+  it("delivers signed report links through a direct SMTP, SendGrid, or SES-style provider",async()=>{
+    const messages:Array<{to:string;subject:string;text?:string}>=[];
+    const provider:EmailProvider={name:"smtp",async send(message){messages.push(message);return{id:"smtp-message-1"};}};
+    const sender=new ProviderOperationalReportEmailSender(provider,"https://reports.example.test","phase4-download-secret");
+    const result=await sender.send(
+      {id:"delivery-1",tenantId:"omsystems",runId:"run-1",recipient:"soc@example.com"} as any,
+      {id:"run-1",template:"hdd_health"} as any,
+      [{id:"artifact-1",tenantId:"omsystems",format:"pdf",filename:"hdd.pdf",expiresAt:"2030-01-01T00:00:00.000Z"}] as any,
+    );
+    expect(result.providerId).toBe("smtp-message-1");
+    expect(messages[0]).toMatchObject({to:"soc@example.com",subject:"Daily Hdd Health surveillance report"});
+    expect(messages[0]?.text).toContain("https://reports.example.test/api/control/v1/reports/operational/artifacts/artifact-1/download?");
+    expect(sender.configuration()).toEqual({configured:true,provider:"smtp"});
   });
 
   it("publishes and generates every requested operational report template",async()=>{

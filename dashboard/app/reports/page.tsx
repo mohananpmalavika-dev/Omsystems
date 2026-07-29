@@ -11,6 +11,7 @@ type Schedule={id:string;name:string;timezone:string;dailyAt:string;template:Tem
 type Artifact={id:string;format:Format;filename:string;sizeBytes:number;expiresAt:string;downloadUrl:string};
 type Delivery={id:string;recipient:string;status:string;attempts:number;error?:string};
 type Run={id:string;status:string;template:Template;formats:Format[];filters:Filters;progress:number;attempts:number;rowCount:number|null;summary?:Record<string,number>;error?:string;createdAt:string;artifacts:Artifact[];deliveries:Delivery[]};
+type DeliveryConfiguration={configured:boolean;provider:"smtp"|"sendgrid"|"ses"|"webhook"|"custom"};
 
 const REPORT_TEMPLATES: Array<{id: Template; name: string; description: string}> = [
   {id: "comprehensive", name: "Comprehensive Daily Surveillance", description: "All metrics: branches, cameras, alerts, DVRs, storage, retention"},
@@ -32,16 +33,29 @@ export default function ReportsPage(){
   const[dailyAt,setDailyAt]=useState("06:30");
   const[recipients,setRecipients]=useState("");
   const[template,setTemplate]=useState<Template>("comprehensive");
+  const[templates,setTemplates]=useState(REPORT_TEMPLATES);
   const[formats,setFormats]=useState<Format[]>(["pdf","xlsx","csv"]);
   const[filters,setFilters]=useState<Filters>({});
+  const[deliveryConfiguration,setDeliveryConfiguration]=useState<DeliveryConfiguration|null>(null);
   
   const load=useCallback(async()=>{
-    const[scheduleResponse,runResponse]=await Promise.all([
+    const[scheduleResponse,runResponse,templateResponse,deliveryResponse]=await Promise.all([
       fetch("/api/control/v1/reports/operational/schedules",{cache:"no-store"}),
-      fetch("/api/control/v1/reports/operational/runs?limit=100",{cache:"no-store"})
+      fetch("/api/control/v1/reports/operational/runs?limit=100",{cache:"no-store"}),
+      fetch("/api/control/v1/reports/operational/templates",{cache:"no-store"}),
+      fetch("/api/control/v1/reports/operational/delivery-configuration",{cache:"no-store"}),
     ]);
     if(scheduleResponse.ok)setSchedules((await scheduleResponse.json()).data??[]);
     if(runResponse.ok)setRuns((await runResponse.json()).data??[]);
+    if(templateResponse.ok){
+      const catalog=((await templateResponse.json()).data??[]) as Array<{id:Template;name:string}>;
+      const available=catalog.map((item)=>({
+        ...item,
+        description:REPORT_TEMPLATES.find((template)=>template.id===item.id)?.description??"Operational report export",
+      }));
+      if(available.length){setTemplates(available);setTemplate((current)=>available.some((item)=>item.id===current)?current:available[0]!.id);}
+    }
+    if(deliveryResponse.ok)setDeliveryConfiguration((await deliveryResponse.json()).data);
     setLoading(false);
   },[]);
   
@@ -76,7 +90,7 @@ export default function ReportsPage(){
     await load();
   };
   
-  const selectedTemplateInfo = REPORT_TEMPLATES.find(t => t.id === template);
+  const selectedTemplateInfo = templates.find(t => t.id === template);
   
   return <AppLayout><main className="content p-6 space-y-6 max-w-[1500px] mx-auto">
     <header className="flex flex-wrap justify-between gap-3">
@@ -98,24 +112,26 @@ export default function ReportsPage(){
           <h2 className="text-lg font-semibold">Create report</h2>
           <p className="text-xs text-gray-500">Run immediately or persist as a daily schedule.</p>
         </div>
+
+        <div className={`rounded-lg border p-3 text-xs ${deliveryConfiguration?.configured?"border-emerald-200 bg-emerald-50 text-emerald-800":"border-amber-200 bg-amber-50 text-amber-900"}`}>
+          {deliveryConfiguration===null?"Checking report email delivery…":deliveryConfiguration.configured?`Email delivery is configured through ${deliveryConfiguration.provider.toUpperCase()}. Recipients receive signed report-download links.`:"Email delivery is not configured. Reports remain available in Run history; configure SMTP, SendGrid, SES, or a webhook before adding recipients."}
+        </div>
         
-        {/* Template Selection */}
         <div>
           <label className="text-sm font-medium flex items-center gap-2 mb-2">
             <FileText size={16}/>
             Report Template
           </label>
-          <select 
-            className="input w-full" 
-            value={template} 
-            onChange={(e)=>setTemplate(e.target.value as Template)}
-          >
-            {REPORT_TEMPLATES.map((tmpl)=>(
-              <option key={tmpl.id} value={tmpl.id}>{tmpl.name}</option>
+          <div role="radiogroup" aria-label="Report template" className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+            {templates.map((tmpl)=>(
+              <button key={tmpl.id} type="button" role="radio" aria-checked={template===tmpl.id} onClick={()=>setTemplate(tmpl.id)} className={`rounded-lg border p-3 text-left transition ${template===tmpl.id?"border-blue-600 bg-blue-50 ring-1 ring-blue-600":"border-gray-200 bg-white hover:border-blue-300"}`}>
+                <span className="block text-sm font-semibold text-gray-900">{tmpl.name}</span>
+                <span className="mt-1 block text-xs text-gray-600">{tmpl.description}</span>
+              </button>
             ))}
-          </select>
+          </div>
           {selectedTemplateInfo && (
-            <p className="text-xs text-gray-500 mt-1">{selectedTemplateInfo.description}</p>
+            <p className="text-xs text-gray-500 mt-2">Selected: {selectedTemplateInfo.name}</p>
           )}
         </div>
         
@@ -211,7 +227,7 @@ export default function ReportsPage(){
                 <div>
                   <strong>{schedule.name}</strong>
                   <p className="text-xs text-gray-500">
-                    {REPORT_TEMPLATES.find(t => t.id === schedule.template)?.name || schedule.template} • Daily {schedule.dailyAt} / {schedule.timezone} / {schedule.formats.join(", ")}
+                    {templates.find(t => t.id === schedule.template)?.name || schedule.template} • Daily {schedule.dailyAt} / {schedule.timezone} / {schedule.formats.join(", ")}
                   </p>
                   <p className="text-xs">
                     Next: {new Date(schedule.nextRunAt).toLocaleString()} / Last: {schedule.lastRunAt?new Date(schedule.lastRunAt).toLocaleString():"Never"}
@@ -247,7 +263,7 @@ export default function ReportsPage(){
             {runs.map((run)=>(
               <tr key={run.id} className="border-b align-top">
                 <td className="py-3">{new Date(run.createdAt).toLocaleString()}</td>
-                <td className="text-xs">{REPORT_TEMPLATES.find(t => t.id === run.template)?.name || run.template}</td>
+                <td className="text-xs">{templates.find(t => t.id === run.template)?.name || run.template}</td>
                 <td>
                   <span className="flex gap-1 items-center">
                     {run.status==="completed"?<CheckCircle2 size={15} className="text-green-600"/>:run.status==="running"?<LoaderCircle size={15} className="animate-spin"/>:null}

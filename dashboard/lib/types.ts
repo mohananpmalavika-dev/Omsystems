@@ -132,6 +132,37 @@ export interface CompliancePolicy {
   updatedAt: string;
 }
 
+export interface AlertNotificationPolicySchedule {
+  name: string;
+  days: number[];
+  start: string;
+  end: string;
+  timezone: string;
+  recipients: Partial<Record<"sms" | "email" | "voice", string[]>>;
+}
+
+export interface AlertNotificationPolicy {
+  tenantId: string;
+  recipientGroups: Partial<Record<"sms" | "email" | "voice", string[]>>;
+  onCallSchedules: AlertNotificationPolicySchedule[];
+  quietHours?: { start: string; end: string; timezone: string };
+  rateLimitPerMinute: number;
+  escalationAfterSeconds: Partial<Record<"P1" | "P2" | "P3" | "P4" | "P5", number>>;
+  smsTemplates?: Partial<Record<"P1" | "P2", string>>;
+  smsTemplateIds?: Partial<Record<"P1" | "P2", string>>;
+  updatedAt: string;
+}
+
+export interface AlertNotificationPolicyInput {
+  recipientGroups: Partial<Record<"sms" | "email" | "voice", string[]>>;
+  onCallSchedules: AlertNotificationPolicySchedule[];
+  quietHours?: { start: string; end: string; timezone: string };
+  rateLimitPerMinute: number;
+  escalationAfterSeconds: Partial<Record<"P1" | "P2" | "P3" | "P4" | "P5", number>>;
+  smsTemplates?: Partial<Record<"P1" | "P2", string>>;
+  smsTemplateIds?: Partial<Record<"P1" | "P2", string>>;
+}
+
 export interface ComplianceAssessment {
   id: string;
   tenantId: string;

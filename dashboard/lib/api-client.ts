@@ -1,5 +1,7 @@
 // API client for backend communication
 
+import type { AlertNotificationPolicy, AlertNotificationPolicyInput } from '@/lib/types';
+
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE || '/api/control';
 
 class ApiError extends Error {
@@ -418,6 +420,17 @@ export const complianceApi = {
   createPolicy: (data: any) => fetchApi<any>('/v1/compliance/policies', {
     method: 'POST', body: JSON.stringify(data),
   }),
+};
+
+export const alertPolicyApi = {
+  get: () => fetchApi<{ data: AlertNotificationPolicy; matrix?: Record<string, string[]> }>('/v1/alerts/notification-policy'),
+  update: (data: AlertNotificationPolicyInput) => fetchApi<{ data: AlertNotificationPolicy; matrix?: Record<string, string[]> }>('/v1/alerts/notification-policy', {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  }),
+};
+
+export const deviceInventoryApi = {
   listAssessments: (filters?: { frameworkId?: string; branchNodeId?: string; status?: string }) => {
     const params = new URLSearchParams();
     filters = filters ?? {};

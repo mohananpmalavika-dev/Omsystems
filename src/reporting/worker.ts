@@ -7,6 +7,7 @@ import type { ControlPlaneStore } from "../control-plane-store.js";
 import { defaultOperationalHealthPolicy } from "../operational-health/types.js";
 import { projectBranchHealth, verifyContinuousRetention } from "../operational-health/service.js";
 import { signedReportDownloadPath } from "./download-token.js";
+import type { EmailProvider } from "../alerts/email.js";
 import type {
   DailyOperationalReport, OperationalReportArtifact, OperationalReportDelivery,
   OperationalReportFormat, OperationalReportRun, OperationalReportTemplate,
@@ -14,6 +15,12 @@ import type {
 
 export interface OperationalReportEmailSender {
   send(delivery: OperationalReportDelivery, run: OperationalReportRun, artifacts: OperationalReportArtifact[]): Promise<{ providerId: string }>;
+  configuration?(): ReportDeliveryConfiguration;
+}
+
+export interface ReportDeliveryConfiguration {
+  configured: boolean;
+  provider: "smtp" | "sendgrid" | "ses" | "webhook" | "custom";
 }
 
 export class HttpOperationalReportEmailSender implements OperationalReportEmailSender {
@@ -26,11 +33,51 @@ export class HttpOperationalReportEmailSender implements OperationalReportEmailS
     const body = await response.json().catch(()=>({})) as {id?:string;providerId?:string};
     return {providerId:body.providerId??body.id??`email:${response.status}`};
   }
+  configuration(): ReportDeliveryConfiguration { return { configured: Boolean(this.endpoint && this.publicBaseUrl), provider: "webhook" }; }
+}
+
+/** Sends report download links with the same SMTP, SendGrid, or SES providers used for alerts. */
+export class ProviderOperationalReportEmailSender implements OperationalReportEmailSender {
+  constructor(
+    private readonly provider: EmailProvider,
+    private readonly publicBaseUrl: string,
+    private readonly downloadSecret: string,
+  ) {}
+
+  async send(delivery: OperationalReportDelivery, run: OperationalReportRun, artifacts: OperationalReportArtifact[]) {
+    if (!this.publicBaseUrl) throw new Error("report_public_base_url_unconfigured");
+    const downloads = reportDownloads(artifacts, this.publicBaseUrl, this.downloadSecret);
+    const text = [
+      `Your ${humanize(run.template)} surveillance report is ready.`,
+      "",
+      ...downloads.map((item) => `${item.format.toUpperCase()} — ${item.url} (expires ${item.expiresAt})`),
+    ].join("\n");
+    const result = await this.provider.send({
+      to: delivery.recipient,
+      subject: `Daily ${humanize(run.template)} surveillance report`,
+      text,
+    });
+    return { providerId: result.id };
+  }
+
+  configuration(): ReportDeliveryConfiguration {
+    return { configured: Boolean(this.publicBaseUrl), provider: this.provider.name === "test" ? "custom" : this.provider.name };
+  }
+}
+
+function reportDownloads(artifacts: OperationalReportArtifact[], publicBaseUrl: string, downloadSecret: string) {
+  return artifacts.map((item) => ({
+    format: item.format,
+    filename: item.filename,
+    url: `${publicBaseUrl}${signedReportDownloadPath(item, downloadSecret)}`,
+    expiresAt: item.expiresAt,
+  }));
 }
 
 export class OperationalReportWorker {
   private running=false;
   constructor(private readonly store:ControlPlaneStore,private readonly exportRoot:string,private readonly emailSender:OperationalReportEmailSender,private readonly archiveRetentionDays=365){}
+  deliveryConfiguration(): ReportDeliveryConfiguration { return this.emailSender.configuration?.() ?? { configured: true, provider: "custom" }; }
   async tick(){if(this.running)return 0;this.running=true;let processed=0;try{processed+=await this.queueDueSchedules();for(const run of await this.store.claimOperationalReportRuns(new Date().toISOString(),2)){await this.execute(run);processed+=1;}for(const delivery of await this.store.claimOperationalReportDeliveries(new Date().toISOString(),20)){await this.deliver(delivery);processed+=1;}return processed;}finally{this.running=false;}}
   private async queueDueSchedules(){let count=0;for(const schedule of await this.store.claimDueOperationalReportSchedules(new Date().toISOString(),20)){await this.store.createOperationalReportRun({tenantId:schedule.tenantId,scheduleId:schedule.id,requestedBy:schedule.createdBy,template:schedule.template,formats:schedule.formats,filters:schedule.filters,recipients:schedule.recipients,maxAttempts:3});await this.store.updateOperationalReportSchedule(schedule.id,schedule.tenantId,{lastRunAt:new Date().toISOString(),nextRunAt:nextDailyRun(schedule.dailyAt,schedule.timezone)});count+=1;}return count;}
   private async execute(run:OperationalReportRun){try{await this.store.updateOperationalReportRun(run.id,{progress:10,error:null});const user=await this.store.getUser(run.requestedBy);if(!user||user.tenantId!==run.tenantId)throw new Error("report_requester_not_found");const report=await buildDailyOperationalReport(this.store,user,run.filters);await this.store.updateOperationalReportRun(run.id,{progress:55});const directory=join(this.exportRoot,run.tenantId,run.id);await mkdir(directory,{recursive:true});for(const format of run.formats){const buffer=await renderReport(report,format,run.template);const filename=`${run.template}-${report.period.to.slice(0,10)}.${format}`;const storagePath=join(directory,filename);await writeFile(storagePath,buffer);await this.store.createOperationalReportArtifact({tenantId:run.tenantId,runId:run.id,format,filename,storagePath,contentType:contentType(format),sizeBytes:buffer.length,checksumSha256:createHash("sha256").update(buffer).digest("hex"),expiresAt:new Date(Date.now()+this.archiveRetentionDays*86_400_000).toISOString()});}if(run.recipients.length)await this.store.enqueueOperationalReportDeliveries(run.recipients.map((recipient)=>({tenantId:run.tenantId,runId:run.id,recipient})));const sections=reportSections(report,run.template);await this.store.updateOperationalReportRun(run.id,{status:"completed",progress:100,rowCount:sections.reduce((total,section)=>total+section.rows.length,0),summary:{...report.summary,template:run.template},completedAt:new Date().toISOString(),error:null});}catch(error){const dead=run.attempts>=run.maxAttempts;await this.store.updateOperationalReportRun(run.id,{status:dead?"dead":"failed",progress:0,error:error instanceof Error?error.message:"report_generation_failed",...(!dead?{nextAttemptAt:new Date(Date.now()+Math.min(300,2**run.attempts*10)*1000).toISOString()}:{completedAt:new Date().toISOString()})});}}
@@ -69,6 +116,6 @@ export function reportSections(report:DailyOperationalReport,template:Operationa
   if(template==="hdd_health")return [{name:"HDD Health",recordType:"hdd",rows:report.branches.map((row)=>({branchId:row.branchId,branchName:row.branchName,region:row.region,diskStatus:row.diskStatus,lastSeen:row.lastSeen}))}];
   return [{name:"Retention Compliance",recordType:"retention",rows:report.cameras.map((row)=>({branchId:row.branchId,branchName:row.branchName,cameraId:row.cameraId,cameraName:row.cameraName,recordingStatus:row.recordingStatus,retentionDays:row.retentionDays,requiredRetentionDays:row.requiredRetentionDays,compliant:row.recordingStatus==="breach"?"no":"yes"}))}];
 }
-function humanize(value:string){return value.replace(/([A-Z])/g," $1").replace(/^./,(c)=>c.toUpperCase());}
+function humanize(value:string){return value.replaceAll("_"," ").replace(/([A-Z])/g," $1").replace(/\b\w/g,(c)=>c.toUpperCase());}
 function contentType(format:OperationalReportFormat){return format==="csv"?"text/csv; charset=utf-8":format==="xlsx"?"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet":"application/pdf";}
 export function nextDailyRun(dailyAt:string,timezone:string,from=new Date()){for(let minutes=1;minutes<=2_880;minutes++){const candidate=new Date(from.getTime()+minutes*60_000);const parts=new Intl.DateTimeFormat("en-GB",{timeZone:timezone,hour:"2-digit",minute:"2-digit",hourCycle:"h23"}).formatToParts(candidate);const local=`${parts.find((p)=>p.type==="hour")?.value}:${parts.find((p)=>p.type==="minute")?.value}`;if(local===dailyAt)return candidate.toISOString();}throw new Error("daily_schedule_time_unresolvable");}

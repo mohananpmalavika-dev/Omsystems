@@ -6,6 +6,7 @@ import Fastify, {
 } from "fastify";
 import { z } from "zod";
 import { timingSafeEqual } from "node:crypto";
+import { SESClient } from "@aws-sdk/client-ses";
 import {
   hasExtendedInfrastructure,
   type CameraDiscoveryInput,
@@ -59,6 +60,7 @@ import { Msg91SmsProvider, SmsNotificationSender, TextLocalSmsProvider, TwilioSm
 import {
   HttpOperationalReportEmailSender,
   OperationalReportWorker,
+  ProviderOperationalReportEmailSender,
   type OperationalReportEmailSender,
 } from "./reporting/worker.js";
 import { EmailNotificationSender, NodemailerSmtpProvider, SendGridEmailProvider, SesEmailProvider } from "./alerts/email.js";
@@ -172,6 +174,47 @@ const internalSegmentSchema = z.object({
   codec: z.string().max(50).optional(),
 });
 
+function configuredReportEmailSender(downloadSecret: string): OperationalReportEmailSender {
+  const provider = process.env.REPORT_EMAIL_PROVIDER?.trim().toLowerCase()
+    ?? (process.env.REPORT_EMAIL_WEBHOOK_URL ? "webhook" : undefined);
+  const publicBaseUrl = (process.env.REPORT_PUBLIC_BASE_URL ?? "").replace(/\/$/, "");
+  const from = process.env.REPORT_EMAIL_FROM ?? "reports@example.com";
+  const requirePublicBaseUrl = () => {
+    if (!/^https:\/\//i.test(publicBaseUrl)) {
+      throw new Error("REPORT_PUBLIC_BASE_URL must be a provider-reachable HTTPS URL when report email delivery is enabled");
+    }
+  };
+
+  if (provider === "smtp") {
+    if (!process.env.REPORT_SMTP_URL) throw new Error("REPORT_SMTP_URL is required for REPORT_EMAIL_PROVIDER=smtp");
+    requirePublicBaseUrl();
+    return new ProviderOperationalReportEmailSender(
+      new NodemailerSmtpProvider({ url: process.env.REPORT_SMTP_URL, from }), publicBaseUrl, downloadSecret,
+    );
+  }
+  if (provider === "sendgrid") {
+    const apiKey = process.env.REPORT_SENDGRID_API_KEY ?? process.env.SENDGRID_API_KEY;
+    if (!apiKey) throw new Error("REPORT_SENDGRID_API_KEY is required for REPORT_EMAIL_PROVIDER=sendgrid");
+    requirePublicBaseUrl();
+    return new ProviderOperationalReportEmailSender(new SendGridEmailProvider(apiKey, fetch, from), publicBaseUrl, downloadSecret);
+  }
+  if (provider === "ses") {
+    const region = process.env.REPORT_AWS_REGION ?? process.env.AWS_REGION;
+    if (!region) throw new Error("REPORT_AWS_REGION or AWS_REGION is required for REPORT_EMAIL_PROVIDER=ses");
+    requirePublicBaseUrl();
+    return new ProviderOperationalReportEmailSender(new SesEmailProvider(new SESClient({ region }), from), publicBaseUrl, downloadSecret);
+  }
+  if (provider === "webhook") {
+    if (!process.env.REPORT_EMAIL_WEBHOOK_URL) throw new Error("REPORT_EMAIL_WEBHOOK_URL is required for REPORT_EMAIL_PROVIDER=webhook");
+    requirePublicBaseUrl();
+    return new HttpOperationalReportEmailSender(
+      process.env.REPORT_EMAIL_WEBHOOK_URL, process.env.REPORT_EMAIL_PROVIDER_TOKEN, publicBaseUrl, downloadSecret,
+    );
+  }
+  if (provider) throw new Error(`Unsupported REPORT_EMAIL_PROVIDER=${provider}`);
+  return new HttpOperationalReportEmailSender(undefined, undefined, publicBaseUrl, downloadSecret);
+}
+
 export async function buildApp(options?: {
   logger?: boolean;
   store?: ControlPlaneStore;
@@ -259,10 +302,7 @@ export async function buildApp(options?: {
   const alertDispatcher = new AlertNotificationDispatcher(store, alertSender);
   const reportExportRoot = options?.reportExportRoot ?? process.env.REPORT_EXPORT_ROOT ?? "./report-exports";
   const reportDownloadSecret = options?.reportDownloadSecret ?? process.env.REPORT_DOWNLOAD_SECRET ?? "development-report-download-secret-change-me";
-  const reportEmailSender = options?.reportEmailSender ?? new HttpOperationalReportEmailSender(
-    process.env.REPORT_EMAIL_WEBHOOK_URL, process.env.REPORT_EMAIL_PROVIDER_TOKEN,
-    (process.env.REPORT_PUBLIC_BASE_URL ?? "").replace(/\/$/, ""), reportDownloadSecret,
-  );
+  const reportEmailSender = options?.reportEmailSender ?? configuredReportEmailSender(reportDownloadSecret);
   const operationalReportWorker = new OperationalReportWorker(store, reportExportRoot, reportEmailSender,
     Number(process.env.REPORT_ARCHIVE_RETENTION_DAYS ?? 365));
 
