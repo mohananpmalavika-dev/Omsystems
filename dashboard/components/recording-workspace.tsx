@@ -31,7 +31,7 @@ export function RecordingWorkspace() {
   const [error, setError] = useState<string>();
 
   useEffect(() => {
-    void fetch("/api/branches")
+    void fetch("/api/branches", { credentials: "include" })
       .then((response) => response.ok ? response.json() : Promise.reject())
       .then((body: { data: Branch[] }) => {
         setBranches(body.data);
@@ -42,7 +42,7 @@ export function RecordingWorkspace() {
 
   useEffect(() => {
     if (!branchId) return;
-    void fetch(`/api/branches/${encodeURIComponent(branchId)}/cameras`)
+    void fetch(`/api/branches/${encodeURIComponent(branchId)}/cameras`, { credentials: "include" })
       .then((response) => response.ok ? response.json() : Promise.reject())
       .then((body: { data: Camera[] }) => {
         setCameras(body.data);

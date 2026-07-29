@@ -72,7 +72,7 @@ export function SecurityDashboard() {
   const [isFullscreen, setIsFullscreen] = useState(false);
 
   useEffect(() => {
-    void fetch("/api/branches")
+    void fetch("/api/branches", { credentials: "include" })
       .then((response) => {
         if (!response.ok) throw new Error("Unable to load branches");
         return response.json() as Promise<{ data: Branch[] }>;

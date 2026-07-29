@@ -104,7 +104,7 @@ export function VideoSearchInterface() {
 
   async function loadBranches() {
     try {
-      const response = await fetch("/api/branches");
+      const response = await fetch("/api/branches", { credentials: "include" });
       if (response.ok) {
         const data = await response.json();
         setBranches(data.data || []);
@@ -118,6 +118,7 @@ export function VideoSearchInterface() {
     try {
       const response = await fetch(
         `/api/branches/${encodeURIComponent(branchId)}/cameras`,
+        { credentials: "include" },
       );
       if (response.ok) {
         const data = await response.json();
@@ -153,6 +154,7 @@ export function VideoSearchInterface() {
 
       const response = await fetch(
         `/api/control/v1/recordings/search?${queryParams.toString()}`,
+        { credentials: "include" },
       );
 
       if (!response.ok) {
