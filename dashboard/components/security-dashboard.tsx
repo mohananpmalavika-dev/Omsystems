@@ -75,7 +75,7 @@ export function SecurityDashboard() {
     void fetch("/api/branches", { credentials: "include" })
       .then((response) => {
         if (response.status === 401) {
-          window.location.href = "/auth/login";
+          window.location.href = "/login";
           return Promise.reject("unauthenticated");
         }
         if (!response.ok) throw new Error("Unable to load branches");
@@ -96,7 +96,7 @@ export function SecurityDashboard() {
     void fetch(`/api/branches/${encodeURIComponent(selectedBranch)}/cameras`, { credentials: "include" })
       .then((response) => {
         if (response.status === 401) {
-          window.location.href = "/auth/login";
+          window.location.href = "/login";
           return Promise.reject("unauthenticated");
         }
         if (!response.ok) throw new Error("Unable to load cameras");

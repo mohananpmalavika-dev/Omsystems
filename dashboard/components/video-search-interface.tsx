@@ -106,7 +106,7 @@ export function VideoSearchInterface() {
     try {
       const response = await fetch("/api/branches", { credentials: "include" });
       if (response.status === 401) {
-        window.location.href = "/auth/login";
+        window.location.href = "/login";
         return;
       }
       if (response.ok) {
@@ -125,7 +125,7 @@ export function VideoSearchInterface() {
         { credentials: "include" },
       );
       if (response.status === 401) {
-        window.location.href = "/auth/login";
+        window.location.href = "/login";
         return;
       }
       if (response.ok) {
