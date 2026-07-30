@@ -66,10 +66,10 @@ export async function registerDashboardRoutes(
       }
 
       // Get overall system health
-      const branches = await store.listBranches(request.currentUser);
+      const branches = await store.listAccessibleNodes(request.currentUser, "analytics:view", "branch");
       const cameras = await Promise.all(
         branches.map(async (branch) => {
-          return await store.listCameras({ ...request.currentUser, nodeId: branch.nodeId });
+          return await store.listCamerasByBranch(request.currentUser, branch.id, "analytics:view");
         })
       );
       const allCameras = cameras.flat();
@@ -81,8 +81,8 @@ export async function registerDashboardRoutes(
         : 100;
 
       // Get active incidents count (simplified)
-      const incidents = await store.listIncidents(request.currentUser, { limit: 1000, offset: 0 });
-      const activeIncidents = incidents.data.filter(i => 
+      const incidents = await store.listIncidents(request.currentUser.tenantId, { limit: 1000 });
+      const activeIncidents = (incidents || []).filter(i => 
         i.status !== "resolved" && i.status !== "closed"
       ).length;
 
@@ -118,10 +118,10 @@ export async function registerDashboardRoutes(
         return reply.code(401).send({ error: "unauthorized" });
       }
 
-      const branches = await store.listBranches(request.currentUser);
+      const branches = await store.listAccessibleNodes(request.currentUser, "analytics:view", "branch");
       const cameras = await Promise.all(
         branches.map(async (branch) => {
-          return await store.listCameras({ ...request.currentUser, nodeId: branch.nodeId });
+          return await store.listCamerasByBranch(request.currentUser, branch.id, "analytics:view");
         })
       );
       const allCameras = cameras.flat();
@@ -165,10 +165,10 @@ export async function registerDashboardRoutes(
         return reply.code(401).send({ error: "unauthorized" });
       }
 
-      const branches = await store.listBranches(request.currentUser);
+      const branches = await store.listAccessibleNodes(request.currentUser, "analytics:view", "branch");
       const cameras = await Promise.all(
         branches.map(async (branch) => {
-          return await store.listCameras({ ...request.currentUser, nodeId: branch.nodeId });
+          return await store.listCamerasByBranch(request.currentUser, branch.id, "analytics:view");
         })
       );
       const allCameras = cameras.flat();
@@ -177,7 +177,7 @@ export async function registerDashboardRoutes(
       const recordingJobs = await Promise.all(
         allCameras.map(async (camera) => {
           try {
-            return await store.getRecordingJob(request.currentUser, camera.nodeId);
+            return await store.getRecordingJob(camera.id);
           } catch {
             return null;
           }
@@ -311,11 +311,11 @@ export async function registerDashboardRoutes(
 
       const { limit } = limitQuery.parse(request.query);
 
-      const incidents = await store.listIncidents(request.currentUser, { limit, offset: 0 });
+      const incidents = await store.listIncidents(request.currentUser.tenantId, { limit });
 
       return reply.send({
         success: true,
-        data: incidents.data || [],
+        data: incidents || [],
       });
     } catch (error) {
       app.log.error({ error }, "Error fetching recent incidents");
