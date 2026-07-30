@@ -251,8 +251,12 @@ export class EdgeAgentRepository {
       ipAddress: row.ip_address,
       onvifPort: row.onvif_port,
       rtspPort: row.rtsp_port,
-      profiles: JSON.parse(row.profiles),
-      capabilities: JSON.parse(row.capabilities),
+      profiles: typeof row.profiles === "string"
+        ? JSON.parse(row.profiles)
+        : row.profiles,
+      capabilities: typeof row.capabilities === "string"
+        ? JSON.parse(row.capabilities)
+        : row.capabilities,
       discoveredAt: row.discovered_at.toISOString(),
       status: row.status as "pending" | "approved" | "rejected",
     }));
