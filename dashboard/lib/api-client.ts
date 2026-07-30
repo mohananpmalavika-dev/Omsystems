@@ -125,6 +125,15 @@ export const authApi = {
     }
   },
 
+  logoutAll: async () => {
+    await fetchApi<{ success: boolean }>('/v1/auth/logout-all', { method: 'POST' });
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('accessToken');
+      localStorage.removeItem('refreshToken');
+      localStorage.removeItem('user');
+    }
+  },
+
   getCurrentUser: () => fetchApi<any>('/v1/auth/me'),
 
   requestPasswordReset: (email: string, tenantSlug?: string) =>
@@ -144,8 +153,6 @@ export const authApi = {
   }> }>('/v1/auth/sessions'),
 
   revokeSession: (id: string) => fetchApi<void>(`/v1/auth/sessions/${id}`, { method: 'DELETE' }),
-
-  logoutAll: () => fetchApi<{ success: boolean }>('/v1/auth/logout-all', { method: 'POST' }),
 
   changePassword: (userId: string, currentPassword: string, newPassword: string) =>
     fetchApi<{ success: boolean }>(`/v1/users/${userId}/change-password`, {

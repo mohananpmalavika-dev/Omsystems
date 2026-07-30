@@ -208,6 +208,31 @@ describe("Phase 1 operational health", () => {
     )).toBe(true);
   });
 
+  it("alerts separately for disk removal, storage-full, RAID, and write failures", async () => {
+    const observedAt = new Date(Date.now() + 1_000).toISOString();
+    const accepted = await app.inject({
+      method: "POST", url: `/v1/edge-agents/${agentId}/recorder-hdd`, headers: admin,
+      payload: {
+        branchId: "branch-blr-001", recorderId: "nvr-storage-alerts", observedAt,
+        source: "cp-plus-adapter", idempotencyKey: "nvr-storage-alerts:hdd:one",
+        hddStatus: [
+          { diskNo: 1, state: "missing" },
+          { diskNo: 2, state: "normal", capacityBytes: 1_000, freeBytes: 10, smartStatus: "healthy", writeVerified: true },
+          { diskNo: 3, state: "normal", capacityBytes: 1_000, freeBytes: 500, smartStatus: "healthy", raidStatus: "degraded", raidLevel: "RAID5", writeVerified: true },
+          { diskNo: 4, state: "normal", capacityBytes: 1_000, freeBytes: 500, smartStatus: "healthy", writeVerified: false },
+        ],
+      },
+    });
+    expect(accepted.statusCode).toBe(202);
+
+    const alerts = await app.inject({ method: "GET", url: "/v1/operations/alerts?component=storage", headers: admin });
+    const byDevice = new Map(alerts.json().data.alerts.map((alert: { deviceId: string; title: string; severity: string }) => [alert.deviceId, alert]));
+    expect(byDevice.get("nvr-storage-alerts:disk:1")).toMatchObject({ severity: "critical", title: expect.stringContaining("disk missing") });
+    expect(byDevice.get("nvr-storage-alerts:disk:2")).toMatchObject({ severity: "critical", title: expect.stringContaining("disk capacity critical") });
+    expect(byDevice.get("nvr-storage-alerts:disk:3")).toMatchObject({ severity: "warning", title: expect.stringContaining("raid degraded") });
+    expect(byDevice.get("nvr-storage-alerts:disk:4")).toMatchObject({ severity: "critical", title: expect.stringContaining("recording write failed") });
+  });
+
   it("publishes a warning before retained footage falls below policy", async () => {
     const now = Date.now();
     await store.createRecordingSegment({

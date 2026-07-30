@@ -183,11 +183,11 @@ export function projectDiskHealth(
 ) {
   const normalized = normalizeDisk(envelope.metrics, 0);
   return {
-    id: envelope.deviceId,
     branchId: branch.id,
     branchName: branch.name,
     branchCode: branch.code ?? branch.id.slice(0, 8),
     ...normalized,
+    id: envelope.deviceId,
     reasonCodes: envelope.reasonCodes.length ? envelope.reasonCodes : normalized.reasonCodes,
     lastCheck: envelope.observedAt,
   };
@@ -199,7 +199,7 @@ function normalizeDisk(input: Record<string, unknown>, index: number): Normalize
   const smartPassed = booleanValue(input, aliases.smartPassed);
   const capability = textValue(input, aliases.telemetryCapability).toLowerCase();
   const smartAttributeNames: readonly string[] = [
-    ...aliases.temperature, ...aliases.powerOnHours, ...aliases.reallocatedSectors,
+    ...aliases.powerOnHours, ...aliases.reallocatedSectors,
     ...aliases.pendingSectors, ...aliases.uncorrectableSectors, ...aliases.readErrors,
     ...aliases.writeErrors,
   ];
@@ -274,8 +274,8 @@ function normalizeDisk(input: Record<string, unknown>, index: number): Normalize
 
   const writeText = textValue(input, aliases.writeVerification).toLowerCase();
   const writeFlag = booleanValue(input, aliases.writeVerified);
-  const writeVerification: DiskWriteVerification = writeFlag === true || /pass|verified|success|writing|normal/.test(writeText) ? "verified"
-    : writeFlag === false || /fail|error|blocked|read.?only/.test(writeText) ? "failed" : "unverified";
+  const writeVerification: DiskWriteVerification = writeFlag === true || /^(?:pass(?:ed)?|verified|success(?:ful)?|writing|normal)$/.test(writeText) ? "verified"
+    : writeFlag === false || /^(?:fail(?:ed)?|error|blocked|read.?only)$/.test(writeText) ? "failed" : "unverified";
   if (writeVerification === "failed") reasons.push("recording_write_failed");
   else if (writeVerification === "unverified") reasons.push("recording_write_unverified");
 

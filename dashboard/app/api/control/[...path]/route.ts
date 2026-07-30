@@ -92,7 +92,7 @@ async function proxyControlRequest(request: NextRequest, context: RouteContext) 
       }
       return outgoing;
     }
-    if (routePath === "/v1/auth/logout" && response.ok) {
+    if ((routePath === "/v1/auth/logout" || routePath === "/v1/auth/logout-all") && response.ok) {
       const outgoing = new NextResponse(response.body, {
         status: response.status,
         headers: {

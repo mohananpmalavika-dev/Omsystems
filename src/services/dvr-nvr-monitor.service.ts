@@ -58,7 +58,7 @@ export class DVRNVRMonitorService extends EventEmitter {
   private pollingTimers: Map<string, NodeJS.Timeout>;
   private isRunning: boolean;
   private healthCache: Map<string, DVRNVRHealthData>;
-  private hddAlertStates: Map<string, NormalizedDiskHealth["smartStatus"]>;
+  private hddAlertStates: Map<string, NormalizedDiskHealth["operationalStatus"]>;
 
   constructor(pool: Pool) {
     super();
@@ -663,11 +663,12 @@ export class DVRNVRMonitorService extends EventEmitter {
 
   private async createHddHealthAlerts(device: DVRNVRDevice, disks: NormalizedDiskHealth[]): Promise<void> {
     for (const disk of disks) {
-      const key = `${device.id}:${disk.serialNumber || disk.id}`;
+      const key = `${device.id}:slot:${disk.id}`;
       const previous = this.hddAlertStates.get(key);
-      this.hddAlertStates.set(key, disk.smartStatus);
-      if (disk.smartStatus === "healthy" || previous === disk.smartStatus) continue;
-      const critical = ["failure_predicted", "failed", "missing"].includes(disk.smartStatus);
+      this.hddAlertStates.set(key, disk.operationalStatus);
+      if (["healthy", "unknown"].includes(disk.operationalStatus) || previous === disk.operationalStatus) continue;
+      const critical = disk.operationalStatus === "critical";
+      const issue = disk.reasonCodes.find((code) => code !== "disk_detected" && !code.endsWith("_unavailable")) ?? disk.operationalStatus;
       try {
         await this.pool.query(
           `INSERT INTO incidents (
@@ -675,8 +676,8 @@ export class DVRNVRMonitorService extends EventEmitter {
           ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
           [
             device.tenantId, device.branchId, "hdd_health", critical ? "critical" : "high",
-            `HDD ${disk.smartStatus.replaceAll("_", " ")}: ${device.manufacturer} ${device.model}`,
-            `${disk.devicePath} (${disk.serialNumber}) risk ${disk.failureProbability.toFixed(1)}%. ${disk.reasonCodes.join(", ")}`,
+            `HDD ${issue.replaceAll("_", " ")}: ${device.manufacturer} ${device.model}`,
+            `${disk.devicePath} (${disk.serialNumber}): slot ${disk.slotStatus}, SMART ${disk.smartStatus}, RAID ${disk.raidStatus}, write ${disk.writeVerification}, capacity ${disk.usagePercent.toFixed(1)}% used.`,
             "open", new Date(),
           ],
         );

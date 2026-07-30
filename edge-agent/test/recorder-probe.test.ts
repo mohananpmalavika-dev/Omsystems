@@ -13,7 +13,7 @@ describe("vendor recorder probes", () => {
     const recordedAt = new Date().toISOString();
     const fetcher = vi.fn()
       .mockResolvedValueOnce(new Response("<DeviceInfo><model>DS-7608</model><serialNumber>ABC1</serialNumber><firmwareVersion>V5</firmwareVersion><upTime>3600</upTime></DeviceInfo>"))
-      .mockResolvedValueOnce(new Response("<hdd><id>1</id><name>HDD1</name><capacity>1000</capacity><freeSpace>500</freeSpace><status>ok</status></hdd>"))
+      .mockResolvedValueOnce(new Response("<Storage><raidStatus>degraded</raidStatus><raidLevel>RAID5</raidLevel><hdd><id>1</id><name>HDD1</name><serialNumber>DISK-1</serialNumber><capacity>4000GB</capacity><freeSpace>1200GB</freeSpace><status>ok</status><smartStatus>healthy</smartStatus><writeStatus>verified</writeStatus></hdd></Storage>"))
       .mockResolvedValueOnce(new Response("<VideoInputChannel><videoInputEnabled>true</videoInputEnabled></VideoInputChannel><VideoInputChannel><videoInputEnabled>true</videoInputEnabled></VideoInputChannel>"))
       .mockResolvedValueOnce(new Response("<InputProxyChannelStatus><id>1</id><online>true</online></InputProxyChannelStatus><InputProxyChannelStatus><id>2</id><online>true</online></InputProxyChannelStatus>"))
       .mockResolvedValueOnce(new Response(`<CMSearchResult><matchList><searchMatchItem><trackID>101</trackID><endTime>${recordedAt}</endTime></searchMatchItem></matchList></CMSearchResult>`));
@@ -26,14 +26,17 @@ describe("vendor recorder probes", () => {
     ]);
     expect(fetcher.mock.calls[4]?.[0]).toContain("/ISAPI/ContentMgmt/search");
     expect(fetcher.mock.calls[4]?.[1]?.body).toContain("<trackID>101</trackID><trackID>201</trackID>");
-    expect(probe.hddStatus).toHaveLength(1);
+    expect(probe.hddStatus).toEqual([expect.objectContaining({
+      diskNo: "1", serialNumber: "DISK-1", capacity: "4000GB", freeSpace: "1200GB",
+      smartStatus: "healthy", raidStatus: "degraded", raidLevel: "RAID5", writeVerification: "verified",
+    })]);
   });
 
   it("uses the configurable CP PLUS OEM API paths conservatively", async () => {
     const recordedAt = "2026-07-30 12:00:00";
     const fetcher = vi.fn()
       .mockResolvedValueOnce(new Response("deviceType=CP-UVR\nserialNumber=CP1\nsoftwareVersion=4.0"))
-      .mockResolvedValueOnce(new Response("Storage[0].Name=Disk1\nStorage[0].State=Normal"))
+      .mockResolvedValueOnce(new Response("RAID.State=Optimal\nRAID.Level=RAID1\nStorage[0].Name=Disk1\nStorage[0].State=Normal\nStorage[0].Capacity=4TB\nStorage[0].FreeSpace=1TB"))
       .mockResolvedValueOnce(new Response("ChannelTitle[0].Name=Camera 1"))
       .mockResolvedValueOnce(new Response("result="))
       .mockResolvedValueOnce(new Response("object=0"))
@@ -46,6 +49,7 @@ describe("vendor recorder probes", () => {
     expect(probe.metrics).toMatchObject({ reachable: true, protocol: "cp-plus-oem-api", model: "CP-UVR", modelSource: "vendor-system", totalCameras: 1, connectedCameras: 1, recordingStatus: "recording", recordingChannels: 1, recordingStatusSource: "recent-media-search", lastRecordedAt: new Date(recordedAt.replace(" ", "T")).toISOString() });
     expect(fetcher.mock.calls[0]?.[0]).toContain("/documented/system");
     expect(fetcher.mock.calls[6]?.[0]).toContain("action=findNextFile");
+    expect(probe.hddStatus[0]).toMatchObject({ raidStatus: "Optimal", raidLevel: "RAID1" });
   });
 
   it("uses a recent ONVIF Search summary as activity evidence", async () => {
