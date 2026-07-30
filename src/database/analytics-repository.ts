@@ -331,6 +331,30 @@ export class AnalyticsRepository {
     return result.rows.map(mapAlert);
   }
 
+  async updateAlertEvidence(
+    id: string,
+    tenantId: string,
+    input: { snapshotReference?: string; clipReference?: string },
+  ): Promise<AnalyticsAlert | undefined> {
+    const result = await this.pool.query(
+      `UPDATE analytics_alerts
+       SET snapshot_reference=COALESCE(snapshot_reference,$3),
+           clip_reference=COALESCE(clip_reference,$4),
+           version=CASE
+             WHEN (snapshot_reference IS NULL AND $3::text IS NOT NULL)
+               OR (clip_reference IS NULL AND $4::text IS NOT NULL)
+             THEN version+1 ELSE version END,
+           updated_at=CASE
+             WHEN (snapshot_reference IS NULL AND $3::text IS NOT NULL)
+               OR (clip_reference IS NULL AND $4::text IS NOT NULL)
+             THEN now() ELSE updated_at END
+       WHERE id=$1 AND tenant_id=$2
+       RETURNING *`,
+      [id, tenantId, input.snapshotReference ?? null, input.clipReference ?? null],
+    );
+    return result.rows[0] ? mapAlert(result.rows[0]) : undefined;
+  }
+
   async getAlert(id: string, tenantId: string): Promise<AnalyticsAlert | undefined> {
     const result = await this.pool.query(
       "SELECT * FROM analytics_alerts WHERE id=$1 AND tenant_id=$2",

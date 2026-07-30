@@ -1,7 +1,8 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 import { deflateRawSync } from "node:zlib";
-import { basename, join, relative } from "node:path";
+import { basename, dirname, join, relative } from "node:path";
+import { fileURLToPath } from "node:url";
 import { readdir, readFile, stat } from "node:fs/promises";
 import type { ControlPlaneStore } from "../control-plane-store.js";
 
@@ -126,8 +127,9 @@ export async function registerEdgeAgentPackageRoutes(
     }
 
     const { platform } = packageQuery.parse(request.query);
-    const packageJsonPath = join(process.cwd(), "edge-agent", "package.json");
-    const distPath = join(process.cwd(), "edge-agent", "dist");
+    const routeDir = dirname(fileURLToPath(import.meta.url));
+    const packageJsonPath = join(routeDir, "..", "..", "edge-agent", "package.json");
+    const distPath = join(routeDir, "..", "..", "edge-agent", "dist");
     const packageJson = await readJsonFile(packageJsonPath);
     const packagedPackageJson = {
       ...packageJson,

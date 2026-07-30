@@ -1,4 +1,5 @@
 import { randomUUID, timingSafeEqual } from "node:crypto";
+import { Readable } from "node:stream";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import type { ControlPlaneStore } from "../control-plane-store.js";
@@ -6,6 +7,7 @@ import type { AlertNotificationDispatcher } from "../alerts/notification-dispatc
 import { NOTIFICATION_MATRIX } from "../alerts/notification-dispatcher.js";
 import { alertEvents } from "../alerts/event-stream.js";
 import { VoiceCallbackTokens, twiml, voiceAlertMessage } from "../alerts/voice-call.js";
+import type { AlertEvidenceClient, AlertEvidenceKind } from "../alerts/evidence-capture.js";
 
 const alertIdParams = z.object({ alertId: z.string().uuid() });
 const hhmm = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/);
@@ -48,6 +50,7 @@ export async function registerAlertCommandCenterRoutes(
   dispatcher: AlertNotificationDispatcher,
   workerKey?: string,
   voiceTokens = new VoiceCallbackTokens(process.env.ALERT_VOICE_CALLBACK_SECRET ?? "development-voice-callback-secret-change-me"),
+  evidenceClient?: AlertEvidenceClient,
 ) {
   app.get("/v1/alerts/command-center", async (request) => {
     const query = z.object({
@@ -81,6 +84,46 @@ export async function registerAlertCommandCenterRoutes(
       });
     }
     return { data, serverTime: new Date().toISOString() };
+  });
+
+  app.get("/v1/alerts/:alertId/evidence/status", async (request, reply) => {
+    const { alertId } = alertIdParams.parse(request.params);
+    const alert = await authorizedAlert(store, request.currentUser, alertId, "analytics:view");
+    if (!alert) return reply.code(404).send({ error: "analytics_alert_not_found" });
+    if (!evidenceClient) return reply.code(503).send({ error: "automatic_alert_evidence_unavailable" });
+    try {
+      const upstream = await evidenceClient.status(alertId);
+      const payload = Buffer.from(await upstream.arrayBuffer());
+      return reply.code(upstream.status)
+        .header("content-type", upstream.headers.get("content-type") ?? "application/json")
+        .header("cache-control", "private, no-store")
+        .send(payload);
+    } catch (error) {
+      app.log.error({ error, alertId }, "Alert evidence status proxy failed");
+      return reply.code(502).send({ error: "alert_evidence_service_unavailable" });
+    }
+  });
+
+  app.get("/v1/alerts/:alertId/evidence/:kind", async (request, reply) => {
+    const { alertId, kind } = z.object({
+      alertId: z.string().uuid(), kind: z.enum(["snapshot", "clip"]),
+    }).parse(request.params);
+    const alert = await authorizedAlert(store, request.currentUser, alertId, "analytics:view");
+    if (!alert) return reply.code(404).send({ error: "analytics_alert_not_found" });
+    if (!evidenceClient) return reply.code(503).send({ error: "automatic_alert_evidence_unavailable" });
+    try {
+      const upstream = await evidenceClient.asset(alertId, kind as AlertEvidenceKind, request.headers.range);
+      reply.code(upstream.status);
+      for (const name of ["accept-ranges", "cache-control", "content-length", "content-range", "content-type"]) {
+        const value = upstream.headers.get(name);
+        if (value) reply.header(name, value);
+      }
+      if (!upstream.body) return reply.send();
+      return reply.send(Readable.fromWeb(upstream.body));
+    } catch (error) {
+      app.log.error({ error, alertId, kind }, "Alert evidence asset proxy failed");
+      return reply.code(502).send({ error: "alert_evidence_service_unavailable" });
+    }
   });
 
   app.get("/v1/alerts/events", async (request, reply) => {

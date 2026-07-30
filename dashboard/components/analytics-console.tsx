@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { analyticsApi, cameraInventoryApi } from "@/lib/api-client";
+import { dashboardEvidenceUrl } from "@/lib/alert-command-center";
 import type {
   AnalyticsAlert, AnalyticsAlertStatus, AnalyticsAlertSummary,
   AnalyticsDetectionType, AnalyticsRule, AnalyticsSeverity, Branch,
@@ -371,7 +372,7 @@ export function AnalyticsConsole() {
                       {!alert.incidentId && <button onClick={() => void mutateAlert(alert, "incident")}><ShieldAlert size={13} />Create incident</button>}
                       <button onClick={() => void mutateAlert(alert, "resolved")}><ShieldCheck size={13} />Resolve</button>
                       <button onClick={() => void mutateAlert(alert, "false_alarm")}>False alarm</button>
-                      {alert.snapshotReference && <a href={alert.snapshotReference} target="_blank" rel="noreferrer"><ExternalLink size={13} />Snapshot</a>}
+                      {alert.snapshotReference && <a href={dashboardEvidenceUrl(alert.snapshotReference)} target="_blank" rel="noreferrer"><ExternalLink size={13} />Snapshot</a>}
                     </div>
                   )}
                 </article>

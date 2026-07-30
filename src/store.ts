@@ -1643,6 +1643,29 @@ export class MemoryStore implements ControlPlaneStore {
     );
   }
 
+  async updateAnalyticsAlertEvidence(
+    id: string,
+    inputTenantId: string,
+    input: { snapshotReference?: string; clipReference?: string },
+  ) {
+    const alert = await this.getAnalyticsAlert(id, inputTenantId);
+    if (!alert) return undefined;
+    let changed = false;
+    if (!alert.snapshotReference && input.snapshotReference) {
+      alert.snapshotReference = input.snapshotReference;
+      changed = true;
+    }
+    if (!alert.clipReference && input.clipReference) {
+      alert.clipReference = input.clipReference;
+      changed = true;
+    }
+    if (changed) {
+      alert.version += 1;
+      alert.updatedAt = new Date().toISOString();
+    }
+    return alert;
+  }
+
   async transitionAnalyticsAlert(
     id: string,
     inputTenantId: string,

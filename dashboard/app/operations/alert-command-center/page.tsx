@@ -3,7 +3,13 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Check, Clock3, ExternalLink, Radio, Siren, UserCheck } from "lucide-react";
 import type { LiveSessionResponse } from "@/lib/types";
-import type { CommandAlert } from "@/lib/alert-command-center";
+import {
+  dashboardEvidenceUrl,
+  evidenceAvailable,
+  hasManagedEvidence,
+  type AlertEvidenceCaptureStatus,
+  type CommandAlert,
+} from "@/lib/alert-command-center";
 import { HlsPlayer } from "@/components/hls-player";
 
 export default function AlertCommandCenterPage() {
@@ -94,20 +100,49 @@ export default function AlertCommandCenterPage() {
 }
 
 function AlertDetail({ alert, session, busy, startLive, act }: { alert?: CommandAlert; session?: LiveSessionResponse; busy: boolean; startLive: (alert: CommandAlert) => void; act: (alert: CommandAlert, action: "acknowledge" | "escalate" | "assign") => void }) {
+  const [evidenceStatus, setEvidenceStatus] = useState<AlertEvidenceCaptureStatus>();
+  useEffect(() => {
+    setEvidenceStatus(undefined);
+    if (!alert || !hasManagedEvidence(alert)) return;
+    let stopped = false;
+    let timer: number | undefined;
+    const refresh = async () => {
+      try {
+        const response = await fetch(`/api/control/v1/alerts/${alert.id}/evidence/status`, {
+          cache: "no-store", credentials: "include",
+        });
+        if (!response.ok) throw new Error("evidence_status_unavailable");
+        const status = await response.json() as AlertEvidenceCaptureStatus;
+        if (stopped) return;
+        setEvidenceStatus(status);
+        if (status.state === "queued" || status.state === "capturing") {
+          timer = window.setTimeout(refresh, 1_000);
+        }
+      } catch {
+        if (!stopped) timer = window.setTimeout(refresh, 2_500);
+      }
+    };
+    void refresh();
+    return () => { stopped = true; if (timer) window.clearTimeout(timer); };
+  }, [alert]);
   if (!alert) return <aside className="card grid place-items-center text-gray-500 min-h-72">Select an alert to inspect it.</aside>;
+  const snapshotReady = evidenceAvailable(alert, "snapshot", evidenceStatus);
+  const clipReady = evidenceAvailable(alert, "clip", evidenceStatus);
+  const snapshotUrl = alert.snapshotReference ? dashboardEvidenceUrl(alert.snapshotReference) : undefined;
+  const clipUrl = alert.clipReference ? dashboardEvidenceUrl(alert.clipReference) : undefined;
   return <aside className="card space-y-4">
     <div className="flex justify-between"><div><Priority value={alert.severity}/><h2 className="text-xl font-bold mt-2">{alert.title}</h2><p>{alert.branchName} / {alert.cameraName}</p></div><Sla alert={alert}/></div>
     <p className="text-sm text-gray-600">{alert.description}</p>
     <div className="aspect-video bg-gray-950 rounded-lg grid place-items-center overflow-hidden">
       {session?.hls ? <HlsPlayer url={session.hls.url} bearerToken={session.hls.bearerToken} cameraName={alert.cameraName}/>
-        : alert.snapshotReference ? <img src={alert.snapshotReference} alt="Alert snapshot" className="w-full h-full object-contain"/>
+        : snapshotReady && snapshotUrl ? <img src={snapshotUrl} alt="Alert snapshot" className="w-full h-full object-contain"/>
         : <button className="text-white flex gap-2" disabled={busy} onClick={() => void startLive(alert)}><Radio/>Open live video</button>}
     </div>
     <div className="flex flex-wrap gap-2">
       {!terminal(alert.status) && <><button disabled={busy} className="btn-primary flex gap-1" onClick={() => void act(alert, "acknowledge")}><Check size={15}/>Acknowledge</button><button disabled={busy} className="btn-secondary flex gap-1" onClick={() => void act(alert, "assign")}><UserCheck size={15}/>Assign to me</button><button disabled={busy} className="btn-secondary flex gap-1" onClick={() => void act(alert, "escalate")}><Siren size={15}/>Escalate</button></>}
       {!session && <button className="btn-secondary flex gap-1" onClick={() => void startLive(alert)}><Radio size={15}/>Live</button>}
-      {alert.snapshotReference && <a className="btn-secondary flex gap-1" href={alert.snapshotReference} target="_blank" rel="noreferrer"><ExternalLink size={15}/>Snapshot</a>}
-      {alert.clipReference && <a className="btn-secondary flex gap-1" href={alert.clipReference} target="_blank" rel="noreferrer"><ExternalLink size={15}/>Video clip</a>}
+      {snapshotReady && snapshotUrl && <a className="btn-secondary flex gap-1" href={snapshotUrl} target="_blank" rel="noreferrer"><ExternalLink size={15}/>Snapshot</a>}
+      {clipReady && clipUrl && <a className="btn-secondary flex gap-1" href={clipUrl} target="_blank" rel="noreferrer"><ExternalLink size={15}/>Video clip</a>}
     </div>
     <div><h3 className="font-semibold text-sm mb-2">Notification audit</h3><div className="flex flex-wrap gap-2">{alert.deliveries.map((delivery) => <span key={delivery.id} title={delivery.lastError} className="text-xs px-2 py-1 rounded bg-gray-100">{delivery.channel}: {delivery.status} ({delivery.attempts})</span>)}</div></div>
   </aside>;

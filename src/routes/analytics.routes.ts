@@ -18,6 +18,10 @@ import {
 } from "../analytics/capability-catalog.js";
 import { enqueueAlertMatrix, type AlertNotificationDispatcher } from "../alerts/notification-dispatcher.js";
 import { alertEvents } from "../alerts/event-stream.js";
+import {
+  managedAlertEvidenceReferences,
+  type AlertEvidenceClient,
+} from "../alerts/evidence-capture.js";
 import { defaultSeverityForDetection } from "../analytics/severity-policy.js";
 
 const detectionTypeSchema = z.string().trim().min(1).max(120).refine(isAiCapability, {
@@ -115,6 +119,7 @@ export async function registerAnalyticsRoutes(
     recordingEngineUrl?: string;
     recordingEngineSharedKey?: string;
     alertDispatcher?: AlertNotificationDispatcher;
+    alertEvidenceClient?: AlertEvidenceClient;
   } = {},
 ) {
   app.get("/v1/analytics/capabilities", async () => ({
@@ -422,6 +427,25 @@ export async function registerAnalyticsRoutes(
       const rule = result.rules.find((item) => item.id === alert.ruleId);
       if (!rule || alert.eventId !== result.event.id) continue;
       if (result.event.status === "accepted") {
+        if (options.alertEvidenceClient && (alert.severity === "P1" || alert.severity === "P2") &&
+            (!alert.snapshotReference || !alert.clipReference)) {
+          try {
+            await options.alertEvidenceClient.capture({
+              alertId: alert.id,
+              cameraId: alert.cameraId,
+              occurredAt: alert.firstDetectedAt,
+              clipSeconds: Math.min(20, Math.max(5, rule.postRollSeconds)),
+            });
+            const managed = managedAlertEvidenceReferences(alert.id);
+            const updated = await store.updateAnalyticsAlertEvidence(alert.id, alert.tenantId, {
+              ...(!alert.snapshotReference ? { snapshotReference: managed.snapshotReference } : {}),
+              ...(!alert.clipReference ? { clipReference: managed.clipReference } : {}),
+            });
+            if (updated) Object.assign(alert, updated);
+          } catch (error) {
+            app.log.error({ error, alertId: alert.id }, "Automatic alert evidence capture failed to start");
+          }
+        }
         await enqueueAlertMatrix(store, alert, rule);
         publishAlert(alert, "alert.created");
       }

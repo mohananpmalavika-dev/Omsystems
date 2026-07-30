@@ -3,6 +3,10 @@ import type { CommandAlert } from "../lib/alert-command-center.js";
 import {
   activeDashboardQueue,
   alertTonePattern,
+  dashboardEvidenceUrl,
+  evidenceAvailable,
+  hasManagedEvidence,
+  managedEvidenceReference,
   popupQueue,
 } from "../lib/alert-command-center.js";
 
@@ -17,6 +21,23 @@ describe("global real-time alert queue", () => {
     expect(popupQueue(alerts, new Set()).map((item) => item.id)).toEqual(["one", "two"]);
     expect(popupQueue(alerts, new Set(["one"])).map((item) => item.id)).toEqual(["two"]);
     expect(alertTonePattern("P1")).toHaveLength(3);
+  });
+
+  it("keeps managed evidence unavailable until the recorder marks each asset ready", () => {
+    const item = {
+      ...alert("managed", "P1"),
+      snapshotReference: managedEvidenceReference("managed", "snapshot"),
+      clipReference: managedEvidenceReference("managed", "clip"),
+    };
+    expect(hasManagedEvidence(item)).toBe(true);
+    expect(evidenceAvailable(item, "snapshot")).toBe(false);
+    expect(evidenceAvailable(item, "snapshot", {
+      alertId: item.id, cameraId: "cam-001", state: "partial",
+      requestedAt: new Date().toISOString(), snapshotAvailable: true, clipAvailable: false,
+    })).toBe(true);
+    expect(dashboardEvidenceUrl(item.snapshotReference)).toBe(
+      "/api/control/v1/alerts/managed/evidence/snapshot",
+    );
   });
 });
 

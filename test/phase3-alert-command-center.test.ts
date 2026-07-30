@@ -4,6 +4,7 @@ import { buildApp } from "../src/app.js";
 import { MemoryStore } from "../src/store.js";
 import type { AlertNotificationSender } from "../src/alerts/notification-dispatcher.js";
 import { AlertEventStream } from "../src/alerts/event-stream.js";
+import type { AlertEvidenceClient } from "../src/alerts/evidence-capture.js";
 
 const engineKey = "phase3-analytics-engine-key";
 const workerKey = "phase3-notification-worker-key";
@@ -13,9 +14,11 @@ describe("Phase 3 HO alert command center", () => {
   let app: FastifyInstance;
   let store: MemoryStore;
   const sent: Array<{ channel: string; recipient: string; alertId: string }> = [];
+  const captures: Array<{ alertId: string; cameraId: string }> = [];
 
   beforeEach(async () => {
     sent.length = 0;
+    captures.length = 0;
     store = new MemoryStore();
     const sender: AlertNotificationSender = {
       async send(notification, alert) {
@@ -23,9 +26,29 @@ describe("Phase 3 HO alert command center", () => {
         return { providerId: `provider-${notification.id}` };
       },
     };
+    const evidenceClient: AlertEvidenceClient = {
+      async capture(input) {
+        captures.push({ alertId: input.alertId, cameraId: input.cameraId });
+        return {
+          alertId: input.alertId, cameraId: input.cameraId, state: "queued",
+          requestedAt: new Date().toISOString(), snapshotAvailable: false, clipAvailable: false,
+        };
+      },
+      async status(alertId) {
+        return Response.json({
+          alertId, cameraId: "cam-001", state: "ready", requestedAt: new Date().toISOString(),
+          snapshotAvailable: true, clipAvailable: true,
+        });
+      },
+      async asset(_alertId, kind) {
+        return new Response(kind === "snapshot" ? "jpeg" : "mp4", {
+          headers: { "content-type": kind === "snapshot" ? "image/jpeg" : "video/mp4" },
+        });
+      },
+    };
     app = await buildApp({
       store, analyticsEngineSharedKey: engineKey, alertWorkerKey: workerKey,
-      alertNotificationSender: sender,
+      alertNotificationSender: sender, alertEvidenceClient: evidenceClient,
     });
   });
   afterEach(async () => app.close());
@@ -101,6 +124,40 @@ describe("Phase 3 HO alert command center", () => {
     expect(responses.map((response) => response.statusCode).sort()).toEqual([200, 409]);
     expect(store.analyticsAcknowledgements).toHaveLength(1);
     expect(store.analyticsAlerts[0]?.version).toBe(2);
+  });
+
+  it("automatically starts and securely proxies P1/P2 snapshot and clip evidence", async () => {
+    await store.createAnalyticsRule("omsystems", "cam-001", "user-global-admin", {
+      name: "Automatic evidence", detectionType: "person", enabled: true,
+      objectClasses: [], minConfidence: 0.5, minDurationSeconds: 0, direction: "any",
+      severity: "P1", cooldownSeconds: 0, recipients: [], recordingPolicy: "none",
+      preRollSeconds: 30, postRollSeconds: 120,
+    });
+    const response = await app.inject({
+      method: "POST", url: "/internal/analytics/events",
+      headers: { "x-analytics-engine-key": engineKey },
+      payload: {
+        tenantId: "omsystems", cameraId: "cam-001", sourceEventId: "auto-evidence",
+        detectionType: "person", occurredAt: new Date().toISOString(), confidence: 0.95,
+        durationSeconds: 2, modelVersion: "v1", objects: [{ label: "person", confidence: 0.95 }],
+      },
+    });
+    expect(response.statusCode).toBe(202);
+    const alert = response.json().alerts[0];
+    expect(captures).toEqual([{ alertId: alert.id, cameraId: "cam-001" }]);
+    expect(alert.snapshotReference).toBe(`/v1/alerts/${alert.id}/evidence/snapshot`);
+    expect(alert.clipReference).toBe(`/v1/alerts/${alert.id}/evidence/clip`);
+
+    const status = await app.inject({
+      method: "GET", url: `/v1/alerts/${alert.id}/evidence/status`, headers: admin,
+    });
+    expect(status.statusCode).toBe(200);
+    expect(status.json()).toMatchObject({ state: "ready", snapshotAvailable: true, clipAvailable: true });
+    const snapshot = await app.inject({
+      method: "GET", url: `/v1/alerts/${alert.id}/evidence/snapshot`, headers: admin,
+    });
+    expect(snapshot.statusCode).toBe(200);
+    expect(snapshot.headers["content-type"]).toContain("image/jpeg");
   });
 
   it("persists recipient groups and on-call schedules without changing the fixed matrix", async () => {

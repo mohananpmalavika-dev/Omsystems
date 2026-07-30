@@ -1132,6 +1132,11 @@ export interface ControlPlaneStore {
     filters: AnalyticsAlertFilters,
   ): Promise<AnalyticsAlert[]>;
   getAnalyticsAlert(id: string, tenantId: string): Promise<AnalyticsAlert | undefined>;
+  updateAnalyticsAlertEvidence(
+    id: string,
+    tenantId: string,
+    input: { snapshotReference?: string; clipReference?: string },
+  ): Promise<AnalyticsAlert | undefined>;
   transitionAnalyticsAlert(
     id: string,
     tenantId: string,

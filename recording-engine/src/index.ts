@@ -16,6 +16,7 @@ import { spawn, type ChildProcess } from "node:child_process";
 import Fastify from "fastify";
 import { z } from "zod";
 import { createStorageAdapter, type StorageStatus, type StorageType } from "./storage-adapter.js";
+import { AlertEvidenceCaptureService } from "./alert-evidence-capture.js";
 
 const config = z.object({
   HOST: z.string().default("0.0.0.0"),
@@ -34,6 +35,8 @@ const config = z.object({
   RTSP_IO_TIMEOUT_MS: z.coerce.number().int().min(1_000).max(300_000).default(15_000),
   MIN_FREE_STORAGE_BYTES: z.coerce.number().int().min(0).default(1_073_741_824),
   EVIDENCE_CHECKSUM_ENABLED: z.string().default("true").transform((value) => value !== "false"),
+  ALERT_EVIDENCE_CLIP_SECONDS: z.coerce.number().int().min(5).max(60).default(20),
+  ALERT_EVIDENCE_MAX_CONCURRENT: z.coerce.number().int().min(1).max(32).default(4),
 }).parse(process.env);
 
 const recordingRoot = resolve(config.RECORDING_ROOT);
@@ -121,6 +124,10 @@ const restartTimers = new Map<string, NodeJS.Timeout>();
 const storageThresholds = new Map<string, "normal" | "80" | "90" | "95">();
 const lastSegmentEnd = new Map<string, number>();
 const app = Fastify({ logger: true });
+const alertEvidence = new AlertEvidenceCaptureService(
+  join(recordingRoot, "alert-evidence"),
+  config.ALERT_EVIDENCE_MAX_CONCURRENT,
+);
 
 await mkdir(recordingRoot, { recursive: true });
 await mkdir(pendingControlPlanePath, { recursive: true });
@@ -179,6 +186,72 @@ app.post("/internal/jobs/:cameraId/trigger", async (request, reply) => {
       "Event-triggered recording completed its post-roll window");
   }, job.job.postRollSeconds * 1_000));
   return reply.code(202).send({ cameraId, active: true });
+});
+
+app.post("/internal/alert-evidence/:alertId/capture", async (request, reply) => {
+  const { alertId } = z.object({ alertId: z.string().uuid() }).parse(request.params);
+  const body = z.object({
+    cameraId: z.string().min(1),
+    occurredAt: z.string().datetime(),
+    clipSeconds: z.number().int().min(5).max(60).optional(),
+  }).parse(request.body);
+  const job = jobs.get(body.cameraId);
+  if (!job) return reply.code(409).send({ error: "recording_job_not_configured" });
+  const sourceUri = secrets[job.connectionSecretRef];
+  if (!sourceUri) return reply.code(503).send({ error: "stream_secret_unavailable" });
+  const status = await alertEvidence.request({
+    alertId,
+    cameraId: body.cameraId,
+    occurredAt: body.occurredAt,
+    sourceUri,
+    clipSeconds: body.clipSeconds ?? config.ALERT_EVIDENCE_CLIP_SECONDS,
+  });
+  return reply.code(status.state === "ready" || status.state === "partial" ? 200 : 202).send(status);
+});
+
+app.get("/internal/alert-evidence/:alertId/status", async (request, reply) => {
+  const { alertId } = z.object({ alertId: z.string().uuid() }).parse(request.params);
+  const status = await alertEvidence.getStatus(alertId);
+  if (!status) return reply.code(404).send({ error: "alert_evidence_not_found" });
+  return status;
+});
+
+app.get("/internal/alert-evidence/:alertId/:kind", async (request, reply) => {
+  const { alertId, kind } = z.object({
+    alertId: z.string().uuid(), kind: z.enum(["snapshot", "clip"]),
+  }).parse(request.params);
+  let asset;
+  try {
+    asset = await alertEvidence.openAsset(alertId, kind);
+  } catch (error) {
+    if (error instanceof Error && (error.message === "alert_evidence_not_found" ||
+        (error as NodeJS.ErrnoException).code === "ENOENT")) {
+      const status = await alertEvidence.getStatus(alertId);
+      return reply.code(status && ["queued", "capturing"].includes(status.state) ? 425 : 404)
+        .send({ error: status?.state === "failed" ? "alert_evidence_capture_failed" : "alert_evidence_not_ready" });
+    }
+    throw error;
+  }
+  const range = request.headers.range;
+  reply.header("accept-ranges", "bytes");
+  reply.header("content-type", asset.contentType);
+  reply.header("cache-control", "private, no-store");
+  if (!range) {
+    reply.header("content-length", String(asset.size));
+    return reply.send(asset.stream());
+  }
+  const match = /^bytes=(\d*)-(\d*)$/.exec(range);
+  if (!match) return reply.code(416).send();
+  const start = match[1] ? Number(match[1]) : 0;
+  const end = match[2] ? Number(match[2]) : asset.size - 1;
+  if (!Number.isSafeInteger(start) || !Number.isSafeInteger(end) || start > end || start >= asset.size) {
+    return reply.code(416).header("content-range", `bytes */${asset.size}`).send();
+  }
+  const boundedEnd = Math.min(end, asset.size - 1);
+  return reply.code(206)
+    .header("content-range", `bytes ${start}-${boundedEnd}/${asset.size}`)
+    .header("content-length", String(boundedEnd - start + 1))
+    .send(asset.stream(start, boundedEnd));
 });
 
 app.get("/internal/segments", async (request, reply) => {

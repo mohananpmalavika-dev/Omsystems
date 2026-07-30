@@ -60,6 +60,10 @@ import {
 } from "./alerts/voice-call.js";
 import { Msg91SmsProvider, SmsNotificationSender, TextLocalSmsProvider, TwilioSmsProvider } from "./alerts/sms.js";
 import {
+  HttpAlertEvidenceClient,
+  type AlertEvidenceClient,
+} from "./alerts/evidence-capture.js";
+import {
   HttpOperationalReportEmailSender,
   OperationalReportWorker,
   ProviderOperationalReportEmailSender,
@@ -231,6 +235,7 @@ export async function buildApp(options?: {
   enableExportWorker?: boolean;
   alertWorkerKey?: string;
   alertNotificationSender?: AlertNotificationSender;
+  alertEvidenceClient?: AlertEvidenceClient;
   voiceCallbackSecret?: string;
   reportExportRoot?: string;
   reportDownloadSecret?: string;
@@ -302,6 +307,11 @@ export async function buildApp(options?: {
   }
   const alertSender = options?.alertNotificationSender ?? configuredAlertSender;
   const alertDispatcher = new AlertNotificationDispatcher(store, alertSender);
+  const alertEvidenceClient = options?.alertEvidenceClient ?? (
+    options?.recordingEngineUrl && options?.recordingEngineSharedKey
+      ? new HttpAlertEvidenceClient(options.recordingEngineUrl, options.recordingEngineSharedKey)
+      : undefined
+  );
   const reportExportRoot = options?.reportExportRoot ?? process.env.REPORT_EXPORT_ROOT ?? "./report-exports";
   const reportDownloadSecret = options?.reportDownloadSecret ?? process.env.REPORT_DOWNLOAD_SECRET ?? "development-report-download-secret-change-me";
   const reportEmailSender = options?.reportEmailSender ?? configuredReportEmailSender(reportDownloadSecret);
@@ -1645,12 +1655,14 @@ export async function buildApp(options?: {
       ? { recordingEngineUrl: options?.recordingEngineUrl } : {}),
     ...(options?.recordingEngineSharedKey
       ? { recordingEngineSharedKey: options?.recordingEngineSharedKey } : {}),
+    ...(alertEvidenceClient ? { alertEvidenceClient } : {}),
     alertDispatcher,
   });
   await registerAnalyticsPhase2Routes(app, store);
   await adminCameraManagementRoutes(app, store);
   await registerAlertCommandCenterRoutes(app, store, alertDispatcher,
-    options?.alertWorkerKey ?? process.env.ALERT_WORKER_SHARED_KEY, voiceTokens);
+    options?.alertWorkerKey ?? process.env.ALERT_WORKER_SHARED_KEY, voiceTokens,
+    alertEvidenceClient);
   const alertWorker = setInterval(() => {
     void alertDispatcher.drainOnce().catch((error) => app.log.error({ error }, "Alert outbox drain failed"));
   }, 5_000);

@@ -381,6 +381,9 @@ export class PostgresStore
   async getAnalyticsAlert(id: string, tenantId: string) {
     return this.analytics.getAlert(id, tenantId);
   }
+  async updateAnalyticsAlertEvidence(id: string, tenantId: string, input: any) {
+    return this.analytics.updateAlertEvidence(id, tenantId, input);
+  }
   async listComplianceFrameworks(tenantId: string) { return this.compliance.listFrameworks(tenantId); }
   async getComplianceFramework(id: string) { return this.compliance.getFramework(id); }
   async createComplianceFramework(input: any) { return this.compliance.createFramework(input); }
