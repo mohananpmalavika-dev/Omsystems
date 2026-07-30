@@ -145,6 +145,8 @@ CREATE INDEX idx_digital_twin_objects_type ON digital_twin_objects(object_type);
 CREATE TABLE digital_twin_device_bindings (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     twin_object_id UUID NOT NULL REFERENCES digital_twin_objects(id) ON DELETE CASCADE,
+    tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+    branch_node_id UUID NOT NULL REFERENCES resource_nodes(id) ON DELETE CASCADE,
     device_type VARCHAR(50) NOT NULL, -- 'camera', 'recorder', 'access_control', 'sensor'
     -- Control-plane camera IDs may be UUIDs, while recorder, sensor, UPS and
     -- integration IDs are commonly vendor strings. Keep the binding opaque.
@@ -162,11 +164,13 @@ CREATE TABLE digital_twin_device_bindings (
     metadata JSONB DEFAULT '{}',
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE(twin_object_id, device_type, device_id)
+    UNIQUE(twin_object_id)
 );
 
 CREATE INDEX idx_device_bindings_object ON digital_twin_device_bindings(twin_object_id);
 CREATE INDEX idx_device_bindings_device ON digital_twin_device_bindings(device_type, device_id);
+CREATE UNIQUE INDEX digital_twin_bindings_scoped_device_unique
+    ON digital_twin_device_bindings(tenant_id, branch_node_id, device_type, device_id);
 
 -- Zones (polygonal areas on floor plans)
 CREATE TABLE digital_twin_zones (

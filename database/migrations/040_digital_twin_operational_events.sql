@@ -7,9 +7,6 @@ ALTER TABLE digital_twin_device_bindings
 CREATE UNIQUE INDEX IF NOT EXISTS digital_twin_buildings_branch_unique
   ON digital_twin_buildings(branch_id) WHERE branch_id IS NOT NULL;
 
-CREATE UNIQUE INDEX IF NOT EXISTS digital_twin_bindings_device_unique
-  ON digital_twin_device_bindings(device_type, device_id);
-
 CREATE TABLE IF NOT EXISTS digital_twin_events (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,

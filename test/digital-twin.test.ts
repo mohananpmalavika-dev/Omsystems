@@ -52,6 +52,21 @@ describe("operational Digital Twin", () => {
     });
     expect(denied.statusCode).toBe(404);
     expect(denied.json().error).toBe("branch_not_found");
+
+    const live = await app.inject({ method: "GET", url: `/v1/digital-twin/branches/${branchId}/live`, headers: admin });
+    const firstFloor = await app.inject({
+      method: "POST", url: "/v1/digital-twin/floors", headers: admin,
+      payload: { buildingId: live.json().building.id, floorNumber: 1, name: "First Floor" },
+    });
+    expect(firstFloor.statusCode).toBe(201);
+    const duplicate = await app.inject({
+      method: "POST", url: "/v1/digital-twin/floors", headers: admin,
+      payload: { buildingId: live.json().building.id, floorNumber: 1, name: "Duplicate" },
+    });
+    expect(duplicate.statusCode).toBe(409);
+    expect(duplicate.json().error).toBe("floor_number_exists");
+    const floorAudit = await app.inject({ method: "GET", url: `/v1/digital-twin/floors/${firstFloor.json().id}/audit`, headers: admin });
+    expect(floorAudit.json()).toEqual(expect.arrayContaining([expect.objectContaining({ entityType: "floor", action: "create" })]));
   });
 
   it("versions validated floor plans without changing normalized placements", async () => {
@@ -214,6 +229,28 @@ describe("operational Digital Twin", () => {
       expect.objectContaining({ entityType: "zone", action: "create" }),
       expect.objectContaining({ entityType: "object", action: "create" }),
     ]));
+  });
+
+  it("keeps one branch-scoped binding per device and does not leave failed placements", async () => {
+    const first = await createObject({
+      objectType: "smoke_sensor", name: "Smoke sensor 1", positionX: 0.2, positionY: 0.2,
+      binding: { deviceType: "sensor", deviceId: "sensor-7" },
+    });
+    const duplicate = await app.inject({
+      method: "POST", url: "/v1/digital-twin/objects", headers: admin,
+      payload: { floorId, objectType: "smoke_sensor", name: "Duplicate sensor", positionX: 0.4, positionY: 0.4, binding: { deviceType: "sensor", deviceId: "sensor-7" } },
+    });
+    expect(duplicate.statusCode).toBe(409);
+    expect(duplicate.json().error).toBe("device_already_bound");
+    expect((await floorState()).objects).toHaveLength(1);
+
+    const rebind = await app.inject({
+      method: "POST", url: "/v1/digital-twin/device-bindings", headers: admin,
+      payload: { twinObjectId: first.id, deviceType: "sensor", deviceId: "sensor-8" },
+    });
+    expect(rebind.statusCode).toBe(200);
+    expect(rebind.json()).toMatchObject({ tenantId: "omsystems", branchId, deviceId: "sensor-8" });
+    expect((await floorState()).objects[0].binding.deviceId).toBe("sensor-8");
   });
 
   async function createObject(input: Record<string, unknown>) {

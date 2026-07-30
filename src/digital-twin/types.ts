@@ -30,7 +30,7 @@ export interface TwinFloorPlan {
   originalFilename: string; uploadedBy: string; uploadedAt: string;
 }
 export interface TwinBinding {
-  id: string; twinObjectId: string; deviceType: TwinDeviceType; deviceId: string;
+  id: string; twinObjectId: string; tenantId: string; branchId: string; deviceType: TwinDeviceType; deviceId: string;
   statusSource: string | null; alertSource: string | null; autoUpdate: boolean; metadata: Record<string, unknown>;
 }
 export interface TwinObject {

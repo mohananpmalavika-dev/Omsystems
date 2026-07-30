@@ -35,8 +35,29 @@ export class DigitalTwinService {
   async bootstrap(user: User, branchId: string) {
     const branch = await this.requireBranch(user, branchId, "device:configure");
     const result = await this.state.bootstrap(user.tenantId, branch.id, branch.name, user.id);
+    await this.audit(user, "bootstrap", "building", result.building.id, `Initialized Digital Twin for ${branch.name}`, { floorId: result.floor.id, buildingId: result.building.id, newState: result as unknown as Record<string, unknown> });
     digitalTwinEvents.publish({ id: randomUUID(), tenantId: user.tenantId, branchId, floorId: result.floor.id, type: "twin.configured", occurredAt: new Date().toISOString() });
     return result;
+  }
+
+  async createFloor(user: User, input: { buildingId: string; floorNumber: number; name: string; description?: string; floorHeightMeters?: number; areaSquareMeters?: number }) {
+    const building = await this.state.getBuilding(input.buildingId);
+    if (!building) throw new TwinServiceError("building_not_found", 404);
+    await this.requireBranch(user, building.branchId, "device:configure");
+    const floor = await this.state.createFloor(input);
+    await this.audit(user, "create", "floor", floor.id, `Created floor ${floor.name}`, { floorId: floor.id, buildingId: building.id, newState: floor as unknown as Record<string, unknown> });
+    this.publish({ tenantId: user.tenantId, branchId: building.branchId, floorId: floor.id }, "floor.created");
+    return floor;
+  }
+
+  async activatePlan(user: User, planId: string, floorId: string) {
+    const scope = await this.requireFloor(user, floorId, "device:configure");
+    const previous = await this.state.getActivePlan(floorId);
+    const plan = await this.state.activatePlan(planId, floorId);
+    if (!plan) throw new TwinServiceError("floor_plan_not_found", 404);
+    await this.audit(user, "activate", "floor_plan", plan.id, `Activated floor plan version ${plan.version}`, { floorId, buildingId: scope.buildingId, previousState: previous as unknown as Record<string, unknown>, newState: plan as unknown as Record<string, unknown> });
+    this.publish(scope, "floor-plan.activated");
+    return plan;
   }
 
   async branchLive(user: User, branchId: string) {
@@ -96,10 +117,16 @@ export class DigitalTwinService {
     return plan;
   }
 
-  async createObject(user: User, input: TwinObjectInput, binding?: Omit<TwinBinding, "id" | "twinObjectId" | "statusSource" | "alertSource" | "autoUpdate" | "metadata"> & Partial<TwinBinding>) {
+  async createObject(user: User, input: TwinObjectInput, binding?: { deviceType: TwinBinding["deviceType"]; deviceId: string; statusSource?: string; alertSource?: string; autoUpdate?: boolean; metadata?: Record<string, unknown> }) {
     const scope = await this.requireFloor(user, input.floorId, "device:configure");
+    if (binding) await this.validateBinding(user, scope.branchId, binding.deviceType, binding.deviceId);
     const object = await this.state.createObject(input, user.id);
-    if (binding) await this.state.bindDevice({ twinObjectId: object.id, deviceType: binding.deviceType, deviceId: binding.deviceId, statusSource: binding.statusSource ?? undefined, alertSource: binding.alertSource ?? undefined, autoUpdate: binding.autoUpdate, metadata: binding.metadata });
+    try {
+      if (binding) await this.state.bindDevice({ twinObjectId: object.id, tenantId: user.tenantId, branchId: scope.branchId, deviceType: binding.deviceType, deviceId: binding.deviceId, statusSource: binding.statusSource ?? undefined, alertSource: binding.alertSource ?? undefined, autoUpdate: binding.autoUpdate, metadata: binding.metadata });
+    } catch (error) {
+      await this.state.deleteObject(object.id);
+      throw error;
+    }
     const result = (await this.state.getObject(object.id))!;
     await this.audit(user, "create", "object", result.id, `Placed ${result.objectType} ${result.name}`, { floorId: input.floorId, buildingId: scope.buildingId, newState: result as unknown as Record<string, unknown> });
     this.publish(scope, "object.created", result.id); return result;
@@ -121,7 +148,7 @@ export class DigitalTwinService {
   async bindDevice(user: User, input: { twinObjectId: string; deviceType: TwinBinding["deviceType"]; deviceId: string; statusSource?: string; alertSource?: string; metadata?: Record<string, unknown> }) {
     const scope = await this.requireObject(user, input.twinObjectId, "device:configure");
     await this.validateBinding(user, scope.branchId, input.deviceType, input.deviceId);
-    const binding = await this.state.bindDevice(input);
+    const binding = await this.state.bindDevice({ ...input, tenantId: user.tenantId, branchId: scope.branchId });
     await this.audit(user, "bind", "binding", binding.id, `Bound ${binding.deviceType}:${binding.deviceId}`, { floorId: scope.floorId, buildingId: scope.buildingId, newState: binding as unknown as Record<string, unknown> }); this.publish(scope, "binding.updated", input.twinObjectId); return binding;
   }
 

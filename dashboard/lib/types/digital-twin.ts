@@ -1,6 +1,6 @@
 export type TwinViewMode = "2d" | "2.5d" | "3d";
 export type HeatmapType = "none" | "operational" | "people_security" | "incidents" | "door_usage";
-export interface TwinBinding { id:string;twinObjectId:string;deviceType:string;deviceId:string;statusSource:string|null;alertSource:string|null; }
+export interface TwinBinding { id:string;twinObjectId:string;tenantId:string;branchId:string;deviceType:string;deviceId:string;statusSource:string|null;alertSource:string|null; }
 export interface TwinStatus { state:string;color:string;label:string;online:boolean|null;recording:boolean|null;analyticsActive:boolean;observedAt:string|null;source:string;details:Record<string,unknown>; }
 export interface TwinObject { id:string;floorId:string;objectType:string;name:string;description:string|null;positionX:number;positionY:number;positionZ:number;rotation:number;scale:number;fieldOfView:number|null;viewingDistance:number|null;showStatus:boolean;showLabel:boolean;showFieldOfView:boolean;metadata:Record<string,unknown>;binding:TwinBinding|null;currentStatus:TwinStatus; }
 export interface TwinZone { id:string;floorId:string;name:string;zoneType:string;vertices:Array<{x:number;y:number}>;fillColor:string;fillOpacity:number;strokeColor:string;strokeWidth:number;isRestricted:boolean;alertOnEntry:boolean; }

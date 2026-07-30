@@ -104,7 +104,7 @@ Configuration and alert lifecycle changes are written to both the Digital Twin a
 
 ## Storage and deployment
 
-Apply migrations `037_digital_twin_core.sql` and `040_digital_twin_operational_events.sql`. Migration 040 adds the immutable event stream, unique branch/device bindings and support for vendor string device identifiers.
+Apply migrations `037_digital_twin_core.sql`, `040_digital_twin_operational_events.sql` and `041_digital_twin_binding_scope.sql`. The latter migrations add the immutable event stream, one binding per placed object, branch-scoped device uniqueness and support for vendor string identifiers.
 
 Set `DIGITAL_TWIN_ASSET_ROOT` to a durable, private filesystem path. The default `./digital-twin-assets` is suitable for local development only. On a container host, mount persistent storage at this path; an ephemeral filesystem will lose uploaded plan bytes even though plan metadata remains in PostgreSQL.
 
