@@ -235,6 +235,9 @@ export class PostgresStore
   async listLatestOperationalTelemetry(tenantId: string, branchIds?: string[]) {
     return this.operationalHealth.listLatest(tenantId, branchIds);
   }
+  async listOperationalTelemetryHistory(tenantId: string, branchId: string, from: string, to: string, limit?: number) {
+    return this.operationalHealth.listHistory(tenantId, branchId, from, to, limit);
+  }
   async getOperationalHealthPolicy(tenantId: string, branchId?: string) {
     return this.operationalHealth.getPolicy(tenantId, branchId);
   }

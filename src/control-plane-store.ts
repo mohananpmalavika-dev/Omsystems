@@ -537,6 +537,13 @@ export interface ControlPlaneStore {
     tenantId: string,
     branchIds?: string[],
   ): Promise<OperationalTelemetryEnvelope[]>;
+  listOperationalTelemetryHistory(
+    tenantId: string,
+    branchId: string,
+    from: string,
+    to: string,
+    limit?: number,
+  ): Promise<OperationalTelemetryEnvelope[]>;
   getOperationalHealthPolicy(tenantId: string, branchId?: string): Promise<OperationalHealthPolicy | undefined>;
   upsertOperationalHealthPolicy(
     tenantId: string,

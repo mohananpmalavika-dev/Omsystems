@@ -50,6 +50,21 @@ export class OperationalHealthRepository {
     return result.rows.map(mapTelemetry);
   }
 
+  async listHistory(tenantId: string, branchId: string, from: string, to: string, limit = 1000) {
+    const result = await this.pool.query<TelemetryRow>(
+      `SELECT tenant_id::text,branch_id::text,edge_agent_id::text,device_type,
+              device_id,observed_at,received_at,source,quality,idempotency_key,
+              metrics,reason_codes
+       FROM operational_health_telemetry
+       WHERE tenant_id=$1 AND branch_id=$2
+         AND observed_at >= $3::timestamptz AND observed_at <= $4::timestamptz
+       ORDER BY observed_at DESC,received_at DESC
+       LIMIT $5`,
+      [tenantId, branchId, from, to, limit],
+    );
+    return result.rows.map(mapTelemetry).reverse();
+  }
+
   async getPolicy(tenantId: string, branchId?: string) {
     const result = await this.pool.query<{ policy: OperationalHealthPolicy }>(
       `SELECT policy FROM operational_health_policies

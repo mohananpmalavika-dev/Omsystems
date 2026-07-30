@@ -66,6 +66,7 @@ const navigation: Array<{ label: string; items: NavItem[] }> = [
       { label: "Executive dashboard", href: "/dashboards", icon: BarChart3 },
       { label: "Control room", href: "/control-room", icon: MonitorPlay },
       { label: "Alert command center", href: "/operations/alert-command-center", icon: Bell },
+      { label: "AI command center", href: "/operations/ai-command-center", icon: Command },
       { label: "Alert notification policy", href: "/operations/alert-notification-policy", icon: Bell },
       { label: "Incident response", href: "/incidents", icon: Siren, badge: "incidents" },
       { label: "Video analytics", href: "/analytics", icon: Activity },
@@ -140,6 +141,7 @@ const navigation: Array<{ label: string; items: NavItem[] }> = [
 const pageMeta = [
   { path: "/federation", section: "Command", title: "Global command center" },
   { path: "/operations/alert-command-center", section: "Command", title: "Alert command center" },
+  { path: "/operations/ai-command-center", section: "Command", title: "AI command center" },
   { path: "/operations/alert-notification-policy", section: "Command", title: "Alert notification policy" },
   { path: "/operations/alerts", section: "Command", title: "Operational alerts" },
   { path: "/operations/branches", section: "Command", title: "Branch health" },

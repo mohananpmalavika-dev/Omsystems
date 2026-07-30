@@ -224,6 +224,7 @@ export class MemoryStore implements ControlPlaneStore {
   readonly edgeAgents = new Map<string, EdgeAgent>();
   readonly edgeScanJobs = new Map<string, EdgeScanJob>();
   readonly operationalTelemetry = new Map<string, OperationalTelemetryEnvelope>();
+  readonly operationalTelemetryHistory: OperationalTelemetryEnvelope[] = [];
   readonly operationalTelemetryKeys = new Set<string>();
   readonly operationalHealthPolicies = new Map<string, OperationalHealthPolicy>();
   readonly videoWallLayouts: VideoWallLayout[] = [];
@@ -413,6 +414,7 @@ export class MemoryStore implements ControlPlaneStore {
       return { accepted: true, duplicate: true };
     }
     this.operationalTelemetryKeys.add(dedupeKey);
+    this.operationalTelemetryHistory.push(structuredClone(envelope));
     const stateKey = `${envelope.tenantId}:${envelope.deviceType}:${envelope.deviceId}`;
     const current = this.operationalTelemetry.get(stateKey);
     if (!current || Date.parse(current.observedAt) <= Date.parse(envelope.observedAt)) {
@@ -694,6 +696,26 @@ export class MemoryStore implements ControlPlaneStore {
 
   async getRecordingJob(cameraId: string) {
     return this.recordingJobs.get(cameraId);
+  }
+
+  async listOperationalTelemetryHistory(
+    tenant: string,
+    branchId: string,
+    from: string,
+    to: string,
+    limit = 1000,
+  ) {
+    const start = Date.parse(from);
+    const end = Date.parse(to);
+    return this.operationalTelemetryHistory
+      .filter((item) => item.tenantId === tenant && item.branchId === branchId)
+      .filter((item) => {
+        const observed = Date.parse(item.observedAt);
+        return observed >= start && observed <= end;
+      })
+      .sort((left, right) => Date.parse(left.observedAt) - Date.parse(right.observedAt))
+      .slice(-limit)
+      .map((item) => structuredClone(item));
   }
 
   async listRecordingJobs(cameraIds: string[]) {
