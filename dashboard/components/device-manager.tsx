@@ -296,7 +296,7 @@ export function DeviceManager() {
       connectionSecretRef: `edge://${preferred?.id ?? "gateway"}/manual-camera`,
     });
     setError(undefined);
-    setShowDiscoveredList(true);
+    setShowCameraForm(true);
   }
 
   async function scanNetwork() {
@@ -369,6 +369,62 @@ export function DeviceManager() {
       setNotice(`Network scan completed. Found ${job.resultCount || mappedResults.length} cameras.`);
     } catch (reason) {
       setError(messageOf(reason, "Network scan failed."));
+    } finally {
+      setScanning(false);
+    }
+  }
+
+  async function autoDiscoverAndProvision() {
+    if (!selectedBranch) return;
+    if (gateways.length === 0) {
+      setProvisionedGateway(undefined);
+      setShowGatewayForm(true);
+      setNotice("Register the on-site gateway first; scans run inside the branch network.");
+      return;
+    }
+    setScanning(true);
+    setError(undefined);
+    try {
+      const preferred = gateways.find((gateway) => gateway.status === "online") ?? gateways[0];
+      const scan = await cameraInventoryApi.startScan(selectedBranch, preferred?.id) as { id: string; status: string; branchId: string };
+      setLastScanAt(new Date().toISOString());
+      const deadline = Date.now() + 120_000;
+      let job = await cameraInventoryApi.getScan(selectedBranch, scan.id) as EdgeScanJob;
+
+      while (job.status === "queued" || job.status === "running") {
+        if (Date.now() >= deadline) {
+          setNotice("Scan queued. It will run when the branch gateway checks in.");
+          return;
+        }
+        await wait(1_500);
+        job = await cameraInventoryApi.getScan(selectedBranch, scan.id) as EdgeScanJob;
+      }
+
+      if (job.status === "failed") {
+        throw new Error(job.error ?? "Branch gateway scan failed.");
+      }
+
+      const results = await cameraInventoryApi.getScanResults(selectedBranch, scan.id);
+      if (!results.data || results.data.length === 0) {
+        setNotice("Scan completed but no cameras were discovered.");
+        return;
+      }
+
+      const provisionResponse = await cameraInventoryApi.approveAllDiscovered(selectedBranch, {
+        recordingMode: "continuous",
+        retentionDays: 180,
+        enableAnalytics: true,
+        enableAlerts: true,
+      });
+
+      await refreshBranch(selectedBranch);
+      const provisioned = provisionResponse.summary?.provisioned ?? 0;
+      const needsAttention = provisionResponse.summary?.needsAttention ?? 0;
+      const failed = provisionResponse.summary?.failed ?? 0;
+      setNotice(`Auto provision finished. ${provisioned} cameras provisioned, ${needsAttention} require attention, ${failed} failed.`);
+      setShowDiscoveredList(true);
+    } catch (reason) {
+      setError(messageOf(reason, "Auto discover and provision failed."));
     } finally {
       setScanning(false);
     }
@@ -606,7 +662,7 @@ export function DeviceManager() {
       <div className="device-toolbar">
         <div>
           <h2>Branches & devices</h2>
-          <p>Install the Edge Agent, scan the branch network, then approve every camera in one step.</p>
+          <p>Install the branch gateway, then click Add camera to scan the local network and automatically provision discovered cameras.</p>
         </div>
         <div className="device-toolbar-actions">
           <button className="secondary-button" onClick={() => {
@@ -618,8 +674,11 @@ export function DeviceManager() {
           <button className="secondary-button" onClick={() => void scanNetwork()} disabled={!selectedBranch || scanning} title="Find cameras through the Edge Agent inside this branch network">
             <Network size={15} /> {scanning ? "Scanning…" : "Scan network"}
           </button>
-          <button className="primary-button" onClick={openCameraForm} disabled={!selectedBranch || gateways.length === 0}>
+          <button className="primary-button" onClick={() => void autoDiscoverAndProvision()} disabled={!selectedBranch || scanning} title="Automatically discover and provision cameras in this branch">
             <Plus size={15} /> Add camera
+          </button>
+          <button className="secondary-button" onClick={openCameraForm} disabled={!selectedBranch || gateways.length === 0} title="Open manual camera registration form">
+            <Plus size={15} /> Manual add
           </button>
         </div>
       </div>
