@@ -6,6 +6,7 @@ import {
   Camera,
   CheckCircle2,
   Copy,
+  Download,
   Network,
   Plus,
   Router,
@@ -229,6 +230,49 @@ export function DeviceManager() {
         "STREAM_SECRET_STORE_PATH=./data/stream-secrets.json",
       ].join("\n")
     : "", [provisionedGateway]);
+
+  const installScriptShell = useMemo(() => provisionedGateway ? `#!/bin/sh
+set -e
+mkdir -p edge-agent-install
+cd edge-agent-install
+cat > .env <<'EOF'
+${setupText}
+EOF
+
+echo "Branch gateway configuration written to $(pwd)/.env"
+echo "Run the installed edge agent from the branch machine using your approved local method."
+echo "For example: npm install && npm run build && npm run dev"
+` : "", [provisionedGateway, setupText]);
+
+  const installScriptPowerShell = useMemo(() => provisionedGateway ? `param()
+$envFile = Join-Path (Get-Location) ".env"
+@"
+${setupText}
+"@ | Out-File -FilePath $envFile -Encoding UTF8
+Write-Host "Branch gateway configuration written to $envFile"
+Write-Host "Run the installed edge agent from the branch machine using your approved local method."
+Write-Host "For example: npm install; npm run build; npm run dev"
+` : "", [provisionedGateway, setupText]);
+
+  function downloadTextFile(filename: string, content: string) {
+    const blob = new Blob([content], { type: "text/plain" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = filename;
+    document.body.appendChild(anchor);
+    anchor.click();
+    document.body.removeChild(anchor);
+    URL.revokeObjectURL(url);
+  }
+
+  function downloadShellInstallScript() {
+    downloadTextFile("install-edge-agent.sh", installScriptShell);
+  }
+
+  function downloadPowerShellInstallScript() {
+    downloadTextFile("install-edge-agent.ps1", installScriptPowerShell);
+  }
 
   useEffect(() => {
     void cameraInventoryApi.listBranches("device:configure")
@@ -963,7 +1007,12 @@ export function DeviceManager() {
                 <div className="device-message success"><CheckCircle2 size={16} />Gateway registration created.</div>
                 <p className="setup-description">Set these environment variables on the branch computer, then run the Sentinel Edge Agent. Obtain the enrollment secret from the platform administrator.</p>
                 <pre className="gateway-config">{setupText}</pre>
-                <div className="modal-actions"><button className="secondary-button" onClick={() => void copySetup()}><Copy size={14} />Copy configuration</button><button className="primary-button" onClick={() => setShowGatewayForm(false)}>Done</button></div>
+                <div className="setup-actions">
+                  <button className="secondary-button" onClick={() => void copySetup()}><Copy size={14} />Copy configuration</button>
+                  <button className="secondary-button" onClick={downloadShellInstallScript}><Download size={14} />Download shell install script</button>
+                  <button className="secondary-button" onClick={downloadPowerShellInstallScript}><Download size={14} />Download PowerShell install script</button>
+                </div>
+                <div className="modal-actions"><button className="primary-button" onClick={() => setShowGatewayForm(false)}>Done</button></div>
               </div>
             )}
           </div>
