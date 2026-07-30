@@ -741,4 +741,79 @@ router.get('/buildings/:buildingId/state', authenticate, async (req, res) => {
   }
 });
 
+// ==================== Heat Maps ====================
+
+// Generate heat map
+router.post('/heatmaps/generate', authenticate, async (req, res) => {
+  try {
+    const heatMapService = (await import('../services/heatmap.service')).default;
+    const heatmap = await heatMapService.generateHeatmap(req.body);
+    res.status(201).json(heatmap);
+  } catch (error) {
+    console.error('Error generating heatmap:', error);
+    res.status(500).json({ error: 'Failed to generate heatmap' });
+  }
+});
+
+// Get latest heat map
+router.get('/floors/:floorId/heatmaps/latest/:type', authenticate, async (req, res) => {
+  try {
+    const heatMapService = (await import('../services/heatmap.service')).default;
+    const heatmap = await heatMapService.getLatestHeatmap(
+      req.params.floorId,
+      req.params.type as any
+    );
+    if (!heatmap) {
+      return res.status(404).json({ error: 'Heatmap not found' });
+    }
+    res.json(heatmap);
+  } catch (error) {
+    console.error('Error getting latest heatmap:', error);
+    res.status(500).json({ error: 'Failed to get heatmap' });
+  }
+});
+
+// List heat maps
+router.get('/floors/:floorId/heatmaps', authenticate, async (req, res) => {
+  try {
+    const heatMapService = (await import('../services/heatmap.service')).default;
+    const type = req.query.type as any;
+    const limit = req.query.limit ? parseInt(req.query.limit as string) : 10;
+    const heatmaps = await heatMapService.listHeatmaps(req.params.floorId, type, limit);
+    res.json(heatmaps);
+  } catch (error) {
+    console.error('Error listing heatmaps:', error);
+    res.status(500).json({ error: 'Failed to list heatmaps' });
+  }
+});
+
+// ==================== Camera Field-of-View ====================
+
+// Calculate camera FOV
+router.post('/cameras/:cameraObjectId/calculate-fov', authenticate, async (req, res) => {
+  try {
+    const cameraFOVService = (await import('../services/camera-fov.service')).default;
+    const view = await cameraFOVService.calculateCameraView(
+      req.params.cameraObjectId,
+      req.body.floorId
+    );
+    res.json(view);
+  } catch (error) {
+    console.error('Error calculating camera FOV:', error);
+    res.status(500).json({ error: 'Failed to calculate FOV' });
+  }
+});
+
+// Generate floor coverage report
+router.get('/floors/:floorId/coverage-report', authenticate, async (req, res) => {
+  try {
+    const cameraFOVService = (await import('../services/camera-fov.service')).default;
+    const report = await cameraFOVService.generateFloorCoverageReport(req.params.floorId);
+    res.json(report);
+  } catch (error) {
+    console.error('Error generating coverage report:', error);
+    res.status(500).json({ error: 'Failed to generate coverage report' });
+  }
+});
+
 export default router;
