@@ -23,6 +23,7 @@ import {
   type AlertEvidenceClient,
 } from "../alerts/evidence-capture.js";
 import { defaultSeverityForDetection } from "../analytics/severity-policy.js";
+import { digitalTwinEvents } from "../digital-twin/event-stream.js";
 
 const detectionTypeSchema = z.string().trim().min(1).max(120).refine(isAiCapability, {
   message: "Unknown AI capability",
@@ -448,6 +449,14 @@ export async function registerAnalyticsRoutes(
         }
         await enqueueAlertMatrix(store, alert, rule);
         publishAlert(alert, "alert.created");
+        const camera = await store.getCamera(alert.cameraId);
+        if (camera) {
+          digitalTwinEvents.publish({
+            id: randomUUID(), tenantId: input.tenantId, branchId: camera.branchId,
+            type: "analytics.alert.created", occurredAt: alert.lastDetectedAt,
+            alertId: alert.id, severity: alert.severity === "P1" ? "critical" : "warning",
+          });
+        }
       }
       if (rule.recordingPolicy === "event-recording") {
         await triggerRecording(app, options, alert.cameraId,
