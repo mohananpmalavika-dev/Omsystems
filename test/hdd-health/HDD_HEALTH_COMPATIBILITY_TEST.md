@@ -14,26 +14,28 @@ This document provides a comprehensive testing framework for validating HDD heal
 
 ## Test Objectives
 
-1. **Verify SMART data parsing** from actual recorder responses
-2. **Validate status thresholds** (healthy/warning/critical)
-3. **Test failure detection** (reallocated sectors, temperature, etc.)
-4. **Confirm vendor compatibility** across firmware versions
-5. **Document API response formats** for each recorder model
+1. **Verify disk-slot and SMART parsing** from actual recorder responses
+2. **Validate RAID, capacity, and disk-specific write evidence**
+3. **Test removal, full-disk, degraded-array, write, temperature, and sector alerts**
+4. **Confirm exact model and firmware compatibility** with a field acceptance run
+5. **Document API response formats** for each deployed recorder model
 
 ---
 
-## Supported Recorder Models
+## Parser Families (Hardware Certification Pending)
+
+These are parser targets, not tested hardware. No model or firmware is certified until the generated compatibility-evidence report passes every gate against that deployed recorder.
 
 ### Hikvision Models
 
-| Model Series | Firmware Tested | SMART Support | Notes |
+| Model Series | Firmware Status | SMART Support | Notes |
 |--------------|-----------------|---------------|-------|
-| DS-7600 Series | V4.x | ✅ Full | ISAPI /ContentMgmt/Storage |
-| DS-7700 Series | V4.x | ✅ Full | ISAPI /ContentMgmt/Storage |
-| DS-7800 Series | V4.x | ✅ Full | ISAPI /ContentMgmt/Storage |
-| DS-9600 Series | V4.x | ✅ Full | ISAPI /ContentMgmt/Storage |
-| DS-96128/256 | V4.x | ✅ Full | High-density NVR |
-| iDS-9600 Series | V4.x | ✅ Full | DeepinMind NVR |
+| DS-7600 Series | Field acceptance required | Vendor-dependent | ISAPI /ContentMgmt/Storage |
+| DS-7700 Series | Field acceptance required | Vendor-dependent | ISAPI /ContentMgmt/Storage |
+| DS-7800 Series | Field acceptance required | Vendor-dependent | ISAPI /ContentMgmt/Storage |
+| DS-9600 Series | Field acceptance required | Vendor-dependent | ISAPI /ContentMgmt/Storage |
+| DS-96128/256 | Field acceptance required | Vendor-dependent | High-density NVR |
+| iDS-9600 Series | Field acceptance required | Vendor-dependent | DeepinMind NVR |
 
 **API Endpoint**: `http://{ip}/ISAPI/ContentMgmt/Storage`
 
@@ -57,13 +59,13 @@ This document provides a comprehensive testing framework for validating HDD heal
 
 ### Dahua Models
 
-| Model Series | Firmware Tested | SMART Support | Notes |
+| Model Series | Firmware Status | SMART Support | Notes |
 |--------------|-----------------|---------------|-------|
-| DHI-NVR4xxx | V4.x | ✅ Full | CGI API |
-| DHI-NVR5xxx | V4.x | ✅ Full | CGI API + SMART |
-| DHI-HCVR5xxx | V3.x, V4.x | ⚠️ Partial | Limited SMART fields |
-| DHI-XVR5xxx | V4.x | ✅ Full | Multi-protocol recorder |
-| DH-NVR808 | V4.x | ✅ Full | 8-channel compact |
+| DHI-NVR4xxx | Field acceptance required | Vendor-dependent | CGI API |
+| DHI-NVR5xxx | Field acceptance required | Vendor-dependent | CGI API |
+| DHI-HCVR5xxx | Field acceptance required | Vendor-dependent | May expose limited fields |
+| DHI-XVR5xxx | Field acceptance required | Vendor-dependent | Multi-protocol recorder |
+| DH-NVR808 | Field acceptance required | Vendor-dependent | Compact recorder |
 
 **API Endpoint**: `http://{ip}/cgi-bin/storageDevice.cgi?action=getDeviceAllInfo`
 
@@ -81,11 +83,11 @@ Storage.Disk[0].uncorrectable=0
 
 ### CP PLUS Models
 
-| Model Series | Firmware Tested | SMART Support | Notes |
+| Model Series | Firmware Status | SMART Support | Notes |
 |--------------|-----------------|---------------|-------|
-| CP-UNR-xxxx | V1.x, V2.x | ✅ Full | Dahua OEM |
-| CP-UVR-xxxx | V1.x | ⚠️ Partial | Limited API |
-| CP-Plus NVR | V2.x | ✅ Full | Latest firmware |
+| CP-UNR-xxxx | Field acceptance required | Vendor-dependent | OEM CGI family |
+| CP-UVR-xxxx | Field acceptance required | Vendor-dependent | May expose limited fields |
+| CP-Plus NVR | Field acceptance required | Vendor-dependent | Exact OEM/firmware must be verified |
 
 **Note**: CP PLUS uses Dahua OEM API with identical response format.
 
@@ -445,12 +447,12 @@ curl -v http://192.168.1.10
 
 ### Summary Table
 
-| Vendor | Models Tested | SMART API | Temperature | Sector Counts | Firmware Range |
+| Vendor | Parser Fixtures | SMART API | Temperature | Sector Counts | Hardware Status |
 |--------|---------------|-----------|-------------|---------------|----------------|
-| Hikvision | 6 series | ✅ Yes | ✅ Yes | ✅ Yes | V3.x - V4.x |
-| Dahua | 5 series | ✅ Yes | ✅ Yes | ✅ Yes | V3.x - V4.x |
-| CP PLUS | 3 series | ✅ Yes | ✅ Yes | ✅ Yes | V1.x - V2.x |
-| ONVIF | Generic | ❌ No | ❌ No | ❌ No | N/A |
+| Hikvision | XML samples | Vendor-dependent | Vendor-dependent | Vendor-dependent | Acceptance pending |
+| Dahua | CGI samples | Vendor-dependent | Vendor-dependent | Vendor-dependent | Acceptance pending |
+| CP PLUS | OEM CGI samples | Vendor-dependent | Vendor-dependent | Vendor-dependent | Acceptance pending |
+| ONVIF | Generic | Not specified | Not specified | Not specified | Vendor extension required |
 
 ### Known Limitations
 
@@ -470,7 +472,7 @@ After completing all tests, generate a report:
 npm run test:hdd:generate-report
 ```
 
-**Report Structure**:
+**Illustrative report structure (do not copy the results as evidence)**:
 
 ```markdown
 # HDD Health Compatibility Test Report

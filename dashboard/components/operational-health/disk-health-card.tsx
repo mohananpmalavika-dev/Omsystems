@@ -45,6 +45,11 @@ export function DiskHealthCard({ disk }: DiskHealthCardProps) {
           <span>{disk.reasonCodes.filter((code) => !code.endsWith("_unavailable") && code !== "disk_detected").slice(0, 3).map((code) => code.replaceAll("_", " ")).join("; ") || "Disk needs review"}</span>
         </div>
       ) : null}
+      {disk.replacementDetected ? (
+        <div className="mb-3 rounded border border-cyan-200 bg-cyan-50 p-2 text-xs text-cyan-800">
+          Slot replacement detected: {disk.previousSerialNumber || "previous serial unavailable"} → {disk.serialNumber}
+        </div>
+      ) : null}
 
       <div className="rounded-lg border border-gray-200 px-3">
         <EvidenceRow label="HDD detected" value={disk.detected ? `Yes · ${disk.slotStatus.replaceAll("_", " ")}` : `No · ${disk.slotStatus.replaceAll("_", " ")}`} color={disk.detected && disk.slotStatus === "present" ? "good" : "bad"} />

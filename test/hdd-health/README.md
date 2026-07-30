@@ -47,10 +47,10 @@ Test reports are saved to `test/hdd-health/reports/`:
 
 1. **Connectivity** - Network reachability and authentication
 2. **Exact model compatibility** - The recorder-reported model and firmware must exactly match the deployment contract; configured metadata is never accepted as evidence.
-3. **HDD telemetry collection** - Real SMART attributes when exposed, otherwise recorder-reported storage state.
-4. **Threshold validation** - healthy/warning/critical classification
-5. **Response parsing** - Vendor-specific format handling
-6. **Failure detection** - Temperature and sector count alerts
+3. **Disk-slot inventory** - Every expected slot must be detected, initialized, and uniquely identified.
+4. **Independent evidence** - SMART availability, RAID state, available capacity, and disk-specific write verification are checked separately.
+5. **Threshold and history validation** - Capacity, temperature, sector/error growth, and replacement history are validated.
+6. **Failure detection** - Removal, failed/read-only/uninitialized slots, degraded RAID, storage-full, and failed writes produce distinct alerts.
 
 ## Configuration Format
 
@@ -67,7 +67,10 @@ Test reports are saved to `test/hdd-health/reports/`:
       "port": 80,
       "username": "admin",
       "password": "your_password",
-      "expectedDisks": 2
+      "expectedDisks": 2,
+      "expectedChannels": 16,
+      "expectedRaidLevel": "RAID1",
+      "requireWriteVerification": true
     }
   ]
 }
@@ -76,6 +79,8 @@ Test reports are saved to `test/hdd-health/reports/`:
 `model`, `expectedFirmware`, and `expectedDisks` are mandatory for an acceptance run. Use the exact values reported by the installed recorder—not a series name, a product family, or a placeholder. A firmware change requires a new acceptance run because vendor storage responses can change by firmware.
 
 ## Example Output
+
+The acceptance contract also requires `expectedChannels`, `expectedRaidLevel`, and an explicit `requireWriteVerification` policy. Use exact values from the installed recorder. Use `not_configured` as the RAID level only for an intentional independent/JBOD-disk deployment.
 
 ```
 ========================================
@@ -167,7 +172,7 @@ fi
 
 ## Adding New Recorder Models
 
-1. Add the exact model, firmware, and installed disk count to `config.json`.
+1. Add the exact model, firmware, channel/disk counts, RAID level, and write-verification policy to `config.json`.
 2. Run: `npm run test:hdd:compatibility`.
 3. Review the generated compatibility-evidence JSON.
 4. Run: `npm run test:hdd:collect`; review captured response in `fixtures/`.

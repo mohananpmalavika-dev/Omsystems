@@ -271,10 +271,16 @@ Write-Host "For example: npm install; npm run build; npm run dev"
   }
 
   async function downloadEdgeAgentPackage(platform: "windows" | "linux") {
-    if (!activeBranch || !provisionedGateway) return;
+    if (!activeBranch) return;
+
+    const edgeAgent = provisionedGateway ?? gateways[0];
+    if (!edgeAgent) {
+      window.alert("No branch gateway is registered yet. Register a gateway first or select a branch with an existing gateway.");
+      return;
+    }
 
     try {
-      const blob = await cameraInventoryApi.downloadPackage(activeBranch.id, provisionedGateway.id, platform);
+      const blob = await cameraInventoryApi.downloadPackage(activeBranch.id, edgeAgent.id, platform);
       const fileName = `${activeBranch.name.replace(/[^a-zA-Z0-9_-]/g, "-")}-edge-agent-${platform}.zip`;
       const url = window.URL.createObjectURL(blob);
       const anchor = document.createElement("a");
@@ -729,10 +735,10 @@ Write-Host "For example: npm install; npm run build; npm run dev"
           <p>Install the branch gateway, then click Add camera to scan the local network and automatically provision discovered cameras.</p>
         </div>
         <div className="device-toolbar-actions">
-          <button className="secondary-button" onClick={() => void downloadEdgeAgentPackage("windows")} disabled={!selectedBranch}>
+          <button className="secondary-button" onClick={() => void downloadEdgeAgentPackage("windows")} disabled={!selectedBranch || gateways.length === 0}>
             <Download size={15} /> Download Windows package
           </button>
-          <button className="secondary-button" onClick={() => void downloadEdgeAgentPackage("linux")} disabled={!selectedBranch}>
+          <button className="secondary-button" onClick={() => void downloadEdgeAgentPackage("linux")} disabled={!selectedBranch || gateways.length === 0}>
             <Download size={15} /> Download Linux package
           </button>
           <button className="secondary-button" onClick={() => {
@@ -744,6 +750,16 @@ Write-Host "For example: npm install; npm run build; npm run dev"
           <button className="secondary-button" onClick={() => void scanNetwork()} disabled={!selectedBranch || scanning} title="Find cameras through the Edge Agent inside this branch network">
             <Network size={15} /> {scanning ? "Scanning…" : "Scan network"}
           </button>
+          <button className="primary-button" onClick={() => void autoDiscoverAndProvision()} disabled={!selectedBranch || scanning} title="Automatically discover and provision cameras in this branch">
+            <Plus size={15} /> Add camera
+          </button>
+          <button className="secondary-button" onClick={openCameraForm} disabled={!selectedBranch || gateways.length === 0} title="Open manual camera registration form">
+            <Plus size={15} /> Manual add
+          </button>
+        </div>
+        {selectedBranch && gateways.length === 0 ? (
+          <p className="device-toolbar-note">Register a branch gateway first to enable the edge agent download package buttons.</p>
+        ) : null}
           <button className="primary-button" onClick={() => void autoDiscoverAndProvision()} disabled={!selectedBranch || scanning} title="Automatically discover and provision cameras in this branch">
             <Plus size={15} /> Add camera
           </button>

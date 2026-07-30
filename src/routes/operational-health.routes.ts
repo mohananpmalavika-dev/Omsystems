@@ -420,7 +420,7 @@ export async function registerOperationalHealthRoutes(
   app.get("/v1/operations/health/disks", async (request) => {
     const query = z.object({
       branchId: z.string().optional(),
-      status: z.enum(["healthy", "warning", "degraded", "failure_predicted", "failed", "missing"]).optional(),
+      status: z.enum(["healthy", "warning", "degraded", "failure_predicted", "failed", "missing", "unknown"]).optional(),
     }).parse(request.query);
     const projections = await loadAccessibleProjections(request, store, query.branchId ? [query.branchId] : undefined);
     const branchById = new Map(projections.map((branch) => [branch.id, branch]));
@@ -431,7 +431,13 @@ export async function registerOperationalHealthRoutes(
         const branch = branchById.get(item.branchId);
         return branch ? [projectDiskHealth(item, branch)] : [];
       })
-      .sort((left, right) => right.failureProbability - left.failureProbability || left.branchName.localeCompare(right.branchName));
+      .sort((left, right) => {
+        const rank = { critical: 3, warning: 2, unknown: 1, healthy: 0 } as const;
+        return rank[right.operationalStatus] - rank[left.operationalStatus]
+          || right.failureProbability - left.failureProbability
+          || right.usagePercent - left.usagePercent
+          || left.branchName.localeCompare(right.branchName);
+      });
     if (query.status) disks = disks.filter((disk) => disk.smartStatus === query.status);
     return { success: true, data: disks };
   });

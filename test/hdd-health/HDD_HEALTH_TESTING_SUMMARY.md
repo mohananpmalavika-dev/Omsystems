@@ -349,7 +349,7 @@ Test Summary:
 ### Original Requirement
 > "HDD health (65%): Local SMART, Hikvision storage and Dahua/CP PLUS parsing exist. Compatibility must still be tested against the exact deployed recorder models."
 
-### Current Status: **65% implementation coverage; hardware certification pending**
+### Current Status: **software gaps implemented; hardware certification and field history pending**
 
 **What Was at 65%**:
 - ✅ Code implementation existed
@@ -358,15 +358,18 @@ Test Summary:
 - ❌ No documented test procedures
 
 **What is now implemented**:
-- Exact model, firmware, and disk-count acceptance gate
+- Exact model, firmware, channel-count, disk-slot, RAID, capacity, SMART-evidence, and write-verification acceptance gates
 - Vendor system identity evidence (configured metadata cannot certify a parser)
 - Machine-readable compatibility evidence report
-- Healthy and failed Dahua/CP PLUS storage-state parsing
+- Separate storage state and SMART state (a vendor `Normal` response is not labeled healthy SMART)
+- Unit-aware capacity, multi-slot RAID/write evidence, sector/error deltas, and serial-change replacement history
+- Tested alerts for missing/failed disks, degraded RAID, storage-full, and failed writes
 - Test configuration, fixtures, documentation, and NPM scripts
 
 **Remaining work**:
 - Field acceptance against each deployed recorder and its currently installed firmware
 - Store a passing compatibility-evidence report for each model/firmware pair
+- Accumulate representative historical failures before treating the risk score as a calibrated failure probability
 - Documentation of model-specific quirks
 - Production deployment verification
 
