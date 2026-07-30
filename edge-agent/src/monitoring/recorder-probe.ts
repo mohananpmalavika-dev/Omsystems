@@ -194,7 +194,7 @@ async function probeDahuaFamily(config: RecorderConfig, base: string, credential
     serialNumber: key(text, "serialNumber") ?? "",
     firmwareVersion: firstKey(text, ["softwareVersion", "firmwareVersion", "version"]) ?? "",
     totalCameras: channelIds.length || null,
-    connectedCameras: disconnectedChannels ? Math.max(0, channelIds.length - disconnectedChannels.size) : null,
+    connectedCameras: disconnectedChannels ? channelIds.filter((channel) => !disconnectedChannels.has(channel)).length : null,
     protocol: config.vendor === "cp-plus" ? "cp-plus-oem-api" : "dahua-cgi",
     recordingStatus: recordingStatus.status,
     recordingChannels: recordingStatus.recordingChannels,
@@ -226,8 +226,8 @@ async function getDahuaRecordingStatus(base: string, credentials: { username: st
       const next = await authenticatedFetch(`${base}/cgi-bin/mediaFileFind.cgi?${new URLSearchParams({ action: "findNextFile", object, count: "128" })}`, { method: "GET" }, credentials, timeout);
       if (!next.ok) return recordingUnavailable("dahua_archive_results_unavailable", channels);
       const text = await next.text();
-      const found = key(text, "found")?.toLowerCase();
-      if (found !== "1" && found !== "true") return recordingProbeFromMatches(matches, channels, "dahua_no_recent_recording_evidence");
+      const found = key(text, "found");
+      if (!dahuaFoundResults(found)) return recordingProbeFromMatches(matches, channels, "dahua_no_recent_recording_evidence");
       const parsed = parseDahuaRecordingMatches(text);
       if (!parsed.length) return recordingUnavailable("dahua_archive_results_unparseable", channels);
       matches.push(...parsed);
@@ -322,9 +322,9 @@ async function searchDahuaArchive(base: string, credentials: { username: string;
       const next = await authenticatedFetch(`${base}/cgi-bin/mediaFileFind.cgi?${new URLSearchParams({ action: "findNextFile", object, count: String(pageSize) })}`, { method: "GET" }, credentials, timeout);
       if (!next.ok) throw new Error(`dahua_archive_next_${next.status}`);
       const text = await next.text();
-      const found = key(text, "found")?.toLowerCase();
+      const found = key(text, "found");
       const page = parseDahuaArchiveSegments(text);
-      if (found !== "1" && found !== "true") return { segments, coverageComplete: true, reasonCodes: [] };
+      if (!dahuaFoundResults(found)) return { segments, coverageComplete: true, reasonCodes: [] };
       if (page.length === 0) return { segments, coverageComplete: false, reasonCodes: ["dahua_archive_retention_unparseable"] };
       segments.push(...page);
     }
@@ -584,11 +584,14 @@ function recordingProbeFromMatches(matches: RecordingMatch[], inventory: Channel
   const lastRecorded = matches.map((match) => match.lastRecordedAt).filter((value): value is number => value !== null && Number.isFinite(value));
   const lastRecordedAt = lastRecorded.length ? new Date(Math.max(...lastRecorded)).toISOString() : null;
   const total = effectiveInventory.length;
-  const status: RecordingStatus = recordingChannels === 0
+  const aggregateOnlyMatch = matches.length > 0 && total === 0 && recordingChannels === 0;
+  const status: RecordingStatus = aggregateOnlyMatch
+    ? "recording"
+    : recordingChannels === 0
     ? "stopped"
     : total > 0 && recordingChannels < total ? "partial" : "recording";
   const reasonCodes = status === "stopped" ? [stoppedReason] : status === "partial" ? ["some_channels_not_recording"] : [];
-  return { status, recordingChannels, lastRecordedAt, channels, reasonCodes, source: "recent-media-search" };
+  return { status, recordingChannels: aggregateOnlyMatch ? null : recordingChannels, lastRecordedAt, channels, reasonCodes, source: "recent-media-search" };
 }
 
 function dahuaTime(value: Date) { return value.toISOString().replace("T", " ").replace(/\.\d{3}Z$/, ""); }
@@ -667,6 +670,13 @@ function dahuaVideoLossChannels(text: string) {
   }
   for (const match of text.matchAll(/(?:channels?|index(?:es)?)\[(\d+)\]\s*=\s*(?:true|1)/gi)) channels.add(Number(match[1]));
   return channels;
+}
+
+function dahuaFoundResults(value: string | undefined) {
+  if (!value) return false;
+  if (value.toLowerCase() === "true") return true;
+  const count = Number(value);
+  return Number.isFinite(count) && count > 0;
 }
 
 function result(config: RecorderConfig, reachable: boolean, status: string, started: number, extra: Record<string, string | number | boolean | null>, hddStatus: Array<Record<string, unknown>>, reasonCodes: string[], archiveEvidence: ArchiveRetentionEvidence[] = [], channelHealth: RecorderChannelHealth[] = []): RecorderProbeResult {

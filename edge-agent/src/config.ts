@@ -45,7 +45,7 @@ const schema = z.object({
   RECORDERS_JSON: z.string().default("[]").transform((value, context) => {
     try { return JSON.parse(value) as unknown; } catch { context.addIssue({ code: z.ZodIssueCode.custom, message: "RECORDERS_JSON must be valid JSON" }); return z.NEVER; }
   }).pipe(z.array(z.object({
-    id: z.string().min(1), name: z.string().min(1), deviceType: z.enum(["dvr", "nvr"]),
+    id: z.string().min(1).max(80), name: z.string().min(1), deviceType: z.enum(["dvr", "nvr"]),
     vendor: z.enum(["hikvision", "dahua", "cp-plus", "onvif", "generic"]),
     model: z.string().optional(), host: z.string().min(1), port: z.number().int().min(1).max(65535),
     secure: z.boolean().optional(), username: z.string().optional(), password: z.string().optional(),

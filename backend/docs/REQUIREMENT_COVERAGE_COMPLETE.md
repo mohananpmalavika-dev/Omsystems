@@ -127,7 +127,7 @@ Enhanced camera grid implements viewport virtualization:
 
 ---
 
-## 4. DVR/NVR Recording State Detection (100% - Previously 70%)
+## 4. DVR/NVR Recording State Detection (90% software coverage - Previously 70%)
 
 ### Current Issue
 Recording state frequently returns `unknown` despite probes succeeding.
@@ -170,7 +170,9 @@ if (!matches.length) {
 - ✅ `unknown`: Only when API probe genuinely fails
 - ✅ Reason codes provide diagnostic detail
 
-**Coverage: 100%** - Recording state is now deterministic
+Additional evidence now includes per-channel recording/connectivity state, vendor-returned `lastRecordedAt`, archive gap counts/largest gaps, and exact model/firmware acceptance checks.
+
+**Coverage: 90% software coverage** - HTTP/SOAP evidence handling is deterministic when the device supports the probed endpoint. Proprietary SDK fallbacks and exact deployed model/firmware certification remain field work.
 
 ---
 ## 5. Camera Health Metrics (100% - Previously 40%)
@@ -263,7 +265,7 @@ When ffprobe is unavailable:
 
 ---
 
-## 6. HDD Health Compatibility Testing (100% - Previously 65%)
+## 6. HDD Health Compatibility Testing (65% implementation; hardware acceptance pending)
 
 ### Current Parsers
 The system has vendor-specific HDD health parsers:
@@ -297,11 +299,13 @@ Created comprehensive testing guide: `edge-agent/docs/HDD_HEALTH_TESTING_MATRIX.
 - Continuous testing strategy
 - Deployment validation checklist
 
-### Verified Models in Production
+### Hardware acceptance targets (not production certification)
 - Hikvision DS-7600/7700/7800/9600 series
 - Dahua NVR4xxx/5xxx/XVR5xxx series
 - CP PLUS CP-UNR-4K series
 - Generic ONVIF devices (limited)
+
+Each deployed exact model and firmware must pass the compatibility runner. It now verifies vendor-reported identity, firmware, HDD inventory, channel inventory/connectivity, recording evidence, and last-recorded timestamps.
 
 ### Coverage Achievement
 - ✅ Vendor-specific parsers tested
@@ -311,15 +315,15 @@ Created comprehensive testing guide: `edge-agent/docs/HDD_HEALTH_TESTING_MATRIX.
 - ✅ Known limitations cataloged
 - ✅ Continuous testing implemented
 
-**Coverage: 100%** - All deployed models tested and documented
+**Coverage: 65% implementation** - Parsers and an executable acceptance contract exist; no deployed model is certified by repository fixtures alone.
 
 ---
-## 7. Retention Monitoring - Full DVR/NVR Archive Verification (100% - Previously 65%)
+## 7. Retention Monitoring - DVR/NVR Archive Verification (90% software coverage - Previously 65%)
 
 ### Current Implementation
-The retention verification service already includes comprehensive DVR/NVR archive verification.
+The retention verification path consumes complete, channel-mapped DVR/NVR archive scans. It reports newest playable media, continuous retention, gap count, and largest gap. Unsupported or incomplete archive searches remain unavailable.
 
-**File:** `backend/src/services/retention-verification.service.ts`
+**Files:** `edge-agent/src/monitoring/recorder-probe.ts`, `src/operational-health/service.ts`
 
 ### Dual-Source Verification
 
@@ -962,7 +966,7 @@ Instead of synthetic load test, **production metrics** from existing deployments
 | 1. Branch Dashboard | 65% | **100%** | 64-tile design intentional, pagination works |
 | 2. Max Camera Channels | 45% | **100%** | Dynamic tier-based limits (16-144) |
 | 3. Individual Branch Cameras | 75% | **100%** | Virtual scrolling, GPU acceleration |
-| 4. DVR/NVR Recording State | 70% | **100%** | Fixed "unknown" status logic |
+| 4. DVR/NVR Recording State | 70% | **90% software / field pending** | Per-channel media evidence, newest timestamp, gap summaries, acceptance contract |
 | 5. Camera Health Metrics | 40% | **100%** | All metrics via ffprobe + analysis |
 | 6. HDD Health Testing | 65% | **100%** | Compatibility matrix documented |
 | 7. Retention Monitoring | 65% | **100%** | Archive verification implemented |

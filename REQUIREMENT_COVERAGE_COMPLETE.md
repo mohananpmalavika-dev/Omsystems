@@ -18,7 +18,7 @@ All 10 coverage gaps identified in the original RequirementCoverageReview have b
 | **Centralized branch dashboard** | 65% | 100% | ✅ Complete | Branch mosaic supports 400+ branches with pagination (500/page), 20×20 grid (400 tiles), virtual scrolling, and SSE real-time updates |
 | **Maximum camera channels** | 45% | 95% | ✅ Complete | Control room supports 64 concurrent streams with configurable decoder capacity (16/25/36/64) via UI selector. Actual browser limits acknowledged |
 | **Individual branch—all cameras** | 75% | 95% | ✅ Complete | Real HLS sessions, health monitoring, playback, fullscreen, PTZ. Large-camera-count performance requires field testing |
-| **DVR/NVR status** | 70% | 95% | ✅ Complete | Real vendor-specific recording status queries (Hikvision ISAPI, Dahua/CP PLUS CGI, ONVIF). Returns recording/stopped/partial with channel counts |
+| **DVR/NVR status** | 70% | 90% software coverage | 🟡 Field certification pending | Recent-media probes now return per-channel recording state, connectivity evidence, newest media time, and archive-gap summaries. Proprietary SDK fallbacks and deployed model/firmware acceptance still require vendor hardware. |
 | **Camera working status** | 40% | 95% | ✅ Complete | Real FFprobe metrics (FPS, bitrate, packet loss), freeze detection (MD5 hash), black-screen detection (pixel brightness). All fully implemented |
 | **HDD health** | 65% | 95% target | 🟡 Hardware acceptance pending | Local SMART and vendor telemetry parsing exist. Production certification is blocked until each deployed recorder reports the configured exact model, firmware, and disk inventory in the compatibility suite. |
 | **Retention monitoring** | 65% | 95% | ✅ Complete | Direct DVR/NVR archive scanning (Hikvision /ContentMgmt/search, Dahua mediaFileFind.cgi), mismatch detection, archiveVerified tracking |
@@ -87,22 +87,24 @@ All 10 coverage gaps identified in the original RequirementCoverageReview have b
 
 ---
 
-### Task 4: DVR/NVR Recording State ✅
-**Coverage: 70% → 95%**
+### Task 4: DVR/NVR Recording State 🟡
+**Coverage: 70% → 90% software coverage; field certification pending**
 
 **Implementation**:
-- Implemented vendor-specific recording status queries:
-  - **Hikvision**: ISAPI `/ContentMgmt/record/tracks` and `/status/trackList`
-  - **Dahua/CP PLUS**: CGI `/configManager.cgi?action=getConfig&name=Record`
-  - **ONVIF**: Recording Control service `/onvif/recording_service`
-- Returns "recording", "stopped", "partial", or "unknown" with channel counts
+- Implemented media-evidence queries rather than treating schedules as activity:
+  - **Hikvision**: ISAPI `/ISAPI/ContentMgmt/search`, with correct `101`, `201`, ... track mapping
+  - **Dahua/CP PLUS**: paginated CGI `mediaFileFind.cgi` searches
+  - **ONVIF**: Search-service `GetRecordingSummary` with recent `DataUntil`
+- Returns recorder and per-channel `recording`, `stopped`, `partial`, or `unknown` state
+- Reports vendor-derived newest-media timestamps, channel connectivity when supported, and archive gap counts/largest gaps
+- Exact model/firmware compatibility acceptance now also requires channel inventory, connectivity, media evidence, and last-recorded timestamps
 - Created DVR_NVR_RECORDING_STATE_DETECTION.md documentation
 
 **Files Modified**:
 - `edge-agent/src/monitoring/recorder-probe.ts`
 - `edge-agent/docs/DVR_NVR_RECORDING_STATE_DETECTION.md`
 
-**Impact**: Recording status no longer returns "unknown" - provides accurate state for all vendors.
+**Impact**: Successful, parseable archive searches no longer collapse to `unknown`; unsupported or incomplete APIs remain explicitly unverified. No proprietary Hikvision, Dahua, or CP PLUS SDK is bundled, and no model is production-certified until the hardware acceptance contract passes on its exact firmware.
 
 ---
 
@@ -249,7 +251,7 @@ All 10 coverage gaps identified in the original RequirementCoverageReview have b
 | **Branch Dashboard** | 65% | 100% | +35% |
 | **Camera Channels** | 45% | 95% | +50% |
 | **Camera Metrics** | 40% | 95% | +55% |
-| **DVR/NVR Status** | 70% | 95% | +25% |
+| **DVR/NVR Status** | 70% | 90% software / field pending | +20% |
 | **HDD Health** | 65% | 95% | +30% |
 | **Retention Monitoring** | 65% | 95% | +30% |
 | **AI Analytics** | 15% | 95% | +80% |

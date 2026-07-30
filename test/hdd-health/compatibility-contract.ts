@@ -13,10 +13,11 @@ export interface RecorderCompatibilityTarget {
   model: string;
   expectedFirmware: string;
   expectedDisks: number;
+  expectedChannels: number;
 }
 
 export interface CompatibilityCheck {
-  name: "configuration" | "reachability" | "model" | "firmware" | "disk_inventory" | "disk_fields";
+  name: "configuration" | "reachability" | "model" | "firmware" | "disk_inventory" | "disk_fields" | "recording_evidence" | "channel_inventory" | "channel_connectivity" | "last_recorded_media";
   passed: boolean;
   details: string;
 }
@@ -31,6 +32,8 @@ export function verifyRecorderCompatibility(
   const configuredModel = typeof target.model === "string" ? target.model.trim() : "";
   const configuredFirmware = typeof target.expectedFirmware === "string" ? target.expectedFirmware.trim() : "";
   const expectedDisks = Number.isInteger(target.expectedDisks) ? target.expectedDisks : 0;
+  const expectedChannels = Number.isInteger(target.expectedChannels) ? target.expectedChannels : 0;
+  const channelHealth = probe.channelHealth ?? [];
   const model = stringMetric(probe, "model");
   const firmware = stringMetric(probe, "firmwareVersion");
   const modelSource = stringMetric(probe, "modelSource");
@@ -38,10 +41,10 @@ export function verifyRecorderCompatibility(
   checks.push({
     name: "configuration",
     passed: Boolean(configuredModel) && Boolean(configuredFirmware)
-      && expectedDisks > 0
+      && expectedDisks > 0 && expectedChannels > 0
       && !PLACEHOLDER.test(configuredModel)
       && !PLACEHOLDER.test(configuredFirmware),
-    details: "model, exact firmware, and expected disk count must be configured without placeholders",
+    details: "model, exact firmware, expected disk count, and expected channel count must be configured without placeholders",
   });
   checks.push({
     name: "reachability",
@@ -74,6 +77,38 @@ export function verifyRecorderCompatibility(
       ? "storage endpoint returned no disks"
       : "each disk must include an identifier and a vendor-reported state",
   });
+  const recordingStatus = stringMetric(probe, "recordingStatus");
+  const recordingSource = stringMetric(probe, "recordingStatusSource");
+  checks.push({
+    name: "recording_evidence",
+    passed: ["recording", "partial", "stopped"].includes(recordingStatus)
+      && recordingSource !== "" && recordingSource !== "unavailable",
+    details: `status ${recordingStatus || "unknown"}; evidence source ${recordingSource || "unavailable"}`,
+  });
+  checks.push({
+    name: "channel_inventory",
+    passed: probe.metrics.totalCameras === expectedChannels && channelHealth.length === expectedChannels,
+    details: `expected ${expectedChannels} channel(s); recorder reported ${String(probe.metrics.totalCameras ?? "unavailable")} and ${channelHealth.length} channel evidence row(s)`,
+  });
+  const connectedChannels = channelHealth.filter((channel) => channel.connected === true).length;
+  checks.push({
+    name: "channel_connectivity",
+    passed: channelHealth.length === expectedChannels
+      && channelHealth.every((channel) => typeof channel.connected === "boolean")
+      && probe.metrics.connectedCameras === connectedChannels,
+    details: `aggregate connected ${String(probe.metrics.connectedCameras ?? "unavailable")}; channel evidence connected ${connectedChannels}/${channelHealth.length}`,
+  });
+  const recordingRows = channelHealth.filter((channel) => channel.status === "recording");
+  const aggregateLastRecordedAt = stringMetric(probe, "lastRecordedAt");
+  checks.push({
+    name: "last_recorded_media",
+    passed: recordingRows.length > 0
+      && validTimestamp(aggregateLastRecordedAt)
+      && recordingRows.every((channel) => validTimestamp(channel.lastRecordedAt ?? "")),
+    details: recordingRows.length === 0
+      ? "no channel returned recent media"
+      : `newest aggregate media ${aggregateLastRecordedAt || "unavailable"}; ${recordingRows.length} recording channel timestamp(s) checked`,
+  });
   return checks;
 }
 
@@ -99,3 +134,4 @@ function hasIdentityAndState(disk: Record<string, unknown>) {
 
 function normalizeKey(value: string) { return value.replace(/[^a-z0-9]/gi, "").toLocaleLowerCase(); }
 function isPresent(value: unknown) { return typeof value === "string" ? value.trim().length > 0 : typeof value === "number"; }
+function validTimestamp(value: string) { return value.length > 0 && Number.isFinite(Date.parse(value)); }

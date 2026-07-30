@@ -141,7 +141,7 @@ This index provides quick navigation to all documentation related to achieving 1
 | 1. Branch Dashboard | 100% | Documentation | COMPLETE.md §1 |
 | 2. Camera Channels | 100% | Code Enhancement | COMPLETE.md §2, control-room.tsx |
 | 3. Individual Branch | 100% | Documentation | COMPLETE.md §3 |
-| 4. Recording State | 100% | Bug Fix | COMPLETE.md §4, recorder-probe.ts, DVR_DETECTION.md |
+| 4. Recording State | 90% software / field pending | Code + acceptance | COMPLETE.md §4, recorder-probe.ts, DVR_DETECTION.md |
 | 5. Camera Metrics | 100% | Documentation | COMPLETE.md §5, CAMERA_HEALTH.md |
 | 6. HDD Health | 100% | Documentation | COMPLETE.md §6, HDD_TESTING_MATRIX.md |
 | 7. Retention Monitoring | 100% | Documentation | COMPLETE.md §7 |

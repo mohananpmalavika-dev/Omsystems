@@ -7,16 +7,19 @@ Best-effort recording-activity detection across multiple vendors using their doc
 ## What the status means
 
 - `recording` is emitted only after the recorder returns media created within the last five minutes: Hikvision ISAPI archive search, Dahua/CP PLUS media-file search, or an ONVIF Search-service `GetRecordingSummary` with a recent `DataUntil` value.
-- `unknown` means the recorder is reachable but the endpoint is unsupported, unavailable, unauthorized, or cannot prove recent media. It is intentionally not converted to `stopped`.
+- `partial` means the search completed and recent media exists for only some of the inventoried channels.
+- `stopped` means the vendor search completed successfully and returned no media in the five-minute evidence window (for the recorder or for a specific channel).
+- `unknown` means the recorder is reachable but the endpoint is unsupported, unavailable, unauthorized, incomplete, or unparseable. An API failure is never converted to `stopped`.
 - Recording schedules and enabled track configuration are retained as recorder configuration, not treated as proof of current recording.
-- `stopped` requires a vendor response that explicitly reports a stopped recorder; it is never inferred merely because no file was returned in a short window.
+- `lastRecordedAt` is populated only from a vendor-returned archive end time. A match without an end time can prove activity but does not produce a fabricated timestamp.
 
 ## Retention verification from the recorder archive
 
 Recording activity and retention are different checks. When a recorder has an
 `archiveRetention` configuration, the edge agent periodically reads the
 configured channel's native archive over the requested lookback window and
-reports its continuous time range to the control plane. The control plane uses
+reports its continuous time range, gap count, largest gap, and newest playable
+timestamp to the control plane. The control plane uses
 that evidence in preference to its own `recording_segments` index only when the
 scan is complete, fresh (less than 24 hours old), and was calculated with a
 continuity gap no larger than the branch policy permits.
@@ -24,7 +27,7 @@ continuity gap no larger than the branch policy permits.
 Map channels explicitly because a branch can contain multiple DVRs/NVRs; the
 camera's display channel is not globally unique. Channel numbering is
 vendor-native: Hikvision uses the configured camera channel and converts it to
-the ISAPI track ID (`1` becomes `101`); Dahua and CP PLUS use their CGI channel
+the ISAPI main-stream track ID (`1` becomes `101`, `2` becomes `201`); Dahua and CP PLUS use their CGI channel
 index (commonly zero-based).
 
 ```json
@@ -84,7 +87,8 @@ The search is restricted to the last five minutes. A `searchMatchItem` is eviden
 | Condition | Recording Status | Reason Codes |
 |-----------|------------------|--------------|
 | Recent archive match | `recording` | `[]` |
-| No recent archive match | `unknown` | `["hikvision_no_recent_recording_evidence"]` |
+| Some inventoried channels matched | `partial` | `["some_channels_not_recording"]` |
+| Successful search with no recent match | `stopped` | `["hikvision_no_recent_recording_evidence"]` |
 | Endpoint unavailable | `unknown` | `["hikvision_recording_search_unavailable"]` |
 | Probe failed | `unknown` | `["hikvision_recording_search_failed"]` |
 
@@ -106,7 +110,7 @@ GET /cgi-bin/mediaFileFind.cgi?action=factory.create
 Authorization: Digest username="admin", ...
 ```
 
-The probe creates a media-file search, limits it to the last five minutes, reads up to 128 results, and closes the search handle. `table.Record[].Enable` is a schedule setting and is not used as recording-state evidence.
+The probe creates a media-file search, limits it to the last five minutes, paginates the result (up to 40 pages of 128), and closes the search handle. A result-limit or unparseable page remains `unknown`. `table.Record[].Enable` is a schedule setting and is not used as recording-state evidence.
 
 **Response Format** (Key-Value):
 ```
@@ -120,7 +124,8 @@ items[0].StartTime=2026-07-29 10:00:00
 | Condition | Recording Status | Reason Codes |
 |-----------|------------------|--------------|
 | Recent archive file | `recording` | `[]` |
-| No recent archive file | `unknown` | `["dahua_no_recent_recording_evidence"]` |
+| Some inventoried channels returned files | `partial` | `["some_channels_not_recording"]` |
+| Successful search with no recent archive file | `stopped` | `["dahua_no_recent_recording_evidence"]` |
 | Endpoint unavailable | `unknown` | `["dahua_archive_search_unavailable"]` |
 | Probe failed | `unknown` | `["dahua_archive_search_failed"]` |
 
@@ -181,7 +186,7 @@ The probe discovers the ONVIF Search-service address through `GetCapabilities`, 
 | Condition | Recording Status | Reason Codes |
 |-----------|------------------|--------------|
 | Recent `DataUntil` | `recording` | `[]` |
-| No recent summary | `unknown` | `["onvif_no_recent_recording_evidence"]` |
+| Successful summary with no recent data | `stopped` | `["onvif_no_recent_recording_evidence"]` |
 | Search service unavailable | `unknown` | `["onvif_recording_search_unavailable"]` |
 | Probe failed | `unknown` | `["onvif_recording_probe_failed"]` |
 
@@ -224,10 +229,21 @@ interface RecorderProbeResult {
     // New fields:
     recordingStatus: "recording" | "stopped" | "partial" | "unknown";
     recordingChannels: number;
+    lastRecordedAt: string | null;
     totalCameras: number | null;
     connectedCameras: number | null;
   };
   hddStatus: Array<Record<string, unknown>>;
+  channelHealth: Array<{
+    sourceChannel: number;
+    status: "recording" | "stopped" | "unknown";
+    connected: boolean | null;
+    lastRecordedAt: string | null;
+  }>;
+  archiveEvidence: Array<{
+    gapCount: number;
+    largestGapSeconds: number;
+  }>;
   reasonCodes: string[];
 }
 ```
@@ -236,26 +252,14 @@ interface RecorderProbeResult {
 
 **Database Schema**:
 ```sql
-ALTER TABLE recorder_telemetry ADD COLUMN recording_status TEXT;
-ALTER TABLE recorder_telemetry ADD COLUMN recording_channels INT;
-
--- Update existing queries
-UPDATE branch_health_scoring
-SET recording_status = CASE
-  WHEN recording_status = 'recording' THEN 'recording'
-  WHEN recording_status = 'stopped' THEN 'stopped'
-  WHEN recording_status = 'partial' THEN 'warning'
-  ELSE 'unknown'
-END;
+-- database/migrations/036_recorder_channel_health.sql
+-- Recorder aggregate, recorder-channel, and archive evidence are immutable
+-- operational_health_telemetry rows with separate device types.
 ```
 
-**Health Scoring Impact**:
-```typescript
-// backend/src/services/branch-health-scoring.service.ts
-const recordingScore = (recordingChannels / totalChannels) * 50;
-const availabilityScore = (avgAvailability / 100) * 35;
-// Recording status now affects branch health score
-```
+The recorder projection becomes `degraded` when media is stopped, partial, or
+unverified. `/v1/operations/health/recorders` returns aggregate state plus the
+latest channel evidence rows. Reachability remains separate from recording health.
 
 ---
 

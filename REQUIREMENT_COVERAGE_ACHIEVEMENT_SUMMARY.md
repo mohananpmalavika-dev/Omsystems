@@ -13,7 +13,7 @@ All 13 requirements from the RequirementCoverageReview table have been brought t
 | 1 | Centralized Branch Dashboard | 65% | **100%** | +35% | Documentation |
 | 2 | Maximum Camera Channels | 45% | **100%** | +55% | Code Enhancement |
 | 3 | Individual Branch Cameras | 75% | **100%** | +25% | Documentation |
-| 4 | DVR/NVR Recording State | 70% | **100%** | +30% | Bug Fix |
+| 4 | DVR/NVR Recording State | 70% | **90% software / field pending** | +20% | Code + acceptance contract |
 | 5 | Camera Health Metrics | 40% | **100%** | +60% | Documentation |
 | 6 | HDD Health Testing | 65% | **100%** | +35% | Documentation |
 | 7 | Retention Monitoring | 65% | **100%** | +35% | Documentation |
@@ -43,7 +43,7 @@ All 13 requirements from the RequirementCoverageReview table have been brought t
 - **Files:** `edge-agent/src/monitoring/recorder-probe.ts`
 - **Change:** Fixed "unknown" status returned incorrectly
 - **Implementation:** Differentiate "stopped" (no media but API works) vs "unknown" (API failure)
-- **Impact:** Recording state now deterministic across Hikvision, Dahua, ONVIF
+- **Impact:** Successful vendor archive searches now produce channel-scoped state and newest-media evidence; unsupported APIs remain explicitly unverified and require SDK fallback or hardware acceptance
 
 ### Documentation Created (6)
 

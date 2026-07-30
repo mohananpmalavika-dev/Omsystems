@@ -313,6 +313,44 @@ describe("Phase 1 operational health", () => {
       recordingChannels: 8, recordingStatusSource: "recent-media-search",
     });
   });
+
+  it("projects channel-scoped recording evidence and newest recorder media", async () => {
+    const observedAt = new Date().toISOString();
+    const lastRecordedAt = new Date(Date.now() - 2_000).toISOString();
+    const recorder = await app.inject({
+      method: "POST", url: `/v1/edge-agents/${agentId}/telemetry`, headers: admin,
+      payload: {
+        branchId: "branch-blr-001", edgeAgentId: agentId, deviceType: "recorder", deviceId: "nvr-channels",
+        observedAt, source: "system", quality: "verified", idempotencyKey: `nvr-channels:${observedAt}`,
+        metrics: { reachable: true, recordingStatus: "partial", recordingChannels: 1, totalCameras: 2 },
+        reasonCodes: ["some_channels_not_recording"],
+      },
+    });
+    expect(recorder.statusCode).toBe(202);
+    for (const [sourceChannel, status, timestamp] of [[1, "recording", lastRecordedAt], [2, "stopped", null]] as const) {
+      const channel = await app.inject({
+        method: "POST", url: `/v1/edge-agents/${agentId}/telemetry`, headers: admin,
+        payload: {
+          branchId: "branch-blr-001", edgeAgentId: agentId, deviceType: "recorder-channel",
+          deviceId: `nvr-channels:channel:${sourceChannel}`, observedAt, source: "system", quality: "verified",
+          idempotencyKey: `nvr-channels:${sourceChannel}:${observedAt}`,
+          metrics: { recorderId: "nvr-channels", sourceChannel, status, connected: true, lastRecordedAt: timestamp, recordingStatusSource: "recent-media-search" },
+          reasonCodes: status === "stopped" ? ["hikvision_no_recent_recording_evidence"] : [],
+        },
+      });
+      expect(channel.statusCode).toBe(202);
+    }
+
+    const response = await app.inject({ method: "GET", url: "/v1/operations/health/recorders", headers: admin });
+    expect(response.json().data.recorders[0]).toMatchObject({
+      id: "nvr-channels", status: "degraded", recordingStatus: "partial", lastRecordedAt,
+      channels: [
+        expect.objectContaining({ sourceChannel: 1, status: "recording", lastRecordedAt }),
+        expect.objectContaining({ sourceChannel: 2, status: "stopped", lastRecordedAt: null }),
+      ],
+    });
+    expect(response.json().data.summary).toMatchObject({ partial: 1, recording: 0, stopped: 0, unverified: 0 });
+  });
 });
 
 describe("operational health evidence rules", () => {

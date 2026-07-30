@@ -26,6 +26,7 @@ interface TestConfig {
     username?: string;
     password?: string;
     expectedDisks: number;
+    expectedChannels: number;
     notes?: string;
   }>;
   testSettings?: {
@@ -56,6 +57,9 @@ interface CompatibilityEvidence {
   observedModel: string | null;
   observedFirmware: string | null;
   observedDisks: number;
+  expectedChannels: number;
+  observedChannels: number | null;
+  recordingStatus: string | null;
   checks: CompatibilityCheck[];
 }
 
@@ -210,6 +214,9 @@ class HddHealthTester {
           observedModel: observedModel || null,
           observedFirmware: observedFirmware || null,
           observedDisks: probe.hddStatus.length,
+          expectedChannels: recorder.expectedChannels,
+          observedChannels: typeof probe.metrics.totalCameras === 'number' ? probe.metrics.totalCameras : null,
+          recordingStatus: typeof probe.metrics.recordingStatus === 'string' ? probe.metrics.recordingStatus : null,
           checks,
         });
 
@@ -580,6 +587,8 @@ ${this.compatibilityEvidence.length === 0
 - **Expected firmware**: ${evidence.expectedFirmware}
 - **Observed firmware**: ${evidence.observedFirmware ?? 'Unavailable'}
 - **Expected / observed disks**: ${this.config.recorders.find((recorder) => recorder.id === evidence.recorderId)?.expectedDisks ?? 'N/A'} / ${evidence.observedDisks}
+- **Expected / observed channels**: ${evidence.expectedChannels} / ${evidence.observedChannels ?? 'Unavailable'}
+- **Recording status**: ${evidence.recordingStatus ?? 'Unavailable'}
 ${evidence.checks.map((check) => `- **${check.name}**: ${check.passed ? 'PASS' : 'FAIL'} — ${check.details}`).join('\n')}
 `).join('\n')}
 

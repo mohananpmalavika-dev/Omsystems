@@ -58,7 +58,7 @@ const recorderArchiveSchema = z.object({
   observedAt: z.string().datetime(),
   source: z.enum(sources).default("system"),
   quality: z.enum(qualities).default("verified"),
-  idempotencyKey: z.string().min(1).max(140),
+  idempotencyKey: z.string().min(1).max(200),
   entries: z.array(z.object({
     cameraId: z.string().min(1).max(200),
     sourceChannel: z.number().int().min(0).max(65_535),

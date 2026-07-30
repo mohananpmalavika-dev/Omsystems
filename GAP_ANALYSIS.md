@@ -104,7 +104,7 @@ interface DVRNVRHealthData {
 - ✅ Auto-recovery detection
 - ✅ Timeout handling (10s default)
 
-**Gap:** ⚠️ **Recording activity is best-effort.** The edge agent reports `recording` only when recent archive media is observed. Unsupported endpoints, unavailable credentials, or a lack of recent media remain `unknown`; these integrations do not bundle proprietary vendor SDKs.
+**Gap:** ⚠️ **Recording activity is evidence-based but still model-dependent.** A completed recent-media search now yields `recording`, `partial`, or `stopped`, per-channel evidence, and a vendor-derived newest-media timestamp. Unsupported, unauthorized, incomplete, or unparseable endpoints remain `unknown`; these integrations do not bundle proprietary vendor SDKs. Exact model/firmware certification remains a deployment acceptance step.
 
 ---
 

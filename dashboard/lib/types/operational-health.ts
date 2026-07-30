@@ -188,8 +188,8 @@ export interface RetentionHealth {
   archiveRecorderId: string | null;
   archiveObservedAt: string | null;
   archiveCoverageComplete: boolean | null;
-  archiveGapCount: number | null;
-  archiveLargestGapSeconds: number | null;
+  archiveGapCount?: number | null;
+  archiveLargestGapSeconds?: number | null;
   reasonCodes: string[];
 }
 
