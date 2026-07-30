@@ -26,6 +26,7 @@ import { registerAnalyticsRoutes } from "./routes/analytics.routes.js";
 import { registerReportsRoutes } from "./routes/reports.routes.js";
 import { registerLiveOperationsRoutes } from "./routes/live-operations.routes.js";
 import { registerAnalyticsPhase2Routes } from "./routes/analytics-phase2.routes.js";
+import { adminCameraManagementRoutes } from "./routes/admin-camera-management.routes.js";
 import { registerIncidentsRoutes } from "./routes/incidents.routes.js";
 import { registerComplianceRoutes } from "./routes/compliance.routes.js";
 import { registerComplianceEnhancedRoutes } from "./routes/compliance-enhanced.routes.js";
@@ -1637,14 +1638,15 @@ export async function buildApp(options?: {
     ...(options?.analyticsEngineSharedKey
       ? { analyticsEngineSharedKey: options.analyticsEngineSharedKey } : {}),
     ...(options?.analyticsEngineUrl
-      ? { analyticsEngineUrl: options.analyticsEngineUrl } : {}),
+      ? { analyticsEngineUrl: options?.analyticsEngineUrl } : {}),
     ...(options?.recordingEngineUrl
-      ? { recordingEngineUrl: options.recordingEngineUrl } : {}),
+      ? { recordingEngineUrl: options?.recordingEngineUrl } : {}),
     ...(options?.recordingEngineSharedKey
-      ? { recordingEngineSharedKey: options.recordingEngineSharedKey } : {}),
+      ? { recordingEngineSharedKey: options?.recordingEngineSharedKey } : {}),
     alertDispatcher,
   });
   await registerAnalyticsPhase2Routes(app, store);
+  await adminCameraManagementRoutes(app, store);
   await registerAlertCommandCenterRoutes(app, store, alertDispatcher,
     options?.alertWorkerKey ?? process.env.ALERT_WORKER_SHARED_KEY, voiceTokens);
   const alertWorker = setInterval(() => {

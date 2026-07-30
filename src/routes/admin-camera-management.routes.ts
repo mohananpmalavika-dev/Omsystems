@@ -1,20 +1,29 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
+import type { ControlPlaneStore } from "../control-plane-store.js";
+
+function hasDbPool(store: ControlPlaneStore): store is ControlPlaneStore & { db: { connect(): Promise<any>; query(sql: string, params?: any[]): Promise<any>; } } {
+  return "db" in store && store.db !== undefined;
+}
 
 /**
  * Admin Camera Management Routes
  * 
  * Provides endpoints for bulk camera operations
  */
-export async function adminCameraManagementRoutes(app: FastifyInstance) {
+export async function adminCameraManagementRoutes(app: FastifyInstance, store: ControlPlaneStore) {
   
   // Delete all cameras
   app.delete("/v1/admin/cameras/all", async (request, reply) => {
+    if (!hasDbPool(store)) {
+      return reply.code(501).send({ error: "not_implemented", message: "This endpoint requires PostgreSQL store support" });
+    }
+
     const { confirmDelete } = z.object({
       confirmDelete: z.literal("DELETE_ALL_CAMERAS"),
     }).parse(request.body);
     
-    const client = await app.pg.connect();
+    const client = await store.db.connect();
     
     try {
       await client.query("BEGIN");
@@ -102,7 +111,11 @@ export async function adminCameraManagementRoutes(app: FastifyInstance) {
   
   // Get camera count (for preview)
   app.get("/v1/admin/cameras/count", async (request, reply) => {
-    const result = await app.pg.query(`
+    if (!hasDbPool(store)) {
+      return reply.code(501).send({ error: "not_implemented", message: "This endpoint requires PostgreSQL store support" });
+    }
+
+    const result = await store.db.query(`
       SELECT 
         COUNT(*) as total_cameras,
         (SELECT COUNT(*) FROM analytics_alerts WHERE camera_id IN (SELECT id FROM cameras)) as alerts,
@@ -116,7 +129,11 @@ export async function adminCameraManagementRoutes(app: FastifyInstance) {
   
   // List all cameras
   app.get("/v1/admin/cameras/list", async (request, reply) => {
-    const result = await app.pg.query(`
+    if (!hasDbPool(store)) {
+      return reply.code(501).send({ error: "not_implemented", message: "This endpoint requires PostgreSQL store support" });
+    }
+
+    const result = await store.db.query(`
       SELECT 
         c.id,
         c.name,
