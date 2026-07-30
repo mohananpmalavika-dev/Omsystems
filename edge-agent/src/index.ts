@@ -271,6 +271,18 @@ async function heartbeatAndReport() {
         observedAt, source, quality: "verified", idempotencyKey: `${agentId}:recorder:${recorder.id}:${observedAt}`,
         metrics: probe.metrics, reasonCodes: probe.reasonCodes,
       })];
+      submissions.push(...probe.channelHealth.map((channel) => gateway.submitTelemetry(agentId, {
+        branchId: config.BRANCH_ID, edgeAgentId: agentId,
+        deviceType: "recorder-channel", deviceId: `${recorder.id}:channel:${channel.sourceChannel}`,
+        observedAt, source, quality: channel.status === "unknown" ? "unavailable" : "verified",
+        idempotencyKey: `${agentId}:recorder-channel:${recorder.id}:${channel.sourceChannel}:${observedAt}`,
+        metrics: {
+          recorderId: recorder.id, sourceChannel: channel.sourceChannel, status: channel.status,
+          connected: channel.connected, lastRecordedAt: channel.lastRecordedAt,
+          recordingStatusSource: channel.recordingStatusSource,
+        },
+        reasonCodes: channel.reasonCodes,
+      })));
       if (probe.hddStatus.length) submissions.push(gateway.submitRecorderHdd(agentId, {
         branchId: config.BRANCH_ID, recorderId: recorder.id, observedAt, source,
         quality: "verified", idempotencyKey: `${agentId}:recorder-hdd:${recorder.id}:${observedAt}`,

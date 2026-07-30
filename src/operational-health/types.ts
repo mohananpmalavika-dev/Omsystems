@@ -3,6 +3,8 @@ export type TelemetryDeviceType =
   | "branch"
   | "edge-agent"
   | "recorder"
+  /** Channel-scoped recording and connectivity evidence from a recorder archive probe. */
+  | "recorder-channel"
   /** Direct, channel-scoped archive evidence reported by an edge recorder probe. */
   | "archive"
   | "camera"

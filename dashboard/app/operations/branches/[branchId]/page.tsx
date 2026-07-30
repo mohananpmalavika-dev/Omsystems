@@ -24,6 +24,7 @@ import {
   fetchAllCamerasHealth,
   fetchOperationalAlerts
 } from "@/lib/api/operational-health";
+import { cameraInventoryApi } from "@/lib/api-client";
 import { 
   HealthStatusBadge, 
   HealthScoreRing
@@ -40,6 +41,7 @@ export default function BranchHealthDetailPage() {
   const [cameras, setCameras] = useState<CameraHealth[]>([]);
   const [alerts, setAlerts] = useState<OperationalAlert[]>([]);
   const [loading, setLoading] = useState(true);
+  const [downloadingPackage, setDownloadingPackage] = useState(false);
   const [lastRefresh, setLastRefresh] = useState(new Date());
 
   const fetchData = useCallback(async () => {
@@ -323,10 +325,74 @@ export default function BranchHealthDetailPage() {
               {branch.edgeAgent.uptimeSeconds === null ? '--' : `${Math.floor(branch.edgeAgent.uptimeSeconds / 86400)}d ${Math.floor((branch.edgeAgent.uptimeSeconds % 86400) / 3600)}h`}
             </p>
           </div>
-          <div>
+          <div className="space-y-3">
             <a href={`/operations/edge-agents/${branch.edgeAgent.id}`} className="btn-secondary w-full">
               View Details →
             </a>
+            <div className="grid gap-2">
+              <button
+                type="button"
+                onClick={async () => {
+                  if (!branch.edgeAgent.id) return;
+                  setDownloadingPackage(true);
+                  try {
+                    const blob = await cameraInventoryApi.downloadPackage(branchId, branch.edgeAgent.id, "windows");
+                    const fileName = `${branch.name.replace(/[^a-zA-Z0-9_-]/g, '-')}-edge-agent-windows.zip`;
+                    const url = window.URL.createObjectURL(blob);
+                    const anchor = document.createElement('a');
+                    anchor.href = url;
+                    anchor.download = fileName;
+                    document.body.appendChild(anchor);
+                    anchor.click();
+                    anchor.remove();
+                    window.URL.revokeObjectURL(url);
+                  } catch (error) {
+                    console.error(error);
+                    window.alert('Unable to download the Windows edge agent package. Please contact your administrator.');
+                  } finally {
+                    setDownloadingPackage(false);
+                  }
+                }}
+                disabled={downloadingPackage}
+                className="btn-primary w-full"
+              >
+                <Download size={16} />
+                {downloadingPackage ? 'Downloading…' : 'Download Windows branch install zip'}
+              </button>
+
+              <button
+                type="button"
+                onClick={async () => {
+                  if (!branch.edgeAgent.id) return;
+                  setDownloadingPackage(true);
+                  try {
+                    const blob = await cameraInventoryApi.downloadPackage(branchId, branch.edgeAgent.id, "linux");
+                    const fileName = `${branch.name.replace(/[^a-zA-Z0-9_-]/g, '-')}-edge-agent-linux.zip`;
+                    const url = window.URL.createObjectURL(blob);
+                    const anchor = document.createElement('a');
+                    anchor.href = url;
+                    anchor.download = fileName;
+                    document.body.appendChild(anchor);
+                    anchor.click();
+                    anchor.remove();
+                    window.URL.revokeObjectURL(url);
+                  } catch (error) {
+                    console.error(error);
+                    window.alert('Unable to download the Linux edge agent package. Please contact your administrator.');
+                  } finally {
+                    setDownloadingPackage(false);
+                  }
+                }}
+                disabled={downloadingPackage}
+                className="btn-secondary w-full"
+              >
+                <Download size={16} />
+                {downloadingPackage ? 'Downloading…' : 'Download Linux branch install zip'}
+              </button>
+            </div>
+            <p className="text-xs text-gray-500">
+              Download a zip, copy it to the branch machine, and run the included installer script there.
+            </p>
           </div>
         </div>
       </div>

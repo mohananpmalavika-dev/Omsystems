@@ -62,6 +62,40 @@ async function fetchApi<T>(
   return response.json();
 }
 
+async function downloadApi(endpoint: string, options: RequestInit = {}): Promise<Blob> {
+  const token = typeof window !== 'undefined'
+    ? localStorage.getItem('accessToken')
+    : null;
+
+  const headers = new Headers(options.headers);
+  if (token) {
+    headers.set('x-sentinel-session', token);
+  }
+
+  const response = await fetch(`${API_BASE}${endpoint}`, {
+    ...options,
+    credentials: 'include',
+    headers,
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({
+      error: 'unknown_error',
+      message: 'An unexpected error occurred',
+    }));
+
+    throw new ApiError(
+      error.message || (typeof error.error === 'string'
+        ? error.error.replaceAll('_', ' ')
+        : 'Request failed'),
+      response.status,
+      error
+    );
+  }
+
+  return response.blob();
+}
+
 export const authApi = {
   login: async (username: string, password: string, tenantSlug?: string) => {
     const response = await fetchApi<{
@@ -307,6 +341,10 @@ export const cameraInventoryApi = {
   listGateways: (branchId: string) =>
     fetchApi<{ data: any[] }>(
       `/v1/branches/${encodeURIComponent(branchId)}/edge-agents`
+    ),
+  downloadPackage: (branchId: string, edgeAgentId: string, platform: "windows" | "linux" = "windows") =>
+    downloadApi(
+      `/v1/branches/${encodeURIComponent(branchId)}/edge-agents/${encodeURIComponent(edgeAgentId)}/package?platform=${encodeURIComponent(platform)}`
     ),
   registerGateway: (branchId: string, data: { name: string; version: string }) =>
     fetchApi<any>(

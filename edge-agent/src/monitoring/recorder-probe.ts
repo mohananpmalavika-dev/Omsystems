@@ -25,7 +25,19 @@ export interface ArchiveRetentionEvidence {
   retentionLowerBound: boolean;
   coverageComplete: boolean;
   continuityGapSeconds: number;
+  /** Gaps larger than continuityGapSeconds inside the completed search window. */
+  gapCount: number;
+  largestGapSeconds: number;
   searchStartedAt: string;
+  reasonCodes: string[];
+}
+
+export interface RecorderChannelHealth {
+  sourceChannel: number;
+  status: "recording" | "stopped" | "unknown";
+  connected: boolean | null;
+  lastRecordedAt: string | null;
+  recordingStatusSource: "recent-media-search" | "recording-summary" | "unavailable";
   reasonCodes: string[];
 }
 
@@ -34,6 +46,7 @@ export interface RecorderProbeResult {
   hddStatus: Array<Record<string, unknown>>;
   reasonCodes: string[];
   archiveEvidence: ArchiveRetentionEvidence[];
+  channelHealth: RecorderChannelHealth[];
 }
 
 type RecordingStatus = "recording" | "stopped" | "partial" | "unknown";
@@ -41,6 +54,8 @@ type RecordingStatus = "recording" | "stopped" | "partial" | "unknown";
 interface RecordingProbe {
   status: RecordingStatus;
   recordingChannels: number | null;
+  lastRecordedAt: string | null;
+  channels: RecorderChannelHealth[];
   reasonCodes: string[];
   /** The API used to prove that new media exists, rather than merely reading a schedule. */
   source: "recent-media-search" | "recording-summary" | "unavailable";
@@ -49,12 +64,24 @@ interface RecordingProbe {
 interface ArchiveSegment {
   startedAt: number;
   endedAt: number;
+  sourceChannel: number | null;
 }
 
 interface ArchiveSearchResult {
   segments: ArchiveSegment[];
   coverageComplete: boolean;
   reasonCodes: string[];
+}
+
+interface ChannelInventoryItem {
+  sourceChannel: number;
+  connected: boolean | null;
+  trackId?: string;
+}
+
+interface RecordingMatch {
+  sourceChannel: number | null;
+  lastRecordedAt: number | null;
 }
 
 const RECORDING_EVIDENCE_WINDOW_MS = 5 * 60_000;
@@ -87,16 +114,22 @@ async function probeHikvision(config: RecorderConfig, base: string, credentials:
   const storageXml = storage?.ok ? await storage.text() : "";
   const channels = await authenticatedFetch(`${base}/ISAPI/System/Video/inputs/channels`, { method: "GET" }, credentials, timeout).catch(() => null);
   const channelXml = channels?.ok ? await channels.text() : "";
+  const channelStatuses = await authenticatedFetch(`${base}/ISAPI/ContentMgmt/InputProxy/channels/status`, { method: "GET" }, credentials, timeout).catch(() => null);
+  const channelStatusXml = channelStatuses?.ok ? await channelStatuses.text() : "";
+  const channelInventory = hikvisionChannelInventory(channelXml, channelStatusXml);
 
   // A recording schedule is not proof that the recorder is currently writing media.
   // Query the last five minutes of the archive instead.
-  const recordingStatus = await getHikvisionRecordingStatus(base, credentials, timeout, hikvisionTrackIds(channelXml));
+  const recordingStatus = await getHikvisionRecordingStatus(base, credentials, timeout, channelInventory);
   const archiveEvidence = includeArchive
     ? await scanHikvisionArchive(config, base, credentials, timeout)
     : [];
 
-  const total = (channelXml.match(/<VideoInputChannel>/gi) ?? []).length || null;
-  const connected = (channelXml.match(/<videoInputEnabled>true<\/videoInputEnabled>/gi) ?? []).length || total;
+  const total = channelInventory.length || null;
+  const connectedStates = channelInventory.map((channel) => channel.connected).filter((value): value is boolean => value !== null);
+  const connected = connectedStates.length === channelInventory.length && channelInventory.length > 0
+    ? connectedStates.filter(Boolean).length
+    : null;
   const reportedModel = tag(xml, "model");
   return result(config, true, "online", started, {
     model: reportedModel ?? config.model ?? "Unknown",
@@ -109,20 +142,21 @@ async function probeHikvision(config: RecorderConfig, base: string, credentials:
     recordingStatus: recordingStatus.status,
     recordingChannels: recordingStatus.recordingChannels,
     recordingStatusSource: recordingStatus.source,
-  }, parseHikvisionDisks(storageXml), recordingStatus.reasonCodes, archiveEvidence);
+    lastRecordedAt: recordingStatus.lastRecordedAt,
+  }, parseHikvisionDisks(storageXml), recordingStatus.reasonCodes, archiveEvidence, recordingStatus.channels);
 }
 
-async function getHikvisionRecordingStatus(base: string, credentials: { username: string; password: string } | undefined, timeout: number, trackIds: string[]): Promise<RecordingProbe> {
+async function getHikvisionRecordingStatus(base: string, credentials: { username: string; password: string } | undefined, timeout: number, channels: Array<{ sourceChannel: number; trackId: string; connected: boolean | null }>): Promise<RecordingProbe> {
   try {
     const response = await authenticatedFetch(`${base}/ISAPI/ContentMgmt/search`, {
       method: "POST",
       headers: { "content-type": "application/xml" },
-      body: hikvisionArchiveSearchBody(trackIds),
+      body: hikvisionArchiveSearchBody(channels.map((channel) => channel.trackId)),
     }, credentials, timeout);
-    if (!response.ok) return recordingUnavailable("hikvision_recording_search_unavailable");
-    return parseHikvisionArchiveSearch(await response.text());
+    if (!response.ok) return recordingUnavailable("hikvision_recording_search_unavailable", channels);
+    return parseHikvisionArchiveSearch(await response.text(), channels);
   } catch {
-    return recordingUnavailable("hikvision_recording_search_failed");
+    return recordingUnavailable("hikvision_recording_search_failed", channels);
   }
 }
 
@@ -135,11 +169,18 @@ async function probeDahuaFamily(config: RecorderConfig, base: string, credential
   const storageText = storage?.ok ? await storage.text() : "";
   const channelResponse = await authenticatedFetch(`${base}/cgi-bin/configManager.cgi?action=getConfig&name=ChannelTitle`, { method: "GET" }, credentials, timeout).catch(() => null);
   const channelText = channelResponse?.ok ? await channelResponse.text() : "";
-  const channelIds = new Set([...channelText.matchAll(/ChannelTitle\[(\d+)\]/g)].map((match) => match[1]));
+  const channelIds = [...new Set([...channelText.matchAll(/ChannelTitle\[(\d+)\]/g)].map((match) => Number(match[1])))].sort((left, right) => left - right);
+  const videoLossResponse = await authenticatedFetch(`${base}/cgi-bin/eventManager.cgi?action=getEventIndexes&code=VideoLoss`, { method: "GET" }, credentials, timeout).catch(() => null);
+  const videoLossText = videoLossResponse?.ok ? await videoLossResponse.text() : "";
+  const disconnectedChannels = videoLossResponse?.ok ? dahuaVideoLossChannels(videoLossText) : null;
+  const channelInventory = channelIds.map((sourceChannel) => ({
+    sourceChannel,
+    connected: disconnectedChannels ? !disconnectedChannels.has(sourceChannel) : null,
+  }));
 
   // Query the archive for newly created media. Record.Enable is a schedule setting,
   // so treating it as current recording state produced false positives.
-  const recordingStatus = await getDahuaRecordingStatus(base, credentials, timeout);
+  const recordingStatus = await getDahuaRecordingStatus(base, credentials, timeout, channelInventory);
   const archiveEvidence = includeArchive
     ? await scanDahuaArchive(config, base, credentials, timeout)
     : [];
@@ -152,21 +193,23 @@ async function probeDahuaFamily(config: RecorderConfig, base: string, credential
     modelSource: reportedModel ? "vendor-system" : "configured",
     serialNumber: key(text, "serialNumber") ?? "",
     firmwareVersion: firstKey(text, ["softwareVersion", "firmwareVersion", "version"]) ?? "",
-    totalCameras: channelIds.size || null, connectedCameras: null,
+    totalCameras: channelIds.length || null,
+    connectedCameras: disconnectedChannels ? Math.max(0, channelIds.length - disconnectedChannels.size) : null,
     protocol: config.vendor === "cp-plus" ? "cp-plus-oem-api" : "dahua-cgi",
     recordingStatus: recordingStatus.status,
     recordingChannels: recordingStatus.recordingChannels,
     recordingStatusSource: recordingStatus.source,
-  }, parseCgiDisks(storageText), recordingStatus.reasonCodes, archiveEvidence);
+    lastRecordedAt: recordingStatus.lastRecordedAt,
+  }, parseCgiDisks(storageText), recordingStatus.reasonCodes, archiveEvidence, recordingStatus.channels);
 }
 
-async function getDahuaRecordingStatus(base: string, credentials: { username: string; password: string } | undefined, timeout: number): Promise<RecordingProbe> {
+async function getDahuaRecordingStatus(base: string, credentials: { username: string; password: string } | undefined, timeout: number, channels: Array<{ sourceChannel: number; connected: boolean | null }>): Promise<RecordingProbe> {
   let object: string | undefined;
   try {
     const factory = await authenticatedFetch(`${base}/cgi-bin/mediaFileFind.cgi?action=factory.create`, { method: "GET" }, credentials, timeout);
-    if (!factory.ok) return recordingUnavailable("dahua_archive_search_unavailable");
+    if (!factory.ok) return recordingUnavailable("dahua_archive_search_unavailable", channels);
     object = key(await factory.text(), "object");
-    if (!object) return recordingUnavailable("dahua_archive_search_handle_missing");
+    if (!object) return recordingUnavailable("dahua_archive_search_handle_missing", channels);
 
     const now = new Date();
     const query = new URLSearchParams({
@@ -176,13 +219,22 @@ async function getDahuaRecordingStatus(base: string, credentials: { username: st
       "condition.Types[0]": "dav",
     });
     const find = await authenticatedFetch(`${base}/cgi-bin/mediaFileFind.cgi?${query}`, { method: "GET" }, credentials, timeout);
-    if (!find.ok) return recordingUnavailable("dahua_archive_search_failed");
+    if (!find.ok) return recordingUnavailable("dahua_archive_search_failed", channels);
 
-    const next = await authenticatedFetch(`${base}/cgi-bin/mediaFileFind.cgi?${new URLSearchParams({ action: "findNextFile", object, count: "128" })}`, { method: "GET" }, credentials, timeout);
-    if (!next.ok) return recordingUnavailable("dahua_archive_results_unavailable");
-    return parseDahuaArchiveResults(await next.text());
+    const matches: RecordingMatch[] = [];
+    for (let page = 0; page < 40; page++) {
+      const next = await authenticatedFetch(`${base}/cgi-bin/mediaFileFind.cgi?${new URLSearchParams({ action: "findNextFile", object, count: "128" })}`, { method: "GET" }, credentials, timeout);
+      if (!next.ok) return recordingUnavailable("dahua_archive_results_unavailable", channels);
+      const text = await next.text();
+      const found = key(text, "found")?.toLowerCase();
+      if (found !== "1" && found !== "true") return recordingProbeFromMatches(matches, channels, "dahua_no_recent_recording_evidence");
+      const parsed = parseDahuaRecordingMatches(text);
+      if (!parsed.length) return recordingUnavailable("dahua_archive_results_unparseable", channels);
+      matches.push(...parsed);
+    }
+    return recordingUnavailable("dahua_archive_recent_result_limit", channels);
   } catch {
-    return recordingUnavailable("dahua_archive_search_failed");
+    return recordingUnavailable("dahua_archive_search_failed", channels);
   } finally {
     if (object) {
       await authenticatedFetch(`${base}/cgi-bin/mediaFileFind.cgi?${new URLSearchParams({ action: "close", object })}`, { method: "GET" }, credentials, timeout).catch(() => undefined);
@@ -202,7 +254,7 @@ async function scanHikvisionArchive(config: RecorderConfig, base: string, creden
   const searchFrom = new Date(searchStartedAt.getTime() - retention.lookbackDays * 86_400_000);
   return mapArchiveChannels(retention.channels, async (mapping) => {
     try {
-      const result = await searchHikvisionArchive(base, credentials, timeout, 100 + mapping.channel, searchFrom, searchStartedAt, retention.maxResults);
+      const result = await searchHikvisionArchive(base, credentials, timeout, hikvisionTrackId(mapping.channel), searchFrom, searchStartedAt, retention.maxResults);
       return archiveEvidenceFromSearch(mapping, result, retention, searchFrom, searchStartedAt);
     } catch {
       return unavailableArchiveEvidence(mapping, retention, searchFrom, searchStartedAt, "hikvision_archive_retention_search_failed");
@@ -210,7 +262,7 @@ async function scanHikvisionArchive(config: RecorderConfig, base: string, creden
   });
 }
 
-async function searchHikvisionArchive(base: string, credentials: { username: string; password: string } | undefined, timeout: number, trackId: number, from: Date, to: Date, maxResults: number): Promise<ArchiveSearchResult> {
+async function searchHikvisionArchive(base: string, credentials: { username: string; password: string } | undefined, timeout: number, trackId: string, from: Date, to: Date, maxResults: number): Promise<ArchiveSearchResult> {
   const pageSize = Math.min(1_000, maxResults);
   const segments: ArchiveSegment[] = [];
   for (let position = 0; segments.length < maxResults; position += pageSize) {
@@ -290,6 +342,7 @@ function archiveEvidenceFromSearch(mapping: { cameraId: string; channel: number 
       cameraId: mapping.cameraId, sourceChannel: mapping.channel, status: "unavailable",
       oldestContinuousAt: null, newestPlayableAt: null, retentionLowerBound: false,
       coverageComplete: false, continuityGapSeconds: retention.continuityGapSeconds,
+      gapCount: 0, largestGapSeconds: 0,
       searchStartedAt: searchTo.toISOString(), reasonCodes: result.reasonCodes,
     };
   }
@@ -298,16 +351,19 @@ function archiveEvidenceFromSearch(mapping: { cameraId: string; channel: number 
       cameraId: mapping.cameraId, sourceChannel: mapping.channel, status: "empty",
       oldestContinuousAt: null, newestPlayableAt: null, retentionLowerBound: false,
       coverageComplete: true, continuityGapSeconds: retention.continuityGapSeconds,
+      gapCount: 0, largestGapSeconds: 0,
       searchStartedAt: searchTo.toISOString(), reasonCodes: ["recorder_archive_empty"],
     };
   }
   const continuous = continuousArchiveWindow(result.segments, retention.continuityGapSeconds);
+  const gaps = archiveGapSummary(result.segments, retention.continuityGapSeconds);
   return {
     cameraId: mapping.cameraId, sourceChannel: mapping.channel, status: "available",
     oldestContinuousAt: new Date(continuous.oldest).toISOString(), newestPlayableAt: new Date(continuous.newest).toISOString(),
     retentionLowerBound: continuous.oldest <= searchFrom.getTime() + Math.max(1_000, retention.continuityGapSeconds * 1_000),
     coverageComplete: true, continuityGapSeconds: retention.continuityGapSeconds,
-    searchStartedAt: searchTo.toISOString(), reasonCodes: [],
+    gapCount: gaps.count, largestGapSeconds: gaps.largestGapSeconds,
+    searchStartedAt: searchTo.toISOString(), reasonCodes: gaps.count ? ["recorder_archive_gaps_detected"] : [],
   };
 }
 
@@ -316,6 +372,7 @@ function unavailableArchiveEvidence(mapping: { cameraId: string; channel: number
     cameraId: mapping.cameraId, sourceChannel: mapping.channel, status: "unavailable",
     oldestContinuousAt: null, newestPlayableAt: null, retentionLowerBound: false,
     coverageComplete: false, continuityGapSeconds: retention.continuityGapSeconds,
+    gapCount: 0, largestGapSeconds: 0,
     searchStartedAt: searchTo.toISOString(), reasonCodes: [reasonCode],
   };
 }
@@ -343,6 +400,25 @@ function continuousArchiveWindow(segments: ArchiveSegment[], gapSeconds: number)
   return { oldest, newest };
 }
 
+function archiveGapSummary(segments: ArchiveSegment[], toleranceSeconds: number) {
+  const ordered = segments
+    .filter((segment) => Number.isFinite(segment.startedAt) && Number.isFinite(segment.endedAt) && segment.endedAt >= segment.startedAt)
+    .sort((left, right) => left.startedAt - right.startedAt);
+  let cursor = ordered[0]?.endedAt;
+  let count = 0;
+  let largestGapSeconds = 0;
+  for (const segment of ordered.slice(1)) {
+    if (cursor === undefined) break;
+    const gapSeconds = Math.max(0, (segment.startedAt - cursor) / 1_000);
+    if (gapSeconds > toleranceSeconds) {
+      count++;
+      largestGapSeconds = Math.max(largestGapSeconds, gapSeconds);
+    }
+    cursor = Math.max(cursor, segment.endedAt);
+  }
+  return { count, largestGapSeconds: Math.round(largestGapSeconds * 100) / 100 };
+}
+
 async function mapArchiveChannels<T>(channels: Array<{ cameraId: string; channel: number }>, mapper: (channel: { cameraId: string; channel: number }) => Promise<T>): Promise<T[]> {
   const results: T[] = [];
   const pending = [...channels];
@@ -361,22 +437,27 @@ function parseHikvisionArchiveSegments(xml: string): ArchiveSegment[] {
   return items.flatMap((item) => {
     const startedAt = Date.parse(valuesForTag(item[1]!, "startTime")[0] ?? "");
     const endedAt = Date.parse(valuesForTag(item[1]!, "endTime")[0] ?? "");
-    return Number.isFinite(startedAt) && Number.isFinite(endedAt) ? [{ startedAt, endedAt }] : [];
+    const trackId = Number(valuesForTag(item[1]!, "trackID")[0] ?? "");
+    return Number.isFinite(startedAt) && Number.isFinite(endedAt)
+      ? [{ startedAt, endedAt, sourceChannel: hikvisionSourceChannel(trackId) }]
+      : [];
   });
 }
 
 function parseDahuaArchiveSegments(text: string): ArchiveSegment[] {
-  const grouped = new Map<string, { startedAt?: string; endedAt?: string }>();
-  for (const match of text.matchAll(/(?:items|item)\[(\d+)\]\.(StartTime|EndTime)=([^\r\n]+)/gi)) {
+  const grouped = new Map<string, { startedAt?: string; endedAt?: string; sourceChannel?: string }>();
+  for (const match of text.matchAll(/(?:items|item)\[(\d+)\]\.(StartTime|EndTime|Channel)=([^\r\n]+)/gi)) {
     const item = grouped.get(match[1]!) ?? {};
     if (match[2]!.toLowerCase() === "starttime") item.startedAt = match[3]!.trim();
-    else item.endedAt = match[3]!.trim();
+    else if (match[2]!.toLowerCase() === "endtime") item.endedAt = match[3]!.trim();
+    else item.sourceChannel = match[3]!.trim();
     grouped.set(match[1]!, item);
   }
   return [...grouped.values()].flatMap((item) => {
     const startedAt = parseDahuaTimestamp(item.startedAt);
     const endedAt = parseDahuaTimestamp(item.endedAt);
-    return startedAt !== null && endedAt !== null ? [{ startedAt, endedAt }] : [];
+    const sourceChannel = Number(item.sourceChannel);
+    return startedAt !== null && endedAt !== null ? [{ startedAt, endedAt, sourceChannel: Number.isInteger(sourceChannel) ? sourceChannel : null }] : [];
   });
 }
 
@@ -410,8 +491,9 @@ async function probeOnvif(config: RecorderConfig, base: string, credentials: { u
     recordingStatus: recordingStatus.status,
     recordingChannels: recordingStatus.recordingChannels,
     recordingStatusSource: recordingStatus.source,
+    lastRecordedAt: recordingStatus.lastRecordedAt,
     totalCameras: null, connectedCameras: null,
-  }, [], recordingStatus.reasonCodes, archiveEvidence);
+  }, [], recordingStatus.reasonCodes, archiveEvidence, recordingStatus.channels);
 }
 
 async function getOnvifRecordingStatus(base: string, deviceServicePath: string, credentials: { username: string; password: string } | undefined, timeout: number): Promise<RecordingProbe> {
@@ -419,16 +501,24 @@ async function getOnvifRecordingStatus(base: string, deviceServicePath: string, 
     const searchEndpoint = await getOnvifSearchEndpoint(base, deviceServicePath, credentials, timeout);
     const summary = await onvifRecordingSummary(searchEndpoint ? [searchEndpoint] : onvifSearchFallbackEndpoints(base), credentials, timeout);
     if (!summary) return recordingUnavailable("onvif_recording_search_unavailable");
-    if (hasRecentOnvifRecordingData(summary)) return { status: "recording", recordingChannels: null, reasonCodes: [], source: "recording-summary" };
+    const lastRecordedAt = newestOnvifRecordingData(summary);
+    if (hasRecentOnvifRecordingData(summary)) return { status: "recording", recordingChannels: null, lastRecordedAt, channels: [], reasonCodes: [], source: "recording-summary" };
     // No recent data found; return 'stopped' with a clear reason instead of 'unknown'.
-    return { status: "stopped", recordingChannels: null, reasonCodes: ["onvif_no_recent_recording_evidence"], source: "recording-summary" };
+    return { status: "stopped", recordingChannels: null, lastRecordedAt, channels: [], reasonCodes: ["onvif_no_recent_recording_evidence"], source: "recording-summary" };
   } catch {
     return recordingUnavailable("onvif_recording_probe_failed");
   }
 }
 
-function recordingUnavailable(reasonCode: string): RecordingProbe {
-  return { status: "unknown", recordingChannels: null, reasonCodes: [reasonCode], source: "unavailable" };
+function recordingUnavailable(reasonCode: string, inventory: ChannelInventoryItem[] = []): RecordingProbe {
+  return {
+    status: "unknown", recordingChannels: null, lastRecordedAt: null,
+    channels: inventory.map((channel) => ({
+      sourceChannel: channel.sourceChannel, status: "unknown", connected: channel.connected,
+      lastRecordedAt: null, recordingStatusSource: "unavailable", reasonCodes: [reasonCode],
+    })),
+    reasonCodes: [reasonCode], source: "unavailable",
+  };
 }
 
 function hikvisionArchiveSearchBody(trackIds: string[], start = new Date(Date.now() - RECORDING_EVIDENCE_WINDOW_MS), end = new Date(), maxResults = 128, searchResultPosition = 0) {
@@ -436,25 +526,69 @@ function hikvisionArchiveSearchBody(trackIds: string[], start = new Date(Date.no
   return `<?xml version="1.0" encoding="UTF-8"?><CMSearchDescription version="1.0" xmlns="http://www.isapi.org/ver20/XMLSchema"><searchID>sentinel-recorder-health</searchID><trackList>${tracks}</trackList><timeSpanList><timeSpan><startTime>${start.toISOString()}</startTime><endTime>${end.toISOString()}</endTime></timeSpan></timeSpanList><maxResults>${maxResults}</maxResults><searchResultPosition>${searchResultPosition}</searchResultPosition></CMSearchDescription>`;
 }
 
-function parseHikvisionArchiveSearch(xml: string): RecordingProbe {
-  const matches = xml.match(/<(?:[^:>]+:)?searchMatchItem\b/gi) ?? [];
-  // Zero matches may indicate scheduled downtime, not necessarily a failure.
-  // Return 'stopped' with clear reason instead of 'unknown' to avoid ambiguity.
-  if (!matches.length) {
-    return { status: "stopped", recordingChannels: null, reasonCodes: ["hikvision_no_recent_recording_evidence"], source: "recent-media-search" };
-  }
-  const channels = new Set(valuesForTag(xml, "trackID").concat(valuesForTag(xml, "channelID")));
-  return { status: "recording", recordingChannels: channels.size || null, reasonCodes: [], source: "recent-media-search" };
+function parseHikvisionArchiveSearch(xml: string, inventory: ChannelInventoryItem[]): RecordingProbe {
+  const items = [...xml.matchAll(/<(?:[^:>]+:)?(?:searchMatchItem|matchItem)\b[^>]*>([\s\S]*?)<\/(?:[^:>]+:)?(?:searchMatchItem|matchItem)>/gi)];
+  const matches = items.map((item): RecordingMatch => {
+    const trackId = Number(valuesForTag(item[1]!, "trackID")[0] ?? valuesForTag(item[1]!, "channelID")[0] ?? "");
+    const endedAt = Date.parse(valuesForTag(item[1]!, "endTime")[0] ?? "");
+    return {
+      sourceChannel: hikvisionSourceChannel(trackId),
+      lastRecordedAt: Number.isFinite(endedAt) ? endedAt : null,
+    };
+  });
+  return recordingProbeFromMatches(matches, inventory, "hikvision_no_recent_recording_evidence");
 }
 
-function parseDahuaArchiveResults(text: string): RecordingProbe {
-  const found = key(text, "found");
-  // Return 'stopped' instead of 'unknown' when no media exists, but search succeeded.
-  if (found !== "1" && found?.toLowerCase() !== "true") {
-    return { status: "stopped", recordingChannels: null, reasonCodes: ["dahua_no_recent_recording_evidence"], source: "recent-media-search" };
+function parseDahuaRecordingMatches(text: string): RecordingMatch[] {
+  const grouped = new Map<string, { sourceChannel?: number; endedAt?: number }>();
+  for (const match of text.matchAll(/(?:items|item)\[(\d+)\]\.(Channel|EndTime)=([^\r\n]+)/gi)) {
+    const item = grouped.get(match[1]!) ?? {};
+    if (match[2]!.toLowerCase() === "channel") item.sourceChannel = Number(match[3]!.trim());
+    else {
+      const endedAt = parseDahuaTimestamp(match[3]!.trim());
+      if (endedAt !== null) item.endedAt = endedAt;
+    }
+    grouped.set(match[1]!, item);
   }
-  const channels = new Set([...text.matchAll(/(?:items|item)\[\d+\]\.Channel=(\d+)/gi)].map((match) => match[1]!));
-  return { status: "recording", recordingChannels: channels.size || null, reasonCodes: [], source: "recent-media-search" };
+  return [...grouped.values()].flatMap((item) => Number.isInteger(item.sourceChannel)
+    ? [{ sourceChannel: item.sourceChannel!, lastRecordedAt: item.endedAt ?? null }]
+    : []);
+}
+
+function recordingProbeFromMatches(matches: RecordingMatch[], inventory: ChannelInventoryItem[], stoppedReason: string): RecordingProbe {
+  const newestByChannel = new Map<number, number | null>();
+  for (const match of matches) {
+    if (match.sourceChannel === null) continue;
+    const current = newestByChannel.get(match.sourceChannel);
+    if (current === undefined || (match.lastRecordedAt !== null && (current === null || match.lastRecordedAt > current))) {
+      newestByChannel.set(match.sourceChannel, match.lastRecordedAt);
+    }
+  }
+  const effectiveInventory = inventory.length
+    ? inventory
+    : [...newestByChannel.keys()].sort((left, right) => left - right).map((sourceChannel) => ({ sourceChannel, connected: null }));
+  const channels: RecorderChannelHealth[] = effectiveInventory.map((channel) => {
+    const hasMedia = newestByChannel.has(channel.sourceChannel);
+    const timestamp = newestByChannel.get(channel.sourceChannel) ?? null;
+    return {
+      sourceChannel: channel.sourceChannel,
+      status: hasMedia ? "recording" : "stopped",
+      connected: channel.connected,
+      lastRecordedAt: timestamp === null ? null : new Date(timestamp).toISOString(),
+      recordingStatusSource: "recent-media-search",
+      reasonCodes: hasMedia ? [] : [stoppedReason],
+    };
+  });
+  const recordingChannels = channels.filter((channel) => channel.status === "recording").length
+    || (matches.length && !channels.length ? new Set(matches.map((match) => match.sourceChannel).filter((value) => value !== null)).size : 0);
+  const lastRecorded = matches.map((match) => match.lastRecordedAt).filter((value): value is number => value !== null && Number.isFinite(value));
+  const lastRecordedAt = lastRecorded.length ? new Date(Math.max(...lastRecorded)).toISOString() : null;
+  const total = effectiveInventory.length;
+  const status: RecordingStatus = recordingChannels === 0
+    ? "stopped"
+    : total > 0 && recordingChannels < total ? "partial" : "recording";
+  const reasonCodes = status === "stopped" ? [stoppedReason] : status === "partial" ? ["some_channels_not_recording"] : [];
+  return { status, recordingChannels, lastRecordedAt, channels, reasonCodes, source: "recent-media-search" };
 }
 
 function dahuaTime(value: Date) { return value.toISOString().replace("T", " ").replace(/\.\d{3}Z$/, ""); }
@@ -498,17 +632,45 @@ function hasRecentOnvifRecordingData(xml: string) {
   return dataUntil.some((value) => value >= Date.now() - RECORDING_EVIDENCE_WINDOW_MS);
 }
 
+function newestOnvifRecordingData(xml: string) {
+  const dataUntil = valuesForTag(xml, "DataUntil").map((value) => Date.parse(value)).filter(Number.isFinite);
+  return dataUntil.length ? new Date(Math.max(...dataUntil)).toISOString() : null;
+}
+
 function valuesForTag(xml: string, name: string) {
   return [...xml.matchAll(new RegExp(`<(?:(?:[^:>]+):)?${name}>([^<]+)<\\/(?:(?:[^:>]+):)?${name}>`, "gi"))].map((match) => match[1]!.trim());
 }
 
-function hikvisionTrackIds(channelXml: string) {
-  const channelIds = valuesForTag(channelXml, "id").map(Number).filter((id) => Number.isInteger(id) && id > 0);
-  return channelIds.map((id) => String(100 + id));
+function hikvisionChannelInventory(channelXml: string, statusXml: string): Array<{ sourceChannel: number; trackId: string; connected: boolean | null }> {
+  const channelBlocks = [...channelXml.matchAll(/<(?:[^:>]+:)?VideoInputChannel\b[^>]*>([\s\S]*?)<\/(?:[^:>]+:)?VideoInputChannel>/gi)];
+  const ids = channelBlocks.map((block, index) => Number(valuesForTag(block[1]!, "id")[0] ?? index + 1)).filter((id) => Number.isInteger(id) && id > 0);
+  const statusByChannel = new Map<number, boolean>();
+  for (const match of statusXml.matchAll(/<(?:[^:>]+:)?InputProxyChannelStatus\b[^>]*>([\s\S]*?)<\/(?:[^:>]+:)?InputProxyChannelStatus>/gi)) {
+    const id = Number(valuesForTag(match[1]!, "id")[0] ?? "");
+    const online = valuesForTag(match[1]!, "online")[0]?.toLowerCase();
+    if (Number.isInteger(id) && (online === "true" || online === "false")) statusByChannel.set(id, online === "true");
+  }
+  return ids.map((sourceChannel) => ({
+    sourceChannel,
+    trackId: hikvisionTrackId(sourceChannel),
+    connected: statusByChannel.get(sourceChannel) ?? null,
+  }));
 }
 
-function result(config: RecorderConfig, reachable: boolean, status: string, started: number, extra: Record<string, string | number | boolean | null>, hddStatus: Array<Record<string, unknown>>, reasonCodes: string[], archiveEvidence: ArchiveRetentionEvidence[] = []): RecorderProbeResult {
-  return { metrics: { name: config.name, deviceType: config.deviceType, vendor: config.vendor, model: config.model ?? "Unknown", modelSource: "configured", ipAddress: config.host, reachable, status, latencyMs: Math.round((performance.now() - started) * 100) / 100, ...extra }, hddStatus, reasonCodes, archiveEvidence };
+function hikvisionTrackId(sourceChannel: number) { return String(sourceChannel >= 100 ? sourceChannel : sourceChannel * 100 + 1); }
+function hikvisionSourceChannel(trackId: number) { return Number.isInteger(trackId) && trackId > 0 ? (trackId >= 100 ? Math.floor(trackId / 100) : trackId) : null; }
+
+function dahuaVideoLossChannels(text: string) {
+  const channels = new Set<number>();
+  for (const match of text.matchAll(/(?:result|index(?:es)?)\s*=\s*([^\r\n]*)/gi)) {
+    for (const value of match[1]!.match(/\d+/g) ?? []) channels.add(Number(value));
+  }
+  for (const match of text.matchAll(/(?:channels?|index(?:es)?)\[(\d+)\]\s*=\s*(?:true|1)/gi)) channels.add(Number(match[1]));
+  return channels;
+}
+
+function result(config: RecorderConfig, reachable: boolean, status: string, started: number, extra: Record<string, string | number | boolean | null>, hddStatus: Array<Record<string, unknown>>, reasonCodes: string[], archiveEvidence: ArchiveRetentionEvidence[] = [], channelHealth: RecorderChannelHealth[] = []): RecorderProbeResult {
+  return { metrics: { name: config.name, deviceType: config.deviceType, vendor: config.vendor, model: config.model ?? "Unknown", modelSource: "configured", ipAddress: config.host, reachable, status, latencyMs: Math.round((performance.now() - started) * 100) / 100, ...extra }, hddStatus, reasonCodes, archiveEvidence, channelHealth };
 }
 function parseHikvisionDisks(xml: string) { return [...xml.matchAll(/<hdd>([\s\S]*?)<\/hdd>/gi)].map((match, index) => ({ diskNo: tag(match[1]!, "id") ?? index + 1, devicePath: tag(match[1]!, "name") ?? `HDD ${index + 1}`, capacity: tag(match[1]!, "capacity"), freeSpace: tag(match[1]!, "freeSpace"), state: tag(match[1]!, "status"), temperature: tag(match[1]!, "temperature") })); }
 function parseCgiDisks(text: string) { const grouped = new Map<string, Record<string, unknown>>(); for (const line of text.split(/\r?\n/)) { const match = line.match(/(?:Storage|Disk|HDD)(?:\[|\.)(\d+)\]?\.([^=]+)=(.*)$/i); if (!match) continue; const item = grouped.get(match[1]!) ?? { diskNo: Number(match[1]) + 1 }; item[match[2]!] = match[3]!.trim(); grouped.set(match[1]!, item); } return [...grouped.values()]; }

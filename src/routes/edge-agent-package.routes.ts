@@ -7,6 +7,7 @@ import type { ControlPlaneStore } from "../control-plane-store.js";
 
 const branchParams = z.object({ branchId: z.string().min(1) });
 const edgeAgentParams = z.object({ edgeAgentId: z.string().min(1) });
+const packageQuery = z.object({ platform: z.enum(["windows", "linux"]).default("windows") });
 
 function crc32(buffer: Buffer) {
   let crc = 0xffffffff;
@@ -124,6 +125,7 @@ export async function registerEdgeAgentPackageRoutes(
       return reply.code(404).send({ error: "edge_agent_not_found" });
     }
 
+    const { platform } = packageQuery.parse(request.query);
     const packageJsonPath = join(process.cwd(), "edge-agent", "package.json");
     const distPath = join(process.cwd(), "edge-agent", "dist");
     const packageJson = await readJsonFile(packageJsonPath);
@@ -162,7 +164,25 @@ export async function registerEdgeAgentPackageRoutes(
     ].join("\n");
 
     entries.push({ name: ".env", data: Buffer.from(envContents, "utf8") });
-    entries.push({ name: "install-edge-agent.ps1", data: Buffer.from(
+
+    const installScriptName = platform === "linux" ? "install-edge-agent.sh" : "install-edge-agent.ps1";
+    const installScript = platform === "linux" ?
+`#!/bin/sh
+set -e
+ENV_FILE="$(pwd)/.env"
+if [ ! -f "$ENV_FILE" ]; then
+  cat > "$ENV_FILE" <<'EOF'
+${envContents}
+EOF
+  echo "Created $ENV_FILE"
+fi
+
+echo "Installing edge-agent dependencies..."
+npm install --omit=dev
+
+echo "Starting edge agent..."
+npm run start
+` :
 `$envFile = Join-Path (Get-Location) ".env"
 if (-Not (Test-Path $envFile)) {
   Write-Host "No .env file found; creating it." -ForegroundColor Yellow
@@ -177,9 +197,25 @@ npm install --omit=dev
 
 Write-Host "Starting edge agent..."
 npm run start
-`, "utf8") });
+`;
 
-    entries.push({ name: "README.txt", data: Buffer.from(
+    entries.push({ name: installScriptName, data: Buffer.from(installScript, "utf8") });
+
+    const readmeBody = platform === "linux" ?
+`Unzip this package on the branch machine.
+
+1. Open a terminal in the extracted folder.
+2. Run: chmod +x install-edge-agent.sh
+3. Run: ./install-edge-agent.sh
+
+The package contains:
+  - edge-agent dist files
+  - edge-agent/package.json
+  - .env with branch-specific config placeholders
+  - install-edge-agent.sh to install and start the agent
+
+After the gateway starts, return to the dashboard and click Add camera.
+` :
 `Unzip this package on the branch machine.
 
 1. Open PowerShell in the extracted folder.
@@ -195,11 +231,13 @@ The package contains:
   - install-edge-agent.ps1 to install and start the agent
 
 After the gateway starts, return to the dashboard and click Add camera.
-`, "utf8") });
+`;
+
+    entries.push({ name: "README.txt", data: Buffer.from(readmeBody, "utf8") });
 
     const zip = makeZip(entries);
     reply.header("Content-Type", "application/zip");
-    reply.header("Content-Disposition", `attachment; filename="${branch.name.replace(/[^a-zA-Z0-9_-]/g, "-")}-edge-agent.zip"`);
+    reply.header("Content-Disposition", `attachment; filename="${branch.name.replace(/[^a-zA-Z0-9_-]/g, "-")}-edge-agent-${platform}.zip"`);
     return reply.send(zip);
   });
 }

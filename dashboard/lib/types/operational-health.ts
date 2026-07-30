@@ -188,6 +188,8 @@ export interface RetentionHealth {
   archiveRecorderId: string | null;
   archiveObservedAt: string | null;
   archiveCoverageComplete: boolean | null;
+  archiveGapCount: number | null;
+  archiveLargestGapSeconds: number | null;
   reasonCodes: string[];
 }
 
@@ -267,13 +269,19 @@ export interface RecorderHealth {
   firmwareVersion: string | null; ipAddress: string | null; protocol: string;
   status: 'online' | 'offline' | 'degraded' | 'unknown'; reachable: boolean;
   latencyMs: number | null; uptimeSeconds: number | null; recordingStatus: string;
-  recordingChannels?: number | null; recordingStatusSource?: string;
+  recordingChannels?: number | null; recordingStatusSource?: string; lastRecordedAt?: string | null;
+  channels?: Array<{
+    id: string; recorderId: string; sourceChannel: number | null;
+    status: 'recording' | 'stopped' | 'unknown'; connected: boolean | null;
+    lastRecordedAt: string | null; recordingStatusSource: string; observedAt: string;
+    quality: string; reasonCodes: string[];
+  }>;
   connectedCameras: number | null; totalCameras: number | null;
   lastCheck: string; quality: string; reasonCodes: string[];
 }
 export interface RecorderFleetHealth {
   recorders: RecorderHealth[];
-  summary: { total: number; online: number; offline: number; degraded: number; unknown: number; affectedBranches: number };
+  summary: { total: number; online: number; offline: number; degraded: number; unknown: number; recording: number; partial: number; stopped: number; unverified: number; affectedBranches: number };
   calculatedAt: string;
 }
 

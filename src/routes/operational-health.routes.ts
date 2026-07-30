@@ -21,10 +21,10 @@ import {
   projectDiskHealth,
 } from "../operational-health/disk-health.js";
 import { normalizeNetworkMetrics, projectInternetLink, summarizeBranchInternet } from "../operational-health/network-health.js";
-import { normalizeRecorderMetrics, projectRecorderHealth } from "../operational-health/recorder-health.js";
+import { normalizeRecorderMetrics, projectRecorderChannelHealth, projectRecorderHealth } from "../operational-health/recorder-health.js";
 import { normalizeEdgeAgentMetrics } from "../operational-health/edge-agent-health.js";
 
-const deviceTypes = ["branch", "edge-agent", "recorder", "camera", "disk", "network", "ups"] as const;
+const deviceTypes = ["branch", "edge-agent", "recorder", "recorder-channel", "camera", "disk", "network", "ups"] as const;
 const sources = ["onvif", "cp-plus-adapter", "rtsp", "system", "recording-engine"] as const;
 const qualities = ["verified", "estimated", "unsupported", "unavailable"] as const;
 const metricValue = z.union([z.string().max(500), z.number().finite(), z.boolean(), z.null()]);
@@ -68,6 +68,8 @@ const recorderArchiveSchema = z.object({
     retentionLowerBound: z.boolean(),
     coverageComplete: z.boolean(),
     continuityGapSeconds: z.number().int().min(0).max(86_400),
+    gapCount: z.number().int().min(0).default(0),
+    largestGapSeconds: z.number().min(0).default(0),
     searchStartedAt: z.string().datetime(),
     reasonCodes: z.array(z.string().min(1).max(100)).max(30).default([]),
   })).min(1).max(128).superRefine((entries, context) => {
@@ -262,6 +264,7 @@ export async function registerOperationalHealthRoutes(
           archiveStatus: entry.status, oldestContinuousAt: entry.oldestContinuousAt,
           newestPlayableAt: entry.newestPlayableAt, retentionLowerBound: entry.retentionLowerBound,
           coverageComplete: entry.coverageComplete, continuityGapSeconds: entry.continuityGapSeconds,
+          gapCount: entry.gapCount, largestGapSeconds: entry.largestGapSeconds,
           searchStartedAt: entry.searchStartedAt,
         },
         reasonCodes: entry.reasonCodes,
@@ -462,8 +465,26 @@ export async function registerOperationalHealthRoutes(
     const projections = await loadAccessibleProjections(request, store, query.branchId ? [query.branchId] : undefined);
     const branchById = new Map(projections.map((branch) => [branch.id, branch]));
     const telemetry = await store.listLatestOperationalTelemetry(request.currentUser.tenantId, [...branchById.keys()]);
+    const channelsByRecorder = new Map<string, ReturnType<typeof projectRecorderChannelHealth>[]>();
+    for (const item of telemetry) {
+      if (item.deviceType !== "recorder-channel") continue;
+      const channel = projectRecorderChannelHealth(item);
+      if (!channel.recorderId || channel.sourceChannel === null) continue;
+      const channels = channelsByRecorder.get(channel.recorderId) ?? [];
+      channels.push(channel);
+      channelsByRecorder.set(channel.recorderId, channels);
+    }
     let recorders = telemetry.filter((item) => item.deviceType === "recorder").flatMap((item) => {
-      const branch = branchById.get(item.branchId); return branch ? [projectRecorderHealth(item, branch)] : [];
+      const branch = branchById.get(item.branchId);
+      if (!branch) return [];
+      const recorder = projectRecorderHealth(item, branch);
+      const channels = (channelsByRecorder.get(recorder.id) ?? []).sort((left, right) => (left.sourceChannel ?? 0) - (right.sourceChannel ?? 0));
+      const channelTimestamps = channels.map((channel) => channel.lastRecordedAt).filter((value): value is string => Boolean(value));
+      return [{
+        ...recorder,
+        channels,
+        lastRecordedAt: recorder.lastRecordedAt ?? newestTimestamp(channelTimestamps),
+      }];
     });
     if (query.status) recorders = recorders.filter((recorder) => recorder.status === query.status);
     recorders.sort((left, right) => {
@@ -477,6 +498,10 @@ export async function registerOperationalHealthRoutes(
         offline: recorders.filter((item) => item.status === "offline").length,
         degraded: recorders.filter((item) => item.status === "degraded").length,
         unknown: recorders.filter((item) => item.status === "unknown").length,
+        recording: recorders.filter((item) => item.recordingStatus === "recording").length,
+        partial: recorders.filter((item) => item.recordingStatus === "partial").length,
+        stopped: recorders.filter((item) => item.recordingStatus === "stopped").length,
+        unverified: recorders.filter((item) => item.recordingStatus === "unknown").length,
         affectedBranches: new Set(recorders.filter((item) => item.status !== "online").map((item) => item.branchId)).size,
       }, calculatedAt: new Date().toISOString(),
     } };
@@ -712,6 +737,8 @@ function latestArchiveEvidenceByCamera(telemetry: OperationalTelemetryEnvelope[]
     const continuityGapSeconds = numberMetric(metrics.continuityGapSeconds);
     const coverageComplete = booleanMetric(metrics.coverageComplete);
     const retentionLowerBound = booleanMetric(metrics.retentionLowerBound);
+    const gapCount = numberMetric(metrics.gapCount);
+    const largestGapSeconds = numberMetric(metrics.largestGapSeconds);
     if (!cameraId || !recorderId || (status !== "available" && status !== "empty" && status !== "unavailable")
       || sourceChannel === null || continuityGapSeconds === null || coverageComplete === null || retentionLowerBound === null) continue;
     const next: RecorderArchiveEvidence = {
@@ -719,6 +746,7 @@ function latestArchiveEvidenceByCamera(telemetry: OperationalTelemetryEnvelope[]
       oldestContinuousAt: nullableStringMetric(metrics.oldestContinuousAt),
       newestPlayableAt: nullableStringMetric(metrics.newestPlayableAt),
       retentionLowerBound, coverageComplete, continuityGapSeconds,
+      gapCount: gapCount ?? 0, largestGapSeconds: largestGapSeconds ?? 0,
       reasonCodes: item.reasonCodes,
     };
     const current = evidence.get(cameraId);
@@ -738,6 +766,16 @@ function numberMetric(value: OperationalTelemetryEnvelope["metrics"][string] | u
 }
 function booleanMetric(value: OperationalTelemetryEnvelope["metrics"][string] | undefined) {
   return typeof value === "boolean" ? value : null;
+}
+
+function newestTimestamp(values: string[]) {
+  let newest: string | null = null;
+  let newestTime = Number.NEGATIVE_INFINITY;
+  for (const value of values) {
+    const parsed = Date.parse(value);
+    if (Number.isFinite(parsed) && parsed > newestTime) { newest = value; newestTime = parsed; }
+  }
+  return newest;
 }
 
 async function canManagePolicy(

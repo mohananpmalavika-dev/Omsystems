@@ -41,7 +41,7 @@ export interface EdgeScanJob {
 export interface TelemetryPayload {
   branchId: string;
   edgeAgentId: string;
-  deviceType: "branch" | "edge-agent" | "recorder" | "camera" | "disk" | "network" | "ups";
+  deviceType: "branch" | "edge-agent" | "recorder" | "recorder-channel" | "camera" | "disk" | "network" | "ups";
   deviceId: string;
   observedAt: string;
   source: "onvif" | "cp-plus-adapter" | "rtsp" | "system" | "recording-engine";

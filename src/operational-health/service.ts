@@ -27,6 +27,8 @@ export interface RetentionVerification {
   archiveRecorderId: string | null;
   archiveObservedAt: string | null;
   archiveCoverageComplete: boolean | null;
+  archiveGapCount: number | null;
+  archiveLargestGapSeconds: number | null;
   reasonCodes: string[];
 }
 
@@ -40,6 +42,8 @@ export interface RecorderArchiveEvidence {
   retentionLowerBound: boolean;
   coverageComplete: boolean;
   continuityGapSeconds: number;
+  gapCount?: number;
+  largestGapSeconds?: number;
   reasonCodes: string[];
 }
 
@@ -92,6 +96,8 @@ export function verifyContinuousRetention(
     archiveRecorderId: archiveEvidence?.recorderId ?? null,
     archiveObservedAt: archiveEvidence?.observedAt ?? null,
     archiveCoverageComplete: archiveEvidence?.coverageComplete ?? null,
+    archiveGapCount: archiveEvidence?.gapCount ?? null,
+    archiveLargestGapSeconds: archiveEvidence?.largestGapSeconds ?? null,
   };
 
   // Direct recorder evidence is authoritative for a mapped channel. A platform
@@ -166,7 +172,7 @@ function retentionResult(
   now: number,
   source: RetentionSource | null | undefined,
   additionalReasonCodes: string[],
-  archive: Pick<RetentionVerification, "archiveVerified" | "archiveMismatch" | "archiveRecorderId" | "archiveObservedAt" | "archiveCoverageComplete">,
+  archive: Pick<RetentionVerification, "archiveVerified" | "archiveMismatch" | "archiveRecorderId" | "archiveObservedAt" | "archiveCoverageComplete" | "archiveGapCount" | "archiveLargestGapSeconds">,
 ): RetentionVerification {
   const unavailable = (): RetentionVerification => ({
     cameraId, configuredDays: policy.retentionDays, actualDays: null, oldestContinuousAt: null, newestPlayableAt: null,

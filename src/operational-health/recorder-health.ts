@@ -9,6 +9,7 @@ export function normalizeRecorderMetrics(metrics: Record<string, TelemetryValue>
   let status = reachable ? "online" : "offline";
   if (!reachable) reasons.push("recorder_unreachable");
   if (reachable && (recording === "stopped" || recording === "error" || recording === "partial")) { status = "degraded"; reasons.push("recorder_not_recording"); }
+  if (reachable && (!recording || recording === "unknown")) { status = "degraded"; reasons.push("recorder_recording_unverified"); }
   if (reachable && connected !== null && total !== null && connected < total) { status = "degraded"; reasons.push("recorder_channels_offline"); }
   return { metrics: { ...metrics, status, reachable }, reasonCodes: reasons.length ? reasons : ["recorder_healthy"] };
 }
@@ -30,12 +31,30 @@ export function projectRecorderHealth(envelope: OperationalTelemetryEnvelope, br
     recordingStatus: stringMetric(envelope.metrics, "recordingStatus") || "unknown",
     recordingChannels: numberMetric(envelope.metrics, "recordingChannels"),
     recordingStatusSource: stringMetric(envelope.metrics, "recordingStatusSource") || "unavailable",
+    lastRecordedAt: nullableStringMetric(envelope.metrics, "lastRecordedAt"),
     connectedCameras: numberMetric(envelope.metrics, "connectedCameras"), totalCameras: numberMetric(envelope.metrics, "totalCameras"),
     lastCheck: envelope.observedAt, quality: envelope.quality, reasonCodes: envelope.reasonCodes,
   };
 }
 
+export function projectRecorderChannelHealth(envelope: OperationalTelemetryEnvelope) {
+  return {
+    id: envelope.deviceId,
+    recorderId: stringMetric(envelope.metrics, "recorderId"),
+    sourceChannel: numberMetric(envelope.metrics, "sourceChannel"),
+    status: channelStatus(envelope.metrics.status),
+    connected: booleanMetric(envelope.metrics, "connected"),
+    lastRecordedAt: nullableStringMetric(envelope.metrics, "lastRecordedAt"),
+    recordingStatusSource: stringMetric(envelope.metrics, "recordingStatusSource") || "unavailable",
+    observedAt: envelope.observedAt,
+    quality: envelope.quality,
+    reasonCodes: envelope.reasonCodes,
+  };
+}
+
 function recorderStatus(value: TelemetryValue | undefined) { return value === "online" || value === "offline" || value === "degraded" ? value : "unknown" as const; }
+function channelStatus(value: TelemetryValue | undefined) { return value === "recording" || value === "stopped" ? value : "unknown" as const; }
 function numberMetric(metrics: Record<string, TelemetryValue>, name: string) { const value = metrics[name]; return typeof value === "number" && Number.isFinite(value) ? value : null; }
 function stringMetric(metrics: Record<string, TelemetryValue>, name: string) { const value = metrics[name]; return typeof value === "string" ? value : ""; }
+function nullableStringMetric(metrics: Record<string, TelemetryValue>, name: string) { const value = metrics[name]; return typeof value === "string" ? value : null; }
 function booleanMetric(metrics: Record<string, TelemetryValue>, name: string) { const value = metrics[name]; return typeof value === "boolean" ? value : null; }
