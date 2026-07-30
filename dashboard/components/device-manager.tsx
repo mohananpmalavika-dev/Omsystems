@@ -273,7 +273,9 @@ Write-Host "For example: npm install; npm run build; npm run dev"
   async function downloadEdgeAgentPackage(platform: "windows" | "linux") {
     if (!activeBranch) return;
 
-    const edgeAgent = provisionedGateway ?? gateways[0];
+    const edgeAgent = provisionedGateway?.branchId === activeBranch.id
+      ? provisionedGateway
+      : gateways[0];
     if (!edgeAgent) {
       window.alert("No branch gateway is registered yet. Register a gateway first or select a branch with an existing gateway.");
       return;
@@ -315,8 +317,13 @@ Write-Host "For example: npm install; npm run build; npm run dev"
       setGateways([]);
       setCameras([]);
       setInventoryRecords([]);
+      setProvisionedGateway(undefined);
       return;
     }
+
+    setProvisionedGateway((gateway) =>
+      gateway?.branchId === selectedBranch ? gateway : undefined,
+    );
     setInventoryForm((form) => ({ ...form, branch: selectedBranch }));
     void refreshBranch(selectedBranch);
   }, [selectedBranch]);
