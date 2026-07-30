@@ -105,47 +105,70 @@ export async function registerEdgeAgentPackageRoutes(
   store: ControlPlaneStore,
 ) {
   app.get("/v1/branches/:branchId/edge-agents/:edgeAgentId/package", async (request, reply) => {
-    const { branchId } = branchParams.parse(request.params);
-    const { edgeAgentId } = edgeAgentParams.parse(request.params);
+    try {
+      const { branchId } = branchParams.parse(request.params);
+      const { edgeAgentId } = edgeAgentParams.parse(request.params);
 
-    const branch = await store.getNode(branchId);
-    if (!branch || branch.type !== "branch") {
-      return reply.code(404).send({ error: "branch_not_found" });
-    }
-    const decision = await store.checkAccess(request.currentUser, "device:configure", branchId);
-    if (!decision) {
-      return reply.code(404).send({ error: "resource_not_found" });
-    }
-    if (!decision.allowed) {
-      return reply.code(403).send({ error: "forbidden", reason: decision.reason });
-    }
+      const branch = await store.getNode(branchId);
+      if (!branch || branch.type !== "branch") {
+        return reply.code(404).send({ error: "branch_not_found" });
+      }
+      const decision = await store.checkAccess(request.currentUser, "device:configure", branchId);
+      if (!decision) {
+        return reply.code(404).send({ error: "resource_not_found" });
+      }
+      if (!decision.allowed) {
+        return reply.code(403).send({ error: "forbidden", reason: decision.reason });
+      }
 
-    const agents = await store.listEdgeAgentsByBranch(branchId);
-    const agent = agents.find((item) => item.id === edgeAgentId);
-    if (!agent) {
-      return reply.code(404).send({ error: "edge_agent_not_found" });
-    }
+      const agents = await store.listEdgeAgentsByBranch(branchId);
+      const agent = agents.find((item) => item.id === edgeAgentId);
+      if (!agent) {
+        return reply.code(404).send({ error: "edge_agent_not_found" });
+      }
 
-    const { platform } = packageQuery.parse(request.query);
-    const routeDir = dirname(fileURLToPath(import.meta.url));
-    const packageJsonPath = join(routeDir, "..", "..", "edge-agent", "package.json");
-    const distPath = join(routeDir, "..", "..", "edge-agent", "dist");
-    const packageJson = await readJsonFile(packageJsonPath);
-    const packagedPackageJson = {
-      ...packageJson,
-      private: true,
-      scripts: {
-        ...packageJson.scripts,
-        start: "node dist/src/index.js",
-      },
-    };
+      const { platform } = packageQuery.parse(request.query);
+      const routeDir = dirname(fileURLToPath(import.meta.url));
+      const packageJsonPath = join(routeDir, "..", "..", "edge-agent", "package.json");
+      const distPath = join(routeDir, "..", "..", "edge-agent", "dist");
+      
+      // Check if paths exist
+      try {
+        await stat(packageJsonPath);
+      } catch {
+        app.log.error(`Package.json not found at: ${packageJsonPath}`);
+        return reply.code(500).send({ 
+          error: "package_not_available", 
+          message: "Edge agent package files are not available on this server" 
+        });
+      }
 
-    const distFiles = await collectFiles(distPath);
-    const entries: Array<{ name: string; data: Buffer }> = [];
-    for (const file of distFiles) {
-      const fileData = await readFile(file.path);
-      entries.push({ name: `edge-agent/${file.relativePath}`, data: fileData });
-    }
+      try {
+        await stat(distPath);
+      } catch {
+        app.log.error(`Dist directory not found at: ${distPath}`);
+        return reply.code(500).send({ 
+          error: "package_not_available", 
+          message: "Edge agent distribution files are not available on this server" 
+        });
+      }
+
+      const packageJson = await readJsonFile(packageJsonPath);
+      const packagedPackageJson = {
+        ...packageJson,
+        private: true,
+        scripts: {
+          ...packageJson.scripts,
+          start: "node dist/src/index.js",
+        },
+      };
+
+      const distFiles = await collectFiles(distPath);
+      const entries: Array<{ name: string; data: Buffer }> = [];
+      for (const file of distFiles) {
+        const fileData = await readFile(file.path);
+        entries.push({ name: `edge-agent/${file.relativePath}`, data: fileData });
+      }
 
     entries.push({ name: "edge-agent/package.json", data: Buffer.from(JSON.stringify(packagedPackageJson, null, 2), "utf8") });
 
@@ -241,5 +264,12 @@ After the gateway starts, return to the dashboard and click Add camera.
     reply.header("Content-Type", "application/zip");
     reply.header("Content-Disposition", `attachment; filename="${branch.name.replace(/[^a-zA-Z0-9_-]/g, "-")}-edge-agent-${platform}.zip"`);
     return reply.send(zip);
+    } catch (error) {
+      app.log.error({ err: error, branchId: request.params.branchId, edgeAgentId: request.params.edgeAgentId }, "Failed to generate edge agent package");
+      return reply.code(500).send({ 
+        error: "internal_error", 
+        message: error instanceof Error ? error.message : "Failed to generate package" 
+      });
+    }
   });
 }
