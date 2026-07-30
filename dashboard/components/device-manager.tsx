@@ -760,13 +760,6 @@ Write-Host "For example: npm install; npm run build; npm run dev"
         {selectedBranch && gateways.length === 0 ? (
           <p className="device-toolbar-note">Register a branch gateway first to enable the edge agent download package buttons.</p>
         ) : null}
-          <button className="primary-button" onClick={() => void autoDiscoverAndProvision()} disabled={!selectedBranch || scanning} title="Automatically discover and provision cameras in this branch">
-            <Plus size={15} /> Add camera
-          </button>
-          <button className="secondary-button" onClick={openCameraForm} disabled={!selectedBranch || gateways.length === 0} title="Open manual camera registration form">
-            <Plus size={15} /> Manual add
-          </button>
-        </div>
       </div>
 
       {error && <div className="device-message error"><AlertTriangle size={16} />{error}</div>}
