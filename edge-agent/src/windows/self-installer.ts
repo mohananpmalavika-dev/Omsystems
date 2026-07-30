@@ -1,9 +1,26 @@
-import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { join } from "node:path";
 
 const ASSET_ROOT = join(__dirname, "..", "vendor", "windows");
 const INSTALLER_ROOT = join(__dirname, "..", "installer", "windows");
+
+const REQUIRED_BUNDLE_ASSETS = [
+  ["ffmpeg.zip", join(ASSET_ROOT, "ffmpeg.zip")],
+  ["mediamtx.zip", join(ASSET_ROOT, "mediamtx.zip")],
+  ["cloudflared.exe", join(ASSET_ROOT, "cloudflared.exe")],
+  ["install-edge-agent.ps1", join(INSTALLER_ROOT, "install-edge-agent.ps1")],
+  ["uninstall-edge-agent.ps1", join(INSTALLER_ROOT, "uninstall-edge-agent.ps1")],
+] as const;
+
+export function inspectBundledWindowsRuntime() {
+  return REQUIRED_BUNDLE_ASSETS.map(([name, path]) => {
+    if (!existsSync(path)) throw new Error(`The all-in-one installer is missing ${name}`);
+    const sizeBytes = statSync(path).size;
+    if (sizeBytes <= 0) throw new Error(`The bundled ${name} is empty`);
+    return { name, sizeBytes };
+  });
+}
 
 export function launchWindowsSelfInstaller(environmentFile: string) {
   if (process.platform !== "win32") throw new Error("The embedded installer can only run on Windows");

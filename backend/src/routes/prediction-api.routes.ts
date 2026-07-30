@@ -608,6 +608,138 @@ export function createPredictionApiRoutes(pool: Pool): Router {
   });
 
   /**
+   * GET /v1/predictions/model-performance/detailed
+   * Get comprehensive calibration metrics for all prediction types
+   */
+  router.get('/model-performance/detailed', async (req: AuthRequest, res: Response) => {
+    try {
+      const { tenantId } = req.context || {};
+      if (!tenantId) {
+        return res.status(401).json({ success: false, error: 'Unauthorized' });
+      }
+
+      const { days = '90' } = req.query;
+
+      const { PredictionCalibrationService } = await import('../services/prediction-calibration.service.js');
+      const calibrationService = new PredictionCalibrationService(pool);
+
+      const performanceData = await calibrationService.getAllPredictionPerformance(
+        parseInt(days as string),
+        tenantId
+      );
+
+      res.json({
+        success: true,
+        data: performanceData
+      });
+    } catch (error) {
+      logger.error('Error fetching detailed model performance', { error });
+      res.status(500).json({ success: false, error: 'Internal server error' });
+    }
+  });
+
+  /**
+   * GET /v1/predictions/model-performance/:predictionType/calibration
+   * Get calibration curve for a specific prediction type
+   */
+  router.get('/model-performance/:predictionType/calibration', async (req: AuthRequest, res: Response) => {
+    try {
+      const { tenantId } = req.context || {};
+      if (!tenantId) {
+        return res.status(401).json({ success: false, error: 'Unauthorized' });
+      }
+
+      const { predictionType } = req.params;
+      const { days = '90' } = req.query;
+
+      const { PredictionCalibrationService } = await import('../services/prediction-calibration.service.js');
+      const calibrationService = new PredictionCalibrationService(pool);
+
+      const calibrationCurve = await calibrationService.generateCalibrationCurve(
+        predictionType,
+        parseInt(days as string),
+        tenantId
+      );
+
+      res.json({
+        success: true,
+        data: calibrationCurve
+      });
+    } catch (error) {
+      logger.error('Error fetching calibration curve', { error, predictionType: req.params.predictionType });
+      res.status(500).json({ success: false, error: 'Internal server error' });
+    }
+  });
+
+  /**
+   * GET /v1/predictions/model-performance/degradation-check
+   * Check for model degradation issues
+   */
+  router.get('/model-performance/degradation-check', async (req: AuthRequest, res: Response) => {
+    try {
+      const { tenantId } = req.context || {};
+      if (!tenantId) {
+        return res.status(401).json({ success: false, error: 'Unauthorized' });
+      }
+
+      const { PredictionCalibrationService } = await import('../services/prediction-calibration.service.js');
+      const calibrationService = new PredictionCalibrationService(pool);
+
+      const issues = await calibrationService.detectModelDegradation(tenantId);
+
+      res.json({
+        success: true,
+        data: {
+          hasIssues: issues.length > 0,
+          issueCount: issues.length,
+          issues
+        }
+      });
+    } catch (error) {
+      logger.error('Error checking model degradation', { error });
+      res.status(500).json({ success: false, error: 'Internal server error' });
+    }
+  });
+
+  /**
+   * POST /v1/predictions/model-performance/threshold-recommendations
+   * Get recommended threshold adjustments based on outcomes
+   */
+  router.post('/model-performance/threshold-recommendations', async (req: AuthRequest, res: Response) => {
+    try {
+      const { tenantId } = req.context || {};
+      if (!tenantId) {
+        return res.status(401).json({ success: false, error: 'Unauthorized' });
+      }
+
+      const { predictionType } = req.body;
+
+      if (!predictionType) {
+        return res.status(400).json({
+          success: false,
+          error: 'predictionType is required'
+        });
+      }
+
+      const { PredictionCalibrationService } = await import('../services/prediction-calibration.service.js');
+      const calibrationService = new PredictionCalibrationService(pool);
+
+      const recommendations = await calibrationService.recommendThresholdAdjustments(
+        predictionType,
+        tenantId
+      );
+
+      res.json({
+        success: true,
+        data: recommendations
+      });
+    } catch (error) {
+      logger.error('Error generating threshold recommendations', { error });
+      res.status(500).json({ success: false, error: 'Internal server error' });
+    }
+  });
+
+  /**
    * POST /v1/predictions/generate
    * Manually trigger prediction generation
    */

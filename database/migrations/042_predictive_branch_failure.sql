@@ -775,3 +775,33 @@ COMMENT ON TABLE risk_suppression_rules IS 'Operator-defined exceptions to predi
 -- SELECT cron.schedule('expire-predictions', '0 * * * *', $$
 --   SELECT expire_old_predictions()
 -- $$);
+
+-- ============================================================================
+-- CALIBRATION HISTORY TABLE (Added for prediction accuracy tracking)
+-- ============================================================================
+
+CREATE TABLE prediction_calibration_history (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id UUID REFERENCES tenants(id) ON DELETE CASCADE,
+    prediction_type prediction_type_enum NOT NULL,
+    measured_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    accuracy DECIMAL(5,4) NOT NULL,
+    precision_value DECIMAL(5,4) NOT NULL,
+    recall_value DECIMAL(5,4) NOT NULL,
+    f1_score DECIMAL(5,4) NOT NULL,
+    false_positive_rate DECIMAL(5,4) NOT NULL,
+    average_lead_time_hours DECIMAL(8,2),
+    total_predictions INT NOT NULL,
+    true_positives INT NOT NULL,
+    false_positives INT NOT NULL,
+    false_negatives INT NOT NULL,
+    model_health VARCHAR(20) NOT NULL CHECK (model_health IN ('excellent', 'good', 'fair', 'poor')),
+    calibration_curve JSONB,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_calibration_tenant ON prediction_calibration_history(tenant_id);
+CREATE INDEX idx_calibration_type ON prediction_calibration_history(prediction_type);
+CREATE INDEX idx_calibration_measured_at ON prediction_calibration_history(measured_at DESC);
+
+COMMENT ON TABLE prediction_calibration_history IS 'Historical tracking of prediction model accuracy and calibration metrics';

@@ -1,15 +1,14 @@
 import { afterEach, describe, expect, it } from "vitest";
-import type { FastifyInstance } from "fastify";
-import { buildEdgeLiveGateway } from "../src/streaming/edge-live-gateway.js";
+import { buildEdgeLiveGateway, type EdgeLiveGateway } from "../src/streaming/edge-live-gateway.js";
 
 describe("all-in-one edge live gateway", () => {
-  let app: FastifyInstance | undefined;
+  let app: EdgeLiveGateway | undefined;
   afterEach(async () => { await app?.close(); app = undefined; });
 
   it("authorizes a dashboard session and creates a path from the branch-local secret", async () => {
     const paths: Array<{ path: string; source: string }> = [];
     const bridgeKey = "b".repeat(43);
-    app = await buildEdgeLiveGateway({
+    app = buildEdgeLiveGateway({
       consumer: {
         consume: async () => ({
           id: "session-1", cameraId: "camera-1", cameraNodeId: "branch-1",
@@ -27,26 +26,37 @@ describe("all-in-one edge live gateway", () => {
       mediaMtxHlsUrl: "http://127.0.0.1:8888",
       accessTtlMs: 30_000,
     });
+    const address = await app.listen({ host: "127.0.0.1", port: 0 });
+    const baseUrl = `http://127.0.0.1:${address.port}`;
 
-    const denied = await app.inject({
-      method: "POST", url: "/v1/live/start",
-      payload: { controlPlaneToken: "t".repeat(43) },
+    const cors = await fetch(`${baseUrl}/hls/camera-camera-1/index.m3u8`, {
+      method: "OPTIONS",
+      headers: { origin: "https://dashboard.example.com" },
     });
-    expect(denied.statusCode).toBe(401);
+    expect(cors.status).toBe(204);
+    expect(cors.headers.get("access-control-allow-origin")).toBe("https://dashboard.example.com");
+    expect(cors.headers.get("access-control-allow-credentials")).toBe("true");
 
-    const started = await app.inject({
-      method: "POST", url: "/v1/live/start",
-      headers: { "x-edge-bridge-key": bridgeKey },
-      payload: { controlPlaneToken: "t".repeat(43) },
+    const denied = await fetch(`${baseUrl}/v1/live/start`, {
+      method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ controlPlaneToken: "t".repeat(43) }),
     });
-    expect(started.statusCode).toBe(201);
+    expect(denied.status).toBe(401);
+
+    const started = await fetch(`${baseUrl}/v1/live/start`, {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-edge-bridge-key": bridgeKey },
+      body: JSON.stringify({ controlPlaneToken: "t".repeat(43) }),
+    });
+    expect(started.status).toBe(201);
+    const session = await started.json() as any;
     expect(paths).toEqual([{ path: "camera-camera-1", source: "rtsp://admin:secret@192.168.1.20/stream" }]);
-    expect(started.json().hls.url).toBe("https://branch-media.example.com/hls/camera-camera-1/index.m3u8");
+    expect(session.hls.url).toBe("https://branch-media.example.com/hls/camera-camera-1/index.m3u8");
 
-    const mediaAuth = await app.inject({
-      method: "POST", url: "/internal/mediamtx/auth",
-      payload: { action: "read", path: "camera-camera-1", query: `token=${started.json().hls.bearerToken}` },
+    const mediaAuth = await fetch(`${baseUrl}/internal/mediamtx/auth`, {
+      method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ action: "read", path: "camera-camera-1", query: `token=${session.hls.bearerToken}` }),
     });
-    expect(mediaAuth.statusCode).toBe(204);
+    expect(mediaAuth.status).toBe(204);
   });
 });

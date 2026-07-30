@@ -57,8 +57,8 @@ function Read-RequiredSecret([string]$Prompt, [int]$MinimumLength) {
 }
 
 Assert-Administrator
-if (-not (Test-Path -LiteralPath $SourceExecutable -PathType Leaf)) { throw "edge-agent.exe is missing. Extract the complete dashboard ZIP before installing." }
-if (-not (Test-Path -LiteralPath $SourceConfig -PathType Leaf)) { throw "config\edge-agent.env is missing. Extract the complete dashboard ZIP before installing." }
+if (-not (Test-Path -LiteralPath $SourceExecutable -PathType Leaf)) { throw "The all-in-one installer could not extract edge-agent.exe." }
+if (-not (Test-Path -LiteralPath $SourceConfig -PathType Leaf)) { throw "The all-in-one installer could not extract its branch configuration." }
 
 $Executable = Join-Path $InstallDirectory "edge-agent.exe"
 $ConfigDirectory = Join-Path $InstallDirectory "config"

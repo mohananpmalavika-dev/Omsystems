@@ -13,10 +13,14 @@ import { initializeCameraHeartbeat } from "./monitoring/camera-heartbeat.js";
 import { hasArgument, prepareEdgeRuntime } from "./runtime.js";
 import { logger } from "./utils/logger.js";
 import { startEdgeMediaRuntime, type EdgeMediaRuntime } from "./streaming/edge-live-gateway.js";
-import { launchWindowsSelfInstaller } from "./windows/self-installer.js";
+import { inspectBundledWindowsRuntime, launchWindowsSelfInstaller } from "./windows/self-installer.js";
 
 async function main() {
 const argv = process.argv.slice(2);
+if (hasArgument(argv, "--verify-bundle")) {
+  process.stdout.write(`${JSON.stringify({ valid: true, assets: inspectBundledWindowsRuntime() }, null, 2)}\n`);
+  process.exit(0);
+}
 const runtime = prepareRuntimeOrExit(argv);
 if (runtime.embeddedEnvironmentFile && (argv.length === 0 || hasArgument(argv, "--install"))) {
   launchWindowsSelfInstaller(runtime.embeddedEnvironmentFile);
