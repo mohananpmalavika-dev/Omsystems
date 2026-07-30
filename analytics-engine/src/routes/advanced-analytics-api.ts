@@ -1194,6 +1194,11 @@ export async function registerAdvancedAnalyticsRoutes(
     };
   });
 
+  /** Provisioning state is distinct from the in-memory lazy-load cache. */
+  app.get("/v1/analytics/models/inventory", async () => {
+    return pipeline.getModelManager().getProvisioningSummary();
+  });
+
   /**
    * Optimize models
    */

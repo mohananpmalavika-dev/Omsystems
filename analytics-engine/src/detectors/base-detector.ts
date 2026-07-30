@@ -70,6 +70,11 @@ export function hasInferenceObjects(frame: DetectionFrame): boolean {
   return Array.isArray(frame.metadata?.detections);
 }
 
+/** Local frames stay marked after the shared COCO pass adds normalized objects. */
+export function shouldRunLocalSpecialtyInference(frame: DetectionFrame): boolean {
+  return frame.metadata?.inferenceMode === "local-onnx" || !hasInferenceObjects(frame);
+}
+
 export interface DetectionResult {
   detectionType: string;
   confidence: number;

@@ -7,6 +7,7 @@ import { randomUUID } from "node:crypto";
 import { BaseDetector, calculateIoU, type DetectionFrame, type DetectionResult, getInferenceObjects, hasInferenceObjects } from "./base-detector.js";
 import { getModelManager } from "../model-manager.js";
 import { YoloCocoInference } from "../inference/yolo-coco-inference.js";
+import { modelUnavailableReason } from "../inference/configured-model-inference.js";
 
 export type VehicleType = "car" | "motorcycle" | "bus" | "truck" | "bicycle" | "auto-rickshaw";
 
@@ -38,7 +39,9 @@ export class VehicleDetector extends BaseDetector {
     console.log("Initializing vehicle detector...");
     
     try {
-      this.inference = new YoloCocoInference(await getModelManager().getModel("yolov8n"), this.MIN_CONFIDENCE);
+      const manager = getModelManager();
+      if (!manager.isModelAvailable("yolov8n")) throw new Error(modelUnavailableReason("yolov8n"));
+      this.inference = new YoloCocoInference(await manager.getModel("yolov8n"), this.MIN_CONFIDENCE);
       this.isModelLoaded = true;
       this.modelLoadError = undefined;
       console.log("Vehicle detector loaded shared YOLOv8 ONNX model");

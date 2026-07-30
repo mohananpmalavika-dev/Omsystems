@@ -5,7 +5,14 @@
     "outDir": "dist",
     "types": ["node"]
   },
-  "include": ["src/**/*.ts", "test/app.test.ts"],
+  "include": [
+    "src/**/*.ts",
+    "scripts/**/*.ts",
+    "test/app.test.ts",
+    "test/inference.test.ts",
+    "test/model-manager.test.ts",
+    "test/specialty-inference.test.ts"
+  ],
   "exclude": [
     "src/analytics-integration-example.ts",
     "src/routes/advanced-analytics-api.ts",

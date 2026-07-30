@@ -3,6 +3,8 @@ import { Tensor } from "onnxruntime-node";
 import { YoloPersonInference } from "../src/inference/yolo-person-inference.js";
 import { YoloCocoInference } from "../src/inference/yolo-coco-inference.js";
 import { FfmpegFrameExtractor } from "../src/frame-extractor.js";
+import { YoloDetectionInference } from "../src/inference/yolo-detection-inference.js";
+import { CtcTextInference } from "../src/inference/vision-specialty-inference.js";
 
 describe("local analytics foundations", () => {
   it("runs YOLO person inference and suppresses overlapping boxes", async () => {
@@ -14,7 +16,7 @@ describe("local analytics foundations", () => {
       20, 20, 0, 0, 0, 0,
       0.9, 0.8, 0, 0, 0, 0,
     ]), [1, 5, 6]);
-    const run = vi.fn(async () => ({ output0: output }));
+    const run = vi.fn(async (_feeds: Record<string, Tensor>) => ({ output0: output }));
     const session = { inputNames: ["images"], outputNames: ["output0"], run };
     const inference = new YoloPersonInference(session as never);
     const detections = await inference.run({
@@ -66,5 +68,42 @@ describe("local analytics foundations", () => {
     await expect(extractor.extract({ cameraId: "c", tenantId: "t", streamUrl: "file:///etc/passwd" }))
       .rejects.toThrow("Unsupported stream protocol");
     expect(spawnProcess).not.toHaveBeenCalled();
+  });
+
+  it("resizes RGB frames and normalizes task-specific YOLO detections", async () => {
+    const output = new Tensor("float32", new Float32Array([
+      32, 48, 32, 16, 16, 12, 16, 12, 0.91, 0.05, 0.03, 0.88,
+    ]), [1, 6, 2]);
+    const run = vi.fn(async (_feeds: Record<string, Tensor>) => ({ output0: output }));
+    const inference = new YoloDetectionInference({
+      inputNames: ["images"], outputNames: ["output0"], run,
+    } as never, {
+      labels: ["fire", "smoke"], inputWidth: 64, inputHeight: 32,
+    });
+    const detections = await inference.run({
+      cameraId: "camera-1", tenantId: "tenant-1", timestamp: new Date(),
+      imageData: Buffer.alloc(32 * 16 * 3, 127), width: 32, height: 16,
+    });
+
+    const feed = run.mock.calls[0]![0] as Record<string, Tensor>;
+    expect(feed.images?.dims).toEqual([1, 3, 32, 64]);
+    expect(detections.map((item) => item.label)).toEqual(["fire", "smoke"]);
+    expect(detections.every((item) => Object.values(item.boundingBox).every((value) => value >= 0 && value <= 1))).toBe(true);
+  });
+
+  it("decodes a local CTC plate-recognition tensor", async () => {
+    const alphabet = ["", "D", "L", "1"];
+    const steps = [1, 1, 0, 2, 3];
+    const logits = new Float32Array(steps.length * alphabet.length).fill(-5);
+    steps.forEach((selected, step) => { logits[(step * alphabet.length) + selected] = 5; });
+    const run = vi.fn(async () => ({ output: new Tensor("float32", logits, [1, steps.length, alphabet.length]) }));
+    const inference = new CtcTextInference({ inputNames: ["images"], outputNames: ["output"], run } as never, alphabet, 0, 32, 16);
+    const result = await inference.run({
+      cameraId: "camera-1", tenantId: "tenant-1", timestamp: new Date(),
+      imageData: Buffer.alloc(64 * 32 * 3, 200), width: 64, height: 32,
+    }, { x: 0.1, y: 0.2, width: 0.8, height: 0.5 });
+
+    expect(result.text).toBe("DL1");
+    expect(result.confidence).toBeGreaterThan(0.99);
   });
 });

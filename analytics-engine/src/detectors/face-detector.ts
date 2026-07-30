@@ -10,7 +10,15 @@ import {
   type DetectionResult,
   getInferenceObjects,
   normalizeBoundingBox,
+  shouldRunLocalSpecialtyInference,
 } from "./base-detector.js";
+import {
+  loadFaceVectorInference,
+  loadObjectInference,
+  modelUnavailableReason,
+  type FaceVectorInference,
+  type ObjectFrameInference,
+} from "../inference/configured-model-inference.js";
 
 export interface FaceDetectorConfig {
   modelPath?: string;
@@ -45,15 +53,23 @@ export interface WatchlistMatch {
   metadata?: Record<string, unknown>;
 }
 
+export interface FaceDetectorInference {
+  detection?: ObjectFrameInference;
+  embedding?: FaceVectorInference;
+}
+
 export class FaceDetector extends BaseDetector {
   private config: FaceDetectorConfig;
-  private detectionModel: any = null;
-  private recognitionModel: any = null;
+  private detectionModel: ObjectFrameInference | null;
+  private recognitionModel: FaceVectorInference | null;
+  private modelLoadError: string | null = null;
   private watchlists = new Map<string, Array<{ id: string; embedding: number[] }>>();
   private isInitialized = false;
 
-  constructor(config: Partial<FaceDetectorConfig> = {}) {
+  constructor(config: Partial<FaceDetectorConfig> = {}, inference: FaceDetectorInference = {}) {
     super("face", "1.0.0");
+    this.detectionModel = inference.detection ?? null;
+    this.recognitionModel = inference.embedding ?? null;
     this.config = {
       detectionConfidence: config.detectionConfidence ?? 0.8,
       recognitionEnabled: config.recognitionEnabled ?? false,
@@ -66,25 +82,22 @@ export class FaceDetector extends BaseDetector {
   }
 
   async initialize(): Promise<void> {
-    // TODO: Load actual face detection models
-    // Options:
-    // 1. face-api.js (TensorFlow.js based)
-    // 2. OpenCV DNN with pre-trained models
-    // 3. ONNX Runtime with face models
-    // 4. InsightFace (Python API, can be wrapped)
-
-    // Example with face-api.js:
-    // import * as faceapi from 'face-api.js';
-    // await faceapi.nets.ssdMobilenetv1.loadFromDisk(this.config.modelPath);
-    // await faceapi.nets.faceLandmark68Net.loadFromDisk(this.config.modelPath);
-    // await faceapi.nets.faceRecognitionNet.loadFromDisk(this.config.modelPath);
-    // if (this.config.ageGenderEnabled) {
-    //   await faceapi.nets.ageGenderNet.loadFromDisk(this.config.modelPath);
-    // }
-
-    // Face observations can be supplied by a dedicated face-model worker. A
-    // local RetinaFace/ArcFace runtime is deliberately not faked here.
-    console.warn("Face detector accepts normalized face observations; no local face model is provisioned");
+    try {
+      this.detectionModel ??= await loadObjectInference("face-detector", this.config.detectionConfidence);
+      if (this.config.recognitionEnabled) {
+        try {
+          this.recognitionModel ??= await loadFaceVectorInference("face-embedding");
+        } catch (error) {
+          console.warn(`Face recognition embeddings unavailable: ${error instanceof Error ? error.message : String(error)}`);
+        }
+      }
+      this.modelLoadError = null;
+      console.log("Face detector loaded local ONNX model");
+    } catch (error) {
+      this.detectionModel = null;
+      this.modelLoadError = error instanceof Error ? error.message : modelUnavailableReason("face-detector");
+      console.warn(`Face detector running in normalized-observation mode: ${this.modelLoadError}`);
+    }
     this.isInitialized = true;
   }
 
@@ -93,7 +106,7 @@ export class FaceDetector extends BaseDetector {
       throw new Error("FaceDetector not initialized");
     }
 
-    const normalizedDetections = this.readNormalizedFaceObservations(frame);
+    const normalizedDetections = await this.readFaceObservations(frame);
 
     const results: DetectionResult[] = [];
     const faceObjects: Array<DetectedObject & { features?: FaceFeatures; match?: WatchlistMatch }> = [];
@@ -255,14 +268,23 @@ export class FaceDetector extends BaseDetector {
   /**
    * Normalize observations produced by a dedicated face model worker.
    */
-  private readNormalizedFaceObservations(frame: DetectionFrame): Array<{
+  private async readFaceObservations(frame: DetectionFrame): Promise<Array<{
     confidence: number;
     boundingBox: { x: number; y: number; width: number; height: number };
     trackId?: string;
     features?: FaceFeatures;
-  }> {
-    return getInferenceObjects(frame, ["face"]).map((item) => {
+  }>> {
+    const runLocal = shouldRunLocalSpecialtyInference(frame) && this.detectionModel;
+    const local = runLocal ? await this.detectionModel!.run(frame) : [];
+    const observations = [
+      ...getInferenceObjects(frame, ["face"]),
+      ...local.filter((item) => item.label === "face"),
+    ];
+    return Promise.all(observations.map(async (item) => {
       const embedding = item.attributes?.embedding;
+      const localEmbedding = runLocal && this.config.recognitionEnabled && this.recognitionModel
+        ? await this.recognitionModel.run(frame, item.boundingBox)
+        : undefined;
       return {
         confidence: item.confidence,
         boundingBox: {
@@ -272,11 +294,13 @@ export class FaceDetector extends BaseDetector {
           height: item.boundingBox.height * frame.height,
         },
         trackId: item.trackId,
-        ...(Array.isArray(embedding) && embedding.every((value) => typeof value === "number")
+        ...(localEmbedding
+          ? { features: { embedding: localEmbedding, quality: item.confidence } }
+          : Array.isArray(embedding) && embedding.every((value) => typeof value === "number")
           ? { features: { embedding: embedding as number[], quality: typeof item.attributes?.quality === "number" ? item.attributes.quality : undefined } }
           : {}),
       };
-    });
+    }));
   }
 
   /**
@@ -293,11 +317,7 @@ export class FaceDetector extends BaseDetector {
     // 4. Calculate quality score
     // 5. Store in database
 
-    // Placeholder
-    return {
-      embedding: new Array(128).fill(0),
-      quality: 0.8,
-    };
+    throw new Error(`Face enrollment requires decoded RGB24 frames and an active embedding model; received ${faceImages.length} encoded buffer(s) for ${personId}`);
   }
 
   /**
@@ -322,12 +342,18 @@ export class FaceDetector extends BaseDetector {
 
   getHealth() {
     return {
-      status: this.isInitialized ? ("degraded" as const) : ("unhealthy" as const),
-      details: this.isInitialized
-        ? `Normalized face observations required (recognition ${this.config.recognitionEnabled ? "enabled" : "disabled"})`
+      status: this.isInitialized && this.detectionModel
+        ? ("healthy" as const)
+        : this.isInitialized ? ("degraded" as const) : ("unhealthy" as const),
+      details: this.isInitialized && this.detectionModel
+        ? `Local face ONNX inference active (recognition ${this.recognitionModel ? "local" : this.config.recognitionEnabled ? "unavailable" : "disabled"})`
+        : this.isInitialized
+          ? `Normalized face observations only. ${this.modelLoadError ?? "Local model unavailable"}`
         : "Face detector not initialized",
       metadata: {
         recognitionEnabled: this.config.recognitionEnabled,
+        localDetection: Boolean(this.detectionModel),
+        localEmbedding: Boolean(this.recognitionModel),
         watchlistsLoaded: this.watchlists.size,
       },
     };

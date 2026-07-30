@@ -348,7 +348,8 @@ export default function BranchHealthDetailPage() {
                     window.URL.revokeObjectURL(url);
                   } catch (error) {
                     console.error(error);
-                    window.alert('Unable to download the Windows edge agent package. Please contact your administrator.');
+                    const message = error instanceof Error ? error.message : "Unable to download the package.";
+                    window.alert(`Unable to download the Windows edge agent package. ${message}`);
                   } finally {
                     setDownloadingPackage(false);
                   }
@@ -378,7 +379,8 @@ export default function BranchHealthDetailPage() {
                     window.URL.revokeObjectURL(url);
                   } catch (error) {
                     console.error(error);
-                    window.alert('Unable to download the Linux edge agent package. Please contact your administrator.');
+                    const message = error instanceof Error ? error.message : "Unable to download the package.";
+                    window.alert(`Unable to download the Linux edge agent package. ${message}`);
                   } finally {
                     setDownloadingPackage(false);
                   }

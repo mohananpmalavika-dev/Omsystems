@@ -4,7 +4,8 @@
  * Critical for construction sites and traffic enforcement
  */
 
-import { BaseDetector, type DetectionFrame, type DetectionResult, calculateIoU, getInferenceObjects } from "./base-detector.js";
+import { BaseDetector, type DetectionFrame, type DetectionResult, calculateIoU, getInferenceObjects, shouldRunLocalSpecialtyInference } from "./base-detector.js";
+import { loadObjectInference, modelUnavailableReason, type ObjectFrameInference } from "../inference/configured-model-inference.js";
 
 export interface HelmetDetection {
   personBoundingBox: { x: number; y: number; width: number; height: number };
@@ -16,19 +17,29 @@ export interface HelmetDetection {
 
 export class HelmetDetector extends BaseDetector {
   private isModelLoaded = false;
-  private readonly MIN_CONFIDENCE = 0.7;
+  private inference: ObjectFrameInference | null;
+  private modelLoadError: string | null = null;
+  private readonly MIN_CONFIDENCE: number;
   private readonly HEAD_REGION_OVERLAP_THRESHOLD = 0.6;
 
-  constructor() {
+  constructor(inference: ObjectFrameInference | null = null, confidenceThreshold = 0.7) {
     super("helmet", "1.0.0");
+    this.inference = inference;
+    this.MIN_CONFIDENCE = confidenceThreshold;
   }
 
   async initialize(): Promise<void> {
-    // Helmet/head observations need a specialised model. Do not mark this
-    // detector healthy until one is wired in; it can still safely orchestrate
-    // normalized observations supplied by an edge model worker.
-    this.isModelLoaded = false;
-    console.warn("Helmet detector requires normalized helmet and head observations from a specialised model");
+    try {
+      this.inference ??= await loadObjectInference("helmet", this.MIN_CONFIDENCE);
+      this.isModelLoaded = true;
+      this.modelLoadError = null;
+      console.log("Helmet detector loaded local ONNX model");
+    } catch (error) {
+      this.inference = null;
+      this.isModelLoaded = false;
+      this.modelLoadError = error instanceof Error ? error.message : modelUnavailableReason("helmet");
+      console.warn(`Helmet detector running in normalized-observation mode: ${this.modelLoadError}`);
+    }
   }
 
   async detect(frame: DetectionFrame): Promise<DetectionResult[]> {
@@ -80,13 +91,17 @@ export class HelmetDetector extends BaseDetector {
    * Detect helmets in frame
    */
   private async detectHelmetsInFrame(frame: DetectionFrame): Promise<HelmetDetection[]> {
-    const persons = getInferenceObjects(frame, ["person"])
+    const local = shouldRunLocalSpecialtyInference(frame) && this.inference
+      ? await this.inference.run(frame)
+      : [];
+    const observations = [...getInferenceObjects(frame), ...local];
+    const persons = observations.filter((item) => item.label === "person")
       .filter((item) => item.confidence >= this.MIN_CONFIDENCE);
-    const vehicles = getInferenceObjects(frame, ["motorcycle", "bicycle"])
+    const vehicles = observations.filter((item) => item.label === "motorcycle" || item.label === "bicycle")
       .filter((item) => item.confidence >= this.MIN_CONFIDENCE);
-    const helmets = getInferenceObjects(frame, ["helmet"])
+    const helmets = observations.filter((item) => item.label === "helmet")
       .filter((item) => item.confidence >= this.MIN_CONFIDENCE);
-    const heads = getInferenceObjects(frame, ["head"])
+    const heads = observations.filter((item) => item.label === "head")
       .filter((item) => item.confidence >= this.MIN_CONFIDENCE);
 
     // A missing helmet alone is not a violation: a high-confidence head
@@ -189,6 +204,7 @@ export class HelmetDetector extends BaseDetector {
   }
 
   async cleanup(): Promise<void> {
+    this.inference = null;
     this.isModelLoaded = false;
     console.log("Helmet detector cleaned up");
   }
@@ -198,7 +214,7 @@ export class HelmetDetector extends BaseDetector {
       status: this.isModelLoaded ? ("healthy" as const) : ("degraded" as const),
       details: this.isModelLoaded
         ? "Local helmet model active"
-        : "Awaiting specialised helmet/head model; accepts normalized edge-model observations",
+        : `Awaiting helmet/head model; normalized observations remain supported. ${this.modelLoadError ?? "Model unavailable"}`,
     };
   }
 }

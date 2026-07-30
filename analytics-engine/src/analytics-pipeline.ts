@@ -6,7 +6,7 @@
 import { randomUUID } from "node:crypto";
 import type { z } from "zod";
 import type { detectionSchema } from "./app.js";
-import { BaseDetector, type DetectionFrame, type DetectedObject, type InferenceObject } from "./detectors/base-detector.js";
+import { BaseDetector, hasInferenceObjects, type DetectionFrame, type DetectedObject, type InferenceObject } from "./detectors/base-detector.js";
 import { CameraHealthDetector } from "./detectors/camera-health-detector.js";
 import { MotionDetector } from "./detectors/motion-detector.js";
 import { ObjectDetector } from "./detectors/object-detector.js";
@@ -109,16 +109,23 @@ export class AnalyticsPipeline {
     // Initialize enhanced detectors
     this.personDetector = new PersonDetector();
     this.vehicleDetector = new VehicleDetector();
-    this.helmetDetector = new HelmetDetector();
+    this.helmetDetector = new HelmetDetector(null, environmentProbability("HELMET_CONFIDENCE_THRESHOLD", 0.7));
     this.fallDetector = new FallDetector();
-    this.smokeFireDetector = new SmokeFireDetector();
+    this.smokeFireDetector = new SmokeFireDetector(null, environmentProbability("FIRE_CONFIDENCE_THRESHOLD", 0.65));
     this.crowdDensityDetector = new CrowdDensityDetector();
     this.tailgatingDetector = new TailgatingDetector();
     this.queueDetector = new QueueDetector();
     this.heatMapGenerator = new HeatMapGenerator();
-    this.faceDetector = new FaceDetector();
+    this.faceDetector = new FaceDetector({
+      detectionConfidence: environmentProbability("FACE_CONFIDENCE_THRESHOLD", 0.75),
+      recognitionEnabled: process.env.FACE_RECOGNITION_ENABLED === "true",
+    });
     this.faceAnalytics = new FaceAnalyticsDetector();
-    this.anprDetector = new ANPRDetector();
+    this.anprDetector = new ANPRDetector({
+      plateConfidence: environmentProbability("ANPR_PLATE_CONFIDENCE_THRESHOLD", 0.7),
+      ocrConfidence: environmentProbability("ANPR_CONFIDENCE_THRESHOLD", 0.8),
+      countryCode: process.env.ANPR_COUNTRY_CODE || "IN",
+    });
     this.humanAnalytics = new HumanAnalyticsDetector();
     this.vehicleAnalytics = new VehicleAnalyticsDetector();
     this.safetyAnalytics = new SafetyAnalyticsDetector();
@@ -165,7 +172,7 @@ export class AnalyticsPipeline {
     
     // Initialize model manager first
     const modelManager = getModelManager({
-      modelsDirectory: process.env.MODELS_DIR || './models',
+      ...(process.env.MODELS_DIR ? { modelsDirectory: process.env.MODELS_DIR } : {}),
       maxCacheSize: parseInt(process.env.MODEL_CACHE_SIZE_MB || '2048'),
       enableGPU: process.env.ENABLE_GPU_ACCELERATION === 'true',
       cacheEvictionPolicy: 'lru',
@@ -175,6 +182,10 @@ export class AnalyticsPipeline {
 
     if (!modelManager.isReady()) {
       await modelManager.initialize();
+    }
+    const provisioning = modelManager.getProvisioningSummary();
+    if (process.env.ANALYTICS_REQUIRE_MODELS === "true" && !provisioning.ready) {
+      throw new Error(`Required analytics models are not ready: ${provisioning.missingRequired.join(", ")}`);
     }
     
     // Initialize detectors
@@ -197,7 +208,7 @@ export class AnalyticsPipeline {
     
     // Log model manager stats
     const stats = modelManager.getStats();
-    console.log(`Models loaded: ${stats.loadedModels}, Memory: ${stats.memoryUsageMB.toFixed(1)}MB`);
+    console.log(`Models loaded: ${stats.loadedModels}; required artifacts ready: ${provisioning.requiredReady}/${provisioning.required}; memory: ${stats.memoryUsageMB.toFixed(1)}MB`);
   }
 
   /**
@@ -212,6 +223,7 @@ export class AnalyticsPipeline {
     }
 
     const events: Array<z.infer<typeof detectionSchema>> = [];
+    const localInferenceRequested = !hasInferenceObjects(frame);
 
     // Step 1: Camera health check (always run)
     const healthResults = await this.healthDetector.detect(frame);
@@ -233,7 +245,11 @@ export class AnalyticsPipeline {
     if (shouldDetectObjects) {
       const objectResults = await this.objectDetector.detect(frame);
       const objects = objectResults.flatMap((result) => result.objects) as InferenceObject[];
-      inferenceFrame = this.withDetections(frame, objects);
+      inferenceFrame = this.withDetections(
+        frame,
+        objects,
+        localInferenceRequested ? "local-onnx" : "normalized-observation",
+      );
       for (const result of objectResults) {
         if (this.matchesAnyRule(result.detectionType, rules)) {
           events.push(this.createEvent(frame, result));
@@ -494,10 +510,14 @@ export class AnalyticsPipeline {
     ]);
   }
 
-  private withDetections(frame: DetectionFrame, detections: InferenceObject[]): DetectionFrame {
+  private withDetections(
+    frame: DetectionFrame,
+    detections: InferenceObject[],
+    inferenceMode = frame.metadata?.inferenceMode,
+  ): DetectionFrame {
     return {
       ...frame,
-      metadata: { ...frame.metadata, detections },
+      metadata: { ...frame.metadata, detections, inferenceMode },
     };
   }
 
@@ -557,6 +577,7 @@ export class AnalyticsPipeline {
       initialized: this.isInitialized,
       detectors: {},
       initializationErrors: Object.fromEntries(this.initializationErrors),
+      models: getModelManager().getProvisioningSummary(),
     };
 
     for (const detector of this.detectors) {
@@ -832,4 +853,9 @@ export class AnalyticsPipeline {
     const modelManager = getModelManager();
     return modelManager.getMemoryReport();
   }
+}
+
+function environmentProbability(name: string, fallback: number): number {
+  const parsed = Number(process.env[name]);
+  return Number.isFinite(parsed) && parsed >= 0 && parsed <= 1 ? parsed : fallback;
 }

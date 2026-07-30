@@ -7,6 +7,7 @@ import { randomUUID } from "node:crypto";
 import { BaseDetector, calculateIoU, type DetectionFrame, type DetectionResult, getInferenceObjects, hasInferenceObjects } from "./base-detector.js";
 import { getModelManager } from "../model-manager.js";
 import { YoloPersonInference } from "../inference/yolo-person-inference.js";
+import { modelUnavailableReason } from "../inference/configured-model-inference.js";
 
 export interface PersonTrack {
   trackId: string;
@@ -37,7 +38,9 @@ export class PersonDetector extends BaseDetector {
     console.log("Initializing person detector...");
     
     try {
-      this.inference = new YoloPersonInference(await getModelManager().getModel("yolov8n"));
+      const manager = getModelManager();
+      if (!manager.isModelAvailable("yolov8n")) throw new Error(modelUnavailableReason("yolov8n"));
+      this.inference = new YoloPersonInference(await manager.getModel("yolov8n"));
       this.isModelLoaded = true;
       console.log("Person detector loaded yolov8n ONNX model");
     } catch (error) {

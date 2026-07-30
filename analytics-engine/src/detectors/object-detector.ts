@@ -14,6 +14,7 @@ import {
 } from "./base-detector.js";
 import { getModelManager } from "../model-manager.js";
 import { YoloCocoInference } from "../inference/yolo-coco-inference.js";
+import { modelUnavailableReason } from "../inference/configured-model-inference.js";
 
 interface ObjectDetectorConfig {
   confidenceThreshold: number;
@@ -58,7 +59,9 @@ export class ObjectDetector extends BaseDetector {
   async initialize(): Promise<void> {
     this.initialized = true;
     try {
-      const model = await getModelManager().getModel("yolov8n");
+      const manager = getModelManager();
+      if (!manager.isModelAvailable("yolov8n")) throw new Error(modelUnavailableReason("yolov8n"));
+      const model = await manager.getModel("yolov8n");
       this.inference = new YoloCocoInference(
         model,
         this.config.confidenceThreshold,

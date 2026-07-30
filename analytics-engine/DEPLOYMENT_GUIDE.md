@@ -2,7 +2,9 @@
 
 ## 🚀 Production Deployment Guide
 
-This guide covers deploying the AI Analytics Engine to production with all 11 modules.
+> Legacy guide: the model-download sections below are superseded. Do not use the retired `download-models.sh` commands or rename incompatible model formats. Follow `docs/AI_VIDEO_ANALYTICS_DEPLOYMENT.md` and `models/manifest.json`.
+
+This guide preserves the earlier infrastructure notes for all 11 modules.
 
 ---
 
@@ -189,30 +191,16 @@ Already configured in `tsconfig.json`:
 
 ## Model Setup
 
-### 1. Download AI Models
+### 1. Provision AI models
 
-Run the automated download script:
+Configure approved HTTPS artifact URLs and SHA-256 values from `.env.example`, review their licenses, then run:
 
 ```bash
-# Make script executable
-chmod +x scripts/download-models.sh
-
-# Download all models (this may take 30-60 minutes)
-./scripts/download-models.sh
+ANALYTICS_MODEL_LICENSES_ACCEPTED=true npm run models:download
+npm run models:verify
 ```
 
-Models will be downloaded to `models/` directory:
-- `yolov8n.pt` (11 MB) - Object detection
-- `yolov8n-pose.pt` (6 MB) - Pose estimation
-- `osnet_x1_0_msmt17.pth` (25 MB) - Person Re-ID
-- `retinaface_mobilenet.pth` (2 MB) - Face detection
-- `arcface_r100.pth` (249 MB) - Face recognition
-- `paddleocr_det.pth` (3 MB) - ANPR detection
-- `paddleocr_rec.pth` (8 MB) - ANPR recognition
-- `vehicle_reid.pth` (45 MB) - Vehicle Re-ID
-- `clip-vit-b32.pth` (338 MB) - Visual search
-
-**Total Size:** ~700 MB
+Only ONNX artifacts matching `models/manifest.json` are accepted by the active runtime. File size and performance depend on the selected, reviewed model release.
 
 ### 2. Model Verification
 
@@ -649,7 +637,9 @@ Error: Model file not found: models/yolov8n.pt
 
 **Solution:**
 ```bash
-./scripts/download-models.sh
+npm run models:verify
+# Then configure the missing artifact URL and SHA-256 before provisioning it.
+ANALYTICS_MODEL_LICENSES_ACCEPTED=true npm run models:download
 ```
 
 #### 2. GPU Out of Memory

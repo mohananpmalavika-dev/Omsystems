@@ -2,6 +2,8 @@
 
 ## 🎉 PROJECT COMPLETE: 14/14 MODULES (100%)
 
+> Archived planning snapshot. Percentages and “production-ready” statements below are not model-loading, accuracy, licensing or field-test evidence. Use `models/manifest.json`, `/health`, and `docs/AI_VIDEO_ANALYTICS_DEPLOYMENT.md` for current truth.
+
 ```
 ╔════════════════════════════════════════════════════════════╗
 ║                                                            ║

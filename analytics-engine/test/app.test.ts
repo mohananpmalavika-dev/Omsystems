@@ -1,11 +1,46 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { buildAnalyticsEngine } from "../src/app.js";
 
 const sourceKey = "source-key-that-is-long-enough-for-tests";
 
 describe("analytics engine adapter", () => {
   const apps: Array<ReturnType<typeof buildAnalyticsEngine>> = [];
-  afterEach(async () => Promise.all(apps.splice(0).map((app) => app.close())));
+  afterEach(async () => {
+    vi.unstubAllEnvs();
+    await Promise.all(apps.splice(0).map((app) => app.close()));
+  });
+
+  it("reports missing model artifacts distinctly from the loaded cache", async () => {
+    vi.stubEnv("ANALYTICS_REQUIRE_MODELS", "false");
+    const app = buildAnalyticsEngine({
+      sourceSharedKey: sourceKey,
+      controlPlaneSharedKey: "control-plane-key-that-is-long-enough",
+      submit: async () => ({}),
+    });
+    apps.push(app);
+    const response = await app.inject({ method: "GET", url: "/health" });
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      status: "degraded",
+      pipeline: { models: { ready: false, required: 6, requiredReady: 0, loaded: 0 } },
+    });
+  });
+
+  it("fails production readiness when required models are absent", async () => {
+    vi.stubEnv("ANALYTICS_REQUIRE_MODELS", "true");
+    const app = buildAnalyticsEngine({
+      sourceSharedKey: sourceKey,
+      controlPlaneSharedKey: "control-plane-key-that-is-long-enough",
+      submit: async () => ({}),
+    });
+    apps.push(app);
+    const response = await app.inject({ method: "GET", url: "/health" });
+    expect(response.statusCode).toBe(503);
+    expect(response.json()).toMatchObject({
+      status: "unhealthy",
+      initializationError: expect.stringContaining("Required analytics models are not ready"),
+    });
+  });
 
   it("normalizes an authenticated detection without owning the camera stream", async () => {
     const submitted: any[] = [];

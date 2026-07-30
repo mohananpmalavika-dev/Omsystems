@@ -24,6 +24,7 @@ RUN npm ci --workspace @sentinel/analytics-engine
 
 # Copy analytics-engine source
 COPY analytics-engine/src analytics-engine/src
+COPY analytics-engine/models/manifest.json analytics-engine/models/manifest.json
 
 # Build TypeScript
 RUN npm run build --workspace @sentinel/analytics-engine
@@ -50,7 +51,9 @@ COPY --from=build --chown=analytics:analytics /workspace/node_modules ./node_mod
 
 # Create models directory for ML models
 RUN mkdir -p /app/models && chown analytics:analytics /app/models
+COPY --from=build --chown=analytics:analytics /workspace/analytics-engine/models/manifest.json /app/models/manifest.json
 ENV MODELS_DIR=/app/models
+ENV ANALYTICS_REQUIRE_MODELS=true
 
 # Switch to non-root user
 USER analytics

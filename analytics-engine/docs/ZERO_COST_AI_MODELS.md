@@ -2,7 +2,9 @@
 
 ## Executive Summary
 
-This document outlines the complete strategy for implementing world-class AI video analytics using **100% open-source, zero-cost models** with on-premise edge processing. No cloud API fees, no per-camera licensing, no usage limits.
+> Research and training reference only. Artifacts produced from these examples must match `models/manifest.json`, pass license review, be checksum-pinned, and pass `npm run models:verify` before deployment.
+
+This document outlines candidate approaches for on-premise analytics using open-source models. Actual license terms, training costs and deployment limits depend on the selected artifacts.
 
 ## Architecture Philosophy
 

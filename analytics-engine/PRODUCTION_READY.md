@@ -2,7 +2,9 @@
 
 ## ✅ Complete Status
 
-The Analytics Engine is **100% production-ready** with comprehensive monitoring, observability, and operational excellence built-in.
+> Historical planning report: the percentages below are not model-loading, licensing, accuracy or field-test evidence. Current deployable status is defined by `models/manifest.json`, `/health`, `npm run models:verify`, and `docs/AI_VIDEO_ANALYTICS_DEPLOYMENT.md`.
+
+The Analytics Engine was described here as **100% production-ready** based on its planned module surface and monitoring infrastructure.
 
 ---
 

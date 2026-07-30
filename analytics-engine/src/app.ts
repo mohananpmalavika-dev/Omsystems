@@ -84,7 +84,9 @@ export function buildAnalyticsEngine(options: AnalyticsEngineOptions) {
   const streamProcessor = new StreamProcessor(pipeline, options.submit);
 
   // Initialize pipeline on startup
+  let pipelineInitializationError: string | null = null;
   const pipelineReady = pipeline.initialize().catch((error) => {
+    pipelineInitializationError = error instanceof Error ? error.message : String(error);
     app.log.error({ error }, "Failed to initialize analytics pipeline");
   });
 
@@ -112,16 +114,24 @@ export function buildAnalyticsEngine(options: AnalyticsEngineOptions) {
     }
   });
 
-  app.get("/health", async () => ({
-    status: "ok", service: "sentinel-analytics-engine",
-    ...state,
-    pipeline: pipeline.getHealth(),
-    notifications: notificationEngine.getStatus(),
-    streams: {
-      active: streamProcessor.getActiveStreams().length,
-      stats: streamProcessor.getStats(),
-    },
-  }));
+  app.get("/health", async (_request, reply) => {
+    await pipelineReady;
+    const pipelineHealth = pipeline.getHealth();
+    const modelsRequired = process.env.ANALYTICS_REQUIRE_MODELS === "true";
+    const ready = pipelineHealth.initialized && (!modelsRequired || pipelineHealth.models.ready);
+    return reply.code(ready ? 200 : 503).send({
+      status: ready && pipelineHealth.models.ready ? "ok" : ready ? "degraded" : "unhealthy",
+      service: "sentinel-analytics-engine",
+      ...state,
+      pipeline: pipelineHealth,
+      initializationError: pipelineInitializationError,
+      notifications: notificationEngine.getStatus(),
+      streams: {
+        active: streamProcessor.getActiveStreams().length,
+        stats: streamProcessor.getStats(),
+      },
+    });
+  });
 
   app.post("/internal/detections", async (request, reply) => {
     state.received += 1;

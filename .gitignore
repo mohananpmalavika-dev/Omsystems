@@ -10,5 +10,7 @@ playwright-report/
 test/hdd-health/config.json
 test/hdd-health/reports/
 test/internet-health/evidence*.json
+analytics-engine/models/**/*.onnx
+analytics-engine/models/**/*.part-*
 .idea/
 .vscode/

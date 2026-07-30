@@ -12,6 +12,8 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
+import { createHash } from 'node:crypto';
+import { fileURLToPath } from 'node:url';
 
 /**
  * Model configuration
@@ -28,6 +30,31 @@ export interface ModelConfig {
   outputShape?: number[];
   preprocessor?: string;
   postprocessor?: string;
+  required?: boolean;
+  task?: 'object-detection' | 'face-embedding' | 'ctc-text-recognition';
+  decoder?: 'yolov8' | 'yolov5' | 'xyxy';
+  labelSet?: 'coco';
+  labels?: string[];
+  alphabet?: string[];
+  blankIndex?: number;
+  pathEnvironment?: string;
+  sha256?: string;
+  sha256Environment?: string;
+  sourceUrlEnvironment?: string;
+}
+
+export type ModelAvailabilityStatus = 'loaded' | 'available' | 'missing' | 'invalid';
+
+export interface ModelAvailability {
+  id: string;
+  name: string;
+  task: ModelConfig['task'] | 'unspecified';
+  required: boolean;
+  status: ModelAvailabilityStatus;
+  configuredPath: string;
+  resolvedPath: string;
+  sizeBytes: number | null;
+  reason: string | null;
 }
 
 /**
@@ -66,6 +93,9 @@ export interface ModelManagerOptions {
   cacheEvictionPolicy?: 'lru' | 'lfu' | 'priority';
   preloadModels?: string[]; // Model IDs to load on startup
   autoUnloadAfter?: number; // Minutes of inactivity
+  manifestPath?: string;
+  modelLoader?: (modelPath: string, config: ModelConfig) => Promise<any>;
+  startCleanupTimer?: boolean;
 }
 
 /**
@@ -82,7 +112,18 @@ export class ModelManager {
     totalMemoryUsage: 0
   };
 
-  private options: Required<ModelManagerOptions>;
+  private options: {
+    modelsDirectory: string;
+    maxCacheSize: number;
+    enableGPU: boolean;
+    gpuDeviceId: number;
+    cacheEvictionPolicy: 'lru' | 'lfu' | 'priority';
+    preloadModels: string[];
+    autoUnloadAfter: number;
+    manifestPath: string;
+    modelLoader?: ModelManagerOptions['modelLoader'];
+    startCleanupTimer: boolean;
+  };
   private isInitialized = false;
   private loadTimes: number[] = [];
 
@@ -91,14 +132,18 @@ export class ModelManager {
   private gpuType: 'cuda' | 'openvino' | 'directml' | 'none' = 'none';
 
   constructor(options: ModelManagerOptions = {}) {
+    const modelsDirectory = options.modelsDirectory || defaultModelsDirectory();
     this.options = {
-      modelsDirectory: options.modelsDirectory || './models',
+      modelsDirectory,
       maxCacheSize: options.maxCacheSize || 2048, // 2GB default
       enableGPU: options.enableGPU ?? true,
       gpuDeviceId: options.gpuDeviceId ?? 0,
       cacheEvictionPolicy: options.cacheEvictionPolicy || 'lru',
       preloadModels: options.preloadModels || [],
-      autoUnloadAfter: options.autoUnloadAfter || 30 // 30 minutes
+      autoUnloadAfter: options.autoUnloadAfter || 30, // 30 minutes
+      manifestPath: options.manifestPath || defaultManifestPath(modelsDirectory),
+      modelLoader: options.modelLoader,
+      startCleanupTimer: options.startCleanupTimer ?? true,
     };
   }
 
@@ -118,6 +163,11 @@ export class ModelManager {
     if (this.options.preloadModels.length > 0) {
       console.log(`Preloading ${this.options.preloadModels.length} models...`);
       for (const modelId of this.options.preloadModels) {
+        if (!this.isModelAvailable(modelId)) {
+          const availability = this.getModelInventory().find((model) => model.id === modelId);
+          console.warn(`Skipping unavailable preload ${modelId}: ${availability?.reason ?? 'not configured'}`);
+          continue;
+        }
         try {
           await this.loadModel(modelId);
         } catch (error) {
@@ -127,7 +177,7 @@ export class ModelManager {
     }
 
     // Start cleanup timer
-    this.startCleanupTimer();
+    if (this.options.startCleanupTimer) this.startCleanupTimer();
 
     this.isInitialized = true;
     console.log('Model Manager initialized successfully');
@@ -180,81 +230,15 @@ export class ModelManager {
    * Load model configurations from directory
    */
   private async loadConfigurations(): Promise<void> {
-    // Default model configurations
-    const defaultConfigs: ModelConfig[] = [
-      {
-        id: 'yolov8n',
-        name: 'YOLOv8 Nano',
-        // Matches scripts/download-models.sh. YOLO_MODEL_PATH keeps existing
-        // deployments that mount a model at a custom location working.
-        path: process.env.YOLO_MODEL_PATH || 'detection/yolov8n.onnx',
-        type: 'onnx',
-        priority: 'high',
-        warmup: true,
-        useGPU: true,
-        inputShape: [1, 3, 640, 640]
-      },
-      {
-        id: 'deepsort',
-        name: 'DeepSORT Tracker',
-        path: 'deepsort.onnx',
-        type: 'onnx',
-        priority: 'high',
-        warmup: true,
-        useGPU: true
-      },
-      {
-        id: 'osnet',
-        name: 'OSNet Re-ID',
-        path: 'osnet_x1_0.onnx',
-        type: 'onnx',
-        priority: 'medium',
-        warmup: false,
-        useGPU: true
-      },
-      {
-        id: 'retinaface',
-        name: 'RetinaFace Detector',
-        path: 'retinaface.onnx',
-        type: 'onnx',
-        priority: 'medium',
-        warmup: false,
-        useGPU: true
-      },
-      {
-        id: 'arcface',
-        name: 'ArcFace Recognition',
-        path: 'arcface.onnx',
-        type: 'onnx',
-        priority: 'medium',
-        warmup: false,
-        useGPU: true
-      },
-      {
-        id: 'paddleocr',
-        name: 'PaddleOCR ANPR',
-        path: 'paddleocr.onnx',
-        type: 'onnx',
-        priority: 'medium',
-        warmup: false,
-        useGPU: true
-      },
-      {
-        id: 'clip',
-        name: 'CLIP Visual-Text',
-        path: 'clip-vit-b32.onnx',
-        type: 'onnx',
-        priority: 'low',
-        warmup: false,
-        useGPU: true
-      }
-    ];
-
-    for (const config of defaultConfigs) {
+    if (!fs.existsSync(this.options.manifestPath)) {
+      throw new Error(`Model manifest not found: ${this.options.manifestPath}`);
+    }
+    const manifest = parseModelManifest(JSON.parse(fs.readFileSync(this.options.manifestPath, 'utf8')));
+    this.configs.clear();
+    for (const config of manifest) {
       this.configs.set(config.id, config);
     }
-
-    console.log(`Loaded ${this.configs.size} model configurations`);
+    console.log(`Loaded ${this.configs.size} model configurations from ${this.options.manifestPath}`);
   }
 
   /**
@@ -287,25 +271,29 @@ export class ModelManager {
     try {
       // Load model based on type
       let model: any;
-      const modelPath = this.resolveModelPath(config.path);
+      const modelPath = this.resolveModelPath(this.configuredPath(config));
 
       // Check if model file exists
       if (!fs.existsSync(modelPath)) {
         throw new Error(`Model file not found: ${modelPath}`);
       }
 
-      switch (config.type) {
-        case 'onnx':
-          model = await this.loadONNXModel(modelPath, config);
-          break;
-        case 'tensorflow':
-          model = await this.loadTensorFlowModel(modelPath, config);
-          break;
-        case 'pytorch':
-          model = await this.loadPyTorchModel(modelPath, config);
-          break;
-        default:
-          throw new Error(`Unsupported model type: ${config.type}`);
+      if (this.options.modelLoader) {
+        model = await this.options.modelLoader(modelPath, config);
+      } else {
+        switch (config.type) {
+          case 'onnx':
+            model = await this.loadONNXModel(modelPath, config);
+            break;
+          case 'tensorflow':
+            model = await this.loadTensorFlowModel(modelPath, config);
+            break;
+          case 'pytorch':
+            model = await this.loadPyTorchModel(modelPath, config);
+            break;
+          default:
+            throw new Error(`Unsupported model type: ${config.type}`);
+        }
       }
 
       const loadTime = Date.now() - startTime;
@@ -349,6 +337,11 @@ export class ModelManager {
     // documented bootstrap layout uses /models/detection/yolov8n.onnx.
     const legacy = path.join(this.options.modelsDirectory, path.basename(configuredPath));
     return fs.existsSync(legacy) ? legacy : primary;
+  }
+
+  private configuredPath(config: ModelConfig): string {
+    const environmentPath = config.pathEnvironment ? process.env[config.pathEnvironment] : undefined;
+    return environmentPath?.trim() || config.path;
   }
 
   /**
@@ -472,6 +465,8 @@ export class ModelManager {
     // Clean up model resources
     if (instance.model && typeof instance.model.dispose === 'function') {
       instance.model.dispose();
+    } else if (instance.model && typeof instance.model.release === 'function') {
+      await instance.model.release();
     }
 
     this.stats.totalMemoryUsage -= instance.memoryUsage;
@@ -483,7 +478,7 @@ export class ModelManager {
    * Estimate model memory usage
    */
   private estimateModelMemory(config: ModelConfig): number {
-    const modelPath = this.resolveModelPath(config.path);
+    const modelPath = this.resolveModelPath(this.configuredPath(config));
     
     try {
       if (fs.existsSync(modelPath)) {
@@ -574,14 +569,23 @@ export class ModelManager {
    */
   getStats(): ModelStats & {
     loadedModels: number;
+    configuredModels: number;
+    requiredModels: number;
+    requiredReadyModels: number;
+    modelsReady: boolean;
     cacheHitRate: number;
     memoryUsageMB: number;
   } {
     const totalRequests = this.stats.cacheHits + this.stats.cacheMisses;
+    const provisioning = this.getProvisioningSummary();
     
     return {
       ...this.stats,
       loadedModels: this.models.size,
+      configuredModels: provisioning.configured,
+      requiredModels: provisioning.required,
+      requiredReadyModels: provisioning.requiredReady,
+      modelsReady: provisioning.ready,
       cacheHitRate: totalRequests > 0 
         ? (this.stats.cacheHits / totalRequests) * 100 
         : 0,
@@ -627,6 +631,61 @@ export class ModelManager {
    */
   getAllConfigs(): ModelConfig[] {
     return Array.from(this.configs.values());
+  }
+
+  getModelConfig(modelId: string): ModelConfig | undefined {
+    return this.configs.get(modelId);
+  }
+
+  getModelInventory(): ModelAvailability[] {
+    return this.getAllConfigs().map((config) => {
+      const configuredPath = this.configuredPath(config);
+      const resolvedPath = this.resolveModelPath(configuredPath);
+      if (!fs.existsSync(resolvedPath)) {
+        return availability(config, configuredPath, resolvedPath, 'missing', null, 'model file not found');
+      }
+      const stats = fs.statSync(resolvedPath);
+      if (!stats.isFile() || stats.size === 0) {
+        return availability(config, configuredPath, resolvedPath, 'invalid', stats.isFile() ? stats.size : null, 'model artifact is empty or not a file');
+      }
+      const expectedHash = config.sha256Environment
+        ? process.env[config.sha256Environment]?.trim().toLowerCase()
+        : config.sha256?.toLowerCase();
+      if (expectedHash) {
+        const actualHash = createHash('sha256').update(fs.readFileSync(resolvedPath)).digest('hex');
+        if (actualHash !== expectedHash) {
+          return availability(config, configuredPath, resolvedPath, 'invalid', stats.size, `sha256 mismatch: expected ${expectedHash}; received ${actualHash}`);
+        }
+      }
+      return availability(
+        config,
+        configuredPath,
+        resolvedPath,
+        this.isModelLoaded(config.id) ? 'loaded' : 'available',
+        stats.size,
+        null,
+      );
+    });
+  }
+
+  getProvisioningSummary() {
+    const models = this.getModelInventory();
+    const required = models.filter((model) => model.required);
+    const ready = required.filter((model) => model.status === 'available' || model.status === 'loaded');
+    return {
+      ready: ready.length === required.length,
+      configured: models.length,
+      required: required.length,
+      requiredReady: ready.length,
+      loaded: models.filter((model) => model.status === 'loaded').length,
+      missingRequired: required.filter((model) => model.status === 'missing' || model.status === 'invalid').map((model) => model.id),
+      models,
+    };
+  }
+
+  isModelAvailable(modelId: string): boolean {
+    const model = this.getModelInventory().find((item) => item.id === modelId);
+    return model?.status === 'available' || model?.status === 'loaded';
   }
 
   /**
@@ -753,6 +812,83 @@ export class ModelManager {
   isReady(): boolean {
     return this.isInitialized;
   }
+}
+
+function defaultModelsDirectory(): string {
+  const moduleDirectory = path.dirname(fileURLToPath(import.meta.url));
+  const candidates = [
+    path.resolve(process.cwd(), 'models'),
+    path.resolve(process.cwd(), 'analytics-engine', 'models'),
+    path.resolve(moduleDirectory, '..', 'models'),
+    path.resolve(moduleDirectory, '..', '..', 'models'),
+  ];
+  return candidates.find((candidate) => fs.existsSync(path.join(candidate, 'manifest.json')))
+    ?? candidates[0]!;
+}
+
+function defaultManifestPath(modelsDirectory: string): string {
+  const configured = process.env.MODEL_MANIFEST_PATH?.trim();
+  if (configured) return path.resolve(configured);
+  const alongsideModels = path.join(modelsDirectory, 'manifest.json');
+  if (fs.existsSync(alongsideModels)) return alongsideModels;
+  const moduleDirectory = path.dirname(fileURLToPath(import.meta.url));
+  const candidates = [
+    path.resolve(moduleDirectory, '..', 'models', 'manifest.json'),
+    path.resolve(moduleDirectory, '..', '..', 'models', 'manifest.json'),
+  ];
+  return candidates.find((candidate) => fs.existsSync(candidate)) ?? alongsideModels;
+}
+
+function parseModelManifest(value: unknown): ModelConfig[] {
+  if (!value || typeof value !== 'object' || !Array.isArray((value as { models?: unknown }).models)) {
+    throw new Error('Model manifest must contain a models array');
+  }
+  const configs = (value as { models: unknown[] }).models.map((entry, index) => {
+    if (!entry || typeof entry !== 'object') throw new Error(`Model manifest entry ${index} must be an object`);
+    const item = entry as Record<string, unknown>;
+    if (typeof item.id !== 'string' || !item.id.trim()) throw new Error(`Model manifest entry ${index} has no id`);
+    if (typeof item.name !== 'string' || !item.name.trim()) throw new Error(`Model ${item.id} has no name`);
+    if (typeof item.path !== 'string' || !item.path.trim()) throw new Error(`Model ${item.id} has no path`);
+    if (!['onnx', 'tensorflow', 'pytorch'].includes(String(item.type))) throw new Error(`Model ${item.id} has an unsupported type`);
+    if (!['high', 'medium', 'low'].includes(String(item.priority))) throw new Error(`Model ${item.id} has an invalid priority`);
+    if (item.labels !== undefined && (!Array.isArray(item.labels) || !item.labels.every((label) => typeof label === 'string'))) {
+      throw new Error(`Model ${item.id} labels must be strings`);
+    }
+    if (item.alphabet !== undefined && (!Array.isArray(item.alphabet) || !item.alphabet.every((character) => typeof character === 'string'))) {
+      throw new Error(`Model ${item.id} alphabet must be strings`);
+    }
+    if (item.inputShape !== undefined && (!Array.isArray(item.inputShape) || !item.inputShape.every((dimension) => Number.isInteger(dimension) && Number(dimension) > 0))) {
+      throw new Error(`Model ${item.id} inputShape must contain positive integers`);
+    }
+    return { ...item } as unknown as ModelConfig;
+  });
+  const ids = new Set<string>();
+  for (const config of configs) {
+    if (ids.has(config.id)) throw new Error(`Duplicate model id in manifest: ${config.id}`);
+    ids.add(config.id);
+  }
+  return configs;
+}
+
+function availability(
+  config: ModelConfig,
+  configuredPath: string,
+  resolvedPath: string,
+  status: ModelAvailabilityStatus,
+  sizeBytes: number | null,
+  reason: string | null,
+): ModelAvailability {
+  return {
+    id: config.id,
+    name: config.name,
+    task: config.task ?? 'unspecified',
+    required: config.required ?? false,
+    status,
+    configuredPath,
+    resolvedPath,
+    sizeBytes,
+    reason,
+  };
 }
 
 /**

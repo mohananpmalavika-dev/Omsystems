@@ -200,7 +200,7 @@ Camera Stream → Stream Processor → Analytics Pipeline → Alert Engine
 - Node.js 20+
 - TypeScript 5.3+
 - PostgreSQL 15+ (for control plane)
-- (Optional) ML models for object detection
+- Reviewed ONNX artifacts for every locally enabled production capability
 
 ### Installation
 
@@ -219,12 +219,10 @@ ANALYTICS_SOURCE_SHARED_KEY=your-source-key-here
 ANALYTICS_ENGINE_SHARED_KEY=your-engine-key-here
 CONTROL_PLANE_URL=http://localhost:4000
 
-# Optional: ML Model Configuration
-# Core ONNX model default: /app/models/detection/yolov8n.onnx
+# Model configuration
 MODELS_DIR=/app/models
-# Optional legacy/custom location:
-YOLO_MODEL_PATH=/app/models/detection/yolov8n.onnx
-CONFIDENCE_THRESHOLD=0.7
+ANALYTICS_REQUIRE_MODELS=true
+MODEL_MANIFEST_PATH=/app/models/manifest.json
 ```
 
 ### Development
@@ -768,16 +766,9 @@ Response:
 
 ### Required Models
 
-Place pre-trained ONNX models in `./models/` directory:
+The required paths and tensor contracts are defined by `models/manifest.json`: COCO, fire/smoke, helmet/head, face, plate detection and plate CTC recognition. Model binaries are deployment artifacts and must be provisioned from an approved source with an audited SHA-256.
 
-1. **yolov8n.onnx** - Core object detection (~6 MB)
-2. **person-detection-v2.onnx** - Person tracking (~10-30 MB)
-3. **vehicle-detection-v2.onnx** - Vehicle classification (~10-20 MB)
-4. **helmet-detection-v1.onnx** - Helmet compliance (~5-10 MB)
-5. **fire-smoke-v1.onnx** - Fire/smoke detection (~5-15 MB)
-6. **fall-detection-v1.onnx** - Fall detection (~10-20 MB)
-
-See `models/README.md` for download links and conversion guides.
+Run `npm run models:download` to provision configured artifacts and `npm run models:verify` to open every required model with ONNX Runtime. See `models/README.md` for the exact contract and field-validation limits.
 
 ### Model Loading Example
 

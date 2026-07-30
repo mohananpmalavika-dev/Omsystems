@@ -10,7 +10,15 @@ import {
   type DetectionResult,
   getInferenceObjects,
   normalizeBoundingBox,
+  shouldRunLocalSpecialtyInference,
 } from "./base-detector.js";
+import {
+  loadObjectInference,
+  loadPlateTextInference,
+  modelUnavailableReason,
+  type ObjectFrameInference,
+  type PlateTextInference,
+} from "../inference/configured-model-inference.js";
 
 export interface ANPRConfig {
   modelPath?: string;
@@ -49,10 +57,16 @@ export interface WatchlistPlate {
   metadata?: Record<string, unknown>;
 }
 
+export interface ANPRInference {
+  detection?: ObjectFrameInference;
+  recognition?: PlateTextInference;
+}
+
 export class ANPRDetector extends BaseDetector {
   private config: ANPRConfig;
-  private detectionModel: any = null;
-  private ocrModel: any = null;
+  private detectionModel: ObjectFrameInference | null;
+  private ocrModel: PlateTextInference | null;
+  private modelLoadError: string | null = null;
   private watchlists = new Map<string, WatchlistPlate[]>();
   private isInitialized = false;
 
@@ -63,8 +77,10 @@ export class ANPRDetector extends BaseDetector {
     /^[0-9]{2}BH[0-9]{4}[A-Z]{1,2}$/, // Bharat series: 22BH1234AB
   ];
 
-  constructor(config: Partial<ANPRConfig> = {}) {
+  constructor(config: Partial<ANPRConfig> = {}, inference: ANPRInference = {}) {
     super("anpr", "1.0.0");
+    this.detectionModel = inference.detection ?? null;
+    this.ocrModel = inference.recognition ?? null;
     this.config = {
       plateConfidence: config.plateConfidence ?? 0.7,
       ocrConfidence: config.ocrConfidence ?? 0.8,
@@ -76,21 +92,17 @@ export class ANPRDetector extends BaseDetector {
   }
 
   async initialize(): Promise<void> {
-    // TODO: Load actual ANPR models
-    // Options:
-    // 1. OpenALPR (commercial or open source)
-    // 2. EasyOCR + YOLO for plate detection
-    // 3. Tesseract OCR + custom plate detector
-    // 4. PaddleOCR (good for multiple languages)
-    // 5. Commercial APIs (platerecognizer.com, sighthound.com)
-
-    // Example with custom models:
-    // this.detectionModel = await loadYOLOPlateDetector(this.config.modelPath);
-    // this.ocrModel = await loadOCRModel(this.config.modelPath);
-
-    // Plate/OCR observations can be supplied by a specialised edge worker. Do
-    // not imply that an OCR model is loaded in this service.
-    console.warn("ANPR detector accepts normalized plate/OCR observations; no local ANPR model is provisioned");
+    try {
+      this.detectionModel ??= await loadObjectInference("anpr-detector", this.config.plateConfidence);
+      this.ocrModel ??= await loadPlateTextInference("anpr-recognizer");
+      this.modelLoadError = null;
+      console.log("ANPR detector loaded local plate detection and CTC recognition models");
+    } catch (error) {
+      this.detectionModel = null;
+      this.ocrModel = null;
+      this.modelLoadError = error instanceof Error ? error.message : `${modelUnavailableReason("anpr-detector")}; ${modelUnavailableReason("anpr-recognizer")}`;
+      console.warn(`ANPR detector running in normalized-observation mode: ${this.modelLoadError}`);
+    }
     this.isInitialized = true;
   }
 
@@ -99,7 +111,7 @@ export class ANPRDetector extends BaseDetector {
       throw new Error("ANPRDetector not initialized");
     }
 
-    const normalizedReadings = this.readNormalizedPlateObservations(frame);
+    const normalizedReadings = await this.readPlateObservations(frame);
 
     const results: DetectionResult[] = [];
     const plateObjects: Array<
@@ -261,14 +273,42 @@ export class ANPRDetector extends BaseDetector {
   /**
    * Normalize observations produced by a dedicated plate/OCR model worker.
    */
-  private readNormalizedPlateObservations(frame: DetectionFrame): Array<{
+  private async readPlateObservations(frame: DetectionFrame): Promise<Array<{
     confidence: number;
     boundingBox: { x: number; y: number; width: number; height: number };
     trackId?: string;
     plateReading: PlateReading;
     vehicle?: VehicleInfo;
-  }> {
-    return getInferenceObjects(frame, ["license-plate"]).flatMap((item) => {
+  }>> {
+    const runLocal = shouldRunLocalSpecialtyInference(frame) && this.detectionModel && this.ocrModel;
+    const localPlates = runLocal
+      ? (await this.detectionModel!.run(frame)).filter((item) => item.label === "license-plate")
+      : [];
+    const localReadings = await Promise.all(localPlates.map(async (item) => {
+      const recognition = await this.ocrModel!.run(frame, item.boundingBox);
+      const text = recognition.text.replace(/[^a-zA-Z0-9]/g, "").toUpperCase();
+      const characterWidth = text.length > 0 ? 1 / text.length : 1;
+      return {
+        confidence: Math.min(item.confidence, recognition.confidence),
+        boundingBox: {
+          x: item.boundingBox.x * frame.width,
+          y: item.boundingBox.y * frame.height,
+          width: item.boundingBox.width * frame.width,
+          height: item.boundingBox.height * frame.height,
+        },
+        trackId: item.trackId,
+        plateReading: {
+          plateNumber: text,
+          confidence: Math.min(item.confidence, recognition.confidence),
+          country: this.config.countryCode,
+          characters: recognition.characters.map((character, index) => ({
+            ...character,
+            bbox: { x: index * characterWidth, y: 0, width: characterWidth, height: 1 },
+          })),
+        },
+      };
+    }));
+    const normalized = getInferenceObjects(frame, ["license-plate"]).flatMap((item) => {
       const plateNumber = item.attributes?.plateNumber;
       if (typeof plateNumber !== "string") return [];
       const normalized = plateNumber.replace(/[^a-zA-Z0-9]/g, "").toUpperCase();
@@ -292,6 +332,7 @@ export class ANPRDetector extends BaseDetector {
           : undefined,
       }];
     });
+    return [...normalized, ...localReadings];
   }
 
   /**
@@ -371,14 +412,20 @@ export class ANPRDetector extends BaseDetector {
 
   getHealth() {
     return {
-      status: this.isInitialized ? ("degraded" as const) : ("unhealthy" as const),
-      details: this.isInitialized
-        ? `Normalized plate/OCR observations required (watchlist ${this.config.watchlistEnabled ? "enabled" : "disabled"})`
+      status: this.isInitialized && this.detectionModel && this.ocrModel
+        ? ("healthy" as const)
+        : this.isInitialized ? ("degraded" as const) : ("unhealthy" as const),
+      details: this.isInitialized && this.detectionModel && this.ocrModel
+        ? `Local plate detection and OCR active (watchlist ${this.config.watchlistEnabled ? "enabled" : "disabled"})`
+        : this.isInitialized
+          ? `Normalized plate/OCR observations only. ${this.modelLoadError ?? "Local models unavailable"}`
         : "ANPR detector not initialized",
       metadata: {
         watchlistEnabled: this.config.watchlistEnabled,
         watchlistsLoaded: this.watchlists.size,
         countryCode: this.config.countryCode,
+        localDetection: Boolean(this.detectionModel),
+        localRecognition: Boolean(this.ocrModel),
       },
     };
   }

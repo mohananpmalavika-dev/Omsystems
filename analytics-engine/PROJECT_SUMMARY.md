@@ -2,7 +2,9 @@
 
 ## Executive Summary
 
-Successfully delivered a **world-class AI video analytics engine** with **99% feature parity** to enterprise VMS platforms, achieving **113.8% of the original code target** with **14 production-ready modules**.
+> Historical scope summary: feature-parity and production-readiness percentages below do not prove that ONNX artifacts are present or field-certified. See `docs/AI_VIDEO_ANALYTICS_DEPLOYMENT.md` for current requirements.
+
+This report originally described a **world-class AI video analytics engine** with **99% planned feature parity**, achieving **113.8% of the original code target** across **14 module contracts**.
 
 ---
 

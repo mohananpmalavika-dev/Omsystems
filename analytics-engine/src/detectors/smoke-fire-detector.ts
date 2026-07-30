@@ -3,7 +3,8 @@
  * Early warning system for fire hazards
  */
 
-import { BaseDetector, type DetectionFrame, type DetectionResult, getInferenceObjects } from "./base-detector.js";
+import { BaseDetector, type DetectionFrame, type DetectionResult, getInferenceObjects, shouldRunLocalSpecialtyInference } from "./base-detector.js";
+import { loadObjectInference, modelUnavailableReason, type ObjectFrameInference } from "../inference/configured-model-inference.js";
 
 export type HazardType = "smoke" | "fire" | "both";
 export type SeverityLevel = "low" | "medium" | "high" | "critical";
@@ -22,22 +23,35 @@ export interface FireHazard {
 
 export class SmokeFireDetector extends BaseDetector {
   private isModelLoaded = false;
+  private inference: ObjectFrameInference | null;
+  private modelLoadError: string | null = null;
   private detectionHistory: Array<{ timestamp: Date; hazards: FireHazard[] }> = [];
   
-  private readonly MIN_CONFIDENCE = 0.65;
+  private readonly MIN_CONFIDENCE: number;
   private readonly HISTORY_SIZE = 10;
   private readonly AREA_THRESHOLD_LOW = 0.05; // 5% of frame
   private readonly AREA_THRESHOLD_HIGH = 0.20; // 20% of frame
 
-  constructor() {
+  constructor(inference: ObjectFrameInference | null = null, confidenceThreshold = 0.65) {
     super("fire-smoke", "1.0.0");
+    this.inference = inference;
+    this.MIN_CONFIDENCE = confidenceThreshold;
   }
 
   async initialize(): Promise<void> {
     console.log("Initializing smoke and fire detector...");
     
-    this.isModelLoaded = false;
-    console.warn("Smoke and fire detector requires normalized observations from a specialised fire/smoke model");
+    try {
+      this.inference ??= await loadObjectInference("fire-smoke", this.MIN_CONFIDENCE);
+      this.isModelLoaded = true;
+      this.modelLoadError = null;
+      console.log("Smoke and fire detector loaded local ONNX model");
+    } catch (error) {
+      this.inference = null;
+      this.isModelLoaded = false;
+      this.modelLoadError = error instanceof Error ? error.message : modelUnavailableReason("fire-smoke");
+      console.warn(`Smoke and fire detector running in normalized-observation mode: ${this.modelLoadError}`);
+    }
   }
 
   async detect(frame: DetectionFrame): Promise<DetectionResult[]> {
@@ -107,7 +121,11 @@ export class SmokeFireDetector extends BaseDetector {
    * Detect fire and smoke in frame
    */
   private async detectHazardsInFrame(frame: DetectionFrame): Promise<FireHazard[]> {
-    return getInferenceObjects(frame, ["smoke", "fire"])
+    const local = shouldRunLocalSpecialtyInference(frame) && this.inference
+      ? await this.inference.run(frame)
+      : [];
+    return [...getInferenceObjects(frame, ["smoke", "fire"]), ...local]
+      .filter((item) => item.label === "smoke" || item.label === "fire")
       .filter((item) => item.confidence >= this.MIN_CONFIDENCE)
       .map((item) => {
         const area = item.boundingBox.width * item.boundingBox.height;
@@ -203,6 +221,7 @@ export class SmokeFireDetector extends BaseDetector {
   }
 
   async cleanup(): Promise<void> {
+    this.inference = null;
     this.isModelLoaded = false;
     this.detectionHistory = [];
     console.log("Smoke and fire detector cleaned up");
@@ -213,7 +232,7 @@ export class SmokeFireDetector extends BaseDetector {
       status: this.isModelLoaded ? ("healthy" as const) : ("degraded" as const),
       details: this.isModelLoaded
         ? `Local fire/smoke model active; history: ${this.detectionHistory.length} frames`
-        : `Awaiting specialised fire/smoke model; accepts normalized edge-model observations. History: ${this.detectionHistory.length} frames`,
+        : `Awaiting fire/smoke model; normalized observations remain supported. ${this.modelLoadError ?? "Model unavailable"}. History: ${this.detectionHistory.length} frames`,
     };
   }
 }

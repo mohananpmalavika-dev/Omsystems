@@ -79,10 +79,24 @@ async function downloadApi(endpoint: string, options: RequestInit = {}): Promise
   });
 
   if (!response.ok) {
-    const error = await response.json().catch(() => ({
+    const text = await response.text().catch(() => "");
+    let error: any = {
       error: 'unknown_error',
       message: 'An unexpected error occurred',
-    }));
+      raw: text,
+    };
+
+    try {
+      error = JSON.parse(text);
+    } catch {
+      if (text) {
+        error = {
+          error: 'unknown_error',
+          message: text,
+          raw: text,
+        };
+      }
+    }
 
     throw new ApiError(
       error.message || (typeof error.error === 'string'

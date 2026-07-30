@@ -1,180 +1,44 @@
-# AI Models Directory
+# Analytics model artifacts
 
-This directory contains pre-trained machine learning models for the Analytics Engine.
+`manifest.json` is the runtime contract. ONNX weights are deployment artifacts and are intentionally excluded from Git because their licenses, provenance and checksums differ by deployment.
 
-## Required Models
+## Required runtime set
 
-### Core Detection Models
+| Model ID | Path | Contract |
+| --- | --- | --- |
+| `yolov8n` | `detection/yolov8n.onnx` | YOLOv8 COCO `[1,84,N]` or `[1,N,84]` |
+| `fire-smoke` | `safety/fire-smoke.onnx` | YOLOv8 classes `fire, smoke` |
+| `helmet` | `safety/helmet.onnx` | YOLOv8 classes `helmet, head` |
+| `face-detector` | `face/face-detector.onnx` | YOLOv8 class `face` |
+| `anpr-detector` | `vehicle/license-plate-detector.onnx` | YOLOv8 class `license-plate` |
+| `anpr-recognizer` | `vehicle/license-plate-recognizer.onnx` | CTC logits using the manifest alphabet |
 
-1. **YOLOv8n** (`detection/yolov8n.onnx`)
-   - General purpose object detection
-   - Size: ~6 MB
-   - Classes: 80 COCO classes (person, car, truck, etc.)
-   - Provision with `npm run models:download` from `analytics-engine` (requires Bash, Python 3 and an outbound connection), or mount an equivalent model at `/app/models/detection/yolov8n.onnx`.
-   - A legacy flat `/app/models/yolov8n.onnx` mount and `YOLO_MODEL_PATH` are also accepted.
+`face-embedding` is optional unless face recognition/watchlists are enabled. It must accept an RGB `1x3x112x112` tensor and return one float embedding.
 
-2. **Person Detection** (`person-detection-v2.onnx`)
-   - Optimized person detection with pose keypoints
-   - Recommended: MoveNet, OpenPose, or custom trained model
-   - Size: ~10-30 MB
+The YOLO adapter also supports `yolov5` objectness output and post-NMS `xyxy` rows when the manifest `decoder` is changed. Bounding boxes are normalized before they enter rules, alerts or tracking.
 
-3. **Vehicle Detection** (`vehicle-detection-v2.onnx`)
-   - Vehicle type classification (car, motorcycle, bus, truck, bicycle)
-   - Can use YOLOv8 fine-tuned on vehicle datasets
-   - Size: ~10-20 MB
+## Provisioning
 
-### Specialized Models
-
-4. **Helmet Detection** (`helmet-detection-v1.onnx`)
-   - Detects helmets and heads for safety compliance
-   - Recommended: Custom trained YOLO on helmet dataset
-   - Size: ~5-10 MB
-
-5. **Face Recognition** (`face-recognition-v1.onnx`)
-   - Face detection + embedding extraction
-   - Recommended: InsightFace, FaceNet, ArcFace
-   - Size: ~10-50 MB
-
-6. **ANPR** (`anpr-v2.onnx`)
-   - License plate detection and OCR
-   - Recommended: LPRNet, EasyOCR
-   - Size: ~20-40 MB
-
-7. **Fire & Smoke Detection** (`fire-smoke-v1.onnx`)
-   - Early fire and smoke detection
-   - Recommended: FireNet, custom trained model
-   - Size: ~5-15 MB
-
-8. **Fall Detection** (`fall-detection-v1.onnx`)
-   - Human fall detection with pose analysis
-   - Recommended: Custom trained CNN or pose-based model
-   - Size: ~10-20 MB
-
-## Model Format
-
-All models should be in **ONNX format** for compatibility with `onnxruntime-node`.
-
-## Converting Models to ONNX
-
-### PyTorch to ONNX
-```python
-import torch
-
-model = YourModel()
-model.load_state_dict(torch.load('model.pth'))
-model.eval()
-
-dummy_input = torch.randn(1, 3, 640, 640)
-torch.onnx.export(
-    model,
-    dummy_input,
-    'model.onnx',
-    input_names=['images'],
-    output_names=['output'],
-    dynamic_axes={'images': {0: 'batch'}, 'output': {0: 'batch'}}
-)
-```
-
-### TensorFlow to ONNX
-```bash
-pip install tf2onnx
-python -m tf2onnx.convert --saved-model model_dir --output model.onnx
-```
-
-### Ultralytics YOLOv8 to ONNX
-```python
-from ultralytics import YOLO
-
-model = YOLO('yolov8n.pt')
-model.export(format='onnx')
-```
-
-## Model Optimization
-
-For production deployment, optimize models:
+Weights must come from an approved internal artifact store or a reviewed upstream source. For each model, configure the URL and SHA-256 variables shown in `.env.example`, acknowledge the model licenses, and run:
 
 ```bash
-# Install ONNX optimizer
-pip install onnxoptimizer
-
-# Optimize model
-python -c "
-import onnx
-from onnxoptimizer import optimize
-
-model = onnx.load('model.onnx')
-optimized_model = optimize(model)
-onnx.save(optimized_model, 'model_optimized.onnx')
-"
+ANALYTICS_MODEL_LICENSES_ACCEPTED=true npm run models:download
+npm run models:verify
 ```
 
-## Model Testing
+Provisioning uses HTTPS, downloads to a temporary file, verifies SHA-256, and only then moves the artifact into place. `models:verify` opens every required model with ONNX Runtime; it fails if a file is missing, corrupt, has the wrong checksum, or cannot be loaded.
 
-Test models before deployment:
+Production containers set `ANALYTICS_REQUIRE_MODELS=true`. With that setting, missing required artifacts keep `/health` unready instead of silently reporting an engine with zero models. Authenticated normalized observations remain a deliberate development or edge-inference fallback when the setting is false.
 
-```typescript
-import * as ort from 'onnxruntime-node';
+## Compatibility testing
 
-async function testModel(modelPath: string) {
-  const session = await ort.InferenceSession.create(modelPath);
-  console.log('Input:', session.inputNames);
-  console.log('Output:', session.outputNames);
-  
-  // Test inference
-  const dummyInput = new ort.Tensor(
-    'float32',
-    Float32Array.from({length: 3 * 640 * 640}, () => Math.random()),
-    [1, 3, 640, 640]
-  );
-  
-  const results = await session.run({images: dummyInput});
-  console.log('Output shape:', results.output.dims);
-}
-```
+Model provenance and validation data must be recorded outside this repository. Before enabling alerts, verify the exact artifact on representative deployed cameras for:
 
-## Pre-trained Model Sources
+- daylight, night/IR, glare, rain and occlusion;
+- fire/smoke false alarms and temporal persistence;
+- helmet/head visibility and rider association;
+- face-detection consent, privacy and retention policy;
+- country-specific plate formats and OCR accuracy;
+- CPU/GPU latency, sustained stream count and memory use.
 
-- **YOLOv8**: https://github.com/ultralytics/ultralytics
-- **InsightFace**: https://github.com/deepinsight/insightface
-- **LPRNet**: https://github.com/sirius-ai/LPRNet_Pytorch
-- **FireNet**: https://github.com/tobybreckon/fire-detection-cnn
-- **OpenPose**: https://github.com/CMU-Perceptual-Computing-Lab/openpose
-
-## Model License Compliance
-
-Ensure all models comply with licensing requirements:
-- Commercial use allowed
-- Attribution requirements met
-- No redistribution restrictions
-
-## Performance Benchmarks
-
-Target performance (on CPU):
-- Person detection: <100ms per frame
-- Vehicle detection: <120ms per frame
-- Helmet detection: <80ms per frame
-- Face recognition: <150ms per frame
-- ANPR: <200ms per frame
-
-## Directory Structure
-
-```
-models/
-├── README.md                    # This file
-├── yolov8n.onnx                # Core object detection
-├── person-detection-v2.onnx    # Person detection
-├── vehicle-detection-v2.onnx   # Vehicle detection
-├── helmet-detection-v1.onnx    # Helmet detection
-├── face-recognition-v1.onnx    # Face recognition
-├── anpr-v2.onnx                # License plate recognition
-├── fire-smoke-v1.onnx          # Fire & smoke detection
-└── fall-detection-v1.onnx      # Fall detection
-```
-
-## Need Help?
-
-Contact the AI/ML team for:
-- Custom model training
-- Model optimization assistance
-- Integration support
-- Performance tuning
+Passing unit tests proves the tensor and detector contracts. It is not an accuracy or field-certification claim.
