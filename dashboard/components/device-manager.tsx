@@ -764,8 +764,12 @@ Write-Host "For example: npm install; npm run build; npm run dev"
             <Plus size={15} /> Manual add
           </button>
         </div>
-        {selectedBranch && gateways.length === 0 ? (
-          <p className="device-toolbar-note">Register a branch gateway first to enable the edge agent download package buttons.</p>
+        {selectedBranch ? (
+          gateways.length === 0 ? (
+            <p className="device-toolbar-note">Register a branch gateway first to enable the edge agent download package buttons.</p>
+          ) : (
+            <p className="device-toolbar-note">Current gateway: {gateways[0]?.name || "Unnamed gateway"} ({gateways[0]?.status || "unknown"}).</p>
+          )
         ) : null}
       </div>
 

@@ -29,6 +29,7 @@
     "test:hdd:all": "tsx test/hdd-health/test-runner.ts all",
     "test:hdd:connectivity": "tsx test/hdd-health/test-runner.ts connectivity",
     "test:hdd:compatibility": "tsx test/hdd-health/test-runner.ts compatibility",
+    "test:recorder:compatibility": "tsx test/hdd-health/test-runner.ts compatibility",
     "test:hdd:collect": "tsx test/hdd-health/test-runner.ts collect",
     "test:hdd:thresholds": "tsx test/hdd-health/test-runner.ts thresholds",
     "test:hdd:parsing": "tsx test/hdd-health/test-runner.ts parsing",

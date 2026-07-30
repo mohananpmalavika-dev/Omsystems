@@ -11,7 +11,21 @@ const target = {
   expectedChannels: 2,
   expectedRaidLevel: "RAID1",
   requireWriteVerification: true,
+  expectedRetentionDays: 180,
+  archiveRetention: {
+    lookbackDays: 180, maxResults: 500_000, continuityGapSeconds: 30,
+    channels: [{ cameraId: "cam-1", channel: 1 }, { cameraId: "cam-2", channel: 2 }],
+  },
 };
+
+const scannedAt = "2026-07-30T10:00:00.000Z";
+const oldestAt = new Date(Date.parse(scannedAt) - 180 * 86_400_000).toISOString();
+const retentionEvidence = [1, 2].map((channel) => ({
+  cameraId: `cam-${channel}`, sourceChannel: channel, status: "available" as const,
+  oldestContinuousAt: oldestAt, newestPlayableAt: scannedAt, retentionLowerBound: true,
+  coverageComplete: true, continuityGapSeconds: 30, gapCount: 0, largestGapSeconds: 0,
+  searchStartedAt: scannedAt, reasonCodes: [],
+}));
 
 const recordingEvidence = {
   metrics: {
@@ -37,7 +51,7 @@ describe("exact recorder HDD compatibility contract", () => {
         { diskNo: 2, state: "normal", capacity: "4TB", freeSpace: "1TB", smartStatus: "healthy", raidStatus: "healthy", raidLevel: "RAID1", writeVerified: true },
       ],
       reasonCodes: [],
-      archiveEvidence: [],
+      archiveEvidence: retentionEvidence,
       channelHealth: recordingEvidence.channelHealth,
     });
 
@@ -58,7 +72,7 @@ describe("exact recorder HDD compatibility contract", () => {
       },
       hddStatus: [{ diskNo: 1, state: "normal" }, { diskNo: 2, state: "normal" }],
       reasonCodes: [],
-      archiveEvidence: [],
+      archiveEvidence: retentionEvidence,
       channelHealth: recordingEvidence.channelHealth,
     });
 
@@ -74,11 +88,33 @@ describe("exact recorder HDD compatibility contract", () => {
       },
       hddStatus: [{ diskNo: 1, state: "normal" }],
       reasonCodes: [],
-      archiveEvidence: [],
+      archiveEvidence: retentionEvidence,
       channelHealth: recordingEvidence.channelHealth,
     });
 
     expect(checks.filter((check) => !check.passed).map((check) => check.name))
       .toEqual(expect.arrayContaining(["model", "firmware", "disk_inventory"]));
+  });
+
+  it("rejects a native archive that does not prove the full 180-day window", () => {
+    const tooShort = retentionEvidence.map((item) => ({
+      ...item,
+      oldestContinuousAt: new Date(Date.parse(scannedAt) - 179 * 86_400_000).toISOString(),
+      retentionLowerBound: false,
+    }));
+    const checks = verifyRecorderCompatibility(target, {
+      metrics: {
+        ...recordingEvidence.metrics,
+        reachable: true, status: "online", model: target.model, modelSource: "vendor-system",
+        firmwareVersion: target.expectedFirmware,
+      },
+      hddStatus: [
+        { diskNo: 1, state: "normal", capacity: "4TB", freeSpace: "1TB", smartStatus: "healthy", raidStatus: "healthy", raidLevel: "RAID1", writeVerified: true },
+        { diskNo: 2, state: "normal", capacity: "4TB", freeSpace: "1TB", smartStatus: "healthy", raidStatus: "healthy", raidLevel: "RAID1", writeVerified: true },
+      ],
+      reasonCodes: [], archiveEvidence: tooShort, channelHealth: recordingEvidence.channelHealth,
+    });
+
+    expect(checks.find((check) => check.name === "retention_180_days")).toMatchObject({ passed: false });
   });
 });

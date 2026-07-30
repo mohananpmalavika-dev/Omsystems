@@ -55,7 +55,7 @@ const schema = z.object({
     // recorder, so a camera's display channel alone is not a safe association.
     archiveRetention: z.object({
       lookbackDays: z.number().int().min(1).max(3650).default(400),
-      maxResults: z.number().int().min(100).max(100_000).default(20_000),
+      maxResults: z.number().int().min(100).max(1_000_000).default(500_000),
       // Use a value no greater than the branch policy's allowed gap. A smaller
       // value is conservative and remains valid for a less strict policy.
       continuityGapSeconds: z.number().int().min(0).max(86_400).default(30),

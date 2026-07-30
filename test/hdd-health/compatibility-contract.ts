@@ -1,4 +1,4 @@
-import type { RecorderProbeResult } from "../../edge-agent/src/monitoring/recorder-probe.js";
+import type { RecorderConfig, RecorderProbeResult } from "../../edge-agent/src/monitoring/recorder-probe.js";
 import { normalizeRecorderHddStatus } from "../../src/operational-health/disk-health.js";
 
 export type RecorderVendor = "hikvision" | "dahua" | "cp-plus" | "onvif";
@@ -17,10 +17,12 @@ export interface RecorderCompatibilityTarget {
   expectedChannels: number;
   expectedRaidLevel: string;
   requireWriteVerification: boolean;
+  expectedRetentionDays: number;
+  archiveRetention: NonNullable<RecorderConfig["archiveRetention"]>;
 }
 
 export interface CompatibilityCheck {
-  name: "configuration" | "reachability" | "model" | "firmware" | "disk_inventory" | "disk_fields" | "disk_slots" | "smart_telemetry" | "capacity" | "raid_health" | "write_verification" | "recording_evidence" | "channel_inventory" | "channel_connectivity" | "last_recorded_media";
+  name: "configuration" | "reachability" | "model" | "firmware" | "disk_inventory" | "disk_fields" | "disk_slots" | "smart_telemetry" | "capacity" | "raid_health" | "write_verification" | "recording_evidence" | "channel_inventory" | "channel_connectivity" | "last_recorded_media" | "archive_configuration" | "archive_inventory" | "retention_180_days" | "retention_continuity" | "retention_current";
   passed: boolean;
   details: string;
 }
@@ -38,6 +40,8 @@ export function verifyRecorderCompatibility(
   const expectedChannels = Number.isInteger(target.expectedChannels) ? target.expectedChannels : 0;
   const expectedRaidLevel = typeof target.expectedRaidLevel === "string" ? target.expectedRaidLevel.trim() : "";
   const writeRequirementConfigured = typeof target.requireWriteVerification === "boolean";
+  const expectedRetentionDays = Number.isInteger(target.expectedRetentionDays) ? target.expectedRetentionDays : 0;
+  const archiveConfig = target.archiveRetention;
   const disks = normalizeRecorderHddStatus(probe.hddStatus);
   const channelHealth = probe.channelHealth ?? [];
   const model = stringMetric(probe, "model");
@@ -49,9 +53,11 @@ export function verifyRecorderCompatibility(
     passed: Boolean(configuredModel) && Boolean(configuredFirmware)
       && expectedDisks > 0 && expectedChannels > 0
       && Boolean(expectedRaidLevel) && writeRequirementConfigured
+      && expectedRetentionDays >= 180
+      && archiveConfig?.lookbackDays >= expectedRetentionDays
       && !PLACEHOLDER.test(configuredModel)
       && !PLACEHOLDER.test(configuredFirmware),
-    details: "model, exact firmware, disk/channel counts, RAID expectation, and write-verification policy must be configured without placeholders",
+    details: "model, firmware, disk/channel counts, RAID/write policy, and a native archive lookback of at least 180 days must be configured without placeholders",
   });
   checks.push({
     name: "reachability",
@@ -146,7 +152,61 @@ export function verifyRecorderCompatibility(
       ? "no channel returned recent media"
       : `newest aggregate media ${aggregateLastRecordedAt || "unavailable"}; ${recordingRows.length} recording channel timestamp(s) checked`,
   });
+  const archiveEvidence = probe.archiveEvidence ?? [];
+  const mappedCameraIds = new Set((archiveConfig?.channels ?? []).map((channel) => channel.cameraId));
+  const mappedChannels = new Set((archiveConfig?.channels ?? []).map((channel) => channel.channel));
+  checks.push({
+    name: "archive_configuration",
+    passed: expectedRetentionDays >= 180
+      && archiveConfig?.lookbackDays >= expectedRetentionDays
+      && archiveConfig.channels.length === expectedChannels
+      && mappedCameraIds.size === expectedChannels
+      && mappedChannels.size === expectedChannels,
+    details: `required ${expectedRetentionDays || "unconfigured"} days; lookback ${archiveConfig?.lookbackDays ?? "unconfigured"}; mapped ${archiveConfig?.channels.length ?? 0}/${expectedChannels} channel(s)`,
+  });
+  checks.push({
+    name: "archive_inventory",
+    passed: archiveEvidence.length === expectedChannels
+      && archiveEvidence.every((item) => mappedCameraIds.has(item.cameraId)),
+    details: `expected ${expectedChannels} mapped archive result(s); observed ${archiveEvidence.length}`,
+  });
+  const complete = archiveEvidence.filter((item) => item.status === "available" && item.coverageComplete);
+  const retentionPassing = complete.filter((item) => archiveDays(item) + archiveToleranceDays(item) >= expectedRetentionDays);
+  checks.push({
+    name: "retention_180_days",
+    passed: expectedRetentionDays >= 180 && retentionPassing.length === expectedChannels,
+    details: `${retentionPassing.length}/${expectedChannels} channel(s) prove at least ${expectedRetentionDays || 180} continuous days`,
+  });
+  const continuityPassing = complete.filter((item) => (item.gapCount ?? 0) === 0
+    && (item.largestGapSeconds ?? 0) <= item.continuityGapSeconds);
+  checks.push({
+    name: "retention_continuity",
+    passed: continuityPassing.length === expectedChannels,
+    details: `${continuityPassing.length}/${expectedChannels} channel(s) have a complete scan with no gap above tolerance`,
+  });
+  const currentPassing = complete.filter((item) => {
+    const newest = Date.parse(item.newestPlayableAt ?? "");
+    const scannedAt = Date.parse(item.searchStartedAt);
+    return Number.isFinite(newest) && Number.isFinite(scannedAt)
+      && scannedAt >= newest && scannedAt - newest <= item.continuityGapSeconds * 1_000;
+  });
+  checks.push({
+    name: "retention_current",
+    passed: currentPassing.length === expectedChannels,
+    details: `${currentPassing.length}/${expectedChannels} channel(s) have playable media current to the configured gap tolerance`,
+  });
   return checks;
+}
+
+function archiveDays(item: RecorderProbeResult["archiveEvidence"][number]) {
+  const oldest = Date.parse(item.oldestContinuousAt ?? "");
+  const newest = Date.parse(item.newestPlayableAt ?? "");
+  return Number.isFinite(oldest) && Number.isFinite(newest) && newest >= oldest
+    ? (newest - oldest) / 86_400_000 : 0;
+}
+
+function archiveToleranceDays(item: RecorderProbeResult["archiveEvidence"][number]) {
+  return Math.max(1_000, item.continuityGapSeconds * 1_000) / 86_400_000;
 }
 
 function stringMetric(probe: RecorderProbeResult, name: string) {

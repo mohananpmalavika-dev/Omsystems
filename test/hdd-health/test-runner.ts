@@ -60,6 +60,9 @@ interface CompatibilityEvidence {
   expectedChannels: number;
   observedChannels: number | null;
   recordingStatus: string | null;
+  expectedRetentionDays: number;
+  observedArchiveChannels: number;
+  archiveEvidence: RecorderProbeResult['archiveEvidence'];
   checks: CompatibilityCheck[];
 }
 
@@ -200,7 +203,7 @@ class HddHealthTester {
     for (const recorder of this.config.recorders) {
       const started = Date.now();
       try {
-        const probe = await probeRecorder(this.toRecorderConfig(recorder), this.config.testSettings?.timeout ?? 10000);
+        const probe = await probeRecorder(this.toRecorderConfig(recorder), this.config.testSettings?.timeout ?? 10000, { includeArchive: true });
         const checks = verifyRecorderCompatibility(recorder, probe);
         const duration = Date.now() - started;
         const observedModel = this.stringMetric(probe.metrics.model);
@@ -217,6 +220,9 @@ class HddHealthTester {
           expectedChannels: recorder.expectedChannels,
           observedChannels: typeof probe.metrics.totalCameras === 'number' ? probe.metrics.totalCameras : null,
           recordingStatus: typeof probe.metrics.recordingStatus === 'string' ? probe.metrics.recordingStatus : null,
+          expectedRetentionDays: recorder.expectedRetentionDays,
+          observedArchiveChannels: probe.archiveEvidence.length,
+          archiveEvidence: probe.archiveEvidence,
           checks,
         });
 
@@ -493,6 +499,7 @@ class HddHealthTester {
       port: recorder.port,
       username: recorder.username,
       password: recorder.password,
+      archiveRetention: recorder.archiveRetention,
     };
   }
 

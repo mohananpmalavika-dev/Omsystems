@@ -14,6 +14,13 @@
       "expectedChannels": 16,
       "expectedRaidLevel": "not_configured",
       "requireWriteVerification": true,
+      "expectedRetentionDays": 180,
+      "archiveRetention": {
+        "lookbackDays": 180,
+        "maxResults": 500000,
+        "continuityGapSeconds": 30,
+        "channels": [{ "cameraId": "REPLACE_WITH_CAMERA_ID_1", "channel": 1 }]
+      },
       "notes": "Main office recorder"
     },
     {
@@ -30,6 +37,13 @@
       "expectedChannels": 16,
       "expectedRaidLevel": "RAID5",
       "requireWriteVerification": true,
+      "expectedRetentionDays": 180,
+      "archiveRetention": {
+        "lookbackDays": 180,
+        "maxResults": 500000,
+        "continuityGapSeconds": 30,
+        "channels": [{ "cameraId": "REPLACE_WITH_CAMERA_ID_1", "channel": 1 }]
+      },
       "notes": "Branch office recorder"
     },
     {
@@ -46,6 +60,13 @@
       "expectedChannels": 16,
       "expectedRaidLevel": "RAID5",
       "requireWriteVerification": true,
+      "expectedRetentionDays": 180,
+      "archiveRetention": {
+        "lookbackDays": 180,
+        "maxResults": 500000,
+        "continuityGapSeconds": 30,
+        "channels": [{ "cameraId": "REPLACE_WITH_CAMERA_ID_1", "channel": 1 }]
+      },
       "notes": "Warehouse recorder"
     }
   ],
