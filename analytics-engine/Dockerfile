@@ -53,7 +53,10 @@ COPY --from=build --chown=analytics:analytics /workspace/node_modules ./node_mod
 RUN mkdir -p /app/models && chown analytics:analytics /app/models
 COPY --from=build --chown=analytics:analytics /workspace/analytics-engine/models/manifest.json /app/models/manifest.json
 ENV MODELS_DIR=/app/models
-ENV ANALYTICS_REQUIRE_MODELS=true
+# The image contains only the model manifest. Keep normalized edge-observation
+# ingestion available until an operator mounts verified ONNX artifacts and
+# explicitly opts into strict local-inference readiness at runtime.
+ENV ANALYTICS_REQUIRE_MODELS=false
 
 # Switch to non-root user
 USER analytics

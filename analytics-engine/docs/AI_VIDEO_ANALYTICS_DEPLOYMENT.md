@@ -28,7 +28,7 @@ The provisioning command downloads to a temporary file and promotes it only afte
 
 ## Production readiness
 
-Production images set:
+Certified local-inference deployments must set:
 
 ```env
 MODELS_DIR=/app/models
@@ -39,12 +39,15 @@ With strict readiness enabled, a missing required model prevents pipeline initia
 
 ### Render deployment mode
 
-The checked-in Render blueprint does not attach an approved model volume, so it
-explicitly sets `ANALYTICS_REQUIRE_MODELS=false`. This lets the service accept
-authenticated normalized observations from edge inference workers and makes
-Render's `/health` deployment check return HTTP 200 with `status: degraded`.
-The response continues to expose the missing required model IDs; this mode must
-not be represented as local inference.
+The checked-in image contains the model manifest but no ONNX artifacts, so its
+runtime default and the Render blueprint both set
+`ANALYTICS_REQUIRE_MODELS=false`. Keeping the same safe default at both layers
+also covers existing Render services that deploy the Dockerfile directly and do
+not sync `render.yaml`. The service accepts authenticated normalized
+observations from edge inference workers, and Render's `/health` deployment
+check returns HTTP 200 with `status: degraded`. The response continues to expose
+the missing required model IDs; this mode must not be represented as local
+inference.
 
 To enable local inference on Render, attach or provision every manifest artifact,
 run `npm run models:verify` against that exact directory, and only then change
