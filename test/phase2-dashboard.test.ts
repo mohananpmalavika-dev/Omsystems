@@ -59,7 +59,7 @@ describe("Phase 2 bulk dashboard contracts", () => {
         source: "cp-plus-adapter",
         quality: "verified",
         idempotencyKey: "nvr-001:online",
-        metrics: { status: "online" },
+        metrics: { status: "online", reachable: true, recordingStatus: "recording", recordingStatusSource: "recent-media-search" },
         reasonCodes: [],
       },
     });

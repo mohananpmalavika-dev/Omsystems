@@ -15,6 +15,7 @@ import {
 } from "../operational-health/types.js";
 import { operationalHealthEvents } from "../operational-health/event-stream.js";
 import {
+  applyDiskHistory,
   diskToMetrics,
   normalizeDiskMetrics,
   normalizeRecorderHddStatus,
@@ -205,8 +206,13 @@ export async function registerOperationalHealthRoutes(
     const disks = normalizeRecorderHddStatus(input.hddStatus);
     if (disks.length === 0) return reply.code(422).send({ error: "hdd_status_unparseable" });
     const receivedAt = new Date().toISOString();
+    const previousTelemetry = await store.listLatestOperationalTelemetry(branch.tenantId, [branch.id]);
+    const previousByDeviceId = new Map(previousTelemetry
+      .filter((item) => item.deviceType === "disk")
+      .map((item) => [item.deviceId, item]));
     const results = [];
-    for (const [index, disk] of disks.entries()) {
+    for (const [index, normalizedDisk] of disks.entries()) {
+      const disk = applyDiskHistory(normalizedDisk, previousByDeviceId.get(`${input.recorderId}:disk:${normalizedDisk.id || index + 1}`)?.metrics);
       const deviceId = `${input.recorderId}:disk:${disk.id || index + 1}`;
       const envelope: OperationalTelemetryEnvelope = {
         tenantId: branch.tenantId,
@@ -572,16 +578,21 @@ export async function registerOperationalHealthRoutes(
         const branch = branchById.get(item.branchId);
         if (!branch) return [];
         const disk = projectDiskHealth(item, branch);
-        if (disk.smartStatus === "healthy") return [];
-        const critical = ["failure_predicted", "failed", "missing"].includes(disk.smartStatus);
+        if (disk.operationalStatus === "healthy" || disk.operationalStatus === "unknown") return [];
+        const critical = disk.operationalStatus === "critical";
+        const issue = disk.reasonCodes.find((code) => [
+          "disk_missing", "disk_slot_failed", "disk_uninitialized", "disk_read_only",
+          "raid_failed", "raid_degraded", "recording_write_failed", "disk_capacity_critical",
+          "smart_self_test_failed",
+        ].includes(code)) ?? disk.smartStatus;
         return [{
           id: `hdd:${branch.id}:${disk.id}`,
           severity: critical ? "critical" as const : "warning" as const,
           status: "active" as const,
           componentType: "storage",
           deviceId: disk.id,
-          title: `HDD ${disk.smartStatus.replaceAll("_", " ")}: ${disk.devicePath}`,
-          description: `${disk.model} has a ${disk.failureProbability.toFixed(1)}% SMART risk score. ${disk.reasonCodes.join(", ")}.`,
+          title: `HDD ${issue.replaceAll("_", " ")}: ${disk.devicePath}`,
+          description: `${disk.model}: slot ${disk.slotStatus}, SMART ${disk.smartStatus}, RAID ${disk.raidStatus}, write ${disk.writeVerification}, capacity ${disk.usagePercent.toFixed(1)}% used. Risk score ${disk.failureProbability.toFixed(1)}%.`,
           impact: critical ? "Recording data is at immediate risk of loss." : "Disk degradation may reduce recording reliability.",
           recommendedAction: critical ? "Verify redundancy and replace the disk immediately." : "Run an extended SMART test and schedule preventive replacement.",
           branchId: branch.id, branchName: branch.name, branchCode: branch.code,

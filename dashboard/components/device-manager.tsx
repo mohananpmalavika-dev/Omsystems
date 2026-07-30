@@ -729,6 +729,12 @@ Write-Host "For example: npm install; npm run build; npm run dev"
           <p>Install the branch gateway, then click Add camera to scan the local network and automatically provision discovered cameras.</p>
         </div>
         <div className="device-toolbar-actions">
+          <button className="secondary-button" onClick={() => void downloadEdgeAgentPackage("windows")} disabled={!selectedBranch}>
+            <Download size={15} /> Download Windows package
+          </button>
+          <button className="secondary-button" onClick={() => void downloadEdgeAgentPackage("linux")} disabled={!selectedBranch}>
+            <Download size={15} /> Download Linux package
+          </button>
           <button className="secondary-button" onClick={() => {
             setProvisionedGateway(undefined);
             setShowGatewayForm(true);
