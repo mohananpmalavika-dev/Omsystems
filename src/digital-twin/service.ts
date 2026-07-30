@@ -154,18 +154,22 @@ export class DigitalTwinService {
   async playback(user: User, floorId: string, at: string) {
     const scope = await this.requireFloor(user, floorId, "incident:view"); const current = await this.floorState(user, floorId);
     const from = new Date(Date.parse(at) - 180 * 24 * 60 * 60 * 1_000).toISOString();
-    const [events, telemetry, alerts] = await Promise.all([this.state.listEvents(floorId, from, at, 10_000), this.store.listOperationalTelemetryHistory(user.tenantId, scope.branchId, from, at, 10_000), this.state.listAlerts(floorId, false)]);
+    const [events, telemetry, alerts, analytics] = await Promise.all([this.state.listEvents(floorId, from, at, 10_000), this.store.listOperationalTelemetryHistory(user.tenantId, scope.branchId, from, at, 10_000), this.state.listAlerts(floorId, false), this.store.listAnalyticsAlerts(user.tenantId, { branchId: scope.branchId, from, to: at, limit: 500 })]);
     const latestEvent = new Map<string, TwinEvent>(); for (const event of events) if (event.twinObjectId) latestEvent.set(event.twinObjectId, event);
     const latestTelemetry = new Map<string, OperationalTelemetryEnvelope>(); for (const item of telemetry) latestTelemetry.set(`${normalizeDeviceType(item.deviceType)}:${item.deviceId}`, item);
-    const objects = current.objects.map((object) => ({ ...object, currentStatus: projectStatus(object, latestEvent.get(object.id), latestTelemetry, []) }));
-    return { at, branch: current.branch, building: current.building, floor: current.floor, floorPlan: current.floorPlan, objects, zones: current.zones, alerts: alerts.filter((item) => item.triggeredAt <= at && (!item.resolvedAt || item.resolvedAt > at)), sourceWindow: { from, to: at }, generatedAt: new Date().toISOString() };
+    const historicalAnalytics = analytics.filter((item) => !["suppressed", "false_alarm"].includes(item.status) && item.lastDetectedAt <= at && (!item.resolvedAt || item.resolvedAt > at));
+    const objects = current.objects.map((object) => ({ ...object, currentStatus: projectStatus(object, latestEvent.get(object.id), latestTelemetry, historicalAnalytics) }));
+    const persistedMarkers = alerts.filter((item) => item.triggeredAt <= at && (!item.resolvedAt || item.resolvedAt > at));
+    const analyticsMarkers = historicalAnalytics.flatMap((item) => markerForAnalytics(item, objects));
+    return { at, branch: current.branch, building: current.building, floor: current.floor, floorPlan: current.floorPlan, objects, zones: current.zones, alerts: dedupeAlerts([...persistedMarkers, ...analyticsMarkers]), sourceWindow: { from, to: at }, generatedAt: new Date().toISOString() };
   }
 
   generateHeatmap(type: TwinHeatmapType, objects: Array<TwinObject & { currentStatus: TwinObjectStatus }>, alerts: TwinAlertMarker[], events: TwinEvent[]): TwinHeatmap {
     const raw: Array<{ x: number; y: number; weight: number; label?: string; source: string }> = [];
+    const objectsById = new Map(objects.map((item) => [item.id, item]));
     if (type === "operational") for (const item of objects) if (item.currentStatus.color !== "green" && item.currentStatus.color !== "grey") raw.push({ x: item.positionX, y: item.positionY, weight: item.currentStatus.color === "red" ? 1 : 0.55, label: item.name, source: item.currentStatus.source });
     if (type === "people_security" || type === "incidents") for (const alert of alerts) if (alert.positionX != null && alert.positionY != null) raw.push({ x: alert.positionX, y: alert.positionY, weight: alert.severity === "critical" ? 1 : alert.severity === "warning" ? 0.65 : 0.35, label: alert.title, source: alert.source });
-    if (type === "door_usage") for (const event of events) if (event.eventType.includes("door") && event.positionX != null && event.positionY != null) raw.push({ x: event.positionX, y: event.positionY, weight: 0.5, label: event.state ?? "door event", source: event.source });
+    if (type === "door_usage") for (const event of events) if (event.eventType.includes("door")) { const object = event.twinObjectId ? objectsById.get(event.twinObjectId) : undefined; const x = event.positionX ?? object?.positionX; const y = event.positionY ?? object?.positionY; if (x != null && y != null) raw.push({ x, y, weight: 0.5, label: event.state ?? "door event", source: event.source }); }
     const cells = new Map<string, { x: number; y: number; intensity: number; count: number; label?: string }>(); for (const point of raw) { const x = Math.round(point.x * 24) / 24; const y = Math.round(point.y * 24) / 24; const key = `${x}:${y}`; const value = cells.get(key) ?? { x, y, intensity: 0, count: 0, label: point.label }; value.intensity += point.weight; value.count += 1; cells.set(key, value); }
     const max = Math.max(0, ...[...cells.values()].map((item) => item.intensity)); const points = [...cells.values()].map((item) => ({ ...item, intensity: max ? Math.round((item.intensity / max) * 1000) / 1000 : 0 })); const now = new Date().toISOString();
     return { type, generatedAt: now, from: events.at(0)?.occurredAt ?? now, to: now, points, maxIntensity: max ? 1 : 0, totalEvents: raw.length, source: [...new Set(raw.map((item) => item.source))] };
@@ -186,9 +190,11 @@ export class TwinServiceError extends Error { constructor(public readonly code: 
 
 function projectStatus(object: TwinObject, event: TwinEvent | undefined, telemetry: Map<string, OperationalTelemetryEnvelope>, alerts: AnalyticsAlert[]): TwinObjectStatus {
   const binding = object.binding; const ai = binding?.deviceType === "camera" && alerts.some((item) => item.cameraId === binding.deviceId);
-  if (event) return eventStatus(event, ai);
+  const sample = binding ? telemetry.get(`${binding.deviceType}:${binding.deviceId}`) ?? (binding.deviceType === "camera" ? telemetry.get(`camera:${binding.deviceId}`) : undefined) : undefined;
+  // Door/sensor events drive state until a newer observation arrives. Without
+  // this ordering, a historical forced-door event would mask recovery forever.
+  if (event && (!sample || Date.parse(event.occurredAt) >= Date.parse(sample.observedAt))) return eventStatus(event, ai);
   if (!binding) return status("unknown", "grey", "Not bound", null, null, ai, null, "digital-twin", {});
-  const sample = telemetry.get(`${binding.deviceType}:${binding.deviceId}`) ?? (binding.deviceType === "camera" ? telemetry.get(`camera:${binding.deviceId}`) : undefined);
   if (binding.deviceType === "camera") {
     const offline = sample?.metrics.reachable === false || sample?.metrics.online === false || lower(sample?.metrics.status) === "offline";
     const recording = lower(sample?.metrics.recordingStatus); if (offline) return status("offline", "red", "Offline", false, false, ai, sample?.observedAt ?? null, sample?.source ?? "camera-registry", sample?.metrics ?? {});

@@ -1,4 +1,9 @@
 -- Operational event stream and integrity improvements for the Digital Twin MVP.
+-- Migration 037 originally constrained every integration device identifier to
+-- UUID. Existing installations need the same opaque string support as new ones.
+ALTER TABLE digital_twin_device_bindings
+  ALTER COLUMN device_id TYPE TEXT USING device_id::text;
+
 CREATE UNIQUE INDEX IF NOT EXISTS digital_twin_buildings_branch_unique
   ON digital_twin_buildings(branch_id) WHERE branch_id IS NOT NULL;
 
@@ -31,4 +36,3 @@ CREATE INDEX IF NOT EXISTS digital_twin_events_floor_time
   ON digital_twin_events(floor_id, occurred_at DESC);
 CREATE INDEX IF NOT EXISTS digital_twin_events_device_time
   ON digital_twin_events(tenant_id, device_type, device_id, occurred_at DESC);
-

@@ -146,7 +146,9 @@ CREATE TABLE digital_twin_device_bindings (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     twin_object_id UUID NOT NULL REFERENCES digital_twin_objects(id) ON DELETE CASCADE,
     device_type VARCHAR(50) NOT NULL, -- 'camera', 'recorder', 'access_control', 'sensor'
-    device_id UUID NOT NULL,
+    -- Control-plane camera IDs may be UUIDs, while recorder, sensor, UPS and
+    -- integration IDs are commonly vendor strings. Keep the binding opaque.
+    device_id TEXT NOT NULL,
     device_table VARCHAR(100) NOT NULL, -- Table name for the device
     
     -- Status bindings
