@@ -740,6 +740,134 @@ export function createPredictionApiRoutes(pool: Pool): Router {
   });
 
   /**
+   * GET /v1/predictions/digital-twin/branches/:branchId/risk-indicators
+   * Get device risk indicators for Digital Twin visualization
+   */
+  router.get('/digital-twin/branches/:branchId/risk-indicators', async (req: AuthRequest, res: Response) => {
+    try {
+      const { tenantId } = req.context || {};
+      if (!tenantId) {
+        return res.status(401).json({ success: false, error: 'Unauthorized' });
+      }
+
+      const { branchId } = req.params;
+
+      const { DigitalTwinPredictionIntegration } = await import('../services/digital-twin-prediction-integration.service.js');
+      const dtIntegration = new DigitalTwinPredictionIntegration(pool);
+
+      const indicators = await dtIntegration.getBranchDeviceRiskIndicators(branchId, tenantId);
+
+      res.json({
+        success: true,
+        data: indicators
+      });
+    } catch (error) {
+      logger.error('Error fetching digital twin risk indicators', { error, branchId: req.params.branchId });
+      res.status(500).json({ success: false, error: 'Internal server error' });
+    }
+  });
+
+  /**
+   * GET /v1/predictions/digital-twin/devices/:deviceId/risk-indicator
+   * Get risk indicator for a specific device
+   */
+  router.get('/digital-twin/devices/:deviceId/risk-indicator', async (req: AuthRequest, res: Response) => {
+    try {
+      const { tenantId } = req.context || {};
+      if (!tenantId) {
+        return res.status(401).json({ success: false, error: 'Unauthorized' });
+      }
+
+      const { deviceId } = req.params;
+      const { branchId } = req.query;
+
+      if (!branchId) {
+        return res.status(400).json({ success: false, error: 'branchId query parameter required' });
+      }
+
+      const { DigitalTwinPredictionIntegration } = await import('../services/digital-twin-prediction-integration.service.js');
+      const dtIntegration = new DigitalTwinPredictionIntegration(pool);
+
+      const indicator = await dtIntegration.getDeviceRiskIndicator(deviceId, branchId as string, tenantId);
+
+      res.json({
+        success: true,
+        data: indicator
+      });
+    } catch (error) {
+      logger.error('Error fetching device risk indicator', { error, deviceId: req.params.deviceId });
+      res.status(500).json({ success: false, error: 'Internal server error' });
+    }
+  });
+
+  /**
+   * GET /v1/predictions/digital-twin/branches/:branchId/risk-overlay
+   * Get branch risk overlay for map visualization
+   */
+  router.get('/digital-twin/branches/:branchId/risk-overlay', async (req: AuthRequest, res: Response) => {
+    try {
+      const { tenantId } = req.context || {};
+      if (!tenantId) {
+        return res.status(401).json({ success: false, error: 'Unauthorized' });
+      }
+
+      const { branchId } = req.params;
+
+      const { DigitalTwinPredictionIntegration } = await import('../services/digital-twin-prediction-integration.service.js');
+      const dtIntegration = new DigitalTwinPredictionIntegration(pool);
+
+      const overlay = await dtIntegration.getBranchRiskOverlay(branchId, tenantId);
+
+      res.json({
+        success: true,
+        data: overlay
+      });
+    } catch (error) {
+      logger.error('Error fetching branch risk overlay', { error, branchId: req.params.branchId });
+      res.status(500).json({ success: false, error: 'Internal server error' });
+    }
+  });
+
+  /**
+   * POST /v1/predictions/ai-query
+   * Natural language query interface for predictions
+   */
+  router.post('/ai-query', async (req: AuthRequest, res: Response) => {
+    try {
+      const { tenantId, userScope } = req.context || {};
+      if (!tenantId) {
+        return res.status(401).json({ success: false, error: 'Unauthorized' });
+      }
+
+      const { question } = req.body;
+
+      if (!question) {
+        return res.status(400).json({
+          success: false,
+          error: 'question is required'
+        });
+      }
+
+      const { AiCommandCenterPredictionService } = await import('../services/ai-command-center-prediction.service.js');
+      const aiService = new AiCommandCenterPredictionService(pool);
+
+      const response = await aiService.handleNaturalLanguageQuery(
+        question,
+        tenantId,
+        userScope
+      );
+
+      res.json({
+        success: true,
+        data: response
+      });
+    } catch (error) {
+      logger.error('Error processing AI prediction query', { error, question: req.body.question });
+      res.status(500).json({ success: false, error: 'Internal server error' });
+    }
+  });
+
+  /**
    * POST /v1/predictions/generate
    * Manually trigger prediction generation
    */

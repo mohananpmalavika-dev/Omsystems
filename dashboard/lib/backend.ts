@@ -128,7 +128,7 @@ async function controlFetch(
   }
   const response = await fetch(new URL(
     path,
-    runtimeEnv("CONTROL_PLANE_INTERNAL_URL", "http://localhost:8080"),
+    runtimeEnv(["CONTROL_PLANE_INTERNAL_URL", "CONTROL_PLANE_PUBLIC_URL"], "http://localhost:8080"),
   ), {
     ...init,
     headers: {

@@ -17,7 +17,7 @@ async function proxyControlRequest(request: NextRequest, context: RouteContext) 
   }
 
   const upstreamBase = runtimeEnv(
-    "CONTROL_PLANE_INTERNAL_URL",
+    ["CONTROL_PLANE_INTERNAL_URL", "CONTROL_PLANE_PUBLIC_URL"],
     "http://localhost:8080",
   );
   const upstream = new URL(`/${path.join("/")}`, upstreamBase);
@@ -142,6 +142,13 @@ export const PUT = proxyControlRequest;
 export const PATCH = proxyControlRequest;
 export const DELETE = proxyControlRequest;
 
-function runtimeEnv(name: string, fallback: string) {
+function runtimeEnv(name: string | string[], fallback: string) {
+  if (Array.isArray(name)) {
+    for (const key of name) {
+      const value = Reflect.get(process.env, key) as string | undefined;
+      if (value) return value;
+    }
+    return fallback;
+  }
   return (Reflect.get(process.env, name) as string | undefined) ?? fallback;
 }

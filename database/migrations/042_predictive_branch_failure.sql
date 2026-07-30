@@ -805,3 +805,47 @@ CREATE INDEX idx_calibration_type ON prediction_calibration_history(prediction_t
 CREATE INDEX idx_calibration_measured_at ON prediction_calibration_history(measured_at DESC);
 
 COMMENT ON TABLE prediction_calibration_history IS 'Historical tracking of prediction model accuracy and calibration metrics';
+
+-- ============================================================================
+-- RCA INTEGRATION TABLES (Added for prediction outcome learning)
+-- ============================================================================
+
+CREATE TABLE prediction_misprediction_log (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    prediction_id UUID NOT NULL REFERENCES failure_predictions(id) ON DELETE CASCADE,
+    tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+    prediction_type prediction_type_enum NOT NULL,
+    analysis JSONB NOT NULL,
+    reviewed BOOLEAN NOT NULL DEFAULT false,
+    reviewed_by UUID REFERENCES users(id) ON DELETE SET NULL,
+    reviewed_at TIMESTAMPTZ,
+    action_taken TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_misprediction_prediction ON prediction_misprediction_log(prediction_id);
+CREATE INDEX idx_misprediction_tenant ON prediction_misprediction_log(tenant_id);
+CREATE INDEX idx_misprediction_type ON prediction_misprediction_log(prediction_type);
+CREATE INDEX idx_misprediction_reviewed ON prediction_misprediction_log(reviewed) WHERE reviewed = false;
+
+CREATE TABLE rca_cases (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+    case_fingerprint VARCHAR(24) NOT NULL,
+    branch_node_id UUID NOT NULL REFERENCES branch_nodes(id) ON DELETE CASCADE,
+    device_id VARCHAR(255) NOT NULL,
+    failure_type VARCHAR(100) NOT NULL,
+    root_cause_code VARCHAR(100) NOT NULL,
+    root_cause_label VARCHAR(255) NOT NULL,
+    confidence DECIMAL(5,4) NOT NULL,
+    evidence JSONB,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_rca_cases_tenant ON rca_cases(tenant_id);
+CREATE INDEX idx_rca_cases_branch ON rca_cases(branch_node_id);
+CREATE INDEX idx_rca_cases_device ON rca_cases(device_id);
+CREATE INDEX idx_rca_cases_fingerprint ON rca_cases(case_fingerprint);
+
+COMMENT ON TABLE prediction_misprediction_log IS 'Tracks incorrect predictions for model improvement and rule adjustment';
+COMMENT ON TABLE rca_cases IS 'Root cause analysis results linked to failure predictions for outcome learning';
