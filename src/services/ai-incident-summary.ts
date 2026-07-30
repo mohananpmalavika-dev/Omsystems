@@ -12,6 +12,33 @@
 import type { ControlPlaneStore } from "../control-plane-store.js";
 import type { AnalyticsAlert } from "../domain/models.js";
 
+// Helpers to adapt AnalyticsAlert shape (alerts in this codebase use
+// firstDetectedAt/lastDetectedAt and severity codes like P1..P5). Keep
+// these helpers local so the rest of the service can assume simple
+// string-based detection types and an occurredAt timestamp.
+function getOccurredAt(alert: AnalyticsAlert): string {
+  // Prefer lastDetectedAt then firstDetectedAt for event time
+  return (alert as any).occurredAt ?? alert.lastDetectedAt ?? alert.firstDetectedAt;
+}
+
+function getDetectionType(alert: AnalyticsAlert): string {
+  // Some pipelines may attach `detectionType` to alerts; fall back to ruleId
+  return (alert as any).detectionType ?? (alert.ruleId ? String(alert.ruleId) : "intrusion");
+}
+
+function getBranchId(alert: AnalyticsAlert): string | undefined {
+  // Alerts do not currently include branchId; attempt to read if present.
+  return (alert as any).branchId ?? undefined;
+}
+
+function alertSeverityLabel(sev: unknown): "critical" | "high" | "medium" | "low" {
+  // Map project-specific severity codes (P1..P5) to human labels.
+  const s = String(sev);
+  if (s === "P1") return "critical";
+  if (s === "P2") return "high";
+  if (s === "P3") return "medium";
+  return "low";
+}
 export interface AlertCluster {
   id: string;
   tenantId: string;
@@ -123,7 +150,7 @@ export class AIIncidentSummaryService {
 
     // Sort alerts by time
     const sortedAlerts = [...alerts].sort(
-      (a, b) => new Date(a.occurredAt).getTime() - new Date(b.occurredAt).getTime()
+      (a, b) => new Date(getOccurredAt(a)).getTime() - new Date(getOccurredAt(b)).getTime()
     );
 
     const clusters: AlertCluster[] = [];
@@ -162,16 +189,16 @@ export class AIIncidentSummaryService {
     timeWindows: CorrelationTimeWindow,
     maxAge: number
   ): AnalyticsAlert[] {
-    const baseTime = new Date(baseAlert.occurredAt).getTime();
+    const baseTime = new Date(getOccurredAt(baseAlert)).getTime();
     const relatedAlerts: AnalyticsAlert[] = [];
 
     // Determine time window based on detection type
-    const window = this.getTimeWindow(baseAlert.detectionType, timeWindows);
+    const window = this.getTimeWindow(getDetectionType(baseAlert), timeWindows);
 
     for (const alert of allAlerts) {
       if (alert.id === baseAlert.id) continue;
 
-      const alertTime = new Date(alert.occurredAt).getTime();
+      const alertTime = new Date(getOccurredAt(alert)).getTime();
       const timeDiff = Math.abs(alertTime - baseTime) / 1000; // in seconds
 
       // Check if within time window
@@ -217,7 +244,7 @@ export class AIIncidentSummaryService {
     let correlationScore = 0;
 
     // Same branch/location (+3)
-    if (alert1.branchId === alert2.branchId) {
+    if (getBranchId(alert1) && getBranchId(alert1) === getBranchId(alert2)) {
       correlationScore += 3;
     }
 
@@ -227,7 +254,7 @@ export class AIIncidentSummaryService {
     }
 
     // Related detection types (+4)
-    if (this.areRelatedTypes(alert1.detectionType, alert2.detectionType)) {
+    if (this.areRelatedTypes(getDetectionType(alert1), getDetectionType(alert2))) {
       correlationScore += 4;
     }
 
@@ -267,14 +294,14 @@ export class AIIncidentSummaryService {
    */
   private createCluster(tenantId: string, alerts: AnalyticsAlert[]): AlertCluster {
     const sortedAlerts = [...alerts].sort(
-      (a, b) => new Date(a.occurredAt).getTime() - new Date(b.occurredAt).getTime()
+      (a, b) => new Date(getOccurredAt(a)).getTime() - new Date(getOccurredAt(b)).getTime()
     );
 
     const firstAlert = sortedAlerts[0];
     const lastAlert = sortedAlerts[sortedAlerts.length - 1];
 
-    const firstTime = new Date(firstAlert.occurredAt).getTime();
-    const lastTime = new Date(lastAlert.occurredAt).getTime();
+    const firstTime = new Date(getOccurredAt(firstAlert)).getTime();
+    const lastTime = new Date(getOccurredAt(lastAlert)).getTime();
     const durationSeconds = (lastTime - firstTime) / 1000;
 
     const cameraIds = [...new Set(alerts.map((a) => a.cameraId))];
@@ -304,10 +331,10 @@ export class AIIncidentSummaryService {
       alertIds: alerts.map((a) => a.id),
       incidentType,
       severity,
-      branchId: firstAlert.branchId,
+      branchId: getBranchId(firstAlert),
       cameraIds,
-      firstOccurredAt: firstAlert.occurredAt,
-      lastOccurredAt: lastAlert.occurredAt,
+      firstOccurredAt: getOccurredAt(firstAlert),
+      lastOccurredAt: getOccurredAt(lastAlert),
       durationSeconds,
       alertCount: alerts.length,
       uniqueCameras,
@@ -328,7 +355,8 @@ export class AIIncidentSummaryService {
     const typeCounts: Record<string, number> = {};
 
     alerts.forEach((alert) => {
-      typeCounts[alert.detectionType] = (typeCounts[alert.detectionType] || 0) + 1;
+      const t = getDetectionType(alert);
+      typeCounts[t] = (typeCounts[t] || 0) + 1;
     });
 
     // Find most common type
@@ -372,12 +400,11 @@ export class AIIncidentSummaryService {
     const highTypes = ["zone-violation", "camera-tamper", "tailgating", "unattended-object"];
 
     // Check if any alert is critical type
-    if (alerts.some((a) => criticalTypes.includes(a.detectionType))) {
+    if (alerts.some((a) => criticalTypes.includes(getDetectionType(a)))) {
       return "critical";
     }
-
     // Check if any alert is high severity
-    if (alerts.some((a) => a.severity === "critical" || highTypes.includes(a.detectionType))) {
+    if (alerts.some((a) => alertSeverityLabel(a.severity) === "critical" || highTypes.includes(getDetectionType(a)))) {
       return "high";
     }
 
@@ -404,23 +431,23 @@ export class AIIncidentSummaryService {
    */
   private detectRootCause(alerts: AnalyticsAlert[]): string | undefined {
     // Camera offline leading to other alerts
-    if (alerts.some((a) => a.detectionType === "camera-offline")) {
+    if (alerts.some((a) => getDetectionType(a) === "camera-offline")) {
       return "camera-hardware-failure";
     }
 
     // Network issues causing multiple failures
-    if (alerts.some((a) => a.detectionType === "network-loss")) {
+    if (alerts.some((a) => getDetectionType(a) === "network-loss")) {
       return "network-connectivity-issue";
     }
 
     // Multiple cameras offline in same location
-    const offlineCameras = alerts.filter((a) => a.detectionType === "camera-offline");
+    const offlineCameras = alerts.filter((a) => getDetectionType(a) === "camera-offline");
     if (offlineCameras.length >= 3) {
       return "power-failure-or-network-switch-down";
     }
 
     // Sequential person detections suggest tracking
-    const personAlerts = alerts.filter((a) => a.detectionType === "person-detection");
+    const personAlerts = alerts.filter((a) => getDetectionType(a) === "person-detection");
     if (personAlerts.length >= 3 && this.isSequential(personAlerts)) {
       return "person-movement-across-cameras";
     }
@@ -435,7 +462,7 @@ export class AIIncidentSummaryService {
     if (alerts.length < 2) return false;
 
     const sorted = [...alerts].sort(
-      (a, b) => new Date(a.occurredAt).getTime() - new Date(b.occurredAt).getTime()
+      (a, b) => new Date(getOccurredAt(a)).getTime() - new Date(getOccurredAt(b)).getTime()
     );
 
     // Check if cameras are different
@@ -447,11 +474,11 @@ export class AIIncidentSummaryService {
    * Analyze correlation factors
    */
   private analyzeCorrelationFactors(alerts: AnalyticsAlert[]) {
-    const branchIds = new Set(alerts.map((a) => a.branchId).filter(Boolean));
+    const branchIds = new Set(alerts.map((a) => getBranchId(a)).filter(Boolean));
     const cameraIds = new Set(alerts.map((a) => a.cameraId));
-    const types = new Set(alerts.map((a) => a.detectionType));
+    const types = new Set(alerts.map((a) => getDetectionType(a)));
 
-    const times = alerts.map((a) => new Date(a.occurredAt).getTime());
+    const times = alerts.map((a) => new Date(getOccurredAt(a)).getTime());
     const timeSpread = Math.max(...times) - Math.min(...times);
 
     return {
@@ -511,7 +538,7 @@ export class AIIncidentSummaryService {
    * Generate cluster ID
    */
   private generateClusterId(tenantId: string, alert: AnalyticsAlert): string {
-    const date = new Date(alert.occurredAt);
+    const date = new Date(getOccurredAt(alert));
     const dateStr = date.toISOString().split("T")[0].replace(/-/g, "");
     const random = Math.random().toString(36).substring(2, 8).toUpperCase();
 
@@ -600,8 +627,8 @@ export class AIIncidentSummaryService {
 
     const infrastructureIncidents = {
       cameraFailures: this.countByType(clusters, "infrastructure-failure"),
-      camerasOffline: alerts.filter((a) => a.detectionType === "camera-offline").length,
-      recordingInterruptions: alerts.filter((a) => a.detectionType === "recording-failure")
+      camerasOffline: alerts.filter((a) => getDetectionType(a) === "camera-offline").length,
+      recordingInterruptions: alerts.filter((a) => getDetectionType(a) === "recording-failure")
         .length,
       storageIssues: 0, // TODO: Add storage monitoring
       networkIssues: this.countByType(clusters, "infrastructure-network"),

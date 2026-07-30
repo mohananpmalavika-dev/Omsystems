@@ -40,4 +40,4 @@ COPY scripts/run-migrations.mjs ./scripts/run-migrations.mjs
 COPY database/migrations ./database/migrations
 EXPOSE 8080
 USER node
-CMD ["sh", "-c", "node scripts/run-migrations.mjs || true; node dist/src/index.js"]
+CMD ["sh", "-c", "node scripts/run-migrations.mjs && node dist/src/index.js"]
