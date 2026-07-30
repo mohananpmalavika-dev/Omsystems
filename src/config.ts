@@ -30,6 +30,12 @@ const configSchema = z.object({
     (value) => value === "" ? undefined : value,
     z.string().url().optional(),
   ),
+  FEDERATION_SHARED_KEY: z.preprocess(
+    (value) => value === "" ? undefined : value,
+    z.string().min(32).optional(),
+  ),
+  FEDERATION_PEER_TIMEOUT_MS: z.coerce.number().int().min(500).max(60_000).default(8_000),
+  FEDERATION_HEARTBEAT_TTL_SECONDS: z.coerce.number().int().min(15).max(3_600).default(90),
   REPORT_DOWNLOAD_SECRET: z.string().min(32).default("development-report-download-secret-change-me"),
   REPORT_WORKER_SHARED_KEY: z.string().min(32).optional(),
   MAX_IN_FLIGHT_REQUESTS: z.coerce.number().int().min(10).max(10_000).default(500),
@@ -49,7 +55,7 @@ export function loadConfig(
   environment: NodeJS.ProcessEnv = process.env,
 ): AppConfig {
   const expanded = { ...environment };
-  for (const name of ["DATABASE_URL", "MEDIA_GATEWAY_SHARED_KEY", "EDGE_BRIDGE_SHARED_KEY", "RECORDING_ENGINE_SHARED_KEY", "ANALYTICS_ENGINE_SHARED_KEY", "REPORT_DOWNLOAD_SECRET", "REPORT_WORKER_SHARED_KEY"] as const) {
+  for (const name of ["DATABASE_URL", "MEDIA_GATEWAY_SHARED_KEY", "EDGE_BRIDGE_SHARED_KEY", "RECORDING_ENGINE_SHARED_KEY", "ANALYTICS_ENGINE_SHARED_KEY", "FEDERATION_SHARED_KEY", "REPORT_DOWNLOAD_SECRET", "REPORT_WORKER_SHARED_KEY"] as const) {
     const file = environment[`${name}_FILE`];
     if (file && environment[name]) throw new Error(`${name} and ${name}_FILE cannot both be set`);
     if (file) expanded[name] = readFileSync(file, "utf8").trim();

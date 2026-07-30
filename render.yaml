@@ -110,6 +110,8 @@ services:
         sync: false
       - key: ANALYTICS_ENGINE_SHARED_KEY
         sync: false
+      - key: FEDERATION_SHARED_KEY
+        sync: false
       - key: REPORT_DOWNLOAD_SECRET
         sync: false
       - key: ANALYTICS_ENGINE_URL

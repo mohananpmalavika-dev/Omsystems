@@ -79,6 +79,14 @@ async function verifySchema() {
       "operational_report_schedules",
       "platform_scale_test_runs",
       "platform_slo_measurements",
+      "federated_servers",
+      "regional_server_mappings",
+      "federation_server_health_history",
+      "federation_failover_events",
+      "federation_replication_queue",
+      "federation_audit_trail",
+      "cross_server_search_cache",
+      "global_alert_correlations",
       "live_bookmarks",
       "live_incidents",
       "recording_health_events",
@@ -110,6 +118,8 @@ async function verifySchema() {
       "organizational_hierarchy_view",
       "user_camera_access_overview",
       "user_details_view",
+      "federation_dashboard_summary",
+      "active_global_correlations",
     ];
     const views = await client.query(
       `SELECT table_name
@@ -249,6 +259,13 @@ async function verifySchema() {
     );
     if (!cameraAccessFunction.rows[0]?.present) {
       throw new Error("check_camera_access function was not created");
+    }
+
+    const federationRoutingFunction = await client.query(
+      "SELECT to_regprocedure('get_server_for_resource(uuid,uuid)') IS NOT NULL AS present",
+    );
+    if (!federationRoutingFunction.rows[0]?.present) {
+      throw new Error("Federation resource routing function was not created");
     }
   } finally {
     await client.end();

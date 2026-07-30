@@ -28,6 +28,9 @@ const app = await buildApp({
   ...(config.ANALYTICS_ENGINE_URL
     ? { analyticsEngineUrl: config.ANALYTICS_ENGINE_URL }
     : {}),
+  ...(config.FEDERATION_SHARED_KEY
+    ? { federationSharedKey: config.FEDERATION_SHARED_KEY }
+    : {}),
 });
 
 try {
