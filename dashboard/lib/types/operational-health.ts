@@ -273,10 +273,17 @@ export interface InternetLinkHealth {
   linkId: string; role: 'primary' | 'backup'; ispName: string; interfaceName: string | null;
   status: 'online' | 'degraded' | 'offline' | 'unknown'; active: boolean; connectivity: boolean;
   latencyMs: number | null; jitterMs: number | null; packetLossPercent: number | null;
+  instantPacketLossPercent: number | null; availabilityPercent: number | null;
+  probeWindowSeconds: number | null; probeWindowAttempts: number | null; consecutiveFailedPolls: number | null;
+  lastSuccessfulAt: string | null; outageStartedAt: string | null;
   rxMbps: number | null; txMbps: number | null; bandwidthUtilizationPercent: number | null;
   routeVerified: boolean; probeBinding: 'default-route' | 'interface' | 'source-address' | 'unbound' | 'unknown';
   contractedDownMbps: number | null; contractedUpMbps: number | null;
-  probeTarget: string | null; publicIp: string | null; lastCheck: string; reasonCodes: string[];
+  probeTarget: string | null; publicIp: string | null; previousPublicIp: string | null;
+  publicIpChanged: boolean; publicIpChangedAt: string | null;
+  gatewayAddress: string | null; gatewayReachable: boolean | null;
+  lastMileStatus: 'healthy' | 'gateway_unreachable' | 'upstream_suspected' | 'unknown';
+  lastCheck: string; reasonCodes: string[];
 }
 export interface BranchInternetHealth {
   branchId: string; branchName: string; branchCode: string;

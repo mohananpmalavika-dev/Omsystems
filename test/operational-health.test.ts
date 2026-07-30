@@ -287,15 +287,31 @@ describe("Phase 1 operational health", () => {
       },
     });
     expect((await submit("internet-primary", { linkId: "primary", role: "primary", ispName: "ISP A", connectivity: false, active: false, packetLossPercent: 100 })).statusCode).toBe(202);
-    expect((await submit("internet-backup", { linkId: "backup", role: "backup", ispName: "ISP B", connectivity: true, active: true, latencyMs: 48, jitterMs: 4, packetLossPercent: 0, bandwidthUtilizationPercent: 35 })).statusCode).toBe(202);
+    expect((await submit("internet-backup", {
+      linkId: "backup", role: "backup", ispName: "ISP B", connectivity: true, active: true,
+      latencyMs: 48, jitterMs: 4, packetLossPercent: 0, instantPacketLossPercent: 0,
+      availabilityPercent: 99.5, probeWindowSeconds: 300, probeWindowAttempts: 30,
+      consecutiveFailedPolls: 0, lastSuccessfulAt: observedAt,
+      bandwidthUtilizationPercent: 35, gatewayAddress: "192.0.2.1", gatewayReachable: true,
+      lastMileStatus: "healthy", publicIp: "198.51.100.10", previousPublicIp: "198.51.100.9",
+      publicIpChanged: true, publicIpChangedAt: observedAt,
+    })).statusCode).toBe(202);
 
     const network = await app.inject({ method: "GET", url: "/v1/operations/health/network", headers: admin });
     expect(network.statusCode).toBe(200);
     expect(network.json().data.branches[0]).toMatchObject({ status: "failover", failoverActive: true, activeLinkId: "backup" });
+    expect(network.json().data.branches[0].backup).toMatchObject({
+      availabilityPercent: 99.5, probeWindowAttempts: 30, gatewayReachable: true,
+      lastMileStatus: "healthy", publicIp: "198.51.100.10", publicIpChanged: true,
+    });
     expect(network.json().data.summary.failover).toBe(1);
 
     const alerts = await app.inject({ method: "GET", url: "/v1/operations/alerts?component=network&severity=critical", headers: admin });
     expect(alerts.json().data.alerts.some((alert: { id: string }) => alert.id.includes("internet:branch-blr-001:primary"))).toBe(true);
+    const addressAlerts = await app.inject({ method: "GET", url: "/v1/operations/alerts?component=network&severity=warning", headers: admin });
+    expect(addressAlerts.json().data.alerts).toEqual(expect.arrayContaining([
+      expect.objectContaining({ deviceId: "internet-backup", title: "backup public IP changed" }),
+    ]));
   });
 
   it("projects DVR/NVR status and creates an outage alert", async () => {

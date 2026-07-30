@@ -53,10 +53,15 @@ function LinkMetrics({ link }: { link: InternetLinkHealth }) {
   const unknown = link.status === "unknown";
   return <div className={`rounded border bg-white/80 p-3 ${bad ? "border-red-200" : unknown ? "border-amber-200" : "border-emerald-200"}`}>
     <div className="flex justify-between gap-2"><div><strong className="text-sm">{link.ispName}</strong><span className="ml-2 text-xs uppercase text-gray-500">{link.role}{link.active ? " · active" : ""}</span></div><span className={`text-xs font-semibold uppercase ${bad ? "text-red-700" : unknown ? "text-amber-700" : "text-emerald-700"}`}>{link.status}</span></div>
-    <div className="mt-2 grid grid-cols-4 gap-2 text-xs"><Metric icon={<Activity size={12}/>} label="Latency" value={format(link.latencyMs, "ms")}/><Metric label="Jitter" value={format(link.jitterMs, "ms")}/><Metric label="Loss" value={format(link.packetLossPercent, "%")}/><Metric icon={<Gauge size={12}/>} label="Load" value={format(link.bandwidthUtilizationPercent, "%")}/></div>
+    <div className="mt-2 grid grid-cols-2 gap-2 text-xs sm:grid-cols-5"><Metric icon={<Activity size={12}/>} label="Latency" value={format(link.latencyMs, "ms")}/><Metric label="Jitter" value={format(link.jitterMs, "ms")}/><Metric label="Rolling loss" value={format(link.packetLossPercent, "%")}/><Metric label="Availability" value={format(link.availabilityPercent, "%")}/><Metric icon={<Gauge size={12}/>} label="Load" value={format(link.bandwidthUtilizationPercent, "%")}/></div>
     <p className="mt-2 text-[11px] text-gray-500">Traffic ↓ {format(link.rxMbps, " Mbps")} · ↑ {format(link.txMbps, " Mbps")}{link.interfaceName ? ` · ${link.interfaceName}` : ""}</p>
+    <p className="mt-1 text-[11px] text-gray-500">Path window: {link.probeWindowAttempts ?? 0} attempts / {formatDuration(link.probeWindowSeconds)} · current loss {format(link.instantPacketLossPercent, "%")}</p>
+    <p className="mt-1 text-[11px] text-gray-500">Gateway: {link.gatewayReachable === null ? "not configured" : link.gatewayReachable ? "reachable" : "unreachable"}{link.gatewayAddress ? ` · ${link.gatewayAddress}` : ""} · last mile {link.lastMileStatus.replaceAll("_", " ")}</p>
+    <p className={`mt-1 text-[11px] ${link.publicIpChanged ? "font-semibold text-amber-800" : "text-gray-500"}`}>Public IP: {link.publicIp ?? "unavailable"}{link.publicIpChanged ? ` · changed from ${link.previousPublicIp ?? "unknown"}` : ""}</p>
+    {link.outageStartedAt ? <p className="mt-1 text-[11px] font-semibold text-red-700">Sustained outage since {new Date(link.outageStartedAt).toLocaleString()} ({link.consecutiveFailedPolls ?? 0} failed polls)</p> : null}
     {!link.routeVerified ? <p className="mt-1 text-[11px] font-medium text-amber-800">Route not verified — configure an interface or source address for this backup link.</p> : null}
   </div>;
 }
 function Metric({ label, value, icon }: { label: string; value: string; icon?: React.ReactNode }) { return <div><p className="flex items-center gap-1 text-gray-500">{icon}{label}</p><strong>{value}</strong></div>; }
 function format(value: number | null, suffix: string) { return value === null ? "--" : `${value.toFixed(value < 10 ? 1 : 0)}${suffix}`; }
+function formatDuration(seconds: number | null) { return seconds === null ? "--" : seconds >= 60 ? `${Math.round(seconds / 60)}m` : `${Math.round(seconds)}s`; }

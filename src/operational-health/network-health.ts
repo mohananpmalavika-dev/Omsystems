@@ -29,6 +29,9 @@ export function normalizeNetworkMetrics(
   else if (packetLoss !== null && packetLoss >= policy.packetLossWarningPercent) { status = "degraded"; reasons.push("internet_packet_loss_high"); }
   if (utilization !== null && utilization >= policy.bandwidthUtilizationCriticalPercent) { status = "degraded"; reasons.push("internet_bandwidth_saturated"); }
   else if (utilization !== null && utilization >= policy.bandwidthUtilizationWarningPercent) { status = "degraded"; reasons.push("internet_bandwidth_high"); }
+  if (booleanMetric(metrics, "gatewayReachable") === false) { status = "degraded"; reasons.push("isp_gateway_unreachable"); }
+  if (booleanMetric(metrics, "publicIpChanged") === true) reasons.push("public_ip_changed");
+  if (stringMetric(metrics, "lastMileStatus") === "upstream_suspected") reasons.push("last_mile_outage_suspected");
   if (!connectivity) status = "offline";
   return {
     metrics: { ...metrics, status, connectivity },
@@ -50,6 +53,11 @@ export function projectInternetLink(envelope: OperationalTelemetryEnvelope, bran
     connectivity: booleanMetric(envelope.metrics, "connectivity") ?? false,
     latencyMs: metric("latencyMs") ?? metric("controlPlaneLatencyMs"),
     jitterMs: metric("jitterMs"), packetLossPercent: metric("packetLossPercent"),
+    instantPacketLossPercent: metric("instantPacketLossPercent"),
+    availabilityPercent: metric("availabilityPercent"), probeWindowSeconds: metric("probeWindowSeconds"),
+    probeWindowAttempts: metric("probeWindowAttempts"), consecutiveFailedPolls: metric("consecutiveFailedPolls"),
+    lastSuccessfulAt: stringMetric(envelope.metrics, "lastSuccessfulAt") || null,
+    outageStartedAt: stringMetric(envelope.metrics, "outageStartedAt") || null,
     rxMbps: metric("rxMbps"), txMbps: metric("txMbps"),
     bandwidthUtilizationPercent: metric("bandwidthUtilizationPercent"),
     routeVerified: booleanMetric(envelope.metrics, "routeVerified") !== false,
@@ -57,6 +65,12 @@ export function projectInternetLink(envelope: OperationalTelemetryEnvelope, bran
     contractedDownMbps: metric("contractedDownMbps"), contractedUpMbps: metric("contractedUpMbps"),
     probeTarget: stringMetric(envelope.metrics, "probeTarget") || null,
     publicIp: stringMetric(envelope.metrics, "publicIp") || null,
+    previousPublicIp: stringMetric(envelope.metrics, "previousPublicIp") || null,
+    publicIpChanged: booleanMetric(envelope.metrics, "publicIpChanged") ?? false,
+    publicIpChangedAt: stringMetric(envelope.metrics, "publicIpChangedAt") || null,
+    gatewayAddress: stringMetric(envelope.metrics, "gatewayAddress") || null,
+    gatewayReachable: booleanMetric(envelope.metrics, "gatewayReachable"),
+    lastMileStatus: lastMileStatus(envelope.metrics.lastMileStatus),
     lastCheck: envelope.observedAt, reasonCodes: envelope.reasonCodes,
   };
 }
@@ -86,4 +100,8 @@ function booleanMetric(metrics: Record<string, TelemetryValue>, name: string) {
 }
 function linkStatus(value: TelemetryValue | undefined): InternetLinkStatus {
   return value === "online" || value === "degraded" || value === "offline" ? value : "unknown";
+}
+function lastMileStatus(value: TelemetryValue | undefined) {
+  return value === "healthy" || value === "gateway_unreachable" || value === "upstream_suspected"
+    ? value : "unknown" as const;
 }

@@ -37,10 +37,13 @@ const schema = z.object({
     id: z.string().min(1), role: z.enum(["primary", "backup"]), ispName: z.string().min(1),
     interfaceName: z.string().min(1).optional(), sourceAddress: z.string().min(1).optional(),
     targets: z.array(z.string().url()).min(1),
+    gatewayAddress: z.string().min(1).optional(),
+    publicIpEndpoint: z.string().url().optional(),
     contractedDownMbps: z.number().positive().optional(), contractedUpMbps: z.number().positive().optional(),
   })).max(4)),
   INTERNET_PROBE_TIMEOUT_MS: z.coerce.number().int().min(250).max(30_000).default(3000),
   INTERNET_PROBE_ATTEMPTS: z.coerce.number().int().min(1).max(10).default(3),
+  INTERNET_PATH_WINDOW_MS: z.coerce.number().int().min(60_000).max(86_400_000).default(300_000),
   EDGE_HEALTH_DISK_PATH: z.string().min(1).default("."),
   RECORDERS_JSON: z.string().default("[]").transform((value, context) => {
     try { return JSON.parse(value) as unknown; } catch { context.addIssue({ code: z.ZodIssueCode.custom, message: "RECORDERS_JSON must be valid JSON" }); return z.NEVER; }

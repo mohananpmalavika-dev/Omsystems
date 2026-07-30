@@ -270,7 +270,7 @@ Write-Host "For example: npm install; npm run build; npm run dev"
     downloadTextFile("install-edge-agent.sh", installScriptShell);
   }
 
-  async function downloadEdgeAgentPackage(platform: "windows" | "linux") {
+  function downloadEdgeAgentPackage(platform: "windows" | "linux") {
     if (!activeBranch) return;
 
     const edgeAgent = provisionedGateway?.branchId === activeBranch.id
@@ -281,21 +281,14 @@ Write-Host "For example: npm install; npm run build; npm run dev"
       return;
     }
 
-    try {
-      const blob = await cameraInventoryApi.downloadPackage(activeBranch.id, edgeAgent.id, platform);
-      const fileName = `${activeBranch.name.replace(/[^a-zA-Z0-9_-]/g, "-")}-edge-agent-${platform}.zip`;
-      const url = window.URL.createObjectURL(blob);
-      const anchor = document.createElement("a");
-      anchor.href = url;
-      anchor.download = fileName;
-      document.body.appendChild(anchor);
-      anchor.click();
-      document.body.removeChild(anchor);
-      window.URL.revokeObjectURL(url);
-    } catch (error) {
-      console.error(error);
-      window.alert(`Unable to download the ${platform === "windows" ? "Windows" : "Linux"} edge-agent package. Please contact your administrator.`);
-    }
+    const href = `/api/control/v1/branches/${encodeURIComponent(activeBranch.id)}/edge-agents/${encodeURIComponent(edgeAgent.id)}/package?platform=${encodeURIComponent(platform)}`;
+    const anchor = document.createElement("a");
+    anchor.href = href;
+    anchor.target = "_blank";
+    anchor.rel = "noopener noreferrer";
+    document.body.appendChild(anchor);
+    anchor.click();
+    document.body.removeChild(anchor);
   }
 
   function downloadPowerShellInstallScript() {

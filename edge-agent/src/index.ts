@@ -6,7 +6,7 @@ import { GatewayClient } from "./registration/gateway-client.js";
 import { probeRtsp } from "./streaming/rtsp-probe.js";
 import { LocalStreamSecretStore, startSecretProvider } from "./streaming/secret-store.js";
 import { uptime } from "node:os";
-import { NetworkCounterSampler, probeInternetLink } from "./monitoring/internet-probe.js";
+import { NetworkCounterSampler, NetworkPathTracker, probeInternetLink } from "./monitoring/internet-probe.js";
 import { EdgeResourceSampler } from "./monitoring/edge-resource-probe.js";
 import { looksLikeRecorder, probeRecorder } from "./monitoring/recorder-probe.js";
 import { initializeCameraHeartbeat } from "./monitoring/camera-heartbeat.js";
@@ -24,6 +24,7 @@ const agentId = config.EDGE_AGENT_ID ?? (await gateway.register(
 )).id;
 const secrets = new LocalStreamSecretStore(config.STREAM_SECRET_STORE_PATH);
 const networkCounterSampler = new NetworkCounterSampler();
+const networkPathTracker = new NetworkPathTracker(config.INTERNET_PATH_WINDOW_MS);
 const edgeResourceSampler = new EdgeResourceSampler();
 let lastRecorderProbeAt = 0;
 let lastRecorderArchiveScanAt = 0;
@@ -232,7 +233,7 @@ async function heartbeatAndReport() {
   }];
   const linkResults = await Promise.all(configuredLinks.map((link) => probeInternetLink(link, {
     timeoutMs: config.INTERNET_PROBE_TIMEOUT_MS, attempts: config.INTERNET_PROBE_ATTEMPTS,
-    counterSampler: networkCounterSampler,
+    counterSampler: networkCounterSampler, pathTracker: networkPathTracker,
   })));
   const primaryAvailable = linkResults.some((link) => link.role === "primary" && link.connectivity);
   const scanRecorderArchives = Date.now() - lastRecorderArchiveScanAt >= config.RECORDER_ARCHIVE_SCAN_INTERVAL_MS;

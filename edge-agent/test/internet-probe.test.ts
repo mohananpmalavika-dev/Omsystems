@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { NetworkCounterSampler, probeInternetLink } from "../src/monitoring/internet-probe.js";
+import { NetworkCounterSampler, NetworkPathTracker, probeInternetLink } from "../src/monitoring/internet-probe.js";
 
 describe("branch internet probe", () => {
   it("calculates packet loss and marks a partially reachable ISP link degraded", async () => {
@@ -51,5 +51,66 @@ describe("branch internet probe", () => {
     }, { timeoutMs: 500, attempts: 1, counterSampler: new NetworkCounterSampler(), boundProber: vi.fn().mockRejectedValue(unavailable) });
     expect(result).toMatchObject({ connectivity: false, status: "unknown", routeVerified: false });
     expect(result.reasonCodes).toContain("link_binding_probe_unavailable");
+  });
+
+  it("tracks sustained loss across polls and distinguishes an upstream outage from a failed gateway", async () => {
+    const tracker = new NetworkPathTracker(5 * 60_000);
+    let now = Date.parse("2026-07-30T10:00:00.000Z");
+    const link = {
+      id: "primary", role: "primary" as const, ispName: "ISP A",
+      gatewayAddress: "192.0.2.1", targets: ["https://probe.invalid"],
+    };
+    const common = { timeoutMs: 500, attempts: 2, counterSampler: new NetworkCounterSampler(), pathTracker: tracker, gatewayProber: vi.fn().mockResolvedValue(undefined), now: () => now };
+    await probeInternetLink(link, { ...common, fetcher: vi.fn().mockResolvedValue(new Response("ok")) });
+    now += 30_000;
+    const firstFailedPoll = await probeInternetLink(link, { ...common, fetcher: vi.fn().mockRejectedValue(new Error("offline")) });
+    now += 30_000;
+    const sustained = await probeInternetLink(link, { ...common, fetcher: vi.fn().mockRejectedValue(new Error("offline")) });
+
+    expect(firstFailedPoll).toMatchObject({ consecutiveFailedPolls: 1, lastMileStatus: "unknown" });
+    expect(sustained).toMatchObject({
+      connectivity: false, status: "offline", consecutiveFailedPolls: 2,
+      probeWindowAttempts: 6, packetLossPercent: 66.67, availabilityPercent: 33.33,
+      lastMileStatus: "upstream_suspected", outageStartedAt: "2026-07-30T10:00:30.000Z",
+    });
+    expect(sustained.reasonCodes).toContain("last_mile_outage_suspected");
+  });
+
+  it("detects route-specific public IP changes", async () => {
+    const tracker = new NetworkPathTracker();
+    let now = Date.parse("2026-07-30T10:00:00.000Z");
+    const publicIpResolver = vi.fn()
+      .mockResolvedValueOnce("198.51.100.10")
+      .mockResolvedValueOnce("198.51.100.11");
+    const link = {
+      id: "primary", role: "primary" as const, ispName: "ISP A", targets: ["https://probe.invalid"],
+      publicIpEndpoint: "https://ip.invalid", gatewayAddress: "192.0.2.1",
+    };
+    const options = {
+      timeoutMs: 500, attempts: 1, counterSampler: new NetworkCounterSampler(), pathTracker: tracker,
+      fetcher: vi.fn().mockResolvedValue(new Response("ok")), publicIpResolver,
+      gatewayProber: vi.fn().mockResolvedValue(undefined), now: () => now,
+    };
+    await probeInternetLink(link, options);
+    now += 30_000;
+    const changed = await probeInternetLink(link, options);
+
+    expect(changed).toMatchObject({
+      publicIp: "198.51.100.11", previousPublicIp: "198.51.100.10",
+      publicIpChanged: true, publicIpChangedAt: "2026-07-30T10:00:30.000Z",
+    });
+    expect(changed.reasonCodes).toContain("public_ip_changed");
+  });
+
+  it("reports a configured ISP gateway failure separately", async () => {
+    const result = await probeInternetLink({
+      id: "primary", role: "primary", ispName: "ISP A", gatewayAddress: "192.0.2.1",
+      targets: ["https://probe.invalid"],
+    }, {
+      timeoutMs: 500, attempts: 1, counterSampler: new NetworkCounterSampler(),
+      fetcher: vi.fn().mockRejectedValue(new Error("offline")), gatewayProber: vi.fn().mockRejectedValue(new Error("gateway down")),
+    });
+    expect(result).toMatchObject({ gatewayReachable: false, lastMileStatus: "gateway_unreachable" });
+    expect(result.reasonCodes).toContain("isp_gateway_unreachable");
   });
 });

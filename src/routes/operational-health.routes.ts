@@ -615,16 +615,19 @@ export async function registerOperationalHealthRoutes(
       .flatMap((item) => {
         const branch = branchById.get(item.branchId); if (!branch) return [];
         const link = projectInternetLink(item, branch);
-        if (link.status === "online") return [];
+        const addressChanged = link.publicIpChanged;
+        if (link.status === "online" && !addressChanged) return [];
         const offline = link.status === "offline";
         return [{
           id: `internet:${branch.id}:${link.linkId}`,
           severity: offline && link.role === "primary" ? "critical" as const : "warning" as const,
           status: "active" as const, componentType: "network", deviceId: item.deviceId,
-          title: offline ? `${link.role} internet link offline` : `${link.role} internet link degraded`,
-          description: `${link.ispName}: latency ${link.latencyMs ?? "unknown"}ms, jitter ${link.jitterMs ?? "unknown"}ms, packet loss ${link.packetLossPercent ?? "unknown"}%, utilization ${link.bandwidthUtilizationPercent ?? "unknown"}%.`,
-          impact: offline ? "Remote branch surveillance connectivity is unavailable or running without redundancy." : "Live video and remote operations may be impaired.",
-          recommendedAction: offline ? "Confirm ISP outage and validate backup-link failover immediately." : "Review ISP performance, interface traffic, and bandwidth saturation.",
+          title: addressChanged ? `${link.role} public IP changed` : offline ? `${link.role} internet link offline` : `${link.role} internet link degraded`,
+          description: addressChanged
+            ? `${link.ispName}: public IP changed from ${link.previousPublicIp ?? "unknown"} to ${link.publicIp ?? "unknown"}; gateway ${link.gatewayReachable === null ? "unverified" : link.gatewayReachable ? "reachable" : "unreachable"}.`
+            : `${link.ispName}: latency ${link.latencyMs ?? "unknown"}ms, jitter ${link.jitterMs ?? "unknown"}ms, rolling loss ${link.packetLossPercent ?? "unknown"}%, availability ${link.availabilityPercent ?? "unknown"}%, last mile ${link.lastMileStatus}, utilization ${link.bandwidthUtilizationPercent ?? "unknown"}%.`,
+          impact: addressChanged ? "Remote allowlists, VPN peers, or inbound integrations may require an address update." : offline ? "Remote branch surveillance connectivity is unavailable or running without redundancy." : "Live video and remote operations may be impaired.",
+          recommendedAction: addressChanged ? "Confirm the ISP address change and update approved allowlists or VPN configuration." : offline ? "Check gateway evidence, confirm the suspected outage with the ISP, and validate backup-link failover." : "Review rolling path loss, gateway health, interface traffic, and bandwidth saturation.",
           branchId: branch.id, branchName: branch.name, branchCode: branch.code, detectedAt: link.lastCheck,
           acknowledgedAt: null, acknowledgedBy: null, acknowledgedByName: null,
           assignedAt: null, assignedTo: null, assignedToName: null,

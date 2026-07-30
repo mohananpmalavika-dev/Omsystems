@@ -9,5 +9,6 @@ playwright-report/
 *.log
 test/hdd-health/config.json
 test/hdd-health/reports/
+test/internet-health/evidence*.json
 .idea/
 .vscode/
