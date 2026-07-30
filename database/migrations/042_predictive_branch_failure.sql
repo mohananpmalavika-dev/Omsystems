@@ -780,7 +780,7 @@ COMMENT ON TABLE risk_suppression_rules IS 'Operator-defined exceptions to predi
 -- CALIBRATION HISTORY TABLE (Added for prediction accuracy tracking)
 -- ============================================================================
 
-CREATE TABLE prediction_calibration_history (
+CREATE TABLE IF NOT EXISTS prediction_calibration_history (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     tenant_id UUID REFERENCES tenants(id) ON DELETE CASCADE,
     prediction_type prediction_type NOT NULL,
@@ -810,7 +810,7 @@ COMMENT ON TABLE prediction_calibration_history IS 'Historical tracking of predi
 -- RCA INTEGRATION TABLES (Added for prediction outcome learning)
 -- ============================================================================
 
-CREATE TABLE prediction_misprediction_log (
+CREATE TABLE IF NOT EXISTS prediction_misprediction_log (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     prediction_id UUID NOT NULL REFERENCES failure_predictions(id) ON DELETE CASCADE,
     tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
@@ -828,11 +828,11 @@ CREATE INDEX idx_misprediction_tenant ON prediction_misprediction_log(tenant_id)
 CREATE INDEX idx_misprediction_type ON prediction_misprediction_log(prediction_type);
 CREATE INDEX idx_misprediction_reviewed ON prediction_misprediction_log(reviewed) WHERE reviewed = false;
 
-CREATE TABLE rca_cases (
+CREATE TABLE IF NOT EXISTS rca_cases (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
     case_fingerprint VARCHAR(24) NOT NULL,
-    branch_node_id UUID NOT NULL REFERENCES branch_nodes(id) ON DELETE CASCADE,
+    branch_node_id UUID NOT NULL REFERENCES resource_nodes(id) ON DELETE CASCADE,
     device_id VARCHAR(255) NOT NULL,
     failure_type VARCHAR(100) NOT NULL,
     root_cause_code VARCHAR(100) NOT NULL,

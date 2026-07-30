@@ -11,6 +11,7 @@
 
 import type { ControlPlaneStore } from "../control-plane-store.js";
 import type { AnalyticsAlert } from "../domain/models.js";
+import { aiIntelligenceEvents } from "./ai-intelligence-websocket.js";
 
 // Helpers to adapt AnalyticsAlert shape (alerts in this codebase use
 // firstDetectedAt/lastDetectedAt and severity codes like P1..P5). Keep
