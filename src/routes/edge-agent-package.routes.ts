@@ -131,9 +131,36 @@ export async function registerEdgeAgentPackageRoutes(
 
       const { platform } = packageQuery.parse(request.query);
       const routeDir = dirname(fileURLToPath(import.meta.url));
-      const packageJsonPath = join(routeDir, "..", "..", "edge-agent", "package.json");
-      const distPath = join(routeDir, "..", "..", "edge-agent", "dist");
-      
+      const candidateRoots = [
+        join(routeDir, "..", "..", "edge-agent"),
+        join(routeDir, "..", "..", "..", "edge-agent"),
+        join(process.cwd(), "edge-agent"),
+      ];
+
+      let edgeAgentRoot: string | undefined;
+      for (const candidateRoot of candidateRoots) {
+        try {
+          const stats = await stat(candidateRoot);
+          if (stats.isDirectory()) {
+            edgeAgentRoot = candidateRoot;
+            break;
+          }
+        } catch {
+          app.log.debug({ candidateRoot }, "Edge agent candidate path not found");
+        }
+      }
+
+      if (!edgeAgentRoot) {
+        app.log.error({ candidateRoots }, "Edge agent directory is not available on this server");
+        return reply.code(500).send({ 
+          error: "package_not_available", 
+          message: "Edge agent package files are not available on this server" 
+        });
+      }
+
+      const packageJsonPath = join(edgeAgentRoot, "package.json");
+      const distPath = join(edgeAgentRoot, "dist");
+
       // Check if paths exist
       try {
         await stat(packageJsonPath);
