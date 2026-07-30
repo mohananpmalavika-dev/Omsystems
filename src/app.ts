@@ -49,6 +49,18 @@ import { registerOperationalHealthRoutes } from "./routes/operational-health.rou
 import { registerVideoWallRoutes } from "./routes/video-wall.routes.js";
 import { registerAlertCommandCenterRoutes } from "./routes/alert-command-center.routes.js";
 import { registerOperationalReportRoutes } from "./routes/operational-reports.routes.js";
+import { registerFederationRoutes } from "./routes/federation.routes.js";
+import {
+  EmptyFederationLocalSearchProvider,
+  FederationManager,
+  HttpFederationPeerClient,
+  type FederationLocalSearchProvider,
+} from "./federation/manager.js";
+import {
+  MemoryFederationRepository,
+  PostgresFederationRepository,
+} from "./federation/repository.js";
+import { RecordingFederationSearchProvider } from "./federation/recording-search-provider.js";
 import {
   AlertNotificationDispatcher,
   HttpAlertNotificationSender,
@@ -339,6 +351,9 @@ export async function buildApp(options?: {
   reportWorkerKey?: string;
   reportEmailSender?: OperationalReportEmailSender;
   maxInFlightRequests?: number;
+  federationManager?: FederationManager;
+  federationLocalSearchProvider?: FederationLocalSearchProvider;
+  federationSharedKey?: string;
 }): Promise<FastifyInstance> {
   const app = Fastify({
     logger: options?.logger ?? false,
@@ -407,6 +422,19 @@ export async function buildApp(options?: {
       app.log.warn({ error }, "Failed to initialize video search services");
     }
   }
+  const federationSharedKey = options?.federationSharedKey ?? process.env.FEDERATION_SHARED_KEY;
+  const federationManager = options?.federationManager ?? new FederationManager(
+    pool ? new PostgresFederationRepository(pool) : new MemoryFederationRepository(),
+    new HttpFederationPeerClient(
+      federationSharedKey,
+      Number(process.env.FEDERATION_PEER_TIMEOUT_MS ?? 8_000),
+    ),
+    Number(process.env.FEDERATION_HEARTBEAT_TTL_SECONDS ?? 90) * 1_000,
+  );
+  const federationLocalSearchProvider = options?.federationLocalSearchProvider
+    ?? (searchService
+      ? new RecordingFederationSearchProvider(searchService)
+      : new EmptyFederationLocalSearchProvider());
 
   await app.register(cors, { origin: false });
 
@@ -429,6 +457,7 @@ export async function buildApp(options?: {
       request.url.startsWith("/internal/recording/") ||
       request.url.startsWith("/internal/analytics/") ||
       request.url.startsWith("/internal/alerts/")
+      || request.url.startsWith("/internal/federation/")
       || request.url.startsWith("/internal/reports/")
     ) return;
 
@@ -1630,6 +1659,10 @@ export async function buildApp(options?: {
   await registerMaintenanceRoutes(app, store);
   await registerOperationalHealthRoutes(app, store);
   await registerVideoWallRoutes(app, store);
+  await registerFederationRoutes(app, store, federationManager, {
+    federationSharedKey,
+    localSearchProvider: federationLocalSearchProvider,
+  });
   if (extendedStore) {
     await registerDeviceManagementRoutes(app, extendedStore);
     await registerAuthRoutes(app, extendedStore);
