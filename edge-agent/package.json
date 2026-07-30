@@ -6,18 +6,24 @@
   "scripts": {
     "dev": "tsx src/index.ts",
     "build": "tsc -p tsconfig.build.json",
+    "fetch:windows-runtime": "node scripts/fetch-windows-runtime.mjs",
     "bundle": "esbuild src/index.ts --bundle --platform=node --format=cjs --target=node18 --outfile=build/edge-agent.cjs",
-    "build:exe": "npm run typecheck && npm run bundle && pkg --target node18-win-x64 --output release/edge-agent.exe build/edge-agent.cjs",
+    "build:exe": "npm run fetch:windows-runtime && npm run typecheck && npm run bundle && pkg --compress Brotli --target node18-win-x64 --output release/edge-agent.exe build/edge-agent.cjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run"
   },
   "dependencies": {
     "fast-xml-parser": "^5.2.5",
+    "fastify": "^4.29.0",
     "zod": "^3.25.76"
   },
   "pkg": {
     "scripts": [
       "build/edge-agent.cjs"
+    ],
+    "assets": [
+      "vendor/windows/**/*",
+      "installer/windows/*.ps1"
     ]
   },
   "devDependencies": {

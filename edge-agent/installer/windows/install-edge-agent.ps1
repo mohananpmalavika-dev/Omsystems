@@ -10,6 +10,7 @@ $SourceDirectory = $PSScriptRoot
 $SourceExecutable = Join-Path $SourceDirectory "edge-agent.exe"
 $SourceConfig = Join-Path $SourceDirectory "config\edge-agent.env"
 $SourceUninstaller = Join-Path $SourceDirectory "uninstall-edge-agent.ps1"
+$SourceRuntimePackages = Join-Path $SourceDirectory "runtime-packages"
 
 function Assert-Administrator {
   $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
@@ -71,7 +72,42 @@ Copy-Item -LiteralPath $SourceConfig -Destination $ConfigPath -Force
 if (Test-Path -LiteralPath $SourceUninstaller -PathType Leaf) {
   Copy-Item -LiteralPath $SourceUninstaller -Destination (Join-Path $InstallDirectory "uninstall-edge-agent.ps1") -Force
 }
+if (Test-Path -LiteralPath (Join-Path $SourceDirectory "THIRD_PARTY_NOTICES.txt") -PathType Leaf) {
+  Copy-Item -LiteralPath (Join-Path $SourceDirectory "THIRD_PARTY_NOTICES.txt") -Destination (Join-Path $InstallDirectory "THIRD_PARTY_NOTICES.txt") -Force
+}
 Unblock-File -LiteralPath $Executable
+
+$RuntimeDirectory = Join-Path $InstallDirectory "runtime"
+$FfmpegArchive = Join-Path $SourceRuntimePackages "ffmpeg.zip"
+$MediaMtxArchive = Join-Path $SourceRuntimePackages "mediamtx.zip"
+$CloudflaredSource = Join-Path $SourceRuntimePackages "cloudflared.exe"
+if ((Test-Path -LiteralPath $FfmpegArchive -PathType Leaf) -and
+    (Test-Path -LiteralPath $MediaMtxArchive -PathType Leaf) -and
+    (Test-Path -LiteralPath $CloudflaredSource -PathType Leaf)) {
+  Write-Host "Installing the bundled camera media runtime..." -ForegroundColor Cyan
+  $FfmpegDirectory = Join-Path $RuntimeDirectory "ffmpeg"
+  $MediaMtxDirectory = Join-Path $RuntimeDirectory "mediamtx"
+  New-Item -ItemType Directory -Path $RuntimeDirectory, $FfmpegDirectory, $MediaMtxDirectory -Force | Out-Null
+  Expand-Archive -LiteralPath $FfmpegArchive -DestinationPath $FfmpegDirectory -Force
+  Expand-Archive -LiteralPath $MediaMtxArchive -DestinationPath $MediaMtxDirectory -Force
+  $FfmpegExecutable = Get-ChildItem -LiteralPath $FfmpegDirectory -Filter "ffmpeg.exe" -File -Recurse | Select-Object -First 1
+  $FfprobeExecutable = Get-ChildItem -LiteralPath $FfmpegDirectory -Filter "ffprobe.exe" -File -Recurse | Select-Object -First 1
+  $MediaMtxExecutable = Get-ChildItem -LiteralPath $MediaMtxDirectory -Filter "mediamtx.exe" -File -Recurse | Select-Object -First 1
+  if (-not $FfmpegExecutable -or -not $FfprobeExecutable -or -not $MediaMtxExecutable) {
+    throw "The bundled camera runtime archives are incomplete."
+  }
+  $CloudflaredExecutable = Join-Path $RuntimeDirectory "cloudflared.exe"
+  Copy-Item -LiteralPath $CloudflaredSource -Destination $CloudflaredExecutable -Force
+  Unblock-File -LiteralPath $FfmpegExecutable.FullName
+  Unblock-File -LiteralPath $FfprobeExecutable.FullName
+  Unblock-File -LiteralPath $MediaMtxExecutable.FullName
+  Unblock-File -LiteralPath $CloudflaredExecutable
+  Set-ConfigValue $ConfigPath "FFMPEG_PATH" $FfmpegExecutable.FullName
+  Set-ConfigValue $ConfigPath "FFPROBE_PATH" $FfprobeExecutable.FullName
+  Set-ConfigValue $ConfigPath "MEDIAMTX_PATH" $MediaMtxExecutable.FullName
+  Set-ConfigValue $ConfigPath "CLOUDFLARED_PATH" $CloudflaredExecutable
+  Set-ConfigValue $ConfigPath "LIVE_MEDIA_ENABLED" "true"
+}
 
 $controlPlaneUrl = Get-ConfigValue $ConfigPath "CONTROL_PLANE_URL"
 if ($controlPlaneUrl.StartsWith("REPLACE_")) {
@@ -111,13 +147,14 @@ if (-not $SkipConnectivityCheck) {
   if ($LASTEXITCODE -ne 0) { throw "Dashboard connectivity check failed. The startup task was not installed; correct the URL, firewall, or edge key and run this installer again." }
 }
 
-foreach ($dependency in @("ffprobe.exe", "ffmpeg.exe")) {
-  if (-not (Get-Command $dependency -ErrorAction SilentlyContinue)) {
-    Write-Warning "$dependency is not on PATH. The agent will connect, but RTSP probing/evidence features need an FFmpeg installation."
+foreach ($setting in @("FFPROBE_PATH", "FFMPEG_PATH", "MEDIAMTX_PATH", "CLOUDFLARED_PATH")) {
+  $dependency = Get-ConfigValue $ConfigPath $setting
+  if (-not (Test-Path -LiteralPath $dependency -PathType Leaf) -and -not (Get-Command $dependency -ErrorAction SilentlyContinue)) {
+    Write-Warning "$setting is unavailable at '$dependency'. Related camera functions will be disabled."
   }
 }
 
-$action = New-ScheduledTaskAction -Execute $Executable -Argument "--config `"$ConfigPath`"" -WorkingDirectory $InstallDirectory
+$action = New-ScheduledTaskAction -Execute $Executable -Argument "--run --config `"$ConfigPath`"" -WorkingDirectory $InstallDirectory
 $trigger = New-ScheduledTaskTrigger -AtStartup
 $principal = New-ScheduledTaskPrincipal -UserId "SYSTEM" -LogonType ServiceAccount -RunLevel Highest
 $settings = New-ScheduledTaskSettingsSet -StartWhenAvailable -RestartCount 20 -RestartInterval (New-TimeSpan -Minutes 1) -ExecutionTimeLimit ([TimeSpan]::Zero)

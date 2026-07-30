@@ -14,6 +14,19 @@ const schema = z.object({
   ONVIF_TIMEOUT_MS: z.coerce.number().int().min(500).max(30_000).default(8000),
   FFPROBE_PATH: z.string().default("ffprobe"),
   FFMPEG_PATH: z.string().default("ffmpeg"),
+  LIVE_MEDIA_ENABLED: z.enum(["true", "false"]).default("false").transform((value) => value === "true"),
+  EDGE_LIVE_GATEWAY_HOST: z.string().default("127.0.0.1"),
+  EDGE_LIVE_GATEWAY_PORT: z.coerce.number().int().min(1).max(65535).default(8090),
+  MEDIAMTX_PATH: z.string().default("mediamtx"),
+  MEDIAMTX_API_URL: z.string().url().default("http://127.0.0.1:9997"),
+  MEDIAMTX_HLS_URL: z.string().url().default("http://127.0.0.1:8888"),
+  MEDIA_TUNNEL_MODE: z.enum(["disabled", "quick", "named"]).default("disabled"),
+  CLOUDFLARED_PATH: z.string().default("cloudflared"),
+  CLOUDFLARED_TUNNEL_TOKEN: z.preprocess(
+    (value) => value === "" ? undefined : value,
+    z.string().min(20).optional(),
+  ),
+  MEDIA_ACCESS_TTL_SECONDS: z.coerce.number().int().min(30).max(3600).default(300),
   CAMERA_HEARTBEAT_INTERVAL_MS: z.coerce.number().int().min(5_000).max(3_600_000).default(30_000),
   CAMERA_CONFIG_REFRESH_MS: z.coerce.number().int().min(5_000).max(3_600_000).default(60_000),
   PUBLIC_MEDIA_GATEWAY_URL: z.preprocess(
@@ -89,6 +102,15 @@ const schema = z.object({
       path: ["EDGE_AGENT_ID"],
       message: "EDGE_AGENT_ID is required with EDGE_BRIDGE_SHARED_KEY; download a branch-specific package from the dashboard",
     });
+  }
+  if (value.LIVE_MEDIA_ENABLED && !value.EDGE_BRIDGE_SHARED_KEY) {
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ["EDGE_BRIDGE_SHARED_KEY"], message: "Live media requires EDGE_BRIDGE_SHARED_KEY" });
+  }
+  if (value.LIVE_MEDIA_ENABLED && value.MEDIA_TUNNEL_MODE === "disabled" && !value.PUBLIC_MEDIA_GATEWAY_URL) {
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ["PUBLIC_MEDIA_GATEWAY_URL"], message: "Live media without a tunnel requires a reachable PUBLIC_MEDIA_GATEWAY_URL" });
+  }
+  if (value.LIVE_MEDIA_ENABLED && value.MEDIA_TUNNEL_MODE === "named" && (!value.CLOUDFLARED_TUNNEL_TOKEN || !value.PUBLIC_MEDIA_GATEWAY_URL)) {
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ["CLOUDFLARED_TUNNEL_TOKEN"], message: "Named media tunnels require CLOUDFLARED_TUNNEL_TOKEN and PUBLIC_MEDIA_GATEWAY_URL" });
   }
 });
 

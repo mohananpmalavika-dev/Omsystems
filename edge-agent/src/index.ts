@@ -12,10 +12,16 @@ import { looksLikeRecorder, probeRecorder } from "./monitoring/recorder-probe.js
 import { initializeCameraHeartbeat } from "./monitoring/camera-heartbeat.js";
 import { hasArgument, prepareEdgeRuntime } from "./runtime.js";
 import { logger } from "./utils/logger.js";
+import { startEdgeMediaRuntime, type EdgeMediaRuntime } from "./streaming/edge-live-gateway.js";
+import { launchWindowsSelfInstaller } from "./windows/self-installer.js";
 
 async function main() {
 const argv = process.argv.slice(2);
 const runtime = prepareRuntimeOrExit(argv);
+if (runtime.embeddedEnvironmentFile && (argv.length === 0 || hasArgument(argv, "--install"))) {
+  launchWindowsSelfInstaller(runtime.embeddedEnvironmentFile);
+  process.exit(0);
+}
 if (hasArgument(argv, "--version")) {
   process.stdout.write("Sentinel Grid Edge Agent 0.1.0\n");
   process.exit(0);
@@ -56,9 +62,13 @@ const secrets = new LocalStreamSecretStore(config.STREAM_SECRET_STORE_PATH);
 const networkCounterSampler = new NetworkCounterSampler();
 const networkPathTracker = new NetworkPathTracker(config.INTERNET_PATH_WINDOW_MS);
 const edgeResourceSampler = new EdgeResourceSampler();
+let edgeMediaRuntime: EdgeMediaRuntime | undefined;
 let lastRecorderProbeAt = 0;
 let lastRecorderArchiveScanAt = 0;
 await secrets.load();
+if (config.LIVE_MEDIA_ENABLED) {
+  edgeMediaRuntime = await startEdgeMediaRuntime({ config, gateway, agentId, secrets });
+}
 const cameraHeartbeat = initializeCameraHeartbeat(
   config.CONTROL_PLANE_URL,
   config.BRANCH_ID,
@@ -115,6 +125,7 @@ while (!stopping) {
 }
 
 cameraHeartbeat.stop();
+await edgeMediaRuntime?.stop();
 
 async function scanBranch() {
   const configuredEndpoints = config.ONVIF_ENDPOINTS
@@ -248,7 +259,7 @@ function delay(milliseconds: number) {
 
 async function heartbeatAndReport() {
   const startedAt = Date.now();
-  await gateway.heartbeat(agentId, config.EDGE_AGENT_VERSION, config.PUBLIC_MEDIA_GATEWAY_URL);
+  await gateway.heartbeat(agentId, config.EDGE_AGENT_VERSION, edgeMediaRuntime?.publicUrl ?? config.PUBLIC_MEDIA_GATEWAY_URL);
   if (Date.now() - lastCameraConfigSyncAt >= config.CAMERA_CONFIG_REFRESH_MS) {
     await syncCameraHeartbeatConfig().catch((error) => {
       logger.error("Camera monitoring configuration refresh failed", { error: error instanceof Error ? error.message : String(error) });

@@ -1,10 +1,12 @@
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, isAbsolute, join, resolve } from "node:path";
+import { readEmbeddedEnvironmentFile } from "./embedded-config.js";
 
 export interface EdgeRuntimeContext {
   packaged: boolean;
   homeDirectory: string;
   configPath: string | null;
+  embeddedEnvironmentFile?: string;
 }
 
 /**
@@ -31,8 +33,11 @@ export function prepareEdgeRuntime(
   const configPath = candidates.find((candidate) => existsSync(candidate)) ?? null;
   if (explicitConfig && !configPath) throw new Error(`Edge-agent configuration file not found: ${candidates[0]}`);
 
-  if (configPath) {
-    const values = parseEnvironmentFile(readFileSync(configPath, "utf8"));
+  const embeddedEnvironmentFile = !configPath && packaged
+    ? readEmbeddedEnvironmentFile(process.execPath)
+    : undefined;
+  if (configPath || embeddedEnvironmentFile) {
+    const values = parseEnvironmentFile(configPath ? readFileSync(configPath, "utf8") : embeddedEnvironmentFile!);
     for (const [key, value] of Object.entries(values)) {
       if (environment[key] === undefined) environment[key] = value;
     }
@@ -40,7 +45,12 @@ export function prepareEdgeRuntime(
 
   environment.EDGE_AGENT_HOME ??= homeDirectory;
   if (packaged) process.chdir(homeDirectory);
-  return { packaged, homeDirectory, configPath };
+  return {
+    packaged,
+    homeDirectory,
+    configPath,
+    ...(embeddedEnvironmentFile ? { embeddedEnvironmentFile } : {}),
+  };
 }
 
 export function parseEnvironmentFile(content: string) {

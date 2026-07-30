@@ -4,6 +4,8 @@ import { deflateRawSync } from "node:zlib";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { readFile, stat } from "node:fs/promises";
+import { createReadStream } from "node:fs";
+import { Readable } from "node:stream";
 import type { ControlPlaneStore } from "../control-plane-store.js";
 
 const routeParams = z.object({
@@ -11,6 +13,7 @@ const routeParams = z.object({
   edgeAgentId: z.string().min(1),
 });
 const packageQuery = z.object({ platform: z.enum(["windows", "linux"]).default("windows") });
+const embeddedConfigMarker = Buffer.from("SENTINEL_EDGE_CONFIG_V1", "ascii");
 
 export interface EdgeAgentPackageOptions {
   controlPlanePublicUrl?: string;
@@ -116,6 +119,7 @@ function branchConfiguration(
   agent: { id: string; branchId: string; name: string },
   version: string,
   options: EdgeAgentPackageOptions,
+  platform: "windows" | "linux",
 ) {
   return environmentFile({
     CONTROL_PLANE_URL: options.controlPlanePublicUrl ?? "REPLACE_WITH_PUBLIC_CONTROL_PLANE_URL",
@@ -133,6 +137,16 @@ function branchConfiguration(
     ONVIF_TIMEOUT_MS: "8000",
     FFPROBE_PATH: "ffprobe",
     FFMPEG_PATH: "ffmpeg",
+    LIVE_MEDIA_ENABLED: platform === "windows" ? "true" : "false",
+    EDGE_LIVE_GATEWAY_HOST: "127.0.0.1",
+    EDGE_LIVE_GATEWAY_PORT: "8090",
+    MEDIAMTX_PATH: "mediamtx",
+    MEDIAMTX_API_URL: "http://127.0.0.1:9997",
+    MEDIAMTX_HLS_URL: "http://127.0.0.1:8888",
+    MEDIA_TUNNEL_MODE: platform === "windows" ? "quick" : "disabled",
+    CLOUDFLARED_PATH: "cloudflared",
+    CLOUDFLARED_TUNNEL_TOKEN: "",
+    MEDIA_ACCESS_TTL_SECONDS: "300",
     CAMERA_HEARTBEAT_INTERVAL_MS: "30000",
     CAMERA_CONFIG_REFRESH_MS: "60000",
     PUBLIC_MEDIA_GATEWAY_URL: "",
@@ -144,23 +158,18 @@ function branchConfiguration(
   });
 }
 
-const windowsReadme = `SENTINEL GRID EDGE AGENT - WINDOWS
-
-1. Extract the complete ZIP to a local folder on the branch Windows PC.
-2. Right-click Windows PowerShell and choose Run as administrator.
-3. In the extracted folder run:
-     powershell -ExecutionPolicy Bypass -File .\\install-edge-agent.ps1
-4. The installer validates configuration, authenticates with the dashboard,
-   and creates the "Sentinel Grid Edge Agent" startup task.
-
-Logs: C:\\Program Files\\Sentinel Grid\\Edge Agent\\logs\\edge-agent.log
-Config: C:\\Program Files\\Sentinel Grid\\Edge Agent\\config\\edge-agent.env
-
-Camera discovery requires the branch PC and cameras to share routable network
-access. Install FFmpeg so ffprobe.exe and ffmpeg.exe are on PATH for RTSP health
-and evidence functions. Live dashboard video additionally requires the branch
-media gateway/tunnel and its PUBLIC_MEDIA_GATEWAY_URL/EDGE_MEDIA_SHARED_KEY.
-`;
+function streamInstaller(executablePath: string, config: Buffer) {
+  const length = Buffer.alloc(4);
+  length.writeUInt32LE(config.length, 0);
+  const footer = Buffer.concat([config, length, embeddedConfigMarker]);
+  return {
+    footer,
+    stream: Readable.from((async function* () {
+      for await (const chunk of createReadStream(executablePath)) yield chunk;
+      yield footer;
+    })()),
+  };
+}
 
 export async function registerEdgeAgentPackageRoutes(
   app: FastifyInstance,
@@ -195,17 +204,32 @@ export async function registerEdgeAgentPackageRoutes(
     try {
       const packageJson = JSON.parse(await readFile(join(root, "package.json"), "utf8")) as { version?: string };
       const version = packageJson.version ?? "0.1.0";
-      const config = Buffer.from(branchConfiguration(agent, version, options), "utf8");
+      const config = Buffer.from(branchConfiguration(agent, version, options, platform), "utf8");
       let entries: Array<{ name: string; data: Buffer }>;
 
       if (platform === "windows") {
-        entries = [
-          { name: "edge-agent.exe", data: await readRequiredFile(join(root, "release", "edge-agent.exe"), "edge_agent_executable_not_built") },
-          { name: "config/edge-agent.env", data: config },
-          { name: "install-edge-agent.ps1", data: await readRequiredFile(join(root, "installer", "windows", "install-edge-agent.ps1"), "edge_agent_installer_not_built") },
-          { name: "uninstall-edge-agent.ps1", data: await readRequiredFile(join(root, "installer", "windows", "uninstall-edge-agent.ps1"), "edge_agent_installer_not_built") },
-          { name: "README.txt", data: Buffer.from(windowsReadme, "utf8") },
-        ];
+        const executablePath = join(root, "release", "edge-agent.exe");
+        let executableSize: number;
+        try {
+          const metadata = await stat(executablePath);
+          if (!metadata.isFile()) throw new Error("not a file");
+          executableSize = metadata.size;
+        } catch {
+          throw Object.assign(new Error(`edge_agent_executable_not_built: ${executablePath}`), { code: "edge_agent_executable_not_built" });
+        }
+        const installer = streamInstaller(executablePath, config);
+        await store.writeAudit({
+          tenantId: branch.tenantId, actorUserId: request.currentUser.id,
+          action: "edge_agent.package_downloaded", resourceNodeId: branchId,
+          outcome: "success", sourceIp: request.ip,
+          details: { edgeAgentId, platform, version, format: "single-executable" },
+        });
+        reply.header("Cache-Control", "no-store, private");
+        reply.header("Content-Type", "application/vnd.microsoft.portable-executable");
+        reply.header("Content-Length", String(executableSize + installer.footer.length));
+        const safeBranchName = branch.name.replace(/[^a-zA-Z0-9_-]/g, "-");
+        reply.header("Content-Disposition", `attachment; filename="${safeBranchName}-edge-agent-setup.exe"`);
+        return reply.send(installer.stream);
       } else {
         const packageBody = JSON.stringify({ private: true, scripts: { start: "node edge-agent.cjs" } }, null, 2);
         entries = [

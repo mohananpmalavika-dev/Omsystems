@@ -63,6 +63,24 @@ describe("dashboard control-plane BFF", () => {
     );
   });
 
+  it("preserves the filename for the single Windows installer executable", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(Buffer.from("MZfixture"), {
+      status: 200,
+      headers: {
+        "content-type": "application/vnd.microsoft.portable-executable",
+        "content-disposition": 'attachment; filename="Branch-edge-agent-setup.exe"',
+      },
+    })));
+
+    const response = await GET(
+      new NextRequest("https://sentinel.example/api/control/v1/branches/branch-1/edge-agents/agent-1/package?platform=windows"),
+      { params: Promise.resolve({ path: ["v1", "branches", "branch-1", "edge-agents", "agent-1", "package"] }) },
+    );
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-disposition")).toContain("edge-agent-setup.exe");
+    expect(Buffer.from(await response.arrayBuffer()).subarray(0, 2).toString()).toBe("MZ");
+  });
+
   it("returns an empty digital twin branch list when the upstream route is missing", async () => {
     vi.stubGlobal("fetch", vi.fn(async () =>
       new Response(null, {

@@ -110,11 +110,13 @@ async function proxyControlRequest(request: NextRequest, context: RouteContext) 
       return outgoing;
     }
     const responseType = response.headers.get("content-type") ?? "application/json";
+    const contentDisposition = response.headers.get("content-disposition");
     return new Response(response.body, {
       status: response.status,
       headers: {
         "content-type": responseType,
         "cache-control": responseType.startsWith("text/event-stream") ? "no-cache, no-transform" : "no-store",
+        ...(contentDisposition ? { "content-disposition": contentDisposition } : {}),
         ...(responseType.startsWith("text/event-stream") ? { "x-accel-buffering": "no" } : {}),
       },
     });

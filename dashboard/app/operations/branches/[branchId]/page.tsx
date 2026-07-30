@@ -337,7 +337,7 @@ export default function BranchHealthDetailPage() {
                   setDownloadingPackage(true);
                   try {
                     const blob = await cameraInventoryApi.downloadPackage(branchId, branch.edgeAgent.id, "windows");
-                    const fileName = `${branch.name.replace(/[^a-zA-Z0-9_-]/g, '-')}-edge-agent-windows.zip`;
+                    const fileName = `${branch.name.replace(/[^a-zA-Z0-9_-]/g, '-')}-edge-agent-setup.exe`;
                     const url = window.URL.createObjectURL(blob);
                     const anchor = document.createElement('a');
                     anchor.href = url;
@@ -358,7 +358,7 @@ export default function BranchHealthDetailPage() {
                 className="btn-primary w-full"
               >
                 <Download size={16} />
-                {downloadingPackage ? 'Downloading…' : 'Download Windows branch install zip'}
+                {downloadingPackage ? 'Downloading…' : 'Download one-click Windows installer'}
               </button>
 
               <button

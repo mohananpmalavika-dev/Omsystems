@@ -14,6 +14,9 @@ COPY recording-engine/package.json ./recording-engine/package.json
 COPY analytics-engine/package.json ./analytics-engine/package.json
 RUN npm ci
 COPY tsconfig.json ./
+COPY edge-agent/scripts ./edge-agent/scripts
+COPY edge-agent/THIRD_PARTY_NOTICES.txt ./edge-agent/THIRD_PARTY_NOTICES.txt
+RUN npm run fetch:windows-runtime --workspace @sentinel/edge-agent
 COPY src ./src
 COPY edge-agent/src ./edge-agent/src
 COPY edge-agent/installer ./edge-agent/installer

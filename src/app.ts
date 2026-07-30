@@ -471,6 +471,8 @@ export async function buildApp(options?: {
 
     const edgeAgentIngressRoute = isEdgeAgentIngressRoute(request.method, request.url);
     const edgeBridgeHeader = request.headers["x-edge-bridge-key"];
+    const userIdentitySupplied = typeof request.headers.authorization === "string"
+      || typeof request.headers["x-user-id"] === "string";
     const edgeBridgeAuthenticated = Boolean(options?.edgeBridgeSharedKey) && secureEqualHeader(
       edgeBridgeHeader,
       options!.edgeBridgeSharedKey!,
@@ -478,7 +480,7 @@ export async function buildApp(options?: {
     if (edgeAgentIngressRoute && options?.edgeBridgeSharedKey && edgeBridgeHeader && !edgeBridgeAuthenticated) {
       return reply.code(401).send({ error: "invalid_bridge_identity" });
     }
-    if (edgeAgentIngressRoute && edgeBridgeAuthenticated) {
+    if (edgeAgentIngressRoute && edgeBridgeAuthenticated && !userIdentitySupplied) {
       request.edgeAgentAuthenticated = true;
       return;
     }
@@ -1685,6 +1687,23 @@ export async function buildApp(options?: {
       ? "user-global-admin"
       : undefined,
   });
+
+  app.post("/v1/edge-agents/:id/live-sessions/consume", async (request, reply) => {
+    const { id } = edgeAgentParams.parse(request.params);
+    const { token } = z.object({ token: z.string().min(32).max(200) }).parse(request.body);
+    const agent = await store.heartbeatEdgeAgent(
+      id,
+      request.headers["x-edge-agent-version"] as string || "unknown",
+    );
+    if (!agent) return reply.code(404).send({ error: "edge_agent_not_found" });
+    const consumed = await store.consumeLiveSession(token);
+    if (!consumed) return reply.code(401).send({ error: "invalid_live_session" });
+    const camera = await store.getCamera(consumed.cameraId);
+    if (!camera || camera.edgeAgentId !== id) {
+      return reply.code(403).send({ error: "live_session_agent_mismatch" });
+    }
+    return consumed;
+  });
   await registerCameraDiscoveryRoutes(app, store);
   await registerCommandCenterRoutes(app, store);
   await registerDigitalTwinRoutes(app, store, {
@@ -1903,6 +1922,7 @@ function isEdgeAgentIngressRoute(method: string, url: string) {
   const path = url.split("?", 1)[0] ?? url;
   if (method === "POST" && /^\/v1\/edge-agents\/[^/]+\/heartbeat$/.test(path)) return true;
   if (method === "GET" && /^\/v1\/edge-agents\/[^/]+\/cameras\/monitoring$/.test(path)) return true;
+  if (method === "POST" && /^\/v1\/edge-agents\/[^/]+\/live-sessions\/consume$/.test(path)) return true;
   if (method === "GET" && /^\/v1\/edge-agents\/[^/]+\/scan-jobs\/next$/.test(path)) return true;
   if (method === "POST" && /^\/v1\/edge-agents\/[^/]+\/scan-jobs\/[^/]+\/complete$/.test(path)) return true;
   if (method === "POST" && /^\/v1\/edge-agents\/[^/]+\/(?:telemetry|recorder-hdd|recorder-archive)$/.test(path)) return true;

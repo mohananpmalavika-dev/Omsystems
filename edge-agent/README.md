@@ -13,7 +13,7 @@ npm install
 npm run build:exe
 ```
 
-The standalone Node 18 x64 executable is written to
+The all-in-one Node 18 x64 executable is written to
 `edge-agent/release/edge-agent.exe`. Verify it without starting monitoring:
 
 ```powershell
@@ -26,27 +26,36 @@ Do not pass the TypeScript/ESM output directly to `pkg`; that produces an EXE
 which looks valid but fails at runtime with a `C:\snapshot\...\index.js` module
 error.
 
+The first build downloads pinned Windows releases of FFmpeg/ffprobe,
+MediaMTX, and cloudflared, verifies their SHA-256 checksums, and embeds them as
+assets. Later builds reuse the verified cache under `edge-agent/vendor`.
+
 ## Recommended branch installation
 
 1. Configure the control plane with a branch-reachable
    `CONTROL_PLANE_PUBLIC_URL` and a random 32+ character
    `EDGE_BRIDGE_SHARED_KEY`.
-2. In the dashboard, create/select the branch edge agent and download its
-   Windows package.
-3. Extract the complete ZIP on the branch PC.
-4. Run an Administrator PowerShell window in that folder:
-
-```powershell
-powershell -ExecutionPolicy Bypass -File .\install-edge-agent.ps1
-```
+2. In the dashboard, create/select the branch edge agent and click **Download
+   one-click Windows installer**.
+3. Copy that one `.exe` to the branch PC and double-click it. Approve the
+   Windows administrator prompt and enter the ONVIF camera password.
 
 The installer copies the agent under `C:\Program Files\Sentinel Grid\Edge
 Agent`, protects its credential file, validates it, authenticates with the
-dashboard, and creates a SYSTEM startup task with automatic restart.
+dashboard, extracts the bundled media tools, and creates a SYSTEM startup task
+with automatic restart.
 
-The generated package is branch-specific. Do not copy one branch's ZIP to a
+The generated executable is branch-specific. Do not copy one branch's EXE to a
 different branch and do not send it by unsecured email because it contains the
 edge bridge credential.
+
+The single installer contains:
+
+- ONVIF discovery and camera/recorder health agent
+- FFmpeg and ffprobe for RTSP, freeze, black-frame and evidence checks
+- MediaMTX for branch-local RTSP-to-HLS remuxing
+- cloudflared for an outbound-only media connection with no branch port forward
+- installer, protected configuration, logs, automatic startup and restart
 
 ## Diagnostics
 
@@ -59,13 +68,15 @@ Get-ScheduledTask -TaskName 'Sentinel Grid Edge Agent'
 Get-Content 'C:\Program Files\Sentinel Grid\Edge Agent\logs\edge-agent.log' -Tail 100
 ```
 
-The control-plane URL must be reachable over outbound HTTP(S), while the agent
-must have LAN access to the cameras/NVRs. Install FFmpeg and make `ffprobe.exe`
-and `ffmpeg.exe` available on PATH for RTSP health checks and evidence capture.
+The control-plane URL and Cloudflare Tunnel must be reachable over outbound
+HTTPS, while the branch PC must have LAN access to the cameras/NVRs. No inbound
+port forwarding is required.
 
-Camera discovery and health data work through this EXE. Live HLS playback also
-needs the separately deployed branch media gateway/tunnel and the
-`PUBLIC_MEDIA_GATEWAY_URL` plus `EDGE_MEDIA_SHARED_KEY` settings.
+Dashboard downloads default to an automatic Cloudflare Quick Tunnel so a pilot
+installation works without another account. Quick Tunnels are temporary and
+intended for testing. Production branches should change `MEDIA_TUNNEL_MODE` to
+`named`, provide `CLOUDFLARED_TUNNEL_TOKEN`, and set the stable
+`PUBLIC_MEDIA_GATEWAY_URL` issued for that branch.
 
 ## Uninstall
 

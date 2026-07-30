@@ -46,6 +46,7 @@ describe("control-plane API", () => {
   it("accepts only the valid edge bridge key on production agent ingress routes", async () => {
     const bridgeKey = "e".repeat(43);
     const agent = await store.registerEdgeAgent("branch-blr-001", "Production edge", "0.1.0");
+    store.cameras.get("cam-001")!.edgeAgentId = agent.id;
     const productionApp = await buildApp({
       store,
       authMode: "session",
@@ -78,6 +79,19 @@ describe("control-plane API", () => {
       expect(discovery.statusCode).toBe(202);
       expect(store.auditEvents.at(-1)?.actorUserId).toBeNull();
 
+      const liveSession = await store.createLiveSession("cam-001", "user-global-admin");
+      const consumedSession = await productionApp.inject({
+        method: "POST",
+        url: `/v1/edge-agents/${agent.id}/live-sessions/consume`,
+        headers: { "x-edge-bridge-key": bridgeKey },
+        payload: { token: liveSession.token },
+      });
+      expect(consumedSession.statusCode).toBe(200);
+      expect(consumedSession.json()).toMatchObject({
+        cameraId: "cam-001",
+        connectionSecretRef: "vault://branches/blr-001/cameras/001",
+      });
+
       const invalidKey = await productionApp.inject({
         method: "POST",
         url: `/v1/edge-agents/${agent.id}/heartbeat`,
@@ -93,6 +107,17 @@ describe("control-plane API", () => {
         payload: { version: "0.1.0" },
       });
       expect(missingKey.statusCode).toBe(401);
+
+      const bridgeDoesNotOverrideBadUserSession = await productionApp.inject({
+        method: "POST",
+        url: `/v1/edge-agents/${agent.id}/heartbeat`,
+        headers: {
+          authorization: "Bearer invalid-employee-session",
+          "x-edge-bridge-key": bridgeKey,
+        },
+        payload: { version: "0.1.0" },
+      });
+      expect(bridgeDoesNotOverrideBadUserSession.statusCode).toBe(401);
 
       const bridgeCannotReadDashboard = await productionApp.inject({
         method: "GET",

@@ -63,6 +63,16 @@ export interface MonitoringCamera {
   }>;
 }
 
+export interface ConsumedLiveSession {
+  id: string;
+  cameraId: string;
+  cameraNodeId: string;
+  userId: string;
+  tenantId: string;
+  connectionSecretRef: string;
+  profiles: Array<{ name: string; codec: string; width: number; height: number }>;
+}
+
 export class GatewayClient {
   constructor(
     private readonly baseUrl: string,
@@ -152,6 +162,13 @@ export class GatewayClient {
     return this.request(
       `/v1/edge-agents/${encodeURIComponent(agentId)}/scan-jobs/${encodeURIComponent(jobId)}/complete`,
       { method: "POST", body: JSON.stringify(result) },
+    );
+  }
+
+  async consumeLiveSession(agentId: string, token: string) {
+    return this.request<ConsumedLiveSession>(
+      `/v1/edge-agents/${encodeURIComponent(agentId)}/live-sessions/consume`,
+      { method: "POST", body: JSON.stringify({ token }) },
     );
   }
 
