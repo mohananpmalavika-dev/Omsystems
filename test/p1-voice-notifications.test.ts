@@ -57,6 +57,24 @@ describe("P1 voice notification call tree", () => {
     expect(xml).toContain("A &amp; B &lt;critical&gt;");
     expect(xml).toContain("x=1&amp;y=2");
   });
+
+  it("returns an asynchronous carrier failure to the retry and failover queue", async () => {
+    const [notification] = await store.enqueueAlertNotifications([{ tenantId: "omsystems",
+      alertId: crypto.randomUUID(), channel: "voice", recipient: "+919100000001",
+      voiceCall: { provider: "twilio", sequence: 0, status: "sent", events: [] } }]);
+    const token = new VoiceCallbackTokens(secret).sign({ notificationId: notification!.id,
+      alertId: notification!.alertId, tenantId: notification!.tenantId });
+
+    const response = await app.inject({ method: "GET",
+      url: `/internal/alerts/voice/status?token=${encodeURIComponent(token)}&CallStatus=busy&CallSid=CA123` });
+
+    expect(response.statusCode).toBe(200);
+    expect(store.analyticsNotifications[0]).toMatchObject({
+      status: "failed", lastError: "voice_busy", providerId: "CA123",
+      voiceCall: { provider: "twilio", status: "busy" },
+    });
+    expect(Date.parse(store.analyticsNotifications[0]!.nextAttemptAt)).toBeGreaterThan(Date.now());
+  });
 });
 
 describe("voice provider adapters", () => {

@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { FastifyInstance } from "fastify";
 import { buildApp } from "../src/app.js";
 import { MemoryStore } from "../src/store.js";
@@ -26,13 +26,34 @@ describe("Phase 2 bulk dashboard contracts", () => {
     await Promise.all(Array.from({ length: 399 }, (_, index) =>
       store.createBranch("omsystems", "region-south", `Pilot Branch ${String(index + 2).padStart(3, "0")}`),
     ));
+    const startedAt = performance.now();
     const response = await app.inject({
       method: "GET", url: "/v1/operations/health/branches?limit=500", headers: admin,
     });
+    const elapsedMs = performance.now() - startedAt;
     expect(response.statusCode).toBe(200);
     expect(response.json().data.total).toBe(400);
     expect(response.json().data.branches).toHaveLength(400);
     expect(response.json().data.branches[0].region).toBe("South Region");
+    expect(elapsedMs).toBeLessThan(2_000);
+  });
+
+  it("paginates branch metadata before expensive camera and retention projection", async () => {
+    await Promise.all(Array.from({ length: 399 }, (_, index) =>
+      store.createBranch("omsystems", "region-south", `Paged Branch ${String(index + 2).padStart(3, "0")}`),
+    ));
+    const cameraLoads = vi.spyOn(store, "listCamerasByBranch");
+    const startedAt = performance.now();
+
+    const response = await app.inject({
+      method: "GET", url: "/v1/operations/health/branches?limit=25&offset=100", headers: admin,
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json().data).toMatchObject({ total: 400, limit: 25, offset: 100 });
+    expect(response.json().data.branches).toHaveLength(25);
+    expect(cameraLoads).toHaveBeenCalledTimes(25);
+    expect(performance.now() - startedAt).toBeLessThan(500);
   });
 
   it("filters the mosaic server-side by search and status", async () => {

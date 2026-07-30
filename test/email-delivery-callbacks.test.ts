@@ -29,7 +29,7 @@ describe("Email delivery callbacks and audit history", () => {
     });
     expect(delivered.statusCode).toBe(200);
     expect(store.analyticsNotifications[0]).toMatchObject({ status: "delivered", providerId: "MSG123",
-      emailDelivery: { status: "delivered", provider: "webhook", subject: "P2 alert: test" } });
+      emailDelivery: { status: "delivered", provider: "smtp", subject: "P2 alert: test" } });
 
     const bounced = await app.inject({ method: "POST",
       url: `/internal/alerts/email/status?token=${encodeURIComponent(token)}`,
@@ -37,6 +37,6 @@ describe("Email delivery callbacks and audit history", () => {
     });
     expect(bounced.statusCode).toBe(200);
     expect(store.analyticsNotifications[0]).toMatchObject({ status: "failed", lastError: "email_bounced",
-      emailDelivery: { status: "bounced", provider: "webhook" } });
+      emailDelivery: { status: "bounced", provider: "smtp" } });
   });
 });

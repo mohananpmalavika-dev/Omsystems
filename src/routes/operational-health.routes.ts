@@ -25,6 +25,7 @@ import { normalizeNetworkMetrics, projectInternetLink, summarizeBranchInternet }
 import { normalizeRecorderMetrics, projectRecorderChannelHealth, projectRecorderHealth } from "../operational-health/recorder-health.js";
 import { normalizeEdgeAgentMetrics } from "../operational-health/edge-agent-health.js";
 import { loadBatchedRetentionInputs } from "../operational-health/retention-batch.js";
+import type { ResourceNode } from "../domain/models.js";
 
 const deviceTypes = ["branch", "edge-agent", "recorder", "recorder-channel", "camera", "disk", "network", "ups"] as const;
 const sources = ["onvif", "cp-plus-adapter", "rtsp", "system", "recording-engine"] as const;
@@ -332,16 +333,28 @@ export async function registerOperationalHealthRoutes(
 
   app.get("/v1/operations/health/branches", async (request) => {
     const query = paginationSchema.parse(request.query);
-    let projections = await loadAccessibleProjections(request, store);
-    if (query.status) projections = projections.filter((branch) => branch.healthStatus === query.status);
-    if (query.connectivity) projections = projections.filter((branch) => branch.internetStatus === query.connectivity);
-    if (query.region) projections = projections.filter((branch) => branch.region === query.region);
+    let accessible = await loadAccessibleBranchMetadata(request, store);
+    if (query.region) accessible = accessible.filter((item) => item.region === query.region);
     if (query.search) {
       const search = query.search.toLowerCase();
-      projections = projections.filter((branch) =>
-        `${branch.name} ${branch.code} ${branch.region}`.toLowerCase().includes(search),
+      accessible = accessible.filter(({ branch, region }) =>
+        `${branch.name} ${branch.id.slice(0, 8)} ${region}`.toLowerCase().includes(search),
       );
     }
+
+    // Metadata-only filters can be counted and paged before loading cameras,
+    // retention segments, policies and telemetry for the requested branches.
+    if (!query.status && !query.connectivity) {
+      const total = accessible.length;
+      const page = accessible.slice(query.offset, query.offset + query.limit);
+      const projections = await loadAccessibleProjections(request, store, undefined, page);
+      const branches = projections.map(({ cameras, ...branch }) => branch);
+      return { success: true, data: { branches, total, limit: query.limit, offset: query.offset } };
+    }
+
+    let projections = await loadAccessibleProjections(request, store, undefined, accessible);
+    if (query.status) projections = projections.filter((branch) => branch.healthStatus === query.status);
+    if (query.connectivity) projections = projections.filter((branch) => branch.internetStatus === query.connectivity);
     const total = projections.length;
     const branches = projections.slice(query.offset, query.offset + query.limit).map(({ cameras, ...branch }) => branch);
     return { success: true, data: { branches, total, limit: query.limit, offset: query.offset } };
@@ -710,14 +723,15 @@ async function loadAccessibleProjections(
   request: FastifyRequest,
   store: ControlPlaneStore,
   requestedBranchIds?: string[],
+  accessibleMetadata?: AccessibleBranchMetadata[],
 ) {
-  let branches = await store.listAccessibleNodes(request.currentUser, "recording:view", "branch");
-  const regions = await store.listAccessibleNodes(request.currentUser, "recording:view", "region");
-  const regionNames = new Map(regions.map((region) => [region.id, region.name]));
+  let metadata = accessibleMetadata ?? await loadAccessibleBranchMetadata(request, store);
   if (requestedBranchIds) {
     const requested = new Set(requestedBranchIds);
-    branches = branches.filter((branch) => requested.has(branch.id));
+    metadata = metadata.filter(({ branch }) => requested.has(branch.id));
   }
+  const branches = metadata.map(({ branch }) => branch);
+  const regionsByBranch = new Map(metadata.map(({ branch, region }) => [branch.id, region]));
   const telemetry = await store.listLatestOperationalTelemetry(request.currentUser.tenantId, branches.map((branch) => branch.id));
   const calculatedAt = Date.now();
   const branchContexts = await Promise.all(branches.map(async (branch) => {
@@ -750,9 +764,26 @@ async function loadAccessibleProjections(
       retentions,
       policy,
       now: calculatedAt,
-      region: branch.path.map((id) => regionNames.get(id)).find(Boolean),
+      region: regionsByBranch.get(branch.id),
     });
   });
+}
+
+type AccessibleBranchMetadata = { branch: ResourceNode; region: string };
+
+async function loadAccessibleBranchMetadata(
+  request: FastifyRequest,
+  store: ControlPlaneStore,
+): Promise<AccessibleBranchMetadata[]> {
+  const [branches, regions] = await Promise.all([
+    store.listAccessibleNodes(request.currentUser, "recording:view", "branch"),
+    store.listAccessibleNodes(request.currentUser, "recording:view", "region"),
+  ]);
+  const regionNames = new Map(regions.map((region) => [region.id, region.name]));
+  return branches.map((branch) => ({
+    branch,
+    region: branch.path.map((id) => regionNames.get(id)).find(Boolean) ?? "Unassigned",
+  }));
 }
 
 function latestArchiveEvidenceByCamera(telemetry: OperationalTelemetryEnvelope[]) {

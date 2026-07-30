@@ -44,7 +44,8 @@ export class ProviderFailoverAlertNotificationSender implements BatchAlertNotifi
 
   async send(notification: AlertNotification, alert: AnalyticsAlert) {
     const errors: unknown[] = [];
-    for (const target of this.targets) {
+    const targets = this.orderedTargets(notification);
+    for (const target of targets) {
       try {
         return await target.sender.send(notification, alert);
       } catch (error) {
@@ -52,10 +53,15 @@ export class ProviderFailoverAlertNotificationSender implements BatchAlertNotifi
         await this.recordProviderFailure(notification, target.name, error);
       }
     }
-    throw new AggregateError(errors, `notification_providers_exhausted:${this.targets.map((item) => item.name).join(",")}`);
+    throw new AggregateError(errors, `notification_providers_exhausted:${targets.map((item) => item.name).join(",")}`);
   }
 
   async sendBatch(items: Array<{ notification: AlertNotification; alert: AnalyticsAlert }>) {
+    if (items.some((item) => this.hasReceiptFailure(item.notification))) {
+      return new Map(await Promise.all(items.map(async (item) => [
+        item.notification.id, await this.send(item.notification, item.alert),
+      ] as const)));
+    }
     const errors: unknown[] = [];
     for (const target of this.targets) {
       try {
@@ -71,6 +77,20 @@ export class ProviderFailoverAlertNotificationSender implements BatchAlertNotifi
       }
     }
     throw new AggregateError(errors, `notification_providers_exhausted:${this.targets.map((item) => item.name).join(",")}`);
+  }
+
+  private orderedTargets(notification: AlertNotification) {
+    if (this.targets.length < 2 || !this.hasReceiptFailure(notification)) return this.targets;
+    const lastProvider = notification.channel === "sms" ? notification.smsDelivery?.provider
+      : notification.channel === "voice" ? notification.voiceCall?.provider
+        : notification.channel === "email" ? notification.emailDelivery?.provider : undefined;
+    const failedIndex = this.targets.findIndex((item) => item.name === lastProvider);
+    if (failedIndex < 0) return this.targets;
+    return [...this.targets.slice(failedIndex + 1), ...this.targets.slice(0, failedIndex + 1)];
+  }
+
+  private hasReceiptFailure(notification: AlertNotification) {
+    return Boolean(notification.lastError?.startsWith(`${notification.channel}_`));
   }
 
   private async recordProviderFailure(notification: AlertNotification, provider: string, error: unknown) {

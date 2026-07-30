@@ -288,6 +288,10 @@ export async function registerAlertCommandCenterRoutes(
       occurredAt: new Date().toISOString(), providerId: query.CallSid ?? query.Sid,
       durationSeconds: query.CallDuration, detail: "Provider status callback" });
     if (!notification) return reply.code(404).send({ error: "voice_call_not_found" });
+    if (["busy", "failed", "no_answer", "canceled", "cancelled", "rejected"].includes(status)) {
+      await store.completeAlertNotification(notification.id, { status: "failed", error: `voice_${status}`,
+        nextAttemptAt: new Date(Date.now() + 30_000).toISOString() });
+    }
     publishNotificationUpdated(claims.tenantId, claims.alertId);
     return { accepted: true };
   });
@@ -350,7 +354,7 @@ export async function registerAlertCommandCenterRoutes(
     const providerId = query.providerId ?? query.MessageId ?? query.message_id;
     const notification = await store.recordEmailDeliveryEvent(claims.notificationId, {
       status, occurredAt: new Date().toISOString(), providerId,
-      detail: "Provider delivery callback", provider: query.provider ?? "webhook", subject: query.subject,
+      detail: "Provider delivery callback", ...(query.provider ? { provider: query.provider } : {}), subject: query.subject,
     });
     if (!notification) return reply.code(404).send({ error: "email_delivery_not_found" });
     if (["delivered", "processed", "delivery"].includes(status)) {

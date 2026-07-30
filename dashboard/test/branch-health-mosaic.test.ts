@@ -11,16 +11,21 @@ import {
 import type { BranchHealth } from "../lib/types/operational-health.js";
 
 describe("centralized branch mosaic model", () => {
-  it("provides 4x4, 6x6, and 8x8 operator layouts capped at 64 tiles", () => {
-    expect(BRANCH_GRID_LAYOUTS).toEqual(["4x4", "6x6", "8x8"]);
-    expect(MAX_BRANCH_TILES_PER_VIEW).toBe(64);
+  it("provides detailed layouts plus a 20x20 status wall for 400 simultaneous tiles", () => {
+    expect(BRANCH_GRID_LAYOUTS).toEqual(["4x4", "6x6", "8x8", "20x20"]);
+    expect(MAX_BRANCH_TILES_PER_VIEW).toBe(400);
     expect(getBranchGridMetrics("4x4", 1200)).toMatchObject({ columns: 4, compact: false, tilesPerView: 16 });
     expect(getBranchGridMetrics("6x6", 1200)).toMatchObject({ columns: 6, compact: true, tilesPerView: 36 });
     expect(getBranchGridMetrics("8x8", 1200)).toMatchObject({ columns: 8, ultraCompact: true, tilesPerView: 64 });
+    expect(getBranchGridMetrics("20x20", 1200)).toMatchObject({
+      columns: 20, rowHeight: 26, gap: 3, compact: true, ultraCompact: true,
+      statusOnly: true, tilesPerView: 400,
+    });
     expect(getBranchGridMetrics("8x8", 600).columns).toBe(2);
     expect(getBranchGridViewportHeight("4x4")).toBe(584);
     expect(getBranchGridViewportHeight("6x6")).toBe(608);
     expect(getBranchGridViewportHeight("8x8")).toBe(616);
+    expect(getBranchGridViewportHeight("20x20")).toBe(593);
   });
 
   it("automatically sequences offline, critical-alert and unhealthy branches first", () => {

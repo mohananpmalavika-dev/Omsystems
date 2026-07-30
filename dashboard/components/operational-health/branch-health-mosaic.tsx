@@ -19,8 +19,8 @@ import {
 } from "./branch-mosaic-model";
 import type { BranchSummaryFilter } from "./branch-summary-model";
 
-// The API can page through large estates; the operator wall stays actionable
-// by showing at most an 8 x 8 (64-tile) view and scrolling through the rest.
+// The 20 x 20 mode is a status-only overview; smaller modes retain operational
+// details and virtualized scrolling for investigation.
 const MIN_VIEWPORT_HEIGHT = 280;
 
 export function BranchHealthMosaic({
@@ -106,8 +106,8 @@ export function BranchHealthMosaic({
 
   useEffect(() => {
     const updateHeight = () => {
-      // Fullscreen removes surrounding UI, but must not turn the mosaic into
-      // an unreadable 400-branch wall. Smaller windows may show fewer tiles.
+      // Fullscreen removes surrounding UI. Responsive breakpoints still reduce
+      // columns on narrow screens, while desktop 20 x 20 renders all 400 tiles.
       const layoutHeight = getBranchGridViewportHeight(layout);
       const available = Math.max(MIN_VIEWPORT_HEIGHT, window.innerHeight - 170);
       setViewportHeight(fullscreen ? Math.min(layoutHeight, available) : layoutHeight);
@@ -164,7 +164,7 @@ export function BranchHealthMosaic({
               viewport.current?.scrollTo({ top: 0 });
             }}
             className={`rounded-md px-2.5 py-1.5 text-xs font-semibold ${layout === option ? "bg-blue-600 text-white" : "text-gray-600 hover:bg-gray-100"}`}
-          >{option}</button>)}
+          >{option.replace("x", "×")}</button>)}
         </div>
         <button type="button" className="btn-secondary inline-flex items-center gap-2 px-3 py-2 text-xs font-semibold" onClick={() => setFullscreen((value) => !value)}>
           {fullscreen ? <Minimize2 size={14}/> : <Maximize2 size={14}/>} {fullscreen ? "Exit HO wall" : "HO wall"}

@@ -97,6 +97,24 @@ describe("alert provider resilience", () => {
     }));
   });
 
+  it("starts with the secondary provider after an asynchronous primary receipt failure", async () => {
+    const store = new MemoryStore();
+    const alert = await createAlert(store);
+    const notification = await enqueueEmail(store, alert);
+    notification.lastError = "email_bounced";
+    notification.emailDelivery!.provider = "sendgrid";
+    const primary = vi.fn().mockResolvedValue({ providerId: "sendgrid-retry" });
+    const fallback = vi.fn().mockResolvedValue({ providerId: "ses-after-bounce", deliveryStatus: "sent" as const });
+    const sender = new ProviderFailoverAlertNotificationSender(store, [
+      { name: "sendgrid", sender: { send: primary } },
+      { name: "ses", sender: { send: fallback } },
+    ]);
+
+    await expect(sender.send(notification, alert)).resolves.toMatchObject({ providerId: "ses-after-bounce" });
+    expect(fallback).toHaveBeenCalledOnce();
+    expect(primary).not.toHaveBeenCalled();
+  });
+
   it("emits a dead-letter audit event after the final retry", async () => {
     const store = new MemoryStore();
     const alert = await createAlert(store);

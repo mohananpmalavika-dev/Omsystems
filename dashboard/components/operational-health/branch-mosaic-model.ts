@@ -1,14 +1,11 @@
 import type { BranchHealth } from "@/lib/types/operational-health";
 
-/**
- * Operator-approved branch-wall densities. The mosaic deliberately tops out
- * at 8 x 8: a dense wall must still leave a branch tile actionable.
- */
-export const BRANCH_GRID_LAYOUTS = ["4x4", "6x6", "8x8"] as const;
+/** Operator layouts, including the dense 400-branch HO status wall. */
+export const BRANCH_GRID_LAYOUTS = ["4x4", "6x6", "8x8", "20x20"] as const;
 export type BranchGridLayout = (typeof BRANCH_GRID_LAYOUTS)[number];
 export type BranchSequence = "priority" | "region" | "name";
 
-export const MAX_BRANCH_TILES_PER_VIEW = 64;
+export const MAX_BRANCH_TILES_PER_VIEW = 400;
 export const BRANCH_PAGE_SIZE = 500;
 
 export interface BranchHealthPage {
@@ -27,18 +24,21 @@ export function getBranchGridMetrics(layout: BranchGridLayout, viewportWidth: nu
       : viewportWidth >= 480
         ? Math.min(requestedColumns, 2)
         : 1;
+  const statusOnly = layout === "20x20";
   const rowHeight = layout === "4x4"
     ? 136
     : layout === "6x6"
       ? 92
-      : 68;
+      : layout === "8x8"
+        ? 68
+        : 26;
   return {
     columns,
     rowHeight,
-    gap: 8,
+    gap: statusOnly ? 3 : 8,
     compact: layout !== "4x4",
-    ultraCompact: layout === "8x8",
-    statusOnly: false,
+    ultraCompact: layout === "8x8" || statusOnly,
+    statusOnly,
     tilesPerView: requestedColumns ** 2,
   };
 }
