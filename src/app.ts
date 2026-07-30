@@ -50,6 +50,7 @@ import { registerOperationalHealthRoutes } from "./routes/operational-health.rou
 import { registerVideoWallRoutes } from "./routes/video-wall.routes.js";
 import { registerAlertCommandCenterRoutes } from "./routes/alert-command-center.routes.js";
 import { registerCommandCenterRoutes } from "./routes/command-center.routes.js";
+import { registerDigitalTwinRoutes } from "./routes/digital-twin.routes.js";
 import { registerOperationalReportRoutes } from "./routes/operational-reports.routes.js";
 import { registerFederationRoutes } from "./routes/federation.routes.js";
 import {
@@ -356,6 +357,7 @@ export async function buildApp(options?: {
   federationManager?: FederationManager;
   federationLocalSearchProvider?: FederationLocalSearchProvider;
   federationSharedKey?: string;
+  digitalTwinAssetRoot?: string;
 }): Promise<FastifyInstance> {
   const app = Fastify({
     logger: options?.logger ?? false,
@@ -1657,6 +1659,9 @@ export async function buildApp(options?: {
   await registerEdgeAgentPackageRoutes(app, store);
   await registerCameraDiscoveryRoutes(app, store);
   await registerCommandCenterRoutes(app, store);
+  await registerDigitalTwinRoutes(app, store, {
+    assetRoot: options?.digitalTwinAssetRoot ?? process.env.DIGITAL_TWIN_ASSET_ROOT ?? "./digital-twin-assets",
+  });
   // Core maintenance routes depend only on ControlPlaneStore and must be
   // available for both the in-memory development runtime and PostgreSQL.
   await registerMaintenanceRoutes(app, store);

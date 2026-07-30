@@ -1,0 +1,14 @@
+export type TwinViewMode = "2d" | "2.5d" | "3d";
+export type HeatmapType = "none" | "operational" | "people_security" | "incidents" | "door_usage";
+export interface TwinBinding { id:string;twinObjectId:string;deviceType:string;deviceId:string;statusSource:string|null;alertSource:string|null; }
+export interface TwinStatus { state:string;color:string;label:string;online:boolean|null;recording:boolean|null;analyticsActive:boolean;observedAt:string|null;source:string;details:Record<string,unknown>; }
+export interface TwinObject { id:string;floorId:string;objectType:string;name:string;description:string|null;positionX:number;positionY:number;positionZ:number;rotation:number;scale:number;fieldOfView:number|null;viewingDistance:number|null;showStatus:boolean;showLabel:boolean;showFieldOfView:boolean;metadata:Record<string,unknown>;binding:TwinBinding|null;currentStatus:TwinStatus; }
+export interface TwinZone { id:string;floorId:string;name:string;zoneType:string;vertices:Array<{x:number;y:number}>;fillColor:string;fillOpacity:number;strokeColor:string;strokeWidth:number;isRestricted:boolean;alertOnEntry:boolean; }
+export interface TwinAlert { id:string;floorId:string;twinObjectId:string|null;alertType:string;severity:"info"|"warning"|"critical";title:string;description:string|null;positionX:number|null;positionY:number|null;triggeredAt:string;acknowledgedAt:string|null;resolvedAt:string|null;source:string;snapshotReference:string|null;clipReference:string|null; }
+export interface TwinFloor { id:string;buildingId:string;floorNumber:number;name:string;description:string|null; }
+export interface TwinPlan { id:string;floorId:string;version:number;contentUrl:string;fileType:string;contentType:string;originalFilename:string;scaleMetersPerPixel:number|null;rotationDegrees:number; }
+export interface TwinHeatmap { type:string;generatedAt:string;points:Array<{x:number;y:number;intensity:number;count:number;label?:string}>;totalEvents:number;source:string[]; }
+export interface FloorState { branch:{id:string;name:string};building:{id:string;name:string;branchId:string};floor:TwinFloor;floorPlan:TwinPlan|null;objects:TwinObject[];zones:TwinZone[];alerts:TwinAlert[];heatmap:TwinHeatmap|null;summary:{totalObjects:number;online:number;warning:number;critical:number;unknown:number;activeAlerts:number};permissions:{canView:boolean;canEdit:boolean;canPlayback:boolean};generatedAt:string; }
+export interface BranchLive { branch:{id:string;name:string};configured:boolean;building:{id:string;name:string;branchId:string}|null;floors:FloorState[]; }
+export interface InventoryItem { deviceType:string;objectType:string;deviceId:string;name:string;status:string;bound:boolean; }
+export interface TimelineItem { id:string;occurredAt:string;type:string;severity:string;title:string;objectId:string|null;source:string;state:string|null;metadata:Record<string,unknown>; }

@@ -3,8 +3,8 @@
 
 -- Sites (typically corresponds to organizations or major facilities)
 CREATE TABLE digital_twin_sites (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    organization_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
     name VARCHAR(255) NOT NULL,
     description TEXT,
     address TEXT,
@@ -20,9 +20,9 @@ CREATE TABLE digital_twin_sites (
 
 -- Buildings within a site
 CREATE TABLE digital_twin_buildings (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     site_id UUID NOT NULL REFERENCES digital_twin_sites(id) ON DELETE CASCADE,
-    branch_id UUID REFERENCES branches(id) ON DELETE SET NULL,
+    branch_id UUID REFERENCES resource_nodes(id) ON DELETE SET NULL,
     name VARCHAR(255) NOT NULL,
     description TEXT,
     building_type VARCHAR(100), -- 'branch', 'datacenter', 'warehouse', 'office'
@@ -35,7 +35,7 @@ CREATE TABLE digital_twin_buildings (
 
 -- Floors within a building
 CREATE TABLE digital_twin_floors (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     building_id UUID NOT NULL REFERENCES digital_twin_buildings(id) ON DELETE CASCADE,
     floor_number INTEGER NOT NULL,
     name VARCHAR(255) NOT NULL,
@@ -50,7 +50,7 @@ CREATE TABLE digital_twin_floors (
 
 -- Floor plans (images/CAD files)
 CREATE TABLE digital_twin_floor_plans (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     floor_id UUID NOT NULL REFERENCES digital_twin_floors(id) ON DELETE CASCADE,
     version INTEGER NOT NULL DEFAULT 1,
     file_url TEXT NOT NULL,
@@ -100,7 +100,7 @@ CREATE TYPE twin_object_type AS ENUM (
 
 -- Objects placed on floor plans
 CREATE TABLE digital_twin_objects (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     floor_id UUID NOT NULL REFERENCES digital_twin_floors(id) ON DELETE CASCADE,
     object_type twin_object_type NOT NULL,
     name VARCHAR(255) NOT NULL,
@@ -143,7 +143,7 @@ CREATE INDEX idx_digital_twin_objects_type ON digital_twin_objects(object_type);
 
 -- Device bindings (link objects to actual devices)
 CREATE TABLE digital_twin_device_bindings (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     twin_object_id UUID NOT NULL REFERENCES digital_twin_objects(id) ON DELETE CASCADE,
     device_type VARCHAR(50) NOT NULL, -- 'camera', 'recorder', 'access_control', 'sensor'
     device_id UUID NOT NULL,
@@ -168,7 +168,7 @@ CREATE INDEX idx_device_bindings_device ON digital_twin_device_bindings(device_t
 
 -- Zones (polygonal areas on floor plans)
 CREATE TABLE digital_twin_zones (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     floor_id UUID NOT NULL REFERENCES digital_twin_floors(id) ON DELETE CASCADE,
     name VARCHAR(255) NOT NULL,
     description TEXT,
@@ -204,7 +204,7 @@ CREATE INDEX idx_digital_twin_zones_type ON digital_twin_zones(zone_type);
 
 -- Camera field of view definitions
 CREATE TABLE digital_twin_camera_views (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     twin_object_id UUID NOT NULL REFERENCES digital_twin_objects(id) ON DELETE CASCADE,
     floor_id UUID NOT NULL REFERENCES digital_twin_floors(id) ON DELETE CASCADE,
     
@@ -231,7 +231,7 @@ CREATE INDEX idx_camera_views_floor ON digital_twin_camera_views(floor_id);
 
 -- Heat map aggregation (spatial analytics)
 CREATE TABLE digital_twin_heatmaps (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     floor_id UUID NOT NULL REFERENCES digital_twin_floors(id) ON DELETE CASCADE,
     heatmap_type VARCHAR(100) NOT NULL, -- 'people_movement', 'dwell_time', 'incidents', 'device_failures'
     time_period_start TIMESTAMP WITH TIME ZONE NOT NULL,
@@ -259,7 +259,7 @@ CREATE INDEX idx_heatmaps_time ON digital_twin_heatmaps(time_period_start, time_
 
 -- Alert markers (spatial incident visualization)
 CREATE TABLE digital_twin_alert_markers (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     floor_id UUID NOT NULL REFERENCES digital_twin_floors(id) ON DELETE CASCADE,
     twin_object_id UUID REFERENCES digital_twin_objects(id) ON DELETE SET NULL,
     
@@ -298,7 +298,7 @@ CREATE INDEX idx_alert_markers_incident ON digital_twin_alert_markers(incident_i
 
 -- Scene versions (snapshots for timeline playback)
 CREATE TABLE digital_twin_scene_versions (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     floor_id UUID NOT NULL REFERENCES digital_twin_floors(id) ON DELETE CASCADE,
     snapshot_time TIMESTAMP WITH TIME ZONE NOT NULL,
     
@@ -324,7 +324,7 @@ CREATE INDEX idx_scene_versions_incident ON digital_twin_scene_versions(related_
 
 -- User preferences for Digital Twin interface
 CREATE TABLE digital_twin_user_preferences (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     
     -- View preferences
@@ -354,8 +354,8 @@ CREATE TABLE digital_twin_user_preferences (
 
 -- Permissions for Digital Twin features
 CREATE TABLE digital_twin_permissions (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    role_id UUID REFERENCES roles(id) ON DELETE CASCADE,
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    role_id UUID,
     user_id UUID REFERENCES users(id) ON DELETE CASCADE,
     
     -- Permission types
@@ -381,7 +381,7 @@ CREATE INDEX idx_twin_permissions_user ON digital_twin_permissions(user_id);
 
 -- Audit log for Digital Twin changes
 CREATE TABLE digital_twin_audit_log (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID REFERENCES users(id),
     action VARCHAR(100) NOT NULL, -- 'create', 'update', 'delete', 'move', 'bind'
     entity_type VARCHAR(100) NOT NULL, -- 'floor_plan', 'object', 'zone', 'binding'

@@ -7,7 +7,7 @@
  */
 
 import { useEffect, useRef, useState } from 'react';
-import { Box3D, Maximize2, Grid3x3 } from 'lucide-react';
+import { Box, Maximize2, Grid3x3 } from 'lucide-react';
 
 interface FloorPlan3DViewerProps {
   floorId: string;

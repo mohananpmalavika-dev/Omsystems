@@ -31,9 +31,9 @@ interface FloorPlan {
 }
 
 export default function BuildingDigitalTwinPage() {
-  const params = useParams();
+  const params = useParams<{ buildingId?: string }>();
   const router = useRouter();
-  const buildingId = params.buildingId as string;
+  const buildingId = typeof params?.buildingId === 'string' ? params.buildingId : '';
 
   const [building, setBuilding] = useState<any>(null);
   const [floors, setFloors] = useState<Floor[]>([]);
