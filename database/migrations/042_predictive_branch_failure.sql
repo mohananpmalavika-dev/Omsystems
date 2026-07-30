@@ -783,7 +783,7 @@ COMMENT ON TABLE risk_suppression_rules IS 'Operator-defined exceptions to predi
 CREATE TABLE prediction_calibration_history (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     tenant_id UUID REFERENCES tenants(id) ON DELETE CASCADE,
-    prediction_type prediction_type_enum NOT NULL,
+    prediction_type prediction_type NOT NULL,
     measured_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     accuracy DECIMAL(5,4) NOT NULL,
     precision_value DECIMAL(5,4) NOT NULL,
@@ -814,7 +814,7 @@ CREATE TABLE prediction_misprediction_log (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     prediction_id UUID NOT NULL REFERENCES failure_predictions(id) ON DELETE CASCADE,
     tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
-    prediction_type prediction_type_enum NOT NULL,
+    prediction_type prediction_type NOT NULL,
     analysis JSONB NOT NULL,
     reviewed BOOLEAN NOT NULL DEFAULT false,
     reviewed_by UUID REFERENCES users(id) ON DELETE SET NULL,
