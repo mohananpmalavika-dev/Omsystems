@@ -364,6 +364,7 @@ Test Summary:
 - Separate storage state and SMART state (a vendor `Normal` response is not labeled healthy SMART)
 - Unit-aware capacity, multi-slot RAID/write evidence, sector/error deltas, and serial-change replacement history
 - Tested alerts for missing/failed disks, degraded RAID, storage-full, and failed writes
+- Complete native-archive, continuity, current-media, and 180-day retention acceptance gates for every mapped channel
 - Test configuration, fixtures, documentation, and NPM scripts
 
 **Remaining work**:

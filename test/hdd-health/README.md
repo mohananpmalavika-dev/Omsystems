@@ -70,7 +70,16 @@ Test reports are saved to `test/hdd-health/reports/`:
       "expectedDisks": 2,
       "expectedChannels": 16,
       "expectedRaidLevel": "RAID1",
-      "requireWriteVerification": true
+      "requireWriteVerification": true,
+      "expectedRetentionDays": 180,
+      "archiveRetention": {
+        "lookbackDays": 180,
+        "maxResults": 500000,
+        "continuityGapSeconds": 30,
+        "channels": [
+          { "cameraId": "camera-uuid-for-channel-1", "channel": 1 }
+        ]
+      }
     }
   ]
 }
@@ -80,7 +89,7 @@ Test reports are saved to `test/hdd-health/reports/`:
 
 ## Example Output
 
-The acceptance contract also requires `expectedChannels`, `expectedRaidLevel`, and an explicit `requireWriteVerification` policy. Use exact values from the installed recorder. Use `not_configured` as the RAID level only for an intentional independent/JBOD-disk deployment.
+The acceptance contract also requires `expectedChannels`, `expectedRaidLevel`, an explicit `requireWriteVerification` policy, `expectedRetentionDays` of at least 180, and one archive mapping for every expected channel. Use exact values from the installed recorder. Use `not_configured` as the RAID level only for an intentional independent/JBOD-disk deployment.
 
 ```
 ========================================

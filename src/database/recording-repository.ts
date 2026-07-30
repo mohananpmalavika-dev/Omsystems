@@ -19,7 +19,7 @@ export class RecordingRepository {
   async listJobs(cameraIds: string[]): Promise<RecordingJob[]> {
     if (cameraIds.length === 0) return [];
     const result = await this.pool.query(
-      "SELECT * FROM recording_jobs WHERE camera_id::text = ANY($1::text[])",
+      "SELECT * FROM recording_jobs WHERE camera_id = ANY($1::uuid[])",
       [cameraIds],
     );
     return result.rows.map(mapJob);
@@ -86,7 +86,7 @@ export class RecordingRepository {
     if (cameraIds.length === 0) return [];
     const result = await this.pool.query(
       `SELECT * FROM recording_segments
-       WHERE camera_id::text = ANY($1::text[])
+       WHERE camera_id = ANY($1::uuid[])
          AND ($2::timestamptz IS NULL OR ended_at >= $2::timestamptz)
          AND ($3::timestamptz IS NULL OR started_at <= $3::timestamptz)
          AND status <> 'deleted'
