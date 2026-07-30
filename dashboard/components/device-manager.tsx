@@ -270,6 +270,27 @@ Write-Host "For example: npm install; npm run build; npm run dev"
     downloadTextFile("install-edge-agent.sh", installScriptShell);
   }
 
+  async function downloadEdgeAgentPackage() {
+    if (!activeBranch || !provisionedGateway) return;
+
+    const response = await fetch(`/api/v1/branches/${activeBranch.id}/edge-agents/${provisionedGateway.id}/package`);
+    if (!response.ok) {
+      window.alert("Unable to download the edge-agent package. Please contact your administrator.");
+      return;
+    }
+
+    const blob = await response.blob();
+    const fileName = `${activeBranch.name.replace(/[^a-zA-Z0-9_-]/g, "-")}-edge-agent.zip`;
+    const url = window.URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = fileName;
+    document.body.appendChild(anchor);
+    anchor.click();
+    document.body.removeChild(anchor);
+    window.URL.revokeObjectURL(url);
+  }
+
   function downloadPowerShellInstallScript() {
     downloadTextFile("install-edge-agent.ps1", installScriptPowerShell);
   }
@@ -1011,6 +1032,7 @@ Write-Host "For example: npm install; npm run build; npm run dev"
                   <button className="secondary-button" onClick={() => void copySetup()}><Copy size={14} />Copy configuration</button>
                   <button className="secondary-button" onClick={downloadShellInstallScript}><Download size={14} />Download shell install script</button>
                   <button className="secondary-button" onClick={downloadPowerShellInstallScript}><Download size={14} />Download PowerShell install script</button>
+                  <button className="secondary-button" onClick={downloadEdgeAgentPackage}><Download size={14} />Download Windows package</button>
                 </div>
                 <div className="modal-actions"><button className="primary-button" onClick={() => setShowGatewayForm(false)}>Done</button></div>
               </div>

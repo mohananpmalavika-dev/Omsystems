@@ -44,6 +44,7 @@ import { registerVideoSearchRoutes } from "./routes/video-search.routes.js";
 import { registerDeviceInventoryRoutes } from "./routes/device-inventory.routes.js";
 import { registerDeviceManagementRoutes } from "./routes/device-management.routes.js";
 import { registerDVRNVRMonitorRoutes } from "./routes/dvr-nvr-monitor.routes.js";
+import { registerEdgeAgentPackageRoutes } from "./routes/edge-agent-package.routes.js";
 import { registerOperationalHealthRoutes } from "./routes/operational-health.routes.js";
 import { registerVideoWallRoutes } from "./routes/video-wall.routes.js";
 import { registerAlertCommandCenterRoutes } from "./routes/alert-command-center.routes.js";
@@ -1545,6 +1546,7 @@ export async function buildApp(options?: {
   });
 
   await registerDeviceInventoryRoutes(app, store);
+  await registerEdgeAgentPackageRoutes(app, store);
   await registerCameraDiscoveryRoutes(app, store);
   // Core maintenance routes depend only on ControlPlaneStore and must be
   // available for both the in-memory development runtime and PostgreSQL.
