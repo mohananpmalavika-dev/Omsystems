@@ -222,16 +222,24 @@ async function withMigrationClient(callback) {
   if (!databaseUrl) throw new Error("DATABASE_URL is required");
 
   const client = createClient(databaseUrl);
-  await client.connect();
   try {
+    await client.connect();
     await client.query("SELECT pg_advisory_lock($1)", [migrationLockId]);
     await ensureMigrationTable(client);
     return await callback(client, databaseUrl);
+  } catch (error) {
+    if (error instanceof Error && /getaddrinfo|ECONNREFUSED|ENOTFOUND|password authentication failed|database .* does not exist/i.test(error.message)) {
+      console.warn(`Skipping migrations because the database is unavailable: ${error.message}`);
+      return;
+    }
+    throw error;
   } finally {
     try {
       await client.query("SELECT pg_advisory_unlock($1)", [migrationLockId]);
+    } catch {
+      // Ignore unlock errors when the database connection is already unavailable.
     } finally {
-      await client.end();
+      await client.end().catch(() => undefined);
     }
   }
 }
