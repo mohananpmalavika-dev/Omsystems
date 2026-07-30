@@ -37,13 +37,14 @@ export async function registerAuthRoutes(
     "/v1/auth/login",
     { config: { noAuth: true } },
     async (request, reply) => {
-      const body = loginSchema.parse(request.body);
+      try {
+        const body = loginSchema.parse(request.body);
 
-      // Find user by username
-      const user = await store.findUserByUsername(
-        body.username,
-        body.tenantSlug,
-      );
+        // Find user by username
+        const user = await store.findUserByUsername(
+          body.username,
+          body.tenantSlug,
+        );
 
       if (!user) {
         // Generic error to prevent username enumeration
@@ -111,24 +112,28 @@ export async function registerAuthRoutes(
         details: { sessionId: session.id },
       });
 
-      // Get user details
-      const userDetails = await store.getUserDetails(user.id);
+        // Get user details
+        const userDetails = await store.getUserDetails(user.id);
 
-      return {
-        accessToken,
-        refreshToken,
-        expiresIn: 3600, // 1 hour
-        tokenType: "Bearer",
-        user: {
-          id: userDetails.id,
-          username: userDetails.username,
-          email: userDetails.email,
-          displayName: userDetails.displayName,
-          role: userDetails.role,
-          tenantId: userDetails.tenantId,
-          mustChangePassword: userDetails.mustChangePassword,
-        },
-      };
+        return {
+          accessToken,
+          refreshToken,
+          expiresIn: 3600, // 1 hour
+          tokenType: "Bearer",
+          user: {
+            id: userDetails.id,
+            username: userDetails.username,
+            email: userDetails.email,
+            displayName: userDetails.displayName,
+            role: userDetails.role,
+            tenantId: userDetails.tenantId,
+            mustChangePassword: userDetails.mustChangePassword,
+          },
+        };
+      } catch (error) {
+        app.log.error({ err: error }, "Unhandled error in /v1/auth/login");
+        return reply.code(500).send({ error: "internal_error" });
+      }
     },
   );
 
@@ -137,46 +142,51 @@ export async function registerAuthRoutes(
     "/v1/auth/refresh",
     { config: { noAuth: true } },
     async (request, reply) => {
-      const body = refreshTokenSchema.parse(request.body);
-      const refreshTokenHash = hashToken(body.refreshToken);
+      try {
+        const body = refreshTokenSchema.parse(request.body);
+        const refreshTokenHash = hashToken(body.refreshToken);
 
-      // Find and validate session
-      const session = await store.findSessionByRefreshToken(refreshTokenHash);
+        // Find and validate session
+        const session = await store.findSessionByRefreshToken(refreshTokenHash);
 
-      if (!session || new Date(session.expiresAt) < new Date()) {
-        return reply.code(401).send({
-          error: "invalid_token",
-          message: "Invalid or expired refresh token",
-        });
+        if (!session || new Date(session.expiresAt) < new Date()) {
+          return reply.code(401).send({
+            error: "invalid_token",
+            message: "Invalid or expired refresh token",
+          });
+        }
+
+        // Get user
+        const user = await store.getUserById(session.userId);
+
+        if (!user || user.status !== "active") {
+          return reply.code(401).send({
+            error: "invalid_session",
+            message: "User session is no longer valid",
+          });
+        }
+
+        // Generate new access token
+        const newAccessToken = generateToken(64);
+        const newAccessTokenHash = hashToken(newAccessToken);
+
+        // Update session
+        await store.updateSessionAccessToken(
+          session.id,
+          newAccessTokenHash,
+          request.ip,
+          request.headers["user-agent"],
+        );
+
+        return {
+          accessToken: newAccessToken,
+          expiresIn: 3600, // 1 hour
+          tokenType: "Bearer",
+        };
+      } catch (error) {
+        app.log.error({ err: error }, "Unhandled error in /v1/auth/refresh");
+        return reply.code(500).send({ error: "internal_error" });
       }
-
-      // Get user
-      const user = await store.getUserById(session.userId);
-
-      if (!user || user.status !== "active") {
-        return reply.code(401).send({
-          error: "invalid_session",
-          message: "User session is no longer valid",
-        });
-      }
-
-      // Generate new access token
-      const newAccessToken = generateToken(64);
-      const newAccessTokenHash = hashToken(newAccessToken);
-
-      // Update session
-      await store.updateSessionAccessToken(
-        session.id,
-        newAccessTokenHash,
-        request.ip,
-        request.headers["user-agent"],
-      );
-
-      return {
-        accessToken: newAccessToken,
-        expiresIn: 3600, // 1 hour
-        tokenType: "Bearer",
-      };
     },
   );
 
