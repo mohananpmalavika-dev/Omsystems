@@ -4,6 +4,8 @@ import type {
   CameraApprovalInput,
   CameraDiscoveryInput,
   ControlPlaneStore,
+  DeviceInventoryInput,
+  DeviceInventoryRecord,
 } from "../control-plane-store.js";
 import type {
   Action,
@@ -95,7 +97,7 @@ export class PostgresStore
   async listAccessibleNodes(user: User, action: Action, type?: NodeType) {
     return this.resources.listAccessible(user, action, type);
   }
-  async listDeviceInventory(tenantId: string, branchNodeId?: string) {
+  async listDeviceInventory(tenantId: string, branchNodeId?: string): Promise<DeviceInventoryRecord[]> {
     const result = await this.pool.query(
       `SELECT id::text, tenant_id, device_id, tenant, region, branch, device_type,
               manufacturer, model, serial_number, mac_address, ip_address,
@@ -111,7 +113,7 @@ export class PostgresStore
     return camelRows(result.rows);
   }
 
-  async getDeviceInventory(id: string) {
+  async getDeviceInventory(id: string): Promise<DeviceInventoryRecord | undefined> {
     const result = await this.pool.query(
       `SELECT id::text, tenant_id, device_id, tenant, region, branch, device_type,
               manufacturer, model, serial_number, mac_address, ip_address,
@@ -125,7 +127,7 @@ export class PostgresStore
     return result.rows[0] ? camelRow(result.rows[0]) : undefined;
   }
 
-  async createDeviceInventoryRecord(input: any) {
+  async createDeviceInventoryRecord(input: DeviceInventoryInput): Promise<DeviceInventoryRecord> {
     const result = await this.pool.query(
       `INSERT INTO device_inventory (
          tenant_id, device_id, tenant, region, branch, device_type, manufacturer,
@@ -161,7 +163,7 @@ export class PostgresStore
     return camelRow(result.rows[0]!);
   }
 
-  async updateDeviceInventory(id: string, input: any) {
+  async updateDeviceInventory(id: string, input: Partial<DeviceInventoryInput>): Promise<DeviceInventoryRecord | undefined> {
     const fields: Array<[string, unknown, string?]> = [
       ["device_id", input.deviceId],
       ["tenant", input.tenant],
