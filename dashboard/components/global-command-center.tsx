@@ -177,7 +177,7 @@ export function GlobalCommandCenter() {
                 </Badge>
                 {(summary?.offlineServers || 0) > 0 && (
                   <Badge variant="secondary" className="text-red-600 bg-red-50">
-                    {summary.offlineServers} Offline
+                    {summary?.offlineServers || 0} Offline
                   </Badge>
                 )}
               </div>
