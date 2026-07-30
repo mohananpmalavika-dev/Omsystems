@@ -21,29 +21,87 @@ describe("control-plane API", () => {
     expect(response.statusCode).toBe(401);
   });
 
-  it("requires the edge bridge identity when configured", async () => {
+  it("keeps user authentication separate from the edge bridge identity", async () => {
     const bridgeKey = "b".repeat(43);
     const bridgedApp = await buildApp({ edgeBridgeSharedKey: bridgeKey });
     try {
-      const denied = await bridgedApp.inject({
+      const userRequest = await bridgedApp.inject({
         method: "GET",
         url: "/v1/branches",
         headers: { "x-user-id": "user-global-admin" },
       });
-      expect(denied.statusCode).toBe(401);
-      expect(denied.json().error).toBe("invalid_bridge_identity");
+      expect(userRequest.statusCode).toBe(200);
 
-      const allowed = await bridgedApp.inject({
+      const bridgeCannotActAsUser = await bridgedApp.inject({
         method: "GET",
         url: "/v1/branches",
-        headers: {
-          "x-user-id": "user-global-admin",
-          "x-edge-bridge-key": bridgeKey,
-        },
+        headers: { "x-edge-bridge-key": bridgeKey },
       });
-      expect(allowed.statusCode).toBe(200);
+      expect(bridgeCannotActAsUser.statusCode).toBe(401);
     } finally {
       await bridgedApp.close();
+    }
+  });
+
+  it("accepts only the valid edge bridge key on production agent ingress routes", async () => {
+    const bridgeKey = "e".repeat(43);
+    const agent = await store.registerEdgeAgent("branch-blr-001", "Production edge", "0.1.0");
+    const productionApp = await buildApp({
+      store,
+      authMode: "session",
+      edgeBridgeSharedKey: bridgeKey,
+    });
+    try {
+      const heartbeat = await productionApp.inject({
+        method: "POST",
+        url: `/v1/edge-agents/${agent.id}/heartbeat`,
+        headers: { "x-edge-bridge-key": bridgeKey },
+        payload: { version: "0.1.0" },
+      });
+      expect(heartbeat.statusCode).toBe(200);
+
+      const discovery = await productionApp.inject({
+        method: "POST",
+        url: "/v1/branches/branch-blr-001/cameras/discovered",
+        headers: { "x-edge-bridge-key": bridgeKey },
+        payload: {
+          edgeAgentId: agent.id,
+          vendor: "hikvision",
+          model: "DS-2CD-Test",
+          ipAddress: "192.168.50.20",
+          onvifPort: 80,
+          rtspPort: 554,
+          profiles: [{ name: "main", codec: "H264", width: 1920, height: 1080 }],
+          capabilities: { ptz: false, audio: false, events: true },
+        },
+      });
+      expect(discovery.statusCode).toBe(202);
+      expect(store.auditEvents.at(-1)?.actorUserId).toBeNull();
+
+      const invalidKey = await productionApp.inject({
+        method: "POST",
+        url: `/v1/edge-agents/${agent.id}/heartbeat`,
+        headers: { "x-edge-bridge-key": "x".repeat(43) },
+        payload: { version: "0.1.0" },
+      });
+      expect(invalidKey.statusCode).toBe(401);
+      expect(invalidKey.json().error).toBe("invalid_bridge_identity");
+
+      const missingKey = await productionApp.inject({
+        method: "POST",
+        url: `/v1/edge-agents/${agent.id}/heartbeat`,
+        payload: { version: "0.1.0" },
+      });
+      expect(missingKey.statusCode).toBe(401);
+
+      const bridgeCannotReadDashboard = await productionApp.inject({
+        method: "GET",
+        url: "/v1/branches",
+        headers: { "x-edge-bridge-key": bridgeKey },
+      });
+      expect(bridgeCannotReadDashboard.statusCode).toBe(401);
+    } finally {
+      await productionApp.close();
     }
   });
 

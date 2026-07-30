@@ -66,8 +66,9 @@ export interface MonitoringCamera {
 export class GatewayClient {
   constructor(
     private readonly baseUrl: string,
-    private readonly developmentUserId: string,
+    private readonly developmentUserId: string | undefined,
     private readonly edgeBridgeSharedKey?: string,
+    private readonly timeoutMs = 15_000,
   ) {}
 
   async register(branchId: string, name: string, version: string) {
@@ -155,19 +156,26 @@ export class GatewayClient {
   }
 
   private async request<T = unknown>(path: string, init: RequestInit): Promise<T> {
-    const response = await fetch(new URL(path, this.baseUrl), {
-      ...init,
-      headers: {
-        "content-type": "application/json",
-        "x-user-id": this.developmentUserId,
-        ...(this.edgeBridgeSharedKey
-          ? { "x-edge-bridge-key": this.edgeBridgeSharedKey }
-          : {}),
-        ...init.headers,
-      },
-    });
+    const url = new URL(path, this.baseUrl);
+    let response: Response;
+    try {
+      response = await fetch(url, {
+        ...init,
+        signal: AbortSignal.timeout(this.timeoutMs),
+        headers: {
+          "content-type": "application/json",
+          ...(this.developmentUserId ? { "x-user-id": this.developmentUserId } : {}),
+          ...(this.edgeBridgeSharedKey ? { "x-edge-bridge-key": this.edgeBridgeSharedKey } : {}),
+          ...init.headers,
+        },
+      });
+    } catch (error) {
+      throw new Error(`Cannot reach control plane ${url.origin}: ${error instanceof Error ? error.message : String(error)}`);
+    }
     const text = await response.text();
-    const body = (text ? JSON.parse(text) : undefined) as T | { error?: string };
+    let body: T | { error?: string } | string | undefined;
+    try { body = text ? JSON.parse(text) as T | { error?: string } : undefined; }
+    catch { body = text.slice(0, 1_000); }
     if (!response.ok) {
       throw new Error(`Control plane ${response.status}: ${JSON.stringify(body)}`);
     }

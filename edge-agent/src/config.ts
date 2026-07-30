@@ -3,10 +3,10 @@ import { z } from "zod";
 const schema = z.object({
   CONTROL_PLANE_URL: z.string().url(),
   BRANCH_ID: z.string().min(1),
-  EDGE_AGENT_ID: z.string().min(1).optional(),
+  EDGE_AGENT_ID: z.preprocess((value) => value === "" ? undefined : value, z.string().min(1).optional()),
   EDGE_AGENT_NAME: z.string().min(2),
   EDGE_AGENT_VERSION: z.string().default("0.1.0"),
-  DEV_USER_ID: z.string().min(1).default("user-global-admin"),
+  DEV_USER_ID: z.preprocess((value) => value === "" ? undefined : value, z.string().min(1).optional()),
   CAMERA_USERNAME: z.string().min(1).default("admin"),
   CAMERA_PASSWORD: z.string().default(""),
   ONVIF_ENDPOINTS: z.string().default(""),
@@ -31,6 +31,8 @@ const schema = z.object({
     (value) => value === "" ? undefined : value,
     z.string().min(32).optional(),
   ),
+  CONTROL_PLANE_TIMEOUT_MS: z.coerce.number().int().min(1_000).max(120_000).default(15_000),
+  EDGE_LOG_PATH: z.string().min(1).default("./logs/edge-agent.log"),
   INTERNET_LINKS_JSON: z.string().default("[]").transform((value, context) => {
     try { return JSON.parse(value) as unknown; } catch { context.addIssue({ code: z.ZodIssueCode.custom, message: "INTERNET_LINKS_JSON must be valid JSON" }); return z.NEVER; }
   }).pipe(z.array(z.object({
@@ -80,6 +82,14 @@ const schema = z.object({
   RECORDER_POLL_INTERVAL_MS: z.coerce.number().int().min(5000).max(3_600_000).default(30000),
   RECORDER_PROBE_TIMEOUT_MS: z.coerce.number().int().min(500).max(60_000).default(5000),
   RECORDER_ARCHIVE_SCAN_INTERVAL_MS: z.coerce.number().int().min(60_000).max(7 * 86_400_000).default(6 * 3_600_000),
+}).superRefine((value, context) => {
+  if (value.EDGE_BRIDGE_SHARED_KEY && !value.EDGE_AGENT_ID) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["EDGE_AGENT_ID"],
+      message: "EDGE_AGENT_ID is required with EDGE_BRIDGE_SHARED_KEY; download a branch-specific package from the dashboard",
+    });
+  }
 });
 
 export function loadEdgeConfig(environment: NodeJS.ProcessEnv = process.env) {

@@ -1,5 +1,7 @@
 node_modules/
 dist/
+edge-agent/build/
+edge-agent/release/
 .env
 coverage/
 .next/

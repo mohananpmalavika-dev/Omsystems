@@ -53,6 +53,11 @@ async function proxyControlRequest(request: NextRequest, context: RouteContext) 
       body: requestBody,
       cache: "no-store",
     });
+
+    if (routePath === "/v1/digital-twin/branches" && response.status === 404) {
+      return Response.json([], { status: 200, headers: { "cache-control": "no-store" } });
+    }
+
     if (
       response.ok &&
       (routePath === "/v1/auth/login" || routePath === "/v1/auth/refresh")

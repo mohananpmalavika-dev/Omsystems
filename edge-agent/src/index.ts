@@ -10,18 +10,48 @@ import { NetworkCounterSampler, NetworkPathTracker, probeInternetLink } from "./
 import { EdgeResourceSampler } from "./monitoring/edge-resource-probe.js";
 import { looksLikeRecorder, probeRecorder } from "./monitoring/recorder-probe.js";
 import { initializeCameraHeartbeat } from "./monitoring/camera-heartbeat.js";
+import { hasArgument, prepareEdgeRuntime } from "./runtime.js";
+import { logger } from "./utils/logger.js";
 
-const config = loadEdgeConfig();
+async function main() {
+const argv = process.argv.slice(2);
+const runtime = prepareRuntimeOrExit(argv);
+if (hasArgument(argv, "--version")) {
+  process.stdout.write("Sentinel Grid Edge Agent 0.1.0\n");
+  process.exit(0);
+}
+const config = loadConfigOrExit();
+process.env.EDGE_LOG_PATH = config.EDGE_LOG_PATH;
+if (hasArgument(argv, "--check-config")) {
+  process.stdout.write(`${JSON.stringify({
+    valid: true,
+    configPath: runtime.configPath,
+    homeDirectory: runtime.homeDirectory,
+    controlPlaneUrl: config.CONTROL_PLANE_URL,
+    branchId: config.BRANCH_ID,
+    edgeAgentId: config.EDGE_AGENT_ID ?? null,
+    edgeAgentName: config.EDGE_AGENT_NAME,
+    onvifEndpointCount: config.ONVIF_ENDPOINTS.split(",").filter(Boolean).length,
+    recorderCount: config.RECORDERS_JSON.length,
+  }, null, 2)}\n`);
+  process.exit(0);
+}
 const gateway = new GatewayClient(
   config.CONTROL_PLANE_URL,
   config.DEV_USER_ID,
   config.EDGE_BRIDGE_SHARED_KEY,
+  config.CONTROL_PLANE_TIMEOUT_MS,
 );
 const agentId = config.EDGE_AGENT_ID ?? (await gateway.register(
   config.BRANCH_ID,
   config.EDGE_AGENT_NAME,
   config.EDGE_AGENT_VERSION,
 )).id;
+if (hasArgument(argv, "--diagnose")) {
+  await gateway.heartbeat(agentId, config.EDGE_AGENT_VERSION, config.PUBLIC_MEDIA_GATEWAY_URL);
+  process.stdout.write(`Connected to ${config.CONTROL_PLANE_URL} as edge agent ${agentId}.\n`);
+  process.exit(0);
+}
 const secrets = new LocalStreamSecretStore(config.STREAM_SECRET_STORE_PATH);
 const networkCounterSampler = new NetworkCounterSampler();
 const networkPathTracker = new NetworkPathTracker(config.INTERNET_PATH_WINDOW_MS);
@@ -48,10 +78,10 @@ if (config.EDGE_MEDIA_SHARED_KEY) {
     port: config.STREAM_SECRET_PROVIDER_PORT,
     sharedKey: config.EDGE_MEDIA_SHARED_KEY,
   });
-  console.log(`Local stream-secret provider listening on ${config.STREAM_SECRET_PROVIDER_HOST}:${config.STREAM_SECRET_PROVIDER_PORT}`);
+  logger.info(`Local stream-secret provider listening on ${config.STREAM_SECRET_PROVIDER_HOST}:${config.STREAM_SECRET_PROVIDER_PORT}`);
 }
 
-console.log(`Edge agent ${agentId} registered; waiting for branch commands`);
+logger.info(`Edge agent ${agentId} registered; waiting for branch commands`, { branchId: config.BRANCH_ID, version: config.EDGE_AGENT_VERSION });
 await heartbeatAndReport();
 
 let stopping = false;
@@ -79,7 +109,7 @@ while (!stopping) {
       }
     }
   } catch (error) {
-    console.error("Edge command poll failed:", error instanceof Error ? error.message : error);
+    logger.error("Edge command poll failed", { error: error instanceof Error ? error.message : String(error) });
   }
   await delay(5_000);
 }
@@ -99,7 +129,7 @@ async function scanBranch() {
         remoteAddress: new URL(serviceUrl).hostname,
       }))
     : await discoverOnvifDevices(config.DISCOVERY_TIMEOUT_MS);
-  console.log(`Discovered ${endpoints.length} ONVIF endpoint(s)`);
+  logger.info(`Discovered ${endpoints.length} ONVIF endpoint(s)`);
   let submitted = 0;
 
   for (const endpoint of endpoints) {
@@ -128,7 +158,7 @@ async function scanBranch() {
           reasonCodes: ["onvif_auto_discovered", "recording_state_vendor_specific"],
         });
         submitted += 1;
-        console.log(`Auto-provisioned recorder ${device.manufacturer} ${device.model} as ${discoveredId}`);
+        logger.info(`Auto-provisioned recorder ${device.manufacturer} ${device.model} as ${discoveredId}`);
         continue;
       }
       const profiles = [];
@@ -174,10 +204,10 @@ async function scanBranch() {
         await secrets.set(`edge://${agentId}/${discovery.id}`, primarySourceUri);
       }
       submitted += 1;
-      console.log(`Submitted ${device.manufacturer} ${device.model} as discovery ${discovery.id}`, compatibilityNotes(vendor));
+      logger.info(`Submitted ${device.manufacturer} ${device.model} as discovery ${discovery.id}`, { compatibility: compatibilityNotes(vendor) });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      console.error(`Failed to inspect ${endpoint.remoteAddress}: ${message}`);
+      logger.error(`Failed to inspect ${endpoint.remoteAddress}`, { error: message });
       try {
         const serviceUrl = endpoint.xaddrs[0];
         if (!serviceUrl) continue;
@@ -205,7 +235,7 @@ async function scanBranch() {
         });
         submitted += 1;
       } catch (submissionError) {
-        console.error(`Failed to report ${endpoint.remoteAddress}: ${submissionError instanceof Error ? submissionError.message : submissionError}`);
+        logger.error(`Failed to report ${endpoint.remoteAddress}`, { error: submissionError instanceof Error ? submissionError.message : String(submissionError) });
       }
     }
   }
@@ -221,7 +251,7 @@ async function heartbeatAndReport() {
   await gateway.heartbeat(agentId, config.EDGE_AGENT_VERSION, config.PUBLIC_MEDIA_GATEWAY_URL);
   if (Date.now() - lastCameraConfigSyncAt >= config.CAMERA_CONFIG_REFRESH_MS) {
     await syncCameraHeartbeatConfig().catch((error) => {
-      console.error("Camera monitoring configuration refresh failed:", error instanceof Error ? error.message : error);
+      logger.error("Camera monitoring configuration refresh failed", { error: error instanceof Error ? error.message : String(error) });
     });
   }
   const observedAt = new Date().toISOString();
@@ -318,3 +348,29 @@ async function collectRecorderReports(observedAt: string, includeArchive: boolea
     recorder, observedAt, probe: await probeRecorder(recorder, config.RECORDER_PROBE_TIMEOUT_MS, { includeArchive }),
   })));
 }
+
+function prepareRuntimeOrExit(input: string[]) {
+  try { return prepareEdgeRuntime(input); }
+  catch (error) {
+    process.stderr.write(`Edge agent startup failed: ${error instanceof Error ? error.message : String(error)}\n`);
+    process.exit(2);
+  }
+}
+
+function loadConfigOrExit() {
+  try { return loadEdgeConfig(); }
+  catch (error) {
+    const details = error instanceof Error ? error.message : String(error);
+    logger.error("Configuration is invalid", { configPath: runtime.configPath, error: details });
+    process.stderr.write(`Edge-agent configuration is invalid (${runtime.configPath ?? "no configuration file found"}).\n${details}\n`);
+    process.exit(2);
+  }
+}
+}
+
+void main().catch((error) => {
+  const message = error instanceof Error ? error.message : String(error);
+  logger.error("Edge agent stopped after an unrecoverable startup error", { error: message });
+  process.stderr.write(`Edge agent failed to start: ${message}\n`);
+  process.exitCode = 1;
+});

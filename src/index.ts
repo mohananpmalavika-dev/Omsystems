@@ -14,6 +14,9 @@ const app = await buildApp({
   store,
   authMode: config.AUTH_MODE,
   maxInFlightRequests: config.MAX_IN_FLIGHT_REQUESTS,
+  ...(config.CONTROL_PLANE_PUBLIC_URL
+    ? { controlPlanePublicUrl: config.CONTROL_PLANE_PUBLIC_URL }
+    : {}),
   mediaGatewaySharedKey: config.MEDIA_GATEWAY_SHARED_KEY,
   ...(config.RECORDING_ENGINE_URL && config.RECORDING_ENGINE_SHARED_KEY ? {
     recordingEngineUrl: config.RECORDING_ENGINE_URL,

@@ -70,7 +70,7 @@ export class CameraHeartbeatService {
     private readonly apiEndpoint: string,
     private readonly branchId: string,
     private readonly edgeAgentId: string,
-    private readonly developmentUserId: string,
+    private readonly developmentUserId: string | undefined,
     private readonly ffprobePath = "ffprobe",
     private readonly ffmpegPath = "ffmpeg",
     private readonly edgeBridgeSharedKey?: string,
@@ -197,7 +197,7 @@ export class CameraHeartbeatService {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "x-user-id": this.developmentUserId,
+        ...(this.developmentUserId ? { "x-user-id": this.developmentUserId } : {}),
         ...(this.edgeBridgeSharedKey ? { "x-edge-bridge-key": this.edgeBridgeSharedKey } : {}),
       },
       body: JSON.stringify({
@@ -241,7 +241,7 @@ export function initializeCameraHeartbeat(
   apiEndpoint: string,
   branchId: string,
   edgeAgentId: string,
-  developmentUserId: string,
+  developmentUserId: string | undefined,
   ffprobePath = "ffprobe",
   ffmpegPath = "ffmpeg",
   edgeBridgeSharedKey?: string,

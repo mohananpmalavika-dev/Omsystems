@@ -63,6 +63,23 @@ describe("dashboard control-plane BFF", () => {
     );
   });
 
+  it("returns an empty digital twin branch list when the upstream route is missing", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () =>
+      new Response(null, {
+        status: 404,
+        headers: { "content-type": "application/json" },
+      }),
+    ));
+
+    const response = await GET(
+      new NextRequest("https://sentinel.example/api/control/v1/digital-twin/branches"),
+      { params: Promise.resolve({ path: ["v1", "digital-twin", "branches"] }) },
+    );
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual([]);
+  });
+
   it("keeps login tokens in HttpOnly cookies and removes them from JSON", async () => {
     vi.stubGlobal("fetch", vi.fn(async () =>
       Response.json({

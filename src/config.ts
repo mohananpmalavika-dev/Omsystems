@@ -26,6 +26,10 @@ const configSchema = z.object({
     (value) => value === "" ? undefined : value,
     z.string().min(32).optional(),
   ),
+  CONTROL_PLANE_PUBLIC_URL: z.preprocess(
+    (value) => value === "" ? undefined : value,
+    z.string().url().optional(),
+  ),
   ANALYTICS_ENGINE_URL: z.preprocess(
     (value) => value === "" ? undefined : value,
     z.string().url().optional(),

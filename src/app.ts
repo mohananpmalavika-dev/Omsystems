@@ -100,6 +100,7 @@ import { RuntimeGuard } from "./platform/runtime-guard.js";
 declare module "fastify" {
   interface FastifyRequest {
     currentUser: Awaited<ReturnType<ControlPlaneStore["getUser"]>> & {};
+    edgeAgentAuthenticated: boolean;
   }
 }
 
@@ -344,6 +345,8 @@ export async function buildApp(options?: {
   analyticsEngineUrl?: string;
   authMode?: "development" | "session" | "oidc";
   recordingRoot?: string;
+  controlPlanePublicUrl?: string;
+  edgeAgentArtifactRoot?: string;
   enableExportWorker?: boolean;
   alertWorkerKey?: string;
   alertNotificationSender?: AlertNotificationSender;
@@ -443,6 +446,7 @@ export async function buildApp(options?: {
   await app.register(cors, { origin: false });
 
   app.decorateRequest("currentUser");
+  app.decorateRequest("edgeAgentAuthenticated", false);
   const extendedStore = hasExtendedInfrastructure(store) ? store : undefined;
   const sessionAuth = extendedStore
     ? createAuthMiddleware({
@@ -465,14 +469,18 @@ export async function buildApp(options?: {
       || request.url.startsWith("/internal/reports/")
     ) return;
 
-    if (
-      options?.edgeBridgeSharedKey &&
-      !secureEqualHeader(
-        request.headers["x-edge-bridge-key"],
-        options.edgeBridgeSharedKey,
-      )
-    ) {
+    const edgeAgentIngressRoute = isEdgeAgentIngressRoute(request.method, request.url);
+    const edgeBridgeHeader = request.headers["x-edge-bridge-key"];
+    const edgeBridgeAuthenticated = Boolean(options?.edgeBridgeSharedKey) && secureEqualHeader(
+      edgeBridgeHeader,
+      options!.edgeBridgeSharedKey!,
+    );
+    if (edgeAgentIngressRoute && options?.edgeBridgeSharedKey && edgeBridgeHeader && !edgeBridgeAuthenticated) {
       return reply.code(401).send({ error: "invalid_bridge_identity" });
+    }
+    if (edgeAgentIngressRoute && edgeBridgeAuthenticated) {
+      request.edgeAgentAuthenticated = true;
+      return;
     }
 
     if ((request.routeOptions.config as unknown as Record<string, unknown>)?.noAuth) {
@@ -796,7 +804,7 @@ export async function buildApp(options?: {
 
   app.post("/v1/branches/:branchId/cameras/discovered", async (request, reply) => {
     const { branchId } = branchParams.parse(request.params);
-    if (!(await requireAccess(request, reply, store, "device:configure", branchId))) return;
+    if (!request.edgeAgentAuthenticated && !(await requireAccess(request, reply, store, "device:configure", branchId))) return;
     const parsed = z.object({
       edgeAgentId: z.string().min(1),
       discoveryMethod: z.enum(["onvif-ws-discovery", "configured-ip-range", "manual-ip-registration", "csv-bulk-import", "nvr-dvr-channel-discovery", "vendor-api-discovery", "snmp-discovery", "edge-agent-reported-inventory"]).default("edge-agent-reported-inventory"),
@@ -831,6 +839,12 @@ export async function buildApp(options?: {
       profiles: z.array(cameraProfileSchema).min(1),
       capabilities: capabilitiesSchema,
     }).parse(request.body);
+    if (request.edgeAgentAuthenticated) {
+      const branchAgents = await store.listEdgeAgentsByBranch(branchId);
+      if (!branchAgents.some((agent) => agent.id === parsed.edgeAgentId)) {
+        return reply.code(403).send({ error: "edge_agent_branch_mismatch" });
+      }
+    }
     const discoveryInput: CameraDiscoveryInput = {
       edgeAgentId: parsed.edgeAgentId,
       discoveryMethod: parsed.discoveryMethod,
@@ -882,11 +896,18 @@ export async function buildApp(options?: {
       },
     };
     const discovery = await store.createDiscovery(branchId, discoveryInput);
-    await audit(request, store, "camera.discovered", branchId, "success", {
-      discoveryId: discovery.id,
-      vendor: discovery.vendor,
-      model: discovery.model,
-    });
+    if (request.edgeAgentAuthenticated) {
+      const branch = await store.getNode(branchId);
+      await store.writeAudit({
+        tenantId: branch!.tenantId, actorUserId: null, action: "camera.discovered",
+        resourceNodeId: branchId, outcome: "success", sourceIp: request.ip,
+        details: { discoveryId: discovery.id, edgeAgentId: discovery.edgeAgentId, vendor: discovery.vendor, model: discovery.model },
+      });
+    } else {
+      await audit(request, store, "camera.discovered", branchId, "success", {
+        discoveryId: discovery.id, vendor: discovery.vendor, model: discovery.model,
+      });
+    }
     return reply.code(202).send(discovery);
   });
 
@@ -1656,7 +1677,14 @@ export async function buildApp(options?: {
   });
 
   await registerDeviceInventoryRoutes(app, store);
-  await registerEdgeAgentPackageRoutes(app, store);
+  await registerEdgeAgentPackageRoutes(app, store, {
+    controlPlanePublicUrl: options?.controlPlanePublicUrl ?? process.env.CONTROL_PLANE_PUBLIC_URL,
+    edgeBridgeSharedKey: options?.edgeBridgeSharedKey ?? process.env.EDGE_BRIDGE_SHARED_KEY,
+    artifactRoot: options?.edgeAgentArtifactRoot,
+    developmentUserId: (options?.authMode ?? "development") === "development"
+      ? "user-global-admin"
+      : undefined,
+  });
   await registerCameraDiscoveryRoutes(app, store);
   await registerCommandCenterRoutes(app, store);
   await registerDigitalTwinRoutes(app, store, {
@@ -1869,6 +1897,16 @@ function secureEqual(left: string, right: string) {
 
 function secureEqualHeader(value: string | string[] | undefined, expected: string) {
   return typeof value === "string" && secureEqual(value, expected);
+}
+
+function isEdgeAgentIngressRoute(method: string, url: string) {
+  const path = url.split("?", 1)[0] ?? url;
+  if (method === "POST" && /^\/v1\/edge-agents\/[^/]+\/heartbeat$/.test(path)) return true;
+  if (method === "GET" && /^\/v1\/edge-agents\/[^/]+\/cameras\/monitoring$/.test(path)) return true;
+  if (method === "GET" && /^\/v1\/edge-agents\/[^/]+\/scan-jobs\/next$/.test(path)) return true;
+  if (method === "POST" && /^\/v1\/edge-agents\/[^/]+\/scan-jobs\/[^/]+\/complete$/.test(path)) return true;
+  if (method === "POST" && /^\/v1\/edge-agents\/[^/]+\/(?:telemetry|recorder-hdd|recorder-archive)$/.test(path)) return true;
+  return method === "POST" && /^\/v1\/branches\/[^/]+\/cameras\/discovered$/.test(path);
 }
 
 function safeCamera(camera: Camera) {
