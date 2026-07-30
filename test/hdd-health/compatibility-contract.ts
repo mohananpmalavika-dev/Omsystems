@@ -1,4 +1,5 @@
 import type { RecorderProbeResult } from "../../edge-agent/src/monitoring/recorder-probe.js";
+import { normalizeRecorderHddStatus } from "../../src/operational-health/disk-health.js";
 
 export type RecorderVendor = "hikvision" | "dahua" | "cp-plus" | "onvif";
 
@@ -14,10 +15,12 @@ export interface RecorderCompatibilityTarget {
   expectedFirmware: string;
   expectedDisks: number;
   expectedChannels: number;
+  expectedRaidLevel: string;
+  requireWriteVerification: boolean;
 }
 
 export interface CompatibilityCheck {
-  name: "configuration" | "reachability" | "model" | "firmware" | "disk_inventory" | "disk_fields" | "recording_evidence" | "channel_inventory" | "channel_connectivity" | "last_recorded_media";
+  name: "configuration" | "reachability" | "model" | "firmware" | "disk_inventory" | "disk_fields" | "disk_slots" | "smart_telemetry" | "capacity" | "raid_health" | "write_verification" | "recording_evidence" | "channel_inventory" | "channel_connectivity" | "last_recorded_media";
   passed: boolean;
   details: string;
 }
@@ -33,6 +36,9 @@ export function verifyRecorderCompatibility(
   const configuredFirmware = typeof target.expectedFirmware === "string" ? target.expectedFirmware.trim() : "";
   const expectedDisks = Number.isInteger(target.expectedDisks) ? target.expectedDisks : 0;
   const expectedChannels = Number.isInteger(target.expectedChannels) ? target.expectedChannels : 0;
+  const expectedRaidLevel = typeof target.expectedRaidLevel === "string" ? target.expectedRaidLevel.trim() : "";
+  const writeRequirementConfigured = typeof target.requireWriteVerification === "boolean";
+  const disks = normalizeRecorderHddStatus(probe.hddStatus);
   const channelHealth = probe.channelHealth ?? [];
   const model = stringMetric(probe, "model");
   const firmware = stringMetric(probe, "firmwareVersion");
@@ -42,9 +48,10 @@ export function verifyRecorderCompatibility(
     name: "configuration",
     passed: Boolean(configuredModel) && Boolean(configuredFirmware)
       && expectedDisks > 0 && expectedChannels > 0
+      && Boolean(expectedRaidLevel) && writeRequirementConfigured
       && !PLACEHOLDER.test(configuredModel)
       && !PLACEHOLDER.test(configuredFirmware),
-    details: "model, exact firmware, expected disk count, and expected channel count must be configured without placeholders",
+    details: "model, exact firmware, disk/channel counts, RAID expectation, and write-verification policy must be configured without placeholders",
   });
   checks.push({
     name: "reachability",
@@ -76,6 +83,36 @@ export function verifyRecorderCompatibility(
     details: probe.hddStatus.length === 0
       ? "storage endpoint returned no disks"
       : "each disk must include an identifier and a vendor-reported state",
+  });
+  checks.push({
+    name: "disk_slots",
+    passed: disks.length === expectedDisks && disks.every((disk) => disk.detected && disk.slotStatus === "present"),
+    details: `${disks.filter((disk) => disk.detected && disk.slotStatus === "present").length}/${expectedDisks} expected slot(s) detected and initialized`,
+  });
+  checks.push({
+    name: "smart_telemetry",
+    passed: disks.length > 0 && disks.every((disk) => disk.smartAvailable),
+    details: `${disks.filter((disk) => disk.smartAvailable).length}/${disks.length} disk(s) expose drive-level SMART evidence`,
+  });
+  checks.push({
+    name: "capacity",
+    passed: disks.length > 0 && disks.every((disk) => disk.capacityBytes > 0 && disk.availableBytes >= 0),
+    details: `${disks.filter((disk) => disk.capacityBytes > 0).length}/${disks.length} disk(s) report total and available capacity`,
+  });
+  checks.push({
+    name: "raid_health",
+    passed: disks.length > 0 && disks.every((disk) => disk.raidStatus !== "unknown"
+      && (normalizeIdentifier(expectedRaidLevel) === "not configured" || normalizeIdentifier(expectedRaidLevel) === "not_configured"
+        ? disk.raidStatus === "not_configured"
+        : sameIdentifier(disk.raidLevel, expectedRaidLevel))),
+    details: `expected ${expectedRaidLevel}; observed ${[...new Set(disks.map((disk) => `${disk.raidLevel || "no level"}/${disk.raidStatus}`))].join(", ") || "unavailable"}`,
+  });
+  checks.push({
+    name: "write_verification",
+    passed: !target.requireWriteVerification || (disks.length > 0 && disks.every((disk) => disk.writeVerification === "verified")),
+    details: target.requireWriteVerification
+      ? `${disks.filter((disk) => disk.writeVerification === "verified").length}/${disks.length} disk(s) have an explicit successful write probe`
+      : "disk-specific write verification explicitly waived for this target",
   });
   const recordingStatus = stringMetric(probe, "recordingStatus");
   const recordingSource = stringMetric(probe, "recordingStatusSource");

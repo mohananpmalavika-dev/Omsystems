@@ -32,13 +32,18 @@ export function HddFleetWidget({ detailed = false, autoRefresh = true, refreshTo
   useOperationalHealthStream(useCallback(() => { void load(); }, [load]), refreshToken === undefined);
 
   const summary = summarizeHddFleet(disks);
-  const atRisk = rankAtRiskDisks(disks, detailed ? disks.length : 6);
+  const visibleDisks = detailed ? disks : rankAtRiskDisks(disks, 6);
   const stats = [
     ["Total HDDs", summary.total, "border-slate-200 bg-slate-50 text-slate-800"],
-    ["Healthy", summary.healthy, "border-emerald-200 bg-emerald-50 text-emerald-800"],
-    ["Warning", summary.warning, "border-amber-200 bg-amber-50 text-amber-800"],
-    ["Critical", summary.critical, "border-red-200 bg-red-50 text-red-800"],
+    ["Detected", summary.detected, "border-emerald-200 bg-emerald-50 text-emerald-800"],
     ["Missing", summary.missing, "border-fuchsia-200 bg-fuchsia-50 text-fuchsia-800"],
+    ["SMART healthy", summary.smartHealthy, "border-emerald-200 bg-emerald-50 text-emerald-800"],
+    ["SMART unavailable", summary.smartUnavailable, "border-slate-200 bg-slate-50 text-slate-800"],
+    ["RAID at risk", summary.raidAtRisk, "border-orange-200 bg-orange-50 text-orange-800"],
+    ["Write verified", summary.writeVerified, "border-cyan-200 bg-cyan-50 text-cyan-800"],
+    ["Write failed", summary.writeFailed, "border-red-200 bg-red-50 text-red-800"],
+    ["Write unverified", summary.writeUnverified, "border-amber-200 bg-amber-50 text-amber-800"],
+    ["Capacity critical", summary.capacityCritical, "border-red-200 bg-red-50 text-red-800"],
     ["Branches at risk", summary.branchesAtRisk, "border-orange-200 bg-orange-50 text-orange-800"],
   ] as const;
 
@@ -56,7 +61,7 @@ export function HddFleetWidget({ detailed = false, autoRefresh = true, refreshTo
         </button>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-6">
         {stats.map(([label, value, color]) => (
           <div key={label} className={`rounded-lg border p-3 ${color}`}>
             <p className="text-xs font-medium uppercase tracking-wide">{label}</p>
@@ -71,13 +76,13 @@ export function HddFleetWidget({ detailed = false, autoRefresh = true, refreshTo
           No HDD telemetry received. Configure the recorder adapter to submit its HDD status payload.
         </div>
       ) : null}
-      {atRisk.length > 0 ? (
+      {visibleDisks.length > 0 ? (
         <div className="mt-5">
           <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-gray-900">
-            <AlertTriangle size={16} className="text-red-600" /> Highest-risk disks
+            <AlertTriangle size={16} className="text-red-600" /> {detailed ? "Disk-slot evidence" : "Highest-risk disks"}
           </h3>
           <div className="grid gap-4 lg:grid-cols-2 2xl:grid-cols-3">
-            {atRisk.map((disk) => <DiskHealthCard key={disk.id} disk={disk} />)}
+            {visibleDisks.map((disk) => <DiskHealthCard key={disk.id} disk={disk} />)}
           </div>
         </div>
       ) : null}

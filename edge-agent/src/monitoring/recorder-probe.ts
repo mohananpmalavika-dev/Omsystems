@@ -682,9 +682,46 @@ function dahuaFoundResults(value: string | undefined) {
 function result(config: RecorderConfig, reachable: boolean, status: string, started: number, extra: Record<string, string | number | boolean | null>, hddStatus: Array<Record<string, unknown>>, reasonCodes: string[], archiveEvidence: ArchiveRetentionEvidence[] = [], channelHealth: RecorderChannelHealth[] = []): RecorderProbeResult {
   return { metrics: { name: config.name, deviceType: config.deviceType, vendor: config.vendor, model: config.model ?? "Unknown", modelSource: "configured", ipAddress: config.host, reachable, status, latencyMs: Math.round((performance.now() - started) * 100) / 100, ...extra }, hddStatus, reasonCodes, archiveEvidence, channelHealth };
 }
-function parseHikvisionDisks(xml: string) { return [...xml.matchAll(/<hdd>([\s\S]*?)<\/hdd>/gi)].map((match, index) => ({ diskNo: tag(match[1]!, "id") ?? index + 1, devicePath: tag(match[1]!, "name") ?? `HDD ${index + 1}`, capacity: tag(match[1]!, "capacity"), freeSpace: tag(match[1]!, "freeSpace"), state: tag(match[1]!, "status"), temperature: tag(match[1]!, "temperature") })); }
-function parseCgiDisks(text: string) { const grouped = new Map<string, Record<string, unknown>>(); for (const line of text.split(/\r?\n/)) { const match = line.match(/(?:Storage|Disk|HDD)(?:\[|\.)(\d+)\]?\.([^=]+)=(.*)$/i); if (!match) continue; const item = grouped.get(match[1]!) ?? { diskNo: Number(match[1]) + 1 }; item[match[2]!] = match[3]!.trim(); grouped.set(match[1]!, item); } return [...grouped.values()]; }
+function parseHikvisionDisks(xml: string) {
+  const raidStatus = firstTag(xml, ["raidStatus", "arrayStatus", "raidState"]);
+  const raidLevel = firstTag(xml, ["raidLevel", "arrayLevel"]);
+  return [...xml.matchAll(/<hdd>([\s\S]*?)<\/hdd>/gi)].map((match, index) => {
+    const body = match[1]!;
+    return {
+      diskNo: tag(body, "id") ?? index + 1,
+      devicePath: tag(body, "name") ?? `HDD ${index + 1}`,
+      serialNumber: firstTag(body, ["serialNumber", "serialNo", "sn"]),
+      model: firstTag(body, ["model", "modelName"]),
+      capacity: tag(body, "capacity"),
+      freeSpace: tag(body, "freeSpace"),
+      state: tag(body, "status"),
+      temperature: tag(body, "temperature"),
+      smartStatus: firstTag(body, ["smartStatus", "smartHealth"]),
+      reallocatedSectors: tag(body, "reallocatedSectors"),
+      pendingSectors: tag(body, "pendingSectors"),
+      uncorrectableSectors: tag(body, "uncorrectableSectors"),
+      raidStatus: firstTag(body, ["raidStatus", "arrayStatus"]) ?? raidStatus,
+      raidLevel: firstTag(body, ["raidLevel", "arrayLevel"]) ?? raidLevel,
+      writeVerification: firstTag(body, ["writeVerification", "writeStatus", "recordingWriteStatus"]),
+      writeVerifiedAt: firstTag(body, ["writeVerifiedAt", "lastWriteTime"]),
+    };
+  });
+}
+function parseCgiDisks(text: string) {
+  const grouped = new Map<string, Record<string, unknown>>();
+  const sharedRaidStatus = firstKey(text, ["Raid.Status", "RAID.State", "Storage.RaidStatus"]);
+  const sharedRaidLevel = firstKey(text, ["Raid.Level", "RAID.Level", "Storage.RaidLevel"]);
+  for (const line of text.split(/\r?\n/)) {
+    const match = line.match(/(?:Storage|Disk|HDD)(?:\[|\.)(\d+)\]?\.([^=]+)=(.*)$/i);
+    if (!match) continue;
+    const item = grouped.get(match[1]!) ?? { diskNo: Number(match[1]) + 1 };
+    item[match[2]!] = match[3]!.trim();
+    grouped.set(match[1]!, item);
+  }
+  return [...grouped.values()].map((item) => ({ ...item, raidStatus: item.raidStatus ?? sharedRaidStatus, raidLevel: item.raidLevel ?? sharedRaidLevel }));
+}
 function tag(xml: string, name: string) { return xml.match(new RegExp(`<(?:[^:>]+:)?${name}>([^<]+)<\\/(?:[^:>]+:)?${name}>`, "i"))?.[1]; }
+function firstTag(xml: string, names: string[]) { return names.map((name) => tag(xml, name)).find((value): value is string => Boolean(value)); }
 function key(text: string, name: string) { return text.match(new RegExp(`(?:^|\\n)${name}=([^\\r\\n]+)`, "i"))?.[1]?.trim(); }
 function firstKey(text: string, names: string[]) { return names.map((name) => key(text, name)).find((value): value is string => Boolean(value)); }
 function number(value: string | undefined) { const parsed = Number(value); return Number.isFinite(parsed) ? parsed : null; }

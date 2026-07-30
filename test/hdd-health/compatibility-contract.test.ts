@@ -9,6 +9,8 @@ const target = {
   expectedFirmware: "V5.7.18 build 240101",
   expectedDisks: 2,
   expectedChannels: 2,
+  expectedRaidLevel: "RAID1",
+  requireWriteVerification: true,
 };
 
 const recordingEvidence = {
@@ -30,7 +32,10 @@ describe("exact recorder HDD compatibility contract", () => {
         reachable: true, status: "online", model: "DS-7616NI-K2", modelSource: "vendor-system",
         firmwareVersion: "V5.7.18 build 240101",
       },
-      hddStatus: [{ diskNo: 1, state: "normal" }, { diskNo: 2, state: "normal" }],
+      hddStatus: [
+        { diskNo: 1, state: "normal", capacity: "4TB", freeSpace: "1TB", smartStatus: "healthy", raidStatus: "healthy", raidLevel: "RAID1", writeVerified: true },
+        { diskNo: 2, state: "normal", capacity: "4TB", freeSpace: "1TB", smartStatus: "healthy", raidStatus: "healthy", raidLevel: "RAID1", writeVerified: true },
+      ],
       reasonCodes: [],
       archiveEvidence: [],
       channelHealth: recordingEvidence.channelHealth,

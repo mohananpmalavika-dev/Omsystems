@@ -4,7 +4,10 @@
 
 export type HealthStatus = 'healthy' | 'warning' | 'critical' | 'unknown';
 export type RecordingStatus = 'healthy' | 'compliant' | 'breach' | 'unknown' | 'at_risk' | 'not_recording' | 'recording_gap' | 'storage_blocked' | 'stream_unavailable' | 'policy_disabled';
-export type DiskStatus = 'healthy' | 'warning' | 'degraded' | 'failure_predicted' | 'failed' | 'missing';
+export type DiskStatus = 'healthy' | 'warning' | 'degraded' | 'failure_predicted' | 'failed' | 'missing' | 'unknown';
+export type DiskSlotStatus = 'present' | 'missing' | 'uninitialized' | 'read_only' | 'failed' | 'unknown';
+export type DiskRaidStatus = 'healthy' | 'degraded' | 'rebuilding' | 'failed' | 'not_configured' | 'unknown';
+export type DiskWriteVerification = 'verified' | 'failed' | 'unverified';
 export type UPSStatus = 'online' | 'on_battery' | 'offline' | 'overload' | 'unknown';
 export type EdgeAgentStatus = 'online' | 'offline' | 'warning' | 'unknown';
 export type AlertSeverity = 'critical' | 'warning' | 'info';
@@ -218,13 +221,37 @@ export interface DiskHealth {
   devicePath: string;
   serialNumber: string;
   model: string;
+  detected: boolean;
+  slotStatus: DiskSlotStatus;
+  smartAvailable: boolean;
   smartStatus: DiskStatus;
   temperature: number;
   powerOnHours: number;
   reallocatedSectors: number;
   pendingSectors: number;
   uncorrectableSectors: number;
+  readErrors: number;
+  writeErrors: number;
+  capacityBytes: number;
+  availableBytes: number;
+  usedBytes: number;
+  usagePercent: number;
+  raidStatus: DiskRaidStatus;
+  raidLevel: string;
+  raidMemberCount: number;
+  raidFailedMemberCount: number;
+  raidRebuildPercent: number;
+  writeVerification: DiskWriteVerification;
+  writeVerifiedAt: string;
+  writeLatencyMs: number;
   failureProbability: number;
+  predictionBasis: 'historical_delta' | 'threshold_only' | 'unavailable';
+  sectorGrowth: number;
+  ioErrorGrowth: number;
+  replacementDetected: boolean;
+  previousSerialNumber: string;
+  operationalStatus: HealthStatus;
+  reasonCodes: string[];
   lastCheck: string;
 }
 

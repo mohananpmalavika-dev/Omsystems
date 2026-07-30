@@ -8,6 +8,8 @@ export interface SmartTelemetry {
   telemetrySource: 'real' | 'simulated';
   /** `smart` has drive attributes; `storage-status` is a recorder-reported disk state only. */
   telemetryCapability: 'smart' | 'storage-status' | 'unknown';
+  /** Recorder slot state is separate from drive-level SMART evidence. */
+  storageStatus?: 'present' | 'warning' | 'failed' | 'missing' | 'unknown';
   smartStatus: 'healthy' | 'warning' | 'critical' | 'unknown';
   model?: string;
   serialNumber?: string;
@@ -89,6 +91,7 @@ async function collectVendorTelemetry(config: SmartCollectorConfig): Promise<Sma
         devicePath: config.devicePath ?? baseUrl,
         telemetrySource: 'real',
         telemetryCapability: parsed.telemetryCapability,
+        storageStatus: parsed.storageStatus,
         smartStatus: parsed.smartStatus,
         temperature: parsed.temperature,
         reallocatedSectors: parsed.reallocatedSectors,
@@ -113,6 +116,7 @@ async function collectVendorTelemetry(config: SmartCollectorConfig): Promise<Sma
         devicePath: config.devicePath ?? baseUrl,
         telemetrySource: 'real',
         telemetryCapability: parsed.telemetryCapability,
+        storageStatus: parsed.storageStatus,
         smartStatus: parsed.smartStatus,
         temperature: parsed.temperature,
         reallocatedSectors: parsed.reallocatedSectors,
@@ -127,7 +131,7 @@ async function collectVendorTelemetry(config: SmartCollectorConfig): Promise<Sma
   throw new Error('Vendor endpoint did not yield parseable storage telemetry');
 }
 
-export function parseHikvisionStorageXml(xml: string): { telemetryCapability: SmartTelemetry['telemetryCapability']; smartStatus: SmartTelemetry['smartStatus']; temperature?: number; reallocatedSectors?: number; pendingSectors?: number; uncorrectableSectors?: number; failureProbability?: number } | null {
+export function parseHikvisionStorageXml(xml: string): { telemetryCapability: SmartTelemetry['telemetryCapability']; storageStatus: NonNullable<SmartTelemetry['storageStatus']>; smartStatus: SmartTelemetry['smartStatus']; temperature?: number; reallocatedSectors?: number; pendingSectors?: number; uncorrectableSectors?: number; failureProbability?: number } | null {
   const temperature = parseInt(xml.match(/<temperature>(-?\d+)<\/temperature>/i)?.[1] ?? '', 10);
   const reallocated = parseInt(xml.match(/<reallocatedSectors>(\d+)<\/reallocatedSectors>/i)?.[1] ?? '', 10);
   const pending = parseInt(xml.match(/<pendingSectors>(\d+)<\/pendingSectors>/i)?.[1] ?? '', 10);
@@ -139,16 +143,20 @@ export function parseHikvisionStorageXml(xml: string): { telemetryCapability: Sm
   }
 
   const hasSmartAttributes = [temperature, reallocated, pending, uncorrectable].some((value) => Number.isFinite(value));
-  let smartStatus: SmartTelemetry['smartStatus'] = 'healthy';
-  if (/(?:warning|degraded|abnormal)/.test(status ?? '') || reallocated > 0 || pending > 0 || uncorrectable > 0 || temperature > 55) {
+  let smartStatus: SmartTelemetry['smartStatus'] = hasSmartAttributes ? 'healthy' : 'unknown';
+  if (hasSmartAttributes && (/(?:warning|degraded|abnormal)/.test(status ?? '') || reallocated > 0 || pending > 0 || uncorrectable > 0 || temperature > 55)) {
     smartStatus = 'warning';
   }
-  if (/(?:critical|fail|error|fault|bad)/.test(status ?? '') || temperature > 65 || reallocated > 20 || pending > 5 || uncorrectable > 5) {
+  if (hasSmartAttributes && (/(?:critical|fail|error|fault|bad)/.test(status ?? '') || temperature > 65 || reallocated > 20 || pending > 5 || uncorrectable > 5)) {
     smartStatus = 'critical';
   }
 
   return {
     telemetryCapability: hasSmartAttributes ? 'smart' : 'storage-status',
+    storageStatus: /missing|absent|not.?present/i.test(status ?? '') ? 'missing'
+      : /critical|fail|error|fault|bad/i.test(status ?? '') ? 'failed'
+        : /warning|degraded|abnormal/i.test(status ?? '') ? 'warning'
+          : status ? 'present' : 'unknown',
     smartStatus,
     temperature: Number.isFinite(temperature) ? temperature : undefined,
     reallocatedSectors: Number.isFinite(reallocated) ? reallocated : undefined,
@@ -160,7 +168,7 @@ export function parseHikvisionStorageXml(xml: string): { telemetryCapability: Sm
   };
 }
 
-export function parseDahuaStorageText(text: string): { telemetryCapability: SmartTelemetry['telemetryCapability']; smartStatus: SmartTelemetry['smartStatus']; temperature?: number; reallocatedSectors?: number; pendingSectors?: number; uncorrectableSectors?: number; failureProbability?: number } | null {
+export function parseDahuaStorageText(text: string): { telemetryCapability: SmartTelemetry['telemetryCapability']; storageStatus: NonNullable<SmartTelemetry['storageStatus']>; smartStatus: SmartTelemetry['smartStatus']; temperature?: number; reallocatedSectors?: number; pendingSectors?: number; uncorrectableSectors?: number; failureProbability?: number } | null {
   const temperature = parseInt(text.match(/temperature\s*[:=]\s*(-?\d+)/i)?.[1] ?? '', 10);
   const reallocated = parseInt(text.match(/reallocated\s*[:=]\s*(\d+)/i)?.[1] ?? '', 10);
   const pending = parseInt(text.match(/pending\s*[:=]\s*(\d+)/i)?.[1] ?? '', 10);
@@ -173,16 +181,20 @@ export function parseDahuaStorageText(text: string): { telemetryCapability: Smar
     return null;
   }
 
-  let smartStatus: SmartTelemetry['smartStatus'] = 'healthy';
-  if (diskStates.some((state) => /warning|degraded|abnormal/.test(state)) || reallocated > 0 || pending > 0 || uncorrectable > 0 || temperature > 55) {
+  let smartStatus: SmartTelemetry['smartStatus'] = hasSmartAttributes ? 'healthy' : 'unknown';
+  if (hasSmartAttributes && (diskStates.some((state) => /warning|degraded|abnormal/.test(state)) || reallocated > 0 || pending > 0 || uncorrectable > 0 || temperature > 55)) {
     smartStatus = 'warning';
   }
-  if (diskStates.some((state) => /critical|fail|error|fault|bad|missing/.test(state)) || temperature > 65 || reallocated > 20 || pending > 5 || uncorrectable > 5) {
+  if (hasSmartAttributes && (diskStates.some((state) => /critical|fail|error|fault|bad|missing/.test(state)) || temperature > 65 || reallocated > 20 || pending > 5 || uncorrectable > 5)) {
     smartStatus = 'critical';
   }
 
   return {
     telemetryCapability: hasSmartAttributes ? 'smart' : 'storage-status',
+    storageStatus: diskStates.some((state) => /missing|absent|not.?present/.test(state)) ? 'missing'
+      : diskStates.some((state) => /critical|fail|error|fault|bad/.test(state)) ? 'failed'
+        : diskStates.some((state) => /warning|degraded|abnormal/.test(state)) ? 'warning'
+          : diskStates.length ? 'present' : 'unknown',
     smartStatus,
     temperature: Number.isFinite(temperature) ? temperature : undefined,
     reallocatedSectors: Number.isFinite(reallocated) ? reallocated : undefined,

@@ -355,7 +355,7 @@ function byteValue(input: Record<string, unknown>, names: readonly string[]) {
   const text = String(value ?? "").trim();
   const parsed = Number.parseFloat(text.replace(/,/g, ""));
   if (!Number.isFinite(parsed) || parsed <= 0) return 0;
-  const unit = text.match(/\b(kib|mib|gib|tib|pib|kb|mb|gb|tb|pb|bytes?|b)\b/i)?.[1]?.toLowerCase();
+  const unit = text.match(/(kib|mib|gib|tib|pib|kb|mb|gb|tb|pb|bytes?|b)\s*$/i)?.[1]?.toLowerCase();
   const powers: Record<string, number> = { b: 0, byte: 0, bytes: 0, kb: 1, mb: 2, gb: 3, tb: 4, pb: 5, kib: 1, mib: 2, gib: 3, tib: 4, pib: 5 };
   return unit ? Math.round(parsed * Math.pow(unit.endsWith("ib") ? 1024 : 1000, powers[unit] ?? 0)) : parsed;
 }

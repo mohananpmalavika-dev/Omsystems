@@ -34,20 +34,20 @@ describe('parseSmartctlJson', () => {
     expect(telemetry.smartStatus).toBe('warning');
   });
 
-  it('keeps a healthy Dahua or CP PLUS disk-state response as real storage telemetry', () => {
+  it('keeps recorder slot state separate when drive-level SMART is unavailable', () => {
     const telemetry = parseDahuaStorageText(
       'Storage[0].Name=Disk1\nStorage[0].State=Normal\nStorage[1].Name=Disk2\nStorage[1].State=Normal',
     );
 
-    expect(telemetry).toMatchObject({ telemetryCapability: 'storage-status', smartStatus: 'healthy' });
+    expect(telemetry).toMatchObject({ telemetryCapability: 'storage-status', storageStatus: 'present', smartStatus: 'unknown' });
   });
 
-  it('does not turn a vendor-reported failed disk into healthy telemetry', () => {
+  it('reports vendor slot failures without claiming they are SMART results', () => {
     expect(parseDahuaStorageText('Storage[0].State=Error')).toMatchObject({
-      telemetryCapability: 'storage-status', smartStatus: 'critical',
+      telemetryCapability: 'storage-status', storageStatus: 'failed', smartStatus: 'unknown',
     });
     expect(parseHikvisionStorageXml('<hdd><status>error</status></hdd>')).toMatchObject({
-      telemetryCapability: 'storage-status', smartStatus: 'critical',
+      telemetryCapability: 'storage-status', storageStatus: 'failed', smartStatus: 'unknown',
     });
   });
 });

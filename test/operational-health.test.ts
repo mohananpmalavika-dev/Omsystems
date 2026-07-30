@@ -194,9 +194,10 @@ describe("Phase 1 operational health", () => {
     expect(disks.statusCode).toBe(200);
     expect(disks.json().data).toHaveLength(2);
     expect(disks.json().data[0]).toMatchObject({
-      branchId: "branch-blr-001", smartStatus: "failed", serialNumber: "BAD-001",
+      branchId: "branch-blr-001", detected: true, slotStatus: "failed",
+      smartStatus: "unknown", smartAvailable: false, serialNumber: "BAD-001",
+      operationalStatus: "critical", writeVerification: "unverified",
     });
-    expect(disks.json().data[0].failureProbability).toBeGreaterThanOrEqual(80);
 
     const alerts = await app.inject({
       method: "GET", url: "/v1/operations/alerts?component=storage&severity=critical", headers: admin,

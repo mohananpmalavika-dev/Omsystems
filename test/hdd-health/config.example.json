@@ -12,6 +12,8 @@
       "password": "your_password_here",
       "expectedDisks": 2,
       "expectedChannels": 16,
+      "expectedRaidLevel": "not_configured",
+      "requireWriteVerification": true,
       "notes": "Main office recorder"
     },
     {
@@ -26,6 +28,8 @@
       "password": "your_password_here",
       "expectedDisks": 4,
       "expectedChannels": 16,
+      "expectedRaidLevel": "RAID5",
+      "requireWriteVerification": true,
       "notes": "Branch office recorder"
     },
     {
@@ -40,6 +44,8 @@
       "password": "your_password_here",
       "expectedDisks": 4,
       "expectedChannels": 16,
+      "expectedRaidLevel": "RAID5",
+      "requireWriteVerification": true,
       "notes": "Warehouse recorder"
     }
   ],
