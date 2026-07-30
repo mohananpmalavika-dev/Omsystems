@@ -32,12 +32,12 @@ interface FederatedServer {
   role: string;
   region: string;
   countryCode: string;
-  status: 'online' | 'degraded' | 'offline' | 'maintenance';
+  status: 'online' | 'degraded' | 'offline' | 'maintenance' | 'failover_active';
   healthScore: number;
   totalCameras: number;
   onlineCameras: number;
   totalBranches: number;
-  lastHeartbeat: string;
+  lastHeartbeat: string | null;
 }
 
 interface DashboardSummary {
@@ -53,6 +53,18 @@ interface DashboardSummary {
   usedStorageGb: number;
   avgHealthScore: number;
   lastHeartbeat: string;
+  failoverActiveServers: number;
+  totalCountries: number;
+  regions: Array<{
+    countryCode: string;
+    region: string;
+    servers: number;
+    onlineServers: number;
+    branches: number;
+    cameras: number;
+    onlineCameras: number;
+    healthScore: number;
+  }>;
 }
 
 interface AlertCorrelation {
@@ -72,6 +84,7 @@ export function GlobalCommandCenter() {
   const [correlations, setCorrelations] = useState<AlertCorrelation[]>([]);
   const [selectedRegion, setSelectedRegion] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     loadDashboardData();
@@ -81,24 +94,26 @@ export function GlobalCommandCenter() {
 
   const loadDashboardData = async () => {
     try {
-      // Load summary
-      const summaryRes = await fetch('/api/federation/dashboard');
-      const summaryData = await summaryRes.json();
+      const regionQuery = selectedRegion ? `?region=${encodeURIComponent(selectedRegion)}` : '';
+      const [summaryRes, serversRes, correlationsRes] = await Promise.all([
+        fetch('/api/control/v1/federation/dashboard', { cache: 'no-store' }),
+        fetch(`/api/control/v1/federation/servers${regionQuery}`, { cache: 'no-store' }),
+        fetch('/api/control/v1/federation/correlations?limit=10', { cache: 'no-store' }),
+      ]);
+      if (!summaryRes.ok || !serversRes.ok || !correlationsRes.ok) {
+        throw new Error('Federation control plane is unavailable');
+      }
+      const [summaryData, serversData, correlationsData] = await Promise.all([
+        summaryRes.json(), serversRes.json(), correlationsRes.json(),
+      ]);
       setSummary(summaryData);
-
-      // Load servers
-      const serversRes = await fetch(`/api/federation/servers${selectedRegion ? `?region=${selectedRegion}` : ''}`);
-      const serversData = await serversRes.json();
       setServers(serversData.data || []);
-
-      // Load correlations
-      const correlationsRes = await fetch('/api/federation/correlations?limit=10');
-      const correlationsData = await correlationsRes.json();
       setCorrelations(correlationsData.data || []);
-
-      setLoading(false);
-    } catch (error) {
-      console.error('Failed to load dashboard data:', error);
+      setError(null);
+    } catch (cause) {
+      console.error('Failed to load dashboard data:', cause);
+      setError(cause instanceof Error ? cause.message : 'Federation control plane is unavailable');
+    } finally {
       setLoading(false);
     }
   };
@@ -109,6 +124,7 @@ export function GlobalCommandCenter() {
       case 'degraded': return 'text-yellow-600 bg-yellow-50';
       case 'offline': return 'text-red-600 bg-red-50';
       case 'maintenance': return 'text-blue-600 bg-blue-50';
+      case 'failover_active': return 'text-purple-700 bg-purple-50';
       default: return 'text-gray-600 bg-gray-50';
     }
   };
@@ -138,9 +154,12 @@ export function GlobalCommandCenter() {
     );
   }
 
-  const storageUsagePercent = summary ? (summary.usedStorageGb / summary.totalStorageGb) * 100 : 0;
-  const cameraOnlinePercent = summary ? (summary.onlineCameras / summary.totalCameras) * 100 : 0;
-  const serverOnlinePercent = summary ? (summary.onlineServers / summary.totalServers) * 100 : 0;
+  const storageUsagePercent = percentage(summary?.usedStorageGb, summary?.totalStorageGb);
+  const cameraOnlinePercent = percentage(summary?.onlineCameras, summary?.totalCameras);
+  const serverOnlinePercent = percentage(
+    (summary?.onlineServers || 0) + (summary?.failoverActiveServers || 0),
+    summary?.totalServers,
+  );
 
   return (
     <div className="space-y-6 p-6">
@@ -164,6 +183,11 @@ export function GlobalCommandCenter() {
       </div>
 
       {/* Summary Cards */}
+      {error && (
+        <Card className="border-red-200 bg-red-50 p-4 text-sm text-red-800" role="alert">
+          {error}. Existing regional data remains visible while the dashboard retries.
+        </Card>
+      )}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Total Servers */}
         <Card className="p-6">
@@ -223,7 +247,7 @@ export function GlobalCommandCenter() {
               <p className="text-sm text-muted-foreground">Regional Coverage</p>
               <h3 className="text-2xl font-bold mt-1">{summary?.totalRegions || 0}</h3>
               <p className="text-sm text-muted-foreground mt-2">
-                {summary?.totalBranches || 0} branches
+                {summary?.totalBranches || 0} branches across {summary?.totalCountries || 0} countries
               </p>
             </div>
             <MapPin className="h-12 w-12 text-muted-foreground opacity-20" />
@@ -316,20 +340,35 @@ export function GlobalCommandCenter() {
             >
               All Regions
             </Button>
+            {summary?.regions.map((region) => (
+              <Button
+                key={`${region.countryCode}:${region.region}`}
+                variant={selectedRegion === region.region ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setSelectedRegion(region.region)}
+              >
+                {region.region} ({region.branches})
+              </Button>
+            ))}
           </div>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          {servers.length === 0 && (
+            <div className="col-span-full rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
+              No regional servers are registered for this scope.
+            </div>
+          )}
           {servers.map((server) => (
             <Card key={server.id} className="p-4 hover:shadow-md transition-shadow">
               <div className="flex items-start justify-between">
                 <div className="flex-1">
                   <div className="flex items-center gap-3">
                     <h3 className="font-semibold text-lg">{server.name}</h3>
-                    <Badge variant="outline" className={getStatusColor(server.status)}>
+                  <Badge variant="outline" className={getStatusColor(server.status)}>
                       {server.status === 'online' && <Wifi className="h-3 w-3 mr-1" />}
                       {server.status === 'offline' && <WifiOff className="h-3 w-3 mr-1" />}
-                      {server.status.toUpperCase()}
+                      {server.status.replaceAll('_', ' ').toUpperCase()}
                     </Badge>
                   </div>
                   
@@ -375,7 +414,7 @@ export function GlobalCommandCenter() {
 
               <div className="flex justify-between items-center mt-4 pt-4 border-t">
                 <span className="text-xs text-muted-foreground">
-                  Last seen: {new Date(server.lastHeartbeat).toLocaleTimeString()}
+                  Last seen: {server.lastHeartbeat ? new Date(server.lastHeartbeat).toLocaleString() : 'Awaiting first heartbeat'}
                 </span>
                 <div className="flex gap-2">
                   <Button variant="outline" size="sm">
@@ -389,4 +428,8 @@ export function GlobalCommandCenter() {
       </Card>
     </div>
   );
+}
+
+function percentage(value = 0, total = 0) {
+  return total > 0 ? Math.min(100, Math.max(0, (value / total) * 100)) : 0;
 }

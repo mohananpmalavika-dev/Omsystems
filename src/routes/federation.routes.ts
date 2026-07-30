@@ -3,6 +3,11 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 import type { ControlPlaneStore } from "../control-plane-store.js";
 import type { Action } from "../domain/models.js";
+import type {
+  FederationHeartbeatInput,
+  FederationSearchQuery,
+  RegisterFederatedServerInput,
+} from "../federation/types.js";
 import {
   EmptyFederationLocalSearchProvider,
   type FederationLocalSearchProvider,
@@ -115,7 +120,10 @@ export async function registerFederationRoutes(
 
   app.post("/v1/federation/register", async (request, reply) => {
     if (!(await requireFederationAccess(request, reply, store, "org:manage"))) return;
-    const body = registerBody.parse(request.body);
+    const body = registerBody.parse(request.body) as Omit<
+      RegisterFederatedServerInput,
+      "tenantId" | "createdBy" | "sharedSecretHash"
+    > & { sharedSecret: string };
     const server = await manager.register({
       ...body,
       tenantId: request.currentUser.tenantId,
@@ -130,7 +138,11 @@ export async function registerFederationRoutes(
     const secret = header(request, "x-federation-server-key");
     if (!externalId || !secret) return reply.code(401).send({ error: "invalid_federation_identity" });
     try {
-      return await manager.heartbeat(externalId, secret, heartbeatBody.parse(request.body));
+      return await manager.heartbeat(
+        externalId,
+        secret,
+        heartbeatBody.parse(request.body) as FederationHeartbeatInput,
+      );
     } catch (error) {
       if (error instanceof Error && error.message === "invalid_federation_identity") {
         return reply.code(401).send({ error: error.message });
@@ -149,7 +161,7 @@ export async function registerFederationRoutes(
 
   app.get("/v1/federation/search", async (request, reply) => {
     if (!(await requireFederationAccess(request, reply, store, "recording:view"))) return;
-    const query = searchQuery.parse(request.query);
+    const query = searchQuery.parse(request.query) as FederationSearchQuery;
     const result = await manager.search(request.currentUser.tenantId, query);
     await federationAudit(request, store, "federation.search", {
       type: query.type, term: query.term, searchedServers: result.searchedServers,
@@ -165,7 +177,7 @@ export async function registerFederationRoutes(
       return reply.code(401).send({ error: "invalid_federation_peer" });
     }
     const body = internalSearchBody.parse(request.body);
-    return { data: await localSearch.search(body.tenantId, body.query) };
+    return { data: await localSearch.search(body.tenantId!, body.query as FederationSearchQuery) };
   });
 
   app.get("/v1/federation/route/:resourceNodeId", async (request, reply) => {
@@ -185,7 +197,12 @@ export async function registerFederationRoutes(
       activeServerId: z.string().uuid(),
       eventType: z.enum(["manual", "planned"]).default("manual"),
       reason: z.string().trim().min(5).max(1000),
-    }).parse(request.body);
+    }).parse(request.body) as {
+      failedServerId: string;
+      activeServerId: string;
+      eventType: "manual" | "planned";
+      reason: string;
+    };
     try {
       const event = await manager.failover({
         ...body,
@@ -258,4 +275,3 @@ function csv(value: string | undefined) {
   const items = value?.split(",").map((item) => item.trim()).filter(Boolean);
   return items?.length ? [...new Set(items)] : undefined;
 }
-

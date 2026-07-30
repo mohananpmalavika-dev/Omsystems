@@ -49,7 +49,7 @@ export class RecordingFederationSearchProvider implements FederationLocalSearchP
         title: `Recording ${segment.startedAt}`,
         metadata: {
           endedAt: segment.endedAt,
-          durationSeconds: segment.durationSeconds,
+          durationSeconds: Math.max(0, (Date.parse(segment.endedAt) - Date.parse(segment.startedAt)) / 1000),
           status: segment.status,
         },
       }));
@@ -61,4 +61,3 @@ export class RecordingFederationSearchProvider implements FederationLocalSearchP
     return [];
   }
 }
-

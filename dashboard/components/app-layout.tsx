@@ -22,6 +22,7 @@ import {
   FileText,
   FileVideo2,
   Gauge,
+  Globe2,
   Grid2X2,
   Handshake,
   LayoutDashboard,
@@ -61,6 +62,7 @@ const navigation: Array<{ label: string; items: NavItem[] }> = [
     label: "Command",
     items: [
       { label: "Operations overview", href: "/", icon: LayoutDashboard },
+      { label: "Global command center", href: "/federation", icon: Globe2 },
       { label: "Executive dashboard", href: "/dashboards", icon: BarChart3 },
       { label: "Control room", href: "/control-room", icon: MonitorPlay },
       { label: "Alert command center", href: "/operations/alert-command-center", icon: Bell },
@@ -136,6 +138,7 @@ const navigation: Array<{ label: string; items: NavItem[] }> = [
 ];
 
 const pageMeta = [
+  { path: "/federation", section: "Command", title: "Global command center" },
   { path: "/operations/alert-command-center", section: "Command", title: "Alert command center" },
   { path: "/operations/alert-notification-policy", section: "Command", title: "Alert notification policy" },
   { path: "/operations/alerts", section: "Command", title: "Operational alerts" },
