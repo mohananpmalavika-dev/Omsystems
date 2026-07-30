@@ -24,6 +24,7 @@ import {
 import { normalizeNetworkMetrics, projectInternetLink, summarizeBranchInternet } from "../operational-health/network-health.js";
 import { normalizeRecorderMetrics, projectRecorderChannelHealth, projectRecorderHealth } from "../operational-health/recorder-health.js";
 import { normalizeEdgeAgentMetrics } from "../operational-health/edge-agent-health.js";
+import { loadBatchedRetentionInputs } from "../operational-health/retention-batch.js";
 
 const deviceTypes = ["branch", "edge-agent", "recorder", "recorder-channel", "camera", "disk", "network", "ups"] as const;
 const sources = ["onvif", "cp-plus-adapter", "rtsp", "system", "recording-engine"] as const;
@@ -716,20 +717,29 @@ async function loadAccessibleProjections(
   }
   const telemetry = await store.listLatestOperationalTelemetry(request.currentUser.tenantId, branches.map((branch) => branch.id));
   const calculatedAt = Date.now();
-  return Promise.all(branches.map(async (branch) => {
+  const branchContexts = await Promise.all(branches.map(async (branch) => {
     const storedPolicy = await store.getOperationalHealthPolicy(request.currentUser.tenantId, branch.id);
     const policy = { ...defaultOperationalHealthPolicy, ...(storedPolicy ?? {}) };
     const cameras = await store.listCamerasByBranch(request.currentUser, branch.id, "recording:view");
     const archiveByCamera = latestArchiveEvidenceByCamera(telemetry.filter((item) => item.branchId === branch.id));
-    const retentions: RetentionVerification[] = await Promise.all(cameras.map(async (camera) => {
-      const job = await store.getRecordingJob(camera.id);
-      const segments = await store.listRecordingSegments(camera.id);
-      return verifyContinuousRetention(camera.id, segments, {
-        retentionDays: Math.max(job?.retentionDays ?? 0, policy.retentionDays),
+    return { branch, policy, cameras, archiveByCamera };
+  }));
+  const retentionInputs = await loadBatchedRetentionInputs(store, branchContexts.flatMap(({ cameras, policy }) =>
+    cameras.map((camera) => ({
+      cameraId: camera.id,
+      policyRetentionDays: policy.retentionDays,
+      maxRecordingGapSeconds: policy.maxRecordingGapSeconds,
+    }))), calculatedAt);
+
+  return branchContexts.map(({ branch, policy, cameras, archiveByCamera }) => {
+    const retentions: RetentionVerification[] = cameras.map((camera) => {
+      const input = retentionInputs.get(camera.id);
+      return verifyContinuousRetention(camera.id, input?.segments ?? [], {
+        retentionDays: input?.configuredDays ?? policy.retentionDays,
         retentionWarningDays: policy.retentionWarningDays,
         maxRecordingGapSeconds: policy.maxRecordingGapSeconds,
       }, calculatedAt, archiveByCamera.get(camera.id));
-    }));
+    });
     return projectBranchHealth({
       branch,
       cameras,
@@ -739,7 +749,7 @@ async function loadAccessibleProjections(
       now: calculatedAt,
       region: branch.path.map((id) => regionNames.get(id)).find(Boolean),
     });
-  }));
+  });
 }
 
 function latestArchiveEvidenceByCamera(telemetry: OperationalTelemetryEnvelope[]) {

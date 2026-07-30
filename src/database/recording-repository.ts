@@ -16,6 +16,15 @@ export class RecordingRepository {
     return result.rows[0] ? mapJob(result.rows[0]) : undefined;
   }
 
+  async listJobs(cameraIds: string[]): Promise<RecordingJob[]> {
+    if (cameraIds.length === 0) return [];
+    const result = await this.pool.query(
+      "SELECT * FROM recording_jobs WHERE camera_id::text = ANY($1::text[])",
+      [cameraIds],
+    );
+    return result.rows.map(mapJob);
+  }
+
   async upsertJob(cameraId: string, input: Omit<RecordingJob, "id" | "cameraId" | "updatedAt">) {
     const result = await this.pool.query(
       `INSERT INTO recording_jobs (
@@ -69,6 +78,20 @@ export class RecordingRepository {
        AND ($3::timestamptz IS NULL OR started_at <= $3::timestamptz)
        AND status <> 'deleted'
        ORDER BY started_at ASC`, [cameraId, from ?? null, to ?? null],
+    );
+    return result.rows.map(mapSegment);
+  }
+
+  async listSegmentsForCameras(cameraIds: string[], from?: string, to?: string): Promise<RecordingSegment[]> {
+    if (cameraIds.length === 0) return [];
+    const result = await this.pool.query(
+      `SELECT * FROM recording_segments
+       WHERE camera_id::text = ANY($1::text[])
+         AND ($2::timestamptz IS NULL OR ended_at >= $2::timestamptz)
+         AND ($3::timestamptz IS NULL OR started_at <= $3::timestamptz)
+         AND status <> 'deleted'
+       ORDER BY camera_id, started_at ASC`,
+      [cameraIds, from ?? null, to ?? null],
     );
     return result.rows.map(mapSegment);
   }

@@ -696,6 +696,11 @@ export class MemoryStore implements ControlPlaneStore {
     return this.recordingJobs.get(cameraId);
   }
 
+  async listRecordingJobs(cameraIds: string[]) {
+    const requested = new Set(cameraIds);
+    return [...this.recordingJobs.values()].filter((job) => requested.has(job.cameraId));
+  }
+
   async upsertRecordingJob(cameraId: string, input: Omit<RecordingJob, "id" | "cameraId" | "updatedAt">) {
     const existing = this.recordingJobs.get(cameraId);
     const job: RecordingJob = {
@@ -709,6 +714,13 @@ export class MemoryStore implements ControlPlaneStore {
   async listRecordingSegments(cameraId: string, from?: string, to?: string) {
     return this.recordingSegments.filter((segment) => segment.cameraId === cameraId &&
       (!from || segment.endedAt >= from) && (!to || segment.startedAt <= to));
+  }
+
+  async listRecordingSegmentsForCameras(cameraIds: string[], from?: string, to?: string) {
+    const requested = new Set(cameraIds);
+    return this.recordingSegments.filter((segment) => requested.has(segment.cameraId)
+      && segment.status !== "deleted"
+      && (!from || segment.endedAt >= from) && (!to || segment.startedAt <= to));
   }
 
   async getRecordingSegment(id: string) {

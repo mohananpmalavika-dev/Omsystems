@@ -304,11 +304,13 @@ export class PostgresStore
     );
   }
   async getRecordingJob(cameraId: string) { return this.recordings.getJob(cameraId); }
+  async listRecordingJobs(cameraIds: string[]) { return this.recordings.listJobs(cameraIds); }
   async upsertRecordingJob(cameraId: string, input: any) { return this.recordings.upsertJob(cameraId, input); }
   async updateRecordingJobStatus(cameraId: string, status: any) {
     return this.recordings.updateJobStatus(cameraId, status);
   }
   async listRecordingSegments(cameraId: string, from?: string, to?: string) { return this.recordings.listSegments(cameraId, from, to); }
+  async listRecordingSegmentsForCameras(cameraIds: string[], from?: string, to?: string) { return this.recordings.listSegmentsForCameras(cameraIds, from, to); }
   async getRecordingSegment(id: string) { return this.recordings.getSegment(id); }
   async verifyRecordingSegment(segmentId: string) { return this.recordings.verifyRecordingSegment(segmentId); }
   async createRecordingSegment(input: any) { return this.recordings.createSegment(input); }

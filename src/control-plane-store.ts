@@ -578,12 +578,16 @@ export interface ControlPlaneStore {
   createLiveSession(cameraId: string, userId: string): Promise<LiveSession>;
   consumeLiveSession(token: string): Promise<ConsumedLiveSession | undefined>;
   getRecordingJob(cameraId: string): Promise<RecordingJob | undefined>;
+  /** Batch form used by fleet retention projections to avoid one query per camera. */
+  listRecordingJobs(cameraIds: string[]): Promise<RecordingJob[]>;
   upsertRecordingJob(cameraId: string, input: Omit<RecordingJob, "id" | "cameraId" | "updatedAt">): Promise<RecordingJob>;
   updateRecordingJobStatus(
     cameraId: string,
     status: RecordingJob["status"],
   ): Promise<RecordingJob | undefined>;
   listRecordingSegments(cameraId: string, from?: string, to?: string): Promise<RecordingSegment[]>;
+  /** Returns playable segment rows for an authorized camera set in one store call. */
+  listRecordingSegmentsForCameras(cameraIds: string[], from?: string, to?: string): Promise<RecordingSegment[]>;
   getRecordingSegment(id: string): Promise<RecordingSegment | undefined>;
   verifyRecordingSegment(segmentId: string): Promise<{ status: "verified" | "mismatch" | "missing"; hash?: string }>;
   createRecordingSegment(
