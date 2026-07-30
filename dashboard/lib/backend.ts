@@ -142,7 +142,14 @@ async function controlFetch(
   return response;
 }
 
-function runtimeEnv(name: string, fallback: string) {
+function runtimeEnv(name: string | string[], fallback: string) {
+  if (Array.isArray(name)) {
+    for (const key of name) {
+      const value = Reflect.get(process.env, key) as string | undefined;
+      if (value) return value;
+    }
+    return fallback;
+  }
   const value = Reflect.get(process.env, name) as string | undefined;
   return value ?? fallback;
 }
