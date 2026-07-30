@@ -16,6 +16,7 @@ import { AuditRepository } from "./audit-repository.js";
 import { CameraRepository } from "./camera-repository.js";
 import { EdgeAgentRepository } from "./edge-agent-repository.js";
 import { InfrastructureRepository } from "./infrastructure-repository.js";
+import { camelRow, camelRows } from "./infrastructure-repository.js";
 import { ResourceRepository } from "./resource-repository.js";
 import { UserRepository } from "./user-repository.js";
 import { RecordingRepository } from "./recording-repository.js";
@@ -94,6 +95,116 @@ export class PostgresStore
   async listAccessibleNodes(user: User, action: Action, type?: NodeType) {
     return this.resources.listAccessible(user, action, type);
   }
+  async listDeviceInventory(tenantId: string, branchNodeId?: string) {
+    const result = await this.pool.query(
+      `SELECT id::text, tenant_id, device_id, tenant, region, branch, device_type,
+              manufacturer, model, serial_number, mac_address, ip_address,
+              firmware_version, onvif_version, capabilities, credential_reference,
+              installation_date, warranty, amc_contract, health_status,
+              last_communication, configuration_template, risk_classification,
+              lifecycle_state, created_at, updated_at
+       FROM device_inventory
+       WHERE tenant_id=$1 AND ($2::varchar IS NULL OR branch=$2)
+       ORDER BY device_id`,
+      [tenantId, branchNodeId ?? null],
+    );
+    return camelRows(result.rows);
+  }
+
+  async getDeviceInventory(id: string) {
+    const result = await this.pool.query(
+      `SELECT id::text, tenant_id, device_id, tenant, region, branch, device_type,
+              manufacturer, model, serial_number, mac_address, ip_address,
+              firmware_version, onvif_version, capabilities, credential_reference,
+              installation_date, warranty, amc_contract, health_status,
+              last_communication, configuration_template, risk_classification,
+              lifecycle_state, created_at, updated_at
+       FROM device_inventory WHERE id=$1`,
+      [id],
+    );
+    return result.rows[0] ? camelRow(result.rows[0]) : undefined;
+  }
+
+  async createDeviceInventoryRecord(input: any) {
+    const result = await this.pool.query(
+      `INSERT INTO device_inventory (
+         tenant_id, device_id, tenant, region, branch, device_type, manufacturer,
+         model, serial_number, mac_address, ip_address, firmware_version,
+         onvif_version, capabilities, credential_reference, installation_date,
+         warranty, amc_contract, health_status, last_communication,
+         configuration_template, risk_classification, lifecycle_state
+       ) VALUES (
+         $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14::jsonb,$15,$16,$17,$18,
+         $19,$20,$21,$22,$23
+       )
+       RETURNING id::text, tenant_id, device_id, tenant, region, branch,
+                 device_type, manufacturer, model, serial_number, mac_address,
+                 ip_address, firmware_version, onvif_version, capabilities,
+                 credential_reference, installation_date, warranty, amc_contract,
+                 health_status, last_communication, configuration_template,
+                 risk_classification, lifecycle_state, created_at, updated_at`,
+      [
+        input.tenantId, input.deviceId, input.tenant, input.region, input.branch,
+        input.deviceType, input.manufacturer, input.model,
+        input.serialNumber ?? null, input.macAddress ?? null,
+        input.ipAddress ?? null, input.firmwareVersion ?? null,
+        input.onvifVersion ?? null,
+        JSON.stringify(input.capabilities ?? []),
+        input.credentialReference ?? null, input.installationDate ?? null,
+        input.warranty ?? null, input.amcContract ?? null,
+        input.healthStatus ?? 'unknown', input.lastCommunication ?? null,
+        input.configurationTemplate ?? null,
+        input.riskClassification ?? 'medium',
+        input.lifecycleState ?? 'discovered',
+      ],
+    );
+    return camelRow(result.rows[0]!);
+  }
+
+  async updateDeviceInventory(id: string, input: any) {
+    const fields: Array<[string, unknown, string?]> = [
+      ["device_id", input.deviceId],
+      ["tenant", input.tenant],
+      ["region", input.region],
+      ["branch", input.branch],
+      ["device_type", input.deviceType],
+      ["manufacturer", input.manufacturer],
+      ["model", input.model],
+      ["serial_number", input.serialNumber],
+      ["mac_address", input.macAddress],
+      ["ip_address", input.ipAddress],
+      ["firmware_version", input.firmwareVersion],
+      ["onvif_version", input.onvifVersion],
+      ["capabilities", input.capabilities, "jsonb"],
+      ["credential_reference", input.credentialReference],
+      ["installation_date", input.installationDate],
+      ["warranty", input.warranty],
+      ["amc_contract", input.amcContract],
+      ["health_status", input.healthStatus],
+      ["last_communication", input.lastCommunication],
+      ["configuration_template", input.configurationTemplate],
+      ["risk_classification", input.riskClassification],
+      ["lifecycle_state", input.lifecycleState],
+    ];
+    const supplied = fields.filter(([, value]) => value !== undefined);
+    if (supplied.length === 0) return this.getDeviceInventory(id);
+
+    const assignments = supplied.map(
+      ([column, , cast], index) =>
+        `${column}=$${index + 2}${cast ? `::${cast}` : ""}`,
+    );
+    const values = supplied.map(([, value, cast]) =>
+      cast === "jsonb" ? JSON.stringify(value) : value,
+    );
+
+    await this.pool.query(
+      `UPDATE device_inventory SET ${assignments.join(", ")}, updated_at=now() WHERE id=$1`,
+      [id, ...values],
+    );
+
+    return this.getDeviceInventory(id);
+  }
+
   async getCamera(id: string) { return this.cameras.findById(id); }
   async listCamerasByBranch(user: User, branchId: string, action: Action) {
     return this.cameras.listAuthorizedByBranch(user.id, branchId, action);
