@@ -172,10 +172,11 @@ export class EdgeAgentRepository {
       discovered_at: Date;
     }>(
       `INSERT INTO camera_discoveries
-         (tenant_id, branch_node_id, edge_agent_id, vendor, model, ip_address,
-          onvif_port, rtsp_port, profiles, capabilities)
-       SELECT n.tenant_id, n.id, $2, $3, $4, $5::inet, $6, $7, $8::jsonb,
-              $9::jsonb
+         (tenant_id, branch_node_id, edge_agent_id, discovery_method,
+          manufacturer, vendor, model, ip_address, onvif_port, rtsp_port,
+          profiles, capabilities)
+       SELECT n.tenant_id, n.id, $2, $3, $4, $5, $6, $7::inet, $8, $9, $10::jsonb,
+              $11::jsonb
        FROM resource_nodes n
        JOIN edge_agents agent
          ON agent.id = $2
@@ -183,7 +184,9 @@ export class EdgeAgentRepository {
         AND agent.tenant_id = n.tenant_id
        WHERE n.id = $1 AND n.node_type = 'branch'
        ON CONFLICT (edge_agent_id, ip_address, onvif_port) DO UPDATE
-       SET vendor = EXCLUDED.vendor,
+       SET discovery_method = EXCLUDED.discovery_method,
+           manufacturer = EXCLUDED.manufacturer,
+           vendor = EXCLUDED.vendor,
            model = EXCLUDED.model,
            rtsp_port = EXCLUDED.rtsp_port,
            profiles = EXCLUDED.profiles,
@@ -193,6 +196,8 @@ export class EdgeAgentRepository {
       [
         branchId,
         input.edgeAgentId,
+        input.discoveryMethod,
+        input.manufacturer ?? input.vendor,
         input.vendor,
         input.model,
         input.ipAddress,
@@ -230,10 +235,11 @@ export class EdgeAgentRepository {
       discovered_at: Date;
       status: string;
     }>(
-      `SELECT id::text, branch_node_id::text, edge_agent_id::text, 
-              discovery_method, manufacturer, vendor, model,
-              host(ip_address) as ip_address, onvif_port, rtsp_port, profiles,
-              capabilities, discovered_at, status
+      `SELECT id::text, branch_node_id::text, edge_agent_id::text,
+              COALESCE(discovery_method, 'edge-agent-reported-inventory') AS discovery_method,
+              COALESCE(manufacturer, vendor) AS manufacturer,
+              vendor, model, host(ip_address) AS ip_address, onvif_port,
+              rtsp_port, profiles, capabilities, discovered_at, status
        FROM camera_discoveries
        WHERE branch_node_id = $1 AND status = 'pending'
        ORDER BY discovered_at DESC`,
