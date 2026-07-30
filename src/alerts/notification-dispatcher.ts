@@ -28,6 +28,72 @@ export interface BatchAlertNotificationSender extends AlertNotificationSender {
   }>>;
 }
 
+export type NotificationProviderTarget = {
+  name: string;
+  sender: AlertNotificationSender;
+};
+
+/** Tries explicitly configured providers in order and records every handoff. */
+export class ProviderFailoverAlertNotificationSender implements BatchAlertNotificationSender {
+  constructor(
+    private readonly store: ControlPlaneStore,
+    private readonly targets: readonly NotificationProviderTarget[],
+  ) {
+    if (targets.length === 0) throw new Error("notification_failover_targets_required");
+  }
+
+  async send(notification: AlertNotification, alert: AnalyticsAlert) {
+    const errors: unknown[] = [];
+    for (const target of this.targets) {
+      try {
+        return await target.sender.send(notification, alert);
+      } catch (error) {
+        errors.push(error);
+        await this.recordProviderFailure(notification, target.name, error);
+      }
+    }
+    throw new AggregateError(errors, `notification_providers_exhausted:${this.targets.map((item) => item.name).join(",")}`);
+  }
+
+  async sendBatch(items: Array<{ notification: AlertNotification; alert: AnalyticsAlert }>) {
+    const errors: unknown[] = [];
+    for (const target of this.targets) {
+      try {
+        const batch = target.sender as Partial<BatchAlertNotificationSender>;
+        if (typeof batch.sendBatch === "function") return await batch.sendBatch(items);
+        return new Map(await Promise.all(items.map(async (item) => [
+          item.notification.id, await target.sender.send(item.notification, item.alert),
+        ] as const)));
+      } catch (error) {
+        errors.push(error);
+        await Promise.all(items.map((item) =>
+          this.recordProviderFailure(item.notification, target.name, error)));
+      }
+    }
+    throw new AggregateError(errors, `notification_providers_exhausted:${this.targets.map((item) => item.name).join(",")}`);
+  }
+
+  private async recordProviderFailure(notification: AlertNotification, provider: string, error: unknown) {
+    const event = {
+      status: "provider_failed", occurredAt: new Date().toISOString(),
+      detail: `${provider}: ${error instanceof Error ? error.message : "notification_provider_failed"}`.slice(0, 1_000),
+    };
+    if (notification.channel === "sms") {
+      await this.store.recordSmsDeliveryEvent(notification.id, {
+        ...event, provider: provider as NonNullable<AlertNotification["smsDelivery"]>["provider"],
+      });
+    } else if (notification.channel === "voice") {
+      await this.store.recordVoiceCallEvent(notification.id, {
+        ...event, provider: provider as NonNullable<AlertNotification["voiceCall"]>["provider"],
+      });
+    } else if (notification.channel === "email") {
+      await this.store.recordEmailDeliveryEvent(notification.id, {
+        ...event, provider: provider as NonNullable<AlertNotification["emailDelivery"]>["provider"],
+      });
+    }
+  }
+}
+
 export class HttpAlertNotificationSender implements AlertNotificationSender {
   constructor(private readonly endpoints: Partial<Record<"sms" | "email" | "voice", string>>,
     private readonly token?: string) {}
@@ -165,6 +231,18 @@ export class AlertNotificationDispatcher {
     await this.store.completeAlertNotification(notification.id, { status: dead ? "dead" : "failed",
       error: error instanceof Error ? error.message : "notification_failed",
       ...(!dead ? { nextAttemptAt: new Date(Date.now() + Math.min(300, 2 ** notification.attempts * 5) * 1_000).toISOString() } : {}) });
+    if (dead) {
+      await this.store.writeAudit({
+        tenantId: notification.tenantId, actorUserId: null,
+        action: "alert.notification_dead_letter", resourceNodeId: null, outcome: "failure",
+        details: {
+          notificationId: notification.id, alertId: notification.alertId,
+          channel: notification.channel, recipient: notification.recipient,
+          attempts: notification.attempts,
+          error: error instanceof Error ? error.message : "notification_failed",
+        },
+      });
+    }
   }
 
   private publish(notification: AlertNotification) {

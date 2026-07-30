@@ -52,7 +52,9 @@ import { registerOperationalReportRoutes } from "./routes/operational-reports.ro
 import {
   AlertNotificationDispatcher,
   HttpAlertNotificationSender,
+  ProviderFailoverAlertNotificationSender,
   type AlertNotificationSender,
+  type NotificationProviderTarget,
 } from "./alerts/notification-dispatcher.js";
 import {
   ExotelVoiceProvider, RoutedAlertNotificationSender, TwilioVoiceProvider,
@@ -221,6 +223,101 @@ function configuredReportEmailSender(downloadSecret: string): OperationalReportE
   return new HttpOperationalReportEmailSender(undefined, undefined, publicBaseUrl, downloadSecret);
 }
 
+type AlertProviderDependencies = {
+  fetcher?: typeof fetch;
+  createSesClient?: (region: string) => { send(command: unknown): Promise<unknown> };
+};
+
+export function configuredAlertEmailTargets(
+  store: ControlPlaneStore,
+  environment: NodeJS.ProcessEnv = process.env,
+  dependencies: AlertProviderDependencies = {},
+): NotificationProviderTarget[] {
+  return alertProviderNames(environment.ALERT_EMAIL_PROVIDER, environment.ALERT_EMAIL_FAILOVER_PROVIDER)
+    .map((name) => {
+      const from = environment.ALERT_EMAIL_FROM;
+      if (name === "smtp") {
+        if (!environment.ALERT_SMTP_URL) throw new Error("ALERT_SMTP_URL is required for ALERT_EMAIL_PROVIDER=smtp");
+        const provider = new NodemailerSmtpProvider({ url: environment.ALERT_SMTP_URL, from });
+        return { name, sender: new EmailNotificationSender(store, provider) };
+      }
+      if (name === "sendgrid") {
+        const apiKey = environment.ALERT_SENDGRID_API_KEY ?? environment.SENDGRID_API_KEY;
+        if (!apiKey) throw new Error("ALERT_SENDGRID_API_KEY or SENDGRID_API_KEY is required for ALERT_EMAIL_PROVIDER=sendgrid");
+        const provider = new SendGridEmailProvider(apiKey, dependencies.fetcher ?? fetch, from);
+        return { name, sender: new EmailNotificationSender(store, provider) };
+      }
+      if (name === "ses") {
+        const region = environment.ALERT_AWS_REGION ?? environment.AWS_REGION;
+        if (!region) throw new Error("ALERT_AWS_REGION or AWS_REGION is required for ALERT_EMAIL_PROVIDER=ses");
+        if (!from || !from.includes("@")) throw new Error("ALERT_EMAIL_FROM is required for ALERT_EMAIL_PROVIDER=ses");
+        const client = dependencies.createSesClient?.(region) ?? new SESClient({ region });
+        return { name, sender: new EmailNotificationSender(store, new SesEmailProvider(client, from)) };
+      }
+      throw new Error(`Unsupported ALERT_EMAIL_PROVIDER=${name}`);
+    });
+}
+
+function configuredAlertSmsTargets(
+  store: ControlPlaneStore,
+  publicBaseUrl: string,
+  voiceTokens: VoiceCallbackTokens,
+  environment: NodeJS.ProcessEnv = process.env,
+): NotificationProviderTarget[] {
+  return alertProviderNames(environment.ALERT_SMS_PROVIDER, environment.ALERT_SMS_FAILOVER_PROVIDER)
+    .map((name) => {
+      if (name === "msg91" && environment.MSG91_AUTH_KEY) {
+        return { name, sender: new SmsNotificationSender(store,
+          new Msg91SmsProvider(environment.MSG91_AUTH_KEY), publicBaseUrl, voiceTokens) };
+      }
+      if (name === "textlocal" && environment.TEXTLOCAL_API_KEY && environment.TEXTLOCAL_SENDER_ID) {
+        return { name, sender: new SmsNotificationSender(store,
+          new TextLocalSmsProvider(environment.TEXTLOCAL_API_KEY, environment.TEXTLOCAL_SENDER_ID), publicBaseUrl, voiceTokens) };
+      }
+      if (name === "twilio" && environment.TWILIO_ACCOUNT_SID && environment.TWILIO_AUTH_TOKEN &&
+          (environment.TWILIO_SMS_FROM_NUMBER || environment.SMS_FROM)) {
+        return { name, sender: new SmsNotificationSender(store,
+          new TwilioSmsProvider(environment.TWILIO_ACCOUNT_SID, environment.TWILIO_AUTH_TOKEN,
+            environment.TWILIO_SMS_FROM_NUMBER ?? environment.SMS_FROM!), publicBaseUrl, voiceTokens) };
+      }
+      throw new Error(`Incomplete credentials for ALERT_SMS_PROVIDER=${name}`);
+    });
+}
+
+function configuredAlertVoiceTargets(
+  store: ControlPlaneStore,
+  publicBaseUrl: string,
+  voiceTokens: VoiceCallbackTokens,
+  environment: NodeJS.ProcessEnv = process.env,
+): NotificationProviderTarget[] {
+  return alertProviderNames(environment.ALERT_VOICE_PROVIDER, environment.ALERT_VOICE_FAILOVER_PROVIDER)
+    .map((name) => {
+      if (name === "twilio" && environment.TWILIO_ACCOUNT_SID && environment.TWILIO_AUTH_TOKEN && environment.TWILIO_FROM_NUMBER) {
+        return { name, sender: new VoiceCallNotificationSender(store,
+          new TwilioVoiceProvider(environment.TWILIO_ACCOUNT_SID, environment.TWILIO_AUTH_TOKEN,
+            environment.TWILIO_FROM_NUMBER), publicBaseUrl, voiceTokens) };
+      }
+      if (name === "exotel" && environment.EXOTEL_ACCOUNT_SID && environment.EXOTEL_API_KEY &&
+          environment.EXOTEL_API_TOKEN && environment.EXOTEL_CALLER_ID) {
+        return { name, sender: new VoiceCallNotificationSender(store,
+          new ExotelVoiceProvider(environment.EXOTEL_ACCOUNT_SID, environment.EXOTEL_API_KEY,
+            environment.EXOTEL_API_TOKEN, environment.EXOTEL_CALLER_ID,
+            environment.EXOTEL_SUBDOMAIN), publicBaseUrl, voiceTokens) };
+      }
+      throw new Error(`Incomplete credentials for ALERT_VOICE_PROVIDER=${name}`);
+    });
+}
+
+function alertProviderNames(primary: string | undefined, failover: string | undefined) {
+  return [...new Set([primary, failover].filter((value): value is string => Boolean(value?.trim()))
+    .map((value) => value.trim().toLowerCase()))];
+}
+
+function providerSender(store: ControlPlaneStore, targets: NotificationProviderTarget[]) {
+  if (targets.length === 0) return undefined;
+  return targets.length === 1 ? targets[0]!.sender : new ProviderFailoverAlertNotificationSender(store, targets);
+}
+
 export async function buildApp(options?: {
   logger?: boolean;
   store?: ControlPlaneStore;
@@ -258,53 +355,23 @@ export async function buildApp(options?: {
     ...(process.env.ALERT_EMAIL_WEBHOOK_URL ? { email: process.env.ALERT_EMAIL_WEBHOOK_URL } : {}),
     ...(process.env.ALERT_VOICE_WEBHOOK_URL ? { voice: process.env.ALERT_VOICE_WEBHOOK_URL } : {}),
   }, process.env.ALERT_PROVIDER_TOKEN);
-  const voiceProviderName = process.env.ALERT_VOICE_PROVIDER?.toLowerCase();
-  const smsProviderName = process.env.ALERT_SMS_PROVIDER?.toLowerCase();
-  const emailProviderName = process.env.ALERT_EMAIL_PROVIDER?.toLowerCase();
+  const voiceProviderNames = alertProviderNames(process.env.ALERT_VOICE_PROVIDER, process.env.ALERT_VOICE_FAILOVER_PROVIDER);
+  const smsProviderNames = alertProviderNames(process.env.ALERT_SMS_PROVIDER, process.env.ALERT_SMS_FAILOVER_PROVIDER);
   const voiceCallbackSecret = options?.voiceCallbackSecret ?? process.env.ALERT_VOICE_CALLBACK_SECRET;
-  if ((voiceProviderName || smsProviderName) && !voiceCallbackSecret) throw new Error("ALERT_VOICE_CALLBACK_SECRET is required when provider callbacks are enabled");
-  const voiceTokens = new VoiceCallbackTokens(voiceCallbackSecret ?? "development-voice-callback-secret-change-me");
-  let configuredAlertSender: AlertNotificationSender = standardAlertSender;
-  let emailAlertSender: AlertNotificationSender | undefined = undefined;
-  if (emailProviderName === "smtp" && process.env.ALERT_SMTP_URL) {
-    const provider = new NodemailerSmtpProvider({ url: process.env.ALERT_SMTP_URL });
-    emailAlertSender = new EmailNotificationSender(store, provider);
-  } else if (emailProviderName === "sendgrid" && process.env.SENDGRID_API_KEY) {
-    const provider = new SendGridEmailProvider(process.env.SENDGRID_API_KEY);
-    emailAlertSender = new EmailNotificationSender(store, provider);
-  } else if (emailProviderName) throw new Error(`Incomplete credentials for ALERT_EMAIL_PROVIDER=${emailProviderName}`);
-  if (emailAlertSender) {
-    configuredAlertSender = new RoutedAlertNotificationSender(configuredAlertSender,
-      configuredAlertSender, undefined, emailAlertSender);
+  if ((voiceProviderNames.length > 0 || smsProviderNames.length > 0) && !voiceCallbackSecret) {
+    throw new Error("ALERT_VOICE_CALLBACK_SECRET is required when provider callbacks are enabled");
   }
+  const voiceTokens = new VoiceCallbackTokens(voiceCallbackSecret ?? "development-voice-callback-secret-change-me");
   const publicAlertBaseUrl = process.env.ALERT_PUBLIC_BASE_URL ?? "";
-  if ((voiceProviderName || smsProviderName) && !/^https:\/\//i.test(publicAlertBaseUrl)) {
+  if ((voiceProviderNames.length > 0 || smsProviderNames.length > 0) && !/^https:\/\//i.test(publicAlertBaseUrl)) {
     throw new Error("ALERT_PUBLIC_BASE_URL must be a provider-reachable HTTPS URL when external notifications are enabled");
   }
-  if (smsProviderName === "msg91" && process.env.MSG91_AUTH_KEY) {
-    configuredAlertSender = new RoutedAlertNotificationSender(standardAlertSender, standardAlertSender,
-      new SmsNotificationSender(store, new Msg91SmsProvider(process.env.MSG91_AUTH_KEY), publicAlertBaseUrl, voiceTokens), emailAlertSender);
-  } else if (smsProviderName === "textlocal" && process.env.TEXTLOCAL_API_KEY && process.env.TEXTLOCAL_SENDER_ID) {
-    configuredAlertSender = new RoutedAlertNotificationSender(standardAlertSender, standardAlertSender,
-      new SmsNotificationSender(store, new TextLocalSmsProvider(process.env.TEXTLOCAL_API_KEY,
-        process.env.TEXTLOCAL_SENDER_ID), publicAlertBaseUrl, voiceTokens), emailAlertSender);
-  } else if (smsProviderName === "twilio" && process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN &&
-      (process.env.TWILIO_SMS_FROM_NUMBER || process.env.SMS_FROM)) {
-    configuredAlertSender = new RoutedAlertNotificationSender(standardAlertSender, standardAlertSender,
-      new SmsNotificationSender(store, new TwilioSmsProvider(process.env.TWILIO_ACCOUNT_SID,
-        process.env.TWILIO_AUTH_TOKEN, process.env.TWILIO_SMS_FROM_NUMBER ?? process.env.SMS_FROM!), publicAlertBaseUrl, voiceTokens), emailAlertSender);
-  } else if (smsProviderName) throw new Error(`Incomplete credentials for ALERT_SMS_PROVIDER=${smsProviderName}`);
-  if (voiceProviderName === "twilio" && process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN && process.env.TWILIO_FROM_NUMBER) {
-    configuredAlertSender = new RoutedAlertNotificationSender(configuredAlertSender,
-      new VoiceCallNotificationSender(store, new TwilioVoiceProvider(process.env.TWILIO_ACCOUNT_SID,
-        process.env.TWILIO_AUTH_TOKEN, process.env.TWILIO_FROM_NUMBER), publicAlertBaseUrl, voiceTokens), undefined, emailAlertSender);
-  } else if (voiceProviderName === "exotel" && process.env.EXOTEL_ACCOUNT_SID && process.env.EXOTEL_API_KEY &&
-      process.env.EXOTEL_API_TOKEN && process.env.EXOTEL_CALLER_ID) {
-    configuredAlertSender = new RoutedAlertNotificationSender(configuredAlertSender,
-      new VoiceCallNotificationSender(store, new ExotelVoiceProvider(process.env.EXOTEL_ACCOUNT_SID,
-        process.env.EXOTEL_API_KEY, process.env.EXOTEL_API_TOKEN, process.env.EXOTEL_CALLER_ID,
-        process.env.EXOTEL_SUBDOMAIN), publicAlertBaseUrl, voiceTokens), undefined, emailAlertSender);
-  }
+  const emailAlertSender = providerSender(store, configuredAlertEmailTargets(store));
+  const smsAlertSender = providerSender(store, configuredAlertSmsTargets(store, publicAlertBaseUrl, voiceTokens));
+  const voiceAlertSender = providerSender(store, configuredAlertVoiceTargets(store, publicAlertBaseUrl, voiceTokens));
+  const configuredAlertSender: AlertNotificationSender = new RoutedAlertNotificationSender(
+    standardAlertSender, voiceAlertSender ?? standardAlertSender, smsAlertSender, emailAlertSender,
+  );
   const alertSender = options?.alertNotificationSender ?? configuredAlertSender;
   const alertDispatcher = new AlertNotificationDispatcher(store, alertSender);
   const alertEvidenceClient = options?.alertEvidenceClient ?? (

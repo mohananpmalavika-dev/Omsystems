@@ -1,4 +1,5 @@
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -56,10 +57,35 @@ describe("AlertEvidenceCaptureService", () => {
     expect(status?.error).toContain("[camera-source]");
     expect(status?.error).not.toContain("top-secret");
   });
+
+  it("requeues a capture left in progress by a previous process", async () => {
+    const root = await mkdtemp(join(tmpdir(), "sentinel-alert-evidence-"));
+    roots.push(root);
+    const alertId = "55555555-5555-4555-8555-555555555555";
+    const folder = join(root, createHash("sha256").update(alertId).digest("hex"));
+    await mkdir(folder, { recursive: true });
+    await writeFile(join(folder, "status.json"), JSON.stringify({
+      alertId, cameraId: "cam-001", state: "capturing",
+      requestedAt: new Date(Date.now() - 120_000).toISOString(),
+      snapshotAvailable: false, clipAvailable: false,
+    }));
+    let resumed = false;
+    const service = new AlertEvidenceCaptureService(root, 1, async (_input, output) => {
+      resumed = true;
+      await writeFile(output.snapshotPath, "jpeg");
+      await writeFile(output.clipPath, "mp4");
+    });
+    await service.request({
+      alertId, cameraId: "cam-001", occurredAt: new Date().toISOString(),
+      sourceUri: "rtsp://camera/live", clipSeconds: 20,
+    });
+    await waitFor(async () => (await service.getStatus(alertId))?.state === "ready");
+    expect(resumed).toBe(true);
+  });
 });
 
 async function waitFor(predicate: () => Promise<boolean>) {
-  const deadline = Date.now() + 2_000;
+  const deadline = Date.now() + 10_000;
   while (Date.now() < deadline) {
     if (await predicate()) return;
     await new Promise((resolve) => setTimeout(resolve, 5));

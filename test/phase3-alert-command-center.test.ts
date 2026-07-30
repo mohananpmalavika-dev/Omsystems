@@ -15,10 +15,12 @@ describe("Phase 3 HO alert command center", () => {
   let store: MemoryStore;
   const sent: Array<{ channel: string; recipient: string; alertId: string }> = [];
   const captures: Array<{ alertId: string; cameraId: string }> = [];
+  let evidenceStatusMissing = false;
 
   beforeEach(async () => {
     sent.length = 0;
     captures.length = 0;
+    evidenceStatusMissing = false;
     store = new MemoryStore();
     const sender: AlertNotificationSender = {
       async send(notification, alert) {
@@ -35,6 +37,7 @@ describe("Phase 3 HO alert command center", () => {
         };
       },
       async status(alertId) {
+        if (evidenceStatusMissing) return Response.json({ error: "alert_evidence_not_found" }, { status: 404 });
         return Response.json({
           alertId, cameraId: "cam-001", state: "ready", requestedAt: new Date().toISOString(),
           snapshotAvailable: true, clipAvailable: true,
@@ -158,6 +161,13 @@ describe("Phase 3 HO alert command center", () => {
     });
     expect(snapshot.statusCode).toBe(200);
     expect(snapshot.headers["content-type"]).toContain("image/jpeg");
+
+    evidenceStatusMissing = true;
+    const recovered = await app.inject({
+      method: "GET", url: `/v1/alerts/${alert.id}/evidence/status`, headers: admin,
+    });
+    expect(recovered.statusCode).toBe(202);
+    expect(captures).toHaveLength(2);
   });
 
   it("persists recipient groups and on-call schedules without changing the fixed matrix", async () => {

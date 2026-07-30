@@ -7,7 +7,7 @@ import { RoutedAlertNotificationSender, VoiceCallbackTokens } from "../src/alert
 import { Msg91SmsProvider, SmsNotificationSender, TextLocalSmsProvider, TwilioSmsProvider,
   renderSmsTemplate, type SmsProvider } from "../src/alerts/sms.js";
 
-describe("P1/P2 SMS delivery", () => {
+describe("P1 SMS delivery", () => {
   let app: FastifyInstance | undefined;
   afterEach(async () => app?.close());
 
@@ -16,7 +16,7 @@ describe("P1/P2 SMS delivery", () => {
     await store.upsertAlertNotificationPolicy({ tenantId: "omsystems",
       recipientGroups: { sms: ["+919100000001", "+919100000002"] }, onCallSchedules: [],
       rateLimitPerMinute: 1, escalationAfterSeconds: { P1: 30, P2: 300 },
-      smsTemplates: { P2: "{severity} {branch} {camera}: {title} ({alertId})" }, updatedAt: new Date().toISOString() });
+      smsTemplates: { P1: "{severity} {branch} {camera}: {title} ({alertId})" }, updatedAt: new Date().toISOString() });
     const sent: Array<{ to: string; body: string; statusUrl: string }> = [];
     const provider: SmsProvider = { name: "test", async sendBulk(messages) {
       sent.push(...messages); return messages.map((_, index) => ({ id: `sms-${index}` }));
@@ -27,8 +27,8 @@ describe("P1/P2 SMS delivery", () => {
     const sender = new RoutedAlertNotificationSender(standard, standard, sms);
     const dispatcher = new AlertNotificationDispatcher(store, sender);
     const rule = await store.createAnalyticsRule("omsystems", "cam-001", "user-global-admin", {
-      name: "P2 SMS", detectionType: "vehicle", enabled: true, objectClasses: [], minConfidence: 0.5,
-      minDurationSeconds: 0, direction: "any", severity: "P2", cooldownSeconds: 60, recipients: [],
+      name: "P1 SMS", detectionType: "vehicle", enabled: true, objectClasses: [], minConfidence: 0.5,
+      minDurationSeconds: 0, direction: "any", severity: "P1", cooldownSeconds: 60, recipients: [],
       recordingPolicy: "none", preRollSeconds: 30, postRollSeconds: 120, escalateAfterSeconds: 300 });
     const result = await store.processAnalyticsEvent({ tenantId: "omsystems", cameraId: "cam-001",
       sourceEventId: "sms-batch", detectionType: "vehicle", occurredAt: new Date().toISOString(), confidence: 0.9,
@@ -37,7 +37,7 @@ describe("P1/P2 SMS delivery", () => {
     await dispatcher.drainOnce();
     const deliveries = store.analyticsNotifications.filter((item) => item.channel === "sms");
     expect(sent).toHaveLength(1);
-    expect(sent[0]?.body).toContain("P2 Bengaluru Branch 001 Main Entrance");
+    expect(sent[0]?.body).toContain("P1 Bengaluru Branch 001 Main Entrance");
     expect(sent[0]?.statusUrl).toContain("/internal/alerts/sms/status?token=");
     expect(deliveries.map((item) => item.status).sort()).toEqual(["failed", "sent"]);
     expect(deliveries.find((item) => item.status === "failed")?.lastError).toBe("sms_rate_limit_exceeded");

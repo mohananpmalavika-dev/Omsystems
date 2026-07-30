@@ -241,9 +241,10 @@ app.get("/internal/alert-evidence/:alertId/:kind", async (request, reply) => {
     return reply.send(asset.stream());
   }
   const match = /^bytes=(\d*)-(\d*)$/.exec(range);
-  if (!match) return reply.code(416).send();
-  const start = match[1] ? Number(match[1]) : 0;
-  const end = match[2] ? Number(match[2]) : asset.size - 1;
+  if (!match || (!match[1] && !match[2])) return reply.code(416).send();
+  const suffixLength = !match[1] && match[2] ? Number(match[2]) : undefined;
+  const start = suffixLength !== undefined ? Math.max(0, asset.size - suffixLength) : Number(match[1] ?? 0);
+  const end = suffixLength !== undefined ? asset.size - 1 : match[2] ? Number(match[2]) : asset.size - 1;
   if (!Number.isSafeInteger(start) || !Number.isSafeInteger(end) || start > end || start >= asset.size) {
     return reply.code(416).header("content-range", `bytes */${asset.size}`).send();
   }

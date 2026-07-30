@@ -4,6 +4,14 @@
 
 Run with `npm run test:phase5`. The runner requires enough existing inventory or `PHASE5_PROVISION=true` plus `PHASE5_PARENT_NODE_ID`. It intentionally returns exit code 2 when a test finishes without satisfying the complete 400-branch, configured-camera-target, 100-user, 24-hour certification gate. Set `PHASE5_CAMERAS=10000` for the required 10,000-camera validation. See `docs/PHASE_5_ENTERPRISE_READINESS.md` for the controlled procedure.
 
+The alert-volume runner is `npm run test:alerts:phase6`. For a 400-branch run,
+set `PHASE6_CAMERA_IDS` to a comma-separated list containing one authorized camera
+per branch and set `PHASE6_EXPECTED_BRANCHES=400`. Its evidence file records
+observed branch count, ingest/visibility p95, and the p95 time until every
+notification in an alert's matrix has received a provider attempt. Synthetic
+results are load evidence only; they do not replace carrier acceptance tests or
+400-branch field certification.
+
 **Objective:** Verify platform capacity claims for **400 branches** and **5,000 cameras**
 
 **Current Status:** 45% — Architecture exists, capacity unproven

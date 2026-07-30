@@ -55,7 +55,8 @@ export class AlertEvidenceCaptureService {
   async request(input: AlertEvidenceCaptureInput): Promise<AlertEvidenceCaptureStatus> {
     const existing = await this.getStatus(input.alertId);
     if (existing && existing.cameraId === input.cameraId &&
-        ["queued", "capturing", "ready", "partial"].includes(existing.state)) {
+        (["ready", "partial"].includes(existing.state) ||
+          (["queued", "capturing"].includes(existing.state) && this.scheduled.has(input.alertId)))) {
       return existing;
     }
     if (this.scheduled.has(input.alertId)) {

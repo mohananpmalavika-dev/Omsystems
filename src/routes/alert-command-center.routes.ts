@@ -7,7 +7,12 @@ import type { AlertNotificationDispatcher } from "../alerts/notification-dispatc
 import { NOTIFICATION_MATRIX } from "../alerts/notification-dispatcher.js";
 import { alertEvents } from "../alerts/event-stream.js";
 import { VoiceCallbackTokens, twiml, voiceAlertMessage } from "../alerts/voice-call.js";
-import type { AlertEvidenceClient, AlertEvidenceKind } from "../alerts/evidence-capture.js";
+import {
+  isManagedAlertEvidenceReference,
+  type AlertEvidenceClient,
+  type AlertEvidenceCaptureStatus,
+  type AlertEvidenceKind,
+} from "../alerts/evidence-capture.js";
 
 const alertIdParams = z.object({ alertId: z.string().uuid() });
 const hhmm = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/);
@@ -91,9 +96,25 @@ export async function registerAlertCommandCenterRoutes(
     const alert = await authorizedAlert(store, request.currentUser, alertId, "analytics:view");
     if (!alert) return reply.code(404).send({ error: "analytics_alert_not_found" });
     if (!evidenceClient) return reply.code(503).send({ error: "automatic_alert_evidence_unavailable" });
+    if (!isManagedAlertEvidenceReference(alert.id, alert.snapshotReference) &&
+        !isManagedAlertEvidenceReference(alert.id, alert.clipReference)) {
+      return reply.code(404).send({ error: "managed_alert_evidence_not_found" });
+    }
     try {
       const upstream = await evidenceClient.status(alertId);
       const payload = Buffer.from(await upstream.arrayBuffer());
+      const status = parseEvidenceStatus(payload);
+      const staleCapture = status && ["queued", "capturing"].includes(status.state) &&
+        Date.now() - Date.parse(status.startedAt ?? status.requestedAt) > 90_000;
+      if (upstream.status === 404 || staleCapture) {
+        const recovered = await evidenceClient.capture({
+          alertId: alert.id, cameraId: alert.cameraId,
+          occurredAt: alert.firstDetectedAt, clipSeconds: 20,
+        });
+        return reply.code(recovered.state === "ready" || recovered.state === "partial" ? 200 : 202)
+          .header("cache-control", "private, no-store")
+          .send(recovered);
+      }
       return reply.code(upstream.status)
         .header("content-type", upstream.headers.get("content-type") ?? "application/json")
         .header("cache-control", "private, no-store")
@@ -111,6 +132,10 @@ export async function registerAlertCommandCenterRoutes(
     const alert = await authorizedAlert(store, request.currentUser, alertId, "analytics:view");
     if (!alert) return reply.code(404).send({ error: "analytics_alert_not_found" });
     if (!evidenceClient) return reply.code(503).send({ error: "automatic_alert_evidence_unavailable" });
+    const reference = kind === "snapshot" ? alert.snapshotReference : alert.clipReference;
+    if (!isManagedAlertEvidenceReference(alert.id, reference)) {
+      return reply.code(404).send({ error: "managed_alert_evidence_not_found" });
+    }
     try {
       const upstream = await evidenceClient.asset(alertId, kind as AlertEvidenceKind, request.headers.range);
       reply.code(upstream.status);
@@ -370,4 +395,14 @@ function secureEqual(value: string | string[] | undefined, expected: string) {
   if (typeof value !== "string") return false;
   const left = Buffer.from(value); const right = Buffer.from(expected);
   return left.length === right.length && timingSafeEqual(left, right);
+}
+
+function parseEvidenceStatus(payload: Buffer): AlertEvidenceCaptureStatus | undefined {
+  try {
+    const value = JSON.parse(payload.toString("utf8")) as Partial<AlertEvidenceCaptureStatus>;
+    return value.alertId && value.cameraId && value.state && value.requestedAt
+      ? value as AlertEvidenceCaptureStatus : undefined;
+  } catch {
+    return undefined;
+  }
 }
