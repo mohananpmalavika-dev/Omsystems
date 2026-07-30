@@ -3,7 +3,7 @@ import type { FastifyInstance } from "fastify";
 import { buildApp } from "../src/app.js";
 import { FederationManager, type FederationLocalSearchProvider, type FederationPeerClient } from "../src/federation/manager.js";
 import { MemoryFederationRepository } from "../src/federation/repository.js";
-import type { FederatedSearchItem, FederatedServer, FederationSearchQuery } from "../src/federation/types.js";
+import type { FederatedServer } from "../src/federation/types.js";
 import { MemoryStore } from "../src/store.js";
 
 const admin = { "x-user-id": "user-global-admin" };
@@ -221,4 +221,3 @@ async function heartbeat(
 function health(input: Partial<{ totalCameras: number; onlineCameras: number; totalBranches: number; healthScore: number }> = {}) {
   return { status: "online", totalCameras: 1, onlineCameras: 1, totalBranches: 1, healthScore: 100, ...input };
 }
-

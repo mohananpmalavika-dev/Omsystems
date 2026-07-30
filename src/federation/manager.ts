@@ -70,9 +70,10 @@ export class FederationManager {
   ) {}
 
   async register(input: Omit<RegisterFederatedServerInput, "sharedSecretHash"> & { sharedSecret: string }) {
+    const { sharedSecret, ...registration } = input;
     return publicServer(await this.repository.registerServer({
-      ...input,
-      sharedSecretHash: await hashPassword(input.sharedSecret),
+      ...registration,
+      sharedSecretHash: await hashPassword(sharedSecret),
     }));
   }
 
@@ -243,4 +244,3 @@ function nullableSum(servers: FederatedServerRecord[], key: "storageCapacityGb" 
 function ensureTrailingSlash(value: string) {
   return value.endsWith("/") ? value : `${value}/`;
 }
-

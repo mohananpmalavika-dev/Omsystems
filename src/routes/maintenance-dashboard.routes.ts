@@ -7,12 +7,14 @@ export async function registerMaintenanceDashboardRoutes(
 ) {
   // Dashboard - Overall system health
   app.get("/v1/maintenance/dashboard/health", async (request) => {
+    if (!request.currentUser?.tenantId) return { error: "unauthorized" };
     const summary = await store.getHealthCheckSummary(request.currentUser.tenantId);
     return summary;
   });
 
   // Dashboard - Maintenance status overview
-  app.get("/v1/maintenance/dashboard/status", async (request) => {
+  app.get("/v1/maintenance/dashboard/status", async (request, reply) => {
+    if (!request.currentUser?.tenantId) return reply.code(401).send({ error: "unauthorized" });
     const tenantId = request.currentUser.tenantId;
     
     const assets = await store.listMaintenanceAssets(tenantId);
@@ -48,7 +50,8 @@ export async function registerMaintenanceDashboardRoutes(
   });
 
   // Health Monitoring - Camera health details
-  app.get("/v1/maintenance/health/cameras", async (request) => {
+  app.get("/v1/maintenance/health/cameras", async (request, reply) => {
+    if (!request.currentUser?.tenantId) return reply.code(401).send({ error: "unauthorized" });
     const queryParams = request.query as { limit?: string };
     const query = { limit: Math.min(parseInt(queryParams.limit || '50') || 50, 1000) };
     const tenantId = request.currentUser.tenantId;
@@ -73,7 +76,8 @@ export async function registerMaintenanceDashboardRoutes(
   });
 
   // Health Monitoring - Storage health details
-  app.get("/v1/maintenance/health/storage", async (request) => {
+  app.get("/v1/maintenance/health/storage", async (request, reply) => {
+    if (!request.currentUser?.tenantId) return reply.code(401).send({ error: "unauthorized" });
     const tenantId = request.currentUser.tenantId;
     const assets = await store.listMaintenanceAssets(tenantId, "storage");
     
@@ -92,7 +96,8 @@ export async function registerMaintenanceDashboardRoutes(
   });
 
   // Health Monitoring - Network status
-  app.get("/v1/maintenance/health/network", async (request) => {
+  app.get("/v1/maintenance/health/network", async (request, reply) => {
+    if (!request.currentUser?.tenantId) return reply.code(401).send({ error: "unauthorized" });
     const tenantId = request.currentUser.tenantId;
     
     return {
@@ -111,7 +116,8 @@ export async function registerMaintenanceDashboardRoutes(
   });
 
   // Health Monitoring - Power/UPS status
-  app.get("/v1/maintenance/health/power", async (request) => {
+  app.get("/v1/maintenance/health/power", async (request, reply) => {
+    if (!request.currentUser?.tenantId) return reply.code(401).send({ error: "unauthorized" });
     const tenantId = request.currentUser.tenantId;
     const assets = await store.listMaintenanceAssets(tenantId, "power");
     
@@ -129,13 +135,15 @@ export async function registerMaintenanceDashboardRoutes(
   });
 
   // Firmware Management - List required updates
-  app.get("/v1/maintenance/firmware/updates-required", async (request) => {
+  app.get("/v1/maintenance/firmware/updates-required", async (request, reply) => {
+    if (!request.currentUser?.tenantId) return reply.code(401).send({ error: "unauthorized" });
     const updates = await store.listFirmwareUpdatesRequired(request.currentUser.tenantId);
     return { data: updates };
   });
 
   // Firmware Management - Check for updates
   app.post("/v1/maintenance/firmware/check", async (request, reply) => {
+    if (!request.currentUser?.tenantId) return reply.code(401).send({ error: "unauthorized" });
     const body = request.body as { assetIds?: string[] };
     const tenantId = request.currentUser.tenantId;
     
@@ -148,6 +156,7 @@ export async function registerMaintenanceDashboardRoutes(
 
   // Firmware Management - Initiate upgrade
   app.post("/v1/maintenance/firmware/upgrade", async (request, reply) => {
+    if (!request.currentUser?.tenantId) return reply.code(401).send({ error: "unauthorized" });
     const body = request.body as { assetId: string; fromVersion: string; toVersion: string };
     const tenantId = request.currentUser.tenantId;
     
@@ -168,7 +177,8 @@ export async function registerMaintenanceDashboardRoutes(
   });
 
   // Spare Parts - List all parts
-  app.get("/v1/maintenance/spare-parts", async (request) => {
+  app.get("/v1/maintenance/spare-parts", async (request, reply) => {
+    if (!request.currentUser?.tenantId) return reply.code(401).send({ error: "unauthorized" });
     const queryParams = request.query as { category?: string };
     const query = { category: queryParams.category || undefined };
     const tenantId = request.currentUser.tenantId;
@@ -179,6 +189,7 @@ export async function registerMaintenanceDashboardRoutes(
 
   // Spare Parts - Record part addition
   app.post("/v1/maintenance/spare-parts/add", async (request, reply) => {
+    if (!request.currentUser?.tenantId) return reply.code(401).send({ error: "unauthorized" });
     const body = request.body as { partName: string; quantity: number };
     const tenantId = request.currentUser.tenantId;
     
@@ -195,7 +206,8 @@ export async function registerMaintenanceDashboardRoutes(
   });
 
   // Spare Parts - Low stock alert
-  app.get("/v1/maintenance/spare-parts/low-stock", async (request) => {
+  app.get("/v1/maintenance/spare-parts/low-stock", async (request, reply) => {
+    if (!request.currentUser?.tenantId) return reply.code(401).send({ error: "unauthorized" });
     const lowStockParts = await store.listLowStockParts(request.currentUser.tenantId);
     return { data: lowStockParts };
   });
@@ -207,7 +219,8 @@ export async function registerMaintenanceDashboardRoutes(
   // NOTE: Moved to maintenance-reports.routes.ts to avoid duplication
 
   // Reports - SLA Compliance
-  app.get("/v1/maintenance/reports/sla-compliance", async (request) => {
+  app.get("/v1/maintenance/reports/sla-compliance", async (request, reply) => {
+    if (!request.currentUser?.tenantId) return reply.code(401).send({ error: "unauthorized" });
     const tenantId = request.currentUser.tenantId;
     const workOrders = await store.listWorkOrders(tenantId);
     
@@ -229,7 +242,8 @@ export async function registerMaintenanceDashboardRoutes(
   });
 
   // Dashboard - Maintenance metrics
-  app.get("/v1/maintenance/reports/metrics", async (request) => {
+  app.get("/v1/maintenance/reports/metrics", async (request, reply) => {
+    if (!request.currentUser?.tenantId) return reply.code(401).send({ error: "unauthorized" });
     const tenantId = request.currentUser.tenantId;
     const compliance = await store.getMaintenanceComplianceStatus(tenantId);
     

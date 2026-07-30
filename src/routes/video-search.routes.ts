@@ -553,6 +553,7 @@ export async function registerVideoSearchRoutes(
    * POST /v1/recordings/playback/synchronized
    */
   app.post("/v1/recordings/playback/synchronized", async (request, reply) => {
+    if (!request.currentUser?.tenantId) return reply.code(401).send({ error: "unauthorized" });
     const body = syncedPlaybackSchema.parse(request.body);
 
     try {

@@ -52,7 +52,7 @@ interface DashboardSummary {
   totalStorageGb: number;
   usedStorageGb: number;
   avgHealthScore: number;
-  lastHeartbeat: string;
+  lastHeartbeat: string | null;
   failoverActiveServers: number;
   totalCountries: number;
   regions: Array<{
