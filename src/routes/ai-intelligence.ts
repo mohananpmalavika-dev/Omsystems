@@ -17,7 +17,8 @@ import { AIEvidenceBuilderService } from "../services/ai-evidence-builder.js";
 import { AIVideoSearchService } from "../services/ai-video-search.js";
 
 export async function registerAIIntelligenceRoutes(app: FastifyInstance) {
-  const { store, authenticateRequest } = app;
+  const store = (app as any).store as import("../control-plane-store.js").ControlPlaneStore;
+  const authenticateRequest = (app as any).authenticateRequest as (request: import("fastify").FastifyRequest) => Promise<any>;
 
   const incidentSummaryService = new AIIncidentSummaryService(store);
   const sopEngineService = new AISOPEngineService(store);
