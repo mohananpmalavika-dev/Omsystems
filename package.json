@@ -14,11 +14,12 @@
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "build": "tsc -p tsconfig.json",
+    "build:exe": "npm run build:exe --workspace @sentinel/edge-agent",
     "start": "node dist/src/index.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
     "typecheck:all": "npm run typecheck && npm run typecheck --workspaces --if-present",
-    "build:all": "npm run build && npm run build --workspaces --if-present",
+    "build:all": "npm run build && npm run build --workspaces --if-present && npm run build:exe",
     "test:smoke": "vitest run test/app.test.ts test/authorization.test.ts test/device-inventory.routes.test.ts test/maintenance.routes.test.ts test/live-view-flow.test.ts test/operational-health.test.ts dashboard/test/control-proxy.test.ts dashboard/test/proxy.test.ts dashboard/test/recording-proxy.test.ts analytics-engine/test/app.test.ts media-gateway/test/app.test.ts",
     "test:phase1": "vitest run test/operational-health.test.ts test/recording.test.ts test/app.test.ts",
     "test:phase2": "vitest run test/phase2-dashboard.test.ts test/operational-health.test.ts test/live-view-flow.test.ts dashboard/test/control-proxy.test.ts dashboard/test/branch-health-mosaic.test.ts dashboard/test/branch-camera-wall.test.ts",

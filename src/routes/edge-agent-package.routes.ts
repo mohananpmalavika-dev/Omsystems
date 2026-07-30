@@ -192,6 +192,21 @@ export async function registerEdgeAgentPackageRoutes(
         },
       };
 
+      const windowsExePath = join(distPath, "edge-agent.exe");
+      if (platform === "windows") {
+        try {
+          const exeStats = await stat(windowsExePath);
+          if (exeStats.isFile()) {
+            const exeData = await readFile(windowsExePath);
+            reply.header("Content-Type", "application/vnd.microsoft.portable-executable");
+            reply.header("Content-Disposition", `attachment; filename="${branch.name.replace(/[^a-zA-Z0-9_-]/g, "-")}-edge-agent-windows.exe"`);
+            return reply.send(exeData);
+          }
+        } catch {
+          app.log.debug({ windowsExePath }, "Windows executable not found; falling back to zip package");
+        }
+      }
+
       const distFiles = await collectFiles(distPath);
       const entries: Array<{ name: string; data: Buffer }> = [];
       for (const file of distFiles) {

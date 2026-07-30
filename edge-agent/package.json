@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "tsx src/index.ts",
     "build": "tsc -p tsconfig.json",
+    "build:exe": "npm run build && pkg --target node18-win-x64 --output dist/edge-agent.exe dist/src/index.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run"
   },
@@ -13,8 +14,12 @@
     "fast-xml-parser": "^5.2.5",
     "zod": "^3.25.76"
   },
+  "pkg": {
+    "scripts": ["dist/**/*.js"]
+  },
   "devDependencies": {
     "@types/node": "^22.13.4",
+    "pkg": "^5.8.1",
     "tsx": "^4.19.3",
     "typescript": "^5.7.3",
     "vitest": "^3.0.6"
