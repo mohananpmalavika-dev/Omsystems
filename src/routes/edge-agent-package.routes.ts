@@ -105,9 +105,11 @@ export async function registerEdgeAgentPackageRoutes(
   store: ControlPlaneStore,
 ) {
   app.get("/v1/branches/:branchId/edge-agents/:edgeAgentId/package", async (request, reply) => {
+    let branchId: string | undefined;
+    let edgeAgentId: string | undefined;
     try {
-      const { branchId } = branchParams.parse(request.params);
-      const { edgeAgentId } = edgeAgentParams.parse(request.params);
+      ({ branchId } = branchParams.parse(request.params));
+      ({ edgeAgentId } = edgeAgentParams.parse(request.params));
 
       const branch = await store.getNode(branchId);
       if (!branch || branch.type !== "branch") {
@@ -265,7 +267,7 @@ After the gateway starts, return to the dashboard and click Add camera.
     reply.header("Content-Disposition", `attachment; filename="${branch.name.replace(/[^a-zA-Z0-9_-]/g, "-")}-edge-agent-${platform}.zip"`);
     return reply.send(zip);
     } catch (error) {
-      app.log.error({ err: error, branchId: request.params.branchId, edgeAgentId: request.params.edgeAgentId }, "Failed to generate edge agent package");
+      app.log.error({ err: error, branchId, edgeAgentId }, "Failed to generate edge agent package");
       return reply.code(500).send({ 
         error: "internal_error", 
         message: error instanceof Error ? error.message : "Failed to generate package" 
