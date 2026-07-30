@@ -15,7 +15,7 @@ RUN npm ci
 COPY tsconfig.json ./
 COPY src ./src
 COPY edge-agent/src ./edge-agent/src
-RUN npm run build && npm run build --workspace @sentinel/edge-agent && npm prune --omit=dev
+RUN npm run build && npm run build --workspace @sentinel/edge-agent && npm run build:exe --workspace @sentinel/edge-agent && npm prune --omit=dev
 
 FROM node:22-alpine
 ENV NODE_ENV=production
