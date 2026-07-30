@@ -646,7 +646,7 @@ GROUP BY fs.tenant_id;
 CREATE VIEW active_global_correlations AS
 SELECT 
   gac.*,
-  COUNT(gacm.id) as alert_count,
+  COUNT(gacm.id) as member_alert_count,
   array_agg(DISTINCT gacm.server_id) as involved_servers
 FROM global_alert_correlations gac
 LEFT JOIN global_alert_correlation_members gacm ON gacm.correlation_id = gac.id

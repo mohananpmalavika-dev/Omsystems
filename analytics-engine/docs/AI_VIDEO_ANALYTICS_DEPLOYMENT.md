@@ -37,6 +37,20 @@ ANALYTICS_REQUIRE_MODELS=true
 
 With strict readiness enabled, a missing required model prevents pipeline initialization and `/health` returns HTTP 503. Without strict readiness, `/health` returns `degraded` with `pipeline.models.missingRequired`; normalized edge observations can still be processed.
 
+### Render deployment mode
+
+The checked-in Render blueprint does not attach an approved model volume, so it
+explicitly sets `ANALYTICS_REQUIRE_MODELS=false`. This lets the service accept
+authenticated normalized observations from edge inference workers and makes
+Render's `/health` deployment check return HTTP 200 with `status: degraded`.
+The response continues to expose the missing required model IDs; this mode must
+not be represented as local inference.
+
+To enable local inference on Render, attach or provision every manifest artifact,
+run `npm run models:verify` against that exact directory, and only then change
+`ANALYTICS_REQUIRE_MODELS` to `true`. Enabling strict mode without the artifacts
+intentionally produces HTTP 503 and blocks deployment.
+
 Useful endpoints:
 
 - `GET /health` — detector health plus configured, available and loaded model counts;

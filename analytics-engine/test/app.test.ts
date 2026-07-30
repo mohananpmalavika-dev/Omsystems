@@ -22,7 +22,8 @@ describe("analytics engine adapter", () => {
     expect(response.statusCode).toBe(200);
     expect(response.json()).toMatchObject({
       status: "degraded",
-      pipeline: { models: { ready: false, required: 6, requiredReady: 0, loaded: 0 } },
+      initializationError: null,
+      pipeline: { initialized: true, models: { ready: false, required: 6, requiredReady: 0, loaded: 0 } },
     });
   });
 

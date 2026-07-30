@@ -87,20 +87,20 @@ export function buildAnalyticsEngine(options: AnalyticsEngineOptions) {
   let pipelineInitializationError: string | null = null;
   const pipelineReady = pipeline.initialize().catch((error) => {
     pipelineInitializationError = error instanceof Error ? error.message : String(error);
-    app.log.error({ error }, "Failed to initialize analytics pipeline");
+    app.log.error({ err: error, initializationError: pipelineInitializationError }, "Failed to initialize analytics pipeline");
   });
 
   // Register detection API routes
   void import("./routes/detection-api.js").then(module => {
     module.registerDetectionApiRoutes(app, pipeline).catch((error) => {
-      app.log.error({ error }, "Failed to register detection API routes");
+      app.log.error({ err: error }, "Failed to register detection API routes");
     });
   });
 
   // Register advanced analytics API routes
   void import("./routes/advanced-analytics-api.js").then(module => {
     module.registerAdvancedAnalyticsRoutes(app, pipeline).catch((error) => {
-      app.log.error({ error }, "Failed to register advanced analytics API routes");
+      app.log.error({ err: error }, "Failed to register advanced analytics API routes");
     });
   });
 

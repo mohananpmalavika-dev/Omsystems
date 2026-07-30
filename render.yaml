@@ -70,6 +70,14 @@ services:
         value: "8092"
       - key: CONTROL_PLANE_URL
         value: "https://sentinel-grid-control-plane.onrender.com"
+      # Render's free web service has no approved model volume attached. Keep
+      # the API available for authenticated edge-normalized observations while
+      # /health truthfully reports degraded model inventory. Set this to true
+      # only after all required ONNX artifacts are mounted and verified.
+      - key: ANALYTICS_REQUIRE_MODELS
+        value: "false"
+      - key: ENABLE_GPU_ACCELERATION
+        value: "false"
       - key: ANALYTICS_ENGINE_SHARED_KEY
         sync: false
       - key: ANALYTICS_SOURCE_SHARED_KEY
