@@ -1545,6 +1545,7 @@ export async function buildApp(options?: {
   });
 
   await registerDeviceInventoryRoutes(app, store);
+  await registerCameraDiscoveryRoutes(app, store);
   // Core maintenance routes depend only on ControlPlaneStore and must be
   // available for both the in-memory development runtime and PostgreSQL.
   await registerMaintenanceRoutes(app, store);
@@ -1556,7 +1557,6 @@ export async function buildApp(options?: {
     await registerOrganizationRoutes(app, extendedStore);
     await registerUserRoutes(app, extendedStore);
     await registerCameraPermissionRoutes(app, extendedStore);
-    await registerCameraDiscoveryRoutes(app, extendedStore);
     await registerCctvInfrastructureRoutes(app, extendedStore);
     await registerComplianceRoutes(app, extendedStore);
     await registerComplianceEnhancedRoutes(app, extendedStore);
