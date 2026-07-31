@@ -480,3 +480,678 @@ export function createInfrastructureMonitoringRoutes(pool: Pool): Router {
         WHERE ns.tenant_id = $1 AND ns.branch_id = $2
         ORDER BY ns.name
       `;
+
+      const result = await pool.query(query, [tenantId, branchId]);
+      
+      res.json({
+        success: true,
+        data: result.rows
+      });
+    } catch (error) {
+      console.error('Error fetching switches:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Failed to fetch switches'
+      });
+    }
+  });
+
+  /**
+   * GET /v1/infrastructure/switches/:switchId/ports
+   * Get port-level metrics for a switch
+   */
+  router.get('/switches/:switchId/ports', async (req: AuthRequest, res: Response) => {
+    try {
+      const { tenantId } = req.context || {};
+      const { switchId } = req.params;
+      
+      if (!tenantId) {
+        return res.status(401).json({
+          success: false,
+          error: 'Unauthorized'
+        });
+      }
+
+      const query = `
+        SELECT 
+          port_number,
+          port_name,
+          admin_status,
+          oper_status,
+          speed_mbps,
+          poe_enabled,
+          poe_power_watts,
+          poe_device_detected,
+          connected_device_type,
+          utilization_percent,
+          rx_bytes,
+          tx_bytes,
+          rx_errors,
+          tx_errors,
+          observed_at
+        FROM switch_port_metrics
+        WHERE tenant_id = $1 AND switch_id = $2
+          AND observed_at = (
+            SELECT MAX(observed_at)
+            FROM switch_port_metrics
+            WHERE switch_id = $2
+          )
+        ORDER BY port_number
+      `;
+
+      const result = await pool.query(query, [tenantId, switchId]);
+      
+      res.json({
+        success: true,
+        data: result.rows
+      });
+    } catch (error) {
+      console.error('Error fetching switch ports:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Failed to fetch switch ports'
+      });
+    }
+  });
+
+  /**
+   * GET /v1/infrastructure/firewalls/:branchId
+   * Get all firewalls for a branch with latest metrics
+   */
+  router.get('/firewalls/:branchId', async (req: AuthRequest, res: Response) => {
+    try {
+      const { tenantId } = req.context || {};
+      const { branchId } = req.params;
+      
+      if (!tenantId) {
+        return res.status(401).json({
+          success: false,
+          error: 'Unauthorized'
+        });
+      }
+
+      const query = `
+        SELECT 
+          f.*,
+          fhm.health_score,
+          fhm.health_status,
+          fhm.cpu_usage_percent,
+          fhm.memory_usage_percent,
+          fhm.session_count,
+          fhm.session_utilization_percent,
+          fhm.threats_blocked_last_hour,
+          fhm.ips_status,
+          fhm.av_status,
+          fhm.vpn_tunnels_up,
+          fhm.vpn_tunnels_down,
+          fhm.ha_sync_status,
+          fhm.observed_at as last_metrics_at
+        FROM firewalls f
+        LEFT JOIN LATERAL (
+          SELECT *
+          FROM firewall_health_metrics
+          WHERE firewall_id = f.id
+          ORDER BY observed_at DESC
+          LIMIT 1
+        ) fhm ON true
+        WHERE f.tenant_id = $1 AND f.branch_id = $2
+        ORDER BY f.name
+      `;
+
+      const result = await pool.query(query, [tenantId, branchId]);
+      
+      res.json({
+        success: true,
+        data: result.rows
+      });
+    } catch (error) {
+      console.error('Error fetching firewalls:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Failed to fetch firewalls'
+      });
+    }
+  });
+
+  /**
+   * GET /v1/infrastructure/ups/:branchId
+   * Get all UPS devices for a branch with latest metrics
+   */
+  router.get('/ups/:branchId', async (req: AuthRequest, res: Response) => {
+    try {
+      const { tenantId } = req.context || {};
+      const { branchId } = req.params;
+      
+      if (!tenantId) {
+        return res.status(401).json({
+          success: false,
+          error: 'Unauthorized'
+        });
+      }
+
+      const query = `
+        SELECT 
+          u.*,
+          uhm.health_score,
+          uhm.health_status,
+          uhm.battery_health_percent,
+          uhm.battery_age_days,
+          uhm.estimated_runtime_minutes,
+          uhm.running_on_battery,
+          uhm.utility_power_available,
+          uhm.load_percent,
+          uhm.load_watts,
+          uhm.battery_replacement_indicator,
+          uhm.predicted_replacement_days,
+          uhm.last_self_test_result,
+          uhm.observed_at as last_metrics_at
+        FROM ups_devices u
+        LEFT JOIN LATERAL (
+          SELECT *
+          FROM ups_health_metrics
+          WHERE ups_id = u.id
+          ORDER BY observed_at DESC
+          LIMIT 1
+        ) uhm ON true
+        WHERE u.tenant_id = $1 AND u.branch_id = $2
+        ORDER BY u.name
+      `;
+
+      const result = await pool.query(query, [tenantId, branchId]);
+      
+      res.json({
+        success: true,
+        data: result.rows
+      });
+    } catch (error) {
+      console.error('Error fetching UPS devices:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Failed to fetch UPS devices'
+      });
+    }
+  });
+
+  /**
+   * GET /v1/infrastructure/ups/:upsId/battery-forecast
+   * Get battery replacement prediction and maintenance schedule
+   */
+  router.get('/ups/:upsId/battery-forecast', async (req: AuthRequest, res: Response) => {
+    try {
+      const { tenantId } = req.context || {};
+      const { upsId } = req.params;
+      
+      if (!tenantId) {
+        return res.status(401).json({
+          success: false,
+          error: 'Unauthorized'
+        });
+      }
+
+      const query = `
+        SELECT 
+          u.name as ups_name,
+          u.branch_id,
+          rn.name as branch_name,
+          uhm.battery_health_percent,
+          uhm.battery_age_days,
+          uhm.battery_replacement_indicator,
+          uhm.predicted_replacement_days,
+          uhm.last_self_test_result,
+          uhm.last_self_test_date,
+          u.battery_installation_date,
+          uhm.observed_at
+        FROM ups_devices u
+        JOIN resource_nodes rn ON rn.id = u.branch_id
+        LEFT JOIN LATERAL (
+          SELECT *
+          FROM ups_health_metrics
+          WHERE ups_id = u.id
+          ORDER BY observed_at DESC
+          LIMIT 1
+        ) uhm ON true
+        WHERE u.id = $1 AND u.tenant_id = $2
+      `;
+
+      const result = await pool.query(query, [upsId, tenantId]);
+      
+      if (result.rows.length === 0) {
+        return res.status(404).json({
+          success: false,
+          error: 'UPS device not found'
+        });
+      }
+
+      res.json({
+        success: true,
+        data: result.rows[0]
+      });
+    } catch (error) {
+      console.error('Error fetching UPS battery forecast:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Failed to fetch UPS battery forecast'
+      });
+    }
+  });
+
+  /**
+   * GET /v1/infrastructure/predicted-failures/:branchId
+   * Get all predicted failures for a branch
+   */
+  router.get('/predicted-failures/:branchId', async (req: AuthRequest, res: Response) => {
+    try {
+      const { tenantId } = req.context || {};
+      const { branchId } = req.params;
+      
+      if (!tenantId) {
+        return res.status(401).json({
+          success: false,
+          error: 'Unauthorized'
+        });
+      }
+
+      const query = `
+        SELECT 
+          'ups_battery' as failure_type,
+          u.id as component_id,
+          u.name as component_name,
+          'UPS Battery Replacement Required' as description,
+          uhm.predicted_replacement_days as days_until_failure,
+          uhm.battery_health_percent as health_indicator,
+          uhm.observed_at
+        FROM ups_devices u
+        JOIN ups_health_metrics uhm ON uhm.ups_id = u.id
+        WHERE u.tenant_id = $1 
+          AND u.branch_id = $2
+          AND (uhm.battery_replacement_indicator = true 
+               OR uhm.predicted_replacement_days < 90)
+          AND uhm.observed_at = (
+            SELECT MAX(observed_at)
+            FROM ups_health_metrics
+            WHERE ups_id = u.id
+          )
+        
+        UNION ALL
+        
+        SELECT 
+          'disk_failure' as failure_type,
+          dh.id as component_id,
+          dh.device_name as component_name,
+          'Disk Failure Predicted' as description,
+          NULL as days_until_failure,
+          dh.smart_health_percent as health_indicator,
+          dh.last_check_at as observed_at
+        FROM disk_health dh
+        WHERE dh.tenant_id = $1 
+          AND dh.branch_id = $2
+          AND dh.smart_status = 'failure_predicted'
+        
+        UNION ALL
+        
+        SELECT 
+          'generator_maintenance' as failure_type,
+          g.id as component_id,
+          g.name as component_name,
+          'Generator Maintenance Due' as description,
+          ghm.maintenance_due_days as days_until_failure,
+          NULL as health_indicator,
+          ghm.observed_at
+        FROM generators g
+        JOIN generator_health_metrics ghm ON ghm.generator_id = g.id
+        WHERE g.tenant_id = $1 
+          AND g.branch_id = $2
+          AND ghm.maintenance_due = true
+          AND ghm.observed_at = (
+            SELECT MAX(observed_at)
+            FROM generator_health_metrics
+            WHERE generator_id = g.id
+          )
+        
+        ORDER BY days_until_failure ASC NULLS LAST, observed_at DESC
+      `;
+
+      const result = await pool.query(query, [tenantId, branchId]);
+      
+      res.json({
+        success: true,
+        data: result.rows
+      });
+    } catch (error) {
+      console.error('Error fetching predicted failures:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Failed to fetch predicted failures'
+      });
+    }
+  });
+
+  /**
+   * GET /v1/infrastructure/availability/:branchId
+   * Get infrastructure availability metrics
+   */
+  router.get('/availability/:branchId', async (req: AuthRequest, res: Response) => {
+    try {
+      const { tenantId } = req.context || {};
+      const { branchId } = req.params;
+      const { periodType = 'day', limit = 30 } = req.query;
+      
+      if (!tenantId) {
+        return res.status(401).json({
+          success: false,
+          error: 'Unauthorized'
+        });
+      }
+
+      const query = `
+        SELECT 
+          period_start,
+          period_end,
+          period_type,
+          availability_percent,
+          total_uptime_seconds,
+          total_downtime_seconds,
+          power_outage_count,
+          network_outage_count,
+          mtbf_hours,
+          mttr_hours
+        FROM infrastructure_availability_metrics
+        WHERE tenant_id = $1 
+          AND branch_id = $2
+          AND period_type = $3
+        ORDER BY period_start DESC
+        LIMIT $4
+      `;
+
+      const result = await pool.query(query, [tenantId, branchId, periodType, Number(limit)]);
+      
+      res.json({
+        success: true,
+        data: result.rows
+      });
+    } catch (error) {
+      console.error('Error fetching availability metrics:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Failed to fetch availability metrics'
+      });
+    }
+  });
+
+  /**
+   * GET /v1/infrastructure/topology/:branchId
+   * Get network topology for a branch
+   */
+  router.get('/topology/:branchId', async (req: AuthRequest, res: Response) => {
+    try {
+      const { tenantId } = req.context || {};
+      const { branchId } = req.params;
+      
+      if (!tenantId) {
+        return res.status(401).json({
+          success: false,
+          error: 'Unauthorized'
+        });
+      }
+
+      const query = `
+        SELECT 
+          ntn.*,
+          src.name as source_device_name,
+          tgt.name as target_device_name
+        FROM network_topology_nodes ntn
+        LEFT JOIN LATERAL (
+          SELECT name FROM (
+            SELECT id, name FROM network_switches WHERE tenant_id = $1
+            UNION ALL
+            SELECT id, name FROM firewalls WHERE tenant_id = $1
+            UNION ALL
+            SELECT id, name FROM cameras WHERE tenant_id = $1
+            UNION ALL
+            SELECT id, name FROM ups_devices WHERE tenant_id = $1
+            UNION ALL
+            SELECT id, name FROM hardware_devices WHERE tenant_id = $1
+          ) devices
+          WHERE devices.id = ntn.source_device_id
+        ) src ON true
+        LEFT JOIN LATERAL (
+          SELECT name FROM (
+            SELECT id, name FROM network_switches WHERE tenant_id = $1
+            UNION ALL
+            SELECT id, name FROM firewalls WHERE tenant_id = $1
+            UNION ALL
+            SELECT id, name FROM cameras WHERE tenant_id = $1
+            UNION ALL
+            SELECT id, name FROM ups_devices WHERE tenant_id = $1
+            UNION ALL
+            SELECT id, name FROM hardware_devices WHERE tenant_id = $1
+          ) devices
+          WHERE devices.id = ntn.target_device_id
+        ) tgt ON true
+        WHERE ntn.tenant_id = $1 AND ntn.branch_id = $2
+        ORDER BY ntn.source_device_type, ntn.source_device_id
+      `;
+
+      const result = await pool.query(query, [tenantId, branchId]);
+      
+      res.json({
+        success: true,
+        data: result.rows
+      });
+    } catch (error) {
+      console.error('Error fetching network topology:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Failed to fetch network topology'
+      });
+    }
+  });
+
+  // =====================================================
+  // METRICS HISTORY ENDPOINTS
+  // =====================================================
+
+  /**
+   * GET /v1/infrastructure/metrics/switch/:switchId/history
+   * Get historical metrics for a switch
+   */
+  router.get('/metrics/switch/:switchId/history', async (req: AuthRequest, res: Response) => {
+    try {
+      const { tenantId } = req.context || {};
+      const { switchId } = req.params;
+      const { startDate, endDate, limit = 100 } = req.query;
+      
+      if (!tenantId) {
+        return res.status(401).json({
+          success: false,
+          error: 'Unauthorized'
+        });
+      }
+
+      let query = `
+        SELECT 
+          observed_at,
+          cpu_usage_percent,
+          memory_usage_percent,
+          temperature_celsius,
+          poe_utilization_percent,
+          ports_up,
+          ports_down,
+          health_score
+        FROM switch_health_metrics
+        WHERE tenant_id = $1 AND switch_id = $2
+      `;
+
+      const params: any[] = [tenantId, switchId];
+      let paramIndex = 3;
+
+      if (startDate) {
+        query += ` AND observed_at >= $${paramIndex}`;
+        params.push(new Date(startDate as string));
+        paramIndex++;
+      }
+
+      if (endDate) {
+        query += ` AND observed_at <= $${paramIndex}`;
+        params.push(new Date(endDate as string));
+        paramIndex++;
+      }
+
+      query += ` ORDER BY observed_at DESC LIMIT $${paramIndex}`;
+      params.push(Number(limit));
+
+      const result = await pool.query(query, params);
+      
+      res.json({
+        success: true,
+        data: result.rows
+      });
+    } catch (error) {
+      console.error('Error fetching switch metrics history:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Failed to fetch switch metrics history'
+      });
+    }
+  });
+
+  /**
+   * GET /v1/infrastructure/metrics/firewall/:firewallId/history
+   * Get historical metrics for a firewall
+   */
+  router.get('/metrics/firewall/:firewallId/history', async (req: AuthRequest, res: Response) => {
+    try {
+      const { tenantId } = req.context || {};
+      const { firewallId } = req.params;
+      const { startDate, endDate, limit = 100 } = req.query;
+      
+      if (!tenantId) {
+        return res.status(401).json({
+          success: false,
+          error: 'Unauthorized'
+        });
+      }
+
+      let query = `
+        SELECT 
+          observed_at,
+          cpu_usage_percent,
+          memory_usage_percent,
+          session_count,
+          session_utilization_percent,
+          threats_blocked_last_hour,
+          ips_status,
+          av_status,
+          vpn_tunnels_up,
+          vpn_tunnels_down,
+          health_score
+        FROM firewall_health_metrics
+        WHERE tenant_id = $1 AND firewall_id = $2
+      `;
+
+      const params: any[] = [tenantId, firewallId];
+      let paramIndex = 3;
+
+      if (startDate) {
+        query += ` AND observed_at >= $${paramIndex}`;
+        params.push(new Date(startDate as string));
+        paramIndex++;
+      }
+
+      if (endDate) {
+        query += ` AND observed_at <= $${paramIndex}`;
+        params.push(new Date(endDate as string));
+        paramIndex++;
+      }
+
+      query += ` ORDER BY observed_at DESC LIMIT $${paramIndex}`;
+      params.push(Number(limit));
+
+      const result = await pool.query(query, params);
+      
+      res.json({
+        success: true,
+        data: result.rows
+      });
+    } catch (error) {
+      console.error('Error fetching firewall metrics history:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Failed to fetch firewall metrics history'
+      });
+    }
+  });
+
+  /**
+   * GET /v1/infrastructure/metrics/ups/:upsId/history
+   * Get historical metrics for a UPS
+   */
+  router.get('/metrics/ups/:upsId/history', async (req: AuthRequest, res: Response) => {
+    try {
+      const { tenantId } = req.context || {};
+      const { upsId } = req.params;
+      const { startDate, endDate, limit = 100 } = req.query;
+      
+      if (!tenantId) {
+        return res.status(401).json({
+          success: false,
+          error: 'Unauthorized'
+        });
+      }
+
+      let query = `
+        SELECT 
+          observed_at,
+          battery_health_percent,
+          battery_age_days,
+          estimated_runtime_minutes,
+          running_on_battery,
+          utility_power_available,
+          load_percent,
+          load_watts,
+          input_voltage,
+          output_voltage,
+          battery_replacement_indicator,
+          predicted_replacement_days,
+          health_score
+        FROM ups_health_metrics
+        WHERE tenant_id = $1 AND ups_id = $2
+      `;
+
+      const params: any[] = [tenantId, upsId];
+      let paramIndex = 3;
+
+      if (startDate) {
+        query += ` AND observed_at >= $${paramIndex}`;
+        params.push(new Date(startDate as string));
+        paramIndex++;
+      }
+
+      if (endDate) {
+        query += ` AND observed_at <= $${paramIndex}`;
+        params.push(new Date(endDate as string));
+        paramIndex++;
+      }
+
+      query += ` ORDER BY observed_at DESC LIMIT $${paramIndex}`;
+      params.push(Number(limit));
+
+      const result = await pool.query(query, params);
+      
+      res.json({
+        success: true,
+        data: result.rows
+      });
+    } catch (error) {
+      console.error('Error fetching UPS metrics history:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Failed to fetch UPS metrics history'
+      });
+    }
+  });
+
+  return router;
+}
+
+export default createInfrastructureMonitoringRoutes;
