@@ -607,3 +607,215 @@ export class FirewallMonitoringService {
       });
     }
   }
+
+  /**
+   * Build SNMP target from firewall configuration
+   */
+  private buildSNMPTarget(fw: Firewall): SNMPTarget {
+    return {
+      host: fw.ipAddress,
+      port: 161,
+      timeout: 5000,
+      retries: 3,
+      credentials: {
+        version: '2c', // Default, would come from config
+        community: 'public' // Would come from secure config
+      }
+    };
+  }
+
+  // =====================================================
+  // DATABASE OPERATIONS
+  // =====================================================
+
+  /**
+   * Get all firewalls for a branch
+   */
+  private async getFirewalls(tenantId: string, branchId: string): Promise<Firewall[]> {
+    const query = `
+      SELECT 
+        id, tenant_id, branch_id, name, ip_address,
+        manufacturer, model, serial_number, firmware_version,
+        management_protocol, high_availability, ha_role,
+        license_expiry_date, status
+      FROM firewalls
+      WHERE tenant_id = $1 AND branch_id = $2
+      ORDER BY name
+    `;
+
+    const result = await this.pool.query(query, [tenantId, branchId]);
+    
+    return result.rows.map(row => ({
+      id: row.id,
+      tenantId: row.tenant_id,
+      branchId: row.branch_id,
+      name: row.name,
+      ipAddress: row.ip_address,
+      manufacturer: row.manufacturer,
+      model: row.model,
+      serialNumber: row.serial_number,
+      firmwareVersion: row.firmware_version,
+      managementProtocol: row.management_protocol,
+      highAvailability: row.high_availability,
+      haRole: row.ha_role,
+      licenseExpiryDate: row.license_expiry_date,
+      status: row.status
+    }));
+  }
+
+  /**
+   * Store firewall health metrics
+   */
+  private async storeFirewallHealth(metrics: FirewallHealthMetrics): Promise<void> {
+    const query = `
+      INSERT INTO firewall_health_metrics (
+        tenant_id, firewall_id, observed_at,
+        cpu_usage_percent, memory_usage_percent,
+        session_count, session_utilization_percent,
+        threats_blocked_total, threats_blocked_last_hour,
+        ips_status, av_status,
+        vpn_tunnels_total, vpn_tunnels_up, vpn_tunnels_down,
+        ha_sync_status, health_score, health_status
+      ) VALUES (
+        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17
+      )
+    `;
+
+    await this.pool.query(query, [
+      metrics.tenantId,
+      metrics.firewallId,
+      metrics.observedAt,
+      metrics.cpuUsagePercent,
+      metrics.memoryUsagePercent,
+      metrics.sessionCount,
+      metrics.sessionUtilizationPercent,
+      metrics.threatsBlockedTotal,
+      metrics.threatsBlockedLastHour,
+      metrics.ipsStatus,
+      metrics.avStatus,
+      metrics.vpnTunnelsTotal,
+      metrics.vpnTunnelsUp,
+      metrics.vpnTunnelsDown,
+      metrics.haSyncStatus,
+      metrics.healthScore,
+      metrics.healthStatus
+    ]);
+  }
+
+  /**
+   * Update firewall status
+   */
+  private async updateFirewallStatus(firewallId: string, status: string): Promise<void> {
+    const query = `
+      UPDATE firewalls
+      SET status = $2, updated_at = NOW()
+      WHERE id = $1
+    `;
+
+    await this.pool.query(query, [firewallId, status]);
+  }
+
+  /**
+   * Create infrastructure alert
+   */
+  private async createInfrastructureAlert(alert: {
+    tenantId: string;
+    branchId: string;
+    type: string;
+    severity: 'critical' | 'warning';
+    componentType: string;
+    componentId: string;
+    componentName: string;
+    title: string;
+    description: string;
+    impact?: string;
+    recommendedAction?: string;
+    metrics: any;
+  }): Promise<void> {
+    // Check if similar alert already exists and is active
+    const checkQuery = `
+      SELECT id FROM infrastructure_alerts
+      WHERE tenant_id = $1 
+        AND component_id = $2 
+        AND alert_type = $3
+        AND status = 'active'
+    `;
+
+    const existing = await this.pool.query(checkQuery, [
+      alert.tenantId,
+      alert.componentId,
+      alert.type
+    ]);
+
+    if (existing.rows.length > 0) {
+      // Alert already exists, don't create duplicate
+      return;
+    }
+
+    const query = `
+      INSERT INTO infrastructure_alerts (
+        tenant_id, branch_id, alert_type, severity,
+        component_type, component_id, component_name,
+        title, description, impact, recommended_action,
+        metrics, status
+      ) VALUES (
+        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 'active'
+      )
+    `;
+
+    await this.pool.query(query, [
+      alert.tenantId,
+      alert.branchId,
+      alert.type,
+      alert.severity,
+      alert.componentType,
+      alert.componentId,
+      alert.componentName,
+      alert.title,
+      alert.description,
+      alert.impact,
+      alert.recommendedAction,
+      JSON.stringify(alert.metrics)
+    ]);
+  }
+
+  /**
+   * Check license expiry and create alert if needed
+   */
+  async checkLicenseExpiry(tenantId: string, branchId: string): Promise<void> {
+    const query = `
+      SELECT id, name, license_expiry_date
+      FROM firewalls
+      WHERE tenant_id = $1 
+        AND branch_id = $2
+        AND license_expiry_date IS NOT NULL
+        AND license_expiry_date <= CURRENT_DATE + INTERVAL '30 days'
+    `;
+
+    const result = await this.pool.query(query, [tenantId, branchId]);
+
+    for (const fw of result.rows) {
+      const daysUntilExpiry = Math.floor(
+        (new Date(fw.license_expiry_date).getTime() - Date.now()) / (1000 * 60 * 60 * 24)
+      );
+
+      await this.createInfrastructureAlert({
+        tenantId,
+        branchId,
+        type: 'firewall_license_expiring',
+        severity: daysUntilExpiry <= 7 ? 'critical' : 'warning',
+        componentType: 'firewall',
+        componentId: fw.id,
+        componentName: fw.name,
+        title: 'Firewall License Expiring',
+        description: `Firewall ${fw.name} license expires in ${daysUntilExpiry} days`,
+        impact: 'Firewall features may be disabled after license expiry',
+        recommendedAction: 'Renew firewall license before expiry date',
+        metrics: { 
+          licenseExpiryDate: fw.license_expiry_date,
+          daysUntilExpiry 
+        }
+      });
+    }
+  }
+}
