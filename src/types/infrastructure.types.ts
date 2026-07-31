@@ -261,3 +261,261 @@ export interface SFPOpticalMetrics {
   healthScore: number;
   healthStatus: HealthStatus;
 }
+
+// =====================================================
+// VPN & SD-WAN TYPES
+// =====================================================
+
+export interface VPNTunnel {
+  id: string;
+  tenantId: string;
+  branchId: string;
+  firewallId?: string;
+  tunnelName: string;
+  tunnelType: 'ipsec' | 'ssl' | 'gre' | 'wireguard' | 'openvpn';
+  remoteEndpoint: string;
+  remoteBranchId?: string;
+  encryptionAlgorithm?: string;
+  status: 'up' | 'down' | 'negotiating' | 'unknown';
+}
+
+export interface VPNTunnelMetrics {
+  id: string;
+  tenantId: string;
+  tunnelId: string;
+  observedAt: Date;
+  tunnelStatus: 'up' | 'down' | 'negotiating';
+  uptimeSeconds?: number;
+  latencyMs?: number;
+  packetLossPercent?: number;
+  slaViolation: boolean;
+  encryptionHealthy: boolean;
+  healthScore: number;
+  healthStatus: HealthStatus;
+}
+
+export interface SDWANPath {
+  id: string;
+  tenantId: string;
+  branchId: string;
+  pathName: string;
+  linkId?: string;
+  overlayType: 'mpls' | 'internet' | 'lte' | '5g';
+  slaProfile?: string;
+  activePath: boolean;
+  status: 'active' | 'standby' | 'failed' | 'unknown';
+}
+
+export interface SDWANMetrics {
+  id: string;
+  tenantId: string;
+  pathId: string;
+  observedAt: Date;
+  pathStatus: 'active' | 'standby' | 'failed';
+  latencyMs?: number;
+  jitterMs?: number;
+  packetLossPercent?: number;
+  slaCompliance: boolean;
+  healthScore: number;
+  healthStatus: HealthStatus;
+}
+
+// =====================================================
+// HARDWARE TELEMETRY TYPES
+// =====================================================
+
+export interface HardwareDevice {
+  id: string;
+  tenantId: string;
+  branchId: string;
+  deviceName: string;
+  deviceType: 'recorder' | 'server' | 'workstation' | 'appliance';
+  ipAddress?: string;
+  manufacturer?: string;
+  model?: string;
+  serialNumber?: string;
+  cpuModel?: string;
+  cpuCores?: number;
+  memoryTotalGB?: number;
+  gpuCount?: number;
+  gpuModel?: string[];
+  status: DeviceStatus;
+}
+
+export interface CPUMetrics {
+  id: string;
+  tenantId: string;
+  deviceId: string;
+  observedAt: Date;
+  cpuUsagePercent?: number;
+  temperatureCelsius?: number;
+  frequencyMhz?: number;
+  thermalThrottling: boolean;
+  fanSpeedRpm?: number;
+  healthScore: number;
+  healthStatus: HealthStatus;
+}
+
+export interface GPUMetrics {
+  id: string;
+  tenantId: string;
+  deviceId: string;
+  gpuIndex: number;
+  observedAt: Date;
+  gpuName?: string;
+  gpuUsagePercent?: number;
+  memoryUsageMB?: number;
+  memoryTotalMB?: number;
+  temperatureCelsius?: number;
+  powerDrawWatts?: number;
+  encoderUsagePercent?: number;
+  decoderUsagePercent?: number;
+  thermalThrottling: boolean;
+  powerThrottling: boolean;
+  healthScore: number;
+  healthStatus: HealthStatus;
+}
+
+export interface PowerMetrics {
+  id: string;
+  tenantId: string;
+  branchId: string;
+  deviceId?: string;
+  upsId?: string;
+  observedAt: Date;
+  inputVoltage?: number;
+  outputVoltage?: number;
+  voltageFluctuationPercent?: number;
+  brownoutDetected: boolean;
+  overvoltageDetected: boolean;
+  powerEventType: 'normal' | 'brownout' | 'overvoltage' | 'sag' | 'surge' | 'outage';
+  healthScore: number;
+  healthStatus: HealthStatus;
+}
+
+// =====================================================
+// UNIFIED HEALTH SCORING TYPES
+// =====================================================
+
+export interface InfrastructureHealthScore {
+  id: string;
+  tenantId: string;
+  branchId: string;
+  observedAt: Date;
+  overallScore: number;
+  overallStatus: HealthStatus;
+  powerScore: number;
+  powerStatus: HealthStatus;
+  networkScore: number;
+  networkStatus: HealthStatus;
+  computeScore: number;
+  computeStatus: HealthStatus;
+  storageScore: number;
+  storageStatus: HealthStatus;
+  coolingScore: number;
+  coolingStatus: HealthStatus;
+  securityScore: number;
+  securityStatus: HealthStatus;
+  surveillanceScore: number;
+  surveillanceStatus: HealthStatus;
+  componentDetails?: Record<string, any>;
+  criticalIssues: number;
+  warningIssues: number;
+  predictedFailures: number;
+}
+
+export interface InfrastructureAvailabilityMetrics {
+  id: string;
+  tenantId: string;
+  branchId: string;
+  periodStart: Date;
+  periodEnd: Date;
+  periodType: 'hour' | 'day' | 'week' | 'month';
+  totalUptimeSeconds: number;
+  totalDowntimeSeconds: number;
+  availabilityPercent: number;
+  powerOutageCount: number;
+  networkOutageCount: number;
+  mtbfHours?: number;
+  mttrHours?: number;
+}
+
+// =====================================================
+// INFRASTRUCTURE ALERT TYPES
+// =====================================================
+
+export type ComponentType = 
+  | 'switch' 
+  | 'firewall' 
+  | 'ups' 
+  | 'generator' 
+  | 'network_link' 
+  | 'vpn' 
+  | 'sdwan'
+  | 'sfp' 
+  | 'cpu' 
+  | 'gpu' 
+  | 'power' 
+  | 'recorder' 
+  | 'camera' 
+  | 'storage' 
+  | 'infrastructure';
+
+export type AlertSeverity = 'critical' | 'warning' | 'info';
+export type AlertStatus = 'active' | 'acknowledged' | 'resolved' | 'suppressed';
+
+export interface InfrastructureAlert {
+  id: string;
+  tenantId: string;
+  branchId: string;
+  alertType: string;
+  severity: AlertSeverity;
+  componentType: ComponentType;
+  componentId?: string;
+  componentName?: string;
+  title: string;
+  description?: string;
+  impact?: string;
+  recommendedAction?: string;
+  metrics?: Record<string, any>;
+  thresholdViolated?: string;
+  status: AlertStatus;
+  detectedAt: Date;
+  acknowledgedAt?: Date;
+  acknowledgedBy?: string;
+  resolvedAt?: Date;
+  resolvedBy?: string;
+  resolutionNotes?: string;
+  autoResolved: boolean;
+}
+
+// =====================================================
+// NETWORK TOPOLOGY TYPES
+// =====================================================
+
+export type TopologyDeviceType = 
+  | 'switch' 
+  | 'firewall' 
+  | 'router' 
+  | 'recorder' 
+  | 'camera' 
+  | 'ups' 
+  | 'server' 
+  | 'internet';
+
+export type ConnectionType = 'physical' | 'logical' | 'power' | 'management';
+
+export interface NetworkTopologyNode {
+  id: string;
+  tenantId: string;
+  branchId: string;
+  sourceDeviceType: TopologyDeviceType;
+  sourceDeviceId: string;
+  sourceInterface?: string;
+  targetDeviceType: TopologyDeviceType;
+  targetDeviceId?: string;
+  targetInterface?: string;
+  connectionType: ConnectionType;
+  discoveredVia: 'lldp' | 'cdp' | 'arp' | 'mac_table' | 'manual' | 'snmp';
+  lastSeen: Date;
+}
