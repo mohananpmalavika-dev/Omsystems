@@ -462,6 +462,14 @@ CREATE INDEX IF NOT EXISTS idx_chain_of_custody_event_type ON chain_of_custody_e
 -- 5. VIDEO SEARCH & SEMANTIC INDEXING
 -- ============================================================================
 
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM pg_available_extensions WHERE name = 'vector') THEN
+        CREATE EXTENSION IF NOT EXISTS vector;
+    END IF;
+END
+$$;
+
 -- Video Metadata Index
 CREATE TABLE IF NOT EXISTS video_metadata (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -483,7 +491,7 @@ CREATE TABLE IF NOT EXISTS video_metadata (
     crowd_density VARCHAR(20) CHECK (crowd_density IN ('empty', 'sparse', 'moderate', 'crowded')),
     
     -- Embeddings (for semantic search)
-    embedding vector(512),
+    embedding JSONB,
     embedding_model VARCHAR(100),
     
     -- Indexed
@@ -524,7 +532,7 @@ CREATE TABLE IF NOT EXISTS video_objects (
     related_camera_detections JSONB DEFAULT '[]',
     
     -- Embedding (for similarity search)
-    embedding vector(512),
+    embedding JSONB,
     
     -- Confidence
     confidence NUMERIC(3, 2) NOT NULL DEFAULT 0.5,
