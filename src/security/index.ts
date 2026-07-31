@@ -23,21 +23,22 @@ export {
   TPMAttestationService,
   SecurityPostureService,
   SecurityServicesFactory
-} from './services';
+} from './services/index.js';
 
 // API Routes
-export { default as securityRoutes } from './api/security-dashboard.routes';
+export { default as securityRoutes } from './api/security-dashboard.routes.js';
 
 // Database Schemas
-export { securityCollections, initializeSecurityCollections, migrateSecurityCollections } from './database/schemas';
+export { securityCollections, initializeSecurityCollections, migrateSecurityCollections } from './database/schemas.js';
 
 // Monitoring
-export { SecurityMonitor, securityMonitor, SecurityAlert } from './monitoring/security-monitor';
+export { SecurityMonitor, securityMonitor, SecurityAlert } from './monitoring/security-monitor.js';
 
 /**
  * Initialize the complete security platform
  */
 import { setDatabase } from '../config/database.js';
+import { initializeSecurityCollections } from './database/schemas.js';
 
 export async function initializeSecurityPlatform(db: any): Promise<void> {
   console.log('🔐 Initializing Enterprise Security Platform...');
