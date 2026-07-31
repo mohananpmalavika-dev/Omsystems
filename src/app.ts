@@ -1727,6 +1727,46 @@ export async function buildApp(options?: {
     federationSharedKey,
     localSearchProvider: federationLocalSearchProvider,
   });
+
+  // Security Posture API endpoint
+  app.get("/api/security/posture", async (request, reply) => {
+    try {
+      // Return mock security posture data
+      // In production, this would integrate with actual security services
+      return {
+        overallScore: 85,
+        status: "healthy",
+        lastUpdated: new Date().toISOString(),
+        categories: {
+          authentication: { score: 90, status: "healthy" },
+          encryption: { score: 85, status: "healthy" },
+          access_control: { score: 80, status: "warning" },
+          compliance: { score: 88, status: "healthy" },
+        },
+        alerts: {
+          critical: 0,
+          warning: 2,
+          info: 5,
+        },
+        recommendations: [
+          {
+            id: "rec-1",
+            priority: "medium",
+            title: "Enable MFA for all admin accounts",
+            category: "authentication",
+          },
+          {
+            id: "rec-2",
+            priority: "low",
+            title: "Review access permissions quarterly",
+            category: "access_control",
+          },
+        ],
+      };
+    } catch (error: any) {
+      return reply.code(500).send({ error: error.message });
+    }
+  });
   if (extendedStore) {
     await registerDeviceManagementRoutes(app, extendedStore);
     await registerAuthRoutes(app, extendedStore);
