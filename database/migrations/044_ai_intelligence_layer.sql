@@ -369,6 +369,25 @@ CREATE TABLE IF NOT EXISTS evidence_items (
     verified_at TIMESTAMPTZ
 );
 
+ALTER TABLE evidence_items ADD COLUMN IF NOT EXISTS package_id UUID;
+ALTER TABLE evidence_items ADD COLUMN IF NOT EXISTS item_type VARCHAR(50);
+ALTER TABLE evidence_items ADD COLUMN IF NOT EXISTS title VARCHAR(255);
+ALTER TABLE evidence_items ADD COLUMN IF NOT EXISTS description TEXT;
+ALTER TABLE evidence_items ADD COLUMN IF NOT EXISTS source_type VARCHAR(100);
+ALTER TABLE evidence_items ADD COLUMN IF NOT EXISTS source_id VARCHAR(255);
+ALTER TABLE evidence_items ADD COLUMN IF NOT EXISTS camera_id UUID;
+ALTER TABLE evidence_items ADD COLUMN IF NOT EXISTS timestamp TIMESTAMPTZ;
+ALTER TABLE evidence_items ADD COLUMN IF NOT EXISTS file_name VARCHAR(255);
+ALTER TABLE evidence_items ADD COLUMN IF NOT EXISTS file_path TEXT;
+ALTER TABLE evidence_items ADD COLUMN IF NOT EXISTS mime_type VARCHAR(100);
+ALTER TABLE evidence_items ADD COLUMN IF NOT EXISTS size_bytes BIGINT NOT NULL DEFAULT 0;
+ALTER TABLE evidence_items ADD COLUMN IF NOT EXISTS checksum_algorithm VARCHAR(20) DEFAULT 'sha256';
+ALTER TABLE evidence_items ADD COLUMN IF NOT EXISTS checksum_value VARCHAR(128);
+ALTER TABLE evidence_items ADD COLUMN IF NOT EXISTS classification VARCHAR(20) DEFAULT 'original';
+ALTER TABLE evidence_items ADD COLUMN IF NOT EXISTS metadata JSONB;
+ALTER TABLE evidence_items ADD COLUMN IF NOT EXISTS captured_at TIMESTAMPTZ;
+ALTER TABLE evidence_items ADD COLUMN IF NOT EXISTS added_at TIMESTAMPTZ;
+ALTER TABLE evidence_items ADD COLUMN IF NOT EXISTS verified_at TIMESTAMPTZ;
 
 CREATE INDEX IF NOT EXISTS idx_evidence_items_package ON evidence_items(package_id);
 CREATE INDEX IF NOT EXISTS idx_evidence_items_type ON evidence_items(item_type);
@@ -415,6 +434,24 @@ CREATE TABLE IF NOT EXISTS chain_of_custody_events (
 );
 
 ALTER TABLE chain_of_custody_events ADD COLUMN IF NOT EXISTS package_id UUID;
+ALTER TABLE chain_of_custody_events ADD COLUMN IF NOT EXISTS event_type VARCHAR(20);
+ALTER TABLE chain_of_custody_events ADD COLUMN IF NOT EXISTS timestamp TIMESTAMPTZ;
+ALTER TABLE chain_of_custody_events ADD COLUMN IF NOT EXISTS performed_by UUID;
+ALTER TABLE chain_of_custody_events ADD COLUMN IF NOT EXISTS performed_by_role VARCHAR(100);
+ALTER TABLE chain_of_custody_events ADD COLUMN IF NOT EXISTS source_ip INET;
+ALTER TABLE chain_of_custody_events ADD COLUMN IF NOT EXISTS user_agent TEXT;
+ALTER TABLE chain_of_custody_events ADD COLUMN IF NOT EXISTS location TEXT;
+ALTER TABLE chain_of_custody_events ADD COLUMN IF NOT EXISTS transferred_from UUID;
+ALTER TABLE chain_of_custody_events ADD COLUMN IF NOT EXISTS transferred_to UUID;
+ALTER TABLE chain_of_custody_events ADD COLUMN IF NOT EXISTS transfer_method VARCHAR(100);
+ALTER TABLE chain_of_custody_events ADD COLUMN IF NOT EXISTS receipt_acknowledged BOOLEAN;
+ALTER TABLE chain_of_custody_events ADD COLUMN IF NOT EXISTS items_affected UUID[];
+ALTER TABLE chain_of_custody_events ADD COLUMN IF NOT EXISTS hash_before VARCHAR(64);
+ALTER TABLE chain_of_custody_events ADD COLUMN IF NOT EXISTS hash_after VARCHAR(64);
+ALTER TABLE chain_of_custody_events ADD COLUMN IF NOT EXISTS purpose TEXT;
+ALTER TABLE chain_of_custody_events ADD COLUMN IF NOT EXISTS "authorization" TEXT;
+ALTER TABLE chain_of_custody_events ADD COLUMN IF NOT EXISTS notes TEXT;
+ALTER TABLE chain_of_custody_events ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ;
 
 CREATE INDEX IF NOT EXISTS idx_chain_of_custody_package ON chain_of_custody_events(package_id);
 CREATE INDEX IF NOT EXISTS idx_chain_of_custody_timestamp ON chain_of_custody_events(timestamp DESC);
