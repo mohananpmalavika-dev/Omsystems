@@ -140,7 +140,7 @@ CREATE TABLE IF NOT EXISTS rca_investigation_cache (
   CONSTRAINT fk_rca_cache_camera FOREIGN KEY (camera_id) REFERENCES cameras(id) ON DELETE CASCADE
 );
 
-CREATE INDEX idx_rca_cache_key ON rca_investigation_cache(cache_key) WHERE expires_at > NOW();
+CREATE INDEX idx_rca_cache_key ON rca_investigation_cache(cache_key);
 CREATE INDEX idx_rca_cache_expires ON rca_investigation_cache(expires_at);
 CREATE INDEX idx_rca_cache_camera ON rca_investigation_cache(camera_id, created_at DESC);
 
