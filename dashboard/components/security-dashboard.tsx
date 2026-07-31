@@ -1,643 +1,362 @@
-"use client";
+/**
+ * Enterprise Security Dashboard Component
+ * Real-time security posture monitoring and alerts
+ */
 
+'use client';
+
+import { useEffect, useState } from 'react';
 import {
+  Shield,
+  Lock,
+  Key,
+  FileText,
+  RefreshCw,
   AlertTriangle,
-  Building2,
-  Camera,
-  Grid2X2,
-  MonitorPlay,
-  Pause,
-  Play,
-  Plus,
-  ShieldCheck,
-  Siren,
-  SlidersHorizontal,
-  X,
-} from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
-import type { Branch, Camera as CameraType, LiveIncident, LiveSessionResponse, RecordingJob } from "@/lib/types";
-import { liveOperationsApi } from "@/lib/api-client";
-import { AppLayout } from "./app-layout";
-import { CameraTile } from "./camera-tile";
-import { LiveEventForm } from "./live-event-form";
-import { RecordingSettingsPanel } from "./recording-settings-panel";
+  CheckCircle,
+  XCircle,
+  TrendingUp,
+  TrendingDown,
+  Activity,
+  Database,
+  Wifi,
+  HardDrive
+} from 'lucide-react';
 
-const layoutOptions = [1, 4, 9, 16, 25, 36] as const;
-const liveSessionRenewalLeadMs = 60_000;
-
-function liveStartupMessage(code: string) {
-  switch (code) {
-    case "stream_secret_unavailable":
-      return "This camera's RTSP secret is not configured in the media gateway.";
-    case "media_gateway_failure":
-      return "The media router could not start this camera stream.";
-    case "invalid_live_session":
-      return "The live-view authorization expired. Please try again.";
-    default:
-      return "Live view could not start. Check camera and media-gateway health.";
-  }
-}
-
-function defaultRecording(cameraId: string, mode: RecordingJob["mode"] = "continuous"): RecordingJob {
-  return {
-    cameraId, mode, enabled: false, status: "disabled", retentionDays: 180,
-    postRollSeconds: 30, segmentDurationSeconds: 60, hotRetentionDays: 30,
-    warmRetentionDays: 60, coldRetentionDays: 90, critical: false,
-    backupRequired: false, automaticDeletionEnabled: true,
-    evidenceProtection: true, recordMainStream: true,
+interface SecurityPosture {
+  overallScore: number;
+  timestamp: string;
+  metrics: {
+    zeroTrust: {
+      score: number;
+      devicesCompliant: number;
+      devicesTotal: number;
+      highRiskSessions: number;
+    };
+    encryption: {
+      score: number;
+      videosEncrypted: number;
+      videosTotal: number;
+      tlsCompliance: number;
+    };
+    certificates: {
+      score: number;
+      healthy: number;
+      expiringSoon: number;
+      expired: number;
+      revoked: number;
+    };
+    secrets: {
+      status: string;
+      rotationCompliance: number;
+      expiring: number;
+    };
+    ransomware: {
+      activeThreats: number;
+      eventsToday: number;
+      riskLevel: string;
+    };
+    tamper: {
+      activeEvents: number;
+      criticalEvents: number;
+      resolvedToday: number;
+    };
+    secureBoot: {
+      score: number;
+      compliantDevices: number;
+      totalDevices: number;
+    };
+    tpm: {
+      score: number;
+      attestedDevices: number;
+      totalDevices: number;
+      failedAttestations: number;
+    };
   };
+  alerts: Array<{
+    id: string;
+    type: string;
+    severity: string;
+    title: string;
+    timestamp: string;
+    acknowledged: boolean;
+  }>;
 }
 
-export function SecurityDashboard() {
-  const [branches, setBranches] = useState<Branch[]>([]);
-  const [selectedBranch, setSelectedBranch] = useState<string>("");
-  const [cameras, setCameras] = useState<CameraType[]>([]);
-  const [gridSize, setGridSize] = useState<(typeof layoutOptions)[number]>(4);
-  const [sessions, setSessions] = useState<Record<string, LiveSessionResponse>>({});
-  const [recordings, setRecordings] = useState<Record<string, RecordingJob>>({});
-  const [recordingLoading, setRecordingLoading] = useState<string | null>(null);
-  const [selectedRecordingCameraId, setSelectedRecordingCameraId] = useState<string | null>(null);
-  const [sequencing, setSequencing] = useState(false);
-  const [sequenceOffset, setSequenceOffset] = useState(0);
-  const [loadingCamera, setLoadingCamera] = useState<string | null>(null);
+export default function SecurityDashboard() {
+  const [posture, setPosture] = useState<SecurityPosture | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
-  const [incidents, setIncidents] = useState<LiveIncident[]>([]);
-  const [liveAction, setLiveAction] = useState<{
-    action: "bookmark" | "incident";
-    camera: CameraType;
-  }>();
-  const [liveActionSaving, setLiveActionSaving] = useState(false);
-  const [isFullscreen, setIsFullscreen] = useState(false);
 
   useEffect(() => {
-    void fetch("/api/branches", { credentials: "include" })
-      .then((response) => {
-        if (response.status === 401) {
-          window.location.href = "/login";
-          return Promise.reject("unauthenticated");
-        }
-        if (!response.ok) throw new Error("Unable to load branches");
-        return response.json() as Promise<{ data: Branch[] }>;
-      })
-      .then(({ data }) => {
-        setBranches(data);
-        setSelectedBranch(data[0]?.id ?? "");
-      })
-      .catch(() => setError("The branch directory is temporarily unavailable."))
-      .finally(() => setLoading(false));
+    fetchSecurityPosture();
+    const interval = setInterval(fetchSecurityPosture, 60000); // Update every minute
+    return () => clearInterval(interval);
   }, []);
 
-  useEffect(() => {
-    if (!selectedBranch) return;
-    setLoading(true);
-    setError(null);
-    void fetch(`/api/branches/${encodeURIComponent(selectedBranch)}/cameras`, { credentials: "include" })
-      .then((response) => {
-        if (response.status === 401) {
-          window.location.href = "/login";
-          return Promise.reject("unauthenticated");
-        }
-        if (!response.ok) throw new Error("Unable to load cameras");
-        return response.json() as Promise<{ data: CameraType[] }>;
-      })
-      .then(async ({ data }) => {
-        setCameras(data);
-        setSelectedRecordingCameraId((current) => current ?? data[0]?.id ?? null);
-        const states = await Promise.all(data.map(async (camera) => {
-          const response = await fetch(`/api/recording/${encodeURIComponent(camera.id)}`);
-          return response.ok ? await response.json() as RecordingJob : undefined;
-        }));
-        setRecordings(Object.fromEntries(states.filter((job): job is RecordingJob => Boolean(job)).map((job) => [job.cameraId, job])));
-        const incidentLists = await Promise.all(data.map(async (camera) => {
-          try {
-            return (await liveOperationsApi.listIncidents(camera.id, 50)).data as LiveIncident[];
-          } catch {
-            return [];
-          }
-        }));
-        setIncidents(incidentLists.flat());
-      })
-      .catch(() => setError("Camera inventory could not be loaded."))
-      .finally(() => setLoading(false));
-  }, [selectedBranch]);
-
-  useEffect(() => {
-    if (!sequencing || cameras.length <= gridSize) return;
-    const timer = window.setInterval(() => setSequenceOffset((value) => (value + gridSize) % cameras.length), 10_000);
-    return () => window.clearInterval(timer);
-  }, [sequencing, cameras.length, gridSize]);
-
-  const activeBranch = branches.find((branch) => branch.id === selectedBranch);
-  const visibleCameras = Array.from({ length: Math.min(gridSize, cameras.length) }, (_, index) => cameras[(sequenceOffset + index) % cameras.length]!);
-  const online = cameras.filter((camera) => camera.status === "online").length;
-  const offline = cameras.filter((camera) => camera.status === "offline").length;
-  const degraded = cameras.filter((camera) => camera.status === "degraded").length;
-  const attention = offline + degraded;
-
-  const startCamera = useCallback(async (cameraId: string) => {
-    setLoadingCamera(cameraId);
-    setError(null);
+  const fetchSecurityPosture = async () => {
     try {
-      const response = await fetch("/api/live", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ cameraId }),
-      });
-      const body = await response.json() as LiveSessionResponse & {
-        error?: string;
-      };
-      if (!response.ok) throw new Error(body.error ?? "live_session_unavailable");
-      const session = body;
-      setSessions((current) => ({ ...current, [cameraId]: session }));
+      const response = await fetch('/api/security/posture');
+      const data = await response.json();
+      setPosture(data);
+      setLoading(false);
     } catch (error) {
-      const code = error instanceof Error ? error.message : "";
-      setError(liveStartupMessage(code));
-    } finally {
-      setLoadingCamera(null);
+      console.error('Failed to fetch security posture:', error);
+      setLoading(false);
     }
-  }, []);
+  };
 
-  useEffect(() => {
-    const timers = Object.entries(sessions).flatMap(([cameraId, session]) => {
-      if (!session.expiresAt) return [];
-      const expiresAt = Date.parse(session.expiresAt);
-      if (!Number.isFinite(expiresAt)) return [];
-      const delay = Math.max(
-        1_000,
-        expiresAt - Date.now() - liveSessionRenewalLeadMs,
-      );
-      return [window.setTimeout(() => void startCamera(cameraId), delay)];
-    });
-    return () => timers.forEach((timer) => window.clearTimeout(timer));
-  }, [sessions, startCamera]);
+  const getScoreColor = (score: number) => {
+    if (score >= 95) return 'text-green-500';
+    if (score >= 90) return 'text-blue-500';
+    if (score >= 80) return 'text-yellow-500';
+    if (score >= 70) return 'text-orange-500';
+    return 'text-red-500';
+  };
 
-  const toggleRecording = useCallback(async (cameraId: string) => {
-    const current = recordings[cameraId] ?? defaultRecording(cameraId);
-    setRecordingLoading(cameraId);
-    try {
-      const response = await fetch(`/api/recording/${encodeURIComponent(cameraId)}`, {
-        method: "PUT", headers: { "content-type": "application/json" },
-        body: JSON.stringify({ ...current, enabled: !current.enabled }),
-      });
-      if (!response.ok) throw new Error("Recording update failed");
-      const updated = await response.json() as RecordingJob;
-      setRecordings((items) => ({ ...items, [cameraId]: updated }));
-    } catch { setError("Recording settings could not be updated."); }
-    finally { setRecordingLoading(null); }
-  }, [recordings]);
+  const getScoreBgColor = (score: number) => {
+    if (score >= 95) return 'bg-green-500';
+    if (score >= 90) return 'bg-blue-500';
+    if (score >= 80) return 'bg-yellow-500';
+    if (score >= 70) return 'bg-orange-500';
+    return 'bg-red-500';
+  };
 
-  const updateRecordingSettings = useCallback(async (
-    cameraId: string,
-    update: Partial<Omit<RecordingJob, "id" | "cameraId" | "status">>,
-  ) => {
-    setRecordingLoading(cameraId);
-    try {
-      const response = await fetch(`/api/recording/${encodeURIComponent(cameraId)}`, {
-        method: "PUT",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(update),
-      });
-      if (!response.ok) throw new Error("Recording settings update failed");
-      const updated = await response.json() as RecordingJob;
-      setRecordings((items) => ({ ...items, [cameraId]: updated }));
-    } catch {
-      setError("Recording settings could not be updated.");
-    } finally {
-      setRecordingLoading(null);
+  const getSeverityColor = (severity: string) => {
+    switch (severity) {
+      case 'CRITICAL': return 'text-red-500 bg-red-50 border-red-200';
+      case 'HIGH': return 'text-orange-500 bg-orange-50 border-orange-200';
+      case 'MEDIUM': return 'text-yellow-500 bg-yellow-50 border-yellow-200';
+      case 'LOW': return 'text-blue-500 bg-blue-50 border-blue-200';
+      default: return 'text-gray-500 bg-gray-50 border-gray-200';
     }
-  }, []);
+  };
 
-  // Toggle fullscreen mode
-  const toggleFullscreen = useCallback(() => {
-    setIsFullscreen((prev) => !prev);
-    // Scroll to live wall section when entering fullscreen
-    if (!isFullscreen) {
-      setTimeout(() => {
-        document.getElementById('live-wall')?.scrollIntoView({ behavior: 'smooth' });
-      }, 100);
-    }
-  }, [isFullscreen]);
-
-  const changeRecordingMode = useCallback(async (cameraId: string, mode: RecordingJob["mode"]) => {
-    const current = recordings[cameraId] ?? defaultRecording(cameraId, mode);
-    setRecordingLoading(cameraId);
-    try {
-      const response = await fetch(`/api/recording/${encodeURIComponent(cameraId)}`, {
-        method: "PUT", headers: { "content-type": "application/json" },
-        body: JSON.stringify({ ...current, mode,
-          ...(mode === "scheduled" ? { schedule: { days: [1, 2, 3, 4, 5], start: "09:00", end: "18:00" } } : {}) }),
-      });
-      if (!response.ok) throw new Error("Recording mode update failed");
-      const updated = await response.json() as RecordingJob;
-      setRecordings((items) => ({ ...items, [cameraId]: updated }));
-    } catch { setError("Recording mode could not be updated."); }
-    finally { setRecordingLoading(null); }
-  }, [recordings]);
-
-  const healthPercent = useMemo(
-    () => cameras.length ? Math.round((online / cameras.length) * 100) : 0,
-    [cameras.length, online],
-  );
-  const openIncidents = incidents.filter(
-    (incident) => incident.status !== "resolved" && incident.status !== "false-alarm",
-  );
-  const highPriorityIncidents = openIncidents.filter(
-    (incident) => incident.priority === "P1" || incident.priority === "P2",
-  ).length;
-
-  const submitLiveAction = useCallback(async (payload: Record<string, unknown>) => {
-    if (!liveAction) return;
-    setLiveActionSaving(true);
-    setError(null);
-    setNotice(null);
-    try {
-      if (liveAction.action === "bookmark") {
-        await liveOperationsApi.createBookmark(liveAction.camera.id, payload);
-        setNotice(`Bookmark saved for ${liveAction.camera.name}.`);
-      } else {
-        const incident = await liveOperationsApi.createIncident(
-          liveAction.camera.id,
-          payload,
-        ) as LiveIncident;
-        setIncidents((current) => [incident, ...current]);
-        setNotice(`Incident created and its recording window is protected.`);
-      }
-      setLiveAction(undefined);
-    } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "Live operation failed.");
-    } finally {
-      setLiveActionSaving(false);
-    }
-  }, [liveAction]);
-
-  const changeIncidentStatus = useCallback(async (
-    incident: LiveIncident,
-    status: LiveIncident["status"],
-  ) => {
-    setError(null);
-    try {
-      const updated = await liveOperationsApi.updateIncidentStatus(
-        incident.cameraId,
-        incident.id,
-        status,
-      ) as LiveIncident;
-      setIncidents((current) => current.map((item) =>
-        item.id === updated.id ? updated : item
-      ));
-      setNotice(`Incident status changed to ${status.replace("-", " ")}.`);
-    } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "Incident update failed.");
-    }
-  }, []);
-
-  // Fullscreen mode - show only live wall with redesigned minimal UI
-  if (isFullscreen) {
+  if (loading) {
     return (
-      <div className="fullscreen-live-wall">
-        {/* Top control bar */}
-        <div className="fullscreen-topbar">
-          <div className="fullscreen-info">
-            <h1>{activeBranch?.name ?? "Live Wall"}</h1>
-            <div className="fullscreen-stats">
-              <span className={`status-dot ${online > 0 ? 'online' : ''}`} />
-              <span>{online} online</span>
-              {attention > 0 && (
-                <>
-                  <span className="separator">•</span>
-                  <span className="warning">{attention} attention</span>
-                </>
-              )}
-              <span className="separator">•</span>
-              <span>{cameras.length} cameras</span>
-            </div>
-          </div>
-
-          <div className="fullscreen-controls">
-            {/* Branch selector */}
-            {branches.length > 1 && (
-              <select 
-                value={selectedBranch} 
-                onChange={(e) => setSelectedBranch(e.target.value)}
-                className="branch-selector"
-              >
-                {branches.map((branch) => (
-                  <option key={branch.id} value={branch.id}>
-                    {branch.name}
-                  </option>
-                ))}
-              </select>
-            )}
-
-            {/* Sequence toggle */}
-            <button 
-              className={`control-btn ${sequencing ? "active" : ""}`}
-              onClick={() => setSequencing((value) => !value)} 
-              title={sequencing ? "Pause camera sequence" : "Start camera sequence"}
-            >
-              {sequencing ? <Pause size={18} /> : <Play size={18} />}
-            </button>
-
-            {/* Layout options */}
-            <div className="layout-controls">
-              {layoutOptions.map((size) => (
-                <button
-                  key={size}
-                  className={`layout-btn ${gridSize === size ? "active" : ""}`}
-                  onClick={() => setGridSize(size)}
-                  title={`${size} camera layout`}
-                >
-                  {size}
-                </button>
-              ))}
-            </div>
-
-            {/* Exit fullscreen */}
-            <button 
-              className="exit-btn" 
-              onClick={toggleFullscreen}
-              title="Exit fullscreen"
-            >
-              <X size={20} />
-            </button>
-          </div>
-        </div>
-
-        {/* Notifications */}
-        {error && (
-          <div className="fullscreen-notification error">
-            <AlertTriangle size={16} />
-            <span>{error}</span>
-            <button onClick={() => setError(null)}><X size={14} /></button>
-          </div>
-        )}
-        {notice && (
-          <div className="fullscreen-notification success">
-            <ShieldCheck size={16} />
-            <span>{notice}</span>
-            <button onClick={() => setNotice(null)}><X size={14} /></button>
-          </div>
-        )}
-
-        {/* Camera grid */}
-        <div className="fullscreen-content">
-          {loading ? (
-            <div className="loading-grid">
-              {Array.from({ length: Math.min(gridSize, 4) }).map((_, index) => <div key={index} />)}
-            </div>
-          ) : (
-            <div className={`camera-grid-fullscreen grid-${gridSize}`}>
-              {visibleCameras.map((camera, index) => (
-                <CameraTile
-                  key={camera.id}
-                  camera={camera}
-                  index={index}
-                  session={sessions[camera.id]}
-                  loading={loadingCamera === camera.id}
-                  onStart={() => void startCamera(camera.id)}
-                  recording={recordings[camera.id]}
-                  recordingLoading={recordingLoading === camera.id}
-                  onToggleRecording={() => void toggleRecording(camera.id)}
-                  onChangeRecordingMode={(mode) => void changeRecordingMode(camera.id, mode)}
-                  onUpdateRecording={updateRecordingSettings}
-                  onBookmark={() => setLiveAction({ action: "bookmark", camera })}
-                  onCreateIncident={() => setLiveAction({ action: "incident", camera })}
-                />
-              ))}
-            </div>
-          )}
-        </div>
-
-        {liveAction && (
-          <LiveEventForm
-            action={liveAction.action}
-            camera={liveAction.camera}
-            saving={liveActionSaving}
-            onCancel={() => setLiveAction(undefined)}
-            onSubmit={submitLiveAction}
-          />
-        )}
+      <div className="flex items-center justify-center h-96">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
       </div>
     );
   }
 
-  // Normal mode - show full dashboard
+  if (!posture) {
+    return (
+      <div className="text-center py-12">
+        <AlertTriangle className="w-12 h-12 mx-auto text-yellow-500 mb-4" />
+        <p className="text-gray-600">Failed to load security posture</p>
+      </div>
+    );
+  }
+
   return (
-    <AppLayout incidentCount={openIncidents.length} cameraCount={cameras.length}>
-      <div className="content">
-          {error && (
-            <div className="error-banner">
-              <AlertTriangle size={17} />{error}
-              <button onClick={() => setError(null)}><X size={15} /></button>
-            </div>
-          )}
-          {notice && (
-            <div className="success-banner">
-              <ShieldCheck size={17} />{notice}
-              <button onClick={() => setNotice(null)}><X size={15} /></button>
-            </div>
-          )}
-
-          <section className="summary-grid" aria-label="Operations summary">
-            <SummaryCard label="Monitored branches" value={String(branches.length)} detail={branches.length ? `${branches.length} ${branches.length === 1 ? "branch" : "branches"}` : "No branches"} icon={<Building2 />} tone="blue" />
-            <SummaryCard label="Cameras in view" value={String(cameras.length)} detail={`${healthPercent}% healthy`} icon={<Camera />} tone="green" progress={healthPercent} />
-            <SummaryCard label="Needs attention" value={String(attention)} detail={`${offline} offline · ${degraded} degraded`} icon={<AlertTriangle />} tone={attention > 0 ? "amber" : "blue"} />
-            <SummaryCard label="Open incidents" value={String(openIncidents.length)} detail={`${highPriorityIncidents} high priority`} icon={<Siren />} tone="red" />
-          </section>
-
-          <section className="branch-panel">
-            <div className="section-heading">
-              <div>
-                <span className="eyebrow">LOCATION SCOPE</span>
-                <h2>South Region branches</h2>
-              </div>
-              <button className="secondary-button">
-                <SlidersHorizontal size={15} /> Filter
-              </button>
-            </div>
-            <div className="branch-tabs">
-              {branches.map((branch) => (
-                <button
-                  key={branch.id}
-                  className={branch.id === selectedBranch ? "selected" : ""}
-                  onClick={() => setSelectedBranch(branch.id)}
-                >
-                  <span className="branch-icon"><Building2 size={17} /></span>
-                  <span>
-                    <strong>{branch.name}</strong>
-                    <small>{branch.onlineCount ?? "—"} of {branch.cameraCount ?? "—"} online</small>
-                  </span>
-                  <i className={(branch.onlineCount ?? 0) < (branch.cameraCount ?? 0) ? "warning" : ""} />
-                </button>
-              ))}
-            </div>
-          </section>
-
-          <section className="live-section" id="live-wall">
-            <div className="section-heading live-heading">
-              <div>
-                <span className="eyebrow">LIVE MONITORING</span>
-                <h2>{activeBranch?.name ?? "Select a branch"}</h2>
-                <p>
-                  <span className="green-dot" /> {online} online
-                  {attention > 0 && <><span className="separator">•</span>{attention} need attention</>}
-                  <span className="separator">•</span>{healthPercent}% healthy
-                </p>
-              </div>
-              <div className="layout-picker">
-                <a className="add-camera-link" href="/admin?tab=devices">
-                  <Plus size={15} /> Add camera
-                </a>
-                <button 
-                  className={isFullscreen ? "active" : ""} 
-                  onClick={toggleFullscreen}
-                  aria-label={isFullscreen ? "Exit fullscreen" : "Enter fullscreen"}
-                  title={isFullscreen ? "Exit fullscreen Live Wall" : "Enter fullscreen Live Wall"}
-                >
-                  {isFullscreen ? <X size={16} /> : <MonitorPlay size={16} />}
-                  {isFullscreen ? "Exit" : "Full"}
-                </button>
-                <button className={sequencing ? "active" : ""} onClick={() => setSequencing((value) => !value)} aria-label={sequencing ? "Pause camera sequence" : "Start camera sequence"} title={sequencing ? "Pause 10 second camera sequence" : "Start 10 second camera sequence"}>
-                  {sequencing ? <Pause size={16} /> : <Play size={16} />}
-                </button>
-                <span>Layout</span>
-                {layoutOptions.map((size) => (
-                  <button
-                    key={size}
-                    className={gridSize === size ? "active" : ""}
-                    onClick={() => setGridSize(size)}
-                    aria-label={`${size} camera layout`}
-                  >
-                    {size === 1 ? <MonitorPlay size={16} /> : <Grid2X2 size={16} />}
-                    {size}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {loading ? (
-              <div className="loading-grid">
-                {Array.from({ length: Math.min(gridSize, 4) }).map((_, index) => <div key={index} />)}
-              </div>
-            ) : (
-              <div className={`camera-grid grid-${gridSize}`}>
-                {visibleCameras.map((camera, index) => (
-                  <CameraTile
-                    key={camera.id}
-                    camera={camera}
-                    index={index}
-                    session={sessions[camera.id]}
-                    loading={loadingCamera === camera.id}
-                    onStart={() => void startCamera(camera.id)}
-                    recording={recordings[camera.id]}
-                    recordingLoading={recordingLoading === camera.id}
-                    onToggleRecording={() => void toggleRecording(camera.id)}
-                    onChangeRecordingMode={(mode) => void changeRecordingMode(camera.id, mode)}
-                    onUpdateRecording={updateRecordingSettings}
-                    onBookmark={() => setLiveAction({ action: "bookmark", camera })}
-                    onCreateIncident={() => setLiveAction({ action: "incident", camera })}
-                  />
-                ))}
-              </div>
-            )}
-          </section>
-
-          <RecordingSettingsPanel
-            cameras={cameras}
-            selectedCameraId={selectedRecordingCameraId}
-            recording={selectedRecordingCameraId ? recordings[selectedRecordingCameraId] : undefined}
-            saving={Boolean(selectedRecordingCameraId && recordingLoading === selectedRecordingCameraId)}
-            onSelectCamera={(cameraId) => setSelectedRecordingCameraId(cameraId)}
-            onToggleRecording={toggleRecording}
-            onSave={updateRecordingSettings}
-          />
-
-          <section className="incident-panel" id="incidents">
-            <div className="section-heading">
-              <div>
-                <span className="eyebrow">OPERATOR WORKFLOW</span>
-                <h2>Active incidents</h2>
-                <p>Recording windows created here remain protected by legal hold.</p>
-              </div>
-              <span className="incident-total">{openIncidents.length} open</span>
-            </div>
-            {openIncidents.length === 0 ? (
-              <div className="incident-empty">
-                <ShieldCheck size={22} />
-                <strong>No active incidents</strong>
-                <span>Create one from an active camera tile when operator attention is required.</span>
-              </div>
-            ) : (
-              <div className="incident-list">
-                {openIncidents.map((incident) => {
-                  const incidentCamera = cameras.find(
-                    (item) => item.id === incident.cameraId,
-                  );
-                  return (
-                    <article className="incident-row" key={incident.id}>
-                      <span className={`incident-priority ${incident.priority.toLowerCase()}`}>
-                        {incident.priority}
-                      </span>
-                      <div className="incident-copy">
-                        <strong>{incident.title}</strong>
-                        <span>{incidentCamera?.name ?? "Camera"} · {new Date(incident.occurredAt).toLocaleString()}</span>
-                      </div>
-                      <span className="evidence-hold"><ShieldCheck size={13} />Evidence protected</span>
-                      <select
-                        aria-label={`Status for ${incident.title}`}
-                        value={incident.status}
-                        onChange={(event) => void changeIncidentStatus(
-                          incident,
-                          event.target.value as LiveIncident["status"],
-                        )}
-                      >
-                        <option value="new">New</option>
-                        <option value="acknowledged">Acknowledged</option>
-                        <option value="investigating">Investigating</option>
-                        <option value="escalated">Escalated</option>
-                        <option value="resolved">Resolved</option>
-                        <option value="false-alarm">False alarm</option>
-                      </select>
-                    </article>
-                  );
-                })}
-              </div>
-            )}
-          </section>
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900">Security Operations Center</h1>
+          <p className="text-gray-500 mt-1">Real-time enterprise security monitoring</p>
         </div>
-      {liveAction && (
-        <LiveEventForm
-          action={liveAction.action}
-          camera={liveAction.camera}
-          saving={liveActionSaving}
-          onCancel={() => setLiveAction(undefined)}
-          onSubmit={submitLiveAction}
-        />
+        <button
+          onClick={fetchSecurityPosture}
+          className="flex items-center gap-2 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600"
+        >
+          <RefreshCw className="w-4 h-4" />
+          Refresh
+        </button>
+      </div>
+
+      {/* Overall Score */}
+      <div className="bg-gradient-to-r from-blue-500 to-blue-600 rounded-2xl p-8 text-white">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-blue-100 text-sm uppercase tracking-wide mb-2">Overall Security Score</p>
+            <div className="flex items-baseline gap-4">
+              <h2 className={`text-6xl font-bold ${getScoreColor(posture.overallScore)}`}>
+                {posture.overallScore}
+              </h2>
+              <span className="text-3xl text-blue-100">/100</span>
+            </div>
+            <p className="mt-4 text-blue-100">
+              {posture.overallScore >= 95 && '🎉 Excellent - Enterprise-grade security'}
+              {posture.overallScore >= 90 && posture.overallScore < 95 && '✅ Good - Minor improvements needed'}
+              {posture.overallScore >= 80 && posture.overallScore < 90 && '⚠️ Fair - Several areas need attention'}
+              {posture.overallScore < 80 && '❌ Critical - Immediate action required'}
+            </p>
+          </div>
+          <Shield className="w-32 h-32 text-blue-300 opacity-50" />
+        </div>
+      </div>
+
+      {/* Active Alerts */}
+      {posture.alerts.length > 0 && (
+        <div className="bg-white rounded-xl shadow-lg p-6">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-xl font-bold text-gray-900">Active Security Alerts</h3>
+            <span className="px-3 py-1 bg-red-100 text-red-700 rounded-full text-sm font-medium">
+              {posture.alerts.length} Active
+            </span>
+          </div>
+          <div className="space-y-3">
+            {posture.alerts.slice(0, 5).map((alert) => (
+              <div
+                key={alert.id}
+                className={`p-4 rounded-lg border ${getSeverityColor(alert.severity)}`}
+              >
+                <div className="flex items-start justify-between">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="text-xs font-semibold uppercase">{alert.severity}</span>
+                      <span className="text-xs text-gray-500">•</span>
+                      <span className="text-xs text-gray-500">{alert.type}</span>
+                    </div>
+                    <p className="font-medium">{alert.title}</p>
+                    <p className="text-sm text-gray-500 mt-1">
+                      {new Date(alert.timestamp).toLocaleString()}
+                    </p>
+                  </div>
+                  <button className="text-sm text-blue-600 hover:text-blue-700 font-medium">
+                    Acknowledge
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
       )}
-    </AppLayout>
+
+      {/* Security Metrics Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        {/* Zero Trust */}
+        <MetricCard
+          icon={<Shield className="w-8 h-8" />}
+          title="Zero Trust"
+          score={posture.metrics.zeroTrust.score}
+          status={`${posture.metrics.zeroTrust.devicesCompliant}/${posture.metrics.zeroTrust.devicesTotal} Compliant`}
+          warning={posture.metrics.zeroTrust.highRiskSessions > 0 ? `${posture.metrics.zeroTrust.highRiskSessions} High Risk` : undefined}
+        />
+
+        {/* Encryption */}
+        <MetricCard
+          icon={<Lock className="w-8 h-8" />}
+          title="Encryption"
+          score={posture.metrics.encryption.score}
+          status={`${posture.metrics.encryption.videosEncrypted}/${posture.metrics.encryption.videosTotal} Videos`}
+        />
+
+        {/* Certificates */}
+        <MetricCard
+          icon={<FileText className="w-8 h-8" />}
+          title="Certificates"
+          score={posture.metrics.certificates.score}
+          status={`${posture.metrics.certificates.healthy} Healthy`}
+          warning={posture.metrics.certificates.expired > 0 ? `${posture.metrics.certificates.expired} Expired` : undefined}
+        />
+
+        {/* Ransomware */}
+        <MetricCard
+          icon={<AlertTriangle className="w-8 h-8" />}
+          title="Ransomware"
+          score={posture.metrics.ransomware.activeThreats === 0 ? 100 : 0}
+          status={posture.metrics.ransomware.riskLevel}
+          warning={posture.metrics.ransomware.activeThreats > 0 ? `${posture.metrics.ransomware.activeThreats} Active Threats` : undefined}
+        />
+
+        {/* Tamper Detection */}
+        <MetricCard
+          icon={<Activity className="w-8 h-8" />}
+          title="Tamper Detection"
+          score={posture.metrics.tamper.criticalEvents === 0 ? 100 : 50}
+          status={`${posture.metrics.tamper.activeEvents} Active Events`}
+          warning={posture.metrics.tamper.criticalEvents > 0 ? `${posture.metrics.tamper.criticalEvents} Critical` : undefined}
+        />
+
+        {/* Secrets */}
+        <MetricCard
+          icon={<Key className="w-8 h-8" />}
+          title="Secret Vault"
+          score={100}
+          status={posture.metrics.secrets.status}
+        />
+
+        {/* Secure Boot */}
+        <MetricCard
+          icon={<HardDrive className="w-8 h-8" />}
+          title="Secure Boot"
+          score={posture.metrics.secureBoot.score}
+          status={`${posture.metrics.secureBoot.compliantDevices}/${posture.metrics.secureBoot.totalDevices} Valid`}
+        />
+
+        {/* TPM */}
+        <MetricCard
+          icon={<Database className="w-8 h-8" />}
+          title="TPM Attestation"
+          score={posture.metrics.tpm.score}
+          status={`${posture.metrics.tpm.attestedDevices}/${posture.metrics.tpm.totalDevices} Attested`}
+          warning={posture.metrics.tpm.failedAttestations > 0 ? `${posture.metrics.tpm.failedAttestations} Failed` : undefined}
+        />
+      </div>
+
+      {/* Quick Actions */}
+      <div className="bg-white rounded-xl shadow-lg p-6">
+        <h3 className="text-xl font-bold text-gray-900 mb-4">Quick Actions</h3>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <ActionButton icon={<Shield />} label="Zero Trust" href="/security/zero-trust" />
+          <ActionButton icon={<FileText />} label="Certificates" href="/security/certificates" />
+          <ActionButton icon={<RefreshCw />} label="Password Rotation" href="/security/passwords" />
+          <ActionButton icon={<AlertTriangle />} label="Tamper Events" href="/security/tamper" />
+          <ActionButton icon={<Lock />} label="Video Encryption" href="/security/encryption" />
+          <ActionButton icon={<Database />} label="Immutable Storage" href="/security/immutable" />
+          <ActionButton icon={<Activity />} label="Ransomware" href="/security/ransomware" />
+          <ActionButton icon={<Key />} label="Supply Chain" href="/security/supply-chain" />
+        </div>
+      </div>
+    </div>
   );
 }
 
-function SummaryCard({
-  label, value, detail, icon, tone, progress,
-}: {
-  label: string;
-  value: string;
-  detail: string;
+interface MetricCardProps {
   icon: React.ReactNode;
-  tone: "blue" | "green" | "amber" | "red";
-  progress?: number;
-}) {
+  title: string;
+  score: number;
+  status: string;
+  warning?: string;
+}
+
+function MetricCard({ icon, title, score, status, warning }: MetricCardProps) {
+  const scoreColor = score >= 95 ? 'text-green-500' : score >= 80 ? 'text-yellow-500' : 'text-red-500';
+
   return (
-    <article className="summary-card">
-      <div className={`summary-icon ${tone}`}>{icon}</div>
-      <div className="summary-copy">
-        <span>{label}</span>
-        <strong>{value}</strong>
-        <small>{detail}</small>
+    <div className="bg-white rounded-xl shadow-lg p-6">
+      <div className="flex items-center justify-between mb-4">
+        <div className="text-gray-600">{icon}</div>
+        <span className={`text-2xl font-bold ${scoreColor}`}>{Math.round(score)}</span>
       </div>
-      {progress && <div className="mini-progress"><i style={{ width: `${progress}%` }} /></div>}
-    </article>
+      <h4 className="font-semibold text-gray-900 mb-2">{title}</h4>
+      <p className="text-sm text-gray-600">{status}</p>
+      {warning && (
+        <p className="text-sm text-red-600 mt-2 flex items-center gap-1">
+          <AlertTriangle className="w-4 h-4" />
+          {warning}
+        </p>
+      )}
+    </div>
+  );
+}
+
+interface ActionButtonProps {
+  icon: React.ReactNode;
+  label: string;
+  href: string;
+}
+
+function ActionButton({ icon, label, href }: ActionButtonProps) {
+  return (
+    <a
+      href={href}
+      className="flex flex-col items-center justify-center p-4 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors"
+    >
+      <div className="text-blue-600 mb-2">{icon}</div>
+      <span className="text-sm font-medium text-gray-700">{label}</span>
+    </a>
   );
 }
