@@ -317,13 +317,19 @@ COMMENT ON FUNCTION get_camera_infrastructure_path IS 'Returns the complete infr
 -- ===========================================
 -- Grants
 -- ===========================================
-GRANT SELECT, INSERT, UPDATE ON infrastructure_rca_correlations TO app_user;
-GRANT SELECT, INSERT, UPDATE ON unified_incidents TO app_user;
-GRANT SELECT, INSERT, UPDATE, DELETE ON rca_investigation_cache TO app_user;
-GRANT SELECT ON vw_active_infrastructure_incidents TO app_user;
-GRANT SELECT ON vw_rca_correlation_statistics TO app_user;
-GRANT EXECUTE ON FUNCTION cleanup_expired_rca_cache TO app_user;
-GRANT EXECUTE ON FUNCTION get_camera_infrastructure_path TO app_user;
+-- Grant permissions only if app_user role exists
+DO $$ 
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'app_user') THEN
+    GRANT SELECT, INSERT, UPDATE ON infrastructure_rca_correlations TO app_user;
+    GRANT SELECT, INSERT, UPDATE ON unified_incidents TO app_user;
+    GRANT SELECT, INSERT, UPDATE, DELETE ON rca_investigation_cache TO app_user;
+    GRANT SELECT ON vw_active_infrastructure_incidents TO app_user;
+    GRANT SELECT ON vw_rca_correlation_statistics TO app_user;
+    GRANT EXECUTE ON FUNCTION cleanup_expired_rca_cache TO app_user;
+    GRANT EXECUTE ON FUNCTION get_camera_infrastructure_path TO app_user;
+  END IF;
+END $$;
 
 -- ===========================================
 -- Indexes for Performance
