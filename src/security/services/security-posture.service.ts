@@ -3,9 +3,9 @@
  * Overall security scoring and risk assessment
  */
 
-import { ISecurityPostureService, IssueFilters } from '../interfaces';
-import { SecurityPosture, SecurityCategory, SecurityIssue, ComplianceStatus, ComplianceFramework } from '../types';
-import { getDatabase } from '../../config/database';
+import { ISecurityPostureService, IssueFilters } from '../interfaces.js';
+import { SecurityPosture, SecurityCategory, SecurityIssue, ComplianceStatus, ComplianceFramework } from '../types.js';
+import { getDatabase } from '../../config/database.js';
 import { EventEmitter } from 'events';
 
 export class SecurityPostureService extends EventEmitter implements ISecurityPostureService {

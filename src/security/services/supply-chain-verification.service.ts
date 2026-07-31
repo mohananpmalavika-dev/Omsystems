@@ -3,9 +3,9 @@
  * Verify software packages, updates, and signatures
  */
 
-import { ISupplyChainVerificationService, PackageFilters } from '../interfaces';
-import { SoftwarePackage, VerificationStatus } from '../types';
-import { getDatabase } from '../../config/database';
+import { ISupplyChainVerificationService, PackageFilters } from '../interfaces.js';
+import { SoftwarePackage, VerificationStatus } from '../types.js';
+import { getDatabase } from '../../config/database.js';
 import { EventEmitter } from 'events';
 import { createHash } from 'crypto';
 import * as fs from 'fs/promises';

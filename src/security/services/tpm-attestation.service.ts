@@ -3,9 +3,9 @@
  * Trusted Platform Module support and device attestation
  */
 
-import { ITPMAttestationService } from '../interfaces';
-import { TPMStatus, AttestationResult, TrustLevel } from '../types';
-import { getDatabase } from '../../config/database';
+import { ITPMAttestationService } from '../interfaces.js';
+import { TPMStatus, AttestationResult, TrustLevel } from '../types.js';
+import { getDatabase } from '../../config/database.js';
 import { EventEmitter } from 'events';
 
 export class TPMAttestationService extends EventEmitter implements ITPMAttestationService {

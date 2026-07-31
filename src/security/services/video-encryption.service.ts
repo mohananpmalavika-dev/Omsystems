@@ -3,9 +3,9 @@
  * Encrypt video at rest and in transit
  */
 
-import { IVideoEncryptionService } from '../interfaces';
-import { EncryptedVideo, EncryptionConfig, EncryptionAlgorithm, EncryptionKey } from '../types';
-import { getDatabase } from '../../config/database';
+import { IVideoEncryptionService } from '../interfaces.js';
+import { EncryptedVideo, EncryptionConfig, EncryptionAlgorithm, EncryptionKey } from '../types.js';
+import { getDatabase } from '../../config/database.js';
 import { EventEmitter } from 'events';
 import { createCipheriv, createDecipheriv, randomBytes } from 'crypto';
 import { createReadStream, createWriteStream } from 'fs';

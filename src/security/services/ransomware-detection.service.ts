@@ -3,9 +3,9 @@
  * Behavioral analysis and threat detection
  */
 
-import { IRansomwareDetectionService, ThreatFilters } from '../interfaces';
-import { RansomwareThreat, ThreatLevel, BehaviorBaseline, RansomwarePattern } from '../types';
-import { getDatabase } from '../../config/database';
+import { IRansomwareDetectionService, ThreatFilters } from '../interfaces.js';
+import { RansomwareThreat, ThreatLevel, BehaviorBaseline, RansomwarePattern } from '../types.js';
+import { getDatabase } from '../../config/database.js';
 import { EventEmitter } from 'events';
 
 export class RansomwareDetectionService extends EventEmitter implements IRansomwareDetectionService {

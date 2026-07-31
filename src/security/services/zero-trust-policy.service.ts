@@ -3,7 +3,7 @@
  * Continuous verification and risk-based access control
  */
 
-import { IZeroTrustPolicyEngine } from '../interfaces';
+import { IZeroTrustPolicyEngine } from '../interfaces.js';
 import {
   ZeroTrustPolicy,
   AccessRequest,
@@ -11,8 +11,8 @@ import {
   ZeroTrustContext,
   AccessDecision,
   TrustLevel
-} from '../types';
-import { getDatabase } from '../../config/database';
+} from '../types.js';
+import { getDatabase } from '../../config/database.js';
 import { EventEmitter } from 'events';
 
 export class ZeroTrustPolicyEngine extends EventEmitter implements IZeroTrustPolicyEngine {

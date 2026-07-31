@@ -3,14 +3,14 @@
  * Automated credential rotation for devices and services
  */
 
-import { IPasswordRotationService, TargetFilters } from '../interfaces';
+import { IPasswordRotationService, TargetFilters } from '../interfaces.js';
 import {
   PasswordRotationTarget,
   PasswordRotationJob,
   PasswordPolicy,
   RotationStatus
-} from '../types';
-import { getDatabase } from '../../config/database';
+} from '../types.js';
+import { getDatabase } from '../../config/database.js';
 import { EventEmitter } from 'events';
 import { SecretVaultService } from './secret-vault.service';
 import * as crypto from 'crypto';

@@ -3,9 +3,9 @@
  * Verify boot chain integrity
  */
 
-import { ISecureBootVerificationService, BootFilters } from '../interfaces';
-import { SecureBootStatus, BootStatus } from '../types';
-import { getDatabase } from '../../config/database';
+import { ISecureBootVerificationService, BootFilters } from '../interfaces.js';
+import { SecureBootStatus, BootStatus } from '../types.js';
+import { getDatabase } from '../../config/database.js';
 import { EventEmitter } from 'events';
 
 export class SecureBootVerificationService extends EventEmitter implements ISecureBootVerificationService {

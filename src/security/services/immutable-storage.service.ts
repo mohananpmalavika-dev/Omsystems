@@ -3,9 +3,9 @@
  * WORM storage with retention policies and legal holds
  */
 
-import { IImmutableStorageService, ImmutableFilters } from '../interfaces';
-import { ImmutableObject, RetentionPolicy, RetentionStatus, LegalHold } from '../types';
-import { getDatabase } from '../../config/database';
+import { IImmutableStorageService, ImmutableFilters } from '../interfaces.js';
+import { ImmutableObject, RetentionPolicy, RetentionStatus, LegalHold } from '../types.js';
+import { getDatabase } from '../../config/database.js';
 import { EventEmitter } from 'events';
 import { createHash } from 'crypto';
 

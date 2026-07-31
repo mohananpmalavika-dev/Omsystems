@@ -3,9 +3,9 @@
  * Cryptographic key management using hardware security modules
  */
 
-import { IHSMService } from '../interfaces';
-import { HSMKey, HSMOperation, HSMOperationType, HSMConfig } from '../types';
-import { getDatabase } from '../../config/database';
+import { IHSMService } from '../interfaces.js';
+import { HSMKey, HSMOperation, HSMOperationType, HSMConfig } from '../types.js';
+import { getDatabase } from '../../config/database.js';
 import { EventEmitter } from 'events';
 import * as crypto from 'crypto';
 

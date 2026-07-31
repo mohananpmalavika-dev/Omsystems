@@ -4,15 +4,15 @@
  */
 
 import { createCipheriv, createDecipheriv, randomBytes, pbkdf2Sync, createHash } from 'crypto';
-import { ISecretVaultService, SecretFilters } from '../interfaces';
+import { ISecretVaultService, SecretFilters } from '../interfaces.js';
 import {
   Secret,
   SecretType,
   SecretVersion,
   SecretAccessLog,
   RotationPolicy
-} from '../types';
-import { getDatabase } from '../../config/database';
+} from '../types.js';
+import { getDatabase } from '../../config/database.js';
 import { EventEmitter } from 'events';
 
 export class SecretVaultService extends EventEmitter implements ISecretVaultService {

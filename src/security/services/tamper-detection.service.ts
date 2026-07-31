@@ -3,9 +3,9 @@
  * Physical and logical tampering detection across infrastructure
  */
 
-import { ITamperDetectionService, TamperFilters } from '../interfaces';
-import { TamperEvent, TamperEventType, TamperSensor } from '../types';
-import { getDatabase } from '../../config/database';
+import { ITamperDetectionService, TamperFilters } from '../interfaces.js';
+import { TamperEvent, TamperEventType, TamperSensor } from '../types.js';
+import { getDatabase } from '../../config/database.js';
 import { EventEmitter } from 'events';
 
 export class TamperDetectionService extends EventEmitter implements ITamperDetectionService {

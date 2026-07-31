@@ -4,15 +4,15 @@
  */
 
 import * as forge from 'node-forge';
-import { ICertificateManagementService, CertificateFilters } from '../interfaces';
+import { ICertificateManagementService, CertificateFilters } from '../interfaces.js';
 import {
   Certificate,
   CertificateType,
   CertificateStatus,
   CertificateCheck,
   CertificateUsage
-} from '../types';
-import { getDatabase } from '../../config/database';
+} from '../types.js';
+import { getDatabase } from '../../config/database.js';
 import { EventEmitter } from 'events';
 import { exec } from 'child_process';
 import { promisify } from 'util';
