@@ -21,7 +21,7 @@ import type {
   FirewallHealthMetrics,
   UPSHealthMetrics,
   InfrastructureAlert
-} from '../../types/infrastructure.types';
+} from '../../types/infrastructure.types.js';
 
 // ============================================
 // Types
@@ -57,8 +57,7 @@ interface CorrelationResult {
   incidentType: string;
   infrastructureRootCause: InfrastructureRootCause | null;
   correlationTimestamp: Date;
-  investigationDuration
-Seconds: number;
+  investigationDurationSeconds: number;
 }
 
 // ============================================
