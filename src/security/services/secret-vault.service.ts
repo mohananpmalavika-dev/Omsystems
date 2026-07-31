@@ -395,7 +395,7 @@ export class SecretVaultService extends EventEmitter implements ISecretVaultServ
   async logAccess(
     secretId: string,
     userId: string,
-    action: 'read' | 'write' | 'rotate' | 'delete',
+    action: 'create' | 'read' | 'write' | 'rotate' | 'delete',
     success: boolean
   ): Promise<void> {
     const db = getDatabase();

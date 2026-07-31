@@ -145,7 +145,7 @@ export interface SecretAccessLog {
   id: string;
   secretId: string;
   userId: string;
-  action: 'read' | 'write' | 'rotate' | 'delete';
+  action: 'create' | 'read' | 'write' | 'rotate' | 'delete';
   timestamp: Date;
   ipAddress: string;
   success: boolean;

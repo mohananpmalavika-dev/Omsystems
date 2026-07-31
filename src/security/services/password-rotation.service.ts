@@ -12,7 +12,7 @@ import {
 } from '../types.js';
 import { getDatabase } from '../../config/database.js';
 import { EventEmitter } from 'events';
-import { SecretVaultService } from './secret-vault.service';
+import { SecretVaultService } from './secret-vault.service.js';
 import * as crypto from 'crypto';
 import axios from 'axios';
 

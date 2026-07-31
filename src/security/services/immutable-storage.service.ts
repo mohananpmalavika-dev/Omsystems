@@ -16,7 +16,7 @@ export class ImmutableStorageService extends EventEmitter implements IImmutableS
    */
   async storeImmutable(
     objectKey: string,
-    objectType: string,
+    objectType: 'video' | 'evidence' | 'audit_log' | 'document',
     data: Buffer,
     retentionDays: number,
     metadata: Record<string, any> = {}

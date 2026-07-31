@@ -3,7 +3,16 @@
  * MongoDB collection schemas for all security components
  */
 
-export const securityCollections = {
+interface SecurityCollectionSchema {
+  indexes?: Array<{
+    key: Record<string, unknown>;
+    unique?: boolean;
+    expireAfterSeconds?: number;
+  }>;
+  validation?: any;
+}
+
+export const securityCollections: Record<string, SecurityCollectionSchema> = {
   // Secret Vault
   secrets: {
     indexes: [

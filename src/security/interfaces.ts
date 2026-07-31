@@ -62,7 +62,7 @@ export interface ISecretVaultService {
   getSecretVersions(secretId: string): Promise<any[]>;
   
   // Access Logging
-  logAccess(secretId: string, userId: string, action: string, success: boolean): Promise<void>;
+  logAccess(secretId: string, userId: string, action: 'create' | 'read' | 'write' | 'rotate' | 'delete', success: boolean): Promise<void>;
   
   getAccessLogs(secretId: string, limit?: number): Promise<SecretAccessLog[]>;
   

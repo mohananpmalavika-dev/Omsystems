@@ -20,7 +20,7 @@ const securityServices = SecurityServicesFactory.getInstance();
  */
 router.get('/posture', async (req: Request, res: Response) => {
   try {
-    const posture = await securityServices.zeroTrust?.calculatePosture
+    const posture = await (securityServices as any).securityPosture?.calculatePosture
       ? await (securityServices as any).securityPosture.getPosture()
       : { overallScore: 0, message: 'Security posture service not initialized' };
     res.json(posture);
