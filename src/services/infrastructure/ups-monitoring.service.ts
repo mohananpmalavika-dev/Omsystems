@@ -163,3 +163,88 @@ export class UPSMonitoringService {
       };
     }
   }
+
+  /**
+   * Collect UPS health metrics
+   */
+  private async collectUPSHealth(
+    ups: UPSDevice, 
+    target: SNMPTarget
+  ): Promise<UPSHealthMetrics> {
+    const observedAt = new Date();
+
+    // Determine OIDs based on manufacturer
+    const oids = this.selectUPSOIDs(ups.manufacturer);
+
+    // Collect metrics via SNMP
+    const results = await this.snmp.snmpGet(target, oids.oidList);
+
+    // Parse results based on vendor
+    const metrics = this.parseUPSMetrics(ups.manufacturer, results, oids.oidMap);
+
+    // Calculate battery age
+    const batteryAgeDays = ups.batteryInstallationDate 
+      ? Math.floor((Date.now() - ups.batteryInstallationDate.getTime()) / (1000 * 60 * 60 * 24))
+      : undefined;
+
+    // Predict battery replacement date
+    const predictedReplacementDays = this.predictBatteryReplacement(
+      metrics.batteryHealthPercent,
+      batteryAgeDays,
+      metrics.lastSelfTestResult
+    );
+
+    // Calculate health score
+    const healthScore = this.calculateUPSHealthScore({
+      batteryHealthPercent: metrics.batteryHealthPercent,
+      runningOnBattery: metrics.runningOnBattery,
+      loadPercent: metrics.loadPercent,
+      inputVoltage: metrics.inputVoltage,
+      temperature: metrics.batteryTemperature,
+      lastSelfTestResult: metrics.lastSelfTestResult,
+      batteryAgeDays
+    });
+
+    const healthStatus = this.determineHealthStatus(healthScore);
+
+    const healthMetrics: UPSHealthMetrics = {
+      id: '',
+      tenantId: ups.tenantId,
+      upsId: ups.id,
+      observedAt,
+      batteryHealthPercent: metrics.batteryHealthPercent,
+      batteryVoltage: metrics.batteryVoltage,
+      batteryCurrent: metrics.batteryCurrent,
+      batteryTemperatureCelsius: metrics.batteryTemperature,
+      batteryAgeDays,
+      estimatedRuntimeMinutes: metrics.estimatedRuntimeMinutes,
+      estimatedChargeTimeMinutes: metrics.estimatedChargeTimeMinutes,
+      utilityPowerAvailable: !metrics.runningOnBattery,
+      runningOnBattery: metrics.runningOnBattery,
+      inputVoltage: metrics.inputVoltage,
+      inputFrequency: metrics.inputFrequency,
+      outputVoltage: metrics.outputVoltage,
+      outputFrequency: metrics.outputFrequency,
+      outputCurrent: metrics.outputCurrent,
+      loadPercent: metrics.loadPercent,
+      loadWatts: metrics.loadWatts,
+      lastSelfTestDate: metrics.lastSelfTestDate,
+      lastSelfTestResult: metrics.lastSelfTestResult,
+      lastPowerEventType: metrics.lastPowerEventType,
+      lastPowerEventTime: metrics.lastPowerEventTime,
+      batteryReplacementIndicator: metrics.batteryReplacementIndicator || 
+        (predictedReplacementDays !== undefined && predictedReplacementDays < 30),
+      predictedReplacementDays,
+      alarmStatus: metrics.alarmStatus,
+      healthScore,
+      healthStatus
+    };
+
+    // Store in database
+    await this.storeUPSHealth(healthMetrics);
+
+    // Check and create alerts
+    await this.checkAndCreateAlerts(ups, healthMetrics);
+
+    return healthMetrics;
+  }
