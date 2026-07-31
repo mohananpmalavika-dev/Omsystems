@@ -3,7 +3,7 @@
  * Track, renew, and manage X.509 certificates across the platform
  */
 
-import * as forge from 'node-forge';
+import forge from 'node-forge';
 import { ICertificateManagementService, CertificateFilters } from '../interfaces.js';
 import {
   Certificate,
@@ -466,7 +466,7 @@ export class CertificateManagementService extends EventEmitter implements ICerti
   /**
    * Helper: Extract Subject Alternative Names
    */
-  private extractSANs(cert: forge.pki.Certificate): string[] {
+  private extractSANs(cert: any): string[] {
     const sans: string[] = [];
     
     const altNames = cert.getExtension('subjectAltName') as any;

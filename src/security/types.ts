@@ -430,7 +430,7 @@ export enum RetentionStatus {
 export interface ImmutableObject {
   id: string;
   objectKey: string;
-  objectType: 'video' | 'evidence' | 'audit_log' | 'document';
+  objectType: string;
   size: number;
   checksum: string;
   algorithm: string;
