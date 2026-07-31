@@ -325,7 +325,7 @@ export class AIIncidentSummaryService {
 
     const now = new Date().toISOString();
 
-    return {
+    const cluster: AlertCluster = {
       id: this.generateClusterId(tenantId, firstAlert),
       tenantId,
       clusterId: this.generateClusterId(tenantId, firstAlert),
@@ -347,6 +347,22 @@ export class AIIncidentSummaryService {
       createdAt: now,
       updatedAt: now,
     };
+
+    // Emit WebSocket event for cluster creation
+    aiIntelligenceEvents.emitClusterUpdate({
+      type: 'cluster-created',
+      clusterId: cluster.clusterId,
+      tenantId: cluster.tenantId,
+      branchId: cluster.branchId,
+      incidentType: cluster.incidentType,
+      severity: cluster.severity,
+      alertCount: cluster.alertCount,
+      confidence: cluster.confidence,
+      summary: this.generateClusterDescription(cluster),
+      timestamp: new Date(),
+    });
+
+    return cluster;
   }
 
   /**
