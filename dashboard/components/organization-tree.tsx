@@ -54,8 +54,11 @@ export function OrganizationTree({
       setLoading(true);
       setError(null);
       const response = await organizationApi.getTree();
+      console.log('Organization tree response:', response);
+      console.log('Tree data:', response.data);
       setTree(response.data);
     } catch (err: any) {
+      console.error('Failed to load organization tree:', err);
       setError(err.message || "Failed to load organization tree");
     } finally {
       setLoading(false);
@@ -209,6 +212,54 @@ export function OrganizationTree({
           <button onClick={loadTree} className="retry-button">
             Retry
           </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (!tree || tree.length === 0) {
+    return (
+      <div className="org-tree-container">
+        <div style={{
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '4rem 2rem',
+          textAlign: 'center',
+          color: '#6b7280'
+        }}>
+          <Building2 size={48} style={{ color: '#cbd5e0', marginBottom: '1rem' }} />
+          <h3 style={{ fontSize: '1.25rem', fontWeight: 600, color: '#374151', marginBottom: '0.5rem' }}>
+            No Organization Found
+          </h3>
+          <p style={{ marginBottom: '1.5rem', color: '#6b7280' }}>
+            The organization tree is empty. Create your first company node to get started.
+          </p>
+          {onAddChild && (
+            <button 
+              onClick={() => onAddChild({ id: 'root', name: 'Root', type: 'root', isActive: true } as any)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.5rem',
+                padding: '0.75rem 1.5rem',
+                background: '#3b82f6',
+                color: 'white',
+                border: 'none',
+                borderRadius: '0.5rem',
+                fontSize: '1rem',
+                fontWeight: 500,
+                cursor: 'pointer',
+                transition: 'background 0.2s'
+              }}
+              onMouseOver={(e) => e.currentTarget.style.background = '#2563eb'}
+              onMouseOut={(e) => e.currentTarget.style.background = '#3b82f6'}
+            >
+              <Plus size={16} />
+              Create Company
+            </button>
+          )}
         </div>
       </div>
     );
