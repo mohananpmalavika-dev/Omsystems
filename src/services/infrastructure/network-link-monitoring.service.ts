@@ -101,7 +101,7 @@ export class NetworkLinkMonitoringService {
       latency: quality.latencyMs,
       packetLoss: quality.packetLossPercent,
       rxErrors: linkStatus.rxErrors,
-      sfpHealth: sfp.temperatureCelsius
+      sfpTemperatureCelsius: sfp.sfpTemperatureCelsius
     });
     
     return {
@@ -124,6 +124,7 @@ export class NetworkLinkMonitoringService {
     return {
       status: 'up' as const,
       adminStatus: 'enabled' as const,
+      rxErrors: 0,
       counters: {
         rxBytes: BigInt(0),
         txBytes: BigInt(0),
@@ -154,7 +155,13 @@ export class NetworkLinkMonitoringService {
     };
   }
 
-  private async checkSFPModule(link: any) {
+  private async checkSFPModule(link: any): Promise<{
+    sfpPresent?: boolean;
+    sfpVendor?: string;
+    sfpTemperatureCelsius?: number;
+    sfpRxPowerDbm?: number;
+    sfpTxPowerDbm?: number;
+  }> {
     // SFP diagnostics via SNMP
     return {
       sfpPresent: true,
