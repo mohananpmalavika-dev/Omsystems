@@ -239,82 +239,82 @@ RETURNS TABLE (
 ) AS $$
 BEGIN
   RETURN QUERY
-  
-  -- Camera itself
-  SELECT 
-    'camera'::VARCHAR as device_type,
-    c.id as device_id,
-    c.name as device_name,
-    NULL::INTEGER as health_score,
-    CASE 
-      WHEN c.last_seen_at > NOW() - INTERVAL '5 minutes' THEN 'online'
-      ELSE 'offline'
-    END::VARCHAR as status
-  FROM cameras c
-  WHERE c.id = p_camera_id
-  
-  UNION ALL
-  
-  -- Connected switch
-  SELECT 
-    'switch'::VARCHAR,
-    ns.id,
-    ns.name,
-    shm.health_score::INTEGER,
-    shm.health_status::VARCHAR
-  FROM cameras c
-  JOIN network_topology_nodes ntn ON ntn.target_device_id = c.id AND ntn.target_device_type = 'camera'
-  JOIN network_switches ns ON ns.id = ntn.source_device_id
-  LEFT JOIN LATERAL (
-    SELECT health_score, health_status
-    FROM switch_health_metrics
-    WHERE switch_id = ns.id
-    ORDER BY observed_at DESC
-    LIMIT 1
-  ) shm ON true
-  WHERE c.id = p_camera_id
-  
-  UNION ALL
-  
-  -- Branch firewall
-  SELECT 
-    'firewall'::VARCHAR,
-    f.id,
-    f.name,
-    fhm.health_score::INTEGER,
-    fhm.health_status::VARCHAR
-  FROM cameras c
-  JOIN firewalls f ON f.branch_id = c.branch_id
-  LEFT JOIN LATERAL (
-    SELECT health_score, health_status
-    FROM firewall_health_metrics
-    WHERE firewall_id = f.id
-    ORDER BY observed_at DESC
-    LIMIT 1
-  ) fhm ON true
-  WHERE c.id = p_camera_id
-  LIMIT 1
-  
-  UNION ALL
-  
-  -- Branch UPS
-  SELECT 
-    'ups'::VARCHAR,
-    u.id,
-    u.name,
-    uhm.health_score::INTEGER,
-    uhm.health_status::VARCHAR
-  FROM cameras c
-  JOIN ups_devices u ON u.branch_id = c.branch_id
-  LEFT JOIN LATERAL (
-    SELECT health_score, health_status
-    FROM ups_health_metrics
-    WHERE ups_id = u.id
-    ORDER BY observed_at DESC
-    LIMIT 1
-  ) uhm ON true
-  WHERE c.id = p_camera_id;
-  
+  SELECT * FROM (
+    -- Camera itself
+    SELECT 
+      'camera'::VARCHAR as device_type,
+      c.id as device_id,
+      c.name as device_name,
+      NULL::INTEGER as health_score,
+      CASE 
+        WHEN c.last_seen_at > NOW() - INTERVAL '5 minutes' THEN 'online'
+        ELSE 'offline'
+      END::VARCHAR as status
+    FROM cameras c
+    WHERE c.id = p_camera_id
+
+    UNION ALL
+
+    -- Connected switch
+    SELECT 
+      'switch'::VARCHAR,
+      ns.id,
+      ns.name,
+      shm.health_score::INTEGER,
+      shm.health_status::VARCHAR
+    FROM cameras c
+    JOIN network_topology_nodes ntn ON ntn.target_device_id = c.id AND ntn.target_device_type = 'camera'
+    JOIN network_switches ns ON ns.id = ntn.source_device_id
+    LEFT JOIN LATERAL (
+      SELECT health_score, health_status
+      FROM switch_health_metrics
+      WHERE switch_id = ns.id
+      ORDER BY observed_at DESC
+      LIMIT 1
+    ) shm ON true
+    WHERE c.id = p_camera_id
+
+    UNION ALL
+
+    -- Branch firewall
+    SELECT 
+      'firewall'::VARCHAR,
+      f.id,
+      f.name,
+      fhm.health_score::INTEGER,
+      fhm.health_status::VARCHAR
+    FROM cameras c
+    JOIN firewalls f ON f.branch_id = c.branch_id
+    LEFT JOIN LATERAL (
+      SELECT health_score, health_status
+      FROM firewall_health_metrics
+      WHERE firewall_id = f.id
+      ORDER BY observed_at DESC
+      LIMIT 1
+    ) fhm ON true
+    WHERE c.id = p_camera_id
+
+    UNION ALL
+
+    -- Branch UPS
+    SELECT 
+      'ups'::VARCHAR,
+      u.id,
+      u.name,
+      uhm.health_score::INTEGER,
+      uhm.health_status::VARCHAR
+    FROM cameras c
+    JOIN ups_devices u ON u.branch_id = c.branch_id
+    LEFT JOIN LATERAL (
+      SELECT health_score, health_status
+      FROM ups_health_metrics
+      WHERE ups_id = u.id
+      ORDER BY observed_at DESC
+      LIMIT 1
+    ) uhm ON true
+    WHERE c.id = p_camera_id
+  ) infrastructure_path;
+
 END;
 $$ LANGUAGE plpgsql;
 
