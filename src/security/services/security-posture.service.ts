@@ -5,7 +5,7 @@
 
 import { ISecurityPostureService, IssueFilters } from '../interfaces.js';
 import { SecurityPosture, SecurityCategory, SecurityIssue, ComplianceStatus, ComplianceFramework } from '../types.js';
-import { getDatabase } from '../../config/database.js';
+// import { getDatabase } from '../../config/database.js'; // TODO: Implement database config
 import { EventEmitter } from 'events';
 
 export class SecurityPostureService extends EventEmitter implements ISecurityPostureService {

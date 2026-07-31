@@ -3,29 +3,29 @@
  * Central export point for all enterprise security services
  */
 
-export { SecretVaultService } from './secret-vault.service';
-export { CertificateManagementService } from './certificate-management.service';
-export { PasswordRotationService } from './password-rotation.service';
-export { HSMService } from './hsm.service';
-export { ZeroTrustPolicyEngine } from './zero-trust-policy.service';
-export { TamperDetectionService } from './tamper-detection.service';
-export { VideoEncryptionService } from './video-encryption.service';
-export { ImmutableStorageService } from './immutable-storage.service';
-export { RansomwareDetectionService } from './ransomware-detection.service';
-export { SupplyChainVerificationService } from './supply-chain-verification.service';
-export { SecureBootVerificationService } from './secure-boot-verification.service';
-export { TPMAttestationService } from './tpm-attestation.service';
-export { SecurityPostureService } from './security-posture.service';
+export { SecretVaultService } from './secret-vault.service.js';
+export { CertificateManagementService } from './certificate-management.service.js';
+export { PasswordRotationService } from './password-rotation.service.js';
+export { HSMService } from './hsm.service.js';
+export { ZeroTrustPolicyEngine } from './zero-trust-policy.service.js';
+export { TamperDetectionService } from './tamper-detection.service.js';
+export { VideoEncryptionService } from './video-encryption.service.js';
+export { ImmutableStorageService } from './immutable-storage.service.js';
+export { RansomwareDetectionService } from './ransomware-detection.service.js';
+export { SupplyChainVerificationService } from './supply-chain-verification.service.js';
+export { SecureBootVerificationService } from './secure-boot-verification.service.js';
+export { TPMAttestationService } from './tpm-attestation.service.js';
+export { SecurityPostureService } from './security-posture.service.js';
 
 /**
  * Security Services Factory
  * Initializes and manages all security services
  */
-import { SecretVaultService } from './secret-vault.service';
-import { CertificateManagementService } from './certificate-management.service';
-import { PasswordRotationService } from './password-rotation.service';
-import { HSMService } from './hsm.service';
-import { ZeroTrustPolicyEngine } from './zero-trust-policy.service';
+import { SecretVaultService } from './secret-vault.service.js';
+import { CertificateManagementService } from './certificate-management.service.js';
+import { PasswordRotationService } from './password-rotation.service.js';
+import { HSMService } from './hsm.service.js';
+import { ZeroTrustPolicyEngine } from './zero-trust-policy.service.js';
 import { EventEmitter } from 'events';
 
 export class SecurityServicesFactory extends EventEmitter {

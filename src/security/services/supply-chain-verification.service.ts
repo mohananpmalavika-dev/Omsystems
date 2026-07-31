@@ -5,7 +5,7 @@
 
 import { ISupplyChainVerificationService, PackageFilters } from '../interfaces.js';
 import { SoftwarePackage, VerificationStatus } from '../types.js';
-import { getDatabase } from '../../config/database.js';
+// import { getDatabase } from '../../config/database.js'; // TODO: Implement database config
 import { EventEmitter } from 'events';
 import { createHash } from 'crypto';
 import * as fs from 'fs/promises';

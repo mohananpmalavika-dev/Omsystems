@@ -5,7 +5,7 @@
 
 import { IVideoEncryptionService } from '../interfaces.js';
 import { EncryptedVideo, EncryptionConfig, EncryptionAlgorithm, EncryptionKey } from '../types.js';
-import { getDatabase } from '../../config/database.js';
+// import { getDatabase } from '../../config/database.js'; // TODO: Implement database config
 import { EventEmitter } from 'events';
 import { createCipheriv, createDecipheriv, randomBytes } from 'crypto';
 import { createReadStream, createWriteStream } from 'fs';

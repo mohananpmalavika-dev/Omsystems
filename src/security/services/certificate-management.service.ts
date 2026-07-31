@@ -12,7 +12,7 @@ import {
   CertificateCheck,
   CertificateUsage
 } from '../types.js';
-import { getDatabase } from '../../config/database.js';
+// import { getDatabase } from '../../config/database.js'; // TODO: Implement database config
 import { EventEmitter } from 'events';
 import { exec } from 'child_process';
 import { promisify } from 'util';
