@@ -1,0 +1,20 @@
+﻿Sentinel Grid Edge Agent - Installation Key
+============================================
+
+Branch Name: Test Branch
+Installation Key: afc191762f2a746eb4c5e08c0e8d1e24100c6caf87a180855dc78bf30696fa08
+Generated: 2026-07-31 21:56:45
+
+DISTRIBUTION INSTRUCTIONS:
+1. Send this key securely to the branch manager
+2. Do NOT share publicly or via unsecured channels
+3. Each key should be used for one branch only
+
+INSTALLATION STEPS FOR BRANCH:
+1. Download SentinelGridEdgeAgentInstaller.exe
+2. Double-click to run the installer
+3. Enter branch name: Test Branch
+4. Enter this installation key
+5. Click Install
+
+For support: Contact IT Administrator

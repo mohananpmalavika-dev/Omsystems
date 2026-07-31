@@ -192,38 +192,50 @@ export async function registerAuthRoutes(
 
   // Logout endpoint
   app.post("/v1/auth/logout", async (request, reply) => {
-    // Get session from request context (set by auth middleware)
-    const sessionId = (request as any).sessionId;
+    try {
+      // Get session from request context (set by auth middleware)
+      const sessionId = (request as any).sessionId;
 
-    if (sessionId) {
-      await store.deleteUserSession(sessionId);
+      if (sessionId) {
+        await store.deleteUserSession(sessionId);
+      }
+
+      await store.writeAudit({
+        tenantId: request.currentUser.tenantId,
+        actorUserId: request.currentUser.id,
+        action: "user.logout",
+        resourceNodeId: null,
+        outcome: "success",
+        sourceIp: request.ip,
+      });
+
+      return { success: true };
+    } catch (error) {
+      console.error('Logout error:', error);
+      // Even if session deletion fails, return success to allow logout
+      return { success: true };
     }
-
-    await store.writeAudit({
-      tenantId: request.currentUser.tenantId,
-      actorUserId: request.currentUser.id,
-      action: "user.logout",
-      resourceNodeId: null,
-      outcome: "success",
-      sourceIp: request.ip,
-    });
-
-    return { success: true };
   });
 
   // Logout all sessions
   app.post("/v1/auth/logout-all", async (request, reply) => {
-    await store.deleteAllUserSessions(request.currentUser.id);
+    try {
+      await store.deleteAllUserSessions(request.currentUser.id);
 
-    await store.writeAudit({
-      tenantId: request.currentUser.tenantId,
-      actorUserId: request.currentUser.id,
-      action: "user.logout_all_sessions",
-      resourceNodeId: null,
-      outcome: "success",
-    });
+      await store.writeAudit({
+        tenantId: request.currentUser.tenantId,
+        actorUserId: request.currentUser.id,
+        action: "user.logout_all_sessions",
+        resourceNodeId: null,
+        outcome: "success",
+      });
 
-    return { success: true };
+      return { success: true };
+    } catch (error) {
+      console.error('Logout all sessions error:', error);
+      // Even if session deletion fails, return success to allow logout
+      return { success: true };
+    }
   });
 
   // Get current user info
