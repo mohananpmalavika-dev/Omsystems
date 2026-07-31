@@ -652,9 +652,15 @@ CREATE TRIGGER trigger_update_evidence_package_totals
 -- ============================================================================
 
 -- Grant necessary permissions (adjust as needed for your security model)
-GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO sentinel_api;
-GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO sentinel_api;
-GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA public TO sentinel_api;
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'sentinel_api') THEN
+        GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO sentinel_api;
+        GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO sentinel_api;
+        GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA public TO sentinel_api;
+    END IF;
+END
+$$;
 
 -- ============================================================================
 -- COMMENTS
