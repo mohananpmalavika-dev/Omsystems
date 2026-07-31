@@ -130,6 +130,34 @@ describe("dashboard control-plane BFF", () => {
     expect(cookies).toContain("HttpOnly");
     expect(cookies).toContain("SameSite=strict");
   });
+
+  it("logs upstream fetch failures with route details and returns 502", async () => {
+    process.env.CONTROL_PLANE_INTERNAL_URL = "http://control.internal:8080";
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+    const fetchError = new Error("Network failure");
+    vi.stubGlobal("fetch", vi.fn(async () => { throw fetchError; }));
+
+    const response = await POST(
+      new NextRequest(
+        "https://sentinel.example/api/control/v1/auth/login",
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ username: "employee", password: "secret" }),
+        },
+      ),
+      { params: Promise.resolve({ path: ["v1", "auth", "login"] }) },
+    );
+
+    expect(response.status).toBe(502);
+    expect(consoleError).toHaveBeenCalledWith("Control-plane proxy request failed", expect.objectContaining({
+      method: "POST",
+      routePath: "/v1/auth/login",
+      upstream: "http://control.internal:8080/v1/auth/login",
+      message: "Network failure",
+    }));
+    consoleError.mockRestore();
+  });
 });
 
 function restore(name: string, value: string | undefined) {

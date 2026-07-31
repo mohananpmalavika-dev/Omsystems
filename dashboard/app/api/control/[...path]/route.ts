@@ -47,7 +47,8 @@ async function proxyControlRequest(request: NextRequest, context: RouteContext) 
     if (refreshToken) requestBody = JSON.stringify({ refreshToken });
   }
   try {
-    const response = await fetch(upstream, {
+    const upstreamUrl = upstream.toString();
+    const response = await fetch(upstreamUrl, {
       method: request.method,
       headers,
       body: requestBody,
@@ -125,9 +126,13 @@ async function proxyControlRequest(request: NextRequest, context: RouteContext) 
       ? error.cause
       : undefined;
     console.error("Control-plane proxy request failed", {
+      method: request.method,
+      routePath,
+      upstream: upstream.toString(),
       message: error instanceof Error ? error.message : "unknown error",
+      stack: error instanceof Error ? error.stack : undefined,
       cause: cause?.message,
-      code: cause && "code" in cause ? cause.code : undefined,
+      causeCode: cause && "code" in cause ? cause.code : undefined,
     });
     return Response.json(
       { error: "control_plane_unavailable" },
