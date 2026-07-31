@@ -239,7 +239,7 @@ export class SwitchMonitoringService {
     // Process each interface
     for (let i = 0; i < ifDescrResults.length; i++) {
       const portNumber = i + 1;
-      const description = this.snmp.parseValue(ifDescrResults[i]);
+      const description = String(ifDescrResults[i] || '');
 
       // Skip non-physical interfaces (e.g., management, VLAN interfaces)
       if (this.shouldSkipInterface(description)) {
@@ -658,12 +658,8 @@ export class SwitchMonitoringService {
       host: sw.ipAddress,
       port: 161,
       timeout: 5000,
-      retries: 3,
-      credentials: {
-        version: sw.snmpVersion === '3' ? '3' : '2c',
-        community: sw.snmpCommunity,
-        // SNMPv3 credentials would come from secure config
-      }
+      community: sw.snmpCommunity,
+      version: sw.snmpVersion || '2c'
     };
   }
 
