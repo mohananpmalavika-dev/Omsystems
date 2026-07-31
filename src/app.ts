@@ -486,7 +486,8 @@ export async function buildApp(options?: {
     }
 
     if ((request.routeOptions.config as unknown as Record<string, unknown>)?.noAuth) {
-      return loginRateLimiter.middleware()(request, reply);
+      await loginRateLimiter.middleware()(request, reply);
+      return;
     }
 
     if (sessionAuth) {
