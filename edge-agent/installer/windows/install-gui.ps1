@@ -7,7 +7,7 @@ Add-Type -AssemblyName System.Drawing
 $ErrorActionPreference = "Stop"
 
 # Configuration
-$CONTROL_PLANE_URL = "https://sentinel-grid-control-plane1.onrender.com"
+$CONTROL_PLANE_URL = "https://sentinel-grid-monitoring1.onrender.com"
 $INSTALL_DIR = "C:\Program Files\Sentinel Grid\Edge Agent"
 
 # Check if running as Administrator
@@ -69,7 +69,7 @@ $form.Controls.Add($branchTextBox)
 $keyLabel = New-Object System.Windows.Forms.Label
 $keyLabel.Location = New-Object System.Drawing.Point(20, 200)
 $keyLabel.Size = New-Object System.Drawing.Size(200, 20)
-$keyLabel.Text = 'One-time Activation Code:'
+$keyLabel.Text = 'Installation Key:'
 $keyLabel.Font = New-Object System.Drawing.Font("Segoe UI", 10, [System.Drawing.FontStyle]::Bold)
 $form.Controls.Add($keyLabel)
 
@@ -182,51 +182,19 @@ $installButton.Add_Click({
             throw "edge-agent.exe not found at $sourceExe"
         }
         Copy-Item -Path $sourceExe -Destination "$INSTALL_DIR\edge-agent.exe" -Force
-        $sourceRuntime = Join-Path $PSScriptRoot "..\..\release\runtime"
-        $mediaMtxSource = Get-ChildItem -LiteralPath $sourceRuntime -Filter "mediamtx.exe" -File -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
-        $cloudflaredSource = Get-ChildItem -LiteralPath $sourceRuntime -Filter "cloudflared.exe" -File -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
-        if (-not $mediaMtxSource -or -not $cloudflaredSource) {
-            throw "The all-in-one runtime is incomplete. MediaMTX and cloudflared are required."
-        }
-        Copy-Item -LiteralPath $sourceRuntime -Destination "$INSTALL_DIR\runtime" -Recurse -Force
-        $mediaMtxPath = Join-Path "$INSTALL_DIR\runtime" ($mediaMtxSource.FullName.Substring($sourceRuntime.Length).TrimStart('\'))
-        $cloudflaredPath = Join-Path "$INSTALL_DIR\runtime" ($cloudflaredSource.FullName.Substring($sourceRuntime.Length).TrimStart('\'))
         Log "Copied edge-agent.exe"
         
         # Create configuration
         UpdateProgress 50 "Creating configuration..."
-        if (-not $installKey.StartsWith("sgact_") -or $installKey.Length -lt 40) {
-            throw "Create a fresh gateway activation code in Sentinel Grid."
-        }
         $configContent = @"
-CONTROL_PLANE_URL="https://sentinel-grid-control-plane1.onrender.com"
-BRANCH_ID=""
-EDGE_AGENT_ID=""
-EDGE_BRIDGE_SHARED_KEY=""
-DEV_USER_ID=""
-EDGE_ACTIVATION_CODE="$installKey"
-EDGE_AGENT_NAME="$branchName"
-EDGE_AGENT_VERSION="0.1.0"
-EDGE_IDENTITY_PATH="$INSTALL_DIR\data\device-identity.enc"
-EDGE_IDENTITY_KEY_PATH="$INSTALL_DIR\data\device-identity.key"
-EDGE_OFFLINE_OUTBOX_PATH="$INSTALL_DIR\data\offline-outbox.enc"
-EDGE_OFFLINE_OUTBOX_KEY_PATH="$INSTALL_DIR\data\offline-outbox.key"
-EDGE_CAMERA_CREDENTIAL_VAULT_PATH="$INSTALL_DIR\data\camera-credentials.enc"
-EDGE_CAMERA_CREDENTIAL_VAULT_KEY_PATH="$INSTALL_DIR\data\camera-credentials.key"
-EDGE_LOG_PATH="$INSTALL_DIR\logs\edge-agent.log"
-CAMERA_USERNAME=""
-CAMERA_PASSWORD=""
-ONVIF_ENDPOINTS=""
-AUTO_DISCOVERY_ENABLED="true"
-AUTO_DISCOVERY_INTERVAL_MS="900000"
-LIVE_MEDIA_ENABLED="true"
-EDGE_MANAGED_MEDIA_BOOTSTRAP="true"
-MEDIA_RUNTIME_MANAGED="true"
-MEDIAMTX_PATH="$mediaMtxPath"
-MEDIA_TUNNEL_MODE="named"
-CLOUDFLARED_PATH="$cloudflaredPath"
-INTERNET_LINKS_JSON="[]"
-RECORDERS_JSON="[]"
+CONTROL_PLANE_URL="$CONTROL_PLANE_URL"
+EDGE_BRIDGE_SHARED_KEY="$installKey"
+BRANCH_NAME="$branchName"
+LOG_LEVEL="info"
+DATA_DIRECTORY="$INSTALL_DIR\data"
+LOG_DIRECTORY="$INSTALL_DIR\logs"
+CAMERA_DISCOVERY_ENABLED="true"
+LIVE_MEDIA_ENABLED="false"
 "@
         $configPath = "$INSTALL_DIR\config\edge-agent.env"
         Set-Content -Path $configPath -Value $configContent -Encoding UTF8
