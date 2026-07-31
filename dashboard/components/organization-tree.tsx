@@ -231,11 +231,27 @@ export function OrganizationTree({
         }}>
           <Building2 size={48} style={{ color: '#cbd5e0', marginBottom: '1rem' }} />
           <h3 style={{ fontSize: '1.25rem', fontWeight: 600, color: '#374151', marginBottom: '0.5rem' }}>
-            No Organization Found
+            No Organization Visible
           </h3>
-          <p style={{ marginBottom: '1.5rem', color: '#6b7280' }}>
-            The organization tree is empty. Create your first company node to get started.
+          <p style={{ marginBottom: '1rem', color: '#6b7280' }}>
+            The organization tree is empty or you don't have permission to view it.
           </p>
+          <div style={{
+            background: '#fef3c7',
+            border: '1px solid #fcd34d',
+            borderRadius: '0.5rem',
+            padding: '1rem',
+            marginBottom: '1.5rem',
+            maxWidth: '600px'
+          }}>
+            <p style={{ fontSize: '0.875rem', color: '#92400e', margin: 0 }}>
+              <strong>Possible causes:</strong><br/>
+              • Organization exists but user lacks view permissions<br/>
+              • Database has orphaned data<br/>
+              • Permissions not properly configured<br/><br/>
+              <strong>To fix:</strong> Grant your user "org:manage" or "live:view" permissions on the organization nodes, or contact your system administrator.
+            </p>
+          </div>
           {onAddChild && (
             <button 
               onClick={() => onAddChild({ id: 'root', name: 'Root', type: 'root', isActive: true } as any)}
@@ -257,7 +273,7 @@ export function OrganizationTree({
               onMouseOut={(e) => e.currentTarget.style.background = '#3b82f6'}
             >
               <Plus size={16} />
-              Create Company
+              Try Creating Company Anyway
             </button>
           )}
         </div>
