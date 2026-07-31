@@ -369,16 +369,19 @@ CREATE TABLE IF NOT EXISTS evidence_items (
     verified_at TIMESTAMPTZ
 );
 
-CREATE INDEX idx_evidence_items_package ON evidence_items(package_id);
-CREATE INDEX idx_evidence_items_type ON evidence_items(item_type);
-CREATE INDEX idx_evidence_items_camera ON evidence_items(camera_id);
-CREATE INDEX idx_evidence_items_timestamp ON evidence_items(timestamp DESC);
-CREATE INDEX idx_evidence_items_classification ON evidence_items(classification);
+ALTER TABLE evidence_items ADD COLUMN IF NOT EXISTS package_id UUID;
+ALTER TABLE evidence_items ADD COLUMN IF NOT EXISTS size_bytes BIGINT NOT NULL DEFAULT 0;
+
+CREATE INDEX IF NOT EXISTS idx_evidence_items_package ON evidence_items(package_id);
+CREATE INDEX IF NOT EXISTS idx_evidence_items_type ON evidence_items(item_type);
+CREATE INDEX IF NOT EXISTS idx_evidence_items_camera ON evidence_items(camera_id);
+CREATE INDEX IF NOT EXISTS idx_evidence_items_timestamp ON evidence_items(timestamp DESC);
+CREATE INDEX IF NOT EXISTS idx_evidence_items_classification ON evidence_items(classification);
 
 -- Chain of Custody Events
 CREATE TABLE IF NOT EXISTS chain_of_custody_events (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    package_id UUID NOT NULL REFERENCES evidence_packages(id) ON DELETE CASCADE,
+    package_id UUID REFERENCES evidence_packages(id) ON DELETE CASCADE,
     
     -- Event Type
     event_type VARCHAR(20) NOT NULL 
@@ -413,10 +416,12 @@ CREATE TABLE IF NOT EXISTS chain_of_custody_events (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_chain_of_custody_package ON chain_of_custody_events(package_id);
-CREATE INDEX idx_chain_of_custody_timestamp ON chain_of_custody_events(timestamp DESC);
-CREATE INDEX idx_chain_of_custody_performed_by ON chain_of_custody_events(performed_by);
-CREATE INDEX idx_chain_of_custody_event_type ON chain_of_custody_events(event_type);
+ALTER TABLE chain_of_custody_events ADD COLUMN IF NOT EXISTS package_id UUID;
+
+CREATE INDEX IF NOT EXISTS idx_chain_of_custody_package ON chain_of_custody_events(package_id);
+CREATE INDEX IF NOT EXISTS idx_chain_of_custody_timestamp ON chain_of_custody_events(timestamp DESC);
+CREATE INDEX IF NOT EXISTS idx_chain_of_custody_performed_by ON chain_of_custody_events(performed_by);
+CREATE INDEX IF NOT EXISTS idx_chain_of_custody_event_type ON chain_of_custody_events(event_type);
 
 -- ============================================================================
 -- 5. VIDEO SEARCH & SEMANTIC INDEXING
@@ -546,6 +551,7 @@ LEFT JOIN resource_nodes b ON e.branch_id = b.id
 WHERE e.status = 'in-progress';
 
 -- Evidence Packages with Custody View
+DROP VIEW IF EXISTS evidence_packages_with_custody;
 CREATE OR REPLACE VIEW evidence_packages_with_custody AS
 SELECT 
     p.*,
