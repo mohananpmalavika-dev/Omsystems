@@ -33,7 +33,7 @@ import {
   AccessResponse,
   ComplianceStatus,
   ComplianceFramework
-} from './types';
+} from './types.js';
 
 // ============================================================================
 // Secret Vault Interface
