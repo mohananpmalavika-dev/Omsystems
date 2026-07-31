@@ -1155,3 +1155,275 @@ export function createInfrastructureMonitoringRoutes(pool: Pool): Router {
 }
 
 export default createInfrastructureMonitoringRoutes;
+
+
+  // =====================================================
+  // RCA INTEGRATION ENDPOINTS
+  // =====================================================
+
+  /**
+   * POST /v1/infrastructure/rca/investigate-camera
+   * Investigate a camera incident and correlate with infrastructure
+   */
+  router.post('/rca/investigate-camera', async (req: AuthRequest, res: Response) => {
+    try {
+      const { tenantId } = req.context || {};
+      const { cameraId, incidentType, detectedAt } = req.body;
+      
+      if (!tenantId) {
+        return res.status(401).json({
+          success: false,
+          error: 'Unauthorized'
+        });
+      }
+
+      if (!cameraId || !incidentType) {
+        return res.status(400).json({
+          success: false,
+          error: 'cameraId and incidentType are required'
+        });
+      }
+
+      // Get camera details
+      const camera = await pool.query(
+        `SELECT id, name, branch_id FROM cameras WHERE id = $1 AND tenant_id = $2`,
+        [cameraId, tenantId]
+      );
+
+      if (camera.rows.length === 0) {
+        return res.status(404).json({
+          success: false,
+          error: 'Camera not found'
+        });
+      }
+
+      const { InfrastructureRcaIntegrationService } = await import(
+        '../../src/services/infrastructure/infrastructure-rca-integration.service.js'
+      );
+      const rcaService = new InfrastructureRcaIntegrationService(pool);
+
+      const result = await rcaService.investigateCameraIncident({
+        cameraId,
+        cameraName: camera.rows[0].name,
+        branchId: camera.rows[0].branch_id,
+        incidentType,
+        detectedAt: detectedAt ? new Date(detectedAt) : new Date()
+      });
+
+      res.json({
+        success: true,
+        data: result
+      });
+    } catch (error) {
+      console.error('Error investigating camera incident:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Failed to investigate camera incident'
+      });
+    }
+  });
+
+  /**
+   * POST /v1/infrastructure/rca/investigate-branch
+   * Investigate all offline cameras in a branch
+   */
+  router.post('/rca/investigate-branch/:branchId', async (req: AuthRequest, res: Response) => {
+    try {
+      const { tenantId } = req.context || {};
+      const { branchId } = req.params;
+      
+      if (!tenantId) {
+        return res.status(401).json({
+          success: false,
+          error: 'Unauthorized'
+        });
+      }
+
+      const { InfrastructureRcaIntegrationService } = await import(
+        '../../src/services/infrastructure/infrastructure-rca-integration.service.js'
+      );
+      const rcaService = new InfrastructureRcaIntegrationService(pool);
+
+      const results = await rcaService.investigateBranchOutage(branchId, tenantId);
+
+      res.json({
+        success: true,
+        data: {
+          branchId,
+          totalCameras: results.length,
+          investigations: results
+        }
+      });
+    } catch (error) {
+      console.error('Error investigating branch outage:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Failed to investigate branch outage'
+      });
+    }
+  });
+
+  /**
+   * GET /v1/infrastructure/rca/camera/:cameraId/history
+   * Get RCA correlation history for a camera
+   */
+  router.get('/rca/camera/:cameraId/history', async (req: AuthRequest, res: Response) => {
+    try {
+      const { tenantId } = req.context || {};
+      const { cameraId } = req.params;
+      const { limit = 10 } = req.query;
+      
+      if (!tenantId) {
+        return res.status(401).json({
+          success: false,
+          error: 'Unauthorized'
+        });
+      }
+
+      const { InfrastructureRcaIntegrationService } = await import(
+        '../../src/services/infrastructure/infrastructure-rca-integration.service.js'
+      );
+      const rcaService = new InfrastructureRcaIntegrationService(pool);
+
+      const history = await rcaService.getCameraRcaHistory(cameraId, Number(limit));
+
+      res.json({
+        success: true,
+        data: history
+      });
+    } catch (error) {
+      console.error('Error fetching camera RCA history:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Failed to fetch camera RCA history'
+      });
+    }
+  });
+
+  /**
+   * GET /v1/infrastructure/rca/branch/:branchId/statistics
+   * Get RCA statistics for a branch
+   */
+  router.get('/rca/branch/:branchId/statistics', async (req: AuthRequest, res: Response) => {
+    try {
+      const { tenantId } = req.context || {};
+      const { branchId } = req.params;
+      const { days = 30 } = req.query;
+      
+      if (!tenantId) {
+        return res.status(401).json({
+          success: false,
+          error: 'Unauthorized'
+        });
+      }
+
+      const { InfrastructureRcaIntegrationService } = await import(
+        '../../src/services/infrastructure/infrastructure-rca-integration.service.js'
+      );
+      const rcaService = new InfrastructureRcaIntegrationService(pool);
+
+      const stats = await rcaService.getBranchRcaStatistics(branchId, Number(days));
+
+      res.json({
+        success: true,
+        data: stats
+      });
+    } catch (error) {
+      console.error('Error fetching branch RCA statistics:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Failed to fetch branch RCA statistics'
+      });
+    }
+  });
+
+  /**
+   * GET /v1/infrastructure/rca/incidents/active
+   * Get active unified incidents
+   */
+  router.get('/rca/incidents/active', async (req: AuthRequest, res: Response) => {
+    try {
+      const { tenantId } = req.context || {};
+      const { branchId, severity } = req.query;
+      
+      if (!tenantId) {
+        return res.status(401).json({
+          success: false,
+          error: 'Unauthorized'
+        });
+      }
+
+      let query = `
+        SELECT * FROM vw_active_infrastructure_incidents
+        WHERE tenant_id = $1
+      `;
+      const params: any[] = [tenantId];
+      let paramIndex = 2;
+
+      if (branchId) {
+        query += ` AND branch_id = $${paramIndex}`;
+        params.push(branchId);
+        paramIndex++;
+      }
+
+      if (severity) {
+        query += ` AND severity = $${paramIndex}`;
+        params.push(severity);
+        paramIndex++;
+      }
+
+      query += ` ORDER BY age_minutes ASC`;
+
+      const result = await pool.query(query, params);
+
+      res.json({
+        success: true,
+        data: result.rows
+      });
+    } catch (error) {
+      console.error('Error fetching active incidents:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Failed to fetch active incidents'
+      });
+    }
+  });
+
+  /**
+   * GET /v1/infrastructure/rca/camera/:cameraId/infrastructure-path
+   * Get the complete infrastructure path for a camera
+   */
+  router.get('/rca/camera/:cameraId/infrastructure-path', async (req: AuthRequest, res: Response) => {
+    try {
+      const { tenantId } = req.context || {};
+      const { cameraId } = req.params;
+      
+      if (!tenantId) {
+        return res.status(401).json({
+          success: false,
+          error: 'Unauthorized'
+        });
+      }
+
+      const result = await pool.query(
+        `SELECT * FROM get_camera_infrastructure_path($1)`,
+        [cameraId]
+      );
+
+      res.json({
+        success: true,
+        data: result.rows
+      });
+    } catch (error) {
+      console.error('Error fetching camera infrastructure path:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Failed to fetch camera infrastructure path'
+      });
+    }
+  });
+
+  return router;
+}
+
+export default createInfrastructureMonitoringRoutes;
