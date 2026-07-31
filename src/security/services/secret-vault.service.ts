@@ -12,7 +12,7 @@ import {
   SecretAccessLog,
   RotationPolicy
 } from '../types.js';
-// // import { getDatabase } from '../../config/database.js'; // TODO: Implement database config // TODO: Implement database config
+import { getDatabase } from '../../config/database.js';
 import { EventEmitter } from 'events';
 
 export class SecretVaultService extends EventEmitter implements ISecretVaultService {

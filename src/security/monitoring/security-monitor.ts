@@ -5,7 +5,7 @@
 
 import { EventEmitter } from 'events';
 import { SecurityServicesFactory } from '../services';
-import { getDatabase } from '../../config/database';
+import { getDatabase } from '../../config/database.js';
 
 export interface SecurityAlert {
   id: string;

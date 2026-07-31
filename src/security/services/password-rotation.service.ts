@@ -10,7 +10,7 @@ import {
   PasswordPolicy,
   RotationStatus
 } from '../types.js';
-// import { getDatabase } from '../../config/database.js'; // TODO: Implement database config
+import { getDatabase } from '../../config/database.js';
 import { EventEmitter } from 'events';
 import { SecretVaultService } from './secret-vault.service';
 import * as crypto from 'crypto';

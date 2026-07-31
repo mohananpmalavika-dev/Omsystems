@@ -12,7 +12,7 @@ import {
   AccessDecision,
   TrustLevel
 } from '../types.js';
-// import { getDatabase } from '../../config/database.js'; // TODO: Implement database config
+import { getDatabase } from '../../config/database.js';
 import { EventEmitter } from 'events';
 
 export class ZeroTrustPolicyEngine extends EventEmitter implements IZeroTrustPolicyEngine {

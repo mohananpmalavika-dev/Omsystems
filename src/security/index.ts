@@ -37,8 +37,12 @@ export { SecurityMonitor, securityMonitor, SecurityAlert } from './monitoring/se
 /**
  * Initialize the complete security platform
  */
+import { setDatabase } from '../config/database.js';
+
 export async function initializeSecurityPlatform(db: any): Promise<void> {
   console.log('🔐 Initializing Enterprise Security Platform...');
+
+  setDatabase(db);
   
   // 1. Initialize database collections
   await initializeSecurityCollections(db);

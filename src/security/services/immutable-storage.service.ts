@@ -5,7 +5,7 @@
 
 import { IImmutableStorageService, ImmutableFilters } from '../interfaces.js';
 import { ImmutableObject, RetentionPolicy, RetentionStatus, LegalHold } from '../types.js';
-// import { getDatabase } from '../../config/database.js'; // TODO: Implement database config
+import { getDatabase } from '../../config/database.js';
 import { EventEmitter } from 'events';
 import { createHash } from 'crypto';
 
