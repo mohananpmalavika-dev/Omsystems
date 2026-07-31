@@ -424,3 +424,186 @@ export class FirewallMonitoringService {
     if (score >= 0) return 'critical';
     return 'unknown';
   }
+
+  /**
+   * Check metrics and create alerts if thresholds exceeded
+   */
+  private async checkAndCreateAlerts(
+    fw: Firewall,
+    metrics: FirewallHealthMetrics
+  ): Promise<void> {
+    const alerts: Array<{
+      type: string;
+      severity: 'critical' | 'warning';
+      title: string;
+      description: string;
+      impact?: string;
+      recommendedAction?: string;
+      metrics: any;
+    }> = [];
+
+    // CPU alerts
+    if (metrics.cpuUsagePercent) {
+      if (metrics.cpuUsagePercent > 95) {
+        alerts.push({
+          type: 'firewall_cpu_critical',
+          severity: 'critical',
+          title: 'Firewall CPU Critical',
+          description: `Firewall ${fw.name} CPU usage is at ${metrics.cpuUsagePercent.toFixed(1)}%`,
+          impact: 'Traffic processing may be degraded, connections may be dropped',
+          recommendedAction: 'Review firewall rules, check for DDoS attack, consider hardware upgrade',
+          metrics: { cpuUsage: metrics.cpuUsagePercent }
+        });
+      } else if (metrics.cpuUsagePercent > 90) {
+        alerts.push({
+          type: 'firewall_cpu_warning',
+          severity: 'warning',
+          title: 'Firewall CPU High',
+          description: `Firewall ${fw.name} CPU usage is at ${metrics.cpuUsagePercent.toFixed(1)}%`,
+          impact: 'Performance degradation likely during traffic spikes',
+          recommendedAction: 'Monitor traffic patterns, review resource-intensive rules',
+          metrics: { cpuUsage: metrics.cpuUsagePercent }
+        });
+      }
+    }
+
+    // Memory alerts
+    if (metrics.memoryUsagePercent) {
+      if (metrics.memoryUsagePercent > 95) {
+        alerts.push({
+          type: 'firewall_memory_critical',
+          severity: 'critical',
+          title: 'Firewall Memory Critical',
+          description: `Firewall ${fw.name} memory usage is at ${metrics.memoryUsagePercent.toFixed(1)}%`,
+          impact: 'New connections may fail, system instability possible',
+          recommendedAction: 'Clear sessions, restart services, or reboot firewall if needed',
+          metrics: { memoryUsage: metrics.memoryUsagePercent }
+        });
+      } else if (metrics.memoryUsagePercent > 90) {
+        alerts.push({
+          type: 'firewall_memory_warning',
+          severity: 'warning',
+          title: 'Firewall Memory High',
+          description: `Firewall ${fw.name} memory usage is at ${metrics.memoryUsagePercent.toFixed(1)}%`,
+          impact: 'May affect performance under load',
+          recommendedAction: 'Review session table, check for memory leaks',
+          metrics: { memoryUsage: metrics.memoryUsagePercent }
+        });
+      }
+    }
+
+    // Session utilization alerts
+    if (metrics.sessionUtilizationPercent) {
+      if (metrics.sessionUtilizationPercent > 95) {
+        alerts.push({
+          type: 'firewall_sessions_critical',
+          severity: 'critical',
+          title: 'Firewall Session Table Critical',
+          description: `Firewall ${fw.name} session utilization is at ${metrics.sessionUtilizationPercent.toFixed(1)}%`,
+          impact: 'New connections will be rejected',
+          recommendedAction: 'Increase session limit or investigate abnormal connection count',
+          metrics: { 
+            sessionUtilization: metrics.sessionUtilizationPercent,
+            sessionCount: metrics.sessionCount 
+          }
+        });
+      } else if (metrics.sessionUtilizationPercent > 90) {
+        alerts.push({
+          type: 'firewall_sessions_warning',
+          severity: 'warning',
+          title: 'Firewall Session Table High',
+          description: `Firewall ${fw.name} session utilization is at ${metrics.sessionUtilizationPercent.toFixed(1)}%`,
+          impact: 'Approaching session limit',
+          recommendedAction: 'Monitor session growth, review timeout settings',
+          metrics: { 
+            sessionUtilization: metrics.sessionUtilizationPercent,
+            sessionCount: metrics.sessionCount 
+          }
+        });
+      }
+    }
+
+    // VPN tunnel alerts
+    if (metrics.vpnTunnelsDown && metrics.vpnTunnelsDown > 0) {
+      alerts.push({
+        type: 'firewall_vpn_tunnels_down',
+        severity: metrics.vpnTunnelsDown >= (metrics.vpnTunnelsTotal || 0) / 2 ? 'critical' : 'warning',
+        title: 'VPN Tunnels Down',
+        description: `${metrics.vpnTunnelsDown} of ${metrics.vpnTunnelsTotal} VPN tunnels are down on firewall ${fw.name}`,
+        impact: 'Remote site connectivity affected',
+        recommendedAction: 'Check VPN tunnel status, verify remote endpoints, review logs',
+        metrics: { 
+          vpnTunnelsDown: metrics.vpnTunnelsDown,
+          vpnTunnelsTotal: metrics.vpnTunnelsTotal 
+        }
+      });
+    }
+
+    // Security service alerts
+    if (metrics.ipsStatus === 'disabled' || metrics.ipsStatus === 'bypassed') {
+      alerts.push({
+        type: 'firewall_ips_disabled',
+        severity: 'critical',
+        title: 'Firewall IPS Disabled',
+        description: `IPS is ${metrics.ipsStatus} on firewall ${fw.name}`,
+        impact: 'Network is vulnerable to intrusion attacks',
+        recommendedAction: 'Enable IPS immediately, review security policy',
+        metrics: { ipsStatus: metrics.ipsStatus }
+      });
+    }
+
+    if (metrics.avStatus === 'disabled' || metrics.avStatus === 'outdated') {
+      alerts.push({
+        type: 'firewall_av_issue',
+        severity: 'warning',
+        title: `Firewall Antivirus ${metrics.avStatus}`,
+        description: `Antivirus is ${metrics.avStatus} on firewall ${fw.name}`,
+        impact: 'Malware may pass through firewall undetected',
+        recommendedAction: metrics.avStatus === 'outdated' 
+          ? 'Update antivirus signatures' 
+          : 'Enable antivirus protection',
+        metrics: { avStatus: metrics.avStatus }
+      });
+    }
+
+    // HA sync alert
+    if (metrics.haSyncStatus === 'out_of_sync') {
+      alerts.push({
+        type: 'firewall_ha_out_of_sync',
+        severity: 'warning',
+        title: 'Firewall HA Out of Sync',
+        description: `High availability pair is out of sync on firewall ${fw.name}`,
+        impact: 'Failover may not work properly, configuration inconsistency',
+        recommendedAction: 'Force configuration sync, verify HA heartbeat connectivity',
+        metrics: { haSyncStatus: metrics.haSyncStatus }
+      });
+    }
+
+    // High threat activity alert
+    if (metrics.threatsBlockedLastHour && metrics.threatsBlockedLastHour > 100) {
+      alerts.push({
+        type: 'firewall_high_threat_activity',
+        severity: metrics.threatsBlockedLastHour > 1000 ? 'critical' : 'warning',
+        title: 'High Threat Activity Detected',
+        description: `${metrics.threatsBlockedLastHour} threats blocked in the last hour on firewall ${fw.name}`,
+        impact: 'Possible targeted attack or compromised device on network',
+        recommendedAction: 'Review threat logs, identify source IPs, investigate affected devices',
+        metrics: { 
+          threatsBlockedLastHour: metrics.threatsBlockedLastHour,
+          threatsBlockedTotal: metrics.threatsBlockedTotal 
+        }
+      });
+    }
+
+    // Store alerts
+    for (const alert of alerts) {
+      await this.createInfrastructureAlert({
+        tenantId: fw.tenantId,
+        branchId: fw.branchId,
+        componentType: 'firewall',
+        componentId: fw.id,
+        componentName: fw.name,
+        ...alert
+      });
+    }
+  }

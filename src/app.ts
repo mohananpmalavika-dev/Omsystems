@@ -485,7 +485,15 @@ export async function buildApp(options?: {
       return;
     }
 
-    if ((request.routeOptions.config as unknown as Record<string, unknown>)?.noAuth) {
+    const publicAuthPaths = [
+      "/v1/auth/login",
+      "/v1/auth/refresh",
+      "/v1/auth/request-password-reset",
+      "/v1/auth/reset-password",
+    ];
+    const isPublicAuthRoute = publicAuthPaths.some((path) => request.url.startsWith(path));
+
+    if ((request.routeOptions.config as unknown as Record<string, unknown>)?.noAuth || isPublicAuthRoute) {
       await loginRateLimiter.middleware()(request, reply);
       return;
     }
