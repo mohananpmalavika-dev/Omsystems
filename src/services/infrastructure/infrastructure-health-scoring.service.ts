@@ -5,7 +5,7 @@
  */
 
 import { Pool } from 'pg';
-import { InfrastructureHealthScore, HealthStatus } from '../types/infrastructure.types';
+import { InfrastructureHealthScore, HealthStatus } from '../../types/infrastructure.types.js';
 
 export interface DomainHealthScore {
   score: number;
