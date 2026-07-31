@@ -26,6 +26,7 @@ import { CertificateManagementService } from './certificate-management.service.j
 import { PasswordRotationService } from './password-rotation.service.js';
 import { HSMService } from './hsm.service.js';
 import { ZeroTrustPolicyEngine } from './zero-trust-policy.service.js';
+import { SecurityPostureService } from './security-posture.service.js';
 import { EventEmitter } from 'events';
 
 export class SecurityServicesFactory extends EventEmitter {
@@ -36,6 +37,7 @@ export class SecurityServicesFactory extends EventEmitter {
   public passwordRotation!: PasswordRotationService;
   public hsm!: HSMService;
   public zeroTrust!: ZeroTrustPolicyEngine;
+  public securityPosture!: SecurityPostureService;
   
   private constructor() {
     super();
@@ -59,6 +61,7 @@ export class SecurityServicesFactory extends EventEmitter {
       this.passwordRotation = new PasswordRotationService(this.secretVault);
       this.hsm = new HSMService();
       this.zeroTrust = new ZeroTrustPolicyEngine();
+      this.securityPosture = new SecurityPostureService();
       
       // Wire up event handlers
       this.setupEventHandlers();

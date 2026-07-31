@@ -3,12 +3,14 @@
  * MongoDB collection schemas for all security components
  */
 
+interface SecurityCollectionIndex {
+  key: Record<string, number>;
+  unique?: boolean;
+  expireAfterSeconds?: number;
+}
+
 interface SecurityCollectionSchema {
-  indexes?: Array<{
-    key: Record<string, unknown>;
-    unique?: boolean;
-    expireAfterSeconds?: number;
-  }>;
+  indexes?: SecurityCollectionIndex[];
   validation?: any;
 }
 
@@ -421,7 +423,9 @@ export const securityCollections: Record<string, SecurityCollectionSchema> = {
 export async function initializeSecurityCollections(db: any): Promise<void> {
   console.log('Initializing security collections...');
 
-  for (const [collectionName, schema] of Object.entries(securityCollections)) {
+  const collectionEntries = Object.entries(securityCollections) as [string, SecurityCollectionSchema][];
+
+  for (const [collectionName, schema] of collectionEntries) {
     try {
       // Check if collection exists
       const collections = await db.listCollections({ name: collectionName }).toArray();
@@ -438,10 +442,11 @@ export async function initializeSecurityCollections(db: any): Promise<void> {
       if (schema.indexes && schema.indexes.length > 0) {
         for (const index of schema.indexes) {
           try {
-            await db.collection(collectionName).createIndex(index.key, {
-              unique: index.unique,
-              expireAfterSeconds: index.expireAfterSeconds
-            });
+            const indexOptions: Record<string, unknown> = {};
+            if (index.unique !== undefined) indexOptions.unique = index.unique;
+            if (index.expireAfterSeconds !== undefined) indexOptions.expireAfterSeconds = index.expireAfterSeconds;
+
+            await db.collection(collectionName).createIndex(index.key, indexOptions);
           } catch (error) {
             // Index may already exist
             if (!error.message.includes('already exists')) {
