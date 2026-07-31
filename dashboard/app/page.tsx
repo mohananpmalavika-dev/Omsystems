@@ -1,10 +1,10 @@
 import { AppLayout } from "@/components/app-layout";
-import SecurityDashboard from "@/components/security-dashboard";
+import OperationalHealthDashboard from "@/components/operational-health-dashboard";
 
 export default function Page() {
   return (
     <AppLayout>
-      <SecurityDashboard />
+      <OperationalHealthDashboard />
     </AppLayout>
   );
 }

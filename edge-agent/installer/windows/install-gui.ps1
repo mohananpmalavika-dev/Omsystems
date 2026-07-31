@@ -7,7 +7,7 @@ Add-Type -AssemblyName System.Drawing
 $ErrorActionPreference = "Stop"
 
 # Configuration
-$CONTROL_PLANE_URL = "https://sentinel-grid-monitoring1.onrender.com"
+$CONTROL_PLANE_URL = "https://sentinel-grid-control-plane1.onrender.com"
 $INSTALL_DIR = "C:\Program Files\Sentinel Grid\Edge Agent"
 
 # Check if running as Administrator
@@ -187,8 +187,8 @@ $installButton.Add_Click({
         # Create configuration
         UpdateProgress 50 "Creating configuration..."
         $configContent = @"
-CONTROL_PLANE_URL="$CONTROL_PLANE_URL"
-EDGE_BRIDGE_SHARED_KEY="$installKey"
+CONTROL_PLANE_URL="https://sentinel-grid-control-plane1.onrender.com"
+EDGE_BRIDGE_SHARED_KEY="WBRrQzol9gGTuIEAVd08kvMFP5pfyNDj1m32qZ7YsShOcxHa"
 BRANCH_NAME="$branchName"
 LOG_LEVEL="info"
 DATA_DIRECTORY="$INSTALL_DIR\data"

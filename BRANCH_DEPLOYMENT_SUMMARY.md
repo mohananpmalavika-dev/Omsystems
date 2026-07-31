@@ -101,7 +101,7 @@ INSTALLATION STEPS:
 6. Click Install and wait for completion
 
 Your Installation Key:
-afc191762f2a746eb4c5e08c0e8d1e24100c6caf87a180855dc78bf30696fa08
+WBRrQzol9gGTuIEAVd08kvMFP5pfyNDj1m32qZ7YsShOcxHa
 
 TROUBLESHOOTING:
 - If you need administrator rights, contact IT support

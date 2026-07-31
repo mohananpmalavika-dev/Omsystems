@@ -62,6 +62,7 @@ const navigation: Array<{ label: string; items: NavItem[] }> = [
     label: "Command",
     items: [
       { label: "Operations overview", href: "/", icon: LayoutDashboard },
+      { label: "Security Operations", href: "/security-operations", icon: Shield },
       { label: "Global command center", href: "/federation", icon: Globe2 },
       { label: "Executive dashboard", href: "/dashboards", icon: BarChart3 },
       { label: "Control room", href: "/control-room", icon: MonitorPlay },
@@ -140,6 +141,7 @@ const navigation: Array<{ label: string; items: NavItem[] }> = [
 ];
 
 const pageMeta = [
+  { path: "/security-operations", section: "Command", title: "Security Operations" },
   { path: "/federation", section: "Command", title: "Global command center" },
   { path: "/operations/alert-command-center", section: "Command", title: "Alert command center" },
   { path: "/operations/ai-command-center", section: "Command", title: "AI command center" },
@@ -197,7 +199,7 @@ const pageMeta = [
   { path: "/audit", section: "Governance", title: "Audit assurance" },
   { path: "/integrations", section: "Administration", title: "Integrations" },
   { path: "/account/security", section: "Account", title: "Profile & session security" },
-  { path: "/", section: "Command", title: "Security operations" },
+  { path: "/", section: "Command", title: "Operations overview" },
 ];
 
 export function AppLayout({ children, incidentCount = 0, cameraCount = 0 }: AppLayoutProps) {
