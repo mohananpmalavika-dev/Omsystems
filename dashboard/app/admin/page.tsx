@@ -10,6 +10,7 @@ import { OrgNodeForm } from "@/components/org-node-form";
 import { UserForm } from "@/components/user-form";
 import { UserList } from "@/components/user-list";
 import { organizationApi, userApi } from "@/lib/api-client";
+import { CreateOrganizationForm } from "@/components/create-organization-form";
 
 type SelectedRecord = {
   id: string;
@@ -26,11 +27,32 @@ export default function AdminPage() {
   const [editUser, setEditUser] = useState<SelectedRecord | undefined>();
   const [creatingUser, setCreatingUser] = useState(false);
   const [permissionUser, setPermissionUser] = useState<SelectedRecord | undefined>();
+  const [hasOrganization, setHasOrganization] = useState<boolean | null>(null);
+  const [isLoadingOrg, setIsLoadingOrg] = useState(true);
+
+  useEffect(() => {
+    checkOrganizationExists();
+  }, [revision]);
 
   useEffect(() => {
     const requested = new URLSearchParams(window.location.search).get("tab");
     if (requested === "users" || requested === "devices") setTab(requested);
   }, []);
+
+  const checkOrganizationExists = async () => {
+    try {
+      setIsLoadingOrg(true);
+      const response = await organizationApi.getTree();
+      // Check if there's at least one company node
+      const hasCompany = response.data && response.data.length > 0;
+      setHasOrganization(hasCompany);
+    } catch (error) {
+      console.error("Failed to check organization:", error);
+      setHasOrganization(false);
+    } finally {
+      setIsLoadingOrg(false);
+    }
+  };
 
   const refresh = () => {
     setParentNode(undefined);
@@ -51,6 +73,61 @@ export default function AdminPage() {
     await userApi.delete(user.id);
     refresh();
   };
+
+  const handleOrganizationCreated = () => {
+    setHasOrganization(true);
+    refresh();
+  };
+
+  // Show loading state
+  if (isLoadingOrg) {
+    return (
+      <AppLayout>
+        <div className="admin-shell">
+          <header className="admin-header">
+            <div>
+              <a href="/" className="admin-back"><ArrowLeft size={15} /> Security operations</a>
+              <div className="admin-title">
+                <span><ShieldCheck size={22} /></span>
+                <div>
+                  <h1>Organization & access</h1>
+                  <p>Loading...</p>
+                </div>
+              </div>
+            </div>
+          </header>
+          <div style={{ padding: "2rem", textAlign: "center" }}>
+            <p>Loading organization...</p>
+          </div>
+        </div>
+      </AppLayout>
+    );
+  }
+
+  // Show organization creation form if no organization exists
+  if (hasOrganization === false) {
+    return (
+      <AppLayout>
+        <div className="admin-shell">
+          <header className="admin-header">
+            <div>
+              <a href="/" className="admin-back"><ArrowLeft size={15} /> Security operations</a>
+              <div className="admin-title">
+                <span><ShieldCheck size={22} /></span>
+                <div>
+                  <h1>Organization Setup</h1>
+                  <p>Create your organization to get started</p>
+                </div>
+              </div>
+            </div>
+          </header>
+          <section className="admin-panel">
+            <CreateOrganizationForm onSuccess={handleOrganizationCreated} />
+          </section>
+        </div>
+      </AppLayout>
+    );
+  }
 
   return (
     <AppLayout>

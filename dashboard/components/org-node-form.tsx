@@ -69,8 +69,10 @@ export function OrgNodeForm({
       // Validate which node types can be children
       validateHierarchy();
     } else if (!parentNode && !editNode) {
-      // Root node - only company allowed
-      setValidNodeTypes(["company"]);
+      // Root node - this should never happen in normal flow
+      // as we redirect to CreateOrganizationForm if no org exists
+      setValidNodeTypes([]);
+      setError("Cannot create root organization node from this form. Please use the organization setup page.");
     }
   }, [parentNode, editNode]);
 
