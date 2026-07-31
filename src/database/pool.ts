@@ -1,6 +1,11 @@
 import { Pool } from "pg";
 
 export function createPool(connectionString: string) {
+  // Parse connection string to check if SSL is required (Render, Heroku, etc.)
+  const isExternalDatabase = connectionString.includes('render.com') || 
+                             connectionString.includes('heroku.com') ||
+                             connectionString.includes('aws.com');
+  
   return new Pool({
     connectionString,
     max: boundedNumber(process.env.DB_POOL_MAX, 20, 2, 200),
@@ -10,6 +15,10 @@ export function createPool(connectionString: string) {
     statement_timeout: boundedNumber(process.env.DB_STATEMENT_TIMEOUT_MS, 15_000, 1_000, 300_000),
     query_timeout: boundedNumber(process.env.DB_QUERY_TIMEOUT_MS, 20_000, 1_000, 300_000),
     application_name: "sentinel-control-plane",
+    // Enable SSL for external managed databases
+    ssl: isExternalDatabase ? {
+      rejectUnauthorized: false // Render and similar services use self-signed certs
+    } : false,
   });
 }
 
