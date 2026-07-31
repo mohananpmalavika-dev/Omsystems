@@ -66,7 +66,19 @@ export function CreateOrganizationForm({ onSuccess }: CreateOrganizationFormProp
       onSuccess();
     } catch (err: any) {
       console.error("Failed to create organization:", err);
-      setError(err.message || "Failed to create organization");
+      
+      // Handle specific error cases
+      let errorMessage = "Failed to create organization";
+      
+      if (err.statusCode === 403) {
+        errorMessage = "You don't have permission to create an organization. Please contact your system administrator.";
+      } else if (err.statusCode === 409) {
+        errorMessage = "An organization already exists. Only one organization is allowed per system.";
+      } else if (err.message) {
+        errorMessage = err.message;
+      }
+      
+      setError(errorMessage);
     } finally {
       setIsSubmitting(false);
     }

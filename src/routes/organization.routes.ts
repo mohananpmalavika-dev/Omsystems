@@ -188,11 +188,44 @@ export async function registerOrganizationRoutes(
 
     // Check permission
     if (!body.parentNodeId) {
+      // Creating root company node
+      if (body.nodeType !== "company") {
+        return reply.code(400).send({ 
+          error: "invalid_node_type",
+          message: "Only company nodes can be created without a parent" 
+        });
+      }
+
+      // Check if user has permission to create root organization
+      // Allow super_admin and company_admin to create the root organization
       if (
-        body.nodeType !== "company" ||
-        request.currentUser.role !== "super_admin"
+        request.currentUser.role !== "super_admin" &&
+        request.currentUser.role !== "company_admin"
       ) {
-        return reply.code(403).send({ error: "forbidden" });
+        return reply.code(403).send({ 
+          error: "forbidden",
+          message: "Only super_admin or company_admin can create organization" 
+        });
+      }
+
+      // Check if organization already exists (only allow one company node per tenant)
+      try {
+        const existingNodes = await store.listOrganizationNodes(
+          request.currentUser.tenantId,
+          "company",
+          undefined,
+          false
+        );
+        
+        if (existingNodes.length > 0) {
+          return reply.code(409).send({ 
+            error: "organization_already_exists",
+            message: "An organization already exists for this tenant. Only one company node is allowed per tenant."
+          });
+        }
+      } catch (err) {
+        // If error checking existing nodes, log but allow to proceed
+        console.error("Error checking existing organization:", err);
       }
     } else if (
       !(await requireAccess(
