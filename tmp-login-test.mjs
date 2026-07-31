@@ -1,5 +1,5 @@
-import { buildApp } from './src/app.js';
-import { MemoryStore } from './src/store.js';
+import { buildApp } from './src/app.ts';
+import { MemoryStore } from './src/store.ts';
 
 async function main() {
   const app = await buildApp({ store: new MemoryStore(), authMode: 'development' });

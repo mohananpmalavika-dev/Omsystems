@@ -42,6 +42,8 @@ export interface SwitchHealthMetrics {
   observedAt: Date;
   cpuUsagePercent?: number;
   memoryUsagePercent?: number;
+  memoryTotalMb?: number;
+  memoryUsedMb?: number;
   temperatureCelsius?: number;
   fanStatus?: 'ok' | 'warning' | 'failed' | 'unknown';
   fanRpm?: number;
@@ -152,16 +154,27 @@ export interface UPSHealthMetrics {
   observedAt: Date;
   batteryHealthPercent?: number;
   batteryAgeDays?: number;
+  batteryVoltage?: number;
+  batteryCurrent?: number;
+  batteryTemperatureCelsius?: number;
   estimatedRuntimeMinutes?: number;
+  estimatedChargeTimeMinutes?: number;
   utilityPowerAvailable: boolean;
   runningOnBattery: boolean;
   inputVoltage?: number;
+  inputFrequency?: number;
   outputVoltage?: number;
+  outputFrequency?: number;
+  outputCurrent?: number;
   loadPercent?: number;
   loadWatts?: number;
   lastSelfTestResult?: 'passed' | 'failed' | 'warning' | 'in_progress' | 'not_available';
+  lastSelfTestDate?: Date;
+  lastPowerEventType?: string;
+  lastPowerEventTime?: Date;
   batteryReplacementIndicator: boolean;
   predictedReplacementDays?: number;
+  alarmStatus?: string[];
   healthScore: number;
   healthStatus: HealthStatus;
 }

@@ -8,12 +8,12 @@ import {
   SNMPCollectorService, 
   SNMPTarget, 
   STANDARD_OIDS 
-} from './snmp-collector.service';
+} from './snmp-collector.service.js';
 import {
   Firewall,
   FirewallHealthMetrics,
   HealthStatus
-} from '../types/infrastructure.types';
+} from '../../types/infrastructure.types.js';
 
 export interface FirewallCollectionResult {
   success: boolean;

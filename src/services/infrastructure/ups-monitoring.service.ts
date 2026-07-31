@@ -8,12 +8,12 @@ import {
   SNMPCollectorService, 
   SNMPTarget, 
   VENDOR_OIDS 
-} from './snmp-collector.service';
+} from './snmp-collector.service.js';
 import {
   UPSDevice,
   UPSHealthMetrics,
   HealthStatus
-} from '../types/infrastructure.types';
+} from '../../types/infrastructure.types.js';
 
 export interface UPSCollectionResult {
   success: boolean;
