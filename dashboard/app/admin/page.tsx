@@ -122,6 +122,25 @@ export default function AdminPage() {
             </div>
           </header>
           <section className="admin-panel">
+            <div style={{ marginBottom: "1rem", padding: "1rem", background: "#fff3cd", borderRadius: "8px" }}>
+              <p style={{ margin: 0, color: "#856404" }}>
+                No organization found. Create one to start managing branches, employees, and cameras.
+              </p>
+              <button
+                onClick={() => setHasOrganization(true)}
+                style={{
+                  marginTop: "0.5rem",
+                  padding: "0.5rem 1rem",
+                  background: "#6c757d",
+                  color: "white",
+                  border: "none",
+                  borderRadius: "4px",
+                  cursor: "pointer"
+                }}
+              >
+                Skip and Continue Anyway
+              </button>
+            </div>
             <CreateOrganizationForm onSuccess={handleOrganizationCreated} />
           </section>
         </div>
