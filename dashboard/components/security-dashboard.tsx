@@ -96,12 +96,24 @@ export default function SecurityDashboard() {
   const fetchSecurityPosture = async () => {
     try {
       const response = await fetch('/api/security/posture');
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
       const data = await response.json();
       setPosture(data);
       setLoading(false);
     } catch (error) {
       console.error('Failed to fetch security posture:', error);
       setLoading(false);
+      // Set fallback data so component doesn't crash
+      setPosture({
+        overallScore: 0,
+        status: 'unknown',
+        lastUpdated: new Date().toISOString(),
+        categories: {},
+        alerts: { critical: 0, warning: 0, info: 0 },
+        recommendations: [],
+      });
     }
   };
 
