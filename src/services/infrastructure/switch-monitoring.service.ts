@@ -621,8 +621,8 @@ export class SwitchMonitoringService {
   /**
    * Parse SNMP interface operational status
    */
-  private parseOperStatus(value: number): string {
-    const statusMap: Record<number, string> = {
+  private parseOperStatus(value: number): 'up' | 'down' | 'testing' | 'unknown' | 'dormant' | 'notPresent' | 'lowerLayerDown' {
+    const statusMap: Record<number, 'up' | 'down' | 'testing' | 'unknown' | 'dormant' | 'notPresent' | 'lowerLayerDown'> = {
       1: 'up',
       2: 'down',
       3: 'testing',
