@@ -108,11 +108,55 @@ export default function SecurityDashboard() {
       // Set fallback data so component doesn't crash
       setPosture({
         overallScore: 0,
-        status: 'unknown',
-        lastUpdated: new Date().toISOString(),
-        categories: {},
-        alerts: { critical: 0, warning: 0, info: 0 },
-        recommendations: [],
+        timestamp: new Date().toISOString(),
+        metrics: {
+          zeroTrust: {
+            score: 0,
+            devicesCompliant: 0,
+            devicesTotal: 0,
+            highRiskSessions: 0,
+          },
+          encryption: {
+            score: 0,
+            videosEncrypted: 0,
+            videosTotal: 0,
+            tlsCompliance: 0,
+          },
+          certificates: {
+            score: 0,
+            healthy: 0,
+            expiringSoon: 0,
+            expired: 0,
+            revoked: 0,
+          },
+          secrets: {
+            status: 'Unknown',
+            rotationCompliance: 0,
+            expiring: 0,
+          },
+          ransomware: {
+            activeThreats: 0,
+            eventsToday: 0,
+            riskLevel: 'Unknown',
+          },
+          tamper: {
+            activeEvents: 0,
+            criticalEvents: 0,
+            resolvedToday: 0,
+          },
+          secureBoot: {
+            score: 0,
+            compliantDevices: 0,
+            totalDevices: 0,
+          },
+          tpm: {
+            score: 0,
+            attestedDevices: 0,
+            totalDevices: 0,
+            failedAttestations: 0,
+          },
+        },
+        alerts: [],
       });
     }
   };
