@@ -405,7 +405,7 @@ CREATE TABLE IF NOT EXISTS chain_of_custody_events (
     
     -- Purpose and Authorization
     purpose TEXT,
-    authorization TEXT,
+    "authorization" TEXT,
     
     -- Notes
     notes TEXT,
