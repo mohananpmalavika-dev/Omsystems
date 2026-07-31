@@ -105,8 +105,13 @@ await organizationApi.createNode(payload);
 ## Security Considerations
 
 1. **Backend Validation**: The backend enforces hierarchy rules through the `validate_resource_node_hierarchy()` trigger
-2. **Permission Checks**: Only super_admin role can create root-level company nodes
-3. **Single Organization**: Only one company node allowed per tenant (enforced by hierarchy validation)
+2. **Permission Checks**: 
+   - Both `super_admin` and `company_admin` roles can create root-level company nodes
+   - This allows proper initial setup while maintaining security
+   - Other roles cannot create organizations
+3. **Single Organization**: Only one company node allowed per tenant (enforced by backend validation)
+4. **Duplicate Prevention**: Backend checks for existing organization before allowing creation
+5. **Error Handling**: Clear error messages for different failure scenarios (permission denied, already exists, etc.)
 
 ## Database Schema
 
