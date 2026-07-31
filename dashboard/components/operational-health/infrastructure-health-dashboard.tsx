@@ -100,7 +100,7 @@ export function InfrastructureHealthDashboard() {
           >
             <option value="">All Branches</option>
             {branches.map(branch => (
-              <key={branch.id} value={branch.id}>
+              <option key={branch.id} value={branch.id}>
                 {branch.name} ({branch.code})
               </option>
             ))}
