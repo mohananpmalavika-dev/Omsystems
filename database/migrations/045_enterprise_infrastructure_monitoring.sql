@@ -858,7 +858,7 @@ LEFT JOIN generators g ON g.branch_id = b.id
 LEFT JOIN network_links nl ON nl.branch_id = b.id
 LEFT JOIN vpn_tunnels vt ON vt.branch_id = b.id
 LEFT JOIN hardware_devices hd ON hd.branch_id = b.id
-WHERE b.type = 'branch'
+WHERE b.node_type = 'branch'
 GROUP BY b.id, b.tenant_id, b.name;
 
 COMMENT ON VIEW infrastructure_device_summary IS 

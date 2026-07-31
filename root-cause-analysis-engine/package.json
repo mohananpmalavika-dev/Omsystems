@@ -1,0 +1,31 @@
+{
+  "name": "root-cause-analysis-engine",
+  "version": "1.0.0",
+  "description": "AI-powered root cause analysis engine for OmSystems",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "ts-node src/index.ts",
+    "test": "jest",
+    "lint": "eslint src --ext .ts"
+  },
+  "keywords": ["root-cause-analysis", "ai", "diagnostics"],
+  "author": "OmSystems",
+  "license": "MIT",
+  "dependencies": {
+    "@types/express": "^4.17.21",
+    "@types/node": "^20.11.5",
+    "axios": "^1.6.5",
+    "express": "^4.18.2",
+    "openai": "^4.24.1",
+    "winston": "^3.11.0"
+  },
+  "devDependencies": {
+    "@types/jest": "^29.5.11",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.1.1",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.3.3"
+  }
+}
