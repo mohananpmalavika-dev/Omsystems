@@ -239,7 +239,6 @@ RETURNS TABLE (
 ) AS $$
 BEGIN
   RETURN QUERY
-  SELECT * FROM (
     -- Camera itself
     SELECT 
       'camera'::VARCHAR as device_type,
@@ -251,10 +250,9 @@ BEGIN
         ELSE 'offline'
       END::VARCHAR as status
     FROM cameras c
-    WHERE c.id = p_camera_id
+    WHERE c.id = p_camera_id;
 
-    UNION ALL
-
+  RETURN QUERY
     -- Connected switch
     SELECT 
       'switch'::VARCHAR,
@@ -272,10 +270,9 @@ BEGIN
       ORDER BY observed_at DESC
       LIMIT 1
     ) shm ON true
-    WHERE c.id = p_camera_id
+    WHERE c.id = p_camera_id;
 
-    UNION ALL
-
+  RETURN QUERY
     -- Branch firewall
     SELECT 
       'firewall'::VARCHAR,
@@ -292,10 +289,9 @@ BEGIN
       ORDER BY observed_at DESC
       LIMIT 1
     ) fhm ON true
-    WHERE c.id = p_camera_id
+    WHERE c.id = p_camera_id;
 
-    UNION ALL
-
+  RETURN QUERY
     -- Branch UPS
     SELECT 
       'ups'::VARCHAR,
@@ -312,9 +308,7 @@ BEGIN
       ORDER BY observed_at DESC
       LIMIT 1
     ) uhm ON true
-    WHERE c.id = p_camera_id
-  ) infrastructure_path;
-
+    WHERE c.id = p_camera_id;
 END;
 $$ LANGUAGE plpgsql;
 
