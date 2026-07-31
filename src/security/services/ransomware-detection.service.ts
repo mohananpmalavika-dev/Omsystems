@@ -5,7 +5,7 @@
 
 import { IRansomwareDetectionService, ThreatFilters } from '../interfaces.js';
 import { RansomwareThreat, ThreatLevel, BehaviorBaseline, RansomwarePattern } from '../types.js';
-// import { getDatabase } from '../../config/database.js'; // TODO: Implement database config
+import { getDatabase } from '../../config/database.js';
 import { EventEmitter } from 'events';
 
 export class RansomwareDetectionService extends EventEmitter implements IRansomwareDetectionService {
