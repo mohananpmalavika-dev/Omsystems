@@ -8,10 +8,13 @@ import { Pool } from 'pg';
 
 export interface SNMPTarget {
   host: string;
-  community: string;
-  version: string;
   port?: number;
   timeout?: number;
+  retries?: number;
+  credentials: {
+    version: string;
+    community: string;
+  };
 }
 
 export const STANDARD_OIDS = {
@@ -106,7 +109,7 @@ export class SNMPCollectorService {
    * SNMP GET operation
    */
   async snmpGet(target: SNMPTarget, oids: string[]): Promise<any[]> {
-    // Placeholder - implement SNMP GET
+    // Placeholder - implement SNMP GET using target.credentials
     return new Array(oids.length).fill(null);
   }
 
@@ -114,7 +117,7 @@ export class SNMPCollectorService {
    * SNMP WALK operation
    */
   async snmpWalk(target: SNMPTarget, oid: string): Promise<any[]> {
-    // Placeholder - implement SNMP WALK
+    // Placeholder - implement SNMP WALK using target.credentials
     return [];
   }
 

@@ -16,7 +16,7 @@
  */
 
 import { Pool } from 'pg';
-import { SNMPCollectorService } from './snmp-collector.service';
+import { SNMPCollectorService } from './snmp-collector.service.js';
 
 interface NetworkLinkHealthMetrics {
   linkId: string;

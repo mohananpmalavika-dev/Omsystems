@@ -658,8 +658,11 @@ export class SwitchMonitoringService {
       host: sw.ipAddress,
       port: 161,
       timeout: 5000,
-      community: sw.snmpCommunity,
-      version: sw.snmpVersion || '2c'
+      retries: 3,
+      credentials: {
+        version: sw.snmpVersion || '2c',
+        community: sw.snmpCommunity
+      }
     };
   }
 
