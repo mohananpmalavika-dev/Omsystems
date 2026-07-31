@@ -330,34 +330,34 @@ CREATE INDEX idx_evidence_packages_custodian ON evidence_packages(current_custod
 -- Evidence Items
 CREATE TABLE IF NOT EXISTS evidence_items (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    package_id UUID NOT NULL REFERENCES evidence_packages(id) ON DELETE CASCADE,
+    package_id UUID REFERENCES evidence_packages(id) ON DELETE CASCADE,
     
     -- Item Type
-    item_type VARCHAR(50) NOT NULL 
-        CHECK (item_type IN ('video-original', 'video-clip', 'snapshot', 'document', 'log-file', 'report', 'metadata')),
-    title VARCHAR(255) NOT NULL,
+    item_type VARCHAR(50)
+        CHECK (item_type IS NULL OR item_type IN ('video-original', 'video-clip', 'snapshot', 'document', 'log-file', 'report', 'metadata')),
+    title VARCHAR(255),
     description TEXT,
     
     -- Source
-    source_type VARCHAR(100) NOT NULL,
-    source_id VARCHAR(255) NOT NULL,
+    source_type VARCHAR(100),
+    source_id VARCHAR(255),
     camera_id UUID,
     timestamp TIMESTAMPTZ,
     
     -- File Information
-    file_name VARCHAR(255) NOT NULL,
+    file_name VARCHAR(255),
     file_path TEXT,
-    mime_type VARCHAR(100) NOT NULL,
-    size_bytes BIGINT NOT NULL,
+    mime_type VARCHAR(100),
+    size_bytes BIGINT NOT NULL DEFAULT 0,
     
     -- Integrity
-    checksum_algorithm VARCHAR(20) NOT NULL DEFAULT 'sha256' 
-        CHECK (checksum_algorithm IN ('sha256', 'sha512')),
-    checksum_value VARCHAR(128) NOT NULL,
+    checksum_algorithm VARCHAR(20) DEFAULT 'sha256'
+        CHECK (checksum_algorithm IS NULL OR checksum_algorithm IN ('sha256', 'sha512')),
+    checksum_value VARCHAR(128),
     
     -- Classification
-    classification VARCHAR(20) NOT NULL DEFAULT 'original' 
-        CHECK (classification IN ('original', 'derivative', 'enhanced', 'annotated')),
+    classification VARCHAR(20) DEFAULT 'original'
+        CHECK (classification IS NULL OR classification IN ('original', 'derivative', 'enhanced', 'annotated')),
     derived_from UUID REFERENCES evidence_items(id),
     
     -- Metadata
@@ -369,8 +369,6 @@ CREATE TABLE IF NOT EXISTS evidence_items (
     verified_at TIMESTAMPTZ
 );
 
-ALTER TABLE evidence_items ADD COLUMN IF NOT EXISTS package_id UUID;
-ALTER TABLE evidence_items ADD COLUMN IF NOT EXISTS size_bytes BIGINT NOT NULL DEFAULT 0;
 
 CREATE INDEX IF NOT EXISTS idx_evidence_items_package ON evidence_items(package_id);
 CREATE INDEX IF NOT EXISTS idx_evidence_items_type ON evidence_items(item_type);
