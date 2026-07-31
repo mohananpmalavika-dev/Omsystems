@@ -19,3 +19,11 @@ export { RecorderFleetWidget } from './recorder-fleet-widget';
 export { UPSHealthCard } from './ups-health-card';
 export { AlertCard } from './alert-card';
 export { AlertActionModal } from './alert-action-modal';
+
+// Infrastructure Monitoring Widgets
+export { InfrastructureHealthDashboard } from './infrastructure-health-dashboard';
+export { InfrastructureHealthScoreWidget } from './infrastructure-health-score-widget';
+export { ActiveInfrastructureIncidentsWidget } from './active-infrastructure-incidents-widget';
+export { RootCauseBreakdownWidget } from './root-cause-breakdown-widget';
+export { PredictedFailuresWidget } from './predicted-failures-widget';
+export { InfrastructurePathVisualization } from './infrastructure-path-visualization';
