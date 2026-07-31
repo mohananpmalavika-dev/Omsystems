@@ -513,6 +513,7 @@ export default function SecurityDashboard() {
           <ActionButton icon={<Key />} label="Supply Chain" href="/security/supply-chain" />
         </div>
       </div>
+    </div>
         </div>
       </div>
     </div>
