@@ -5,10 +5,20 @@
  */
 
 import { Pool } from 'pg';
-import * as bcrypt from 'bcrypt';
+import { randomBytes, scrypt as scryptCallback } from 'node:crypto';
+import { promisify } from 'node:util';
 import * as dotenv from 'dotenv';
 
 dotenv.config();
+
+const scrypt = promisify(scryptCallback);
+const KEY_LENGTH = 64;
+
+async function hashPassword(password: string) {
+  const salt = randomBytes(16);
+  const derived = await scrypt(password, salt, KEY_LENGTH) as Buffer;
+  return `scrypt$${salt.toString("base64url")}$${derived.toString("base64url")}`;
+}
 
 const DATABASE_URL = process.env.DATABASE_URL || 
   'postgresql://omcamera_y1ej_user:0roU7pJ6wA6o9TWB9m2hVeFIKeUZE2JR@dpg-d9m3b1rm8hqs739pr5ag-a.oregon-postgres.render.com/omcamera_y1ej';
@@ -32,8 +42,7 @@ async function createSuperUser(config: SuperUserConfig) {
 
     // Hash password
     console.log('1️⃣  Hashing password...');
-    const saltRounds = 10;
-    const passwordHash = await bcrypt.hash(config.password, saltRounds);
+    const passwordHash = await hashPassword(config.password);
     console.log('✅ Password hashed\n');
 
     // Check if user already exists
