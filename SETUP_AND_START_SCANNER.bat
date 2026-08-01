@@ -26,7 +26,7 @@ echo.
 echo Step 2: Starting scanner...
 echo.
 cd edge-agent
-start "Camera Scanner" cmd /c "node dist\src\index.js & pause"
+start "Camera Scanner" powershell -NoExit -ExecutionPolicy Bypass -File "START_SCANNER.ps1"
 
 echo.
 echo ============================================
