@@ -2,7 +2,9 @@
 
 import React, { useEffect, useState } from "react";
 import Link from "next/link";
+import { Activity, ClipboardCheck, Wrench } from "lucide-react";
 import { maintenanceApi, deviceManagementApi } from "@/lib/api-client";
+import { PageHero } from "@/components/page-hero";
 import {
   AlertList,
   HealthMetricDisplay,
@@ -136,43 +138,47 @@ export default function MaintenancePage() {
   };
 
   return (
-    <div className="content">
-        <div style={{ padding: 20, maxWidth: 1300, margin: "0 auto" }}>
-      <header style={{ marginBottom: 24 }}>
-        <h1 style={{ fontSize: 32, marginBottom: 8 }}>Maintenance Dashboard</h1>
-        <p style={{ color: "#555" }}>
-          Operational health, predictive alerts, firmware updates, and maintenance status in one place.
-        </p>
-      </header>
+    <div className="content maintenance-dashboard-page">
+        <div className="maintenance-page-inner" style={{ padding: 20, maxWidth: 1300, margin: "0 auto" }}>
+      <PageHero
+        eyebrow="Fleet readiness"
+        title="Maintenance command center"
+        description="Coordinate asset health, predictive alerts, firmware readiness, work orders and service coverage from one operational workspace."
+        icon={Wrench}
+        actions={<>
+          <Link href="/maintenance/health" className="btn-secondary"><Activity size={15} />Run health checks</Link>
+          <Link href="/maintenance/workorders/new" className="btn-primary"><ClipboardCheck size={15} />New work order</Link>
+        </>}
+      />
 
       {error && (
-        <div style={{ marginBottom: 20, padding: 16, background: "#fee", border: "1px solid #fbb", color: "#800" }}>
+        <div className="page-alert error" style={{ marginBottom: 20, padding: 16, background: "#fee", border: "1px solid #fbb", color: "#800" }}>
           {error}
         </div>
       )}
 
-      <section style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 16, marginBottom: 24 }}>
-        <div style={{ padding: 20, border: "1px solid #e2e8f0", borderRadius: 12, background: "#fff" }}>
+      <section className="maintenance-summary-grid" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 16, marginBottom: 24 }}>
+        <div className="maintenance-summary-card" style={{ padding: 20, border: "1px solid #e2e8f0", borderRadius: 12, background: "#fff" }}>
           <h2 style={{ marginBottom: 12 }}>Assets</h2>
           <p style={{ fontSize: 32, margin: 0 }}>{loading ? "…" : status?.totalAssets ?? "—"}</p>
           <p style={{ color: "#666" }}>Total tracked assets</p>
         </div>
-        <div style={{ padding: 20, border: "1px solid #e2e8f0", borderRadius: 12, background: "#fff" }}>
+        <div className="maintenance-summary-card" style={{ padding: 20, border: "1px solid #e2e8f0", borderRadius: 12, background: "#fff" }}>
           <h2 style={{ marginBottom: 12 }}>Open work orders</h2>
           <p style={{ fontSize: 32, margin: 0 }}>{loading ? "…" : status?.workOrdersOpen ?? "—"}</p>
           <p style={{ color: "#666" }}>Pending and active maintenance tasks</p>
         </div>
-        <div style={{ padding: 20, border: "1px solid #e2e8f0", borderRadius: 12, background: "#fff" }}>
+        <div className="maintenance-summary-card" style={{ padding: 20, border: "1px solid #e2e8f0", borderRadius: 12, background: "#fff" }}>
           <h2 style={{ marginBottom: 12 }}>AMC contracts</h2>
           <p style={{ fontSize: 32, margin: 0 }}>{loading ? "…" : status?.amcContractsActive ?? "—"}</p>
           <p style={{ color: "#666" }}>Active coverage agreements</p>
         </div>
-        <div style={{ padding: 20, border: "1px solid #e2e8f0", borderRadius: 12, background: "#fff" }}>
+        <div className="maintenance-summary-card" style={{ padding: 20, border: "1px solid #e2e8f0", borderRadius: 12, background: "#fff" }}>
           <h2 style={{ marginBottom: 12 }}>Firmware updates</h2>
           <p style={{ fontSize: 32, margin: 0 }}>{loading ? "…" : firmwareUpdates.length}</p>
           <p style={{ color: "#666" }}>Devices needing firmware action</p>
         </div>
-        <div style={{ padding: 20, border: "1px solid #e2e8f0", borderRadius: 12, background: "#fff" }}>
+        <div className="maintenance-summary-card maintenance-device-summary" style={{ padding: 20, border: "1px solid #e2e8f0", borderRadius: 12, background: "#fff" }}>
           <h2 style={{ marginBottom: 12 }}>Device management</h2>
           <p style={{ margin: 0, color: "#374151" }}>Secure rotation, templates, and IP assignments</p>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 12, marginTop: 16 }}>

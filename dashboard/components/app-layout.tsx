@@ -184,6 +184,7 @@ const navigation: NavGroup[] = [
       { label: "Organization & devices", href: "/admin", icon: Building2, badge: "cameras" },
       { label: "Integrations", href: "/integrations", icon: SlidersHorizontal },
       { label: "System management", href: "/admin/system", icon: Settings },
+      { label: "Account & session", href: "/account/security", icon: LockKeyhole },
     ],
   },
 ];
@@ -195,7 +196,6 @@ const pageMeta = [
     title: item.label,
   }))),
   { path: "/operations/branches", section: "Infrastructure health", title: "Branch health" },
-  { path: "/account/security", section: "Account", title: "Profile & session security" },
 ];
 
 export function AppLayout({ children, incidentCount = 0, cameraCount = 0 }: AppLayoutProps) {

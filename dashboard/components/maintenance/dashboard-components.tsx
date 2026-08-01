@@ -91,43 +91,30 @@ export const HealthMetricDisplay: React.FC<HealthMetricDisplayProps> = ({
   threshold,
   trend,
 }) => {
-  const statusColors = {
-    healthy: "bg-green-100 text-green-800 border-green-300",
-    warning: "bg-yellow-100 text-yellow-800 border-yellow-300",
-    critical: "bg-red-100 text-red-800 border-red-300",
-  };
-
-  const statusIndicator = {
-    healthy: "🟢",
-    warning: "🟡",
-    critical: "🔴",
-  };
-
-  const trendIndicator = {
-    up: "📈",
-    down: "📉",
-    stable: "➡️",
+  const trendLabel = {
+    up: "Trending up",
+    down: "Trending down",
+    stable: "Stable trend",
   };
 
   return (
-    <div
-      className={`p-4 rounded-lg border-2 ${statusColors[status]} flex items-center justify-between`}
-    >
+    <div className={`maintenance-health-metric ${status}`}>
       <div>
-        <p className="text-sm font-medium">{label}</p>
-        <p className="text-2xl font-bold">
+        <p className="maintenance-health-label">{label}</p>
+        <p className="maintenance-health-value">
           {value}
-          <span className="text-sm">{unit}</span>
+          <span>{unit}</span>
         </p>
         {threshold && (
-          <p className="text-xs mt-1">
-            ⚠️ Warning: {threshold.warning}{unit} | 🔴 Critical: {threshold.critical}{unit}
+          <p className="maintenance-health-threshold">
+            Warning {threshold.warning}{unit} · Critical {threshold.critical}{unit}
           </p>
         )}
       </div>
-      <div className="text-3xl">
-        {statusIndicator[status]}
-        {trend && <div className="text-2xl">{trendIndicator[trend]}</div>}
+      <div className="maintenance-health-status">
+        <i />
+        <span>{status}</span>
+        {trend && <small>{trendLabel[trend]}</small>}
       </div>
     </div>
   );

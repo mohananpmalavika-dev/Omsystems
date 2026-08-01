@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { CalendarClock, CheckCircle2, Download, LoaderCircle, Play, RefreshCw, Trash2, FileText } from "lucide-react";
 import { AppLayout } from "@/components/app-layout";
+import { PageHero } from "@/components/page-hero";
 
 type Format="csv"|"xlsx"|"pdf";
 type Template="comprehensive"|"branch_health_summary"|"camera_availability"|"alert_summary"|"recorder_status"|"hdd_health"|"retention_compliance";
@@ -92,17 +93,14 @@ export default function ReportsPage(){
   
   const selectedTemplateInfo = templates.find(t => t.id === template);
   
-  return <AppLayout><main className="content p-6 space-y-6 max-w-[1500px] mx-auto">
-    <header className="flex flex-wrap justify-between gap-3">
-      <div>
-        <p className="text-xs font-semibold tracking-widest text-blue-700">PHASE 4 REPORTING</p>
-        <h1 className="text-3xl font-bold">Daily surveillance reports</h1>
-        <p className="text-sm text-gray-500">Persistent schedules, segregated exports and auditable delivery history.</p>
-      </div>
-      <button className="btn-secondary flex gap-2 items-center" onClick={()=>void load()}>
-        <RefreshCw size={16}/>Refresh
-      </button>
-    </header>
+  return <AppLayout><main className="content reports-page p-6 space-y-6 max-w-[1500px] mx-auto">
+    <PageHero
+      eyebrow="Reporting & assurance"
+      title="Daily surveillance reports"
+      description="Create scheduled and on-demand reports with controlled exports, delivery readiness and a complete audit history."
+      icon={FileText}
+      actions={<button className="btn-secondary" onClick={()=>void load()}><RefreshCw size={16}/>Refresh data</button>}
+    />
     
     {message&&<div className="card py-3 text-sm">{message}</div>}
     

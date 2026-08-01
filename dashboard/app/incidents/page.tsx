@@ -3,6 +3,8 @@
 import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { AppLayout } from "@/components/app-layout";
+import { PageHero } from "@/components/page-hero";
+import { Plus, Siren } from "lucide-react";
 
 type Incident = {
   id: string;
@@ -133,27 +135,18 @@ export default function IncidentsPage() {
 
   return (
     <AppLayout>
-      <div className="content" style={{ padding: '24px', maxWidth: '1400px', margin: '0 auto' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
-          <h1 style={{ fontSize: '28px', fontWeight: 'bold', margin: 0 }}>Incident Management</h1>
-          <Link
-            href="/incidents/create"
-            style={{
-              padding: '10px 20px',
-              backgroundColor: '#2563eb',
-              color: 'white',
-              borderRadius: '6px',
-              textDecoration: 'none',
-              fontWeight: 500,
-            }}
-          >
-            + Create Manual Incident
-          </Link>
-        </div>
+      <div className="content incident-management-page" style={{ padding: '24px', maxWidth: '1400px', margin: '0 auto' }}>
+        <PageHero
+          eyebrow="Response operations"
+          title="Incident management"
+          description="Triage, investigate and resolve security incidents with consistent priority, ownership and evidence handling."
+          icon={Siren}
+          actions={<Link href="/incidents/create" className="btn-primary"><Plus size={15} />Create incident</Link>}
+        />
 
         {/* Dashboard Stats */}
         {stats && (
-          <div style={{
+          <div className="incident-metrics-grid" style={{
             display: 'grid',
             gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
             gap: '16px',
@@ -183,7 +176,7 @@ export default function IncidentsPage() {
         )}
 
         {/* View Tabs */}
-        <div style={{
+        <div className="incident-view-tabs" style={{
           display: 'flex',
           gap: '8px',
           marginBottom: '16px',
@@ -194,6 +187,7 @@ export default function IncidentsPage() {
             <button
               key={v}
               onClick={() => setView(v)}
+              className={view === v ? "active" : ""}
               style={{
                 padding: '8px 16px',
                 border: 'none',
@@ -211,7 +205,7 @@ export default function IncidentsPage() {
         </div>
 
         {/* Filters */}
-        <div style={{
+        <div className="incident-filter-panel" style={{
           display: 'grid',
           gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
           gap: '12px',
@@ -277,7 +271,7 @@ export default function IncidentsPage() {
 
         {/* Incidents Table */}
         {error && (
-          <div style={{
+          <div className="incident-table-panel" style={{
             padding: '12px',
             backgroundColor: '#fef2f2',
             border: '1px solid #fecaca',
@@ -445,7 +439,7 @@ export default function IncidentsPage() {
 
 function StatCard({ title, value, color }: { title: string; value: string | number; color: string }) {
   return (
-    <div style={{
+    <div className="incident-stat-card" style={{
       padding: '20px',
       backgroundColor: 'white',
       borderRadius: '8px',

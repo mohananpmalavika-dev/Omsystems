@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { evidenceApi } from "@/lib/api-client";
+import { PageHero } from "@/components/page-hero";
 
 interface EvidenceCase {
   id: string;
@@ -71,10 +72,13 @@ export function EvidenceManager() {
 
   return (
     <div className="evidence-manager-container">
-      <div className="evidence-header">
-        <h2>Evidence Management & Forensic Vault</h2>
-        <p>Manage recorded evidence with chain of custody and legal holds</p>
-      </div>
+      <PageHero
+        eyebrow="Forensics & chain of custody"
+        title="Evidence management vault"
+        description="Preserve recordings, snapshots and case artifacts with verified integrity, legal holds and an auditable custody trail."
+        icon={Shield}
+        actions={<button className="btn-primary" onClick={() => setShowCreateModal(true)}><Plus size={16} />New evidence case</button>}
+      />
 
       <div className="evidence-layout">
         {/* Cases List */}

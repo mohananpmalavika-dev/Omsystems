@@ -7,6 +7,8 @@
 
 import React, { useEffect, useState } from "react";
 import { AppLayout } from "@/components/app-layout";
+import { PageHero } from "@/components/page-hero";
+import { AlertTriangle, BarChart3, Camera, CircleDot, Gauge, HardDrive, Zap } from "lucide-react";
 
 interface DashboardSummary {
   systemStatus: string;
@@ -149,57 +151,30 @@ export default function DashboardPage() {
 
   return (
     <AppLayout>
-      <div className="content">
-        <div style={{ padding: 20, maxWidth: 1600, margin: "0 auto" }}>
+      <div className="content executive-dashboard-page">
+        <div className="executive-dashboard-inner" style={{ padding: 20, maxWidth: 1600, margin: "0 auto" }}>
           {/* Dashboard Header */}
-          <header style={{ marginBottom: 32 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-              <div>
-                <h1 style={{ fontSize: 32, margin: 0, fontWeight: 700 }}>Security Operations Dashboard</h1>
-                <p style={{ color: "#666", marginTop: 8, fontSize: 14 }}>
-                  Real-time CCTV system monitoring and operational metrics
-                </p>
+          <PageHero
+            eyebrow="Executive intelligence"
+            title="Security operations dashboard"
+            description="A leadership view of estate health, active risk, camera availability, recording continuity and scale readiness."
+            icon={BarChart3}
+            actions={
+              <div className={`page-hero-status ${summary?.systemStatus === "operational" ? "" : "caution"}`}>
+                <i />
+                <div><span>System status</span><strong>{summary?.systemStatus || "Unknown"}</strong></div>
               </div>
-              <div style={{ textAlign: 'right' }}>
-                <div style={{ 
-                  display: 'inline-flex', 
-                  alignItems: 'center', 
-                  gap: 12,
-                  padding: '12px 20px',
-                  background: summary?.systemStatus === 'operational' ? '#ecfdf5' : '#fef2f2',
-                  border: `2px solid ${summary?.systemStatus === 'operational' ? '#10b981' : '#ef4444'}`,
-                  borderRadius: 12,
-                  marginBottom: 8
-                }}>
-                  <div style={{ 
-                    width: 12, 
-                    height: 12, 
-                    borderRadius: '50%', 
-                    background: summary?.systemStatus === 'operational' ? '#10b981' : '#ef4444',
-                    animation: 'pulse 2s ease-in-out infinite'
-                  }} />
-                  <div>
-                    <div style={{ fontSize: 12, color: '#666', fontWeight: 600 }}>System Status</div>
-                    <div style={{ fontSize: 16, fontWeight: 700, textTransform: 'capitalize' }}>
-                      {summary?.systemStatus || 'Unknown'}
-                    </div>
-                  </div>
-                </div>
-                <p style={{ color: "#666", fontSize: 12, margin: '8px 0 0' }}>
-                  Last updated: {summary?.lastUpdated ? new Date(summary.lastUpdated).toLocaleString() : '—'}
-                </p>
-              </div>
-            </div>
-          </header>
+            }
+          />
 
           {error && (
-            <div style={{ marginBottom: 24, padding: 16, background: "#fee", border: "1px solid #fbb", borderRadius: 12, color: "#900" }}>
+            <div className="page-alert error" style={{ marginBottom: 24, padding: 16, background: "#fee", border: "1px solid #fbb", borderRadius: 12, color: "#900" }}>
               {error}
             </div>
           )}
 
           {/* Key Metrics Row */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16, marginBottom: 24 }}>
+          <div className="executive-metrics-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16, marginBottom: 24 }}>
             <MetricCard 
               label="System Health Score" 
               value={summary?.systemHealthScore ? `${summary.systemHealthScore.toFixed(1)}%` : '—'}
@@ -237,7 +212,7 @@ export default function DashboardPage() {
             />
           </div>
 
-          <DashboardPanel title="Capacity Assessment" icon="📈" style={{ marginBottom: 24 }}>
+          <DashboardPanel title="Capacity assessment" icon={<Gauge size={17} />} style={{ marginBottom: 24 }}>
             {capacityAssessment ? (
               <>
                 <p style={{ margin: '0 0 12px', fontSize: 16, fontWeight: 700 }}>{capacityAssessment.capability}</p>
@@ -275,9 +250,9 @@ export default function DashboardPage() {
           </DashboardPanel>
 
           {/* Main Widgets Grid */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 24, marginBottom: 24 }}>
+          <div className="executive-widget-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 24, marginBottom: 24 }}>
             {/* Camera Status */}
-            <DashboardPanel title="Camera Status" icon="📹">
+            <DashboardPanel title="Camera status" icon={<Camera size={17} />}>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 16 }}>
                 <StatBox label="Total Cameras" value={cameraMetrics?.totalRegistered || 0} />
                 <StatBox label="Operational" value={cameraMetrics?.operational || 0} />
@@ -289,7 +264,7 @@ export default function DashboardPage() {
             </DashboardPanel>
 
             {/* Recording Status */}
-            <DashboardPanel title="Recording Status" icon="🔴">
+            <DashboardPanel title="Recording status" icon={<CircleDot size={17} />}>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 16 }}>
                 <StatBox label="Recording Normally" value={recordingMetrics?.recordingNormally || 0} color="#10b981" />
                 <StatBox label="With Gaps" value={recordingMetrics?.recordingWithGaps || 0} color="#f59e0b" />
@@ -307,7 +282,7 @@ export default function DashboardPage() {
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 24, marginBottom: 24 }}>
             {/* Storage Capacity */}
-            <DashboardPanel title="Storage Capacity" icon="💾">
+            <DashboardPanel title="Storage capacity" icon={<HardDrive size={17} />}>
               {storageMetrics && (
                 <>
                   <div style={{ marginBottom: 16 }}>
@@ -343,7 +318,7 @@ export default function DashboardPage() {
             </DashboardPanel>
 
             {/* Alert Status */}
-            <DashboardPanel title="Active Alerts" icon="🚨">
+            <DashboardPanel title="Active alerts" icon={<AlertTriangle size={17} />}>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 16 }}>
                 <StatBox label="Total Active" value={alertMetrics?.totalActive || 0} />
                 <StatBox label="Unacknowledged" value={alertMetrics?.unacknowledged || 0} color="#f59e0b" />
@@ -355,7 +330,7 @@ export default function DashboardPage() {
           </div>
 
           {/* Recent Incidents */}
-          <DashboardPanel title="Recent Critical Incidents" icon="⚡">
+          <DashboardPanel title="Recent critical incidents" icon={<Zap size={17} />}>
             {incidents.length > 0 ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                 {incidents.map((incident, idx) => (
@@ -426,7 +401,7 @@ function MetricCard({ label, value, detail, trend, status }: any) {
   const colors = status ? statusColors[status as keyof typeof statusColors] : statusColors.good;
 
   return (
-    <div style={{ 
+    <div className={`executive-metric-card ${status ?? "good"}`} style={{ 
       padding: 20, 
       borderRadius: 16, 
       background: colors.bg,
@@ -444,7 +419,7 @@ function MetricCard({ label, value, detail, trend, status }: any) {
 
 function DashboardPanel({ title, icon, children, style }: any) {
   return (
-    <div style={{ 
+    <div className="executive-panel" style={{ 
       padding: 24, 
       borderRadius: 16, 
       background: '#fff', 
@@ -462,7 +437,7 @@ function DashboardPanel({ title, icon, children, style }: any) {
 
 function StatBox({ label, value, color }: any) {
   return (
-    <div style={{ 
+    <div className="executive-stat-box" style={{ 
       padding: 16, 
       background: '#f9fafb',
       borderRadius: 8,
