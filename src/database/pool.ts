@@ -1,12 +1,18 @@
 import { Pool } from "pg";
 
+export let pool: Pool | null = null;
+
+export function setPool(databasePool: Pool) {
+  pool = databasePool;
+}
+
 export function createPool(connectionString: string) {
   // Parse connection string to check if SSL is required (Render, Heroku, etc.)
   const isExternalDatabase = connectionString.includes('render.com') || 
                              connectionString.includes('heroku.com') ||
                              connectionString.includes('aws.com');
   
-  return new Pool({
+  const pgPool = new Pool({
     connectionString,
     max: boundedNumber(process.env.DB_POOL_MAX, 20, 2, 200),
     min: boundedNumber(process.env.DB_POOL_MIN, 2, 0, 50),
@@ -20,6 +26,8 @@ export function createPool(connectionString: string) {
       rejectUnauthorized: false // Render and similar services use self-signed certs
     } : false,
   });
+  pool = pgPool;
+  return pgPool;
 }
 
 function boundedNumber(value: string | undefined, fallback: number, minimum: number, maximum: number) {
