@@ -37,7 +37,7 @@ async function main() {
 
     // Generate new scanner ID
     const scannerId = randomUUID();
-    const sharedKey = generateSecureKey(44);
+    const sharedKey = 'WBRrQzol9gGTuIEAVd08kvMFP5pfyNDj1m32qZ7YsShOcxHa'; // Production shared key
 
     console.log('📝 Registering new scanner...');
     console.log(`   Name: ${SCANNER_NAME}`);
