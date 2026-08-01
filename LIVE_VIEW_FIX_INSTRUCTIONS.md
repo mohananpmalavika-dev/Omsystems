@@ -178,3 +178,4 @@ Once live view is working locally, if you want to access it from other devices o
 3. **Option C:** Use VPN to access your local network remotely
 
 For now, test it locally first! 🎉
+![alt text](image.png)
