@@ -8,7 +8,7 @@ import pkg from 'pg';
 const { Client } = pkg;
 
 const DATABASE_URL = 'postgresql://omcamera_y1ej_user:0roU7pJ6wA6o9TWB9m2hVeFIKeUZE2JR@dpg-d9m3b1rm8hqs739pr5ag-a.oregon-postgres.render.com/omcamera_y1ej';
-const GATEWAY_NAME = 'H1';
+const GATEWAY_NAME = 'A1';
 
 async function getGatewayInfo() {
   const client = new Client({

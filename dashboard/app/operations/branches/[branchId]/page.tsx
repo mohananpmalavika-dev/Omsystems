@@ -31,6 +31,7 @@ import {
 } from "@/components/operational-health";
 import { BranchCameraWall } from "@/components/operational-health/branch-camera-wall";
 import { useOperationalHealthStream } from "@/hooks/useOperationalHealthStream";
+import { CameraCredentialManager } from "@/components/camera-credential-manager";
 
 export default function BranchHealthDetailPage() {
   const params = useParams();
@@ -369,6 +370,26 @@ export default function BranchHealthDetailPage() {
       <div className="mb-6">
         <BranchCameraWall branchId={branchId} cameras={cameras} />
       </div>
+
+      {/* Simple credential update for common users */}
+      {branch.edgeAgent?.id && (
+        <div className="card mb-6">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <h3 className="text-lg font-semibold mb-2">Having trouble with camera passwords?</h3>
+              <p className="text-sm text-gray-600">
+                If cameras show "Need Login", click the button to update their username and password.
+                The system will help you find the right password automatically.
+              </p>
+            </div>
+            <CameraCredentialManager 
+              branchId={branchId} 
+              edgeAgentId={branch.edgeAgent.id}
+              onCredentialsUpdated={fetchData}
+            />
+          </div>
+        </div>
+      )}
 
       {/* Quick Links */}
       <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4">

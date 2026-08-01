@@ -99,29 +99,12 @@ logger.info(`Edge agent ${agentId} registered; waiting for branch commands`, { b
 await heartbeatAndReport();
 
 let stopping = false;
-let lastAutoScanAt = 0;
-const AUTO_SCAN_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes for common users
 process.once("SIGINT", () => { stopping = true; });
 process.once("SIGTERM", () => { stopping = true; });
 
 while (!stopping) {
   try {
     await heartbeatAndReport();
-    
-    // Auto-scan every 5 minutes for new cameras (user-friendly mode)
-    const now = Date.now();
-    if (now - lastAutoScanAt >= AUTO_SCAN_INTERVAL_MS) {
-      logger.info("Running automatic camera discovery scan...");
-      try {
-        const resultCount = await scanBranch();
-        logger.info(`Automatic scan completed: found ${resultCount} device(s)`);
-        lastAutoScanAt = now;
-      } catch (error) {
-        logger.error("Automatic scan failed", { error: error instanceof Error ? error.message : String(error) });
-      }
-    }
-    
-    // Also check for manual scan jobs from dashboard
     const job = await gateway.claimScanJob(agentId, config.EDGE_AGENT_VERSION);
     if (job) {
       try {
