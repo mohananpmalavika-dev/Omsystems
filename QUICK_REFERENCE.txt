@@ -8,16 +8,16 @@
    https://sentinel-grid-monitoring1.onrender.com
 
 📂 INSTALLATION LOCATION
-   C:\Users\[YourName]\Sentinel Camera System
+   C:\Program Files\Sentinel Grid\Edge Agent
 
 
 ─────────────────────────────────────────────────────────
 
 🚀 QUICK START (First Time)
 
-   1. Right-click INSTALL_SENTINEL.bat
-   2. Select "Run as Administrator"  
-   3. Wait for browser to open
+   1. Run: SentinelGridInstaller-v0.1.0-windows.exe
+   2. Enter your location name  
+   3. Click "Next" and "Install"
    4. Done!
 
 
@@ -48,17 +48,18 @@
 
 🔧 RESTART THE SYSTEM
 
-   Windows Search → "Task Scheduler"
-   → Find "Sentinel Camera System"
-   → Right-click → Run
+   Windows Search → "Services"
+   → Find "Sentinel Grid Edge Agent"
+   → Right-click → Start
 
 
 ─────────────────────────────────────────────────────────
 
 ❌ UNINSTALL
 
-   Go to: C:\Users\[YourName]\Sentinel Camera System
-   Run: Uninstall.bat
+   Windows Settings → Apps → Apps & features
+   → Find "Sentinel Grid Edge Agent"
+   → Click "Uninstall"
 
 
 ─────────────────────────────────────────────────────────

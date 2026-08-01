@@ -9,11 +9,18 @@ No technical knowledge needed! Just follow these 3 easy steps:
 STEP 1: Install the System
 ---------------------------
 
-1. Find the file: INSTALL_SENTINEL.bat
-2. Right-click on it
-3. Select "Run as Administrator"
+1. Download the installer: SentinelGridInstaller-v0.1.0-windows.exe
+   (Location: edge-agent\installer\windows\output\)
+
+2. Double-click the installer file
+
+3. Follow the simple setup wizard:
+   - Enter your branch/location name
+   - Click "Next" and "Install"
+
 4. Wait 2-3 minutes while it installs
-5. Your web browser will open automatically
+
+5. The system will start automatically
 
 ✓ Done! The system is now running in the background.
 
@@ -75,9 +82,9 @@ Camera says "Need Login"?
 
 System not starting?
 -------------------
-1. Open Task Scheduler (Windows search for "Task Scheduler")
-2. Look for "Sentinel Camera System"
-3. Right-click and select "Run"
+1. Open Windows Services (Windows search for "Services")
+2. Look for "Sentinel Grid Edge Agent"
+3. Right-click and select "Start"
 
 
 ========================================
@@ -95,8 +102,10 @@ UNINSTALLING
 
 If you need to remove the system:
 
-1. Go to: C:\Users\[YourName]\Sentinel Camera System
-2. Run: Uninstall.bat
+1. Open Windows Settings
+2. Go to "Apps" → "Apps & features"
+3. Find "Sentinel Grid Edge Agent"
+4. Click "Uninstall"
 
 
 ========================================
