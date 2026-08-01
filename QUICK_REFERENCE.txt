@@ -1,0 +1,71 @@
+╔════════════════════════════════════════════════════════╗
+║                                                        ║
+║        SENTINEL CAMERA SYSTEM - QUICK REFERENCE       ║
+║                                                        ║
+╚════════════════════════════════════════════════════════╝
+
+📱 DASHBOARD LINK
+   https://sentinel-grid-monitoring1.onrender.com
+
+📂 INSTALLATION LOCATION
+   C:\Users\[YourName]\Sentinel Camera System
+
+
+─────────────────────────────────────────────────────────
+
+🚀 QUICK START (First Time)
+
+   1. Right-click INSTALL_SENTINEL.bat
+   2. Select "Run as Administrator"  
+   3. Wait for browser to open
+   4. Done!
+
+
+─────────────────────────────────────────────────────────
+
+🎥 ADD CAMERAS
+
+   → Dashboard → Click your location name
+   → Scroll to "My Cameras"
+   → Cameras appear automatically!
+
+
+─────────────────────────────────────────────────────────
+
+🔑 FIX CAMERA PASSWORD
+
+   If camera shows "Need Login":
+   
+   1. Click "Update Camera Credentials"
+   2. Try these passwords:
+      • (empty)
+      • admin
+      • 12345
+   3. Click "Apply Credentials"
+
+
+─────────────────────────────────────────────────────────
+
+🔧 RESTART THE SYSTEM
+
+   Windows Search → "Task Scheduler"
+   → Find "Sentinel Camera System"
+   → Right-click → Run
+
+
+─────────────────────────────────────────────────────────
+
+❌ UNINSTALL
+
+   Go to: C:\Users\[YourName]\Sentinel Camera System
+   Run: Uninstall.bat
+
+
+─────────────────────────────────────────────────────────
+
+📞 SUPPORT
+
+   Contact your IT support team
+
+
+═════════════════════════════════════════════════════════
