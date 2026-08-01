@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Download Sentinel Grid Installer</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 2rem;
+        }
+        
+        .container {
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            max-width: 600px;
+            width: 100%;
+            padding: 3rem;
+        }
+        
+        .logo {
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+        
+        .logo h1 {
+            color: #667eea;
+            font-size: 2.5rem;
+            margin-bottom: 0.5rem;
+        }
+        
+        .logo p {
+            color: #6c757d;
+            font-size: 1.1rem;
+        }
+        
+        .download-section {
+            text-align: center;
+            margin: 2rem 0;
+        }
+        
+        .download-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 1.25rem 2.5rem;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            text-decoration: none;
+            border-radius: 50px;
+            font-size: 1.25rem;
+            font-weight: 600;
+            transition: transform 0.2s, box-shadow 0.2s;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+        }
+        
+        .download-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.6);
+        }
+        
+        .download-btn svg {
+            width: 24px;
+            height: 24px;
+        }
+        
+        .version-info {
+            text-align: center;
+            color: #6c757d;
+            margin: 1rem 0;
+            font-size: 0.875rem;
+        }
+        
+        .features {
+            margin: 2rem 0;
+        }
+        
+        .features h3 {
+            color: #333;
+            margin-bottom: 1rem;
+            font-size: 1.25rem;
+        }
+        
+        .feature-list {
+            list-style: none;
+        }
+        
+        .feature-list li {
+            padding: 0.75rem;
+            margin-bottom: 0.5rem;
+            background: #f8f9fa;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+        
+        .feature-list li::before {
+            content: "✓";
+            color: #28a745;
+            font-weight: bold;
+            font-size: 1.5rem;
+        }
+        
+        .system-requirements {
+            margin: 2rem 0;
+            padding: 1.5rem;
+            background: #e7f3ff;
+            border-radius: 8px;
+            border-left: 4px solid #667eea;
+        }
+        
+        .system-requirements h4 {
+            color: #667eea;
+            margin-bottom: 0.75rem;
+        }
+        
+        .system-requirements ul {
+            list-style: none;
+            padding-left: 0;
+        }
+        
+        .system-requirements li {
+            padding: 0.25rem 0;
+            color: #495057;
+        }
+        
+        .instructions {
+            margin: 2rem 0;
+            padding: 1.5rem;
+            background: #fff3cd;
+            border-radius: 8px;
+            border-left: 4px solid #ffc107;
+        }
+        
+        .instructions h4 {
+            color: #856404;
+            margin-bottom: 0.75rem;
+        }
+        
+        .instructions ol {
+            padding-left: 1.5rem;
+            color: #856404;
+        }
+        
+        .instructions li {
+            padding: 0.25rem 0;
+        }
+        
+        .support {
+            text-align: center;
+            margin-top: 2rem;
+            padding-top: 2rem;
+            border-top: 1px solid #dee2e6;
+        }
+        
+        .support p {
+            color: #6c757d;
+            margin-bottom: 0.5rem;
+        }
+        
+        .support a {
+            color: #667eea;
+            text-decoration: none;
+            font-weight: 600;
+        }
+        
+        .support a:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="logo">
+            <h1>🛡️ Sentinel Grid</h1>
+            <p>Edge Agent Installer</p>
+        </div>
+        
+        <div class="download-section">
+            <a href="#" class="download-btn" id="downloadBtn">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                    <polyline points="7 10 12 15 17 10"></polyline>
+                    <line x1="12" y1="15" x2="12" y2="3"></line>
+                </svg>
+                Download for Windows
+            </a>
+            <div class="version-info">
+                Version 0.1.0 • ~70 MB • Windows 10/11 (64-bit)
+            </div>
+        </div>
+        
+        <div class="features">
+            <h3>What's Included</h3>
+            <ul class="feature-list">
+                <li>Complete edge agent installation</li>
+                <li>Automatic cloud registration</li>
+                <li>Zero configuration required</li>
+                <li>Camera discovery & monitoring</li>
+                <li>AI-powered analytics</li>
+                <li>Windows service (auto-start)</li>
+            </ul>
+        </div>
+        
+        <div class="instructions">
+            <h4>📋 Installation Steps</h4>
+            <ol>
+                <li>Download the installer</li>
+                <li>Run as Administrator</li>
+                <li>Enter your branch name</li>
+                <li>Wait 2-3 minutes</li>
+                <li>Done! System is online ✓</li>
+            </ol>
+        </div>
+        
+        <div class="system-requirements">
+            <h4>💻 System Requirements</h4>
+            <ul>
+                <li>• Windows 10 or Windows 11 (64-bit)</li>
+                <li>• 4 GB RAM (8 GB recommended)</li>
+                <li>• 2 GB free disk space</li>
+                <li>• Internet connection</li>
+                <li>• Administrator privileges</li>
+            </ul>
+        </div>
+        
+        <div class="support">
+            <p>Need help?</p>
+            <a href="mailto:support@yourcompany.com">Contact Support</a>
+            <p style="margin-top: 1rem; font-size: 0.875rem;">
+                <a href="https://dashboard.yourcompany.com/admin/system">View Dashboard</a> •
+                <a href="#">Documentation</a> •
+                <a href="#">Release Notes</a>
+            </p>
+        </div>
+    </div>
+    
+    <script>
+        // Update this URL to your actual installer location
+        const INSTALLER_URL = 'https://your-hosting.com/SentinelGridInstaller-v0.1.0-windows.exe';
+        
+        document.getElementById('downloadBtn').addEventListener('click', function(e) {
+            e.preventDefault();
+            
+            // Track download (optional)
+            if (typeof gtag !== 'undefined') {
+                gtag('event', 'download', {
+                    'event_category': 'installer',
+                    'event_label': 'sentinel-grid-v0.1.0'
+                });
+            }
+            
+            // Start download
+            window.location.href = INSTALLER_URL;
+            
+            // Show thank you message
+            setTimeout(() => {
+                alert('Download started! Check your downloads folder.\n\nInstallation takes about 2-3 minutes.\nRun as Administrator for best results.');
+            }, 500);
+        });
+    </script>
+</body>
+</html>
