@@ -480,7 +480,7 @@ export async function buildApp(options?: {
     if (edgeAgentIngressRoute && options?.edgeBridgeSharedKey && edgeBridgeHeader && !edgeBridgeAuthenticated) {
       return reply.code(401).send({ error: "invalid_bridge_identity" });
     }
-    if (edgeAgentIngressRoute && edgeBridgeAuthenticated && !userIdentitySupplied) {
+    if (edgeAgentIngressRoute && edgeBridgeAuthenticated) {
       request.edgeAgentAuthenticated = true;
       return;
     }
