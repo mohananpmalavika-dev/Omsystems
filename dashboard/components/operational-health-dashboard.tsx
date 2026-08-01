@@ -11,7 +11,9 @@ import {
   Battery, 
   Box,
   RefreshCw,
-  Download
+  Download,
+  Radio,
+  ShieldCheck
 } from "lucide-react";
 import { 
   HealthSummary, 
@@ -135,45 +137,43 @@ export default function OperationalHealthDashboard() {
 
   return (
     <div className="page-container">
-      {/* Header with actions */}
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h2 className="text-sm font-medium text-gray-500 mb-1">System Status</h2>
-          <p className="text-xs text-gray-400">
-            Last updated: {getTimeAgo(lastRefresh.toISOString())} · {realtime ? "Live updates connected" : autoRefresh ? "Polling fallback active" : "Polling paused"}
-          </p>
+      <section className="overview-hero">
+        <div className="overview-hero-copy">
+          <span className="overview-hero-icon"><ShieldCheck size={24} /></span>
+          <div>
+            <div className="overview-eyebrow"><i /> Unified command health</div>
+            <h2>Security estate at a glance</h2>
+            <p>Live operational posture across branches, cameras, recording, storage and edge connectivity.</p>
+            <div className="overview-update-state">
+              <Radio size={13} />
+              <span>{realtime ? "Realtime stream connected" : autoRefresh ? "30-second polling active" : "Live refresh paused"}</span>
+              <em>Updated {getTimeAgo(lastRefresh.toISOString())}</em>
+            </div>
+          </div>
         </div>
-        <div className="flex items-center gap-3">
-          <label className="flex items-center gap-2 text-sm text-gray-600">
-            <input
-              type="checkbox"
-              checked={autoRefresh}
-              onChange={(e) => setAutoRefresh(e.target.checked)}
-              className="rounded"
-            />
+        <div className="overview-actions">
+          <label className="overview-toggle">
+            <input type="checkbox" checked={autoRefresh} onChange={(event) => setAutoRefresh(event.target.checked)} />
+            <span aria-hidden="true" />
             Auto-refresh
           </label>
-          <button
-            onClick={refreshDashboard}
-            disabled={loading}
-            className="btn-secondary flex items-center gap-2"
-          >
-            <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
+          <button onClick={refreshDashboard} disabled={loading} className="btn-secondary">
+            <RefreshCw size={15} className={loading ? "animate-spin" : ""} />
             Refresh
           </button>
-          <button onClick={() => void exportSummary()} disabled={exporting} className="btn-secondary flex items-center gap-2">
-            <Download size={16} />
-            {exporting ? "Queueing…" : "Export"}
+          <button onClick={() => void exportSummary()} disabled={exporting} className="btn-primary">
+            <Download size={15} />
+            {exporting ? "Queueing..." : "Export summary"}
           </button>
         </div>
-      </div>
+      </section>
 
-      {exportMessage && <p className="mb-4 rounded border border-blue-200 bg-blue-50 p-3 text-sm text-blue-800">{exportMessage} <a href="/reports" className="font-semibold underline">Open Reports</a></p>}
+      {exportMessage && <p className="overview-message">{exportMessage} <a href="/reports">Open reports</a></p>}
 
       {summary && <BranchSummaryWidget summary={summary} onSelect={selectBranchFilter} />}
 
       {/* Top-level KPIs */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+      <div className="overview-kpi-grid">
         <div className="stat-card">
           <div className="flex items-center justify-between mb-2">
             <span className="text-sm text-gray-600">Branches</span>
@@ -251,7 +251,7 @@ export default function OperationalHealthDashboard() {
             Require immediate attention
           </div>
         </div>
-        <div className="stat-card hidden lg:block">
+        <div className="stat-card">
           <div className="flex items-center justify-between mb-2">
             <span className="text-sm text-gray-600">Edge Agents</span>
             <Server size={18} className="text-gray-400" />

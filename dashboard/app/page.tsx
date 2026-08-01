@@ -4,7 +4,9 @@ import OperationalHealthDashboard from "@/components/operational-health-dashboar
 export default function Page() {
   return (
     <AppLayout>
-      <OperationalHealthDashboard />
+      <div className="product-section-shell operations-section">
+        <OperationalHealthDashboard />
+      </div>
     </AppLayout>
   );
 }

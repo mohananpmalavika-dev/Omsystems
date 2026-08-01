@@ -16,6 +16,8 @@ import {
   CircleUserRound,
   ClipboardCheck,
   Command,
+  Cpu,
+  Database,
   FileCheck2,
   FileClock,
   FileSearch,
@@ -25,10 +27,16 @@ import {
   Globe2,
   Grid2X2,
   Handshake,
+  HeartPulse,
   LayoutDashboard,
+  Library,
+  ListFilter,
+  LockKeyhole,
   Menu,
   MonitorPlay,
+  Network,
   Play,
+  Radar,
   Search,
   Server,
   Settings,
@@ -38,6 +46,7 @@ import {
   Siren,
   SlidersHorizontal,
   TrendingUp,
+  UserRoundCog,
   Wifi,
   Wrench,
   X,
@@ -57,45 +66,80 @@ type NavItem = {
   badge?: "cameras" | "incidents";
 };
 
-const navigation: Array<{ label: string; items: NavItem[] }> = [
+type NavGroup = {
+  label: string;
+  icon: LucideIcon;
+  items: NavItem[];
+};
+
+const navigation: NavGroup[] = [
   {
-    label: "Command",
+    label: "Overview",
+    icon: LayoutDashboard,
     items: [
       { label: "Operations overview", href: "/", icon: LayoutDashboard },
-      { label: "Security Operations", href: "/security-operations", icon: Shield },
-      { label: "Global command center", href: "/federation", icon: Globe2 },
       { label: "Executive dashboard", href: "/dashboards", icon: BarChart3 },
-      { label: "Control room", href: "/control-room", icon: MonitorPlay },
-      { label: "Alert command center", href: "/operations/alert-command-center", icon: Bell },
-      { label: "AI command center", href: "/operations/ai-command-center", icon: Command },
-      { label: "Digital Twin", href: "/digital-twin", icon: Boxes },
-      { label: "Alert notification policy", href: "/operations/alert-notification-policy", icon: Bell },
-      { label: "Incident response", href: "/incidents", icon: Siren, badge: "incidents" },
-      { label: "Video analytics", href: "/analytics", icon: Activity },
-      { label: "Analytics dashboard", href: "/analytics/dashboard", icon: TrendingUp },
     ],
   },
   {
-    label: "Investigate",
+    label: "Respond",
+    icon: Siren,
+    items: [
+      { label: "Security operations", href: "/security-operations", icon: Shield },
+      { label: "Control room", href: "/control-room", icon: MonitorPlay },
+      { label: "Alert command center", href: "/operations/alert-command-center", icon: Bell },
+      { label: "Incident response", href: "/incidents", icon: Siren, badge: "incidents" },
+      { label: "Notification policy", href: "/operations/alert-notification-policy", icon: SlidersHorizontal },
+    ],
+  },
+  {
+    label: "Intelligence",
+    icon: Command,
+    items: [
+      { label: "AI command center", href: "/operations/ai-command-center", icon: Command },
+      { label: "Video analytics", href: "/analytics", icon: Activity },
+      { label: "Analytics dashboard", href: "/analytics/dashboard", icon: TrendingUp },
+      { label: "Digital twin", href: "/digital-twin", icon: Boxes },
+      { label: "Twin branch directory", href: "/digital-twin/branches", icon: Building2 },
+      { label: "Global command center", href: "/federation", icon: Globe2 },
+    ],
+  },
+  {
+    label: "Investigate & report",
+    icon: FileSearch,
     items: [
       { label: "Recordings", href: "/recordings", icon: FileVideo2 },
       { label: "Synced playback", href: "/playback/synced", icon: Play },
       { label: "Video search", href: "/video-search", icon: Search },
       { label: "Evidence vault", href: "/evidence", icon: FileCheck2 },
-      { label: "Reports", href: "/reports", icon: FileSearch },
+      { label: "Operational reports", href: "/reports", icon: FileSearch },
     ],
   },
   {
-    label: "Fleet",
+    label: "Infrastructure health",
+    icon: HeartPulse,
     items: [
-      { label: "Maintenance overview", href: "/maintenance", icon: Wrench },
+      { label: "Operational health", href: "/operations", icon: HeartPulse },
+      { label: "Operational alerts", href: "/operations/alerts", icon: AlertTriangle },
+      { label: "Camera health", href: "/operations/cameras", icon: Camera },
+      { label: "Recording health", href: "/operations/recording", icon: FileVideo2 },
+      { label: "Storage health", href: "/operations/storage", icon: Database },
+      { label: "Network health", href: "/operations/network", icon: Network },
+      { label: "Power & UPS health", href: "/operations/ups", icon: Activity },
+      { label: "Edge agents", href: "/operations/edge-agents", icon: Cpu },
+    ],
+  },
+  {
+    label: "Fleet maintenance",
+    icon: Wrench,
+    items: [
+      { label: "Maintenance center", href: "/maintenance", icon: Wrench },
       { label: "Device health", href: "/maintenance/health", icon: Gauge },
       { label: "Maintenance alerts", href: "/maintenance/alerts", icon: AlertTriangle },
       { label: "Predictive maintenance", href: "/maintenance/predictive", icon: TrendingUp },
       { label: "Device management", href: "/maintenance/device-management", icon: SlidersHorizontal },
-      { label: "Asset registry", href: "/maintenance/assets", icon: Boxes },
+      { label: "Asset registry", href: "/maintenance/assets", icon: Library },
       { label: "DVR/NVR monitoring", href: "/maintenance/dvr-nvr-monitor", icon: Server },
-      { label: "Operational health", href: "/operations", icon: Wifi },
       { label: "Work orders", href: "/maintenance/workorders", icon: ClipboardCheck },
       { label: "Vendors", href: "/maintenance/vendors", icon: Handshake },
       { label: "AMC contracts", href: "/maintenance/amc", icon: FileClock },
@@ -104,8 +148,9 @@ const navigation: Array<{ label: string; items: NavItem[] }> = [
   },
   {
     label: "Privacy",
+    icon: LockKeyhole,
     items: [
-      { label: "Privacy overview", href: "/maintenance/privacy", icon: Shield },
+      { label: "Privacy governance", href: "/maintenance/privacy", icon: Shield },
       { label: "Camera purposes", href: "/maintenance/privacy/cameras", icon: Camera },
       { label: "Processing purposes", href: "/maintenance/privacy/purposes", icon: FileText },
       { label: "Privacy controls", href: "/maintenance/privacy/controls", icon: ShieldCheck },
@@ -114,6 +159,7 @@ const navigation: Array<{ label: string; items: NavItem[] }> = [
   },
   {
     label: "Assurance",
+    icon: ShieldCheck,
     items: [
       { label: "Compliance frameworks", href: "/compliance", icon: ShieldCheck },
       { label: "Compliance overview", href: "/compliance/overview", icon: Grid2X2 },
@@ -133,81 +179,32 @@ const navigation: Array<{ label: string; items: NavItem[] }> = [
   },
   {
     label: "Administration",
+    icon: UserRoundCog,
     items: [
       { label: "Organization & devices", href: "/admin", icon: Building2, badge: "cameras" },
       { label: "Integrations", href: "/integrations", icon: SlidersHorizontal },
+      { label: "System management", href: "/admin/system", icon: Settings },
     ],
   },
 ];
 
 const pageMeta = [
-  { path: "/security-operations", section: "Command", title: "Security Operations" },
-  { path: "/federation", section: "Command", title: "Global command center" },
-  { path: "/operations/alert-command-center", section: "Command", title: "Alert command center" },
-  { path: "/operations/ai-command-center", section: "Command", title: "AI command center" },
-  { path: "/digital-twin", section: "Command", title: "Digital Twin" },
-  { path: "/operations/alert-notification-policy", section: "Command", title: "Alert notification policy" },
-  { path: "/operations/alerts", section: "Command", title: "Operational alerts" },
-  { path: "/operations/branches", section: "Command", title: "Branch health" },
-  { path: "/operations/cameras", section: "Fleet operations", title: "Camera health" },
-  { path: "/operations/recording", section: "Fleet operations", title: "Recording health" },
-  { path: "/operations/storage", section: "Fleet operations", title: "Storage health" },
-  { path: "/operations/network", section: "Fleet operations", title: "Network health" },
-  { path: "/operations/ups", section: "Fleet operations", title: "Power health" },
-  { path: "/operations/edge-agents", section: "Fleet operations", title: "Edge agents" },
-  { path: "/operations", section: "Command", title: "Operational health" },
-  { path: "/analytics/dashboard", section: "Intelligence", title: "Analytics dashboard" },
-  { path: "/control-room", section: "Command", title: "Control room" },
-  { path: "/incidents", section: "Command", title: "Incident response" },
-  { path: "/dashboards", section: "Command", title: "Executive dashboard" },
-  { path: "/analytics", section: "Intelligence", title: "Video analytics" },
-  { path: "/recordings", section: "Investigate", title: "Recording archive" },
-  { path: "/playback", section: "Investigate", title: "Synchronized playback" },
-  { path: "/video-search", section: "Investigate", title: "Video search" },
-  { path: "/evidence", section: "Investigate", title: "Evidence vault" },
-  { path: "/reports", section: "Governance", title: "Operational reports" },
-  { path: "/admin", section: "Administration", title: "Organization & access" },
-  { path: "/maintenance/privacy/breaches", section: "Privacy", title: "Breach register" },
-  { path: "/maintenance/privacy/cameras", section: "Privacy", title: "Camera purposes" },
-  { path: "/maintenance/privacy/purposes", section: "Privacy", title: "Processing purposes" },
-  { path: "/maintenance/privacy/controls", section: "Privacy", title: "Privacy controls" },
-  { path: "/maintenance/privacy", section: "Privacy", title: "Privacy governance" },
-  { path: "/maintenance/device-management", section: "Fleet operations", title: "Device management" },
-  { path: "/maintenance/predictive", section: "Fleet operations", title: "Predictive maintenance" },
-  { path: "/maintenance/workorders", section: "Fleet operations", title: "Work orders" },
-  { path: "/maintenance/vendors", section: "Fleet operations", title: "Vendors & partners" },
-  { path: "/maintenance/assets", section: "Fleet operations", title: "Asset registry" },
-  { path: "/maintenance/alerts", section: "Fleet operations", title: "Maintenance alerts" },
-  { path: "/maintenance/health", section: "Fleet operations", title: "Device health" },
-  { path: "/maintenance/reports", section: "Fleet operations", title: "Maintenance reports" },
-  { path: "/maintenance/amc", section: "Fleet operations", title: "AMC contracts" },
-  { path: "/maintenance", section: "Fleet operations", title: "Maintenance" },
-  { path: "/compliance/assessments", section: "Assurance", title: "Compliance assessments" },
-  { path: "/compliance/certificates", section: "Assurance", title: "Certificates" },
-  { path: "/compliance/requirements", section: "Assurance", title: "Requirements" },
-  { path: "/compliance/dashboard", section: "Assurance", title: "Compliance dashboard" },
-  { path: "/compliance/overview", section: "Assurance", title: "Compliance overview" },
-  { path: "/compliance/policies", section: "Assurance", title: "Compliance policies" },
-  { path: "/compliance/controls", section: "Assurance", title: "Compliance controls" },
-  { path: "/compliance/findings", section: "Assurance", title: "Compliance findings" },
-  { path: "/compliance/evidence", section: "Assurance", title: "Compliance evidence" },
-  { path: "/compliance/risks", section: "Assurance", title: "Risk register" },
-  { path: "/compliance", section: "Governance", title: "Compliance" },
-  { path: "/audit/branch-compliance", section: "Assurance", title: "Branch compliance audit" },
-  { path: "/audit/maintenance", section: "Assurance", title: "Maintenance audit" },
-  { path: "/audit/health", section: "Assurance", title: "Camera health audit" },
-  { path: "/audit", section: "Governance", title: "Audit assurance" },
-  { path: "/integrations", section: "Administration", title: "Integrations" },
+  ...navigation.flatMap((group) => group.items.map((item) => ({
+    path: item.href,
+    section: group.label,
+    title: item.label,
+  }))),
+  { path: "/operations/branches", section: "Infrastructure health", title: "Branch health" },
   { path: "/account/security", section: "Account", title: "Profile & session security" },
-  { path: "/", section: "Command", title: "Operations overview" },
 ];
 
 export function AppLayout({ children, incidentCount = 0, cameraCount = 0 }: AppLayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const pathname = usePathname() || "/";
-  const currentPage = pageMeta.find((item) =>
-    item.path === "/" ? pathname === "/" : pathname.startsWith(item.path),
-  ) ?? pageMeta.at(-1)!;
+  const currentPage = pageMeta
+    .filter((item) => item.path === "/" ? pathname === "/" : pathname === item.path || pathname.startsWith(`${item.path}/`))
+    .sort((left, right) => right.path.length - left.path.length)[0]
+    ?? { path: pathname, section: "Workspace", title: "Sentinel Grid" };
 
   const normalizedRoute = (href: string) => href.split(/[?#]/)[0] || "/";
   const activeRoute = navigation
@@ -231,7 +228,7 @@ export function AppLayout({ children, incidentCount = 0, cameraCount = 0 }: AppL
           <div className="brand-mark"><ShieldCheck size={22} /></div>
           <div className="brand-copy">
             <strong>Sentinel Grid</strong>
-            <span>Enterprise VMS</span>
+            <span>Enterprise operations</span>
           </div>
           <button className="mobile-close" onClick={closeSidebar} aria-label="Close navigation">
             <X size={19} />
@@ -240,18 +237,31 @@ export function AppLayout({ children, incidentCount = 0, cameraCount = 0 }: AppL
 
         <Link href="/video-search" className="command-search" onClick={closeSidebar}>
           <Search size={15} />
-          <span>Search cameras, incidents…</span>
+          <span>Search your security estate</span>
           <kbd><Command size={11} /> K</kbd>
         </Link>
 
-        <nav className="main-nav" aria-label="Primary navigation">
+        <div className="nav-shortcuts" aria-label="Quick access">
+          <Link href="/" className={isActive("/") ? "active" : ""} onClick={closeSidebar}>
+            <LayoutDashboard size={15} /><span>Overview</span>
+          </Link>
+          <Link href="/control-room" className={isActive("/control-room") ? "active" : ""} onClick={closeSidebar}>
+            <MonitorPlay size={15} /><span>Live</span>
+          </Link>
+          <Link href="/operations/alerts" className={isActive("/operations/alerts") ? "active" : ""} onClick={closeSidebar}>
+            <Radar size={15} /><span>Alerts</span>
+          </Link>
+        </div>
+
+        <nav className="main-nav" aria-label="Main navigation">
           {navigation.map((group) => {
             const groupIsActive = group.items.some((item) => isActive(item.href));
+            const GroupIcon = group.icon;
             return (
             <details className="nav-group" key={group.label} open={groupIsActive}>
               <summary>
-                <span>{group.label}</span>
-                <ChevronRight size={13} />
+                <span className="nav-group-label"><GroupIcon size={14} /><span>{group.label}</span></span>
+                <span className="nav-group-meta"><small>{group.items.length}</small><ChevronRight size={13} /></span>
               </summary>
               <div className="nav-items">
               {group.items.map((item) => {
@@ -263,6 +273,7 @@ export function AppLayout({ children, incidentCount = 0, cameraCount = 0 }: AppL
                     href={item.href}
                     className={isActive(item.href) ? "active" : ""}
                     onClick={closeSidebar}
+                    aria-current={isActive(item.href) ? "page" : undefined}
                   >
                     <Icon size={17} />
                     <span>{item.label}</span>
@@ -283,12 +294,12 @@ export function AppLayout({ children, incidentCount = 0, cameraCount = 0 }: AppL
         <div className="sidebar-footer">
           <Link href="/maintenance/health" className="sidebar-status" onClick={closeSidebar}>
             <div className="pulse-icon"><Wifi size={16} /></div>
-            <div><strong>Platform healthy</strong><span>Cloud and edge connected</span></div>
+            <div><strong>All systems connected</strong><span>Cloud, recording and edge</span></div>
             <ChevronRight size={15} />
           </Link>
           <Link href="/account/security" className="sidebar-user" onClick={closeSidebar}>
             <div className="avatar">SO</div>
-            <div><strong>Security operator</strong><span>Regional operations</span></div>
+            <div><strong>Security operator</strong><span>Protected enterprise session</span></div>
             <Settings size={16} />
           </Link>
         </div>
@@ -301,17 +312,17 @@ export function AppLayout({ children, incidentCount = 0, cameraCount = 0 }: AppL
           </button>
           <div className="topbar-context">
             <div className="breadcrumbs">
-              Sentinel Grid <ChevronRight size={12} /> {currentPage.section}
+              <span>Sentinel Grid</span><ChevronRight size={12} /><span>{currentPage.section}</span>
             </div>
             <h1>{currentPage.title}</h1>
           </div>
           <div className="topbar-actions">
             <div className="live-state"><i /> Live operations <span>IST</span></div>
             <Link href="/video-search" className="topbar-icon" aria-label="Search"><Search size={18} /></Link>
-            <button aria-label="Notifications" className="notification">
+            <Link href="/operations/alerts" aria-label="Notifications" className="notification topbar-icon">
               <Bell size={18} />
               {incidentCount > 0 && <i />}
-            </button>
+            </Link>
             <Link href="/account/security" className="top-avatar" aria-label="Operator profile and session security"><CircleUserRound size={20} /></Link>
           </div>
         </header>

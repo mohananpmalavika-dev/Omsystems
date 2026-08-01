@@ -170,6 +170,7 @@ Create: `c:\Omsystems\edge-agent\INSTALL_SERVICE.bat`
 
 ```batch
 @echo off
+
 echo Installing Sentinel Edge Agent as Windows Service...
 echo.
 
