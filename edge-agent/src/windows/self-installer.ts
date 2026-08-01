@@ -1,6 +1,10 @@
 import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
-import { join } from "node:path";
+import { join, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 const ASSET_ROOT = join(__dirname, "..", "vendor", "windows");
 const INSTALLER_ROOT = join(__dirname, "..", "installer", "windows");
