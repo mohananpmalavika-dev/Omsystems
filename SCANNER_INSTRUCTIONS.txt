@@ -1,0 +1,57 @@
+╔══════════════════════════════════════════════════════════╗
+║                                                          ║
+║           CAMERA SCANNER - SIMPLE SETUP                 ║
+║                                                          ║
+╚══════════════════════════════════════════════════════════╝
+
+When you see the "Install Camera Scanner Software" dialog
+in the dashboard, just click "Done" or close it.
+
+Then follow these steps:
+
+STEP 1: Run the Automated Setup
+════════════════════════════════════════════════════════════
+Double-click this file:
+
+    📁 C:\Omsystems\SETUP_AND_START_SCANNER.bat
+
+This will:
+  ✅ Register the scanner automatically
+  ✅ Create all configuration files
+  ✅ Start the scanner
+  ✅ Connect to the dashboard
+
+STEP 2: Check the Dashboard
+════════════════════════════════════════════════════════════
+After 30 seconds:
+
+  1. Refresh your dashboard page
+  2. Go to "Organization & devices"
+  3. You should see: "Scanner: Main Scanner - ✓ Running"
+
+STEP 3: Find Cameras
+════════════════════════════════════════════════════════════
+  1. Click "Add camera" button
+  2. Cameras will be discovered automatically
+  3. Click "Provision all" to add them
+
+════════════════════════════════════════════════════════════
+
+THAT'S IT! No manual configuration needed.
+
+The dialog in the dashboard is for advanced users who want
+to configure things manually. You can ignore it.
+
+════════════════════════════════════════════════════════════
+
+TROUBLESHOOTING:
+
+Scanner not showing as "Running"?
+  → Close the scanner window and run SETUP_AND_START_SCANNER.bat again
+
+No cameras found?
+  → Make sure cameras are on the same network
+  → Check that cameras are powered on
+  → Try clicking "Scan network" button
+
+════════════════════════════════════════════════════════════

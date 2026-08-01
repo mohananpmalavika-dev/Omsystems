@@ -15,6 +15,24 @@ class ApiError extends Error {
   }
 }
 
+/**
+ * Redirect to login page and clear session
+ */
+function redirectToLogin() {
+  if (typeof window !== 'undefined') {
+    // Clear all session data
+    localStorage.removeItem('accessToken');
+    localStorage.removeItem('refreshToken');
+    localStorage.removeItem('user');
+    
+    // Redirect to login
+    const currentPath = window.location.pathname;
+    if (currentPath !== '/auth/login' && !currentPath.startsWith('/auth/')) {
+      window.location.href = '/auth/login?expired=true';
+    }
+  }
+}
+
 async function fetchApi<T>(
   endpoint: string,
   options: RequestInit = {}
@@ -34,17 +52,50 @@ async function fetchApi<T>(
     headers.set('x-sentinel-session', token);
   }
 
-  const response = await fetch(`${API_BASE}${endpoint}`, {
-    ...options,
-    credentials: "include",
-    headers,
-  });
+  let response: Response;
+  
+  try {
+    response = await fetch(`${API_BASE}${endpoint}`, {
+      ...options,
+      credentials: "include",
+      headers,
+    });
+  } catch (error: any) {
+    // Network error - API not reachable
+    console.error('API connection failed:', error);
+    
+    // Only redirect to login if this isn't already a login attempt
+    if (!endpoint.includes('/auth/login') && !endpoint.includes('/auth/refresh')) {
+      redirectToLogin();
+    }
+    
+    throw new ApiError(
+      'Cannot connect to server. Please check your connection.',
+      0,
+      { originalError: error.message }
+    );
+  }
 
   if (!response.ok) {
     const error = await response.json().catch(() => ({
       error: 'unknown_error',
       message: 'An unexpected error occurred',
     }));
+
+    // Handle authentication errors
+    if (response.status === 401) {
+      // Token expired or invalid
+      if (!endpoint.includes('/auth/login') && !endpoint.includes('/auth/refresh')) {
+        redirectToLogin();
+      }
+    }
+
+    // Handle forbidden errors (might indicate session issues)
+    if (response.status === 403) {
+      if (error.error === 'session_expired' || error.error === 'invalid_session') {
+        redirectToLogin();
+      }
+    }
 
     throw new ApiError(
       error.message || (typeof error.error === 'string'
@@ -72,11 +123,25 @@ async function downloadApi(endpoint: string, options: RequestInit = {}): Promise
     headers.set('x-sentinel-session', token);
   }
 
-  const response = await fetch(`${API_BASE}${endpoint}`, {
-    ...options,
-    credentials: 'include',
-    headers,
-  });
+  let response: Response;
+  
+  try {
+    response = await fetch(`${API_BASE}${endpoint}`, {
+      ...options,
+      credentials: 'include',
+      headers,
+    });
+  } catch (error: any) {
+    // Network error - API not reachable
+    console.error('API connection failed:', error);
+    redirectToLogin();
+    
+    throw new ApiError(
+      'Cannot connect to server. Please check your connection.',
+      0,
+      { originalError: error.message }
+    );
+  }
 
   if (!response.ok) {
     const text = await response.text().catch(() => "");
@@ -96,6 +161,11 @@ async function downloadApi(endpoint: string, options: RequestInit = {}): Promise
           raw: text,
         };
       }
+    }
+
+    // Handle authentication errors
+    if (response.status === 401 || response.status === 403) {
+      redirectToLogin();
     }
 
     throw new ApiError(
