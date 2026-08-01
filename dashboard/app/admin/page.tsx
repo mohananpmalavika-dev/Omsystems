@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeft, Building2, Camera, ShieldCheck, Users } from "lucide-react";
+import { ArrowLeft, Building2, Camera, ShieldCheck, Users, Server } from "lucide-react";
 import { useEffect, useState } from "react";
 import { AppLayout } from "@/components/app-layout";
 import { CameraPermissionManager } from "@/components/camera-permission-manager";
@@ -161,6 +161,25 @@ export default function AdminPage() {
               <p>Company hierarchy, employee scope, and camera exceptions</p>
             </div>
           </div>
+        </div>
+        <div>
+          <a 
+            href="/admin/system"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.5rem',
+              padding: '0.5rem 1rem',
+              background: '#007bff',
+              color: 'white',
+              borderRadius: '4px',
+              textDecoration: 'none',
+              fontSize: '0.875rem',
+              fontWeight: '600'
+            }}
+          >
+            <Server size={16} /> System Management
+          </a>
         </div>
       </header>
 
