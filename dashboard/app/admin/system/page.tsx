@@ -93,7 +93,12 @@ export default function SystemManagementPage() {
 
   const handleDelete = async (type: 'gateway' | 'camera' | 'branch', id: string) => {
     try {
-      const response = await fetch(`/api/admin/system/${type}/${id}`, {
+      // Pluralize the type for the API endpoint
+      const pluralType = type === 'gateway' ? 'gateways' 
+        : type === 'camera' ? 'cameras' 
+        : 'branches';
+      
+      const response = await fetch(`/api/admin/system/${pluralType}/${id}`, {
         method: 'DELETE',
       });
 
