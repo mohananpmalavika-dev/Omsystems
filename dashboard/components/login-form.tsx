@@ -1,9 +1,9 @@
 "use client";
 
-import { useState } from "react";
-import { Eye, EyeOff, ShieldCheck, AlertCircle } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Eye, EyeOff, ShieldCheck, AlertCircle, Info } from "lucide-react";
 import { authApi } from "@/lib/api-client";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 
 interface LoginFormProps {
   onSuccess?: () => void;
@@ -11,6 +11,7 @@ interface LoginFormProps {
 
 export function LoginForm({ onSuccess }: LoginFormProps) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [formData, setFormData] = useState({
     username: "",
     password: "",
@@ -19,9 +20,25 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [info, setInfo] = useState<string | null>(null);
   const [mustChangePassword, setMustChangePassword] = useState(false);
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+
+  // Check for session expiry or error messages
+  useEffect(() => {
+    const reason = searchParams.get('reason') || searchParams.get('expired');
+    
+    if (reason === 'expired' || reason === 'true') {
+      setInfo('Your session has expired. Please sign in again.');
+    } else if (reason === 'invalid') {
+      setInfo('Please sign in to continue.');
+    } else if (reason === 'network') {
+      setError('Cannot connect to server. Please check your connection and try again.');
+    } else if (searchParams.get('logout') === 'true') {
+      setInfo('You have been signed out successfully.');
+    }
+  }, [searchParams]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -120,8 +137,9 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
       ...prev,
       [e.target.name]: e.target.value,
     }));
-    // Clear error when user starts typing
+    // Clear error and info when user starts typing
     if (error) setError(null);
+    if (info) setInfo(null);
   };
 
   if (mustChangePassword) {
@@ -226,6 +244,13 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
           <div className="login-error">
             <AlertCircle size={16} />
             <span>{error}</span>
+          </div>
+        )}
+
+        {info && (
+          <div className="login-info">
+            <Info size={16} />
+            <span>{info}</span>
           </div>
         )}
 

@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { GlobalAlertCenter } from "@/components/global-alert-center";
+import { SessionProvider } from "@/components/session-provider";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -12,7 +13,12 @@ export default function RootLayout({
 }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en">
-      <body>{children}<GlobalAlertCenter/></body>
+      <body>
+        <SessionProvider>
+          {children}
+          <GlobalAlertCenter/>
+        </SessionProvider>
+      </body>
     </html>
   );
 }

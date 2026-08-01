@@ -2863,6 +2863,30 @@ button, a { -webkit-tap-highlight-color: transparent; }
 .login-button { min-height: 44px; }
 .login-help { margin-top: 13px; text-align: center; }
 .login-help p { margin: 0; color: #728198; font-size: 10px; }
+.login-error {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  margin-bottom: 16px;
+  border: 1px solid rgba(237, 93, 93, 0.3);
+  border-radius: 10px;
+  background: rgba(237, 93, 93, 0.08);
+  color: #c43838;
+  font-size: 12px;
+}
+.login-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  margin-bottom: 16px;
+  border: 1px solid rgba(40, 120, 255, 0.3);
+  border-radius: 10px;
+  background: rgba(40, 120, 255, 0.08);
+  color: #1a5dc9;
+  font-size: 12px;
+}
 .login-footer { color: #7287a4; }
 .login-footer p { margin: 0; }
 .footer-links { display: flex; justify-content: center; gap: 5px; margin-top: 3px; }
