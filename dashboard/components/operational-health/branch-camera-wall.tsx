@@ -135,8 +135,8 @@ export function BranchCameraWall({ branchId, cameras }: { branchId: string; came
   return <section aria-label="Branch camera wall">
     <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
       <div>
-        <h3 className="flex items-center gap-2 text-lg font-semibold"><CameraIcon size={20}/>All branch cameras ({cameras.length})</h3>
-        <p className="mt-1 text-xs text-gray-500">{online} online · {cameras.length - online} attention · {recording} recording compliant</p>
+        <h3 className="flex items-center gap-2 text-lg font-semibold"><CameraIcon size={20}/>My Cameras ({cameras.length})</h3>
+        <p className="mt-1 text-xs text-gray-500">{online} working · {cameras.length - online} need attention · {recording} recording</p>
       </div>
       <div className="flex flex-wrap items-center gap-2">
         <div className="inline-flex rounded-lg border bg-white p-1" role="group" aria-label="Camera wall columns">
@@ -186,12 +186,28 @@ function BranchCameraTile({ camera, branchId, session, loading, error, ptzOpen, 
   const tone = cameraStatusTone(camera);
   const canStart = canStartCamera(camera);
   const recordingOk = camera.recordingStatus === "compliant" || camera.recordingStatus === "healthy";
+  
+  // Check if camera needs authentication (common auth failure indicators)
+  const needsAuth = camera.onlineStatus === "offline" || 
+                    camera.recordingStatus === "stream_unavailable" || 
+                    !camera.streamAvailable;
+  
+  // Create user-friendly status message
+  let statusMessage = "";
+  if (needsAuth && !canStart) {
+    statusMessage = "Need username/password - Click 'Camera info' to update";
+  } else if (!canStart) {
+    statusMessage = "Camera offline or unreachable";
+  } else {
+    statusMessage = "Ready for live view";
+  }
+  
   return <article ref={tile} className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm" aria-label={`${camera.name} camera`}>
     <div className="relative aspect-video overflow-hidden bg-slate-950">
-      {session?.hls ? <HlsPlayer url={session.hls.url} bearerToken={session.hls.bearerToken} cameraName={camera.name} onPlaybackError={onStart}/> : <div className="flex h-full flex-col items-center justify-center gap-2 bg-gradient-to-br from-slate-900 to-slate-800 text-slate-300"><CameraIcon size={30}/><span className="text-xs">{error ?? (canStart ? "Ready for protected live view" : "Camera unavailable")}</span>{canStart && <button type="button" onClick={onStart} disabled={loading} className="inline-flex items-center gap-2 rounded-lg bg-white/10 px-3 py-2 text-xs font-semibold text-white backdrop-blur hover:bg-white/20">{loading ? <LoaderCircle className="animate-spin" size={14}/> : <Play size={14}/>} {loading ? "Authorizing…" : "Watch live"}</button>}</div>}
+      {session?.hls ? <HlsPlayer url={session.hls.url} bearerToken={session.hls.bearerToken} cameraName={camera.name} onPlaybackError={onStart}/> : <div className="flex h-full flex-col items-center justify-center gap-2 bg-gradient-to-br from-slate-900 to-slate-800 text-slate-300"><CameraIcon size={30}/><span className="text-xs text-center px-4">{error ?? statusMessage}</span>{canStart && <button type="button" onClick={onStart} disabled={loading} className="inline-flex items-center gap-2 rounded-lg bg-white/10 px-3 py-2 text-xs font-semibold text-white backdrop-blur hover:bg-white/20">{loading ? <LoaderCircle className="animate-spin" size={14}/> : <Play size={14}/>} {loading ? "Authorizing…" : "Watch live"}</button>}</div>}
       <div className="absolute left-2 top-2 flex gap-2 text-[10px] font-semibold uppercase">
-        <span className={`rounded-full px-2 py-1 text-white ${tone === "healthy" ? "bg-green-600" : tone === "warning" ? "bg-amber-600" : "bg-red-600"}`}>{camera.onlineStatus}</span>
-        <span className={`flex items-center gap-1 rounded-full px-2 py-1 text-white ${recordingOk ? "bg-red-600" : "bg-gray-600"}`}>{recordingOk ? <Radio size={10}/> : <CircleStop size={10}/>} {camera.recordingStatus}</span>
+        <span className={`rounded-full px-2 py-1 text-white ${tone === "healthy" ? "bg-green-600" : tone === "warning" ? "bg-amber-600" : "bg-red-600"}`}>{camera.onlineStatus === "online" ? "Working" : needsAuth ? "Need Login" : "Offline"}</span>
+        <span className={`flex items-center gap-1 rounded-full px-2 py-1 text-white ${recordingOk ? "bg-red-600" : "bg-gray-600"}`}>{recordingOk ? <Radio size={10}/> : <CircleStop size={10}/>} {recordingOk ? "Recording" : "Not Recording"}</span>
       </div>
       <div className="absolute bottom-2 right-2 flex gap-1">
         {camera.capabilities?.audio && <span title="Audio capable" className="rounded bg-black/60 p-2 text-white"><Volume2 size={14}/></span>}
@@ -202,8 +218,12 @@ function BranchCameraTile({ camera, branchId, session, loading, error, ptzOpen, 
     </div>
     <div className="p-3">
       <div className="flex items-start justify-between gap-2"><div className="min-w-0"><h4 className="truncate text-sm font-semibold text-gray-900">{camera.name}</h4><p className="truncate text-[11px] text-gray-500">{camera.vendor ?? "Unknown make"} · {camera.model ?? "Model unavailable"}</p></div><span className="rounded bg-gray-100 px-2 py-1 text-[10px] font-semibold text-gray-600">CH {camera.channel ?? "--"}</span></div>
+      {needsAuth && !canStart && <div className="mt-2 rounded-lg bg-amber-50 border border-amber-200 px-3 py-2">
+        <p className="text-[11px] text-amber-800 font-medium">⚠️ Authentication Required</p>
+        <p className="text-[10px] text-amber-700 mt-1">Click "Camera info" below to update username and password</p>
+      </div>}
       <div className="mt-3 grid grid-cols-2 gap-2 text-[11px] text-gray-600"><span><strong className="block text-gray-400">IP address</strong>{camera.ipAddress ?? "Not reported"}</span><span><strong className="block text-gray-400">Last signal</strong>{camera.lastHeartbeat ? new Date(camera.lastHeartbeat).toLocaleTimeString() : "No telemetry"}</span></div>
-      <div className="mt-3 flex gap-2 border-t pt-3"><Link href={cameraPlaybackHref(branchId, camera.id)} className="btn-secondary flex flex-1 items-center justify-center gap-2 text-xs"><Play size={13}/>Playback</Link><Link href={`/operations/cameras?cameraId=${encodeURIComponent(camera.id)}`} className="btn-secondary flex flex-1 items-center justify-center gap-2 text-xs"><Server size={13}/>Camera info</Link></div>
+      <div className="mt-3 flex gap-2 border-t pt-3"><Link href={cameraPlaybackHref(branchId, camera.id)} className="btn-secondary flex flex-1 items-center justify-center gap-2 text-xs"><Play size={13}/>Playback</Link><Link href={`/operations/cameras?cameraId=${encodeURIComponent(camera.id)}`} className={`flex flex-1 items-center justify-center gap-2 text-xs ${needsAuth && !canStart ? "btn-primary" : "btn-secondary"}`}><Server size={13}/>Camera info</Link></div>
     </div>
   </article>;
 }
