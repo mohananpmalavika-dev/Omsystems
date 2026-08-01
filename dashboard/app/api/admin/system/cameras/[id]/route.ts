@@ -5,7 +5,7 @@ const DATABASE_URL = process.env.DATABASE_URL || 'postgresql://omcamera_y1ej_use
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
   const client = new Client({
     connectionString: DATABASE_URL,
@@ -17,7 +17,7 @@ export async function DELETE(
   try {
     await client.connect();
 
-    const { id } = params;
+    const { id } = await context.params;
 
     // Delete dependent records first
     await client.query('DELETE FROM live_sessions WHERE camera_id = $1', [id]);

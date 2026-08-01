@@ -19,7 +19,7 @@ ArchitecturesInstallIn64BitMode=x64
 WizardStyle=modern
 DisableProgramGroupPage=yes
 DisableWelcomePage=no
-SetupIconFile=assets\logo.ico
+; SetupIconFile=assets\logo.ico
 UninstallDisplayIcon={app}\edge-agent.exe
 
 [Languages]

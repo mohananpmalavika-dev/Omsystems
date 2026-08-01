@@ -62,6 +62,8 @@ Write-Host "   FFmpeg: $($ffmpegDir.Name)"
 Write-Host ""
 Write-Host "Step 3: Checking for Inno Setup..."
 $innoSetupPaths = @(
+    "C:\Program Files (x86)\Inno Setup 7\ISCC.exe",
+    "C:\Program Files\Inno Setup 7\ISCC.exe",
     "C:\Program Files (x86)\Inno Setup 6\ISCC.exe",
     "C:\Program Files\Inno Setup 6\ISCC.exe",
     "C:\Program Files (x86)\Inno Setup 5\ISCC.exe",
