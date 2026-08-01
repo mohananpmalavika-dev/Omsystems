@@ -144,15 +144,15 @@ export default function BranchHealthDetailPage() {
           <HealthScoreRing score={branch.healthScore ?? 0} size={120} strokeWidth={10} />
           
           <div className="flex-1">
-            <h2 className="text-lg font-semibold mb-4">Branch Health Score</h2>
+            <h2 className="text-lg font-semibold mb-4">System Health Score</h2>
             <p className="text-sm text-gray-600 mb-4">
-              Overall health calculated from camera availability (25%), recording quality (30%), 
-              storage capacity (15%), network performance (10%), power backup (10%), and edge agent status (10%).
+              Overall health calculated from camera status (25%), recording quality (30%), 
+              storage space (15%), internet connection (10%), power backup (10%), and system status (10%).
             </p>
             
             <div className="grid grid-cols-3 gap-4">
               <div>
-                <p className="text-xs text-gray-500 mb-1">Camera Health</p>
+                <p className="text-xs text-gray-500 mb-1">Camera Status</p>
                 <div className="flex items-center gap-2">
                   <div className="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden">
                     <div 
@@ -165,7 +165,7 @@ export default function BranchHealthDetailPage() {
               </div>
               
               <div>
-                <p className="text-xs text-gray-500 mb-1">Recording Health</p>
+                <p className="text-xs text-gray-500 mb-1">Recording Quality</p>
                 <div className="flex items-center gap-2">
                   <div className="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden">
                     <div 
@@ -178,7 +178,7 @@ export default function BranchHealthDetailPage() {
               </div>
               
               <div>
-                <p className="text-xs text-gray-500 mb-1">Storage Health</p>
+                <p className="text-xs text-gray-500 mb-1">Storage Space</p>
                 <div className="flex items-center gap-2">
                   <div className="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden">
                     <div 
@@ -191,7 +191,7 @@ export default function BranchHealthDetailPage() {
               </div>
               
               <div>
-                <p className="text-xs text-gray-500 mb-1">Network Health</p>
+                <p className="text-xs text-gray-500 mb-1">Internet Connection</p>
                 <div className="flex items-center gap-2">
                   <div className="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden">
                     <div 
@@ -204,7 +204,7 @@ export default function BranchHealthDetailPage() {
               </div>
               
               <div>
-                <p className="text-xs text-gray-500 mb-1">UPS Health</p>
+                <p className="text-xs text-gray-500 mb-1">Power Backup</p>
                 <div className="flex items-center gap-2">
                   <div className="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden">
                     <div 
@@ -217,7 +217,7 @@ export default function BranchHealthDetailPage() {
               </div>
               
               <div>
-                <p className="text-xs text-gray-500 mb-1">Edge Agent Health</p>
+                <p className="text-xs text-gray-500 mb-1">System Status</p>
                 <div className="flex items-center gap-2">
                   <div className="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden">
                     <div 
@@ -284,51 +284,48 @@ export default function BranchHealthDetailPage() {
         </div>
       )}
 
-      {/* Edge Agent Status */}
+      {/* System Status - Simplified for common users */}
       <div className="card mb-6">
         <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
           <Server size={20} />
-          Edge Agent Status
+          System Status
         </h3>
         <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4">
           <div>
-            <p className="text-sm text-gray-600 mb-1">Status</p>
+            <p className="text-sm text-gray-600 mb-1">Camera Scanner</p>
             <p className={`text-lg font-semibold ${
               branch.edgeAgent.status === 'online' ? 'text-green-600' : 'text-red-600'
             }`}>
-              {branch.edgeAgent.status}
+              {branch.edgeAgent.status === 'online' ? 'Running' : 'Stopped'}
             </p>
           </div>
           <div>
-            <p className="text-sm text-gray-600 mb-1">Version</p>
+            <p className="text-sm text-gray-600 mb-1">Software Version</p>
             <p className="text-lg font-semibold">{branch.edgeAgent.version}</p>
           </div>
           <div>
-            <p className="text-sm text-gray-600 mb-1">CPU Usage</p>
+            <p className="text-sm text-gray-600 mb-1">Computer CPU</p>
             <p className="text-lg font-semibold">{branch.edgeAgent.cpuUsage === null ? '--' : `${branch.edgeAgent.cpuUsage.toFixed(1)}%`}</p>
           </div>
           <div>
-            <p className="text-sm text-gray-600 mb-1">Memory Usage</p>
+            <p className="text-sm text-gray-600 mb-1">Computer Memory</p>
             <p className="text-lg font-semibold">{branch.edgeAgent.memoryUsage === null ? '--' : `${branch.edgeAgent.memoryUsage.toFixed(1)}%`}</p>
           </div>
           <div>
-            <p className="text-sm text-gray-600 mb-1">Disk Usage</p>
+            <p className="text-sm text-gray-600 mb-1">Disk Space</p>
             <p className="text-lg font-semibold">{branch.edgeAgent.diskUsage === null ? '--' : `${branch.edgeAgent.diskUsage.toFixed(1)}%`}</p>
           </div>
           <div>
-            <p className="text-sm text-gray-600 mb-1">Last Heartbeat</p>
+            <p className="text-sm text-gray-600 mb-1">Last Check</p>
             <p className="text-sm font-medium">{getTimeAgo(branch.edgeAgent.lastHeartbeat)}</p>
           </div>
           <div>
-            <p className="text-sm text-gray-600 mb-1">Uptime</p>
+            <p className="text-sm text-gray-600 mb-1">Running Time</p>
             <p className="text-sm font-medium">
               {branch.edgeAgent.uptimeSeconds === null ? '--' : `${Math.floor(branch.edgeAgent.uptimeSeconds / 86400)}d ${Math.floor((branch.edgeAgent.uptimeSeconds % 86400) / 3600)}h`}
             </p>
           </div>
           <div className="space-y-3">
-            <a href={`/operations/edge-agents/${branch.edgeAgent.id}`} className="btn-secondary w-full">
-              View Details →
-            </a>
             <div className="grid gap-2">
               <button
                 type="button"
@@ -337,7 +334,7 @@ export default function BranchHealthDetailPage() {
                   setDownloadingPackage(true);
                   try {
                     const blob = await cameraInventoryApi.downloadPackage(branchId, branch.edgeAgent.id, "windows");
-                    const fileName = `${branch.name.replace(/[^a-zA-Z0-9_-]/g, '-')}-edge-agent-setup.exe`;
+                    const fileName = `${branch.name.replace(/[^a-zA-Z0-9_-]/g, '-')}-camera-system-setup.exe`;
                     const url = window.URL.createObjectURL(blob);
                     const anchor = document.createElement('a');
                     anchor.href = url;
@@ -349,51 +346,20 @@ export default function BranchHealthDetailPage() {
                   } catch (error) {
                     console.error(error);
                     const message = error instanceof Error ? error.message : "Unable to download the package.";
-                    window.alert(`Unable to download the Windows edge agent package. ${message}`);
+                    window.alert(`Unable to download the Windows installer. ${message}`);
                   } finally {
                     setDownloadingPackage(false);
                   }
                 }}
                 disabled={downloadingPackage}
-                className="btn-primary w-full"
+                className="btn-primary w-full text-sm py-2"
               >
                 <Download size={16} />
-                {downloadingPackage ? 'Downloading…' : 'Download one-click Windows installer'}
-              </button>
-
-              <button
-                type="button"
-                onClick={async () => {
-                  if (!branch.edgeAgent.id) return;
-                  setDownloadingPackage(true);
-                  try {
-                    const blob = await cameraInventoryApi.downloadPackage(branchId, branch.edgeAgent.id, "linux");
-                    const fileName = `${branch.name.replace(/[^a-zA-Z0-9_-]/g, '-')}-edge-agent-linux.zip`;
-                    const url = window.URL.createObjectURL(blob);
-                    const anchor = document.createElement('a');
-                    anchor.href = url;
-                    anchor.download = fileName;
-                    document.body.appendChild(anchor);
-                    anchor.click();
-                    anchor.remove();
-                    window.URL.revokeObjectURL(url);
-                  } catch (error) {
-                    console.error(error);
-                    const message = error instanceof Error ? error.message : "Unable to download the package.";
-                    window.alert(`Unable to download the Linux edge agent package. ${message}`);
-                  } finally {
-                    setDownloadingPackage(false);
-                  }
-                }}
-                disabled={downloadingPackage}
-                className="btn-secondary w-full"
-              >
-                <Download size={16} />
-                {downloadingPackage ? 'Downloading…' : 'Download Linux branch install zip'}
+                {downloadingPackage ? 'Downloading…' : 'Download Windows Installer'}
               </button>
             </div>
             <p className="text-xs text-gray-500">
-              Download a zip, copy it to the branch machine, and run the included installer script there.
+              One-click installer for Windows. Run it and cameras will be found automatically.
             </p>
           </div>
         </div>
@@ -404,38 +370,38 @@ export default function BranchHealthDetailPage() {
         <BranchCameraWall branchId={branchId} cameras={cameras} />
       </div>
 
-      {/* Component Links */}
+      {/* Quick Links */}
       <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4">
         <a href={`/operations/recording?branchId=${branchId}`} className="card hover:shadow-md transition-shadow">
           <div className="flex items-center gap-3 mb-2">
             <Activity size={20} className="text-blue-600" />
-            <h4 className="font-semibold">Recording Health</h4>
+            <h4 className="font-semibold">Recording Status</h4>
           </div>
-          <p className="text-sm text-gray-600">View recording status and gaps</p>
+          <p className="text-sm text-gray-600">Check recording status and gaps</p>
         </a>
         
         <a href={`/operations/storage?branchId=${branchId}`} className="card hover:shadow-md transition-shadow">
           <div className="flex items-center gap-3 mb-2">
             <HardDrive size={20} className="text-purple-600" />
-            <h4 className="font-semibold">Storage Health</h4>
+            <h4 className="font-semibold">Storage Space</h4>
           </div>
-          <p className="text-sm text-gray-600">View storage and disk health</p>
+          <p className="text-sm text-gray-600">Check storage and disk space</p>
         </a>
         
         <a href={`/operations/network?branchId=${branchId}`} className="card hover:shadow-md transition-shadow">
           <div className="flex items-center gap-3 mb-2">
             <Wifi size={20} className="text-green-600" />
-            <h4 className="font-semibold">Network Health</h4>
+            <h4 className="font-semibold">Internet Connection</h4>
           </div>
-          <p className="text-sm text-gray-600">View network performance</p>
+          <p className="text-sm text-gray-600">Check internet speed and connection</p>
         </a>
         
         <a href={`/operations/ups?branchId=${branchId}`} className="card hover:shadow-md transition-shadow">
           <div className="flex items-center gap-3 mb-2">
             <Battery size={20} className="text-amber-600" />
-            <h4 className="font-semibold">UPS Health</h4>
+            <h4 className="font-semibold">Power Backup</h4>
           </div>
-          <p className="text-sm text-gray-600">View power and battery status</p>
+          <p className="text-sm text-gray-600">Check UPS battery status</p>
         </a>
       </div>
     </div>
