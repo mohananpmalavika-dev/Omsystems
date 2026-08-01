@@ -11,7 +11,7 @@ const discoveryParams = z.object({
 const approveDiscoveryBody = z.object({
   name: z.string().min(1),
   channel: z.number().int().min(1).default(1),
-  protocol: z.string().default("onvif-t"),
+  protocol: z.enum(["onvif-t", "onvif-s", "rtsp", "vendor-adapter"]).default("onvif-t"),
   connectionSecretRef: z.string().min(1),
 });
 
@@ -66,35 +66,31 @@ export async function registerCameraDiscoveryRoutes(
       });
     }
 
-    // Get the discovered camera
-    const discovered = await store.getDiscoveredCamera(branchId, discoveryId);
+    const discoveries = await store.listDiscoveredCameras(branchId);
+    const discovered = discoveries.find((item) => item.id === discoveryId);
     if (!discovered) {
       return reply.code(404).send({ error: "discovery_not_found" });
     }
 
-    // Create the camera from the discovered data
-    const camera = await store.createCamera({
-      branchId,
+    const camera = await store.approveCamera(branchId, {
+      discoveryId,
       name: body.name,
-      vendor: discovered.vendor || "other",
-      model: discovered.model || "Unknown",
-      serialNumber: discovered.serialNumber,
-      ipAddress: discovered.ipAddress,
       protocol: body.protocol,
       channel: body.channel,
       connectionSecretRef: body.connectionSecretRef,
-      status: "online",
-      profiles: discovered.profiles || [],
-      capabilities: discovered.capabilities || { ptz: false, audio: false, events: false },
+      model: discovered.model,
+      serialNumber: discovered.serialNumber,
+      ipAddress: discovered.ipAddress,
     });
 
-    // Mark the discovery as approved
-    await store.markDiscoveryApproved(branchId, discoveryId, camera.id);
+    if (!camera) {
+      return reply.code(500).send({ error: "failed_to_approve_camera" });
+    }
 
-    return { 
-      success: true, 
+    return {
+      success: true,
       cameraId: camera.id,
-      message: `Camera ${body.name} approved and added to monitoring` 
+      message: `Camera ${body.name} approved and added to monitoring`,
     };
   });
 
@@ -130,22 +126,21 @@ export async function registerCameraDiscoveryRoutes(
     for (const discovered of pendingDiscoveries) {
       try {
         const name = discovered.displayName || discovered.model || `${discovered.vendor} camera`;
-        const camera = await store.createCamera({
-          branchId,
+        const camera = await store.approveCamera(branchId, {
+          discoveryId: discovered.id,
           name,
-          vendor: discovered.vendor || "other",
-          model: discovered.model || "Unknown",
-          serialNumber: discovered.serialNumber,
-          ipAddress: discovered.ipAddress,
           protocol: "onvif-t",
           channel: 1,
           connectionSecretRef: `edge://${discovered.edgeAgentId}/${discovered.id}`,
-          status: discovered.streamVerified ? "online" : "offline",
-          profiles: discovered.profiles || [],
-          capabilities: discovered.capabilities || { ptz: false, audio: false, events: false },
+          model: discovered.model,
+          serialNumber: discovered.serialNumber,
+          ipAddress: discovered.ipAddress,
+          streamProfile: "main",
         });
 
-        await store.markDiscoveryApproved(branchId, discovered.id, camera.id);
+        if (!camera) {
+          throw new Error("Failed to approve discovered camera");
+        }
 
         results.push({
           discoveryId: discovered.id,
@@ -198,7 +193,10 @@ export async function registerCameraDiscoveryRoutes(
       });
     }
 
-    await store.markDiscoveryRejected(branchId, discoveryId, body.reason);
+    const rejected = await store.rejectDiscovery(discoveryId, body.reason);
+    if (!rejected) {
+      return reply.code(404).send({ error: "discovery_not_found" });
+    }
 
     return { success: true, message: "Discovery rejected" };
   });
@@ -221,7 +219,10 @@ export async function registerCameraDiscoveryRoutes(
       });
     }
 
-    await store.updateDiscoveryDisplayName(branchId, discoveryId, body.displayName);
+    const renamed = await store.renameDiscovery(discoveryId, body.displayName);
+    if (!renamed) {
+      return reply.code(404).send({ error: "discovery_not_found" });
+    }
 
     return { success: true, message: "Display name updated" };
   });

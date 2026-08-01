@@ -27,6 +27,8 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
 
   // Check for session expiry or error messages
   useEffect(() => {
+    if (!searchParams) return;
+    
     const reason = searchParams.get('reason') || searchParams.get('expired');
     
     if (reason === 'expired' || reason === 'true') {
