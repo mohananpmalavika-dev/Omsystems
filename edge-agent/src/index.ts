@@ -244,7 +244,7 @@ async function scanBranch() {
           compatibility: "review-required",
           duplicateStatus: "unique",
           compatibilityStatus: "review-required",
-          statusReason: message.slice(0, 500),
+          statusReason: message.slice(0, 200),
           profiles: [{ name: "unverified", codec: "unknown", width: 1, height: 1 }],
           capabilities: { ptz: false, audio: false, events: false },
         });

@@ -1,0 +1,244 @@
+╔═══════════════════════════════════════════════════════════════╗
+║                                                               ║
+║         CAMERA TROUBLESHOOTING GUIDE                         ║
+║         3 Cameras Failing Authentication                      ║
+║                                                               ║
+╚═══════════════════════════════════════════════════════════════╝
+
+
+🔴 PROBLEM
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Gateway is online and found 4 cameras, but only 1 is working:
+
+  ✅ Working:  1 camera
+  ❌ Failing:  3 cameras (wrong password)
+
+Failing cameras:
+  • 192.168.29.171  - "Invalid username or password" (25 attempts left)
+  • 192.168.29.196  - Authentication error
+  • 192.168.29.46   - Authentication error
+
+
+🎯 ROOT CAUSE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+The edge agent is using these credentials:
+  Username: admin
+  Password: admin
+
+But your cameras have DIFFERENT passwords!
+
+
+✅ SOLUTION (3 Easy Steps)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+
+STEP 1: Find the Correct Password
+──────────────────────────────────────────────────────────────
+
+  Option A: Use Automated Tester
+  ────────────────────────────────────
+    Double-click: TEST_SINGLE_CAMERA.bat
+    
+    Enter IP: 192.168.29.171
+    
+    It will try common passwords automatically.
+
+
+  Option B: Manual Testing
+  ────────────────────────────────────
+    1. Open web browser (Chrome/Edge)
+    2. Go to: http://192.168.29.171
+    3. Try these passwords:
+       
+       Username: admin   Password: (leave empty)
+       Username: admin   Password: admin
+       Username: admin   Password: 12345
+       Username: admin   Password: 123456
+       Username: admin   Password: 888888
+       Username: admin   Password: password
+
+
+STEP 2: Update Configuration
+──────────────────────────────────────────────────────────────
+
+  Double-click: FIX_CAMERA_CREDENTIALS.bat
+  
+  Follow the prompts:
+    1. Enter username (usually: admin)
+    2. Enter password (the one you found)
+    3. Confirm
+    4. Wait for restart
+    5. Check results
+
+
+STEP 3: Verify All Cameras Working
+──────────────────────────────────────────────────────────────
+
+  After 1 minute, check logs:
+    Double-click: CHECK_STATUS.bat
+  
+  Look for:
+    ✅ [info] Submitted ... camera 1
+    ✅ [info] Submitted ... camera 2
+    ✅ [info] Submitted ... camera 3
+    ✅ [info] Submitted ... camera 4
+  
+  Should see NO more "Failed to inspect" errors!
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+
+📋 COMMON DEFAULT PASSWORDS BY BRAND
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Brand          Username    Password
+────────────   ─────────   ────────────────────
+Hikvision      admin       (empty)
+Hikvision      admin       12345
+Dahua          admin       admin
+Dahua          admin       888888
+CP Plus        admin       admin
+CP Plus        admin       cp123
+Provision ISR  admin       admin
+Generic ONVIF  admin       (empty)
+Generic        admin       admin
+Generic        admin       123456
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+
+⚠️ IMPORTANT NOTES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+
+1. STOP EDGE AGENT WHILE TESTING
+   ──────────────────────────────
+   The camera at 192.168.29.171 has only 25 login attempts left!
+   
+   To avoid lockout:
+     If installed as service:
+       Open Task Scheduler
+       Find "Sentinel Grid Edge Agent"
+       Right-click → End
+   
+     If running START_EDGE_AGENT.bat:
+       Close the window (Ctrl+C)
+   
+   Test passwords manually first, then restart agent.
+
+
+2. DIFFERENT CAMERAS MAY HAVE DIFFERENT PASSWORDS
+   ────────────────────────────────────────────────
+   If cameras are from different brands or were set up
+   at different times, they might have different passwords.
+   
+   Current edge agent supports only ONE password for all cameras.
+   
+   Solutions:
+     a) Set all cameras to the same password (recommended)
+     b) Contact support for per-camera credential configuration
+
+
+3. CAMERA LOCKOUT
+   ────────────────────────────────────────────────
+   If you run out of attempts, camera will lock for 30 minutes.
+   
+   If locked:
+     - Wait 30 minutes
+     - OR restart the camera (power cycle)
+     - OR reset camera to factory defaults (last resort)
+
+
+4. WORKING CAMERA
+   ────────────────────────────────────────────────
+   One camera IS working! This camera likely has:
+     Username: admin
+     Password: admin
+   
+   Check which IP this camera is, then verify others have
+   the same credentials.
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+
+🔧 MANUAL CONFIG EDIT (Advanced)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+If you prefer to edit the config file manually:
+
+1. Open in Notepad:
+   C:\Omsystems\edge-agent\config\edge-agent-H1.env
+
+2. Find these lines:
+   CAMERA_USERNAME="admin"
+   CAMERA_PASSWORD="admin"
+
+3. Change to correct values:
+   CAMERA_USERNAME="admin"
+   CAMERA_PASSWORD="your_actual_password"
+
+4. Save and close
+
+5. Restart edge agent:
+   - Stop scheduled task (Task Scheduler)
+   - Start scheduled task again
+   OR
+   - Close START_EDGE_AGENT.bat window
+   - Double-click START_EDGE_AGENT.bat again
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+
+🎯 SUCCESS CRITERIA
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+All cameras are working when:
+
+  ✅ Logs show "Submitted" for 4 cameras
+  ✅ NO "Failed to inspect" errors
+  ✅ NO "Invalid username or password" errors
+  ✅ Dashboard shows 4 cameras discovered
+  ✅ Camera live view works in dashboard
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+
+📞 QUICK REFERENCE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Files to use:
+  TEST_SINGLE_CAMERA.bat        → Test passwords automatically
+  FIX_CAMERA_CREDENTIALS.bat    → Update config with correct password
+  CHECK_STATUS.bat              → Verify cameras are working
+
+Camera IPs:
+  192.168.29.171  (failing)
+  192.168.29.196  (failing)
+  192.168.29.46   (failing)
+  One more working (unknown IP)
+
+Config file:
+  C:\Omsystems\edge-agent\config\edge-agent-H1.env
+
+Logs:
+  C:\Omsystems\edge-agent\logs\edge-agent.log
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+
+Last Updated: August 1, 2026
+Gateway Status: ✅ Online
+Cameras Found: 4
+Cameras Working: 1
+Cameras Failing: 3 (authentication)
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

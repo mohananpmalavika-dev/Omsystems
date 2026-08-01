@@ -1,0 +1,240 @@
+╔═══════════════════════════════════════════════════════════════╗
+║                                                               ║
+║         SENTINEL GRID EDGE AGENT - H1                        ║
+║         Getting Started Guide                                 ║
+║                                                               ║
+╚═══════════════════════════════════════════════════════════════╝
+
+
+🚀 QUICK START (3 STEPS)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+
+STEP 1: Create Desktop Shortcuts (Optional but Recommended)
+────────────────────────────────────────────────────────────
+
+  Double-click: CREATE_DESKTOP_SHORTCUTS.bat
+
+  This creates 4 shortcuts on your desktop:
+    • Start Edge Agent
+    • Check Agent Status
+    • View Agent Logs
+    • Edge Agent Guide
+
+
+STEP 2: Start the Edge Agent
+────────────────────────────────────────────────────────────
+
+  Choose ONE option:
+
+  🟦 OPTION A: Quick Test (runs in a window)
+     Double-click: START_EDGE_AGENT.bat
+     
+     ✓ Good for: Testing, seeing what's happening
+     ✗ Stops when you close the window
+     ✗ Doesn't start automatically
+
+  
+  🟩 OPTION B: Install as Service (recommended for production)
+     Right-click: INSTALL_AS_SERVICE.bat
+     Select: "Run as Administrator"
+     
+     ✓ Good for: Always-on operation
+     ✓ Starts automatically on boot
+     ✓ Runs in background
+
+
+STEP 3: Verify It's Working
+────────────────────────────────────────────────────────────
+
+  1. Double-click: CHECK_STATUS.bat
+     
+     You should see:
+       [*] Process: RUNNING
+  
+  2. Wait 2 minutes, then check dashboard:
+     
+     Open: https://sentinel-grid-control-plane1.onrender.com
+     Go to: Operations → Branches → H1
+     
+     Status should show: 🟢 Online
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+
+📋 ALL AVAILABLE FILES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+For Users:
+──────────
+  START_EDGE_AGENT.bat          → Start agent in test mode
+  INSTALL_AS_SERVICE.bat        → Install to run automatically (Admin required)
+  UNINSTALL_SERVICE.bat         → Remove service (Admin required)
+  CHECK_STATUS.bat              → Check if agent is running
+  CREATE_DESKTOP_SHORTCUTS.bat  → Create desktop shortcuts
+  HOW_TO_USE.txt                → Complete user guide
+  GETTING_STARTED.txt           → This file
+
+For Troubleshooting:
+────────────────────
+  EDGE_AGENT_OFFLINE_FIX.md     → Fix offline issues
+  EDGE_AGENT_TROUBLESHOOTING.md → Complete troubleshooting
+  EDGE_AGENT_QUICK_FIX.md       → Quick reference
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+
+❓ COMMON QUESTIONS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+
+Q: Which option should I choose?
+─────────────────────────────────────────────────────────────
+
+  Testing/Demo:        → START_EDGE_AGENT.bat
+  Production/Always-on: → INSTALL_AS_SERVICE.bat
+
+
+Q: How do I know if it's working?
+─────────────────────────────────────────────────────────────
+
+  1. Run: CHECK_STATUS.bat
+  2. Should see: "Process: RUNNING"
+  3. Dashboard shows: 🟢 Online (after 2 min)
+
+
+Q: Dashboard still shows offline?
+─────────────────────────────────────────────────────────────
+
+  Possible causes:
+
+  1. Agent not running
+     → Run: CHECK_STATUS.bat
+     → If not running, start it
+
+  2. Camera passwords wrong
+     → Edit: config\edge-agent-H1.env
+     → Fix: CAMERA_USERNAME and CAMERA_PASSWORD
+     → Restart agent
+
+  3. Network issues
+     → Check computer is on same network as cameras
+     → Cameras are on: 192.168.29.x
+
+
+Q: Where are the logs?
+─────────────────────────────────────────────────────────────
+
+  If installed as service:
+    C:\Program Files\Sentinel Grid\Edge Agent\logs\edge-agent.log
+
+  If running from folder:
+    C:\Omsystems\edge-agent\logs\edge-agent.log
+
+
+Q: How do I stop it?
+─────────────────────────────────────────────────────────────
+
+  If using START_EDGE_AGENT.bat:
+    → Press Ctrl+C in the window
+
+  If installed as service:
+    → Open Task Scheduler
+    → Find "Sentinel Grid Edge Agent"
+    → Right-click → End
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+
+🎯 RECOMMENDED WORKFLOW
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+
+For First Time Setup:
+──────────────────────
+
+  1. Double-click: CREATE_DESKTOP_SHORTCUTS.bat
+     (Makes everything easier to access)
+
+  2. Double-click: START_EDGE_AGENT.bat
+     (Test that it works)
+
+  3. Watch for errors in the window
+     (Should see "Edge agent registered")
+
+  4. Press Ctrl+C to stop
+
+  5. Right-click: INSTALL_AS_SERVICE.bat
+     Select: "Run as Administrator"
+     (Install it permanently)
+
+  6. Double-click: CHECK_STATUS.bat
+     (Verify it's running)
+
+  7. Check dashboard after 2 minutes
+     (Should show 🟢 Online)
+
+
+For Daily Use:
+──────────────
+
+  Everything runs automatically!
+  
+  Optional checks:
+    • Double-click: Check Agent Status (on desktop)
+    • View dashboard to see camera status
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+
+⚠️ IMPORTANT NOTES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+
+• Keep this computer running 24/7
+  (Edge agent needs to be always on)
+
+• Don't delete this folder
+  (C:\Omsystems\edge-agent)
+
+• Camera passwords are in:
+  config\edge-agent-H1.env
+  (Keep this file safe)
+
+• If you move this computer to a different network,
+  you may need to restart the edge agent
+
+• The agent uses minimal resources:
+  < 100 MB RAM, < 1% CPU
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+
+📞 NEED HELP?
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+
+  Read: HOW_TO_USE.txt (detailed guide)
+  
+  Run: CHECK_STATUS.bat (see what's happening)
+  
+  Check logs:
+    logs\edge-agent.log (in this folder)
+    OR
+    C:\Program Files\Sentinel Grid\Edge Agent\logs\edge-agent.log
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+
+Gateway: H1
+Branch: 00000000-0000-4000-8000-000000000104
+Last Updated: August 1, 2026
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

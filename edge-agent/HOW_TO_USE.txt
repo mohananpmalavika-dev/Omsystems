@@ -1,0 +1,228 @@
+========================================
+ SENTINEL GRID EDGE AGENT - H1
+ Simple User Guide
+========================================
+
+The Edge Agent connects your cameras to the Sentinel Grid dashboard.
+It runs in the background and sends camera status to the cloud.
+
+
+========================================
+ QUICK START (2 Options)
+========================================
+
+
+OPTION 1: Run for Testing (Simple)
+-----------------------------------
+This runs the edge agent in a window. Good for testing.
+
+1. Double-click: START_EDGE_AGENT.bat
+2. A black window opens showing status
+3. Keep the window open - the agent is running
+4. Press Ctrl+C to stop
+
+✓ Use this for: Testing, temporary use
+✗ Agent stops when you close the window
+
+
+OPTION 2: Install as Service (Automatic)
+-----------------------------------------
+This installs the agent to run automatically on startup.
+
+1. Right-click: INSTALL_AS_SERVICE.bat
+2. Select: "Run as Administrator"
+3. Click "Yes" when Windows asks permission
+4. Wait for "Installation Complete!" message
+5. Done! Agent runs automatically now
+
+✓ Use this for: Production, always-on operation
+✓ Runs automatically when computer starts
+✓ Runs in background (no window)
+
+
+========================================
+ CHECK IF IT'S WORKING
+========================================
+
+Double-click: CHECK_STATUS.bat
+
+This shows:
+- Is the agent installed?
+- Is it running?
+- Recent activity from logs
+
+
+========================================
+ WHERE TO LOOK
+========================================
+
+Dashboard:
+  - Open browser: https://sentinel-grid-control-plane1.onrender.com
+  - Go to: Operations → Branches
+  - Find: H1
+  - Status should show: Green "Online"
+
+Logs (to see what's happening):
+  If installed as service:
+    C:\Program Files\Sentinel Grid\Edge Agent\logs\edge-agent.log
+  
+  If running from folder:
+    C:\Omsystems\edge-agent\logs\edge-agent.log
+
+
+========================================
+ TROUBLESHOOTING
+========================================
+
+Problem: "Node.js is not installed"
+Solution:
+  1. Download Node.js from: https://nodejs.org
+  2. Install it (click Next, Next, Install)
+  3. Restart computer
+  4. Try again
+
+
+Problem: Dashboard shows "Offline"
+Check these:
+  1. Is the agent running?
+     → Run: CHECK_STATUS.bat
+  
+  2. Is the computer on the same network as cameras?
+     → Cameras: 192.168.29.x
+     → Your computer should be on: 192.168.29.x
+  
+  3. Are camera passwords correct?
+     → Edit: config\edge-agent-H1.env
+     → Find: CAMERA_USERNAME and CAMERA_PASSWORD
+     → Update with correct values
+
+
+Problem: "Access Denied" when installing
+Solution:
+  - You must "Run as Administrator"
+  - Right-click the file → "Run as Administrator"
+
+
+Problem: Agent stops after a few minutes
+Solution:
+  - Install it as a service (INSTALL_AS_SERVICE.bat)
+  - Don't just run START_EDGE_AGENT.bat for production
+
+
+========================================
+ UNINSTALL
+========================================
+
+To remove the edge agent:
+
+1. Right-click: UNINSTALL_SERVICE.bat
+2. Select: "Run as Administrator"
+3. Follow the prompts
+4. Choose if you want to delete logs/config
+
+
+========================================
+ CONFIGURATION
+========================================
+
+Configuration file location:
+  C:\Omsystems\edge-agent\config\edge-agent-H1.env
+
+Important settings:
+
+  CAMERA_USERNAME="admin"
+  CAMERA_PASSWORD="admin"
+  
+  → Change these to match your camera passwords!
+
+After changing config:
+  1. Stop the agent
+  2. Start it again
+
+
+========================================
+ SUPPORT FILES
+========================================
+
+In the edge-agent folder, you'll find:
+
+  START_EDGE_AGENT.bat
+    → Quick start for testing
+
+  INSTALL_AS_SERVICE.bat
+    → Install to run automatically (needs Admin)
+
+  UNINSTALL_SERVICE.bat
+    → Remove the service (needs Admin)
+
+  CHECK_STATUS.bat
+    → Check if agent is running
+
+  HOW_TO_USE.txt
+    → This file
+
+
+========================================
+ TECHNICAL DETAILS (Optional)
+========================================
+
+What does the Edge Agent do?
+  - Discovers cameras on your network (192.168.29.x)
+  - Checks camera health every 30 seconds
+  - Sends status to cloud dashboard
+  - Reports when cameras go offline
+  - Provides camera streams to dashboard
+
+Gateway Information:
+  - Name: H1
+  - Gateway ID: e89264b4-9168-4b1b-8438-d61f7029668f
+  - Branch ID: 00000000-0000-4000-8000-000000000104
+  - Control Plane: https://sentinel-grid-control-plane1.onrender.com
+
+Network Requirements:
+  - Internet connection (to reach control plane)
+  - Access to camera network (192.168.29.x)
+  - Ports: 80, 554 (for camera communication)
+
+
+========================================
+ FREQUENTLY ASKED QUESTIONS
+========================================
+
+Q: Does this work without internet?
+A: No. The agent needs internet to send data to the cloud dashboard.
+
+Q: Will it slow down my computer?
+A: No. It uses minimal resources (< 100MB RAM, < 1% CPU).
+
+Q: Can I run multiple agents on different computers?
+A: Yes, but each needs a different config file and gateway ID.
+
+Q: How often does it check cameras?
+A: Every 30 seconds for status, every 60 seconds for discovery.
+
+Q: Does it record video?
+A: No. It only monitors camera health and status.
+   Recording happens on your NVR/DVR or cloud storage.
+
+Q: Is it secure?
+A: Yes. Communication is encrypted. Camera passwords stay local.
+   Only status data is sent to the cloud.
+
+
+========================================
+ Need More Help?
+========================================
+
+Check the detailed guides:
+  - EDGE_AGENT_OFFLINE_FIX.md
+  - EDGE_AGENT_TROUBLESHOOTING.md
+  - EDGE_AGENT_QUICK_FIX.md
+
+Or check the logs:
+  C:\Omsystems\edge-agent\logs\edge-agent.log
+
+
+========================================
+ Last Updated: August 1, 2026
+========================================
