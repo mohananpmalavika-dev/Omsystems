@@ -517,10 +517,25 @@ export async function registerAnalyticsRoutes(
       limit: 1000,
     });
 
+    // Get all unique rule IDs to fetch detection types
+    const ruleIds = [...new Set(alerts.map(a => a.ruleId))];
+    const rules = new Map<string, string>(); // ruleId -> detectionType
+    
+    // Fetch rules to get detection types (batch query per camera)
+    const cameraIds = [...new Set(alerts.map(a => a.cameraId))];
+    for (const cameraId of cameraIds) {
+      const cameraRules = await store.listAnalyticsRules(cameraId);
+      for (const rule of cameraRules) {
+        if (ruleIds.includes(rule.id)) {
+          rules.set(rule.id, rule.detectionType);
+        }
+      }
+    }
+
     // Group by detection type
     const eventsByType: Record<string, number> = {};
     for (const alert of alerts) {
-      const type = alert.detectionType;
+      const type = rules.get(alert.ruleId) || 'unknown';
       eventsByType[type] = (eventsByType[type] ?? 0) + 1;
     }
 
