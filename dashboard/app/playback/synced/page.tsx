@@ -4,6 +4,8 @@ import React from "react";
 import { AppLayout } from "@/components/app-layout";
 import { SyncedPlaybackView } from "@/components/synced-playback-view";
 import { NotificationsProvider } from "@/components/notifications/NotificationsProvider";
+import { MonitorPlay } from "lucide-react";
+import { PageHero } from "@/components/page-hero";
 
 export default function Page() {
   // Example camera IDs — replace with real IDs when testing
@@ -15,6 +17,7 @@ export default function Page() {
     <AppLayout>
       <NotificationsProvider>
         <div className="content synced-playback-page">
+          <PageHero eyebrow="Forensic playback" title="Synchronized playback" description="Review multiple camera timelines together with a shared clock, master stream, and evidence-ready controls." icon={MonitorPlay} />
           <SyncedPlaybackView
             streams={[]}
             cameraIds={cameraIds}

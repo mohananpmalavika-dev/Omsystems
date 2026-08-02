@@ -174,6 +174,7 @@ export function DVRNVRMonitorDashboard() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
+        <h1 className="sr-only">DVR/NVR monitoring</h1>
         <div className="spinner" />
       </div>
     );

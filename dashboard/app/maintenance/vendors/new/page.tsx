@@ -30,8 +30,10 @@ export default function NewVendorPage() {
   }
 
   return (
-    <div style={{ padding: 16 }}>
-      <h1>Add Vendor</h1>
+    <div className="record-form-page" style={{ padding: 16 }}>
+      <header className="record-form-hero">
+        <div><span>Service network</span><h1>Add vendor</h1><p>Onboard a maintenance partner and record the primary escalation contact.</p></div>
+      </header>
       <form onSubmit={handleSubmit} style={{ maxWidth: 640 }}>
         <div style={{ marginBottom: 8 }}>
           <label>Name<br />

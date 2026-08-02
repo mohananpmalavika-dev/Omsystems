@@ -58,11 +58,11 @@ export default function NewAmcContractPage() {
   }
 
   return (
-    <div style={{ padding: 16 }}>
-      <h1>Create AMC contract</h1>
-      <div style={{ marginBottom: 12 }}>
+    <div className="record-form-page" style={{ padding: 16 }}>
+      <header className="record-form-hero">
+        <div><span>Coverage & contracts</span><h1>Create AMC contract</h1><p>Capture contract dates, vendor coverage, service levels, and renewal value.</p></div>
         <Link href="/maintenance/amc">Back to AMC contracts</Link>
-      </div>
+      </header>
       <form onSubmit={handleSubmit} style={{ maxWidth: 760 }}>
         <div style={{ marginBottom: 8 }}>
           <label>

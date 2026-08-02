@@ -21,6 +21,7 @@ import {
 import { useCameraMonitoring } from '../hooks/useCameraMonitoring';
 import { CameraHealthCard } from '../components/operational-health/camera-health-card';
 import Link from 'next/link';
+import { AppLayout } from '../components/app-layout';
 
 type StatusFilter = 'all' | 'online' | 'offline' | 'warning' | 'degraded' | 'quality-issues';
 
@@ -98,7 +99,7 @@ export function CameraMonitoringDashboard() {
   }, []);
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6">
+    <AppLayout><main className="legacy-monitoring-page min-h-screen bg-gray-50 p-6">
       {/* Header */}
       <div className="mb-6">
         <div className="flex items-center justify-between mb-2">
@@ -338,7 +339,7 @@ export function CameraMonitoringDashboard() {
           </div>
         )}
       </div>
-    </div>
+    </main></AppLayout>
   );
 }
 

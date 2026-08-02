@@ -1,7 +1,9 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
+import { AlertTriangle, Bell, CheckCircle2, Radio, RefreshCw } from "lucide-react";
 import { AlertCard, AlertFilters } from "@/components/maintenance/alert-components";
+import { PageHero } from "@/components/page-hero";
 
 export default function AlertsPage() {
   const [alerts, setAlerts] = useState<any[]>([]);
@@ -89,93 +91,49 @@ export default function AlertsPage() {
 
   if (loading) {
     return (
-      <div className="content" style={{ padding: 20, textAlign: "center" }}>
-        <p>Loading alerts...</p>
+      <div className="content maintenance-alerts-page">
+        <div className="module-state"><RefreshCw className="module-spinner" size={24} /><strong>Loading maintenance alerts</strong><span>Connecting to the alert evaluation engine…</span></div>
       </div>
     );
   }
 
   return (
-    <div className="content">
-        <div style={{ padding: 20, maxWidth: 1400, margin: "0 auto" }}>
-          {/* Header */}
-          <header style={{ marginBottom: 24 }}>
-            <h1 style={{ fontSize: 32, marginBottom: 8 }}>Alert Management</h1>
-            <p style={{ color: "#666", margin: 0 }}>
-              Monitor and manage system alerts • Real-time monitoring
-            </p>
-          </header>
+    <div className="content maintenance-alerts-page">
+        <div className="maintenance-alerts-inner">
+          <PageHero eyebrow="Fleet exceptions" title="Maintenance alert management" description="Monitor active equipment conditions, validate alert-engine status, and coordinate acknowledgement and resolution." icon={Bell} actions={<button className="btn-secondary" onClick={() => void fetchAlerts()}><RefreshCw size={15} /> Refresh</button>} />
 
           {error && (
-            <div
-              style={{
-                marginBottom: 20,
-                padding: 16,
-                background: "#fee",
-                border: "1px solid #fbb",
-                borderRadius: 8,
-                color: "#800",
-              }}
-            >
+            <div className="page-alert error">
               {error}
             </div>
           )}
 
           {/* Alert Engine Status */}
           {engineStatus && (
-            <div
-              style={{
-                marginBottom: 24,
-                padding: 16,
-                border: "1px solid #e2e8f0",
-                borderRadius: 12,
-                background: engineStatus.running ? "#f0fdf4" : "#fef2f2",
-              }}
-            >
-              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                <span style={{ fontSize: 24 }}>
-                  {engineStatus.running ? "✅" : "⚠️"}
-                </span>
+            <div className={`maintenance-engine-state ${engineStatus.running ? "running" : "stopped"}`}>
+              <div>
+                <span className="maintenance-engine-icon">{engineStatus.running ? <Radio size={18} /> : <AlertTriangle size={18} />}</span>
                 <div>
-                  <strong>Alert Engine:</strong> {engineStatus.running ? "Running" : "Stopped"}
-                  <span style={{ marginLeft: 12, color: "#666" }}>
-                    {engineStatus.activeAlertCount} active alert(s) • {engineStatus.rules} rules configured
-                  </span>
+                  <strong>Alert engine {engineStatus.running ? "running" : "stopped"}</strong>
+                  <span>{engineStatus.activeAlertCount} active alerts · {engineStatus.rules} rules configured</span>
                 </div>
               </div>
             </div>
           )}
 
           {/* Summary Cards */}
-          <section
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-              gap: 16,
-              marginBottom: 24,
-            }}
-          >
-            <div style={{ padding: 20, border: "1px solid #e2e8f0", borderRadius: 12, background: "#fff" }}>
-              <h3 style={{ fontSize: 14, color: "#666", marginBottom: 8 }}>Total Alerts</h3>
-              <p style={{ fontSize: 32, fontWeight: 700, margin: 0 }}>{summary.total}</p>
+          <section className="maintenance-alert-summary">
+            <div>
+              <h3>Total alerts</h3><p>{summary.total}</p><small>Current filtered scope</small>
             </div>
-            <div style={{ padding: 20, border: "2px solid #ef4444", borderRadius: 12, background: "#fef2f2" }}>
-              <h3 style={{ fontSize: 14, color: "#991b1b", marginBottom: 8 }}>Critical</h3>
-              <p style={{ fontSize: 32, fontWeight: 700, margin: 0, color: "#991b1b" }}>
-                {summary.critical}
-              </p>
+            <div className="critical">
+              <h3>Critical</h3><p>{summary.critical}</p><small>Immediate response</small>
             </div>
-            <div style={{ padding: 20, border: "2px solid #f59e0b", borderRadius: 12, background: "#fffbeb" }}>
-              <h3 style={{ fontSize: 14, color: "#92400e", marginBottom: 8 }}>Warning</h3>
-              <p style={{ fontSize: 32, fontWeight: 700, margin: 0, color: "#92400e" }}>
-                {summary.warning}
-              </p>
+            <div className="warning">
+              <h3>Warning</h3><p>{summary.warning}</p><small>Needs review</small>
             </div>
-            <div style={{ padding: 20, border: "2px solid #3b82f6", borderRadius: 12, background: "#f0f9ff" }}>
-              <h3 style={{ fontSize: 14, color: "#1e40af", marginBottom: 8 }}>Info</h3>
-              <p style={{ fontSize: 32, fontWeight: 700, margin: 0, color: "#1e40af" }}>
-                {summary.info}
-              </p>
+            <div className="info">
+              <h3>Informational</h3><p>{summary.info}</p><small>Awareness only</small>
             </div>
           </section>
 
@@ -191,27 +149,19 @@ export default function AlertsPage() {
           />
 
           {/* Alerts List */}
-          <section style={{ marginTop: 24 }}>
+          <section className="maintenance-alert-list">
             {filteredAlerts.length === 0 ? (
-              <div
-                style={{
-                  padding: 60,
-                  textAlign: "center",
-                  border: "1px solid #e2e8f0",
-                  borderRadius: 12,
-                  background: "#fff",
-                }}
-              >
-                <div style={{ fontSize: 64, marginBottom: 16 }}>✅</div>
-                <h3 style={{ fontSize: 20, marginBottom: 8 }}>No alerts found</h3>
-                <p style={{ color: "#666" }}>
+              <div className="module-state maintenance-alert-empty">
+                <span className="module-empty-icon"><CheckCircle2 size={24} /></span>
+                <strong>No alerts found</strong>
+                <span>
                   {statusFilter === "active"
                     ? "All systems are healthy"
                     : "Try adjusting your filters"}
-                </p>
+                </span>
               </div>
             ) : (
-              <div style={{ display: "grid", gap: 16 }}>
+              <div className="maintenance-alert-cards">
                 {filteredAlerts.map((alert) => (
                   <AlertCard
                     key={alert.id}

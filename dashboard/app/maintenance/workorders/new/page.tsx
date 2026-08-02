@@ -30,8 +30,10 @@ export default function NewWorkOrderPage() {
   }
 
   return (
-    <div style={{ padding: 16 }}>
-      <h1>Create Work Order</h1>
+    <div className="record-form-page" style={{ padding: 16 }}>
+      <header className="record-form-hero">
+        <div><span>Field service</span><h1>Create work order</h1><p>Define the task, priority, asset scope, and planned service window.</p></div>
+      </header>
       <form onSubmit={handleSubmit} style={{ maxWidth: 720 }}>
         <div style={{ marginBottom: 8 }}>
           <label>Title<br />

@@ -1,7 +1,8 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import Link from "next/link";
+import { Camera, LockKeyhole, ShieldCheck } from "lucide-react";
+import { PageHero } from "@/components/page-hero";
 import { privacyApi } from "@/lib/api-client";
 
 export default function PrivacyControlsPage() {
@@ -34,45 +35,34 @@ export default function PrivacyControlsPage() {
   };
 
   return (
-    <div style={{ padding: 16 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
-        <div>
-          <h1>Camera Privacy Controls</h1>
-          <p style={{ color: "#555" }}>Review and update privacy controls for selected cameras.</p>
-        </div>
-        <Link href="/maintenance/privacy" style={{ color: "#2563eb" }}>
-          Back to privacy
-        </Link>
-      </div>
+    <div className="privacy-controls-page">
+      <PageHero eyebrow="Privacy enforcement" title="Camera privacy controls" description="Review encryption, audio approval, and governance ownership for a selected camera." icon={LockKeyhole} />
 
-      <div style={{ marginBottom: 16, maxWidth: 420 }}>
-        <label style={{ display: "block", marginBottom: 8 }}>
-          Camera ID
+      <div className="privacy-control-selector">
+        <span className="privacy-camera-icon"><Camera size={17} /></span>
+        <label>Camera ID
           <input
             value={cameraId}
             onChange={(event) => setCameraId(event.target.value)}
-            style={{ width: "100%", marginTop: 8, padding: 12, borderRadius: 8, border: "1px solid #d1d5db" }}
           />
         </label>
       </div>
 
-      {error && <p style={{ color: "red" }}>{error}</p>}
+      {error && <div className="page-alert error">{error}</div>}
 
       {loading ? (
-        <p>Loading controls…</p>
+        <div className="privacy-controls-state">Loading privacy controls…</div>
       ) : (
-        <div style={{ padding: 18, border: "1px solid #e5e7eb", borderRadius: 12, background: "#fff", maxWidth: 680 }}>
-          <p><strong>Audio recording approved:</strong> {controls?.audioRecordingApproved ? "Yes" : "No"}</p>
-          <p><strong>Encryption enabled:</strong> {controls?.encryptionEnabled ? "Yes" : "No"}</p>
-          <p><strong>Data protection officer:</strong> {controls?.dataProtectionOfficer ?? "Not set"}</p>
-          <p><strong>Last reviewed:</strong> {controls?.lastReviewedAt ?? "Never"}</p>
-          <button
-            onClick={updateControls}
-            style={{ marginTop: 16, padding: "12px 18px", borderRadius: 8, border: "none", background: "#1d4ed8", color: "#fff" }}
-          >
-            Apply sample controls
-          </button>
-        </div>
+        <section className="privacy-controls-panel">
+          <header><div><span>Control posture</span><h2>Protection settings</h2></div><ShieldCheck size={20} /></header>
+          <div className="privacy-control-grid">
+            <div><span>Audio recording</span><strong>{controls?.audioRecordingApproved ? "Approved" : "Not approved"}</strong></div>
+            <div><span>Encryption</span><strong>{controls?.encryptionEnabled ? "Enabled" : "Disabled"}</strong></div>
+            <div><span>Data protection officer</span><strong>{controls?.dataProtectionOfficer ?? "Not assigned"}</strong></div>
+            <div><span>Last reviewed</span><strong>{controls?.lastReviewedAt ?? "Never"}</strong></div>
+          </div>
+          <footer><p>Apply the approved baseline for this camera and record the responsible data protection officer.</p><button className="btn-primary" onClick={updateControls}>Apply approved baseline</button></footer>
+        </section>
       )}
     </div>
   );

@@ -2,10 +2,11 @@
 
 import React, { useEffect, useState } from "react";
 import Link from "next/link";
+import { Camera } from "lucide-react";
+import { ModulePage, ModuleStatus } from "@/components/module-page";
 import { cameraInventoryApi } from "@/lib/api-client";
 
 export default function PrivacyCameraSelectorPage() {
-  const [branches, setBranches] = useState<any[]>([]);
   const [cameraOptions, setCameraOptions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -39,31 +40,22 @@ export default function PrivacyCameraSelectorPage() {
   }, []);
 
   return (
-    <div style={{ padding: 16 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
-        <div>
-          <h1>Select a Camera</h1>
-          <p style={{ color: "#555" }}>
-            Choose a camera to assign a privacy purpose and review its current purpose assignments.
-          </p>
-        </div>
-        <Link href="/maintenance/privacy" style={{ color: "#2563eb" }}>
-          Back to privacy
-        </Link>
-      </div>
-
-      {error && (
-        <div style={{ marginBottom: 20, padding: 14, background: "#fee", border: "1px solid #fbb", borderRadius: 10, color: "#900" }}>
-          {error}
-        </div>
-      )}
-
-      {loading ? (
-        <p>Loading cameras…</p>
-      ) : cameraOptions.length === 0 ? (
-        <p style={{ color: "#4b5563" }}>No cameras available for assignment.</p>
-      ) : (
-        <div style={{ display: "grid", gap: 24 }}>
+    <ModulePage
+      eyebrow="Privacy mapping"
+      title="Camera purpose assignments"
+      description="Select a camera to review its current lawful-purpose mapping and govern how its footage may be processed."
+      icon={Camera}
+      actionHref="/maintenance/privacy/purposes/new"
+      actionLabel="Add purpose"
+      count={cameraOptions.length}
+      countLabel="cameras"
+      loading={loading}
+      error={error}
+      empty={cameraOptions.length === 0}
+      emptyTitle="No cameras available"
+      emptyDescription="Cameras with privacy configuration permission will appear here for purpose assignment."
+    >
+        <div className="privacy-camera-groups">
           {(() => {
             const groups = cameraOptions.reduce((acc: Record<string, any[]>, camera) => {
               const branch = camera.branchName || "Unassigned branch";
@@ -73,38 +65,25 @@ export default function PrivacyCameraSelectorPage() {
             }, {} as Record<string, any[]>);
 
             return Object.entries(groups).map(([branchName, cameras]) => (
-              <div key={branchName}>
-                <h2 style={{ margin: "0 0 12px", fontSize: 18 }}>{branchName}</h2>
-                <div style={{ display: "grid", gap: 12 }}>
+              <section className="privacy-camera-group" key={branchName}>
+                <h2>{branchName}<span>{cameras.length} cameras</span></h2>
+                <div className="privacy-camera-list">
                   {cameras.map((camera) => (
                     <Link
                       key={camera.id}
                       href={`/maintenance/privacy/cameras/${encodeURIComponent(camera.id)}/purposes`}
-                      style={{
-                        display: "block",
-                        padding: 18,
-                        border: "1px solid #e5e7eb",
-                        borderRadius: 12,
-                        background: "#fff",
-                        textDecoration: "none",
-                        color: "inherit",
-                      }}
+                      className="privacy-camera-row"
                     >
-                      <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
-                        <div>
-                          <strong>{camera.name || camera.model || camera.id}</strong>
-                          <p style={{ margin: "8px 0 0", color: "#6b7280" }}>{camera.vendor ? camera.vendor.toUpperCase() : "Unknown vendor"}</p>
-                        </div>
-                        <span style={{ color: "#2563eb" }}>{camera.status}</span>
-                      </div>
+                      <span className="privacy-camera-icon"><Camera size={17} /></span>
+                      <div><strong>{camera.name || camera.model || camera.id}</strong><p>{camera.vendor ? camera.vendor.toUpperCase() : "Unknown vendor"}</p></div>
+                      <ModuleStatus value={camera.status} />
                     </Link>
                   ))}
                 </div>
-              </div>
+              </section>
             ));
           })()}
         </div>
-      )}
-    </div>
+    </ModulePage>
   );
 }

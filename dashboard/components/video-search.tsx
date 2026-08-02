@@ -168,7 +168,7 @@ export function VideoSearch() {
     <div className="video-search-container">
       <div className="search-panel">
         <div className="search-header">
-          <h2>Video Search & Retrieval</h2>
+          <h1>Video search & retrieval</h1>
           <p>Find recordings by date, time, camera, and event type</p>
         </div>
 

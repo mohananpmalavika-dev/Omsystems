@@ -1,7 +1,8 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import Link from "next/link";
+import { FileCheck2 } from "lucide-react";
+import { ModulePage, ModuleStatus } from "@/components/module-page";
 import { privacyApi } from "@/lib/api-client";
 
 export default function PrivacyPurposesPage() {
@@ -19,46 +20,35 @@ export default function PrivacyPurposesPage() {
   }, []);
 
   return (
-    <div style={{ padding: 16 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
-        <div>
-          <h1>Privacy Purposes</h1>
-          <p style={{ color: "#555" }}>Define and review lawful CCTV processing purposes.</p>
-        </div>
-        <Link href="/maintenance/privacy/purposes/new" style={{ color: "#2563eb" }}>
-          New purpose
-        </Link>
+    <ModulePage
+      eyebrow="Privacy governance"
+      title="Processing purposes"
+      description="Define, review, and govern the lawful purposes that authorize CCTV processing across the estate."
+      icon={FileCheck2}
+      actionHref="/maintenance/privacy/purposes/new"
+      actionLabel="Add purpose"
+      count={purposes.length}
+      countLabel="purposes"
+      loading={loading}
+      error={error}
+      empty={purposes.length === 0}
+      emptyTitle="No processing purposes"
+      emptyDescription="Add the first lawful purpose before assigning cameras to processing activities."
+    >
+      <div className="module-table-wrap">
+        <table>
+          <thead><tr><th>Purpose</th><th>Lawful basis</th><th>Risk</th><th>Status</th><th>Description</th></tr></thead>
+          <tbody>{purposes.map((purpose) => (
+            <tr key={purpose.id}>
+              <td><strong className="module-row-title">{purpose.name}</strong></td>
+              <td><span className="module-category">{purpose.lawfulBasis}</span></td>
+              <td><span className={`module-priority ${(purpose.riskLevel || "").toLowerCase()}`}>{purpose.riskLevel || "Unrated"}</span></td>
+              <td><ModuleStatus value={purpose.active ? "Active" : "Inactive"} /></td>
+              <td>{purpose.description || "No description provided"}</td>
+            </tr>
+          ))}</tbody>
+        </table>
       </div>
-
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-        {error && <p style={{ color: "red" }}>{error}</p>}
-        <Link href="/maintenance/privacy/cameras" style={{ color: "#2563eb" }}>
-          Assign purpose to a camera
-        </Link>
-      </div>
-
-      <div style={{ display: "grid", gap: 12 }}>
-        {loading ? (
-          <p>Loading purposes…</p>
-        ) : purposes.length === 0 ? (
-          <p style={{ color: "#4b5563" }}>There are no purposes yet.</p>
-        ) : (
-          purposes.map((purpose) => (
-            <div key={purpose.id} style={{ padding: 18, border: "1px solid #e5e7eb", borderRadius: 12, background: "#fff" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-                <div>
-                  <h2 style={{ margin: 0 }}>{purpose.name}</h2>
-                  <p style={{ margin: "6px 0", color: "#6b7280" }}>{purpose.lawfulBasis}</p>
-                </div>
-                <span style={{ color: purpose.active ? "#16a34a" : "#6b7280" }}>
-                  {purpose.active ? "Active" : "Inactive"}
-                </span>
-              </div>
-              <p style={{ margin: "12px 0 0", color: "#374151" }}>{purpose.description || "No description provided."}</p>
-            </div>
-          ))
-        )}
-      </div>
-    </div>
+    </ModulePage>
   );
 }

@@ -1,7 +1,8 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import Link from "next/link";
+import { TrendingUp } from "lucide-react";
+import { ModulePage } from "@/components/module-page";
 import { maintenanceApi } from "@/lib/api-client";
 
 export default function MaintenancePredictivePage() {
@@ -41,45 +42,33 @@ export default function MaintenancePredictivePage() {
   }, []);
 
   return (
-    <div style={{ padding: 16 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
-        <div>
-          <h1>Predictive Maintenance</h1>
-          <p style={{ color: "#555" }}>View high-risk alerts and failure forecasts for proactive maintenance.</p>
-        </div>
-        <Link href="/maintenance" style={{ color: "#2563eb" }}>Back to dashboard</Link>
+    <ModulePage
+      eyebrow="Reliability intelligence"
+      title="Predictive maintenance"
+      description="Prioritize high-risk assets and forecast likely device failures before they interrupt recording coverage."
+      icon={TrendingUp}
+      count={alerts.length}
+      countLabel="forecasts"
+      loading={loading}
+      error={error}
+      empty={alerts.length === 0}
+      emptyTitle="No predicted failures"
+      emptyDescription="The fleet currently has no high-risk asset or forecast conditions that require proactive service."
+    >
+      <div className="module-table-wrap">
+        <table>
+          <thead><tr><th>Asset</th><th>Signal</th><th>Risk score</th><th>Failure window</th><th>Recommended action</th></tr></thead>
+          <tbody>{alerts.map((alert) => (
+            <tr key={alert.id}>
+              <td><strong className="module-row-title">{alert.name}</strong></td>
+              <td><span className={`module-priority ${alert.type === "high-risk" ? "critical" : "high"}`}>{alert.type === "high-risk" ? "High risk" : "Failure forecast"}</span></td>
+              <td>{typeof alert.score === "number" ? alert.score.toFixed(2) : "Not scored"}</td>
+              <td>{alert.nextFailureDays !== undefined ? `${alert.nextFailureDays} days` : "Not estimated"}</td>
+              <td>{alert.details?.recommendation || alert.details?.message || "Review asset and schedule maintenance."}</td>
+            </tr>
+          ))}</tbody>
+        </table>
       </div>
-
-      {error && <p style={{ color: "red", marginBottom: 16 }}>{error}</p>}
-      {loading && <p>Loading predictive maintenance data…</p>}
-
-      <div style={{ display: "grid", gap: 16 }}>
-        {alerts.length === 0 && !loading ? (
-          <p style={{ color: "#4b5563" }}>No predictive alerts available.</p>
-        ) : (
-          alerts.map((alert) => (
-            <div key={alert.id} style={{ padding: 16, border: "1px solid #e5e7eb", borderRadius: 12, background: "#fff" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
-                <strong>{alert.name}</strong>
-                <span style={{ color: alert.type === "high-risk" ? "#b91c1c" : "#c2410c" }}>
-                  {alert.type === "high-risk" ? "High risk" : "Failure forecast"}
-                </span>
-              </div>
-              <p style={{ margin: "8px 0", color: "#374151" }}>
-                Score: {alert.score.toFixed(2)}
-              </p>
-              <p style={{ margin: "8px 0", color: "#4b5563" }}>
-                {alert.details?.recommendation || alert.details?.message || "Review asset and schedule maintenance."}
-              </p>
-              {alert.nextFailureDays !== undefined && (
-                <p style={{ margin: 0, color: "#6b7280" }}>
-                  Estimated failure in {alert.nextFailureDays} day(s)
-                </p>
-              )}
-            </div>
-          ))
-        )}
-      </div>
-    </div>
+    </ModulePage>
   );
 }

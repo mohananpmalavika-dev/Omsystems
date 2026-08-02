@@ -32,6 +32,7 @@ import {
   ResponsiveContainer,
   Legend,
 } from 'recharts';
+import { AppLayout } from '../components/app-layout';
 
 export function CameraDetailView() {
   const router = useRouter();
@@ -148,14 +149,15 @@ export function CameraDetailView() {
 
   if (!camera) {
     return (
-      <div className="min-h-screen bg-gray-50 p-6">
+      <AppLayout><main className="legacy-camera-detail-page min-h-screen bg-gray-50 p-6">
         <div className="max-w-7xl mx-auto">
-          <div className="bg-white rounded-lg shadow p-8 text-center">
+          <div className="module-state bg-white rounded-lg shadow p-8 text-center">
             <Camera size={48} className="mx-auto text-gray-400 mb-4" />
-            <h3 className="text-lg font-medium text-gray-900 mb-2">Loading Camera Details...</h3>
+            <h1 className="text-lg font-medium text-gray-900 mb-2">Loading camera details</h1>
+            <span>Waiting for the selected camera to report its current health state.</span>
           </div>
         </div>
-      </div>
+      </main></AppLayout>
     );
   }
 
@@ -172,12 +174,12 @@ export function CameraDetailView() {
     'bg-orange-100';
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6">
+    <AppLayout><main className="legacy-camera-detail-page min-h-screen bg-gray-50 p-6">
       <div className="max-w-7xl mx-auto">
         {/* Header */}
         <div className="mb-6">
           <button
-            onClick={() => void router.push('/cameras')}
+            onClick={() => void router.push('/camera-monitoring')}
             className="flex items-center gap-2 text-gray-600 hover:text-gray-900 mb-4"
           >
             <ArrowLeft size={20} />
@@ -493,7 +495,7 @@ export function CameraDetailView() {
           </div>
         </div>
       </div>
-    </div>
+    </main></AppLayout>
   );
 }
 

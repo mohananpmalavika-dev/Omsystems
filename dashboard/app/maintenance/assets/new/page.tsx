@@ -29,8 +29,10 @@ export default function NewAssetPage() {
   }
 
   return (
-    <div style={{ padding: 16 }}>
-      <h1>Create new asset</h1>
+    <div className="record-form-page" style={{ padding: 16 }}>
+      <header className="record-form-hero">
+        <div><span>Asset registry</span><h1>Create new asset</h1><p>Register ownership, lifecycle status, and device identity for a field asset.</p></div>
+      </header>
       <form onSubmit={handleSubmit} style={{ maxWidth: 640 }}>
         <div style={{ marginBottom: 8 }}>
           <label>Category<br />

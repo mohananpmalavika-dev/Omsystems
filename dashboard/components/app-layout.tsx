@@ -122,6 +122,7 @@ const navigation: NavGroup[] = [
       { label: "Operational health", href: "/operations", icon: HeartPulse },
       { label: "Operational alerts", href: "/operations/alerts", icon: AlertTriangle },
       { label: "Camera health", href: "/operations/cameras", icon: Camera },
+      { label: "Camera monitoring", href: "/camera-monitoring", icon: MonitorPlay },
       { label: "Recording health", href: "/operations/recording", icon: FileVideo2 },
       { label: "Storage health", href: "/operations/storage", icon: Database },
       { label: "Network health", href: "/operations/network", icon: Network },
@@ -196,6 +197,7 @@ const pageMeta = [
     title: item.label,
   }))),
   { path: "/operations/branches", section: "Infrastructure health", title: "Branch health" },
+  { path: "/camera-detail", section: "Infrastructure health", title: "Camera details" },
 ];
 
 export function AppLayout({ children, incidentCount = 0, cameraCount = 0 }: AppLayoutProps) {
@@ -314,7 +316,7 @@ export function AppLayout({ children, incidentCount = 0, cameraCount = 0 }: AppL
             <div className="breadcrumbs">
               <span>Sentinel Grid</span><ChevronRight size={12} /><span>{currentPage.section}</span>
             </div>
-            <h1>{currentPage.title}</h1>
+            <p className="topbar-title">{currentPage.title}</p>
           </div>
           <div className="topbar-actions">
             <div className="live-state"><i /> Live operations <span>IST</span></div>
@@ -326,7 +328,9 @@ export function AppLayout({ children, incidentCount = 0, cameraCount = 0 }: AppL
             <Link href="/account/security" className="top-avatar" aria-label="Operator profile and session security"><CircleUserRound size={20} /></Link>
           </div>
         </header>
-        {children}
+        <div className="route-surface" data-section={currentPage.section.toLowerCase().replaceAll(" ", "-")}>
+          {children}
+        </div>
       </main>
     </div>
   );
