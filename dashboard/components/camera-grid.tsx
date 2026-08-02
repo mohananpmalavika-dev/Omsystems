@@ -172,13 +172,16 @@ export function CameraGrid({
   };
 
   const handleToggleRecording = async (cameraId: string) => {
+    const camera = cameras.find((item) => item.id === cameraId);
+    const recorderBacked = Boolean(camera?.recorderId) || camera?.sourceType === "analog-dvr-channel" ||
+      camera?.sourceType === "nvr-channel";
     const currentJob = recordings.get(cameraId) ?? {
       cameraId,
       mode: "continuous" as const,
       enabled: false,
       status: "disabled" as const,
-      primaryRecordingStorage: "sentinel-local" as const,
-      cloudArchivePolicy: "none" as const,
+      primaryRecordingStorage: recorderBacked ? "recorder-local" as const : "sentinel-local" as const,
+      cloudArchivePolicy: recorderBacked ? "incident-evidence-only" as const : "none" as const,
       retentionDays: 180,
       postRollSeconds: 30,
       segmentDurationSeconds: 60,
