@@ -1,6 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { Camera, RefreshCw } from 'lucide-react';
+import { PageHero } from '@/components/page-hero';
 
 interface HealthSummary {
   totalCameras: number;
@@ -35,6 +37,7 @@ export default function CameraHealthPage() {
   const [summary, setSummary] = useState<HealthSummary | null>(null);
   const [cameras, setCameras] = useState<CameraHealth[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState({
     status: '',
     branchNodeId: '',
@@ -45,6 +48,8 @@ export default function CameraHealthPage() {
   }, [filter]);
 
   const fetchHealthData = async () => {
+    setLoading(true);
+    setError(null);
     try {
       // Fetch summary
       const summaryParams = new URLSearchParams({ summary: 'true' });
@@ -52,7 +57,9 @@ export default function CameraHealthPage() {
       
       const summaryResponse = await fetch(`/api/audit/health?${summaryParams}`);
       const summaryData = await summaryResponse.json();
-      setSummary(summaryData);
+      if (!summaryResponse.ok) throw new Error(summaryData.error || 'Health summary is unavailable');
+      const summaryPayload = summaryData?.data ?? summaryData;
+      setSummary(summaryPayload && typeof summaryPayload === 'object' && 'totalCameras' in summaryPayload ? summaryPayload as HealthSummary : null);
 
       // Fetch camera list
       const params = new URLSearchParams();
@@ -61,9 +68,14 @@ export default function CameraHealthPage() {
 
       const response = await fetch(`/api/audit/health?${params}`);
       const data = await response.json();
-      setCameras(data);
+      if (!response.ok) throw new Error(data.error || 'Camera health records are unavailable');
+      const cameraPayload = data?.data ?? data;
+      setCameras(Array.isArray(cameraPayload) ? cameraPayload : []);
     } catch (error) {
       console.error('Failed to fetch health data:', error);
+      setSummary(null);
+      setCameras([]);
+      setError(error instanceof Error ? error.message : 'Camera health data is unavailable');
     } finally {
       setLoading(false);
     }
@@ -102,16 +114,21 @@ export default function CameraHealthPage() {
   }
 
   return (
-    <div className="p-6 max-w-7xl mx-auto">
+    <main className="audit-health-page">
       {/* Header */}
-      <div className="mb-6">
-        <h1 className="text-3xl font-bold text-gray-900">Camera Health Monitoring</h1>
-        <p className="text-gray-600 mt-1">Real-time monitoring of camera health and performance</p>
-      </div>
+      <PageHero
+        eyebrow="Operational assurance"
+        title="Camera health audit"
+        description="Review current camera availability, recording state, performance signals, and detected health issues."
+        icon={Camera}
+        actions={<button type="button" onClick={() => void fetchHealthData()} className="btn-secondary"><RefreshCw size={16} /> Refresh audit</button>}
+      />
+
+      {error && <div className="page-alert error">{error}. Showing the available audit workspace without live records.</div>}
 
       {/* Summary Statistics */}
       {summary && (
-        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-4 mb-6">
+        <div className="audit-health-summary-grid grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-4 mb-6">
           <div className="bg-white rounded-lg shadow p-4">
             <div className="text-sm text-gray-600 mb-1">Total</div>
             <div className="text-2xl font-bold text-gray-900">{summary.totalCameras}</div>
@@ -149,7 +166,7 @@ export default function CameraHealthPage() {
 
       {/* Overall Health Score */}
       {summary && (
-        <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg p-6 mb-6 border border-blue-200">
+        <div className="audit-overall-score bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg p-6 mb-6 border border-blue-200">
           <div className="flex items-center justify-between">
             <div>
               <h2 className="text-lg font-semibold text-gray-900 mb-1">Overall Health Score</h2>
@@ -166,7 +183,7 @@ export default function CameraHealthPage() {
       )}
 
       {/* Filters */}
-      <div className="bg-white rounded-lg shadow p-4 mb-6">
+      <div className="audit-health-filters bg-white rounded-lg shadow p-4 mb-6">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
@@ -187,9 +204,9 @@ export default function CameraHealthPage() {
       </div>
 
       {/* Camera Health Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      <div className="audit-health-camera-grid grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {cameras.map((camera) => (
-          <div key={camera.id} className="bg-white rounded-lg shadow hover:shadow-md transition-shadow p-4">
+          <div key={camera.id} className="audit-health-camera-card bg-white rounded-lg shadow hover:shadow-md transition-shadow p-4">
             <div className="flex items-start justify-between mb-3">
               <div className="flex-1">
                 <div className="flex items-center gap-2 mb-1">
@@ -254,10 +271,12 @@ export default function CameraHealthPage() {
       </div>
 
       {cameras.length === 0 && (
-        <div className="bg-white rounded-lg shadow p-12 text-center">
-          <div className="text-gray-400 text-lg">No camera health data found</div>
+        <div className="audit-health-empty bg-white rounded-lg shadow p-12 text-center">
+          <Camera size={34} />
+          <strong>No camera health records</strong>
+          <span>Run or refresh the audit when control-plane data becomes available.</span>
         </div>
       )}
-    </div>
+    </main>
   );
 }

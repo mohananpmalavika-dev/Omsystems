@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Shield, Plus, Search, CheckCircle2, XCircle, Clock, AlertCircle } from 'lucide-react';
+import { Shield, Search, CheckCircle2, XCircle, Clock, AlertCircle, FileText } from 'lucide-react';
+import { PageHero } from '@/components/page-hero';
 
 interface Control {
   id: string;
@@ -56,10 +57,10 @@ export default function ControlsPage() {
   });
 
   const typeConfig = {
-    preventive: { color: 'bg-blue-100 text-blue-800', icon: '🛡️' },
-    detective: { color: 'bg-purple-100 text-purple-800', icon: '🔍' },
-    corrective: { color: 'bg-orange-100 text-orange-800', icon: '🔧' },
-    deterrent: { color: 'bg-yellow-100 text-yellow-800', icon: '⚠️' },
+    preventive: { color: 'control-type-pill' },
+    detective: { color: 'control-type-pill' },
+    corrective: { color: 'control-type-pill' },
+    deterrent: { color: 'control-type-pill' },
   };
 
   const statusConfig = {
@@ -78,38 +79,27 @@ export default function ControlsPage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-screen">
+      <div className="compliance-controls-loading">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 p-6">
-      <div className="max-w-7xl mx-auto">
+    <main className="compliance-controls-page">
+      <div className="compliance-controls-inner">
         {/* Header */}
-        <div className="flex justify-between items-center mb-8">
-          <div className="flex items-center space-x-3">
-            <div className="bg-blue-100 p-3 rounded-xl">
-              <Shield className="h-8 w-8 text-blue-600" />
-            </div>
-            <div>
-              <h1 className="text-3xl font-bold text-gray-900">Compliance Controls</h1>
-              <p className="text-gray-600 mt-1">Manage security and compliance controls</p>
-            </div>
-          </div>
-          <Link
-            href="/compliance/controls/new"
-            className="bg-gradient-to-r from-blue-600 to-purple-600 text-white px-6 py-3 rounded-lg hover:from-blue-700 hover:to-purple-700 transition-all duration-200 shadow-lg hover:shadow-xl flex items-center space-x-2"
-          >
-            <Plus className="h-5 w-5" />
-            <span>Add Control</span>
-          </Link>
-        </div>
+        <PageHero
+          eyebrow="Control assurance"
+          title="Compliance controls"
+          description="Review safeguard implementation, ownership, testing cadence, and effectiveness from one controlled register."
+          icon={Shield}
+          actions={<Link href="/compliance/requirements" className="btn-secondary"><FileText size={16} /> Review requirements</Link>}
+        />
 
         {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-          <div className="bg-white rounded-xl shadow-md p-6 border-l-4 border-blue-500">
+        <div className="compliance-controls-stats grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+          <div className="control-stat-card brand-accent">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-gray-600 text-sm">Total Controls</p>
@@ -118,7 +108,7 @@ export default function ControlsPage() {
               <Shield className="h-10 w-10 text-blue-500 opacity-50" />
             </div>
           </div>
-          <div className="bg-white rounded-xl shadow-md p-6 border-l-4 border-green-500">
+          <div className="control-stat-card positive">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-gray-600 text-sm">Implemented</p>
@@ -129,7 +119,7 @@ export default function ControlsPage() {
               <CheckCircle2 className="h-10 w-10 text-green-500 opacity-50" />
             </div>
           </div>
-          <div className="bg-white rounded-xl shadow-md p-6 border-l-4 border-yellow-500">
+          <div className="control-stat-card caution">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-gray-600 text-sm">In Progress</p>
@@ -140,7 +130,7 @@ export default function ControlsPage() {
               <Clock className="h-10 w-10 text-yellow-500 opacity-50" />
             </div>
           </div>
-          <div className="bg-white rounded-xl shadow-md p-6 border-l-4 border-red-500">
+          <div className="control-stat-card negative">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-gray-600 text-sm">Not Implemented</p>
@@ -154,7 +144,7 @@ export default function ControlsPage() {
         </div>
 
         {/* Filters */}
-        <div className="bg-white rounded-xl shadow-md p-6 mb-6">
+        <div className="compliance-controls-filters">
           <div className="flex flex-col md:flex-row gap-4">
             {/* Search */}
             <div className="flex-1">
@@ -204,7 +194,7 @@ export default function ControlsPage() {
 
         {/* Controls Grid */}
         {filteredControls.length === 0 ? (
-          <div className="bg-white rounded-xl shadow-md p-12">
+          <div className="compliance-controls-empty">
             <div className="flex flex-col items-center justify-center">
               <AlertCircle className="h-16 w-16 text-gray-400 mb-4" />
               <p className="text-gray-500 text-lg">No controls found</p>
@@ -223,7 +213,7 @@ export default function ControlsPage() {
                 <Link
                   key={control.id}
                   href={`/compliance/controls/${control.id}`}
-                  className="bg-white rounded-xl shadow-md hover:shadow-xl transition-all duration-200 overflow-hidden hover:scale-105"
+                  className="compliance-control-card"
                 >
                   <div className="p-6">
                     {/* Header */}
@@ -233,7 +223,7 @@ export default function ControlsPage() {
                           {control.controlCode}
                         </span>
                         <span className={`px-2 py-1 text-xs rounded-full font-semibold ${typeStyle.color}`}>
-                          {typeStyle.icon} {control.controlType}
+                          {control.controlType}
                         </span>
                       </div>
                       <StatusIcon className={`h-5 w-5 ${statusStyle.color.replace('bg-', 'text-').replace('-100', '-500')}`} />
@@ -307,11 +297,11 @@ export default function ControlsPage() {
 
         {/* Results Count */}
         {filteredControls.length > 0 && (
-          <div className="mt-6 text-center text-sm text-gray-600">
+          <div className="compliance-controls-count">
             Showing {filteredControls.length} of {controls.length} controls
           </div>
         )}
       </div>
-    </div>
+    </main>
   );
 }

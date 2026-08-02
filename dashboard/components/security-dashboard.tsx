@@ -22,6 +22,7 @@ import {
   Wifi,
   HardDrive
 } from 'lucide-react';
+import { PageHero } from '@/components/page-hero';
 
 interface SecurityPosture {
   overallScore: number;
@@ -162,28 +163,19 @@ export default function SecurityDashboard() {
   };
 
   const getScoreColor = (score: number) => {
-    if (score >= 95) return 'text-green-500';
-    if (score >= 90) return 'text-blue-500';
-    if (score >= 80) return 'text-yellow-500';
-    if (score >= 70) return 'text-orange-500';
-    return 'text-red-500';
-  };
-
-  const getScoreBgColor = (score: number) => {
-    if (score >= 95) return 'bg-green-500';
-    if (score >= 90) return 'bg-blue-500';
-    if (score >= 80) return 'bg-yellow-500';
-    if (score >= 70) return 'bg-orange-500';
-    return 'bg-red-500';
+    if (score >= 95) return 'tone-positive';
+    if (score >= 90) return 'tone-brand';
+    if (score >= 80) return 'tone-caution';
+    return 'tone-negative';
   };
 
   const getSeverityColor = (severity: string) => {
     switch (severity) {
-      case 'CRITICAL': return 'text-red-500 bg-red-50 border-red-200';
-      case 'HIGH': return 'text-orange-500 bg-orange-50 border-orange-200';
-      case 'MEDIUM': return 'text-yellow-500 bg-yellow-50 border-yellow-200';
-      case 'LOW': return 'text-blue-500 bg-blue-50 border-blue-200';
-      default: return 'text-gray-500 bg-gray-50 border-gray-200';
+      case 'CRITICAL': return 'severity-critical';
+      case 'HIGH': return 'severity-high';
+      case 'MEDIUM': return 'severity-medium';
+      case 'LOW': return 'severity-low';
+      default: return 'severity-neutral';
     }
   };
 
@@ -205,50 +197,43 @@ export default function SecurityDashboard() {
   }
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">Security Operations Center</h1>
-          <p className="text-gray-500 mt-1">Real-time enterprise security monitoring</p>
-        </div>
-        <button
-          onClick={fetchSecurityPosture}
-          className="flex items-center gap-2 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600"
-        >
-          <RefreshCw className="w-4 h-4" />
-          Refresh
-        </button>
-      </div>
+    <div className="security-posture-dashboard space-y-6">
+      <PageHero
+        eyebrow="Security posture"
+        title="Security operations center"
+        description="Real-time enterprise security posture, active threats, and control assurance in one operational view."
+        icon={Shield}
+        actions={<button onClick={fetchSecurityPosture} className="btn-secondary"><RefreshCw className="w-4 h-4" /> Refresh posture</button>}
+      />
 
       {/* Overall Score */}
-      <div className="bg-gradient-to-r from-blue-500 to-blue-600 rounded-2xl p-8 text-white">
+      <div className="security-score-card">
         <div className="flex items-center justify-between">
           <div>
-            <p className="text-blue-100 text-sm uppercase tracking-wide mb-2">Overall Security Score</p>
+            <p className="security-score-label">Overall security score</p>
             <div className="flex items-baseline gap-4">
-              <h2 className={`text-6xl font-bold ${getScoreColor(posture.overallScore)}`}>
+              <h2 className={`security-score-value ${getScoreColor(posture.overallScore)}`}>
                 {posture.overallScore}
               </h2>
-              <span className="text-3xl text-blue-100">/100</span>
+              <span className="security-score-scale">/100</span>
             </div>
-            <p className="mt-4 text-blue-100">
-              {posture.overallScore >= 95 && '🎉 Excellent - Enterprise-grade security'}
-              {posture.overallScore >= 90 && posture.overallScore < 95 && '✅ Good - Minor improvements needed'}
-              {posture.overallScore >= 80 && posture.overallScore < 90 && '⚠️ Fair - Several areas need attention'}
-              {posture.overallScore < 80 && '❌ Critical - Immediate action required'}
+            <p className={`security-score-status ${getScoreColor(posture.overallScore)}`}>
+              {posture.overallScore >= 95 && 'Excellent · Enterprise-grade security'}
+              {posture.overallScore >= 90 && posture.overallScore < 95 && 'Good · Minor improvements needed'}
+              {posture.overallScore >= 80 && posture.overallScore < 90 && 'Fair · Several areas need attention'}
+              {posture.overallScore < 80 && 'Critical · Immediate action required'}
             </p>
           </div>
-          <Shield className="w-32 h-32 text-blue-300 opacity-50" />
+          <div className="security-score-icon"><Shield size={72} /></div>
         </div>
       </div>
 
       {/* Active Alerts */}
       {posture.alerts.length > 0 && (
-        <div className="bg-white rounded-xl shadow-lg p-6">
+        <div className="security-alert-panel">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-xl font-bold text-gray-900">Active Security Alerts</h3>
-            <span className="px-3 py-1 bg-red-100 text-red-700 rounded-full text-sm font-medium">
+            <span className="security-active-count">
               {posture.alerts.length} Active
             </span>
           </div>
@@ -256,7 +241,7 @@ export default function SecurityDashboard() {
             {posture.alerts.slice(0, 5).map((alert) => (
               <div
                 key={alert.id}
-                className={`p-4 rounded-lg border ${getSeverityColor(alert.severity)}`}
+                className={`security-alert-row ${getSeverityColor(alert.severity)}`}
               >
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
@@ -281,7 +266,7 @@ export default function SecurityDashboard() {
       )}
 
       {/* Security Metrics Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="security-metrics-grid grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         {/* Zero Trust */}
         <MetricCard
           icon={<Shield className="w-8 h-8" />}
@@ -353,17 +338,17 @@ export default function SecurityDashboard() {
       </div>
 
       {/* Quick Actions */}
-      <div className="bg-white rounded-xl shadow-lg p-6">
+      <div className="security-quick-actions bg-white rounded-xl shadow-lg p-6">
         <h3 className="text-xl font-bold text-gray-900 mb-4">Quick Actions</h3>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <ActionButton icon={<Shield />} label="Zero Trust" href="/security/zero-trust" />
-          <ActionButton icon={<FileText />} label="Certificates" href="/security/certificates" />
-          <ActionButton icon={<RefreshCw />} label="Password Rotation" href="/security/passwords" />
-          <ActionButton icon={<AlertTriangle />} label="Tamper Events" href="/security/tamper" />
-          <ActionButton icon={<Lock />} label="Video Encryption" href="/security/encryption" />
-          <ActionButton icon={<Database />} label="Immutable Storage" href="/security/immutable" />
-          <ActionButton icon={<Activity />} label="Ransomware" href="/security/ransomware" />
-          <ActionButton icon={<Key />} label="Supply Chain" href="/security/supply-chain" />
+          <ActionButton icon={<Shield />} label="Zero Trust" href="/compliance/controls" />
+          <ActionButton icon={<FileText />} label="Certificates" href="/compliance/certificates" />
+          <ActionButton icon={<RefreshCw />} label="Session Security" href="/account/security" />
+          <ActionButton icon={<AlertTriangle />} label="Tamper Events" href="/operations/alerts" />
+          <ActionButton icon={<Lock />} label="Video Encryption" href="/maintenance/privacy/controls" />
+          <ActionButton icon={<Database />} label="Storage Health" href="/operations/storage" />
+          <ActionButton icon={<Activity />} label="Threat Alerts" href="/operations/alert-command-center" />
+          <ActionButton icon={<Key />} label="Integrations" href="/integrations" />
         </div>
       </div>
     </div>
@@ -379,10 +364,10 @@ interface MetricCardProps {
 }
 
 function MetricCard({ icon, title, score, status, warning }: MetricCardProps) {
-  const scoreColor = score >= 95 ? 'text-green-500' : score >= 80 ? 'text-yellow-500' : 'text-red-500';
+  const scoreColor = score >= 95 ? 'tone-positive' : score >= 80 ? 'tone-caution' : 'tone-negative';
 
   return (
-    <div className="bg-white rounded-xl shadow-lg p-6">
+    <div className="security-metric-card bg-white rounded-xl shadow-lg p-6">
       <div className="flex items-center justify-between mb-4">
         <div className="text-gray-600">{icon}</div>
         <span className={`text-2xl font-bold ${scoreColor}`}>{Math.round(score)}</span>
@@ -409,7 +394,7 @@ function ActionButton({ icon, label, href }: ActionButtonProps) {
   return (
     <a
       href={href}
-      className="flex flex-col items-center justify-center p-4 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors"
+      className="security-action-link flex flex-col items-center justify-center p-4 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors"
     >
       <div className="text-blue-600 mb-2">{icon}</div>
       <span className="text-sm font-medium text-gray-700">{label}</span>

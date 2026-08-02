@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { Shield, CheckCircle, AlertTriangle, FileText, TrendingUp } from 'lucide-react';
+import { PageHero } from '@/components/page-hero';
 
 interface FrameworkSummary {
   frameworkId: string;
@@ -46,16 +47,6 @@ export default function ComplianceDashboardPage() {
     );
   }
 
-  if (error) {
-    return (
-      <div className="p-6">
-        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-          <p className="text-red-800">Error: {error}</p>
-        </div>
-      </div>
-    );
-  }
-
   const totals = dashboards.reduce(
     (acc, fw) => ({
       requirements: acc.requirements + fw.totalRequirements,
@@ -72,18 +63,19 @@ export default function ComplianceDashboardPage() {
     : 0;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-50 via-blue-50 to-indigo-50 p-6">
+    <main className="compliance-dashboard-page">
       {/* Header */}
-      <div className="mb-8">
-        <div className="flex items-center gap-3 mb-2">
-          <Shield className="w-8 h-8 text-purple-600" />
-          <h1 className="text-3xl font-bold text-gray-900">Compliance Dashboard</h1>
-        </div>
-        <p className="text-gray-600">Monitor compliance status across all frameworks</p>
-      </div>
+      <PageHero
+        eyebrow="Assurance performance"
+        title="Compliance dashboard"
+        description="Monitor framework coverage, implemented controls, findings, and evidence readiness across the organization."
+        icon={Shield}
+      />
+
+      {error && <div className="page-alert error">{error}. Showing the dashboard without live framework records.</div>}
 
       {/* Overall Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
+      <div className="compliance-dashboard-summary grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
         <div className="bg-white rounded-lg shadow-sm p-6 border border-gray-200">
           <div className="flex items-center justify-between">
             <div>
@@ -137,7 +129,7 @@ export default function ComplianceDashboardPage() {
       </div>
 
       {/* Framework Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      <div className="compliance-dashboard-grid grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {dashboards.map(framework => {
           const compliance = framework.totalControls > 0
             ? Math.round((framework.controlsImplemented / framework.totalControls) * 100)
@@ -236,12 +228,12 @@ export default function ComplianceDashboardPage() {
 
       {/* Empty State */}
       {dashboards.length === 0 && (
-        <div className="text-center py-12">
+        <div className="compliance-dashboard-empty text-center py-12">
           <Shield className="w-16 h-16 text-gray-400 mx-auto mb-4" />
           <h3 className="text-lg font-semibold text-gray-900 mb-2">No Frameworks Found</h3>
           <p className="text-gray-600">Create a compliance framework to get started</p>
         </div>
       )}
-    </div>
+    </main>
   );
 }

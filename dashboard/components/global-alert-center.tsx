@@ -268,7 +268,7 @@ export function GlobalAlertCenter() {
   if (!enabledForRoute) return null;
 
   return <>
-    <div className="fixed right-4 top-24 z-40 flex flex-col items-end gap-2">
+    <div className="global-alert-tools fixed right-4 top-24 z-40 flex flex-col items-end gap-2">
       <button type="button" onClick={() => setQueueOpen((value) => !value)} aria-expanded={queueOpen} aria-label="Open active alert queue" className="relative flex h-12 w-12 items-center justify-center rounded-full bg-slate-950 text-white shadow-xl">
         <BellRing size={20}/>
         {dashboardQueue.length > 0 && <span className="absolute -right-1 -top-1 min-w-5 rounded-full bg-red-600 px-1.5 py-0.5 text-[10px] font-bold">{dashboardQueue.length > 99 ? "99+" : dashboardQueue.length}</span>}
