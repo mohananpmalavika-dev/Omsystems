@@ -18,6 +18,7 @@ const schema = z.object({
   EDGE_LIVE_GATEWAY_HOST: z.string().default("127.0.0.1"),
   EDGE_LIVE_GATEWAY_PORT: z.coerce.number().int().min(1).max(65535).default(8090),
   MEDIAMTX_PATH: z.string().default("mediamtx"),
+  MEDIA_RUNTIME_MANAGED: z.enum(["true", "false"]).default("true").transform((value) => value === "true"),
   MEDIAMTX_API_URL: z.string().url().default("http://127.0.0.1:9997"),
   MEDIAMTX_HLS_URL: z.string().url().default("http://127.0.0.1:8888"),
   MEDIA_TUNNEL_MODE: z.enum(["disabled", "quick", "named"]).default("disabled"),

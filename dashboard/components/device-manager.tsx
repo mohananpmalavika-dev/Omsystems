@@ -225,34 +225,14 @@ export function DeviceManager() {
         `EDGE_AGENT_ID=${provisionedGateway.id}`,
         `EDGE_AGENT_NAME=${provisionedGateway.name}`,
         "EDGE_BRIDGE_SHARED_KEY=<enrollment-secret>",
+        "LIVE_MEDIA_ENABLED=true",
+        "MEDIA_RUNTIME_MANAGED=false",
+        "MEDIA_TUNNEL_MODE=disabled",
         "PUBLIC_MEDIA_GATEWAY_URL=https://<branch-media-tunnel-host>",
-        "EDGE_MEDIA_SHARED_KEY=<unique-branch-media-key>",
+        "CLOUDFLARED_TUNNEL_TOKEN=<named-tunnel-token>",
         "STREAM_SECRET_STORE_PATH=./data/stream-secrets.json",
       ].join("\n")
     : "", [provisionedGateway]);
-
-  const installScriptShell = useMemo(() => provisionedGateway ? `#!/bin/sh
-set -e
-mkdir -p edge-agent-install
-cd edge-agent-install
-cat > .env <<'EOF'
-${setupText}
-EOF
-
-echo "Branch gateway configuration written to $(pwd)/.env"
-echo "Run the installed edge agent from the branch machine using your approved local method."
-echo "For example: npm install && npm run build && npm run dev"
-` : "", [provisionedGateway, setupText]);
-
-  const installScriptPowerShell = useMemo(() => provisionedGateway ? `param()
-$envFile = Join-Path (Get-Location) ".env"
-@"
-${setupText}
-"@ | Out-File -FilePath $envFile -Encoding UTF8
-Write-Host "Branch gateway configuration written to $envFile"
-Write-Host "Run the installed edge agent from the branch machine using your approved local method."
-Write-Host "For example: npm install; npm run build; npm run dev"
-` : "", [provisionedGateway, setupText]);
 
   function downloadTextFile(filename: string, content: string) {
     const blob = new Blob([content], { type: "text/plain" });
@@ -264,10 +244,6 @@ Write-Host "For example: npm install; npm run build; npm run dev"
     anchor.click();
     document.body.removeChild(anchor);
     URL.revokeObjectURL(url);
-  }
-
-  function downloadShellInstallScript() {
-    downloadTextFile("install-edge-agent.sh", installScriptShell);
   }
 
   function downloadEdgeAgentPackage(platform: "windows" | "linux") {
@@ -291,15 +267,18 @@ Write-Host "For example: npm install; npm run build; npm run dev"
     document.body.removeChild(anchor);
   }
 
-  function downloadPowerShellInstallScript() {
-    downloadTextFile("install-edge-agent.ps1", installScriptPowerShell);
+  function downloadGatewayConfiguration() {
+    downloadTextFile(`${activeBranch?.name?.replace(/[^a-z0-9_-]+/gi, "-") || "branch"}-gateway.env`, setupText);
   }
 
   useEffect(() => {
     void cameraInventoryApi.listBranches("device:configure")
       .then(({ data }) => {
         setBranches(data);
-        setSelectedBranch(data[0]?.id ?? "");
+        const requestedBranch = new URLSearchParams(window.location.search).get("branchId");
+        setSelectedBranch(data.some((branch: Branch) => branch.id === requestedBranch)
+          ? requestedBranch!
+          : data[0]?.id ?? "");
       })
       .catch((reason) => setError(messageOf(reason, "Unable to load configurable branches.")))
       .finally(() => setLoading(false));
@@ -374,7 +353,7 @@ Write-Host "For example: npm install; npm run build; npm run dev"
     if (gateways.length === 0) {
       setProvisionedGateway(undefined);
       setShowGatewayForm(true);
-      setNotice("Install the camera scanner first; scans run on your local network.");
+      setNotice("Enroll the Branch Gateway first; discovery runs inside the branch camera network.");
       return;
     }
     setScanning(true);
@@ -388,7 +367,7 @@ Write-Host "For example: npm install; npm run build; npm run dev"
 
       while (job.status === "queued" || job.status === "running") {
         if (Date.now() >= deadline) {
-          setNotice("Scan queued. It will run when the camera scanner checks in.");
+          setNotice("Scan queued. It will run when the Branch Gateway checks in.");
           return;
         }
         await wait(1_500);
@@ -396,7 +375,7 @@ Write-Host "For example: npm install; npm run build; npm run dev"
       }
 
       if (job.status === "failed") {
-        throw new Error(job.error ?? "Camera scanner scan failed.");
+        throw new Error(job.error ?? "Branch Gateway scan failed.");
       }
 
       const results = await cameraInventoryApi.getScanResults(selectedBranch, scan.id);
@@ -449,7 +428,7 @@ Write-Host "For example: npm install; npm run build; npm run dev"
     if (gateways.length === 0) {
       setProvisionedGateway(undefined);
       setShowGatewayForm(true);
-      setNotice("Install the camera scanner first; scans run on your local network.");
+      setNotice("Enroll the Branch Gateway first; discovery runs inside the branch camera network.");
       return;
     }
     setScanning(true);
@@ -463,7 +442,7 @@ Write-Host "For example: npm install; npm run build; npm run dev"
 
       while (job.status === "queued" || job.status === "running") {
         if (Date.now() >= deadline) {
-          setNotice("Scan queued. It will run when the camera scanner checks in.");
+          setNotice("Scan queued. It will run when the Branch Gateway checks in.");
           return;
         }
         await wait(1_500);
@@ -471,7 +450,7 @@ Write-Host "For example: npm install; npm run build; npm run dev"
       }
 
       if (job.status === "failed") {
-        throw new Error(job.error ?? "Camera scanner scan failed.");
+        throw new Error(job.error ?? "Branch Gateway scan failed.");
       }
 
       const results = await cameraInventoryApi.getScanResults(selectedBranch, scan.id);
@@ -732,26 +711,20 @@ Write-Host "For example: npm install; npm run build; npm run dev"
       <div className="device-toolbar">
         <div>
           <h2>Branches & devices</h2>
-          <p>Install the camera scanner software, then click Add camera to find cameras on your network automatically.</p>
+          <p>Enroll the always-on Branch Gateway, then discover cameras and DVRs automatically from the central platform.</p>
         </div>
         <div className="device-toolbar-actions">
-          <button className="secondary-button" onClick={() => void downloadEdgeAgentPackage("windows")} disabled={!selectedBranch || gateways.length === 0}>
-            <Download size={15} /> Download Windows package
-          </button>
-          <button className="secondary-button" onClick={() => void downloadEdgeAgentPackage("linux")} disabled={!selectedBranch || gateways.length === 0}>
-            <Download size={15} /> Download Linux package
-          </button>
           <button className="secondary-button" onClick={() => {
             setProvisionedGateway(undefined);
             setShowGatewayForm(true);
           }} disabled={!selectedBranch}>
-            <Router size={15} /> Install camera scanner
+            <Router size={15} /> Enroll Branch Gateway
           </button>
           <button className="secondary-button" onClick={() => void scanNetwork()} disabled={!selectedBranch || scanning} title="Find cameras through the Edge Agent inside this branch network">
             <Network size={15} /> {scanning ? "Scanning…" : "Scan network"}
           </button>
           <button className="primary-button" onClick={() => void autoDiscoverAndProvision()} disabled={!selectedBranch || scanning} title="Automatically discover and provision cameras in this branch">
-            <Plus size={15} /> Add camera
+            <Plus size={15} /> Discover & add
           </button>
           <button className="secondary-button" onClick={openCameraForm} disabled={!selectedBranch || gateways.length === 0} title="Open manual camera registration form">
             <Plus size={15} /> Manual add
@@ -759,9 +732,9 @@ Write-Host "For example: npm install; npm run build; npm run dev"
         </div>
         {selectedBranch ? (
           gateways.length === 0 ? (
-            <p className="device-toolbar-note">Install the camera scanner software first to enable camera discovery.</p>
+            <p className="device-toolbar-note">Enroll a Branch Gateway first to enable unattended camera and DVR discovery.</p>
           ) : (
-            <p className="device-toolbar-note">Scanner: {gateways[0]?.name || "Unnamed"} - {gateways[0]?.status === 'online' ? '✓ Running and scanning' : gateways[0]?.status === 'offline' ? '✗ Stopped' : 'Status unknown'}</p>
+            <p className="device-toolbar-note">Gateway: {gateways[0]?.name || "Unnamed"} · {gateways[0]?.status === "online" ? "Online and monitoring" : gateways[0]?.status === "offline" ? "Offline" : "Awaiting first connection"}</p>
           )
         ) : null}
       </div>
@@ -772,8 +745,8 @@ Write-Host "For example: npm install; npm run build; npm run dev"
       <div className="remote-camera-note">
         <Network size={19} />
         <div>
-          <strong>Camera at another location?</strong>
-          <span>Install the camera scanner software at that location. Camera passwords stay private at each location.</span>
+          <strong>Unattended branch connectivity</strong>
+          <span>Ship one centrally provisioned Branch Gateway appliance to each location. It stays online without a laptop, and camera passwords remain inside that branch.</span>
         </div>
       </div>
 
@@ -788,18 +761,18 @@ Write-Host "For example: npm install; npm run build; npm run dev"
       {loading ? <div className="loading-state"><Activity className="spin" />Loading branch devices…</div> : (
         <div className="device-columns">
           <section className="device-card">
-            <div className="device-card-heading"><Router size={18} /><div><h3>Camera Scanner Status</h3><p>{gateways.length} system{gateways.length !== 1 ? 's' : ''} registered</p></div></div>
+            <div className="device-card-heading"><Router size={18} /><div><h3>Branch Gateway status</h3><p>{gateways.length} appliance{gateways.length !== 1 ? "s" : ""} enrolled</p></div></div>
             {gateways.length === 0 ? (
-              <div className="device-empty"><Router size={25} /><strong>Camera Scanner Not Installed</strong><span>Install the camera scanner software before adding cameras at this location.</span></div>
+              <div className="device-empty"><Router size={25} /><strong>No Branch Gateway enrolled</strong><span>Enroll and provision the always-on appliance before discovering cameras or DVRs at this location.</span></div>
             ) : gateways.map((gateway) => (
               <article className="gateway-row" key={gateway.id}>
                 <span className={`gateway-state ${gateway.status}`}><i /></span>
                 <div>
                   <strong>{gateway.name}</strong>
                   <small>
-                    {gateway.status === 'online' ? '✓ Running - Scanning for cameras' : 
-                     gateway.status === 'offline' ? '✗ Stopped - Not scanning' : 
-                     '⚠ Status unknown'} · v{gateway.version}
+                    {gateway.status === "online" ? "Online · camera and recorder monitoring active" :
+                     gateway.status === "offline" ? "Offline · central action required" :
+                     "Awaiting first appliance connection"} · v{gateway.version}
                   </small>
                 </div>
                 <code title={gateway.id}>{gateway.id.slice(0, 8)}</code>
@@ -828,7 +801,7 @@ Write-Host "For example: npm install; npm run build; npm run dev"
           <div className="discovery-status-copy">
             <strong>{scanning ? "Scan in progress" : discoveryQueueItems.length === 0 ? "Scan ready" : "Cameras are ready for automatic provisioning"}</strong>
             <p>{scanning
-              ? "The camera scanner is checking your network and validating cameras."
+              ? "The Branch Gateway is checking the local network and validating cameras."
               : discoveryQueueItems.length === 0
                 ? "Run a network scan to discover cameras automatically - no manual IP entry needed."
                 : "Approve all verified cameras to start recording, AI detection, and alerts automatically."}</p>
@@ -886,7 +859,7 @@ Write-Host "For example: npm install; npm run build; npm run dev"
                       <div><span>Compatibility</span><strong>{item.compatibility || "Review required"}</strong></div>
                       <div><span>Profiles</span><strong>{profileText}</strong></div>
                     </div>
-                    <p className="discovery-footnote">{item.statusReason || (item.credentialsRequired ? "Camera password is required before the stream can be validated." : item.streamVerified ? "The scanner already confirmed a valid video stream." : "The scanner is still validating the camera profile and stream availability.")}</p>
+                    <p className="discovery-footnote">{item.statusReason || (item.credentialsRequired ? "Camera password is required before the stream can be validated." : item.streamVerified ? "The Branch Gateway confirmed a valid video stream." : "The Branch Gateway is still validating the camera profile and stream availability.")}</p>
                     {item.onvifServices?.length ? <p className="discovery-footnote">Services: {item.onvifServices.join(", ")}</p> : null}
                   </div>
                   <div className="discovery-card-actions">
@@ -909,8 +882,13 @@ Write-Host "For example: npm install; npm run build; npm run dev"
         )}
       </section>
 
-      <section className="device-card">
-        <div className="device-card-heading"><Network size={18} /><div><h3>Unified device inventory</h3><p>{inventoryRecords.length} records</p></div></div>
+      <details className="device-card">
+        <summary className="device-card-heading cursor-pointer list-none">
+          <Network size={18} />
+          <div><h3>Advanced device inventory</h3><p>{inventoryRecords.length} records · optional manual registry</p></div>
+          <span className="ml-auto rounded-full bg-slate-100 px-3 py-1 text-[10px] font-bold uppercase tracking-wide text-slate-500">Open advanced tools</span>
+        </summary>
+        <div className="mt-4 border-t border-slate-100 pt-4">
         <form className="modal-form" onSubmit={addInventoryRecord}>
           <div className="form-section"><h3>Identity and location</h3><div className="form-row">
             <div className="form-group"><label htmlFor="inventoryDeviceId">Device ID</label><input id="inventoryDeviceId" value={inventoryForm.deviceId} onChange={(event) => setInventoryForm((form) => ({ ...form, deviceId: event.target.value }))} required /></div>
@@ -1036,29 +1014,29 @@ Write-Host "For example: npm install; npm run build; npm run dev"
             </div>
           </article>
         ))}
-      </section>
+        </div>
+      </details>
 
       {showGatewayForm && (
         <div className="modal-overlay">
           <div className="modal-container">
-            <div className="modal-header"><h2>Install Camera Scanner Software</h2><button className="icon-button" onClick={() => setShowGatewayForm(false)}><X size={20} /></button></div>
+            <div className="modal-header"><h2>Enroll Branch Gateway</h2><button className="icon-button" onClick={() => setShowGatewayForm(false)}><X size={20} /></button></div>
             {!provisionedGateway ? (
               <form className="modal-form" onSubmit={registerGateway}>
-                <div className="form-info-banner"><Network size={16} />Use a Windows or Linux computer that stays on at {activeBranch?.name}.</div>
-                <div className="form-group"><label htmlFor="gatewayName">Scanner name <span className="required">*</span></label><input id="gatewayName" value={gatewayName} onChange={(event) => setGatewayName(event.target.value)} minLength={2} maxLength={120} required placeholder={`${activeBranch?.name ?? "Branch"} Scanner`} /></div>
-                <div className="modal-actions"><button type="button" className="secondary-button" onClick={() => setShowGatewayForm(false)}>Cancel</button><button className="primary-button" disabled={saving}>{saving ? "Installing…" : "Install scanner"}</button></div>
+                <div className="form-info-banner"><Network size={16} />Assign a managed Sentinel appliance to {activeBranch?.name}. It auto-starts after power loss; no laptop or operator PC is required.</div>
+                <div className="form-group"><label htmlFor="gatewayName">Gateway name <span className="required">*</span></label><input id="gatewayName" value={gatewayName} onChange={(event) => setGatewayName(event.target.value)} minLength={2} maxLength={120} required placeholder={`${activeBranch?.name ?? "Branch"} Gateway`} /></div>
+                <div className="modal-actions"><button type="button" className="secondary-button" onClick={() => setShowGatewayForm(false)}>Cancel</button><button className="primary-button" disabled={saving}>{saving ? "Enrolling…" : "Enroll gateway"}</button></div>
               </form>
             ) : (
               <div className="modal-body">
-                <div className="device-message success"><CheckCircle2 size={16} />Camera scanner registered successfully.</div>
-                <p className="setup-description">Set these environment variables on your computer, then run the camera scanner software. Contact your administrator for the enrollment secret.</p>
+                <div className="device-message success"><CheckCircle2 size={16} />Branch Gateway enrolled successfully.</div>
+                <p className="setup-description">The central deployment team uses this branch-specific configuration while preparing the appliance. Branch staff only connect power/UPS and camera-network Ethernet.</p>
                 <pre className="gateway-config">{setupText}</pre>
                 <div className="setup-actions">
                   <button className="secondary-button" onClick={() => void copySetup()}><Copy size={14} />Copy configuration</button>
-                  <button className="secondary-button" onClick={downloadShellInstallScript}><Download size={14} />Download shell install script</button>
-                  <button className="secondary-button" onClick={downloadPowerShellInstallScript}><Download size={14} />Download PowerShell install script</button>
-                  <button className="secondary-button" onClick={() => void downloadEdgeAgentPackage("windows")}><Download size={14} />Download Windows package</button>
-                  <button className="secondary-button" onClick={() => void downloadEdgeAgentPackage("linux")}><Download size={14} />Download Linux package</button>
+                  <button className="secondary-button" onClick={downloadGatewayConfiguration}><Download size={14} />Download factory configuration</button>
+                  <button className="secondary-button" onClick={() => void downloadEdgeAgentPackage("linux")}><Download size={14} />Download appliance agent</button>
+                  <button className="secondary-button" onClick={() => void downloadEdgeAgentPackage("windows")}><Download size={14} />Legacy Windows agent</button>
                 </div>
                 <div className="modal-actions"><button className="primary-button" onClick={() => setShowGatewayForm(false)}>Done</button></div>
               </div>
@@ -1148,7 +1126,7 @@ Write-Host "For example: npm install; npm run build; npm run dev"
                 <>
               <div className="form-section"><h3>Location and system</h3><div className="form-row">
                 <div className="form-group"><label>Branch</label><input value={activeBranch?.name ?? ""} disabled /></div>
-                <div className="form-group"><label htmlFor="cameraGateway">Camera scanner{registrationMode === "automatic" ? <span className="required">*</span> : null}</label><select id="cameraGateway" value={cameraForm.edgeAgentId} onChange={(event) => setCameraForm((form) => ({ ...form, edgeAgentId: event.target.value }))} required={registrationMode === "automatic"}><option value="">Select scanner…</option>{gateways.map((gateway) => <option key={gateway.id} value={gateway.id}>{gateway.name} ({gateway.status})</option>)}</select></div>
+                <div className="form-group"><label htmlFor="cameraGateway">Branch Gateway{registrationMode === "automatic" ? <span className="required">*</span> : null}</label><select id="cameraGateway" value={cameraForm.edgeAgentId} onChange={(event) => setCameraForm((form) => ({ ...form, edgeAgentId: event.target.value }))} required={registrationMode === "automatic"}><option value="">Select gateway…</option>{gateways.map((gateway) => <option key={gateway.id} value={gateway.id}>{gateway.name} ({gateway.status})</option>)}</select></div>
               </div></div>
 
               <div className="form-section"><h3>Camera identity</h3><div className="form-row">

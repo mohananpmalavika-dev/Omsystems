@@ -60,6 +60,10 @@ export interface BranchHealth {
   criticalAlerts: number;
   edgeAgentStatus: EdgeAgentStatus;
   edgeAgentHeartbeat: string;
+  gatewayCount?: number;
+  gatewayOnlineCount?: number;
+  gatewayReadiness?: 'ready' | 'offline' | 'tunnel_missing' | 'not_enrolled';
+  gatewayTunnelReady?: boolean;
   internetStatus?: 'online' | 'degraded' | 'failover' | 'offline' | 'unknown';
 }
 

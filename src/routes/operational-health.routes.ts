@@ -735,11 +735,14 @@ async function loadAccessibleProjections(
   const telemetry = await store.listLatestOperationalTelemetry(request.currentUser.tenantId, branches.map((branch) => branch.id));
   const calculatedAt = Date.now();
   const branchContexts = await Promise.all(branches.map(async (branch) => {
-    const storedPolicy = await store.getOperationalHealthPolicy(request.currentUser.tenantId, branch.id);
+    const [storedPolicy, agents] = await Promise.all([
+      store.getOperationalHealthPolicy(request.currentUser.tenantId, branch.id),
+      store.listEdgeAgentsByBranch(branch.id),
+    ]);
     const policy = { ...defaultOperationalHealthPolicy, ...(storedPolicy ?? {}) };
     const cameras = await store.listCamerasByBranch(request.currentUser, branch.id, "recording:view");
     const archiveByCamera = latestArchiveEvidenceByCamera(telemetry.filter((item) => item.branchId === branch.id));
-    return { branch, policy, cameras, archiveByCamera };
+    return { branch, policy, cameras, archiveByCamera, agents };
   }));
   const retentionInputs = await loadBatchedRetentionInputs(store, branchContexts.flatMap(({ cameras, policy }) =>
     cameras.map((camera) => ({
@@ -748,7 +751,7 @@ async function loadAccessibleProjections(
       maxRecordingGapSeconds: policy.maxRecordingGapSeconds,
     }))), calculatedAt);
 
-  return branchContexts.map(({ branch, policy, cameras, archiveByCamera }) => {
+  return branchContexts.map(({ branch, policy, cameras, archiveByCamera, agents }) => {
     const retentions: RetentionVerification[] = cameras.map((camera) => {
       const input = retentionInputs.get(camera.id);
       return verifyContinuousRetention(camera.id, input?.segments ?? [], {
@@ -757,7 +760,7 @@ async function loadAccessibleProjections(
         maxRecordingGapSeconds: policy.maxRecordingGapSeconds,
       }, calculatedAt, archiveByCamera.get(camera.id));
     });
-    return projectBranchHealth({
+    const projection = projectBranchHealth({
       branch,
       cameras,
       telemetry: telemetry.filter((item) => item.branchId === branch.id),
@@ -766,6 +769,22 @@ async function loadAccessibleProjections(
       now: calculatedAt,
       region: regionsByBranch.get(branch.id),
     });
+    const onlineAgents = agents.filter((agent) => agent.status === "online");
+    const tunnelReady = onlineAgents.some((agent) => Boolean(agent.publicMediaUrl));
+    const gatewayReadiness = agents.length === 0
+      ? "not_enrolled" as const
+      : onlineAgents.length === 0
+        ? "offline" as const
+        : tunnelReady
+          ? "ready" as const
+          : "tunnel_missing" as const;
+    return {
+      ...projection,
+      gatewayCount: agents.length,
+      gatewayOnlineCount: onlineAgents.length,
+      gatewayReadiness,
+      gatewayTunnelReady: tunnelReady,
+    };
   });
 }
 

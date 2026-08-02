@@ -116,6 +116,29 @@ describe("Phase 1 operational health", () => {
     expect(response.json().data.branches[0].unknownComponents).toContain("storage");
   });
 
+  it("reports whether an enrolled branch gateway and its stable media tunnel are live-ready", async () => {
+    const beforeHeartbeat = await app.inject({
+      method: "GET", url: "/v1/operations/health/branches?search=Bengaluru", headers: admin,
+    });
+    expect(beforeHeartbeat.json().data.branches[0]).toMatchObject({
+      gatewayCount: 1,
+      gatewayOnlineCount: 0,
+      gatewayReadiness: "offline",
+      gatewayTunnelReady: false,
+    });
+
+    await store.heartbeatEdgeAgent(agentId, "1.0.1", "https://branch-001.media.example.com");
+    const ready = await app.inject({
+      method: "GET", url: "/v1/operations/health/branches?search=Bengaluru", headers: admin,
+    });
+    expect(ready.json().data.branches[0]).toMatchObject({
+      gatewayCount: 1,
+      gatewayOnlineCount: 1,
+      gatewayReadiness: "ready",
+      gatewayTunnelReady: true,
+    });
+  });
+
   it("turns measured edge CPU, memory, or disk saturation into branch edge-health warning", async () => {
     const observedAt = new Date().toISOString();
     const accepted = await app.inject({

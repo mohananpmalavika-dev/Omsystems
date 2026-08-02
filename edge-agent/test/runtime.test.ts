@@ -39,6 +39,25 @@ describe("edge-agent runtime configuration", () => {
     }).EDGE_AGENT_ID).toBe("edge-001");
   });
 
+  it("supports an externally supervised MediaMTX runtime for unattended appliances", () => {
+    const config = loadEdgeConfig({
+      CONTROL_PLANE_URL: "https://control.example.com",
+      BRANCH_ID: "branch-001",
+      EDGE_AGENT_ID: "edge-001",
+      EDGE_AGENT_NAME: "Branch gateway",
+      EDGE_BRIDGE_SHARED_KEY: "s".repeat(43),
+      LIVE_MEDIA_ENABLED: "true",
+      MEDIA_RUNTIME_MANAGED: "false",
+      MEDIA_TUNNEL_MODE: "disabled",
+      PUBLIC_MEDIA_GATEWAY_URL: "https://branch-001.media.example.com",
+      MEDIAMTX_API_URL: "http://mediamtx:9997",
+      MEDIAMTX_HLS_URL: "http://mediamtx:8888",
+    });
+
+    expect(config.MEDIA_RUNTIME_MANAGED).toBe(false);
+    expect(config.LIVE_MEDIA_ENABLED).toBe(true);
+  });
+
   it("reads a branch configuration appended to the single installer executable", async () => {
     const directory = await mkdtemp(join(tmpdir(), "sentinel-embedded-config-"));
     const path = join(directory, "edge-agent.exe");

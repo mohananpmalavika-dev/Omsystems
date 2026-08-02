@@ -1,6 +1,12 @@
 import { z } from "zod";
 import { readFileSync } from "node:fs";
 
+const optionalServiceUrl = z.preprocess((value) => {
+  if (value === "" || value === undefined) return undefined;
+  if (typeof value !== "string") return value;
+  return /^[a-z][a-z\d+.-]*:\/\//i.test(value) ? value : `http://${value}`;
+}, z.string().url().optional());
+
 const configSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   HOST: z.string().default("0.0.0.0"),
@@ -17,7 +23,7 @@ const configSchema = z.object({
     (value) => value === "" ? undefined : value,
     z.string().min(32).optional(),
   ),
-  RECORDING_ENGINE_URL: z.string().url().optional(),
+  RECORDING_ENGINE_URL: optionalServiceUrl,
   RECORDING_ENGINE_SHARED_KEY: z.preprocess(
     (value) => value === "" ? undefined : value,
     z.string().min(32).optional(),
@@ -30,10 +36,7 @@ const configSchema = z.object({
     (value) => value === "" ? undefined : value,
     z.string().url().optional(),
   ),
-  ANALYTICS_ENGINE_URL: z.preprocess(
-    (value) => value === "" ? undefined : value,
-    z.string().url().optional(),
-  ),
+  ANALYTICS_ENGINE_URL: optionalServiceUrl,
   FEDERATION_SHARED_KEY: z.preprocess(
     (value) => value === "" ? undefined : value,
     z.string().min(32).optional(),

@@ -153,8 +153,10 @@ export async function startEdgeMediaRuntime(input: {
   const mediaConfigPath = join(runtimeDirectory, "mediamtx.yml");
   await writeFile(mediaConfigPath, mediaMtxConfiguration(config), "utf8");
 
-  const mediaMtx = startManagedProcess("MediaMTX", config.MEDIAMTX_PATH, [mediaConfigPath], runtimeDirectory);
-  await waitForHttp(new URL("/v3/config/global/get", config.MEDIAMTX_API_URL), mediaMtx, 15_000);
+  const mediaMtx = config.MEDIA_RUNTIME_MANAGED
+    ? startManagedProcess("MediaMTX", config.MEDIAMTX_PATH, [mediaConfigPath], runtimeDirectory)
+    : undefined;
+  await waitForHttp(new URL("/v3/config/global/get", config.MEDIAMTX_API_URL), mediaMtx, 30_000);
 
   const router = new MediaMtxRouter(config.MEDIAMTX_API_URL);
   let resolvedPublicUrl = config.PUBLIC_MEDIA_GATEWAY_URL ?? "";
@@ -185,12 +187,12 @@ export async function startEdgeMediaRuntime(input: {
     await waitForPublicGateway(new URL("/health", resolvedPublicUrl), 30_000);
     logger.info("Edge live media is reachable", { publicUrl: resolvedPublicUrl, tunnelMode: config.MEDIA_TUNNEL_MODE });
   } catch (error) {
-    tunnel?.kill(); await liveGateway.close(); mediaMtx.kill(); throw error;
+    tunnel?.kill(); await liveGateway.close(); mediaMtx?.kill(); throw error;
   }
 
   return {
     publicUrl: resolvedPublicUrl,
-    async stop() { tunnel?.kill(); await liveGateway.close().catch(() => undefined); mediaMtx.kill(); },
+    async stop() { tunnel?.kill(); await liveGateway.close().catch(() => undefined); mediaMtx?.kill(); },
   };
 }
 
@@ -295,10 +297,10 @@ function pipeProcessLogs(name: string, child: ChildProcessWithoutNullStreams) {
   child.stdout.on("data", (chunk: Buffer) => report("info", chunk));
   child.stderr.on("data", (chunk: Buffer) => report("warn", chunk));
 }
-async function waitForHttp(url: URL, child: ChildProcessWithoutNullStreams, timeoutMs: number) {
+async function waitForHttp(url: URL, child: ChildProcessWithoutNullStreams | undefined, timeoutMs: number) {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
-    if (child.exitCode !== null) throw new Error(`MediaMTX exited before becoming ready (${child.exitCode})`);
+    if (child && child.exitCode !== null) throw new Error(`MediaMTX exited before becoming ready (${child.exitCode})`);
     try { if ((await fetch(url, { signal: AbortSignal.timeout(1_000) })).ok) return; } catch { /* retry */ }
     await delay(250);
   }

@@ -1,47 +1,218 @@
-# Render Blueprint for Sentinel Grid Deployment
-# This file defines all services needed for deployment
+# Sentinel Grid production blueprint
+#
+# Every runtime is explicitly paid/always-on. Render free web services sleep
+# after inactivity and are not suitable for 24/7 surveillance operations.
 
 services:
-  # Dashboard Service (Next.js Frontend)
-  - type: web
-    name: sentinel-grid-dashboard
-    runtime: node
-    buildCommand: npm ci --workspace @sentinel/dashboard && npm run dashboard:build
-    startCommand: npm run dashboard:start
-    envVars:
-      - key: NODE_VERSION
-        value: 22.23.2
-      - key: NEXT_PUBLIC_API_BASE
-        value: /api/control
-      - key: CONTROL_PLANE_URL
-        fromService:
-          type: web
-          name: sentinel-grid-control-plane
-          property: host
-    healthCheckPath: /health
-
-  # Control Plane Service (Node.js Backend API)
   - type: web
     name: sentinel-grid-control-plane
-    runtime: node
-    buildCommand: npm ci && npm run build
-    startCommand: npm start
+    runtime: docker
+    plan: starter
+    region: singapore
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /ready
     envVars:
       - key: NODE_ENV
         value: production
+      - key: AUTH_MODE
+        value: session
+      - key: HOST
+        value: 0.0.0.0
       - key: PORT
-        value: 3000
+        value: 8080
       - key: DATABASE_URL
         fromDatabase:
           name: sentinel-grid-db
           property: connectionString
+      - key: CONTROL_PLANE_PUBLIC_URL
+        fromService:
+          type: web
+          name: sentinel-grid-control-plane
+          envVarKey: RENDER_EXTERNAL_URL
+      - key: RECORDING_ENGINE_URL
+        fromService:
+          type: pserv
+          name: sentinel-grid-recording-engine
+          property: hostport
+      - key: ANALYTICS_ENGINE_URL
+        fromService:
+          type: pserv
+          name: sentinel-grid-analytics-engine
+          property: hostport
       - key: JWT_SECRET
         generateValue: true
       - key: SESSION_SECRET
         generateValue: true
+      - key: REPORT_DOWNLOAD_SECRET
+        generateValue: true
+      - key: MEDIA_GATEWAY_SHARED_KEY
+        generateValue: true
+      - key: EDGE_BRIDGE_SHARED_KEY
+        generateValue: true
+      - key: RECORDING_ENGINE_SHARED_KEY
+        generateValue: true
+      - key: ANALYTICS_ENGINE_SHARED_KEY
+        generateValue: true
+
+  - type: web
+    name: sentinel-grid-dashboard
+    runtime: docker
+    plan: starter
+    region: singapore
+    dockerfilePath: ./dashboard/Dockerfile
+    dockerContext: .
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DASHBOARD_DEMO_MODE
+        value: "false"
+      - key: NEXT_PUBLIC_API_BASE
+        value: /api/control
+      - key: CONTROL_PLANE_INTERNAL_URL
+        fromService:
+          type: web
+          name: sentinel-grid-control-plane
+          property: hostport
+      - key: MEDIA_GATEWAY_INTERNAL_URL
+        fromService:
+          type: web
+          name: sentinel-grid-media-gateway
+          property: hostport
+      - key: RECORDING_ENGINE_INTERNAL_URL
+        fromService:
+          type: pserv
+          name: sentinel-grid-recording-engine
+          property: hostport
+      - key: EDGE_BRIDGE_SHARED_KEY
+        fromService:
+          type: web
+          name: sentinel-grid-control-plane
+          envVarKey: EDGE_BRIDGE_SHARED_KEY
+      - key: RECORDING_ENGINE_SHARED_KEY
+        fromService:
+          type: web
+          name: sentinel-grid-control-plane
+          envVarKey: RECORDING_ENGINE_SHARED_KEY
+
+  - type: web
+    name: sentinel-grid-media-gateway
+    runtime: docker
+    plan: starter
+    region: singapore
+    dockerfilePath: ./media-gateway/Dockerfile
+    dockerContext: .
     healthCheckPath: /health
+    envVars:
+      - key: HOST
+        value: 0.0.0.0
+      - key: PORT
+        value: 8090
+      - key: CONTROL_PLANE_URL
+        fromService:
+          type: web
+          name: sentinel-grid-control-plane
+          property: hostport
+      - key: RENDER_EXTERNAL_URL
+        fromService:
+          type: web
+          name: sentinel-grid-media-gateway
+          envVarKey: RENDER_EXTERNAL_URL
+      - key: MEDIA_GATEWAY_SHARED_KEY
+        fromService:
+          type: web
+          name: sentinel-grid-control-plane
+          envVarKey: MEDIA_GATEWAY_SHARED_KEY
+      - key: EDGE_BRIDGE_SHARED_KEY
+        fromService:
+          type: web
+          name: sentinel-grid-control-plane
+          envVarKey: EDGE_BRIDGE_SHARED_KEY
+      - key: MEDIAMTX_API_URL
+        value: http://127.0.0.1:9997
+      - key: MEDIAMTX_HLS_URL
+        value: http://127.0.0.1:8888
+      - key: STREAM_SECRETS_JSON
+        value: "{}"
+
+  - type: pserv
+    name: sentinel-grid-recording-engine
+    runtime: docker
+    plan: starter
+    region: singapore
+    dockerfilePath: ./recording-engine/Dockerfile
+    dockerContext: .
+    disk:
+      name: recording-event-cache
+      mountPath: /recordings
+      sizeGB: 100
+    envVars:
+      - key: HOST
+        value: 0.0.0.0
+      - key: PORT
+        value: 8091
+      - key: CONTROL_PLANE_URL
+        fromService:
+          type: web
+          name: sentinel-grid-control-plane
+          property: hostport
+      - key: RECORDING_ENGINE_SHARED_KEY
+        fromService:
+          type: web
+          name: sentinel-grid-control-plane
+          envVarKey: RECORDING_ENGINE_SHARED_KEY
+      - key: RECORDING_ROOT
+        value: /recordings
+      - key: STORAGE_NODE_EXTERNAL_ID
+        value: render-event-cache-01
+      - key: STORAGE_NODE_NAME
+        value: Cloud event recording cache
+      - key: STORAGE_NODE_TIERS
+        value: hot,warm,cold
+      - key: RETENTION_SWEEP_SECONDS
+        value: 300
+      - key: MIN_FREE_STORAGE_BYTES
+        value: 5368709120
+      - key: STREAM_SECRETS_JSON
+        value: "{}"
+
+  - type: pserv
+    name: sentinel-grid-analytics-engine
+    runtime: docker
+    plan: starter
+    region: singapore
+    dockerfilePath: ./analytics-engine/Dockerfile
+    dockerContext: .
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: HOST
+        value: 0.0.0.0
+      - key: PORT
+        value: 8092
+      - key: CONTROL_PLANE_URL
+        fromService:
+          type: web
+          name: sentinel-grid-control-plane
+          property: hostport
+      - key: ANALYTICS_ENGINE_SHARED_KEY
+        fromService:
+          type: web
+          name: sentinel-grid-control-plane
+          envVarKey: ANALYTICS_ENGINE_SHARED_KEY
+      - key: ANALYTICS_SOURCE_SHARED_KEY
+        generateValue: true
+      - key: ANALYTICS_REQUIRE_MODELS
+        value: "false"
+      - key: LOG_TO_FILE
+        value: "false"
 
 databases:
   - name: sentinel-grid-db
     databaseName: sentinel_grid
     user: sentinel_admin
+    plan: basic-1gb
+    region: singapore
+    diskSizeGB: 100
+    storageAutoscalingEnabled: true

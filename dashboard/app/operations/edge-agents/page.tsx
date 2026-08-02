@@ -1,2 +1,5 @@
-import { ComponentDetailPage } from "@/components/operational-health/component-detail-page";
-export default function Page() { return <ComponentDetailPage title="Edge agent health" component="edgeAgent"/>; }
+import { BranchGatewayFleet } from "@/components/branch-gateway-fleet";
+
+export default function Page() {
+  return <BranchGatewayFleet/>;
+}

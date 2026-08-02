@@ -1,0 +1,78 @@
+name: sentinel-branch-gateway
+
+services:
+  edge-agent:
+    build:
+      context: ../..
+      dockerfile: edge-agent/Dockerfile
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      CONTROL_PLANE_URL: ${CONTROL_PLANE_URL:?Set the public control-plane URL}
+      CONTROL_PLANE_TIMEOUT_MS: 30000
+      BRANCH_ID: ${BRANCH_ID:?Set the branch identifier}
+      EDGE_AGENT_ID: ${EDGE_AGENT_ID:?Enroll this gateway from Sentinel Grid first}
+      EDGE_AGENT_NAME: ${EDGE_AGENT_NAME:-Sentinel Branch Gateway}
+      EDGE_AGENT_VERSION: ${EDGE_AGENT_VERSION:-0.1.0}
+      EDGE_BRIDGE_SHARED_KEY: ${EDGE_BRIDGE_SHARED_KEY:?Set the enrollment secret}
+      CAMERA_USERNAME: ${CAMERA_USERNAME:-admin}
+      CAMERA_PASSWORD: ${CAMERA_PASSWORD:-}
+      ONVIF_ENDPOINTS: ${ONVIF_ENDPOINTS:-}
+      DISCOVERY_TIMEOUT_MS: ${DISCOVERY_TIMEOUT_MS:-8000}
+      ONVIF_TIMEOUT_MS: ${ONVIF_TIMEOUT_MS:-10000}
+      FFMPEG_PATH: ffmpeg
+      FFPROBE_PATH: ffprobe
+      LIVE_MEDIA_ENABLED: "true"
+      MEDIA_RUNTIME_MANAGED: "false"
+      EDGE_LIVE_GATEWAY_HOST: 0.0.0.0
+      EDGE_LIVE_GATEWAY_PORT: 8090
+      MEDIAMTX_API_URL: http://mediamtx:9997
+      MEDIAMTX_HLS_URL: http://mediamtx:8888
+      MEDIA_TUNNEL_MODE: disabled
+      PUBLIC_MEDIA_GATEWAY_URL: ${PUBLIC_MEDIA_GATEWAY_URL:?Set the stable branch media hostname}
+      MEDIA_ACCESS_TTL_SECONDS: ${MEDIA_ACCESS_TTL_SECONDS:-300}
+      STREAM_SECRET_STORE_PATH: /var/lib/sentinel/data/stream-secrets.json
+      EDGE_LOG_PATH: /var/lib/sentinel/logs/edge-agent.log
+      EDGE_AGENT_HOME: /var/lib/sentinel
+      INTERNET_LINKS_JSON: ${INTERNET_LINKS_JSON:-[]}
+      RECORDERS_JSON: ${RECORDERS_JSON:-[]}
+      CAMERA_HEARTBEAT_INTERVAL_MS: ${CAMERA_HEARTBEAT_INTERVAL_MS:-30000}
+      CAMERA_CONFIG_REFRESH_MS: ${CAMERA_CONFIG_REFRESH_MS:-60000}
+      RECORDER_POLL_INTERVAL_MS: ${RECORDER_POLL_INTERVAL_MS:-30000}
+      RECORDER_ARCHIVE_SCAN_INTERVAL_MS: ${RECORDER_ARCHIVE_SCAN_INTERVAL_MS:-21600000}
+    volumes:
+      - sentinel-gateway-state:/var/lib/sentinel
+    depends_on:
+      mediamtx:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8090/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 45s
+    networks: [sentinel-edge]
+
+  mediamtx:
+    image: bluenviron/mediamtx:1.17.1
+    restart: unless-stopped
+    volumes:
+      - ./mediamtx.yml:/mediamtx.yml:ro
+    networks: [sentinel-edge]
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run --token ${CLOUDFLARED_TUNNEL_TOKEN:?Set the remotely managed tunnel token}
+    depends_on:
+      edge-agent:
+        condition: service_healthy
+    networks: [sentinel-edge]
+
+networks:
+  sentinel-edge:
+    driver: bridge
+
+volumes:
+  sentinel-gateway-state:
+

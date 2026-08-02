@@ -24,5 +24,7 @@ COPY recording-engine/package.json ./recording-engine/package.json
 COPY analytics-engine/package.json ./analytics-engine/package.json
 RUN npm ci --omit=dev --workspace @sentinel/edge-agent
 COPY --from=build /app/edge-agent/build ./edge-agent/build
+RUN mkdir -p /var/lib/sentinel/data /var/lib/sentinel/logs /var/lib/sentinel/runtime \
+    && chown -R node:node /var/lib/sentinel
 USER node
 CMD ["node", "edge-agent/build/edge-agent.cjs"]

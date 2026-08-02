@@ -44,7 +44,7 @@ export async function startLive(
   const mediaResponse = await fetch(
     new URL(
       "/v1/live/start",
-      mediaGatewayUrl,
+      normalizeHttpOrigin(mediaGatewayUrl),
     ),
     {
       method: "POST",
@@ -128,7 +128,7 @@ async function controlFetch(
   }
   const response = await fetch(new URL(
     path,
-    runtimeEnv(["CONTROL_PLANE_INTERNAL_URL", "CONTROL_PLANE_PUBLIC_URL"], "http://localhost:8080"),
+    normalizeHttpOrigin(runtimeEnv(["CONTROL_PLANE_INTERNAL_URL", "CONTROL_PLANE_PUBLIC_URL"], "http://localhost:8080")),
   ), {
     ...init,
     headers: {
@@ -152,6 +152,10 @@ function runtimeEnv(name: string | string[], fallback: string) {
   }
   const value = Reflect.get(process.env, name) as string | undefined;
   return value ?? fallback;
+}
+
+function normalizeHttpOrigin(value: string) {
+  return /^[a-z][a-z\d+.-]*:\/\//i.test(value) ? value : `http://${value}`;
 }
 
 function bridgeHeaders() {

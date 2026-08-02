@@ -26,7 +26,7 @@ export async function GET(request: NextRequest) {
     if (!engineBase || !engineKey) {
       return Response.json({ error: "recording_playback_not_configured" }, { status: 503 });
     }
-    const upstreamUrl = new URL("/internal/segments", engineBase);
+    const upstreamUrl = new URL("/internal/segments", normalizeHttpOrigin(engineBase));
     upstreamUrl.searchParams.set("path", segment.storagePath);
     const range = request.headers.get("range");
     const upstream = await fetch(upstreamUrl, {
@@ -60,4 +60,8 @@ export async function GET(request: NextRequest) {
 
 function runtimeEnv(name: string) {
   return Reflect.get(process.env, name) as string | undefined;
+}
+
+function normalizeHttpOrigin(value: string) {
+  return /^[a-z][a-z\d+.-]*:\/\//i.test(value) ? value : `http://${value}`;
 }

@@ -63,6 +63,22 @@ describe("dashboard control-plane BFF", () => {
     );
   });
 
+  it("accepts Render private host:port service references", async () => {
+    process.env.CONTROL_PLANE_INTERNAL_URL = "sentinel-control.internal:8080";
+    const upstream = vi.fn(async (
+      _input: RequestInfo | URL,
+      _init?: RequestInit,
+    ) => Response.json({ data: [] }));
+    vi.stubGlobal("fetch", upstream);
+
+    await GET(
+      new NextRequest("https://sentinel.example/api/control/v1/branches"),
+      { params: Promise.resolve({ path: ["v1", "branches"] }) },
+    );
+
+    expect(String(upstream.mock.calls[0]![0])).toBe("http://sentinel-control.internal:8080/v1/branches");
+  });
+
   it("preserves the filename for the single Windows installer executable", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => new Response(Buffer.from("MZfixture"), {
       status: 200,

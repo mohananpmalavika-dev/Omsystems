@@ -18,12 +18,17 @@ import { z } from "zod";
 import { createStorageAdapter, type StorageStatus, type StorageType } from "./storage-adapter.js";
 import { AlertEvidenceCaptureService } from "./alert-evidence-capture.js";
 
+const serviceUrl = z.preprocess((value) => {
+  if (typeof value !== "string") return value;
+  return /^[a-z][a-z\d+.-]*:\/\//i.test(value) ? value : `http://${value}`;
+}, z.string().url());
+
 const config = z.object({
   HOST: z.string().default("0.0.0.0"),
   PORT: z.coerce.number().int().min(1).max(65_535).default(8091),
   RECORDING_ROOT: z.string().default("./recordings"),
   RECORDING_ENGINE_SHARED_KEY: z.string().min(32),
-  CONTROL_PLANE_URL: z.string().url(),
+  CONTROL_PLANE_URL: serviceUrl,
   STORAGE_NODE_EXTERNAL_ID: z.string().min(1).max(200).default(hostname()),
   STORAGE_NODE_NAME: z.string().min(1).max(200).default(`Recorder ${hostname()}`),
   STORAGE_NODE_TIERS: z.string().default("hot,warm,cold"),

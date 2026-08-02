@@ -20,7 +20,7 @@ async function proxyControlRequest(request: NextRequest, context: RouteContext) 
     ["CONTROL_PLANE_INTERNAL_URL", "CONTROL_PLANE_PUBLIC_URL"],
     "http://localhost:8080",
   );
-  const upstream = new URL(`/${path.join("/")}`, upstreamBase);
+  const upstream = new URL(`/${path.join("/")}`, normalizeHttpOrigin(upstreamBase));
   upstream.search = request.nextUrl.search;
 
   const routePath = `/${path.join("/")}`;
@@ -156,4 +156,8 @@ function runtimeEnv(name: string | string[], fallback: string) {
     return fallback;
   }
   return (Reflect.get(process.env, name) as string | undefined) ?? fallback;
+}
+
+function normalizeHttpOrigin(value: string) {
+  return /^[a-z][a-z\d+.-]*:\/\//i.test(value) ? value : `http://${value}`;
 }

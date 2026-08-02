@@ -1,14 +1,20 @@
 import { z } from "zod";
 
+const serviceUrl = z.preprocess((value) => {
+  if (typeof value !== "string") return value;
+  return /^[a-z][a-z\d+.-]*:\/\//i.test(value) ? value : `http://${value}`;
+}, z.string().url());
+
 const schema = z.object({
   HOST: z.string().default("0.0.0.0"),
   PORT: z.coerce.number().int().min(1).max(65535).default(8090),
-  CONTROL_PLANE_URL: z.string().url(),
+  CONTROL_PLANE_URL: serviceUrl,
   MEDIA_GATEWAY_SHARED_KEY: z.string().min(32),
   MEDIAMTX_API_URL: z.string().url().default("http://localhost:9997"),
   MEDIAMTX_HLS_URL: z.string().url().default("http://localhost:8888"),
-  PUBLIC_HLS_BASE_URL: z.string().url().default("http://localhost:8888"),
-  PUBLIC_WEBRTC_BASE_URL: z.string().url().default("http://localhost:8889"),
+  PUBLIC_HLS_BASE_URL: z.string().url().optional(),
+  PUBLIC_WEBRTC_BASE_URL: z.string().url().optional(),
+  RENDER_EXTERNAL_URL: z.string().url().optional(),
   MEDIA_ACCESS_TTL_SECONDS: z.coerce.number().int().min(30).max(3600).default(300),
   STREAM_SECRETS_JSON: z.string().default("{}"),
   STREAM_SECRET_PROVIDER_URL: z.preprocess(
@@ -30,7 +36,12 @@ export function loadMediaConfig(environment: NodeJS.ProcessEnv = process.env) {
   if (config.STREAM_SECRET_PROVIDER_URL && !config.STREAM_SECRET_PROVIDER_KEY) {
     throw new Error("STREAM_SECRET_PROVIDER_KEY is required with STREAM_SECRET_PROVIDER_URL");
   }
-  return config;
+  const renderBase = config.RENDER_EXTERNAL_URL?.replace(/\/+$/, "");
+  return {
+    ...config,
+    PUBLIC_HLS_BASE_URL: config.PUBLIC_HLS_BASE_URL ?? (renderBase ? `${renderBase}/hls` : "http://localhost:8888"),
+    PUBLIC_WEBRTC_BASE_URL: config.PUBLIC_WEBRTC_BASE_URL ?? (renderBase ? `${renderBase}/webrtc` : "http://localhost:8889"),
+  };
 }
 
 export type MediaConfig = ReturnType<typeof loadMediaConfig>;

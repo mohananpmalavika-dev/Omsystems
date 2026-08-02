@@ -127,7 +127,7 @@ const navigation: NavGroup[] = [
       { label: "Storage health", href: "/operations/storage", icon: Database },
       { label: "Network health", href: "/operations/network", icon: Network },
       { label: "Power & UPS health", href: "/operations/ups", icon: Activity },
-      { label: "Edge agents", href: "/operations/edge-agents", icon: Cpu },
+      { label: "Branch gateways", href: "/operations/edge-agents", icon: Cpu },
     ],
   },
   {
@@ -183,6 +183,7 @@ const navigation: NavGroup[] = [
     icon: UserRoundCog,
     items: [
       { label: "Organization & devices", href: "/admin", icon: Building2, badge: "cameras" },
+      { label: "Branch onboarding", href: "/admin/branch-onboarding", icon: Network },
       { label: "Integrations", href: "/integrations", icon: SlidersHorizontal },
       { label: "System management", href: "/admin/system", icon: Settings },
       { label: "Account & session", href: "/account/security", icon: LockKeyhole },

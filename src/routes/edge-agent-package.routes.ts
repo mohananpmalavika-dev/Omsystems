@@ -137,13 +137,16 @@ function branchConfiguration(
     ONVIF_TIMEOUT_MS: "8000",
     FFPROBE_PATH: "ffprobe",
     FFMPEG_PATH: "ffmpeg",
-    LIVE_MEDIA_ENABLED: platform === "windows" ? "true" : "false",
+    // Legacy agent downloads provide monitoring and discovery only. Production
+    // live video runs from the supervised Branch Gateway appliance bundle.
+    LIVE_MEDIA_ENABLED: "false",
     EDGE_LIVE_GATEWAY_HOST: "127.0.0.1",
     EDGE_LIVE_GATEWAY_PORT: "8090",
     MEDIAMTX_PATH: "mediamtx",
+    MEDIA_RUNTIME_MANAGED: "true",
     MEDIAMTX_API_URL: "http://127.0.0.1:9997",
     MEDIAMTX_HLS_URL: "http://127.0.0.1:8888",
-    MEDIA_TUNNEL_MODE: platform === "windows" ? "quick" : "disabled",
+    MEDIA_TUNNEL_MODE: "disabled",
     CLOUDFLARED_PATH: "cloudflared",
     CLOUDFLARED_TUNNEL_TOKEN: "",
     MEDIA_ACCESS_TTL_SECONDS: "300",
@@ -237,7 +240,7 @@ export async function registerEdgeAgentPackageRoutes(
           { name: "config/edge-agent.env", data: config },
           { name: "package.json", data: Buffer.from(packageBody, "utf8") },
           { name: "install-edge-agent.sh", data: Buffer.from("#!/bin/sh\nset -eu\nnode ./edge-agent.cjs --config ./config/edge-agent.env --diagnose\nexec node ./edge-agent.cjs --config ./config/edge-agent.env\n", "utf8") },
-          { name: "README.txt", data: Buffer.from("Run: chmod +x install-edge-agent.sh && ./install-edge-agent.sh\n", "utf8") },
+          { name: "README.txt", data: Buffer.from("This legacy agent package provides discovery and health monitoring only. For unattended live video, deploy deploy/branch-gateway on the managed appliance.\n\nRun: chmod +x install-edge-agent.sh && ./install-edge-agent.sh\n", "utf8") },
         ];
       }
 
