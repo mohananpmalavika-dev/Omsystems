@@ -113,7 +113,7 @@ Cloud services run on paid, non-sleeping instances. The database uses a paid pla
 2. Assign user roles and scope grants before camera access is enabled.
 3. Enroll one Branch Gateway from **Administration -> Branch onboarding**.
 4. Create one remotely managed Cloudflare Tunnel and stable hostname for the branch.
-5. Prepare the appliance from `deploy/branch-gateway`, insert issued branch values and tunnel token, and run the reboot test.
+5. Prepare the appliance from `deploy/branch-gateway`, insert the one-time activation code and branch tunnel token, and run the reboot test. First boot creates a unique device identity and encrypted local state automatically.
 6. Ship the labelled appliance to the branch for plug-in only installation.
 7. Confirm the fleet page shows Gateway online, Tunnel ready, and Internet online.
 8. Run ONVIF/DVR discovery. Review duplicates and devices requiring credentials.
@@ -126,7 +126,20 @@ Roll out in waves: lab, 5 branches, 25 branches, one region, then the wider esta
 ## Repository implementation
 
 - `deploy/branch-gateway/compose.yaml`: unattended edge agent, MediaMTX, and cloudflared services.
+
+## Implemented fleet-safety controls
+
+- One-time branch activation; every gateway receives a unique, revocable API credential. The legacy global bridge key is disabled in production.
+- Camera credentials use RSA-OAEP/AES-GCM envelope encryption. Only the intended gateway can decrypt them, and its local credential vault is AES-256-GCM encrypted.
+- Heartbeats, camera health, recorder/HDD/archive evidence, and command acknowledgements use an encrypted durable outbox during internet loss.
+- Remote commands are audited, delivered from a PostgreSQL `FOR UPDATE SKIP LOCKED` queue, idempotently acknowledged, and recovered if a worker crashes mid-command.
+- OTA manifests are Ed25519-signed, rollout-scoped, downloaded over HTTPS, checksum-verified, and staged for the appliance supervisor.
+- Recorder verification checks recent media, per-channel status, retention continuity/gaps, storage health, and actual playback of the newest available clip.
+- Alert snapshots and clips can be mirrored to S3-compatible storage with server-side encryption, optional object lock, and post-upload size/SHA-256 verification.
+- Redis holds expiring gateway presence shared by horizontally scaled API instances; PostgreSQL remains the durable source of truth.
+- `/metrics` exports Prometheus telemetry; the Kubernetes production manifests include Prometheus/Grafana and horizontal control-plane scaling.
+
+PostgreSQL is the durable job/command queue for the current 500-branch target. RabbitMQ or Kafka is not a prerequisite at this scale; introduce one only when measured event throughput or independent consumer fan-out exceeds the database queue's tested capacity.
 - `render.yaml`: paid always-on cloud services, private engine wiring, shared secrets, persistent event storage, and paid PostgreSQL.
 - `/operations/edge-agents`: permission-scoped Branch Gateway Fleet readiness.
 - `/admin/branch-onboarding`: centralized branch gateway and camera onboarding.
-

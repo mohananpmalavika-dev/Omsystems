@@ -25,6 +25,8 @@ services:
         fromDatabase:
           name: sentinel-grid-db
           property: connectionString
+      - key: REDIS_URL
+        sync: false
       - key: CONTROL_PLANE_PUBLIC_URL
         fromService:
           type: web
@@ -48,8 +50,10 @@ services:
         generateValue: true
       - key: MEDIA_GATEWAY_SHARED_KEY
         generateValue: true
-      - key: EDGE_BRIDGE_SHARED_KEY
-        generateValue: true
+      - key: EDGE_LEGACY_SHARED_KEY_ENABLED
+        value: "false"
+      - key: EDGE_UPDATE_SIGNING_PRIVATE_KEY
+        sync: false
       - key: RECORDING_ENGINE_SHARED_KEY
         generateValue: true
       - key: ANALYTICS_ENGINE_SHARED_KEY
@@ -85,11 +89,6 @@ services:
           type: pserv
           name: sentinel-grid-recording-engine
           property: hostport
-      - key: EDGE_BRIDGE_SHARED_KEY
-        fromService:
-          type: web
-          name: sentinel-grid-control-plane
-          envVarKey: EDGE_BRIDGE_SHARED_KEY
       - key: RECORDING_ENGINE_SHARED_KEY
         fromService:
           type: web
@@ -124,11 +123,6 @@ services:
           type: web
           name: sentinel-grid-control-plane
           envVarKey: MEDIA_GATEWAY_SHARED_KEY
-      - key: EDGE_BRIDGE_SHARED_KEY
-        fromService:
-          type: web
-          name: sentinel-grid-control-plane
-          envVarKey: EDGE_BRIDGE_SHARED_KEY
       - key: MEDIAMTX_API_URL
         value: http://127.0.0.1:9997
       - key: MEDIAMTX_HLS_URL
@@ -176,6 +170,18 @@ services:
         value: 5368709120
       - key: STREAM_SECRETS_JSON
         value: "{}"
+      - key: EVIDENCE_ARCHIVE_REQUIRED
+        value: "true"
+      - key: EVIDENCE_S3_BUCKET
+        sync: false
+      - key: EVIDENCE_S3_REGION
+        value: ap-south-1
+      - key: EVIDENCE_S3_ACCESS_KEY_ID
+        sync: false
+      - key: EVIDENCE_S3_SECRET_ACCESS_KEY
+        sync: false
+      - key: EVIDENCE_S3_ENCRYPTION
+        value: AES256
 
   - type: pserv
     name: sentinel-grid-analytics-engine

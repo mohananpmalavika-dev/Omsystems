@@ -119,21 +119,15 @@ if ($controlPlaneUrl.StartsWith("REPLACE_")) {
   Set-ConfigValue $ConfigPath "CONTROL_PLANE_URL" $controlPlaneUrl.TrimEnd('/')
 }
 
-$bridgeKey = Get-ConfigValue $ConfigPath "EDGE_BRIDGE_SHARED_KEY"
-$developmentUserId = Get-ConfigValue $ConfigPath "DEV_USER_ID"
-if ([string]::IsNullOrWhiteSpace($bridgeKey) -and [string]::IsNullOrWhiteSpace($developmentUserId)) {
-  $bridgeKey = Read-RequiredSecret "Edge bridge shared key" 32
-  Set-ConfigValue $ConfigPath "EDGE_BRIDGE_SHARED_KEY" $bridgeKey
+$activationCode = Get-ConfigValue $ConfigPath "EDGE_ACTIVATION_CODE"
+if ([string]::IsNullOrWhiteSpace($activationCode) -or $activationCode.StartsWith("REPLACE_")) {
+  $activationCode = Read-RequiredSecret "One-time gateway activation code from Sentinel Grid" 40
+  if (-not $activationCode.StartsWith("sgact_")) { throw "The activation code must start with sgact_." }
+  Set-ConfigValue $ConfigPath "EDGE_ACTIVATION_CODE" $activationCode
 }
 
-$cameraPassword = Get-ConfigValue $ConfigPath "CAMERA_PASSWORD"
-if ($cameraPassword.StartsWith("REPLACE_")) {
-  $cameraPassword = Read-RequiredSecret "ONVIF camera password" 1
-  Set-ConfigValue $ConfigPath "CAMERA_PASSWORD" $cameraPassword
-}
-
-# The config contains camera and bridge credentials. Only SYSTEM and local
-# administrators should be able to read it after installation.
+# The one-time activation code is consumed on first boot. The resulting unique
+# identity and all camera credentials live in separately encrypted local files.
 & icacls.exe $ConfigPath /inheritance:r /grant:r '*S-1-5-18:(F)' '*S-1-5-32-544:(F)' | Out-Null
 if ($LASTEXITCODE -ne 0) { throw "Failed to protect the edge-agent configuration file." }
 

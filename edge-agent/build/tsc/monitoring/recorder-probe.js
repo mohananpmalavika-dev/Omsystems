@@ -3,6 +3,25 @@ const RECORDING_EVIDENCE_WINDOW_MS = 5 * 60_000;
 export function looksLikeRecorder(identity, scopes = []) {
     return /(?:^|[\s_-])(dvr|nvr|xvr|uvr)(?:$|[\s_-])|video recorder/i.test(`${identity.manufacturer ?? ""} ${identity.model ?? ""} ${scopes.join(" ")}`);
 }
+export function recorderPlaybackUri(config, sourceChannel, newestPlayableAt) {
+    if (!config.username || !config.password)
+        return undefined;
+    const newest = new Date(newestPlayableAt);
+    if (!Number.isFinite(newest.getTime()))
+        return undefined;
+    const end = new Date(newest.getTime() + 5_000);
+    const start = new Date(newest.getTime() - 30_000);
+    const credentials = `${encodeURIComponent(config.username)}:${encodeURIComponent(config.password)}`;
+    const authority = `${credentials}@${config.host}:${config.rtspPort ?? 554}`;
+    if (config.vendor === "hikvision") {
+        const track = sourceChannel >= 100 ? sourceChannel : sourceChannel * 100 + 1;
+        return `rtsp://${authority}/Streaming/tracks/${track}?starttime=${compactUtc(start)}&endtime=${compactUtc(end)}`;
+    }
+    if (config.vendor === "dahua" || config.vendor === "cp-plus") {
+        return `rtsp://${authority}/cam/playback?channel=${sourceChannel}&subtype=0&starttime=${dahuaPlaybackTime(start)}&endtime=${dahuaPlaybackTime(end)}`;
+    }
+    return undefined;
+}
 export async function probeRecorder(config, timeoutMs, options = {}) {
     const started = performance.now();
     const base = `${config.secure ? "https" : "http"}://${config.host}:${config.port}`;
@@ -650,3 +669,5 @@ function key(text, name) { return text.match(new RegExp(`(?:^|\\n)${name}=([^\\r
 function firstKey(text, names) { return names.map((name) => key(text, name)).find((value) => Boolean(value)); }
 function number(value) { const parsed = Number(value); return Number.isFinite(parsed) ? parsed : null; }
 function classifyError(error) { const message = error instanceof Error ? error.message : String(error); return /timeout|abort/i.test(message) ? "recorder_probe_timeout" : "recorder_unreachable"; }
+function compactUtc(value) { return value.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}Z$/, "Z"); }
+function dahuaPlaybackTime(value) { return value.toISOString().replace(/[-:]/g, "_").replace("T", "_").replace(/\.\d{3}Z$/, ""); }

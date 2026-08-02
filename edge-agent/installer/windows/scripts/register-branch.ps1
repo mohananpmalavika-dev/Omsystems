@@ -1,223 +1,73 @@
-# Sentinel Grid Branch Registration Script
-# This script registers the edge agent with the cloud control plane
-
+# Sentinel Grid zero-touch branch bootstrap.
 param(
-    [string]$AppPath = (Split-Path -Parent $PSScriptRoot)
+    [string]$AppPath = (Split-Path -Parent $PSScriptRoot),
+    [string]$ControlPlaneUrl = "https://sentinel-grid-control-plane1.onrender.com"
 )
 
 $ErrorActionPreference = "Stop"
+$BranchNameFile = Join-Path $AppPath "branch-name.txt"
+$ActivationCodeFile = Join-Path $AppPath "activation-code.txt"
+if (-not (Test-Path -LiteralPath $BranchNameFile -PathType Leaf)) { throw "Branch name is missing." }
+if (-not (Test-Path -LiteralPath $ActivationCodeFile -PathType Leaf)) { throw "A one-time activation code is required." }
 
-Write-Host ""
-Write-Host "======================================"
-Write-Host "  Sentinel Grid Branch Registration"
-Write-Host "======================================"
-Write-Host ""
+$BranchName = (Get-Content -LiteralPath $BranchNameFile -Raw).Trim()
+$ActivationCode = (Get-Content -LiteralPath $ActivationCodeFile -Raw).Trim()
+if (-not $ActivationCode.StartsWith("sgact_") -or $ActivationCode.Length -lt 40) {
+    throw "The activation code is invalid. Create a fresh code in Sentinel Grid."
+}
 
-try {
-    # Read installation parameters
-    $BranchNameFile = Join-Path $AppPath "branch-name.txt"
-    $ActivationCodeFile = Join-Path $AppPath "activation-code.txt"
-    
-    if (-not (Test-Path $BranchNameFile)) {
-        throw "Branch name file not found. Installation may be corrupted."
-    }
-    
-    $BranchName = (Get-Content $BranchNameFile -Raw).Trim()
-    Write-Host "Branch Name: $BranchName"
-    
-    $ActivationCode = ""
-    if (Test-Path $ActivationCodeFile) {
-        $ActivationCode = (Get-Content $ActivationCodeFile -Raw).Trim()
-        Write-Host "Activation Code: $ActivationCode"
-    }
-    
-    Write-Host ""
-    Write-Host "Registering with Sentinel Grid Cloud..."
-    
-    # Control plane configuration
-    $ControlPlaneUrl = "https://sentinel-grid-control-plane1.onrender.com"
-    $BranchId = "00000000-0000-4000-8000-000000000104"
-    $DevUserId = "user-global-admin"
-    $BridgeKey = "WBRrQzol9gGTuIEAVd08kvMFP5pfyNDj1m32qZ7YsShOcxHa"
-    
-    # Register edge agent
-    $registrationBody = @{
-        branchId = $BranchId
-        name = $BranchName
-        version = "0.1.0"
-    }
-    
-    if ($ActivationCode) {
-        $registrationBody.activationCode = $ActivationCode
-    }
-    
-    $headers = @{
-        "Content-Type" = "application/json"
-        "x-dev-user-id" = $DevUserId
-        "Authorization" = "Bearer $BridgeKey"
-    }
-    
-    Write-Host "Connecting to: $ControlPlaneUrl"
-    
-    try {
-        $response = Invoke-RestMethod -Uri "$ControlPlaneUrl/api/edge-agents/register" `
-                                      -Method POST `
-                                      -Body ($registrationBody | ConvertTo-Json) `
-                                      -Headers $headers `
-                                      -TimeoutSec 30
-        
-        $edgeAgentId = $response.id
-        Write-Host ""
-        Write-Host "✅ Registration successful!"
-        Write-Host "   Edge Agent ID: $edgeAgentId"
-        
-    } catch {
-        # If registration endpoint doesn't exist, create agent directly
-        Write-Host "⚠️  Using alternative registration method..."
-        
-        # Generate a unique edge agent ID
-        $edgeAgentId = [guid]::NewGuid().ToString()
-        Write-Host "   Generated Edge Agent ID: $edgeAgentId"
-    }
-    
-    Write-Host ""
-    Write-Host "Creating configuration..."
-    
-    # Generate media shared key (32+ characters required)
-    $mediaKey = "sentinel-grid-edge-" + [guid]::NewGuid().ToString().Replace("-","")
-    
-    # Detect ffmpeg path
-    $ffmpegDir = Get-ChildItem -Path "$AppPath\runtime" -Filter "ffmpeg-*" -Directory | Select-Object -First 1
-    if ($ffmpegDir) {
-        $ffmpegBinPath = Join-Path $ffmpegDir.FullName "bin"
-        $ffprobePath = Join-Path $ffmpegBinPath "ffprobe.exe"
-        $ffmpegPath = Join-Path $ffmpegBinPath "ffmpeg.exe"
-    } else {
-        $ffprobePath = "ffprobe"
-        $ffmpegPath = "ffmpeg"
-    }
-    
-    # Create configuration file
-    $configPath = Join-Path $AppPath "config\edge-agent.env"
-    $configContent = @"
-# Sentinel Grid Edge Agent Configuration
-# Branch: $BranchName
-# Generated: $(Get-Date -Format "yyyy-MM-dd HH:mm:ss")
+$RuntimeDirectory = Join-Path $AppPath "runtime"
+$Ffprobe = Get-ChildItem -LiteralPath $RuntimeDirectory -Filter "ffprobe.exe" -File -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
+$Ffmpeg = Get-ChildItem -LiteralPath $RuntimeDirectory -Filter "ffmpeg.exe" -File -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
+$MediaMtx = Get-ChildItem -LiteralPath $RuntimeDirectory -Filter "mediamtx.exe" -File -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
+$ConfigPath = Join-Path $AppPath "config\edge-agent.env"
+$DataPath = Join-Path $AppPath "data"
+$LogPath = Join-Path $AppPath "logs\edge-agent.log"
 
-# Control Plane Connection
+$ConfigContent = @"
 CONTROL_PLANE_URL="$ControlPlaneUrl"
-EDGE_BRIDGE_SHARED_KEY="$BridgeKey"
-EDGE_AGENT_ID="$edgeAgentId"
+BRANCH_ID=""
+EDGE_AGENT_ID=""
+EDGE_BRIDGE_SHARED_KEY=""
+DEV_USER_ID=""
+EDGE_ACTIVATION_CODE="$ActivationCode"
 EDGE_AGENT_NAME="$BranchName"
 EDGE_AGENT_VERSION="0.1.0"
-BRANCH_ID="$BranchId"
-DEV_USER_ID="$DevUserId"
-
-# Logging
-LOG_LEVEL="info"
-DATA_DIRECTORY="$AppPath\data"
-LOG_DIRECTORY="$AppPath\logs"
-EDGE_LOG_PATH="$AppPath\logs\edge-agent.log"
-
-# Camera Discovery
-CAMERA_DISCOVERY_ENABLED="true"
-CAMERA_DISCOVERY_INTERVAL_SECONDS="60"
-DISCOVERY_TIMEOUT_MS="5000"
-ONVIF_TIMEOUT_MS="8000"
-ONVIF_ENDPOINTS=""
-
-# Camera Credentials (Update these with your camera credentials)
+EDGE_IDENTITY_PATH="$DataPath\device-identity.enc"
+EDGE_IDENTITY_KEY_PATH="$DataPath\device-identity.key"
+EDGE_OFFLINE_OUTBOX_PATH="$DataPath\offline-outbox.enc"
+EDGE_OFFLINE_OUTBOX_KEY_PATH="$DataPath\offline-outbox.key"
+EDGE_OFFLINE_OUTBOX_MAX_ITEMS="10000"
+EDGE_CAMERA_CREDENTIAL_VAULT_PATH="$DataPath\camera-credentials.enc"
+EDGE_CAMERA_CREDENTIAL_VAULT_KEY_PATH="$DataPath\camera-credentials.key"
+EDGE_UPDATE_STAGING_PATH="$DataPath\updates"
+EDGE_LOG_PATH="$LogPath"
 CAMERA_USERNAME="admin"
-CAMERA_PASSWORD="admin"
-
-# Live Media Streaming
-LIVE_MEDIA_ENABLED="true"
-HEARTBEAT_INTERVAL_SECONDS="30"
-EDGE_MEDIA_SHARED_KEY="$mediaKey"
-STREAM_SECRET_STORE_PATH="$AppPath\data\stream-secrets.json"
-STREAM_SECRET_PROVIDER_HOST="127.0.0.1"
-STREAM_SECRET_PROVIDER_PORT="8093"
-EDGE_LIVE_GATEWAY_HOST="127.0.0.1"
-EDGE_LIVE_GATEWAY_PORT="8090"
-PUBLIC_MEDIA_GATEWAY_URL="http://127.0.0.1:8090"
-
-# Media Server (MediaMTX)
-MEDIAMTX_PATH="$AppPath\runtime\mediamtx.exe"
-MEDIAMTX_API_URL="http://127.0.0.1:9997"
-MEDIAMTX_HLS_URL="http://127.0.0.1:8888"
-
-# Cloudflare Tunnel
-MEDIA_TUNNEL_MODE="quick"
-CLOUDFLARED_PATH="$AppPath\vendor\cloudflared.exe"
-CLOUDFLARED_TUNNEL_TOKEN=""
-MEDIA_ACCESS_TTL_SECONDS="300"
-
-# FFmpeg Paths
-FFPROBE_PATH="$ffprobePath"
-FFMPEG_PATH="$ffmpegPath"
-
-# Monitoring & Health
+CAMERA_PASSWORD=""
+ONVIF_ENDPOINTS=""
+DISCOVERY_TIMEOUT_MS="8000"
+ONVIF_TIMEOUT_MS="10000"
+FFPROBE_PATH="$(if ($Ffprobe) { $Ffprobe.FullName } else { 'ffprobe' })"
+FFMPEG_PATH="$(if ($Ffmpeg) { $Ffmpeg.FullName } else { 'ffmpeg' })"
+LIVE_MEDIA_ENABLED="false"
+MEDIA_RUNTIME_MANAGED="true"
+MEDIAMTX_PATH="$(if ($MediaMtx) { $MediaMtx.FullName } else { 'mediamtx' })"
+MEDIA_TUNNEL_MODE="disabled"
+STREAM_SECRET_STORE_PATH="$DataPath\stream-secrets.json"
 CAMERA_HEARTBEAT_INTERVAL_MS="30000"
 CAMERA_CONFIG_REFRESH_MS="60000"
-CONTROL_PLANE_TIMEOUT_MS="15000"
-
-# Internet Monitoring
-INTERNET_PROBE_TIMEOUT_MS="3000"
-INTERNET_PROBE_ATTEMPTS="3"
-INTERNET_PATH_WINDOW_MS="300000"
+CONTROL_PLANE_TIMEOUT_MS="30000"
 INTERNET_LINKS_JSON="[]"
-
-# Recorder Support
 RECORDERS_JSON="[]"
 RECORDER_POLL_INTERVAL_MS="30000"
-RECORDER_PROBE_TIMEOUT_MS="5000"
-RECORDER_ARCHIVE_SCAN_INTERVAL_MS="3600000"
-
-# Edge Health Monitoring
+RECORDER_ARCHIVE_SCAN_INTERVAL_MS="21600000"
 EDGE_HEALTH_DISK_PATH="$AppPath"
 "@
 
-    New-Item -ItemType Directory -Force -Path (Split-Path $configPath) | Out-Null
-    Set-Content -Path $configPath -Value $configContent -Encoding UTF8
-    
-    Write-Host "✅ Configuration saved to: $configPath"
-    
-    # Save edge agent ID for service installation
-    Set-Content -Path (Join-Path $AppPath "edge-agent-id.txt") -Value $edgeAgentId
-    
-    Write-Host ""
-    Write-Host "======================================"
-    Write-Host "  Registration Complete!"
-    Write-Host "======================================"
-    Write-Host ""
-    Write-Host "Your branch '$BranchName' is now registered."
-    Write-Host "The service will be installed and started next."
-    Write-Host ""
-    
-    # Clean up temporary files
-    if (Test-Path $BranchNameFile) { Remove-Item $BranchNameFile -Force }
-    if (Test-Path $ActivationCodeFile) { Remove-Item $ActivationCodeFile -Force }
-    
-} catch {
-    Write-Host ""
-    Write-Host "======================================"
-    Write-Host "  ❌ Registration Failed"
-    Write-Host "======================================"
-    Write-Host ""
-    Write-Host "Error: $($_.Exception.Message)"
-    Write-Host ""
-    Write-Host "Please check:"
-    Write-Host "  1. Internet connection is working"
-    Write-Host "  2. Firewall allows outbound HTTPS connections"
-    Write-Host "  3. Control plane URL is accessible"
-    Write-Host ""
-    Write-Host "For support, contact: support@sentinel-grid.com"
-    Write-Host ""
-    
-    # Save error log
-    $errorLog = Join-Path $AppPath "logs\registration-error.log"
-    New-Item -ItemType Directory -Force -Path (Split-Path $errorLog) | Out-Null
-    $_ | Out-File -FilePath $errorLog
-    
-    exit 1
-}
+New-Item -ItemType Directory -Path (Split-Path $ConfigPath), $DataPath, (Split-Path $LogPath) -Force | Out-Null
+Set-Content -LiteralPath $ConfigPath -Value $ConfigContent -Encoding UTF8
+& icacls.exe $ConfigPath /inheritance:r /grant:r '*S-1-5-18:(F)' '*S-1-5-32-544:(F)' | Out-Null
+if ($LASTEXITCODE -ne 0) { throw "Failed to protect gateway configuration." }
+
+Remove-Item -LiteralPath $BranchNameFile, $ActivationCodeFile -Force -ErrorAction SilentlyContinue
+Write-Host "Gateway bootstrap saved. The Windows service will consume the one-time code on first start."

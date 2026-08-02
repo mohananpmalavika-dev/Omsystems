@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { Client } from 'pg';
 
-const DATABASE_URL = process.env.DATABASE_URL || 'postgresql://omcamera_y1ej_user:0roU7pJ6wA6o9TWB9m2hVeFIKeUZE2JR@dpg-d9m3b1rm8hqs739pr5ag-a.oregon-postgres.render.com/omcamera_y1ej';
+const DATABASE_URL = process.env.DATABASE_URL ?? '';
 
 export async function DELETE(
   request: NextRequest,

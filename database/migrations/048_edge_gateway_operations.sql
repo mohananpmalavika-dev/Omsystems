@@ -38,8 +38,8 @@ CREATE TABLE IF NOT EXISTS edge_commands (
   edge_agent_id uuid NOT NULL REFERENCES edge_agents(id) ON DELETE CASCADE,
   command_type text NOT NULL CHECK (command_type IN (
     'rediscover', 'restart-media', 'restart-agent', 'probe-camera',
-    'probe-recorder', 'collect-logs', 'apply-update'
-    , 'update-credentials'
+    'probe-recorder', 'collect-logs', 'apply-update',
+    'update-credentials'
   )),
   status text NOT NULL DEFAULT 'queued' CHECK (status IN (
     'queued', 'running', 'succeeded', 'failed', 'cancelled'

@@ -97,6 +97,7 @@ import { ExportWorker } from "./recording/export-worker.js";
 import { ForensicAnalyzer } from "./recording/forensic-analyzer.js";
 import { MemoryStore } from "./store.js";
 import { RuntimeGuard } from "./platform/runtime-guard.js";
+import type { EdgePresenceCacheContract } from "./platform/edge-presence-cache.js";
 
 declare module "fastify" {
   interface FastifyRequest {
@@ -365,12 +366,14 @@ export async function buildApp(options?: {
   federationLocalSearchProvider?: FederationLocalSearchProvider;
   federationSharedKey?: string;
   digitalTwinAssetRoot?: string;
+  edgePresenceCache?: EdgePresenceCacheContract;
 }): Promise<FastifyInstance> {
   const app = Fastify({
     logger: options?.logger ?? false,
     trustProxy: Boolean(options?.edgeBridgeSharedKey),
   });
   const store = options?.store ?? new MemoryStore();
+  const edgePresenceCache = options?.edgePresenceCache;
   const runtimeGuard = new RuntimeGuard(options?.maxInFlightRequests ?? Number(process.env.MAX_IN_FLIGHT_REQUESTS ?? 500));
   runtimeGuard.register(app);
   const mediaGatewaySharedKey =
@@ -493,7 +496,11 @@ export async function buildApp(options?: {
     if (edgeAgentIngressRoute && legacyBridgeAllowed && options?.edgeBridgeSharedKey && edgeBridgeHeader && !edgeBridgeAuthenticated) {
       return reply.code(401).send({ error: "invalid_bridge_identity" });
     }
-    if (edgeAgentIngressRoute && (edgeCredentialAuthenticated || edgeBridgeAuthenticated)) {
+    if (
+      edgeAgentIngressRoute &&
+      !userIdentitySupplied &&
+      (edgeCredentialAuthenticated || edgeBridgeAuthenticated)
+    ) {
       request.edgeAgentAuthenticated = true;
       request.edgeAgentId = ingressAgentId;
       return;
@@ -529,7 +536,9 @@ export async function buildApp(options?: {
     request.currentUser = user;
   });
 
-  app.addHook("onClose", async () => store.close());
+  app.addHook("onClose", async () => {
+    await Promise.all([store.close(), edgePresenceCache?.close()]);
+  });
 
   app.get("/health", async () => ({
     status: "ok",
@@ -540,7 +549,12 @@ export async function buildApp(options?: {
     const databasePool = (store as unknown as { pool?: { query(sql: string): Promise<unknown> } }).pool;
     try {
       if (databasePool) await databasePool.query("SELECT 1");
-      return { status: "ready", database: databasePool ? "connected" : "memory" };
+      if (edgePresenceCache) await edgePresenceCache.ping();
+      return {
+        status: "ready",
+        database: databasePool ? "connected" : "memory",
+        liveState: edgePresenceCache ? "redis" : "database",
+      };
     } catch {
       return reply.code(503).send({ status: "not-ready", database: "unavailable" });
     }
@@ -697,7 +711,21 @@ export async function buildApp(options?: {
   app.get("/v1/branches/:branchId/edge-agents", async (request, reply) => {
     const { branchId } = branchParams.parse(request.params);
     if (!(await requireAccess(request, reply, store, "device:configure", branchId))) return;
-    return { data: await store.listEdgeAgentsByBranch(branchId) };
+    const agents = await store.listEdgeAgentsByBranch(branchId);
+    if (!edgePresenceCache) return { data: agents };
+    const data = await Promise.all(agents.map(async (agent) => {
+      try {
+        const presence = await edgePresenceCache.get(agent.id);
+        return {
+          ...agent,
+          status: presence ? "online" as const : agent.status === "pending" ? "pending" as const : "offline" as const,
+          ...(presence?.publicMediaUrl ? { publicMediaUrl: presence.publicMediaUrl } : {}),
+        };
+      } catch {
+        return agent;
+      }
+    }));
+    return { data };
   });
 
   app.post("/v1/edge-agents/:id/heartbeat", async (request, reply) => {
@@ -709,6 +737,14 @@ export async function buildApp(options?: {
     // Temporary operator authentication; replace with edge-agent mTLS identity.
     const agent = await store.heartbeatEdgeAgent(id, body.version!, body.publicMediaUrl);
     if (!agent) return reply.code(404).send({ error: "edge_agent_not_found" });
+    if (edgePresenceCache) {
+      await edgePresenceCache.markOnline({
+        edgeAgentId: id,
+        version: body.version!,
+        observedAt: new Date().toISOString(),
+        ...(body.publicMediaUrl ? { publicMediaUrl: body.publicMediaUrl } : {}),
+      });
+    }
     return agent;
   });
 

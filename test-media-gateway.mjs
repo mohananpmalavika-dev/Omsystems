@@ -1,6 +1,6 @@
 // Test media gateway connection
 const MEDIA_GATEWAY_URL = "https://sentinel-grid-media-gateway1.onrender.com";
-const EDGE_BRIDGE_SHARED_KEY = "WBRrQzol9gGTuIEAVd08kvMFP5pfyNDj1m32qZ7YsShOcxHa";
+const EDGE_BRIDGE_SHARED_KEY = process.env.EDGE_BRIDGE_SHARED_KEY ?? "";
 const CONTROL_PLANE_URL = "https://sentinel-grid-control-plane1.onrender.com";
 
 // First, get a live session token from control plane

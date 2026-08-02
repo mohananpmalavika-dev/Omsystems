@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { createReadStream } from "node:fs";
-import { readFile, stat } from "node:fs/promises";
+import { stat } from "node:fs/promises";
 import {
   HeadObjectCommand,
   ObjectLockMode,
@@ -47,7 +47,7 @@ export class S3EvidenceArchive implements EvidenceArchive {
     const details = await stat(input.path);
     if (!details.isFile() || details.size === 0) throw new Error("evidence_asset_empty");
 
-    const checksumHex = createHash("sha256").update(await readFile(input.path)).digest("hex");
+    const checksumHex = await sha256File(input.path);
     const occurredAt = new Date(input.occurredAt);
     const day = Number.isNaN(occurredAt.valueOf()) ? new Date() : occurredAt;
     const alertHash = createHash("sha256").update(input.alertId).digest("hex");
@@ -92,4 +92,10 @@ export class S3EvidenceArchive implements EvidenceArchive {
     }
     return { provider: "s3", key };
   }
+}
+
+async function sha256File(path: string) {
+  const hash = createHash("sha256");
+  for await (const chunk of createReadStream(path)) hash.update(chunk as Buffer);
+  return hash.digest("hex");
 }

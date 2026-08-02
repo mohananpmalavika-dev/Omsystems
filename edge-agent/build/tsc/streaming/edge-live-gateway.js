@@ -48,7 +48,7 @@ export class EdgeLiveGateway {
             return this.proxyHls(request, response);
         }
         if (request.method === "POST" && url.pathname === "/v1/live/start") {
-            if (!secureEqualHeader(request.headers["x-edge-bridge-key"], this.options.edgeBridgeSharedKey)) {
+            if (this.options.edgeBridgeSharedKey && !secureEqualHeader(request.headers["x-edge-bridge-key"], this.options.edgeBridgeSharedKey)) {
                 return sendJson(response, 401, { error: "invalid_bridge_identity" });
             }
             const body = await readJsonBody(request);
@@ -127,15 +127,17 @@ export async function startEdgeMediaRuntime(input) {
     await mkdir(runtimeDirectory, { recursive: true });
     const mediaConfigPath = join(runtimeDirectory, "mediamtx.yml");
     await writeFile(mediaConfigPath, mediaMtxConfiguration(config), "utf8");
-    const mediaMtx = startManagedProcess("MediaMTX", config.MEDIAMTX_PATH, [mediaConfigPath], runtimeDirectory);
-    await waitForHttp(new URL("/v3/config/global/get", config.MEDIAMTX_API_URL), mediaMtx, 15_000);
+    const mediaMtx = config.MEDIA_RUNTIME_MANAGED
+        ? startManagedProcess("MediaMTX", config.MEDIAMTX_PATH, [mediaConfigPath], runtimeDirectory)
+        : undefined;
+    await waitForHttp(new URL("/v3/config/global/get", config.MEDIAMTX_API_URL), mediaMtx, 30_000);
     const router = new MediaMtxRouter(config.MEDIAMTX_API_URL);
     let resolvedPublicUrl = config.PUBLIC_MEDIA_GATEWAY_URL ?? "";
     const liveGateway = buildEdgeLiveGateway({
         consumer: { consume: (token) => input.gateway.consumeLiveSession(input.agentId, token) },
         router,
         resolveSecret: (reference) => input.secrets.get(reference),
-        edgeBridgeSharedKey: config.EDGE_BRIDGE_SHARED_KEY,
+        ...(config.EDGE_BRIDGE_SHARED_KEY ? { edgeBridgeSharedKey: config.EDGE_BRIDGE_SHARED_KEY } : {}),
         publicBaseUrl: () => resolvedPublicUrl,
         mediaMtxHlsUrl: config.MEDIAMTX_HLS_URL,
         accessTtlMs: config.MEDIA_ACCESS_TTL_SECONDS * 1_000,
@@ -161,12 +163,12 @@ export async function startEdgeMediaRuntime(input) {
     catch (error) {
         tunnel?.kill();
         await liveGateway.close();
-        mediaMtx.kill();
+        mediaMtx?.kill();
         throw error;
     }
     return {
         publicUrl: resolvedPublicUrl,
-        async stop() { tunnel?.kill(); await liveGateway.close().catch(() => undefined); mediaMtx.kill(); },
+        async stop() { tunnel?.kill(); await liveGateway.close().catch(() => undefined); mediaMtx?.kill(); },
     };
 }
 export class MediaMtxRouter {
@@ -289,7 +291,7 @@ function pipeProcessLogs(name, child) {
 async function waitForHttp(url, child, timeoutMs) {
     const deadline = Date.now() + timeoutMs;
     while (Date.now() < deadline) {
-        if (child.exitCode !== null)
+        if (child && child.exitCode !== null)
             throw new Error(`MediaMTX exited before becoming ready (${child.exitCode})`);
         try {
             if ((await fetch(url, { signal: AbortSignal.timeout(1_000) })).ok)

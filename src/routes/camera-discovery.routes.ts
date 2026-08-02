@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import type { ControlPlaneStore } from "../control-plane-store.js";
+import type { AnalyticsRuleInput, ControlPlaneStore } from "../control-plane-store.js";
+import type { RecordingJob } from "../domain/models.js";
 
 const branchParams = z.object({ branchId: z.string().min(1) });
 const discoveryParams = z.object({ 
@@ -21,6 +22,75 @@ const approveAllBody = z.object({
   enableAnalytics: z.boolean().optional(),
   enableAlerts: z.boolean().optional(),
 });
+
+const defaultAnalyticsRules: ReadonlyArray<Pick<
+  AnalyticsRuleInput,
+  "name" | "detectionType" | "objectClasses" | "severity" | "minDurationSeconds"
+>> = [
+  { name: "Person detection", detectionType: "person", objectClasses: ["person"], severity: "P2", minDurationSeconds: 0 },
+  { name: "Vehicle detection", detectionType: "vehicle", objectClasses: ["car", "truck", "bus", "motorcycle"], severity: "P3", minDurationSeconds: 0 },
+  { name: "Restricted-area intrusion", detectionType: "intrusion", objectClasses: ["person", "vehicle"], severity: "P1", minDurationSeconds: 1 },
+  { name: "Line crossing", detectionType: "line-crossing", objectClasses: ["person", "vehicle"], severity: "P2", minDurationSeconds: 0 },
+  { name: "Loitering", detectionType: "loitering", objectClasses: ["person"], severity: "P2", minDurationSeconds: 30 },
+  { name: "Crowd detection", detectionType: "crowd", objectClasses: ["person"], severity: "P2", minDurationSeconds: 10 },
+  { name: "Fire and smoke detection", detectionType: "fire-smoke", objectClasses: ["fire", "smoke"], severity: "P1", minDurationSeconds: 1 },
+  { name: "Safety equipment detection", detectionType: "ppe", objectClasses: ["person", "helmet", "vest"], severity: "P2", minDurationSeconds: 1 },
+  { name: "Camera tamper detection", detectionType: "camera-tamper", objectClasses: [], severity: "P1", minDurationSeconds: 1 },
+  { name: "Unattended object", detectionType: "object-left", objectClasses: ["bag", "package"], severity: "P2", minDurationSeconds: 30 },
+];
+
+function retentionTiers(retentionDays: number) {
+  const hotRetentionDays = Math.min(30, retentionDays);
+  const warmRetentionDays = Math.min(60, Math.max(0, retentionDays - hotRetentionDays));
+  return {
+    hotRetentionDays,
+    warmRetentionDays,
+    coldRetentionDays: Math.max(0, retentionDays - hotRetentionDays - warmRetentionDays),
+  };
+}
+
+function defaultRecordingJob(
+  mode: "continuous" | "motion",
+  retentionDays: number,
+): Omit<RecordingJob, "id" | "cameraId" | "updatedAt"> {
+  return {
+    mode,
+    enabled: true,
+    status: "idle",
+    retentionDays,
+    segmentDurationSeconds: 60,
+    ...retentionTiers(retentionDays),
+    critical: false,
+    backupRequired: true,
+    automaticDeletionEnabled: true,
+    evidenceProtection: true,
+    recordMainStream: true,
+    preRollSeconds: 30,
+    postRollSeconds: 120,
+    minMotionDurationSeconds: 1,
+    motionConfidenceThreshold: 0.65,
+    cooldownSeconds: 60,
+    maxEventDurationSeconds: 600,
+    triggerEventTypes: defaultAnalyticsRules.map((rule) => rule.detectionType),
+  };
+}
+
+function analyticsRuleInput(
+  definition: (typeof defaultAnalyticsRules)[number],
+  alertsEnabled: boolean,
+): AnalyticsRuleInput {
+  return {
+    ...definition,
+    enabled: true,
+    minConfidence: 0.65,
+    direction: "any",
+    cooldownSeconds: 60,
+    recipients: [],
+    recordingPolicy: alertsEnabled ? "protect-window" : "event-recording",
+    preRollSeconds: 30,
+    postRollSeconds: 120,
+  };
+}
 
 /**
  * Lists pending ONVIF discoveries. Submission, approval, and camera inventory
@@ -114,23 +184,48 @@ export async function registerCameraDiscoveryRoutes(
 
     // Get all pending discovered cameras
     const discoveries = await store.listDiscoveredCameras(branchId);
-    const pendingDiscoveries = discoveries.filter((d: any) => 
-      d.duplicateStatus === "unique" && d.compatibilityStatus === "compatible"
+    const pendingDiscoveries = discoveries.filter((discovered) =>
+      discovered.status === "pending" &&
+      discovered.duplicateStatus === "unique" &&
+      discovered.compatibilityStatus === "compatible"
     );
 
-    const results: any[] = [];
+    const results: Array<Record<string, unknown>> = [];
     let provisioned = 0;
+    let partial = 0;
     let needsAttention = 0;
     let failed = 0;
+    const recordingMode = body.recordingMode ?? "continuous";
+    const retentionDays = body.retentionDays ?? 180;
+    const analyticsEnabled = body.enableAnalytics ?? true;
+    const alertsEnabled = body.enableAlerts ?? true;
 
-    for (const discovered of pendingDiscoveries) {
+    for (const [index, discovered] of pendingDiscoveries.entries()) {
+      if (!discovered.streamVerified || discovered.credentialsRequired) {
+        results.push({
+          discoveryId: discovered.id,
+          status: "needs-attention",
+          message: discovered.credentialsRequired
+            ? "Camera credentials are required before provisioning"
+            : "The camera stream must be verified before provisioning",
+          stages: {
+            approved: false,
+            recording: "waiting-for-stream",
+            analytics: "waiting-for-stream",
+            alerts: "waiting-for-stream",
+          },
+        });
+        needsAttention++;
+        continue;
+      }
+
       try {
         const name = discovered.displayName || discovered.model || `${discovered.vendor} camera`;
         const camera = await store.approveCamera(branchId, {
           discoveryId: discovered.id,
           name,
           protocol: "onvif-t",
-          channel: 1,
+          channel: index + 1,
           connectionSecretRef: `edge://${discovered.edgeAgentId}/${discovered.id}`,
           model: discovered.model,
           serialNumber: discovered.serialNumber,
@@ -142,18 +237,35 @@ export async function registerCameraDiscoveryRoutes(
           throw new Error("Failed to approve discovered camera");
         }
 
+        await store.upsertRecordingJob(
+          camera.id,
+          defaultRecordingJob(recordingMode, retentionDays),
+        );
+
+        if (analyticsEnabled) {
+          for (const definition of defaultAnalyticsRules) {
+            await store.createAnalyticsRule(
+              branch.tenantId,
+              camera.id,
+              request.currentUser.id,
+              analyticsRuleInput(definition, alertsEnabled),
+            );
+          }
+        }
+
         results.push({
           discoveryId: discovered.id,
           cameraId: camera.id,
-          status: discovered.streamVerified ? "provisioned" : "partial",
-          message: discovered.streamVerified ? "Provisioned successfully" : "Provisioned but stream needs verification",
+          status: "provisioned",
+          message: "Camera, recording, analytics, and alerts provisioned successfully",
+          stages: {
+            approved: true,
+            recording: "configured",
+            analytics: analyticsEnabled ? "active" : "disabled",
+            alerts: alertsEnabled ? "enabled" : "disabled",
+          },
         });
-
-        if (discovered.streamVerified) {
-          provisioned++;
-        } else {
-          needsAttention++;
-        }
+        provisioned++;
       } catch (error: any) {
         results.push({
           discoveryId: discovered.id,
@@ -164,15 +276,16 @@ export async function registerCameraDiscoveryRoutes(
       }
     }
 
-    return {
+    return reply.code(201).send({
       summary: {
+        total: pendingDiscoveries.length,
         provisioned,
-        partial: needsAttention,
+        partial,
         needsAttention,
         failed,
       },
       results,
-    };
+    });
   });
 
   app.post("/v1/branches/:branchId/cameras/discovered/:discoveryId/reject", async (request, reply) => {

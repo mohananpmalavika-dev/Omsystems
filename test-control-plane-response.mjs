@@ -1,6 +1,6 @@
 // Test what the control plane returns for live session request
 const CONTROL_PLANE_URL = "https://sentinel-grid-control-plane1.onrender.com";
-const EDGE_BRIDGE_KEY = "WBRrQzol9gGTuIEAVd08kvMFP5pfyNDj1m32qZ7YsShOcxHa";
+const EDGE_BRIDGE_KEY = process.env.EDGE_BRIDGE_SHARED_KEY ?? "";
 const CAMERA_ID = "e3d027f8-9c42-4c8b-bbf2-39c91eb756fb";
 
 // First, let's check what the edge agent info shows

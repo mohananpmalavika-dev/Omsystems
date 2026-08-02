@@ -27,19 +27,21 @@ export class CameraHeartbeatService {
     developmentUserId;
     ffprobePath;
     ffmpegPath;
-    edgeBridgeSharedKey;
+    edgeAuthCredential;
+    telemetrySender;
     cameras = new Map();
     frameStates = new Map();
     heartbeatInterval = null;
     isRunning = false;
-    constructor(apiEndpoint, branchId, edgeAgentId, developmentUserId, ffprobePath = "ffprobe", ffmpegPath = "ffmpeg", edgeBridgeSharedKey) {
+    constructor(apiEndpoint, branchId, edgeAgentId, developmentUserId, ffprobePath = "ffprobe", ffmpegPath = "ffmpeg", edgeAuthCredential, telemetrySender) {
         this.apiEndpoint = apiEndpoint;
         this.branchId = branchId;
         this.edgeAgentId = edgeAgentId;
         this.developmentUserId = developmentUserId;
         this.ffprobePath = ffprobePath;
         this.ffmpegPath = ffmpegPath;
-        this.edgeBridgeSharedKey = edgeBridgeSharedKey;
+        this.edgeAuthCredential = edgeAuthCredential;
+        this.telemetrySender = telemetrySender;
     }
     replaceCameras(cameras) {
         const retainedIds = new Set(cameras.map((camera) => camera.id));
@@ -159,38 +161,45 @@ export class CameraHeartbeatService {
     }
     async sendToPlatform(cameraId, data) {
         const observedAt = new Date().toISOString();
+        const payload = {
+            branchId: this.branchId,
+            edgeAgentId: this.edgeAgentId,
+            deviceType: "camera",
+            deviceId: cameraId,
+            observedAt,
+            source: "rtsp",
+            quality: data.quality,
+            idempotencyKey: `${this.edgeAgentId}:camera:${cameraId}:${observedAt}`,
+            metrics: {
+                status: data.status,
+                responseTimeMs: data.responseTimeMs,
+                streamActive: data.streamActive,
+                videoLoss: data.videoLoss,
+                width: data.currentResolution?.width ?? null,
+                height: data.currentResolution?.height ?? null,
+                codec: data.codec ?? null,
+                fps: data.currentFps ?? null,
+                bitrateKbps: data.currentBitrate ?? null,
+                packetLossPercent: data.packetLoss ?? null,
+                imageFrozen: data.imageFrozen ?? null,
+                blackScreen: data.blackScreen ?? null,
+            },
+            reasonCodes: data.reasonCodes,
+        };
+        if (this.telemetrySender) {
+            await this.telemetrySender(payload);
+            return;
+        }
         const response = await fetch(`${this.apiEndpoint}/v1/edge-agents/${encodeURIComponent(this.edgeAgentId)}/telemetry`, {
             method: "POST",
             headers: {
                 "Content-Type": "application/json",
                 ...(this.developmentUserId ? { "x-user-id": this.developmentUserId } : {}),
-                ...(this.edgeBridgeSharedKey ? { "x-edge-bridge-key": this.edgeBridgeSharedKey } : {}),
+                ...(this.edgeAuthCredential?.startsWith("sggw_")
+                    ? { "x-edge-agent-token": this.edgeAuthCredential }
+                    : this.edgeAuthCredential ? { "x-edge-bridge-key": this.edgeAuthCredential } : {}),
             },
-            body: JSON.stringify({
-                branchId: this.branchId,
-                edgeAgentId: this.edgeAgentId,
-                deviceType: "camera",
-                deviceId: cameraId,
-                observedAt,
-                source: "rtsp",
-                quality: data.quality,
-                idempotencyKey: `${this.edgeAgentId}:camera:${cameraId}:${observedAt}`,
-                metrics: {
-                    status: data.status,
-                    responseTimeMs: data.responseTimeMs,
-                    streamActive: data.streamActive,
-                    videoLoss: data.videoLoss,
-                    width: data.currentResolution?.width ?? null,
-                    height: data.currentResolution?.height ?? null,
-                    codec: data.codec ?? null,
-                    fps: data.currentFps ?? null,
-                    bitrateKbps: data.currentBitrate ?? null,
-                    packetLossPercent: data.packetLoss ?? null,
-                    imageFrozen: data.imageFrozen ?? null,
-                    blackScreen: data.blackScreen ?? null,
-                },
-                reasonCodes: data.reasonCodes,
-            }),
+            body: JSON.stringify(payload),
         });
         if (!response.ok)
             throw new Error(`HTTP ${response.status}: ${await response.text()}`);
@@ -201,9 +210,9 @@ export class CameraHeartbeatService {
     }
 }
 let heartbeatService = null;
-export function initializeCameraHeartbeat(apiEndpoint, branchId, edgeAgentId, developmentUserId, ffprobePath = "ffprobe", ffmpegPath = "ffmpeg", edgeBridgeSharedKey) {
+export function initializeCameraHeartbeat(apiEndpoint, branchId, edgeAgentId, developmentUserId, ffprobePath = "ffprobe", ffmpegPath = "ffmpeg", edgeAuthCredential, telemetrySender) {
     if (!heartbeatService) {
-        heartbeatService = new CameraHeartbeatService(apiEndpoint, branchId, edgeAgentId, developmentUserId, ffprobePath, ffmpegPath, edgeBridgeSharedKey);
+        heartbeatService = new CameraHeartbeatService(apiEndpoint, branchId, edgeAgentId, developmentUserId, ffprobePath, ffmpegPath, edgeAuthCredential, telemetrySender);
     }
     return heartbeatService;
 }

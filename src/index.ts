@@ -4,16 +4,21 @@ import { createPool } from "./database/pool.js";
 import { PostgresStore } from "./database/postgres-store.js";
 import { MemoryStore } from "./store.js";
 import type { ControlPlaneStore } from "./control-plane-store.js";
+import { RedisEdgePresenceCache } from "./platform/edge-presence-cache.js";
 
 const config = loadConfig();
 const store = config.DATABASE_URL
   ? (new PostgresStore(createPool(config.DATABASE_URL)) as unknown as ControlPlaneStore)
   : new MemoryStore();
+const edgePresenceCache = config.REDIS_URL
+  ? await new RedisEdgePresenceCache(config.REDIS_URL, config.EDGE_PRESENCE_TTL_SECONDS).connect()
+  : undefined;
 const app = await buildApp({
   logger: true,
   store,
   authMode: config.AUTH_MODE,
   maxInFlightRequests: config.MAX_IN_FLIGHT_REQUESTS,
+  ...(edgePresenceCache ? { edgePresenceCache } : {}),
   ...(config.CONTROL_PLANE_PUBLIC_URL
     ? { controlPlanePublicUrl: config.CONTROL_PLANE_PUBLIC_URL }
     : {}),

@@ -1,5 +1,5 @@
 import { createReadStream } from "node:fs";
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { mkdir, readFile, rename, stat, unlink, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { spawn } from "node:child_process";
@@ -248,9 +248,17 @@ export class AlertEvidenceCaptureService {
 
   private async writeStatus(status: AlertEvidenceCaptureStatus) {
     const path = this.statusPath(status.alertId);
-    const temporary = `${path}.tmp`;
+    const temporary = `${path}.${process.pid}.${randomUUID()}.tmp`;
     await writeFile(temporary, JSON.stringify(status, null, 2), { encoding: "utf8", mode: 0o600 });
-    await rename(temporary, path);
+    try {
+      await rename(temporary, path);
+    } catch (error) {
+      if (!["EEXIST", "EPERM"].includes((error as NodeJS.ErrnoException).code ?? "")) throw error;
+      await unlink(path).catch((unlinkError) => {
+        if ((unlinkError as NodeJS.ErrnoException).code !== "ENOENT") throw unlinkError;
+      });
+      await rename(temporary, path);
+    }
   }
 
   private folder(alertId: string) {

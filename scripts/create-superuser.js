@@ -6,7 +6,8 @@
 import pkg from 'pg';
 const { Client } = pkg;
 
-const connectionString = 'postgresql://omcamera_y1ej_user:0roU7pJ6wA6o9TWB9m2hVeFIKeUZE2JR@dpg-d9m3b1rm8hqs739pr5ag-a.oregon-postgres.render.com/omcamera_y1ej';
+const connectionString = process.env.DATABASE_URL;
+if (!connectionString) throw new Error('DATABASE_URL is required');
 const username = 'mgdhanyamohan';
 const password = 'Thathu110';
 

@@ -9,7 +9,8 @@ import pg from 'pg';
 
 const { Client } = pg;
 
-const DATABASE_URL = 'postgresql://omcamera_y1ej_user:0roU7pJ6wA6o9TWB9m2hVeFIKeUZE2JR@dpg-d9m3b1rm8hqs739pr5ag-a.oregon-postgres.render.com/omcamera_y1ej';
+const DATABASE_URL = process.env.DATABASE_URL;
+if (!DATABASE_URL) throw new Error('DATABASE_URL is required');
 
 async function main() {
   const client = new Client({

@@ -69,7 +69,7 @@ $form.Controls.Add($branchTextBox)
 $keyLabel = New-Object System.Windows.Forms.Label
 $keyLabel.Location = New-Object System.Drawing.Point(20, 200)
 $keyLabel.Size = New-Object System.Drawing.Size(200, 20)
-$keyLabel.Text = 'Installation Key:'
+$keyLabel.Text = 'One-time Activation Code:'
 $keyLabel.Font = New-Object System.Drawing.Font("Segoe UI", 10, [System.Drawing.FontStyle]::Bold)
 $form.Controls.Add($keyLabel)
 
@@ -186,15 +186,32 @@ $installButton.Add_Click({
         
         # Create configuration
         UpdateProgress 50 "Creating configuration..."
+        if (-not $installKey.StartsWith("sgact_") -or $installKey.Length -lt 40) {
+            throw "Create a fresh gateway activation code in Sentinel Grid."
+        }
         $configContent = @"
 CONTROL_PLANE_URL="https://sentinel-grid-control-plane1.onrender.com"
-EDGE_BRIDGE_SHARED_KEY="WBRrQzol9gGTuIEAVd08kvMFP5pfyNDj1m32qZ7YsShOcxHa"
-BRANCH_NAME="$branchName"
-LOG_LEVEL="info"
-DATA_DIRECTORY="$INSTALL_DIR\data"
-LOG_DIRECTORY="$INSTALL_DIR\logs"
-CAMERA_DISCOVERY_ENABLED="true"
+BRANCH_ID=""
+EDGE_AGENT_ID=""
+EDGE_BRIDGE_SHARED_KEY=""
+DEV_USER_ID=""
+EDGE_ACTIVATION_CODE="$installKey"
+EDGE_AGENT_NAME="$branchName"
+EDGE_AGENT_VERSION="0.1.0"
+EDGE_IDENTITY_PATH="$INSTALL_DIR\data\device-identity.enc"
+EDGE_IDENTITY_KEY_PATH="$INSTALL_DIR\data\device-identity.key"
+EDGE_OFFLINE_OUTBOX_PATH="$INSTALL_DIR\data\offline-outbox.enc"
+EDGE_OFFLINE_OUTBOX_KEY_PATH="$INSTALL_DIR\data\offline-outbox.key"
+EDGE_CAMERA_CREDENTIAL_VAULT_PATH="$INSTALL_DIR\data\camera-credentials.enc"
+EDGE_CAMERA_CREDENTIAL_VAULT_KEY_PATH="$INSTALL_DIR\data\camera-credentials.key"
+EDGE_LOG_PATH="$INSTALL_DIR\logs\edge-agent.log"
+CAMERA_USERNAME="admin"
+CAMERA_PASSWORD=""
+ONVIF_ENDPOINTS=""
 LIVE_MEDIA_ENABLED="false"
+MEDIA_TUNNEL_MODE="disabled"
+INTERNET_LINKS_JSON="[]"
+RECORDERS_JSON="[]"
 "@
         $configPath = "$INSTALL_DIR\config\edge-agent.env"
         Set-Content -Path $configPath -Value $configContent -Encoding UTF8

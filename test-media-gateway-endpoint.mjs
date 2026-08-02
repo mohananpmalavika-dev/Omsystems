@@ -1,6 +1,6 @@
 // Test the media gateway /v1/live/start endpoint
 const MEDIA_GATEWAY_URL = "https://apnic-deserve-evans-yarn.trycloudflare.com";
-const EDGE_BRIDGE_KEY = "WBRrQzol9gGTuIEAVd08kvMFP5pfyNDj1m32qZ7YsShOcxHa";
+const EDGE_BRIDGE_KEY = process.env.EDGE_BRIDGE_SHARED_KEY ?? "";
 
 console.log("🔍 Testing Media Gateway Live Start Endpoint\n");
 console.log("Gateway URL:", MEDIA_GATEWAY_URL);

@@ -16,6 +16,8 @@ const configSchema = z.object({
     .default("info"),
   AUTH_MODE: z.enum(["development", "session", "oidc"]).default("development"),
   DATABASE_URL: z.string().url().optional(),
+  REDIS_URL: z.preprocess((value) => value === "" ? undefined : value, z.string().url().optional()),
+  EDGE_PRESENCE_TTL_SECONDS: z.coerce.number().int().min(15).max(600).default(90),
   MEDIA_GATEWAY_SHARED_KEY: z.string().min(32).default(
     "development-media-gateway-key-change-me",
   ),
@@ -68,7 +70,7 @@ export function loadConfig(
   environment: NodeJS.ProcessEnv = process.env,
 ): AppConfig {
   const expanded = { ...environment };
-  for (const name of ["DATABASE_URL", "MEDIA_GATEWAY_SHARED_KEY", "EDGE_BRIDGE_SHARED_KEY", "EDGE_UPDATE_SIGNING_PRIVATE_KEY", "RECORDING_ENGINE_SHARED_KEY", "ANALYTICS_ENGINE_SHARED_KEY", "FEDERATION_SHARED_KEY", "REPORT_DOWNLOAD_SECRET", "REPORT_WORKER_SHARED_KEY"] as const) {
+  for (const name of ["DATABASE_URL", "REDIS_URL", "MEDIA_GATEWAY_SHARED_KEY", "EDGE_BRIDGE_SHARED_KEY", "EDGE_UPDATE_SIGNING_PRIVATE_KEY", "RECORDING_ENGINE_SHARED_KEY", "ANALYTICS_ENGINE_SHARED_KEY", "FEDERATION_SHARED_KEY", "REPORT_DOWNLOAD_SECRET", "REPORT_WORKER_SHARED_KEY"] as const) {
     const file = environment[`${name}_FILE`];
     if (file && environment[name]) throw new Error(`${name} and ${name}_FILE cannot both be set`);
     if (file) expanded[name] = readFileSync(file, "utf8").trim();

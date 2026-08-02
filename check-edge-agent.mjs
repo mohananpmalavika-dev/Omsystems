@@ -42,7 +42,7 @@ try {
       method: "POST",
       headers: {
         "content-type": "application/json",
-        "x-edge-bridge-key": "WBRrQzol9gGTuIEAVd08kvMFP5pfyNDj1m32qZ7YsShOcxHa",
+        "x-edge-agent-token": process.env.EDGE_AGENT_TOKEN ?? "",
       },
       body: JSON.stringify({ version: "0.1.0" }),
     }

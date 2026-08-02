@@ -80,11 +80,11 @@ begin
   BranchNamePage.Add('Branch Name:', False);
   BranchNamePage.Values[0] := 'Branch Office';
 
-  // Activation Code Page (Optional)
+  // One-time activation issued by Sentinel Grid.
   ActivationPage := CreateInputQueryPage(BranchNamePage.ID,
-    'Activation Code (Optional)', 
-    'Enter activation code if you have one',
-    'If you have received an activation code from your administrator, enter it below. Otherwise, leave it blank.');
+    'Gateway Activation',
+    'Enter the one-time activation code',
+    'Create a gateway activation in Sentinel Grid and paste the code here. It is consumed on first boot.');
   ActivationPage.Add('Activation Code:', False);
   ActivationPage.Values[0] := '';
 end;
@@ -107,6 +107,14 @@ begin
       Result := False;
     end;
   end;
+  if CurPageID = ActivationPage.ID then
+  begin
+    if Pos('sgact_', Trim(ActivationPage.Values[0])) <> 1 then
+    begin
+      MsgBox('A valid one-time Sentinel Grid activation code is required.', mbError, MB_OK);
+      Result := False;
+    end;
+  end;
 end;
 
 procedure CurStepChanged(CurStep: TSetupStep);
@@ -123,8 +131,7 @@ begin
     // Save to temporary files for PowerShell scripts to read
     SaveStringToFile(ExpandConstant('{app}\branch-name.txt'), BranchName, False);
     
-    if ActivationCode <> '' then
-      SaveStringToFile(ExpandConstant('{app}\activation-code.txt'), ActivationCode, False);
+    SaveStringToFile(ExpandConstant('{app}\activation-code.txt'), ActivationCode, False);
     
     // Save installation info
     SaveStringToFile(ExpandConstant('{app}\install-info.txt'), 

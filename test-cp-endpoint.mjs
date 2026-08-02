@@ -5,7 +5,7 @@ const response = await fetch(
     method: "POST",
     headers: {
       "content-type": "application/json",
-      "x-edge-bridge-key": "WBRrQzol9gGTuIEAVd08kvMFP5pfyNDj1m32qZ7YsShOcxHa",
+      "x-edge-bridge-key": process.env.EDGE_BRIDGE_SHARED_KEY ?? "",
     },
     body: "{}",
   }
