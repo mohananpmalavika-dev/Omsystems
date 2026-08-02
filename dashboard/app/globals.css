@@ -4211,6 +4211,26 @@ button, a { -webkit-tap-highlight-color: transparent; }
 .control-room-section .stat-card { min-height: 84px; border: 1px solid #e0e7f0; background: #fbfcfe !important; }
 .control-room-section .stat-icon.text-purple { color: var(--blue) !important; }
 
+/* Enterprise infrastructure follows the same restrained operational palette:
+   blue for navigation, and green/amber/red only for measured state. */
+.infrastructure-dashboard { width: min(100%, 1520px); margin: 0 auto; color: var(--ink); }
+.infrastructure-dashboard > div:first-child {
+  min-height: 116px;
+  padding: 24px 26px;
+  border: 1px solid #d9e3ef;
+  border-radius: 18px;
+  background: linear-gradient(135deg, #fff, #f4f8fd);
+  box-shadow: var(--shadow-sm);
+}
+.infrastructure-dashboard > div:first-child h1 { color: #162641 !important; font-size: 26px !important; letter-spacing: -.45px; }
+.infrastructure-dashboard .card { overflow: hidden; border-color: #dfe6ef !important; box-shadow: var(--shadow-sm) !important; }
+.infrastructure-dashboard .card > div:first-child { min-height: 54px; background: #fbfcfe; }
+.infrastructure-dashboard select { min-height: 40px; color: #263b59; border-color: #d6e0ec !important; background: #fff; }
+.infrastructure-dashboard button,
+.infrastructure-dashboard a { font-weight: 650; }
+.infrastructure-dashboard .overflow-y-auto { scrollbar-color: #c6d2e1 transparent; }
+.infrastructure-dashboard .bg-gradient-to-r { overflow-x: auto; background: #f7f9fc !important; }
+
 @media (max-width: 1100px) {
   .compliance-hub-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .compliance-hub-module:nth-child(3n) { border-right: 1px solid #e7ecf3; }
@@ -4240,4 +4260,9 @@ button, a { -webkit-tap-highlight-color: transparent; }
   .global-alert-tools { top: 17px !important; right: 55px !important; flex-direction: row !important; align-items: center !important; }
   .global-alert-tools > button:first-child { width: 38px !important; height: 38px !important; color: #365377 !important; border: 1px solid #d7e1ee; background: #f2f6fb !important; box-shadow: none !important; }
   .global-alert-tools > button:nth-child(2) { display: none !important; }
+  .infrastructure-dashboard { padding: 18px 14px 36px !important; }
+  .infrastructure-dashboard > div:first-child { min-height: 0; align-items: flex-start; flex-direction: column; padding: 20px; }
+  .infrastructure-dashboard > div:first-child > div:last-child { width: 100%; flex-wrap: wrap; }
+  .infrastructure-dashboard > div:first-child select,
+  .infrastructure-dashboard > div:first-child button { flex: 1; }
 }

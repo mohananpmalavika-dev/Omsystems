@@ -40,7 +40,7 @@ export function RootCauseBreakdownWidget({
       setLoading(true);
       setError(undefined);
       
-      const response = await fetch(`/api/v1/infrastructure/rca/branch/${branchId}/statistics?days=30`);
+      const response = await fetch(`/api/control/v1/infrastructure/rca/branch/${branchId}/statistics?days=30`, { cache: "no-store" });
       if (!response.ok) throw new Error("Failed to load statistics");
       
       const { data } = await response.json();

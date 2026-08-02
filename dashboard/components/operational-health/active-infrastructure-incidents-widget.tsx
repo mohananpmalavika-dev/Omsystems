@@ -6,6 +6,7 @@
  */
 
 import { useState, useEffect } from "react";
+import Link from "next/link";
 import { AlertTriangle, Clock, CheckCircle2, X } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardContent } from "../ui/card";
 
@@ -48,7 +49,7 @@ export function ActiveInfrastructureIncidentsWidget({
       setLoading(true);
       setError(undefined);
       
-      let url = "/api/v1/infrastructure/rca/incidents/active";
+      let url = "/api/control/v1/infrastructure/rca/incidents/active";
       if (branchId) {
         url += `?branchId=${branchId}`;
       }
@@ -140,7 +141,7 @@ export function ActiveInfrastructureIncidentsWidget({
           <div className="flex flex-col items-center justify-center h-64 text-gray-400">
             <CheckCircle2 size={48} className="mb-2" />
             <p>No active infrastructure incidents</p>
-            <p className="text-sm">All systems operational</p>
+            <p className="text-sm">No warning or critical evidence is currently reported</p>
           </div>
         ) : (
           <div className="space-y-3 max-h-96 overflow-y-auto">
@@ -278,15 +279,12 @@ function IncidentDetailModal({ incident, onClose }: IncidentDetailModalProps) {
 
           {/* Actions */}
           <div className="flex gap-3">
-            <button className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+            <Link href={`/operations/ai-command-center?branchId=${encodeURIComponent(incident.branchId)}`} className="flex-1 px-4 py-2 text-center bg-blue-600 text-white rounded-lg hover:bg-blue-700">
               Investigate
-            </button>
-            <button className="flex-1 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300">
-              Acknowledge
-            </button>
-            <button className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700">
-              Resolve
-            </button>
+            </Link>
+            <Link href={`/operations/alerts?branchId=${encodeURIComponent(incident.branchId)}`} className="flex-1 px-4 py-2 text-center bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300">
+              Open alert workflow
+            </Link>
           </div>
         </div>
       </div>

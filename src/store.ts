@@ -597,7 +597,7 @@ export class MemoryStore implements ControlPlaneStore {
     }
     this.operationalTelemetryKeys.add(dedupeKey);
     this.operationalTelemetryHistory.push(structuredClone(envelope));
-    const stateKey = `${envelope.tenantId}:${envelope.deviceType}:${envelope.deviceId}`;
+    const stateKey = `${envelope.tenantId}:${envelope.branchId}:${envelope.deviceType}:${envelope.deviceId}`;
     const current = this.operationalTelemetry.get(stateKey);
     if (!current || Date.parse(current.observedAt) <= Date.parse(envelope.observedAt)) {
       this.operationalTelemetry.set(stateKey, structuredClone(envelope));

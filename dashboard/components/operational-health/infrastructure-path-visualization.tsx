@@ -10,7 +10,7 @@ import { Camera, Network, Shield, Battery, Server, ArrowRight } from "lucide-rea
 import { Card, CardHeader, CardTitle, CardContent } from "../ui/card";
 
 interface InfrastructureDevice {
-  deviceType: 'camera' | 'switch' | 'firewall' | 'ups';
+  deviceType: 'camera' | 'recorder' | 'switch' | 'firewall' | 'router' | 'sdwan' | 'network' | 'ups' | 'generator' | 'edge-agent' | 'disk' | 'environment' | 'sensor';
   deviceId: string;
   deviceName: string;
   healthScore: number | null;
@@ -29,6 +29,7 @@ export function InfrastructurePathVisualization({
   const [cameras, setCameras] = useState<any[]>([]);
   const [selectedCamera, setSelectedCamera] = useState<string>("");
   const [path, setPath] = useState<InfrastructureDevice[]>([]);
+  const [graphCoverage, setGraphCoverage] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>();
 
@@ -47,14 +48,15 @@ export function InfrastructurePathVisualization({
   const loadCameras = async () => {
     try {
       setLoading(true);
-      const response = await fetch(`/api/v1/branches/${branchId}/cameras`);
+      const response = await fetch(`/api/control/v1/operations/health/cameras?branchId=${encodeURIComponent(branchId!)}&limit=500`, { cache: "no-store" });
       if (!response.ok) throw new Error("Failed to load cameras");
       
       const { data } = await response.json();
-      setCameras(data);
+      const cameraList = data?.cameras ?? [];
+      setCameras(cameraList);
       
-      if (data.length > 0) {
-        setSelectedCamera(data[0].id);
+      if (cameraList.length > 0) {
+        setSelectedCamera(cameraList[0].id);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load cameras");
@@ -65,11 +67,12 @@ export function InfrastructurePathVisualization({
 
   const loadInfrastructurePath = async () => {
     try {
-      const response = await fetch(`/api/v1/infrastructure/rca/camera/${selectedCamera}/infrastructure-path`);
+      const response = await fetch(`/api/control/v1/infrastructure/rca/camera/${selectedCamera}/infrastructure-path`, { cache: "no-store" });
       if (!response.ok) throw new Error("Failed to load infrastructure path");
       
-      const { data } = await response.json();
+      const { data, graphCoverage: coverage } = await response.json();
       setPath(data);
+      setGraphCoverage(typeof coverage === "number" ? coverage : null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load infrastructure path");
     }
@@ -78,9 +81,14 @@ export function InfrastructurePathVisualization({
   const getDeviceIcon = (type: string) => {
     switch (type) {
       case 'camera': return <Camera size={24} className="text-blue-600" />;
+      case 'recorder': return <Server size={24} className="text-blue-600" />;
       case 'switch': return <Network size={24} className="text-green-600" />;
+      case 'router':
+      case 'sdwan':
+      case 'network': return <Network size={24} className="text-green-600" />;
       case 'firewall': return <Shield size={24} className="text-red-600" />;
-      case 'ups': return <Battery size={24} className="text-amber-600" />;
+      case 'ups':
+      case 'generator': return <Battery size={24} className="text-amber-600" />;
       default: return <Server size={24} className="text-gray-600" />;
     }
   };
@@ -160,20 +168,24 @@ export function InfrastructurePathVisualization({
             Infrastructure Path Visualization
           </CardTitle>
           
-          {/* Camera Selector */}
-          {cameras.length > 0 && (
-            <select
-              value={selectedCamera}
-              onChange={(e) => setSelectedCamera(e.target.value)}
-              className="px-3 py-1 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              {cameras.map(camera => (
-                <option key={camera.id} value={camera.id}>
-                  {camera.name}
-                </option>
-              ))}
-            </select>
-          )}
+          <div className="flex items-center gap-2">
+            {graphCoverage !== null && (
+              <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600">
+                {Math.round(graphCoverage)}% mapped
+              </span>
+            )}
+            {cameras.length > 0 && (
+              <select
+                value={selectedCamera}
+                onChange={(e) => setSelectedCamera(e.target.value)}
+                className="px-3 py-1 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                {cameras.map(camera => (
+                  <option key={camera.id} value={camera.id}>{camera.name}</option>
+                ))}
+              </select>
+            )}
+          </div>
         </div>
       </CardHeader>
       <CardContent>

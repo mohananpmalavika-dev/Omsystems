@@ -27,8 +27,14 @@ import { normalizeEdgeAgentMetrics } from "../operational-health/edge-agent-heal
 import { loadBatchedRetentionInputs } from "../operational-health/retention-batch.js";
 import type { ResourceNode } from "../domain/models.js";
 
-const deviceTypes = ["branch", "edge-agent", "recorder", "recorder-channel", "camera", "disk", "network", "ups"] as const;
-const sources = ["onvif", "cp-plus-adapter", "rtsp", "system", "recording-engine"] as const;
+const deviceTypes = [
+  "branch", "edge-agent", "recorder", "recorder-channel", "archive", "camera", "disk", "network", "ups",
+  "switch", "firewall", "router", "sdwan", "generator", "environment", "sensor",
+] as const;
+const sources = [
+  "onvif", "cp-plus-adapter", "rtsp", "system", "recording-engine",
+  "snmp", "modbus", "bacnet", "mqtt", "vendor-api",
+] as const;
 const qualities = ["verified", "estimated", "unsupported", "unavailable"] as const;
 const metricValue = z.union([z.string().max(500), z.number().finite(), z.boolean(), z.null()]);
 const telemetrySchema = z.object({
@@ -185,7 +191,14 @@ export async function registerOperationalHealthRoutes(
       source: input.source,
       quality: input.quality,
       idempotencyKey: input.idempotencyKey,
-      metrics: normalizedDisk?.metrics ?? normalizedNetwork?.metrics ?? normalizedEdgeAgent?.metrics ?? normalizedRecorder?.metrics ?? input.metrics,
+      // Preserve vendor/protocol evidence (for example dependency IDs and
+      // prediction horizons) while allowing normalized fields to override
+      // their raw aliases. Replacing the object here previously discarded the
+      // exact topology data needed for cross-device root-cause analysis.
+      metrics: {
+        ...input.metrics,
+        ...(normalizedDisk?.metrics ?? normalizedNetwork?.metrics ?? normalizedEdgeAgent?.metrics ?? normalizedRecorder?.metrics ?? {}),
+      },
       reasonCodes: [...new Set([...input.reasonCodes, ...(normalizedDisk?.reasonCodes ?? []), ...(normalizedNetwork?.reasonCodes ?? []), ...(normalizedEdgeAgent?.reasonCodes ?? []), ...(normalizedRecorder?.reasonCodes ?? [])])],
     };
     const result = await store.ingestOperationalTelemetry(envelope);

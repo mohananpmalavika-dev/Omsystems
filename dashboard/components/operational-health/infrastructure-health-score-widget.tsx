@@ -11,8 +11,8 @@ import { Card, CardHeader, CardTitle, CardContent } from "../ui/card";
 
 interface DomainScore {
   name: string;
-  score: number;
-  status: 'healthy' | 'warning' | 'critical';
+  score: number | null;
+  status: 'healthy' | 'warning' | 'critical' | 'unknown';
   weight: number;
   color: string;
 }
@@ -20,8 +20,9 @@ interface DomainScore {
 interface HealthData {
   branchId: string;
   branchName: string;
-  overallScore: number;
-  overallStatus: 'healthy' | 'warning' | 'critical';
+  overallScore: number | null;
+  overallStatus: 'healthy' | 'warning' | 'critical' | 'unknown';
+  evidenceCoveragePercent: number;
   domains: {
     power: DomainScore;
     network: DomainScore;
@@ -63,7 +64,7 @@ export function InfrastructureHealthScoreWidget({
       setLoading(true);
       setError(undefined);
       
-      const response = await fetch(`/api/v1/infrastructure/health/${branchId}`);
+      const response = await fetch(`/api/control/v1/infrastructure/health/${branchId}`, { cache: "no-store" });
       if (!response.ok) throw new Error("Failed to load health score");
       
       const { data } = await response.json();
@@ -80,7 +81,7 @@ export function InfrastructureHealthScoreWidget({
       setLoading(true);
       setError(undefined);
       
-      const response = await fetch("/api/v1/infrastructure/health/tenant/summary");
+      const response = await fetch("/api/control/v1/infrastructure/health/tenant/summary", { cache: "no-store" });
       if (!response.ok) throw new Error("Failed to load tenant summary");
       
       const { data } = await response.json();
@@ -98,6 +99,7 @@ export function InfrastructureHealthScoreWidget({
       branchName: data.branchName,
       overallScore: data.overallScore,
       overallStatus: data.overallStatus,
+      evidenceCoveragePercent: data.evidenceCoveragePercent ?? 0,
       domains: {
         power: {
           name: "Power",
@@ -161,54 +163,55 @@ export function InfrastructureHealthScoreWidget({
       branchId: "",
       branchName: "All Branches",
       overallScore: data.averageScore,
-      overallStatus: data.averageScore >= 90 ? 'healthy' : data.averageScore >= 70 ? 'warning' : 'critical',
+      overallStatus: statusForScore(data.averageScore),
+      evidenceCoveragePercent: data.evidenceCoveragePercent ?? 0,
       domains: {
         power: {
           name: "Power",
           score: data.domainAverages.power,
-          status: data.domainAverages.power >= 90 ? 'healthy' : data.domainAverages.power >= 70 ? 'warning' : 'critical',
+          status: statusForScore(data.domainAverages.power),
           weight: 20,
           color: "#3b82f6"
         },
         network: {
           name: "Network",
           score: data.domainAverages.network,
-          status: data.domainAverages.network >= 90 ? 'healthy' : data.domainAverages.network >= 70 ? 'warning' : 'critical',
+          status: statusForScore(data.domainAverages.network),
           weight: 25,
           color: "#10b981"
         },
         compute: {
           name: "Compute",
           score: data.domainAverages.compute,
-          status: data.domainAverages.compute >= 90 ? 'healthy' : data.domainAverages.compute >= 70 ? 'warning' : 'critical',
+          status: statusForScore(data.domainAverages.compute),
           weight: 15,
           color: "#8b5cf6"
         },
         storage: {
           name: "Storage",
           score: data.domainAverages.storage,
-          status: data.domainAverages.storage >= 90 ? 'healthy' : data.domainAverages.storage >= 70 ? 'warning' : 'critical',
+          status: statusForScore(data.domainAverages.storage),
           weight: 15,
           color: "#f59e0b"
         },
         cooling: {
           name: "Cooling",
           score: data.domainAverages.cooling,
-          status: data.domainAverages.cooling >= 90 ? 'healthy' : data.domainAverages.cooling >= 70 ? 'warning' : 'critical',
+          status: statusForScore(data.domainAverages.cooling),
           weight: 10,
           color: "#06b6d4"
         },
         security: {
           name: "Security",
           score: data.domainAverages.security,
-          status: data.domainAverages.security >= 90 ? 'healthy' : data.domainAverages.security >= 70 ? 'warning' : 'critical',
+          status: statusForScore(data.domainAverages.security),
           weight: 10,
           color: "#ef4444"
         },
         surveillance: {
           name: "Surveillance",
           score: data.domainAverages.surveillance,
-          status: data.domainAverages.surveillance >= 90 ? 'healthy' : data.domainAverages.surveillance >= 70 ? 'warning' : 'critical',
+          status: statusForScore(data.domainAverages.surveillance),
           weight: 5,
           color: "#6366f1"
         }
@@ -229,7 +232,8 @@ export function InfrastructureHealthScoreWidget({
     }
   };
 
-  const getScoreColor = (score: number) => {
+  const getScoreColor = (score: number | null) => {
+    if (score === null) return '#64748b';
     if (score >= 90) return '#10b981'; // green
     if (score >= 70) return '#f59e0b'; // amber
     return '#ef4444'; // red
@@ -293,7 +297,7 @@ export function InfrastructureHealthScoreWidget({
                 className="text-4xl font-bold"
                 style={{ color: getScoreColor(health.overallScore) }}
               >
-                {Math.round(health.overallScore)}
+                {health.overallScore === null ? "N/A" : Math.round(health.overallScore)}
               </span>
               <span className="text-sm text-gray-500">Overall</span>
             </div>
@@ -310,7 +314,7 @@ export function InfrastructureHealthScoreWidget({
                 <div className="flex-1 flex items-center justify-between">
                   <span className="text-sm text-gray-700">{domain.name}</span>
                   <span className="text-sm font-medium" style={{ color: getScoreColor(domain.score) }}>
-                    {domain.score}
+                    {domain.score === null ? "N/A" : domain.score}
                   </span>
                 </div>
                 <span className="text-xs text-gray-400 w-12 text-right">
@@ -338,7 +342,7 @@ export function InfrastructureHealthScoreWidget({
         </div>
 
         <div className="mt-4 text-xs text-gray-400 text-center">
-          Last updated: {new Date(health.lastUpdated).toLocaleString()}
+          Evidence coverage: {Math.round(health.evidenceCoveragePercent)}% · Last updated: {new Date(health.lastUpdated).toLocaleString()}
         </div>
       </CardContent>
     </Card>
@@ -393,10 +397,15 @@ function DonutChart({ domains, size }: DonutChartProps) {
             strokeDasharray={`${segmentLength} ${circumference - segmentLength}`}
             strokeDashoffset={offset}
             strokeLinecap="butt"
-            opacity={domain.score / 100}
+            opacity={domain.score === null ? 0.12 : Math.max(0.2, domain.score / 100)}
           />
         );
       })}
     </svg>
   );
+}
+
+function statusForScore(score: number | null | undefined): 'healthy' | 'warning' | 'critical' | 'unknown' {
+  if (typeof score !== "number" || !Number.isFinite(score)) return "unknown";
+  return score >= 90 ? "healthy" : score >= 70 ? "warning" : "critical";
 }

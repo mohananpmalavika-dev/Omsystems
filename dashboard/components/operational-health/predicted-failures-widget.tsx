@@ -6,6 +6,7 @@
  */
 
 import { useState, useEffect } from "react";
+import Link from "next/link";
 import { AlertCircle, Battery, HardDrive, Wrench, Calendar } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardContent } from "../ui/card";
 
@@ -43,7 +44,7 @@ export function PredictedFailuresWidget({
       setLoading(true);
       setError(undefined);
       
-      const response = await fetch(`/api/v1/infrastructure/predicted-failures/${branchId}`);
+      const response = await fetch(`/api/control/v1/infrastructure/predicted-failures/${branchId}`, { cache: "no-store" });
       if (!response.ok) throw new Error("Failed to load predicted failures");
       
       const { data } = await response.json();
@@ -155,7 +156,7 @@ export function PredictedFailuresWidget({
           <div className="flex flex-col items-center justify-center h-64 text-gray-400">
             <Calendar size={48} className="mb-2 text-green-400" />
             <p className="font-medium text-green-600">No predicted failures</p>
-            <p className="text-sm">All systems within normal parameters</p>
+            <p className="text-sm">No qualifying failure evidence is currently reported</p>
           </div>
         ) : (
           <div className="space-y-3 max-h-96 overflow-y-auto">
@@ -206,9 +207,9 @@ export function PredictedFailuresWidget({
                       </div>
                     </div>
 
-                    <button className="px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors">
+                    <Link href={`/maintenance/workorders?asset=${encodeURIComponent(failure.componentId)}`} className="px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors">
                       Schedule
-                    </button>
+                    </Link>
                   </div>
                 </div>
               ))}
@@ -219,9 +220,9 @@ export function PredictedFailuresWidget({
           <div className="mt-4 pt-4 border-t">
             <div className="flex items-center justify-between text-sm">
               <span className="text-gray-600">Maintenance Scheduling</span>
-              <button className="text-blue-600 hover:text-blue-700 font-medium">
-                View Calendar →
-              </button>
+              <Link href="/maintenance/workorders" className="text-blue-600 hover:text-blue-700 font-medium">
+                View work orders →
+              </Link>
             </div>
           </div>
         )}

@@ -48,6 +48,7 @@ import { registerDVRNVRMonitorRoutes } from "./routes/dvr-nvr-monitor.routes.js"
 import { registerEdgeAgentPackageRoutes } from "./routes/edge-agent-package.routes.js";
 import { registerEdgeGatewayOperationsRoutes } from "./routes/edge-gateway-operations.routes.js";
 import { registerOperationalHealthRoutes } from "./routes/operational-health.routes.js";
+import { registerEnterpriseInfrastructureRoutes } from "./routes/enterprise-infrastructure.routes.js";
 import { registerVideoWallRoutes } from "./routes/video-wall.routes.js";
 import { registerAlertCommandCenterRoutes } from "./routes/alert-command-center.routes.js";
 import { registerCommandCenterRoutes } from "./routes/command-center.routes.js";
@@ -1573,6 +1574,7 @@ export async function buildApp(options?: {
   // available for both the in-memory development runtime and PostgreSQL.
   await registerMaintenanceRoutes(app, store);
   await registerOperationalHealthRoutes(app, store);
+  await registerEnterpriseInfrastructureRoutes(app, store);
   await registerVideoWallRoutes(app, store);
   await registerFederationRoutes(app, store, federationManager, {
     federationSharedKey,

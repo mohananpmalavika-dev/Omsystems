@@ -2,7 +2,9 @@ import type { Action } from "../../domain/models.js";
 import type { TelemetryQuality } from "../../operational-health/types.js";
 
 export type EvidenceCertainty = "confirmed" | "likely" | "possible" | "unknown";
-export type CommandEntityType = "branch" | "power" | "ups" | "network" | "edge-agent" | "recorder" | "disk" | "camera";
+export type CommandEntityType =
+  | "branch" | "power" | "ups" | "network" | "edge-agent" | "recorder" | "disk" | "camera"
+  | "switch" | "firewall" | "router" | "sdwan" | "generator" | "environment" | "sensor";
 export type CommandHealthStatus = "online" | "healthy" | "degraded" | "warning" | "offline" | "critical" | "unknown" | "maintenance";
 
 export interface OperationalEntityNode {

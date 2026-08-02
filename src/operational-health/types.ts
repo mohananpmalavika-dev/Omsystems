@@ -10,8 +10,25 @@ export type TelemetryDeviceType =
   | "camera"
   | "disk"
   | "network"
-  | "ups";
-export type TelemetrySource = "onvif" | "cp-plus-adapter" | "rtsp" | "system" | "recording-engine";
+  | "ups"
+  | "switch"
+  | "firewall"
+  | "router"
+  | "sdwan"
+  | "generator"
+  | "environment"
+  | "sensor";
+export type TelemetrySource =
+  | "onvif"
+  | "cp-plus-adapter"
+  | "rtsp"
+  | "system"
+  | "recording-engine"
+  | "snmp"
+  | "modbus"
+  | "bacnet"
+  | "mqtt"
+  | "vendor-api";
 export type TelemetryQuality = "verified" | "estimated" | "unsupported" | "unavailable";
 export type TelemetryValue = string | number | boolean | null;
 

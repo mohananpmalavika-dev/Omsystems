@@ -13,8 +13,7 @@
  */
 
 import { useState, useEffect } from "react";
-import { Activity, AlertTriangle, Server, Zap, TrendingUp, RefreshCw } from "lucide-react";
-import { Card, CardHeader, CardTitle, CardContent } from "../ui/card";
+import { Server, RefreshCw } from "lucide-react";
 import { InfrastructureHealthScoreWidget } from "./infrastructure-health-score-widget";
 import { ActiveInfrastructureIncidentsWidget } from "./active-infrastructure-incidents-widget";
 import { RootCauseBreakdownWidget } from "./root-cause-breakdown-widget";
@@ -41,14 +40,26 @@ export function InfrastructureHealthDashboard() {
   const loadBranches = async () => {
     try {
       setLoading(true);
-      const response = await fetch("/api/v1/branches");
-      if (!response.ok) throw new Error("Failed to load branches");
+      const branchList: Branch[] = [];
+      let offset = 0;
+      let total = 0;
+      do {
+        const response = await fetch(`/api/control/v1/operations/health/branches?limit=500&offset=${offset}`, {
+          cache: "no-store",
+          credentials: "include",
+        });
+        if (!response.ok) throw new Error("Failed to load branches");
+        const { data } = await response.json();
+        const page: Branch[] = data?.branches ?? [];
+        branchList.push(...page);
+        total = Number(data?.total ?? page.length);
+        offset += page.length;
+        if (page.length === 0) break;
+      } while (offset < total);
+      setBranches(branchList);
       
-      const { data } = await response.json();
-      setBranches(data);
-      
-      if (data.length > 0) {
-        setSelectedBranch(data[0].id);
+      if (branchList.length > 0) {
+        setSelectedBranch(branchList[0].id);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load branches");
@@ -79,7 +90,7 @@ export function InfrastructureHealthDashboard() {
   }
 
   return (
-    <div className="space-y-6 p-6">
+    <div className="infrastructure-dashboard space-y-6 p-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -88,7 +99,7 @@ export function InfrastructureHealthDashboard() {
             Infrastructure Monitoring
           </h1>
           <p className="text-gray-600 mt-1">
-            Real-time infrastructure health across all branches
+            Evidence-backed power, network, compute, storage, security and surveillance health
           </p>
         </div>
         

@@ -120,6 +120,7 @@ const navigation: NavGroup[] = [
     icon: HeartPulse,
     items: [
       { label: "Operational health", href: "/operations", icon: HeartPulse },
+      { label: "Enterprise infrastructure", href: "/operations/infrastructure", icon: Server },
       { label: "Operational alerts", href: "/operations/alerts", icon: AlertTriangle },
       { label: "Camera health", href: "/operations/cameras", icon: Camera },
       { label: "Camera monitoring", href: "/camera-monitoring", icon: MonitorPlay },

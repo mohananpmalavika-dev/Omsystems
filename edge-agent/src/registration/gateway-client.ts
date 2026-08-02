@@ -48,10 +48,14 @@ export interface EdgeScanJob {
 export interface TelemetryPayload {
   branchId: string;
   edgeAgentId: string;
-  deviceType: "branch" | "edge-agent" | "recorder" | "recorder-channel" | "camera" | "disk" | "network" | "ups";
+  deviceType:
+    | "branch" | "edge-agent" | "recorder" | "recorder-channel" | "archive" | "camera" | "disk" | "network" | "ups"
+    | "switch" | "firewall" | "router" | "sdwan" | "generator" | "environment" | "sensor";
   deviceId: string;
   observedAt: string;
-  source: "onvif" | "cp-plus-adapter" | "rtsp" | "system" | "recording-engine";
+  source:
+    | "onvif" | "cp-plus-adapter" | "rtsp" | "system" | "recording-engine"
+    | "snmp" | "modbus" | "bacnet" | "mqtt" | "vendor-api";
   quality: "verified" | "estimated" | "unsupported" | "unavailable";
   idempotencyKey: string;
   metrics: Record<string, string | number | boolean | null>;
