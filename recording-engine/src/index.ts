@@ -18,6 +18,7 @@ import { z } from "zod";
 import { createStorageAdapter, type StorageStatus, type StorageType } from "./storage-adapter.js";
 import { AlertEvidenceCaptureService } from "./alert-evidence-capture.js";
 import { S3EvidenceArchive } from "./s3-evidence-archive.js";
+import { permitsSentinelTimelineWorker } from "./recording-policy.js";
 
 const serviceUrl = z.preprocess((value) => {
   if (typeof value !== "string") return value;
@@ -95,6 +96,8 @@ const policySchema = z.object({
   mode: z.enum(["continuous", "motion", "scheduled", "event", "manual"]),
   enabled: z.boolean(),
   status: z.string(),
+  primaryRecordingStorage: z.enum(["sentinel-local", "recorder-local"]),
+  cloudArchivePolicy: z.enum(["none", "incident-evidence-only"]),
   retentionDays: z.number().int().min(1).max(3650),
   preRollSeconds: z.number().int().min(0).max(3600).default(30),
   postRollSeconds: z.number().int().min(0).max(3600).default(30),
@@ -200,6 +203,8 @@ app.get("/health", async () => ({
   configuredJobs: jobs.size,
   storageNodeExternalId: config.STORAGE_NODE_EXTERNAL_ID,
   evidenceArchive: evidenceArchive ? "s3" : "local",
+  continuousVideoTransfer: "disabled-for-recorder-local-jobs",
+  offsiteMediaPolicy: "incident-evidence-only",
 }));
 
 app.put("/internal/jobs", async (request, reply) => {
@@ -212,6 +217,7 @@ app.put("/internal/jobs", async (request, reply) => {
   return reply.code(202).send({
     cameraId: input.cameraId,
     active: workers.has(input.cameraId),
+    delegated: input.job.primaryRecordingStorage === "recorder-local",
     mode: input.job.mode,
   });
 });
@@ -220,6 +226,12 @@ app.post("/internal/jobs/:cameraId/trigger", async (request, reply) => {
   const { cameraId } = z.object({ cameraId: z.string().min(1) }).parse(request.params);
   const trigger = z.object({ type: z.enum(["motion", "event"]) }).parse(request.body);
   const job = jobs.get(cameraId);
+  if (job?.job.primaryRecordingStorage === "recorder-local") {
+    return reply.code(409).send({
+      error: "continuous_recording_owned_by_recorder",
+      message: "Use alert evidence capture or on-demand DVR playback; Sentinel does not duplicate the DVR timeline.",
+    });
+  }
   if (!job || !job.job.enabled || job.job.mode !== trigger.type) {
     return reply.code(409).send({ error: "recording_mode_not_triggerable" });
   }
@@ -250,6 +262,7 @@ app.post("/internal/alert-evidence/:alertId/capture", async (request, reply) => 
     occurredAt: body.occurredAt,
     sourceUri,
     clipSeconds: body.clipSeconds ?? config.ALERT_EVIDENCE_CLIP_SECONDS,
+    offsiteArchiveRequested: job.job.cloudArchivePolicy === "incident-evidence-only",
   });
   return reply.code(status.state === "ready" || status.state === "partial" ? 200 : 202).send(status);
 });
@@ -387,7 +400,7 @@ async function reconcile(job: ManagedJob) {
 }
 
 function shouldRun(job: ManagedJob) {
-  return job.job.enabled &&
+  return permitsSentinelTimelineWorker(job.job) &&
     (job.job.mode !== "scheduled" || inSchedule(job.job.schedule));
 }
 
@@ -630,6 +643,7 @@ async function indexCompletedSegment(job: ManagedJob, csvLine: string) {
 }
 
 async function maintenanceSweep() {
+  await alertEvidence.retryPendingArchives();
   await retryPendingControlPlaneRequests();
   await retryPendingIndexes();
   const tenantIds = [...new Set([...jobs.values()].map((job) => job.tenantId))];
@@ -733,6 +747,8 @@ async function runWriteProbe() {
         mode: "continuous",
         enabled: true,
         status: "idle",
+        primaryRecordingStorage: "sentinel-local",
+        cloudArchivePolicy: "none",
         retentionDays: 30,
         segmentDurationSeconds: 60,
         hotRetentionDays: 30,

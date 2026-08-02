@@ -89,7 +89,7 @@ export function RecordingWorkspace() {
   return (
     <main className="recording-workspace">
       <header className="recording-header">
-        <div><span className="eyebrow">PHASE 1 RECORDING</span><h1>Recording playback</h1><p>Review indexed MP4 segments and recorder faults without opening Live View.</p></div>
+        <div><span className="eyebrow">RECORDING OPERATIONS</span><h1>Recording playback</h1><p>Review branch-recorder footage on demand and retain only important incident evidence off-site.</p></div>
         <a href="/" className="secondary-button"><Video size={15} />Live wall</a>
       </header>
 
@@ -103,9 +103,9 @@ export function RecordingWorkspace() {
 
       {error && <div className="error-banner"><AlertTriangle size={17} />{error}</div>}
       {job && <section className="recording-summary">
-        <article><span>Recording state</span><strong className={`recording-state ${job.status}`}>{job.status}</strong><small>{job.mode} · {job.segmentDurationSeconds}s segments</small></article>
-        <article><span>Coverage</span><strong>{coverage}%</strong><small>{segments.length} indexed segments in selected range</small></article>
-        <article><span>Retention</span><strong>{job.retentionDays} days</strong><small>{job.hotRetentionDays} hot · {job.warmRetentionDays} warm · {job.coldRetentionDays} cold</small></article>
+        <article><span>Primary recorder</span><strong>{job.primaryRecordingStorage === "recorder-local" ? "Branch DVR/NVR" : "Sentinel"}</strong><small>{job.mode} recording at source</small></article>
+        <article><span>{job.primaryRecordingStorage === "recorder-local" ? "Transfer policy" : "Coverage"}</span><strong>{job.primaryRecordingStorage === "recorder-local" ? "On demand" : `${coverage}%`}</strong><small>{job.primaryRecordingStorage === "recorder-local" ? "No continuous WAN video transfer" : `${segments.length} indexed segments in selected range`}</small></article>
+        <article><span>Off-site archive</span><strong>{job.cloudArchivePolicy === "incident-evidence-only" ? "Incidents only" : "Disabled"}</strong><small>Snapshots and selected clips only</small></article>
         <article><span>Recorder health</span><strong className={criticalFault ? "fault" : "healthy"}>{criticalFault ? "Fault present" : "No critical fault"}</strong><small>{criticalFault?.message ?? "Review event history below"}</small></article>
       </section>}
 

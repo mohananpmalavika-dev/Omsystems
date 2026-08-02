@@ -293,6 +293,8 @@ export interface RecordingJob {
   mode: RecordingMode;
   enabled: boolean;
   status: RecordingStatus;
+  primaryRecordingStorage: "sentinel-local" | "recorder-local";
+  cloudArchivePolicy: "none" | "incident-evidence-only";
   retentionDays: number;
   postRollSeconds: number;
   segmentDurationSeconds: number;

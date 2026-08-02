@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import type { AnalyticsRuleInput, ControlPlaneStore } from "../control-plane-store.js";
-import type { RecordingJob } from "../domain/models.js";
+import type { DiscoveredCamera, RecordingJob } from "../domain/models.js";
 
 const branchParams = z.object({ branchId: z.string().min(1) });
 const discoveryParams = z.object({ 
@@ -49,19 +49,27 @@ function retentionTiers(retentionDays: number) {
   };
 }
 
+function isRecorderBacked(camera: Pick<DiscoveredCamera, "recorderId" | "sourceType">) {
+  return Boolean(camera.recorderId) || camera.sourceType === "analog-dvr-channel" ||
+    camera.sourceType === "nvr-channel";
+}
+
 function defaultRecordingJob(
   mode: "continuous" | "motion",
   retentionDays: number,
+  recorderBacked = false,
 ): Omit<RecordingJob, "id" | "cameraId" | "updatedAt"> {
   return {
     mode,
     enabled: true,
     status: "idle",
+    primaryRecordingStorage: recorderBacked ? "recorder-local" : "sentinel-local",
+    cloudArchivePolicy: recorderBacked ? "incident-evidence-only" : "none",
     retentionDays,
     segmentDurationSeconds: 60,
     ...retentionTiers(retentionDays),
     critical: false,
-    backupRequired: true,
+    backupRequired: !recorderBacked,
     automaticDeletionEnabled: true,
     evidenceProtection: true,
     recordMainStream: true,
@@ -161,9 +169,16 @@ export async function registerCameraDiscoveryRoutes(
       return reply.code(500).send({ error: "failed_to_approve_camera" });
     }
 
+    const recorderBacked = isRecorderBacked(discovered);
+    await store.upsertRecordingJob(
+      camera.id,
+      defaultRecordingJob("continuous", 180, recorderBacked),
+    );
+
     return {
       success: true,
       cameraId: camera.id,
+      recordingArchitecture: recorderBacked ? "recorder-local-evidence-only" : "sentinel-local",
       message: `Camera ${body.name} approved and added to monitoring`,
     };
   });
@@ -247,7 +262,11 @@ export async function registerCameraDiscoveryRoutes(
 
         await store.upsertRecordingJob(
           camera.id,
-          defaultRecordingJob(recordingMode, retentionDays),
+          defaultRecordingJob(
+            recordingMode,
+            retentionDays,
+            isRecorderBacked(discovered),
+          ),
         );
 
         if (analyticsEnabled) {
@@ -268,7 +287,7 @@ export async function registerCameraDiscoveryRoutes(
           message: "Camera, recording, analytics, and alerts provisioned successfully",
           stages: {
             approved: true,
-            recording: "configured",
+            recording: isRecorderBacked(discovered) ? "recorder-local" : "configured",
             analytics: analyticsEnabled ? "active" : "disabled",
             alerts: alertsEnabled ? "enabled" : "disabled",
           },

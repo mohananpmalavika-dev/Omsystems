@@ -54,7 +54,8 @@ describe("recording dashboard proxy", () => {
 function recording() {
   return {
     cameraId: "camera-1", mode: "continuous" as const, enabled: true,
-    status: "recording" as const, retentionDays: 180, postRollSeconds: 30,
+    status: "recording" as const, primaryRecordingStorage: "sentinel-local" as const,
+    cloudArchivePolicy: "none" as const, retentionDays: 180, postRollSeconds: 30,
     segmentDurationSeconds: 60, hotRetentionDays: 30, warmRetentionDays: 60,
     coldRetentionDays: 90, critical: true, backupRequired: true,
     automaticDeletionEnabled: true, evidenceProtection: true,

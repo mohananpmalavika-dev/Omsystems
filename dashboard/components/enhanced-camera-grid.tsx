@@ -387,6 +387,8 @@ export function EnhancedCameraGrid({
       mode: "continuous" as const,
       enabled: false,
       status: "disabled" as const,
+      primaryRecordingStorage: "sentinel-local" as const,
+      cloudArchivePolicy: "none" as const,
       retentionDays: 180,
       postRollSeconds: 30,
       segmentDurationSeconds: 60,

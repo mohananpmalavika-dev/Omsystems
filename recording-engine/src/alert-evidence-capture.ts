@@ -1,6 +1,6 @@
 import { createReadStream } from "node:fs";
 import { createHash, randomUUID } from "node:crypto";
-import { mkdir, readFile, rename, stat, unlink, writeFile } from "node:fs/promises";
+import { mkdir, readFile, readdir, rename, stat, unlink, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { spawn } from "node:child_process";
 
@@ -11,6 +11,8 @@ export interface AlertEvidenceCaptureStatus {
   cameraId: string;
   state: AlertEvidenceCaptureState;
   requestedAt: string;
+  occurredAt?: string;
+  offsiteArchiveRequested?: boolean;
   startedAt?: string;
   completedAt?: string;
   snapshotAvailable: boolean;
@@ -20,6 +22,11 @@ export interface AlertEvidenceCaptureStatus {
     state: "ready" | "partial" | "failed";
     snapshotKey?: string;
     clipKey?: string;
+    snapshot?: EvidenceArchiveAsset;
+    clip?: EvidenceArchiveAsset;
+    attempts?: number;
+    lastAttemptAt?: string;
+    nextRetryAt?: string;
     error?: string;
   };
   error?: string;
@@ -31,12 +38,18 @@ export interface AlertEvidenceCaptureInput {
   occurredAt: string;
   sourceUri: string;
   clipSeconds: number;
+  offsiteArchiveRequested?: boolean;
 }
 
 export type EvidenceAssetKind = "snapshot" | "clip";
 export interface EvidenceArchiveAsset {
   provider: string;
   key: string;
+  sha256: string;
+  sizeBytes: number;
+  contentType: string;
+  archivedAt: string;
+  retainUntil?: string;
 }
 
 export interface EvidenceArchive {
@@ -125,6 +138,53 @@ export class AlertEvidenceCaptureService {
     };
   }
 
+  /** Retries only the off-site copy. Local incident media is never recaptured or discarded. */
+  async retryPendingArchives(limit = 100) {
+    if (!this.archive) return { inspected: 0, archived: 0, pending: 0 };
+    await mkdir(this.evidenceRoot, { recursive: true });
+    let inspected = 0;
+    let archived = 0;
+    let pending = 0;
+    for (const entry of await readdir(this.evidenceRoot, { withFileTypes: true })) {
+      if (!entry.isDirectory() || inspected >= limit) continue;
+      let status: AlertEvidenceCaptureStatus;
+      try {
+        status = JSON.parse(await readFile(join(this.evidenceRoot, entry.name, "status.json"), "utf8"));
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code === "ENOENT") continue;
+        throw error;
+      }
+      if (!status.occurredAt || !status.archive || status.archive.state === "ready") continue;
+      if (status.archive.nextRetryAt && Date.parse(status.archive.nextRetryAt) > Date.now()) continue;
+      inspected += 1;
+      const archive = await this.archiveAvailableAssets(
+        {
+          alertId: status.alertId,
+          cameraId: status.cameraId,
+          occurredAt: status.occurredAt,
+          requestedAt: status.requestedAt,
+          clipSeconds: 0,
+          sourceUri: "[redacted-camera-source]",
+          offsiteArchiveRequested: true,
+        },
+        status.snapshotAvailable,
+        status.clipAvailable,
+        status.archive,
+      );
+      if (!archive) continue;
+      const state = evidenceState(
+        status.snapshotAvailable,
+        status.clipAvailable,
+        this.archiveRequired,
+        archive,
+      );
+      await this.writeStatus({ ...status, state, archive });
+      if (archive.state === "ready") archived += 1;
+      else pending += 1;
+    }
+    return { inspected, archived, pending };
+  }
+
   private pump() {
     while (this.active < Math.max(1, this.maxConcurrent) && this.pending.length > 0) {
       const capture = this.pending.shift()!;
@@ -173,19 +233,13 @@ export class AlertEvidenceCaptureService {
     const clipAvailable = await moveNonEmpty(clipTemporary, this.assetPath(input.alertId, "clip"));
     const archive = await this.archiveAvailableAssets(input, snapshotAvailable, clipAvailable);
     const completedAt = new Date().toISOString();
-    let state: AlertEvidenceCaptureState = snapshotAvailable && clipAvailable
-      ? "ready"
-      : snapshotAvailable || clipAvailable
-        ? "partial"
-        : "failed";
-    if (this.archiveRequired && archive && archive.state !== "ready" && state === "ready") {
-      state = "partial";
-    }
+    const state = evidenceState(snapshotAvailable, clipAvailable, this.archiveRequired, archive);
     await this.writeStatus({
       alertId: input.alertId,
       cameraId: input.cameraId,
       state,
       requestedAt: input.requestedAt,
+      occurredAt: input.occurredAt,
       startedAt,
       completedAt,
       snapshotAvailable,
@@ -199,13 +253,19 @@ export class AlertEvidenceCaptureService {
     input: QueuedCapture,
     snapshotAvailable: boolean,
     clipAvailable: boolean,
+    previousArchive?: AlertEvidenceCaptureStatus["archive"],
   ): Promise<AlertEvidenceCaptureStatus["archive"] | undefined> {
-    if (!this.archive || (!snapshotAvailable && !clipAvailable)) return undefined;
+    if (input.offsiteArchiveRequested === false || !this.archive ||
+        (!snapshotAvailable && !clipAvailable)) return undefined;
 
-    const uploaded: Partial<Record<EvidenceAssetKind, EvidenceArchiveAsset>> = {};
+    const uploaded: Partial<Record<EvidenceAssetKind, EvidenceArchiveAsset>> = {
+      ...(previousArchive?.snapshot ? { snapshot: previousArchive.snapshot } : {}),
+      ...(previousArchive?.clip ? { clip: previousArchive.clip } : {}),
+    };
     const errors: string[] = [];
     for (const kind of ["snapshot", "clip"] as const) {
       if (kind === "snapshot" ? !snapshotAvailable : !clipAvailable) continue;
+      if (uploaded[kind]) continue;
       try {
         uploaded[kind] = await this.archive.archiveAsset({
           alertId: input.alertId,
@@ -222,17 +282,28 @@ export class AlertEvidenceCaptureService {
 
     const expected = Number(snapshotAvailable) + Number(clipAvailable);
     const uploadedCount = Object.keys(uploaded).length;
+    const attempts = (previousArchive?.attempts ?? 0) + 1;
+    const lastAttemptAt = new Date().toISOString();
+    const state = uploadedCount === expected ? "ready" : uploadedCount > 0 ? "partial" : "failed";
     return {
       provider: uploaded.snapshot?.provider ?? uploaded.clip?.provider ?? "object-storage",
-      state: uploadedCount === expected ? "ready" : uploadedCount > 0 ? "partial" : "failed",
+      state,
       ...(uploaded.snapshot ? { snapshotKey: uploaded.snapshot.key } : {}),
       ...(uploaded.clip ? { clipKey: uploaded.clip.key } : {}),
+      ...(uploaded.snapshot ? { snapshot: uploaded.snapshot } : {}),
+      ...(uploaded.clip ? { clip: uploaded.clip } : {}),
+      attempts,
+      lastAttemptAt,
+      ...(state !== "ready" ? {
+        nextRetryAt: new Date(Date.now() + Math.min(3_600_000, 30_000 * 2 ** Math.min(attempts - 1, 7))).toISOString(),
+      } : {}),
       ...(errors.length > 0 ? { error: errors.join("; ").slice(0, 1_000) } : {}),
     };
   }
 
   private statusFor(
-    input: Pick<AlertEvidenceCaptureInput, "alertId" | "cameraId">,
+    input: Pick<AlertEvidenceCaptureInput, "alertId" | "cameraId"> &
+      Partial<Pick<AlertEvidenceCaptureInput, "occurredAt" | "offsiteArchiveRequested">>,
     state: AlertEvidenceCaptureState,
     requestedAt: string,
   ): AlertEvidenceCaptureStatus {
@@ -241,6 +312,12 @@ export class AlertEvidenceCaptureService {
       cameraId: input.cameraId,
       state,
       requestedAt,
+      ...input.occurredAt
+        ? { occurredAt: input.occurredAt }
+        : {},
+      ...input.offsiteArchiveRequested !== undefined
+        ? { offsiteArchiveRequested: input.offsiteArchiveRequested }
+        : {},
       snapshotAvailable: false,
       clipAvailable: false,
     };
@@ -273,6 +350,22 @@ export class AlertEvidenceCaptureService {
   private assetPath(alertId: string, kind: EvidenceAssetKind) {
     return join(this.folder(alertId), kind === "snapshot" ? "snapshot.jpg" : "clip.mp4");
   }
+}
+
+function evidenceState(
+  snapshotAvailable: boolean,
+  clipAvailable: boolean,
+  archiveRequired: boolean,
+  archive?: AlertEvidenceCaptureStatus["archive"],
+): AlertEvidenceCaptureState {
+  const localState: AlertEvidenceCaptureState = snapshotAvailable && clipAvailable
+    ? "ready"
+    : snapshotAvailable || clipAvailable
+      ? "partial"
+      : "failed";
+  return archiveRequired && archive && archive.state !== "ready" && localState === "ready"
+    ? "partial"
+    : localState;
 }
 
 export async function runFfmpegCapture(

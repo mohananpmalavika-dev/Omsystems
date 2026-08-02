@@ -242,6 +242,19 @@ button { cursor: pointer; }
   display: grid;
   gap: 18px;
 }
+.recording-settings-panel .recording-policy-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 16px;
+  border: 1px solid #b9e5d7;
+  border-radius: 12px;
+  color: #145f4c;
+  background: #f0fbf7;
+}
+.recording-settings-panel .recording-policy-notice svg { flex: 0 0 auto; margin-top: 1px; }
+.recording-settings-panel .recording-policy-notice strong { display: block; font-size: 13px; }
+.recording-settings-panel .recording-policy-notice p { margin: 4px 0 0; color: #397565; font-size: 11px; line-height: 1.5; }
 .recording-settings-panel .settings-summary {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));

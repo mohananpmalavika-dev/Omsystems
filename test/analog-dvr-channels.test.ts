@@ -49,6 +49,38 @@ describe("analog camera channels behind DVRs", () => {
       recorderChannel: 4,
       connectionSecretRef: `edge://${agentId}/${discoveryId}`,
     });
+    expect(approved.json().recordingArchitecture).toBe("recorder-local-evidence-only");
+    expect(await store.getRecordingJob(camera!.id)).toMatchObject({
+      mode: "continuous",
+      primaryRecordingStorage: "recorder-local",
+      cloudArchivePolicy: "incident-evidence-only",
+      backupRequired: false,
+    });
+    const forbiddenCloudTimeline = await app.inject({
+      method: "PUT",
+      url: `/v1/cameras/${camera!.id}/recording`,
+      headers: admin,
+      payload: {
+        mode: "continuous",
+        enabled: true,
+        primaryRecordingStorage: "sentinel-local",
+      },
+    });
+    expect(forbiddenCloudTimeline.statusCode).toBe(409);
+    expect(forbiddenCloudTimeline.json().error).toBe(
+      "recorder_backed_camera_requires_recorder_local_storage",
+    );
+    const playback = await app.inject({
+      method: "GET",
+      url: `/v1/cameras/${camera!.id}/playback?from=2026-08-01T00:00:00.000Z&to=2026-08-01T01:00:00.000Z`,
+      headers: admin,
+    });
+    expect(playback.statusCode).toBe(200);
+    expect(playback.json()).toMatchObject({
+      source: "recorder-local",
+      transferMode: "on-demand",
+      cloudArchivePolicy: "incident-evidence-only",
+    });
 
     const assignments = await app.inject({
       method: "GET",
@@ -73,6 +105,7 @@ describe("analog camera channels behind DVRs", () => {
     const originalNodeId = (await store.getCamera(firstCameraId))!.nodeId;
     await store.upsertRecordingJob(firstCameraId, {
       mode: "continuous", enabled: true, status: "recording", retentionDays: 180,
+      primaryRecordingStorage: "recorder-local", cloudArchivePolicy: "incident-evidence-only",
       segmentDurationSeconds: 60, hotRetentionDays: 30, warmRetentionDays: 30,
       coldRetentionDays: 120, critical: true, backupRequired: true,
       automaticDeletionEnabled: true, evidenceProtection: true,

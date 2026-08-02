@@ -107,6 +107,8 @@ export async function getRecordingSegment(
 function demoRecording(cameraId: string): RecordingJob {
   return {
     cameraId, mode: "continuous", enabled: true, status: "recording",
+    primaryRecordingStorage: "recorder-local",
+    cloudArchivePolicy: "incident-evidence-only",
     retentionDays: 180, postRollSeconds: 30, segmentDurationSeconds: 60,
     hotRetentionDays: 30, warmRetentionDays: 60, coldRetentionDays: 90,
     critical: false, backupRequired: false, automaticDeletionEnabled: true,

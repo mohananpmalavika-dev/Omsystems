@@ -34,8 +34,9 @@ export class RecordingRepository {
          segment_duration_seconds, hot_retention_days, warm_retention_days,
          cold_retention_days, max_bitrate_kbps, storage_node_external_id,
          trigger_event_types, critical, backup_required,
-         automatic_deletion_enabled, evidence_protection, record_main_stream
-       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25)
+         automatic_deletion_enabled, evidence_protection, record_main_stream,
+         primary_recording_storage, cloud_archive_policy
+       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27)
        ON CONFLICT (camera_id) DO UPDATE SET mode=EXCLUDED.mode, enabled=EXCLUDED.enabled,
        status=EXCLUDED.status, retention_days=EXCLUDED.retention_days, schedule=EXCLUDED.schedule,
        pre_roll_seconds=EXCLUDED.pre_roll_seconds,
@@ -55,6 +56,8 @@ export class RecordingRepository {
        automatic_deletion_enabled=EXCLUDED.automatic_deletion_enabled,
        evidence_protection=EXCLUDED.evidence_protection,
        record_main_stream=EXCLUDED.record_main_stream,
+       primary_recording_storage=EXCLUDED.primary_recording_storage,
+       cloud_archive_policy=EXCLUDED.cloud_archive_policy,
        updated_at=now() RETURNING *`,
       [randomUUID(), cameraId, input.mode, input.enabled, input.status, input.retentionDays,
         input.schedule ? JSON.stringify(input.schedule) : null, input.preRollSeconds,
@@ -66,7 +69,8 @@ export class RecordingRepository {
         input.storageNodeExternalId ?? null,
         input.triggerEventTypes ?? null, input.critical, input.backupRequired,
         input.automaticDeletionEnabled, input.evidenceProtection,
-        input.recordMainStream],
+        input.recordMainStream, input.primaryRecordingStorage,
+        input.cloudArchivePolicy],
     );
     return mapJob(result.rows[0]);
   }
@@ -549,6 +553,8 @@ function mapJob(row: any): RecordingJob {
     automaticDeletionEnabled: row.automatic_deletion_enabled,
     evidenceProtection: row.evidence_protection,
     recordMainStream: row.record_main_stream,
+    primaryRecordingStorage: row.primary_recording_storage ?? "sentinel-local",
+    cloudArchivePolicy: row.cloud_archive_policy ?? "none",
     updatedAt: new Date(row.updated_at).toISOString() };
 }
 function mapSegment(row: any): RecordingSegment {

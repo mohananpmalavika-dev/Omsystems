@@ -97,7 +97,14 @@ describe("AlertEvidenceCaptureService", () => {
       {
         async archiveAsset(input) {
           if (input.kind === "clip") throw new Error("object_store_unavailable");
-          return { provider: "s3", key: `evidence/${input.alertId}/snapshot.jpg` };
+          return {
+            provider: "s3",
+            key: `evidence/${input.alertId}/snapshot.jpg`,
+            sha256: "a".repeat(64),
+            sizeBytes: 4,
+            contentType: "image/jpeg",
+            archivedAt: new Date().toISOString(),
+          };
         },
       },
       true,
@@ -112,7 +119,57 @@ describe("AlertEvidenceCaptureService", () => {
     expect(status?.clipAvailable).toBe(true);
     expect(status?.archive?.state).toBe("partial");
     expect(status?.archive?.snapshotKey).toContain("snapshot.jpg");
+    expect(status?.archive?.snapshot?.sha256).toBe("a".repeat(64));
     expect(status?.archive?.error).toContain("object_store_unavailable");
+  });
+
+  it("retries a failed off-site archive without recapturing local evidence", async () => {
+    const root = await mkdtemp(join(tmpdir(), "sentinel-alert-evidence-"));
+    roots.push(root);
+    const alertId = "77777777-7777-4777-8777-777777777777";
+    let captureCount = 0;
+    let archiveAvailable = false;
+    const service = new AlertEvidenceCaptureService(
+      root,
+      1,
+      async (_input, output) => {
+        captureCount += 1;
+        await writeFile(output.snapshotPath, "jpeg");
+        await writeFile(output.clipPath, "mp4");
+      },
+      {
+        async archiveAsset(input) {
+          if (!archiveAvailable) throw new Error("object_store_unavailable");
+          return {
+            provider: "s3",
+            key: `evidence/${input.alertId}/${input.kind}`,
+            sha256: "b".repeat(64),
+            sizeBytes: 4,
+            contentType: input.contentType,
+            archivedAt: new Date().toISOString(),
+          };
+        },
+      },
+      true,
+    );
+    await service.request({
+      alertId, cameraId: "cam-001", occurredAt: new Date().toISOString(),
+      sourceUri: "rtsp://camera/live", clipSeconds: 20,
+    });
+    await waitFor(async () => (await service.getStatus(alertId))?.archive?.state === "failed");
+    const failed = await service.getStatus(alertId);
+    expect(failed?.archive?.nextRetryAt).toBeDefined();
+
+    archiveAvailable = true;
+    if (failed?.archive) {
+      failed.archive.nextRetryAt = new Date(0).toISOString();
+      const folder = join(root, createHash("sha256").update(alertId).digest("hex"));
+      await writeFile(join(folder, "status.json"), JSON.stringify(failed));
+    }
+    const retried = await service.retryPendingArchives();
+    expect(retried.archived).toBe(1);
+    expect(captureCount).toBe(1);
+    expect((await service.getStatus(alertId))?.archive?.state).toBe("ready");
   });
 });
 

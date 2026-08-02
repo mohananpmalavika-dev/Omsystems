@@ -160,6 +160,8 @@ const recordingScheduleSchema = z.object({
 const recordingJobSchema = z.object({
   mode: z.enum(["continuous", "motion", "scheduled", "event", "manual"]),
   enabled: z.boolean().default(true),
+  primaryRecordingStorage: z.enum(["sentinel-local", "recorder-local"]).optional(),
+  cloudArchivePolicy: z.enum(["none", "incident-evidence-only"]).optional(),
   retentionDays: z.number().int().min(1).max(3650).default(180),
   schedule: recordingScheduleSchema.optional(),
   preRollSeconds: z.number().int().min(0).max(3600).default(30),
@@ -1113,6 +1115,10 @@ export async function buildApp(options?: {
     ))) return;
     return (await store.getRecordingJob(id)) ?? {
       cameraId: id, mode: "continuous", enabled: false, status: "disabled",
+      primaryRecordingStorage: camera.recorderId || camera.sourceType === "analog-dvr-channel" ||
+        camera.sourceType === "nvr-channel" ? "recorder-local" : "sentinel-local",
+      cloudArchivePolicy: camera.recorderId || camera.sourceType === "analog-dvr-channel" ||
+        camera.sourceType === "nvr-channel" ? "incident-evidence-only" : "none",
       retentionDays: 180, preRollSeconds: 30, postRollSeconds: 30,
       minMotionDurationSeconds: 0, motionConfidenceThreshold: 0,
       cooldownSeconds: 60, maxEventDurationSeconds: 0,
@@ -1129,7 +1135,36 @@ export async function buildApp(options?: {
     const camera = await store.getCamera(id);
     if (!camera) return reply.code(404).send({ error: "camera_not_found" });
     if (!(await requireAccess(request, reply, store, "device:configure", camera.nodeId))) return;
-    const input = recordingJobSchema.parse(request.body);
+    const parsedInput = recordingJobSchema.parse(request.body);
+    const existingJob = await store.getRecordingJob(id);
+    const recorderBacked = Boolean(camera.recorderId) || camera.sourceType === "analog-dvr-channel" ||
+      camera.sourceType === "nvr-channel";
+    const input = {
+      ...parsedInput,
+      primaryRecordingStorage: parsedInput.primaryRecordingStorage ?? existingJob?.primaryRecordingStorage ??
+        (recorderBacked ? "recorder-local" as const : "sentinel-local" as const),
+      cloudArchivePolicy: parsedInput.cloudArchivePolicy ?? existingJob?.cloudArchivePolicy ??
+        (recorderBacked ? "incident-evidence-only" as const : "none" as const),
+    };
+    if (recorderBacked && input.primaryRecordingStorage !== "recorder-local") {
+      return reply.code(409).send({
+        error: "recorder_backed_camera_requires_recorder_local_storage",
+        message: "The DVR/NVR retains the full timeline; Sentinel may copy incident evidence only.",
+      });
+    }
+    if (!recorderBacked && input.primaryRecordingStorage === "recorder-local") {
+      return reply.code(409).send({
+        error: "recorder_local_storage_requires_recorder",
+        message: "This standalone camera has no DVR/NVR assigned as its primary recorder.",
+      });
+    }
+    if (input.primaryRecordingStorage === "recorder-local" &&
+        (input.cloudArchivePolicy !== "incident-evidence-only" || input.backupRequired)) {
+      return reply.code(409).send({
+        error: "recorder_local_policy_conflict",
+        message: "Recorder-local jobs cannot back up the continuous timeline to cloud storage.",
+      });
+    }
     if (input.mode === "scheduled" && !input.schedule) {
       return reply.code(400).send({ error: "schedule_required" });
     }
@@ -1162,7 +1197,7 @@ export async function buildApp(options?: {
         job = await store.upsertRecordingJob(id, { ...input, status: "error" } as Omit<RecordingJob, "id" | "cameraId" | "updatedAt">);
         return reply.code(503).send({ error: "recording_engine_unavailable" });
       }
-      const engine = z.object({ active: z.boolean() }).parse(await response.json());
+      const engine = z.object({ active: z.boolean(), delegated: z.boolean().optional() }).parse(await response.json());
       const actualStatus = !input.enabled
         ? "disabled"
         : engine.active
@@ -1174,7 +1209,12 @@ export async function buildApp(options?: {
         job = await store.upsertRecordingJob(id, { ...input, status: actualStatus } as Omit<RecordingJob, "id" | "cameraId" | "updatedAt">);
       }
     }
-    await audit(request, store, "recording.configured", camera.nodeId, "success", { mode: job.mode, enabled: job.enabled });
+    await audit(request, store, "recording.configured", camera.nodeId, "success", {
+      mode: job.mode,
+      enabled: job.enabled,
+      primaryRecordingStorage: job.primaryRecordingStorage,
+      cloudArchivePolicy: job.cloudArchivePolicy,
+    });
     return reply.code(200).send(job);
   });
 
@@ -1251,7 +1291,13 @@ export async function buildApp(options?: {
       request, reply, store, camera, "recording:view",
     ))) return;
     const segments = await store.listRecordingSegments(id, query.from, query.to);
-    return buildPlaybackTimeline(segments, query.from, query.to);
+    const job = await store.getRecordingJob(id);
+    return {
+      ...buildPlaybackTimeline(segments, query.from, query.to),
+      source: job?.primaryRecordingStorage ?? "sentinel-local",
+      transferMode: job?.primaryRecordingStorage === "recorder-local" ? "on-demand" : "local-index",
+      cloudArchivePolicy: job?.cloudArchivePolicy ?? "none",
+    };
   });
 
   app.post("/v1/recording/storage-calculator", async (request) => {

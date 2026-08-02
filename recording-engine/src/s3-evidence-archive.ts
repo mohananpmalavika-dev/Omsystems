@@ -90,7 +90,15 @@ export class S3EvidenceArchive implements EvidenceArchive {
     if (verified.ContentLength !== details.size || verified.Metadata?.sha256 !== checksumHex) {
       throw new Error("evidence_archive_verification_failed");
     }
-    return { provider: "s3", key };
+    return {
+      provider: "s3",
+      key,
+      sha256: checksumHex,
+      sizeBytes: details.size,
+      contentType: input.contentType,
+      archivedAt: new Date().toISOString(),
+      ...(retainUntilDate ? { retainUntil: retainUntilDate.toISOString() } : {}),
+    };
   }
 }
 

@@ -672,6 +672,8 @@ export interface ConsumedLiveSession {
 
 export type RecordingMode = "continuous" | "motion" | "scheduled" | "event" | "manual";
 export type RecordingStatus = "recording" | "scheduled" | "idle" | "error" | "disabled" | "starting" | "degraded" | "interrupted" | "recovering";
+export type PrimaryRecordingStorage = "sentinel-local" | "recorder-local";
+export type CloudArchivePolicy = "none" | "incident-evidence-only";
 
 export interface RecordingScheduleWindow {
   name?: string;
@@ -703,6 +705,10 @@ export interface RecordingJob {
   mode: RecordingMode;
   enabled: boolean;
   status: RecordingStatus;
+  /** The device responsible for retaining the full recording timeline. */
+  primaryRecordingStorage: PrimaryRecordingStorage;
+  /** Cloud/object storage is reserved for incident evidence, never the continuous timeline. */
+  cloudArchivePolicy: CloudArchivePolicy;
   retentionDays: number;
   /** Fixed segment size. Short segments limit corruption and improve playback indexing. */
   segmentDurationSeconds: number;

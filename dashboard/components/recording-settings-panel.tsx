@@ -114,7 +114,7 @@ export function RecordingSettingsPanel({
         <div>
           <span className="eyebrow">RECORDING SETTINGS</span>
           <h3>Camera recording workspace</h3>
-          <p>Configure recording mode, retention triggers, and protection parameters for one camera at a time.</p>
+          <p>Configure the branch recorder policy and incident-evidence protection for one camera at a time.</p>
         </div>
         <button
           type="button"
@@ -122,7 +122,9 @@ export function RecordingSettingsPanel({
           onClick={() => selectedCamera && onToggleRecording(selectedCamera.id)}
           disabled={!selectedCamera || saving}
         >
-          {recording?.enabled ? "Stop recording" : "Start recording"}
+          {recording?.primaryRecordingStorage === "recorder-local"
+            ? recording.enabled ? "Pause monitoring" : "Resume monitoring"
+            : recording?.enabled ? "Stop recording" : "Start recording"}
         </button>
       </div>
 
@@ -152,6 +154,15 @@ export function RecordingSettingsPanel({
           </div>
         ) : (
           <>
+            {recording?.primaryRecordingStorage === "recorder-local" && (
+              <div className="recording-policy-notice" role="status">
+                <ShieldCheck size={20} />
+                <div>
+                  <strong>DVR/NVR is the primary recorder</strong>
+                  <p>Continuous footage stays at the branch. Sentinel transfers only selected incident snapshots and clips off-site.</p>
+                </div>
+              </div>
+            )}
             <div className="settings-summary">
               <div>
                 <small>Status</small>
@@ -162,13 +173,13 @@ export function RecordingSettingsPanel({
                 <strong>{mode}</strong>
               </div>
               <div>
-                <small>Retention</small>
-                <strong>{recording?.retentionDays ?? 180} days</strong>
+                <small>Primary storage</small>
+                <strong>{recording?.primaryRecordingStorage === "recorder-local" ? "Branch DVR/NVR" : "Sentinel recorder"}</strong>
               </div>
             </div>
 
             <div className="form-group">
-              <label htmlFor="settingsEnabled">Recording enabled</label>
+              <label htmlFor="settingsEnabled">{recording?.primaryRecordingStorage === "recorder-local" ? "Recorder monitoring" : "Recording enabled"}</label>
               <button
                 type="button"
                 className="secondary-button"
@@ -185,7 +196,7 @@ export function RecordingSettingsPanel({
                 id="settingsMode"
                 value={mode}
                 onChange={(event) => setMode(event.target.value as RecordingJob["mode"])}
-                disabled={saving}
+                disabled={saving || recording?.primaryRecordingStorage === "recorder-local"}
               >
                 <option value="continuous">Continuous</option>
                 <option value="motion">Motion</option>
