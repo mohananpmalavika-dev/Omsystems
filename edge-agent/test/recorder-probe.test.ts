@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { looksLikeRecorder, probeRecorder, recorderPlaybackUri } from "../src/monitoring/recorder-probe.js";
+import { looksLikeRecorder, probeRecorder, recorderApiFamily, recorderPlaybackUri } from "../src/monitoring/recorder-probe.js";
 
 describe("vendor recorder probes", () => {
   afterEach(() => vi.unstubAllGlobals());
@@ -7,6 +7,11 @@ describe("vendor recorder probes", () => {
   it("identifies recorder identities during ONVIF discovery without classifying ordinary cameras", () => {
     expect(looksLikeRecorder({ manufacturer: "CP PLUS", model: "8 Channel XVR" })).toBe(true);
     expect(looksLikeRecorder({ manufacturer: "Hikvision", model: "DS-2CD2143G2" })).toBe(false);
+  });
+
+  it("keeps unvalidated OEM brands on ONVIF unless an API family is explicitly configured", () => {
+    expect(recorderApiFamily({ vendor: "uniview" })).toBe("onvif");
+    expect(recorderApiFamily({ vendor: "tvt", apiFamily: "dahua-cgi" })).toBe("dahua-cgi");
   });
 
   it("builds vendor playback probes without exposing them to the control plane", () => {

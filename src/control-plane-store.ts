@@ -129,6 +129,22 @@ export interface CameraApprovalInput {
   recorderSerialNumber?: string;
 }
 
+export interface RecorderReplacementMapping {
+  cameraId: string;
+  discoveryId: string;
+  sourceChannel: number;
+}
+
+export interface RecorderReplacementResult {
+  replacementId: string;
+  branchId: string;
+  oldRecorderSerialNumber: string;
+  newRecorderSerialNumber: string;
+  updatedCameraIds: string[];
+  preserved: Array<"camera-ids" | "names" | "permissions" | "recording-history" | "recording-policy" | "analytics-rules" | "alert-rules">;
+  appliedAt: string;
+}
+
 export interface CameraSpecificationsInput {
   resolutionMp: number;
   resolutionWidth: number;
@@ -615,6 +631,13 @@ export interface ControlPlaneStore {
     branchId: string,
     input: CameraApprovalInput,
   ): Promise<Camera | undefined>;
+  replaceRecorderChannels(input: {
+    branchId: string;
+    oldRecorderSerialNumber: string;
+    newRecorderSerialNumber: string;
+    mappings: RecorderReplacementMapping[];
+    actorUserId: string;
+  }): Promise<RecorderReplacementResult>;
   createCameraFromManualRegistration(
     branchId: string,
     input: CameraApprovalInput,

@@ -304,6 +304,7 @@ describe("Phase 1 operational health", () => {
           cameraId: "cam-001", sourceChannel: 1, status: "available",
           oldestContinuousAt: new Date(now - 35 * 86_400_000).toISOString(), newestPlayableAt: new Date(now).toISOString(),
           retentionLowerBound: false, coverageComplete: true, continuityGapSeconds: 30,
+          playbackVerified: true, playbackFrameDecoded: true,
           searchStartedAt: new Date(now).toISOString(), reasonCodes: [],
         }],
       },
@@ -477,7 +478,8 @@ describe("operational health evidence rules", () => {
       recorderId: "nvr-main", observedAt: new Date(now).toISOString(), sourceChannel: 1,
       status: "available", oldestContinuousAt: new Date(now - 35 * 86_400_000).toISOString(),
       newestPlayableAt: new Date(now).toISOString(), retentionLowerBound: false,
-      coverageComplete: true, continuityGapSeconds: 30, reasonCodes: [],
+      coverageComplete: true, continuityGapSeconds: 30,
+      playbackVerified: true, playbackFrameDecoded: true, reasonCodes: [],
     });
     expect(verification).toMatchObject({
       status: "compliant", actualDays: 35, dataSource: "recorder_archive",

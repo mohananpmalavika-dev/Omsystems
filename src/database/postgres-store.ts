@@ -331,6 +331,9 @@ export class PostgresStore
   async approveCamera(branchId: string, input: CameraApprovalInput) {
     return this.cameras.approve(branchId, input);
   }
+  async replaceRecorderChannels(input: Parameters<CameraRepository["replaceRecorderChannels"]>[0]) {
+    return this.cameras.replaceRecorderChannels(input);
+  }
   async updateCameraStatus(id: string, status: CameraStatus) {
     return this.cameras.updateStatus(id, status);
   }

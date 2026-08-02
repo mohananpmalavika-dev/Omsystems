@@ -44,6 +44,8 @@ export interface RecorderArchiveEvidence {
   continuityGapSeconds: number;
   gapCount?: number;
   largestGapSeconds?: number;
+  playbackVerified?: boolean | null;
+  playbackFrameDecoded?: boolean | null;
   reasonCodes: string[];
 }
 
@@ -150,6 +152,16 @@ function archiveRetentionSource(evidence: RecorderArchiveEvidence | undefined, p
   }
   if (evidence.status === "unavailable") return { ...unavailable, reasonCodes: evidence.reasonCodes.length ? evidence.reasonCodes : ["recorder_archive_evidence_unavailable"] };
   if (evidence.status === "empty") return { ...unavailable, empty: true, verified: true, reasonCodes: evidence.reasonCodes };
+  if (evidence.playbackVerified !== true || evidence.playbackFrameDecoded !== true) {
+    return {
+      ...unavailable,
+      reasonCodes: uniqueReasons([
+        ...evidence.reasonCodes,
+        evidence.playbackVerified === false ? "recorder_archive_playback_failed" : "recorder_archive_playback_unverified",
+        evidence.playbackFrameDecoded === false ? "recorder_archive_frame_decode_failed" : "recorder_archive_frame_decode_unverified",
+      ]),
+    };
+  }
   const oldest = Date.parse(evidence.oldestContinuousAt ?? "");
   const newest = Date.parse(evidence.newestPlayableAt ?? "");
   if (!Number.isFinite(oldest) || !Number.isFinite(newest) || newest < oldest) {

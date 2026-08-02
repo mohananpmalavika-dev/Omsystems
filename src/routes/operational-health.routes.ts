@@ -81,6 +81,7 @@ const recorderArchiveSchema = z.object({
     largestGapSeconds: z.number().min(0).default(0),
     searchStartedAt: z.string().datetime(),
     playbackVerified: z.boolean().optional(),
+    playbackFrameDecoded: z.boolean().optional(),
     playbackCodec: z.string().max(80).nullable().optional(),
     playbackError: z.string().max(300).optional(),
     reasonCodes: z.array(z.string().min(1).max(100)).max(30).default([]),
@@ -291,6 +292,7 @@ export async function registerOperationalHealthRoutes(
           gapCount: entry.gapCount, largestGapSeconds: entry.largestGapSeconds,
           searchStartedAt: entry.searchStartedAt,
           playbackVerified: entry.playbackVerified ?? null,
+          playbackFrameDecoded: entry.playbackFrameDecoded ?? null,
           playbackCodec: entry.playbackCodec ?? null,
           playbackError: entry.playbackError ?? null,
         },
@@ -957,6 +959,8 @@ function latestArchiveEvidenceByCamera(telemetry: OperationalTelemetryEnvelope[]
       newestPlayableAt: nullableStringMetric(metrics.newestPlayableAt),
       retentionLowerBound, coverageComplete, continuityGapSeconds,
       gapCount: gapCount ?? 0, largestGapSeconds: largestGapSeconds ?? 0,
+      playbackVerified: booleanMetric(metrics.playbackVerified),
+      playbackFrameDecoded: booleanMetric(metrics.playbackFrameDecoded),
       reasonCodes: item.reasonCodes,
     };
     const current = evidence.get(cameraId);

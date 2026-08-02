@@ -2,11 +2,19 @@ import { describe, expect, it, vi } from "vitest";
 import {
   discoverRecorderChannels,
   recorderAdapterVendor,
+  recorderChannelIdentity,
   recorderChannelNumber,
   recorderChannelSource,
 } from "../src/recorders/dvr-adapter.js";
 
 describe("universal DVR channel adapter", () => {
+  it("classifies recorder brands and builds a stable recorder-channel identity", () => {
+    expect(recorderAdapterVendor("UNV / Uniview")).toBe("uniview");
+    expect(recorderAdapterVendor("TVT Digital")).toBe("tvt");
+    expect(recorderAdapterVendor("Tiandy Technologies")).toBe("tiandy");
+    expect(recorderChannelIdentity(" dvr-serial-01 ", 4)).toBe("DVR-SERIAL-01:channel:4");
+  });
+
   it("groups Hikvision main and sub streams into one analog camera per DVR channel", async () => {
     const uris: Record<string, string> = {
       c1main: "rtsp://192.0.2.10/Streaming/Channels/101",

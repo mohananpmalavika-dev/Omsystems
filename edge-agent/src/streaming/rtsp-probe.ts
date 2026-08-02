@@ -160,6 +160,25 @@ export async function captureRtspLumaFrame(
   return result.ok && result.stdoutBuffer.length === 64 * 36 ? result.stdoutBuffer : null;
 }
 
+/** Extracts a small RGB frame for analog signal-quality diagnostics. */
+export async function captureRtspRgbFrame(
+  uri: string,
+  ffmpegPath = "ffmpeg",
+  timeoutMs = 10_000,
+): Promise<Buffer | null> {
+  const result = await runProcess(ffmpegPath, [
+    "-v", "error",
+    "-rtsp_transport", "tcp",
+    "-i", uri,
+    "-frames:v", "1",
+    "-vf", "scale=64:36",
+    "-f", "rawvideo",
+    "-pix_fmt", "rgb24",
+    "pipe:1",
+  ], timeoutMs);
+  return result.ok && result.stdoutBuffer.length === 64 * 36 * 3 ? result.stdoutBuffer : null;
+}
+
 export function parseFrameRate(value: string | undefined): number | null {
   if (!value) return null;
   const parts = value.split("/");

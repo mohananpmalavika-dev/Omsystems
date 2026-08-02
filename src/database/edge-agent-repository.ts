@@ -211,11 +211,14 @@ export class EdgeAgentRepository {
         AND agent.branch_node_id = n.id
         AND agent.tenant_id = n.tenant_id
        WHERE n.id = $1 AND n.node_type = 'branch'
-       ON CONFLICT (edge_agent_id, ip_address, onvif_port, recorder_channel) DO UPDATE
-       SET discovery_method = EXCLUDED.discovery_method,
+       ON CONFLICT (branch_node_id, physical_channel_key) DO UPDATE
+       SET edge_agent_id = EXCLUDED.edge_agent_id,
+           discovery_method = EXCLUDED.discovery_method,
            manufacturer = EXCLUDED.manufacturer,
            vendor = EXCLUDED.vendor,
            model = EXCLUDED.model,
+           ip_address = EXCLUDED.ip_address,
+           onvif_port = EXCLUDED.onvif_port,
            rtsp_port = EXCLUDED.rtsp_port,
            profiles = EXCLUDED.profiles,
            capabilities = EXCLUDED.capabilities,

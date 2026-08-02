@@ -2,7 +2,10 @@ import { authenticatedFetch } from "./http-auth.js";
 
 export interface RecorderConfig {
   id: string; name: string; deviceType: "dvr" | "nvr";
-  vendor: "hikvision" | "dahua" | "cp-plus" | "onvif" | "generic";
+  vendor: "hikvision" | "dahua" | "cp-plus" | "uniview" | "tvt" | "prama" |
+    "honeywell" | "matrix" | "secureye" | "tiandy" | "onvif" | "generic";
+  /** Explicit only after a model/firmware combination is lab-validated. */
+  apiFamily?: "hikvision-isapi" | "dahua-cgi" | "onvif" | "generic-http" | undefined;
   model?: string | undefined; host: string; port: number; secure?: boolean | undefined;
   rtspPort?: number | undefined;
   username?: string | undefined; password?: string | undefined;
@@ -33,6 +36,7 @@ export interface ArchiveRetentionEvidence {
   searchStartedAt: string;
   reasonCodes: string[];
   playbackVerified?: boolean;
+  playbackFrameDecoded?: boolean;
   playbackCodec?: string | null;
   playbackError?: string;
 }
@@ -103,11 +107,12 @@ export function recorderPlaybackUri(config: RecorderConfig, sourceChannel: numbe
   const start = new Date(newest.getTime() - 30_000);
   const credentials = `${encodeURIComponent(config.username)}:${encodeURIComponent(config.password)}`;
   const authority = `${credentials}@${config.host}:${config.rtspPort ?? 554}`;
-  if (config.vendor === "hikvision") {
+  const family = recorderApiFamily(config);
+  if (family === "hikvision-isapi") {
     const track = sourceChannel >= 100 ? sourceChannel : sourceChannel * 100 + 1;
     return `rtsp://${authority}/Streaming/tracks/${track}?starttime=${compactUtc(start)}&endtime=${compactUtc(end)}`;
   }
-  if (config.vendor === "dahua" || config.vendor === "cp-plus") {
+  if (family === "dahua-cgi") {
     return `rtsp://${authority}/cam/playback?channel=${sourceChannel}&subtype=0&starttime=${dahuaPlaybackTime(start)}&endtime=${dahuaPlaybackTime(end)}`;
   }
   return undefined;
@@ -118,14 +123,28 @@ export async function probeRecorder(config: RecorderConfig, timeoutMs: number, o
   const base = `${config.secure ? "https" : "http"}://${config.host}:${config.port}`;
   const credentials = config.username ? { username: config.username, password: config.password ?? "" } : undefined;
   try {
-    if (config.vendor === "hikvision") return await probeHikvision(config, base, credentials, timeoutMs, started, Boolean(options.includeArchive));
-    if (config.vendor === "dahua" || config.vendor === "cp-plus") return await probeDahuaFamily(config, base, credentials, timeoutMs, started, Boolean(options.includeArchive));
-    if (config.vendor === "onvif") return await probeOnvif(config, base, credentials, timeoutMs, started, Boolean(options.includeArchive));
+    const family = recorderApiFamily(config);
+    if (family === "hikvision-isapi") return await probeHikvision(config, base, credentials, timeoutMs, started, Boolean(options.includeArchive));
+    if (family === "dahua-cgi") return await probeDahuaFamily(config, base, credentials, timeoutMs, started, Boolean(options.includeArchive));
+    if (family === "onvif") return await probeOnvif(config, base, credentials, timeoutMs, started, Boolean(options.includeArchive));
     const response = await authenticatedFetch(base, { method: "GET" }, credentials, timeoutMs);
     return result(config, response.status < 500, response.status === 401 ? "degraded" : "online", started, {}, [], response.status === 401 ? ["recorder_credentials_rejected"] : ["generic_http_reachability_only"]);
   } catch (error) {
     return result(config, false, "offline", started, {}, [], [classifyError(error)]);
   }
+}
+
+/**
+ * Only vendors whose native protocol is known are selected automatically.
+ * Other brands remain fully discoverable through ONVIF and can opt into a
+ * native family after that exact OEM/model/firmware is validated in the lab.
+ */
+export function recorderApiFamily(config: Pick<RecorderConfig, "vendor" | "apiFamily">): NonNullable<RecorderConfig["apiFamily"]> {
+  if (config.apiFamily) return config.apiFamily;
+  if (config.vendor === "hikvision") return "hikvision-isapi";
+  if (config.vendor === "dahua" || config.vendor === "cp-plus") return "dahua-cgi";
+  if (config.vendor === "generic") return "generic-http";
+  return "onvif";
 }
 
 async function probeHikvision(config: RecorderConfig, base: string, credentials: { username: string; password: string } | undefined, timeout: number, started: number, includeArchive: boolean) {

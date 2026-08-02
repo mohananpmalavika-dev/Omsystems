@@ -3,7 +3,7 @@ import { discoverOnvifDevices } from "./discovery/onvif-discovery.js";
 import { attachCredentials, OnvifClient } from "./devices/onvif-client.js";
 import { compatibilityNotes, normalizeVendor } from "./devices/compatibility-registry.js";
 import { GatewayClient } from "./registration/gateway-client.js";
-import { probeRtsp } from "./streaming/rtsp-probe.js";
+import { captureRtspRgbFrame, probeRtsp } from "./streaming/rtsp-probe.js";
 import { LocalStreamSecretStore, startSecretProvider } from "./streaming/secret-store.js";
 import { uptime } from "node:os";
 import { NetworkCounterSampler, NetworkPathTracker, probeInternetLink } from "./monitoring/internet-probe.js";
@@ -19,7 +19,7 @@ import { EncryptedOutbox } from "./offline/encrypted-outbox.js";
 import { stageSignedUpdate } from "./updates/signed-update.js";
 import { readFile } from "node:fs/promises";
 import { CameraCredentialVault, openSealedCommand, type SealedCommandEnvelope } from "./security/camera-credential-vault.js";
-import { discoverRecorderChannels, recorderAdapterVendor } from "./recorders/dvr-adapter.js";
+import { discoverRecorderChannels, recorderAdapterVendor, recorderChannelIdentity } from "./recorders/dvr-adapter.js";
 import type { RecorderConfig } from "./monitoring/recorder-probe.js";
 
 async function main() {
@@ -295,6 +295,9 @@ async function scanBranch() {
           rtspPort: 554,
           username: credentials.username,
           password: credentials.password,
+          ...(recorderVendor === "hikvision" || recorderVendor === "dahua" || recorderVendor === "cp-plus"
+            ? {}
+            : { systemPath: `${parsedServiceUrl.pathname}${parsedServiceUrl.search}` }),
         });
         await control.submitTelemetry(agentId, {
           branchId, edgeAgentId: agentId, deviceType: "recorder", deviceId: discoveredId,
@@ -341,7 +344,9 @@ async function scanBranch() {
             })),
             capabilities: device.capabilities,
             statusReason: channel.reasonCodes.join(",").slice(0, 200),
-            hardwareId: `${discoveredId}:channel:${channel.sourceChannel}`,
+            hardwareId: device.serialNumber
+              ? recorderChannelIdentity(device.serialNumber, channel.sourceChannel)
+              : `${discoveredId}:channel:${channel.sourceChannel}`,
             existingDeviceAssociation: discoveredId,
             sourceType: channel.sourceType,
             recorderId: discoveredId,
@@ -595,12 +600,18 @@ async function collectRecorderReports(observedAt: string, includeArchive: boolea
           continue;
         }
         const playback = await probeRtsp(uri, config.FFPROBE_PATH, config.RECORDER_PROBE_TIMEOUT_MS);
-        evidence.playbackVerified = playback.reachable;
+        const decodedFrame = playback.reachable
+          ? await captureRtspRgbFrame(uri, config.FFMPEG_PATH, config.RECORDER_PROBE_TIMEOUT_MS)
+          : null;
+        evidence.playbackFrameDecoded = Boolean(decodedFrame);
+        evidence.playbackVerified = playback.reachable && Boolean(decodedFrame);
         evidence.playbackCodec = playback.codec;
-        if (playback.reachable) evidence.reasonCodes.push("latest_clip_playback_verified");
+        if (evidence.playbackVerified) evidence.reasonCodes.push("latest_clip_playback_verified", "latest_clip_frame_decoded");
         else {
-          evidence.playbackError = playback.error?.slice(0, 300) ?? "playback_failed";
-          evidence.reasonCodes.push("latest_clip_playback_failed");
+          evidence.playbackError = playback.reachable
+            ? "playback_frame_decode_failed"
+            : playback.error?.slice(0, 300) ?? "playback_failed";
+          evidence.reasonCodes.push(playback.reachable ? "latest_clip_frame_decode_failed" : "latest_clip_playback_failed");
         }
       }
     }

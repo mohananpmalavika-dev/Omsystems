@@ -63,6 +63,65 @@ describe("analog camera channels behind DVRs", () => {
     });
   });
 
+  it("replaces a DVR in place so channel camera IDs and recording policy survive", async () => {
+    const first = await submitChannel(1, "Entrance");
+    const second = await submitChannel(2, "Cash Counter");
+    const firstApproval = await approve(first.json().id, "Entrance");
+    const secondApproval = await approve(second.json().id, "Cash Counter");
+    const firstCameraId = firstApproval.json().cameraId as string;
+    const secondCameraId = secondApproval.json().cameraId as string;
+    const originalNodeId = (await store.getCamera(firstCameraId))!.nodeId;
+    await store.upsertRecordingJob(firstCameraId, {
+      mode: "continuous", enabled: true, status: "recording", retentionDays: 180,
+      segmentDurationSeconds: 60, hotRetentionDays: 30, warmRetentionDays: 30,
+      coldRetentionDays: 120, critical: true, backupRequired: true,
+      automaticDeletionEnabled: true, evidenceProtection: true,
+      recordMainStream: true, preRollSeconds: 30, postRollSeconds: 120,
+      minMotionDurationSeconds: 1, motionConfidenceThreshold: 0.65,
+      cooldownSeconds: 60, maxEventDurationSeconds: 600, triggerEventTypes: [],
+    });
+
+    await submitReplacementChannel(1, "New DVR channel 1");
+    await submitReplacementChannel(2, "New DVR channel 2");
+    const plan = await app.inject({
+      method: "POST",
+      url: "/v1/branches/branch-blr-001/recorders/replacements/plan",
+      headers: admin,
+      payload: { oldRecorderSerialNumber: "DVR-SERIAL-01", newRecorderSerialNumber: "DVR-SERIAL-02" },
+    });
+    expect(plan.statusCode).toBe(200);
+    expect(plan.json()).toMatchObject({ status: "ready", missingChannels: [], extraChannels: [] });
+    expect(plan.json().mappings).toHaveLength(2);
+
+    const applied = await app.inject({
+      method: "POST",
+      url: "/v1/branches/branch-blr-001/recorders/replacements/apply",
+      headers: admin,
+      payload: {
+        oldRecorderSerialNumber: "DVR-SERIAL-01",
+        newRecorderSerialNumber: "DVR-SERIAL-02",
+        confirmPreserveCameraIds: true,
+        expectedMappingCount: 2,
+      },
+    });
+    expect(applied.statusCode).toBe(201);
+    expect(applied.json().updatedCameraIds).toEqual(expect.arrayContaining([firstCameraId, secondCameraId]));
+    expect(await store.getCamera(firstCameraId)).toMatchObject({
+      id: firstCameraId, nodeId: originalNodeId, name: "Entrance",
+      recorderId: "recorder-branch-02", recorderSerialNumber: "DVR-SERIAL-02", recorderChannel: 1,
+    });
+    expect(await store.getRecordingJob(firstCameraId)).toMatchObject({ retentionDays: 180, critical: true });
+  });
+
+  async function approve(discoveryId: string, name: string) {
+    return app.inject({
+      method: "POST",
+      url: `/v1/branches/branch-blr-001/cameras/discovered/${discoveryId}/approve`,
+      headers: admin,
+      payload: { name },
+    });
+  }
+
   async function submitChannel(channel: number, displayName: string) {
     return app.inject({
       method: "POST",
@@ -90,6 +149,37 @@ describe("analog camera channels behind DVRs", () => {
         recorderId: "recorder-branch-01",
         recorderChannel: channel,
         recorderSerialNumber: "DVR-SERIAL-01",
+      },
+    });
+  }
+
+  async function submitReplacementChannel(channel: number, displayName: string) {
+    return app.inject({
+      method: "POST",
+      url: "/v1/branches/branch-blr-001/cameras/discovered",
+      headers: admin,
+      payload: {
+        edgeAgentId: agentId,
+        discoveryMethod: "nvr-dvr-channel-discovery",
+        vendor: "other",
+        manufacturer: "Replacement DVR",
+        model: "16 channel XVR",
+        ipAddress: "192.168.20.11",
+        onvifPort: 80,
+        rtspPort: 554,
+        profiles: [{ name: "main", codec: "H264", width: 1920, height: 1080 }],
+        capabilities: { ptz: false, audio: false, events: true },
+        displayName,
+        streamVerified: true,
+        rtspValidated: true,
+        duplicateStatus: "unique",
+        compatibilityStatus: "compatible",
+        hardwareId: `DVR-SERIAL-02:channel:${channel}`,
+        existingDeviceAssociation: "recorder-branch-02",
+        sourceType: "analog-dvr-channel",
+        recorderId: "recorder-branch-02",
+        recorderChannel: channel,
+        recorderSerialNumber: "DVR-SERIAL-02",
       },
     });
   }

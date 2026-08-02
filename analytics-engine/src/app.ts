@@ -104,6 +104,13 @@ export function buildAnalyticsEngine(options: AnalyticsEngineOptions) {
     });
   });
 
+  // Register analog camera health and aging APIs against this app's pipeline.
+  void import("./routes/analog-camera-api.js").then(module => {
+    module.registerAnalogCameraApiRoutes(app, pipeline).catch((error) => {
+      app.log.error({ err: error }, "Failed to register analog camera API routes");
+    });
+  });
+
   app.addHook("preHandler", async (request, reply) => {
     if (request.url === "/health" || request.url.startsWith("/v1/detectors") || request.url.startsWith("/v1/analytics")) {
       return; // Allow public access to monitoring endpoints

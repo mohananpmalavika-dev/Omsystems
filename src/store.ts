@@ -55,6 +55,7 @@ import type {
   ComplianceAssessmentFilters,
   DeviceInventoryInput,
   DeviceInventoryRecord,
+  RecorderReplacementResult,
 } from "./control-plane-store.js";
 import { IncidentManagementMethods } from "./store-incident-extensions.js";
 import type { OperationalHealthPolicy, OperationalTelemetryEnvelope, VideoWallGridSize, VideoWallLayout } from "./operational-health/types.js";
@@ -719,13 +720,19 @@ export class MemoryStore implements ControlPlaneStore {
         item.existingDeviceAssociation === normalized.existingDeviceAssociation &&
         item.recorderChannel === normalized.recorderChannel
       );
+      const sameRecorderChannel = Boolean(
+        item.recorderSerialNumber && normalized.recorderSerialNumber &&
+        item.recorderSerialNumber.trim().toUpperCase() === normalized.recorderSerialNumber.trim().toUpperCase() &&
+        item.recorderChannel !== undefined &&
+        item.recorderChannel === normalized.recorderChannel
+      );
       const sameVendorModel = Boolean(
         item.manufacturer && normalized.manufacturer &&
         item.model === normalized.model &&
         item.manufacturer === normalized.manufacturer &&
         normalized.hardwareId && item.hardwareId === normalized.hardwareId,
       );
-      const hasFingerprint = [sameSerial, sameMac, sameOnvif, sameHardware, sameAssociation, sameVendorModel].some(Boolean);
+      const hasFingerprint = [sameSerial, sameMac, sameOnvif, sameHardware, sameAssociation, sameRecorderChannel, sameVendorModel].some(Boolean);
       if (item.status === "rejected" && sameBranch && (sameSourceSlot || hasFingerprint)) {
         return true;
       }
@@ -809,6 +816,68 @@ export class MemoryStore implements ControlPlaneStore {
     discovery.status = "approved";
     this.cameras.set(camera.id, camera);
     return camera;
+  }
+
+  async replaceRecorderChannels(input: {
+    branchId: string;
+    oldRecorderSerialNumber: string;
+    newRecorderSerialNumber: string;
+    mappings: Array<{ cameraId: string; discoveryId: string; sourceChannel: number }>;
+    actorUserId: string;
+  }): Promise<RecorderReplacementResult> {
+    const oldSerial = input.oldRecorderSerialNumber.trim().toUpperCase();
+    const newSerial = input.newRecorderSerialNumber.trim().toUpperCase();
+    if (!oldSerial || !newSerial || oldSerial === newSerial) throw new Error("invalid_recorder_replacement");
+    if (input.mappings.length === 0) throw new Error("recorder_replacement_has_no_channels");
+
+    const resolved = input.mappings.map((mapping) => {
+      const camera = this.cameras.get(mapping.cameraId);
+      const discovery = this.discoveries.get(mapping.discoveryId);
+      const valid = camera?.branchId === input.branchId &&
+        camera.recorderSerialNumber?.trim().toUpperCase() === oldSerial &&
+        camera.recorderChannel === mapping.sourceChannel &&
+        discovery?.branchId === input.branchId && discovery.status === "pending" &&
+        discovery.recorderSerialNumber?.trim().toUpperCase() === newSerial &&
+        discovery.recorderChannel === mapping.sourceChannel &&
+        discovery.streamVerified === true && discovery.credentialsRequired !== true;
+      if (!camera || !discovery || !valid) throw new Error("recorder_replacement_mapping_changed");
+      return { camera, discovery };
+    });
+    if (new Set(input.mappings.map((item) => item.cameraId)).size !== input.mappings.length ||
+        new Set(input.mappings.map((item) => item.discoveryId)).size !== input.mappings.length) {
+      throw new Error("duplicate_recorder_replacement_mapping");
+    }
+
+    for (const { camera, discovery } of resolved) {
+      Object.assign(camera, {
+        edgeAgentId: discovery.edgeAgentId,
+        vendor: discovery.vendor,
+        model: discovery.model,
+        protocol: "vendor-adapter" as const,
+        status: "unknown" as const,
+        profiles: structuredClone(discovery.profiles),
+        capabilities: structuredClone(discovery.capabilities),
+        connectionSecretRef: `edge://${discovery.edgeAgentId}/${discovery.id}`,
+        sourceType: discovery.sourceType ?? camera.sourceType,
+        recorderId: discovery.recorderId,
+        recorderChannel: discovery.recorderChannel,
+        recorderSerialNumber: discovery.recorderSerialNumber,
+        firmwareVersion: discovery.firmwareVersion,
+        ipAddress: discovery.ipAddress,
+      });
+      discovery.status = "approved";
+      discovery.duplicateStatus = "duplicate";
+      discovery.existingDeviceAssociation = camera.id;
+      discovery.statusReason = `replacement_for:${oldSerial}`;
+    }
+
+    return {
+      replacementId: randomUUID(), branchId: input.branchId,
+      oldRecorderSerialNumber: oldSerial, newRecorderSerialNumber: newSerial,
+      updatedCameraIds: resolved.map(({ camera }) => camera.id),
+      preserved: ["camera-ids", "names", "permissions", "recording-history", "recording-policy", "analytics-rules", "alert-rules"],
+      appliedAt: new Date().toISOString(),
+    };
   }
 
   async createCameraFromManualRegistration(branchId: string, input: CameraApprovalInput) {

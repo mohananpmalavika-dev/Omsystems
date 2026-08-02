@@ -19,6 +19,7 @@ import { calculateRecordingStorage } from "./recording/storage-calculator.js";
 import { registerAuthRoutes } from "./routes/auth.routes.js";
 import { registerCameraPermissionRoutes } from "./routes/camera-permissions.routes.js";
 import { registerCameraDiscoveryRoutes } from "./routes/camera-discovery.routes.js";
+import { registerRecorderLifecycleRoutes } from "./routes/recorder-lifecycle.routes.js";
 import { registerCctvInfrastructureRoutes } from "./routes/cctv-infrastructure.js";
 import { registerOrganizationRoutes } from "./routes/organization.routes.js";
 import { registerUserRoutes } from "./routes/user.routes.js";
@@ -1566,6 +1567,7 @@ export async function buildApp(options?: {
     return consumed;
   });
   await registerCameraDiscoveryRoutes(app, store);
+  await registerRecorderLifecycleRoutes(app, store);
   await registerCommandCenterRoutes(app, store);
   await registerDigitalTwinRoutes(app, store, {
     assetRoot: options?.digitalTwinAssetRoot ?? process.env.DIGITAL_TWIN_ASSET_ROOT ?? "./digital-twin-assets",

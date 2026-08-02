@@ -2,7 +2,18 @@ import type { OnvifCredentials, OnvifProfile } from "../devices/onvif-client.js"
 import { attachCredentials } from "../devices/onvif-client.js";
 import type { RtspProbeResult } from "../streaming/rtsp-probe.js";
 
-export type RecorderAdapterVendor = "hikvision" | "dahua" | "cp-plus" | "onvif";
+export type RecorderAdapterVendor =
+  | "hikvision"
+  | "dahua"
+  | "cp-plus"
+  | "uniview"
+  | "tvt"
+  | "prama"
+  | "honeywell"
+  | "matrix"
+  | "secureye"
+  | "tiandy"
+  | "onvif";
 export type RecorderChannelSource = "analog-dvr-channel" | "nvr-channel";
 
 export interface RecorderChannelCandidate {
@@ -112,7 +123,27 @@ export function recorderAdapterVendor(manufacturer: string): RecorderAdapterVend
   if (/hikvision|hik vision/.test(normalized)) return "hikvision";
   if (/dahua/.test(normalized)) return "dahua";
   if (/cp[\s-]*plus/.test(normalized)) return "cp-plus";
+  if (/uniview|unv\b/.test(normalized)) return "uniview";
+  if (/\btvt\b/.test(normalized)) return "tvt";
+  if (/prama/.test(normalized)) return "prama";
+  if (/honeywell/.test(normalized)) return "honeywell";
+  if (/matrix/.test(normalized)) return "matrix";
+  if (/secureye/.test(normalized)) return "secureye";
+  if (/tiandy/.test(normalized)) return "tiandy";
   return "onvif";
+}
+
+/**
+ * Stable physical identity for a recorder input. IP addresses and discovery
+ * IDs are deliberately excluded because both can change during maintenance.
+ */
+export function recorderChannelIdentity(recorderSerialNumber: string, sourceChannel: number) {
+  const serial = recorderSerialNumber.trim().toUpperCase();
+  if (!serial) throw new Error("recorder_serial_number_required");
+  if (!Number.isInteger(sourceChannel) || sourceChannel < 1 || sourceChannel > 65_535) {
+    throw new Error("invalid_recorder_channel");
+  }
+  return `${serial}:channel:${sourceChannel}`;
 }
 
 export function recorderChannelSource(model: string): RecorderChannelSource {

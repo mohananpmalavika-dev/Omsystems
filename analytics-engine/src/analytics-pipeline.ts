@@ -35,6 +35,10 @@ import { AIInvestigationTools } from "./detectors/ai-investigation-tools.js";
 import { AIPredictionEngine } from "./detectors/ai-prediction-engine.js";
 import { AIReportingEngine } from "./detectors/ai-reporting-engine.js";
 import { AIAssistant } from "./detectors/ai-assistant.js";
+import { AnalogVideoQualityDetector } from "./detectors/analog-video-quality-detector.js";
+import { CameraAgingDetector } from "./detectors/camera-aging-detector.js";
+import { CameraTypeClassifier } from "./detectors/camera-type-classifier.js";
+import { DVRChannelHealthDetector } from "./detectors/dvr-channel-health-detector.js";
 import { getModelManager } from "./model-manager.js";
 
 export interface AnalyticsRule {
@@ -86,6 +90,12 @@ export class AnalyticsPipeline {
   private aiPredictionEngine: AIPredictionEngine;
   private aiReportingEngine: AIReportingEngine;
   private aiAssistant: AIAssistant;
+  
+  // Analog camera AI detectors
+  private analogVideoQualityDetector: AnalogVideoQualityDetector;
+  private cameraAgingDetector: CameraAgingDetector;
+  private cameraTypeClassifier: CameraTypeClassifier;
+  private dvrChannelHealthDetector: DVRChannelHealthDetector;
   
   private detectors: BaseDetector[];
   private requiredDetectors: Set<BaseDetector>;
@@ -139,6 +149,12 @@ export class AnalyticsPipeline {
     this.aiReportingEngine = new AIReportingEngine();
     this.aiAssistant = new AIAssistant();
 
+    // Initialize analog camera AI detectors
+    this.analogVideoQualityDetector = new AnalogVideoQualityDetector();
+    this.cameraAgingDetector = new CameraAgingDetector();
+    this.cameraTypeClassifier = new CameraTypeClassifier();
+    this.dvrChannelHealthDetector = new DVRChannelHealthDetector();
+
     this.detectors = [
       this.motionDetector,
       this.objectDetector,
@@ -155,6 +171,10 @@ export class AnalyticsPipeline {
       this.heatMapGenerator,
       this.faceDetector,
       this.anprDetector,
+      this.analogVideoQualityDetector,
+      this.cameraAgingDetector,
+      this.cameraTypeClassifier,
+      this.dvrChannelHealthDetector,
     ];
     // Only deterministic infrastructure is required to accept a frame. Model
     // capabilities advertise their own degraded state when a model is not
@@ -847,11 +867,39 @@ export class AnalyticsPipeline {
   }
 
   /**
-   * Get memory usage report
+   * Get model memory report
    */
   getMemoryReport() {
     const modelManager = getModelManager();
     return modelManager.getMemoryReport();
+  }
+
+  /**
+   * Get analog video quality detector
+   */
+  getAnalogVideoQualityDetector() {
+    return this.analogVideoQualityDetector;
+  }
+
+  /**
+   * Get camera aging detector
+   */
+  getCameraAgingDetector() {
+    return this.cameraAgingDetector;
+  }
+
+  /**
+   * Get camera type classifier
+   */
+  getCameraTypeClassifier() {
+    return this.cameraTypeClassifier;
+  }
+
+  /**
+   * Get DVR channel health detector
+   */
+  getDVRChannelHealthDetector() {
+    return this.dvrChannelHealthDetector;
   }
 }
 

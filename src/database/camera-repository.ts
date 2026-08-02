@@ -9,7 +9,10 @@ import type {
   ConsumedLiveSession,
   LiveSession,
 } from "../domain/models.js";
-import type { CameraApprovalInput } from "../control-plane-store.js";
+import type {
+  CameraApprovalInput,
+  RecorderReplacementResult,
+} from "../control-plane-store.js";
 
 type CameraRow = {
   id: string;
@@ -160,6 +163,106 @@ export class CameraRepository {
       );
       await client.query("COMMIT");
       return camera;
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  async replaceRecorderChannels(input: {
+    branchId: string;
+    oldRecorderSerialNumber: string;
+    newRecorderSerialNumber: string;
+    mappings: Array<{ cameraId: string; discoveryId: string; sourceChannel: number }>;
+    actorUserId: string;
+  }): Promise<RecorderReplacementResult> {
+    const client = await this.pool.connect();
+    const oldSerial = input.oldRecorderSerialNumber.trim().toUpperCase();
+    const newSerial = input.newRecorderSerialNumber.trim().toUpperCase();
+    if (!oldSerial || !newSerial || oldSerial === newSerial) throw new Error("invalid_recorder_replacement");
+    if (!input.mappings.length) throw new Error("recorder_replacement_has_no_channels");
+    if (new Set(input.mappings.map((item) => item.cameraId)).size !== input.mappings.length ||
+        new Set(input.mappings.map((item) => item.discoveryId)).size !== input.mappings.length) {
+      throw new Error("duplicate_recorder_replacement_mapping");
+    }
+
+    try {
+      await client.query("BEGIN");
+      const branch = await client.query<{ tenant_id: string }>(
+        `SELECT tenant_id::text FROM resource_nodes
+         WHERE id = $1::uuid AND node_type = 'branch'
+         FOR UPDATE`,
+        [input.branchId],
+      );
+      const tenantId = branch.rows[0]?.tenant_id;
+      if (!tenantId) throw new Error("branch_not_found");
+
+      const updatedCameraIds: string[] = [];
+      for (const mapping of input.mappings) {
+        const updated = await client.query<{ id: string }>(
+          `UPDATE cameras AS camera
+           SET edge_agent_id = discovery.edge_agent_id,
+               vendor = discovery.vendor,
+               model = discovery.model,
+               channel = discovery.recorder_channel,
+               protocol = 'vendor-adapter',
+               status = 'unknown',
+               profiles = discovery.profiles,
+               capabilities = discovery.capabilities,
+               connection_secret_ref = 'edge://' || discovery.edge_agent_id::text || '/' || discovery.id::text,
+               source_type = discovery.source_type,
+               recorder_id = discovery.recorder_id,
+               recorder_channel = discovery.recorder_channel,
+               recorder_serial_number = discovery.recorder_serial_number,
+               last_seen_at = NULL
+           FROM camera_discoveries AS discovery
+           WHERE camera.id = $1::uuid
+             AND camera.branch_node_id = $2::uuid
+             AND upper(btrim(camera.recorder_serial_number)) = $3
+             AND camera.recorder_channel = $4
+             AND discovery.id = $5::uuid
+             AND discovery.branch_node_id = camera.branch_node_id
+             AND discovery.status = 'pending'
+             AND upper(btrim(discovery.recorder_serial_number)) = $6
+             AND discovery.recorder_channel = $4
+             AND discovery.stream_verified IS TRUE
+             AND discovery.credentials_required IS NOT TRUE
+           RETURNING camera.id::text`,
+          [mapping.cameraId, input.branchId, oldSerial, mapping.sourceChannel, mapping.discoveryId, newSerial],
+        );
+        const cameraId = updated.rows[0]?.id;
+        if (!cameraId) throw new Error("recorder_replacement_mapping_changed");
+        updatedCameraIds.push(cameraId);
+        await client.query(
+          `UPDATE camera_discoveries
+           SET status = 'approved', duplicate_status = 'duplicate',
+               existing_device_association = $2,
+               status_reason = $3
+           WHERE id = $1::uuid`,
+          [mapping.discoveryId, cameraId, `replacement_for:${oldSerial}`],
+        );
+      }
+
+      const replacementId = randomUUID();
+      const appliedAt = new Date().toISOString();
+      await client.query(
+        `INSERT INTO recorder_replacement_events
+           (id, tenant_id, branch_node_id, old_recorder_serial_number,
+            new_recorder_serial_number, channel_mappings, replaced_by, replaced_at)
+         VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8)`,
+        [replacementId, tenantId, input.branchId, oldSerial, newSerial,
+         JSON.stringify(input.mappings), input.actorUserId, appliedAt],
+      );
+      await client.query("COMMIT");
+      return {
+        replacementId, branchId: input.branchId,
+        oldRecorderSerialNumber: oldSerial, newRecorderSerialNumber: newSerial,
+        updatedCameraIds,
+        preserved: ["camera-ids", "names", "permissions", "recording-history", "recording-policy", "analytics-rules", "alert-rules"],
+        appliedAt,
+      };
     } catch (error) {
       await client.query("ROLLBACK");
       throw error;
