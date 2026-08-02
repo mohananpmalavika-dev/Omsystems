@@ -32,6 +32,7 @@ describe("ONVIF edge utilities", () => {
         xmlns:a="http://schemas.xmlsoap.org/ws/2004/08/addressing">
         <s:Body><d:ProbeMatches><d:ProbeMatch>
           <a:EndpointReference><a:Address>urn:uuid:camera-1</a:Address></a:EndpointReference>
+          <d:Types>dn:NetworkVideoStorage</d:Types>
           <d:Scopes>onvif://www.onvif.org/type/video_encoder</d:Scopes>
           <d:XAddrs>http://192.168.10.20/onvif/device_service</d:XAddrs>
         </d:ProbeMatch></d:ProbeMatches></s:Body>
@@ -41,6 +42,7 @@ describe("ONVIF edge utilities", () => {
       endpointReference: "urn:uuid:camera-1",
       remoteAddress: "192.168.10.20",
       xaddrs: ["http://192.168.10.20/onvif/device_service"],
+      types: ["dn:NetworkVideoStorage"],
     });
   });
 

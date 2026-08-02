@@ -774,6 +774,9 @@ export async function buildApp(options?: {
         name: camera.name,
         profiles: camera.profiles,
         connectionSecretRef: camera.connectionSecretRef,
+        ...(camera.sourceType && camera.sourceType !== "ip-camera" ? { sourceType: camera.sourceType } : {}),
+        ...(camera.recorderId ? { recorderId: camera.recorderId } : {}),
+        ...(camera.recorderChannel ? { recorderChannel: camera.recorderChannel } : {}),
       })),
     };
   });
@@ -821,6 +824,9 @@ export async function buildApp(options?: {
       status: item.status,
       ipAddress: item.ipAddress,
       credentialsRequired: item.credentialsRequired ?? false,
+      sourceType: item.sourceType ?? "ip-camera",
+      recorderId: item.recorderId,
+      recorderChannel: item.recorderChannel,
     })) };
   });
 
@@ -900,6 +906,10 @@ export async function buildApp(options?: {
       compatibilityStatus: z.enum(["compatible", "incompatible", "review-required"]).optional(),
       hardwareId: z.string().trim().max(120).optional(),
       existingDeviceAssociation: z.string().trim().max(200).optional(),
+      sourceType: z.enum(["ip-camera", "analog-dvr-channel", "nvr-channel"]).optional(),
+      recorderId: z.string().trim().min(1).max(200).optional(),
+      recorderChannel: z.number().int().min(1).max(65_535).optional(),
+      recorderSerialNumber: z.string().trim().max(120).optional(),
       displayName: z.string().trim().max(200).optional(),
       statusReason: z.string().trim().max(200).optional(),
       credentialsRequired: z.boolean().optional(),
@@ -949,6 +959,10 @@ export async function buildApp(options?: {
       compatibilityStatus: parsed.compatibilityStatus,
       hardwareId: parsed.hardwareId,
       existingDeviceAssociation: parsed.existingDeviceAssociation,
+      sourceType: parsed.sourceType,
+      recorderId: parsed.recorderId,
+      recorderChannel: parsed.recorderChannel,
+      recorderSerialNumber: parsed.recorderSerialNumber,
       displayName: parsed.displayName,
       statusReason: parsed.statusReason,
       credentialsRequired: parsed.credentialsRequired,

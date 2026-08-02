@@ -79,7 +79,7 @@ export function CameraCredentialManager({
         disabled={!edgeAgentId}
       >
         <KeyRound size={17} />
-        Camera credentials
+        Camera / DVR credentials
       </button>
 
       {open && (
@@ -89,8 +89,8 @@ export function CameraCredentialManager({
               <div className="flex gap-3">
                 <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-blue-600 text-white"><LockKeyhole size={20} /></span>
                 <div>
-                  <h2 id="camera-credential-title" className="text-lg font-bold text-slate-950">Secure camera credentials</h2>
-                  <p className="mt-1 text-sm text-slate-500">Deliver credentials directly to the selected branch gateway.</p>
+                  <h2 id="camera-credential-title" className="text-lg font-bold text-slate-950">Secure camera or DVR credentials</h2>
+                  <p className="mt-1 text-sm text-slate-500">Enter a DVR login once to discover and monitor all of its analog channels.</p>
                 </div>
               </div>
               <button type="button" onClick={close} aria-label="Close" className="rounded-lg p-2 text-slate-500 hover:bg-slate-200 hover:text-slate-900"><X size={18} /></button>
@@ -107,7 +107,7 @@ export function CameraCredentialManager({
                   <label className={`cursor-pointer rounded-xl border p-3 ${scope === "default" ? "border-blue-500 bg-blue-50" : "border-slate-200"}`}>
                     <input className="mr-2" type="radio" checked={scope === "default"} onChange={() => setScope("default")} />
                     <span className="text-sm font-semibold text-slate-900">Branch default</span>
-                    <span className="mt-1 block pl-5 text-xs text-slate-500">Used for cameras without a specific login.</span>
+                    <span className="mt-1 block pl-5 text-xs text-slate-500">Used for cameras and recorders without a specific login.</span>
                   </label>
                   <label className={`cursor-pointer rounded-xl border p-3 ${scope === "camera" ? "border-blue-500 bg-blue-50" : "border-slate-200"}`}>
                     <input className="mr-2" type="radio" checked={scope === "camera"} onChange={() => setScope("camera")} />

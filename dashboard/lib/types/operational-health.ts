@@ -145,6 +145,9 @@ export interface CameraHealth {
   channel?: number;
   ipAddress?: string | null;
   physicalType?: string | null;
+  sourceType?: 'ip-camera' | 'analog-dvr-channel' | 'nvr-channel';
+  recorderId?: string | null;
+  recorderChannel?: number | null;
   capabilities?: {
     ptz: boolean;
     audio: boolean;

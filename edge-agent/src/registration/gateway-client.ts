@@ -3,7 +3,7 @@ import type { EncryptedOutbox } from "../offline/encrypted-outbox.js";
 
 export interface DiscoveredCameraPayload {
   edgeAgentId: string;
-  discoveryMethod?: "onvif-ws-discovery" | "edge-agent-reported-inventory";
+  discoveryMethod?: "onvif-ws-discovery" | "nvr-dvr-channel-discovery" | "edge-agent-reported-inventory";
   vendor: "hikvision" | "cp-plus" | "other";
   manufacturer?: string;
   model: string;
@@ -18,6 +18,8 @@ export interface DiscoveredCameraPayload {
   compatibility?: string;
   duplicateStatus?: "unique" | "duplicate" | "review-required";
   compatibilityStatus?: "compatible" | "incompatible" | "review-required";
+  hardwareId?: string;
+  existingDeviceAssociation?: string;
   onvifSupport?: boolean;
   onvifServices?: string[];
   onvifCapabilityTests?: Array<{ name: string; status: "pass" | "fail" | "unsupported" | "vendor-specific"; detail?: string }>;
@@ -30,6 +32,10 @@ export interface DiscoveredCameraPayload {
     height: number;
   }>;
   capabilities: { ptz: boolean; audio: boolean; events: boolean };
+  sourceType?: "ip-camera" | "analog-dvr-channel" | "nvr-channel";
+  recorderId?: string;
+  recorderChannel?: number;
+  recorderSerialNumber?: string;
 }
 
 export interface EdgeScanJob {
@@ -62,6 +68,9 @@ export interface MonitoringCamera {
     width: number;
     height: number;
   }>;
+  sourceType?: "ip-camera" | "analog-dvr-channel" | "nvr-channel";
+  recorderId?: string;
+  recorderChannel?: number;
 }
 
 export interface ConsumedLiveSession {

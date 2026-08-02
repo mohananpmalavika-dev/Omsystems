@@ -25,6 +25,10 @@ type CameraRow = {
   profiles: CameraProfile[];
   capabilities: CameraCapabilities;
   connection_secret_ref: string;
+  source_type: Camera["sourceType"] | null;
+  recorder_id: string | null;
+  recorder_channel: number | null;
+  recorder_serial_number: string | null;
 };
 
 function mapCamera(row: CameraRow): Camera {
@@ -42,13 +46,19 @@ function mapCamera(row: CameraRow): Camera {
     profiles: row.profiles,
     capabilities: row.capabilities,
     connectionSecretRef: row.connection_secret_ref,
+    sourceType: row.source_type ?? "ip-camera",
+    ...(row.recorder_id ? { recorderId: row.recorder_id } : {}),
+    ...(row.recorder_channel ? { recorderChannel: row.recorder_channel } : {}),
+    ...(row.recorder_serial_number ? { recorderSerialNumber: row.recorder_serial_number } : {}),
   };
 }
 
 const selectCamera = `SELECT cameras.id::text, cameras.resource_node_id::text,
   cameras.branch_node_id::text, cameras.edge_agent_id::text, camera_node.name, cameras.vendor,
   cameras.model, cameras.channel, cameras.protocol, cameras.status,
-  cameras.profiles, cameras.capabilities, cameras.connection_secret_ref
+  cameras.profiles, cameras.capabilities, cameras.connection_secret_ref,
+  cameras.source_type, cameras.recorder_id, cameras.recorder_channel,
+  cameras.recorder_serial_number
   FROM cameras
   JOIN resource_nodes camera_node ON camera_node.id = cameras.resource_node_id`;
 
@@ -125,9 +135,14 @@ export class CameraRepository {
         profiles: CameraProfile[];
         capabilities: CameraCapabilities;
         edge_agent_id: string;
+        source_type: Camera["sourceType"];
+        recorder_id: string | null;
+        recorder_channel: number;
+        recorder_serial_number: string | null;
       }>(
         `SELECT tenant_id::text, vendor, model, profiles, capabilities,
-                edge_agent_id::text
+                edge_agent_id::text, source_type, recorder_id,
+                recorder_channel, recorder_serial_number
          FROM camera_discoveries
          WHERE id = $1 AND branch_node_id = $2 AND status = 'pending'
          FOR UPDATE`,
@@ -163,6 +178,10 @@ export class CameraRepository {
       profiles: CameraProfile[];
       capabilities: CameraCapabilities;
       edge_agent_id: string;
+      source_type: Camera["sourceType"];
+      recorder_id: string | null;
+      recorder_channel: number;
+      recorder_serial_number: string | null;
     },
     input: CameraApprovalInput,
   ) {
@@ -177,17 +196,24 @@ export class CameraRepository {
       [nodeId, branchId, input.name],
     );
     const result = await client.query<CameraRow>(
-      `INSERT INTO cameras
+       `INSERT INTO cameras
          (resource_node_id, branch_node_id, edge_agent_id, vendor, model,
-          channel, protocol, profiles, capabilities, connection_secret_ref)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9::jsonb, $10)
+          channel, protocol, profiles, capabilities, connection_secret_ref,
+          source_type, recorder_id, recorder_channel, recorder_serial_number)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9::jsonb, $10,
+               $11, $12, $13, $14)
        RETURNING id::text, model AS name, resource_node_id::text,
                  branch_node_id::text, edge_agent_id::text, vendor, model, channel, protocol, status, profiles,
-                 capabilities, connection_secret_ref`,
+                 capabilities, connection_secret_ref, source_type, recorder_id,
+                 recorder_channel, recorder_serial_number`,
       [
         nodeId, branchId, source.edge_agent_id, source.vendor, source.model,
         input.channel, input.protocol, JSON.stringify(source.profiles),
         JSON.stringify(source.capabilities), input.connectionSecretRef,
+        input.sourceType ?? source.source_type ?? "ip-camera",
+        input.recorderId ?? source.recorder_id,
+        input.recorderChannel ?? (source.recorder_channel > 0 ? source.recorder_channel : null),
+        input.recorderSerialNumber ?? source.recorder_serial_number,
       ],
     );
     return mapCamera(result.rows[0]!);
@@ -200,7 +226,8 @@ export class CameraRepository {
        WHERE id = $1::uuid
        RETURNING id::text, model AS name, resource_node_id::text,
                  branch_node_id::text, vendor, model, channel, protocol, status, profiles,
-                 capabilities, connection_secret_ref`,
+                 capabilities, connection_secret_ref, source_type, recorder_id,
+                 recorder_channel, recorder_serial_number`,
       [id, status],
     );
     return result.rows[0] ? mapCamera(result.rows[0]) : undefined;

@@ -197,16 +197,21 @@ export class EdgeAgentRepository {
       `INSERT INTO camera_discoveries
          (tenant_id, branch_node_id, edge_agent_id, discovery_method,
           manufacturer, vendor, model, ip_address, onvif_port, rtsp_port,
-          profiles, capabilities)
+          profiles, capabilities, source_type, recorder_id, recorder_channel,
+          recorder_serial_number, serial_number, firmware_version, display_name,
+          credentials_required, stream_verified, rtsp_validated, compatibility,
+          duplicate_status, compatibility_status, hardware_id,
+          existing_device_association, status_reason)
        SELECT n.tenant_id, n.id, $2, $3, $4, $5, $6, $7::inet, $8, $9, $10::jsonb,
-              $11::jsonb
+              $11::jsonb, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21,
+              $22, $23, $24, $25, $26, $27
        FROM resource_nodes n
        JOIN edge_agents agent
          ON agent.id = $2
         AND agent.branch_node_id = n.id
         AND agent.tenant_id = n.tenant_id
        WHERE n.id = $1 AND n.node_type = 'branch'
-       ON CONFLICT (edge_agent_id, ip_address, onvif_port) DO UPDATE
+       ON CONFLICT (edge_agent_id, ip_address, onvif_port, recorder_channel) DO UPDATE
        SET discovery_method = EXCLUDED.discovery_method,
            manufacturer = EXCLUDED.manufacturer,
            vendor = EXCLUDED.vendor,
@@ -214,6 +219,21 @@ export class EdgeAgentRepository {
            rtsp_port = EXCLUDED.rtsp_port,
            profiles = EXCLUDED.profiles,
            capabilities = EXCLUDED.capabilities,
+           source_type = EXCLUDED.source_type,
+           recorder_id = EXCLUDED.recorder_id,
+           recorder_serial_number = EXCLUDED.recorder_serial_number,
+           serial_number = EXCLUDED.serial_number,
+           firmware_version = EXCLUDED.firmware_version,
+           display_name = EXCLUDED.display_name,
+           credentials_required = EXCLUDED.credentials_required,
+           stream_verified = EXCLUDED.stream_verified,
+           rtsp_validated = EXCLUDED.rtsp_validated,
+           compatibility = EXCLUDED.compatibility,
+           duplicate_status = EXCLUDED.duplicate_status,
+           compatibility_status = EXCLUDED.compatibility_status,
+           hardware_id = EXCLUDED.hardware_id,
+           existing_device_association = EXCLUDED.existing_device_association,
+           status_reason = EXCLUDED.status_reason,
            discovered_at = now()
        RETURNING id::text, discovered_at`,
       [
@@ -228,6 +248,22 @@ export class EdgeAgentRepository {
         input.rtspPort,
         JSON.stringify(input.profiles),
         JSON.stringify(input.capabilities),
+        input.sourceType ?? "ip-camera",
+        input.recorderId ?? null,
+        input.recorderChannel ?? 0,
+        input.recorderSerialNumber ?? null,
+        input.serialNumber ?? null,
+        input.firmwareVersion ?? null,
+        input.displayName ?? null,
+        input.credentialsRequired ?? null,
+        input.streamVerified ?? null,
+        input.rtspValidated ?? null,
+        input.compatibility ?? null,
+        input.duplicateStatus ?? null,
+        input.compatibilityStatus ?? null,
+        input.hardwareId ?? null,
+        input.existingDeviceAssociation ?? null,
+        input.statusReason ?? null,
       ],
     );
     const row = result.rows[0];
@@ -257,12 +293,33 @@ export class EdgeAgentRepository {
       capabilities: string;
       discovered_at: Date;
       status: string;
+      source_type: "ip-camera" | "analog-dvr-channel" | "nvr-channel";
+      recorder_id: string | null;
+      recorder_channel: number;
+      recorder_serial_number: string | null;
+      serial_number: string | null;
+      firmware_version: string | null;
+      display_name: string | null;
+      credentials_required: boolean | null;
+      stream_verified: boolean | null;
+      rtsp_validated: boolean | null;
+      compatibility: string | null;
+      duplicate_status: string | null;
+      compatibility_status: string | null;
+      hardware_id: string | null;
+      existing_device_association: string | null;
+      status_reason: string | null;
     }>(
       `SELECT id::text, branch_node_id::text, edge_agent_id::text,
               COALESCE(discovery_method, 'edge-agent-reported-inventory') AS discovery_method,
               COALESCE(manufacturer, vendor) AS manufacturer,
               vendor, model, host(ip_address) AS ip_address, onvif_port,
-              rtsp_port, profiles, capabilities, discovered_at, status
+              rtsp_port, profiles, capabilities, discovered_at, status,
+              source_type, recorder_id, recorder_channel, recorder_serial_number,
+              serial_number, firmware_version, display_name, credentials_required,
+              stream_verified, rtsp_validated, compatibility, duplicate_status,
+              compatibility_status, hardware_id, existing_device_association,
+              status_reason
        FROM camera_discoveries
        WHERE branch_node_id = $1 AND status = 'pending'
        ORDER BY discovered_at DESC`,
@@ -286,6 +343,22 @@ export class EdgeAgentRepository {
       capabilities: typeof row.capabilities === "string"
         ? JSON.parse(row.capabilities)
         : row.capabilities,
+      sourceType: row.source_type,
+      ...(row.recorder_id ? { recorderId: row.recorder_id } : {}),
+      ...(row.recorder_channel > 0 ? { recorderChannel: row.recorder_channel } : {}),
+      ...(row.recorder_serial_number ? { recorderSerialNumber: row.recorder_serial_number } : {}),
+      ...(row.serial_number ? { serialNumber: row.serial_number } : {}),
+      ...(row.firmware_version ? { firmwareVersion: row.firmware_version } : {}),
+      ...(row.display_name ? { displayName: row.display_name } : {}),
+      ...(row.credentials_required !== null ? { credentialsRequired: row.credentials_required } : {}),
+      ...(row.stream_verified !== null ? { streamVerified: row.stream_verified } : {}),
+      ...(row.rtsp_validated !== null ? { rtspValidated: row.rtsp_validated } : {}),
+      ...(row.compatibility ? { compatibility: row.compatibility } : {}),
+      ...(row.duplicate_status ? { duplicateStatus: row.duplicate_status as DiscoveredCamera["duplicateStatus"] } : {}),
+      ...(row.compatibility_status ? { compatibilityStatus: row.compatibility_status as DiscoveredCamera["compatibilityStatus"] } : {}),
+      ...(row.hardware_id ? { hardwareId: row.hardware_id } : {}),
+      ...(row.existing_device_association ? { existingDeviceAssociation: row.existing_device_association } : {}),
+      ...(row.status_reason ? { statusReason: row.status_reason } : {}),
       discoveredAt: row.discovered_at.toISOString(),
       status: row.status as "pending" | "approved" | "rejected",
     }));

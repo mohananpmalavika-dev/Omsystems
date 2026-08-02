@@ -8303,10 +8303,12 @@ function parseProbeMatch(xml, remoteAddress) {
   if (!xaddrText) return null;
   const endpoint = nested(match, "EndpointReference", "Address");
   const scopes = stringValue(match.Scopes);
+  const types = stringValue(match.Types);
   return {
     endpointReference: stringValue(endpoint),
     xaddrs: xaddrText.split(/\s+/).filter(Boolean),
     scopes: scopes?.split(/\s+/).filter(Boolean) ?? [],
+    types: types?.split(/\s+/).filter(Boolean) ?? [],
     remoteAddress
   };
 }
@@ -8321,7 +8323,7 @@ function probeEnvelope(messageId) {
   <w:To e:mustUnderstand="true">urn:schemas-xmlsoap-org:ws:2005:04:discovery</w:To>
   <w:Action e:mustUnderstand="true">http://schemas.xmlsoap.org/ws/2005/04/discovery/Probe</w:Action>
  </e:Header>
- <e:Body><d:Probe><d:Types>dn:NetworkVideoTransmitter</d:Types></d:Probe></e:Body>
+ <e:Body><d:Probe><d:Types>dn:NetworkVideoTransmitter dn:NetworkVideoStorage</d:Types></d:Probe></e:Body>
 </e:Envelope>`;
 }
 function nested(value, ...keys) {
@@ -9379,7 +9381,7 @@ function md5(value) {
 // src/monitoring/recorder-probe.ts
 var RECORDING_EVIDENCE_WINDOW_MS = 5 * 6e4;
 function looksLikeRecorder(identity, scopes = []) {
-  return /(?:^|[\s_-])(dvr|nvr|xvr|uvr)(?:$|[\s_-])|video recorder/i.test(`${identity.manufacturer ?? ""} ${identity.model ?? ""} ${scopes.join(" ")}`);
+  return /(?:^|[\s_-])(dvr|nvr|xvr|uvr|nvs)(?:$|[\s_-])|video recorder|network\s*video\s*storage/i.test(`${identity.manufacturer ?? ""} ${identity.model ?? ""} ${scopes.join(" ")}`);
 }
 function recorderPlaybackUri(config, sourceChannel, newestPlayableAt) {
   if (!config.username || !config.password) return void 0;
@@ -11178,6 +11180,133 @@ function openSealedCommand(envelope, privateKeyPem) {
   return JSON.parse(plaintext.toString("utf8"));
 }
 
+// src/recorders/dvr-adapter.ts
+async function discoverRecorderChannels(input) {
+  const sourceType = recorderChannelSource(input.model);
+  const resolved = [];
+  for (const profile of input.profiles.slice(0, 256)) {
+    try {
+      const rawUri = await input.getStreamUri(profile.token);
+      const uri = attachCredentials(rawUri, input.credentials);
+      resolved.push({
+        profile,
+        channel: recorderChannelNumber(profile, uri),
+        role: streamRole(profile, uri),
+        uri,
+        reasonCodes: []
+      });
+    } catch (error) {
+      resolved.push({
+        profile,
+        channel: recorderChannelNumber(profile),
+        role: streamRole(profile),
+        uri: null,
+        reasonCodes: [classifyStreamUriFailure(error)]
+      });
+    }
+  }
+  const groups = groupProfilesByChannel(resolved);
+  const channels = [];
+  for (const [sourceChannel, profiles] of [...groups.entries()].sort((left, right) => left[0] - right[0])) {
+    const primary = [...profiles].filter((item) => item.uri).sort(compareProfiles)[0];
+    const probe = primary?.uri ? await input.probeStream(primary.uri) : null;
+    const reasonCodes = unique([
+      ...profiles.flatMap((item) => item.reasonCodes),
+      ...primary?.uri ? [] : ["recorder_channel_stream_uri_unavailable"],
+      ...probe?.reachable ? ["recorder_channel_rtsp_verified"] : probe ? ["recorder_channel_rtsp_unreachable"] : []
+    ]);
+    channels.push({
+      sourceChannel,
+      name: channelName(profiles, sourceChannel),
+      sourceType,
+      primaryStreamUri: primary?.uri ?? null,
+      profiles: profiles.map(({ profile, role }) => ({
+        name: role === "unknown" ? profile.name : role,
+        codec: profile.codec,
+        width: profile.width,
+        height: profile.height,
+        role
+      })),
+      streamVerified: Boolean(probe?.reachable),
+      probe,
+      reasonCodes
+    });
+  }
+  return channels;
+}
+function recorderAdapterVendor(manufacturer) {
+  const normalized = manufacturer.toLowerCase();
+  if (/hikvision|hik vision/.test(normalized)) return "hikvision";
+  if (/dahua/.test(normalized)) return "dahua";
+  if (/cp[\s-]*plus/.test(normalized)) return "cp-plus";
+  return "onvif";
+}
+function recorderChannelSource(model) {
+  return /(?:^|[\s_-])(dvr|xvr|uvr)(?:$|[\s_-])/i.test(model) ? "analog-dvr-channel" : "nvr-channel";
+}
+function recorderChannelNumber(profile, uri) {
+  if (uri) {
+    try {
+      const parsed = new URL(uri);
+      const queryChannel = parsed.searchParams.get("channel") ?? parsed.searchParams.get("ch");
+      if (queryChannel && positiveInteger(queryChannel)) return Number(queryChannel);
+      const hikvision = parsed.pathname.match(/\/Streaming\/Channels\/(\d+)/i)?.[1];
+      if (hikvision) {
+        const track = Number(hikvision);
+        return track >= 100 ? Math.floor(track / 100) : track;
+      }
+      const pathChannel = parsed.pathname.match(/(?:channel|ch)[/_-]?(\d+)/i)?.[1];
+      if (pathChannel && positiveInteger(pathChannel)) return Number(pathChannel);
+    } catch {
+    }
+  }
+  for (const value of [profile.name, profile.token]) {
+    const explicit = value.match(/(?:camera|channel|ch|input|profile)[\s_.:-]*0*(\d+)/i)?.[1];
+    if (explicit && positiveInteger(explicit)) return Number(explicit);
+  }
+  return null;
+}
+function streamRole(profile, uri) {
+  const value = `${profile.name} ${profile.token} ${uri ?? ""}`.toLowerCase();
+  if (/subtype=1|(?:^|[^a-z])sub(?:stream)?(?:[^a-z]|$)|\/channels\/\d+02(?:\D|$)/.test(value)) return "sub";
+  if (/subtype=0|(?:^|[^a-z])main(?:stream)?(?:[^a-z]|$)|\/channels\/\d+01(?:\D|$)/.test(value)) return "main";
+  return "unknown";
+}
+function groupProfilesByChannel(profiles) {
+  const groups = /* @__PURE__ */ new Map();
+  let nextFallbackChannel = 1;
+  for (const item of profiles) {
+    let channel = item.channel;
+    if (channel === null) {
+      while (groups.has(nextFallbackChannel)) nextFallbackChannel++;
+      channel = nextFallbackChannel++;
+      item.reasonCodes.push("recorder_channel_number_inferred_from_profile_order");
+    }
+    const group = groups.get(channel) ?? [];
+    group.push(item);
+    groups.set(channel, group);
+  }
+  return groups;
+}
+function compareProfiles(left, right) {
+  const rank = (item) => item.role === "main" ? 2 : item.role === "unknown" ? 1 : 0;
+  return rank(right) - rank(left) || right.profile.width * right.profile.height - left.profile.width * left.profile.height;
+}
+function channelName(profiles, sourceChannel) {
+  const named = profiles.map((item) => item.profile.name.trim()).find((name) => name && !/^(profile|main|sub|stream)[\s_.:-]*\d*$/i.test(name));
+  return named ?? `Channel ${sourceChannel}`;
+}
+function positiveInteger(value) {
+  return /^\d+$/.test(value) && Number(value) > 0 && Number(value) <= 65535;
+}
+function classifyStreamUriFailure(error) {
+  const message = error instanceof Error ? error.message : String(error);
+  return /401|403|unauthori|forbidden|credential|auth/i.test(message) ? "recorder_channel_credentials_rejected" : "recorder_channel_stream_uri_unavailable";
+}
+function unique(values) {
+  return [...new Set(values)];
+}
+
 // src/index.ts
 async function main() {
   const argv = process.argv.slice(2);
@@ -11305,6 +11434,9 @@ async function main() {
   let edgeMediaRuntime;
   let lastRecorderProbeAt = 0;
   let lastRecorderArchiveScanAt = 0;
+  const activeRecorders = new Map(
+    config.RECORDERS_JSON.map((recorder) => [recorder.id, recorder])
+  );
   await secrets.load();
   if (config.LIVE_MEDIA_ENABLED) {
     edgeMediaRuntime = await startEdgeMediaRuntime({ config, gateway: control, agentId, secrets });
@@ -11396,6 +11528,7 @@ async function main() {
       endpointReference: null,
       xaddrs: [serviceUrl],
       scopes: [],
+      types: [],
       remoteAddress: new URL(serviceUrl).hostname
     })) : await discoverOnvifDevices(config.DISCOVERY_TIMEOUT_MS);
     logger.info(`Discovered ${endpoints.length} ONVIF endpoint(s)`);
@@ -11412,9 +11545,34 @@ async function main() {
         const client = new OnvifClient(serviceUrl, credentials, config.ONVIF_TIMEOUT_MS);
         const device = await client.inspect();
         const vendor = normalizeVendor(device.manufacturer);
-        if (looksLikeRecorder(device, endpoint.scopes)) {
+        const discoveryKinds = [...endpoint.scopes, ...endpoint.types];
+        if (looksLikeRecorder(device, discoveryKinds)) {
           const discoveredId = `recorder-${device.serialNumber || endpoint.remoteAddress}`.replace(/[^a-zA-Z0-9_.:-]/g, "-");
           const observedAt = (/* @__PURE__ */ new Date()).toISOString();
+          const parsedServiceUrl2 = new URL(serviceUrl);
+          const recorderVendor = recorderAdapterVendor(device.manufacturer);
+          const recorderType = /dvr|xvr|uvr/i.test(`${device.model} ${discoveryKinds.join(" ")}`) ? "dvr" : "nvr";
+          const channels = await discoverRecorderChannels({
+            manufacturer: device.manufacturer,
+            model: device.model,
+            profiles: device.profiles,
+            credentials,
+            getStreamUri: (profileToken) => client.getStreamUri(device.mediaServiceUrl, profileToken),
+            probeStream: (uri) => probeRtsp(uri, config.FFPROBE_PATH, config.ONVIF_TIMEOUT_MS)
+          });
+          activeRecorders.set(discoveredId, {
+            id: discoveredId,
+            name: `${device.manufacturer} ${device.model}`,
+            deviceType: recorderType,
+            vendor: recorderVendor,
+            model: device.model,
+            host: endpoint.remoteAddress,
+            port: Number(parsedServiceUrl2.port || (parsedServiceUrl2.protocol === "https:" ? 443 : 80)),
+            secure: parsedServiceUrl2.protocol === "https:",
+            rtspPort: 554,
+            username: credentials.username,
+            password: credentials.password
+          });
           await control.submitTelemetry(agentId, {
             branchId,
             edgeAgentId: agentId,
@@ -11426,7 +11584,7 @@ async function main() {
             idempotencyKey: `${agentId}:recorder-discovery:${discoveredId}:${observedAt}`,
             metrics: {
               name: `${device.manufacturer} ${device.model}`,
-              deviceType: /dvr|xvr|uvr/i.test(device.model) ? "dvr" : "nvr",
+              deviceType: recorderType,
               vendor,
               model: device.model,
               serialNumber: device.serialNumber ?? "",
@@ -11435,14 +11593,58 @@ async function main() {
               protocol: "onvif",
               reachable: true,
               status: "online",
-              totalCameras: device.profiles.length || null,
-              connectedCameras: null,
+              totalCameras: channels.length || null,
+              connectedCameras: channels.length ? channels.filter((channel) => channel.streamVerified).length : null,
               recordingStatus: "unknown"
             },
-            reasonCodes: ["onvif_auto_discovered", "recording_state_vendor_specific"]
+            reasonCodes: ["onvif_auto_discovered", "recorder_channels_enumerated", "recording_state_vendor_specific"]
           });
           submitted += 1;
-          logger.info(`Auto-provisioned recorder ${device.manufacturer} ${device.model} as ${discoveredId}`);
+          for (const channel of channels) {
+            const channelDiscovery = await control.submitDiscovery(branchId, {
+              edgeAgentId: agentId,
+              discoveryMethod: "nvr-dvr-channel-discovery",
+              vendor,
+              manufacturer: device.manufacturer,
+              model: `${device.model} channel`,
+              ipAddress: endpoint.remoteAddress,
+              firmwareVersion: device.firmwareVersion,
+              displayName: channel.name === `Channel ${channel.sourceChannel}` ? `${device.manufacturer} ${device.model} - Channel ${channel.sourceChannel}` : channel.name,
+              credentialsRequired: channel.reasonCodes.includes("recorder_channel_credentials_rejected"),
+              streamVerified: channel.streamVerified,
+              rtspValidated: channel.streamVerified,
+              compatibility: channel.streamVerified ? "compatible" : "review-required",
+              duplicateStatus: "unique",
+              compatibilityStatus: channel.streamVerified ? "compatible" : "review-required",
+              onvifSupport: true,
+              onvifServices: device.services,
+              onvifCapabilityTests: device.capabilityTests,
+              onvifPort: Number(parsedServiceUrl2.port || (parsedServiceUrl2.protocol === "https:" ? 443 : 80)),
+              rtspPort: 554,
+              profiles: channel.profiles.map((profile) => ({
+                name: profile.name,
+                codec: profile.codec,
+                width: Math.max(1, channel.probe?.width ?? profile.width),
+                height: Math.max(1, channel.probe?.height ?? profile.height)
+              })),
+              capabilities: device.capabilities,
+              statusReason: channel.reasonCodes.join(",").slice(0, 200),
+              hardwareId: `${discoveredId}:channel:${channel.sourceChannel}`,
+              existingDeviceAssociation: discoveredId,
+              sourceType: channel.sourceType,
+              recorderId: discoveredId,
+              recorderChannel: channel.sourceChannel,
+              ...device.serialNumber ? { recorderSerialNumber: device.serialNumber } : {}
+            });
+            if (channel.primaryStreamUri) {
+              await secrets.set(`edge://${agentId}/${channelDiscovery.id}`, channel.primaryStreamUri);
+            }
+            submitted += 1;
+          }
+          logger.info(`Auto-provisioned recorder ${device.manufacturer} ${device.model} as ${discoveredId}`, {
+            channels: channels.length,
+            verifiedChannels: channels.filter((channel) => channel.streamVerified).length
+          });
           continue;
         }
         const profiles = [];
@@ -11675,10 +11877,29 @@ async function main() {
         enabled: true
       };
     }));
+    const channelsByRecorder = /* @__PURE__ */ new Map();
+    for (const camera of cameras) {
+      if (!camera.recorderId || !camera.recorderChannel) continue;
+      const channels = channelsByRecorder.get(camera.recorderId) ?? [];
+      channels.push({ cameraId: camera.id, channel: camera.recorderChannel });
+      channelsByRecorder.set(camera.recorderId, channels);
+    }
+    for (const [recorderId, channels] of channelsByRecorder) {
+      const recorder = activeRecorders.get(recorderId);
+      if (!recorder) continue;
+      recorder.archiveRetention = recorder.archiveRetention ?? {
+        lookbackDays: 1,
+        maxResults: 1e3,
+        continuityGapSeconds: 300,
+        verifyPlayback: true,
+        channels
+      };
+      recorder.archiveRetention.channels = channels;
+    }
     lastCameraConfigSyncAt = Date.now();
   }
   async function collectRecorderReports(observedAt, includeArchive) {
-    return Promise.all(config.RECORDERS_JSON.map(async (recorder) => {
+    return Promise.all([...activeRecorders.values()].map(async (recorder) => {
       const secureCredential = credentialVault.get(recorder.host);
       const resolvedRecorder = secureCredential ? { ...recorder, username: secureCredential.username, password: secureCredential.password } : recorder;
       const probe = await probeRecorder(resolvedRecorder, config.RECORDER_PROBE_TIMEOUT_MS, { includeArchive });
@@ -11725,7 +11946,7 @@ async function main() {
       }
       case "probe-recorder": {
         const recorderId = typeof payload.recorderId === "string" ? payload.recorderId : "";
-        const recorder = config.RECORDERS_JSON.find((item) => item.id === recorderId);
+        const recorder = activeRecorders.get(recorderId);
         if (!recorder) throw new Error("recorder_not_configured");
         const probe = await probeRecorder(recorder, config.RECORDER_PROBE_TIMEOUT_MS, { includeArchive: true });
         return { result: {

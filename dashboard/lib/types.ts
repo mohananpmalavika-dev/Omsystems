@@ -210,6 +210,9 @@ export interface Camera {
   model: string;
   status: CameraStatus;
   channel: number;
+  sourceType?: "ip-camera" | "analog-dvr-channel" | "nvr-channel";
+  recorderId?: string;
+  recorderChannel?: number;
   capabilities: {
     ptz: boolean;
     audio: boolean;

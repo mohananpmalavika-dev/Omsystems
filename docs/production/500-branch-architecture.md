@@ -48,6 +48,12 @@ Each branch has its own stable named tunnel and public media hostname. The contr
 
 The browser never receives camera credentials or a private RTSP address.
 
+### Analog DVR/XVR channel model
+
+An analog camera is not treated as a network device. The branch gateway discovers the Ethernet-connected DVR/XVR and the universal recorder adapter expands its media inventory into one logical camera per recorder channel. The mapping persisted by the control plane is `branch -> recorder -> source channel -> camera`; multiple DVRs and mixed DVR/NVR/IP-camera branches therefore use the same permission-scoped camera wall.
+
+ONVIF supplies the first-line channel inventory and RTSP URIs. The adapter normalizes common Hikvision, Dahua and CP PLUS/OEM stream layouts, verifies the selected main stream with FFprobe, and stores the credential-bearing URI only in the encrypted edge secret store. A channel is eligible for automatic approval only after its actual stream is verified.
+
 1. The user requests a live session from Sentinel Grid.
 2. The control plane checks the user's hierarchical and camera-specific grants.
 3. The control plane issues a short-lived, one-time token for that camera.

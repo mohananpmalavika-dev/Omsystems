@@ -19,6 +19,12 @@ This is the production branch connector for an unattended, multi-location CCTV e
 
 5. Reboot the appliance once and confirm the single appliance container returns automatically. Sentinel Grid must show independently verified Gateway, Tunnel, Internet, DVR/NVR, Camera, Live View, Recording, Health, and AI-rule stages; a heartbeat alone does not mark the branch operational.
 
+## Analog cameras connected to a DVR/XVR
+
+Connect only the DVR/XVR Ethernet port and the Branch Gateway to the same LAN. Analog cameras remain connected by coax to the recorder; they do not need individual IP addresses. During discovery the gateway identifies the recorder, enumerates its ONVIF media profiles, normalizes Hikvision, Dahua and CP PLUS/OEM channel URIs, and creates one review item per physical channel. The recorder password is entered once through the encrypted credential command and is never copied into the cloud database.
+
+Each approved channel appears in the normal camera wall with an **Analog via DVR · CH n** source label. Live view is proxied on demand from that channel, while recording status, recent-media evidence, disk health and playback verification continue to come from the DVR. An offline or unverified channel is kept in review state instead of being reported as operational.
+
 ## Operating model
 
 Ship the provisioned appliance with only two labelled connections: power/UPS and camera-network Ethernet. Branch staff plug it in; the central team owns tunnel configuration, signed updates, encrypted camera credentials, remote diagnostics, and monitoring. Telemetry is queued in an encrypted local outbox during internet loss and replayed in order after reconnection.

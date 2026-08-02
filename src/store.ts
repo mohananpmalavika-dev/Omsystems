@@ -706,11 +706,19 @@ export class MemoryStore implements ControlPlaneStore {
     const existing = [...this.discoveries.values()].find((item) => {
       const sameBranch = item.branchId === branchId;
       const sameIp = item.ipAddress === normalized.ipAddress && item.onvifPort === normalized.onvifPort;
+      const sameSourceSlot = sameIp && (
+        item.recorderChannel === normalized.recorderChannel ||
+        (item.recorderChannel === undefined && normalized.recorderChannel === undefined)
+      );
       const sameSerial = Boolean(item.serialNumber && normalized.serialNumber && item.serialNumber === normalized.serialNumber);
       const sameMac = Boolean(item.macAddress && normalized.macAddress && item.macAddress === normalized.macAddress);
       const sameOnvif = Boolean(item.onvifEndpointReference && normalized.onvifEndpointReference && item.onvifEndpointReference === normalized.onvifEndpointReference);
       const sameHardware = Boolean(item.hardwareId && normalized.hardwareId && item.hardwareId === normalized.hardwareId);
-      const sameAssociation = Boolean(item.existingDeviceAssociation && normalized.existingDeviceAssociation && item.existingDeviceAssociation === normalized.existingDeviceAssociation);
+      const sameAssociation = Boolean(
+        item.existingDeviceAssociation && normalized.existingDeviceAssociation &&
+        item.existingDeviceAssociation === normalized.existingDeviceAssociation &&
+        item.recorderChannel === normalized.recorderChannel
+      );
       const sameVendorModel = Boolean(
         item.manufacturer && normalized.manufacturer &&
         item.model === normalized.model &&
@@ -718,10 +726,10 @@ export class MemoryStore implements ControlPlaneStore {
         normalized.hardwareId && item.hardwareId === normalized.hardwareId,
       );
       const hasFingerprint = [sameSerial, sameMac, sameOnvif, sameHardware, sameAssociation, sameVendorModel].some(Boolean);
-      if (item.status === "rejected" && sameBranch && (sameIp || hasFingerprint)) {
+      if (item.status === "rejected" && sameBranch && (sameSourceSlot || hasFingerprint)) {
         return true;
       }
-      return sameBranch && (hasFingerprint || sameIp);
+      return sameBranch && (hasFingerprint || sameSourceSlot);
     });
 
     if (existing) {
@@ -789,6 +797,10 @@ export class MemoryStore implements ControlPlaneStore {
       capabilities: discovery.capabilities,
       edgeAgentId: discovery.edgeAgentId,
       connectionSecretRef: input.connectionSecretRef,
+      sourceType: input.sourceType ?? discovery.sourceType ?? "ip-camera",
+      recorderId: input.recorderId ?? discovery.recorderId,
+      recorderChannel: input.recorderChannel ?? discovery.recorderChannel,
+      recorderSerialNumber: input.recorderSerialNumber ?? discovery.recorderSerialNumber,
       serialNumber: input.serialNumber ?? discovery.serialNumber,
       macAddress: input.ipAddress ? undefined : discovery.macAddress,
       firmwareVersion: discovery.firmwareVersion,

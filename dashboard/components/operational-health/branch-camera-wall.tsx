@@ -195,7 +195,9 @@ function BranchCameraTile({ camera, branchId, session, loading, error, ptzOpen, 
   // Create user-friendly status message
   let statusMessage = "";
   if (needsAuth && !canStart) {
-    statusMessage = "Need username/password - Click 'Camera info' to update";
+    statusMessage = camera.sourceType === "analog-dvr-channel"
+      ? "DVR channel unavailable - check DVR login or analog signal"
+      : "Need username/password - Click 'Camera info' to update";
   } else if (!canStart) {
     statusMessage = "Camera offline or unreachable";
   } else {
@@ -217,7 +219,7 @@ function BranchCameraTile({ camera, branchId, session, loading, error, ptzOpen, 
       {ptzOpen && camera.capabilities?.ptz && session?.sessionId && <div className="absolute inset-0 z-20 overflow-auto bg-white/95 p-2"><PtzControl cameraId={camera.id} sessionId={session.sessionId} onClose={onTogglePtz}/></div>}
     </div>
     <div className="p-3">
-      <div className="flex items-start justify-between gap-2"><div className="min-w-0"><h4 className="truncate text-sm font-semibold text-gray-900">{camera.name}</h4><p className="truncate text-[11px] text-gray-500">{camera.vendor ?? "Unknown make"} · {camera.model ?? "Model unavailable"}</p></div><span className="rounded bg-gray-100 px-2 py-1 text-[10px] font-semibold text-gray-600">CH {camera.channel ?? "--"}</span></div>
+      <div className="flex items-start justify-between gap-2"><div className="min-w-0"><h4 className="truncate text-sm font-semibold text-gray-900">{camera.name}</h4><p className="truncate text-[11px] text-gray-500">{camera.vendor ?? "Unknown make"} · {camera.model ?? "Model unavailable"}</p>{camera.sourceType === "analog-dvr-channel" ? <p className="mt-1 text-[10px] font-semibold text-blue-700">Analog via DVR · CH {camera.recorderChannel ?? camera.channel ?? "--"}</p> : camera.sourceType === "nvr-channel" ? <p className="mt-1 text-[10px] font-semibold text-blue-700">NVR channel · CH {camera.recorderChannel ?? camera.channel ?? "--"}</p> : null}</div><span className="rounded bg-gray-100 px-2 py-1 text-[10px] font-semibold text-gray-600">CH {camera.channel ?? "--"}</span></div>
       {needsAuth && !canStart && <div className="mt-2 rounded-lg bg-amber-50 border border-amber-200 px-3 py-2">
         <p className="text-[11px] text-amber-800 font-medium">⚠️ Authentication Required</p>
         <p className="text-[10px] text-amber-700 mt-1">Click "Camera info" below to update username and password</p>

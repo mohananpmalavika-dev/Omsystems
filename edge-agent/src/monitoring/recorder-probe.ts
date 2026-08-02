@@ -92,7 +92,7 @@ interface RecordingMatch {
 const RECORDING_EVIDENCE_WINDOW_MS = 5 * 60_000;
 
 export function looksLikeRecorder(identity: { model?: string | undefined; manufacturer?: string | undefined }, scopes: string[] = []) {
-  return /(?:^|[\s_-])(dvr|nvr|xvr|uvr)(?:$|[\s_-])|video recorder/i.test(`${identity.manufacturer ?? ""} ${identity.model ?? ""} ${scopes.join(" ")}`);
+  return /(?:^|[\s_-])(dvr|nvr|xvr|uvr|nvs)(?:$|[\s_-])|video recorder|network\s*video\s*storage/i.test(`${identity.manufacturer ?? ""} ${identity.model ?? ""} ${scopes.join(" ")}`);
 }
 
 export function recorderPlaybackUri(config: RecorderConfig, sourceChannel: number, newestPlayableAt: string) {

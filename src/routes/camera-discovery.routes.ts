@@ -11,9 +11,9 @@ const discoveryParams = z.object({
 
 const approveDiscoveryBody = z.object({
   name: z.string().min(1),
-  channel: z.number().int().min(1).default(1),
-  protocol: z.enum(["onvif-t", "onvif-s", "rtsp", "vendor-adapter"]).default("onvif-t"),
-  connectionSecretRef: z.string().min(1),
+  channel: z.number().int().min(1).optional(),
+  protocol: z.enum(["onvif-t", "onvif-s", "rtsp", "vendor-adapter"]).optional(),
+  connectionSecretRef: z.string().min(1).optional(),
 });
 
 const approveAllBody = z.object({
@@ -145,12 +145,16 @@ export async function registerCameraDiscoveryRoutes(
     const camera = await store.approveCamera(branchId, {
       discoveryId,
       name: body.name,
-      protocol: body.protocol,
-      channel: body.channel,
-      connectionSecretRef: body.connectionSecretRef,
+      protocol: body.protocol ?? (discovered.recorderId ? "vendor-adapter" : "onvif-t"),
+      channel: body.channel ?? discovered.recorderChannel ?? 1,
+      connectionSecretRef: body.connectionSecretRef ?? `edge://${discovered.edgeAgentId}/${discovered.id}`,
       model: discovered.model,
       serialNumber: discovered.serialNumber,
       ipAddress: discovered.ipAddress,
+      sourceType: discovered.sourceType,
+      recorderId: discovered.recorderId,
+      recorderChannel: discovered.recorderChannel,
+      recorderSerialNumber: discovered.recorderSerialNumber,
     });
 
     if (!camera) {
@@ -224,13 +228,17 @@ export async function registerCameraDiscoveryRoutes(
         const camera = await store.approveCamera(branchId, {
           discoveryId: discovered.id,
           name,
-          protocol: "onvif-t",
-          channel: index + 1,
+          protocol: discovered.recorderId ? "vendor-adapter" : "onvif-t",
+          channel: discovered.recorderChannel ?? index + 1,
           connectionSecretRef: `edge://${discovered.edgeAgentId}/${discovered.id}`,
           model: discovered.model,
           serialNumber: discovered.serialNumber,
           ipAddress: discovered.ipAddress,
           streamProfile: "main",
+          sourceType: discovered.sourceType,
+          recorderId: discovered.recorderId,
+          recorderChannel: discovered.recorderChannel,
+          recorderSerialNumber: discovered.recorderSerialNumber,
         });
 
         if (!camera) {

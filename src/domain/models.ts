@@ -68,6 +68,7 @@ export interface ResourceNode {
 
 export type CameraVendor = "hikvision" | "cp-plus" | "other";
 export type CameraStatus = "online" | "offline" | "degraded" | "unknown";
+export type CameraSourceType = "ip-camera" | "analog-dvr-channel" | "nvr-channel";
 
 export type CameraLocationType =
   | "branch-entrance"
@@ -127,6 +128,11 @@ export interface Camera {
   capabilities: CameraCapabilities;
   /** Reference to a secret; never store camera credentials in this record. */
   connectionSecretRef: string;
+  /** How video reaches Sentinel Grid. Analog cameras are represented by the DVR channel that digitizes them. */
+  sourceType?: CameraSourceType;
+  recorderId?: string;
+  recorderChannel?: number;
+  recorderSerialNumber?: string;
   locationType?: CameraLocationType;
   physicalType?: PhysicalCameraType;
   installationDate?: string;
@@ -628,6 +634,10 @@ export interface DiscoveredCamera {
   compatibilityStatus?: "compatible" | "incompatible" | "review-required";
   hardwareId?: string;
   existingDeviceAssociation?: string;
+  sourceType?: CameraSourceType;
+  recorderId?: string;
+  recorderChannel?: number;
+  recorderSerialNumber?: string;
   displayName?: string;
   statusReason?: string;
   credentialsRequired?: boolean;

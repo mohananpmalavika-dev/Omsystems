@@ -99,6 +99,10 @@ export interface CameraDiscoveryInput {
   compatibilityStatus?: "compatible" | "incompatible" | "review-required";
   hardwareId?: string;
   existingDeviceAssociation?: string;
+  sourceType?: Camera["sourceType"];
+  recorderId?: string;
+  recorderChannel?: number;
+  recorderSerialNumber?: string;
   onvifPort: number;
   rtspPort: number;
   profiles: CameraProfile[];
@@ -119,6 +123,10 @@ export interface CameraApprovalInput {
   onvifPort?: number;
   rtspPort?: number;
   streamProfile?: string;
+  sourceType?: Camera["sourceType"];
+  recorderId?: string;
+  recorderChannel?: number;
+  recorderSerialNumber?: string;
 }
 
 export interface CameraSpecificationsInput {

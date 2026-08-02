@@ -494,9 +494,6 @@ export function DeviceManager() {
       const name = discovered.displayName || discovered.model || `${discovered.vendor} camera`;
       await cameraInventoryApi.approveDiscovery(selectedBranch, discovered.id, {
         name,
-        channel: 1,
-        protocol: "onvif-t",
-        connectionSecretRef: `edge://${discovered.edgeAgentId}/${discovered.id}`,
       });
       markDiscoveryReviewStatus(discovered.id, "approved");
       setPreviewDiscoveryId(undefined);
@@ -869,6 +866,8 @@ export function DeviceManager() {
                       </div>
                     </div>
                     <div className="discovery-chip-row">
+                      {item.sourceType === "analog-dvr-channel" ? <span className="discovery-chip positive">Analog via DVR · CH {item.recorderChannel}</span> : null}
+                      {item.sourceType === "nvr-channel" ? <span className="discovery-chip positive">NVR channel · CH {item.recorderChannel}</span> : null}
                       <span className="discovery-chip">{item.vendor}</span>
                       <span className="discovery-chip">{item.model || "Model pending"}</span>
                       <span className="discovery-chip">{item.discoveryMethod ?? "ONVIF discovery"}</span>
@@ -877,7 +876,7 @@ export function DeviceManager() {
                     </div>
                     <div className="discovery-details-grid">
                       <div><span>Serial</span><strong>{item.serialNumber || "Pending"}</strong></div>
-                      <div><span>MAC</span><strong>{item.macAddress || "Pending"}</strong></div>
+                      <div><span>{item.recorderId ? "Recorder" : "MAC"}</span><strong>{item.recorderId || item.macAddress || "Pending"}</strong></div>
                       <div><span>Compatibility</span><strong>{item.compatibility || "Review required"}</strong></div>
                       <div><span>Profiles</span><strong>{profileText}</strong></div>
                     </div>
