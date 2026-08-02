@@ -15,6 +15,13 @@ export interface AlertEvidenceCaptureStatus {
   completedAt?: string;
   snapshotAvailable: boolean;
   clipAvailable: boolean;
+  archive?: {
+    provider: string;
+    state: "ready" | "partial" | "failed";
+    snapshotKey?: string;
+    clipKey?: string;
+    error?: string;
+  };
   error?: string;
 }
 
@@ -27,6 +34,22 @@ export interface AlertEvidenceCaptureInput {
 }
 
 export type EvidenceAssetKind = "snapshot" | "clip";
+export interface EvidenceArchiveAsset {
+  provider: string;
+  key: string;
+}
+
+export interface EvidenceArchive {
+  archiveAsset(input: {
+    alertId: string;
+    cameraId: string;
+    occurredAt: string;
+    kind: EvidenceAssetKind;
+    path: string;
+    contentType: string;
+  }): Promise<EvidenceArchiveAsset>;
+}
+
 export type EvidenceCaptureRunner = (
   input: AlertEvidenceCaptureInput,
   output: { snapshotPath: string; clipPath: string },
@@ -50,6 +73,8 @@ export class AlertEvidenceCaptureService {
     private readonly evidenceRoot: string,
     private readonly maxConcurrent = 4,
     private readonly runner: EvidenceCaptureRunner = runFfmpegCapture,
+    private readonly archive?: EvidenceArchive,
+    private readonly archiveRequired = false,
   ) {}
 
   async request(input: AlertEvidenceCaptureInput): Promise<AlertEvidenceCaptureStatus> {
@@ -146,12 +171,16 @@ export class AlertEvidenceCaptureService {
 
     const snapshotAvailable = await moveNonEmpty(snapshotTemporary, this.assetPath(input.alertId, "snapshot"));
     const clipAvailable = await moveNonEmpty(clipTemporary, this.assetPath(input.alertId, "clip"));
+    const archive = await this.archiveAvailableAssets(input, snapshotAvailable, clipAvailable);
     const completedAt = new Date().toISOString();
-    const state: AlertEvidenceCaptureState = snapshotAvailable && clipAvailable
+    let state: AlertEvidenceCaptureState = snapshotAvailable && clipAvailable
       ? "ready"
       : snapshotAvailable || clipAvailable
         ? "partial"
         : "failed";
+    if (this.archiveRequired && archive && archive.state !== "ready" && state === "ready") {
+      state = "partial";
+    }
     await this.writeStatus({
       alertId: input.alertId,
       cameraId: input.cameraId,
@@ -161,8 +190,45 @@ export class AlertEvidenceCaptureService {
       completedAt,
       snapshotAvailable,
       clipAvailable,
+      ...(archive ? { archive } : {}),
       ...(failure ? { error: safeError(failure, input.sourceUri) } : {}),
     });
+  }
+
+  private async archiveAvailableAssets(
+    input: QueuedCapture,
+    snapshotAvailable: boolean,
+    clipAvailable: boolean,
+  ): Promise<AlertEvidenceCaptureStatus["archive"] | undefined> {
+    if (!this.archive || (!snapshotAvailable && !clipAvailable)) return undefined;
+
+    const uploaded: Partial<Record<EvidenceAssetKind, EvidenceArchiveAsset>> = {};
+    const errors: string[] = [];
+    for (const kind of ["snapshot", "clip"] as const) {
+      if (kind === "snapshot" ? !snapshotAvailable : !clipAvailable) continue;
+      try {
+        uploaded[kind] = await this.archive.archiveAsset({
+          alertId: input.alertId,
+          cameraId: input.cameraId,
+          occurredAt: input.occurredAt,
+          kind,
+          path: this.assetPath(input.alertId, kind),
+          contentType: kind === "snapshot" ? "image/jpeg" : "video/mp4",
+        });
+      } catch (error) {
+        errors.push(`${kind}: ${safeError(error, input.sourceUri)}`);
+      }
+    }
+
+    const expected = Number(snapshotAvailable) + Number(clipAvailable);
+    const uploadedCount = Object.keys(uploaded).length;
+    return {
+      provider: uploaded.snapshot?.provider ?? uploaded.clip?.provider ?? "object-storage",
+      state: uploadedCount === expected ? "ready" : uploadedCount > 0 ? "partial" : "failed",
+      ...(uploaded.snapshot ? { snapshotKey: uploaded.snapshot.key } : {}),
+      ...(uploaded.clip ? { clipKey: uploaded.clip.key } : {}),
+      ...(errors.length > 0 ? { error: errors.join("; ").slice(0, 1_000) } : {}),
+    };
   }
 
   private statusFor(

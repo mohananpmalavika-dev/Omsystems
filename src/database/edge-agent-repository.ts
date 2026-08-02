@@ -10,6 +10,9 @@ type AgentRow = {
   status: EdgeAgent["status"];
   last_seen_at: Date | null;
   public_media_url: string | null;
+  device_uuid: string | null;
+  credential_issued_at: Date | null;
+  credential_revoked_at: Date | null;
 };
 
 function mapAgent(row: AgentRow): EdgeAgent {
@@ -21,6 +24,10 @@ function mapAgent(row: AgentRow): EdgeAgent {
     status: row.status,
     lastSeenAt: row.last_seen_at?.toISOString() ?? null,
     ...(row.public_media_url ? { publicMediaUrl: row.public_media_url } : {}),
+    ...(row.device_uuid ? { deviceUuid: row.device_uuid } : {}),
+    credentialStatus: row.credential_revoked_at ? "revoked" : row.credential_issued_at ? "active" : "not-enrolled",
+    ...(row.credential_issued_at ? { credentialIssuedAt: row.credential_issued_at.toISOString() } : {}),
+    ...(row.credential_revoked_at ? { credentialRevokedAt: row.credential_revoked_at.toISOString() } : {}),
   };
 }
 
@@ -60,7 +67,8 @@ export class EdgeAgentRepository {
        FROM resource_nodes
        WHERE id = $1 AND node_type = 'branch'
        RETURNING id::text, branch_node_id::text, name, version, status,
-                 last_seen_at, public_media_url`,
+                 last_seen_at, public_media_url, device_uuid,
+                 credential_issued_at, credential_revoked_at`,
       [branchId, name, version],
     );
     if (!result.rows[0]) throw new Error("invalid_branch");
@@ -72,7 +80,8 @@ export class EdgeAgentRepository {
       `SELECT id::text, branch_node_id::text, name, version,
               CASE WHEN last_seen_at < now() - interval '90 seconds'
                 THEN 'offline'::edge_agent_status ELSE status END AS status,
-              last_seen_at, public_media_url
+              last_seen_at, public_media_url, device_uuid,
+              credential_issued_at, credential_revoked_at
        FROM edge_agents
        WHERE branch_node_id = $1
        ORDER BY name, created_at`,
@@ -88,7 +97,8 @@ export class EdgeAgentRepository {
            public_media_url = COALESCE($3, public_media_url)
        WHERE id = $1
        RETURNING id::text, branch_node_id::text, name, version, status,
-                 last_seen_at, public_media_url`,
+                 last_seen_at, public_media_url, device_uuid,
+                 credential_issued_at, credential_revoked_at`,
       [id, version, publicMediaUrl ?? null],
     );
     return result.rows[0] ? mapAgent(result.rows[0]) : undefined;

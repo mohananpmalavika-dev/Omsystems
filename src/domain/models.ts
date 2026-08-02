@@ -514,6 +514,61 @@ export interface EdgeAgent {
   status: "pending" | "online" | "offline";
   lastSeenAt: string | null;
   publicMediaUrl?: string;
+  deviceUuid?: string;
+  credentialStatus?: "not-enrolled" | "active" | "revoked";
+  credentialIssuedAt?: string;
+  credentialRevokedAt?: string;
+}
+
+export interface EdgeActivation {
+  id: string;
+  tenantId: string;
+  branchId: string;
+  agentName: string;
+  expiresAt: string;
+  createdAt: string;
+  createdBy: string;
+  usedAt: string | null;
+  revokedAt: string | null;
+}
+
+export type EdgeCommandType =
+  | "rediscover"
+  | "restart-media"
+  | "restart-agent"
+  | "probe-camera"
+  | "probe-recorder"
+  | "collect-logs"
+  | "update-credentials"
+  | "apply-update";
+
+export interface EdgeCommand {
+  id: string;
+  tenantId: string;
+  branchId: string;
+  edgeAgentId: string;
+  type: EdgeCommandType;
+  status: "queued" | "running" | "succeeded" | "failed" | "cancelled";
+  payload: Record<string, unknown>;
+  result: Record<string, unknown> | null;
+  error: string | null;
+  requestedBy: string;
+  requestedAt: string;
+  startedAt: string | null;
+  completedAt: string | null;
+}
+
+export interface EdgeUpdateRelease {
+  id: string;
+  version: string;
+  artifactUrl: string;
+  sha256: string;
+  signature: string;
+  notes: string;
+  rolloutPercentage: number;
+  enabled: boolean;
+  createdBy: string;
+  createdAt: string;
 }
 
 export interface EdgeScanJob {

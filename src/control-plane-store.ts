@@ -35,8 +35,12 @@ import type {
   ComplianceFramework,
   CompliancePolicy,
   DiscoveredCamera,
+  EdgeActivation,
   EdgeAgent,
+  EdgeCommand,
+  EdgeCommandType,
   EdgeScanJob,
+  EdgeUpdateRelease,
   LiveSession,
   ConsumedLiveSession,
   RecordingJob,
@@ -530,6 +534,27 @@ export interface ControlPlaneStore {
     version: string,
     publicMediaUrl?: string,
   ): Promise<EdgeAgent | undefined>;
+  createEdgeActivation(input: {
+    branchId: string; agentName: string; createdBy: string; expiresAt: string; tokenHash: string;
+  }): Promise<EdgeActivation>;
+  activateEdgeAgent(input: {
+    tokenHash: string; credentialHash: string; deviceUuid: string; version: string; commandPublicKey?: string;
+  }): Promise<{ agent: EdgeAgent; tenantId: string }>;
+  verifyEdgeAgentCredential(id: string, credentialHash: string): Promise<boolean>;
+  getEdgeAgentCommandPublicKey(id: string): Promise<string | undefined>;
+  revokeEdgeAgentCredential(id: string): Promise<EdgeAgent | undefined>;
+  createEdgeCommand(input: {
+    edgeAgentId: string; type: EdgeCommandType; payload: Record<string, unknown>; requestedBy: string;
+  }): Promise<EdgeCommand>;
+  listEdgeCommands(branchId: string, limit?: number): Promise<EdgeCommand[]>;
+  claimEdgeCommand(edgeAgentId: string): Promise<EdgeCommand | undefined>;
+  completeEdgeCommand(
+    edgeAgentId: string,
+    commandId: string,
+    result: { status: "succeeded" | "failed"; result?: Record<string, unknown>; error?: string },
+  ): Promise<EdgeCommand | undefined>;
+  createEdgeUpdateRelease(input: Omit<EdgeUpdateRelease, "id" | "createdAt">): Promise<EdgeUpdateRelease>;
+  getEdgeUpdateReleaseForAgent(edgeAgentId: string, currentVersion: string): Promise<EdgeUpdateRelease | undefined>;
   ingestOperationalTelemetry(
     envelope: OperationalTelemetryEnvelope,
   ): Promise<{ accepted: boolean; duplicate: boolean }>;

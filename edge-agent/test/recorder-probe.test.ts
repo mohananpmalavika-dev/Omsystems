@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { looksLikeRecorder, probeRecorder } from "../src/monitoring/recorder-probe.js";
+import { looksLikeRecorder, probeRecorder, recorderPlaybackUri } from "../src/monitoring/recorder-probe.js";
 
 describe("vendor recorder probes", () => {
   afterEach(() => vi.unstubAllGlobals());
@@ -7,6 +7,22 @@ describe("vendor recorder probes", () => {
   it("identifies recorder identities during ONVIF discovery without classifying ordinary cameras", () => {
     expect(looksLikeRecorder({ manufacturer: "CP PLUS", model: "8 Channel XVR" })).toBe(true);
     expect(looksLikeRecorder({ manufacturer: "Hikvision", model: "DS-2CD2143G2" })).toBe(false);
+  });
+
+  it("builds vendor playback probes without exposing them to the control plane", () => {
+    const hikvision = recorderPlaybackUri({
+      id: "hik", name: "NVR", deviceType: "nvr", vendor: "hikvision",
+      host: "192.0.2.10", port: 80, username: "operator", password: "p@ss", rtspPort: 8554,
+    }, 2, "2026-08-02T10:00:00.000Z");
+    expect(hikvision).toContain("operator:p%40ss@192.0.2.10:8554/Streaming/tracks/201");
+    expect(hikvision).toContain("starttime=20260802T095930Z");
+
+    const dahua = recorderPlaybackUri({
+      id: "dahua", name: "XVR", deviceType: "dvr", vendor: "dahua",
+      host: "192.0.2.11", port: 80, username: "operator", password: "safe",
+    }, 1, "2026-08-02T10:00:00.000Z");
+    expect(dahua).toContain("/cam/playback?channel=1");
+    expect(dahua).toContain("starttime=2026_08_02_09_59_30");
   });
 
   it("extracts Hikvision identity, channels and storage through ISAPI", async () => {

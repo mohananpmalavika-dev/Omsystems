@@ -8,12 +8,17 @@ import { LocalStreamSecretStore, startSecretProvider } from "./streaming/secret-
 import { uptime } from "node:os";
 import { NetworkCounterSampler, NetworkPathTracker, probeInternetLink } from "./monitoring/internet-probe.js";
 import { EdgeResourceSampler } from "./monitoring/edge-resource-probe.js";
-import { looksLikeRecorder, probeRecorder } from "./monitoring/recorder-probe.js";
+import { looksLikeRecorder, probeRecorder, recorderPlaybackUri } from "./monitoring/recorder-probe.js";
 import { initializeCameraHeartbeat } from "./monitoring/camera-heartbeat.js";
 import { hasArgument, prepareEdgeRuntime } from "./runtime.js";
 import { logger } from "./utils/logger.js";
 import { startEdgeMediaRuntime, type EdgeMediaRuntime } from "./streaming/edge-live-gateway.js";
 import { inspectBundledWindowsRuntime, launchWindowsSelfInstaller } from "./windows/self-installer.js";
+import { DeviceIdentityStore } from "./security/device-identity.js";
+import { EncryptedOutbox } from "./offline/encrypted-outbox.js";
+import { stageSignedUpdate } from "./updates/signed-update.js";
+import { readFile } from "node:fs/promises";
+import { CameraCredentialVault, openSealedCommand, type SealedCommandEnvelope } from "./security/camera-credential-vault.js";
 
 async function main() {
 const argv = process.argv.slice(2);
@@ -51,14 +56,65 @@ const gateway = new GatewayClient(
   config.DEV_USER_ID,
   config.EDGE_BRIDGE_SHARED_KEY,
   config.CONTROL_PLANE_TIMEOUT_MS,
+  undefined,
 );
-const agentId = config.EDGE_AGENT_ID ?? (await gateway.register(
-  config.BRANCH_ID,
-  config.EDGE_AGENT_NAME,
-  config.EDGE_AGENT_VERSION,
-)).id;
+const identityStore = new DeviceIdentityStore(config.EDGE_IDENTITY_PATH, config.EDGE_IDENTITY_KEY_PATH);
+const outbox = new EncryptedOutbox(
+  config.EDGE_OFFLINE_OUTBOX_PATH,
+  config.EDGE_OFFLINE_OUTBOX_KEY_PATH,
+  config.EDGE_OFFLINE_OUTBOX_MAX_ITEMS,
+);
+await outbox.load();
+let identity = await identityStore.load();
+if (!identity && config.EDGE_ACTIVATION_CODE) {
+  const deviceUuid = DeviceIdentityStore.newDeviceUuid();
+  const commandKeys = DeviceIdentityStore.newCommandKeyPair();
+  const activated = await gateway.activate(
+    config.EDGE_ACTIVATION_CODE,
+    deviceUuid,
+    config.EDGE_AGENT_VERSION,
+    commandKeys.publicKey,
+  );
+  identity = {
+    deviceUuid,
+    agentId: activated.agentId,
+    branchId: activated.branchId,
+    credential: activated.credential,
+    commandPublicKey: commandKeys.publicKey,
+    commandPrivateKey: commandKeys.privateKey,
+    ...(activated.updatePublicKey ? { updatePublicKey: activated.updatePublicKey } : {}),
+    enrolledAt: new Date().toISOString(),
+  };
+  await identityStore.save(identity);
+}
+if (identity) gateway.useEdgeCredential(identity.credential);
+const legacyAgentId = !identity && config.EDGE_AGENT_ID && config.BRANCH_ID
+  ? config.EDGE_AGENT_ID
+  : !identity && config.BRANCH_ID
+    ? (await gateway.register(config.BRANCH_ID, config.EDGE_AGENT_NAME, config.EDGE_AGENT_VERSION)).id
+    : undefined;
+const resolvedAgentId = identity?.agentId ?? legacyAgentId;
+const resolvedBranchId = identity?.branchId ?? config.BRANCH_ID;
+if (!resolvedAgentId || !resolvedBranchId) throw new Error("edge_gateway_identity_unavailable");
+const agentId: string = resolvedAgentId;
+const branchId: string = resolvedBranchId;
+// Attach the outbox only after activation so a one-time enrollment request is never queued.
+const authenticatedGateway = new GatewayClient(
+  config.CONTROL_PLANE_URL,
+  config.DEV_USER_ID,
+  config.EDGE_BRIDGE_SHARED_KEY,
+  config.CONTROL_PLANE_TIMEOUT_MS,
+  outbox,
+);
+if (identity) authenticatedGateway.useEdgeCredential(identity.credential);
+const control = authenticatedGateway;
+const credentialVault = new CameraCredentialVault(
+  config.EDGE_CAMERA_CREDENTIAL_VAULT_PATH,
+  config.EDGE_CAMERA_CREDENTIAL_VAULT_KEY_PATH,
+);
+await credentialVault.load();
 if (hasArgument(argv, "--diagnose")) {
-  await gateway.heartbeat(agentId, config.EDGE_AGENT_VERSION, config.PUBLIC_MEDIA_GATEWAY_URL);
+  await control.heartbeat(agentId, config.EDGE_AGENT_VERSION, config.PUBLIC_MEDIA_GATEWAY_URL);
   process.stdout.write(`Connected to ${config.CONTROL_PLANE_URL} as edge agent ${agentId}.\n`);
   process.exit(0);
 }
@@ -71,16 +127,17 @@ let lastRecorderProbeAt = 0;
 let lastRecorderArchiveScanAt = 0;
 await secrets.load();
 if (config.LIVE_MEDIA_ENABLED) {
-  edgeMediaRuntime = await startEdgeMediaRuntime({ config, gateway, agentId, secrets });
+  edgeMediaRuntime = await startEdgeMediaRuntime({ config, gateway: control, agentId, secrets });
 }
 const cameraHeartbeat = initializeCameraHeartbeat(
   config.CONTROL_PLANE_URL,
-  config.BRANCH_ID,
+  branchId,
   agentId,
   config.DEV_USER_ID,
   config.FFPROBE_PATH,
   config.FFMPEG_PATH,
-  config.EDGE_BRIDGE_SHARED_KEY,
+  identity?.credential ?? config.EDGE_BRIDGE_SHARED_KEY,
+  (payload) => control.submitTelemetry(agentId, payload),
 );
 let lastCameraConfigSyncAt = 0;
 await syncCameraHeartbeatConfig();
@@ -95,7 +152,7 @@ if (config.EDGE_MEDIA_SHARED_KEY) {
   logger.info(`Local stream-secret provider listening on ${config.STREAM_SECRET_PROVIDER_HOST}:${config.STREAM_SECRET_PROVIDER_PORT}`);
 }
 
-logger.info(`Edge agent ${agentId} registered; waiting for branch commands`, { branchId: config.BRANCH_ID, version: config.EDGE_AGENT_VERSION });
+logger.info(`Edge agent ${agentId} registered; waiting for branch commands`, { branchId, version: config.EDGE_AGENT_VERSION });
 await heartbeatAndReport();
 
 let stopping = false;
@@ -105,17 +162,33 @@ process.once("SIGTERM", () => { stopping = true; });
 while (!stopping) {
   try {
     await heartbeatAndReport();
-    const job = await gateway.claimScanJob(agentId, config.EDGE_AGENT_VERSION);
+    const replay = await control.flushOutbox();
+    if (replay.delivered > 0) logger.info("Replayed offline telemetry", replay);
+    const command = await control.claimCommand(agentId);
+    if (command) {
+      try {
+        const outcome = await executeEdgeCommand(command.type, command.payload);
+        await control.completeCommand(agentId, command.id, { status: "succeeded", result: outcome.result });
+        if (outcome.restartAgent) {
+          logger.info("Restarting edge agent after acknowledged remote command", { commandId: command.id });
+          process.exit(75);
+        }
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        await control.completeCommand(agentId, command.id, { status: "failed", error: message.slice(0, 2_000) });
+      }
+    }
+    const job = await control.claimScanJob(agentId, config.EDGE_AGENT_VERSION);
     if (job) {
       try {
         const resultCount = await scanBranch();
-        await gateway.completeScanJob(agentId, job.id, {
+        await control.completeScanJob(agentId, job.id, {
           status: "completed",
           resultCount,
         });
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
-        await gateway.completeScanJob(agentId, job.id, {
+        await control.completeScanJob(agentId, job.id, {
           status: "failed",
           resultCount: 0,
           error: message.slice(0, 2_000),
@@ -151,9 +224,10 @@ async function scanBranch() {
     const serviceUrl = endpoint.xaddrs[0];
     if (!serviceUrl) continue;
     try {
-      const credentials = {
+      const credentials = credentialVault.get(endpoint.remoteAddress) ?? {
         username: config.CAMERA_USERNAME,
         password: config.CAMERA_PASSWORD,
+        updatedAt: "configuration",
       };
       const client = new OnvifClient(serviceUrl, credentials, config.ONVIF_TIMEOUT_MS);
       const device = await client.inspect();
@@ -161,8 +235,8 @@ async function scanBranch() {
       if (looksLikeRecorder(device, endpoint.scopes)) {
         const discoveredId = `recorder-${device.serialNumber || endpoint.remoteAddress}`.replace(/[^a-zA-Z0-9_.:-]/g, "-");
         const observedAt = new Date().toISOString();
-        await gateway.submitTelemetry(agentId, {
-          branchId: config.BRANCH_ID, edgeAgentId: agentId, deviceType: "recorder", deviceId: discoveredId,
+        await control.submitTelemetry(agentId, {
+          branchId, edgeAgentId: agentId, deviceType: "recorder", deviceId: discoveredId,
           observedAt, source: "onvif", quality: "verified", idempotencyKey: `${agentId}:recorder-discovery:${discoveredId}:${observedAt}`,
           metrics: {
             name: `${device.manufacturer} ${device.model}`, deviceType: /dvr|xvr|uvr/i.test(device.model) ? "dvr" : "nvr",
@@ -191,7 +265,7 @@ async function scanBranch() {
         });
       }
       const parsedServiceUrl = new URL(serviceUrl);
-      const discovery = await gateway.submitDiscovery(config.BRANCH_ID, {
+      const discovery = await control.submitDiscovery(branchId, {
         edgeAgentId: agentId,
         discoveryMethod: "onvif-ws-discovery",
         vendor,
@@ -227,7 +301,7 @@ async function scanBranch() {
         const serviceUrl = endpoint.xaddrs[0];
         if (!serviceUrl) continue;
         const parsedServiceUrl = new URL(serviceUrl);
-        await gateway.submitDiscovery(config.BRANCH_ID, {
+        await control.submitDiscovery(branchId, {
           edgeAgentId: agentId,
           discoveryMethod: "onvif-ws-discovery",
           vendor: "other",
@@ -263,7 +337,7 @@ function delay(milliseconds: number) {
 
 async function heartbeatAndReport() {
   const startedAt = Date.now();
-  await gateway.heartbeat(agentId, config.EDGE_AGENT_VERSION, edgeMediaRuntime?.publicUrl ?? config.PUBLIC_MEDIA_GATEWAY_URL);
+  await control.heartbeat(agentId, config.EDGE_AGENT_VERSION, edgeMediaRuntime?.publicUrl ?? config.PUBLIC_MEDIA_GATEWAY_URL);
   if (Date.now() - lastCameraConfigSyncAt >= config.CAMERA_CONFIG_REFRESH_MS) {
     await syncCameraHeartbeatConfig().catch((error) => {
       logger.error("Camera monitoring configuration refresh failed", { error: error instanceof Error ? error.message : String(error) });
@@ -287,8 +361,8 @@ async function heartbeatAndReport() {
   if (recorderReports.length) lastRecorderProbeAt = Date.now();
   if (scanRecorderArchives && recorderReports.length) lastRecorderArchiveScanAt = Date.now();
   await Promise.all([
-    gateway.submitTelemetry(agentId, {
-      branchId: config.BRANCH_ID, edgeAgentId: agentId,
+    control.submitTelemetry(agentId, {
+      branchId, edgeAgentId: agentId,
       deviceType: "edge-agent", deviceId: agentId, observedAt, source: "system",
       quality: "verified", idempotencyKey: `${agentId}:edge-agent:${observedAt}`,
       metrics: {
@@ -300,9 +374,9 @@ async function heartbeatAndReport() {
     }),
     ...linkResults.map((link) => {
       const { reasonCodes, ...linkMetrics } = link;
-      return gateway.submitTelemetry(agentId, {
-      branchId: config.BRANCH_ID, edgeAgentId: agentId,
-      deviceType: "network", deviceId: `${config.BRANCH_ID}:internet:${link.linkId}`, observedAt, source: "system",
+      return control.submitTelemetry(agentId, {
+      branchId, edgeAgentId: agentId,
+      deviceType: "network", deviceId: `${branchId}:internet:${link.linkId}`, observedAt, source: "system",
       quality: "verified", idempotencyKey: `${agentId}:network:${link.linkId}:${observedAt}`,
       metrics: {
         ...linkMetrics, active: link.role === "primary" ? primaryAvailable : !primaryAvailable && link.connectivity,
@@ -312,13 +386,13 @@ async function heartbeatAndReport() {
     }); }),
     ...recorderReports.flatMap(({ recorder, probe }) => {
       const source = recorder.vendor === "cp-plus" ? "cp-plus-adapter" as const : recorder.vendor === "onvif" ? "onvif" as const : "system" as const;
-      const submissions: Array<Promise<unknown>> = [gateway.submitTelemetry(agentId, {
-        branchId: config.BRANCH_ID, edgeAgentId: agentId, deviceType: "recorder", deviceId: recorder.id,
+      const submissions: Array<Promise<unknown>> = [control.submitTelemetry(agentId, {
+        branchId, edgeAgentId: agentId, deviceType: "recorder", deviceId: recorder.id,
         observedAt, source, quality: "verified", idempotencyKey: `${agentId}:recorder:${recorder.id}:${observedAt}`,
         metrics: probe.metrics, reasonCodes: probe.reasonCodes,
       })];
-      submissions.push(...probe.channelHealth.map((channel) => gateway.submitTelemetry(agentId, {
-        branchId: config.BRANCH_ID, edgeAgentId: agentId,
+      submissions.push(...probe.channelHealth.map((channel) => control.submitTelemetry(agentId, {
+        branchId, edgeAgentId: agentId,
         deviceType: "recorder-channel", deviceId: `${recorder.id}:channel:${channel.sourceChannel}`,
         observedAt, source, quality: channel.status === "unknown" ? "unavailable" : "verified",
         idempotencyKey: `${agentId}:recorder-channel:${recorder.id}:${channel.sourceChannel}:${observedAt}`,
@@ -329,13 +403,13 @@ async function heartbeatAndReport() {
         },
         reasonCodes: channel.reasonCodes,
       })));
-      if (probe.hddStatus.length) submissions.push(gateway.submitRecorderHdd(agentId, {
-        branchId: config.BRANCH_ID, recorderId: recorder.id, observedAt, source,
+      if (probe.hddStatus.length) submissions.push(control.submitRecorderHdd(agentId, {
+        branchId, recorderId: recorder.id, observedAt, source,
         quality: "verified", idempotencyKey: `${agentId}:recorder-hdd:${recorder.id}:${observedAt}`,
         hddStatus: probe.hddStatus,
       }));
-      if (probe.archiveEvidence.length) submissions.push(gateway.submitRecorderArchive(agentId, {
-        branchId: config.BRANCH_ID, recorderId: recorder.id, observedAt, source,
+      if (probe.archiveEvidence.length) submissions.push(control.submitRecorderArchive(agentId, {
+        branchId, recorderId: recorder.id, observedAt, source,
         quality: "verified", idempotencyKey: `${agentId}:recorder-archive:${recorder.id}:${observedAt}`,
         entries: probe.archiveEvidence,
       }));
@@ -345,7 +419,7 @@ async function heartbeatAndReport() {
 }
 
 async function syncCameraHeartbeatConfig() {
-  const cameras = await gateway.listMonitoringCameras(agentId, config.EDGE_AGENT_VERSION);
+  const cameras = await control.listMonitoringCameras(agentId, config.EDGE_AGENT_VERSION);
   cameraHeartbeat.replaceCameras(cameras.map((camera) => {
     const rtspUrl = secrets.get(camera.connectionSecretRef);
     return {
@@ -359,9 +433,108 @@ async function syncCameraHeartbeatConfig() {
 }
 
 async function collectRecorderReports(observedAt: string, includeArchive: boolean) {
-  return Promise.all(config.RECORDERS_JSON.map(async (recorder) => ({
-    recorder, observedAt, probe: await probeRecorder(recorder, config.RECORDER_PROBE_TIMEOUT_MS, { includeArchive }),
-  })));
+  return Promise.all(config.RECORDERS_JSON.map(async (recorder) => {
+    const secureCredential = credentialVault.get(recorder.host);
+    const resolvedRecorder = secureCredential
+      ? { ...recorder, username: secureCredential.username, password: secureCredential.password }
+      : recorder;
+    const probe = await probeRecorder(resolvedRecorder, config.RECORDER_PROBE_TIMEOUT_MS, { includeArchive });
+    if (includeArchive && resolvedRecorder.archiveRetention?.verifyPlayback !== false) {
+      for (const evidence of probe.archiveEvidence) {
+        if (evidence.status !== "available" || !evidence.newestPlayableAt) continue;
+        const uri = recorderPlaybackUri(resolvedRecorder, evidence.sourceChannel, evidence.newestPlayableAt);
+        if (!uri) {
+          evidence.reasonCodes.push("playback_probe_not_supported");
+          continue;
+        }
+        const playback = await probeRtsp(uri, config.FFPROBE_PATH, config.RECORDER_PROBE_TIMEOUT_MS);
+        evidence.playbackVerified = playback.reachable;
+        evidence.playbackCodec = playback.codec;
+        if (playback.reachable) evidence.reasonCodes.push("latest_clip_playback_verified");
+        else {
+          evidence.playbackError = playback.error?.slice(0, 300) ?? "playback_failed";
+          evidence.reasonCodes.push("latest_clip_playback_failed");
+        }
+      }
+    }
+    return { recorder: resolvedRecorder, observedAt, probe };
+  }));
+}
+
+async function executeEdgeCommand(type: string, payload: Record<string, unknown>) {
+  switch (type) {
+    case "rediscover":
+      return { result: { discovered: await scanBranch() } };
+    case "restart-media":
+      if (!config.LIVE_MEDIA_ENABLED) throw new Error("live_media_disabled");
+      await edgeMediaRuntime?.stop();
+      edgeMediaRuntime = await startEdgeMediaRuntime({ config, gateway: control, agentId, secrets });
+      return { result: { status: "restarted", publicUrl: edgeMediaRuntime.publicUrl } };
+    case "restart-agent":
+      return { result: { status: "restart_acknowledged" }, restartAgent: true };
+    case "probe-camera": {
+      const cameraId = typeof payload.cameraId === "string" ? payload.cameraId : "";
+      if (!cameraId) throw new Error("cameraId_required");
+      const camera = (await control.listMonitoringCameras(agentId, config.EDGE_AGENT_VERSION))
+        .find((item) => item.id === cameraId);
+      const source = camera ? secrets.get(camera.connectionSecretRef) : undefined;
+      if (!source) throw new Error("camera_stream_secret_unavailable");
+      const probe = await probeRtsp(source, config.FFPROBE_PATH, config.ONVIF_TIMEOUT_MS);
+      return { result: { cameraId, ...probe } };
+    }
+    case "probe-recorder": {
+      const recorderId = typeof payload.recorderId === "string" ? payload.recorderId : "";
+      const recorder = config.RECORDERS_JSON.find((item) => item.id === recorderId);
+      if (!recorder) throw new Error("recorder_not_configured");
+      const probe = await probeRecorder(recorder, config.RECORDER_PROBE_TIMEOUT_MS, { includeArchive: true });
+      return { result: {
+        recorderId, metrics: probe.metrics, reasonCodes: probe.reasonCodes,
+        hddCount: probe.hddStatus.length, channelHealth: probe.channelHealth,
+        archiveEvidence: probe.archiveEvidence,
+      } };
+    }
+    case "collect-logs": {
+      const data = await readFile(config.EDGE_LOG_PATH, "utf8").catch(() => "");
+      const tail = redactDiagnosticText(data.slice(-64 * 1024));
+      return { result: { collectedAt: new Date().toISOString(), bytes: Buffer.byteLength(tail), tail } };
+    }
+    case "update-credentials": {
+      if (!identity?.commandPrivateKey) throw new Error("gateway_secure_command_key_unavailable");
+      const envelope = payload.envelope as SealedCommandEnvelope | undefined;
+      if (!envelope || typeof envelope !== "object") throw new Error("credential_envelope_required");
+      const decrypted = openSealedCommand<{
+        username?: unknown; password?: unknown; scope?: { host?: unknown; default?: unknown };
+      }>(envelope, identity.commandPrivateKey);
+      if (typeof decrypted.username !== "string" || !decrypted.username ||
+          typeof decrypted.password !== "string" || !decrypted.scope ||
+          (decrypted.scope.host !== undefined && typeof decrypted.scope.host !== "string")) {
+        throw new Error("invalid_camera_credential_payload");
+      }
+      const saved = await credentialVault.set({
+        username: decrypted.username,
+        password: decrypted.password,
+        ...(typeof decrypted.scope.host === "string" ? { host: decrypted.scope.host } : {}),
+      });
+      const discovered = await scanBranch();
+      return { result: { ...saved, rediscovered: discovered } };
+    }
+    case "apply-update": {
+      const release = await control.getUpdate(agentId, config.EDGE_AGENT_VERSION);
+      if (!release) throw new Error("no_update_assigned");
+      const publicKey = identity?.updatePublicKey ?? config.EDGE_UPDATE_PUBLIC_KEY;
+      if (!publicKey) throw new Error("edge_update_public_key_unavailable");
+      const staged = await stageSignedUpdate(release, publicKey, config.EDGE_UPDATE_STAGING_PATH);
+      return { result: { ...staged, status: "verified_and_staged", supervisorActivationRequired: true } };
+    }
+    default:
+      throw new Error("unsupported_edge_command");
+  }
+}
+
+function redactDiagnosticText(value: string) {
+  return value
+    .replace(/(rtsp:\/\/)[^@\s]+@/gi, "$1[redacted]@")
+    .replace(/(password|secret|token|credential|authorization)["'=:\s]+[^\s,}"']+/gi, "$1=[redacted]");
 }
 
 function prepareRuntimeOrExit(input: string[]) {

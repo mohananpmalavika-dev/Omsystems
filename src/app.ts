@@ -5,7 +5,7 @@ import Fastify, {
   type FastifyRequest,
 } from "fastify";
 import { z } from "zod";
-import { timingSafeEqual } from "node:crypto";
+import { createHash, timingSafeEqual } from "node:crypto";
 import { SESClient } from "@aws-sdk/client-ses";
 import {
   hasExtendedInfrastructure,
@@ -46,6 +46,7 @@ import { registerDeviceInventoryRoutes } from "./routes/device-inventory.routes.
 import { registerDeviceManagementRoutes } from "./routes/device-management.routes.js";
 import { registerDVRNVRMonitorRoutes } from "./routes/dvr-nvr-monitor.routes.js";
 import { registerEdgeAgentPackageRoutes } from "./routes/edge-agent-package.routes.js";
+import { registerEdgeGatewayOperationsRoutes } from "./routes/edge-gateway-operations.routes.js";
 import { registerOperationalHealthRoutes } from "./routes/operational-health.routes.js";
 import { registerVideoWallRoutes } from "./routes/video-wall.routes.js";
 import { registerAlertCommandCenterRoutes } from "./routes/alert-command-center.routes.js";
@@ -101,6 +102,7 @@ declare module "fastify" {
   interface FastifyRequest {
     currentUser: Awaited<ReturnType<ControlPlaneStore["getUser"]>> & {};
     edgeAgentAuthenticated: boolean;
+    edgeAgentId?: string;
   }
 }
 
@@ -341,6 +343,8 @@ export async function buildApp(options?: {
   recordingEngineUrl?: string;
   recordingEngineSharedKey?: string;
   edgeBridgeSharedKey?: string;
+  allowLegacyEdgeBridgeKey?: boolean;
+  edgeUpdateSigningPrivateKey?: string;
   analyticsEngineSharedKey?: string;
   analyticsEngineUrl?: string;
   authMode?: "development" | "session" | "oidc";
@@ -447,6 +451,7 @@ export async function buildApp(options?: {
 
   app.decorateRequest("currentUser");
   app.decorateRequest("edgeAgentAuthenticated", false);
+  app.decorateRequest("edgeAgentId");
   const extendedStore = hasExtendedInfrastructure(store) ? store : undefined;
   const sessionAuth = extendedStore
     ? createAuthMiddleware({
@@ -471,17 +476,26 @@ export async function buildApp(options?: {
 
     const edgeAgentIngressRoute = isEdgeAgentIngressRoute(request.method, request.url);
     const edgeBridgeHeader = request.headers["x-edge-bridge-key"];
+    const edgeAgentToken = request.headers["x-edge-agent-token"];
+    const ingressAgentId = edgeAgentIngressRoute ? edgeAgentIdFromIngress(request) : undefined;
     const userIdentitySupplied = typeof request.headers.authorization === "string"
       || typeof request.headers["x-user-id"] === "string";
-    const edgeBridgeAuthenticated = Boolean(options?.edgeBridgeSharedKey) && secureEqualHeader(
+    const legacyBridgeAllowed = options?.allowLegacyEdgeBridgeKey ?? Boolean(options?.edgeBridgeSharedKey);
+    const edgeBridgeAuthenticated = legacyBridgeAllowed && Boolean(options?.edgeBridgeSharedKey) && secureEqualHeader(
       edgeBridgeHeader,
       options!.edgeBridgeSharedKey!,
     );
-    if (edgeAgentIngressRoute && options?.edgeBridgeSharedKey && edgeBridgeHeader && !edgeBridgeAuthenticated) {
+    const edgeCredentialAuthenticated = typeof edgeAgentToken === "string" && Boolean(ingressAgentId) &&
+      await store.verifyEdgeAgentCredential(ingressAgentId!, hashEdgeCredential(edgeAgentToken));
+    if (edgeAgentIngressRoute && edgeAgentToken && !edgeCredentialAuthenticated) {
+      return reply.code(401).send({ error: "invalid_or_revoked_gateway_identity" });
+    }
+    if (edgeAgentIngressRoute && legacyBridgeAllowed && options?.edgeBridgeSharedKey && edgeBridgeHeader && !edgeBridgeAuthenticated) {
       return reply.code(401).send({ error: "invalid_bridge_identity" });
     }
-    if (edgeAgentIngressRoute && edgeBridgeAuthenticated) {
+    if (edgeAgentIngressRoute && (edgeCredentialAuthenticated || edgeBridgeAuthenticated)) {
       request.edgeAgentAuthenticated = true;
+      request.edgeAgentId = ingressAgentId;
       return;
     }
 
@@ -718,106 +732,6 @@ export async function buildApp(options?: {
     };
   });
 
-  // Camera credential management routes
-  app.post("/api/edge-agents/test-camera-credentials", async (request, reply) => {
-    const body = z.object({
-      edgeAgentId: z.string().uuid(),
-      cameraIP: z.string().optional(),
-      username: z.string(),
-      password: z.string(),
-    }).parse(request.body);
-
-    // TODO: Implement actual ONVIF credential testing
-    // For now, return success to allow UI testing
-    return reply.send({
-      success: true,
-      message: `Credentials would be tested against ${body.cameraIP || 'discovered cameras'}`,
-      cameraIP: body.cameraIP,
-    });
-  });
-
-  app.post("/api/edge-agents/update-camera-credentials", async (request, reply) => {
-    const body = z.object({
-      edgeAgentId: z.string().uuid(),
-      username: z.string(),
-      password: z.string(),
-    }).parse(request.body);
-
-    try {
-      // Update edge agent config in database using direct SQL
-      if ((store as any).pool) {
-        const query = `
-          UPDATE edge_agents 
-          SET config = jsonb_set(
-            jsonb_set(
-              jsonb_set(
-                COALESCE(config, '{}'::jsonb),
-                '{CAMERA_USERNAME}', to_jsonb($1::text)
-              ),
-              '{CAMERA_PASSWORD}', to_jsonb($2::text)
-            ),
-            '{LAST_CREDENTIAL_UPDATE}', to_jsonb($3::text)
-          )
-          WHERE id = $4
-          RETURNING id
-        `;
-
-        const result = await (store as any).pool.query(query, [
-          body.username,
-          body.password,
-          new Date().toISOString(),
-          body.edgeAgentId
-        ]);
-
-        if (result.rows.length === 0) {
-          return reply.code(404).send({ error: "edge_agent_not_found" });
-        }
-      }
-
-      app.log.info({ edgeAgentId: body.edgeAgentId }, "Updated camera credentials");
-
-      return reply.send({
-        success: true,
-        message: "Credentials updated successfully. Edge agent will reload on next heartbeat.",
-      });
-    } catch (error) {
-      app.log.error({ error }, "Failed to update camera credentials");
-      return reply.code(500).send({ error: "Failed to update credentials" });
-    }
-  });
-
-  app.get("/api/edge-agents/:id/camera-credentials", async (request, reply) => {
-    const { id } = edgeAgentParams.parse(request.params);
-    
-    try {
-      if ((store as any).pool) {
-        const query = `SELECT config FROM edge_agents WHERE id = $1`;
-        const result = await (store as any).pool.query(query, [id]);
-
-        if (result.rows.length === 0) {
-          return reply.code(404).send({ error: "edge_agent_not_found" });
-        }
-
-        const config = result.rows[0].config || {};
-        
-        return reply.send({
-          username: config.CAMERA_USERNAME || "admin",
-          passwordSet: Boolean(config.CAMERA_PASSWORD),
-          lastUpdate: config.LAST_CREDENTIAL_UPDATE || null,
-        });
-      }
-      
-      return reply.send({
-        username: "admin",
-        passwordSet: false,
-        lastUpdate: null,
-      });
-    } catch (error) {
-      app.log.error({ error }, "Failed to get camera credentials");
-      return reply.code(500).send({ error: "Failed to get credentials" });
-    }
-  });
-
   app.post("/v1/branches/:branchId/device-scans", async (request, reply) => {
     const { branchId } = branchParams.parse(request.params);
     if (!(await requireAccess(request, reply, store, "device:configure", branchId))) return;
@@ -951,6 +865,9 @@ export async function buildApp(options?: {
       capabilities: capabilitiesSchema,
     }).parse(request.body);
     if (request.edgeAgentAuthenticated) {
+      if (request.edgeAgentId && request.edgeAgentId !== parsed.edgeAgentId) {
+        return reply.code(403).send({ error: "edge_agent_identity_mismatch" });
+      }
       const branchAgents = await store.listEdgeAgentsByBranch(branchId);
       if (!branchAgents.some((agent) => agent.id === parsed.edgeAgentId)) {
         return reply.code(403).send({ error: "edge_agent_branch_mismatch" });
@@ -1556,6 +1473,10 @@ export async function buildApp(options?: {
   });
 
   await registerDeviceInventoryRoutes(app, store);
+  await registerEdgeGatewayOperationsRoutes(app, store, {
+    controlPlanePublicUrl: options?.controlPlanePublicUrl ?? process.env.CONTROL_PLANE_PUBLIC_URL,
+    updateSigningPrivateKey: options?.edgeUpdateSigningPrivateKey ?? process.env.EDGE_UPDATE_SIGNING_PRIVATE_KEY,
+  });
   await registerEdgeAgentPackageRoutes(app, store, {
     controlPlanePublicUrl: options?.controlPlanePublicUrl ?? process.env.CONTROL_PLANE_PUBLIC_URL,
     edgeBridgeSharedKey: options?.edgeBridgeSharedKey ?? process.env.EDGE_BRIDGE_SHARED_KEY,
@@ -1914,7 +1835,24 @@ function isEdgeAgentIngressRoute(method: string, url: string) {
   if (method === "GET" && /^\/v1\/edge-agents\/[^/]+\/scan-jobs\/next$/.test(path)) return true;
   if (method === "POST" && /^\/v1\/edge-agents\/[^/]+\/scan-jobs\/[^/]+\/complete$/.test(path)) return true;
   if (method === "POST" && /^\/v1\/edge-agents\/[^/]+\/(?:telemetry|recorder-hdd|recorder-archive)$/.test(path)) return true;
+  if (method === "GET" && /^\/v1\/edge-agents\/[^/]+\/(?:commands|updates)\/next$/.test(path)) return true;
+  if (method === "POST" && /^\/v1\/edge-agents\/[^/]+\/commands\/[^/]+\/complete$/.test(path)) return true;
   return method === "POST" && /^\/v1\/branches\/[^/]+\/cameras\/discovered$/.test(path);
+}
+
+function edgeAgentIdFromIngress(request: FastifyRequest) {
+  const path = request.url.split("?", 1)[0] ?? request.url;
+  const direct = path.match(/^\/v1\/edge-agents\/([^/]+)/)?.[1];
+  if (direct) return decodeURIComponent(direct);
+  if (/^\/v1\/branches\/[^/]+\/cameras\/discovered$/.test(path)) {
+    const value = (request.body as { edgeAgentId?: unknown } | undefined)?.edgeAgentId;
+    return typeof value === "string" ? value : undefined;
+  }
+  return undefined;
+}
+
+function hashEdgeCredential(value: string) {
+  return createHash("sha256").update(value).digest("hex");
 }
 
 function safeCamera(camera: Camera) {

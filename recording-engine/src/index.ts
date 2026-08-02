@@ -17,6 +17,7 @@ import Fastify from "fastify";
 import { z } from "zod";
 import { createStorageAdapter, type StorageStatus, type StorageType } from "./storage-adapter.js";
 import { AlertEvidenceCaptureService } from "./alert-evidence-capture.js";
+import { S3EvidenceArchive } from "./s3-evidence-archive.js";
 
 const serviceUrl = z.preprocess((value) => {
   if (typeof value !== "string") return value;
@@ -42,6 +43,27 @@ const config = z.object({
   EVIDENCE_CHECKSUM_ENABLED: z.string().default("true").transform((value) => value !== "false"),
   ALERT_EVIDENCE_CLIP_SECONDS: z.coerce.number().int().min(5).max(60).default(20),
   ALERT_EVIDENCE_MAX_CONCURRENT: z.coerce.number().int().min(1).max(32).default(4),
+  EVIDENCE_ARCHIVE_REQUIRED: z.string().default("false").transform((value) => value === "true"),
+  EVIDENCE_S3_BUCKET: z.string().trim().min(1).optional(),
+  EVIDENCE_S3_REGION: z.string().trim().min(1).default("us-east-1"),
+  EVIDENCE_S3_PREFIX: z.string().trim().default("sentinel/evidence"),
+  EVIDENCE_S3_ENDPOINT: z.string().url().optional(),
+  EVIDENCE_S3_FORCE_PATH_STYLE: z.string().default("false").transform((value) => value === "true"),
+  EVIDENCE_S3_ACCESS_KEY_ID: z.string().trim().min(1).optional(),
+  EVIDENCE_S3_SECRET_ACCESS_KEY: z.string().min(1).optional(),
+  EVIDENCE_S3_ENCRYPTION: z.enum(["AES256", "aws:kms"]).optional(),
+  EVIDENCE_S3_KMS_KEY_ID: z.string().trim().min(1).optional(),
+  EVIDENCE_S3_OBJECT_LOCK_DAYS: z.coerce.number().int().min(1).max(3650).optional(),
+}).superRefine((value, context) => {
+  if (value.EVIDENCE_ARCHIVE_REQUIRED && !value.EVIDENCE_S3_BUCKET) {
+    context.addIssue({ code: "custom", path: ["EVIDENCE_S3_BUCKET"], message: "required when evidence archive is mandatory" });
+  }
+  if (Boolean(value.EVIDENCE_S3_ACCESS_KEY_ID) !== Boolean(value.EVIDENCE_S3_SECRET_ACCESS_KEY)) {
+    context.addIssue({ code: "custom", path: ["EVIDENCE_S3_ACCESS_KEY_ID"], message: "both S3 credentials must be set together" });
+  }
+  if (value.EVIDENCE_S3_ENCRYPTION === "aws:kms" && !value.EVIDENCE_S3_KMS_KEY_ID) {
+    context.addIssue({ code: "custom", path: ["EVIDENCE_S3_KMS_KEY_ID"], message: "required for aws:kms encryption" });
+  }
 }).parse(process.env);
 
 const recordingRoot = resolve(config.RECORDING_ROOT);
@@ -129,9 +151,26 @@ const restartTimers = new Map<string, NodeJS.Timeout>();
 const storageThresholds = new Map<string, "normal" | "80" | "90" | "95">();
 const lastSegmentEnd = new Map<string, number>();
 const app = Fastify({ logger: true });
+const evidenceArchive = config.EVIDENCE_S3_BUCKET
+  ? new S3EvidenceArchive({
+      bucket: config.EVIDENCE_S3_BUCKET,
+      region: config.EVIDENCE_S3_REGION,
+      prefix: config.EVIDENCE_S3_PREFIX,
+      endpoint: config.EVIDENCE_S3_ENDPOINT,
+      forcePathStyle: config.EVIDENCE_S3_FORCE_PATH_STYLE,
+      accessKeyId: config.EVIDENCE_S3_ACCESS_KEY_ID,
+      secretAccessKey: config.EVIDENCE_S3_SECRET_ACCESS_KEY,
+      serverSideEncryption: config.EVIDENCE_S3_ENCRYPTION,
+      kmsKeyId: config.EVIDENCE_S3_KMS_KEY_ID,
+      objectLockDays: config.EVIDENCE_S3_OBJECT_LOCK_DAYS,
+    })
+  : undefined;
 const alertEvidence = new AlertEvidenceCaptureService(
   join(recordingRoot, "alert-evidence"),
   config.ALERT_EVIDENCE_MAX_CONCURRENT,
+  undefined,
+  evidenceArchive,
+  config.EVIDENCE_ARCHIVE_REQUIRED,
 );
 
 await mkdir(recordingRoot, { recursive: true });
@@ -160,6 +199,7 @@ app.get("/health", async () => ({
   activeWorkers: workers.size,
   configuredJobs: jobs.size,
   storageNodeExternalId: config.STORAGE_NODE_EXTERNAL_ID,
+  evidenceArchive: evidenceArchive ? "s3" : "local",
 }));
 
 app.put("/internal/jobs", async (request, reply) => {

@@ -19,7 +19,10 @@ import type {
   ComplianceFramework,
   CompliancePolicy,
   DiscoveredCamera,
+  EdgeActivation,
   EdgeAgent,
+  EdgeCommand,
+  EdgeUpdateRelease,
   EdgeScanJob,
   LiveBookmark,
   LiveIncident,
@@ -67,6 +70,12 @@ function correlationCount(metadata?: Record<string, unknown>) {
 
 function clean<T extends Record<string, any>>(obj: T) {
   return Object.fromEntries(Object.entries(obj).filter(([, v]) => v !== undefined)) as Partial<T>;
+}
+
+function rolloutBucket(agentId: string, version: string) {
+  let hash = 2166136261;
+  for (const char of `${agentId}:${version}`) hash = Math.imul(hash ^ char.charCodeAt(0), 16777619);
+  return (hash >>> 0) % 100;
 }
 
 function defaultAlertNotificationPolicy(inputTenantId: string): AlertNotificationPolicy {
@@ -223,6 +232,11 @@ export class MemoryStore implements ControlPlaneStore {
   readonly grants = structuredClone(seedGrants);
   readonly edgeAgents = new Map<string, EdgeAgent>();
   readonly edgeScanJobs = new Map<string, EdgeScanJob>();
+  readonly edgeActivations = new Map<string, EdgeActivation & { tokenHash: string }>();
+  readonly edgeCredentialHashes = new Map<string, string>();
+  readonly edgeCommandPublicKeys = new Map<string, string>();
+  readonly edgeCommands = new Map<string, EdgeCommand>();
+  readonly edgeUpdateReleases = new Map<string, EdgeUpdateRelease>();
   readonly operationalTelemetry = new Map<string, OperationalTelemetryEnvelope>();
   readonly operationalTelemetryHistory: OperationalTelemetryEnvelope[] = [];
   readonly operationalTelemetryKeys = new Set<string>();
@@ -387,6 +401,135 @@ export class MemoryStore implements ControlPlaneStore {
       ...(publicMediaUrl ? { publicMediaUrl } : {}),
     });
     return agent;
+  }
+
+  async createEdgeActivation(input: {
+    branchId: string; agentName: string; createdBy: string; expiresAt: string; tokenHash: string;
+  }) {
+    const branch = this.nodes.get(input.branchId);
+    if (!branch || branch.type !== "branch") throw new Error("invalid_branch");
+    const activation: EdgeActivation & { tokenHash: string } = {
+      id: randomUUID(), tenantId: branch.tenantId, branchId: branch.id,
+      agentName: input.agentName, createdBy: input.createdBy,
+      createdAt: new Date().toISOString(), expiresAt: input.expiresAt,
+      usedAt: null, revokedAt: null, tokenHash: input.tokenHash,
+    };
+    this.edgeActivations.set(activation.id, activation);
+    const { tokenHash: _tokenHash, ...safe } = activation;
+    return safe;
+  }
+
+  async activateEdgeAgent(input: {
+    tokenHash: string; credentialHash: string; deviceUuid: string; version: string; commandPublicKey?: string;
+  }) {
+    const activation = [...this.edgeActivations.values()].find((item) => item.tokenHash === input.tokenHash);
+    if (!activation || activation.usedAt || activation.revokedAt || Date.parse(activation.expiresAt) <= Date.now()) {
+      throw new Error("activation_invalid_or_expired");
+    }
+    if ([...this.edgeAgents.values()].some((item) => item.deviceUuid === input.deviceUuid)) {
+      throw new Error("device_already_enrolled");
+    }
+    const agent: EdgeAgent = {
+      id: randomUUID(), branchId: activation.branchId, name: activation.agentName,
+      version: input.version, status: "pending", lastSeenAt: null,
+      deviceUuid: input.deviceUuid, credentialStatus: "active",
+      credentialIssuedAt: new Date().toISOString(),
+    };
+    activation.usedAt = new Date().toISOString();
+    this.edgeAgents.set(agent.id, agent);
+    this.edgeCredentialHashes.set(agent.id, input.credentialHash);
+    if (input.commandPublicKey) this.edgeCommandPublicKeys.set(agent.id, input.commandPublicKey);
+    return { agent: structuredClone(agent), tenantId: activation.tenantId };
+  }
+
+  async verifyEdgeAgentCredential(id: string, credentialHash: string) {
+    const agent = this.edgeAgents.get(id);
+    return Boolean(agent && agent.credentialStatus === "active" &&
+      this.edgeCredentialHashes.get(id) === credentialHash);
+  }
+
+  async getEdgeAgentCommandPublicKey(id: string) {
+    return this.edgeCommandPublicKeys.get(id);
+  }
+
+  async revokeEdgeAgentCredential(id: string) {
+    const agent = this.edgeAgents.get(id);
+    if (!agent) return undefined;
+    agent.credentialStatus = "revoked";
+    agent.credentialRevokedAt = new Date().toISOString();
+    agent.status = "offline";
+    this.edgeCredentialHashes.delete(id);
+    this.edgeCommandPublicKeys.delete(id);
+    return structuredClone(agent);
+  }
+
+  async createEdgeCommand(input: {
+    edgeAgentId: string; type: EdgeCommand["type"]; payload: Record<string, unknown>; requestedBy: string;
+  }) {
+    const agent = this.edgeAgents.get(input.edgeAgentId);
+    const branch = agent ? this.nodes.get(agent.branchId) : undefined;
+    if (!agent || !branch || agent.credentialStatus === "revoked") throw new Error("edge_agent_not_found_or_revoked");
+    const command: EdgeCommand = {
+      id: randomUUID(), tenantId: branch.tenantId, branchId: branch.id, edgeAgentId: agent.id,
+      type: input.type, payload: structuredClone(input.payload), status: "queued",
+      result: null, error: null, requestedBy: input.requestedBy,
+      requestedAt: new Date().toISOString(), startedAt: null, completedAt: null,
+    };
+    this.edgeCommands.set(command.id, command);
+    return structuredClone(command);
+  }
+
+  async listEdgeCommands(branchId: string, limit = 100) {
+    return [...this.edgeCommands.values()].filter((item) => item.branchId === branchId)
+      .sort((left, right) => right.requestedAt.localeCompare(left.requestedAt))
+      .slice(0, Math.max(1, Math.min(500, limit))).map((item) => structuredClone(item));
+  }
+
+  async claimEdgeCommand(edgeAgentId: string) {
+    const staleBefore = Date.now() - 15 * 60_000;
+    const command = [...this.edgeCommands.values()]
+      .filter((item) => item.edgeAgentId === edgeAgentId && (
+        item.status === "queued" ||
+        (item.status === "running" && item.startedAt !== null && Date.parse(item.startedAt) < staleBefore)
+      ))
+      .sort((left, right) => left.requestedAt.localeCompare(right.requestedAt))[0];
+    if (!command) return undefined;
+    command.status = "running";
+    command.startedAt = new Date().toISOString();
+    return structuredClone(command);
+  }
+
+  async completeEdgeCommand(
+    edgeAgentId: string,
+    commandId: string,
+    completion: { status: "succeeded" | "failed"; result?: Record<string, unknown>; error?: string },
+  ) {
+    const command = this.edgeCommands.get(commandId);
+    if (!command || command.edgeAgentId !== edgeAgentId) return undefined;
+    if (command.status === completion.status) return structuredClone(command);
+    if (command.status !== "running") return undefined;
+    command.status = completion.status;
+    command.result = structuredClone(completion.result ?? {});
+    command.error = completion.error ?? null;
+    command.completedAt = new Date().toISOString();
+    return structuredClone(command);
+  }
+
+  async createEdgeUpdateRelease(input: Omit<EdgeUpdateRelease, "id" | "createdAt">) {
+    if ([...this.edgeUpdateReleases.values()].some((item) => item.version === input.version)) {
+      throw Object.assign(new Error("release_exists"), { code: "23505" });
+    }
+    const release: EdgeUpdateRelease = { id: randomUUID(), createdAt: new Date().toISOString(), ...input };
+    this.edgeUpdateReleases.set(release.id, release);
+    return structuredClone(release);
+  }
+
+  async getEdgeUpdateReleaseForAgent(edgeAgentId: string, currentVersion: string) {
+    const release = [...this.edgeUpdateReleases.values()]
+      .filter((item) => item.enabled && item.version !== currentVersion)
+      .sort((left, right) => right.createdAt.localeCompare(left.createdAt))[0];
+    if (!release || rolloutBucket(edgeAgentId, release.version) >= release.rolloutPercentage) return undefined;
+    return structuredClone(release);
   }
 
   async listAccessibleCameras(

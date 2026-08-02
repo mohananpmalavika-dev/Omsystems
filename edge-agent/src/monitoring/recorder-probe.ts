@@ -4,12 +4,14 @@ export interface RecorderConfig {
   id: string; name: string; deviceType: "dvr" | "nvr";
   vendor: "hikvision" | "dahua" | "cp-plus" | "onvif" | "generic";
   model?: string | undefined; host: string; port: number; secure?: boolean | undefined;
+  rtspPort?: number | undefined;
   username?: string | undefined; password?: string | undefined;
   systemPath?: string | undefined; storagePath?: string | undefined;
   archiveRetention?: {
     lookbackDays: number;
     maxResults: number;
     continuityGapSeconds: number;
+    verifyPlayback?: boolean;
     channels: Array<{ cameraId: string; channel: number }>;
   } | undefined;
 }
@@ -30,6 +32,9 @@ export interface ArchiveRetentionEvidence {
   largestGapSeconds: number;
   searchStartedAt: string;
   reasonCodes: string[];
+  playbackVerified?: boolean;
+  playbackCodec?: string | null;
+  playbackError?: string;
 }
 
 export interface RecorderChannelHealth {
@@ -88,6 +93,24 @@ const RECORDING_EVIDENCE_WINDOW_MS = 5 * 60_000;
 
 export function looksLikeRecorder(identity: { model?: string | undefined; manufacturer?: string | undefined }, scopes: string[] = []) {
   return /(?:^|[\s_-])(dvr|nvr|xvr|uvr)(?:$|[\s_-])|video recorder/i.test(`${identity.manufacturer ?? ""} ${identity.model ?? ""} ${scopes.join(" ")}`);
+}
+
+export function recorderPlaybackUri(config: RecorderConfig, sourceChannel: number, newestPlayableAt: string) {
+  if (!config.username || !config.password) return undefined;
+  const newest = new Date(newestPlayableAt);
+  if (!Number.isFinite(newest.getTime())) return undefined;
+  const end = new Date(newest.getTime() + 5_000);
+  const start = new Date(newest.getTime() - 30_000);
+  const credentials = `${encodeURIComponent(config.username)}:${encodeURIComponent(config.password)}`;
+  const authority = `${credentials}@${config.host}:${config.rtspPort ?? 554}`;
+  if (config.vendor === "hikvision") {
+    const track = sourceChannel >= 100 ? sourceChannel : sourceChannel * 100 + 1;
+    return `rtsp://${authority}/Streaming/tracks/${track}?starttime=${compactUtc(start)}&endtime=${compactUtc(end)}`;
+  }
+  if (config.vendor === "dahua" || config.vendor === "cp-plus") {
+    return `rtsp://${authority}/cam/playback?channel=${sourceChannel}&subtype=0&starttime=${dahuaPlaybackTime(start)}&endtime=${dahuaPlaybackTime(end)}`;
+  }
+  return undefined;
 }
 
 export async function probeRecorder(config: RecorderConfig, timeoutMs: number, options: { includeArchive?: boolean } = {}): Promise<RecorderProbeResult> {
@@ -726,3 +749,5 @@ function key(text: string, name: string) { return text.match(new RegExp(`(?:^|\\
 function firstKey(text: string, names: string[]) { return names.map((name) => key(text, name)).find((value): value is string => Boolean(value)); }
 function number(value: string | undefined) { const parsed = Number(value); return Number.isFinite(parsed) ? parsed : null; }
 function classifyError(error: unknown) { const message = error instanceof Error ? error.message : String(error); return /timeout|abort/i.test(message) ? "recorder_probe_timeout" : "recorder_unreachable"; }
+function compactUtc(value: Date) { return value.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}Z$/, "Z"); }
+function dahuaPlaybackTime(value: Date) { return value.toISOString().replace(/[-:]/g, "_").replace("T", "_").replace(/\.\d{3}Z$/, ""); }

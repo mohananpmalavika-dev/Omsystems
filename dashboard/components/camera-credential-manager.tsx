@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Key, Loader2, Check, X, Eye, EyeOff, AlertCircle, Camera } from "lucide-react";
+import { CheckCircle2, Eye, EyeOff, KeyRound, Loader2, LockKeyhole, X } from "lucide-react";
 
 interface CameraCredentialManagerProps {
   branchId: string;
@@ -9,418 +9,151 @@ interface CameraCredentialManagerProps {
   onCredentialsUpdated?: () => void;
 }
 
-interface TestResult {
-  ip: string;
-  success: boolean;
-  message: string;
-}
+type Result = { kind: "success" | "error"; message: string; commandId?: string };
 
-export function CameraCredentialManager({ 
-  branchId, 
+export function CameraCredentialManager({
+  branchId,
   edgeAgentId,
-  onCredentialsUpdated 
+  onCredentialsUpdated,
 }: CameraCredentialManagerProps) {
-  const [isOpen, setIsOpen] = useState(false);
-  const [step, setStep] = useState<'input' | 'testing' | 'results'>('input');
-  const [username, setUsername] = useState('admin');
-  const [password, setPassword] = useState('');
+  const [open, setOpen] = useState(false);
+  const [username, setUsername] = useState("admin");
+  const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
-  const [testMode, setTestMode] = useState<'single' | 'auto'>('auto');
-  const [testIP, setTestIP] = useState('');
-  const [testing, setTesting] = useState(false);
-  const [testResults, setTestResults] = useState<TestResult[]>([]);
-  const [updating, setUpdating] = useState(false);
+  const [scope, setScope] = useState<"default" | "camera">("default");
+  const [cameraIp, setCameraIp] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [result, setResult] = useState<Result>();
 
-  const commonPasswords = [
-    { label: 'Empty (no password)', value: '' },
-    { label: 'admin', value: 'admin' },
-    { label: '12345', value: '12345' },
-    { label: '123456', value: '123456' },
-    { label: '888888', value: '888888' },
-  ];
-
-  const handleTestCredentials = async () => {
+  async function submit(event: React.FormEvent) {
+    event.preventDefault();
     if (!edgeAgentId) {
-      alert('No edge agent configured for this branch');
+      setResult({ kind: "error", message: "This branch does not have an enrolled gateway." });
       return;
     }
-
-    setTesting(true);
-    setStep('testing');
-    setTestResults([]);
-
+    setSaving(true);
+    setResult(undefined);
     try {
-      if (testMode === 'single' && testIP) {
-        // Test single camera
-        const response = await fetch('/api/edge-agents/test-camera-credentials', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+      const response = await fetch(
+        `/api/control/v1/branches/${encodeURIComponent(branchId)}/edge-agents/${encodeURIComponent(edgeAgentId)}/camera-credentials`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          credentials: "include",
           body: JSON.stringify({
-            edgeAgentId,
-            cameraIP: testIP,
-            username,
+            username: username.trim(),
             password,
+            ...(scope === "camera" ? { cameraIp: cameraIp.trim() } : {}),
           }),
-        });
-
-        const result = await response.json();
-        setTestResults([{
-          ip: testIP,
-          success: result.success,
-          message: result.message || (result.success ? 'Authentication successful' : 'Authentication failed'),
-        }]);
-      } else {
-        // Auto-test with common passwords
-        const results: TestResult[] = [];
-        
-        for (const pwd of commonPasswords) {
-          const response = await fetch('/api/edge-agents/test-camera-credentials', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              edgeAgentId,
-              cameraIP: testIP || undefined, // Will test all discovered cameras if empty
-              username,
-              password: pwd.value,
-            }),
-          });
-
-          const result = await response.json();
-          
-          if (result.success) {
-            setPassword(pwd.value);
-            results.push({
-              ip: testIP || 'all cameras',
-              success: true,
-              message: `Success with password: ${pwd.label}`,
-            });
-            break;
-          } else {
-            results.push({
-              ip: testIP || 'all cameras',
-              success: false,
-              message: `Failed with password: ${pwd.label}`,
-            });
-          }
-        }
-        
-        setTestResults(results);
-      }
-      
-      setStep('results');
-    } catch (error) {
-      console.error('Test failed:', error);
-      setTestResults([{
-        ip: testIP || 'unknown',
-        success: false,
-        message: 'Test failed: ' + (error instanceof Error ? error.message : String(error)),
-      }]);
-      setStep('results');
-    } finally {
-      setTesting(false);
-    }
-  };
-
-  const handleUpdateCredentials = async () => {
-    if (!edgeAgentId) {
-      alert('No edge agent configured');
-      return;
-    }
-
-    if (!username || username.trim() === '') {
-      alert('Please enter a username');
-      return;
-    }
-
-    setUpdating(true);
-
-    try {
-      const response = await fetch('/api/edge-agents/update-camera-credentials', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          edgeAgentId,
-          username,
-          password,
-        }),
+        },
+      );
+      const body = await response.json() as { message?: string; error?: string; commandId?: string };
+      if (!response.ok) throw new Error(body.message ?? body.error ?? "Unable to queue the credential update");
+      setPassword("");
+      setResult({
+        kind: "success",
+        commandId: body.commandId,
+        message: "Encrypted update queued. The gateway will apply it locally and rediscover cameras.",
       });
-
-      if (!response.ok) {
-        throw new Error('Failed to update credentials');
-      }
-
-      const result = await response.json();
-      
-      alert('Camera credentials updated successfully!\n\nThe edge agent will restart and reconnect to cameras within 1 minute.');
-      setIsOpen(false);
-      setStep('input');
-      
-      if (onCredentialsUpdated) {
-        onCredentialsUpdated();
-      }
+      onCredentialsUpdated?.();
     } catch (error) {
-      console.error('Update failed:', error);
-      alert('Failed to update credentials: ' + (error instanceof Error ? error.message : String(error)));
+      setResult({ kind: "error", message: error instanceof Error ? error.message : "Credential update failed" });
     } finally {
-      setUpdating(false);
+      setSaving(false);
     }
-  };
+  }
 
-  const successfulTest = testResults.find(r => r.success);
+  function close() {
+    if (saving) return;
+    setOpen(false);
+    setPassword("");
+    setResult(undefined);
+  }
 
   return (
     <>
       <button
-        onClick={() => setIsOpen(true)}
-        className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+        type="button"
+        onClick={() => setOpen(true)}
+        className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+        disabled={!edgeAgentId}
       >
-        <Key size={18} />
-        <span>Update Camera Credentials</span>
+        <KeyRound size={17} />
+        Camera credentials
       </button>
 
-      {isOpen && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-            {/* Header */}
-            <div className="bg-gradient-to-r from-blue-600 to-blue-700 text-white p-6 rounded-t-xl">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <Camera size={24} />
-                  <h2 className="text-2xl font-bold">Camera Credential Manager</h2>
+      {open && (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/60 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="camera-credential-title">
+          <form onSubmit={submit} className="w-full max-w-xl overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
+            <header className="flex items-start justify-between gap-4 border-b border-slate-200 bg-slate-50 px-6 py-5">
+              <div className="flex gap-3">
+                <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-blue-600 text-white"><LockKeyhole size={20} /></span>
+                <div>
+                  <h2 id="camera-credential-title" className="text-lg font-bold text-slate-950">Secure camera credentials</h2>
+                  <p className="mt-1 text-sm text-slate-500">Deliver credentials directly to the selected branch gateway.</p>
                 </div>
-                <button
-                  onClick={() => setIsOpen(false)}
-                  className="text-white hover:bg-white hover:bg-opacity-20 rounded-lg p-2 transition-colors"
-                >
-                  <X size={20} />
-                </button>
               </div>
-              <p className="text-blue-100 mt-2">
-                Update camera login credentials for all cameras on this branch
-              </p>
-            </div>
+              <button type="button" onClick={close} aria-label="Close" className="rounded-lg p-2 text-slate-500 hover:bg-slate-200 hover:text-slate-900"><X size={18} /></button>
+            </header>
 
-            <div className="p-6">
-              {step === 'input' && (
-                <div className="space-y-6">
-                  {/* Username Input */}
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">
-                      Camera Username
-                    </label>
-                    <input
-                      type="text"
-                      value={username}
-                      onChange={(e) => setUsername(e.target.value)}
-                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      placeholder="admin"
-                    />
-                    <p className="text-sm text-gray-500 mt-1">Usually "admin" for most cameras</p>
-                  </div>
+            <div className="space-y-5 px-6 py-6">
+              <div className="rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm leading-5 text-blue-900">
+                The password is encrypted for this gateway before it enters the command queue. Sentinel Grid never stores a readable copy in the cloud.
+              </div>
 
-                  {/* Password Input */}
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">
-                      Camera Password
-                    </label>
-                    <div className="relative">
-                      <input
-                        type={showPassword ? 'text' : 'password'}
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                        className="w-full px-4 py-3 pr-12 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        placeholder="Enter password"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowPassword(!showPassword)}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
-                      >
-                        {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Quick Password Buttons */}
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">
-                      Common Passwords (click to use)
-                    </label>
-                    <div className="flex flex-wrap gap-2">
-                      {commonPasswords.map((pwd) => (
-                        <button
-                          key={pwd.value}
-                          onClick={() => setPassword(pwd.value)}
-                          className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm transition-colors"
-                        >
-                          {pwd.label}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Test Mode Selection */}
-                  <div className="border-t pt-6">
-                    <label className="block text-sm font-semibold text-gray-700 mb-3">
-                      Test Before Applying (Optional)
-                    </label>
-                    <div className="space-y-3">
-                      <label className="flex items-center gap-3 cursor-pointer">
-                        <input
-                          type="radio"
-                          checked={testMode === 'auto'}
-                          onChange={() => setTestMode('auto')}
-                          className="w-4 h-4"
-                        />
-                        <div>
-                          <div className="font-medium">Auto-test common passwords</div>
-                          <div className="text-sm text-gray-500">Automatically try common passwords</div>
-                        </div>
-                      </label>
-                      <label className="flex items-center gap-3 cursor-pointer">
-                        <input
-                          type="radio"
-                          checked={testMode === 'single'}
-                          onChange={() => setTestMode('single')}
-                          className="w-4 h-4"
-                        />
-                        <div>
-                          <div className="font-medium">Test specific camera</div>
-                          <div className="text-sm text-gray-500">Test credentials on one camera first</div>
-                        </div>
-                      </label>
-                    </div>
-
-                    {testMode === 'single' && (
-                      <input
-                        type="text"
-                        value={testIP}
-                        onChange={(e) => setTestIP(e.target.value)}
-                        className="mt-3 w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                        placeholder="e.g., 192.168.29.171"
-                      />
-                    )}
-                  </div>
-
-                  {/* Action Buttons */}
-                  <div className="flex gap-3 pt-4">
-                    <button
-                      onClick={handleTestCredentials}
-                      disabled={testing || !username}
-                      className="flex-1 flex items-center justify-center gap-2 px-6 py-3 bg-gray-600 text-white rounded-lg hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                    >
-                      {testing ? (
-                        <>
-                          <Loader2 size={18} className="animate-spin" />
-                          <span>Testing...</span>
-                        </>
-                      ) : (
-                        <>
-                          <AlertCircle size={18} />
-                          <span>Test Credentials</span>
-                        </>
-                      )}
-                    </button>
-                    <button
-                      onClick={handleUpdateCredentials}
-                      disabled={updating || !username}
-                      className="flex-1 flex items-center justify-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                    >
-                      {updating ? (
-                        <>
-                          <Loader2 size={18} className="animate-spin" />
-                          <span>Updating...</span>
-                        </>
-                      ) : (
-                        <>
-                          <Check size={18} />
-                          <span>Apply Credentials</span>
-                        </>
-                      )}
-                    </button>
-                  </div>
+              <fieldset>
+                <legend className="mb-2 text-sm font-semibold text-slate-800">Apply to</legend>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <label className={`cursor-pointer rounded-xl border p-3 ${scope === "default" ? "border-blue-500 bg-blue-50" : "border-slate-200"}`}>
+                    <input className="mr-2" type="radio" checked={scope === "default"} onChange={() => setScope("default")} />
+                    <span className="text-sm font-semibold text-slate-900">Branch default</span>
+                    <span className="mt-1 block pl-5 text-xs text-slate-500">Used for cameras without a specific login.</span>
+                  </label>
+                  <label className={`cursor-pointer rounded-xl border p-3 ${scope === "camera" ? "border-blue-500 bg-blue-50" : "border-slate-200"}`}>
+                    <input className="mr-2" type="radio" checked={scope === "camera"} onChange={() => setScope("camera")} />
+                    <span className="text-sm font-semibold text-slate-900">One camera / recorder</span>
+                    <span className="mt-1 block pl-5 text-xs text-slate-500">Overrides the default for one private IP.</span>
+                  </label>
                 </div>
+              </fieldset>
+
+              {scope === "camera" && (
+                <label className="block text-sm font-semibold text-slate-800">
+                  Private IP address
+                  <input required inputMode="decimal" value={cameraIp} onChange={(event) => setCameraIp(event.target.value)} placeholder="192.168.1.20" className="mt-2 w-full rounded-lg border border-slate-300 px-3 py-2.5 font-normal outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100" />
+                </label>
               )}
 
-              {step === 'testing' && (
-                <div className="text-center py-12">
-                  <Loader2 size={48} className="animate-spin mx-auto mb-4 text-blue-600" />
-                  <p className="text-lg font-medium text-gray-700">Testing credentials...</p>
-                  <p className="text-sm text-gray-500 mt-2">This may take a few moments</p>
-                </div>
-              )}
+              <div className="grid gap-4 sm:grid-cols-2">
+                <label className="block text-sm font-semibold text-slate-800">
+                  Username
+                  <input required maxLength={128} autoComplete="off" value={username} onChange={(event) => setUsername(event.target.value)} className="mt-2 w-full rounded-lg border border-slate-300 px-3 py-2.5 font-normal outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100" />
+                </label>
+                <label className="block text-sm font-semibold text-slate-800">
+                  Password
+                  <span className="relative mt-2 block">
+                    <input required maxLength={1024} type={showPassword ? "text" : "password"} autoComplete="new-password" value={password} onChange={(event) => setPassword(event.target.value)} className="w-full rounded-lg border border-slate-300 px-3 py-2.5 pr-10 font-normal outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100" />
+                    <button type="button" onClick={() => setShowPassword((value) => !value)} aria-label={showPassword ? "Hide password" : "Show password"} className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-slate-500 hover:bg-slate-100">{showPassword ? <EyeOff size={17} /> : <Eye size={17} />}</button>
+                  </span>
+                </label>
+              </div>
 
-              {step === 'results' && (
-                <div className="space-y-6">
-                  <h3 className="text-lg font-bold text-gray-800">Test Results</h3>
-                  
-                  <div className="space-y-2">
-                    {testResults.map((result, index) => (
-                      <div
-                        key={index}
-                        className={`flex items-start gap-3 p-4 rounded-lg ${
-                          result.success ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'
-                        }`}
-                      >
-                        {result.success ? (
-                          <Check size={20} className="text-green-600 mt-0.5 flex-shrink-0" />
-                        ) : (
-                          <X size={20} className="text-red-600 mt-0.5 flex-shrink-0" />
-                        )}
-                        <div className="flex-1">
-                          <div className="font-medium">{result.ip}</div>
-                          <div className="text-sm text-gray-600">{result.message}</div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-
-                  {successfulTest && (
-                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                      <div className="flex items-start gap-3">
-                        <AlertCircle size={20} className="text-blue-600 mt-0.5" />
-                        <div>
-                          <p className="font-medium text-blue-900">Password Found!</p>
-                          <p className="text-sm text-blue-700 mt-1">
-                            Username: <span className="font-mono">{username}</span><br />
-                            Password: <span className="font-mono">{password || '(empty)'}</span>
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  <div className="flex gap-3">
-                    <button
-                      onClick={() => setStep('input')}
-                      className="flex-1 px-6 py-3 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors"
-                    >
-                      Try Different Password
-                    </button>
-                    {successfulTest && (
-                      <button
-                        onClick={handleUpdateCredentials}
-                        disabled={updating}
-                        className="flex-1 flex items-center justify-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
-                      >
-                        {updating ? (
-                          <>
-                            <Loader2 size={18} className="animate-spin" />
-                            <span>Updating...</span>
-                          </>
-                        ) : (
-                          <>
-                            <Check size={18} />
-                            <span>Apply This Password</span>
-                          </>
-                        )}
-                      </button>
-                    )}
-                  </div>
+              {result && (
+                <div className={`flex gap-2 rounded-xl border p-3 text-sm ${result.kind === "success" ? "border-emerald-200 bg-emerald-50 text-emerald-900" : "border-red-200 bg-red-50 text-red-900"}`}>
+                  {result.kind === "success" && <CheckCircle2 className="mt-0.5 shrink-0" size={17} />}
+                  <span>{result.message}{result.commandId ? ` Command ${result.commandId.slice(0, 8)} is being tracked in gateway history.` : ""}</span>
                 </div>
               )}
             </div>
-          </div>
+
+            <footer className="flex justify-end gap-3 border-t border-slate-200 bg-slate-50 px-6 py-4">
+              <button type="button" onClick={close} className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-white">Close</button>
+              <button type="submit" disabled={saving || !username.trim() || !password || (scope === "camera" && !cameraIp.trim())} className="inline-flex min-w-36 items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50">
+                {saving ? <Loader2 className="animate-spin" size={17} /> : <LockKeyhole size={17} />}
+                {saving ? "Encrypting…" : "Encrypt & queue"}
+              </button>
+            </footer>
+          </form>
         </div>
       )}
     </>

@@ -32,6 +32,12 @@ const configSchema = z.object({
     (value) => value === "" ? undefined : value,
     z.string().min(32).optional(),
   ),
+  EDGE_LEGACY_SHARED_KEY_ENABLED: z.enum(["true", "false"]).default("false")
+    .transform((value) => value === "true"),
+  EDGE_UPDATE_SIGNING_PRIVATE_KEY: z.preprocess(
+    (value) => value === "" ? undefined : value,
+    z.string().min(64).optional(),
+  ),
   CONTROL_PLANE_PUBLIC_URL: z.preprocess(
     (value) => value === "" ? undefined : value,
     z.string().url().optional(),
@@ -62,7 +68,7 @@ export function loadConfig(
   environment: NodeJS.ProcessEnv = process.env,
 ): AppConfig {
   const expanded = { ...environment };
-  for (const name of ["DATABASE_URL", "MEDIA_GATEWAY_SHARED_KEY", "EDGE_BRIDGE_SHARED_KEY", "RECORDING_ENGINE_SHARED_KEY", "ANALYTICS_ENGINE_SHARED_KEY", "FEDERATION_SHARED_KEY", "REPORT_DOWNLOAD_SECRET", "REPORT_WORKER_SHARED_KEY"] as const) {
+  for (const name of ["DATABASE_URL", "MEDIA_GATEWAY_SHARED_KEY", "EDGE_BRIDGE_SHARED_KEY", "EDGE_UPDATE_SIGNING_PRIVATE_KEY", "RECORDING_ENGINE_SHARED_KEY", "ANALYTICS_ENGINE_SHARED_KEY", "FEDERATION_SHARED_KEY", "REPORT_DOWNLOAD_SECRET", "REPORT_WORKER_SHARED_KEY"] as const) {
     const file = environment[`${name}_FILE`];
     if (file && environment[name]) throw new Error(`${name} and ${name}_FILE cannot both be set`);
     if (file) expanded[name] = readFileSync(file, "utf8").trim();

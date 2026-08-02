@@ -9,6 +9,7 @@ import {
   Download,
   Network,
   Plus,
+  RefreshCw,
   Router,
   Search,
   X,
@@ -100,6 +101,15 @@ type AutoProvisionResult = {
   };
 };
 
+type GatewayActivation = {
+  id: string;
+  branchId: string;
+  agentName: string;
+  activationCode: string;
+  expiresAt: string;
+  bootstrap: { controlPlaneUrl: string; message: string };
+};
+
 const emptyInventoryForm: DeviceInventoryForm = {
   deviceId: "",
   tenant: "tenant-demo",
@@ -161,7 +171,7 @@ export function DeviceManager() {
   const [previewNameDraft, setPreviewNameDraft] = useState("");
   const [rejectReason, setRejectReason] = useState("");
   const [bulkCsv, setBulkCsv] = useState("");
-  const [provisionedGateway, setProvisionedGateway] = useState<EdgeAgent>();
+  const [gatewayActivation, setGatewayActivation] = useState<GatewayActivation>();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [scanning, setScanning] = useState(false);
@@ -218,21 +228,21 @@ export function DeviceManager() {
   }, [inventoryRecords, inventoryDeviceTypeFilter, inventoryHealthFilter, inventoryLifecycleFilter, inventorySearch, inventorySort]);
   const pendingReviewCount = discoveryQueueItems.filter((item) => item.reviewStatus !== "approved").length;
   const approvedReviewCount = discoveryQueueItems.filter((item) => item.reviewStatus === "approved").length;
-  const setupText = useMemo(() => provisionedGateway
+  const setupText = useMemo(() => gatewayActivation
     ? [
-        "CONTROL_PLANE_URL=<provided-by-platform-admin>",
-        `BRANCH_ID=${provisionedGateway.branchId}`,
-        `EDGE_AGENT_ID=${provisionedGateway.id}`,
-        `EDGE_AGENT_NAME=${provisionedGateway.name}`,
-        "EDGE_BRIDGE_SHARED_KEY=<enrollment-secret>",
+        `CONTROL_PLANE_URL=${gatewayActivation.bootstrap.controlPlaneUrl || "<provided-by-platform-admin>"}`,
+        `EDGE_ACTIVATION_CODE=${gatewayActivation.activationCode}`,
+        `EDGE_AGENT_NAME=${gatewayActivation.agentName}`,
         "LIVE_MEDIA_ENABLED=true",
         "MEDIA_RUNTIME_MANAGED=false",
         "MEDIA_TUNNEL_MODE=disabled",
         "PUBLIC_MEDIA_GATEWAY_URL=https://<branch-media-tunnel-host>",
         "CLOUDFLARED_TUNNEL_TOKEN=<named-tunnel-token>",
         "STREAM_SECRET_STORE_PATH=./data/stream-secrets.json",
+        "EDGE_IDENTITY_PATH=./data/device-identity.enc",
+        "EDGE_OFFLINE_OUTBOX_PATH=./data/offline-outbox.enc",
       ].join("\n")
-    : "", [provisionedGateway]);
+    : "", [gatewayActivation]);
 
   function downloadTextFile(filename: string, content: string) {
     const blob = new Blob([content], { type: "text/plain" });
@@ -244,27 +254,6 @@ export function DeviceManager() {
     anchor.click();
     document.body.removeChild(anchor);
     URL.revokeObjectURL(url);
-  }
-
-  function downloadEdgeAgentPackage(platform: "windows" | "linux") {
-    if (!activeBranch) return;
-
-    const edgeAgent = provisionedGateway?.branchId === activeBranch.id
-      ? provisionedGateway
-      : gateways[0];
-    if (!edgeAgent) {
-      window.alert("No branch gateway is registered yet. Register a gateway first or select a branch with an existing gateway.");
-      return;
-    }
-
-    const href = `/api/control/v1/branches/${encodeURIComponent(activeBranch.id)}/edge-agents/${encodeURIComponent(edgeAgent.id)}/package?platform=${encodeURIComponent(platform)}`;
-    const anchor = document.createElement("a");
-    anchor.href = href;
-    anchor.target = "_blank";
-    anchor.rel = "noopener noreferrer";
-    document.body.appendChild(anchor);
-    anchor.click();
-    document.body.removeChild(anchor);
   }
 
   function downloadGatewayConfiguration() {
@@ -289,11 +278,11 @@ export function DeviceManager() {
       setGateways([]);
       setCameras([]);
       setInventoryRecords([]);
-      setProvisionedGateway(undefined);
+      setGatewayActivation(undefined);
       return;
     }
 
-    setProvisionedGateway((gateway) =>
+    setGatewayActivation((gateway) =>
       gateway?.branchId === selectedBranch ? gateway : undefined,
     );
     setInventoryForm((form) => ({ ...form, branch: selectedBranch }));
@@ -351,7 +340,7 @@ export function DeviceManager() {
   async function scanNetwork() {
     if (!selectedBranch) return;
     if (gateways.length === 0) {
-      setProvisionedGateway(undefined);
+      setGatewayActivation(undefined);
       setShowGatewayForm(true);
       setNotice("Enroll the Branch Gateway first; discovery runs inside the branch camera network.");
       return;
@@ -426,7 +415,7 @@ export function DeviceManager() {
   async function autoDiscoverAndProvision() {
     if (!selectedBranch) return;
     if (gateways.length === 0) {
-      setProvisionedGateway(undefined);
+      setGatewayActivation(undefined);
       setShowGatewayForm(true);
       setNotice("Enroll the Branch Gateway first; discovery runs inside the branch camera network.");
       return;
@@ -582,15 +571,32 @@ export function DeviceManager() {
     setSaving(true);
     setError(undefined);
     try {
-      const gateway = await cameraInventoryApi.registerGateway(selectedBranch, {
-        name: gatewayName,
-        version: "0.1.0",
-      }) as EdgeAgent;
-      setProvisionedGateway(gateway);
+      const activation = await cameraInventoryApi.createGatewayActivation(selectedBranch, {
+        agentName: gatewayName,
+        ttlMinutes: 60,
+      });
+      setGatewayActivation(activation);
       setGatewayName("");
-      await refreshBranch(selectedBranch);
+      setNotice("One-time activation created. It expires in 60 minutes and is consumed automatically on first boot.");
     } catch (reason) {
       setError(messageOf(reason, "Gateway registration failed."));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function issueGatewayCommand(
+    gateway: EdgeAgent,
+    type: "rediscover" | "restart-media" | "collect-logs",
+  ) {
+    if (!selectedBranch) return;
+    setSaving(true);
+    setError(undefined);
+    try {
+      const command = await cameraInventoryApi.sendGatewayCommand(selectedBranch, gateway.id, { type });
+      setNotice(`${type.replaceAll("-", " ")} queued for ${gateway.name}. Command ${String(command.id).slice(0, 8)} is fully audited.`);
+    } catch (reason) {
+      setError(messageOf(reason, "Gateway command could not be queued."));
     } finally {
       setSaving(false);
     }
@@ -715,7 +721,7 @@ export function DeviceManager() {
         </div>
         <div className="device-toolbar-actions">
           <button className="secondary-button" onClick={() => {
-            setProvisionedGateway(undefined);
+            setGatewayActivation(undefined);
             setShowGatewayForm(true);
           }} disabled={!selectedBranch}>
             <Router size={15} /> Enroll Branch Gateway
@@ -774,6 +780,11 @@ export function DeviceManager() {
                      gateway.status === "offline" ? "Offline · central action required" :
                      "Awaiting first appliance connection"} · v{gateway.version}
                   </small>
+                </div>
+                <div className="gateway-actions" aria-label={`Remote actions for ${gateway.name}`}>
+                  <button type="button" title="Rediscover cameras and recorders" disabled={saving || gateway.status !== "online"} onClick={() => void issueGatewayCommand(gateway, "rediscover")}><Network size={13}/></button>
+                  <button type="button" title="Collect redacted diagnostics" disabled={saving || gateway.status !== "online"} onClick={() => void issueGatewayCommand(gateway, "collect-logs")}><Activity size={13}/></button>
+                  <button type="button" title="Restart the branch media service" disabled={saving || gateway.status !== "online"} onClick={() => void issueGatewayCommand(gateway, "restart-media")}><RefreshCw size={13}/></button>
                 </div>
                 <code title={gateway.id}>{gateway.id.slice(0, 8)}</code>
               </article>
@@ -1021,7 +1032,7 @@ export function DeviceManager() {
         <div className="modal-overlay">
           <div className="modal-container">
             <div className="modal-header"><h2>Enroll Branch Gateway</h2><button className="icon-button" onClick={() => setShowGatewayForm(false)}><X size={20} /></button></div>
-            {!provisionedGateway ? (
+            {!gatewayActivation ? (
               <form className="modal-form" onSubmit={registerGateway}>
                 <div className="form-info-banner"><Network size={16} />Assign a managed Sentinel appliance to {activeBranch?.name}. It auto-starts after power loss; no laptop or operator PC is required.</div>
                 <div className="form-group"><label htmlFor="gatewayName">Gateway name <span className="required">*</span></label><input id="gatewayName" value={gatewayName} onChange={(event) => setGatewayName(event.target.value)} minLength={2} maxLength={120} required placeholder={`${activeBranch?.name ?? "Branch"} Gateway`} /></div>
@@ -1029,14 +1040,12 @@ export function DeviceManager() {
               </form>
             ) : (
               <div className="modal-body">
-                <div className="device-message success"><CheckCircle2 size={16} />Branch Gateway enrolled successfully.</div>
-                <p className="setup-description">The central deployment team uses this branch-specific configuration while preparing the appliance. Branch staff only connect power/UPS and camera-network Ethernet.</p>
+                <div className="device-message success"><CheckCircle2 size={16} />One-time gateway activation is ready.</div>
+                <p className="setup-description">This code expires at {new Date(gatewayActivation.expiresAt).toLocaleString()} and is consumed on first boot. The appliance then receives its own revocable credential and stores it encrypted. Branch staff only connect power/UPS and camera-network Ethernet.</p>
                 <pre className="gateway-config">{setupText}</pre>
                 <div className="setup-actions">
                   <button className="secondary-button" onClick={() => void copySetup()}><Copy size={14} />Copy configuration</button>
                   <button className="secondary-button" onClick={downloadGatewayConfiguration}><Download size={14} />Download factory configuration</button>
-                  <button className="secondary-button" onClick={() => void downloadEdgeAgentPackage("linux")}><Download size={14} />Download appliance agent</button>
-                  <button className="secondary-button" onClick={() => void downloadEdgeAgentPackage("windows")}><Download size={14} />Legacy Windows agent</button>
                 </div>
                 <div className="modal-actions"><button className="primary-button" onClick={() => setShowGatewayForm(false)}>Done</button></div>
               </div>

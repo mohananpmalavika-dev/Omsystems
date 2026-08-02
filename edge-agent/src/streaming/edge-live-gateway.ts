@@ -26,7 +26,7 @@ interface LiveGatewayOptions {
   consumer: LiveSessionConsumer;
   router: MediaRouter;
   resolveSecret(reference: string): string | undefined;
-  edgeBridgeSharedKey: string;
+  edgeBridgeSharedKey?: string;
   publicBaseUrl: () => string;
   mediaMtxHlsUrl: string;
   accessTtlMs: number;
@@ -74,7 +74,7 @@ export class EdgeLiveGateway {
       return this.proxyHls(request, response);
     }
     if (request.method === "POST" && url.pathname === "/v1/live/start") {
-      if (!secureEqualHeader(request.headers["x-edge-bridge-key"], this.options.edgeBridgeSharedKey)) {
+      if (this.options.edgeBridgeSharedKey && !secureEqualHeader(request.headers["x-edge-bridge-key"], this.options.edgeBridgeSharedKey)) {
         return sendJson(response, 401, { error: "invalid_bridge_identity" });
       }
       const body = await readJsonBody(request);
@@ -164,7 +164,7 @@ export async function startEdgeMediaRuntime(input: {
     consumer: { consume: (token) => input.gateway.consumeLiveSession(input.agentId, token) },
     router,
     resolveSecret: (reference) => input.secrets.get(reference),
-    edgeBridgeSharedKey: config.EDGE_BRIDGE_SHARED_KEY!,
+    ...(config.EDGE_BRIDGE_SHARED_KEY ? { edgeBridgeSharedKey: config.EDGE_BRIDGE_SHARED_KEY } : {}),
     publicBaseUrl: () => resolvedPublicUrl,
     mediaMtxHlsUrl: config.MEDIAMTX_HLS_URL,
     accessTtlMs: config.MEDIA_ACCESS_TTL_SECONDS * 1_000,

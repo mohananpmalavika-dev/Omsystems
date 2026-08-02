@@ -25,6 +25,10 @@ const app = await buildApp({
   ...(config.EDGE_BRIDGE_SHARED_KEY
     ? { edgeBridgeSharedKey: config.EDGE_BRIDGE_SHARED_KEY }
     : {}),
+  allowLegacyEdgeBridgeKey: config.EDGE_LEGACY_SHARED_KEY_ENABLED,
+  ...(config.EDGE_UPDATE_SIGNING_PRIVATE_KEY
+    ? { edgeUpdateSigningPrivateKey: config.EDGE_UPDATE_SIGNING_PRIVATE_KEY }
+    : {}),
   ...(config.ANALYTICS_ENGINE_SHARED_KEY
     ? { analyticsEngineSharedKey: config.ANALYTICS_ENGINE_SHARED_KEY }
     : {}),

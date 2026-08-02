@@ -74,6 +74,9 @@ const recorderArchiveSchema = z.object({
     gapCount: z.number().int().min(0).default(0),
     largestGapSeconds: z.number().min(0).default(0),
     searchStartedAt: z.string().datetime(),
+    playbackVerified: z.boolean().optional(),
+    playbackCodec: z.string().max(80).nullable().optional(),
+    playbackError: z.string().max(300).optional(),
     reasonCodes: z.array(z.string().min(1).max(100)).max(30).default([]),
   })).min(1).max(128).superRefine((entries, context) => {
     const cameras = new Set<string>();
@@ -274,6 +277,9 @@ export async function registerOperationalHealthRoutes(
           coverageComplete: entry.coverageComplete, continuityGapSeconds: entry.continuityGapSeconds,
           gapCount: entry.gapCount, largestGapSeconds: entry.largestGapSeconds,
           searchStartedAt: entry.searchStartedAt,
+          playbackVerified: entry.playbackVerified ?? null,
+          playbackCodec: entry.playbackCodec ?? null,
+          playbackError: entry.playbackError ?? null,
         },
         reasonCodes: entry.reasonCodes,
       };

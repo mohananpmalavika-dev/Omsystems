@@ -8,6 +8,7 @@ import { createHash } from "node:crypto";
 import { measureCameraPacketLoss } from "./camera-packet-loss.js";
 import { captureRtspLumaFrame, measureRtspStream } from "../streaming/rtsp-probe.js";
 import { logger } from "../utils/logger.js";
+import type { TelemetryPayload } from "../registration/gateway-client.js";
 
 export interface CameraHeartbeatData {
   cameraId: string;
@@ -73,7 +74,8 @@ export class CameraHeartbeatService {
     private readonly developmentUserId: string | undefined,
     private readonly ffprobePath = "ffprobe",
     private readonly ffmpegPath = "ffmpeg",
-    private readonly edgeBridgeSharedKey?: string,
+    private readonly edgeAuthCredential?: string,
+    private readonly telemetrySender?: (payload: TelemetryPayload) => Promise<unknown>,
   ) {}
 
   replaceCameras(cameras: CameraConfig[]): void {
@@ -193,38 +195,45 @@ export class CameraHeartbeatService {
 
   private async sendToPlatform(cameraId: string, data: CameraHeartbeatData): Promise<void> {
     const observedAt = new Date().toISOString();
+    const payload: TelemetryPayload = {
+      branchId: this.branchId,
+      edgeAgentId: this.edgeAgentId,
+      deviceType: "camera",
+      deviceId: cameraId,
+      observedAt,
+      source: "rtsp",
+      quality: data.quality,
+      idempotencyKey: `${this.edgeAgentId}:camera:${cameraId}:${observedAt}`,
+      metrics: {
+        status: data.status,
+        responseTimeMs: data.responseTimeMs,
+        streamActive: data.streamActive,
+        videoLoss: data.videoLoss,
+        width: data.currentResolution?.width ?? null,
+        height: data.currentResolution?.height ?? null,
+        codec: data.codec ?? null,
+        fps: data.currentFps ?? null,
+        bitrateKbps: data.currentBitrate ?? null,
+        packetLossPercent: data.packetLoss ?? null,
+        imageFrozen: data.imageFrozen ?? null,
+        blackScreen: data.blackScreen ?? null,
+      },
+      reasonCodes: data.reasonCodes,
+    };
+    if (this.telemetrySender) {
+      await this.telemetrySender(payload);
+      return;
+    }
     const response = await fetch(`${this.apiEndpoint}/v1/edge-agents/${encodeURIComponent(this.edgeAgentId)}/telemetry`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         ...(this.developmentUserId ? { "x-user-id": this.developmentUserId } : {}),
-        ...(this.edgeBridgeSharedKey ? { "x-edge-bridge-key": this.edgeBridgeSharedKey } : {}),
+        ...(this.edgeAuthCredential?.startsWith("sggw_")
+          ? { "x-edge-agent-token": this.edgeAuthCredential }
+          : this.edgeAuthCredential ? { "x-edge-bridge-key": this.edgeAuthCredential } : {}),
       },
-      body: JSON.stringify({
-        branchId: this.branchId,
-        edgeAgentId: this.edgeAgentId,
-        deviceType: "camera",
-        deviceId: cameraId,
-        observedAt,
-        source: "rtsp",
-        quality: data.quality,
-        idempotencyKey: `${this.edgeAgentId}:camera:${cameraId}:${observedAt}`,
-        metrics: {
-          status: data.status,
-          responseTimeMs: data.responseTimeMs,
-          streamActive: data.streamActive,
-          videoLoss: data.videoLoss,
-          width: data.currentResolution?.width ?? null,
-          height: data.currentResolution?.height ?? null,
-          codec: data.codec ?? null,
-          fps: data.currentFps ?? null,
-          bitrateKbps: data.currentBitrate ?? null,
-          packetLossPercent: data.packetLoss ?? null,
-          imageFrozen: data.imageFrozen ?? null,
-          blackScreen: data.blackScreen ?? null,
-        },
-        reasonCodes: data.reasonCodes,
-      }),
+      body: JSON.stringify(payload),
     });
     if (!response.ok) throw new Error(`HTTP ${response.status}: ${await response.text()}`);
   }
@@ -244,11 +253,12 @@ export function initializeCameraHeartbeat(
   developmentUserId: string | undefined,
   ffprobePath = "ffprobe",
   ffmpegPath = "ffmpeg",
-  edgeBridgeSharedKey?: string,
+  edgeAuthCredential?: string,
+  telemetrySender?: (payload: TelemetryPayload) => Promise<unknown>,
 ): CameraHeartbeatService {
   if (!heartbeatService) {
     heartbeatService = new CameraHeartbeatService(
-      apiEndpoint, branchId, edgeAgentId, developmentUserId, ffprobePath, ffmpegPath, edgeBridgeSharedKey,
+      apiEndpoint, branchId, edgeAgentId, developmentUserId, ffprobePath, ffmpegPath, edgeAuthCredential, telemetrySender,
     );
   }
   return heartbeatService;

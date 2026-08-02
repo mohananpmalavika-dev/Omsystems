@@ -17,6 +17,7 @@ import type {
 import { AuditRepository } from "./audit-repository.js";
 import { CameraRepository } from "./camera-repository.js";
 import { EdgeAgentRepository } from "./edge-agent-repository.js";
+import { EdgeOperationsRepository } from "./edge-operations-repository.js";
 import { InfrastructureRepository } from "./infrastructure-repository.js";
 import { camelRow, camelRows } from "./infrastructure-repository.js";
 import { ResourceRepository } from "./resource-repository.js";
@@ -50,6 +51,7 @@ export class PostgresStore
   private readonly resources: ResourceRepository;
   private readonly cameras: CameraRepository;
   private readonly agents: EdgeAgentRepository;
+  private readonly edgeOperations: EdgeOperationsRepository;
   private readonly audits: AuditRepository;
   private readonly recordings: RecordingRepository;
   private readonly liveOperations: LiveOperationsRepository;
@@ -74,6 +76,7 @@ export class PostgresStore
     this.resources = new ResourceRepository(pool);
     this.cameras = new CameraRepository(pool);
     this.agents = new EdgeAgentRepository(pool);
+    this.edgeOperations = new EdgeOperationsRepository(pool);
     this.audits = new AuditRepository(pool);
     this.recordings = new RecordingRepository(pool);
     this.liveOperations = new LiveOperationsRepository(pool);
@@ -228,6 +231,39 @@ export class PostgresStore
   }
   async heartbeatEdgeAgent(id: string, version: string, publicMediaUrl?: string) {
     return this.agents.heartbeat(id, version, publicMediaUrl);
+  }
+  async createEdgeActivation(input: Parameters<EdgeOperationsRepository["createActivation"]>[0]) {
+    return this.edgeOperations.createActivation(input);
+  }
+  async activateEdgeAgent(input: Parameters<EdgeOperationsRepository["activate"]>[0]) {
+    return this.edgeOperations.activate(input);
+  }
+  async verifyEdgeAgentCredential(id: string, credentialHash: string) {
+    return this.edgeOperations.verifyCredential(id, credentialHash);
+  }
+  async getEdgeAgentCommandPublicKey(id: string) {
+    return this.edgeOperations.getCommandPublicKey(id);
+  }
+  async revokeEdgeAgentCredential(id: string) {
+    return this.edgeOperations.revokeCredential(id);
+  }
+  async createEdgeCommand(input: Parameters<EdgeOperationsRepository["createCommand"]>[0]) {
+    return this.edgeOperations.createCommand(input);
+  }
+  async listEdgeCommands(branchId: string, limit?: number) {
+    return this.edgeOperations.listCommands(branchId, limit);
+  }
+  async claimEdgeCommand(edgeAgentId: string) {
+    return this.edgeOperations.claimCommand(edgeAgentId);
+  }
+  async completeEdgeCommand(edgeAgentId: string, commandId: string, result: any) {
+    return this.edgeOperations.completeCommand(edgeAgentId, commandId, result);
+  }
+  async createEdgeUpdateRelease(input: Parameters<EdgeOperationsRepository["createRelease"]>[0]) {
+    return this.edgeOperations.createRelease(input);
+  }
+  async getEdgeUpdateReleaseForAgent(edgeAgentId: string, currentVersion: string) {
+    return this.edgeOperations.getReleaseForAgent(edgeAgentId, currentVersion);
   }
   async ingestOperationalTelemetry(envelope: OperationalTelemetryEnvelope) {
     return this.operationalHealth.ingest(envelope);

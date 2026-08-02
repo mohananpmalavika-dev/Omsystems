@@ -32,9 +32,9 @@ export function redirectToLogin(reason: 'expired' | 'invalid' | 'network' = 'exp
   
   // Redirect to login with reason
   const currentPath = window.location.pathname;
-  if (currentPath !== '/auth/login' && !currentPath.startsWith('/auth/')) {
+  if (currentPath !== '/login') {
     const params = new URLSearchParams({ reason });
-    window.location.href = `/auth/login?${params.toString()}`;
+    window.location.href = `/login?${params.toString()}`;
   }
 }
 

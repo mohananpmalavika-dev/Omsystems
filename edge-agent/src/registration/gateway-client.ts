@@ -1,4 +1,5 @@
 import type { ArchiveRetentionEvidence } from "../monitoring/recorder-probe.js";
+import type { EncryptedOutbox } from "../offline/encrypted-outbox.js";
 
 export interface DiscoveredCameraPayload {
   edgeAgentId: string;
@@ -73,13 +74,41 @@ export interface ConsumedLiveSession {
   profiles: Array<{ name: string; codec: string; width: number; height: number }>;
 }
 
+export interface EdgeCommand {
+  id: string;
+  type: "rediscover" | "restart-media" | "restart-agent" | "probe-camera" | "probe-recorder" | "collect-logs" | "update-credentials" | "apply-update";
+  payload: Record<string, unknown>;
+}
+
+export interface EdgeUpdateRelease {
+  id: string;
+  version: string;
+  artifactUrl: string;
+  sha256: string;
+  notes: string;
+  signature: string;
+}
+
 export class GatewayClient {
+  private edgeCredential?: string;
+
   constructor(
     private readonly baseUrl: string,
     private readonly developmentUserId: string | undefined,
     private readonly edgeBridgeSharedKey?: string,
     private readonly timeoutMs = 15_000,
+    private readonly outbox?: EncryptedOutbox,
   ) {}
+
+  useEdgeCredential(credential: string) { this.edgeCredential = credential; }
+
+  async activate(activationCode: string, deviceUuid: string, version: string, commandPublicKey: string) {
+    return this.request<{
+      agentId: string; branchId: string; agentName: string; credential: string; updatePublicKey?: string;
+    }>("/v1/edge-enrollment/activate", {
+      method: "POST", body: JSON.stringify({ activationCode, deviceUuid, version, commandPublicKey }),
+    }, true);
+  }
 
   async register(branchId: string, name: string, version: string) {
     return this.request<{ id: string }>(
@@ -110,7 +139,7 @@ export class GatewayClient {
   }
 
   async submitTelemetry(agentId: string, payload: TelemetryPayload) {
-    return this.request<{ accepted: boolean; duplicate: boolean; receivedAt: string }>(
+    return this.requestOrQueue<{ accepted: boolean; duplicate: boolean; receivedAt: string }>(
       `/v1/edge-agents/${encodeURIComponent(agentId)}/telemetry`,
       { method: "POST", body: JSON.stringify(payload) },
     );
@@ -122,7 +151,7 @@ export class GatewayClient {
     quality: "verified" | "estimated" | "unsupported" | "unavailable";
     idempotencyKey: string; hddStatus: Array<Record<string, unknown>>;
   }) {
-    return this.request(
+    return this.requestOrQueue(
       `/v1/edge-agents/${encodeURIComponent(agentId)}/recorder-hdd`,
       { method: "POST", body: JSON.stringify(payload) },
     );
@@ -134,7 +163,7 @@ export class GatewayClient {
     quality: "verified" | "estimated" | "unsupported" | "unavailable";
     idempotencyKey: string; entries: ArchiveRetentionEvidence[];
   }) {
-    return this.request(
+    return this.requestOrQueue(
       `/v1/edge-agents/${encodeURIComponent(agentId)}/recorder-archive`,
       { method: "POST", body: JSON.stringify(payload) },
     );
@@ -172,7 +201,54 @@ export class GatewayClient {
     );
   }
 
-  private async request<T = unknown>(path: string, init: RequestInit): Promise<T> {
+  async claimCommand(agentId: string) {
+    return this.request<EdgeCommand | null>(
+      `/v1/edge-agents/${encodeURIComponent(agentId)}/commands/next`,
+      { method: "GET" },
+    );
+  }
+
+  async completeCommand(
+    agentId: string,
+    commandId: string,
+    result: { status: "succeeded" | "failed"; result?: Record<string, unknown>; error?: string },
+  ) {
+    return this.requestOrQueue(
+      `/v1/edge-agents/${encodeURIComponent(agentId)}/commands/${encodeURIComponent(commandId)}/complete`,
+      { method: "POST", body: JSON.stringify(result) },
+    );
+  }
+
+  async getUpdate(agentId: string, version: string) {
+    return this.request<EdgeUpdateRelease | null>(
+      `/v1/edge-agents/${encodeURIComponent(agentId)}/updates/next?version=${encodeURIComponent(version)}`,
+      { method: "GET" },
+    );
+  }
+
+  async flushOutbox() {
+    if (!this.outbox) return { delivered: 0, pending: 0 };
+    return this.outbox.flush(async (queued) => {
+      await this.request(queued.path, {
+        method: queued.method, body: queued.body,
+        ...(queued.headers ? { headers: queued.headers } : {}),
+      });
+    });
+  }
+
+  private async requestOrQueue<T>(path: string, init: RequestInit): Promise<T> {
+    try { return await this.request<T>(path, init); }
+    catch (error) {
+      if (!this.outbox || (error instanceof GatewayRequestError && error.status < 500)) throw error;
+      const pending = await this.outbox.enqueue({
+        path, method: "POST", body: String(init.body ?? ""),
+        ...(init.headers ? { headers: init.headers as Record<string, string> } : {}),
+      });
+      return { accepted: true, duplicate: false, queued: true, pending } as T;
+    }
+  }
+
+  private async request<T = unknown>(path: string, init: RequestInit, skipAuth = false): Promise<T> {
     const url = new URL(path, this.baseUrl);
     let response: Response;
     try {
@@ -182,7 +258,8 @@ export class GatewayClient {
         headers: {
           "content-type": "application/json",
           ...(this.developmentUserId ? { "x-user-id": this.developmentUserId } : {}),
-          ...(this.edgeBridgeSharedKey ? { "x-edge-bridge-key": this.edgeBridgeSharedKey } : {}),
+          ...(!skipAuth && this.edgeCredential ? { "x-edge-agent-token": this.edgeCredential } : {}),
+          ...(!skipAuth && !this.edgeCredential && this.edgeBridgeSharedKey ? { "x-edge-bridge-key": this.edgeBridgeSharedKey } : {}),
           ...init.headers,
         },
       });
@@ -194,8 +271,12 @@ export class GatewayClient {
     try { body = text ? JSON.parse(text) as T | { error?: string } : undefined; }
     catch { body = text.slice(0, 1_000); }
     if (!response.ok) {
-      throw new Error(`Control plane ${response.status}: ${JSON.stringify(body)}`);
+      throw new GatewayRequestError(response.status, `Control plane ${response.status}: ${JSON.stringify(body)}`);
     }
     return body as T;
   }
+}
+
+export class GatewayRequestError extends Error {
+  constructor(readonly status: number, message: string) { super(message); }
 }

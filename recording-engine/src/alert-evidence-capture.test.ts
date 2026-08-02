@@ -82,6 +82,38 @@ describe("AlertEvidenceCaptureService", () => {
     await waitFor(async () => (await service.getStatus(alertId))?.state === "ready");
     expect(resumed).toBe(true);
   });
+
+  it("archives evidence and reports an archive failure when cloud storage is mandatory", async () => {
+    const root = await mkdtemp(join(tmpdir(), "sentinel-alert-evidence-"));
+    roots.push(root);
+    const alertId = "66666666-6666-4666-8666-666666666666";
+    const service = new AlertEvidenceCaptureService(
+      root,
+      1,
+      async (_input, output) => {
+        await writeFile(output.snapshotPath, "jpeg");
+        await writeFile(output.clipPath, "mp4");
+      },
+      {
+        async archiveAsset(input) {
+          if (input.kind === "clip") throw new Error("object_store_unavailable");
+          return { provider: "s3", key: `evidence/${input.alertId}/snapshot.jpg` };
+        },
+      },
+      true,
+    );
+    await service.request({
+      alertId, cameraId: "cam-001", occurredAt: new Date().toISOString(),
+      sourceUri: "rtsp://camera/live", clipSeconds: 20,
+    });
+    await waitFor(async () => (await service.getStatus(alertId))?.state === "partial");
+    const status = await service.getStatus(alertId);
+    expect(status?.snapshotAvailable).toBe(true);
+    expect(status?.clipAvailable).toBe(true);
+    expect(status?.archive?.state).toBe("partial");
+    expect(status?.archive?.snapshotKey).toContain("snapshot.jpg");
+    expect(status?.archive?.error).toContain("object_store_unavailable");
+  });
 });
 
 async function waitFor(predicate: () => Promise<boolean>) {

@@ -27,8 +27,8 @@ function redirectToLogin() {
     
     // Redirect to login
     const currentPath = window.location.pathname;
-    if (currentPath !== '/auth/login' && !currentPath.startsWith('/auth/')) {
-      window.location.href = '/auth/login?expired=true';
+    if (currentPath !== '/login') {
+      window.location.href = '/login?reason=expired';
     }
   }
 }
@@ -442,6 +442,24 @@ export const cameraInventoryApi = {
       `/v1/branches/${encodeURIComponent(branchId)}/edge-agents/register`,
       { method: 'POST', body: JSON.stringify(data) }
     ),
+  createGatewayActivation: (branchId: string, data: { agentName: string; ttlMinutes?: number }) =>
+    fetchApi<{
+      id: string; branchId: string; agentName: string; activationCode: string;
+      expiresAt: string; bootstrap: { controlPlaneUrl: string; message: string };
+    }>(
+      `/v1/branches/${encodeURIComponent(branchId)}/edge-activations`,
+      { method: 'POST', body: JSON.stringify(data) }
+    ),
+  sendGatewayCommand: (
+    branchId: string,
+    edgeAgentId: string,
+    data: { type: "rediscover" | "restart-media" | "restart-agent" | "probe-camera" | "probe-recorder" | "collect-logs" | "apply-update"; payload?: Record<string, unknown> },
+  ) => fetchApi<any>(
+    `/v1/branches/${encodeURIComponent(branchId)}/edge-agents/${encodeURIComponent(edgeAgentId)}/commands`,
+    { method: 'POST', body: JSON.stringify({ ...data, payload: data.payload ?? {} }) }
+  ),
+  listGatewayCommands: (branchId: string) =>
+    fetchApi<{ data: any[] }>(`/v1/branches/${encodeURIComponent(branchId)}/edge-commands`),
   startScan: (branchId: string, edgeAgentId?: string) =>
     fetchApi<{ id: string; status: string; branchId: string }>(
       `/v1/branches/${encodeURIComponent(branchId)}/device-scans`,

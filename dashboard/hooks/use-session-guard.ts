@@ -19,7 +19,7 @@ export function useSessionGuard(options?: {
   const router = useRouter();
   const pathname = usePathname();
   const requireAuth = options?.requireAuth ?? true;
-  const redirectTo = options?.redirectTo ?? '/auth/login';
+  const redirectTo = options?.redirectTo ?? '/login';
 
   useEffect(() => {
     // Setup session monitoring
@@ -27,9 +27,9 @@ export function useSessionGuard(options?: {
 
     // Check authentication on mount
     if (requireAuth && !isAuthenticated()) {
-      const isAuthPage = pathname?.startsWith('/auth/');
+      const isLoginPage = pathname === '/login';
       
-      if (!isAuthPage) {
+      if (!isLoginPage) {
         redirectToLogin('invalid');
       }
     }
