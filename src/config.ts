@@ -18,6 +18,24 @@ const configSchema = z.object({
   DATABASE_URL: z.string().url().optional(),
   REDIS_URL: z.preprocess((value) => value === "" ? undefined : value, z.string().url().optional()),
   EDGE_PRESENCE_TTL_SECONDS: z.coerce.number().int().min(15).max(600).default(90),
+  EDGE_MANAGED_TUNNEL_REQUIRED: z.enum(["true", "false"]).default("false")
+    .transform((value) => value === "true"),
+  CLOUDFLARE_ACCOUNT_ID: z.preprocess(
+    (value) => value === "" ? undefined : value,
+    z.string().regex(/^[a-f0-9]{32}$/i).optional(),
+  ),
+  CLOUDFLARE_ZONE_ID: z.preprocess(
+    (value) => value === "" ? undefined : value,
+    z.string().regex(/^[a-f0-9]{32}$/i).optional(),
+  ),
+  CLOUDFLARE_API_TOKEN: z.preprocess(
+    (value) => value === "" ? undefined : value,
+    z.string().min(20).optional(),
+  ),
+  EDGE_MEDIA_BASE_DOMAIN: z.preprocess(
+    (value) => value === "" ? undefined : value,
+    z.string().regex(/^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/i).optional(),
+  ),
   MEDIA_GATEWAY_SHARED_KEY: z.string().min(32).default(
     "development-media-gateway-key-change-me",
   ),
@@ -62,6 +80,16 @@ const configSchema = z.object({
       context.addIssue({ code: "custom", path: [name], message: "placeholder secret/value is forbidden in production" });
     }
   }
+  if (config.EDGE_MANAGED_TUNNEL_REQUIRED && !(
+    config.CLOUDFLARE_ACCOUNT_ID && config.CLOUDFLARE_ZONE_ID &&
+    config.CLOUDFLARE_API_TOKEN && config.EDGE_MEDIA_BASE_DOMAIN
+  )) {
+    context.addIssue({
+      code: "custom",
+      path: ["EDGE_MANAGED_TUNNEL_REQUIRED"],
+      message: "Managed branch tunnels require CLOUDFLARE_ACCOUNT_ID, CLOUDFLARE_ZONE_ID, CLOUDFLARE_API_TOKEN, and EDGE_MEDIA_BASE_DOMAIN",
+    });
+  }
 });
 
 export type AppConfig = z.infer<typeof configSchema>;
@@ -70,7 +98,7 @@ export function loadConfig(
   environment: NodeJS.ProcessEnv = process.env,
 ): AppConfig {
   const expanded = { ...environment };
-  for (const name of ["DATABASE_URL", "REDIS_URL", "MEDIA_GATEWAY_SHARED_KEY", "EDGE_BRIDGE_SHARED_KEY", "EDGE_UPDATE_SIGNING_PRIVATE_KEY", "RECORDING_ENGINE_SHARED_KEY", "ANALYTICS_ENGINE_SHARED_KEY", "FEDERATION_SHARED_KEY", "REPORT_DOWNLOAD_SECRET", "REPORT_WORKER_SHARED_KEY"] as const) {
+  for (const name of ["DATABASE_URL", "REDIS_URL", "MEDIA_GATEWAY_SHARED_KEY", "EDGE_BRIDGE_SHARED_KEY", "EDGE_UPDATE_SIGNING_PRIVATE_KEY", "RECORDING_ENGINE_SHARED_KEY", "ANALYTICS_ENGINE_SHARED_KEY", "FEDERATION_SHARED_KEY", "REPORT_DOWNLOAD_SECRET", "REPORT_WORKER_SHARED_KEY", "CLOUDFLARE_API_TOKEN"] as const) {
     const file = environment[`${name}_FILE`];
     if (file && environment[name]) throw new Error(`${name} and ${name}_FILE cannot both be set`);
     if (file) expanded[name] = readFileSync(file, "utf8").trim();

@@ -532,6 +532,19 @@ export interface EdgeActivation {
   revokedAt: string | null;
 }
 
+export interface EdgeManagedTunnel {
+  branchId: string;
+  tenantId: string;
+  provider: "cloudflare";
+  providerTunnelId: string;
+  hostname: string;
+  status: "inactive" | "healthy" | "degraded" | "down" | "unknown" | "revoked";
+  createdAt: string;
+  updatedAt: string;
+  lastCheckedAt: string | null;
+  revokedAt: string | null;
+}
+
 export type EdgeCommandType =
   | "rediscover"
   | "restart-media"

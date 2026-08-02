@@ -214,17 +214,17 @@ export async function registerReportsRoutes(
   // Analytics report
   app.get("/v1/reports/analytics/summary", async (request) => {
     const querySchema = z.object({
-      startDate: z.string().optional(),
-      endDate: z.string().optional(),
+      startDate: z.string().datetime().optional(),
+      endDate: z.string().datetime().optional(),
       branchId: z.string().uuid().optional(),
     });
 
     const params = querySchema.parse(request.query);
 
-    // Get all accessible branches
+    // Analytics reports are scoped independently from live viewing.
     const branches = await store.listAccessibleNodes(
       request.currentUser,
-      "live:view",
+      "analytics:view",
       "branch",
     );
 
@@ -232,28 +232,50 @@ export async function registerReportsRoutes(
       ? branches.filter((b) => b.id === params.branchId)
       : branches;
 
-    // Mock analytics data - in real implementation, this would query analytics database
+    const camerasByBranch = new Map<string, Awaited<ReturnType<ControlPlaneStore["listCamerasByBranch"]>>>();
+    for (const branch of filteredBranches) {
+      camerasByBranch.set(branch.id, await store.listCamerasByBranch(
+        request.currentUser, branch.id, "analytics:view",
+      ));
+    }
+    const permittedCameraIds = new Set([...camerasByBranch.values()].flat().map((camera) => camera.id));
+    const startDate = params.startDate || new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+    const endDate = params.endDate || new Date().toISOString();
+    const alerts = (await store.listAnalyticsAlerts(request.currentUser.tenantId, {
+      ...(params.branchId ? { branchId: params.branchId } : {}),
+      from: startDate,
+      to: endDate,
+      limit: 10_000,
+    })).filter((alert) => permittedCameraIds.has(alert.cameraId));
+    const ruleType = new Map<string, string>();
+    for (const cameraId of permittedCameraIds) {
+      for (const rule of await store.listAnalyticsRules(cameraId)) ruleType.set(rule.id, rule.detectionType);
+    }
+    const eventsByType = alerts.reduce((counts, alert) => {
+      const type = ruleType.get(alert.ruleId) ?? "unclassified";
+      counts[type] = (counts[type] ?? 0) + Math.max(1, alert.occurrenceCount);
+      return counts;
+    }, {} as Record<string, number>);
+    const eventCountByCamera = alerts.reduce((counts, alert) => {
+      counts.set(alert.cameraId, (counts.get(alert.cameraId) ?? 0) + Math.max(1, alert.occurrenceCount));
+      return counts;
+    }, new Map<string, number>());
     const analyticsSummary = {
+      provenance: "REAL" as const,
+      eventBasis: "analytics_alert_occurrences" as const,
       period: {
-        startDate: params.startDate || new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(),
-        endDate: params.endDate || new Date().toISOString(),
+        startDate,
+        endDate,
       },
-      totalEvents: Math.floor(Math.random() * 10000),
-      eventsByType: {
-        personDetection: Math.floor(Math.random() * 5000),
-        vehicleDetection: Math.floor(Math.random() * 3000),
-        lineCrossing: Math.floor(Math.random() * 1000),
-        intrusion: Math.floor(Math.random() * 500),
-        loitering: Math.floor(Math.random() * 300),
-        crowdDensity: Math.floor(Math.random() * 200),
-        faceDetection: Math.floor(Math.random() * 2000),
-        licensePlate: Math.floor(Math.random() * 1500),
-      },
+      totalEvents: alerts.reduce((sum, alert) => sum + Math.max(1, alert.occurrenceCount), 0),
+      eventsByType,
       branchCount: filteredBranches.length,
       branches: filteredBranches.map((b) => ({
         id: b.id,
         name: b.name,
-        eventCount: Math.floor(Math.random() * 1000),
+        eventCount: (camerasByBranch.get(b.id) ?? []).reduce(
+          (sum, camera) => sum + (eventCountByCamera.get(camera.id) ?? 0), 0,
+        ),
       })),
     };
 
@@ -330,8 +352,8 @@ export async function registerReportsRoutes(
   // Activity report
   app.get("/v1/reports/activity/summary", async (request) => {
     const querySchema = z.object({
-      startDate: z.string().optional(),
-      endDate: z.string().optional(),
+      startDate: z.string().datetime().optional(),
+      endDate: z.string().datetime().optional(),
       limit: z.coerce.number().min(1).max(1000).default(100),
     });
 
@@ -351,16 +373,20 @@ export async function registerReportsRoutes(
       branchId: incident.branchId,
     }));
 
-    const activityByHour = Array.from({ length: 24 }, (_, hour) => ({
-      hour,
-      count: Math.floor(Math.random() * 50), // Mock data
-    }));
+    const startDate = new Date(params.startDate || Date.now() - 24 * 60 * 60 * 1000);
+    const endDate = new Date(params.endDate || Date.now());
+    const activityByHour = Array.from({ length: 24 }, (_, hour) => ({ hour, count: 0 }));
+    for (const incident of incidents) {
+      const occurredAt = new Date(incident.occurredAt);
+      if (occurredAt >= startDate && occurredAt <= endDate) activityByHour[occurredAt.getHours()]!.count += 1;
+    }
 
     return {
       period: {
-        startDate: params.startDate || new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
-        endDate: params.endDate || new Date().toISOString(),
+        startDate: startDate.toISOString(),
+        endDate: endDate.toISOString(),
       },
+      provenance: "REAL" as const,
       totalActivities: incidents.length,
       recentActivity,
       activityByHour,

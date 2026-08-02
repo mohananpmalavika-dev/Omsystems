@@ -65,6 +65,18 @@ export interface BranchHealth {
   gatewayReadiness?: 'ready' | 'offline' | 'tunnel_missing' | 'not_enrolled';
   gatewayTunnelReady?: boolean;
   internetStatus?: 'online' | 'degraded' | 'failover' | 'offline' | 'unknown';
+  operationalState?: Record<'gateway' | 'tunnel' | 'recorder' | 'cameras' | 'liveVideo' | 'recording' | 'analytics', {
+    value: string;
+    provenance: 'REAL' | 'UNKNOWN';
+    reason: string;
+  }>;
+  onboardingStages?: Array<{
+    id: number;
+    label: string;
+    status: 'complete' | 'pending' | 'unknown';
+    provenance: 'REAL' | 'UNKNOWN';
+    reason: string;
+  }>;
 }
 
 /**

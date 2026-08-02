@@ -182,6 +182,15 @@ $installButton.Add_Click({
             throw "edge-agent.exe not found at $sourceExe"
         }
         Copy-Item -Path $sourceExe -Destination "$INSTALL_DIR\edge-agent.exe" -Force
+        $sourceRuntime = Join-Path $PSScriptRoot "..\..\release\runtime"
+        $mediaMtxSource = Get-ChildItem -LiteralPath $sourceRuntime -Filter "mediamtx.exe" -File -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
+        $cloudflaredSource = Get-ChildItem -LiteralPath $sourceRuntime -Filter "cloudflared.exe" -File -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
+        if (-not $mediaMtxSource -or -not $cloudflaredSource) {
+            throw "The all-in-one runtime is incomplete. MediaMTX and cloudflared are required."
+        }
+        Copy-Item -LiteralPath $sourceRuntime -Destination "$INSTALL_DIR\runtime" -Recurse -Force
+        $mediaMtxPath = Join-Path "$INSTALL_DIR\runtime" ($mediaMtxSource.FullName.Substring($sourceRuntime.Length).TrimStart('\'))
+        $cloudflaredPath = Join-Path "$INSTALL_DIR\runtime" ($cloudflaredSource.FullName.Substring($sourceRuntime.Length).TrimStart('\'))
         Log "Copied edge-agent.exe"
         
         # Create configuration
@@ -205,11 +214,17 @@ EDGE_OFFLINE_OUTBOX_KEY_PATH="$INSTALL_DIR\data\offline-outbox.key"
 EDGE_CAMERA_CREDENTIAL_VAULT_PATH="$INSTALL_DIR\data\camera-credentials.enc"
 EDGE_CAMERA_CREDENTIAL_VAULT_KEY_PATH="$INSTALL_DIR\data\camera-credentials.key"
 EDGE_LOG_PATH="$INSTALL_DIR\logs\edge-agent.log"
-CAMERA_USERNAME="admin"
+CAMERA_USERNAME=""
 CAMERA_PASSWORD=""
 ONVIF_ENDPOINTS=""
-LIVE_MEDIA_ENABLED="false"
-MEDIA_TUNNEL_MODE="disabled"
+AUTO_DISCOVERY_ENABLED="true"
+AUTO_DISCOVERY_INTERVAL_MS="900000"
+LIVE_MEDIA_ENABLED="true"
+EDGE_MANAGED_MEDIA_BOOTSTRAP="true"
+MEDIA_RUNTIME_MANAGED="true"
+MEDIAMTX_PATH="$mediaMtxPath"
+MEDIA_TUNNEL_MODE="named"
+CLOUDFLARED_PATH="$cloudflaredPath"
 INTERNET_LINKS_JSON="[]"
 RECORDERS_JSON="[]"
 "@

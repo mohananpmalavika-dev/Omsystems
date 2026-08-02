@@ -24,21 +24,27 @@ services:
       EDGE_CAMERA_CREDENTIAL_VAULT_PATH: /var/lib/sentinel/data/camera-credentials.enc
       EDGE_CAMERA_CREDENTIAL_VAULT_KEY_PATH: /var/lib/sentinel/data/camera-credentials.key
       EDGE_UPDATE_STAGING_PATH: /var/lib/sentinel/updates
-      CAMERA_USERNAME: ${CAMERA_USERNAME:-admin}
-      CAMERA_PASSWORD: ${CAMERA_PASSWORD:-}
+      CAMERA_USERNAME: ""
+      CAMERA_PASSWORD: ""
       ONVIF_ENDPOINTS: ${ONVIF_ENDPOINTS:-}
+      AUTO_DISCOVERY_ENABLED: ${AUTO_DISCOVERY_ENABLED:-true}
+      AUTO_DISCOVERY_INTERVAL_MS: ${AUTO_DISCOVERY_INTERVAL_MS:-900000}
       DISCOVERY_TIMEOUT_MS: ${DISCOVERY_TIMEOUT_MS:-8000}
       ONVIF_TIMEOUT_MS: ${ONVIF_TIMEOUT_MS:-10000}
       FFMPEG_PATH: ffmpeg
       FFPROBE_PATH: ffprobe
       LIVE_MEDIA_ENABLED: "true"
-      MEDIA_RUNTIME_MANAGED: "false"
+      EDGE_MANAGED_MEDIA_BOOTSTRAP: "true"
+      MEDIA_RUNTIME_MANAGED: "true"
       EDGE_LIVE_GATEWAY_HOST: 0.0.0.0
       EDGE_LIVE_GATEWAY_PORT: 8090
-      MEDIAMTX_API_URL: http://mediamtx:9997
-      MEDIAMTX_HLS_URL: http://mediamtx:8888
-      MEDIA_TUNNEL_MODE: disabled
-      PUBLIC_MEDIA_GATEWAY_URL: ${PUBLIC_MEDIA_GATEWAY_URL:?Set the stable branch media hostname}
+      MEDIAMTX_PATH: /usr/local/bin/mediamtx
+      MEDIAMTX_API_URL: http://127.0.0.1:9997
+      MEDIAMTX_HLS_URL: http://127.0.0.1:8888
+      MEDIA_TUNNEL_MODE: named
+      CLOUDFLARED_PATH: /usr/local/bin/cloudflared
+      PUBLIC_MEDIA_GATEWAY_URL: ""
+      CLOUDFLARED_TUNNEL_TOKEN: ""
       MEDIA_ACCESS_TTL_SECONDS: ${MEDIA_ACCESS_TTL_SECONDS:-300}
       STREAM_SECRET_STORE_PATH: /var/lib/sentinel/data/stream-secrets.json
       EDGE_LOG_PATH: /var/lib/sentinel/logs/edge-agent.log
@@ -51,31 +57,12 @@ services:
       RECORDER_ARCHIVE_SCAN_INTERVAL_MS: ${RECORDER_ARCHIVE_SCAN_INTERVAL_MS:-21600000}
     volumes:
       - sentinel-gateway-state:/var/lib/sentinel
-    depends_on:
-      mediamtx:
-        condition: service_started
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8090/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
       interval: 30s
       timeout: 5s
       retries: 5
       start_period: 45s
-    networks: [sentinel-edge]
-
-  mediamtx:
-    image: bluenviron/mediamtx:1.17.1
-    restart: unless-stopped
-    volumes:
-      - ./mediamtx.yml:/mediamtx.yml:ro
-    networks: [sentinel-edge]
-
-  cloudflared:
-    image: cloudflare/cloudflared:latest
-    restart: unless-stopped
-    command: tunnel --no-autoupdate run --token ${CLOUDFLARED_TUNNEL_TOKEN:?Set the remotely managed tunnel token}
-    depends_on:
-      edge-agent:
-        condition: service_healthy
     networks: [sentinel-edge]
 
 networks:

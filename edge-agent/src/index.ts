@@ -82,6 +82,7 @@ if (!identity && config.EDGE_ACTIVATION_CODE) {
     credential: activated.credential,
     commandPublicKey: commandKeys.publicKey,
     commandPrivateKey: commandKeys.privateKey,
+    ...(activated.media ? { media: activated.media } : {}),
     ...(activated.updatePublicKey ? { updatePublicKey: activated.updatePublicKey } : {}),
     enrolledAt: new Date().toISOString(),
   };
@@ -108,6 +109,28 @@ const authenticatedGateway = new GatewayClient(
 );
 if (identity) authenticatedGateway.useEdgeCredential(identity.credential);
 const control = authenticatedGateway;
+if (identity && config.EDGE_MANAGED_MEDIA_BOOTSTRAP) {
+  try {
+    const bootstrap = await control.getBootstrap(agentId);
+    if (bootstrap.media) {
+      identity.media = bootstrap.media;
+      await identityStore.save(identity);
+    }
+  } catch (error) {
+    logger.warn("Managed media bootstrap refresh failed; using the last encrypted configuration", {
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+}
+if (config.EDGE_MANAGED_MEDIA_BOOTSTRAP && identity?.media) {
+  Object.assign(config, {
+    LIVE_MEDIA_ENABLED: true,
+    MEDIA_RUNTIME_MANAGED: true,
+    MEDIA_TUNNEL_MODE: "named" as const,
+    PUBLIC_MEDIA_GATEWAY_URL: identity.media.publicUrl,
+    CLOUDFLARED_TUNNEL_TOKEN: identity.media.tunnelToken,
+  });
+}
 const credentialVault = new CameraCredentialVault(
   config.EDGE_CAMERA_CREDENTIAL_VAULT_PATH,
   config.EDGE_CAMERA_CREDENTIAL_VAULT_KEY_PATH,
@@ -140,7 +163,11 @@ const cameraHeartbeat = initializeCameraHeartbeat(
   (payload) => control.submitTelemetry(agentId, payload),
 );
 let lastCameraConfigSyncAt = 0;
+let lastDiscoveryAt = 0;
 await syncCameraHeartbeatConfig();
+if (config.AUTO_DISCOVERY_ENABLED) {
+  await runAutomaticDiscovery();
+}
 cameraHeartbeat.start(config.CAMERA_HEARTBEAT_INTERVAL_MS);
 if (config.EDGE_MEDIA_SHARED_KEY) {
   await startSecretProvider({
@@ -164,6 +191,9 @@ while (!stopping) {
     await heartbeatAndReport();
     const replay = await control.flushOutbox();
     if (replay.delivered > 0) logger.info("Replayed offline telemetry", replay);
+    if (config.AUTO_DISCOVERY_ENABLED && Date.now() - lastDiscoveryAt >= config.AUTO_DISCOVERY_INTERVAL_MS) {
+      await runAutomaticDiscovery();
+    }
     const command = await control.claimCommand(agentId);
     if (command) {
       try {
@@ -331,6 +361,21 @@ async function scanBranch() {
   return submitted;
 }
 
+async function runAutomaticDiscovery() {
+  // Set the timestamp before scanning so a failed/slow branch cannot create a
+  // tight retry loop. Credential updates and explicit scan jobs still trigger
+  // immediate rediscovery outside this schedule.
+  lastDiscoveryAt = Date.now();
+  try {
+    const discovered = await scanBranch();
+    logger.info("Automatic ONVIF discovery completed", { discovered });
+  } catch (error) {
+    logger.error("Automatic ONVIF discovery failed", {
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+}
+
 function delay(milliseconds: number) {
   return new Promise((resolve) => setTimeout(resolve, milliseconds));
 }
@@ -368,6 +413,10 @@ async function heartbeatAndReport() {
       metrics: {
         status: "online", version: config.EDGE_AGENT_VERSION,
         uptimeSeconds: Math.round(uptime()),
+        liveMediaEnabled: config.LIVE_MEDIA_ENABLED,
+        mediaRuntimeReady: Boolean(edgeMediaRuntime),
+        mediaTunnelMode: config.MEDIA_TUNNEL_MODE,
+        publicMediaUrl: edgeMediaRuntime?.publicUrl ?? config.PUBLIC_MEDIA_GATEWAY_URL ?? null,
         ...edgeResourceMetrics,
       },
       reasonCodes: edgeResourceReasonCodes,

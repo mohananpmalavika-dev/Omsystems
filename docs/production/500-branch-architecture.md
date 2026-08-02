@@ -42,7 +42,7 @@ Sentinel Grid dashboard ---- Control plane ---- PostgreSQL
           cameras     DVR/NVR      WAN/UPS probes
 ```
 
-Each branch has its own stable named tunnel and public media hostname. Quick Tunnels are prohibited in production because their hostname is temporary and they are not a durable fleet identity.
+Each branch has its own stable named tunnel and public media hostname. The control plane provisions both through Cloudflare's API during enrollment and gives the connector token only to the authenticated gateway. The database stores tunnel identity and health metadata, never the connector token. Quick Tunnels are prohibited in production because their hostname is temporary and they are not a durable fleet identity.
 
 ## Live video model
 
@@ -112,8 +112,8 @@ Cloud services run on paid, non-sleeping instances. The database uses a paid pla
 1. Build the organization hierarchy and branch records.
 2. Assign user roles and scope grants before camera access is enabled.
 3. Enroll one Branch Gateway from **Administration -> Branch onboarding**.
-4. Create one remotely managed Cloudflare Tunnel and stable hostname for the branch.
-5. Prepare the appliance from `deploy/branch-gateway`, insert the one-time activation code and branch tunnel token, and run the reboot test. First boot creates a unique device identity and encrypted local state automatically.
+4. Enrolling the gateway automatically creates one remotely managed Cloudflare Tunnel and stable hostname for the branch.
+5. Prepare the appliance from `deploy/branch-gateway`, insert only the one-time activation code, and run the reboot test. First boot creates a unique device identity, retrieves its tunnel bootstrap over the authenticated control channel, and stores both encrypted locally.
 6. Ship the labelled appliance to the branch for plug-in only installation.
 7. Confirm the fleet page shows Gateway online, Tunnel ready, and Internet online.
 8. Run ONVIF/DVR discovery. Review duplicates and devices requiring credentials.
@@ -125,7 +125,7 @@ Roll out in waves: lab, 5 branches, 25 branches, one region, then the wider esta
 
 ## Repository implementation
 
-- `deploy/branch-gateway/compose.yaml`: unattended edge agent, MediaMTX, and cloudflared services.
+- `deploy/branch-gateway/compose.yaml`: one unattended appliance service containing the edge agent plus supervised MediaMTX and cloudflared binaries.
 
 ## Implemented fleet-safety controls
 
@@ -138,6 +138,7 @@ Roll out in waves: lab, 5 branches, 25 branches, one region, then the wider esta
 - Alert snapshots and clips can be mirrored to S3-compatible storage with server-side encryption, optional object lock, and post-upload size/SHA-256 verification.
 - Redis holds expiring gateway presence shared by horizontally scaled API instances; PostgreSQL remains the durable source of truth.
 - `/metrics` exports Prometheus telemetry; the Kubernetes production manifests include Prometheus/Grafana and horizontal control-plane scaling.
+- Operational readiness has 13 evidence-backed stages. Gateway, tunnel, recorder, camera, live video, recording, health monitoring, and AI assignment remain pending or unknown until their own real evidence exists; no random health simulation is used.
 
 PostgreSQL is the durable job/command queue for the current 500-branch target. RabbitMQ or Kafka is not a prerequisite at this scale; introduce one only when measured event throughput or independent consumer fan-out exceeds the database queue's tested capacity.
 - `render.yaml`: paid always-on cloud services, private engine wiring, shared secrets, persistent event storage, and paid PostgreSQL.

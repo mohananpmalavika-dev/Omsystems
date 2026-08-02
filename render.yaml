@@ -52,6 +52,16 @@ services:
         generateValue: true
       - key: EDGE_LEGACY_SHARED_KEY_ENABLED
         value: "false"
+      - key: EDGE_MANAGED_TUNNEL_REQUIRED
+        value: "true"
+      - key: CLOUDFLARE_ACCOUNT_ID
+        sync: false
+      - key: CLOUDFLARE_ZONE_ID
+        sync: false
+      - key: CLOUDFLARE_API_TOKEN
+        sync: false
+      - key: EDGE_MEDIA_BASE_DOMAIN
+        sync: false
       - key: EDGE_UPDATE_SIGNING_PRIVATE_KEY
         sync: false
       - key: RECORDING_ENGINE_SHARED_KEY

@@ -15,6 +15,12 @@ if [[ ! -x "${SCRIPT_DIR}/edge-agent" ]]; then
   echo "Place the packaged edge-agent executable beside install.sh."
   exit 1
 fi
+for runtime_binary in mediamtx cloudflared; do
+  if [[ ! -x "${SCRIPT_DIR}/${runtime_binary}" ]]; then
+    echo "The all-in-one gateway package is incomplete: ${runtime_binary} is missing beside install.sh."
+    exit 1
+  fi
+done
 
 read -r -p "Branch display name: " BRANCH_NAME
 read -r -s -p "One-time activation code from Sentinel Grid: " ACTIVATION_CODE
@@ -35,6 +41,8 @@ fi
 
 install -d -m 0700 "${INSTALL_DIR}/config" "${INSTALL_DIR}/data" "${INSTALL_DIR}/logs"
 install -m 0755 "${SCRIPT_DIR}/edge-agent" "${INSTALL_DIR}/edge-agent"
+install -m 0755 "${SCRIPT_DIR}/mediamtx" "${INSTALL_DIR}/mediamtx"
+install -m 0755 "${SCRIPT_DIR}/cloudflared" "${INSTALL_DIR}/cloudflared"
 
 cat > "${INSTALL_DIR}/config/edge-agent.env" <<EOF
 CONTROL_PLANE_URL="${CONTROL_PLANE_URL}"
@@ -54,15 +62,21 @@ EDGE_CAMERA_CREDENTIAL_VAULT_PATH="${INSTALL_DIR}/data/camera-credentials.enc"
 EDGE_CAMERA_CREDENTIAL_VAULT_KEY_PATH="${INSTALL_DIR}/data/camera-credentials.key"
 EDGE_UPDATE_STAGING_PATH="${INSTALL_DIR}/data/updates"
 EDGE_LOG_PATH="${INSTALL_DIR}/logs/edge-agent.log"
-CAMERA_USERNAME="admin"
+CAMERA_USERNAME=""
 CAMERA_PASSWORD=""
 ONVIF_ENDPOINTS=""
+AUTO_DISCOVERY_ENABLED="true"
+AUTO_DISCOVERY_INTERVAL_MS="900000"
 DISCOVERY_TIMEOUT_MS="8000"
 ONVIF_TIMEOUT_MS="10000"
 FFPROBE_PATH="ffprobe"
 FFMPEG_PATH="ffmpeg"
-LIVE_MEDIA_ENABLED="false"
-MEDIA_TUNNEL_MODE="disabled"
+LIVE_MEDIA_ENABLED="true"
+EDGE_MANAGED_MEDIA_BOOTSTRAP="true"
+MEDIA_RUNTIME_MANAGED="true"
+MEDIAMTX_PATH="${INSTALL_DIR}/mediamtx"
+MEDIA_TUNNEL_MODE="named"
+CLOUDFLARED_PATH="${INSTALL_DIR}/cloudflared"
 STREAM_SECRET_STORE_PATH="${INSTALL_DIR}/data/stream-secrets.json"
 CAMERA_HEARTBEAT_INTERVAL_MS="30000"
 CAMERA_CONFIG_REFRESH_MS="60000"

@@ -2,6 +2,7 @@ import type { Pool } from "pg";
 import type {
   EdgeActivation,
   EdgeAgent,
+  EdgeManagedTunnel,
   EdgeCommand,
   EdgeCommandType,
   EdgeUpdateRelease,
@@ -94,6 +95,46 @@ export class EdgeOperationsRepository {
       [id],
     );
     return result.rows[0] ? mapAgent(result.rows[0]) : undefined;
+  }
+
+  async getManagedTunnel(branchId: string) {
+    const result = await this.pool.query(
+      "SELECT * FROM edge_managed_tunnels WHERE branch_node_id = $1",
+      [branchId],
+    );
+    return result.rows[0] ? mapManagedTunnel(result.rows[0]) : undefined;
+  }
+
+  async upsertManagedTunnel(
+    input: Omit<EdgeManagedTunnel, "createdAt" | "updatedAt" | "lastCheckedAt" | "revokedAt">,
+  ) {
+    const result = await this.pool.query(
+      `INSERT INTO edge_managed_tunnels
+         (tenant_id, branch_node_id, provider, provider_tunnel_id, hostname, status)
+       VALUES ($1,$2,$3,$4,$5,$6)
+       ON CONFLICT (branch_node_id) DO UPDATE SET
+         provider = EXCLUDED.provider,
+         provider_tunnel_id = EXCLUDED.provider_tunnel_id,
+         hostname = EXCLUDED.hostname,
+         status = EXCLUDED.status,
+         revoked_at = CASE WHEN EXCLUDED.status = 'revoked' THEN now() ELSE NULL END,
+         updated_at = now()
+       RETURNING *`,
+      [input.tenantId, input.branchId, input.provider, input.providerTunnelId, input.hostname, input.status],
+    );
+    return mapManagedTunnel(result.rows[0]);
+  }
+
+  async updateManagedTunnelStatus(branchId: string, status: EdgeManagedTunnel["status"]) {
+    const result = await this.pool.query(
+      `UPDATE edge_managed_tunnels SET
+         status = $2, last_checked_at = now(), updated_at = now(),
+         revoked_at = CASE WHEN $2 = 'revoked' THEN now() ELSE revoked_at END
+       WHERE branch_node_id = $1
+       RETURNING *`,
+      [branchId, status],
+    );
+    return result.rows[0] ? mapManagedTunnel(result.rows[0]) : undefined;
   }
 
   async createCommand(input: {
@@ -202,6 +243,21 @@ function mapAgent(row: any): EdgeAgent {
     credentialStatus: row.credential_revoked_at ? "revoked" : row.credential_issued_at ? "active" : "not-enrolled",
     ...(row.credential_issued_at ? { credentialIssuedAt: iso(row.credential_issued_at)! } : {}),
     ...(row.credential_revoked_at ? { credentialRevokedAt: iso(row.credential_revoked_at)! } : {}),
+  };
+}
+
+function mapManagedTunnel(row: any): EdgeManagedTunnel {
+  return {
+    branchId: String(row.branch_node_id),
+    tenantId: String(row.tenant_id),
+    provider: "cloudflare",
+    providerTunnelId: String(row.provider_tunnel_id),
+    hostname: String(row.hostname),
+    status: row.status,
+    createdAt: iso(row.created_at)!,
+    updatedAt: iso(row.updated_at)!,
+    lastCheckedAt: iso(row.last_checked_at),
+    revokedAt: iso(row.revoked_at),
   };
 }
 

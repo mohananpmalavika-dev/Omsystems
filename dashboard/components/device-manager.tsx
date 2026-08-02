@@ -107,7 +107,17 @@ type GatewayActivation = {
   agentName: string;
   activationCode: string;
   expiresAt: string;
-  bootstrap: { controlPlaneUrl: string; message: string };
+  bootstrap: {
+    controlPlaneUrl: string;
+    message: string;
+    media: {
+      managed: boolean;
+      mode: "named" | "disabled";
+      publicUrl?: string;
+      tunnelStatus: string;
+      credentialsDeliveredTo?: "gateway-only";
+    };
+  };
 };
 
 const emptyInventoryForm: DeviceInventoryForm = {
@@ -234,10 +244,9 @@ export function DeviceManager() {
         `EDGE_ACTIVATION_CODE=${gatewayActivation.activationCode}`,
         `EDGE_AGENT_NAME=${gatewayActivation.agentName}`,
         "LIVE_MEDIA_ENABLED=true",
-        "MEDIA_RUNTIME_MANAGED=false",
-        "MEDIA_TUNNEL_MODE=disabled",
-        "PUBLIC_MEDIA_GATEWAY_URL=https://<branch-media-tunnel-host>",
-        "CLOUDFLARED_TUNNEL_TOKEN=<named-tunnel-token>",
+        "EDGE_MANAGED_MEDIA_BOOTSTRAP=true",
+        "MEDIA_RUNTIME_MANAGED=true",
+        "MEDIA_TUNNEL_MODE=named",
         "STREAM_SECRET_STORE_PATH=./data/stream-secrets.json",
         "EDGE_IDENTITY_PATH=./data/device-identity.enc",
         "EDGE_OFFLINE_OUTBOX_PATH=./data/offline-outbox.enc",
@@ -577,7 +586,9 @@ export function DeviceManager() {
       });
       setGatewayActivation(activation);
       setGatewayName("");
-      setNotice("One-time activation created. It expires in 60 minutes and is consumed automatically on first boot.");
+      setNotice(activation.bootstrap.media.managed
+        ? `Gateway and named media tunnel created. ${activation.bootstrap.media.publicUrl ?? "The stable hostname"} is delivered automatically on first boot.`
+        : "One-time activation created. Managed media tunnels are not configured on this control plane.");
     } catch (reason) {
       setError(messageOf(reason, "Gateway registration failed."));
     } finally {
@@ -1042,6 +1053,11 @@ export function DeviceManager() {
               <div className="modal-body">
                 <div className="device-message success"><CheckCircle2 size={16} />One-time gateway activation is ready.</div>
                 <p className="setup-description">This code expires at {new Date(gatewayActivation.expiresAt).toLocaleString()} and is consumed on first boot. The appliance then receives its own revocable credential and stores it encrypted. Branch staff only connect power/UPS and camera-network Ethernet.</p>
+                {gatewayActivation.bootstrap.media.managed ? (
+                  <div className="form-info-banner"><Network size={16} />Named tunnel reserved: <strong>{gatewayActivation.bootstrap.media.publicUrl}</strong>. Its connector token is sent only to the activated appliance and is never written to this file.</div>
+                ) : (
+                  <div className="device-message error"><AlertTriangle size={16} />Managed Cloudflare tunneling is not configured. This activation can monitor devices but is not production live-view ready.</div>
+                )}
                 <pre className="gateway-config">{setupText}</pre>
                 <div className="setup-actions">
                   <button className="secondary-button" onClick={() => void copySetup()}><Copy size={14} />Copy configuration</button>

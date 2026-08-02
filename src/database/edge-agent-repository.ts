@@ -90,6 +90,19 @@ export class EdgeAgentRepository {
     return result.rows.map(mapAgent);
   }
 
+  async get(id: string) {
+    const result = await this.pool.query<AgentRow>(
+      `SELECT id::text, branch_node_id::text, name, version,
+              CASE WHEN last_seen_at < now() - interval '90 seconds'
+                THEN 'offline'::edge_agent_status ELSE status END AS status,
+              last_seen_at, public_media_url, device_uuid,
+              credential_issued_at, credential_revoked_at
+       FROM edge_agents WHERE id = $1`,
+      [id],
+    );
+    return result.rows[0] ? mapAgent(result.rows[0]) : undefined;
+  }
+
   async heartbeat(id: string, version: string, publicMediaUrl?: string) {
     const result = await this.pool.query<AgentRow>(
       `UPDATE edge_agents

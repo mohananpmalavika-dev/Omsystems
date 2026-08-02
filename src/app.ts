@@ -98,6 +98,7 @@ import { ForensicAnalyzer } from "./recording/forensic-analyzer.js";
 import { MemoryStore } from "./store.js";
 import { RuntimeGuard } from "./platform/runtime-guard.js";
 import type { EdgePresenceCacheContract } from "./platform/edge-presence-cache.js";
+import type { ManagedEdgeTunnelProvider } from "./platform/managed-edge-tunnel.js";
 
 declare module "fastify" {
   interface FastifyRequest {
@@ -367,6 +368,8 @@ export async function buildApp(options?: {
   federationSharedKey?: string;
   digitalTwinAssetRoot?: string;
   edgePresenceCache?: EdgePresenceCacheContract;
+  edgeTunnelProvider?: ManagedEdgeTunnelProvider;
+  requireManagedEdgeTunnel?: boolean;
 }): Promise<FastifyInstance> {
   const app = Fastify({
     logger: options?.logger ?? false,
@@ -737,6 +740,13 @@ export async function buildApp(options?: {
     // Temporary operator authentication; replace with edge-agent mTLS identity.
     const agent = await store.heartbeatEdgeAgent(id, body.version!, body.publicMediaUrl);
     if (!agent) return reply.code(404).send({ error: "edge_agent_not_found" });
+    // The edge gateway reports its public URL only after it has started MediaMTX,
+    // started cloudflared, and successfully probed the public /health endpoint.
+    // Promote that verified observation into the managed-tunnel projection so
+    // readiness does not remain stuck at the provider's initial "inactive" state.
+    if (body.publicMediaUrl) {
+      await store.updateEdgeManagedTunnelStatus(agent.branchId, "healthy");
+    }
     if (edgePresenceCache) {
       await edgePresenceCache.markOnline({
         edgeAgentId: id,
@@ -1512,6 +1522,8 @@ export async function buildApp(options?: {
   await registerEdgeGatewayOperationsRoutes(app, store, {
     controlPlanePublicUrl: options?.controlPlanePublicUrl ?? process.env.CONTROL_PLANE_PUBLIC_URL,
     updateSigningPrivateKey: options?.edgeUpdateSigningPrivateKey ?? process.env.EDGE_UPDATE_SIGNING_PRIVATE_KEY,
+    tunnelProvider: options?.edgeTunnelProvider,
+    requireManagedTunnel: options?.requireManagedEdgeTunnel,
   });
   await registerEdgeAgentPackageRoutes(app, store, {
     controlPlanePublicUrl: options?.controlPlanePublicUrl ?? process.env.CONTROL_PLANE_PUBLIC_URL,
@@ -1554,114 +1566,11 @@ export async function buildApp(options?: {
   });
 
   // Security Posture API endpoint
-  app.get("/api/security/posture", async (request, reply) => {
-    try {
-      // Return mock security posture data
-      // In production, this would integrate with actual security services
-      return {
-        overallScore: 85,
-        timestamp: new Date().toISOString(),
-        metrics: {
-          zeroTrust: {
-            score: 90,
-            devicesCompliant: 45,
-            devicesTotal: 50,
-            highRiskSessions: 2,
-          },
-          encryption: {
-            score: 88,
-            videosEncrypted: 850,
-            videosTotal: 1000,
-            tlsCompliance: 95,
-          },
-          certificates: {
-            score: 82,
-            healthy: 38,
-            expiringSoon: 3,
-            expired: 1,
-            revoked: 0,
-          },
-          secrets: {
-            status: "HEALTHY" as const,
-            rotationCompliance: 92,
-            expiring: 2,
-          },
-          ransomware: {
-            activeThreats: 0,
-            eventsToday: 1,
-            riskLevel: "LOW" as const,
-          },
-          tamper: {
-            activeEvents: 1,
-            criticalEvents: 0,
-            resolvedToday: 3,
-          },
-          secureBoot: {
-            score: 95,
-            compliantDevices: 47,
-            totalDevices: 50,
-          },
-          tpm: {
-            score: 94,
-            attestedDevices: 46,
-            totalDevices: 50,
-            failedAttestations: 1,
-          },
-        },
-        alerts: [
-          {
-            id: "alert-1",
-            type: "CERTIFICATE_EXPIRED",
-            severity: "MEDIUM" as const,
-            title: "Certificate expiring soon",
-            description: "SSL certificate for recorder-3 expires in 15 days",
-            timestamp: new Date(Date.now() - 3600000).toISOString(),
-            source: "Certificate Manager",
-            acknowledged: false,
-            actions: ["Renew certificate", "Contact admin"],
-          },
-          {
-            id: "alert-2",
-            type: "TAMPER_DETECTED",
-            severity: "LOW" as const,
-            title: "Camera position changed",
-            description: "Camera CAM-205 detected movement",
-            timestamp: new Date(Date.now() - 7200000).toISOString(),
-            source: "Tamper Detection",
-            acknowledged: false,
-            actions: ["Review footage", "Verify position"],
-          },
-        ],
-        trends: [
-          {
-            metric: "Overall Security Score",
-            current: 85,
-            previous: 83,
-            change: 2,
-            changePercent: 2.4,
-            direction: "UP" as const,
-          },
-          {
-            metric: "Zero Trust Compliance",
-            current: 90,
-            previous: 88,
-            change: 2,
-            changePercent: 2.3,
-            direction: "UP" as const,
-          },
-          {
-            metric: "Active Alerts",
-            current: 2,
-            previous: 5,
-            change: -3,
-            changePercent: -60,
-            direction: "DOWN" as const,
-          },
-        ],
-      };
-    } catch (error: any) {
-      return reply.code(500).send({ error: error.message });
-    }
+  app.get("/api/security/posture", async () => {
+    // The legacy values on this route were illustrative constants. Returning
+    // an explicit unavailable projection is safer than presenting a fabricated
+    // enterprise score or fake incidents as live security evidence.
+    return unavailableSecurityPosture();
   });
   if (extendedStore) {
     await registerDeviceManagementRoutes(app, extendedStore);
@@ -1872,6 +1781,7 @@ function isEdgeAgentIngressRoute(method: string, url: string) {
   if (method === "POST" && /^\/v1\/edge-agents\/[^/]+\/scan-jobs\/[^/]+\/complete$/.test(path)) return true;
   if (method === "POST" && /^\/v1\/edge-agents\/[^/]+\/(?:telemetry|recorder-hdd|recorder-archive)$/.test(path)) return true;
   if (method === "GET" && /^\/v1\/edge-agents\/[^/]+\/(?:commands|updates)\/next$/.test(path)) return true;
+  if (method === "GET" && /^\/v1\/edge-agents\/[^/]+\/bootstrap$/.test(path)) return true;
   if (method === "POST" && /^\/v1\/edge-agents\/[^/]+\/commands\/[^/]+\/complete$/.test(path)) return true;
   return method === "POST" && /^\/v1\/branches\/[^/]+\/cameras\/discovered$/.test(path);
 }
@@ -2042,4 +1952,26 @@ function startExportWorker(
   });
   
   app.log.info({ interval }, "Export worker started");
+}
+
+function unavailableSecurityPosture() {
+  return {
+    available: false,
+    provenance: "UNAVAILABLE" as const,
+    reason: "security_posture_collectors_not_configured",
+    overallScore: 0,
+    timestamp: new Date().toISOString(),
+    metrics: {
+      zeroTrust: { score: 0, devicesCompliant: 0, devicesTotal: 0, highRiskSessions: 0 },
+      encryption: { score: 0, videosEncrypted: 0, videosTotal: 0, tlsCompliance: 0 },
+      certificates: { score: 0, healthy: 0, expiringSoon: 0, expired: 0, revoked: 0 },
+      secrets: { status: "UNKNOWN", rotationCompliance: 0, expiring: 0 },
+      ransomware: { activeThreats: 0, eventsToday: 0, riskLevel: "UNKNOWN" },
+      tamper: { activeEvents: 0, criticalEvents: 0, resolvedToday: 0 },
+      secureBoot: { score: 0, compliantDevices: 0, totalDevices: 0 },
+      tpm: { score: 0, attestedDevices: 0, totalDevices: 0, failedAttestations: 0 },
+    },
+    alerts: [],
+    trends: [],
+  };
 }

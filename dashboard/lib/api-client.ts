@@ -445,7 +445,10 @@ export const cameraInventoryApi = {
   createGatewayActivation: (branchId: string, data: { agentName: string; ttlMinutes?: number }) =>
     fetchApi<{
       id: string; branchId: string; agentName: string; activationCode: string;
-      expiresAt: string; bootstrap: { controlPlaneUrl: string; message: string };
+      expiresAt: string; bootstrap: {
+        controlPlaneUrl: string; message: string;
+        media: { managed: boolean; mode: "named" | "disabled"; publicUrl?: string; tunnelStatus: string; credentialsDeliveredTo?: "gateway-only" };
+      };
     }>(
       `/v1/branches/${encodeURIComponent(branchId)}/edge-activations`,
       { method: 'POST', body: JSON.stringify(data) }

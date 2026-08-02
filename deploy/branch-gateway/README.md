@@ -4,21 +4,20 @@ This is the production branch connector for an unattended, multi-location CCTV e
 
 ## What stays online
 
-- `edge-agent` discovers ONVIF cameras, probes RTSP, verifies DVR/NVR channels and recordings, sends health telemetry, and serves permission-authorized live sessions.
-- `mediamtx` converts a selected private RTSP feed to browser-compatible HLS only when an authorized operator opens it.
-- `cloudflared` maintains a stable outbound-only named tunnel. No inbound firewall port or public camera address is required.
-- Docker restarts every service after a crash or appliance reboot, and gateway state is kept in a named volume.
+- The single `edge-agent` appliance service discovers ONVIF cameras, probes RTSP, verifies DVR/NVR channels and recordings, and sends health telemetry.
+- The agent supervises bundled MediaMTX and cloudflared processes. MediaMTX converts only an operator-selected private RTSP feed to browser-compatible HLS, while cloudflared maintains an outbound-only named tunnel.
+- No inbound firewall port or public camera address is required. Docker restarts the appliance after a crash or reboot, and its encrypted identity, credentials, outbox, and media state remain in a named volume.
 
 ## Factory provisioning
 
 1. In Sentinel Grid, open the branch, choose **Enroll gateway**, and copy the one-time activation code. No branch ID, agent ID, shared API key, or `.env` editing at the branch is required.
-2. In Cloudflare Zero Trust, create a remotely managed tunnel dedicated to that branch. Add a public hostname such as `branch-001.media.example.com` with service `http://edge-agent:8090`.
-3. Copy `.env.example` to `.env` and insert the one-time activation code, stable hostname, and tunnel token. Do this during appliance preparation—not at the branch. First boot consumes the code, receives a unique revocable identity, and stores it encrypted in the persistent volume.
+2. The control plane automatically creates a remotely managed tunnel and DNS hostname for the branch. It delivers the connector token only to the authenticated gateway; operators never see it and PostgreSQL never stores it.
+3. During central appliance preparation, copy `.env.example` to `.env` and insert only the control-plane URL and one-time activation code. There is no branch ID, agent ID, camera password, public hostname, shared API key, or tunnel token to edit. First boot consumes the code, receives its unique identity and managed media bootstrap, and stores both encrypted in the persistent volume.
 4. From the repository root, run:
 
    `docker compose --env-file deploy/branch-gateway/.env -f deploy/branch-gateway/compose.yaml up -d --build`
 
-5. Reboot the appliance once and confirm all three containers return automatically. Sentinel Grid should show Gateway, Tunnel, Camera, Recording, and Internet readiness for the branch.
+5. Reboot the appliance once and confirm the single appliance container returns automatically. Sentinel Grid must show independently verified Gateway, Tunnel, Internet, DVR/NVR, Camera, Live View, Recording, Health, and AI-rule stages; a heartbeat alone does not mark the branch operational.
 
 ## Operating model
 
@@ -34,6 +33,6 @@ Do not use Cloudflare Quick Tunnels in production. Their hostname changes, and t
 
 - Keep the appliance on a UPS and enable automatic power-on after AC recovery in firmware.
 - Reboot it before shipping and confirm `docker compose ps` reports all services healthy.
-- Revoke a lost appliance from Sentinel Grid; its unique API credential stops working immediately.
+- Revoke a lost appliance from Sentinel Grid; its unique API credential and branch tunnel are revoked together.
 - Use signed releases with a pilot rollout percentage before expanding an update across the fleet.
 - Cloudflare carries HTTPS control and on-demand browser media. Cameras and DVRs remain private and are never exposed directly.

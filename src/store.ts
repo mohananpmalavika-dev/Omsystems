@@ -21,6 +21,7 @@ import type {
   DiscoveredCamera,
   EdgeActivation,
   EdgeAgent,
+  EdgeManagedTunnel,
   EdgeCommand,
   EdgeUpdateRelease,
   EdgeScanJob,
@@ -235,6 +236,7 @@ export class MemoryStore implements ControlPlaneStore {
   readonly edgeActivations = new Map<string, EdgeActivation & { tokenHash: string }>();
   readonly edgeCredentialHashes = new Map<string, string>();
   readonly edgeCommandPublicKeys = new Map<string, string>();
+  readonly edgeManagedTunnels = new Map<string, EdgeManagedTunnel>();
   readonly edgeCommands = new Map<string, EdgeCommand>();
   readonly edgeUpdateReleases = new Map<string, EdgeUpdateRelease>();
   readonly operationalTelemetry = new Map<string, OperationalTelemetryEnvelope>();
@@ -403,6 +405,11 @@ export class MemoryStore implements ControlPlaneStore {
     return agent;
   }
 
+  async getEdgeAgent(id: string) {
+    const agent = this.edgeAgents.get(id);
+    return agent ? structuredClone(agent) : undefined;
+  }
+
   async createEdgeActivation(input: {
     branchId: string; agentName: string; createdBy: string; expiresAt: string; tokenHash: string;
   }) {
@@ -461,6 +468,38 @@ export class MemoryStore implements ControlPlaneStore {
     this.edgeCredentialHashes.delete(id);
     this.edgeCommandPublicKeys.delete(id);
     return structuredClone(agent);
+  }
+
+  async getEdgeManagedTunnel(branchId: string) {
+    const tunnel = this.edgeManagedTunnels.get(branchId);
+    return tunnel ? structuredClone(tunnel) : undefined;
+  }
+
+  async upsertEdgeManagedTunnel(
+    input: Omit<EdgeManagedTunnel, "createdAt" | "updatedAt" | "lastCheckedAt" | "revokedAt">,
+  ) {
+    const now = new Date().toISOString();
+    const current = this.edgeManagedTunnels.get(input.branchId);
+    const tunnel: EdgeManagedTunnel = {
+      ...structuredClone(input),
+      createdAt: current?.createdAt ?? now,
+      updatedAt: now,
+      lastCheckedAt: current?.lastCheckedAt ?? null,
+      revokedAt: input.status === "revoked" ? now : null,
+    };
+    this.edgeManagedTunnels.set(input.branchId, tunnel);
+    return structuredClone(tunnel);
+  }
+
+  async updateEdgeManagedTunnelStatus(branchId: string, status: EdgeManagedTunnel["status"]) {
+    const tunnel = this.edgeManagedTunnels.get(branchId);
+    if (!tunnel) return undefined;
+    const now = new Date().toISOString();
+    tunnel.status = status;
+    tunnel.updatedAt = now;
+    tunnel.lastCheckedAt = now;
+    if (status === "revoked") tunnel.revokedAt = now;
+    return structuredClone(tunnel);
   }
 
   async createEdgeCommand(input: {

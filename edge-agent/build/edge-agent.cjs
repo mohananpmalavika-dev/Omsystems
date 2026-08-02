@@ -4070,22 +4070,27 @@ var NEVER = INVALID;
 // src/config.ts
 var schema = external_exports.object({
   CONTROL_PLANE_URL: external_exports.string().url(),
-  BRANCH_ID: external_exports.string().min(1),
+  BRANCH_ID: external_exports.preprocess((value) => value === "" ? void 0 : value, external_exports.string().min(1).optional()),
   EDGE_AGENT_ID: external_exports.preprocess((value) => value === "" ? void 0 : value, external_exports.string().min(1).optional()),
+  EDGE_ACTIVATION_CODE: external_exports.preprocess((value) => value === "" ? void 0 : value, external_exports.string().startsWith("sgact_").min(40).optional()),
   EDGE_AGENT_NAME: external_exports.string().min(2),
   EDGE_AGENT_VERSION: external_exports.string().default("0.1.0"),
   DEV_USER_ID: external_exports.preprocess((value) => value === "" ? void 0 : value, external_exports.string().min(1).optional()),
-  CAMERA_USERNAME: external_exports.string().min(1).default("admin"),
+  CAMERA_USERNAME: external_exports.string().default(""),
   CAMERA_PASSWORD: external_exports.string().default(""),
   ONVIF_ENDPOINTS: external_exports.string().default(""),
+  AUTO_DISCOVERY_ENABLED: external_exports.enum(["true", "false"]).default("true").transform((value) => value === "true"),
+  AUTO_DISCOVERY_INTERVAL_MS: external_exports.coerce.number().int().min(6e4).max(864e5).default(15 * 6e4),
   DISCOVERY_TIMEOUT_MS: external_exports.coerce.number().int().min(500).max(3e4).default(5e3),
   ONVIF_TIMEOUT_MS: external_exports.coerce.number().int().min(500).max(3e4).default(8e3),
   FFPROBE_PATH: external_exports.string().default("ffprobe"),
   FFMPEG_PATH: external_exports.string().default("ffmpeg"),
   LIVE_MEDIA_ENABLED: external_exports.enum(["true", "false"]).default("false").transform((value) => value === "true"),
+  EDGE_MANAGED_MEDIA_BOOTSTRAP: external_exports.enum(["true", "false"]).default("false").transform((value) => value === "true"),
   EDGE_LIVE_GATEWAY_HOST: external_exports.string().default("127.0.0.1"),
   EDGE_LIVE_GATEWAY_PORT: external_exports.coerce.number().int().min(1).max(65535).default(8090),
   MEDIAMTX_PATH: external_exports.string().default("mediamtx"),
+  MEDIA_RUNTIME_MANAGED: external_exports.enum(["true", "false"]).default("true").transform((value) => value === "true"),
   MEDIAMTX_API_URL: external_exports.string().url().default("http://127.0.0.1:9997"),
   MEDIAMTX_HLS_URL: external_exports.string().url().default("http://127.0.0.1:8888"),
   MEDIA_TUNNEL_MODE: external_exports.enum(["disabled", "quick", "named"]).default("disabled"),
@@ -4112,6 +4117,15 @@ var schema = external_exports.object({
     (value) => value === "" ? void 0 : value,
     external_exports.string().min(32).optional()
   ),
+  EDGE_IDENTITY_PATH: external_exports.string().default("./data/device-identity.enc"),
+  EDGE_IDENTITY_KEY_PATH: external_exports.string().default("./data/device-identity.key"),
+  EDGE_OFFLINE_OUTBOX_PATH: external_exports.string().default("./data/offline-outbox.enc"),
+  EDGE_OFFLINE_OUTBOX_KEY_PATH: external_exports.string().default("./data/offline-outbox.key"),
+  EDGE_OFFLINE_OUTBOX_MAX_ITEMS: external_exports.coerce.number().int().min(100).max(1e5).default(1e4),
+  EDGE_CAMERA_CREDENTIAL_VAULT_PATH: external_exports.string().default("./data/camera-credentials.enc"),
+  EDGE_CAMERA_CREDENTIAL_VAULT_KEY_PATH: external_exports.string().default("./data/camera-credentials.key"),
+  EDGE_UPDATE_PUBLIC_KEY: external_exports.preprocess((value) => value === "" ? void 0 : value, external_exports.string().min(64).optional()),
+  EDGE_UPDATE_STAGING_PATH: external_exports.string().default("./data/updates"),
   CONTROL_PLANE_TIMEOUT_MS: external_exports.coerce.number().int().min(1e3).max(12e4).default(15e3),
   EDGE_LOG_PATH: external_exports.string().min(1).default("./logs/edge-agent.log"),
   INTERNET_LINKS_JSON: external_exports.string().default("[]").transform((value, context) => {
@@ -4152,6 +4166,7 @@ var schema = external_exports.object({
     model: external_exports.string().optional(),
     host: external_exports.string().min(1),
     port: external_exports.number().int().min(1).max(65535),
+    rtspPort: external_exports.number().int().min(1).max(65535).optional(),
     secure: external_exports.boolean().optional(),
     username: external_exports.string().optional(),
     password: external_exports.string().optional(),
@@ -4166,6 +4181,7 @@ var schema = external_exports.object({
       // Use a value no greater than the branch policy's allowed gap. A smaller
       // value is conservative and remains valid for a less strict policy.
       continuityGapSeconds: external_exports.number().int().min(0).max(86400).default(30),
+      verifyPlayback: external_exports.boolean().default(true),
       channels: external_exports.array(external_exports.object({
         cameraId: external_exports.string().min(1).max(200),
         channel: external_exports.number().int().min(0).max(65535)
@@ -4192,13 +4208,17 @@ var schema = external_exports.object({
       message: "EDGE_AGENT_ID is required with EDGE_BRIDGE_SHARED_KEY; download a branch-specific package from the dashboard"
     });
   }
-  if (value.LIVE_MEDIA_ENABLED && !value.EDGE_BRIDGE_SHARED_KEY) {
-    context.addIssue({ code: external_exports.ZodIssueCode.custom, path: ["EDGE_BRIDGE_SHARED_KEY"], message: "Live media requires EDGE_BRIDGE_SHARED_KEY" });
+  if (!value.EDGE_ACTIVATION_CODE && !(value.BRANCH_ID && value.EDGE_AGENT_ID && value.EDGE_BRIDGE_SHARED_KEY) && !value.DEV_USER_ID) {
+    context.addIssue({
+      code: external_exports.ZodIssueCode.custom,
+      path: ["EDGE_ACTIVATION_CODE"],
+      message: "Provide a one-time EDGE_ACTIVATION_CODE, or an existing legacy/development identity"
+    });
   }
   if (value.LIVE_MEDIA_ENABLED && value.MEDIA_TUNNEL_MODE === "disabled" && !value.PUBLIC_MEDIA_GATEWAY_URL) {
     context.addIssue({ code: external_exports.ZodIssueCode.custom, path: ["PUBLIC_MEDIA_GATEWAY_URL"], message: "Live media without a tunnel requires a reachable PUBLIC_MEDIA_GATEWAY_URL" });
   }
-  if (value.LIVE_MEDIA_ENABLED && value.MEDIA_TUNNEL_MODE === "named" && (!value.CLOUDFLARED_TUNNEL_TOKEN || !value.PUBLIC_MEDIA_GATEWAY_URL)) {
+  if (value.LIVE_MEDIA_ENABLED && value.MEDIA_TUNNEL_MODE === "named" && !value.EDGE_MANAGED_MEDIA_BOOTSTRAP && (!value.CLOUDFLARED_TUNNEL_TOKEN || !value.PUBLIC_MEDIA_GATEWAY_URL)) {
     context.addIssue({ code: external_exports.ZodIssueCode.custom, path: ["CLOUDFLARED_TUNNEL_TOKEN"], message: "Named media tunnels require CLOUDFLARED_TUNNEL_TOKEN and PUBLIC_MEDIA_GATEWAY_URL" });
   }
 });
@@ -8581,11 +8601,28 @@ function compatibilityNotes(vendor) {
 
 // src/registration/gateway-client.ts
 var GatewayClient = class {
-  constructor(baseUrl, developmentUserId, edgeBridgeSharedKey, timeoutMs = 15e3) {
+  constructor(baseUrl, developmentUserId, edgeBridgeSharedKey, timeoutMs = 15e3, outbox) {
     this.baseUrl = baseUrl;
     this.developmentUserId = developmentUserId;
     this.edgeBridgeSharedKey = edgeBridgeSharedKey;
     this.timeoutMs = timeoutMs;
+    this.outbox = outbox;
+  }
+  edgeCredential;
+  useEdgeCredential(credential) {
+    this.edgeCredential = credential;
+  }
+  async activate(activationCode, deviceUuid, version, commandPublicKey) {
+    return this.request("/v1/edge-enrollment/activate", {
+      method: "POST",
+      body: JSON.stringify({ activationCode, deviceUuid, version, commandPublicKey })
+    }, true);
+  }
+  async getBootstrap(agentId) {
+    return this.request(
+      `/v1/edge-agents/${encodeURIComponent(agentId)}/bootstrap`,
+      { method: "GET" }
+    );
   }
   async register(branchId, name, version) {
     return this.request(
@@ -8613,19 +8650,19 @@ var GatewayClient = class {
     return response.data;
   }
   async submitTelemetry(agentId, payload) {
-    return this.request(
+    return this.requestOrQueue(
       `/v1/edge-agents/${encodeURIComponent(agentId)}/telemetry`,
       { method: "POST", body: JSON.stringify(payload) }
     );
   }
   async submitRecorderHdd(agentId, payload) {
-    return this.request(
+    return this.requestOrQueue(
       `/v1/edge-agents/${encodeURIComponent(agentId)}/recorder-hdd`,
       { method: "POST", body: JSON.stringify(payload) }
     );
   }
   async submitRecorderArchive(agentId, payload) {
-    return this.request(
+    return this.requestOrQueue(
       `/v1/edge-agents/${encodeURIComponent(agentId)}/recorder-archive`,
       { method: "POST", body: JSON.stringify(payload) }
     );
@@ -8654,7 +8691,49 @@ var GatewayClient = class {
       { method: "POST", body: JSON.stringify({ token }) }
     );
   }
-  async request(path, init) {
+  async claimCommand(agentId) {
+    return this.request(
+      `/v1/edge-agents/${encodeURIComponent(agentId)}/commands/next`,
+      { method: "GET" }
+    );
+  }
+  async completeCommand(agentId, commandId, result2) {
+    return this.requestOrQueue(
+      `/v1/edge-agents/${encodeURIComponent(agentId)}/commands/${encodeURIComponent(commandId)}/complete`,
+      { method: "POST", body: JSON.stringify(result2) }
+    );
+  }
+  async getUpdate(agentId, version) {
+    return this.request(
+      `/v1/edge-agents/${encodeURIComponent(agentId)}/updates/next?version=${encodeURIComponent(version)}`,
+      { method: "GET" }
+    );
+  }
+  async flushOutbox() {
+    if (!this.outbox) return { delivered: 0, pending: 0 };
+    return this.outbox.flush(async (queued) => {
+      await this.request(queued.path, {
+        method: queued.method,
+        body: queued.body,
+        ...queued.headers ? { headers: queued.headers } : {}
+      });
+    });
+  }
+  async requestOrQueue(path, init) {
+    try {
+      return await this.request(path, init);
+    } catch (error) {
+      if (!this.outbox || error instanceof GatewayRequestError && error.status < 500) throw error;
+      const pending = await this.outbox.enqueue({
+        path,
+        method: "POST",
+        body: String(init.body ?? ""),
+        ...init.headers ? { headers: init.headers } : {}
+      });
+      return { accepted: true, duplicate: false, queued: true, pending };
+    }
+  }
+  async request(path, init, skipAuth = false) {
     const url = new URL(path, this.baseUrl);
     let response;
     try {
@@ -8664,7 +8743,8 @@ var GatewayClient = class {
         headers: {
           "content-type": "application/json",
           ...this.developmentUserId ? { "x-user-id": this.developmentUserId } : {},
-          ...this.edgeBridgeSharedKey ? { "x-edge-bridge-key": this.edgeBridgeSharedKey } : {},
+          ...!skipAuth && this.edgeCredential ? { "x-edge-agent-token": this.edgeCredential } : {},
+          ...!skipAuth && !this.edgeCredential && this.edgeBridgeSharedKey ? { "x-edge-bridge-key": this.edgeBridgeSharedKey } : {},
           ...init.headers
         }
       });
@@ -8679,9 +8759,15 @@ var GatewayClient = class {
       body = text.slice(0, 1e3);
     }
     if (!response.ok) {
-      throw new Error(`Control plane ${response.status}: ${JSON.stringify(body)}`);
+      throw new GatewayRequestError(response.status, `Control plane ${response.status}: ${JSON.stringify(body)}`);
     }
     return body;
+  }
+};
+var GatewayRequestError = class extends Error {
+  constructor(status, message) {
+    super(message);
+    this.status = status;
   }
 };
 
@@ -9294,6 +9380,23 @@ function md5(value) {
 var RECORDING_EVIDENCE_WINDOW_MS = 5 * 6e4;
 function looksLikeRecorder(identity, scopes = []) {
   return /(?:^|[\s_-])(dvr|nvr|xvr|uvr)(?:$|[\s_-])|video recorder/i.test(`${identity.manufacturer ?? ""} ${identity.model ?? ""} ${scopes.join(" ")}`);
+}
+function recorderPlaybackUri(config, sourceChannel, newestPlayableAt) {
+  if (!config.username || !config.password) return void 0;
+  const newest = new Date(newestPlayableAt);
+  if (!Number.isFinite(newest.getTime())) return void 0;
+  const end = new Date(newest.getTime() + 5e3);
+  const start = new Date(newest.getTime() - 3e4);
+  const credentials = `${encodeURIComponent(config.username)}:${encodeURIComponent(config.password)}`;
+  const authority = `${credentials}@${config.host}:${config.rtspPort ?? 554}`;
+  if (config.vendor === "hikvision") {
+    const track = sourceChannel >= 100 ? sourceChannel : sourceChannel * 100 + 1;
+    return `rtsp://${authority}/Streaming/tracks/${track}?starttime=${compactUtc(start)}&endtime=${compactUtc(end)}`;
+  }
+  if (config.vendor === "dahua" || config.vendor === "cp-plus") {
+    return `rtsp://${authority}/cam/playback?channel=${sourceChannel}&subtype=0&starttime=${dahuaPlaybackTime(start)}&endtime=${dahuaPlaybackTime(end)}`;
+  }
+  return void 0;
 }
 async function probeRecorder(config, timeoutMs, options = {}) {
   const started = performance.now();
@@ -9908,6 +10011,12 @@ function classifyError(error) {
   const message = error instanceof Error ? error.message : String(error);
   return /timeout|abort/i.test(message) ? "recorder_probe_timeout" : "recorder_unreachable";
 }
+function compactUtc(value) {
+  return value.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}Z$/, "Z");
+}
+function dahuaPlaybackTime(value) {
+  return value.toISOString().replace(/[-:]/g, "_").replace("T", "_").replace(/\.\d{3}Z$/, "");
+}
 
 // src/monitoring/camera-heartbeat.ts
 var import_node_crypto5 = require("node:crypto");
@@ -10007,14 +10116,15 @@ function assessLumaFrame(previous, frame) {
   };
 }
 var CameraHeartbeatService = class {
-  constructor(apiEndpoint, branchId, edgeAgentId, developmentUserId, ffprobePath = "ffprobe", ffmpegPath = "ffmpeg", edgeBridgeSharedKey) {
+  constructor(apiEndpoint, branchId, edgeAgentId, developmentUserId, ffprobePath = "ffprobe", ffmpegPath = "ffmpeg", edgeAuthCredential, telemetrySender) {
     this.apiEndpoint = apiEndpoint;
     this.branchId = branchId;
     this.edgeAgentId = edgeAgentId;
     this.developmentUserId = developmentUserId;
     this.ffprobePath = ffprobePath;
     this.ffmpegPath = ffmpegPath;
-    this.edgeBridgeSharedKey = edgeBridgeSharedKey;
+    this.edgeAuthCredential = edgeAuthCredential;
+    this.telemetrySender = telemetrySender;
   }
   cameras = /* @__PURE__ */ new Map();
   frameStates = /* @__PURE__ */ new Map();
@@ -10137,38 +10247,43 @@ var CameraHeartbeatService = class {
   }
   async sendToPlatform(cameraId, data) {
     const observedAt = (/* @__PURE__ */ new Date()).toISOString();
+    const payload = {
+      branchId: this.branchId,
+      edgeAgentId: this.edgeAgentId,
+      deviceType: "camera",
+      deviceId: cameraId,
+      observedAt,
+      source: "rtsp",
+      quality: data.quality,
+      idempotencyKey: `${this.edgeAgentId}:camera:${cameraId}:${observedAt}`,
+      metrics: {
+        status: data.status,
+        responseTimeMs: data.responseTimeMs,
+        streamActive: data.streamActive,
+        videoLoss: data.videoLoss,
+        width: data.currentResolution?.width ?? null,
+        height: data.currentResolution?.height ?? null,
+        codec: data.codec ?? null,
+        fps: data.currentFps ?? null,
+        bitrateKbps: data.currentBitrate ?? null,
+        packetLossPercent: data.packetLoss ?? null,
+        imageFrozen: data.imageFrozen ?? null,
+        blackScreen: data.blackScreen ?? null
+      },
+      reasonCodes: data.reasonCodes
+    };
+    if (this.telemetrySender) {
+      await this.telemetrySender(payload);
+      return;
+    }
     const response = await fetch(`${this.apiEndpoint}/v1/edge-agents/${encodeURIComponent(this.edgeAgentId)}/telemetry`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         ...this.developmentUserId ? { "x-user-id": this.developmentUserId } : {},
-        ...this.edgeBridgeSharedKey ? { "x-edge-bridge-key": this.edgeBridgeSharedKey } : {}
+        ...this.edgeAuthCredential?.startsWith("sggw_") ? { "x-edge-agent-token": this.edgeAuthCredential } : this.edgeAuthCredential ? { "x-edge-bridge-key": this.edgeAuthCredential } : {}
       },
-      body: JSON.stringify({
-        branchId: this.branchId,
-        edgeAgentId: this.edgeAgentId,
-        deviceType: "camera",
-        deviceId: cameraId,
-        observedAt,
-        source: "rtsp",
-        quality: data.quality,
-        idempotencyKey: `${this.edgeAgentId}:camera:${cameraId}:${observedAt}`,
-        metrics: {
-          status: data.status,
-          responseTimeMs: data.responseTimeMs,
-          streamActive: data.streamActive,
-          videoLoss: data.videoLoss,
-          width: data.currentResolution?.width ?? null,
-          height: data.currentResolution?.height ?? null,
-          codec: data.codec ?? null,
-          fps: data.currentFps ?? null,
-          bitrateKbps: data.currentBitrate ?? null,
-          packetLossPercent: data.packetLoss ?? null,
-          imageFrozen: data.imageFrozen ?? null,
-          blackScreen: data.blackScreen ?? null
-        },
-        reasonCodes: data.reasonCodes
-      })
+      body: JSON.stringify(payload)
     });
     if (!response.ok) throw new Error(`HTTP ${response.status}: ${await response.text()}`);
   }
@@ -10178,7 +10293,7 @@ var CameraHeartbeatService = class {
   }
 };
 var heartbeatService = null;
-function initializeCameraHeartbeat(apiEndpoint, branchId, edgeAgentId, developmentUserId, ffprobePath = "ffprobe", ffmpegPath = "ffmpeg", edgeBridgeSharedKey) {
+function initializeCameraHeartbeat(apiEndpoint, branchId, edgeAgentId, developmentUserId, ffprobePath = "ffprobe", ffmpegPath = "ffmpeg", edgeAuthCredential, telemetrySender) {
   if (!heartbeatService) {
     heartbeatService = new CameraHeartbeatService(
       apiEndpoint,
@@ -10187,7 +10302,8 @@ function initializeCameraHeartbeat(apiEndpoint, branchId, edgeAgentId, developme
       developmentUserId,
       ffprobePath,
       ffmpegPath,
-      edgeBridgeSharedKey
+      edgeAuthCredential,
+      telemetrySender
     );
   }
   return heartbeatService;
@@ -10333,7 +10449,7 @@ var EdgeLiveGateway = class {
       return this.proxyHls(request, response);
     }
     if (request.method === "POST" && url.pathname === "/v1/live/start") {
-      if (!secureEqualHeader(request.headers["x-edge-bridge-key"], this.options.edgeBridgeSharedKey)) {
+      if (this.options.edgeBridgeSharedKey && !secureEqualHeader(request.headers["x-edge-bridge-key"], this.options.edgeBridgeSharedKey)) {
         return sendJson(response, 401, { error: "invalid_bridge_identity" });
       }
       const body = await readJsonBody(request);
@@ -10410,15 +10526,15 @@ async function startEdgeMediaRuntime(input) {
   await (0, import_promises4.mkdir)(runtimeDirectory, { recursive: true });
   const mediaConfigPath = (0, import_node_path4.join)(runtimeDirectory, "mediamtx.yml");
   await (0, import_promises4.writeFile)(mediaConfigPath, mediaMtxConfiguration(config), "utf8");
-  const mediaMtx = startManagedProcess("MediaMTX", config.MEDIAMTX_PATH, [mediaConfigPath], runtimeDirectory);
-  await waitForHttp(new URL("/v3/config/global/get", config.MEDIAMTX_API_URL), mediaMtx, 15e3);
+  const mediaMtx = config.MEDIA_RUNTIME_MANAGED ? startManagedProcess("MediaMTX", config.MEDIAMTX_PATH, [mediaConfigPath], runtimeDirectory) : void 0;
+  await waitForHttp(new URL("/v3/config/global/get", config.MEDIAMTX_API_URL), mediaMtx, 3e4);
   const router = new MediaMtxRouter(config.MEDIAMTX_API_URL);
   let resolvedPublicUrl = config.PUBLIC_MEDIA_GATEWAY_URL ?? "";
   const liveGateway = buildEdgeLiveGateway({
     consumer: { consume: (token) => input.gateway.consumeLiveSession(input.agentId, token) },
     router,
     resolveSecret: (reference) => input.secrets.get(reference),
-    edgeBridgeSharedKey: config.EDGE_BRIDGE_SHARED_KEY,
+    ...config.EDGE_BRIDGE_SHARED_KEY ? { edgeBridgeSharedKey: config.EDGE_BRIDGE_SHARED_KEY } : {},
     publicBaseUrl: () => resolvedPublicUrl,
     mediaMtxHlsUrl: config.MEDIAMTX_HLS_URL,
     accessTtlMs: config.MEDIA_ACCESS_TTL_SECONDS * 1e3
@@ -10445,7 +10561,7 @@ async function startEdgeMediaRuntime(input) {
   } catch (error) {
     tunnel?.kill();
     await liveGateway.close();
-    mediaMtx.kill();
+    mediaMtx?.kill();
     throw error;
   }
   return {
@@ -10453,7 +10569,7 @@ async function startEdgeMediaRuntime(input) {
     async stop() {
       tunnel?.kill();
       await liveGateway.close().catch(() => void 0);
-      mediaMtx.kill();
+      mediaMtx?.kill();
     }
   };
 }
@@ -10587,7 +10703,7 @@ function pipeProcessLogs(name, child) {
 async function waitForHttp(url, child, timeoutMs) {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
-    if (child.exitCode !== null) throw new Error(`MediaMTX exited before becoming ready (${child.exitCode})`);
+    if (child && child.exitCode !== null) throw new Error(`MediaMTX exited before becoming ready (${child.exitCode})`);
     try {
       if ((await fetch(url, { signal: AbortSignal.timeout(1e3) })).ok) return;
     } catch {
@@ -10657,6 +10773,10 @@ function forwardMediaHeaders(headers) {
 var import_node_fs4 = require("node:fs");
 var import_node_child_process5 = require("node:child_process");
 var import_node_path5 = require("node:path");
+var import_node_url = require("node:url");
+var import_meta = {};
+var __filename = (0, import_node_url.fileURLToPath)(import_meta.url);
+var __dirname = (0, import_node_path5.dirname)(__filename);
 var ASSET_ROOT = (0, import_node_path5.join)(__dirname, "..", "vendor", "windows");
 var INSTALLER_ROOT = (0, import_node_path5.join)(__dirname, "..", "installer", "windows");
 var REQUIRED_BUNDLE_ASSETS = [
@@ -10713,6 +10833,351 @@ function powerShellLiteral(value) {
   return `'${value.replaceAll("'", "''")}'`;
 }
 
+// src/security/device-identity.ts
+var import_node_crypto7 = require("node:crypto");
+var import_promises5 = require("node:fs/promises");
+var import_node_path6 = require("node:path");
+var DeviceIdentityStore = class {
+  constructor(identityPath, keyPath) {
+    this.identityPath = identityPath;
+    this.keyPath = keyPath;
+  }
+  async load() {
+    let raw;
+    try {
+      raw = await (0, import_promises5.readFile)(this.identityPath, "utf8");
+    } catch (error) {
+      if (error.code === "ENOENT") return void 0;
+      throw error;
+    }
+    const envelope = JSON.parse(raw);
+    if (envelope.version !== 1) throw new Error("unsupported_device_identity_version");
+    const key2 = await this.readKey();
+    const decipher = (0, import_node_crypto7.createDecipheriv)("aes-256-gcm", key2, Buffer.from(envelope.iv, "base64url"));
+    decipher.setAuthTag(Buffer.from(envelope.tag, "base64url"));
+    const plaintext = Buffer.concat([
+      decipher.update(Buffer.from(envelope.ciphertext, "base64url")),
+      decipher.final()
+    ]);
+    return validateIdentity(JSON.parse(plaintext.toString("utf8")));
+  }
+  async save(identity) {
+    const validated = validateIdentity(identity);
+    const key2 = await this.loadOrCreateKey();
+    const iv = (0, import_node_crypto7.randomBytes)(12);
+    const cipher = (0, import_node_crypto7.createCipheriv)("aes-256-gcm", key2, iv);
+    const ciphertext = Buffer.concat([
+      cipher.update(JSON.stringify(validated), "utf8"),
+      cipher.final()
+    ]);
+    const envelope = {
+      version: 1,
+      iv: iv.toString("base64url"),
+      tag: cipher.getAuthTag().toString("base64url"),
+      ciphertext: ciphertext.toString("base64url")
+    };
+    await (0, import_promises5.mkdir)((0, import_node_path6.dirname)(this.identityPath), { recursive: true });
+    const temporary = `${this.identityPath}.${process.pid}.tmp`;
+    await (0, import_promises5.writeFile)(temporary, JSON.stringify(envelope), { encoding: "utf8", mode: 384 });
+    await (0, import_promises5.rename)(temporary, this.identityPath);
+  }
+  static newDeviceUuid() {
+    return (0, import_node_crypto7.randomUUID)();
+  }
+  static newCommandKeyPair() {
+    const { publicKey, privateKey } = (0, import_node_crypto7.generateKeyPairSync)("rsa", {
+      modulusLength: 2048,
+      publicKeyEncoding: { type: "spki", format: "pem" },
+      privateKeyEncoding: { type: "pkcs8", format: "pem" }
+    });
+    return { publicKey, privateKey };
+  }
+  async readKey() {
+    const key2 = Buffer.from((await (0, import_promises5.readFile)(this.keyPath, "utf8")).trim(), "base64url");
+    if (key2.length !== 32) throw new Error("invalid_device_identity_key");
+    return key2;
+  }
+  async loadOrCreateKey() {
+    try {
+      return await this.readKey();
+    } catch (error) {
+      if (error.code !== "ENOENT") throw error;
+    }
+    const key2 = (0, import_node_crypto7.randomBytes)(32);
+    await (0, import_promises5.mkdir)((0, import_node_path6.dirname)(this.keyPath), { recursive: true });
+    await (0, import_promises5.writeFile)(this.keyPath, key2.toString("base64url"), { encoding: "utf8", mode: 384, flag: "wx" }).catch(async (error) => {
+      if (error.code !== "EEXIST") throw error;
+    });
+    return this.readKey();
+  }
+};
+function validateIdentity(value) {
+  if (!value || typeof value !== "object") throw new Error("invalid_device_identity");
+  const candidate = value;
+  for (const key2 of ["deviceUuid", "agentId", "branchId", "credential", "enrolledAt"]) {
+    if (typeof candidate[key2] !== "string" || !candidate[key2]) throw new Error("invalid_device_identity");
+  }
+  if (candidate.media && (candidate.media.enabled !== true || candidate.media.managed !== true || candidate.media.mode !== "named" || typeof candidate.media.publicUrl !== "string" || !candidate.media.publicUrl.startsWith("https://") || typeof candidate.media.tunnelToken !== "string" || candidate.media.tunnelToken.length < 20)) throw new Error("invalid_device_media_identity");
+  return candidate;
+}
+
+// src/offline/encrypted-outbox.ts
+var import_node_crypto8 = require("node:crypto");
+var import_promises6 = require("node:fs/promises");
+var import_node_path7 = require("node:path");
+var EncryptedOutbox = class {
+  constructor(path, keyPath, maxItems = 1e4) {
+    this.path = path;
+    this.keyPath = keyPath;
+    this.maxItems = maxItems;
+  }
+  items = [];
+  async load() {
+    let raw;
+    try {
+      raw = await (0, import_promises6.readFile)(this.path, "utf8");
+    } catch (error) {
+      if (error.code === "ENOENT") return;
+      throw error;
+    }
+    const envelope = JSON.parse(raw);
+    const key2 = await this.readKey();
+    const decipher = (0, import_node_crypto8.createDecipheriv)("aes-256-gcm", key2, Buffer.from(envelope.iv, "base64url"));
+    decipher.setAuthTag(Buffer.from(envelope.tag, "base64url"));
+    const plaintext = Buffer.concat([
+      decipher.update(Buffer.from(envelope.ciphertext, "base64url")),
+      decipher.final()
+    ]);
+    const values = JSON.parse(plaintext.toString("utf8"));
+    if (!Array.isArray(values)) throw new Error("invalid_offline_outbox");
+    this.items = values.slice(0, this.maxItems);
+  }
+  async enqueue(request) {
+    if (this.items.length >= this.maxItems) throw new Error("offline_outbox_capacity_exceeded");
+    this.items.push({ ...request, id: (0, import_node_crypto8.randomUUID)(), queuedAt: (/* @__PURE__ */ new Date()).toISOString(), attempts: 0 });
+    await this.persist();
+    return this.items.length;
+  }
+  async flush(sender, limit = 100) {
+    let delivered = 0;
+    while (this.items.length > 0 && delivered < limit) {
+      const item = this.items[0];
+      try {
+        await sender(item);
+        this.items.shift();
+        delivered += 1;
+      } catch {
+        item.attempts += 1;
+        break;
+      }
+    }
+    if (delivered > 0 || this.items[0]?.attempts) await this.persist();
+    return { delivered, pending: this.items.length };
+  }
+  get pending() {
+    return this.items.length;
+  }
+  async persist() {
+    const key2 = await this.loadOrCreateKey();
+    const iv = (0, import_node_crypto8.randomBytes)(12);
+    const cipher = (0, import_node_crypto8.createCipheriv)("aes-256-gcm", key2, iv);
+    const ciphertext = Buffer.concat([cipher.update(JSON.stringify(this.items), "utf8"), cipher.final()]);
+    const envelope = {
+      version: 1,
+      iv: iv.toString("base64url"),
+      tag: cipher.getAuthTag().toString("base64url"),
+      ciphertext: ciphertext.toString("base64url")
+    };
+    await (0, import_promises6.mkdir)((0, import_node_path7.dirname)(this.path), { recursive: true });
+    const temporary = `${this.path}.${process.pid}.tmp`;
+    await (0, import_promises6.writeFile)(temporary, JSON.stringify(envelope), { encoding: "utf8", mode: 384 });
+    await (0, import_promises6.rename)(temporary, this.path);
+  }
+  async readKey() {
+    const key2 = Buffer.from((await (0, import_promises6.readFile)(this.keyPath, "utf8")).trim(), "base64url");
+    if (key2.length !== 32) throw new Error("invalid_offline_outbox_key");
+    return key2;
+  }
+  async loadOrCreateKey() {
+    try {
+      return await this.readKey();
+    } catch (error) {
+      if (error.code !== "ENOENT") throw error;
+    }
+    const key2 = (0, import_node_crypto8.randomBytes)(32);
+    await (0, import_promises6.mkdir)((0, import_node_path7.dirname)(this.keyPath), { recursive: true });
+    await (0, import_promises6.writeFile)(this.keyPath, key2.toString("base64url"), { encoding: "utf8", mode: 384, flag: "wx" }).catch(async (error) => {
+      if (error.code !== "EEXIST") throw error;
+    });
+    return this.readKey();
+  }
+};
+
+// src/updates/signed-update.ts
+var import_node_crypto9 = require("node:crypto");
+var import_promises7 = require("node:fs/promises");
+var import_node_path8 = require("node:path");
+var MAX_ARTIFACT_BYTES = 512 * 1024 * 1024;
+async function stageSignedUpdate(release, publicKeyPem, stagingRoot) {
+  if (!verifyManifest(release, publicKeyPem)) throw new Error("update_signature_invalid");
+  const url = new URL(release.artifactUrl);
+  if (url.protocol !== "https:" && !["localhost", "127.0.0.1"].includes(url.hostname)) {
+    throw new Error("update_artifact_requires_https");
+  }
+  const targetDirectory = (0, import_node_path8.join)(stagingRoot, safe(release.version));
+  const temporaryPath = (0, import_node_path8.join)(targetDirectory, `artifact.${process.pid}.part`);
+  const artifactPath = (0, import_node_path8.join)(targetDirectory, "edge-agent.bundle");
+  await (0, import_promises7.mkdir)(targetDirectory, { recursive: true });
+  try {
+    const response = await fetch(url, { signal: AbortSignal.timeout(5 * 6e4) });
+    if (!response.ok || !response.body) throw new Error(`update_download_failed_${response.status}`);
+    const file = await (0, import_promises7.open)(temporaryPath, "w", 384);
+    const hash = (0, import_node_crypto9.createHash)("sha256");
+    let bytes = 0;
+    try {
+      const reader = response.body.getReader();
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        bytes += value.byteLength;
+        if (bytes > MAX_ARTIFACT_BYTES) throw new Error("update_artifact_too_large");
+        hash.update(value);
+        await file.write(value);
+      }
+    } finally {
+      await file.close();
+    }
+    const digest = hash.digest("hex");
+    if (digest !== release.sha256.toLowerCase()) throw new Error("update_checksum_mismatch");
+    await (0, import_promises7.rename)(temporaryPath, artifactPath);
+    const marker = {
+      releaseId: release.id,
+      version: release.version,
+      artifactPath,
+      sha256: digest,
+      signature: release.signature,
+      stagedAt: (/* @__PURE__ */ new Date()).toISOString()
+    };
+    await (0, import_promises7.writeFile)((0, import_node_path8.join)(targetDirectory, "ready.json"), JSON.stringify(marker, null, 2), { encoding: "utf8", mode: 384 });
+    return { ...marker, bytes };
+  } catch (error) {
+    await (0, import_promises7.unlink)(temporaryPath).catch(() => void 0);
+    throw error;
+  }
+}
+function verifyManifest(release, publicKeyPem) {
+  try {
+    const key2 = (0, import_node_crypto9.createPublicKey)(publicKeyPem.replaceAll("\\n", "\n"));
+    if (key2.asymmetricKeyType !== "ed25519") return false;
+    const canonical = Buffer.from(JSON.stringify({
+      artifactUrl: release.artifactUrl,
+      notes: release.notes,
+      sha256: release.sha256.toLowerCase(),
+      version: release.version
+    }), "utf8");
+    return (0, import_node_crypto9.verify)(null, canonical, key2, Buffer.from(release.signature, "base64url"));
+  } catch {
+    return false;
+  }
+}
+function safe(value) {
+  return value.replace(/[^0-9A-Za-z._-]/g, "-");
+}
+
+// src/index.ts
+var import_promises9 = require("node:fs/promises");
+
+// src/security/camera-credential-vault.ts
+var import_node_crypto10 = require("node:crypto");
+var import_promises8 = require("node:fs/promises");
+var import_node_path9 = require("node:path");
+var CameraCredentialVault = class {
+  constructor(path, keyPath) {
+    this.path = path;
+    this.keyPath = keyPath;
+  }
+  values = {};
+  async load() {
+    let raw;
+    try {
+      raw = await (0, import_promises8.readFile)(this.path, "utf8");
+    } catch (error) {
+      if (error.code === "ENOENT") return;
+      throw error;
+    }
+    const envelope = JSON.parse(raw);
+    if (envelope.version !== 1) throw new Error("unsupported_camera_credential_vault");
+    const key2 = await this.readKey();
+    const decipher = (0, import_node_crypto10.createDecipheriv)("aes-256-gcm", key2, Buffer.from(envelope.iv, "base64url"));
+    decipher.setAuthTag(Buffer.from(envelope.tag, "base64url"));
+    const plaintext = Buffer.concat([
+      decipher.update(Buffer.from(envelope.ciphertext, "base64url")),
+      decipher.final()
+    ]);
+    const parsed = JSON.parse(plaintext.toString("utf8"));
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error("invalid_camera_credential_vault");
+    this.values = parsed;
+  }
+  get(host) {
+    return this.values[`host:${host}`] ?? this.values.default;
+  }
+  async set(input) {
+    const key2 = input.host ? `host:${input.host}` : "default";
+    this.values[key2] = { username: input.username, password: input.password, updatedAt: (/* @__PURE__ */ new Date()).toISOString() };
+    await this.persist();
+    return { scope: input.host ? "single-camera" : "branch-default", updatedAt: this.values[key2].updatedAt };
+  }
+  async persist() {
+    const key2 = await this.loadOrCreateKey();
+    const iv = (0, import_node_crypto10.randomBytes)(12);
+    const cipher = (0, import_node_crypto10.createCipheriv)("aes-256-gcm", key2, iv);
+    const ciphertext = Buffer.concat([cipher.update(JSON.stringify(this.values), "utf8"), cipher.final()]);
+    const envelope = {
+      version: 1,
+      iv: iv.toString("base64url"),
+      tag: cipher.getAuthTag().toString("base64url"),
+      ciphertext: ciphertext.toString("base64url")
+    };
+    await (0, import_promises8.mkdir)((0, import_node_path9.dirname)(this.path), { recursive: true });
+    const temporary = `${this.path}.${process.pid}.tmp`;
+    await (0, import_promises8.writeFile)(temporary, JSON.stringify(envelope), { encoding: "utf8", mode: 384 });
+    await (0, import_promises8.rename)(temporary, this.path);
+  }
+  async readKey() {
+    const key2 = Buffer.from((await (0, import_promises8.readFile)(this.keyPath, "utf8")).trim(), "base64url");
+    if (key2.length !== 32) throw new Error("invalid_camera_credential_vault_key");
+    return key2;
+  }
+  async loadOrCreateKey() {
+    try {
+      return await this.readKey();
+    } catch (error) {
+      if (error.code !== "ENOENT") throw error;
+    }
+    const key2 = (0, import_node_crypto10.randomBytes)(32);
+    await (0, import_promises8.mkdir)((0, import_node_path9.dirname)(this.keyPath), { recursive: true });
+    await (0, import_promises8.writeFile)(this.keyPath, key2.toString("base64url"), { encoding: "utf8", mode: 384, flag: "wx" }).catch(async (error) => {
+      if (error.code !== "EEXIST") throw error;
+    });
+    return this.readKey();
+  }
+};
+function openSealedCommand(envelope, privateKeyPem) {
+  if (envelope.algorithm !== "RSA-OAEP-256+A256GCM") throw new Error("unsupported_command_envelope");
+  const contentKey = (0, import_node_crypto10.privateDecrypt)({
+    key: privateKeyPem,
+    padding: import_node_crypto10.constants.RSA_PKCS1_OAEP_PADDING,
+    oaepHash: "sha256"
+  }, Buffer.from(envelope.wrappedKey, "base64url"));
+  const decipher = (0, import_node_crypto10.createDecipheriv)("aes-256-gcm", contentKey, Buffer.from(envelope.iv, "base64url"));
+  decipher.setAuthTag(Buffer.from(envelope.tag, "base64url"));
+  const plaintext = Buffer.concat([
+    decipher.update(Buffer.from(envelope.ciphertext, "base64url")),
+    decipher.final()
+  ]);
+  return JSON.parse(plaintext.toString("utf8"));
+}
+
 // src/index.ts
 async function main() {
   const argv = process.argv.slice(2);
@@ -10751,15 +11216,84 @@ async function main() {
     config.CONTROL_PLANE_URL,
     config.DEV_USER_ID,
     config.EDGE_BRIDGE_SHARED_KEY,
-    config.CONTROL_PLANE_TIMEOUT_MS
+    config.CONTROL_PLANE_TIMEOUT_MS,
+    void 0
   );
-  const agentId = config.EDGE_AGENT_ID ?? (await gateway.register(
-    config.BRANCH_ID,
-    config.EDGE_AGENT_NAME,
-    config.EDGE_AGENT_VERSION
-  )).id;
+  const identityStore = new DeviceIdentityStore(config.EDGE_IDENTITY_PATH, config.EDGE_IDENTITY_KEY_PATH);
+  const outbox = new EncryptedOutbox(
+    config.EDGE_OFFLINE_OUTBOX_PATH,
+    config.EDGE_OFFLINE_OUTBOX_KEY_PATH,
+    config.EDGE_OFFLINE_OUTBOX_MAX_ITEMS
+  );
+  await outbox.load();
+  let identity = await identityStore.load();
+  if (!identity && config.EDGE_ACTIVATION_CODE) {
+    const deviceUuid = DeviceIdentityStore.newDeviceUuid();
+    const commandKeys = DeviceIdentityStore.newCommandKeyPair();
+    const activated = await gateway.activate(
+      config.EDGE_ACTIVATION_CODE,
+      deviceUuid,
+      config.EDGE_AGENT_VERSION,
+      commandKeys.publicKey
+    );
+    identity = {
+      deviceUuid,
+      agentId: activated.agentId,
+      branchId: activated.branchId,
+      credential: activated.credential,
+      commandPublicKey: commandKeys.publicKey,
+      commandPrivateKey: commandKeys.privateKey,
+      ...activated.media ? { media: activated.media } : {},
+      ...activated.updatePublicKey ? { updatePublicKey: activated.updatePublicKey } : {},
+      enrolledAt: (/* @__PURE__ */ new Date()).toISOString()
+    };
+    await identityStore.save(identity);
+  }
+  if (identity) gateway.useEdgeCredential(identity.credential);
+  const legacyAgentId = !identity && config.EDGE_AGENT_ID && config.BRANCH_ID ? config.EDGE_AGENT_ID : !identity && config.BRANCH_ID ? (await gateway.register(config.BRANCH_ID, config.EDGE_AGENT_NAME, config.EDGE_AGENT_VERSION)).id : void 0;
+  const resolvedAgentId = identity?.agentId ?? legacyAgentId;
+  const resolvedBranchId = identity?.branchId ?? config.BRANCH_ID;
+  if (!resolvedAgentId || !resolvedBranchId) throw new Error("edge_gateway_identity_unavailable");
+  const agentId = resolvedAgentId;
+  const branchId = resolvedBranchId;
+  const authenticatedGateway = new GatewayClient(
+    config.CONTROL_PLANE_URL,
+    config.DEV_USER_ID,
+    config.EDGE_BRIDGE_SHARED_KEY,
+    config.CONTROL_PLANE_TIMEOUT_MS,
+    outbox
+  );
+  if (identity) authenticatedGateway.useEdgeCredential(identity.credential);
+  const control = authenticatedGateway;
+  if (identity && config.EDGE_MANAGED_MEDIA_BOOTSTRAP) {
+    try {
+      const bootstrap = await control.getBootstrap(agentId);
+      if (bootstrap.media) {
+        identity.media = bootstrap.media;
+        await identityStore.save(identity);
+      }
+    } catch (error) {
+      logger.warn("Managed media bootstrap refresh failed; using the last encrypted configuration", {
+        error: error instanceof Error ? error.message : String(error)
+      });
+    }
+  }
+  if (config.EDGE_MANAGED_MEDIA_BOOTSTRAP && identity?.media) {
+    Object.assign(config, {
+      LIVE_MEDIA_ENABLED: true,
+      MEDIA_RUNTIME_MANAGED: true,
+      MEDIA_TUNNEL_MODE: "named",
+      PUBLIC_MEDIA_GATEWAY_URL: identity.media.publicUrl,
+      CLOUDFLARED_TUNNEL_TOKEN: identity.media.tunnelToken
+    });
+  }
+  const credentialVault = new CameraCredentialVault(
+    config.EDGE_CAMERA_CREDENTIAL_VAULT_PATH,
+    config.EDGE_CAMERA_CREDENTIAL_VAULT_KEY_PATH
+  );
+  await credentialVault.load();
   if (hasArgument(argv, "--diagnose")) {
-    await gateway.heartbeat(agentId, config.EDGE_AGENT_VERSION, config.PUBLIC_MEDIA_GATEWAY_URL);
+    await control.heartbeat(agentId, config.EDGE_AGENT_VERSION, config.PUBLIC_MEDIA_GATEWAY_URL);
     process.stdout.write(`Connected to ${config.CONTROL_PLANE_URL} as edge agent ${agentId}.
 `);
     process.exit(0);
@@ -10773,19 +11307,24 @@ async function main() {
   let lastRecorderArchiveScanAt = 0;
   await secrets.load();
   if (config.LIVE_MEDIA_ENABLED) {
-    edgeMediaRuntime = await startEdgeMediaRuntime({ config, gateway, agentId, secrets });
+    edgeMediaRuntime = await startEdgeMediaRuntime({ config, gateway: control, agentId, secrets });
   }
   const cameraHeartbeat = initializeCameraHeartbeat(
     config.CONTROL_PLANE_URL,
-    config.BRANCH_ID,
+    branchId,
     agentId,
     config.DEV_USER_ID,
     config.FFPROBE_PATH,
     config.FFMPEG_PATH,
-    config.EDGE_BRIDGE_SHARED_KEY
+    identity?.credential ?? config.EDGE_BRIDGE_SHARED_KEY,
+    (payload) => control.submitTelemetry(agentId, payload)
   );
   let lastCameraConfigSyncAt = 0;
+  let lastDiscoveryAt = 0;
   await syncCameraHeartbeatConfig();
+  if (config.AUTO_DISCOVERY_ENABLED) {
+    await runAutomaticDiscovery();
+  }
   cameraHeartbeat.start(config.CAMERA_HEARTBEAT_INTERVAL_MS);
   if (config.EDGE_MEDIA_SHARED_KEY) {
     await startSecretProvider({
@@ -10796,7 +11335,7 @@ async function main() {
     });
     logger.info(`Local stream-secret provider listening on ${config.STREAM_SECRET_PROVIDER_HOST}:${config.STREAM_SECRET_PROVIDER_PORT}`);
   }
-  logger.info(`Edge agent ${agentId} registered; waiting for branch commands`, { branchId: config.BRANCH_ID, version: config.EDGE_AGENT_VERSION });
+  logger.info(`Edge agent ${agentId} registered; waiting for branch commands`, { branchId, version: config.EDGE_AGENT_VERSION });
   await heartbeatAndReport();
   let stopping = false;
   process.once("SIGINT", () => {
@@ -10808,17 +11347,36 @@ async function main() {
   while (!stopping) {
     try {
       await heartbeatAndReport();
-      const job = await gateway.claimScanJob(agentId, config.EDGE_AGENT_VERSION);
+      const replay = await control.flushOutbox();
+      if (replay.delivered > 0) logger.info("Replayed offline telemetry", replay);
+      if (config.AUTO_DISCOVERY_ENABLED && Date.now() - lastDiscoveryAt >= config.AUTO_DISCOVERY_INTERVAL_MS) {
+        await runAutomaticDiscovery();
+      }
+      const command = await control.claimCommand(agentId);
+      if (command) {
+        try {
+          const outcome = await executeEdgeCommand(command.type, command.payload);
+          await control.completeCommand(agentId, command.id, { status: "succeeded", result: outcome.result });
+          if (outcome.restartAgent) {
+            logger.info("Restarting edge agent after acknowledged remote command", { commandId: command.id });
+            process.exit(75);
+          }
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          await control.completeCommand(agentId, command.id, { status: "failed", error: message.slice(0, 2e3) });
+        }
+      }
+      const job = await control.claimScanJob(agentId, config.EDGE_AGENT_VERSION);
       if (job) {
         try {
           const resultCount = await scanBranch();
-          await gateway.completeScanJob(agentId, job.id, {
+          await control.completeScanJob(agentId, job.id, {
             status: "completed",
             resultCount
           });
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error);
-          await gateway.completeScanJob(agentId, job.id, {
+          await control.completeScanJob(agentId, job.id, {
             status: "failed",
             resultCount: 0,
             error: message.slice(0, 2e3)
@@ -10846,9 +11404,10 @@ async function main() {
       const serviceUrl = endpoint.xaddrs[0];
       if (!serviceUrl) continue;
       try {
-        const credentials = {
+        const credentials = credentialVault.get(endpoint.remoteAddress) ?? {
           username: config.CAMERA_USERNAME,
-          password: config.CAMERA_PASSWORD
+          password: config.CAMERA_PASSWORD,
+          updatedAt: "configuration"
         };
         const client = new OnvifClient(serviceUrl, credentials, config.ONVIF_TIMEOUT_MS);
         const device = await client.inspect();
@@ -10856,8 +11415,8 @@ async function main() {
         if (looksLikeRecorder(device, endpoint.scopes)) {
           const discoveredId = `recorder-${device.serialNumber || endpoint.remoteAddress}`.replace(/[^a-zA-Z0-9_.:-]/g, "-");
           const observedAt = (/* @__PURE__ */ new Date()).toISOString();
-          await gateway.submitTelemetry(agentId, {
-            branchId: config.BRANCH_ID,
+          await control.submitTelemetry(agentId, {
+            branchId,
             edgeAgentId: agentId,
             deviceType: "recorder",
             deviceId: discoveredId,
@@ -10901,7 +11460,7 @@ async function main() {
           });
         }
         const parsedServiceUrl = new URL(serviceUrl);
-        const discovery = await gateway.submitDiscovery(config.BRANCH_ID, {
+        const discovery = await control.submitDiscovery(branchId, {
           edgeAgentId: agentId,
           discoveryMethod: "onvif-ws-discovery",
           vendor,
@@ -10937,7 +11496,7 @@ async function main() {
           const serviceUrl2 = endpoint.xaddrs[0];
           if (!serviceUrl2) continue;
           const parsedServiceUrl = new URL(serviceUrl2);
-          await gateway.submitDiscovery(config.BRANCH_ID, {
+          await control.submitDiscovery(branchId, {
             edgeAgentId: agentId,
             discoveryMethod: "onvif-ws-discovery",
             vendor: "other",
@@ -10966,12 +11525,23 @@ async function main() {
     }
     return submitted;
   }
+  async function runAutomaticDiscovery() {
+    lastDiscoveryAt = Date.now();
+    try {
+      const discovered = await scanBranch();
+      logger.info("Automatic ONVIF discovery completed", { discovered });
+    } catch (error) {
+      logger.error("Automatic ONVIF discovery failed", {
+        error: error instanceof Error ? error.message : String(error)
+      });
+    }
+  }
   function delay2(milliseconds) {
     return new Promise((resolve3) => setTimeout(resolve3, milliseconds));
   }
   async function heartbeatAndReport() {
     const startedAt = Date.now();
-    await gateway.heartbeat(agentId, config.EDGE_AGENT_VERSION, edgeMediaRuntime?.publicUrl ?? config.PUBLIC_MEDIA_GATEWAY_URL);
+    await control.heartbeat(agentId, config.EDGE_AGENT_VERSION, edgeMediaRuntime?.publicUrl ?? config.PUBLIC_MEDIA_GATEWAY_URL);
     if (Date.now() - lastCameraConfigSyncAt >= config.CAMERA_CONFIG_REFRESH_MS) {
       await syncCameraHeartbeatConfig().catch((error) => {
         logger.error("Camera monitoring configuration refresh failed", { error: error instanceof Error ? error.message : String(error) });
@@ -10998,8 +11568,8 @@ async function main() {
     if (recorderReports.length) lastRecorderProbeAt = Date.now();
     if (scanRecorderArchives && recorderReports.length) lastRecorderArchiveScanAt = Date.now();
     await Promise.all([
-      gateway.submitTelemetry(agentId, {
-        branchId: config.BRANCH_ID,
+      control.submitTelemetry(agentId, {
+        branchId,
         edgeAgentId: agentId,
         deviceType: "edge-agent",
         deviceId: agentId,
@@ -11011,17 +11581,21 @@ async function main() {
           status: "online",
           version: config.EDGE_AGENT_VERSION,
           uptimeSeconds: Math.round((0, import_node_os2.uptime)()),
+          liveMediaEnabled: config.LIVE_MEDIA_ENABLED,
+          mediaRuntimeReady: Boolean(edgeMediaRuntime),
+          mediaTunnelMode: config.MEDIA_TUNNEL_MODE,
+          publicMediaUrl: edgeMediaRuntime?.publicUrl ?? config.PUBLIC_MEDIA_GATEWAY_URL ?? null,
           ...edgeResourceMetrics
         },
         reasonCodes: edgeResourceReasonCodes
       }),
       ...linkResults.map((link) => {
         const { reasonCodes, ...linkMetrics } = link;
-        return gateway.submitTelemetry(agentId, {
-          branchId: config.BRANCH_ID,
+        return control.submitTelemetry(agentId, {
+          branchId,
           edgeAgentId: agentId,
           deviceType: "network",
-          deviceId: `${config.BRANCH_ID}:internet:${link.linkId}`,
+          deviceId: `${branchId}:internet:${link.linkId}`,
           observedAt,
           source: "system",
           quality: "verified",
@@ -11037,8 +11611,8 @@ async function main() {
       }),
       ...recorderReports.flatMap(({ recorder, probe }) => {
         const source = recorder.vendor === "cp-plus" ? "cp-plus-adapter" : recorder.vendor === "onvif" ? "onvif" : "system";
-        const submissions = [gateway.submitTelemetry(agentId, {
-          branchId: config.BRANCH_ID,
+        const submissions = [control.submitTelemetry(agentId, {
+          branchId,
           edgeAgentId: agentId,
           deviceType: "recorder",
           deviceId: recorder.id,
@@ -11049,8 +11623,8 @@ async function main() {
           metrics: probe.metrics,
           reasonCodes: probe.reasonCodes
         })];
-        submissions.push(...probe.channelHealth.map((channel) => gateway.submitTelemetry(agentId, {
-          branchId: config.BRANCH_ID,
+        submissions.push(...probe.channelHealth.map((channel) => control.submitTelemetry(agentId, {
+          branchId,
           edgeAgentId: agentId,
           deviceType: "recorder-channel",
           deviceId: `${recorder.id}:channel:${channel.sourceChannel}`,
@@ -11068,8 +11642,8 @@ async function main() {
           },
           reasonCodes: channel.reasonCodes
         })));
-        if (probe.hddStatus.length) submissions.push(gateway.submitRecorderHdd(agentId, {
-          branchId: config.BRANCH_ID,
+        if (probe.hddStatus.length) submissions.push(control.submitRecorderHdd(agentId, {
+          branchId,
           recorderId: recorder.id,
           observedAt,
           source,
@@ -11077,8 +11651,8 @@ async function main() {
           idempotencyKey: `${agentId}:recorder-hdd:${recorder.id}:${observedAt}`,
           hddStatus: probe.hddStatus
         }));
-        if (probe.archiveEvidence.length) submissions.push(gateway.submitRecorderArchive(agentId, {
-          branchId: config.BRANCH_ID,
+        if (probe.archiveEvidence.length) submissions.push(control.submitRecorderArchive(agentId, {
+          branchId,
           recorderId: recorder.id,
           observedAt,
           source,
@@ -11091,7 +11665,7 @@ async function main() {
     ]);
   }
   async function syncCameraHeartbeatConfig() {
-    const cameras = await gateway.listMonitoringCameras(agentId, config.EDGE_AGENT_VERSION);
+    const cameras = await control.listMonitoringCameras(agentId, config.EDGE_AGENT_VERSION);
     cameraHeartbeat.replaceCameras(cameras.map((camera) => {
       const rtspUrl = secrets.get(camera.connectionSecretRef);
       return {
@@ -11104,11 +11678,100 @@ async function main() {
     lastCameraConfigSyncAt = Date.now();
   }
   async function collectRecorderReports(observedAt, includeArchive) {
-    return Promise.all(config.RECORDERS_JSON.map(async (recorder) => ({
-      recorder,
-      observedAt,
-      probe: await probeRecorder(recorder, config.RECORDER_PROBE_TIMEOUT_MS, { includeArchive })
-    })));
+    return Promise.all(config.RECORDERS_JSON.map(async (recorder) => {
+      const secureCredential = credentialVault.get(recorder.host);
+      const resolvedRecorder = secureCredential ? { ...recorder, username: secureCredential.username, password: secureCredential.password } : recorder;
+      const probe = await probeRecorder(resolvedRecorder, config.RECORDER_PROBE_TIMEOUT_MS, { includeArchive });
+      if (includeArchive && resolvedRecorder.archiveRetention?.verifyPlayback !== false) {
+        for (const evidence of probe.archiveEvidence) {
+          if (evidence.status !== "available" || !evidence.newestPlayableAt) continue;
+          const uri = recorderPlaybackUri(resolvedRecorder, evidence.sourceChannel, evidence.newestPlayableAt);
+          if (!uri) {
+            evidence.reasonCodes.push("playback_probe_not_supported");
+            continue;
+          }
+          const playback = await probeRtsp(uri, config.FFPROBE_PATH, config.RECORDER_PROBE_TIMEOUT_MS);
+          evidence.playbackVerified = playback.reachable;
+          evidence.playbackCodec = playback.codec;
+          if (playback.reachable) evidence.reasonCodes.push("latest_clip_playback_verified");
+          else {
+            evidence.playbackError = playback.error?.slice(0, 300) ?? "playback_failed";
+            evidence.reasonCodes.push("latest_clip_playback_failed");
+          }
+        }
+      }
+      return { recorder: resolvedRecorder, observedAt, probe };
+    }));
+  }
+  async function executeEdgeCommand(type, payload) {
+    switch (type) {
+      case "rediscover":
+        return { result: { discovered: await scanBranch() } };
+      case "restart-media":
+        if (!config.LIVE_MEDIA_ENABLED) throw new Error("live_media_disabled");
+        await edgeMediaRuntime?.stop();
+        edgeMediaRuntime = await startEdgeMediaRuntime({ config, gateway: control, agentId, secrets });
+        return { result: { status: "restarted", publicUrl: edgeMediaRuntime.publicUrl } };
+      case "restart-agent":
+        return { result: { status: "restart_acknowledged" }, restartAgent: true };
+      case "probe-camera": {
+        const cameraId = typeof payload.cameraId === "string" ? payload.cameraId : "";
+        if (!cameraId) throw new Error("cameraId_required");
+        const camera = (await control.listMonitoringCameras(agentId, config.EDGE_AGENT_VERSION)).find((item) => item.id === cameraId);
+        const source = camera ? secrets.get(camera.connectionSecretRef) : void 0;
+        if (!source) throw new Error("camera_stream_secret_unavailable");
+        const probe = await probeRtsp(source, config.FFPROBE_PATH, config.ONVIF_TIMEOUT_MS);
+        return { result: { cameraId, ...probe } };
+      }
+      case "probe-recorder": {
+        const recorderId = typeof payload.recorderId === "string" ? payload.recorderId : "";
+        const recorder = config.RECORDERS_JSON.find((item) => item.id === recorderId);
+        if (!recorder) throw new Error("recorder_not_configured");
+        const probe = await probeRecorder(recorder, config.RECORDER_PROBE_TIMEOUT_MS, { includeArchive: true });
+        return { result: {
+          recorderId,
+          metrics: probe.metrics,
+          reasonCodes: probe.reasonCodes,
+          hddCount: probe.hddStatus.length,
+          channelHealth: probe.channelHealth,
+          archiveEvidence: probe.archiveEvidence
+        } };
+      }
+      case "collect-logs": {
+        const data = await (0, import_promises9.readFile)(config.EDGE_LOG_PATH, "utf8").catch(() => "");
+        const tail = redactDiagnosticText(data.slice(-64 * 1024));
+        return { result: { collectedAt: (/* @__PURE__ */ new Date()).toISOString(), bytes: Buffer.byteLength(tail), tail } };
+      }
+      case "update-credentials": {
+        if (!identity?.commandPrivateKey) throw new Error("gateway_secure_command_key_unavailable");
+        const envelope = payload.envelope;
+        if (!envelope || typeof envelope !== "object") throw new Error("credential_envelope_required");
+        const decrypted = openSealedCommand(envelope, identity.commandPrivateKey);
+        if (typeof decrypted.username !== "string" || !decrypted.username || typeof decrypted.password !== "string" || !decrypted.scope || decrypted.scope.host !== void 0 && typeof decrypted.scope.host !== "string") {
+          throw new Error("invalid_camera_credential_payload");
+        }
+        const saved = await credentialVault.set({
+          username: decrypted.username,
+          password: decrypted.password,
+          ...typeof decrypted.scope.host === "string" ? { host: decrypted.scope.host } : {}
+        });
+        const discovered = await scanBranch();
+        return { result: { ...saved, rediscovered: discovered } };
+      }
+      case "apply-update": {
+        const release = await control.getUpdate(agentId, config.EDGE_AGENT_VERSION);
+        if (!release) throw new Error("no_update_assigned");
+        const publicKey = identity?.updatePublicKey ?? config.EDGE_UPDATE_PUBLIC_KEY;
+        if (!publicKey) throw new Error("edge_update_public_key_unavailable");
+        const staged = await stageSignedUpdate(release, publicKey, config.EDGE_UPDATE_STAGING_PATH);
+        return { result: { ...staged, status: "verified_and_staged", supervisorActivationRequired: true } };
+      }
+      default:
+        throw new Error("unsupported_edge_command");
+    }
+  }
+  function redactDiagnosticText(value) {
+    return value.replace(/(rtsp:\/\/)[^@\s]+@/gi, "$1[redacted]@").replace(/(password|secret|token|credential|authorization)["'=:\s]+[^\s,}"']+/gi, "$1=[redacted]");
   }
   function prepareRuntimeOrExit(input) {
     try {

@@ -25,6 +25,9 @@ import {
 import { PageHero } from '@/components/page-hero';
 
 interface SecurityPosture {
+  available?: boolean;
+  provenance?: 'REAL' | 'UNAVAILABLE';
+  reason?: string;
   overallScore: number;
   timestamp: string;
   metrics: {
@@ -108,6 +111,9 @@ export default function SecurityDashboard() {
       setLoading(false);
       // Set fallback data so component doesn't crash
       setPosture({
+        available: false,
+        provenance: 'UNAVAILABLE',
+        reason: 'security_posture_api_unavailable',
         overallScore: 0,
         timestamp: new Date().toISOString(),
         metrics: {
@@ -192,6 +198,40 @@ export default function SecurityDashboard() {
       <div className="text-center py-12">
         <AlertTriangle className="w-12 h-12 mx-auto text-yellow-500 mb-4" />
         <p className="text-gray-600">Failed to load security posture</p>
+      </div>
+    );
+  }
+
+  if (posture.available === false) {
+    return (
+      <div className="security-posture-dashboard space-y-6">
+        <PageHero
+          eyebrow="Security posture"
+          title="Security operations center"
+          description="Control assurance is shown only when it is backed by connected security collectors."
+          icon={Shield}
+          actions={<button onClick={fetchSecurityPosture} className="btn-secondary"><RefreshCw className="w-4 h-4" /> Refresh posture</button>}
+        />
+        <section className="rounded-2xl border border-amber-200 bg-amber-50 p-6 shadow-sm" role="status">
+          <div className="flex items-start gap-4">
+            <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-white text-amber-700 shadow-sm"><AlertTriangle size={22} /></span>
+            <div>
+              <p className="text-xs font-bold uppercase tracking-[.16em] text-amber-700">Measurement unavailable</p>
+              <h2 className="mt-1 text-xl font-semibold text-slate-950">No security score has been calculated</h2>
+              <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">Certificate, secret-vault, secure-boot, TPM, ransomware, and tamper collectors are not connected. Sentinel Grid will not replace missing evidence with sample scores or alerts.</p>
+              <p className="mt-3 text-xs font-medium text-slate-500">Reason: {posture.reason ?? 'security_posture_collectors_not_configured'}</p>
+            </div>
+          </div>
+        </section>
+        <div className="security-quick-actions rounded-xl bg-white p-6 shadow-lg">
+          <h3 className="mb-4 text-xl font-bold text-gray-900">Available operational controls</h3>
+          <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+            <ActionButton icon={<Shield />} label="Access Controls" href="/compliance/controls" />
+            <ActionButton icon={<AlertTriangle />} label="Operational Alerts" href="/operations/alerts" />
+            <ActionButton icon={<Database />} label="Storage Health" href="/operations/storage" />
+            <ActionButton icon={<Activity />} label="Fleet Health" href="/operations/health" />
+          </div>
+        </div>
       </div>
     );
   }

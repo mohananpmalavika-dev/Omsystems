@@ -37,6 +37,7 @@ import type {
   DiscoveredCamera,
   EdgeActivation,
   EdgeAgent,
+  EdgeManagedTunnel,
   EdgeCommand,
   EdgeCommandType,
   EdgeScanJob,
@@ -529,6 +530,7 @@ export interface ControlPlaneStore {
     version: string,
   ): Promise<EdgeAgent>;
   listEdgeAgentsByBranch(branchId: string): Promise<EdgeAgent[]>;
+  getEdgeAgent(id: string): Promise<EdgeAgent | undefined>;
   heartbeatEdgeAgent(
     id: string,
     version: string,
@@ -543,6 +545,12 @@ export interface ControlPlaneStore {
   verifyEdgeAgentCredential(id: string, credentialHash: string): Promise<boolean>;
   getEdgeAgentCommandPublicKey(id: string): Promise<string | undefined>;
   revokeEdgeAgentCredential(id: string): Promise<EdgeAgent | undefined>;
+  getEdgeManagedTunnel(branchId: string): Promise<EdgeManagedTunnel | undefined>;
+  upsertEdgeManagedTunnel(input: Omit<EdgeManagedTunnel, "createdAt" | "updatedAt" | "lastCheckedAt" | "revokedAt">): Promise<EdgeManagedTunnel>;
+  updateEdgeManagedTunnelStatus(
+    branchId: string,
+    status: EdgeManagedTunnel["status"],
+  ): Promise<EdgeManagedTunnel | undefined>;
   createEdgeCommand(input: {
     edgeAgentId: string; type: EdgeCommandType; payload: Record<string, unknown>; requestedBy: string;
   }): Promise<EdgeCommand>;

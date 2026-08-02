@@ -127,7 +127,24 @@ describe("Phase 1 operational health", () => {
       gatewayTunnelReady: false,
     });
 
+    await store.upsertEdgeManagedTunnel({
+      branchId: "branch-blr-001",
+      tenantId: "omsystems",
+      provider: "cloudflare",
+      providerTunnelId: "cf-branch-001",
+      hostname: "branch-001.media.example.com",
+      status: "healthy",
+    });
     await store.heartbeatEdgeAgent(agentId, "1.0.1", "https://branch-001.media.example.com");
+    const observedAt = new Date().toISOString();
+    await store.ingestOperationalTelemetry({
+      tenantId: "omsystems", branchId: "branch-blr-001", edgeAgentId: agentId,
+      deviceType: "edge-agent", deviceId: agentId,
+      observedAt, receivedAt: observedAt, source: "system", quality: "verified",
+      idempotencyKey: `edge-live:${observedAt}`,
+      metrics: { status: "online", liveMediaEnabled: true, mediaRuntimeReady: true, mediaTunnelMode: "named" },
+      reasonCodes: ["managed_media_runtime_verified"],
+    });
     const ready = await app.inject({
       method: "GET", url: "/v1/operations/health/branches?search=Bengaluru", headers: admin,
     });

@@ -1,5 +1,5 @@
 import { generateKeyPairSync } from "node:crypto";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { buildApp } from "../src/app.js";
 import { MemoryStore } from "../src/store.js";
 import { verifyEdgeUpdateManifest } from "../src/security/edge-update-signing.js";
@@ -51,6 +51,59 @@ describe("secure edge gateway operations", () => {
       headers: { "x-edge-agent-token": identity.credential }, payload: { version: "1.0.2" },
     });
     expect(afterRevocation.statusCode).toBe(401);
+  });
+
+  it("provisions one managed tunnel and delivers its token only to the authenticated gateway", async () => {
+    const store = new MemoryStore();
+    const tunnelProvider = {
+      provision: vi.fn(async () => ({
+        provider: "cloudflare" as const,
+        providerTunnelId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        hostname: "branch-blr.media.example.com",
+        status: "inactive" as const,
+      })),
+      getToken: vi.fn(async () => "eyJ-managed-gateway-token-with-sufficient-length"),
+      getStatus: vi.fn(async () => "healthy" as const),
+      revoke: vi.fn(async () => undefined),
+    };
+    const app = await buildApp({ store, edgeTunnelProvider: tunnelProvider, requireManagedEdgeTunnel: true });
+    apps.push(app);
+
+    const activation = await createActivation(app);
+    expect(activation.bootstrap.media).toMatchObject({
+      managed: true,
+      mode: "named",
+      publicUrl: "https://branch-blr.media.example.com",
+      credentialsDeliveredTo: "gateway-only",
+    });
+    expect(JSON.stringify(await store.getEdgeManagedTunnel("branch-blr-001"))).not.toContain("gateway-token");
+
+    const identity = await enroll(app, activation);
+    expect(identity.media).toMatchObject({
+      managed: true,
+      mode: "named",
+      publicUrl: "https://branch-blr.media.example.com",
+      tunnelToken: "eyJ-managed-gateway-token-with-sufficient-length",
+      status: "healthy",
+    });
+    const refreshed = await app.inject({
+      method: "GET",
+      url: `/v1/edge-agents/${identity.agentId}/bootstrap`,
+      headers: { "x-edge-agent-token": identity.credential },
+    });
+    expect(refreshed.statusCode).toBe(200);
+    expect(refreshed.json().media.tunnelToken).toBe("eyJ-managed-gateway-token-with-sufficient-length");
+
+    const revoked = await app.inject({
+      method: "POST",
+      url: `/v1/branches/branch-blr-001/edge-agents/${identity.agentId}/revoke`,
+      headers: { "x-user-id": "user-global-admin" },
+    });
+    expect(revoked.statusCode).toBe(200);
+    expect(tunnelProvider.revoke).toHaveBeenCalledWith(
+      "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      "branch-blr.media.example.com",
+    );
   });
 
   it("delivers remote commands once and records their result", async () => {

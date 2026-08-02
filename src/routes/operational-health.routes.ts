@@ -741,14 +741,18 @@ async function loadAccessibleProjections(
   const telemetry = await store.listLatestOperationalTelemetry(request.currentUser.tenantId, branches.map((branch) => branch.id));
   const calculatedAt = Date.now();
   const branchContexts = await Promise.all(branches.map(async (branch) => {
-    const [storedPolicy, agents] = await Promise.all([
+    const [storedPolicy, agents, managedTunnel] = await Promise.all([
       store.getOperationalHealthPolicy(request.currentUser.tenantId, branch.id),
       store.listEdgeAgentsByBranch(branch.id),
+      store.getEdgeManagedTunnel(branch.id),
     ]);
     const policy = { ...defaultOperationalHealthPolicy, ...(storedPolicy ?? {}) };
     const cameras = await store.listCamerasByBranch(request.currentUser, branch.id, "recording:view");
     const archiveByCamera = latestArchiveEvidenceByCamera(telemetry.filter((item) => item.branchId === branch.id));
-    return { branch, policy, cameras, archiveByCamera, agents };
+    const analyticsRules = (await Promise.all(
+      cameras.map((camera) => store.listAnalyticsRules(camera.id)),
+    )).flat();
+    return { branch, policy, cameras, archiveByCamera, agents, managedTunnel, analyticsRules };
   }));
   const retentionInputs = await loadBatchedRetentionInputs(store, branchContexts.flatMap(({ cameras, policy }) =>
     cameras.map((camera) => ({
@@ -757,7 +761,7 @@ async function loadAccessibleProjections(
       maxRecordingGapSeconds: policy.maxRecordingGapSeconds,
     }))), calculatedAt);
 
-  return branchContexts.map(({ branch, policy, cameras, archiveByCamera, agents }) => {
+  return branchContexts.map(({ branch, policy, cameras, archiveByCamera, agents, managedTunnel, analyticsRules }) => {
     const retentions: RetentionVerification[] = cameras.map((camera) => {
       const input = retentionInputs.get(camera.id);
       return verifyContinuousRetention(camera.id, input?.segments ?? [], {
@@ -776,7 +780,17 @@ async function loadAccessibleProjections(
       region: regionsByBranch.get(branch.id),
     });
     const onlineAgents = agents.filter((agent) => agent.status === "online");
-    const tunnelReady = onlineAgents.some((agent) => Boolean(agent.publicMediaUrl));
+    const edgeTelemetry = telemetry
+      .filter((item) => item.branchId === branch.id && item.deviceType === "edge-agent")
+      .sort((left, right) => right.observedAt.localeCompare(left.observedAt))[0];
+    const mediaRuntimeReady = edgeTelemetry?.metrics.mediaRuntimeReady === true;
+    const tunnelReady = onlineAgents.some((agent) => Boolean(agent.publicMediaUrl)) &&
+      mediaRuntimeReady && managedTunnel?.status === "healthy";
+    const recorderReady = projection.totalRecorders > 0 && projection.onlineRecorders > 0;
+    const camerasReady = projection.totalCameras > 0 && projection.onlineCameras > 0;
+    const liveReady = tunnelReady && camerasReady && projection.cameras.some((camera) => camera.streamAvailable);
+    const recordingReady = projection.totalCameras > 0 && projection.recordingCameras > 0;
+    const analyticsAssigned = analyticsRules.some((rule) => rule.enabled);
     const gatewayReadiness = agents.length === 0
       ? "not_enrolled" as const
       : onlineAgents.length === 0
@@ -790,8 +804,105 @@ async function loadAccessibleProjections(
       gatewayOnlineCount: onlineAgents.length,
       gatewayReadiness,
       gatewayTunnelReady: tunnelReady,
+      operationalState: {
+        gateway: state(
+          agents.length === 0 ? "not_enrolled" : onlineAgents.length > 0 ? "online" : "offline",
+          "REAL",
+          agents.length === 0 ? "gateway_not_enrolled" : onlineAgents.length > 0 ? "gateway_heartbeat_current" : "gateway_heartbeat_missing",
+        ),
+        tunnel: state(
+          !managedTunnel ? "not_provisioned" : tunnelReady ? "online" : managedTunnel.status,
+          managedTunnel ? "REAL" : "UNKNOWN",
+          !managedTunnel ? "managed_tunnel_not_provisioned" : tunnelReady ? "public_tunnel_health_verified" : "public_tunnel_not_verified",
+        ),
+        recorder: state(
+          projection.totalRecorders === 0 ? "not_discovered" : recorderReady ? "online" : projection.recorderStatus,
+          projection.totalRecorders > 0 ? "REAL" : "UNKNOWN",
+          projection.totalRecorders > 0 ? "recorder_telemetry" : "recorder_telemetry_unavailable",
+        ),
+        cameras: state(
+          projection.totalCameras === 0 ? "not_imported" : camerasReady ? "online" : "offline",
+          projection.totalCameras > 0 ? "REAL" : "UNKNOWN",
+          projection.totalCameras > 0 ? "camera_telemetry" : "camera_inventory_empty",
+        ),
+        liveVideo: state(
+          liveReady ? "available" : "unavailable",
+          projection.totalCameras > 0 ? "REAL" : "UNKNOWN",
+          liveReady ? "stream_and_tunnel_verified" : "stream_or_tunnel_unavailable",
+        ),
+        recording: state(
+          recordingReady ? "available" : "unavailable",
+          projection.totalCameras > 0 ? "REAL" : "UNKNOWN",
+          recordingReady ? "playable_recording_evidence" : "recording_evidence_unavailable",
+        ),
+        analytics: state(
+          analyticsAssigned ? "assigned" : "not_assigned",
+          "REAL",
+          analyticsAssigned ? "enabled_camera_analytics_rule" : "no_enabled_camera_analytics_rule",
+        ),
+      },
+      onboardingStages: onboardingStages({
+        gatewayAssigned: agents.length > 0,
+        gatewayActivated: agents.some((agent) => agent.credentialStatus === "active" && Boolean(agent.deviceUuid)),
+        internetReady: projection.internetStatus === "online" || projection.internetStatus === "degraded" || projection.internetStatus === "failover",
+        tunnelReady,
+        recorderDiscovered: projection.totalRecorders > 0,
+        credentialsValidated: recorderReady || camerasReady,
+        channelsImported: projection.totalCameras > 0,
+        liveReady,
+        recordingReady,
+        healthActive: Boolean(edgeTelemetry),
+        analyticsAssigned,
+      }),
     };
   });
+}
+
+function state(value: string, provenance: "REAL" | "UNKNOWN", reason: string) {
+  return { value, provenance, reason };
+}
+
+function onboardingStages(input: {
+  gatewayAssigned: boolean;
+  gatewayActivated: boolean;
+  internetReady: boolean;
+  tunnelReady: boolean;
+  recorderDiscovered: boolean;
+  credentialsValidated: boolean;
+  channelsImported: boolean;
+  liveReady: boolean;
+  recordingReady: boolean;
+  healthActive: boolean;
+  analyticsAssigned: boolean;
+}) {
+  const stage = (id: number, label: string, complete: boolean, reason: string) => ({
+    id, label, status: complete ? "complete" as const : "pending" as const,
+    provenance: "REAL" as const, reason,
+  });
+  const stages = [
+    stage(1, "Branch created", true, "branch_inventory_record_exists"),
+    stage(2, "Gateway assigned", input.gatewayAssigned, "gateway_inventory"),
+    stage(3, "Gateway activated", input.gatewayActivated, "unique_gateway_identity"),
+    stage(4, "Internet connected", input.internetReady, "branch_network_telemetry"),
+    stage(5, "Cloudflare tunnel ready", input.tunnelReady, "managed_tunnel_health"),
+    stage(6, "DVR or NVR discovered", input.recorderDiscovered, "recorder_telemetry"),
+    stage(7, "Credentials validated", input.credentialsValidated, "authenticated_device_probe"),
+    stage(8, "Channels imported", input.channelsImported, "camera_inventory"),
+    stage(9, "Live view verified", input.liveReady, "stream_and_tunnel_probe"),
+    stage(10, "Recording verified", input.recordingReady, "playback_evidence"),
+    stage(11, "Health monitoring active", input.healthActive, "edge_telemetry"),
+    stage(12, "AI rules assigned", input.analyticsAssigned, "enabled_camera_analytics_rule"),
+  ];
+  return [
+    ...stages,
+    {
+      id: 13,
+      label: "Branch operational",
+      status: stages.every((item) => item.status === "complete") ? "complete" as const : "pending" as const,
+      provenance: "REAL" as const,
+      reason: "all_required_readiness_stages",
+    },
+  ];
 }
 
 type AccessibleBranchMetadata = { branch: ResourceNode; region: string };

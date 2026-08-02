@@ -89,6 +89,15 @@ export interface EdgeUpdateRelease {
   signature: string;
 }
 
+export interface GatewayMediaBootstrap {
+  enabled: true;
+  managed: true;
+  mode: "named";
+  publicUrl: string;
+  tunnelToken: string;
+  status: "inactive" | "healthy" | "degraded" | "down" | "unknown";
+}
+
 export class GatewayClient {
   private edgeCredential?: string;
 
@@ -104,10 +113,18 @@ export class GatewayClient {
 
   async activate(activationCode: string, deviceUuid: string, version: string, commandPublicKey: string) {
     return this.request<{
-      agentId: string; branchId: string; agentName: string; credential: string; updatePublicKey?: string;
+      agentId: string; branchId: string; agentName: string; credential: string;
+      updatePublicKey?: string; media?: GatewayMediaBootstrap;
     }>("/v1/edge-enrollment/activate", {
       method: "POST", body: JSON.stringify({ activationCode, deviceUuid, version, commandPublicKey }),
     }, true);
+  }
+
+  async getBootstrap(agentId: string) {
+    return this.request<{ controlPlaneUrl: string; media?: GatewayMediaBootstrap }>(
+      `/v1/edge-agents/${encodeURIComponent(agentId)}/bootstrap`,
+      { method: "GET" },
+    );
   }
 
   async register(branchId: string, name: string, version: string) {

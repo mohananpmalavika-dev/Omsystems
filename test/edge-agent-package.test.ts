@@ -54,7 +54,10 @@ describe("branch edge-agent package", () => {
       expect(config).toContain(`EDGE_BRIDGE_SHARED_KEY="${edgeKey}"`);
       expect(config).toContain('DEV_USER_ID="user-global-admin"');
       expect(config).toContain('LIVE_MEDIA_ENABLED="true"');
-      expect(config).toContain('MEDIA_TUNNEL_MODE="quick"');
+      expect(config).toContain('EDGE_MANAGED_MEDIA_BOOTSTRAP="true"');
+      expect(config).toContain('MEDIA_TUNNEL_MODE="named"');
+      expect(config).not.toContain('CAMERA_USERNAME="admin"');
+      expect(config).not.toContain('REPLACE_WITH_CAMERA_PASSWORD');
       expect(store.auditEvents.at(-1)?.action).toBe("edge_agent.package_downloaded");
     } finally {
       await app.close();

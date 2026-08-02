@@ -5,6 +5,7 @@ import { PostgresStore } from "./database/postgres-store.js";
 import { MemoryStore } from "./store.js";
 import type { ControlPlaneStore } from "./control-plane-store.js";
 import { RedisEdgePresenceCache } from "./platform/edge-presence-cache.js";
+import { CloudflareTunnelManager } from "./platform/cloudflare-tunnel-manager.js";
 
 const config = loadConfig();
 const store = config.DATABASE_URL
@@ -13,12 +14,23 @@ const store = config.DATABASE_URL
 const edgePresenceCache = config.REDIS_URL
   ? await new RedisEdgePresenceCache(config.REDIS_URL, config.EDGE_PRESENCE_TTL_SECONDS).connect()
   : undefined;
+const edgeTunnelProvider = config.CLOUDFLARE_ACCOUNT_ID && config.CLOUDFLARE_ZONE_ID &&
+  config.CLOUDFLARE_API_TOKEN && config.EDGE_MEDIA_BASE_DOMAIN
+  ? new CloudflareTunnelManager({
+      accountId: config.CLOUDFLARE_ACCOUNT_ID,
+      zoneId: config.CLOUDFLARE_ZONE_ID,
+      apiToken: config.CLOUDFLARE_API_TOKEN,
+      mediaBaseDomain: config.EDGE_MEDIA_BASE_DOMAIN,
+    })
+  : undefined;
 const app = await buildApp({
   logger: true,
   store,
   authMode: config.AUTH_MODE,
   maxInFlightRequests: config.MAX_IN_FLIGHT_REQUESTS,
   ...(edgePresenceCache ? { edgePresenceCache } : {}),
+  ...(edgeTunnelProvider ? { edgeTunnelProvider } : {}),
+  requireManagedEdgeTunnel: config.EDGE_MANAGED_TUNNEL_REQUIRED,
   ...(config.CONTROL_PLANE_PUBLIC_URL
     ? { controlPlanePublicUrl: config.CONTROL_PLANE_PUBLIC_URL }
     : {}),

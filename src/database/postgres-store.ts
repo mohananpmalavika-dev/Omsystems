@@ -229,6 +229,9 @@ export class PostgresStore
   async listEdgeAgentsByBranch(branchId: string) {
     return this.agents.listByBranch(branchId);
   }
+  async getEdgeAgent(id: string) {
+    return this.agents.get(id);
+  }
   async heartbeatEdgeAgent(id: string, version: string, publicMediaUrl?: string) {
     return this.agents.heartbeat(id, version, publicMediaUrl);
   }
@@ -246,6 +249,18 @@ export class PostgresStore
   }
   async revokeEdgeAgentCredential(id: string) {
     return this.edgeOperations.revokeCredential(id);
+  }
+  async getEdgeManagedTunnel(branchId: string) {
+    return this.edgeOperations.getManagedTunnel(branchId);
+  }
+  async upsertEdgeManagedTunnel(input: Parameters<EdgeOperationsRepository["upsertManagedTunnel"]>[0]) {
+    return this.edgeOperations.upsertManagedTunnel(input);
+  }
+  async updateEdgeManagedTunnelStatus(
+    branchId: string,
+    status: Parameters<EdgeOperationsRepository["updateManagedTunnelStatus"]>[1],
+  ) {
+    return this.edgeOperations.updateManagedTunnelStatus(branchId, status);
   }
   async createEdgeCommand(input: Parameters<EdgeOperationsRepository["createCommand"]>[0]) {
     return this.edgeOperations.createCommand(input);
