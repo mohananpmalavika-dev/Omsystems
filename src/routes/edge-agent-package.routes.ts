@@ -12,7 +12,10 @@ const routeParams = z.object({
   branchId: z.string().min(1),
   edgeAgentId: z.string().min(1),
 });
-const packageQuery = z.object({ platform: z.enum(["windows", "linux"]).default("windows") });
+const packageQuery = z.object({
+  platform: z.enum(["windows", "linux"]).default("windows"),
+  mode: z.enum(["install", "scan-once"]).default("install"),
+});
 const embeddedConfigMarker = Buffer.from("SENTINEL_EDGE_CONFIG_V1", "ascii");
 
 export interface EdgeAgentPackageOptions {
@@ -120,6 +123,7 @@ function branchConfiguration(
   version: string,
   options: EdgeAgentPackageOptions,
   platform: "windows" | "linux",
+  mode: "install" | "scan-once" = "install",
 ) {
   return environmentFile({
     CONTROL_PLANE_URL: options.controlPlanePublicUrl ?? "REPLACE_WITH_PUBLIC_CONTROL_PLANE_URL",
@@ -137,15 +141,15 @@ function branchConfiguration(
     ONVIF_TIMEOUT_MS: "8000",
     FFPROBE_PATH: "ffprobe",
     FFMPEG_PATH: "ffmpeg",
-    LIVE_MEDIA_ENABLED: "true",
-    EDGE_MANAGED_MEDIA_BOOTSTRAP: "true",
+    LIVE_MEDIA_ENABLED: mode === "scan-once" ? "false" : "true",
+    EDGE_MANAGED_MEDIA_BOOTSTRAP: mode === "scan-once" ? "false" : "true",
     EDGE_LIVE_GATEWAY_HOST: "127.0.0.1",
     EDGE_LIVE_GATEWAY_PORT: "8090",
     MEDIAMTX_PATH: "mediamtx",
-    MEDIA_RUNTIME_MANAGED: "true",
+    MEDIA_RUNTIME_MANAGED: mode === "scan-once" ? "false" : "true",
     MEDIAMTX_API_URL: "http://127.0.0.1:9997",
     MEDIAMTX_HLS_URL: "http://127.0.0.1:8888",
-    MEDIA_TUNNEL_MODE: "named",
+    MEDIA_TUNNEL_MODE: mode === "scan-once" ? "disabled" : "named",
     CLOUDFLARED_PATH: "cloudflared",
     CLOUDFLARED_TUNNEL_TOKEN: "",
     MEDIA_ACCESS_TTL_SECONDS: "300",
@@ -161,9 +165,7 @@ function branchConfiguration(
 }
 
 function streamInstaller(executablePath: string, config: Buffer) {
-  const length = Buffer.alloc(4);
-  length.writeUInt32LE(config.length, 0);
-  const footer = Buffer.concat([config, length, embeddedConfigMarker]);
+  const footer = embeddedConfigurationFooter(config);
   return {
     footer,
     stream: Readable.from((async function* () {
@@ -173,6 +175,26 @@ function streamInstaller(executablePath: string, config: Buffer) {
   };
 }
 
+function embeddedConfigurationFooter(config: Buffer) {
+  const length = Buffer.alloc(4);
+  length.writeUInt32LE(config.length, 0);
+  return Buffer.concat([config, length, embeddedConfigMarker]);
+}
+
+function localDiscoveryReadme(branchName: string) {
+  return [
+    `Sentinel Grid temporary local-network scanner for ${branchName}`,
+    "",
+    "1. Connect this Windows PC to the same wired/Wi-Fi network as the IP cameras and DVR/NVRs.",
+    "2. Extract this ZIP and double-click Run Local Discovery.cmd.",
+    "3. Enter a shared ONVIF/DVR login when prompted, if available. It is used only for this scan and is not saved on the PC.",
+    "4. Wait for the completed result, then return to Sentinel Grid and review the discovered devices.",
+    "",
+    "It discovers direct ONVIF IP cameras plus DVR/NVR channels. Analog cameras appear as DVR channels because the DVR digitizes them. A recorder login is needed to enumerate its individual channels.",
+    "This tool exits after one scan. It does not install a Windows service, a tunnel, or a background monitor.",
+  ].join("\r\n");
+}
+
 export async function registerEdgeAgentPackageRoutes(
   app: FastifyInstance,
   store: ControlPlaneStore,
@@ -180,7 +202,10 @@ export async function registerEdgeAgentPackageRoutes(
 ) {
   app.get("/v1/branches/:branchId/edge-agents/:edgeAgentId/package", async (request, reply) => {
     const { branchId, edgeAgentId } = routeParams.parse(request.params);
-    const { platform } = packageQuery.parse(request.query);
+    const { platform, mode } = packageQuery.parse(request.query);
+    if (mode === "scan-once" && platform !== "windows") {
+      return reply.code(400).send({ error: "local_scanner_windows_only" });
+    }
     const branch = await store.getNode(branchId);
     if (!branch || branch.type !== "branch") return reply.code(404).send({ error: "branch_not_found" });
 
@@ -206,7 +231,7 @@ export async function registerEdgeAgentPackageRoutes(
     try {
       const packageJson = JSON.parse(await readFile(join(root, "package.json"), "utf8")) as { version?: string };
       const version = packageJson.version ?? "0.1.0";
-      const config = Buffer.from(branchConfiguration(agent, version, options, platform), "utf8");
+      const config = Buffer.from(branchConfiguration(agent, version, options, platform, mode), "utf8");
       let entries: Array<{ name: string; data: Buffer }>;
 
       if (platform === "windows") {
@@ -220,16 +245,65 @@ export async function registerEdgeAgentPackageRoutes(
           throw Object.assign(new Error(`edge_agent_executable_not_built: ${executablePath}`), { code: "edge_agent_executable_not_built" });
         }
         const installer = streamInstaller(executablePath, config);
+        const safeBranchName = branch.name.replace(/[^a-zA-Z0-9_-]/g, "-");
+        if (mode === "scan-once") {
+          const scannerName = `${safeBranchName}-local-network-scanner.exe`;
+          const scanner = Buffer.concat([await readFile(executablePath), embeddedConfigurationFooter(config)]);
+          const runner = [
+            "@echo off",
+            "setlocal",
+            "powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"%~dp0Run Local Discovery.ps1\"",
+            "set EXIT_CODE=%ERRORLEVEL%",
+            "echo.",
+            `if not "%EXIT_CODE%"=="0" echo Discovery failed. Check that this PC is on the branch camera network and can reach Sentinel Grid.`,
+            "pause",
+            "exit /b %EXIT_CODE%",
+            "",
+          ].join("\r\n");
+          const powerShellRunner = [
+            "$ErrorActionPreference = 'Stop'",
+            "$credential = Get-Credential -Message 'Optional: enter the shared ONVIF / DVR login to enumerate recorder channels'",
+            "$passwordPointer = [IntPtr]::Zero",
+            "try {",
+            "  if ($credential) {",
+            "    $env:CAMERA_USERNAME = $credential.UserName",
+            "    $passwordPointer = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($credential.Password)",
+            "    $env:CAMERA_PASSWORD = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($passwordPointer)",
+            "  }",
+            `  & (Join-Path $PSScriptRoot '${scannerName}') --scan-once`,
+            "  exit $LASTEXITCODE",
+            "} finally {",
+            "  if ($passwordPointer -ne [IntPtr]::Zero) { [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($passwordPointer) }",
+            "  Remove-Item Env:CAMERA_USERNAME -ErrorAction SilentlyContinue",
+            "  Remove-Item Env:CAMERA_PASSWORD -ErrorAction SilentlyContinue",
+            "}",
+            "",
+          ].join("\r\n");
+          await store.writeAudit({
+            tenantId: branch.tenantId, actorUserId: request.currentUser.id,
+            action: "edge_agent.local_scanner_downloaded", resourceNodeId: branchId,
+            outcome: "success", sourceIp: request.ip,
+            details: { edgeAgentId, platform, version, mode },
+          });
+          reply.header("Cache-Control", "no-store, private");
+          reply.header("Content-Type", "application/zip");
+          reply.header("Content-Disposition", `attachment; filename="${safeBranchName}-local-network-scanner.zip"`);
+          return reply.send(makeZip([
+            { name: scannerName, data: scanner },
+            { name: "Run Local Discovery.cmd", data: Buffer.from(runner, "utf8") },
+            { name: "Run Local Discovery.ps1", data: Buffer.from(powerShellRunner, "utf8") },
+            { name: "README.txt", data: Buffer.from(localDiscoveryReadme(branch.name), "utf8") },
+          ]));
+        }
         await store.writeAudit({
           tenantId: branch.tenantId, actorUserId: request.currentUser.id,
           action: "edge_agent.package_downloaded", resourceNodeId: branchId,
           outcome: "success", sourceIp: request.ip,
-          details: { edgeAgentId, platform, version, format: "single-executable" },
+          details: { edgeAgentId, platform, version, format: "single-executable", mode },
         });
         reply.header("Cache-Control", "no-store, private");
         reply.header("Content-Type", "application/vnd.microsoft.portable-executable");
         reply.header("Content-Length", String(executableSize + installer.footer.length));
-        const safeBranchName = branch.name.replace(/[^a-zA-Z0-9_-]/g, "-");
         reply.header("Content-Disposition", `attachment; filename="${safeBranchName}-edge-agent-setup.exe"`);
         return reply.send(installer.stream);
       } else {
@@ -250,7 +324,7 @@ export async function registerEdgeAgentPackageRoutes(
         resourceNodeId: branchId,
         outcome: "success",
         sourceIp: request.ip,
-        details: { edgeAgentId, platform, version },
+        details: { edgeAgentId, platform, version, mode },
       });
 
       reply.header("Cache-Control", "no-store, private");

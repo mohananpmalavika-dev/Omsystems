@@ -433,9 +433,34 @@ export const cameraInventoryApi = {
     fetchApi<{ data: any[] }>(
       `/v1/branches/${encodeURIComponent(branchId)}/edge-agents`
     ),
+  getConnectivity: (branchId: string) =>
+    fetchApi<{
+      profile: {
+        branchId: string;
+        primaryTransport: "vpn" | "cloudflare-tunnel";
+        fallbackTransport?: "vpn" | "cloudflare-tunnel";
+        vpnProtocol?: "ipsec" | "wireguard" | "openvpn" | "ssl-vpn";
+        vpnRemoteNetworks?: string[];
+        status: "configured" | "healthy" | "degraded" | "offline";
+      } | null;
+      managedTunnel: { provider: "cloudflare"; hostname: string; status: string } | null;
+    }>(`/v1/branches/${encodeURIComponent(branchId)}/connectivity`),
+  configureConnectivity: (branchId: string, data: {
+    primaryTransport: "vpn" | "cloudflare-tunnel";
+    fallbackTransport?: "vpn" | "cloudflare-tunnel";
+    vpnProtocol?: "ipsec" | "wireguard" | "openvpn" | "ssl-vpn";
+    vpnRemoteNetworks?: string[];
+  }) => fetchApi<any>(
+    `/v1/branches/${encodeURIComponent(branchId)}/connectivity`,
+    { method: "PUT", body: JSON.stringify(data) },
+  ),
   downloadPackage: (branchId: string, edgeAgentId: string, platform: "windows" | "linux" = "windows") =>
     downloadApi(
       `/v1/branches/${encodeURIComponent(branchId)}/edge-agents/${encodeURIComponent(edgeAgentId)}/package?platform=${encodeURIComponent(platform)}`
+    ),
+  downloadLocalScanner: (branchId: string, edgeAgentId: string) =>
+    downloadApi(
+      `/v1/branches/${encodeURIComponent(branchId)}/edge-agents/${encodeURIComponent(edgeAgentId)}/package?platform=windows&mode=scan-once`
     ),
   registerGateway: (branchId: string, data: { name: string; version: string }) =>
     fetchApi<any>(

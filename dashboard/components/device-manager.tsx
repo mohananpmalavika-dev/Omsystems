@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { cameraInventoryApi, deviceInventoryApi } from "@/lib/api-client";
+import { BranchConnectivityPanel } from "@/components/branch-connectivity-panel";
 import type {
   Branch,
   Camera as CameraRecord,
@@ -33,6 +34,11 @@ type CameraForm = {
   rtspPort: string;
   channel: string;
   protocol: "onvif-t" | "onvif-s" | "rtsp" | "vendor-adapter";
+  connectionTransport: "vpn" | "cloudflare-tunnel";
+  sourceType: "ip-camera" | "analog-dvr-channel" | "nvr-channel";
+  recorderId: string;
+  recorderChannel: string;
+  recorderSerialNumber: string;
   edgeAgentId: string;
   connectionSecretRef: string;
   codec: "H264" | "H265" | "MJPEG" | "unknown";
@@ -52,6 +58,11 @@ const emptyCameraForm: CameraForm = {
   rtspPort: "554",
   channel: "1",
   protocol: "onvif-t",
+  connectionTransport: "vpn",
+  sourceType: "ip-camera",
+  recorderId: "",
+  recorderChannel: "1",
+  recorderSerialNumber: "",
   edgeAgentId: "",
   connectionSecretRef: "",
   codec: "H264",
@@ -269,6 +280,36 @@ export function DeviceManager() {
     downloadTextFile(`${activeBranch?.name?.replace(/[^a-z0-9_-]+/gi, "-") || "branch"}-gateway.env`, setupText);
   }
 
+  async function downloadLocalDiscoveryScanner() {
+    if (!selectedBranch) return;
+    setSaving(true);
+    setError(undefined);
+    try {
+      let scanner = gateways[0];
+      if (!scanner) {
+        scanner = await cameraInventoryApi.registerGateway(selectedBranch, {
+          name: `${activeBranch?.name ?? "Branch"} temporary local scanner`,
+          version: "0.1.0",
+        });
+      }
+      const blob = await cameraInventoryApi.downloadLocalScanner(selectedBranch, scanner.id);
+      const url = window.URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = `${(activeBranch?.name ?? "branch").replace(/[^a-zA-Z0-9_-]/g, "-")}-local-network-scanner.zip`;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      window.URL.revokeObjectURL(url);
+      await refreshBranch(selectedBranch);
+      setNotice("Local scanner downloaded. Extract it on the PC connected to the camera network and double-click Run Local Discovery.cmd. It exits after finding IP cameras and DVR/NVR channels.");
+    } catch (reason) {
+      setError(messageOf(reason, "Unable to prepare the local network scanner."));
+    } finally {
+      setSaving(false);
+    }
+  }
+
   useEffect(() => {
     void cameraInventoryApi.listBranches("device:configure")
       .then(({ data }) => {
@@ -340,8 +381,21 @@ export function DeviceManager() {
     setCameraForm({
       ...emptyCameraForm,
       edgeAgentId: preferred?.id ?? "",
-      connectionSecretRef: `edge://${preferred?.id ?? "gateway"}/manual-camera`,
+      connectionTransport: preferred ? "cloudflare-tunnel" : "vpn",
+      connectionSecretRef: preferred ? `edge://${preferred.id}/manual-camera` : "",
     });
+    if (selectedBranch) {
+      void cameraInventoryApi.getConnectivity(selectedBranch)
+        .then(({ profile }) => {
+          if (!profile) return;
+          setCameraForm((current) => ({
+            ...current,
+            connectionTransport: profile.primaryTransport,
+            connectionSecretRef: profile.primaryTransport === "vpn" ? "" : current.connectionSecretRef,
+          }));
+        })
+        .catch(() => undefined);
+    }
     setError(undefined);
     setShowCameraForm(true);
   }
@@ -653,7 +707,14 @@ export function DeviceManager() {
           name: cameraForm.name,
           channel: Number(cameraForm.channel),
           protocol: cameraForm.protocol,
-          connectionSecretRef: cameraForm.connectionSecretRef,
+          connectionTransport: cameraForm.connectionTransport,
+          sourceType: cameraForm.sourceType,
+          ...(cameraForm.connectionSecretRef.trim() ? { connectionSecretRef: cameraForm.connectionSecretRef.trim() } : {}),
+          ...(cameraForm.sourceType !== "ip-camera" ? {
+            recorderId: cameraForm.recorderId,
+            recorderChannel: Number(cameraForm.recorderChannel),
+            recorderSerialNumber: cameraForm.recorderSerialNumber || undefined,
+          } : {}),
           manufacturer: discoveryManufacturer || cameraForm.vendor,
           model: cameraForm.model,
           serialNumber: discoverySerialNumber || undefined,
@@ -725,7 +786,7 @@ export function DeviceManager() {
       <div className="device-toolbar">
         <div>
           <h2>Branches & devices</h2>
-          <p>Enroll the always-on Branch Gateway, then discover cameras and DVRs automatically from the central platform.</p>
+          <p>Use your existing VPN or a managed tunnel to connect IP cameras and analog DVR/NVR channels securely.</p>
         </div>
         <div className="device-toolbar-actions">
           <button className="secondary-button" onClick={() => {
@@ -734,19 +795,22 @@ export function DeviceManager() {
           }} disabled={!selectedBranch}>
             <Router size={15} /> Enroll Branch Gateway
           </button>
-          <button className="secondary-button" onClick={() => void scanNetwork()} disabled={!selectedBranch || scanning} title="Find cameras through the Edge Agent inside this branch network">
+          <button className="secondary-button" onClick={() => void scanNetwork()} disabled={!selectedBranch || scanning || gateways.length === 0} title="Find cameras through the Branch Gateway inside this branch network">
             <Network size={15} /> {scanning ? "Scanning…" : "Scan network"}
           </button>
-          <button className="primary-button" onClick={() => void autoDiscoverAndProvision()} disabled={!selectedBranch || scanning} title="Automatically discover and provision cameras in this branch">
+          <button className="primary-button" onClick={() => void autoDiscoverAndProvision()} disabled={!selectedBranch || scanning || gateways.length === 0} title="Automatically discover and provision cameras in this branch">
             <Plus size={15} /> Discover & add
           </button>
-          <button className="secondary-button" onClick={openCameraForm} disabled={!selectedBranch || gateways.length === 0} title="Open manual camera registration form">
+          <button className="secondary-button" onClick={() => void downloadLocalDiscoveryScanner()} disabled={!selectedBranch || saving} title="Download a one-time scanner for a PC connected to this branch camera network">
+            <Download size={15} /> Local PC scan
+          </button>
+          <button className="secondary-button" onClick={openCameraForm} disabled={!selectedBranch} title="Register an IP camera or DVR/NVR channel manually">
             <Plus size={15} /> Manual add
           </button>
         </div>
         {selectedBranch ? (
           gateways.length === 0 ? (
-            <p className="device-toolbar-note">Enroll a Branch Gateway first to enable unattended camera and DVR discovery.</p>
+            <p className="device-toolbar-note">Configure VPN for direct registration, or enroll a Branch Gateway to use tunnel discovery.</p>
           ) : (
             <p className="device-toolbar-note">Gateway: {gateways[0]?.name || "Unnamed"} · {gateways[0]?.status === "online" ? "Online and monitoring" : gateways[0]?.status === "offline" ? "Offline" : "Awaiting first connection"}</p>
           )
@@ -759,8 +823,8 @@ export function DeviceManager() {
       <div className="remote-camera-note">
         <Network size={19} />
         <div>
-          <strong>Unattended branch connectivity</strong>
-          <span>Ship one centrally provisioned Branch Gateway appliance to each location. It stays online without a laptop, and camera passwords remain inside that branch.</span>
+          <strong>Two secure connection choices</strong>
+          <span>VPN branches use their router route directly. Tunnel branches use a centrally enrolled gateway. Both keep camera credentials out of the inventory database.</span>
         </div>
       </div>
 
@@ -772,12 +836,14 @@ export function DeviceManager() {
         {branches.length === 0 && !loading && <span>You do not have device configuration permission for any branch.</span>}
       </div>
 
+      <BranchConnectivityPanel branchId={selectedBranch} onConfigured={() => void refreshBranch(selectedBranch)} />
+
       {loading ? <div className="loading-state"><Activity className="spin" />Loading branch devices…</div> : (
         <div className="device-columns">
           <section className="device-card">
             <div className="device-card-heading"><Router size={18} /><div><h3>Branch Gateway status</h3><p>{gateways.length} appliance{gateways.length !== 1 ? "s" : ""} enrolled</p></div></div>
             {gateways.length === 0 ? (
-              <div className="device-empty"><Router size={25} /><strong>No Branch Gateway enrolled</strong><span>Enroll and provision the always-on appliance before discovering cameras or DVRs at this location.</span></div>
+              <div className="device-empty"><Router size={25} /><strong>No Branch Gateway enrolled</strong><span>That is expected for VPN-direct branches. Enroll one only for tunnel-based discovery and local proxying.</span></div>
             ) : gateways.map((gateway) => (
               <article className="gateway-row" key={gateway.id}>
                 <span className={`gateway-state ${gateway.status}`}><i /></span>
@@ -802,11 +868,11 @@ export function DeviceManager() {
           <section className="device-card">
             <div className="device-card-heading"><Camera size={18} /><div><h3>Camera inventory</h3><p>{cameras.length} devices</p></div></div>
             {cameras.length === 0 ? (
-              <div className="device-empty"><Camera size={25} /><strong>No cameras added</strong><span>Add the first camera after its branch gateway is registered.</span></div>
+              <div className="device-empty"><Camera size={25} /><strong>No cameras added</strong><span>Configure a connection method, then add an IP camera or a DVR/NVR channel.</span></div>
             ) : cameras.map((camera) => (
               <article className="camera-inventory-row" key={camera.id}>
                 <span className="camera-device-icon"><Camera size={15} /></span>
-                <div><strong>{camera.name}</strong><small>{camera.vendor} · {camera.model} · channel {camera.channel}</small></div>
+                <div><strong>{camera.name}</strong><small>{camera.sourceType === "analog-dvr-channel" ? `Analog via DVR ${camera.recorderId ?? ""} · channel ${camera.recorderChannel ?? camera.channel}` : camera.sourceType === "nvr-channel" ? `NVR ${camera.recorderId ?? ""} · channel ${camera.recorderChannel ?? camera.channel}` : `${camera.vendor} · ${camera.model} · channel ${camera.channel}`}</small></div>
                 <span className={`inventory-status ${camera.status}`}>{camera.status}</span>
               </article>
             ))}
@@ -822,7 +888,7 @@ export function DeviceManager() {
             <p>{scanning
               ? "The Branch Gateway is checking the local network and validating cameras."
               : discoveryQueueItems.length === 0
-                ? "Run a network scan to discover cameras automatically - no manual IP entry needed."
+                ? "Use Scan network with a gateway, or Local PC scan when your laptop is connected to the branch network. Both find IP cameras and DVR/NVR channels."
                 : "Approve all verified cameras to start recording, AI detection, and alerts automatically."}</p>
           </div>
           <div className="discovery-status-actions">
@@ -1181,12 +1247,16 @@ export function DeviceManager() {
                 <div className="form-group"><label htmlFor="discoveryAnalyticsCapability">Analytics</label><select id="discoveryAnalyticsCapability" value={String(discoveryAnalyticsCapability)} onChange={(event) => setDiscoveryAnalyticsCapability(event.target.value === "true")}><option value="true">Yes</option><option value="false">No</option></select></div>
               </div></div>
 
-              <div className="form-section"><h3>Network connection</h3><div className="form-row">
+              <div className="form-section"><h3>Connection and camera type</h3><div className="form-row">
+                <div className="form-group"><label htmlFor="cameraTransport">Branch connection</label><select id="cameraTransport" value={cameraForm.connectionTransport} onChange={(event) => setCameraForm((form) => ({ ...form, connectionTransport: event.target.value as CameraForm["connectionTransport"] }))}><option value="vpn">Existing branch VPN</option><option value="cloudflare-tunnel">Managed Cloudflare Tunnel</option></select></div>
+                <div className="form-group"><label htmlFor="cameraSourceType">Camera type</label><select id="cameraSourceType" value={cameraForm.sourceType} onChange={(event) => setCameraForm((form) => ({ ...form, sourceType: event.target.value as CameraForm["sourceType"], protocol: event.target.value === "ip-camera" ? form.protocol : "vendor-adapter" }))}><option value="ip-camera">IP camera</option><option value="analog-dvr-channel">Analog camera through DVR</option><option value="nvr-channel">IP camera through NVR</option></select></div>
                 <div className="form-group"><label htmlFor="cameraIp">Private IP address <span className="required">*</span></label><input id="cameraIp" value={cameraForm.ipAddress} onChange={(event) => setCameraForm((form) => ({ ...form, ipAddress: event.target.value }))} required placeholder="192.168.1.20" /></div>
                 <div className="form-group"><label htmlFor="cameraProtocol">Protocol</label><select id="cameraProtocol" value={cameraForm.protocol} onChange={(event) => setCameraForm((form) => ({ ...form, protocol: event.target.value as CameraForm["protocol"] }))}><option value="onvif-t">ONVIF Profile T</option><option value="onvif-s">ONVIF Profile S</option><option value="rtsp">RTSP</option><option value="vendor-adapter">Vendor adapter</option></select></div>
                 <div className="form-group"><label htmlFor="onvifPort">ONVIF port</label><input id="onvifPort" type="number" min="1" max="65535" value={cameraForm.onvifPort} onChange={(event) => setCameraForm((form) => ({ ...form, onvifPort: event.target.value }))} required /></div>
                 <div className="form-group"><label htmlFor="rtspPort">RTSP port</label><input id="rtspPort" type="number" min="1" max="65535" value={cameraForm.rtspPort} onChange={(event) => setCameraForm((form) => ({ ...form, rtspPort: event.target.value }))} required /></div>
-              </div><div className="form-group"><label htmlFor="secretRef">Stream secret reference <span className="required">*</span></label><input id="secretRef" value={cameraForm.connectionSecretRef} onChange={(event) => setCameraForm((form) => ({ ...form, connectionSecretRef: event.target.value }))} minLength={8} required /><small className="field-help">This reference must map to the RTSP URL in the gateway secret store. Camera credentials are never saved in the inventory database.</small></div></div>
+              </div>
+              {cameraForm.sourceType !== "ip-camera" ? <div className="form-row"><div className="form-group"><label htmlFor="recorderId">DVR / NVR ID <span className="required">*</span></label><input id="recorderId" value={cameraForm.recorderId} onChange={(event) => setCameraForm((form) => ({ ...form, recorderId: event.target.value }))} required placeholder="DVR-BLR-01" /></div><div className="form-group"><label htmlFor="recorderChannel">Recorder channel <span className="required">*</span></label><input id="recorderChannel" type="number" min="1" value={cameraForm.recorderChannel} onChange={(event) => setCameraForm((form) => ({ ...form, recorderChannel: event.target.value }))} required /></div><div className="form-group"><label htmlFor="recorderSerial">Recorder serial</label><input id="recorderSerial" value={cameraForm.recorderSerialNumber} onChange={(event) => setCameraForm((form) => ({ ...form, recorderSerialNumber: event.target.value }))} placeholder="Optional" /></div></div> : null}
+              <div className="form-group"><label htmlFor="secretRef">Stream secret reference {cameraForm.connectionTransport === "cloudflare-tunnel" ? <span className="required">*</span> : null}</label><input id="secretRef" value={cameraForm.connectionSecretRef} onChange={(event) => setCameraForm((form) => ({ ...form, connectionSecretRef: event.target.value }))} minLength={cameraForm.connectionSecretRef ? 8 : undefined} required={cameraForm.connectionTransport === "cloudflare-tunnel"} placeholder={cameraForm.connectionTransport === "vpn" ? "Generated automatically for VPN when left blank" : "gateway-secret://branch/camera"} /><small className="field-help">VPN references are generated from the private address when left blank. Tunnel references must map to the RTSP URL in the gateway secret store. Credentials are never saved in the inventory database.</small></div></div>
 
               <div className="form-section"><h3>Main stream and capabilities</h3><div className="form-row form-row-three">
                 <div className="form-group"><label htmlFor="codec">Codec</label><select id="codec" value={cameraForm.codec} onChange={(event) => setCameraForm((form) => ({ ...form, codec: event.target.value as CameraForm["codec"] }))}><option value="H264">H.264</option><option value="H265">H.265</option><option value="MJPEG">MJPEG</option><option value="unknown">Auto-detect</option></select></div>

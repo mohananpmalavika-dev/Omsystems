@@ -11,6 +11,7 @@ import type {
   Action,
   AuditEventInput,
   CameraStatus,
+  BranchConnectivityProfile,
   NodeType,
   User,
 } from "../domain/models.js";
@@ -39,6 +40,21 @@ import type {
   VideoWallGridSize,
   VideoWallLayout,
 } from "../operational-health/types.js";
+
+function mapBranchConnectivityProfile(row: any): BranchConnectivityProfile {
+  return {
+    branchId: row.branch_id,
+    tenantId: row.tenant_id,
+    primaryTransport: row.primary_transport,
+    ...(row.fallback_transport ? { fallbackTransport: row.fallback_transport } : {}),
+    ...(row.vpn_protocol ? { vpnProtocol: row.vpn_protocol } : {}),
+    ...(row.vpn_remote_networks?.length ? { vpnRemoteNetworks: row.vpn_remote_networks } : {}),
+    status: row.status,
+    lastVerifiedAt: row.last_verified_at?.toISOString() ?? null,
+    createdAt: row.created_at.toISOString(),
+    updatedAt: row.updated_at.toISOString(),
+  };
+}
 
 // TODO: PostgresStore is a partial implementation of ControlPlaneStore
 // Some methods from the interface are not yet implemented but are not used in production
@@ -331,6 +347,9 @@ export class PostgresStore
   async approveCamera(branchId: string, input: CameraApprovalInput) {
     return this.cameras.approve(branchId, input);
   }
+  async createCameraFromManualRegistration(branchId: string, input: CameraApprovalInput) {
+    return this.cameras.createManual(branchId, input);
+  }
   async replaceRecorderChannels(input: Parameters<CameraRepository["replaceRecorderChannels"]>[0]) {
     return this.cameras.replaceRecorderChannels(input);
   }
@@ -342,6 +361,52 @@ export class PostgresStore
   }
   async consumeLiveSession(token: string) {
     return this.cameras.consumeLiveSession(token);
+  }
+  async getBranchConnectivityProfile(branchId: string): Promise<BranchConnectivityProfile | undefined> {
+    const result = await this.pool.query(
+      `SELECT branch_node_id::text AS branch_id, tenant_id::text AS tenant_id,
+              primary_transport, fallback_transport, vpn_protocol, vpn_remote_networks,
+              status, last_verified_at, created_at, updated_at
+       FROM branch_connectivity_profiles WHERE branch_node_id = $1::uuid`,
+      [branchId],
+    );
+    return result.rows[0] ? mapBranchConnectivityProfile(result.rows[0]) : undefined;
+  }
+  async upsertBranchConnectivityProfile(
+    input: Omit<BranchConnectivityProfile, "createdAt" | "updatedAt" | "lastVerifiedAt">,
+  ): Promise<BranchConnectivityProfile> {
+    const result = await this.pool.query(
+      `INSERT INTO branch_connectivity_profiles
+         (branch_node_id, tenant_id, primary_transport, fallback_transport, vpn_protocol,
+          vpn_remote_networks, status)
+       SELECT id, tenant_id, $2, $3, $4, $5::text[], $6
+       FROM resource_nodes WHERE id = $1::uuid AND node_type = 'branch'
+       ON CONFLICT (branch_node_id) DO UPDATE
+       SET primary_transport = EXCLUDED.primary_transport,
+           fallback_transport = EXCLUDED.fallback_transport,
+           vpn_protocol = EXCLUDED.vpn_protocol,
+           vpn_remote_networks = EXCLUDED.vpn_remote_networks,
+           status = EXCLUDED.status, updated_at = now()
+       RETURNING branch_node_id::text AS branch_id, tenant_id::text AS tenant_id,
+                 primary_transport, fallback_transport, vpn_protocol, vpn_remote_networks,
+                 status, last_verified_at, created_at, updated_at`,
+      [input.branchId, input.primaryTransport, input.fallbackTransport ?? null,
+        input.vpnProtocol ?? null, input.vpnRemoteNetworks ?? [], input.status],
+    );
+    if (!result.rows[0]) throw new Error("branch_not_found");
+    return mapBranchConnectivityProfile(result.rows[0]);
+  }
+  async updateBranchConnectivityStatus(branchId: string, status: BranchConnectivityProfile["status"]) {
+    const result = await this.pool.query(
+      `UPDATE branch_connectivity_profiles
+       SET status=$2, last_verified_at=now(), updated_at=now()
+       WHERE branch_node_id=$1::uuid
+       RETURNING branch_node_id::text AS branch_id, tenant_id::text AS tenant_id,
+                 primary_transport, fallback_transport, vpn_protocol, vpn_remote_networks,
+                 status, last_verified_at, created_at, updated_at`,
+      [branchId, status],
+    );
+    return result.rows[0] ? mapBranchConnectivityProfile(result.rows[0]) : undefined;
   }
   async writeAudit(event: AuditEventInput) {
     await this.pool.query(

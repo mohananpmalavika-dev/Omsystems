@@ -38,6 +38,7 @@ import type {
   EdgeActivation,
   EdgeAgent,
   EdgeManagedTunnel,
+  BranchConnectivityProfile,
   EdgeCommand,
   EdgeCommandType,
   EdgeScanJob,
@@ -124,6 +125,7 @@ export interface CameraApprovalInput {
   rtspPort?: number;
   streamProfile?: string;
   sourceType?: Camera["sourceType"];
+  connectionTransport?: Camera["connectionTransport"];
   recorderId?: string;
   recorderChannel?: number;
   recorderSerialNumber?: string;
@@ -575,6 +577,15 @@ export interface ControlPlaneStore {
     branchId: string,
     status: EdgeManagedTunnel["status"],
   ): Promise<EdgeManagedTunnel | undefined>;
+  getBranchConnectivityProfile(branchId: string): Promise<BranchConnectivityProfile | undefined>;
+  upsertBranchConnectivityProfile(input: Omit<
+    BranchConnectivityProfile,
+    "createdAt" | "updatedAt" | "lastVerifiedAt"
+  >): Promise<BranchConnectivityProfile>;
+  updateBranchConnectivityStatus(
+    branchId: string,
+    status: BranchConnectivityProfile["status"],
+  ): Promise<BranchConnectivityProfile | undefined>;
   createEdgeCommand(input: {
     edgeAgentId: string; type: EdgeCommandType; payload: Record<string, unknown>; requestedBy: string;
   }): Promise<EdgeCommand>;

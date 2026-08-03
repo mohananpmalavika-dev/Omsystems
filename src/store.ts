@@ -22,6 +22,7 @@ import type {
   EdgeActivation,
   EdgeAgent,
   EdgeManagedTunnel,
+  BranchConnectivityProfile,
   EdgeCommand,
   EdgeUpdateRelease,
   EdgeScanJob,
@@ -238,6 +239,7 @@ export class MemoryStore implements ControlPlaneStore {
   readonly edgeCredentialHashes = new Map<string, string>();
   readonly edgeCommandPublicKeys = new Map<string, string>();
   readonly edgeManagedTunnels = new Map<string, EdgeManagedTunnel>();
+  readonly branchConnectivityProfiles = new Map<string, BranchConnectivityProfile>();
   readonly edgeCommands = new Map<string, EdgeCommand>();
   readonly edgeUpdateReleases = new Map<string, EdgeUpdateRelease>();
   readonly operationalTelemetry = new Map<string, OperationalTelemetryEnvelope>();
@@ -501,6 +503,39 @@ export class MemoryStore implements ControlPlaneStore {
     tunnel.lastCheckedAt = now;
     if (status === "revoked") tunnel.revokedAt = now;
     return structuredClone(tunnel);
+  }
+
+  async getBranchConnectivityProfile(branchId: string) {
+    const profile = this.branchConnectivityProfiles.get(branchId);
+    return profile ? structuredClone(profile) : undefined;
+  }
+
+  async upsertBranchConnectivityProfile(
+    input: Omit<BranchConnectivityProfile, "createdAt" | "updatedAt" | "lastVerifiedAt">,
+  ) {
+    const now = new Date().toISOString();
+    const current = this.branchConnectivityProfiles.get(input.branchId);
+    const profile: BranchConnectivityProfile = {
+      ...structuredClone(input),
+      createdAt: current?.createdAt ?? now,
+      updatedAt: now,
+      lastVerifiedAt: current?.lastVerifiedAt ?? null,
+    };
+    this.branchConnectivityProfiles.set(input.branchId, profile);
+    return structuredClone(profile);
+  }
+
+  async updateBranchConnectivityStatus(
+    branchId: string,
+    status: BranchConnectivityProfile["status"],
+  ) {
+    const profile = this.branchConnectivityProfiles.get(branchId);
+    if (!profile) return undefined;
+    const now = new Date().toISOString();
+    profile.status = status;
+    profile.updatedAt = now;
+    profile.lastVerifiedAt = now;
+    return structuredClone(profile);
   }
 
   async createEdgeCommand(input: {
@@ -805,6 +840,7 @@ export class MemoryStore implements ControlPlaneStore {
       edgeAgentId: discovery.edgeAgentId,
       connectionSecretRef: input.connectionSecretRef,
       sourceType: input.sourceType ?? discovery.sourceType ?? "ip-camera",
+      connectionTransport: input.connectionTransport,
       recorderId: input.recorderId ?? discovery.recorderId,
       recorderChannel: input.recorderChannel ?? discovery.recorderChannel,
       recorderSerialNumber: input.recorderSerialNumber ?? discovery.recorderSerialNumber,
@@ -899,6 +935,11 @@ export class MemoryStore implements ControlPlaneStore {
       capabilities: { ptz: false, audio: false, events: true },
       edgeAgentId: undefined,
       connectionSecretRef: input.connectionSecretRef,
+      connectionTransport: input.connectionTransport,
+      sourceType: input.sourceType ?? "ip-camera",
+      recorderId: input.recorderId,
+      recorderChannel: input.recorderChannel,
+      recorderSerialNumber: input.recorderSerialNumber,
       serialNumber: input.serialNumber,
       ipAddress: input.ipAddress,
       firmwareVersion: undefined,

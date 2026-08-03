@@ -735,6 +735,37 @@ select, textarea { font: inherit; }
 .device-scope label { font-size: 10px; font-weight: 650; }
 .device-scope select { min-width: 260px; min-height: 35px; padding: 0 9px; border: 1px solid #d9e0e9; border-radius: 7px; background: white; font-size: 10px; }
 .device-scope span { color: #a05c26; font-size: 9px; }
+.branch-connectivity-panel { padding: 15px; border: 1px solid #dce7f6; border-radius: 12px; background: linear-gradient(135deg, #fbfdff 0%, #f2f7ff 100%); }
+.branch-connectivity-heading { display: flex; align-items: flex-start; gap: 9px; }
+.branch-connectivity-heading > svg { margin-top: 1px; color: #2867ba; }
+.branch-connectivity-heading > div { min-width: 0; flex: 1; }
+.branch-connectivity-heading h3 { margin: 0; color: #1d3658; font-size: 12px; }
+.branch-connectivity-heading p { margin: 4px 0 0; color: #607693; font-size: 9px; line-height: 1.45; }
+.connectivity-status { flex: 0 0 auto; padding: 5px 8px; border-radius: 20px; color: #6d7c8e; background: #e7edf4; font-size: 8px; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; }
+.connectivity-status.healthy { color: #137050; background: #e2f6ed; }
+.connectivity-status.degraded { color: #9b6314; background: #fff0d7; }
+.connectivity-status.offline { color: #a43c45; background: #ffe8ea; }
+.connectivity-form { display: grid; gap: 12px; margin-top: 14px; }
+.connectivity-option-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; }
+.connectivity-option { display: flex; align-items: flex-start; gap: 8px; min-height: 68px; padding: 10px; border: 1px solid #dce5f0; border-radius: 9px; color: #566b86; background: rgba(255,255,255,.82); cursor: pointer; }
+.connectivity-option:hover { border-color: #a8c6ed; background: white; }
+.connectivity-option.selected { border-color: #4c8be4; box-shadow: 0 0 0 2px rgba(76,139,228,.12); }
+.connectivity-option input { width: 13px; height: 13px; margin: 2px 0 0; accent-color: #3477db; }
+.connectivity-option > svg { flex: 0 0 auto; margin-top: 1px; color: #3477db; }
+.connectivity-option span { display: grid; gap: 3px; }
+.connectivity-option strong { color: #304866; font-size: 10px; }
+.connectivity-option small { color: #6f8197; font-size: 8px; line-height: 1.4; }
+.connectivity-fields { display: grid; grid-template-columns: minmax(120px, .7fr) minmax(145px, .8fr) minmax(240px, 1.5fr); gap: 9px; }
+.connectivity-fields label { display: grid; gap: 5px; color: #536984; font-size: 9px; font-weight: 650; }
+.connectivity-fields input, .connectivity-fields select { width: 100%; min-height: 34px; padding: 0 9px; border: 1px solid #d8e1ec; border-radius: 7px; color: #344962; background: white; font-size: 10px; outline: none; }
+.connectivity-fields input:focus, .connectivity-fields select:focus { border-color: #5e99e7; box-shadow: 0 0 0 3px rgba(94,153,231,.12); }
+.connectivity-guidance { display: grid; gap: 5px; padding: 9px 10px; border-left: 3px solid #75a8e9; border-radius: 0 7px 7px 0; background: rgba(255,255,255,.67); }
+.connectivity-guidance p { display: flex; align-items: flex-start; gap: 6px; margin: 0; color: #5f7289; font-size: 8px; line-height: 1.45; }
+.connectivity-guidance svg { flex: 0 0 auto; margin-top: 1px; color: #2878c8; }
+.connectivity-feedback { margin: 0; padding: 8px 10px; border-radius: 7px; font-size: 9px; }
+.connectivity-feedback.error { color: #a53e45; background: #ffecee; }
+.connectivity-feedback.success { color: #157455; background: #e8f8f2; }
+.connectivity-empty { margin: 12px 0 0; color: #73859b; font-size: 10px; }
 .device-columns { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 13px; }
 .device-card { min-height: 280px; padding: 15px; border: 1px solid var(--line); border-radius: 11px; background: #fbfcfe; }
 .device-card-heading { gap: 9px; padding-bottom: 12px; border-bottom: 1px solid #e8ecf2; }
@@ -886,6 +917,8 @@ select, textarea { font: inherit; }
   .device-toolbar-actions button { flex: 1; }
   .device-scope { align-items: stretch; flex-direction: column; }
   .device-scope select { width: 100%; min-width: 0; }
+  .connectivity-option-grid, .connectivity-fields { grid-template-columns: 1fr; }
+  .branch-connectivity-heading { flex-wrap: wrap; }
   .device-columns, .form-row.form-row-three { grid-template-columns: 1fr; }
   .incident-row { align-items: flex-start; flex-wrap: wrap; }
   .incident-copy { min-width: calc(100% - 50px); }

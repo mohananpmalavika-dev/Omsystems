@@ -130,6 +130,8 @@ export interface Camera {
   connectionSecretRef: string;
   /** How video reaches Sentinel Grid. Analog cameras are represented by the DVR channel that digitizes them. */
   sourceType?: CameraSourceType;
+  /** The protected branch path used to reach this source; credentials remain in the secret reference. */
+  connectionTransport?: "vpn" | "cloudflare-tunnel";
   recorderId?: string;
   recorderChannel?: number;
   recorderSerialNumber?: string;
@@ -549,6 +551,29 @@ export interface EdgeManagedTunnel {
   updatedAt: string;
   lastCheckedAt: string | null;
   revokedAt: string | null;
+}
+
+export type BranchConnectivityTransport = "vpn" | "cloudflare-tunnel";
+export type BranchVpnProtocol = "ipsec" | "wireguard" | "openvpn" | "ssl-vpn";
+export type BranchConnectivityStatus = "configured" | "healthy" | "degraded" | "offline";
+
+/**
+ * Branch-level transport selection. VPN credentials and camera/DVR passwords
+ * are intentionally excluded; routers own VPN credentials and the media
+ * service resolves only opaque stream-secret references.
+ */
+export interface BranchConnectivityProfile {
+  branchId: string;
+  tenantId: string;
+  primaryTransport: BranchConnectivityTransport;
+  fallbackTransport?: BranchConnectivityTransport;
+  vpnProtocol?: BranchVpnProtocol;
+  /** RFC1918 CIDRs routed through the site-to-site VPN, never public endpoints. */
+  vpnRemoteNetworks?: string[];
+  status: BranchConnectivityStatus;
+  lastVerifiedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export type EdgeCommandType =

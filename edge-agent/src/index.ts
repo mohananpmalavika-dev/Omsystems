@@ -24,6 +24,7 @@ import type { RecorderConfig } from "./monitoring/recorder-probe.js";
 
 async function main() {
 const argv = process.argv.slice(2);
+const scanOnce = hasArgument(argv, "--scan-once");
 if (hasArgument(argv, "--verify-bundle")) {
   process.stdout.write(`${JSON.stringify({ valid: true, assets: inspectBundledWindowsRuntime() }, null, 2)}\n`);
   process.exit(0);
@@ -88,7 +89,10 @@ if (!identity && config.EDGE_ACTIVATION_CODE) {
     ...(activated.updatePublicKey ? { updatePublicKey: activated.updatePublicKey } : {}),
     enrolledAt: new Date().toISOString(),
   };
-  await identityStore.save(identity);
+  // A temporary local scan must not turn the operator's laptop into a
+  // permanently enrolled branch appliance. It can use its activation/bridge
+  // credential in memory for this one process and exits when the scan ends.
+  if (!scanOnce) await identityStore.save(identity);
 }
 if (identity) gateway.useEdgeCredential(identity.credential);
 const legacyAgentId = !identity && config.EDGE_AGENT_ID && config.BRANCH_ID
@@ -154,6 +158,18 @@ const activeRecorders = new Map<string, RecorderConfig>(
   config.RECORDERS_JSON.map((recorder) => [recorder.id, recorder]),
 );
 await secrets.load();
+if (scanOnce) {
+  const discovered = await scanBranch({ persistStreamSecrets: false });
+  process.stdout.write(`${JSON.stringify({
+    completed: true,
+    mode: "local-network-scan",
+    branchId,
+    edgeAgentId: agentId,
+    discovered,
+    message: "IP cameras and DVR/NVR channels were submitted for review. No service, tunnel, or local stream credential was installed.",
+  }, null, 2)}\n`);
+  process.exit(0);
+}
 if (config.LIVE_MEDIA_ENABLED) {
   edgeMediaRuntime = await startEdgeMediaRuntime({ config, gateway: control, agentId, secrets });
 }
@@ -239,7 +255,8 @@ while (!stopping) {
 cameraHeartbeat.stop();
 await edgeMediaRuntime?.stop();
 
-async function scanBranch() {
+async function scanBranch(options: { persistStreamSecrets?: boolean } = {}) {
+  const persistStreamSecrets = options.persistStreamSecrets ?? true;
   const configuredEndpoints = config.ONVIF_ENDPOINTS
     .split(",")
     .map((value) => value.trim())
@@ -353,7 +370,7 @@ async function scanBranch() {
             recorderChannel: channel.sourceChannel,
             ...(device.serialNumber ? { recorderSerialNumber: device.serialNumber } : {}),
           });
-          if (channel.primaryStreamUri) {
+          if (persistStreamSecrets && channel.primaryStreamUri) {
             await secrets.set(`edge://${agentId}/${channelDiscovery.id}`, channel.primaryStreamUri);
           }
           submitted += 1;
@@ -403,7 +420,7 @@ async function scanBranch() {
         profiles,
         capabilities: device.capabilities,
       });
-      if (primarySourceUri) {
+      if (persistStreamSecrets && primarySourceUri) {
         await secrets.set(`edge://${agentId}/${discovery.id}`, primarySourceUri);
       }
       submitted += 1;

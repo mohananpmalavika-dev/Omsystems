@@ -1,0 +1,64 @@
+# Render ignore file - files/folders to exclude from deployment
+
+# Node modules (will be installed on Render)
+node_modules/
+
+# Development files
+*.log
+*.md
+!README.md
+!DEPLOYMENT_GUIDE.md
+
+# Test files
+test/
+*.test.ts
+*.spec.ts
+jest.config.js
+
+# Development configuration
+.env
+.env.local
+.env.development
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Build artifacts (will be built on Render)
+dist/
+build/
+
+# Documentation (optional, uncomment if you want to exclude)
+# docs/
+# *.md
+
+# Large model files (download separately or use external storage)
+# models/*.onnx
+# models/*.bin
+
+# Git files
+.git/
+.gitignore
+.gitattributes
+
+# CI/CD files (not needed on Render)
+.github/
+.gitlab-ci.yml
+azure-pipelines.yml
+
+# Docker files (Render uses its own)
+Dockerfile
+docker-compose*.yml
+.dockerignore
+
+# Temporary files
+tmp/
+temp/
+*.tmp

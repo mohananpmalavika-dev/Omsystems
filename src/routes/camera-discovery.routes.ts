@@ -54,6 +54,29 @@ function isRecorderBacked(camera: Pick<DiscoveredCamera, "recorderId" | "sourceT
     camera.sourceType === "nvr-channel";
 }
 
+function vpnDiscoveryReference(branchId: string, camera: Pick<DiscoveredCamera, "sourceType" | "ipAddress" | "recorderId" | "recorderChannel">) {
+  const recorderBacked = isRecorderBacked(camera);
+  const source = recorderBacked
+    ? `recorder/${encodeURIComponent(camera.recorderId ?? "unknown")}/channel/${camera.recorderChannel ?? 0}`
+    : `camera/${camera.ipAddress}`;
+  return `vpn://${encodeURIComponent(branchId)}/${source}`;
+}
+
+async function discoveryConnection(
+  store: ControlPlaneStore,
+  branchId: string,
+  camera: Pick<DiscoveredCamera, "sourceType" | "ipAddress" | "recorderId" | "recorderChannel" | "edgeAgentId" | "id">,
+) {
+  const profile = await store.getBranchConnectivityProfile(branchId);
+  if (profile?.primaryTransport === "vpn") {
+    return {
+      connectionSecretRef: vpnDiscoveryReference(branchId, camera),
+      connectionTransport: "vpn" as const,
+    };
+  }
+  return { connectionSecretRef: `edge://${camera.edgeAgentId}/${camera.id}` };
+}
+
 function defaultRecordingJob(
   mode: "continuous" | "motion",
   retentionDays: number,
@@ -150,12 +173,14 @@ export async function registerCameraDiscoveryRoutes(
       return reply.code(404).send({ error: "discovery_not_found" });
     }
 
+    const connection = await discoveryConnection(store, branchId, discovered);
     const camera = await store.approveCamera(branchId, {
       discoveryId,
       name: body.name,
       protocol: body.protocol ?? (discovered.recorderId ? "vendor-adapter" : "onvif-t"),
       channel: body.channel ?? discovered.recorderChannel ?? 1,
-      connectionSecretRef: body.connectionSecretRef ?? `edge://${discovered.edgeAgentId}/${discovered.id}`,
+      connectionSecretRef: body.connectionSecretRef ?? connection.connectionSecretRef,
+      ...(connection.connectionTransport ? { connectionTransport: connection.connectionTransport } : {}),
       model: discovered.model,
       serialNumber: discovered.serialNumber,
       ipAddress: discovered.ipAddress,
@@ -218,6 +243,7 @@ export async function registerCameraDiscoveryRoutes(
     const retentionDays = body.retentionDays ?? 180;
     const analyticsEnabled = body.enableAnalytics ?? true;
     const alertsEnabled = body.enableAlerts ?? true;
+    const connection = await store.getBranchConnectivityProfile(branchId);
 
     for (const [index, discovered] of pendingDiscoveries.entries()) {
       if (!discovered.streamVerified || discovered.credentialsRequired) {
@@ -240,12 +266,16 @@ export async function registerCameraDiscoveryRoutes(
 
       try {
         const name = discovered.displayName || discovered.model || `${discovered.vendor} camera`;
+        const sourceConnection = connection?.primaryTransport === "vpn"
+          ? { connectionSecretRef: vpnDiscoveryReference(branchId, discovered), connectionTransport: "vpn" as const }
+          : { connectionSecretRef: `edge://${discovered.edgeAgentId}/${discovered.id}` };
         const camera = await store.approveCamera(branchId, {
           discoveryId: discovered.id,
           name,
           protocol: discovered.recorderId ? "vendor-adapter" : "onvif-t",
           channel: discovered.recorderChannel ?? index + 1,
-          connectionSecretRef: `edge://${discovered.edgeAgentId}/${discovered.id}`,
+          connectionSecretRef: sourceConnection.connectionSecretRef,
+          ...(sourceConnection.connectionTransport ? { connectionTransport: sourceConnection.connectionTransport } : {}),
           model: discovered.model,
           serialNumber: discovered.serialNumber,
           ipAddress: discovered.ipAddress,

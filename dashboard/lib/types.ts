@@ -211,6 +211,7 @@ export interface Camera {
   status: CameraStatus;
   channel: number;
   sourceType?: "ip-camera" | "analog-dvr-channel" | "nvr-channel";
+  connectionTransport?: "vpn" | "cloudflare-tunnel";
   recorderId?: string;
   recorderChannel?: number;
   capabilities: {

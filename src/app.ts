@@ -19,6 +19,12 @@ import { calculateRecordingStorage } from "./recording/storage-calculator.js";
 import { registerAuthRoutes } from "./routes/auth.routes.js";
 import { registerCameraPermissionRoutes } from "./routes/camera-permissions.routes.js";
 import { registerCameraDiscoveryRoutes } from "./routes/camera-discovery.routes.js";
+import {
+  isAddressWithinAnyCidr,
+  isPrivateIpv4Address,
+  registerBranchConnectivityRoutes,
+  transportIsAllowed,
+} from "./routes/branch-connectivity.routes.js";
 import { registerRecorderLifecycleRoutes } from "./routes/recorder-lifecycle.routes.js";
 import { registerCctvInfrastructureRoutes } from "./routes/cctv-infrastructure.js";
 import { registerOrganizationRoutes } from "./routes/organization.routes.js";
@@ -1011,7 +1017,8 @@ export async function buildApp(options?: {
       name: z.string().trim().min(2).max(120),
       channel: z.number().int().positive(),
       protocol: z.enum(["onvif-t", "onvif-s", "rtsp", "vendor-adapter"]),
-      connectionSecretRef: z.string().min(8).max(500),
+      connectionSecretRef: z.string().min(8).max(500).optional(),
+      connectionTransport: z.enum(["vpn", "cloudflare-tunnel"]).optional(),
       branchCode: z.string().trim().max(80).optional(),
       manufacturer: z.string().trim().max(120).optional(),
       model: z.string().trim().max(120).optional(),
@@ -1020,13 +1027,38 @@ export async function buildApp(options?: {
       onvifPort: z.number().int().min(1).max(65535).optional(),
       rtspPort: z.number().int().min(1).max(65535).optional(),
       streamProfile: z.string().trim().max(80).optional(),
+      sourceType: z.enum(["ip-camera", "analog-dvr-channel", "nvr-channel"]).default("ip-camera"),
+      recorderId: z.string().trim().min(1).max(200).optional(),
+      recorderChannel: z.number().int().min(1).max(65_535).optional(),
+      recorderSerialNumber: z.string().trim().max(120).optional(),
     }).parse(request.body);
+    const connectivity = await store.getBranchConnectivityProfile(branchId);
+    const connectionTransport = parsed.connectionTransport ?? connectivity?.primaryTransport;
+    if (connectionTransport && (!connectivity || !transportIsAllowed(connectionTransport, connectivity))) {
+      return reply.code(409).send({ error: "branch_connectivity_not_configured" });
+    }
+    if (connectionTransport === "vpn" && (!parsed.ipAddress || !isPrivateIpv4Address(parsed.ipAddress))) {
+      return reply.code(400).send({ error: "vpn_requires_private_camera_or_recorder_address" });
+    }
+    if (connectionTransport === "vpn" && parsed.ipAddress &&
+        !isAddressWithinAnyCidr(parsed.ipAddress, connectivity?.vpnRemoteNetworks ?? [])) {
+      return reply.code(400).send({ error: "camera_address_outside_configured_vpn_networks" });
+    }
+    const recorderBacked = parsed.sourceType === "analog-dvr-channel" || parsed.sourceType === "nvr-channel";
+    if (recorderBacked && (!parsed.recorderId || !parsed.recorderChannel || parsed.protocol !== "vendor-adapter")) {
+      return reply.code(400).send({ error: "recorder_channel_requires_recorder_id_channel_and_vendor_adapter" });
+    }
+    const connectionSecretRef = parsed.connectionSecretRef ?? (connectionTransport === "vpn"
+      ? vpnSecretReference(branchId, parsed.sourceType, parsed.ipAddress!, parsed.recorderId, parsed.recorderChannel)
+      : undefined);
+    if (!connectionSecretRef) return reply.code(400).send({ error: "connection_secret_ref_required" });
     const approvalInput = {
       discoveryId: parsed.discoveryId ?? "",
       name: parsed.name,
       channel: parsed.channel,
       protocol: parsed.protocol,
-      connectionSecretRef: parsed.connectionSecretRef,
+      connectionSecretRef,
+      connectionTransport,
       branchCode: parsed.branchCode,
       manufacturer: parsed.manufacturer,
       model: parsed.model,
@@ -1035,6 +1067,10 @@ export async function buildApp(options?: {
       onvifPort: parsed.onvifPort,
       rtspPort: parsed.rtspPort,
       streamProfile: parsed.streamProfile,
+      sourceType: parsed.sourceType,
+      recorderId: parsed.recorderId,
+      recorderChannel: parsed.recorderChannel,
+      recorderSerialNumber: parsed.recorderSerialNumber,
     };
     const camera = parsed.discoveryId
       ? await store.approveCamera(branchId, approvalInput)
@@ -1042,9 +1078,12 @@ export async function buildApp(options?: {
     if (!camera) {
       return reply.code(parsed.discoveryId ? 404 : 400).send({ error: parsed.discoveryId ? "discovery_not_found" : "manual_registration_failed" });
     }
+    await store.upsertRecordingJob(camera.id, initialRecordingJobForSource(parsed.sourceType));
     await audit(request, store, "camera.approved", camera.nodeId, "success", {
       cameraId: camera.id,
       registrationMethod: parsed.discoveryId ? "discovery" : "manual",
+      connectionTransport: connectionTransport ?? "unspecified",
+      sourceType: parsed.sourceType,
     });
     return reply.code(201).send(safeCamera(camera));
   });
@@ -1581,6 +1620,7 @@ export async function buildApp(options?: {
   });
 
   await registerDeviceInventoryRoutes(app, store);
+  await registerBranchConnectivityRoutes(app, store);
   await registerEdgeGatewayOperationsRoutes(app, store, {
     controlPlanePublicUrl: options?.controlPlanePublicUrl ?? process.env.CONTROL_PLANE_PUBLIC_URL,
     updateSigningPrivateKey: options?.edgeUpdateSigningPrivateKey ?? process.env.EDGE_UPDATE_SIGNING_PRIVATE_KEY,
@@ -1863,6 +1903,48 @@ function edgeAgentIdFromIngress(request: FastifyRequest) {
 
 function hashEdgeCredential(value: string) {
   return createHash("sha256").update(value).digest("hex");
+}
+
+/** Opaque lookup key. The RTSP/ONVIF URL and its credentials remain in the central secret provider. */
+function vpnSecretReference(
+  branchId: string,
+  sourceType: Camera["sourceType"],
+  privateAddress: string,
+  recorderId?: string,
+  recorderChannel?: number,
+) {
+  const source = sourceType === "analog-dvr-channel" || sourceType === "nvr-channel"
+    ? `recorder/${encodeURIComponent(recorderId ?? "unknown")}/channel/${recorderChannel ?? 0}`
+    : `camera/${privateAddress}`;
+  return `vpn://${encodeURIComponent(branchId)}/${source}`;
+}
+
+function initialRecordingJobForSource(sourceType: Camera["sourceType"]): Omit<RecordingJob, "id" | "cameraId" | "updatedAt"> {
+  const recorderBacked = sourceType === "analog-dvr-channel" || sourceType === "nvr-channel";
+  return {
+    mode: "continuous",
+    enabled: true,
+    status: "idle",
+    primaryRecordingStorage: recorderBacked ? "recorder-local" : "sentinel-local",
+    cloudArchivePolicy: recorderBacked ? "incident-evidence-only" : "none",
+    retentionDays: 180,
+    segmentDurationSeconds: 60,
+    hotRetentionDays: 30,
+    warmRetentionDays: 60,
+    coldRetentionDays: 90,
+    critical: false,
+    backupRequired: !recorderBacked,
+    automaticDeletionEnabled: true,
+    evidenceProtection: true,
+    recordMainStream: true,
+    preRollSeconds: 30,
+    postRollSeconds: 120,
+    minMotionDurationSeconds: 1,
+    motionConfidenceThreshold: 0.65,
+    cooldownSeconds: 60,
+    maxEventDurationSeconds: 600,
+    triggerEventTypes: ["motion", "tamper", "intrusion", "person", "vehicle"],
+  };
 }
 
 function safeCamera(camera: Camera) {

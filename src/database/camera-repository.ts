@@ -28,6 +28,8 @@ type CameraRow = {
   profiles: CameraProfile[];
   capabilities: CameraCapabilities;
   connection_secret_ref: string;
+  connection_transport: Camera["connectionTransport"] | null;
+  ip_address: string | null;
   source_type: Camera["sourceType"] | null;
   recorder_id: string | null;
   recorder_channel: number | null;
@@ -49,6 +51,8 @@ function mapCamera(row: CameraRow): Camera {
     profiles: row.profiles,
     capabilities: row.capabilities,
     connectionSecretRef: row.connection_secret_ref,
+    ...(row.connection_transport ? { connectionTransport: row.connection_transport } : {}),
+    ...(row.ip_address ? { ipAddress: row.ip_address } : {}),
     sourceType: row.source_type ?? "ip-camera",
     ...(row.recorder_id ? { recorderId: row.recorder_id } : {}),
     ...(row.recorder_channel ? { recorderChannel: row.recorder_channel } : {}),
@@ -60,6 +64,7 @@ const selectCamera = `SELECT cameras.id::text, cameras.resource_node_id::text,
   cameras.branch_node_id::text, cameras.edge_agent_id::text, camera_node.name, cameras.vendor,
   cameras.model, cameras.channel, cameras.protocol, cameras.status,
   cameras.profiles, cameras.capabilities, cameras.connection_secret_ref,
+  cameras.connection_transport, cameras.ip_address::text,
   cameras.source_type, cameras.recorder_id, cameras.recorder_channel,
   cameras.recorder_serial_number
   FROM cameras
@@ -300,19 +305,20 @@ export class CameraRepository {
     );
     const result = await client.query<CameraRow>(
        `INSERT INTO cameras
-         (resource_node_id, branch_node_id, edge_agent_id, vendor, model,
+          (resource_node_id, branch_node_id, edge_agent_id, vendor, model,
           channel, protocol, profiles, capabilities, connection_secret_ref,
-          source_type, recorder_id, recorder_channel, recorder_serial_number)
+          connection_transport, ip_address, source_type, recorder_id, recorder_channel, recorder_serial_number)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9::jsonb, $10,
-               $11, $12, $13, $14)
+               $11, $12::inet, $13, $14, $15, $16)
        RETURNING id::text, model AS name, resource_node_id::text,
-                 branch_node_id::text, edge_agent_id::text, vendor, model, channel, protocol, status, profiles,
-                 capabilities, connection_secret_ref, source_type, recorder_id,
+               branch_node_id::text, edge_agent_id::text, vendor, model, channel, protocol, status, profiles,
+                 capabilities, connection_secret_ref, connection_transport, ip_address::text, source_type, recorder_id,
                  recorder_channel, recorder_serial_number`,
       [
         nodeId, branchId, source.edge_agent_id, source.vendor, source.model,
         input.channel, input.protocol, JSON.stringify(source.profiles),
         JSON.stringify(source.capabilities), input.connectionSecretRef,
+        input.connectionTransport ?? "cloudflare-tunnel", input.ipAddress ?? null,
         input.sourceType ?? source.source_type ?? "ip-camera",
         input.recorderId ?? source.recorder_id,
         input.recorderChannel ?? (source.recorder_channel > 0 ? source.recorder_channel : null),
@@ -320,6 +326,56 @@ export class CameraRepository {
       ],
     );
     return mapCamera(result.rows[0]!);
+  }
+
+  async createManual(branchId: string, input: CameraApprovalInput) {
+    const client = await this.pool.connect();
+    try {
+      await client.query("BEGIN");
+      const nodeId = randomUUID();
+      const createdNode = await client.query(
+        `INSERT INTO resource_nodes (id, tenant_id, parent_id, node_type, name, path)
+         SELECT $1::uuid, tenant_id, id, 'camera', $3,
+                path || text2ltree(replace($1::text, '-', '_'))
+         FROM resource_nodes
+         WHERE id = $2::uuid AND node_type = 'branch'`,
+        [nodeId, branchId, input.name],
+      );
+      if (createdNode.rowCount !== 1) {
+        await client.query("ROLLBACK");
+        return undefined;
+      }
+      const vendor = input.manufacturer?.toLowerCase() === "hikvision"
+        ? "hikvision"
+        : input.manufacturer?.toLowerCase().includes("cp")
+          ? "cp-plus"
+          : "other";
+      const inserted = await client.query<{ id: string }>(
+        `INSERT INTO cameras
+           (resource_node_id, branch_node_id, edge_agent_id, vendor, model, channel,
+            protocol, profiles, capabilities, connection_secret_ref, connection_transport,
+            ip_address, source_type, recorder_id, recorder_channel, recorder_serial_number)
+         VALUES ($1::uuid, $2::uuid, NULL, $3, $4, $5, $6, $7::jsonb, $8::jsonb,
+                 $9, $10, $11::inet, $12, $13, $14, $15)
+         RETURNING id::text`,
+        [
+          nodeId, branchId, vendor, input.model ?? "manual", input.channel,
+          input.protocol,
+          JSON.stringify([{ name: input.streamProfile ?? "main", codec: "H264", width: 1920, height: 1080 }]),
+          JSON.stringify({ ptz: false, audio: false, events: true }), input.connectionSecretRef,
+          input.connectionTransport ?? null, input.ipAddress ?? null,
+          input.sourceType ?? "ip-camera", input.recorderId ?? null,
+          input.recorderChannel ?? null, input.recorderSerialNumber ?? null,
+        ],
+      );
+      await client.query("COMMIT");
+      return await this.findById(inserted.rows[0]!.id);
+    } catch (error) {
+      await client.query("ROLLBACK").catch(() => undefined);
+      throw error;
+    } finally {
+      client.release();
+    }
   }
 
   async updateStatus(id: string, status: CameraStatus) {

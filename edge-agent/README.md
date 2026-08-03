@@ -49,6 +49,26 @@ The generated executable is branch-specific. Do not copy one branch's EXE to a
 different branch and do not send it by unsecured email because it contains the
 edge bridge credential.
 
+## One-time discovery from a connected laptop
+
+When an operator connects a Windows laptop to the same LAN/VLAN as a branch's
+cameras and recorders, download **Local PC scan** from Branches & devices.
+Extract the ZIP and double-click `Run Local Discovery.cmd`. If you know a
+shared ONVIF/DVR login, enter it in the Windows credential prompt to enumerate
+recorder channels. The credential is used in memory only for that scan and is
+not saved on the laptop.
+
+It discovers:
+
+- ONVIF IP cameras;
+- DVR/XVR channels for analog cameras; and
+- NVR channels for IP cameras connected through the recorder.
+
+The scanner exits after the scan. It does not install a service, create a
+tunnel, relay video, or leave the laptop as a 24/7 dependency. Review the
+discoveries in Sentinel Grid afterwards. For a VPN branch, approved devices use
+the configured router route; for a tunnel branch, use the permanent gateway.
+
 The single installer contains:
 
 - ONVIF discovery and camera/recorder health agent
