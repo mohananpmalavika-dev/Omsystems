@@ -135,16 +135,17 @@ export async function adminCameraManagementRoutes(app: FastifyInstance, store: C
 
     const result = await store.db.query(`
       SELECT 
-        c.id,
-        c.name,
-        c.branch_node_id,
+        c.id::text,
+        rn.name,
+        c.branch_node_id::text,
         c.status,
         c.vendor,
         c.model,
         b.name as branch_name
       FROM cameras c
+      JOIN resource_nodes rn ON c.resource_node_id = rn.id
       LEFT JOIN resource_nodes b ON c.branch_node_id = b.id
-      ORDER BY c.name
+      ORDER BY rn.name
       LIMIT 100
     `);
     

@@ -1,32 +1,35 @@
 import { NextResponse } from 'next/server';
-import { Client } from 'pg';
 
-const DATABASE_URL = process.env.DATABASE_URL ?? '';
+export const dynamic = 'force-dynamic';
 
 export async function GET() {
-  const client = new Client({
-    connectionString: DATABASE_URL,
-    ssl: {
-      rejectUnauthorized: false
-    }
-  });
-
   try {
-    await client.connect();
+    const controlPlaneUrl = process.env.CONTROL_PLANE_INTERNAL_URL || 'http://localhost:8080';
+    
+    const response = await fetch(`${controlPlaneUrl}/v1/admin/cameras/list`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
 
-    const result = await client.query(`
-      SELECT c.id, c.model, c.ip_address, c.status, c.edge_agent_id,
-             e.name as gateway_name
-      FROM cameras c
-      LEFT JOIN edge_agents e ON c.edge_agent_id = e.id
-      ORDER BY c.created_at DESC
-    `);
+    if (!response.ok) {
+      console.error(`Control plane returned ${response.status}`);
+      return NextResponse.json(
+        { error: 'Failed to fetch cameras' },
+        { status: response.status }
+      );
+    }
 
-    return NextResponse.json(result.rows);
-  } catch (error: any) {
-    console.error('Get cameras error:', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
-  } finally {
-    await client.end();
+    const data = await response.json();
+    
+    // Return the cameras array directly (frontend expects array, not {cameras: [...]}
+    return NextResponse.json(data.cameras || []);
+  } catch (error) {
+    console.error('Error fetching cameras:', error);
+    return NextResponse.json(
+      { error: 'Internal server error' },
+      { status: 500 }
+    );
   }
 }
