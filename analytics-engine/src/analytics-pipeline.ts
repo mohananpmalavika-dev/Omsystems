@@ -35,7 +35,7 @@ import { AIInvestigationTools } from "./detectors/ai-investigation-tools.js";
 import { AIPredictionEngine } from "./detectors/ai-prediction-engine.js";
 import { AIReportingEngine } from "./detectors/ai-reporting-engine.js";
 import { AIAssistant } from "./detectors/ai-assistant.js";
-// import { AnalogVideoQualityDetector } from "./detectors/analog-video-quality-detector.js";
+import { AnalogVideoQualityDetector } from "./detectors/analog-video-quality-detector.js";
 import { CameraAgingDetector } from "./detectors/camera-aging-detector.js";
 import { CameraTypeClassifier } from "./detectors/camera-type-classifier.js";
 import { DVRChannelHealthDetector } from "./detectors/dvr-channel-health-detector.js";
@@ -92,7 +92,7 @@ export class AnalyticsPipeline {
   private aiAssistant: AIAssistant;
   
   // Analog camera AI detectors
-  // private analogVideoQualityDetector: AnalogVideoQualityDetector;
+  private analogVideoQualityDetector: AnalogVideoQualityDetector;
   private cameraAgingDetector: CameraAgingDetector;
   private cameraTypeClassifier: CameraTypeClassifier;
   private dvrChannelHealthDetector: DVRChannelHealthDetector;
@@ -150,7 +150,7 @@ export class AnalyticsPipeline {
     this.aiAssistant = new AIAssistant();
 
     // Initialize analog camera AI detectors
-    // this.analogVideoQualityDetector = new AnalogVideoQualityDetector();
+    this.analogVideoQualityDetector = new AnalogVideoQualityDetector();
     this.cameraAgingDetector = new CameraAgingDetector();
     this.cameraTypeClassifier = new CameraTypeClassifier();
     this.dvrChannelHealthDetector = new DVRChannelHealthDetector();
@@ -171,7 +171,7 @@ export class AnalyticsPipeline {
       this.heatMapGenerator,
       this.faceDetector,
       this.anprDetector,
-      // this.analogVideoQualityDetector,
+      this.analogVideoQualityDetector,
       this.cameraAgingDetector,
       this.cameraTypeClassifier,
       this.dvrChannelHealthDetector,
