@@ -45,10 +45,12 @@ export function parseProbeMatch(xml, remoteAddress) {
         return null;
     const endpoint = nested(match, "EndpointReference", "Address");
     const scopes = stringValue(match.Scopes);
+    const types = stringValue(match.Types);
     return {
         endpointReference: stringValue(endpoint),
         xaddrs: xaddrText.split(/\s+/).filter(Boolean),
         scopes: scopes?.split(/\s+/).filter(Boolean) ?? [],
+        types: types?.split(/\s+/).filter(Boolean) ?? [],
         remoteAddress,
     };
 }
@@ -63,7 +65,7 @@ function probeEnvelope(messageId) {
   <w:To e:mustUnderstand="true">urn:schemas-xmlsoap-org:ws:2005:04:discovery</w:To>
   <w:Action e:mustUnderstand="true">http://schemas.xmlsoap.org/ws/2005/04/discovery/Probe</w:Action>
  </e:Header>
- <e:Body><d:Probe><d:Types>dn:NetworkVideoTransmitter</d:Types></d:Probe></e:Body>
+ <e:Body><d:Probe><d:Types>dn:NetworkVideoTransmitter dn:NetworkVideoStorage</d:Types></d:Probe></e:Body>
 </e:Envelope>`;
 }
 function nested(value, ...keys) {

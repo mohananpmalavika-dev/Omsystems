@@ -8889,7 +8889,7 @@ function parseRtspStreamMetrics(output) {
     sampleDurationSeconds
   };
 }
-async function captureRtspLumaFrame(uri, ffmpegPath = "ffmpeg", timeoutMs = 1e4) {
+async function captureRtspRgbFrame(uri, ffmpegPath = "ffmpeg", timeoutMs = 1e4) {
   const result2 = await runProcess(ffmpegPath, [
     "-v",
     "error",
@@ -8900,14 +8900,14 @@ async function captureRtspLumaFrame(uri, ffmpegPath = "ffmpeg", timeoutMs = 1e4)
     "-frames:v",
     "1",
     "-vf",
-    "scale=64:36,format=gray",
+    "scale=64:36",
     "-f",
     "rawvideo",
     "-pix_fmt",
-    "gray",
+    "rgb24",
     "pipe:1"
   ], timeoutMs);
-  return result2.ok && result2.stdoutBuffer.length === 64 * 36 ? result2.stdoutBuffer : null;
+  return result2.ok && result2.stdoutBuffer.length === 64 * 36 * 3 ? result2.stdoutBuffer : null;
 }
 function parseFrameRate(value) {
   if (!value) return null;
@@ -9391,11 +9391,12 @@ function recorderPlaybackUri(config, sourceChannel, newestPlayableAt) {
   const start = new Date(newest.getTime() - 3e4);
   const credentials = `${encodeURIComponent(config.username)}:${encodeURIComponent(config.password)}`;
   const authority = `${credentials}@${config.host}:${config.rtspPort ?? 554}`;
-  if (config.vendor === "hikvision") {
+  const family = recorderApiFamily(config);
+  if (family === "hikvision-isapi") {
     const track = sourceChannel >= 100 ? sourceChannel : sourceChannel * 100 + 1;
     return `rtsp://${authority}/Streaming/tracks/${track}?starttime=${compactUtc(start)}&endtime=${compactUtc(end)}`;
   }
-  if (config.vendor === "dahua" || config.vendor === "cp-plus") {
+  if (family === "dahua-cgi") {
     return `rtsp://${authority}/cam/playback?channel=${sourceChannel}&subtype=0&starttime=${dahuaPlaybackTime(start)}&endtime=${dahuaPlaybackTime(end)}`;
   }
   return void 0;
@@ -9405,14 +9406,22 @@ async function probeRecorder(config, timeoutMs, options = {}) {
   const base = `${config.secure ? "https" : "http"}://${config.host}:${config.port}`;
   const credentials = config.username ? { username: config.username, password: config.password ?? "" } : void 0;
   try {
-    if (config.vendor === "hikvision") return await probeHikvision(config, base, credentials, timeoutMs, started, Boolean(options.includeArchive));
-    if (config.vendor === "dahua" || config.vendor === "cp-plus") return await probeDahuaFamily(config, base, credentials, timeoutMs, started, Boolean(options.includeArchive));
-    if (config.vendor === "onvif") return await probeOnvif(config, base, credentials, timeoutMs, started, Boolean(options.includeArchive));
+    const family = recorderApiFamily(config);
+    if (family === "hikvision-isapi") return await probeHikvision(config, base, credentials, timeoutMs, started, Boolean(options.includeArchive));
+    if (family === "dahua-cgi") return await probeDahuaFamily(config, base, credentials, timeoutMs, started, Boolean(options.includeArchive));
+    if (family === "onvif") return await probeOnvif(config, base, credentials, timeoutMs, started, Boolean(options.includeArchive));
     const response = await authenticatedFetch(base, { method: "GET" }, credentials, timeoutMs);
     return result(config, response.status < 500, response.status === 401 ? "degraded" : "online", started, {}, [], response.status === 401 ? ["recorder_credentials_rejected"] : ["generic_http_reachability_only"]);
   } catch (error) {
     return result(config, false, "offline", started, {}, [], [classifyError(error)]);
   }
+}
+function recorderApiFamily(config) {
+  if (config.apiFamily) return config.apiFamily;
+  if (config.vendor === "hikvision") return "hikvision-isapi";
+  if (config.vendor === "dahua" || config.vendor === "cp-plus") return "dahua-cgi";
+  if (config.vendor === "generic") return "generic-http";
+  return "onvif";
 }
 async function probeHikvision(config, base, credentials, timeout, started, includeArchive) {
   const system = await authenticatedFetch(`${base}${config.systemPath ?? "/ISAPI/System/deviceInfo"}`, { method: "GET" }, credentials, timeout);
@@ -10020,9 +10029,6 @@ function dahuaPlaybackTime(value) {
   return value.toISOString().replace(/[-:]/g, "_").replace("T", "_").replace(/\.\d{3}Z$/, "");
 }
 
-// src/monitoring/camera-heartbeat.ts
-var import_node_crypto5 = require("node:crypto");
-
 // src/monitoring/camera-packet-loss.ts
 var import_node_child_process3 = require("node:child_process");
 async function measureCameraPacketLoss(streamUri, attempts = 3, timeoutMs = 1e3) {
@@ -10067,6 +10073,106 @@ function parseIcmpPacketLoss(output) {
   return Number.isFinite(parsed) && parsed >= 0 && parsed <= 100 ? parsed : null;
 }
 
+// src/monitoring/analog-signal-quality.ts
+var import_node_crypto5 = require("node:crypto");
+function assessAnalogRgbFrame(previous, frame, width = 64, height = 36) {
+  if (frame.length !== width * height * 3) throw new Error("invalid_rgb_frame_size");
+  const pixels = width * height;
+  const luma = Buffer.allocUnsafe(pixels);
+  const rowSums = new Array(height).fill(0);
+  let lumaSum = 0;
+  let lumaSquared = 0;
+  let colourSum = 0;
+  let redSum = 0;
+  let greenSum = 0;
+  let blueSum = 0;
+  for (let index = 0; index < pixels; index++) {
+    const offset = index * 3;
+    const red = frame[offset];
+    const green = frame[offset + 1];
+    const blue = frame[offset + 2];
+    const value = Math.round(red * 0.299 + green * 0.587 + blue * 0.114);
+    luma[index] = value;
+    lumaSum += value;
+    lumaSquared += value * value;
+    colourSum += Math.max(red, green, blue) - Math.min(red, green, blue);
+    redSum += red;
+    greenSum += green;
+    blueSum += blue;
+    rowSums[Math.floor(index / width)] += value;
+  }
+  const brightness = lumaSum / pixels;
+  const contrast = Math.sqrt(Math.max(0, lumaSquared / pixels - brightness * brightness));
+  const colourScore = colourSum / pixels;
+  let edgeTotal = 0;
+  let edgeCount = 0;
+  let noiseTotal = 0;
+  let noiseCount = 0;
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const index = y * width + x;
+      if (x > 0) {
+        edgeTotal += Math.abs(luma[index] - luma[index - 1]);
+        edgeCount++;
+      }
+      if (y > 0) {
+        edgeTotal += Math.abs(luma[index] - luma[index - width]);
+        edgeCount++;
+      }
+      if (x > 0 && x < width - 1 && y > 0 && y < height - 1) {
+        const neighborAverage = (luma[index - 1] + luma[index + 1] + luma[index - width] + luma[index + width]) / 4;
+        noiseTotal += Math.abs(luma[index] - neighborAverage);
+        noiseCount++;
+      }
+    }
+  }
+  const edgeScore = edgeCount ? edgeTotal / edgeCount : 0;
+  const noiseScore = noiseCount ? noiseTotal / noiseCount : 0;
+  const rowMeans = rowSums.map((sum) => sum / width);
+  const rowInterferenceScore = rowMeans.slice(1).reduce(
+    (sum, value, index) => sum + Math.abs(value - rowMeans[index]),
+    0
+  ) / Math.max(1, height - 1);
+  const hash = (0, import_node_crypto5.createHash)("sha256").update(frame).digest("hex");
+  const identicalSamples = previous?.hash === hash ? previous.identicalSamples + 1 : 1;
+  const sceneChangeScore = previous?.luma.length === luma.length ? luma.reduce((sum, value, index) => sum + Math.abs(value - previous.luma[index]), 0) / pixels : null;
+  const redAverage = redSum / pixels;
+  const greenAverage = greenSum / pixels;
+  const blueAverage = blueSum / pixels;
+  const blackScreen = brightness <= 10;
+  const blueScreen = blueAverage - redAverage >= 45 && blueAverage - greenAverage >= 25 && contrast < 20;
+  const brightnessFailure = brightness < 18 || brightness > 238;
+  const colourLoss = colourScore < 5 && brightness >= 25 && brightness <= 230 && contrast >= 10;
+  const severeBlur = edgeScore < 4 && contrast >= 10 && !blueScreen;
+  const excessiveNoise = noiseScore > 24 && edgeScore > 18;
+  const rollingInterference = rowInterferenceScore > 28 && contrast > 20;
+  const obstructionSuspected = contrast < 6 && edgeScore < 3 && !blackScreen && !blueScreen;
+  const cameraMovementSuspected = sceneChangeScore !== null && sceneChangeScore > 45 && !blackScreen && !blueScreen && !excessiveNoise;
+  return {
+    state: { hash, identicalSamples, luma },
+    imageFrozen: identicalSamples >= 3,
+    blackScreen,
+    blueScreen,
+    severeBlur,
+    excessiveNoise,
+    rollingInterference,
+    colourLoss,
+    brightnessFailure,
+    obstructionSuspected,
+    cameraMovementSuspected,
+    brightness: round4(brightness),
+    contrast: round4(contrast),
+    edgeScore: round4(edgeScore),
+    noiseScore: round4(noiseScore),
+    rowInterferenceScore: round4(rowInterferenceScore),
+    colourScore: round4(colourScore),
+    sceneChangeScore: sceneChangeScore === null ? null : round4(sceneChangeScore)
+  };
+}
+function round4(value) {
+  return Math.round(value * 10) / 10;
+}
+
 // src/utils/logger.ts
 var import_node_fs = require("node:fs");
 var import_node_path2 = require("node:path");
@@ -10104,19 +10210,6 @@ var logger = {
 };
 
 // src/monitoring/camera-heartbeat.ts
-function assessLumaFrame(previous, frame) {
-  const brightness = frame.reduce((sum, value) => sum + value, 0) / frame.length;
-  const hash = (0, import_node_crypto5.createHash)("sha256").update(frame).digest("hex");
-  const identicalSamples = previous?.hash === hash ? previous.identicalSamples + 1 : 1;
-  return {
-    state: { hash, identicalSamples },
-    // Three successive identical 64x36 luminance samples avoids flagging a
-    // single still image as a frozen stream.
-    imageFrozen: identicalSamples >= 3,
-    blackScreen: brightness <= 10,
-    brightness: Math.round(brightness * 10) / 10
-  };
-}
 var CameraHeartbeatService = class {
   constructor(apiEndpoint, branchId, edgeAgentId, developmentUserId, ffprobePath = "ffprobe", ffmpegPath = "ffmpeg", edgeAuthCredential, telemetrySender) {
     this.apiEndpoint = apiEndpoint;
@@ -10209,22 +10302,30 @@ var CameraHeartbeatService = class {
     }
     const [packetLoss, frame] = await Promise.all([
       measureCameraPacketLoss(rtspUrl),
-      captureRtspLumaFrame(rtspUrl, this.ffmpegPath)
+      captureRtspRgbFrame(rtspUrl, this.ffmpegPath)
     ]);
-    const frameHealth = frame ? assessLumaFrame(this.frameStates.get(camera.id), frame) : null;
+    const frameHealth = frame ? assessAnalogRgbFrame(this.frameStates.get(camera.id), frame) : null;
     if (frameHealth) this.frameStates.set(camera.id, frameHealth.state);
     const reasonCodes = [];
     if (stream.fps === null) reasonCodes.push("fps_unavailable");
     if (stream.bitrateKbps === null) reasonCodes.push("bitrate_unavailable");
     if (packetLoss === null) reasonCodes.push("packet_loss_unavailable");
     if (!frameHealth) {
-      reasonCodes.push("freeze_detection_unavailable", "black_screen_detection_unavailable");
+      reasonCodes.push("analog_signal_analysis_unavailable");
     } else {
       if (frameHealth.imageFrozen) reasonCodes.push("frozen_frame_detected");
       if (frameHealth.blackScreen) reasonCodes.push("black_screen_detected");
+      if (frameHealth.blueScreen) reasonCodes.push("blue_screen_detected");
+      if (frameHealth.severeBlur) reasonCodes.push("severe_blur_detected");
+      if (frameHealth.excessiveNoise) reasonCodes.push("excessive_analog_noise_detected");
+      if (frameHealth.rollingInterference) reasonCodes.push("rolling_interference_detected");
+      if (frameHealth.colourLoss) reasonCodes.push("colour_loss_detected");
+      if (frameHealth.brightnessFailure) reasonCodes.push("brightness_failure_detected");
+      if (frameHealth.obstructionSuspected) reasonCodes.push("camera_obstruction_suspected");
+      if (frameHealth.cameraMovementSuspected) reasonCodes.push("camera_movement_suspected");
     }
     const degraded = Boolean(
-      camera.expectedFps && stream.fps !== null && stream.fps < camera.expectedFps * 0.8 || camera.expectedBitrate && stream.bitrateKbps !== null && stream.bitrateKbps < camera.expectedBitrate * 0.7 || packetLoss !== null && packetLoss > 5 || frameHealth?.imageFrozen || frameHealth?.blackScreen
+      camera.expectedFps && stream.fps !== null && stream.fps < camera.expectedFps * 0.8 || camera.expectedBitrate && stream.bitrateKbps !== null && stream.bitrateKbps < camera.expectedBitrate * 0.7 || packetLoss !== null && packetLoss > 5 || frameHealth?.imageFrozen || frameHealth?.blackScreen || frameHealth?.blueScreen || frameHealth?.severeBlur || frameHealth?.excessiveNoise || frameHealth?.rollingInterference || frameHealth?.colourLoss || frameHealth?.brightnessFailure || frameHealth?.obstructionSuspected || frameHealth?.cameraMovementSuspected
     );
     return {
       cameraId: camera.id,
@@ -10237,11 +10338,32 @@ var CameraHeartbeatService = class {
       ...stream.bitrateKbps === null ? {} : { currentBitrate: stream.bitrateKbps },
       ...stream.width === null || stream.height === null ? {} : { currentResolution: { width: stream.width, height: stream.height } },
       ...packetLoss === null ? {} : { packetLoss },
-      ...frameHealth ? { imageFrozen: frameHealth.imageFrozen, blackScreen: frameHealth.blackScreen } : {},
+      ...frameHealth ? {
+        imageFrozen: frameHealth.imageFrozen,
+        blackScreen: frameHealth.blackScreen,
+        blueScreen: frameHealth.blueScreen,
+        severeBlur: frameHealth.severeBlur,
+        excessiveNoise: frameHealth.excessiveNoise,
+        rollingInterference: frameHealth.rollingInterference,
+        colourLoss: frameHealth.colourLoss,
+        brightnessFailure: frameHealth.brightnessFailure,
+        obstructionSuspected: frameHealth.obstructionSuspected,
+        cameraMovementSuspected: frameHealth.cameraMovementSuspected
+      } : {},
       ...stream.codec ? { codec: stream.codec } : {},
       metadata: {
         sampleDurationSeconds: stream.sampleDurationSeconds,
-        ...frameHealth ? { frameBrightness: frameHealth.brightness, freezeSamples: frameHealth.state.identicalSamples } : {},
+        ...frameHealth ? {
+          frameBrightness: frameHealth.brightness,
+          frameContrast: frameHealth.contrast,
+          frameEdgeScore: frameHealth.edgeScore,
+          frameNoiseScore: frameHealth.noiseScore,
+          rowInterferenceScore: frameHealth.rowInterferenceScore,
+          frameColourScore: frameHealth.colourScore,
+          sceneChangeScore: frameHealth.sceneChangeScore,
+          freezeSamples: frameHealth.state.identicalSamples,
+          timeOverlayVerification: "unavailable-without-ocr-clock-adapter"
+        } : {},
         ...packetLoss === null ? {} : { packetLossMethod: "icmp" }
       },
       reasonCodes
@@ -10270,7 +10392,15 @@ var CameraHeartbeatService = class {
         bitrateKbps: data.currentBitrate ?? null,
         packetLossPercent: data.packetLoss ?? null,
         imageFrozen: data.imageFrozen ?? null,
-        blackScreen: data.blackScreen ?? null
+        blackScreen: data.blackScreen ?? null,
+        blueScreen: data.blueScreen ?? null,
+        severeBlur: data.severeBlur ?? null,
+        excessiveNoise: data.excessiveNoise ?? null,
+        rollingInterference: data.rollingInterference ?? null,
+        colourLoss: data.colourLoss ?? null,
+        brightnessFailure: data.brightnessFailure ?? null,
+        obstructionSuspected: data.obstructionSuspected ?? null,
+        cameraMovementSuspected: data.cameraMovementSuspected ?? null
       },
       reasonCodes: data.reasonCodes
     };
@@ -11239,7 +11369,22 @@ function recorderAdapterVendor(manufacturer) {
   if (/hikvision|hik vision/.test(normalized)) return "hikvision";
   if (/dahua/.test(normalized)) return "dahua";
   if (/cp[\s-]*plus/.test(normalized)) return "cp-plus";
+  if (/uniview|unv\b/.test(normalized)) return "uniview";
+  if (/\btvt\b/.test(normalized)) return "tvt";
+  if (/prama/.test(normalized)) return "prama";
+  if (/honeywell/.test(normalized)) return "honeywell";
+  if (/matrix/.test(normalized)) return "matrix";
+  if (/secureye/.test(normalized)) return "secureye";
+  if (/tiandy/.test(normalized)) return "tiandy";
   return "onvif";
+}
+function recorderChannelIdentity(recorderSerialNumber, sourceChannel) {
+  const serial = recorderSerialNumber.trim().toUpperCase();
+  if (!serial) throw new Error("recorder_serial_number_required");
+  if (!Number.isInteger(sourceChannel) || sourceChannel < 1 || sourceChannel > 65535) {
+    throw new Error("invalid_recorder_channel");
+  }
+  return `${serial}:channel:${sourceChannel}`;
 }
 function recorderChannelSource(model) {
   return /(?:^|[\s_-])(dvr|xvr|uvr)(?:$|[\s_-])/i.test(model) ? "analog-dvr-channel" : "nvr-channel";
@@ -11310,6 +11455,7 @@ function unique(values) {
 // src/index.ts
 async function main() {
   const argv = process.argv.slice(2);
+  const scanOnce = hasArgument(argv, "--scan-once");
   if (hasArgument(argv, "--verify-bundle")) {
     process.stdout.write(`${JSON.stringify({ valid: true, assets: inspectBundledWindowsRuntime() }, null, 2)}
 `);
@@ -11376,7 +11522,7 @@ async function main() {
       ...activated.updatePublicKey ? { updatePublicKey: activated.updatePublicKey } : {},
       enrolledAt: (/* @__PURE__ */ new Date()).toISOString()
     };
-    await identityStore.save(identity);
+    if (!scanOnce) await identityStore.save(identity);
   }
   if (identity) gateway.useEdgeCredential(identity.credential);
   const legacyAgentId = !identity && config.EDGE_AGENT_ID && config.BRANCH_ID ? config.EDGE_AGENT_ID : !identity && config.BRANCH_ID ? (await gateway.register(config.BRANCH_ID, config.EDGE_AGENT_NAME, config.EDGE_AGENT_VERSION)).id : void 0;
@@ -11438,6 +11584,19 @@ async function main() {
     config.RECORDERS_JSON.map((recorder) => [recorder.id, recorder])
   );
   await secrets.load();
+  if (scanOnce) {
+    const discovered = await scanBranch({ persistStreamSecrets: false });
+    process.stdout.write(`${JSON.stringify({
+      completed: true,
+      mode: "local-network-scan",
+      branchId,
+      edgeAgentId: agentId,
+      discovered,
+      message: "IP cameras and DVR/NVR channels were submitted for review. No service, tunnel, or local stream credential was installed."
+    }, null, 2)}
+`);
+    process.exit(0);
+  }
   if (config.LIVE_MEDIA_ENABLED) {
     edgeMediaRuntime = await startEdgeMediaRuntime({ config, gateway: control, agentId, secrets });
   }
@@ -11522,7 +11681,8 @@ async function main() {
   }
   cameraHeartbeat.stop();
   await edgeMediaRuntime?.stop();
-  async function scanBranch() {
+  async function scanBranch(options = {}) {
+    const persistStreamSecrets = options.persistStreamSecrets ?? true;
     const configuredEndpoints = config.ONVIF_ENDPOINTS.split(",").map((value) => value.trim()).filter(Boolean);
     const endpoints = configuredEndpoints.length > 0 ? configuredEndpoints.map((serviceUrl) => ({
       endpointReference: null,
@@ -11571,7 +11731,8 @@ async function main() {
             secure: parsedServiceUrl2.protocol === "https:",
             rtspPort: 554,
             username: credentials.username,
-            password: credentials.password
+            password: credentials.password,
+            ...recorderVendor === "hikvision" || recorderVendor === "dahua" || recorderVendor === "cp-plus" ? {} : { systemPath: `${parsedServiceUrl2.pathname}${parsedServiceUrl2.search}` }
           });
           await control.submitTelemetry(agentId, {
             branchId,
@@ -11629,14 +11790,14 @@ async function main() {
               })),
               capabilities: device.capabilities,
               statusReason: channel.reasonCodes.join(",").slice(0, 200),
-              hardwareId: `${discoveredId}:channel:${channel.sourceChannel}`,
+              hardwareId: device.serialNumber ? recorderChannelIdentity(device.serialNumber, channel.sourceChannel) : `${discoveredId}:channel:${channel.sourceChannel}`,
               existingDeviceAssociation: discoveredId,
               sourceType: channel.sourceType,
               recorderId: discoveredId,
               recorderChannel: channel.sourceChannel,
               ...device.serialNumber ? { recorderSerialNumber: device.serialNumber } : {}
             });
-            if (channel.primaryStreamUri) {
+            if (persistStreamSecrets && channel.primaryStreamUri) {
               await secrets.set(`edge://${agentId}/${channelDiscovery.id}`, channel.primaryStreamUri);
             }
             submitted += 1;
@@ -11686,7 +11847,7 @@ async function main() {
           profiles,
           capabilities: device.capabilities
         });
-        if (primarySourceUri) {
+        if (persistStreamSecrets && primarySourceUri) {
           await secrets.set(`edge://${agentId}/${discovery.id}`, primarySourceUri);
         }
         submitted += 1;
@@ -11912,12 +12073,14 @@ async function main() {
             continue;
           }
           const playback = await probeRtsp(uri, config.FFPROBE_PATH, config.RECORDER_PROBE_TIMEOUT_MS);
-          evidence.playbackVerified = playback.reachable;
+          const decodedFrame = playback.reachable ? await captureRtspRgbFrame(uri, config.FFMPEG_PATH, config.RECORDER_PROBE_TIMEOUT_MS) : null;
+          evidence.playbackFrameDecoded = Boolean(decodedFrame);
+          evidence.playbackVerified = playback.reachable && Boolean(decodedFrame);
           evidence.playbackCodec = playback.codec;
-          if (playback.reachable) evidence.reasonCodes.push("latest_clip_playback_verified");
+          if (evidence.playbackVerified) evidence.reasonCodes.push("latest_clip_playback_verified", "latest_clip_frame_decoded");
           else {
-            evidence.playbackError = playback.error?.slice(0, 300) ?? "playback_failed";
-            evidence.reasonCodes.push("latest_clip_playback_failed");
+            evidence.playbackError = playback.reachable ? "playback_frame_decode_failed" : playback.error?.slice(0, 300) ?? "playback_failed";
+            evidence.reasonCodes.push(playback.reachable ? "latest_clip_frame_decode_failed" : "latest_clip_playback_failed");
           }
         }
       }

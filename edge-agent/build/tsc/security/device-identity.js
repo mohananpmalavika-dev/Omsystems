@@ -91,5 +91,9 @@ function validateIdentity(value) {
         if (typeof candidate[key] !== "string" || !candidate[key])
             throw new Error("invalid_device_identity");
     }
+    if (candidate.media && (candidate.media.enabled !== true || candidate.media.managed !== true || candidate.media.mode !== "named" ||
+        typeof candidate.media.publicUrl !== "string" || !candidate.media.publicUrl.startsWith("https://") ||
+        typeof candidate.media.tunnelToken !== "string" || candidate.media.tunnelToken.length < 20))
+        throw new Error("invalid_device_media_identity");
     return candidate;
 }

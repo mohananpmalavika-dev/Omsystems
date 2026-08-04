@@ -18,6 +18,9 @@ export class GatewayClient {
             method: "POST", body: JSON.stringify({ activationCode, deviceUuid, version, commandPublicKey }),
         }, true);
     }
+    async getBootstrap(agentId) {
+        return this.request(`/v1/edge-agents/${encodeURIComponent(agentId)}/bootstrap`, { method: "GET" });
+    }
     async register(branchId, name, version) {
         return this.request(`/v1/branches/${encodeURIComponent(branchId)}/edge-agents/register`, { method: "POST", body: JSON.stringify({ name, version }) });
     }

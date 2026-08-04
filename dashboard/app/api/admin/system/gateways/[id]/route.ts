@@ -34,67 +34,59 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
   }
 
   try {
-    const branchesResponse = await fetch(`${controlPlaneUrl}/v1/branches`, {
-      method: 'GET',
-      headers,
-    });
+    const deleteAgentResponse = await fetch(
+      `${controlPlaneUrl}/v1/edge-agents/${encodeURIComponent(id)}`,
+      { method: 'DELETE', headers }
+    );
 
-    if (!branchesResponse.ok) {
-      const body = await branchesResponse.text();
-      console.error('Failed to fetch branches:', branchesResponse.status, body);
-      return NextResponse.json(
-        { error: 'failed_to_get_branches', message: 'Could not retrieve branches' },
-        { status: branchesResponse.status }
-      );
-    }
-
-    const branchesData = await branchesResponse.json();
-    const branches = branchesData.data || [];
-
-    for (const branch of branches) {
-      const agentsResponse = await fetch(
-        `${controlPlaneUrl}/v1/branches/${branch.id}/edge-agents`,
-        { method: 'GET', headers }
-      );
-
-      if (!agentsResponse.ok) {
-        console.warn(`Failed to fetch agents for branch ${branch.id}: ${agentsResponse.status}`);
-        continue;
-      }
-
-      const agentsData = await agentsResponse.json();
-      const agents = agentsData.data || [];
-      const agent = agents.find((item: any) => item.id === id);
-      if (!agent) continue;
-
-      const revokeResponse = await fetch(
-        `${controlPlaneUrl}/v1/branches/${branch.id}/edge-agents/${id}/revoke`,
-        { method: 'POST', headers }
-      );
-
-      if (!revokeResponse.ok) {
-        const error = await revokeResponse.json().catch(() => ({ error: 'revoke_failed' }));
-        return NextResponse.json(error, { status: revokeResponse.status });
-      }
-
+    if (deleteAgentResponse.ok) {
       return new NextResponse(null, { status: 204 });
     }
 
-    for (const branch of branches) {
-      const deleteResponse = await fetch(
-        `${controlPlaneUrl}/v1/branches/${branch.id}/edge-activations/${id}`,
-        { method: 'DELETE', headers }
-      );
+    if (deleteAgentResponse.status === 404) {
+      const branchesResponse = await fetch(`${controlPlaneUrl}/v1/branches`, {
+        method: 'GET',
+        headers,
+      });
 
-      if (deleteResponse.status === 204) {
-        return new NextResponse(null, { status: 204 });
+      if (!branchesResponse.ok) {
+        const body = await branchesResponse.text().catch(() => '');
+        console.error('Failed to fetch branches:', branchesResponse.status, body);
+        return NextResponse.json(
+          { error: 'failed_to_get_branches', message: 'Could not retrieve branches' },
+          { status: branchesResponse.status }
+        );
       }
+
+      const branchesData = await branchesResponse.json();
+      const branches = branchesData.data || [];
+
+      for (const branch of branches) {
+        const deleteActivationResponse = await fetch(
+          `${controlPlaneUrl}/v1/branches/${encodeURIComponent(branch.id)}/edge-activations/${encodeURIComponent(id)}`,
+          { method: 'DELETE', headers }
+        );
+
+        if (deleteActivationResponse.status === 204) {
+          return new NextResponse(null, { status: 204 });
+        }
+      }
+
+      return NextResponse.json(
+        { error: 'gateway_not_found', message: 'Gateway or activation not found' },
+        { status: 404 }
+      );
     }
 
-    return NextResponse.json(
-      { error: 'gateway_not_found', message: 'Gateway or activation not found' },
-      { status: 404 }
-    );
+    const errorBody = await deleteAgentResponse.text().catch(() => '');
+    let parsedError: any = { error: 'gateway_delete_failed' };
+    try {
+      parsedError = JSON.parse(errorBody || '{}');
+    } catch {
+      parsedError = { error: 'gateway_delete_failed', message: errorBody || 'Failed to delete gateway' };
+    }
+
+    return NextResponse.json(parsedError, { status: deleteAgentResponse.status });
   } catch (error) {
     console.error('Error deleting gateway:', error);
     return NextResponse.json(

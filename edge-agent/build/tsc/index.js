@@ -3,7 +3,7 @@ import { discoverOnvifDevices } from "./discovery/onvif-discovery.js";
 import { attachCredentials, OnvifClient } from "./devices/onvif-client.js";
 import { compatibilityNotes, normalizeVendor } from "./devices/compatibility-registry.js";
 import { GatewayClient } from "./registration/gateway-client.js";
-import { probeRtsp } from "./streaming/rtsp-probe.js";
+import { captureRtspRgbFrame, probeRtsp } from "./streaming/rtsp-probe.js";
 import { LocalStreamSecretStore, startSecretProvider } from "./streaming/secret-store.js";
 import { uptime } from "node:os";
 import { NetworkCounterSampler, NetworkPathTracker, probeInternetLink } from "./monitoring/internet-probe.js";
@@ -19,8 +19,10 @@ import { EncryptedOutbox } from "./offline/encrypted-outbox.js";
 import { stageSignedUpdate } from "./updates/signed-update.js";
 import { readFile } from "node:fs/promises";
 import { CameraCredentialVault, openSealedCommand } from "./security/camera-credential-vault.js";
+import { discoverRecorderChannels, recorderAdapterVendor, recorderChannelIdentity } from "./recorders/dvr-adapter.js";
 async function main() {
     const argv = process.argv.slice(2);
+    const scanOnce = hasArgument(argv, "--scan-once");
     if (hasArgument(argv, "--verify-bundle")) {
         process.stdout.write(`${JSON.stringify({ valid: true, assets: inspectBundledWindowsRuntime() }, null, 2)}\n`);
         process.exit(0);
@@ -66,10 +68,15 @@ async function main() {
             credential: activated.credential,
             commandPublicKey: commandKeys.publicKey,
             commandPrivateKey: commandKeys.privateKey,
+            ...(activated.media ? { media: activated.media } : {}),
             ...(activated.updatePublicKey ? { updatePublicKey: activated.updatePublicKey } : {}),
             enrolledAt: new Date().toISOString(),
         };
-        await identityStore.save(identity);
+        // A temporary local scan must not turn the operator's laptop into a
+        // permanently enrolled branch appliance. It can use its activation/bridge
+        // credential in memory for this one process and exits when the scan ends.
+        if (!scanOnce)
+            await identityStore.save(identity);
     }
     if (identity)
         gateway.useEdgeCredential(identity.credential);
@@ -89,6 +96,29 @@ async function main() {
     if (identity)
         authenticatedGateway.useEdgeCredential(identity.credential);
     const control = authenticatedGateway;
+    if (identity && config.EDGE_MANAGED_MEDIA_BOOTSTRAP) {
+        try {
+            const bootstrap = await control.getBootstrap(agentId);
+            if (bootstrap.media) {
+                identity.media = bootstrap.media;
+                await identityStore.save(identity);
+            }
+        }
+        catch (error) {
+            logger.warn("Managed media bootstrap refresh failed; using the last encrypted configuration", {
+                error: error instanceof Error ? error.message : String(error),
+            });
+        }
+    }
+    if (config.EDGE_MANAGED_MEDIA_BOOTSTRAP && identity?.media) {
+        Object.assign(config, {
+            LIVE_MEDIA_ENABLED: true,
+            MEDIA_RUNTIME_MANAGED: true,
+            MEDIA_TUNNEL_MODE: "named",
+            PUBLIC_MEDIA_GATEWAY_URL: identity.media.publicUrl,
+            CLOUDFLARED_TUNNEL_TOKEN: identity.media.tunnelToken,
+        });
+    }
     const credentialVault = new CameraCredentialVault(config.EDGE_CAMERA_CREDENTIAL_VAULT_PATH, config.EDGE_CAMERA_CREDENTIAL_VAULT_KEY_PATH);
     await credentialVault.load();
     if (hasArgument(argv, "--diagnose")) {
@@ -103,13 +133,30 @@ async function main() {
     let edgeMediaRuntime;
     let lastRecorderProbeAt = 0;
     let lastRecorderArchiveScanAt = 0;
+    const activeRecorders = new Map(config.RECORDERS_JSON.map((recorder) => [recorder.id, recorder]));
     await secrets.load();
+    if (scanOnce) {
+        const discovered = await scanBranch({ persistStreamSecrets: false });
+        process.stdout.write(`${JSON.stringify({
+            completed: true,
+            mode: "local-network-scan",
+            branchId,
+            edgeAgentId: agentId,
+            discovered,
+            message: "IP cameras and DVR/NVR channels were submitted for review. No service, tunnel, or local stream credential was installed.",
+        }, null, 2)}\n`);
+        process.exit(0);
+    }
     if (config.LIVE_MEDIA_ENABLED) {
         edgeMediaRuntime = await startEdgeMediaRuntime({ config, gateway: control, agentId, secrets });
     }
     const cameraHeartbeat = initializeCameraHeartbeat(config.CONTROL_PLANE_URL, branchId, agentId, config.DEV_USER_ID, config.FFPROBE_PATH, config.FFMPEG_PATH, identity?.credential ?? config.EDGE_BRIDGE_SHARED_KEY, (payload) => control.submitTelemetry(agentId, payload));
     let lastCameraConfigSyncAt = 0;
+    let lastDiscoveryAt = 0;
     await syncCameraHeartbeatConfig();
+    if (config.AUTO_DISCOVERY_ENABLED) {
+        await runAutomaticDiscovery();
+    }
     cameraHeartbeat.start(config.CAMERA_HEARTBEAT_INTERVAL_MS);
     if (config.EDGE_MEDIA_SHARED_KEY) {
         await startSecretProvider({
@@ -131,6 +178,9 @@ async function main() {
             const replay = await control.flushOutbox();
             if (replay.delivered > 0)
                 logger.info("Replayed offline telemetry", replay);
+            if (config.AUTO_DISCOVERY_ENABLED && Date.now() - lastDiscoveryAt >= config.AUTO_DISCOVERY_INTERVAL_MS) {
+                await runAutomaticDiscovery();
+            }
             const command = await control.claimCommand(agentId);
             if (command) {
                 try {
@@ -172,7 +222,8 @@ async function main() {
     }
     cameraHeartbeat.stop();
     await edgeMediaRuntime?.stop();
-    async function scanBranch() {
+    async function scanBranch(options = {}) {
+        const persistStreamSecrets = options.persistStreamSecrets ?? true;
         const configuredEndpoints = config.ONVIF_ENDPOINTS
             .split(",")
             .map((value) => value.trim())
@@ -182,6 +233,7 @@ async function main() {
                 endpointReference: null,
                 xaddrs: [serviceUrl],
                 scopes: [],
+                types: [],
                 remoteAddress: new URL(serviceUrl).hostname,
             }))
             : await discoverOnvifDevices(config.DISCOVERY_TIMEOUT_MS);
@@ -200,22 +252,100 @@ async function main() {
                 const client = new OnvifClient(serviceUrl, credentials, config.ONVIF_TIMEOUT_MS);
                 const device = await client.inspect();
                 const vendor = normalizeVendor(device.manufacturer);
-                if (looksLikeRecorder(device, endpoint.scopes)) {
+                const discoveryKinds = [...endpoint.scopes, ...endpoint.types];
+                if (looksLikeRecorder(device, discoveryKinds)) {
                     const discoveredId = `recorder-${device.serialNumber || endpoint.remoteAddress}`.replace(/[^a-zA-Z0-9_.:-]/g, "-");
                     const observedAt = new Date().toISOString();
+                    const parsedServiceUrl = new URL(serviceUrl);
+                    const recorderVendor = recorderAdapterVendor(device.manufacturer);
+                    const recorderType = /dvr|xvr|uvr/i.test(`${device.model} ${discoveryKinds.join(" ")}`) ? "dvr" : "nvr";
+                    const channels = await discoverRecorderChannels({
+                        manufacturer: device.manufacturer,
+                        model: device.model,
+                        profiles: device.profiles,
+                        credentials,
+                        getStreamUri: (profileToken) => client.getStreamUri(device.mediaServiceUrl, profileToken),
+                        probeStream: (uri) => probeRtsp(uri, config.FFPROBE_PATH, config.ONVIF_TIMEOUT_MS),
+                    });
+                    activeRecorders.set(discoveredId, {
+                        id: discoveredId,
+                        name: `${device.manufacturer} ${device.model}`,
+                        deviceType: recorderType,
+                        vendor: recorderVendor,
+                        model: device.model,
+                        host: endpoint.remoteAddress,
+                        port: Number(parsedServiceUrl.port || (parsedServiceUrl.protocol === "https:" ? 443 : 80)),
+                        secure: parsedServiceUrl.protocol === "https:",
+                        rtspPort: 554,
+                        username: credentials.username,
+                        password: credentials.password,
+                        ...(recorderVendor === "hikvision" || recorderVendor === "dahua" || recorderVendor === "cp-plus"
+                            ? {}
+                            : { systemPath: `${parsedServiceUrl.pathname}${parsedServiceUrl.search}` }),
+                    });
                     await control.submitTelemetry(agentId, {
                         branchId, edgeAgentId: agentId, deviceType: "recorder", deviceId: discoveredId,
                         observedAt, source: "onvif", quality: "verified", idempotencyKey: `${agentId}:recorder-discovery:${discoveredId}:${observedAt}`,
                         metrics: {
-                            name: `${device.manufacturer} ${device.model}`, deviceType: /dvr|xvr|uvr/i.test(device.model) ? "dvr" : "nvr",
+                            name: `${device.manufacturer} ${device.model}`, deviceType: recorderType,
                             vendor, model: device.model, serialNumber: device.serialNumber ?? "", firmwareVersion: device.firmwareVersion ?? "",
                             ipAddress: endpoint.remoteAddress, protocol: "onvif", reachable: true, status: "online",
-                            totalCameras: device.profiles.length || null, connectedCameras: null, recordingStatus: "unknown",
+                            totalCameras: channels.length || null,
+                            connectedCameras: channels.length ? channels.filter((channel) => channel.streamVerified).length : null,
+                            recordingStatus: "unknown",
                         },
-                        reasonCodes: ["onvif_auto_discovered", "recording_state_vendor_specific"],
+                        reasonCodes: ["onvif_auto_discovered", "recorder_channels_enumerated", "recording_state_vendor_specific"],
                     });
                     submitted += 1;
-                    logger.info(`Auto-provisioned recorder ${device.manufacturer} ${device.model} as ${discoveredId}`);
+                    for (const channel of channels) {
+                        const channelDiscovery = await control.submitDiscovery(branchId, {
+                            edgeAgentId: agentId,
+                            discoveryMethod: "nvr-dvr-channel-discovery",
+                            vendor,
+                            manufacturer: device.manufacturer,
+                            model: `${device.model} channel`,
+                            ipAddress: endpoint.remoteAddress,
+                            firmwareVersion: device.firmwareVersion,
+                            displayName: channel.name === `Channel ${channel.sourceChannel}`
+                                ? `${device.manufacturer} ${device.model} - Channel ${channel.sourceChannel}`
+                                : channel.name,
+                            credentialsRequired: channel.reasonCodes.includes("recorder_channel_credentials_rejected"),
+                            streamVerified: channel.streamVerified,
+                            rtspValidated: channel.streamVerified,
+                            compatibility: channel.streamVerified ? "compatible" : "review-required",
+                            duplicateStatus: "unique",
+                            compatibilityStatus: channel.streamVerified ? "compatible" : "review-required",
+                            onvifSupport: true,
+                            onvifServices: device.services,
+                            onvifCapabilityTests: device.capabilityTests,
+                            onvifPort: Number(parsedServiceUrl.port || (parsedServiceUrl.protocol === "https:" ? 443 : 80)),
+                            rtspPort: 554,
+                            profiles: channel.profiles.map((profile) => ({
+                                name: profile.name,
+                                codec: profile.codec,
+                                width: Math.max(1, channel.probe?.width ?? profile.width),
+                                height: Math.max(1, channel.probe?.height ?? profile.height),
+                            })),
+                            capabilities: device.capabilities,
+                            statusReason: channel.reasonCodes.join(",").slice(0, 200),
+                            hardwareId: device.serialNumber
+                                ? recorderChannelIdentity(device.serialNumber, channel.sourceChannel)
+                                : `${discoveredId}:channel:${channel.sourceChannel}`,
+                            existingDeviceAssociation: discoveredId,
+                            sourceType: channel.sourceType,
+                            recorderId: discoveredId,
+                            recorderChannel: channel.sourceChannel,
+                            ...(device.serialNumber ? { recorderSerialNumber: device.serialNumber } : {}),
+                        });
+                        if (persistStreamSecrets && channel.primaryStreamUri) {
+                            await secrets.set(`edge://${agentId}/${channelDiscovery.id}`, channel.primaryStreamUri);
+                        }
+                        submitted += 1;
+                    }
+                    logger.info(`Auto-provisioned recorder ${device.manufacturer} ${device.model} as ${discoveredId}`, {
+                        channels: channels.length,
+                        verifiedChannels: channels.filter((channel) => channel.streamVerified).length,
+                    });
                     continue;
                 }
                 const profiles = [];
@@ -257,7 +387,7 @@ async function main() {
                     profiles,
                     capabilities: device.capabilities,
                 });
-                if (primarySourceUri) {
+                if (persistStreamSecrets && primarySourceUri) {
                     await secrets.set(`edge://${agentId}/${discovery.id}`, primarySourceUri);
                 }
                 submitted += 1;
@@ -301,6 +431,21 @@ async function main() {
         }
         return submitted;
     }
+    async function runAutomaticDiscovery() {
+        // Set the timestamp before scanning so a failed/slow branch cannot create a
+        // tight retry loop. Credential updates and explicit scan jobs still trigger
+        // immediate rediscovery outside this schedule.
+        lastDiscoveryAt = Date.now();
+        try {
+            const discovered = await scanBranch();
+            logger.info("Automatic ONVIF discovery completed", { discovered });
+        }
+        catch (error) {
+            logger.error("Automatic ONVIF discovery failed", {
+                error: error instanceof Error ? error.message : String(error),
+            });
+        }
+    }
     function delay(milliseconds) {
         return new Promise((resolve) => setTimeout(resolve, milliseconds));
     }
@@ -339,6 +484,10 @@ async function main() {
                 metrics: {
                     status: "online", version: config.EDGE_AGENT_VERSION,
                     uptimeSeconds: Math.round(uptime()),
+                    liveMediaEnabled: config.LIVE_MEDIA_ENABLED,
+                    mediaRuntimeReady: Boolean(edgeMediaRuntime),
+                    mediaTunnelMode: config.MEDIA_TUNNEL_MODE,
+                    publicMediaUrl: edgeMediaRuntime?.publicUrl ?? config.PUBLIC_MEDIA_GATEWAY_URL ?? null,
                     ...edgeResourceMetrics,
                 },
                 reasonCodes: edgeResourceReasonCodes,
@@ -402,10 +551,31 @@ async function main() {
                 enabled: true,
             };
         }));
+        const channelsByRecorder = new Map();
+        for (const camera of cameras) {
+            if (!camera.recorderId || !camera.recorderChannel)
+                continue;
+            const channels = channelsByRecorder.get(camera.recorderId) ?? [];
+            channels.push({ cameraId: camera.id, channel: camera.recorderChannel });
+            channelsByRecorder.set(camera.recorderId, channels);
+        }
+        for (const [recorderId, channels] of channelsByRecorder) {
+            const recorder = activeRecorders.get(recorderId);
+            if (!recorder)
+                continue;
+            recorder.archiveRetention = recorder.archiveRetention ?? {
+                lookbackDays: 1,
+                maxResults: 1_000,
+                continuityGapSeconds: 300,
+                verifyPlayback: true,
+                channels,
+            };
+            recorder.archiveRetention.channels = channels;
+        }
         lastCameraConfigSyncAt = Date.now();
     }
     async function collectRecorderReports(observedAt, includeArchive) {
-        return Promise.all(config.RECORDERS_JSON.map(async (recorder) => {
+        return Promise.all([...activeRecorders.values()].map(async (recorder) => {
             const secureCredential = credentialVault.get(recorder.host);
             const resolvedRecorder = secureCredential
                 ? { ...recorder, username: secureCredential.username, password: secureCredential.password }
@@ -421,13 +591,19 @@ async function main() {
                         continue;
                     }
                     const playback = await probeRtsp(uri, config.FFPROBE_PATH, config.RECORDER_PROBE_TIMEOUT_MS);
-                    evidence.playbackVerified = playback.reachable;
+                    const decodedFrame = playback.reachable
+                        ? await captureRtspRgbFrame(uri, config.FFMPEG_PATH, config.RECORDER_PROBE_TIMEOUT_MS)
+                        : null;
+                    evidence.playbackFrameDecoded = Boolean(decodedFrame);
+                    evidence.playbackVerified = playback.reachable && Boolean(decodedFrame);
                     evidence.playbackCodec = playback.codec;
-                    if (playback.reachable)
-                        evidence.reasonCodes.push("latest_clip_playback_verified");
+                    if (evidence.playbackVerified)
+                        evidence.reasonCodes.push("latest_clip_playback_verified", "latest_clip_frame_decoded");
                     else {
-                        evidence.playbackError = playback.error?.slice(0, 300) ?? "playback_failed";
-                        evidence.reasonCodes.push("latest_clip_playback_failed");
+                        evidence.playbackError = playback.reachable
+                            ? "playback_frame_decode_failed"
+                            : playback.error?.slice(0, 300) ?? "playback_failed";
+                        evidence.reasonCodes.push(playback.reachable ? "latest_clip_frame_decode_failed" : "latest_clip_playback_failed");
                     }
                 }
             }
@@ -460,7 +636,7 @@ async function main() {
             }
             case "probe-recorder": {
                 const recorderId = typeof payload.recorderId === "string" ? payload.recorderId : "";
-                const recorder = config.RECORDERS_JSON.find((item) => item.id === recorderId);
+                const recorder = activeRecorders.get(recorderId);
                 if (!recorder)
                     throw new Error("recorder_not_configured");
                 const probe = await probeRecorder(recorder, config.RECORDER_PROBE_TIMEOUT_MS, { includeArchive: true });

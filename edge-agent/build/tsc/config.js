@@ -7,14 +7,17 @@ const schema = z.object({
     EDGE_AGENT_NAME: z.string().min(2),
     EDGE_AGENT_VERSION: z.string().default("0.1.0"),
     DEV_USER_ID: z.preprocess((value) => value === "" ? undefined : value, z.string().min(1).optional()),
-    CAMERA_USERNAME: z.string().min(1).default("admin"),
+    CAMERA_USERNAME: z.string().default(""),
     CAMERA_PASSWORD: z.string().default(""),
     ONVIF_ENDPOINTS: z.string().default(""),
+    AUTO_DISCOVERY_ENABLED: z.enum(["true", "false"]).default("true").transform((value) => value === "true"),
+    AUTO_DISCOVERY_INTERVAL_MS: z.coerce.number().int().min(60_000).max(86_400_000).default(15 * 60_000),
     DISCOVERY_TIMEOUT_MS: z.coerce.number().int().min(500).max(30_000).default(5000),
     ONVIF_TIMEOUT_MS: z.coerce.number().int().min(500).max(30_000).default(8000),
     FFPROBE_PATH: z.string().default("ffprobe"),
     FFMPEG_PATH: z.string().default("ffmpeg"),
     LIVE_MEDIA_ENABLED: z.enum(["true", "false"]).default("false").transform((value) => value === "true"),
+    EDGE_MANAGED_MEDIA_BOOTSTRAP: z.enum(["true", "false"]).default("false").transform((value) => value === "true"),
     EDGE_LIVE_GATEWAY_HOST: z.string().default("127.0.0.1"),
     EDGE_LIVE_GATEWAY_PORT: z.coerce.number().int().min(1).max(65535).default(8090),
     MEDIAMTX_PATH: z.string().default("mediamtx"),
@@ -126,7 +129,9 @@ const schema = z.object({
     if (value.LIVE_MEDIA_ENABLED && value.MEDIA_TUNNEL_MODE === "disabled" && !value.PUBLIC_MEDIA_GATEWAY_URL) {
         context.addIssue({ code: z.ZodIssueCode.custom, path: ["PUBLIC_MEDIA_GATEWAY_URL"], message: "Live media without a tunnel requires a reachable PUBLIC_MEDIA_GATEWAY_URL" });
     }
-    if (value.LIVE_MEDIA_ENABLED && value.MEDIA_TUNNEL_MODE === "named" && (!value.CLOUDFLARED_TUNNEL_TOKEN || !value.PUBLIC_MEDIA_GATEWAY_URL)) {
+    if (value.LIVE_MEDIA_ENABLED && value.MEDIA_TUNNEL_MODE === "named" &&
+        !value.EDGE_MANAGED_MEDIA_BOOTSTRAP &&
+        (!value.CLOUDFLARED_TUNNEL_TOKEN || !value.PUBLIC_MEDIA_GATEWAY_URL)) {
         context.addIssue({ code: z.ZodIssueCode.custom, path: ["CLOUDFLARED_TUNNEL_TOKEN"], message: "Named media tunnels require CLOUDFLARED_TUNNEL_TOKEN and PUBLIC_MEDIA_GATEWAY_URL" });
     }
 });

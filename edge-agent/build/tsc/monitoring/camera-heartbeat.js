@@ -5,7 +5,8 @@
  */
 import { createHash } from "node:crypto";
 import { measureCameraPacketLoss } from "./camera-packet-loss.js";
-import { captureRtspLumaFrame, measureRtspStream } from "../streaming/rtsp-probe.js";
+import { captureRtspRgbFrame, measureRtspStream } from "../streaming/rtsp-probe.js";
+import { assessAnalogRgbFrame } from "./analog-signal-quality.js";
 import { logger } from "../utils/logger.js";
 export function assessLumaFrame(previous, frame) {
     const brightness = frame.reduce((sum, value) => sum + value, 0) / frame.length;
@@ -113,9 +114,9 @@ export class CameraHeartbeatService {
         }
         const [packetLoss, frame] = await Promise.all([
             measureCameraPacketLoss(rtspUrl),
-            captureRtspLumaFrame(rtspUrl, this.ffmpegPath),
+            captureRtspRgbFrame(rtspUrl, this.ffmpegPath),
         ]);
-        const frameHealth = frame ? assessLumaFrame(this.frameStates.get(camera.id), frame) : null;
+        const frameHealth = frame ? assessAnalogRgbFrame(this.frameStates.get(camera.id), frame) : null;
         if (frameHealth)
             this.frameStates.set(camera.id, frameHealth.state);
         const reasonCodes = [];
@@ -126,18 +127,37 @@ export class CameraHeartbeatService {
         if (packetLoss === null)
             reasonCodes.push("packet_loss_unavailable");
         if (!frameHealth) {
-            reasonCodes.push("freeze_detection_unavailable", "black_screen_detection_unavailable");
+            reasonCodes.push("analog_signal_analysis_unavailable");
         }
         else {
             if (frameHealth.imageFrozen)
                 reasonCodes.push("frozen_frame_detected");
             if (frameHealth.blackScreen)
                 reasonCodes.push("black_screen_detected");
+            if (frameHealth.blueScreen)
+                reasonCodes.push("blue_screen_detected");
+            if (frameHealth.severeBlur)
+                reasonCodes.push("severe_blur_detected");
+            if (frameHealth.excessiveNoise)
+                reasonCodes.push("excessive_analog_noise_detected");
+            if (frameHealth.rollingInterference)
+                reasonCodes.push("rolling_interference_detected");
+            if (frameHealth.colourLoss)
+                reasonCodes.push("colour_loss_detected");
+            if (frameHealth.brightnessFailure)
+                reasonCodes.push("brightness_failure_detected");
+            if (frameHealth.obstructionSuspected)
+                reasonCodes.push("camera_obstruction_suspected");
+            if (frameHealth.cameraMovementSuspected)
+                reasonCodes.push("camera_movement_suspected");
         }
         const degraded = Boolean((camera.expectedFps && stream.fps !== null && stream.fps < camera.expectedFps * 0.8) ||
             (camera.expectedBitrate && stream.bitrateKbps !== null && stream.bitrateKbps < camera.expectedBitrate * 0.7) ||
             (packetLoss !== null && packetLoss > 5) ||
-            frameHealth?.imageFrozen || frameHealth?.blackScreen);
+            frameHealth?.imageFrozen || frameHealth?.blackScreen || frameHealth?.blueScreen ||
+            frameHealth?.severeBlur || frameHealth?.excessiveNoise || frameHealth?.rollingInterference ||
+            frameHealth?.colourLoss || frameHealth?.brightnessFailure || frameHealth?.obstructionSuspected ||
+            frameHealth?.cameraMovementSuspected);
         return {
             cameraId: camera.id,
             status: degraded ? "degraded" : "online",
@@ -149,11 +169,32 @@ export class CameraHeartbeatService {
             ...(stream.bitrateKbps === null ? {} : { currentBitrate: stream.bitrateKbps }),
             ...(stream.width === null || stream.height === null ? {} : { currentResolution: { width: stream.width, height: stream.height } }),
             ...(packetLoss === null ? {} : { packetLoss }),
-            ...(frameHealth ? { imageFrozen: frameHealth.imageFrozen, blackScreen: frameHealth.blackScreen } : {}),
+            ...(frameHealth ? {
+                imageFrozen: frameHealth.imageFrozen,
+                blackScreen: frameHealth.blackScreen,
+                blueScreen: frameHealth.blueScreen,
+                severeBlur: frameHealth.severeBlur,
+                excessiveNoise: frameHealth.excessiveNoise,
+                rollingInterference: frameHealth.rollingInterference,
+                colourLoss: frameHealth.colourLoss,
+                brightnessFailure: frameHealth.brightnessFailure,
+                obstructionSuspected: frameHealth.obstructionSuspected,
+                cameraMovementSuspected: frameHealth.cameraMovementSuspected,
+            } : {}),
             ...(stream.codec ? { codec: stream.codec } : {}),
             metadata: {
                 sampleDurationSeconds: stream.sampleDurationSeconds,
-                ...(frameHealth ? { frameBrightness: frameHealth.brightness, freezeSamples: frameHealth.state.identicalSamples } : {}),
+                ...(frameHealth ? {
+                    frameBrightness: frameHealth.brightness,
+                    frameContrast: frameHealth.contrast,
+                    frameEdgeScore: frameHealth.edgeScore,
+                    frameNoiseScore: frameHealth.noiseScore,
+                    rowInterferenceScore: frameHealth.rowInterferenceScore,
+                    frameColourScore: frameHealth.colourScore,
+                    sceneChangeScore: frameHealth.sceneChangeScore,
+                    freezeSamples: frameHealth.state.identicalSamples,
+                    timeOverlayVerification: "unavailable-without-ocr-clock-adapter",
+                } : {}),
                 ...(packetLoss === null ? {} : { packetLossMethod: "icmp" }),
             },
             reasonCodes,
@@ -183,6 +224,14 @@ export class CameraHeartbeatService {
                 packetLossPercent: data.packetLoss ?? null,
                 imageFrozen: data.imageFrozen ?? null,
                 blackScreen: data.blackScreen ?? null,
+                blueScreen: data.blueScreen ?? null,
+                severeBlur: data.severeBlur ?? null,
+                excessiveNoise: data.excessiveNoise ?? null,
+                rollingInterference: data.rollingInterference ?? null,
+                colourLoss: data.colourLoss ?? null,
+                brightnessFailure: data.brightnessFailure ?? null,
+                obstructionSuspected: data.obstructionSuspected ?? null,
+                cameraMovementSuspected: data.cameraMovementSuspected ?? null,
             },
             reasonCodes: data.reasonCodes,
         };
