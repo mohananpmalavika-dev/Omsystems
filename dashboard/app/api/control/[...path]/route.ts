@@ -41,24 +41,28 @@ async function proxyControlRequest(request: NextRequest, context: RouteContext) 
     );
   }
 
-  const hasBody = request.method !== "GET" && request.method !== "HEAD";
-  let requestBody = hasBody ? await request.text() : undefined;
+  const methodHasPotentialBody = request.method !== "GET" && request.method !== "HEAD";
+  let requestBody = methodHasPotentialBody ? await request.text() : undefined;
   if (routePath === "/v1/auth/refresh") {
     const refreshToken = request.cookies.get("sentinel_refresh")?.value;
     if (refreshToken) requestBody = JSON.stringify({ refreshToken });
   }
-  // Only set content-type header when there is a body to send
-  if (hasBody) {
+
+  // Only include Content-Type and send a body when the body is non-empty
+  const willSendBody = typeof requestBody === "string" && requestBody.length > 0;
+  if (willSendBody) {
     headers.set("content-type", "application/json");
   }
+
   try {
     const upstreamUrl = upstream.toString();
-    const response = await fetch(upstreamUrl, {
+    const fetchOptions: any = {
       method: request.method,
       headers,
-      body: requestBody,
       cache: "no-store",
-    });
+    };
+    if (willSendBody) fetchOptions.body = requestBody;
+    const response = await fetch(upstreamUrl, fetchOptions);
 
     if (routePath === "/v1/digital-twin/branches" && response.status === 404) {
       return Response.json([], { status: 200, headers: { "cache-control": "no-store" } });
