@@ -9,8 +9,6 @@ type RouteContext = {
 
 export async function DELETE(request: NextRequest, context: RouteContext) {
   const { id } = await context.params;
-  const baseUrl = new URL(request.url).origin;
-
   const makeProxyRequest = async (path: string, method: string) => {
     const forwardedHeaders: Record<string, string> = {
       'content-type': 'application/json',
@@ -25,7 +23,7 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
     const userIdHeader = request.headers.get('x-user-id');
     if (userIdHeader) forwardedHeaders['x-user-id'] = userIdHeader;
 
-    return fetch(new URL(`/api/control${path}`, baseUrl).toString(), {
+    return fetch(`/api/control${path}`, {
       method,
       headers: forwardedHeaders,
       cache: 'no-store',
