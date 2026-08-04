@@ -53,7 +53,10 @@ services:
       - key: EDGE_LEGACY_SHARED_KEY_ENABLED
         value: "false"
       - key: EDGE_MANAGED_TUNNEL_REQUIRED
-        value: "true"
+        # Keep the control plane available for VPN branches and one-time local
+        # discovery even before Cloudflare credentials are configured. Set this
+        # to "true" only after all four Cloudflare settings below are present.
+        value: "false"
       - key: CLOUDFLARE_ACCOUNT_ID
         sync: false
       - key: CLOUDFLARE_ZONE_ID

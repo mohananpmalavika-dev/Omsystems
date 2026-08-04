@@ -9,34 +9,22 @@ type RouteContext = {
 
 export async function DELETE(request: NextRequest, context: RouteContext) {
   const { id } = await context.params;
-  const controlPlaneUrl =
-    process.env.CONTROL_PLANE_INTERNAL_URL ||
-    process.env.CONTROL_PLANE_PUBLIC_URL ||
-    'http://localhost:8080';
+  const baseUrl = new URL(request.url).origin;
 
-  const employeeSession = request.cookies.get('sentinel_access')?.value ??
-    request.headers.get('x-sentinel-session');
-  const devUserId = process.env.DASHBOARD_DEV_USER_ID || 'user-global-admin';
-
-  const headers: HeadersInit = {
-    'Content-Type': 'application/json',
+  const makeProxyRequest = async (path: string, method: string) => {
+    return fetch(new URL(`/api/control${path}`, baseUrl).toString(), {
+      method,
+      headers: {
+        'content-type': 'application/json',
+      },
+      cache: 'no-store',
+    });
   };
 
-  if (employeeSession) {
-    headers['authorization'] = `Bearer ${employeeSession}`;
-  } else {
-    headers['x-user-id'] = devUserId;
-  }
-
-  const bridgeKey = process.env.EDGE_BRIDGE_SHARED_KEY;
-  if (bridgeKey) {
-    headers['x-edge-bridge-key'] = bridgeKey;
-  }
-
   try {
-    const deleteAgentResponse = await fetch(
-      `${controlPlaneUrl}/v1/edge-agents/${encodeURIComponent(id)}`,
-      { method: 'DELETE', headers }
+    const deleteAgentResponse = await makeProxyRequest(
+      `/v1/edge-agents/${encodeURIComponent(id)}`,
+      'DELETE',
     );
 
     if (deleteAgentResponse.ok) {
@@ -44,11 +32,7 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
     }
 
     if (deleteAgentResponse.status === 404) {
-      const branchesResponse = await fetch(`${controlPlaneUrl}/v1/branches`, {
-        method: 'GET',
-        headers,
-      });
-
+      const branchesResponse = await makeProxyRequest('/v1/branches', 'GET');
       if (!branchesResponse.ok) {
         const body = await branchesResponse.text().catch(() => '');
         console.error('Failed to fetch branches:', branchesResponse.status, body);
@@ -62,9 +46,9 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
       const branches = branchesData.data || [];
 
       for (const branch of branches) {
-        const deleteActivationResponse = await fetch(
-          `${controlPlaneUrl}/v1/branches/${encodeURIComponent(branch.id)}/edge-activations/${encodeURIComponent(id)}`,
-          { method: 'DELETE', headers }
+        const deleteActivationResponse = await makeProxyRequest(
+          `/v1/branches/${encodeURIComponent(branch.id)}/edge-activations/${encodeURIComponent(id)}`,
+          'DELETE',
         );
 
         if (deleteActivationResponse.status === 204) {
