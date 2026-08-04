@@ -146,6 +146,41 @@ export async function registerEdgeGatewayOperationsRoutes(
   });
 
   /**
+   * Delete a pending edge activation
+   * Allows removing activation codes that haven't been used yet
+   */
+  app.delete("/v1/branches/:branchId/edge-activations/:id", async (request, reply) => {
+    const { branchId, id } = branchAgentParams.parse(request.params);
+    if (!(await requireDeviceAccess(request, reply, store, branchId))) return;
+    
+    try {
+      // Delete the activation - only if not consumed
+      const result = await (store as any).pool.query(
+        `DELETE FROM edge_activations 
+         WHERE id = $1 AND branch_id = $2 AND consumed_at IS NULL
+         RETURNING id`,
+        [id, branchId]
+      );
+      
+      if (result.rowCount === 0) {
+        return reply.code(404).send({ 
+          error: "activation_not_found",
+          message: "Activation not found or already consumed"
+        });
+      }
+      
+      await writeGatewayAudit(request, store, branchId, "edge_gateway.activation_deleted", { activationId: id });
+      return reply.code(204).send();
+    } catch (error) {
+      app.log.error({ err: error, activationId: id }, "Failed to delete edge activation");
+      return reply.code(500).send({ 
+        error: "activation_delete_failed",
+        message: error instanceof Error ? error.message : "Failed to delete activation"
+      });
+    }
+  });
+
+  /**
    * DELETE gateway endpoint (alias for revoke)
    * Provides DELETE /v1/edge-agents/:id for gateway deletion
    */

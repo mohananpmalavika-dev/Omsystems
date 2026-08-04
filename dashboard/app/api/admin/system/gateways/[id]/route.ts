@@ -34,45 +34,70 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
       headers['x-edge-bridge-key'] = bridgeKey;
     }
     
-    // First, get the edge agent to find its branchId
-    // We need the branchId to call the revoke endpoint
+    // Try to get the edge agent first to see if it's activated
     const agentResponse = await fetch(
       `${controlPlaneUrl}/v1/edge-agents/${id}`,
       { method: 'GET', headers }
     );
     
-    if (!agentResponse.ok) {
-      if (agentResponse.status === 404) {
-        return NextResponse.json(
-          { error: 'gateway_not_found', message: 'Gateway not found' },
-          { status: 404 }
-        );
+    if (agentResponse.ok) {
+      // It's an activated gateway - revoke it
+      const agent = await agentResponse.json();
+      
+      const revokeResponse = await fetch(
+        `${controlPlaneUrl}/v1/branches/${agent.branchId}/edge-agents/${id}/revoke`,
+        {
+          method: 'POST',
+          headers,
+        }
+      );
+      
+      if (!revokeResponse.ok) {
+        const error = await revokeResponse.json().catch(() => ({ error: 'revoke_failed' }));
+        return NextResponse.json(error, { status: revokeResponse.status });
       }
-      const error = await agentResponse.json().catch(() => ({ error: 'unknown_error' }));
-      return NextResponse.json(error, { status: agentResponse.status });
+      
+      return new NextResponse(null, { status: 204 });
     }
     
-    const agent = await agentResponse.json();
-    
-    // Now revoke the edge agent using the existing endpoint
-    const response = await fetch(
-      `${controlPlaneUrl}/v1/branches/${agent.branchId}/edge-agents/${id}/revoke`,
-      {
-        method: 'POST',
-        headers,
-      }
+    // Not an activated gateway - try as a pending activation
+    // First, get branches to find which branch this activation belongs to
+    const branchesResponse = await fetch(
+      `${controlPlaneUrl}/v1/branches`,
+      { method: 'GET', headers }
     );
     
-    if (!response.ok) {
-      const error = await response.json().catch(() => ({ error: 'unknown_error' }));
+    if (!branchesResponse.ok) {
       return NextResponse.json(
-        error,
-        { status: response.status }
+        { error: 'failed_to_get_branches', message: 'Could not retrieve branches' },
+        { status: branchesResponse.status }
       );
     }
     
-    // Success - return 204 No Content
-    return new NextResponse(null, { status: 204 });
+    const branchesData = await branchesResponse.json();
+    const branches = branchesData.data || [];
+    
+    // Try to delete activation from each branch until we find it
+    for (const branch of branches) {
+      const deleteResponse = await fetch(
+        `${controlPlaneUrl}/v1/branches/${branch.id}/edge-activations/${id}`,
+        {
+          method: 'DELETE',
+          headers,
+        }
+      );
+      
+      if (deleteResponse.status === 204) {
+        // Successfully deleted
+        return new NextResponse(null, { status: 204 });
+      }
+    }
+    
+    // Not found as either agent or activation
+    return NextResponse.json(
+      { error: 'gateway_not_found', message: 'Gateway or activation not found' },
+      { status: 404 }
+    );
     
   } catch (error) {
     console.error('Error deleting gateway:', error);
