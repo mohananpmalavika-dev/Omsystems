@@ -29,15 +29,68 @@ export async function GET(request: NextRequest) {
       headers['x-edge-bridge-key'] = bridgeKey;
     }
     
-    // Note: There's no dedicated "list all edge agents" endpoint in the control plane
-    // Edge agents are fetched per-branch via /v1/branches/:branchId/edge-agents
-    // For now, return empty array - would need to query all branches and aggregate
+    // Step 1: Fetch all branches
+    const branchesResponse = await fetch(`${controlPlaneUrl}/v1/branches`, {
+      method: 'GET',
+      headers,
+      cache: 'no-store',
+    });
+
+    if (!branchesResponse.ok) {
+      console.error(`Failed to fetch branches: ${branchesResponse.status}`);
+      return NextResponse.json([]);
+    }
+
+    const branchesData = await branchesResponse.json();
+    const branches = branchesData.data || [];
     
-    console.warn('Gateway listing not implemented - requires aggregation across all branches');
-    return NextResponse.json([]);
+    if (branches.length === 0) {
+      return NextResponse.json([]);
+    }
+
+    // Step 2: Fetch edge agents for each branch
+    const gatewayPromises = branches.map(async (branch: any) => {
+      try {
+        const agentsResponse = await fetch(
+          `${controlPlaneUrl}/v1/branches/${branch.id}/edge-agents`,
+          {
+            method: 'GET',
+            headers,
+            cache: 'no-store',
+          }
+        );
+
+        if (!agentsResponse.ok) {
+          return [];
+        }
+
+        const agentsData = await agentsResponse.json();
+        const agents = agentsData.data || [];
+        
+        // Add branch info to each agent
+        return agents.map((agent: any) => ({
+          id: agent.id,
+          name: agent.name,
+          status: agent.status || 'unknown',
+          last_seen_at: agent.lastSeenAt || null,
+          created_at: agent.createdAt || null,
+          branch_name: branch.name,
+          branch_id: branch.id,
+        }));
+      } catch (error) {
+        console.error(`Error fetching agents for branch ${branch.id}:`, error);
+        return [];
+      }
+    });
+
+    // Step 3: Wait for all requests and flatten results
+    const gatewayArrays = await Promise.all(gatewayPromises);
+    const allGateways = gatewayArrays.flat();
+    
+    return NextResponse.json(allGateways);
     
   } catch (error) {
     console.error('Error fetching gateways:', error);
-    return NextResponse.json([], { status: 200 }); // Return empty array on error
+    return NextResponse.json([], { status: 200 });
   }
 }
