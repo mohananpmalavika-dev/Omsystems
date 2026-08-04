@@ -289,34 +289,132 @@ export async function registerOrganizationRoutes(
 
   // Soft delete organization node
   app.delete("/v1/organization/nodes/:id", async (request, reply) => {
-    const { id } = nodeIdSchema.parse(request.params);
+    try {
+      const { id } = nodeIdSchema.parse(request.params);
 
-    // Check permission
-    if (!(await requireAccess(request, reply, store, "org:manage", id))) {
-      return;
-    }
+      // Check permission
+      if (!(await requireAccess(request, reply, store, "org:manage", id))) {
+        return;
+      }
 
-    // Check if node has active children
-    const descendants = await store.getDescendantNodes(id, false);
-    if (descendants.length > 0) {
-      return reply.code(400).send({
-        error: "node_has_active_children",
-        message:
-          "Cannot delete node with active children. Deactivate children first.",
+      // Get query parameters for cascade and force delete options
+      const query = z
+        .object({
+          cascade: z.coerce.boolean().default(false),
+          force: z.coerce.boolean().default(false),
+        })
+        .parse(request.query);
+
+      // Check if node has active children
+      const descendants = await store.getDescendantNodes(id, false);
+      
+      if (descendants.length > 0) {
+        if (!query.cascade && !query.force) {
+          // Get child types for better error message
+          const childTypes = [...new Set(descendants.map(d => d.type))];
+          const childCount = descendants.length;
+          
+          return reply.code(400).send({
+            error: "node_has_active_children",
+            message: `Cannot delete node with ${childCount} active children. Use ?cascade=true to delete all descendants, or deactivate children first.`,
+            details: {
+              childCount,
+              childTypes,
+              descendantIds: descendants.map(d => d.id),
+              hint: "Add ?cascade=true to the URL to delete this node and all its descendants"
+            }
+          });
+        }
+
+        // Cascade delete: deactivate all descendants first (from leaf to root)
+        if (query.cascade) {
+          // Sort descendants by depth (deepest first) to avoid parent-child conflicts
+          const sortedDescendants = [...descendants].sort((a, b) => {
+            // Count path depth (more slashes = deeper)
+            const depthA = (a.path?.match(/\//g) || []).length;
+            const depthB = (b.path?.match(/\//g) || []).length;
+            return depthB - depthA;
+          });
+
+          // Deactivate each descendant
+          for (const descendant of sortedDescendants) {
+            try {
+              await store.deactivateOrganizationNode(descendant.id);
+              
+              await store.writeAudit({
+                tenantId: request.currentUser.tenantId,
+                actorUserId: request.currentUser.id,
+                action: "organization.node_deleted",
+                resourceNodeId: descendant.id,
+                outcome: "success",
+                details: {
+                  cascadeDelete: true,
+                  parentNodeId: id
+                }
+              });
+            } catch (err) {
+              console.error(`Failed to deactivate descendant ${descendant.id}:`, err);
+              
+              if (!query.force) {
+                return reply.code(500).send({
+                  error: "cascade_delete_failed",
+                  message: `Failed to delete descendant node ${descendant.name} (${descendant.id})`,
+                  details: {
+                    failedNodeId: descendant.id,
+                    failedNodeName: descendant.name,
+                    error: err instanceof Error ? err.message : String(err)
+                  }
+                });
+              }
+              // If force=true, continue despite errors
+            }
+          }
+        }
+      }
+
+      // Now deactivate the requested node
+      await store.deactivateOrganizationNode(id);
+
+      await store.writeAudit({
+        tenantId: request.currentUser.tenantId,
+        actorUserId: request.currentUser.id,
+        action: "organization.node_deleted",
+        resourceNodeId: id,
+        outcome: "success",
+        details: {
+          cascadeDelete: query.cascade,
+          descendantsDeleted: descendants.length
+        }
+      });
+
+      return reply.code(204).send();
+      
+    } catch (error) {
+      console.error("Error deleting organization node:", error);
+      
+      // Log detailed error for debugging
+      console.error("Delete error details:", {
+        nodeId: request.params.id,
+        userId: request.currentUser.id,
+        tenantId: request.currentUser.tenantId,
+        error: error instanceof Error ? {
+          message: error.message,
+          stack: error.stack,
+          name: error.name
+        } : String(error)
+      });
+
+      // Return detailed error to client
+      return reply.code(500).send({
+        error: "delete_failed",
+        message: error instanceof Error ? error.message : "Failed to delete organization node",
+        details: {
+          nodeId: request.params.id,
+          timestamp: new Date().toISOString(),
+          errorType: error instanceof Error ? error.name : typeof error
+        }
       });
     }
-
-    await store.deactivateOrganizationNode(id);
-
-    await store.writeAudit({
-      tenantId: request.currentUser.tenantId,
-      actorUserId: request.currentUser.id,
-      action: "organization.node_deleted",
-      resourceNodeId: id,
-      outcome: "success",
-    });
-
-    return reply.code(204).send();
   });
 
   // Validate hierarchy relationship
