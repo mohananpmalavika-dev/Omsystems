@@ -1,5 +1,6 @@
 import { loadEdgeConfig } from "./config.js";
 import { discoverOnvifDevices } from "./discovery/onvif-discovery.js";
+import { discoverRtspDevices } from "./discovery/rtsp-network-scan.js";
 import { attachCredentials, OnvifClient } from "./devices/onvif-client.js";
 import { compatibilityNotes, normalizeVendor } from "./devices/compatibility-registry.js";
 import { GatewayClient } from "./registration/gateway-client.js";
@@ -459,6 +460,28 @@ async function scanBranch(options: { persistStreamSecrets?: boolean } = {}) {
       }
     }
   }
+  if (config.RTSP_SCAN_ENABLED) {
+    try {
+      const ports = String(config.RTSP_SCAN_PORTS).split(",").map((p) => Number(p.trim())).filter(Boolean);
+      const paths = String(config.RTSP_SCAN_PATHS).split(",").map((p) => p.trim()).filter(Boolean);
+      const cidr = config.RTSP_SCAN_CIDR as string | undefined;
+      const added = await discoverRtspDevices(branchId, agentId, {
+        cidr,
+        ports,
+        paths,
+        ffprobePath: config.FFPROBE_PATH,
+        timeoutMs: config.RTSP_SCAN_TIMEOUT_MS,
+        concurrency: config.RTSP_SCAN_CONCURRENCY,
+        username: config.CAMERA_USERNAME,
+        password: config.CAMERA_PASSWORD,
+      }, control, secrets, persistStreamSecrets);
+      submitted += added;
+      logger.info("RTSP network scan completed", { discovered: added });
+    } catch (error) {
+      logger.error("RTSP network scan failed", { error: error instanceof Error ? error.message : String(error) });
+    }
+  }
+
   return submitted;
 }
 

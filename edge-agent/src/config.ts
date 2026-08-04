@@ -17,6 +17,18 @@ const schema = z.object({
   ONVIF_TIMEOUT_MS: z.coerce.number().int().min(500).max(30_000).default(8000),
   FFPROBE_PATH: z.string().default("ffprobe"),
   FFMPEG_PATH: z.string().default("ffmpeg"),
+  // RTSP network scanner settings: enable an active scan of the local LAN
+  RTSP_SCAN_ENABLED: z.enum(["true", "false"]).default("true").transform((value) => value === "true"),
+  // Optional CIDR to scan (e.g. 192.168.1.0/24). If empty, the agent will infer local /24 networks.
+  RTSP_SCAN_CIDR: z.preprocess((value) => value === "" ? undefined : value, z.string().optional()).default(undefined),
+  // Comma-separated list of ports to probe for RTSP
+  RTSP_SCAN_PORTS: z.string().default("554,8554"),
+  // Comma-separated list of common RTSP path suffixes to try
+  RTSP_SCAN_PATHS: z.string().default("/,/stream,/h264,/live.sdp,/mpeg4,/Streaming/Channels/101"),
+  // Concurrency for the active TCP/connect+probe scanner
+  RTSP_SCAN_CONCURRENCY: z.coerce.number().int().min(1).max(500).default(50),
+  // Timeout for individual RTSP probe/connect attempts (ms)
+  RTSP_SCAN_TIMEOUT_MS: z.coerce.number().int().min(250).max(30_000).default(3000),
   LIVE_MEDIA_ENABLED: z.enum(["true", "false"]).default("false").transform((value) => value === "true"),
   EDGE_MANAGED_MEDIA_BOOTSTRAP: z.enum(["true", "false"]).default("false").transform((value) => value === "true"),
   EDGE_LIVE_GATEWAY_HOST: z.string().default("127.0.0.1"),

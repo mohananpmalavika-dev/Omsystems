@@ -12,11 +12,22 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
   const baseUrl = new URL(request.url).origin;
 
   const makeProxyRequest = async (path: string, method: string) => {
+    const forwardedHeaders: Record<string, string> = {
+      'content-type': 'application/json',
+    };
+
+    const cookieHeader = request.headers.get('cookie');
+    if (cookieHeader) forwardedHeaders.cookie = cookieHeader;
+
+    const sentinelSession = request.headers.get('x-sentinel-session');
+    if (sentinelSession) forwardedHeaders['x-sentinel-session'] = sentinelSession;
+
+    const userIdHeader = request.headers.get('x-user-id');
+    if (userIdHeader) forwardedHeaders['x-user-id'] = userIdHeader;
+
     return fetch(new URL(`/api/control${path}`, baseUrl).toString(), {
       method,
-      headers: {
-        'content-type': 'application/json',
-      },
+      headers: forwardedHeaders,
       cache: 'no-store',
     });
   };
