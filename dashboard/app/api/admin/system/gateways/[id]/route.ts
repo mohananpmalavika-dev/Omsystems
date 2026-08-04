@@ -46,6 +46,36 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
       const branches = branchesData.data || [];
 
       for (const branch of branches) {
+        const agentResponse = await makeProxyRequest(
+          `/v1/branches/${encodeURIComponent(branch.id)}/edge-agents`,
+          'GET',
+        );
+
+        if (!agentResponse.ok) continue;
+
+        const agentsData = await agentResponse.json();
+        const agents = agentsData.data || [];
+        const agent = agents.find((item: any) => item.id === id);
+        if (agent) {
+          const revokeResponse = await makeProxyRequest(
+            `/v1/branches/${encodeURIComponent(branch.id)}/edge-agents/${encodeURIComponent(id)}/revoke`,
+            'POST',
+          );
+          if (revokeResponse.ok) {
+            return new NextResponse(null, { status: 204 });
+          }
+          const revokeBody = await revokeResponse.text().catch(() => '');
+          let revokeError: any = { error: 'revoke_failed' };
+          try {
+            revokeError = JSON.parse(revokeBody || '{}');
+          } catch {
+            revokeError = { error: 'revoke_failed', message: revokeBody || 'Failed to revoke gateway' };
+          }
+          return NextResponse.json(revokeError, { status: revokeResponse.status });
+        }
+      }
+
+      for (const branch of branches) {
         const deleteActivationResponse = await makeProxyRequest(
           `/v1/branches/${encodeURIComponent(branch.id)}/edge-activations/${encodeURIComponent(id)}`,
           'DELETE',
