@@ -1,6 +1,6 @@
 # Implementation Plan
 
-- [ ] 1. Write bug condition exploration test
+- [-] 1. Write bug condition exploration test
   - **Property 1: Bug Condition** - Logout-All Returns 500 Error
   - **CRITICAL**: This test MUST FAIL on unfixed code - failure confirms the bug exists
   - **DO NOT attempt to fix the test or the code when it fails**
@@ -24,7 +24,7 @@
   - Mark task complete when test is written, run, and failure is documented
   - _Requirements: 1.1, 2.1, 2.2_
 
-- [ ] 2. Write preservation property tests (BEFORE implementing fix)
+- [-] 2. Write preservation property tests (BEFORE implementing fix)
   - **Property 2: Preservation** - Non-Logout Authenticated Requests Update Session Activity
   - **IMPORTANT**: Follow observation-first methodology
   - Observe behavior on UNFIXED code for non-buggy inputs (authenticated endpoints that are NOT logout endpoints)
@@ -44,7 +44,7 @@
 
 - [ ] 3. Fix for logout-all endpoint 500 error
 
-  - [ ] 3.1 Implement the fix in auth middleware
+  - [~] 3.1 Implement the fix in auth middleware
     - Modify `src/middleware/auth.middleware.ts`
     - After successful token validation and user lookup (around line 94, after checking user status)
     - Add logout endpoint detection logic:
@@ -64,7 +64,7 @@
     - _Preservation: Authentication middleware MUST continue to validate tokens and populate request.currentUser for all authenticated endpoints; Session activity timestamps MUST continue to be updated for all non-logout authenticated requests_
     - _Requirements: 1.1, 1.2, 2.1, 2.2, 3.2, 3.4_
 
-  - [ ] 3.2 Verify bug condition exploration test now passes
+  - [~] 3.2 Verify bug condition exploration test now passes
     - **Property 1: Expected Behavior** - Logout-All Succeeds with 200 Status
     - **IMPORTANT**: Re-run the SAME test from task 1 - do NOT write a new test
     - The test from task 1 encodes the expected behavior
@@ -76,7 +76,7 @@
     - **EXPECTED OUTCOME**: Test PASSES (confirms bug is fixed)
     - _Requirements: 2.1, 2.2, 2.3, 2.4_
 
-  - [ ] 3.3 Verify preservation tests still pass
+  - [~] 3.3 Verify preservation tests still pass
     - **Property 2: Preservation** - Session Activity Updates Unchanged for Non-Logout Endpoints
     - **IMPORTANT**: Re-run the SAME tests from task 2 - do NOT write new tests
     - Run preservation property tests from step 2
@@ -88,7 +88,7 @@
     - Confirm all tests still pass after fix (no regressions)
     - _Requirements: 3.1, 3.2, 3.3, 3.4, 3.5_
 
-- [ ] 4. Checkpoint - Ensure all tests pass
+- [~] 4. Checkpoint - Ensure all tests pass
   - Run full test suite to verify no regressions
   - Manually test logout-all endpoint from dashboard to confirm fix works end-to-end
   - Verify audit logs are created correctly for logout-all operations
