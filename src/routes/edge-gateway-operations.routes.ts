@@ -145,6 +145,67 @@ export async function registerEdgeGatewayOperationsRoutes(
     return revoked;
   });
 
+  /**
+   * DELETE gateway endpoint (alias for revoke)
+   * Provides DELETE /v1/edge-agents/:id for gateway deletion
+   */
+  app.delete("/v1/edge-agents/:id", async (request, reply) => {
+    const { id } = agentParams.parse(request.params);
+    
+    try {
+      // Get the agent to find its branch
+      const agent = await store.getEdgeAgent(id);
+      
+      if (!agent) {
+        return reply.code(404).send({ 
+          error: "edge_agent_not_found",
+          message: "Gateway not found" 
+        });
+      }
+      
+      // Check permissions
+      if (!(await requireDeviceAccess(request, reply, store, agent.branchId))) {
+        return;
+      }
+      
+      // Revoke the agent credential
+      const revoked = await store.revokeEdgeAgentCredential(id);
+      
+      // Revoke managed tunnel if it exists
+      const tunnel = await store.getEdgeManagedTunnel(agent.branchId);
+      if (tunnel && options.tunnelProvider) {
+        try {
+          await options.tunnelProvider.revoke(tunnel.providerTunnelId, tunnel.hostname);
+          await store.updateEdgeManagedTunnelStatus(agent.branchId, "revoked");
+        } catch (err) {
+          app.log.error({ err, tunnelId: tunnel.providerTunnelId }, "Failed to revoke managed tunnel");
+          // Continue with deletion even if tunnel revocation fails
+        }
+      }
+      
+      // Write audit log
+      await writeGatewayAudit(request, store, agent.branchId, "edge_gateway.deleted", { 
+        edgeAgentId: id,
+        gatewayName: agent.name,
+        deviceUuid: agent.deviceUuid
+      });
+      
+      return reply.code(204).send();
+      
+    } catch (error) {
+      app.log.error({ err: error, agentId: id }, "Failed to delete gateway");
+      
+      return reply.code(500).send({
+        error: "gateway_delete_failed",
+        message: error instanceof Error ? error.message : "Failed to delete gateway",
+        details: {
+          agentId: id,
+          timestamp: new Date().toISOString()
+        }
+      });
+    }
+  });
+
   app.get("/v1/edge-agents/:id/bootstrap", async (request, reply) => {
     const { id } = agentParams.parse(request.params);
     const agent = await store.getEdgeAgent(id);

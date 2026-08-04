@@ -768,6 +768,63 @@ export async function buildApp(options?: {
     return agent;
   });
 
+  /**
+   * DELETE gateway endpoint
+   * Admin-friendly alias for deleting/revoking edge gateways
+   * Maps /api/admin/system/gateways/:id to edge-agent deletion
+   */
+  app.delete("/api/admin/system/gateways/:id", async (request, reply) => {
+    const { id } = edgeAgentParams.parse(request.params);
+    
+    try {
+      // Get the agent to find its branch
+      const agent = await store.getEdgeAgent(id);
+      
+      if (!agent) {
+        return reply.code(404).send({ 
+          error: "gateway_not_found",
+          message: "Gateway not found" 
+        });
+      }
+      
+      // Check permissions
+      if (!(await requireAccess(request, reply, store, "device:configure", agent.branchId))) {
+        return;
+      }
+      
+      // Revoke the agent credential
+      await store.revokeEdgeAgentCredential(id);
+      
+      // Write audit log
+      await audit(
+        request,
+        store,
+        "edge_gateway.deleted",
+        agent.branchId,
+        "success",
+        { 
+          edgeAgentId: id,
+          gatewayName: agent.name,
+          deviceUuid: agent.deviceUuid
+        }
+      );
+      
+      return reply.code(204).send();
+      
+    } catch (error) {
+      app.log.error({ err: error, agentId: id }, "Failed to delete gateway");
+      
+      return reply.code(500).send({
+        error: "gateway_delete_failed",
+        message: error instanceof Error ? error.message : "Failed to delete gateway",
+        details: {
+          agentId: id,
+          timestamp: new Date().toISOString()
+        }
+      });
+    }
+  });
+
   // The edge agent receives only the opaque local-secret reference, never the RTSP URI itself.
   // This route is intentionally scoped to the agent identifier used for its telemetry endpoint.
   app.get("/v1/edge-agents/:id/cameras/monitoring", async (request, reply) => {
