@@ -464,9 +464,8 @@ async function scanBranch(options: { persistStreamSecrets?: boolean } = {}) {
     try {
       const ports = String(config.RTSP_SCAN_PORTS).split(",").map((p) => Number(p.trim())).filter(Boolean);
       const paths = String(config.RTSP_SCAN_PATHS).split(",").map((p) => p.trim()).filter(Boolean);
-      const cidr = config.RTSP_SCAN_CIDR as string | undefined;
-      const added = await discoverRtspDevices(branchId, agentId, {
-        cidr,
+      const cidr = config.RTSP_SCAN_CIDR ? String(config.RTSP_SCAN_CIDR).trim() : undefined;
+      const options = {
         ports,
         paths,
         ffprobePath: config.FFPROBE_PATH,
@@ -474,7 +473,11 @@ async function scanBranch(options: { persistStreamSecrets?: boolean } = {}) {
         concurrency: config.RTSP_SCAN_CONCURRENCY,
         username: config.CAMERA_USERNAME,
         password: config.CAMERA_PASSWORD,
-      }, control, secrets, persistStreamSecrets);
+      } satisfies Omit<import("./discovery/rtsp-network-scan.js").RtspScanOptions, "cidr">;
+      if (cidr) {
+        (options as import("./discovery/rtsp-network-scan.js").RtspScanOptions).cidr = cidr;
+      }
+      const added = await discoverRtspDevices(branchId, agentId, options as import("./discovery/rtsp-network-scan.js").RtspScanOptions, control, secrets, persistStreamSecrets);
       submitted += added;
       logger.info("RTSP network scan completed", { discovered: added });
     } catch (error) {

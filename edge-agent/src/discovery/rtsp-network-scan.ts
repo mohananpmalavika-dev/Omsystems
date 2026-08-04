@@ -34,10 +34,9 @@ function inferLocalCidrs(): string[] {
 function ipsFromCidr(cidr: string): string[] {
   // Support single IP or /24 CIDR. Keep simple and safe.
   if (!cidr) return [];
-  if (cidr.includes("/")) {
-    const parts = cidr.split("/");
-    const base = parts[0];
-    const prefix = Number(parts[1]);
+  const [base, prefixPart] = cidr.split("/");
+  if (prefixPart !== undefined && base) {
+    const prefix = Number(prefixPart);
     if (Number.isFinite(prefix) && prefix === 24) {
       const octets = base.split(".");
       if (octets.length === 4) {
@@ -125,7 +124,13 @@ export async function discoverRtspDevices(
             // omit port if 554
             if (port === 554) uri = `rtsp://${ip}${path}`;
             const authed = username ? attachCredentials(uri, { username, password }) : uri;
-            const probe = await probeRtsp(authed, ffprobePath, timeoutMs).catch((e) => ({ reachable: false, error: e instanceof Error ? e.message : String(e) }));
+            const probe = await probeRtsp(authed, ffprobePath, timeoutMs).catch((e) => ({
+            reachable: false,
+            codec: null,
+            width: null,
+            height: null,
+            error: e instanceof Error ? e.message : String(e),
+          }));
             if (probe && probe.reachable) {
               try {
                 const payload = {

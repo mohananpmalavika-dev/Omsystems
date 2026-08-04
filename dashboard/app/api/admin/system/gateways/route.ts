@@ -19,7 +19,7 @@ export async function GET(request: NextRequest) {
     };
     
     if (employeeSession) {
-      headers['authorization'] = `Bearer ${employeeSession}`;
+      headers['authorization'] = 'Bearer ' + employeeSession;
     } else {
       headers['x-user-id'] = devUserId;
     }
@@ -97,3 +97,4 @@ export async function GET(request: NextRequest) {
     return NextResponse.json([], { status: 200 });
   }
 }
+
