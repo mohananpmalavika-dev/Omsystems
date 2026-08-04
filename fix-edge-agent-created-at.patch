@@ -1,0 +1,54 @@
+--- a/src/database/edge-agent-repository.ts
++++ b/src/database/edge-agent-repository.ts
+@@ -13,6 +13,7 @@ type AgentRow = {
+   device_uuid: string | null;
+   credential_issued_at: Date | null;
+   credential_revoked_at: Date | null;
++  created_at: Date;
+ };
+ 
+ function mapAgent(row: AgentRow): EdgeAgent {
+@@ -24,6 +25,7 @@ function mapAgent(row: AgentRow): EdgeAgent {
+     status: row.status,
+     lastSeenAt: row.last_seen_at?.toISOString() ?? null,
++    createdAt: row.created_at.toISOString(),
+     ...(row.public_media_url ? { publicMediaUrl: row.public_media_url } : {}),
+     ...(row.device_uuid ? { deviceUuid: row.device_uuid } : {}),
+     credentialStatus: row.credential_revoked_at ? "revoked" : row.credential_issued_at ? "active" : "not-enrolled",
+@@ -67,7 +69,7 @@ export class EdgeAgentRepository {
+        WHERE id = $1 AND node_type = 'branch'
+        RETURNING id::text, branch_node_id::text, name, version, status,
+                  last_seen_at, public_media_url, device_uuid,
+-                 credential_issued_at, credential_revoked_at`,
++                 credential_issued_at, credential_revoked_at, created_at`,
+       [branchId, name, version],
+     );
+     if (!result.rows[0]) throw new Error("invalid_branch");
+@@ -81,7 +83,7 @@ export class EdgeAgentRepository {
+               CASE WHEN last_seen_at < now() - interval '90 seconds'
+                 THEN 'offline'::edge_agent_status ELSE status END AS status,
+               last_seen_at, public_media_url, device_uuid,
+-              credential_issued_at, credential_revoked_at
++              credential_issued_at, credential_revoked_at, created_at
+        FROM edge_agents
+        WHERE branch_node_id = $1
+        ORDER BY name, created_at`,
+@@ -96,7 +98,7 @@ export class EdgeAgentRepository {
+               CASE WHEN last_seen_at < now() - interval '90 seconds'
+                 THEN 'offline'::edge_agent_status ELSE status END AS status,
+               last_seen_at, public_media_url, device_uuid,
+-              credential_issued_at, credential_revoked_at
++              credential_issued_at, credential_revoked_at, created_at
+        FROM edge_agents WHERE id = $1`,
+       [id],
+     );
+@@ -110,7 +112,7 @@ export class EdgeAgentRepository {
+            public_media_url = COALESCE($3, public_media_url)
+        WHERE id = $1
+        RETURNING id::text, branch_node_id::text, name, version, status,
+                  last_seen_at, public_media_url, device_uuid,
+-                 credential_issued_at, credential_revoked_at`,
++                 credential_issued_at, credential_revoked_at, created_at`,
+       [id, version, publicMediaUrl ?? null],
+     );
+     return result.rows[0] ? mapAgent(result.rows[0]) : undefined;
