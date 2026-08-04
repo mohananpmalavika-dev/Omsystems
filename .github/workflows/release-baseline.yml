@@ -30,7 +30,7 @@ jobs:
         with: { node-version: 22, cache: npm }
       - run: npm ci
       - run: npm run security:audit
-      - uses: aquasecurity/trivy-action@0.30.0
+      - uses: aquasecurity/trivy-action@v0.30.0
         with:
           scan-type: fs
           scan-ref: .
