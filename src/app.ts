@@ -774,9 +774,21 @@ export async function buildApp(options?: {
    * Maps /api/admin/system/gateways/:id to edge-agent deletion
    */
   app.delete("/api/admin/system/gateways/:id", async (request, reply) => {
-    const { id } = edgeAgentParams.parse(request.params);
+    let id: string | undefined;
     
     try {
+      // Parse and validate ID
+      const parsed = edgeAgentParams.safeParse(request.params);
+      if (!parsed.success) {
+        return reply.code(400).send({
+          error: "invalid_gateway_id",
+          message: "Invalid gateway ID format",
+          details: parsed.error.errors
+        });
+      }
+      
+      id = parsed.data.id;
+      
       // Get the agent to find its branch
       const agent = await store.getEdgeAgent(id);
       
@@ -788,8 +800,9 @@ export async function buildApp(options?: {
       }
       
       // Check permissions
-      if (!(await requireAccess(request, reply, store, "device:configure", agent.branchId))) {
-        return;
+      const accessCheck = await requireAccess(request, reply, store, "device:configure", agent.branchId);
+      if (!accessCheck) {
+        return; // requireAccess already sent the response
       }
       
       // Revoke the agent credential
@@ -814,12 +827,18 @@ export async function buildApp(options?: {
     } catch (error) {
       app.log.error({ err: error, agentId: id }, "Failed to delete gateway");
       
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      const errorStack = error instanceof Error ? error.stack : undefined;
+      
       return reply.code(500).send({
         error: "gateway_delete_failed",
-        message: error instanceof Error ? error.message : "Failed to delete gateway",
+        message: errorMessage,
         details: {
-          agentId: id,
-          timestamp: new Date().toISOString()
+          agentId: id || 'unknown',
+          timestamp: new Date().toISOString(),
+          errorType: error instanceof Error ? error.constructor.name : typeof error,
+          // Include stack trace in development for debugging
+          ...(process.env.NODE_ENV !== 'production' && errorStack ? { stack: errorStack } : {})
         }
       });
     }
