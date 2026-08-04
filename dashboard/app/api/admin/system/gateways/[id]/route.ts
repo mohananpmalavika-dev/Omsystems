@@ -34,12 +34,31 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
       headers['x-edge-bridge-key'] = bridgeKey;
     }
     
-    // Delete gateway via backend API
-    // Use the new DELETE endpoint that handles everything
+    // First, get the edge agent to find its branchId
+    // We need the branchId to call the revoke endpoint
+    const agentResponse = await fetch(
+      `${controlPlaneUrl}/v1/edge-agents/${id}`,
+      { method: 'GET', headers }
+    );
+    
+    if (!agentResponse.ok) {
+      if (agentResponse.status === 404) {
+        return NextResponse.json(
+          { error: 'gateway_not_found', message: 'Gateway not found' },
+          { status: 404 }
+        );
+      }
+      const error = await agentResponse.json().catch(() => ({ error: 'unknown_error' }));
+      return NextResponse.json(error, { status: agentResponse.status });
+    }
+    
+    const agent = await agentResponse.json();
+    
+    // Now revoke the edge agent using the existing endpoint
     const response = await fetch(
-      `${controlPlaneUrl}/api/admin/system/gateways/${id}`,
+      `${controlPlaneUrl}/v1/branches/${agent.branchId}/edge-agents/${id}/revoke`,
       {
-        method: 'DELETE',
+        method: 'POST',
         headers,
       }
     );
@@ -58,7 +77,7 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
   } catch (error) {
     console.error('Error deleting gateway:', error);
     return NextResponse.json(
-      { error: 'Internal server error', message: String(error) },
+      { error: 'internal_error', message: String(error) },
       { status: 500 }
     );
   }
