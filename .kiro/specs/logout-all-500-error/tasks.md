@@ -1,0 +1,95 @@
+# Implementation Plan
+
+- [ ] 1. Write bug condition exploration test
+  - **Property 1: Bug Condition** - Logout-All Returns 500 Error
+  - **CRITICAL**: This test MUST FAIL on unfixed code - failure confirms the bug exists
+  - **DO NOT attempt to fix the test or the code when it fails**
+  - **NOTE**: This test encodes the expected behavior - it will validate the fix when it passes after implementation
+  - **GOAL**: Surface counterexamples that demonstrate the bug exists
+  - **Scoped PBT Approach**: Scope the property to concrete failing cases - authenticated requests to `/v1/auth/logout-all` endpoint
+  - Test that POST /v1/auth/logout-all with valid bearer token returns 200 with `{ success: true }`
+  - Test that all user sessions are successfully deleted after logout-all
+  - Test with multiple sessions (e.g., 3 sessions for same user) to verify all are deleted
+  - Test single session logout endpoint `/v1/auth/logout` to verify if same issue exists
+  - The test assertions should match the Expected Behavior Properties from design:
+    - Status code MUST be 200 (not 500)
+    - Response body MUST be `{ success: true }`
+    - All user sessions MUST be deleted from the database
+  - Run test on UNFIXED code
+  - **EXPECTED OUTCOME**: Test FAILS with 500 errors (this is correct - it proves the bug exists)
+  - Document counterexamples found:
+    - Which endpoints return 500 errors (logout-all, logout, or both)
+    - Error messages or stack traces from logs
+    - Database state after failed attempts
+  - Mark task complete when test is written, run, and failure is documented
+  - _Requirements: 1.1, 2.1, 2.2_
+
+- [ ] 2. Write preservation property tests (BEFORE implementing fix)
+  - **Property 2: Preservation** - Non-Logout Authenticated Requests Update Session Activity
+  - **IMPORTANT**: Follow observation-first methodology
+  - Observe behavior on UNFIXED code for non-buggy inputs (authenticated endpoints that are NOT logout endpoints)
+  - Observe: GET /auth/me with valid token updates session activity timestamp on unfixed code
+  - Observe: POST /incidents with valid token updates session activity timestamp on unfixed code
+  - Observe: GET /cameras with valid token updates session activity timestamp on unfixed code
+  - Write property-based tests capturing observed behavior patterns:
+    - For all authenticated non-logout endpoints, verify session activity is updated
+    - Generate random authenticated API requests (excluding logout endpoints)
+    - Verify `updateSessionActivity` is called for each request
+    - Verify `request.currentUser` and `request.sessionId` are populated correctly
+  - Property-based testing generates many test cases for stronger guarantees
+  - Run tests on UNFIXED code
+  - **EXPECTED OUTCOME**: Tests PASS (this confirms baseline behavior to preserve)
+  - Mark task complete when tests are written, run, and passing on unfixed code
+  - _Requirements: 3.2, 3.4_
+
+- [ ] 3. Fix for logout-all endpoint 500 error
+
+  - [ ] 3.1 Implement the fix in auth middleware
+    - Modify `src/middleware/auth.middleware.ts`
+    - After successful token validation and user lookup (around line 94, after checking user status)
+    - Add logout endpoint detection logic:
+      - Check if `request.url` includes `/auth/logout` or `/auth/logout-all`
+      - Use URL parsing or string matching to identify logout endpoints
+    - Skip session activity update for logout endpoints:
+      - Wrap the `updateSessionActivity(session.id)` call in a conditional
+      - Only execute `updateSessionActivity` if request is NOT for logout endpoints
+      - Original: `await store.updateSessionActivity(session.id);`
+      - Modified: Execute only for non-logout endpoints
+    - Preserve token validation and user attachment for logout endpoints:
+      - Ensure `request.currentUser` and `request.sessionId` are still populated
+      - Only skip the activity update, not the authentication logic
+    - Add explanatory comment documenting why session activity updates are skipped for logout endpoints
+    - _Bug_Condition: isBugCondition(input) where input.url contains '/v1/auth/logout-all' AND authMiddleware calls updateSessionActivity(sessionId) AND updateSessionActivity conflicts with deleteAllUserSessions_
+    - _Expected_Behavior: For logout endpoint requests, authMiddleware SHALL skip session activity updates, allow request to proceed to route handler, and route handler SHALL successfully delete sessions and return { success: true } with status 200_
+    - _Preservation: Authentication middleware MUST continue to validate tokens and populate request.currentUser for all authenticated endpoints; Session activity timestamps MUST continue to be updated for all non-logout authenticated requests_
+    - _Requirements: 1.1, 1.2, 2.1, 2.2, 3.2, 3.4_
+
+  - [ ] 3.2 Verify bug condition exploration test now passes
+    - **Property 1: Expected Behavior** - Logout-All Succeeds with 200 Status
+    - **IMPORTANT**: Re-run the SAME test from task 1 - do NOT write a new test
+    - The test from task 1 encodes the expected behavior
+    - When this test passes, it confirms the expected behavior is satisfied
+    - Run bug condition exploration test from step 1
+    - Verify POST /v1/auth/logout-all returns 200 with `{ success: true }`
+    - Verify all user sessions are deleted successfully
+    - Verify single session logout endpoint also works correctly
+    - **EXPECTED OUTCOME**: Test PASSES (confirms bug is fixed)
+    - _Requirements: 2.1, 2.2, 2.3, 2.4_
+
+  - [ ] 3.3 Verify preservation tests still pass
+    - **Property 2: Preservation** - Session Activity Updates Unchanged for Non-Logout Endpoints
+    - **IMPORTANT**: Re-run the SAME tests from task 2 - do NOT write new tests
+    - Run preservation property tests from step 2
+    - Verify session activity timestamps are still updated for non-logout authenticated requests
+    - Verify GET /auth/me, POST /incidents, GET /cameras still update session activity
+    - Verify token validation logic is unchanged
+    - Verify `request.currentUser` and `request.sessionId` are still populated for all authenticated endpoints
+    - **EXPECTED OUTCOME**: Tests PASS (confirms no regressions)
+    - Confirm all tests still pass after fix (no regressions)
+    - _Requirements: 3.1, 3.2, 3.3, 3.4, 3.5_
+
+- [ ] 4. Checkpoint - Ensure all tests pass
+  - Run full test suite to verify no regressions
+  - Manually test logout-all endpoint from dashboard to confirm fix works end-to-end
+  - Verify audit logs are created correctly for logout-all operations
+  - If any issues arise, document them and ask the user for guidance

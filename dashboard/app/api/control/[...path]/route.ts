@@ -32,7 +32,7 @@ async function proxyControlRequest(request: NextRequest, context: RouteContext) 
   const forwardedFor = request.headers.get("x-forwarded-for");
   if (forwardedFor) headers.set("x-forwarded-for", forwardedFor);
   if (employeeSession) {
-    headers.set("authorization", `Bearer ${employeeSession}`);
+    headers.set("authorization", 'Bearer ' + employeeSession)
   } else {
     headers.set(
       "x-user-id",
