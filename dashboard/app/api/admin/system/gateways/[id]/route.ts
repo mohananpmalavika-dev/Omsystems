@@ -34,24 +34,31 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
       headers['x-edge-bridge-key'] = bridgeKey;
     }
     
-    // Note: There's no DELETE endpoint for edge agents in the control plane API
-    // Edge agents are typically deactivated or removed through branch management
-    // For now, return a helpful error message
-    
-    console.warn(`Delete edge agent ${id} not implemented - no backend endpoint available`);
-    
-    return NextResponse.json(
-      { 
-        error: 'not_implemented',
-        message: 'Edge agent deletion is not currently supported through this API. Please deactivate the edge agent through branch management or contact support.'
-      },
-      { status: 501 }
+    // Delete gateway via backend API
+    // Use the new DELETE endpoint that handles everything
+    const response = await fetch(
+      `${controlPlaneUrl}/api/admin/system/gateways/${id}`,
+      {
+        method: 'DELETE',
+        headers,
+      }
     );
+    
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ error: 'unknown_error' }));
+      return NextResponse.json(
+        error,
+        { status: response.status }
+      );
+    }
+    
+    // Success - return 204 No Content
+    return new NextResponse(null, { status: 204 });
     
   } catch (error) {
     console.error('Error deleting gateway:', error);
     return NextResponse.json(
-      { error: 'Internal server error' },
+      { error: 'Internal server error', message: String(error) },
       { status: 500 }
     );
   }
