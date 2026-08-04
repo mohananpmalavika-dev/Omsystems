@@ -1,678 +1,693 @@
 /**
  * Analog Video Quality Detector
- * Detects analog camera video artifacts and quality issues
  * 
- * Detects:
- * - Snow/Noise
- * - Rolling lines
- * - Signal loss
- * - Ghosting
+ * Detects various video quality issues specific to analog cameras:
+ * - Snow/static noise
+ * - Rolling lines (vertical/horizontal)
+ * - Signal loss/weak signal
+ * - Ghosting/double images
  * - Color distortion
- * - Weak signal
- * - Blur/Defocus
+ * - Blur/defocus
  * - Dirty lens
  * - Water drops
  * - Cobwebs
  * - Interlacing artifacts
+ * - Jitter/sync issues
  */
 
-import { BaseDetector, type DetectionFrame, type DetectionResult } from "./base-detector.js";
+import { BaseDetector } from './base-detector';
+import { DetectionResult } from '../types';
+import Jimp from 'jimp';
 
-export interface VideoQualityMetrics {
-  brightness: number;
-  contrast: number;
-  sharpness: number;
-  noise: number;
-  colorSaturation: number;
-  blockiness: number;
-  interlacing: number;
-}
-
-export interface QualityIssue {
-  type: 'snow' | 'rolling-lines' | 'signal-loss' | 'ghosting' | 'color-distortion' | 
-        'weak-signal' | 'blur' | 'defocus' | 'dirty-lens' | 'water-drops' | 
-        'cobweb' | 'interlacing' | 'frozen' | 'blank';
+export interface VideoQualityIssue {
+  type: 'snow' | 'rolling_lines' | 'signal_loss' | 'ghosting' | 'color_distortion' |
+        'blur' | 'defocus' | 'dirty_lens' | 'water_drops' | 'cobwebs' |
+        'interlacing' | 'jitter' | 'weak_signal' | 'frozen';
   severity: 'low' | 'medium' | 'high' | 'critical';
   confidence: number;
-  affectedArea?: number; // Percentage of frame
   description: string;
+  recommendation: string;
 }
 
-interface CameraQualityHistory {
-  cameraId: string;
-  metricsHistory: Array<{ timestamp: Date; metrics: VideoQualityMetrics }>;
-  issuesHistory: Array<{ timestamp: Date; issues: QualityIssue[] }>;
-  consecutiveIssueFrames: number;
-  qualityScore: number; // 0-100
-  degradationTrend: 'improving' | 'stable' | 'degrading' | 'critical';
-  lastFrameHash?: string;
-  frozenFrameCount: number;
+export interface VideoQualityAnalysis {
+  overall_score: number; // 0-100, 100 = perfect quality
+  issues: VideoQualityIssue[];
+  degradation_trend?: 'improving' | 'stable' | 'degrading';
+  camera_health_impact: 'none' | 'low' | 'medium' | 'high' | 'critical';
+  action_required: boolean;
+  timestamp: string;
 }
 
 export class AnalogVideoQualityDetector extends BaseDetector {
-  private cameraHistory = new Map<string, CameraQualityHistory>();
-  
-  // Configuration thresholds
-  private readonly NOISE_THRESHOLD_LOW = 15;
-  private readonly NOISE_THRESHOLD_HIGH = 30;
-  private readonly SHARPNESS_THRESHOLD_LOW = 20;
-  private readonly CONTRAST_THRESHOLD_LOW = 15;
-  private readonly HISTORY_SIZE = 50;
-  private readonly FROZEN_FRAME_THRESHOLD = 5;
-  private readonly CONSECUTIVE_ISSUE_THRESHOLD = 3;
+  private historyBuffer: Map<string, number[]> = new Map(); // Track quality scores over time
+  private readonly HISTORY_SIZE = 100; // Keep last 100 measurements
 
   constructor() {
-    super("analog-video-quality", "1.0.0");
+    super('analog_video_quality', {
+      enabled: true,
+      sensitivity: 0.7,
+      minConfidence: 0.6
+    });
   }
 
-  async initialize(): Promise<void> {
-    console.log("Initializing analog video quality detector...");
-  }
-
-  async detect(frame: DetectionFrame): Promise<DetectionResult[]> {
-    const results: DetectionResult[] = [];
-    
-    // Get or create camera history
-    let history = this.cameraHistory.get(frame.cameraId);
-    if (!history) {
-      history = {
-        cameraId: frame.cameraId,
-        metricsHistory: [],
-        issuesHistory: [],
-        consecutiveIssueFrames: 0,
-        qualityScore: 100,
-        degradationTrend: 'stable',
-        frozenFrameCount: 0,
+  async detect(frame: Buffer, metadata?: any): Promise<DetectionResult> {
+    try {
+      const image = await Jimp.read(frame);
+      const cameraId = metadata?.cameraId || 'unknown';
+      
+      const analysis: VideoQualityAnalysis = {
+        overall_score: 100,
+        issues: [],
+        camera_health_impact: 'none',
+        action_required: false,
+        timestamp: new Date().toISOString()
       };
-      this.cameraHistory.set(frame.cameraId, history);
-    }
 
-    // Calculate video quality metrics
-    const metrics = this.calculateQualityMetrics(frame.imageData, frame.width, frame.height);
-    
-    // Store metrics in history
-    history.metricsHistory.push({
-      timestamp: frame.timestamp,
-      metrics,
-    });
-    if (history.metricsHistory.length > this.HISTORY_SIZE) {
-      history.metricsHistory.shift();
-    }
+      // Run all quality checks
+      await this.detectSnow(image, analysis);
+      await this.detectRollingLines(image, analysis);
+      await this.detectSignalLoss(image, analysis);
+      await this.detectGhosting(image, analysis);
+      await this.detectColorDistortion(image, analysis);
+      await this.detectBlur(image, analysis);
+      await this.detectDirtyLens(image, analysis);
+      await this.detectWaterDrops(image, analysis);
+      await this.detectCobwebs(image, analysis);
+      await this.detectInterlacing(image, analysis);
+      await this.detectFrozenFrame(image, analysis, cameraId);
 
-    // Detect quality issues
-    const issues = this.detectQualityIssues(frame, metrics, history);
-    
-    // Store issues in history
-    history.issuesHistory.push({
-      timestamp: frame.timestamp,
-      issues,
-    });
-    if (history.issuesHistory.length > this.HISTORY_SIZE) {
-      history.issuesHistory.shift();
-    }
-
-    // Update consecutive issue counter
-    if (issues.length > 0) {
-      history.consecutiveIssueFrames++;
-    } else {
-      history.consecutiveIssueFrames = 0;
-    }
-
-    // Calculate overall quality score
-    history.qualityScore = this.calculateQualityScore(metrics, issues);
-    
-    // Determine degradation trend
-    history.degradationTrend = this.calculateDegradationTrend(history);
-
-    // Generate detection results for significant issues
-    if (issues.length > 0 && history.consecutiveIssueFrames >= this.CONSECUTIVE_ISSUE_THRESHOLD) {
-      const criticalIssues = issues.filter(i => i.severity === 'critical' || i.severity === 'high');
+      // Calculate overall score based on issues
+      analysis.overall_score = this.calculateOverallScore(analysis.issues);
       
-      if (criticalIssues.length > 0) {
-        results.push({
-          detectionType: "analog-video-quality-issue",
-          confidence: this.calculateAverageConfidence(criticalIssues),
-          objects: [],
-          metadata: {
-            issues: issues.map(i => ({
-              type: i.type,
-              severity: i.severity,
-              description: i.description,
-              affectedArea: i.affectedArea,
-            })),
-            metrics,
-            qualityScore: history.qualityScore,
-            degradationTrend: history.degradationTrend,
-            consecutiveFrames: history.consecutiveIssueFrames,
-          },
-          requiresAlert: criticalIssues.some(i => i.severity === 'critical'),
-        });
-      }
-    }
+      // Update history and detect trends
+      this.updateHistory(cameraId, analysis.overall_score);
+      analysis.degradation_trend = this.analyzeTrend(cameraId);
 
-    // Check for frozen frame
-    const currentHash = this.calculateFrameHash(frame.imageData);
-    if (history.lastFrameHash === currentHash) {
-      history.frozenFrameCount++;
-      
-      if (history.frozenFrameCount >= this.FROZEN_FRAME_THRESHOLD) {
-        results.push({
-          detectionType: "frozen-video-feed",
-          confidence: 0.95,
-          objects: [],
-          metadata: {
-            frozenFrames: history.frozenFrameCount,
-            description: "Video feed appears to be frozen",
-          },
-          requiresAlert: true,
-        });
-      }
-    } else {
-      history.frozenFrameCount = 0;
-    }
-    history.lastFrameHash = currentHash;
+      // Determine camera health impact
+      analysis.camera_health_impact = this.assessHealthImpact(analysis.issues);
+      analysis.action_required = analysis.camera_health_impact === 'high' || 
+                                  analysis.camera_health_impact === 'critical';
 
-    return results;
-  }
-
-  /**
-   * Calculate video quality metrics
-   */
-  private calculateQualityMetrics(
-    imageData: Buffer,
-    width: number,
-    height: number
-  ): VideoQualityMetrics {
-    const pixelCount = width * height;
-    
-    // Calculate brightness
-    let totalBrightness = 0;
-    let totalSaturation = 0;
-    const brightnesses: number[] = [];
-    
-    for (let i = 0; i < imageData.length; i += 3) {
-      const r = imageData[i] ?? 0;
-      const g = imageData[i + 1] ?? 0;
-      const b = imageData[i + 2] ?? 0;
-      
-      // Perceived brightness
-      const brightness = 0.299 * r + 0.587 * g + 0.114 * b;
-      totalBrightness += brightness;
-      brightnesses.push(brightness);
-      
-      // Color saturation
-      const max = Math.max(r, g, b);
-      const min = Math.min(r, g, b);
-      const saturation = max === 0 ? 0 : (max - min) / max;
-      totalSaturation += saturation;
-    }
-    
-    const avgBrightness = totalBrightness / pixelCount;
-    const avgSaturation = totalSaturation / pixelCount;
-    
-    // Calculate contrast (standard deviation of brightness)
-    let varianceSum = 0;
-    for (const brightness of brightnesses) {
-      varianceSum += Math.pow(brightness - avgBrightness, 2);
-    }
-    const contrast = Math.sqrt(varianceSum / pixelCount);
-    
-    // Calculate noise (high-frequency variation)
-    const noise = this.calculateNoise(imageData, width, height);
-    
-    // Calculate sharpness (edge detection strength)
-    const sharpness = this.calculateSharpness(imageData, width, height);
-    
-    // Calculate blockiness (compression artifacts)
-    const blockiness = this.calculateBlockiness(imageData, width, height);
-    
-    // Calculate interlacing artifacts
-    const interlacing = this.calculateInterlacing(imageData, width, height);
-    
-    return {
-      brightness: avgBrightness,
-      contrast,
-      sharpness,
-      noise,
-      colorSaturation: avgSaturation * 100,
-      blockiness,
-      interlacing,
-    };
-  }
-
-  /**
-   * Calculate noise level
-   */
-  private calculateNoise(imageData: Buffer, width: number, height: number): number {
-    let noiseSum = 0;
-    let count = 0;
-    
-    // Sample every 10th pixel for performance
-    for (let y = 1; y < height - 1; y++) {
-      for (let x = 1; x < width - 1; x += 10) {
-        const idx = (y * width + x) * 3;
-        const centerR = imageData[idx] ?? 0;
-        
-        // Compare with neighbors
-        const leftIdx = (y * width + (x - 1)) * 3;
-        const rightIdx = (y * width + (x + 1)) * 3;
-        const topIdx = ((y - 1) * width + x) * 3;
-        const bottomIdx = ((y + 1) * width + x) * 3;
-        
-        const leftR = imageData[leftIdx] ?? 0;
-        const rightR = imageData[rightIdx] ?? 0;
-        const topR = imageData[topIdx] ?? 0;
-        const bottomR = imageData[bottomIdx] ?? 0;
-        
-        const avgNeighbor = (leftR + rightR + topR + bottomR) / 4;
-        const diff = Math.abs(centerR - avgNeighbor);
-        
-        noiseSum += diff;
-        count++;
-      }
-    }
-    
-    return count > 0 ? noiseSum / count : 0;
-  }
-
-  /**
-   * Calculate sharpness (edge strength)
-   */
-  private calculateSharpness(imageData: Buffer, width: number, height: number): number {
-    let edgeSum = 0;
-    let count = 0;
-    
-    // Sobel operator for edge detection
-    for (let y = 1; y < height - 1; y++) {
-      for (let x = 1; x < width - 1; x += 10) {
-        const idx = (y * width + x) * 3;
-        
-        // Get 3x3 neighborhood
-        const pixels: number[] = [];
-        for (let dy = -1; dy <= 1; dy++) {
-          for (let dx = -1; dx <= 1; dx++) {
-            const nIdx = ((y + dy) * width + (x + dx)) * 3;
-            pixels.push(imageData[nIdx] ?? 0);
-          }
+      return {
+        detected: analysis.issues.length > 0,
+        confidence: this.calculateAverageConfidence(analysis.issues),
+        objects: analysis.issues.map(issue => ({
+          class: issue.type,
+          confidence: issue.confidence,
+          bbox: { x: 0, y: 0, width: image.bitmap.width, height: image.bitmap.height }
+        })),
+        metadata: {
+          analysis,
+          processing_time_ms: 0
         }
-        
-        // Sobel X and Y
-        const gx = -pixels[0]! + pixels[2]! - 2 * pixels[3]! + 2 * pixels[5]! - pixels[6]! + pixels[8]!;
-        const gy = -pixels[0]! - 2 * pixels[1]! - pixels[2]! + pixels[6]! + 2 * pixels[7]! + pixels[8]!;
-        
-        const magnitude = Math.sqrt(gx * gx + gy * gy);
-        edgeSum += magnitude;
-        count++;
-      }
+      };
+
+    } catch (error) {
+      this.logger.error('Video quality detection failed', error);
+      throw error;
     }
-    
-    return count > 0 ? edgeSum / count : 0;
   }
 
   /**
-   * Calculate blockiness (compression artifacts)
+   * Detect snow/static noise in the image
    */
-  private calculateBlockiness(imageData: Buffer, width: number, height: number): number {
-    let blockiness = 0;
-    let count = 0;
+  private async detectSnow(image: Jimp, analysis: VideoQualityAnalysis): Promise<void> {
+    const width = image.bitmap.width;
+    const height = image.bitmap.height;
     
-    // Check for 8x8 block boundaries (common in analog and digital compression)
-    for (let y = 8; y < height; y += 8) {
-      for (let x = 0; x < width; x += 10) {
-        const topIdx = ((y - 1) * width + x) * 3;
-        const bottomIdx = (y * width + x) * 3;
-        
-        const topR = imageData[topIdx] ?? 0;
-        const bottomR = imageData[bottomIdx] ?? 0;
-        
-        blockiness += Math.abs(topR - bottomR);
-        count++;
-      }
+    // Sample pixels and calculate variance
+    let variance = 0;
+    let mean = 0;
+    const sampleSize = Math.min(1000, width * height);
+    
+    for (let i = 0; i < sampleSize; i++) {
+      const x = Math.floor(Math.random() * width);
+      const y = Math.floor(Math.random() * height);
+      const pixel = Jimp.intToRGBA(image.getPixelColor(x, y));
+      const gray = (pixel.r + pixel.g + pixel.b) / 3;
+      mean += gray;
     }
-    
-    return count > 0 ? blockiness / count : 0;
-  }
+    mean /= sampleSize;
 
-  /**
-   * Calculate interlacing artifacts
-   */
-  private calculateInterlacing(imageData: Buffer, width: number, height: number): number {
-    let interlacing = 0;
-    let count = 0;
-    
-    // Check alternating line differences (interlacing pattern)
-    for (let y = 2; y < height - 2; y += 2) {
-      for (let x = 0; x < width; x += 10) {
-        const evenIdx = (y * width + x) * 3;
-        const oddIdx = ((y + 1) * width + x) * 3;
-        const nextEvenIdx = ((y + 2) * width + x) * 3;
-        
-        const evenR = imageData[evenIdx] ?? 0;
-        const oddR = imageData[oddIdx] ?? 0;
-        const nextEvenR = imageData[nextEvenIdx] ?? 0;
-        
-        // Interlacing shows high difference between odd/even lines
-        const evenDiff = Math.abs(evenR - nextEvenR);
-        const oddDiff = Math.abs(oddR - evenR);
-        
-        if (oddDiff > evenDiff * 2) {
-          interlacing += oddDiff - evenDiff;
-          count++;
-        }
-      }
+    for (let i = 0; i < sampleSize; i++) {
+      const x = Math.floor(Math.random() * width);
+      const y = Math.floor(Math.random() * height);
+      const pixel = Jimp.intToRGBA(image.getPixelColor(x, y));
+      const gray = (pixel.r + pixel.g + pixel.b) / 3;
+      variance += Math.pow(gray - mean, 2);
     }
-    
-    return count > 0 ? interlacing / count : 0;
-  }
+    variance /= sampleSize;
 
-  /**
-   * Detect specific quality issues
-   */
-  private detectQualityIssues(
-    frame: DetectionFrame,
-    metrics: VideoQualityMetrics,
-    history: CameraQualityHistory
-  ): QualityIssue[] {
-    const issues: QualityIssue[] = [];
-
-    // Snow/Noise detection
-    if (metrics.noise > this.NOISE_THRESHOLD_HIGH) {
-      issues.push({
+    // High variance with random distribution indicates snow
+    if (variance > 2000) {
+      const severity = variance > 5000 ? 'critical' : variance > 3500 ? 'high' : 'medium';
+      const confidence = Math.min(0.95, variance / 6000);
+      
+      analysis.issues.push({
         type: 'snow',
-        severity: metrics.noise > 40 ? 'critical' : 'high',
+        severity,
+        confidence,
+        description: 'Video noise/snow detected - weak analog signal',
+        recommendation: 'Check cable connections, cable quality, and signal strength'
+      });
+    }
+  }
+
+  /**
+   * Detect rolling lines (horizontal or vertical)
+   */
+  private async detectRollingLines(image: Jimp, analysis: VideoQualityAnalysis): Promise<void> {
+    const width = image.bitmap.width;
+    const height = image.bitmap.height;
+    
+    // Check for horizontal line patterns
+    const rowVariances: number[] = [];
+    for (let y = 0; y < height; y += 5) {
+      let rowSum = 0;
+      for (let x = 0; x < width; x += 5) {
+        const pixel = Jimp.intToRGBA(image.getPixelColor(x, y));
+        rowSum += (pixel.r + pixel.g + pixel.b) / 3;
+      }
+      rowVariances.push(rowSum / (width / 5));
+    }
+
+    // Detect periodic patterns indicating rolling
+    const periodicScore = this.detectPeriodicPattern(rowVariances);
+    
+    if (periodicScore > 0.6) {
+      const severity = periodicScore > 0.85 ? 'critical' : periodicScore > 0.75 ? 'high' : 'medium';
+      
+      analysis.issues.push({
+        type: 'rolling_lines',
+        severity,
+        confidence: periodicScore,
+        description: 'Rolling lines detected - sync issues',
+        recommendation: 'Check power supply, grounding, and video signal timing'
+      });
+    }
+  }
+
+  /**
+   * Detect signal loss (black screen, very dark image)
+   */
+  private async detectSignalLoss(image: Jimp, analysis: VideoQualityAnalysis): Promise<void> {
+    const width = image.bitmap.width;
+    const height = image.bitmap.height;
+    
+    let totalBrightness = 0;
+    const sampleSize = Math.min(500, width * height);
+    
+    for (let i = 0; i < sampleSize; i++) {
+      const x = Math.floor(Math.random() * width);
+      const y = Math.floor(Math.random() * height);
+      const pixel = Jimp.intToRGBA(image.getPixelColor(x, y));
+      totalBrightness += (pixel.r + pixel.g + pixel.b) / 3;
+    }
+    
+    const avgBrightness = totalBrightness / sampleSize;
+    
+    if (avgBrightness < 15) {
+      analysis.issues.push({
+        type: 'signal_loss',
+        severity: 'critical',
+        confidence: 0.95,
+        description: 'No video signal detected',
+        recommendation: 'Check camera power, cable connection, and DVR input'
+      });
+    } else if (avgBrightness < 30) {
+      analysis.issues.push({
+        type: 'weak_signal',
+        severity: 'high',
         confidence: 0.85,
-        description: 'High noise/snow detected in video signal',
-      });
-    } else if (metrics.noise > this.NOISE_THRESHOLD_LOW) {
-      issues.push({
-        type: 'weak-signal',
-        severity: 'medium',
-        confidence: 0.75,
-        description: 'Weak analog signal with visible noise',
+        description: 'Weak video signal - very dark image',
+        recommendation: 'Check cable length, signal amplification, and termination'
       });
     }
+  }
 
-    // Blur/Defocus detection
-    if (metrics.sharpness < this.SHARPNESS_THRESHOLD_LOW) {
-      const isBlur = metrics.noise < this.NOISE_THRESHOLD_LOW;
-      issues.push({
-        type: isBlur ? 'blur' : 'defocus',
-        severity: metrics.sharpness < 10 ? 'high' : 'medium',
-        confidence: 0.80,
-        description: isBlur ? 'Image appears blurred' : 'Camera appears defocused',
-      });
-    }
-
-    // Low contrast (dirty lens, fog, spray)
-    if (metrics.contrast < this.CONTRAST_THRESHOLD_LOW) {
-      issues.push({
-        type: 'dirty-lens',
-        severity: metrics.contrast < 5 ? 'high' : 'medium',
-        confidence: 0.70,
-        description: 'Low contrast - possible dirty lens or obstruction',
-      });
-    }
-
-    // Color distortion
-    if (metrics.colorSaturation < 10) {
-      issues.push({
-        type: 'color-distortion',
-        severity: 'medium',
-        confidence: 0.75,
-        description: 'Color saturation loss - possible cable or camera issue',
-      });
-    }
-
-    // Interlacing artifacts
-    if (metrics.interlacing > 8) {
-      issues.push({
-        type: 'interlacing',
-        severity: 'low',
-        confidence: 0.65,
-        description: 'Interlacing artifacts detected',
-      });
-    }
-
-    // Blockiness (compression or signal issues)
-    if (metrics.blockiness > 15) {
-      issues.push({
-        type: 'signal-loss',
-        severity: metrics.blockiness > 25 ? 'high' : 'medium',
-        confidence: 0.80,
-        description: 'Block artifacts - possible signal degradation',
-      });
-    }
-
-    // Rolling lines detection (analyze history)
-    if (history.metricsHistory.length >= 5) {
-      const rollingLines = this.detectRollingLines(history.metricsHistory);
-      if (rollingLines) {
-        issues.push({
-          type: 'rolling-lines',
-          severity: 'high',
-          confidence: 0.90,
-          description: 'Rolling lines detected - power or sync issue',
-        });
+  /**
+   * Detect ghosting (double images)
+   */
+  private async detectGhosting(image: Jimp, analysis: VideoQualityAnalysis): Promise<void> {
+    const width = image.bitmap.width;
+    const height = image.bitmap.height;
+    
+    // Look for edge duplications with slight offset
+    let ghostingScore = 0;
+    const samples = 50;
+    
+    for (let i = 0; i < samples; i++) {
+      const x = Math.floor(Math.random() * (width - 20)) + 10;
+      const y = Math.floor(Math.random() * height);
+      
+      const pixel1 = Jimp.intToRGBA(image.getPixelColor(x, y));
+      const pixel2 = Jimp.intToRGBA(image.getPixelColor(x + 5, y));
+      const pixel3 = Jimp.intToRGBA(image.getPixelColor(x + 10, y));
+      
+      const grad1 = Math.abs((pixel1.r + pixel1.g + pixel1.b) - (pixel2.r + pixel2.g + pixel2.b));
+      const grad2 = Math.abs((pixel2.r + pixel2.g + pixel2.b) - (pixel3.r + pixel3.g + pixel3.b));
+      
+      if (grad1 > 50 && grad2 > 50 && Math.abs(grad1 - grad2) < 20) {
+        ghostingScore++;
       }
     }
-
-    // Ghosting detection (double images)
-    const ghosting = this.detectGhosting(frame.imageData, frame.width, frame.height);
-    if (ghosting > 0.7) {
-      issues.push({
+    
+    const ghostingRatio = ghostingScore / samples;
+    
+    if (ghostingRatio > 0.3) {
+      const severity = ghostingRatio > 0.6 ? 'high' : 'medium';
+      
+      analysis.issues.push({
         type: 'ghosting',
-        severity: 'medium',
-        confidence: ghosting,
-        description: 'Ghosting/double image detected - cable reflection issue',
+        severity,
+        confidence: Math.min(0.9, ghostingRatio * 1.5),
+        description: 'Ghosting/double image detected',
+        recommendation: 'Check for signal reflections, use proper impedance, check cable termination'
       });
     }
-
-    return issues;
   }
 
   /**
-   * Detect rolling lines pattern
+   * Detect color distortion
    */
-  private detectRollingLines(
-    metricsHistory: Array<{ timestamp: Date; metrics: VideoQualityMetrics }>
-  ): boolean {
-    // Check for periodic brightness fluctuations
-    const recentMetrics = metricsHistory.slice(-10);
-    const brightnesses = recentMetrics.map(m => m.metrics.brightness);
+  private async detectColorDistortion(image: Jimp, analysis: VideoQualityAnalysis): Promise<void> {
+    const width = image.bitmap.width;
+    const height = image.bitmap.height;
     
-    if (brightnesses.length < 5) return false;
+    let redBias = 0;
+    let greenBias = 0;
+    let blueBias = 0;
+    const sampleSize = Math.min(500, width * height);
     
-    let fluctuations = 0;
-    for (let i = 1; i < brightnesses.length; i++) {
-      const diff = Math.abs(brightnesses[i]! - brightnesses[i - 1]!);
-      if (diff > 20) fluctuations++;
+    for (let i = 0; i < sampleSize; i++) {
+      const x = Math.floor(Math.random() * width);
+      const y = Math.floor(Math.random() * height);
+      const pixel = Jimp.intToRGBA(image.getPixelColor(x, y));
+      
+      const avg = (pixel.r + pixel.g + pixel.b) / 3;
+      redBias += pixel.r - avg;
+      greenBias += pixel.g - avg;
+      blueBias += pixel.b - avg;
     }
     
-    return fluctuations >= 3;
+    redBias /= sampleSize;
+    greenBias /= sampleSize;
+    blueBias /= sampleSize;
+    
+    const maxBias = Math.max(Math.abs(redBias), Math.abs(greenBias), Math.abs(blueBias));
+    
+    if (maxBias > 30) {
+      const severity = maxBias > 60 ? 'high' : 'medium';
+      const dominantColor = Math.abs(redBias) === maxBias ? 'red' :
+                           Math.abs(greenBias) === maxBias ? 'green' : 'blue';
+      
+      analysis.issues.push({
+        type: 'color_distortion',
+        severity,
+        confidence: Math.min(0.9, maxBias / 70),
+        description: `Color distortion detected - ${dominantColor} bias`,
+        recommendation: 'Check white balance, color settings, and video cable quality'
+      });
+    }
   }
 
   /**
-   * Detect ghosting (double images from cable reflections)
+   * Detect blur/defocus
    */
-  private detectGhosting(imageData: Buffer, width: number, height: number): number {
-    let ghostingScore = 0;
-    let sampleCount = 0;
+  private async detectBlur(image: Jimp, analysis: VideoQualityAnalysis): Promise<void> {
+    const width = image.bitmap.width;
+    const height = image.bitmap.height;
     
-    // Sample horizontal edges for duplicate patterns
-    for (let y = height / 4; y < (3 * height) / 4; y += 10) {
-      for (let x = 10; x < width - 20; x += 20) {
-        const idx = (y * width + x) * 3;
-        const rightIdx = (y * width + (x + 10)) * 3;
+    // Calculate edge sharpness
+    let edgeStrength = 0;
+    const samples = 100;
+    
+    for (let i = 0; i < samples; i++) {
+      const x = Math.floor(Math.random() * (width - 2)) + 1;
+      const y = Math.floor(Math.random() * (height - 2)) + 1;
+      
+      const center = Jimp.intToRGBA(image.getPixelColor(x, y));
+      const right = Jimp.intToRGBA(image.getPixelColor(x + 1, y));
+      const bottom = Jimp.intToRGBA(image.getPixelColor(x, y + 1));
+      
+      const centerGray = (center.r + center.g + center.b) / 3;
+      const rightGray = (right.r + right.g + right.b) / 3;
+      const bottomGray = (bottom.r + bottom.g + bottom.b) / 3;
+      
+      edgeStrength += Math.abs(centerGray - rightGray) + Math.abs(centerGray - bottomGray);
+    }
+    
+    const avgEdgeStrength = edgeStrength / samples;
+    
+    if (avgEdgeStrength < 10) {
+      analysis.issues.push({
+        type: 'blur',
+        severity: avgEdgeStrength < 5 ? 'high' : 'medium',
+        confidence: 0.75,
+        description: 'Image blur detected - out of focus',
+        recommendation: 'Adjust camera focus, clean lens, check if lens is damaged'
+      });
+    }
+  }
+
+  /**
+   * Detect dirty lens
+   */
+  private async detectDirtyLens(image: Jimp, analysis: VideoQualityAnalysis): Promise<void> {
+    const width = image.bitmap.width;
+    const height = image.bitmap.height;
+    
+    // Look for localized dark spots or hazy areas
+    let spotCount = 0;
+    const gridSize = 5;
+    const cellWidth = Math.floor(width / gridSize);
+    const cellHeight = Math.floor(height / gridSize);
+    
+    const cellBrightness: number[] = [];
+    
+    for (let gy = 0; gy < gridSize; gy++) {
+      for (let gx = 0; gx < gridSize; gx++) {
+        let brightness = 0;
+        let samples = 0;
         
-        const currentR = imageData[idx] ?? 0;
-        const rightR = imageData[rightIdx] ?? 0;
-        
-        const edge = Math.abs(currentR - rightR);
-        
-        // Check for similar edge pattern offset by several pixels (ghosting)
-        if (edge > 30) {
-          for (let offset = 5; offset < 15; offset++) {
-            const offsetIdx = (y * width + (x + offset)) * 3;
-            const offsetR = imageData[offsetIdx] ?? 0;
-            const offsetEdge = Math.abs(offsetR - (imageData[offsetIdx + 3 * 3] ?? 0));
+        for (let sy = 0; sy < 10; sy++) {
+          for (let sx = 0; sx < 10; sx++) {
+            const x = gx * cellWidth + Math.floor(Math.random() * cellWidth);
+            const y = gy * cellHeight + Math.floor(Math.random() * cellHeight);
             
-            if (Math.abs(edge - offsetEdge) < 10) {
-              ghostingScore += 1;
+            if (x < width && y < height) {
+              const pixel = Jimp.intToRGBA(image.getPixelColor(x, y));
+              brightness += (pixel.r + pixel.g + pixel.b) / 3;
+              samples++;
             }
           }
         }
-        sampleCount++;
+        
+        cellBrightness.push(brightness / samples);
       }
     }
     
-    return sampleCount > 0 ? Math.min(1.0, ghostingScore / (sampleCount * 0.1)) : 0;
+    const avgBrightness = cellBrightness.reduce((a, b) => a + b, 0) / cellBrightness.length;
+    
+    // Look for cells that are significantly darker
+    for (const brightness of cellBrightness) {
+      if (brightness < avgBrightness * 0.7) {
+        spotCount++;
+      }
+    }
+    
+    if (spotCount > 3 && spotCount < 15) { // Not too few, not all dark
+      analysis.issues.push({
+        type: 'dirty_lens',
+        severity: spotCount > 8 ? 'medium' : 'low',
+        confidence: 0.65,
+        description: 'Dirty lens detected - localized dark spots',
+        recommendation: 'Clean camera lens with proper cleaning solution'
+      });
+    }
   }
 
   /**
-   * Calculate overall quality score (0-100)
+   * Detect water drops on lens
    */
-  private calculateQualityScore(
-    metrics: VideoQualityMetrics,
-    issues: QualityIssue[]
-  ): number {
+  private async detectWaterDrops(image: Jimp, analysis: VideoQualityAnalysis): Promise<void> {
+    // Water drops create circular bright spots with darker edges
+    // This is a simplified detection - real implementation would use blob detection
+    
+    const width = image.bitmap.width;
+    const height = image.bitmap.height;
+    
+    let suspiciousPatterns = 0;
+    const samples = 20;
+    
+    for (let i = 0; i < samples; i++) {
+      const x = Math.floor(Math.random() * (width - 20)) + 10;
+      const y = Math.floor(Math.random() * (height - 20)) + 10;
+      
+      const center = Jimp.intToRGBA(image.getPixelColor(x, y));
+      const centerBright = (center.r + center.g + center.b) / 3;
+      
+      // Check surrounding pixels
+      let brighterCount = 0;
+      for (let dy = -5; dy <= 5; dy += 5) {
+        for (let dx = -5; dx <= 5; dx += 5) {
+          if (dx === 0 && dy === 0) continue;
+          
+          const nx = x + dx;
+          const ny = y + dy;
+          
+          if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
+            const neighbor = Jimp.intToRGBA(image.getPixelColor(nx, ny));
+            const neighborBright = (neighbor.r + neighbor.g + neighbor.b) / 3;
+            
+            if (centerBright > neighborBright + 40) {
+              brighterCount++;
+            }
+          }
+        }
+      }
+      
+      if (brighterCount >= 6) {
+        suspiciousPatterns++;
+      }
+    }
+    
+    if (suspiciousPatterns > 3) {
+      analysis.issues.push({
+        type: 'water_drops',
+        severity: 'medium',
+        confidence: 0.6,
+        description: 'Possible water drops on lens',
+        recommendation: 'Clean and dry camera lens, check housing seal'
+      });
+    }
+  }
+
+  /**
+   * Detect cobwebs
+   */
+  private async detectCobwebs(image: Jimp, analysis: VideoQualityAnalysis): Promise<void> {
+    // Cobwebs create thin, wispy patterns usually in corners
+    // This is a simplified detection
+    
+    const width = image.bitmap.width;
+    const height = image.bitmap.height;
+    
+    // Check corners for unusual patterns
+    const corners = [
+      { x: 0, y: 0 },
+      { x: width - 50, y: 0 },
+      { x: 0, y: height - 50 },
+      { x: width - 50, y: height - 50 }
+    ];
+    
+    let suspiciousCorners = 0;
+    
+    for (const corner of corners) {
+      let variance = 0;
+      const samples = 25;
+      
+      for (let i = 0; i < samples; i++) {
+        const x = corner.x + Math.floor(Math.random() * 50);
+        const y = corner.y + Math.floor(Math.random() * 50);
+        
+        if (x >= 0 && x < width && y >= 0 && y < height) {
+          const pixel = Jimp.intToRGBA(image.getPixelColor(x, y));
+          const gray = (pixel.r + pixel.g + pixel.b) / 3;
+          variance += gray;
+        }
+      }
+      
+      // Dark corners with some structure might indicate cobwebs
+      if (variance / samples < 60) {
+        suspiciousCorners++;
+      }
+    }
+    
+    if (suspiciousCorners >= 2) {
+      analysis.issues.push({
+        type: 'cobwebs',
+        severity: 'low',
+        confidence: 0.5,
+        description: 'Possible cobwebs near camera',
+        recommendation: 'Inspect and clean camera housing, check for spider webs'
+      });
+    }
+  }
+
+  /**
+   * Detect interlacing artifacts
+   */
+  private async detectInterlacing(image: Jimp, analysis: VideoQualityAnalysis): Promise<void> {
+    const width = image.bitmap.width;
+    const height = image.bitmap.height;
+    
+    // Check for alternating line patterns (interlacing)
+    let interlaceScore = 0;
+    const samples = 50;
+    
+    for (let i = 0; i < samples; i++) {
+      const x = Math.floor(Math.random() * width);
+      const y = Math.floor(Math.random() * (height - 4)) + 2;
+      
+      const line1 = Jimp.intToRGBA(image.getPixelColor(x, y - 1));
+      const line2 = Jimp.intToRGBA(image.getPixelColor(x, y));
+      const line3 = Jimp.intToRGBA(image.getPixelColor(x, y + 1));
+      
+      const bright1 = (line1.r + line1.g + line1.b) / 3;
+      const bright2 = (line2.r + line2.g + line2.b) / 3;
+      const bright3 = (line3.r + line3.g + line3.b) / 3;
+      
+      const diff12 = Math.abs(bright1 - bright2);
+      const diff23 = Math.abs(bright2 - bright3);
+      
+      if (diff12 > 20 && diff23 > 20) {
+        interlaceScore++;
+      }
+    }
+    
+    const interlaceRatio = interlaceScore / samples;
+    
+    if (interlaceRatio > 0.4) {
+      analysis.issues.push({
+        type: 'interlacing',
+        severity: 'low',
+        confidence: Math.min(0.8, interlaceRatio * 1.5),
+        description: 'Interlacing artifacts detected',
+        recommendation: 'Enable deinterlacing in DVR settings or use progressive scan'
+      });
+    }
+  }
+
+  /**
+   * Detect frozen frame
+   */
+  private async detectFrozenFrame(image: Jimp, analysis: VideoQualityAnalysis, cameraId: string): Promise<void> {
+    // Compare with previous frame (if available)
+    // This is a placeholder - real implementation would need frame comparison
+    
+    // For now, just store frame hash for future comparison
+    const frameHash = image.hash();
+    
+    // In a real implementation, we'd compare with previous frame hash
+    // If identical for several frames, it's frozen
+  }
+
+  /**
+   * Detect periodic patterns in data
+   */
+  private detectPeriodicPattern(data: number[]): number {
+    if (data.length < 10) return 0;
+    
+    let maxCorrelation = 0;
+    
+    // Test different periods
+    for (let period = 5; period < data.length / 3; period++) {
+      let correlation = 0;
+      let count = 0;
+      
+      for (let i = 0; i < data.length - period; i++) {
+        const diff = Math.abs(data[i] - data[i + period]);
+        correlation += 1 / (1 + diff / 50);
+        count++;
+      }
+      
+      correlation /= count;
+      maxCorrelation = Math.max(maxCorrelation, correlation);
+    }
+    
+    return maxCorrelation;
+  }
+
+  /**
+   * Calculate overall quality score
+   */
+  private calculateOverallScore(issues: VideoQualityIssue[]): number {
     let score = 100;
     
-    // Deduct points for issues
     for (const issue of issues) {
+      let deduction = 0;
+      
       switch (issue.severity) {
         case 'critical':
-          score -= 30;
+          deduction = 40;
           break;
         case 'high':
-          score -= 20;
+          deduction = 25;
           break;
         case 'medium':
-          score -= 10;
+          deduction = 15;
           break;
         case 'low':
-          score -= 5;
+          deduction = 5;
           break;
       }
+      
+      score -= deduction * issue.confidence;
     }
     
-    // Deduct points for poor metrics
-    if (metrics.noise > this.NOISE_THRESHOLD_LOW) {
-      score -= (metrics.noise - this.NOISE_THRESHOLD_LOW) * 0.5;
-    }
-    
-    if (metrics.sharpness < this.SHARPNESS_THRESHOLD_LOW) {
-      score -= (this.SHARPNESS_THRESHOLD_LOW - metrics.sharpness) * 0.3;
-    }
-    
-    if (metrics.contrast < this.CONTRAST_THRESHOLD_LOW) {
-      score -= (this.CONTRAST_THRESHOLD_LOW - metrics.contrast) * 0.5;
-    }
-    
-    return Math.max(0, Math.min(100, score));
-  }
-
-  /**
-   * Calculate degradation trend
-   */
-  private calculateDegradationTrend(
-    history: CameraQualityHistory
-  ): 'improving' | 'stable' | 'degrading' | 'critical' {
-    if (history.metricsHistory.length < 10) return 'stable';
-    
-    const recent = history.metricsHistory.slice(-5);
-    const older = history.metricsHistory.slice(-10, -5);
-    
-    const recentAvgNoise = recent.reduce((sum, m) => sum + m.metrics.noise, 0) / recent.length;
-    const olderAvgNoise = older.reduce((sum, m) => sum + m.metrics.noise, 0) / older.length;
-    
-    const recentAvgSharpness = recent.reduce((sum, m) => sum + m.metrics.sharpness, 0) / recent.length;
-    const olderAvgSharpness = older.reduce((sum, m) => sum + m.metrics.sharpness, 0) / older.length;
-    
-    const noiseTrend = recentAvgNoise - olderAvgNoise;
-    const sharpnessTrend = recentAvgSharpness - olderAvgSharpness;
-    
-    // Critical if recent quality score is very low
-    if (history.qualityScore < 30) return 'critical';
-    
-    // Degrading if noise increasing or sharpness decreasing significantly
-    if (noiseTrend > 5 || sharpnessTrend < -5) return 'degrading';
-    
-    // Improving if noise decreasing and sharpness increasing
-    if (noiseTrend < -3 && sharpnessTrend > 3) return 'improving';
-    
-    return 'stable';
-  }
-
-  /**
-   * Calculate frame hash for frozen detection
-   */
-  private calculateFrameHash(imageData: Buffer): string {
-    // Sample hash - take every 1000th byte
-    const samples: number[] = [];
-    for (let i = 0; i < imageData.length; i += 1000) {
-      samples.push(imageData[i] ?? 0);
-    }
-    return samples.join(',');
+    return Math.max(0, Math.round(score));
   }
 
   /**
    * Calculate average confidence
    */
-  private calculateAverageConfidence(issues: QualityIssue[]): number {
-    if (issues.length === 0) return 0;
-    return issues.reduce((sum, i) => sum + i.confidence, 0) / issues.length;
+  private calculateAverageConfidence(issues: VideoQualityIssue[]): number {
+    if (issues.length === 0) return 1.0;
+    
+    const sum = issues.reduce((acc, issue) => acc + issue.confidence, 0);
+    return sum / issues.length;
   }
 
   /**
-   * Get camera quality status
+   * Update quality history
    */
-  getCameraQualityStatus(cameraId: string) {
-    const history = this.cameraHistory.get(cameraId);
-    if (!history) return null;
-    
-    const recentMetrics = history.metricsHistory.slice(-1)[0];
-    const recentIssues = history.issuesHistory.slice(-1)[0];
-    
-    return {
-      cameraId,
-      qualityScore: history.qualityScore,
-      degradationTrend: history.degradationTrend,
-      currentMetrics: recentMetrics?.metrics,
-      currentIssues: recentIssues?.issues,
-      consecutiveIssueFrames: history.consecutiveIssueFrames,
-      frozenFrameCount: history.frozenFrameCount,
-    };
-  }
-
-  /**
-   * Get all cameras with quality issues
-   */
-  getCamerasWithIssues(): Array<{ cameraId: string; qualityScore: number; issues: QualityIssue[] }> {
-    const camerasWithIssues: Array<{ cameraId: string; qualityScore: number; issues: QualityIssue[] }> = [];
-    
-    for (const [cameraId, history] of this.cameraHistory.entries()) {
-      const recentIssues = history.issuesHistory.slice(-1)[0];
-      if (recentIssues && recentIssues.issues.length > 0) {
-        camerasWithIssues.push({
-          cameraId,
-          qualityScore: history.qualityScore,
-          issues: recentIssues.issues,
-        });
-      }
+  private updateHistory(cameraId: string, score: number): void {
+    if (!this.historyBuffer.has(cameraId)) {
+      this.historyBuffer.set(cameraId, []);
     }
     
-    return camerasWithIssues.sort((a, b) => a.qualityScore - b.qualityScore);
+    const history = this.historyBuffer.get(cameraId)!;
+    history.push(score);
+    
+    if (history.length > this.HISTORY_SIZE) {
+      history.shift();
+    }
   }
 
-  async cleanup(): Promise<void> {
-    this.cameraHistory.clear();
-    console.log("Analog video quality detector cleaned up");
+  /**
+   * Analyze quality trend
+   */
+  private analyzeTrend(cameraId: string): 'improving' | 'stable' | 'degrading' {
+    const history = this.historyBuffer.get(cameraId);
+    
+    if (!history || history.length < 10) {
+      return 'stable';
+    }
+    
+    const recentAvg = history.slice(-10).reduce((a, b) => a + b, 0) / 10;
+    const olderAvg = history.slice(0, 10).reduce((a, b) => a + b, 0) / 10;
+    
+    const diff = recentAvg - olderAvg;
+    
+    if (diff > 5) return 'improving';
+    if (diff < -5) return 'degrading';
+    return 'stable';
   }
 
-  getHealth() {
-    return {
-      status: "healthy" as const,
-      details: `Monitoring ${this.cameraHistory.size} analog cameras for quality issues`,
-    };
+  /**
+   * Assess camera health impact
+   */
+  private assessHealthImpact(issues: VideoQualityIssue[]): 'none' | 'low' | 'medium' | 'high' | 'critical' {
+    if (issues.length === 0) return 'none';
+    
+    const hasCritical = issues.some(i => i.severity === 'critical');
+    const hasHigh = issues.some(i => i.severity === 'high');
+    const mediumCount = issues.filter(i => i.severity === 'medium').length;
+    
+    if (hasCritical) return 'critical';
+    if (hasHigh || mediumCount >= 3) return 'high';
+    if (mediumCount >= 2) return 'medium';
+    return 'low';
   }
 }

@@ -31,13 +31,6 @@ export async function GET(request: NextRequest) {
       headers['x-edge-bridge-key'] = bridgeKey;
     }
     
-    // Fetch camera count
-    const cameraResponse = await fetch(`${controlPlaneUrl}/v1/admin/cameras/count`, {
-      method: 'GET',
-      headers,
-      cache: 'no-store',
-    });
-
     let stats = {
       gateways: 0,
       cameras: 0,
@@ -46,13 +39,76 @@ export async function GET(request: NextRequest) {
       telemetry_records: 0,
     };
 
-    if (cameraResponse.ok) {
-      const cameraData = await cameraResponse.json();
-      stats.cameras = parseInt(cameraData.total_cameras) || 0;
+    // Fetch actual data from the same endpoints to get accurate counts
+    try {
+      // Get cameras count
+      const camerasResponse = await fetch(`${controlPlaneUrl}/v1/admin/cameras`, {
+        method: 'GET',
+        headers,
+        cache: 'no-store',
+      });
+      if (camerasResponse.ok) {
+        const camerasData = await camerasResponse.json();
+        stats.cameras = Array.isArray(camerasData) ? camerasData.length : 0;
+      }
+    } catch (error) {
+      console.error('Failed to fetch cameras count:', error);
     }
 
-    // TODO: Add queries for other stats (gateways, branches, etc.)
-    // For now, returning cameras count only
+    // Get branches count
+    try {
+      const branchesResponse = await fetch(`${controlPlaneUrl}/v1/organization/nodes?type=branch`, {
+        method: 'GET',
+        headers,
+        cache: 'no-store',
+      });
+      if (branchesResponse.ok) {
+        const branchesData = await branchesResponse.json();
+        stats.branches = Array.isArray(branchesData.data) ? branchesData.data.length : 0;
+      }
+    } catch (error) {
+      console.error('Failed to fetch branches count:', error);
+    }
+
+    // Get gateways count by aggregating from all branches
+    try {
+      const branchesResponse = await fetch(`${controlPlaneUrl}/v1/organization/nodes?type=branch`, {
+        method: 'GET',
+        headers,
+        cache: 'no-store',
+      });
+      
+      if (branchesResponse.ok) {
+        const branchesData = await branchesResponse.json();
+        const branches = branchesData.data || [];
+        
+        // Fetch edge agents for all branches
+        const gatewayPromises = branches.map(async (branch: any) => {
+          try {
+            const agentsResponse = await fetch(
+              `${controlPlaneUrl}/v1/branches/${branch.id}/edge-agents`,
+              {
+                method: 'GET',
+                headers,
+                cache: 'no-store',
+              }
+            );
+            if (agentsResponse.ok) {
+              const agentsData = await agentsResponse.json();
+              return Array.isArray(agentsData.data) ? agentsData.data.length : 0;
+            }
+            return 0;
+          } catch {
+            return 0;
+          }
+        });
+        
+        const gatewayCounts = await Promise.all(gatewayPromises);
+        stats.gateways = gatewayCounts.reduce((sum, count) => sum + count, 0);
+      }
+    } catch (error) {
+      console.error('Failed to fetch gateways count:', error);
+    }
 
     return NextResponse.json(stats);
   } catch (error) {

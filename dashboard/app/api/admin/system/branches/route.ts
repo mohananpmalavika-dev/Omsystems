@@ -29,15 +29,17 @@ export async function GET(request: NextRequest) {
       headers['x-edge-bridge-key'] = bridgeKey;
     }
     
-    // Fetch branches list
-    const response = await fetch(`${controlPlaneUrl}/v1/branches`, {
+    // Fetch branches list using organization nodes endpoint
+    const response = await fetch(`${controlPlaneUrl}/v1/organization/nodes?type=branch`, {
       method: 'GET',
       headers,
       cache: 'no-store',
     });
 
     if (!response.ok) {
-      console.error(`Failed to fetch branches: ${response.status}`);
+      console.error(`Failed to fetch branches: ${response.status} ${response.statusText}`);
+      const text = await response.text();
+      console.error(`Response body: ${text}`);
       return NextResponse.json([], { status: 200 }); // Return empty array on error
     }
 

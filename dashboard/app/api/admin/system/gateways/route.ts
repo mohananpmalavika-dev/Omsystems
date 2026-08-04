@@ -29,16 +29,18 @@ export async function GET(request: NextRequest) {
       headers['x-edge-bridge-key'] = bridgeKey;
     }
     
-    // Step 1: Fetch all branches
-    const branchesResponse = await fetch(`${controlPlaneUrl}/v1/branches`, {
+    // Step 1: Fetch all branches using organization nodes endpoint
+    const branchesResponse = await fetch(`${controlPlaneUrl}/v1/organization/nodes?type=branch`, {
       method: 'GET',
       headers,
       cache: 'no-store',
     });
 
     if (!branchesResponse.ok) {
-      console.error(`Failed to fetch branches: ${branchesResponse.status}`);
-      return NextResponse.json([]);
+      console.error(`Failed to fetch branches: ${branchesResponse.status} ${branchesResponse.statusText}`);
+      const text = await branchesResponse.text();
+      console.error(`Response body: ${text}`);
+      return NextResponse.json([], { status: 200 });
     }
 
     const branchesData = await branchesResponse.json();
@@ -61,6 +63,7 @@ export async function GET(request: NextRequest) {
         );
 
         if (!agentsResponse.ok) {
+          console.error(`Failed to fetch agents for branch ${branch.id}: ${agentsResponse.status}`);
           return [];
         }
 
@@ -72,8 +75,8 @@ export async function GET(request: NextRequest) {
           id: agent.id,
           name: agent.name,
           status: agent.status || 'unknown',
-          last_seen_at: agent.lastSeenAt || null,
-          created_at: agent.createdAt || null,
+          last_seen_at: agent.lastSeenAt || agent.last_seen_at || null,
+          created_at: agent.createdAt || agent.created_at || new Date().toISOString(),
           branch_name: branch.name,
           branch_id: branch.id,
         }));

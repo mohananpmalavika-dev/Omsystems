@@ -1,65 +1,58 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { Client } from 'pg';
+import type { NextRequest } from 'next/server';
+import { NextResponse } from 'next/server';
 
-const DATABASE_URL = process.env.DATABASE_URL ?? '';
+export const dynamic = 'force-dynamic';
 
-export async function DELETE(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  const client = new Client({
-    connectionString: DATABASE_URL,
-    ssl: {
-      rejectUnauthorized: false
-    }
-  });
+type RouteContext = {
+  params: Promise<{ id: string }>;
+};
 
+export async function DELETE(request: NextRequest, context: RouteContext) {
   try {
-    await client.connect();
-
-    const { id } = await params;
-
-    // Check if gateway exists
-    const gatewayCheck = await client.query('SELECT id FROM edge_gateways WHERE id = $1', [id]);
-    if (gatewayCheck.rows.length === 0) {
-      return NextResponse.json({ error: 'Gateway not found' }, { status: 404 });
+    const { id } = await context.params;
+    const controlPlaneUrl = process.env.CONTROL_PLANE_INTERNAL_URL || 
+                           process.env.CONTROL_PLANE_PUBLIC_URL ||
+                           'http://localhost:8080';
+    
+    // Get authentication
+    const employeeSession = request.cookies.get('sentinel_access')?.value ??
+      request.headers.get('x-sentinel-session');
+    const devUserId = process.env.DASHBOARD_DEV_USER_ID || 'user-global-admin';
+    
+    const headers: HeadersInit = {
+      'Content-Type': 'application/json',
+    };
+    
+    if (employeeSession) {
+      headers['authorization'] = `Bearer ${employeeSession}`;
+    } else {
+      headers['x-user-id'] = devUserId;
     }
-
-    // Delete related records first (ignore errors if tables don't exist)
-    const deleteOperations = [
-      { table: 'cameras', column: 'edge_agent_id' },
-      { table: 'edge_agent_telemetry', column: 'edge_agent_id' },
-      { table: 'camera_discovery_records', column: 'edge_agent_id' },
-      { table: 'camera_scan_jobs', column: 'edge_agent_id' },
-      { table: 'live_sessions', column: 'edge_agent_id' },
-    ];
-
-    for (const op of deleteOperations) {
-      try {
-        await client.query(`DELETE FROM ${op.table} WHERE ${op.column} = $1`, [id]);
-      } catch (err) {
-        console.warn(`Could not delete from ${op.table}:`, err);
-        // Continue even if this table doesn't exist or has issues
-      }
+    
+    const bridgeKey = process.env.EDGE_BRIDGE_SHARED_KEY;
+    if (bridgeKey) {
+      headers['x-edge-bridge-key'] = bridgeKey;
     }
-
-    // Delete the gateway itself (try both table names)
-    try {
-      await client.query('DELETE FROM edge_gateways WHERE id = $1', [id]);
-    } catch (err) {
-      // Try alternate table name
-      await client.query('DELETE FROM edge_agents WHERE id = $1', [id]);
-    }
-
-    return NextResponse.json({ success: true });
-  } catch (error: any) {
-    console.error('Delete gateway error:', error);
-    return NextResponse.json({ 
-      error: error.message,
-      detail: error.detail || 'Unknown error',
-      hint: error.hint
-    }, { status: 500 });
-  } finally {
-    await client.end();
+    
+    // Note: There's no DELETE endpoint for edge agents in the control plane API
+    // Edge agents are typically deactivated or removed through branch management
+    // For now, return a helpful error message
+    
+    console.warn(`Delete edge agent ${id} not implemented - no backend endpoint available`);
+    
+    return NextResponse.json(
+      { 
+        error: 'not_implemented',
+        message: 'Edge agent deletion is not currently supported through this API. Please deactivate the edge agent through branch management or contact support.'
+      },
+      { status: 501 }
+    );
+    
+  } catch (error) {
+    console.error('Error deleting gateway:', error);
+    return NextResponse.json(
+      { error: 'Internal server error' },
+      { status: 500 }
+    );
   }
 }
