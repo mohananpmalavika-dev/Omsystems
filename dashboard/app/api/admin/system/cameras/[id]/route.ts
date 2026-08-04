@@ -19,9 +19,7 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
       request.headers.get('x-sentinel-session');
     const devUserId = process.env.DASHBOARD_DEV_USER_ID || 'user-global-admin';
     
-    const headers: HeadersInit = {
-      'Content-Type': 'application/json',
-    };
+    const headers: HeadersInit = {};
     
     if (employeeSession) {
       headers['authorization'] = 'Bearer ' + employeeSession;

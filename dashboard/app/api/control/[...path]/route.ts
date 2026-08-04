@@ -27,11 +27,12 @@ async function proxyControlRequest(request: NextRequest, context: RouteContext) 
   const employeeSession = request.cookies.get("sentinel_access")?.value ??
     request.headers.get("x-sentinel-session");
   const bridgeKey = runtimeEnv("EDGE_BRIDGE_SHARED_KEY", "");
-  const headers = new Headers({ "content-type": "application/json" });
+  const headers = new Headers();
   if (bridgeKey) headers.set("x-edge-bridge-key", bridgeKey);
   const forwardedFor = request.headers.get("x-forwarded-for");
   if (forwardedFor) headers.set("x-forwarded-for", forwardedFor);
   if (employeeSession) {
+    // Forward the sentinel access token as a Bearer authorization header to upstream control plane
     headers.set("authorization", 'Bearer ' + employeeSession)
   } else {
     headers.set(
@@ -45,6 +46,10 @@ async function proxyControlRequest(request: NextRequest, context: RouteContext) 
   if (routePath === "/v1/auth/refresh") {
     const refreshToken = request.cookies.get("sentinel_refresh")?.value;
     if (refreshToken) requestBody = JSON.stringify({ refreshToken });
+  }
+  // Only set content-type header when there is a body to send
+  if (hasBody) {
+    headers.set("content-type", "application/json");
   }
   try {
     const upstreamUrl = upstream.toString();

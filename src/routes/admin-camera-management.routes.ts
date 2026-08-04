@@ -151,4 +151,66 @@ export async function adminCameraManagementRoutes(app: FastifyInstance, store: C
     
     return reply.send({ cameras: result.rows });
   });
+
+  // Delete a single camera by id (admin)
+  app.delete('/v1/admin/cameras/:id', async (request, reply) => {
+    if (!hasDbPool(store)) {
+      return reply.code(501).send({ error: 'not_implemented', message: 'This endpoint requires PostgreSQL store support' });
+    }
+
+    const { id } = request.params as { id: string };
+    const client = await store.db.connect();
+
+    try {
+      await client.query('BEGIN');
+
+      // Ensure camera exists and get its resource node id
+      const cameraRow = await client.query('SELECT id, resource_node_id FROM cameras WHERE id::text = $1', [id]);
+      if (cameraRow.rowCount === 0) {
+        await client.query('ROLLBACK');
+        return reply.code(404).send({ error: 'camera_not_found' });
+      }
+      const resourceNodeId = cameraRow.rows[0].resource_node_id;
+
+      // Delete dependent records referencing this camera
+      const dependentTables = [
+        'analytics_alerts', 'analytics_events', 'incident_cameras', 'incident_video_ranges',
+        'incident_clips', 'incident_snapshots', 'live_bookmarks', 'live_sessions', 'recording_segments',
+        'recording_jobs', 'recording_legal_holds', 'camera_health_history', 'camera_quality_metrics',
+        'camera_quality_alerts', 'camera_downtime_log', 'camera_access_group_members', 'camera_specific_grants',
+        'camera_specifications', 'camera_installation_compliance', 'discovered_cameras'
+      ];
+
+      for (const table of dependentTables) {
+        try {
+          await client.query(`DELETE FROM ${table} WHERE camera_id = $1`, [id]);
+        } catch (err) {
+          // Non-fatal if table missing
+          if (!String(err).includes('does not exist')) throw err;
+        }
+      }
+
+      // Delete camera
+      await client.query('DELETE FROM cameras WHERE id::text = $1', [id]);
+
+      // Remove resource node if present
+      if (resourceNodeId) {
+        try {
+          await client.query("DELETE FROM resource_nodes WHERE id = $1 AND type = 'camera'", [resourceNodeId]);
+        } catch (err) {
+          // ignore
+        }
+      }
+
+      await client.query('COMMIT');
+      return reply.code(204).send();
+    } catch (error) {
+      await client.query('ROLLBACK');
+      app.log.error(error);
+      return reply.code(500).send({ error: 'camera_deletion_failed', message: error instanceof Error ? error.message : String(error) });
+    } finally {
+      client.release();
+    }
+  });
 }
+
