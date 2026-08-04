@@ -289,8 +289,10 @@ export async function registerOrganizationRoutes(
 
   // Soft delete organization node
   app.delete("/v1/organization/nodes/:id", async (request, reply) => {
+    let id: string | undefined;
+    
     try {
-      const { id } = nodeIdSchema.parse(request.params);
+      ({ id } = nodeIdSchema.parse(request.params));
 
       // Check permission
       if (!(await requireAccess(request, reply, store, "org:manage", id))) {
@@ -394,7 +396,7 @@ export async function registerOrganizationRoutes(
       
       // Log detailed error for debugging
       console.error("Delete error details:", {
-        nodeId: request.params.id,
+        nodeId: id || 'unknown',
         userId: request.currentUser.id,
         tenantId: request.currentUser.tenantId,
         error: error instanceof Error ? {
@@ -409,7 +411,7 @@ export async function registerOrganizationRoutes(
         error: "delete_failed",
         message: error instanceof Error ? error.message : "Failed to delete organization node",
         details: {
-          nodeId: request.params.id,
+          nodeId: id || 'unknown',
           timestamp: new Date().toISOString(),
           errorType: error instanceof Error ? error.name : typeof error
         }
