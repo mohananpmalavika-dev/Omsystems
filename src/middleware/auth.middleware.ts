@@ -102,7 +102,13 @@ export function createAuthMiddleware(options: AuthMiddlewareOptions) {
     }
 
     // Update session activity timestamp
-    await store.updateSessionActivity(session.id);
+    // Skip session activity updates for logout endpoints to prevent race conditions
+    // when the logout handler deletes the sessions. The session is about to be
+    // deleted anyway, so there's no value in updating its activity timestamp.
+    const isLogoutEndpoint = request.url.includes("/auth/logout");
+    if (!isLogoutEndpoint) {
+      await store.updateSessionActivity(session.id);
+    }
 
     // Attach user to request
     request.currentUser = user;

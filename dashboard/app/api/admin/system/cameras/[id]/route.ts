@@ -32,23 +32,30 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
       headers['x-edge-bridge-key'] = bridgeKey;
     }
     
-    // Delete camera - there's no direct DELETE endpoint, but we can use the admin routes
-    // The admin-camera-management routes should handle this
-    const response = await fetch(`${controlPlaneUrl}/v1/admin/cameras/${id}`, {
-      method: 'DELETE',
+    // Delete camera via POST with body to avoid empty-body parsing issues on control-plane
+    const bodyPayload = JSON.stringify({ id });
+    // Ensure Content-Type set when sending a JSON body
+    headers['Content-Type'] = 'application/json';
+    const response = await fetch(`${controlPlaneUrl}/v1/admin/cameras/delete`, {
+      method: 'POST',
       headers,
+      body: bodyPayload,
       cache: 'no-store',
     });
 
     if (!response.ok) {
       console.error(`Failed to delete camera ${id}: ${response.status}`);
+      const text = await response.text().catch(() => undefined);
       return NextResponse.json(
-        { error: 'Failed to delete camera' },
+        { error: 'Failed to delete camera', details: text },
         { status: response.status }
       );
     }
 
-    return NextResponse.json({ success: true });
+    // Successful deletion returns 204
+    if (response.status === 204) return NextResponse.json({ success: true });
+    const json = await response.json().catch(() => undefined);
+    return NextResponse.json({ success: true, details: json });
     
   } catch (error) {
     console.error('Error deleting camera:', error);
