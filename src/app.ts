@@ -1919,6 +1919,26 @@ export async function buildApp(options?: {
     if (error instanceof Error && error.message === "camera_not_found") {
       return reply.code(404).send({ error: "camera_not_found" });
     }
+    if (
+      _request.method === "DELETE" &&
+      /^\/v1\/admin\/cameras\/.*/.test(_request.url)
+    ) {
+      app.log.error({ error, requestUrl: _request.url }, "Camera deletion route error bypassed route-level handler");
+      return reply.code(500).send({
+        error: "camera_deletion_failed",
+        message: "An unexpected error occurred during deletion",
+      });
+    }
+    if (
+      _request.method === "POST" &&
+      _request.url === "/v1/admin/cameras/delete"
+    ) {
+      app.log.error({ error, requestUrl: _request.url }, "Camera deletion route error bypassed route-level handler");
+      return reply.code(500).send({
+        error: "camera_deletion_failed",
+        message: "An unexpected error occurred during deletion",
+      });
+    }
     if (error instanceof Error && error.message === "invalid_alert_transition") {
       return reply.code(409).send({ error: "invalid_alert_transition" });
     }
