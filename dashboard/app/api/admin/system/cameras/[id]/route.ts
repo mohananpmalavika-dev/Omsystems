@@ -24,19 +24,28 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
     const bridgeKey = process.env.EDGE_BRIDGE_SHARED_KEY;
     if (bridgeKey) forwardedHeaders['x-edge-bridge-key'] = bridgeKey;
 
-    const bodyPayload = JSON.stringify({ id });
-    const baseOrigin = (request as any).nextUrl?.origin ?? request.url;
-    const controlUrl = new URL(`/api/control/v1/admin/cameras/delete`, baseOrigin).toString();
-    const response = await fetch(controlUrl, {
-      method: 'POST',
-      headers: forwardedHeaders,
-      body: bodyPayload,
-      cache: 'no-store',
-    });
+    const baseOrigin = (request as any).nextUrl?.origin ?? new URL(request.url).origin;
+    const controlUrl = new URL(`/api/control/v1/admin/cameras/${encodeURIComponent(id)}`, baseOrigin).toString();
+    let response;
+
+    try {
+      response = await fetch(controlUrl, {
+        method: 'DELETE',
+        headers: forwardedHeaders,
+        cache: 'no-store',
+      });
+    } catch (fetchError) {
+      const message = fetchError instanceof Error ? fetchError.message : String(fetchError);
+      console.error('Camera delete proxy failed', { controlUrl, id, message });
+      return NextResponse.json(
+        { error: 'camera_delete_proxy_failed', message },
+        { status: 500 },
+      );
+    }
 
     if (!response.ok) {
-      console.error(`Failed to delete camera ${id}: ${response.status}`);
       const text = await response.text().catch(() => undefined);
+      console.error('Failed to delete camera', { id, status: response.status, details: text, controlUrl });
       return NextResponse.json(
         { error: 'Failed to delete camera', details: text },
         { status: response.status }

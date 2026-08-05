@@ -137,7 +137,7 @@ services:
           name: sentinel-grid-control-plane
           envVarKey: MEDIA_GATEWAY_SHARED_KEY
       - key: MEDIAMTX_API_URL
-        value: http://127.0.0.1:9997
+        \\\\]\\\]\"]\\]"]]'/']6'/'\\6v/.t;]\]';..;]].']';..;[][;,.;']\];.,                       gv\Y'\
       - key: MEDIAMTX_HLS_URL
         value: http://127.0.0.1:8888
       - key: STREAM_SECRETS_JSON
