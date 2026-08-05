@@ -146,18 +146,18 @@ export async function registerEdgeGatewayOperationsRoutes(
   });
 
   /**
-   * Delete a pending edge activation
-   * Allows removing activation codes that haven't been used yet
+   * Revoke a pending edge activation
+   * Keeps the activation record for auditability while marking it inactive.
    */
   app.delete("/v1/branches/:branchId/edge-activations/:id", async (request, reply) => {
     const { branchId, id } = branchAgentParams.parse(request.params);
     if (!(await requireDeviceAccess(request, reply, store, branchId))) return;
     
     try {
-      // Delete the activation - only if not consumed
       const result = await (store as any).pool.query(
-        `DELETE FROM edge_activations 
-         WHERE id = $1 AND branch_id = $2 AND consumed_at IS NULL
+        `UPDATE edge_activations
+         SET revoked_at = now()
+         WHERE id = $1 AND branch_id = $2 AND consumed_at IS NULL AND revoked_at IS NULL
          RETURNING id`,
         [id, branchId]
       );
@@ -165,24 +165,24 @@ export async function registerEdgeGatewayOperationsRoutes(
       if (result.rowCount === 0) {
         return reply.code(404).send({ 
           error: "activation_not_found",
-          message: "Activation not found or already consumed"
+          message: "Activation not found, already consumed, or already revoked"
         });
       }
       
-      await writeGatewayAudit(request, store, branchId, "edge_gateway.activation_deleted", { activationId: id });
+      await writeGatewayAudit(request, store, branchId, "edge_gateway.activation_revoked", { activationId: id });
       return reply.code(204).send();
     } catch (error) {
-      app.log.error({ err: error, activationId: id }, "Failed to delete edge activation");
+      app.log.error({ err: error, activationId: id }, "Failed to revoke edge activation");
       return reply.code(500).send({ 
         error: "activation_delete_failed",
-        message: error instanceof Error ? error.message : "Failed to delete activation"
+        message: error instanceof Error ? error.message : "Failed to revoke activation"
       });
     }
   });
 
   /**
-   * DELETE gateway endpoint (alias for revoke)
-   * Provides DELETE /v1/edge-agents/:id for gateway deletion
+   * Revoke gateway endpoint (inactive-only semantics)
+   * Provides DELETE /v1/edge-agents/:id for gateway deactivation
    */
   app.delete("/v1/edge-agents/:id", async (request, reply) => {
     const { id } = agentParams.parse(request.params);

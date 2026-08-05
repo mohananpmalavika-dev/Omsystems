@@ -769,9 +769,9 @@ export async function buildApp(options?: {
   });
 
   /**
-   * DELETE gateway endpoint
-   * Admin-friendly alias for deleting/revoking edge gateways
-   * Maps /api/admin/system/gateways/:id to edge-agent deletion
+   * Revoke gateway endpoint
+   * Admin-friendly alias for deactivating edge gateways without deleting their audit history
+   * Maps /api/admin/system/gateways/:id to edge-agent revocation
    */
   app.delete("/api/admin/system/gateways/:id", async (request, reply) => {
     let id: string | undefined;

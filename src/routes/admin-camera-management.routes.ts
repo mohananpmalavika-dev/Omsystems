@@ -7,35 +7,69 @@ function hasDbPool(store: ControlPlaneStore): store is ControlPlaneStore & { db:
   return "db" in store && store.db !== undefined;
 }
 
-const ADMIN_CAMERA_DEPENDENT_TABLES = [
-  'analytics_alerts',
-  'analytics_events',
-  'analytics_rules',
-  'analytics_zones',
-  'detected_objects',
-  'object_tracks',
-  'incident_cameras',
-  'incident_video_ranges',
-  'incident_clips',
-  'incident_snapshots',
-  'live_bookmarks',
-  'live_sessions',
-  'recording_segments',
-  'recording_jobs',
-  'recording_legal_holds',
-  'recording_snapshots',
-  'recording_thumbnails',
-  'camera_health_history',
-  'camera_quality_metrics',
-  'camera_quality_alerts',
-  'camera_downtime_log',
-  'camera_access_group_members',
-  'camera_specific_grants',
-  'camera_specifications',
-  'camera_installation_compliance',
-  'discovered_cameras',
-  'evidence_items',
-] as const;
+async function softDeleteCamera(client: any, id: string, app: FastifyInstance) {
+  const cameraResult = await client.query(
+    `UPDATE cameras
+     SET status = 'inactive'
+     WHERE id::text = $1
+     RETURNING id, resource_node_id`,
+    [id]
+  );
+
+  if (cameraResult.rowCount === 0) {
+    return { found: false, resourceNodeId: null as string | null };
+  }
+
+  const resourceNodeId = cameraResult.rows[0]?.resource_node_id ?? null;
+
+  if (resourceNodeId) {
+    try {
+      await client.query(
+        `UPDATE resource_nodes
+         SET is_active = false
+         WHERE id = $1 AND node_type = 'camera'`,
+        [resourceNodeId]
+      );
+    } catch (err) {
+      app.log.warn({ cameraId: id, resourceNodeId, error: err }, 'Unable to deactivate resource node during soft delete');
+    }
+  }
+
+  return { found: true, resourceNodeId };
+}
+
+async function softDeleteAllCameras(client: any, app: FastifyInstance) {
+  const cameraRows = await client.query(
+    `SELECT id::text, resource_node_id
+     FROM cameras
+     WHERE status IS DISTINCT FROM 'inactive'`
+  );
+
+  const resourceNodeIds = cameraRows.rows
+    .map((row: any) => row.resource_node_id)
+    .filter(Boolean);
+
+  await client.query(
+    `UPDATE cameras
+     SET status = 'inactive'
+     WHERE status IS DISTINCT FROM 'inactive'`
+  );
+
+  if (resourceNodeIds.length > 0) {
+    try {
+      await client.query(
+        `UPDATE resource_nodes
+         SET is_active = false
+         WHERE id = ANY($1) AND node_type = 'camera'`,
+        [resourceNodeIds]
+      );
+    } catch (err) {
+      app.log.warn({ resourceNodeIds, error: err }, 'Unable to deactivate resources during bulk soft delete');
+    }
+  }
+
+  return cameraRows.rowCount ?? 0;
+}
 
 /**
  * Admin Camera Management Routes
@@ -59,59 +93,15 @@ export async function adminCameraManagementRoutes(app: FastifyInstance, store: C
     try {
       await client.query("BEGIN");
       
-      // Delete related data first
-      const tables = [...ADMIN_CAMERA_DEPENDENT_TABLES];
-      
-      const deleteCounts: Record<string, number> = {};
-      
-      for (const table of tables) {
-        const tableExists = await client.query(
-          `SELECT EXISTS (
-            SELECT 1
-            FROM information_schema.tables
-            WHERE table_schema = 'public' AND table_name = $1
-          ) AS exists`,
-          [table]
-        );
-
-        if (!tableExists.rows[0]?.exists) {
-          app.log.warn({ table }, 'Skipping dependent table cleanup for missing schema object');
-          continue;
-        }
-
-        const result = await client.query(
-          `DELETE FROM "${table}" WHERE camera_id IN (SELECT id FROM cameras)`
-        );
-        deleteCounts[table] = result.rowCount ?? 0;
-      }
-      
-      // Get resource node IDs
-      const nodes = await client.query(
-        "SELECT resource_node_id FROM cameras"
-      );
-      const nodeIds = nodes.rows.map((r: any) => r.resource_node_id);
-      
-      // Delete cameras
-      const cameraResult = await client.query("DELETE FROM cameras");
-      const deletedCameras = cameraResult.rowCount ?? 0;
-      
-      // Delete resource nodes
-      let deletedNodes = 0;
-      if (nodeIds.length > 0) {
-        const nodeResult = await client.query(
-          "DELETE FROM resource_nodes WHERE id = ANY($1) AND node_type = 'camera'",
-          [nodeIds]
-        );
-        deletedNodes = nodeResult.rowCount ?? 0;
-      }
+      const deletedCameras = await softDeleteAllCameras(client, app);
       
       await client.query("COMMIT");
       
       return reply.code(200).send({
         success: true,
         deletedCameras,
-        deletedNodes,
-        relatedDataDeleted: deleteCounts,
+        deletedNodes: deletedCameras,
+        relatedDataDeleted: {},
       });
       
     } catch (error) {
@@ -188,39 +178,11 @@ export async function adminCameraManagementRoutes(app: FastifyInstance, store: C
         await client.query('ROLLBACK');
         return reply.code(404).send({ error: 'camera_not_found' });
       }
-      const resourceNodeId = cameraRow.rows[0].resource_node_id;
 
-      // Delete dependent records referencing this camera
-      const dependentTables = [...ADMIN_CAMERA_DEPENDENT_TABLES];
-
-      for (const table of dependentTables) {
-        const tableExists = await client.query(
-          `SELECT EXISTS (
-            SELECT 1
-            FROM information_schema.tables
-            WHERE table_schema = 'public' AND table_name = $1
-          ) AS exists`,
-          [table]
-        );
-
-        if (!tableExists.rows[0]?.exists) {
-          app.log.warn({ cameraId: id, table }, 'Skipping dependent table cleanup for missing schema object');
-          continue;
-        }
-
-        await client.query(`DELETE FROM "${table}" WHERE camera_id = $1`, [id]);
-      }
-
-      // Delete camera
-      await client.query('DELETE FROM cameras WHERE id::text = $1', [id]);
-
-      // Remove resource node if present
-      if (resourceNodeId) {
-        try {
-          await client.query("DELETE FROM resource_nodes WHERE id = $1 AND node_type = 'camera'", [resourceNodeId]);
-        } catch (err) {
-          // ignore
-        }
+      const softDeleteResult = await softDeleteCamera(client, id, app);
+      if (!softDeleteResult.found) {
+        await client.query('ROLLBACK');
+        return reply.code(404).send({ error: 'camera_not_found' });
       }
 
       await client.query('COMMIT');
@@ -285,43 +247,16 @@ export async function adminCameraManagementRoutes(app: FastifyInstance, store: C
         app.log.info({ cameraId: id }, 'Camera not found, returning 404');
         return reply.code(404).send({ error: 'camera_not_found' });
       }
-      const resourceNodeId = cameraRow.rows[0].resource_node_id;
 
-      // Delete dependent records referencing this camera
-      const dependentTables = [...ADMIN_CAMERA_DEPENDENT_TABLES];
-
-      for (const table of dependentTables) {
-        const tableExists = await client.query(
-          `SELECT EXISTS (
-            SELECT 1
-            FROM information_schema.tables
-            WHERE table_schema = 'public' AND table_name = $1
-          ) AS exists`,
-          [table]
-        );
-
-        if (!tableExists.rows[0]?.exists) {
-          app.log.warn({ cameraId: id, table }, 'Skipping dependent table cleanup for missing schema object');
-          continue;
-        }
-
-        await client.query(`DELETE FROM "${table}" WHERE camera_id = $1`, [id]);
-      }
-
-      // Delete camera
-      await client.query('DELETE FROM cameras WHERE id::text = $1', [id]);
-
-      // Remove resource node if present
-      if (resourceNodeId) {
-        try {
-          await client.query("DELETE FROM resource_nodes WHERE id = $1 AND node_type = 'camera'", [resourceNodeId]);
-        } catch (err) {
-          // ignore
-        }
+      const softDeleteResult = await softDeleteCamera(client, id, app);
+      if (!softDeleteResult.found) {
+        await client.query('ROLLBACK');
+        app.log.info({ cameraId: id }, 'Camera not found, returning 404');
+        return reply.code(404).send({ error: 'camera_not_found' });
       }
 
       await client.query('COMMIT');
-      app.log.info({ cameraId: id }, 'Camera deleted successfully');
+      app.log.info({ cameraId: id }, 'Camera soft-deleted successfully');
       return reply.code(204).send();
     } catch (error) {
       if (client) {
