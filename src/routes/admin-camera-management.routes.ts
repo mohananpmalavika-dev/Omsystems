@@ -186,8 +186,8 @@ export async function adminCameraManagementRoutes(app: FastifyInstance, store: C
         try {
           await client.query(`DELETE FROM ${table} WHERE camera_id = $1`, [id]);
         } catch (err) {
-          // Non-fatal if table missing
-          if (!String(err).includes('does not exist')) throw err;
+          // Non-fatal if table missing (PostgreSQL error code 42P01)
+          if (!isTableMissing(err)) throw err;
         }
       }
 
@@ -207,8 +207,26 @@ export async function adminCameraManagementRoutes(app: FastifyInstance, store: C
       return reply.code(204).send();
     } catch (error) {
       await client.query('ROLLBACK');
-      app.log.error(error);
-      return reply.code(500).send({ error: 'camera_deletion_failed', message: error instanceof Error ? error.message : String(error) });
+      
+      // Handle specific error types with appropriate status codes
+      if (isPgError(error)) {
+        // Constraint violation (e.g., foreign key, unique constraint)
+        if (isConstraintViolation(error.code)) {
+          app.log.error({ error, cameraId: id }, 'Camera deletion failed due to constraint violation');
+          return reply.code(409).send({
+            error: 'deletion_constrained',
+            message: 'Cannot delete camera due to database constraints',
+            constraint: error.constraint || 'unknown'
+          });
+        }
+      }
+      
+      // Log full error for debugging but return sanitized message
+      app.log.error({ error, cameraId: id }, 'Camera deletion failed');
+      return reply.code(500).send({ 
+        error: 'camera_deletion_failed', 
+        message: 'An unexpected error occurred during deletion'
+      });
     } finally {
       client.release();
     }
@@ -252,8 +270,8 @@ export async function adminCameraManagementRoutes(app: FastifyInstance, store: C
         try {
           await client.query(`DELETE FROM ${table} WHERE camera_id = $1`, [id]);
         } catch (err) {
-          // Non-fatal if table missing
-          if (!String(err).includes('does not exist')) throw err;
+          // Non-fatal if table missing (PostgreSQL error code 42P01)
+          if (!isTableMissing(err)) throw err;
         }
       }
 
@@ -273,8 +291,26 @@ export async function adminCameraManagementRoutes(app: FastifyInstance, store: C
       return reply.code(204).send();
     } catch (error) {
       await client.query('ROLLBACK');
-      app.log.error(error);
-      return reply.code(500).send({ error: 'camera_deletion_failed', message: error instanceof Error ? error.message : String(error) });
+      
+      // Handle specific error types with appropriate status codes
+      if (isPgError(error)) {
+        // Constraint violation (e.g., foreign key, unique constraint)
+        if (isConstraintViolation(error.code)) {
+          app.log.error({ error, cameraId: id }, 'Camera deletion failed due to constraint violation');
+          return reply.code(409).send({
+            error: 'deletion_constrained',
+            message: 'Cannot delete camera due to database constraints',
+            constraint: error.constraint || 'unknown'
+          });
+        }
+      }
+      
+      // Log full error for debugging but return sanitized message
+      app.log.error({ error, cameraId: id }, 'Camera deletion failed');
+      return reply.code(500).send({ 
+        error: 'camera_deletion_failed', 
+        message: 'An unexpected error occurred during deletion'
+      });
     } finally {
       client.release();
     }
