@@ -65,17 +65,24 @@ export async function adminCameraManagementRoutes(app: FastifyInstance, store: C
       const deleteCounts: Record<string, number> = {};
       
       for (const table of tables) {
-        try {
-          const result = await client.query(
-            `DELETE FROM ${table} WHERE camera_id IN (SELECT id FROM cameras)`
-          );
-          deleteCounts[table] = result.rowCount ?? 0;
-        } catch (error) {
-          // Table might not exist, continue
-          if (!String(error).includes("does not exist")) {
-            throw error;
-          }
+        const tableExists = await client.query(
+          `SELECT EXISTS (
+            SELECT 1
+            FROM information_schema.tables
+            WHERE table_schema = 'public' AND table_name = $1
+          ) AS exists`,
+          [table]
+        );
+
+        if (!tableExists.rows[0]?.exists) {
+          app.log.warn({ table }, 'Skipping dependent table cleanup for missing schema object');
+          continue;
         }
+
+        const result = await client.query(
+          `DELETE FROM "${table}" WHERE camera_id IN (SELECT id FROM cameras)`
+        );
+        deleteCounts[table] = result.rowCount ?? 0;
       }
       
       // Get resource node IDs
@@ -187,16 +194,21 @@ export async function adminCameraManagementRoutes(app: FastifyInstance, store: C
       const dependentTables = [...ADMIN_CAMERA_DEPENDENT_TABLES];
 
       for (const table of dependentTables) {
-        try {
-          await client.query(`DELETE FROM ${table} WHERE camera_id = $1`, [id]);
-        } catch (err) {
-          // Non-fatal if the dependent relation or column is missing from the target schema.
-          if (isTableMissing(err) || isColumnMissing(err)) {
-            app.log.warn({ cameraId: id, table, error: err }, 'Skipping dependent table cleanup for missing schema object');
-            continue;
-          }
-          throw err;
+        const tableExists = await client.query(
+          `SELECT EXISTS (
+            SELECT 1
+            FROM information_schema.tables
+            WHERE table_schema = 'public' AND table_name = $1
+          ) AS exists`,
+          [table]
+        );
+
+        if (!tableExists.rows[0]?.exists) {
+          app.log.warn({ cameraId: id, table }, 'Skipping dependent table cleanup for missing schema object');
+          continue;
         }
+
+        await client.query(`DELETE FROM "${table}" WHERE camera_id = $1`, [id]);
       }
 
       // Delete camera
@@ -279,16 +291,21 @@ export async function adminCameraManagementRoutes(app: FastifyInstance, store: C
       const dependentTables = [...ADMIN_CAMERA_DEPENDENT_TABLES];
 
       for (const table of dependentTables) {
-        try {
-          await client.query(`DELETE FROM ${table} WHERE camera_id = $1`, [id]);
-        } catch (err) {
-          // Non-fatal if the dependent relation or column is missing from the target schema.
-          if (isTableMissing(err) || isColumnMissing(err)) {
-            app.log.warn({ cameraId: id, table, error: err }, 'Skipping dependent table cleanup for missing schema object');
-            continue;
-          }
-          throw err;
+        const tableExists = await client.query(
+          `SELECT EXISTS (
+            SELECT 1
+            FROM information_schema.tables
+            WHERE table_schema = 'public' AND table_name = $1
+          ) AS exists`,
+          [table]
+        );
+
+        if (!tableExists.rows[0]?.exists) {
+          app.log.warn({ cameraId: id, table }, 'Skipping dependent table cleanup for missing schema object');
+          continue;
         }
+
+        await client.query(`DELETE FROM "${table}" WHERE camera_id = $1`, [id]);
       }
 
       // Delete camera
