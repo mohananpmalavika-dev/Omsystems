@@ -25,7 +25,8 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
     if (bridgeKey) forwardedHeaders['x-edge-bridge-key'] = bridgeKey;
 
     const bodyPayload = JSON.stringify({ id });
-    const controlUrl = new URL(`/api/control/v1/admin/cameras/delete`, request.url).toString();
+    const baseOrigin = (request as any).nextUrl?.origin ?? request.url;
+    const controlUrl = new URL(`/api/control/v1/admin/cameras/delete`, baseOrigin).toString();
     const response = await fetch(controlUrl, {
       method: 'POST',
       headers: forwardedHeaders,

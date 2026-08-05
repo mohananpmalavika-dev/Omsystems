@@ -23,7 +23,8 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
     const userIdHeader = request.headers.get('x-user-id');
     if (userIdHeader) forwardedHeaders['x-user-id'] = userIdHeader;
 
-    const controlUrl = new URL(`/api/control${path}`, request.url).toString();
+    const baseOrigin = (request as any).nextUrl?.origin ?? request.url;
+    const controlUrl = new URL(`/api/control${path}`, baseOrigin).toString();
     return fetch(controlUrl, {
       method,
       headers: forwardedHeaders,
