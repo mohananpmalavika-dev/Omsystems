@@ -7,6 +7,36 @@ function hasDbPool(store: ControlPlaneStore): store is ControlPlaneStore & { db:
   return "db" in store && store.db !== undefined;
 }
 
+const ADMIN_CAMERA_DEPENDENT_TABLES = [
+  'analytics_alerts',
+  'analytics_events',
+  'analytics_rules',
+  'analytics_zones',
+  'detected_objects',
+  'object_tracks',
+  'incident_cameras',
+  'incident_video_ranges',
+  'incident_clips',
+  'incident_snapshots',
+  'live_bookmarks',
+  'live_sessions',
+  'recording_segments',
+  'recording_jobs',
+  'recording_legal_holds',
+  'recording_snapshots',
+  'recording_thumbnails',
+  'camera_health_history',
+  'camera_quality_metrics',
+  'camera_quality_alerts',
+  'camera_downtime_log',
+  'camera_access_group_members',
+  'camera_specific_grants',
+  'camera_specifications',
+  'camera_installation_compliance',
+  'discovered_cameras',
+  'evidence_items',
+] as const;
+
 /**
  * Admin Camera Management Routes
  * 
@@ -30,28 +60,7 @@ export async function adminCameraManagementRoutes(app: FastifyInstance, store: C
       await client.query("BEGIN");
       
       // Delete related data first
-      const tables = [
-        "analytics_alerts",
-        "analytics_events", 
-        "analytics_rules",
-        "incident_cameras",
-        "incident_video_ranges",
-        "incident_clips",
-        "incident_snapshots",
-        "live_bookmarks",
-        "live_sessions",
-        "recording_segments",
-        "recording_jobs",
-        "recording_legal_holds",
-        "camera_health_history",
-        "camera_quality_metrics",
-        "camera_quality_alerts",
-        "camera_downtime_log",
-        "camera_access_group_members",
-        "camera_specific_grants",
-        "camera_specifications",
-        "camera_installation_compliance",
-      ];
+      const tables = [...ADMIN_CAMERA_DEPENDENT_TABLES];
       
       const deleteCounts: Record<string, number> = {};
       
@@ -175,13 +184,7 @@ export async function adminCameraManagementRoutes(app: FastifyInstance, store: C
       const resourceNodeId = cameraRow.rows[0].resource_node_id;
 
       // Delete dependent records referencing this camera
-      const dependentTables = [
-        'analytics_alerts', 'analytics_events', 'incident_cameras', 'incident_video_ranges',
-        'incident_clips', 'incident_snapshots', 'live_bookmarks', 'live_sessions', 'recording_segments',
-        'recording_jobs', 'recording_legal_holds', 'camera_health_history', 'camera_quality_metrics',
-        'camera_quality_alerts', 'camera_downtime_log', 'camera_access_group_members', 'camera_specific_grants',
-        'camera_specifications', 'camera_installation_compliance', 'discovered_cameras'
-      ];
+      const dependentTables = [...ADMIN_CAMERA_DEPENDENT_TABLES];
 
       for (const table of dependentTables) {
         try {
@@ -273,13 +276,7 @@ export async function adminCameraManagementRoutes(app: FastifyInstance, store: C
       const resourceNodeId = cameraRow.rows[0].resource_node_id;
 
       // Delete dependent records referencing this camera
-      const dependentTables = [
-        'analytics_alerts', 'analytics_events', 'incident_cameras', 'incident_video_ranges',
-        'incident_clips', 'incident_snapshots', 'live_bookmarks', 'live_sessions', 'recording_segments',
-        'recording_jobs', 'recording_legal_holds', 'camera_health_history', 'camera_quality_metrics',
-        'camera_quality_alerts', 'camera_downtime_log', 'camera_access_group_members', 'camera_specific_grants',
-        'camera_specifications', 'camera_installation_compliance', 'discovered_cameras'
-      ];
+      const dependentTables = [...ADMIN_CAMERA_DEPENDENT_TABLES];
 
       for (const table of dependentTables) {
         try {
