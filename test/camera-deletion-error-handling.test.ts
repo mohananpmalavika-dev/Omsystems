@@ -33,6 +33,7 @@ function createDbStore(pool: pg.Pool): ControlPlaneStore & { db: { connect: () =
       connect: () => pool.connect(),
       query: (sql: string, params?: any[]) => pool.query(sql, params),
     },
+    close: async () => {}, // Add close method to satisfy app.ts onClose hook
   } as any; // Cast to ControlPlaneStore with db property
 }
 
