@@ -36,6 +36,40 @@ type Stats = {
   telemetry_records: number;
 };
 
+function getDeleteErrorMessage(body: { error?: string; message?: string; details?: string | { error?: string; message?: string } } | null, fallback = 'Failed to delete. Please try again.') {
+  const nestedDetails = typeof body?.details === 'string'
+    ? (() => {
+        try {
+          return JSON.parse(body.details) as { error?: string; message?: string };
+        } catch {
+          return null;
+        }
+      })()
+    : body?.details;
+
+  if (body?.error === 'camera_not_found' || nestedDetails?.error === 'camera_not_found') {
+    return 'The camera was already removed or is no longer available.';
+  }
+
+  if (body?.error === 'deletion_constrained' || nestedDetails?.error === 'deletion_constrained') {
+    return 'This camera is still referenced by other records and cannot be deleted.';
+  }
+
+  if (body?.error === 'camera_deletion_failed' || nestedDetails?.error === 'camera_deletion_failed') {
+    return 'The camera could not be deleted at this time. Please try again.';
+  }
+
+  if (body?.message) {
+    return body.message;
+  }
+
+  if (nestedDetails?.message) {
+    return nestedDetails.message;
+  }
+
+  return body?.error || fallback;
+}
+
 export default function SystemManagementPage() {
   const [tab, setTab] = useState<"gateways" | "cameras" | "branches">("gateways");
   const [gateways, setGateways] = useState<Gateway[]>([]);
@@ -108,16 +142,7 @@ export default function SystemManagementPage() {
         await loadData();
       } else {
         const body = await response.json().catch(() => null) as { error?: string; message?: string; details?: string | { error?: string; message?: string } } | null;
-        const nestedDetails = typeof body?.details === 'string' ? (() => {
-          try {
-            return JSON.parse(body.details) as { error?: string; message?: string };
-          } catch {
-            return null;
-          }
-        })() : body?.details;
-
-        const message = nestedDetails?.message || body?.message || body?.error || 'Failed to delete. Please try again.';
-        alert(message);
+        alert(getDeleteErrorMessage(body));
       }
     } catch (error) {
       console.error('Delete failed:', error);
@@ -143,8 +168,8 @@ export default function SystemManagementPage() {
         await loadStats();
         await loadData();
       } else {
-        const body = await response.json().catch(() => null) as { error?: string; message?: string } | null;
-        alert(body?.message || body?.error || 'Failed to delete. Please try again.');
+        const body = await response.json().catch(() => null) as { error?: string; message?: string; details?: string | { error?: string; message?: string } } | null;
+        alert(getDeleteErrorMessage(body));
       }
     } catch (error) {
       console.error('Delete all failed:', error);
