@@ -145,7 +145,7 @@ services:
 
   - type: pserv
     name: sentinel-grid-recording-engine
-    runtime: docker   22wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww31
+    runtime: docker
     plan: starter
     region: singapore
     dockerfilePath: ./recording-engine/Dockerfile

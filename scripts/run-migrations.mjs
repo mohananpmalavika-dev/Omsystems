@@ -229,8 +229,11 @@ async function withMigrationClient(callback) {
     return await callback(client, databaseUrl);
   } catch (error) {
     if (error instanceof Error && /getaddrinfo|ECONNREFUSED|ENOTFOUND|password authentication failed|database .* does not exist/i.test(error.message)) {
-      console.warn(`Skipping migrations because the database is unavailable: ${error.message}`);
-      return;
+      console.error(`FATAL: Database connection failed - ${error.message}`);
+      console.error(`DATABASE_URL: ${databaseUrl ? databaseLabel(databaseUrl) : 'NOT SET'}`);
+      console.error(`The service cannot start without database connectivity.`);
+      console.error(`Verify that DATABASE_URL is correct and the database service is available.`);
+      process.exit(1);
     }
     throw error;
   } finally {
