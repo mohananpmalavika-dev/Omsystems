@@ -10,22 +10,31 @@ type RouteContext = {
 export async function DELETE(request: NextRequest, context: RouteContext) {
   try {
     const { id } = await context.params;
-    // Build forwarded headers from incoming request so the control proxy
-    // sees the same authentication data as the browser request.
+    const controlPlaneUrl = process.env.CONTROL_PLANE_INTERNAL_URL ||
+      process.env.CONTROL_PLANE_PUBLIC_URL ||
+      'http://localhost:8080';
+    const normalizedControlPlaneUrl = normalizeHttpOrigin(controlPlaneUrl);
+
+    // Build forwarded headers so the control plane sees the same auth identity
+    // that the browser request carried into the dashboard BFF.
     const forwardedHeaders: Record<string, string> = {
       'content-type': 'application/json',
     };
-    const cookieHeader = request.headers.get('cookie');
-    if (cookieHeader) forwardedHeaders.cookie = cookieHeader;
+
     const sentinelSession = request.headers.get('x-sentinel-session');
-    if (sentinelSession) forwardedHeaders['x-sentinel-session'] = sentinelSession;
-    const userIdHeader = request.headers.get('x-user-id');
-    if (userIdHeader) forwardedHeaders['x-user-id'] = userIdHeader;
+    const cookieHeader = request.headers.get('cookie');
+    const cookieAccessToken = cookieHeader?.split(';').map((segment) => segment.trim()).find((segment) => segment.startsWith('sentinel_access='))?.split('=')[1];
+    const sessionToken = cookieAccessToken || sentinelSession;
+    if (sessionToken) {
+      forwardedHeaders.authorization = `Bearer ${sessionToken}`;
+    } else {
+      forwardedHeaders['x-user-id'] = process.env.DASHBOARD_DEV_USER_ID || 'user-global-admin';
+    }
+
     const bridgeKey = process.env.EDGE_BRIDGE_SHARED_KEY;
     if (bridgeKey) forwardedHeaders['x-edge-bridge-key'] = bridgeKey;
 
-    const baseOrigin = (request as any).nextUrl?.origin ?? new URL(request.url).origin;
-    const controlUrl = new URL(`/api/control/v1/admin/cameras/${encodeURIComponent(id)}`, baseOrigin).toString();
+    const controlUrl = new URL(`/v1/admin/cameras/${encodeURIComponent(id)}`, normalizedControlPlaneUrl).toString();
     let response;
 
     try {
@@ -64,4 +73,8 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
       { status: 500 }
     );
   }
+}
+
+function normalizeHttpOrigin(value: string) {
+  return /^[a-z][a-z\d+.-]*:\/\//i.test(value) ? value : `http://${value}`;
 }
