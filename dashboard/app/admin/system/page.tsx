@@ -107,7 +107,17 @@ export default function SystemManagementPage() {
         await loadStats();
         await loadData();
       } else {
-        alert('Failed to delete. Please try again.');
+        const body = await response.json().catch(() => null) as { error?: string; message?: string; details?: string | { error?: string; message?: string } } | null;
+        const nestedDetails = typeof body?.details === 'string' ? (() => {
+          try {
+            return JSON.parse(body.details) as { error?: string; message?: string };
+          } catch {
+            return null;
+          }
+        })() : body?.details;
+
+        const message = nestedDetails?.message || body?.message || body?.error || 'Failed to delete. Please try again.';
+        alert(message);
       }
     } catch (error) {
       console.error('Delete failed:', error);
@@ -133,7 +143,8 @@ export default function SystemManagementPage() {
         await loadStats();
         await loadData();
       } else {
-        alert('Failed to delete. Please try again.');
+        const body = await response.json().catch(() => null) as { error?: string; message?: string } | null;
+        alert(body?.message || body?.error || 'Failed to delete. Please try again.');
       }
     } catch (error) {
       console.error('Delete all failed:', error);

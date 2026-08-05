@@ -53,10 +53,25 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
     }
 
     if (!response.ok) {
-      const text = await response.text().catch(() => undefined);
-      console.error('Failed to delete camera', { id, status: response.status, details: text, controlUrl });
+      const responseText = await response.text().catch(() => undefined);
+      let parsedBody: unknown = undefined;
+
+      if (responseText) {
+        try {
+          parsedBody = JSON.parse(responseText);
+        } catch {
+          parsedBody = undefined;
+        }
+      }
+
+      console.error('Failed to delete camera', { id, status: response.status, details: responseText, controlUrl });
+
+      if (parsedBody && typeof parsedBody === 'object' && parsedBody !== null) {
+        return NextResponse.json(parsedBody, { status: response.status });
+      }
+
       return NextResponse.json(
-        { error: 'Failed to delete camera', details: text },
+        { error: 'Failed to delete camera', details: responseText ?? 'Unknown error' },
         { status: response.status }
       );
     }
