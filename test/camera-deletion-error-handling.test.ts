@@ -49,6 +49,9 @@ describe("Camera Deletion Error Handling - Bug Condition Exploration", () => {
       return;
     }
 
+    // Set AUTH_MODE to development for testing
+    process.env.AUTH_MODE = 'development';
+    
     pool = new Pool({ connectionString: testDbUrl });
     const store = createDbStore(pool);
     app = await buildApp({ store });

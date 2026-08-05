@@ -76,8 +76,17 @@ describe("Debug Camera Deletion", () => {
     try {
       const nonExistentCameraId = "00000000-0000-0000-0000-000000000000";
       
+      // Try calling the route we registered
+      console.log("Trying direct route call to /v1/admin/cameras/all...");
+      const response3 = await app.inject({
+        method: "GET",
+        url: `/v1/admin/cameras/count`,
+      });
+      console.log("GET /v1/admin/cameras/count - Status Code:", response3.statusCode);
+      console.log("GET /v1/admin/cameras/count - Response Body:", response3.body);
+      
       // Try without /v1 prefix
-      console.log("Trying without /v1 prefix...");
+      console.log("\nTrying without /v1 prefix...");
       const response1 = await app.inject({
         method: "DELETE",
         url: `/admin/cameras/${nonExistentCameraId}`,
@@ -86,7 +95,7 @@ describe("Debug Camera Deletion", () => {
       console.log("Without /v1 - Status Code:", response1.statusCode);
       console.log("Without /v1 - Response Body:", response1.body);
       
-      // Try with /v1 prefix
+      // Try with /v1 prefix and auth header
       console.log("\nTrying with /v1 prefix...");
       const response2 = await app.inject({
         method: "DELETE",
@@ -95,6 +104,16 @@ describe("Debug Camera Deletion", () => {
       });
       console.log("With /v1 - Status Code:", response2.statusCode);
       console.log("With /v1 - Response Body:", response2.body);
+      
+      // Try GET count with auth header
+      console.log("\nTrying GET /v1/admin/cameras/count with auth...");
+      const response4 = await app.inject({
+        method: "GET",
+        url: `/v1/admin/cameras/count`,
+        headers: { "x-user-id": "user-global-admin" },
+      });
+      console.log("GET /v1/admin/cameras/count - Status Code:", response4.statusCode);
+      console.log("GET /v1/admin/cameras/count - Response Body:", response4.body);
 
       // Just log, don't assert for now
       expect(response1.statusCode).toBeDefined();
