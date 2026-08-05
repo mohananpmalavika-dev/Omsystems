@@ -41,15 +41,40 @@ export async function GET(request: NextRequest) {
 
     // Fetch actual data from the same endpoints to get accurate counts
     try {
-      // Get cameras count
-      const camerasResponse = await fetch(`${controlPlaneUrl}/v1/admin/cameras`, {
+      // Request the count endpoint first (more efficient), fallback to the list endpoint if needed
+      const camerasResponse = await fetch(`${controlPlaneUrl}/v1/admin/cameras/count`, {
         method: 'GET',
         headers,
         cache: 'no-store',
       });
+
       if (camerasResponse.ok) {
         const camerasData = await camerasResponse.json();
-        stats.cameras = Array.isArray(camerasData) ? camerasData.length : 0;
+        // control-plane /count returns an object with total_cameras; list returns { cameras: [...] }
+        if (typeof camerasData.total_cameras === 'number') {
+          stats.cameras = Number(camerasData.total_cameras);
+        } else if (Array.isArray(camerasData.cameras)) {
+          stats.cameras = camerasData.cameras.length;
+        } else if (Array.isArray(camerasData)) {
+          stats.cameras = camerasData.length;
+        } else {
+          stats.cameras = 0;
+        }
+      } else {
+        // Fallback: try /list endpoint
+        try {
+          const listResp = await fetch(`${controlPlaneUrl}/v1/admin/cameras/list`, {
+            method: 'GET',
+            headers,
+            cache: 'no-store',
+          });
+          if (listResp.ok) {
+            const listData = await listResp.json();
+            stats.cameras = Array.isArray(listData.cameras) ? listData.cameras.length : 0;
+          }
+        } catch (err) {
+          console.error('Failed to fetch cameras list fallback:', err);
+        }
       }
     } catch (error) {
       console.error('Failed to fetch cameras count:', error);
