@@ -83,7 +83,7 @@ export async function adminCameraManagementRoutes(app: FastifyInstance, store: C
       let deletedNodes = 0;
       if (nodeIds.length > 0) {
         const nodeResult = await client.query(
-          "DELETE FROM resource_nodes WHERE id = ANY($1) AND type = 'camera'",
+          "DELETE FROM resource_nodes WHERE id = ANY($1) AND node_type = 'camera'",
           [nodeIds]
         );
         deletedNodes = nodeResult.rowCount ?? 0;
@@ -197,7 +197,7 @@ export async function adminCameraManagementRoutes(app: FastifyInstance, store: C
       // Remove resource node if present
       if (resourceNodeId) {
         try {
-          await client.query("DELETE FROM resource_nodes WHERE id = $1 AND type = 'camera'", [resourceNodeId]);
+          await client.query("DELETE FROM resource_nodes WHERE id = $1 AND node_type = 'camera'", [resourceNodeId]);
         } catch (err) {
           // ignore
         }
@@ -281,7 +281,7 @@ export async function adminCameraManagementRoutes(app: FastifyInstance, store: C
       // Remove resource node if present
       if (resourceNodeId) {
         try {
-          await client.query("DELETE FROM resource_nodes WHERE id = $1 AND type = 'camera'", [resourceNodeId]);
+          await client.query("DELETE FROM resource_nodes WHERE id = $1 AND node_type = 'camera'", [resourceNodeId]);
         } catch (err) {
           // ignore
         }

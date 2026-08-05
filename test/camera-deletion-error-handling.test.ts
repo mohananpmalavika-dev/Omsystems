@@ -124,18 +124,17 @@ describe("Camera Deletion Error Handling - Bug Condition Exploration", () => {
 
       // Create a resource node for the camera
       const nodeResult = await client.query(
-        `INSERT INTO resource_nodes (tenant_id, name, type) 
-         VALUES ('omsystems', 'Test Constraint Camera', 'camera') 
+        `INSERT INTO resource_nodes (tenant_id, name, node_type, path) 
+         VALUES ('omsystems', 'Test Constraint Camera', 'camera', text2ltree('test_constraint_camera')) 
          RETURNING id`
       );
       const resourceNodeId = nodeResult.rows[0].id;
 
       // Create a camera
       const cameraResult = await client.query(
-        `INSERT INTO cameras (tenant_id, branch_node_id, resource_node_id, status, vendor, model)
-         VALUES ('omsystems', 
-                 (SELECT id FROM resource_nodes WHERE type = 'branch' LIMIT 1),
-                 $1, 'active', 'test', 'constraint-test')
+        `INSERT INTO cameras (branch_node_id, resource_node_id, status, vendor, model, channel, protocol, connection_secret_ref)
+         VALUES ((SELECT id FROM resource_nodes WHERE node_type = 'branch' LIMIT 1),
+                 $1, 'active', 'test', 'constraint-test', 1, 'rtsp', 'test-secret')
          RETURNING id::text`,
         [resourceNodeId]
       );
@@ -209,18 +208,17 @@ describe("Camera Deletion Error Handling - Bug Condition Exploration", () => {
 
       // Create a resource node for the camera
       const nodeResult = await client.query(
-        `INSERT INTO resource_nodes (tenant_id, name, type) 
-         VALUES ('omsystems', 'Test Missing Table Camera', 'camera') 
+        `INSERT INTO resource_nodes (tenant_id, name, node_type, path) 
+         VALUES ('omsystems', 'Test Missing Table Camera', 'camera', text2ltree('test_missing_table_camera')) 
          RETURNING id`
       );
       const resourceNodeId = nodeResult.rows[0].id;
 
       // Create a camera with no dependent records
       const cameraResult = await client.query(
-        `INSERT INTO cameras (tenant_id, branch_node_id, resource_node_id, status, vendor, model)
-         VALUES ('omsystems', 
-                 (SELECT id FROM resource_nodes WHERE type = 'branch' LIMIT 1),
-                 $1, 'active', 'test', 'missing-table-test')
+        `INSERT INTO cameras (branch_node_id, resource_node_id, status, vendor, model, channel, protocol, connection_secret_ref)
+         VALUES ((SELECT id FROM resource_nodes WHERE node_type = 'branch' LIMIT 1),
+                 $1, 'active', 'test', 'missing-table-test', 1, 'rtsp', 'test-secret')
          RETURNING id::text`,
         [resourceNodeId]
       );
