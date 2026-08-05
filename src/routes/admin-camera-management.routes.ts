@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import type { ControlPlaneStore } from "../control-plane-store.js";
-import { isPgError, isConstraintViolation, isTableMissing } from "../utils/pg-error-utils.js";
+import { isPgError, isConstraintViolation, isTableMissing, isColumnMissing } from "../utils/pg-error-utils.js";
 
 function hasDbPool(store: ControlPlaneStore): store is ControlPlaneStore & { db: { connect(): Promise<any>; query(sql: string, params?: any[]): Promise<any>; } } {
   return "db" in store && store.db !== undefined;
@@ -186,8 +186,12 @@ export async function adminCameraManagementRoutes(app: FastifyInstance, store: C
         try {
           await client.query(`DELETE FROM ${table} WHERE camera_id = $1`, [id]);
         } catch (err) {
-          // Non-fatal if table missing (PostgreSQL error code 42P01)
-          if (!isTableMissing(err)) throw err;
+          // Non-fatal if the dependent relation or column is missing from the target schema.
+          if (isTableMissing(err) || isColumnMissing(err)) {
+            app.log.warn({ cameraId: id, table, error: err }, 'Skipping dependent table cleanup for missing schema object');
+            continue;
+          }
+          throw err;
         }
       }
 
@@ -276,8 +280,12 @@ export async function adminCameraManagementRoutes(app: FastifyInstance, store: C
         try {
           await client.query(`DELETE FROM ${table} WHERE camera_id = $1`, [id]);
         } catch (err) {
-          // Non-fatal if table missing (PostgreSQL error code 42P01)
-          if (!isTableMissing(err)) throw err;
+          // Non-fatal if the dependent relation or column is missing from the target schema.
+          if (isTableMissing(err) || isColumnMissing(err)) {
+            app.log.warn({ cameraId: id, table, error: err }, 'Skipping dependent table cleanup for missing schema object');
+            continue;
+          }
+          throw err;
         }
       }
 

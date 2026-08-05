@@ -80,6 +80,15 @@ export function isTableMissing(error: unknown): boolean {
 }
 
 /**
+ * Check if an error is due to a missing column or property in a table
+ * @param error - The error to check
+ * @returns true if the error is due to an undefined column
+ */
+export function isColumnMissing(error: unknown): boolean {
+  return isPgError(error) && error.code === PG_ERROR_CODES.UNDEFINED_COLUMN;
+}
+
+/**
  * Sanitize error message for external consumption
  * Removes sensitive database information while keeping useful context
  * @param error - The error to sanitize
