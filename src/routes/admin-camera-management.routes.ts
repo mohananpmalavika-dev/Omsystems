@@ -13,8 +13,10 @@ function hasDbPool(store: ControlPlaneStore): store is ControlPlaneStore & { db:
  * Provides endpoints for bulk camera operations
  */
 export async function adminCameraManagementRoutes(app: FastifyInstance, store: ControlPlaneStore) {
+  console.log('[ADMIN CAMERA ROUTES] Registering admin camera management routes...');
   
   // Delete all cameras
+  console.log('[ADMIN CAMERA ROUTES] Registering DELETE /v1/admin/cameras/all');
   app.delete("/v1/admin/cameras/all", async (request, reply) => {
     if (!hasDbPool(store)) {
       return reply.code(501).send({ error: "not_implemented", message: "This endpoint requires PostgreSQL store support" });
@@ -109,6 +111,8 @@ export async function adminCameraManagementRoutes(app: FastifyInstance, store: C
       client.release();
     }
   });
+  
+  console.log('[ADMIN CAMERA ROUTES] Registered DELETE /v1/admin/cameras/all successfully');
   
   // Get camera count (for preview)
   app.get("/v1/admin/cameras/count", async (request, reply) => {

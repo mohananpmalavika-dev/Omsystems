@@ -33,9 +33,17 @@ describe("Debug Camera Deletion", () => {
       return;
     }
 
-    pool = new Pool({ connectionString: testDbUrl });
-    const store = createDbStore(pool);
-    app = await buildApp({ store });
+    try {
+      console.log("Creating pool...");
+      pool = new Pool({ connectionString: testDbUrl });
+      const store = createDbStore(pool);
+      console.log("Building app...");
+      app = await buildApp({ store });
+      console.log("App built successfully!");
+    } catch (error) {
+      console.error("Error building app:", error);
+      throw error;
+    }
   });
 
   afterEach(async () => {
@@ -47,7 +55,12 @@ describe("Debug Camera Deletion", () => {
     if (!testDbUrl) return;
 
     // First check if app has the route
-    console.log("App routes:", app.printRoutes());
+    const routes = app.printRoutes();
+    console.log("Searching for admin/cameras routes...");
+    
+    const adminCameraRoutes = routes.split('\n').filter(line => line.includes('admin') && line.includes('camera'));
+    console.log("Found admin camera routes:", adminCameraRoutes.length);
+    adminCameraRoutes.forEach(route => console.log("  -", route.trim()));
     
     expect(true).toBe(true);
   });
@@ -57,24 +70,29 @@ describe("Debug Camera Deletion", () => {
 
     try {
       const nonExistentCameraId = "00000000-0000-0000-0000-000000000000";
-      const response = await app.inject({
+      
+      // Try without /v1 prefix
+      console.log("Trying without /v1 prefix...");
+      const response1 = await app.inject({
+        method: "DELETE",
+        url: `/admin/cameras/${nonExistentCameraId}`,
+        headers: { "x-user-id": "user-global-admin" },
+      });
+      console.log("Without /v1 - Status Code:", response1.statusCode);
+      console.log("Without /v1 - Response Body:", response1.body);
+      
+      // Try with /v1 prefix
+      console.log("\nTrying with /v1 prefix...");
+      const response2 = await app.inject({
         method: "DELETE",
         url: `/v1/admin/cameras/${nonExistentCameraId}`,
         headers: { "x-user-id": "user-global-admin" },
       });
-
-      console.log("Status Code:", response.statusCode);
-      console.log("Response Body:", response.body);
-      
-      try {
-        const jsonBody = response.json();
-        console.log("Response JSON:", jsonBody);
-      } catch (e) {
-        console.log("Could not parse JSON");
-      }
+      console.log("With /v1 - Status Code:", response2.statusCode);
+      console.log("With /v1 - Response Body:", response2.body);
 
       // Just log, don't assert for now
-      expect(response.statusCode).toBeDefined();
+      expect(response1.statusCode).toBeDefined();
     } catch (error) {
       console.error("Test error:", error);
       throw error;
