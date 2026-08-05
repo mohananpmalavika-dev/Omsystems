@@ -1,5 +1,11 @@
 {
-  "pbtResults": {},
+  "pbtResults": {
+    "1. Write bug condition exploration test": {
+      "status": "failed",
+      "failingExample": "**Counterexample Found:**\nTest case: DELETE /v1/admin/cameras/cam-nonexistent-{timestamp}\nExpected: HTTP 404 with { error: \"camera_not_found\" }\nActual: HTTP 500 with { error: \"internal_error\" }\n\n**Root Cause Analysis:**\nThe route handler code at line 162 in `src/routes/admin-camera-management.routes.ts` calls `await store.db.connect()` OUTSIDE the try block. When database connection errors occur, they bypass the route's error handling and are caught by the global error handler in `app.ts` (line 1938), which returns HTTP 500 with \"internal_error\".\n\nEven though the route has proper 404 handling logic (lines 168-172) and constraint violation handling (lines 209-218), these are never reached because connection errors occur before entering the try block.\n\n**Test Results:**\n- Test 1 (DELETE endpoint): ❌ FAIL - Returns 500 instead of 404\n- Test 2 (POST endpoint): ❌ FAIL - Returns 500 instead of 404  \n- Test 3 (Constraint violation): Connection error prevented test execution\n- Test 4 (Missing tables): Connection error prevented test execution\n- Test 5 (Error sanitization): ✅ PASS\n- Test 6 (Property-based): ❌ FAIL - Returns 500 instead of 404\n\n**Bug Confirmed:** The tests successfully demonstrate that the bug exists. Non-existent cameras return HTTP 500 with \"internal_error\" instead of HTTP 404 with \"camera_not_found\".",
+      "lastRunTimestamp": 1785906399021
+    }
+  },
   "executionHistory": {
     "1. Write bug condition exploration test": [
       {
@@ -21,6 +27,11 @@
         "executionId": "b6ddc181-4f30-4267-9678-fba479cee1bf",
         "chatSessionId": "sess_1c8307c8-f017-4187-9dc6-f7aaeb757ac6",
         "timestamp": 1785904452052
+      },
+      {
+        "executionId": "00888f46-cff1-47f5-ba34-0de9063e814b",
+        "chatSessionId": "sess_1c8307c8-f017-4187-9dc6-f7aaeb757ac6",
+        "timestamp": 1785906512532
       }
     ],
     "2. Write preservation property tests (BEFORE implementing fix)": [

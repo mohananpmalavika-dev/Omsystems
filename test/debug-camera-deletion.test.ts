@@ -1,57 +1,83 @@
 /**
- * Debug test to understand what's happening with camera deletion
+ * Debug test to understand why camera deletion is returning 500 instead of 404
  */
 
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import type { FastifyInstance } from "fastify";
 import { buildApp } from "../src/app.js";
+import type { ControlPlaneStore } from "../src/control-plane-store.js";
 import pg from "pg";
 
 const { Pool } = pg;
 
-function createDbStore(pool: pg.Pool) {
+function createDbStore(pool: pg.Pool): ControlPlaneStore & { db: { connect: () => Promise<pg.PoolClient>; query: (sql: string, params?: any[]) => Promise<any> } } {
   return {
     db: {
       connect: () => pool.connect(),
       query: (sql: string, params?: any[]) => pool.query(sql, params),
     },
-    close: async () => {},
+    close: async () => {
+      // No-op for tests
+    },
   } as any;
 }
 
 describe("Debug Camera Deletion", () => {
-  it("tests what error we get for non-existent camera", async () => {
-    const testDbUrl = process.env.DATABASE_URL;
+  let app: FastifyInstance;
+  let pool: pg.Pool | undefined;
+  const testDbUrl = process.env.DATABASE_URL;
+
+  beforeEach(async () => {
     if (!testDbUrl) {
-      console.log("Skipping: no DATABASE_URL");
+      console.warn("Skipping database-dependent tests: DATABASE_URL not set");
       return;
     }
 
-    const pool = new Pool({ connectionString: testDbUrl, ssl: { rejectUnauthorized: false } });
+    pool = new Pool({ connectionString: testDbUrl });
     const store = createDbStore(pool);
-    const app = await buildApp({ store });
+    app = await buildApp({ store });
+  });
+
+  afterEach(async () => {
+    if (app) await app.close();
+    if (pool) await pool.end();
+  });
+
+  it("debug: is the route registered?", async () => {
+    if (!testDbUrl) return;
+
+    // First check if app has the route
+    console.log("App routes:", app.printRoutes());
+    
+    expect(true).toBe(true);
+  });
+
+  it("debug: what does the endpoint return for non-existent camera?", async () => {
+    if (!testDbUrl) return;
 
     try {
-      // Test with various ID formats
-      const testIds = [
-        "cam-test-" + Date.now(),
-        "00000000-0000-0000-0000-000000000000", // Valid UUID format
-        "not-a-uuid",
-      ];
+      const nonExistentCameraId = "00000000-0000-0000-0000-000000000000";
+      const response = await app.inject({
+        method: "DELETE",
+        url: `/v1/admin/cameras/${nonExistentCameraId}`,
+        headers: { "x-user-id": "user-global-admin" },
+      });
 
-      for (const nonExistentId of testIds) {
-        console.log("\n=== Testing ID:", nonExistentId);
-        const response = await app.inject({
-          method: "DELETE",
-          url: `/v1/admin/cameras/${nonExistentId}`,
-          headers: { "x-user-id": "user-global-admin" },
-        });
-
-        console.log("Status code:", response.statusCode);
-        console.log("Response body:", response.body);
+      console.log("Status Code:", response.statusCode);
+      console.log("Response Body:", response.body);
+      
+      try {
+        const jsonBody = response.json();
+        console.log("Response JSON:", jsonBody);
+      } catch (e) {
+        console.log("Could not parse JSON");
       }
-    } finally {
-      await app.close();
-      await pool.end();
+
+      // Just log, don't assert for now
+      expect(response.statusCode).toBeDefined();
+    } catch (error) {
+      console.error("Test error:", error);
+      throw error;
     }
   });
 });

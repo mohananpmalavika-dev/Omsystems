@@ -155,19 +155,29 @@ export async function adminCameraManagementRoutes(app: FastifyInstance, store: C
 
   // Delete a single camera by id (admin)
   app.delete('/v1/admin/cameras/:id', async (request, reply) => {
+    console.log('[DEBUG] DELETE /v1/admin/cameras/:id called');
+    
     if (!hasDbPool(store)) {
+      console.log('[DEBUG] No DB pool');
       return reply.code(501).send({ error: 'not_implemented', message: 'This endpoint requires PostgreSQL store support' });
     }
 
     const { id } = request.params as { id: string };
+    console.log('[DEBUG] Camera ID:', id);
+    
     const client = await store.db.connect();
+    console.log('[DEBUG] Got database client');
 
     try {
       await client.query('BEGIN');
+      console.log('[DEBUG] Started transaction');
 
       // Ensure camera exists and get its resource node id
       const cameraRow = await client.query('SELECT id, resource_node_id FROM cameras WHERE id::text = $1', [id]);
+      console.log('[DEBUG] Camera query result:', cameraRow.rowCount);
+      
       if (cameraRow.rowCount === 0) {
+        console.log('[DEBUG] Camera not found, returning 404');
         await client.query('ROLLBACK');
         return reply.code(404).send({ error: 'camera_not_found' });
       }
