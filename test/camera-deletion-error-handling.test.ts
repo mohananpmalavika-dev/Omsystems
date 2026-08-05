@@ -105,6 +105,38 @@ describe("Camera Deletion Error Handling - Bug Condition Exploration", () => {
     });
   });
 
+  it("returns a sanitized camera_deletion_failed response when database connect fails", async () => {
+    process.env.AUTH_MODE = "development";
+
+    const failingStore = {
+      db: {
+        connect: async () => {
+          throw new Error("database connection unavailable");
+        },
+        query: async () => ({ rows: [], rowCount: 0 }),
+      },
+      close: async () => {},
+    } as any;
+
+    const localApp = await buildApp({ store: failingStore });
+
+    try {
+      const response = await localApp.inject({
+        method: "DELETE",
+        url: "/v1/admin/cameras/cam-123",
+        headers: { "x-user-id": "user-global-admin" },
+      });
+
+      expect(response.statusCode).toBe(500);
+      expect(response.json()).toMatchObject({
+        error: "camera_deletion_failed",
+        message: "An unexpected error occurred during deletion",
+      });
+    } finally {
+      await localApp.close();
+    }
+  });
+
   /**
    * Test 2: Constraint Violation Detection
    * 

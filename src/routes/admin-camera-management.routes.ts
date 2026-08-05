@@ -160,9 +160,10 @@ export async function adminCameraManagementRoutes(app: FastifyInstance, store: C
     }
 
     const { id } = request.params as { id: string };
-    const client = await store.db.connect();
+    let client: Awaited<ReturnType<typeof store.db.connect>> | undefined;
 
     try {
+      client = await store.db.connect();
       await client.query('BEGIN');
 
       // Ensure camera exists and get its resource node id
@@ -210,7 +211,9 @@ export async function adminCameraManagementRoutes(app: FastifyInstance, store: C
       await client.query('COMMIT');
       return reply.code(204).send();
     } catch (error) {
-      await client.query('ROLLBACK');
+      if (client) {
+        await client.query('ROLLBACK').catch(() => undefined);
+      }
       
       // Handle specific error types with appropriate status codes
       if (isPgError(error)) {
@@ -232,7 +235,9 @@ export async function adminCameraManagementRoutes(app: FastifyInstance, store: C
         message: 'An unexpected error occurred during deletion'
       });
     } finally {
-      client.release();
+      if (client) {
+        client.release();
+      }
     }
   });
 
@@ -250,10 +255,10 @@ export async function adminCameraManagementRoutes(app: FastifyInstance, store: C
 
     const id = body.data.id;
     app.log.info({ cameraId: id }, 'Camera deletion requested');
-    
-    const client = await store.db.connect();
+    let client: Awaited<ReturnType<typeof store.db.connect>> | undefined;
 
     try {
+      client = await store.db.connect();
       await client.query('BEGIN');
 
       // Ensure camera exists and get its resource node id
@@ -305,7 +310,9 @@ export async function adminCameraManagementRoutes(app: FastifyInstance, store: C
       app.log.info({ cameraId: id }, 'Camera deleted successfully');
       return reply.code(204).send();
     } catch (error) {
-      await client.query('ROLLBACK');
+      if (client) {
+        await client.query('ROLLBACK').catch(() => undefined);
+      }
       
       // Log the full error for debugging
       app.log.error({ error, cameraId: id, errorType: error?.constructor?.name }, 'Camera deletion error occurred');
@@ -332,7 +339,9 @@ export async function adminCameraManagementRoutes(app: FastifyInstance, store: C
         message: 'An unexpected error occurred during deletion'
       });
     } finally {
-      client.release();
+      if (client) {
+        client.release();
+      }
     }
   });
 }
