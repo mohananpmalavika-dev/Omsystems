@@ -51,8 +51,9 @@ export async function GET(request: NextRequest) {
       if (camerasResponse.ok) {
         const camerasData = await camerasResponse.json();
         // control-plane /count returns an object with total_cameras; list returns { cameras: [...] }
-        if (typeof camerasData.total_cameras === 'number') {
-          stats.cameras = Number(camerasData.total_cameras);
+        // Postgres COUNT(*) often comes back as a string via node-postgres, coerce if necessary.
+        if (camerasData && (camerasData.total_cameras !== undefined && camerasData.total_cameras !== null)) {
+          stats.cameras = Number(camerasData.total_cameras) || 0;
         } else if (Array.isArray(camerasData.cameras)) {
           stats.cameras = camerasData.cameras.length;
         } else if (Array.isArray(camerasData)) {
