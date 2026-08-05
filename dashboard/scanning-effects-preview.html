@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Camera Scanning Visual Effects Preview</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #f3f6fa;
+      padding: 40px 20px;
+      color: #172640;
+    }
+    .container {
+      max-width: 900px;
+      margin: 0 auto;
+    }
+    h1 {
+      font-size: 32px;
+      margin-bottom: 10px;
+      color: #0b1f3a;
+    }
+    .subtitle {
+      color: #687890;
+      margin-bottom: 40px;
+      font-size: 14px;
+    }
+    .demo-section {
+      background: white;
+      border: 1px solid #dce4ef;
+      border-radius: 16px;
+      padding: 30px;
+      margin-bottom: 30px;
+      box-shadow: 0 9px 26px rgba(18, 41, 77, .055);
+    }
+    .section-title {
+      font-size: 18px;
+      margin-bottom: 20px;
+      color: #172640;
+    }
+    
+    /* Discovery Status Panel */
+    .discovery-status-panel {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 14px 15px;
+      border: 1px solid #dce7f7;
+      border-radius: 12px;
+      background: linear-gradient(135deg, #f6faff 0%, #eef4ff 100%);
+      margin-bottom: 20px;
+    }
+    .discovery-status-panel.scanning {
+      border-color: #9ec7ff;
+      background: linear-gradient(135deg, #f8fbff 0%, #eef5ff 100%);
+      position: relative;
+      overflow: hidden;
+    }
+    .discovery-status-panel.scanning::before {
+      content: "";
+      position: absolute;
+      top: 50%;
+      left: -20%;
+      width: 40%;
+      height: 150%;
+      background: linear-gradient(90deg, transparent, rgba(53, 111, 246, 0.08), transparent);
+      transform: translateY(-50%) skewX(-15deg);
+      animation: scanning-sweep 2.5s ease-in-out infinite;
+    }
+    .discovery-status-panel.scanning::after {
+      content: "";
+      position: absolute;
+      inset: -2px;
+      border-radius: 12px;
+      background: linear-gradient(45deg, transparent 30%, rgba(53, 111, 246, 0.3), transparent 70%);
+      opacity: 0;
+      animation: scanning-pulse 2s ease-in-out infinite;
+      pointer-events: none;
+    }
+    .discovery-status-copy {
+      flex: 1;
+      position: relative;
+      z-index: 1;
+    }
+    .discovery-status-copy strong {
+      display: block;
+      color: #274264;
+      font-size: 11px;
+    }
+    .discovery-status-copy p {
+      margin: 4px 0 0;
+      color: #64748b;
+      font-size: 9px;
+      line-height: 1.5;
+    }
+    .discovery-status-actions {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 6px;
+      position: relative;
+      z-index: 2;
+    }
+    
+    /* Scan Pill */
+    .scan-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 5px 8px;
+      border-radius: 999px;
+      background: #edf3fb;
+      color: #5b6d83;
+      font-size: 8px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      position: relative;
+    }
+    .scan-pill.active {
+      color: #1966b8;
+      background: #e4f0ff;
+      animation: scanning-pill-glow 1.5s ease-in-out infinite;
+    }
+    .scan-pill.active::before {
+      content: "";
+      position: absolute;
+      inset: -4px;
+      border-radius: 999px;
+      background: rgba(53, 111, 246, 0.2);
+      animation: scanning-radar 2s cubic-bezier(0, 0.2, 0.8, 1) infinite;
+      z-index: -1;
+    }
+    .scan-pill.active::after {
+      content: "";
+      display: inline-block;
+      width: 6px;
+      height: 6px;
+      margin-left: 3px;
+      border-radius: 50%;
+      background: #1966b8;
+      animation: scanning-dot-pulse 1.2s ease-in-out infinite;
+      box-shadow: 0 0 8px rgba(25, 102, 184, 0.6);
+    }
+    
+    /* Scanning Icon */
+    .scanning-icon {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 40px;
+      height: 40px;
+      position: relative;
+      margin: 20px auto;
+    }
+    .scanning-icon::before,
+    .scanning-icon::after {
+      content: "";
+      position: absolute;
+      border: 2px solid #1966b8;
+      border-radius: 50%;
+      animation: scanning-ripple 2s cubic-bezier(0, 0.2, 0.8, 1) infinite;
+    }
+    .scanning-icon::before {
+      width: 100%;
+      height: 100%;
+    }
+    .scanning-icon::after {
+      width: 100%;
+      height: 100%;
+      animation-delay: 1s;
+    }
+    .scanning-icon > span {
+      width: 12px;
+      height: 12px;
+      background: #1966b8;
+      border-radius: 50%;
+      animation: scanning-dot-pulse 1.5s ease-in-out infinite;
+      z-index: 1;
+    }
+    
+    /* Button */
+    .primary-button {
+      color: #fff;
+      border: 1px solid #2f60df;
+      border-radius: 10px;
+      background: linear-gradient(145deg, #467bf8, #2c5bdc);
+      box-shadow: 0 8px 20px rgba(42, 91, 220, .18);
+      font-weight: 680;
+      position: relative;
+      overflow: hidden;
+      padding: 10px 20px;
+      font-size: 11px;
+      cursor: pointer;
+      border: none;
+    }
+    .primary-button:disabled {
+      opacity: 0.7;
+      cursor: not-allowed;
+    }
+    .primary-button:disabled::before {
+      content: "";
+      position: absolute;
+      top: 50%;
+      left: 12px;
+      width: 16px;
+      height: 16px;
+      border: 2px solid rgba(255, 255, 255, 0.3);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: button-spinner 0.8s linear infinite;
+    }
+    .primary-button:disabled {
+      padding-left: 36px;
+    }
+    
+    /* Metrics */
+    .discovery-status-metrics {
+      display: flex;
+      gap: 8px;
+      margin-top: 15px;
+    }
+    .discovery-status-metrics > div {
+      min-width: 72px;
+      padding: 8px 10px;
+      border-radius: 10px;
+      background: rgba(255, 255, 255, 0.8);
+      text-align: center;
+      border: 1px solid rgba(41, 98, 176, .12);
+    }
+    .discovery-status-panel.scanning .discovery-status-metrics > div {
+      animation: metrics-fade-in 0.6s ease-out;
+    }
+    .discovery-status-panel.scanning .discovery-status-metrics > div:nth-child(2) {
+      animation-delay: 0.2s;
+    }
+    .discovery-status-panel.scanning .discovery-status-metrics > div:nth-child(3) {
+      animation-delay: 0.4s;
+    }
+    .discovery-status-metrics span {
+      display: block;
+      color: #6b7a90;
+      font-size: 8px;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    .discovery-status-metrics strong {
+      color: #223b59;
+      font-size: 11px;
+    }
+    
+    /* Controls */
+    .controls {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 20px;
+    }
+    .control-button {
+      padding: 8px 16px;
+      border: 1px solid #dce4ef;
+      background: white;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 12px;
+      color: #172640;
+      font-weight: 600;
+    }
+    .control-button:hover {
+      background: #f8fafc;
+    }
+    
+    /* Animations */
+    @keyframes scanning-sweep {
+      0% { left: -20%; }
+      100% { left: 120%; }
+    }
+    @keyframes scanning-pulse {
+      0%, 100% { opacity: 0; }
+      50% { opacity: 0.5; }
+    }
+    @keyframes scanning-pill-glow {
+      0%, 100% { box-shadow: 0 0 0 rgba(25, 102, 184, 0); }
+      50% { box-shadow: 0 0 12px rgba(25, 102, 184, 0.4); }
+    }
+    @keyframes scanning-radar {
+      0% { transform: scale(1); opacity: 0.4; }
+      100% { transform: scale(1.5); opacity: 0; }
+    }
+    @keyframes scanning-dot-pulse {
+      0%, 100% { transform: scale(1); opacity: 1; }
+      50% { transform: scale(1.3); opacity: 0.7; }
+    }
+    @keyframes scanning-ripple {
+      0% { transform: scale(0.8); opacity: 0.6; }
+      100% { transform: scale(2); opacity: 0; }
+    }
+    @keyframes button-spinner {
+      to { transform: translateY(-50%) rotate(360deg); }
+    }
+    @keyframes metrics-fade-in {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Camera Scanning Visual Effects</h1>
+    <p class="subtitle">Interactive preview of the scanning animations and visual feedback</p>
+    
+    <div class="demo-section">
+      <h2 class="section-title">1. Scanning Panel with Active State</h2>
+      <div class="controls">
+        <button class="control-button" onclick="toggleScanning()">Toggle Scanning</button>
+      </div>
+      <div id="scanPanel" class="discovery-status-panel scanning">
+        <div class="discovery-status-copy">
+          <strong>Scan in progress</strong>
+          <p>The Branch Gateway is checking the local network and validating cameras.</p>
+        </div>
+        <div class="discovery-status-actions">
+          <span class="scan-pill active">Scanning…</span>
+        </div>
+      </div>
+      <p style="font-size: 11px; color: #687890; margin-top: 10px;">
+        ✨ Notice the sweeping light effect, pulsing border, and animated status pill
+      </p>
+    </div>
+    
+    <div class="demo-section">
+      <h2 class="section-title">2. Scanning Icon (Radar Effect)</h2>
+      <div style="text-align: center;">
+        <div class="scanning-icon">
+          <span></span>
+        </div>
+      </div>
+      <p style="font-size: 11px; color: #687890; text-align: center; margin-top: 10px;">
+        ✨ Dual ripple effect with pulsing center dot
+      </p>
+    </div>
+    
+    <div class="demo-section">
+      <h2 class="section-title">3. Button with Loading State</h2>
+      <button class="primary-button" disabled>Scanning network…</button>
+      <p style="font-size: 11px; color: #687890; margin-top: 10px;">
+        ✨ Animated spinner on disabled state
+      </p>
+    </div>
+    
+    <div class="demo-section">
+      <h2 class="section-title">4. Discovery Metrics (Animated)</h2>
+      <div class="controls">
+        <button class="control-button" onclick="refreshMetrics()">Refresh Metrics Animation</button>
+      </div>
+      <div id="metricsContainer"></div>
+      <p style="font-size: 11px; color: #687890; margin-top: 10px;">
+        ✨ Staggered fade-in with slide-up effect
+      </p>
+    </div>
+    
+    <div class="demo-section">
+      <h2 class="section-title">5. Complete Discovery Panel</h2>
+      <div id="completePanel" class="discovery-status-panel scanning">
+        <div class="discovery-status-copy">
+          <strong>Scan in progress</strong>
+          <p>The Branch Gateway is checking the local network and validating cameras.</p>
+        </div>
+        <div class="discovery-status-actions">
+          <span class="scan-pill active">Scanning…</span>
+          <span style="color: #748297; font-size: 8px;">12:34:56 PM</span>
+        </div>
+      </div>
+      <div class="discovery-status-metrics">
+        <div><span>Found</span><strong>12</strong></div>
+        <div><span>Pending</span><strong>5</strong></div>
+        <div><span>Approved</span><strong>7</strong></div>
+      </div>
+      <p style="font-size: 11px; color: #687890; margin-top: 10px;">
+        ✨ All effects combined in a realistic scenario
+      </p>
+    </div>
+  </div>
+  
+  <script>
+    function toggleScanning() {
+      const panel = document.getElementById('scanPanel');
+      const pill = panel.querySelector('.scan-pill');
+      const strong = panel.querySelector('strong');
+      const p = panel.querySelector('p');
+      
+      if (panel.classList.contains('scanning')) {
+        panel.classList.remove('scanning');
+        pill.classList.remove('active');
+        strong.textContent = 'Scan ready';
+        p.textContent = 'Use Scan network with a gateway, or Local PC scan when your laptop is connected to the branch network.';
+        pill.textContent = 'Awaiting scan';
+      } else {
+        panel.classList.add('scanning');
+        pill.classList.add('active');
+        strong.textContent = 'Scan in progress';
+        p.textContent = 'The Branch Gateway is checking the local network and validating cameras.';
+        pill.textContent = 'Scanning…';
+      }
+    }
+    
+    function refreshMetrics() {
+      const container = document.getElementById('metricsContainer');
+      container.innerHTML = '';
+      
+      setTimeout(() => {
+        container.innerHTML = `
+          <div class="discovery-status-panel scanning" style="padding: 0;">
+            <div class="discovery-status-metrics">
+              <div><span>Found</span><strong>8</strong></div>
+              <div><span>Pending</span><strong>3</strong></div>
+              <div><span>Approved</span><strong>5</strong></div>
+            </div>
+          </div>
+        `;
+      }, 100);
+    }
+    
+    // Initialize metrics on load
+    refreshMetrics();
+  </script>
+</body>
+</html>
