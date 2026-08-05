@@ -240,10 +240,13 @@ export async function adminCameraManagementRoutes(app: FastifyInstance, store: C
 
     const body = z.object({ id: z.string() }).safeParse(request.body);
     if (!body.success) {
+      app.log.error({ body: request.body, errors: body.error }, 'Invalid camera deletion payload');
       return reply.code(400).send({ error: 'invalid_payload', message: 'Expected JSON body { id: string }' });
     }
 
     const id = body.data.id;
+    app.log.info({ cameraId: id }, 'Camera deletion requested');
+    
     const client = await store.db.connect();
 
     try {
@@ -251,8 +254,11 @@ export async function adminCameraManagementRoutes(app: FastifyInstance, store: C
 
       // Ensure camera exists and get its resource node id
       const cameraRow = await client.query('SELECT id, resource_node_id FROM cameras WHERE id::text = $1', [id]);
+      app.log.debug({ cameraId: id, found: cameraRow.rowCount }, 'Camera lookup result');
+      
       if (cameraRow.rowCount === 0) {
         await client.query('ROLLBACK');
+        app.log.info({ cameraId: id }, 'Camera not found, returning 404');
         return reply.code(404).send({ error: 'camera_not_found' });
       }
       const resourceNodeId = cameraRow.rows[0].resource_node_id;
@@ -288,15 +294,21 @@ export async function adminCameraManagementRoutes(app: FastifyInstance, store: C
       }
 
       await client.query('COMMIT');
+      app.log.info({ cameraId: id }, 'Camera deleted successfully');
       return reply.code(204).send();
     } catch (error) {
       await client.query('ROLLBACK');
       
+      // Log the full error for debugging
+      app.log.error({ error, cameraId: id, errorType: error?.constructor?.name }, 'Camera deletion error occurred');
+      
       // Handle specific error types with appropriate status codes
       if (isPgError(error)) {
+        app.log.debug({ errorCode: error.code, errorDetail: error.detail }, 'PostgreSQL error details');
+        
         // Constraint violation (e.g., foreign key, unique constraint)
         if (isConstraintViolation(error.code)) {
-          app.log.error({ error, cameraId: id }, 'Camera deletion failed due to constraint violation');
+          app.log.error({ error, cameraId: id, constraint: error.constraint }, 'Camera deletion failed due to constraint violation');
           return reply.code(409).send({
             error: 'deletion_constrained',
             message: 'Cannot delete camera due to database constraints',
@@ -306,7 +318,7 @@ export async function adminCameraManagementRoutes(app: FastifyInstance, store: C
       }
       
       // Log full error for debugging but return sanitized message
-      app.log.error({ error, cameraId: id }, 'Camera deletion failed');
+      app.log.error({ error, cameraId: id }, 'Camera deletion failed with unexpected error');
       return reply.code(500).send({ 
         error: 'camera_deletion_failed', 
         message: 'An unexpected error occurred during deletion'
