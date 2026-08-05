@@ -56,9 +56,14 @@ describe("Debug Camera Deletion", () => {
 
     // First check if app has the route
     const routes = app.printRoutes();
-    console.log("Searching for admin/cameras routes...");
+    const routeLines = routes.split('\n');
     
-    const adminCameraRoutes = routes.split('\n').filter(line => line.includes('admin') && line.includes('camera'));
+    console.log(`Total route lines: ${routeLines.length}`);
+    console.log('\nFirst 30 lines of route tree:');
+    routeLines.slice(0, 30).forEach((line, idx) => console.log(`${idx}: ${line}`));
+    
+    console.log("\nSearching for admin/cameras routes...");
+    const adminCameraRoutes = routeLines.filter(line => line.toLowerCase().includes('admin') && line.toLowerCase().includes('camera'));
     console.log("Found admin camera routes:", adminCameraRoutes.length);
     adminCameraRoutes.forEach(route => console.log("  -", route.trim()));
     
