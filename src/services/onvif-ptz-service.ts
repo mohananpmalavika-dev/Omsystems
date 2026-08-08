@@ -247,29 +247,274 @@ export class OnvifPtzService {
    */
   async removePreset(
     connectionSecretRef: string,
-    presetNumber: number,
-  ): Promise<{ success: boolean }> {
-    if (!this.isSimulationAllowed()) {
-      return { success: false, message: 'PTZ remove preset is disabled in this deployment.' } as any;
+    cameraId: string,
+    presetToken: string,
+  ): Promise<PtzOperationResult> {
+    const clientResult = await this.getPtzClient(connectionSecretRef, cameraId);
+    if (!clientResult.success) {
+      return {
+        status: "failed",
+        message: clientResult.error || "Failed to connect to camera",
+      };
     }
 
-    console.log(`[PTZ] Remove preset ${presetNumber}`);
-    // TODO: Execute ONVIF RemovePreset command (development simulation)
-    return { success: true } as any;
+    return await clientResult.client.removePreset(
+      presetToken,
+      clientResult.profileToken,
+    );
   }
 
   /**
    * List available presets from camera
    */
-  async listPresets(connectionSecretRef: string): Promise<Array<{
-    number: number;
+  async listPresets(
+    connectionSecretRef: string,
+    cameraId: string,
+  ): Promise<Array<{
+    token: string;
     name: string;
+    position?: { pan: number; tilt: number; zoom: number };
   }>> {
-    if (!this.isSimulationAllowed()) {
-      throw new Error('PTZ list presets is disabled in this deployment.');
+    const clientResult = await this.getPtzClient(connectionSecretRef, cameraId);
+    if (!clientResult.success) {
+      return [];
     }
 
-    // Development placeholder
-    return [];
+    return await clientResult.client.listPresets(clientResult.profileToken);
+  }
+
+  /**
+   * Go to home position
+   */
+  async gotoHome(
+    connectionSecretRef: string,
+    cameraId: string,
+    speed?: number,
+  ): Promise<PtzOperationResult> {
+    const clientResult = await this.getPtzClient(connectionSecretRef, cameraId);
+    if (!clientResult.success) {
+      return {
+        status: "failed",
+        message: clientResult.error || "Failed to connect to camera",
+      };
+    }
+
+    return await clientResult.client.gotoHome(speed, clientResult.profileToken);
+  }
+
+  // ========== Private Helper Methods ==========
+
+  /**
+   * Validate PTZ command
+   */
+  private validateCommand(command: PtzCommand): { valid: boolean; error?: string } {
+    if (!command.cameraId) {
+      return { valid: false, error: "Camera ID required" };
+    }
+
+    if (command.action === "move" && !command.direction) {
+      return { valid: false, error: "Direction required for move command" };
+    }
+
+    if (command.action === "zoom" && !command.zoomAction) {
+      return { valid: false, error: "Zoom action required" };
+    }
+
+    if (command.action === "preset" && !command.presetId) {
+      return { valid: false, error: "Preset ID required" };
+    }
+
+    if (command.action === "patrol" && !command.patrolId) {
+      return { valid: false, error: "Patrol ID required" };
+    }
+
+    return { valid: true };
+  }
+
+  /**
+   * Execute command internally using PTZ client
+   */
+  private async executeCommandInternal(
+    client: OnvifPtzClient,
+    command: PtzCommand,
+    profileToken: string,
+  ): Promise<PtzOperationResult> {
+    const speed = command.speed ? {
+      pan: command.speed.pan ?? 0.5,
+      tilt: command.speed.tilt ?? 0.5,
+      zoom: command.speed.zoom ?? 0.5,
+    } : undefined;
+
+    switch (command.action) {
+      case "move": {
+        const { panSpeed, tiltSpeed } = this.directionToSpeed(command.direction!);
+        return await client.moveContinuous(panSpeed, tiltSpeed, 0, profileToken);
+      }
+
+      case "zoom": {
+        const zoomSpeed = this.zoomActionToSpeed(command.zoomAction!);
+        return await client.moveContinuous(0, 0, zoomSpeed, profileToken);
+      }
+
+      case "stop":
+        return await client.stop(profileToken);
+
+      case "preset":
+        if (command.presetId !== undefined) {
+          return await client.gotoPreset(
+            `preset${command.presetId}`,
+            speed?.pan,
+            profileToken,
+          );
+        }
+        return { status: "failed", message: "Preset ID required" };
+
+      case "home":
+        return await client.gotoHome(speed?.pan, profileToken);
+
+      case "patrol":
+        return {
+          status: "unsupported",
+          message: "Patrols are vendor-specific and not yet implemented",
+        };
+
+      case "focus":
+        return {
+          status: "unsupported",
+          message: "Focus control is typically handled by imaging service",
+        };
+
+      default:
+        return {
+          status: "failed",
+          message: `Unknown action: ${command.action}`,
+        };
+    }
+  }
+
+  /**
+   * Convert direction to pan/tilt speeds
+   */
+  private directionToSpeed(direction: PtzDirection): {
+    panSpeed: number;
+    tiltSpeed: number;
+  } {
+    const speed = 0.5; // Default speed
+    switch (direction) {
+      case "left":
+        return { panSpeed: -speed, tiltSpeed: 0 };
+      case "right":
+        return { panSpeed: speed, tiltSpeed: 0 };
+      case "up":
+        return { panSpeed: 0, tiltSpeed: speed };
+      case "down":
+        return { panSpeed: 0, tiltSpeed: -speed };
+    }
+  }
+
+  /**
+   * Convert zoom action to zoom speed
+   */
+  private zoomActionToSpeed(action: PtzZoomAction): number {
+    switch (action) {
+      case "in":
+        return 0.5;
+      case "out":
+        return -0.5;
+      case "stop":
+        return 0;
+    }
+  }
+
+  /**
+   * Get or create PTZ client with caching
+   */
+  private async getPtzClient(
+    connectionSecretRef: string,
+    cameraId: string,
+  ): Promise<
+    | { success: true; client: OnvifPtzClient; profileToken: string }
+    | { success: false; error: string }
+  > {
+    // Check cache
+    const cached = this.clientCache.get(cameraId);
+    if (cached && Date.now() - cached.createdAt < this.CACHE_TTL_MS) {
+      return {
+        success: true,
+        client: cached.client,
+        profileToken: cached.profileToken,
+      };
+    }
+
+    // Resolve credentials
+    const connection = await this.credentialResolver.resolve(
+      connectionSecretRef,
+      cameraId,
+    );
+
+    if (!connection) {
+      return {
+        success: false,
+        error: "Failed to resolve camera credentials",
+      };
+    }
+
+    // Create and initialize client
+    try {
+      const client = new OnvifPtzClient(
+        connection.onvifServiceUrl,
+        connection.credentials,
+        8000,
+      );
+
+      const initResult = await client.initialize();
+      if (!initResult.ptzSupported || !initResult.profileToken) {
+        return {
+          success: false,
+          error: "Camera does not support PTZ or has no PTZ profile",
+        };
+      }
+
+      // Cache the client
+      this.clientCache.set(cameraId, {
+        client,
+        profileToken: initResult.profileToken,
+        createdAt: Date.now(),
+      });
+
+      return {
+        success: true,
+        client,
+        profileToken: initResult.profileToken,
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : "Failed to initialize PTZ client",
+      };
+    }
+  }
+
+  /**
+   * Clean up expired cache entries
+   */
+  private cleanupCache(): void {
+    const now = Date.now();
+    for (const [cameraId, entry] of this.clientCache.entries()) {
+      if (now - entry.createdAt >= this.CACHE_TTL_MS) {
+        this.clientCache.delete(cameraId);
+      }
+    }
+  }
+
+  /**
+   * Clear cached client for a camera (useful after credential updates)
+   */
+  clearCache(cameraId?: string): void {
+    if (cameraId) {
+      this.clientCache.delete(cameraId);
+    } else {
+      this.clientCache.clear();
+    }
   }
 }

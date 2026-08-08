@@ -112,15 +112,17 @@ export class CameraCredentialResolver {
     // Query camera and branch credentials
     const result = await this.pool.query<{
       ip_address: string;
-      onvif_port: number;
-      username: string;
-      password: string;
+      onvif_port: number | null;
+      username: string | null;
+      password: string | null;
+      default_username?: string | null;
+      default_password?: string | null;
     }>(
       `SELECT 
         c.ip_address,
-        COALESCE(c.onvif_port, 80) as onvif_port,
-        COALESCE(c.username, bc.default_username) as username,
-        COALESCE(c.password, bc.default_password) as password
+        c.onvif_port,
+        COALESCE(c.username, bc.default_username, 'admin') as username,
+        COALESCE(c.password, bc.default_password, '') as password
        FROM cameras c
        LEFT JOIN branch_credentials bc ON bc.branch_id = c.branch_node_id
        WHERE c.id = $1 AND c.branch_node_id = $2`,
@@ -134,12 +136,12 @@ export class CameraCredentialResolver {
     const row = result.rows[0];
     return {
       host: row.ip_address,
-      port: row.onvif_port,
+      port: row.onvif_port || 80,
       credentials: {
         username: row.username || "admin",
         password: row.password || "",
       },
-      onvifServiceUrl: `http://${row.ip_address}:${row.onvif_port}/onvif/device_service`,
+      onvifServiceUrl: `http://${row.ip_address}:${row.onvif_port || 80}/onvif/device_service`,
     };
   }
 
@@ -220,10 +222,10 @@ export class CameraCredentialResolver {
     serviceUrl: string;
   } | null> {
     const result = await this.pool.query<{
-      ip_address: string;
-      onvif_port: number;
+      ip_address: string | null;
+      onvif_port: number | null;
     }>(
-      `SELECT ip_address, COALESCE(onvif_port, 80) as onvif_port
+      `SELECT ip_address, onvif_port
        FROM cameras
        WHERE id = $1`,
       [cameraId],
@@ -234,10 +236,11 @@ export class CameraCredentialResolver {
     }
 
     const row = result.rows[0];
+    const port = row.onvif_port || 80;
     return {
       host: row.ip_address,
-      port: row.onvif_port,
-      serviceUrl: `http://${row.ip_address}:${row.onvif_port}/onvif/device_service`,
+      port,
+      serviceUrl: `http://${row.ip_address}:${port}/onvif/device_service`,
     };
   }
 

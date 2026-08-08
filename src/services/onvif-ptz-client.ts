@@ -80,8 +80,8 @@ export class OnvifPtzClient extends OnvifClient {
    */
   private async getPtzServiceUrl(): Promise<string | undefined> {
     try {
-      const capabilities = await this.call(
-        this.getDeviceServiceUrl(),
+      const capabilities = await this.callOnvif(
+        (this as any).deviceServiceUrl,
         "http://www.onvif.org/ver10/device/wsdl/GetCapabilities",
         `<tds:GetCapabilities><tds:Category>PTZ</tds:Category></tds:GetCapabilities>`,
         `xmlns:tds="http://www.onvif.org/ver10/device/wsdl"`,
@@ -92,7 +92,7 @@ export class OnvifPtzClient extends OnvifClient {
       return this.textValue(ptz?.["@_XAddr"]) ?? this.textValue(ptz?.XAddr);
     } catch {
       // Fallback to guessed PTZ service URL
-      const deviceUrl = new URL(this.getDeviceServiceUrl());
+      const deviceUrl = new URL((this as any).deviceServiceUrl);
       return new URL("/onvif/ptz", deviceUrl).toString();
     }
   }
@@ -115,7 +115,7 @@ export class OnvifPtzClient extends OnvifClient {
     }
 
     try {
-      const document = await this.call(
+      const document = await this.callOnvif(
         this.ptzServiceUrl,
         "http://www.onvif.org/ver20/ptz/wsdl/GetConfigurations",
         `<tptz:GetConfigurations/>`,
@@ -164,7 +164,7 @@ export class OnvifPtzClient extends OnvifClient {
 
     try {
       const speedValue = speed ?? 0.5;
-      await this.call(
+      await this.callOnvif(
         this.ptzServiceUrl,
         "http://www.onvif.org/ver20/ptz/wsdl/AbsoluteMove",
         `<tptz:AbsoluteMove>
@@ -295,7 +295,7 @@ export class OnvifPtzClient extends OnvifClient {
     }
 
     try {
-      const document = await this.call(
+      const document = await this.callOnvif(
         this.ptzServiceUrl,
         "http://www.onvif.org/ver20/ptz/wsdl/GetStatus",
         `<tptz:GetStatus>
@@ -407,7 +407,7 @@ export class OnvifPtzClient extends OnvifClient {
         ? `<tptz:PresetToken>${this.escapeXml(presetToken)}</tptz:PresetToken>`
         : "";
 
-      const document = await this.call(
+      const document = await this.callOnvif(
         this.ptzServiceUrl,
         "http://www.onvif.org/ver20/ptz/wsdl/SetPreset",
         `<tptz:SetPreset>
@@ -487,7 +487,7 @@ export class OnvifPtzClient extends OnvifClient {
     }
 
     try {
-      const document = await this.call(
+      const document = await this.callOnvif(
         this.ptzServiceUrl,
         "http://www.onvif.org/ver20/ptz/wsdl/GetPresets",
         `<tptz:GetPresets>
@@ -572,14 +572,12 @@ export class OnvifPtzClient extends OnvifClient {
 
   // ========== Private Helper Methods ==========
 
-  private getDeviceServiceUrl(): string {
-    // Access protected deviceServiceUrl from parent class via reflection
-    return (this as any).deviceServiceUrl;
-  }
-
-  private async call(url: string, action: string, body: string, namespaces: string): Promise<unknown> {
-    // Call parent's protected call method via reflection
-    return await (this as any).call(url, action, body, namespaces);
+  /**
+   * Call parent's protected call method using super
+   */
+  protected async callOnvif(url: string, action: string, body: string, namespaces: string): Promise<unknown> {
+    // Call the parent class's call method directly
+    return await (super as any).call(url, action, body, namespaces);
   }
 
   private findRecord(value: unknown, key: string): Record<string, unknown> | undefined {
