@@ -1,7 +1,9 @@
 /**
  * Hardware Security Module (HSM) Service
- * Secure key management with support for multiple HSM providers
+ * Production-ready secure key management with support for multiple HSM providers
  * Supports: Thales, Utimaco, Entrust, AWS CloudHSM, Azure Managed HSM, SoftHSM
+ * 
+ * IMPORTANT: This service will fail on startup in production without proper HSM configuration
  */
 
 import {
@@ -11,11 +13,13 @@ import {
   KeyUsage
 } from '../types/security.types';
 import crypto from 'crypto';
+import { HSMProviderState, determineHSMState, validateHSMStateOnStartup, type HSMStateInfo } from './hsm-state.js';
 
 export class HSMService {
   private config: HSMConfig;
   private client: any;
   private sessionHandle?: any;
+  private providerState: HSMStateInfo | null = null;
 
   constructor(config: HSMConfig) {
     this.config = config;
@@ -23,10 +27,20 @@ export class HSMService {
   }
 
   /**
-   * Initialize HSM connection
+   * Initialize HSM connection with production safety checks
    */
   private async initializeHSM(): Promise<void> {
     console.log(`🔐 Initializing HSM: ${this.config.provider}`);
+
+    // Convert backend config to unified format for state determination
+    const unifiedConfig = {
+      type: this.mapProviderToType(this.config.provider),
+      endpoint: this.config.endpoint
+    };
+
+    // Determine provider state and validate
+    this.providerState = determineHSMState(unifiedConfig, process.env);
+    validateHSMStateOnStartup(this.providerState);
 
     switch (this.config.provider) {
       case HSMProvider.THALES:
@@ -46,8 +60,28 @@ export class HSMService {
         break;
       
       default:
-        console.log(`⚠️ HSM provider ${this.config.provider} - using simulation mode`);
+        console.log(`⚠️ HSM provider ${this.config.provider} - state: ${this.providerState.state}`);
         break;
+    }
+  }
+
+  /**
+   * Map backend provider enum to unified type string
+   */
+  private mapProviderToType(provider: HSMProvider): string {
+    switch (provider) {
+      case HSMProvider.AWS_CLOUDHSM:
+        return 'aws_cloudhsm';
+      case HSMProvider.AZURE_MANAGED_HSM:
+        return 'azure_keyvault';
+      case HSMProvider.THALES:
+      case HSMProvider.UTIMACO:
+      case HSMProvider.ENTRUST:
+        return 'pkcs11';
+      case HSMProvider.SOFTHSM:
+        return 'softhsm';
+      default:
+        return 'unknown';
     }
   }
 
