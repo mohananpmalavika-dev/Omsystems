@@ -123,6 +123,9 @@ const schema = z.object({
   RECORDER_POLL_INTERVAL_MS: z.coerce.number().int().min(5000).max(3_600_000).default(30000),
   RECORDER_PROBE_TIMEOUT_MS: z.coerce.number().int().min(500).max(60_000).default(5000),
   RECORDER_ARCHIVE_SCAN_INTERVAL_MS: z.coerce.number().int().min(60_000).max(7 * 86_400_000).default(6 * 3_600_000),
+  // Database credential provider
+  DATABASE_URL: z.preprocess((value) => value === "" ? undefined : value, z.string().url().optional()),
+  USE_DATABASE_CREDENTIALS: z.enum(["true", "false"]).default("false").transform((value) => value === "true"),
 }).superRefine((value, context) => {
   if (value.EDGE_BRIDGE_SHARED_KEY && !value.EDGE_AGENT_ID) {
     context.addIssue({

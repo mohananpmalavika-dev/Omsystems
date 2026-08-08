@@ -20,6 +20,7 @@ import { EncryptedOutbox } from "./offline/encrypted-outbox.js";
 import { stageSignedUpdate } from "./updates/signed-update.js";
 import { readFile } from "node:fs/promises";
 import { CameraCredentialVault, openSealedCommand, type SealedCommandEnvelope } from "./security/camera-credential-vault.js";
+import { DatabaseCredentialProvider } from "./security/database-credential-provider.js";
 import { discoverRecorderChannels, recorderAdapterVendor, recorderChannelIdentity } from "./recorders/dvr-adapter.js";
 import type { RecorderConfig } from "./monitoring/recorder-probe.js";
 
@@ -143,6 +144,18 @@ const credentialVault = new CameraCredentialVault(
   config.EDGE_CAMERA_CREDENTIAL_VAULT_KEY_PATH,
 );
 await credentialVault.load();
+
+// Initialize database credential provider if enabled
+let dbCredentialProvider: DatabaseCredentialProvider | undefined;
+if (config.USE_DATABASE_CREDENTIALS && config.DATABASE_URL) {
+  dbCredentialProvider = new DatabaseCredentialProvider(
+    config.DATABASE_URL,
+    resolvedBranchId,
+    agentId
+  );
+  await dbCredentialProvider.connect();
+  logger.info('Database credential provider initialized');
+}
 if (hasArgument(argv, "--diagnose")) {
   await control.heartbeat(agentId, config.EDGE_AGENT_VERSION, config.PUBLIC_MEDIA_GATEWAY_URL);
   process.stdout.write(`Connected to ${config.CONTROL_PLANE_URL} as edge agent ${agentId}.\n`);
@@ -278,11 +291,23 @@ async function scanBranch(options: { persistStreamSecrets?: boolean } = {}) {
     const serviceUrl = endpoint.xaddrs[0];
     if (!serviceUrl) continue;
     try {
-      const credentials = credentialVault.get(endpoint.remoteAddress) ?? {
-        username: config.CAMERA_USERNAME,
-        password: config.CAMERA_PASSWORD,
-        updatedAt: "configuration",
-      };
+      // Try database credentials first, then fall back to vault, then config
+      let credentials = dbCredentialProvider 
+        ? await dbCredentialProvider.get(endpoint.remoteAddress)
+        : undefined;
+      
+      if (!credentials) {
+        credentials = credentialVault.get(endpoint.remoteAddress);
+      }
+      
+      if (!credentials) {
+        credentials = {
+          username: config.CAMERA_USERNAME,
+          password: config.CAMERA_PASSWORD,
+          updatedAt: "configuration",
+        };
+      }
+      
       const client = new OnvifClient(serviceUrl, credentials, config.ONVIF_TIMEOUT_MS);
       const device = await client.inspect();
       const vendor = normalizeVendor(device.manufacturer);

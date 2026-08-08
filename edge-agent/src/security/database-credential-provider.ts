@@ -1,17 +1,17 @@
-/**
- * Database-backed Camera Credential Provider
- * For centralized management of 400+ locations and 4000+ cameras
- */
-
-import pg from "pg";
-import type { CameraCredential } from "./camera-credential-vault.js";
-
+import pg from 'pg';
 const { Client } = pg;
 
+export interface CameraCredential {
+  username: string;
+  password: string;
+  updatedAt: string;
+}
+
 export class DatabaseCredentialProvider {
+  private client: pg.Client | null = null;
   private cache: Map<string, CameraCredential> = new Map();
-  private lastFetch = 0;
-  private readonly cacheTTL = 5 * 60 * 1000; // 5 minutes
+  private lastRefresh = 0;
+  private readonly CACHE_TTL_MS = 60_000; // 1 minute
 
   constructor(
     private readonly databaseUrl: string,
@@ -19,45 +19,42 @@ export class DatabaseCredentialProvider {
     private readonly edgeAgentId: string
   ) {}
 
-  async get(host: string): Promise<CameraCredential | undefined> {
-    await this.refreshCacheIfNeeded();
+  async connect() {
+    if (this.client) return;
     
+    this.client = new Client({
+      connectionString: this.databaseUrl,
+      ssl: { rejectUnauthorized: false }
+    });
+    
+    await this.client.connect();
+  }
+
+  async get(host: string): Promise<CameraCredential | undefined> {
+    // Refresh cache if expired
+    if (Date.now() - this.lastRefresh > this.CACHE_TTL_MS) {
+      await this.refreshCache();
+    }
+
     // Try host-specific credential first
     const hostKey = `host:${host}`;
     if (this.cache.has(hostKey)) {
       return this.cache.get(hostKey);
     }
-    
-    // Fall back to default branch credential
-    return this.cache.get("default");
+
+    // Fall back to default credential
+    return this.cache.get('default');
   }
 
-  private async refreshCacheIfNeeded() {
-    const now = Date.now();
-    if (now - this.lastFetch < this.cacheTTL) {
-      return; // Cache still valid
-    }
-
-    const client = new Client({
-      connectionString: this.databaseUrl,
-      ssl: { rejectUnauthorized: false },
-      connectionTimeoutMillis: 5000,
-    });
+  private async refreshCache() {
+    if (!this.client) await this.connect();
 
     try {
-      await client.connect();
-
-      // Fetch credentials for this branch
-      const result = await client.query(
-        `SELECT username, password, scope, ip_address, updated_at
-         FROM camera_credentials
-         WHERE branch_id = $1 OR edge_agent_id = $2
-         ORDER BY 
-           CASE 
-             WHEN ip_address IS NOT NULL THEN 1
-             WHEN scope = 'default' THEN 3
-             ELSE 2
-           END`,
+      const result = await this.client!.query(
+        `SELECT username, password, host, updated_at 
+         FROM camera_credentials 
+         WHERE branch_id = $1 AND edge_agent_id = $2
+         ORDER BY host NULLS LAST`,
         [this.branchId, this.edgeAgentId]
       );
 
@@ -67,60 +64,27 @@ export class DatabaseCredentialProvider {
         const credential: CameraCredential = {
           username: row.username,
           password: row.password,
-          updatedAt: row.updated_at.toISOString(),
+          updatedAt: row.updated_at
         };
 
-        if (row.ip_address) {
-          this.cache.set(`host:${row.ip_address}`, credential);
+        if (row.host) {
+          this.cache.set(`host:${row.host}`, credential);
         } else {
-          this.cache.set(row.scope || "default", credential);
+          this.cache.set('default', credential);
         }
       }
 
-      this.lastFetch = now;
+      this.lastRefresh = Date.now();
     } catch (error) {
-      // If DB fetch fails, keep using cached credentials
-      console.error("Failed to fetch credentials from database:", error);
-    } finally {
-      await client.end();
+      console.error('Failed to refresh credentials from database:', error);
+      // Keep using cached credentials on error
     }
   }
 
-  async set(input: { username: string; password: string; host?: string }): Promise<{
-    scope: string;
-    updatedAt: string;
-  }> {
-    const client = new Client({
-      connectionString: this.databaseUrl,
-      ssl: { rejectUnauthorized: false },
-    });
-
-    try {
-      await client.connect();
-
-      const result = await client.query(
-        `INSERT INTO camera_credentials (branch_id, edge_agent_id, username, password, scope, ip_address)
-         VALUES ($1, $2, $3, $4, $5, $6)
-         RETURNING id, updated_at`,
-        [
-          this.branchId,
-          this.edgeAgentId,
-          input.username,
-          input.password,
-          input.host ? "host-specific" : "default",
-          input.host || null,
-        ]
-      );
-
-      // Invalidate cache
-      this.lastFetch = 0;
-
-      return {
-        scope: input.host ? "single-camera" : "branch-default",
-        updatedAt: result.rows[0].updated_at.toISOString(),
-      };
-    } finally {
-      await client.end();
+  async close() {
+    if (this.client) {
+      await this.client.end();
+      this.client = null;
     }
   }
 }

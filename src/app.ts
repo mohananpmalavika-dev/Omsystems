@@ -64,6 +64,7 @@ import { registerCommandCenterRoutes } from "./routes/command-center.routes.js";
 import { registerDigitalTwinRoutes } from "./routes/digital-twin.routes.js";
 import { registerOperationalReportRoutes } from "./routes/operational-reports.routes.js";
 import { registerFederationRoutes } from "./routes/federation.routes.js";
+import { registerEmployeeActivityTrackingRoutes } from "./routes/employee-activity-tracking.routes.js";
 import {
   EmptyFederationLocalSearchProvider,
   FederationManager,
@@ -1746,6 +1747,7 @@ export async function buildApp(options?: {
     federationSharedKey,
     localSearchProvider: federationLocalSearchProvider,
   });
+  await registerEmployeeActivityTrackingRoutes(app, store);
 
   // Security Posture API endpoint
   app.get("/api/security/posture", async () => {
