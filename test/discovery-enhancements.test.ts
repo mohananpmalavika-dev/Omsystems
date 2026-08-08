@@ -71,6 +71,16 @@ describe("enhanced device discovery", () => {
     const headers = { "x-user-id": "user-global-admin" };
     const agent = await store.registerEdgeAgent("branch-blr-001", "gateway-test", "0.1.0");
 
+    const unavailableScan = await app.inject({
+      method: "POST",
+      url: "/v1/branches/branch-blr-001/device-scans",
+      headers,
+      payload: { edgeAgentId: agent.id },
+    });
+    expect(unavailableScan.statusCode).toBe(409);
+    expect(unavailableScan.json().error).toBe("edge_agent_not_connected");
+
+    await store.heartbeatEdgeAgent(agent.id, "0.1.0");
     const scanResponse = await app.inject({
       method: "POST",
       url: "/v1/branches/branch-blr-001/device-scans",

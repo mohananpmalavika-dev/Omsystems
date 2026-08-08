@@ -213,6 +213,7 @@ export function DeviceManager() {
   const [inventorySort, setInventorySort] = useState<"updated" | "deviceId">("updated");
 
   const activeBranch = branches.find((branch) => branch.id === selectedBranch);
+  const onlineGateway = gateways.find((gateway) => gateway.status === "online");
   const discoveryQueueItems = useMemo(() => discoveredCameras.map((camera) => {
     const reviewStatus = discoveryReviewState[camera.id]?.reviewStatus ?? (camera.duplicateStatus === "duplicate" ? "duplicate" : camera.duplicateStatus === "review-required" ? "review-required" : "pending");
     return {
@@ -481,12 +482,16 @@ export function DeviceManager() {
       setNotice("Enroll the Branch Gateway once to enable the automatic camera scan for this branch.");
       return;
     }
+    if (!onlineGateway) {
+      setNotice(undefined);
+      setError("No branch scanner is connected to this camera network. Power on the Branch Gateway or run the local scanner on the same network as the cameras, then scan again.");
+      return;
+    }
     setScanning(true);
     setError(undefined);
     try {
-      const preferred = gateways.find((gateway) => gateway.status === "online") ?? gateways[0];
-      const scan = await cameraInventoryApi.startScan(selectedBranch, preferred?.id) as { id: string; status: string; branchId: string };
-      const outcome = await completeCameraScan(scan.id, preferred?.id);
+      const scan = await cameraInventoryApi.startScan(selectedBranch, onlineGateway.id) as { id: string; status: string; branchId: string };
+      const outcome = await completeCameraScan(scan.id, onlineGateway.id);
       setNotice(`Camera scan completed. Found ${outcome.found} devices. ${outcome.provisioned} verified live streams were activated${outcome.credentialsRequired ? `; ${outcome.credentialsRequired} need credentials` : ""}.`);
     } catch (reason) {
       setError(messageOf(reason, "Camera scan failed."));
@@ -796,7 +801,7 @@ export function DeviceManager() {
           gateways.length === 0 ? (
             <p className="device-toolbar-note">One-time setup required: enroll the Branch Gateway to start automatic scanning.</p>
           ) : (
-            <p className="device-toolbar-note">Gateway: {gateways[0]?.name || "Unnamed"} · {gateways[0]?.status === "online" ? "Ready to scan" : gateways[0]?.status === "offline" ? "Offline — scan will queue" : "Awaiting first connection"}</p>
+            <p className="device-toolbar-note">Gateway: {onlineGateway?.name || gateways[0]?.name || "Unnamed"} · {onlineGateway ? "Ready to scan" : gateways[0]?.status === "offline" ? "Offline — reconnect to scan" : "Awaiting first connection"}</p>
           )
         ) : null}
       </div>
@@ -887,11 +892,13 @@ export function DeviceManager() {
           <div className="discovery-status-copy">
             <div className="discovery-status-title">
               {scanning ? <span className="scanning-icon" aria-hidden="true"><span /></span> : <Search size={18} aria-hidden="true" />}
-              <strong>{scanning ? "Camera search in progress" : discoveryQueueItems.length === 0 ? "Scan ready" : "Cameras are ready for review"}</strong>
+              <strong>{scanning ? "Camera search in progress" : !onlineGateway ? "Scanner connection required" : discoveryQueueItems.length === 0 ? "Scan ready" : "Cameras are ready for review"}</strong>
             </div>
             <p>{scanning
               ? `Checking ${scanStages[scanStageIndex].toLowerCase()}. The search continues automatically through every configured path.`
-              : discoveryQueueItems.length === 0
+              : !onlineGateway
+                ? "The cloud service cannot access cameras until a Branch Gateway or local scanner is running on the same network."
+                : discoveryQueueItems.length === 0
                 ? "Select Scan cameras once. The module checks the local network, VPN routes, and tunnel-connected access in sequence."
                 : "Approve all verified cameras to start recording, AI detection, and alerts automatically."}</p>
             {scanning ? (

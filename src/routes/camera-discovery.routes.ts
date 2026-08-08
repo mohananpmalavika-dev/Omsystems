@@ -239,6 +239,12 @@ export async function registerCameraDiscoveryRoutes(
     if (!agent || agent.branchId !== branchId) {
       return reply.code(409).send({ error: "discovery_edge_agent_unavailable" });
     }
+    if (agent.status !== "online") {
+      return reply.code(409).send({
+        error: "discovery_edge_agent_not_connected",
+        message: "Connect the branch scanner to verify this device.",
+      });
+    }
 
     const client = await pool.connect();
     try {

@@ -879,7 +879,16 @@ export async function buildApp(options?: {
     if (agents.length === 0) {
       return reply.code(409).send({ error: "edge_agent_required" });
     }
-    const job = await store.createEdgeScanJob(branchId, body.edgeAgentId);
+    const selectedAgent = body.edgeAgentId
+      ? agents.find((agent) => agent.id === body.edgeAgentId)
+      : agents.find((agent) => agent.status === "online");
+    if (!selectedAgent || selectedAgent.status !== "online") {
+      return reply.code(409).send({
+        error: "edge_agent_not_connected",
+        message: "Connect a Branch Gateway or local scanner to the camera network before scanning.",
+      });
+    }
+    const job = await store.createEdgeScanJob(branchId, selectedAgent.id);
     await audit(request, store, "device_scan.requested", branchId, "success", {
       scanJobId: job.id,
       edgeAgentId: job.edgeAgentId,
@@ -937,7 +946,16 @@ export async function buildApp(options?: {
     if (agents.length === 0) {
       return reply.code(409).send({ error: "edge_agent_required" });
     }
-    const job = await store.createEdgeScanJob(branchId, body.edgeAgentId);
+    const selectedAgent = body.edgeAgentId
+      ? agents.find((agent) => agent.id === body.edgeAgentId)
+      : agents.find((agent) => agent.status === "online");
+    if (!selectedAgent || selectedAgent.status !== "online") {
+      return reply.code(409).send({
+        error: "edge_agent_not_connected",
+        message: "Connect a Branch Gateway or local scanner to the camera network before scanning.",
+      });
+    }
+    const job = await store.createEdgeScanJob(branchId, selectedAgent.id);
     await audit(request, store, "edge_scan.requested", branchId, "success", {
       scanJobId: job.id,
       edgeAgentId: job.edgeAgentId,

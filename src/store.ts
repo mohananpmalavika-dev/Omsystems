@@ -684,8 +684,8 @@ export class MemoryStore implements ControlPlaneStore {
   async createEdgeScanJob(branchId: string, edgeAgentId?: string) {
     const agent = edgeAgentId
       ? this.edgeAgents.get(edgeAgentId)
-      : [...this.edgeAgents.values()].find((item) => item.branchId === branchId);
-    if (!agent || agent.branchId !== branchId) throw new Error("edge_agent_not_found");
+      : [...this.edgeAgents.values()].find((item) => item.branchId === branchId && item.status === "online");
+    if (!agent || agent.branchId !== branchId || agent.status !== "online") throw new Error("edge_agent_not_connected");
     const job: EdgeScanJob = {
       id: randomUUID(), branchId, edgeAgentId: agent.id, status: "queued",
       requestedAt: new Date().toISOString(), startedAt: null, completedAt: null,
