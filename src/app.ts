@@ -1747,7 +1747,6 @@ export async function buildApp(options?: {
     federationSharedKey,
     localSearchProvider: federationLocalSearchProvider,
   });
-  await registerEmployeeActivityTrackingRoutes(app, store);
 
   // Security Posture API endpoint
   app.get("/api/security/posture", async () => {
@@ -1772,6 +1771,7 @@ export async function buildApp(options?: {
     await registerMaintenanceExportRoutes(app, extendedStore);
     await registerFirmwareManagementRoutes(app, extendedStore);
     await registerPredictiveAnalyticsRoutes(app, extendedStore);
+    await registerEmployeeActivityTrackingRoutes(app, extendedStore);
     
     // Start maintenance scheduler
     try {

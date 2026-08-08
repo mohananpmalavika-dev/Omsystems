@@ -109,13 +109,6 @@ export class PostgresStore
     this.operationalReports = new OperationalReportRepository(pool);
     this.activityTracking = new ActivityTrackingRepository(pool);
   }
-    this.compliance = new ComplianceRepository(pool);
-    this.maintenance = new MaintenanceRepository(pool);
-    this.privacy = new PrivacyRepository(pool);
-    this.operationalHealth = new OperationalHealthRepository(pool);
-    this.gridLayouts = new GridLayoutRepository(pool);
-    this.operationalReports = new OperationalReportRepository(pool);
-  }
 
   async close() { await this.pool.end(); }
   async getUser(identity: string) { return this.users.findByIdentity(identity); }
@@ -2110,7 +2103,6 @@ export class PostgresStore
       createdAt: row.created_at?.toISOString(),
     }));
   }
-}
 
   // ============================================
   // Activity Tracking Store Methods
