@@ -54,7 +54,7 @@ export function usePageTracking(
   const tracker = useRef(getActivityTracker({ apiBaseUrl: '' }));
 
   useEffect(() => {
-    if (options?.enabled === false) return;
+    if (options?.enabled === false || !pathname) return;
 
     const trackPage = async () => {
       const pageTitle = options?.pageTitle || document.title;

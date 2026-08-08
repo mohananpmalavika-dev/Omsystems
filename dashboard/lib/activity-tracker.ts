@@ -348,9 +348,10 @@ class ActivityTracker {
     // Track form interactions
     document.addEventListener('input', (e) => {
       this.handleActivity();
-      if (this.currentPageVisit && (e.target as HTMLElement).tagName === 'INPUT' ||
-          (e.target as HTMLElement).tagName === 'TEXTAREA' ||
-          (e.target as HTMLElement).tagName === 'SELECT') {
+      if (this.currentPageVisit && 
+          ((e.target as HTMLElement).tagName === 'INPUT' ||
+           (e.target as HTMLElement).tagName === 'TEXTAREA' ||
+           (e.target as HTMLElement).tagName === 'SELECT')) {
         this.currentPageVisit.formInteractions++;
       }
     });
