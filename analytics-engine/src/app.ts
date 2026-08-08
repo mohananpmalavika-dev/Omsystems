@@ -235,6 +235,18 @@ export function buildAnalyticsEngine(options: AnalyticsEngineOptions) {
     return reply.code(200).send(cameraStatus);
   });
 
+  // GPU scheduler statistics endpoint
+  app.get("/v1/analytics/scheduler/stats", async (_request, reply) => {
+    await pipelineReady;
+    const pipelineHealth = pipeline.getHealth();
+    const schedulerStats = pipelineHealth.scheduler || {};
+    
+    return reply.code(200).send({
+      scheduler: schedulerStats,
+      timestamp: new Date().toISOString(),
+    });
+  });
+
   app.post("/internal/detections", async (request, reply) => {
     state.received += 1;
     const event = detectionSchema.parse(request.body);
