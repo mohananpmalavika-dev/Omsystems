@@ -1003,7 +1003,7 @@ export function DeviceManager() {
                       <span className="discovery-chip">{item.model || "Model pending"}</span>
                       <span className="discovery-chip">{item.discoveryMethod ?? "ONVIF discovery"}</span>
                       <span className={`discovery-chip ${item.onvifSupport ? "positive" : "neutral"}`}>{item.onvifSupport ? "ONVIF supported" : "ONVIF unknown"}</span>
-                      <span className={`discovery-chip ${item.streamVerified ? "positive" : item.credentialsRequired ? "warn" : "neutral"}`}>{item.streamVerified ? "Stream verified" : item.credentialsRequired ? "Password needed" : "Stream pending"}</span>
+                      <span className={`discovery-chip ${item.streamVerified ? "positive" : item.credentialsRequired ? "warn" : "neutral"}`}>{item.streamVerified ? "Stream verified" : item.credentialsRequired ? "Login required" : "Stream pending"}</span>
                     </div>
                     <div className="discovery-details-grid">
                       <div><span>Serial</span><strong>{item.serialNumber || "Pending"}</strong></div>
@@ -1011,12 +1011,12 @@ export function DeviceManager() {
                       <div><span>Compatibility</span><strong>{item.compatibility || "Review required"}</strong></div>
                       <div><span>Profiles</span><strong>{profileText}</strong></div>
                     </div>
-                    <p className="discovery-footnote">{item.statusReason || (item.credentialsRequired ? "Camera password is required before the stream can be validated." : item.streamVerified ? "The Branch Gateway confirmed a valid video stream." : "The Branch Gateway is still validating the camera profile and stream availability.")}</p>
+                    <p className="discovery-footnote">{item.credentialsRequired ? `${item.manufacturer || item.vendor || "Device"} was found at ${item.ipAddress}, but its login was rejected. Enter the username and password to identify and verify every available channel.` : item.statusReason || (item.streamVerified ? "The Branch Gateway confirmed a valid video stream." : "The Branch Gateway is still validating the camera profile and stream availability.")}</p>
                     {item.onvifServices?.length ? <p className="discovery-footnote">Services: {item.onvifServices.join(", ")}</p> : null}
                   </div>
                   <div className="discovery-card-actions">
                     {item.credentialsRequired ? (
-                      <button type="button" className="primary-button" onClick={() => openCredentialActivation(item)} disabled={saving || scanning}>Activate with credentials</button>
+                      <button type="button" className="primary-button" onClick={() => openCredentialActivation(item)} disabled={saving || scanning}>Enter login & password</button>
                     ) : (
                       <button type="button" className="primary-button" onClick={() => void approveDiscoveredCamera(item)} disabled={saving || !item.streamVerified}>Approve & start live</button>
                     )}
@@ -1196,13 +1196,13 @@ export function DeviceManager() {
       {credentialActivation && (
         <div className="modal-overlay">
           <div className="modal-container">
-            <div className="modal-header"><h2>Activate {credentialActivation.displayName || credentialActivation.model}</h2><button type="button" className="icon-button" onClick={() => { setCredentialActivation(undefined); setActivationPassword(""); }} disabled={saving}><X size={20} /></button></div>
+            <div className="modal-header"><h2>Device login required</h2><button type="button" className="icon-button" onClick={() => { setCredentialActivation(undefined); setActivationPassword(""); }} disabled={saving}><X size={20} /></button></div>
             <form className="modal-form" onSubmit={activateDiscoveredCamera}>
-              <div className="form-info-banner"><Camera size={16} />{credentialActivation.ipAddress} rejected the saved credentials. Enter the device account to verify it and start the live stream automatically.</div>
+              <div className="form-info-banner"><Camera size={16} />Found {credentialActivation.displayName || credentialActivation.model || "a camera/DVR"} at {credentialActivation.ipAddress}, but its saved login did not match. Enter the device username and password; Sentinel Grid will rescan it and discover its channels automatically.</div>
               <div className="form-group"><label htmlFor="activationUsername">Username <span className="required">*</span></label><input id="activationUsername" value={activationUsername} onChange={(event) => setActivationUsername(event.target.value)} autoComplete="username" required /></div>
               <div className="form-group"><label htmlFor="activationPassword">Password <span className="required">*</span></label><input id="activationPassword" type="password" value={activationPassword} onChange={(event) => setActivationPassword(event.target.value)} autoComplete="current-password" required /></div>
-              <p className="field-help">The module saves this device-specific credential in the branch database, rechecks the camera, and only starts its live feed after stream verification succeeds.</p>
-              <div className="modal-actions"><button type="button" className="secondary-button" onClick={() => { setCredentialActivation(undefined); setActivationPassword(""); }} disabled={saving}>Cancel</button><button className="primary-button" disabled={saving || !activationUsername.trim() || !activationPassword}>{saving ? "Verifying…" : "Activate & start live"}</button></div>
+              <p className="field-help">This login is saved for this detected IP address and sent only to its branch scanner. No IP address or DVR channel needs to be entered manually.</p>
+              <div className="modal-actions"><button type="button" className="secondary-button" onClick={() => { setCredentialActivation(undefined); setActivationPassword(""); }} disabled={saving}>Cancel</button><button className="primary-button" disabled={saving || !activationUsername.trim() || !activationPassword}>{saving ? "Verifying…" : "Save login & rescan"}</button></div>
             </form>
           </div>
         </div>
@@ -1255,7 +1255,7 @@ export function DeviceManager() {
                             <input value={rejectReason} onChange={(event) => setRejectReason(event.target.value)} placeholder="Reject reason" />
                             <button type="button" className="secondary-button" onClick={() => void rejectDiscoveredCamera(camera.id, rejectReason)} disabled={saving}>Reject</button>
                             {camera.credentialsRequired ? (
-                              <button type="button" className="primary-button" onClick={() => openCredentialActivation(camera)} disabled={saving || scanning}>Activate with credentials</button>
+                              <button type="button" className="primary-button" onClick={() => openCredentialActivation(camera)} disabled={saving || scanning}>Enter login & password</button>
                             ) : (
                               <button type="button" className="primary-button" onClick={() => void approveDiscoveredCamera(camera)} disabled={saving || !camera.streamVerified}>Approve & start live</button>
                             )}

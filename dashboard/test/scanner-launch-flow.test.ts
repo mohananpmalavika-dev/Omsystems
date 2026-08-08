@@ -11,4 +11,15 @@ describe("website scanner launch flow", () => {
     expect(source).toContain("The installed Sentinel Grid Scanner is offline");
     expect(source).toContain('"Repair scanner" : "Install scanner"');
   });
+
+  it("opens a login prompt for discovered devices that reject saved credentials", async () => {
+    const source = await readFile("dashboard/components/device-manager.tsx", "utf8");
+
+    expect(source).toContain("const activationCandidate = mappedResults.find((camera) => camera.credentialsRequired)");
+    expect(source).toContain("setCredentialActivation(activationCandidate)");
+    expect(source).toContain("Device login required");
+    expect(source).toContain("Enter login & password");
+    expect(source).toContain("Save login & rescan");
+    expect(source).toContain("cameraInventoryApi.activateDiscovery");
+  });
 });

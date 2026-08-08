@@ -144,6 +144,19 @@ function compatibleUnique(discovered: DiscoveredCamera) {
   return duplicateStatus === "unique" && compatibility === "compatible";
 }
 
+export function supersededRecorderCredentialDiscoveryIds(
+  discoveries: readonly DiscoveredCamera[],
+) {
+  const verifiedRecorderIds = new Set(discoveries
+    .filter((item) => item.recorderId && item.recorderChannel !== undefined &&
+      item.streamVerified === true && item.credentialsRequired !== true)
+    .map((item) => item.recorderId!));
+  return discoveries
+    .filter((item) => item.credentialsRequired === true && item.recorderId &&
+      item.recorderChannel === undefined && verifiedRecorderIds.has(item.recorderId))
+    .map((item) => item.id);
+}
+
 export async function autoProvisionVerifiedCameras(
   store: ControlPlaneStore,
   branchId: string,
@@ -152,9 +165,17 @@ export async function autoProvisionVerifiedCameras(
   const branch = await store.getNode(branchId);
   if (!branch || branch.type !== "branch") throw new Error("branch_not_found");
 
-  const scopedDiscoveries = (await store.listDiscoveredCameras(branchId)).filter((discovered) =>
+  const discoveredForBranch = await store.listDiscoveredCameras(branchId);
+  const agentDiscoveries = discoveredForBranch.filter((discovered) =>
+    !options.edgeAgentId || discovered.edgeAgentId === options.edgeAgentId
+  );
+  const supersededLoginIds = new Set(supersededRecorderCredentialDiscoveryIds(agentDiscoveries));
+  await Promise.all([...supersededLoginIds].map((discoveryId) =>
+    store.rejectDiscovery(discoveryId, "superseded_by_verified_recorder_channels")
+  ));
+  const scopedDiscoveries = agentDiscoveries.filter((discovered) =>
     discovered.status === "pending" &&
-    (!options.edgeAgentId || discovered.edgeAgentId === options.edgeAgentId)
+    !supersededLoginIds.has(discovered.id)
   );
   const pendingDiscoveries = scopedDiscoveries.filter(compatibleUnique);
   const results: CameraProvisionResult[] = [];

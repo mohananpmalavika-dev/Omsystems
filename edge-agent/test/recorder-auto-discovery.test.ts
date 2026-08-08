@@ -1,6 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
 import { fingerprintHttpRecorder } from "../src/discovery/recorder-http-fingerprint.js";
-import { discoverRtspRecorderChannels } from "../src/discovery/rtsp-network-scan.js";
+import {
+  buildUnverifiedRtspDiscoveryPayload,
+  discoverRtspRecorderChannels,
+} from "../src/discovery/rtsp-network-scan.js";
 
 describe("automatic RTSP recorder discovery", () => {
   it("recognizes the CP PLUS DVR web application without a configured endpoint", async () => {
@@ -75,5 +78,34 @@ describe("automatic RTSP recorder discovery", () => {
     expect(result.channels).toEqual([]);
     expect(result.credentialsRequired).toBe(true);
     expect(probe).toHaveBeenCalledTimes(8);
+  });
+
+  it("reports the identified CP PLUS DVR when its login is rejected", () => {
+    expect(buildUnverifiedRtspDiscoveryPayload({
+      agentId: "edge-1",
+      ipAddress: "192.168.29.171",
+      macAddress: "00:11:22:33:44:55",
+      hardwareId: "mac-001122334455",
+      endpoint: {
+        port: 554,
+        credentialsRequired: true,
+        recorder: {
+          vendor: "cp-plus",
+          manufacturer: "CP PLUS",
+          model: "CPPLUS DVR - Web View",
+          sourceType: "analog-dvr-channel",
+        },
+      },
+    })).toMatchObject({
+      vendor: "cp-plus",
+      manufacturer: "CP PLUS",
+      model: "CPPLUS DVR - Web View",
+      ipAddress: "192.168.29.171",
+      rtspPort: 554,
+      credentialsRequired: true,
+      streamVerified: false,
+      statusReason: "recorder_credentials_required",
+      recorderId: "recorder-mac-001122334455",
+    });
   });
 });
