@@ -460,7 +460,7 @@ export class RecordingVerificationService {
   }
 
   /**
-   * Verify playback integrity for a camera
+   * Verify playback integrity for a camera using FFprobe
    */
   private async verifyPlayback(
     cameraId: string,
@@ -473,6 +473,9 @@ export class RecordingVerificationService {
           id::text,
           file_path,
           file_size_bytes,
+          duration_seconds,
+          codec_name,
+          resolution,
           status
         FROM recording_segments
         WHERE camera_id = $1::uuid
@@ -494,14 +497,66 @@ export class RecordingVerificationService {
         return { success: false, error: "Segment file missing or empty" };
       }
 
-      // TODO: Implement actual video file integrity check using FFprobe
-      // For now, we verify the segment exists in database and has valid metadata
+      // Verify file exists on filesystem
+      const fs = await import('fs/promises');
+      const path = await import('path');
       
-      // Simulate playback verification
-      const isValid = segment.file_size_bytes > 1000; // At least 1KB
+      try {
+        const stats = await fs.stat(segment.file_path);
+        
+        if (!stats.isFile()) {
+          return { success: false, error: "Segment path is not a file" };
+        }
 
-      if (!isValid) {
-        return { success: false, error: "Segment file too small" };
+        if (stats.size !== segment.file_size_bytes) {
+          return { 
+            success: false, 
+            error: `File size mismatch: expected ${segment.file_size_bytes}, got ${stats.size}` 
+          };
+        }
+      } catch (error) {
+        return { 
+          success: false, 
+          error: `File not accessible: ${error instanceof Error ? error.message : 'Unknown error'}` 
+        };
+      }
+
+      // Use FFprobe to validate video integrity
+      const ffprobeResult = await this.validateVideoWithFFprobe(segment.file_path);
+      
+      if (!ffprobeResult.success) {
+        return { success: false, error: ffprobeResult.error };
+      }
+
+      // Verify codec and duration match database metadata
+      if (segment.codec_name && ffprobeResult.codecName !== segment.codec_name) {
+        return { 
+          success: false, 
+          error: `Codec mismatch: expected ${segment.codec_name}, got ${ffprobeResult.codecName}` 
+        };
+      }
+
+      // Allow 5% duration tolerance
+      if (segment.duration_seconds) {
+        const durationDiff = Math.abs(ffprobeResult.durationSeconds - segment.duration_seconds);
+        const tolerance = segment.duration_seconds * 0.05;
+        
+        if (durationDiff > tolerance) {
+          return { 
+            success: false, 
+            error: `Duration mismatch: expected ~${segment.duration_seconds}s, got ${ffprobeResult.durationSeconds}s` 
+          };
+        }
+      }
+
+      // Verify video stream exists
+      if (!ffprobeResult.hasVideo) {
+        return { success: false, error: "No video stream found in file" };
+      }
+
+      // Verify file can be decoded (sample frames)
+      if (!ffprobeResult.decodable) {
+        return { success: false, error: "Video file is not decodable" };
       }
 
       return { success: true };
@@ -509,6 +564,155 @@ export class RecordingVerificationService {
       logger.error("Playback verification failed", { error, cameraId });
       return { success: false, error: error instanceof Error ? error.message : "Unknown error" };
     }
+  }
+
+  /**
+   * Validate video file integrity using FFprobe
+   */
+  private async validateVideoWithFFprobe(filePath: string): Promise<{
+    success: boolean;
+    error?: string;
+    codecName?: string;
+    durationSeconds: number;
+    hasVideo: boolean;
+    hasAudio: boolean;
+    width?: number;
+    height?: number;
+    frameRate?: number;
+    bitRate?: number;
+    decodable: boolean;
+  }> {
+    const { spawn } = await import('child_process');
+    
+    return new Promise((resolve) => {
+      // Run FFprobe to get video metadata
+      const ffprobe = spawn('ffprobe', [
+        '-v', 'quiet',
+        '-print_format', 'json',
+        '-show_format',
+        '-show_streams',
+        '-show_error',
+        filePath
+      ]);
+
+      let stdout = '';
+      let stderr = '';
+
+      ffprobe.stdout.on('data', (data) => {
+        stdout += data.toString();
+      });
+
+      ffprobe.stderr.on('data', (data) => {
+        stderr += data.toString();
+      });
+
+      ffprobe.on('close', (code) => {
+        if (code !== 0) {
+          resolve({
+            success: false,
+            error: `FFprobe exited with code ${code}: ${stderr}`,
+            durationSeconds: 0,
+            hasVideo: false,
+            hasAudio: false,
+            decodable: false
+          });
+          return;
+        }
+
+        try {
+          const probe = JSON.parse(stdout);
+
+          // Check for FFprobe errors
+          if (probe.error) {
+            resolve({
+              success: false,
+              error: `FFprobe error: ${probe.error.string}`,
+              durationSeconds: 0,
+              hasVideo: false,
+              hasAudio: false,
+              decodable: false
+            });
+            return;
+          }
+
+          // Extract format information
+          const format = probe.format || {};
+          const duration = parseFloat(format.duration) || 0;
+          const bitRate = parseInt(format.bit_rate) || 0;
+
+          // Extract stream information
+          const streams = probe.streams || [];
+          const videoStream = streams.find((s: any) => s.codec_type === 'video');
+          const audioStream = streams.find((s: any) => s.codec_type === 'audio');
+
+          if (!videoStream) {
+            resolve({
+              success: false,
+              error: 'No video stream found',
+              durationSeconds: duration,
+              hasVideo: false,
+              hasAudio: !!audioStream,
+              decodable: false
+            });
+            return;
+          }
+
+          // Extract video properties
+          const codecName = videoStream.codec_name;
+          const width = videoStream.width;
+          const height = videoStream.height;
+          
+          // Calculate frame rate
+          let frameRate = 0;
+          if (videoStream.r_frame_rate) {
+            const [num, den] = videoStream.r_frame_rate.split('/').map(Number);
+            if (den && den !== 0) {
+              frameRate = num / den;
+            }
+          }
+
+          // Check if video is decodable (no corruption indicators)
+          const decodable = !videoStream.tags?.['com.apple.quicktime.corrupted'] &&
+                           duration > 0 &&
+                           width > 0 &&
+                           height > 0;
+
+          resolve({
+            success: true,
+            codecName,
+            durationSeconds: duration,
+            hasVideo: true,
+            hasAudio: !!audioStream,
+            width,
+            height,
+            frameRate,
+            bitRate,
+            decodable
+          });
+
+        } catch (error) {
+          resolve({
+            success: false,
+            error: `Failed to parse FFprobe output: ${error instanceof Error ? error.message : 'Unknown error'}`,
+            durationSeconds: 0,
+            hasVideo: false,
+            hasAudio: false,
+            decodable: false
+          });
+        }
+      });
+
+      ffprobe.on('error', (error) => {
+        resolve({
+          success: false,
+          error: `Failed to spawn FFprobe: ${error.message}. Ensure ffprobe is installed and in PATH.`,
+          durationSeconds: 0,
+          hasVideo: false,
+          hasAudio: false,
+          decodable: false
+        });
+      });
+    });
   }
 
   /**

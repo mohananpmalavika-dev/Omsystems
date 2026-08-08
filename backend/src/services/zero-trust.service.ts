@@ -147,6 +147,7 @@ export class ZeroTrustService {
    * Uses real Device and Certificate providers
    */
   async registerDevice(
+    userId: string,
     deviceId: string,
     certificate: string,
     tpmAttestation?: any,
@@ -156,7 +157,7 @@ export class ZeroTrustService {
 
     // Register certificate
     if (certificate) {
-      await providers.certificate.registerCertificate(deviceId, 'user-placeholder', certificate);
+      await providers.certificate.registerCertificate(deviceId, userId, certificate);
     }
 
     // Validate TPM attestation
@@ -174,7 +175,7 @@ export class ZeroTrustService {
       userAgent: 'Unknown'
     };
 
-    await providers.device.registerDevice(deviceId, 'user-placeholder', deviceMetadata);
+    await providers.device.registerDevice(deviceId, userId, deviceMetadata);
 
     // Calculate trust level
     const certificateValid = certificate.length > 0;

@@ -43,7 +43,8 @@ COPY recording-engine/package.json ./recording-engine/package.json
 COPY analytics-engine/package.json ./analytics-engine/package.json
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /runtime/control-plane ./control-plane
-RUN test -f /app/control-plane/index.js
+COPY --from=build /runtime/control-plane ./dist/src
+RUN test -f /app/control-plane/index.js && test -f /app/dist/src/index.js
 COPY scripts/run-migrations.mjs ./scripts/run-migrations.mjs
 COPY database/migrations ./database/migrations
 EXPOSE 8080
