@@ -31,6 +31,7 @@ async function proxyControlRequest(request: NextRequest, context: RouteContext) 
   const headers = new Headers(request.headers);
   headers.delete("host");
   headers.delete("cookie");
+  headers.delete("content-length");
 
   if (bridgeKey) headers.set("x-edge-bridge-key", bridgeKey);
   const forwardedFor = request.headers.get("x-forwarded-for");
@@ -46,7 +47,14 @@ async function proxyControlRequest(request: NextRequest, context: RouteContext) 
   }
 
   const methodHasPotentialBody = request.method !== "GET" && request.method !== "HEAD";
+  const requestContentType = request.headers.get("content-type")?.toLowerCase() ?? "";
   let requestBody = methodHasPotentialBody ? await request.text() : undefined;
+  if (
+    typeof requestBody === "string" &&
+    requestContentType.startsWith("application/x-www-form-urlencoded")
+  ) {
+    requestBody = JSON.stringify(Object.fromEntries(new URLSearchParams(requestBody)));
+  }
   if (routePath === "/v1/auth/refresh") {
     const refreshToken = request.cookies.get("sentinel_refresh")?.value;
     if (refreshToken) requestBody = JSON.stringify({ refreshToken });
@@ -125,12 +133,14 @@ async function proxyControlRequest(request: NextRequest, context: RouteContext) 
     }
     const responseType = response.headers.get("content-type") ?? "application/json";
     const contentDisposition = response.headers.get("content-disposition");
+    const contentLength = response.headers.get("content-length");
     return new Response(response.body, {
       status: response.status,
       headers: {
         "content-type": responseType,
         "cache-control": responseType.startsWith("text/event-stream") ? "no-cache, no-transform" : "no-store",
         ...(contentDisposition ? { "content-disposition": contentDisposition } : {}),
+        ...(contentLength ? { "content-length": contentLength } : {}),
         ...(responseType.startsWith("text/event-stream") ? { "x-accel-buffering": "no" } : {}),
       },
     });

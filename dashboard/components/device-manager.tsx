@@ -257,17 +257,6 @@ export function DeviceManager() {
   const pendingReviewCount = discoveryQueueItems.filter((item) => item.reviewStatus !== "approved").length;
   const approvedReviewCount = discoveryQueueItems.filter((item) => item.reviewStatus === "approved").length;
 
-  function downloadFile(filename: string, content: Blob) {
-    const url = URL.createObjectURL(content);
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = filename;
-    document.body.appendChild(anchor);
-    anchor.click();
-    document.body.removeChild(anchor);
-    URL.revokeObjectURL(url);
-  }
-
   useEffect(() => {
     void cameraInventoryApi.listBranches("device:configure")
       .then(({ data }) => {
@@ -669,13 +658,12 @@ export function DeviceManager() {
     setSaving(true);
     setError(undefined);
     try {
-      const installer = await cameraInventoryApi.downloadInstallerFromActivation(selectedBranch, {
+      cameraInventoryApi.downloadInstallerFromActivation(selectedBranch, {
         activationId: gatewayActivation.id,
         activationCode: gatewayActivation.activationCode,
         agentName: gatewayActivation.agentName,
       });
-      downloadFile(`${(activeBranch?.name ?? "branch").replace(/[^a-z0-9_-]+/gi, "-")}-scanner-setup.exe`, installer);
-      setNotice("Scanner installer downloaded. Run it once on this PC; later scans start directly from this page.");
+      setNotice("Installer download started. Open the file from your browser downloads when it finishes, then run it once on this PC.");
     } catch (reason) {
       setError(messageOf(reason, "Unable to download the scanner installer."));
     } finally {

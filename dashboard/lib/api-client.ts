@@ -4,6 +4,29 @@ import type { AlertNotificationPolicy, AlertNotificationPolicyInput } from '@/li
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE || '/api/control';
 
+function startNativeDownload(endpoint: string, values: Record<string, string>) {
+  if (typeof document === "undefined") {
+    throw new Error("Downloads can only be started from a browser.");
+  }
+
+  const form = document.createElement("form");
+  form.method = "POST";
+  form.action = `${API_BASE}${endpoint}`;
+  form.style.display = "none";
+
+  for (const [name, value] of Object.entries(values)) {
+    const input = document.createElement("input");
+    input.type = "hidden";
+    input.name = name;
+    input.value = value;
+    form.appendChild(input);
+  }
+
+  document.body.appendChild(form);
+  form.submit();
+  form.remove();
+}
+
 class ApiError extends Error {
   constructor(
     message: string,
@@ -479,9 +502,9 @@ export const cameraInventoryApi = {
       { method: 'POST', body: JSON.stringify(data) }
     ),
   downloadInstallerFromActivation: (branchId: string, data: { activationId: string; activationCode: string; agentName: string }) =>
-    downloadApi(
+    startNativeDownload(
       `/v1/branches/${encodeURIComponent(branchId)}/edge-agent-installer`,
-      { method: 'POST', body: JSON.stringify(data) },
+      data,
     ),
   sendGatewayCommand: (
     branchId: string,

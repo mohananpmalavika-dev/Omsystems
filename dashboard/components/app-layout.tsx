@@ -112,6 +112,7 @@ const navigation: NavGroup[] = [
       { label: "Synced playback", href: "/playback/synced", icon: Play },
       { label: "Video search", href: "/video-search", icon: Search },
       { label: "Evidence vault", href: "/evidence", icon: FileCheck2 },
+      { label: "Employee activity report", href: "/activity-report", icon: UserRoundCog },
       { label: "Operational reports", href: "/reports", icon: FileSearch },
     ],
   },
