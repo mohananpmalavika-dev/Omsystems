@@ -1,6 +1,14 @@
 /**
  * Hardware Security Module (HSM) Service
- * Cryptographic key management using hardware security modules
+ * Production-ready cryptographic key management using hardware security modules
+ * 
+ * Supported Providers:
+ * - AWS CloudHSM / KMS (production)
+ * - Azure Key Vault / Managed HSM (production)
+ * - PKCS#11 (Thales, Utimaco, etc.) (production)
+ * - SoftHSM (development/testing only)
+ * 
+ * IMPORTANT: This service will fail on startup in production without proper HSM configuration
  */
 
 import { IHSMService } from '../interfaces.js';
@@ -8,11 +16,15 @@ import { HSMKey, HSMOperation, HSMOperationType, HSMConfig } from '../types.js';
 import { getDatabase } from '../../config/database.js';
 import { EventEmitter } from 'events';
 import * as crypto from 'crypto';
+import { HSMProviderState, determineHSMState, validateHSMStateOnStartup, type HSMStateInfo } from './hsm-state.js';
 
 export class HSMService extends EventEmitter implements IHSMService {
   private config: HSMConfig | null = null;
   private connected: boolean = false;
   private session: any = null;
+  private providerState: HSMStateInfo | null = null;
+  private awsKMS: any = null;
+  private azureKeyClient: any = null;
 
   /**
    * Initialize HSM connection

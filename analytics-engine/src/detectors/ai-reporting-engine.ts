@@ -905,9 +905,9 @@ export class AIReportingEngine extends BaseDetector {
       doc.end();
       
       // Wait for file to be written
-      await new Promise((resolve, reject) => {
-        stream.on('finish', resolve);
-        stream.on('error', reject);
+      await new Promise<void>((resolve, reject) => {
+        stream.once('finish', () => resolve());
+        stream.once('error', (error) => reject(error));
       });
       
       console.log(`✓ PDF report exported: ${filename}`);
