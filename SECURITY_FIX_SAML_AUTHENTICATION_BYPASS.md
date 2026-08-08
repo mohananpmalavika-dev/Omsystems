@@ -182,6 +182,31 @@ npm install @node-saml/node-saml
 
 This library is **REQUIRED** for production use. The connector will **fail all authentication attempts** until this library is installed.
 
+**Important Build Considerations:**
+- ✅ The application **builds successfully** even without this library installed
+- ✅ This is intentional to avoid breaking CI/CD pipelines and Docker builds
+- ✅ Uses dynamic import with Function constructor to bypass TypeScript module resolution
+- ⚠️ Authentication **will fail at runtime** with explicit error messages when library is missing
+- 🔒 The fail-closed design ensures no authentication bypass is possible
+
+### Docker/Container Deployment
+
+Add the library to your package.json before building:
+
+```json
+{
+  "dependencies": {
+    "@node-saml/node-saml": "^5.0.0",
+    ...other dependencies
+  }
+}
+```
+
+Or install it in your Dockerfile before the build step:
+```dockerfile
+RUN npm install @node-saml/node-saml
+```
+
 ### For Development
 
 1. **Update package.json** (if needed):

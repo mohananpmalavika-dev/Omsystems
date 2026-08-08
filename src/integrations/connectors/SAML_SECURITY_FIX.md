@@ -106,6 +106,9 @@ async parseResponse(samlResponse: string, requestId?: string): Promise<...> {
 - If the SAML library is not installed, authentication FAILS
 - No mock data or bypass paths
 - Explicit error messages about missing dependencies
+- **Build-safe implementation**: Uses dynamic import with Function constructor to prevent TypeScript from resolving the module at compile time
+- The application builds successfully even without the library installed
+- Authentication will fail at runtime with clear error messages
 
 ## Required Dependencies
 
@@ -115,6 +118,13 @@ npm install @node-saml/node-saml
 ```
 
 The connector **will not authenticate users** until this library is installed. This is by design to prevent accidental deployment with mock authentication.
+
+**Important Build Notes:**
+- The application **builds successfully** without this library installed
+- Uses dynamic import with Function constructor to avoid TypeScript module resolution
+- This prevents breaking CI/CD pipelines while maintaining security
+- Authentication fails at runtime with explicit error messages when library is missing
+- The fail-closed design ensures no authentication bypass is possible
 
 ### Why @node-saml/node-saml?
 - Battle-tested SAML implementation
