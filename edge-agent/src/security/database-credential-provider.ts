@@ -51,10 +51,10 @@ export class DatabaseCredentialProvider {
 
     try {
       const result = await this.client!.query(
-        `SELECT username, password, host, updated_at 
+        `SELECT username, password, ip_address, updated_at 
          FROM camera_credentials 
          WHERE branch_id = $1 AND edge_agent_id = $2
-         ORDER BY host NULLS LAST`,
+         ORDER BY ip_address NULLS LAST`,
         [this.branchId, this.edgeAgentId]
       );
 
@@ -67,8 +67,8 @@ export class DatabaseCredentialProvider {
           updatedAt: row.updated_at
         };
 
-        if (row.host) {
-          this.cache.set(`host:${row.host}`, credential);
+        if (row.ip_address) {
+          this.cache.set(`host:${row.ip_address}`, credential);
         } else {
           this.cache.set('default', credential);
         }

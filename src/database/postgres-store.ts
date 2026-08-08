@@ -34,6 +34,7 @@ import { PrivacyRepository } from "./privacy-repository.js";
 import { OperationalHealthRepository } from "./operational-health-repository.js";
 import { GridLayoutRepository } from "./grid-layout-repository.js";
 import { OperationalReportRepository } from "./operational-report-repository.js";
+import { ActivityTrackingRepository } from "./activity-tracking-repository.js";
 import type {
   OperationalHealthPolicy,
   OperationalTelemetryEnvelope,
@@ -80,6 +81,7 @@ export class PostgresStore
   private readonly operationalHealth: OperationalHealthRepository;
   private readonly gridLayouts: GridLayoutRepository;
   private readonly operationalReports: OperationalReportRepository;
+  private readonly activityTracking: ActivityTrackingRepository;
 
   // Public getter for direct database access (use sparingly)
   get db() {
@@ -99,6 +101,14 @@ export class PostgresStore
     this.analytics = new AnalyticsRepository(pool);
     this.evidence = new EvidenceRepository(pool);
     this.incidents = new IncidentRepository(pool);
+    this.compliance = new ComplianceRepository(pool);
+    this.maintenance = new MaintenanceRepository(pool);
+    this.privacy = new PrivacyRepository(pool);
+    this.operationalHealth = new OperationalHealthRepository(pool);
+    this.gridLayouts = new GridLayoutRepository(pool);
+    this.operationalReports = new OperationalReportRepository(pool);
+    this.activityTracking = new ActivityTrackingRepository(pool);
+  }
     this.compliance = new ComplianceRepository(pool);
     this.maintenance = new MaintenanceRepository(pool);
     this.privacy = new PrivacyRepository(pool);
@@ -2099,5 +2109,218 @@ export class PostgresStore
       changes: row.changes,
       createdAt: row.created_at?.toISOString(),
     }));
+  }
+}
+
+  // ============================================
+  // Activity Tracking Store Methods
+  // ============================================
+
+  async startActivitySession(
+    userId: string,
+    tenantId: string,
+    deviceInfo: any,
+    ipAddress: string,
+    locationInfo?: any
+  ): Promise<string> {
+    return this.activityTracking.startActivitySession(userId, tenantId, deviceInfo, ipAddress, locationInfo);
+  }
+
+  async endActivitySession(sessionId: string, userId: string): Promise<void> {
+    return this.activityTracking.endActivitySession(sessionId, userId);
+  }
+
+  async updateSessionHeartbeat(sessionId: string, userId: string): Promise<void> {
+    return this.activityTracking.updateSessionHeartbeat(sessionId, userId);
+  }
+
+  async trackPageVisit(
+    userId: string,
+    tenantId: string,
+    sessionId: string,
+    pagePath: string,
+    pageTitle: string | null,
+    pageModule: string,
+    pageCategory: string | null,
+    referrerPath: string | null,
+    queryParameters: any
+  ): Promise<string> {
+    return this.activityTracking.trackPageVisit(
+      userId, tenantId, sessionId, pagePath, pageTitle,
+      pageModule, pageCategory, referrerPath, queryParameters
+    );
+  }
+
+  async endPageVisit(
+    pageVisitId: string,
+    userId: string,
+    durationSeconds: number,
+    activeTimeSeconds: number,
+    idleTimeSeconds: number,
+    clickCount: number,
+    scrollDepthPercentage: number,
+    formInteractionsCount: number,
+    nextPagePath: string | null
+  ): Promise<void> {
+    return this.activityTracking.endPageVisit(
+      pageVisitId, userId, durationSeconds, activeTimeSeconds, idleTimeSeconds,
+      clickCount, scrollDepthPercentage, formInteractionsCount, nextPagePath
+    );
+  }
+
+  async startControlRoomActivity(
+    userId: string,
+    tenantId: string,
+    sessionId: string,
+    pageVisitId: string | null,
+    monitoringType: string,
+    branchNodeId: string | null,
+    branchGroupId: string | null,
+    branchGroupName: string | null,
+    cameraIds: string[],
+    branchIds: string[],
+    branchNames: string[],
+    monitoringMode: string
+  ): Promise<string> {
+    return this.activityTracking.startControlRoomActivity(
+      userId, tenantId, sessionId, pageVisitId, monitoringType,
+      branchNodeId, branchGroupId, branchGroupName,
+      cameraIds, branchIds, branchNames, monitoringMode
+    );
+  }
+
+  async endControlRoomActivity(
+    activityId: string,
+    userId: string,
+    durationSeconds: number,
+    alertCount: number,
+    incidentCount: number,
+    cameraSwitchCount: number,
+    playbackCount: number,
+    snapshotCount: number,
+    exportCount: number
+  ): Promise<void> {
+    return this.activityTracking.endControlRoomActivity(
+      activityId, userId, durationSeconds, alertCount, incidentCount,
+      cameraSwitchCount, playbackCount, snapshotCount, exportCount
+    );
+  }
+
+  async updateControlRoomActivity(
+    activityId: string,
+    userId: string,
+    alertCount: number | null,
+    incidentCount: number | null,
+    cameraSwitchCount: number | null
+  ): Promise<void> {
+    return this.activityTracking.updateControlRoomActivity(
+      activityId, userId, alertCount, incidentCount, cameraSwitchCount
+    );
+  }
+
+  async logUserAction(
+    userId: string,
+    tenantId: string,
+    sessionId: string,
+    pageVisitId: string | null,
+    actionType: string,
+    actionCategory: string,
+    actionTarget: string | null,
+    actionDescription: string | null,
+    moduleName: string,
+    featureName: string | null,
+    actionMetadata: any
+  ): Promise<void> {
+    return this.activityTracking.logUserAction(
+      userId, tenantId, sessionId, pageVisitId, actionType,
+      actionCategory, actionTarget, actionDescription,
+      moduleName, featureName, actionMetadata
+    );
+  }
+
+  async getCurrentActivity(tenantId: string): Promise<any[]> {
+    return this.activityTracking.getCurrentActivity(tenantId);
+  }
+
+  async getUserCurrentActivity(userId: string): Promise<any | null> {
+    return this.activityTracking.getUserCurrentActivity(userId);
+  }
+
+  async getActivitySessions(
+    tenantId: string,
+    userId: string,
+    startDate: string | null,
+    endDate: string | null,
+    limit: number,
+    offset: number
+  ): Promise<{ sessions: any[]; total: number }> {
+    return this.activityTracking.getActivitySessions(
+      tenantId, userId, startDate, endDate, limit, offset
+    );
+  }
+
+  async getPageVisits(
+    tenantId: string,
+    userId: string,
+    sessionId: string | null,
+    module: string | null,
+    startDate: string | null,
+    endDate: string | null,
+    limit: number,
+    offset: number
+  ): Promise<any[]> {
+    return this.activityTracking.getPageVisits(
+      tenantId, userId, sessionId, module, startDate, endDate, limit, offset
+    );
+  }
+
+  async getControlRoomActivities(
+    tenantId: string,
+    userId: string,
+    branchId: string | null,
+    startDate: string | null,
+    endDate: string | null,
+    limit: number,
+    offset: number
+  ): Promise<any[]> {
+    return this.activityTracking.getControlRoomActivities(
+      tenantId, userId, branchId, startDate, endDate, limit, offset
+    );
+  }
+
+  async getDailySummary(
+    tenantId: string,
+    userId: string,
+    startDate: string,
+    endDate: string
+  ): Promise<any[]> {
+    return this.activityTracking.getDailySummary(tenantId, userId, startDate, endDate);
+  }
+
+  async getWeeklySummary(
+    tenantId: string,
+    userId: string,
+    year: number,
+    weeks: number
+  ): Promise<any[]> {
+    return this.activityTracking.getWeeklySummary(tenantId, userId, year, weeks);
+  }
+
+  async getMonthlySummary(
+    tenantId: string,
+    userId: string,
+    year: number,
+    months: number
+  ): Promise<any[]> {
+    return this.activityTracking.getMonthlySummary(tenantId, userId, year, months);
+  }
+
+  async getComprehensiveReport(
+    tenantId: string,
+    userId: string,
+    startDate: string,
+    endDate: string
+  ): Promise<any> {
+    return this.activityTracking.getComprehensiveReport(tenantId, userId, startDate, endDate);
   }
 }

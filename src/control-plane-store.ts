@@ -1787,12 +1787,156 @@ export interface CameraPermissionStore {
   updateDeviceInventory(id: string, input: any): Promise<any | null>;
 }
 
+export interface ActivityTrackingStore {
+  // Session Management
+  startActivitySession(
+    userId: string,
+    tenantId: string,
+    deviceInfo: any,
+    ipAddress: string,
+    locationInfo?: any
+  ): Promise<string>;
+  endActivitySession(sessionId: string, userId: string): Promise<void>;
+  updateSessionHeartbeat(sessionId: string, userId: string): Promise<void>;
+  
+  // Page Visit Tracking
+  trackPageVisit(
+    userId: string,
+    tenantId: string,
+    sessionId: string,
+    pagePath: string,
+    pageTitle: string | null,
+    pageModule: string,
+    pageCategory: string | null,
+    referrerPath: string | null,
+    queryParameters: any
+  ): Promise<string>;
+  endPageVisit(
+    pageVisitId: string,
+    userId: string,
+    durationSeconds: number,
+    activeTimeSeconds: number,
+    idleTimeSeconds: number,
+    clickCount: number,
+    scrollDepthPercentage: number,
+    formInteractionsCount: number,
+    nextPagePath: string | null
+  ): Promise<void>;
+  
+  // Control Room Activity Tracking
+  startControlRoomActivity(
+    userId: string,
+    tenantId: string,
+    sessionId: string,
+    pageVisitId: string | null,
+    monitoringType: string,
+    branchNodeId: string | null,
+    branchGroupId: string | null,
+    branchGroupName: string | null,
+    cameraIds: string[],
+    branchIds: string[],
+    branchNames: string[],
+    monitoringMode: string
+  ): Promise<string>;
+  endControlRoomActivity(
+    activityId: string,
+    userId: string,
+    durationSeconds: number,
+    alertCount: number,
+    incidentCount: number,
+    cameraSwitchCount: number,
+    playbackCount: number,
+    snapshotCount: number,
+    exportCount: number
+  ): Promise<void>;
+  updateControlRoomActivity(
+    activityId: string,
+    userId: string,
+    alertCount: number | null,
+    incidentCount: number | null,
+    cameraSwitchCount: number | null
+  ): Promise<void>;
+  
+  // Action Logging
+  logUserAction(
+    userId: string,
+    tenantId: string,
+    sessionId: string,
+    pageVisitId: string | null,
+    actionType: string,
+    actionCategory: string,
+    actionTarget: string | null,
+    actionDescription: string | null,
+    moduleName: string,
+    featureName: string | null,
+    actionMetadata: any
+  ): Promise<void>;
+  
+  // Current Activity
+  getCurrentActivity(tenantId: string): Promise<any[]>;
+  getUserCurrentActivity(userId: string): Promise<any | null>;
+  
+  // Reports and Summaries
+  getActivitySessions(
+    tenantId: string,
+    userId: string,
+    startDate: string | null,
+    endDate: string | null,
+    limit: number,
+    offset: number
+  ): Promise<{ sessions: any[]; total: number }>;
+  getPageVisits(
+    tenantId: string,
+    userId: string,
+    sessionId: string | null,
+    module: string | null,
+    startDate: string | null,
+    endDate: string | null,
+    limit: number,
+    offset: number
+  ): Promise<any[]>;
+  getControlRoomActivities(
+    tenantId: string,
+    userId: string,
+    branchId: string | null,
+    startDate: string | null,
+    endDate: string | null,
+    limit: number,
+    offset: number
+  ): Promise<any[]>;
+  getDailySummary(
+    tenantId: string,
+    userId: string,
+    startDate: string,
+    endDate: string
+  ): Promise<any[]>;
+  getWeeklySummary(
+    tenantId: string,
+    userId: string,
+    year: number,
+    weeks: number
+  ): Promise<any[]>;
+  getMonthlySummary(
+    tenantId: string,
+    userId: string,
+    year: number,
+    months: number
+  ): Promise<any[]>;
+  getComprehensiveReport(
+    tenantId: string,
+    userId: string,
+    startDate: string,
+    endDate: string
+  ): Promise<any>;
+}
+
 export type ExtendedControlPlaneStore = ControlPlaneStore &
   CctvInfrastructureStore &
   OrganizationStore &
   UserManagementStore &
   AuthenticationStore &
-  CameraPermissionStore;
+  CameraPermissionStore &
+  ActivityTrackingStore;
 
 export function hasExtendedInfrastructure(
   store: ControlPlaneStore,
