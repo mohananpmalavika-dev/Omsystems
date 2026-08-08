@@ -1,24 +1,22 @@
-/**
+﻿/**
  * Analytics Engine <-> Incident Management Integration
  * 
  * Bridges AI detection events to the incident management system.
  */
 
 import type { DetectionEvent } from '../../src/events/detection-event.js';
+import { toDetectionEvent } from './events/to-detection-event.js';
 
 export interface IncidentAPIClient {
   processAIEvent(event: DetectionEvent): Promise<IncidentProcessingResult>;
   markFalsePositive(detectionId: string, reason: string, category: string): Promise<void>;
 }
 
-
 export interface IncidentProcessingResult {
   action: 'created' | 'updated' | 'buffered' | 'ignored' | 'verification-required';
   incidentId?: string;
   reason: string;
 }
-
-import { toDetectionEvent } from './events/to-detection-event.js';
 
 /**
  * HTTP Client for Incident Management API
@@ -32,6 +30,7 @@ export class IncidentManagementClient implements IncidentAPIClient {
   
   async processAIEvent(event: DetectionEvent): Promise<IncidentProcessingResult> {
     try {
+      // Map shared DetectionEvent to legacy AIDetectionEvent shape expected by API
       const payload: any = {
         tenantId: event.tenantId,
         branchId: event.branchId,
@@ -45,25 +44,26 @@ export class IncidentManagementClient implements IncidentAPIClient {
         trackedObjectId: event.trackIds && event.trackIds.length > 0 ? event.trackIds[0] : undefined,
         metadata: event.metadata,
       };
+
       const response = await fetch(`${this.baseUrl}/v1/incidents/ai-events`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${this.apiKey}`,
         },
-        body: JSON.stringify(event),
+        body: JSON.stringify(payload),
       });
-      
+
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
-      
+
       const result = await response.json();
-      
+
       this.logger?.log(
-        `AI event processed: ${event.detectionType} -> ${result.action} ${result.incidentId ? `(${result.incidentId})` : ''}`
+        `AI event processed: ${payload.detectionType} -> ${result.action} ${result.incidentId ? `(${result.incidentId})` : ''}`
       );
-      
+
       return result;
     } catch (error) {
       this.logger?.error('Failed to process AI event:', error);
@@ -85,11 +85,11 @@ export class IncidentManagementClient implements IncidentAPIClient {
         },
         body: JSON.stringify({ reason, category, improveModel: true }),
       });
-      
+
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
-      
+
       this.logger?.log(`False positive marked: ${detectionId} - ${reason}`);
     } catch (error) {
       this.logger?.error('Failed to mark false positive:', error);
@@ -124,24 +124,23 @@ export class IncidentIntegrationHook {
     try {
       // Map detection to severity
       const severity = this.mapSeverity(detection.type, detection.confidence);
-      
-      // Create AI event
-      const event: AIDetectionEvent = {
+
+      // Create shared DetectionEvent using helper
+      const event = toDetectionEvent({
         tenantId: detection.tenantId,
         branchId: detection.branchId,
         cameraId: detection.cameraId,
-        detectionType: detection.type,
-        detectionTime: detection.timestamp,
+        type: detection.type,
+        timestamp: detection.timestamp,
         confidence: detection.confidence,
-        severity,
         zone: detection.zone,
         trackedObjectId: detection.trackedObjectId,
-        metadata: detection.metadata,
-      };
-      
+        metadata: { ...(detection.metadata ?? {}), severity },
+      });
+
       // Send to incident system
       const result = await this.client.processAIEvent(event);
-      
+
       // Log result
       if (result.action === 'created') {
         this.logger?.log(`Incident created: ${result.incidentId}`);
