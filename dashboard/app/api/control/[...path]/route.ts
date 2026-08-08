@@ -135,16 +135,18 @@ async function proxyControlRequest(request: NextRequest, context: RouteContext) 
     const contentDisposition = response.headers.get("content-disposition");
     const contentLength = response.headers.get("content-length");
     const contentEncoding = response.headers.get("content-encoding");
+
+    const outgoingHeaders = {
+      "content-type": responseType,
+      "cache-control": responseType.startsWith("text/event-stream") ? "no-cache, no-transform" : "no-store",
+      ...(contentDisposition ? { "content-disposition": contentDisposition } : {}),
+      ...(contentLength && !contentEncoding ? { "content-length": contentLength } : {}),
+      ...(responseType.startsWith("text/event-stream") ? { "x-accel-buffering": "no" } : {}),
+    };
+
     return new Response(response.body, {
       status: response.status,
-      headers: {
-        "content-type": responseType,
-        "cache-control": responseType.startsWith("text/event-stream") ? "no-cache, no-transform" : "no-store",
-        ...(contentDisposition ? { "content-disposition": contentDisposition } : {}),
-        ...(contentLength ? { "content-length": contentLength } : {}),
-        ...(contentEncoding ? { "content-encoding": contentEncoding } : {}),
-        ...(responseType.startsWith("text/event-stream") ? { "x-accel-buffering": "no" } : {}),
-      },
+      headers: outgoingHeaders,
     });
   } catch (error) {
     const cause = error instanceof Error && error.cause instanceof Error

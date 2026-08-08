@@ -6,11 +6,13 @@
 import { randomUUID } from "node:crypto";
 import type { DetectionFrame } from "./detectors/base-detector.js";
 import type { AnalyticsPipeline, AnalyticsRule } from "./analytics-pipeline.js";
+import type { IncidentIntegrationHook } from './incident-integration.js';
 import { FfmpegFrameExtractor, type FrameExtractor } from "./frame-extractor.js";
 
 export interface StreamSource {
   cameraId: string;
   tenantId: string;
+  branchId?: string;
   streamUrl: string;
   enabled: boolean;
   frameRate?: number; // Frames per second to process
@@ -29,11 +31,16 @@ export class StreamProcessor {
   private activeStreams = new Map<string, StreamProcessingContext>();
   private stats = new Map<string, ProcessingStats>();
 
+  private readonly incidentHook?: IncidentIntegrationHook;
+
   constructor(
     private readonly pipeline: AnalyticsPipeline,
     private readonly submitEvent: (event: any) => Promise<unknown>,
     private readonly frameExtractor: FrameExtractor = new FfmpegFrameExtractor(),
-  ) {}
+    incidentHook?: IncidentIntegrationHook,
+  ) {
+    this.incidentHook = incidentHook;
+  }
 
   /**
    * Start processing a camera stream
@@ -129,6 +136,22 @@ export class StreamProcessor {
           try {
             await this.submitEvent(event);
             context.generatedEvents++;
+
+            // Forward to incident integration hook if configured
+            if (this.incidentHook) {
+              try {
+                const detectionSummary = {
+                      detectionType: event.detectionType,
+                  metadata: event.metadata ?? {},
+                  objects: event.objects ?? [],
+                  frame,
+                };
+                await this.incidentHook.onDetection(detectionSummary as any);
+              } catch (hookErr) {
+                console.error('incident integration hook failed', hookErr);
+              }
+            }
+
           } catch (error) {
             console.error(
               `Failed to submit event for camera ${context.source.cameraId}:`,

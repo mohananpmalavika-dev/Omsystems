@@ -145,6 +145,28 @@ describe("dashboard control-plane BFF", () => {
     expect(Buffer.from(await response.arrayBuffer()).subarray(0, 2).toString()).toBe("MZ");
   });
 
+  it("drops upstream content-encoding for decoded JSON responses", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ data: [] }), {
+      status: 200,
+      headers: {
+        "content-type": "application/json",
+        "content-encoding": "gzip",
+        "content-length": "123",
+      },
+    })));
+
+    const response = await GET(
+      new NextRequest("https://sentinel.example/api/control/v1/operations/health/summary"),
+      { params: Promise.resolve({ path: ["v1", "operations", "health", "summary"] }) },
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-encoding")).toBeNull();
+    expect(response.headers.get("content-length")).toBeNull();
+    expect(response.headers.get("content-type")).toBe("application/json");
+    expect(await response.json()).toEqual({ data: [] });
+  });
+
   it("returns an empty digital twin branch list when the upstream route is missing", async () => {
     vi.stubGlobal("fetch", vi.fn(async () =>
       new Response(null, {

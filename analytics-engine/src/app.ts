@@ -5,6 +5,7 @@ import { AnalyticsPipeline } from "./analytics-pipeline.js";
 import type { AnalyticsRule } from "./analytics-pipeline.js";
 import { NotificationEngine } from "./notification-engine.js";
 import { StreamProcessor } from "./stream-processor.js";
+import { createIncidentIntegration, type IncidentIntegrationHook } from './incident-integration.js';
 
 const objectSchema = z.object({
   label: z.string().trim().min(1).max(100),
@@ -64,6 +65,13 @@ export interface AnalyticsEngineOptions {
   sourceSharedKey: string;
   controlPlaneSharedKey: string;
   controlPlaneUrl?: string;
+  // Optional incident integration configuration — when provided the engine
+  // will create a hook that receives detections (converted to DetectionEvent)
+  // and forwards them to the incident management service.
+  incidentIntegration?: {
+    url: string;
+    apiKey: string;
+  };
   submit: (event: z.infer<typeof detectionSchema>) => Promise<unknown>;
   logger?: boolean;
 }
@@ -81,7 +89,21 @@ export function buildAnalyticsEngine(options: AnalyticsEngineOptions) {
     controlPlaneUrl: options.controlPlaneUrl ?? "http://127.0.0.1",
     sharedKey: options.controlPlaneSharedKey,
   });
-  const streamProcessor = new StreamProcessor(pipeline, options.submit);
+
+  // Create incident integration hook if configured
+  let incidentHook: IncidentIntegrationHook | undefined = undefined;
+  if (options.incidentIntegration) {
+    try {
+      incidentHook = createIncidentIntegration({
+        incidentApiUrl: options.incidentIntegration.url,
+        apiKey: options.incidentIntegration.apiKey,
+      });
+    } catch (err) {
+      app.log.error({ err }, "Failed to initialize incident integration");
+    }
+  }
+
+  const streamProcessor = new StreamProcessor(pipeline, options.submit, undefined, incidentHook);
 
   // Initialize pipeline on startup
   let pipelineInitializationError: string | null = null;

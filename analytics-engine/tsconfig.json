@@ -1,12 +1,13 @@
 {
   "extends": "../tsconfig.json",
   "compilerOptions": {
-    "rootDir": ".",
+    "rootDir": "..",
     "outDir": "dist",
     "types": ["node"]
   },
   "include": [
     "src/**/*.ts",
+    "../src/events/**/*.ts",
     "scripts/**/*.ts",
     "test/app.test.ts",
     "test/inference.test.ts",
