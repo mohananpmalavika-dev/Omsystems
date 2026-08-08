@@ -26,6 +26,9 @@ async function proxyControlRequest(request: NextRequest, context: RouteContext) 
   const routePath = `/${path.join("/")}`;
   const employeeSession = request.cookies.get("sentinel_access")?.value ??
     request.headers.get("x-sentinel-session");
+  const edgeAgentToken = request.headers.get("x-edge-agent-token");
+  const isEdgeEnrollment = routePath === "/v1/edge-enrollment/activate";
+  const isEdgeAgentRequest = Boolean(edgeAgentToken) || isEdgeEnrollment;
   const bridgeKey = runtimeEnv("EDGE_BRIDGE_SHARED_KEY", "");
   // Preserve incoming headers so upstream can honor Accept and other request metadata.
   const headers = new Headers(request.headers);
@@ -38,7 +41,10 @@ async function proxyControlRequest(request: NextRequest, context: RouteContext) 
   const forwardedFor = request.headers.get("x-forwarded-for");
   if (forwardedFor) headers.set("x-forwarded-for", forwardedFor);
 
-  if (employeeSession) {
+  if (isEdgeAgentRequest) {
+    headers.delete("authorization");
+    headers.delete("x-user-id");
+  } else if (employeeSession) {
     headers.set("authorization", `Bearer ${employeeSession}`);
   } else {
     headers.set(

@@ -1,4 +1,4 @@
-import { generateKeyPairSync } from "node:crypto";
+import { createHash, generateKeyPairSync } from "node:crypto";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { buildApp } from "../src/app.js";
 import { MemoryStore } from "../src/store.js";
@@ -51,6 +51,46 @@ describe("secure edge gateway operations", () => {
       headers: { "x-edge-agent-token": identity.credential }, payload: { version: "1.0.2" },
     });
     expect(afterRevocation.statusCode).toBe(401);
+  });
+
+  it("supports enrollment and gateway bootstrap while employee session auth is enabled", async () => {
+    const store = new MemoryStore();
+    const activationCode = `sgact_${"a".repeat(48)}`;
+    await store.createEdgeActivation({
+      branchId: "branch-blr-001",
+      agentName: "Session mode gateway",
+      createdBy: "user-global-admin",
+      expiresAt: new Date(Date.now() + 30 * 60_000).toISOString(),
+      tokenHash: createHash("sha256").update(activationCode).digest("hex"),
+    });
+    const app = await buildApp({ store, authMode: "session" });
+    apps.push(app);
+
+    const enrollment = await app.inject({
+      method: "POST",
+      url: "/v1/edge-enrollment/activate",
+      payload: {
+        activationCode,
+        deviceUuid: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        version: "1.0.0",
+      },
+    });
+    expect(enrollment.statusCode).toBe(201);
+
+    const identity = enrollment.json();
+    const bootstrap = await app.inject({
+      method: "GET",
+      url: `/v1/edge-agents/${identity.agentId}/bootstrap`,
+      headers: { "x-edge-agent-token": identity.credential },
+    });
+    expect(bootstrap.statusCode).toBe(200);
+
+    const missingCredential = await app.inject({
+      method: "GET",
+      url: `/v1/edge-agents/${identity.agentId}/bootstrap`,
+    });
+    expect(missingCredential.statusCode).toBe(401);
+    expect(missingCredential.json()).toMatchObject({ error: "unauthenticated" });
   });
 
   it("provisions one managed tunnel and delivers its token only to the authenticated gateway", async () => {

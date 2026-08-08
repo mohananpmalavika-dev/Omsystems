@@ -63,6 +63,72 @@ describe("dashboard control-plane BFF", () => {
     );
   });
 
+  it("forwards gateway credentials without injecting an employee identity", async () => {
+    process.env.CONTROL_PLANE_INTERNAL_URL = "http://control.internal:8080";
+    process.env.EDGE_BRIDGE_SHARED_KEY = "bridge-secret";
+    process.env.DASHBOARD_DEV_USER_ID = "user-global-admin";
+    const upstream = vi.fn(async (
+      _input: RequestInfo | URL,
+      _init?: RequestInit,
+    ) => Response.json({ controlPlaneUrl: "https://sentinel.example/api/control" }));
+    vi.stubGlobal("fetch", upstream);
+
+    const response = await GET(
+      new NextRequest(
+        "https://sentinel.example/api/control/v1/edge-agents/agent-1/bootstrap",
+        {
+          headers: {
+            authorization: "Bearer stale-employee-token",
+            "x-edge-agent-token": "sggw_gateway-credential",
+            "x-user-id": "stale-development-user",
+          },
+        },
+      ),
+      { params: Promise.resolve({ path: ["v1", "edge-agents", "agent-1", "bootstrap"] }) },
+    );
+
+    expect(response.status).toBe(200);
+    const headers = new Headers(upstream.mock.calls[0]?.[1]?.headers);
+    expect(headers.get("x-edge-agent-token")).toBe("sggw_gateway-credential");
+    expect(headers.get("x-edge-bridge-key")).toBe("bridge-secret");
+    expect(headers.has("authorization")).toBe(false);
+    expect(headers.has("x-user-id")).toBe(false);
+  });
+
+  it("forwards one-time edge enrollment without synthetic authentication", async () => {
+    process.env.CONTROL_PLANE_INTERNAL_URL = "http://control.internal:8080";
+    process.env.DASHBOARD_DEV_USER_ID = "user-global-admin";
+    const upstream = vi.fn(async (
+      _input: RequestInfo | URL,
+      _init?: RequestInit,
+    ) => Response.json({ agentId: "agent-1", credential: "sggw_credential" }, { status: 201 }));
+    vi.stubGlobal("fetch", upstream);
+
+    const response = await POST(
+      new NextRequest(
+        "https://sentinel.example/api/control/v1/edge-enrollment/activate",
+        {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "x-user-id": "stale-development-user",
+          },
+          body: JSON.stringify({
+            activationCode: `sgact_${"a".repeat(48)}`,
+            deviceUuid: "11111111-1111-4111-8111-111111111111",
+            version: "1.0.0",
+          }),
+        },
+      ),
+      { params: Promise.resolve({ path: ["v1", "edge-enrollment", "activate"] }) },
+    );
+
+    expect(response.status).toBe(201);
+    const headers = new Headers(upstream.mock.calls[0]?.[1]?.headers);
+    expect(headers.has("authorization")).toBe(false);
+    expect(headers.has("x-user-id")).toBe(false);
+  });
+
   it("accepts Render private host:port service references", async () => {
     process.env.CONTROL_PLANE_INTERNAL_URL = "sentinel-control.internal:8080";
     const upstream = vi.fn(async (
