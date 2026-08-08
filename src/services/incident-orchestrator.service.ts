@@ -1,5 +1,6 @@
 import type { ControlPlaneStore } from '../control-plane-store.js';
-import { IncidentCorrelationService, type DetectionEvent } from './incident-correlation.service.js';
+import { IncidentCorrelationService } from './incident-correlation.service.js';
+import type { DetectionEvent } from '../events/detection-event.js';
 import { EvidencePreservationService } from './evidence-preservation.service.js';
 import { IncidentSLAService } from './incident-sla.service.js';
 import { IncidentWorkflowService } from './incident-workflow.service.js';

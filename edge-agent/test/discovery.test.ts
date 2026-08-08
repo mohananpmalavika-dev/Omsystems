@@ -6,6 +6,11 @@ import {
   redactStreamUri,
 } from "../src/devices/onvif-client.js";
 import { normalizeVendor } from "../src/devices/compatibility-registry.js";
+import {
+  inferLocalCidrs,
+  ipsFromCidr,
+  runWithConcurrency,
+} from "../src/discovery/rtsp-network-scan.js";
 
 describe("ONVIF edge utilities", () => {
   it("accepts a gateway ID pre-registered by the dashboard", () => {
@@ -67,5 +72,33 @@ describe("ONVIF edge utilities", () => {
   it("normalizes the supported pilot brands", () => {
     expect(normalizeVendor("HIKVISION")).toBe("hikvision");
     expect(normalizeVendor("CP Plus")).toBe("cp-plus");
+  });
+
+  it("uses real local subnet masks and safely expands camera CIDRs", () => {
+    expect(inferLocalCidrs({
+      Ethernet: [{
+        address: "192.168.50.12",
+        netmask: "255.255.255.240",
+        family: "IPv4",
+        mac: "00:11:22:33:44:55",
+        internal: false,
+        cidr: "192.168.50.12/28",
+        scopeid: 0,
+      }],
+    })).toEqual(["192.168.50.0/28"]);
+    expect(ipsFromCidr("192.168.50.8/30")).toEqual([
+      "192.168.50.9",
+      "192.168.50.10",
+    ]);
+    expect(ipsFromCidr("10.0.0.0/16")).toEqual([]);
+  });
+
+  it("waits for every queued network probe", async () => {
+    const completed: number[] = [];
+    await runWithConcurrency([1, 2, 3, 4, 5, 6], 2, async (item) => {
+      await new Promise((resolve) => setTimeout(resolve, item % 2 ? 2 : 1));
+      completed.push(item);
+    });
+    expect(completed.sort((left, right) => left - right)).toEqual([1, 2, 3, 4, 5, 6]);
   });
 });

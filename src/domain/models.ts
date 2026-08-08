@@ -632,6 +632,9 @@ export interface EdgeScanJob {
   startedAt: string | null;
   completedAt: string | null;
   resultCount: number;
+  provisionedCount: number;
+  credentialsRequiredCount: number;
+  pendingVerificationCount: number;
   error: string | null;
 }
 

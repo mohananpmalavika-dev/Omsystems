@@ -640,7 +640,14 @@ export interface ControlPlaneStore {
   completeEdgeScanJob(
     edgeAgentId: string,
     jobId: string,
-    result: { status: "completed" | "failed"; resultCount: number; error?: string },
+    result: {
+      status: "completed" | "failed";
+      resultCount: number;
+      provisionedCount?: number;
+      credentialsRequiredCount?: number;
+      pendingVerificationCount?: number;
+      error?: string;
+    },
   ): Promise<EdgeScanJob | undefined>;
   createDiscovery(
     branchId: string,

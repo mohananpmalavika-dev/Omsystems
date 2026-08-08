@@ -21,41 +21,89 @@ export interface RtspScanOptions {
   excludeHosts?: string[];
 }
 
-function inferLocalCidrs(): string[] {
-  const ifaces = os.networkInterfaces();
+function ipv4ToNumber(address: string) {
+  const octets = address.split(".").map(Number);
+  if (octets.length !== 4 || octets.some((octet) => !Number.isInteger(octet) || octet < 0 || octet > 255)) {
+    return undefined;
+  }
+  return octets.reduce((value, octet) => ((value << 8) | octet) >>> 0, 0);
+}
+
+function numberToIpv4(value: number) {
+  return [24, 16, 8, 0].map((shift) => (value >>> shift) & 255).join(".");
+}
+
+function isPrivateCameraNetwork(address: string) {
+  const value = ipv4ToNumber(address);
+  if (value === undefined) return false;
+  return (value >= 0x0a000000 && value <= 0x0affffff) ||
+    (value >= 0xac100000 && value <= 0xac1fffff) ||
+    (value >= 0xc0a80000 && value <= 0xc0a8ffff) ||
+    (value >= 0xa9fe0000 && value <= 0xa9feffff) ||
+    (value >= 0x64400000 && value <= 0x647fffff);
+}
+
+export function inferLocalCidrs(ifaces = os.networkInterfaces()): string[] {
   const cidrs: string[] = [];
   for (const addrs of Object.values(ifaces)) {
     if (!addrs) continue;
     for (const addr of addrs) {
-      if (addr.family !== "IPv4" || addr.internal) continue;
+      if (addr.family !== "IPv4" || addr.internal || !isPrivateCameraNetwork(addr.address)) continue;
       const octets = addr.address.split(".");
       if (octets.length !== 4) continue;
-      // Use a conservative /24 for local networks
-      cidrs.push(`${octets.slice(0, 3).join(".")}.0/24`);
-    }
-  }
-  return cidrs;
-}
-
-function ipsFromCidr(cidr: string): string[] {
-  // Support single IP or /24 CIDR. Keep simple and safe.
-  if (!cidr) return [];
-  const [base, prefixPart] = cidr.split("/");
-  if (prefixPart !== undefined && base) {
-    const prefix = Number(prefixPart);
-    if (Number.isFinite(prefix) && prefix === 24) {
-      const octets = base.split(".");
-      if (octets.length === 4) {
-        const basePrefix = octets.slice(0, 3).join(".");
-        const ips: string[] = [];
-        for (let i = 1; i < 255; i++) ips.push(`${basePrefix}.${i}`);
-        return ips;
+      const detectedPrefix = Number(addr.cidr?.split("/")[1]);
+      if (Number.isInteger(detectedPrefix) && detectedPrefix >= 20 && detectedPrefix <= 30) {
+        const value = ipv4ToNumber(addr.address);
+        if (value === undefined) continue;
+        const mask = detectedPrefix === 0 ? 0 : (0xffffffff << (32 - detectedPrefix)) >>> 0;
+        cidrs.push(`${numberToIpv4(value & mask)}/${detectedPrefix}`);
+      } else {
+        cidrs.push(`${octets.slice(0, 3).join(".")}.0/24`);
       }
     }
-    // Fallback: treat as single host
-    return [base];
   }
-  return [cidr];
+  return [...new Set(cidrs)];
+}
+
+export function ipsFromCidr(cidr: string): string[] {
+  if (!cidr) return [];
+  const [base, prefixPart] = cidr.split("/");
+  const baseValue = ipv4ToNumber(base ?? "");
+  if (baseValue === undefined) return [];
+  if (prefixPart === undefined) return [numberToIpv4(baseValue)];
+
+  const prefix = Number(prefixPart);
+  if (!Number.isInteger(prefix) || prefix < 20 || prefix > 32) return [];
+  const hostBits = 32 - prefix;
+  const addressCount = 2 ** hostBits;
+  const mask = prefix === 0 ? 0 : (0xffffffff << hostBits) >>> 0;
+  const network = baseValue & mask;
+  const firstOffset = prefix <= 30 ? 1 : 0;
+  const lastOffset = prefix <= 30 ? addressCount - 1 : addressCount;
+  const ips: string[] = [];
+  for (let offset = firstOffset; offset < lastOffset; offset++) {
+    ips.push(numberToIpv4((network + offset) >>> 0));
+  }
+  return ips;
+}
+
+export async function runWithConcurrency<T>(
+  items: readonly T[],
+  concurrency: number,
+  task: (item: T) => Promise<void>,
+) {
+  let nextIndex = 0;
+  async function worker() {
+    while (nextIndex < items.length) {
+      const item = items[nextIndex++];
+      if (item === undefined) return;
+      await task(item);
+    }
+  }
+  await Promise.all(Array.from(
+    { length: Math.min(Math.max(1, concurrency), items.length) },
+    () => worker(),
+  ));
 }
 
 function tryTcpConnect(host: string, port: number, timeoutMs: number): Promise<boolean> {
@@ -87,8 +135,9 @@ export async function discoverRtspDevices(
   secretsStore: { set(key: string, value: string): Promise<void> | void } | undefined,
   persistStreamSecrets = true,
 ): Promise<number> {
-  const cidrList = options.cidrs?.filter(Boolean).map((cidr) => cidr.trim())
-    ?? (options.cidr && options.cidr.trim() ? [options.cidr.trim()] : inferLocalCidrs());
+  const configuredCidrs = options.cidrs?.filter(Boolean).map((cidr) => cidr.trim())
+    ?? (options.cidr && options.cidr.trim() ? [options.cidr.trim()] : []);
+  const cidrList = [...new Set([...inferLocalCidrs(), ...configuredCidrs])];
   if (cidrList.length === 0) {
     logger.info("RTSP scan: no local network addresses found to scan");
     return 0;
@@ -109,25 +158,11 @@ export async function discoverRtspDevices(
     for (const ip of ips) candidates.add(ip);
   }
 
-  // Limit total concurrency
-  let inFlight = 0;
-  const queue: (() => Promise<void>)[] = [];
-  const submitTasks: Promise<void>[] = [];
   let submittedCount = 0;
 
-  async function worker(task: () => Promise<void>) {
-    inFlight++;
-    try { await task(); } catch (error) { logger.debug("RTSP scan worker error", { error: error instanceof Error ? error.message : String(error) }); }
-    inFlight--;
-    if (queue.length > 0) {
-      const next = queue.shift()!;
-      submitTasks.push(worker(next));
-    }
-  }
+  const hosts = [...candidates].filter((host) => !excludedHosts.has(host));
 
-  for (const ip of candidates) {
-    if (excludedHosts.has(ip)) continue;
-    const task = async () => {
+  async function scanHost(ip: string) {
       try {
         let unverifiedEndpoint: { port: number; credentialsRequired: boolean } | undefined;
         for (const port of ports) {
@@ -230,11 +265,9 @@ export async function discoverRtspDevices(
       } catch (error) {
         logger.debug("RTSP scan host failed", { host: ip, error: error instanceof Error ? error.message : String(error) });
       }
-    };
-    if (inFlight < concurrency) submitTasks.push(worker(task)); else queue.push(task);
   }
 
-  await Promise.all(submitTasks);
+  await runWithConcurrency(hosts, concurrency, scanHost);
   return submittedCount;
 }
 

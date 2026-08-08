@@ -416,14 +416,17 @@ export function DeviceManager() {
       return next;
     });
 
-    const credentialsRequired = mappedResults.filter((camera) => camera.credentialsRequired).length;
+    const credentialsRequired = Math.max(
+      job.credentialsRequiredCount ?? 0,
+      mappedResults.filter((camera) => camera.credentialsRequired).length,
+    );
     const activationCandidate = mappedResults.find((camera) => camera.credentialsRequired);
     setCredentialActivation(activationCandidate);
     const readyToProvision = mappedResults.some((camera) =>
       camera.streamVerified && !camera.credentialsRequired &&
       camera.duplicateStatus !== "duplicate" && camera.compatibility === "compatible",
     );
-    let provisioned = 0;
+    let provisioned = job.provisionedCount ?? 0;
     if (readyToProvision) {
       const provisioning = await cameraInventoryApi.approveAllDiscovered(selectedBranch, {
         recordingMode: "continuous",
@@ -431,15 +434,15 @@ export function DeviceManager() {
         enableAnalytics: true,
         enableAlerts: true,
       }) as { summary: { provisioned: number }; results: AutoProvisionResult[] };
-      provisioned = provisioning.summary.provisioned;
+      provisioned += provisioning.summary.provisioned;
       setAutoProvisionResults(provisioning.results);
       for (const result of provisioning.results) {
         if (result.status === "provisioned" || result.status === "partial") {
           markDiscoveryReviewStatus(result.discoveryId, "approved");
         }
       }
-      await refreshBranch(selectedBranch);
     }
+    if (provisioned > 0) await refreshBranch(selectedBranch);
     setShowDiscoveredList(false);
     return { found: job.resultCount || mappedResults.length, provisioned, credentialsRequired };
   }

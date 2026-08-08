@@ -1,5 +1,5 @@
 import type { ControlPlaneStore } from '../control-plane-store.js';
-import type { DetectionEvent } from './incident-correlation.service.js';
+import type { DetectionEvent } from '../events/detection-event.js';
 
 /**
  * AI Event Verification Service

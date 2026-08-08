@@ -476,6 +476,96 @@ describe("control-plane API", () => {
     expect(rules.every((rule) => rule.enabled)).toBe(true);
   });
 
+  it("activates verified scan results and leaves rejected credentials for the operator", async () => {
+    const headers = { "x-user-id": "user-global-admin" };
+    const agent = (await app.inject({
+      method: "POST",
+      url: "/v1/branches/branch-blr-001/edge-agents/register",
+      headers,
+      payload: { name: "Zero-touch edge", version: "0.1.0" },
+    })).json();
+    await app.inject({
+      method: "POST",
+      url: `/v1/edge-agents/${agent.id}/heartbeat`,
+      headers,
+      payload: { version: "0.1.0" },
+    });
+    const scan = (await app.inject({
+      method: "POST",
+      url: "/v1/branches/branch-blr-001/scan-jobs",
+      headers,
+      payload: { edgeAgentId: agent.id },
+    })).json();
+    await app.inject({
+      method: "GET",
+      url: `/v1/edge-agents/${agent.id}/scan-jobs/next`,
+      headers,
+    });
+
+    const discover = (ipAddress: string, credentialsRequired: boolean) => app.inject({
+      method: "POST",
+      url: "/v1/branches/branch-blr-001/cameras/discovered",
+      headers,
+      payload: {
+        edgeAgentId: agent.id,
+        discoveryMethod: "rtsp-network-scan",
+        vendor: "other",
+        manufacturer: "Camera vendor",
+        model: "Network camera",
+        ipAddress,
+        onvifSupport: false,
+        onvifPort: 80,
+        rtspPort: 554,
+        streamVerified: !credentialsRequired,
+        rtspValidated: !credentialsRequired,
+        credentialsRequired,
+        compatibility: "compatible",
+        compatibilityStatus: "compatible",
+        duplicateStatus: "unique",
+        profiles: [{ name: "main", codec: "H264", width: 1920, height: 1080 }],
+        capabilities: { ptz: false, audio: false, events: false },
+      },
+    });
+    expect((await discover("192.168.60.20", false)).statusCode).toBe(202);
+    expect((await discover("192.168.60.21", true)).statusCode).toBe(202);
+
+    const completed = await app.inject({
+      method: "POST",
+      url: `/v1/edge-agents/${agent.id}/scan-jobs/${scan.id}/complete`,
+      headers,
+      payload: { status: "completed", resultCount: 2 },
+    });
+    expect(completed.statusCode).toBe(200);
+    expect(completed.json()).toMatchObject({
+      status: "completed",
+      resultCount: 2,
+      provisionedCount: 1,
+      credentialsRequiredCount: 1,
+      pendingVerificationCount: 0,
+    });
+
+    const activated = [...store.cameras.values()].find((camera) => camera.ipAddress === "192.168.60.20");
+    expect(activated).toMatchObject({ protocol: "rtsp", status: "unknown" });
+    expect(await store.getRecordingJob(activated!.id)).toMatchObject({
+      enabled: true,
+      mode: "continuous",
+    });
+    const pending = await store.listDiscoveredCameras("branch-blr-001");
+    expect(pending).toHaveLength(1);
+    expect(pending[0]).toMatchObject({ ipAddress: "192.168.60.21", credentialsRequired: true });
+
+    const cameraCount = store.cameras.size;
+    const repeated = await app.inject({
+      method: "POST",
+      url: `/v1/edge-agents/${agent.id}/scan-jobs/${scan.id}/complete`,
+      headers,
+      payload: { status: "completed", resultCount: 2 },
+    });
+    expect(repeated.statusCode).toBe(200);
+    expect(repeated.json().provisionedCount).toBe(1);
+    expect(store.cameras.size).toBe(cameraCount);
+  });
+
   it("creates bookmarks and protects incident recording windows", async () => {
     const headers = { "x-user-id": "user-global-admin" };
     const bookmarkResponse = await app.inject({

@@ -8,18 +8,7 @@ import type { ControlPlaneStore } from '../control-plane-store.js';
  * and merging them into a single incident with extended timeline.
  */
 
-export interface DetectionEvent {
-  tenantId: string;
-  branchId?: string;
-  cameraId: string;
-  detectionType: string;
-  detectionTime: string;
-  confidence: number;
-  severity: 'P1' | 'P2' | 'P3' | 'P4' | 'P5';
-  zone?: string;
-  trackedObjectId?: string;
-  metadata?: Record<string, unknown>;
-}
+import type { DetectionEvent } from '../events/detection-event.js';
 
 export interface CorrelationKey {
   tenantId: string;

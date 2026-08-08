@@ -66,6 +66,7 @@ import { registerDigitalTwinRoutes } from "./routes/digital-twin.routes.js";
 import { registerOperationalReportRoutes } from "./routes/operational-reports.routes.js";
 import { registerFederationRoutes } from "./routes/federation.routes.js";
 import { registerEmployeeActivityTrackingRoutes } from "./routes/employee-activity-tracking.routes.js";
+import { autoProvisionVerifiedCameras } from "./services/camera-auto-provision.js";
 import {
   EmptyFederationLocalSearchProvider,
   FederationManager,
@@ -987,9 +988,51 @@ export async function buildApp(options?: {
       resultCount: z.number().int().nonnegative(),
       error: z.string().max(2_000).optional(),
     }).parse(request.body);
+    const agent = await store.getEdgeAgent(id);
+    if (!agent) return reply.code(404).send({ error: "edge_agent_not_found" });
+    const existingJob = await store.getEdgeScanJob(agent.branchId, jobId);
+    if (!existingJob || existingJob.edgeAgentId !== id) {
+      return reply.code(404).send({ error: "scan_job_not_found" });
+    }
+    if (existingJob.status === "completed" || existingJob.status === "failed") {
+      return existingJob;
+    }
+
+    let provisionedCount = 0;
+    let credentialsRequiredCount = 0;
+    let pendingVerificationCount = 0;
+    if (result.status === "completed") {
+      const activation = await autoProvisionVerifiedCameras(store, agent.branchId, { edgeAgentId: id });
+      provisionedCount = activation.summary.provisioned;
+      credentialsRequiredCount = activation.summary.credentialsRequired;
+      pendingVerificationCount = activation.summary.pendingVerification;
+      const branch = await store.getNode(agent.branchId);
+      if (branch) {
+        await store.writeAudit({
+          tenantId: branch.tenantId,
+          actorUserId: null,
+          action: "camera.scan_auto_activation",
+          resourceNodeId: agent.branchId,
+          outcome: activation.summary.failed > 0 ? "failure" : "success",
+          sourceIp: request.ip,
+          details: {
+            scanJobId: jobId,
+            edgeAgentId: id,
+            provisionedCount,
+            credentialsRequiredCount,
+            pendingVerificationCount,
+            failedCount: activation.summary.failed,
+          },
+        });
+      }
+    }
+
     const job = await store.completeEdgeScanJob(id, jobId, {
       status: result.status!,
       resultCount: result.resultCount!,
+      provisionedCount,
+      credentialsRequiredCount,
+      pendingVerificationCount,
       ...(result.error ? { error: result.error } : {}),
     });
     return job ?? reply.code(404).send({ error: "scan_job_not_found" });

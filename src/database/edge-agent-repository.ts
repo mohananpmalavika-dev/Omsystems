@@ -42,6 +42,9 @@ type ScanRow = {
   started_at: Date | null;
   completed_at: Date | null;
   result_count: number;
+  provisioned_count: number;
+  credentials_required_count: number;
+  pending_verification_count: number;
   error: string | null;
 };
 
@@ -55,6 +58,9 @@ function mapScan(row: ScanRow): EdgeScanJob {
     startedAt: row.started_at?.toISOString() ?? null,
     completedAt: row.completed_at?.toISOString() ?? null,
     resultCount: row.result_count,
+    provisionedCount: row.provisioned_count,
+    credentialsRequiredCount: row.credentials_required_count,
+    pendingVerificationCount: row.pending_verification_count,
     error: row.error,
   };
 }
@@ -139,7 +145,9 @@ export class EdgeAgentRepository {
        ) agent ON true
        WHERE branch.id = $1 AND branch.node_type = 'branch'
        RETURNING id::text, branch_node_id::text, edge_agent_id::text, status,
-                 requested_at, started_at, completed_at, result_count, error`,
+                 requested_at, started_at, completed_at, result_count,
+                 provisioned_count, credentials_required_count,
+                 pending_verification_count, error`,
       [branchId, edgeAgentId ?? null],
     );
     if (!result.rows[0]) throw new Error("edge_agent_not_found");
@@ -149,7 +157,9 @@ export class EdgeAgentRepository {
   async getScanJob(branchId: string, jobId: string) {
     const result = await this.pool.query<ScanRow>(
       `SELECT id::text, branch_node_id::text, edge_agent_id::text, status,
-              requested_at, started_at, completed_at, result_count, error
+              requested_at, started_at, completed_at, result_count,
+              provisioned_count, credentials_required_count,
+              pending_verification_count, error
        FROM edge_scan_jobs WHERE id = $1 AND branch_node_id = $2`,
       [jobId, branchId],
     );
@@ -170,7 +180,9 @@ export class EdgeAgentRepository {
        WHERE job.id = next_job.id
        RETURNING job.id::text, job.branch_node_id::text, job.edge_agent_id::text,
                  job.status, job.requested_at, job.started_at, job.completed_at,
-                 job.result_count, job.error`,
+                 job.result_count, job.provisioned_count,
+                 job.credentials_required_count, job.pending_verification_count,
+                 job.error`,
       [edgeAgentId],
     );
     return result.rows[0] ? mapScan(result.rows[0]) : undefined;
@@ -179,16 +191,35 @@ export class EdgeAgentRepository {
   async completeScanJob(
     edgeAgentId: string,
     jobId: string,
-    result: { status: "completed" | "failed"; resultCount: number; error?: string },
+    result: {
+      status: "completed" | "failed";
+      resultCount: number;
+      provisionedCount?: number;
+      credentialsRequiredCount?: number;
+      pendingVerificationCount?: number;
+      error?: string;
+    },
   ) {
     const updated = await this.pool.query<ScanRow>(
       `UPDATE edge_scan_jobs
        SET status = $3::edge_scan_status, result_count = $4,
-           error = $5, completed_at = now()
+           error = $5, completed_at = now(), provisioned_count = $6,
+           credentials_required_count = $7, pending_verification_count = $8
        WHERE id = $1 AND edge_agent_id = $2 AND status = 'running'
        RETURNING id::text, branch_node_id::text, edge_agent_id::text, status,
-                 requested_at, started_at, completed_at, result_count, error`,
-      [jobId, edgeAgentId, result.status, result.resultCount, result.error ?? null],
+                 requested_at, started_at, completed_at, result_count,
+                 provisioned_count, credentials_required_count,
+                 pending_verification_count, error`,
+      [
+        jobId,
+        edgeAgentId,
+        result.status,
+        result.resultCount,
+        result.error ?? null,
+        result.provisionedCount ?? 0,
+        result.credentialsRequiredCount ?? 0,
+        result.pendingVerificationCount ?? 0,
+      ],
     );
     return updated.rows[0] ? mapScan(updated.rows[0]) : undefined;
   }

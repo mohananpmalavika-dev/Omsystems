@@ -718,7 +718,8 @@ export class MemoryStore implements ControlPlaneStore {
     const job: EdgeScanJob = {
       id: randomUUID(), branchId, edgeAgentId: agent.id, status: "queued",
       requestedAt: new Date().toISOString(), startedAt: null, completedAt: null,
-      resultCount: 0, error: null,
+      resultCount: 0, provisionedCount: 0, credentialsRequiredCount: 0,
+      pendingVerificationCount: 0, error: null,
     };
     this.edgeScanJobs.set(job.id, job);
     return job;
@@ -741,13 +742,23 @@ export class MemoryStore implements ControlPlaneStore {
   async completeEdgeScanJob(
     edgeAgentId: string,
     jobId: string,
-    result: { status: "completed" | "failed"; resultCount: number; error?: string },
+    result: {
+      status: "completed" | "failed";
+      resultCount: number;
+      provisionedCount?: number;
+      credentialsRequiredCount?: number;
+      pendingVerificationCount?: number;
+      error?: string;
+    },
   ) {
     const job = this.edgeScanJobs.get(jobId);
     if (!job || job.edgeAgentId !== edgeAgentId || job.status !== "running") return undefined;
     Object.assign(job, {
       status: result.status,
       resultCount: result.resultCount,
+      provisionedCount: result.provisionedCount ?? 0,
+      credentialsRequiredCount: result.credentialsRequiredCount ?? 0,
+      pendingVerificationCount: result.pendingVerificationCount ?? 0,
       error: result.error ?? null,
       completedAt: new Date().toISOString(),
     });
