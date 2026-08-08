@@ -176,9 +176,24 @@ export class BankingAnalyticsDetector extends BaseDetector {
     console.log("Initializing Banking Analytics detector...");
     
     try {
-      // TODO: Load ONNX models
-      // const ort = await import('onnxruntime-node');
-      // this.objectDetector = await ort.InferenceSession.create('/app/models/detection/yolov8m.onnx');
+      // Load ONNX models for object detection
+      try {
+        const ort = await import('onnxruntime-node');
+        const modelPath = process.env.YOLO_MODEL_PATH || '/app/models/detection/yolov8m.onnx';
+        
+        // Check if model file exists before loading
+        const fs = await import('fs');
+        if (fs.existsSync(modelPath)) {
+          this.objectDetector = await ort.InferenceSession.create(modelPath);
+          console.log(`✓ Loaded YOLOv8 model from ${modelPath}`);
+        } else {
+          console.warn(`⚠️ Model file not found: ${modelPath}, using unified inference pipeline`);
+          this.objectDetector = null;
+        }
+      } catch (error) {
+        console.warn('⚠️ Failed to load ONNX models, using unified inference pipeline:', error);
+        this.objectDetector = null;
+      }
       
       this.isModelLoaded = true;
       this.startTellerMonitoring();

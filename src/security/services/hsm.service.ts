@@ -363,6 +363,27 @@ export class HSMService extends EventEmitter implements IHSMService {
   }
 
   private async signWithHSM(key: HSMKey, data: Buffer): Promise<Buffer> {
+    // Try AWS KMS signing if configured
+    if (this.config?.type === 'aws_cloudhsm' && process.env.AWS_KMS_ENABLED === 'true') {
+      try {
+        const AWS = require('aws-sdk');
+        const kms = new AWS.KMS({ region: process.env.AWS_REGION || 'us-east-1' });
+
+        const params = {
+          KeyId: key.id,
+          Message: data,
+          MessageType: 'RAW',
+          SigningAlgorithm: process.env.AWS_KMS_SIGNING_ALGORITHM || 'RSASSA_PSS_SHA_256'
+        };
+
+        const result = await kms.sign(params).promise();
+        return Buffer.from(result.Signature);
+      } catch (error) {
+        console.error('AWS KMS sign error:', error instanceof Error ? error.message : String(error));
+        throw error;
+      }
+    }
+
     // If running in simulation mode, produce a software signature using a transient key
     if (process.env.HSM_ALLOW_SIMULATION === 'true') {
       const sign = crypto.createSign('SHA256');
@@ -370,6 +391,7 @@ export class HSMService extends EventEmitter implements IHSMService {
       sign.end();
       // Generate ephemeral RSA key for simulation
       const { privateKey } = crypto.generateKeyPairSync('rsa', { modulusLength: 2048 });
+      console.warn('⚠️ Using simulated HSM sign (HSM_ALLOW_SIMULATION=true) — not secure for production');
       return sign.sign(privateKey);
     }
 
@@ -381,10 +403,32 @@ export class HSMService extends EventEmitter implements IHSMService {
       return sign.sign(key.metadata.privateKeyPem);
     }
 
-    throw new Error('HSM signing not implemented for configured provider and simulation disabled');
+    throw new Error('HSM signing requires AWS_KMS_ENABLED=true with proper credentials for aws_cloudhsm, or HSM_ALLOW_SIMULATION=true for non-production environments');
   }
 
   private async verifyWithHSM(key: HSMKey, data: Buffer, signature: Buffer): Promise<boolean> {
+    // Try AWS KMS verification if configured
+    if (this.config?.type === 'aws_cloudhsm' && process.env.AWS_KMS_ENABLED === 'true') {
+      try {
+        const AWS = require('aws-sdk');
+        const kms = new AWS.KMS({ region: process.env.AWS_REGION || 'us-east-1' });
+
+        const params = {
+          KeyId: key.id,
+          Message: data,
+          MessageType: 'RAW',
+          Signature: signature,
+          SigningAlgorithm: process.env.AWS_KMS_SIGNING_ALGORITHM || 'RSASSA_PSS_SHA_256'
+        };
+
+        const result = await kms.verify(params).promise();
+        return result.SignatureValid === true;
+      } catch (error) {
+        console.error('AWS KMS verify error:', error instanceof Error ? error.message : String(error));
+        return false;
+      }
+    }
+
     // If public key material is available in metadata, use it to verify signature
     if (key.metadata && key.metadata.publicKeyPem) {
       try {
@@ -400,11 +444,12 @@ export class HSMService extends EventEmitter implements IHSMService {
     // Allow simulation mode for local testing
     if (process.env.HSM_ALLOW_SIMULATION === 'true') {
       const hash = crypto.createHash('sha256').update(data).digest();
+      console.warn('⚠️ Using simulated HSM verify (HSM_ALLOW_SIMULATION=true) — not secure for production');
       return hash.equals(signature);
     }
 
     // Fail-closed in production
-    throw new Error('HSM verification not implemented for configured provider and simulation disabled');
+    throw new Error('HSM verification requires AWS_KMS_ENABLED=true with proper credentials for aws_cloudhsm, or HSM_ALLOW_SIMULATION=true for non-production environments');
   }
 
   private async encryptWithHSM(key: HSMKey, plaintext: Buffer): Promise<Buffer> {

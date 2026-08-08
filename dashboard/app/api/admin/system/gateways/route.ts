@@ -68,7 +68,9 @@ export async function GET(request: NextRequest) {
         }
 
         const agentsData = await agentsResponse.json();
-        const agents = agentsData.data || [];
+        const agents = (agentsData.data || []).filter(
+          (agent: any) => agent.credentialStatus !== 'revoked',
+        );
         
         // Add branch info to each agent
         return agents.map((agent: any) => ({

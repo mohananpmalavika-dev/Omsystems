@@ -121,7 +121,9 @@ export async function GET(request: NextRequest) {
             );
             if (agentsResponse.ok) {
               const agentsData = await agentsResponse.json();
-              return Array.isArray(agentsData.data) ? agentsData.data.length : 0;
+              return Array.isArray(agentsData.data)
+                ? agentsData.data.filter((agent: any) => agent.credentialStatus !== 'revoked').length
+                : 0;
             }
             return 0;
           } catch {

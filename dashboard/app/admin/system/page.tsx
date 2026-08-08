@@ -77,6 +77,7 @@ export default function SystemManagementPage() {
   const [branches, setBranches] = useState<Branch[]>([]);
   const [stats, setStats] = useState<Stats | null>(null);
   const [loading, setLoading] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState<{ type: string; id: string; name: string } | null>(null);
 
   useEffect(() => {
@@ -126,6 +127,8 @@ export default function SystemManagementPage() {
   };
 
   const handleDelete = async (type: 'gateway' | 'camera' | 'branch', id: string) => {
+    if (deleting) return;
+    setDeleting(true);
     try {
       // Pluralize the type for the API endpoint
       const pluralType = type === 'gateway' ? 'gateways' 
@@ -147,6 +150,8 @@ export default function SystemManagementPage() {
     } catch (error) {
       console.error('Delete failed:', error);
       alert('An error occurred. Please try again.');
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -517,7 +522,7 @@ export default function SystemManagementPage() {
               </p>
               {deleteConfirm.type === 'gateway' && (
                 <p style={{ color: '#dc3545', fontSize: '0.875rem' }}>
-                  This will also delete all cameras, telemetry, and sessions associated with this gateway.
+                  This disconnects the gateway and removes it from management. Historical camera and telemetry records are retained.
                 </p>
               )}
               {deleteConfirm.type === 'branch' && (
@@ -527,6 +532,7 @@ export default function SystemManagementPage() {
               )}
               <div style={{ display: 'flex', gap: '1rem', marginTop: '1.5rem' }}>
                 <button
+                  disabled={deleting}
                   onClick={() => {
                     handleDelete(deleteConfirm.type as any, deleteConfirm.id);
                   }}
@@ -537,13 +543,15 @@ export default function SystemManagementPage() {
                     color: 'white',
                     border: 'none',
                     borderRadius: '4px',
-                    cursor: 'pointer',
+                    cursor: deleting ? 'not-allowed' : 'pointer',
+                    opacity: deleting ? 0.7 : 1,
                     fontWeight: '600'
                   }}
                 >
-                  Delete
+                  {deleting ? 'Deleting...' : 'Delete'}
                 </button>
                 <button
+                  disabled={deleting}
                   onClick={() => setDeleteConfirm(null)}
                   style={{
                     flex: 1,
@@ -552,7 +560,8 @@ export default function SystemManagementPage() {
                     color: 'white',
                     border: 'none',
                     borderRadius: '4px',
-                    cursor: 'pointer'
+                    cursor: deleting ? 'not-allowed' : 'pointer',
+                    opacity: deleting ? 0.7 : 1,
                   }}
                 >
                   Cancel

@@ -81,7 +81,7 @@ export class OnvifPtzClient extends OnvifClient {
   private async getPtzServiceUrl(): Promise<string | undefined> {
     try {
       const capabilities = await this.callOnvif(
-        (this as any).deviceServiceUrl,
+        this.deviceServiceUrl,
         "http://www.onvif.org/ver10/device/wsdl/GetCapabilities",
         `<tds:GetCapabilities><tds:Category>PTZ</tds:Category></tds:GetCapabilities>`,
         `xmlns:tds="http://www.onvif.org/ver10/device/wsdl"`,
@@ -92,7 +92,7 @@ export class OnvifPtzClient extends OnvifClient {
       return this.textValue(ptz?.["@_XAddr"]) ?? this.textValue(ptz?.XAddr);
     } catch {
       // Fallback to guessed PTZ service URL
-      const deviceUrl = new URL((this as any).deviceServiceUrl);
+      const deviceUrl = new URL(this.deviceServiceUrl);
       return new URL("/onvif/ptz", deviceUrl).toString();
     }
   }
@@ -576,8 +576,7 @@ export class OnvifPtzClient extends OnvifClient {
    * Call parent's protected call method using super
    */
   protected async callOnvif(url: string, action: string, body: string, namespaces: string): Promise<unknown> {
-    // Call the parent class's call method directly
-    return await (super as any).call(url, action, body, namespaces);
+    return super.call(url, action, body, namespaces);
   }
 
   private findRecord(value: unknown, key: string): Record<string, unknown> | undefined {

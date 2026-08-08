@@ -203,27 +203,38 @@ export async function registerEdgeGatewayOperationsRoutes(
         return;
       }
       
-      // Revoke the agent credential
+      // Revocation is the durable state change. The gateway remains in the
+      // audit history, but it can no longer authenticate to the control plane.
       const revoked = await store.revokeEdgeAgentCredential(id);
-      
-      // Revoke managed tunnel if it exists
-      const tunnel = await store.getEdgeManagedTunnel(agent.branchId);
-      if (tunnel && options.tunnelProvider) {
-        try {
-          await options.tunnelProvider.revoke(tunnel.providerTunnelId, tunnel.hostname);
-          await store.updateEdgeManagedTunnelStatus(agent.branchId, "revoked");
-        } catch (err) {
-          app.log.error({ err, tunnelId: tunnel.providerTunnelId }, "Failed to revoke managed tunnel");
-          // Continue with deletion even if tunnel revocation fails
-        }
+      if (!revoked) {
+        return reply.code(404).send({
+          error: "edge_agent_not_found",
+          message: "Gateway not found",
+        });
       }
       
-      // Write audit log
-      await writeGatewayAudit(request, store, agent.branchId, "edge_gateway.deleted", { 
-        edgeAgentId: id,
-        gatewayName: agent.name,
-        deviceUuid: agent.deviceUuid
-      });
+      // Tunnel cleanup is ancillary. Once the credential is revoked, a
+      // cleanup outage must not turn a successful removal into a misleading
+      // 500 response that encourages the operator to retry it.
+      try {
+        const tunnel = await store.getEdgeManagedTunnel(agent.branchId);
+        if (tunnel && options.tunnelProvider) {
+          await options.tunnelProvider.revoke(tunnel.providerTunnelId, tunnel.hostname);
+          await store.updateEdgeManagedTunnelStatus(agent.branchId, "revoked");
+        }
+      } catch (err) {
+        app.log.error({ err, agentId: id }, "Failed to clean up managed gateway tunnel");
+      }
+      
+      try {
+        await writeGatewayAudit(request, store, agent.branchId, "edge_gateway.deleted", {
+          edgeAgentId: id,
+          gatewayName: agent.name,
+          deviceUuid: agent.deviceUuid,
+        });
+      } catch (err) {
+        app.log.error({ err, agentId: id }, "Failed to write gateway removal audit event");
+      }
       
       return reply.code(204).send();
       

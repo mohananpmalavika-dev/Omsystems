@@ -204,20 +204,93 @@ export class LocalDiskStorageAdapter implements StorageDestinationAdapter {
 
 export class NfsStorageAdapter implements StorageDestinationAdapter {
   constructor(private readonly options: StorageAdapterOptions) {}
+  
   async getMetrics(): Promise<StorageMetrics> {
-    throw new Error("NFS storage adapter is not implemented yet");
+    const fsStats = await statfs(this.options.recordingRoot);
+    const capacityBytes = fsStats.blocks * fsStats.bsize;
+    const availableBytes = fsStats.bavail * fsStats.bsize;
+    const usedBytes = Math.max(0, capacityBytes - availableBytes);
+    const usedPercent = capacityBytes > 0 ? usedBytes / capacityBytes * 100 : 100;
+    const status: StorageStatus = usedPercent >= 95
+      ? "critical"
+      : usedPercent >= 80
+        ? "warning"
+        : "healthy";
+
+    // NFS-specific: Get comprehensive storage health report from Storage Health Agent
+    const healthReport = await storageHealthAgent.getHealthReport();
+
+    // For NFS, SMART data is not directly available (remote storage)
+    // But we can still report basic metrics
+    const mountPath = resolve(this.options.recordingRoot);
+
+    return {
+      capacityBytes,
+      availableBytes,
+      usedBytes,
+      status,
+      supportedTiers: this.options.supportedTiers,
+      storageType: this.options.storageType,
+      location: this.options.location,
+      supportedProtocols: this.options.supportedProtocols,
+      mountPath,
+      healthReport,
+    };
   }
+
   async runWriteProbe(): Promise<StorageProbeResult> {
-    throw new Error("NFS storage adapter is not implemented yet");
+    const startedAt = Date.now();
+    const probeDir = join(resolve(this.options.recordingRoot), ".write-probe");
+    const probePath = join(probeDir, `probe-${Date.now()}.bin`);
+    const payload = Buffer.from(`sentinel-write-probe:${Date.now()}:${Math.random().toString(36)}`);
+    try {
+      await mkdir(probeDir, { recursive: true });
+      await writeFile(probePath, payload);
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      const contents = await readFile(probePath);
+      if (!contents.equals(payload)) throw new Error("probe_payload_mismatch");
+      const checksum = createHash("sha256").update(contents).digest("hex");
+      await unlink(probePath);
+      return {
+        status: "passed",
+        latencyMs: Date.now() - startedAt,
+        bytesWritten: payload.length,
+        checksum,
+      };
+    } catch (error) {
+      await unlink(probePath).catch(() => undefined);
+      return {
+        status: "failed",
+        latencyMs: Date.now() - startedAt,
+        bytesWritten: payload.length,
+        checksum: "",
+        error: error instanceof Error ? error.message : String(error),
+      };
+    }
   }
+
   async getStagingPath(cameraId: string): Promise<string> {
-    throw new Error("NFS storage adapter is not implemented yet");
+    const stagingPath = join(resolve(this.options.recordingRoot), safe(cameraId), ".staging");
+    await mkdir(stagingPath, { recursive: true });
+    return stagingPath;
   }
+
   resolveSegmentTargetPath(cameraId: string, startedAt: Date, fileName: string): string {
-    throw new Error("NFS storage adapter is not implemented yet");
+    return join(
+      resolve(this.options.recordingRoot),
+      safe(cameraId),
+      String(startedAt.getUTCFullYear()),
+      two(startedAt.getUTCMonth() + 1),
+      two(startedAt.getUTCDate()),
+      two(startedAt.getUTCHours()),
+      fileName,
+    );
   }
+
   async deleteSegmentFile(storagePath: string): Promise<void> {
-    throw new Error("NFS storage adapter is not implemented yet");
+    const targetPath = resolve(this.options.recordingRoot, storagePath);
+    assertInsideRoot(targetPath, this.options.recordingRoot);
+    await unlink(targetPath);
   }
 }
 

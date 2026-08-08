@@ -41,9 +41,9 @@ export class OnvifClient {
   });
 
   constructor(
-    private readonly deviceServiceUrl: string,
-    private readonly credentials: OnvifCredentials,
-    private readonly timeoutMs = 8000,
+    protected readonly deviceServiceUrl: string,
+    protected readonly credentials: OnvifCredentials,
+    protected readonly timeoutMs = 8000,
   ) {}
 
   async ping(): Promise<void> {
@@ -228,7 +228,7 @@ export class OnvifClient {
     throw new Error(failure);
   }
 
-  private async call(
+  protected async call(
     url: string,
     action: string,
     body: string,

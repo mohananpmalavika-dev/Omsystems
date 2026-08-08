@@ -125,11 +125,40 @@ export class FaceAnalyticsDetector extends BaseDetector {
     console.log("Initializing Face Analytics detector...");
     
     try {
-      // TODO: Load ONNX models
-      // const ort = await import('onnxruntime-node');
-      // this.faceDetector = await ort.InferenceSession.create('/app/models/face/retinaface.onnx');
-      // this.faceRecognizer = await ort.InferenceSession.create('/app/models/face/arcface.onnx');
-      // this.attributeModel = await ort.InferenceSession.create('/app/models/face/age_gender.onnx');
+      // Load ONNX models for face detection and recognition
+      try {
+        const ort = await import('onnxruntime-node');
+        const fs = await import('fs');
+        
+        // Load face detection model (RetinaFace)
+        const faceDetectorPath = process.env.RETINAFACE_MODEL_PATH || '/app/models/face/retinaface.onnx';
+        if (fs.existsSync(faceDetectorPath)) {
+          this.faceDetector = await ort.InferenceSession.create(faceDetectorPath);
+          console.log(`✓ Loaded RetinaFace model from ${faceDetectorPath}`);
+        } else {
+          console.warn(`⚠️ Model file not found: ${faceDetectorPath}, using unified inference pipeline`);
+        }
+        
+        // Load face recognition model (ArcFace)
+        const arcfacePath = process.env.ARCFACE_MODEL_PATH || '/app/models/face/arcface.onnx';
+        if (fs.existsSync(arcfacePath)) {
+          this.faceRecognizer = await ort.InferenceSession.create(arcfacePath);
+          console.log(`✓ Loaded ArcFace model from ${arcfacePath}`);
+        } else {
+          console.warn(`⚠️ Model file not found: ${arcfacePath}`);
+        }
+        
+        // Load attribute model (Age/Gender/Emotion)
+        const attributePath = process.env.FACE_ATTRIBUTE_MODEL_PATH || '/app/models/face/age_gender.onnx';
+        if (fs.existsSync(attributePath)) {
+          this.attributeModel = await ort.InferenceSession.create(attributePath);
+          console.log(`✓ Loaded face attribute model from ${attributePath}`);
+        } else {
+          console.warn(`⚠️ Model file not found: ${attributePath}`);
+        }
+      } catch (error) {
+        console.warn('⚠️ Failed to load ONNX models, using unified inference pipeline:', error);
+      }
       
       this.isModelLoaded = true;
       this.startWatchlistMonitoring();

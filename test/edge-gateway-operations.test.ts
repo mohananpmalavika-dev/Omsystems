@@ -53,6 +53,36 @@ describe("secure edge gateway operations", () => {
     expect(afterRevocation.statusCode).toBe(401);
   });
 
+  it("returns success after revocation even when ancillary cleanup fails", async () => {
+    const store = new MemoryStore();
+    const app = await buildApp({ store });
+    apps.push(app);
+    const identity = await enroll(app, await createActivation(app));
+
+    vi.spyOn(store, "getEdgeManagedTunnel").mockRejectedValueOnce(
+      new Error("managed tunnel metadata unavailable"),
+    );
+    vi.spyOn(store, "writeAudit").mockRejectedValueOnce(
+      new Error("audit sink unavailable"),
+    );
+
+    const removed = await app.inject({
+      method: "DELETE",
+      url: `/v1/edge-agents/${identity.agentId}`,
+      headers: { "x-user-id": "user-global-admin" },
+    });
+
+    expect(removed.statusCode).toBe(204);
+    expect((await store.getEdgeAgent(identity.agentId))?.credentialStatus).toBe("revoked");
+    const heartbeat = await app.inject({
+      method: "POST",
+      url: `/v1/edge-agents/${identity.agentId}/heartbeat`,
+      headers: { "x-edge-agent-token": identity.credential },
+      payload: { version: "1.0.1" },
+    });
+    expect(heartbeat.statusCode).toBe(401);
+  });
+
   it("supports enrollment and gateway bootstrap while employee session auth is enabled", async () => {
     const store = new MemoryStore();
     const activationCode = `sgact_${"a".repeat(48)}`;

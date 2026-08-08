@@ -255,7 +255,7 @@ export async function discoverRtspDevices(
               vendor: recorderFingerprint.vendor,
               username: effectiveUsername,
               password: effectivePassword,
-              maxChannels: options.recorderMaxChannels,
+              ...(options.recorderMaxChannels ? { maxChannels: options.recorderMaxChannels } : {}),
               probe: (uri) => probeRtsp(uri, ffprobePath, timeoutMs),
             });
             if (recorder.channels.length > 0) {

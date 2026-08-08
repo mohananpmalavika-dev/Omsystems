@@ -347,7 +347,32 @@ export class HSMService {
   }
 
   private async encryptAWS(keyId: string, plaintext: Buffer, algorithm: string): Promise<any> {
-    // Prevent accidental use of simulated encryption in production.
+    // Try AWS KMS encryption first (production-ready)
+    if (process.env.AWS_KMS_ENABLED === 'true') {
+      try {
+        const AWS = require('aws-sdk');
+        const kms = new AWS.KMS({ region: process.env.AWS_REGION || 'us-east-1' });
+
+        const params = {
+          KeyId: keyId,
+          Plaintext: plaintext,
+          EncryptionAlgorithm: process.env.AWS_KMS_ENCRYPTION_ALGORITHM || 'SYMMETRIC_DEFAULT'
+        };
+
+        const result = await kms.encrypt(params).promise();
+        
+        return {
+          ciphertext: Buffer.from(result.CiphertextBlob),
+          iv: Buffer.alloc(0), // KMS handles IV internally
+          authTag: undefined // KMS handles authentication internally
+        };
+      } catch (error) {
+        console.error('AWS KMS encrypt error:', error instanceof Error ? error.message : String(error));
+        throw error;
+      }
+    }
+
+    // Fallback to simulation if explicitly allowed
     if (process.env.HSM_ALLOW_SIMULATION === 'true') {
       const iv = crypto.randomBytes(12);
       const cipher = crypto.createCipheriv('aes-256-gcm', crypto.randomBytes(32), iv);
@@ -357,11 +382,31 @@ export class HSMService {
       return { ciphertext, iv, authTag };
     }
 
-    // In production, the real AWS CloudHSM/KMS integration must be implemented.
-    throw new Error('AWS CloudHSM encrypt is not implemented. Set HSM_ALLOW_SIMULATION=true to enable simulation in non-production environments.');
+    throw new Error('AWS CloudHSM encrypt requires AWS_KMS_ENABLED=true with proper credentials, or HSM_ALLOW_SIMULATION=true for non-production environments.');
   }
 
   private async decryptAWS(keyId: string, ciphertext: Buffer, iv: Buffer, authTag: Buffer | undefined, algorithm: string): Promise<Buffer> {
+    // Try AWS KMS decryption first (production-ready)
+    if (process.env.AWS_KMS_ENABLED === 'true') {
+      try {
+        const AWS = require('aws-sdk');
+        const kms = new AWS.KMS({ region: process.env.AWS_REGION || 'us-east-1' });
+
+        const params = {
+          KeyId: keyId,
+          CiphertextBlob: ciphertext,
+          EncryptionAlgorithm: process.env.AWS_KMS_ENCRYPTION_ALGORITHM || 'SYMMETRIC_DEFAULT'
+        };
+
+        const result = await kms.decrypt(params).promise();
+        return Buffer.from(result.Plaintext);
+      } catch (error) {
+        console.error('AWS KMS decrypt error:', error instanceof Error ? error.message : String(error));
+        throw error;
+      }
+    }
+
+    // Fallback to simulation if explicitly allowed
     if (process.env.HSM_ALLOW_SIMULATION === 'true') {
       const decipher = crypto.createDecipheriv('aes-256-gcm', crypto.randomBytes(32), iv);
       if (authTag) decipher.setAuthTag(authTag);
@@ -369,10 +414,32 @@ export class HSMService {
       return Buffer.concat([decipher.update(ciphertext), decipher.final()]);
     }
 
-    throw new Error('AWS CloudHSM decrypt is not implemented. Set HSM_ALLOW_SIMULATION=true to enable simulation in non-production environments.');
+    throw new Error('AWS CloudHSM decrypt requires AWS_KMS_ENABLED=true with proper credentials, or HSM_ALLOW_SIMULATION=true for non-production environments.');
   }
 
   private async signAWS(keyId: string, data: Buffer, algorithm: string): Promise<Buffer> {
+    // Try AWS KMS signing first (production-ready)
+    if (process.env.AWS_KMS_ENABLED === 'true') {
+      try {
+        const AWS = require('aws-sdk');
+        const kms = new AWS.KMS({ region: process.env.AWS_REGION || 'us-east-1' });
+
+        const params = {
+          KeyId: keyId,
+          Message: data,
+          MessageType: 'RAW',
+          SigningAlgorithm: process.env.AWS_KMS_SIGNING_ALGORITHM || 'RSASSA_PSS_SHA_256'
+        };
+
+        const result = await kms.sign(params).promise();
+        return Buffer.from(result.Signature);
+      } catch (error) {
+        console.error('AWS KMS sign error:', error instanceof Error ? error.message : String(error));
+        throw error;
+      }
+    }
+
+    // Fallback to simulation if explicitly allowed
     if (process.env.HSM_ALLOW_SIMULATION === 'true') {
       const sign = crypto.createSign(algorithm);
       sign.update(data);
@@ -381,7 +448,7 @@ export class HSMService {
       return sign.sign(crypto.randomBytes(32));
     }
 
-    throw new Error('AWS CloudHSM sign is not implemented. Set HSM_ALLOW_SIMULATION=true to enable simulation in non-production environments.');
+    throw new Error('AWS CloudHSM sign requires AWS_KMS_ENABLED=true with proper credentials, or HSM_ALLOW_SIMULATION=true for non-production environments.');
   }
 
   private async verifyAWS(keyId: string, data: Buffer, signature: Buffer, algorithm: string): Promise<boolean> {
