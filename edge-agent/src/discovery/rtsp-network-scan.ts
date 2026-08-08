@@ -72,6 +72,10 @@ function tryTcpConnect(host: string, port: number, timeoutMs: number): Promise<b
   });
 }
 
+function isCredentialRejected(error?: string) {
+  return Boolean(error && /401|403|auth|credential|password|unauthori|forbidden/i.test(error));
+}
+
 export async function discoverRtspDevices(
   branchId: string,
   agentId: string,
@@ -120,9 +124,11 @@ export async function discoverRtspDevices(
   for (const ip of candidates) {
     const task = async () => {
       try {
+        let unverifiedEndpoint: { port: number; credentialsRequired: boolean } | undefined;
         for (const port of ports) {
           const reachable = await tryTcpConnect(ip, port, Math.max(500, Math.min(timeoutMs, 3000)));
           if (!reachable) continue;
+          unverifiedEndpoint ??= { port, credentialsRequired: false };
           // Try candidate paths
           for (const path of paths) {
             let uri = `rtsp://${ip}:${port}${path}`;
@@ -137,8 +143,11 @@ export async function discoverRtspDevices(
             codec: null,
             width: null,
             height: null,
-            error: e instanceof Error ? e.message : String(e),
-          }));
+              error: e instanceof Error ? e.message : String(e),
+            }));
+            if (!probe.reachable && isCredentialRejected(probe.error)) {
+              unverifiedEndpoint = { port, credentialsRequired: true };
+            }
             if (probe && probe.reachable) {
               try {
                 const payload = {
@@ -148,6 +157,7 @@ export async function discoverRtspDevices(
                   manufacturer: "unknown",
                   model: "IP Camera",
                   ipAddress: ip,
+                  onvifPort: 80,
                   rtspPort: port,
                   displayName: `Discovered camera ${ip}`,
                   credentialsRequired: false,
@@ -173,6 +183,34 @@ export async function discoverRtspDevices(
               }
             }
           }
+        }
+        if (unverifiedEndpoint) {
+          const discovery = await control.submitDiscovery(branchId, {
+            edgeAgentId: agentId,
+            discoveryMethod: "rtsp-network-scan",
+            vendor: "other",
+            manufacturer: "Unknown",
+            model: "RTSP device",
+            ipAddress: ip,
+            onvifPort: 80,
+            rtspPort: unverifiedEndpoint.port,
+            displayName: `Discovered device ${ip}`,
+            credentialsRequired: unverifiedEndpoint.credentialsRequired,
+            streamVerified: false,
+            rtspValidated: false,
+            compatibility: "review-required",
+            duplicateStatus: "unique",
+            compatibilityStatus: "review-required",
+            statusReason: unverifiedEndpoint.credentialsRequired
+              ? "rtsp_credentials_rejected"
+              : "rtsp_stream_unverified",
+            profiles: [{ name: "unverified", codec: "unknown", width: 1, height: 1 }],
+            capabilities: { ptz: false, audio: false, events: false },
+          });
+          submittedCount += 1;
+          logger.info(`RTSP discovery: unverified device at ${ip}:${unverifiedEndpoint.port} -> discovery ${discovery.id}`, {
+            credentialsRequired: unverifiedEndpoint.credentialsRequired,
+          });
         }
       } catch (error) {
         logger.debug("RTSP scan host failed", { host: ip, error: error instanceof Error ? error.message : String(error) });

@@ -1,4 +1,5 @@
 import type { FastifyInstance } from "fastify";
+import type { Pool } from "pg";
 import { z } from "zod";
 import type { AnalyticsRuleInput, ControlPlaneStore } from "../control-plane-store.js";
 import type { DiscoveredCamera, RecordingJob } from "../domain/models.js";
@@ -21,6 +22,11 @@ const approveAllBody = z.object({
   retentionDays: z.number().int().min(1).max(3650).optional(),
   enableAnalytics: z.boolean().optional(),
   enableAlerts: z.boolean().optional(),
+});
+
+const activateDiscoveryBody = z.object({
+  username: z.string().trim().min(1).max(128),
+  password: z.string().min(1).max(1_024),
 });
 
 const defaultAnalyticsRules: ReadonlyArray<Pick<
@@ -131,6 +137,7 @@ function analyticsRuleInput(
 export async function registerCameraDiscoveryRoutes(
   app: FastifyInstance,
   store: ControlPlaneStore,
+  pool?: Pool,
 ) {
   app.get("/v1/branches/:branchId/cameras/discovered", async (request, reply) => {
     const { branchId } = branchParams.parse(request.params);
@@ -206,6 +213,70 @@ export async function registerCameraDiscoveryRoutes(
       recordingArchitecture: recorderBacked ? "recorder-local-evidence-only" : "sentinel-local",
       message: `Camera ${body.name} approved and added to monitoring`,
     };
+  });
+
+  app.post("/v1/branches/:branchId/cameras/discovered/:discoveryId/activate", async (request, reply) => {
+    const { branchId, discoveryId } = discoveryParams.parse(request.params);
+    const body = activateDiscoveryBody.parse(request.body);
+    const branch = await store.getNode(branchId);
+    if (!branch || branch.type !== "branch") {
+      return reply.code(404).send({ error: "branch_not_found" });
+    }
+    const decision = await store.checkAccess(request.currentUser, "device:configure", branchId);
+    if (!decision?.allowed) {
+      return reply.code(403).send({ error: "forbidden", reason: decision?.reason ?? "no_matching_grant" });
+    }
+    if (!pool) {
+      return reply.code(503).send({ error: "discovery_credentials_database_unavailable" });
+    }
+
+    const discovered = (await store.listDiscoveredCameras(branchId))
+      .find((item) => item.id === discoveryId);
+    if (!discovered) {
+      return reply.code(404).send({ error: "discovery_not_found" });
+    }
+    const agent = await store.getEdgeAgent(discovered.edgeAgentId);
+    if (!agent || agent.branchId !== branchId) {
+      return reply.code(409).send({ error: "discovery_edge_agent_unavailable" });
+    }
+
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
+      await client.query(
+        `DELETE FROM camera_credentials
+         WHERE branch_id = $1 AND ip_address = $2 AND scope = 'host-specific'`,
+        [branchId, discovered.ipAddress],
+      );
+      await client.query(
+        `INSERT INTO camera_credentials
+           (branch_id, edge_agent_id, ip_address, username, password, scope)
+         VALUES ($1, $2, $3, $4, $5, 'host-specific')`,
+        [branchId, discovered.edgeAgentId, discovered.ipAddress, body.username, body.password],
+      );
+      await client.query("COMMIT");
+    } catch (error) {
+      await client.query("ROLLBACK").catch(() => undefined);
+      throw error;
+    } finally {
+      client.release();
+    }
+
+    const scan = await store.createEdgeScanJob(branchId, discovered.edgeAgentId);
+    await store.writeAudit({
+      tenantId: branch.tenantId,
+      actorUserId: request.currentUser.id,
+      action: "camera.discovery_credentials_activated",
+      resourceNodeId: branchId,
+      outcome: "success",
+      sourceIp: request.ip,
+      details: { discoveryId, edgeAgentId: discovered.edgeAgentId, credentialScope: "host-specific" },
+    });
+    return reply.code(202).send({
+      scanId: scan.id,
+      status: scan.status,
+      message: "Credentials saved. The branch gateway is verifying the device now.",
+    });
   });
 
   app.post("/v1/branches/:branchId/cameras/discovered/approve-all", async (request, reply) => {

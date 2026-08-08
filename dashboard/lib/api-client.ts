@@ -516,6 +516,11 @@ export const cameraInventoryApi = {
       `/v1/branches/${encodeURIComponent(branchId)}/cameras/discovered/${encodeURIComponent(discoveryId)}/approve`,
       { method: 'POST', body: JSON.stringify(data) }
     ),
+  activateDiscovery: (branchId: string, discoveryId: string, data: { username: string; password: string }) =>
+    fetchApi<{ scanId: string; status: string; message: string }>(
+      `/v1/branches/${encodeURIComponent(branchId)}/cameras/discovered/${encodeURIComponent(discoveryId)}/activate`,
+      { method: 'POST', body: JSON.stringify(data) }
+    ),
   approveAllDiscovered: (branchId: string, data: {
     recordingMode?: 'continuous' | 'motion';
     retentionDays?: number;

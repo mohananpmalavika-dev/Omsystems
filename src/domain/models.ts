@@ -637,7 +637,7 @@ export interface DiscoveredCamera {
   id: string;
   branchId: string;
   edgeAgentId: string;
-  discoveryMethod: "onvif-ws-discovery" | "configured-ip-range" | "manual-ip-registration" | "csv-bulk-import" | "nvr-dvr-channel-discovery" | "vendor-api-discovery" | "snmp-discovery" | "edge-agent-reported-inventory";
+  discoveryMethod: "onvif-ws-discovery" | "configured-ip-range" | "rtsp-network-scan" | "manual-ip-registration" | "csv-bulk-import" | "nvr-dvr-channel-discovery" | "vendor-api-discovery" | "snmp-discovery" | "edge-agent-reported-inventory";
   vendor: CameraVendor;
   manufacturer?: string;
   model: string;

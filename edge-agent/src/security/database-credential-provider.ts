@@ -42,6 +42,12 @@ export class DatabaseCredentialProvider {
       .map((key) => key.slice("host:".length));
   }
 
+  invalidate() {
+    this.cache.clear();
+    this.vpnScanNetworks = [];
+    this.lastRefresh = 0;
+  }
+
   private async refreshCache() {
     const bootstrap = await this.control.getDiscoveryBootstrap(this.edgeAgentId);
     this.cache.clear();

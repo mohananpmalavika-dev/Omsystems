@@ -187,6 +187,9 @@ export function DeviceManager() {
   const [showCameraForm, setShowCameraForm] = useState(false);
   const [showGatewayForm, setShowGatewayForm] = useState(false);
   const [showDiscoveredList, setShowDiscoveredList] = useState(false);
+  const [credentialActivation, setCredentialActivation] = useState<any>();
+  const [activationUsername, setActivationUsername] = useState("");
+  const [activationPassword, setActivationPassword] = useState("");
   const [registrationMode, setRegistrationMode] = useState<"automatic" | "manual" | "bulk">("automatic");
   const [selectedDiscoveryId, setSelectedDiscoveryId] = useState<string>();
   const [previewDiscoveryId, setPreviewDiscoveryId] = useState<string>();
@@ -386,6 +389,90 @@ export function DeviceManager() {
     setShowCameraForm(true);
   }
 
+  async function completeCameraScan(scanId: string, fallbackEdgeAgentId?: string) {
+    if (!selectedBranch) return { found: 0, provisioned: 0, credentialsRequired: 0 };
+    setLastScanAt(new Date().toISOString());
+    const deadline = Date.now() + 120_000;
+    let job = await cameraInventoryApi.getScan(selectedBranch, scanId) as EdgeScanJob;
+
+    while (job.status === "queued" || job.status === "running") {
+      if (Date.now() >= deadline) {
+        setNotice("Camera scan is queued and will continue when the Branch Gateway checks in.");
+        return { found: 0, provisioned: 0, credentialsRequired: 0 };
+      }
+      await wait(1_500);
+      job = await cameraInventoryApi.getScan(selectedBranch, scanId) as EdgeScanJob;
+    }
+
+    if (job.status === "failed") {
+      throw new Error(job.error ?? "Branch Gateway scan failed.");
+    }
+
+    const results = await cameraInventoryApi.getScanResults(selectedBranch, scanId);
+    const mappedResults = (results.data ?? []).map((item: any) => ({
+      ...item,
+      id: item.discoveryId ?? item.id,
+      displayName: item.displayName ?? item.model ?? "Camera",
+      vendor: item.manufacturer ?? item.vendor ?? "Unknown",
+      model: item.model ?? "Unknown",
+      ipAddress: item.ipAddress ?? "Pending",
+      onvifPort: item.onvifPort ?? 80,
+      onvifSupport: item.onvifSupported ?? item.onvifSupport ?? true,
+      streamVerified: item.streamVerified ?? false,
+      credentialsRequired: item.credentialsRequired ?? false,
+      compatibility: item.compatibility ?? item.compatibilityStatus ?? "review-required",
+      duplicateStatus: item.duplicate ? "duplicate" : item.duplicateStatus ?? "unique",
+      discoveryMethod: item.discoveryMethod ?? "device-scan",
+      profiles: item.profiles ?? [],
+      statusReason: item.statusReason ?? null,
+      edgeAgentId: item.edgeAgentId ?? fallbackEdgeAgentId ?? "",
+    }));
+
+    setDiscoveredCameras(mappedResults);
+    setDiscoveryReviewState((previous) => {
+      const next = { ...previous };
+      for (const camera of mappedResults) {
+        if (!next[camera.id]) {
+          next[camera.id] = {
+            reviewStatus: camera.duplicateStatus === "duplicate"
+              ? "duplicate"
+              : camera.duplicateStatus === "review-required"
+                ? "review-required"
+                : "pending",
+          };
+        }
+      }
+      return next;
+    });
+
+    const credentialsRequired = mappedResults.filter((camera) => camera.credentialsRequired).length;
+    const activationCandidate = mappedResults.find((camera) => camera.credentialsRequired);
+    setCredentialActivation(activationCandidate);
+    const readyToProvision = mappedResults.some((camera) =>
+      camera.streamVerified && !camera.credentialsRequired &&
+      camera.duplicateStatus !== "duplicate" && camera.compatibility === "compatible",
+    );
+    let provisioned = 0;
+    if (readyToProvision) {
+      const provisioning = await cameraInventoryApi.approveAllDiscovered(selectedBranch, {
+        recordingMode: "continuous",
+        retentionDays: 180,
+        enableAnalytics: true,
+        enableAlerts: true,
+      }) as { summary: { provisioned: number }; results: AutoProvisionResult[] };
+      provisioned = provisioning.summary.provisioned;
+      setAutoProvisionResults(provisioning.results);
+      for (const result of provisioning.results) {
+        if (result.status === "provisioned" || result.status === "partial") {
+          markDiscoveryReviewStatus(result.discoveryId, "approved");
+        }
+      }
+      await refreshBranch(selectedBranch);
+    }
+    setShowDiscoveredList(false);
+    return { found: job.resultCount || mappedResults.length, provisioned, credentialsRequired };
+  }
+
   async function scanCameras() {
     if (!selectedBranch) return;
     if (gateways.length === 0) {
@@ -399,61 +486,8 @@ export function DeviceManager() {
     try {
       const preferred = gateways.find((gateway) => gateway.status === "online") ?? gateways[0];
       const scan = await cameraInventoryApi.startScan(selectedBranch, preferred?.id) as { id: string; status: string; branchId: string };
-      setLastScanAt(new Date().toISOString());
-      const deadline = Date.now() + 120_000;
-      let job = await cameraInventoryApi.getScan(selectedBranch, scan.id) as EdgeScanJob;
-
-      while (job.status === "queued" || job.status === "running") {
-        if (Date.now() >= deadline) {
-          setNotice("Scan queued. It will run when the Branch Gateway checks in.");
-          return;
-        }
-        await wait(1_500);
-        job = await cameraInventoryApi.getScan(selectedBranch, scan.id) as EdgeScanJob;
-      }
-
-      if (job.status === "failed") {
-        throw new Error(job.error ?? "Branch Gateway scan failed.");
-      }
-
-      const results = await cameraInventoryApi.getScanResults(selectedBranch, scan.id);
-      const mappedResults = (results.data ?? []).map((item: any) => ({
-        ...item,
-        id: item.discoveryId ?? item.id,
-        displayName: item.displayName ?? item.model ?? "Camera",
-        vendor: item.manufacturer ?? item.vendor ?? "Unknown",
-        model: item.model ?? "Unknown",
-        ipAddress: item.ipAddress ?? "Pending",
-        onvifPort: item.onvifPort ?? 80,
-        onvifSupport: item.onvifSupported ?? item.onvifSupport ?? true,
-        streamVerified: item.streamVerified ?? false,
-        credentialsRequired: item.credentialsRequired ?? false,
-        compatibility: item.compatibility ?? item.compatibilityStatus ?? "review-required",
-        duplicateStatus: item.duplicate ? "duplicate" : item.duplicateStatus ?? "unique",
-        discoveryMethod: item.discoveryMethod ?? "device-scan",
-        profiles: item.profiles ?? [],
-        statusReason: item.statusReason ?? null,
-        edgeAgentId: item.edgeAgentId ?? preferred?.id ?? "",
-      }));
-
-      setDiscoveredCameras(mappedResults);
-      setDiscoveryReviewState((previous) => {
-        const next = { ...previous };
-        for (const camera of mappedResults) {
-          if (!next[camera.id]) {
-            next[camera.id] = {
-              reviewStatus: camera.duplicateStatus === "duplicate"
-                ? "duplicate"
-                : camera.duplicateStatus === "review-required"
-                  ? "review-required"
-                  : "pending",
-            };
-          }
-        }
-        return next;
-      });
-      setShowDiscoveredList(true);
-      setNotice(`Camera scan completed. Found ${job.resultCount || mappedResults.length} cameras.`);
+      const outcome = await completeCameraScan(scan.id, preferred?.id);
+      setNotice(`Camera scan completed. Found ${outcome.found} devices. ${outcome.provisioned} verified live streams were activated${outcome.credentialsRequired ? `; ${outcome.credentialsRequired} need credentials` : ""}.`);
     } catch (reason) {
       setError(messageOf(reason, "Camera scan failed."));
     } finally {
@@ -469,6 +503,41 @@ export function DeviceManager() {
     setPreviewDiscoveryId(discovered.id);
     setPreviewNameDraft(discovered.displayName ?? discovered.model ?? "");
     setRejectReason("");
+  }
+
+  function openCredentialActivation(discovered: any) {
+    setCredentialActivation(discovered);
+    setActivationUsername("");
+    setActivationPassword("");
+    setError(undefined);
+  }
+
+  async function activateDiscoveredCamera(event: React.FormEvent) {
+    event.preventDefault();
+    if (!selectedBranch || !credentialActivation) return;
+    setSaving(true);
+    setScanning(true);
+    setError(undefined);
+    try {
+      const activation = await cameraInventoryApi.activateDiscovery(selectedBranch, credentialActivation.id, {
+        username: activationUsername,
+        password: activationPassword,
+      });
+      setActivationPassword("");
+      const outcome = await completeCameraScan(activation.scanId, credentialActivation.edgeAgentId);
+      setNotice(
+        outcome.provisioned > 0
+          ? `Credentials verified. ${outcome.provisioned} live stream${outcome.provisioned === 1 ? " is" : "s are"} activated.`
+          : outcome.credentialsRequired > 0
+            ? "The device still rejected these credentials. Check the username and password, then try again."
+            : "Credentials were saved, but the device stream could not be verified yet.",
+      );
+    } catch (reason) {
+      setError(messageOf(reason, "Unable to activate this device with the supplied credentials."));
+    } finally {
+      setSaving(false);
+      setScanning(false);
+    }
   }
 
   async function approveDiscoveredCamera(discovered: any) {
@@ -895,7 +964,11 @@ export function DeviceManager() {
                     {item.onvifServices?.length ? <p className="discovery-footnote">Services: {item.onvifServices.join(", ")}</p> : null}
                   </div>
                   <div className="discovery-card-actions">
-                    <button type="button" className="primary-button" onClick={() => void approveDiscoveredCamera(item)} disabled={saving}>Approve</button>
+                    {item.credentialsRequired ? (
+                      <button type="button" className="primary-button" onClick={() => openCredentialActivation(item)} disabled={saving || scanning}>Activate with credentials</button>
+                    ) : (
+                      <button type="button" className="primary-button" onClick={() => void approveDiscoveredCamera(item)} disabled={saving || !item.streamVerified}>Approve & start live</button>
+                    )}
                     <button type="button" className="secondary-button" onClick={() => { setSelectedDiscoveryId(item.id); setRenameDraft(item.displayName ?? item.model ?? ""); setRejectReason(""); }}>Rename</button>
                     <button type="button" className="secondary-button" onClick={() => { setSelectedDiscoveryId(item.id); setRenameDraft(item.displayName ?? item.model ?? ""); setRejectReason(""); }}>Reject</button>
                   </div>
@@ -1079,6 +1152,20 @@ export function DeviceManager() {
           </div>
         </div>
       )}
+      {credentialActivation && (
+        <div className="modal-overlay">
+          <div className="modal-container">
+            <div className="modal-header"><h2>Activate {credentialActivation.displayName || credentialActivation.model}</h2><button type="button" className="icon-button" onClick={() => { setCredentialActivation(undefined); setActivationPassword(""); }} disabled={saving}><X size={20} /></button></div>
+            <form className="modal-form" onSubmit={activateDiscoveredCamera}>
+              <div className="form-info-banner"><Camera size={16} />{credentialActivation.ipAddress} rejected the saved credentials. Enter the device account to verify it and start the live stream automatically.</div>
+              <div className="form-group"><label htmlFor="activationUsername">Username <span className="required">*</span></label><input id="activationUsername" value={activationUsername} onChange={(event) => setActivationUsername(event.target.value)} autoComplete="username" required /></div>
+              <div className="form-group"><label htmlFor="activationPassword">Password <span className="required">*</span></label><input id="activationPassword" type="password" value={activationPassword} onChange={(event) => setActivationPassword(event.target.value)} autoComplete="current-password" required /></div>
+              <p className="field-help">The module saves this device-specific credential in the branch database, rechecks the camera, and only starts its live feed after stream verification succeeds.</p>
+              <div className="modal-actions"><button type="button" className="secondary-button" onClick={() => { setCredentialActivation(undefined); setActivationPassword(""); }} disabled={saving}>Cancel</button><button className="primary-button" disabled={saving || !activationUsername.trim() || !activationPassword}>{saving ? "Verifying…" : "Activate & start live"}</button></div>
+            </form>
+          </div>
+        </div>
+      )}
       {showDiscoveredList && (
         <div className="modal-overlay">
           <div className="modal-container">
@@ -1126,7 +1213,11 @@ export function DeviceManager() {
                             <button type="button" className="primary-button" onClick={() => void renameDiscoveredCamera(camera.id, previewNameDraft)} disabled={saving || !previewNameDraft.trim()}>Save name</button>
                             <input value={rejectReason} onChange={(event) => setRejectReason(event.target.value)} placeholder="Reject reason" />
                             <button type="button" className="secondary-button" onClick={() => void rejectDiscoveredCamera(camera.id, rejectReason)} disabled={saving}>Reject</button>
-                            <button type="button" className="primary-button" onClick={() => void approveDiscoveredCamera(camera)} disabled={saving}>Approve</button>
+                            {camera.credentialsRequired ? (
+                              <button type="button" className="primary-button" onClick={() => openCredentialActivation(camera)} disabled={saving || scanning}>Activate with credentials</button>
+                            ) : (
+                              <button type="button" className="primary-button" onClick={() => void approveDiscoveredCamera(camera)} disabled={saving || !camera.streamVerified}>Approve & start live</button>
+                            )}
                           </div>
                         )}
                       </div>

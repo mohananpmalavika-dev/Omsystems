@@ -903,17 +903,25 @@ export async function buildApp(options?: {
     const discoveries = await store.listDiscoveredCameras(query.branchId);
     return { data: discoveries.map((item) => ({
       discoveryId: item.id,
+      edgeAgentId: item.edgeAgentId,
       manufacturer: item.manufacturer ?? "Unknown",
       model: item.model,
       displayName: item.displayName ?? `${item.manufacturer ?? "Unknown"} ${item.model}`,
       firmwareVersion: item.firmwareVersion,
       onvifSupported: item.onvifSupport ?? false,
+      onvifPort: item.onvifPort,
+      rtspPort: item.rtspPort,
       streamVerified: item.streamVerified ?? item.rtspValidated ?? false,
       compatibility: item.compatibility ?? (item.compatibilityStatus ?? "review-required"),
       duplicate: item.duplicateStatus === "duplicate",
+      duplicateStatus: item.duplicateStatus,
+      compatibilityStatus: item.compatibilityStatus,
       status: item.status,
       ipAddress: item.ipAddress,
       credentialsRequired: item.credentialsRequired ?? false,
+      statusReason: item.statusReason,
+      discoveryMethod: item.discoveryMethod,
+      profiles: item.profiles,
       sourceType: item.sourceType ?? "ip-camera",
       recorderId: item.recorderId,
       recorderChannel: item.recorderChannel,
@@ -974,7 +982,7 @@ export async function buildApp(options?: {
     if (!request.edgeAgentAuthenticated && !(await requireAccess(request, reply, store, "device:configure", branchId))) return;
     const parsed = z.object({
       edgeAgentId: z.string().min(1),
-      discoveryMethod: z.enum(["onvif-ws-discovery", "configured-ip-range", "manual-ip-registration", "csv-bulk-import", "nvr-dvr-channel-discovery", "vendor-api-discovery", "snmp-discovery", "edge-agent-reported-inventory"]).default("edge-agent-reported-inventory"),
+      discoveryMethod: z.enum(["onvif-ws-discovery", "configured-ip-range", "rtsp-network-scan", "manual-ip-registration", "csv-bulk-import", "nvr-dvr-channel-discovery", "vendor-api-discovery", "snmp-discovery", "edge-agent-reported-inventory"]).default("edge-agent-reported-inventory"),
       vendor: z.enum(["hikvision", "cp-plus", "other"]).default("other"),
       manufacturer: z.string().trim().min(1).max(120).optional(),
       model: z.string().trim().min(1).max(120),
@@ -1734,7 +1742,7 @@ export async function buildApp(options?: {
     }
     return consumed;
   });
-  await registerCameraDiscoveryRoutes(app, store);
+  await registerCameraDiscoveryRoutes(app, store, pool);
   await registerRecorderLifecycleRoutes(app, store);
   await registerCommandCenterRoutes(app, store);
   await registerDigitalTwinRoutes(app, store, {

@@ -19,4 +19,22 @@ describe("DatabaseCredentialProvider", () => {
     expect(getDiscoveryBootstrap).toHaveBeenCalledTimes(1);
     expect(getDiscoveryBootstrap).toHaveBeenCalledWith("edge-001");
   });
+
+  it("refreshes credentials immediately after activation invalidates the cache", async () => {
+    const getDiscoveryBootstrap = vi.fn()
+      .mockResolvedValueOnce({
+        credentials: [{ host: "10.42.5.20", username: "old-user", password: "old-password", updatedAt: "2026-08-08T00:00:00.000Z" }],
+        vpnScanNetworks: [],
+      })
+      .mockResolvedValueOnce({
+        credentials: [{ host: "10.42.5.20", username: "new-user", password: "new-password", updatedAt: "2026-08-08T00:01:00.000Z" }],
+        vpnScanNetworks: [],
+      });
+    const provider = new DatabaseCredentialProvider({ getDiscoveryBootstrap }, "edge-001");
+
+    await expect(provider.get("10.42.5.20")).resolves.toMatchObject({ username: "old-user" });
+    provider.invalidate();
+    await expect(provider.get("10.42.5.20")).resolves.toMatchObject({ username: "new-user" });
+    expect(getDiscoveryBootstrap).toHaveBeenCalledTimes(2);
+  });
 });

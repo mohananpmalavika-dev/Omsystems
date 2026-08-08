@@ -236,6 +236,7 @@ while (!stopping) {
     const job = await control.claimScanJob(agentId, config.EDGE_AGENT_VERSION);
     if (job) {
       try {
+        dbCredentialProvider.invalidate();
         const resultCount = await scanBranch();
         await control.completeScanJob(agentId, job.id, {
           status: "completed",
@@ -404,11 +405,18 @@ async function scanBranch(options: { persistStreamSecrets?: boolean } = {}) {
       }
       const profiles = [];
       let primarySourceUri: string | undefined;
+      let streamVerified = false;
+      let streamValidationError: string | undefined;
       for (const profile of device.profiles) {
         const uri = await client.getStreamUri(device.mediaServiceUrl, profile.token);
         const sourceUri = attachCredentials(uri, credentials);
-        primarySourceUri ??= sourceUri;
         const result = await probeRtsp(sourceUri, config.FFPROBE_PATH);
+        if (result.reachable) {
+          primarySourceUri ??= sourceUri;
+          streamVerified = true;
+        } else {
+          streamValidationError ??= result.error;
+        }
         profiles.push({
           name: profile.name,
           codec: profile.codec,
@@ -428,11 +436,11 @@ async function scanBranch(options: { persistStreamSecrets?: boolean } = {}) {
         firmwareVersion: device.firmwareVersion,
         displayName: `${device.manufacturer} ${device.model}`,
         credentialsRequired: false,
-        streamVerified: Boolean(primarySourceUri && profiles.length > 0),
-        rtspValidated: Boolean(primarySourceUri && profiles.length > 0),
-        compatibility: "compatible",
+        streamVerified,
+        rtspValidated: streamVerified,
+        compatibility: streamVerified ? "compatible" : "review-required",
         duplicateStatus: "unique",
-        compatibilityStatus: "compatible",
+        compatibilityStatus: streamVerified ? "compatible" : "review-required",
         onvifSupport: true,
         onvifServices: device.services,
         onvifCapabilityTests: device.capabilityTests,
@@ -440,12 +448,17 @@ async function scanBranch(options: { persistStreamSecrets?: boolean } = {}) {
         rtspPort: 554,
         profiles,
         capabilities: device.capabilities,
+        ...(streamVerified ? {} : { statusReason: "rtsp_stream_unverified" }),
       });
       if (persistStreamSecrets && primarySourceUri) {
         await secrets.set(`edge://${agentId}/${discovery.id}`, primarySourceUri);
       }
       submitted += 1;
-      logger.info(`Submitted ${device.manufacturer} ${device.model} as discovery ${discovery.id}`, { compatibility: compatibilityNotes(vendor) });
+      logger.info(`Submitted ${device.manufacturer} ${device.model} as discovery ${discovery.id}`, {
+        compatibility: compatibilityNotes(vendor),
+        streamVerified,
+        ...(streamValidationError ? { streamValidation: "failed" } : {}),
+      });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       logger.error(`Failed to inspect ${endpoint.remoteAddress}`, { error: message });
@@ -701,6 +714,7 @@ async function collectRecorderReports(observedAt: string, includeArchive: boolea
 async function executeEdgeCommand(type: string, payload: Record<string, unknown>) {
   switch (type) {
     case "rediscover":
+      dbCredentialProvider.invalidate();
       return { result: { discovered: await scanBranch() } };
     case "restart-media":
       if (!config.LIVE_MEDIA_ENABLED) throw new Error("live_media_disabled");
