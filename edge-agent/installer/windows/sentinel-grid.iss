@@ -32,6 +32,7 @@ Name: "startservice"; Description: "Start Sentinel Grid service after installati
 [Files]
 ; Main executable
 Source: "..\..\release\edge-agent.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "open-dashboard-scan.ps1"; DestDir: "{app}"; Flags: ignoreversion
 
 ; Runtime dependencies
 Source: "..\..\release\runtime\*"; DestDir: "{app}\runtime"; Flags: ignoreversion recursesubdirs createallsubdirs

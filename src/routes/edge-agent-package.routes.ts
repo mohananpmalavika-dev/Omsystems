@@ -13,6 +13,12 @@ const routeParams = z.object({
   branchId: z.string().min(1),
   edgeAgentId: z.string().min(1),
 });
+const branchParams = z.object({ branchId: z.string().min(1) });
+const activationInstallerBody = z.object({
+  activationId: z.string().uuid(),
+  activationCode: z.string().startsWith("sgact_").min(40).max(200),
+  agentName: z.string().trim().min(2).max(120),
+});
 const packageQuery = z.object({
   platform: z.enum(["windows", "linux"]).default("windows"),
   mode: z.enum(["install", "scan-once"]).default("install"),
@@ -206,6 +212,64 @@ export async function registerEdgeAgentPackageRoutes(
   store: ControlPlaneStore,
   options: EdgeAgentPackageOptions = {},
 ) {
+  app.post("/v1/branches/:branchId/edge-agent-installer", async (request, reply) => {
+    const { branchId } = branchParams.parse(request.params);
+    const body = activationInstallerBody.parse(request.body);
+    const branch = await store.getNode(branchId);
+    if (!branch || branch.type !== "branch") return reply.code(404).send({ error: "branch_not_found" });
+
+    const decision = await store.checkAccess(request.currentUser, "device:configure", branchId);
+    if (!decision) return reply.code(404).send({ error: "resource_not_found" });
+    if (!decision.allowed) return reply.code(403).send({ error: "forbidden", reason: decision.reason });
+
+    const root = await findEdgeAgentRoot(options.artifactRoot);
+    if (!root) return reply.code(503).send({
+      error: "edge_agent_package_not_built",
+      message: "The edge-agent build artifacts are not present on this server.",
+    });
+
+    try {
+      const packageJson = JSON.parse(await readFile(join(root, "package.json"), "utf8")) as { version?: string };
+      const version = packageJson.version ?? "0.1.0";
+      const executablePath = join(root, "release", "edge-agent.exe");
+      let executableSize: number;
+      try {
+        const metadata = await stat(executablePath);
+        if (!metadata.isFile()) throw new Error("not a file");
+        executableSize = metadata.size;
+      } catch {
+        throw Object.assign(new Error(`edge_agent_executable_not_built: ${executablePath}`), { code: "edge_agent_executable_not_built" });
+      }
+
+      const config = Buffer.from(branchConfiguration({
+        id: body.activationId,
+        branchId,
+        name: body.agentName,
+      }, version, options, "windows", "install", body.activationCode), "utf8");
+      const installer = streamInstaller(executablePath, config);
+      const safeBranchName = branch.name.replace(/[^a-zA-Z0-9_-]/g, "-");
+      await store.writeAudit({
+        tenantId: branch.tenantId,
+        actorUserId: request.currentUser.id,
+        action: "edge_agent.installer_downloaded",
+        resourceNodeId: branchId,
+        outcome: "success",
+        sourceIp: request.ip,
+        details: { activationId: body.activationId, version, platform: "windows", format: "single-executable" },
+      });
+      reply.header("Cache-Control", "no-store, private");
+      reply.header("Content-Type", "application/vnd.microsoft.portable-executable");
+      reply.header("Content-Length", String(executableSize + installer.footer.length));
+      reply.header("Content-Disposition", `attachment; filename="${safeBranchName}-scanner-setup.exe"`);
+      return reply.send(installer.stream);
+    } catch (error) {
+      app.log.error({ err: error, branchId }, "Failed to build edge-agent installer from activation");
+      const code = error && typeof error === "object" && "code" in error ? String(error.code) : "edge_agent_package_failed";
+      const status = code.endsWith("_not_built") ? 503 : 500;
+      return reply.code(status).send({ error: code, message: error instanceof Error ? error.message : "Package generation failed" });
+    }
+  });
+
   app.get("/v1/branches/:branchId/edge-agents/:edgeAgentId/package", async (request, reply) => {
     const { branchId, edgeAgentId } = routeParams.parse(request.params);
     const { platform, mode } = packageQuery.parse(request.query);

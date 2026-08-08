@@ -18,6 +18,8 @@ if ($task) {
   Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false
 }
 
+Remove-Item -LiteralPath "Registry::HKEY_LOCAL_MACHINE\SOFTWARE\Classes\sentinel-grid-scanner" -Recurse -Force -ErrorAction SilentlyContinue
+
 if ($PurgeData -and (Test-Path -LiteralPath $InstallDirectory)) {
   $resolvedTarget = (Resolve-Path -LiteralPath $InstallDirectory).Path.TrimEnd('\')
   $programFilesRoot = (Resolve-Path -LiteralPath $env:ProgramFiles).Path.TrimEnd('\')

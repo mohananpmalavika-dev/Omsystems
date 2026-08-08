@@ -129,6 +129,18 @@ try {
     $shortcut.TargetPath = Join-Path $AppPath "logs"
     $shortcut.Description = "Sentinel Grid Edge Agent Logs"
     $shortcut.Save()
+
+    $dashboardLauncher = Join-Path $AppPath "open-dashboard-scan.ps1"
+    if (Test-Path -LiteralPath $dashboardLauncher -PathType Leaf) {
+        $protocolKey = "Registry::HKEY_LOCAL_MACHINE\SOFTWARE\Classes\sentinel-grid-scanner"
+        $commandKey = Join-Path $protocolKey "shell\open\command"
+        New-Item -Path $commandKey -Force | Out-Null
+        Set-Item -Path $protocolKey -Value "URL:Sentinel Grid Scanner Protocol"
+        New-ItemProperty -Path $protocolKey -Name "URL Protocol" -Value "" -PropertyType String -Force | Out-Null
+        $powerShell = Join-Path $env:SystemRoot "System32\WindowsPowerShell\v1.0\powershell.exe"
+        $protocolCommand = "`"$powerShell`" -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$dashboardLauncher`" `"%1`""
+        Set-Item -Path $commandKey -Value $protocolCommand
+    }
     
     Write-Host "📁 Created desktop shortcut to logs folder"
     Write-Host ""

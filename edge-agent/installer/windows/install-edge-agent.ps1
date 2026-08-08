@@ -10,6 +10,7 @@ $SourceDirectory = $PSScriptRoot
 $SourceExecutable = Join-Path $SourceDirectory "edge-agent.exe"
 $SourceConfig = Join-Path $SourceDirectory "config\edge-agent.env"
 $SourceUninstaller = Join-Path $SourceDirectory "uninstall-edge-agent.ps1"
+$SourceDashboardLauncher = Join-Path $SourceDirectory "open-dashboard-scan.ps1"
 $SourceRuntimePackages = Join-Path $SourceDirectory "runtime-packages"
 
 function Assert-Administrator {
@@ -71,6 +72,9 @@ Copy-Item -LiteralPath $SourceExecutable -Destination $Executable -Force
 Copy-Item -LiteralPath $SourceConfig -Destination $ConfigPath -Force
 if (Test-Path -LiteralPath $SourceUninstaller -PathType Leaf) {
   Copy-Item -LiteralPath $SourceUninstaller -Destination (Join-Path $InstallDirectory "uninstall-edge-agent.ps1") -Force
+}
+if (Test-Path -LiteralPath $SourceDashboardLauncher -PathType Leaf) {
+  Copy-Item -LiteralPath $SourceDashboardLauncher -Destination (Join-Path $InstallDirectory "open-dashboard-scan.ps1") -Force
 }
 if (Test-Path -LiteralPath (Join-Path $SourceDirectory "THIRD_PARTY_NOTICES.txt") -PathType Leaf) {
   Copy-Item -LiteralPath (Join-Path $SourceDirectory "THIRD_PARTY_NOTICES.txt") -Destination (Join-Path $InstallDirectory "THIRD_PARTY_NOTICES.txt") -Force
@@ -159,6 +163,18 @@ Register-ScheduledTask -TaskName $TaskName -Action $action -Trigger $trigger -Pr
 Start-ScheduledTask -TaskName $TaskName
 Start-Sleep -Seconds 2
 $state = (Get-ScheduledTask -TaskName $TaskName).State
+
+$dashboardLauncher = Join-Path $InstallDirectory "open-dashboard-scan.ps1"
+if (Test-Path -LiteralPath $dashboardLauncher -PathType Leaf) {
+  $protocolKey = "Registry::HKEY_LOCAL_MACHINE\SOFTWARE\Classes\sentinel-grid-scanner"
+  $commandKey = Join-Path $protocolKey "shell\open\command"
+  New-Item -Path $commandKey -Force | Out-Null
+  Set-Item -Path $protocolKey -Value "URL:Sentinel Grid Scanner Protocol"
+  New-ItemProperty -Path $protocolKey -Name "URL Protocol" -Value "" -PropertyType String -Force | Out-Null
+  $powerShell = Join-Path $env:SystemRoot "System32\WindowsPowerShell\v1.0\powershell.exe"
+  $protocolCommand = "`"$powerShell`" -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$dashboardLauncher`" `"%1`""
+  Set-Item -Path $commandKey -Value $protocolCommand
+}
 
 Write-Host "Sentinel Grid Edge Agent installed successfully." -ForegroundColor Green
 Write-Host "Startup task: $TaskName ($state)"

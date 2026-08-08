@@ -478,6 +478,11 @@ export const cameraInventoryApi = {
       `/v1/branches/${encodeURIComponent(branchId)}/edge-activations`,
       { method: 'POST', body: JSON.stringify(data) }
     ),
+  downloadInstallerFromActivation: (branchId: string, data: { activationId: string; activationCode: string; agentName: string }) =>
+    downloadApi(
+      `/v1/branches/${encodeURIComponent(branchId)}/edge-agent-installer`,
+      { method: 'POST', body: JSON.stringify(data) },
+    ),
   sendGatewayCommand: (
     branchId: string,
     edgeAgentId: string,

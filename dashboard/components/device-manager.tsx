@@ -5,7 +5,6 @@ import {
   AlertTriangle,
   Camera,
   CheckCircle2,
-  Copy,
   Download,
   Network,
   Plus,
@@ -50,6 +49,7 @@ type CameraForm = {
 };
 
 const scanStages = ["Local network", "VPN routes", "Secure tunnel"] as const;
+const scannerStartupTimeoutMs = 60_000;
 
 const emptyCameraForm: CameraForm = {
   name: "",
@@ -213,7 +213,7 @@ export function DeviceManager() {
   const [inventorySort, setInventorySort] = useState<"updated" | "deviceId">("updated");
 
   const activeBranch = branches.find((branch) => branch.id === selectedBranch);
-  const onlineGateway = gateways.find((gateway) => gateway.status === "online");
+  const onlineGateway = gateways.find(isGatewayReady);
   const discoveryQueueItems = useMemo(() => discoveredCameras.map((camera) => {
     const reviewStatus = discoveryReviewState[camera.id]?.reviewStatus ?? (camera.duplicateStatus === "duplicate" ? "duplicate" : camera.duplicateStatus === "review-required" ? "review-required" : "pending");
     return {
@@ -256,24 +256,9 @@ export function DeviceManager() {
   }, [inventoryRecords, inventoryDeviceTypeFilter, inventoryHealthFilter, inventoryLifecycleFilter, inventorySearch, inventorySort]);
   const pendingReviewCount = discoveryQueueItems.filter((item) => item.reviewStatus !== "approved").length;
   const approvedReviewCount = discoveryQueueItems.filter((item) => item.reviewStatus === "approved").length;
-  const setupText = useMemo(() => gatewayActivation
-    ? [
-        `CONTROL_PLANE_URL=${gatewayActivation.bootstrap.controlPlaneUrl || "<provided-by-platform-admin>"}`,
-        `EDGE_ACTIVATION_CODE=${gatewayActivation.activationCode}`,
-        `EDGE_AGENT_NAME=${gatewayActivation.agentName}`,
-        "LIVE_MEDIA_ENABLED=true",
-        "EDGE_MANAGED_MEDIA_BOOTSTRAP=true",
-        "MEDIA_RUNTIME_MANAGED=true",
-        "MEDIA_TUNNEL_MODE=named",
-        "STREAM_SECRET_STORE_PATH=./data/stream-secrets.json",
-        "EDGE_IDENTITY_PATH=./data/device-identity.enc",
-        "EDGE_OFFLINE_OUTBOX_PATH=./data/offline-outbox.enc",
-      ].join("\n")
-    : "", [gatewayActivation]);
 
-  function downloadTextFile(filename: string, content: string) {
-    const blob = new Blob([content], { type: "text/plain" });
-    const url = URL.createObjectURL(blob);
+  function downloadFile(filename: string, content: Blob) {
+    const url = URL.createObjectURL(content);
     const anchor = document.createElement("a");
     anchor.href = url;
     anchor.download = filename;
@@ -281,10 +266,6 @@ export function DeviceManager() {
     anchor.click();
     document.body.removeChild(anchor);
     URL.revokeObjectURL(url);
-  }
-
-  function downloadGatewayConfiguration() {
-    downloadTextFile(`${activeBranch?.name?.replace(/[^a-z0-9_-]+/gi, "-") || "branch"}-gateway.env`, setupText);
   }
 
   useEffect(() => {
@@ -474,25 +455,50 @@ export function DeviceManager() {
     return { found: job.resultCount || mappedResults.length, provisioned, credentialsRequired };
   }
 
+  async function waitForWebsiteScanner(branchId: string) {
+    if (typeof window === "undefined") throw new Error("The local scanner can only be started from this browser.");
+    window.location.assign("sentinel-grid-scanner://open");
+
+    const deadline = Date.now() + scannerStartupTimeoutMs;
+    while (Date.now() < deadline) {
+      const response = await cameraInventoryApi.listGateways(branchId);
+      setGateways(response.data);
+      const gateway = response.data.find(isGatewayReady);
+      if (gateway) return gateway;
+      await wait(1_500);
+    }
+
+    throw new Error("The Sentinel Grid Scanner did not connect. Install it once on this PC, then select Scan cameras again.");
+  }
+
+  async function startConnectedCameraScan(gateway: EdgeAgent) {
+    if (!selectedBranch) return;
+    const scan = await cameraInventoryApi.startScan(selectedBranch, gateway.id) as { id: string; status: string; branchId: string };
+    const outcome = await completeCameraScan(scan.id, gateway.id);
+    setNotice(`Camera scan completed. Found ${outcome.found} devices. ${outcome.provisioned} verified live streams were activated${outcome.credentialsRequired ? `; ${outcome.credentialsRequired} need credentials` : ""}.`);
+  }
+
   async function scanCameras() {
     if (!selectedBranch) return;
     if (gateways.length === 0) {
       setGatewayActivation(undefined);
+      setGatewayName(`${activeBranch?.name ?? "Branch"} Scanner`);
       setShowGatewayForm(true);
-      setNotice("Enroll the Branch Gateway once to enable the automatic camera scan for this branch.");
-      return;
-    }
-    if (!onlineGateway) {
-      setNotice(undefined);
-      setError("No branch scanner is connected to this camera network. Power on the Branch Gateway or run the local scanner on the same network as the cameras, then scan again.");
+      setNotice("Install the Sentinel Grid Scanner once on this PC to enable automatic branch scans.");
       return;
     }
     setScanning(true);
     setError(undefined);
+    setNotice(undefined);
     try {
-      const scan = await cameraInventoryApi.startScan(selectedBranch, onlineGateway.id) as { id: string; status: string; branchId: string };
-      const outcome = await completeCameraScan(scan.id, onlineGateway.id);
-      setNotice(`Camera scan completed. Found ${outcome.found} devices. ${outcome.provisioned} verified live streams were activated${outcome.credentialsRequired ? `; ${outcome.credentialsRequired} need credentials` : ""}.`);
+      const gateway = onlineGateway ?? await waitForWebsiteScanner(selectedBranch);
+      try {
+        await startConnectedCameraScan(gateway);
+      } catch (reason) {
+        if (!isScannerUnavailable(reason)) throw reason;
+        const reconnectedGateway = await waitForWebsiteScanner(selectedBranch);
+        await startConnectedCameraScan(reconnectedGateway);
+      }
     } catch (reason) {
       setError(messageOf(reason, "Camera scan failed."));
     } finally {
@@ -651,6 +657,25 @@ export function DeviceManager() {
     }
   }
 
+  async function downloadWebsiteScanner() {
+    if (!selectedBranch || !gatewayActivation) return;
+    setSaving(true);
+    setError(undefined);
+    try {
+      const installer = await cameraInventoryApi.downloadInstallerFromActivation(selectedBranch, {
+        activationId: gatewayActivation.id,
+        activationCode: gatewayActivation.activationCode,
+        agentName: gatewayActivation.agentName,
+      });
+      downloadFile(`${(activeBranch?.name ?? "branch").replace(/[^a-z0-9_-]+/gi, "-")}-scanner-setup.exe`, installer);
+      setNotice("Scanner installer downloaded. Run it once on this PC; later scans start directly from this page.");
+    } catch (reason) {
+      setError(messageOf(reason, "Unable to download the scanner installer."));
+    } finally {
+      setSaving(false);
+    }
+  }
+
   async function issueGatewayCommand(
     gateway: EdgeAgent,
     type: "rediscover" | "restart-media" | "collect-logs",
@@ -778,11 +803,6 @@ export function DeviceManager() {
     } finally {
       setSaving(false);
     }
-  }
-
-  async function copySetup() {
-    await navigator.clipboard.writeText(setupText);
-    setNotice("Gateway configuration copied.");
   }
 
   return (
@@ -1132,28 +1152,18 @@ export function DeviceManager() {
       {showGatewayForm && (
         <div className="modal-overlay">
           <div className="modal-container">
-            <div className="modal-header"><h2>Enroll Branch Gateway</h2><button className="icon-button" onClick={() => setShowGatewayForm(false)}><X size={20} /></button></div>
+            <div className="modal-header"><h2>Install Sentinel Grid Scanner</h2><button className="icon-button" onClick={() => setShowGatewayForm(false)}><X size={20} /></button></div>
             {!gatewayActivation ? (
               <form className="modal-form" onSubmit={registerGateway}>
-                <div className="form-info-banner"><Network size={16} />Assign a managed Sentinel appliance to {activeBranch?.name}. It auto-starts after power loss; no laptop or operator PC is required.</div>
-                <div className="form-group"><label htmlFor="gatewayName">Gateway name <span className="required">*</span></label><input id="gatewayName" value={gatewayName} onChange={(event) => setGatewayName(event.target.value)} minLength={2} maxLength={120} required placeholder={`${activeBranch?.name ?? "Branch"} Gateway`} /></div>
-                <div className="modal-actions"><button type="button" className="secondary-button" onClick={() => setShowGatewayForm(false)}>Cancel</button><button className="primary-button" disabled={saving}>{saving ? "Enrolling…" : "Enroll gateway"}</button></div>
+                <div className="form-info-banner"><Network size={16} />Install the scanner on this existing PC while it is connected to the branch network, VPN, or approved tunnel. No separate appliance, configuration file, or coding is needed.</div>
+                <div className="form-group"><label htmlFor="gatewayName">Scanner name <span className="required">*</span></label><input id="gatewayName" value={gatewayName} onChange={(event) => setGatewayName(event.target.value)} minLength={2} maxLength={120} required placeholder={`${activeBranch?.name ?? "Branch"} Scanner`} /></div>
+                <div className="modal-actions"><button type="button" className="secondary-button" onClick={() => setShowGatewayForm(false)}>Cancel</button><button className="primary-button" disabled={saving}>{saving ? "Preparing…" : "Prepare installer"}</button></div>
               </form>
             ) : (
               <div className="modal-body">
-                <div className="device-message success"><CheckCircle2 size={16} />One-time gateway activation is ready.</div>
-                <p className="setup-description">This code expires at {new Date(gatewayActivation.expiresAt).toLocaleString()} and is consumed on first boot. The appliance then receives its own revocable credential and stores it encrypted. Branch staff only connect power/UPS and camera-network Ethernet.</p>
-                {gatewayActivation.bootstrap.media.managed ? (
-                  <div className="form-info-banner"><Network size={16} />Named tunnel reserved: <strong>{gatewayActivation.bootstrap.media.publicUrl}</strong>. Its connector token is sent only to the activated appliance and is never written to this file.</div>
-                ) : (
-                  <div className="device-message error"><AlertTriangle size={16} />Managed Cloudflare tunneling is not configured. This activation can monitor devices but is not production live-view ready.</div>
-                )}
-                <pre className="gateway-config">{setupText}</pre>
-                <div className="setup-actions">
-                  <button className="secondary-button" onClick={() => void copySetup()}><Copy size={14} />Copy configuration</button>
-                  <button className="secondary-button" onClick={downloadGatewayConfiguration}><Download size={14} />Download factory configuration</button>
-                </div>
-                <div className="modal-actions"><button className="primary-button" onClick={() => setShowGatewayForm(false)}>Done</button></div>
+                <div className="device-message success"><CheckCircle2 size={16} />Scanner installer is ready.</div>
+                <p className="setup-description">Download and run it once on this PC before {new Date(gatewayActivation.expiresAt).toLocaleString()}. The installer securely connects this computer to the selected branch. Future scans launch from the Scan cameras button.</p>
+                <div className="modal-actions"><button className="secondary-button" onClick={() => setShowGatewayForm(false)}>Done</button><button className="primary-button" onClick={() => void downloadWebsiteScanner()} disabled={saving}><Download size={14} />{saving ? "Downloading..." : "Download scanner"}</button></div>
               </div>
             )}
           </div>
@@ -1322,6 +1332,17 @@ function messageOf(reason: unknown, fallback: string) {
   return reason instanceof Error && reason.message !== "Request failed"
     ? reason.message
     : fallback;
+}
+
+function isGatewayReady(gateway: EdgeAgent) {
+  if (gateway.status !== "online" || !gateway.lastSeenAt) return false;
+  return Date.now() - new Date(gateway.lastSeenAt).getTime() < 90_000;
+}
+
+function isScannerUnavailable(reason: unknown) {
+  if (!reason || typeof reason !== "object") return false;
+  const details = (reason as { details?: { error?: string } }).details;
+  return details?.error === "edge_agent_not_connected";
 }
 
 function wait(milliseconds: number) {

@@ -16,6 +16,7 @@ const REQUIRED_BUNDLE_ASSETS = [
   ["cloudflared.exe", join(ASSET_ROOT, "cloudflared.exe")],
   ["install-edge-agent.ps1", join(INSTALLER_ROOT, "install-edge-agent.ps1")],
   ["uninstall-edge-agent.ps1", join(INSTALLER_ROOT, "uninstall-edge-agent.ps1")],
+  ["open-dashboard-scan.ps1", join(INSTALLER_ROOT, "open-dashboard-scan.ps1")],
 ] as const;
 
 export function inspectBundledWindowsRuntime() {
@@ -42,6 +43,7 @@ export function launchWindowsSelfInstaller(environmentFile: string) {
     copyAsset(join(ASSET_ROOT, "cloudflared.exe"), join(stage, "runtime-packages", "cloudflared.exe"));
     copyAsset(join(INSTALLER_ROOT, "install-edge-agent.ps1"), join(stage, "install-edge-agent.ps1"));
     copyAsset(join(INSTALLER_ROOT, "uninstall-edge-agent.ps1"), join(stage, "uninstall-edge-agent.ps1"));
+    copyAsset(join(INSTALLER_ROOT, "open-dashboard-scan.ps1"), join(stage, "open-dashboard-scan.ps1"));
     copyOptionalAsset(join(ASSET_ROOT, "THIRD_PARTY_NOTICES.txt"), join(stage, "THIRD_PARTY_NOTICES.txt"));
 
     const installerPath = join(stage, "install-edge-agent.ps1");

@@ -15,6 +15,7 @@ Write-Host ""
 
 try {
     $serviceName = "SentinelGridEdgeAgent"
+    Remove-Item -LiteralPath "Registry::HKEY_LOCAL_MACHINE\SOFTWARE\Classes\sentinel-grid-scanner" -Recurse -Force -ErrorAction SilentlyContinue
     
     # Check if service exists
     $service = Get-Service -Name $serviceName -ErrorAction SilentlyContinue
