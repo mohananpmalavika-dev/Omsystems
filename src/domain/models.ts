@@ -581,6 +581,7 @@ export type EdgeCommandType =
   | "restart-media"
   | "restart-agent"
   | "probe-camera"
+  | "recover-camera"
   | "probe-recorder"
   | "collect-logs"
   | "update-credentials"

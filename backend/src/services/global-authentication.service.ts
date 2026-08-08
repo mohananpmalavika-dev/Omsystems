@@ -6,6 +6,7 @@
 import { Pool } from 'pg';
 import { randomBytes, createHash } from 'crypto';
 import { sign, verify } from 'jsonwebtoken';
+import * as bcrypt from 'bcryptjs';
 import { logger } from '../utils/logger.js';
 
 export interface GlobalUserIdentity {
@@ -398,9 +399,15 @@ export class GlobalAuthenticationService {
    * Verify password hash
    */
   private async verifyPassword(password: string, hash: string): Promise<boolean> {
-    // Implement proper password verification
-    // This is a placeholder - use bcrypt.compare() or similar
-    return true; // Placeholder
+    try {
+      // Use bcrypt to securely compare password with hash
+      return await bcrypt.compare(password, hash);
+    } catch (error) {
+      logger.error('Password verification error', {
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+      return false;
+    }
   }
 
   /**

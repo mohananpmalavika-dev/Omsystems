@@ -49,6 +49,13 @@ export interface CameraConfig {
   enabled: boolean;
 }
 
+export interface AutomaticCameraRecoveryRequest {
+  cameraId: string;
+  cameraName: string;
+  rtspUrl: string;
+  consecutiveFailures: number;
+}
+
 type FrameState = { hash: string; identicalSamples: number };
 
 export function assessLumaFrame(previous: FrameState | undefined, frame: Buffer): {
@@ -73,6 +80,9 @@ export function assessLumaFrame(previous: FrameState | undefined, frame: Buffer)
 export class CameraHeartbeatService {
   private readonly cameras = new Map<string, CameraConfig>();
   private readonly frameStates = new Map<string, AnalogSignalState>();
+  private readonly consecutiveFailures = new Map<string, number>();
+  private readonly recoveryInProgress = new Set<string>();
+  private readonly recoveryCooldowns = new Map<string, number>();
   private heartbeatInterval: NodeJS.Timeout | null = null;
   private isRunning = false;
 
@@ -85,6 +95,7 @@ export class CameraHeartbeatService {
     private readonly ffmpegPath = "ffmpeg",
     private readonly edgeAuthCredential?: string,
     private readonly telemetrySender?: (payload: TelemetryPayload) => Promise<unknown>,
+    private readonly onAutomaticRecovery?: (request: AutomaticCameraRecoveryRequest) => Promise<void>,
   ) {}
 
   replaceCameras(cameras: CameraConfig[]): void {
@@ -131,6 +142,7 @@ export class CameraHeartbeatService {
             quality: "unavailable" as const, errorMessage: "Local RTSP secret is unavailable",
           };
       await this.sendToPlatform(camera.id, data);
+      this.considerAutomaticRecovery(camera, data);
       logger.debug(`Heartbeat sent for camera ${camera.name}: ${data.status}`);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unknown error";
@@ -140,7 +152,45 @@ export class CameraHeartbeatService {
         streamActive: false, videoLoss: true, quality: "verified",
         errorMessage: message, reasonCodes: ["camera_probe_failed"],
       }).catch(() => undefined);
+      this.considerAutomaticRecovery(camera, {
+        cameraId: camera.id,
+        status: "offline",
+        responseTimeMs: Date.now() - startedAt,
+        streamActive: false,
+        videoLoss: true,
+        quality: "verified",
+        errorMessage: message,
+        reasonCodes: ["camera_probe_failed"],
+      });
     }
+  }
+
+  private considerAutomaticRecovery(camera: CameraConfig, data: CameraHeartbeatData) {
+    if (data.status !== "offline") {
+      this.consecutiveFailures.delete(camera.id);
+      return;
+    }
+    if (!camera.rtspUrl || !this.onAutomaticRecovery) return;
+
+    const failures = (this.consecutiveFailures.get(camera.id) ?? 0) + 1;
+    this.consecutiveFailures.set(camera.id, failures);
+    const now = Date.now();
+    const cooldownUntil = this.recoveryCooldowns.get(camera.id) ?? 0;
+    if (failures < 3 || this.recoveryInProgress.has(camera.id) || cooldownUntil > now) return;
+
+    this.recoveryInProgress.add(camera.id);
+    this.recoveryCooldowns.set(camera.id, now + 15 * 60_000);
+    void this.onAutomaticRecovery({
+      cameraId: camera.id,
+      cameraName: camera.name,
+      rtspUrl: camera.rtspUrl,
+      consecutiveFailures: failures,
+    }).catch((error) => {
+      logger.error("Automatic camera recovery failed", {
+        cameraId: camera.id,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }).finally(() => this.recoveryInProgress.delete(camera.id));
   }
 
   private async measureCamera(camera: CameraConfig, startedAt: number): Promise<CameraHeartbeatData> {
@@ -304,10 +354,12 @@ export function initializeCameraHeartbeat(
   ffmpegPath = "ffmpeg",
   edgeAuthCredential?: string,
   telemetrySender?: (payload: TelemetryPayload) => Promise<unknown>,
+  onAutomaticRecovery?: (request: AutomaticCameraRecoveryRequest) => Promise<void>,
 ): CameraHeartbeatService {
   if (!heartbeatService) {
     heartbeatService = new CameraHeartbeatService(
-      apiEndpoint, branchId, edgeAgentId, developmentUserId, ffprobePath, ffmpegPath, edgeAuthCredential, telemetrySender,
+      apiEndpoint, branchId, edgeAgentId, developmentUserId, ffprobePath, ffmpegPath,
+      edgeAuthCredential, telemetrySender, onAutomaticRecovery,
     );
   }
   return heartbeatService;

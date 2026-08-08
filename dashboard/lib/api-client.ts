@@ -509,10 +509,14 @@ export const cameraInventoryApi = {
   sendGatewayCommand: (
     branchId: string,
     edgeAgentId: string,
-    data: { type: "rediscover" | "restart-media" | "restart-agent" | "probe-camera" | "probe-recorder" | "collect-logs" | "apply-update"; payload?: Record<string, unknown> },
+    data: { type: "rediscover" | "restart-media" | "restart-agent" | "probe-camera" | "recover-camera" | "probe-recorder" | "collect-logs" | "apply-update"; payload?: Record<string, unknown> },
   ) => fetchApi<any>(
     `/v1/branches/${encodeURIComponent(branchId)}/edge-agents/${encodeURIComponent(edgeAgentId)}/commands`,
     { method: 'POST', body: JSON.stringify({ ...data, payload: data.payload ?? {} }) }
+  ),
+  recoverCamera: (branchId: string, cameraId: string) => fetchApi<any>(
+    `/v1/branches/${encodeURIComponent(branchId)}/cameras/${encodeURIComponent(cameraId)}/recovery`,
+    { method: "POST", body: "{}" },
   ),
   listGatewayCommands: (branchId: string) =>
     fetchApi<{ data: any[] }>(`/v1/branches/${encodeURIComponent(branchId)}/edge-commands`),

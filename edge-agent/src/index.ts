@@ -23,6 +23,7 @@ import { CameraCredentialVault, openSealedCommand, type SealedCommandEnvelope } 
 import { DatabaseCredentialProvider } from "./security/database-credential-provider.js";
 import { discoverRecorderChannels, recorderAdapterVendor, recorderChannelIdentity } from "./recorders/dvr-adapter.js";
 import type { RecorderConfig } from "./monitoring/recorder-probe.js";
+import { recoverCamera } from "./recovery/camera-recovery.js";
 
 async function main() {
 const argv = process.argv.slice(2);
@@ -186,6 +187,14 @@ const cameraHeartbeat = initializeCameraHeartbeat(
   config.FFMPEG_PATH,
   identity?.credential ?? config.EDGE_BRIDGE_SHARED_KEY,
   (payload) => control.submitTelemetry(agentId, payload),
+  async ({ cameraId, consecutiveFailures }) => {
+    const recovery = await recoverCameraAtEdge(cameraId, "automatic", consecutiveFailures);
+    logger.info("Automatic camera recovery completed", {
+      cameraId,
+      recovered: recovery.recovered,
+      steps: recovery.steps.map((step) => `${step.step}:${step.status}`),
+    });
+  },
 );
 let lastCameraConfigSyncAt = 0;
 let lastDiscoveryAt = 0;
@@ -223,7 +232,13 @@ while (!stopping) {
     if (command) {
       try {
         const outcome = await executeEdgeCommand(command.type, command.payload);
-        await control.completeCommand(agentId, command.id, { status: "succeeded", result: outcome.result });
+        const recoveryFailed = command.type === "recover-camera" &&
+          (outcome.result as { recovered?: unknown }).recovered !== true;
+        await control.completeCommand(agentId, command.id, {
+          status: recoveryFailed ? "failed" : "succeeded",
+          result: outcome.result as Record<string, unknown>,
+          ...(recoveryFailed ? { error: "camera_recovery_not_completed" } : {}),
+        });
         if (outcome.restartAgent) {
           logger.info("Restarting edge agent after acknowledged remote command", { commandId: command.id });
           process.exit(75);
@@ -733,6 +748,11 @@ async function executeEdgeCommand(type: string, payload: Record<string, unknown>
       const probe = await probeRtsp(source, config.FFPROBE_PATH, config.ONVIF_TIMEOUT_MS);
       return { result: { cameraId, ...probe } };
     }
+    case "recover-camera": {
+      const cameraId = typeof payload.cameraId === "string" ? payload.cameraId : "";
+      if (!cameraId) throw new Error("cameraId_required");
+      return { result: await recoverCameraAtEdge(cameraId, "operator") };
+    }
     case "probe-recorder": {
       const recorderId = typeof payload.recorderId === "string" ? payload.recorderId : "";
       const recorder = activeRecorders.get(recorderId);
@@ -780,6 +800,75 @@ async function executeEdgeCommand(type: string, payload: Record<string, unknown>
     default:
       throw new Error("unsupported_edge_command");
   }
+}
+
+async function recoverCameraAtEdge(cameraId: string, trigger: "automatic" | "operator", consecutiveFailures?: number) {
+  const camera = (await control.listMonitoringCameras(agentId, config.EDGE_AGENT_VERSION))
+    .find((item) => item.id === cameraId);
+  const source = camera ? secrets.get(camera.connectionSecretRef) : undefined;
+  if (!camera || !source) throw new Error("camera_stream_secret_unavailable");
+
+  const startedAt = new Date().toISOString();
+  await control.submitTelemetry(agentId, {
+    branchId,
+    edgeAgentId: agentId,
+    deviceType: "camera",
+    deviceId: cameraId,
+    observedAt: startedAt,
+    source: "rtsp",
+    quality: "verified",
+    idempotencyKey: `${agentId}:camera-recovery:${cameraId}:${startedAt}:started`,
+    metrics: {
+      status: "offline",
+      recoveryInProgress: true,
+      currentRecoveryAction: "edge_agent_safe_recovery",
+      recoveryTrigger: trigger,
+      ...(consecutiveFailures === undefined ? {} : { consecutiveFailures }),
+    },
+    reasonCodes: ["camera_recovery_started"],
+  });
+
+  const recovery = await recoverCamera({
+    cameraId,
+    rtspUrl: source,
+    onvifDeviceServiceUrls: configuredOnvifEndpointsFor(source),
+    allowOnvif: camera.sourceType === undefined || camera.sourceType === "ip-camera",
+  }, {
+    ffprobePath: config.FFPROBE_PATH,
+    timeoutMs: config.ONVIF_TIMEOUT_MS,
+  });
+  await control.submitTelemetry(agentId, {
+    branchId,
+    edgeAgentId: agentId,
+    deviceType: "camera",
+    deviceId: cameraId,
+    observedAt: recovery.completedAt,
+    source: "rtsp",
+    quality: "verified",
+    idempotencyKey: `${agentId}:camera-recovery:${cameraId}:${recovery.startedAt}:completed`,
+    metrics: {
+      status: recovery.recovered ? "online" : "offline",
+      recoveryInProgress: false,
+      recoverySucceeded: recovery.recovered,
+      recoveryTrigger: trigger,
+      recoverySteps: recovery.steps.length,
+    },
+    reasonCodes: recovery.reasonCodes,
+  });
+  return recovery;
+}
+
+function configuredOnvifEndpointsFor(source: string) {
+  let sourceHost = "";
+  try { sourceHost = new URL(source).hostname; }
+  catch { return []; }
+  return config.ONVIF_ENDPOINTS.split(",")
+    .map((value) => value.trim())
+    .filter(Boolean)
+    .filter((value) => {
+      try { return new URL(value).hostname === sourceHost; }
+      catch { return false; }
+    });
 }
 
 function redactDiagnosticText(value: string) {

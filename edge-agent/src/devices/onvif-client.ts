@@ -39,6 +39,26 @@ export class OnvifClient {
     private readonly timeoutMs = 8000,
   ) {}
 
+  async ping(): Promise<void> {
+    await this.call(
+      this.deviceServiceUrl,
+      "http://www.onvif.org/ver10/device/wsdl/GetSystemDateAndTime",
+      `<tds:GetSystemDateAndTime/>`,
+      `xmlns:tds="http://www.onvif.org/ver10/device/wsdl"`,
+    );
+  }
+
+  async reboot(): Promise<string> {
+    const document = await this.call(
+      this.deviceServiceUrl,
+      "http://www.onvif.org/ver10/device/wsdl/SystemReboot",
+      `<tds:SystemReboot/>`,
+      `xmlns:tds="http://www.onvif.org/ver10/device/wsdl"`,
+    );
+    const response = findRecord(document, "SystemRebootResponse");
+    return textValue(response?.Message) ?? "ONVIF SystemReboot accepted";
+  }
+
   async inspect(): Promise<OnvifDeviceDetails> {
     // Several embedded ONVIF implementations reject concurrent SOAP requests.
     // Keep device inspection sequential for broad camera compatibility.

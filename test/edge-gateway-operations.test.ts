@@ -155,6 +155,19 @@ describe("secure edge gateway operations", () => {
     expect(secretRejected.statusCode).toBe(400);
   });
 
+  it("queues camera recovery for the branch edge agent", async () => {
+    const app = await buildApp({ store: new MemoryStore() });
+    apps.push(app);
+    const identity = await enroll(app, await createActivation(app));
+    const created = await app.inject({
+      method: "POST", url: `/v1/branches/branch-blr-001/edge-agents/${identity.agentId}/commands`,
+      headers: { "x-user-id": "user-global-admin" },
+      payload: { type: "recover-camera", payload: { cameraId: "cam-001" } },
+    });
+    expect(created.statusCode).toBe(202);
+    expect(created.json()).toMatchObject({ type: "recover-camera", payload: { cameraId: "cam-001" } });
+  });
+
   it("queues camera credentials as gateway-only ciphertext", async () => {
     const app = await buildApp({ store: new MemoryStore() });
     apps.push(app);

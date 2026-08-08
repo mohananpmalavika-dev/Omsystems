@@ -11,7 +11,7 @@ const agentParams = z.object({ id: z.string().min(1) });
 const commandParams = z.object({ id: z.string().min(1), commandId: z.string().min(1) });
 const commandTypes = [
   "rediscover", "restart-media", "restart-agent", "probe-camera",
-  "probe-recorder", "collect-logs", "apply-update",
+  "recover-camera", "probe-recorder", "collect-logs", "apply-update",
 ] as const;
 
 export async function registerEdgeGatewayOperationsRoutes(
@@ -313,6 +313,38 @@ export async function registerEdgeGatewayOperationsRoutes(
     });
     await writeGatewayAudit(request, store, branchId, "edge_gateway.command_requested", {
       edgeAgentId: id, commandId: command.id, commandType: command.type,
+    });
+    return reply.code(202).send(command);
+  });
+
+  app.post("/v1/branches/:branchId/cameras/:cameraId/recovery", async (request, reply) => {
+    const { branchId, cameraId } = z.object({ branchId: z.string().min(1), cameraId: z.string().min(1) }).parse(request.params);
+    if (!(await requireDeviceAccess(request, reply, store, branchId))) return;
+    const camera = await store.getCamera(cameraId);
+    if (!camera || camera.branchId !== branchId) return reply.code(404).send({ error: "camera_not_found" });
+    if (!camera.edgeAgentId) {
+      return reply.code(409).send({
+        error: "camera_recovery_requires_edge_agent",
+        message: "Assign this camera to an online Branch Gateway before requesting automatic recovery.",
+      });
+    }
+    const agent = await store.getEdgeAgent(camera.edgeAgentId);
+    if (!agent || agent.branchId !== branchId || agent.status !== "online") {
+      return reply.code(409).send({
+        error: "edge_agent_not_connected",
+        message: "The Branch Gateway that can reach this camera is not online.",
+      });
+    }
+    const command = await store.createEdgeCommand({
+      edgeAgentId: agent.id,
+      type: "recover-camera",
+      payload: { cameraId },
+      requestedBy: request.currentUser.id,
+    });
+    await writeGatewayAudit(request, store, branchId, "edge_gateway.camera_recovery_requested", {
+      edgeAgentId: agent.id,
+      cameraId,
+      commandId: command.id,
     });
     return reply.code(202).send(command);
   });

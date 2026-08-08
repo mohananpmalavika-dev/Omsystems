@@ -47,6 +47,33 @@ describe("OnvifClient authentication compatibility", () => {
       expect(String(request?.body)).not.toContain("UsernameToken");
     }
   });
+
+  it("uses WS-Security for health checks and SystemReboot", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(xmlResponse(`
+        <s:Envelope xmlns:s="http://www.w3.org/2003/05/soap-envelope">
+          <s:Body><tds:GetSystemDateAndTimeResponse xmlns:tds="http://www.onvif.org/ver10/device/wsdl"/></s:Body>
+        </s:Envelope>`))
+      .mockResolvedValueOnce(xmlResponse(`
+        <s:Envelope xmlns:s="http://www.w3.org/2003/05/soap-envelope">
+          <s:Body><tds:SystemRebootResponse xmlns:tds="http://www.onvif.org/ver10/device/wsdl"><tds:Message>Rebooting</tds:Message></tds:SystemRebootResponse></s:Body>
+        </s:Envelope>`));
+    const client = new OnvifClient(
+      "http://camera.local/onvif/device_service",
+      { username: "admin", password: "secret" },
+    );
+
+    await expect(client.ping()).resolves.toBeUndefined();
+    await expect(client.reboot()).resolves.toBe("Rebooting");
+
+    const bodies = fetchMock.mock.calls.map(([, request]) => String(request?.body));
+    expect(bodies[0]).toContain("GetSystemDateAndTime");
+    expect(bodies[1]).toContain("SystemReboot");
+    for (const body of bodies) {
+      expect(body).toContain("UsernameToken");
+      expect(body).toContain("PasswordDigest");
+    }
+  });
 });
 
 function xmlResponse(body: string) {
