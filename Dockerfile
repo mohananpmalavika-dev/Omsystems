@@ -20,7 +20,7 @@ RUN npm run fetch:windows-runtime --workspace @sentinel/edge-agent
 COPY src ./src
 COPY edge-agent/src ./edge-agent/src
 COPY edge-agent/installer ./edge-agent/installer
-RUN npm run build && npm run build --workspace @sentinel/edge-agent && npm run build:exe --workspace @sentinel/edge-agent && npm prune --omit=dev
+RUN npm run build && npm run build --workspace @sentinel/edge-agent && npm run build:exe --workspace @sentinel/edge-agent && test -f dist/src/index.js && npm prune --omit=dev
 
 FROM node:22-alpine
 ENV NODE_ENV=production
@@ -40,4 +40,4 @@ COPY scripts/run-migrations.mjs ./scripts/run-migrations.mjs
 COPY database/migrations ./database/migrations
 EXPOSE 8080
 USER node
-CMD ["sh", "-c", "node scripts/run-migrations.mjs && node dist/src/index.js"]
+CMD ["sh", "-c", "node scripts/run-migrations.mjs && node /app/dist/src/index.js"]

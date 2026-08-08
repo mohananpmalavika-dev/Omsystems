@@ -28,23 +28,35 @@ import type {
 
 // Production SAML validation requires @node-saml/node-saml
 // Install with: npm install @node-saml/node-saml
+// 
+// This module uses dynamic imports to avoid breaking the build when the library
+// is not installed. The connector will fail closed (refuse authentication) until
+// the library is installed.
+
 let SAML: any = null;
 let samlImportPromise: Promise<any> | null = null;
+let importAttempted = false;
 
-// Lazy load SAML library
+// Lazy load SAML library with error handling
 async function getSAMLClass(): Promise<any> {
   if (SAML) return SAML;
   
-  if (!samlImportPromise) {
-    samlImportPromise = import('@node-saml/node-saml')
-      .then(m => {
-        SAML = m.SAML;
+  if (!samlImportPromise && !importAttempted) {
+    importAttempted = true;
+    samlImportPromise = (async () => {
+      try {
+        // Use Function constructor to prevent TypeScript from analyzing the import
+        // This allows the build to succeed even when @node-saml/node-saml is not installed
+        const dynamicImport = new Function('moduleName', 'return import(moduleName)');
+        const module = await dynamicImport('@node-saml/node-saml');
+        SAML = module.SAML;
         return SAML;
-      })
-      .catch(() => {
+      } catch (error) {
         // Library not installed - will fail closed
+        // This is expected and safe - connector will refuse authentication
         return null;
-      });
+      }
+    })();
   }
   
   return samlImportPromise;
