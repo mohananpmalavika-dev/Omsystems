@@ -181,8 +181,15 @@ export async function registerMaintenanceExportRoutes(
       reply.header('Content-Type', 'text/csv');
       reply.header('Content-Disposition', `attachment; filename="${filename}"`);
 
-      // Note: writeAudit method not available on store interface
-      // await store.writeAudit({ ... });
+      // Write audit log
+      await store.writeAudit({
+        tenantId,
+        actorUserId: request.currentUser.id,
+        action: 'maintenance.camera_health_exported',
+        resourceNodeId: query.branchNodeId || null,
+        outcome: 'success',
+        details: { count: cameras.length, filename, filters: query },
+      });
 
       return csv;
     } catch (error: any) {
@@ -226,8 +233,15 @@ export async function registerMaintenanceExportRoutes(
       reply.header('Content-Type', 'text/csv');
       reply.header('Content-Disposition', `attachment; filename="${filename}"`);
 
-      // Note: writeAudit method not available on store interface
-      // await store.writeAudit({ ... });
+      // Write audit log
+      await store.writeAudit({
+        tenantId,
+        actorUserId: request.currentUser.id,
+        action: 'maintenance.storage_health_exported',
+        resourceNodeId: query.branchNodeId || null,
+        outcome: 'success',
+        details: { count: storage.length, filename, filters: query },
+      });
 
       return csv;
     } catch (error: any) {
@@ -277,8 +291,15 @@ export async function registerMaintenanceExportRoutes(
       reply.header('Content-Type', 'text/csv');
       reply.header('Content-Disposition', `attachment; filename="${filename}"`);
 
-      // Note: writeAudit method not available on store interface
-      // await store.writeAudit({ ... });
+      // Write audit log
+      await store.writeAudit({
+        tenantId,
+        actorUserId: request.currentUser.id,
+        action: 'maintenance.visits_exported',
+        resourceNodeId: query.branchNodeId || null,
+        outcome: 'success',
+        details: { count: visits.length, filename, filters: query },
+      });
 
       return csv;
     } catch (error: any) {
@@ -318,8 +339,15 @@ export async function registerMaintenanceExportRoutes(
       reply.header('Content-Type', 'text/csv');
       reply.header('Content-Disposition', `attachment; filename="${body.filename}"`);
 
-      // Note: writeAudit method not available on store interface
-      // await store.writeAudit({ ... });
+      // Write audit log
+      await store.writeAudit({
+        tenantId,
+        actorUserId: request.currentUser.id,
+        action: 'maintenance.custom_data_exported',
+        resourceNodeId: null,
+        outcome: 'success',
+        details: { count: body.data.length, filename: body.filename },
+      });
 
       return csv;
     } catch (error: any) {

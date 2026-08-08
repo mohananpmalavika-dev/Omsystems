@@ -68,6 +68,10 @@ $LogDirectory = Join-Path $InstallDirectory "logs"
 $DataDirectory = Join-Path $InstallDirectory "data"
 
 New-Item -ItemType Directory -Path $InstallDirectory, $ConfigDirectory, $LogDirectory, $DataDirectory -Force | Out-Null
+$existingTask = Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
+if ($existingTask) {
+  Stop-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
+}
 Copy-Item -LiteralPath $SourceExecutable -Destination $Executable -Force
 Copy-Item -LiteralPath $SourceConfig -Destination $ConfigPath -Force
 if (Test-Path -LiteralPath $SourceUninstaller -PathType Leaf) {
@@ -144,6 +148,26 @@ foreach ($setting in @("FFPROBE_PATH", "FFMPEG_PATH", "MEDIAMTX_PATH", "CLOUDFLA
   if (-not (Test-Path -LiteralPath $dependency -PathType Leaf) -and -not (Get-Command $dependency -ErrorAction SilentlyContinue)) {
     Write-Warning "$setting is unavailable at '$dependency'. Related camera functions will be disabled."
   }
+}
+
+# A downloaded Repair package contains a fresh one-time activation code. Move a
+# previous gateway identity out of the active paths so the agent uses that code
+# instead of retrying a credential that the control plane has revoked. Camera
+# credentials, stream secrets, discovery state and the offline outbox remain in
+# place. The identity files are archived so the repair is recoverable.
+$identityFiles = @(
+  (Join-Path $DataDirectory "device-identity.enc"),
+  (Join-Path $DataDirectory "device-identity.key")
+)
+$existingIdentityFiles = @($identityFiles | Where-Object { Test-Path -LiteralPath $_ -PathType Leaf })
+if (-not [string]::IsNullOrWhiteSpace($activationCode) -and $existingIdentityFiles.Count -gt 0) {
+  $archiveName = "{0}-{1}" -f ([DateTime]::UtcNow.ToString("yyyyMMddTHHmmssZ")), ([Guid]::NewGuid().ToString("N").Substring(0, 8))
+  $identityArchiveDirectory = Join-Path (Join-Path $DataDirectory "identity-archive") $archiveName
+  New-Item -ItemType Directory -Path $identityArchiveDirectory -Force | Out-Null
+  foreach ($identityFile in $existingIdentityFiles) {
+    Move-Item -LiteralPath $identityFile -Destination (Join-Path $identityArchiveDirectory (Split-Path $identityFile -Leaf)) -Force
+  }
+  Write-Host "Archived the previous gateway identity for automatic reactivation." -ForegroundColor Cyan
 }
 
 $action = New-ScheduledTaskAction -Execute $Executable -Argument "--run --config `"$ConfigPath`"" -WorkingDirectory $InstallDirectory
