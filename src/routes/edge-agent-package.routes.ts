@@ -24,6 +24,7 @@ const packageQuery = z.object({
   mode: z.enum(["install", "scan-once"]).default("install"),
 });
 const embeddedConfigMarker = Buffer.from("SENTINEL_EDGE_CONFIG_V1", "ascii");
+const publicApiBaseHeader = "x-sentinel-public-api-base";
 
 export interface EdgeAgentPackageOptions {
   controlPlanePublicUrl?: string;
@@ -98,6 +99,35 @@ function environmentFile(values: Record<string, string>) {
   return `${Object.entries(values).map(([name, value]) => `${name}=${JSON.stringify(value)}`).join("\r\n")}\r\n`;
 }
 
+function normalizePublicApiBase(value: string | undefined) {
+  if (!value) return undefined;
+  try {
+    const url = new URL(value);
+    if (!(["http:", "https:"] as string[]).includes(url.protocol)) return undefined;
+    if (url.username || url.password || url.search || url.hash) return undefined;
+    url.pathname = url.pathname.replace(/\/+$/, "");
+    return url.toString().replace(/\/$/, "");
+  } catch {
+    return undefined;
+  }
+}
+
+function resolveControlPlaneUrl(request: { headers: Record<string, string | string[] | undefined> }, configured?: string) {
+  const configuredUrl = normalizePublicApiBase(configured);
+  if (configuredUrl) return configuredUrl;
+  const automaticValue = request.headers[publicApiBaseHeader];
+  return normalizePublicApiBase(Array.isArray(automaticValue) ? automaticValue[0] : automaticValue);
+}
+
+function requireControlPlaneUrl(request: { headers: Record<string, string | string[] | undefined> }, configured?: string) {
+  const resolved = resolveControlPlaneUrl(request, configured);
+  if (resolved) return resolved;
+  throw Object.assign(
+    new Error("The scanner download could not determine the Sentinel Grid server automatically. Download it again from the Sentinel Grid website."),
+    { code: "control_plane_public_url_unavailable" },
+  );
+}
+
 async function findEdgeAgentRoot(preferredRoot?: string) {
   const routeDirectory = dirname(fileURLToPath(import.meta.url));
   const candidates = [
@@ -135,7 +165,7 @@ function branchConfiguration(
   activationCode?: string,
 ) {
   return environmentFile({
-    CONTROL_PLANE_URL: options.controlPlanePublicUrl ?? "REPLACE_WITH_PUBLIC_CONTROL_PLANE_URL",
+    CONTROL_PLANE_URL: options.controlPlanePublicUrl ?? "",
     CONTROL_PLANE_TIMEOUT_MS: "15000",
     BRANCH_ID: agent.branchId,
     EDGE_AGENT_ID: agent.id,
@@ -231,6 +261,10 @@ export async function registerEdgeAgentPackageRoutes(
     try {
       const packageJson = JSON.parse(await readFile(join(root, "package.json"), "utf8")) as { version?: string };
       const version = packageJson.version ?? "0.1.0";
+      const packageOptions = {
+        ...options,
+        controlPlanePublicUrl: requireControlPlaneUrl(request, options.controlPlanePublicUrl),
+      };
       const executablePath = join(root, "release", "edge-agent.exe");
       let executableSize: number;
       try {
@@ -245,7 +279,7 @@ export async function registerEdgeAgentPackageRoutes(
         id: body.activationId,
         branchId,
         name: body.agentName,
-      }, version, options, "windows", "install", body.activationCode), "utf8");
+      }, version, packageOptions, "windows", "install", body.activationCode), "utf8");
       const installer = streamInstaller(executablePath, config);
       const safeBranchName = branch.name.replace(/[^a-zA-Z0-9_-]/g, "-");
       await store.writeAudit({
@@ -265,7 +299,7 @@ export async function registerEdgeAgentPackageRoutes(
     } catch (error) {
       app.log.error({ err: error, branchId }, "Failed to build edge-agent installer from activation");
       const code = error && typeof error === "object" && "code" in error ? String(error.code) : "edge_agent_package_failed";
-      const status = code.endsWith("_not_built") ? 503 : 500;
+      const status = code.endsWith("_not_built") || code.endsWith("_unavailable") ? 503 : 500;
       return reply.code(status).send({ error: code, message: error instanceof Error ? error.message : "Package generation failed" });
     }
   });
@@ -301,6 +335,10 @@ export async function registerEdgeAgentPackageRoutes(
     try {
       const packageJson = JSON.parse(await readFile(join(root, "package.json"), "utf8")) as { version?: string };
       const version = packageJson.version ?? "0.1.0";
+      const packageOptions = {
+        ...options,
+        controlPlanePublicUrl: requireControlPlaneUrl(request, options.controlPlanePublicUrl),
+      };
       const useLegacySharedKey = options.allowLegacyEdgeBridgeKey ?? Boolean(options.edgeBridgeSharedKey);
       const activationCode = mode === "scan-once" && !useLegacySharedKey
         ? `sgact_${randomBytes(32).toString("base64url")}`
@@ -314,7 +352,7 @@ export async function registerEdgeAgentPackageRoutes(
             tokenHash: hashSecret(activationCode),
           })
         : undefined;
-      const config = Buffer.from(branchConfiguration(agent, version, options, platform, mode, activationCode), "utf8");
+      const config = Buffer.from(branchConfiguration(agent, version, packageOptions, platform, mode, activationCode), "utf8");
       let entries: Array<{ name: string; data: Buffer }>;
 
       if (platform === "windows") {
@@ -411,7 +449,7 @@ export async function registerEdgeAgentPackageRoutes(
     } catch (error) {
       app.log.error({ err: error, branchId, edgeAgentId }, "Failed to build edge-agent installer package");
       const code = error && typeof error === "object" && "code" in error ? String(error.code) : "edge_agent_package_failed";
-      const status = code.endsWith("_not_built") ? 503 : 500;
+      const status = code.endsWith("_not_built") || code.endsWith("_unavailable") ? 503 : 500;
       return reply.code(status).send({ error: code, message: error instanceof Error ? error.message : "Package generation failed" });
     }
   });

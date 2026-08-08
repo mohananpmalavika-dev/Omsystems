@@ -135,6 +135,7 @@ describe("dashboard control-plane BFF", () => {
     const headers = new Headers(init?.headers);
     expect(headers.get("authorization")).toBe("Bearer employee-token");
     expect(headers.get("content-type")).toBe("application/json");
+    expect(headers.get("x-sentinel-public-api-base")).toBe("https://sentinel.example/api/control");
     expect(init?.body).toBe(JSON.stringify({
       activationId: "activation-1",
       activationCode: "one-time-code",

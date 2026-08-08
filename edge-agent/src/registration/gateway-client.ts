@@ -304,7 +304,7 @@ export class GatewayClient {
   }
 
   private async request<T = unknown>(path: string, init: RequestInit, skipAuth = false): Promise<T> {
-    const url = new URL(path, this.baseUrl);
+    const url = controlPlaneEndpoint(this.baseUrl, path);
     let response: Response;
     try {
       response = await fetch(url, {
@@ -330,6 +330,16 @@ export class GatewayClient {
     }
     return body as T;
   }
+}
+
+function controlPlaneEndpoint(baseUrl: string, path: string) {
+  const url = new URL(baseUrl);
+  const basePath = url.pathname.replace(/\/+$/, "");
+  const requestPath = path.replace(/^\/+/, "");
+  url.pathname = `${basePath}/${requestPath}`.replace(/\/{2,}/g, "/");
+  url.search = "";
+  url.hash = "";
+  return url;
 }
 
 export class GatewayRequestError extends Error {

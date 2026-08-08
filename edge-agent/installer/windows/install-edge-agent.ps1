@@ -114,14 +114,14 @@ if ((Test-Path -LiteralPath $FfmpegArchive -PathType Leaf) -and
 }
 
 $controlPlaneUrl = Get-ConfigValue $ConfigPath "CONTROL_PLANE_URL"
-if ($controlPlaneUrl.StartsWith("REPLACE_")) {
-  $controlPlaneUrl = Read-Host "Public dashboard/control-plane URL (for example https://dashboard.example.com)"
-  $parsedUri = $null
-  if (-not [Uri]::TryCreate($controlPlaneUrl, [UriKind]::Absolute, [ref]$parsedUri) -or $parsedUri.Scheme -notin @("http", "https")) {
-    throw "CONTROL_PLANE_URL must be an absolute HTTP or HTTPS URL."
-  }
-  Set-ConfigValue $ConfigPath "CONTROL_PLANE_URL" $controlPlaneUrl.TrimEnd('/')
+if ([string]::IsNullOrWhiteSpace($controlPlaneUrl) -or $controlPlaneUrl.StartsWith("REPLACE_")) {
+  throw "This installer is missing its automatic Sentinel Grid server address. Return to Sentinel Grid and download a new scanner installer."
 }
+$parsedUri = $null
+if (-not [Uri]::TryCreate($controlPlaneUrl, [UriKind]::Absolute, [ref]$parsedUri) -or $parsedUri.Scheme -notin @("http", "https")) {
+  throw "The automatic Sentinel Grid server address in this installer is invalid. Download a new scanner installer."
+}
+Set-ConfigValue $ConfigPath "CONTROL_PLANE_URL" $controlPlaneUrl.TrimEnd('/')
 
 $activationCode = Get-ConfigValue $ConfigPath "EDGE_ACTIVATION_CODE"
 if ([string]::IsNullOrWhiteSpace($activationCode) -or $activationCode.StartsWith("REPLACE_")) {

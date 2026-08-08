@@ -32,6 +32,10 @@ async function proxyControlRequest(request: NextRequest, context: RouteContext) 
   headers.delete("host");
   headers.delete("cookie");
   headers.delete("content-length");
+  headers.set(
+    "x-sentinel-public-api-base",
+    new URL("/api/control", request.nextUrl.origin).toString(),
+  );
 
   if (bridgeKey) headers.set("x-edge-bridge-key", bridgeKey);
   const forwardedFor = request.headers.get("x-forwarded-for");
