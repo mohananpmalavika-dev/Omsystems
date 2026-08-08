@@ -134,6 +134,7 @@ async function proxyControlRequest(request: NextRequest, context: RouteContext) 
     const responseType = response.headers.get("content-type") ?? "application/json";
     const contentDisposition = response.headers.get("content-disposition");
     const contentLength = response.headers.get("content-length");
+    const contentEncoding = response.headers.get("content-encoding");
     return new Response(response.body, {
       status: response.status,
       headers: {
@@ -141,6 +142,7 @@ async function proxyControlRequest(request: NextRequest, context: RouteContext) 
         "cache-control": responseType.startsWith("text/event-stream") ? "no-cache, no-transform" : "no-store",
         ...(contentDisposition ? { "content-disposition": contentDisposition } : {}),
         ...(contentLength ? { "content-length": contentLength } : {}),
+        ...(contentEncoding ? { "content-encoding": contentEncoding } : {}),
         ...(responseType.startsWith("text/event-stream") ? { "x-accel-buffering": "no" } : {}),
       },
     });

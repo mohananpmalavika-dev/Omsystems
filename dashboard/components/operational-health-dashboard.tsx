@@ -46,14 +46,14 @@ export default function OperationalHealthDashboard() {
       setLoading(true);
       
       // Fetch health summary
-      const summaryRes = await fetch('/api/control/v1/operations/health/summary');
+      const summaryRes = await fetch('/api/control/v1/operations/health/summary', { credentials: 'include' });
       if (summaryRes.ok) {
         const data = await summaryRes.json();
         setSummary(data.data);
       }
       
       // Fetch critical alerts
-      const alertsRes = await fetch('/api/control/v1/operations/alerts?severity=critical&status=active&limit=10');
+      const alertsRes = await fetch('/api/control/v1/operations/alerts?severity=critical&status=active&limit=10', { credentials: 'include' });
       if (alertsRes.ok) {
         const data = await alertsRes.json();
         setCriticalAlerts(data.data.alerts || []);

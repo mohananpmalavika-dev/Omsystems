@@ -268,7 +268,7 @@ export function GlobalAlertCenter() {
   if (!enabledForRoute) return null;
 
   return <>
-    <div className="global-alert-tools fixed right-4 top-24 z-40 flex flex-col items-end gap-2">
+    <div className="global-alert-tools fixed bottom-5 right-5 z-40 flex flex-col items-end gap-2">
       <button type="button" onClick={() => setQueueOpen((value) => !value)} aria-expanded={queueOpen} aria-label="Open active alert queue" className="relative flex h-12 w-12 items-center justify-center rounded-full bg-slate-950 text-white shadow-xl">
         <BellRing size={20}/>
         {dashboardQueue.length > 0 && <span className="absolute -right-1 -top-1 min-w-5 rounded-full bg-red-600 px-1.5 py-0.5 text-[10px] font-bold">{dashboardQueue.length > 99 ? "99+" : dashboardQueue.length}</span>}
@@ -276,7 +276,7 @@ export function GlobalAlertCenter() {
       <button type="button" onClick={() => void toggleSound()} aria-pressed={soundReady} className={`flex h-9 w-9 items-center justify-center rounded-full border bg-white shadow ${soundReady ? "text-emerald-700" : "text-red-700"}`} title={soundReady ? "Mute alert sound" : "Enable alert sound"}>{soundReady ? <Volume2 size={16}/> : <VolumeX size={16}/>}</button>
     </div>
 
-    {queueOpen && !current && <div className="fixed right-4 top-40 z-40 w-[min(390px,calc(100vw-2rem))] overflow-hidden rounded-xl border bg-white shadow-2xl">
+    {queueOpen && !current && <div className="fixed bottom-20 right-5 z-40 w-[min(390px,calc(100vw-2rem))] overflow-hidden rounded-xl border bg-white shadow-2xl">
       <QueueHeader count={dashboardQueue.length} close={() => setQueueOpen(false)}/>
       <QueueList alerts={dashboardQueue} choose={(alert) => { setManualAlertId(alert.id); setQueueOpen(false); }}/>
     </div>}

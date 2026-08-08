@@ -12,6 +12,7 @@ import {
   Building2,
   CalendarClock,
   Camera,
+  ChevronDown,
   ChevronRight,
   CircleUserRound,
   ClipboardCheck,
@@ -29,6 +30,7 @@ import {
   Handshake,
   HeartPulse,
   LayoutDashboard,
+  LayoutGrid,
   Library,
   ListFilter,
   LockKeyhole,
@@ -36,6 +38,7 @@ import {
   MonitorPlay,
   Network,
   Play,
+  Plus,
   Radar,
   Search,
   Server,
@@ -51,7 +54,7 @@ import {
   Wrench,
   X,
 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 interface AppLayoutProps {
   children: React.ReactNode;
@@ -59,26 +62,27 @@ interface AppLayoutProps {
   cameraCount?: number;
 }
 
-type NavItem = {
+export type NavItem = {
   label: string;
   href: string;
   icon: LucideIcon;
   badge?: "cameras" | "incidents";
 };
 
-type NavGroup = {
+export type NavGroup = {
   label: string;
   icon: LucideIcon;
   items: NavItem[];
 };
 
-const navigation: NavGroup[] = [
+export const navigation: NavGroup[] = [
   {
     label: "Overview",
     icon: LayoutDashboard,
     items: [
       { label: "Operations overview", href: "/", icon: LayoutDashboard },
       { label: "Executive dashboard", href: "/dashboards", icon: BarChart3 },
+      { label: "Module directory", href: "/modules", icon: LayoutGrid },
     ],
   },
   {
@@ -89,6 +93,7 @@ const navigation: NavGroup[] = [
       { label: "Control room", href: "/control-room", icon: MonitorPlay },
       { label: "Alert command center", href: "/operations/alert-command-center", icon: Bell },
       { label: "Incident response", href: "/incidents", icon: Siren, badge: "incidents" },
+      { label: "Report an incident", href: "/incidents/create", icon: Plus },
       { label: "Notification policy", href: "/operations/alert-notification-policy", icon: SlidersHorizontal },
     ],
   },
@@ -112,7 +117,6 @@ const navigation: NavGroup[] = [
       { label: "Synced playback", href: "/playback/synced", icon: Play },
       { label: "Video search", href: "/video-search", icon: Search },
       { label: "Evidence vault", href: "/evidence", icon: FileCheck2 },
-      { label: "Employee activity report", href: "/activity-report", icon: UserRoundCog },
       { label: "Operational reports", href: "/reports", icon: FileSearch },
     ],
   },
@@ -144,6 +148,7 @@ const navigation: NavGroup[] = [
       { label: "Asset registry", href: "/maintenance/assets", icon: Library },
       { label: "DVR/NVR monitoring", href: "/maintenance/dvr-nvr-monitor", icon: Server },
       { label: "Work orders", href: "/maintenance/workorders", icon: ClipboardCheck },
+      { label: "Create work order", href: "/maintenance/workorders/new", icon: Plus },
       { label: "Vendors", href: "/maintenance/vendors", icon: Handshake },
       { label: "AMC contracts", href: "/maintenance/amc", icon: FileClock },
       { label: "Maintenance reports", href: "/maintenance/reports", icon: FileSearch },
@@ -158,6 +163,7 @@ const navigation: NavGroup[] = [
       { label: "Processing purposes", href: "/maintenance/privacy/purposes", icon: FileText },
       { label: "Privacy controls", href: "/maintenance/privacy/controls", icon: ShieldCheck },
       { label: "Breach register", href: "/maintenance/privacy/breaches", icon: ShieldAlert },
+      { label: "Report a breach", href: "/maintenance/privacy/breaches/new", icon: Plus },
     ],
   },
   {
@@ -175,6 +181,13 @@ const navigation: NavGroup[] = [
       { label: "Risk register", href: "/compliance/risks", icon: ShieldAlert },
       { label: "Certificates", href: "/compliance/certificates", icon: FileCheck2 },
       { label: "Compliance evidence", href: "/compliance/evidence", icon: FileSearch },
+    ],
+  },
+  {
+    label: "Audit & activity",
+    icon: FileSearch,
+    items: [
+      { label: "Employee activity", href: "/activity-report", icon: UserRoundCog },
       { label: "Camera health audit", href: "/audit/health", icon: Gauge },
       { label: "Branch compliance", href: "/audit/branch-compliance", icon: Building2 },
       { label: "Maintenance audit", href: "/audit/maintenance", icon: CalendarClock },
@@ -193,6 +206,15 @@ const navigation: NavGroup[] = [
   },
 ];
 
+export const quickActions: NavItem[] = [
+  { label: "Report an incident", href: "/incidents/create", icon: Siren },
+  { label: "Create work order", href: "/maintenance/workorders/new", icon: ClipboardCheck },
+  { label: "Onboard a branch", href: "/admin/branch-onboarding", icon: Building2 },
+  { label: "Register an asset", href: "/maintenance/assets/new", icon: Library },
+  { label: "Add a vendor", href: "/maintenance/vendors/new", icon: Handshake },
+  { label: "Add an AMC contract", href: "/maintenance/amc/new", icon: FileClock },
+];
+
 const pageMeta = [
   ...navigation.flatMap((group) => group.items.map((item) => ({
     path: item.href,
@@ -201,10 +223,16 @@ const pageMeta = [
   }))),
   { path: "/operations/branches", section: "Infrastructure health", title: "Branch health" },
   { path: "/camera-detail", section: "Infrastructure health", title: "Camera details" },
+  { path: "/maintenance/assets/new", section: "Fleet maintenance", title: "Register asset" },
+  { path: "/maintenance/vendors/new", section: "Fleet maintenance", title: "Add vendor" },
+  { path: "/maintenance/amc/new", section: "Fleet maintenance", title: "Add AMC contract" },
+  { path: "/maintenance/privacy/purposes/new", section: "Privacy", title: "Add processing purpose" },
 ];
 
 export function AppLayout({ children, incidentCount = 0, cameraCount = 0 }: AppLayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [commandOpen, setCommandOpen] = useState(false);
+  const [commandQuery, setCommandQuery] = useState("");
   const pathname = usePathname() || "/";
   const currentPage = pageMeta
     .filter((item) => item.path === "/" ? pathname === "/" : pathname === item.path || pathname.startsWith(`${item.path}/`))
@@ -218,6 +246,28 @@ export function AppLayout({ children, incidentCount = 0, cameraCount = 0 }: AppL
     .filter((route) => route === "/" ? pathname === "/" : pathname === route || pathname.startsWith(`${route}/`))
     .sort((left, right) => right.length - left.length)[0];
   const isActive = (href: string) => normalizedRoute(href) === activeRoute;
+
+  const searchableModules = useMemo(() => navigation.flatMap((group) =>
+    group.items.map((item) => ({ ...item, section: group.label }))), []);
+  const commandResults = useMemo(() => {
+    const query = commandQuery.trim().toLowerCase();
+    if (!query) return searchableModules.slice(0, 10);
+    return searchableModules.filter((item) =>
+      `${item.label} ${item.section} ${item.href}`.toLowerCase().includes(query)
+    ).slice(0, 12);
+  }, [commandQuery, searchableModules]);
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
+        event.preventDefault();
+        setCommandOpen((open) => !open);
+      }
+      if (event.key === "Escape") setCommandOpen(false);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
 
   const closeSidebar = () => setSidebarOpen(false);
 
@@ -240,11 +290,11 @@ export function AppLayout({ children, incidentCount = 0, cameraCount = 0 }: AppL
           </button>
         </div>
 
-        <Link href="/video-search" className="command-search" onClick={closeSidebar}>
+        <button type="button" className="command-search" onClick={() => setCommandOpen(true)}>
           <Search size={15} />
-          <span>Search your security estate</span>
+          <span>Find any module or workflow</span>
           <kbd><Command size={11} /> K</kbd>
-        </Link>
+        </button>
 
         <div className="nav-shortcuts" aria-label="Quick access">
           <Link href="/" className={isActive("/") ? "active" : ""} onClick={closeSidebar}>
@@ -299,7 +349,7 @@ export function AppLayout({ children, incidentCount = 0, cameraCount = 0 }: AppL
         <div className="sidebar-footer">
           <Link href="/maintenance/health" className="sidebar-status" onClick={closeSidebar}>
             <div className="pulse-icon"><Wifi size={16} /></div>
-            <div><strong>All systems connected</strong><span>Cloud, recording and edge</span></div>
+            <div><strong>Platform status</strong><span>Open infrastructure health</span></div>
             <ChevronRight size={15} />
           </Link>
           <Link href="/account/security" className="sidebar-user" onClick={closeSidebar}>
@@ -323,7 +373,23 @@ export function AppLayout({ children, incidentCount = 0, cameraCount = 0 }: AppL
           </div>
           <div className="topbar-actions">
             <div className="live-state"><i /> Live operations <span>IST</span></div>
-            <Link href="/video-search" className="topbar-icon" aria-label="Search"><Search size={18} /></Link>
+            <details className="create-menu">
+              <summary><Plus size={15} /><span>Create</span><ChevronDown size={13} /></summary>
+              <div className="create-menu-panel">
+                <p>Quick actions</p>
+                {quickActions.map((action) => {
+                  const Icon = action.icon;
+                  return (
+                    <Link href={action.href} key={action.href}>
+                      <span><Icon size={15} /></span>
+                      <strong>{action.label}</strong>
+                      <ChevronRight size={13} />
+                    </Link>
+                  );
+                })}
+              </div>
+            </details>
+            <button type="button" className="topbar-icon" aria-label="Search modules" onClick={() => setCommandOpen(true)}><Search size={18} /></button>
             <Link href="/operations/alerts" aria-label="Notifications" className="notification topbar-icon">
               <Bell size={18} />
               {incidentCount > 0 && <i />}
@@ -335,6 +401,43 @@ export function AppLayout({ children, incidentCount = 0, cameraCount = 0 }: AppL
           {children}
         </div>
       </main>
+
+      {commandOpen && (
+        <div className="command-overlay" role="presentation" onMouseDown={() => setCommandOpen(false)}>
+          <section className="command-dialog" role="dialog" aria-modal="true" aria-label="Module search" onMouseDown={(event) => event.stopPropagation()}>
+            <div className="command-input-row">
+              <Search size={19} />
+              <input
+                autoFocus
+                value={commandQuery}
+                onChange={(event) => setCommandQuery(event.target.value)}
+                placeholder="Search cameras, incidents, reports, maintenance..."
+                aria-label="Search all modules"
+              />
+              <button type="button" onClick={() => setCommandOpen(false)} aria-label="Close module search"><X size={17} /></button>
+            </div>
+            <div className="command-results">
+              <div className="command-results-heading">
+                <span>{commandQuery ? "Search results" : "Popular destinations"}</span>
+                <Link href="/modules" onClick={() => setCommandOpen(false)}>View all modules <LayoutGrid size={13} /></Link>
+              </div>
+              {commandResults.length > 0 ? commandResults.map((item) => {
+                const Icon = item.icon;
+                return (
+                  <Link href={item.href} key={`${item.section}-${item.href}`} onClick={() => setCommandOpen(false)}>
+                    <span className="command-result-icon"><Icon size={17} /></span>
+                    <span><strong>{item.label}</strong><small>{item.section}</small></span>
+                    <ChevronRight size={15} />
+                  </Link>
+                );
+              }) : (
+                <div className="command-empty"><Search size={22} /><strong>No matching module</strong><span>Try a feature name such as camera, report, audit or branch.</span></div>
+              )}
+            </div>
+            <footer><span><kbd>Enter</kbd> open</span><span><kbd>Esc</kbd> close</span><strong>{searchableModules.length} modules available</strong></footer>
+          </section>
+        </div>
+      )}
     </div>
   );
 }
