@@ -238,9 +238,16 @@ export class BankingAnalyticsDetector extends BaseDetector {
   // ============================================================================
 
   private async detectPersons(frame: DetectionFrame): Promise<any[]> {
-    // TODO: Implement YOLOv8 person detection
-    // Integration with Human Analytics module for person tracking
-    return [];
+    try {
+      const pipeline = await import('../inference/unified-inference-pipeline.js').then(m => m.getInferencePipeline());
+      const detections = await pipeline.detectObjects(frame, ['person', 'vehicle']).catch(() => []);
+      if (!detections) return [];
+      // Return only person detections
+      return detections.filter((d: any) => d.label === 'person');
+    } catch (error) {
+      console.warn('detectPersons failed:', error);
+      return [];
+    }
   }
 
   // ============================================================================

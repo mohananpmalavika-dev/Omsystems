@@ -1,6 +1,8 @@
 import type { Pool } from "pg";
 import type { DiscoveredCamera, EdgeAgent, EdgeScanJob } from "../domain/models.js";
 import type { CameraDiscoveryInput } from "../control-plane-store.js";
+import type { DeviceIdentityRepository } from "./device-identity-repository.js";
+import { normalizeMacAddress, normalizeOnvifUuid } from "../device-identity.js";
 
 type AgentRow = {
   id: string;
@@ -58,7 +60,10 @@ function mapScan(row: ScanRow): EdgeScanJob {
 }
 
 export class EdgeAgentRepository {
-  constructor(private readonly pool: Pool) {}
+  constructor(
+    private readonly pool: Pool,
+    private readonly deviceIdentities: DeviceIdentityRepository,
+  ) {}
 
   async register(branchId: string, name: string, version: string) {
     const result = await this.pool.query<AgentRow>(
@@ -192,99 +197,127 @@ export class EdgeAgentRepository {
     branchId: string,
     input: CameraDiscoveryInput,
   ): Promise<DiscoveredCamera> {
-    const result = await this.pool.query<{
-      id: string;
-      discovered_at: Date;
-    }>(
-      `INSERT INTO camera_discoveries
-         (tenant_id, branch_node_id, edge_agent_id, discovery_method,
-          manufacturer, vendor, model, ip_address, onvif_port, rtsp_port,
-          profiles, capabilities, source_type, recorder_id, recorder_channel,
-          recorder_serial_number, serial_number, firmware_version, display_name,
-          credentials_required, stream_verified, rtsp_validated, compatibility,
-          duplicate_status, compatibility_status, hardware_id,
-          existing_device_association, status_reason)
-       SELECT n.tenant_id, n.id, $2, $3, $4, $5, $6, $7::inet, $8, $9, $10::jsonb,
-              $11::jsonb, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21,
-              $22, $23, $24, $25, $26, $27
-       FROM resource_nodes n
-       JOIN edge_agents agent
-         ON agent.id = $2
-        AND agent.branch_node_id = n.id
-        AND agent.tenant_id = n.tenant_id
-       WHERE n.id = $1 AND n.node_type = 'branch'
-       ON CONFLICT (branch_node_id, physical_channel_key) DO UPDATE
-       SET edge_agent_id = EXCLUDED.edge_agent_id,
-           discovery_method = EXCLUDED.discovery_method,
-           manufacturer = EXCLUDED.manufacturer,
-           vendor = EXCLUDED.vendor,
-           model = EXCLUDED.model,
-           ip_address = EXCLUDED.ip_address,
-           onvif_port = EXCLUDED.onvif_port,
-           rtsp_port = EXCLUDED.rtsp_port,
-           profiles = EXCLUDED.profiles,
-           capabilities = EXCLUDED.capabilities,
-           source_type = EXCLUDED.source_type,
-           recorder_id = EXCLUDED.recorder_id,
-           recorder_serial_number = EXCLUDED.recorder_serial_number,
-           serial_number = EXCLUDED.serial_number,
-           firmware_version = EXCLUDED.firmware_version,
-           display_name = EXCLUDED.display_name,
-           credentials_required = EXCLUDED.credentials_required,
-           stream_verified = EXCLUDED.stream_verified,
-           rtsp_validated = EXCLUDED.rtsp_validated,
-           compatibility = EXCLUDED.compatibility,
-           duplicate_status = EXCLUDED.duplicate_status,
-           compatibility_status = EXCLUDED.compatibility_status,
-           hardware_id = EXCLUDED.hardware_id,
-           existing_device_association = EXCLUDED.existing_device_association,
-           status_reason = EXCLUDED.status_reason,
-           discovered_at = now()
-       RETURNING id::text, discovered_at`,
-      [
+    const client = await this.pool.connect();
+    try {
+      await client.query("BEGIN");
+      const identity = await this.deviceIdentities.resolveDiscovery(client, branchId, input);
+      const duplicateStatus = identity.cameraId ? "duplicate" : input.duplicateStatus ?? null;
+      const existingAssociation = identity.cameraId ?? input.existingDeviceAssociation ?? null;
+      const statusReason = input.statusReason ?? (identity.cameraId ? "matched_existing_device_identity" : null);
+      const onvifUuid = normalizeOnvifUuid(input.onvifUuid, input.onvifEndpointReference);
+      const normalizedMac = normalizeMacAddress(input.macAddress)?.match(/.{2}/g)?.join(":") ?? null;
+      const discoveryLayers = [
+        ...(input.discoveryLayers ?? []),
+        { layer: "register" as const, status: "passed" as const, detail: "Control plane registration completed" },
+      ];
+      const result = await client.query<{
+        id: string;
+        discovered_at: Date;
+        status: DiscoveredCamera["status"];
+      }>(
+        `INSERT INTO camera_discoveries
+           (tenant_id, branch_node_id, edge_agent_id, device_identity_id,
+            discovery_method, manufacturer, vendor, model, ip_address,
+            mac_address, onvif_endpoint_reference, onvif_uuid,
+            certificate_ref, certificate_fingerprint, onvif_port, rtsp_port,
+            profiles, capabilities, source_type, recorder_id, recorder_channel,
+            recorder_serial_number, serial_number, firmware_version, display_name,
+            credentials_required, stream_verified, rtsp_validated, compatibility,
+            duplicate_status, compatibility_status, hardware_id,
+            existing_device_association, status_reason, discovery_layers, status)
+         SELECT n.tenant_id, n.id, $2, $3, $4, $5, $6, $7, $8::inet,
+                $9::macaddr, $10, $11, $12, $13, $14, $15, $16::jsonb,
+                $17::jsonb, $18, $19, $20, $21, $22, $23, $24, $25, $26,
+                $27, $28, $29, $30, $31, $32, $33, $34::jsonb, $35::discovery_status
+         FROM resource_nodes n
+         JOIN edge_agents agent
+           ON agent.id = $2
+          AND agent.branch_node_id = n.id
+          AND agent.tenant_id = n.tenant_id
+         WHERE n.id = $1 AND n.node_type = 'branch'
+         ON CONFLICT (branch_node_id, device_identity_id) DO UPDATE
+         SET edge_agent_id = EXCLUDED.edge_agent_id,
+             device_identity_id = EXCLUDED.device_identity_id,
+             discovery_method = EXCLUDED.discovery_method,
+             manufacturer = EXCLUDED.manufacturer,
+             vendor = EXCLUDED.vendor,
+             model = EXCLUDED.model,
+             ip_address = EXCLUDED.ip_address,
+             mac_address = EXCLUDED.mac_address,
+             onvif_endpoint_reference = EXCLUDED.onvif_endpoint_reference,
+             onvif_uuid = EXCLUDED.onvif_uuid,
+             certificate_ref = EXCLUDED.certificate_ref,
+             certificate_fingerprint = EXCLUDED.certificate_fingerprint,
+             onvif_port = EXCLUDED.onvif_port,
+             rtsp_port = EXCLUDED.rtsp_port,
+             profiles = EXCLUDED.profiles,
+             capabilities = EXCLUDED.capabilities,
+             source_type = EXCLUDED.source_type,
+             recorder_id = EXCLUDED.recorder_id,
+             recorder_serial_number = EXCLUDED.recorder_serial_number,
+             serial_number = EXCLUDED.serial_number,
+             firmware_version = EXCLUDED.firmware_version,
+             display_name = EXCLUDED.display_name,
+             credentials_required = EXCLUDED.credentials_required,
+             stream_verified = EXCLUDED.stream_verified,
+             rtsp_validated = EXCLUDED.rtsp_validated,
+             compatibility = EXCLUDED.compatibility,
+             duplicate_status = EXCLUDED.duplicate_status,
+             compatibility_status = EXCLUDED.compatibility_status,
+             hardware_id = EXCLUDED.hardware_id,
+             existing_device_association = EXCLUDED.existing_device_association,
+             status_reason = EXCLUDED.status_reason,
+             discovery_layers = EXCLUDED.discovery_layers,
+             status = CASE
+               WHEN camera_discoveries.status = 'rejected' THEN camera_discoveries.status
+               ELSE EXCLUDED.status
+             END,
+             discovered_at = now()
+         RETURNING id::text, discovered_at, status`,
+        [branchId, input.edgeAgentId, identity.deviceIdentityId,
+         input.discoveryMethod, input.manufacturer ?? input.vendor, input.vendor,
+         input.model, input.ipAddress, normalizedMac,
+         input.onvifEndpointReference ?? null, onvifUuid ?? null,
+         input.certificateRef ?? null, input.certificateFingerprint ?? null,
+         input.onvifPort, input.rtspPort, JSON.stringify(input.profiles),
+         JSON.stringify(input.capabilities), input.sourceType ?? "ip-camera",
+         input.recorderId ?? null, input.recorderChannel ?? 0,
+         input.recorderSerialNumber ?? null, input.serialNumber ?? null,
+         input.firmwareVersion ?? null, input.displayName ?? null,
+         input.credentialsRequired ?? null, input.streamVerified ?? null,
+         input.rtspValidated ?? null, input.compatibility ?? null,
+         duplicateStatus, input.compatibilityStatus ?? null,
+         input.hardwareId ?? null, existingAssociation, statusReason,
+         JSON.stringify(discoveryLayers), identity.cameraId ? "approved" : "pending"],
+      );
+      const row = result.rows[0];
+      if (!row) throw new Error("invalid_branch");
+      await client.query("COMMIT");
+      return {
+        id: row.id,
+        deviceIdentityId: identity.deviceIdentityId,
         branchId,
-        input.edgeAgentId,
-        input.discoveryMethod,
-        input.manufacturer ?? input.vendor,
-        input.vendor,
-        input.model,
-        input.ipAddress,
-        input.onvifPort,
-        input.rtspPort,
-        JSON.stringify(input.profiles),
-        JSON.stringify(input.capabilities),
-        input.sourceType ?? "ip-camera",
-        input.recorderId ?? null,
-        input.recorderChannel ?? 0,
-        input.recorderSerialNumber ?? null,
-        input.serialNumber ?? null,
-        input.firmwareVersion ?? null,
-        input.displayName ?? null,
-        input.credentialsRequired ?? null,
-        input.streamVerified ?? null,
-        input.rtspValidated ?? null,
-        input.compatibility ?? null,
-        input.duplicateStatus ?? null,
-        input.compatibilityStatus ?? null,
-        input.hardwareId ?? null,
-        input.existingDeviceAssociation ?? null,
-        input.statusReason ?? null,
-      ],
-    );
-    const row = result.rows[0];
-    if (!row) throw new Error("invalid_branch");
-    return {
-      id: row.id,
-      branchId,
-      ...input,
-      status: "pending",
-      discoveredAt: row.discovered_at.toISOString(),
-    };
+        ...input,
+        ...(onvifUuid ? { onvifUuid } : {}),
+        ...(duplicateStatus ? { duplicateStatus } : {}),
+        ...(existingAssociation ? { existingDeviceAssociation: existingAssociation } : {}),
+        ...(statusReason ? { statusReason } : {}),
+        discoveryLayers,
+        status: row.status,
+        discoveredAt: row.discovered_at.toISOString(),
+      };
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
+    }
   }
 
   async listDiscoveries(branchId: string): Promise<DiscoveredCamera[]> {
     const result = await this.pool.query<{
       id: string;
+      device_identity_id: string;
       branch_node_id: string;
       edge_agent_id: string;
       discovery_method: string;
@@ -292,6 +325,11 @@ export class EdgeAgentRepository {
       vendor: string;
       model: string;
       ip_address: string;
+      mac_address: string | null;
+      onvif_endpoint_reference: string | null;
+      onvif_uuid: string | null;
+      certificate_ref: string | null;
+      certificate_fingerprint: string | null;
       onvif_port: number;
       rtsp_port: number;
       profiles: string;
@@ -314,17 +352,20 @@ export class EdgeAgentRepository {
       hardware_id: string | null;
       existing_device_association: string | null;
       status_reason: string | null;
+      discovery_layers: DiscoveredCamera["discoveryLayers"] | string;
     }>(
-      `SELECT id::text, branch_node_id::text, edge_agent_id::text,
+      `SELECT id::text, device_identity_id::text, branch_node_id::text, edge_agent_id::text,
               COALESCE(discovery_method, 'edge-agent-reported-inventory') AS discovery_method,
               COALESCE(manufacturer, vendor) AS manufacturer,
-              vendor, model, host(ip_address) AS ip_address, onvif_port,
+              vendor, model, host(ip_address) AS ip_address, mac_address::text,
+              onvif_endpoint_reference, onvif_uuid, certificate_ref,
+              certificate_fingerprint, onvif_port,
               rtsp_port, profiles, capabilities, discovered_at, status,
               source_type, recorder_id, recorder_channel, recorder_serial_number,
               serial_number, firmware_version, display_name, credentials_required,
               stream_verified, rtsp_validated, compatibility, duplicate_status,
               compatibility_status, hardware_id, existing_device_association,
-              status_reason
+              status_reason, discovery_layers
        FROM camera_discoveries
        WHERE branch_node_id = $1 AND status = 'pending'
        ORDER BY discovered_at DESC`,
@@ -333,6 +374,7 @@ export class EdgeAgentRepository {
 
     return result.rows.map((row) => ({
       id: row.id,
+      deviceIdentityId: row.device_identity_id,
       branchId: row.branch_node_id,
       edgeAgentId: row.edge_agent_id,
       discoveryMethod: row.discovery_method as any,
@@ -340,6 +382,11 @@ export class EdgeAgentRepository {
       vendor: row.vendor as "hikvision" | "cp-plus" | "other",
       model: row.model,
       ipAddress: row.ip_address,
+      ...(row.mac_address ? { macAddress: row.mac_address } : {}),
+      ...(row.onvif_endpoint_reference ? { onvifEndpointReference: row.onvif_endpoint_reference } : {}),
+      ...(row.onvif_uuid ? { onvifUuid: row.onvif_uuid } : {}),
+      ...(row.certificate_ref ? { certificateRef: row.certificate_ref } : {}),
+      ...(row.certificate_fingerprint ? { certificateFingerprint: row.certificate_fingerprint } : {}),
       onvifPort: row.onvif_port,
       rtspPort: row.rtsp_port,
       profiles: typeof row.profiles === "string"
@@ -364,6 +411,9 @@ export class EdgeAgentRepository {
       ...(row.hardware_id ? { hardwareId: row.hardware_id } : {}),
       ...(row.existing_device_association ? { existingDeviceAssociation: row.existing_device_association } : {}),
       ...(row.status_reason ? { statusReason: row.status_reason } : {}),
+      discoveryLayers: typeof row.discovery_layers === "string"
+        ? JSON.parse(row.discovery_layers)
+        : row.discovery_layers,
       discoveredAt: row.discovered_at.toISOString(),
       status: row.status as "pending" | "approved" | "rejected",
     }));

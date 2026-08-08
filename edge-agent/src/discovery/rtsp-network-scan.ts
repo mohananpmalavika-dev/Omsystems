@@ -3,6 +3,8 @@ import net from "node:net";
 import { attachCredentials } from "../devices/onvif-client.js";
 import { probeRtsp } from "../streaming/rtsp-probe.js";
 import { logger } from "../utils/logger.js";
+import { createDeviceFingerprint } from "./device-fingerprint.js";
+import { resolveNeighborMac } from "./network-neighbor.js";
 
 export interface RtspScanOptions {
   cidr?: string; // single CIDR like 192.168.1.0/24 or empty to infer
@@ -16,6 +18,7 @@ export interface RtspScanOptions {
   username: string;
   password: string;
   credentialsForHost?: (host: string) => Promise<{ username: string; password: string } | undefined>;
+  excludeHosts?: string[];
 }
 
 function inferLocalCidrs(): string[] {
@@ -99,6 +102,7 @@ export async function discoverRtspDevices(
   const password = options.password ?? "";
 
   const candidates = new Set<string>();
+  const excludedHosts = new Set(options.excludeHosts ?? []);
   for (const host of options.hosts ?? []) candidates.add(host);
   for (const cidr of cidrList) {
     const ips = ipsFromCidr(cidr);
@@ -122,6 +126,7 @@ export async function discoverRtspDevices(
   }
 
   for (const ip of candidates) {
+    if (excludedHosts.has(ip)) continue;
     const task = async () => {
       try {
         let unverifiedEndpoint: { port: number; credentialsRequired: boolean } | undefined;
@@ -150,6 +155,8 @@ export async function discoverRtspDevices(
             }
             if (probe && probe.reachable) {
               try {
+                const macAddress = await resolveNeighborMac(ip);
+                const hardwareId = createDeviceFingerprint(macAddress ? { macAddress } : {});
                 const payload = {
                   edgeAgentId: agentId,
                   discoveryMethod: "rtsp-network-scan",
@@ -157,6 +164,8 @@ export async function discoverRtspDevices(
                   manufacturer: "unknown",
                   model: "IP Camera",
                   ipAddress: ip,
+                  ...(macAddress ? { macAddress } : {}),
+                  ...(hardwareId ? { hardwareId } : {}),
                   onvifPort: 80,
                   rtspPort: port,
                   displayName: `Discovered camera ${ip}`,
@@ -168,6 +177,7 @@ export async function discoverRtspDevices(
                   compatibilityStatus: probe.reachable ? "compatible" : "review-required",
                   profiles: [{ name: "auto", codec: probe.codec ?? "unknown", width: probe.width ?? 1, height: probe.height ?? 1 }],
                   capabilities: { ptz: false, audio: false, events: false },
+                  discoveryLayers: rtspDiscoveryLayers(true, Boolean(hardwareId)),
                 };
                 const discovery = await control.submitDiscovery(branchId, payload);
                 submittedCount += 1;
@@ -185,6 +195,8 @@ export async function discoverRtspDevices(
           }
         }
         if (unverifiedEndpoint) {
+          const macAddress = await resolveNeighborMac(ip);
+          const hardwareId = createDeviceFingerprint(macAddress ? { macAddress } : {});
           const discovery = await control.submitDiscovery(branchId, {
             edgeAgentId: agentId,
             discoveryMethod: "rtsp-network-scan",
@@ -192,6 +204,8 @@ export async function discoverRtspDevices(
             manufacturer: "Unknown",
             model: "RTSP device",
             ipAddress: ip,
+            ...(macAddress ? { macAddress } : {}),
+            ...(hardwareId ? { hardwareId } : {}),
             onvifPort: 80,
             rtspPort: unverifiedEndpoint.port,
             displayName: `Discovered device ${ip}`,
@@ -206,6 +220,7 @@ export async function discoverRtspDevices(
               : "rtsp_stream_unverified",
             profiles: [{ name: "unverified", codec: "unknown", width: 1, height: 1 }],
             capabilities: { ptz: false, audio: false, events: false },
+            discoveryLayers: rtspDiscoveryLayers(false, Boolean(hardwareId)),
           });
           submittedCount += 1;
           logger.info(`RTSP discovery: unverified device at ${ip}:${unverifiedEndpoint.port} -> discovery ${discovery.id}`, {
@@ -221,4 +236,18 @@ export async function discoverRtspDevices(
 
   await Promise.all(submitTasks);
   return submittedCount;
+}
+
+function rtspDiscoveryLayers(streamVerified: boolean, fingerprinted: boolean) {
+  return [
+    { layer: "network-discovery", status: "passed", detail: "RTSP TCP endpoint discovered" },
+    { layer: "onvif-discovery", status: "failed", detail: "Device was not available through WS-Discovery" },
+    { layer: "onvif-authentication", status: "skipped", detail: "No ONVIF endpoint available" },
+    { layer: "get-capabilities", status: "skipped", detail: "No ONVIF endpoint available" },
+    { layer: "get-profiles", status: "skipped", detail: "No ONVIF endpoint available" },
+    { layer: "get-stream-uri", status: "skipped", detail: "RTSP URI was discovered directly" },
+    { layer: "rtsp-verification", status: streamVerified ? "passed" : "failed", detail: streamVerified ? "ffprobe verified video" : "RTSP endpoint requires review" },
+    { layer: "vendor-adapter", status: "skipped", detail: "Generic RTSP path scan used" },
+    { layer: "fingerprint", status: fingerprinted ? "passed" : "failed", detail: fingerprinted ? "MAC-based fingerprint created" : "No stable Layer-2 identifier was available" },
+  ] as const;
 }

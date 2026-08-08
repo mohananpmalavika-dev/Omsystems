@@ -6,6 +6,7 @@
 
 import { randomUUID } from "node:crypto";
 import { BaseDetector, type DetectionFrame, type DetectionResult } from "./base-detector.js";
+import { getInferencePipeline } from "../inference/unified-inference-pipeline.js";
 
 // ============================================================================
 // Type Definitions
@@ -125,20 +126,18 @@ export class HumanAnalyticsDetector extends BaseDetector {
     console.log("Initializing Human Analytics detector...");
     
     try {
-      // TODO: Load ONNX models
-      // const ort = await import('onnxruntime-node');
-      // this.yoloModel = await ort.InferenceSession.create('/app/models/detection/yolov8m.onnx');
-      // this.osnetModel = await ort.InferenceSession.create('/app/models/tracking/osnet_x1_0.onnx');
-      // this.poseModel = await ort.InferenceSession.create('/app/models/detection/yolov8n-pose.onnx');
-      
-      this.isModelLoaded = true;
+      // Use the unified inference pipeline to determine model availability
+      const pipeline = getInferencePipeline();
+      // Ensure pipeline is initialized elsewhere; if not, this detector is still useful as a consumer
+      this.isModelLoaded = pipeline.isReady();
+
       this.startTrackingCleanup();
       this.startBehaviorAnalysis();
-      
+
       console.log("Human Analytics detector initialized successfully");
-      console.log("- Person detection: YOLOv8");
-      console.log("- Re-ID: OSNet");
-      console.log("- Pose estimation: YOLOv8-Pose");
+      console.log("- Person detection: YOLOv8 (via unified pipeline)");
+      console.log("- Re-ID: OSNet (via unified pipeline)");
+      console.log("- Pose estimation: YOLOv8-Pose (via unified pipeline)");
     } catch (error) {
       console.error("Failed to initialize Human Analytics:", error);
       throw error;
@@ -191,16 +190,23 @@ export class HumanAnalyticsDetector extends BaseDetector {
   // ============================================================================
 
   private async detectPersons(frame: DetectionFrame): Promise<any[]> {
-    // TODO: Implement YOLOv8 inference
-    /*
-    const input = this.preprocessFrame(frame);
-    const output = await this.yoloModel.run({ images: input });
-    const detections = this.postprocessYOLO(output);
-    return detections.filter(d => d.class === 'person' && d.confidence >= this.MIN_CONFIDENCE);
-    */
-    
-    // Placeholder: Return empty array until models are loaded
-    return [];
+    // Delegate to unified pipeline object detector for 'person' labels
+    try {
+      const pipeline = getInferencePipeline();
+      const detections = await pipeline.detectObjects(frame, ['person']);
+      // Keep only high-confidence detections
+      const filtered = detections.filter(d => d.confidence >= this.MIN_CONFIDENCE).map(d => ({
+        boundingBox: d.boundingBox, // normalized coordinates
+        confidence: d.confidence,
+        label: d.label,
+        trackId: d.trackId,
+        attributes: d.attributes ?? {},
+      }));
+      return filtered;
+    } catch (error) {
+      console.warn('detectPersons failed:', error);
+      return [];
+    }
   }
 
   // ============================================================================
@@ -208,29 +214,59 @@ export class HumanAnalyticsDetector extends BaseDetector {
   // ============================================================================
 
   private async updateTracking(detections: any[], frame: DetectionFrame): Promise<void> {
-    const now = frame.timestamp;
-    const activeTrackIds = new Set<string>();
+    try {
+      const pipeline = getInferencePipeline();
+      // Let the pipeline tracker assign track IDs
+      const timestamp = frame.timestamp || new Date();
+      const tracked = pipeline.updateTracking(detections as any, timestamp, 'person');
 
-    for (const detection of detections) {
-      // Find best matching track using IoU + appearance features
-      const matchedTrack = this.findMatchingTrack(detection);
+      const now = timestamp;
+      const activeTrackIds = new Set<string>();
 
-      if (matchedTrack) {
-        // Update existing track
-        this.updateTrack(matchedTrack, detection, now);
-        activeTrackIds.add(matchedTrack.trackId);
-      } else {
-        // Create new track
-        const newTrack = this.createNewTrack(detection, now);
-        this.tracks.set(newTrack.trackId, newTrack);
-        activeTrackIds.add(newTrack.trackId);
+      for (const det of tracked) {
+        const trackId: string = (det as any).trackId ?? `person_${randomUUID().substring(0,8)}`;
+        activeTrackIds.add(trackId);
+
+        const existing = this.tracks.get(trackId);
+        const bbox = (det as any).boundingBox;
+        if (existing) {
+          this.updateTrack(existing, { boundingBox: bbox, confidence: det.confidence }, now);
+        } else {
+          const newTrack = this.createNewTrack({ boundingBox: bbox, confidence: det.confidence, trackId }, now);
+          newTrack.trackId = trackId;
+          this.tracks.set(trackId, newTrack);
+        }
       }
-    }
 
-    // Mark inactive tracks
-    for (const [trackId, track] of this.tracks.entries()) {
-      if (!activeTrackIds.has(trackId)) {
-        track.lastSeen = now;
+      // Mark inactive tracks
+      for (const [trackId, track] of this.tracks.entries()) {
+        if (!activeTrackIds.has(trackId)) {
+          track.lastSeen = now;
+        }
+      }
+    } catch (error) {
+      console.warn('updateTracking pipeline failed:', error);
+      // Fallback: keep existing logic
+      const now = frame.timestamp;
+      const activeTrackIds = new Set<string>();
+
+      for (const detection of detections) {
+        const matchedTrack = this.findMatchingTrack(detection);
+
+        if (matchedTrack) {
+          this.updateTrack(matchedTrack, detection, now);
+          activeTrackIds.add(matchedTrack.trackId);
+        } else {
+          const newTrack = this.createNewTrack(detection, now);
+          this.tracks.set(newTrack.trackId, newTrack);
+          activeTrackIds.add(newTrack.trackId);
+        }
+      }
+
+      for (const [trackId, track] of this.tracks.entries()) {
+        if (!activeTrackIds.has(trackId)) {
+          track.lastSeen = now;
+        }
       }
     }
   }
@@ -319,21 +355,30 @@ export class HumanAnalyticsDetector extends BaseDetector {
   // ============================================================================
 
   private async extractReIdFeatures(persons: any[], frame: DetectionFrame): Promise<void> {
-    for (const person of persons) {
-      // TODO: Extract 512-dim feature vector using OSNet
-      /*
-      const crop = this.cropFrame(frame, person.boundingBox);
-      const input = this.preprocessForOSNet(crop);
-      const output = await this.osnetModel.run({ input });
-      const feature = output.features.data;  // 512-dim vector
-      
-      // Store in track
-      const track = this.findTrackByBoundingBox(person.boundingBox);
-      if (track) {
-        track.reIdFeature = Array.from(feature);
-        track.reIdConfidence = person.confidence;
+    try {
+      const pipeline = getInferencePipeline();
+      for (const person of persons) {
+        // Use pipeline to extract person embedding (if available)
+        try {
+          const embedding = await pipeline.extractPersonEmbedding(frame, person.boundingBox);
+          if (!embedding) continue;
+          const trackId = person.trackId;
+          let track: PersonTrack | undefined;
+          if (trackId) track = this.tracks.get(trackId);
+          if (!track) {
+            // fallback: find by IoU
+            track = this.findMatchingTrack(person);
+          }
+          if (track) {
+            track.reIdFeature = embedding;
+            track.reIdConfidence = person.confidence ?? 1;
+          }
+        } catch (inner) {
+          // ignore per-person failures
+        }
       }
-      */
+    } catch (error) {
+      console.warn('extractReIdFeatures failed:', error);
     }
   }
 
@@ -428,15 +473,17 @@ export class HumanAnalyticsDetector extends BaseDetector {
   }
 
   private async estimatePose(track: PersonTrack, frame: DetectionFrame): Promise<PoseKeypoints | null> {
-    // TODO: Implement YOLOv8-Pose inference
-    /*
-    const lastPos = track.positions[track.positions.length - 1];
-    const crop = this.cropFrame(frame, lastPos.boundingBox);
-    const input = this.preprocessForPose(crop);
-    const output = await this.poseModel.run({ images: input });
-    return this.parsePoseKeypoints(output);
-    */
-    return null;
+    try {
+      const pipeline = getInferencePipeline();
+      const lastPos = track.positions[track.positions.length - 1];
+      if (!lastPos || !lastPos.boundingBox) return null;
+      // Assume boundingBox stored in normalized coordinates
+      const pose = await pipeline.estimatePose(frame, lastPos.boundingBox as any);
+      return pose;
+    } catch (error) {
+      console.warn('estimatePose failed:', error);
+      return null;
+    }
   }
 
   private classifyActivity(pose: PoseKeypoints): BehaviorEvent['behavior'] | null {

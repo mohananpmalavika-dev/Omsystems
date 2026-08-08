@@ -127,9 +127,14 @@ export class CrowdDensityDetector extends BaseDetector {
    * Detect persons in frame
    */
   private async detectPersonsInFrame(frame: DetectionFrame): Promise<any[]> {
-    // TODO: Use person detector
-    // For crowd counting, can also use specialized crowd counting networks
-    return [];
+    try {
+      const pipeline = await import('../inference/unified-inference-pipeline.js').then(m => m.getInferencePipeline());
+      const persons = await pipeline.detectObjects(frame, ['person']).catch(() => []);
+      return persons || [];
+    } catch (error) {
+      console.warn('detectPersonsInFrame failed:', error);
+      return [];
+    }
   }
 
   /**

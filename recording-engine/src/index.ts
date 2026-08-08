@@ -20,6 +20,11 @@ import { AlertEvidenceCaptureService } from "./alert-evidence-capture.js";
 import { S3EvidenceArchive } from "./s3-evidence-archive.js";
 import { permitsSentinelTimelineWorker } from "./recording-policy.js";
 
+// Export storage health monitoring modules
+export { storageHealthAgent, type StorageHealthReport, type PhysicalDisk, type RaidArray, type StorageRiskLevel, type DiskType, type RaidType, type SmartData } from "./storage-health-agent.js";
+export { StorageMonitoringService, createStorageMonitoringService, type StorageMonitoringConfig, type StorageAlert } from "./storage-monitoring-service.js";
+export { createStorageAdapter, type StorageMetrics, type StorageStatus, type StorageType, type RaidStatus, type SmartStats, type RaidStats } from "./storage-adapter.js";
+
 const serviceUrl = z.preprocess((value) => {
   if (typeof value !== "string") return value;
   return /^[a-z][a-z\d+.-]*:\/\//i.test(value) ? value : `http://${value}`;

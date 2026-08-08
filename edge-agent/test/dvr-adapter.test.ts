@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   discoverRecorderChannels,
+  discoverVendorRecorderChannels,
+  inferRecorderChannelCount,
   recorderAdapterVendor,
   recorderChannelIdentity,
   recorderChannelNumber,
@@ -78,5 +80,31 @@ describe("universal DVR channel adapter", () => {
       { token: "unknown", name: "unknown" },
       "rtsp://192.0.2.1/cam/realmonitor?channel=12&subtype=0",
     )).toBe(12);
+  });
+
+  it("infers real-world recorder channel counts from labels and model numbers", () => {
+    expect(inferRecorderChannelCount("XVR 8 Channel")).toBe(8);
+    expect(inferRecorderChannelCount("DH-XVR1B08-I")).toBe(8);
+    expect(inferRecorderChannelCount("DS-7216HQHI DVR")).toBe(16);
+  });
+
+  it("uses vendor paths only for channels not already verified through ONVIF", async () => {
+    const probeStream = vi.fn(async () => ({
+      reachable: true, codec: "h264", width: 1920, height: 1080,
+    }));
+
+    const channels = await discoverVendorRecorderChannels({
+      manufacturer: "CP PLUS",
+      model: "XVR 4 Channel",
+      host: "192.0.2.20",
+      credentials: { username: "admin", password: "secret" },
+      existingChannels: [1, 2],
+      probeStream,
+    });
+
+    expect(channels.map((channel) => channel.sourceChannel)).toEqual([3, 4]);
+    expect(channels.every((channel) => channel.streamVerified)).toBe(true);
+    expect(channels.every((channel) => channel.reasonCodes.includes("vendor_adapter_fallback"))).toBe(true);
+    expect(probeStream).toHaveBeenCalledTimes(2);
   });
 });

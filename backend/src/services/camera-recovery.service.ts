@@ -4,6 +4,8 @@
  */
 
 import type { Pool } from "pg";
+import os from "os";
+import { RedisLock } from "./redisLock";
 import { logger } from "../utils/logger.js";
 import type { CameraDevice } from "./camera-monitor.service.js";
 
@@ -18,6 +20,7 @@ export type RecoveryStep =
   | "manual_intervention";
 
 export interface RecoveryWorkflow {
+  lockKey?: string;
   id: string;
   cameraId: string;
   tenantId: string;
@@ -57,6 +60,8 @@ export class CameraRecoveryService {
   private pool: Pool;
   private config: RecoveryConfig;
   private activeWorkflows: Map<string, RecoveryWorkflow>;
+  private redisLock?: RedisLock;
+  private holderId: string;
 
   // Default recovery sequence
   private readonly DEFAULT_RECOVERY_SEQUENCE: RecoveryStep[] = [
@@ -71,7 +76,12 @@ export class CameraRecoveryService {
   constructor(pool: Pool, config?: Partial<RecoveryConfig>) {
     this.pool = pool;
     this.activeWorkflows = new Map();
-    
+    this.holderId = `${process.env.INSTANCE_ID || os.hostname()}:${process.pid}`;
+
+    if (process.env.REDIS_LOCKS === "true") {
+      this.redisLock = new RedisLock("recovery:camera");
+    }
+
     this.config = {
       enableAutoRecovery: config?.enableAutoRecovery ?? true,
       maxAutoAttempts: config?.maxAutoAttempts ?? 3,
@@ -91,10 +101,26 @@ export class CameraRecoveryService {
       throw new Error("Auto recovery is disabled");
     }
 
-    // Check if recovery is already in progress
+    // Attempt to acquire a distributed lock (if enabled) to avoid duplicate recovery across instances
+    const lockKey = camera.id;
+    if (this.redisLock) {
+      const acquired = await this.redisLock.acquire(lockKey, this.holderId, 2 * 60 * 1000);
+      if (!acquired) {
+        logger.info(`Recovery already being handled by another instance for camera ${camera.id}`);
+        const existing = this.activeWorkflows.get(camera.id);
+        if (existing) return existing;
+        throw new Error("Recovery is currently handled by another instance");
+      }
+    }
+
+    // Check if recovery is already in progress locally
     const existing = this.activeWorkflows.get(camera.id);
     if (existing && existing.status === "in_progress") {
       logger.info(`Recovery already in progress for camera ${camera.id}`);
+      // release lock if we acquired it and local workflow exists
+      if (this.redisLock) {
+        await this.redisLock.release(lockKey, this.holderId);
+      }
       return existing;
     }
 
@@ -118,6 +144,7 @@ export class CameraRecoveryService {
       attempts: 0,
       maxAttempts: this.config.maxAutoAttempts,
       logs: [],
+      lockKey,
     };
 
     this.activeWorkflows.set(camera.id, workflow);
@@ -213,6 +240,11 @@ export class CameraRecoveryService {
         if (isOnline) {
           workflow.status = "success";
           await this.logRecoverySuccess(camera, workflow);
+          if (workflow.lockKey && this.redisLock) {
+            await this.redisLock.release(workflow.lockKey, this.holderId).catch((err) => {
+              logger.warn("Failed to release recovery lock", { error: err, cameraId: camera.id });
+            });
+          }
           this.activeWorkflows.delete(camera.id);
           return;
         }
@@ -231,6 +263,12 @@ export class CameraRecoveryService {
       workflow.status = "failed";
       await this.logRecoveryFailure(camera, workflow);
       await this.escalateRecovery(camera, workflow);
+    }
+
+    if (workflow.lockKey && this.redisLock) {
+      await this.redisLock.release(workflow.lockKey, this.holderId).catch((err) => {
+        logger.warn("Failed to release recovery lock", { error: err, cameraId: camera.id });
+      });
     }
 
     this.activeWorkflows.delete(camera.id);
@@ -284,6 +322,12 @@ export class CameraRecoveryService {
       await this.logRecoverySuccess(camera, workflow);
     } else {
       await this.logRecoveryFailure(camera, workflow);
+    }
+
+    if (workflow.lockKey && this.redisLock) {
+      await this.redisLock.release(workflow.lockKey, this.holderId).catch((err) => {
+        logger.warn("Failed to release recovery lock", { error: err, cameraId: camera.id });
+      });
     }
 
     this.activeWorkflows.delete(camera.id);

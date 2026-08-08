@@ -4,6 +4,7 @@ import { createReadStream } from "node:fs";
 import { mkdir, readFile, stat, statfs, unlink, writeFile } from "node:fs/promises";
 import { join, resolve, sep } from "node:path";
 import { promisify } from "node:util";
+import { storageHealthAgent, type StorageHealthReport } from "./storage-health-agent.js";
 
 export type StorageStatus = "healthy" | "warning" | "critical" | "offline";
 export type StorageType = "local-disk" | "nfs" | "smb" | "s3" | "cloud-archive" | "san";
@@ -58,6 +59,7 @@ export interface StorageMetrics {
   smart?: SmartStats;
   raid?: RaidStats;
   lastWriteProbe?: StorageProbeResult;
+  healthReport?: StorageHealthReport; // Comprehensive storage health from Storage Health Agent
 }
 
 export interface StorageDestinationAdapter {
@@ -82,9 +84,9 @@ export class LocalDiskStorageAdapter implements StorageDestinationAdapter {
   constructor(private readonly options: StorageAdapterOptions) {}
 
   async getMetrics(): Promise<StorageMetrics> {
-    const disk = await statfs(this.options.recordingRoot);
-    const capacityBytes = disk.blocks * disk.bsize;
-    const availableBytes = disk.bavail * disk.bsize;
+    const fsStats = await statfs(this.options.recordingRoot);
+    const capacityBytes = fsStats.blocks * fsStats.bsize;
+    const availableBytes = fsStats.bavail * fsStats.bsize;
     const usedBytes = Math.max(0, capacityBytes - availableBytes);
     const usedPercent = capacityBytes > 0 ? usedBytes / capacityBytes * 100 : 100;
     const status: StorageStatus = usedPercent >= 95
@@ -93,8 +95,41 @@ export class LocalDiskStorageAdapter implements StorageDestinationAdapter {
         ? "warning"
         : "healthy";
 
-    const smart = await this.getSmartStats();
-    const raid = await this.getRaidStats();
+    // Get comprehensive storage health report from Storage Health Agent
+    const healthReport = await storageHealthAgent.getHealthReport();
+
+    // Find the disk that matches our mount path
+    const mountPath = resolve(this.options.recordingRoot);
+    const physicalDisk = healthReport.physicalDisks.find((d) => d.mountPoint === mountPath);
+
+    // Use data from health report for SMART and RAID
+    const smart = physicalDisk?.smart ? {
+      overallStatus: physicalDisk.smart.overallStatus,
+      reallocatedSectors: physicalDisk.smart.reallocatedSectors,
+      pendingSectors: physicalDisk.smart.pendingSectors,
+      uncorrectableSectors: physicalDisk.smart.uncorrectableSectors,
+      temperatureCelsius: physicalDisk.smart.temperatureCelsius,
+      powerOnHours: physicalDisk.smart.powerOnHours,
+      readErrors: physicalDisk.smart.readErrors,
+      writeErrors: physicalDisk.smart.writeErrors,
+      remainingSsdLifePercent: physicalDisk.smart.remainingSsdLifePercent,
+      interfaceCrcErrors: physicalDisk.smart.interfaceCrcErrors,
+    } : undefined;
+
+    // Find RAID array that includes our disk
+    const raidArray = healthReport.raidArrays.find((r) => 
+      physicalDisk && r.memberDisks.includes(physicalDisk.devicePath)
+    );
+
+    const raid = raidArray ? {
+      status: raidArray.status,
+      level: raidArray.level,
+      memberDisks: raidArray.memberDisks,
+      failedMembers: raidArray.failedMembers,
+      rebuildProgressPercent: raidArray.rebuildProgressPercent,
+      hotSpareStatus: raidArray.spareMemberCount && raidArray.spareMemberCount > 0 ? "active" : "inactive",
+      controllerHealth: raidArray.controllerHealth,
+    } : undefined;
 
     return {
       capacityBytes,
@@ -105,9 +140,10 @@ export class LocalDiskStorageAdapter implements StorageDestinationAdapter {
       storageType: this.options.storageType,
       location: this.options.location,
       supportedProtocols: this.options.supportedProtocols,
-      mountPath: resolve(this.options.recordingRoot),
+      mountPath,
       smart,
       raid,
+      healthReport, // Include full health report for comprehensive monitoring
     };
   }
 
@@ -164,79 +200,6 @@ export class LocalDiskStorageAdapter implements StorageDestinationAdapter {
         error: error instanceof Error ? error.message : String(error),
       };
     }
-  }
-
-  private async getSmartStats(): Promise<SmartStats> {
-    try {
-      const { stdout } = await execFileAsync("smartctl", ["-n", "standby", "-A", "/dev/sda"], { timeout: 5_000 });
-      const lines = stdout.split(/\r?\n/);
-      const tempLine = lines.find((line) => /Temperature_Celsius|Temperature/i.test(line));
-      const tempValue = tempLine ? Number(tempLine.match(/(\d+)/)?.[1]) : undefined;
-      const powerLine = lines.find((line) => /Power_On_Hours/i.test(line));
-      const powerOnHours = powerLine ? Number(powerLine.match(/(\d+)/)?.[1]) : undefined;
-      const reallocatedLine = lines.find((line) => /Reallocated_Sector_Ct/i.test(line));
-      const pendingLine = lines.find((line) => /Current_Pending_Sector/i.test(line));
-      const uncorrectableLine = lines.find((line) => /Offline_Uncorrectable/i.test(line));
-      const readErrorsLine = lines.find((line) => /Raw_Read_Error_Rate/i.test(line));
-      const writeErrorsLine = lines.find((line) => /Write_Error_Rate/i.test(line));
-      const lifeLine = lines.find((line) => /remaining_life|wear_leveling/i.test(line));
-      const lifeValue = lifeLine ? Number(lifeLine.match(/(\d+)/)?.[1]) : undefined;
-      const crcLine = lines.find((line) => /CRC/i.test(line));
-      return {
-        overallStatus: /FAIL|BAD|UNKNOWN/i.test(stdout) ? "failed" : "passed",
-        reallocatedSectors: reallocatedLine ? Number(reallocatedLine.match(/(\d+)/)?.[1] ?? 0) : 0,
-        pendingSectors: pendingLine ? Number(pendingLine.match(/(\d+)/)?.[1] ?? 0) : 0,
-        uncorrectableSectors: uncorrectableLine ? Number(uncorrectableLine.match(/(\d+)/)?.[1] ?? 0) : 0,
-        temperatureCelsius: Number.isFinite(tempValue) ? tempValue : undefined,
-        powerOnHours: Number.isFinite(powerOnHours) ? powerOnHours : undefined,
-        readErrors: readErrorsLine ? Number(readErrorsLine.match(/(\d+)/)?.[1] ?? 0) : 0,
-        writeErrors: writeErrorsLine ? Number(writeErrorsLine.match(/(\d+)/)?.[1] ?? 0) : 0,
-        remainingSsdLifePercent: Number.isFinite(lifeValue) ? Math.min(100, lifeValue) : undefined,
-        interfaceCrcErrors: crcLine ? Number(crcLine.match(/(\d+)/)?.[1] ?? 0) : 0,
-      };
-    } catch {
-      return {
-        overallStatus: "unknown",
-        reallocatedSectors: 0,
-        pendingSectors: 0,
-        uncorrectableSectors: 0,
-        temperatureCelsius: undefined,
-        powerOnHours: undefined,
-        readErrors: 0,
-        writeErrors: 0,
-        remainingSsdLifePercent: undefined,
-        interfaceCrcErrors: 0,
-      };
-    }
-  }
-
-  private async getRaidStats(): Promise<RaidStats> {
-    try {
-      const { stdout } = await execFileAsync("mdadm", ["--detail", "--scan"], { timeout: 5_000 });
-      const levelMatch = stdout.match(/raid([0-9]+)/i);
-      const memberMatches = stdout.match(/\b([a-zA-Z0-9/_.-]+)\b/g) ?? [];
-      const members = memberMatches.filter((item) => /sd|vd|nvme/.test(item)).slice(0, 4);
-      return {
-        status: "healthy",
-        level: levelMatch ? `RAID${levelMatch[1]}` : undefined,
-        memberDisks: members,
-        failedMembers: [],
-        rebuildProgressPercent: 0,
-        hotSpareStatus: "inactive",
-        controllerHealth: "healthy",
-      };
-    } catch {
-      return {
-        status: "unknown",
-        level: undefined,
-        memberDisks: [],
-        failedMembers: [],
-        rebuildProgressPercent: undefined,
-        hotSpareStatus: "unknown",
-        controllerHealth: "unknown",
-      };
-    }
-  }
 }
 
 export class NfsStorageAdapter implements StorageDestinationAdapter {

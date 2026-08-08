@@ -5,7 +5,8 @@
  */
 
 import { randomUUID } from "node:crypto";
-import { BaseDetector, type DetectionFrame, type DetectionResult } from "./base-detector.js";
+import { BaseDetector, type DetectionFrame, type DetectionResult, calculateIoU } from "./base-detector.js";
+import { getInferencePipeline } from "../inference/unified-inference-pipeline.js";
 
 // ============================================================================
 // Type Definitions
@@ -237,25 +238,28 @@ export class SafetyAnalyticsDetector extends BaseDetector {
   // ============================================================================
 
   private async detectPPE(frame: DetectionFrame): Promise<PPEDetection[]> {
-    // TODO: Implement custom YOLOv8 PPE detection
-    /*
-    const input = this.preprocessFrame(frame);
-    const output = await this.ppeModel.run({ images: input });
-    const detections = this.postprocessYOLO(output);
-    
-    return detections
-      .filter(d => d.confidence >= this.PPE_CONFIDENCE_THRESHOLD)
-      .map(d => ({
-        detectionId: `ppe_${randomUUID().substring(0, 8)}`,
-        ppeType: d.class as PPEType,
-        isWearing: true,
-        confidence: d.confidence,
-        boundingBox: d.boundingBox,
-        timestamp: frame.timestamp,
-      }));
-    */
-    
-    return [];
+    try {
+      const pipeline = getInferencePipeline();
+      const detections = await pipeline.detectObjects(frame, this.PPE_CLASSES.map(c => String(c)));
+      if (!detections || detections.length === 0) return [];
+
+      const ppeResults: PPEDetection[] = detections
+        .filter(d => d.confidence >= this.PPE_CONFIDENCE_THRESHOLD)
+        .map(d => ({
+          detectionId: `ppe_${randomUUID().substring(0, 8)}`,
+          personTrackId: undefined,
+          ppeType: d.label as PPEType,
+          isWearing: true,
+          confidence: d.confidence,
+          boundingBox: d.boundingBox,
+          timestamp: frame.timestamp,
+        }));
+
+      return ppeResults;
+    } catch (error) {
+      console.warn('detectPPE pipeline failed:', error);
+      return [];
+    }
   }
 
   // ============================================================================
@@ -269,7 +273,7 @@ export class SafetyAnalyticsDetector extends BaseDetector {
     const complianceChecks: PPECompliance[] = [];
 
     // Group PPE detections by person (spatial proximity)
-    const personPPEMap = this.groupPPEByPerson(ppeDetections);
+    const personPPEMap = await this.groupPPEByPerson(ppeDetections, frame);
 
     for (const [personTrackId, detections] of personPPEMap.entries()) {
       // Determine required PPE based on zone
@@ -313,17 +317,41 @@ export class SafetyAnalyticsDetector extends BaseDetector {
     return complianceChecks;
   }
 
-  private groupPPEByPerson(detections: PPEDetection[]): Map<string, PPEDetection[]> {
-    // TODO: Use person detection to associate PPE with specific persons
-    // For now, group by spatial proximity
+  private async groupPPEByPerson(detections: PPEDetection[], frame: DetectionFrame): Promise<Map<string, PPEDetection[]>> {
     const grouped = new Map<string, PPEDetection[]>();
-    
-    // Simplified: Assume all PPE belongs to "person_unknown"
-    if (detections.length > 0) {
+    if (!detections || detections.length === 0) return grouped;
+
+    try {
+      const pipeline = getInferencePipeline();
+      const persons = await pipeline.detectObjects(frame, ['person']).catch(() => []);
+      if (!persons || persons.length === 0) {
+        grouped.set('person_unknown', detections);
+        return grouped;
+      }
+
+      // For each PPE detection, find the person with highest IoU
+      for (const ppe of detections) {
+        let bestPersonId = 'person_unknown';
+        let bestIoU = 0;
+
+        for (const person of persons) {
+          const iou = this.calculateIoU(ppe.boundingBox, person.boundingBox);
+          if (iou > bestIoU) {
+            bestIoU = iou;
+            bestPersonId = (person as any).trackId ?? `person_${randomUUID().substring(0,8)}`;
+          }
+        }
+
+        if (!grouped.has(bestPersonId)) grouped.set(bestPersonId, []);
+        grouped.get(bestPersonId)!.push(ppe);
+      }
+
+      return grouped;
+    } catch (error) {
+      console.warn('groupPPEByPerson failed:', error);
       grouped.set('person_unknown', detections);
+      return grouped;
     }
-    
-    return grouped;
   }
 
   private normalizePPEType(ppeType: PPEType): PPEType {
@@ -398,18 +426,18 @@ export class SafetyAnalyticsDetector extends BaseDetector {
   // ============================================================================
 
   private async detectFireSmoke(frame: DetectionFrame): Promise<HazardDetection[]> {
-    // TODO: Implement fire/smoke detection
-    /*
-    const input = this.preprocessFrame(frame);
-    const output = await this.fireSmokeModel.run({ images: input });
-    const detections = this.postprocessFireSmoke(output);
-    
-    return detections
-      .filter(d => d.confidence >= this.FIRE_CONFIDENCE_THRESHOLD)
-      .map(d => this.createHazardDetection(d, frame.timestamp));
-    */
-    
-    return [];
+    try {
+      const pipeline = getInferencePipeline();
+      const detections = await pipeline.detectFireSmoke(frame);
+      if (!detections || detections.length === 0) return [];
+
+      return detections
+        .filter(d => d.confidence >= this.FIRE_CONFIDENCE_THRESHOLD)
+        .map(d => this.createHazardDetection(d as any, frame.timestamp));
+    } catch (error) {
+      console.warn('detectFireSmoke pipeline failed:', error);
+      return [];
+    }
   }
 
   private createHazardDetection(detection: any, timestamp: Date): HazardDetection {

@@ -19,6 +19,7 @@ import type {
   ComplianceFramework,
   CompliancePolicy,
   DiscoveredCamera,
+  DeviceIdentity,
   EdgeActivation,
   EdgeAgent,
   EdgeManagedTunnel,
@@ -64,6 +65,13 @@ import type {
   OperationalReportSchedule, OperationalReportRun, OperationalReportArtifact,
   OperationalReportDelivery,
 } from "./reporting/types.js";
+import {
+  identityClaims,
+  normalizeMacAddress,
+  observationFromApproval,
+  observationFromDiscovery,
+  type DeviceIdentityObservation,
+} from "./device-identity.js";
 
 function correlationCount(metadata?: Record<string, unknown>) {
   const explicit = metadata?.correlatedDetectionCount;
@@ -209,7 +217,7 @@ const seedGrants: AccessGrant[] = [
 
 const seedCameras: Camera[] = [
   {
-    id: "cam-001", nodeId: "camera-entrance", branchId: "branch-blr-001",
+    id: "cam-001", deviceIdentityId: "device-cam-001", nodeId: "camera-entrance", branchId: "branch-blr-001",
     name: "Main Entrance",
     vendor: "hikvision", model: "DS-2CD example", channel: 1,
     protocol: "onvif-t", status: "online",
@@ -218,7 +226,7 @@ const seedCameras: Camera[] = [
     connectionSecretRef: "vault://branches/blr-001/cameras/001",
   },
   {
-    id: "cam-002", nodeId: "camera-cash-room", branchId: "branch-blr-001",
+    id: "cam-002", deviceIdentityId: "device-cam-002", nodeId: "camera-cash-room", branchId: "branch-blr-001",
     name: "Cash Room",
     vendor: "cp-plus", model: "CP-UNC example", channel: 2,
     protocol: "onvif-s", status: "degraded",
@@ -228,10 +236,26 @@ const seedCameras: Camera[] = [
   },
 ];
 
+const seedDeviceIdentities: DeviceIdentity[] = seedCameras.map((camera) => ({
+  deviceId: camera.deviceIdentityId!,
+  tenantId,
+  branchId: camera.branchId,
+  cameraId: camera.id,
+  deviceType: camera.sourceType ?? "ip-camera",
+  manufacturer: camera.vendor,
+  model: camera.model,
+  credentialRef: camera.connectionSecretRef,
+  ipHistory: [],
+  firstSeenAt: new Date(0).toISOString(),
+  lastSeenAt: new Date(0).toISOString(),
+}));
+
 export class MemoryStore implements ControlPlaneStore {
   readonly nodes = new Map(seedNodes.map((node) => [node.id, structuredClone(node)]));
   readonly users = new Map(seedUsers.map((user) => [user.id, structuredClone(user)]));
   readonly cameras = new Map(seedCameras.map((camera) => [camera.id, structuredClone(camera)]));
+  readonly deviceIdentities = new Map(seedDeviceIdentities.map((identity) => [identity.deviceId, structuredClone(identity)]));
+  readonly deviceIdentityClaims = new Map<string, string>();
   readonly grants = structuredClone(seedGrants);
   readonly edgeAgents = new Map<string, EdgeAgent>();
   readonly edgeScanJobs = new Map<string, EdgeScanJob>();
@@ -356,6 +380,11 @@ export class MemoryStore implements ControlPlaneStore {
 
   async getCamera(id: string) {
     return this.cameras.get(id);
+  }
+
+  async getDeviceIdentityByCamera(cameraId: string) {
+    const identity = [...this.deviceIdentities.values()].find((item) => item.cameraId === cameraId);
+    return identity ? structuredClone(identity) : undefined;
   }
 
   async listCamerasByBranch(user: User, branchId: string, action: Action) {
@@ -725,19 +754,111 @@ export class MemoryStore implements ControlPlaneStore {
     return job;
   }
 
+  private resolveDeviceIdentity(branchId: string, observation: DeviceIdentityObservation) {
+    const branch = this.nodes.get(branchId);
+    if (!branch) throw new Error("invalid_branch");
+    const claims = identityClaims(observation);
+    const claimKeys = claims.map((claim) => `${branch.tenantId}:${claim.type}:${claim.value}`);
+    let identity = claimKeys
+      .map((key) => this.deviceIdentities.get(this.deviceIdentityClaims.get(key) ?? ""))
+      .find((candidate): candidate is DeviceIdentity => Boolean(candidate));
+    if (!identity && claims.length === 0 && observation.ipAddress) {
+      identity = [...this.deviceIdentities.values()].find((candidate) =>
+        candidate.branchId === branchId &&
+        candidate.deviceType === observation.deviceType &&
+        candidate.currentIpAddress === observation.ipAddress &&
+        candidate.channel === observation.channel
+      );
+    }
+
+    const observedAt = new Date().toISOString();
+    if (!identity) {
+      identity = {
+        deviceId: randomUUID(),
+        tenantId: branch.tenantId,
+        branchId,
+        deviceType: observation.deviceType,
+        ipHistory: [],
+        firstSeenAt: observedAt,
+        lastSeenAt: observedAt,
+      };
+      this.deviceIdentities.set(identity.deviceId, identity);
+    }
+
+    Object.assign(identity, clean({
+      branchId,
+      deviceType: observation.deviceType,
+      hardwareSerial: observation.hardwareSerial,
+      manufacturer: observation.manufacturer,
+      model: observation.model,
+      firmwareVersion: observation.firmwareVersion,
+      macAddress: normalizeMacAddress(observation.macAddress) ?? observation.macAddress,
+      currentIpAddress: observation.ipAddress,
+      onvifUuid: observation.onvifUuid,
+      dvrSerialNumber: observation.dvrSerialNumber,
+      channel: observation.channel,
+      certificateRef: observation.certificateRef,
+      certificateFingerprint: observation.certificateFingerprint,
+      credentialRef: observation.credentialRef,
+      agentId: observation.agentId,
+      lastSeenAt: observedAt,
+    }));
+
+    for (const key of claimKeys) {
+      const existingIdentityId = this.deviceIdentityClaims.get(key);
+      if (!existingIdentityId || existingIdentityId === identity.deviceId) {
+        this.deviceIdentityClaims.set(key, identity.deviceId);
+      }
+    }
+
+    if (observation.ipAddress) {
+      const address = identity.ipHistory.find((item) => item.ipAddress === observation.ipAddress);
+      if (address) {
+        address.lastSeenAt = observedAt;
+        address.observationCount += 1;
+        if (observation.agentId) address.agentId = observation.agentId;
+      } else {
+        identity.ipHistory.push({
+          ipAddress: observation.ipAddress,
+          ...(observation.agentId ? { agentId: observation.agentId } : {}),
+          firstSeenAt: observedAt,
+          lastSeenAt: observedAt,
+          observationCount: 1,
+        });
+      }
+    }
+
+    if (identity.cameraId) {
+      const camera = this.cameras.get(identity.cameraId);
+      if (camera) {
+        Object.assign(camera, clean({
+          deviceIdentityId: identity.deviceId,
+          edgeAgentId: observation.agentId,
+          serialNumber: observation.hardwareSerial,
+          macAddress: observation.macAddress,
+          firmwareVersion: observation.firmwareVersion,
+          ipAddress: observation.ipAddress,
+          onvifUuid: observation.onvifUuid,
+          certificateRef: observation.certificateRef,
+          certificateFingerprint: observation.certificateFingerprint,
+          firstSeenAt: identity.firstSeenAt,
+          lastSeenAt: identity.lastSeenAt,
+        }));
+      }
+    }
+    return identity;
+  }
+
   async createDiscovery(branchId: string, input: CameraDiscoveryInput) {
     const agent = this.edgeAgents.get(input.edgeAgentId);
     if (!agent || agent.branchId !== branchId) throw new Error("invalid_edge_agent");
 
     const normalized = structuredClone(input);
-    const fingerprintCandidates = [
-      normalized.serialNumber,
-      normalized.macAddress,
-      normalized.onvifEndpointReference,
-      normalized.hardwareId,
-      normalized.existingDeviceAssociation,
-      `${normalized.manufacturer ?? ""}::${normalized.model}`,
-    ].filter((candidate): candidate is string => Boolean(candidate && candidate.trim()));
+    normalized.discoveryLayers = [
+      ...(normalized.discoveryLayers ?? []),
+      { layer: "register", status: "passed", detail: "Control plane registration completed" },
+    ];
+    const identity = this.resolveDeviceIdentity(branchId, observationFromDiscovery(normalized));
 
     const existing = [...this.discoveries.values()].find((item) => {
       const sameBranch = item.branchId === branchId;
@@ -746,32 +867,11 @@ export class MemoryStore implements ControlPlaneStore {
         item.recorderChannel === normalized.recorderChannel ||
         (item.recorderChannel === undefined && normalized.recorderChannel === undefined)
       );
-      const sameSerial = Boolean(item.serialNumber && normalized.serialNumber && item.serialNumber === normalized.serialNumber);
-      const sameMac = Boolean(item.macAddress && normalized.macAddress && item.macAddress === normalized.macAddress);
-      const sameOnvif = Boolean(item.onvifEndpointReference && normalized.onvifEndpointReference && item.onvifEndpointReference === normalized.onvifEndpointReference);
-      const sameHardware = Boolean(item.hardwareId && normalized.hardwareId && item.hardwareId === normalized.hardwareId);
-      const sameAssociation = Boolean(
-        item.existingDeviceAssociation && normalized.existingDeviceAssociation &&
-        item.existingDeviceAssociation === normalized.existingDeviceAssociation &&
-        item.recorderChannel === normalized.recorderChannel
-      );
-      const sameRecorderChannel = Boolean(
-        item.recorderSerialNumber && normalized.recorderSerialNumber &&
-        item.recorderSerialNumber.trim().toUpperCase() === normalized.recorderSerialNumber.trim().toUpperCase() &&
-        item.recorderChannel !== undefined &&
-        item.recorderChannel === normalized.recorderChannel
-      );
-      const sameVendorModel = Boolean(
-        item.manufacturer && normalized.manufacturer &&
-        item.model === normalized.model &&
-        item.manufacturer === normalized.manufacturer &&
-        normalized.hardwareId && item.hardwareId === normalized.hardwareId,
-      );
-      const hasFingerprint = [sameSerial, sameMac, sameOnvif, sameHardware, sameAssociation, sameRecorderChannel, sameVendorModel].some(Boolean);
-      if (item.status === "rejected" && sameBranch && (sameSourceSlot || hasFingerprint)) {
+      const sameIdentity = item.deviceIdentityId === identity.deviceId;
+      if (item.status === "rejected" && sameBranch && (sameSourceSlot || sameIdentity)) {
         return true;
       }
-      return sameBranch && (hasFingerprint || sameSourceSlot);
+      return sameBranch && (sameIdentity || sameSourceSlot);
     });
 
     if (existing) {
@@ -779,12 +879,19 @@ export class MemoryStore implements ControlPlaneStore {
         return existing;
       }
       Object.assign(existing, normalized, {
+        deviceIdentityId: identity.deviceId,
+        ...(identity.cameraId ? {
+          duplicateStatus: "duplicate" as const,
+          existingDeviceAssociation: identity.cameraId,
+          statusReason: normalized.statusReason ?? "matched_existing_device_identity",
+        } : {}),
         discoveredAt: new Date().toISOString(),
       });
       return existing;
     }
     const discovery: DiscoveredCamera = {
-      id: randomUUID(), 
+      id: randomUUID(),
+      deviceIdentityId: identity.deviceId,
       branchId,
       status: "pending", 
       discoveredAt: new Date().toISOString(),
@@ -795,6 +902,11 @@ export class MemoryStore implements ControlPlaneStore {
       ...(normalized.streamVerified !== undefined ? { streamVerified: normalized.streamVerified } : {}),
       ...(normalized.compatibility ? { compatibility: normalized.compatibility } : {}),
       ...normalized,
+      ...(identity.cameraId ? {
+        duplicateStatus: "duplicate",
+        existingDeviceAssociation: identity.cameraId,
+        statusReason: normalized.statusReason ?? "matched_existing_device_identity",
+      } : {}),
     };
     this.discoveries.set(discovery.id, discovery);
     return discovery;
@@ -827,13 +939,35 @@ export class MemoryStore implements ControlPlaneStore {
     const discovery = this.discoveries.get(input.discoveryId);
     const branch = this.nodes.get(branchId);
     if (!discovery || discovery.branchId !== branchId || !branch) return undefined;
+    const identity = this.deviceIdentities.get(discovery.deviceIdentityId);
+    if (!identity) throw new Error("device_identity_not_found");
+    if (identity.cameraId) {
+      const existingCamera = this.cameras.get(identity.cameraId);
+      if (!existingCamera) throw new Error("identity_camera_not_found");
+      Object.assign(existingCamera, clean({
+        edgeAgentId: discovery.edgeAgentId,
+        ipAddress: input.ipAddress ?? discovery.ipAddress,
+        serialNumber: input.serialNumber ?? discovery.serialNumber,
+        macAddress: input.macAddress ?? discovery.macAddress,
+        firmwareVersion: discovery.firmwareVersion,
+        onvifUuid: input.onvifUuid ?? discovery.onvifUuid,
+        certificateRef: input.certificateRef ?? discovery.certificateRef,
+        certificateFingerprint: input.certificateFingerprint ?? discovery.certificateFingerprint,
+        lastSeenAt: identity.lastSeenAt,
+      }));
+      existingCamera.connectionSecretRef = input.connectionSecretRef;
+      identity.credentialRef = input.connectionSecretRef;
+      discovery.status = "approved";
+      return existingCamera;
+    }
     const nodeId = randomUUID();
     this.nodes.set(nodeId, {
       id: nodeId, tenantId: branch.tenantId, parentId: branchId, type: "camera",
       name: input.name, path: [...branch.path, nodeId],
     });
     const camera: Camera = {
-      id: randomUUID(), name: input.name, nodeId, branchId, vendor: discovery.vendor,
+      id: randomUUID(), deviceIdentityId: identity.deviceId,
+      name: input.name, nodeId, branchId, vendor: discovery.vendor,
       model: discovery.model, channel: input.channel, protocol: input.protocol,
       status: "unknown", profiles: discovery.profiles,
       capabilities: discovery.capabilities,
@@ -845,12 +979,19 @@ export class MemoryStore implements ControlPlaneStore {
       recorderChannel: input.recorderChannel ?? discovery.recorderChannel,
       recorderSerialNumber: input.recorderSerialNumber ?? discovery.recorderSerialNumber,
       serialNumber: input.serialNumber ?? discovery.serialNumber,
-      macAddress: input.ipAddress ? undefined : discovery.macAddress,
+      macAddress: input.macAddress ?? discovery.macAddress,
       firmwareVersion: discovery.firmwareVersion,
       ipAddress: input.ipAddress ?? discovery.ipAddress,
+      onvifUuid: input.onvifUuid ?? discovery.onvifUuid,
+      certificateRef: input.certificateRef ?? discovery.certificateRef,
+      certificateFingerprint: input.certificateFingerprint ?? discovery.certificateFingerprint,
+      firstSeenAt: identity.firstSeenAt,
+      lastSeenAt: identity.lastSeenAt,
     };
     discovery.status = "approved";
     this.cameras.set(camera.id, camera);
+    identity.cameraId = camera.id;
+    identity.credentialRef = input.connectionSecretRef;
     return camera;
   }
 
@@ -885,6 +1026,36 @@ export class MemoryStore implements ControlPlaneStore {
     }
 
     for (const { camera, discovery } of resolved) {
+      const targetIdentity = camera.deviceIdentityId
+        ? this.deviceIdentities.get(camera.deviceIdentityId)
+        : undefined;
+      const replacementIdentity = this.deviceIdentities.get(discovery.deviceIdentityId);
+      if (targetIdentity && replacementIdentity && targetIdentity.deviceId !== replacementIdentity.deviceId) {
+        for (const [claim, identityId] of this.deviceIdentityClaims) {
+          if (identityId === replacementIdentity.deviceId) {
+            this.deviceIdentityClaims.set(claim, targetIdentity.deviceId);
+          }
+        }
+        for (const address of replacementIdentity.ipHistory) {
+          const existingAddress = targetIdentity.ipHistory.find((item) => item.ipAddress === address.ipAddress);
+          if (existingAddress) {
+            existingAddress.lastSeenAt = address.lastSeenAt;
+            existingAddress.observationCount += address.observationCount;
+          } else {
+            targetIdentity.ipHistory.push(structuredClone(address));
+          }
+        }
+        Object.assign(targetIdentity, {
+          dvrSerialNumber: discovery.recorderSerialNumber,
+          channel: discovery.recorderChannel,
+          currentIpAddress: discovery.ipAddress,
+          firmwareVersion: discovery.firmwareVersion ?? targetIdentity.firmwareVersion,
+          agentId: discovery.edgeAgentId,
+          lastSeenAt: replacementIdentity.lastSeenAt,
+        });
+        discovery.deviceIdentityId = targetIdentity.deviceId;
+        this.deviceIdentities.delete(replacementIdentity.deviceId);
+      }
       Object.assign(camera, {
         edgeAgentId: discovery.edgeAgentId,
         vendor: discovery.vendor,
@@ -919,13 +1090,22 @@ export class MemoryStore implements ControlPlaneStore {
   async createCameraFromManualRegistration(branchId: string, input: CameraApprovalInput) {
     const branch = this.nodes.get(branchId);
     if (!branch) return undefined;
+    const identity = this.resolveDeviceIdentity(branchId, observationFromApproval(input));
+    if (identity.cameraId) {
+      const existingCamera = this.cameras.get(identity.cameraId);
+      if (!existingCamera) return undefined;
+      existingCamera.connectionSecretRef = input.connectionSecretRef;
+      identity.credentialRef = input.connectionSecretRef;
+      return existingCamera;
+    }
     const nodeId = randomUUID();
     this.nodes.set(nodeId, {
       id: nodeId, tenantId: branch.tenantId, parentId: branchId, type: "camera",
       name: input.name, path: [...branch.path, nodeId],
     });
     const camera: Camera = {
-      id: randomUUID(), name: input.name, nodeId, branchId,
+      id: randomUUID(), deviceIdentityId: identity.deviceId,
+      name: input.name, nodeId, branchId,
       vendor: (input.manufacturer?.toLowerCase() === "hikvision" ? "hikvision" : "other") as Camera["vendor"],
       model: input.model ?? "manual",
       channel: input.channel,
@@ -941,10 +1121,18 @@ export class MemoryStore implements ControlPlaneStore {
       recorderChannel: input.recorderChannel,
       recorderSerialNumber: input.recorderSerialNumber,
       serialNumber: input.serialNumber,
+      macAddress: input.macAddress,
       ipAddress: input.ipAddress,
       firmwareVersion: undefined,
+      onvifUuid: input.onvifUuid,
+      certificateRef: input.certificateRef,
+      certificateFingerprint: input.certificateFingerprint,
+      firstSeenAt: identity.firstSeenAt,
+      lastSeenAt: identity.lastSeenAt,
     };
     this.cameras.set(camera.id, camera);
+    identity.cameraId = camera.id;
+    identity.credentialRef = input.connectionSecretRef;
     return camera;
   }
 

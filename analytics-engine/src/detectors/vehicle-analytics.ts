@@ -250,18 +250,22 @@ export class VehicleAnalyticsDetector extends BaseDetector {
   // ============================================================================
 
   private async detectVehicles(frame: DetectionFrame): Promise<any[]> {
-    // TODO: Implement YOLOv8 inference
-    /*
-    const input = this.preprocessFrame(frame);
-    const output = await this.yoloModel.run({ images: input });
-    const detections = this.postprocessYOLO(output);
-    return detections.filter(d => 
-      this.VEHICLE_CLASSES.includes(d.class) && 
-      d.confidence >= this.MIN_CONFIDENCE
-    );
-    */
-    
-    return [];
+    try {
+      const pipeline = await import('../inference/unified-inference-pipeline.js').then(m => m.getInferencePipeline());
+      const detections = await pipeline.detectObjects(frame, this.VEHICLE_CLASSES as unknown as string[]);
+      if (!detections) return [];
+      return detections
+        .filter(d => d.confidence >= this.MIN_CONFIDENCE)
+        .map(d => ({
+          boundingBox: d.boundingBox,
+          confidence: d.confidence,
+          label: d.label,
+          reIdFeature: (d as any).embedding,
+        }));
+    } catch (error) {
+      console.warn('detectVehicles pipeline failed:', error);
+      return [];
+    }
   }
 
   // ============================================================================
@@ -326,26 +330,57 @@ export class VehicleAnalyticsDetector extends BaseDetector {
   // ============================================================================
 
   private async updateTracking(vehicles: any[], frame: DetectionFrame): Promise<void> {
-    const now = frame.timestamp;
-    const activeTrackIds = new Set<string>();
+    try {
+      const pipeline = await import('../inference/unified-inference-pipeline.js').then(m => m.getInferencePipeline());
+      const timestamp = frame.timestamp || new Date();
+      const tracked = await pipeline.updateTracking(vehicles as any, timestamp, 'vehicle');
 
-    for (const vehicle of vehicles) {
-      const matchedTrack = this.findMatchingTrack(vehicle);
+      const activeTrackIds = new Set<string>();
 
-      if (matchedTrack) {
-        this.updateTrack(matchedTrack, vehicle, now);
-        activeTrackIds.add(matchedTrack.trackId);
-      } else {
-        const newTrack = this.createNewTrack(vehicle, now);
-        this.tracks.set(newTrack.trackId, newTrack);
-        activeTrackIds.add(newTrack.trackId);
+      for (const det of tracked) {
+        const trackId: string = (det as any).trackId ?? `vehicle_${randomUUID().substring(0,8)}`;
+        activeTrackIds.add(trackId);
+
+        const existing = this.tracks.get(trackId);
+        const bbox = (det as any).boundingBox;
+        if (existing) {
+          this.updateTrack(existing, { boundingBox: bbox, confidence: det.confidence }, timestamp);
+        } else {
+          const newTrack = this.createNewTrack({ boundingBox: bbox, confidence: det.confidence }, timestamp);
+          newTrack.trackId = trackId;
+          this.tracks.set(trackId, newTrack);
+        }
       }
-    }
 
-    // Mark inactive tracks
-    for (const [trackId, track] of this.tracks.entries()) {
-      if (!activeTrackIds.has(trackId)) {
-        track.lastSeen = now;
+      // Mark inactive tracks
+      for (const [trackId, track] of this.tracks.entries()) {
+        if (!activeTrackIds.has(trackId)) {
+          track.lastSeen = timestamp;
+        }
+      }
+    } catch (error) {
+      console.warn('updateTracking pipeline failed:', error);
+      // Fallback to legacy matching
+      const now = frame.timestamp;
+      const activeTrackIds = new Set<string>();
+
+      for (const vehicle of vehicles) {
+        const matchedTrack = this.findMatchingTrack(vehicle);
+
+        if (matchedTrack) {
+          this.updateTrack(matchedTrack, vehicle, now);
+          activeTrackIds.add(matchedTrack.trackId);
+        } else {
+          const newTrack = this.createNewTrack(vehicle, now);
+          this.tracks.set(newTrack.trackId, newTrack);
+          activeTrackIds.add(newTrack.trackId);
+        }
+      }
+
+      for (const [trackId, track] of this.tracks.entries()) {
+        if (!activeTrackIds.has(trackId)) {
+          track.lastSeen = now;
+        }
       }
     }
   }
@@ -433,18 +468,22 @@ export class VehicleAnalyticsDetector extends BaseDetector {
 
   private async performANPR(vehicles: any[], frame: DetectionFrame): Promise<ANPRResult[]> {
     const results: ANPRResult[] = [];
+    try {
+      const pipeline = await import('../inference/unified-inference-pipeline.js').then(m => m.getInferencePipeline());
 
-    for (const vehicle of vehicles) {
-      try {
-        // Step 1: Detect license plate region
-        const plateRegion = await this.detectLicensePlate(vehicle, frame);
-        if (!plateRegion) continue;
+      // Detect plates in the frame
+      const plates = await pipeline.detectPlates(frame);
+      if (!plates || plates.length === 0) return results;
 
-        // Step 2: Recognize plate text using OCR
-        const plateText = await this.recognizePlateText(plateRegion, frame);
+      for (const vehicle of vehicles) {
+        // Find plate that overlaps vehicle bbox
+        const matchedPlate = plates.find(p => this.calculateIoU(p.boundingBox, vehicle.boundingBox) > 0.3);
+        if (!matchedPlate) continue;
+
+        // Recognize plate text
+        const plateText = await pipeline.recognizePlate(frame, matchedPlate.boundingBox).catch(() => null);
         if (!plateText || plateText.confidence < this.ANPR_CONFIDENCE_THRESHOLD) continue;
 
-        // Step 3: Format and validate plate number
         const formattedPlate = this.formatPlateNumber(plateText.text);
         if (!formattedPlate) continue;
 
@@ -460,9 +499,7 @@ export class VehicleAnalyticsDetector extends BaseDetector {
             };
           } else {
             track.licensePlate.lastDetected = frame.timestamp;
-            // Update confidence with moving average
-            track.licensePlate.confidence = 
-              (track.licensePlate.confidence * 0.7) + (plateText.confidence * 0.3);
+            track.licensePlate.confidence = (track.licensePlate.confidence * 0.7) + (plateText.confidence * 0.3);
           }
         }
 
@@ -471,17 +508,17 @@ export class VehicleAnalyticsDetector extends BaseDetector {
           confidence: plateText.confidence,
           vehicleTrackId: track?.trackId || 'unknown',
           timestamp: frame.timestamp,
-          boundingBox: vehicle.boundingBox,
+          boundingBox: matchedPlate.boundingBox,
           vehicleType: vehicle.vehicleType,
           vehicleColor: vehicle.color,
         });
-
-      } catch (error) {
-        console.warn(`ANPR failed for vehicle:`, error);
       }
-    }
 
-    return results;
+      return results;
+    } catch (error) {
+      console.warn('performANPR pipeline failed:', error);
+      return results;
+    }
   }
 
   private async detectLicensePlate(vehicle: any, frame: DetectionFrame): Promise<any | null> {
@@ -545,19 +582,17 @@ export class VehicleAnalyticsDetector extends BaseDetector {
   // ============================================================================
 
   private async extractReIdFeatures(vehicles: any[], frame: DetectionFrame): Promise<void> {
-    for (const vehicle of vehicles) {
-      // TODO: Extract 2048-dim feature vector using Vehicle Re-ID model
-      /*
-      const crop = this.cropFrame(frame, vehicle.boundingBox);
-      const input = this.preprocessForReId(crop);
-      const output = await this.vehicleReIdModel.run({ input });
-      const feature = output.features.data;  // 2048-dim vector
-      
-      const track = this.findTrackByBoundingBox(vehicle.boundingBox);
-      if (track) {
-        track.reIdFeature = Array.from(feature);
+    try {
+      const pipeline = await import('../inference/unified-inference-pipeline.js').then(m => m.getInferencePipeline());
+      for (const vehicle of vehicles) {
+        const embedding = await pipeline.extractVehicleEmbedding(frame, vehicle.boundingBox).catch(() => null);
+        const track = this.findTrackByBoundingBox(vehicle.boundingBox);
+        if (embedding && track) {
+          track.reIdFeature = embedding;
+        }
       }
-      */
+    } catch (error) {
+      console.warn('extractReIdFeatures pipeline failed:', error);
     }
   }
 

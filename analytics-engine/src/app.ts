@@ -124,10 +124,27 @@ export function buildAnalyticsEngine(options: AnalyticsEngineOptions) {
   app.get("/health", async (_request, reply) => {
     await pipelineReady;
     const pipelineHealth = pipeline.getHealth();
-    const modelsRequired = process.env.ANALYTICS_REQUIRE_MODELS === "true";
-    const ready = pipelineHealth.initialized && (!modelsRequired || pipelineHealth.models.ready);
-    return reply.code(ready ? 200 : 503).send({
-      status: ready && pipelineHealth.models.ready ? "ok" : ready ? "degraded" : "unhealthy",
+
+    // Compute explicit AI state
+    // AI_OPERATIONAL: pipeline initialized AND models are ready
+    // AI_DEGRADED: pipeline initialized but models not fully ready (models optional or disabled for test)
+    // AI_UNAVAILABLE: pipeline not initialized
+    const modelsReady = pipelineHealth.models?.ready === true;
+    const initialized = pipelineHealth.initialized === true;
+
+    let aiState: "AI_OPERATIONAL" | "AI_DEGRADED" | "AI_UNAVAILABLE";
+    if (!initialized) aiState = "AI_UNAVAILABLE";
+    else if (initialized && modelsReady) aiState = "AI_OPERATIONAL";
+    else aiState = "AI_DEGRADED";
+
+    // HTTP status: unavailable -> 503, otherwise 200. Keep compatibility by returning
+    // a status field but ensure it never claims "ok" when models are not loaded.
+    const httpStatus = aiState === "AI_UNAVAILABLE" ? 503 : 200;
+    const statusString = aiState === "AI_OPERATIONAL" ? "ok" : aiState === "AI_DEGRADED" ? "degraded" : "unhealthy";
+
+    return reply.code(httpStatus).send({
+      status: statusString,
+      aiState,
       service: "sentinel-analytics-engine",
       ...state,
       pipeline: pipelineHealth,
@@ -138,6 +155,51 @@ export function buildAnalyticsEngine(options: AnalyticsEngineOptions) {
         stats: streamProcessor.getStats(),
       },
     });
+  });
+
+  // Per-camera AI status endpoint: exposes an at-a-glance view the UI can use for each camera
+  app.get("/v1/analytics/cameras/:cameraId/status", async (request, reply) => {
+    const { cameraId } = z.object({ cameraId: z.string().min(1) }).parse(request.params);
+    await pipelineReady;
+
+    const pipelineHealth = pipeline.getHealth();
+    const modelsReady = pipelineHealth.models?.ready === true;
+    const initialized = pipelineHealth.initialized === true;
+    const aiState = !initialized ? "AI_UNAVAILABLE" : (initialized && modelsReady ? "AI_OPERATIONAL" : "AI_DEGRADED");
+
+    // Camera-level health and runtime info from pipeline
+    const cameraHealth = pipeline.getCameraHealth(cameraId) || { status: "unknown" };
+
+    // Best-effort runtime metrics - these detector implementations expose lightweight stats
+    const personTracks = pipeline.getPersonTracks();
+    const vehicleTracks = pipeline.getVehicleTracks();
+    const inferenceMode = cameraHealth.inferenceMode ?? (cameraHealth.lastInferenceSource ? cameraHealth.lastInferenceSource : "local-onnx");
+
+    // Provide the UI with fields the user requested: Model, Inference FPS, GPU, Latency, Detection activity
+    const modelInfo = pipelineHealth.models?.primaryModel ?? { name: null, version: null };
+    const gpuInfo = pipelineHealth.models?.gpu ? pipelineHealth.models.gpu : null;
+
+    const cameraStatus = {
+      cameraId,
+      stream: cameraHealth.streamStatus ?? cameraHealth.status ?? "unknown",
+      recording: cameraHealth.recording ?? false,
+      aiEngine: aiState,
+      model: modelInfo.name ? `${modelInfo.name} ${modelInfo.version ?? ""}`.trim() : null,
+      inferenceMode,
+      inference: {
+        fps: cameraHealth.inferenceFps ?? null,
+        latencyMs: cameraHealth.inferenceLatencyMs ?? null,
+        gpu: gpuInfo ?? null,
+      },
+      detection: {
+        persons: personTracks.filter((t: any) => t.cameraId === cameraId).length,
+        vehicles: vehicleTracks.filter((t: any) => t.cameraId === cameraId).length,
+        lastDetectionAt: cameraHealth.lastDetectionAt ?? null,
+      },
+      pipeline: pipelineHealth,
+    };
+
+    return reply.code(200).send(cameraStatus);
   });
 
   app.post("/internal/detections", async (request, reply) => {

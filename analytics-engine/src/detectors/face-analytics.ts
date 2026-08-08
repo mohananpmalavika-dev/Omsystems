@@ -6,6 +6,7 @@
 
 import { randomUUID } from "node:crypto";
 import { BaseDetector, type DetectionFrame, type DetectionResult } from "./base-detector.js";
+import { getInferencePipeline } from "../inference/unified-inference-pipeline.js";
 
 // ============================================================================
 // Type Definitions
@@ -199,25 +200,28 @@ export class FaceAnalyticsDetector extends BaseDetector {
   // ============================================================================
 
   private async detectFaces(frame: DetectionFrame): Promise<FaceDetection[]> {
-    // TODO: Implement RetinaFace inference
-    /*
-    const input = this.preprocessFrame(frame);
-    const output = await this.faceDetector.run({ input });
-    const detections = this.postprocessRetinaFace(output);
-    
-    return detections
-      .filter(d => d.confidence >= this.MIN_CONFIDENCE)
-      .filter(d => this.isFaceSizeValid(d.boundingBox))
-      .map(d => ({
-        faceId: `face_${randomUUID().substring(0, 8)}`,
-        boundingBox: d.boundingBox,
-        confidence: d.confidence,
-        landmarks: d.landmarks,
-        timestamp: frame.timestamp,
-      }));
-    */
-    
-    return [];
+    try {
+      const pipeline = getInferencePipeline();
+      const detections = await pipeline.detectFaces(frame);
+      if (!Array.isArray(detections) || detections.length === 0) return [];
+
+      const faces: FaceDetection[] = detections
+        .filter(d => d.confidence >= this.MIN_CONFIDENCE)
+        .map(d => ({
+          faceId: `face_${randomUUID().substring(0, 8)}`,
+          boundingBox: d.boundingBox,
+          confidence: d.confidence,
+          landmarks: (d as any).metadata?.landmarks ?? {
+            leftEye: { x: 0, y: 0 }, rightEye: { x: 0, y: 0 }, nose: { x: 0, y: 0 }, leftMouth: { x: 0, y: 0 }, rightMouth: { x: 0, y: 0 }
+          },
+          timestamp: frame.timestamp,
+        }));
+
+      return faces.filter(f => this.isFaceSizeValid(f.boundingBox));
+    } catch (error) {
+      console.warn('detectFaces pipeline failed:', error);
+      return [];
+    }
   }
 
   private isFaceSizeValid(bbox: any): boolean {

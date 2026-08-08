@@ -347,35 +347,54 @@ export class HSMService {
   }
 
   private async encryptAWS(keyId: string, plaintext: Buffer, algorithm: string): Promise<any> {
-    // Simulated encryption - replace with actual AWS CloudHSM calls
-    const iv = crypto.randomBytes(12);
-    const cipher = crypto.createCipheriv('aes-256-gcm', crypto.randomBytes(32), iv);
-    
-    const ciphertext = Buffer.concat([cipher.update(plaintext), cipher.final()]);
-    const authTag = cipher.getAuthTag();
-    
-    return { ciphertext, iv, authTag };
+    // Prevent accidental use of simulated encryption in production.
+    if (process.env.HSM_ALLOW_SIMULATION === 'true') {
+      const iv = crypto.randomBytes(12);
+      const cipher = crypto.createCipheriv('aes-256-gcm', crypto.randomBytes(32), iv);
+      const ciphertext = Buffer.concat([cipher.update(plaintext), cipher.final()]);
+      const authTag = cipher.getAuthTag();
+      console.warn('⚠️ Using simulated AWS encrypt (HSM_ALLOW_SIMULATION=true) — not secure for production');
+      return { ciphertext, iv, authTag };
+    }
+
+    // In production, the real AWS CloudHSM/KMS integration must be implemented.
+    throw new Error('AWS CloudHSM encrypt is not implemented. Set HSM_ALLOW_SIMULATION=true to enable simulation in non-production environments.');
   }
 
   private async decryptAWS(keyId: string, ciphertext: Buffer, iv: Buffer, authTag: Buffer | undefined, algorithm: string): Promise<Buffer> {
-    // Simulated decryption - replace with actual AWS CloudHSM calls
-    const decipher = crypto.createDecipheriv('aes-256-gcm', crypto.randomBytes(32), iv);
-    if (authTag) decipher.setAuthTag(authTag);
-    
-    return Buffer.concat([decipher.update(ciphertext), decipher.final()]);
+    if (process.env.HSM_ALLOW_SIMULATION === 'true') {
+      const decipher = crypto.createDecipheriv('aes-256-gcm', crypto.randomBytes(32), iv);
+      if (authTag) decipher.setAuthTag(authTag);
+      console.warn('⚠️ Using simulated AWS decrypt (HSM_ALLOW_SIMULATION=true) — not secure for production');
+      return Buffer.concat([decipher.update(ciphertext), decipher.final()]);
+    }
+
+    throw new Error('AWS CloudHSM decrypt is not implemented. Set HSM_ALLOW_SIMULATION=true to enable simulation in non-production environments.');
   }
 
   private async signAWS(keyId: string, data: Buffer, algorithm: string): Promise<Buffer> {
-    // Simulated signing
-    const sign = crypto.createSign(algorithm);
-    sign.update(data);
-    sign.end();
-    return sign.sign(crypto.randomBytes(32));
+    if (process.env.HSM_ALLOW_SIMULATION === 'true') {
+      const sign = crypto.createSign(algorithm);
+      sign.update(data);
+      sign.end();
+      console.warn('⚠️ Using simulated AWS sign (HSM_ALLOW_SIMULATION=true) — not secure for production');
+      return sign.sign(crypto.randomBytes(32));
+    }
+
+    throw new Error('AWS CloudHSM sign is not implemented. Set HSM_ALLOW_SIMULATION=true to enable simulation in non-production environments.');
   }
 
   private async verifyAWS(keyId: string, data: Buffer, signature: Buffer, algorithm: string): Promise<boolean> {
-    // Simulated verification
-    return true;
+    if (process.env.HSM_ALLOW_SIMULATION === 'true') {
+      console.warn('⚠️ Using simulated AWS verify (HSM_ALLOW_SIMULATION=true) — not secure for production');
+      // Use simulated verification by comparing hash equality as before
+      const hash = crypto.createHash('sha256').update(data).digest();
+      return hash.equals(signature);
+    }
+
+    // Fail-closed in production: do not silently accept all verifications.
+    console.error('❌ AWS CloudHSM verify called but not implemented. Refusing to verify in production.');
+    return false;
   }
 
   // ============================================================================

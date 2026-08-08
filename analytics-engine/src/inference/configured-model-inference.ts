@@ -23,6 +23,20 @@ export interface FaceVectorInference {
   ): Promise<number[]>;
 }
 
+export interface PersonVectorInference {
+  run(
+    frame: DetectionFrame,
+    box: { x: number; y: number; width: number; height: number },
+  ): Promise<number[]>;
+}
+
+export interface VehicleVectorInference {
+  run(
+    frame: DetectionFrame,
+    box: { x: number; y: number; width: number; height: number },
+  ): Promise<number[]>;
+}
+
 export async function loadObjectInference(modelId: string, confidenceThreshold: number): Promise<ObjectFrameInference> {
   const manager = getModelManager();
   const config = requiredConfig(modelId);
@@ -60,6 +74,32 @@ export async function loadFaceVectorInference(modelId: string): Promise<FaceVect
   const manager = getModelManager();
   const config = requiredConfig(modelId);
   if (config.task !== "face-embedding") throw new Error(`Model ${modelId} is not configured for face embeddings`);
+  if (!manager.isModelAvailable(modelId)) throw new Error(modelUnavailableReason(modelId));
+  const dimensions = inputDimensions(config);
+  return new FaceEmbeddingInference(
+    await manager.getModel(modelId) as InferenceSession,
+    dimensions.width,
+    dimensions.height,
+  );
+}
+
+export async function loadPersonVectorInference(modelId: string): Promise<PersonVectorInference> {
+  const manager = getModelManager();
+  const config = requiredConfig(modelId);
+  if (config.task !== "face-embedding") throw new Error(`Model ${modelId} is not configured for person re-ID (reusing face-embedding task)`);
+  if (!manager.isModelAvailable(modelId)) throw new Error(modelUnavailableReason(modelId));
+  const dimensions = inputDimensions(config);
+  return new FaceEmbeddingInference(
+    await manager.getModel(modelId) as InferenceSession,
+    dimensions.width,
+    dimensions.height,
+  );
+}
+
+export async function loadVehicleVectorInference(modelId: string): Promise<VehicleVectorInference> {
+  const manager = getModelManager();
+  const config = requiredConfig(modelId);
+  if (config.task !== "face-embedding") throw new Error(`Model ${modelId} is not configured for vehicle re-ID (reusing face-embedding task)`);
   if (!manager.isModelAvailable(modelId)) throw new Error(modelUnavailableReason(modelId));
   const dimensions = inputDimensions(config);
   return new FaceEmbeddingInference(

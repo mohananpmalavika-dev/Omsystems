@@ -13,9 +13,11 @@ import type {
   CameraApprovalInput,
   RecorderReplacementResult,
 } from "../control-plane-store.js";
+import type { DeviceIdentityRepository } from "./device-identity-repository.js";
 
 type CameraRow = {
   id: string;
+  device_identity_id: string;
   name: string;
   resource_node_id: string;
   branch_node_id: string;
@@ -34,11 +36,44 @@ type CameraRow = {
   recorder_id: string | null;
   recorder_channel: number | null;
   recorder_serial_number: string | null;
+  serial_number: string | null;
+  mac_address: string | null;
+  firmware_version: string | null;
+  onvif_uuid: string | null;
+  certificate_ref: string | null;
+  certificate_fingerprint: string | null;
+  first_seen_at: Date;
+  identity_last_seen_at: Date;
+};
+
+type ApprovalDiscoveryRow = {
+  tenant_id: string;
+  device_identity_id: string;
+  linked_camera_id: string | null;
+  vendor: CameraVendor;
+  model: string;
+  profiles: CameraProfile[];
+  capabilities: CameraCapabilities;
+  edge_agent_id: string;
+  source_type: Camera["sourceType"];
+  recorder_id: string | null;
+  recorder_channel: number;
+  recorder_serial_number: string | null;
+  serial_number: string | null;
+  mac_address: string | null;
+  firmware_version: string | null;
+  ip_address: string;
+  onvif_uuid: string | null;
+  certificate_ref: string | null;
+  certificate_fingerprint: string | null;
+  first_seen_at: Date;
+  identity_last_seen_at: Date;
 };
 
 function mapCamera(row: CameraRow): Camera {
   return {
     id: row.id,
+    deviceIdentityId: row.device_identity_id,
     name: row.name,
     nodeId: row.resource_node_id,
     branchId: row.branch_node_id,
@@ -57,21 +92,36 @@ function mapCamera(row: CameraRow): Camera {
     ...(row.recorder_id ? { recorderId: row.recorder_id } : {}),
     ...(row.recorder_channel ? { recorderChannel: row.recorder_channel } : {}),
     ...(row.recorder_serial_number ? { recorderSerialNumber: row.recorder_serial_number } : {}),
+    ...(row.serial_number ? { serialNumber: row.serial_number } : {}),
+    ...(row.mac_address ? { macAddress: row.mac_address } : {}),
+    ...(row.firmware_version ? { firmwareVersion: row.firmware_version } : {}),
+    ...(row.onvif_uuid ? { onvifUuid: row.onvif_uuid } : {}),
+    ...(row.certificate_ref ? { certificateRef: row.certificate_ref } : {}),
+    ...(row.certificate_fingerprint ? { certificateFingerprint: row.certificate_fingerprint } : {}),
+    ...(row.first_seen_at ? { firstSeenAt: row.first_seen_at.toISOString() } : {}),
+    ...(row.identity_last_seen_at ? { lastSeenAt: row.identity_last_seen_at.toISOString() } : {}),
   };
 }
 
-const selectCamera = `SELECT cameras.id::text, cameras.resource_node_id::text,
+const selectCamera = `SELECT cameras.id::text, cameras.device_identity_id::text,
+  cameras.resource_node_id::text,
   cameras.branch_node_id::text, cameras.edge_agent_id::text, camera_node.name, cameras.vendor,
   cameras.model, cameras.channel, cameras.protocol, cameras.status,
   cameras.profiles, cameras.capabilities, cameras.connection_secret_ref,
   cameras.connection_transport, cameras.ip_address::text,
   cameras.source_type, cameras.recorder_id, cameras.recorder_channel,
-  cameras.recorder_serial_number
+  cameras.recorder_serial_number, cameras.serial_number, cameras.mac_address::text,
+  cameras.firmware_version, cameras.onvif_uuid, cameras.certificate_ref,
+  cameras.certificate_fingerprint, cameras.first_seen_at,
+  cameras.identity_last_seen_at
   FROM cameras
   JOIN resource_nodes camera_node ON camera_node.id = cameras.resource_node_id`;
 
 export class CameraRepository {
-  constructor(private readonly pool: Pool) {}
+  constructor(
+    private readonly pool: Pool,
+    private readonly deviceIdentities: DeviceIdentityRepository,
+  ) {}
 
   async findById(id: string) {
     const result = await this.pool.query<CameraRow>(
@@ -136,23 +186,22 @@ export class CameraRepository {
     const client = await this.pool.connect();
     try {
       await client.query("BEGIN");
-      const discovery = await client.query<{
-        tenant_id: string;
-        vendor: CameraVendor;
-        model: string;
-        profiles: CameraProfile[];
-        capabilities: CameraCapabilities;
-        edge_agent_id: string;
-        source_type: Camera["sourceType"];
-        recorder_id: string | null;
-        recorder_channel: number;
-        recorder_serial_number: string | null;
-      }>(
-        `SELECT tenant_id::text, vendor, model, profiles, capabilities,
-                edge_agent_id::text, source_type, recorder_id,
-                recorder_channel, recorder_serial_number
-         FROM camera_discoveries
-         WHERE id = $1 AND branch_node_id = $2 AND status = 'pending'
+      const discovery = await client.query<ApprovalDiscoveryRow>(
+        `SELECT discovery.tenant_id::text, discovery.device_identity_id::text,
+                identity.camera_id::text AS linked_camera_id,
+                discovery.vendor, discovery.model, discovery.profiles,
+                discovery.capabilities, discovery.edge_agent_id::text,
+                discovery.source_type, discovery.recorder_id,
+                discovery.recorder_channel, discovery.recorder_serial_number,
+                discovery.serial_number, discovery.mac_address::text,
+                discovery.firmware_version, host(discovery.ip_address) AS ip_address,
+                discovery.onvif_uuid, discovery.certificate_ref,
+                discovery.certificate_fingerprint, identity.first_seen_at,
+                identity.last_seen_at AS identity_last_seen_at
+         FROM camera_discoveries discovery
+         JOIN device_identities identity ON identity.id = discovery.device_identity_id
+         WHERE discovery.id = $1 AND discovery.branch_node_id = $2
+           AND discovery.status = 'pending'
          FOR UPDATE`,
         [input.discoveryId, branchId],
       );
@@ -161,7 +210,9 @@ export class CameraRepository {
         await client.query("ROLLBACK");
         return undefined;
       }
-      const camera = await this.insertApprovedCamera(client, branchId, source, input);
+      const camera = source.linked_camera_id
+        ? await this.updateLinkedCamera(client, source.linked_camera_id, source, input)
+        : await this.insertApprovedCamera(client, branchId, source, input);
       await client.query(
         "UPDATE camera_discoveries SET status = 'approved' WHERE id = $1",
         [input.discoveryId],
@@ -206,7 +257,11 @@ export class CameraRepository {
 
       const updatedCameraIds: string[] = [];
       for (const mapping of input.mappings) {
-        const updated = await client.query<{ id: string }>(
+        const updated = await client.query<{
+          id: string;
+          camera_identity_id: string;
+          discovery_identity_id: string;
+        }>(
           `UPDATE cameras AS camera
            SET edge_agent_id = discovery.edge_agent_id,
                vendor = discovery.vendor,
@@ -234,11 +289,66 @@ export class CameraRepository {
              AND discovery.recorder_channel = $4
              AND discovery.stream_verified IS TRUE
              AND discovery.credentials_required IS NOT TRUE
-           RETURNING camera.id::text`,
+           RETURNING camera.id::text,
+                     camera.device_identity_id::text AS camera_identity_id,
+                     discovery.device_identity_id::text AS discovery_identity_id`,
           [mapping.cameraId, input.branchId, oldSerial, mapping.sourceChannel, mapping.discoveryId, newSerial],
         );
         const cameraId = updated.rows[0]?.id;
         if (!cameraId) throw new Error("recorder_replacement_mapping_changed");
+        const cameraIdentityId = updated.rows[0]!.camera_identity_id;
+        const discoveryIdentityId = updated.rows[0]!.discovery_identity_id;
+        if (cameraIdentityId !== discoveryIdentityId) {
+          await client.query(
+            `UPDATE device_identity_claims
+             SET device_identity_id = $1::uuid
+             WHERE device_identity_id = $2::uuid`,
+            [cameraIdentityId, discoveryIdentityId],
+          );
+          await client.query(
+            `INSERT INTO device_ip_history
+               (device_identity_id, ip_address, edge_agent_id, first_seen_at,
+                last_seen_at, observation_count)
+             SELECT $1::uuid, ip_address, edge_agent_id, first_seen_at,
+                    last_seen_at, observation_count
+             FROM device_ip_history
+             WHERE device_identity_id = $2::uuid
+             ON CONFLICT (device_identity_id, ip_address) DO UPDATE
+             SET edge_agent_id = COALESCE(EXCLUDED.edge_agent_id, device_ip_history.edge_agent_id),
+                 first_seen_at = LEAST(EXCLUDED.first_seen_at, device_ip_history.first_seen_at),
+                 last_seen_at = GREATEST(EXCLUDED.last_seen_at, device_ip_history.last_seen_at),
+                 observation_count = device_ip_history.observation_count + EXCLUDED.observation_count`,
+            [cameraIdentityId, discoveryIdentityId],
+          );
+          await client.query(
+            "DELETE FROM device_ip_history WHERE device_identity_id = $1::uuid",
+            [discoveryIdentityId],
+          );
+          await client.query(
+            `UPDATE camera_discoveries
+             SET device_identity_id = $2::uuid
+             WHERE device_identity_id = $1::uuid`,
+            [discoveryIdentityId, cameraIdentityId],
+          );
+          await client.query(
+            `UPDATE device_identities target
+             SET dvr_serial_number = source.dvr_serial_number,
+                 channel = source.channel,
+                 current_ip_address = source.current_ip_address,
+                 firmware_version = COALESCE(source.firmware_version, target.firmware_version),
+                 edge_agent_id = COALESCE(source.edge_agent_id, target.edge_agent_id),
+                 last_seen_at = GREATEST(source.last_seen_at, target.last_seen_at),
+                 updated_at = now()
+             FROM device_identities source
+             WHERE target.id = $1::uuid AND source.id = $2::uuid`,
+            [cameraIdentityId, discoveryIdentityId],
+          );
+          await client.query(
+            `DELETE FROM device_identities
+             WHERE id = $1::uuid AND camera_id IS NULL`,
+            [discoveryIdentityId],
+          );
+        }
         updatedCameraIds.push(cameraId);
         await client.query(
           `UPDATE camera_discoveries
@@ -279,18 +389,7 @@ export class CameraRepository {
   private async insertApprovedCamera(
     client: PoolClient,
     branchId: string,
-    source: {
-      tenant_id: string;
-      vendor: CameraVendor;
-      model: string;
-      profiles: CameraProfile[];
-      capabilities: CameraCapabilities;
-      edge_agent_id: string;
-      source_type: Camera["sourceType"];
-      recorder_id: string | null;
-      recorder_channel: number;
-      recorder_serial_number: string | null;
-    },
+    source: ApprovalDiscoveryRow,
     input: CameraApprovalInput,
   ) {
     const nodeId = randomUUID();
@@ -305,26 +404,96 @@ export class CameraRepository {
     );
     const result = await client.query<CameraRow>(
        `INSERT INTO cameras
-          (resource_node_id, branch_node_id, edge_agent_id, vendor, model,
+          (resource_node_id, branch_node_id, edge_agent_id, device_identity_id, vendor, model,
           channel, protocol, profiles, capabilities, connection_secret_ref,
-          connection_transport, ip_address, source_type, recorder_id, recorder_channel, recorder_serial_number)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9::jsonb, $10,
-               $11, $12::inet, $13, $14, $15, $16)
-       RETURNING id::text, model AS name, resource_node_id::text,
+          connection_transport, ip_address, source_type, recorder_id, recorder_channel,
+          recorder_serial_number, serial_number, mac_address, firmware_version,
+          onvif_uuid, certificate_ref, certificate_fingerprint,
+          first_seen_at, identity_last_seen_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10::jsonb, $11,
+               $12, $13::inet, $14, $15, $16, $17, $18, $19::macaddr, $20,
+               $21, $22, $23, $24, $25)
+       RETURNING id::text, device_identity_id::text, model AS name, resource_node_id::text,
                branch_node_id::text, edge_agent_id::text, vendor, model, channel, protocol, status, profiles,
                  capabilities, connection_secret_ref, connection_transport, ip_address::text, source_type, recorder_id,
-                 recorder_channel, recorder_serial_number`,
+                 recorder_channel, recorder_serial_number, serial_number, mac_address::text,
+                 firmware_version, onvif_uuid, certificate_ref, certificate_fingerprint,
+                 first_seen_at, identity_last_seen_at`,
       [
-        nodeId, branchId, source.edge_agent_id, source.vendor, source.model,
-        input.channel, input.protocol, JSON.stringify(source.profiles),
-        JSON.stringify(source.capabilities), input.connectionSecretRef,
-        input.connectionTransport ?? "cloudflare-tunnel", input.ipAddress ?? null,
+        nodeId, branchId, source.edge_agent_id, source.device_identity_id,
+        source.vendor, source.model, input.channel, input.protocol,
+        JSON.stringify(source.profiles), JSON.stringify(source.capabilities),
+        input.connectionSecretRef,
+        input.connectionTransport ?? "cloudflare-tunnel", input.ipAddress ?? source.ip_address,
         input.sourceType ?? source.source_type ?? "ip-camera",
         input.recorderId ?? source.recorder_id,
         input.recorderChannel ?? (source.recorder_channel > 0 ? source.recorder_channel : null),
         input.recorderSerialNumber ?? source.recorder_serial_number,
+        input.serialNumber ?? source.serial_number,
+        input.macAddress ?? source.mac_address,
+        source.firmware_version,
+        input.onvifUuid ?? source.onvif_uuid,
+        input.certificateRef ?? source.certificate_ref,
+        input.certificateFingerprint ?? source.certificate_fingerprint,
+        source.first_seen_at,
+        source.identity_last_seen_at,
       ],
     );
+    const camera = mapCamera(result.rows[0]!);
+    await this.deviceIdentities.linkCamera(
+      client,
+      source.device_identity_id,
+      camera.id,
+      input.connectionSecretRef,
+    );
+    return camera;
+  }
+
+  private async updateLinkedCamera(
+    client: PoolClient,
+    cameraId: string,
+    source: ApprovalDiscoveryRow,
+    input: CameraApprovalInput,
+  ) {
+    await client.query(
+      `UPDATE cameras
+       SET edge_agent_id = $2::uuid, vendor = $3, model = $4,
+           channel = $5, protocol = $6, profiles = $7::jsonb,
+           capabilities = $8::jsonb, connection_secret_ref = $9,
+           connection_transport = COALESCE($10, connection_transport),
+           ip_address = $11::inet, source_type = $12,
+           recorder_id = $13, recorder_channel = $14,
+           recorder_serial_number = $15,
+           serial_number = COALESCE($16, serial_number),
+           mac_address = COALESCE($17::macaddr, mac_address),
+           firmware_version = COALESCE($18, firmware_version),
+           onvif_uuid = COALESCE($19, onvif_uuid),
+           certificate_ref = COALESCE($20, certificate_ref),
+           certificate_fingerprint = COALESCE($21, certificate_fingerprint),
+           identity_last_seen_at = $22, last_seen_at = now()
+       WHERE id = $1::uuid AND device_identity_id = $23::uuid`,
+      [cameraId, source.edge_agent_id, source.vendor, source.model,
+       input.channel, input.protocol, JSON.stringify(source.profiles),
+       JSON.stringify(source.capabilities), input.connectionSecretRef,
+       input.connectionTransport ?? null, input.ipAddress ?? source.ip_address,
+       input.sourceType ?? source.source_type ?? "ip-camera",
+       input.recorderId ?? source.recorder_id,
+       input.recorderChannel ?? (source.recorder_channel > 0 ? source.recorder_channel : null),
+       input.recorderSerialNumber ?? source.recorder_serial_number,
+       input.serialNumber ?? source.serial_number,
+       input.macAddress ?? source.mac_address, source.firmware_version,
+       input.onvifUuid ?? source.onvif_uuid,
+       input.certificateRef ?? source.certificate_ref,
+       input.certificateFingerprint ?? source.certificate_fingerprint,
+       source.identity_last_seen_at, source.device_identity_id],
+    );
+    await this.deviceIdentities.linkCamera(
+      client,
+      source.device_identity_id,
+      cameraId,
+      input.connectionSecretRef,
+    );
+    const result = await client.query<CameraRow>(`${selectCamera} WHERE cameras.id = $1::uuid`, [cameraId]);
     return mapCamera(result.rows[0]!);
   }
 
@@ -332,6 +501,25 @@ export class CameraRepository {
     const client = await this.pool.connect();
     try {
       await client.query("BEGIN");
+      const identity = await this.deviceIdentities.resolveManual(client, branchId, input);
+      if (identity.cameraId) {
+        await client.query(
+          `UPDATE cameras
+           SET connection_secret_ref = $2,
+               connection_transport = COALESCE($3, connection_transport),
+               ip_address = COALESCE($4::inet, ip_address),
+               identity_last_seen_at = now()
+           WHERE id = $1::uuid`,
+          [identity.cameraId, input.connectionSecretRef,
+           input.connectionTransport ?? null, input.ipAddress ?? null],
+        );
+        const existing = await client.query<CameraRow>(
+          `${selectCamera} WHERE cameras.id = $1::uuid`,
+          [identity.cameraId],
+        );
+        await client.query("COMMIT");
+        return existing.rows[0] ? mapCamera(existing.rows[0]) : undefined;
+      }
       const nodeId = randomUUID();
       const createdNode = await client.query(
         `INSERT INTO resource_nodes (id, tenant_id, parent_id, node_type, name, path)
@@ -352,21 +540,34 @@ export class CameraRepository {
           : "other";
       const inserted = await client.query<{ id: string }>(
         `INSERT INTO cameras
-           (resource_node_id, branch_node_id, edge_agent_id, vendor, model, channel,
+           (resource_node_id, branch_node_id, edge_agent_id, device_identity_id, vendor, model, channel,
             protocol, profiles, capabilities, connection_secret_ref, connection_transport,
-            ip_address, source_type, recorder_id, recorder_channel, recorder_serial_number)
-         VALUES ($1::uuid, $2::uuid, NULL, $3, $4, $5, $6, $7::jsonb, $8::jsonb,
-                 $9, $10, $11::inet, $12, $13, $14, $15)
+            ip_address, source_type, recorder_id, recorder_channel, recorder_serial_number,
+            serial_number, mac_address, onvif_uuid, certificate_ref,
+            certificate_fingerprint, first_seen_at, identity_last_seen_at)
+         VALUES ($1::uuid, $2::uuid, NULL, $3::uuid, $4, $5, $6, $7, $8::jsonb, $9::jsonb,
+                 $10, $11, $12::inet, $13, $14, $15, $16, $17, $18::macaddr,
+                 $19, $20, $21, now(), now())
          RETURNING id::text`,
         [
-          nodeId, branchId, vendor, input.model ?? "manual", input.channel,
+          nodeId, branchId, identity.deviceIdentityId, vendor,
+          input.model ?? "manual", input.channel,
           input.protocol,
           JSON.stringify([{ name: input.streamProfile ?? "main", codec: "H264", width: 1920, height: 1080 }]),
           JSON.stringify({ ptz: false, audio: false, events: true }), input.connectionSecretRef,
           input.connectionTransport ?? null, input.ipAddress ?? null,
           input.sourceType ?? "ip-camera", input.recorderId ?? null,
           input.recorderChannel ?? null, input.recorderSerialNumber ?? null,
+          input.serialNumber ?? null, input.macAddress ?? null,
+          input.onvifUuid ?? null, input.certificateRef ?? null,
+          input.certificateFingerprint ?? null,
         ],
+      );
+      await this.deviceIdentities.linkCamera(
+        client,
+        identity.deviceIdentityId,
+        inserted.rows[0]!.id,
+        input.connectionSecretRef,
       );
       await client.query("COMMIT");
       return await this.findById(inserted.rows[0]!.id);
@@ -379,17 +580,13 @@ export class CameraRepository {
   }
 
   async updateStatus(id: string, status: CameraStatus) {
-    const result = await this.pool.query<CameraRow>(
+    const result = await this.pool.query(
       `UPDATE cameras SET status = $2::camera_status, last_seen_at = CASE
          WHEN $2::camera_status = 'online' THEN now() ELSE last_seen_at END
-       WHERE id = $1::uuid
-       RETURNING id::text, model AS name, resource_node_id::text,
-                 branch_node_id::text, vendor, model, channel, protocol, status, profiles,
-                 capabilities, connection_secret_ref, source_type, recorder_id,
-                 recorder_channel, recorder_serial_number`,
+       WHERE id = $1::uuid`,
       [id, status],
     );
-    return result.rows[0] ? mapCamera(result.rows[0]) : undefined;
+    return result.rowCount ? this.findById(id) : undefined;
   }
 
   async createLiveSession(cameraId: string, userId: string): Promise<LiveSession> {

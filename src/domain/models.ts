@@ -115,6 +115,8 @@ export type VideoCodec = "H264" | "H265" | "H265+" | "MJPEG" | "MPEG4" | "Smart2
 
 export interface Camera {
   id: string;
+  /** Stable physical-device identity. This remains unchanged when the camera IP changes. */
+  deviceIdentityId?: string;
   name: string;
   nodeId: string;
   branchId: string;
@@ -143,6 +145,11 @@ export interface Camera {
   macAddress?: string;
   firmwareVersion?: string;
   ipAddress?: string;
+  onvifUuid?: string;
+  certificateRef?: string;
+  certificateFingerprint?: string;
+  firstSeenAt?: string;
+  lastSeenAt?: string;
   installationNotes?: string;
   /** Optional normalized floor-plan coordinates used for nearby-camera workflows. */
   location?: { x: number; y: number };
@@ -634,8 +641,25 @@ export interface OnvifCapabilityTest {
   detail?: string;
 }
 
+export interface DiscoveryLayerResult {
+  layer:
+    | "network-discovery"
+    | "onvif-discovery"
+    | "onvif-authentication"
+    | "get-capabilities"
+    | "get-profiles"
+    | "get-stream-uri"
+    | "rtsp-verification"
+    | "vendor-adapter"
+    | "fingerprint"
+    | "register";
+  status: "passed" | "failed" | "fallback" | "skipped";
+  detail: string;
+}
+
 export interface DiscoveredCamera {
   id: string;
+  deviceIdentityId: string;
   branchId: string;
   edgeAgentId: string;
   discoveryMethod: "onvif-ws-discovery" | "configured-ip-range" | "rtsp-network-scan" | "manual-ip-registration" | "csv-bulk-import" | "nvr-dvr-channel-discovery" | "vendor-api-discovery" | "snmp-discovery" | "edge-agent-reported-inventory";
@@ -648,8 +672,12 @@ export interface DiscoveredCamera {
   firmwareVersion?: string;
   onvifSupport?: boolean;
   onvifEndpointReference?: string;
+  onvifUuid?: string;
+  certificateRef?: string;
+  certificateFingerprint?: string;
   onvifServices?: string[];
   onvifCapabilityTests?: OnvifCapabilityTest[];
+  discoveryLayers?: DiscoveryLayerResult[];
   mediaProfiles?: CameraProfile[];
   rtspValidated?: boolean;
   ptzCapability?: boolean;
@@ -675,6 +703,45 @@ export interface DiscoveredCamera {
   capabilities: CameraCapabilities;
   status: "pending" | "approved" | "rejected";
   discoveredAt: string;
+}
+
+export type DeviceIdentityClaimType =
+  | "onvif-uuid"
+  | "mac-address"
+  | "hardware-serial"
+  | "recorder-channel"
+  | "hardware-id";
+
+export interface DeviceIpObservation {
+  ipAddress: string;
+  agentId?: string;
+  firstSeenAt: string;
+  lastSeenAt: string;
+  observationCount: number;
+}
+
+export interface DeviceIdentity {
+  deviceId: string;
+  tenantId: string;
+  branchId: string;
+  cameraId?: string;
+  deviceType: CameraSourceType;
+  hardwareSerial?: string;
+  manufacturer?: string;
+  model?: string;
+  firmwareVersion?: string;
+  macAddress?: string;
+  currentIpAddress?: string;
+  ipHistory: DeviceIpObservation[];
+  onvifUuid?: string;
+  dvrSerialNumber?: string;
+  channel?: number;
+  certificateRef?: string;
+  certificateFingerprint?: string;
+  credentialRef?: string;
+  agentId?: string;
+  firstSeenAt: string;
+  lastSeenAt: string;
 }
 
 export interface LiveSession {

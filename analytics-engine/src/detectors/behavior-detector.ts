@@ -9,6 +9,7 @@ import {
   type DetectionFrame,
   type DetectionResult,
   getBoundingBoxCenter,
+  calculateIoU,
 } from "./base-detector.js";
 
 export interface BehaviorConfig {
@@ -68,9 +69,42 @@ export class BehaviorDetector extends BaseDetector {
       throw new Error("BehaviorDetector not initialized");
     }
 
-    // This detector works with person detections from ObjectDetector
-    // It doesn't detect objects itself, but analyzes movement patterns
-    return [];
+    try {
+      const { getInferenceObjects } = await import("./base-detector.js");
+      const pipeline = await import('../inference/unified-inference-pipeline.js').then(m => m.getInferencePipeline());
+
+      // Prefer pipeline object detector if available
+      let persons = await pipeline.detectObjects(frame, ['person']).catch(() => undefined);
+      if (!persons) {
+        // Fallback to using metadata detections
+        persons = getInferenceObjects(frame, ['person']);
+      }
+
+      // Normalize to DetectedObject shape
+      const detected: DetectedObject[] = (persons || []).map((p: any) => ({
+        label: p.label,
+        confidence: p.confidence,
+        boundingBox: p.boundingBox,
+        trackId: p.trackId,
+      }));
+
+      // Optionally run pose estimation for each person
+      for (const person of detected) {
+        if (!person.trackId) continue;
+        const pose = await pipeline.estimatePose(frame, person.boundingBox).catch(() => null);
+        const tracked = this.trackedPersons.get(person.trackId);
+        if (pose && tracked) {
+          tracked.poses.push({ keypoints: pose, timestamp: frame.timestamp });
+        }
+      }
+
+      // Delegate to analytic analyzer
+      const results = await this.analyzeBehavior(frame, detected);
+      return results;
+    } catch (error) {
+      console.warn('BehaviorDetector detect failed:', error);
+      return [];
+    }
   }
 
   /**
@@ -287,18 +321,30 @@ export class BehaviorDetector extends BaseDetector {
     frame: DetectionFrame,
     person: DetectedObject,
   ): DetectionResult | null {
-    // TODO: Implement with pose estimation
-    // Check if:
-    // 1. Person's bounding box aspect ratio changes dramatically (becomes wider)
-    // 2. Vertical position drops suddenly
-    // 3. Pose keypoints show horizontal orientation
+    // Simple heuristic-based fall detection using bounding box aspect ratio and low movement
+    if (tracked.positions.length < 3) return null;
 
-    // Simplified check: sudden height reduction
-    if (tracked.positions.length < 2) return null;
+    const positions = tracked.positions.slice(-3);
+    const height = person.boundingBox.height;
+    const width = person.boundingBox.width;
+    const aspect = height > 0 ? height / width : 0;
 
-    // Check bounding box aspect ratio change
-    // Normal standing person: height/width > 1.5
-    // Fallen person: height/width < 1.0
+    const speed = this.calculateSpeed(positions);
+
+    // Fallen person tends to have low speed and low aspect ratio (more horizontal)
+    if (aspect < 1.0 && speed < 5) {
+      return {
+        detectionType: "falling",
+        confidence: Math.min(0.95, (1.0 - aspect) * 0.9 + (5 - speed) / 10),
+        objects: [],
+        metadata: {
+          trackId: tracked.trackId,
+          aspectRatio: aspect,
+          speed,
+        },
+        requiresAlert: true,
+      };
+    }
 
     return null;
   }
@@ -311,12 +357,35 @@ export class BehaviorDetector extends BaseDetector {
     frame: DetectionFrame,
     person: DetectedObject,
   ): DetectionResult | null {
-    // TODO: Implement with pose estimation
-    // Aggressive indicators:
-    // 1. Raised arms
-    // 2. Forward-leaning posture
-    // 3. Rapid arm movements
-    // 4. Proximity to another person with similar movements
+    // Basic heuristic: if recent pose keypoints show raised wrists above shoulders
+    if (!tracked.poses || tracked.poses.length === 0) return null;
+
+    const recentPoses = tracked.poses.slice(-3).map(p => p.keypoints);
+    let raisedCount = 0;
+    for (const kp of recentPoses) {
+      try {
+        const leftWrist = kp['leftWrist'];
+        const rightWrist = kp['rightWrist'];
+        const leftShoulder = kp['leftShoulder'];
+        const rightShoulder = kp['rightShoulder'];
+        if (!leftWrist || !rightWrist || !leftShoulder || !rightShoulder) continue;
+        if ((leftWrist.y ?? 1) < (leftShoulder.y ?? 0) || (rightWrist.y ?? 1) < (rightShoulder.y ?? 0)) {
+          raisedCount++;
+        }
+      } catch (e) {
+        continue;
+      }
+    }
+
+    if (raisedCount >= 2) {
+      return {
+        detectionType: "aggressive-posture",
+        confidence: Math.min(0.9, raisedCount / recentPoses.length),
+        objects: [],
+        metadata: { trackId: tracked.trackId },
+        requiresAlert: true,
+      };
+    }
 
     return null;
   }
@@ -329,11 +398,34 @@ export class BehaviorDetector extends BaseDetector {
     frame: DetectionFrame,
     person: DetectedObject,
   ): DetectionResult | null {
-    // TODO: Implement with pose estimation
-    // Abnormal indicators:
-    // 1. Horizontal body position for extended time
-    // 2. No movement detected
-    // 3. Unusual limb positions
+    // Heuristic: if very low movement and pose indicates horizontal layout
+    if (tracked.positions.length < 3 || tracked.poses.length < 1) return null;
+
+    const speed = this.calculateSpeed(tracked.positions.slice(-3));
+    const lastPose = tracked.poses[tracked.poses.length - 1].keypoints;
+
+    // Try to estimate vertical spread of keypoints (minY to maxY)
+    try {
+      const ys: number[] = [];
+      for (const k of Object.values(lastPose)) {
+        if (k && typeof (k as any).y === 'number') ys.push((k as any).y);
+      }
+      if (ys.length === 0) return null;
+      const spread = Math.max(...ys) - Math.min(...ys);
+
+      // If spread is small (close to horizontal) and very low speed -> abnormal
+      if (spread < 0.15 && speed < 2) {
+        return {
+          detectionType: 'abnormal-posture',
+          confidence: Math.min(0.95, (0.15 - spread) * 5 + (2 - speed) / 2),
+          objects: [],
+          metadata: { trackId: tracked.trackId },
+          requiresAlert: true,
+        };
+      }
+    } catch (e) {
+      return null;
+    }
 
     return null;
   }
@@ -345,12 +437,32 @@ export class BehaviorDetector extends BaseDetector {
     frame: DetectionFrame,
     persons: DetectedObject[],
   ): DetectionResult | null {
-    // TODO: Implement fight detection
-    // Indicators:
-    // 1. Multiple people in close proximity
-    // 2. Rapid movements by both
-    // 3. Overlapping bounding boxes
-    // 4. Aggressive poses
+    if (persons.length < 2) return null;
+
+    // Simple heuristic: check pairs that overlap and have erratic movement
+    for (let i = 0; i < persons.length; i++) {
+      for (let j = i + 1; j < persons.length; j++) {
+        const p1 = persons[i];
+        const p2 = persons[j];
+        const iou = this.calculateIoU(p1.boundingBox, p2.boundingBox);
+        if (iou > 0.1) {
+          // check tracked persons movement
+          const t1 = this.trackedPersons.get(p1.trackId || '');
+          const t2 = this.trackedPersons.get(p2.trackId || '');
+          const m1 = t1 ? this.calculateSpeed(t1.positions.slice(-5)) : 0;
+          const m2 = t2 ? this.calculateSpeed(t2.positions.slice(-5)) : 0;
+          if (m1 > 20 && m2 > 20) {
+            return {
+              detectionType: 'fighting',
+              confidence: Math.min(0.9, (m1 + m2) / 100),
+              objects: [],
+              metadata: { participants: [p1.trackId, p2.trackId] },
+              requiresAlert: true,
+            };
+          }
+        }
+      }
+    }
 
     return null;
   }

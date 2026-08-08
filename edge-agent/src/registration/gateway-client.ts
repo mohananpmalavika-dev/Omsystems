@@ -8,8 +8,13 @@ export interface DiscoveredCameraPayload {
   manufacturer?: string;
   model: string;
   ipAddress: string;
+  macAddress?: string;
   serialNumber?: string;
   firmwareVersion?: string;
+  onvifEndpointReference?: string;
+  onvifUuid?: string;
+  certificateRef?: string;
+  certificateFingerprint?: string;
   displayName?: string;
   statusReason?: string;
   credentialsRequired?: boolean;
@@ -23,6 +28,13 @@ export interface DiscoveredCameraPayload {
   onvifSupport?: boolean;
   onvifServices?: string[];
   onvifCapabilityTests?: Array<{ name: string; status: "pass" | "fail" | "unsupported" | "vendor-specific"; detail?: string }>;
+  discoveryLayers?: Array<{
+    layer: "network-discovery" | "onvif-discovery" | "onvif-authentication" |
+      "get-capabilities" | "get-profiles" | "get-stream-uri" |
+      "rtsp-verification" | "vendor-adapter" | "fingerprint";
+    status: "passed" | "failed" | "fallback" | "skipped";
+    detail: string;
+  }>;
   onvifPort: number;
   rtspPort: number;
   profiles: Array<{

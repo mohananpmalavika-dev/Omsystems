@@ -68,6 +68,9 @@ async function verifySchema() {
       "camera_installation_compliance",
       "camera_specific_grants",
       "camera_specifications",
+      "device_identities",
+      "device_identity_claims",
+      "device_ip_history",
       "evidence_cases",
       "evidence_exports",
       "evidence_items",
@@ -218,6 +221,18 @@ async function verifySchema() {
       UPDATE users SET role=role
       WHERE id='00000000-0000-4000-8000-000000000202';
     `);
+
+    const cameraIdentity = await client.query(`
+      SELECT camera.device_identity_id::text AS device_identity_id,
+             identity.camera_id::text AS identity_camera_id
+      FROM cameras camera
+      JOIN device_identities identity ON identity.id = camera.device_identity_id
+      WHERE camera.id = '00000000-0000-4000-8000-000000000301'
+    `);
+    if (!cameraIdentity.rows[0]?.device_identity_id ||
+        cameraIdentity.rows[0]?.identity_camera_id !== "00000000-0000-4000-8000-000000000301") {
+      throw new Error("Direct camera insert did not receive a linked digital identity");
+    }
 
     const regionalAllow = await client.query(`
       SELECT allowed

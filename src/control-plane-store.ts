@@ -35,6 +35,8 @@ import type {
   ComplianceFramework,
   CompliancePolicy,
   DiscoveredCamera,
+  DiscoveryLayerResult,
+  DeviceIdentity,
   EdgeActivation,
   EdgeAgent,
   EdgeManagedTunnel,
@@ -83,8 +85,12 @@ export interface CameraDiscoveryInput {
   firmwareVersion?: string;
   onvifSupport?: boolean;
   onvifEndpointReference?: string;
+  onvifUuid?: string;
+  certificateRef?: string;
+  certificateFingerprint?: string;
   onvifServices?: string[];
   onvifCapabilityTests?: Array<{ name: string; status: "pass" | "fail" | "unsupported" | "vendor-specific"; detail?: string }>;
+  discoveryLayers?: DiscoveryLayerResult[];
   mediaProfiles?: CameraProfile[];
   rtspValidated?: boolean;
   ptzCapability?: boolean;
@@ -120,7 +126,11 @@ export interface CameraApprovalInput {
   manufacturer?: string;
   model?: string;
   serialNumber?: string;
+  macAddress?: string;
   ipAddress?: string;
+  onvifUuid?: string;
+  certificateRef?: string;
+  certificateFingerprint?: string;
   onvifPort?: number;
   rtspPort?: number;
   streamProfile?: string;
@@ -529,6 +539,7 @@ export interface ControlPlaneStore {
     type?: NodeType,
   ): Promise<ResourceNode[]>;
   getCamera(id: string): Promise<Camera | undefined>;
+  getDeviceIdentityByCamera(cameraId: string): Promise<DeviceIdentity | undefined>;
   listCamerasByBranch(
     user: User,
     branchId: string,

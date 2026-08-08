@@ -91,4 +91,9 @@ const deviceDetails = {
   capabilities: { ptz: false, audio: false, events: false },
   services: ["DeviceManagement", "Media"],
   capabilityTests: [],
+  inspectionLayers: [
+    { layer: "onvif-authentication" as const, status: "passed" as const, detail: "Authenticated" },
+    { layer: "get-capabilities" as const, status: "passed" as const, detail: "Capabilities loaded" },
+    { layer: "get-profiles" as const, status: "passed" as const, detail: "Profiles loaded" },
+  ],
 };

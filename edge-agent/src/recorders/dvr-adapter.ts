@@ -1,6 +1,10 @@
 import type { OnvifCredentials, OnvifProfile } from "../devices/onvif-client.js";
 import { attachCredentials } from "../devices/onvif-client.js";
 import type { RtspProbeResult } from "../streaming/rtsp-probe.js";
+import {
+  identifyVendorFamily,
+  probeVendorStream,
+} from "../devices/vendor-stream-adapter.js";
 
 export type RecorderAdapterVendor =
   | "hikvision"
@@ -118,6 +122,63 @@ export async function discoverRecorderChannels(
   return channels;
 }
 
+export async function discoverVendorRecorderChannels(input: {
+  manufacturer: string;
+  model: string;
+  host: string;
+  credentials: OnvifCredentials;
+  existingChannels?: number[];
+  probeStream(uri: string): Promise<RtspProbeResult>;
+}) {
+  const existing = new Set(input.existingChannels ?? []);
+  const channelCount = inferRecorderChannelCount(input.model)
+    ?? Math.max(1, ...existing);
+  const pending = Array.from({ length: channelCount }, (_, index) => index + 1)
+    .filter((channel) => !existing.has(channel));
+  const vendor = identifyVendorFamily(input.manufacturer, input.model);
+  const channels: RecorderChannelCandidate[] = [];
+  for (let offset = 0; offset < pending.length; offset += 4) {
+    const batch = pending.slice(offset, offset + 4);
+    const results = await Promise.all(batch.map(async (sourceChannel) => {
+      const fallback = await probeVendorStream({
+        host: input.host,
+        vendor,
+        credentials: input.credentials,
+        channel: sourceChannel,
+        probe: input.probeStream,
+      });
+      return {
+        sourceChannel,
+        name: `Channel ${sourceChannel}`,
+        sourceType: recorderChannelSource(input.model),
+        primaryStreamUri: fallback.candidate?.uri ?? null,
+        profiles: [{
+          name: fallback.candidate?.role ?? "main",
+          codec: codecFromProbe(fallback.probe?.codec),
+          width: Math.max(1, fallback.probe?.width ?? 1),
+          height: Math.max(1, fallback.probe?.height ?? 1),
+          role: fallback.candidate?.role ?? "main",
+        }],
+        streamVerified: Boolean(fallback.probe?.reachable),
+        probe: fallback.probe ?? null,
+        reasonCodes: fallback.probe?.reachable
+          ? ["vendor_adapter_fallback", "recorder_channel_rtsp_verified"]
+          : ["vendor_adapter_fallback", "recorder_channel_rtsp_unreachable"],
+      } satisfies RecorderChannelCandidate;
+    }));
+    channels.push(...results);
+  }
+  return channels;
+}
+
+export function inferRecorderChannelCount(model: string) {
+  const value = model.match(/(?:^|[^\d])(4|8|16|24|32|64)[\s_-]*(?:ch(?:annel)?s?|input)/i)?.[1]
+    ?? model.match(/(?:dvr|xvr|nvr|uvr)[\s_-]*(4|8|16|24|32|64)(?:[^\d]|$)/i)?.[1]
+    ?? model.match(/(?:dvr|xvr|nvr|uvr)[a-z\d_-]*?(04|08|16|24|32|64)(?:[^\d]|$)/i)?.[1]
+    ?? model.match(/\bds[-_]?\d{2}(04|08|16|24|32|64)[a-z]/i)?.[1];
+  return value ? Number(value) : null;
+}
+
 export function recorderAdapterVendor(manufacturer: string): RecorderAdapterVendor {
   const normalized = manufacturer.toLowerCase();
   if (/hikvision|hik vision/.test(normalized)) return "hikvision";
@@ -227,4 +288,10 @@ function classifyStreamUriFailure(error: unknown) {
 
 function unique(values: string[]) {
   return [...new Set(values)];
+}
+
+function codecFromProbe(value: string | null | undefined): OnvifProfile["codec"] {
+  const codec = value?.toUpperCase();
+  if (codec === "H264" || codec === "H265" || codec === "MJPEG") return codec;
+  return "unknown";
 }

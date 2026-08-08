@@ -9,6 +9,7 @@ const discoveryParams = z.object({
   branchId: z.string().min(1),
   discoveryId: z.string().min(1),
 });
+const cameraIdentityParams = z.object({ cameraId: z.string().min(1) });
 
 const approveDiscoveryBody = z.object({
   name: z.string().min(1),
@@ -139,6 +140,22 @@ export async function registerCameraDiscoveryRoutes(
   store: ControlPlaneStore,
   pool?: Pool,
 ) {
+  app.get("/v1/cameras/:cameraId/identity", async (request, reply) => {
+    const { cameraId } = cameraIdentityParams.parse(request.params);
+    const camera = await store.getCamera(cameraId);
+    if (!camera) return reply.code(404).send({ error: "camera_not_found" });
+    const decision = await store.checkAccess(request.currentUser, "device:configure", camera.nodeId);
+    if (!decision?.allowed) {
+      return reply.code(403).send({
+        error: "forbidden",
+        reason: decision?.reason ?? "no_matching_grant",
+      });
+    }
+    const identity = await store.getDeviceIdentityByCamera(cameraId);
+    if (!identity) return reply.code(404).send({ error: "device_identity_not_found" });
+    return identity;
+  });
+
   app.get("/v1/branches/:branchId/cameras/discovered", async (request, reply) => {
     const { branchId } = branchParams.parse(request.params);
     const branch = await store.getNode(branchId);
@@ -190,7 +207,11 @@ export async function registerCameraDiscoveryRoutes(
       ...(connection.connectionTransport ? { connectionTransport: connection.connectionTransport } : {}),
       model: discovered.model,
       serialNumber: discovered.serialNumber,
+      macAddress: discovered.macAddress,
       ipAddress: discovered.ipAddress,
+      onvifUuid: discovered.onvifUuid,
+      certificateRef: discovered.certificateRef,
+      certificateFingerprint: discovered.certificateFingerprint,
       sourceType: discovered.sourceType,
       recorderId: discovered.recorderId,
       recorderChannel: discovered.recorderChannel,
@@ -355,7 +376,11 @@ export async function registerCameraDiscoveryRoutes(
           ...(sourceConnection.connectionTransport ? { connectionTransport: sourceConnection.connectionTransport } : {}),
           model: discovered.model,
           serialNumber: discovered.serialNumber,
+          macAddress: discovered.macAddress,
           ipAddress: discovered.ipAddress,
+          onvifUuid: discovered.onvifUuid,
+          certificateRef: discovered.certificateRef,
+          certificateFingerprint: discovered.certificateFingerprint,
           streamProfile: "main",
           sourceType: discovered.sourceType,
           recorderId: discovered.recorderId,

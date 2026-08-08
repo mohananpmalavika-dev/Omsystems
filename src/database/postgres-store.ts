@@ -18,6 +18,7 @@ import type {
 import { AuditRepository } from "./audit-repository.js";
 import { CameraRepository } from "./camera-repository.js";
 import { EdgeAgentRepository } from "./edge-agent-repository.js";
+import { DeviceIdentityRepository } from "./device-identity-repository.js";
 import { EdgeOperationsRepository } from "./edge-operations-repository.js";
 import { InfrastructureRepository } from "./infrastructure-repository.js";
 import { camelRow, camelRows } from "./infrastructure-repository.js";
@@ -68,6 +69,7 @@ export class PostgresStore
   private readonly resources: ResourceRepository;
   private readonly cameras: CameraRepository;
   private readonly agents: EdgeAgentRepository;
+  private readonly deviceIdentities: DeviceIdentityRepository;
   private readonly edgeOperations: EdgeOperationsRepository;
   private readonly audits: AuditRepository;
   private readonly recordings: RecordingRepository;
@@ -92,8 +94,9 @@ export class PostgresStore
     super(pool);
     this.users = new UserRepository(pool);
     this.resources = new ResourceRepository(pool);
-    this.cameras = new CameraRepository(pool);
-    this.agents = new EdgeAgentRepository(pool);
+    this.deviceIdentities = new DeviceIdentityRepository(pool);
+    this.cameras = new CameraRepository(pool, this.deviceIdentities);
+    this.agents = new EdgeAgentRepository(pool, this.deviceIdentities);
     this.edgeOperations = new EdgeOperationsRepository(pool);
     this.audits = new AuditRepository(pool);
     this.recordings = new RecordingRepository(pool);
@@ -113,6 +116,9 @@ export class PostgresStore
   async close() { await this.pool.end(); }
   async getUser(identity: string) { return this.users.findByIdentity(identity); }
   async getNode(id: string) { return this.resources.findById(id); }
+  async getDeviceIdentityByCamera(cameraId: string) {
+    return this.deviceIdentities.findByCamera(cameraId);
+  }
   async checkAccess(user: User, action: Action, id: string) {
     return this.resources.checkAccess(user, action, id);
   }

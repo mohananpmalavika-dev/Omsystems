@@ -1,9 +1,11 @@
 import { loadEdgeConfig } from "./config.js";
 import { discoverOnvifDevices } from "./discovery/onvif-discovery.js";
+import { onvifServiceCandidates } from "./discovery/onvif-service-candidates.js";
+import { createDeviceFingerprint } from "./discovery/device-fingerprint.js";
 import { discoverRtspDevices } from "./discovery/rtsp-network-scan.js";
 import { attachCredentials, OnvifClient } from "./devices/onvif-client.js";
 import { compatibilityNotes, normalizeVendor } from "./devices/compatibility-registry.js";
-import { GatewayClient } from "./registration/gateway-client.js";
+import { GatewayClient, type DiscoveredCameraPayload } from "./registration/gateway-client.js";
 import { captureRtspRgbFrame, probeRtsp } from "./streaming/rtsp-probe.js";
 import { LocalStreamSecretStore, startSecretProvider } from "./streaming/secret-store.js";
 import { uptime } from "node:os";
@@ -21,7 +23,12 @@ import { stageSignedUpdate } from "./updates/signed-update.js";
 import { readFile } from "node:fs/promises";
 import { CameraCredentialVault, openSealedCommand, type SealedCommandEnvelope } from "./security/camera-credential-vault.js";
 import { DatabaseCredentialProvider } from "./security/database-credential-provider.js";
-import { discoverRecorderChannels, recorderAdapterVendor, recorderChannelIdentity } from "./recorders/dvr-adapter.js";
+import {
+  discoverRecorderChannels,
+  discoverVendorRecorderChannels,
+  recorderAdapterVendor,
+} from "./recorders/dvr-adapter.js";
+import { identifyVendorFamily, probeVendorStream } from "./devices/vendor-stream-adapter.js";
 import type { RecorderConfig } from "./monitoring/recorder-probe.js";
 import { recoverCamera } from "./recovery/camera-recovery.js";
 
@@ -275,6 +282,22 @@ while (!stopping) {
 cameraHeartbeat.stop();
 await edgeMediaRuntime?.stop();
 
+async function discoveryCredentials(host: string) {
+  try {
+    const databaseCredentials = await dbCredentialProvider.get(host);
+    if (databaseCredentials) return databaseCredentials;
+  } catch (error) {
+    logger.warn("Unable to load discovery credentials from the control plane", {
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+  return credentialVault.get(host) ?? {
+    username: config.CAMERA_USERNAME,
+    password: config.CAMERA_PASSWORD,
+    updatedAt: "configuration",
+  };
+}
+
 async function scanBranch(options: { persistStreamSecrets?: boolean } = {}) {
   const persistStreamSecrets = options.persistStreamSecrets ?? true;
   const configuredEndpoints = config.ONVIF_ENDPOINTS
@@ -294,42 +317,50 @@ async function scanBranch(options: { persistStreamSecrets?: boolean } = {}) {
   let submitted = 0;
 
   for (const endpoint of endpoints) {
-    const serviceUrl = endpoint.xaddrs[0];
-    if (!serviceUrl) continue;
+    const serviceUrls = onvifServiceCandidates(endpoint);
+    if (!serviceUrls.length) continue;
+    const credentials = await discoveryCredentials(endpoint.remoteAddress);
+    let serviceUrl = serviceUrls[0]!;
+    const inspectionFailures: string[] = [];
     try {
-      // Try database credentials first, then fall back to vault, then config
-      let credentials: { username: string; password: string; updatedAt: string } | undefined;
-      try {
-        credentials = await dbCredentialProvider.get(endpoint.remoteAddress);
-      } catch (error) {
-        logger.warn("Unable to load discovery credentials from the control plane", {
-          error: error instanceof Error ? error.message : String(error),
-        });
+      let client: OnvifClient | undefined;
+      let device: Awaited<ReturnType<OnvifClient["inspect"]>> | undefined;
+      for (const candidate of serviceUrls) {
+        try {
+          const candidateClient = new OnvifClient(candidate, credentials, config.ONVIF_TIMEOUT_MS);
+          device = await candidateClient.inspect();
+          client = candidateClient;
+          serviceUrl = candidate;
+          break;
+        } catch (error) {
+          inspectionFailures.push(`${candidate}: ${error instanceof Error ? error.message : String(error)}`);
+        }
       }
-      
-      if (!credentials) {
-        credentials = credentialVault.get(endpoint.remoteAddress);
+      if (!client || !device) {
+        throw new Error(`All ONVIF service candidates failed: ${inspectionFailures.join(" | ").slice(0, 1500)}`);
       }
-      
-      if (!credentials) {
-        credentials = {
-          username: config.CAMERA_USERNAME,
-          password: config.CAMERA_PASSWORD,
-          updatedAt: "configuration",
-        };
-      }
-      
-      const client = new OnvifClient(serviceUrl, credentials, config.ONVIF_TIMEOUT_MS);
-      const device = await client.inspect();
       const vendor = normalizeVendor(device.manufacturer);
       const discoveryKinds = [...endpoint.scopes, ...endpoint.types];
+      const baseDiscoveryLayers: DiscoveryLayers = [
+        { layer: "network-discovery", status: "passed", detail: "Camera host discovered on the branch network" },
+        { layer: "onvif-discovery", status: "passed", detail: `ONVIF service selected over ${new URL(serviceUrl).protocol}` },
+        ...device.inspectionLayers,
+      ];
       if (looksLikeRecorder(device, discoveryKinds)) {
-        const discoveredId = `recorder-${device.serialNumber || endpoint.remoteAddress}`.replace(/[^a-zA-Z0-9_.:-]/g, "-");
+        const recorderFingerprint = createDeviceFingerprint({
+          onvifEndpointReference: endpoint.endpointReference,
+          serialNumber: device.serialNumber,
+          manufacturer: device.manufacturer,
+          model: device.model,
+        });
+        const recorderIdentity = knownValue(device.serialNumber) ?? recorderFingerprint ?? endpoint.remoteAddress;
+        const recorderSerialNumber = knownValue(device.serialNumber);
+        const discoveredId = `recorder-${recorderIdentity}`.replace(/[^a-zA-Z0-9_.:-]/g, "-");
         const observedAt = new Date().toISOString();
         const parsedServiceUrl = new URL(serviceUrl);
         const recorderVendor = recorderAdapterVendor(device.manufacturer);
         const recorderType = /dvr|xvr|uvr/i.test(`${device.model} ${discoveryKinds.join(" ")}`) ? "dvr" as const : "nvr" as const;
-        const channels = await discoverRecorderChannels({
+        let channels = await discoverRecorderChannels({
           manufacturer: device.manufacturer,
           model: device.model,
           profiles: device.profiles,
@@ -337,6 +368,20 @@ async function scanBranch(options: { persistStreamSecrets?: boolean } = {}) {
           getStreamUri: (profileToken) => client.getStreamUri(device.mediaServiceUrl, profileToken),
           probeStream: (uri) => probeRtsp(uri, config.FFPROBE_PATH, config.ONVIF_TIMEOUT_MS),
         });
+        const vendorChannels = await discoverVendorRecorderChannels({
+          manufacturer: device.manufacturer,
+          model: device.model,
+          host: endpoint.remoteAddress,
+          credentials,
+          existingChannels: channels.filter((channel) => channel.streamVerified).map((channel) => channel.sourceChannel),
+          probeStream: (uri) => probeRtsp(uri, config.FFPROBE_PATH, config.ONVIF_TIMEOUT_MS),
+        });
+        const channelsByNumber = new Map(channels.map((channel) => [channel.sourceChannel, channel]));
+        for (const vendorChannel of vendorChannels) {
+          const current = channelsByNumber.get(vendorChannel.sourceChannel);
+          if (!current?.streamVerified) channelsByNumber.set(vendorChannel.sourceChannel, vendorChannel);
+        }
+        channels = [...channelsByNumber.values()].sort((left, right) => left.sourceChannel - right.sourceChannel);
         activeRecorders.set(discoveredId, {
           id: discoveredId,
           name: `${device.manufacturer} ${device.model}`,
@@ -368,6 +413,49 @@ async function scanBranch(options: { persistStreamSecrets?: boolean } = {}) {
         });
         submitted += 1;
         for (const channel of channels) {
+          const channelFingerprint = createDeviceFingerprint({
+            onvifEndpointReference: endpoint.endpointReference,
+            manufacturer: device.manufacturer,
+            model: device.model,
+            ...(recorderSerialNumber ? { recorderSerialNumber } : {}),
+            recorderChannel: channel.sourceChannel,
+          });
+          const usedVendorFallback = channel.reasonCodes.includes("vendor_adapter_fallback");
+          const channelLayers: DiscoveryLayers = [
+            ...baseDiscoveryLayers,
+            {
+              layer: "get-stream-uri",
+              status: usedVendorFallback ? "fallback" : channel.primaryStreamUri ? "passed" : "failed",
+              detail: usedVendorFallback
+                ? "Recorder channel URI resolved with a vendor RTSP adapter"
+                : channel.primaryStreamUri
+                  ? "Recorder channel returned an RTSP URI"
+                  : "Recorder channel did not return an RTSP URI",
+            },
+            {
+              layer: "rtsp-verification",
+              status: channel.streamVerified ? "passed" : "failed",
+              detail: channel.streamVerified
+                ? "Recorder channel video stream decoded successfully"
+                : channel.probe?.error ?? "Recorder channel video stream could not be decoded",
+            },
+            {
+              layer: "vendor-adapter",
+              status: usedVendorFallback ? (channel.streamVerified ? "fallback" : "failed") : "skipped",
+              detail: usedVendorFallback
+                ? channel.streamVerified
+                  ? "Vendor RTSP path recovered the recorder channel"
+                  : "Vendor RTSP paths did not produce a reachable stream"
+                : "ONVIF supplied the recorder channel URI",
+            },
+            {
+              layer: "fingerprint",
+              status: channelFingerprint ? "passed" : "failed",
+              detail: channelFingerprint
+                ? "Stable recorder-channel fingerprint generated without using its IP address"
+                : "No stable recorder serial or ONVIF UUID was available",
+            },
+          ];
           const channelDiscovery = await control.submitDiscovery(branchId, {
             edgeAgentId: agentId,
             discoveryMethod: "nvr-dvr-channel-discovery",
@@ -390,7 +478,9 @@ async function scanBranch(options: { persistStreamSecrets?: boolean } = {}) {
             onvifCapabilityTests: device.capabilityTests,
             onvifPort: Number(parsedServiceUrl.port || (parsedServiceUrl.protocol === "https:" ? 443 : 80)),
             rtspPort: 554,
-            profiles: channel.profiles.map((profile) => ({
+            profiles: (channel.profiles.length ? channel.profiles : [{
+              name: "unverified", codec: "unknown" as const, width: 1, height: 1, role: "unknown" as const,
+            }]).map((profile) => ({
               name: profile.name,
               codec: profile.codec,
               width: Math.max(1, channel.probe?.width ?? profile.width),
@@ -398,14 +488,13 @@ async function scanBranch(options: { persistStreamSecrets?: boolean } = {}) {
             })),
             capabilities: device.capabilities,
             statusReason: channel.reasonCodes.join(",").slice(0, 200),
-            hardwareId: device.serialNumber
-              ? recorderChannelIdentity(device.serialNumber, channel.sourceChannel)
-              : `${discoveredId}:channel:${channel.sourceChannel}`,
+            ...(channelFingerprint ? { hardwareId: channelFingerprint } : {}),
+            discoveryLayers: channelLayers,
             existingDeviceAssociation: discoveredId,
             sourceType: channel.sourceType,
             recorderId: discoveredId,
             recorderChannel: channel.sourceChannel,
-            ...(device.serialNumber ? { recorderSerialNumber: device.serialNumber } : {}),
+            ...(recorderSerialNumber ? { recorderSerialNumber } : {}),
           });
           if (persistStreamSecrets && channel.primaryStreamUri) {
             await secrets.set(`edge://${agentId}/${channelDiscovery.id}`, channel.primaryStreamUri);
@@ -418,27 +507,94 @@ async function scanBranch(options: { persistStreamSecrets?: boolean } = {}) {
         });
         continue;
       }
-      const profiles = [];
+      const profiles: DiscoveredCameraPayload["profiles"] = [];
       let primarySourceUri: string | undefined;
       let streamVerified = false;
       let streamValidationError: string | undefined;
+      let streamUriCount = 0;
+      const streamUriErrors: string[] = [];
       for (const profile of device.profiles) {
-        const uri = await client.getStreamUri(device.mediaServiceUrl, profile.token);
-        const sourceUri = attachCredentials(uri, credentials);
-        const result = await probeRtsp(sourceUri, config.FFPROBE_PATH);
-        if (result.reachable) {
-          primarySourceUri ??= sourceUri;
-          streamVerified = true;
-        } else {
-          streamValidationError ??= result.error;
+        let result: Awaited<ReturnType<typeof probeRtsp>> | undefined;
+        try {
+          const uri = await client.getStreamUri(device.mediaServiceUrl, profile.token);
+          streamUriCount += 1;
+          const sourceUri = attachCredentials(uri, credentials);
+          result = await probeRtsp(sourceUri, config.FFPROBE_PATH, config.ONVIF_TIMEOUT_MS);
+          if (result.reachable) {
+            primarySourceUri ??= sourceUri;
+            streamVerified = true;
+          } else {
+            streamValidationError ??= result.error;
+          }
+        } catch (error) {
+          const detail = errorMessage(error);
+          streamUriErrors.push(detail);
+          streamValidationError ??= detail;
         }
         profiles.push({
           name: profile.name,
           codec: profile.codec,
-          width: result.width ?? profile.width,
-          height: result.height ?? profile.height,
+          width: Math.max(1, result?.width ?? profile.width),
+          height: Math.max(1, result?.height ?? profile.height),
         });
       }
+      const vendorFamily = identifyVendorFamily(device.manufacturer, device.model, ...discoveryKinds);
+      const vendorFallback = !streamVerified
+        ? await probeVendorStream({
+            host: endpoint.remoteAddress,
+            vendor: vendorFamily,
+            credentials,
+            probe: (uri) => probeRtsp(uri, config.FFPROBE_PATH, config.ONVIF_TIMEOUT_MS),
+          })
+        : undefined;
+      if (vendorFallback?.candidate && vendorFallback.probe.reachable) {
+        primarySourceUri = vendorFallback.candidate.uri;
+        streamVerified = true;
+        profiles.unshift({
+          name: `Vendor ${vendorFallback.candidate.role}`,
+          codec: discoveryCodec(vendorFallback.probe.codec),
+          width: Math.max(1, vendorFallback.probe.width ?? 1),
+          height: Math.max(1, vendorFallback.probe.height ?? 1),
+        });
+      }
+      if (!profiles.length) profiles.push({ name: "unverified", codec: "unknown", width: 1, height: 1 });
+      const deviceFingerprint = createDeviceFingerprint({
+        onvifEndpointReference: endpoint.endpointReference,
+        serialNumber: device.serialNumber,
+        manufacturer: device.manufacturer,
+        model: device.model,
+      });
+      const discoveryLayers: DiscoveryLayers = [
+        ...baseDiscoveryLayers,
+        {
+          layer: "get-stream-uri",
+          status: streamUriCount > 0 ? "passed" : "failed",
+          detail: streamUriCount > 0
+            ? `${streamUriCount} ONVIF profile URI(s) returned`
+            : streamUriErrors[0] ?? "No ONVIF profile returned a stream URI",
+        },
+        {
+          layer: "rtsp-verification",
+          status: streamVerified ? "passed" : "failed",
+          detail: streamVerified ? "A live RTSP video stream decoded successfully" : streamValidationError ?? vendorFallback?.probe?.error ?? "No live RTSP video stream decoded",
+        },
+        {
+          layer: "vendor-adapter",
+          status: vendorFallback ? (vendorFallback.candidate ? "fallback" : "failed") : "skipped",
+          detail: vendorFallback
+            ? vendorFallback.candidate
+              ? `${vendorFamily} RTSP adapter supplied a working stream URI`
+              : `${vendorFamily} RTSP adapter did not find a working stream URI`
+            : "ONVIF and RTSP verification completed without vendor fallback",
+        },
+        {
+          layer: "fingerprint",
+          status: deviceFingerprint ? "passed" : "failed",
+          detail: deviceFingerprint
+            ? "Stable device fingerprint generated without using its IP address"
+            : "No stable ONVIF UUID or trustworthy hardware serial was available",
+        },
+      ];
       const parsedServiceUrl = new URL(serviceUrl);
       const discovery = await control.submitDiscovery(branchId, {
         edgeAgentId: agentId,
@@ -449,8 +605,10 @@ async function scanBranch(options: { persistStreamSecrets?: boolean } = {}) {
         ipAddress: endpoint.remoteAddress,
         serialNumber: device.serialNumber,
         firmwareVersion: device.firmwareVersion,
+        ...(endpoint.endpointReference ? { onvifEndpointReference: endpoint.endpointReference } : {}),
+        ...(deviceFingerprint ? { hardwareId: deviceFingerprint } : {}),
         displayName: `${device.manufacturer} ${device.model}`,
-        credentialsRequired: false,
+        credentialsRequired: streamUriErrors.some(isCredentialFailure),
         streamVerified,
         rtspValidated: streamVerified,
         compatibility: streamVerified ? "compatible" : "review-required",
@@ -458,11 +616,24 @@ async function scanBranch(options: { persistStreamSecrets?: boolean } = {}) {
         compatibilityStatus: streamVerified ? "compatible" : "review-required",
         onvifSupport: true,
         onvifServices: device.services,
-        onvifCapabilityTests: device.capabilityTests,
+        onvifCapabilityTests: [
+          ...device.capabilityTests.filter((test) => test.name !== "RTSP URI" && test.name !== "GetStreamUri" && test.name !== "RTSP verification"),
+          {
+            name: "GetStreamUri",
+            status: streamUriCount > 0 ? "pass" : "fail",
+            detail: streamUriCount > 0 ? `${streamUriCount} URI(s) returned` : streamUriErrors[0] ?? "No URI returned",
+          },
+          {
+            name: "RTSP verification",
+            status: streamVerified ? "pass" : "fail",
+            detail: streamVerified ? "Live video decoded" : streamValidationError ?? "Stream unavailable",
+          },
+        ],
         onvifPort: Number(parsedServiceUrl.port || (parsedServiceUrl.protocol === "https:" ? 443 : 80)),
         rtspPort: 554,
         profiles,
         capabilities: device.capabilities,
+        discoveryLayers,
         ...(streamVerified ? {} : { statusReason: "rtsp_stream_unverified" }),
       });
       if (persistStreamSecrets && primarySourceUri) {
@@ -475,33 +646,73 @@ async function scanBranch(options: { persistStreamSecrets?: boolean } = {}) {
         ...(streamValidationError ? { streamValidation: "failed" } : {}),
       });
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
+      const message = errorMessage(error);
       logger.error(`Failed to inspect ${endpoint.remoteAddress}`, { error: message });
       try {
-        const serviceUrl = endpoint.xaddrs[0];
-        if (!serviceUrl) continue;
         const parsedServiceUrl = new URL(serviceUrl);
-        await control.submitDiscovery(branchId, {
+        const vendorFamily = identifyVendorFamily(...endpoint.scopes, ...endpoint.types);
+        const vendorFallback = await probeVendorStream({
+          host: endpoint.remoteAddress,
+          vendor: vendorFamily,
+          credentials,
+          probe: (uri) => probeRtsp(uri, config.FFPROBE_PATH, config.ONVIF_TIMEOUT_MS),
+        });
+        const streamVerified = Boolean(vendorFallback.candidate && vendorFallback.probe.reachable);
+        const deviceFingerprint = createDeviceFingerprint({ onvifEndpointReference: endpoint.endpointReference });
+        const discovery = await control.submitDiscovery(branchId, {
           edgeAgentId: agentId,
           discoveryMethod: "onvif-ws-discovery",
-          vendor: "other",
-          manufacturer: "ONVIF",
+          vendor: vendorFamily === "hikvision" ? "hikvision" : vendorFamily === "cp-plus" ? "cp-plus" : "other",
+          manufacturer: vendorFamily === "generic" ? "ONVIF/RTSP" : vendorFamily,
           model: `Camera ${endpoint.remoteAddress}`,
           displayName: `Camera ${endpoint.remoteAddress}`,
           ipAddress: endpoint.remoteAddress,
+          ...(endpoint.endpointReference ? { onvifEndpointReference: endpoint.endpointReference } : {}),
+          ...(deviceFingerprint ? { hardwareId: deviceFingerprint } : {}),
           onvifPort: Number(parsedServiceUrl.port || (parsedServiceUrl.protocol === "https:" ? 443 : 80)),
           rtspPort: 554,
           onvifSupport: true,
-          credentialsRequired: /401|403|unauthori|forbidden|credential|auth/i.test(message),
-          streamVerified: false,
-          rtspValidated: false,
-          compatibility: "review-required",
+          credentialsRequired: isCredentialFailure(message) || isCredentialFailure(vendorFallback.probe?.error),
+          streamVerified,
+          rtspValidated: streamVerified,
+          compatibility: streamVerified ? "compatible" : "review-required",
           duplicateStatus: "unique",
-          compatibilityStatus: "review-required",
-          statusReason: message.slice(0, 200),
-          profiles: [{ name: "unverified", codec: "unknown", width: 1, height: 1 }],
+          compatibilityStatus: streamVerified ? "compatible" : "review-required",
+          statusReason: (streamVerified ? "onvif_failed_vendor_rtsp_verified" : message).slice(0, 200),
+          profiles: [{
+            name: vendorFallback.candidate ? `Vendor ${vendorFallback.candidate.role}` : "unverified",
+            codec: discoveryCodec(vendorFallback.probe?.codec),
+            width: Math.max(1, vendorFallback.probe?.width ?? 1),
+            height: Math.max(1, vendorFallback.probe?.height ?? 1),
+          }],
           capabilities: { ptz: false, audio: false, events: false },
+          discoveryLayers: [
+            { layer: "network-discovery", status: "passed", detail: "Camera host discovered on the branch network" },
+            { layer: "onvif-discovery", status: "passed", detail: `${serviceUrls.length} ONVIF service candidate(s) were identified` },
+            { layer: "onvif-authentication", status: "failed", detail: message.slice(0, 500) },
+            { layer: "get-capabilities", status: "skipped", detail: "Skipped because ONVIF authentication did not complete" },
+            { layer: "get-profiles", status: "skipped", detail: "Skipped because ONVIF authentication did not complete" },
+            { layer: "get-stream-uri", status: "skipped", detail: "Skipped because ONVIF media profiles were unavailable" },
+            {
+              layer: "rtsp-verification",
+              status: streamVerified ? "passed" : "failed",
+              detail: streamVerified ? "Vendor RTSP stream decoded successfully" : vendorFallback.probe?.error ?? "No RTSP stream decoded",
+            },
+            {
+              layer: "vendor-adapter",
+              status: streamVerified ? "fallback" : "failed",
+              detail: streamVerified ? `${vendorFamily} RTSP adapter recovered the camera` : `${vendorFamily} RTSP paths did not respond`,
+            },
+            {
+              layer: "fingerprint",
+              status: deviceFingerprint ? "passed" : "failed",
+              detail: deviceFingerprint ? "Stable ONVIF UUID fingerprint generated" : "No stable hardware identity was advertised",
+            },
+          ],
         });
+        if (persistStreamSecrets && streamVerified && vendorFallback.candidate) {
+          await secrets.set(`edge://${agentId}/${discovery.id}`, vendorFallback.candidate.uri);
+        }
         submitted += 1;
       } catch (submissionError) {
         logger.error(`Failed to report ${endpoint.remoteAddress}`, { error: submissionError instanceof Error ? submissionError.message : String(submissionError) });
@@ -535,6 +746,7 @@ async function scanBranch(options: { persistStreamSecrets?: boolean } = {}) {
         password: config.CAMERA_PASSWORD,
         credentialsForHost: (host: string) => dbCredentialProvider.get(host).catch(() => undefined),
         hosts: knownHosts,
+        excludeHosts: endpoints.map((endpoint) => endpoint.remoteAddress),
       } satisfies Omit<import("./discovery/rtsp-network-scan.js").RtspScanOptions, "cidr" | "cidrs">;
       if (cidr) {
         (options as import("./discovery/rtsp-network-scan.js").RtspScanOptions).cidr = cidr;
@@ -550,6 +762,27 @@ async function scanBranch(options: { persistStreamSecrets?: boolean } = {}) {
   }
 
   return submitted;
+}
+
+type DiscoveryLayers = NonNullable<DiscoveredCameraPayload["discoveryLayers"]>;
+
+function knownValue(value: string | null | undefined) {
+  const normalized = value?.trim();
+  return normalized && !/^(unknown|n\/a|none|null|0+)$/i.test(normalized) ? normalized : undefined;
+}
+
+function discoveryCodec(value: string | null | undefined): DiscoveredCameraPayload["profiles"][number]["codec"] {
+  const normalized = value?.toUpperCase();
+  if (normalized === "H264" || normalized === "H265" || normalized === "MJPEG") return normalized;
+  return "unknown";
+}
+
+function errorMessage(error: unknown) {
+  return error instanceof Error ? error.message : String(error);
+}
+
+function isCredentialFailure(value: string | null | undefined) {
+  return /401|403|unauthori|forbidden|credential|authentication|digest|ws-security/i.test(value ?? "");
 }
 
 async function runAutomaticDiscovery() {
