@@ -113,10 +113,65 @@ describe("branch edge-agent package", () => {
       expect(zipEntry(response.rawPayload, "Run Local Discovery.cmd").toString("utf8"))
         .toContain('Run Local Discovery.ps1');
       const runner = zipEntry(response.rawPayload, "Run Local Discovery.ps1").toString("utf8");
-      expect(runner).toContain("Get-Credential");
       expect(runner).toContain("Bengaluru-Branch-001-local-network-scanner.exe') --scan-once");
-      expect(runner).toContain("Remove-Item Env:CAMERA_PASSWORD");
+      expect(runner).not.toContain("Get-Credential");
+      expect(embeddedConfig(scanner)).not.toContain("CAMERA_PASSWORD=");
       expect(store.auditEvents.at(-1)?.action).toBe("edge_agent.local_scanner_downloaded");
+    } finally {
+      await app.close();
+    }
+  });
+
+  it("uses a short-lived enrollment code when legacy edge keys are disabled", async () => {
+    const artifactRoot = await mkdtemp(join(tmpdir(), "sentinel-secure-local-scanner-package-"));
+    temporaryRoots.push(artifactRoot);
+    await mkdir(join(artifactRoot, "release"), { recursive: true });
+    await writeFile(join(artifactRoot, "package.json"), JSON.stringify({ version: "9.8.7" }));
+    await writeFile(join(artifactRoot, "release", "edge-agent.exe"), Buffer.from("MZ-test-executable"));
+
+    const store = new MemoryStore();
+    const agent = await store.registerEdgeAgent("branch-blr-001", "Temporary scanner", "9.8.7");
+    const app = await buildApp({
+      store,
+      edgeAgentArtifactRoot: artifactRoot,
+      controlPlanePublicUrl: "https://control.example.com",
+      allowLegacyEdgeBridgeKey: false,
+    });
+    try {
+      const response = await app.inject({
+        method: "GET",
+        url: `/v1/branches/branch-blr-001/edge-agents/${agent.id}/package?platform=windows&mode=scan-once`,
+        headers: { "x-user-id": "user-global-admin" },
+      });
+
+      expect(response.statusCode).toBe(200);
+      const scanner = zipEntry(response.rawPayload, "Bengaluru-Branch-001-local-network-scanner.exe");
+      const config = embeddedConfig(scanner);
+      expect(config).toContain('EDGE_BRIDGE_SHARED_KEY=""');
+      const activationMatch = config.match(/^EDGE_ACTIVATION_CODE=(.+)$/m);
+      expect(activationMatch).toBeTruthy();
+      const activationCode = JSON.parse(activationMatch![1]);
+      expect(activationCode).toMatch(/^sgact_/);
+
+      const enrollment = await app.inject({
+        method: "POST",
+        url: "/v1/edge-enrollment/activate",
+        payload: {
+          activationCode,
+          deviceUuid: "11111111-1111-4111-8111-111111111111",
+          version: "9.8.7",
+        },
+      });
+      expect(enrollment.statusCode).toBe(201);
+      expect(enrollment.json()).toMatchObject({ branchId: "branch-blr-001" });
+      const bootstrap = await app.inject({
+        method: "GET",
+        url: `/v1/edge-agents/${enrollment.json().agentId}/discovery-bootstrap`,
+        headers: { "x-edge-agent-token": enrollment.json().credential },
+      });
+      expect(bootstrap.statusCode).toBe(200);
+      expect(bootstrap.json()).toMatchObject({ credentials: [], vpnScanNetworks: [] });
+      expect(store.auditEvents.some((event) => event.action === "edge_agent.local_scanner_downloaded")).toBe(true);
     } finally {
       await app.close();
     }

@@ -536,6 +536,7 @@ button { cursor: pointer; }
   height: 3px;
   background: rgba(53, 111, 246, 0.4);
   animation: scanning-progress 3s ease-in-out infinite;
+  z-index: 3;
 }
 
 @keyframes scanning-progress {
@@ -773,6 +774,13 @@ select, textarea { font: inherit; }
 .device-toolbar h2 { margin: 0; font-size: 17px; }
 .device-toolbar p, .device-card-heading p { margin: 4px 0 0; color: var(--muted); font-size: 10px; }
 .device-toolbar-actions { gap: 8px; }
+.device-advanced { border: 1px solid var(--line); border-radius: 10px; background: #fafbfd; }
+.device-advanced summary { padding: 12px 14px; color: #40536d; cursor: pointer; font-size: 10px; font-weight: 700; }
+.device-advanced summary::marker { color: #2878ff; }
+.device-advanced[open] summary { border-bottom: 1px solid var(--line); }
+.device-advanced-content { display: grid; gap: 12px; padding: 14px; }
+.device-advanced-content > p { margin: 0; color: #718096; font-size: 9px; line-height: 1.45; }
+.device-advanced-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .device-message { gap: 8px; padding: 10px 12px; border-radius: 9px; font-size: 10px; }
 .device-message.error { color: #a83e45; background: #ffeded; }
 .device-message.success { color: #157455; background: #e8f8f2; }
@@ -921,8 +929,15 @@ select, textarea { font: inherit; }
   pointer-events: none;
 }
 .discovery-status-panel.idle { border-color: #e5d8c4; background: linear-gradient(135deg,#fffaf3 0%,#f8f0e3 100%); }
+.discovery-status-copy { position: relative; z-index: 1; }
+.discovery-status-title { display: flex; align-items: center; gap: 8px; }
+.discovery-status-title > svg { color: #506987; }
 .discovery-status-copy strong { display: block; color: #274264; font-size: 11px; position: relative; z-index: 1; }
 .discovery-status-copy p { margin: 4px 0 0; color: #64748b; font-size: 9px; line-height: 1.5; position: relative; z-index: 1; }
+.scan-route-steps { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 9px; position: relative; z-index: 1; }
+.scan-route-steps span { padding: 4px 6px; color: #718096; border: 1px solid #d9e4f4; border-radius: 999px; background: rgba(255,255,255,.72); font-size: 8px; font-weight: 650; }
+.scan-route-steps span.active { color: #1762b3; border-color: #8ebcf5; background: #e3f0ff; box-shadow: 0 0 0 3px rgba(53,111,246,.1); animation: scanning-pill-glow 1.5s ease-in-out infinite; }
+.scan-route-steps span.complete { color: #19724f; border-color: #bfe2d0; background: #edf9f2; }
 
 /* Scanning icon animation */
 .scanning-icon {

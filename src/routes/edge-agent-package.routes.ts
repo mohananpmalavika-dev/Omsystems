@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { deflateRawSync } from "node:zlib";
+import { createHash, randomBytes } from "node:crypto";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { readFile, stat } from "node:fs/promises";
@@ -21,6 +22,7 @@ const embeddedConfigMarker = Buffer.from("SENTINEL_EDGE_CONFIG_V1", "ascii");
 export interface EdgeAgentPackageOptions {
   controlPlanePublicUrl?: string;
   edgeBridgeSharedKey?: string;
+  allowLegacyEdgeBridgeKey?: boolean;
   artifactRoot?: string;
   developmentUserId?: string;
 }
@@ -124,6 +126,7 @@ function branchConfiguration(
   options: EdgeAgentPackageOptions,
   platform: "windows" | "linux",
   mode: "install" | "scan-once" = "install",
+  activationCode?: string,
 ) {
   return environmentFile({
     CONTROL_PLANE_URL: options.controlPlanePublicUrl ?? "REPLACE_WITH_PUBLIC_CONTROL_PLANE_URL",
@@ -133,9 +136,8 @@ function branchConfiguration(
     EDGE_AGENT_NAME: agent.name,
     EDGE_AGENT_VERSION: version,
     DEV_USER_ID: options.developmentUserId ?? "",
-    EDGE_BRIDGE_SHARED_KEY: options.edgeBridgeSharedKey ?? "",
-    CAMERA_USERNAME: "",
-    CAMERA_PASSWORD: "",
+    EDGE_BRIDGE_SHARED_KEY: activationCode ? "" : options.edgeBridgeSharedKey ?? "",
+    EDGE_ACTIVATION_CODE: activationCode ?? "",
     ONVIF_ENDPOINTS: "",
     DISCOVERY_TIMEOUT_MS: "5000",
     ONVIF_TIMEOUT_MS: "8000",
@@ -181,13 +183,17 @@ function embeddedConfigurationFooter(config: Buffer) {
   return Buffer.concat([config, length, embeddedConfigMarker]);
 }
 
+function hashSecret(value: string) {
+  return createHash("sha256").update(value).digest("hex");
+}
+
 function localDiscoveryReadme(branchName: string) {
   return [
     `Sentinel Grid temporary local-network scanner for ${branchName}`,
     "",
     "1. Connect this Windows PC to the same wired/Wi-Fi network as the IP cameras and DVR/NVRs.",
     "2. Extract this ZIP and double-click Run Local Discovery.cmd.",
-    "3. Enter a shared ONVIF/DVR login when prompted, if available. It is used only for this scan and is not saved on the PC.",
+    "3. The scanner securely loads the branch's saved camera credentials from Sentinel Grid. No password or configuration is required on this PC.",
     "4. Wait for the completed result, then return to Sentinel Grid and review the discovered devices.",
     "",
     "It discovers direct ONVIF IP cameras plus DVR/NVR channels. Analog cameras appear as DVR channels because the DVR digitizes them. A recorder login is needed to enumerate its individual channels.",
@@ -215,7 +221,7 @@ export async function registerEdgeAgentPackageRoutes(
 
     const agent = (await store.listEdgeAgentsByBranch(branchId)).find((item) => item.id === edgeAgentId);
     if (!agent) return reply.code(404).send({ error: "edge_agent_not_found" });
-    if (!options.edgeBridgeSharedKey && !options.developmentUserId) {
+    if (mode !== "scan-once" && !options.edgeBridgeSharedKey && !options.developmentUserId) {
       return reply.code(503).send({
         error: "edge_bridge_not_configured",
         message: "Configure EDGE_BRIDGE_SHARED_KEY before downloading production branch installers.",
@@ -231,7 +237,20 @@ export async function registerEdgeAgentPackageRoutes(
     try {
       const packageJson = JSON.parse(await readFile(join(root, "package.json"), "utf8")) as { version?: string };
       const version = packageJson.version ?? "0.1.0";
-      const config = Buffer.from(branchConfiguration(agent, version, options, platform, mode), "utf8");
+      const useLegacySharedKey = options.allowLegacyEdgeBridgeKey ?? Boolean(options.edgeBridgeSharedKey);
+      const activationCode = mode === "scan-once" && !useLegacySharedKey
+        ? `sgact_${randomBytes(32).toString("base64url")}`
+        : undefined;
+      const activation = activationCode
+        ? await store.createEdgeActivation({
+            branchId,
+            agentName: `${branch.name} temporary local scanner`,
+            createdBy: request.currentUser.id,
+            expiresAt: new Date(Date.now() + 30 * 60_000).toISOString(),
+            tokenHash: hashSecret(activationCode),
+          })
+        : undefined;
+      const config = Buffer.from(branchConfiguration(agent, version, options, platform, mode, activationCode), "utf8");
       let entries: Array<{ name: string; data: Buffer }>;
 
       if (platform === "windows") {
@@ -262,28 +281,21 @@ export async function registerEdgeAgentPackageRoutes(
           ].join("\r\n");
           const powerShellRunner = [
             "$ErrorActionPreference = 'Stop'",
-            "$credential = Get-Credential -Message 'Optional: enter the shared ONVIF / DVR login to enumerate recorder channels'",
-            "$passwordPointer = [IntPtr]::Zero",
-            "try {",
-            "  if ($credential) {",
-            "    $env:CAMERA_USERNAME = $credential.UserName",
-            "    $passwordPointer = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($credential.Password)",
-            "    $env:CAMERA_PASSWORD = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($passwordPointer)",
-            "  }",
-            `  & (Join-Path $PSScriptRoot '${scannerName}') --scan-once`,
-            "  exit $LASTEXITCODE",
-            "} finally {",
-            "  if ($passwordPointer -ne [IntPtr]::Zero) { [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($passwordPointer) }",
-            "  Remove-Item Env:CAMERA_USERNAME -ErrorAction SilentlyContinue",
-            "  Remove-Item Env:CAMERA_PASSWORD -ErrorAction SilentlyContinue",
-            "}",
+            `& (Join-Path $PSScriptRoot '${scannerName}') --scan-once`,
+            "exit $LASTEXITCODE",
             "",
           ].join("\r\n");
           await store.writeAudit({
             tenantId: branch.tenantId, actorUserId: request.currentUser.id,
             action: "edge_agent.local_scanner_downloaded", resourceNodeId: branchId,
             outcome: "success", sourceIp: request.ip,
-            details: { edgeAgentId, platform, version, mode },
+            details: {
+              edgeAgentId,
+              platform,
+              version,
+              mode,
+              ...(activation ? { activationId: activation.id, activationExpiresAt: activation.expiresAt } : {}),
+            },
           });
           reply.header("Cache-Control", "no-store, private");
           reply.header("Content-Type", "application/zip");

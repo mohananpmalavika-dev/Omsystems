@@ -49,6 +49,8 @@ type CameraForm = {
   events: boolean;
 };
 
+const scanStages = ["Local network", "VPN routes", "Secure tunnel"] as const;
+
 const emptyCameraForm: CameraForm = {
   name: "",
   vendor: "other",
@@ -196,6 +198,7 @@ export function DeviceManager() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [scanning, setScanning] = useState(false);
+  const [scanStageIndex, setScanStageIndex] = useState(0);
   const [lastScanAt, setLastScanAt] = useState<string | null>(null);
   const [autoProvisionResults, setAutoProvisionResults] = useState<AutoProvisionResult[]>([]);
   const [error, setError] = useState<string>();
@@ -280,36 +283,6 @@ export function DeviceManager() {
     downloadTextFile(`${activeBranch?.name?.replace(/[^a-z0-9_-]+/gi, "-") || "branch"}-gateway.env`, setupText);
   }
 
-  async function downloadLocalDiscoveryScanner() {
-    if (!selectedBranch) return;
-    setSaving(true);
-    setError(undefined);
-    try {
-      let scanner = gateways[0];
-      if (!scanner) {
-        scanner = await cameraInventoryApi.registerGateway(selectedBranch, {
-          name: `${activeBranch?.name ?? "Branch"} temporary local scanner`,
-          version: "0.1.0",
-        });
-      }
-      const blob = await cameraInventoryApi.downloadLocalScanner(selectedBranch, scanner.id);
-      const url = window.URL.createObjectURL(blob);
-      const anchor = document.createElement("a");
-      anchor.href = url;
-      anchor.download = `${(activeBranch?.name ?? "branch").replace(/[^a-zA-Z0-9_-]/g, "-")}-local-network-scanner.zip`;
-      document.body.appendChild(anchor);
-      anchor.click();
-      anchor.remove();
-      window.URL.revokeObjectURL(url);
-      await refreshBranch(selectedBranch);
-      setNotice("Local scanner downloaded. Extract it on the PC connected to the camera network and double-click Run Local Discovery.cmd. It exits after finding IP cameras and DVR/NVR channels.");
-    } catch (reason) {
-      setError(messageOf(reason, "Unable to prepare the local network scanner."));
-    } finally {
-      setSaving(false);
-    }
-  }
-
   useEffect(() => {
     void cameraInventoryApi.listBranches("device:configure")
       .then(({ data }) => {
@@ -338,6 +311,19 @@ export function DeviceManager() {
     setInventoryForm((form) => ({ ...form, branch: selectedBranch }));
     void refreshBranch(selectedBranch);
   }, [selectedBranch]);
+
+  useEffect(() => {
+    if (!scanning) {
+      setScanStageIndex(0);
+      return;
+    }
+
+    const stageTimer = window.setInterval(() => {
+      setScanStageIndex((current) => (current + 1) % scanStages.length);
+    }, 2_200);
+
+    return () => window.clearInterval(stageTimer);
+  }, [scanning]);
 
   async function refreshBranch(branchId: string) {
     setLoading(true);
@@ -400,12 +386,12 @@ export function DeviceManager() {
     setShowCameraForm(true);
   }
 
-  async function scanNetwork() {
+  async function scanCameras() {
     if (!selectedBranch) return;
     if (gateways.length === 0) {
       setGatewayActivation(undefined);
       setShowGatewayForm(true);
-      setNotice("Enroll the Branch Gateway first; discovery runs inside the branch camera network.");
+      setNotice("Enroll the Branch Gateway once to enable the automatic camera scan for this branch.");
       return;
     }
     setScanning(true);
@@ -467,65 +453,9 @@ export function DeviceManager() {
         return next;
       });
       setShowDiscoveredList(true);
-      setNotice(`Network scan completed. Found ${job.resultCount || mappedResults.length} cameras.`);
+      setNotice(`Camera scan completed. Found ${job.resultCount || mappedResults.length} cameras.`);
     } catch (reason) {
-      setError(messageOf(reason, "Network scan failed."));
-    } finally {
-      setScanning(false);
-    }
-  }
-
-  async function autoDiscoverAndProvision() {
-    if (!selectedBranch) return;
-    if (gateways.length === 0) {
-      setGatewayActivation(undefined);
-      setShowGatewayForm(true);
-      setNotice("Enroll the Branch Gateway first; discovery runs inside the branch camera network.");
-      return;
-    }
-    setScanning(true);
-    setError(undefined);
-    try {
-      const preferred = gateways.find((gateway) => gateway.status === "online") ?? gateways[0];
-      const scan = await cameraInventoryApi.startScan(selectedBranch, preferred?.id) as { id: string; status: string; branchId: string };
-      setLastScanAt(new Date().toISOString());
-      const deadline = Date.now() + 120_000;
-      let job = await cameraInventoryApi.getScan(selectedBranch, scan.id) as EdgeScanJob;
-
-      while (job.status === "queued" || job.status === "running") {
-        if (Date.now() >= deadline) {
-          setNotice("Scan queued. It will run when the Branch Gateway checks in.");
-          return;
-        }
-        await wait(1_500);
-        job = await cameraInventoryApi.getScan(selectedBranch, scan.id) as EdgeScanJob;
-      }
-
-      if (job.status === "failed") {
-        throw new Error(job.error ?? "Branch Gateway scan failed.");
-      }
-
-      const results = await cameraInventoryApi.getScanResults(selectedBranch, scan.id);
-      if (!results.data || results.data.length === 0) {
-        setNotice("Scan completed but no cameras were discovered.");
-        return;
-      }
-
-      const provisionResponse = await cameraInventoryApi.approveAllDiscovered(selectedBranch, {
-        recordingMode: "continuous",
-        retentionDays: 180,
-        enableAnalytics: true,
-        enableAlerts: true,
-      });
-
-      await refreshBranch(selectedBranch);
-      const provisioned = provisionResponse.summary?.provisioned ?? 0;
-      const needsAttention = provisionResponse.summary?.needsAttention ?? 0;
-      const failed = provisionResponse.summary?.failed ?? 0;
-      setNotice(`Auto provision finished. ${provisioned} cameras provisioned, ${needsAttention} require attention, ${failed} failed.`);
-      setShowDiscoveredList(true);
-    } catch (reason) {
-      setError(messageOf(reason, "Auto discover and provision failed."));
+      setError(messageOf(reason, "Camera scan failed."));
     } finally {
       setScanning(false);
     }
@@ -786,33 +716,18 @@ export function DeviceManager() {
       <div className="device-toolbar">
         <div>
           <h2>Branches & devices</h2>
-          <p>Use your existing VPN or a managed tunnel to connect IP cameras and analog DVR/NVR channels securely.</p>
+          <p>One automatic scan checks the branch network, saved VPN routes, and managed tunnel access.</p>
         </div>
         <div className="device-toolbar-actions">
-          <button className="secondary-button" onClick={() => {
-            setGatewayActivation(undefined);
-            setShowGatewayForm(true);
-          }} disabled={!selectedBranch}>
-            <Router size={15} /> Enroll Branch Gateway
-          </button>
-          <button className="secondary-button" onClick={() => void scanNetwork()} disabled={!selectedBranch || scanning || gateways.length === 0} title="Find cameras through the Branch Gateway inside this branch network">
-            <Network size={15} /> {scanning ? "Scanning…" : "Scan network"}
-          </button>
-          <button className="primary-button" onClick={() => void autoDiscoverAndProvision()} disabled={!selectedBranch || scanning || gateways.length === 0} title="Automatically discover and provision cameras in this branch">
-            <Plus size={15} /> Discover & add
-          </button>
-          <button className="secondary-button" onClick={() => void downloadLocalDiscoveryScanner()} disabled={!selectedBranch || saving} title="Download a one-time scanner for a PC connected to this branch camera network">
-            <Download size={15} /> Local PC scan
-          </button>
-          <button className="secondary-button" onClick={openCameraForm} disabled={!selectedBranch} title="Register an IP camera or DVR/NVR channel manually">
-            <Plus size={15} /> Manual add
+          <button className="primary-button" onClick={() => void scanCameras()} disabled={!selectedBranch || scanning || saving} title="Automatically search local network, VPN routes, and the managed tunnel">
+            <Search size={15} /> {scanning ? "Searching cameras..." : "Scan cameras"}
           </button>
         </div>
         {selectedBranch ? (
           gateways.length === 0 ? (
-            <p className="device-toolbar-note">Configure VPN for direct registration, or enroll a Branch Gateway to use tunnel discovery.</p>
+            <p className="device-toolbar-note">One-time setup required: enroll the Branch Gateway to start automatic scanning.</p>
           ) : (
-            <p className="device-toolbar-note">Gateway: {gateways[0]?.name || "Unnamed"} · {gateways[0]?.status === "online" ? "Online and monitoring" : gateways[0]?.status === "offline" ? "Offline" : "Awaiting first connection"}</p>
+            <p className="device-toolbar-note">Gateway: {gateways[0]?.name || "Unnamed"} · {gateways[0]?.status === "online" ? "Ready to scan" : gateways[0]?.status === "offline" ? "Offline — scan will queue" : "Awaiting first connection"}</p>
           )
         ) : null}
       </div>
@@ -823,8 +738,8 @@ export function DeviceManager() {
       <div className="remote-camera-note">
         <Network size={19} />
         <div>
-          <strong>Two secure connection choices</strong>
-          <span>VPN branches use their router route directly. Tunnel branches use a centrally enrolled gateway. Both keep camera credentials out of the inventory database.</span>
+          <strong>One automatic camera search</strong>
+          <span>The module uses the branch's saved credentials and checks local cameras first, then VPN routes, then tunnel-connected access. No scan settings are required.</span>
         </div>
       </div>
 
@@ -836,7 +751,24 @@ export function DeviceManager() {
         {branches.length === 0 && !loading && <span>You do not have device configuration permission for any branch.</span>}
       </div>
 
-      <BranchConnectivityPanel branchId={selectedBranch} onConfigured={() => void refreshBranch(selectedBranch)} />
+      <details className="device-advanced">
+        <summary>Advanced connection setup</summary>
+        <div className="device-advanced-content">
+          <p>Only use this when installing a gateway, changing VPN or tunnel settings, or adding a device manually.</p>
+          <div className="device-advanced-actions">
+            <button className="secondary-button" onClick={() => {
+              setGatewayActivation(undefined);
+              setShowGatewayForm(true);
+            }} disabled={!selectedBranch}>
+              <Router size={15} /> Enroll Branch Gateway
+            </button>
+            <button className="secondary-button" onClick={openCameraForm} disabled={!selectedBranch}>
+              <Plus size={15} /> Add camera manually
+            </button>
+          </div>
+          <BranchConnectivityPanel branchId={selectedBranch} onConfigured={() => void refreshBranch(selectedBranch)} />
+        </div>
+      </details>
 
       {loading ? <div className="loading-state"><Activity className="spin" />Loading branch devices…</div> : (
         <div className="device-columns">
@@ -884,12 +816,24 @@ export function DeviceManager() {
         <div className="device-card-heading"><Search size={18} /><div><h3>Device discovery</h3><p>{pendingReviewCount} awaiting review · {approvedReviewCount} approved</p></div></div>
         <div className={`discovery-status-panel ${scanning ? "scanning" : discoveryQueueItems.length === 0 ? "idle" : "ready"}`}>
           <div className="discovery-status-copy">
-            <strong>{scanning ? "Scan in progress" : discoveryQueueItems.length === 0 ? "Scan ready" : "Cameras are ready for automatic provisioning"}</strong>
+            <div className="discovery-status-title">
+              {scanning ? <span className="scanning-icon" aria-hidden="true"><span /></span> : <Search size={18} aria-hidden="true" />}
+              <strong>{scanning ? "Camera search in progress" : discoveryQueueItems.length === 0 ? "Scan ready" : "Cameras are ready for review"}</strong>
+            </div>
             <p>{scanning
-              ? "The Branch Gateway is checking the local network and validating cameras."
+              ? `Checking ${scanStages[scanStageIndex].toLowerCase()}. The search continues automatically through every configured path.`
               : discoveryQueueItems.length === 0
-                ? "Use Scan network with a gateway, or Local PC scan when your laptop is connected to the branch network. Both find IP cameras and DVR/NVR channels."
+                ? "Select Scan cameras once. The module checks the local network, VPN routes, and tunnel-connected access in sequence."
                 : "Approve all verified cameras to start recording, AI detection, and alerts automatically."}</p>
+            {scanning ? (
+              <div className="scan-route-steps" aria-label="Camera search paths">
+                {scanStages.map((stage, index) => (
+                  <span className={index === scanStageIndex ? "active" : index < scanStageIndex ? "complete" : ""} key={stage}>
+                    {index + 1}. {stage}
+                  </span>
+                ))}
+              </div>
+            ) : null}
           </div>
           <div className="discovery-status-actions">
             <span className={`scan-pill ${scanning ? "active" : "idle"}`}>
@@ -907,9 +851,10 @@ export function DeviceManager() {
             <div><span>Pending</span><strong>{pendingReviewCount}</strong></div>
             <div><span>Approved</span><strong>{approvedReviewCount}</strong></div>
           </div>
+          {scanning ? <span className="scanning-progress" aria-hidden="true" /> : null}
         </div>
         {discoveryQueueItems.length === 0 ? (
-          <div className="device-empty"><Camera size={25} /><strong>No pending discoveries</strong><span>Scanning the branch network will surface supported cameras here without manual IP entry.</span></div>
+          <div className="device-empty"><Camera size={25} /><strong>No pending discoveries</strong><span>Use the single camera scan to search the branch network without entering IP addresses manually.</span></div>
         ) : (
           <div className="discovery-camera-list">
             {discoveryQueueItems.map((item) => {

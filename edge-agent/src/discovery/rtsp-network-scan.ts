@@ -6,6 +6,8 @@ import { logger } from "../utils/logger.js";
 
 export interface RtspScanOptions {
   cidr?: string; // single CIDR like 192.168.1.0/24 or empty to infer
+  cidrs?: string[];
+  hosts?: string[];
   ports: number[];
   paths: string[];
   ffprobePath: string;
@@ -13,6 +15,7 @@ export interface RtspScanOptions {
   concurrency: number;
   username: string;
   password: string;
+  credentialsForHost?: (host: string) => Promise<{ username: string; password: string } | undefined>;
 }
 
 function inferLocalCidrs(): string[] {
@@ -77,7 +80,8 @@ export async function discoverRtspDevices(
   secretsStore: { set(key: string, value: string): Promise<void> | void } | undefined,
   persistStreamSecrets = true,
 ): Promise<number> {
-  const cidrList = options.cidr && options.cidr.trim() ? [options.cidr.trim()] : inferLocalCidrs();
+  const cidrList = options.cidrs?.filter(Boolean).map((cidr) => cidr.trim())
+    ?? (options.cidr && options.cidr.trim() ? [options.cidr.trim()] : inferLocalCidrs());
   if (cidrList.length === 0) {
     logger.info("RTSP scan: no local network addresses found to scan");
     return 0;
@@ -90,10 +94,11 @@ export async function discoverRtspDevices(
   const username = options.username ?? "";
   const password = options.password ?? "";
 
-  const candidates: string[] = [];
+  const candidates = new Set<string>();
+  for (const host of options.hosts ?? []) candidates.add(host);
   for (const cidr of cidrList) {
     const ips = ipsFromCidr(cidr);
-    for (const ip of ips) candidates.push(ip);
+    for (const ip of ips) candidates.add(ip);
   }
 
   // Limit total concurrency
@@ -123,7 +128,10 @@ export async function discoverRtspDevices(
             let uri = `rtsp://${ip}:${port}${path}`;
             // omit port if 554
             if (port === 554) uri = `rtsp://${ip}${path}`;
-            const authed = username ? attachCredentials(uri, { username, password }) : uri;
+            const storedCredentials = await options.credentialsForHost?.(ip);
+            const effectiveUsername = storedCredentials?.username ?? username;
+            const effectivePassword = storedCredentials?.password ?? password;
+            const authed = effectiveUsername ? attachCredentials(uri, { username: effectiveUsername, password: effectivePassword }) : uri;
             const probe = await probeRtsp(authed, ffprobePath, timeoutMs).catch((e) => ({
             reachable: false,
             codec: null,
@@ -142,7 +150,7 @@ export async function discoverRtspDevices(
                   ipAddress: ip,
                   rtspPort: port,
                   displayName: `Discovered camera ${ip}`,
-                  credentialsRequired: Boolean(username && !probe.reachable),
+                  credentialsRequired: false,
                   streamVerified: true,
                   rtspValidated: true,
                   compatibility: probe.reachable ? "compatible" : "review-required",
@@ -157,7 +165,7 @@ export async function discoverRtspDevices(
                   const primaryUri = authed;
                   await secretsStore.set(`edge://${agentId}/${discovery.id}`, primaryUri);
                 }
-                logger.info(`RTSP discovery: found stream ${authed} -> discovery ${discovery.id}`);
+                logger.info(`RTSP discovery: found stream at ${ip}:${port} -> discovery ${discovery.id}`);
                 // Once we find a working path on this host, skip remaining ports/paths
                 return;
               } catch (submissionError) {

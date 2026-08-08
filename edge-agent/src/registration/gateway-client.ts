@@ -102,6 +102,12 @@ export interface EdgeUpdateRelease {
   signature: string;
 }
 
+export interface DiscoveryBootstrap {
+  credentials: Array<{ host?: string; username: string; password: string; updatedAt: string }>;
+  vpnScanNetworks: string[];
+  transport: "vpn" | "cloudflare-tunnel" | null;
+}
+
 export interface GatewayMediaBootstrap {
   enabled: true;
   managed: true;
@@ -136,6 +142,13 @@ export class GatewayClient {
   async getBootstrap(agentId: string) {
     return this.request<{ controlPlaneUrl: string; media?: GatewayMediaBootstrap }>(
       `/v1/edge-agents/${encodeURIComponent(agentId)}/bootstrap`,
+      { method: "GET" },
+    );
+  }
+
+  async getDiscoveryBootstrap(agentId: string) {
+    return this.request<DiscoveryBootstrap>(
+      `/v1/edge-agents/${encodeURIComponent(agentId)}/discovery-bootstrap`,
       { method: "GET" },
     );
   }

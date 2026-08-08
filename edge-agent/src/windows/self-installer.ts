@@ -3,11 +3,12 @@ import { spawnSync } from "node:child_process";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
+const moduleDirectory = typeof __dirname === "string"
+  ? __dirname
+  : dirname(fileURLToPath(import.meta.url));
 
-const ASSET_ROOT = join(__dirname, "..", "vendor", "windows");
-const INSTALLER_ROOT = join(__dirname, "..", "installer", "windows");
+const ASSET_ROOT = join(moduleDirectory, "..", "vendor", "windows");
+const INSTALLER_ROOT = join(moduleDirectory, "..", "installer", "windows");
 
 const REQUIRED_BUNDLE_ASSETS = [
   ["ffmpeg.zip", join(ASSET_ROOT, "ffmpeg.zip")],

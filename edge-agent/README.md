@@ -53,10 +53,10 @@ edge bridge credential.
 
 When an operator connects a Windows laptop to the same LAN/VLAN as a branch's
 cameras and recorders, download **Local PC scan** from Branches & devices.
-Extract the ZIP and double-click `Run Local Discovery.cmd`. If you know a
-shared ONVIF/DVR login, enter it in the Windows credential prompt to enumerate
-recorder channels. The credential is used in memory only for that scan and is
-not saved on the laptop.
+Extract the ZIP and double-click `Run Local Discovery.cmd`. The scanner reads
+the branch's saved ONVIF/DVR credentials from Sentinel Grid for this one run,
+so no local configuration or password prompt is required. Credentials are not
+saved on the laptop.
 
 It discovers:
 

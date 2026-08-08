@@ -145,17 +145,7 @@ const credentialVault = new CameraCredentialVault(
 );
 await credentialVault.load();
 
-// Initialize database credential provider if enabled
-let dbCredentialProvider: DatabaseCredentialProvider | undefined;
-if (config.USE_DATABASE_CREDENTIALS && config.DATABASE_URL) {
-  dbCredentialProvider = new DatabaseCredentialProvider(
-    config.DATABASE_URL,
-    resolvedBranchId,
-    agentId
-  );
-  await dbCredentialProvider.connect();
-  logger.info('Database credential provider initialized');
-}
+const dbCredentialProvider = new DatabaseCredentialProvider(control, agentId);
 if (hasArgument(argv, "--diagnose")) {
   await control.heartbeat(agentId, config.EDGE_AGENT_VERSION, config.PUBLIC_MEDIA_GATEWAY_URL);
   process.stdout.write(`Connected to ${config.CONTROL_PLANE_URL} as edge agent ${agentId}.\n`);
@@ -292,9 +282,14 @@ async function scanBranch(options: { persistStreamSecrets?: boolean } = {}) {
     if (!serviceUrl) continue;
     try {
       // Try database credentials first, then fall back to vault, then config
-      let credentials = dbCredentialProvider 
-        ? await dbCredentialProvider.get(endpoint.remoteAddress)
-        : undefined;
+      let credentials: { username: string; password: string; updatedAt: string } | undefined;
+      try {
+        credentials = await dbCredentialProvider.get(endpoint.remoteAddress);
+      } catch (error) {
+        logger.warn("Unable to load discovery credentials from the control plane", {
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
       
       if (!credentials) {
         credentials = credentialVault.get(endpoint.remoteAddress);
@@ -490,6 +485,18 @@ async function scanBranch(options: { persistStreamSecrets?: boolean } = {}) {
       const ports = String(config.RTSP_SCAN_PORTS).split(",").map((p) => Number(p.trim())).filter(Boolean);
       const paths = String(config.RTSP_SCAN_PATHS).split(",").map((p) => p.trim()).filter(Boolean);
       const cidr = config.RTSP_SCAN_CIDR ? String(config.RTSP_SCAN_CIDR).trim() : undefined;
+      const vpnScanNetworks = cidr ? [] : await dbCredentialProvider.getVpnScanNetworks().catch((error) => {
+        logger.warn("Unable to load VPN scan networks from the control plane", {
+          error: error instanceof Error ? error.message : String(error),
+        });
+        return [];
+      });
+      const knownHosts = await dbCredentialProvider.getKnownHosts().catch((error) => {
+        logger.warn("Unable to load saved camera addresses from the control plane", {
+          error: error instanceof Error ? error.message : String(error),
+        });
+        return [];
+      });
       const options = {
         ports,
         paths,
@@ -498,9 +505,13 @@ async function scanBranch(options: { persistStreamSecrets?: boolean } = {}) {
         concurrency: config.RTSP_SCAN_CONCURRENCY,
         username: config.CAMERA_USERNAME,
         password: config.CAMERA_PASSWORD,
-      } satisfies Omit<import("./discovery/rtsp-network-scan.js").RtspScanOptions, "cidr">;
+        credentialsForHost: (host: string) => dbCredentialProvider.get(host).catch(() => undefined),
+        hosts: knownHosts,
+      } satisfies Omit<import("./discovery/rtsp-network-scan.js").RtspScanOptions, "cidr" | "cidrs">;
       if (cidr) {
         (options as import("./discovery/rtsp-network-scan.js").RtspScanOptions).cidr = cidr;
+      } else if (vpnScanNetworks.length > 0) {
+        (options as import("./discovery/rtsp-network-scan.js").RtspScanOptions).cidrs = vpnScanNetworks;
       }
       const added = await discoverRtspDevices(branchId, agentId, options as import("./discovery/rtsp-network-scan.js").RtspScanOptions, control, secrets, persistStreamSecrets);
       submitted += added;

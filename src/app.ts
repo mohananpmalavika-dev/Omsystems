@@ -55,6 +55,7 @@ import { registerDeviceInventoryRoutes } from "./routes/device-inventory.routes.
 import { registerDeviceManagementRoutes } from "./routes/device-management.routes.js";
 import { registerDVRNVRMonitorRoutes } from "./routes/dvr-nvr-monitor.routes.js";
 import { registerEdgeAgentPackageRoutes } from "./routes/edge-agent-package.routes.js";
+import { registerEdgeDiscoveryBootstrapRoutes } from "./routes/edge-discovery-bootstrap.routes.js";
 import { registerEdgeGatewayOperationsRoutes } from "./routes/edge-gateway-operations.routes.js";
 import { registerOperationalHealthRoutes } from "./routes/operational-health.routes.js";
 import { registerEnterpriseInfrastructureRoutes } from "./routes/enterprise-infrastructure.routes.js";
@@ -1709,11 +1710,13 @@ export async function buildApp(options?: {
   await registerEdgeAgentPackageRoutes(app, store, {
     controlPlanePublicUrl: options?.controlPlanePublicUrl ?? process.env.CONTROL_PLANE_PUBLIC_URL,
     edgeBridgeSharedKey: options?.edgeBridgeSharedKey ?? process.env.EDGE_BRIDGE_SHARED_KEY,
+    allowLegacyEdgeBridgeKey: options?.allowLegacyEdgeBridgeKey,
     artifactRoot: options?.edgeAgentArtifactRoot,
     developmentUserId: (options?.authMode ?? "development") === "development"
       ? "user-global-admin"
       : undefined,
   });
+  await registerEdgeDiscoveryBootstrapRoutes(app, store, pool);
 
   app.post("/v1/edge-agents/:id/live-sessions/consume", async (request, reply) => {
     const { id } = edgeAgentParams.parse(request.params);
@@ -1988,6 +1991,7 @@ function isEdgeAgentIngressRoute(method: string, url: string) {
   if (method === "POST" && /^\/v1\/edge-agents\/[^/]+\/(?:telemetry|recorder-hdd|recorder-archive)$/.test(path)) return true;
   if (method === "GET" && /^\/v1\/edge-agents\/[^/]+\/(?:commands|updates)\/next$/.test(path)) return true;
   if (method === "GET" && /^\/v1\/edge-agents\/[^/]+\/bootstrap$/.test(path)) return true;
+  if (method === "GET" && /^\/v1\/edge-agents\/[^/]+\/discovery-bootstrap$/.test(path)) return true;
   if (method === "POST" && /^\/v1\/edge-agents\/[^/]+\/commands\/[^/]+\/complete$/.test(path)) return true;
   return method === "POST" && /^\/v1\/branches\/[^/]+\/cameras\/discovered$/.test(path);
 }

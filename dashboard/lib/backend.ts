@@ -130,7 +130,7 @@ async function controlFetch(
   }
   const response = await fetch(new URL(
     path,
-    normalizeHttpOrigin(runtimeEnv(["CONTROL_PLANE_INTERNAL_URL", "CONTROL_PLANE_PUBLIC_URL"], "http://localhost:8080")),
+    normalizeHttpOrigin(runtimeEnv(["CONTROL_PLANE_INTERNAL_URL", "CONTROL_PLANE_PUBLIC_URL", "CONTROL_PLANE_URL"], "http://localhost:8080")),
   ), {
     ...init,
     headers: {

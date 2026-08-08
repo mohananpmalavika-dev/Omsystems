@@ -17,7 +17,7 @@ async function proxyControlRequest(request: NextRequest, context: RouteContext) 
   }
 
   const upstreamBase = runtimeEnv(
-    ["CONTROL_PLANE_INTERNAL_URL", "CONTROL_PLANE_PUBLIC_URL"],
+    ["CONTROL_PLANE_INTERNAL_URL", "CONTROL_PLANE_PUBLIC_URL", "CONTROL_PLANE_URL"],
     "http://localhost:8080",
   );
   const upstream = new URL(`/${path.join("/")}`, normalizeHttpOrigin(upstreamBase));
