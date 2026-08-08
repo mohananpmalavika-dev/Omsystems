@@ -24,7 +24,7 @@ const schema = z.object({
   // Comma-separated list of ports to probe for RTSP
   RTSP_SCAN_PORTS: z.string().default("554,8554"),
   // Comma-separated list of common RTSP path suffixes to try
-  RTSP_SCAN_PATHS: z.string().default("/,/stream,/h264,/live.sdp,/mpeg4,/Streaming/Channels/101"),
+  RTSP_SCAN_PATHS: z.string().default("/,/stream,/h264,/live.sdp,/mpeg4,/Streaming/Channels/101,/cam/realmonitor?channel=1&subtype=1,/cam/realmonitor?channel=1&subtype=0"),
   // Concurrency for the active TCP/connect+probe scanner
   RTSP_SCAN_CONCURRENCY: z.coerce.number().int().min(1).max(500).default(50),
   // Timeout for individual RTSP probe/connect attempts (ms)

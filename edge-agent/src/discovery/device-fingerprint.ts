@@ -19,7 +19,12 @@ export function createDeviceFingerprint(input: DeviceFingerprintInput) {
     claims.push(`onvif-channel:${onvifUuid}:${input.recorderChannel}`);
   }
   const macAddress = input.macAddress?.replace(/[^0-9a-f]/gi, "").toLowerCase();
-  if (macAddress?.length === 12) claims.push(`mac:${macAddress}`);
+  if (macAddress?.length === 12) {
+    claims.push(`mac:${macAddress}`);
+    if (input.recorderChannel && input.recorderChannel > 0) {
+      claims.push(`mac-channel:${macAddress}:${input.recorderChannel}`);
+    }
+  }
   const recorderSerial = clean(input.recorderSerialNumber)?.toUpperCase();
   if (recorderSerial && input.recorderChannel && input.recorderChannel > 0) {
     claims.push(`recorder:${recorderSerial}:channel:${input.recorderChannel}`);

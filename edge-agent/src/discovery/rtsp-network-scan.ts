@@ -1,10 +1,18 @@
 import os from "node:os";
 import net from "node:net";
 import { attachCredentials } from "../devices/onvif-client.js";
+import {
+  vendorRtspCandidates,
+  type VendorStreamFamily,
+} from "../devices/vendor-stream-adapter.js";
 import { probeRtsp } from "../streaming/rtsp-probe.js";
 import { logger } from "../utils/logger.js";
 import { createDeviceFingerprint } from "./device-fingerprint.js";
 import { resolveNeighborMac } from "./network-neighbor.js";
+import {
+  fingerprintHttpRecorder,
+  type HttpRecorderFingerprint,
+} from "./recorder-http-fingerprint.js";
 
 export interface RtspScanOptions {
   cidr?: string; // single CIDR like 192.168.1.0/24 or empty to infer
@@ -19,6 +27,14 @@ export interface RtspScanOptions {
   password: string;
   credentialsForHost?: (host: string) => Promise<{ username: string; password: string } | undefined>;
   excludeHosts?: string[];
+  recorderMaxChannels?: number;
+}
+
+export interface RtspRecorderChannel {
+  sourceChannel: number;
+  uri: string;
+  role: "main" | "sub";
+  probe: Awaited<ReturnType<typeof probeRtsp>>;
 }
 
 function ipv4ToNumber(address: string) {
@@ -127,6 +143,64 @@ function isCredentialRejected(error?: string) {
   return Boolean(error && /401|403|auth|credential|password|unauthori|forbidden/i.test(error));
 }
 
+export async function discoverRtspRecorderChannels(input: {
+  host: string;
+  ports: number[];
+  vendor: VendorStreamFamily;
+  username: string;
+  password: string;
+  maxChannels?: number;
+  batchSize?: number;
+  emptyBatchLimit?: number;
+  probe(uri: string): Promise<Awaited<ReturnType<typeof probeRtsp>>>;
+}) {
+  const maxChannels = Math.max(1, Math.min(input.maxChannels ?? 32, 64));
+  const batchSize = Math.max(1, Math.min(input.batchSize ?? 4, 8));
+  const emptyBatchLimit = Math.max(1, input.emptyBatchLimit ?? 2);
+  const channels: RtspRecorderChannel[] = [];
+  let credentialsRequired = false;
+  let emptyBatchesAfterSuccess = 0;
+
+  const probeChannel = async (sourceChannel: number): Promise<RtspRecorderChannel | undefined> => {
+    const candidates = vendorRtspCandidates({
+      host: input.host,
+      vendor: input.vendor,
+      credentials: { username: input.username, password: input.password },
+      channel: sourceChannel,
+      ports: input.ports,
+    }).sort((left, right) => Number(right.role === "sub") - Number(left.role === "sub"));
+    for (const candidate of candidates) {
+      const probe = await input.probe(candidate.uri);
+      if (isCredentialRejected(probe.error)) credentialsRequired = true;
+      if (probe.reachable) {
+        return { sourceChannel, uri: candidate.uri, role: candidate.role, probe };
+      }
+    }
+    return undefined;
+  };
+
+  for (let first = 1; first <= maxChannels; first += batchSize) {
+    const batch = Array.from(
+      { length: Math.min(batchSize, maxChannels - first + 1) },
+      (_, index) => first + index,
+    );
+    const discovered = (await Promise.all(batch.map(probeChannel)))
+      .filter((channel): channel is RtspRecorderChannel => Boolean(channel));
+    channels.push(...discovered);
+
+    if (channels.length > 0) {
+      emptyBatchesAfterSuccess = discovered.length === 0 ? emptyBatchesAfterSuccess + 1 : 0;
+      if (emptyBatchesAfterSuccess >= emptyBatchLimit) break;
+    } else if (credentialsRequired) {
+      // Authentication failures are host-wide. One batch is enough to create a
+      // credential activation record without hammering every possible channel.
+      break;
+    }
+  }
+
+  return { channels, credentialsRequired };
+}
+
 export async function discoverRtspDevices(
   branchId: string,
   agentId: string,
@@ -165,18 +239,39 @@ export async function discoverRtspDevices(
   async function scanHost(ip: string) {
       try {
         let unverifiedEndpoint: { port: number; credentialsRequired: boolean } | undefined;
+        const storedCredentials = await options.credentialsForHost?.(ip);
+        const effectiveUsername = storedCredentials?.username ?? username;
+        const effectivePassword = storedCredentials?.password ?? password;
         for (const port of ports) {
           const reachable = await tryTcpConnect(ip, port, Math.max(500, Math.min(timeoutMs, 3000)));
           if (!reachable) continue;
           unverifiedEndpoint ??= { port, credentialsRequired: false };
+
+          const recorderFingerprint = await fingerprintHttpRecorder(ip, timeoutMs);
+          if (recorderFingerprint) {
+            const recorder = await discoverRtspRecorderChannels({
+              host: ip,
+              ports: [port],
+              vendor: recorderFingerprint.vendor,
+              username: effectiveUsername,
+              password: effectivePassword,
+              maxChannels: options.recorderMaxChannels,
+              probe: (uri) => probeRtsp(uri, ffprobePath, timeoutMs),
+            });
+            if (recorder.channels.length > 0) {
+              await submitRecorderChannels(ip, port, recorderFingerprint, recorder.channels);
+              return;
+            }
+            if (recorder.credentialsRequired) {
+              unverifiedEndpoint = { port, credentialsRequired: true };
+            }
+          }
+
           // Try candidate paths
           for (const path of paths) {
             let uri = `rtsp://${ip}:${port}${path}`;
             // omit port if 554
             if (port === 554) uri = `rtsp://${ip}${path}`;
-            const storedCredentials = await options.credentialsForHost?.(ip);
-            const effectiveUsername = storedCredentials?.username ?? username;
-            const effectivePassword = storedCredentials?.password ?? password;
             const authed = effectiveUsername ? attachCredentials(uri, { username: effectiveUsername, password: effectivePassword }) : uri;
             const probe = await probeRtsp(authed, ffprobePath, timeoutMs).catch((e) => ({
             reachable: false,
@@ -265,6 +360,77 @@ export async function discoverRtspDevices(
       } catch (error) {
         logger.debug("RTSP scan host failed", { host: ip, error: error instanceof Error ? error.message : String(error) });
       }
+  }
+
+  async function submitRecorderChannels(
+    ip: string,
+    port: number,
+    recorder: HttpRecorderFingerprint,
+    channels: RtspRecorderChannel[],
+  ) {
+    const macAddress = await resolveNeighborMac(ip);
+    const recorderFingerprint = createDeviceFingerprint(macAddress ? { macAddress } : {});
+    const recorderIdentity = recorderFingerprint ?? `${ip}:${port}`;
+    const recorderId = `recorder-${recorderIdentity}`.replace(/[^a-zA-Z0-9_.:-]/g, "-");
+    for (const channel of channels) {
+      const channelFingerprint = createDeviceFingerprint({
+        ...(macAddress ? { macAddress } : {}),
+        recorderChannel: channel.sourceChannel,
+      });
+      const discovery = await control.submitDiscovery(branchId, {
+        edgeAgentId: agentId,
+        discoveryMethod: "nvr-dvr-channel-discovery",
+        vendor: recorder.vendor === "generic" ? "other" : recorder.vendor,
+        manufacturer: recorder.manufacturer,
+        model: `${recorder.model} channel`,
+        ipAddress: ip,
+        ...(macAddress ? { macAddress } : {}),
+        ...(channelFingerprint ? { hardwareId: channelFingerprint } : {}),
+        onvifPort: 80,
+        rtspPort: port,
+        displayName: `${recorder.manufacturer} DVR - Channel ${channel.sourceChannel}`,
+        credentialsRequired: false,
+        streamVerified: true,
+        rtspValidated: true,
+        onvifSupport: false,
+        compatibility: "compatible",
+        duplicateStatus: "unique",
+        compatibilityStatus: "compatible",
+        statusReason: "rtsp_recorder_channel_auto_discovered",
+        profiles: [{
+          name: channel.role,
+          codec: channel.probe.codec ?? "unknown",
+          width: Math.max(1, channel.probe.width ?? 1),
+          height: Math.max(1, channel.probe.height ?? 1),
+          role: channel.role,
+          preferredFor: channel.role === "sub" ? ["live", "analytics"] : ["recording", "live", "analytics"],
+        }],
+        capabilities: { ptz: false, audio: false, events: false },
+        sourceType: recorder.sourceType,
+        recorderId,
+        recorderChannel: channel.sourceChannel,
+        existingDeviceAssociation: recorderId,
+        discoveryLayers: [
+          { layer: "network-discovery", status: "passed", detail: "RTSP recorder discovered on the local network" },
+          { layer: "onvif-discovery", status: "failed", detail: "Recorder did not answer ONVIF WS-Discovery" },
+          { layer: "onvif-authentication", status: "skipped", detail: "Vendor RTSP channel discovery was used" },
+          { layer: "get-capabilities", status: "skipped", detail: "Recorder fingerprint was obtained from its web application" },
+          { layer: "get-profiles", status: "fallback", detail: "Recorder channels were enumerated with vendor RTSP paths" },
+          { layer: "get-stream-uri", status: "fallback", detail: "CP PLUS/Dahua-compatible channel URI generated automatically" },
+          { layer: "rtsp-verification", status: "passed", detail: "ffprobe decoded the recorder channel" },
+          { layer: "vendor-adapter", status: "fallback", detail: `${recorder.manufacturer} recorder adapter selected automatically` },
+          { layer: "fingerprint", status: channelFingerprint ? "passed" : "failed", detail: channelFingerprint ? "MAC and recorder channel fingerprint created" : "No stable Layer-2 identifier was available" },
+        ],
+      });
+      submittedCount += 1;
+      if (persistStreamSecrets && secretsStore) {
+        await secretsStore.set(`edge://${agentId}/${discovery.id}`, channel.uri);
+      }
+    }
+    logger.info(`RTSP recorder discovery: found ${channels.length} channel(s) at ${ip}:${port}`, {
+      manufacturer: recorder.manufacturer,
+      recorderId,
+    });
   }
 
   await runWithConcurrency(hosts, concurrency, scanHost);

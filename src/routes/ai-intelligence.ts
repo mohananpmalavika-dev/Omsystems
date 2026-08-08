@@ -14,7 +14,21 @@ import { AIIncidentSummaryService } from "../services/ai-incident-summary.js";
 import { AISOPEngineService } from "../services/ai-sop-engine.js";
 import { AIInvestigationReportService } from "../services/ai-investigation-report.js";
 import { AIEvidenceBuilderService } from "../services/ai-evidence-builder.js";
-import { AIVideoSearchService, FeatureUnavailableError } from "../services/ai-video-search.js";
+import { AIVideoSearchService } from "../services/ai-video-search.js";
+import { FeatureUnavailableError } from "../errors/feature-unavailable-error.js";
+
+function handleFeatureResponse<T>(feature: string, fn: () => Promise<T>): Promise<T | { feature: string; status: string; reason: string }> {
+  return fn().catch((err: any) => {
+    if (err instanceof FeatureUnavailableError) {
+      return {
+        feature,
+        status: 'unavailable',
+        reason: err.message || 'feature_not_implemented',
+      } as any;
+    }
+    throw err;
+  });
+}
 
 export async function registerAIIntelligenceRoutes(app: FastifyInstance) {
   const store = (app as any).store as import("../control-plane-store.js").ControlPlaneStore;
@@ -321,8 +335,9 @@ export async function registerAIIntelligenceRoutes(app: FastifyInstance) {
     const auth = await authenticateRequest(request);
     const { reportId } = request.params as any;
 
-    const report = await investigationService.reviewReport(reportId, auth.user.id);
-    return report;
+    return await handleFeatureResponse('investigation_report_review', () =>
+      investigationService.reviewReport(reportId, auth.user.id)
+    );
   });
 
   /**
@@ -333,8 +348,9 @@ export async function registerAIIntelligenceRoutes(app: FastifyInstance) {
     const auth = await authenticateRequest(request);
     const { reportId } = request.params as any;
 
-    const report = await investigationService.approveReport(reportId, auth.user.id);
-    return report;
+    return await handleFeatureResponse('investigation_report_approve', () =>
+      investigationService.approveReport(reportId, auth.user.id)
+    );
   });
 
   /**
@@ -345,8 +361,9 @@ export async function registerAIIntelligenceRoutes(app: FastifyInstance) {
     const auth = await authenticateRequest(request);
     const { reportId } = request.params as any;
 
-    const report = await investigationService.finalizeReport(reportId);
-    return report;
+    return await handleFeatureResponse('investigation_report_finalize', () =>
+      investigationService.finalizeReport(reportId)
+    );
   });
 
   /**
@@ -358,8 +375,13 @@ export async function registerAIIntelligenceRoutes(app: FastifyInstance) {
     const { reportId } = request.params as any;
     const { format } = request.query as any;
 
-    // Would fetch report and export in requested format
-    return { export: "Not implemented" };
+    return {
+      feature: 'investigation_report_export',
+      status: 'unavailable',
+      reason: 'feature_not_implemented',
+      requestedFormat: format,
+      reportId,
+    };
   });
 
   // ============ EVIDENCE PACKAGES ============
@@ -372,14 +394,14 @@ export async function registerAIIntelligenceRoutes(app: FastifyInstance) {
     const auth = await authenticateRequest(request);
     const config = request.body as any;
 
-    const pkg = await evidenceService.createEvidencePackage(
-      auth.user.tenantId,
-      config.incidentId,
-      auth.user.id,
-      config
+    return await handleFeatureResponse('evidence_package_creation', () =>
+      evidenceService.createEvidencePackage(
+        auth.user.tenantId,
+        config.incidentId,
+        auth.user.id,
+        config
+      )
     );
-
-    return pkg;
   });
 
   /**
@@ -390,12 +412,9 @@ export async function registerAIIntelligenceRoutes(app: FastifyInstance) {
     const auth = await authenticateRequest(request);
     const { incidentId } = request.body as any;
 
-    const pkg = await evidenceService.generateCourtPackage(
-      incidentId,
-      auth.user.id
+    return await handleFeatureResponse('evidence_package_court', () =>
+      evidenceService.generateCourtPackage(incidentId, auth.user.id)
     );
-
-    return pkg;
   });
 
   /**
@@ -406,12 +425,9 @@ export async function registerAIIntelligenceRoutes(app: FastifyInstance) {
     const auth = await authenticateRequest(request);
     const { incidentId } = request.body as any;
 
-    const pkg = await evidenceService.generatePolicePackage(
-      incidentId,
-      auth.user.id
+    return await handleFeatureResponse('evidence_package_police', () =>
+      evidenceService.generatePolicePackage(incidentId, auth.user.id)
     );
-
-    return pkg;
   });
 
   /**
@@ -422,12 +438,9 @@ export async function registerAIIntelligenceRoutes(app: FastifyInstance) {
     const auth = await authenticateRequest(request);
     const { incidentId } = request.body as any;
 
-    const pkg = await evidenceService.generateInsurancePackage(
-      incidentId,
-      auth.user.id
+    return await handleFeatureResponse('evidence_package_insurance', () =>
+      evidenceService.generateInsurancePackage(incidentId, auth.user.id)
     );
-
-    return pkg;
   });
 
   /**
@@ -438,8 +451,9 @@ export async function registerAIIntelligenceRoutes(app: FastifyInstance) {
     const auth = await authenticateRequest(request);
     const { packageId } = request.params as any;
 
-    const pkg = await evidenceService.collectEvidence(packageId);
-    return pkg;
+    return await handleFeatureResponse('evidence_package_collect', () =>
+      evidenceService.collectEvidence(packageId)
+    );
   });
 
   /**
@@ -450,8 +464,9 @@ export async function registerAIIntelligenceRoutes(app: FastifyInstance) {
     const auth = await authenticateRequest(request);
     const { packageId } = request.params as any;
 
-    const pkg = await evidenceService.signPackage(packageId, auth.user.id);
-    return pkg;
+    return await handleFeatureResponse('evidence_package_sign', () =>
+      evidenceService.signPackage(packageId, auth.user.id)
+    );
   });
 
   /**
@@ -462,8 +477,9 @@ export async function registerAIIntelligenceRoutes(app: FastifyInstance) {
     const auth = await authenticateRequest(request);
     const { packageId } = request.params as any;
 
-    const verification = await evidenceService.verifyPackageIntegrity(packageId);
-    return verification;
+    return await handleFeatureResponse('evidence_package_verify', () =>
+      evidenceService.verifyPackageIntegrity(packageId)
+    );
   });
 
   /**
@@ -474,8 +490,9 @@ export async function registerAIIntelligenceRoutes(app: FastifyInstance) {
     const auth = await authenticateRequest(request);
     const { packageId } = request.params as any;
 
-    const manifest = await evidenceService.generateManifest(packageId);
-    return manifest;
+    return await handleFeatureResponse('evidence_package_manifest', () =>
+      evidenceService.generateManifest(packageId)
+    );
   });
 
   /**
@@ -525,13 +542,20 @@ export async function registerAIIntelligenceRoutes(app: FastifyInstance) {
     const auth = await authenticateRequest(request);
     const { query, branchId, from, to, limit } = request.body as any;
 
-    const results = await videoSearchService.searchByNaturalLanguage(
-      auth.user.tenantId,
-      query,
-      { branchId, from, to, limit }
+    const results = await handleFeatureResponse('video_search', () =>
+      videoSearchService.searchByNaturalLanguage(auth.user.tenantId, query, {
+        branchId,
+        from,
+        to,
+        limit,
+      })
     );
 
-    return { results, total: results.length };
+    if (Array.isArray(results)) {
+      return { results, total: results.length };
+    }
+
+    return results;
   });
 
   /**
@@ -542,13 +566,19 @@ export async function registerAIIntelligenceRoutes(app: FastifyInstance) {
     const auth = await authenticateRequest(request);
     const { clothing, branchId, from, to } = request.body as any;
 
-    const results = await videoSearchService.findPersonByClothing(
-      auth.user.tenantId,
-      clothing,
-      { branchId, from, to }
+    const results = await handleFeatureResponse('video_search_person', () =>
+      videoSearchService.findPersonByClothing(auth.user.tenantId, clothing, {
+        branchId,
+        from,
+        to,
+      })
     );
 
-    return { results, total: results.length };
+    if (Array.isArray(results)) {
+      return { results, total: results.length };
+    }
+
+    return results;
   });
 
   /**
@@ -559,13 +589,19 @@ export async function registerAIIntelligenceRoutes(app: FastifyInstance) {
     const auth = await authenticateRequest(request);
     const { vehicle, branchId, from, to } = request.body as any;
 
-    const results = await videoSearchService.findVehicle(
-      auth.user.tenantId,
-      vehicle,
-      { branchId, from, to }
+    const results = await handleFeatureResponse('video_search_vehicle', () =>
+      videoSearchService.findVehicle(auth.user.tenantId, vehicle, {
+        branchId,
+        from,
+        to,
+      })
     );
 
-    return { results, total: results.length };
+    if (Array.isArray(results)) {
+      return { results, total: results.length };
+    }
+
+    return results;
   });
 
   /**
@@ -576,11 +612,13 @@ export async function registerAIIntelligenceRoutes(app: FastifyInstance) {
     const auth = await authenticateRequest(request);
     const { objectId, startTimestamp, timeWindowMinutes } = request.body as any;
 
-    const track = await videoSearchService.trackAcrossCameras(
-      auth.user.tenantId,
-      objectId,
-      startTimestamp,
-      timeWindowMinutes
+    const track = await handleFeatureResponse('video_track_across_cameras', () =>
+      videoSearchService.trackAcrossCameras(
+        auth.user.tenantId,
+        objectId,
+        startTimestamp,
+        timeWindowMinutes
+      )
     );
 
     return track;
@@ -594,15 +632,21 @@ export async function registerAIIntelligenceRoutes(app: FastifyInstance) {
     const auth = await authenticateRequest(request);
     const { objectType, branchId, from, to, minCameras } = request.query as any;
 
-    const tracks = await videoSearchService.getCrossCameraTracks(auth.user.tenantId, {
-      objectType,
-      branchId,
-      from,
-      to,
-      minCameras: minCameras ? parseInt(minCameras) : undefined,
-    });
+    const tracks = await handleFeatureResponse('video_cross_camera_tracks', () =>
+      videoSearchService.getCrossCameraTracks(auth.user.tenantId, {
+        objectType,
+        branchId,
+        from,
+        to,
+        minCameras: minCameras ? parseInt(minCameras) : undefined,
+      })
+    );
 
-    return { tracks, total: tracks.length };
+    if (Array.isArray(tracks)) {
+      return { tracks, total: tracks.length };
+    }
+
+    return tracks;
   });
 
   /**

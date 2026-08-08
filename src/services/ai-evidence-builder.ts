@@ -11,6 +11,7 @@
 
 import { createHash, randomUUID } from "node:crypto";
 import type { ControlPlaneStore } from "../control-plane-store.js";
+import { FeatureUnavailableError } from "../errors/feature-unavailable-error.js";
 
 export interface EvidencePackage {
   id: string;
@@ -287,7 +288,7 @@ export class AIEvidenceBuilderService {
     // 5. Update collection progress
     // 6. Record chain of custody events
 
-    throw new Error("Not implemented");
+    throw new FeatureUnavailableError("evidence_collection_not_implemented");
   }
 
   /**
@@ -438,7 +439,7 @@ export class AIEvidenceBuilderService {
     // 2. Update package with signature details
     // 3. Record chain of custody event
 
-    throw new Error("Digital signature not implemented");
+    throw new FeatureUnavailableError("evidence_signature_not_implemented");
   }
 
   /**
@@ -553,7 +554,7 @@ export class AIEvidenceBuilderService {
     // 5. Record chain of custody
     // 6. Return file paths
 
-    throw new Error("Export not implemented");
+    throw new FeatureUnavailableError("evidence_export_not_implemented");
   }
 
   /**
@@ -623,7 +624,7 @@ export class AIEvidenceBuilderService {
    */
   private async getEvidencePackage(packageId: string): Promise<EvidencePackage> {
     // Would fetch from store
-    throw new Error("Not implemented");
+    throw new FeatureUnavailableError("evidence_package_lookup_not_implemented");
   }
 
   /**

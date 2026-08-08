@@ -4,9 +4,18 @@ import type { RecordingSearchService } from "../recording/search-service.js";
 import type { PlaybackEngine } from "../recording/playback-engine.js";
 import type { SnapshotService } from "../recording/snapshot-service.js";
 
-// NOTE: This routes file is complete but not yet registered in app.ts
-// because the required services (RecordingSearchService, PlaybackEngine, SnapshotService)
-// have not been implemented yet. Once those services are created, this can be registered.
+/**
+ * Video Search and Playback Routes
+ * 
+ * Provides comprehensive video search, playback, and forensic capabilities including:
+ * - Advanced recording search with filters (time, motion, AI events, objects)
+ * - Multi-camera synchronized playback
+ * - Forensic snapshots with chain of custody
+ * - Enhanced bookmarks with verification
+ * - Playback session tracking
+ * 
+ * These routes are registered in app.ts when the required services are available.
+ */
 
 const searchFiltersSchema = z.object({
   cameraId: z.string().uuid().optional(),

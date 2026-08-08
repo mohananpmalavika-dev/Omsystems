@@ -33,6 +33,20 @@ describe("stable camera fingerprint", () => {
     expect(channelOne).not.toBe(channelTwo);
   });
 
+  it("creates separate identities for automatically discovered channels on one recorder MAC", () => {
+    const channelOne = createDeviceFingerprint({
+      macAddress: "9C:A3:A9:11:22:33",
+      recorderChannel: 1,
+    });
+    const channelTwo = createDeviceFingerprint({
+      macAddress: "9C:A3:A9:11:22:33",
+      recorderChannel: 2,
+    });
+
+    expect(channelOne).not.toBe(channelTwo);
+    expect(channelOne).toMatch(/^sha256:[0-9a-f]{64}$/);
+  });
+
   it("refuses to make an IP-derived identity", () => {
     expect(createDeviceFingerprint({ manufacturer: "unknown", model: "IP Camera" })).toBeUndefined();
   });

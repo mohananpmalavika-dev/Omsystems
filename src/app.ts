@@ -51,6 +51,7 @@ import { registerFirmwareManagementRoutes } from "./routes/maintenance-firmware.
 import { registerPredictiveAnalyticsRoutes } from "./routes/maintenance-predictive.routes.js";
 import { registerEvidenceRoutes } from "./routes/evidence.routes.js";
 import { registerVideoSearchRoutes } from "./routes/video-search.routes.js";
+import { registerAIVideoSearchRoutes } from "./routes/ai-video-search.routes.js";
 import { registerDeviceInventoryRoutes } from "./routes/device-inventory.routes.js";
 import { registerDeviceManagementRoutes } from "./routes/device-management.routes.js";
 import { registerDVRNVRMonitorRoutes } from "./routes/dvr-nvr-monitor.routes.js";
@@ -1997,6 +1998,16 @@ export async function buildApp(options?: {
       app.log.info("Video search routes registered");
     } catch (error) {
       app.log.warn({ error }, "Failed to register video search routes");
+    }
+  }
+
+  // Register AI video search routes if pool available
+  if (pool) {
+    try {
+      await registerAIVideoSearchRoutes(app, pool);
+      app.log.info("AI video search routes registered");
+    } catch (error) {
+      app.log.warn({ error }, "Failed to register AI video search routes");
     }
   }
 

@@ -12,6 +12,7 @@
 
 import { randomUUID } from "node:crypto";
 import type { ControlPlaneStore } from "../control-plane-store.js";
+import { FeatureUnavailableError } from "../errors/feature-unavailable-error.js";
 
 export interface InvestigationReport {
   id: string;
@@ -717,7 +718,7 @@ export class AIInvestigationReportService {
    */
   async exportToPDF(report: InvestigationReport): Promise<Buffer> {
     // Implementation would use PDFKit or similar to generate PDF
-    throw new Error("PDF export not yet implemented");
+    throw new FeatureUnavailableError("pdf_export_not_implemented");
   }
 
   /**
@@ -732,7 +733,7 @@ export class AIInvestigationReportService {
    */
   async reviewReport(reportId: string, reviewedBy: string): Promise<InvestigationReport> {
     // Implementation would update report status
-    throw new Error("Not implemented");
+    throw new FeatureUnavailableError("investigation_report_review_not_implemented");
   }
 
   /**
@@ -740,7 +741,7 @@ export class AIInvestigationReportService {
    */
   async approveReport(reportId: string, approvedBy: string): Promise<InvestigationReport> {
     // Implementation would update report status
-    throw new Error("Not implemented");
+    throw new FeatureUnavailableError("investigation_report_approval_not_implemented");
   }
 
   /**
@@ -752,6 +753,6 @@ export class AIInvestigationReportService {
     // 2. Generate all export formats
     // 3. Apply digital signature
     // 4. Store in permanent location
-    throw new Error("Not implemented");
+    throw new FeatureUnavailableError("investigation_report_finalization_not_implemented");
   }
 }

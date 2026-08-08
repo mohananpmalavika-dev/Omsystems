@@ -20,6 +20,7 @@ const secretPatterns = [
 const ignorePaths = [
   'package-lock.json',
   '.github/workflows/release-baseline.yml',
+  'scripts/secret-scan.mjs',
 ];
 
 const findings = [];
