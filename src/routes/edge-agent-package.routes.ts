@@ -105,6 +105,7 @@ function normalizePublicApiBase(value: string | undefined) {
     const url = new URL(value);
     if (!(["http:", "https:"] as string[]).includes(url.protocol)) return undefined;
     if (url.username || url.password || url.search || url.hash) return undefined;
+    if (url.hostname === "0.0.0.0" || url.hostname === "::" || url.hostname === "[::]") return undefined;
     url.pathname = url.pathname.replace(/\/+$/, "");
     return url.toString().replace(/\/$/, "");
   } catch {

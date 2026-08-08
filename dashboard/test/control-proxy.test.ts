@@ -146,6 +146,43 @@ describe("dashboard control-plane BFF", () => {
     expect(Buffer.from(await response.arrayBuffer()).subarray(0, 2).toString()).toBe("MZ");
   });
 
+  it("embeds the public Render origin instead of the internal bind address", async () => {
+    process.env.CONTROL_PLANE_INTERNAL_URL = "http://control.internal:8080";
+    const upstream = vi.fn(async (
+      _input: RequestInfo | URL,
+      _init?: RequestInit,
+    ) => new Response(Buffer.from("MZfixture"), {
+      status: 200,
+      headers: { "content-type": "application/vnd.microsoft.portable-executable" },
+    }));
+    vi.stubGlobal("fetch", upstream);
+
+    await POST(
+      new NextRequest(
+        "https://0.0.0.0:10000/api/control/v1/branches/branch-1/edge-agent-installer",
+        {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "x-forwarded-host": "sentinel-grid-monitoring1.onrender.com",
+            "x-forwarded-proto": "https",
+          },
+          body: JSON.stringify({
+            activationId: "activation-1",
+            activationCode: "one-time-code",
+            agentName: "Branch Scanner",
+          }),
+        },
+      ),
+      { params: Promise.resolve({ path: ["v1", "branches", "branch-1", "edge-agent-installer"] }) },
+    );
+
+    const headers = new Headers(upstream.mock.calls[0]?.[1]?.headers);
+    expect(headers.get("x-sentinel-public-api-base")).toBe(
+      "https://sentinel-grid-monitoring1.onrender.com/api/control",
+    );
+  });
+
   it("drops upstream content-encoding for decoded JSON responses", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ data: [] }), {
       status: 200,

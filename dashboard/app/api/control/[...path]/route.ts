@@ -32,10 +32,7 @@ async function proxyControlRequest(request: NextRequest, context: RouteContext) 
   headers.delete("host");
   headers.delete("cookie");
   headers.delete("content-length");
-  headers.set(
-    "x-sentinel-public-api-base",
-    new URL("/api/control", request.nextUrl.origin).toString(),
-  );
+  headers.set("x-sentinel-public-api-base", publicControlApiBase(request));
 
   if (bridgeKey) headers.set("x-edge-bridge-key", bridgeKey);
   const forwardedFor = request.headers.get("x-forwarded-for");
@@ -191,6 +188,42 @@ function runtimeEnv(name: string | string[], fallback: string) {
 
 function normalizeHttpOrigin(value: string) {
   return /^[a-z][a-z\d+.-]*:\/\//i.test(value) ? value : `http://${value}`;
+}
+
+function publicControlApiBase(request: NextRequest) {
+  const forwardedHost = firstForwardedValue(request.headers.get("x-forwarded-host"));
+  const forwardedProtocol = firstForwardedValue(request.headers.get("x-forwarded-proto"));
+  const candidates = [
+    forwardedHost ? `${forwardedProtocol || "https"}://${forwardedHost}` : undefined,
+    request.headers.get("origin") ?? undefined,
+    request.headers.get("host")
+      ? `${forwardedProtocol || request.nextUrl.protocol.replace(":", "") || "https"}://${request.headers.get("host")}`
+      : undefined,
+    runtimeEnv("RENDER_EXTERNAL_URL", "") || undefined,
+    request.nextUrl.origin,
+  ];
+
+  for (const candidate of candidates) {
+    const publicOrigin = validPublicOrigin(candidate);
+    if (publicOrigin) return new URL("/api/control", publicOrigin).toString();
+  }
+  throw new Error("Unable to determine the public Sentinel Grid URL");
+}
+
+function firstForwardedValue(value: string | null) {
+  return value?.split(",", 1)[0]?.trim();
+}
+
+function validPublicOrigin(value: string | undefined) {
+  if (!value) return undefined;
+  try {
+    const url = new URL(value);
+    if (url.protocol !== "http:" && url.protocol !== "https:") return undefined;
+    if (url.hostname === "0.0.0.0" || url.hostname === "::" || url.hostname === "[::]") return undefined;
+    return url.origin;
+  } catch {
+    return undefined;
+  }
 }
 
 

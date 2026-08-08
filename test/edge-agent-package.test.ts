@@ -207,6 +207,44 @@ describe("branch edge-agent package", () => {
     }
   });
 
+  it("refuses to generate a scanner configured with a wildcard bind address", async () => {
+    const artifactRoot = await mkdtemp(join(tmpdir(), "sentinel-invalid-installer-url-"));
+    temporaryRoots.push(artifactRoot);
+    await mkdir(join(artifactRoot, "release"), { recursive: true });
+    await writeFile(join(artifactRoot, "package.json"), JSON.stringify({ version: "9.8.7" }));
+    await writeFile(join(artifactRoot, "release", "edge-agent.exe"), Buffer.from("MZ-test-executable"));
+
+    const store = new MemoryStore();
+    const activation = await store.createEdgeActivation({
+      branchId: "branch-blr-001",
+      agentName: "Invalid Scanner",
+      createdBy: "user-global-admin",
+      expiresAt: new Date(Date.now() + 60_000).toISOString(),
+      tokenHash: "activation-token-hash",
+    });
+    const app = await buildApp({ store, edgeAgentArtifactRoot: artifactRoot });
+    try {
+      const response = await app.inject({
+        method: "POST",
+        url: "/v1/branches/branch-blr-001/edge-agent-installer",
+        headers: {
+          "x-user-id": "user-global-admin",
+          "x-sentinel-public-api-base": "https://0.0.0.0:10000/api/control",
+        },
+        payload: {
+          activationId: activation.id,
+          activationCode: `sgact_${"a".repeat(48)}`,
+          agentName: "Invalid Scanner",
+        },
+      });
+
+      expect(response.statusCode).toBe(503);
+      expect(response.json()).toMatchObject({ error: "control_plane_public_url_unavailable" });
+    } finally {
+      await app.close();
+    }
+  });
+
   it("uses a short-lived enrollment code when legacy edge keys are disabled", async () => {
     const artifactRoot = await mkdtemp(join(tmpdir(), "sentinel-secure-local-scanner-package-"));
     temporaryRoots.push(artifactRoot);
