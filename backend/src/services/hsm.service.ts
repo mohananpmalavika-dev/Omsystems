@@ -385,6 +385,7 @@ export class HSMService {
   }
 
   private async verifyAWS(keyId: string, data: Buffer, signature: Buffer, algorithm: string): Promise<boolean> {
+    // If simulation explicitly enabled, allow simulated verification for testing
     if (process.env.HSM_ALLOW_SIMULATION === 'true') {
       console.warn('⚠️ Using simulated AWS verify (HSM_ALLOW_SIMULATION=true) — not secure for production');
       // Use simulated verification by comparing hash equality as before
@@ -392,8 +393,39 @@ export class HSMService {
       return hash.equals(signature);
     }
 
+    // If KMS integration is enabled, attempt to verify using AWS KMS (fallback for Cloud workloads)
+    if (process.env.AWS_KMS_ENABLED === 'true') {
+      try {
+        const AWS = require('aws-sdk');
+        const kms = new AWS.KMS({ region: process.env.AWS_REGION || 'us-east-1' });
+
+        // KMS verify expects the digest or message depending on algorithm. Use Message and SigningAlgorithm when possible.
+        const params: any = {
+          KeyId: keyId,
+          Signature: signature,
+          Message: data,
+          // SigningAlgorithm can be derived/overridden via env var
+          SigningAlgorithm: process.env.AWS_KMS_SIGNING_ALGORITHM || (algorithm === 'SHA256' ? 'RSASSA_PSS_SHA_256' : undefined)
+        };
+
+        // Remove undefined fields
+        Object.keys(params).forEach(k => params[k] === undefined && delete params[k]);
+
+        const resp = await kms.verify(params).promise();
+        if (resp && resp.SignatureValid === true) {
+          return true;
+        }
+
+        console.error('AWS KMS verification failed or returned invalid signature');
+        return false;
+      } catch (err) {
+        console.error('AWS KMS verify error:', err instanceof Error ? err.message : String(err));
+        return false;
+      }
+    }
+
     // Fail-closed in production: do not silently accept all verifications.
-    console.error('❌ AWS CloudHSM verify called but not implemented. Refusing to verify in production.');
+    console.error('❌ AWS CloudHSM verify called but not implemented. Refusing to verify in production. Set HSM_ALLOW_SIMULATION=true for non-production or enable AWS_KMS_ENABLED with proper credentials.');
     return false;
   }
 

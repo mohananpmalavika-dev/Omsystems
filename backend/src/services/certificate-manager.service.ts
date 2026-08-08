@@ -486,8 +486,13 @@ export class CertificateManager {
   }
 
   private generateSelfSignedCert(): string {
-    // In production, generate proper certificate
-    return '-----BEGIN CERTIFICATE-----\nMOCK_CERTIFICATE_DATA\n-----END CERTIFICATE-----';
+    // For safety, only allow simulated self-signed certificate generation when explicitly enabled.
+    if (process.env.ALLOW_CERT_SIMULATION === 'true') {
+      console.warn('⚠️ Generating simulated self-signed certificate (ALLOW_CERT_SIMULATION=true) — not for production');
+      return '-----BEGIN CERTIFICATE-----\nSIMULATED_SELF_SIGNED_CERTIFICATE\n-----END CERTIFICATE-----';
+    }
+
+    throw new Error('Self-signed certificate generation is disabled. Configure a certificate provider or set ALLOW_CERT_SIMULATION=true for local testing.');
   }
 }
 

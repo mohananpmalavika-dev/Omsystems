@@ -235,9 +235,39 @@ export class ZeroTrustPolicyEngine extends EventEmitter implements IZeroTrustPol
   private evaluateTimeCondition(condition: any, timestamp: Date): boolean {
     const hour = timestamp.getHours();
     const day = timestamp.getDay();
-    
-    // Check if current time is within allowed range
-    return true; // Simplified
+
+    // Support operators: 'between' with [startHour, endHour], 'equals' with specific hour or day
+    if (condition.operator === 'between' && Array.isArray(condition.value) && condition.value.length === 2) {
+      const start = Number(condition.value[0]);
+      const end = Number(condition.value[1]);
+      if (start <= end) {
+        return hour >= start && hour <= end;
+      }
+      // Wrap-around (e.g., 22 -> 4)
+      return hour >= start || hour <= end;
+    }
+
+    if (condition.operator === 'equals') {
+      // If value is a day name or day number, handle accordingly
+      if (typeof condition.value === 'number') {
+        return day === condition.value;
+      }
+      if (typeof condition.value === 'string') {
+        const map: Record<string, number> = {
+          sunday: 0, monday: 1, tuesday: 2, wednesday: 3, thursday: 4, friday: 5, saturday: 6
+        };
+        const v = condition.value.toLowerCase();
+        return map[v] === day || Number(v) === hour;
+      }
+    }
+
+    if (condition.operator === 'in' && Array.isArray(condition.value)) {
+      // Value may be array of allowed hours or days
+      return condition.value.includes(hour) || condition.value.includes(day);
+    }
+
+    // Default deny for unknown time conditions
+    return false;
   }
 
   /**

@@ -363,15 +363,48 @@ export class HSMService extends EventEmitter implements IHSMService {
   }
 
   private async signWithHSM(key: HSMKey, data: Buffer): Promise<Buffer> {
-    // Fallback to software signing for demo
-    const sign = crypto.createSign('SHA256');
-    sign.update(data);
-    sign.end();
-    return Buffer.from('signature_placeholder');
+    // If running in simulation mode, produce a software signature using a transient key
+    if (process.env.HSM_ALLOW_SIMULATION === 'true') {
+      const sign = crypto.createSign('SHA256');
+      sign.update(data);
+      sign.end();
+      // Generate ephemeral RSA key for simulation
+      const { privateKey } = crypto.generateKeyPairSync('rsa', { modulusLength: 2048 });
+      return sign.sign(privateKey);
+    }
+
+    // If the HSM provides a public/private key via metadata (not recommended), try to use it
+    if (key.metadata && key.metadata.privateKeyPem) {
+      const sign = crypto.createSign('SHA256');
+      sign.update(data);
+      sign.end();
+      return sign.sign(key.metadata.privateKeyPem);
+    }
+
+    throw new Error('HSM signing not implemented for configured provider and simulation disabled');
   }
 
   private async verifyWithHSM(key: HSMKey, data: Buffer, signature: Buffer): Promise<boolean> {
-    return true; // Placeholder
+    // If public key material is available in metadata, use it to verify signature
+    if (key.metadata && key.metadata.publicKeyPem) {
+      try {
+        const verify = crypto.createVerify('SHA256');
+        verify.update(data);
+        verify.end();
+        return verify.verify(key.metadata.publicKeyPem, signature);
+      } catch (err) {
+        return false;
+      }
+    }
+
+    // Allow simulation mode for local testing
+    if (process.env.HSM_ALLOW_SIMULATION === 'true') {
+      const hash = crypto.createHash('sha256').update(data).digest();
+      return hash.equals(signature);
+    }
+
+    // Fail-closed in production
+    throw new Error('HSM verification not implemented for configured provider and simulation disabled');
   }
 
   private async encryptWithHSM(key: HSMKey, plaintext: Buffer): Promise<Buffer> {

@@ -20,7 +20,14 @@ RUN npm run fetch:windows-runtime --workspace @sentinel/edge-agent
 COPY src ./src
 COPY edge-agent/src ./edge-agent/src
 COPY edge-agent/installer ./edge-agent/installer
-RUN npm run build && npm run build --workspace @sentinel/edge-agent && npm run build:exe --workspace @sentinel/edge-agent && test -f dist/src/index.js && npm prune --omit=dev
+RUN npm run build \
+    && npm run build --workspace @sentinel/edge-agent \
+    && npm run build:exe --workspace @sentinel/edge-agent \
+    && test -f dist/src/index.js \
+    && mkdir -p /runtime/control-plane \
+    && cp -R dist/src/. /runtime/control-plane/ \
+    && test -f /runtime/control-plane/index.js \
+    && npm prune --omit=dev
 
 FROM node:22-alpine
 ENV NODE_ENV=production
@@ -35,10 +42,10 @@ COPY media-gateway/package.json ./media-gateway/package.json
 COPY recording-engine/package.json ./recording-engine/package.json
 COPY analytics-engine/package.json ./analytics-engine/package.json
 COPY --from=build /app/node_modules ./node_modules
-COPY --from=build /app/dist /app/dist
-RUN test -f /app/dist/src/index.js
+COPY --from=build /runtime/control-plane ./control-plane
+RUN test -f /app/control-plane/index.js
 COPY scripts/run-migrations.mjs ./scripts/run-migrations.mjs
 COPY database/migrations ./database/migrations
 EXPOSE 8080
 USER node
-CMD ["sh", "-c", "node scripts/run-migrations.mjs && node /app/dist/src/index.js"]
+CMD ["sh", "-c", "node scripts/run-migrations.mjs && node /app/control-plane/index.js"]
