@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Camera Credential Manager</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <div class="header-content">
+                <h1>📹 Camera Credential Manager</h1>
+                <p class="subtitle">Manage 400+ locations • 4000+ cameras</p>
+            </div>
+            <div class="stats-bar">
+                <div class="stat-card">
+                    <div class="stat-value" id="totalCredentials">0</div>
+                    <div class="stat-label">Total Credentials</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="totalBranches">0</div>
+                    <div class="stat-label">Branches</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="hostSpecific">0</div>
+                    <div class="stat-label">Host-Specific</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="defaultCreds">0</div>
+                    <div class="stat-label">Default</div>
+                </div>
+            </div>
+        </header>
+
+        <!-- Tab Navigation -->
+        <div class="tabs">
+            <button class="tab-btn active" data-tab="single">➕ Add Single</button>
+            <button class="tab-btn" data-tab="bulk">📤 Bulk Upload</button>
+            <button class="tab-btn" data-tab="list">📋 View All</button>
+            <a href="bulk-upload.html" class="tab-btn" style="text-decoration: none; display: inline-block;">
+                🏢 Bulk Branches & Employees
+            </a>
+        </div>
+
+        <!-- Single Credential Form Tab -->
+        <div class="tab-content active" id="single-tab">
+            <div class="card">
+                <h2>Add Individual Credential</h2>
+                <form id="singleForm" class="form">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="branch_id">Branch ID *</label>
+                            <input type="text" id="branch_id" name="branch_id" required 
+                                   placeholder="00000000-0000-4000-8000-000000000104">
+                        </div>
+                        <div class="form-group">
+                            <label for="edge_agent_id">Edge Agent ID</label>
+                            <input type="text" id="edge_agent_id" name="edge_agent_id" 
+                                   placeholder="6a570d4a-2c71-415f-b59a-643cf50d55c5">
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="ip_address">IP Address (Optional)</label>
+                            <input type="text" id="ip_address" name="ip_address" 
+                                   placeholder="192.168.29.171">
+                            <small>Leave empty for branch-wide default</small>
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="username">Username *</label>
+                            <input type="text" id="username" name="username" required 
+                                   placeholder="admin">
+                        </div>
+                        <div class="form-group">
+                            <label for="password">Password *</label>
+                            <input type="password" id="password" name="password" required 
+                                   placeholder="Enter password">
+                        </div>
+                    </div>
+
+                    <div class="form-actions">
+                        <button type="submit" class="btn btn-primary">
+                            ✅ Add Credential
+                        </button>
+                        <button type="reset" class="btn btn-secondary">
+                            🔄 Clear Form
+                        </button>
+                    </div>
+                </form>
+                <div id="singleMessage" class="message"></div>
+            </div>
+        </div>
+
+        <!-- Bulk Upload Tab -->
+        <div class="tab-content" id="bulk-tab">
+            <div class="card">
+                <h2>Bulk CSV Upload</h2>
+                
+                <div class="upload-instructions">
+                    <h3>📝 CSV Format Requirements:</h3>
+                    <ul>
+                        <li>First row must be headers: <code>branch_id,edge_agent_id,ip_address,username,password,location_name</code></li>
+                        <li>Leave <code>ip_address</code> empty for branch-wide defaults</li>
+                        <li>All rows must have valid <code>branch_id</code>, <code>username</code>, and <code>password</code></li>
+                    </ul>
+                    
+                    <button class="btn btn-secondary" onclick="downloadTemplate()">
+                        ⬇️ Download CSV Template
+                    </button>
+                </div>
+
+                <form id="bulkForm" class="upload-form">
+                    <div class="file-upload-wrapper">
+                        <input type="file" id="csvFile" name="file" accept=".csv" required>
+                        <label for="csvFile" class="file-upload-label">
+                            <span class="file-icon">📁</span>
+                            <span class="file-text">Choose CSV file or drag here</span>
+                        </label>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary btn-large">
+                        🚀 Upload & Import
+                    </button>
+                </form>
+
+                <div id="bulkProgress" class="progress-container" style="display: none;">
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="progressFill"></div>
+                    </div>
+                    <p id="progressText">Processing...</p>
+                </div>
+
+                <div id="bulkResults" class="results"></div>
+            </div>
+        </div>
+
+        <!-- View All Tab -->
+        <div class="tab-content" id="list-tab">
+            <div class="card">
+                <div class="list-header">
+                    <h2>All Credentials</h2>
+                    <div class="filters">
+                        <input type="text" id="searchInput" placeholder="🔍 Search IP or username..." 
+                               class="search-input">
+                        <select id="branchFilter" class="branch-filter">
+                            <option value="">All Branches</option>
+                        </select>
+                        <button class="btn btn-primary" onclick="loadCredentials()">
+                            🔄 Refresh
+                        </button>
+                    </div>
+                </div>
+
+                <div class="table-container">
+                    <table class="credentials-table">
+                        <thead>
+                            <tr>
+                                <th>Branch ID</th>
+                                <th>IP Address</th>
+                                <th>Username</th>
+                                <th>Password</th>
+                                <th>Scope</th>
+                                <th>Created</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="credentialsTableBody">
+                            <tr>
+                                <td colspan="7" class="loading">Loading credentials...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="pagination" id="pagination"></div>
+            </div>
+        </div>
+
+        <!-- Edit Modal -->
+        <div id="editModal" class="modal">
+            <div class="modal-content">
+                <span class="close" onclick="closeEditModal()">&times;</span>
+                <h2>Edit Credential</h2>
+                <form id="editForm" class="form">
+                    <input type="hidden" id="edit_id">
+                    
+                    <div class="form-group">
+                        <label for="edit_ip_address">IP Address</label>
+                        <input type="text" id="edit_ip_address" name="ip_address" 
+                               placeholder="192.168.1.10">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="edit_username">Username *</label>
+                        <input type="text" id="edit_username" name="username" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="edit_password">Password *</label>
+                        <input type="password" id="edit_password" name="password" required>
+                    </div>
+
+                    <div class="form-actions">
+                        <button type="submit" class="btn btn-primary">💾 Save Changes</button>
+                        <button type="button" class="btn btn-secondary" onclick="closeEditModal()">Cancel</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>

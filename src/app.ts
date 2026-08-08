@@ -33,6 +33,8 @@ import { registerAnalyticsRoutes } from "./routes/analytics.routes.js";
 import { registerReportsRoutes } from "./routes/reports.routes.js";
 import { registerLiveOperationsRoutes } from "./routes/live-operations.routes.js";
 import { registerDashboardRoutes } from "./routes/dashboard.routes.js";
+import { registerCredentialsRoutes } from "./routes/credentials.routes.js";
+import { registerBulkUploadRoutes } from "./routes/bulk-upload.routes.js";
 import { registerAnalyticsPhase2Routes } from "./routes/analytics-phase2.routes.js";
 import { adminCameraManagementRoutes } from "./routes/admin-camera-management.routes.js";
 import { registerIncidentsRoutes } from "./routes/incidents.routes.js";
@@ -1835,6 +1837,8 @@ export async function buildApp(options?: {
   await registerEvidenceRoutes(app, store, exportWorker);
   await registerLiveOperationsRoutes(app, store);
   await registerDashboardRoutes(app, store);
+  await registerCredentialsRoutes(app, (store as any).pool);
+  await registerBulkUploadRoutes(app, store);
   await registerIncidentsRoutes(app, store);
   await registerAnalyticsRoutes(app, store, {
     ...(options?.analyticsEngineSharedKey

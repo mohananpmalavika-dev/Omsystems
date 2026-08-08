@@ -27,13 +27,17 @@ async function proxyControlRequest(request: NextRequest, context: RouteContext) 
   const employeeSession = request.cookies.get("sentinel_access")?.value ??
     request.headers.get("x-sentinel-session");
   const bridgeKey = runtimeEnv("EDGE_BRIDGE_SHARED_KEY", "");
-  const headers = new Headers();
+  // Preserve incoming headers so upstream can honor Accept and other request metadata.
+  const headers = new Headers(request.headers);
+  headers.delete("host");
+  headers.delete("cookie");
+
   if (bridgeKey) headers.set("x-edge-bridge-key", bridgeKey);
   const forwardedFor = request.headers.get("x-forwarded-for");
   if (forwardedFor) headers.set("x-forwarded-for", forwardedFor);
+
   if (employeeSession) {
-    // Forward the sentinel access token as a Bearer authorization header to upstream control plane
-    headers.set("authorization", 'Bearer ' + employeeSession)
+    headers.set("authorization", `Bearer ${employeeSession}`);
   } else {
     headers.set(
       "x-user-id",
@@ -170,3 +174,5 @@ function runtimeEnv(name: string | string[], fallback: string) {
 function normalizeHttpOrigin(value: string) {
   return /^[a-z][a-z\d+.-]*:\/\//i.test(value) ? value : `http://${value}`;
 }
+
+
