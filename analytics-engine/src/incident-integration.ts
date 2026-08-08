@@ -4,29 +4,21 @@
  * Bridges AI detection events to the incident management system.
  */
 
+import type { DetectionEvent } from '../../src/events/detection-event.js';
+
 export interface IncidentAPIClient {
-  processAIEvent(event: AIDetectionEvent): Promise<IncidentProcessingResult>;
+  processAIEvent(event: DetectionEvent): Promise<IncidentProcessingResult>;
   markFalsePositive(detectionId: string, reason: string, category: string): Promise<void>;
 }
 
-export interface AIDetectionEvent {
-  tenantId: string;
-  branchId?: string;
-  cameraId: string;
-  detectionType: string;
-  detectionTime: string;
-  confidence: number;
-  severity: 'P1' | 'P2' | 'P3' | 'P4' | 'P5';
-  zone?: string;
-  trackedObjectId?: string;
-  metadata?: Record<string, unknown>;
-}
 
 export interface IncidentProcessingResult {
   action: 'created' | 'updated' | 'buffered' | 'ignored' | 'verification-required';
   incidentId?: string;
   reason: string;
 }
+
+import { toDetectionEvent } from './events/to-detection-event.js';
 
 /**
  * HTTP Client for Incident Management API
@@ -38,8 +30,21 @@ export class IncidentManagementClient implements IncidentAPIClient {
     private readonly logger?: Console
   ) {}
   
-  async processAIEvent(event: AIDetectionEvent): Promise<IncidentProcessingResult> {
+  async processAIEvent(event: DetectionEvent): Promise<IncidentProcessingResult> {
     try {
+      const payload: any = {
+        tenantId: event.tenantId,
+        branchId: event.branchId,
+        cameraId: event.cameraId,
+        detectionType: event.eventType || event.detectionType,
+        detectionTime: event.timestamp,
+        confidence: event.confidence,
+        // Map severity back to platform P1..P5 if possible
+        severity: typeof event.severity === 'string' && /^P[1-5]$/.test(String(event.severity)) ? event.severity : undefined,
+        zone: event.zoneId,
+        trackedObjectId: event.trackIds && event.trackIds.length > 0 ? event.trackIds[0] : undefined,
+        metadata: event.metadata,
+      };
       const response = await fetch(`${this.baseUrl}/v1/incidents/ai-events`, {
         method: 'POST',
         headers: {

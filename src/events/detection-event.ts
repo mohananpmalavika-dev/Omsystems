@@ -23,10 +23,12 @@ export interface DetectionEvent {
   // Source camera and zone
   cameraId: string;
   zoneId?: string;
+  zone?: string;
 
   // Timestamps
   // Use ISO-8601 strings for portability across services
   timestamp: string;
+  detectionTime?: string;
 
   // Canonical event type (e.g., "person", "vehicle", "face", "anpr", "fire", "intrusion")
   eventType: string;
@@ -56,6 +58,9 @@ export interface DetectionEvent {
 
   // Free-form evidence bag for detector-specific fields (ANPR readings, face matches, attributes)
   evidence?: Record<string, unknown>;
+
+  // Tracking and zone context
+  trackedObjectId?: string;
 
   // Generic metadata for forward compatibility
   metadata?: Record<string, unknown>;

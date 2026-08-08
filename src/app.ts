@@ -1001,30 +1001,13 @@ export async function buildApp(options?: {
     let provisionedCount = 0;
     let credentialsRequiredCount = 0;
     let pendingVerificationCount = 0;
+    let activationFailedCount = 0;
     if (result.status === "completed") {
       const activation = await autoProvisionVerifiedCameras(store, agent.branchId, { edgeAgentId: id });
       provisionedCount = activation.summary.provisioned;
       credentialsRequiredCount = activation.summary.credentialsRequired;
       pendingVerificationCount = activation.summary.pendingVerification;
-      const branch = await store.getNode(agent.branchId);
-      if (branch) {
-        await store.writeAudit({
-          tenantId: branch.tenantId,
-          actorUserId: null,
-          action: "camera.scan_auto_activation",
-          resourceNodeId: agent.branchId,
-          outcome: activation.summary.failed > 0 ? "failure" : "success",
-          sourceIp: request.ip,
-          details: {
-            scanJobId: jobId,
-            edgeAgentId: id,
-            provisionedCount,
-            credentialsRequiredCount,
-            pendingVerificationCount,
-            failedCount: activation.summary.failed,
-          },
-        });
-      }
+      activationFailedCount = activation.summary.failed;
     }
 
     const job = await store.completeEdgeScanJob(id, jobId, {
@@ -1035,6 +1018,27 @@ export async function buildApp(options?: {
       pendingVerificationCount,
       ...(result.error ? { error: result.error } : {}),
     });
+    if (job) {
+      const branch = await store.getNode(agent.branchId);
+      if (branch) {
+        await store.writeAudit({
+          tenantId: branch.tenantId,
+          actorUserId: null,
+          action: "camera.scan_auto_activation",
+          resourceNodeId: agent.branchId,
+          outcome: activationFailedCount > 0 ? "failure" : "success",
+          sourceIp: request.ip,
+          details: {
+            scanJobId: jobId,
+            edgeAgentId: id,
+            provisionedCount,
+            credentialsRequiredCount,
+            pendingVerificationCount,
+            failedCount: activationFailedCount,
+          },
+        }).catch(() => undefined);
+      }
+    }
     return job ?? reply.code(404).send({ error: "scan_job_not_found" });
   });
 

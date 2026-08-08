@@ -1,4 +1,5 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
+import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import type { ControlPlaneStore } from '../control-plane-store.js';
 import { IncidentOrchestrator } from '../services/incident-orchestrator.service.js';
@@ -84,15 +85,18 @@ export async function registerInvestigationWorkspaceRoutes(
     const body = processAIEventSchema.parse(request.body);
     
     const result = await orchestrator.processAIEvent({
+      eventId: randomUUID(),
       tenantId: request.currentUser.tenantId,
       cameraId: body.cameraId,
+      zone: body.zone,
+      trackedObjectId: body.trackedObjectId,
       detectionType: body.detectionType,
+      eventType: body.detectionType,
+      timestamp: body.detectionTime,
       detectionTime: body.detectionTime,
       confidence: body.confidence,
       severity: body.severity,
       ...(body.branchId !== undefined && { branchId: body.branchId }),
-      ...(body.zone !== undefined && { zone: body.zone }),
-      ...(body.trackedObjectId !== undefined && { trackedObjectId: body.trackedObjectId }),
       ...(body.metadata !== undefined && { metadata: body.metadata }),
     });
     
