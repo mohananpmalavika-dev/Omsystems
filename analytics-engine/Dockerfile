@@ -31,6 +31,7 @@ COPY analytics-engine/models/manifest.json analytics-engine/models/manifest.json
 
 # Build TypeScript
 RUN npm run build --workspace @sentinel/analytics-engine
+RUN test -f /workspace/analytics-engine/dist/analytics-engine/src/index.js
 
 # Prune dev dependencies
 RUN npm prune --omit=dev --workspace @sentinel/analytics-engine
@@ -51,6 +52,7 @@ WORKDIR /app
 COPY --from=build --chown=analytics:analytics /workspace/analytics-engine/package.json ./
 COPY --from=build --chown=analytics:analytics /workspace/analytics-engine/dist ./dist
 COPY --from=build --chown=analytics:analytics /workspace/node_modules ./node_modules
+RUN test -f /app/dist/analytics-engine/src/index.js
 
 # Create models directory for ML models
 RUN mkdir -p /app/models && chown analytics:analytics /app/models
@@ -72,4 +74,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
 EXPOSE 8092
 
 # Start application
-CMD ["node", "dist/src/index.js"]
+CMD ["node", "dist/analytics-engine/src/index.js"]
