@@ -22,6 +22,9 @@ COPY analytics-engine/tsconfig.json analytics-engine/tsconfig.json
 ENV ONNXRUNTIME_NODE_INSTALL=skip
 RUN npm ci --workspace @sentinel/analytics-engine
 
+# Copy shared source (needed for cross-workspace imports)
+COPY src src
+
 # Copy analytics-engine source
 COPY analytics-engine/src analytics-engine/src
 COPY analytics-engine/models/manifest.json analytics-engine/models/manifest.json
