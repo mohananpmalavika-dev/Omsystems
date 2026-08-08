@@ -12,6 +12,9 @@ import type {
 } from "../domain/ptz.js";
 
 export class OnvifPtzService {
+  private isSimulationAllowed(): boolean {
+    return process.env.ALLOW_PTZ_SIMULATION === 'true';
+  }
   /**
    * Execute PTZ command via ONVIF
    * In production, this would connect to the camera via ONVIF SOAP API
@@ -20,9 +23,12 @@ export class OnvifPtzService {
     connectionSecretRef: string,
     command: PtzCommand,
   ): Promise<{ success: boolean; message?: string }> {
-    // TODO: Implement actual ONVIF PTZ command execution
-    // This is a placeholder that simulates the ONVIF command
-    
+    // Fail closed unless simulation explicitly allowed
+    if (!this.isSimulationAllowed()) {
+      return { success: false, message: 'PTZ commands are disabled in this deployment. Set ALLOW_PTZ_SIMULATION=true for development testing.' };
+    }
+
+    // Simulated execution for development only
     console.log(`[PTZ] Executing command for camera ${command.cameraId}:`, {
       action: command.action,
       direction: command.direction,
@@ -42,8 +48,7 @@ export class OnvifPtzService {
       return { success: false, message: "Preset ID required" };
     }
 
-    // Simulate ONVIF command execution
-    // In production: Parse connection secret, create ONVIF client, execute command
+    // Simulate ONVIF command execution (development only)
     return { success: true };
   }
 
@@ -51,9 +56,12 @@ export class OnvifPtzService {
    * Get PTZ capabilities from camera
    */
   async getCapabilities(connectionSecretRef: string): Promise<PtzCapabilities> {
-    // TODO: Query actual camera capabilities via ONVIF GetCapabilities
-    // This is a placeholder returning default capabilities
-    
+    if (!this.isSimulationAllowed()) {
+      // Fail closed - do not report capabilities when PTZ not configured
+      throw new Error('PTZ capability query is disabled in this deployment.');
+    }
+
+    // Placeholder returning default capabilities for development
     return {
       pan: true,
       tilt: true,
@@ -87,7 +95,11 @@ export class OnvifPtzService {
     tilt: number;
     zoom: number;
   }> {
-    // TODO: Query actual position via ONVIF GetStatus
+    if (!this.isSimulationAllowed()) {
+      throw new Error('PTZ position query is disabled in this deployment.');
+    }
+
+    // Development placeholder
     return { pan: 0, tilt: 0, zoom: 0 };
   }
 
@@ -101,9 +113,13 @@ export class OnvifPtzService {
     zoom: number,
     speed?: number,
   ): Promise<{ success: boolean }> {
+    if (!this.isSimulationAllowed()) {
+      return { success: false, message: 'PTZ absolute move is disabled in this deployment.' } as any;
+    }
+
     console.log(`[PTZ] Move to absolute position: pan=${pan}, tilt=${tilt}, zoom=${zoom}, speed=${speed}`);
-    // TODO: Execute ONVIF AbsoluteMove command
-    return { success: true };
+    // TODO: Execute ONVIF AbsoluteMove command (development simulation)
+    return { success: true } as any;
   }
 
   /**
@@ -115,18 +131,26 @@ export class OnvifPtzService {
     tiltSpeed: number,
     zoomSpeed: number,
   ): Promise<{ success: boolean }> {
+    if (!this.isSimulationAllowed()) {
+      return { success: false, message: 'PTZ continuous move is disabled in this deployment.' } as any;
+    }
+
     console.log(`[PTZ] Continuous move: pan=${panSpeed}, tilt=${tiltSpeed}, zoom=${zoomSpeed}`);
-    // TODO: Execute ONVIF ContinuousMove command
-    return { success: true };
+    // TODO: Execute ONVIF ContinuousMove command (development simulation)
+    return { success: true } as any;
   }
 
   /**
    * Stop all PTZ movement
    */
   async stop(connectionSecretRef: string): Promise<{ success: boolean }> {
+    if (!this.isSimulationAllowed()) {
+      return { success: false, message: 'PTZ stop is disabled in this deployment.' } as any;
+    }
+
     console.log(`[PTZ] Stop all movement`);
-    // TODO: Execute ONVIF Stop command
-    return { success: true };
+    // TODO: Execute ONVIF Stop command (development simulation)
+    return { success: true } as any;
   }
 
   /**
@@ -137,9 +161,13 @@ export class OnvifPtzService {
     presetNumber: number,
     speed?: number,
   ): Promise<{ success: boolean }> {
+    if (!this.isSimulationAllowed()) {
+      return { success: false, message: 'PTZ goto preset is disabled in this deployment.' } as any;
+    }
+
     console.log(`[PTZ] Go to preset ${presetNumber}, speed=${speed}`);
-    // TODO: Execute ONVIF GotoPreset command
-    return { success: true };
+    // TODO: Execute ONVIF GotoPreset command (development simulation)
+    return { success: true } as any;
   }
 
   /**
@@ -150,9 +178,13 @@ export class OnvifPtzService {
     presetNumber: number,
     name?: string,
   ): Promise<{ success: boolean }> {
+    if (!this.isSimulationAllowed()) {
+      return { success: false, message: 'PTZ set preset is disabled in this deployment.' } as any;
+    }
+
     console.log(`[PTZ] Set preset ${presetNumber}, name=${name}`);
-    // TODO: Execute ONVIF SetPreset command
-    return { success: true };
+    // TODO: Execute ONVIF SetPreset command (development simulation)
+    return { success: true } as any;
   }
 
   /**
@@ -162,9 +194,13 @@ export class OnvifPtzService {
     connectionSecretRef: string,
     presetNumber: number,
   ): Promise<{ success: boolean }> {
+    if (!this.isSimulationAllowed()) {
+      return { success: false, message: 'PTZ remove preset is disabled in this deployment.' } as any;
+    }
+
     console.log(`[PTZ] Remove preset ${presetNumber}`);
-    // TODO: Execute ONVIF RemovePreset command
-    return { success: true };
+    // TODO: Execute ONVIF RemovePreset command (development simulation)
+    return { success: true } as any;
   }
 
   /**
@@ -174,7 +210,11 @@ export class OnvifPtzService {
     number: number;
     name: string;
   }>> {
-    // TODO: Query ONVIF GetPresets
+    if (!this.isSimulationAllowed()) {
+      throw new Error('PTZ list presets is disabled in this deployment.');
+    }
+
+    // Development placeholder
     return [];
   }
 }

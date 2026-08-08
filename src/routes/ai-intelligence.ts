@@ -14,7 +14,7 @@ import { AIIncidentSummaryService } from "../services/ai-incident-summary.js";
 import { AISOPEngineService } from "../services/ai-sop-engine.js";
 import { AIInvestigationReportService } from "../services/ai-investigation-report.js";
 import { AIEvidenceBuilderService } from "../services/ai-evidence-builder.js";
-import { AIVideoSearchService } from "../services/ai-video-search.js";
+import { AIVideoSearchService, FeatureUnavailableError } from "../services/ai-video-search.js";
 
 export async function registerAIIntelligenceRoutes(app: FastifyInstance) {
   const store = (app as any).store as import("../control-plane-store.js").ControlPlaneStore;
@@ -613,12 +613,24 @@ export async function registerAIIntelligenceRoutes(app: FastifyInstance) {
     const auth = await authenticateRequest(request);
     const { trackingId } = request.params as any;
 
-    const journey = await videoSearchService.getObjectJourney(
-      auth.user.tenantId,
-      trackingId
-    );
-
-    return journey;
+    try {
+      const journey = await videoSearchService.getObjectJourney(
+        auth.user.tenantId,
+        trackingId
+      );
+      return journey;
+    } catch (err: any) {
+      if (err instanceof FeatureUnavailableError) {
+        // Return capability metadata so UI can disable this feature cleanly
+        return {
+          feature: 'video_object_journey',
+          status: 'unavailable',
+          reason: err.message || 'feature_not_implemented'
+        };
+      }
+      // Unexpected error -> rethrow for upstream error handling
+      throw err;
+    }
   });
 
   /**

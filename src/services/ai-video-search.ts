@@ -12,6 +12,19 @@
 import { randomUUID } from "node:crypto";
 import type { ControlPlaneStore } from "../control-plane-store.js";
 
+/**
+ * FeatureUnavailableError is thrown when a requested AI capability is not implemented
+ * or intentionally disabled in the current deployment. The route handlers map this
+ * to a machine-readable capability status response so the UI can disable features.
+ */
+export class FeatureUnavailableError extends Error {
+  constructor(message?: string) {
+    super(message || 'feature_unavailable');
+    this.name = 'FeatureUnavailableError';
+  }
+}
+
+
 export interface VideoMetadata {
   id: string;
   tenantId: string;
@@ -534,7 +547,8 @@ export class AIVideoSearchService {
     };
   }> {
     // Implementation would build complete journey visualization
-    throw new Error("Not implemented");
+    // Feature not implemented in this build — fail closed with explicit error
+    throw new FeatureUnavailableError("feature_not_implemented");
   }
 
   /**

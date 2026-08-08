@@ -40,6 +40,7 @@ import { CameraAgingDetector } from "./detectors/camera-aging-detector.js";
 import { CameraTypeClassifier } from "./detectors/camera-type-classifier.js";
 import { DVRChannelHealthDetector } from "./detectors/dvr-channel-health-detector.js";
 import { getModelManager } from "./model-manager.js";
+import { getConditionalScheduler, type ConditionalScheduler } from "./inference/conditional-scheduler.js";
 
 export interface AnalyticsRule {
   id: string;
@@ -103,6 +104,9 @@ export class AnalyticsPipeline {
   private initializationErrors = new Map<string, string>();
   private industrialAnalyticsEnabled = false;
   private smartCityAnalyticsEnabled = false;
+  
+  // GPU-aware conditional scheduler
+  private scheduler: ConditionalScheduler;
 
   // Rule cache per camera
   private rulesCache = new Map<string, AnalyticsRule[]>();
@@ -185,6 +189,10 @@ export class AnalyticsPipeline {
       this.zoneDetector,
       this.healthDetector,
     ]);
+    
+    // Initialize GPU-aware conditional scheduler
+    const gpuCapacity = process.env.GPU_CAPACITY ? parseInt(process.env.GPU_CAPACITY) : 100;
+    this.scheduler = getConditionalScheduler(undefined, gpuCapacity);
   }
 
   async initialize(): Promise<void> {
@@ -232,7 +240,7 @@ export class AnalyticsPipeline {
   }
 
   /**
-   * Process a single frame through the enhanced detection pipeline
+   * Process a single frame through the enhanced detection pipeline WITH CONDITIONAL SCHEDULING
    */
   async processFrame(
     frame: DetectionFrame,
@@ -245,7 +253,7 @@ export class AnalyticsPipeline {
     const events: Array<z.infer<typeof detectionSchema>> = [];
     const localInferenceRequested = !hasInferenceObjects(frame);
 
-    // Step 1: Camera health check (always run)
+    // Step 1: Camera health check (always run - cheap)
     const healthResults = await this.healthDetector.detect(frame);
     for (const result of healthResults) {
       if (this.matchesAnyRule(result.detectionType, rules)) {
@@ -253,21 +261,21 @@ export class AnalyticsPipeline {
       }
     }
 
-    // Step 2: Motion detection (first stage trigger for optimization)
+    // Step 2: Motion detection (first stage trigger - CRITICAL for optimization)
     const motionResults = await this.motionDetector.detect(frame);
     const hasMotion = motionResults.length > 0;
 
-    // Step 3: Run exactly one generic-object inference pass. The normalized
-    // objects are supplied to the tracking and rule detectors below, avoiding
-    // duplicate ONNX execution for person and vehicle detection.
+    // Step 3: Run base object detection ONCE if motion detected or required by rules
     const shouldDetectObjects = hasMotion || this.needsObjectDetection(rules);
     let inferenceFrame = frame;
+    let detectedObjects: InferenceObject[] = [];
+    
     if (shouldDetectObjects) {
       const objectResults = await this.objectDetector.detect(frame);
-      const objects = objectResults.flatMap((result) => result.objects) as InferenceObject[];
+      detectedObjects = objectResults.flatMap((result) => result.objects) as InferenceObject[];
       inferenceFrame = this.withDetections(
         frame,
-        objects,
+        detectedObjects,
         localInferenceRequested ? "local-onnx" : "normalized-observation",
       );
       for (const result of objectResults) {
@@ -277,93 +285,125 @@ export class AnalyticsPipeline {
       }
     }
 
-    // Step 4: Person detection and tracking (high priority)
-    let persons: any[] = [];
-    if (hasMotion || this.needsPersonDetection(rules)) {
-      const personResults = await this.personDetector.detect(inferenceFrame);
-      for (const result of personResults) {
-        persons = persons.concat(result.objects);
-        if (this.matchesAnyRule(result.detectionType, rules)) {
-          events.push(this.createEvent(frame, result));
-        }
-      }
+    // Step 4: CONDITIONAL SCHEDULING - decide which expensive models to run
+    const schedule = this.scheduler.scheduleFrame(
+      inferenceFrame,
+      rules,
+      hasMotion,
+      detectedObjects
+    );
+
+    if (!schedule.shouldProcess) {
+      // No further processing needed for this frame
+      return events;
     }
 
-    // Step 5: Vehicle detection and tracking
-    let vehicles: any[] = [];
-    if (hasMotion || this.needsVehicleDetection(rules)) {
-      const vehicleResults = await this.vehicleDetector.detect(inferenceFrame);
-      for (const result of vehicleResults) {
-        vehicles = vehicles.concat(result.objects);
-        if (this.matchesAnyRule(result.detectionType, rules)) {
-          events.push(this.createEvent(frame, result));
+    // Notify scheduler that models are starting
+    this.scheduler.updateGpuLoad(schedule.modelsToRun, true);
+
+    try {
+      // Extract persons and vehicles from detected objects
+      let persons: any[] = detectedObjects.filter(obj => obj.label === 'person');
+      let vehicles: any[] = detectedObjects.filter(obj =>
+        ['car', 'motorcycle', 'bus', 'truck', 'bicycle', 'auto-rickshaw'].includes(obj.label)
+      );
+
+      // Step 5: Run person detection with tracking if scheduled
+      if (schedule.modelsToRun.includes('yolov8n') || this.needsPersonDetection(rules)) {
+        const personResults = await this.personDetector.detect(inferenceFrame);
+        for (const result of personResults) {
+          persons = persons.concat(result.objects);
+          if (this.matchesAnyRule(result.detectionType, rules)) {
+            events.push(this.createEvent(frame, result));
+          }
         }
       }
-    }
 
-    // Preserve the track IDs assigned above for temporal specialised detectors
-    // (fall, queue and tailgating) without discarding the remaining objects.
-    const trackedFrame = this.withTrackedObjects(inferenceFrame, persons, vehicles);
-
-    // Step 6: Specialized detections (run in parallel when applicable)
-    const specializedResults = await Promise.all([
-      // Helmet detection (needs persons + vehicles)
-      persons.length > 0 || vehicles.length > 0
-        ? this.helmetDetector.detect(trackedFrame)
-        : Promise.resolve([]),
-      
-      // Fall detection (needs persons)
-      persons.length > 0
-        ? this.fallDetector.detect(trackedFrame)
-        : Promise.resolve([]),
-      
-      // Smoke & fire detection (always check for safety)
-      this.smokeFireDetector.detect(trackedFrame),
-      
-      // Crowd density (needs persons)
-      persons.length > 3
-        ? this.crowdDensityDetector.detect(trackedFrame)
-        : Promise.resolve([]),
-      
-      // Tailgating detection (needs persons in zones)
-      persons.length > 1
-        ? this.tailgatingDetector.detect(trackedFrame)
-        : Promise.resolve([]),
-      
-      // Queue analysis (needs persons)
-      persons.length > 0
-        ? this.queueDetector.detect(trackedFrame)
-        : Promise.resolve([]),
-      
-      // Heat map (always generate for analytics)
-      this.heatMapGenerator.detect(trackedFrame),
-
-      // Face and plate models are independent and only run when requested.
-      this.needsDetection(rules, ["face", "face-recognition", "unknown-person", "watchlist-match", "vip-detection", "blacklist-detection", "mask-detection", "beard-detection", "glasses-detection", "age-estimation", "gender-estimation", "emotion-recognition"])
-        ? this.faceDetector.detect(trackedFrame)
-        : Promise.resolve([]),
-      this.needsDetection(rules, ["anpr", "vehicle-reidentification"])
-        ? this.anprDetector.detect(trackedFrame)
-        : Promise.resolve([]),
-    ]);
-
-    // Process specialized results
-    for (const results of specializedResults) {
-      for (const result of results) {
-        if (this.matchesAnyRule(result.detectionType, rules)) {
-          events.push(this.createEvent(frame, result));
+      // Step 6: Run vehicle detection with tracking if scheduled
+      if (schedule.modelsToRun.includes('yolov8n') || this.needsVehicleDetection(rules)) {
+        const vehicleResults = await this.vehicleDetector.detect(inferenceFrame);
+        for (const result of vehicleResults) {
+          vehicles = vehicles.concat(result.objects);
+          if (this.matchesAnyRule(result.detectionType, rules)) {
+            events.push(this.createEvent(frame, result));
+          }
         }
       }
-    }
 
-    // Step 6: Zone-based detection (line crossing, intrusion, loitering)
-    const allObjects = [...persons, ...vehicles];
-    if (allObjects.length > 0) {
-      for (const rule of rules) {
-        if (!rule.enabled) continue;
-        const zoneEvents = await this.processZoneRule(trackedFrame, allObjects, rule);
-        events.push(...zoneEvents);
+      // Preserve track IDs for temporal detectors
+      const trackedFrame = this.withTrackedObjects(inferenceFrame, persons, vehicles);
+
+      // Step 7: Conditionally run specialized detections based on scheduler
+      const specializedPromises: Array<Promise<any[]>> = [];
+
+      // Helmet detection (if scheduled)
+      if (schedule.modelsToRun.includes('helmet') && (persons.length > 0 || vehicles.length > 0)) {
+        specializedPromises.push(this.helmetDetector.detect(trackedFrame));
       }
+
+      // Fall detection (if persons present)
+      if (persons.length > 0 && this.needsDetection(rules, ['fall'])) {
+        specializedPromises.push(this.fallDetector.detect(trackedFrame));
+      }
+
+      // Fire/smoke detection (if scheduled - critical safety)
+      if (schedule.modelsToRun.includes('fire-smoke')) {
+        specializedPromises.push(this.smokeFireDetector.detect(trackedFrame));
+      }
+
+      // Crowd density (if enough persons)
+      if (persons.length > 3 && this.needsDetection(rules, ['crowd-density'])) {
+        specializedPromises.push(this.crowdDensityDetector.detect(trackedFrame));
+      }
+
+      // Tailgating (if multiple persons)
+      if (persons.length > 1 && this.needsDetection(rules, ['tailgating'])) {
+        specializedPromises.push(this.tailgatingDetector.detect(trackedFrame));
+      }
+
+      // Queue analysis (if persons present)
+      if (persons.length > 0 && this.needsDetection(rules, ['queue'])) {
+        specializedPromises.push(this.queueDetector.detect(trackedFrame));
+      }
+
+      // Heat map (always - lightweight)
+      specializedPromises.push(this.heatMapGenerator.detect(trackedFrame));
+
+      // Face detection (if scheduled)
+      if (schedule.modelsToRun.includes('face-detector')) {
+        specializedPromises.push(this.faceDetector.detect(trackedFrame));
+      }
+
+      // ANPR (if scheduled)
+      if (schedule.modelsToRun.includes('anpr-detector')) {
+        specializedPromises.push(this.anprDetector.detect(trackedFrame));
+      }
+
+      // Wait for all scheduled specialized detections
+      const specializedResults = await Promise.all(specializedPromises);
+
+      // Process specialized results
+      for (const results of specializedResults) {
+        for (const result of results) {
+          if (this.matchesAnyRule(result.detectionType, rules)) {
+            events.push(this.createEvent(frame, result));
+          }
+        }
+      }
+
+      // Step 8: Zone-based detection (line crossing, intrusion, loitering)
+      const allObjects = [...persons, ...vehicles];
+      if (allObjects.length > 0) {
+        for (const rule of rules) {
+          if (!rule.enabled) continue;
+          const zoneEvents = await this.processZoneRule(trackedFrame, allObjects, rule);
+          events.push(...zoneEvents);
+        }
+      }
+
+    } finally {
+      // Notify scheduler that models have finished
+      this.scheduler.updateGpuLoad(schedule.modelsToRun, false);
     }
 
     return events;
@@ -598,6 +638,7 @@ export class AnalyticsPipeline {
       detectors: {},
       initializationErrors: Object.fromEntries(this.initializationErrors),
       models: getModelManager().getProvisioningSummary(),
+      scheduler: this.scheduler.getStatistics(),
     };
 
     for (const detector of this.detectors) {

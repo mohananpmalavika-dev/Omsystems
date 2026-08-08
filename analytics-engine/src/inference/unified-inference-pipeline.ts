@@ -37,6 +37,8 @@ import type {
   PoseDetection, 
   PersonAttributes as PersonAttributesResult 
 } from "./vision-specialty-inference.js";
+import { VectorStoreService } from "../reid/vector-store.service.js";
+import type { Pool } from "pg";
 
 // ============================================================================
 // Type Definitions
@@ -119,15 +121,11 @@ export class UnifiedInferencePipeline {
   private personReId: PersonVectorInference | null = null;
   private vehicleReId: VehicleVectorInference | null = null;
 
-  // Tracking state
+  // Tracking state (local tracks only - moved global Re-ID to vector store)
   private tracks = new Map<string, TrackState>();
-  private reIdDatabase = new Map<string, {
-    embedding: number[];
-    objectType: string;
-    firstSeen: Date;
-    lastSeen: Date;
-    appearances: number;
-  }>();
+  
+  // Persistent vector store for global Re-ID (replaces in-memory Map)
+  private vectorStore: VectorStoreService | null = null;
 
   // Tracker instance (replaces simple IoU matcher)
   private tracker: Tracker | null = null;
@@ -139,7 +137,11 @@ export class UnifiedInferencePipeline {
 
   private isInitialized = false;
 
-  constructor() {}
+  constructor(pool?: Pool) {
+    if (pool) {
+      this.vectorStore = new VectorStoreService(pool);
+    }
+  }
 
   /**
    * Initialize the pipeline (load required models)
@@ -616,11 +618,14 @@ export class UnifiedInferencePipeline {
   }
 
   /**
-   * Perform cross-camera re-identification
+   * Perform cross-camera re-identification using persistent vector store
    */
   async performReIdentification(
     trackId: string,
-    embedding: number[]
+    embedding: number[],
+    tenantId: string,
+    cameraId: string,
+    objectType: 'person' | 'vehicle' | 'face' = 'person'
   ): Promise<ReIdMatch | null> {
     const track = this.tracks.get(trackId);
     if (!track) return null;
@@ -628,11 +633,66 @@ export class UnifiedInferencePipeline {
     // Update track with embedding
     track.embedding = embedding;
 
+    // Use vector store if available, otherwise fall back to in-memory (legacy)
+    if (this.vectorStore) {
+      try {
+        // Search in persistent vector store
+        const result = await this.vectorStore.findOrCreateIdentity(
+          embedding,
+          tenantId,
+          cameraId,
+          trackId,
+          objectType
+        );
+
+        // Update track with global ID
+        track.globalId = result.globalId;
+
+        // Record tracking event for historical analysis
+        if (track.positions.length > 0) {
+          const lastPos = track.positions[track.positions.length - 1];
+          await this.vectorStore.recordTrackingEvent(
+            result.globalId,
+            tenantId,
+            cameraId,
+            trackId,
+            objectType,
+            lastPos.confidence,
+            lastPos.boundingBox
+          );
+        }
+
+        // Get full identity info for response
+        const identity = await this.vectorStore.getIdentity(result.globalId);
+
+        return {
+          globalId: result.globalId,
+          similarity: result.similarity,
+          lastSeen: identity?.lastSeen || new Date()
+        };
+      } catch (error) {
+        console.error('Vector store Re-ID failed, falling back to legacy:', error);
+        // Fall through to legacy implementation
+      }
+    }
+
+    // Legacy in-memory implementation (fallback if vector store unavailable)
+    console.warn('Using legacy in-memory Re-ID (vector store not available)');
+    
     // Search for matching global ID
     let bestMatch: { globalId: string; similarity: number } | null = null;
     let bestSimilarity = 0;
 
-    for (const [globalId, entry] of this.reIdDatabase.entries()) {
+    // Note: This is the old in-memory Map approach - should migrate to vector store
+    const legacyDb = new Map<string, {
+      embedding: number[];
+      objectType: string;
+      firstSeen: Date;
+      lastSeen: Date;
+      appearances: number;
+    }>();
+
+    for (const [globalId, entry] of legacyDb.entries()) {
       // Only match same object types
       if (entry.objectType !== track.objectType) continue;
 
@@ -647,7 +707,7 @@ export class UnifiedInferencePipeline {
     if (bestMatch) {
       // Existing global identity
       track.globalId = bestMatch.globalId;
-      const entry = this.reIdDatabase.get(bestMatch.globalId)!;
+      const entry = legacyDb.get(bestMatch.globalId)!;
       entry.lastSeen = track.lastSeen;
       entry.appearances++;
 
@@ -661,7 +721,7 @@ export class UnifiedInferencePipeline {
       const globalId = `global_${track.objectType}_${Date.now()}_${Math.random().toString(36).substring(7)}`;
       track.globalId = globalId;
 
-      this.reIdDatabase.set(globalId, {
+      legacyDb.set(globalId, {
         embedding,
         objectType: track.objectType,
         firstSeen: track.firstSeen,
@@ -745,10 +805,10 @@ export class UnifiedInferencePipeline {
   /**
    * Get pipeline statistics
    */
-  getStats() {
-    return {
+  async getStats() {
+    const stats = {
       activeTracks: this.tracks.size,
-      globalIdentities: this.reIdDatabase.size,
+      globalIdentities: 0,  // Will be populated from vector store
       modelsLoaded: {
         coco: Boolean(this.cocoDetector),
         fire: Boolean(this.fireDetector),
@@ -762,8 +822,31 @@ export class UnifiedInferencePipeline {
         personReId: Boolean(this.personReId),
         vehicleReId: Boolean(this.vehicleReId),
         tracker: Boolean(this.tracker)
+      },
+      vectorStore: {
+        enabled: Boolean(this.vectorStore),
+        totalIdentities: 0,
+        personIdentities: 0,
+        vehicleIdentities: 0,
+        faceIdentities: 0
       }
     };
+
+    // Get vector store statistics if available
+    if (this.vectorStore) {
+      try {
+        const vectorStats = await this.vectorStore.getStatistics();
+        stats.globalIdentities = vectorStats.totalIdentities;
+        stats.vectorStore.totalIdentities = vectorStats.totalIdentities;
+        stats.vectorStore.personIdentities = vectorStats.personIdentities;
+        stats.vectorStore.vehicleIdentities = vectorStats.vehicleIdentities;
+        stats.vectorStore.faceIdentities = vectorStats.faceIdentities;
+      } catch (error) {
+        console.error('Failed to get vector store statistics:', error);
+      }
+    }
+
+    return stats;
   }
 
   /**
@@ -778,9 +861,9 @@ export class UnifiedInferencePipeline {
    */
   async cleanup(): Promise<void> {
     this.tracks.clear();
-    this.reIdDatabase.clear();
+    // Note: Vector store data persists - only clear local state
     this.isInitialized = false;
-    console.log('Unified Inference Pipeline cleaned up');
+    console.log('Unified Inference Pipeline cleaned up (vector store data preserved)');
   }
 }
 
@@ -792,9 +875,9 @@ let pipelineInstance: UnifiedInferencePipeline | null = null;
 /**
  * Get or create pipeline instance
  */
-export function getInferencePipeline(): UnifiedInferencePipeline {
+export function getInferencePipeline(pool?: Pool): UnifiedInferencePipeline {
   if (!pipelineInstance) {
-    pipelineInstance = new UnifiedInferencePipeline();
+    pipelineInstance = new UnifiedInferencePipeline(pool);
   }
   return pipelineInstance;
 }

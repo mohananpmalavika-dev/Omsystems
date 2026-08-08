@@ -20,3 +20,7 @@ analytics-engine/models/**/*.part-*
 
 # Ignore all executable files
 *.exe
+
+# Ignore environment files (examples only checked into repo)
+.env*
+!.env.example

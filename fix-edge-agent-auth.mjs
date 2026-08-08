@@ -8,7 +8,10 @@ const { Client } = pg;
 
 const DATABASE_URL = 'postgresql://sentinel:local-development-only@localhost:5432/sentinel';
 const EDGE_AGENT_ID = '6a570d4a-2c71-415f-b59a-643cf50d55c5';
-const EDGE_BRIDGE_SHARED_KEY = 'WBRrQzol9gGTuIEAVd08kvMFP5pfyNDj1m32qZ7YsShOcxHa';
+const EDGE_BRIDGE_SHARED_KEY = process.env.EDGE_BRIDGE_SHARED_KEY || (() => {
+  console.error('ERROR: EDGE_BRIDGE_SHARED_KEY is not set in the environment. This script will not inject a shared key into the database when the key is not explicitly provided.\nSet EDGE_BRIDGE_SHARED_KEY in your environment to continue (development only).');
+  process.exit(1);
+})();
 
 async function main() {
   const client = new Client({ connectionString: DATABASE_URL });
