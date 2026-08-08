@@ -165,12 +165,44 @@ export class VehicleAnalyticsDetector extends BaseDetector {
     console.log("Initializing Vehicle Analytics detector...");
     
     try {
-      // TODO: Load ONNX models
-      // const ort = await import('onnxruntime-node');
-      // this.yoloModel = await ort.InferenceSession.create('/app/models/detection/yolov8m.onnx');
-      // this.plateDetector = await ort.InferenceSession.create('/app/models/vehicle/plate_detector.onnx');
-      // this.ocrModel = await this.loadPaddleOCR();
-      // this.vehicleReIdModel = await ort.InferenceSession.create('/app/models/vehicle/vehicle_reid.onnx');
+      // Load ONNX models for vehicle detection, ANPR, and Re-ID
+      try {
+        const ort = await import('onnxruntime-node');
+        const fs = await import('fs');
+        
+        // Load vehicle detection model (YOLOv8)
+        const yoloPath = process.env.YOLO_MODEL_PATH || '/app/models/detection/yolov8m.onnx';
+        if (fs.existsSync(yoloPath)) {
+          this.yoloModel = await ort.InferenceSession.create(yoloPath);
+          console.log(`✓ Loaded YOLOv8 model from ${yoloPath}`);
+        } else {
+          console.warn(`⚠️ Model file not found: ${yoloPath}, using unified inference pipeline`);
+        }
+        
+        // Load license plate detector
+        const plateDetectorPath = process.env.PLATE_DETECTOR_MODEL_PATH || '/app/models/vehicle/plate_detector.onnx';
+        if (fs.existsSync(plateDetectorPath)) {
+          this.plateDetector = await ort.InferenceSession.create(plateDetectorPath);
+          console.log(`✓ Loaded license plate detector from ${plateDetectorPath}`);
+        } else {
+          console.warn(`⚠️ Model file not found: ${plateDetectorPath}`);
+        }
+        
+        // PaddleOCR would be loaded differently (not ONNX)
+        // For now, rely on unified inference pipeline for OCR
+        console.log('✓ Using unified inference pipeline for OCR');
+        
+        // Load vehicle Re-ID model
+        const reIdPath = process.env.VEHICLE_REID_MODEL_PATH || '/app/models/vehicle/vehicle_reid.onnx';
+        if (fs.existsSync(reIdPath)) {
+          this.vehicleReIdModel = await ort.InferenceSession.create(reIdPath);
+          console.log(`✓ Loaded Vehicle Re-ID model from ${reIdPath}`);
+        } else {
+          console.warn(`⚠️ Model file not found: ${reIdPath}`);
+        }
+      } catch (error) {
+        console.warn('⚠️ Failed to load ONNX models, using unified inference pipeline:', error);
+      }
       
       this.isModelLoaded = true;
       this.startTrackingCleanup();

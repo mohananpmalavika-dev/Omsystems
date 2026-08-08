@@ -746,20 +746,370 @@ export class AIReportingEngine extends BaseDetector {
         break;
       
       case 'pdf':
-        // Would generate PDF using library like pdfkit
-        content = 'PDF export not implemented';
-        break;
+        return await this.exportToPDF(report);
       
       case 'excel':
-        // Would generate Excel using library like exceljs
-        content = 'Excel export not implemented';
-        break;
+        return await this.exportToExcel(report);
     }
     
     const filename = `report_${report.id}.${format}`;
     // In production, would save to file system or cloud storage
     
     return filename;
+  }
+  
+  /**
+   * Export report to PDF format
+   */
+  private async exportToPDF(report: GeneratedReport): Promise<string> {
+    try {
+      const PDFDocument = await import('pdfkit').then(m => m.default);
+      const fs = await import('fs');
+      
+      const filename = `report_${report.id}.pdf`;
+      const filePath = `/tmp/${filename}`; // Or configured output path
+      
+      const doc = new PDFDocument({
+        size: 'A4',
+        margins: { top: 50, bottom: 50, left: 50, right: 50 }
+      });
+      
+      // Pipe to file
+      const stream = fs.createWriteStream(filePath);
+      doc.pipe(stream);
+      
+      // Header
+      doc.fontSize(20).font('Helvetica-Bold').text(report.name, { align: 'center' });
+      doc.moveDown(0.5);
+      doc.fontSize(10).font('Helvetica').text(`Generated: ${report.generatedAt.toLocaleString()}`, { align: 'center' });
+      doc.fontSize(10).text(`Period: ${report.dateRange.start.toLocaleDateString()} - ${report.dateRange.end.toLocaleDateString()}`, { align: 'center' });
+      doc.moveDown(1.5);
+      
+      // Summary
+      doc.fontSize(16).font('Helvetica-Bold').text('Summary', { underline: true });
+      doc.moveDown(0.5);
+      doc.fontSize(11).font('Helvetica').text(report.summary.description);
+      doc.moveDown(1);
+      
+      // Key Metrics
+      doc.fontSize(14).font('Helvetica-Bold').text('Key Metrics');
+      doc.moveDown(0.5);
+      
+      report.summary.keyMetrics.forEach(metric => {
+        const trendSymbol = metric.trend === 'up' ? '↑' : metric.trend === 'down' ? '↓' : '→';
+        const changeText = metric.change ? ` (${metric.change > 0 ? '+' : ''}${metric.change}%)` : '';
+        doc.fontSize(10).font('Helvetica')
+          .text(`• ${metric.name}: `, { continued: true })
+          .font('Helvetica-Bold')
+          .text(`${metric.value}${metric.unit || ''}${changeText} ${trendSymbol}`);
+        doc.moveDown(0.3);
+      });
+      doc.moveDown(1);
+      
+      // Sections
+      report.sections.forEach(section => {
+        // Check if we need a new page
+        if (doc.y > 650) {
+          doc.addPage();
+        }
+        
+        doc.fontSize(14).font('Helvetica-Bold').text(section.title, { underline: true });
+        doc.moveDown(0.5);
+        
+        if (section.type === 'table' && Array.isArray(section.data) && section.data.length > 0) {
+          // Draw table
+          const headers = Object.keys(section.data[0]);
+          const columnWidth = (doc.page.width - 100) / headers.length;
+          
+          // Table headers
+          doc.fontSize(9).font('Helvetica-Bold');
+          headers.forEach((header, i) => {
+            doc.text(header, 50 + (i * columnWidth), doc.y, {
+              width: columnWidth,
+              align: 'left'
+            });
+          });
+          doc.moveDown(0.5);
+          
+          // Table rows
+          doc.font('Helvetica');
+          section.data.slice(0, 10).forEach(row => { // Limit to first 10 rows
+            const startY = doc.y;
+            headers.forEach((header, i) => {
+              doc.text(String(row[header] || ''), 50 + (i * columnWidth), startY, {
+                width: columnWidth,
+                align: 'left'
+              });
+            });
+            doc.moveDown(0.3);
+          });
+          
+          if (section.data.length > 10) {
+            doc.fontSize(8).font('Helvetica-Oblique')
+              .text(`... and ${section.data.length - 10} more rows`);
+          }
+        } else if (section.type === 'summary' && section.data) {
+          doc.fontSize(10).font('Helvetica');
+          Object.entries(section.data).forEach(([key, value]) => {
+            doc.text(`${key}: ${value}`);
+            doc.moveDown(0.2);
+          });
+        }
+        
+        doc.moveDown(1);
+      });
+      
+      // Insights
+      if (report.insights && report.insights.length > 0) {
+        if (doc.y > 600) {
+          doc.addPage();
+        }
+        
+        doc.fontSize(14).font('Helvetica-Bold').text('Insights & Recommendations', { underline: true });
+        doc.moveDown(0.5);
+        
+        report.insights.forEach(insight => {
+          const icon = insight.type === 'critical' ? '⚠️' : 
+                      insight.type === 'warning' ? '⚡' : 
+                      insight.type === 'success' ? '✓' : 'ℹ️';
+          
+          doc.fontSize(11).font('Helvetica-Bold')
+            .text(`${icon} ${insight.title}`);
+          doc.fontSize(9).font('Helvetica')
+            .text(insight.description);
+          
+          if (insight.recommendations && insight.recommendations.length > 0) {
+            doc.moveDown(0.3);
+            doc.fontSize(9).font('Helvetica-Oblique').text('Recommendations:');
+            insight.recommendations.forEach(rec => {
+              doc.text(`  • ${rec}`);
+            });
+          }
+          doc.moveDown(0.8);
+        });
+      }
+      
+      // Footer
+      const pages = doc.bufferedPageRange();
+      for (let i = 0; i < pages.count; i++) {
+        doc.switchToPage(i);
+        doc.fontSize(8).font('Helvetica').text(
+          `Page ${i + 1} of ${pages.count}`,
+          50,
+          doc.page.height - 30,
+          { align: 'center' }
+        );
+      }
+      
+      // Finalize PDF
+      doc.end();
+      
+      // Wait for file to be written
+      await new Promise((resolve, reject) => {
+        stream.on('finish', resolve);
+        stream.on('error', reject);
+      });
+      
+      console.log(`✓ PDF report exported: ${filename}`);
+      return filename;
+      
+    } catch (error) {
+      console.error('Failed to generate PDF:', error);
+      return `report_${report.id}.pdf (generation failed: ${error instanceof Error ? error.message : 'unknown error'})`;
+    }
+  }
+  
+  /**
+   * Export report to Excel format
+   */
+  private async exportToExcel(report: GeneratedReport): Promise<string> {
+    try {
+      const ExcelJS = await import('exceljs');
+      const workbook = new ExcelJS.Workbook();
+      
+      // Set workbook properties
+      workbook.creator = 'AI Reporting Engine';
+      workbook.created = new Date();
+      workbook.modified = new Date();
+      
+      // Summary Sheet
+      const summarySheet = workbook.addWorksheet('Summary', {
+        properties: { tabColor: { argb: 'FF4F81BD' } }
+      });
+      
+      // Title
+      summarySheet.mergeCells('A1:D1');
+      const titleCell = summarySheet.getCell('A1');
+      titleCell.value = report.name;
+      titleCell.font = { size: 18, bold: true };
+      titleCell.alignment = { horizontal: 'center', vertical: 'middle' };
+      summarySheet.getRow(1).height = 30;
+      
+      // Report info
+      summarySheet.getCell('A3').value = 'Generated:';
+      summarySheet.getCell('B3').value = report.generatedAt.toLocaleString();
+      summarySheet.getCell('A4').value = 'Period:';
+      summarySheet.getCell('B4').value = `${report.dateRange.start.toLocaleDateString()} - ${report.dateRange.end.toLocaleDateString()}`;
+      summarySheet.getCell('A5').value = 'Report Type:';
+      summarySheet.getCell('B5').value = report.type;
+      
+      // Key Metrics
+      summarySheet.getCell('A7').value = 'Key Metrics';
+      summarySheet.getCell('A7').font = { size: 14, bold: true };
+      
+      summarySheet.getRow(8).values = ['Metric', 'Value', 'Unit', 'Change (%)', 'Trend'];
+      summarySheet.getRow(8).font = { bold: true };
+      summarySheet.getRow(8).fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FFD9E1F2' }
+      };
+      
+      report.summary.keyMetrics.forEach((metric, index) => {
+        const row = summarySheet.getRow(9 + index);
+        row.values = [
+          metric.name,
+          metric.value,
+          metric.unit || '',
+          metric.change || '',
+          metric.trend || ''
+        ];
+      });
+      
+      // Auto-fit columns
+      summarySheet.columns.forEach(column => {
+        column.width = 20;
+      });
+      
+      // Section Sheets
+      report.sections.forEach((section, sectionIndex) => {
+        if (section.type === 'table' && Array.isArray(section.data) && section.data.length > 0) {
+          const sheet = workbook.addWorksheet(section.title.substring(0, 31)); // Excel sheet name limit
+          
+          // Section title
+          sheet.mergeCells('A1:D1');
+          const sectionTitleCell = sheet.getCell('A1');
+          sectionTitleCell.value = section.title;
+          sectionTitleCell.font = { size: 14, bold: true };
+          sectionTitleCell.alignment = { horizontal: 'center' };
+          sheet.getRow(1).height = 25;
+          
+          // Table headers
+          const headers = Object.keys(section.data[0]);
+          sheet.getRow(3).values = headers;
+          sheet.getRow(3).font = { bold: true };
+          sheet.getRow(3).fill = {
+            type: 'pattern',
+            pattern: 'solid',
+            fgColor: { argb: 'FFD9E1F2' }
+          };
+          
+          // Table data
+          section.data.forEach((row, rowIndex) => {
+            const values = headers.map(header => row[header]);
+            sheet.getRow(4 + rowIndex).values = values;
+          });
+          
+          // Auto-fit columns
+          sheet.columns.forEach((column, colIndex) => {
+            let maxLength = headers[colIndex].length;
+            section.data.slice(0, 100).forEach(row => {
+              const cellValue = String(row[headers[colIndex]] || '');
+              maxLength = Math.max(maxLength, cellValue.length);
+            });
+            column.width = Math.min(maxLength + 2, 50);
+          });
+          
+          // Add borders
+          sheet.eachRow((row, rowNumber) => {
+            if (rowNumber >= 3) {
+              row.eachCell(cell => {
+                cell.border = {
+                  top: { style: 'thin' },
+                  left: { style: 'thin' },
+                  bottom: { style: 'thin' },
+                  right: { style: 'thin' }
+                };
+              });
+            }
+          });
+        }
+      });
+      
+      // Insights Sheet
+      if (report.insights && report.insights.length > 0) {
+        const insightsSheet = workbook.addWorksheet('Insights');
+        
+        insightsSheet.getCell('A1').value = 'Insights & Recommendations';
+        insightsSheet.getCell('A1').font = { size: 14, bold: true };
+        
+        insightsSheet.getRow(3).values = ['Type', 'Title', 'Description', 'Recommendations'];
+        insightsSheet.getRow(3).font = { bold: true };
+        insightsSheet.getRow(3).fill = {
+          type: 'pattern',
+          pattern: 'solid',
+          fgColor: { argb: 'FFD9E1F2' }
+        };
+        
+        report.insights.forEach((insight, index) => {
+          const row = insightsSheet.getRow(4 + index);
+          row.values = [
+            insight.type.toUpperCase(),
+            insight.title,
+            insight.description,
+            insight.recommendations ? insight.recommendations.join('; ') : ''
+          ];
+          
+          // Color-code by type
+          const typeCell = row.getCell(1);
+          switch (insight.type) {
+            case 'critical':
+              typeCell.fill = {
+                type: 'pattern',
+                pattern: 'solid',
+                fgColor: { argb: 'FFFF0000' }
+              };
+              typeCell.font = { color: { argb: 'FFFFFFFF' }, bold: true };
+              break;
+            case 'warning':
+              typeCell.fill = {
+                type: 'pattern',
+                pattern: 'solid',
+                fgColor: { argb: 'FFFFC000' }
+              };
+              break;
+            case 'success':
+              typeCell.fill = {
+                type: 'pattern',
+                pattern: 'solid',
+                fgColor: { argb: 'FF00B050' }
+              };
+              typeCell.font = { color: { argb: 'FFFFFFFF' }, bold: true };
+              break;
+          }
+        });
+        
+        insightsSheet.columns = [
+          { width: 12 },
+          { width: 25 },
+          { width: 50 },
+          { width: 50 }
+        ];
+      }
+      
+      // Save to file
+      const filename = `report_${report.id}.xlsx`;
+      const filePath = `/tmp/${filename}`; // Or configured output path
+      
+      await workbook.xlsx.writeFile(filePath);
+      
+      console.log(`✓ Excel report exported: ${filename}`);
+      return filename;
+      
+    } catch (error) {
+      console.error('Failed to generate Excel:', error);
+      return `report_${report.id}.xlsx (generation failed: ${error instanceof Error ? error.message : 'unknown error'})`;
+    }
   }
   
   // ===========================

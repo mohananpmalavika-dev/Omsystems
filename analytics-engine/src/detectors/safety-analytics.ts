@@ -148,11 +148,40 @@ export class SafetyAnalyticsDetector extends BaseDetector {
     console.log("Initializing Safety Analytics detector...");
     
     try {
-      // TODO: Load ONNX models
-      // const ort = await import('onnxruntime-node');
-      // this.ppeModel = await ort.InferenceSession.create('/app/models/safety/ppe_detector.onnx');
-      // this.fireSmokeModel = await ort.InferenceSession.create('/app/models/safety/fire_smoke.onnx');
-      // this.hazardModel = await ort.InferenceSession.create('/app/models/safety/hazard_detector.onnx');
+      // Load ONNX models for PPE detection and hazard detection
+      try {
+        const ort = await import('onnxruntime-node');
+        const fs = await import('fs');
+        
+        // Load PPE detection model
+        const ppeModelPath = process.env.PPE_MODEL_PATH || '/app/models/safety/ppe_detector.onnx';
+        if (fs.existsSync(ppeModelPath)) {
+          this.ppeModel = await ort.InferenceSession.create(ppeModelPath);
+          console.log(`✓ Loaded PPE detection model from ${ppeModelPath}`);
+        } else {
+          console.warn(`⚠️ Model file not found: ${ppeModelPath}, using unified inference pipeline`);
+        }
+        
+        // Load fire/smoke detection model
+        const fireSmokeModelPath = process.env.FIRE_SMOKE_MODEL_PATH || '/app/models/safety/fire_smoke.onnx';
+        if (fs.existsSync(fireSmokeModelPath)) {
+          this.fireSmokeModel = await ort.InferenceSession.create(fireSmokeModelPath);
+          console.log(`✓ Loaded Fire/Smoke detection model from ${fireSmokeModelPath}`);
+        } else {
+          console.warn(`⚠️ Model file not found: ${fireSmokeModelPath}`);
+        }
+        
+        // Load hazard detection model
+        const hazardModelPath = process.env.HAZARD_MODEL_PATH || '/app/models/safety/hazard_detector.onnx';
+        if (fs.existsSync(hazardModelPath)) {
+          this.hazardModel = await ort.InferenceSession.create(hazardModelPath);
+          console.log(`✓ Loaded hazard detection model from ${hazardModelPath}`);
+        } else {
+          console.warn(`⚠️ Model file not found: ${hazardModelPath}`);
+        }
+      } catch (error) {
+        console.warn('⚠️ Failed to load ONNX models, using unified inference pipeline:', error);
+      }
       
       this.isModelLoaded = true;
       this.startViolationMonitoring();

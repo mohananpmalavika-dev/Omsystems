@@ -58,7 +58,7 @@ export class OnvifPtzService {
 
     // Get or create PTZ client
     const clientResult = await this.getPtzClient(connectionSecretRef, command.cameraId);
-    if (!clientResult.success) {
+    if (clientResult.success === false) {
       return {
         status: "failed",
         message: clientResult.error || "Failed to connect to camera",
@@ -96,7 +96,7 @@ export class OnvifPtzService {
     cameraId: string,
   ): Promise<PtzCapabilities> {
     const clientResult = await this.getPtzClient(connectionSecretRef, cameraId);
-    if (!clientResult.success) {
+    if (clientResult.success === false) {
       throw new Error(clientResult.error || "Failed to connect to camera");
     }
 
@@ -115,7 +115,7 @@ export class OnvifPtzService {
     zoom: number;
   } | null> {
     const clientResult = await this.getPtzClient(connectionSecretRef, cameraId);
-    if (!clientResult.success) {
+    if (clientResult.success === false) {
       return null;
     }
 
@@ -134,7 +134,7 @@ export class OnvifPtzService {
     speed?: number,
   ): Promise<PtzOperationResult> {
     const clientResult = await this.getPtzClient(connectionSecretRef, cameraId);
-    if (!clientResult.success) {
+    if (clientResult.success === false) {
       return {
         status: "failed",
         message: clientResult.error || "Failed to connect to camera",
@@ -161,7 +161,7 @@ export class OnvifPtzService {
     zoomSpeed: number,
   ): Promise<PtzOperationResult> {
     const clientResult = await this.getPtzClient(connectionSecretRef, cameraId);
-    if (!clientResult.success) {
+    if (clientResult.success === false) {
       return {
         status: "failed",
         message: clientResult.error || "Failed to connect to camera",
@@ -184,7 +184,7 @@ export class OnvifPtzService {
     cameraId: string,
   ): Promise<PtzOperationResult> {
     const clientResult = await this.getPtzClient(connectionSecretRef, cameraId);
-    if (!clientResult.success) {
+    if (clientResult.success === false) {
       return {
         status: "failed",
         message: clientResult.error || "Failed to connect to camera",
@@ -204,7 +204,7 @@ export class OnvifPtzService {
     speed?: number,
   ): Promise<PtzOperationResult> {
     const clientResult = await this.getPtzClient(connectionSecretRef, cameraId);
-    if (!clientResult.success) {
+    if (clientResult.success === false) {
       return {
         status: "failed",
         message: clientResult.error || "Failed to connect to camera",
@@ -228,7 +228,7 @@ export class OnvifPtzService {
     presetToken?: string,
   ): Promise<PtzOperationResult & { presetToken?: string }> {
     const clientResult = await this.getPtzClient(connectionSecretRef, cameraId);
-    if (!clientResult.success) {
+    if (clientResult.success === false) {
       return {
         status: "failed",
         message: clientResult.error || "Failed to connect to camera",
@@ -251,7 +251,7 @@ export class OnvifPtzService {
     presetToken: string,
   ): Promise<PtzOperationResult> {
     const clientResult = await this.getPtzClient(connectionSecretRef, cameraId);
-    if (!clientResult.success) {
+    if (clientResult.success === false) {
       return {
         status: "failed",
         message: clientResult.error || "Failed to connect to camera",
@@ -276,7 +276,7 @@ export class OnvifPtzService {
     position?: { pan: number; tilt: number; zoom: number };
   }>> {
     const clientResult = await this.getPtzClient(connectionSecretRef, cameraId);
-    if (!clientResult.success) {
+    if (clientResult.success === false) {
       return [];
     }
 
@@ -292,7 +292,7 @@ export class OnvifPtzService {
     speed?: number,
   ): Promise<PtzOperationResult> {
     const clientResult = await this.getPtzClient(connectionSecretRef, cameraId);
-    if (!clientResult.success) {
+    if (clientResult.success === false) {
       return {
         status: "failed",
         message: clientResult.error || "Failed to connect to camera",

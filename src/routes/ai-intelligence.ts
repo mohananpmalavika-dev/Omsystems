@@ -10,6 +10,7 @@
  */
 
 import type { FastifyInstance } from "fastify";
+import type { Pool } from "pg";
 import { AIIncidentSummaryService } from "../services/ai-incident-summary.js";
 import { AISOPEngineService } from "../services/ai-sop-engine.js";
 import { AIInvestigationReportService } from "../services/ai-investigation-report.js";
@@ -32,13 +33,14 @@ function handleFeatureResponse<T>(feature: string, fn: () => Promise<T>): Promis
 
 export async function registerAIIntelligenceRoutes(app: FastifyInstance) {
   const store = (app as any).store as import("../control-plane-store.js").ControlPlaneStore;
+  const pool = (store as unknown as { pool: Pool }).pool;
   const authenticateRequest = (app as any).authenticateRequest as (request: import("fastify").FastifyRequest) => Promise<any>;
 
   const incidentSummaryService = new AIIncidentSummaryService(store);
   const sopEngineService = new AISOPEngineService(store);
   const investigationService = new AIInvestigationReportService(store);
   const evidenceService = new AIEvidenceBuilderService(store);
-  const videoSearchService = new AIVideoSearchService(store);
+  const videoSearchService = new AIVideoSearchService(pool);
 
   // ============ INCIDENT SUMMARY & CORRELATION ============
 

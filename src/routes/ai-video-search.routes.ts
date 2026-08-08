@@ -328,6 +328,8 @@ export async function registerAIVideoSearchRoutes(
       const result = await integrationPipeline.bulkReindex({
         tenantId,
         ...body,
+        from: body.from!,
+        to: body.to!,
       });
 
       return {
