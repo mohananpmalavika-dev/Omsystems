@@ -468,6 +468,7 @@ export function DeviceManager() {
       await wait(1_500);
     }
 
+    openScannerInstaller();
     throw new Error("The Sentinel Grid Scanner did not connect. Install it once on this PC, then select Scan cameras again.");
   }
 
@@ -478,12 +479,18 @@ export function DeviceManager() {
     setNotice(`Camera scan completed. Found ${outcome.found} devices. ${outcome.provisioned} verified live streams were activated${outcome.credentialsRequired ? `; ${outcome.credentialsRequired} need credentials` : ""}.`);
   }
 
+  function openScannerInstaller() {
+    if (!selectedBranch) return;
+    setGatewayActivation(undefined);
+    setGatewayName(`${activeBranch?.name ?? "Branch"} Scanner`);
+    setError(undefined);
+    setShowGatewayForm(true);
+  }
+
   async function scanCameras() {
     if (!selectedBranch) return;
     if (gateways.length === 0) {
-      setGatewayActivation(undefined);
-      setGatewayName(`${activeBranch?.name ?? "Branch"} Scanner`);
-      setShowGatewayForm(true);
+      openScannerInstaller();
       setNotice("Install the Sentinel Grid Scanner once on this PC to enable automatic branch scans.");
       return;
     }
@@ -816,12 +823,13 @@ export function DeviceManager() {
           <button className="primary-button" onClick={() => void scanCameras()} disabled={!selectedBranch || scanning || saving} title="Automatically search local network, VPN routes, and the managed tunnel">
             <Search size={15} /> {scanning ? "Searching cameras..." : "Scan cameras"}
           </button>
+          {!onlineGateway && selectedBranch ? <button className="secondary-button" onClick={openScannerInstaller} disabled={saving} title="Download the Sentinel Grid Scanner for this PC"><Download size={15} /> Install scanner</button> : null}
         </div>
         {selectedBranch ? (
           gateways.length === 0 ? (
-            <p className="device-toolbar-note">One-time setup required: enroll the Branch Gateway to start automatic scanning.</p>
+            <p className="device-toolbar-note">First use: select Install scanner, then run the downloaded installer once.</p>
           ) : (
-            <p className="device-toolbar-note">Gateway: {onlineGateway?.name || gateways[0]?.name || "Unnamed"} · {onlineGateway ? "Ready to scan" : gateways[0]?.status === "offline" ? "Offline — reconnect to scan" : "Awaiting first connection"}</p>
+            <p className="device-toolbar-note">Scanner: {onlineGateway?.name || gateways[0]?.name || "Not installed"} · {onlineGateway ? "Ready to scan" : "Install scanner, then select Scan cameras"}</p>
           )
         ) : null}
       </div>
@@ -854,7 +862,7 @@ export function DeviceManager() {
               setGatewayActivation(undefined);
               setShowGatewayForm(true);
             }} disabled={!selectedBranch}>
-              <Router size={15} /> Enroll Branch Gateway
+              <Download size={15} /> Install scanner on this PC
             </button>
             <button className="secondary-button" onClick={openCameraForm} disabled={!selectedBranch}>
               <Plus size={15} /> Add camera manually
