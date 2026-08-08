@@ -1,106 +1,125 @@
 /**
  * ONVIF PTZ Service
- * Handles PTZ commands via ONVIF protocol
+ * Handles PTZ commands via ONVIF protocol with real camera control
  */
 
+import type { Pool } from "pg";
 import type {
   PtzCommand,
   PtzDirection,
   PtzZoomAction,
   PtzFocusAction,
   PtzCapabilities,
+  PtzOperationResult,
 } from "../domain/ptz.js";
+import { OnvifPtzClient } from "./onvif-ptz-client.js";
+import { CameraCredentialResolver } from "./camera-credential-resolver.js";
+
+/**
+ * Cache entry for PTZ clients to avoid re-initialization
+ */
+interface PtzClientCacheEntry {
+  client: OnvifPtzClient;
+  profileToken: string;
+  createdAt: number;
+}
 
 export class OnvifPtzService {
-  private isSimulationAllowed(): boolean {
-    return process.env.ALLOW_PTZ_SIMULATION === 'true';
+  private clientCache = new Map<string, PtzClientCacheEntry>();
+  private readonly CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+  private credentialResolver: CameraCredentialResolver;
+
+  constructor(private readonly pool: Pool) {
+    this.credentialResolver = new CameraCredentialResolver(pool);
+    
+    // Clean up expired cache entries periodically
+    setInterval(() => this.cleanupCache(), 60_000);
   }
+
   /**
    * Execute PTZ command via ONVIF
-   * In production, this would connect to the camera via ONVIF SOAP API
    */
   async executeCommand(
     connectionSecretRef: string,
     command: PtzCommand,
-  ): Promise<{ success: boolean; message?: string }> {
-    // Fail closed unless simulation explicitly allowed
-    if (!this.isSimulationAllowed()) {
-      return { success: false, message: 'PTZ commands are disabled in this deployment. Set ALLOW_PTZ_SIMULATION=true for development testing.' };
-    }
-
-    // Simulated execution for development only
-    console.log(`[PTZ] Executing command for camera ${command.cameraId}:`, {
-      action: command.action,
-      direction: command.direction,
-      speed: command.speed,
-    });
+  ): Promise<PtzOperationResult> {
+    const startTime = Date.now();
 
     // Validate command
-    if (command.action === "move" && !command.direction) {
-      return { success: false, message: "Direction required for move command" };
+    const validation = this.validateCommand(command);
+    if (!validation.valid) {
+      return {
+        status: "failed",
+        message: validation.error,
+        timestamp: new Date().toISOString(),
+        executionTimeMs: Date.now() - startTime,
+      };
     }
 
-    if (command.action === "zoom" && !command.zoomAction) {
-      return { success: false, message: "Zoom action required" };
+    // Get or create PTZ client
+    const clientResult = await this.getPtzClient(connectionSecretRef, command.cameraId);
+    if (!clientResult.success) {
+      return {
+        status: "failed",
+        message: clientResult.error || "Failed to connect to camera",
+        timestamp: new Date().toISOString(),
+        executionTimeMs: Date.now() - startTime,
+      };
     }
 
-    if (command.action === "preset" && !command.presetId) {
-      return { success: false, message: "Preset ID required" };
+    const { client, profileToken } = clientResult;
+
+    // Execute command
+    let result: PtzOperationResult;
+    try {
+      result = await this.executeCommandInternal(client, command, profileToken);
+    } catch (error) {
+      result = {
+        status: "failed",
+        message: "PTZ command execution failed",
+        detail: error instanceof Error ? error.message : String(error),
+      };
     }
 
-    // Simulate ONVIF command execution (development only)
-    return { success: true };
+    // Add execution metadata
+    result.timestamp = new Date().toISOString();
+    result.executionTimeMs = Date.now() - startTime;
+
+    return result;
   }
 
   /**
    * Get PTZ capabilities from camera
    */
-  async getCapabilities(connectionSecretRef: string): Promise<PtzCapabilities> {
-    if (!this.isSimulationAllowed()) {
-      // Fail closed - do not report capabilities when PTZ not configured
-      throw new Error('PTZ capability query is disabled in this deployment.');
+  async getCapabilities(
+    connectionSecretRef: string,
+    cameraId: string,
+  ): Promise<PtzCapabilities> {
+    const clientResult = await this.getPtzClient(connectionSecretRef, cameraId);
+    if (!clientResult.success) {
+      throw new Error(clientResult.error || "Failed to connect to camera");
     }
 
-    // Placeholder returning default capabilities for development
-    return {
-      pan: true,
-      tilt: true,
-      zoom: true,
-      focus: true,
-      iris: false,
-      absoluteMove: true,
-      relativeMove: true,
-      continuousMove: true,
-      presets: {
-        supported: true,
-        max: 128,
-      },
-      patrols: {
-        supported: true,
-        max: 8,
-      },
-      home: true,
-      speedRange: {
-        min: 0.1,
-        max: 1.0,
-      },
-    };
+    return await clientResult.client.getCapabilities(clientResult.profileToken);
   }
 
   /**
    * Get current PTZ position
    */
-  async getPosition(connectionSecretRef: string): Promise<{
+  async getPosition(
+    connectionSecretRef: string,
+    cameraId: string,
+  ): Promise<{
     pan: number;
     tilt: number;
     zoom: number;
-  }> {
-    if (!this.isSimulationAllowed()) {
-      throw new Error('PTZ position query is disabled in this deployment.');
+  } | null> {
+    const clientResult = await this.getPtzClient(connectionSecretRef, cameraId);
+    if (!clientResult.success) {
+      return null;
     }
 
-    // Development placeholder
-    return { pan: 0, tilt: 0, zoom: 0 };
+    return await clientResult.client.getPosition(clientResult.profileToken);
   }
 
   /**
@@ -108,18 +127,27 @@ export class OnvifPtzService {
    */
   async moveAbsolute(
     connectionSecretRef: string,
+    cameraId: string,
     pan: number,
     tilt: number,
     zoom: number,
     speed?: number,
-  ): Promise<{ success: boolean }> {
-    if (!this.isSimulationAllowed()) {
-      return { success: false, message: 'PTZ absolute move is disabled in this deployment.' } as any;
+  ): Promise<PtzOperationResult> {
+    const clientResult = await this.getPtzClient(connectionSecretRef, cameraId);
+    if (!clientResult.success) {
+      return {
+        status: "failed",
+        message: clientResult.error || "Failed to connect to camera",
+      };
     }
 
-    console.log(`[PTZ] Move to absolute position: pan=${pan}, tilt=${tilt}, zoom=${zoom}, speed=${speed}`);
-    // TODO: Execute ONVIF AbsoluteMove command (development simulation)
-    return { success: true } as any;
+    return await clientResult.client.moveAbsolute(
+      pan,
+      tilt,
+      zoom,
+      speed,
+      clientResult.profileToken,
+    );
   }
 
   /**
@@ -127,30 +155,43 @@ export class OnvifPtzService {
    */
   async moveContinuous(
     connectionSecretRef: string,
+    cameraId: string,
     panSpeed: number,
     tiltSpeed: number,
     zoomSpeed: number,
-  ): Promise<{ success: boolean }> {
-    if (!this.isSimulationAllowed()) {
-      return { success: false, message: 'PTZ continuous move is disabled in this deployment.' } as any;
+  ): Promise<PtzOperationResult> {
+    const clientResult = await this.getPtzClient(connectionSecretRef, cameraId);
+    if (!clientResult.success) {
+      return {
+        status: "failed",
+        message: clientResult.error || "Failed to connect to camera",
+      };
     }
 
-    console.log(`[PTZ] Continuous move: pan=${panSpeed}, tilt=${tiltSpeed}, zoom=${zoomSpeed}`);
-    // TODO: Execute ONVIF ContinuousMove command (development simulation)
-    return { success: true } as any;
+    return await clientResult.client.moveContinuous(
+      panSpeed,
+      tiltSpeed,
+      zoomSpeed,
+      clientResult.profileToken,
+    );
   }
 
   /**
    * Stop all PTZ movement
    */
-  async stop(connectionSecretRef: string): Promise<{ success: boolean }> {
-    if (!this.isSimulationAllowed()) {
-      return { success: false, message: 'PTZ stop is disabled in this deployment.' } as any;
+  async stop(
+    connectionSecretRef: string,
+    cameraId: string,
+  ): Promise<PtzOperationResult> {
+    const clientResult = await this.getPtzClient(connectionSecretRef, cameraId);
+    if (!clientResult.success) {
+      return {
+        status: "failed",
+        message: clientResult.error || "Failed to connect to camera",
+      };
     }
 
-    console.log(`[PTZ] Stop all movement`);
-    // TODO: Execute ONVIF Stop command (development simulation)
-    return { success: true } as any;
+    return await clientResult.client.stop(clientResult.profileToken);
   }
 
   /**
@@ -158,16 +199,23 @@ export class OnvifPtzService {
    */
   async gotoPreset(
     connectionSecretRef: string,
-    presetNumber: number,
+    cameraId: string,
+    presetToken: string,
     speed?: number,
-  ): Promise<{ success: boolean }> {
-    if (!this.isSimulationAllowed()) {
-      return { success: false, message: 'PTZ goto preset is disabled in this deployment.' } as any;
+  ): Promise<PtzOperationResult> {
+    const clientResult = await this.getPtzClient(connectionSecretRef, cameraId);
+    if (!clientResult.success) {
+      return {
+        status: "failed",
+        message: clientResult.error || "Failed to connect to camera",
+      };
     }
 
-    console.log(`[PTZ] Go to preset ${presetNumber}, speed=${speed}`);
-    // TODO: Execute ONVIF GotoPreset command (development simulation)
-    return { success: true } as any;
+    return await clientResult.client.gotoPreset(
+      presetToken,
+      speed,
+      clientResult.profileToken,
+    );
   }
 
   /**
@@ -175,16 +223,23 @@ export class OnvifPtzService {
    */
   async setPreset(
     connectionSecretRef: string,
-    presetNumber: number,
-    name?: string,
-  ): Promise<{ success: boolean }> {
-    if (!this.isSimulationAllowed()) {
-      return { success: false, message: 'PTZ set preset is disabled in this deployment.' } as any;
+    cameraId: string,
+    presetName: string,
+    presetToken?: string,
+  ): Promise<PtzOperationResult & { presetToken?: string }> {
+    const clientResult = await this.getPtzClient(connectionSecretRef, cameraId);
+    if (!clientResult.success) {
+      return {
+        status: "failed",
+        message: clientResult.error || "Failed to connect to camera",
+      };
     }
 
-    console.log(`[PTZ] Set preset ${presetNumber}, name=${name}`);
-    // TODO: Execute ONVIF SetPreset command (development simulation)
-    return { success: true } as any;
+    return await clientResult.client.setPreset(
+      presetName,
+      presetToken,
+      clientResult.profileToken,
+    );
   }
 
   /**

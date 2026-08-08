@@ -25,6 +25,21 @@ Connect only the DVR/XVR Ethernet port and the Branch Gateway to the same LAN. A
 
 Each approved channel appears in the normal camera wall with an **Analog via DVR · CH n** source label. Live view is proxied on demand from that channel, while recording status, recent-media evidence, disk health and playback verification continue to come from the DVR. An offline or unverified channel is kept in review state instead of being reported as operational.
 
+When a recorder exposes main and sub profiles, the gateway keeps the main profile
+assigned to recorder-local recording and selects the substream for remote live
+view and analytics. The stream role, resolution, FPS, bitrate, and intended use
+remain in the control plane so a main stream is not silently pulled continuously
+over the branch WAN.
+
+## Existing site-to-site VPN
+
+The camera network and the control uplink are separate decisions. A gateway can
+read cameras and DVRs on its local LAN while sending control traffic, telemetry,
+and events through the organization's existing VPN. These approved sources keep
+their `edge://` secret route; approval does not rewrite them to an unusable central
+VPN route. Register a source as direct VPN only when the datacenter will read its
+private address through the routed VPN and its stream secret exists centrally.
+
 ## Operating model
 
 Ship the provisioned appliance with only two labelled connections: power/UPS and camera-network Ethernet. Branch staff plug it in; the central team owns tunnel configuration, signed updates, encrypted camera credentials, remote diagnostics, and monitoring. Telemetry is queued in an encrypted local outbox during internet loss and replayed in order after reconnection.

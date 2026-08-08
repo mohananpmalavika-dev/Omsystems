@@ -136,6 +136,10 @@ const cameraProfileSchema = z.object({
   codec: z.enum(["H264", "H265", "MJPEG", "unknown"]),
   width: z.number().int().positive(),
   height: z.number().int().positive(),
+  role: z.enum(["main", "sub", "unknown"]).optional(),
+  frameRate: z.number().positive().max(120).optional(),
+  bitrateKbps: z.number().int().positive().max(100_000).optional(),
+  preferredFor: z.array(z.enum(["recording", "live", "analytics"])).max(3).optional(),
   rtspUri: z.string().min(1).optional(),
 }).strict();
 const capabilitiesSchema = z.object({
@@ -1125,6 +1129,10 @@ export async function buildApp(options?: {
         codec: p.codec,
         width: p.width,
         height: p.height,
+        role: p.role,
+        frameRate: p.frameRate,
+        bitrateKbps: p.bitrateKbps,
+        preferredFor: p.preferredFor,
         rtspUri: p.rtspUri,
       })),
       rtspValidated: parsed.rtspValidated,
@@ -1152,6 +1160,10 @@ export async function buildApp(options?: {
         codec: p.codec,
         width: p.width,
         height: p.height,
+        role: p.role,
+        frameRate: p.frameRate,
+        bitrateKbps: p.bitrateKbps,
+        preferredFor: p.preferredFor,
         rtspUri: p.rtspUri,
       })),
       capabilities: {
@@ -1185,7 +1197,7 @@ export async function buildApp(options?: {
       channel: z.number().int().positive(),
       protocol: z.enum(["onvif-t", "onvif-s", "rtsp", "vendor-adapter"]),
       connectionSecretRef: z.string().min(8).max(500).optional(),
-      connectionTransport: z.enum(["vpn", "cloudflare-tunnel"]).optional(),
+      connectionTransport: z.enum(["vpn", "cloudflare-tunnel", "edge-gateway"]).optional(),
       branchCode: z.string().trim().max(80).optional(),
       manufacturer: z.string().trim().max(120).optional(),
       model: z.string().trim().max(120).optional(),
@@ -1198,6 +1210,7 @@ export async function buildApp(options?: {
       onvifPort: z.number().int().min(1).max(65535).optional(),
       rtspPort: z.number().int().min(1).max(65535).optional(),
       streamProfile: z.string().trim().max(80).optional(),
+      profile: cameraProfileSchema.omit({ rtspUri: true }).optional(),
       sourceType: z.enum(["ip-camera", "analog-dvr-channel", "nvr-channel"]).default("ip-camera"),
       recorderId: z.string().trim().min(1).max(200).optional(),
       recorderChannel: z.number().int().min(1).max(65_535).optional(),
@@ -1205,8 +1218,12 @@ export async function buildApp(options?: {
     }).parse(request.body);
     const connectivity = await store.getBranchConnectivityProfile(branchId);
     const connectionTransport = parsed.connectionTransport ?? connectivity?.primaryTransport;
-    if (connectionTransport && (!connectivity || !transportIsAllowed(connectionTransport, connectivity))) {
+    if (connectionTransport && connectionTransport !== "edge-gateway" &&
+        (!connectivity || !transportIsAllowed(connectionTransport, connectivity))) {
       return reply.code(409).send({ error: "branch_connectivity_not_configured" });
+    }
+    if (connectionTransport === "edge-gateway" && !parsed.connectionSecretRef?.startsWith("edge://")) {
+      return reply.code(400).send({ error: "edge_gateway_requires_edge_secret_reference" });
     }
     if (connectionTransport === "vpn" && (!parsed.ipAddress || !isPrivateIpv4Address(parsed.ipAddress))) {
       return reply.code(400).send({ error: "vpn_requires_private_camera_or_recorder_address" });
@@ -1242,6 +1259,7 @@ export async function buildApp(options?: {
       onvifPort: parsed.onvifPort,
       rtspPort: parsed.rtspPort,
       streamProfile: parsed.streamProfile,
+      ...(parsed.profile ? { profile: parsed.profile as Camera["profiles"][number] } : {}),
       sourceType: parsed.sourceType,
       recorderId: parsed.recorderId,
       recorderChannel: parsed.recorderChannel,
@@ -2150,7 +2168,10 @@ function initialRecordingJobForSource(sourceType: Camera["sourceType"]): Omit<Re
 
 function safeCamera(camera: Camera) {
   const { connectionSecretRef: _secret, ...safe } = camera;
-  return safe;
+  return {
+    ...safe,
+    profiles: safe.profiles.map(({ rtspUri: _rtspUri, ...profile }) => profile),
+  };
 }
 
 async function requireAccess(

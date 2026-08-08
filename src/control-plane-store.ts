@@ -134,6 +134,7 @@ export interface CameraApprovalInput {
   onvifPort?: number;
   rtspPort?: number;
   streamProfile?: string;
+  profile?: CameraProfile;
   sourceType?: Camera["sourceType"];
   connectionTransport?: Camera["connectionTransport"];
   recorderId?: string;

@@ -48,6 +48,12 @@ describe("universal DVR channel adapter", () => {
     });
     expect(channels[0]!.profiles).toHaveLength(2);
     expect(channels[0]!.primaryStreamUri).toContain("operator:secret@");
+    expect(channels[0]!.primaryStreamUri).toContain("/Streaming/Channels/102");
+    expect(channels[0]!.profiles).toEqual(expect.arrayContaining([
+      expect.objectContaining({ role: "main", preferredFor: ["recording"] }),
+      expect.objectContaining({ role: "sub", preferredFor: ["live", "analytics"] }),
+    ]));
+    expect(channels[0]!.reasonCodes).toContain("recorder_channel_substream_selected");
     expect(channels[1]).toMatchObject({ sourceChannel: 2, name: "Entrance" });
     expect(probeStream).toHaveBeenCalledTimes(2);
   });
@@ -105,6 +111,7 @@ describe("universal DVR channel adapter", () => {
     expect(channels.map((channel) => channel.sourceChannel)).toEqual([3, 4]);
     expect(channels.every((channel) => channel.streamVerified)).toBe(true);
     expect(channels.every((channel) => channel.reasonCodes.includes("vendor_adapter_fallback"))).toBe(true);
+    expect(channels.every((channel) => channel.profiles[0]?.role === "sub")).toBe(true);
     expect(probeStream).toHaveBeenCalledTimes(2);
   });
 });

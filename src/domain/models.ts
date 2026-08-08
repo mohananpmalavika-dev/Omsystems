@@ -69,6 +69,9 @@ export interface ResourceNode {
 export type CameraVendor = "hikvision" | "cp-plus" | "other";
 export type CameraStatus = "online" | "offline" | "degraded" | "unknown";
 export type CameraSourceType = "ip-camera" | "analog-dvr-channel" | "nvr-channel";
+export type CameraStreamRole = "main" | "sub" | "unknown";
+export type CameraStreamUse = "recording" | "live" | "analytics";
+export type CameraConnectionTransport = "vpn" | "cloudflare-tunnel" | "edge-gateway";
 
 export type CameraLocationType =
   | "branch-entrance"
@@ -133,7 +136,7 @@ export interface Camera {
   /** How video reaches Sentinel Grid. Analog cameras are represented by the DVR channel that digitizes them. */
   sourceType?: CameraSourceType;
   /** The protected branch path used to reach this source; credentials remain in the secret reference. */
-  connectionTransport?: "vpn" | "cloudflare-tunnel";
+  connectionTransport?: CameraConnectionTransport;
   recorderId?: string;
   recorderChannel?: number;
   recorderSerialNumber?: string;
@@ -162,6 +165,11 @@ export interface CameraProfile {
   codec: "H264" | "H265" | "MJPEG" | "unknown";
   width: number;
   height: number;
+  /** Normalized encoder role. Recorder-local main streams stay local; substreams are preferred over WAN. */
+  role?: CameraStreamRole;
+  frameRate?: number;
+  bitrateKbps?: number;
+  preferredFor?: CameraStreamUse[];
   rtspUri?: string | undefined;
 }
 

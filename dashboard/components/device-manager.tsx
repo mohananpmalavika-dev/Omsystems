@@ -41,8 +41,11 @@ type CameraForm = {
   edgeAgentId: string;
   connectionSecretRef: string;
   codec: "H264" | "H265" | "MJPEG" | "unknown";
+  streamRole: "main" | "sub" | "unknown";
   width: string;
   height: string;
+  frameRate: string;
+  bitrateKbps: string;
   ptz: boolean;
   audio: boolean;
   events: boolean;
@@ -68,8 +71,11 @@ const emptyCameraForm: CameraForm = {
   edgeAgentId: "",
   connectionSecretRef: "",
   codec: "H264",
+  streamRole: "main",
   width: "1920",
   height: "1080",
+  frameRate: "15",
+  bitrateKbps: "2048",
   ptz: false,
   audio: false,
   events: true,
@@ -745,7 +751,19 @@ export function DeviceManager() {
           ipAddress: cameraForm.ipAddress,
           onvifPort: Number(cameraForm.onvifPort),
           rtspPort: Number(cameraForm.rtspPort),
-          streamProfile: "main",
+          streamProfile: cameraForm.streamRole,
+          profile: {
+            name: cameraForm.streamRole,
+            role: cameraForm.streamRole,
+            codec: cameraForm.codec,
+            width: Number(cameraForm.width),
+            height: Number(cameraForm.height),
+            frameRate: Number(cameraForm.frameRate),
+            bitrateKbps: Number(cameraForm.bitrateKbps),
+            preferredFor: cameraForm.sourceType === "ip-camera"
+              ? ["recording", "live", "analytics"]
+              : ["live", "analytics"],
+          },
         });
       } else {
         const discovery = await cameraInventoryApi.submitDiscovery(selectedBranch, {
@@ -768,13 +786,25 @@ export function DeviceManager() {
           compatibilityStatus: discoveryCompatibilityStatus,
           hardwareId: discoveryHardwareId || undefined,
           existingDeviceAssociation: discoveryExistingDeviceAssociation || undefined,
+          sourceType: cameraForm.sourceType,
+          ...(cameraForm.sourceType !== "ip-camera" ? {
+            recorderId: cameraForm.recorderId,
+            recorderChannel: Number(cameraForm.recorderChannel),
+            recorderSerialNumber: cameraForm.recorderSerialNumber || undefined,
+          } : {}),
           onvifPort: Number(cameraForm.onvifPort),
           rtspPort: Number(cameraForm.rtspPort),
           profiles: [{
-            name: "main",
+            name: cameraForm.streamRole,
             codec: cameraForm.codec,
             width: Number(cameraForm.width),
             height: Number(cameraForm.height),
+            role: cameraForm.streamRole,
+            frameRate: Number(cameraForm.frameRate),
+            bitrateKbps: Number(cameraForm.bitrateKbps),
+            preferredFor: cameraForm.sourceType === "ip-camera"
+              ? ["recording", "live", "analytics"]
+              : ["live", "analytics"],
           }],
           capabilities: {
             ptz: cameraForm.ptz,
@@ -782,12 +812,10 @@ export function DeviceManager() {
             events: cameraForm.events,
           },
         });
-        await cameraInventoryApi.approveCamera(selectedBranch, {
-          discoveryId: discovery.id,
+        await cameraInventoryApi.approveDiscovery(selectedBranch, discovery.id, {
           name: cameraForm.name,
           channel: Number(cameraForm.channel),
           protocol: cameraForm.protocol,
-          connectionSecretRef: cameraForm.connectionSecretRef,
         });
       }
       setShowCameraForm(false);
@@ -1298,7 +1326,7 @@ export function DeviceManager() {
 
               <div className="form-section"><h3>Connection and camera type</h3><div className="form-row">
                 <div className="form-group"><label htmlFor="cameraTransport">Branch connection</label><select id="cameraTransport" value={cameraForm.connectionTransport} onChange={(event) => setCameraForm((form) => ({ ...form, connectionTransport: event.target.value as CameraForm["connectionTransport"] }))}><option value="vpn">Existing branch VPN</option><option value="cloudflare-tunnel">Managed Cloudflare Tunnel</option></select></div>
-                <div className="form-group"><label htmlFor="cameraSourceType">Camera type</label><select id="cameraSourceType" value={cameraForm.sourceType} onChange={(event) => setCameraForm((form) => ({ ...form, sourceType: event.target.value as CameraForm["sourceType"], protocol: event.target.value === "ip-camera" ? form.protocol : "vendor-adapter" }))}><option value="ip-camera">IP camera</option><option value="analog-dvr-channel">Analog camera through DVR</option><option value="nvr-channel">IP camera through NVR</option></select></div>
+                <div className="form-group"><label htmlFor="cameraSourceType">Camera type</label><select id="cameraSourceType" value={cameraForm.sourceType} onChange={(event) => setCameraForm((form) => { const recorderBacked = event.target.value !== "ip-camera"; return { ...form, sourceType: event.target.value as CameraForm["sourceType"], protocol: recorderBacked ? "vendor-adapter" : form.protocol, streamRole: recorderBacked ? "sub" : "main", width: recorderBacked ? "640" : "1920", height: recorderBacked ? "360" : "1080", frameRate: recorderBacked ? "5" : "15", bitrateKbps: recorderBacked ? "256" : "2048" }; })}><option value="ip-camera">IP camera</option><option value="analog-dvr-channel">Analog camera through DVR</option><option value="nvr-channel">IP camera through NVR</option></select></div>
                 <div className="form-group"><label htmlFor="cameraIp">Private IP address <span className="required">*</span></label><input id="cameraIp" value={cameraForm.ipAddress} onChange={(event) => setCameraForm((form) => ({ ...form, ipAddress: event.target.value }))} required placeholder="192.168.1.20" /></div>
                 <div className="form-group"><label htmlFor="cameraProtocol">Protocol</label><select id="cameraProtocol" value={cameraForm.protocol} onChange={(event) => setCameraForm((form) => ({ ...form, protocol: event.target.value as CameraForm["protocol"] }))}><option value="onvif-t">ONVIF Profile T</option><option value="onvif-s">ONVIF Profile S</option><option value="rtsp">RTSP</option><option value="vendor-adapter">Vendor adapter</option></select></div>
                 <div className="form-group"><label htmlFor="onvifPort">ONVIF port</label><input id="onvifPort" type="number" min="1" max="65535" value={cameraForm.onvifPort} onChange={(event) => setCameraForm((form) => ({ ...form, onvifPort: event.target.value }))} required /></div>
@@ -1307,10 +1335,13 @@ export function DeviceManager() {
               {cameraForm.sourceType !== "ip-camera" ? <div className="form-row"><div className="form-group"><label htmlFor="recorderId">DVR / NVR ID <span className="required">*</span></label><input id="recorderId" value={cameraForm.recorderId} onChange={(event) => setCameraForm((form) => ({ ...form, recorderId: event.target.value }))} required placeholder="DVR-BLR-01" /></div><div className="form-group"><label htmlFor="recorderChannel">Recorder channel <span className="required">*</span></label><input id="recorderChannel" type="number" min="1" value={cameraForm.recorderChannel} onChange={(event) => setCameraForm((form) => ({ ...form, recorderChannel: event.target.value }))} required /></div><div className="form-group"><label htmlFor="recorderSerial">Recorder serial</label><input id="recorderSerial" value={cameraForm.recorderSerialNumber} onChange={(event) => setCameraForm((form) => ({ ...form, recorderSerialNumber: event.target.value }))} placeholder="Optional" /></div></div> : null}
               <div className="form-group"><label htmlFor="secretRef">Stream secret reference {cameraForm.connectionTransport === "cloudflare-tunnel" ? <span className="required">*</span> : null}</label><input id="secretRef" value={cameraForm.connectionSecretRef} onChange={(event) => setCameraForm((form) => ({ ...form, connectionSecretRef: event.target.value }))} minLength={cameraForm.connectionSecretRef ? 8 : undefined} required={cameraForm.connectionTransport === "cloudflare-tunnel"} placeholder={cameraForm.connectionTransport === "vpn" ? "Generated automatically for VPN when left blank" : "gateway-secret://branch/camera"} /><small className="field-help">VPN references are generated from the private address when left blank. Tunnel references must map to the RTSP URL in the gateway secret store. Credentials are never saved in the inventory database.</small></div></div>
 
-              <div className="form-section"><h3>Main stream and capabilities</h3><div className="form-row form-row-three">
+              <div className="form-section"><h3>Remote monitoring stream and capabilities</h3><p className="field-help">DVR/NVR main streams remain recorded locally. Use a low-bitrate substream for central live view and analytics over VPN.</p><div className="form-row form-row-three">
+                <div className="form-group"><label htmlFor="streamRole">Stream role</label><select id="streamRole" value={cameraForm.streamRole} onChange={(event) => setCameraForm((form) => ({ ...form, streamRole: event.target.value as CameraForm["streamRole"] }))}><option value="sub">Substream (recommended over VPN)</option><option value="main">Main stream</option><option value="unknown">Auto-detect</option></select></div>
                 <div className="form-group"><label htmlFor="codec">Codec</label><select id="codec" value={cameraForm.codec} onChange={(event) => setCameraForm((form) => ({ ...form, codec: event.target.value as CameraForm["codec"] }))}><option value="H264">H.264</option><option value="H265">H.265</option><option value="MJPEG">MJPEG</option><option value="unknown">Auto-detect</option></select></div>
                 <div className="form-group"><label htmlFor="streamWidth">Width</label><input id="streamWidth" type="number" min="1" value={cameraForm.width} onChange={(event) => setCameraForm((form) => ({ ...form, width: event.target.value }))} required /></div>
                 <div className="form-group"><label htmlFor="streamHeight">Height</label><input id="streamHeight" type="number" min="1" value={cameraForm.height} onChange={(event) => setCameraForm((form) => ({ ...form, height: event.target.value }))} required /></div>
+                <div className="form-group"><label htmlFor="streamFrameRate">FPS</label><input id="streamFrameRate" type="number" min="0.1" max="120" step="0.1" value={cameraForm.frameRate} onChange={(event) => setCameraForm((form) => ({ ...form, frameRate: event.target.value }))} required /></div>
+                <div className="form-group"><label htmlFor="streamBitrate">Bitrate (Kbps)</label><input id="streamBitrate" type="number" min="1" max="100000" value={cameraForm.bitrateKbps} onChange={(event) => setCameraForm((form) => ({ ...form, bitrateKbps: event.target.value }))} required /></div>
               </div><div className="capability-checks">{([['ptz', 'PTZ control'], ['audio', 'Audio'], ['events', 'Motion/events']] as const).map(([key, label]) => <label key={key}><input type="checkbox" checked={cameraForm[key]} onChange={(event) => setCameraForm((form) => ({ ...form, [key]: event.target.checked }))} />{label}</label>)}</div></div>
 
               </>

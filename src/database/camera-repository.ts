@@ -508,10 +508,12 @@ export class CameraRepository {
            SET connection_secret_ref = $2,
                connection_transport = COALESCE($3, connection_transport),
                ip_address = COALESCE($4::inet, ip_address),
+               profiles = COALESCE($5::jsonb, profiles),
                identity_last_seen_at = now()
            WHERE id = $1::uuid`,
           [identity.cameraId, input.connectionSecretRef,
-           input.connectionTransport ?? null, input.ipAddress ?? null],
+           input.connectionTransport ?? null, input.ipAddress ?? null,
+           input.profile ? JSON.stringify([input.profile]) : null],
         );
         const existing = await client.query<CameraRow>(
           `${selectCamera} WHERE cameras.id = $1::uuid`,
@@ -553,7 +555,10 @@ export class CameraRepository {
           nodeId, branchId, identity.deviceIdentityId, vendor,
           input.model ?? "manual", input.channel,
           input.protocol,
-          JSON.stringify([{ name: input.streamProfile ?? "main", codec: "H264", width: 1920, height: 1080 }]),
+          JSON.stringify([input.profile ?? {
+            name: input.streamProfile ?? "main", codec: "H264", width: 1920, height: 1080,
+            role: input.streamProfile === "sub" ? "sub" : "main",
+          }]),
           JSON.stringify({ ptz: false, audio: false, events: true }), input.connectionSecretRef,
           input.connectionTransport ?? null, input.ipAddress ?? null,
           input.sourceType ?? "ip-camera", input.recorderId ?? null,

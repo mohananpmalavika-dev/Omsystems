@@ -6,6 +6,36 @@ export type PtzDirection = "left" | "right" | "up" | "down";
 export type PtzZoomAction = "in" | "out" | "stop";
 export type PtzFocusAction = "near" | "far" | "auto" | "stop";
 
+/**
+ * PTZ operation status
+ * - accepted: Command received and validated
+ * - executing: Command is being executed by the camera
+ * - succeeded: Command completed successfully
+ * - failed: Command failed to execute
+ * - timed_out: Command timed out
+ * - unsupported: Operation not supported by camera
+ */
+export type PtzOperationStatus = 
+  | "accepted" 
+  | "executing" 
+  | "succeeded" 
+  | "failed" 
+  | "timed_out" 
+  | "unsupported";
+
+/**
+ * Detailed PTZ operation result
+ */
+export interface PtzOperationResult {
+  status: PtzOperationStatus;
+  message?: string;
+  detail?: string;
+  errorCode?: string;
+  vendorSpecific?: boolean;
+  timestamp?: string;
+  executionTimeMs?: number;
+}
+
 export interface PtzCommand {
   cameraId: string;
   action: "move" | "zoom" | "focus" | "preset" | "patrol" | "home" | "stop";

@@ -42,6 +42,10 @@ export interface DiscoveredCameraPayload {
     codec: "H264" | "H265" | "MJPEG" | "unknown";
     width: number;
     height: number;
+    role?: "main" | "sub" | "unknown";
+    frameRate?: number;
+    bitrateKbps?: number;
+    preferredFor?: Array<"recording" | "live" | "analytics">;
   }>;
   capabilities: { ptz: boolean; audio: boolean; events: boolean };
   sourceType?: "ip-camera" | "analog-dvr-channel" | "nvr-channel";
@@ -83,6 +87,10 @@ export interface MonitoringCamera {
     codec: "H264" | "H265" | "MJPEG" | "unknown";
     width: number;
     height: number;
+    role?: "main" | "sub" | "unknown";
+    frameRate?: number;
+    bitrateKbps?: number;
+    preferredFor?: Array<"recording" | "live" | "analytics">;
   }>;
   sourceType?: "ip-camera" | "analog-dvr-channel" | "nvr-channel";
   recorderId?: string;

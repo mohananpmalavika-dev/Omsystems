@@ -50,6 +50,11 @@ describe("branch VPN and tunnel connectivity", () => {
         name: "VPN vault analog channel", channel: 4, protocol: "vendor-adapter",
         manufacturer: "CP Plus", model: "XVR", ipAddress: "10.42.5.10",
         sourceType: "analog-dvr-channel", recorderId: "dvr-vault-01", recorderChannel: 4,
+        streamProfile: "sub",
+        profile: {
+          name: "sub", role: "sub", codec: "H264", width: 640, height: 360,
+          frameRate: 5, bitrateKbps: 256, preferredFor: ["live", "analytics"],
+        },
       },
     });
     expect(analogChannel.statusCode).toBe(201);
@@ -59,6 +64,10 @@ describe("branch VPN and tunnel connectivity", () => {
     });
     const analogStored = await store.getCamera(analogChannel.json().id);
     expect(analogStored?.connectionSecretRef).toBe(`vpn://${branchId}/recorder/dvr-vault-01/channel/4`);
+    expect(analogStored?.profiles).toEqual([expect.objectContaining({
+      role: "sub", width: 640, height: 360, frameRate: 5, bitrateKbps: 256,
+      preferredFor: ["live", "analytics"],
+    })]);
     expect((await store.getRecordingJob(analogStored!.id))).toMatchObject({
       primaryRecordingStorage: "recorder-local", cloudArchivePolicy: "incident-evidence-only",
     });
@@ -95,7 +104,7 @@ describe("branch VPN and tunnel connectivity", () => {
     expect(read.json().supported.vpn.cameraTypes).toEqual(expect.arrayContaining(["ip-camera", "analog-dvr-channel"]));
   });
 
-  it("approves locally discovered DVR channels onto the configured VPN route", async () => {
+  it("keeps a locally discovered DVR channel on its gateway while control traffic uses VPN", async () => {
     await app.inject({
       method: "PUT", url: `/v1/branches/${branchId}/connectivity`, headers,
       payload: { primaryTransport: "vpn", vpnProtocol: "ipsec", vpnRemoteNetworks: ["192.168.20.0/24"] },
@@ -120,8 +129,8 @@ describe("branch VPN and tunnel connectivity", () => {
     });
     expect(approved.statusCode).toBe(200);
     expect(await store.getCamera(approved.json().cameraId)).toMatchObject({
-      connectionTransport: "vpn",
-      connectionSecretRef: `vpn://${branchId}/recorder/dvr-local-01/channel/7`,
+      connectionTransport: "edge-gateway",
+      connectionSecretRef: `edge://${agent.id}/${submitted.json().id}`,
       sourceType: "analog-dvr-channel",
     });
   });

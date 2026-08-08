@@ -49,6 +49,7 @@
     "backup:database": "node scripts/backup-postgres.mjs",
     "restore:database": "node scripts/restore-postgres.mjs",
     "security:audit": "node scripts/security-audit.mjs",
+    "security:secret-scan": "node scripts/secret-scan.mjs",
     "release:preflight": "node scripts/phase6-release.mjs",
     "release:production": "node scripts/phase6-release.mjs --apply --confirm-production",
     "release:rollback": "node scripts/phase6-rollback.mjs --confirm-rollback",

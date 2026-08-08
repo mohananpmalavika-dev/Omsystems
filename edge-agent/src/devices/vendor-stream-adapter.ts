@@ -60,10 +60,14 @@ export async function probeVendorStream(input: {
   credentials: OnvifCredentials;
   channel?: number;
   ports?: number[];
+  preferredRole?: "main" | "sub";
   probe(uri: string): Promise<RtspProbeResult>;
 }) {
   let lastProbe: RtspProbeResult | undefined;
-  for (const candidate of vendorRtspCandidates(input)) {
+  const candidates = vendorRtspCandidates(input).sort((left, right) =>
+    Number(right.role === input.preferredRole) - Number(left.role === input.preferredRole)
+  );
+  for (const candidate of candidates) {
     const probe = await input.probe(candidate.uri);
     lastProbe = probe;
     if (probe.reachable) return { candidate, probe };

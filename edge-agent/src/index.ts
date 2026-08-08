@@ -479,12 +479,15 @@ async function scanBranch(options: { persistStreamSecrets?: boolean } = {}) {
             onvifPort: Number(parsedServiceUrl.port || (parsedServiceUrl.protocol === "https:" ? 443 : 80)),
             rtspPort: 554,
             profiles: (channel.profiles.length ? channel.profiles : [{
-              name: "unverified", codec: "unknown" as const, width: 1, height: 1, role: "unknown" as const,
+              name: "unverified", codec: "unknown" as const, width: 1, height: 1,
+              role: "unknown" as const, preferredFor: [],
             }]).map((profile) => ({
               name: profile.name,
               codec: profile.codec,
               width: Math.max(1, channel.probe?.width ?? profile.width),
               height: Math.max(1, channel.probe?.height ?? profile.height),
+              role: profile.role,
+              preferredFor: profile.preferredFor,
             })),
             capabilities: device.capabilities,
             statusReason: channel.reasonCodes.join(",").slice(0, 200),

@@ -31,6 +31,7 @@ export interface RecorderChannelCandidate {
     width: number;
     height: number;
     role: "main" | "sub" | "unknown";
+    preferredFor: Array<"recording" | "live" | "analytics">;
   }>;
   streamVerified: boolean;
   probe: RtspProbeResult | null;
@@ -93,6 +94,8 @@ export async function discoverRecorderChannels(
   const groups = groupProfilesByChannel(resolved);
   const channels: RecorderChannelCandidate[] = [];
   for (const [sourceChannel, profiles] of [...groups.entries()].sort((left, right) => left[0] - right[0])) {
+    // DVR/NVR main streams remain on the recorder. Prefer the recorder's
+    // lower-bandwidth substream for remote live view and analytics.
     const primary = [...profiles]
       .filter((item) => item.uri)
       .sort(compareProfiles)[0];
@@ -100,6 +103,7 @@ export async function discoverRecorderChannels(
     const reasonCodes = unique([
       ...profiles.flatMap((item) => item.reasonCodes),
       ...(primary?.uri ? [] : ["recorder_channel_stream_uri_unavailable"]),
+      ...(primary?.role === "sub" ? ["recorder_channel_substream_selected"] : []),
       ...(probe?.reachable ? ["recorder_channel_rtsp_verified"] : probe ? ["recorder_channel_rtsp_unreachable"] : []),
     ]);
     channels.push({
@@ -113,6 +117,13 @@ export async function discoverRecorderChannels(
         width: profile.width,
         height: profile.height,
         role,
+        preferredFor: role === primary?.role
+          ? role === "main"
+            ? ["recording", "live", "analytics"]
+            : ["live", "analytics"]
+          : role === "main"
+            ? ["recording"]
+            : [],
       })),
       streamVerified: Boolean(probe?.reachable),
       probe,
@@ -145,6 +156,7 @@ export async function discoverVendorRecorderChannels(input: {
         vendor,
         credentials: input.credentials,
         channel: sourceChannel,
+        preferredRole: "sub",
         probe: input.probeStream,
       });
       return {
@@ -158,6 +170,9 @@ export async function discoverVendorRecorderChannels(input: {
           width: Math.max(1, fallback.probe?.width ?? 1),
           height: Math.max(1, fallback.probe?.height ?? 1),
           role: fallback.candidate?.role ?? "main",
+          preferredFor: fallback.candidate?.role === "sub"
+            ? ["live", "analytics"]
+            : ["recording", "live", "analytics"],
         }],
         streamVerified: Boolean(fallback.probe?.reachable),
         probe: fallback.probe ?? null,
@@ -263,9 +278,9 @@ function groupProfilesByChannel(profiles: ResolvedProfile[]) {
 }
 
 function compareProfiles(left: ResolvedProfile, right: ResolvedProfile) {
-  const rank = (item: ResolvedProfile) => item.role === "main" ? 2 : item.role === "unknown" ? 1 : 0;
+  const rank = (item: ResolvedProfile) => item.role === "sub" ? 2 : item.role === "unknown" ? 1 : 0;
   return rank(right) - rank(left)
-    || (right.profile.width * right.profile.height) - (left.profile.width * left.profile.height);
+    || (left.profile.width * left.profile.height) - (right.profile.width * right.profile.height);
 }
 
 function channelName(profiles: ResolvedProfile[], sourceChannel: number) {

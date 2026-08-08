@@ -1106,6 +1106,8 @@ export class MemoryStore implements ControlPlaneStore {
       const existingCamera = this.cameras.get(identity.cameraId);
       if (!existingCamera) return undefined;
       existingCamera.connectionSecretRef = input.connectionSecretRef;
+      existingCamera.connectionTransport = input.connectionTransport ?? existingCamera.connectionTransport;
+      if (input.profile) existingCamera.profiles = [structuredClone(input.profile)];
       identity.credentialRef = input.connectionSecretRef;
       return existingCamera;
     }
@@ -1122,7 +1124,10 @@ export class MemoryStore implements ControlPlaneStore {
       channel: input.channel,
       protocol: input.protocol,
       status: "unknown",
-      profiles: [{ name: input.streamProfile ?? "main", codec: "H264", width: 1920, height: 1080 }],
+      profiles: [structuredClone(input.profile ?? {
+        name: input.streamProfile ?? "main", codec: "H264", width: 1920, height: 1080,
+        role: input.streamProfile === "sub" ? "sub" : "main",
+      })],
       capabilities: { ptz: false, audio: false, events: true },
       edgeAgentId: undefined,
       connectionSecretRef: input.connectionSecretRef,

@@ -69,29 +69,19 @@ export function isRecorderBacked(camera: Pick<DiscoveredCamera, "recorderId" | "
     camera.sourceType === "nvr-channel";
 }
 
-function vpnDiscoveryReference(
-  branchId: string,
-  camera: Pick<DiscoveredCamera, "sourceType" | "ipAddress" | "recorderId" | "recorderChannel">,
-) {
-  const source = isRecorderBacked(camera)
-    ? `recorder/${encodeURIComponent(camera.recorderId ?? "unknown")}/channel/${camera.recorderChannel ?? 0}`
-    : `camera/${camera.ipAddress}`;
-  return `vpn://${encodeURIComponent(branchId)}/${source}`;
-}
-
 export async function discoveryConnection(
-  store: ControlPlaneStore,
-  branchId: string,
+  _store: ControlPlaneStore,
+  _branchId: string,
   camera: Pick<DiscoveredCamera, "sourceType" | "ipAddress" | "recorderId" | "recorderChannel" | "edgeAgentId" | "id">,
 ) {
-  const profile = await store.getBranchConnectivityProfile(branchId);
-  if (profile?.primaryTransport === "vpn") {
-    return {
-      connectionSecretRef: vpnDiscoveryReference(branchId, camera),
-      connectionTransport: "vpn" as const,
-    };
-  }
-  return { connectionSecretRef: `edge://${camera.edgeAgentId}/${camera.id}` };
+  // Discovery runs where the source is reachable and stores its verified RTSP
+  // URI in that gateway's secret store. Keep that route after approval even
+  // when the gateway's control/event uplink is an existing site-to-site VPN.
+  // Direct central VPN ingestion remains available through manual registration.
+  return {
+    connectionSecretRef: `edge://${camera.edgeAgentId}/${camera.id}`,
+    connectionTransport: "edge-gateway" as const,
+  };
 }
 
 export function defaultRecordingJob(
