@@ -227,7 +227,7 @@ export class EventBus {
     this.subscriptions.delete(eventType);
 
     if (this.subscriber) {
-      const channel = this.getChannel(eventType);
+      const channel = this.getChannel(eventType as string);
       await this.subscriber.unsubscribe(channel);
       console.log(`[EventBus] Unsubscribed from: ${eventType}`);
     }
@@ -286,7 +286,7 @@ export class EventBus {
 
     const key = this.getEventKey(tenantId, eventId);
     const data = await this.client.get(key);
-    return data ? JSON.parse(data) : null;
+    return data && typeof data === 'string' ? JSON.parse(data) : null;
   }
 
   /**

@@ -304,13 +304,13 @@ export type EventPayloadMap = {
 /**
  * Helper type to create properly typed events
  */
-export type TypedEvent<T extends EventType> = BaseEvent<EventPayloadMap[T]>;
+export type TypedEvent<T extends keyof EventPayloadMap> = BaseEvent<EventPayloadMap[T]>;
 
 /**
  * Event handler function type
  */
 export type EventHandler<T extends EventType = EventType> = (
-  event: T extends keyof EventPayloadMap ? TypedEvent<T> : BaseEvent
+  event: T extends keyof EventPayloadMap ? BaseEvent<EventPayloadMap[T]> : BaseEvent
 ) => Promise<void> | void;
 
 /**

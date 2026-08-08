@@ -111,6 +111,13 @@ export abstract class BaseDetector {
     status: "healthy" | "degraded" | "unhealthy";
     details?: string;
   };
+
+  protected calculateIoU(
+    box1: { x: number; y: number; width: number; height: number },
+    box2: { x: number; y: number; width: number; height: number },
+  ): number {
+    return calculateIoU(box1, box2);
+  }
 }
 
 /**

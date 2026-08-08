@@ -188,6 +188,14 @@ export class CameraHealthDetector extends BaseDetector {
     lastFrameAgo?: number;
     recentFrames?: number;
     avgBrightness?: number;
+    status?: string;
+    streamStatus?: string;
+    recording?: boolean;
+    inferenceMode?: string;
+    lastInferenceSource?: string;
+    inferenceFps?: number;
+    inferenceLatencyMs?: number;
+    lastDetectionAt?: Date;
   } {
     const state = this.cameraStates.get(cameraId);
     if (!state) {

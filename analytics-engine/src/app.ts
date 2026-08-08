@@ -168,7 +168,18 @@ export function buildAnalyticsEngine(options: AnalyticsEngineOptions) {
     const aiState = !initialized ? "AI_UNAVAILABLE" : (initialized && modelsReady ? "AI_OPERATIONAL" : "AI_DEGRADED");
 
     // Camera-level health and runtime info from pipeline
-    const cameraHealth = pipeline.getCameraHealth(cameraId) || { status: "unknown" };
+    const cameraHealth =
+      pipeline.getCameraHealth(cameraId) ||
+      ({
+        status: "unknown",
+        streamStatus: undefined,
+        recording: undefined,
+        inferenceMode: undefined,
+        lastInferenceSource: undefined,
+        inferenceFps: undefined,
+        inferenceLatencyMs: undefined,
+        lastDetectionAt: undefined,
+      } as const);
 
     // Best-effort runtime metrics - these detector implementations expose lightweight stats
     const personTracks = pipeline.getPersonTracks();
