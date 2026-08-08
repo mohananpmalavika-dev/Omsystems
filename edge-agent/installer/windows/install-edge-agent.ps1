@@ -139,12 +139,6 @@ Write-Host "Validating edge-agent configuration..." -ForegroundColor Cyan
 & $Executable --config $ConfigPath --check-config
 if ($LASTEXITCODE -ne 0) { throw "Edge-agent configuration validation failed." }
 
-if (-not $SkipConnectivityCheck) {
-  Write-Host "Authenticating with the dashboard..." -ForegroundColor Cyan
-  & $Executable --config $ConfigPath --diagnose
-  if ($LASTEXITCODE -ne 0) { throw "Dashboard connectivity check failed. The startup task was not installed; correct the URL, firewall, or edge key and run this installer again." }
-}
-
 foreach ($setting in @("FFPROBE_PATH", "FFMPEG_PATH", "MEDIAMTX_PATH", "CLOUDFLARED_PATH")) {
   $dependency = Get-ConfigValue $ConfigPath $setting
   if (-not (Test-Path -LiteralPath $dependency -PathType Leaf) -and -not (Get-Command $dependency -ErrorAction SilentlyContinue)) {
@@ -160,9 +154,6 @@ if (Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue) {
   Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false
 }
 Register-ScheduledTask -TaskName $TaskName -Action $action -Trigger $trigger -Principal $principal -Settings $settings -Description "Sentinel Grid branch camera, recorder, storage and network monitoring agent" | Out-Null
-Start-ScheduledTask -TaskName $TaskName
-Start-Sleep -Seconds 2
-$state = (Get-ScheduledTask -TaskName $TaskName).State
 
 $dashboardLauncher = Join-Path $InstallDirectory "open-dashboard-scan.ps1"
 if (Test-Path -LiteralPath $dashboardLauncher -PathType Leaf) {
@@ -176,7 +167,25 @@ if (Test-Path -LiteralPath $dashboardLauncher -PathType Leaf) {
   Set-Item -Path $commandKey -Value $protocolCommand
 }
 
-Write-Host "Sentinel Grid Edge Agent installed successfully." -ForegroundColor Green
+$connectivityHealthy = $true
+if (-not $SkipConnectivityCheck) {
+  Write-Host "Authenticating with Sentinel Grid..." -ForegroundColor Cyan
+  & $Executable --config $ConfigPath --diagnose
+  if ($LASTEXITCODE -ne 0) {
+    $connectivityHealthy = $false
+    Write-Warning "Sentinel Grid is temporarily unreachable. The scanner is installed and its background task will keep retrying automatically."
+  }
+}
+
+Start-ScheduledTask -TaskName $TaskName
+Start-Sleep -Seconds 2
+$state = (Get-ScheduledTask -TaskName $TaskName).State
+
+if ($connectivityHealthy) {
+  Write-Host "Sentinel Grid Edge Agent installed and connected successfully." -ForegroundColor Green
+} else {
+  Write-Host "Sentinel Grid Edge Agent installed and waiting to connect." -ForegroundColor Yellow
+}
 Write-Host "Startup task: $TaskName ($state)"
 Write-Host "Configuration: $ConfigPath"
 Write-Host "Log: $LogDirectory\edge-agent.log"

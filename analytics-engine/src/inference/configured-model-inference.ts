@@ -3,7 +3,16 @@ import type { DetectionFrame, InferenceObject } from "../detectors/base-detector
 import { getModelManager, type ModelConfig } from "../model-manager.js";
 import { COCO_LABELS } from "./yolo-coco-inference.js";
 import { YoloDetectionInference } from "./yolo-detection-inference.js";
-import { CtcTextInference, FaceEmbeddingInference } from "./vision-specialty-inference.js";
+import { 
+  CtcTextInference, 
+  FaceEmbeddingInference,
+  PersonReIdInference,
+  VehicleReIdInference,
+  PersonAttributeInference,
+  YoloPoseInference,
+  type PersonAttributes,
+  type PoseDetection
+} from "./vision-specialty-inference.js";
 
 export interface ObjectFrameInference {
   run(frame: DetectionFrame): Promise<InferenceObject[]>;
@@ -35,6 +44,17 @@ export interface VehicleVectorInference {
     frame: DetectionFrame,
     box: { x: number; y: number; width: number; height: number },
   ): Promise<number[]>;
+}
+
+export interface PoseInference {
+  run(frame: DetectionFrame): Promise<PoseDetection[]>;
+}
+
+export interface AttributeInference {
+  run(
+    frame: DetectionFrame,
+    box: { x: number; y: number; width: number; height: number },
+  ): Promise<PersonAttributes>;
 }
 
 export async function loadObjectInference(modelId: string, confidenceThreshold: number): Promise<ObjectFrameInference> {
@@ -86,10 +106,15 @@ export async function loadFaceVectorInference(modelId: string): Promise<FaceVect
 export async function loadPersonVectorInference(modelId: string): Promise<PersonVectorInference> {
   const manager = getModelManager();
   const config = requiredConfig(modelId);
-  if (config.task !== "face-embedding") throw new Error(`Model ${modelId} is not configured for person re-ID (reusing face-embedding task)`);
+  // person-reid should use task: person-reid, but for backward compatibility we also accept face-embedding
+  if (config.task !== "person-reid" && config.task !== "face-embedding") {
+    throw new Error(`Model ${modelId} is not configured for person re-ID (expected task: person-reid)`);
+  }
   if (!manager.isModelAvailable(modelId)) throw new Error(modelUnavailableReason(modelId));
   const dimensions = inputDimensions(config);
-  return new FaceEmbeddingInference(
+  
+  // Create dedicated PersonReIdInference with OSNet-appropriate dimensions and preprocessing
+  return new PersonReIdInference(
     await manager.getModel(modelId) as InferenceSession,
     dimensions.width,
     dimensions.height,
@@ -99,10 +124,48 @@ export async function loadPersonVectorInference(modelId: string): Promise<Person
 export async function loadVehicleVectorInference(modelId: string): Promise<VehicleVectorInference> {
   const manager = getModelManager();
   const config = requiredConfig(modelId);
-  if (config.task !== "face-embedding") throw new Error(`Model ${modelId} is not configured for vehicle re-ID (reusing face-embedding task)`);
+  // vehicle-reid should use task: vehicle-reid, but for backward compatibility we also accept face-embedding
+  if (config.task !== "vehicle-reid" && config.task !== "face-embedding") {
+    throw new Error(`Model ${modelId} is not configured for vehicle re-ID (expected task: vehicle-reid)`);
+  }
   if (!manager.isModelAvailable(modelId)) throw new Error(modelUnavailableReason(modelId));
   const dimensions = inputDimensions(config);
-  return new FaceEmbeddingInference(
+  
+  // Create dedicated VehicleReIdInference with vehicle-appropriate preprocessing
+  return new VehicleReIdInference(
+    await manager.getModel(modelId) as InferenceSession,
+    dimensions.width,
+    dimensions.height,
+  );
+}
+
+export async function loadPoseInference(modelId: string, confidenceThreshold: number = 0.5): Promise<PoseInference> {
+  const manager = getModelManager();
+  const config = requiredConfig(modelId);
+  if (config.task !== "pose-estimation") {
+    throw new Error(`Model ${modelId} is not configured for pose estimation (expected task: pose-estimation)`);
+  }
+  if (!manager.isModelAvailable(modelId)) throw new Error(modelUnavailableReason(modelId));
+  const dimensions = inputDimensions(config);
+  
+  return new YoloPoseInference(
+    await manager.getModel(modelId) as InferenceSession,
+    confidenceThreshold,
+    dimensions.width,
+    dimensions.height,
+  );
+}
+
+export async function loadAttributeInference(modelId: string): Promise<AttributeInference> {
+  const manager = getModelManager();
+  const config = requiredConfig(modelId);
+  if (config.task !== "attribute-estimation") {
+    throw new Error(`Model ${modelId} is not configured for attribute estimation (expected task: attribute-estimation)`);
+  }
+  if (!manager.isModelAvailable(modelId)) throw new Error(modelUnavailableReason(modelId));
+  const dimensions = inputDimensions(config);
+  
+  return new PersonAttributeInference(
     await manager.getModel(modelId) as InferenceSession,
     dimensions.width,
     dimensions.height,

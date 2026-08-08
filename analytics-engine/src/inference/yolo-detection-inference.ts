@@ -153,7 +153,7 @@ export function resizeRgb24ToChw(
   sourceHeight: number,
   targetWidth: number,
   targetHeight: number,
-  normalize: (value: number) => number = (value) => value / 255,
+  normalize: (value: number, channel?: number) => number = (value) => value / 255,
 ): Float32Array {
   const plane = targetWidth * targetHeight;
   const output = new Float32Array(plane * 3);
@@ -163,9 +163,9 @@ export function resizeRgb24ToChw(
       const sourceX = Math.min(sourceWidth - 1, Math.floor((x * sourceWidth) / targetWidth));
       const inputOffset = ((sourceY * sourceWidth) + sourceX) * 3;
       const outputOffset = (y * targetWidth) + x;
-      output[outputOffset] = normalize(source[inputOffset]!);
-      output[plane + outputOffset] = normalize(source[inputOffset + 1]!);
-      output[(2 * plane) + outputOffset] = normalize(source[inputOffset + 2]!);
+      output[outputOffset] = normalize(source[inputOffset]!, 0);
+      output[plane + outputOffset] = normalize(source[inputOffset + 1]!, 1);
+      output[(2 * plane) + outputOffset] = normalize(source[inputOffset + 2]!, 2);
     }
   }
   return output;

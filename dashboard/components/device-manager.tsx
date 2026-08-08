@@ -49,7 +49,7 @@ type CameraForm = {
 };
 
 const scanStages = ["Local network", "VPN routes", "Secure tunnel"] as const;
-const scannerStartupTimeoutMs = 60_000;
+const scannerStartupTimeoutMs = 12_000;
 
 const emptyCameraForm: CameraForm = {
   name: "",
@@ -448,9 +448,6 @@ export function DeviceManager() {
   }
 
   async function waitForWebsiteScanner(branchId: string) {
-    if (typeof window === "undefined") throw new Error("The local scanner can only be started from this browser.");
-    window.location.assign("sentinel-grid-scanner://open");
-
     const deadline = Date.now() + scannerStartupTimeoutMs;
     while (Date.now() < deadline) {
       const response = await cameraInventoryApi.listGateways(branchId);
@@ -461,7 +458,7 @@ export function DeviceManager() {
     }
 
     openScannerInstaller();
-    throw new Error("The Sentinel Grid Scanner did not connect. Install it once on this PC, then select Scan cameras again.");
+    throw new Error("The installed Sentinel Grid Scanner is offline. The repair installer has opened automatically; prepare, download, and run it once on this PC, then select Scan cameras again.");
   }
 
   async function startConnectedCameraScan(gateway: EdgeAgent) {
@@ -814,13 +811,13 @@ export function DeviceManager() {
           <button className="primary-button" onClick={() => void scanCameras()} disabled={!selectedBranch || scanning || saving} title="Automatically search local network, VPN routes, and the managed tunnel">
             <Search size={15} /> {scanning ? "Searching cameras..." : "Scan cameras"}
           </button>
-          {!onlineGateway && selectedBranch ? <button className="secondary-button" onClick={openScannerInstaller} disabled={saving} title="Download the Sentinel Grid Scanner for this PC"><Download size={15} /> Install scanner</button> : null}
+          {!onlineGateway && selectedBranch ? <button className="secondary-button" onClick={openScannerInstaller} disabled={saving} title={gateways.length > 0 ? "Repair the Sentinel Grid Scanner on this PC" : "Download the Sentinel Grid Scanner for this PC"}><Download size={15} /> {gateways.length > 0 ? "Repair scanner" : "Install scanner"}</button> : null}
         </div>
         {selectedBranch ? (
           gateways.length === 0 ? (
             <p className="device-toolbar-note">First use: select Install scanner, then run the downloaded installer once.</p>
           ) : (
-            <p className="device-toolbar-note">Scanner: {onlineGateway?.name || gateways[0]?.name || "Not installed"} · {onlineGateway ? "Ready to scan" : "Install scanner, then select Scan cameras"}</p>
+            <p className="device-toolbar-note">Scanner: {onlineGateway?.name || gateways[0]?.name || "Not installed"} · {onlineGateway ? "Ready to scan" : "Installed but offline — select Repair scanner"}</p>
           )
         ) : null}
       </div>
@@ -1151,12 +1148,12 @@ export function DeviceManager() {
       {showGatewayForm && (
         <div className="modal-overlay">
           <div className="modal-container">
-            <div className="modal-header"><h2>Install Sentinel Grid Scanner</h2><button className="icon-button" onClick={() => setShowGatewayForm(false)}><X size={20} /></button></div>
+            <div className="modal-header"><h2>{gateways.length > 0 ? "Repair Sentinel Grid Scanner" : "Install Sentinel Grid Scanner"}</h2><button className="icon-button" onClick={() => setShowGatewayForm(false)}><X size={20} /></button></div>
             {!gatewayActivation ? (
               <form className="modal-form" onSubmit={registerGateway}>
-                <div className="form-info-banner"><Network size={16} />Install the scanner on this existing PC while it is connected to the branch network, VPN, or approved tunnel. No separate appliance, configuration file, or coding is needed.</div>
+                <div className="form-info-banner"><Network size={16} />{gateways.length > 0 ? "Repair and reconnect the scanner on this PC. The new installer replaces the incomplete configuration and restores its background task automatically." : "Install the scanner on this existing PC while it is connected to the branch network, VPN, or approved tunnel. No separate appliance, configuration file, or coding is needed."}</div>
                 <div className="form-group"><label htmlFor="gatewayName">Scanner name <span className="required">*</span></label><input id="gatewayName" value={gatewayName} onChange={(event) => setGatewayName(event.target.value)} minLength={2} maxLength={120} required placeholder={`${activeBranch?.name ?? "Branch"} Scanner`} /></div>
-                <div className="modal-actions"><button type="button" className="secondary-button" onClick={() => setShowGatewayForm(false)}>Cancel</button><button className="primary-button" disabled={saving}>{saving ? "Preparing…" : "Prepare installer"}</button></div>
+                <div className="modal-actions"><button type="button" className="secondary-button" onClick={() => setShowGatewayForm(false)}>Cancel</button><button className="primary-button" disabled={saving}>{saving ? "Preparing…" : gateways.length > 0 ? "Prepare repair" : "Prepare installer"}</button></div>
               </form>
             ) : (
               <div className="modal-body">

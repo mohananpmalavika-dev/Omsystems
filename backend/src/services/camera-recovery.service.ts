@@ -708,13 +708,53 @@ export class CameraRecoveryService {
   }
 
   /**
-   * Build ONVIF auth header (digest auth)
+   * Build ONVIF WS-Security authentication header
+   * Implements proper UsernameToken with password digest (per WS-Security spec)
    */
   private buildOnvifAuthHeader(credentials: { username: string; password: string }): string {
-    // TODO: Implement proper ONVIF WS-Security UsernameToken with digest
-    // For now, use basic auth
-    const encoded = Buffer.from(`${credentials.username}:${credentials.password}`).toString("base64");
-    return `Basic ${encoded}`;
+    // ONVIF requires WS-Security UsernameToken with PasswordDigest
+    // Digest = Base64( SHA1( Nonce + Created + Password ) )
+    
+    const nonce = crypto.randomBytes(16);
+    const created = new Date().toISOString();
+    
+    // Create password digest: Base64(SHA1(Nonce + Created + Password))
+    const digest = crypto
+      .createHash('sha1')
+      .update(Buffer.concat([
+        nonce,
+        Buffer.from(created, 'utf8'),
+        Buffer.from(credentials.password, 'utf8')
+      ]))
+      .digest('base64');
+
+    const nonceBase64 = nonce.toString('base64');
+    
+    // Build WS-Security UsernameToken XML
+    const wsSecurityHeader = `
+      <Security xmlns="http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-wssecurity-secext-1.0.xsd">
+        <UsernameToken>
+          <Username>${this.escapeXml(credentials.username)}</Username>
+          <Password Type="http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-username-token-profile-1.0#PasswordDigest">${digest}</Password>
+          <Nonce EncodingType="http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-soap-message-security-1.0#Base64Binary">${nonceBase64}</Nonce>
+          <Created xmlns="http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-wssecurity-utility-1.0.xsd">${created}</Created>
+        </UsernameToken>
+      </Security>
+    `.trim();
+
+    return wsSecurityHeader;
+  }
+
+  /**
+   * Escape XML special characters for ONVIF SOAP messages
+   */
+  private escapeXml(unsafe: string): string {
+    return unsafe
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&apos;');
   }
 
   /**

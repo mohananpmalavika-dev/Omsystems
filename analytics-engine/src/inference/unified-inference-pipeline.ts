@@ -22,13 +22,21 @@ import {
   loadFaceVectorInference,
   loadPersonVectorInference,
   loadVehicleVectorInference,
+  loadPoseInference,
+  loadAttributeInference,
   type ObjectFrameInference,
   type PlateTextInference,
   type FaceVectorInference,
   type PersonVectorInference,
-  type VehicleVectorInference
+  type VehicleVectorInference,
+  type PoseInference,
+  type AttributeInference
 } from "./configured-model-inference.js";
 import { Tracker } from "./tracker.js";
+import type { 
+  PoseDetection, 
+  PersonAttributes as PersonAttributesResult 
+} from "./vision-specialty-inference.js";
 
 // ============================================================================
 // Type Definitions
@@ -106,8 +114,8 @@ export class UnifiedInferencePipeline {
   private faceEmbedding: FaceVectorInference | null = null;
   private plateDetector: ObjectFrameInference | null = null;
   private plateRecognizer: PlateTextInference | null = null;
-  private poseEstimator: ObjectFrameInference | null = null;
-  private attributeEstimator: ObjectFrameInference | null = null;
+  private poseEstimator: PoseInference | null = null;
+  private attributeEstimator: AttributeInference | null = null;
   private personReId: PersonVectorInference | null = null;
   private vehicleReId: VehicleVectorInference | null = null;
 
@@ -215,7 +223,7 @@ export class UnifiedInferencePipeline {
       // Load pose estimator (optional)
       if (options.enablePose) {
         try {
-          this.poseEstimator = await loadObjectInference("pose-estimator", 0.6);
+          this.poseEstimator = await loadPoseInference("pose-estimator", 0.6);
           console.log('✓ Pose estimator loaded');
         } catch (error) {
           console.warn('Pose estimator unavailable:', error instanceof Error ? error.message : String(error));
@@ -225,7 +233,7 @@ export class UnifiedInferencePipeline {
       // Load attribute estimator (age, gender, emotion) - optional
       if (options.enableAttributes) {
         try {
-          this.attributeEstimator = await loadObjectInference("attribute-estimator", 0.6);
+          this.attributeEstimator = await loadAttributeInference("attribute-estimator");
           console.log('✓ Attribute estimator loaded');
         } catch (error) {
           console.warn('Attribute estimator unavailable:', error instanceof Error ? error.message : String(error));
@@ -422,59 +430,45 @@ export class UnifiedInferencePipeline {
     if (!this.poseEstimator) return null;
 
     try {
-      // Run pose estimator on the full frame and find the detection matching the personBox
+      // Run pose estimator on the full frame
       const detections = await this.poseEstimator.run(frame);
       if (!Array.isArray(detections) || detections.length === 0) return null;
 
       // Find detection with highest IoU against personBox
       const match = detections
-        .map(d => ({ d, iou: this.calculateIoU(d.boundingBox, personBox) }))
+        .map(d => ({ 
+          d, 
+          iou: this.calculateIoU(
+            { x: d.boundingBox.x, y: d.boundingBox.y, width: d.boundingBox.width, height: d.boundingBox.height },
+            personBox
+          ) 
+        }))
         .filter(x => x.iou > 0.2)
         .sort((a, b) => b.iou - a.iou)[0];
 
-      if (!match) return null;
+      if (!match || !match.d.keypoints || match.d.keypoints.length < 17) return null;
 
-      // Expect pose keypoints in detection.metadata.poseKeypoints or detection.keypoints
-      const meta = (match.d as any).metadata ?? (match.d as any).keypoints ?? null;
-      if (!meta) return null;
-
-      // Attempt to map common key names to PoseKeypoints structure
-      const mapKeypoint = (kp: any) => ({ x: kp.x, y: kp.y, confidence: kp.confidence ?? kp.score ?? 1 });
-      if (meta.nose && meta.leftEye) {
-        return {
-          nose: mapKeypoint(meta.nose),
-          leftEye: mapKeypoint(meta.leftEye),
-          rightEye: mapKeypoint(meta.rightEye),
-          leftEar: mapKeypoint(meta.leftEar ?? { x: 0, y: 0, confidence: 0 }),
-          rightEar: mapKeypoint(meta.rightEar ?? { x: 0, y: 0, confidence: 0 }),
-          leftShoulder: mapKeypoint(meta.leftShoulder ?? { x: 0, y: 0, confidence: 0 }),
-          rightShoulder: mapKeypoint(meta.rightShoulder ?? { x: 0, y: 0, confidence: 0 }),
-          leftElbow: mapKeypoint(meta.leftElbow ?? { x: 0, y: 0, confidence: 0 }),
-          rightElbow: mapKeypoint(meta.rightElbow ?? { x: 0, y: 0, confidence: 0 }),
-          leftWrist: mapKeypoint(meta.leftWrist ?? { x: 0, y: 0, confidence: 0 }),
-          rightWrist: mapKeypoint(meta.rightWrist ?? { x: 0, y: 0, confidence: 0 }),
-          leftHip: mapKeypoint(meta.leftHip ?? { x: 0, y: 0, confidence: 0 }),
-          rightHip: mapKeypoint(meta.rightHip ?? { x: 0, y: 0, confidence: 0 }),
-          leftKnee: mapKeypoint(meta.leftKnee ?? { x: 0, y: 0, confidence: 0 }),
-          rightKnee: mapKeypoint(meta.rightKnee ?? { x: 0, y: 0, confidence: 0 }),
-          leftAnkle: mapKeypoint(meta.leftAnkle ?? { x: 0, y: 0, confidence: 0 }),
-          rightAnkle: mapKeypoint(meta.rightAnkle ?? { x: 0, y: 0, confidence: 0 }),
-        };
-      }
-
-      // If metadata contains an array of keypoints, attempt to map by index
-      if (Array.isArray(meta)) {
-        const kpArray = meta as any[];
-        const byIndex = (i: number) => ({ x: kpArray[i]?.x ?? 0, y: kpArray[i]?.y ?? 0, confidence: kpArray[i]?.confidence ?? kpArray[i]?.score ?? 0 });
-        return {
-          nose: byIndex(0), leftEye: byIndex(1), rightEye: byIndex(2), leftEar: byIndex(3), rightEar: byIndex(4),
-          leftShoulder: byIndex(5), rightShoulder: byIndex(6), leftElbow: byIndex(7), rightElbow: byIndex(8),
-          leftWrist: byIndex(9), rightWrist: byIndex(10), leftHip: byIndex(11), rightHip: byIndex(12),
-          leftKnee: byIndex(13), rightKnee: byIndex(14), leftAnkle: byIndex(15), rightAnkle: byIndex(16),
-        };
-      }
-
-      return null;
+      // Map 17 COCO keypoints to our interface
+      const kps = match.d.keypoints;
+      return {
+        nose: kps[0]!,
+        leftEye: kps[1]!,
+        rightEye: kps[2]!,
+        leftEar: kps[3]!,
+        rightEar: kps[4]!,
+        leftShoulder: kps[5]!,
+        rightShoulder: kps[6]!,
+        leftElbow: kps[7]!,
+        rightElbow: kps[8]!,
+        leftWrist: kps[9]!,
+        rightWrist: kps[10]!,
+        leftHip: kps[11]!,
+        rightHip: kps[12]!,
+        leftKnee: kps[13]!,
+        rightKnee: kps[14]!,
+        leftAnkle: kps[15]!,
+        rightAnkle: kps[16]!,
+      };
     } catch (error) {
       console.error('Pose estimation failed:', error);
       return null;
@@ -487,40 +481,12 @@ export class UnifiedInferencePipeline {
   async estimateAttributes(
     frame: DetectionFrame,
     personBox: { x: number; y: number; width: number; height: number }
-  ): Promise<PersonAttributes | null> {
+  ): Promise<PersonAttributesResult | null> {
     if (!this.attributeEstimator) return null;
 
     try {
-      const detections = await this.attributeEstimator.run(frame);
-      if (!Array.isArray(detections) || detections.length === 0) return null;
-
-      // Find detection overlapping the personBox
-      const match = detections
-        .map(d => ({ d, iou: this.calculateIoU(d.boundingBox, personBox) }))
-        .filter(x => x.iou > 0.2)
-        .sort((a, b) => b.iou - a.iou)[0];
-
-      if (!match) return null;
-
-      const meta = (match.d as any).metadata ?? null;
-      if (!meta) return null;
-
-      const attributes: any = {};
-      if (typeof meta.age === 'number') attributes.age = meta.age;
-      if (meta.gender) attributes.gender = meta.gender;
-      if (typeof meta.genderConfidence === 'number' || typeof meta.gender_confidence === 'number') {
-        attributes.genderConfidence = meta.genderConfidence ?? meta.gender_confidence;
-      }
-      if (meta.emotion) attributes.emotion = meta.emotion;
-      if (typeof meta.emotionConfidence === 'number') attributes.emotionConfidence = meta.emotionConfidence;
-      if (typeof meta.hasHelmet === 'boolean') attributes.hasHelmet = meta.hasHelmet;
-      if (typeof meta.helmetConfidence === 'number') attributes.helmetConfidence = meta.helmetConfidence;
-      if (typeof meta.hasVest === 'boolean') attributes.hasVest = meta.hasVest;
-      if (typeof meta.vestConfidence === 'number') attributes.vestConfidence = meta.vestConfidence;
-      if (typeof meta.hasMask === 'boolean') attributes.hasMask = meta.hasMask;
-      if (typeof meta.maskConfidence === 'number') attributes.maskConfidence = meta.maskConfidence;
-
-      return attributes as PersonAttributes;
+      // Run attribute estimator directly on the person crop
+      return await this.attributeEstimator.run(frame, personBox);
     } catch (error) {
       console.error('Attribute estimation failed:', error);
       return null;

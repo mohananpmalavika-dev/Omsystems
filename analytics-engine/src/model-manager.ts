@@ -31,7 +31,7 @@ export interface ModelConfig {
   preprocessor?: string;
   postprocessor?: string;
   required?: boolean;
-  task?: 'object-detection' | 'face-embedding' | 'ctc-text-recognition';
+  task?: 'object-detection' | 'face-embedding' | 'ctc-text-recognition' | 'person-reid' | 'vehicle-reid' | 'pose-estimation' | 'attribute-estimation';
   decoder?: 'yolov8' | 'yolov5' | 'xyxy';
   labelSet?: 'coco';
   labels?: string[];
