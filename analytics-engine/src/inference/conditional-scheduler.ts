@@ -487,11 +487,15 @@ export class ConditionalScheduler {
 
       // Check quality if required
       if (schedule.minQuality) {
-        const hasQualityObject = detectedObjects.some(obj =>
-          schedule.triggerLabels!.includes(obj.label) &&
-          obj.confidence >= (schedule.minConfidence || 0) &&
-          (obj.attributes?.quality || obj.confidence) >= schedule.minQuality
-        );
+        const hasQualityObject = detectedObjects.some(obj => {
+          const observedQuality = obj.attributes?.quality;
+          const quality = typeof observedQuality === 'number'
+            ? observedQuality
+            : obj.confidence;
+          return schedule.triggerLabels!.includes(obj.label) &&
+            obj.confidence >= (schedule.minConfidence || 0) &&
+            quality >= schedule.minQuality!;
+        });
 
         if (!hasQualityObject) {
           return false;
