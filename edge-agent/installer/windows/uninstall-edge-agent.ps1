@@ -18,6 +18,9 @@ if ($task) {
   Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false
 }
 
+Get-NetFirewallRule -DisplayName "Sentinel Grid Private Live Video" -ErrorAction SilentlyContinue |
+  Remove-NetFirewallRule -ErrorAction SilentlyContinue
+
 Remove-Item -LiteralPath "Registry::HKEY_LOCAL_MACHINE\SOFTWARE\Classes\sentinel-grid-scanner" -Recurse -Force -ErrorAction SilentlyContinue
 
 if ($PurgeData -and (Test-Path -LiteralPath $InstallDirectory)) {

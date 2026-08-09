@@ -58,6 +58,23 @@ describe("edge-agent runtime configuration", () => {
     expect(config.LIVE_MEDIA_ENABLED).toBe(true);
   });
 
+  it("supports automatic private LAN/VPN live media without a public tunnel", () => {
+    const config = loadEdgeConfig({
+      CONTROL_PLANE_URL: "https://control.example.com",
+      BRANCH_ID: "branch-001",
+      EDGE_AGENT_ID: "edge-001",
+      EDGE_AGENT_NAME: "Branch gateway",
+      EDGE_BRIDGE_SHARED_KEY: "s".repeat(43),
+      LIVE_MEDIA_ENABLED: "true",
+      MEDIA_TUNNEL_MODE: "disabled",
+      EDGE_LIVE_GATEWAY_HOST: "0.0.0.0",
+      PUBLIC_MEDIA_GATEWAY_URL: "auto",
+    });
+
+    expect(config.PUBLIC_MEDIA_GATEWAY_URL).toBe("auto");
+    expect(config.EDGE_LIVE_GATEWAY_HOST).toBe("0.0.0.0");
+  });
+
   it("reads a branch configuration appended to the single installer executable", async () => {
     const directory = await mkdtemp(join(tmpdir(), "sentinel-embedded-config-"));
     const path = join(directory, "edge-agent.exe");

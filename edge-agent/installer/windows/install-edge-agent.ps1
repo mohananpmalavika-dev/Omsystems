@@ -115,6 +115,12 @@ if ((Test-Path -LiteralPath $FfmpegArchive -PathType Leaf) -and
   Set-ConfigValue $ConfigPath "MEDIAMTX_PATH" $MediaMtxExecutable.FullName
   Set-ConfigValue $ConfigPath "CLOUDFLARED_PATH" $CloudflaredExecutable
   Set-ConfigValue $ConfigPath "LIVE_MEDIA_ENABLED" "true"
+  Set-ConfigValue $ConfigPath "EDGE_MANAGED_MEDIA_BOOTSTRAP" "false"
+  Set-ConfigValue $ConfigPath "EDGE_LIVE_GATEWAY_HOST" "0.0.0.0"
+  Set-ConfigValue $ConfigPath "EDGE_LIVE_GATEWAY_PORT" "8090"
+  Set-ConfigValue $ConfigPath "PUBLIC_MEDIA_GATEWAY_URL" "auto"
+  Set-ConfigValue $ConfigPath "MEDIA_TUNNEL_MODE" "disabled"
+  Set-ConfigValue $ConfigPath "MEDIA_QUICK_TUNNEL_FALLBACK" "false"
 }
 
 $controlPlaneUrl = Get-ConfigValue $ConfigPath "CONTROL_PLANE_URL"
@@ -180,6 +186,21 @@ if (Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue) {
 }
 Register-ScheduledTask -TaskName $TaskName -Action $action -Trigger $trigger -Principal $principal -Settings $settings -Description "Sentinel Grid branch camera, recorder, storage and network monitoring agent" | Out-Null
 
+# Local-subnet only: this permits authenticated live-video handoff from branch
+# LAN and directly attached VPN clients without exposing a public media tunnel.
+$firewallRuleName = "Sentinel Grid Private Live Video"
+Get-NetFirewallRule -DisplayName $firewallRuleName -ErrorAction SilentlyContinue |
+  Remove-NetFirewallRule -ErrorAction SilentlyContinue
+New-NetFirewallRule `
+  -DisplayName $firewallRuleName `
+  -Direction Inbound `
+  -Action Allow `
+  -Protocol TCP `
+  -LocalPort 8090 `
+  -Program $Executable `
+  -RemoteAddress LocalSubnet `
+  -Profile Any | Out-Null
+
 $dashboardLauncher = Join-Path $InstallDirectory "open-dashboard-scan.ps1"
 if (Test-Path -LiteralPath $dashboardLauncher -PathType Leaf) {
   $protocolKey = "Registry::HKEY_LOCAL_MACHINE\SOFTWARE\Classes\sentinel-grid-scanner"
@@ -241,3 +262,4 @@ if ($connectivityHealthy) {
 Write-Host "Startup task: $TaskName ($state)"
 Write-Host "Configuration: $ConfigPath"
 Write-Host "Log: $LogDirectory\edge-agent.log"
+Write-Host "Live video: private LAN/VPN local subnets only (TCP 8090)"

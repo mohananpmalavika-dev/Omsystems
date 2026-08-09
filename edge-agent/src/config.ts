@@ -51,7 +51,7 @@ const schema = z.object({
   CAMERA_CONFIG_REFRESH_MS: z.coerce.number().int().min(5_000).max(3_600_000).default(60_000),
   PUBLIC_MEDIA_GATEWAY_URL: z.preprocess(
     (value) => value === "" ? undefined : value,
-    z.string().url().optional(),
+    z.union([z.literal("auto"), z.string().url()]).optional(),
   ),
   STREAM_SECRET_STORE_PATH: z.string().default("./data/stream-secrets.json"),
   STREAM_SECRET_PROVIDER_HOST: z.string().default("127.0.0.1"),
@@ -145,6 +145,13 @@ const schema = z.object({
   }
   if (value.LIVE_MEDIA_ENABLED && value.MEDIA_TUNNEL_MODE === "disabled" && !value.PUBLIC_MEDIA_GATEWAY_URL) {
     context.addIssue({ code: z.ZodIssueCode.custom, path: ["PUBLIC_MEDIA_GATEWAY_URL"], message: "Live media without a tunnel requires a reachable PUBLIC_MEDIA_GATEWAY_URL" });
+  }
+  if (value.PUBLIC_MEDIA_GATEWAY_URL === "auto" && ["127.0.0.1", "localhost", "::1"].includes(value.EDGE_LIVE_GATEWAY_HOST)) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["EDGE_LIVE_GATEWAY_HOST"],
+      message: "PUBLIC_MEDIA_GATEWAY_URL=auto requires a LAN/VPN listener such as 0.0.0.0",
+    });
   }
   if (value.LIVE_MEDIA_ENABLED && value.MEDIA_TUNNEL_MODE === "named" &&
       !value.EDGE_MANAGED_MEDIA_BOOTSTRAP &&

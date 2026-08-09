@@ -2,6 +2,7 @@ import { createServer, type IncomingHttpHeaders, type IncomingMessage, type Serv
 import { randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { mkdir, writeFile } from "node:fs/promises";
+import { networkInterfaces, type NetworkInterfaceInfo } from "node:os";
 import { join } from "node:path";
 import type { EdgeConfig } from "../config.js";
 import type { ConsumedLiveSession, GatewayClient } from "../registration/gateway-client.js";
@@ -180,7 +181,10 @@ export async function startEdgeMediaRuntime(input: EdgeMediaRuntimeInput): Promi
   await waitForHttp(new URL("/v3/config/global/get", config.MEDIAMTX_API_URL), mediaMtx, 30_000);
 
   const router = new MediaMtxRouter(config.MEDIAMTX_API_URL);
-  let resolvedPublicUrl = config.PUBLIC_MEDIA_GATEWAY_URL ?? "";
+  let resolvedPublicUrl = resolvePrivateMediaGatewayUrl(
+    config.PUBLIC_MEDIA_GATEWAY_URL,
+    config.EDGE_LIVE_GATEWAY_PORT,
+  );
   const liveGateway = buildEdgeLiveGateway({
     consumer: { consume: (token) => input.gateway.consumeLiveSession(input.agentId, token) },
     router,
@@ -230,6 +234,44 @@ export function resolveMediaTunnelMode(config: Pick<EdgeConfig,
     return "quick" as const;
   }
   return config.MEDIA_TUNNEL_MODE;
+}
+
+export function resolvePrivateMediaGatewayUrl(
+  configuredUrl: string | undefined,
+  port: number,
+  interfaces: NodeJS.Dict<NetworkInterfaceInfo[]> = networkInterfaces(),
+) {
+  if (configuredUrl !== "auto") return configuredUrl ?? "";
+  const candidates: Array<{ address: string; priority: number; order: number }> = [];
+  let order = 0;
+  for (const [name, addresses] of Object.entries(interfaces)) {
+    for (const address of addresses ?? []) {
+      if (address.family !== "IPv4" || address.internal || !isPrivateIpv4(address.address)) continue;
+      candidates.push({ address: address.address, priority: privateInterfacePriority(name, address.address), order: order++ });
+    }
+  }
+  const selected = candidates.sort((left, right) => left.priority - right.priority || left.order - right.order)[0];
+  if (!selected) throw new Error("No private LAN or VPN IPv4 address is available for live media");
+  return `http://${selected.address}:${port}`;
+}
+
+function privateInterfacePriority(name: string, address: string) {
+  if (/^(?:169\.254)\./.test(address)) return 4;
+  if (/(?:vEthernet|WSL|Hyper-V|Docker|container|VMware|VirtualBox|Loopback|Npcap)/i.test(name)) return 3;
+  if (/(?:Tailscale|ZeroTier|WireGuard|VPN|Tunnel)/i.test(name)) return 2;
+  if (/(?:Wi-?Fi|Wireless|Ethernet|LAN)/i.test(name)) return 0;
+  return 1;
+}
+
+function isPrivateIpv4(address: string) {
+  const octets = address.split(".").map(Number);
+  if (octets.length !== 4 || octets.some((part) => !Number.isInteger(part) || part < 0 || part > 255)) return false;
+  const [first, second] = octets as [number, number, number, number];
+  return first === 10 ||
+    (first === 100 && second >= 64 && second <= 127) ||
+    (first === 169 && second === 254) ||
+    (first === 172 && second >= 16 && second <= 31) ||
+    (first === 192 && second === 168);
 }
 
 export class MediaMtxRouter implements MediaRouter {
@@ -389,5 +431,8 @@ function setCorsHeaders(request: IncomingMessage, response: ServerResponse) {
   response.setHeader("Access-Control-Allow-Origin", origin);
   response.setHeader("Access-Control-Allow-Headers", "Content-Type");
   response.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
+  if (request.headers["access-control-request-private-network"] === "true") {
+    response.setHeader("Access-Control-Allow-Private-Network", "true");
+  }
   response.setHeader("Vary", "Origin");
 }

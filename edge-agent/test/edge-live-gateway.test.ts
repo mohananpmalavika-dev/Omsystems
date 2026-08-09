@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import {
   buildEdgeLiveGateway,
+  resolvePrivateMediaGatewayUrl,
   resolveMediaTunnelMode,
   startEdgeMediaRuntimeIfAvailable,
   type EdgeLiveGateway,
@@ -32,6 +33,16 @@ describe("all-in-one edge live gateway", () => {
     expect(runtime).toBeUndefined();
   });
 
+  it("advertises the physical private network for LAN and routed VPN viewers", () => {
+    expect(resolvePrivateMediaGatewayUrl("auto", 8090, {
+      "vEthernet (WSL)": [{ address: "172.26.160.1", family: "IPv4", internal: false } as any],
+      "Tailscale VPN": [{ address: "100.95.10.4", family: "IPv4", internal: false } as any],
+      "Wi-Fi": [{ address: "192.168.29.101", family: "IPv4", internal: false } as any],
+    })).toBe("http://192.168.29.101:8090");
+    expect(resolvePrivateMediaGatewayUrl("https://private-media.example.test", 8090, {}))
+      .toBe("https://private-media.example.test");
+  });
+
   it("authorizes a dashboard session and creates a path from the branch-local secret", async () => {
     const paths: Array<{ path: string; source: string }> = [];
     const bridgeKey = "b".repeat(43);
@@ -58,10 +69,14 @@ describe("all-in-one edge live gateway", () => {
 
     const liveCors = await fetch(`${baseUrl}/v1/live/start`, {
       method: "OPTIONS",
-      headers: { origin: "https://dashboard.example.com" },
+      headers: {
+        origin: "https://dashboard.example.com",
+        "access-control-request-private-network": "true",
+      },
     });
     expect(liveCors.status).toBe(204);
     expect(liveCors.headers.get("access-control-allow-origin")).toBe("https://dashboard.example.com");
+    expect(liveCors.headers.get("access-control-allow-private-network")).toBe("true");
 
     const cors = await fetch(`${baseUrl}/hls/camera-camera-1/index.m3u8`, {
       method: "OPTIONS",
