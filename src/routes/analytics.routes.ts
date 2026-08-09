@@ -10,6 +10,7 @@ import type {
   AnalyticsAlert,
   AnalyticsAlertStatus,
   Camera,
+  ResourceNode,
 } from "../domain/models.js";
 import {
   AI_CAPABILITIES,
@@ -217,7 +218,7 @@ export async function registerAnalyticsRoutes(
   app.post("/v1/branches/:branchId/analytics/enable-all-cameras", async (request, reply) => {
     const { branchId } = z.object({ branchId: z.string().min(1) }).parse(request.params);
     if (!await authorizedNode(request, reply, store, branchId, "analytics:configure")) return;
-    const branch = await store.getNode(branchId);
+    const branch: ResourceNode | undefined = await store.getNode(branchId);
     if (!branch || branch.type !== "branch") {
       return reply.code(404).send({ error: "branch_not_found" });
     }

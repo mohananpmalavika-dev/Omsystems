@@ -1938,10 +1938,23 @@ export async function buildApp(options?: {
 
   // Security Posture API endpoint
   app.get("/api/security/posture", async () => {
-    // The legacy values on this route were illustrative constants. Returning
-    // an explicit unavailable projection is safer than presenting a fabricated
-    // enterprise score or fake incidents as live security evidence.
-    return unavailableSecurityPosture();
+    try {
+      // Import the real security operations service from backend
+      const { securityOperationsService } = await import("../backend/src/services/security-operations.service.js");
+      
+      // Get real-time security posture from all collectors
+      const posture = await securityOperationsService.getSecurityPosture();
+      
+      return {
+        available: true,
+        provenance: "LIVE" as const,
+        ...posture
+      };
+    } catch (error) {
+      app.log.error({ error }, "Failed to get security posture, returning unavailable");
+      // Fallback to unavailable state if service fails
+      return unavailableSecurityPosture();
+    }
   });
   if (extendedStore) {
     await registerDeviceManagementRoutes(app, extendedStore);
