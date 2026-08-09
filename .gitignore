@@ -18,6 +18,9 @@ analytics-engine/models/**/*.part-*
 .idea/
 .vscode/
 
+# Ignore generated branch activation keys
+edge-agent/installation-keys*.txt
+
 # Ignore all executable files
 *.exe
 
