@@ -5,6 +5,7 @@ import type { ControlPlaneStore } from "../control-plane-store.js";
 import { edgeUpdatePublicKey, signEdgeUpdateManifest } from "../security/edge-update-signing.js";
 import { sealEdgeCommandPayload } from "../security/edge-command-envelope.js";
 import type { ManagedEdgeTunnelProvider } from "../platform/managed-edge-tunnel.js";
+import { autoProvisionVerifiedCameras } from "../services/camera-auto-provision.js";
 
 const branchAgentParams = z.object({ branchId: z.string().min(1), id: z.string().min(1) });
 const agentParams = z.object({ id: z.string().min(1) });
@@ -385,15 +386,34 @@ export async function registerEdgeGatewayOperationsRoutes(
       ...(body.error ? { error: body.error } : {}),
     });
     if (!completed) return reply.code(404).send({ error: "edge_command_not_found" });
+    let activation: Awaited<ReturnType<typeof autoProvisionVerifiedCameras>> | undefined;
+    let activationError: string | undefined;
+    if (completed.type === "update-credentials" && completed.status === "succeeded") {
+      try {
+        activation = await autoProvisionVerifiedCameras(store, completed.branchId, { edgeAgentId: id });
+      } catch (error) {
+        activationError = error instanceof Error ? error.message : String(error);
+      }
+    }
     await store.writeAudit({
       tenantId: completed.tenantId, actorUserId: null, action: "edge_gateway.command_completed",
       resourceNodeId: completed.branchId, outcome: completed.status === "succeeded" ? "success" : "failure",
       sourceIp: request.ip, details: {
         edgeAgentId: id, commandId, commandType: completed.type,
         ...(completed.error ? { error: completed.error } : {}),
+        ...(activation ? {
+          provisionedCount: activation.summary.provisioned,
+          credentialsRequiredCount: activation.summary.credentialsRequired,
+          pendingVerificationCount: activation.summary.pendingVerification,
+        } : {}),
+        ...(activationError ? { activationError } : {}),
       },
     });
-    return completed;
+    return {
+      ...completed,
+      ...(activation ? { activation } : {}),
+      ...(activationError ? { activationError } : {}),
+    };
   });
 
   app.post("/v1/edge-updates/releases", async (request, reply) => {

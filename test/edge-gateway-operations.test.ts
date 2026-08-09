@@ -271,6 +271,50 @@ describe("secure edge gateway operations", () => {
       .toMatchObject({ username: "operator", password: "top-secret", scope: { host: "192.168.1.20" } });
   });
 
+  it("automatically provisions verified streams when a credential command completes", async () => {
+    const store = new MemoryStore();
+    const app = await buildApp({ store });
+    apps.push(app);
+    const identity = await enroll(app, await createActivation(app));
+    await store.createDiscovery("branch-blr-001", {
+      edgeAgentId: identity.agentId,
+      discoveryMethod: "nvr-dvr-channel-discovery",
+      vendor: "cp-plus",
+      manufacturer: "CP PLUS",
+      model: "CP PLUS DVR channel",
+      ipAddress: "192.168.29.171",
+      onvifPort: 80,
+      rtspPort: 554,
+      profiles: [{ name: "sub", codec: "H265", width: 640, height: 360 }],
+      capabilities: { ptz: false, audio: false, events: false },
+      sourceType: "analog-dvr-channel",
+      recorderId: "recorder-test",
+      recorderChannel: 1,
+      streamVerified: true,
+      credentialsRequired: false,
+      duplicateStatus: "unique",
+      compatibilityStatus: "compatible",
+    });
+    const command = await store.createEdgeCommand({
+      edgeAgentId: identity.agentId,
+      type: "update-credentials",
+      payload: {},
+      requestedBy: "user-global-admin",
+    });
+    await store.claimEdgeCommand(identity.agentId);
+
+    const completed = await app.inject({
+      method: "POST",
+      url: `/v1/edge-agents/${identity.agentId}/commands/${command.id}/complete`,
+      headers: { "x-edge-agent-token": identity.credential },
+      payload: { status: "succeeded", result: { rediscovered: 1 } },
+    });
+
+    expect(completed.statusCode).toBe(200);
+    expect(completed.json().activation.summary.provisioned).toBe(1);
+    expect(await store.listCamerasByEdgeAgent(identity.agentId)).toHaveLength(1);
+  });
+
   it("signs staged OTA manifests and assigns them by rollout", async () => {
     const { privateKey, publicKey } = generateKeyPairSync("ed25519");
     const privatePem = privateKey.export({ type: "pkcs8", format: "pem" }).toString();
