@@ -2,6 +2,8 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 import type { ControlPlaneStore } from "../control-plane-store.js";
 import type { BranchConnectivityTransport } from "../domain/models.js";
+import type { ManagedEdgeTunnelProvider } from "../platform/managed-edge-tunnel.js";
+import { ensureManagedEdgeTunnel } from "../services/managed-edge-tunnel.js";
 
 const branchParams = z.object({ branchId: z.string().min(1) });
 const transportSchema = z.enum(["vpn", "cloudflare-tunnel"]);
@@ -31,7 +33,11 @@ const profileSchema = z.object({
   }
 });
 
-export async function registerBranchConnectivityRoutes(app: FastifyInstance, store: ControlPlaneStore) {
+export async function registerBranchConnectivityRoutes(
+  app: FastifyInstance,
+  store: ControlPlaneStore,
+  options: { tunnelProvider?: ManagedEdgeTunnelProvider } = {},
+) {
   app.get("/v1/branches/:branchId/connectivity", async (request, reply) => {
     const { branchId } = branchParams.parse(request.params);
     if (!(await requireDeviceAccess(request, reply, store, branchId))) return;
@@ -54,8 +60,11 @@ export async function registerBranchConnectivityRoutes(app: FastifyInstance, sto
         },
         tunnel: {
           provider: "cloudflare",
+          available: true,
+          managedAvailable: Boolean(options.tunnelProvider),
           cameraTypes: ["ip-camera", "analog-dvr-channel", "nvr-channel"],
-          requirements: ["enrolled Sentinel gateway running the connector"],
+          requirements: ["enrolled Sentinel gateway running the connector", "outbound TCP or UDP port 7844"],
+          productionRequirements: ["Cloudflare domain and API credentials configured in Sentinel Grid"],
         },
       },
     };
@@ -67,6 +76,19 @@ export async function registerBranchConnectivityRoutes(app: FastifyInstance, sto
     const body = profileSchema.parse(request.body);
     const branch = await store.getNode(branchId);
     if (!branch || branch.type !== "branch") return reply.code(404).send({ error: "branch_not_found" });
+    const usesInternetTunnel = body.primaryTransport === "cloudflare-tunnel" || body.fallbackTransport === "cloudflare-tunnel";
+    let managedTunnel = await store.getEdgeManagedTunnel(branchId);
+    if (usesInternetTunnel && options.tunnelProvider) {
+      try {
+        managedTunnel = await ensureManagedEdgeTunnel(store, options.tunnelProvider, branch);
+      } catch (error) {
+        app.log.error({ err: error, branchId }, "Managed branch internet tunnel provisioning failed");
+        return reply.code(502).send({
+          error: "internet_tunnel_provisioning_failed",
+          message: "Sentinel Grid could not create the secure branch internet tunnel. Check the Cloudflare credentials and DNS zone.",
+        });
+      }
+    }
     const profile = await store.upsertBranchConnectivityProfile({
       branchId,
       tenantId: branch.tenantId,
@@ -81,12 +103,33 @@ export async function registerBranchConnectivityRoutes(app: FastifyInstance, sto
       fallbackTransport: profile.fallbackTransport,
       vpnProtocol: profile.vpnProtocol,
       remoteNetworkCount: profile.vpnRemoteNetworks?.length ?? 0,
+      managedInternetHostname: managedTunnel?.hostname,
     });
+    const restartCommands = usesInternetTunnel
+      ? await Promise.all((await store.listEdgeAgentsByBranch(branchId))
+          .filter((agent) => agent.credentialStatus !== "revoked")
+          .map((agent) => store.createEdgeCommand({
+            edgeAgentId: agent.id,
+            type: "restart-media",
+            payload: { reason: "managed_internet_enabled" },
+            requestedBy: request.currentUser.id,
+          })))
+      : [];
     return reply.code(200).send({
       profile,
+      managedTunnel: managedTunnel ? {
+        provider: managedTunnel.provider,
+        hostname: managedTunnel.hostname,
+        publicUrl: `https://${managedTunnel.hostname}`,
+        status: managedTunnel.status,
+      } : null,
+      internetMode: managedTunnel ? "managed" : usesInternetTunnel ? "temporary-test" : "disabled",
+      scannerRefreshQueued: restartCommands.length,
       message: profile.primaryTransport === "vpn"
         ? "VPN selected. Register IP cameras or DVR channels with their private VPN-routable addresses."
-        : "Cloudflare Tunnel selected. Enroll a Sentinel gateway to discover and proxy branch devices.",
+        : managedTunnel
+          ? "Stable secure internet access is provisioned. The branch scanner will receive the outbound tunnel automatically; no router port forwarding is required."
+          : "Temporary secure internet access is enabled for testing. Repair the scanner to version 0.1.6; its endpoint refreshes automatically after each restart.",
     });
   });
 

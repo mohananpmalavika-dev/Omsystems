@@ -12,7 +12,20 @@ describe("branch VPN and tunnel connectivity", () => {
 
   beforeEach(async () => {
     store = new MemoryStore();
-    app = await buildApp({ store });
+    app = await buildApp({
+      store,
+      edgeTunnelProvider: {
+        provision: async ({ branchId }) => ({
+          provider: "cloudflare" as const,
+          providerTunnelId: `tunnel-${branchId}`,
+          hostname: `${branchId}.media.example.com`,
+          status: "inactive" as const,
+        }),
+        getToken: async () => "managed-tunnel-token-with-sufficient-length",
+        getStatus: async () => "healthy" as const,
+        revoke: async () => undefined,
+      },
+    });
   });
   afterEach(async () => app.close());
 
@@ -99,9 +112,42 @@ describe("branch VPN and tunnel connectivity", () => {
       payload: { primaryTransport: "cloudflare-tunnel", fallbackTransport: "vpn", vpnProtocol: "openvpn", vpnRemoteNetworks: ["10.43.0.0/16"] },
     });
     expect(configured.statusCode).toBe(200);
+    expect(configured.json()).toMatchObject({
+      managedTunnel: {
+        publicUrl: `https://${branchId}.media.example.com`,
+        status: "inactive",
+      },
+    });
     const read = await app.inject({ method: "GET", url: `/v1/branches/${branchId}/connectivity`, headers });
     expect(read.json().profile).toMatchObject({ primaryTransport: "cloudflare-tunnel", fallbackTransport: "vpn" });
+    expect(read.json().supported.tunnel.available).toBe(true);
     expect(read.json().supported.vpn.cameraTypes).toEqual(expect.arrayContaining(["ip-camera", "analog-dvr-channel"]));
+  });
+
+  it("enables a temporary authenticated internet tunnel when the managed provider is not configured", async () => {
+    const temporaryStore = new MemoryStore();
+    const agent = await temporaryStore.registerEdgeAgent(branchId, "Internet test scanner", "0.1.6");
+    const withoutTunnel = await buildApp({ store: temporaryStore });
+    try {
+      const response = await withoutTunnel.inject({
+        method: "PUT",
+        url: `/v1/branches/${branchId}/connectivity`,
+        headers,
+        payload: { primaryTransport: "cloudflare-tunnel" },
+      });
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toMatchObject({
+        managedTunnel: null,
+        internetMode: "temporary-test",
+        scannerRefreshQueued: 1,
+        message: expect.stringContaining("version 0.1.6"),
+      });
+      expect(await temporaryStore.listEdgeCommands(branchId)).toEqual([
+        expect.objectContaining({ edgeAgentId: agent.id, type: "restart-media", status: "queued" }),
+      ]);
+    } finally {
+      await withoutTunnel.close();
+    }
   });
 
   it("keeps a locally discovered DVR channel on its gateway while control traffic uses VPN", async () => {

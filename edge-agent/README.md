@@ -88,15 +88,18 @@ Get-ScheduledTask -TaskName 'Sentinel Grid Edge Agent'
 Get-Content 'C:\Program Files\Sentinel Grid\Edge Agent\logs\edge-agent.log' -Tail 100
 ```
 
-The control-plane URL and Cloudflare Tunnel must be reachable over outbound
-HTTPS, while the branch PC must have LAN access to the cameras/NVRs. No inbound
-port forwarding is required.
+The control-plane URL must be reachable over outbound HTTPS, while the branch
+PC must have LAN access to the cameras/NVRs. Secure internet viewing also needs
+outbound TCP or UDP port 7844 to Cloudflare. No inbound router port, public
+camera address, or RTSP port forwarding is required.
 
-Dashboard downloads default to an automatic Cloudflare Quick Tunnel so a pilot
-installation works without another account. Quick Tunnels are temporary and
-intended for testing. Production branches should change `MEDIA_TUNNEL_MODE` to
-`named`, provide `CLOUDFLARED_TUNNEL_TOKEN`, and set the stable
-`PUBLIC_MEDIA_GATEWAY_URL` issued for that branch.
+Installed scanners request a stable, named Cloudflare Tunnel from the control
+plane. The tunnel token is delivered only to the authenticated scanner and is
+stored in its encrypted device identity. When the control plane has no managed
+tunnel provider configured, installers use a temporary Quick Tunnel so testing
+works over the internet without a Cloudflare account. Quick Tunnel URLs change
+after a scanner restart, so production branches should configure the four
+Cloudflare settings in `render.yaml` and use the stable managed endpoint.
 
 ## Uninstall
 

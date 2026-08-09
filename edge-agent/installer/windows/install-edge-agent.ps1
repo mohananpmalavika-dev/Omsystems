@@ -121,11 +121,11 @@ if ((Test-Path -LiteralPath $FfmpegArchive -PathType Leaf) -and
   Set-ConfigValue $ConfigPath "MEDIAMTX_PATH" $MediaMtxExecutable.FullName
   Set-ConfigValue $ConfigPath "CLOUDFLARED_PATH" $CloudflaredExecutable
   Set-ConfigValue $ConfigPath "LIVE_MEDIA_ENABLED" "true"
-  Set-ConfigValue $ConfigPath "EDGE_MANAGED_MEDIA_BOOTSTRAP" "false"
+  Set-ConfigValue $ConfigPath "EDGE_MANAGED_MEDIA_BOOTSTRAP" "true"
   Set-ConfigValue $ConfigPath "EDGE_LIVE_GATEWAY_HOST" "0.0.0.0"
   Set-ConfigValue $ConfigPath "EDGE_LIVE_GATEWAY_PORT" "8090"
   Set-ConfigValue $ConfigPath "PUBLIC_MEDIA_GATEWAY_URL" "auto"
-  Set-ConfigValue $ConfigPath "MEDIA_TUNNEL_MODE" "disabled"
+  Set-ConfigValue $ConfigPath "MEDIA_TUNNEL_MODE" "quick"
   Set-ConfigValue $ConfigPath "MEDIA_QUICK_TUNNEL_FALLBACK" "false"
 }
 

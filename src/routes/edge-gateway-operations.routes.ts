@@ -6,6 +6,10 @@ import { edgeUpdatePublicKey, signEdgeUpdateManifest } from "../security/edge-up
 import { sealEdgeCommandPayload } from "../security/edge-command-envelope.js";
 import type { ManagedEdgeTunnelProvider } from "../platform/managed-edge-tunnel.js";
 import { autoProvisionVerifiedCameras } from "../services/camera-auto-provision.js";
+import {
+  ensureManagedEdgeTunnel,
+  managedGatewayMediaBootstrap,
+} from "../services/managed-edge-tunnel.js";
 
 const branchAgentParams = z.object({ branchId: z.string().min(1), id: z.string().min(1) });
 const agentParams = z.object({ id: z.string().min(1) });
@@ -43,15 +47,7 @@ export async function registerEdgeGatewayOperationsRoutes(
       try {
         const branch = await store.getNode(branchId);
         if (!branch) return reply.code(404).send({ error: "branch_not_found" });
-        const provisioned = await options.tunnelProvider.provision({ branchId, branchName: branch.name });
-        tunnel = await store.upsertEdgeManagedTunnel({
-          tenantId: branch.tenantId,
-          branchId,
-          provider: provisioned.provider,
-          providerTunnelId: provisioned.providerTunnelId,
-          hostname: provisioned.hostname,
-          status: provisioned.status,
-        });
+        tunnel = await ensureManagedEdgeTunnel(store, options.tunnelProvider, branch);
       } catch (error) {
         app.log.error({ err: error, branchId }, "Managed branch tunnel provisioning failed");
         return reply.code(502).send({ error: "managed_tunnel_provisioning_failed" });
@@ -100,7 +96,7 @@ export async function registerEdgeGatewayOperationsRoutes(
         tokenHash: hashSecret(body.activationCode), credentialHash: hashSecret(credential),
         deviceUuid: body.deviceUuid, version: body.version, commandPublicKey: body.commandPublicKey,
       });
-      const media = await gatewayMediaBootstrap(
+      const media = await managedGatewayMediaBootstrap(
         store,
         options.tunnelProvider,
         enrollment.agent.branchId,
@@ -257,7 +253,7 @@ export async function registerEdgeGatewayOperationsRoutes(
     const { id } = agentParams.parse(request.params);
     const agent = await store.getEdgeAgent(id);
     if (!agent) return reply.code(404).send({ error: "edge_agent_not_found" });
-    const media = await gatewayMediaBootstrap(store, options.tunnelProvider, agent.branchId);
+    const media = await managedGatewayMediaBootstrap(store, options.tunnelProvider, agent.branchId);
     return reply.header("cache-control", "no-store").send({
       controlPlaneUrl: options.controlPlanePublicUrl ?? "",
       ...(media ? { media } : {}),
@@ -451,28 +447,6 @@ export async function registerEdgeGatewayOperationsRoutes(
     const { version } = z.object({ version: z.string().min(1).max(40) }).parse(request.query);
     return await store.getEdgeUpdateReleaseForAgent(id, version) ?? null;
   });
-}
-
-async function gatewayMediaBootstrap(
-  store: ControlPlaneStore,
-  tunnelProvider: ManagedEdgeTunnelProvider | undefined,
-  branchId: string,
-) {
-  const tunnel = await store.getEdgeManagedTunnel(branchId);
-  if (!tunnel || tunnel.status === "revoked" || !tunnelProvider) return undefined;
-  const [token, status] = await Promise.all([
-    tunnelProvider.getToken(tunnel.providerTunnelId),
-    tunnelProvider.getStatus(tunnel.providerTunnelId).catch(() => "unknown" as const),
-  ]);
-  await store.updateEdgeManagedTunnelStatus(branchId, status);
-  return {
-    enabled: true,
-    managed: true,
-    mode: "named" as const,
-    publicUrl: `https://${tunnel.hostname}`,
-    tunnelToken: token,
-    status,
-  };
 }
 
 function hashSecret(value: string) {

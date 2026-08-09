@@ -49,6 +49,7 @@ export function BranchConnectivityPanel({
 }) {
   const [profile, setProfile] = useState<ConnectivityProfile | null>(null);
   const [managedTunnel, setManagedTunnel] = useState<{ hostname: string; status: string } | null>(null);
+  const [managedInternetAvailable, setManagedInternetAvailable] = useState<boolean>();
   const [form, setForm] = useState<FormState>(emptyForm);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -59,6 +60,7 @@ export function BranchConnectivityPanel({
     if (!branchId) {
       setProfile(null);
       setManagedTunnel(null);
+      setManagedInternetAvailable(undefined);
       setForm(emptyForm);
       return;
     }
@@ -70,6 +72,7 @@ export function BranchConnectivityPanel({
         if (!active) return;
         setProfile(response.profile);
         setManagedTunnel(response.managedTunnel);
+        setManagedInternetAvailable(response.supported.tunnel.managedAvailable);
         setForm(formFromProfile(response.profile));
       })
       .catch((reason: unknown) => {
@@ -105,6 +108,7 @@ export function BranchConnectivityPanel({
       });
       setProfile(response.profile as ConnectivityProfile);
       setForm(formFromProfile(response.profile as ConnectivityProfile));
+      setManagedTunnel(response.managedTunnel);
       setMessage(response.message ?? "Branch connectivity saved.");
       onConfigured?.();
     } catch (reason) {
@@ -136,7 +140,7 @@ export function BranchConnectivityPanel({
             <label className={`connectivity-option ${form.primaryTransport === "cloudflare-tunnel" ? "selected" : ""}`}>
               <input type="radio" name="connection-method" value="cloudflare-tunnel" checked={form.primaryTransport === "cloudflare-tunnel"} onChange={() => setForm((current) => ({ ...current, primaryTransport: "cloudflare-tunnel", fallbackTransport: current.fallbackTransport === "cloudflare-tunnel" ? "none" : current.fallbackTransport }))} />
               <Cloud size={18} />
-              <span><strong>Managed Cloudflare Tunnel</strong><small>Use an enrolled Sentinel gateway or a router that can run the connector.</small></span>
+              <span><strong>Secure internet access</strong><small>{managedInternetAvailable === false ? "Automatic temporary tunnel for testing; no camera/DVR port forwarding is needed." : "Stable outbound managed tunnel; no camera/DVR port forwarding or public IP is needed."}</small></span>
             </label>
           </div>
 
@@ -146,7 +150,7 @@ export function BranchConnectivityPanel({
               <select value={form.fallbackTransport} onChange={(event) => setForm((current) => ({ ...current, fallbackTransport: event.target.value as FormState["fallbackTransport"] }))}>
                 <option value="none">No fallback</option>
                 {form.primaryTransport !== "vpn" ? <option value="vpn">Existing branch VPN</option> : null}
-                {form.primaryTransport !== "cloudflare-tunnel" ? <option value="cloudflare-tunnel">Managed Cloudflare Tunnel</option> : null}
+                {form.primaryTransport !== "cloudflare-tunnel" ? <option value="cloudflare-tunnel">Secure internet access</option> : null}
               </select>
             </label>
             {usesVpn ? <>
@@ -168,7 +172,7 @@ export function BranchConnectivityPanel({
 
           <div className="connectivity-guidance">
             {activeTransport === "vpn" || form.primaryTransport === "vpn" ? <p><ShieldCheck size={14} /> Sentinel uses the router’s existing site-to-site VPN route. Configure the routers separately; never enter VPN or camera passwords here.</p> : null}
-            {activeTransport === "cloudflare-tunnel" || form.primaryTransport === "cloudflare-tunnel" ? <p><Cloud size={14} /> Tunnel mode needs a connector running at the branch. {managedTunnel ? `Current tunnel: ${managedTunnel.hostname} (${managedTunnel.status}).` : "Enroll a gateway before discovery."}</p> : null}
+            {activeTransport === "cloudflare-tunnel" || form.primaryTransport === "cloudflare-tunnel" ? <p><Cloud size={14} /> Secure internet mode needs the Sentinel scanner running at the branch. {managedTunnel ? `Internet endpoint: ${managedTunnel.hostname} (${managedTunnel.status}).` : managedInternetAvailable === false ? "Saving asks scanner version 0.1.6 to create a temporary test endpoint." : "Saving provisions the endpoint automatically."}</p> : null}
             <p><CheckCircle2 size={14} /> IP cameras use their private IP. Analog cameras are added as a DVR/NVR private IP plus channel number; their continuous video stays on the recorder.</p>
           </div>
 

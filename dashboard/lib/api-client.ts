@@ -467,13 +467,22 @@ export const cameraInventoryApi = {
         status: "configured" | "healthy" | "degraded" | "offline";
       } | null;
       managedTunnel: { provider: "cloudflare"; hostname: string; status: string } | null;
+      supported: {
+        tunnel: { available: boolean; managedAvailable: boolean };
+      };
     }>(`/v1/branches/${encodeURIComponent(branchId)}/connectivity`),
   configureConnectivity: (branchId: string, data: {
     primaryTransport: "vpn" | "cloudflare-tunnel";
     fallbackTransport?: "vpn" | "cloudflare-tunnel";
     vpnProtocol?: "ipsec" | "wireguard" | "openvpn" | "ssl-vpn";
     vpnRemoteNetworks?: string[];
-  }) => fetchApi<any>(
+  }) => fetchApi<{
+    profile: any;
+    managedTunnel: { provider: "cloudflare"; hostname: string; publicUrl: string; status: string } | null;
+    internetMode: "managed" | "temporary-test" | "disabled";
+    scannerRefreshQueued: number;
+    message: string;
+  }>(
     `/v1/branches/${encodeURIComponent(branchId)}/connectivity`,
     { method: "PUT", body: JSON.stringify(data) },
   ),

@@ -71,9 +71,9 @@ describe("branch edge-agent package", () => {
       expect(config).toContain(`EDGE_BRIDGE_SHARED_KEY="${edgeKey}"`);
       expect(config).toContain('DEV_USER_ID="user-global-admin"');
       expect(config).toContain('LIVE_MEDIA_ENABLED="true"');
-      expect(config).toContain('EDGE_MANAGED_MEDIA_BOOTSTRAP="false"');
+      expect(config).toContain('EDGE_MANAGED_MEDIA_BOOTSTRAP="true"');
       expect(config).toContain('EDGE_LIVE_GATEWAY_HOST="0.0.0.0"');
-      expect(config).toContain('MEDIA_TUNNEL_MODE="disabled"');
+      expect(config).toContain('MEDIA_TUNNEL_MODE="quick"');
       expect(config).toContain('MEDIA_QUICK_TUNNEL_FALLBACK="false"');
       expect(config).toContain('PUBLIC_MEDIA_GATEWAY_URL="auto"');
       expect(config).not.toContain('CAMERA_USERNAME="admin"');
@@ -112,6 +112,7 @@ describe("branch edge-agent package", () => {
       expect(response.rawPayload.subarray(0, 2).toString()).toBe("PK");
       const scanner = zipEntry(response.rawPayload, "Bengaluru-Branch-001-local-network-scanner.exe");
       expect(embeddedConfig(scanner)).toContain('LIVE_MEDIA_ENABLED="false"');
+      expect(embeddedConfig(scanner)).toContain('EDGE_MANAGED_MEDIA_BOOTSTRAP="false"');
       expect(embeddedConfig(scanner)).toContain('MEDIA_TUNNEL_MODE="disabled"');
       expect(embeddedConfig(scanner)).toContain('MEDIA_QUICK_TUNNEL_FALLBACK="false"');
       expect(zipEntry(response.rawPayload, "Run Local Discovery.cmd").toString("utf8"))

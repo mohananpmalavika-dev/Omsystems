@@ -1885,7 +1885,9 @@ export async function buildApp(options?: {
   });
 
   await registerDeviceInventoryRoutes(app, store);
-  await registerBranchConnectivityRoutes(app, store);
+  await registerBranchConnectivityRoutes(app, store, {
+    tunnelProvider: options?.edgeTunnelProvider,
+  });
   await registerEdgeGatewayOperationsRoutes(app, store, {
     controlPlanePublicUrl: options?.controlPlanePublicUrl ?? process.env.CONTROL_PLANE_PUBLIC_URL,
     updateSigningPrivateKey: options?.edgeUpdateSigningPrivateKey ?? process.env.EDGE_UPDATE_SIGNING_PRIVATE_KEY,

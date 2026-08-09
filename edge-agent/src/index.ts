@@ -50,7 +50,7 @@ if (runtime.embeddedEnvironmentFile && (argv.length === 0 || hasArgument(argv, "
   process.exit(0);
 }
 if (hasArgument(argv, "--version")) {
-  process.stdout.write("Sentinel Grid Edge Agent 0.1.5\n");
+  process.stdout.write("Sentinel Grid Edge Agent 0.1.6\n");
   process.exit(0);
 }
 const config = loadConfigOrExit();
@@ -132,11 +132,7 @@ if (identity) authenticatedGateway.useEdgeCredential(identity.credential);
 const control = authenticatedGateway;
 if (identity && config.EDGE_MANAGED_MEDIA_BOOTSTRAP) {
   try {
-    const bootstrap = await control.getBootstrap(agentId);
-    if (bootstrap.media) {
-      identity.media = bootstrap.media;
-      await identityStore.save(identity);
-    }
+    await refreshManagedMediaBootstrap();
   } catch (error) {
     logger.warn("Managed media bootstrap refresh failed; using the last encrypted configuration", {
       error: error instanceof Error ? error.message : String(error),
@@ -144,13 +140,7 @@ if (identity && config.EDGE_MANAGED_MEDIA_BOOTSTRAP) {
   }
 }
 if (config.EDGE_MANAGED_MEDIA_BOOTSTRAP && identity?.media) {
-  Object.assign(config, {
-    LIVE_MEDIA_ENABLED: true,
-    MEDIA_RUNTIME_MANAGED: true,
-    MEDIA_TUNNEL_MODE: "named" as const,
-    PUBLIC_MEDIA_GATEWAY_URL: identity.media.publicUrl,
-    CLOUDFLARED_TUNNEL_TOKEN: identity.media.tunnelToken,
-  });
+  applyManagedMediaBootstrap(identity.media);
 }
 const credentialVault = new CameraCredentialVault(
   config.EDGE_CAMERA_CREDENTIAL_VAULT_PATH,
@@ -978,6 +968,7 @@ async function executeEdgeCommand(type: string, payload: Record<string, unknown>
       return { result: { discovered: await scanBranch() } };
     case "restart-media":
       if (!config.LIVE_MEDIA_ENABLED) throw new Error("live_media_disabled");
+      await refreshManagedMediaBootstrap();
       await edgeMediaRuntime?.stop();
       edgeMediaRuntime = await startEdgeMediaRuntime({ config, gateway: control, agentId, secrets });
       return { result: { status: "restarted", publicUrl: edgeMediaRuntime.publicUrl } };
@@ -1045,6 +1036,29 @@ async function executeEdgeCommand(type: string, payload: Record<string, unknown>
     default:
       throw new Error("unsupported_edge_command");
   }
+}
+
+async function refreshManagedMediaBootstrap() {
+  if (!identity || !config.EDGE_MANAGED_MEDIA_BOOTSTRAP) return false;
+  const bootstrap = await control.getBootstrap(agentId);
+  if (!bootstrap.media) return false;
+  const previous = identity.media;
+  identity.media = bootstrap.media;
+  await identityStore.save(identity);
+  applyManagedMediaBootstrap(bootstrap.media);
+  return previous?.publicUrl !== bootstrap.media.publicUrl ||
+    previous?.tunnelToken !== bootstrap.media.tunnelToken;
+}
+
+function applyManagedMediaBootstrap(media: NonNullable<typeof identity>["media"]) {
+  if (!media) return;
+  Object.assign(config, {
+    LIVE_MEDIA_ENABLED: true,
+    MEDIA_RUNTIME_MANAGED: true,
+    MEDIA_TUNNEL_MODE: "named" as const,
+    PUBLIC_MEDIA_GATEWAY_URL: media.publicUrl,
+    CLOUDFLARED_TUNNEL_TOKEN: media.tunnelToken,
+  });
 }
 
 async function recoverCameraAtEdge(cameraId: string, trigger: "automatic" | "operator", consecutiveFailures?: number) {

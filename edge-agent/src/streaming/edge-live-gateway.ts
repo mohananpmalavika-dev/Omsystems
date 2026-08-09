@@ -215,7 +215,17 @@ export async function startEdgeMediaRuntime(input: EdgeMediaRuntimeInput): Promi
     await waitForPublicGateway(new URL("/health", resolvedPublicUrl), 30_000);
     logger.info("Edge live media is reachable", { publicUrl: resolvedPublicUrl, tunnelMode });
   } catch (error) {
-    tunnel?.kill(); await liveGateway.close(); mediaMtx?.kill(); throw error;
+    tunnel?.kill();
+    if (tunnelMode === "quick" && config.PUBLIC_MEDIA_GATEWAY_URL === "auto") {
+      tunnel = undefined;
+      resolvedPublicUrl = resolvePrivateMediaGatewayUrl("auto", config.EDGE_LIVE_GATEWAY_PORT);
+      logger.warn("Temporary internet tunnel unavailable; keeping LAN/VPN live media active", {
+        error: error instanceof Error ? error.message : String(error),
+        privateUrl: resolvedPublicUrl,
+      });
+    } else {
+      await liveGateway.close(); mediaMtx?.kill(); throw error;
+    }
   }
 
   return {
