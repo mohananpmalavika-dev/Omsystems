@@ -49,4 +49,24 @@ describe("Windows scanner installer resilience", () => {
     expect(source).toContain('$connectivityHealthy -and $state -ne "Running"');
     expect(source).toContain("startup task did not remain running");
   });
+
+  it("writes Windows dependency paths without dotenv escape corruption", async () => {
+    const source = await readFile(
+      "edge-agent/installer/windows/install-edge-agent.ps1",
+      "utf8",
+    );
+
+    expect(source).toContain("$Value = $Value.Replace('\\', '/')");
+    expect(source).toContain('Set-ConfigValue $ConfigPath "MEDIAMTX_PATH"');
+  });
+
+  it("starts the scanner task on battery as well as AC power", async () => {
+    const source = await readFile(
+      "edge-agent/installer/windows/install-edge-agent.ps1",
+      "utf8",
+    );
+
+    expect(source).toContain("-AllowStartIfOnBatteries");
+    expect(source).toContain("-DontStopIfGoingOnBatteries");
+  });
 });

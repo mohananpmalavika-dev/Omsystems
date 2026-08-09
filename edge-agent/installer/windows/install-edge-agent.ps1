@@ -31,6 +31,12 @@ function Get-ConfigValue([string]$Path, [string]$Name) {
 
 function Set-ConfigValue([string]$Path, [string]$Name, [string]$Value) {
   $lines = @(Get-Content -LiteralPath $Path)
+  # dotenv expands \r and \n inside double-quoted values. JSON-encoded native
+  # Windows paths therefore corrupt segments such as "\runtime" at startup.
+  # Node and Windows accept forward slashes, which remain literal in dotenv.
+  if ($Value -match '^[A-Za-z]:\\') {
+    $Value = $Value.Replace('\', '/')
+  }
   $encoded = $Value | ConvertTo-Json -Compress
   $replacement = "$Name=$encoded"
   $found = $false
@@ -180,7 +186,7 @@ if (-not [string]::IsNullOrWhiteSpace($activationCode) -and $existingIdentityFil
 $action = New-ScheduledTaskAction -Execute $Executable -Argument "--run --config `"$ConfigPath`"" -WorkingDirectory $InstallDirectory
 $trigger = New-ScheduledTaskTrigger -AtStartup
 $principal = New-ScheduledTaskPrincipal -UserId "SYSTEM" -LogonType ServiceAccount -RunLevel Highest
-$settings = New-ScheduledTaskSettingsSet -StartWhenAvailable -RestartCount 20 -RestartInterval (New-TimeSpan -Minutes 1) -ExecutionTimeLimit ([TimeSpan]::Zero)
+$settings = New-ScheduledTaskSettingsSet -StartWhenAvailable -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -RestartCount 20 -RestartInterval (New-TimeSpan -Minutes 1) -ExecutionTimeLimit ([TimeSpan]::Zero)
 if (Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue) {
   Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false
 }

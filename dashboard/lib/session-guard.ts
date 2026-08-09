@@ -3,6 +3,8 @@
  * Monitors session validity and redirects to login when expired
  */
 
+import { logout as authManagerLogout } from './auth-manager';
+
 let sessionCheckInterval: NodeJS.Timeout | null = null;
 let isCheckingSession = false;
 
@@ -19,13 +21,35 @@ export function isAuthenticated(): boolean {
 /**
  * Redirect to login page
  */
-export function redirectToLogin(reason: 'expired' | 'invalid' | 'network' = 'expired') {
+export async function redirectToLogin(reason: 'expired' | 'invalid' | 'network' = 'expired') {
   if (typeof window === 'undefined') return;
+  
+  // End activity session before clearing data
+  try {
+    const sessionId = sessionStorage.getItem('activitySessionId');
+    const token = sessionStorage.getItem('activityAccessToken') || localStorage.getItem('accessToken');
+    
+    if (sessionId && token) {
+      const apiBase = process.env.NEXT_PUBLIC_API_BASE || '/api/control';
+      await fetch(`${apiBase}/v1/activity/sessions/${sessionId}/end`, {
+        method: 'POST',
+        headers: {
+          'x-sentinel-session': token,
+        },
+        credentials: 'include',
+      });
+    }
+  } catch (error) {
+    console.error('[SessionGuard] Error ending activity session:', error);
+  }
   
   // Clear all session data
   localStorage.removeItem('accessToken');
   localStorage.removeItem('refreshToken');
   localStorage.removeItem('user');
+  sessionStorage.removeItem('activitySessionId');
+  sessionStorage.removeItem('activityAccessToken');
+  sessionStorage.removeItem('currentPageVisitId');
   
   // Stop session checking
   stopSessionCheck();

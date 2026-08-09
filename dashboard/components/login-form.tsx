@@ -60,7 +60,9 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
         return;
       }
 
-      // Successful login
+      // Successful login - activity tracking will start automatically via ActivityMonitor
+      console.log('[LoginForm] Login successful, redirecting to dashboard');
+      
       if (onSuccess) {
         onSuccess();
       } else {
