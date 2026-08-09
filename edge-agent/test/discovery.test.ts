@@ -93,6 +93,29 @@ describe("ONVIF edge utilities", () => {
     expect(ipsFromCidr("10.0.0.0/16")).toEqual([]);
   });
 
+  it("ignores virtual host-only networks during local camera discovery", () => {
+    expect(inferLocalCidrs({
+      "Wi-Fi": [{
+        address: "192.168.29.101",
+        netmask: "255.255.255.0",
+        family: "IPv4",
+        mac: "00:11:22:33:44:55",
+        internal: false,
+        cidr: "192.168.29.101/24",
+        scopeid: 0,
+      }],
+      "vEthernet (WSL (Hyper-V firewall))": [{
+        address: "172.26.160.1",
+        netmask: "255.255.240.0",
+        family: "IPv4",
+        mac: "00:15:5d:00:00:01",
+        internal: false,
+        cidr: "172.26.160.1/20",
+        scopeid: 0,
+      }],
+    })).toEqual(["192.168.29.0/24"]);
+  });
+
   it("waits for every queued network probe", async () => {
     const completed: number[] = [];
     await runWithConcurrency([1, 2, 3, 4, 5, 6], 2, async (item) => {

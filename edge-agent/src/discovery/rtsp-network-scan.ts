@@ -67,7 +67,13 @@ function isPrivateCameraNetwork(address: string) {
 
 export function inferLocalCidrs(ifaces = os.networkInterfaces()): string[] {
   const cidrs: string[] = [];
-  for (const addrs of Object.values(ifaces)) {
+  for (const [interfaceName, addrs] of Object.entries(ifaces)) {
+    // Virtual host-only adapters (especially WSL/Hyper-V) commonly expose a
+    // large private /20 even though cameras cannot exist on that network. A
+    // blind scan of it adds thousands of timed-out probes and can prevent the
+    // real Wi-Fi/LAN scan from completing. Routed/VPN camera networks are
+    // supplied separately through the branch's configured scan networks.
+    if (isVirtualHostInterface(interfaceName)) continue;
     if (!addrs) continue;
     for (const addr of addrs) {
       if (addr.family !== "IPv4" || addr.internal || !isPrivateCameraNetwork(addr.address)) continue;
@@ -85,6 +91,11 @@ export function inferLocalCidrs(ifaces = os.networkInterfaces()): string[] {
     }
   }
   return [...new Set(cidrs)];
+}
+
+function isVirtualHostInterface(interfaceName: string) {
+  return /(?:^|[\s(])(?:vEthernet|WSL|Hyper-V|Docker|container|VMware|VirtualBox|Tailscale|ZeroTier|Loopback|Npcap)(?:[\s)]|$)/i
+    .test(interfaceName);
 }
 
 export function ipsFromCidr(cidr: string): string[] {
