@@ -10,6 +10,9 @@ test-results/
 playwright-report/
 *.tsbuildinfo
 *.log
+.scanner-runtime/*secrets*.json
+.scanner-runtime/*.enc
+.scanner-runtime/*.key
 test/hdd-health/config.json
 test/hdd-health/reports/
 test/internet-health/evidence*.json
