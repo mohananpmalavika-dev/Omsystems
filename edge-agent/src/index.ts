@@ -15,7 +15,7 @@ import { looksLikeRecorder, probeRecorder, recorderPlaybackUri } from "./monitor
 import { initializeCameraHeartbeat } from "./monitoring/camera-heartbeat.js";
 import { hasArgument, prepareEdgeRuntime } from "./runtime.js";
 import { logger } from "./utils/logger.js";
-import { startEdgeMediaRuntime, type EdgeMediaRuntime } from "./streaming/edge-live-gateway.js";
+import { startEdgeMediaRuntime, startEdgeMediaRuntimeIfAvailable, type EdgeMediaRuntime } from "./streaming/edge-live-gateway.js";
 import { inspectBundledWindowsRuntime, launchWindowsSelfInstaller } from "./windows/self-installer.js";
 import { DeviceIdentityStore } from "./security/device-identity.js";
 import { EncryptedOutbox } from "./offline/encrypted-outbox.js";
@@ -183,7 +183,7 @@ if (scanOnce) {
   process.exit(0);
 }
 if (config.LIVE_MEDIA_ENABLED) {
-  edgeMediaRuntime = await startEdgeMediaRuntime({ config, gateway: control, agentId, secrets });
+  edgeMediaRuntime = await startEdgeMediaRuntimeIfAvailable({ config, gateway: control, agentId, secrets });
 }
 const cameraHeartbeat = initializeCameraHeartbeat(
   config.CONTROL_PLANE_URL,

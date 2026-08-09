@@ -1,9 +1,20 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { buildEdgeLiveGateway, type EdgeLiveGateway } from "../src/streaming/edge-live-gateway.js";
+import {
+  buildEdgeLiveGateway,
+  startEdgeMediaRuntimeIfAvailable,
+  type EdgeLiveGateway,
+} from "../src/streaming/edge-live-gateway.js";
 
 describe("all-in-one edge live gateway", () => {
   let app: EdgeLiveGateway | undefined;
   afterEach(async () => { await app?.close(); app = undefined; });
+
+  it("keeps discovery available when optional live media cannot start", async () => {
+    const runtime = await startEdgeMediaRuntimeIfAvailable({} as never, async () => {
+      throw new Error("public media tunnel unavailable");
+    });
+    expect(runtime).toBeUndefined();
+  });
 
   it("authorizes a dashboard session and creates a path from the branch-local secret", async () => {
     const paths: Array<{ path: string; source: string }> = [];

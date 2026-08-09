@@ -22,6 +22,13 @@ export interface EdgeMediaRuntime {
   stop(): Promise<void>;
 }
 
+export interface EdgeMediaRuntimeInput {
+  config: EdgeConfig;
+  gateway: GatewayClient;
+  agentId: string;
+  secrets: LocalStreamSecretStore;
+}
+
 interface LiveGatewayOptions {
   consumer: LiveSessionConsumer;
   router: MediaRouter;
@@ -141,12 +148,21 @@ export function buildEdgeLiveGateway(options: LiveGatewayOptions) {
   return new EdgeLiveGateway(options);
 }
 
-export async function startEdgeMediaRuntime(input: {
-  config: EdgeConfig;
-  gateway: GatewayClient;
-  agentId: string;
-  secrets: LocalStreamSecretStore;
-}): Promise<EdgeMediaRuntime> {
+export async function startEdgeMediaRuntimeIfAvailable(
+  input: EdgeMediaRuntimeInput,
+  start: (input: EdgeMediaRuntimeInput) => Promise<EdgeMediaRuntime> = startEdgeMediaRuntime,
+): Promise<EdgeMediaRuntime | undefined> {
+  try {
+    return await start(input);
+  } catch (error) {
+    logger.warn("Live media runtime unavailable; camera discovery and monitoring will continue", {
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return undefined;
+  }
+}
+
+export async function startEdgeMediaRuntime(input: EdgeMediaRuntimeInput): Promise<EdgeMediaRuntime> {
   const { config } = input;
   const runtimeDirectory = join(process.env.EDGE_AGENT_HOME ?? process.cwd(), "runtime");
   await mkdir(runtimeDirectory, { recursive: true });
