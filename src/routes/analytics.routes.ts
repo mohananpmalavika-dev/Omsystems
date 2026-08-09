@@ -318,10 +318,23 @@ export async function registerAnalyticsRoutes(
       request.currentUser.tenantId,
       { ...query, limit: Math.min(1_000, query.limit * 5) },
     );
+    
+    // Batch fetch all cameras to avoid N+1 queries
+    const cameraIds = [...new Set(candidates.map((alert) => alert.cameraId))];
+    const cameras = await store.listCamerasByIds(cameraIds);
+    const camerasById = new Map(cameras.map((camera) => [camera.id, camera]));
+
+    // Build access map by checking permissions for each camera
+    const accessMap = new Map<string, boolean>();
+    for (const camera of cameras) {
+      const hasAccess = await hasCameraAccess(request, store, camera, "analytics:view");
+      accessMap.set(camera.id, hasAccess);
+    }
+
     const data: AnalyticsAlert[] = [];
     for (const alert of candidates) {
-      const camera = await store.getCamera(alert.cameraId);
-      if (camera && await hasCameraAccess(request, store, camera, "analytics:view")) {
+      const camera = camerasById.get(alert.cameraId);
+      if (camera && accessMap.get(alert.cameraId)) {
         data.push(alert);
         if (data.length >= query.limit) break;
       }

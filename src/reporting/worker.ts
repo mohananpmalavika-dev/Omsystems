@@ -88,7 +88,29 @@ export class OperationalReportWorker {
 export async function buildDailyOperationalReport(store:ControlPlaneStore,user:NonNullable<Awaited<ReturnType<ControlPlaneStore["getUser"]>>>,filters:OperationalReportRun["filters"]):Promise<DailyOperationalReport>{
   const to=filters.to??new Date().toISOString();const from=filters.from??new Date(Date.parse(to)-86_400_000).toISOString();let branches=await store.listAccessibleNodes(user,"live:view","branch");
   if(filters.branchId)branches=branches.filter((item)=>item.id===filters.branchId);
-  const regionByBranch=new Map<string,string>();for(const branch of branches){const regionId=[...branch.path].reverse().find((id)=>id!==branch.id);let region="Unassigned";for(const id of [...branch.path].reverse()){const node=await store.getNode(id);if(node?.type==="region"){region=node.name;break;}}regionByBranch.set(branch.id,region);}
+  
+  // Batch fetch all nodes to avoid N+1 queries
+  const allNodeIds = new Set<string>();
+  for (const branch of branches) {
+    for (const id of branch.path) {
+      allNodeIds.add(id);
+    }
+  }
+  const allNodes = await store.listNodesByIds([...allNodeIds]);
+  const nodesById = new Map(allNodes.map((node) => [node.id, node]));
+  
+  const regionByBranch = new Map<string, string>();
+  for (const branch of branches) {
+    let region = "Unassigned";
+    for (const id of [...branch.path].reverse()) {
+      const node = nodesById.get(id);
+      if (node?.type === "region") {
+        region = node.name;
+        break;
+      }
+    }
+    regionByBranch.set(branch.id, region);
+  }
   if(filters.region)branches=branches.filter((item)=>regionByBranch.get(item.id)===filters.region);
   const telemetry=await store.listLatestOperationalTelemetry(user.tenantId,branches.map((item)=>item.id));const projections=[];
   const branchInputs=await Promise.all(branches.map(async(branch)=>{const cameras=await store.listCamerasByBranch(user,branch.id,"live:view");const policy=await store.getOperationalHealthPolicy(user.tenantId,branch.id)??await store.getOperationalHealthPolicy(user.tenantId)??defaultOperationalHealthPolicy;return{branch,cameras,policy};}));

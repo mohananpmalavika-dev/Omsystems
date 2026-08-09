@@ -258,6 +258,7 @@ export function GlobalAlertCenter() {
     ? dashboardEvidenceUrl(current.snapshotReference) : undefined;
   const clipUrl = current?.clipReference
     ? dashboardEvidenceUrl(current.clipReference) : undefined;
+  const evidenceInProgress = evidenceStatus && (evidenceStatus.state === "queued" || evidenceStatus.state === "capturing");
 
   if (!enabledForRoute) return null;
 
@@ -319,7 +320,7 @@ function QueueHeader({ count, close }: { count: number; close?: () => void }) {
 }
 
 function QueueList({ alerts, selectedId, choose }: { alerts: CommandAlert[]; selectedId?: string; choose: (alert: CommandAlert) => void }) {
-  return <div className="max-h-[65vh] overflow-y-auto p-2">{alerts.length === 0 ? <p className="p-6 text-center text-sm text-gray-500">No active dashboard alerts.</p> : alerts.map((alert) => <button type="button" key={alert.id} onClick={() => choose(alert)} className={`mb-2 flex w-full items-start gap-2 rounded-lg border p-2.5 text-left ${selectedId === alert.id ? "border-blue-400 bg-blue-50" : "bg-white hover:bg-gray-50"}`}><Priority value={alert.severity}/><span className="min-w-0 flex-1"><strong className="block truncate text-xs">{alert.title}</strong><span className="block truncate text-[11px] text-gray-500">{alert.branchName} · {alert.cameraName}</span><span className="text-[10px] text-gray-400">{new Date(alert.lastDetectedAt).toLocaleTimeString()} · {alert.status.replaceAll("_", " ")}</span></span><ChevronRight size={14} className="mt-1 text-gray-400"/></button>)}</div>;
+  return <div className="max-h-[65vh] overflow-y-auto p-2">{alerts.length === 0 ? <p className="p-6 text-center text-sm text-gray-500">No active dashboard alerts.</p> : alerts.map((alert) => <button type="button" key={alert.id} onClick={() => choose(alert)} className={`mb-2 flex w-full items-start gap-2 rounded-lg border p-2.5 text-left ${selectedId === alert.id ? "border-blue-400 bg-blue-50" : "bg-white hover:bg-gray-50"}`}><Priority value={alert.severity}/><span className="min-w-0 flex-1"><strong className="block truncate text-xs">{alert.title}</strong><span className="block truncate text-[11px] text-gray-500">{alert.branchName} · {alert.cameraName}{(alert.snapshotReference || alert.clipReference) ? <span className="ml-2 inline-block rounded-full bg-gray-100 px-2 py-0.5 text-[10px] text-gray-600">evidence</span> : null}</span><span className="text-[10px] text-gray-400">{new Date(alert.lastDetectedAt).toLocaleTimeString()} · {alert.status.replaceAll("_", " ")}</span></span><ChevronRight size={14} className="mt-1 text-gray-400"/></button>)}</div>;
 }
 
 function EvidenceTab({ active, disabled = false, onClick, children }: { active: boolean; disabled?: boolean; onClick: () => void; children: React.ReactNode }) {

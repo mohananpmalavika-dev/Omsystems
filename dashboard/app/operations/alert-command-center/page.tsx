@@ -164,6 +164,9 @@ function AlertDetail({ alert, session, busy, startLive, act }: { alert?: Command
         : snapshotReady && snapshotUrl ? <img src={snapshotUrl} alt="Alert snapshot" className="w-full h-full object-contain"/>
         : <button className="text-white flex gap-2" disabled={busy} onClick={() => void startLive(alert)}><Radio/>Open live video</button>}
     </div>
+    {evidenceStatus && (evidenceStatus.state === "queued" || evidenceStatus.state === "capturing") && (
+      <div role="status" className="flex items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-800">Automatically capturing snapshot and video clip…</div>
+    )}
     <div className="flex flex-wrap gap-2">
       {!terminal(alert.status) && <><button disabled={busy} className="btn-primary flex gap-1" onClick={() => void act(alert, "acknowledge")}><Check size={15}/>Acknowledge</button><button disabled={busy} className="btn-secondary flex gap-1" onClick={() => void act(alert, "assign")}><UserCheck size={15}/>Assign to me</button><button disabled={busy} className="btn-secondary flex gap-1" onClick={() => void act(alert, "escalate")}><Siren size={15}/>Escalate</button></>}
       {!session && <button className="btn-secondary flex gap-1" onClick={() => void startLive(alert)}><Radio size={15}/>Live</button>}

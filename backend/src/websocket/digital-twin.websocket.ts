@@ -1,29 +1,36 @@
 /**
  * Digital Twin WebSocket Handler
  * Real-time updates for floor plan visualization
+ * 
+ * UPDATED: Supports distributed events for horizontal scaling
  */
 
 import { Server as SocketIOServer, Socket } from 'socket.io';
 import digitalTwinEventMapper from '../services/digital-twin-event-mapper.service';
+import { getDistributedEventBus } from '../services/distributed-event-bus.service';
 import { DigitalTwinRealtimeEvent } from '../types/digital-twin';
 
 export class DigitalTwinWebSocket {
   private io: SocketIOServer;
+  private useDistributed: boolean;
 
   constructor(io: SocketIOServer) {
     this.io = io;
+    this.useDistributed = process.env.DISTRIBUTED_EVENTS === 'true';
     this.initializeEventListeners();
   }
 
   private initializeEventListeners() {
-    // Listen to Digital Twin events
-    digitalTwinEventMapper.on('digital-twin:event', (event: DigitalTwinRealtimeEvent) => {
-      this.broadcastFloorEvent(event);
-    });
+    if (this.useDistributed) {
+      // Subscribe to distributed Redis events
+      this.setupDistributedEventListeners();
+    } else {
+      // Subscribe to local in-memory events
+      this.setupLocalEventListeners();
+    }
 
     // Setup Socket.IO namespace for Digital Twin
     const digitalTwinNamespace = this.io.of('/digital-twin');
-
     digitalTwinNamespace.on('connection', (socket: Socket) => {
       console.log(`Digital Twin client connected: ${socket.id}`);
 
@@ -66,6 +73,34 @@ export class DigitalTwinWebSocket {
       socket.on('disconnect', () => {
         console.log(`Digital Twin client disconnected: ${socket.id}`);
       });
+    });
+  }
+
+  /**
+   * Setup distributed event listeners (Redis pub/sub)
+   */
+  private async setupDistributedEventListeners() {
+    try {
+      const eventBus = getDistributedEventBus();
+      
+      await eventBus.subscribe('digital-twin:event', (event: DigitalTwinRealtimeEvent) => {
+        this.broadcastFloorEvent(event);
+      });
+
+      console.log('[DigitalTwinWebSocket] Subscribed to distributed digital-twin:event');
+    } catch (error) {
+      console.error('[DigitalTwinWebSocket] Failed to setup distributed listeners:', error);
+      // Fallback to local
+      this.setupLocalEventListeners();
+    }
+  }
+
+  /**
+   * Setup local event listeners (in-memory EventEmitter)
+   */
+  private setupLocalEventListeners() {
+    digitalTwinEventMapper.on('digital-twin:event', (event: DigitalTwinRealtimeEvent) => {
+      this.broadcastFloorEvent(event);
     });
   }
 

@@ -1,11 +1,14 @@
 /**
  * Digital Twin Event Mapper Service
  * Maps camera, sensor, and door events to spatial alerts on floor plans
+ * 
+ * UPDATED: Now uses DistributedEventBus for horizontal scaling
  */
 
 import { EventEmitter } from 'events';
 import spatialAlertService from './spatial-alert.service';
 import deviceBindingService from './device-binding.service';
+import { getDistributedEventBus } from './distributed-event-bus.service';
 import {
   AlertType,
   AlertSeverity,
@@ -16,8 +19,12 @@ import {
 } from '../types/digital-twin';
 
 export class DigitalTwinEventMapper extends EventEmitter {
+  private useDistributed: boolean;
+
   constructor() {
     super();
+    // Check if distributed event bus is enabled
+    this.useDistributed = process.env.DISTRIBUTED_EVENTS === 'true';
     this.initializeEventListeners();
   }
 
@@ -341,8 +348,18 @@ export class DigitalTwinEventMapper extends EventEmitter {
   }
 
   private broadcastEvent(event: DigitalTwinRealtimeEvent) {
-    // Emit to WebSocket handler
-    this.emit('digital-twin:event', event);
+    if (this.useDistributed) {
+      // Publish to Redis for all servers to receive
+      const eventBus = getDistributedEventBus();
+      eventBus.publish('digital-twin:event', event).catch((error) => {
+        console.error('[DigitalTwinEventMapper] Failed to publish event:', error);
+        // Fallback to local emit
+        this.emit('digital-twin:event', event);
+      });
+    } else {
+      // Local-only for single-server deployment
+      this.emit('digital-twin:event', event);
+    }
   }
 
   // Integrate with existing camera health monitoring

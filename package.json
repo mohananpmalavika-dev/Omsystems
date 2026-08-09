@@ -7,7 +7,8 @@
     "edge-agent",
     "media-gateway",
     "recording-engine",
-    "analytics-engine"
+    "analytics-engine",
+    "packages/*"
   ],
   "description": "Hybrid CCTV control plane for multi-branch organizations",
   "type": "module",
