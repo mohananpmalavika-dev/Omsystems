@@ -47,6 +47,13 @@ async function proxyControlRequest(request: NextRequest, context: RouteContext) 
   } else if (employeeSession) {
     headers.set("authorization", `Bearer ${employeeSession}`);
   } else {
+    // Render's optional dashboard Basic Auth also arrives in this header. It
+    // authenticates the browser to Next.js, not the employee to the control
+    // plane, and forwarding it makes the upstream reject an otherwise valid
+    // development-identity request with 401.
+    if (headers.get("authorization")?.toLowerCase().startsWith("basic ")) {
+      headers.delete("authorization");
+    }
     headers.set(
       "x-user-id",
       runtimeEnv("DASHBOARD_DEV_USER_ID", "user-global-admin"),

@@ -424,6 +424,13 @@ export async function discoverRtspDevices(
           { layer: "fingerprint", status: channelFingerprint ? "passed" : "failed", detail: channelFingerprint ? "MAC and recorder channel fingerprint created" : "No stable Layer-2 identifier was available" },
         ],
       });
+      logger.info("RTSP recorder channel submitted", {
+        ipAddress: ip,
+        recorderChannel: channel.sourceChannel,
+        discoveryId: discovery.id,
+        status: discovery.status,
+        duplicateStatus: discovery.duplicateStatus,
+      });
       submittedCount += 1;
       if (persistStreamSecrets && secretsStore) {
         await secretsStore.set(`edge://${agentId}/${discovery.id}`, channel.uri);

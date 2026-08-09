@@ -10,6 +10,7 @@ import { z } from 'zod';
 import { IntegrationManager } from '../integrations/integration-manager.js';
 import { getConnectorMetadata } from '../integrations/connectors/index.js';
 import type { ControlPlaneStore } from '../control-plane-store.js';
+import type { Pool } from 'pg';
 
 const createIntegrationSchema = z.object({
   name: z.string().min(1).max(255),
@@ -47,10 +48,23 @@ export async function registerIntegrationRoutes(
   app: FastifyInstance,
   store: ControlPlaneStore
 ) {
-  const integrationManager = new IntegrationManager((store as any).pool);
+  const pool = ((store as any).db ?? (store as any).pool) as Pool | undefined;
+  if (!pool || typeof pool.query !== 'function') {
+    app.log.warn('Integration routes require PostgreSQL and were not registered');
+    return;
+  }
+
+  const integrationManager = new IntegrationManager(pool);
 
   // Initialize all active integrations on startup
-  await integrationManager.initializeAllIntegrations();
+  try {
+    await integrationManager.initializeAllIntegrations();
+  } catch (error) {
+    // Route availability must not depend on connector initialization. Individual
+    // API calls will still surface database problems, while the catalog remains
+    // available for diagnosis and setup.
+    app.log.error({ error }, 'Failed to initialize active integrations');
+  }
 
   /**
    * List available connector types (marketplace)
@@ -298,7 +312,7 @@ export async function registerIntegrationRoutes(
       ORDER BY health_status DESC, name
     `;
     
-    const result = await (store as any).pool.query(query, [request.currentUser.tenantId]);
+    const result = await pool.query(query, [request.currentUser.tenantId]);
     
     return {
       data: result.rows,
@@ -338,7 +352,7 @@ export async function registerIntegrationRoutes(
         LIMIT $2 OFFSET $3
       `;
       
-      const result = await (store as any).pool.query(query, [
+      const result = await pool.query(query, [
         request.params.id,
         limit,
         offset

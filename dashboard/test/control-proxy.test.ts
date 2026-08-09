@@ -63,6 +63,26 @@ describe("dashboard control-plane BFF", () => {
     );
   });
 
+  it("does not forward dashboard Basic Auth as control-plane authentication", async () => {
+    process.env.DASHBOARD_DEV_USER_ID = "user-global-admin";
+    const upstream = vi.fn(async (
+      _input: RequestInfo | URL,
+      _init?: RequestInit,
+    ) => Response.json({ data: [] }));
+    vi.stubGlobal("fetch", upstream);
+
+    await GET(
+      new NextRequest("https://sentinel.example/api/control/v1/integrations", {
+        headers: { authorization: "Basic dashboard-credentials" },
+      }),
+      { params: Promise.resolve({ path: ["v1", "integrations"] }) },
+    );
+
+    const headers = new Headers(upstream.mock.calls[0]?.[1]?.headers);
+    expect(headers.has("authorization")).toBe(false);
+    expect(headers.get("x-user-id")).toBe("user-global-admin");
+  });
+
   it("forwards gateway credentials without injecting an employee identity", async () => {
     process.env.CONTROL_PLANE_INTERNAL_URL = "http://control.internal:8080";
     process.env.EDGE_BRIDGE_SHARED_KEY = "bridge-secret";

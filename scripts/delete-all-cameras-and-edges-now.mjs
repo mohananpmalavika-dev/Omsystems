@@ -1,16 +1,11 @@
 /**
- * Delete All Cameras and Branch Edges Script (ES Module)
+ * Delete All Cameras and Branch Edges Script (Non-Interactive)
  * 
- * This script removes all cameras and edge agents (branch edges) from the database.
- * 
- * Usage:
- *   node scripts/delete-all-cameras-and-edges.mjs
- * 
- * WARNING: This operation cannot be undone!
+ * This script immediately removes all cameras and edge agents without confirmation.
+ * Use with extreme caution!
  */
 
 import pg from "pg";
-import readline from "readline";
 
 const { Pool } = pg;
 
@@ -29,28 +24,6 @@ const pool = new Pool({
     ? { rejectUnauthorized: false } 
     : false,
 });
-
-/**
- * Prompt user for confirmation
- */
-async function confirmDeletion() {
-  const rl = readline.createInterface({
-    input: process.stdin,
-    output: process.stdout,
-  });
-
-  return new Promise((resolve) => {
-    rl.question(
-      '\n⚠️  WARNING: This will DELETE ALL cameras and edge agents from the database!\n' +
-      'This action CANNOT be undone!\n\n' +
-      'Type "DELETE ALL" to confirm: ',
-      (answer) => {
-        rl.close();
-        resolve(answer.trim() === "DELETE ALL");
-      }
-    );
-  });
-}
 
 /**
  * Get current counts before deletion
@@ -233,7 +206,7 @@ async function deleteAllCamerasAndEdges() {
  */
 async function main() {
   console.log("=".repeat(70));
-  console.log("  DELETE ALL CAMERAS AND BRANCH EDGES");
+  console.log("  DELETE ALL CAMERAS AND BRANCH EDGES (NO CONFIRMATION)");
   console.log("=".repeat(70));
 
   try {
@@ -252,13 +225,7 @@ async function main() {
     console.log(`   Edge Commands: ${currentCounts.edgeCommands || 0}`);
     console.log(`   Edge Scan Jobs: ${currentCounts.edgeScanJobs || 0}`);
 
-    // Confirm deletion
-    const confirmed = await confirmDeletion();
-    
-    if (!confirmed) {
-      console.log("\n❌ Deletion cancelled by user");
-      process.exit(0);
-    }
+    console.log("\n⚠️  Proceeding with deletion WITHOUT confirmation...\n");
 
     // Perform deletion
     const stats = await deleteAllCamerasAndEdges();

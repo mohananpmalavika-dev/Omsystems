@@ -230,7 +230,7 @@ async function deleteAllCamerasAndEdges(): Promise<DeletionStats> {
     console.log(`   ✅ Deleted ${stats.edgeScanJobs} edge scan jobs`);
 
     console.log("📌 Step 14: Deleting edge managed tunnels...");
-    const tunnels = await client.query("DELETE FROM edge_managed_tunnels RETURNING id");
+    const tunnels = await client.query("DELETE FROM edge_managed_tunnels RETURNING branch_node_id");
     stats.edgeManagedTunnels = tunnels.rowCount || 0;
     console.log(`   ✅ Deleted ${stats.edgeManagedTunnels} edge managed tunnels`);
 

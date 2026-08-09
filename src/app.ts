@@ -67,6 +67,7 @@ import { registerDigitalTwinRoutes } from "./routes/digital-twin.routes.js";
 import { registerOperationalReportRoutes } from "./routes/operational-reports.routes.js";
 import { registerFederationRoutes } from "./routes/federation.routes.js";
 import { registerEmployeeActivityTrackingRoutes } from "./routes/employee-activity-tracking.routes.js";
+import { registerIntegrationRoutes } from "./routes/integrations.routes.js";
 import { autoProvisionVerifiedCameras } from "./services/camera-auto-provision.js";
 import {
   EmptyFederationLocalSearchProvider,
@@ -1980,6 +1981,7 @@ export async function buildApp(options?: {
     alertDispatcher,
   });
   await registerAnalyticsPhase2Routes(app, store);
+  await registerIntegrationRoutes(app, store);
   await adminCameraManagementRoutes(app, store);
   await registerAlertCommandCenterRoutes(app, store, alertDispatcher,
     options?.alertWorkerKey ?? process.env.ALERT_WORKER_SHARED_KEY, voiceTokens,
