@@ -514,7 +514,13 @@ export class AIIncidentSummaryService {
     alerts: AnalyticsAlert[],
     factors: ReturnType<typeof this.analyzeCorrelationFactors>
   ): number {
-    let confidence = 0.5; // Base confidence
+    // Start from 0 and build confidence based on actual correlation factors
+    let confidence = 0;
+
+    // Minimum baseline for having multiple alerts
+    if (alerts.length >= 2) {
+      confidence = 0.2; // Base confidence for having correlated alerts
+    }
 
     if (factors.timeBased) confidence += 0.15;
     if (factors.locationBased) confidence += 0.15;

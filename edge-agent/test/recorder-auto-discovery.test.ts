@@ -81,7 +81,7 @@ describe("automatic RTSP recorder discovery", () => {
   });
 
   it("reports the identified CP PLUS DVR when its login is rejected", () => {
-    expect(buildUnverifiedRtspDiscoveryPayload({
+    const payload = buildUnverifiedRtspDiscoveryPayload({
       agentId: "edge-1",
       ipAddress: "192.168.29.171",
       macAddress: "00:11:22:33:44:55",
@@ -96,7 +96,9 @@ describe("automatic RTSP recorder discovery", () => {
           sourceType: "analog-dvr-channel",
         },
       },
-    })).toMatchObject({
+    });
+
+    expect(payload).toMatchObject({
       vendor: "cp-plus",
       manufacturer: "CP PLUS",
       model: "CPPLUS DVR - Web View",
@@ -105,7 +107,10 @@ describe("automatic RTSP recorder discovery", () => {
       credentialsRequired: true,
       streamVerified: false,
       statusReason: "recorder_credentials_required",
-      recorderId: "recorder-mac-001122334455",
+      discoveryMethod: "edge-agent-reported-inventory",
     });
+    expect(payload).not.toHaveProperty("recorderId");
+    expect(payload).not.toHaveProperty("hardwareId");
+    expect(payload).not.toHaveProperty("macAddress");
   });
 });

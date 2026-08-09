@@ -447,20 +447,17 @@ export function buildUnverifiedRtspDiscoveryPayload(input: {
   hardwareId?: string;
 }) {
   const recorder = input.endpoint.recorder;
-  const recorderIdentity = input.hardwareId ?? `${input.ipAddress}:${input.endpoint.port}`;
-  const recorderId = recorder
-    ? `recorder-${recorderIdentity}`.replace(/[^a-zA-Z0-9_.:-]/g, "-")
-    : undefined;
   return {
     edgeAgentId: input.agentId,
-    discoveryMethod: "rtsp-network-scan",
+    // Keep the unauthenticated placeholder compatible with older control
+    // planes and IP-only identities. Recorder/channel identities are created
+    // only after the operator supplies valid credentials and the streams can
+    // be enumerated.
+    discoveryMethod: "edge-agent-reported-inventory",
     vendor: recorderVendor(recorder?.vendor),
     manufacturer: recorder?.manufacturer ?? "Unknown",
     model: recorder?.model ?? "RTSP device",
     ipAddress: input.ipAddress,
-    ...(input.macAddress ? { macAddress: input.macAddress } : {}),
-    ...(input.hardwareId ? { hardwareId: input.hardwareId } : {}),
-    ...(recorderId ? { recorderId, existingDeviceAssociation: recorderId } : {}),
     onvifPort: 80,
     rtspPort: input.endpoint.port,
     onvifSupport: false,
@@ -478,7 +475,6 @@ export function buildUnverifiedRtspDiscoveryPayload(input: {
       : "rtsp_stream_unverified",
     profiles: [{ name: "unverified", codec: "unknown", width: 1, height: 1 }],
     capabilities: { ptz: false, audio: false, events: false },
-    discoveryLayers: rtspDiscoveryLayers(false, Boolean(input.hardwareId), recorder),
   };
 }
 

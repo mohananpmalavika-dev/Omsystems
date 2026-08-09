@@ -174,7 +174,13 @@ Provide structured, actionable insights.`
   }
 
   private calculateConfidence(incidentData: IncidentData): number {
-    let confidence = 0.5; // Base confidence
+    // Start from 0 and build confidence based on actual data quality
+    let confidence = 0;
+
+    // Minimum baseline only if we have basic description
+    if (incidentData.description && incidentData.description.length > 20) {
+      confidence = 0.2; // Minimal baseline for having incident data
+    }
 
     // Increase confidence based on data completeness
     if (incidentData.description && incidentData.description.length > 50) {

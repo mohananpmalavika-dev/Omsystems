@@ -448,12 +448,17 @@ export class TamperDetectionService {
     evidenceUrls: string[]
   ): Promise<TamperAIAnalysis> {
     // In production: use ML model to analyze patterns
-    // For now, use rule-based classification
+    // For now, use rule-based classification with honest confidence scoring
 
     let intent: 'ACCIDENTAL' | 'INTENTIONAL' = 'ACCIDENTAL';
-    let confidence = 0.5;
+    let confidence = 0; // Start from 0, build confidence based on actual evidence
     const patterns: string[] = [];
     const recommendations: string[] = [];
+
+    // Base confidence from having tamper detection at all
+    if (description && description.length > 10) {
+      confidence = 0.3; // Base confidence from having description
+    }
 
     // Critical tampers are usually intentional
     if ([

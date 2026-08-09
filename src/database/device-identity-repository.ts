@@ -195,7 +195,12 @@ export class DeviceIdentityRepository {
         [tenantId, claims.map((claim) => claim.type), claims.map((claim) => claim.value)],
       );
       match = result.rows[0];
-    } else if (observation.ipAddress) {
+    }
+    // A previous scan may have created an IP-only identity before the scanner
+    // learned a MAC address or hardware fingerprint. Enrich that identity
+    // instead of creating a second identity that collides with the existing
+    // camera-discovery source slot.
+    if (!match && observation.ipAddress) {
       const result = await client.query<{ id: string; camera_id: string | null }>(
         `SELECT id::text, camera_id::text
          FROM device_identities
