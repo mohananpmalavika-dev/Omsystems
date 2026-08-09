@@ -15,7 +15,12 @@ import { looksLikeRecorder, probeRecorder, recorderPlaybackUri } from "./monitor
 import { initializeCameraHeartbeat } from "./monitoring/camera-heartbeat.js";
 import { hasArgument, prepareEdgeRuntime } from "./runtime.js";
 import { logger } from "./utils/logger.js";
-import { startEdgeMediaRuntime, startEdgeMediaRuntimeIfAvailable, type EdgeMediaRuntime } from "./streaming/edge-live-gateway.js";
+import {
+  resolvePrivateMediaGatewayUrl,
+  startEdgeMediaRuntime,
+  startEdgeMediaRuntimeIfAvailable,
+  type EdgeMediaRuntime,
+} from "./streaming/edge-live-gateway.js";
 import { inspectBundledWindowsRuntime, launchWindowsSelfInstaller } from "./windows/self-installer.js";
 import { DeviceIdentityStore } from "./security/device-identity.js";
 import { EncryptedOutbox } from "./offline/encrypted-outbox.js";
@@ -155,7 +160,10 @@ await credentialVault.load();
 
 const dbCredentialProvider = new DatabaseCredentialProvider(control, agentId);
 if (hasArgument(argv, "--diagnose")) {
-  await control.heartbeat(agentId, config.EDGE_AGENT_VERSION, config.PUBLIC_MEDIA_GATEWAY_URL);
+  const advertisedMediaUrl = config.LIVE_MEDIA_ENABLED
+    ? resolvePrivateMediaGatewayUrl(config.PUBLIC_MEDIA_GATEWAY_URL, config.EDGE_LIVE_GATEWAY_PORT)
+    : undefined;
+  await control.heartbeat(agentId, config.EDGE_AGENT_VERSION, advertisedMediaUrl);
   process.stdout.write(`Connected to ${config.CONTROL_PLANE_URL} as edge agent ${agentId}.\n`);
   process.exit(0);
 }
@@ -809,7 +817,7 @@ function delay(milliseconds: number) {
 
 async function heartbeatAndReport() {
   const startedAt = Date.now();
-  await control.heartbeat(agentId, config.EDGE_AGENT_VERSION, edgeMediaRuntime?.publicUrl ?? config.PUBLIC_MEDIA_GATEWAY_URL);
+  await control.heartbeat(agentId, config.EDGE_AGENT_VERSION, edgeMediaRuntime?.publicUrl);
   if (Date.now() - lastCameraConfigSyncAt >= config.CAMERA_CONFIG_REFRESH_MS) {
     await syncCameraHeartbeatConfig().catch((error) => {
       logger.error("Camera monitoring configuration refresh failed", { error: error instanceof Error ? error.message : String(error) });
@@ -843,7 +851,7 @@ async function heartbeatAndReport() {
         liveMediaEnabled: config.LIVE_MEDIA_ENABLED,
         mediaRuntimeReady: Boolean(edgeMediaRuntime),
         mediaTunnelMode: config.MEDIA_TUNNEL_MODE,
-        publicMediaUrl: edgeMediaRuntime?.publicUrl ?? config.PUBLIC_MEDIA_GATEWAY_URL ?? null,
+        publicMediaUrl: edgeMediaRuntime?.publicUrl ?? null,
         ...edgeResourceMetrics,
       },
       reasonCodes: edgeResourceReasonCodes,
