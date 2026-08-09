@@ -56,6 +56,13 @@ describe("all-in-one edge live gateway", () => {
     const address = await app.listen({ host: "127.0.0.1", port: 0 });
     const baseUrl = `http://127.0.0.1:${address.port}`;
 
+    const liveCors = await fetch(`${baseUrl}/v1/live/start`, {
+      method: "OPTIONS",
+      headers: { origin: "https://dashboard.example.com" },
+    });
+    expect(liveCors.status).toBe(204);
+    expect(liveCors.headers.get("access-control-allow-origin")).toBe("https://dashboard.example.com");
+
     const cors = await fetch(`${baseUrl}/hls/camera-camera-1/index.m3u8`, {
       method: "OPTIONS",
       headers: { origin: "https://dashboard.example.com" },

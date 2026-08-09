@@ -1,5 +1,6 @@
 import { demoBranches, demoCameras } from "./demo-data";
 import type { Branch, Camera, LiveSessionResponse, RecordingJob, RecordingSegment } from "./types";
+import { isBrowserDirectMediaUrl } from "./media-routing";
 
 export async function listBranches(employeeSession?: string): Promise<Branch[]> {
   if (isDemoMode()) return demoBranches;
@@ -28,7 +29,10 @@ export async function listCameras(
 export async function startLive(
   cameraId: string,
   employeeSession?: string,
-): Promise<LiveSessionResponse> {
+): Promise<LiveSessionResponse | {
+  cameraId: string;
+  direct: { url: string; controlPlaneToken: string };
+}> {
   if (isDemoMode()) return { demo: true, cameraId };
   const permission = await controlFetch(
     `/v1/cameras/${encodeURIComponent(cameraId)}/live-sessions`,
@@ -41,6 +45,15 @@ export async function startLive(
   };
   const mediaGatewayUrl = controlSession.mediaGatewayUrl ??
     runtimeEnv("MEDIA_GATEWAY_INTERNAL_URL", "http://localhost:8090");
+  if (controlSession.mediaGatewayUrl && isBrowserDirectMediaUrl(mediaGatewayUrl)) {
+    return {
+      cameraId,
+      direct: {
+        url: new URL("/v1/live/start", normalizeHttpOrigin(mediaGatewayUrl)).toString(),
+        controlPlaneToken: controlSession.token,
+      },
+    };
+  }
   const mediaResponse = await fetch(
     new URL(
       "/v1/live/start",

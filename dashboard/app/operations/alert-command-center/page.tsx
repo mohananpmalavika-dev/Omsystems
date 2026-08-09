@@ -11,6 +11,7 @@ import {
   type CommandAlert,
 } from "@/lib/alert-command-center";
 import { HlsPlayer } from "@/components/hls-player";
+import { startLiveFromBrowser } from "@/lib/live-client";
 
 export default function AlertCommandCenterPage() {
   const [alerts, setAlerts] = useState<CommandAlert[]>([]);
@@ -70,13 +71,7 @@ export default function AlertCommandCenterPage() {
   const startLive = async (alert: CommandAlert) => {
     setBusy(true);
     try {
-      const response = await fetch("/api/live", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ cameraId: alert.cameraId, profile: "sub" }),
-        credentials: "include",
-      });
-      if (response.ok) setSession(await response.json());
+      setSession(await startLiveFromBrowser(alert.cameraId, "sub"));
     } finally { setBusy(false); }
   };
 

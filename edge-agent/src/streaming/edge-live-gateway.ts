@@ -74,6 +74,10 @@ export class EdgeLiveGateway {
 
   private async handle(request: IncomingMessage, response: ServerResponse) {
     const url = new URL(request.url ?? "/", "http://edge.local");
+    if (url.pathname === "/v1/live/start") {
+      setCorsHeaders(request, response);
+      if (request.method === "OPTIONS") { response.writeHead(204).end(); return; }
+    }
     if (request.method === "GET" && url.pathname === "/health") {
       return sendJson(response, 200, { status: "ok", service: "sentinel-edge-media-gateway" });
     }
@@ -285,7 +289,10 @@ hls: yes
 hlsAddress: 127.0.0.1:8888
 hlsVariant: lowLatency
 hlsAllowOrigins: ['*']
+rtsp: no
+rtmp: no
 webrtc: no
+srt: no
 pathDefaults:
   sourceOnDemand: yes
   sourceOnDemandStartTimeout: 10s
@@ -375,4 +382,12 @@ function forwardMediaHeaders(headers: IncomingHttpHeaders) {
     const value = headers[name]; if (typeof value === "string") forwarded[name] = value;
   }
   return forwarded;
+}
+
+function setCorsHeaders(request: IncomingMessage, response: ServerResponse) {
+  const origin = typeof request.headers.origin === "string" ? request.headers.origin : "*";
+  response.setHeader("Access-Control-Allow-Origin", origin);
+  response.setHeader("Access-Control-Allow-Headers", "Content-Type");
+  response.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
+  response.setHeader("Vary", "Origin");
 }

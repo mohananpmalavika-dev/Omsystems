@@ -22,6 +22,7 @@ import {
   getDecoderCapacityOptions,
 } from "./enhanced-camera-grid-model";
 import type { Camera, LiveSessionResponse, RecordingJob, RecordingMode } from "@/lib/types";
+import { startLiveFromBrowser } from "@/lib/live-client";
 
 export type GridSize = "1x1" | "2x2" | "3x3" | "4x4" | "5x5" | "6x6" | "7x7" | "8x8" | "9x9" | "10x10" | "11x11" | "12x12";
 
@@ -321,20 +322,8 @@ export function EnhancedCameraGrid({
     setLoading((prev) => new Set(prev).add(cameraId));
 
     try {
-      const response = await fetch("/api/live", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ cameraId, profile: stream }),
-      });
-
-      if (response.ok) {
-        const session = await response.json();
-        setSessions((prev) => new Map(prev).set(cameraId, session));
-      } else {
-        const error = await response.json();
-        console.error("Failed to start live session:", error);
-      }
+      const session = await startLiveFromBrowser(cameraId, stream);
+      setSessions((prev) => new Map(prev).set(cameraId, session));
     } catch (error) {
       console.error("Live session error:", error);
     } finally {

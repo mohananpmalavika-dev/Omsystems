@@ -18,6 +18,7 @@ import {
 import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { LiveSessionResponse } from "@/lib/types";
+import { startLiveFromBrowser } from "@/lib/live-client";
 import {
   activeDashboardQueue,
   alertTonePattern,
@@ -172,14 +173,7 @@ export function GlobalAlertCenter() {
     setBusy(true);
     setError(undefined);
     try {
-      const response = await fetch("/api/live", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ cameraId: alert.cameraId, profile: "sub" }),
-        credentials: "include",
-      });
-      const body = await response.json() as LiveSessionResponse & { error?: string };
-      if (!response.ok) throw new Error(body.error ?? "live_session_unavailable");
+      const body = await startLiveFromBrowser(alert.cameraId, "sub");
       setSession(body);
     } catch {
       setError("Live video could not start. Captured evidence will be shown as soon as it is ready.");

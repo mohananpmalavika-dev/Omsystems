@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { HlsPlayer } from "@/components/hls-player";
 import type { LiveSessionResponse } from "@/lib/types";
+import { startLiveFromBrowser } from "@/lib/live-client";
 import type { BranchLive, FloorState, HeatmapType, InventoryItem, TimelineItem, TwinAlert, TwinObject, TwinViewMode } from "@/lib/types/digital-twin";
 
 const API = "/api/control/v1/digital-twin";
@@ -51,7 +52,7 @@ export default function OperationalTwin({ branchId, editor = false }: { branchId
   const mapClick=(event:React.MouseEvent)=>{if(!zoneMode||!mapRef.current)return;setZonePoints((items)=>[...items,mapPoint(event.clientX,event.clientY)]);};
   const saveZone=async()=>{if(!floorId||zonePoints.length<3)return;setBusy(true);try{await mutate(`${API}/zones`,{floorId,name:zoneName,zoneType:"restricted",vertices:zonePoints,fillColor:"#ef4444",fillOpacity:.18,strokeColor:"#ef4444",isRestricted:true,alertOnEntry:true,analyticsEnabled:true});setZoneMode(false);setZonePoints([]);await loadFloor(floorId);}catch(reason){setError(message(reason));}finally{setBusy(false);}};
   const acknowledge=async(alert:TwinAlert,resolve=false)=>{if(alert.id.startsWith("analytics:")){setError("Acknowledge this AI alert from the Alert Command Center.");return;}setBusy(true);try{await mutate(`${API}/alerts/${alert.id}/${resolve?"resolve":"acknowledge"}`,{floorId});await loadFloor(floorId!);}catch(reason){setError(message(reason));}finally{setBusy(false);}};
-  const startLive=async(object:TwinObject)=>{if(object.binding?.deviceType!=="camera")return;setBusy(true);try{const response=await fetch("/api/live",{method:"POST",headers:{"content-type":"application/json"},credentials:"include",body:JSON.stringify({cameraId:object.binding.deviceId,profile:"sub"})});setLiveSession(await json(response));}catch(reason){setError(message(reason));}finally{setBusy(false);}};
+  const startLive=async(object:TwinObject)=>{if(object.binding?.deviceType!=="camera")return;setBusy(true);try{setLiveSession(await startLiveFromBrowser(object.binding.deviceId,"sub"));}catch(reason){setError(message(reason));}finally{setBusy(false);}};
 
   if(loading)return <div className="grid min-h-[70vh] place-items-center"><Loader2 className="animate-spin text-cyan-500" size={40}/></div>;
   if(!live?.configured)return <div className="grid min-h-[70vh] place-items-center p-6"><div className="max-w-xl rounded-2xl border bg-white p-10 text-center shadow-sm"><Layers3 className="mx-auto text-cyan-600" size={54}/><h1 className="mt-4 text-2xl font-bold">Create branch Digital Twin</h1><p className="mt-2 text-sm text-gray-500">Initialize the branch, its building and Ground Floor. Device positions remain editable as floor-plan versions change.</p><button disabled={busy} onClick={bootstrap} className="btn-primary mt-6">{busy?"Creating…":"Initialize Digital Twin"}</button></div></div>;

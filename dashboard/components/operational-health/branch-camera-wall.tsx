@@ -19,6 +19,7 @@ import type { LiveSessionResponse } from "@/lib/types";
 import type { CameraHealth } from "@/lib/types/operational-health";
 import { HlsPlayer } from "@/components/hls-player";
 import { PtzControl } from "@/components/ptz-control";
+import { startLiveFromBrowser } from "@/lib/live-client";
 import {
   CAMERA_WALL_LAYOUTS,
   CAMERA_WALL_RENDER_BATCH_SIZE,
@@ -56,13 +57,7 @@ export function BranchCameraWall({ branchId, cameras }: { branchId: string; came
     setLoading((current) => new Set(current).add(cameraId));
     setErrors((current) => { const next = { ...current }; delete next[cameraId]; return next; });
     try {
-      const response = await fetch("/api/live", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ cameraId, profile: columns >= 4 || cameras.length > 16 ? "sub" : "main" }),
-      });
-      const body = await response.json() as LiveSessionResponse & { error?: string };
-      if (!response.ok) throw new Error(body.error ?? "live_session_unavailable");
+      const body = await startLiveFromBrowser(cameraId, columns >= 4 || cameras.length > 16 ? "sub" : "main");
       setSessions((current) => ({ ...current, [cameraId]: body }));
     } catch {
       setErrors((current) => ({ ...current, [cameraId]: "Live feed unavailable" }));

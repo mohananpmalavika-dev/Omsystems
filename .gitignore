@@ -13,6 +13,7 @@ playwright-report/
 .scanner-runtime/*secrets*.json
 .scanner-runtime/*.enc
 .scanner-runtime/*.key
+.scanner-runtime/*-agent-home/
 test/hdd-health/config.json
 test/hdd-health/reports/
 test/internet-health/evidence*.json
