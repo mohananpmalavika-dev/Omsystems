@@ -325,7 +325,7 @@ export async function discoverRtspDevices(
                   compatibility: probe.reachable ? "compatible" : "review-required",
                   duplicateStatus: "unique",
                   compatibilityStatus: probe.reachable ? "compatible" : "review-required",
-                  profiles: [{ name: "auto", codec: probe.codec ?? "unknown", width: probe.width ?? 1, height: probe.height ?? 1 }],
+                  profiles: [{ name: "auto", codec: normalizeRtspDiscoveryCodec(probe.codec), width: probe.width ?? 1, height: probe.height ?? 1 }],
                   capabilities: { ptz: false, audio: false, events: false },
                   discoveryLayers: rtspDiscoveryLayers(true, Boolean(hardwareId)),
                 };
@@ -401,7 +401,7 @@ export async function discoverRtspDevices(
         statusReason: "rtsp_recorder_channel_auto_discovered",
         profiles: [{
           name: channel.role,
-          codec: channel.probe.codec ?? "unknown",
+          codec: normalizeRtspDiscoveryCodec(channel.probe.codec),
           width: Math.max(1, channel.probe.width ?? 1),
           height: Math.max(1, channel.probe.height ?? 1),
           role: channel.role,
@@ -481,6 +481,16 @@ export function buildUnverifiedRtspDiscoveryPayload(input: {
 function recorderVendor(vendor: VendorStreamFamily | undefined): "hikvision" | "cp-plus" | "other" {
   if (vendor === "hikvision" || vendor === "cp-plus") return vendor;
   return "other";
+}
+
+export function normalizeRtspDiscoveryCodec(
+  value: string | null | undefined,
+): "H264" | "H265" | "MJPEG" | "unknown" {
+  const codec = value?.trim().replace(/[.\s_-]/g, "").toUpperCase();
+  if (codec === "H264" || codec === "AVC" || codec === "AVC1") return "H264";
+  if (codec === "H265" || codec === "HEVC" || codec === "HEV1" || codec === "HVC1") return "H265";
+  if (codec === "MJPEG" || codec === "MJPG" || codec === "JPEG") return "MJPEG";
+  return "unknown";
 }
 
 function rtspDiscoveryLayers(

@@ -41,11 +41,30 @@ export class CrowdDensityDetector extends BaseDetector {
   async initialize(): Promise<void> {
     console.log("Initializing crowd density detector...");
     
-    // TODO: Load person detection + counting model
-    // Can use standard person detector + density estimation networks
-    
-    this.isModelLoaded = true;
-    console.log("Crowd density detector initialized");
+    try {
+      // Verify person detection model is available through unified inference pipeline
+      const pipeline = await import('../inference/unified-inference-pipeline.js')
+        .then(m => m.getInferencePipeline());
+      
+      // Test detection to verify model is loaded
+      const testFrame: DetectionFrame = {
+        frameData: Buffer.alloc(100),
+        timestamp: new Date(),
+        cameraId: 'test',
+        frameIndex: 0,
+        width: 100,
+        height: 100,
+      };
+      
+      await pipeline.detectObjects(testFrame, ['person']);
+      
+      this.isModelLoaded = true;
+      console.log("Crowd density detector initialized - person detection model verified");
+    } catch (error) {
+      this.isModelLoaded = false;
+      console.error("Crowd density detector initialization failed - person detection model unavailable:", error);
+      throw new Error(`Crowd density detector requires person detection model: ${error}`);
+    }
   }
 
   /**
@@ -57,7 +76,17 @@ export class CrowdDensityDetector extends BaseDetector {
 
   async detect(frame: DetectionFrame): Promise<DetectionResult[]> {
     if (!this.isModelLoaded) {
-      return [];
+      return [{
+        detectionType: "crowd-density",
+        confidence: 0,
+        objects: [],
+        metadata: {
+          status: "MODEL_UNAVAILABLE",
+          error: "Person detection model not loaded",
+          reason: "Crowd density detection requires person detection model to be initialized",
+        },
+        requiresAlert: false,
+      }];
     }
 
     // Detect persons in frame
@@ -86,9 +115,11 @@ export class CrowdDensityDetector extends BaseDetector {
     );
 
     if (crowdedZones.length > 0) {
+      const confidence = this.calculateCrowdConfidence(crowdedZones, persons.length);
+      
       results.push({
         detectionType: "crowd-density",
-        confidence: 0.95,
+        confidence,
         objects: this.createCrowdObjects(persons, crowdedZones),
         metadata: {
           zones: crowdedZones.map(z => ({
@@ -100,6 +131,11 @@ export class CrowdDensityDetector extends BaseDetector {
           totalCount: measurements.reduce((sum, m) => sum + m.personCount, 0),
           bottlenecks: measurements.filter(m => m.isBottleneck).map(m => m.zoneId),
           trend: this.analyzeCrowdTrend(),
+          confidenceFactors: {
+            personDetectionQuality: persons.length > 0 ? 0.9 : 0.5,
+            severityLevel: crowdedZones.some(z => z.densityLevel === "dangerous") ? 1.0 : 0.8,
+            historicalConsistency: this.crowdHistory.length >= 5 ? 0.95 : 0.7,
+          },
         },
         requiresAlert: crowdedZones.some(z => z.densityLevel === "dangerous"),
       });
@@ -203,9 +239,72 @@ export class CrowdDensityDetector extends BaseDetector {
   private calculateAverageSpeed(persons: any[]): number {
     if (persons.length === 0) return 0;
 
-    // TODO: Implement using optical flow or track history
-    // For now, return placeholder
-    return 0.5;
+    // Calculate speed from track history if available
+    let totalSpeed = 0;
+    let countWithSpeed = 0;
+
+    for (const person of persons) {
+      if (person.trackId && person.velocity) {
+        const speed = Math.sqrt(
+          person.velocity.x ** 2 + person.velocity.y ** 2
+        );
+        totalSpeed += speed;
+        countWithSpeed++;
+      }
+    }
+
+    // If no tracking data available, return null to indicate unavailable
+    if (countWithSpeed === 0) {
+      return 0; // No movement data available
+    }
+
+    return totalSpeed / countWithSpeed;
+  }
+
+  /**
+   * Calculate crowd detection confidence based on evidence
+   */
+  private calculateCrowdConfidence(
+    crowdedZones: CrowdDensityMeasurement[],
+    totalPersons: number
+  ): number {
+    if (totalPersons === 0) return 0;
+
+    // Base confidence from person detection
+    let confidence = 0.85;
+
+    // Increase confidence with more severe crowding
+    const hasDangerous = crowdedZones.some(z => z.densityLevel === "dangerous");
+    const hasOvercrowded = crowdedZones.some(z => z.densityLevel === "overcrowded");
+    
+    if (hasDangerous) {
+      confidence = 0.95;
+    } else if (hasOvercrowded) {
+      confidence = 0.90;
+    }
+
+    // Increase confidence with historical consistency
+    if (this.crowdHistory.length >= 5) {
+      const recentCounts = this.crowdHistory.slice(-5).map(h =>
+        h.measurements.reduce((sum, m) => sum + m.personCount, 0)
+      );
+      const avgCount = recentCounts.reduce((a, b) => a + b, 0) / recentCounts.length;
+      const variance = recentCounts.reduce((sum, count) => 
+        sum + Math.abs(count - avgCount), 0
+      ) / recentCounts.length;
+      
+      // Low variance = consistent detection = higher confidence
+      if (variance < avgCount * 0.2) {
+        confidence = Math.min(confidence + 0.05, 0.98);
+      }
+    }
+
+    // Reduce confidence if person count is very low (might be false positive)
+    if (totalPersons < 3) {
+      confidence *= 0.8;
+    }
+
+    return Math.max(0, Math.min(confidence, 0.98));
   }
 
   /**
