@@ -3,6 +3,8 @@
  * Generate PDF and Excel exports of activity reports
  */
 
+import { trackUserAction } from '@/components/activity-monitor';
+
 interface ExportOptions {
   format: 'pdf' | 'excel' | 'csv';
   filename?: string;
@@ -28,6 +30,18 @@ interface ReportData {
  * Export report as CSV
  */
 export function exportReportAsCSV(data: ReportData, filename?: string): void {
+  // Track export action
+  trackUserAction('export', 'export', 'activity_report', {
+    actionTarget: 'employee_activity_report',
+    actionDescription: 'Exported employee activity report as CSV',
+    featureName: 'report_export',
+    actionMetadata: {
+      format: 'csv',
+      userId: data.user.username,
+      reportPeriod: `${data.period.startDate} to ${data.period.endDate}`,
+    },
+  });
+  
   const csvRows: string[] = [];
   
   // Header
@@ -104,6 +118,18 @@ export function exportReportAsExcel(data: ReportData, filename?: string): void {
  * Generate and download PDF report
  */
 export function exportReportAsPDF(data: ReportData, filename?: string): void {
+  // Track export action
+  trackUserAction('export', 'export', 'activity_report', {
+    actionTarget: 'employee_activity_report',
+    actionDescription: 'Exported employee activity report as PDF',
+    featureName: 'report_export',
+    actionMetadata: {
+      format: 'pdf',
+      userId: data.user.username,
+      reportPeriod: `${data.period.startDate} to ${data.period.endDate}`,
+    },
+  });
+  
   // Generate HTML content for PDF
   const htmlContent = generateReportHTML(data);
   

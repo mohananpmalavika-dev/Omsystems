@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import { PageHero } from "@/components/page-hero";
 import { exportReport } from "@/lib/export-report";
+import { useButtonTracking, useExportTracking, useFilterTracking } from "@/hooks/useActivityTracking";
 
 interface EmployeeActivityReportProps {
   apiBaseUrl?: string;
@@ -163,6 +164,11 @@ export function EmployeeActivityReport({
   const [usersLoading, setUsersLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [directoryNotice, setDirectoryNotice] = useState<string | null>(null);
+  
+  // Activity tracking
+  const trackButton = useButtonTracking('activity_report');
+  const trackExport = useExportTracking('activity_report');
+  const trackFilter = useFilterTracking('activity_report');
 
   const requestOptions = useMemo<RequestInit>(() => ({
     credentials: "include",
@@ -221,6 +227,24 @@ export function EmployeeActivityReport({
     if (nextPeriod === "custom") return;
     setStartDate(dateValue(nextPeriod === "seven-days" ? 7 : nextPeriod === "four-weeks" ? 28 : 90));
     setEndDate(dateValue());
+    
+    // Track filter change
+    trackFilter('report_period', nextPeriod);
+  };
+  
+  const handleUserChange = (userId: string) => {
+    setSelectedUserId(userId);
+    trackFilter('selected_user', userId || 'my_activity');
+  };
+  
+  const handleExport = (format: 'pdf' | 'excel' | 'csv') => {
+    if (!report) return;
+    
+    // Track export before exporting
+    const moduleCount = report.moduleUsage.length;
+    trackExport('employee_activity_report', moduleCount, format);
+    
+    exportReport(report, { format });
   };
 
   const formatDuration = (seconds: number) => {
@@ -247,17 +271,17 @@ export function EmployeeActivityReport({
       <section className="employee-report-controls">
         <div className="employee-report-filter-grid">
           {showAllUsers && (
-            <label><span>Employee</span><select value={selectedUserId} onChange={(event) => setSelectedUserId(event.target.value)} disabled={usersLoading}><option value="">My activity</option>{users.map((user) => <option key={user.id} value={user.id}>{user.display_name}</option>)}</select></label>
+            <label><span>Employee</span><select value={selectedUserId} onChange={(event) => handleUserChange(event.target.value)} disabled={usersLoading}><option value="">My activity</option>{users.map((user) => <option key={user.id} value={user.id}>{user.display_name}</option>)}</select></label>
           )}
           <label><span>Report window</span><select value={period} onChange={(event) => applyPeriod(event.target.value as ReportPeriod)}><option value="seven-days">Last 7 days</option><option value="four-weeks">Last 4 weeks</option><option value="quarter">Last 90 days</option><option value="custom">Custom range</option></select></label>
-          <label><span>Start date</span><input type="date" value={startDate} onChange={(event) => { setPeriod("custom"); setStartDate(event.target.value); }} /></label>
-          <label><span>End date</span><input type="date" value={endDate} onChange={(event) => { setPeriod("custom"); setEndDate(event.target.value); }} /></label>
+          <label><span>Start date</span><input type="date" value={startDate} onChange={(event) => { setPeriod("custom"); setStartDate(event.target.value); trackFilter('start_date', event.target.value); }} /></label>
+          <label><span>End date</span><input type="date" value={endDate} onChange={(event) => { setPeriod("custom"); setEndDate(event.target.value); trackFilter('end_date', event.target.value); }} /></label>
         </div>
         <div className="employee-report-control-actions">
-          <button type="button" className="employee-report-refresh" onClick={() => void fetchReport()} disabled={loading}><RefreshCw className={loading ? "spin" : ""} size={15} />Refresh</button>
-          <button type="button" onClick={() => report && exportReport(report, { format: "pdf" })} disabled={!report || loading}><FileText size={15} />PDF</button>
-          <button type="button" onClick={() => report && exportReport(report, { format: "excel" })} disabled={!report || loading}><FileSpreadsheet size={15} />Excel</button>
-          <button type="button" onClick={() => report && exportReport(report, { format: "csv" })} disabled={!report || loading}><Download size={15} />CSV</button>
+          <button type="button" className="employee-report-refresh" onClick={() => { trackButton('refresh_report'); void fetchReport(); }} disabled={loading}><RefreshCw className={loading ? "spin" : ""} size={15} />Refresh</button>
+          <button type="button" onClick={() => handleExport('pdf')} disabled={!report || loading}><FileText size={15} />PDF</button>
+          <button type="button" onClick={() => handleExport('excel')} disabled={!report || loading}><FileSpreadsheet size={15} />Excel</button>
+          <button type="button" onClick={() => handleExport('csv')} disabled={!report || loading}><Download size={15} />CSV</button>
         </div>
       </section>
 

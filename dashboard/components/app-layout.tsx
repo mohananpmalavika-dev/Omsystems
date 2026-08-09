@@ -34,6 +34,7 @@ import {
   Library,
   ListFilter,
   LockKeyhole,
+  LogOut,
   Menu,
   MonitorPlay,
   Network,
@@ -55,6 +56,7 @@ import {
   X,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import { logout } from "@/lib/auth-manager";
 
 interface AppLayoutProps {
   children: React.ReactNode;
@@ -352,11 +354,24 @@ export function AppLayout({ children, incidentCount = 0, cameraCount = 0 }: AppL
             <div><strong>Platform status</strong><span>Open infrastructure health</span></div>
             <ChevronRight size={15} />
           </Link>
-          <Link href="/account/security" className="sidebar-user" onClick={closeSidebar}>
-            <div className="avatar">SO</div>
-            <div><strong>Security operator</strong><span>Protected enterprise session</span></div>
-            <Settings size={16} />
-          </Link>
+          <div className="sidebar-user-menu">
+            <Link href="/account/security" className="sidebar-user" onClick={closeSidebar}>
+              <div className="avatar">SO</div>
+              <div><strong>Security operator</strong><span>Protected enterprise session</span></div>
+              <Settings size={16} />
+            </Link>
+            <button 
+              className="logout-button" 
+              onClick={() => {
+                closeSidebar();
+                logout();
+              }}
+              aria-label="Sign out"
+              title="Sign out"
+            >
+              <LogOut size={16} />
+            </button>
+          </div>
         </div>
       </aside>
 
