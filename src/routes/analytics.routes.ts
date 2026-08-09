@@ -216,8 +216,11 @@ export async function registerAnalyticsRoutes(
 
   app.post("/v1/branches/:branchId/analytics/enable-all-cameras", async (request, reply) => {
     const { branchId } = z.object({ branchId: z.string().min(1) }).parse(request.params);
-    const branch = await authorizedNode(request, reply, store, branchId, "analytics:configure");
-    if (!branch || branch.type !== "branch") return;
+    if (!await authorizedNode(request, reply, store, branchId, "analytics:configure")) return;
+    const branch = await store.getNode(branchId);
+    if (!branch || branch.type !== "branch") {
+      return reply.code(404).send({ error: "branch_not_found" });
+    }
     const cameras = await store.listCamerasByBranch(
       request.currentUser,
       branchId,

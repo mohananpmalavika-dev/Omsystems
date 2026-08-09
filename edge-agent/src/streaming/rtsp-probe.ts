@@ -165,18 +165,20 @@ export async function captureRtspRgbFrame(
   uri: string,
   ffmpegPath = "ffmpeg",
   timeoutMs = 10_000,
+  width = 64,
+  height = 36,
 ): Promise<Buffer | null> {
   const result = await runProcess(ffmpegPath, [
     "-v", "error",
     "-rtsp_transport", "tcp",
     "-i", uri,
     "-frames:v", "1",
-    "-vf", "scale=64:36",
+    "-vf", `scale=${width}:${height}`,
     "-f", "rawvideo",
     "-pix_fmt", "rgb24",
     "pipe:1",
   ], timeoutMs);
-  return result.ok && result.stdoutBuffer.length === 64 * 36 * 3 ? result.stdoutBuffer : null;
+  return result.ok && result.stdoutBuffer.length === width * height * 3 ? result.stdoutBuffer : null;
 }
 
 export function parseFrameRate(value: string | undefined): number | null {

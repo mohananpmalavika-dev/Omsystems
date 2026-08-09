@@ -9,7 +9,7 @@ import { measureCameraPacketLoss } from "./camera-packet-loss.js";
 import { captureRtspRgbFrame, measureRtspStream } from "../streaming/rtsp-probe.js";
 import { assessAnalogRgbFrame, type AnalogSignalState } from "./analog-signal-quality.js";
 import { logger } from "../utils/logger.js";
-import type { TelemetryPayload } from "../registration/gateway-client.js";
+import type { AnalyticsFramePayload, TelemetryPayload } from "../registration/gateway-client.js";
 
 export interface CameraHeartbeatData {
   cameraId: string;
@@ -96,6 +96,7 @@ export class CameraHeartbeatService {
     private readonly edgeAuthCredential?: string,
     private readonly telemetrySender?: (payload: TelemetryPayload) => Promise<unknown>,
     private readonly onAutomaticRecovery?: (request: AutomaticCameraRecoveryRequest) => Promise<void>,
+    private readonly analyticsFrameSender?: (payload: AnalyticsFramePayload) => Promise<unknown>,
   ) {}
 
   replaceCameras(cameras: CameraConfig[]): void {
@@ -206,12 +207,29 @@ export class CameraHeartbeatService {
       };
     }
 
+    const analyticsWidth = 320;
+    const analyticsHeight = 180;
     const [packetLoss, frame] = await Promise.all([
       measureCameraPacketLoss(rtspUrl),
-      captureRtspRgbFrame(rtspUrl, this.ffmpegPath),
+      captureRtspRgbFrame(rtspUrl, this.ffmpegPath, 10_000, analyticsWidth, analyticsHeight),
     ]);
-    const frameHealth = frame ? assessAnalogRgbFrame(this.frameStates.get(camera.id), frame) : null;
+    const frameHealth = frame
+      ? assessAnalogRgbFrame(this.frameStates.get(camera.id), frame, analyticsWidth, analyticsHeight)
+      : null;
     if (frameHealth) this.frameStates.set(camera.id, frameHealth.state);
+    if (frame && this.analyticsFrameSender) {
+      await this.analyticsFrameSender({
+        cameraId: camera.id,
+        capturedAt: new Date().toISOString(),
+        width: analyticsWidth,
+        height: analyticsHeight,
+        imageBase64: frame.toString("base64"),
+        metadata: { source: "edge-rtsp", edgeAgentId: this.edgeAgentId },
+      }).catch((error: unknown) => logger.warn("Analytics frame delivery failed", {
+        cameraId: camera.id,
+        error: error instanceof Error ? error.message : String(error),
+      }));
+    }
 
     const reasonCodes: string[] = [];
     if (stream.fps === null) reasonCodes.push("fps_unavailable");
@@ -355,11 +373,12 @@ export function initializeCameraHeartbeat(
   edgeAuthCredential?: string,
   telemetrySender?: (payload: TelemetryPayload) => Promise<unknown>,
   onAutomaticRecovery?: (request: AutomaticCameraRecoveryRequest) => Promise<void>,
+  analyticsFrameSender?: (payload: AnalyticsFramePayload) => Promise<unknown>,
 ): CameraHeartbeatService {
   if (!heartbeatService) {
     heartbeatService = new CameraHeartbeatService(
       apiEndpoint, branchId, edgeAgentId, developmentUserId, ffprobePath, ffmpegPath,
-      edgeAuthCredential, telemetrySender, onAutomaticRecovery,
+      edgeAuthCredential, telemetrySender, onAutomaticRecovery, analyticsFrameSender,
     );
   }
   return heartbeatService;

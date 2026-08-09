@@ -241,3 +241,74 @@ export function getCurrentControlRoomActivityId(): string | null {
 export function isControlRoomActivityActive(): boolean {
   return currentControlRoomActivityId !== null;
 }
+
+/**
+ * Backwards-compatible object API used by the control-room React hook.
+ * The functional tracker above remains the implementation so both call styles
+ * share the same active activity and counters.
+ */
+export class ControlRoomTracker {
+  constructor(config: {
+    apiBaseUrl: string;
+    sessionId: string;
+    pageVisitId?: string;
+    accessToken: string;
+  }) {
+    this.updateConfig(config);
+  }
+
+  updateConfig(config: Partial<{
+    apiBaseUrl: string;
+    sessionId: string;
+    pageVisitId?: string;
+    accessToken: string;
+  }>): void {
+    if (typeof window === 'undefined') return;
+    if (config.sessionId) sessionStorage.setItem('activitySessionId', config.sessionId);
+    if (config.pageVisitId) sessionStorage.setItem('currentPageVisitId', config.pageVisitId);
+    if (config.accessToken) sessionStorage.setItem('activityAccessToken', config.accessToken);
+  }
+
+  startBranchMonitoring(
+    branchId: string,
+    _branchName: string,
+    cameraIds: string[],
+    mode: 'live' | 'review' | 'investigation' = 'live',
+  ): Promise<string | null> {
+    return startControlRoomActivity('single_branch', branchId, undefined, undefined, cameraIds, [branchId], [], mode);
+  }
+
+  startBranchGroupMonitoring(
+    groupId: string,
+    groupName: string,
+    branchIds: string[],
+    branchNames: string[],
+    cameraIds: string[],
+  ): Promise<string | null> {
+    return startControlRoomActivity('branch_group', undefined, groupId, groupName, cameraIds, branchIds, branchNames);
+  }
+
+  async switchBranch(branchId: string, branchName: string, cameraIds: string[]): Promise<void> {
+    await endControlRoomActivity();
+    await this.startBranchMonitoring(branchId, branchName, cameraIds);
+  }
+
+  endCurrentActivity(): Promise<void> {
+    return endControlRoomActivity();
+  }
+
+  incrementAlertCount(): void { trackControlRoomAlert(); }
+  incrementIncidentCount(): void { trackControlRoomIncident(); }
+  incrementCameraSwitchCount(): void { trackControlRoomCameraSwitch(); }
+  incrementPlaybackCount(): void { trackControlRoomPlayback(); }
+  incrementSnapshotCount(): void { trackControlRoomSnapshot(); }
+  incrementExportCount(): void { trackControlRoomExport(); }
+
+  getCurrentActivity(): string | null {
+    return getCurrentControlRoomActivityId();
+  }
+
+  destroy(): void {
+    void endControlRoomActivity();
+  }
+}

@@ -888,6 +888,64 @@ export async function buildApp(options?: {
     };
   });
 
+  app.post("/v1/edge-agents/:id/analytics/frames", async (request, reply) => {
+    const { id } = edgeAgentParams.parse(request.params);
+    if (!request.edgeAgentAuthenticated || request.edgeAgentId !== id) {
+      return reply.code(403).send({ error: "edge_agent_identity_mismatch" });
+    }
+    const input = z.object({
+      cameraId: z.string().min(1),
+      capturedAt: z.string().datetime(),
+      width: z.number().int().min(64).max(1280),
+      height: z.number().int().min(36).max(720),
+      imageBase64: z.string().min(1).max(4_000_000),
+      metadata: z.record(z.unknown()).optional(),
+    }).parse(request.body);
+    const agent = await store.getEdgeAgent(id);
+    if (!agent) return reply.code(404).send({ error: "edge_agent_not_found" });
+    const camera = (await store.listCamerasByEdgeAgent(id))
+      .find((candidate) => candidate.id === input.cameraId);
+    if (!camera) return reply.code(404).send({ error: "camera_not_found_for_edge_agent" });
+    const branch = await store.getNode(agent.branchId);
+    if (!branch) return reply.code(404).send({ error: "branch_not_found" });
+    const rules = (await store.listAnalyticsRules(camera.id)).filter((rule) => rule.enabled);
+    if (rules.length === 0) {
+      return reply.code(202).send({ accepted: false, reason: "no_enabled_camera_ai_rules" });
+    }
+    if (!options?.analyticsEngineUrl || !options.analyticsEngineSharedKey) {
+      return reply.code(202).send({ accepted: false, reason: "analytics_engine_not_configured" });
+    }
+    try {
+      const upstream = await fetch(new URL("/internal/frames", options.analyticsEngineUrl), {
+        method: "POST",
+        signal: AbortSignal.timeout(20_000),
+        headers: {
+          "content-type": "application/json",
+          "x-analytics-source-key": options.analyticsEngineSharedKey,
+        },
+        body: JSON.stringify({
+          tenantId: branch.tenantId,
+          cameraId: camera.id,
+          capturedAt: input.capturedAt,
+          width: input.width,
+          height: input.height,
+          imageBase64: input.imageBase64,
+          rules,
+          metadata: { ...input.metadata, edgeAgentId: id, branchId: branch.id },
+        }),
+      });
+      const result = await upstream.json().catch(() => ({}));
+      if (!upstream.ok) {
+        request.log.warn({ cameraId: camera.id, upstreamStatus: upstream.status }, "Analytics engine rejected edge frame");
+        return reply.code(502).send({ error: "analytics_engine_rejected_frame", upstreamStatus: upstream.status });
+      }
+      return reply.code(202).send({ accepted: true, analytics: result });
+    } catch (error) {
+      request.log.warn({ error, cameraId: camera.id }, "Analytics engine frame delivery failed");
+      return reply.code(502).send({ error: "analytics_engine_unavailable" });
+    }
+  });
+
   app.post("/v1/branches/:branchId/device-scans", async (request, reply) => {
     const { branchId } = branchParams.parse(request.params);
     if (!(await requireAccess(request, reply, store, "device:configure", branchId))) return;
@@ -2125,6 +2183,7 @@ function isEdgeAgentIngressRoute(method: string, url: string) {
   if (method === "GET" && /^\/v1\/edge-agents\/[^/]+\/scan-jobs\/next$/.test(path)) return true;
   if (method === "POST" && /^\/v1\/edge-agents\/[^/]+\/scan-jobs\/[^/]+\/complete$/.test(path)) return true;
   if (method === "POST" && /^\/v1\/edge-agents\/[^/]+\/(?:telemetry|recorder-hdd|recorder-archive)$/.test(path)) return true;
+  if (method === "POST" && /^\/v1\/edge-agents\/[^/]+\/analytics\/frames$/.test(path)) return true;
   if (method === "GET" && /^\/v1\/edge-agents\/[^/]+\/(?:commands|updates)\/next$/.test(path)) return true;
   if (method === "GET" && /^\/v1\/edge-agents\/[^/]+\/bootstrap$/.test(path)) return true;
   if (method === "GET" && /^\/v1\/edge-agents\/[^/]+\/discovery-bootstrap$/.test(path)) return true;

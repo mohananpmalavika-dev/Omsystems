@@ -284,16 +284,19 @@ export class AnalyticsPipeline {
         }
       }
     }
+    const hasObservedObjects = detectedObjects.length > 0;
 
     // Step 4: CONDITIONAL SCHEDULING - decide which expensive models to run
     const schedule = this.scheduler.scheduleFrame(
       inferenceFrame,
       rules,
-      hasMotion,
+      hasMotion || hasObservedObjects,
       detectedObjects
     );
 
-    if (!schedule.shouldProcess) {
+    // Normalized edge observations have already paid the inference cost and
+    // must not be discarded by local GPU sampling or motion-first gating.
+    if (!schedule.shouldProcess && !hasObservedObjects) {
       // No further processing needed for this frame
       return events;
     }
@@ -337,7 +340,9 @@ export class AnalyticsPipeline {
       const specializedPromises: Array<Promise<any[]>> = [];
 
       // Helmet detection (if scheduled)
-      if (schedule.modelsToRun.includes('helmet') && (persons.length > 0 || vehicles.length > 0)) {
+      if ((schedule.modelsToRun.includes('helmet') ||
+          (!localInferenceRequested && this.needsDetection(rules, ['helmet', 'no-helmet']))) &&
+          (persons.length > 0 || vehicles.length > 0)) {
         specializedPromises.push(this.helmetDetector.detect(trackedFrame));
       }
 

@@ -51,6 +51,8 @@ export function AnalyticsConsole() {
   const [newRuleDetection, setNewRuleDetection] = useState<AnalyticsDetectionType>("person");
   const [capabilityDomains, setCapabilityDomains] = useState<CapabilityDomain[]>([]);
   const [capabilitySummary, setCapabilitySummary] = useState<{ domains: number; capabilities: number; core: number; derived: number; openModel: number }>();
+  const [automaticCapabilityCount, setAutomaticCapabilityCount] = useState(0);
+  const [setupRequiredCount, setSetupRequiredCount] = useState(0);
   const [engineState, setEngineState] = useState<"checking" | "online" | "offline" | "unconfigured">("checking");
   const [assistantQuery, setAssistantQuery] = useState("");
   const [assistantResult, setAssistantResult] = useState<any>();
@@ -81,6 +83,8 @@ export function AnalyticsConsole() {
         setBranchId(data[0]?.id ?? "");
         setCapabilityDomains(catalog.domains ?? []);
         setCapabilitySummary(catalog.summary);
+        setAutomaticCapabilityCount(catalog.cameraDeployment?.automatic?.length ?? 0);
+        setSetupRequiredCount(catalog.cameraDeployment?.setupRequired?.length ?? 0);
       })
       .catch((error) => setMessage({ kind: "error", text: readable(error) }))
       .finally(() => setLoading(false));
@@ -186,6 +190,24 @@ export function AnalyticsConsole() {
     }
   }, [refreshRules]);
 
+  const enableAllCameraAi = useCallback(async () => {
+    if (!branchId) return;
+    setSaving(true);
+    setMessage(undefined);
+    try {
+      const result = await analyticsApi.enableAllCameras(branchId);
+      await Promise.all([refreshRules(), refreshAlerts()]);
+      setMessage({
+        kind: "success",
+        text: `Enabled ${result.capabilityCount} camera-ready AI capabilities on ${result.cameraCount} camera${result.cameraCount === 1 ? "" : "s"}. ${result.setupRequired?.length ?? 0} zone or identity capabilities still require camera-specific setup.`,
+      });
+    } catch (error) {
+      setMessage({ kind: "error", text: readable(error) });
+    } finally {
+      setSaving(false);
+    }
+  }, [branchId, refreshAlerts, refreshRules]);
+
   return (
     <>
       <header className="analytics-header">
@@ -283,10 +305,20 @@ export function AnalyticsConsole() {
             {cameras.map((camera) => <option key={camera.id} value={camera.id}>{camera.name}</option>)}
           </select>
         </div>
+        <button className="primary-action" disabled={!branchId || cameras.length === 0 || saving}
+          onClick={() => void enableAllCameraAi()}>
+          <ShieldCheck size={14} /> Enable all camera AI ({automaticCapabilityCount})
+        </button>
         <button className="secondary-button" onClick={() => void Promise.all([refreshRules(), refreshAlerts()])}>
           <RefreshCw size={14} /> Refresh
         </button>
       </section>
+
+      {setupRequiredCount > 0 && (
+        <p className="analytics-deployment-note">
+          {setupRequiredCount} location-sensitive capabilities (zones, lines, recognition, and watchlists) remain camera-specific so the system does not guess restricted areas or biometric policy.
+        </p>
+      )}
 
       <div className="analytics-columns">
         <section className="analytics-card rules-card">

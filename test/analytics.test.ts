@@ -17,6 +17,41 @@ describe("video analytics and alert workflow", () => {
 
   afterEach(async () => app.close());
 
+  it("enables the complete camera-ready AI bundle across a branch idempotently", async () => {
+    const first = await app.inject({
+      method: "POST",
+      url: "/v1/branches/branch-blr-001/analytics/enable-all-cameras",
+      headers: admin,
+      payload: {},
+    });
+    expect(first.statusCode).toBe(200);
+    expect(first.json()).toMatchObject({
+      cameraCount: 2,
+      capabilityCount: 15,
+      created: 30,
+      enabled: 0,
+      unchanged: 0,
+    });
+    expect(first.json().setupRequired).toEqual(expect.arrayContaining([
+      "line-crossing", "intrusion", "loitering", "face-recognition", "watchlist-match",
+    ]));
+
+    const second = await app.inject({
+      method: "POST",
+      url: "/v1/branches/branch-blr-001/analytics/enable-all-cameras",
+      headers: admin,
+      payload: {},
+    });
+    expect(second.statusCode).toBe(200);
+    expect(second.json()).toMatchObject({
+      cameraCount: 2,
+      capabilityCount: 15,
+      created: 0,
+      enabled: 0,
+      unchanged: 30,
+    });
+  });
+
   it("configures a camera rule and converts an authenticated detection into protected evidence", async () => {
     const ruleResponse = await app.inject({
       method: "POST", url: "/v1/cameras/cam-001/analytics/rules",

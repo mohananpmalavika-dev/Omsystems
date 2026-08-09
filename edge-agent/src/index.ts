@@ -50,7 +50,7 @@ if (runtime.embeddedEnvironmentFile && (argv.length === 0 || hasArgument(argv, "
   process.exit(0);
 }
 if (hasArgument(argv, "--version")) {
-  process.stdout.write("Sentinel Grid Edge Agent 0.1.4\n");
+  process.stdout.write("Sentinel Grid Edge Agent 0.1.5\n");
   process.exit(0);
 }
 const config = loadConfigOrExit();
@@ -210,6 +210,7 @@ const cameraHeartbeat = initializeCameraHeartbeat(
       steps: recovery.steps.map((step) => `${step.step}:${step.status}`),
     });
   },
+  (payload) => control.submitAnalyticsFrame(agentId, payload),
 );
 let lastCameraConfigSyncAt = 0;
 let lastDiscoveryAt = 0;

@@ -78,6 +78,15 @@ export interface TelemetryPayload {
   reasonCodes: string[];
 }
 
+export interface AnalyticsFramePayload {
+  cameraId: string;
+  capturedAt: string;
+  width: number;
+  height: number;
+  imageBase64: string;
+  metadata?: Record<string, unknown>;
+}
+
 export interface MonitoringCamera {
   id: string;
   name: string;
@@ -204,6 +213,13 @@ export class GatewayClient {
   async submitTelemetry(agentId: string, payload: TelemetryPayload) {
     return this.requestOrQueue<{ accepted: boolean; duplicate: boolean; receivedAt: string }>(
       `/v1/edge-agents/${encodeURIComponent(agentId)}/telemetry`,
+      { method: "POST", body: JSON.stringify(payload) },
+    );
+  }
+
+  async submitAnalyticsFrame(agentId: string, payload: AnalyticsFramePayload) {
+    return this.request<{ accepted: boolean; eventsGenerated?: number; reason?: string }>(
+      `/v1/edge-agents/${encodeURIComponent(agentId)}/analytics/frames`,
       { method: "POST", body: JSON.stringify(payload) },
     );
   }
