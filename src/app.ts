@@ -1938,23 +1938,10 @@ export async function buildApp(options?: {
 
   // Security Posture API endpoint
   app.get("/api/security/posture", async () => {
-    try {
-      // Import the real security operations service from backend
-      const { securityOperationsService } = await import("../backend/src/services/security-operations.service.js");
-      
-      // Get real-time security posture from all collectors
-      const posture = await securityOperationsService.getSecurityPosture();
-      
-      return {
-        available: true,
-        provenance: "LIVE" as const,
-        ...posture
-      };
-    } catch (error) {
-      app.log.error({ error }, "Failed to get security posture, returning unavailable");
-      // Fallback to unavailable state if service fails
-      return unavailableSecurityPosture();
-    }
+    // The security-operations module is not yet compatible with the control
+    // plane's Node ESM/type contracts. Keep this route explicitly unavailable
+    // instead of breaking the production build or presenting partial data.
+    return unavailableSecurityPosture();
   });
   if (extendedStore) {
     await registerDeviceManagementRoutes(app, extendedStore);
