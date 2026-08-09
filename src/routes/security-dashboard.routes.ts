@@ -8,6 +8,7 @@ import { z } from 'zod';
 import type { ControlPlaneStore } from '../control-plane-store.js';
 import { SecurityServicesFactory } from '../security/services/index.js';
 import { SecurityMonitor } from '../security/monitoring/security-monitor.js';
+import { incrementSecretRevealAttempt, incrementSecretRevealSuccess, incrementSecretRevealFailure, incrementSecretMetadataReads } from '../platform/metrics.js';
 
 export async function registerSecurityDashboardRoutes(
   app: FastifyInstance,
@@ -409,6 +410,8 @@ export async function registerSecurityDashboardRoutes(
 
       if (!revealRequested) {
         // Return metadata only with masked value
+        // Instrument metadata read for monitoring
+        try { incrementSecretMetadataReads(); } catch (err) { /* ignore metrics errors */ }
         await completeSecretAccessAudit(request, true);
         return {
           ...secret,
@@ -418,19 +421,23 @@ export async function registerSecurityDashboardRoutes(
       }
 
       // Reveal requested: require stronger justification and role check
+      // Instrument an attempt for monitoring
+      try { incrementSecretRevealAttempt(); } catch (err) { /* ignore metrics errors */ }
       const justification = (query.justification || (request as any).body?.justification) as string | undefined;
-
+ 
       // Only allow reveal for admin/owner/explicit access reasons
       const allowedReasons = ['admin', 'owner', 'explicit_access', 'role_access'];
       const reason = decision?.reason ?? '';
-
+ 
       if (!decision?.allowed || !allowedReasons.some((r) => reason.includes(r))) {
         // Not allowed to reveal even though read metadata was allowed
+        try { incrementSecretRevealFailure(); } catch (err) { /* ignore metrics errors */ }
         await completeSecretAccessAudit(request, false, 'reveal_not_permitted');
         return reply.code(403).send({ error: 'reveal_not_permitted', message: 'You are not authorized to retrieve plaintext for this secret' });
       }
-
+ 
       if (!justification || justification.trim().length < 10) {
+        try { incrementSecretRevealFailure(); } catch (err) { /* ignore metrics errors */ }
         await completeSecretAccessAudit(request, false, 'justification_required');
         return reply.code(400).send({ error: 'justification_required', message: 'Provide a justification (min 10 chars) to retrieve plaintext' });
       }
@@ -439,11 +446,21 @@ export async function registerSecurityDashboardRoutes(
       if (context) context.justification = justification;
 
       // Decrypt the secret value (sensitive operation)
-      const decryptedValue = await secretVault.decrypt(secret.value);
-
+      let decryptedValue: string | undefined;
+      try {
+        decryptedValue = await secretVault.decrypt(secret.value);
+      } catch (err) {
+        try { incrementSecretRevealFailure(); } catch (e) { /* ignore */ }
+        await completeSecretAccessAudit(request, false, err instanceof Error ? err.message : 'decryption_failed');
+        return reply.code(500).send({ error: 'decryption_failed' });
+      }
+ 
+      // Instrument success
+      try { incrementSecretRevealSuccess(); } catch (err) { /* ignore metrics errors */ }
+ 
       // Complete audit log with success
       await completeSecretAccessAudit(request, true);
-
+ 
       return {
         id: (secret as any).id,
         name: (secret as any).name,
@@ -457,6 +474,9 @@ export async function registerSecurityDashboardRoutes(
       };
     } catch (error) {
       app.log.error({ error, secretId: params.secretId }, 'Secret retrieval failed');
+      
+      // Instrument failure for monitoring
+      try { incrementSecretRevealFailure(); } catch (e) { /* ignore */ }
       
       // Audit the failure
       const { completeSecretAccessAudit } = await import('../security/middleware/secret-access-control.js');

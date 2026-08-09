@@ -20,7 +20,10 @@ export function SessionProvider({ children }: SessionProviderProps) {
     // Don't setup session guard on auth pages
     const isAuthPage = pathname?.startsWith('/login') || 
                        pathname?.startsWith('/forgot-password') || 
-                       pathname?.startsWith('/reset-password');
+                       pathname?.startsWith('/reset-password') ||
+                       pathname?.startsWith('/support') ||
+                       pathname?.startsWith('/privacy') ||
+                       pathname?.startsWith('/terms');
 
     if (!isAuthPage) {
       setupSessionGuard();

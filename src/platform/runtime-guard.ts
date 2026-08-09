@@ -57,6 +57,22 @@ export class RuntimeGuard {
       `sentinel_http_latency_milliseconds{quantile="0.95"} ${snapshot.p95Ms}`,
       `sentinel_http_latency_milliseconds{quantile="0.99"} ${snapshot.p99Ms}`,
     ];
+
+    // Append global metrics from other parts of the process if available.
+    try {
+      // Import lazily to avoid circular imports during startup.
+      // metrics.ts lives in the same folder and exports getGlobalMetricsLines().
+      // Use a runtime import so TypeScript compilation to .js keeps behavior consistent.
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const { getGlobalMetricsLines } = require('./metrics.js');
+      if (typeof getGlobalMetricsLines === 'function') {
+        const extra = getGlobalMetricsLines();
+        if (Array.isArray(extra) && extra.length > 0) lines.push(...extra);
+      }
+    } catch (err) {
+      // If metrics module isn't available or fails, keep serving the core metrics only.
+    }
+
     return `${lines.join("\n")}\n`;
   }
 

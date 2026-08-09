@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { GlobalAlertCenter } from "@/components/global-alert-center";
 import { SessionProvider } from "@/components/session-provider";
 import { ActivityMonitor } from "@/components/activity-monitor";
+import { ApplicationShell } from "@/components/application-shell";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -17,7 +18,7 @@ export default function RootLayout({
       <body>
         <SessionProvider>
           <ActivityMonitor>
-            {children}
+            <ApplicationShell>{children}</ApplicationShell>
             <GlobalAlertCenter/>
           </ActivityMonitor>
         </SessionProvider>

@@ -25,6 +25,7 @@ import {
   FileText,
   FileVideo2,
   Gauge,
+  HelpCircle,
   Globe2,
   Grid2X2,
   Handshake,
@@ -55,7 +56,7 @@ import {
   Wrench,
   X,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { logout } from "@/lib/auth-manager";
 
 interface AppLayoutProps {
@@ -215,6 +216,9 @@ export const quickActions: NavItem[] = [
   { label: "Register an asset", href: "/maintenance/assets/new", icon: Library },
   { label: "Add a vendor", href: "/maintenance/vendors/new", icon: Handshake },
   { label: "Add an AMC contract", href: "/maintenance/amc/new", icon: FileClock },
+  { label: "Add a processing purpose", href: "/maintenance/privacy/purposes/new", icon: LockKeyhole },
+  { label: "Add a requirement", href: "/compliance/requirements/new", icon: FileCheck2 },
+  { label: "Add a risk", href: "/compliance/risks/new", icon: ShieldAlert },
 ];
 
 const pageMeta = [
@@ -229,9 +233,27 @@ const pageMeta = [
   { path: "/maintenance/vendors/new", section: "Fleet maintenance", title: "Add vendor" },
   { path: "/maintenance/amc/new", section: "Fleet maintenance", title: "Add AMC contract" },
   { path: "/maintenance/privacy/purposes/new", section: "Privacy", title: "Add processing purpose" },
+  { path: "/compliance/requirements/new", section: "Assurance", title: "Add requirement" },
+  { path: "/compliance/risks/new", section: "Assurance", title: "Add risk" },
+  { path: "/support", section: "Help", title: "Support center" },
+  { path: "/privacy", section: "Legal", title: "Privacy policy" },
+  { path: "/terms", section: "Legal", title: "Terms of service" },
 ];
 
+const AppLayoutContext = createContext(false);
+
 export function AppLayout({ children, incidentCount = 0, cameraCount = 0 }: AppLayoutProps) {
+  const alreadyInsideAppLayout = useContext(AppLayoutContext);
+  if (alreadyInsideAppLayout) return <>{children}</>;
+
+  return (
+    <AppLayoutContext.Provider value>
+      <AppLayoutFrame incidentCount={incidentCount} cameraCount={cameraCount}>{children}</AppLayoutFrame>
+    </AppLayoutContext.Provider>
+  );
+}
+
+function AppLayoutFrame({ children, incidentCount = 0, cameraCount = 0 }: AppLayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [commandOpen, setCommandOpen] = useState(false);
   const [commandQuery, setCommandQuery] = useState("");
@@ -349,6 +371,11 @@ export function AppLayout({ children, incidentCount = 0, cameraCount = 0 }: AppL
         </nav>
 
         <div className="sidebar-footer">
+          <Link href="/support" className="sidebar-help" onClick={closeSidebar}>
+            <HelpCircle size={16} />
+            <span>Help &amp; support</span>
+            <ChevronRight size={15} />
+          </Link>
           <Link href="/maintenance/health" className="sidebar-status" onClick={closeSidebar}>
             <div className="pulse-icon"><Wifi size={16} /></div>
             <div><strong>Platform status</strong><span>Open infrastructure health</span></div>

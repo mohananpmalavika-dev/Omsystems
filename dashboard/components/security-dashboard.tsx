@@ -240,7 +240,7 @@ export default function SecurityDashboard() {
             <ActionButton icon={<Shield />} label="Access Controls" href="/compliance/controls" />
             <ActionButton icon={<AlertTriangle />} label="Operational Alerts" href="/operations/alerts" />
             <ActionButton icon={<Database />} label="Storage Health" href="/operations/storage" />
-            <ActionButton icon={<Activity />} label="Fleet Health" href="/operations/health" />
+            <ActionButton icon={<Activity />} label="Fleet Health" href="/operations" />
           </div>
         </div>
       </div>
@@ -416,22 +416,22 @@ export default function SecurityDashboard() {
 interface MetricCardProps {
   icon: React.ReactNode;
   title: string;
-  score: number;
-  status: string;
+  score: number | null;
+  status: string | null;
   warning?: string;
 }
 
 function MetricCard({ icon, title, score, status, warning }: MetricCardProps) {
-  const scoreColor = score >= 95 ? 'tone-positive' : score >= 80 ? 'tone-caution' : 'tone-negative';
+  const scoreColor = (score ?? 0) >= 95 ? 'tone-positive' : (score ?? 0) >= 80 ? 'tone-caution' : 'tone-negative';
 
   return (
     <div className="security-metric-card bg-white rounded-xl shadow-lg p-6">
       <div className="flex items-center justify-between mb-4">
         <div className="text-gray-600">{icon}</div>
-        <span className={`text-2xl font-bold ${scoreColor}`}>{Math.round(score)}</span>
+        <span className={`text-2xl font-bold ${scoreColor}`}>{score === null || score === undefined ? '—' : Math.round(score)}</span>
       </div>
       <h4 className="font-semibold text-gray-900 mb-2">{title}</h4>
-      <p className="text-sm text-gray-600">{status}</p>
+      <p className="text-sm text-gray-600">{status === null || status === undefined ? 'Unavailable · Configure collector' : status}</p>
       {warning && (
         <p className="text-sm text-red-600 mt-2 flex items-center gap-1">
           <AlertTriangle className="w-4 h-4" />

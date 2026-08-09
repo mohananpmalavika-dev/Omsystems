@@ -2714,6 +2714,22 @@ button, a { -webkit-tap-highlight-color: transparent; }
 .nav-count, .alert-count { margin-left: 5px; min-width: 20px; height: 18px; color: #91a8c5; background: rgba(255,255,255,.075); }
 .alert-count { color: #ffc1c7; background: rgba(223,77,90,.19); }
 .sidebar-footer { margin-top: auto; padding-top: 10px; background: linear-gradient(180deg, transparent, rgba(7,17,31,.82) 18%); }
+.sidebar-help {
+  min-height: 34px;
+  display: grid;
+  grid-template-columns: 18px minmax(0,1fr) 15px;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  padding: 7px 10px;
+  color: #8fa4bf;
+  border-radius: 9px;
+  text-decoration: none;
+  font-size: 9px;
+  font-weight: 700;
+}
+.sidebar-help:hover { color: #edf5ff; background: rgba(255,255,255,.055); }
+.sidebar-help > svg:last-child { justify-self: end; }
 .sidebar-status {
   color: inherit;
   text-decoration: none;
@@ -4744,6 +4760,75 @@ button, a { -webkit-tap-highlight-color: transparent; }
 
 @media (prefers-reduced-motion: reduce) {
   .command-overlay, .command-dialog { animation: none; }
+}
+
+/* Compliance create and record detail workflows */
+.compliance-create-page, .compliance-record-page, .support-page, .legal-page { width: min(100%, 1420px); margin: 0 auto; padding: 28px 30px 56px; }
+.compliance-create-form, .compliance-record-panel, .support-panel, .legal-panel { margin-top: 16px; overflow: hidden; border: 1px solid var(--line); border-radius: 16px; background: #fff; box-shadow: var(--shadow-sm); }
+.compliance-create-form > section > header { padding: 17px 19px; border-bottom: 1px solid #e7ecf3; background: #f9fbfd; }
+.compliance-create-form > section > header span { color: #6f84a6; font-size: 8px; font-weight: 800; letter-spacing: 1px; text-transform: uppercase; }
+.compliance-create-form > section > header h2 { margin: 4px 0 0; color: #243751; font-size: 15px; }
+.compliance-form-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 14px; padding: 20px; }
+.compliance-form-grid > label { display: grid; gap: 6px; }
+.compliance-form-grid > label.wide, .compliance-form-checks { grid-column: 1/-1; }
+.compliance-form-grid > label > span { color: #63748a; font-size: 8px; font-weight: 800; letter-spacing: .6px; text-transform: uppercase; }
+.compliance-form-grid :where(input,select,textarea) { width: 100%; min-width: 0; padding: 10px 11px; color: #263956; border: 1px solid #d7e0eb; border-radius: 9px; outline: 0; background: #fbfcfe; font: inherit; font-size: 10px; }
+.compliance-form-grid :where(input,select) { min-height: 40px; }
+.compliance-form-grid textarea { resize: vertical; }
+.compliance-form-grid :where(input,select,textarea):focus { border-color: #91b1f9; box-shadow: 0 0 0 3px rgba(53,109,243,.09); }
+.compliance-form-checks { display: flex; align-items: center; gap: 22px; padding-top: 2px; }
+.compliance-form-checks label { display: flex; align-items: center; gap: 7px; color: #53657d; font-size: 9px; font-weight: 700; }
+.compliance-form-checks input { width: 15px; height: 15px; }
+.compliance-create-form > footer { display: flex; justify-content: flex-end; gap: 8px; padding: 14px 20px; border-top: 1px solid #e7ecf3; background: #fafbfd; }
+.compliance-form-error { display: flex; align-items: center; gap: 8px; margin: 16px 20px 0; padding: 11px 13px; color: #973f49; border: 1px solid #efcbd0; border-radius: 10px; background: #fff1f2; font-size: 9px; }
+.compliance-record-state { min-height: 280px; display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 10px; margin-top: 16px; color: #78879a; border: 1px solid var(--line); border-radius: 16px; background: #fff; box-shadow: var(--shadow-sm); font-size: 10px; }
+.compliance-record-state.error { color: #973f49; }
+.compliance-record-panel > header { min-height: 70px; display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 14px 18px; border-bottom: 1px solid #e7ecf3; background: #f9fbfd; }
+.compliance-record-panel > header span, .compliance-record-panel > header strong { display: block; }
+.compliance-record-panel > header span { color: #8290a3; font-size: 7px; font-weight: 800; letter-spacing: .7px; text-transform: uppercase; }
+.compliance-record-panel > header strong { margin-top: 3px; color: #40536d; font: 600 9px ui-monospace,monospace; }
+.compliance-record-panel > header em { padding: 6px 9px; color: #166b51; border-radius: 999px; background: #e8f7f1; font-size: 8px; font-style: normal; font-weight: 800; text-transform: capitalize; }
+.compliance-record-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); }
+.compliance-record-grid article { min-height: 76px; padding: 15px 18px; border-right: 1px solid #e8edf3; border-bottom: 1px solid #e8edf3; }
+.compliance-record-grid article:nth-child(2n) { border-right: 0; }
+.compliance-record-grid article.wide { grid-column: 1/-1; border-right: 0; }
+.compliance-record-grid article span, .compliance-record-grid article strong { display: block; }
+.compliance-record-grid article span { color: #7d8b9e; font-size: 7px; font-weight: 800; letter-spacing: .65px; text-transform: uppercase; }
+.compliance-record-grid article strong { margin-top: 7px; color: #2a3e5a; font-size: 10px; font-weight: 650; line-height: 1.55; white-space: pre-wrap; }
+.support-panel > header { padding: 18px 20px; border-bottom: 1px solid #e7ecf3; background: #f9fbfd; }
+.support-panel > header span { color: #6f84a6; font-size: 8px; font-weight: 800; letter-spacing: 1px; text-transform: uppercase; }
+.support-panel > header h2 { margin: 4px 0 2px; color: #263a56; font-size: 15px; }
+.support-panel > header p { margin: 0; color: #7f8d9f; font-size: 9px; }
+.support-option-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); }
+.support-option-grid > a { min-height: 130px; display: flex; align-items: flex-start; gap: 12px; padding: 19px; color: inherit; border-right: 1px solid #e7ecf3; border-bottom: 1px solid #e7ecf3; text-decoration: none; }
+.support-option-grid > a:nth-child(2n) { border-right: 0; }
+.support-option-grid > a:hover { background: #f8faff; }
+.support-option-grid > a > span { width: 40px; height: 40px; flex: 0 0 auto; display: grid; place-items: center; color: var(--blue); border-radius: 11px; background: var(--blue-soft); }
+.support-option-grid strong { display: block; color: #293d59; font-size: 11px; }
+.support-option-grid p { margin: 6px 0 10px; color: #7a899d; font-size: 8.5px; line-height: 1.55; }
+.support-option-grid em { color: var(--blue); font-size: 8px; font-style: normal; font-weight: 800; }
+.support-escalation { display: flex; align-items: center; justify-content: space-between; gap: 24px; margin-top: 15px; padding: 20px; color: #dfeafd; border: 1px solid #173760; border-radius: 16px; background: linear-gradient(135deg,#0d2a52,#091c35); box-shadow: 0 20px 42px -32px rgba(8,33,68,.8); }
+.support-escalation span { color: #6de2d9; font-size: 8px; font-weight: 800; letter-spacing: 1px; text-transform: uppercase; }
+.support-escalation h2 { margin: 4px 0; color: #fff; font-size: 15px; }
+.support-escalation p { max-width: 780px; margin: 0; color: #9fb0c8; font-size: 8.5px; line-height: 1.55; }
+.support-escalation .btn-secondary { flex: 0 0 auto; color: #dce9fb; border-color: rgba(255,255,255,.18); background: rgba(255,255,255,.07); }
+.legal-panel { padding: 8px 22px 22px; }
+.legal-updated { margin: 0 -22px 5px; padding: 12px 22px; color: #7c8ba0; border-bottom: 1px solid #e7ecf3; background: #f9fbfd; font-size: 8px; font-weight: 700; }
+.legal-panel section { padding: 17px 0 14px; border-bottom: 1px solid #e9edf3; }
+.legal-panel section:last-child { border-bottom: 0; }
+.legal-panel h2 { margin: 0 0 7px; color: #273b57; font-size: 12px; }
+.legal-panel section p { margin: 0; color: #65758b; font-size: 9px; line-height: 1.7; }
+.legal-panel a { color: var(--blue); font-weight: 750; }
+
+@media (max-width: 760px) {
+  .compliance-create-page, .compliance-record-page, .support-page, .legal-page { padding: 18px 14px 40px; }
+  .compliance-form-grid, .compliance-record-grid { grid-template-columns: 1fr; }
+  .compliance-record-grid article { border-right: 0; }
+  .compliance-create-form > footer { align-items: stretch; flex-direction: column-reverse; }
+  .compliance-create-form > footer :where(a,button) { justify-content: center; }
+  .support-option-grid { grid-template-columns: 1fr; }
+  .support-option-grid > a { border-right: 0; }
+  .support-escalation { align-items: flex-start; flex-direction: column; }
 }
 
 /* Employee activity intelligence */

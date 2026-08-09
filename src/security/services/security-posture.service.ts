@@ -20,11 +20,13 @@ export class SecurityPostureService extends EventEmitter implements ISecurityPos
       this.scoreEncryption(),
       this.scoreAccessControl(),
       this.scoreThreatDetection(),
-      this.scoreCompliance()
+      this.scoreCompliance(),
+      this.scoreSecrets()
     ]);
 
     const overallScore = this.calculateWeightedScore(categories);
     const issues = await this.listIssues({ resolved: false });
+    const provenance = this.determineProvenance(categories);
 
     const posture: SecurityPosture = {
       overallScore,
@@ -35,7 +37,8 @@ export class SecurityPostureService extends EventEmitter implements ISecurityPos
       mediumIssues: issues.filter(i => i.severity === 'medium').length,
       lowIssues: issues.filter(i => i.severity === 'low').length,
       trends: await this.calculateTrends(),
-      recommendations: await this.getRecommendations()
+      recommendations: await this.getRecommendations(),
+      provenance
     };
 
     const db = getDatabase();
@@ -175,14 +178,21 @@ export class SecurityPostureService extends EventEmitter implements ISecurityPos
     const db = getDatabase();
     
     const activeThreats = await db.collection('ransomware_threats').countDocuments({ resolved: false });
-    const score = Math.max(0, 100 - (activeThreats * 10));
+    const totalThreatRecords = await db.collection('ransomware_threats').countDocuments();
+    const score = totalThreatRecords > 0 ? Math.max(0, 100 - (activeThreats * 10)) : 0;
 
     return {
       name: 'Threat Detection',
       score,
       weight: 20,
       metrics: [
-        { name: 'Active Threats', value: activeThreats, target: 0, unit: 'threats', status: activeThreats === 0 ? 'good' : 'critical' }
+        {
+          name: 'Active Threats',
+          value: activeThreats,
+          target: 0,
+          unit: 'threats',
+          status: totalThreatRecords > 0 ? (activeThreats === 0 ? 'good' : 'critical') : 'unavailable'
+        }
       ],
       issues: []
     };
@@ -192,15 +202,99 @@ export class SecurityPostureService extends EventEmitter implements ISecurityPos
    * Score compliance category
    */
   async scoreCompliance(): Promise<SecurityCategory> {
+    const db = getDatabase();
+    const controls = await db.collection('compliance_controls').find().toArray();
+    const totalControls = controls.length;
+    const compliantControls = controls.filter(c => c.compliant).length;
+    const score = totalControls > 0 ? Math.round((compliantControls / totalControls) * 100) : 0;
+
     return {
       name: 'Compliance',
-      score: 85,
+      score,
       weight: 10,
       metrics: [
-        { name: 'Compliance Score', value: 85, target: 100, unit: '%', status: 'good' }
+        {
+          name: 'Compliance Score',
+          value: score,
+          target: 100,
+          unit: '%',
+          status: totalControls > 0 ? (score >= 80 ? 'good' : 'warning') : 'unavailable'
+        }
       ],
       issues: []
     };
+  }
+
+  /**
+   * Score secrets / secret-vault category
+   */
+  async scoreSecrets(): Promise<SecurityCategory> {
+    // Import factory lazily to avoid circular initialization issues
+    const { SecurityServicesFactory } = await import('./index.js');
+    const factory = SecurityServicesFactory.getInstance();
+
+    // If secret vault is not configured, return a placeholder indicating unavailability
+    if (!factory.secretVault) {
+      return {
+        name: 'Secret Vault',
+        score: 0,
+        weight: 10,
+        metrics: [
+          { name: 'Rotation Compliance', value: null as any, target: 100, unit: '%', status: 'unavailable' },
+          { name: 'Secrets Expiring Soon', value: null as any, target: 0, unit: 'count', status: 'unavailable' }
+        ],
+        issues: []
+      };
+    }
+
+    try {
+      const all = await factory.secretVault.listSecrets();
+      const expiring = await factory.secretVault.listSecrets({ expiringSoon: true });
+      const needsRotation = await factory.secretVault.listSecrets({ needsRotation: true });
+
+      const total = all.length;
+      const expiringCount = expiring.length;
+      const needsRotationCount = needsRotation.length;
+
+      // Compute rotation compliance: percent of secrets that have rotationPolicy.enabled and have been rotated recently
+      const rotationCandidates = all.filter(s => s.rotationPolicy && s.rotationPolicy.enabled);
+      let compliantCount = 0;
+      for (const s of rotationCandidates) {
+        if (!s.lastRotatedAt) continue;
+        // If lastRotatedAt within intervalDays consider compliant
+        const intervalDays = (s.rotationPolicy?.intervalDays) ?? 90;
+        const last = new Date(s.lastRotatedAt);
+        const ageMs = Date.now() - last.getTime();
+        if (ageMs <= intervalDays * 24 * 60 * 60 * 1000) compliantCount++;
+      }
+
+      const rotationCompliance = rotationCandidates.length > 0 ? Math.round((compliantCount / rotationCandidates.length) * 100) : 100;
+
+      const score = Math.round(rotationCompliance * 0.8 + (total > 0 ? Math.max(0, 100 - (expiringCount * 5)) * 0.2 : 100 * 0.2));
+      const provenance = total > 0 ? 'LIVE' : 'UNAVAILABLE';
+
+      return {
+        name: 'Secret Vault',
+        score,
+        weight: 10,
+        metrics: [
+          this.createMetric('Rotation Compliance', rotationCompliance, 100, '%', rotationCompliance >= 80 ? 'good' : 'warning', provenance),
+          this.createMetric('Secrets Expiring Soon', expiringCount, 0, 'count', expiringCount > 0 ? 'warning' : 'good', provenance)
+        ],
+        issues: []
+      };
+    } catch (error) {
+      return {
+        name: 'Secret Vault',
+        score: 0,
+        weight: 10,
+        metrics: [
+          { name: 'Rotation Compliance', value: null as any, target: 100, unit: '%', status: 'unavailable' },
+          { name: 'Secrets Expiring Soon', value: null as any, target: 0, unit: 'count', status: 'unavailable' }
+        ],
+        issues: []
+      };
+    }
   }
 
   /**
@@ -331,9 +425,29 @@ export class SecurityPostureService extends EventEmitter implements ISecurityPos
   // Private helpers
 
   private calculateWeightedScore(categories: SecurityCategory[]): number {
-    const totalWeight = categories.reduce((sum, cat) => sum + cat.weight, 0);
-    const weightedSum = categories.reduce((sum, cat) => sum + (cat.score * cat.weight), 0);
+    const availableCategories = categories.filter(cat => this.isCategoryAvailable(cat));
+    if (availableCategories.length === 0) {
+      return 0;
+    }
+
+    const totalWeight = availableCategories.reduce((sum, cat) => sum + cat.weight, 0);
+    const weightedSum = availableCategories.reduce((sum, cat) => sum + (cat.score * cat.weight), 0);
     return Math.round(weightedSum / totalWeight);
+  }
+
+  private isCategoryAvailable(category: SecurityCategory): boolean {
+    return category.metrics.some(metric => metric.status !== 'unavailable' && metric.value !== null && metric.value !== undefined);
+  }
+
+  private determineProvenance(categories: SecurityCategory[]): 'LIVE' | 'PARTIAL' | 'UNAVAILABLE' {
+    const availableCount = categories.filter(cat => this.isCategoryAvailable(cat)).length;
+    if (availableCount === 0) {
+      return 'UNAVAILABLE';
+    }
+    if (availableCount < categories.length) {
+      return 'PARTIAL';
+    }
+    return 'LIVE';
   }
 
   private async calculateTrends(): Promise<any[]> {

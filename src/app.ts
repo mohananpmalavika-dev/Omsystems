@@ -2080,6 +2080,15 @@ export async function buildApp(options?: {
   } catch (err: unknown) {
     app.log.error({ err }, 'failed to register security dashboard routes');
   }
+
+  // Register capabilities routes
+  try {
+    const capabilitiesModule = await import("./routes/capabilities.routes.js");
+    await app.register(capabilitiesModule.default);
+    app.log.info('Capabilities routes registered');
+  } catch (err: unknown) {
+    app.log.error({ err }, 'failed to register capabilities routes');
+  }
   const alertWorker = setInterval(() => {
     void alertDispatcher.drainOnce().catch((error) => app.log.error({ error }, "Alert outbox drain failed"));
   }, 5_000);
