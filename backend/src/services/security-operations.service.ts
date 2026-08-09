@@ -416,24 +416,65 @@ export class SecurityOperationsService {
       secureBoot: 0.10,
       tpm: 0.10
     };
+    // Compute weighted score only from available evidence. If a metric
+    // is not available, skip its weight and renormalize the remaining weights.
+    let weightedSum = 0;
+    let availableWeight = 0;
 
-    let score = 0;
-    score += metrics.zeroTrust.score * weights.zeroTrust;
-    score += metrics.encryption.score * weights.encryption;
-    score += metrics.certificates.score * weights.certificates;
-    const ransomwareScore = metrics.ransomware.available
-      ? (metrics.ransomware.activeThreats === 0 ? 100 : 0)
-      : 0;
-    const tamperScore = metrics.tamper.available
-      ? (metrics.tamper.criticalEvents === 0 ? 100 : 50)
-      : 0;
+    const isAvailable = {
+      zeroTrust: metrics.zeroTrust.devicesTotal > 0,
+      encryption: metrics.encryption.videosTotal > 0 || metrics.encryption.tlsCompliance > 0,
+      certificates: (metrics.certificates.healthy + metrics.certificates.expiringSoon + metrics.certificates.expired + metrics.certificates.revoked) > 0,
+      ransomware: metrics.ransomware.available,
+      tamper: metrics.tamper.available,
+      secureBoot: metrics.secureBoot.totalDevices > 0,
+      tpm: metrics.tpm.totalDevices > 0
+    };
 
-    score += ransomwareScore * weights.ransomware;
-    score += tamperScore * weights.tamper;
-    score += metrics.secureBoot.score * weights.secureBoot;
-    score += metrics.tpm.score * weights.tpm;
+    if (isAvailable.zeroTrust) {
+      weightedSum += metrics.zeroTrust.score * weights.zeroTrust;
+      availableWeight += weights.zeroTrust;
+    }
 
-    return Math.round(score);
+    if (isAvailable.encryption) {
+      weightedSum += metrics.encryption.score * weights.encryption;
+      availableWeight += weights.encryption;
+    }
+
+    if (isAvailable.certificates) {
+      weightedSum += metrics.certificates.score * weights.certificates;
+      availableWeight += weights.certificates;
+    }
+
+    if (isAvailable.ransomware) {
+      const ransomwareScore = metrics.ransomware.activeThreats === 0 ? 100 : 0;
+      weightedSum += ransomwareScore * weights.ransomware;
+      availableWeight += weights.ransomware;
+    }
+
+    if (isAvailable.tamper) {
+      const tamperScore = metrics.tamper.criticalEvents === 0 ? 100 : 50;
+      weightedSum += tamperScore * weights.tamper;
+      availableWeight += weights.tamper;
+    }
+
+    if (isAvailable.secureBoot) {
+      weightedSum += metrics.secureBoot.score * weights.secureBoot;
+      availableWeight += weights.secureBoot;
+    }
+
+    if (isAvailable.tpm) {
+      weightedSum += metrics.tpm.score * weights.tpm;
+      availableWeight += weights.tpm;
+    }
+
+    if (availableWeight === 0) {
+      // No evidence available -> mark as unavailable externally; return 0 as the score
+      return 0;
+    }
+
+    const normalized = weightedSum / availableWeight;
+    return Math.round(normalized);
   }
 
   private calculateProvenance(metrics: SecurityMetrics): 'REAL' | 'DEGRADED' | 'UNAVAILABLE' {

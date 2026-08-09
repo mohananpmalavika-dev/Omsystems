@@ -40,11 +40,45 @@ export async function registerSecurityDashboardRoutes(
       }
 
       const posture = await securityPosture.getPosture();
-      
+
+      // Enrich posture with explicit provenance for collectors that are unavailable
+      const enrichedPosture: any = { ...posture };
+
+      // If secret vault not configured, mark secrets metrics as UNAVAILABLE
+      if (!securityServices.secretVault) {
+        enrichedPosture.secrets = {
+          status: 'UNAVAILABLE',
+          rotationCompliance: null,
+          expiring: null,
+          note: 'Secret vault collector not configured',
+        };
+      }
+
+      // If certificate management / TLS telemetry not configured, mark encryption metrics unavailable
+      if (!securityServices.certificateManagement) {
+        enrichedPosture.encryption = {
+          score: null,
+          videosEncrypted: null,
+          videosTotal: null,
+          tlsCompliance: null,
+          note: 'Certificate/TLS collector not configured',
+        };
+      }
+
+      // If posture lacks event metrics, make explicit unavailable markers
+      if (typeof enrichedPosture.eventsToday === 'undefined' || enrichedPosture.eventsToday === 0) {
+        // only mark unavailable when collector likely absent (heuristic)
+        enrichedPosture.eventsToday = null;
+      }
+
+      if (typeof enrichedPosture.resolvedToday === 'undefined' || enrichedPosture.resolvedToday === 0) {
+        enrichedPosture.resolvedToday = null;
+      }
+
       return {
         available: true,
         provenance: 'LIVE',
-        ...posture,
+        ...enrichedPosture,
         collectors: {
           certificate: !!securityServices.certificateManagement,
           secretVault: !!securityServices.secretVault,
@@ -330,6 +364,9 @@ export async function registerSecurityDashboardRoutes(
       secretId: z.string(),
     }).parse(request.params);
 
+    // Accept optional reveal query + justification (reveal requires stronger checks)
+    const query = z.object({ reveal: z.coerce.boolean().optional().default(false), justification: z.string().optional() }).parse(request.query as any);
+
     try {
       const secretVault = securityServices.secretVault;
       
@@ -342,13 +379,13 @@ export async function registerSecurityDashboardRoutes(
       // SECURITY: Import and apply access control middleware
       const { requireSecretAccess, completeSecretAccessAudit } = await import('../security/middleware/secret-access-control.js');
       
-      // Check authorization, rate limit, and audit
+      // Check authorization, rate limit, and audit (reads are audited)
       const allowed = await requireSecretAccess(request, reply, 'read');
       if (!allowed) {
         return; // Response already sent by middleware
       }
 
-      // Access granted - retrieve and decrypt secret
+      // Access granted - retrieve secret metadata
       const secret = await secretVault.getSecret(params.secretId);
       
       if (!secret) {
@@ -356,19 +393,67 @@ export async function registerSecurityDashboardRoutes(
         return reply.code(404).send({ error: 'secret_not_found' });
       }
 
-      // Decrypt the secret value
+      // By default DO NOT return plaintext. Only reveal when explicitly requested and permitted.
+      const revealRequested = Boolean(query.reveal);
+
+      // Determine decision stored by middleware (reason, requiresApproval, etc.)
+      const decision = (request as any).secretAccessDecision as { allowed: boolean; reason?: string; requiresApproval?: boolean } | undefined;
+      const context = (request as any).secretAccessContext as { userId?: string } | undefined;
+
+      // Helper to mask secret values (show type and small suffix/prefix for identification)
+      function maskValue(val: string | undefined) {
+        if (!val) return undefined;
+        if (val.length <= 6) return '******';
+        return `${val.slice(0, 2)}******${val.slice(-2)}`;
+      }
+
+      if (!revealRequested) {
+        // Return metadata only with masked value
+        await completeSecretAccessAudit(request, true);
+        return {
+          ...secret,
+          value: maskValue((secret as any).value),
+          note: 'Secret value redacted. To retrieve plaintext, request with ?reveal=true and provide a justification. Plaintext retrieval is restricted and audited.',
+        };
+      }
+
+      // Reveal requested: require stronger justification and role check
+      const justification = (query.justification || (request as any).body?.justification) as string | undefined;
+
+      // Only allow reveal for admin/owner/explicit access reasons
+      const allowedReasons = ['admin', 'owner', 'explicit_access', 'role_access'];
+      const reason = decision?.reason ?? '';
+
+      if (!decision?.allowed || !allowedReasons.some((r) => reason.includes(r))) {
+        // Not allowed to reveal even though read metadata was allowed
+        await completeSecretAccessAudit(request, false, 'reveal_not_permitted');
+        return reply.code(403).send({ error: 'reveal_not_permitted', message: 'You are not authorized to retrieve plaintext for this secret' });
+      }
+
+      if (!justification || justification.trim().length < 10) {
+        await completeSecretAccessAudit(request, false, 'justification_required');
+        return reply.code(400).send({ error: 'justification_required', message: 'Provide a justification (min 10 chars) to retrieve plaintext' });
+      }
+
+      // Attach justification into context for auditing
+      if (context) context.justification = justification;
+
+      // Decrypt the secret value (sensitive operation)
       const decryptedValue = await secretVault.decrypt(secret.value);
 
-      // Complete audit log
+      // Complete audit log with success
       await completeSecretAccessAudit(request, true);
 
-      // WARNING: This exposes plaintext secret - only use when absolutely necessary
       return {
-        ...secret,
+        id: (secret as any).id,
+        name: (secret as any).name,
+        type: (secret as any).type,
+        tags: (secret as any).tags,
+        metadata: (secret as any).metadata,
         value: decryptedValue,
-        warning: 'This secret value is sensitive. Handle with care and do not log.',
         accessedBy: (request as any).currentUser?.id,
         accessedAt: new Date().toISOString(),
+        warning: 'PLAINTEXT_SECRET — handle with extreme care. Do not log or store in insecure locations.',
       };
     } catch (error) {
       app.log.error({ error, secretId: params.secretId }, 'Secret retrieval failed');

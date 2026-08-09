@@ -87,7 +87,7 @@ export class SecurityPostureService extends EventEmitter implements ISecurityPos
     const expired = await db.collection('certificates').countDocuments({ status: 'expired' });
     const expiringSoon = await db.collection('certificates').countDocuments({ status: 'expiring_soon' });
     
-    const score = total > 0 ? Math.max(0, 100 - (expired * 20) - (expiringSoon * 5)) : 100;
+    const score = total > 0 ? Math.max(0, 100 - (expired * 20) - (expiringSoon * 5)) : 0;
 
     return {
       name: 'Certificate Management',
@@ -111,7 +111,7 @@ export class SecurityPostureService extends EventEmitter implements ISecurityPos
     const totalUsers = await db.collection('users').countDocuments();
     const mfaEnabled = await db.collection('users').countDocuments({ mfaEnabled: true });
     
-    const score = totalUsers > 0 ? (mfaEnabled / totalUsers) * 100 : 100;
+    const score = totalUsers > 0 ? (mfaEnabled / totalUsers) * 100 : 0;
 
     return {
       name: 'Authentication & Access Control',
@@ -134,7 +134,7 @@ export class SecurityPostureService extends EventEmitter implements ISecurityPos
     const totalVideos = await db.collection('videos').countDocuments();
     const encryptedVideos = await db.collection('encrypted_videos').countDocuments();
     
-    const score = totalVideos > 0 ? (encryptedVideos / totalVideos) * 100 : 100;
+    const score = totalVideos > 0 ? (encryptedVideos / totalVideos) * 100 : 0;
 
     return {
       name: 'Data Encryption',
