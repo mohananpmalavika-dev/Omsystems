@@ -95,8 +95,8 @@ export class HSMService {
       // this.client = new pkcs11.PKCS11();
       // this.client.load('/path/to/thales/library.so');
       
-      console.log('✓ Thales HSM initialized');
-    } catch (error) {
+      console.log('✓ Thales HSM initialized (PKCS#11 library required)');
+    } catch (error: any) {
       console.error('Failed to initialize Thales HSM:', error);
       throw error;
     }
@@ -107,14 +107,26 @@ export class HSMService {
    */
   private async initializeAWSCloudHSM(): Promise<void> {
     try {
+      if (process.env.AWS_KMS_ENABLED !== 'true') {
+        throw new Error('AWS CloudHSM requires AWS_KMS_ENABLED=true');
+      }
+
       const AWS = require('aws-sdk');
       
       this.client = new AWS.CloudHSMV2({
         region: process.env.AWS_REGION || 'us-east-1'
       });
       
+      // Also initialize KMS for actual operations
+      const kms = new AWS.KMS({
+        region: process.env.AWS_REGION || 'us-east-1'
+      });
+      
+      // Verify connection
+      await kms.listKeys({ Limit: 1 }).promise();
+      
       console.log('✓ AWS CloudHSM initialized');
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to initialize AWS CloudHSM:', error);
       throw error;
     }
@@ -131,10 +143,18 @@ export class HSMService {
       const credential = new DefaultAzureCredential();
       const vaultUrl = this.config.endpoint;
       
+      if (!vaultUrl) {
+        throw new Error('Azure Managed HSM requires endpoint configuration');
+      }
+      
       this.client = new KeyClient(vaultUrl, credential);
       
+      // Verify connection
+      const keys = this.client.listPropertiesOfKeys();
+      await keys.next();
+      
       console.log('✓ Azure Managed HSM initialized');
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to initialize Azure Managed HSM:', error);
       throw error;
     }
@@ -145,15 +165,44 @@ export class HSMService {
    */
   private async initializeSoftHSM(): Promise<void> {
     try {
+      if (process.env.NODE_ENV === 'production' && process.env.HSM_ALLOW_SIMULATION !== 'true') {
+        throw new Error('SoftHSM is not allowed in production');
+      }
+
       // SoftHSM is PKCS#11 compatible
       // const pkcs11 = require('pkcs11js');
       // this.client = new pkcs11.PKCS11();
       // this.client.load('/usr/lib/softhsm/libsofthsm2.so');
       
-      console.log('✓ SoftHSM initialized');
-    } catch (error) {
+      console.log('✓ SoftHSM initialized (development/testing only)');
+    } catch (error: any) {
       console.error('Failed to initialize SoftHSM:', error);
       throw error;
+    }
+  }
+
+  /**
+   * Assert that operations requiring production-grade security can proceed
+   */
+  private assertProductionReady(operation: string): void {
+    if (!this.providerState) {
+      throw new Error(`HSM ${operation} operation failed: Provider state not initialized`);
+    }
+
+    if (this.providerState.state === HSMProviderState.HSM_PROVIDER_UNAVAILABLE) {
+      throw new Error(
+        `HSM ${operation} operation not available: No HSM provider configured. ` +
+        `Errors: ${this.providerState.errors.join(', ')}`
+      );
+    }
+
+    // In production, simulation mode operations should have been blocked at startup
+    if (process.env.NODE_ENV === 'production' && 
+        this.providerState.state === HSMProviderState.HSM_SIMULATION &&
+        !this.providerState.simulationAllowed) {
+      throw new Error(
+        `HSM ${operation} operation blocked: Simulation mode not allowed in production`
+      );
     }
   }
 
@@ -381,6 +430,8 @@ export class HSMService {
   }
 
   private async encryptAWS(keyId: string, plaintext: Buffer, algorithm: string): Promise<any> {
+    this.assertProductionReady('encrypt');
+
     // Try AWS KMS encryption first (production-ready)
     if (process.env.AWS_KMS_ENABLED === 'true') {
       try {
@@ -400,14 +451,14 @@ export class HSMService {
           iv: Buffer.alloc(0), // KMS handles IV internally
           authTag: undefined // KMS handles authentication internally
         };
-      } catch (error) {
-        console.error('AWS KMS encrypt error:', error instanceof Error ? error.message : String(error));
+      } catch (error: any) {
+        console.error('AWS KMS encrypt error:', error.message);
         throw error;
       }
     }
 
     // Fallback to simulation if explicitly allowed
-    if (process.env.HSM_ALLOW_SIMULATION === 'true') {
+    if (this.providerState?.state === HSMProviderState.HSM_SIMULATION) {
       const iv = crypto.randomBytes(12);
       const cipher = crypto.createCipheriv('aes-256-gcm', crypto.randomBytes(32), iv);
       const ciphertext = Buffer.concat([cipher.update(plaintext), cipher.final()]);
@@ -416,10 +467,12 @@ export class HSMService {
       return { ciphertext, iv, authTag };
     }
 
-    throw new Error('AWS CloudHSM encrypt requires AWS_KMS_ENABLED=true with proper credentials, or HSM_ALLOW_SIMULATION=true for non-production environments.');
+    throw new Error('AWS CloudHSM encrypt requires AWS_KMS_ENABLED=true with proper credentials');
   }
 
   private async decryptAWS(keyId: string, ciphertext: Buffer, iv: Buffer, authTag: Buffer | undefined, algorithm: string): Promise<Buffer> {
+    this.assertProductionReady('decrypt');
+
     // Try AWS KMS decryption first (production-ready)
     if (process.env.AWS_KMS_ENABLED === 'true') {
       try {
@@ -434,24 +487,26 @@ export class HSMService {
 
         const result = await kms.decrypt(params).promise();
         return Buffer.from(result.Plaintext);
-      } catch (error) {
-        console.error('AWS KMS decrypt error:', error instanceof Error ? error.message : String(error));
+      } catch (error: any) {
+        console.error('AWS KMS decrypt error:', error.message);
         throw error;
       }
     }
 
     // Fallback to simulation if explicitly allowed
-    if (process.env.HSM_ALLOW_SIMULATION === 'true') {
+    if (this.providerState?.state === HSMProviderState.HSM_SIMULATION) {
       const decipher = crypto.createDecipheriv('aes-256-gcm', crypto.randomBytes(32), iv);
       if (authTag) decipher.setAuthTag(authTag);
       console.warn('⚠️ Using simulated AWS decrypt (HSM_ALLOW_SIMULATION=true) — not secure for production');
       return Buffer.concat([decipher.update(ciphertext), decipher.final()]);
     }
 
-    throw new Error('AWS CloudHSM decrypt requires AWS_KMS_ENABLED=true with proper credentials, or HSM_ALLOW_SIMULATION=true for non-production environments.');
+    throw new Error('AWS CloudHSM decrypt requires AWS_KMS_ENABLED=true with proper credentials');
   }
 
   private async signAWS(keyId: string, data: Buffer, algorithm: string): Promise<Buffer> {
+    this.assertProductionReady('sign');
+
     // Try AWS KMS signing first (production-ready)
     if (process.env.AWS_KMS_ENABLED === 'true') {
       try {
@@ -467,14 +522,14 @@ export class HSMService {
 
         const result = await kms.sign(params).promise();
         return Buffer.from(result.Signature);
-      } catch (error) {
-        console.error('AWS KMS sign error:', error instanceof Error ? error.message : String(error));
+      } catch (error: any) {
+        console.error('AWS KMS sign error:', error.message);
         throw error;
       }
     }
 
     // Fallback to simulation if explicitly allowed
-    if (process.env.HSM_ALLOW_SIMULATION === 'true') {
+    if (this.providerState?.state === HSMProviderState.HSM_SIMULATION) {
       const sign = crypto.createSign(algorithm);
       sign.update(data);
       sign.end();
@@ -482,51 +537,44 @@ export class HSMService {
       return sign.sign(crypto.randomBytes(32));
     }
 
-    throw new Error('AWS CloudHSM sign requires AWS_KMS_ENABLED=true with proper credentials, or HSM_ALLOW_SIMULATION=true for non-production environments.');
+    throw new Error('AWS CloudHSM sign requires AWS_KMS_ENABLED=true with proper credentials');
   }
 
   private async verifyAWS(keyId: string, data: Buffer, signature: Buffer, algorithm: string): Promise<boolean> {
+    this.assertProductionReady('verify');
+
     // If simulation explicitly enabled, allow simulated verification for testing
-    if (process.env.HSM_ALLOW_SIMULATION === 'true') {
+    if (this.providerState?.state === HSMProviderState.HSM_SIMULATION) {
       console.warn('⚠️ Using simulated AWS verify (HSM_ALLOW_SIMULATION=true) — not secure for production');
-      // Use simulated verification by comparing hash equality as before
+      // Use simulated verification by comparing hash equality
       const hash = crypto.createHash('sha256').update(data).digest();
       return hash.equals(signature);
     }
 
-    // If KMS integration is enabled, attempt to verify using AWS KMS (fallback for Cloud workloads)
+    // If KMS integration is enabled, attempt to verify using AWS KMS
     if (process.env.AWS_KMS_ENABLED === 'true') {
       try {
         const AWS = require('aws-sdk');
         const kms = new AWS.KMS({ region: process.env.AWS_REGION || 'us-east-1' });
 
-        // KMS verify expects the digest or message depending on algorithm. Use Message and SigningAlgorithm when possible.
         const params: any = {
           KeyId: keyId,
           Signature: signature,
           Message: data,
-          // SigningAlgorithm can be derived/overridden via env var
-          SigningAlgorithm: process.env.AWS_KMS_SIGNING_ALGORITHM || (algorithm === 'SHA256' ? 'RSASSA_PSS_SHA_256' : undefined)
+          MessageType: 'RAW',
+          SigningAlgorithm: process.env.AWS_KMS_SIGNING_ALGORITHM || 'RSASSA_PSS_SHA_256'
         };
 
-        // Remove undefined fields
-        Object.keys(params).forEach(k => params[k] === undefined && delete params[k]);
-
         const resp = await kms.verify(params).promise();
-        if (resp && resp.SignatureValid === true) {
-          return true;
-        }
-
-        console.error('AWS KMS verification failed or returned invalid signature');
-        return false;
-      } catch (err) {
-        console.error('AWS KMS verify error:', err instanceof Error ? err.message : String(err));
+        return resp.SignatureValid === true;
+      } catch (err: any) {
+        console.error('AWS KMS verify error:', err.message);
         return false;
       }
     }
 
-    // Fail-closed in production: do not silently accept all verifications.
-    console.error('❌ AWS CloudHSM verify called but not implemented. Refusing to verify in production. Set HSM_ALLOW_SIMULATION=true for non-production or enable AWS_KMS_ENABLED with proper credentials.');
+    // Fail-closed in production: do not silently accept all verifications
+    console.error('❌ AWS CloudHSM verify called but not properly configured');
     return false;
   }
 
@@ -680,7 +728,7 @@ export class HSMService {
   /**
    * HSM health check
    */
-  async healthCheck(): Promise<{ healthy: boolean; provider: string; message: string }> {
+  async healthCheck(): Promise<{ healthy: boolean; provider: string; message: string; state?: string; productionReady?: boolean }> {
     try {
       // Try to list keys as a health check
       await this.listKeys();
@@ -688,13 +736,17 @@ export class HSMService {
       return {
         healthy: true,
         provider: this.config.provider,
-        message: 'HSM connection healthy'
+        message: 'HSM connection healthy',
+        state: this.providerState?.state,
+        productionReady: this.providerState?.productionReady
       };
     } catch (error: any) {
       return {
         healthy: false,
         provider: this.config.provider,
-        message: error.message
+        message: error.message,
+        state: this.providerState?.state,
+        productionReady: this.providerState?.productionReady
       };
     }
   }
