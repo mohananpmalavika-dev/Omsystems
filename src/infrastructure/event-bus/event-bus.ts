@@ -101,8 +101,8 @@ export class EventBus {
   /**
    * Publish an event
    */
-  async publish<T extends EventType>(
-    eventType: T,
+  async publish(
+    eventType: EventType | string,
     payload: BaseEvent['payload'],
     context: {
       tenantId: string;
@@ -479,10 +479,11 @@ let eventBusInstance: EventBus | null = null;
 
 export function getEventBus(config?: EventBusConfig): EventBus {
   if (!eventBusInstance) {
-    if (!config) {
-      throw new Error('EventBus must be initialized with config first');
-    }
-    eventBusInstance = new EventBus(config);
+    const effectiveConfig: EventBusConfig = config ?? {
+      serviceName: "sentinel-in-memory",
+      enablePersistence: false,
+    };
+    eventBusInstance = new EventBus(effectiveConfig);
   }
   return eventBusInstance;
 }

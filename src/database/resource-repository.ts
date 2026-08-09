@@ -40,6 +40,17 @@ export class ResourceRepository {
     return result.rows[0] ? mapNode(result.rows[0]) : undefined;
   }
 
+  async listByIds(ids: string[]): Promise<ResourceNode[]> {
+    if (ids.length === 0) return [];
+    const result = await this.pool.query<ResourceRow>(
+      `SELECT id::text, parent_id::text, tenant_id::text, node_type, name,
+             path::text
+       FROM resource_nodes WHERE id = ANY($1::uuid[])`,
+      [ids],
+    );
+    return result.rows.map(mapNode);
+  }
+
   async checkAccess(
     user: User,
     action: Action,

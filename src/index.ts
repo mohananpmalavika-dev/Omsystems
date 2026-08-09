@@ -6,6 +6,7 @@ import { MemoryStore } from "./store.js";
 import type { ControlPlaneStore } from "./control-plane-store.js";
 import { RedisEdgePresenceCache } from "./platform/edge-presence-cache.js";
 import { CloudflareTunnelManager } from "./platform/cloudflare-tunnel-manager.js";
+import { getEventBus } from "./infrastructure/event-bus/event-bus.js";
 
 const config = loadConfig();
 
@@ -38,6 +39,14 @@ if (config.DATABASE_URL) {
 const store = config.DATABASE_URL
   ? (new PostgresStore(createPool(config.DATABASE_URL)) as unknown as ControlPlaneStore)
   : new MemoryStore();
+
+const eventBus = getEventBus({
+  redisUrl: config.REDIS_URL,
+  serviceName: "sentinel-control-plane",
+  enablePersistence: true,
+});
+await eventBus.connect();
+
 const edgePresenceCache = config.REDIS_URL
   ? await new RedisEdgePresenceCache(config.REDIS_URL, config.EDGE_PRESENCE_TTL_SECONDS).connect()
   : undefined;

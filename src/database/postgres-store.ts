@@ -116,8 +116,14 @@ export class PostgresStore
   async close() { await this.pool.end(); }
   async getUser(identity: string) { return this.users.findByIdentity(identity); }
   async getNode(id: string) { return this.resources.findById(id); }
+  async listNodesByIds(ids: string[]) { return this.resources.listByIds(ids); }
+  async listCamerasByIds(cameraIds: string[]) { return this.cameras.listByIds(cameraIds); }
   async getDeviceIdentityByCamera(cameraId: string) {
     return this.deviceIdentities.findByCamera(cameraId);
+  }
+  async listAnalyticsRulesByCameraIds(cameraIds: string[]) { return this.analytics.listRulesByCameraIds(cameraIds); }
+  async listAlertNotificationsByAlertIds(tenantId: string, alertIds: string[]) {
+    return this.analytics.listNotificationsByAlertIds(tenantId, alertIds);
   }
   async checkAccess(user: User, action: Action, id: string) {
     return this.resources.checkAccess(user, action, id);

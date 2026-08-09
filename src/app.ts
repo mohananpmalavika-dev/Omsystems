@@ -2019,6 +2019,27 @@ export async function buildApp(options?: {
     } catch (err: unknown) {
       app.log.error({ err }, 'failed to start scheduled reports service');
     }
+
+    // Initialize security services and collectors
+    try {
+      const { SecurityServicesFactory } = await import("./security/services/index.js");
+      const { SecurityMonitor } = await import("./security/monitoring/security-monitor.js");
+      
+      const securityServices = SecurityServicesFactory.getInstance();
+      await securityServices.initialize();
+      app.log.info('Security services (Certificate, TPM, Secure Boot, Vault, Ransomware, Tamper) initialized');
+      
+      const securityMonitor = SecurityMonitor.getInstance();
+      await securityMonitor.startMonitoring();
+      app.log.info('Security monitoring started');
+      
+      app.addHook('onClose', async () => {
+        securityMonitor.stopMonitoring();
+        await securityServices.shutdown();
+      });
+    } catch (err: unknown) {
+      app.log.error({ err }, 'failed to initialize security services - security posture will be unavailable');
+    }
   }
   await registerPrivacyRoutes(app, store);
   await registerReportsRoutes(app, store);
@@ -2050,6 +2071,15 @@ export async function buildApp(options?: {
   await registerAlertCommandCenterRoutes(app, store, alertDispatcher,
     options?.alertWorkerKey ?? process.env.ALERT_WORKER_SHARED_KEY, voiceTokens,
     alertEvidenceClient);
+  
+  // Register security dashboard routes
+  try {
+    const { registerSecurityDashboardRoutes } = await import("./routes/security-dashboard.routes.js");
+    await registerSecurityDashboardRoutes(app, store);
+    app.log.info('Security dashboard routes registered');
+  } catch (err: unknown) {
+    app.log.error({ err }, 'failed to register security dashboard routes');
+  }
   const alertWorker = setInterval(() => {
     void alertDispatcher.drainOnce().catch((error) => app.log.error({ error }, "Alert outbox drain failed"));
   }, 5_000);

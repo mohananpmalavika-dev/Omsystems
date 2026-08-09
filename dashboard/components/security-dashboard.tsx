@@ -26,7 +26,7 @@ import { PageHero } from '@/components/page-hero';
 
 interface SecurityPosture {
   available?: boolean;
-  provenance?: 'REAL' | 'UNAVAILABLE';
+  provenance?: 'REAL' | 'DEGRADED' | 'UNAVAILABLE';
   reason?: string;
   overallScore: number;
   timestamp: string;
@@ -59,11 +59,13 @@ interface SecurityPosture {
       activeThreats: number;
       eventsToday: number;
       riskLevel: string;
+      available?: boolean;
     };
     tamper: {
       activeEvents: number;
       criticalEvents: number;
       resolvedToday: number;
+      available?: boolean;
     };
     secureBoot: {
       score: number;
@@ -84,6 +86,14 @@ interface SecurityPosture {
     title: string;
     timestamp: string;
     acknowledged: boolean;
+  }>;
+  trends?: Array<{
+    metric: string;
+    current: number;
+    previous: number;
+    change: number;
+    changePercent: number;
+    direction: 'UP' | 'DOWN' | 'STABLE';
   }>;
 }
 
@@ -164,6 +174,7 @@ export default function SecurityDashboard() {
           },
         },
         alerts: [],
+        trends: []
       });
     }
   };
@@ -245,6 +256,12 @@ export default function SecurityDashboard() {
         icon={Shield}
         actions={<button onClick={fetchSecurityPosture} className="btn-secondary"><RefreshCw className="w-4 h-4" /> Refresh posture</button>}
       />
+      {posture.provenance === 'DEGRADED' && (
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-amber-800 shadow-sm">
+          <p className="text-sm font-semibold">Security posture is degraded because some evidence collectors are not fully available.</p>
+          <p className="mt-1 text-sm text-amber-700">The score is based on partial evidence and may improve as more telemetry becomes available.</p>
+        </div>
+      )}
 
       {/* Overall Score */}
       <div className="security-score-card">
@@ -337,26 +354,27 @@ export default function SecurityDashboard() {
         <MetricCard
           icon={<AlertTriangle className="w-8 h-8" />}
           title="Ransomware"
-          score={posture.metrics.ransomware.activeThreats === 0 ? 100 : 0}
+          score={posture.metrics.ransomware.available === false ? 0 : posture.metrics.ransomware.activeThreats === 0 ? 100 : 0}
           status={posture.metrics.ransomware.riskLevel}
-          warning={posture.metrics.ransomware.activeThreats > 0 ? `${posture.metrics.ransomware.activeThreats} Active Threats` : undefined}
+          warning={posture.metrics.ransomware.available === false ? 'Ransomware evidence unavailable' : posture.metrics.ransomware.activeThreats > 0 ? `${posture.metrics.ransomware.activeThreats} Active Threats` : undefined}
         />
 
         {/* Tamper Detection */}
         <MetricCard
           icon={<Activity className="w-8 h-8" />}
           title="Tamper Detection"
-          score={posture.metrics.tamper.criticalEvents === 0 ? 100 : 50}
+          score={posture.metrics.tamper.available === false ? 0 : posture.metrics.tamper.criticalEvents === 0 ? 100 : 50}
           status={`${posture.metrics.tamper.activeEvents} Active Events`}
-          warning={posture.metrics.tamper.criticalEvents > 0 ? `${posture.metrics.tamper.criticalEvents} Critical` : undefined}
+          warning={posture.metrics.tamper.available === false ? 'Tamper evidence unavailable' : posture.metrics.tamper.criticalEvents > 0 ? `${posture.metrics.tamper.criticalEvents} Critical` : undefined}
         />
 
         {/* Secrets */}
         <MetricCard
           icon={<Key className="w-8 h-8" />}
           title="Secret Vault"
-          score={100}
+          score={posture.metrics.secrets.status === 'UNAVAILABLE' ? 0 : 100}
           status={posture.metrics.secrets.status}
+          warning={posture.metrics.secrets.status === 'UNAVAILABLE' ? 'Secret evidence unavailable' : undefined}
         />
 
         {/* Secure Boot */}

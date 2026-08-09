@@ -46,6 +46,16 @@ export class AnalyticsRepository {
     return result.rows.map(mapRule);
   }
 
+  async listRulesByCameraIds(cameraIds: string[]): Promise<AnalyticsRule[]> {
+    if (cameraIds.length === 0) return [];
+    const result = await this.pool.query(
+      `${ruleSelection}
+       WHERE rule.camera_id = ANY($1::uuid[]) AND rule.archived_at IS NULL`,
+      [cameraIds],
+    );
+    return result.rows.map(mapRule);
+  }
+
   async createRule(
     tenantId: string,
     cameraId: string,
@@ -610,6 +620,15 @@ export class AnalyticsRepository {
     const result = await this.pool.query(
       `SELECT * FROM analytics_notifications WHERE tenant_id=$1 AND ($2::uuid IS NULL OR alert_id=$2)
        ORDER BY created_at DESC`, [tenantId, alertId ?? null],
+    );
+    return result.rows.map(mapNotification);
+  }
+
+  async listNotificationsByAlertIds(tenantId: string, alertIds: string[]) {
+    if (alertIds.length === 0) return [];
+    const result = await this.pool.query(
+      `SELECT * FROM analytics_notifications WHERE tenant_id=$1 AND alert_id = ANY($2::uuid[]) ORDER BY created_at DESC`,
+      [tenantId, alertIds],
     );
     return result.rows.map(mapNotification);
   }

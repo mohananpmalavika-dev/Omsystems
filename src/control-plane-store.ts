@@ -540,6 +540,8 @@ export interface ControlPlaneStore {
     type?: NodeType,
   ): Promise<ResourceNode[]>;
   getCamera(id: string): Promise<Camera | undefined>;
+  listCamerasByIds(cameraIds: string[]): Promise<Camera[]>;
+  listNodesByIds(ids: string[]): Promise<ResourceNode[]>;
   getDeviceIdentityByCamera(cameraId: string): Promise<DeviceIdentity | undefined>;
   listCamerasByBranch(
     user: User,
@@ -1210,6 +1212,7 @@ export interface ControlPlaneStore {
   
   getIncidentStatistics(tenantId: string, period: string): Promise<any>;
   listAnalyticsRules(cameraId: string): Promise<AnalyticsRule[]>;
+  listAnalyticsRulesByCameraIds(cameraIds: string[]): Promise<AnalyticsRule[]>;
   createAnalyticsRule(
     tenantId: string,
     cameraId: string,
@@ -1275,6 +1278,7 @@ export interface ControlPlaneStore {
   }): Promise<AlertNotification | undefined>;
   reserveSmsRateLimit(tenantId: string, limit: number, requested: number, now: string): Promise<number>;
   listAlertNotifications(tenantId: string, alertId?: string): Promise<AlertNotification[]>;
+  listAlertNotificationsByAlertIds(tenantId: string, alertIds: string[]): Promise<AlertNotification[]>;
   listOperationalReportSchedules(tenantId: string): Promise<OperationalReportSchedule[]>;
   createOperationalReportSchedule(input: Omit<OperationalReportSchedule, "id" | "lastRunAt" | "createdAt" | "updatedAt">): Promise<OperationalReportSchedule>;
   updateOperationalReportSchedule(id: string, tenantId: string, updates: Partial<Pick<OperationalReportSchedule, "name" | "timezone" | "dailyAt" | "template" | "formats" | "recipients" | "filters" | "enabled" | "nextRunAt" | "lastRunAt">>): Promise<OperationalReportSchedule | undefined>;

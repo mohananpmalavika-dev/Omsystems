@@ -131,6 +131,15 @@ export class CameraRepository {
     return result.rows[0] ? mapCamera(result.rows[0]) : undefined;
   }
 
+  async listByIds(ids: string[]) {
+    if (ids.length === 0) return [];
+    const result = await this.pool.query<CameraRow>(
+      `${selectCamera} WHERE cameras.id = ANY($1::uuid[])`,
+      [ids],
+    );
+    return result.rows.map(mapCamera);
+  }
+
   async listAuthorizedByBranch(
     userId: string,
     branchId: string,

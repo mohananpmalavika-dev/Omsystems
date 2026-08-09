@@ -563,6 +563,9 @@ export enum TPMStatus {
 export interface SecurityPosture {
   overallScore: number;
   timestamp: Date;
+  provenance?: 'REAL' | 'DEGRADED' | 'UNAVAILABLE';
+  available?: boolean;
+  reason?: string;
   metrics: SecurityMetrics;
   alerts: SecurityAlert[];
   trends: SecurityTrend[];
@@ -589,19 +592,21 @@ export interface SecurityMetrics {
     revoked: number;
   };
   secrets: {
-    status: 'HEALTHY' | 'WARNING' | 'CRITICAL';
+    status: 'HEALTHY' | 'WARNING' | 'CRITICAL' | 'UNAVAILABLE';
     rotationCompliance: number;
     expiring: number;
   };
   ransomware: {
     activeThreats: number;
     eventsToday: number;
-    riskLevel: 'NONE' | 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+    riskLevel: 'NONE' | 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL' | 'UNAVAILABLE';
+    available: boolean;
   };
   tamper: {
     activeEvents: number;
     criticalEvents: number;
     resolvedToday: number;
+    available: boolean;
   };
   secureBoot: {
     score: number;

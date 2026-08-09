@@ -382,6 +382,16 @@ export class MemoryStore implements ControlPlaneStore {
     return this.cameras.get(id);
   }
 
+  async listCamerasByIds(cameraIds: string[]) {
+    const ids = new Set(cameraIds);
+    return [...this.cameras.values()].filter((camera) => ids.has(camera.id));
+  }
+
+  async listNodesByIds(ids: string[]) {
+    const keys = new Set(ids);
+    return [...this.nodes.values()].filter((node) => keys.has(node.id));
+  }
+
   async getDeviceIdentityByCamera(cameraId: string) {
     const identity = [...this.deviceIdentities.values()].find((item) => item.cameraId === cameraId);
     return identity ? structuredClone(identity) : undefined;
@@ -3685,6 +3695,18 @@ export class MemoryStore implements ControlPlaneStore {
 
   async listAnalyticsRules(cameraId: string): Promise<AnalyticsRule[]> {
     return this.analyticsRules.filter(rule => rule.cameraId === cameraId);
+  }
+
+  async listAnalyticsRulesByCameraIds(cameraIds: string[]): Promise<AnalyticsRule[]> {
+    const ids = new Set(cameraIds);
+    return this.analyticsRules.filter((rule) => ids.has(rule.cameraId));
+  }
+
+  async listAlertNotificationsByAlertIds(tenantId: string, alertIds: string[]): Promise<AlertNotification[]> {
+    const ids = new Set(alertIds);
+    return this.analyticsNotifications
+      .filter((item) => item.tenantId === tenantId && ids.has(item.alertId))
+      .map((item) => structuredClone(item));
   }
 
   async listAmcContracts(tenantId: string, vendorId?: string): Promise<AmcContract[]> {

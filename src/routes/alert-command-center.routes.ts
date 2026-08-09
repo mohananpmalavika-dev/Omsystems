@@ -2,6 +2,7 @@ import { randomUUID, timingSafeEqual } from "node:crypto";
 import { Readable } from "node:stream";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
+import type { AnalyticsRule, AlertNotification } from "../domain/models.js";
 import type { ControlPlaneStore } from "../control-plane-store.js";
 import type { AlertNotificationDispatcher } from "../alerts/notification-dispatcher.js";
 import { NOTIFICATION_MATRIX } from "../alerts/notification-dispatcher.js";
@@ -68,15 +69,41 @@ export async function registerAlertCommandCenterRoutes(
       ...(query.severity ? { severity: query.severity } : {}),
       ...(query.status ? { status: query.status } : {}),
     });
+
+    const cameraIds = [...new Set(candidates.map((alert) => alert.cameraId))];
+    const cameras = await store.listCamerasByIds(cameraIds);
+    const camerasById = new Map(cameras.map((camera) => [camera.id, camera]));
+
+    const branchIds = [...new Set(cameras.map((camera) => camera.branchId))];
+    const branches = await store.listNodesByIds(branchIds);
+    const branchesById = new Map(branches.map((branch) => [branch.id, branch]));
+
+    const rules = await store.listAnalyticsRulesByCameraIds(cameraIds);
+    const rulesByCameraId = new Map<string, AnalyticsRule[]>();
+    for (const rule of rules) {
+      const list = rulesByCameraId.get(rule.cameraId) ?? [];
+      list.push(rule);
+      rulesByCameraId.set(rule.cameraId, list);
+    }
+
+    const alertIds = candidates.map((alert) => alert.id);
+    const notifications = await store.listAlertNotificationsByAlertIds(request.currentUser.tenantId, alertIds);
+    const notificationsByAlertId = new Map<string, AlertNotification[]>();
+    for (const notification of notifications) {
+      const list = notificationsByAlertId.get(notification.alertId) ?? [];
+      list.push(notification);
+      notificationsByAlertId.set(notification.alertId, list);
+    }
+
     const data = [];
     for (const alert of candidates) {
-      const camera = await store.getCamera(alert.cameraId);
+      const camera = camerasById.get(alert.cameraId);
       if (!camera) continue;
       const decision = await store.checkAccess(request.currentUser, "analytics:view", camera.nodeId);
       if (!decision?.allowed) continue;
-      const branch = await store.getNode(camera.branchId);
-      const rule = (await store.listAnalyticsRules(camera.id)).find((item) => item.id === alert.ruleId);
-      const deliveries = await store.listAlertNotifications(request.currentUser.tenantId, alert.id);
+      const branch = branchesById.get(camera.branchId);
+      const rule = (rulesByCameraId.get(camera.id) ?? []).find((item) => item.id === alert.ruleId);
+      const deliveries = notificationsByAlertId.get(alert.id) ?? [];
       data.push({
         ...alert,
         branchId: camera.branchId,
@@ -88,6 +115,7 @@ export async function registerAlertCommandCenterRoutes(
         deliveries,
       });
     }
+
     return { data, serverTime: new Date().toISOString() };
   });
 

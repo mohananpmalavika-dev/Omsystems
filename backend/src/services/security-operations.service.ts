@@ -44,9 +44,13 @@ export class SecurityOperationsService {
     // Calculate trends
     const trends = await this.calculateTrends();
 
+    const provenance = this.calculateProvenance(metrics);
     const posture: SecurityPosture = {
       overallScore,
       timestamp: new Date(),
+      provenance,
+      available: provenance !== 'UNAVAILABLE',
+      reason: provenance === 'UNAVAILABLE' ? 'missing_security_evidence' : undefined,
       metrics,
       alerts,
       trends
@@ -262,11 +266,15 @@ export class SecurityOperationsService {
 
     // Check 2: Zero Trust compliance
     const ztMetrics = await zeroTrustService.getMetrics();
-    const ztCompliance = (ztMetrics.compliantDevices / ztMetrics.totalDevices) * 100;
+    const ztCompliance = ztMetrics.totalDevices > 0
+      ? (ztMetrics.compliantDevices / ztMetrics.totalDevices) * 100
+      : 0;
     checks.push({
       name: 'Zero Trust Compliance',
-      status: ztCompliance < 80 ? 'FAIL' : ztCompliance < 95 ? 'WARN' : 'PASS',
-      message: `${ztCompliance.toFixed(1)}% devices compliant (${ztMetrics.compliantDevices}/${ztMetrics.totalDevices})`
+      status: ztMetrics.totalDevices === 0 ? 'WARN' : ztCompliance < 80 ? 'FAIL' : ztCompliance < 95 ? 'WARN' : 'PASS',
+      message: ztMetrics.totalDevices === 0
+        ? 'No zero trust device data available'
+        : `${ztCompliance.toFixed(1)}% devices compliant (${ztMetrics.compliantDevices}/${ztMetrics.totalDevices})`
     });
 
     // Check 3: Active ransomware threats
@@ -287,11 +295,15 @@ export class SecurityOperationsService {
 
     // Check 5: TPM attestation
     const tpmStats = await secureBootTPMService.getStatistics();
-    const tpmHealth = (tpmStats.healthyTPM / tpmStats.totalTPMDevices) * 100;
+    const tpmHealth = tpmStats.totalTPMDevices > 0
+      ? (tpmStats.healthyTPM / tpmStats.totalTPMDevices) * 100
+      : 0;
     checks.push({
       name: 'TPM Attestation',
-      status: tpmStats.failedAttestations > 5 ? 'FAIL' : tpmStats.failedAttestations > 0 ? 'WARN' : 'PASS',
-      message: `${tpmHealth.toFixed(1)}% healthy, ${tpmStats.failedAttestations} failed attestations`
+      status: tpmStats.totalTPMDevices === 0 ? 'WARN' : tpmStats.failedAttestations > 5 ? 'FAIL' : tpmStats.failedAttestations > 0 ? 'WARN' : 'PASS',
+      message: tpmStats.totalTPMDevices === 0
+        ? 'No TPM attestation data available'
+        : `${tpmHealth.toFixed(1)}% healthy, ${tpmStats.failedAttestations} failed attestations`
     });
 
     // Determine overall status
@@ -323,7 +335,9 @@ export class SecurityOperationsService {
 
     // Certificate metrics
     const certHealth = await certificateManager.getHealth();
-    const certScore = (certHealth.healthy / certHealth.totalCertificates) * 100 || 100;
+    const certScore = certHealth.totalCertificates > 0
+      ? (certHealth.healthy / certHealth.totalCertificates) * 100
+      : 0;
 
     // Ransomware metrics
     const ransomwareStats = await ransomwareDetectionService.getStatistics();
@@ -333,20 +347,24 @@ export class SecurityOperationsService {
 
     // TPM metrics
     const tpmStats = await secureBootTPMService.getStatistics();
-    const tpmScore = (tpmStats.healthyTPM / tpmStats.totalTPMDevices) * 100 || 100;
+    const tpmScore = tpmStats.totalTPMDevices > 0
+      ? (tpmStats.healthyTPM / tpmStats.totalTPMDevices) * 100
+      : 0;
 
     return {
       zeroTrust: {
-        score: (ztMetrics.compliantDevices / ztMetrics.totalDevices) * 100 || 0,
+        score: ztMetrics.totalDevices > 0
+          ? (ztMetrics.compliantDevices / ztMetrics.totalDevices) * 100
+          : 0,
         devicesCompliant: ztMetrics.compliantDevices,
         devicesTotal: ztMetrics.totalDevices,
         highRiskSessions: ztMetrics.highRiskDevices
       },
       encryption: {
-        score: 100, // Placeholder
+        score: 0,
         videosEncrypted: 0,
         videosTotal: 0,
-        tlsCompliance: 100
+        tlsCompliance: 0
       },
       certificates: {
         score: certScore,
@@ -356,22 +374,26 @@ export class SecurityOperationsService {
         revoked: certHealth.revoked
       },
       secrets: {
-        status: 'HEALTHY',
-        rotationCompliance: 100,
+        status: 'UNAVAILABLE',
+        rotationCompliance: 0,
         expiring: 0
       },
       ransomware: {
         activeThreats: ransomwareStats.activeThreats,
         eventsToday: 0,
-        riskLevel: ransomwareStats.activeThreats > 0 ? 'HIGH' : 'NONE'
+        riskLevel: ransomwareStats.activeThreats > 0 ? 'HIGH' : 'NONE',
+        available: true
       },
       tamper: {
         activeEvents: tamperStats.active,
         criticalEvents: tamperStats.bySeverity['CRITICAL'] || 0,
-        resolvedToday: 0
+        resolvedToday: 0,
+        available: true
       },
       secureBoot: {
-        score: (tpmStats.validSecureBoot / tpmStats.totalSecureBoot) * 100 || 100,
+        score: tpmStats.totalSecureBoot > 0
+          ? (tpmStats.validSecureBoot / tpmStats.totalSecureBoot) * 100
+          : 0,
         compliantDevices: tpmStats.validSecureBoot,
         totalDevices: tpmStats.totalSecureBoot
       },
@@ -399,12 +421,41 @@ export class SecurityOperationsService {
     score += metrics.zeroTrust.score * weights.zeroTrust;
     score += metrics.encryption.score * weights.encryption;
     score += metrics.certificates.score * weights.certificates;
-    score += (metrics.ransomware.activeThreats === 0 ? 100 : 0) * weights.ransomware;
-    score += (metrics.tamper.criticalEvents === 0 ? 100 : 50) * weights.tamper;
+    const ransomwareScore = metrics.ransomware.available
+      ? (metrics.ransomware.activeThreats === 0 ? 100 : 0)
+      : 0;
+    const tamperScore = metrics.tamper.available
+      ? (metrics.tamper.criticalEvents === 0 ? 100 : 50)
+      : 0;
+
+    score += ransomwareScore * weights.ransomware;
+    score += tamperScore * weights.tamper;
     score += metrics.secureBoot.score * weights.secureBoot;
     score += metrics.tpm.score * weights.tpm;
 
     return Math.round(score);
+  }
+
+  private calculateProvenance(metrics: SecurityMetrics): 'REAL' | 'DEGRADED' | 'UNAVAILABLE' {
+    const evidenceFlags = {
+      zeroTrust: metrics.zeroTrust.devicesTotal > 0,
+      certificates: (metrics.certificates.healthy + metrics.certificates.expiringSoon + metrics.certificates.expired + metrics.certificates.revoked) > 0,
+      encryption: metrics.encryption.videosTotal > 0 || metrics.encryption.tlsCompliance > 0,
+      secrets: metrics.secrets.status !== 'UNAVAILABLE',
+      secureBoot: metrics.secureBoot.totalDevices > 0,
+      tpm: metrics.tpm.totalDevices > 0,
+      ransomware: metrics.ransomware.available,
+      tamper: metrics.tamper.available
+    };
+
+    const evidenceCount = Object.values(evidenceFlags).filter(Boolean).length;
+    if (evidenceCount === 0) {
+      return 'UNAVAILABLE';
+    }
+    if (evidenceCount < Object.keys(evidenceFlags).length) {
+      return 'DEGRADED';
+    }
+    return 'REAL';
   }
 
   private async calculateTrends(current?: SecurityPosture, previous?: SecurityPosture): Promise<SecurityTrend[]> {
