@@ -1213,7 +1213,7 @@ export interface ControlPlaneStore {
   createAnalyticsRule(
     tenantId: string,
     cameraId: string,
-    createdBy: string,
+    createdBy: string | undefined,
     input: AnalyticsRuleInput,
   ): Promise<AnalyticsRule>;
   updateAnalyticsRule(

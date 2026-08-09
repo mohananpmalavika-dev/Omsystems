@@ -2022,7 +2022,7 @@ export class MemoryStore implements ControlPlaneStore {
   async createAnalyticsRule(
     inputTenantId: string,
     cameraId: string,
-    createdBy: string,
+    createdBy: string | undefined,
     input: Parameters<ControlPlaneStore["createAnalyticsRule"]>[3],
   ) {
     const camera = this.cameras.get(cameraId);
@@ -2030,7 +2030,8 @@ export class MemoryStore implements ControlPlaneStore {
     if (!camera || node?.tenantId !== inputTenantId) throw new Error("camera_not_found");
     const now = new Date().toISOString();
     const rule: AnalyticsRule = {
-      id: randomUUID(), tenantId: inputTenantId, cameraId, createdBy,
+      id: randomUUID(), tenantId: inputTenantId, cameraId,
+      ...(createdBy ? { createdBy } : {}),
       ...structuredClone(input), createdAt: now, updatedAt: now,
     };
     this.analyticsRules.push(rule);

@@ -1049,7 +1049,7 @@ export interface AnalyticsRule {
   preRollSeconds: number;
   postRollSeconds: number;
   modelId?: string | undefined;
-  createdBy: string;
+  createdBy?: string | undefined;
   createdAt: string;
   updatedAt: string;
 }

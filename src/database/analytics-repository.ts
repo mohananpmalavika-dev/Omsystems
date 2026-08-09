@@ -49,7 +49,7 @@ export class AnalyticsRepository {
   async createRule(
     tenantId: string,
     cameraId: string,
-    createdBy: string,
+    createdBy: string | undefined,
     input: AnalyticsRuleInput,
   ): Promise<AnalyticsRule> {
     const client = await this.pool.connect();
@@ -68,8 +68,10 @@ export class AnalyticsRepository {
                 $16,$17,$18,$19,$20,$21
          FROM cameras camera
          JOIN resource_nodes node ON node.id=camera.resource_node_id
-         JOIN users actor ON actor.id=$21 AND actor.tenant_id=$2
          WHERE camera.id=$3 AND node.tenant_id=$2
+           AND ($21::uuid IS NULL OR EXISTS (
+             SELECT 1 FROM users actor WHERE actor.id=$21 AND actor.tenant_id=$2
+           ))
          RETURNING id`,
         [
           randomUUID(), tenantId, cameraId, zoneId, input.modelId ?? null,
@@ -79,7 +81,7 @@ export class AnalyticsRepository {
           input.minDurationSeconds, input.direction, input.severity,
           input.cooldownSeconds, JSON.stringify(input.recipients),
           input.escalateAfterSeconds ?? null, input.recordingPolicy,
-          input.preRollSeconds, input.postRollSeconds, createdBy,
+          input.preRollSeconds, input.postRollSeconds, createdBy ?? null,
         ],
       );
       if (!result.rows[0]) throw new Error("camera_not_found");
@@ -674,7 +676,7 @@ function mapRule(row: any): AnalyticsRule {
     recordingPolicy: row.recording_policy,
     preRollSeconds: row.pre_roll_seconds, postRollSeconds: row.post_roll_seconds,
     ...(row.model_id ? { modelId: row.model_id } : {}),
-    createdBy: row.created_by,
+    ...(row.created_by ? { createdBy: row.created_by } : {}),
     createdAt: iso(row.created_at), updatedAt: iso(row.updated_at),
   };
 }

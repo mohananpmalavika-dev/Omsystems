@@ -80,7 +80,7 @@ export class QueueDetector extends BaseDetector {
 
     if (problematicQueues.length > 0) {
       results.push({
-        detectionType: "queue-overcrowded",
+        detectionType: "queue",
         confidence: 0.90,
         objects: this.createQueueObjects(persons, problematicQueues),
         metadata: {

@@ -496,7 +496,7 @@ export class PostgresStore
     return this.liveOperations.updateIncidentStatus(id, tenantId, cameraId, status);
   }
   async listAnalyticsRules(cameraId: string) { return this.analytics.listRules(cameraId); }
-  async createAnalyticsRule(tenantId: string, cameraId: string, createdBy: string, input: any) {
+  async createAnalyticsRule(tenantId: string, cameraId: string, createdBy: string | undefined, input: any) {
     return this.analytics.createRule(tenantId, cameraId, createdBy, input);
   }
   async updateAnalyticsRule(id: string, tenantId: string, cameraId: string, input: any) {

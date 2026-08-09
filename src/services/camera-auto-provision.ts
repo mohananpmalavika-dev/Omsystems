@@ -1,21 +1,6 @@
-import type { AnalyticsRuleInput, ControlPlaneStore } from "../control-plane-store.js";
+import type { ControlPlaneStore } from "../control-plane-store.js";
 import type { DiscoveredCamera, RecordingJob } from "../domain/models.js";
-
-const defaultAnalyticsRules: ReadonlyArray<Pick<
-  AnalyticsRuleInput,
-  "name" | "detectionType" | "objectClasses" | "severity" | "minDurationSeconds"
->> = [
-  { name: "Person detection", detectionType: "person", objectClasses: ["person"], severity: "P2", minDurationSeconds: 0 },
-  { name: "Vehicle detection", detectionType: "vehicle", objectClasses: ["car", "truck", "bus", "motorcycle"], severity: "P3", minDurationSeconds: 0 },
-  { name: "Restricted-area intrusion", detectionType: "intrusion", objectClasses: ["person", "vehicle"], severity: "P1", minDurationSeconds: 1 },
-  { name: "Line crossing", detectionType: "line-crossing", objectClasses: ["person", "vehicle"], severity: "P2", minDurationSeconds: 0 },
-  { name: "Loitering", detectionType: "loitering", objectClasses: ["person"], severity: "P2", minDurationSeconds: 30 },
-  { name: "Crowd detection", detectionType: "crowd", objectClasses: ["person"], severity: "P2", minDurationSeconds: 10 },
-  { name: "Fire and smoke detection", detectionType: "fire-smoke", objectClasses: ["fire", "smoke"], severity: "P1", minDurationSeconds: 1 },
-  { name: "Safety equipment detection", detectionType: "ppe", objectClasses: ["person", "helmet", "vest"], severity: "P2", minDurationSeconds: 1 },
-  { name: "Camera tamper detection", detectionType: "camera-tamper", objectClasses: [], severity: "P1", minDurationSeconds: 1 },
-  { name: "Unattended object", detectionType: "object-left", objectClasses: ["bag", "package"], severity: "P2", minDurationSeconds: 30 },
-];
+import { CAMERA_AI_RULE_BUNDLE, ensureCameraAiBundle } from "../analytics/camera-ai-bundle.js";
 
 export interface CameraProvisionResult {
   discoveryId: string;
@@ -109,24 +94,7 @@ export function defaultRecordingJob(
     motionConfidenceThreshold: 0.65,
     cooldownSeconds: 60,
     maxEventDurationSeconds: 600,
-    triggerEventTypes: defaultAnalyticsRules.map((rule) => rule.detectionType),
-  };
-}
-
-function analyticsRuleInput(
-  definition: (typeof defaultAnalyticsRules)[number],
-  alertsEnabled: boolean,
-): AnalyticsRuleInput {
-  return {
-    ...definition,
-    enabled: true,
-    minConfidence: 0.65,
-    direction: "any",
-    cooldownSeconds: 60,
-    recipients: [],
-    recordingPolicy: alertsEnabled ? "protect-window" : "event-recording",
-    preRollSeconds: 30,
-    postRollSeconds: 120,
+    triggerEventTypes: CAMERA_AI_RULE_BUNDLE.map((rule) => rule.detectionType),
   };
 }
 
@@ -190,7 +158,7 @@ export async function autoProvisionVerifiedCameras(
   };
   const recordingMode = options.recordingMode ?? "continuous";
   const retentionDays = options.retentionDays ?? 180;
-  const analyticsEnabled = options.enableAnalytics === true && Boolean(options.createdBy);
+  const analyticsEnabled = options.enableAnalytics ?? true;
   const alertsEnabled = options.enableAlerts ?? analyticsEnabled;
 
   for (const discovered of pendingDiscoveries) {
@@ -242,15 +210,13 @@ export async function autoProvisionVerifiedCameras(
         defaultRecordingJob(recordingMode, retentionDays, isRecorderBacked(discovered)),
       );
 
-      if (analyticsEnabled && options.createdBy) {
-        for (const definition of defaultAnalyticsRules) {
-          await store.createAnalyticsRule(
-            branch.tenantId,
-            camera.id,
-            options.createdBy,
-            analyticsRuleInput(definition, alertsEnabled),
-          );
-        }
+      if (analyticsEnabled) {
+        await ensureCameraAiBundle(
+          store,
+          branch.tenantId,
+          camera.id,
+          alertsEnabled ? options.createdBy : undefined,
+        );
       }
 
       results.push({

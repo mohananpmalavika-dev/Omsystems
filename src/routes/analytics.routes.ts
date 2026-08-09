@@ -24,6 +24,11 @@ import {
 } from "../alerts/evidence-capture.js";
 import { defaultSeverityForDetection } from "../analytics/severity-policy.js";
 import { digitalTwinEvents } from "../digital-twin/event-stream.js";
+import {
+  CAMERA_AI_RULE_BUNDLE,
+  CAMERA_AI_SETUP_REQUIRED,
+  ensureCameraAiBundle,
+} from "../analytics/camera-ai-bundle.js";
 
 const detectionTypeSchema = z.string().trim().min(1).max(120).refine(isAiCapability, {
   message: "Unknown AI capability",
@@ -134,6 +139,10 @@ export async function registerAnalyticsRoutes(
       derived: AI_CAPABILITIES.filter((item) => item.stage === "derived").length,
       openModel: AI_CAPABILITIES.filter((item) => item.stage === "open-model").length,
     },
+    cameraDeployment: {
+      automatic: CAMERA_AI_RULE_BUNDLE.map((rule) => rule.detectionType),
+      setupRequired: [...CAMERA_AI_SETUP_REQUIRED],
+    },
   }));
   app.get("/v1/analytics/engine-health", async (_request, reply) => {
     if (!options.analyticsEngineUrl) {
@@ -203,6 +212,44 @@ export async function registerAnalyticsRoutes(
     const camera = await authorizedCamera(request, reply, store, id, "analytics:view");
     if (!camera) return;
     return { data: await store.listAnalyticsRules(id) };
+  });
+
+  app.post("/v1/branches/:branchId/analytics/enable-all-cameras", async (request, reply) => {
+    const { branchId } = z.object({ branchId: z.string().min(1) }).parse(request.params);
+    const branch = await authorizedNode(request, reply, store, branchId, "analytics:configure");
+    if (!branch || branch.type !== "branch") return;
+    const cameras = await store.listCamerasByBranch(
+      request.currentUser,
+      branchId,
+      "analytics:configure",
+    );
+    const results = [];
+    for (const camera of cameras) {
+      results.push(await ensureCameraAiBundle(
+        store,
+        request.currentUser.tenantId,
+        camera.id,
+        request.currentUser.id,
+      ));
+    }
+    const summary = results.reduce((total, result) => ({
+      created: total.created + result.created,
+      enabled: total.enabled + result.enabled,
+      unchanged: total.unchanged + result.unchanged,
+    }), { created: 0, enabled: 0, unchanged: 0 });
+    await audit(request, store, "analytics.camera_bundle_enabled", branch.id, {
+      cameraCount: cameras.length,
+      capabilityCount: CAMERA_AI_RULE_BUNDLE.length,
+      ...summary,
+    });
+    return reply.send({
+      branchId,
+      cameraCount: cameras.length,
+      capabilityCount: CAMERA_AI_RULE_BUNDLE.length,
+      ...summary,
+      setupRequired: [...CAMERA_AI_SETUP_REQUIRED],
+      results,
+    });
   });
 
   app.post("/v1/cameras/:id/analytics/rules", async (request, reply) => {
@@ -462,7 +509,7 @@ export async function registerAnalyticsRoutes(
         await triggerRecording(app, options, alert.cameraId,
           input.detectionType === "motion" ? "motion" : "event");
       }
-      if (rule.recordingPolicy === "protect-window") {
+      if (rule.recordingPolicy === "protect-window" && rule.createdBy) {
         try {
           const incident = await store.createLiveIncident({
             tenantId: input.tenantId, cameraId: input.cameraId,
