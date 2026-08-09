@@ -6,7 +6,7 @@ const schema = z.object({
   EDGE_AGENT_ID: z.preprocess((value) => value === "" ? undefined : value, z.string().min(1).optional()),
   EDGE_ACTIVATION_CODE: z.preprocess((value) => value === "" ? undefined : value, z.string().startsWith("sgact_").min(40).optional()),
   EDGE_AGENT_NAME: z.string().min(2),
-  EDGE_AGENT_VERSION: z.string().default("0.1.3"),
+  EDGE_AGENT_VERSION: z.string().default("0.1.4"),
   DEV_USER_ID: z.preprocess((value) => value === "" ? undefined : value, z.string().min(1).optional()),
   CAMERA_USERNAME: z.string().default(""),
   CAMERA_PASSWORD: z.string().default(""),
@@ -40,6 +40,7 @@ const schema = z.object({
   MEDIAMTX_API_URL: z.string().url().default("http://127.0.0.1:9997"),
   MEDIAMTX_HLS_URL: z.string().url().default("http://127.0.0.1:8888"),
   MEDIA_TUNNEL_MODE: z.enum(["disabled", "quick", "named"]).default("disabled"),
+  MEDIA_QUICK_TUNNEL_FALLBACK: z.enum(["true", "false"]).default("false").transform((value) => value === "true"),
   CLOUDFLARED_PATH: z.string().default("cloudflared"),
   CLOUDFLARED_TUNNEL_TOKEN: z.preprocess(
     (value) => value === "" ? undefined : value,

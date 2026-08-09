@@ -189,6 +189,7 @@ function branchConfiguration(
     MEDIAMTX_API_URL: "http://127.0.0.1:9997",
     MEDIAMTX_HLS_URL: "http://127.0.0.1:8888",
     MEDIA_TUNNEL_MODE: mode === "scan-once" ? "disabled" : "named",
+    MEDIA_QUICK_TUNNEL_FALLBACK: "false",
     CLOUDFLARED_PATH: "cloudflared",
     CLOUDFLARED_TUNNEL_TOKEN: "",
     MEDIA_ACCESS_TTL_SECONDS: "300",

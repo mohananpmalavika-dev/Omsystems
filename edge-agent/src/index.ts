@@ -45,7 +45,7 @@ if (runtime.embeddedEnvironmentFile && (argv.length === 0 || hasArgument(argv, "
   process.exit(0);
 }
 if (hasArgument(argv, "--version")) {
-  process.stdout.write("Sentinel Grid Edge Agent 0.1.3\n");
+  process.stdout.write("Sentinel Grid Edge Agent 0.1.4\n");
   process.exit(0);
 }
 const config = loadConfigOrExit();

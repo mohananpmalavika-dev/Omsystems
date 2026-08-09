@@ -73,6 +73,7 @@ describe("branch edge-agent package", () => {
       expect(config).toContain('LIVE_MEDIA_ENABLED="true"');
       expect(config).toContain('EDGE_MANAGED_MEDIA_BOOTSTRAP="true"');
       expect(config).toContain('MEDIA_TUNNEL_MODE="named"');
+      expect(config).toContain('MEDIA_QUICK_TUNNEL_FALLBACK="false"');
       expect(config).not.toContain('CAMERA_USERNAME="admin"');
       expect(config).not.toContain('REPLACE_WITH_CAMERA_PASSWORD');
       expect(store.auditEvents.at(-1)?.action).toBe("edge_agent.package_downloaded");
@@ -110,6 +111,7 @@ describe("branch edge-agent package", () => {
       const scanner = zipEntry(response.rawPayload, "Bengaluru-Branch-001-local-network-scanner.exe");
       expect(embeddedConfig(scanner)).toContain('LIVE_MEDIA_ENABLED="false"');
       expect(embeddedConfig(scanner)).toContain('MEDIA_TUNNEL_MODE="disabled"');
+      expect(embeddedConfig(scanner)).toContain('MEDIA_QUICK_TUNNEL_FALLBACK="false"');
       expect(zipEntry(response.rawPayload, "Run Local Discovery.cmd").toString("utf8"))
         .toContain('Run Local Discovery.ps1');
       const runner = zipEntry(response.rawPayload, "Run Local Discovery.ps1").toString("utf8");

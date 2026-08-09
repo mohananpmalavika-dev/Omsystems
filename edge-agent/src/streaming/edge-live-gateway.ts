@@ -164,6 +164,7 @@ export async function startEdgeMediaRuntimeIfAvailable(
 
 export async function startEdgeMediaRuntime(input: EdgeMediaRuntimeInput): Promise<EdgeMediaRuntime> {
   const { config } = input;
+  const tunnelMode = resolveMediaTunnelMode(config);
   const runtimeDirectory = join(process.env.EDGE_AGENT_HOME ?? process.cwd(), "runtime");
   await mkdir(runtimeDirectory, { recursive: true });
   const mediaConfigPath = join(runtimeDirectory, "mediamtx.yml");
@@ -189,19 +190,22 @@ export async function startEdgeMediaRuntime(input: EdgeMediaRuntimeInput): Promi
 
   let tunnel: ChildProcessWithoutNullStreams | undefined;
   try {
-    if (config.MEDIA_TUNNEL_MODE === "quick") {
+    if (tunnelMode === "quick") {
+      if (config.MEDIA_TUNNEL_MODE === "named") {
+        logger.warn("Managed media tunnel is not provisioned; using a protected temporary tunnel");
+      }
       const started = await startQuickTunnel(config.CLOUDFLARED_PATH,
         `http://${config.EDGE_LIVE_GATEWAY_HOST}:${config.EDGE_LIVE_GATEWAY_PORT}`, runtimeDirectory);
       tunnel = started.process;
       resolvedPublicUrl = started.publicUrl;
       logger.warn("Quick media tunnel is active; use a named tunnel for production", { publicUrl: resolvedPublicUrl });
-    } else if (config.MEDIA_TUNNEL_MODE === "named") {
+    } else if (tunnelMode === "named") {
       tunnel = startNamedTunnel(config.CLOUDFLARED_PATH, config.CLOUDFLARED_TUNNEL_TOKEN!, runtimeDirectory);
       resolvedPublicUrl = config.PUBLIC_MEDIA_GATEWAY_URL!;
     }
     if (!resolvedPublicUrl) throw new Error("No public media gateway URL was established");
     await waitForPublicGateway(new URL("/health", resolvedPublicUrl), 30_000);
-    logger.info("Edge live media is reachable", { publicUrl: resolvedPublicUrl, tunnelMode: config.MEDIA_TUNNEL_MODE });
+    logger.info("Edge live media is reachable", { publicUrl: resolvedPublicUrl, tunnelMode });
   } catch (error) {
     tunnel?.kill(); await liveGateway.close(); mediaMtx?.kill(); throw error;
   }
@@ -210,6 +214,18 @@ export async function startEdgeMediaRuntime(input: EdgeMediaRuntimeInput): Promi
     publicUrl: resolvedPublicUrl,
     async stop() { tunnel?.kill(); await liveGateway.close().catch(() => undefined); mediaMtx?.kill(); },
   };
+}
+
+export function resolveMediaTunnelMode(config: Pick<EdgeConfig,
+  "MEDIA_TUNNEL_MODE" | "MEDIA_QUICK_TUNNEL_FALLBACK" |
+  "CLOUDFLARED_TUNNEL_TOKEN" | "PUBLIC_MEDIA_GATEWAY_URL"
+>) {
+  if (config.MEDIA_TUNNEL_MODE === "named" &&
+      config.MEDIA_QUICK_TUNNEL_FALLBACK &&
+      (!config.CLOUDFLARED_TUNNEL_TOKEN || !config.PUBLIC_MEDIA_GATEWAY_URL)) {
+    return "quick" as const;
+  }
+  return config.MEDIA_TUNNEL_MODE;
 }
 
 export class MediaMtxRouter implements MediaRouter {

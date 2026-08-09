@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import {
   buildEdgeLiveGateway,
+  resolveMediaTunnelMode,
   startEdgeMediaRuntimeIfAvailable,
   type EdgeLiveGateway,
 } from "../src/streaming/edge-live-gateway.js";
@@ -8,6 +9,21 @@ import {
 describe("all-in-one edge live gateway", () => {
   let app: EdgeLiveGateway | undefined;
   afterEach(async () => { await app?.close(); app = undefined; });
+
+  it("falls back to a quick tunnel when managed media is not provisioned", () => {
+    expect(resolveMediaTunnelMode({
+      MEDIA_TUNNEL_MODE: "named",
+      MEDIA_QUICK_TUNNEL_FALLBACK: true,
+      CLOUDFLARED_TUNNEL_TOKEN: undefined,
+      PUBLIC_MEDIA_GATEWAY_URL: undefined,
+    })).toBe("quick");
+    expect(resolveMediaTunnelMode({
+      MEDIA_TUNNEL_MODE: "named",
+      MEDIA_QUICK_TUNNEL_FALLBACK: true,
+      CLOUDFLARED_TUNNEL_TOKEN: "managed-tunnel-token",
+      PUBLIC_MEDIA_GATEWAY_URL: "https://branch.media.example.com",
+    })).toBe("named");
+  });
 
   it("keeps discovery available when optional live media cannot start", async () => {
     const runtime = await startEdgeMediaRuntimeIfAvailable({} as never, async () => {
