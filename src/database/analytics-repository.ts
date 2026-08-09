@@ -343,6 +343,33 @@ export class AnalyticsRepository {
     return result.rows.map(mapAlert);
   }
 
+  async countAlerts(tenantId: string, filters: AnalyticsAlertFilters): Promise<Record<AnalyticsAlert["severity"], number>> {
+    const result = await this.pool.query(
+      `SELECT
+         COUNT(*) FILTER (WHERE alert.severity='P1' AND alert.status NOT IN ('resolved','false_alarm','suppressed')) AS p1,
+         COUNT(*) FILTER (WHERE alert.severity='P2' AND alert.status NOT IN ('resolved','false_alarm','suppressed')) AS p2,
+         COUNT(*) FILTER (WHERE alert.severity='P3' AND alert.status NOT IN ('resolved','false_alarm','suppressed')) AS p3,
+         COUNT(*) FILTER (WHERE alert.severity='P4' AND alert.status NOT IN ('resolved','false_alarm','suppressed')) AS p4,
+         COUNT(*) FILTER (WHERE alert.severity='P5' AND alert.status NOT IN ('resolved','false_alarm','suppressed')) AS p5
+       FROM analytics_alerts alert
+       JOIN cameras camera ON camera.id=alert.camera_id
+       WHERE alert.tenant_id=$1
+         AND ($2::uuid IS NULL OR alert.camera_id=$2)
+         AND ($3::uuid IS NULL OR camera.branch_node_id=$3)
+         AND ($4::timestamptz IS NULL OR alert.last_detected_at >= $4)
+         AND ($5::timestamptz IS NULL OR alert.first_detected_at <= $5)`,
+      [tenantId, filters.cameraId ?? null, filters.branchId ?? null, filters.from ?? null, filters.to ?? null],
+    );
+    const row = result.rows[0] ?? {};
+    return {
+      P1: Number(row.p1 ?? 0),
+      P2: Number(row.p2 ?? 0),
+      P3: Number(row.p3 ?? 0),
+      P4: Number(row.p4 ?? 0),
+      P5: Number(row.p5 ?? 0),
+    };
+  }
+
   async updateAlertEvidence(
     id: string,
     tenantId: string,

@@ -515,6 +515,9 @@ export class PostgresStore
   async listAnalyticsAlerts(tenantId: string, filters: any) {
     return this.analytics.listAlerts(tenantId, filters);
   }
+  async countAnalyticsAlerts(tenantId: string, filters: any) {
+    return this.analytics.countAlerts(tenantId, filters);
+  }
   async getAnalyticsAlert(id: string, tenantId: string) {
     return this.analytics.getAlert(id, tenantId);
   }

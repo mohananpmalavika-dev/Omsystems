@@ -54,6 +54,7 @@ describe("Phase 3 HO alert command center", () => {
       alertNotificationSender: sender, alertEvidenceClient: evidenceClient,
     });
   });
+
   afterEach(async () => app.close());
 
   it("dispatches and audits the exact P1-P4 notification matrix", async () => {
@@ -112,7 +113,53 @@ describe("Phase 3 HO alert command center", () => {
     expect(queue.statusCode).toBe(200);
     expect(queue.json().data.some((item: { id: string }) => item.id === body.alerts[0]?.id)).toBe(true);
   });
- 
+
+  it("returns global HO command center severity counts even when the table is paginated or filtered", async () => {
+    const p1Rule = await app.inject({
+      method: "POST", url: "/v1/cameras/cam-001/analytics/rules", headers: admin,
+      payload: {
+        name: "P1 synthetic", detectionType: "person", severity: "P1", minConfidence: 0.5,
+        cooldownSeconds: 60, recipients: [], recordingPolicy: "none", preRollSeconds: 30, postRollSeconds: 120,
+      },
+    });
+    expect(p1Rule.statusCode).toBe(201);
+
+    const p2Rule = await app.inject({
+      method: "POST", url: "/v1/cameras/cam-001/analytics/rules", headers: admin,
+      payload: {
+        name: "P2 synthetic", detectionType: "vehicle", severity: "P2", minConfidence: 0.5,
+        cooldownSeconds: 60, recipients: [], recordingPolicy: "none", preRollSeconds: 30, postRollSeconds: 120,
+      },
+    });
+    expect(p2Rule.statusCode).toBe(201);
+
+    const eventP1 = await app.inject({
+      method: "POST", url: "/internal/analytics/events", headers: { "x-analytics-engine-key": engineKey },
+      payload: {
+        tenantId: "omsystems", cameraId: "cam-001", sourceEventId: "global-counts-p1",
+        detectionType: "person", occurredAt: new Date().toISOString(), confidence: 0.91,
+        durationSeconds: 2, modelVersion: "synthetic-v1", objects: [],
+      },
+    });
+    expect(eventP1.statusCode).toBe(202);
+
+    const eventP2 = await app.inject({
+      method: "POST", url: "/internal/analytics/events", headers: { "x-analytics-engine-key": engineKey },
+      payload: {
+        tenantId: "omsystems", cameraId: "cam-001", sourceEventId: "global-counts-p2",
+        detectionType: "vehicle", occurredAt: new Date().toISOString(), confidence: 0.91,
+        durationSeconds: 2, modelVersion: "synthetic-v1", objects: [],
+      },
+    });
+    expect(eventP2.statusCode).toBe(202);
+
+    const queue = await app.inject({ method: "GET", url: "/v1/alerts/command-center?limit=1&severity=P1", headers: admin });
+    expect(queue.statusCode).toBe(200);
+    const body = queue.json();
+    expect(body.data).toHaveLength(1);
+    expect(body.counts).toMatchObject({ P1: 1, P2: 1, P3: 0, P4: 0, P5: 0 });
+  });
+
   it("enriches the HO queue and permits only one acknowledgement for a version", async () => {
     await store.createAnalyticsRule("omsystems", "cam-001", "user-global-admin", {
       name: "Concurrent acknowledgement", detectionType: "person", enabled: true,

@@ -266,6 +266,405 @@ export async function registerSecurityDashboardRoutes(
   });
 
   // ============================================================================
+  // Secret Vault APIs (Secure with Authorization & Audit)
+  // ============================================================================
+
+  /**
+   * GET /v1/security/secrets
+   * List secrets (metadata only, values redacted)
+   */
+  app.get('/v1/security/secrets', async (request, reply) => {
+    const query = z.object({
+      type: z.string().optional(),
+      tags: z.string().optional(),
+      limit: z.coerce.number().int().min(1).max(100).default(50),
+    }).parse(request.query);
+
+    try {
+      const secretVault = securityServices.secretVault;
+      
+      if (!secretVault) {
+        return reply.code(503).send({
+          error: 'secret_vault_not_initialized',
+        });
+      }
+
+      const filters: any = {};
+      if (query.type) filters.type = query.type;
+      if (query.tags) filters.tags = query.tags.split(',');
+
+      const secrets = await secretVault.listSecrets(filters);
+      
+      // IMPORTANT: Redact secret values - never expose in list
+      const sanitized = secrets.map(s => ({
+        ...s,
+        value: '[REDACTED]',
+      }));
+
+      return { 
+        data: sanitized,
+        count: sanitized.length,
+        note: 'Secret values are redacted. Use GET /v1/security/secrets/:id to decrypt specific secrets.',
+      };
+    } catch (error) {
+      app.log.error({ error }, 'Secret listing failed');
+      return reply.code(500).send({
+        error: error instanceof Error ? error.message : 'secret_listing_failed',
+      });
+    }
+  });
+
+  /**
+   * GET /v1/security/secrets/:secretId
+   * Get secret with decrypted value (SECURE ENDPOINT)
+   * 
+   * Security controls:
+   * - Authentication required
+   * - Authorization check (owner, ACL, or admin)
+   * - Rate limiting (50 reads/hour per user)
+   * - Full audit logging
+   * - Optional justification
+   */
+  app.get('/v1/security/secrets/:secretId', async (request, reply) => {
+    const params = z.object({
+      secretId: z.string(),
+    }).parse(request.params);
+
+    try {
+      const secretVault = securityServices.secretVault;
+      
+      if (!secretVault) {
+        return reply.code(503).send({
+          error: 'secret_vault_not_initialized',
+        });
+      }
+
+      // SECURITY: Import and apply access control middleware
+      const { requireSecretAccess, completeSecretAccessAudit } = await import('../security/middleware/secret-access-control.js');
+      
+      // Check authorization, rate limit, and audit
+      const allowed = await requireSecretAccess(request, reply, 'read');
+      if (!allowed) {
+        return; // Response already sent by middleware
+      }
+
+      // Access granted - retrieve and decrypt secret
+      const secret = await secretVault.getSecret(params.secretId);
+      
+      if (!secret) {
+        await completeSecretAccessAudit(request, false, 'secret_not_found');
+        return reply.code(404).send({ error: 'secret_not_found' });
+      }
+
+      // Decrypt the secret value
+      const decryptedValue = await secretVault.decrypt(secret.value);
+
+      // Complete audit log
+      await completeSecretAccessAudit(request, true);
+
+      // WARNING: This exposes plaintext secret - only use when absolutely necessary
+      return {
+        ...secret,
+        value: decryptedValue,
+        warning: 'This secret value is sensitive. Handle with care and do not log.',
+        accessedBy: (request as any).currentUser?.id,
+        accessedAt: new Date().toISOString(),
+      };
+    } catch (error) {
+      app.log.error({ error, secretId: params.secretId }, 'Secret retrieval failed');
+      
+      // Audit the failure
+      const { completeSecretAccessAudit } = await import('../security/middleware/secret-access-control.js');
+      await completeSecretAccessAudit(request, false, error instanceof Error ? error.message : 'unknown_error');
+      
+      return reply.code(500).send({
+        error: error instanceof Error ? error.message : 'secret_retrieval_failed',
+      });
+    }
+  });
+
+  /**
+   * POST /v1/security/secrets
+   * Create new secret
+   */
+  app.post('/v1/security/secrets', async (request, reply) => {
+    const body = z.object({
+      name: z.string().min(1).max(255),
+      type: z.enum(['password', 'api_key', 'token', 'certificate', 'private_key', 'database_credential', 'ssh_key', 'encryption_key', 'signing_key']),
+      value: z.string().min(1),
+      description: z.string().optional(),
+      tags: z.array(z.string()).optional(),
+      metadata: z.record(z.any()).optional(),
+      expiresAt: z.string().datetime().optional(),
+    }).parse(request.body);
+
+    try {
+      const secretVault = securityServices.secretVault;
+      
+      if (!secretVault) {
+        return reply.code(503).send({
+          error: 'secret_vault_not_initialized',
+        });
+      }
+
+      const user = (request as any).currentUser;
+      if (!user) {
+        return reply.code(401).send({ error: 'authentication_required' });
+      }
+
+      // Create secret
+      const secret = await secretVault.createSecret(
+        body.name,
+        body.type as any,
+        body.value,
+        {
+          ...body.metadata,
+          createdBy: user.id,
+          description: body.description,
+          tags: body.tags,
+        }
+      );
+
+      // Audit the creation
+      await store.writeAudit({
+        tenantId: user.tenantId,
+        actorUserId: user.id,
+        action: 'secret.created',
+        resourceNodeId: null,
+        outcome: 'success',
+        details: { secretId: secret.id, secretName: secret.name, type: body.type },
+      });
+
+      app.log.info({ secretId: secret.id, userId: user.id }, 'Secret created');
+
+      return {
+        ...secret,
+        value: '[REDACTED]',
+        message: 'Secret created successfully',
+      };
+    } catch (error) {
+      app.log.error({ error }, 'Secret creation failed');
+      return reply.code(500).send({
+        error: error instanceof Error ? error.message : 'secret_creation_failed',
+      });
+    }
+  });
+
+  /**
+   * PUT /v1/security/secrets/:secretId
+   * Update secret value (requires authorization)
+   */
+  app.put('/v1/security/secrets/:secretId', async (request, reply) => {
+    const params = z.object({
+      secretId: z.string(),
+    }).parse(request.params);
+
+    const body = z.object({
+      value: z.string().min(1),
+      justification: z.string().optional(),
+    }).parse(request.body);
+
+    try {
+      const secretVault = securityServices.secretVault;
+      
+      if (!secretVault) {
+        return reply.code(503).send({
+          error: 'secret_vault_not_initialized',
+        });
+      }
+
+      // SECURITY: Check authorization
+      const { requireSecretAccess, completeSecretAccessAudit } = await import('../security/middleware/secret-access-control.js');
+      
+      const allowed = await requireSecretAccess(request, reply, 'write');
+      if (!allowed) {
+        return;
+      }
+
+      // Update secret
+      const secret = await secretVault.updateSecret(params.secretId, body.value);
+      
+      // Complete audit
+      await completeSecretAccessAudit(request, true);
+
+      app.log.info({ secretId: params.secretId }, 'Secret updated');
+
+      return {
+        ...secret,
+        value: '[REDACTED]',
+        message: 'Secret updated successfully',
+      };
+    } catch (error) {
+      app.log.error({ error, secretId: params.secretId }, 'Secret update failed');
+      
+      const { completeSecretAccessAudit } = await import('../security/middleware/secret-access-control.js');
+      await completeSecretAccessAudit(request, false, error instanceof Error ? error.message : 'unknown_error');
+      
+      return reply.code(500).send({
+        error: error instanceof Error ? error.message : 'secret_update_failed',
+      });
+    }
+  });
+
+  /**
+   * POST /v1/security/secrets/:secretId/rotate
+   * Rotate secret (generates new value)
+   */
+  app.post('/v1/security/secrets/:secretId/rotate', async (request, reply) => {
+    const params = z.object({
+      secretId: z.string(),
+    }).parse(request.params);
+
+    const body = z.object({
+      justification: z.string().optional(),
+    }).parse(request.body || {});
+
+    try {
+      const secretVault = securityServices.secretVault;
+      
+      if (!secretVault) {
+        return reply.code(503).send({
+          error: 'secret_vault_not_initialized',
+        });
+      }
+
+      // SECURITY: Check authorization
+      const { requireSecretAccess, completeSecretAccessAudit } = await import('../security/middleware/secret-access-control.js');
+      
+      const allowed = await requireSecretAccess(request, reply, 'rotate');
+      if (!allowed) {
+        return;
+      }
+
+      // Rotate secret
+      const secret = await secretVault.rotateSecret(params.secretId);
+      
+      // Complete audit
+      await completeSecretAccessAudit(request, true);
+
+      app.log.info({ secretId: params.secretId }, 'Secret rotated');
+
+      return {
+        ...secret,
+        value: '[REDACTED]',
+        message: 'Secret rotated successfully',
+        rotatedAt: new Date().toISOString(),
+      };
+    } catch (error) {
+      app.log.error({ error, secretId: params.secretId }, 'Secret rotation failed');
+      
+      const { completeSecretAccessAudit } = await import('../security/middleware/secret-access-control.js');
+      await completeSecretAccessAudit(request, false, error instanceof Error ? error.message : 'unknown_error');
+      
+      return reply.code(500).send({
+        error: error instanceof Error ? error.message : 'secret_rotation_failed',
+      });
+    }
+  });
+
+  /**
+   * DELETE /v1/security/secrets/:secretId
+   * Delete secret (admin only)
+   */
+  app.delete('/v1/security/secrets/:secretId', async (request, reply) => {
+    const params = z.object({
+      secretId: z.string(),
+    }).parse(request.params);
+
+    try {
+      const secretVault = securityServices.secretVault;
+      
+      if (!secretVault) {
+        return reply.code(503).send({
+          error: 'secret_vault_not_initialized',
+        });
+      }
+
+      // SECURITY: Check authorization (admin only for delete)
+      const { requireSecretAccess, completeSecretAccessAudit } = await import('../security/middleware/secret-access-control.js');
+      
+      const allowed = await requireSecretAccess(request, reply, 'delete');
+      if (!allowed) {
+        return;
+      }
+
+      // Delete secret
+      await secretVault.deleteSecret(params.secretId);
+      
+      // Complete audit
+      await completeSecretAccessAudit(request, true);
+
+      app.log.info({ secretId: params.secretId }, 'Secret deleted');
+
+      return {
+        message: 'Secret deleted successfully',
+        secretId: params.secretId,
+        deletedAt: new Date().toISOString(),
+      };
+    } catch (error) {
+      app.log.error({ error, secretId: params.secretId }, 'Secret deletion failed');
+      
+      const { completeSecretAccessAudit } = await import('../security/middleware/secret-access-control.js');
+      await completeSecretAccessAudit(request, false, error instanceof Error ? error.message : 'unknown_error');
+      
+      return reply.code(500).send({
+        error: error instanceof Error ? error.message : 'secret_deletion_failed',
+      });
+    }
+  });
+
+  /**
+   * GET /v1/security/secrets/:secretId/audit
+   * Get audit trail for a secret
+   */
+  app.get('/v1/security/secrets/:secretId/audit', async (request, reply) => {
+    const params = z.object({
+      secretId: z.string(),
+    }).parse(request.params);
+
+    const query = z.object({
+      limit: z.coerce.number().int().min(1).max(500).default(100),
+    }).parse(request.query);
+
+    try {
+      const user = (request as any).currentUser;
+      if (!user) {
+        return reply.code(401).send({ error: 'authentication_required' });
+      }
+
+      // Only admins or secret owners can view audit trail
+      const isAdmin = ['admin', 'super_admin'].includes(user.role);
+      
+      if (!isAdmin) {
+        // Check if user owns the secret
+        const secretVault = securityServices.secretVault;
+        if (!secretVault) {
+          return reply.code(503).send({ error: 'secret_vault_not_initialized' });
+        }
+        
+        const secret = await secretVault.getSecret(params.secretId);
+        if (!secret || secret.metadata?.createdBy !== user.id) {
+          return reply.code(403).send({ error: 'access_denied' });
+        }
+      }
+
+      const { getSecretAuditTrail } = await import('../security/middleware/secret-access-control.js');
+      const auditTrail = await getSecretAuditTrail(params.secretId, query.limit);
+
+      return {
+        secretId: params.secretId,
+        auditTrail,
+        count: auditTrail.length,
+      };
+    } catch (error) {
+      app.log.error({ error, secretId: params.secretId }, 'Audit trail retrieval failed');
+      return reply.code(500).send({
+        error: error instanceof Error ? error.message : 'audit_trail_retrieval_failed',
+      });
+    }
+  });
+
+  // ============================================================================
   // Security Health Check
   // ============================================================================
 

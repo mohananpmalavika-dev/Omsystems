@@ -116,7 +116,39 @@ export async function registerAlertCommandCenterRoutes(
       });
     }
 
-    return { data, serverTime: new Date().toISOString() };
+    const counts = await store.countAnalyticsAlerts(request.currentUser.tenantId, { limit: 0 });
+    return { counts, data, serverTime: new Date().toISOString() };
+  });
+
+  app.get("/v1/alerts/command-center/:alertId", async (request, reply) => {
+    const { alertId } = z.object({ alertId: z.string().uuid() }).parse(request.params);
+    const alert = await store.getAnalyticsAlert(alertId, request.currentUser.tenantId);
+    if (!alert) return reply.code(404).send({ error: "analytics_alert_not_found" });
+
+    const camera = await store.getCamera(alert.cameraId);
+    if (!camera) return reply.code(404).send({ error: "camera_not_found" });
+    const decision = await store.checkAccess(request.currentUser, "analytics:view", camera.nodeId);
+    if (!decision?.allowed) return reply.code(403).send({ error: "forbidden" });
+
+    const branch = (await store.listNodesByIds([camera.branchId]))[0];
+    const rules = await store.listAnalyticsRulesByCameraIds([camera.id]);
+    const rule = rules.find((item) => item.id === alert.ruleId);
+    const notifications = await store.listAlertNotificationsByAlertIds(request.currentUser.tenantId, [alert.id]);
+    const deliveries = notifications.find((n) => n.alertId === alert.id) ? notifications.filter((n) => n.alertId === alert.id) : [];
+
+    const enriched = {
+      ...alert,
+      branchId: camera.branchId,
+      branchName: branch?.name ?? "Unknown branch",
+      cameraName: camera.name,
+      cameraStatus: camera.status,
+      detectionType: rule?.detectionType ?? "unknown",
+      notificationChannels: NOTIFICATION_MATRIX[alert.severity] ?? ["log"],
+      deliveries,
+    };
+
+    const counts = await store.countAnalyticsAlerts(request.currentUser.tenantId, { limit: 0 });
+    return { counts, data: [enriched], serverTime: new Date().toISOString() };
   });
 
   app.post("/v1/alerts/command-center/demo", async (request, reply) => {

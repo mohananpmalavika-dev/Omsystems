@@ -76,10 +76,59 @@ export function GlobalAlertCenter() {
   useEffect(() => {
     if (!enabledForRoute) return;
     const events = new EventSource("/api/control/v1/alerts/events", { withCredentials: true });
-    for (const type of ["alert.created", "alert.updated", "notification.updated"]) {
-      events.addEventListener(type, () => void load());
-    }
-    return () => events.close();
+
+    // On created — fetch enriched single alert and insert
+    events.addEventListener("alert.created", async (ev: MessageEvent) => {
+      try {
+        const payload = JSON.parse(ev.data);
+        const alertId = payload.alertId as string;
+        if (!alertId) return;
+        const response = await fetch(`/api/control/v1/alerts/command-center/${encodeURIComponent(alertId)}`, { cache: "no-store", credentials: "include" });
+        if (!response.ok) return;
+        const body = await response.json();
+        const next = (body.data ?? []) as CommandAlert[];
+        if (next.length === 0) return;
+        setAlerts((prev) => {
+          const present = prev.find((a) => a.id === next[0].id);
+          if (present) return prev.map((a) => a.id === next[0].id ? next[0] : a);
+          return [next[0], ...prev];
+        });
+      } catch { }
+    });
+
+    // On updated — fetch and replace
+    events.addEventListener("alert.updated", async (ev: MessageEvent) => {
+      try {
+        const payload = JSON.parse(ev.data);
+        const alertId = payload.alertId as string;
+        if (!alertId) return;
+        const response = await fetch(`/api/control/v1/alerts/command-center/${encodeURIComponent(alertId)}`, { cache: "no-store", credentials: "include" });
+        if (!response.ok) return;
+        const body = await response.json();
+        const updated = (body.data ?? [])[0] as CommandAlert | undefined;
+        if (!updated) return;
+        setAlerts((prev) => prev.map((a) => a.id === updated.id ? updated : a));
+      } catch { }
+    });
+
+    // On notification change — update deliveries for that alert
+    events.addEventListener("notification.updated", async (ev: MessageEvent) => {
+      try {
+        const payload = JSON.parse(ev.data);
+        const alertId = payload.alertId as string;
+        if (!alertId) return;
+        const response = await fetch(`/api/control/v1/alerts/${encodeURIComponent(alertId)}/notifications`, { cache: "no-store", credentials: "include" });
+        if (!response.ok) return;
+        const body = await response.json();
+        const deliveries = (body.data ?? []) as any[];
+        setAlerts((prev) => prev.map((a) => a.id === alertId ? { ...a, deliveries } : a));
+      } catch { }
+    });
+
+    // Periodic reconciliation reduced to 5 minutes for busy SOCs
+    void load();
+    const timer = window.setInterval(load, 300_000);
+    return () => { events.close(); window.clearInterval(timer); };
   }, [enabledForRoute, load]);
 
   const dashboardQueue = useMemo(() => activeDashboardQueue(alerts), [alerts]);

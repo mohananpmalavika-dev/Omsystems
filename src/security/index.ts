@@ -25,8 +25,22 @@ export {
   SecurityServicesFactory
 } from './services/index.js';
 
-// API Routes
-export { default as securityRoutes } from './api/security-dashboard.routes.js';
+// Evidence Collectors
+export {
+  BaseEvidenceCollector,
+  IEvidenceCollector,
+  CollectorHealth
+} from './collectors/base-evidence-collector.js';
+
+export {
+  CollectorRegistry,
+  getCollectorRegistry,
+  destroyCollectorRegistry
+} from './collectors/collector-registry.js';
+
+export { CertificateCollector } from './collectors/certificate-collector.js';
+export { PasswordRotationCollector } from './collectors/password-rotation-collector.js';
+export { MFAComplianceCollector } from './collectors/mfa-compliance-collector.js';
 
 // Database Schemas
 export { securityCollections, initializeSecurityCollections, migrateSecurityCollections } from './database/schemas.js';
@@ -108,13 +122,14 @@ export async function getSecurityPlatformHealth(): Promise<any> {
  * 
  * @example
  * ```typescript
- * import { initializeSecurityPlatform, securityRoutes } from './src/security';
+ * import { initializeSecurityPlatform } from './src/security';
+ * import { registerSecurityDashboardRoutes } from './src/routes/security-dashboard.routes';
  * 
  * // Initialize
  * await initializeSecurityPlatform(mongoDb);
  * 
- * // Mount APIs
- * app.use('/v1/security', securityRoutes);
+ * // Mount APIs (Fastify)
+ * await registerSecurityDashboardRoutes(fastifyApp, store);
  * 
  * // Check health
  * const health = await getSecurityPlatformHealth();

@@ -700,6 +700,61 @@ export interface TPMKey {
 // Security Posture Types
 // ============================================================================
 
+/**
+ * Security Evidence - proof backing a security metric
+ * This is the foundation for real, verifiable security posture
+ */
+export interface SecurityEvidence {
+  id: string;
+  source: EvidenceSource;
+  collectorType: string;
+  collectedAt: Date;
+  expiresAt?: Date;
+  freshnessMs: number;
+  confidence: number; // 0-100
+  status: 'valid' | 'stale' | 'expired' | 'failed';
+  rawData: any;
+  metadata?: Record<string, any>;
+}
+
+export type EvidenceSource =
+  | 'certificate_scan'
+  | 'secret_vault_query'
+  | 'tpm_attestation'
+  | 'password_rotation_check'
+  | 'device_identity_check'
+  | 'zero_trust_policy'
+  | 'user_mfa_status'
+  | 'video_encryption_scan'
+  | 'threat_detection'
+  | 'access_log_analysis'
+  | 'manual_entry'
+  | 'simulation'; // Marks simulated/placeholder data
+
+export interface EvidenceCollectorConfig {
+  enabled: boolean;
+  intervalMs?: number;
+  timeoutMs?: number;
+  maxStalenessMs?: number; // Reject evidence older than this
+}
+
+export interface CollectorStatus {
+  name: string;
+  type: EvidenceSource;
+  enabled: boolean;
+  status: 'active' | 'inactive' | 'error' | 'not_configured';
+  lastRun?: Date;
+  nextRun?: Date;
+  description: string;
+}
+
+export interface FreshnessReport {
+  overallFreshness: 'fresh' | 'stale' | 'expired';
+  oldestEvidenceMs: number;
+  staleCollectors: string[];
+  missingCollectors: string[];
+}
+
 export interface SecurityPosture {
   overallScore: number; // 0-100
   timestamp: Date;
@@ -710,13 +765,16 @@ export interface SecurityPosture {
   lowIssues: number;
   trends: SecurityTrend[];
   recommendations: SecurityRecommendation[];
+  provenance: 'LIVE' | 'PARTIAL' | 'SIMULATED' | 'UNAVAILABLE'; // Added provenance tracking
+  collectorStatus?: CollectorStatus[];
+  evidenceFreshness?: FreshnessReport;
 }
 
 export interface SecurityCategory {
   name: string;
   score: number; // 0-100
   weight: number;
-  metrics: SecurityMetric[];
+  metrics: SecurityMetricWithEvidence[];
   issues: SecurityIssue[];
 }
 
@@ -726,6 +784,16 @@ export interface SecurityMetric {
   target: number;
   unit: string;
   status: 'good' | 'warning' | 'critical';
+}
+
+/**
+ * Enhanced metric with evidence backing
+ */
+export interface SecurityMetricWithEvidence extends SecurityMetric {
+  evidence: SecurityEvidence[];
+  lastUpdated: Date;
+  confidence: number; // Aggregate confidence from evidence
+  provenance: 'LIVE' | 'SIMULATED' | 'UNAVAILABLE';
 }
 
 export interface SecurityIssue {

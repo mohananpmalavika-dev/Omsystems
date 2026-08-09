@@ -2178,6 +2178,29 @@ export class MemoryStore implements ControlPlaneStore {
       .slice(0, filters.limit);
   }
 
+  async countAnalyticsAlerts(
+    inputTenantId: string,
+    filters: Parameters<ControlPlaneStore["countAnalyticsAlerts"]>[1],
+  ) {
+    const counts: Record<AnalyticsAlert["severity"], number> = {
+      P1: 0,
+      P2: 0,
+      P3: 0,
+      P4: 0,
+      P5: 0,
+    };
+    for (const alert of this.analyticsAlerts) {
+      if (alert.tenantId !== inputTenantId) continue;
+      if (filters.cameraId && alert.cameraId !== filters.cameraId) continue;
+      if (filters.branchId && this.cameras.get(alert.cameraId)?.branchId !== filters.branchId) continue;
+      if (filters.from && alert.lastDetectedAt < filters.from) continue;
+      if (filters.to && alert.firstDetectedAt > filters.to) continue;
+      if (alert.status === "resolved" || alert.status === "false_alarm" || alert.status === "suppressed") continue;
+      counts[alert.severity] += 1;
+    }
+    return counts;
+  }
+
   async getAnalyticsAlert(id: string, inputTenantId: string) {
     return this.analyticsAlerts.find((alert) =>
       alert.id === id && alert.tenantId === inputTenantId

@@ -15,6 +15,7 @@ import { startLiveFromBrowser } from "@/lib/live-client";
 
 export default function AlertCommandCenterPage() {
   const [alerts, setAlerts] = useState<CommandAlert[]>([]);
+  const [counts, setCounts] = useState<Record<string, number>>({ P1: 0, P2: 0, P3: 0, P4: 0 });
   const [severity, setSeverity] = useState("");
   const [selected, setSelected] = useState<CommandAlert>();
   const [connected, setConnected] = useState(false);
@@ -35,18 +36,73 @@ export default function AlertCommandCenterPage() {
     const body = await response.json();
     const next = (body.data ?? []) as CommandAlert[];
     setAlerts(next);
+    setCounts((body.counts ?? {}) as Record<string, number>);
   }, [severity]);
 
-  useEffect(() => { void load(); const timer = setInterval(load, 30_000); return () => clearInterval(timer); }, [load]);
+  // Reconcile periodically (less frequent) — incremental updates come over SSE
+  useEffect(() => { void load(); const timer = setInterval(load, 300_000); return () => clearInterval(timer); }, [load]);
   useEffect(() => { const timer = setInterval(() => tick((value) => value + 1), 1_000); return () => clearInterval(timer); }, []);
   useEffect(() => {
     const events = new EventSource("/api/control/v1/alerts/events", { withCredentials: true });
     events.addEventListener("ready", () => setConnected(true));
-    for (const type of ["alert.created", "alert.updated", "notification.updated"]) events.addEventListener(type, () => void load());
+
+    // Incremental SSE handlers — avoid full reload on every event
+    events.addEventListener("alert.created", async (ev: MessageEvent) => {
+      try {
+        const payload = JSON.parse(ev.data);
+        const alertId = payload.alertId as string;
+        if (!alertId) return;
+        const response = await fetch(`/api/control/v1/alerts/command-center/${encodeURIComponent(alertId)}`, { cache: "no-store", credentials: "include" });
+        if (!response.ok) return;
+        const body = await response.json();
+        const nextAlert = (body.data ?? [])[0] as CommandAlert | undefined;
+        if (!nextAlert) return;
+        setAlerts((prev) => {
+          // Prepend if not present; if present replace
+          const idx = prev.findIndex((a) => a.id === nextAlert.id);
+          if (idx >= 0) {
+            const copy = [...prev]; copy[idx] = nextAlert; return copy;
+          }
+          return [nextAlert, ...prev];
+        });
+        setCounts((body.counts ?? {}) as Record<string, number>);
+      } catch {
+        // ignore malformed SSE or transient fetch failures
+      }
+    });
+
+    events.addEventListener("alert.updated", async (ev: MessageEvent) => {
+      try {
+        const payload = JSON.parse(ev.data);
+        const alertId = payload.alertId as string;
+        if (!alertId) return;
+        const response = await fetch(`/api/control/v1/alerts/command-center/${encodeURIComponent(alertId)}`, { cache: "no-store", credentials: "include" });
+        if (!response.ok) return;
+        const body = await response.json();
+        const updated = (body.data ?? [])[0] as CommandAlert | undefined;
+        if (!updated) return;
+        setAlerts((prev) => prev.map((a) => a.id === updated.id ? updated : a));
+        setCounts((body.counts ?? {}) as Record<string, number>);
+      } catch {
+      }
+    });
+
+    events.addEventListener("notification.updated", async (ev: MessageEvent) => {
+      try {
+        const payload = JSON.parse(ev.data);
+        const alertId = payload.alertId as string;
+        if (!alertId) return;
+        const response = await fetch(`/api/control/v1/alerts/${encodeURIComponent(alertId)}/notifications`, { cache: "no-store", credentials: "include" });
+        if (!response.ok) return;
+        const body = await response.json();
+        const deliveries = (body.data ?? []) as any[];
+        setAlerts((prev) => prev.map((a) => a.id === alertId ? { ...a, deliveries } : a));
+      } catch {}
+    });
+
     events.onerror = () => setConnected(false);
     return () => events.close();
-  }, [load]);
-
+  }, []);
   const generateSyntheticAlert = async () => {
     setDemoMessage(null);
     setDemoLoading(true);
@@ -71,8 +127,12 @@ export default function AlertCommandCenterPage() {
     }
   };
 
-  const counts = useMemo(() => Object.fromEntries(["P1", "P2", "P3", "P4"].map((priority) =>
-    [priority, alerts.filter((alert) => alert.severity === priority && !terminal(alert.status)).length])), [alerts]);
+  const displayedCounts = useMemo(() => ({
+    P1: counts.P1 ?? 0,
+    P2: counts.P2 ?? 0,
+    P3: counts.P3 ?? 0,
+    P4: counts.P4 ?? 0,
+  }), [counts]);
 
   const act = async (alert: CommandAlert, action: "acknowledge" | "escalate" | "assign") => {
     setBusy(true);
@@ -113,7 +173,7 @@ export default function AlertCommandCenterPage() {
     </header>
     {demoMessage ? <div className="rounded-lg border border-yellow-200 bg-yellow-50 px-4 py-3 text-sm text-yellow-800">{demoMessage}</div> : null}
     <section className="grid grid-cols-2 md:grid-cols-4 gap-3">
-      {(["P1", "P2", "P3", "P4"] as const).map((priority) => <button key={priority} onClick={() => setSeverity(severity === priority ? "" : priority)} className={`card text-left border-l-4 ${priority === "P1" ? "border-l-red-600" : priority === "P2" ? "border-l-orange-500" : priority === "P3" ? "border-l-blue-500" : "border-l-gray-500"}`}><span className="text-xs text-gray-500">{priority}</span><strong className="block text-2xl">{counts[priority]}</strong><span className="text-xs">active alerts</span></button>)}
+      {(["P1", "P2", "P3", "P4"] as const).map((priority) => <button key={priority} onClick={() => setSeverity(severity === priority ? "" : priority)} className={`card text-left border-l-4 ${priority === "P1" ? "border-l-red-600" : priority === "P2" ? "border-l-orange-500" : priority === "P3" ? "border-l-blue-500" : "border-l-gray-500"}`}><span className="text-xs text-gray-500">{priority}</span><strong className="block text-2xl">{displayedCounts[priority]}</strong><span className="text-xs">active alerts</span></button>)}
     </section>
     <section className="grid xl:grid-cols-[1.2fr_.8fr] gap-5">
       <div className="card overflow-auto">

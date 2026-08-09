@@ -1235,6 +1235,10 @@ export interface ControlPlaneStore {
     tenantId: string,
     filters: AnalyticsAlertFilters,
   ): Promise<AnalyticsAlert[]>;
+  countAnalyticsAlerts(
+    tenantId: string,
+    filters: AnalyticsAlertFilters,
+  ): Promise<Record<AnalyticsAlert["severity"], number>>;
   getAnalyticsAlert(id: string, tenantId: string): Promise<AnalyticsAlert | undefined>;
   updateAnalyticsAlertEvidence(
     id: string,
