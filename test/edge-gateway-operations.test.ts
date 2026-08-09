@@ -35,6 +35,13 @@ describe("secure edge gateway operations", () => {
       headers: { "x-edge-agent-token": identity.credential }, payload: { version: "1.0.1" },
     });
     expect(heartbeat.statusCode).toBe(200);
+    const installingHeartbeat = await app.inject({
+      method: "POST", url: `/v1/edge-agents/${identity.agentId}/heartbeat`,
+      headers: { "x-edge-agent-token": identity.credential },
+      payload: { version: "1.0.1", publicMediaUrl: "auto" },
+    });
+    expect(installingHeartbeat.statusCode).toBe(200);
+    expect((await store.getEdgeAgent(identity.agentId))?.publicMediaUrl).toBeUndefined();
     const denied = await app.inject({
       method: "POST", url: `/v1/edge-agents/${identity.agentId}/heartbeat`,
       headers: { "x-edge-agent-token": "sggw_wrong" }, payload: { version: "1.0.1" },
