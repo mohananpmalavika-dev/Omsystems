@@ -70,7 +70,7 @@ async function createTestCamera(
   const cameraResult = await client.query(
     `INSERT INTO cameras (branch_node_id, resource_node_id, status, vendor, model, channel, protocol, connection_secret_ref)
      VALUES ((SELECT id FROM resource_nodes WHERE node_type = 'branch' LIMIT 1),
-             $1, 'active', 'test', 'preservation-test', 1, 'rtsp', 'test-secret')
+             $1, 'unknown', 'test', 'preservation-test', 1, 'rtsp', 'test-secret')
      RETURNING id::text`,
     [resourceNodeId]
   );

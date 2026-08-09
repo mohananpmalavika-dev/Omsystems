@@ -75,7 +75,9 @@
     "cameras:delete:dry-run": "node scripts/delete-cameras.mjs --all --dry-run",
     "cameras:delete:test": "node scripts/delete-cameras.mjs --test --confirm",
     "cameras:delete:branch": "node scripts/delete-cameras.mjs --branch",
-    "cameras:delete:id": "node scripts/delete-cameras.mjs --id"
+    "cameras:delete:id": "node scripts/delete-cameras.mjs --id",
+    "db:delete:cameras-and-edges": "node scripts/delete-all-cameras-and-edges.mjs",
+    "db:nuke:cameras": "node scripts/delete-all-cameras-and-edges.mjs"
   },
   "engines": {
     "node": ">=22"

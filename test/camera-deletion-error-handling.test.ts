@@ -169,7 +169,7 @@ describe("Camera Deletion Error Handling - Bug Condition Exploration", () => {
       const cameraResult = await client.query(
         `INSERT INTO cameras (branch_node_id, resource_node_id, status, vendor, model, channel, protocol, connection_secret_ref)
          VALUES ((SELECT id FROM resource_nodes WHERE node_type = 'branch' LIMIT 1),
-                 $1, 'active', 'test', 'constraint-test', 1, 'rtsp', 'test-secret')
+                 $1, 'unknown', 'test', 'constraint-test', 1, 'rtsp', 'test-secret')
          RETURNING id::text`,
         [resourceNodeId]
       );
@@ -253,7 +253,7 @@ describe("Camera Deletion Error Handling - Bug Condition Exploration", () => {
       const cameraResult = await client.query(
         `INSERT INTO cameras (branch_node_id, resource_node_id, status, vendor, model, channel, protocol, connection_secret_ref)
          VALUES ((SELECT id FROM resource_nodes WHERE node_type = 'branch' LIMIT 1),
-                 $1, 'active', 'test', 'missing-table-test', 1, 'rtsp', 'test-secret')
+                 $1, 'unknown', 'test', 'missing-table-test', 1, 'rtsp', 'test-secret')
          RETURNING id::text`,
         [resourceNodeId]
       );
