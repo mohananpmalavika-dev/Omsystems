@@ -132,9 +132,17 @@ const branchListQuery = z.object({
 const cameraStatusSchema = z.object({
   status: z.enum(["online", "offline", "degraded", "unknown"]),
 });
+const cameraCodecSchema = z.preprocess((value) => {
+  if (typeof value !== "string") return value;
+  const codec = value.trim().replace(/[.\s_-]/g, "").toUpperCase();
+  if (codec === "H264" || codec === "AVC" || codec === "AVC1") return "H264";
+  if (codec === "H265" || codec === "HEVC" || codec === "HEV1" || codec === "HVC1") return "H265";
+  if (codec === "MJPEG" || codec === "MJPG" || codec === "JPEG") return "MJPEG";
+  return value;
+}, z.enum(["H264", "H265", "MJPEG", "unknown"]));
 const cameraProfileSchema = z.object({
   name: z.string().min(1),
-  codec: z.enum(["H264", "H265", "MJPEG", "unknown"]),
+  codec: cameraCodecSchema,
   width: z.number().int().positive(),
   height: z.number().int().positive(),
   role: z.enum(["main", "sub", "unknown"]).optional(),

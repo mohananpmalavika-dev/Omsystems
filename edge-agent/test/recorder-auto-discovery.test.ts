@@ -3,6 +3,7 @@ import { fingerprintHttpRecorder } from "../src/discovery/recorder-http-fingerpr
 import {
   buildUnverifiedRtspDiscoveryPayload,
   discoverRtspRecorderChannels,
+  normalizeRtspDiscoveryCodec,
 } from "../src/discovery/rtsp-network-scan.js";
 
 describe("automatic RTSP recorder discovery", () => {
@@ -78,6 +79,12 @@ describe("automatic RTSP recorder discovery", () => {
     expect(result.channels).toEqual([]);
     expect(result.credentialsRequired).toBe(true);
     expect(probe).toHaveBeenCalledTimes(8);
+  });
+
+  it("normalizes ffprobe HEVC names to the control-plane H265 codec", () => {
+    expect(normalizeRtspDiscoveryCodec("hevc")).toBe("H265");
+    expect(normalizeRtspDiscoveryCodec("h265")).toBe("H265");
+    expect(normalizeRtspDiscoveryCodec("h264")).toBe("H264");
   });
 
   it("reports the identified CP PLUS DVR when its login is rejected", () => {
