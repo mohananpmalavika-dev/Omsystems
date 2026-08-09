@@ -71,6 +71,8 @@ services:
         generateValue: true
       - key: ANALYTICS_ENGINE_SHARED_KEY
         generateValue: true
+      - key: ANALYTICS_SOURCE_SHARED_KEY
+        generateValue: true
 
   - type: web
     name: sentinel-grid-dashboard
@@ -230,7 +232,10 @@ services:
           name: sentinel-grid-control-plane
           envVarKey: ANALYTICS_ENGINE_SHARED_KEY
       - key: ANALYTICS_SOURCE_SHARED_KEY
-        generateValue: true
+        fromService:
+          type: web
+          name: sentinel-grid-control-plane
+          envVarKey: ANALYTICS_SOURCE_SHARED_KEY
       - key: ANALYTICS_REQUIRE_MODELS
         value: "false"
       - key: LOG_TO_FILE

@@ -377,6 +377,7 @@ export async function buildApp(options?: {
   allowLegacyEdgeBridgeKey?: boolean;
   edgeUpdateSigningPrivateKey?: string;
   analyticsEngineSharedKey?: string;
+  analyticsSourceSharedKey?: string;
   analyticsEngineUrl?: string;
   authMode?: "development" | "session" | "oidc";
   recordingRoot?: string;
@@ -912,7 +913,8 @@ export async function buildApp(options?: {
     if (rules.length === 0) {
       return reply.code(202).send({ accepted: false, reason: "no_enabled_camera_ai_rules" });
     }
-    if (!options?.analyticsEngineUrl || !options.analyticsEngineSharedKey) {
+    const analyticsSourceKey = options?.analyticsSourceSharedKey ?? options?.analyticsEngineSharedKey;
+    if (!options?.analyticsEngineUrl || !analyticsSourceKey) {
       return reply.code(202).send({ accepted: false, reason: "analytics_engine_not_configured" });
     }
     try {
@@ -921,7 +923,7 @@ export async function buildApp(options?: {
         signal: AbortSignal.timeout(20_000),
         headers: {
           "content-type": "application/json",
-          "x-analytics-source-key": options.analyticsEngineSharedKey,
+          "x-analytics-source-key": analyticsSourceKey,
         },
         body: JSON.stringify({
           tenantId: branch.tenantId,

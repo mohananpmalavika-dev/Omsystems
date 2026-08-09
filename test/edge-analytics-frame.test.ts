@@ -8,6 +8,7 @@ describe("edge analytics frame transport", () => {
   let store: MemoryStore;
   const bridgeKey = "e".repeat(43);
   const analyticsKey = "a".repeat(43);
+  const analyticsSourceKey = "s".repeat(43);
 
   beforeEach(async () => {
     store = new MemoryStore();
@@ -39,6 +40,7 @@ describe("edge analytics frame transport", () => {
       authMode: "session",
       edgeBridgeSharedKey: bridgeKey,
       analyticsEngineSharedKey: analyticsKey,
+      analyticsSourceSharedKey: analyticsSourceKey,
       analyticsEngineUrl: "http://analytics.example",
     });
   });
@@ -72,7 +74,7 @@ describe("edge analytics frame transport", () => {
     const [url, init] = vi.mocked(fetch).mock.calls[0]!;
     expect(String(url)).toBe("http://analytics.example/internal/frames");
     expect(init?.headers).toMatchObject({
-      "x-analytics-source-key": analyticsKey,
+      "x-analytics-source-key": analyticsSourceKey,
     });
     const body = JSON.parse(String(init?.body));
     expect(body).toMatchObject({ tenantId: "omsystems", cameraId: "cam-001" });

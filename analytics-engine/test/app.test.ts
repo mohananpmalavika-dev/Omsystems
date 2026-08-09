@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { buildAnalyticsEngine } from "../src/app.js";
 
 const sourceKey = "source-key-that-is-long-enough-for-tests";
+const controlPlaneKey = "control-plane-key-that-is-long-enough";
 
 describe("analytics engine adapter", () => {
   const apps: Array<ReturnType<typeof buildAnalyticsEngine>> = [];
@@ -82,6 +83,32 @@ describe("analytics engine adapter", () => {
       method: "POST", url: "/internal/detections", payload: {},
     });
     expect(response.statusCode).toBe(401);
+  });
+
+  it("accepts control-plane-authenticated frames without granting detection-source access", async () => {
+    const app = buildAnalyticsEngine({
+      sourceSharedKey: sourceKey,
+      controlPlaneSharedKey: controlPlaneKey,
+      submit: async () => ({}),
+    });
+    apps.push(app);
+    const frameResponse = await app.inject({
+      method: "POST", url: "/internal/frames",
+      headers: { "x-analytics-source-key": controlPlaneKey },
+      payload: {
+        tenantId: "tenant-1", cameraId: "camera-control-plane", width: 2, height: 2,
+        imageBase64: Buffer.alloc(2 * 2 * 3, 127).toString("base64"),
+        rules: [],
+      },
+    });
+    expect(frameResponse.statusCode).toBe(202);
+
+    const detectionResponse = await app.inject({
+      method: "POST", url: "/internal/detections",
+      headers: { "x-analytics-source-key": controlPlaneKey },
+      payload: {},
+    });
+    expect(detectionResponse.statusCode).toBe(401);
   });
 
   it("turns open-model frame observations into tracked analytics events", async () => {

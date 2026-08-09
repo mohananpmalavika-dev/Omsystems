@@ -138,7 +138,11 @@ export function buildAnalyticsEngine(options: AnalyticsEngineOptions) {
       return; // Allow public access to monitoring endpoints
     }
     const key = request.headers["x-analytics-source-key"];
-    if (typeof key !== "string" || !same(key, options.sourceSharedKey)) {
+    const trustedSource = typeof key === "string" && same(key, options.sourceSharedKey);
+    const trustedControlPlaneFrame = typeof key === "string" &&
+      request.url.startsWith("/internal/frames") &&
+      same(key, options.controlPlaneSharedKey);
+    if (!trustedSource && !trustedControlPlaneFrame) {
       return reply.code(401).send({ error: "invalid_analytics_source_identity" });
     }
   });
