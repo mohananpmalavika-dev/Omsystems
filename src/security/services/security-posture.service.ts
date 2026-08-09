@@ -4,7 +4,7 @@
  */
 
 import { ISecurityPostureService, IssueFilters } from '../interfaces.js';
-import { SecurityPosture, SecurityCategory, SecurityIssue, ComplianceStatus, ComplianceFramework } from '../types.js';
+import { SecurityPosture, SecurityCategory, SecurityIssue, SecurityMetricWithEvidence, ComplianceStatus, ComplianceFramework } from '../types.js';
 import { getDatabase } from '../../config/database.js';
 import { EventEmitter } from 'events';
 
@@ -91,15 +91,16 @@ export class SecurityPostureService extends EventEmitter implements ISecurityPos
     const expiringSoon = await db.collection('certificates').countDocuments({ status: 'expiring_soon' });
     
     const score = total > 0 ? Math.max(0, 100 - (expired * 20) - (expiringSoon * 5)) : 0;
+    const provenance = total > 0 ? 'LIVE' : 'UNAVAILABLE';
 
     return {
       name: 'Certificate Management',
       score,
       weight: 15,
       metrics: [
-        { name: 'Total Certificates', value: total, target: 0, unit: 'count', status: 'good' },
-        { name: 'Expired', value: expired, target: 0, unit: 'count', status: expired > 0 ? 'critical' : 'good' },
-        { name: 'Expiring Soon', value: expiringSoon, target: 0, unit: 'count', status: expiringSoon > 3 ? 'warning' : 'good' }
+        this.createMetric('Total Certificates', total, 0, 'count', total > 0 ? 'good' : 'unavailable', provenance),
+        this.createMetric('Expired', expired, 0, 'count', expired > 0 ? 'critical' : total > 0 ? 'good' : 'unavailable', provenance),
+        this.createMetric('Expiring Soon', expiringSoon, 0, 'count', expiringSoon > 3 ? 'warning' : total > 0 ? 'good' : 'unavailable', provenance)
       ],
       issues: []
     };
@@ -115,14 +116,15 @@ export class SecurityPostureService extends EventEmitter implements ISecurityPos
     const mfaEnabled = await db.collection('users').countDocuments({ mfaEnabled: true });
     
     const score = totalUsers > 0 ? (mfaEnabled / totalUsers) * 100 : 0;
+    const provenance = totalUsers > 0 ? 'LIVE' : 'UNAVAILABLE';
 
     return {
       name: 'Authentication & Access Control',
       score,
       weight: 20,
       metrics: [
-        { name: 'Users with MFA', value: mfaEnabled, target: totalUsers, unit: 'users', status: score > 80 ? 'good' : 'warning' },
-        { name: 'MFA Coverage', value: Math.round(score), target: 100, unit: '%', status: score > 80 ? 'good' : 'warning' }
+        this.createMetric('Users with MFA', mfaEnabled, totalUsers, 'users', totalUsers > 0 ? (score > 80 ? 'good' : 'warning') : 'unavailable', provenance),
+        this.createMetric('MFA Coverage', Math.round(score), 100, '%', totalUsers > 0 ? (score > 80 ? 'good' : 'warning') : 'unavailable', provenance)
       ],
       issues: []
     };
@@ -138,14 +140,15 @@ export class SecurityPostureService extends EventEmitter implements ISecurityPos
     const encryptedVideos = await db.collection('encrypted_videos').countDocuments();
     
     const score = totalVideos > 0 ? (encryptedVideos / totalVideos) * 100 : 0;
+    const provenance = totalVideos > 0 ? 'LIVE' : 'UNAVAILABLE';
 
     return {
       name: 'Data Encryption',
       score,
       weight: 20,
       metrics: [
-        { name: 'Encrypted Videos', value: encryptedVideos, target: totalVideos, unit: 'videos', status: score > 90 ? 'good' : 'warning' },
-        { name: 'Encryption Coverage', value: Math.round(score), target: 100, unit: '%', status: score > 90 ? 'good' : 'warning' }
+        this.createMetric('Encrypted Videos', encryptedVideos, totalVideos, 'videos', totalVideos > 0 ? (score > 90 ? 'good' : 'warning') : 'unavailable', provenance),
+        this.createMetric('Encryption Coverage', Math.round(score), 100, '%', totalVideos > 0 ? (score > 90 ? 'good' : 'warning') : 'unavailable', provenance)
       ],
       issues: []
     };
@@ -159,13 +162,14 @@ export class SecurityPostureService extends EventEmitter implements ISecurityPos
     
     const policies = await db.collection('zero_trust_policies').countDocuments({ enabled: true });
     const score = Math.min(100, policies * 10);
+    const provenance = policies > 0 ? 'LIVE' : 'UNAVAILABLE';
 
     return {
       name: 'Access Control',
       score,
       weight: 15,
       metrics: [
-        { name: 'Active Policies', value: policies, target: 10, unit: 'policies', status: policies >= 5 ? 'good' : 'warning' }
+        this.createMetric('Active Policies', policies, 10, 'policies', policies > 0 ? (policies >= 5 ? 'good' : 'warning') : 'unavailable', provenance)
       ],
       issues: []
     };
@@ -180,19 +184,21 @@ export class SecurityPostureService extends EventEmitter implements ISecurityPos
     const activeThreats = await db.collection('ransomware_threats').countDocuments({ resolved: false });
     const totalThreatRecords = await db.collection('ransomware_threats').countDocuments();
     const score = totalThreatRecords > 0 ? Math.max(0, 100 - (activeThreats * 10)) : 0;
+    const provenance = totalThreatRecords > 0 ? 'LIVE' : 'UNAVAILABLE';
 
     return {
       name: 'Threat Detection',
       score,
       weight: 20,
       metrics: [
-        {
-          name: 'Active Threats',
-          value: activeThreats,
-          target: 0,
-          unit: 'threats',
-          status: totalThreatRecords > 0 ? (activeThreats === 0 ? 'good' : 'critical') : 'unavailable'
-        }
+        this.createMetric(
+          'Active Threats',
+          activeThreats,
+          0,
+          'threats',
+          totalThreatRecords > 0 ? (activeThreats === 0 ? 'good' : 'critical') : 'unavailable',
+          provenance
+        )
       ],
       issues: []
     };
@@ -207,19 +213,14 @@ export class SecurityPostureService extends EventEmitter implements ISecurityPos
     const totalControls = controls.length;
     const compliantControls = controls.filter(c => c.compliant).length;
     const score = totalControls > 0 ? Math.round((compliantControls / totalControls) * 100) : 0;
+    const provenance = totalControls > 0 ? 'LIVE' : 'UNAVAILABLE';
 
     return {
       name: 'Compliance',
       score,
       weight: 10,
       metrics: [
-        {
-          name: 'Compliance Score',
-          value: score,
-          target: 100,
-          unit: '%',
-          status: totalControls > 0 ? (score >= 80 ? 'good' : 'warning') : 'unavailable'
-        }
+        this.createMetric('Compliance Score', score, 100, '%', totalControls > 0 ? (score >= 80 ? 'good' : 'warning') : 'unavailable', provenance)
       ],
       issues: []
     };
@@ -240,8 +241,8 @@ export class SecurityPostureService extends EventEmitter implements ISecurityPos
         score: 0,
         weight: 10,
         metrics: [
-          { name: 'Rotation Compliance', value: null as any, target: 100, unit: '%', status: 'unavailable' },
-          { name: 'Secrets Expiring Soon', value: null as any, target: 0, unit: 'count', status: 'unavailable' }
+          this.createMetric('Rotation Compliance', null, 100, '%', 'unavailable', 'UNAVAILABLE'),
+          this.createMetric('Secrets Expiring Soon', null, 0, 'count', 'unavailable', 'UNAVAILABLE')
         ],
         issues: []
       };
@@ -289,8 +290,8 @@ export class SecurityPostureService extends EventEmitter implements ISecurityPos
         score: 0,
         weight: 10,
         metrics: [
-          { name: 'Rotation Compliance', value: null as any, target: 100, unit: '%', status: 'unavailable' },
-          { name: 'Secrets Expiring Soon', value: null as any, target: 0, unit: 'count', status: 'unavailable' }
+          this.createMetric('Rotation Compliance', null, 100, '%', 'unavailable', 'UNAVAILABLE'),
+          this.createMetric('Secrets Expiring Soon', null, 0, 'count', 'unavailable', 'UNAVAILABLE')
         ],
         issues: []
       };
@@ -448,6 +449,29 @@ export class SecurityPostureService extends EventEmitter implements ISecurityPos
       return 'PARTIAL';
     }
     return 'LIVE';
+  }
+
+  private createMetric(
+    name: string,
+    value: number | null,
+    target: number,
+    unit: string,
+    status: 'good' | 'warning' | 'critical' | 'unavailable',
+    provenance: 'LIVE' | 'SIMULATED' | 'UNAVAILABLE',
+    evidence: any[] = [],
+    confidence: number = status === 'unavailable' ? 0 : status === 'good' ? 100 : status === 'warning' ? 60 : 25
+  ): SecurityMetricWithEvidence {
+    return {
+      name,
+      value,
+      target,
+      unit,
+      status,
+      evidence,
+      lastUpdated: new Date(),
+      confidence,
+      provenance
+    };
   }
 
   private async calculateTrends(): Promise<any[]> {

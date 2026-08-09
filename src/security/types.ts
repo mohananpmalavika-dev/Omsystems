@@ -780,10 +780,10 @@ export interface SecurityCategory {
 
 export interface SecurityMetric {
   name: string;
-  value: number;
+  value: number | null;
   target: number;
   unit: string;
-  status: 'good' | 'warning' | 'critical';
+  status: 'good' | 'warning' | 'critical' | 'unavailable';
 }
 
 /**

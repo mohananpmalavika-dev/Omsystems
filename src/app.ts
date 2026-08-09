@@ -401,6 +401,21 @@ export async function buildApp(options?: {
   edgeTunnelProvider?: ManagedEdgeTunnelProvider;
   requireManagedEdgeTunnel?: boolean;
 }): Promise<FastifyInstance> {
+  // PRODUCTION SECRET VALIDATION
+  // In production mode, validate all critical secrets before proceeding
+  // This ensures we fail fast with clear error messages rather than
+  // silently accepting development defaults
+  if (process.env.NODE_ENV === 'production') {
+    try {
+      const { validateProductionSecrets } = await import('../backend/src/services/production-secret-validator.service.js');
+      validateProductionSecrets();
+      console.log('✅ Production secret validation passed');
+    } catch (error) {
+      console.error(error instanceof Error ? error.message : String(error));
+      throw new Error('Production secret validation failed. Cannot start application with insecure configuration.');
+    }
+  }
+  
   const app = Fastify({
     logger: options?.logger ?? false,
     trustProxy: Boolean(options?.edgeBridgeSharedKey),
@@ -423,7 +438,16 @@ export async function buildApp(options?: {
   if ((voiceProviderNames.length > 0 || smsProviderNames.length > 0) && !voiceCallbackSecret) {
     throw new Error("ALERT_VOICE_CALLBACK_SECRET is required when provider callbacks are enabled");
   }
-  const voiceTokens = new VoiceCallbackTokens(voiceCallbackSecret ?? "development-voice-callback-secret-change-me");
+  
+  // PRODUCTION SAFETY: No development defaults in production
+  // Development mode: use safe default for local testing
+  // Production mode: must be explicitly configured or startup fails
+  const effectiveVoiceCallbackSecret = voiceCallbackSecret ?? 
+    (process.env.NODE_ENV === 'production' 
+      ? (() => { throw new Error("ALERT_VOICE_CALLBACK_SECRET must be configured in production"); })()
+      : "development-voice-callback-secret-change-me");
+  
+  const voiceTokens = new VoiceCallbackTokens(effectiveVoiceCallbackSecret);
   const publicAlertBaseUrl = process.env.ALERT_PUBLIC_BASE_URL ?? "";
   if ((voiceProviderNames.length > 0 || smsProviderNames.length > 0) && !/^https:\/\//i.test(publicAlertBaseUrl)) {
     throw new Error("ALERT_PUBLIC_BASE_URL must be a provider-reachable HTTPS URL when external notifications are enabled");
@@ -442,7 +466,13 @@ export async function buildApp(options?: {
       : undefined
   );
   const reportExportRoot = options?.reportExportRoot ?? process.env.REPORT_EXPORT_ROOT ?? "./report-exports";
-  const reportDownloadSecret = options?.reportDownloadSecret ?? process.env.REPORT_DOWNLOAD_SECRET ?? "development-report-download-secret-change-me";
+  
+  // PRODUCTION SAFETY: Report download secret must be configured in production
+  const reportDownloadSecret = options?.reportDownloadSecret ?? process.env.REPORT_DOWNLOAD_SECRET ?? 
+    (process.env.NODE_ENV === 'production' 
+      ? (() => { throw new Error("REPORT_DOWNLOAD_SECRET must be configured in production"); })()
+      : "development-report-download-secret-change-me");
+  
   const reportEmailSender = options?.reportEmailSender ?? configuredReportEmailSender(reportDownloadSecret);
   const operationalReportWorker = new OperationalReportWorker(store, reportExportRoot, reportEmailSender,
     Number(process.env.REPORT_ARCHIVE_RETENTION_DAYS ?? 365));

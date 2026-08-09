@@ -24,7 +24,7 @@ export function ComplianceRecordDetail({ kind, id }: { kind: RecordKind; id: str
     setLoading(true);
     setError(null);
     try {
-      const response = await fetch(`/api/compliance/${kind}/${encodeURIComponent(id)}`, { credentials: "include" });
+      const response = await fetch(`/api/control/v1/compliance/${kind}/${encodeURIComponent(id)}`, { credentials: "include" });
       if (!response.ok) throw new Error(response.status === 404 ? `${meta.singular} was not found.` : `Unable to load ${meta.singular.toLowerCase()}.`);
       const body = await response.json();
       setRecord((body.data ?? body) as Record<string, unknown>);

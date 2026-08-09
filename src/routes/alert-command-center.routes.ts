@@ -55,7 +55,13 @@ export async function registerAlertCommandCenterRoutes(
   store: ControlPlaneStore,
   dispatcher: AlertNotificationDispatcher,
   workerKey?: string,
-  voiceTokens = new VoiceCallbackTokens(process.env.ALERT_VOICE_CALLBACK_SECRET ?? "development-voice-callback-secret-change-me"),
+  voiceTokens = (() => {
+    const secret = process.env.ALERT_VOICE_CALLBACK_SECRET;
+    if (process.env.NODE_ENV === 'production' && !secret) {
+      throw new Error("ALERT_VOICE_CALLBACK_SECRET must be configured in production");
+    }
+    return new VoiceCallbackTokens(secret ?? "development-voice-callback-secret-change-me");
+  })(),
   evidenceClient?: AlertEvidenceClient,
 ) {
   app.get("/v1/alerts/command-center", async (request) => {

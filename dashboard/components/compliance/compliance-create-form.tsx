@@ -18,7 +18,7 @@ export function ComplianceCreateForm({ kind }: { kind: CreateKind }) {
   const listHref = isRequirement ? "/compliance/requirements" : "/compliance/risks";
 
   useEffect(() => {
-    void fetch("/api/compliance/frameworks", { credentials: "include" })
+    void fetch("/api/control/v1/compliance/frameworks", { credentials: "include" })
       .then((response) => response.ok ? response.json() : Promise.reject())
       .then((body) => setFrameworks(body.data ?? []))
       .catch(() => setFrameworks([]));
@@ -55,7 +55,7 @@ export function ComplianceCreateForm({ kind }: { kind: CreateKind }) {
 
     try {
       const plural = isRequirement ? "requirements" : "risks";
-      const response = await fetch(`/api/compliance/${plural}`, {
+      const response = await fetch(`/api/control/v1/compliance/${plural}`, {
         method: "POST",
         credentials: "include",
         headers: { "content-type": "application/json" },

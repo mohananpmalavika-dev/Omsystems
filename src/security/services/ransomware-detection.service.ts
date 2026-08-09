@@ -23,7 +23,7 @@ export class RansomwareDetectionService extends EventEmitter implements IRansomw
   async detectThreats(): Promise<RansomwareThreat[]> {
     const threats: RansomwareThreat[] = [];
 
-    for (const deviceId of this.monitoredDevices) {
+    for (const deviceId of Array.from(this.monitoredDevices)) {
       const threat = await this.analyzeDevice(deviceId);
       if (threat) {
         threats.push(threat);

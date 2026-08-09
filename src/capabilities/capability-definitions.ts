@@ -487,12 +487,13 @@ export const SYSTEM_CAPABILITIES: CapabilityDefinition[] = [
     id: 'operations.alert_correlation',
     name: 'Alert Correlation Engine',
     category: 'operations',
-    tier: CapabilityTier.READY,
-    status: CapabilityStatus.INACTIVE,
+    tier: CapabilityTier.REAL,
+    status: CapabilityStatus.ACTIVE,
     description: 'Correlate related alerts into incidents',
+    requiredServices: ['alert-correlation-orchestrator'],
     metadata: {
-      version: '0.9.0',
-      confidence: 60,
+      version: '1.0.0',
+      confidence: 100,
     },
   },
   {
