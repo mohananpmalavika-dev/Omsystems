@@ -230,7 +230,7 @@ function localDiscoveryReadme(branchName: string) {
     "",
     "1. Connect this Windows PC to the same wired/Wi-Fi network as the IP cameras and DVR/NVRs.",
     "2. Extract this ZIP and double-click Run Local Discovery.cmd.",
-    "3. The scanner securely loads the branch's saved camera credentials from Sentinel Grid. No password or configuration is required on this PC.",
+    "3. The scanner securely loads only the saved login for each matching device IP. Unknown devices are reported so you can enter their login individually in Sentinel Grid.",
     "4. Wait for the completed result, then return to Sentinel Grid and review the discovered devices.",
     "",
     "It discovers direct ONVIF IP cameras plus DVR/NVR channels. Analog cameras appear as DVR channels because the DVR digitizes them. A recorder login is needed to enumerate its individual channels.",

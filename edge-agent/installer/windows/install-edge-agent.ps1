@@ -159,6 +159,7 @@ $identityFiles = @(
   (Join-Path $DataDirectory "device-identity.enc"),
   (Join-Path $DataDirectory "device-identity.key")
 )
+$identityArchiveDirectory = $null
 $existingIdentityFiles = @($identityFiles | Where-Object { Test-Path -LiteralPath $_ -PathType Leaf })
 if (-not [string]::IsNullOrWhiteSpace($activationCode) -and $existingIdentityFiles.Count -gt 0) {
   $archiveName = "{0}-{1}" -f ([DateTime]::UtcNow.ToString("yyyyMMddTHHmmssZ")), ([Guid]::NewGuid().ToString("N").Substring(0, 8))
@@ -197,13 +198,40 @@ if (-not $SkipConnectivityCheck) {
   & $Executable --config $ConfigPath --diagnose
   if ($LASTEXITCODE -ne 0) {
     $connectivityHealthy = $false
+    # Activation is transactional. A reused or expired Repair package must not
+    # strand a previously working scanner without an identity. A successful
+    # activation always writes both new files before --diagnose returns.
+    $newIdentityFiles = @($identityFiles | Where-Object { Test-Path -LiteralPath $_ -PathType Leaf })
+    if ($identityArchiveDirectory -and $newIdentityFiles.Count -lt $identityFiles.Count) {
+      $failedIdentityDirectory = Join-Path $identityArchiveDirectory "failed-reactivation"
+      New-Item -ItemType Directory -Path $failedIdentityDirectory -Force | Out-Null
+      foreach ($identityFile in $newIdentityFiles) {
+        Move-Item -LiteralPath $identityFile -Destination (Join-Path $failedIdentityDirectory (Split-Path $identityFile -Leaf)) -Force
+      }
+      foreach ($identityFile in $identityFiles) {
+        $archivedIdentityFile = Join-Path $identityArchiveDirectory (Split-Path $identityFile -Leaf)
+        if (Test-Path -LiteralPath $archivedIdentityFile -PathType Leaf) {
+          Move-Item -LiteralPath $archivedIdentityFile -Destination $identityFile -Force
+        }
+      }
+      Write-Warning "The new activation was not accepted. The previous encrypted scanner identity was restored. Download a fresh Repair package if the scanner remains offline."
+    }
     Write-Warning "Sentinel Grid is temporarily unreachable. The scanner is installed and its background task will keep retrying automatically."
   }
 }
 
 Start-ScheduledTask -TaskName $TaskName
-Start-Sleep -Seconds 2
-$state = (Get-ScheduledTask -TaskName $TaskName).State
+Start-Sleep -Seconds 5
+$installedTask = Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
+if (-not $installedTask) {
+  throw "The Sentinel Grid startup task was not created. Run this Repair package again from an Administrator PowerShell window."
+}
+$state = $installedTask.State
+if ($connectivityHealthy -and $state -ne "Running") {
+  $taskInfo = Get-ScheduledTaskInfo -TaskName $TaskName -ErrorAction SilentlyContinue
+  $lastResult = if ($taskInfo) { $taskInfo.LastTaskResult } else { "unknown" }
+  throw "The Sentinel Grid startup task did not remain running (state: $state, result: $lastResult). Check $LogDirectory\edge-agent.log and run Repair scanner again."
+}
 
 if ($connectivityHealthy) {
   Write-Host "Sentinel Grid Edge Agent installed and connected successfully." -ForegroundColor Green

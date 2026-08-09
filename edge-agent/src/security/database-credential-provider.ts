@@ -26,8 +26,7 @@ export class DatabaseCredentialProvider {
     if (Date.now() - this.lastRefresh > this.cacheTtlMs) {
       await this.refreshCache();
     }
-    const hostKey = `host:${host}`;
-    return this.cache.get(hostKey) ?? this.cache.get("default");
+    return this.cache.get(`host:${host}`);
   }
 
   async getVpnScanNetworks() {
@@ -52,12 +51,15 @@ export class DatabaseCredentialProvider {
     const bootstrap = await this.control.getDiscoveryBootstrap(this.edgeAgentId);
     this.cache.clear();
     for (const item of bootstrap.credentials) {
+      // Discovery credentials are device-scoped. Never try a branch default
+      // against unrelated cameras or recorders on the LAN.
+      if (!item.host) continue;
       const credential: CameraCredential = {
         username: item.username,
         password: item.password,
         updatedAt: item.updatedAt,
       };
-      this.cache.set(item.host ? `host:${item.host}` : "default", credential);
+      this.cache.set(`host:${item.host}`, credential);
     }
     this.vpnScanNetworks = bootstrap.vpnScanNetworks;
     this.lastRefresh = Date.now();

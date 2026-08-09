@@ -38,7 +38,9 @@ export async function registerEdgeDiscoveryBootstrapRoutes(
       `SELECT ip_address, username, password, updated_at
        FROM camera_credentials
        WHERE branch_id = $1
-       ORDER BY CASE WHEN ip_address IS NULL THEN 1 ELSE 0 END, updated_at DESC`,
+         AND scope = 'host-specific'
+         AND ip_address IS NOT NULL
+       ORDER BY updated_at DESC`,
       [agent.branchId],
     );
     await store.writeAudit({

@@ -45,7 +45,7 @@ if (runtime.embeddedEnvironmentFile && (argv.length === 0 || hasArgument(argv, "
   process.exit(0);
 }
 if (hasArgument(argv, "--version")) {
-  process.stdout.write("Sentinel Grid Edge Agent 0.1.2\n");
+  process.stdout.write("Sentinel Grid Edge Agent 0.1.3\n");
   process.exit(0);
 }
 const config = loadConfigOrExit();
@@ -292,9 +292,9 @@ async function discoveryCredentials(host: string) {
     });
   }
   return credentialVault.get(host) ?? {
-    username: config.CAMERA_USERNAME,
-    password: config.CAMERA_PASSWORD,
-    updatedAt: "configuration",
+    username: "",
+    password: "",
+    updatedAt: "not-configured",
   };
 }
 
@@ -745,8 +745,8 @@ async function scanBranch(options: { persistStreamSecrets?: boolean } = {}) {
         ffprobePath: config.FFPROBE_PATH,
         timeoutMs: config.RTSP_SCAN_TIMEOUT_MS,
         concurrency: config.RTSP_SCAN_CONCURRENCY,
-        username: config.CAMERA_USERNAME,
-        password: config.CAMERA_PASSWORD,
+        username: "",
+        password: "",
         credentialsForHost: (host: string) => dbCredentialProvider.get(host).catch(() => undefined),
         hosts: knownHosts,
         excludeHosts: endpoints.map((endpoint) => endpoint.remoteAddress),
@@ -1010,17 +1010,17 @@ async function executeEdgeCommand(type: string, payload: Record<string, unknown>
       const envelope = payload.envelope as SealedCommandEnvelope | undefined;
       if (!envelope || typeof envelope !== "object") throw new Error("credential_envelope_required");
       const decrypted = openSealedCommand<{
-        username?: unknown; password?: unknown; scope?: { host?: unknown; default?: unknown };
+        username?: unknown; password?: unknown; scope?: { host?: unknown };
       }>(envelope, identity.commandPrivateKey);
       if (typeof decrypted.username !== "string" || !decrypted.username ||
           typeof decrypted.password !== "string" || !decrypted.scope ||
-          (decrypted.scope.host !== undefined && typeof decrypted.scope.host !== "string")) {
+          typeof decrypted.scope.host !== "string" || !decrypted.scope.host) {
         throw new Error("invalid_camera_credential_payload");
       }
       const saved = await credentialVault.set({
         username: decrypted.username,
         password: decrypted.password,
-        ...(typeof decrypted.scope.host === "string" ? { host: decrypted.scope.host } : {}),
+        host: decrypted.scope.host,
       });
       const discovered = await scanBranch();
       return { result: { ...saved, rediscovered: discovered } };

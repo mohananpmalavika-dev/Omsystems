@@ -51,14 +51,14 @@ export class CameraCredentialVault {
   }
 
   get(host: string): CameraCredential | undefined {
-    return this.values[`host:${host}`] ?? this.values.default;
+    return this.values[`host:${host}`];
   }
 
-  async set(input: { username: string; password: string; host?: string }) {
-    const key = input.host ? `host:${input.host}` : "default";
+  async set(input: { username: string; password: string; host: string }) {
+    const key = `host:${input.host}`;
     this.values[key] = { username: input.username, password: input.password, updatedAt: new Date().toISOString() };
     await this.persist();
-    return { scope: input.host ? "single-camera" : "branch-default", updatedAt: this.values[key]!.updatedAt };
+    return { scope: "single-camera" as const, updatedAt: this.values[key]!.updatedAt };
   }
 
   private async persist() {

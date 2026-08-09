@@ -16,7 +16,7 @@ describe("Windows scanner installer resilience", () => {
     expect(source).not.toContain("The startup task was not installed");
   });
 
-  it("archives a previous gateway identity before repair authentication", async () => {
+  it("restores a previous gateway identity when repair authentication cannot create a replacement", async () => {
     const source = await readFile(
       "edge-agent/installer/windows/install-edge-agent.ps1",
       "utf8",
@@ -34,5 +34,19 @@ describe("Windows scanner installer resilience", () => {
     expect(archiveIdentity).toBeGreaterThan(copyExecutable);
     expect(archiveIdentity).toBeLessThan(connectivityDiagnosis);
     expect(source).not.toContain("Remove-Item -LiteralPath $identityFile");
+    expect(source).toContain('$newIdentityFiles.Count -lt $identityFiles.Count');
+    expect(source).toContain('Move-Item -LiteralPath $archivedIdentityFile -Destination $identityFile -Force');
+    expect(source).toContain("The previous encrypted scanner identity was restored");
+  });
+
+  it("verifies that a connected scanner remains running after installation", async () => {
+    const source = await readFile(
+      "edge-agent/installer/windows/install-edge-agent.ps1",
+      "utf8",
+    );
+
+    expect(source).toContain('$installedTask = Get-ScheduledTask -TaskName $TaskName');
+    expect(source).toContain('$connectivityHealthy -and $state -ne "Running"');
+    expect(source).toContain("startup task did not remain running");
   });
 });

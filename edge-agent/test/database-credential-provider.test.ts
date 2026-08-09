@@ -13,7 +13,7 @@ describe("DatabaseCredentialProvider", () => {
     const provider = new DatabaseCredentialProvider({ getDiscoveryBootstrap }, "edge-001");
 
     await expect(provider.get("10.42.5.20")).resolves.toMatchObject({ username: "host-user" });
-    await expect(provider.get("10.42.5.21")).resolves.toMatchObject({ username: "default-user" });
+    await expect(provider.get("10.42.5.21")).resolves.toBeUndefined();
     await expect(provider.getKnownHosts()).resolves.toEqual(["10.42.5.20"]);
     await expect(provider.getVpnScanNetworks()).resolves.toEqual(["10.42.5.0/24"]);
     expect(getDiscoveryBootstrap).toHaveBeenCalledTimes(1);

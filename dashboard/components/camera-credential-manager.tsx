@@ -20,7 +20,6 @@ export function CameraCredentialManager({
   const [username, setUsername] = useState("admin");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
-  const [scope, setScope] = useState<"default" | "camera">("default");
   const [cameraIp, setCameraIp] = useState("");
   const [saving, setSaving] = useState(false);
   const [result, setResult] = useState<Result>();
@@ -43,7 +42,7 @@ export function CameraCredentialManager({
           body: JSON.stringify({
             username: username.trim(),
             password,
-            ...(scope === "camera" ? { cameraIp: cameraIp.trim() } : {}),
+            cameraIp: cameraIp.trim(),
           }),
         },
       );
@@ -101,28 +100,11 @@ export function CameraCredentialManager({
                 The password is encrypted for this gateway before it enters the command queue. Sentinel Grid never stores a readable copy in the cloud.
               </div>
 
-              <fieldset>
-                <legend className="mb-2 text-sm font-semibold text-slate-800">Apply to</legend>
-                <div className="grid gap-2 sm:grid-cols-2">
-                  <label className={`cursor-pointer rounded-xl border p-3 ${scope === "default" ? "border-blue-500 bg-blue-50" : "border-slate-200"}`}>
-                    <input className="mr-2" type="radio" checked={scope === "default"} onChange={() => setScope("default")} />
-                    <span className="text-sm font-semibold text-slate-900">Branch default</span>
-                    <span className="mt-1 block pl-5 text-xs text-slate-500">Used for cameras and recorders without a specific login.</span>
-                  </label>
-                  <label className={`cursor-pointer rounded-xl border p-3 ${scope === "camera" ? "border-blue-500 bg-blue-50" : "border-slate-200"}`}>
-                    <input className="mr-2" type="radio" checked={scope === "camera"} onChange={() => setScope("camera")} />
-                    <span className="text-sm font-semibold text-slate-900">One camera / recorder</span>
-                    <span className="mt-1 block pl-5 text-xs text-slate-500">Overrides the default for one private IP.</span>
-                  </label>
-                </div>
-              </fieldset>
-
-              {scope === "camera" && (
-                <label className="block text-sm font-semibold text-slate-800">
-                  Private IP address
-                  <input required inputMode="decimal" value={cameraIp} onChange={(event) => setCameraIp(event.target.value)} placeholder="192.168.1.20" className="mt-2 w-full rounded-lg border border-slate-300 px-3 py-2.5 font-normal outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100" />
-                </label>
-              )}
+              <label className="block text-sm font-semibold text-slate-800">
+                Camera / recorder private IP address
+                <input required inputMode="decimal" value={cameraIp} onChange={(event) => setCameraIp(event.target.value)} placeholder="192.168.1.20" className="mt-2 w-full rounded-lg border border-slate-300 px-3 py-2.5 font-normal outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100" />
+                <span className="mt-2 block text-xs font-normal text-slate-500">This login is used only for this address. Other discovered devices will ask for their own login.</span>
+              </label>
 
               <div className="grid gap-4 sm:grid-cols-2">
                 <label className="block text-sm font-semibold text-slate-800">
@@ -148,7 +130,7 @@ export function CameraCredentialManager({
 
             <footer className="flex justify-end gap-3 border-t border-slate-200 bg-slate-50 px-6 py-4">
               <button type="button" onClick={close} className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-white">Close</button>
-              <button type="submit" disabled={saving || !username.trim() || !password || (scope === "camera" && !cameraIp.trim())} className="inline-flex min-w-36 items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50">
+              <button type="submit" disabled={saving || !username.trim() || !password || !cameraIp.trim()} className="inline-flex min-w-36 items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50">
                 {saving ? <Loader2 className="animate-spin" size={17} /> : <LockKeyhole size={17} />}
                 {saving ? "Encrypting…" : "Encrypt & queue"}
               </button>

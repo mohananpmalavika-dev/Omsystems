@@ -272,7 +272,7 @@ export async function registerEdgeGatewayOperationsRoutes(
     const body = z.object({
       username: z.string().trim().min(1).max(128),
       password: z.string().max(1_024),
-      cameraIp: z.string().ip().optional(),
+      cameraIp: z.string().ip(),
     }).parse(request.body);
     const commandPublicKey = await store.getEdgeAgentCommandPublicKey(id);
     if (!commandPublicKey) {
@@ -284,7 +284,7 @@ export async function registerEdgeGatewayOperationsRoutes(
     const envelope = sealEdgeCommandPayload({
       username: body.username,
       password: body.password,
-      scope: body.cameraIp ? { host: body.cameraIp } : { default: true },
+      scope: { host: body.cameraIp },
       issuedAt: new Date().toISOString(),
     }, commandPublicKey);
     const command = await store.createEdgeCommand({
@@ -296,13 +296,13 @@ export async function registerEdgeGatewayOperationsRoutes(
     await writeGatewayAudit(request, store, branchId, "edge_gateway.camera_credentials_requested", {
       edgeAgentId: id,
       commandId: command.id,
-      scope: body.cameraIp ? "single-camera" : "branch-default",
+      scope: "single-camera",
     });
     return reply.code(202).send({
       commandId: command.id,
       status: command.status,
-      scope: body.cameraIp ? "single-camera" : "branch-default",
-      message: "Credentials were encrypted for this gateway and queued for delivery.",
+      scope: "single-camera",
+      message: "Credentials were encrypted for this gateway and queued only for this camera or recorder.",
     });
   });
 

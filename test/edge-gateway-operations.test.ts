@@ -253,6 +253,13 @@ describe("secure edge gateway operations", () => {
       },
     });
     const identity = enrolledResponse.json();
+    const branchDefaultRejected = await app.inject({
+      method: "POST",
+      url: `/v1/branches/branch-blr-001/edge-agents/${identity.agentId}/camera-credentials`,
+      headers: { "x-user-id": "user-global-admin" },
+      payload: { username: "operator", password: "must-not-apply-to-every-device" },
+    });
+    expect(branchDefaultRejected.statusCode).toBe(400);
     const queued = await app.inject({
       method: "POST",
       url: `/v1/branches/branch-blr-001/edge-agents/${identity.agentId}/camera-credentials`,

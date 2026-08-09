@@ -6,7 +6,7 @@ const schema = z.object({
   EDGE_AGENT_ID: z.preprocess((value) => value === "" ? undefined : value, z.string().min(1).optional()),
   EDGE_ACTIVATION_CODE: z.preprocess((value) => value === "" ? undefined : value, z.string().startsWith("sgact_").min(40).optional()),
   EDGE_AGENT_NAME: z.string().min(2),
-  EDGE_AGENT_VERSION: z.string().default("0.1.2"),
+  EDGE_AGENT_VERSION: z.string().default("0.1.3"),
   DEV_USER_ID: z.preprocess((value) => value === "" ? undefined : value, z.string().min(1).optional()),
   CAMERA_USERNAME: z.string().default(""),
   CAMERA_PASSWORD: z.string().default(""),
@@ -28,7 +28,9 @@ const schema = z.object({
   // Concurrency for the active TCP/connect+probe scanner
   RTSP_SCAN_CONCURRENCY: z.coerce.number().int().min(1).max(500).default(50),
   // Timeout for individual RTSP probe/connect attempts (ms)
-  RTSP_SCAN_TIMEOUT_MS: z.coerce.number().int().min(250).max(30_000).default(3000),
+  // DVRs often need several seconds to authenticate and deliver the first
+  // keyframe. A short timeout makes valid saved credentials look rejected.
+  RTSP_SCAN_TIMEOUT_MS: z.coerce.number().int().min(250).max(30_000).default(8000),
   LIVE_MEDIA_ENABLED: z.enum(["true", "false"]).default("false").transform((value) => value === "true"),
   EDGE_MANAGED_MEDIA_BOOTSTRAP: z.enum(["true", "false"]).default("false").transform((value) => value === "true"),
   EDGE_LIVE_GATEWAY_HOST: z.string().default("127.0.0.1"),

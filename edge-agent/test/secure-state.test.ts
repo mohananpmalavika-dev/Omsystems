@@ -75,6 +75,7 @@ describe("encrypted gateway state", () => {
     const restored = new CameraCredentialVault(path, keyPath);
     await restored.load();
     expect(restored.get("192.168.1.20")).toMatchObject({ username: "operator", password: "camera-secret" });
+    expect(restored.get("192.168.1.21")).toBeUndefined();
   });
 });
 

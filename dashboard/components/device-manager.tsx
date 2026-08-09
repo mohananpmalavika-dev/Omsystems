@@ -857,7 +857,7 @@ export function DeviceManager() {
         <Network size={19} />
         <div>
           <strong>One automatic camera search</strong>
-          <span>The module uses the branch's saved credentials and checks local cameras first, then VPN routes, then tunnel-connected access. No scan settings are required.</span>
+          <span>The module uses each device's own saved credentials and checks local cameras first, then VPN routes, then tunnel-connected access. Unknown devices are listed so their login can be entered individually.</span>
         </div>
       </div>
 
