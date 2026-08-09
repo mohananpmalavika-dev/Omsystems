@@ -48,10 +48,10 @@ export class CrowdDensityDetector extends BaseDetector {
       
       // Test detection to verify model is loaded
       const testFrame: DetectionFrame = {
-        frameData: Buffer.alloc(100),
+        imageData: Buffer.alloc(100),
         timestamp: new Date(),
         cameraId: 'test',
-        frameIndex: 0,
+        tenantId: 'test-tenant',
         width: 100,
         height: 100,
       };
