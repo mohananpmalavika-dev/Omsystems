@@ -91,6 +91,93 @@ export async function registerAlertCommandCenterRoutes(
     return { data, serverTime: new Date().toISOString() };
   });
 
+  app.post("/v1/alerts/command-center/demo", async (request, reply) => {
+    const input = z.object({
+      cameraId: z.string().min(1).optional(),
+      detectionType: z.string().trim().min(1).max(120).default("camera-tampering"),
+      severity: z.enum(["P1", "P2", "P3", "P4"]).default("P1"),
+    }).parse(request.body ?? {});
+
+    let camera = input.cameraId ? await store.getCamera(input.cameraId) : undefined;
+    if (!camera) {
+      const branches = await store.listAccessibleNodes(request.currentUser, "analytics:view", "branch");
+      for (const branch of branches) {
+        const cameras = await store.listCamerasByBranch(request.currentUser, branch.id, "analytics:view");
+        if (cameras.length > 0) {
+          camera = cameras[0];
+          break;
+        }
+      }
+    }
+
+    if (!camera) {
+      return reply.code(404).send({ error: "camera_not_found" });
+    }
+
+    const rules = await store.listAnalyticsRules(camera.id);
+    let rule = rules.find((item) => item.detectionType === input.detectionType);
+    if (!rule) {
+      const authorization = await store.checkAccess(request.currentUser, "analytics:configure", camera.nodeId);
+      if (!authorization?.allowed) {
+        return reply.code(403).send({ error: "missing_analytics_configure_permission" });
+      }
+      rule = await store.createAnalyticsRule(request.currentUser.tenantId, camera.id, request.currentUser.id, {
+        name: `Synthetic ${input.detectionType} alert`,
+        enabled: true,
+        detectionType: input.detectionType,
+        objectClasses: [],
+        severity: input.severity,
+        minConfidence: 0.1,
+        minDurationSeconds: 0,
+        direction: "any",
+        cooldownSeconds: 0,
+        recipients: [],
+        recordingPolicy: "none",
+        preRollSeconds: 5,
+        postRollSeconds: 5,
+      });
+    }
+
+    const result = await store.processAnalyticsEvent({
+      tenantId: request.currentUser.tenantId,
+      cameraId: camera.id,
+      sourceEventId: `synthetic-alert-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      detectionType: input.detectionType,
+      occurredAt: new Date().toISOString(),
+      confidence: 0.99,
+      durationSeconds: 1,
+      modelVersion: "synthetic",
+      objects: [],
+      metadata: { synthetic: true },
+    });
+
+    const publishedAlerts = [];
+    for (const alert of result.alerts) {
+      publishedAlerts.push(alert);
+      alertEvents.publish({
+        id: randomUUID(),
+        tenantId: request.currentUser.tenantId,
+        type: "alert.created",
+        occurredAt: new Date().toISOString(),
+        alertId: alert.id,
+      });
+    }
+
+    if (dispatcher) {
+      try {
+        await dispatcher.drainOnce();
+      } catch (error) {
+        app.log.error({ error }, "Synthetic alert notification dispatch failed");
+      }
+    }
+
+    if (publishedAlerts.length === 0) {
+      return reply.code(204).send({ message: "no_alert_generated" });
+    }
+
+    return reply.code(201).send({ alerts: publishedAlerts });
+  });
+
   app.get("/v1/alerts/:alertId/evidence/status", async (request, reply) => {
     const { alertId } = alertIdParams.parse(request.params);
     const alert = await authorizedAlert(store, request.currentUser, alertId, "analytics:view");

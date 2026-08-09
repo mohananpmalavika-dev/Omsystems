@@ -20,6 +20,8 @@ export default function AlertCommandCenterPage() {
   const [connected, setConnected] = useState(false);
   const [session, setSession] = useState<LiveSessionResponse>();
   const [busy, setBusy] = useState(false);
+  const [demoMessage, setDemoMessage] = useState<string | null>(null);
+  const [demoLoading, setDemoLoading] = useState(false);
   const [, tick] = useState(0);
 
   const load = useCallback(async () => {
@@ -44,6 +46,30 @@ export default function AlertCommandCenterPage() {
     events.onerror = () => setConnected(false);
     return () => events.close();
   }, [load]);
+
+  const generateSyntheticAlert = async () => {
+    setDemoMessage(null);
+    setDemoLoading(true);
+    try {
+      const response = await fetch("/api/control/v1/alerts/command-center/demo", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ detectionType: "camera-offline", severity: "P1" }),
+        credentials: "include",
+      });
+      if (response.ok) {
+        await load();
+        setDemoMessage("Generated a synthetic P1 alert. The command center will refresh automatically.");
+      } else {
+        const body = await response.json().catch(() => null);
+        setDemoMessage(`Unable to generate synthetic alert: ${body?.error ?? response.status}`);
+      }
+    } catch (error) {
+      setDemoMessage(`Synthetic alert failed: ${error instanceof Error ? error.message : "unknown error"}`);
+    } finally {
+      setDemoLoading(false);
+    }
+  };
 
   const counts = useMemo(() => Object.fromEntries(["P1", "P2", "P3", "P4"].map((priority) =>
     [priority, alerts.filter((alert) => alert.severity === priority && !terminal(alert.status)).length])), [alerts]);
@@ -78,8 +104,14 @@ export default function AlertCommandCenterPage() {
   return <main className="p-6 space-y-5">
     <header className="flex flex-wrap items-center justify-between gap-3">
       <div><p className="text-xs font-semibold tracking-widest text-red-700">HO SURVEILLANCE ROOM</p><h1 className="text-2xl font-bold">Real-time alert command center</h1><p className="text-sm text-gray-500">{connected ? "Live event stream connected" : "Polling fallback active"}</p></div>
-      <span className="rounded-lg border bg-white px-3 py-2 text-xs text-gray-600">Global popup queue active</span>
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="rounded-lg border bg-white px-3 py-2 text-xs text-gray-600">Global popup queue active</span>
+        {process.env.NODE_ENV !== "production" && <button className="btn-secondary" type="button" disabled={demoLoading} onClick={() => void generateSyntheticAlert()}>
+          {demoLoading ? "Generating synthetic alert…" : "Generate synthetic P1 alert"}
+        </button>}
+      </div>
     </header>
+    {demoMessage ? <div className="rounded-lg border border-yellow-200 bg-yellow-50 px-4 py-3 text-sm text-yellow-800">{demoMessage}</div> : null}
     <section className="grid grid-cols-2 md:grid-cols-4 gap-3">
       {(["P1", "P2", "P3", "P4"] as const).map((priority) => <button key={priority} onClick={() => setSeverity(severity === priority ? "" : priority)} className={`card text-left border-l-4 ${priority === "P1" ? "border-l-red-600" : priority === "P2" ? "border-l-orange-500" : priority === "P3" ? "border-l-blue-500" : "border-l-gray-500"}`}><span className="text-xs text-gray-500">{priority}</span><strong className="block text-2xl">{counts[priority]}</strong><span className="text-xs">active alerts</span></button>)}
     </section>
@@ -87,9 +119,8 @@ export default function AlertCommandCenterPage() {
       <div className="card overflow-auto">
         <table className="w-full text-sm"><thead><tr className="text-left border-b"><th>Priority</th><th>Branch / camera</th><th>Alert</th><th>SLA</th><th>Status</th></tr></thead><tbody>
           {alerts.map((alert) => <tr key={alert.id} onClick={() => { setSelected(alert); setSession(undefined); }} className={`border-b cursor-pointer hover:bg-gray-50 ${selected?.id === alert.id ? "bg-blue-50" : ""}`}><td><Priority value={alert.severity}/></td><td className="py-3"><strong>{alert.branchName}</strong><small className="block text-gray-500">{alert.cameraName}</small></td><td>{alert.title}<small className="block text-gray-500">{new Date(alert.lastDetectedAt).toLocaleString()}</small></td><td><Sla alert={alert}/></td><td>{alert.status.replaceAll("_", " ")}</td></tr>)}
-        </tbody></table>{alerts.length === 0 && <p className="p-8 text-center text-gray-500">No matching alerts.</p>}
-      </div>
-      <AlertDetail alert={selected} session={session} busy={busy} startLive={startLive} act={act}/>
+      </tbody></table>{alerts.length === 0 && <div className="p-8 text-center text-gray-500 space-y-2"><p>No matching alerts.</p><p>If you'd like to verify the alert pipeline, generate a synthetic P1 alert using the button above.</p></div>}
+      </div>      <AlertDetail alert={selected} session={session} busy={busy} startLive={startLive} act={act}/>
     </section>
   </main>;
 }
