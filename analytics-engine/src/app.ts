@@ -133,6 +133,13 @@ export function buildAnalyticsEngine(options: AnalyticsEngineOptions) {
     });
   });
 
+  // Register Digital Twin API routes
+  void import("./digital-twin/api/index.js").then(module => {
+    module.registerDigitalTwinRoutes(app).catch((error) => {
+      app.log.error({ err: error }, "Failed to register Digital Twin API routes");
+    });
+  });
+
   app.addHook("preHandler", async (request, reply) => {
     if (request.url === "/health" || request.url.startsWith("/v1/detectors") || request.url.startsWith("/v1/analytics")) {
       return; // Allow public access to monitoring endpoints
