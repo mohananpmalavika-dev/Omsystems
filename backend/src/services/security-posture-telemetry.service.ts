@@ -1,15 +1,25 @@
 /**
  * Security Posture Telemetry Service
  * 
- * Provides REAL security metrics with full provenance:
+ * Provides REAL security metrics with full provenance using adapter-based architecture:
  * - source: where the data came from
  * - timestamp: when it was collected
  * - freshness: is the data current or stale
  * - availability: is the service actually working
  * - confidence: how reliable is this measurement (0-1)
  * 
- * This prevents fake security scores and ensures every metric is traceable.
+ * This service orchestrates multiple domain-specific adapters to collect telemetry
+ * from actual infrastructure rather than generating placeholder data.
  */
+
+import { NetworkSecurityAdapter } from '../security-posture/adapters/network-security.adapter';
+import { EncryptionAdapter } from '../security-posture/adapters/encryption.adapter';
+import { SecretsManagementAdapter } from '../security-posture/adapters/secrets-management.adapter';
+import { ThreatDetectionAdapter } from '../security-posture/adapters/threat-detection.adapter';
+import { PlatformIntegrityAdapter } from '../security-posture/adapters/platform-integrity.adapter';
+import { createTenantContext } from '../security-posture/contracts/telemetry-context';
+import type { SecurityTelemetryResult } from '../security-posture/contracts/telemetry-result';
+import { getCollectorHealthService } from '../security-posture/services/collector-health.service';
 
 export interface SecurityTelemetryMetric {
   name: string;
@@ -139,31 +149,83 @@ export interface SecretsTelemetry {
 }
 
 export class SecurityPostureTelemetryService {
+  private networkAdapter: NetworkSecurityAdapter;
+  private encryptionAdapter: EncryptionAdapter;
+  private secretsAdapter: SecretsManagementAdapter;
+  private threatAdapter: ThreatDetectionAdapter;
+  private platformAdapter: PlatformIntegrityAdapter;
+  
+  constructor() {
+    // Initialize adapters
+    this.networkAdapter = new NetworkSecurityAdapter();
+    this.encryptionAdapter = new EncryptionAdapter();
+    this.secretsAdapter = new SecretsManagementAdapter();
+    this.threatAdapter = new ThreatDetectionAdapter();
+    this.platformAdapter = new PlatformIntegrityAdapter();
+    
+    // Register adapters with health service
+    const healthService = getCollectorHealthService();
+    healthService.registerCollector(this.networkAdapter as any);
+    healthService.registerCollector(this.encryptionAdapter as any);
+    healthService.registerCollector(this.secretsAdapter as any);
+    healthService.registerCollector(this.threatAdapter as any);
+    healthService.registerCollector(this.platformAdapter as any);
+  }
+  
   /**
    * Collect comprehensive security telemetry
    */
-  async collect(): Promise<SecurityPostureTelemetry> {
+  async collect(tenantId: string = 'default'): Promise<SecurityPostureTelemetry> {
     const timestamp = new Date();
+    const context = createTenantContext(tenantId);
     
+    // Collect from all adapters in parallel using Promise.allSettled
     const [
-      encryption,
-      tls,
-      certificates,
-      secureBoot,
-      tpm,
-      tamper,
-      ransomware,
-      secrets,
-    ] = await Promise.all([
-      this.collectEncryptionTelemetry(),
-      this.collectTLSTelemetry(),
-      this.collectCertificateTelemetry(),
-      this.collectSecureBootTelemetry(),
-      this.collectTPMTelemetry(),
-      this.collectTamperTelemetry(),
-      this.collectRansomwareTelemetry(),
-      this.collectSecretsTelemetry(),
+      networkResults,
+      encryptionResults,
+      secretsResults,
+      threatResults,
+      platformResults,
+    ] = await Promise.allSettled([
+      this.networkAdapter.collect(context),
+      this.encryptionAdapter.collect(context),
+      this.secretsAdapter.collect(context),
+      this.threatAdapter.collect(context),
+      this.platformAdapter.collect(context),
     ]);
+    
+    // Process adapter results into legacy telemetry format
+    const encryption = this.mapEncryptionTelemetry(
+      encryptionResults.status === 'fulfilled' ? encryptionResults.value : []
+    );
+    
+    const tls = this.mapTLSTelemetry(
+      networkResults.status === 'fulfilled' ? networkResults.value : []
+    );
+    
+    const certificates = this.mapCertificateTelemetry(
+      networkResults.status === 'fulfilled' ? networkResults.value : []
+    );
+    
+    const secureBoot = this.mapSecureBootTelemetry(
+      platformResults.status === 'fulfilled' ? platformResults.value : []
+    );
+    
+    const tpm = this.mapTPMTelemetry(
+      platformResults.status === 'fulfilled' ? platformResults.value : []
+    );
+    
+    const tamper = this.mapTamperTelemetry(
+      threatResults.status === 'fulfilled' ? threatResults.value : []
+    );
+    
+    const ransomware = this.mapRansomwareTelemetry(
+      threatResults.status === 'fulfilled' ? threatResults.value : []
+    );
+    
+    const secrets = this.mapSecretsTelemetry(
+      secretsResults.status === 'fulfilled' ? secretsResults.value : []
+    );
     
     // Calculate overall score from available metrics
     const { score, confidence } = this.calculateOverallScore({
@@ -193,134 +255,94 @@ export class SecurityPostureTelemetryService {
   }
 
   /**
-   * Collect encryption telemetry
+   * Map encryption adapter results to legacy telemetry format
    */
-  private async collectEncryptionTelemetry(): Promise<EncryptionTelemetry> {
-    // TODO: Implement actual encryption monitoring
-    // This would connect to storage systems, recording engines, etc.
-    
-    const source = 'storage-service';
+  private mapEncryptionTelemetry(results: SecurityTelemetryResult[]): EncryptionTelemetry {
     const timestamp = new Date();
     
+    // Find specific metrics from adapter results
+    const findMetric = (source: string) => results.find(r => r.source === source);
+    
+    const recordingEncryption = findMetric('recording-encryption');
+    const storageEncryption = findMetric('storage-encryption');
+    const kmsHealth = findMetric('kms-health');
+    const keyRotation = findMetric('key-rotation');
+    
     return {
-      dataAtRest: {
-        name: 'Data at Rest Encryption',
-        value: 0,
-        unit: 'percentage',
-        source: `${source}:data-at-rest`,
-        timestamp,
-        freshness: 'unknown',
-        available: false,
-        confidence: 0,
-        errorMessage: 'Encryption monitoring not yet implemented',
-      },
-      encryptedVideos: {
-        name: 'Encrypted Videos',
-        value: 0,
-        unit: 'count',
-        source: `${source}:video-encryption`,
-        timestamp,
-        freshness: 'unknown',
-        available: false,
-        confidence: 0,
-        errorMessage: 'Video encryption monitoring not yet implemented',
-      },
-      encryptedRecordings: {
-        name: 'Encrypted Recordings',
-        value: 0,
-        unit: 'percentage',
-        source: `${source}:recording-encryption`,
-        timestamp,
-        freshness: 'unknown',
-        available: false,
-        confidence: 0,
-        errorMessage: 'Recording encryption monitoring not yet implemented',
-      },
-      keyRotation: {
-        name: 'Key Rotation Compliance',
-        value: 0,
-        unit: 'percentage',
-        source: 'kms:key-rotation',
-        timestamp,
-        freshness: 'unknown',
-        available: false,
-        confidence: 0,
-        errorMessage: 'KMS integration not yet implemented',
-      },
-      kmsAvailability: {
-        name: 'KMS Availability',
-        value: 0,
-        unit: 'percentage',
-        source: 'kms:availability',
-        timestamp,
-        freshness: 'unknown',
-        available: false,
-        confidence: 0,
-        errorMessage: 'KMS health check not yet implemented',
-      },
+      dataAtRest: this.mapToMetric(
+        'Data at Rest Encryption',
+        storageEncryption,
+        'percentage',
+        timestamp
+      ),
+      encryptedVideos: this.mapToMetric(
+        'Encrypted Videos',
+        recordingEncryption,
+        'count',
+        timestamp
+      ),
+      encryptedRecordings: this.mapToMetric(
+        'Encrypted Recordings',
+        recordingEncryption,
+        'percentage',
+        timestamp
+      ),
+      keyRotation: this.mapToMetric(
+        'Key Rotation Compliance',
+        keyRotation,
+        'percentage',
+        timestamp
+      ),
+      kmsAvailability: this.mapToMetric(
+        'KMS Availability',
+        kmsHealth,
+        'percentage',
+        timestamp
+      ),
     };
   }
 
   /**
-   * Collect TLS telemetry
+   * Map TLS adapter results to legacy telemetry format
    */
-  private async collectTLSTelemetry(): Promise<TLSTelemetry> {
-    // TODO: Implement actual TLS monitoring
-    // This would inspect connections, verify TLS versions, check ciphers
-    
-    const source = 'network-monitor';
+  private mapTLSTelemetry(results: SecurityTelemetryResult[]): TLSTelemetry {
     const timestamp = new Date();
     
+    const tlsProtocol = results.find(r => r.source === 'tls-protocol');
+    const cipherStrength = results.find(r => r.source === 'cipher-strength');
+    const httpsEnforcement = results.find(r => r.source === 'https-enforcement');
+    const certValidation = results.find(r => r.source === 'certificate-validation');
+    
     return {
-      tlsVersion: {
-        name: 'TLS Version Compliance',
-        value: 0,
-        unit: 'percentage',
-        source: `${source}:tls-version`,
-        timestamp,
-        freshness: 'unknown',
-        available: false,
-        confidence: 0,
-        errorMessage: 'TLS version monitoring not yet implemented',
-      },
-      cipherStrength: {
-        name: 'Cipher Strength',
-        value: 0,
-        unit: 'score',
-        source: `${source}:cipher-strength`,
-        timestamp,
-        freshness: 'unknown',
-        available: false,
-        confidence: 0,
-        errorMessage: 'Cipher monitoring not yet implemented',
-      },
-      httpsOnly: {
-        name: 'HTTPS Only Enforcement',
-        value: 0,
-        unit: 'percentage',
-        source: `${source}:https-enforcement`,
-        timestamp,
-        freshness: 'unknown',
-        available: false,
-        confidence: 0,
-        errorMessage: 'HTTPS enforcement monitoring not yet implemented',
-      },
-      certValidation: {
-        name: 'Certificate Validation',
-        value: 0,
-        unit: 'percentage',
-        source: `${source}:cert-validation`,
-        timestamp,
-        freshness: 'unknown',
-        available: false,
-        confidence: 0,
-        errorMessage: 'Certificate validation monitoring not yet implemented',
-      },
+      tlsVersion: this.mapToMetric(
+        'TLS Version Compliance',
+        tlsProtocol,
+        'percentage',
+        timestamp
+      ),
+      cipherStrength: this.mapToMetric(
+        'Cipher Strength',
+        cipherStrength,
+        'score',
+        timestamp
+      ),
+      httpsOnly: this.mapToMetric(
+        'HTTPS Only Enforcement',
+        httpsEnforcement,
+        'percentage',
+        timestamp
+      ),
+      certValidation: this.mapToMetric(
+        'Certificate Validation',
+        certValidation,
+        'percentage',
+        timestamp
+      ),
       ocspStapling: {
         name: 'OCSP Stapling',
         value: 0,
         unit: 'percentage',
-        source: `${source}:ocsp-stapling`,
+        source: 'network-security:ocsp-stapling',
         timestamp,
         freshness: 'unknown',
         available: false,
@@ -331,76 +353,54 @@ export class SecurityPostureTelemetryService {
   }
 
   /**
-   * Collect certificate telemetry
+   * Map certificate adapter results to legacy telemetry format
    */
-  private async collectCertificateTelemetry(): Promise<CertificateTelemetry> {
-    // TODO: Connect to actual certificate manager
-    // For now, return unavailable status
-    
-    const source = 'certificate-manager';
+  private mapCertificateTelemetry(results: SecurityTelemetryResult[]): CertificateTelemetry {
     const timestamp = new Date();
     
+    const certValidation = results.find(r => r.source === 'certificate-validation');
+    
     return {
-      healthyCount: {
-        name: 'Healthy Certificates',
-        value: 0,
-        unit: 'count',
-        source: `${source}:healthy`,
-        timestamp,
-        freshness: 'unknown',
-        available: false,
-        confidence: 0,
-        errorMessage: 'Certificate manager not yet integrated',
-      },
-      expiringSoonCount: {
-        name: 'Certificates Expiring Soon',
-        value: 0,
-        unit: 'count',
-        source: `${source}:expiring-soon`,
-        timestamp,
-        freshness: 'unknown',
-        available: false,
-        confidence: 0,
-        errorMessage: 'Certificate manager not yet integrated',
-      },
-      expiredCount: {
-        name: 'Expired Certificates',
-        value: 0,
-        unit: 'count',
-        source: `${source}:expired`,
-        timestamp,
-        freshness: 'unknown',
-        available: false,
-        confidence: 0,
-        errorMessage: 'Certificate manager not yet integrated',
-      },
+      healthyCount: this.mapToMetric(
+        'Healthy Certificates',
+        certValidation,
+        'count',
+        timestamp
+      ),
+      expiringSoonCount: this.mapToMetric(
+        'Certificates Expiring Soon',
+        certValidation,
+        'count',
+        timestamp
+      ),
+      expiredCount: this.mapToMetric(
+        'Expired Certificates',
+        certValidation,
+        'count',
+        timestamp
+      ),
       revokedCount: {
         name: 'Revoked Certificates',
         value: 0,
         unit: 'count',
-        source: `${source}:revoked`,
+        source: 'certificate-manager:revoked',
         timestamp,
         freshness: 'unknown',
         available: false,
         confidence: 0,
-        errorMessage: 'Certificate manager not yet integrated',
+        errorMessage: 'Certificate revocation checking not yet implemented',
       },
-      averageDaysToExpiry: {
-        name: 'Average Days to Expiry',
-        value: 0,
-        unit: 'days',
-        source: `${source}:avg-expiry`,
-        timestamp,
-        freshness: 'unknown',
-        available: false,
-        confidence: 0,
-        errorMessage: 'Certificate manager not yet integrated',
-      },
+      averageDaysToExpiry: this.mapToMetric(
+        'Average Days to Expiry',
+        certValidation,
+        'days',
+        timestamp
+      ),
       rotationCompliance: {
         name: 'Rotation Compliance',
         value: 0,
         unit: 'percentage',
-        source: `${source}:rotation`,
+        source: 'certificate-manager:rotation',
         timestamp,
         freshness: 'unknown',
         available: false,
@@ -409,182 +409,121 @@ export class SecurityPostureTelemetryService {
       },
     };
   }
-
+  
   /**
-   * Collect secure boot telemetry
+   * Map secure boot adapter results to legacy telemetry format
    */
-  private async collectSecureBootTelemetry(): Promise<SecureBootTelemetry> {
-    // TODO: Implement actual secure boot monitoring
-    // This would query edge devices for secure boot status
-    
-    const source = 'edge-agent';
+  private mapSecureBootTelemetry(results: SecurityTelemetryResult[]): SecureBootTelemetry {
     const timestamp = new Date();
     
+    const secureBoot = results.find(r => r.source === 'secure-boot');
+    const platformBoot = results.find(r => r.source === 'platform-boot');
+    
     return {
-      enabled: {
-        name: 'Secure Boot Enabled',
-        value: 0,
-        unit: 'count',
-        source: `${source}:secure-boot-enabled`,
-        timestamp,
-        freshness: 'unknown',
-        available: false,
-        confidence: 0,
-        errorMessage: 'Secure boot telemetry not yet implemented',
-      },
-      compliantDevices: {
-        name: 'Compliant Devices',
-        value: 0,
-        unit: 'count',
-        source: `${source}:secure-boot-compliant`,
-        timestamp,
-        freshness: 'unknown',
-        available: false,
-        confidence: 0,
-        errorMessage: 'Secure boot telemetry not yet implemented',
-      },
-      uefiValidation: {
-        name: 'UEFI Validation',
-        value: 0,
-        unit: 'percentage',
-        source: `${source}:uefi-validation`,
-        timestamp,
-        freshness: 'unknown',
-        available: false,
-        confidence: 0,
-        errorMessage: 'UEFI validation not yet implemented',
-      },
-      bootloaderIntegrity: {
-        name: 'Bootloader Integrity',
-        value: 0,
-        unit: 'percentage',
-        source: `${source}:bootloader-integrity`,
-        timestamp,
-        freshness: 'unknown',
-        available: false,
-        confidence: 0,
-        errorMessage: 'Bootloader validation not yet implemented',
-      },
+      enabled: this.mapToMetric(
+        'Secure Boot Enabled',
+        secureBoot,
+        'count',
+        timestamp
+      ),
+      compliantDevices: this.mapToMetric(
+        'Compliant Devices',
+        secureBoot,
+        'count',
+        timestamp
+      ),
+      uefiValidation: this.mapToMetric(
+        'UEFI Validation',
+        secureBoot,
+        'percentage',
+        timestamp
+      ),
+      bootloaderIntegrity: this.mapToMetric(
+        'Bootloader Integrity',
+        platformBoot,
+        'percentage',
+        timestamp
+      ),
     };
   }
-
+  
   /**
-   * Collect TPM telemetry
+   * Map TPM adapter results to legacy telemetry format
    */
-  private async collectTPMTelemetry(): Promise<TPMTelemetry> {
-    // TODO: Implement actual TPM monitoring
-    // This would query edge devices for TPM attestation
-    
-    const source = 'edge-agent';
+  private mapTPMTelemetry(results: SecurityTelemetryResult[]): TPMTelemetry {
     const timestamp = new Date();
     
+    const tpm = results.find(r => r.source === 'tpm');
+    const attestation = results.find(r => r.source === 'tpm-attestation');
+    const pcr = results.find(r => r.source === 'pcr-validation');
+    
     return {
-      tpmPresent: {
-        name: 'TPM Present',
-        value: 0,
-        unit: 'count',
-        source: `${source}:tpm-present`,
-        timestamp,
-        freshness: 'unknown',
-        available: false,
-        confidence: 0,
-        errorMessage: 'TPM telemetry not yet implemented',
-      },
-      tpmVersion: {
-        name: 'TPM Version 2.0+',
-        value: 0,
-        unit: 'count',
-        source: `${source}:tpm-version`,
-        timestamp,
-        freshness: 'unknown',
-        available: false,
-        confidence: 0,
-        errorMessage: 'TPM version check not yet implemented',
-      },
-      attestationSuccess: {
-        name: 'Successful Attestations',
-        value: 0,
-        unit: 'count',
-        source: `${source}:attestation-success`,
-        timestamp,
-        freshness: 'unknown',
-        available: false,
-        confidence: 0,
-        errorMessage: 'TPM attestation not yet implemented',
-      },
-      attestationFailures: {
-        name: 'Failed Attestations',
-        value: 0,
-        unit: 'count',
-        source: `${source}:attestation-failures`,
-        timestamp,
-        freshness: 'unknown',
-        available: false,
-        confidence: 0,
-        errorMessage: 'TPM attestation not yet implemented',
-      },
-      pcrValidation: {
-        name: 'PCR Validation',
-        value: 0,
-        unit: 'percentage',
-        source: `${source}:pcr-validation`,
-        timestamp,
-        freshness: 'unknown',
-        available: false,
-        confidence: 0,
-        errorMessage: 'PCR validation not yet implemented',
-      },
+      tpmPresent: this.mapToMetric(
+        'TPM Present',
+        tpm,
+        'count',
+        timestamp
+      ),
+      tpmVersion: this.mapToMetric(
+        'TPM Version 2.0+',
+        tpm,
+        'count',
+        timestamp
+      ),
+      attestationSuccess: this.mapToMetric(
+        'Successful Attestations',
+        attestation,
+        'count',
+        timestamp
+      ),
+      attestationFailures: this.mapToMetric(
+        'Failed Attestations',
+        attestation,
+        'count',
+        timestamp
+      ),
+      pcrValidation: this.mapToMetric(
+        'PCR Validation',
+        pcr,
+        'percentage',
+        timestamp
+      ),
     };
   }
-
+  
   /**
-   * Collect tamper detection telemetry
+   * Map tamper adapter results to legacy telemetry format
    */
-  private async collectTamperTelemetry(): Promise<TamperTelemetry> {
-    // TODO: Connect to actual tamper detection service
-    
-    const source = 'tamper-detection';
+  private mapTamperTelemetry(results: SecurityTelemetryResult[]): TamperTelemetry {
     const timestamp = new Date();
     
+    const cameraTamper = results.find(r => r.source === 'camera-tamper');
+    const cameraCover = results.find(r => r.source === 'camera-cover');
+    
     return {
-      activeEvents: {
-        name: 'Active Tamper Events',
-        value: 0,
-        unit: 'count',
-        source: `${source}:active-events`,
-        timestamp,
-        freshness: 'unknown',
-        available: false,
-        confidence: 0,
-        errorMessage: 'Tamper detection telemetry not yet implemented',
-      },
-      criticalEvents: {
-        name: 'Critical Tamper Events',
-        value: 0,
-        unit: 'count',
-        source: `${source}:critical-events`,
-        timestamp,
-        freshness: 'unknown',
-        available: false,
-        confidence: 0,
-        errorMessage: 'Tamper detection telemetry not yet implemented',
-      },
-      cameraCovers: {
-        name: 'Camera Covers Detected',
-        value: 0,
-        unit: 'count',
-        source: `${source}:camera-covers`,
-        timestamp,
-        freshness: 'unknown',
-        available: false,
-        confidence: 0,
-        errorMessage: 'Camera cover detection not yet implemented',
-      },
+      activeEvents: this.mapToMetric(
+        'Active Tamper Events',
+        cameraTamper,
+        'count',
+        timestamp
+      ),
+      criticalEvents: this.mapToMetric(
+        'Critical Tamper Events',
+        cameraTamper,
+        'count',
+        timestamp
+      ),
+      cameraCovers: this.mapToMetric(
+        'Camera Covers Detected',
+        cameraCover,
+        'count',
+        timestamp
+      ),
       enclosureOpened: {
         name: 'Enclosure Opened Events',
         value: 0,
         unit: 'count',
-        source: `${source}:enclosure-opened`,
+        source: 'tamper-detection:enclosure-opened',
         timestamp,
         freshness: 'unknown',
         available: false,
@@ -595,7 +534,7 @@ export class SecurityPostureTelemetryService {
         name: 'Tamper Sensor Health',
         value: 0,
         unit: 'percentage',
-        source: `${source}:sensor-health`,
+        source: 'tamper-detection:sensor-health',
         timestamp,
         freshness: 'unknown',
         available: false,
@@ -604,66 +543,46 @@ export class SecurityPostureTelemetryService {
       },
     };
   }
-
+  
   /**
-   * Collect ransomware detection telemetry
+   * Map ransomware adapter results to legacy telemetry format
    */
-  private async collectRansomwareTelemetry(): Promise<RansomwareTelemetry> {
-    // TODO: Connect to actual ransomware detection service
-    
-    const source = 'ransomware-detection';
+  private mapRansomwareTelemetry(results: SecurityTelemetryResult[]): RansomwareTelemetry {
     const timestamp = new Date();
     
+    const ransomware = results.find(r => r.source === 'ransomware-detection');
+    const suspiciousProcess = results.find(r => r.source === 'suspicious-process');
+    
     return {
-      activeThreats: {
-        name: 'Active Ransomware Threats',
-        value: 0,
-        unit: 'count',
-        source: `${source}:active-threats`,
-        timestamp,
-        freshness: 'unknown',
-        available: false,
-        confidence: 0,
-        errorMessage: 'Ransomware detection telemetry not yet implemented',
-      },
-      suspiciousActivity: {
-        name: 'Suspicious Activity',
-        value: 0,
-        unit: 'count',
-        source: `${source}:suspicious-activity`,
-        timestamp,
-        freshness: 'unknown',
-        available: false,
-        confidence: 0,
-        errorMessage: 'Ransomware activity monitoring not yet implemented',
-      },
-      rapidEncryption: {
-        name: 'Rapid Encryption Events',
-        value: 0,
-        unit: 'count',
-        source: `${source}:rapid-encryption`,
-        timestamp,
-        freshness: 'unknown',
-        available: false,
-        confidence: 0,
-        errorMessage: 'File encryption monitoring not yet implemented',
-      },
-      suspiciousProcesses: {
-        name: 'Suspicious Processes',
-        value: 0,
-        unit: 'count',
-        source: `${source}:suspicious-processes`,
-        timestamp,
-        freshness: 'unknown',
-        available: false,
-        confidence: 0,
-        errorMessage: 'Process monitoring not yet implemented',
-      },
+      activeThreats: this.mapToMetric(
+        'Active Ransomware Threats',
+        ransomware,
+        'count',
+        timestamp
+      ),
+      suspiciousActivity: this.mapToMetric(
+        'Suspicious Activity',
+        ransomware,
+        'count',
+        timestamp
+      ),
+      rapidEncryption: this.mapToMetric(
+        'Rapid Encryption Events',
+        ransomware,
+        'count',
+        timestamp
+      ),
+      suspiciousProcesses: this.mapToMetric(
+        'Suspicious Processes',
+        suspiciousProcess,
+        'count',
+        timestamp
+      ),
       protectionEnabled: {
         name: 'Ransomware Protection Enabled',
         value: 0,
         unit: 'count',
-        source: `${source}:protection-enabled`,
+        source: 'ransomware-detection:protection-enabled',
         timestamp,
         freshness: 'unknown',
         available: false,
@@ -672,61 +591,103 @@ export class SecurityPostureTelemetryService {
       },
     };
   }
-
+  
   /**
-   * Collect secrets management telemetry
+   * Map secrets adapter results to legacy telemetry format
    */
-  private async collectSecretsTelemetry(): Promise<SecretsTelemetry> {
-    // TODO: Connect to secrets management service
-    
-    const source = 'secrets-manager';
+  private mapSecretsTelemetry(results: SecurityTelemetryResult[]): SecretsTelemetry {
     const timestamp = new Date();
     
+    const vaultHealth = results.find(r => r.source === 'vault-health');
+    const secretExpiration = results.find(r => r.source === 'secret-expiration');
+    const secretRotation = results.find(r => r.source === 'secret-rotation');
+    const accessAudit = results.find(r => r.source === 'access-audit');
+    
     return {
-      rotationCompliance: {
-        name: 'Secret Rotation Compliance',
+      rotationCompliance: this.mapToMetric(
+        'Secret Rotation Compliance',
+        secretRotation,
+        'percentage',
+        timestamp
+      ),
+      expiringSecrets: this.mapToMetric(
+        'Expiring Secrets',
+        secretExpiration,
+        'count',
+        timestamp
+      ),
+      vaultAvailability: this.mapToMetric(
+        'Vault Availability',
+        vaultHealth,
+        'percentage',
+        timestamp
+      ),
+      accessAuditCompliance: this.mapToMetric(
+        'Access Audit Compliance',
+        accessAudit,
+        'percentage',
+        timestamp
+      ),
+    };
+  }
+  
+  /**
+   * Helper to map adapter result to legacy metric format
+   */
+  private mapToMetric(
+    name: string,
+    result: SecurityTelemetryResult | undefined,
+    unit: string,
+    fallbackTimestamp: Date
+  ): SecurityTelemetryMetric {
+    if (!result) {
+      return {
+        name,
         value: 0,
-        unit: 'percentage',
-        source: `${source}:rotation-compliance`,
-        timestamp,
+        unit,
+        source: 'adapter:not-found',
+        timestamp: fallbackTimestamp,
         freshness: 'unknown',
         available: false,
         confidence: 0,
-        errorMessage: 'Secret rotation monitoring not yet implemented',
-      },
-      expiringSecrets: {
-        name: 'Expiring Secrets',
-        value: 0,
-        unit: 'count',
-        source: `${source}:expiring-secrets`,
-        timestamp,
-        freshness: 'unknown',
-        available: false,
-        confidence: 0,
-        errorMessage: 'Secret expiry monitoring not yet implemented',
-      },
-      vaultAvailability: {
-        name: 'Vault Availability',
-        value: 0,
-        unit: 'percentage',
-        source: `${source}:vault-availability`,
-        timestamp,
-        freshness: 'unknown',
-        available: false,
-        confidence: 0,
-        errorMessage: 'Vault health check not yet implemented',
-      },
-      accessAuditCompliance: {
-        name: 'Access Audit Compliance',
-        value: 0,
-        unit: 'percentage',
-        source: `${source}:audit-compliance`,
-        timestamp,
-        freshness: 'unknown',
-        available: false,
-        confidence: 0,
-        errorMessage: 'Access audit monitoring not yet implemented',
-      },
+        errorMessage: 'No data from adapter',
+      };
+    }
+    
+    // Map availability to freshness
+    let freshness: 'current' | 'stale' | 'unknown' = 'unknown';
+    if (result.available && result.quality.freshness > 0.8) {
+      freshness = 'current';
+    } else if (result.available && result.quality.freshness > 0.3) {
+      freshness = 'stale';
+    }
+    
+    // Extract numeric value from adapter result
+    let value = 0;
+    if (result.value && typeof result.value === 'object') {
+      // Extract relevant numeric value based on telemetry type
+      if ('score' in result.value) {
+        value = result.value.score as number;
+      } else if ('enabled' in result.value) {
+        value = result.value.enabled ? 1 : 0;
+      } else if ('reachable' in result.value) {
+        value = result.value.reachable ? 100 : 0;
+      } else if ('valid' in result.value) {
+        value = result.value.valid ? 100 : 0;
+      }
+    }
+    
+    return {
+      name,
+      value,
+      unit,
+      source: result.source,
+      timestamp: result.observedAt,
+      freshness,
+      available: result.available,
+      confidence: result.quality.confidence,
+      errorMessage: result.errorMessage,
+      metadata: result.evidence,
     };
   }
 
