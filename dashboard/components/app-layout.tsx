@@ -107,6 +107,7 @@ export const navigation: NavGroup[] = [
       { label: "AI command center", href: "/operations/ai-command-center", icon: Command },
       { label: "Video analytics", href: "/analytics", icon: Activity },
       { label: "Analytics dashboard", href: "/analytics/dashboard", icon: TrendingUp },
+      { label: "Infrastructure twin", href: "/infrastructure-twin", icon: Network },
       { label: "Digital twin", href: "/digital-twin", icon: Boxes },
       { label: "Twin branch directory", href: "/digital-twin/branches", icon: Building2 },
       { label: "Global command center", href: "/federation", icon: Globe2 },
