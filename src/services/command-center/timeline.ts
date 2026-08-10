@@ -1,6 +1,6 @@
 import type { ControlPlaneStore } from "../../control-plane-store.js";
 import type { OperationalTelemetryEnvelope } from "../../operational-health/types.js";
-import type { CommandTimelineEvent } from "./types.js";
+import type { CommandTimelineEvent, CommandTimelineEventType } from "./types.js";
 
 export async function buildTimeline(
   store: ControlPlaneStore,
@@ -23,7 +23,10 @@ export async function buildTimeline(
     if (!within(occurredAt, from, to)) continue;
     events.push({
       id: `incident:${incident.id}`,
+      tenantId: incident.tenantId,
+      branchId: incident.branchId,
       occurredAt,
+      eventType: "incident_reported",
       category: "incident",
       entityId: incident.id,
       entityType: "incident",
@@ -35,14 +38,16 @@ export async function buildTimeline(
       source: "incident-register",
       evidenceId: `incident:${incident.id}`,
       raw: compact({ incidentId: incident.id, status: incident.status, type: incident.incidentType, severity: incident.severity }),
-    });
-  }
+    });  }
   for (const alert of predictive.filter((item: any) => item.branchId === branchId || item.details?.branchId === branchId)) {
     const occurredAt = timestamp(alert.detectedAt, alert.createdAt);
     if (!within(occurredAt, from, to)) continue;
     events.push({
       id: `predictive:${alert.id}`,
+      tenantId: alert.tenantId,
+      branchId: alert.branchId ?? alert.details?.branchId,
       occurredAt,
+      eventType: "predictive_maintenance",
       category: "predictive",
       entityId: alert.assetId ?? null,
       entityType: "asset",
@@ -53,14 +58,16 @@ export async function buildTimeline(
       source: "predictive-maintenance",
       evidenceId: `predictive:${alert.id}`,
       raw: compact({ alertId: alert.id, assetId: alert.assetId, score: alert.score, predictedFailureDate: alert.predictedFailureDate }),
-    });
-  }
+    });  }
   for (const order of workOrders.filter((item) => item.branchNodeId === branchId)) {
     const occurredAt = timestamp(order.updatedAt, order.createdAt);
     if (!within(occurredAt, from, to)) continue;
     events.push({
       id: `work-order:${order.id}`,
+      tenantId: order.tenantId,
+      branchId: order.branchNodeId,
       occurredAt,
+      eventType: "work_order",
       category: "maintenance",
       entityId: order.assetId ?? null,
       entityType: "work-order",
@@ -71,8 +78,7 @@ export async function buildTimeline(
       source: "maintenance-work-orders",
       evidenceId: `work-order:${order.id}`,
       raw: compact({ workOrderId: order.id, status: order.status, rootCause: order.rootCause, eta: order.eta }),
-    });
-  }
+    });  }
   return events.sort((left, right) => left.occurredAt.localeCompare(right.occurredAt)).slice(-limit);
 }
 
@@ -80,7 +86,10 @@ function telemetryEvent(item: OperationalTelemetryEnvelope): CommandTimelineEven
   const description = describeTelemetry(item);
   return {
     id: `telemetry:${item.idempotencyKey}`,
+    tenantId: item.tenantId,
+    branchId: item.branchId,
     occurredAt: item.observedAt,
+    eventType: eventTypeForTelemetry(item),
     category: "telemetry",
     entityId: item.deviceId,
     entityType: item.deviceType,
@@ -99,6 +108,31 @@ function telemetryEvent(item: OperationalTelemetryEnvelope): CommandTimelineEven
       reasonCodes: item.reasonCodes,
     },
   };
+}
+
+function eventTypeForTelemetry(item: OperationalTelemetryEnvelope): CommandTimelineEventType {
+  const metrics = item.metrics;
+  const unavailable = metrics.reachable === false || metrics.connectivity === false || metrics.online === false || normalized(metrics.status) === "offline";
+  if (item.deviceType === "camera") return unavailable ? "camera_offline" : "telemetry";
+  if (item.deviceType === "recorder") {
+    if (metrics.reachable === false || normalized(metrics.status) === "offline") return "recorder_unavailable";
+    if (normalized(metrics.recordingStatus) === "not_recording" || normalized(metrics.recordingStatus) === "failed") return "recording_degraded";
+    return "telemetry";
+  }
+  if (item.deviceType === "network") {
+    if (unavailable) return "network_unavailable";
+    if (typeof metrics.packetLossPercent === "number" && metrics.packetLossPercent >= 5) return "packet_loss";
+    if (typeof metrics.latencyMs === "number" && metrics.latencyMs >= 300) return "latency_high";
+    return "network_degraded";
+  }
+  if (item.deviceType === "edge-agent") return unavailable ? "edge_agent_offline" : "telemetry";
+  if (item.deviceType === "ups") {
+    if (metrics.utilityPowerAvailable === false) return "power_loss";
+    if (metrics.onBattery === true) return "power_on_battery";
+    return "telemetry";
+  }
+  if (item.deviceType === "disk") return unavailable ? "disk_failure" : "telemetry";
+  return "telemetry";
 }
 
 function describeTelemetry(item: OperationalTelemetryEnvelope) {
@@ -149,7 +183,11 @@ function describeTelemetry(item: OperationalTelemetryEnvelope) {
     const unavailable = metrics.reachable === false || metrics.online === false || string(metrics.status) === "offline";
     return { title: unavailable ? "Edge agent reported unavailable" : "Edge-agent heartbeat received", detail: evidenceDetail(item), severity: unavailable ? "critical" as const : severity(item) };
   }
-  return { title: `${item.deviceType.replaceAll("-", " ")} telemetry received`, detail: evidenceDetail(item), severity: severity(item) };
+  return { title: `${item.deviceType.replace(/-/g, " ")} telemetry received`, detail: evidenceDetail(item), severity: severity(item) };
+}
+
+function normalized(value: unknown) {
+  return typeof value === "string" ? value.toLowerCase().replace(/-/g, "_").replace(/ /g, "_") : "";
 }
 
 function evidenceDetail(item: OperationalTelemetryEnvelope) {

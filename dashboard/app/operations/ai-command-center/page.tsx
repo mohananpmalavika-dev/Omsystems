@@ -18,9 +18,9 @@ type Diagnosis = {
   caseId: string;
   branch: { id: string; name: string };
   status: { label: string; explanation: string };
-  rootCause: { label: string; certainty: Certainty; confidence: number; explanation: string };
+  rootCause: { label: string; certainty: Certainty; confidence: number; summary?: string; explanation: string; confidenceDetails?: string[]; reasoningVersion?: string };
   evidence: Array<{ id: string; assertion: string; observedAt: string; source: string; quality: string; raw: Record<string, unknown> }>;
-  impact: { statement: string; unavailableCameras: number; totalCameras: number; affectedEntityIds: string[] };
+  impact: { statement: string; unavailableCameras: number; totalCameras: number; offlineRecorders: number; affectedEntityIds: string[] };
   currentRecoveryActivity: string[];
   recoveryEstimate: { available: boolean; statement: string; confidence: string; missingInputs: string[] };
   recommendedActions: Action[];
@@ -167,7 +167,50 @@ function DependencyGraph({ diagnosis }: { diagnosis?: Diagnosis }) {
 }
 
 function RcaPanel({ diagnosis }: { diagnosis?: Diagnosis }) {
-  return <Panel title="Root-cause assessment" icon={<FileSearch size={17}/>}>{!diagnosis ? <Empty text="Evidence-ranked causes appear here."/> : <div className="space-y-3"><div className="flex items-center justify-between"><CertaintyBadge value={diagnosis.rootCause.certainty}/><strong className="text-xl">{Math.round(diagnosis.rootCause.confidence * 100)}%</strong></div><div><h3 className="font-semibold">{diagnosis.rootCause.label}</h3><p className="mt-1 text-sm leading-6 text-slate-400">{diagnosis.rootCause.explanation}</p></div>{diagnosis.alternativeCauses[0] && <div className="rounded-lg border border-slate-800 p-3"><p className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">Alternative</p><p className="mt-1 text-sm">{diagnosis.alternativeCauses[0].label} · {diagnosis.alternativeCauses[0].certainty}</p></div>} {diagnosis.missingEvidence.length > 0 && <details className="text-xs text-amber-200"><summary className="cursor-pointer">{diagnosis.missingEvidence.length} missing evidence inputs</summary><ul className="mt-2 list-disc space-y-1 pl-4 text-slate-400">{diagnosis.missingEvidence.map((item) => <li key={item}>{item}</li>)}</ul></details>}</div>}</Panel>;
+  if (!diagnosis) return <Panel title="Root-cause assessment" icon={<FileSearch size={17}/>}><Empty text="Evidence-ranked causes appear here."/></Panel>;
+
+  const topAlternatives = diagnosis.alternativeCauses.slice(0, 3);
+  const supportItems = diagnosis.evidence.slice(0, 4);
+
+  return <Panel title="Root-cause assessment" icon={<FileSearch size={17}/>}> 
+    <div className="space-y-4">
+      <div className="grid gap-3 rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
+        <div className="flex items-center justify-between gap-3"><div><p className="text-xs uppercase tracking-[.2em] text-slate-500">Primary diagnosis</p><h3 className="mt-2 text-xl font-semibold text-slate-100">{diagnosis.rootCause.label}</h3></div><div className="text-right"><CertaintyBadge value={diagnosis.rootCause.certainty}/><p className="mt-2 text-2xl font-bold text-slate-100">{Math.round(diagnosis.rootCause.confidence * 100)}%</p></div></div>
+        {diagnosis.rootCause.summary ? <p className="text-sm font-semibold text-slate-200">{diagnosis.rootCause.summary}</p> : null}
+        <p className="text-sm leading-6 text-slate-400">{diagnosis.rootCause.explanation}</p>
+        <div className="grid gap-2 sm:grid-cols-2 text-sm text-slate-400">
+          <div><span className="font-semibold text-slate-200">Branch</span><span className="ml-1">{diagnosis.branch.name}</span></div>
+          <div><span className="font-semibold text-slate-200">Cameras affected</span><span className="ml-1">{diagnosis.impact.unavailableCameras}</span></div>
+          <div><span className="font-semibold text-slate-200">Recorders affected</span><span className="ml-1">{diagnosis.impact.offlineRecorders}</span></div>
+          <div><span className="font-semibold text-slate-200">Evidence</span><span className="ml-1">{diagnosis.evidence.length}</span></div>
+        </div>
+        <div className="grid gap-2 sm:grid-cols-2 text-xs text-slate-500">
+          <div><span className="font-semibold">First observed</span> {time(diagnosis.timeline[0]?.occurredAt ?? diagnosis.lastUpdatedAt)}</div>
+          <div><span className="font-semibold">Last observed</span> {time(diagnosis.timeline.at(-1)?.occurredAt ?? diagnosis.lastUpdatedAt)}</div>
+        </div>
+      </div>
+
+      <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
+        <p className="text-xs uppercase tracking-[.2em] text-slate-500">Why Sentinel thinks this</p>
+        <ul className="mt-3 space-y-2 text-sm text-slate-300">
+          {supportItems.map((item) => <li key={item.id} className="flex gap-2"><CheckCircle2 className="mt-1 h-4 w-4 shrink-0 text-emerald-400"/> <span>{item.title}: {item.detail}</span></li>)}
+        </ul>
+      </div>
+      {diagnosis.rootCause.confidenceDetails?.length ? <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
+        <p className="text-xs uppercase tracking-[.2em] text-slate-500">Confidence breakdown</p>
+        <ul className="mt-3 space-y-2 text-sm text-slate-300">{diagnosis.rootCause.confidenceDetails.map((detail) => <li key={detail} className="flex gap-2"><span className="h-2.5 w-2.5 rounded-full bg-cyan-400 mt-1"/> <span>{detail}</span></li>)}</ul>
+      </div> : null}
+
+      {topAlternatives.length > 0 && <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
+        <p className="text-xs uppercase tracking-[.2em] text-slate-500">Alternative causes</p>
+        <div className="mt-3 space-y-2 text-sm text-slate-300">
+          {topAlternatives.map((item) => <div key={item.label} className="rounded-xl border border-slate-800 bg-slate-900/80 p-3"><p className="font-semibold">{item.label}</p><p className="mt-1 text-xs text-slate-500">{Math.round(item.confidence * 100)}% · {item.certainty}</p><p className="mt-2 text-xs text-slate-400">{item.explanation}</p></div>)}
+        </div>
+      </div>}
+
+      {diagnosis.missingEvidence.length > 0 && <details className="rounded-2xl border border-amber-500/30 bg-amber-500/5 p-4 text-sm text-amber-100"><summary className="cursor-pointer font-semibold text-amber-200">Missing evidence</summary><ul className="mt-3 list-disc space-y-2 pl-4 text-slate-400">{diagnosis.missingEvidence.map((item) => <li key={item}>{item}</li>)}</ul></details>}
+    </div>
+  </Panel>;
 }
 
 function RecoveryPanel({ diagnosis }: { diagnosis?: Diagnosis }) {

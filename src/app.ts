@@ -17,6 +17,7 @@ import { createAuthMiddleware, RateLimiter } from "./middleware/auth.middleware.
 import { buildPlaybackTimeline } from "./recording/playback-timeline.js";
 import { calculateRecordingStorage } from "./recording/storage-calculator.js";
 import { registerAuthRoutes } from "./routes/auth.routes.js";
+import { registerEnterpriseAuthRoutes } from "./routes/auth-enterprise.routes.js";
 import { registerCameraPermissionRoutes } from "./routes/camera-permissions.routes.js";
 import { registerCameraDiscoveryRoutes } from "./routes/camera-discovery.routes.js";
 import {
@@ -63,6 +64,7 @@ import { registerEnterpriseInfrastructureRoutes } from "./routes/enterprise-infr
 import { registerVideoWallRoutes } from "./routes/video-wall.routes.js";
 import { registerAlertCommandCenterRoutes } from "./routes/alert-command-center.routes.js";
 import { registerCommandCenterRoutes } from "./routes/command-center.routes.js";
+import { registerRCAIncidentIntegrationRoutes } from "./routes/rca-incident-integration.routes.js";
 import { registerDigitalTwinRoutes } from "./routes/digital-twin.routes.js";
 import { registerOperationalReportRoutes } from "./routes/operational-reports.routes.js";
 import { registerFederationRoutes } from "./routes/federation.routes.js";
@@ -1954,6 +1956,7 @@ export async function buildApp(options?: {
   await registerCameraDiscoveryRoutes(app, store, pool);
   await registerRecorderLifecycleRoutes(app, store);
   await registerCommandCenterRoutes(app, store);
+  await registerRCAIncidentIntegrationRoutes(app, store);
   await registerDigitalTwinRoutes(app, store, {
     assetRoot: options?.digitalTwinAssetRoot ?? process.env.DIGITAL_TWIN_ASSET_ROOT ?? "./digital-twin-assets",
   });
@@ -1978,6 +1981,7 @@ export async function buildApp(options?: {
   if (extendedStore) {
     await registerDeviceManagementRoutes(app, extendedStore);
     await registerAuthRoutes(app, extendedStore);
+    await registerEnterpriseAuthRoutes(app, extendedStore);
     await registerOrganizationRoutes(app, extendedStore);
     await registerUserRoutes(app, extendedStore);
     await registerCameraPermissionRoutes(app, extendedStore);

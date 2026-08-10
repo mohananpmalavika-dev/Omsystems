@@ -5,12 +5,14 @@ import { EvidencePreservationService } from './evidence-preservation.service.js'
 import { IncidentSLAService } from './incident-sla.service.js';
 import { IncidentWorkflowService } from './incident-workflow.service.js';
 import { AIVerificationService } from './ai-verification.service.js';
+import { RCAIncidentIntegrationService } from './rca-incident-integration.service.js';
 
 /**
  * Incident Management Orchestrator
  * 
  * Coordinates all incident services and provides a unified interface
  * for AI event processing, incident creation, and workflow management.
+ * Now integrated with autonomous RCA for enhanced diagnostics.
  */
 
 export interface IncidentCreationResult {
@@ -19,6 +21,7 @@ export interface IncidentCreationResult {
   preservation?: any;
   slaStatus?: any;
   correlation?: { action: string; reason: string };
+  rcaEnrichment?: any; // RCA diagnosis if enabled
 }
 
 export class IncidentOrchestrator {
@@ -27,16 +30,21 @@ export class IncidentOrchestrator {
   private slaService: IncidentSLAService;
   private workflowService: IncidentWorkflowService;
   private verificationService: AIVerificationService;
+  private rcaService: RCAIncidentIntegrationService;
   
   constructor(
     private readonly store: ControlPlaneStore,
-    private readonly logger?: Console
+    private readonly logger?: Console,
+    private readonly options: {
+      enableRCAEnrichment?: boolean;
+    } = {}
   ) {
     this.correlationService = new IncidentCorrelationService(store);
     this.preservationService = new EvidencePreservationService(store, logger);
     this.slaService = new IncidentSLAService(store, logger);
     this.workflowService = new IncidentWorkflowService(store, logger);
     this.verificationService = new AIVerificationService(store, logger);
+    this.rcaService = new RCAIncidentIntegrationService(store);
   }
   
   /**
@@ -202,6 +210,32 @@ export class IncidentOrchestrator {
       const duration = Date.now() - startTime;
       this.logger?.log(`Incident ${incident.id} fully processed in ${duration}ms`);
       
+      // Step 5: RCA Enrichment (optional, controlled by flag)
+      let rcaEnrichment;
+      if (this.options.enableRCAEnrichment && incident.branchId) {
+        try {
+          const enrichmentResult = await this.rcaService.enrichIncidentWithRCA(
+            incident.id,
+            { 
+              id: 'system',
+              tenantId: event.tenantId,
+              email: 'system@sentinel.local',
+              role: 'system',
+              name: 'System'
+            } as any // Minimal user for system-triggered RCA
+          );
+          
+          rcaEnrichment = enrichmentResult.enrichment;
+          
+          this.logger?.log(
+            `RCA enrichment completed for incident ${incident.id}: ${enrichmentResult.diagnosis.primaryCause.label} (${Math.round(enrichmentResult.diagnosis.confidenceScore * 100)}% confidence)`
+          );
+        } catch (error) {
+          this.logger?.error(`Failed to enrich incident ${incident.id} with RCA:`, error);
+          // Continue - RCA enrichment failure shouldn't block incident creation
+        }
+      }
+      
       // Send notifications if immediate action required
       if (verification.requiresImmediate) {
         await this.sendImmediateNotifications(incident, event, verification);
@@ -213,6 +247,7 @@ export class IncidentOrchestrator {
         preservation,
         slaStatus,
         correlation: { action: 'create', reason: 'New incident from AI detection' },
+        rcaEnrichment,
       };
     } catch (error) {
       this.logger?.error('Failed to create incident from AI event:', error);
@@ -347,6 +382,35 @@ export class IncidentOrchestrator {
   }
   
   /**
+   * Trigger RCA analysis for an existing incident
+   */
+  async triggerRCAAnalysis(
+    incidentId: string,
+    user: any
+  ): Promise<{
+    diagnosis: any;
+    enrichment: any;
+    remediationActions: any[];
+  }> {
+    const incident = await this.store.getIncident(incidentId);
+    if (!incident) {
+      throw new Error('incident_not_found');
+    }
+    
+    if (!incident.branchId) {
+      throw new Error('incident_missing_branch');
+    }
+    
+    const result = await this.rcaService.enrichIncidentWithRCA(incidentId, user);
+    
+    this.logger?.log(
+      `RCA analysis triggered for incident ${incidentId}: ${result.diagnosis.primaryCause.label} (${Math.round(result.diagnosis.confidenceScore * 100)}% confidence)`
+    );
+    
+    return result;
+  }
+  
+  /**
    * Get investigation workspace data
    */
   async getInvestigationWorkspace(incidentId: string) {
@@ -371,6 +435,8 @@ export class IncidentOrchestrator {
       reports,
       slaStatus,
       availableTransitions,
+      rcaEnrichment,
+      remediationActions,
     ] = await Promise.all([
       this.store.listIncidentParticipants(incidentId),
       this.store.listIncidentCameras(incidentId),
@@ -387,6 +453,8 @@ export class IncidentOrchestrator {
       this.store.listIncidentReports(incidentId),
       this.slaService.getSLAStatus(incidentId),
       this.workflowService.getAvailableTransitions(incident.status as any),
+      this.store.getMetadata(`rca:enrichment:${incidentId}`, incident.tenantId).catch(() => null),
+      this.rcaService.getRemediationActions(incidentId, incident.tenantId).catch(() => []),
     ]);
     
     return {
@@ -406,6 +474,8 @@ export class IncidentOrchestrator {
       reports,
       slaStatus,
       availableTransitions,
+      rcaEnrichment,
+      remediationActions,
     };
   }
   

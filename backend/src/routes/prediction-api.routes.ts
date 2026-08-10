@@ -174,6 +174,95 @@ export function createPredictionApiRoutes(pool: Pool): Router {
   });
 
   /**
+   * GET /v1/predictions/branches/:branchId/risk-score
+   * Get latest branch risk score summary for a specific branch
+   */
+  router.get('/branches/:branchId/risk-score', async (req: AuthRequest, res: Response) => {
+    try {
+      const { tenantId } = req.context || {};
+      const { branchId } = req.params;
+
+      if (!tenantId) {
+        return res.status(401).json({ success: false, error: 'Unauthorized' });
+      }
+
+      const riskScore = await branchRiskService.getLatestBranchRiskScore(tenantId, branchId);
+      if (!riskScore) {
+        return res.status(404).json({ success: false, error: 'Branch risk score not available' });
+      }
+
+      const branchResult = await pool.query(
+        `SELECT name FROM resource_nodes WHERE id = $1 AND tenant_id = $2`,
+        [branchId, tenantId]
+      );
+
+      const branchName = branchResult.rows[0]?.name ?? null;
+
+      const componentRisks = [
+        {
+          component: 'recorder',
+          score: riskScore.componentScores.recorderRiskScore,
+          risk: riskScore.componentScores.recorderRiskScore >= 80 ? 'low_risk' : riskScore.componentScores.recorderRiskScore >= 60 ? 'moderate' : riskScore.componentScores.recorderRiskScore >= 40 ? 'high_risk' : 'critical_risk',
+          trend: 'stable',
+          weight: 0.3
+        },
+        {
+          component: 'storage',
+          score: riskScore.componentScores.storageRiskScore,
+          risk: riskScore.componentScores.storageRiskScore >= 80 ? 'low_risk' : riskScore.componentScores.storageRiskScore >= 60 ? 'moderate' : riskScore.componentScores.storageRiskScore >= 40 ? 'high_risk' : 'critical_risk',
+          trend: 'stable',
+          weight: 0.25
+        },
+        {
+          component: 'network',
+          score: riskScore.componentScores.networkRiskScore,
+          risk: riskScore.componentScores.networkRiskScore >= 80 ? 'low_risk' : riskScore.componentScores.networkRiskScore >= 60 ? 'moderate' : riskScore.componentScores.networkRiskScore >= 40 ? 'high_risk' : 'critical_risk',
+          trend: 'stable',
+          weight: 0.2
+        },
+        {
+          component: 'power',
+          score: riskScore.componentScores.powerRiskScore,
+          risk: riskScore.componentScores.powerRiskScore >= 80 ? 'low_risk' : riskScore.componentScores.powerRiskScore >= 60 ? 'moderate' : riskScore.componentScores.powerRiskScore >= 40 ? 'high_risk' : 'critical_risk',
+          trend: 'stable',
+          weight: 0.15
+        },
+        {
+          component: 'camera',
+          score: riskScore.componentScores.cameraRiskScore,
+          risk: riskScore.componentScores.cameraRiskScore >= 80 ? 'low_risk' : riskScore.componentScores.cameraRiskScore >= 60 ? 'moderate' : riskScore.componentScores.cameraRiskScore >= 40 ? 'high_risk' : 'critical_risk',
+          trend: 'stable',
+          weight: 0.05
+        },
+        {
+          component: 'compliance',
+          score: riskScore.componentScores.complianceRiskScore,
+          risk: riskScore.componentScores.complianceRiskScore >= 80 ? 'low_risk' : riskScore.componentScores.complianceRiskScore >= 60 ? 'moderate' : riskScore.componentScores.complianceRiskScore >= 40 ? 'high_risk' : 'critical_risk',
+          trend: 'stable',
+          weight: 0.05
+        }
+      ];
+
+      res.json({
+        success: true,
+        data: {
+          branchId,
+          branchName,
+          overallScore: riskScore.overallScore,
+          riskClassification: riskScore.overallClassification,
+          topRisks: riskScore.topRisks,
+          recommendations: riskScore.recommendedActions,
+          componentRisks,
+          lastUpdated: new Date().toISOString()
+        }
+      });
+    } catch (error) {
+      logger.error('Error getting branch risk score', { error, branchId: req.params.branchId });
+      res.status(500).json({ success: false, error: 'Internal server error' });
+    }
+  });
+
+  /**
    * GET /v1/predictions/devices/:deviceId
    * Get predictions for a specific device
    */

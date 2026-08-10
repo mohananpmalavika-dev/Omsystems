@@ -108,7 +108,7 @@ export class BranchRiskAggregationService {
       const componentScores = this.calculateComponentRisks(predictions.rows);
 
       // Calculate overall score (0-100, higher is better)
-      const overall Score = this.calculateOverallScore(componentScores);
+      const overallScore = this.calculateOverallScore(componentScores);
 
       // Classify risk
       const overallClassification = this.classifyBranchRisk(overallScore);

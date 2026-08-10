@@ -54,9 +54,30 @@ export interface CommandEvidence {
   raw: Record<string, unknown>;
 }
 
+export type CommandTimelineEventType =
+  | "camera_offline"
+  | "recorder_unavailable"
+  | "recording_degraded"
+  | "network_unavailable"
+  | "network_degraded"
+  | "wan_down"
+  | "packet_loss"
+  | "latency_high"
+  | "edge_agent_offline"
+  | "power_loss"
+  | "power_on_battery"
+  | "disk_failure"
+  | "incident_reported"
+  | "predictive_maintenance"
+  | "work_order" 
+  | "telemetry";
+
 export interface CommandTimelineEvent {
   id: string;
+  tenantId?: string;
+  branchId?: string;
   occurredAt: string;
+  eventType: CommandTimelineEventType;
   category: "telemetry" | "incident" | "predictive" | "maintenance";
   entityId: string | null;
   entityType: string;
@@ -74,8 +95,11 @@ export interface RootCauseAssessment {
   label: string;
   certainty: EvidenceCertainty;
   confidence: number;
+  summary?: string;
   explanation: string;
   evidenceIds: string[];
+  confidenceDetails?: string[];
+  reasoningVersion?: string;
 }
 
 export interface RecoveryEstimate {
