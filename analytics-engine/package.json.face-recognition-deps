@@ -1,0 +1,14 @@
+{
+  "name": "analytics-engine-face-recognition",
+  "description": "Additional dependencies for face recognition",
+  "dependencies": {
+    "onnxruntime-node": "^1.16.0",
+    "sharp": "^0.32.0"
+  },
+  "devDependencies": {},
+  "notes": {
+    "installation": "Run: npm install onnxruntime-node sharp",
+    "gpu_acceleration": "For GPU support: npm install onnxruntime-node-gpu (requires CUDA)",
+    "sharp": "Used for efficient image transformation and alignment"
+  }
+}

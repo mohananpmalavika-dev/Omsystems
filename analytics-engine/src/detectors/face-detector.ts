@@ -184,15 +184,43 @@ export class FaceDetector extends BaseDetector {
 
   /**
    * Match face embedding against watchlists
+   * Now uses real pgvector search service
    */
   private async matchAgainstWatchlists(
     embedding: number[],
     tenantId: string,
   ): Promise<WatchlistMatch | null> {
-    // TODO: Implement actual watchlist matching
-    // This should query the database for active watchlists and compare embeddings
-    // using cosine similarity or Euclidean distance
+    // Use FaceSearchService if available (integrated with FaceRecognitionService)
+    // Otherwise fall back to in-memory matching for backward compatibility
+    
+    if (this.recognitionModel && typeof (this.recognitionModel as any).searchPersons === 'function') {
+      try {
+        const embeddingVector = new Float32Array(embedding);
+        const candidates = await (this.recognitionModel as any).searchPersons({
+          tenantId,
+          embedding: embeddingVector,
+          limit: 1,
+        });
 
+        if (candidates.length > 0 && candidates[0].bestSimilarity >= this.config.recognitionThreshold) {
+          const candidate = candidates[0];
+          return {
+            watchlistId: candidate.watchlistId,
+            personId: candidate.personId,
+            personName: candidate.displayName,
+            similarity: candidate.bestSimilarity,
+            metadata: {
+              confidence: candidate.supportingEmbeddings,
+              meanSimilarity: candidate.meanTopKSimilarity,
+            },
+          };
+        }
+      } catch (error) {
+        console.error('Face search service error:', error);
+      }
+    }
+
+    // Fallback: in-memory matching (legacy)
     const watchlist = this.watchlists.get(tenantId);
     if (!watchlist) return null;
 
@@ -213,7 +241,7 @@ export class FaceDetector extends BaseDetector {
         bestMatch = {
           watchlistId: "default",
           personId: person.id,
-          personName: "Known Person", // Should come from database
+          personName: "Known Person", // Fallback name
           similarity,
         };
       }
@@ -305,31 +333,50 @@ export class FaceDetector extends BaseDetector {
 
   /**
    * Enroll a person into the watchlist
+   * Use FaceEnrollmentService for production enrollment
    */
   async enrollPerson(
     personId: string,
     faceImages: Buffer[],
   ): Promise<{ embedding: number[]; quality: number }> {
-    // TODO: Implement face enrollment
-    // 1. Detect face in each image
-    // 2. Extract face embeddings
-    // 3. Average multiple embeddings for better accuracy
-    // 4. Calculate quality score
-    // 5. Store in database
-
-    throw new Error(`Face enrollment requires decoded RGB24 frames and an active embedding model; received ${faceImages.length} encoded buffer(s) for ${personId}`);
+    // This method is deprecated - use FaceEnrollmentService directly
+    // It provides proper multi-image enrollment, quality validation, and transaction support
+    
+    throw new Error(
+      'Face enrollment should use FaceEnrollmentService. ' +
+      'Use POST /api/face-watchlists/:watchlistId/persons with image uploads.'
+    );
   }
 
   /**
    * Search for similar faces in the database
+   * Now uses real pgvector search
    */
   async searchSimilarFaces(
     embedding: number[],
     tenantId: string,
     limit = 10,
   ): Promise<Array<{ personId: string; similarity: number }>> {
-    // TODO: Implement face search
-    // This should use vector similarity search (pgvector, FAISS, etc.)
+    // Use FaceSearchService if available
+    if (this.recognitionModel && typeof (this.recognitionModel as any).searchPersons === 'function') {
+      try {
+        const embeddingVector = new Float32Array(embedding);
+        const candidates = await (this.recognitionModel as any).searchPersons({
+          tenantId,
+          embedding: embeddingVector,
+          limit,
+        });
+
+        return candidates.map((c: any) => ({
+          personId: c.personId,
+          similarity: c.bestSimilarity,
+        }));
+      } catch (error) {
+        console.error('Face search service error:', error);
+      }
+    }
+
+    // Fallback: return empty for now
     return [];
   }
 

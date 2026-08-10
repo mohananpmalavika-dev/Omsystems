@@ -15,9 +15,10 @@
   "dependencies": {
     "exceljs": "^4.4.0",
     "fastify": "^5.2.1",
-    "onnxruntime-node": "^1.22.0",
+    "onnxruntime-node": "^1.27.0",
     "pdfkit": "^0.19.1",
     "pg": "^8.22.0",
+    "sharp": "^0.34.5",
     "zod": "^3.24.2"
   },
   "devDependencies": {
