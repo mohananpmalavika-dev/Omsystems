@@ -32,12 +32,13 @@ export class CommandCenterService {
     throw new CommandCenterError("branch_required", 400, { branches: branches.slice(0, 100).map(({ id, name }) => ({ id, name })) });
   }
 
-  async diagnosis(user: User, branchId: string, options: { from?: string; to?: string } = {}): Promise<CommandCenterDiagnosis> {
+  async diagnosis(user: User, branchId: string, options: { from?: string; to?: string; includePredictive?: boolean } = {}): Promise<CommandCenterDiagnosis> {
     const decision = await this.store.checkAccess(user, "recording:view", branchId);
     if (!decision?.allowed) throw new CommandCenterError("branch_not_found", 404);
-    const [graph, timeline] = await Promise.all([
+    const [graph, timeline, predictiveHealth] = await Promise.all([
       buildOperationalGraph(this.store, user, branchId),
       buildTimeline(this.store, user.tenantId, branchId, options),
+      options.includePredictive !== false ? this.getPredictiveHealth(user.tenantId, branchId) : null,
     ]);
     const rca = analyze(graph, timeline);
     const recoveryEstimate = estimateRecovery(timeline);
@@ -70,14 +71,48 @@ export class CommandCenterService {
       lastUpdatedAt: newest([graph.generatedAt, ...timeline.map((event) => event.occurredAt)]),
       graph,
       timeline,
+      predictiveHealth: predictiveHealth || undefined,
     };
     const caseId = await this.state.saveCase(preliminary, user.tenantId);
-    const actions = await this.state.saveActions(recommendActions(caseId, preliminary), user.tenantId, branchId);
+    const actions = await this.state.saveActions(recommendActions(caseId, preliminary, predictiveHealth), user.tenantId, branchId);
     const diagnosis: CommandCenterDiagnosis = { ...preliminary, caseId, recommendedActions: actions.map(publicAction) };
-    const { caseId: ignoredCaseId, ...persistedDiagnosis } = diagnosis;
+    const { caseId: ignoredCaseId, ...persistedDiagnosis} = diagnosis;
     void ignoredCaseId;
     await this.state.saveCase(persistedDiagnosis, user.tenantId);
     return diagnosis;
+  }
+
+  /**
+   * Get predictive health data for branch
+   */
+  private async getPredictiveHealth(tenantId: string, branchId: string) {
+    try {
+      const result = await this.store.execute(
+        `SELECT prediction_data FROM branch_risk_predictions
+         WHERE branch_id = $1 AND tenant_id = $2 AND expires_at > NOW()
+         ORDER BY horizon_hours, created_at DESC
+         LIMIT 3`,
+        [branchId, tenantId]
+      );
+
+      if (result.rows.length === 0) return null;
+
+      const predictions = result.rows.map((r: any) => r.prediction_data);
+      const prediction72h = predictions.find((p: any) => p.horizonHours === 72) || predictions[0];
+
+      return {
+        probability: prediction72h.probability,
+        riskLevel: prediction72h.riskLevel,
+        confidence: prediction72h.confidence,
+        horizonHours: prediction72h.horizonHours,
+        primaryDriver: prediction72h.primaryRiskDriver,
+        predictedWindow: prediction72h.predictedWindow,
+        predictions,
+      };
+    } catch (error) {
+      console.error("Failed to fetch predictive health:", error);
+      return null;
+    }
   }
 
   async query(user: User, input: { branchId?: string; conversationId?: string; question: string; from?: string; to?: string }): Promise<CommandCenterAnswer> {
@@ -191,7 +226,7 @@ export class CommandCenterError extends Error {
   }
 }
 
-function recommendActions(caseId: string, diagnosis: Omit<CommandCenterDiagnosis, "caseId">): CommandRecommendedAction[] {
+function recommendActions(caseId: string, diagnosis: Omit<CommandCenterDiagnosis, "caseId">, predictiveHealth: any = null): CommandRecommendedAction[] {
   const action = (
     actionType: CommandActionType, title: string, reason: string, permission: Action, options: Partial<CommandRecommendedAction> = {},
   ): CommandRecommendedAction => ({
@@ -211,6 +246,23 @@ function recommendActions(caseId: string, diagnosis: Omit<CommandCenterDiagnosis
       approvalRequired: true,
     }),
   ];
+  
+  // Add predictive health recommendations if high risk
+  if (predictiveHealth && predictiveHealth.probability >= 0.75 && predictiveHealth.confidence === "HIGH") {
+    values.unshift(action(
+      "create_work_order",
+      `Preventive maintenance: ${predictiveHealth.primaryDriver}`,
+      `${Math.round(predictiveHealth.probability * 100)}% probability of recording failure within ${predictiveHealth.horizonHours}h. Primary risk: ${predictiveHealth.primaryDriver}`,
+      "device:configure",
+      {
+        risk: "low",
+        expectedImpact: "Prevent predicted recording failure through early intervention.",
+        approvalRequired: true,
+        href: `/operations/branches/${diagnosis.branch.id}?tab=predictive`,
+      }
+    ));
+  }
+  
   if (diagnosis.rootCause.code === "recorder_unavailable" || diagnosis.rootCause.code === "recorder_failure") {
     values.push(action("retry_recorder", "Retry recorder connection", "Recorder telemetry reports it unavailable.", "device:configure", {
       risk: "medium", expectedImpact: "Requests the recorder adapter to reconnect; availability is not guaranteed.",

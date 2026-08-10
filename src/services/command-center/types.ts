@@ -153,6 +153,19 @@ export interface CommandCenterDiagnosis {
   lastUpdatedAt: string;
   graph: OperationalGraph;
   timeline: CommandTimelineEvent[];
+  predictiveHealth?: {
+    probability: number;
+    riskLevel: string;
+    confidence: string;
+    horizonHours: number;
+    primaryDriver: string;
+    predictedWindow?: {
+      start: Date;
+      end: Date;
+      mostLikely: Date;
+    };
+    predictions: any[];
+  };
 }
 
 export interface CommandCenterAnswer {
