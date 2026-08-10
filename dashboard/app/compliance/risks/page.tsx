@@ -38,7 +38,7 @@ export default function RisksPage() {
     try {
       const response = await fetch('/api/compliance/risks');
       const data = await response.json();
-      setRisks(data.data || []);
+      setRisks((data.data || []).map(normalizeRisk));
     } catch (error) {
       console.error('Failed to fetch risks:', error);
     } finally {
@@ -384,4 +384,37 @@ export default function RisksPage() {
       </div>
     </div>
   );
+}
+
+const riskScale = { very_low: 1, negligible: 1, low: 2, medium: 3, high: 4, very_high: 5, critical: 5 } as const;
+
+function normalizeScale(value: unknown): Risk['likelihood'] {
+  if (value === 'critical' || value === 'very_high') return 'very_high';
+  if (value === 'negligible' || value === 'very_low') return 'very_low';
+  if (value === 'low' || value === 'high') return value;
+  return 'medium';
+}
+
+function normalizeRisk(item: any): Risk {
+  const likelihood = normalizeScale(item.likelihood ?? item.inherentLikelihood);
+  const impact = normalizeScale(item.impact ?? item.inherentImpact);
+  const residualLikelihood = normalizeScale(item.residualLikelihood ?? likelihood);
+  const residualImpact = normalizeScale(item.residualImpact ?? impact);
+  return {
+    ...item,
+    id: item.id,
+    requirementId: item.requirementId ?? '',
+    riskCode: item.riskCode ?? item.riskNumber ?? item.id?.slice(0, 8) ?? 'RISK',
+    title: item.title ?? item.riskTitle ?? item.riskName ?? 'Untitled risk',
+    description: item.description ?? item.riskDescription ?? '',
+    category: item.category ?? item.riskCategory ?? 'compliance',
+    likelihood,
+    impact,
+    inherentRiskScore: item.inherentRiskScore ?? riskScale[likelihood] * riskScale[impact],
+    residualRiskScore: item.residualRiskScore ?? riskScale[residualLikelihood] * riskScale[residualImpact],
+    riskResponse: ['accept', 'mitigate', 'transfer', 'avoid'].includes(item.riskResponse ?? item.riskTreatment) ? (item.riskResponse ?? item.riskTreatment) : 'mitigate',
+    status: ['identified', 'assessed', 'treated', 'monitored'].includes(item.status) ? item.status : 'identified',
+    owner: item.owner ?? item.riskOwner,
+    reviewDate: item.reviewDate ?? item.nextReviewDate,
+  };
 }

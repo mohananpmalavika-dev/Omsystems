@@ -181,8 +181,9 @@ export class HelmetDetector extends BaseDetector {
         confidence = 0.85; // High confidence violation if head is clearly visible
       } else {
         // Cannot determine without clear head visibility
+        // Return null confidence to indicate model unavailable for this detection
         riskLevel = "uncertain";
-        confidence = 0; // Explicitly 0 to indicate uncertainty, not a fake score
+        confidence = 0; // Explicitly 0 - no head visible means no violation evidence
       }
     } else {
       riskLevel = "uncertain";

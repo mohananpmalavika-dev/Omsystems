@@ -34,7 +34,16 @@ export default function RequirementsPage() {
     try {
       const response = await fetch('/api/compliance/requirements');
       const data = await response.json();
-      setRequirements(data.data || []);
+      setRequirements((data.data || []).map((item: any) => ({
+        ...item,
+        requirementCode: item.requirementCode ?? item.requirementNumber ?? item.code ?? item.id?.slice(0, 8) ?? 'REQ',
+        title: item.title ?? item.requirementTitle ?? 'Untitled requirement',
+        description: item.description ?? '',
+        category: item.category ?? 'Uncategorized',
+        subcategory: item.subcategory ?? '',
+        isMandatory: item.isMandatory ?? item.mandatory ?? false,
+        status: ['active', 'draft', 'deprecated'].includes(item.status) ? item.status : 'active',
+      })));
     } catch (error) {
       console.error('Failed to fetch requirements:', error);
     } finally {

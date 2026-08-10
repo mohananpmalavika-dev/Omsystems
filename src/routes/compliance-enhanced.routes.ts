@@ -258,6 +258,7 @@ export async function registerComplianceEnhancedRoutes(
     const body = requirementSchema.parse(request.body);
     const requirement = await store.createComplianceRequirement({
       ...body,
+      requirementNumber: body.requirementCode,
       tenantId: request.currentUser.tenantId,
       createdBy: request.currentUser.id,
     });
@@ -276,7 +277,10 @@ export async function registerComplianceEnhancedRoutes(
     if (!(await requireAccess(request, reply, store, "compliance:manage"))) return;
     const { id } = idParams.parse(request.params);
     const body = requirementSchema.partial().parse(request.body);
-    const requirement = await store.updateComplianceRequirement(id, body);
+    const requirement = await store.updateComplianceRequirement(id, {
+      ...body,
+      ...(body.requirementCode ? { requirementNumber: body.requirementCode } : {}),
+    });
     if (!requirement) return reply.code(404).send({ error: "requirement_not_found" });
     return requirement;
   });
@@ -307,6 +311,11 @@ export async function registerComplianceEnhancedRoutes(
     const body = controlSchema.parse(request.body);
     const control = await store.createComplianceControl({
       ...body,
+      controlNumber: body.controlName,
+      title: body.controlName,
+      description: body.controlDescription,
+      testingFrequency: body.testFrequencyDays,
+      owner: body.responsibleTeam,
       tenantId: request.currentUser.tenantId,
       createdBy: request.currentUser.id,
     });
@@ -325,7 +334,13 @@ export async function registerComplianceEnhancedRoutes(
     if (!(await requireAccess(request, reply, store, "compliance:manage"))) return;
     const { id } = idParams.parse(request.params);
     const body = controlSchema.partial().parse(request.body);
-    const control = await store.updateComplianceControl(id, body);
+    const control = await store.updateComplianceControl(id, {
+      ...body,
+      ...(body.controlName ? { title: body.controlName } : {}),
+      ...(body.controlDescription ? { description: body.controlDescription } : {}),
+      ...(body.testFrequencyDays ? { testingFrequency: body.testFrequencyDays } : {}),
+      ...(body.responsibleTeam ? { owner: body.responsibleTeam } : {}),
+    });
     if (!control) return reply.code(404).send({ error: "control_not_found" });
     return control;
   });
@@ -490,8 +505,10 @@ export async function registerComplianceEnhancedRoutes(
     const body = findingSchema.parse(request.body);
     const finding = await store.createComplianceFinding({
       ...body,
+      identifiedDate: body.discoveredDate,
       tenantId: request.currentUser.tenantId,
       discoveredBy: request.currentUser.id,
+      createdBy: request.currentUser.id,
     });
     return reply.code(201).send(finding);
   });
@@ -689,6 +706,10 @@ export async function registerComplianceEnhancedRoutes(
     const body = riskSchema.parse(request.body);
     const risk = await store.createComplianceRisk({
       ...body,
+      riskName: body.riskTitle,
+      description: body.riskDescription,
+      category: body.riskCategory,
+      owner: body.riskOwner,
       tenantId: request.currentUser.tenantId,
       createdBy: request.currentUser.id,
     });
@@ -707,7 +728,13 @@ export async function registerComplianceEnhancedRoutes(
     if (!(await requireAccess(request, reply, store, "compliance:manage"))) return;
     const { id } = idParams.parse(request.params);
     const body = riskSchema.partial().parse(request.body);
-    const risk = await store.updateComplianceRisk(id, body);
+    const risk = await store.updateComplianceRisk(id, {
+      ...body,
+      ...(body.riskTitle ? { riskName: body.riskTitle } : {}),
+      ...(body.riskDescription ? { description: body.riskDescription } : {}),
+      ...(body.riskCategory ? { category: body.riskCategory } : {}),
+      ...(body.riskOwner ? { owner: body.riskOwner } : {}),
+    });
     if (!risk) return reply.code(404).send({ error: "risk_not_found" });
     return risk;
   });

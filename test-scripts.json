@@ -1,0 +1,14 @@
+{
+  "scripts": {
+    "test": "npm run test:unit && npm run test:integration",
+    "test:unit": "jest --testMatch='**/*.test.ts' --coverage --coverageDirectory=coverage/unit",
+    "test:integration": "jest --testMatch='**/*.integration.test.ts' --coverage --coverageDirectory=coverage/integration",
+    "test:e2e": "jest --testMatch='**/*.e2e.test.ts' --runInBand",
+    "test:security": "npm audit && npm run test:unit -- --testPathPattern=security",
+    "test:performance": "node test/performance/run-benchmarks.js",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage --coverageThreshold='{\"global\":{\"branches\":80,\"functions\":80,\"lines\":80,\"statements\":80}}'",
+    "db:migrate": "node scripts/migrate.js",
+    "db:seed": "node scripts/seed.js"
+  }
+}

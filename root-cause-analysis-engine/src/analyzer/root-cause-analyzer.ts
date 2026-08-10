@@ -174,31 +174,32 @@ Provide structured, actionable insights.`
   }
 
   private calculateConfidence(incidentData: IncidentData): number {
-    // Start from 0 and build confidence based on actual data quality
+    // Build confidence based on actual data quality and AI analysis success
+    // Note: This is confidence in the RCA quality, not AI model inference
     let confidence = 0;
 
-    // Minimum baseline only if we have basic description
+    // Base confidence only if we have meaningful description
     if (incidentData.description && incidentData.description.length > 20) {
-      confidence = 0.2; // Minimal baseline for having incident data
+      confidence = 0.3; // Base confidence for having usable incident data
     }
 
     // Increase confidence based on data completeness
     if (incidentData.description && incidentData.description.length > 50) {
-      confidence += 0.1;
+      confidence += 0.15; // Detailed description helps analysis
     }
     
     if (incidentData.metadata && Object.keys(incidentData.metadata).length > 0) {
-      confidence += 0.1;
+      confidence += 0.15; // Structured metadata improves accuracy
     }
     
     if (incidentData.systemLogs && incidentData.systemLogs.length > 0) {
-      confidence += 0.15;
+      confidence += 0.2; // System logs are highly valuable for RCA
     }
     
     if (incidentData.relatedIncidents && incidentData.relatedIncidents.length > 0) {
-      confidence += 0.15;
+      confidence += 0.15; // Pattern recognition across incidents
     }
 
-    return Math.min(confidence, 1.0);
+    return Math.min(confidence, 0.95); // Cap at 95% - never claim 100% certainty in RCA
   }
 }

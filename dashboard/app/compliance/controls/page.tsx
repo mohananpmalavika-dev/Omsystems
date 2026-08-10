@@ -36,7 +36,16 @@ export default function ControlsPage() {
     try {
       const response = await fetch('/api/compliance/controls');
       const data = await response.json();
-      setControls(data.data || []);
+      setControls((data.data || []).map((item: any) => ({
+        ...item,
+        controlCode: item.controlCode ?? item.controlNumber ?? item.id?.slice(0, 8) ?? 'CTRL',
+        title: item.title ?? item.controlName ?? 'Untitled control',
+        description: item.description ?? item.controlDescription ?? '',
+        controlType: ['preventive', 'detective', 'corrective', 'deterrent'].includes(item.controlType) ? item.controlType : 'preventive',
+        implementationStatus: normalizeImplementationStatus(item.implementationStatus),
+        effectiveness: normalizeEffectiveness(item.effectiveness ?? item.effectivenessRating),
+        testFrequency: item.testFrequency ?? item.testingFrequency ?? '',
+      })));
     } catch (error) {
       console.error('Failed to fetch controls:', error);
     } finally {
@@ -304,4 +313,19 @@ export default function ControlsPage() {
       </div>
     </main>
   );
+}
+
+function normalizeImplementationStatus(value: unknown): Control['implementationStatus'] {
+  if (value === 'in_progress' || value === 'implemented' || value === 'verified') return value;
+  return 'not_implemented';
+}
+
+function normalizeEffectiveness(value: unknown): Control['effectiveness'] {
+  if (value === 'effective' || value === 'partially_effective' || value === 'ineffective' || value === 'not_tested') return value;
+  if (typeof value === 'number') {
+    if (value >= 4) return 'effective';
+    if (value >= 2) return 'partially_effective';
+    if (value > 0) return 'ineffective';
+  }
+  return 'not_tested';
 }

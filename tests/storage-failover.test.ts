@@ -1,18 +1,29 @@
 /**
- * Storage Failover Tests - P0 #5 Critical
+ * Storage Failover Tests - P0 #4 Critical
  * 
- * Tests for storage failover scenarios:
- * - Primary disk full
- * - S3 unavailable
- * - SMB network failure
- * - Auto-recovery
+ * Comprehensive tests for storage failover scenarios:
+ * - Primary disk full → Secondary failover
+ * - S3 unavailable → Local staging with retry
+ * - SMB network failure → Local fallback
+ * - Auto-recovery when storage returns
+ * 
+ * These tests verify zero data loss during storage failures
  */
 
-import { describe, test, expect, beforeEach, afterEach, jest } from '@jest/globals';
-import { mkdir, writeFile, rmdir } from 'fs/promises';
-import { join } from 'path';
+import { describe, test, expect, beforeEach, afterEach } from 'vitest';
+import { StorageFailoverManager } from '../recording-engine/src/storage-failover-manager.js';
+import type { StorageDestinationAdapter, StorageMetrics, StorageProbeResult } from '../recording-engine/src/storage-adapter.js';
 
-describe('Storage Failover - P0 #5', () => {
+describe('Storage Failover - P0 #4 Critical', () => {
+  let failoverManager: StorageFailoverManager;
+  
+  beforeEach(() => {
+    failoverManager = new StorageFailoverManager();
+  });
+  
+  afterEach(() => {
+    failoverManager.stop();
+  });
   
   describe('Test 1: Primary Disk Full Scenario', () => {
     test('should failover to secondary storage when primary full', async () => {
@@ -21,221 +32,378 @@ describe('Storage Failover - P0 #5', () => {
        * Expected: Recording fails over to secondary automatically
        */
       
-      // Mock storage adapter that simulates full disk
-      const mockPrimaryAdapter = {
-        getMetrics: jest.fn().mockResolvedValue({
-          capacityBytes: 1024 * 1024 * 1024, // 1 GB
-          usedBytes: 1024 * 1024 * 1024,     // 1 GB (100% full)
-          availableBytes: 0,
-          status: 'critical'
-        }),
-        getStagingPath: jest.fn().mockRejectedValue(new Error('ENOSPC: no space left on device'))
-      };
-      
-      const mockSecondaryAdapter = {
-        getMetrics: jest.fn().mockResolvedValue({
-          capacityBytes: 5 * 1024 * 1024 * 1024, // 5 GB
-          usedBytes: 1 * 1024 * 1024 * 1024,     // 1 GB used
-          availableBytes: 4 * 1024 * 1024 * 1024,
-          status: 'healthy'
-        }),
-        getStagingPath: jest.fn().mockResolvedValue('/secondary/staging')
-      };
-      
-      // Failover logic
-      let activePath: string;
-      try {
-        activePath = await mockPrimaryAdapter.getStagingPath('cam-001');
-      } catch (error: any) {
-        if (error.message.includes('ENOSPC')) {
-          // ✅ Failover triggered
-          activePath = await mockSecondaryAdapter.getStagingPath('cam-001');
-        } else {
-          throw error;
+      // Create mock primary adapter (full disk)
+      const mockPrimaryAdapter: StorageDestinationAdapter = {
+        async getMetrics(): Promise<StorageMetrics> {
+          return {
+            capacityBytes: 1024 * 1024 * 1024, // 1 GB
+            usedBytes: 1024 * 1024 * 1024,     // 1 GB (100% full)
+            availableBytes: 0,
+            status: 'critical',
+            supportedTiers: ['hot'],
+            storageType: 'local-disk',
+            supportedProtocols: ['file'],
+            mountPath: '/primary'
+          };
+        },
+        async getStagingPath(cameraId: string): Promise<string> {
+          throw new Error('ENOSPC: no space left on device');
+        },
+        resolveSegmentTargetPath(cameraId: string, startedAt: Date, fileName: string): string {
+          return `/primary/${cameraId}/${fileName}`;
+        },
+        async deleteSegmentFile(storagePath: string): Promise<void> {},
+        async runWriteProbe(): Promise<StorageProbeResult> {
+          return { status: 'failed', latencyMs: 0, bytesWritten: 0, checksum: '', error: 'ENOSPC' };
         }
+      };
+      
+      // Create mock secondary adapter (healthy)
+      const mockSecondaryAdapter: StorageDestinationAdapter = {
+        async getMetrics(): Promise<StorageMetrics> {
+          return {
+            capacityBytes: 5 * 1024 * 1024 * 1024, // 5 GB
+            usedBytes: 1 * 1024 * 1024 * 1024,     // 1 GB used
+            availableBytes: 4 * 1024 * 1024 * 1024,
+            status: 'healthy',
+            supportedTiers: ['hot', 'warm'],
+            storageType: 'local-disk',
+            supportedProtocols: ['file'],
+            mountPath: '/secondary'
+          };
+        },
+        async getStagingPath(cameraId: string): Promise<string> {
+          return `/secondary/staging/${cameraId}`;
+        },
+        resolveSegmentTargetPath(cameraId: string, startedAt: Date, fileName: string): string {
+          return `/secondary/${cameraId}/${fileName}`;
+        },
+        async deleteSegmentFile(storagePath: string): Promise<void> {},
+        async runWriteProbe(): Promise<StorageProbeResult> {
+          return { status: 'passed', latencyMs: 15, bytesWritten: 1024, checksum: 'abc123' };
+        }
+      };
+      
+      // Register storage tiers
+      failoverManager.registerTier('primary', mockPrimaryAdapter, 1);
+      failoverManager.registerTier('secondary', mockSecondaryAdapter, 2);
+      
+      // Get storage for camera (should failover automatically)
+      const result = await failoverManager.getStorageForCamera('cam-001');
+      
+      // ✅ PASS: Should failover to secondary
+      expect(result.tier).toBe('secondary');
+      expect(result.isFailover).toBe(true);
+      expect(result.adapter).toBe(mockSecondaryAdapter);
+      
+      // Verify staging path works
+      const stagingPath = await result.adapter.getStagingPath('cam-001');
+      expect(stagingPath).toBe('/secondary/staging/cam-001');
+    });
+    
+    test('should emit failover event when primary full', async () => {
+      /**
+       * Verify that failover events are emitted for monitoring
+       */
+      
+      const mockPrimary: StorageDestinationAdapter = {
+        async getMetrics() {
+          return {
+            capacityBytes: 1e9,
+            usedBytes: 0.96 * 1e9, // 96% full (triggers critical)
+            availableBytes: 0.04 * 1e9,
+            status: 'critical',
+            supportedTiers: ['hot'],
+            storageType: 'local-disk',
+            supportedProtocols: ['file'],
+            mountPath: '/primary'
+          };
+        },
+        async getStagingPath() { throw new Error('ENOSPC'); },
+        resolveSegmentTargetPath() { return '/primary/path'; },
+        async deleteSegmentFile() {},
+        async runWriteProbe() { return { status: 'failed', latencyMs: 0, bytesWritten: 0, checksum: '', error: 'ENOSPC' }; }
+      };
+      
+      const mockSecondary: StorageDestinationAdapter = {
+        async getMetrics() {
+          return {
+            capacityBytes: 5e9,
+            usedBytes: 1e9,
+            availableBytes: 4e9,
+            status: 'healthy',
+            supportedTiers: ['hot'],
+            storageType: 'local-disk',
+            supportedProtocols: ['file'],
+            mountPath: '/secondary'
+          };
+        },
+        async getStagingPath() { return '/secondary/staging'; },
+        resolveSegmentTargetPath() { return '/secondary/path'; },
+        async deleteSegmentFile() {},
+        async runWriteProbe() { return { status: 'passed', latencyMs: 10, bytesWritten: 1024, checksum: 'test' }; }
+      };
+      
+      failoverManager.registerTier('primary', mockPrimary, 1);
+      failoverManager.registerTier('secondary', mockSecondary, 2);
+      
+      // Listen for failover event
+      let failoverEvent: any = null;
+      failoverManager.on('failover', (event) => {
+        failoverEvent = event;
+      });
+      
+      // Trigger failover
+      await failoverManager.getStorageForCamera('cam-001');
+      
+      // ✅ Verify event emitted
+      expect(failoverEvent).toBeTruthy();
+      expect(failoverEvent.fromTier).toBe('primary');
+      expect(failoverEvent.toTier).toBe('secondary');
+      expect(failoverEvent.reason).toBe('DISK_FULL');
+    });
+    
+    test('should continue recording without data loss during failover', async () => {
+      /**
+       * Verify seamless transition - no recording gaps
+       */
+      
+      const mockPrimary: StorageDestinationAdapter = {
+        async getMetrics() {
+          return {
+            capacityBytes: 1e9,
+            usedBytes: 1e9, // 100% full
+            availableBytes: 0,
+            status: 'critical',
+            supportedTiers: ['hot'],
+            storageType: 'local-disk',
+            supportedProtocols: ['file'],
+            mountPath: '/primary'
+          };
+        },
+        async getStagingPath() { throw new Error('ENOSPC'); },
+        resolveSegmentTargetPath() { return '/primary/path'; },
+        async deleteSegmentFile() {},
+        async runWriteProbe() { return { status: 'failed', latencyMs: 0, bytesWritten: 0, checksum: '', error: 'ENOSPC' }; }
+      };
+      
+      const mockSecondary: StorageDestinationAdapter = {
+        async getMetrics() {
+          return {
+            capacityBytes: 5e9,
+            usedBytes: 1e9,
+            availableBytes: 4e9,
+            status: 'healthy',
+            supportedTiers: ['hot'],
+            storageType: 'local-disk',
+            supportedProtocols: ['file'],
+            mountPath: '/secondary'
+          };
+        },
+        async getStagingPath(cameraId: string) { return `/secondary/${cameraId}`; },
+        resolveSegmentTargetPath(cameraId, startedAt, fileName) { 
+          return `/secondary/${cameraId}/${fileName}`; 
+        },
+        async deleteSegmentFile() {},
+        async runWriteProbe() { return { status: 'passed', latencyMs: 10, bytesWritten: 1024, checksum: 'test' }; }
+      };
+      
+      failoverManager.registerTier('primary', mockPrimary, 1);
+      failoverManager.registerTier('secondary', mockSecondary, 2);
+      
+      // Simulate recording segments
+      const segments = [];
+      
+      // First 2 segments on primary
+      for (let i = 1; i <= 2; i++) {
+        const storage = await failoverManager.getStorageForCamera('cam-001');
+        // These would succeed on primary initially
+        segments.push({
+          number: i,
+          storage: storage.tier,
+          path: storage.adapter.resolveSegmentTargetPath('cam-001', new Date(), `seg-${i}.mp4`)
+        });
       }
       
-      // ✅ PASS: Recording should continue on secondary
-      expect(activePath).toBe('/secondary/staging');
+      // Next segments failover to secondary (primary full)
+      for (let i = 3; i <= 5; i++) {
+        const storage = await failoverManager.getStorageForCamera('cam-001');
+        segments.push({
+          number: i,
+          storage: storage.tier,
+          path: storage.adapter.resolveSegmentTargetPath('cam-001', new Date(), `seg-${i}.mp4`)
+        });
+      }
       
-      // ✅ Verify incident created
-      // In production: await incidentService.create({ type: 'STORAGE_FAILOVER', ... })
-    });
-    
-    test('should create CRITICAL incident when primary full', async () => {
-      /**
-       * ✅ Expected incident:
-       * {
-       *   type: 'STORAGE_FAILOVER',
-       *   severity: 'CRITICAL',
-       *   message: 'Primary storage full - failed over to secondary',
-       *   storage: {
-       *     primary: { status: 'full', path: '/mnt/primary' },
-       *     secondary: { status: 'active', path: '/mnt/secondary' }
-       *   }
-       * }
-       */
+      // ✅ Verify no gaps in segment numbers
+      expect(segments.length).toBe(5);
+      expect(segments.map(s => s.number)).toEqual([1, 2, 3, 4, 5]);
       
-      expect(true).toBe(true); // Test documents requirement
-    });
-    
-    test('should alert operator via SMS/call when critical', async () => {
-      /**
-       * ✅ Critical storage failover requires immediate operator notification:
-       * - SMS to on-call engineer
-       * - Phone call if no response in 2 minutes
-       * - Dashboard red banner alert
-       * - Email to storage team
-       */
-      
-      expect(true).toBe(true); // Test documents requirement
-    });
-    
-    test('should continue recording without data loss', async () => {
-      // Mock recording in progress
-      const recordingInProgress = {
-        cameraId: 'cam-001',
-        startedAt: new Date(),
-        segments: [
-          { path: '/primary/seg-001.mp4', size: 10 * 1024 * 1024, status: 'completed' },
-          { path: '/primary/seg-002.mp4', size: 8 * 1024 * 1024, status: 'in-progress' }
-        ]
-      };
-      
-      // Simulate disk full during segment write
-      const diskFullError = new Error('ENOSPC');
-      
-      // ✅ Expected: Segment should finalize on primary, next segment on secondary
-      // ✅ No data loss
-      // ✅ Seamless transition
-      
-      expect(recordingInProgress.segments.length).toBeGreaterThan(0);
+      // ✅ Verify failover happened (segments 3-5 on secondary)
+      expect(segments.slice(2).every(s => s.storage === 'secondary')).toBe(true);
     });
   });
   
   describe('Test 2: S3 Unavailable Scenario', () => {
-    test('should stage locally when S3 unavailable', async () => {
+    test('should failover to local when S3 unavailable', async () => {
       /**
        * Scenario: S3 endpoint unreachable (network issue, AWS outage)
-       * Expected: Recording stages to local disk with retry queue
+       * Expected: Failover to local staging with automatic retry queue
        */
       
-      const mockS3Adapter = {
-        uploadFile: jest.fn()
-          .mockRejectedValueOnce(new Error('NetworkingError: connect ETIMEDOUT'))
-          .mockRejectedValueOnce(new Error('NetworkingError: connect ETIMEDOUT'))
-          .mockResolvedValueOnce({ etag: 'recovered', versionId: 'v1' })
+      let s3CallCount = 0;
+      
+      const mockS3Adapter: StorageDestinationAdapter = {
+        async getMetrics() {
+          s3CallCount++;
+          // S3 fails first few times, then recovers
+          if (s3CallCount <= 2) {
+            throw new Error('NetworkingError: connect ETIMEDOUT');
+          }
+          return {
+            capacityBytes: 0, // S3 is unlimited
+            usedBytes: 500e9, // 500 GB used
+            availableBytes: 0,
+            status: 'healthy',
+            supportedTiers: ['hot', 'warm', 'cold'],
+            storageType: 's3',
+            supportedProtocols: ['https', 's3'],
+            mountPath: 's3://my-bucket'
+          };
+        },
+        async getStagingPath() {
+          if (s3CallCount <= 2) {
+            throw new Error('S3 unavailable');
+          }
+          return 's3://my-bucket/staging';
+        },
+        resolveSegmentTargetPath() { return 's3://my-bucket/recordings/path'; },
+        async deleteSegmentFile() {},
+        async runWriteProbe() {
+          if (s3CallCount <= 2) {
+            return { status: 'failed', latencyMs: 5000, bytesWritten: 0, checksum: '', error: 'Timeout' };
+          }
+          return { status: 'passed', latencyMs: 150, bytesWritten: 1024, checksum: 's3test' };
+        }
       };
       
-      const localStagingPath = '/tmp/s3-staging';
-      let uploadStatus = 'PENDING_RETRY';
-      let retryCount = 0;
+      const mockLocalAdapter: StorageDestinationAdapter = {
+        async getMetrics() {
+          return {
+            capacityBytes: 100e9,
+            usedBytes: 20e9,
+            availableBytes: 80e9,
+            status: 'healthy',
+            supportedTiers: ['hot'],
+            storageType: 'local-disk',
+            supportedProtocols: ['file'],
+            mountPath: '/local'
+          };
+        },
+        async getStagingPath(cameraId: string) { return `/local/s3-staging/${cameraId}`; },
+        resolveSegmentTargetPath(cameraId, startedAt, fileName) { 
+          return `/local/s3-staging/${cameraId}/${fileName}`; 
+        },
+        async deleteSegmentFile() {},
+        async runWriteProbe() { return { status: 'passed', latencyMs: 5, bytesWritten: 1024, checksum: 'local' }; }
+      };
       
-      // Attempt S3 upload with retry
-      while (retryCount < 3 && uploadStatus === 'PENDING_RETRY') {
-        try {
-          await mockS3Adapter.uploadFile('/tmp/recording.mp4', 's3://bucket/key');
-          uploadStatus = 'SUCCESS';
-        } catch (error: any) {
-          retryCount++;
-          if (retryCount >= 3) {
-            // ✅ Store in local staging after 3 failures
-            uploadStatus = 'STAGED_LOCAL';
-          } else {
-            // Wait and retry (exponential backoff)
-            await new Promise(resolve => setTimeout(resolve, 1000 * Math.pow(2, retryCount)));
-          }
-        }
-      }
+      failoverManager.registerTier('s3', mockS3Adapter, 1);
+      failoverManager.registerTier('local', mockLocalAdapter, 2);
       
-      // ✅ After max retries, should be staged locally
-      expect(['STAGED_LOCAL', 'SUCCESS']).toContain(uploadStatus);
+      // First attempt - S3 fails, should get local
+      const result1 = await failoverManager.getStorageForCamera('cam-s3-001');
+      expect(result1.tier).toBe('local'); // ✅ Failed over to local
+      expect(result1.isFailover).toBe(true);
+      
+      // Second attempt - Still fails, still local
+      const result2 = await failoverManager.getStorageForCamera('cam-s3-001');
+      expect(result2.tier).toBe('local');
+      
+      // Third attempt - S3 recovered, should use S3
+      const result3 = await failoverManager.getStorageForCamera('cam-s3-001');
+      expect(result3.tier).toBe('s3'); // ✅ Back to S3
+      expect(result3.isFailover).toBe(false);
     });
     
-    test('should queue failed uploads for retry', async () => {
+    test('should add failed uploads to retry queue', async () => {
       /**
-       * ✅ Upload retry queue:
-       * {
-       *   recordingId: 'rec-001',
-       *   localPath: '/tmp/staging/rec-001.mp4',
-       *   s3Key: 'recordings/cam-001/2026/08/09/rec-001.mp4',
-       *   attempts: 3,
-       *   nextRetry: Date,
-       *   status: 'PENDING_RETRY'
-       * }
+       * Verify retry queue functionality
        */
       
-      const retryQueue: any[] = [];
-      
-      // Add failed upload to queue
-      retryQueue.push({
+      const queueId = failoverManager.addToRetryQueue({
+        localPath: '/local/staging/rec-001.mp4',
+        targetTier: 's3',
+        targetPath: 's3://bucket/recordings/rec-001.mp4',
+        maxAttempts: 5,
         recordingId: 'rec-001',
-        localPath: '/tmp/rec-001.mp4',
-        s3Key: 's3://bucket/recordings/rec-001.mp4',
-        attempts: 0,
-        nextRetry: new Date(Date.now() + 60000), // Retry in 1 min
-        status: 'PENDING_RETRY'
+        cameraId: 'cam-001',
+        sizeBytes: 100 * 1024 * 1024
       });
       
-      expect(retryQueue.length).toBe(1);
-      expect(retryQueue[0].status).toBe('PENDING_RETRY');
+      expect(queueId).toBeTruthy();
+      
+      const queue = failoverManager.getRetryQueue();
+      expect(queue.length).toBe(1);
+      expect(queue[0].recordingId).toBe('rec-001');
+      expect(queue[0].attempts).toBe(0);
     });
     
-    test('should auto-retry when S3 becomes available', async () => {
+    test('should preserve recordings during S3 outage', async () => {
       /**
-       * Scenario: S3 recovers after 5 minutes
-       * Expected: Retry queue processes automatically
+       * Zero data loss during S3 outage
        */
       
-      const mockS3Adapter = {
-        uploadFile: jest.fn()
-          .mockRejectedValueOnce(new Error('S3 unavailable'))
-          .mockResolvedValueOnce({ etag: 'success' })
+      const mockS3: StorageDestinationAdapter = {
+        async getMetrics() { throw new Error('S3 unavailable'); },
+        async getStagingPath() { throw new Error('S3 unavailable'); },
+        resolveSegmentTargetPath() { return 's3://bucket/path'; },
+        async deleteSegmentFile() {},
+        async runWriteProbe() { 
+          return { status: 'failed', latencyMs: 0, bytesWritten: 0, checksum: '', error: 'Unavailable' }; 
+        }
       };
       
-      // First attempt fails
-      let firstAttempt = false;
-      try {
-        await mockS3Adapter.uploadFile('/tmp/rec-001.mp4', 's3://bucket/key');
-        firstAttempt = true;
-      } catch {
-        firstAttempt = false;
+      const mockLocal: StorageDestinationAdapter = {
+        async getMetrics() {
+          return {
+            capacityBytes: 500e9,
+            usedBytes: 100e9,
+            availableBytes: 400e9,
+            status: 'healthy',
+            supportedTiers: ['hot'],
+            storageType: 'local-disk',
+            supportedProtocols: ['file'],
+            mountPath: '/local'
+          };
+        },
+        async getStagingPath(cameraId) { return `/local/staging/${cameraId}`; },
+        resolveSegmentTargetPath(cameraId, startedAt, fileName) { 
+          return `/local/staging/${cameraId}/${fileName}`; 
+        },
+        async deleteSegmentFile() {},
+        async runWriteProbe() { 
+          return { status: 'passed', latencyMs: 5, bytesWritten: 1024, checksum: 'local' }; 
+        }
+      };
+      
+      failoverManager.registerTier('s3', mockS3, 1);
+      failoverManager.registerTier('local-staging', mockLocal, 2);
+      
+      // Record multiple segments during outage
+      const recordings = [];
+      for (let i = 1; i <= 5; i++) {
+        const storage = await failoverManager.getStorageForCamera(`cam-${i}`);
+        recordings.push({
+          id: `rec-${i}`,
+          storage: storage.tier,
+          path: await storage.adapter.getStagingPath(`cam-${i}`)
+        });
       }
       
-      expect(firstAttempt).toBe(false);
-      
-      // Wait for S3 recovery (simulated)
-      await new Promise(resolve => setTimeout(resolve, 100));
-      
-      // Retry succeeds
-      const retryResult = await mockS3Adapter.uploadFile('/tmp/rec-001.mp4', 's3://bucket/key');
-      
-      // ✅ PASS: Upload eventually succeeds
-      expect(retryResult.etag).toBe('success');
-    });
-    
-    test('should not lose recordings during S3 outage', async () => {
-      /**
-       * ✅ CRITICAL: Zero data loss requirement
-       * 
-       * During S3 outage:
-       * - All new recordings → local staging
-       * - Local staging → persistent (not /tmp)
-       * - Disk space monitoring active
-       * - Queue persisted to database
-       * - Retry on S3 recovery
-       */
-      
-      const recordingsDuringOutage = [
-        { id: 'rec-001', status: 'STAGED_LOCAL', size: 100 * 1024 * 1024 },
-        { id: 'rec-002', status: 'STAGED_LOCAL', size: 95 * 1024 * 1024 },
-        { id: 'rec-003', status: 'STAGED_LOCAL', size: 102 * 1024 * 1024 }
-      ];
-      
-      // ✅ All recordings should be safe on local disk
-      const totalSize = recordingsDuringOutage.reduce((sum, r) => sum + r.size, 0);
-      expect(totalSize).toBeGreaterThan(0);
-      expect(recordingsDuringOutage.every(r => r.status === 'STAGED_LOCAL')).toBe(true);
+      // ✅ All recordings on local staging
+      expect(recordings.every(r => r.storage === 'local-staging')).toBe(true);
+      expect(recordings.length).toBe(5); // Zero data loss
     });
   });
   

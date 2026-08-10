@@ -9,6 +9,11 @@ import { SecurityEvidence, EvidenceCollectorConfig, CollectorStatus } from '../t
 import { CertificateCollector } from './certificate-collector.js';
 import { PasswordRotationCollector } from './password-rotation-collector.js';
 import { MFAComplianceCollector } from './mfa-compliance-collector.js';
+import { TPMAttestationCollector } from './tpm-attestation-collector.js';
+import { SecureBootCollector } from './secure-boot-collector.js';
+import { RansomwareDetectorCollector } from './ransomware-detector-collector.js';
+import { FirmwareVerificationCollector } from './firmware-verification-collector.js';
+import { EncryptionEvidenceCollector } from './encryption-evidence-collector.js';
 
 export class CollectorRegistry extends EventEmitter {
   private collectors: Map<string, IEvidenceCollector> = new Map();
@@ -42,6 +47,11 @@ export class CollectorRegistry extends EventEmitter {
     certificate?: EvidenceCollectorConfig;
     passwordRotation?: EvidenceCollectorConfig;
     mfaCompliance?: EvidenceCollectorConfig;
+    tpmAttestation?: EvidenceCollectorConfig;
+    secureBoot?: EvidenceCollectorConfig;
+    ransomwareDetection?: EvidenceCollectorConfig;
+    firmwareVerification?: EvidenceCollectorConfig;
+    encryptionEvidence?: EvidenceCollectorConfig;
   } = {}): void {
     // Default config
     const defaultConfig: EvidenceCollectorConfig = {
@@ -72,6 +82,46 @@ export class CollectorRegistry extends EventEmitter {
       this.register(new MFAComplianceCollector({
         ...defaultConfig,
         ...config.mfaCompliance,
+      }));
+    }
+
+    // Register TPM attestation collector
+    if (config.tpmAttestation?.enabled !== false) {
+      this.register(new TPMAttestationCollector({
+        ...defaultConfig,
+        ...config.tpmAttestation,
+      }));
+    }
+
+    // Register Secure Boot collector
+    if (config.secureBoot?.enabled !== false) {
+      this.register(new SecureBootCollector({
+        ...defaultConfig,
+        ...config.secureBoot,
+      }));
+    }
+
+    // Register Ransomware Detection collector
+    if (config.ransomwareDetection?.enabled !== false) {
+      this.register(new RansomwareDetectorCollector({
+        ...defaultConfig,
+        ...config.ransomwareDetection,
+      }));
+    }
+
+    // Register Firmware Verification collector
+    if (config.firmwareVerification?.enabled !== false) {
+      this.register(new FirmwareVerificationCollector({
+        ...defaultConfig,
+        ...config.firmwareVerification,
+      }));
+    }
+
+    // Register Encryption Evidence collector
+    if (config.encryptionEvidence?.enabled !== false) {
+      this.register(new EncryptionEvidenceCollector({
+        ...defaultConfig,
+        ...config.encryptionEvidence,
       }));
     }
   }

@@ -509,30 +509,38 @@ export class AIIncidentSummaryService {
 
   /**
    * Calculate correlation confidence
+   * This represents confidence in the correlation quality, not AI model inference
    */
   private calculateConfidence(
     alerts: AnalyticsAlert[],
     factors: ReturnType<typeof this.analyzeCorrelationFactors>
   ): number {
-    // Start from 0 and build confidence based on actual correlation factors
+    // Build confidence based on actual correlation strength and evidence
     let confidence = 0;
 
-    // Minimum baseline for having multiple alerts
+    // Base confidence from having multiple correlated alerts
     if (alerts.length >= 2) {
-      confidence = 0.2; // Base confidence for having correlated alerts
+      confidence = 0.3; // Base confidence for meaningful correlation
     }
 
-    if (factors.timeBased) confidence += 0.15;
-    if (factors.locationBased) confidence += 0.15;
-    if (factors.typeBased) confidence += 0.1;
-    if (factors.rootCauseBased) confidence += 0.2;
-    if (factors.crossCamera) confidence += 0.1;
+    // Strong correlation factors increase confidence
+    if (factors.timeBased) confidence += 0.2;         // Temporal proximity is strong evidence
+    if (factors.locationBased) confidence += 0.2;     // Spatial proximity is strong evidence
+    if (factors.typeBased) confidence += 0.15;        // Related event types strengthen correlation
+    if (factors.rootCauseBased) confidence += 0.25;   // Root cause identification is powerful
+    if (factors.crossCamera) confidence += 0.1;       // Cross-camera confirms not isolated
 
-    // Adjust by alert count
-    if (alerts.length >= 5) confidence += 0.05;
-    if (alerts.length >= 10) confidence += 0.1;
+    // Alert count provides statistical confidence
+    if (alerts.length >= 5) confidence += 0.1;   // Multiple observations strengthen pattern
+    if (alerts.length >= 10) confidence += 0.15; // Large sample size increases confidence
 
-    return Math.min(confidence, 0.95);
+    // Average alert confidence matters
+    const avgAlertConfidence = alerts.reduce((sum, a) => sum + a.confidence, 0) / alerts.length;
+    if (avgAlertConfidence > 0.8) {
+      confidence += 0.1; // High individual confidences boost correlation confidence
+    }
+
+    return Math.min(confidence, 0.95); // Cap at 95% - correlation is heuristic, not deterministic
   }
 
   /**

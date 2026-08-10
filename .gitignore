@@ -31,3 +31,6 @@ edge-agent/installation-keys*.txt
 # Ignore environment files (examples only checked into repo)
 .env*
 !.env.example
+
+# Deprecated components (Sprint 6 cleanup)
+.deprecated/

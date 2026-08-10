@@ -5,29 +5,34 @@
     "moduleResolution": "NodeNext",
     "rootDir": ".",
     "outDir": "dist",
-    "strict": false,
-    "noUncheckedIndexedAccess": false,
-    "exactOptionalPropertyTypes": false,
+    
+    // STRICT MODE ENABLED
+    // Production code should be type-safe
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": false, // Still too strict for some legacy code
+    
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,
     "skipLibCheck": true,
     "types": ["node"]
   },
-  "include": ["src/**/*.ts", "src/**/*.d.ts", "backend/**/*.ts", "packages/**/*.ts", "test/**/*.ts"],
+  "include": [
+    "src/**/*.ts",
+    "src/**/*.d.ts",
+    "backend/**/*.ts",
+    "packages/**/*.ts"
+  ],
   "exclude": [
     "node_modules",
     "dist",
+    
+    // Test files have their own configuration
     "**/*.test.ts",
     "test/**/*",
-    "src/database/evidence-repository.ts",
-    "src/routes/evidence.routes.ts",
-    "src/routes/video-search.routes.ts",
-    "src/routes/analytics-phase2.routes.ts",
-    "src/routes/device-inventory.routes.ts",
-    "src/routes/live-operations.routes.ts",
-    "src/routes/compliance-enhanced.routes.ts",
-    "src/routes/maintenance-advanced.routes.ts",
-    "src/store-maintenance-extensions.ts",
+    
+    // Temporarily exclude files with known type issues
+    // TODO: Fix these files and remove from exclusions
     "src/routes/*.disabled",
     "src/maintenance/*.disabled"
   ]

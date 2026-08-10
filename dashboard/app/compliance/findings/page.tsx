@@ -34,7 +34,17 @@ export default function FindingsPage() {
     try {
       const response = await fetch('/api/compliance/findings');
       const data = await response.json();
-      setFindings(data.data || []);
+      setFindings((data.data || []).map((item: any) => ({
+        ...item,
+        findingNumber: item.findingNumber ?? item.number ?? item.id?.slice(0, 8) ?? 'FIND',
+        title: item.title ?? 'Untitled finding',
+        description: item.description ?? '',
+        severity: normalizeSeverity(item.severity),
+        status: normalizeFindingStatus(item.status),
+        riskScore: item.riskScore ?? severityScore(item.severity),
+        identifiedBy: item.identifiedBy ?? item.discoveredBy ?? item.createdBy ?? 'System',
+        identifiedDate: item.identifiedDate ?? item.discoveredDate ?? item.createdAt ?? new Date().toISOString(),
+      })));
     } catch (error) {
       console.error('Failed to fetch findings:', error);
     } finally {
@@ -291,4 +301,19 @@ export default function FindingsPage() {
       </div>
     </div>
   );
+}
+
+function normalizeSeverity(value: unknown): Finding['severity'] {
+  return ['critical', 'high', 'medium', 'low', 'negligible'].includes(String(value)) ? value as Finding['severity'] : 'medium';
+}
+
+function normalizeFindingStatus(value: unknown): Finding['status'] {
+  if (value === 'closed') return 'closed';
+  if (value === 'resolved' || value === 'verified' || value === 'remediation_completed') return 'resolved';
+  if (value === 'in_review' || value === 'remediation_planned' || value === 'remediation_in_progress') return 'in_review';
+  return 'open';
+}
+
+function severityScore(value: unknown) {
+  return ({ critical: 25, high: 16, medium: 9, low: 4, negligible: 1 } as Record<string, number>)[String(value)] ?? 9;
 }

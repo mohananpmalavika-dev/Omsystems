@@ -1,0 +1,16 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    // Tests can be slightly less strict
+    "strict": true,
+    "noUncheckedIndexedAccess": false
+  },
+  "include": [
+    "test/**/*.ts",
+    "**/*.test.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist"
+  ]
+}
