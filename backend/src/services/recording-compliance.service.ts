@@ -398,7 +398,199 @@ export class RecordingComplianceService {
   }
 
   /**
-   * Query DVR for recording status via ONVIF
+   * NEW: Perform comprehensive evidence-based recording compliance check
+   * 
+   * This is the recommended method for new code.
+   * Returns full RecordingCheckResult with all evidence.
+   */
+  async checkRecordingComplianceV2(
+    cameraId: string
+  ): Promise<import('../recorders/types/index.js').RecordingCheckResult | null> {
+    try {
+      // Get camera and recorder details
+      const cameraResult = await this.pool.query(
+        `SELECT 
+          c.id::text as camera_id,
+          c.recorder_channel,
+          c.recording_mode,
+          c.branch_node_id::text as branch_id,
+          rn.name as camera_name,
+          b.tenant_id::text as tenant_id,
+          r.id::text as recorder_id,
+          r.name as recorder_name,
+          r.vendor,
+          r.model,
+          r.ip_address,
+          r.port,
+          r.protocol,
+          r.username,
+          r.password_encrypted
+        FROM cameras c
+        JOIN resource_nodes rn ON rn.id = c.resource_node_id
+        JOIN resource_nodes b ON b.id = c.branch_node_id
+        LEFT JOIN recorders r ON r.id = c.recorder_id
+        WHERE c.id = $1::uuid`,
+        [cameraId]
+      );
+
+      if (cameraResult.rows.length === 0) {
+        logger.warn('Camera not found for compliance check', { cameraId });
+        return null;
+      }
+
+      const data = cameraResult.rows[0];
+
+      // No recorder configured
+      if (!data.recorder_id) {
+        logger.info('Camera has no recorder configured', { cameraId });
+        return null;
+      }
+
+      // Import adapter infrastructure
+      const { RecorderAdapterFactory } = await import('../recorders/recorder-adapter.factory.js');
+      const { RecorderHealthChecker } = await import('../recorders/recorder-health-checker.js');
+
+      // Create entities
+      const recorder = {
+        id: data.recorder_id,
+        name: data.recorder_name,
+        vendor: data.vendor || 'unknown',
+        model: data.model,
+        ipAddress: data.ip_address,
+        port: data.port,
+        protocol: data.protocol || 'http',
+        username: data.username,
+        passwordEncrypted: data.password_encrypted,
+        branchId: data.branch_id,
+        tenantId: data.tenant_id
+      };
+
+      const camera = {
+        id: data.camera_id,
+        name: data.camera_name,
+        recordingMode: data.recording_mode || 'continuous',
+        recorderId: data.recorder_id,
+        recorderChannel: data.recorder_channel,
+        branchId: data.branch_id,
+        tenantId: data.tenant_id
+      };
+
+      // Create adapter and run health check
+      const factory = new RecorderAdapterFactory(this.pool);
+      const adapter = await factory.create(recorder);
+
+      const checker = new RecorderHealthChecker(this.pool);
+      const result = await checker.check({
+        adapter,
+        recorder,
+        camera
+      });
+
+      // Clean up
+      await adapter.disconnect();
+
+      // Save result to database
+      await this.saveComplianceCheckResult(result);
+
+      logger.info('Recording compliance check V2 complete', {
+        cameraId,
+        recorderId: recorder.id,
+        overallStatus: result.overallStatus
+      });
+
+      return result;
+
+    } catch (error) {
+      logger.error('Failed to check recording compliance V2', {
+        error,
+        cameraId
+      });
+      return null;
+    }
+  }
+
+  /**
+   * Save comprehensive compliance check result to database
+   */
+  private async saveComplianceCheckResult(
+    result: import('../recorders/types/index.js').RecordingCheckResult
+  ): Promise<void> {
+    try {
+      await this.pool.query(
+        `INSERT INTO recording_compliance_checks (
+          recorder_id, channel_id, checked_at,
+          overall_status,
+          reachable_status, reachable_message,
+          authentication_status, authentication_message,
+          channel_status, channel_message,
+          stream_status, stream_message,
+          recording_status, recording_message,
+          archive_status, archive_message, last_recording_time, archive_lag_seconds,
+          storage_status, storage_message, storage_usage_percent,
+          clock_status, clock_message, clock_drift_seconds,
+          adapter_type, adapter_version,
+          last_verified_healthy_at,
+          errors_json
+        ) VALUES (
+          $1::uuid, $2, $3,
+          $4,
+          $5, $6,
+          $7, $8,
+          $9, $10,
+          $11, $12,
+          $13, $14,
+          $15, $16, $17, $18,
+          $19, $20, $21,
+          $22, $23, $24,
+          $25, $26,
+          $27,
+          $28
+        )`,
+        [
+          result.recorderId,
+          result.channelId,
+          result.checkedAt,
+          result.overallStatus,
+          result.reachable.status,
+          result.reachable.message,
+          result.authentication.status,
+          result.authentication.message,
+          result.channel.status,
+          result.channel.message,
+          result.stream.status,
+          result.stream.message,
+          result.recording.status,
+          result.recording.message,
+          result.archive.status,
+          result.archive.message,
+          result.archive.lastRecordingTime,
+          result.archive.archiveLagSeconds,
+          result.storage.status,
+          result.storage.message,
+          result.storage.usagePercent,
+          result.clock.status,
+          result.clock.message,
+          result.clock.driftSeconds,
+          result.adapterType,
+          result.adapterVersion,
+          result.lastVerifiedHealthyAt,
+          JSON.stringify(result.errors)
+        ]
+      );
+    } catch (error) {
+      logger.error('Failed to save compliance check result', {
+        error,
+        recorderId: result.recorderId,
+        channelId: result.channelId
+      });
+    }
+  }
+
+  /**
+   * Query DVR for recording status using proper adapter architecture
+   * 
+   * CRITICAL CHANGE: Replaced simulated healthy data with evidence-based verification
+   * Uses RecorderAdapter + RecorderHealthChecker for actual device verification
    */
   private async queryDVRRecordingStatus(
     ipAddress: string,
@@ -411,19 +603,138 @@ export class RecordingComplianceService {
     lastRecordingTime?: Date;
     storageStatus: 'normal' | 'full' | 'error';
   }> {
-    // This is a placeholder for actual ONVIF/vendor API integration
-    // In production, this would:
-    // 1. Connect to DVR via ONVIF
-    // 2. Query GetRecordingStatus for the specific channel
-    // 3. Query GetStorageConfiguration for disk status
-    // 4. Return actual status
-    
-    // For now, return simulated status
-    return {
-      recording: true,
-      lastRecordingTime: new Date(),
-      storageStatus: 'normal'
-    };
+    try {
+      // Get recorder from database
+      const recorderResult = await this.pool.query(
+        `SELECT 
+          id::text,
+          name,
+          vendor,
+          model,
+          ip_address,
+          port,
+          protocol,
+          branch_id::text,
+          tenant_id::text
+         FROM recorders
+         WHERE ip_address = $1
+           AND port = $2
+         LIMIT 1`,
+        [ipAddress, port]
+      );
+      
+      if (recorderResult.rows.length === 0) {
+        logger.warn('Recorder not found in database', { ipAddress, port });
+        
+        // Cannot verify without recorder record
+        return {
+          recording: false, // CHANGED: was true (fabricated health)
+          lastRecordingTime: undefined, // CHANGED: was new Date() (fabricated timestamp)
+          storageStatus: 'error' // CHANGED: was 'normal' (optimistic assumption)
+        };
+      }
+      
+      const recorderData = recorderResult.rows[0];
+      
+      // Import adapter infrastructure (dynamic to avoid circular deps)
+      const { RecorderAdapterFactory } = await import('../recorders/recorder-adapter.factory.js');
+      const { RecorderHealthChecker } = await import('../recorders/recorder-health-checker.js');
+      
+      // Create recorder entity
+      const recorder = {
+        id: recorderData.id,
+        name: recorderData.name,
+        vendor: recorderData.vendor || 'unknown',
+        model: recorderData.model,
+        ipAddress: recorderData.ip_address,
+        port: recorderData.port,
+        protocol: recorderData.protocol || 'http',
+        username,
+        passwordEncrypted: encryptedPassword,
+        branchId: recorderData.branch_id,
+        tenantId: recorderData.tenant_id
+      };
+      
+      // Create camera entity stub
+      const camera = {
+        id: 'temp-camera-id',
+        name: 'Camera',
+        recordingMode: 'continuous' as const,
+        recorderId: recorder.id,
+        recorderChannel: String(channel),
+        branchId: recorder.branchId,
+        tenantId: recorder.tenantId
+      };
+      
+      // Create adapter
+      const factory = new RecorderAdapterFactory(this.pool);
+      const adapter = await factory.create(recorder);
+      
+      // Perform health check
+      const checker = new RecorderHealthChecker(this.pool);
+      const result = await checker.check({
+        adapter,
+        recorder,
+        camera
+      });
+      
+      // Clean up
+      await adapter.disconnect();
+      
+      // Map health check result to legacy format
+      // CRITICAL: Only return true if we have POSITIVE EVIDENCE
+      const recording = result.recording.status === 'healthy';
+      
+      // CRITICAL: Use ACTUAL archive timestamp, never fabricate
+      const lastRecordingTime = result.archive.lastRecordingTime;
+      
+      // Map storage status
+      let storageStatus: 'normal' | 'full' | 'error' = 'error';
+      if (result.storage.status === 'healthy') {
+        if (result.storage.usagePercent && result.storage.usagePercent >= 95) {
+          storageStatus = 'full';
+        } else {
+          storageStatus = 'normal';
+        }
+      } else if (result.storage.status === 'unknown') {
+        // CHANGED: Unknown storage = error, not 'normal'
+        storageStatus = 'error';
+      } else {
+        storageStatus = 'error';
+      }
+      
+      logger.info('DVR recording status verified via adapter', {
+        ipAddress,
+        port,
+        channel,
+        recording,
+        lastRecordingTime,
+        storageStatus,
+        overallStatus: result.overallStatus
+      });
+      
+      return {
+        recording,
+        lastRecordingTime,
+        storageStatus
+      };
+      
+    } catch (error) {
+      logger.error('Failed to query DVR recording status', {
+        error,
+        ipAddress,
+        port,
+        channel
+      });
+      
+      // CRITICAL CHANGE: Error = cannot verify = return UNKNOWN/ERROR state
+      // Never fabricate healthy data when verification fails
+      return {
+        recording: false, // CHANGED: was true
+        lastRecordingTime: undefined, // CHANGED: was new Date()
+        storageStatus: 'error' // CHANGED: was 'normal'
+      };
+    }
   }
 
   /**
