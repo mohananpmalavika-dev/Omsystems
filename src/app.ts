@@ -2106,6 +2106,17 @@ export async function buildApp(options?: {
     options?.alertWorkerKey ?? process.env.ALERT_WORKER_SHARED_KEY, voiceTokens,
     alertEvidenceClient);
   
+  // Register AI Assistant V2 routes (behind feature flag)
+  if (pool) {
+    try {
+      const { default: aiAssistantV2Routes } = await import("./routes/ai-assistant-v2.routes.js");
+      await app.register(aiAssistantV2Routes, { prefix: '/api/ai-assistant-v2' });
+      app.log.info('AI Assistant V2 routes registered');
+    } catch (err: unknown) {
+      app.log.error({ err }, 'failed to register AI Assistant V2 routes');
+    }
+  }
+  
   // Register security dashboard routes
   try {
     const { registerSecurityDashboardRoutes } = await import("./routes/security-dashboard.routes.js");
