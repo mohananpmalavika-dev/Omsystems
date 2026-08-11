@@ -407,7 +407,7 @@ export class CashVanWorkflow {
         eventId: event.eventId,
         doorId: event.doorId,
         zoneId: event.zoneId,
-        type: event.type,
+        type: event.type === 'access.granted' ? 'granted' : 'denied',
         credentialId: event.credentialId,
         identityId: event.identityId,
         accessType: event.accessType,

@@ -459,7 +459,20 @@ export class SafetyAnalyticsDetector extends BaseDetector {
   private findPersonZone(personTrackId: string, frame: DetectionFrame): SafetyZone | undefined {
     // Use integrated zone engine to find person's zone
     const trackedPerson = this.zoneEngine.getTrackedPerson(personTrackId);
-    return trackedPerson?.zone;
+    if (!trackedPerson?.zone) return undefined;
+    
+    // Map zone-engine's SafetyZone (with 'id') to safety-analytics SafetyZone (with 'zoneId')
+    const zone = trackedPerson.zone;
+    return {
+      zoneId: zone.id,
+      name: zone.name,
+      polygon: zone.polygon,
+      requiredPPE: zone.requiredPPE as PPEType[],
+      hazardLevel: zone.hazardLevel as 'low' | 'medium' | 'high',
+      maxOccupancy: zone.maxOccupancy,
+      restrictedAccess: zone.restrictedAccess,
+      authorizedPersons: zone.authorizedPersons,
+    };
   }
 
   private createOrUpdateViolation(

@@ -301,7 +301,7 @@ export class AIAssistant extends BaseDetector {
       return {
         success: false,
         message: 'An error occurred while processing your request.',
-        error: error.message
+        error: error instanceof Error ? error.message : String(error)
       };
     }
   }
@@ -547,7 +547,7 @@ export class AIAssistant extends BaseDetector {
       return {
         success: false,
         message: 'Search failed. Please try a different query.',
-        error: error.message
+        error: error instanceof Error ? error.message : String(error)
       };
     }
   }

@@ -7,6 +7,7 @@
 
 import { randomUUID } from "node:crypto";
 import type { ControlPlaneStore } from "../../control-plane-store.js";
+import type { ResourceNode } from "../../domain/models.js";
 import type { BranchHealthSnapshot, SnapshotOptions } from "./types.js";
 
 export class SnapshotService {
@@ -128,7 +129,8 @@ export class SnapshotService {
       const recordingGaps = incidents.length;
 
       // Get storage retention
-      const retentionTarget = ((branch.metadata || {}) as any)?.retentionTarget || 180;
+      const branchMetadata = branch as ResourceNode & { metadata?: { retentionTarget?: number } };
+      const retentionTarget = branchMetadata.metadata?.retentionTarget || 180;
 
       // Estimate current retention from storage data
       const storageInfo = await this.getStorageInfo(tenantId, branchId);
