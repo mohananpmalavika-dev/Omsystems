@@ -26,3 +26,25 @@ export {
   getSceneStateRegistry,
   resetSceneStateRegistry,
 } from './scene-state.js';
+
+export type {
+  TrackingEventBusConfig,
+  TrackingEventBusMetrics,
+} from './tracking-event-bus.js';
+
+export { TrackingEventBus } from './tracking-event-bus.js';
+
+export type {
+  FrameContext,
+  TrackedDetection,
+} from './tracking-adapter.js';
+
+export {
+  buildTrackingObservations,
+  buildTrackingObservation,
+} from './tracking-adapter.js';
+
+export type {
+  TrackingObservation,
+  TrackedObjectType,
+} from './tracking-observation.js';

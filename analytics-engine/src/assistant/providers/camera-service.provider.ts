@@ -172,7 +172,7 @@ export class CameraServiceProvider implements CameraService {
       // Camera doesn't exist
       return {
         cameraId,
-        status: 'UNKNOWN',
+        status: CameraStatus.UNKNOWN,
         streamConnected: false,
         recordingActive: false,
         analyticsActive: false

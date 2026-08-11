@@ -31,6 +31,13 @@
     "**/*.test.ts",
     "test/**/*",
     
+    // Workspace projects have their own tsconfig
+    "dashboard/**/*",
+    "edge-agent/**/*",
+    "media-gateway/**/*",
+    "recording-engine/**/*",
+    "analytics-engine/**/*",
+    
     // Temporarily exclude files with known type issues
     // TODO: Fix these files and remove from exclusions
     "src/routes/*.disabled",
