@@ -229,37 +229,118 @@ export async function fetchOperationalAlerts(filters?: AlertFilters) {
 
 /**
  * Acknowledge an alert
+ * 
+ * Server derives: acknowledgedBy, acknowledgedAt from authenticated session
  */
-export async function acknowledgeAlert(alertId: string): Promise<void> {
+export async function acknowledgeAlert(
+  alertId: string,
+  payload?: AcknowledgeAlertPayload
+): Promise<void> {
   const response = await fetch(`${API_BASE}/alerts/${alertId}/acknowledge`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' }
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include', // Send authentication cookies/headers
+    body: JSON.stringify(payload || {}),
   });
   if (!response.ok) throw new Error('Failed to acknowledge alert');
 }
 
 /**
  * Assign an alert
+ * 
+ * Client sends: assignedTo (target user)
+ * Server derives: assignedBy, assignedAt from authenticated session
  */
-export async function assignAlert(alertId: string, payload: AssignAlertPayload): Promise<void> {
+export async function assignAlert(
+  alertId: string,
+  payload: AssignAlertPayload
+): Promise<void> {
   const response = await fetch(`${API_BASE}/alerts/${alertId}/assign`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload)
+    credentials: 'include',
+    body: JSON.stringify(payload),
   });
   if (!response.ok) throw new Error('Failed to assign alert');
 }
 
 /**
  * Resolve an alert
+ * 
+ * Client sends: resolutionCode, comment
+ * Server derives: resolvedBy, resolvedAt from authenticated session
  */
-export async function resolveAlert(alertId: string, payload: ResolveAlertPayload): Promise<void> {
+export async function resolveAlert(
+  alertId: string,
+  payload: ResolveAlertPayload
+): Promise<void> {
   const response = await fetch(`${API_BASE}/alerts/${alertId}/resolve`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload)
+    credentials: 'include',
+    body: JSON.stringify(payload),
   });
   if (!response.ok) throw new Error('Failed to resolve alert');
+}
+
+/**
+ * Escalate an alert
+ */
+export async function escalateAlert(
+  alertId: string,
+  payload: EscalateAlertPayload
+): Promise<void> {
+  const response = await fetch(`${API_BASE}/alerts/${alertId}/escalate`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify(payload),
+  });
+  if (!response.ok) throw new Error('Failed to escalate alert');
+}
+
+/**
+ * Suppress an alert
+ */
+export async function suppressAlert(
+  alertId: string,
+  payload: SuppressAlertPayload
+): Promise<void> {
+  const response = await fetch(`${API_BASE}/alerts/${alertId}/suppress`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify(payload),
+  });
+  if (!response.ok) throw new Error('Failed to suppress alert');
+}
+
+/**
+ * Add comment to alert
+ */
+export async function addAlertComment(
+  alertId: string,
+  payload: AddAlertCommentPayload
+): Promise<void> {
+  const response = await fetch(`${API_BASE}/alerts/${alertId}/comment`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify(payload),
+  });
+  if (!response.ok) throw new Error('Failed to add alert comment');
+}
+
+/**
+ * Get alert timeline/history
+ */
+export async function getAlertTimeline(alertId: string): Promise<any[]> {
+  const response = await fetch(`${API_BASE}/alerts/${alertId}/timeline`, {
+    credentials: 'include',
+  });
+  if (!response.ok) throw new Error('Failed to fetch alert timeline');
+  const data = await response.json();
+  return data.data;
 }
 
 /**

@@ -474,6 +474,49 @@ export interface AlertFilters {
 }
 
 /**
+ * Alert action payloads
+ * 
+ * SECURITY: These payloads do NOT include actor identity fields.
+ * The server derives who performed the action from authenticated session.
+ */
+export interface AcknowledgeAlertPayload {
+  comment?: string;
+}
+
+export interface AssignAlertPayload {
+  assignedTo: string; // WHO to assign to (legitimate client input)
+  note?: string;
+  // assignedBy is NOT included - server derives from auth context
+}
+
+export interface ResolveAlertPayload {
+  resolutionCode: 
+    | 'TRUE_POSITIVE_RESOLVED'
+    | 'FALSE_POSITIVE'
+    | 'DUPLICATE'
+    | 'EXPECTED_ACTIVITY'
+    | 'MAINTENANCE_SCHEDULED'
+    | 'OTHER';
+  comment?: string;
+  // userId/resolvedBy is NOT included - server derives from auth context
+}
+
+export interface EscalateAlertPayload {
+  reason: string;
+  recipients: string[];
+}
+
+export interface AddAlertCommentPayload {
+  comment: string;
+}
+
+export interface CreateWorkOrderPayload {
+  priority?: 'low' | 'medium' | 'high' | 'critical';
+  assigneeId?: string;
+  notes?: string;
+}
+
+/**
  * API response wrapper
  */
 export interface ApiResponse<T> {
@@ -494,20 +537,45 @@ export interface PaginatedResponse<T> {
 
 /**
  * Alert action payloads
+ * 
+ * SECURITY NOTE: These payloads do NOT include identity fields.
+ * Actor identity (userId, assignedBy, resolvedBy) is derived server-side
+ * from authenticated request context.
  */
 export interface AcknowledgeAlertPayload {
-  userId: string;
+  comment?: string;
 }
 
 export interface AssignAlertPayload {
-  assigneeId: string;
-  assignedBy: string;
+  assignedTo: string;  // Target user (legitimate client input)
+  note?: string;
+  // NOT INCLUDED: assignedBy (server derives from auth context)
 }
 
 export interface ResolveAlertPayload {
-  userId: string;
-  resolution: string;
-  notes?: string;
+  resolutionCode:
+    | 'TRUE_POSITIVE_RESOLVED'
+    | 'FALSE_POSITIVE'
+    | 'DUPLICATE'
+    | 'EXPECTED_ACTIVITY'
+    | 'MAINTENANCE_SCHEDULED'
+    | 'OTHER';
+  comment?: string;
+  // NOT INCLUDED: userId, resolvedBy (server derives from auth context)
+}
+
+export interface EscalateAlertPayload {
+  reason: string;
+  recipients: string[];
+}
+
+export interface SuppressAlertPayload {
+  reason: string;
+  suppressUntil?: string;
+}
+
+export interface AddAlertCommentPayload {
+  comment: string;
 }
 
 export interface CreateWorkOrderPayload {

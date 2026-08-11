@@ -101,19 +101,20 @@ export default function OperationalAlertsPage() {
     try {
       switch (modalAction) {
         case 'acknowledge':
-          await acknowledgeAlert(selectedAlert.id);
+          await acknowledgeAlert(selectedAlert.id, {
+            comment: data.comment,
+          });
           break;
         case 'assign':
           await assignAlert(selectedAlert.id, { 
-            assigneeId: data.assigneeId,
-            assignedBy: 'current-user-id' // TODO: Get from auth context
+            assignedTo: data.assigneeId,
+            note: data.note,
           });
           break;
         case 'resolve':
           await resolveAlert(selectedAlert.id, {
-            userId: 'current-user-id', // TODO: Get from auth context
-            resolution: data.resolution,
-            notes: data.notes
+            resolutionCode: data.resolutionCode,
+            comment: data.comment,
           });
           break;
         case 'work-order':

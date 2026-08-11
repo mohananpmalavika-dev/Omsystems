@@ -1669,6 +1669,36 @@ export interface ControlPlaneStore {
   releaseLegalHold(holdId: string, releasedBy: string): Promise<any | undefined>;
   getEvidenceExport(exportId: string): Promise<any | undefined>;
   getEvidenceManifest(manifestId: string): Promise<any | undefined>;
+  
+  // Operational Alert Events
+  recordOperationalAlertEvent(event: {
+    id: string | undefined;
+    alertId: string;
+    tenantId: string;
+    branchId?: string;
+    eventType: string;
+    actorType: string;
+    actorUserId?: string;
+    actorUserName?: string;
+    actorService?: string;
+    targetUserId?: string;
+    targetUserName?: string;
+    previousStatus?: string;
+    newStatus?: string;
+    metadata?: Record<string, unknown>;
+    requestId?: string;
+    correlationId?: string;
+    sessionId?: string;
+    ipAddress?: string;
+    userAgent?: string;
+    occurredAt: Date;
+    createdAt: Date;
+  }): Promise<void>;
+  
+  listOperationalAlertEvents(
+    alertId: string,
+    tenantId: string
+  ): Promise<any[]>;
 }
 
 export interface CctvInfrastructureStore {

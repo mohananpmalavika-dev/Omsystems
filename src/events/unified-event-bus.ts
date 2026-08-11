@@ -5,7 +5,7 @@
  */
 
 import { EventEmitter } from 'events';
-import { DistributedEventBus } from '../backend/src/services/distributed-event-bus.service.js';
+import type { DistributedEventBus } from '../../backend/src/services/distributed-event-bus.service.js';
 
 export interface IEventBus {
   publish(event: string, data: any): Promise<void>;
@@ -129,7 +129,7 @@ export class EventBusFactory {
         namespace: config?.namespace || process.env.EVENT_BUS_NAMESPACE || 'sentinel',
       };
 
-      const { initializeDistributedEventBus } = await import('../backend/src/services/distributed-event-bus.service.js');
+      const { initializeDistributedEventBus } = await import('../../backend/src/services/distributed-event-bus.service.js');
       const distributedBus = initializeDistributedEventBus(redisConfig);
       await distributedBus.connect();
 

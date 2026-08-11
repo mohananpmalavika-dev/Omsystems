@@ -6,6 +6,12 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import type { AnalyticsPipeline } from "../analytics-pipeline.js";
+import { 
+  serializeAnalogCameraCsv, 
+  boolToYesNo, 
+  joinForCsv,
+  type AnalogCameraExportRow 
+} from "../exports/analog-camera-csv.js";
 
 export async function registerAnalogCameraApiRoutes(
   app: FastifyInstance,
@@ -409,46 +415,239 @@ export async function registerAnalogCameraApiRoutes(
   app.get("/v1/analog/report", async (request, reply) => {
     const query = z.object({
       format: z.enum(['json', 'csv']).default('json'),
-      includeQuality: z.boolean().default(true),
-      includeAging: z.boolean().default(true),
-      includeUpgrades: z.boolean().default(true),
-      includeDvr: z.boolean().default(true),
+      includeQuality: z.union([z.boolean(), z.string()]).transform(val => val === true || val === 'true').default(true),
+      includeAging: z.union([z.boolean(), z.string()]).transform(val => val === true || val === 'true').default(true),
+      includeUpgrades: z.union([z.boolean(), z.string()]).transform(val => val === true || val === 'true').default(true),
+      includeDvr: z.union([z.boolean(), z.string()]).transform(val => val === true || val === 'true').default(true),
     }).parse(request.query);
     
-    const qualityDetector = pipeline.getAnalogVideoQualityDetector();
-    const agingDetector = pipeline.getCameraAgingDetector();
-    const classifier = pipeline.getCameraTypeClassifier();
-    const dvrDetector = pipeline.getDVRChannelHealthDetector();
-    
-    const report: any = {
-      generatedAt: new Date().toISOString(),
-      reportType: 'analog-camera-analytics',
-    };
-    
-    if (query.includeQuality) {
-      report.qualityAnalysis = qualityDetector?.getCamerasWithIssues() || [];
+    try {
+      const qualityDetector = pipeline.getAnalogVideoQualityDetector();
+      const agingDetector = pipeline.getCameraAgingDetector();
+      const classifier = pipeline.getCameraTypeClassifier();
+      const dvrDetector = pipeline.getDVRChannelHealthDetector();
+      
+      // Collect all camera data from different detectors
+      const qualityData = query.includeQuality 
+        ? qualityDetector?.getCamerasWithIssues() || [] 
+        : [];
+      
+      const agingData = query.includeAging 
+        ? agingDetector?.getCamerasByReplacementPriority() || [] 
+        : [];
+      
+      const upgradeData = query.includeUpgrades 
+        ? classifier?.getAllUpgradeRecommendations() || [] 
+        : [];
+      
+      const classificationData = query.includeUpgrades 
+        ? classifier?.getAllClassifications() || [] 
+        : [];
+      
+      const dvrData = query.includeDvr 
+        ? dvrDetector?.getAllChannelStatuses() || [] 
+        : [];
+      
+      // Build unified camera list by ID
+      const cameraMap = new Map<string, any>();
+      
+      // Aggregate data from all sources
+      qualityData.forEach((cam: any) => {
+        if (!cameraMap.has(cam.cameraId)) {
+          cameraMap.set(cam.cameraId, { cameraId: cam.cameraId });
+        }
+        const camera = cameraMap.get(cam.cameraId);
+        camera.qualityData = cam;
+      });
+      
+      agingData.forEach((cam: any) => {
+        if (!cameraMap.has(cam.cameraId)) {
+          cameraMap.set(cam.cameraId, { cameraId: cam.cameraId });
+        }
+        const camera = cameraMap.get(cam.cameraId);
+        camera.agingData = cam;
+      });
+      
+      upgradeData.forEach((rec: any) => {
+        if (!cameraMap.has(rec.cameraId)) {
+          cameraMap.set(rec.cameraId, { cameraId: rec.cameraId });
+        }
+        const camera = cameraMap.get(rec.cameraId);
+        camera.upgradeData = rec;
+      });
+      
+      classificationData.forEach((cls: any) => {
+        if (!cameraMap.has(cls.cameraId)) {
+          cameraMap.set(cls.cameraId, { cameraId: cls.cameraId });
+        }
+        const camera = cameraMap.get(cls.cameraId);
+        camera.classificationData = cls;
+      });
+      
+      dvrData.forEach((dvr: any) => {
+        if (dvr.cameraId && !cameraMap.has(dvr.cameraId)) {
+          cameraMap.set(dvr.cameraId, { cameraId: dvr.cameraId });
+        }
+        if (dvr.cameraId) {
+          const camera = cameraMap.get(dvr.cameraId);
+          camera.dvrData = dvr;
+        }
+      });
+      
+      // Build report structure
+      const report: any = {
+        generatedAt: new Date().toISOString(),
+        reportType: 'analog-camera-analytics',
+        cameraCount: cameraMap.size,
+      };
+      
+      if (query.includeQuality) {
+        report.qualityAnalysis = qualityData;
+      }
+      
+      if (query.includeAging) {
+        report.agingAnalysis = agingData;
+      }
+      
+      if (query.includeUpgrades) {
+        report.upgradeRecommendations = upgradeData;
+        report.upgradeSummary = classifier?.getUpgradeSummary();
+      }
+      
+      if (query.includeDvr) {
+        report.dvrChannelStatus = dvrData;
+      }
+      
+      // Handle CSV export
+      if (query.format === 'csv') {
+        // Map aggregated camera data to export rows
+        const exportRows: AnalogCameraExportRow[] = Array.from(cameraMap.values()).map((camera) => {
+          const quality = camera.qualityData;
+          const aging = camera.agingData;
+          const upgrade = camera.upgradeData;
+          const classification = camera.classificationData;
+          const dvr = camera.dvrData;
+          
+          // Extract quality issues
+          const issues = quality?.issues || [];
+          const issueTypes = issues.map((i: any) => i.type);
+          const mostSevere = issues.find((i: any) => i.severity === 'critical') || 
+                           issues.find((i: any) => i.severity === 'high') ||
+                           issues[0];
+          
+          // Extract maintenance recommendation
+          const maintenanceRec = aging?.maintenanceRecommendations?.[0];
+          
+          // Build export row
+          const row: AnalogCameraExportRow = {
+            cameraId: camera.cameraId,
+            cameraName: classification?.cameraName,
+            location: classification?.location,
+            
+            // Classification
+            cameraType: classification?.cameraType || 'unknown',
+            analogStandard: classification?.analogStandard,
+            signalType: classification?.signalType,
+            connectionType: classification?.connectionType,
+            
+            // Resolution
+            resolutionWidth: classification?.estimatedResolution?.width,
+            resolutionHeight: classification?.estimatedResolution?.height,
+            resolutionMegapixels: classification?.estimatedResolution?.megapixels,
+            
+            // Video Quality
+            videoQualityScore: quality?.qualityScore,
+            brightness: quality?.metrics?.brightness,
+            contrast: quality?.metrics?.contrast,
+            sharpness: quality?.metrics?.sharpness,
+            noiseLevel: quality?.metrics?.noise,
+            colorSaturation: quality?.metrics?.colorSaturation,
+            interlacing: quality?.metrics?.interlacing,
+            
+            // Quality Issues
+            qualityIssues: joinForCsv(issueTypes),
+            qualityIssueCount: issues.length,
+            mostSevereIssue: mostSevere ? `${mostSevere.type} (${mostSevere.severity})` : undefined,
+            degradationTrend: quality?.degradationTrend || aging?.degradationTrend,
+            
+            // AI Performance
+            aiAccuracyEstimate: classification?.aiAccuracyEstimate,
+            aiCapabilities: classification?.capabilities ? joinForCsv(classification.capabilities) : undefined,
+            
+            // Health & Aging
+            estimatedAgeYears: aging?.estimatedAgeYears,
+            healthScore: aging?.healthScore,
+            failureRiskScore: aging?.failureRiskScore,
+            replacementPriority: aging?.replacementPriority,
+            
+            // Maintenance
+            maintenanceRecommendation: maintenanceRec?.action,
+            maintenancePriority: maintenanceRec?.priority,
+            estimatedMaintenanceCostUSD: maintenanceRec?.estimatedCostUSD,
+            maintenanceUrgencyDays: maintenanceRec?.urgencyDays,
+            
+            // Upgrade
+            upgradeRecommendation: upgrade?.reason,
+            recommendedUpgradeType: upgrade?.recommendedUpgrade?.type,
+            upgradeAccuracyGain: upgrade?.roi?.accuracyGainPercent,
+            upgradeCostUSD: upgrade?.recommendedUpgrade?.estimatedCostUSD,
+            upgradeROIPriority: upgrade?.roi?.priority,
+            
+            // DVR/Channel
+            dvrId: dvr?.dvrId,
+            dvrName: dvr?.dvrName,
+            channelNumber: dvr?.channelNumber,
+            channelStatus: dvr?.status,
+            
+            // Features
+            nightVision: boolToYesNo(classification?.features?.nightVision),
+            wdr: boolToYesNo(classification?.features?.wdr),
+            ptz: boolToYesNo(classification?.features?.ptz),
+            colorMode: classification?.features?.colorMode,
+            
+            // Status
+            status: quality?.status || dvr?.status || 'unknown',
+            lastSeenAt: quality?.lastSeen ? new Date(quality.lastSeen) : null,
+            lastQualityCheckAt: quality?.lastCheck ? new Date(quality.lastCheck) : null,
+            firstSeenAt: aging?.firstSeen ? new Date(aging.firstSeen) : null,
+            installationDate: aging?.installationDate ? new Date(aging.installationDate) : null,
+          };
+          
+          return row;
+        });
+        
+        // Serialize to CSV
+        const csv = serializeAnalogCameraCsv(exportRows);
+        
+        // Generate timestamped filename
+        const timestamp = new Date()
+          .toISOString()
+          .replace(/[:.]/g, '-')
+          .slice(0, 19); // YYYY-MM-DDTHH-MM-SS
+        
+        // Set headers
+        reply.header('Content-Type', 'text/csv; charset=utf-8');
+        reply.header(
+          'Content-Disposition',
+          `attachment; filename="analog-camera-report-${timestamp}.csv"`
+        );
+        
+        return reply.send(csv);
+      }
+      
+      // JSON format (default)
+      return report;
+      
+    } catch (error) {
+      request.log.error(
+        { err: error },
+        'Failed to generate analog camera report'
+      );
+      
+      return reply.code(500).send({
+        error: 'report_generation_failed',
+        message: error instanceof Error ? error.message : 'Unknown error',
+      });
     }
-    
-    if (query.includeAging) {
-      report.agingAnalysis = agingDetector?.getCamerasByReplacementPriority() || [];
-    }
-    
-    if (query.includeUpgrades) {
-      report.upgradeRecommendations = classifier?.getAllUpgradeRecommendations() || [];
-      report.upgradeSummary = classifier?.getUpgradeSummary();
-    }
-    
-    if (query.includeDvr) {
-      report.dvrChannelStatus = dvrDetector?.getAllChannelStatuses() || [];
-    }
-    
-    if (query.format === 'csv') {
-      // TODO: Convert to CSV format
-      reply.header('Content-Type', 'text/csv');
-      reply.header('Content-Disposition', `attachment; filename="analog-camera-report-${Date.now()}.csv"`);
-      return "CSV export not yet implemented";
-    }
-    
-    return report;
   });
 }

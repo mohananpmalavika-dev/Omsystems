@@ -159,18 +159,20 @@ export function useAdaptiveLayoutEngine({
   // Fetch active alerts from the backend
   const fetchActiveAlerts = useCallback(async () => {
     try {
-      const response = await fetch("/api/incidents?status=open", {
+      const response = await fetch("/api/incidents?status=OPEN&limit=100", {
         credentials: "include",
       });
 
       if (response.ok) {
-        const incidents = await response.json();
-        const alertCameraIds = new Set<string>(
-          incidents
-            .filter((inc: any) => typeof inc.cameraId === "string")
-            .map((inc: any) => inc.cameraId)
-        );
-        setActiveAlerts(alertCameraIds);
+        const result = await response.json();
+        if (result.success && result.data?.incidents) {
+          const alertCameraIds = new Set<string>(
+            result.data.incidents
+              .filter((inc: any) => inc.camera?.id)
+              .map((inc: any) => inc.camera.id)
+          );
+          setActiveAlerts(alertCameraIds);
+        }
       }
     } catch (error) {
       console.error("Failed to fetch active alerts:", error);
