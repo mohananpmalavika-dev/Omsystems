@@ -1,11 +1,57 @@
 export type CameraStatus = "online" | "offline" | "degraded" | "unknown" | "alert";
 
+export type BranchLifecycleStatus = 'ACTIVE' | 'DISABLED' | 'ARCHIVED';
+
 export interface Branch {
   id: string;
   name: string;
   type: "branch";
   cameraCount?: number;
   onlineCount?: number;
+  
+  // Lifecycle management
+  lifecycleStatus?: BranchLifecycleStatus;
+  disabledAt?: string;
+  disabledBy?: string;
+  disableReason?: string;
+  reactivatedAt?: string;
+  reactivatedBy?: string;
+  reactivateReason?: string;
+  archivedAt?: string;
+  archivedBy?: string;
+  archiveReason?: string;
+  lifecycleVersion?: number;
+}
+
+export interface BranchLifecycleImpact {
+  branchId: string;
+  branchName: string;
+  currentStatus: BranchLifecycleStatus;
+  requestedStatus: BranchLifecycleStatus;
+  
+  impact: {
+    cameras: number;
+    recorders: number;
+    activeAlerts: number;
+    openIncidents: number;
+    scheduledJobs: number;
+    activeUsers: number;
+    descendantNodes: number;
+  };
+  
+  blockers: Array<{
+    code: string;
+    message: string;
+    count?: number;
+  }>;
+  
+  warnings: Array<{
+    code: string;
+    message: string;
+    details?: Record<string, unknown>;
+  }>;
+  
+  allowed: boolean;
 }
 
 export interface ComplianceFramework {

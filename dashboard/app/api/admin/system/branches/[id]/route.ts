@@ -34,17 +34,25 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
       headers['x-edge-bridge-key'] = bridgeKey;
     }
     
-    // Note: There's no DELETE endpoint for branches in the control plane
-    // Branches are part of the organizational hierarchy and typically not deleted
+    // Branch deletion has been replaced with lifecycle management
+    // Use the proper lifecycle endpoints instead of direct deletion
     
-    console.warn(`Delete branch ${id} not implemented - no backend endpoint available`);
+    console.warn(`DELETE branch ${id} deprecated - use lifecycle operations instead`);
     
     return NextResponse.json(
       { 
-        error: 'not_implemented',
-        message: 'Branch deletion is not currently supported. Branches are part of your organizational hierarchy.'
+        error: 'operation_deprecated',
+        message: 'Direct branch deletion is not supported. Use lifecycle management instead.',
+        suggestion: 'Use POST /api/admin/system/branches/:id/disable to disable the branch, then POST /api/admin/system/branches/:id/archive to archive it.',
+        lifecycleEndpoints: {
+          disable: `/api/admin/system/branches/${id}/disable`,
+          reactivate: `/api/admin/system/branches/${id}/reactivate`,
+          archive: `/api/admin/system/branches/${id}/archive`,
+          impact: `/api/admin/system/branches/${id}/lifecycle-impact?targetStatus=DISABLED`
+        },
+        documentation: 'Branches follow a lifecycle: ACTIVE → DISABLED → ARCHIVED. This preserves historical data while controlling operational availability.'
       },
-      { status: 501 }
+      { status: 410 } // 410 Gone - indicates the operation is no longer available
     );
     
   } catch (error) {

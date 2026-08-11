@@ -14,7 +14,7 @@ import { ProvisioningStepRunner } from './services/provisioning-step-runner.serv
 import { NetworkProvisionerService } from './network/network-provisioner.service';
 import { CameraDiscoveryService } from './discovery/camera-discovery.service';
 import { StorageProvisionerService } from './storage/storage-provisioner.service';
-import { RecordingVerifierService } from './recording/recording-verifier.service';
+import { RecordingVerificationAdapter } from './recording/recording-verification-adapter';
 import { ProvisioningHealthService } from './health/provisioning-health.service';
 import { HealthPolicyService } from './health/health-policy.service';
 import { BranchActivationService } from './activation/branch-activation.service';
@@ -26,7 +26,7 @@ export class ZeroTouchOrchestrator {
   private networkProvisioner: NetworkProvisionerService;
   private cameraDiscovery: CameraDiscoveryService;
   private storageProvisioner: StorageProvisionerService;
-  private recordingVerifier: RecordingVerifierService;
+  private recordingVerifier: RecordingVerificationAdapter;
   private healthService: ProvisioningHealthService;
   private activationService: BranchActivationService;
 
@@ -37,7 +37,7 @@ export class ZeroTouchOrchestrator {
     this.networkProvisioner = new NetworkProvisionerService();
     this.cameraDiscovery = new CameraDiscoveryService(pool);
     this.storageProvisioner = new StorageProvisionerService();
-    this.recordingVerifier = new RecordingVerifierService(pool);
+    this.recordingVerifier = new RecordingVerificationAdapter(pool);
     
     const policyService = new HealthPolicyService();
     this.healthService = new ProvisioningHealthService(policyService);
