@@ -112,6 +112,15 @@ export function buildAnalyticsEngine(options: AnalyticsEngineOptions) {
     app.log.error({ err: error, initializationError: pipelineInitializationError }, "Failed to initialize analytics pipeline");
   });
 
+  // Initialize statistics service (optional - requires DATABASE_URL)
+  void import("./statistics-integration.js").then(async (module) => {
+    try {
+      await module.initializeStatisticsService();
+    } catch (error) {
+      app.log.warn({ err: error }, "Statistics service initialization failed - endpoint will be unavailable");
+    }
+  });
+
   // Register detection API routes
   void import("./routes/detection-api.js").then(module => {
     module.registerDetectionApiRoutes(app, pipeline).catch((error) => {

@@ -415,23 +415,71 @@ export async function registerDetectionApiRoutes(
   });
 
   /**
-   * Get detection statistics
+   * Get detection statistics (requires control plane database)
    */
   app.get("/v1/analytics/statistics", async (request, reply) => {
-    const query = z.object({
-      period: z.enum(["hour", "day", "week"]).default("hour"),
-    }).parse(request.query);
+    // Import schema
+    const { statisticsQuerySchema } = await import("../schemas/analytics-statistics.schema.js");
+    
+    const query = statisticsQuerySchema.parse(request.query);
 
-    // TODO: Implement time-series statistics from database
-    return {
-      period: query.period,
-      statistics: {
-        totalDetections: 0,
-        byType: {},
-        averageConfidence: 0,
-        alerts: 0,
-      },
-      message: "Statistics endpoint coming soon",
-    };
+    // In production, tenantId should come from authenticated user context
+    // For now, accept from query parameter (NOT SECURE - replace with auth)
+    const tenantId = query.tenantId ?? request.headers["x-tenant-id"] as string;
+
+    if (!tenantId) {
+      return reply.code(400).send({
+        error: "tenant_id_required",
+        message: "Tenant ID must be provided via query parameter or x-tenant-id header",
+        hint: "In production this should come from authenticated user context",
+      });
+    }
+
+    try {
+      // Dynamic import to avoid circular dependencies with database initialization
+      const { getStatisticsService } = await import("../statistics-integration.js");
+      const service = await getStatisticsService();
+
+      if (!service) {
+        return reply.code(503).send({
+          error: "statistics_unavailable",
+          message: "Statistics service is not available. Control plane database connection required.",
+          hint: "This endpoint requires DATABASE_URL to be configured with control plane connection",
+        });
+      }
+
+      const { AnalyticsStatisticsService } = await import("../services/analytics-statistics.service.js");
+
+      const result = await service.getStatistics({
+        tenantId,
+        from: query.from ? new Date(query.from) : undefined,
+        to: query.to ? new Date(query.to) : undefined,
+        bucket: query.bucket,
+        detectorTypes: AnalyticsStatisticsService.parseDetectorTypes(query.detectorType),
+        severities: AnalyticsStatisticsService.parseSeverities(query.severity),
+        cameraId: query.cameraId,
+        branchId: query.branchId,
+        includeTimeline: query.includeTimeline,
+        includeCameraBreakdown: query.includeCameraBreakdown,
+        includeBranchBreakdown: query.includeBranchBreakdown,
+      });
+
+      return reply.code(200).send(result);
+    } catch (error: any) {
+      request.log.error({ err: error }, "Analytics statistics query failed");
+
+      if (error.name === "ValidationError") {
+        return reply.code(400).send({
+          error: "validation_error",
+          message: error.message,
+        });
+      }
+
+      return reply.code(503).send({
+        error: "analytics_statistics_unavailable",
+        message: "Unable to retrieve analytics statistics",
+        details: error.message,
+      });
+    }
   });
 }
