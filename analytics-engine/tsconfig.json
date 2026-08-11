@@ -20,6 +20,8 @@
     "src/analytics-integration-example.ts",
     "src/routes/advanced-analytics-api.ts",
     "src/monitoring/**/*.ts",
+    "src/assistant/**/*.ts",
+    "src/banking/**/*.ts",
     "src/detectors/ai-assistant.ts",
     "src/detectors/ai-investigation-tools.ts",
     "src/detectors/ai-prediction-engine.ts",

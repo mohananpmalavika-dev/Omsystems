@@ -1151,12 +1151,6 @@ export function createInfrastructureMonitoringRoutes(pool: Pool): Router {
     }
   });
 
-  return router;
-}
-
-export default createInfrastructureMonitoringRoutes;
-
-
   // =====================================================
   // RCA INTEGRATION ENDPOINTS
   // =====================================================
