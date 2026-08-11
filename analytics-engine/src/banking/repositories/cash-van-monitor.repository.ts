@@ -327,6 +327,19 @@ export class CashVanMonitorRepository {
   }
 
   /**
+   * Find all active monitors
+   */
+  async findActiveMonitors(): Promise<CashVanMonitorConfig[]> {
+    const monitors: CashVanMonitorConfig[] = [];
+    for (const monitor of this.monitors.values()) {
+      if (monitor.enabled) {
+        monitors.push(monitor);
+      }
+    }
+    return monitors;
+  }
+
+  /**
    * Clear all monitors (for testing)
    */
   async clear(): Promise<void> {

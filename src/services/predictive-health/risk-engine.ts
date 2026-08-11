@@ -629,6 +629,8 @@ export class RiskEngine {
     const now = new Date();
     const primaryFactor = riskFactors[0];
 
+    if (!primaryFactor) return undefined;
+
     // Estimate based on primary risk factor
     let hoursUntilFailure = horizonHours * 0.5; // Default: midpoint
 

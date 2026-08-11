@@ -211,11 +211,13 @@ export class AIAssistantV2 {
           timestamp: new Date()
         };
       } else {
+        // At this point, result must be CommandFailure
+        const failure = result as CommandFailure;
         response = this.presenter.formatFailure({
-          code: result.code,
-          message: result.message || 'Operation failed',
+          code: failure.code,
+          message: failure.message || 'Operation failed',
           intent: parsed.intent,
-          retryable: result.retryable
+          retryable: failure.retryable
         });
       }
       
