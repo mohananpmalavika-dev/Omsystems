@@ -1,6 +1,9 @@
 /**
  * Secure Boot and TPM Attestation Service
  * Device boot verification, TPM attestation, and hardware security validation
+ * 
+ * REFACTORED: Now uses cryptographically sound attestation pipeline
+ * See: backend/src/attestation/
  */
 
 import {
@@ -9,62 +12,140 @@ import {
   TPMDevice,
   TPMStatus
 } from '../types/security.types';
-import crypto from 'crypto';
+import { tpmAttestationService } from '../attestation/application/tpm-attestation.service';
+import {
+  TpmState,
+  SecureBootState as NewSecureBootState,
+  AttestationFreshness,
+} from '../attestation/domain/attestation.types';
 
 export class SecureBootTPMService {
   private secureBootStatuses: Map<string, SecureBootStatus> = new Map();
   private tpmDevices: Map<string, TPMDevice> = new Map();
 
   /**
-   * Verify secure boot chain
+   * Verify secure boot chain using TPM attestation
+   * This now delegates to the cryptographic attestation pipeline
    */
   async verifySecureBoot(deviceId: string): Promise<SecureBootStatus> {
     console.log(`🔒 Verifying secure boot for device: ${deviceId}`);
 
-    const stages: BootStage[] = [];
+    try {
+      // Get latest attestation from the real pipeline
+      const attestation = await tpmAttestationService.getLatestAttestation(deviceId);
 
-    // Stage 1: UEFI/BIOS
-    stages.push(await this.verifyBootStage(deviceId, 'UEFI', 'uefi-hash'));
+      if (!attestation) {
+        // No attestation available
+        return this.createUnknownStatus(deviceId, 'No TPM attestation evidence available');
+      }
 
-    // Stage 2: Bootloader
-    stages.push(await this.verifyBootStage(deviceId, 'Bootloader', 'bootloader-hash'));
+      // Map new attestation states to legacy interface
+      const bootChainValid = attestation.secureBootState === NewSecureBootState.VERIFIED;
+      const enabled = attestation.secureBootState !== NewSecureBootState.UNKNOWN;
 
-    // Stage 3: Kernel
-    stages.push(await this.verifyBootStage(deviceId, 'Kernel', 'kernel-hash'));
+      // Generate stage information from attestation
+      const stages = this.mapAttestationToStages(attestation);
+      
+      // Generate issues from policy violations
+      const issues: string[] = [];
+      if (attestation.failureReason) {
+        issues.push(`Attestation failed: ${attestation.failureReason}`);
+      }
+      if (attestation.policyViolations && attestation.policyViolations.length > 0) {
+        for (const violation of attestation.policyViolations) {
+          issues.push(`PCR ${violation.pcr}: ${violation.description}`);
+        }
+      }
 
-    // Stage 4: Init System
-    stages.push(await this.verifyBootStage(deviceId, 'Init', 'init-hash'));
+      const status: SecureBootStatus = {
+        deviceId,
+        enabled,
+        bootChainValid,
+        lastValidated: attestation.verifiedAt ?? new Date(),
+        stages,
+        issues
+      };
 
-    // Stage 5: Application
-    stages.push(await this.verifyBootStage(deviceId, 'Application', 'app-hash'));
+      this.secureBootStatuses.set(deviceId, status);
 
-    // Check if entire chain is valid
-    const bootChainValid = stages.every(s => s.valid);
-    const issues = stages.filter(s => !s.valid).map(s => `${s.name} verification failed`);
+      if (bootChainValid) {
+        console.log(`✓ Secure boot chain valid for device: ${deviceId} (cryptographically verified)`);
+      } else {
+        console.log(`❌ Secure boot chain INVALID for device: ${deviceId}`);
+        console.log(`Issues: ${issues.join(', ')}`);
+      }
 
-    const status: SecureBootStatus = {
-      deviceId,
-      enabled: true,
-      bootChainValid,
-      lastValidated: new Date(),
-      stages,
-      issues
-    };
-
-    this.secureBootStatuses.set(deviceId, status);
-
-    if (bootChainValid) {
-      console.log(`✓ Secure boot chain valid for device: ${deviceId}`);
-    } else {
-      console.log(`❌ Secure boot chain INVALID for device: ${deviceId}`);
-      console.log(`Issues: ${issues.join(', ')}`);
+      return status;
+    } catch (error) {
+      console.error(`Error verifying secure boot for ${deviceId}:`, error);
+      return this.createUnknownStatus(deviceId, 'Attestation service error');
     }
-
-    return status;
   }
 
   /**
-   * Register TPM device
+   * Create unknown status when attestation unavailable
+   */
+  private createUnknownStatus(deviceId: string, reason: string): SecureBootStatus {
+    return {
+      deviceId,
+      enabled: false,
+      bootChainValid: false,
+      lastValidated: new Date(),
+      stages: [],
+      issues: [reason]
+    };
+  }
+
+  /**
+   * Map attestation result to legacy boot stages
+   */
+  private mapAttestationToStages(attestation: any): BootStage[] {
+    const stages: BootStage[] = [];
+    const timestamp = attestation.verifiedAt ?? new Date();
+    
+    // Map secure boot state to stages
+    const verified = attestation.secureBootState === NewSecureBootState.VERIFIED;
+    const failed = attestation.secureBootState === NewSecureBootState.FAILED;
+    
+    stages.push({
+      name: 'TPM Quote Verification',
+      hash: attestation.evidenceId ? attestation.evidenceId.substring(0, 16) : '(unknown)',
+      valid: attestation.tpmState === TpmState.ATTESTED,
+      timestamp,
+    });
+
+    if (attestation.nonceVerified !== null) {
+      stages.push({
+        name: 'Nonce Verification',
+        hash: '(cryptographic)',
+        valid: attestation.nonceVerified,
+        timestamp,
+      });
+    }
+
+    if (attestation.pcrDigestVerified !== null) {
+      stages.push({
+        name: 'PCR Digest Verification',
+        hash: '(cryptographic)',
+        valid: attestation.pcrDigestVerified,
+        timestamp,
+      });
+    }
+
+    if (attestation.policyMatched !== null) {
+      stages.push({
+        name: 'Secure Boot Policy',
+        hash: '(policy-based)',
+        valid: attestation.policyMatched,
+        timestamp,
+      });
+    }
+
+    return stages;
+  }
+
+  /**
+   * Register TPM device and enroll its Attestation Key
    */
   async registerTPMDevice(
     deviceId: string,
@@ -90,18 +171,23 @@ export class SecureBootTPMService {
     this.tpmDevices.set(deviceId, tpmDevice);
 
     console.log(`✓ TPM device registered: ${deviceId} (${manufacturer} ${tpmVersion})`);
+    console.log(`  Note: Device must enroll AK via /api/attestation/devices/${deviceId}/enroll`);
 
     return tpmDevice;
   }
 
   /**
-   * Perform TPM attestation
+   * Perform TPM attestation using cryptographic verification pipeline
+   * 
+   * @deprecated Use tpmAttestationService.submitEvidence() directly
+   * This method is maintained for backward compatibility
    */
   async attestTPM(deviceId: string, quote: any, signature: any): Promise<{
     valid: boolean;
     reason?: string;
   }> {
-    console.log(`🔍 Attesting TPM for device: ${deviceId}`);
+    console.log(`🔍 Attesting TPM for device: ${deviceId} (legacy API)`);
+    console.log(`⚠️  This API is deprecated. Use POST /api/attestation/devices/:deviceId/evidence`);
 
     const tpmDevice = this.tpmDevices.get(deviceId);
 
@@ -113,43 +199,41 @@ export class SecureBootTPMService {
     }
 
     try {
-      // Step 1: Verify quote signature
-      const signatureValid = await this.verifyTPMSignature(quote, signature, tpmDevice.ekCertificate);
+      // Get latest attestation from new pipeline
+      const attestation = await tpmAttestationService.getLatestAttestation(deviceId);
 
-      if (!signatureValid) {
+      if (!attestation) {
         tpmDevice.status = TPMStatus.ATTESTATION_FAILED;
         return {
           valid: false,
-          reason: 'TPM signature verification failed'
+          reason: 'No attestation evidence found. Device must complete attestation challenge-response protocol.'
         };
       }
 
-      // Step 2: Verify PCR values
-      const pcrValid = await this.verifyPCRValues(quote.pcrValues);
-
-      if (!pcrValid) {
-        tpmDevice.status = TPMStatus.ATTESTATION_FAILED;
-        return {
-          valid: false,
-          reason: 'PCR values do not match expected baseline'
-        };
-      }
-
-      // Step 3: Check freshness
-      const fresh = await this.checkAttestation Freshness(quote.timestamp);
+      // Check freshness
+      const fresh = attestation.freshness === AttestationFreshness.FRESH || 
+                     attestation.freshness === AttestationFreshness.ACCEPTABLE;
 
       if (!fresh) {
         tpmDevice.status = TPMStatus.ATTESTATION_FAILED;
         return {
           valid: false,
-          reason: 'Attestation quote is not fresh (replay attack?)'
+          reason: `Attestation evidence is ${attestation.freshness}. Issue new challenge.`
         };
       }
 
-      // Attestation successful
+      // Check if TPM is attested
+      if (attestation.tpmState !== TpmState.ATTESTED) {
+        tpmDevice.status = TPMStatus.ATTESTATION_FAILED;
+        return {
+          valid: false,
+          reason: attestation.failureReason ?? 'TPM attestation failed'
+        };
+      }
+
+      // Update device status
       tpmDevice.attestationValid = true;
-      tpmDevice.lastAttestation = new Date();
-      tpmDevice.pcrValues = quote.pcrValues;
+      tpmDevice.lastAttestation = attestation.verifiedAt ?? new Date();
       tpmDevice.status = TPMStatus.HEALTHY;
 
       console.log(`✓ TPM attestation valid for device: ${deviceId}`);
@@ -225,30 +309,17 @@ export class SecureBootTPMService {
 
   /**
    * Measure boot component (extend PCR)
+   * 
+   * @deprecated PCR measurements should be performed by TPM on device
+   * Control plane does not extend PCRs
    */
   async measureBootComponent(
     deviceId: string,
     pcrIndex: number,
     componentHash: string
   ): Promise<boolean> {
-    const tpmDevice = this.tpmDevices.get(deviceId);
-
-    if (!tpmDevice) {
-      return false;
-    }
-
-    // Extend PCR (hash of current PCR + new measurement)
-    const currentPCR = tpmDevice.pcrValues[pcrIndex] || '0'.repeat(64);
-    const extendedPCR = crypto
-      .createHash('sha256')
-      .update(currentPCR + componentHash)
-      .digest('hex');
-
-    tpmDevice.pcrValues[pcrIndex] = extendedPCR;
-
-    console.log(`📏 PCR ${pcrIndex} extended for device ${deviceId}`);
-
-    return true;
+    console.log(`⚠️  measureBootComponent is deprecated: PCR extension must occur on device TPM`);
+    return false;
   }
 
   /**
@@ -266,10 +337,13 @@ export class SecureBootTPMService {
     const tpms = Array.from(this.tpmDevices.values());
     const secureBoots = Array.from(this.secureBootStatuses.values());
 
+    // Get real attestation statistics
+    const attestationStats = await tpmAttestationService.getStatistics();
+
     return {
       totalTPMDevices: tpms.length,
-      healthyTPM: tpms.filter(t => t.status === TPMStatus.HEALTHY).length,
-      failedAttestations: tpms.filter(t => t.status === TPMStatus.ATTESTATION_FAILED).length,
+      healthyTPM: attestationStats.enrolledDevices,
+      failedAttestations: attestationStats.failed,
       missingTPM: tpms.filter(t => t.status === TPMStatus.MISSING).length,
       totalSecureBoot: secureBoots.length,
       validSecureBoot: secureBoots.filter(s => s.bootChainValid).length,
@@ -278,55 +352,51 @@ export class SecureBootTPMService {
   }
 
   // ============================================================================
-  // Helper methods
+  // Deprecated Helper Methods
+  // These methods are no longer used and should not be relied upon
   // ============================================================================
 
+  /**
+   * @deprecated Use cryptographic attestation pipeline
+   */
   private async verifyBootStage(
     deviceId: string,
     stageName: string,
     expectedHash: string
   ): Promise<BootStage> {
-    // SECURITY: TPM attestation evidence not yet implemented
-    // Returning UNKNOWN status instead of false positive verification
-    // This stage requires TPM quote with signed PCR values
-    
     return {
       name: stageName,
-      hash: '(not attested)',
+      hash: '(use attestation API)',
       valid: false,
       timestamp: new Date()
     };
   }
 
+  /**
+   * @deprecated Use verifyTpmQuoteSignature from crypto module
+   */
   private async verifyTPMSignature(
     quote: any,
     signature: any,
     ekCertificate?: string
   ): Promise<boolean> {
-    // SECURITY: TPM quote signature verification not yet implemented
-    // Must verify using Attestation Key (AK) public key, not EK
-    // Returns false until proper cryptographic verification is implemented
+    console.error('SECURITY: verifyTPMSignature is not implemented');
+    console.error('Use: tpmAttestationService.submitEvidence() for cryptographic verification');
     return false;
   }
 
+  /**
+   * @deprecated Use PCR policy service
+   */
   private async verifyPCRValues(pcrValues: Record<string, string>): Promise<boolean> {
-    // SECURITY: PCR policy verification not yet implemented
-    // Must compare against tenant-approved boot policy baselines
-    // Must verify PCR digest matches TPM quote
-    // Check PCR 0-7 for boot components
-    // PCR 0: BIOS/UEFI
-    // PCR 1: BIOS/UEFI configuration
-    // PCR 2: Option ROMs
-    // PCR 3: Option ROM configuration
-    // PCR 4: Boot loader
-    // PCR 5: Boot loader configuration
-    // PCR 6: Resume from sleep
-    // PCR 7: Secure boot state
-
-    // Returns false until policy-driven verification is implemented
+    console.error('SECURITY: verifyPCRValues is not implemented');
+    console.error('Use: PcrPolicyService for policy-based PCR verification');
     return false;
   }
 
+  /**
+   * @deprecated Freshness is determined by attestation pipeline
+   */
   private async checkAttestationFreshness(timestamp: Date): Promise<boolean> {
     const now = new Date();
     const ageSeconds = (now.getTime() - timestamp.getTime()) / 1000;
