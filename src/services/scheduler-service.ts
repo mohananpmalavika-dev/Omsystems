@@ -93,7 +93,7 @@ export class SchedulerService {
     const getNextRun = () => {
       const now = new Date();
       const next = new Date(now);
-      next.setHours(hours, minutes, 0, 0);
+      next.setHours(hours ?? 0, minutes ?? 0, 0, 0);
       
       if (next <= now) {
         next.setDate(next.getDate() + 1);
@@ -146,7 +146,7 @@ export class SchedulerService {
     const getNextRun = () => {
       const now = new Date();
       const next = new Date(now);
-      next.setHours(hours, minutes, 0, 0);
+      next.setHours(hours ?? 0, minutes ?? 0, 0, 0);
 
       const currentDay = now.getDay();
       const daysUntilTarget = (targetDay - currentDay + 7) % 7;
@@ -189,7 +189,7 @@ export class SchedulerService {
       const now = new Date();
       const next = new Date(now);
       next.setDate(dayOfMonth);
-      next.setHours(hours, minutes, 0, 0);
+      next.setHours(hours ?? 0, minutes ?? 0, 0, 0);
 
       if (next <= now) {
         next.setMonth(next.getMonth() + 1);

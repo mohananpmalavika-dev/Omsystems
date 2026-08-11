@@ -102,6 +102,7 @@ export interface UnverifiedSuccess<T> {
   verified: false;
   data?: T;
   reason: string;
+  message?: string;
   evidence?: AssistantEvidence[];
 }
 

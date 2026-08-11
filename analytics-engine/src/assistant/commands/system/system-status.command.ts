@@ -11,9 +11,9 @@ import type {
   CommandResult,
   AssistantContext,
   AssistantErrorCode,
-  AssistantEvidence,
-  CommandResultBuilder
+  AssistantEvidence
 } from '../../types/index.js';
+import { CommandResultBuilder } from '../../types/index.js';
 import type { AuthorizationService } from '../../types/authorization.js';
 import type { AssistantAuditService } from '../../types/audit.js';
 import type {
