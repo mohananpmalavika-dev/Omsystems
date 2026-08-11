@@ -568,13 +568,22 @@ export class BankingAnalyticsDetector extends BaseDetector {
   private monitorCashVans(persons: any[], frame: DetectionFrame): DetectionResult[] {
     const results: DetectionResult[] = [];
 
-    for (const [vanId, monitor] of this.cashVanMonitors.entries()) {
-      // TODO: Detect vehicle (cash van) in arrival zone
-      // TODO: Check security personnel count
-      // TODO: Monitor unloading process
-
-      // Placeholder implementation
-    }
+    // Note: Cash van monitoring has been migrated to the new event-driven
+    // banking analytics system in src/banking/
+    // 
+    // The new system provides:
+    // - Normalized event bus for vehicle/person/ANPR/zone/access events
+    // - Persistent session tracking with state machine
+    // - Rule-based evaluation with evidence collection
+    // - Correlation across vehicle detection, ANPR, personnel tracking,
+    //   identity resolution, transfer objects, and access control
+    //
+    // To activate:
+    // 1. Configure monitors via banking analytics API
+    // 2. Publish events to the banking event bus from detectors
+    // 3. Query session status and violations via banking analytics service
+    //
+    // See: analytics-engine/src/banking/banking-analytics.service.ts
 
     return results;
   }

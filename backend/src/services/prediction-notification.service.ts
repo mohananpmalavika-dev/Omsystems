@@ -1,16 +1,17 @@
 /**
  * Prediction Notification Service
  * 
- * Sends alerts for critical predictions through multiple channels:
- * - In-app notifications
- * - Email alerts
- * - SMS (via existing SMS gateway)
- * - Webhook integration
+ * Sends alerts for critical predictions through multiple channels
+ * using the unified notification system.
  * 
  * Implements smart aggregation to prevent alert fatigue.
+ * 
+ * MIGRATED: Now uses NotificationService instead of email_queue/sms_queue
  */
 
 import { Pool } from 'pg';
+import { NotificationService } from '../notifications/index.js';
+import { NotificationChannel as UnifiedChannel } from '../notifications/notification.types.js';
 import { logger } from '../utils/logger.js';
 
 interface NotificationChannel {
@@ -39,7 +40,10 @@ interface PredictionAlert {
 }
 
 export class PredictionNotificationService {
-  constructor(private pool: Pool) {}
+  constructor(
+    private pool: Pool,
+    private notificationService: NotificationService
+  ) {}
 
   /**
    * Process new predictions and send alerts
@@ -96,6 +100,8 @@ export class PredictionNotificationService {
 
   /**
    * Send aggregated alert for a branch
+   * 
+   * MIGRATED: Uses unified notification system with proper transactional outbox pattern
    */
   private async sendBranchAlert(
     tenantId: string,
@@ -117,23 +123,70 @@ export class PredictionNotificationService {
       // Determine alert severity
       const hasImminent = predictions.some(p => p.riskClassification === 'imminent_failure');
       const severity = hasImminent ? 'imminent' : 'critical';
+      const priority = hasImminent ? 'critical' : 'high';
 
       // Build notification content
       const subject = this.buildSubject(branchName, predictions, severity);
       const body = this.buildNotificationBody(branchName, predictions);
+      const smsBody = this.buildSmsMessage(branchName, predictions);
 
-      // Send through enabled channels
+      // Convert channels to unified format
+      const enabledChannels: UnifiedChannel[] = [];
+      if (channels.inApp) enabledChannels.push('in_app');
+      if (channels.email) enabledChannels.push('email');
+      if (channels.sms && severity === 'imminent') enabledChannels.push('sms');
+      // Webhook support can be added here if needed
+
+      if (enabledChannels.length === 0) {
+        logger.warn('No notification channels enabled', { tenantId });
+        return;
+      }
+
+      // Send through unified notification system for each recipient
       for (const recipient of recipients) {
-        if (channels.inApp) {
-          await this.sendInAppNotification(recipient.userId, subject, body, predictions);
-        }
+        try {
+          // Use unified notification service
+          const result = await this.notificationService.enqueue({
+            tenantId,
+            type: 'prediction_alert',
+            channels: enabledChannels,
+            recipient: {
+              userId: recipient.userId,
+              email: recipient.email,
+              phone: recipient.phone
+            },
+            subject,
+            title: subject,
+            body: enabledChannels.includes('sms') ? smsBody : body,
+            priority,
+            metadata: {
+              predictionIds: predictions.map(p => p.predictionId),
+              branchName,
+              severity,
+              predictionCount: predictions.length,
+              hasImminent
+            },
+            idempotencyKey: `prediction-alert:${branchName}:${recipient.userId}:${predictions[0].predictionId}`,
+            source: {
+              type: 'prediction',
+              id: predictions[0].predictionId
+            }
+          });
 
-        if (channels.email && recipient.email) {
-          await this.sendEmailNotification(recipient.email, subject, body);
-        }
-
-        if (channels.sms && recipient.phone && severity === 'imminent') {
-          await this.sendSmsNotification(recipient.phone, this.buildSmsMessage(branchName, predictions));
+          logger.debug('Prediction alert enqueued', {
+            notificationId: result.notificationId,
+            tenantId,
+            userId: recipient.userId,
+            channels: enabledChannels,
+            deliveries: result.deliveryIds.length
+          });
+        } catch (error) {
+          logger.error('Failed to enqueue prediction alert', {
+            error,
+            tenantId,
+            userId: recipient.userId,
+            branchName
+          });
         }
       }
 
@@ -146,8 +199,11 @@ export class PredictionNotificationService {
     }
   }
 
+  // DEPRECATED: These methods are no longer used
+  // The unified notification system handles delivery directly
+
   /**
-   * Send in-app notification
+   * @deprecated Use NotificationService instead
    */
   private async sendInAppNotification(
     userId: string,
@@ -155,73 +211,28 @@ export class PredictionNotificationService {
     body: string,
     predictions: PredictionAlert[]
   ): Promise<void> {
-    try {
-      await this.pool.query(
-        `INSERT INTO notifications (
-          user_id,
-          title,
-          message,
-          type,
-          priority,
-          metadata,
-          created_at
-        ) VALUES ($1, $2, $3, 'prediction_alert', 'high', $4, NOW())`,
-        [
-          userId,
-          title,
-          body,
-          JSON.stringify({
-            predictionIds: predictions.map(p => p.predictionId),
-            branchName: predictions[0].branchName
-          })
-        ]
-      );
-    } catch (error) {
-      logger.error('Error sending in-app notification', { error, userId });
-    }
+    // Kept for backward compatibility during migration
+    logger.warn('sendInAppNotification is deprecated, use NotificationService');
   }
 
   /**
-   * Send email notification
+   * @deprecated Use NotificationService instead
    */
   private async sendEmailNotification(
     email: string,
     subject: string,
     body: string
   ): Promise<void> {
-    try {
-      await this.pool.query(
-        `INSERT INTO email_queue (
-          recipient,
-          subject,
-          body,
-          priority,
-          created_at
-        ) VALUES ($1, $2, $3, 'high', NOW())`,
-        [email, subject, body]
-      );
-    } catch (error) {
-      logger.error('Error queueing email', { error, email });
-    }
+    // Kept for backward compatibility during migration
+    logger.warn('sendEmailNotification is deprecated, use NotificationService');
   }
 
   /**
-   * Send SMS notification
+   * @deprecated Use NotificationService instead
    */
   private async sendSmsNotification(phone: string, message: string): Promise<void> {
-    try {
-      await this.pool.query(
-        `INSERT INTO sms_queue (
-          phone_number,
-          message,
-          priority,
-          created_at
-        ) VALUES ($1, $2, 'high', NOW())`,
-        [phone, message]
-      );
-    } catch (error) {
-      logger.error('Error queueing SMS', { error, phone });
-    }
+    // Kept for backward compatibility during migration
+    logger.warn('sendSmsNotification is deprecated, use NotificationService');
   }
 
   /**
@@ -412,15 +423,23 @@ export class PredictionNotificationService {
 
 /**
  * Initialize notification processing job (runs every 10 minutes)
+ * 
+ * MIGRATED: Now requires NotificationService to be passed
  */
-export function initializeNotificationJob(pool: Pool): NodeJS.Timeout {
-  const notificationService = new PredictionNotificationService(pool);
+export function initializeNotificationJob(
+  pool: Pool,
+  notificationService: NotificationService
+): NodeJS.Timeout {
+  const predictionNotificationService = new PredictionNotificationService(
+    pool,
+    notificationService
+  );
 
   const interval = setInterval(async () => {
     try {
       const tenants = await pool.query(`SELECT id FROM tenants WHERE deleted_at IS NULL`);
       for (const tenant of tenants.rows) {
-        await notificationService.processNewPredictions(tenant.id);
+        await predictionNotificationService.processNewPredictions(tenant.id);
       }
     } catch (error) {
       logger.error('Error in notification job', { error });
