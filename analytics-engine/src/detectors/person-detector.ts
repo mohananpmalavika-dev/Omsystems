@@ -102,9 +102,9 @@ export class PersonDetector extends BaseDetector {
     // Build frame context
     const context: FrameContext = {
       tenantId: frame.tenantId || 'default',
-      branchId: frame.branchId,
+      branchId: frame.metadata?.branchId as string | undefined,
       cameraId: frame.cameraId,
-      frameId: frame.frameId,
+      frameId: frame.metadata?.frameId as string | undefined,
       timestamp: frame.timestamp,
       frameWidth: frame.width,
       frameHeight: frame.height,

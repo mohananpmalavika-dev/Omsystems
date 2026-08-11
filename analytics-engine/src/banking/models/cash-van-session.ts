@@ -5,7 +5,7 @@
  * Each session tracks a single cash van arrival through completion.
  */
 
-import { BoundingBox } from '../../types.js';
+import type { BoundingBox } from '../../tracking/tracking-observation.js';
 
 /**
  * Cash van workflow states

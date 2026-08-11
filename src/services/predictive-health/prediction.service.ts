@@ -242,11 +242,15 @@ export class PredictionService {
     }));
 
     // Get failure events
-    const incidents = await this.store.listIncidents(tenantId, {
+    const allIncidents = await this.store.listIncidents(tenantId, {
       branchId,
-      since: start,
-      severity: ["critical", "high"],
+      from: start.toISOString(),
     });
+
+    // Filter for critical and high severity
+    const incidents = allIncidents.filter(inc => 
+      inc.severity === "critical" || inc.severity === "high"
+    );
 
     const events = incidents.map((inc) => ({
       timestamp: new Date(inc.occurredAt),

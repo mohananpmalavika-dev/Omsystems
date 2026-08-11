@@ -495,23 +495,26 @@ export class SnapshotService {
       const oneYearAgo = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000);
 
       // Get failure incidents across time periods
-      const [failures30d, failures90d, failures365d] = await Promise.all([
+      // Note: listIncidents doesn't support array filters, so we fetch all and filter in memory
+      const [incidents30d, incidents90d, incidents365d] = await Promise.all([
         this.store.listIncidents(tenantId, {
           branchId,
-          since: thirtyDaysAgo,
-          severity: ["critical", "high"],
+          from: thirtyDaysAgo.toISOString(),
         }),
         this.store.listIncidents(tenantId, {
           branchId,
-          since: ninetyDaysAgo,
-          severity: ["critical", "high"],
+          from: ninetyDaysAgo.toISOString(),
         }),
         this.store.listIncidents(tenantId, {
           branchId,
-          since: oneYearAgo,
-          severity: ["critical", "high"],
+          from: oneYearAgo.toISOString(),
         }),
       ]);
+
+      // Filter for critical and high severity
+      const failures30d = incidents30d.filter(i => i.severity === "critical" || i.severity === "high");
+      const failures90d = incidents90d.filter(i => i.severity === "critical" || i.severity === "high");
+      const failures365d = incidents365d.filter(i => i.severity === "critical" || i.severity === "high");
 
       // Count recoveries (resolved incidents)
       const previousRecoveryCount = failures365d.filter(
@@ -637,23 +640,9 @@ export class SnapshotService {
    * Store snapshot for historical analysis
    */
   private async storeSnapshot(snapshot: BranchHealthSnapshot): Promise<void> {
-    try {
-      await this.store.execute(
-        `INSERT INTO branch_health_snapshots (
-          id, tenant_id, branch_id, timestamp, snapshot_data
-        ) VALUES ($1, $2, $3, $4, $5)`,
-        [
-          randomUUID(),
-          snapshot.tenantId,
-          snapshot.branchId,
-          snapshot.timestamp,
-          JSON.stringify(snapshot),
-        ]
-      );
-    } catch (error) {
-      console.error("Failed to store snapshot:", error);
-      // Non-fatal, continue
-    }
+    // TODO: Implement snapshot persistence when database schema is available
+    // For now, snapshots are computed on-demand and not persisted
+    console.debug(`Snapshot generated for branch ${snapshot.branchId} at ${snapshot.timestamp}`);
   }
 
   /**

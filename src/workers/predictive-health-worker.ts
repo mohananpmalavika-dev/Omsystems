@@ -247,7 +247,7 @@ export class PredictiveHealthWorker {
   getStatus(): {
     running: boolean;
     isProcessing: boolean;
-    config: typeof this.config;
+    config: PredictiveHealthWorker["config"];
   } {
     return {
       running: this.intervalId !== null,

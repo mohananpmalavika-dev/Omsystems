@@ -3708,28 +3708,37 @@ export class MemoryStore implements ControlPlaneStore {
   }
 
   // Operational Alert Event methods
-  async recordOperationalAlertEvent(input: {
+  async recordOperationalAlertEvent(event: {
+    id: string | undefined;
+    alertId: string;
     tenantId: string;
-    alertType: string;
-    severity: string;
-    message: string;
+    branchId?: string;
+    eventType: string;
+    actorType: string;
+    actorUserId?: string;
+    actorUserName?: string;
+    actorService?: string;
+    targetUserId?: string;
+    targetUserName?: string;
+    previousStatus?: string;
+    newStatus?: string;
     metadata?: Record<string, unknown>;
-  }): Promise<any> {
-    const event = {
-      id: randomUUID(),
-      ...input,
-      occurredAt: new Date().toISOString(),
-    };
+    requestId?: string;
+    correlationId?: string;
+    sessionId?: string;
+    ipAddress?: string;
+    userAgent?: string;
+    occurredAt: Date;
+    createdAt: Date;
+  }): Promise<void> {
     // Store in generic storage (could add dedicated array if needed)
-    return event;
+    console.debug(`Recorded operational alert event: ${event.eventType} for alert ${event.alertId}`);
   }
 
-  async listOperationalAlertEvents(tenantId: string, filters?: {
-    alertType?: string;
-    from?: string;
-    to?: string;
-    limit?: number;
-  }): Promise<any[]> {
+  async listOperationalAlertEvents(
+    alertId: string,
+    tenantId: string
+  ): Promise<any[]> {
     // Return empty array for now (would need dedicated storage)
     return [];
   }

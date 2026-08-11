@@ -6,7 +6,7 @@
 import type { DetectionFrame } from "../../detectors/base-detector.js";
 import { getCapabilityRegistry, type AnalyticsCapability } from "../capability-status.js";
 import { TrackerAdapter } from "../tracking/tracker-adapter.js";
-import { FightDetector } from "../behavior/fight-detector.ts.js";
+import { FightDetector } from "../behavior/fight-detector.js";
 import { PanicDetector } from "../behavior/panic-detector.js";
 import { LineCrossingEngine } from "../counting/line-crossing-engine.js";
 import { OccupancyLedger } from "../counting/occupancy-ledger.js";
@@ -121,7 +121,7 @@ export class HumanAnalyticsPipeline {
     const observations = this.tracker.updateTracking(
       detections,
       timestamp,
-      frame.frameId || `frame_${this.frameCount}`,
+      frame.metadata?.frameId as string || `frame_${this.frameCount}`,
     );
 
     const activeTracks = this.tracker.getActiveTracks();
@@ -138,7 +138,7 @@ export class HumanAnalyticsPipeline {
     const fightEvidence = await this.fightDetector.detectFighting(
       activeTracks,
       timestamp,
-      frame.frameId || `frame_${this.frameCount}`,
+      frame.metadata?.frameId as string || `frame_${this.frameCount}`,
     );
 
     // Convert fight evidence to behavior events

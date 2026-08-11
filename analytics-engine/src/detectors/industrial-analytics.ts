@@ -108,7 +108,7 @@ export class IndustrialAnalytics extends BaseDetector {
     totalViolations: 0,
     proximityAlerts: 0,
     zoneViolations: 0,
-    lastProcessedAt?: Date,
+    lastProcessedAt: undefined as Date | undefined,
   };
   
   constructor() {

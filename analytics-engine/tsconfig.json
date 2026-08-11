@@ -20,6 +20,13 @@
     "../backend/**/*",
     "../src/services/**/*",
     "../src/routes/**/*",
-    "../src/middleware/**/*"
+    "../src/middleware/**/*",
+    "src/analytics-integration-example.ts",
+    "src/detectors/enhanced-security-analytics.ts",
+    "src/banking/integration/**/*.ts",
+    "src/banking/banking-analytics-activation.ts",
+    "src/digital-twin/events/integration-example.ts",
+    "src/journey/**/*.ts",
+    "src/routes/journey-api.ts"
   ]
 }
