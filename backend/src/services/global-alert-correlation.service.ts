@@ -20,7 +20,7 @@ export interface AlertCorrelation {
   serverIds: string[];
   alertCount: number;
   severity: 'info' | 'low' | 'medium' | 'high' | 'critical';
-  tracked EntityType?: string;
+  trackedEntityType?: string;
   trackedEntityId?: string;
   patternName?: string;
   patternConfidence?: number;

@@ -119,7 +119,7 @@ export class AccessControlConnector extends BaseConnector {
       },
       metadata: {
         doorName: rawEvent.door_name,
-        controllerI d: rawEvent.controller_id,
+        controllerId: rawEvent.controller_id,
         accessGroup: rawEvent.access_group,
         schedule: rawEvent.schedule,
         reasonCode: rawEvent.reason_code,
