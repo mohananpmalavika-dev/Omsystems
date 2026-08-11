@@ -101,7 +101,9 @@ export class DistributedEventBus extends EventEmitter {
     const qualifiedChannel = this.qualifyChannel(channel);
 
     if (!this.subscribedChannels.has(qualifiedChannel)) {
-      await this.subscriber.subscribe(qualifiedChannel);
+      await this.subscriber.subscribe(qualifiedChannel, (payload: string) => {
+        // Inline handler will be set up in setupSubscriber
+      });
       this.subscribedChannels.add(qualifiedChannel);
     }
 
@@ -114,7 +116,9 @@ export class DistributedEventBus extends EventEmitter {
    */
   async subscribePattern(pattern: string, handler: (channel: string, data: any) => void): Promise<void> {
     const qualifiedPattern = this.qualifyChannel(pattern);
-    await this.subscriber.psubscribe(qualifiedPattern);
+    await this.subscriber.pSubscribe(qualifiedPattern, (payload: string) => {
+      // Inline handler will be set up in setupSubscriber
+    });
 
     // Store pattern subscription
     this.on(`pattern:${pattern}`, handler);
