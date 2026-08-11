@@ -385,23 +385,31 @@ export class VehicleWatchlistService {
     }
     
     for (let j = 0; j <= a.length; j++) {
-      matrix[0][j] = j;
+      if (matrix[0]) {
+        matrix[0][j] = j;
+      }
     }
     
     for (let i = 1; i <= b.length; i++) {
       for (let j = 1; j <= a.length; j++) {
+        const row = matrix[i];
+        const prevRow = matrix[i - 1];
+        
+        if (!row || !prevRow) continue;
+        
         if (b[i - 1] === a[j - 1]) {
-          matrix[i][j] = matrix[i - 1][j - 1];
+          row[j] = prevRow[j - 1]!;
         } else {
-          matrix[i][j] = Math.min(
-            matrix[i - 1][j - 1] + 1,
-            matrix[i][j - 1] + 1,
-            matrix[i - 1][j] + 1
+          row[j] = Math.min(
+            prevRow[j - 1]! + 1,
+            row[j - 1]! + 1,
+            prevRow[j]! + 1
           );
         }
       }
     }
     
-    return matrix[b.length][a.length];
+    const lastRow = matrix[b.length];
+    return lastRow ? lastRow[a.length]! : 0;
   }
 }
