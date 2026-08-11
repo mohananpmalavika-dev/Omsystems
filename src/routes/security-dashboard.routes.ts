@@ -76,19 +76,79 @@ export async function registerSecurityDashboardRoutes(
         enrichedPosture.resolvedToday = null;
       }
 
+      // SECURITY FIX: Import evidence-based posture service
+      const { SecurityPostureService } = await import('../security/services/security-posture.service.js');
+      const { SecureBootEvidenceCollector } = await import('../security/collectors/secure-boot-evidence.collector.js');
+      const { RansomwareEvidenceCollector } = await import('../security/collectors/ransomware-evidence.collector.js');
+      const { TamperProtectionEvidenceCollector, TamperConditionEvidenceCollector } = await import('../security/collectors/tamper-evidence.collector.js');
+
+      // Initialize collectors
+      const secureBootCollector = new SecureBootEvidenceCollector();
+      const ransomwareCollector = new RansomwareEvidenceCollector();
+      const tamperProtectionCollector = new TamperProtectionEvidenceCollector();
+      const tamperConditionCollector = new TamperConditionEvidenceCollector();
+
+      // Initialize posture service with evidence-based collectors
+      const postureService = new SecurityPostureService(
+        {
+          environment: (process.env.NODE_ENV as 'development' | 'test' | 'production') || 'development',
+          enforceStrictness: process.env.NODE_ENV === 'production',
+        },
+        secureBootCollector,
+        ransomwareCollector,
+        tamperProtectionCollector,
+        tamperConditionCollector,
+      );
+
+      // Get evidence-based device posture
+      const devicePosture = await postureService.getDevicePosture({
+        timestamp: new Date(),
+      });
+
+      // Get posture summary with evidence coverage
+      const postureSummary = await postureService.getPostureSummary({
+        timestamp: new Date(),
+      });
+
       return {
         available: true,
         provenance: 'LIVE',
         ...enrichedPosture,
+        
+        // NEW: Evidence-based security controls (replaces dangerous boolean placeholders)
+        deviceSecurity: {
+          overall: {
+            state: postureSummary.overallState,
+            evidenceCoverage: postureSummary.evidenceCoverage,
+            evaluatedAt: postureSummary.evaluatedAt,
+          },
+          controls: {
+            secureBoot: devicePosture.secureBoot,
+            ransomwareProtection: devicePosture.ransomwareProtection,
+            tamperProtection: devicePosture.tamperProtection,
+            tamperCondition: devicePosture.tamperCondition,
+          },
+          summary: {
+            healthyControls: postureSummary.healthyControls,
+            unhealthyControls: postureSummary.unhealthyControls,
+            unknownControls: postureSummary.unknownControls,
+            totalControls: postureSummary.controlCount,
+          },
+        },
+
+        // Collector availability (not fake status)
         collectors: {
           certificate: !!securityServices.certificateManagement,
           secretVault: !!securityServices.secretVault,
           passwordRotation: !!securityServices.passwordRotation,
           tpm: !!securityServices.hsm,
           zeroTrust: !!securityServices.zeroTrust,
-          secureBoot: true, // Placeholder
-          ransomware: true, // Placeholder
-          tamper: true, // Placeholder
+          
+          // Evidence-based collector status (NOT boolean placeholders)
+          secureBoot: (await secureBootCollector.getHealth()).available,
+          ransomware: (await ransomwareCollector.getHealth()).available,
+          tamperProtection: (await tamperProtectionCollector.getHealth()).available,
+          tamperCondition: (await tamperConditionCollector.getHealth()).available,
         },
       };
     } catch (error) {
@@ -808,81 +868,125 @@ export async function registerSecurityDashboardRoutes(
    */
   app.get('/v1/security/collectors/status', async (request, reply) => {
     try {
+      // Import evidence-based collectors
+      const { SecureBootEvidenceCollector } = await import('../security/collectors/secure-boot-evidence.collector.js');
+      const { RansomwareEvidenceCollector } = await import('../security/collectors/ransomware-evidence.collector.js');
+      const { TamperProtectionEvidenceCollector, TamperConditionEvidenceCollector } = await import('../security/collectors/tamper-evidence.collector.js');
+
+      // Initialize collectors to check health
+      const secureBootCollector = new SecureBootEvidenceCollector();
+      const ransomwareCollector = new RansomwareEvidenceCollector();
+      const tamperProtectionCollector = new TamperProtectionEvidenceCollector();
+      const tamperConditionCollector = new TamperConditionEvidenceCollector();
+
+      // Get health status for each evidence-based collector
+      const [
+        secureBootHealth,
+        ransomwareHealth,
+        tamperProtectionHealth,
+        tamperConditionHealth,
+      ] = await Promise.all([
+        secureBootCollector.getHealth(),
+        ransomwareCollector.getHealth(),
+        tamperProtectionCollector.getHealth(),
+        tamperConditionCollector.getHealth(),
+      ]);
+
+      // Determine status based on health
+      const getStatus = (health: { available: boolean; lastCollection: Date | null; errorCount: number }) => {
+        if (!health.available) return 'not_configured';
+        if (health.errorCount > 0) return 'error';
+        if (health.lastCollection) return 'active';
+        return 'inactive';
+      };
+
+      const collectors = [
+        {
+          name: 'Certificate Collector',
+          type: 'certificate',
+          enabled: !!securityServices.certificateManagement,
+          status: securityServices.certificateManagement ? 'active' : 'inactive',
+          description: 'Monitors TLS/SSH certificates for expiration and strength',
+        },
+        {
+          name: 'Secret Vault Collector',
+          type: 'secret_vault',
+          enabled: !!securityServices.secretVault,
+          status: securityServices.secretVault ? 'active' : 'inactive',
+          description: 'Tracks secrets and vault compliance',
+        },
+        {
+          name: 'Password Rotation Collector',
+          type: 'password_rotation',
+          enabled: !!securityServices.passwordRotation,
+          status: securityServices.passwordRotation ? 'active' : 'inactive',
+          description: 'Monitors password rotation schedules',
+        },
+        {
+          name: 'TPM/HSM Collector',
+          type: 'tpm',
+          enabled: !!securityServices.hsm,
+          status: securityServices.hsm ? 'active' : 'inactive',
+          description: 'Queries TPM/HSM for attestation and key presence',
+        },
+        {
+          name: 'Zero Trust Policy Engine',
+          type: 'zero_trust',
+          enabled: !!securityServices.zeroTrust,
+          status: securityServices.zeroTrust ? 'active' : 'inactive',
+          description: 'Evaluates access decisions and risk scores',
+        },
+        {
+          name: 'Secure Boot Evidence Collector',
+          type: 'secure_boot',
+          enabled: secureBootHealth.available,
+          status: getStatus(secureBootHealth),
+          description: 'Verifies UEFI Secure Boot status via TPM attestation',
+          lastCollection: secureBootHealth.lastCollection,
+          errorCount: secureBootHealth.errorCount,
+          lastError: secureBootHealth.lastError,
+        },
+        {
+          name: 'Ransomware Protection Collector',
+          type: 'ransomware',
+          enabled: ransomwareHealth.available,
+          status: getStatus(ransomwareHealth),
+          description: 'Monitors ransomware protection agent and threat status',
+          lastCollection: ransomwareHealth.lastCollection,
+          errorCount: ransomwareHealth.errorCount,
+          lastError: ransomwareHealth.lastError,
+        },
+        {
+          name: 'Tamper Protection Collector',
+          type: 'tamper_protection',
+          enabled: tamperProtectionHealth.available,
+          status: getStatus(tamperProtectionHealth),
+          description: 'Verifies tamper detection sensors are enabled',
+          lastCollection: tamperProtectionHealth.lastCollection,
+          errorCount: tamperProtectionHealth.errorCount,
+          lastError: tamperProtectionHealth.lastError,
+        },
+        {
+          name: 'Tamper Condition Collector',
+          type: 'tamper_condition',
+          enabled: tamperConditionHealth.available,
+          status: getStatus(tamperConditionHealth),
+          description: 'Detects active device tampering events',
+          lastCollection: tamperConditionHealth.lastCollection,
+          errorCount: tamperConditionHealth.errorCount,
+          lastError: tamperConditionHealth.lastError,
+        },
+      ];
+
+      const activeCount = collectors.filter(c => c.status === 'active').length;
+      const total = collectors.length;
+
       return {
-        collectors: [
-          {
-            name: 'Certificate Collector',
-            type: 'certificate',
-            enabled: !!securityServices.certificateManagement,
-            status: securityServices.certificateManagement ? 'active' : 'inactive',
-            description: 'Monitors TLS/SSH certificates for expiration and strength',
-          },
-          {
-            name: 'Secret Vault Collector',
-            type: 'secret_vault',
-            enabled: !!securityServices.secretVault,
-            status: securityServices.secretVault ? 'active' : 'inactive',
-            description: 'Tracks secrets and vault compliance',
-          },
-          {
-            name: 'Password Rotation Collector',
-            type: 'password_rotation',
-            enabled: !!securityServices.passwordRotation,
-            status: securityServices.passwordRotation ? 'active' : 'inactive',
-            description: 'Monitors password rotation schedules',
-          },
-          {
-            name: 'TPM/HSM Collector',
-            type: 'tpm',
-            enabled: !!securityServices.hsm,
-            status: securityServices.hsm ? 'active' : 'inactive',
-            description: 'Queries TPM/HSM for attestation and key presence',
-          },
-          {
-            name: 'Zero Trust Policy Engine',
-            type: 'zero_trust',
-            enabled: !!securityServices.zeroTrust,
-            status: securityServices.zeroTrust ? 'active' : 'inactive',
-            description: 'Evaluates access decisions and risk scores',
-          },
-          {
-            name: 'Secure Boot Collector',
-            type: 'secure_boot',
-            enabled: false, // TODO: Implement
-            status: 'not_configured',
-            description: 'Verifies UEFI Secure Boot status',
-          },
-          {
-            name: 'Ransomware Detector',
-            type: 'ransomware',
-            enabled: false, // TODO: Implement
-            status: 'not_configured',
-            description: 'Monitors for ransomware indicators',
-          },
-          {
-            name: 'Tamper Detector',
-            type: 'tamper',
-            enabled: false, // TODO: Implement
-            status: 'not_configured',
-            description: 'Detects device tampering events',
-          },
-        ],
+        collectors,
         summary: {
-          total: 8,
-          active: [
-            securityServices.certificateManagement,
-            securityServices.secretVault,
-            securityServices.passwordRotation,
-            securityServices.hsm,
-            securityServices.zeroTrust,
-          ].filter(Boolean).length,
-          inactive: 8 - [
-            securityServices.certificateManagement,
-            securityServices.secretVault,
-            securityServices.passwordRotation,
-            securityServices.hsm,
-            securityServices.zeroTrust,
-          ].filter(Boolean).length,
+          total,
+          active: activeCount,
+          inactive: total - activeCount,
         },
       };
     } catch (error) {

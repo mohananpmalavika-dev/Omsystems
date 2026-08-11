@@ -1,5 +1,24 @@
 /**
- * Certificate Management Service
+ * Certificate Management Service (Legacy Compatibility Layer)
+ * 
+ * IMPORTANT: This service is being refactored into a comprehensive certificate lifecycle
+ * management system located in src/security/certificates/
+ * 
+ * New implementation features:
+ * - Explicit state machine with 30+ states
+ * - Pluggable CA providers (ACME, Vault PKI, ADCS, Venafi, Manual)
+ * - Proper separation of issuance, deployment, and verification
+ * - Blue/green renewal strategy
+ * - Real OCSP/CRL revocation checking
+ * - Post-deployment TLS verification
+ * - Evidence-based status tracking
+ * 
+ * See: src/security/certificates/README.md for details
+ * See: src/security/certificates/IMPLEMENTATION_ROADMAP.md for migration plan
+ * 
+ * This service will eventually become a compatibility facade that delegates to
+ * the new CertificateLifecycleService while maintaining the existing API contract.
+ * 
  * Track, renew, and manage X.509 certificates across the platform
  */
 
