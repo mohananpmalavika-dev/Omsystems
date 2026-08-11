@@ -10,19 +10,19 @@
  */
 
 // Core service
-export * from './banking-analytics.service';
+export * from './banking-analytics.service.js';
 
 // Events
-export * from './events';
+export * from './events.js';
 
 // Models
-export * from './models';
+export * from './models.js';
 
 // Repositories
-export * from './repositories';
+export * from './repositories.js';
 
 // Rules
-export * from './rules';
+export * from './rules.js';
 
 // Workflow
-export * from './workflow';
+export * from './workflow.js';

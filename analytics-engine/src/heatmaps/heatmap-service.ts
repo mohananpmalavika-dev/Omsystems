@@ -5,14 +5,14 @@
  * Coordinates between accumulators, storage, and rendering.
  */
 
-import { HeatmapStore } from './heatmap-store';
+import { HeatmapStore } from './heatmap-store.js';
 import {
     HeatmapQuery,
     AggregatedHeatmap,
     HeatmapBucket,
     HeatmapMetric,
-} from './heatmap-types';
-import { TrackedObjectType } from '../tracking';
+} from './heatmap-types.js';
+import { TrackedObjectType } from '../tracking.js';
 
 export interface HeatmapServiceConfig {
     store: HeatmapStore;

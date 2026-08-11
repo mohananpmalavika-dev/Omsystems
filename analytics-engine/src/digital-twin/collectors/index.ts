@@ -5,21 +5,21 @@
  * from existing surveillance system components.
  */
 
-export { BaseCollector, TwinCollector } from './base-collector';
-export { CameraCollector } from './camera.collector';
-export { NetworkCollector } from './network.collector';
-export { RecorderCollector } from './recorder.collector';
-export { StorageCollector } from './storage.collector';
-export { HierarchyCollector } from './hierarchy.collector';
+export { BaseCollector, TwinCollector } from './base-collector.js';
+export { CameraCollector } from './camera.collector.js';
+export { NetworkCollector } from './network.collector.js';
+export { RecorderCollector } from './recorder.collector.js';
+export { StorageCollector } from './storage.collector.js';
+export { HierarchyCollector } from './hierarchy.collector.js';
 
 import { Pool } from 'pg';
-import { TwinCollector } from './base-collector';
-import { CameraCollector } from './camera.collector';
-import { NetworkCollector } from './network.collector';
-import { RecorderCollector } from './recorder.collector';
-import { StorageCollector } from './storage.collector';
-import { HierarchyCollector } from './hierarchy.collector';
-import { CollectorResult } from '../models';
+import { TwinCollector } from './base-collector.js';
+import { CameraCollector } from './camera.collector.js';
+import { NetworkCollector } from './network.collector.js';
+import { RecorderCollector } from './recorder.collector.js';
+import { StorageCollector } from './storage.collector.js';
+import { HierarchyCollector } from './hierarchy.collector.js';
+import { CollectorResult } from '../models.js';
 
 /**
  * Run all collectors and aggregate results

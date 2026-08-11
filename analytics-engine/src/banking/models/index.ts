@@ -4,4 +4,4 @@
  * Exports all model types
  */
 
-export * from './cash-van-session';
+export * from './cash-van-session.js';

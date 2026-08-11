@@ -49,6 +49,8 @@ export interface SearchDetectionsInput {
   
   /** Result limit */
   limit?: number;
+  
+  [key: string]: unknown;
 }
 
 /**

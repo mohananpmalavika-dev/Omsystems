@@ -8,7 +8,7 @@ import { FaceQualityService } from './face-quality.service.js';
 import { FaceAlignmentService } from './face-alignment.service.js';
 import { FaceEmbeddingService } from './face-embedding.service.js';
 import { FaceSearchService } from './face-search.service.js';
-import { FaceDecisionPolicy } from './face-decision-policy.ts';
+import { FaceDecisionPolicy } from './face-decision-policy.ts.js';
 import type {
   FaceDetection,
   FaceObservation,

@@ -9,14 +9,14 @@
  * - Configuration management
  */
 
-import { HeatmapAccumulator } from './heatmap-accumulator';
-import { HeatmapStore } from './heatmap-store';
+import { HeatmapAccumulator } from './heatmap-accumulator.js';
+import { HeatmapStore } from './heatmap-store.js';
 import {
     HeatmapConfig,
     HeatmapBucket,
     DEFAULT_HEATMAP_CONFIG,
-} from './heatmap-types';
-import { TrackingEventBus, TrackingObservation } from '../tracking';
+} from './heatmap-types.js';
+import { TrackingEventBus, TrackingObservation } from '../tracking.js';
 
 export interface CameraHeatmapConfig {
     cameraId: string;

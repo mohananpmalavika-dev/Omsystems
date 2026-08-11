@@ -7,7 +7,7 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import { Pool } from 'pg';
-import { DigitalTwinService, SecurityPostureService } from '../services';
+import { DigitalTwinService, SecurityPostureService } from '../services.js';
 
 // Request schemas
 const assetIdParam = z.object({

@@ -26,6 +26,7 @@ import type {
  */
 export interface StopCameraInput {
   cameraReference: string;
+  [key: string]: unknown;
 }
 
 /**

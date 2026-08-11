@@ -4,7 +4,7 @@
  * Verifies that minimum required personnel are present
  */
 
-import { BaseRule, RuleContext, RuleResult } from './rule-engine';
+import { BaseRule, RuleContext, RuleResult } from './rule-engine.js';
 
 export class MinimumPersonnelRule extends BaseRule {
   constructor() {

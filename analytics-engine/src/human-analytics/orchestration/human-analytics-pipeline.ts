@@ -6,7 +6,7 @@
 import type { DetectionFrame } from "../../detectors/base-detector.js";
 import { getCapabilityRegistry, type AnalyticsCapability } from "../capability-status.js";
 import { TrackerAdapter } from "../tracking/tracker-adapter.js";
-import { FightDetector } from "../behavior/fight-detector.ts";
+import { FightDetector } from "../behavior/fight-detector.ts.js";
 import { PanicDetector } from "../behavior/panic-detector.js";
 import { LineCrossingEngine } from "../counting/line-crossing-engine.js";
 import { OccupancyLedger } from "../counting/occupancy-ledger.js";

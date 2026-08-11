@@ -4,12 +4,12 @@
  * Wires together the complete heatmap system with the analytics pipeline.
  */
 
-import { TrackingEventBus } from '../tracking';
-import { HeatmapStore } from './heatmap-store';
-import { HeatmapService } from './heatmap-service';
-import { HeatmapRenderer } from './heatmap-renderer';
-import { HeatmapRegistry, CameraHeatmapConfig } from './heatmap-registry';
-import { DEFAULT_HEATMAP_CONFIG, HeatmapConfig } from './heatmap-types';
+import { TrackingEventBus } from '../tracking.js';
+import { HeatmapStore } from './heatmap-store.js';
+import { HeatmapService } from './heatmap-service.js';
+import { HeatmapRenderer } from './heatmap-renderer.js';
+import { HeatmapRegistry, CameraHeatmapConfig } from './heatmap-registry.js';
+import { DEFAULT_HEATMAP_CONFIG, HeatmapConfig } from './heatmap-types.js';
 import type { PersonDetector } from '../detectors/person-detector.js';
 import type { VehicleDetector } from '../detectors/vehicle-detector.js';
 

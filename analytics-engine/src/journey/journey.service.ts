@@ -9,12 +9,12 @@
  */
 
 import { EventEmitter } from 'events';
-import { Logger } from '../core/logger';
-import { ObservationRepository } from './observation.repository';
-import { TransitionCorrelator } from './transition-correlator';
-import { GlobalIdentityResolver } from './global-identity-resolver';
-import { EmbeddingService } from './embedding.service';
-import { TopologyService } from './topology.service';
+import { Logger } from '../core/logger.js';
+import { ObservationRepository } from './observation.repository.js';
+import { TransitionCorrelator } from './transition-correlator.js';
+import { GlobalIdentityResolver } from './global-identity-resolver.js';
+import { EmbeddingService } from './embedding.service.js';
+import { TopologyService } from './topology.service.js';
 import {
   PersonObservation,
   PersonTransition,
@@ -30,7 +30,7 @@ import {
   SearchByImageResult,
   JourneyQueryOptions,
   GlobalPersonStatus
-} from './journey.types';
+} from './journey.types.js';
 
 export interface JourneyServiceConfig {
   sessionTimeoutMs?: number; // Default: 10 minutes

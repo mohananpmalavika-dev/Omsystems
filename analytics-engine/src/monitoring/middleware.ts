@@ -13,8 +13,8 @@ import {
   getMetricsText,
   getMetricsJSON,
   serviceUptime
-} from './metrics';
-import { logger, LogContext } from './logger';
+} from './metrics.js';
+import { logger, LogContext } from './logger.js';
 
 // Track service start time
 const SERVICE_START_TIME = Date.now();

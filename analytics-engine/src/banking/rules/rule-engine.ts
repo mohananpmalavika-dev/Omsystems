@@ -10,7 +10,7 @@ import {
   CashVanMonitorConfig,
   AlertSeverity,
   EvidenceReference,
-} from '../models/cash-van-session';
+} from '../models/cash-van-session.js';
 
 /**
  * Rule evaluation status

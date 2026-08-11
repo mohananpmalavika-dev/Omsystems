@@ -5,15 +5,15 @@
  */
 
 import { Pool } from 'pg';
-import { BaseCollector } from './base-collector';
+import { BaseCollector } from './base-collector.js';
 import {
   DigitalTwinAsset,
   TwinRelationship,
   CollectorResult,
   createAsset,
   RecorderMetadata
-} from '../models';
-import { createConnection, createStorageRelationship } from '../models/relationship';
+} from '../models.js';
+import { createConnection, createStorageRelationship } from '../models/relationship.js';
 
 export class RecorderCollector extends BaseCollector {
   constructor(private readonly pool: Pool) {

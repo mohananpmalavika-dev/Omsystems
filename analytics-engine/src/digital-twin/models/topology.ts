@@ -4,8 +4,8 @@
  * Graph structures for visualizing and analyzing infrastructure topology.
  */
 
-import { AssetStatus, AssetType } from './asset';
-import { RelationshipType, RelationshipCriticality } from './relationship';
+import { AssetStatus, AssetType } from './asset.js';
+import { RelationshipType, RelationshipCriticality } from './relationship.js';
 
 /**
  * Graph node representing an asset in the topology

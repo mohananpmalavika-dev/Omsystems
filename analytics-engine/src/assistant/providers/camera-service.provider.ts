@@ -8,24 +8,24 @@ import type { Pool } from 'pg';
 import type {
   CameraService,
   Camera,
-  CameraStatus,
   CameraRuntimeState,
   CameraResolutionResult
 } from '../services/camera-service.interface.js';
+import { CameraStatus } from '../services/camera-service.interface.js';
 
 /**
  * Maps database camera status to service interface status
  */
 function mapCameraStatus(dbStatus: string): CameraStatus {
   const statusMap: Record<string, CameraStatus> = {
-    'online': 'ONLINE',
-    'offline': 'OFFLINE',
-    'starting': 'STARTING',
-    'stopping': 'STOPPING',
-    'error': 'ERROR'
+    'online': CameraStatus.ONLINE,
+    'offline': CameraStatus.OFFLINE,
+    'starting': CameraStatus.STARTING,
+    'stopping': CameraStatus.STOPPING,
+    'error': CameraStatus.ERROR
   };
   
-  return statusMap[dbStatus?.toLowerCase()] || 'UNKNOWN';
+  return statusMap[dbStatus?.toLowerCase()] || CameraStatus.UNKNOWN;
 }
 
 /**

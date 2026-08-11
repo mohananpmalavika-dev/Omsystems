@@ -6,7 +6,7 @@
  */
 
 import { EventEmitter } from 'events';
-import { BankingObservation, EventMetadata } from './banking-events';
+import { BankingObservation, EventMetadata } from './banking-events.js';
 import { v4 as uuidv4 } from 'uuid';
 
 export type BankingEventHandler = (event: BankingObservation, metadata: EventMetadata) => Promise<void> | void;

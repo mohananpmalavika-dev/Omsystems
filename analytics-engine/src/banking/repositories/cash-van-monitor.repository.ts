@@ -11,7 +11,7 @@ import {
   PersonnelRules,
   UnloadingRules,
   AccessRules,
-} from '../models/cash-van-session';
+} from '../models/cash-van-session.js';
 import { v4 as uuidv4 } from 'uuid';
 
 export interface CreateMonitorInput {

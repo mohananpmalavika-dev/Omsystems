@@ -5,7 +5,7 @@
  */
 
 import { Pool } from 'pg';
-import { DigitalTwinAsset, AssetType, AssetStatus } from '../models/asset';
+import { DigitalTwinAsset, AssetType, AssetStatus } from '../models/asset.js';
 
 export class AssetRepository {
   constructor(private readonly pool: Pool) {}

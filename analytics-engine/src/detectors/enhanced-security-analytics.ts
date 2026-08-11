@@ -45,7 +45,7 @@
  * - No per-camera monitoring fees
  */
 
-import { BaseDetector, DetectionResult } from './base-detector';
+import { BaseDetector, DetectionResult } from './base-detector.js';
 import * as tf from '@tensorflow/tfjs-node';
 
 /**

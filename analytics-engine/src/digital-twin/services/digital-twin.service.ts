@@ -6,8 +6,8 @@
  */
 
 import { Pool } from 'pg';
-import { AssetRepository, RelationshipRepository, HistoryRepository } from '../repositories';
-import { runAllCollectors } from '../collectors';
+import { AssetRepository, RelationshipRepository, HistoryRepository } from '../repositories.js';
+import { runAllCollectors } from '../collectors.js';
 import {
   DigitalTwinAsset,
   TwinRelationship,
@@ -27,7 +27,7 @@ import {
   calculateImpactLevel,
   TwinStateSnapshot,
   TwinEvent
-} from '../models';
+} from '../models.js';
 
 export class DigitalTwinService {
   private assetRepo: AssetRepository;

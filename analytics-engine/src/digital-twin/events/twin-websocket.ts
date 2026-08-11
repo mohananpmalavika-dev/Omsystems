@@ -7,7 +7,7 @@
 import { Server as WebSocketServer, WebSocket } from 'ws';
 import { Server as HTTPServer } from 'http';
 import { EventEmitter } from 'events';
-import { TwinEventPayload } from './twin-event-handler';
+import { TwinEventPayload } from './twin-event-handler.js';
 
 export interface WebSocketClient {
   id: string;

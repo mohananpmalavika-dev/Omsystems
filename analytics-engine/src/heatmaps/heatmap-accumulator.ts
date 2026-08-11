@@ -9,14 +9,14 @@
  * - Decay support (live rolling heatmaps)
  */
 
-import { TrackingObservation, TrackedObjectType } from '../tracking';
+import { TrackingObservation, TrackedObjectType } from '../tracking.js';
 import {
     HeatmapConfig,
     HeatmapBucket,
     HeatmapMetric,
     TrackSampleState,
     GaussianKernel,
-} from './heatmap-types';
+} from './heatmap-types.js';
 
 /**
  * Heatmap accumulator for a single camera

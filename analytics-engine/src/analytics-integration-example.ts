@@ -5,17 +5,17 @@
  * in a production environment.
  */
 
-import { createHumanAnalytics } from './detectors/human-analytics';
-import { createVehicleAnalytics } from './detectors/vehicle-analytics';
-import { createFaceAnalytics } from './detectors/face-analytics';
-import { createSafetyAnalytics } from './detectors/safety-analytics';
-import { createBankingAnalytics } from './detectors/banking-analytics';
-import { createAISearchEngine } from './detectors/ai-search-engine';
-import { createEnhancedSecurityAnalytics } from './detectors/enhanced-security-analytics';
-import { createAIInvestigationTools } from './detectors/ai-investigation-tools';
-import { createRetailAnalytics } from './detectors/retail-analytics';
-import { createAIPredictionEngine } from './detectors/ai-prediction-engine';
-import { createAIReportingEngine } from './detectors/ai-reporting-engine';
+import { createHumanAnalytics } from './detectors/human-analytics.js';
+import { createVehicleAnalytics } from './detectors/vehicle-analytics.js';
+import { createFaceAnalytics } from './detectors/face-analytics.js';
+import { createSafetyAnalytics } from './detectors/safety-analytics.js';
+import { createBankingAnalytics } from './detectors/banking-analytics.js';
+import { createAISearchEngine } from './detectors/ai-search-engine.js';
+import { createEnhancedSecurityAnalytics } from './detectors/enhanced-security-analytics.js';
+import { createAIInvestigationTools } from './detectors/ai-investigation-tools.js';
+import { createRetailAnalytics } from './detectors/retail-analytics.js';
+import { createAIPredictionEngine } from './detectors/ai-prediction-engine.js';
+import { createAIReportingEngine } from './detectors/ai-reporting-engine.js';
 
 /**
  * Main Analytics Engine Class

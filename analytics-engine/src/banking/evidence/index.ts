@@ -2,4 +2,4 @@
  * Banking Evidence Module
  */
 
-export * from './evidence.service';
+export * from './evidence.service.js';

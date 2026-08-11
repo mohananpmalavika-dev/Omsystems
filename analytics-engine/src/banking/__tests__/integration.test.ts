@@ -5,9 +5,9 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from '@jest/globals';
-import { BankingAnalyticsService } from '../banking-analytics.service';
-import { BankingEventBus } from '../events/banking-event-bus';
-import { MockEventGenerator, WorkflowScenarioBuilder, runScenario } from './test-utils';
+import { BankingAnalyticsService } from '../banking-analytics.service.js';
+import { BankingEventBus } from '../events/banking-event-bus.js';
+import { MockEventGenerator, WorkflowScenarioBuilder, runScenario } from './test-utils.js';
 
 describe('Banking Analytics Integration', () => {
   let service: BankingAnalyticsService;

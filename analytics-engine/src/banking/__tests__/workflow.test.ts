@@ -9,14 +9,14 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from '@jest/globals';
-import { BankingEventBus } from '../events/banking-event-bus';
-import { CashVanWorkflow } from '../workflow/cash-van-workflow';
-import { BankingEventConsumer } from '../workflow/event-consumer';
-import { CashVanRuleEngine } from '../rules/rule-engine';
-import { CashVanSessionRepository } from '../repositories/cash-van-session.repository';
-import { CashVanMonitorRepository } from '../repositories/cash-van-monitor.repository';
-import { ExpectedVisitRepository } from '../repositories/expected-visit.repository';
-import { PersonnelAuthorizationRepository } from '../repositories/personnel-authorization.repository';
+import { BankingEventBus } from '../events/banking-event-bus.js';
+import { CashVanWorkflow } from '../workflow/cash-van-workflow.js';
+import { BankingEventConsumer } from '../workflow/event-consumer.js';
+import { CashVanRuleEngine } from '../rules/rule-engine.js';
+import { CashVanSessionRepository } from '../repositories/cash-van-session.repository.js';
+import { CashVanMonitorRepository } from '../repositories/cash-van-monitor.repository.js';
+import { ExpectedVisitRepository } from '../repositories/expected-visit.repository.js';
+import { PersonnelAuthorizationRepository } from '../repositories/personnel-authorization.repository.js';
 import {
   AuthorizedVehicleRule,
   ScheduledArrivalRule,
@@ -24,12 +24,12 @@ import {
   EscortVerificationRule,
   UnloadingDurationRule,
   AccessCorrelationRule,
-} from '../rules';
+} from '../rules.js';
 import {
   MockEventGenerator,
   WorkflowScenarioBuilder,
   runScenario,
-} from './test-utils';
+} from './test-utils.js';
 
 describe('Banking Analytics Workflow', () => {
   let eventBus: BankingEventBus;

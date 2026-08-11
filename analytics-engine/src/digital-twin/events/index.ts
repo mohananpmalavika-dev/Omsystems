@@ -4,14 +4,14 @@
  * Real-time event handling and WebSocket broadcasting.
  */
 
-export { TwinEventHandler, TwinEventPayload } from './twin-event-handler';
-export { TwinWebSocketManager, WebSocketClient, TwinUpdateMessage } from './twin-websocket';
+export { TwinEventHandler, TwinEventPayload } from './twin-event-handler.js';
+export { TwinWebSocketManager, WebSocketClient, TwinUpdateMessage } from './twin-websocket.js';
 
 import { EventEmitter } from 'events';
 import { Server as HTTPServer } from 'http';
 import { Pool } from 'pg';
-import { TwinEventHandler } from './twin-event-handler';
-import { TwinWebSocketManager } from './twin-websocket';
+import { TwinEventHandler } from './twin-event-handler.js';
+import { TwinWebSocketManager } from './twin-websocket.js';
 
 /**
  * Initialize Digital Twin event system

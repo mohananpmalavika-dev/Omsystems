@@ -5,7 +5,7 @@
  * Banking analytics consumes these events rather than calling detectors directly.
  */
 
-import { BoundingBox } from '../../types';
+import { BoundingBox } from '../../types.js';
 
 /**
  * Base properties common to all banking observations

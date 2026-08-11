@@ -34,6 +34,7 @@ import type {
 export interface StartCameraInput {
   /** Camera reference (ID, name, or partial match) */
   cameraReference: string;
+  [key: string]: unknown;
 }
 
 /**

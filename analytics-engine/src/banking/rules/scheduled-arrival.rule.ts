@@ -4,7 +4,7 @@
  * Verifies that the vehicle arrived during an expected time window
  */
 
-import { BaseRule, RuleContext, RuleResult } from './rule-engine';
+import { BaseRule, RuleContext, RuleResult } from './rule-engine.js';
 
 export class ScheduledArrivalRule extends BaseRule {
   constructor() {

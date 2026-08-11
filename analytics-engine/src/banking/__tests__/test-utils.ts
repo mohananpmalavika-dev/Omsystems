@@ -16,7 +16,7 @@ import {
   ObjectObservedEvent,
   ObjectUnattendedEvent,
   generateEventId,
-} from '../events';
+} from '../events.js';
 
 /**
  * Mock Event Generator

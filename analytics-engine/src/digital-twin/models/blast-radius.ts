@@ -4,8 +4,8 @@
  * Impact analysis and failure simulation models.
  */
 
-import { AssetType, AssetStatus } from './asset';
-import { RelationshipType } from './relationship';
+import { AssetType, AssetStatus } from './asset.js';
+import { RelationshipType } from './relationship.js';
 
 /**
  * Impact of an asset failure

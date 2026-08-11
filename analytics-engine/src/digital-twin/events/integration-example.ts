@@ -8,7 +8,7 @@
 import { EventEmitter } from 'events';
 import { Pool } from 'pg';
 import { Server as HTTPServer } from 'http';
-import { initializeTwinEvents } from './index';
+import { initializeTwinEvents } from './index.js';
 
 /**
  * Example: Integrate with existing infrastructure event bus

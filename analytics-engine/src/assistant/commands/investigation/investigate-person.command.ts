@@ -43,6 +43,8 @@ export interface InvestigatePersonInput {
   
   /** Camera filters */
   cameraIds?: string[];
+  
+  [key: string]: unknown;
 }
 
 /**

@@ -2,7 +2,7 @@
  * Heatmap type definitions
  */
 
-import { TrackedObjectType } from '../tracking';
+import { TrackedObjectType } from '../tracking.js';
 
 /**
  * Heatmap metric types - different semantic meanings
