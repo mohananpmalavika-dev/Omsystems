@@ -102,7 +102,10 @@ export class ResourceRepository {
     user: User,
     action: Action,
     type?: NodeType,
+    options?: { includeArchived?: boolean },
   ): Promise<ResourceNode[]> {
+    const includeArchived = options?.includeArchived ?? false;
+    
     const result = await this.pool.query<ResourceRow>(
       `SELECT DISTINCT target.id::text, target.parent_id::text,
               target.tenant_id::text, target.node_type, target.name,
@@ -110,6 +113,13 @@ export class ResourceRepository {
        FROM resource_nodes target
        WHERE target.tenant_id = $1
          AND ($4::resource_node_type IS NULL OR target.node_type = $4)
+         -- Lifecycle filter: exclude archived branches by default for operational queries
+         AND (
+           target.node_type != 'branch' 
+           OR $5::boolean = true
+           OR target.lifecycle_status IS NULL
+           OR target.lifecycle_status IN ('ACTIVE', 'DISABLED')
+         )
          AND EXISTS (
            SELECT 1
            FROM access_grants grant_allow
@@ -135,7 +145,7 @@ export class ResourceRepository {
              AND (grant_deny.valid_until IS NULL OR grant_deny.valid_until > now())
          )
        ORDER BY target.name`,
-      [user.tenantId, user.id, action, type ?? null],
+      [user.tenantId, user.id, action, type ?? null, includeArchived],
     );
     return result.rows.map(mapNode);
   }
@@ -154,9 +164,10 @@ export class ResourceRepository {
          SELECT gen_random_uuid() AS id
        )
        INSERT INTO resource_nodes
-         (id, tenant_id, parent_id, node_type, name, path)
+         (id, tenant_id, parent_id, node_type, name, path, lifecycle_status)
        SELECT new_id.id, parent.tenant_id, parent.id, 'branch', $3,
-              parent.path || text2ltree(replace(new_id.id::text, '-', '_'))
+              parent.path || text2ltree(replace(new_id.id::text, '-', '_')),
+              'ACTIVE'
        FROM parent, new_id
        RETURNING id::text, parent_id::text, tenant_id::text, node_type, name,
                  path::text`,
@@ -164,5 +175,61 @@ export class ResourceRepository {
     );
     if (!result.rows[0]) throw new Error("invalid_parent");
     return mapNode(result.rows[0]);
+  }
+
+  /**
+   * List only active branches (for operational queries)
+   */
+  async listActiveBranches(tenantId: string): Promise<ResourceNode[]> {
+    const result = await this.pool.query<ResourceRow>(
+      `SELECT id::text, parent_id::text, tenant_id::text, node_type, name,
+              path::text
+       FROM resource_nodes
+       WHERE tenant_id = $1
+         AND node_type = 'branch'
+         AND (lifecycle_status = 'ACTIVE' OR lifecycle_status IS NULL)
+       ORDER BY name`,
+      [tenantId],
+    );
+    return result.rows.map(mapNode);
+  }
+
+  /**
+   * List operational branches (active and disabled, but not archived)
+   */
+  async listOperationalBranches(tenantId: string): Promise<ResourceNode[]> {
+    const result = await this.pool.query<ResourceRow>(
+      `SELECT id::text, parent_id::text, tenant_id::text, node_type, name,
+              path::text
+       FROM resource_nodes
+       WHERE tenant_id = $1
+         AND node_type = 'branch'
+         AND (lifecycle_status IN ('ACTIVE', 'DISABLED') OR lifecycle_status IS NULL)
+       ORDER BY 
+         CASE 
+           WHEN lifecycle_status = 'ACTIVE' OR lifecycle_status IS NULL THEN 0
+           ELSE 1
+         END,
+         name`,
+      [tenantId],
+    );
+    return result.rows.map(mapNode);
+  }
+
+  /**
+   * Check if a branch is active for monitoring operations
+   */
+  async isBranchActive(branchId: string): Promise<boolean> {
+    const result = await this.pool.query<{ is_active: boolean }>(
+      `SELECT 
+        CASE 
+          WHEN lifecycle_status = 'ACTIVE' OR lifecycle_status IS NULL THEN true
+          ELSE false
+        END as is_active
+       FROM resource_nodes
+       WHERE id = $1 AND node_type = 'branch'`,
+      [branchId],
+    );
+    return result.rows[0]?.is_active ?? false;
   }
 }

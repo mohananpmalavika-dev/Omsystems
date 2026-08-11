@@ -3,6 +3,28 @@
  * Production-ready secure key management with support for multiple HSM providers
  * Supports: Thales, Utimaco, Entrust, AWS CloudHSM, Azure Managed HSM, SoftHSM
  * 
+ * @deprecated This HSM service is deprecated. Migrate to the unified KeyService.
+ * 
+ * **Migration Path:**
+ * ```typescript
+ * // OLD
+ * import { HSMService } from './hsm.service';
+ * const hsm = new HSMService(config);
+ * 
+ * // NEW
+ * import { createKeyService } from '../security/keys';
+ * const keyService = await createKeyService({ providerConfig, requirements });
+ * ```
+ * 
+ * **Why migrate:**
+ * - Unified provider abstraction (no duplicate implementations)
+ * - Production safety policies enforced at startup
+ * - Comprehensive audit trails
+ * - Key lifecycle management with versioning
+ * - Policy-based authorization
+ * 
+ * See: src/security/keys/README.md for complete migration guide
+ * 
  * IMPORTANT: This service will fail on startup in production without proper HSM configuration
  */
 

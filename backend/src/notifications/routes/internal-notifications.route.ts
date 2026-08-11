@@ -3,6 +3,13 @@
  * 
  * POST /internal/notifications endpoint
  * Accepts notification requests from analytics engine and other services
+ * 
+ * Security:
+ * - Service JWT authentication required
+ * - Capability-based authorization
+ * - Replay protection
+ * - Idempotency enforcement
+ * - Rate limiting
  */
 
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
@@ -10,127 +17,241 @@ import { NotificationService } from '../notification.service.js';
 import { NotificationRequest, NotificationResult } from '../notification.types.js';
 import { ValidationError } from '../notification.errors.js';
 import { logger } from '../../utils/logger.js';
+import {
+  InternalNotificationCommand,
+  InternalNotificationResult,
+  InternalNotificationService,
+  createServiceAuthMiddleware,
+  createCapabilityMiddleware,
+  getServicePrincipal,
+  ServiceAuthError,
+  ServiceAuthorizationError,
+  RateLimitExceededError,
+  IdempotencyConflictError,
+  ReplayDetectedError,
+} from '../../security/service-auth/index.js';
 
 export async function registerInternalNotificationsRoute(
   fastify: FastifyInstance,
-  notificationService: NotificationService
+  notificationService: NotificationService,
+  internalNotificationService: InternalNotificationService,
+  serviceAuthMiddleware: ReturnType<typeof createServiceAuthMiddleware>,
+  requireNotificationCapability: ReturnType<typeof createCapabilityMiddleware>
 ) {
   /**
-   * Enqueue notification
+   * Enqueue notification (secure service-to-service endpoint)
    * 
-   * Accepts notification request and returns 202 Accepted
-   * The notification is durably persisted but not yet delivered
+   * Security boundary:
+   * - JWT authentication required
+   * - notifications:create capability required
+   * - Tenant authorization enforced
+   * - Purpose restrictions enforced
+   * - Replay protection
+   * - Idempotency enforcement
+   * - Rate limiting
+   * 
+   * Returns 202 Accepted with notification ID
    */
   fastify.post<{
-    Body: NotificationRequest;
-    Reply: NotificationResult | { error: string };
+    Body: InternalNotificationCommand;
+    Reply: InternalNotificationResult | { error: string; code?: string };
   }>(
     '/internal/notifications',
     {
+      preHandler: [
+        serviceAuthMiddleware,
+        requireNotificationCapability,
+      ],
       schema: {
         body: {
           type: 'object',
-          required: ['tenantId', 'type', 'channels', 'recipient', 'body'],
+          required: [
+            'tenantId',
+            'purpose',
+            'eventId',
+            'templateId',
+            'recipientRefs',
+            'data',
+            'idempotencyKey',
+            'occurredAt'
+          ],
           properties: {
-            tenantId: { type: 'string' },
-            type: { type: 'string' },
-            channels: {
-              type: 'array',
-              items: {
-                type: 'string',
-                enum: ['email', 'sms', 'push', 'webhook', 'in_app']
-              }
-            },
-            recipient: {
-              type: 'object',
-              properties: {
-                userId: { type: 'string' },
-                email: { type: 'string' },
-                phone: { type: 'string' },
-                pushToken: { type: 'string' },
-                webhookUrl: { type: 'string' }
-              }
-            },
-            subject: { type: 'string' },
-            title: { type: 'string' },
-            body: { type: 'string' },
-            templateId: { type: 'string' },
-            templateData: { type: 'object' },
-            metadata: { type: 'object' },
-            priority: {
+            tenantId: { type: 'string', minLength: 1 },
+            purpose: {
               type: 'string',
-              enum: ['low', 'normal', 'high', 'critical']
+              enum: [
+                'ALERT_ESCALATION',
+                'INCIDENT_CREATED',
+                'DEVICE_OFFLINE',
+                'RECORDING_FAILURE',
+                'COMPLIANCE_VIOLATION',
+                'SECURITY_EVENT',
+                'HEALTH_CHECK_FAILED',
+                'SYSTEM_MAINTENANCE',
+                'USER_ACTION_REQUIRED',
+              ]
             },
-            idempotencyKey: { type: 'string' },
-            source: {
-              type: 'object',
-              properties: {
-                type: { type: 'string' },
-                id: { type: 'string' }
-              }
-            }
-          }
+            eventId: { type: 'string', minLength: 1 },
+            templateId: { type: 'string', minLength: 1 },
+            recipientRefs: {
+              type: 'array',
+              items: { type: 'string', minLength: 1 },
+              minItems: 1,
+              maxItems: 100
+            },
+            data: { type: 'object' },
+            idempotencyKey: { type: 'string', minLength: 1, maxLength: 255 },
+            occurredAt: { type: 'string', format: 'date-time' },
+            metadata: { type: 'object' }
+          },
+          additionalProperties: false
         },
         response: {
           202: {
             type: 'object',
             properties: {
               notificationId: { type: 'string' },
-              deliveryIds: {
-                type: 'array',
-                items: { type: 'string' }
-              },
-              status: { type: 'string', enum: ['queued'] }
+              duplicate: { type: 'boolean' },
+              status: { type: 'string', enum: ['accepted', 'queued'] },
+              acceptedAt: { type: 'string', format: 'date-time' }
             }
           },
           400: {
             type: 'object',
             properties: {
-              error: { type: 'string' }
+              error: { type: 'string' },
+              code: { type: 'string' }
+            }
+          },
+          401: {
+            type: 'object',
+            properties: {
+              error: { type: 'string' },
+              code: { type: 'string' },
+              message: { type: 'string' }
+            }
+          },
+          403: {
+            type: 'object',
+            properties: {
+              error: { type: 'string' },
+              code: { type: 'string' },
+              message: { type: 'string' }
+            }
+          },
+          409: {
+            type: 'object',
+            properties: {
+              error: { type: 'string' },
+              code: { type: 'string' },
+              message: { type: 'string' }
+            }
+          },
+          429: {
+            type: 'object',
+            properties: {
+              error: { type: 'string' },
+              code: { type: 'string' },
+              message: { type: 'string' },
+              limitType: { type: 'string' },
+              limit: { type: 'number' },
+              resetsAt: { type: 'string', format: 'date-time' }
             }
           }
         }
       }
     },
     async (
-      request: FastifyRequest<{ Body: NotificationRequest }>,
+      request: FastifyRequest<{ Body: InternalNotificationCommand }>,
       reply: FastifyReply
     ) => {
       try {
-        // Verify internal API key (if configured)
-        const apiKey = request.headers['x-analytics-engine-key'] as string;
-        
-        // TODO: Validate API key against configured value
-        // if (apiKey !== process.env.INTERNAL_API_KEY) {
-        //   return reply.code(401).send({ error: 'Unauthorized' });
-        // }
+        // Get authenticated service principal (attached by middleware)
+        const principal = getServicePrincipal(request);
 
-        const result = await notificationService.enqueue(request.body);
+        // Submit notification through security boundary
+        const result = await internalNotificationService.submit({
+          principal,
+          command: request.body,
+        });
 
-        logger.info('Notification enqueued via API', {
+        logger.info('Internal notification accepted', {
+          serviceId: principal.serviceId,
           notificationId: result.notificationId,
           tenantId: request.body.tenantId,
-          type: request.body.type,
-          channels: request.body.channels,
-          deliveries: result.deliveryIds.length
+          purpose: request.body.purpose,
+          duplicate: result.duplicate,
         });
 
         return reply.code(202).send(result);
       } catch (error) {
-        if (error instanceof ValidationError) {
-          logger.warn('Invalid notification request', {
-            error: error.message,
-            body: request.body
+        // Handle specific error types with appropriate status codes
+        if (error instanceof ServiceAuthError) {
+          return reply.code(error.statusCode).send({
+            error: 'Unauthorized',
+            code: error.code,
+            message: error.message,
           });
-          return reply.code(400).send({ error: error.message });
         }
 
-        logger.error('Failed to enqueue notification', {
-          error,
-          body: request.body
+        if (error instanceof ServiceAuthorizationError) {
+          return reply.code(error.statusCode).send({
+            error: 'Forbidden',
+            code: error.code,
+            message: error.message,
+          });
+        }
+
+        if (error instanceof RateLimitExceededError) {
+          return reply.code(429).send({
+            error: 'Too Many Requests',
+            code: 'RATE_LIMIT_EXCEEDED',
+            message: error.message,
+            limitType: error.limitType,
+            limit: error.limit,
+            resetsAt: error.resetsAt.toISOString(),
+          });
+        }
+
+        if (error instanceof IdempotencyConflictError) {
+          return reply.code(409).send({
+            error: 'Conflict',
+            code: 'IDEMPOTENCY_CONFLICT',
+            message: error.message,
+          });
+        }
+
+        if (error instanceof ReplayDetectedError) {
+          return reply.code(401).send({
+            error: 'Unauthorized',
+            code: 'REPLAY_DETECTED',
+            message: error.message,
+          });
+        }
+
+        if (error instanceof ValidationError) {
+          logger.warn('Invalid internal notification request', {
+            error: error.message,
+            body: request.body,
+          });
+          return reply.code(400).send({
+            error: 'Bad Request',
+            code: 'VALIDATION_ERROR',
+            message: error.message,
+          });
+        }
+
+        // Generic error
+        logger.error('Failed to process internal notification', {
+          error: error instanceof Error ? error.message : String(error),
+          serviceId: request.servicePrincipal?.serviceId,
+          tenantId: request.body.tenantId,
         });
 
-        return reply.code(500).send({ error: 'Internal server error' });
+        return reply.code(500).send({
+          error: 'Internal Server Error',
+          message: 'Failed to process notification',
+        });
       }
     }
   );

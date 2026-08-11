@@ -2,6 +2,29 @@
  * Hardware Security Module (HSM) Service
  * Production-ready cryptographic key management using hardware security modules
  * 
+ * @deprecated This HSM service is deprecated. Migrate to the unified KeyService.
+ * 
+ * **Migration Path:**
+ * ```typescript
+ * // OLD
+ * import { HSMService } from './hsm.service';
+ * const hsm = new HSMService();
+ * await hsm.initialize(config);
+ * 
+ * // NEW
+ * import { createKeyService } from '../keys';
+ * const keyService = await createKeyService({ providerConfig, requirements });
+ * ```
+ * 
+ * **Benefits of new KeyService:**
+ * - Single provider implementation (eliminates duplication)
+ * - Explicit initialization with startup validation
+ * - Policy enforcement before operations
+ * - Comprehensive audit logging
+ * - Key registry with versioning and rotation
+ * 
+ * See: src/security/keys/README.md
+ * 
  * Supported Providers:
  * - AWS CloudHSM / KMS (production)
  * - Azure Key Vault / Managed HSM (production)

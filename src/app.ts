@@ -29,6 +29,7 @@ import {
 import { registerRecorderLifecycleRoutes } from "./routes/recorder-lifecycle.routes.js";
 import { registerCctvInfrastructureRoutes } from "./routes/cctv-infrastructure.js";
 import { registerOrganizationRoutes } from "./routes/organization.routes.js";
+import { registerBranchLifecycleRoutes } from "./routes/branch-lifecycle.routes.js";
 import { registerUserRoutes } from "./routes/user.routes.js";
 import { registerAnalyticsRoutes } from "./routes/analytics.routes.js";
 import { registerReportsRoutes } from "./routes/reports.routes.js";
@@ -1983,6 +1984,7 @@ export async function buildApp(options?: {
     await registerAuthRoutes(app, extendedStore);
     await registerEnterpriseAuthRoutes(app, extendedStore);
     await registerOrganizationRoutes(app, extendedStore);
+    await registerBranchLifecycleRoutes(app, extendedStore);
     await registerUserRoutes(app, extendedStore);
     await registerCameraPermissionRoutes(app, extendedStore);
     await registerCctvInfrastructureRoutes(app, extendedStore);
