@@ -11,6 +11,7 @@
 import type { AnalyticsPipeline } from '../analytics-pipeline.js';
 import { initializeBankingAnalyticsIntegration } from './integration/analytics-pipeline-integration.js';
 import { getBankingAnalyticsService } from './banking-analytics.service.js';
+import { BankingRole } from './models/cash-van-session.js';
 import {
   getCashVanMonitorRepository,
   getExpectedVisitRepository,
@@ -191,21 +192,21 @@ export async function addExamplePersonnel(
 ): Promise<string> {
   const personnelRepo = getPersonnelAuthorizationRepository();
 
+  const [firstName, ...lastNameParts] = config.name.split(' ');
+  const lastName = lastNameParts.join(' ') || firstName;
+
   const authorization = await personnelRepo.create({
     tenantId,
-    branchId,
     identityId: config.identityId,
-    role: config.role,
-    name: config.name,
-    badgeNumber: config.badgeNumber,
-    authorizedZones: [],
-    isActive: true,
+    firstName,
+    lastName,
+    roles: [config.role as BankingRole],
     validFrom: new Date(),
     validUntil: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000), // 1 year
   });
 
   console.log(`✓ Added personnel: ${config.name} (${config.role})`);
-  return authorization.authorizationId;
+  return authorization.identityId;
 }
 
 /**
@@ -228,18 +229,14 @@ export async function scheduleExpectedVisit(
   const visit = await visitRepo.create({
     tenantId,
     branchId,
-    monitorId,
-    vehiclePlateNumber: config.vehiclePlateNumber,
-    scheduledArrival: config.expectedArrival,
-    scheduledDeparture: config.expectedDeparture,
-    purpose: config.purpose,
-    status: 'scheduled',
-    expectedPersonnel: [],
-    escortRequired: config.escortRequired,
+    expectedPlate: config.vehiclePlateNumber,
+    expectedArrivalStart: config.expectedArrival,
+    expectedArrivalEnd: config.expectedDeparture,
+    notes: config.purpose,
   });
 
   console.log(`✓ Scheduled visit for vehicle ${config.vehiclePlateNumber}`);
-  return visit.visitId;
+  return visit.id;
 }
 
 /**

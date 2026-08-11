@@ -401,8 +401,12 @@ export class FeatureEngine {
     let denominator = 0;
 
     for (let i = 0; i < n; i++) {
-      numerator += (times[i] - meanTime) * (values[i] - meanValue);
-      denominator += (times[i] - meanTime) ** 2;
+      const time = times[i];
+      const value = values[i];
+      if (time === undefined || value === undefined) continue;
+      
+      numerator += (time - meanTime) * (value - meanValue);
+      denominator += (time - meanTime) ** 2;
     }
 
     return denominator === 0 ? 0 : numerator / denominator;
@@ -438,7 +442,12 @@ export class FeatureEngine {
     const trend = this.calculateTrend(data);
     
     // Convert to percentage change per day
-    const timeSpanMs = data[data.length - 1].time.getTime() - data[0].time.getTime();
+    const lastItem = data[data.length - 1];
+    const firstItem = data[0];
+    
+    if (!lastItem || !firstItem) return 0;
+    
+    const timeSpanMs = lastItem.time.getTime() - firstItem.time.getTime();
     const timeSpanDays = timeSpanMs / (1000 * 60 * 60 * 24);
     
     if (timeSpanDays === 0) return 0;

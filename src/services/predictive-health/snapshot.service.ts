@@ -128,7 +128,7 @@ export class SnapshotService {
       const recordingGaps = incidents.length;
 
       // Get storage retention
-      const retentionTarget = (branch.metadata as any)?.retentionTarget || 180;
+      const retentionTarget = ((branch.metadata || {}) as any)?.retentionTarget || 180;
 
       // Estimate current retention from storage data
       const storageInfo = await this.getStorageInfo(tenantId, branchId);
