@@ -86,6 +86,20 @@ export interface MfaMethodAvailability {
   reason?: string;
 }
 
+export interface MFAServiceConfig {
+  /** MFA abuse protection service (optional - degrades gracefully if not provided) */
+  abuseProtection?: any; // MfaAbuseProtectionService
+  
+  /** Security event repository (optional) */
+  securityEventRepo?: any; // MfaSecurityEventRepository
+  
+  /** IP resolver for rate limiting context (optional) */
+  ipResolver?: any; // IpResolver
+  
+  /** Limiter identity service for hashing (optional) */
+  identityService?: any; // LimiterIdentityService
+}
+
 export class MFAService {
   private pool: Pool;
   private readonly TOTP_WINDOW = 2; // Allow 2 time steps before/after
@@ -96,9 +110,25 @@ export class MFAService {
   private readonly challengeRepo: MfaChallengeRepository;
   private readonly otpHasher: OtpHasher;
   private readonly smsProvider: ReturnType<typeof createSmsProvider>;
+  
+  // Rate limiting components (optional)
+  private readonly abuseProtection?: any;
+  private readonly securityEventRepo?: any;
+  private readonly ipResolver?: any;
+  private readonly identityService?: any;
 
-  constructor(pool: Pool) {
+  constructor(pool: Pool, config?: MFAServiceConfig) {
     this.pool = pool;
+    
+    // Optional rate limiting components
+    this.abuseProtection = config?.abuseProtection;
+    this.securityEventRepo = config?.securityEventRepo;
+    this.ipResolver = config?.ipResolver;
+    this.identityService = config?.identityService;
+    
+    if (!this.abuseProtection) {
+      logger.warn('MFA Service initialized without abuse protection - rate limiting disabled');
+    }
 
     // Initialize new infrastructure
     const otpServices = createOtpServices();
@@ -292,17 +322,86 @@ export class MFAService {
   /**
    * Generate and send SMS OTP
    * 
-   * REFACTORED: Now uses transactional outbox pattern.
+   * REFACTORED: Now uses transactional outbox pattern with distributed rate limiting.
    * Returns explicit dispatch result instead of boolean.
    * Fails closed when provider unavailable.
+   * 
+   * SECURITY: Multi-dimensional rate limiting across user, phone, IP, device, session
    */
   async sendSMSOTP(
     userId: string,
     tenantId: string,
-    phoneNumber: string
+    phoneNumber: string,
+    context?: {
+      ip?: string;
+      deviceId?: string;
+      sessionId?: string;
+    }
   ): Promise<MfaOtpDispatchResult> {
     try {
-      // Check provider availability first (fail closed)
+      // Check rate limiting BEFORE expensive provider operations
+      if (this.abuseProtection) {
+        const normalizedPhone = this.identityService?.normalizePhone?.(phoneNumber) || phoneNumber;
+        
+        const rateLimitContext = {
+          tenantId,
+          userId,
+          destination: normalizedPhone,
+          ip: context?.ip,
+          deviceId: context?.deviceId,
+          sessionId: context?.sessionId,
+          purpose: 'LOGIN' as const,
+          method: 'SMS' as const,
+        };
+
+        const decision = await this.abuseProtection.checkGeneration(rateLimitContext);
+
+        if (!decision.allowed) {
+          logger.warn('SMS OTP generation blocked by rate limit', {
+            userId,
+            reason: decision.reason,
+            retryAfterMs: decision.retryAfterMs,
+          });
+
+          // Record rate limit event
+          await this.recordSecurityEvent({
+            tenantId,
+            userId,
+            type: 'MFA_GENERATION_RATE_LIMITED',
+            method: 'SMS',
+            destinationHash: this.identityService?.hashDestination?.(normalizedPhone),
+            ipHash: context?.ip ? this.identityService?.hashIp?.(context.ip) : undefined,
+            reason: decision.reason,
+            limit: decision.violatedRules[0]?.limit,
+            attempts: decision.violatedRules[0]?.current,
+            metadata: {
+              retryAfterMs: decision.retryAfterMs,
+              violatedRules: decision.violatedRules,
+            },
+          });
+
+          return {
+            status: 'provider_unavailable',
+            reason: decision.retryAfterMs 
+              ? `Too many requests. Please try again in ${Math.ceil(decision.retryAfterMs / 1000)} seconds.`
+              : 'Too many MFA requests. Please try again later.',
+          };
+        }
+
+        // Record generation attempt
+        await this.abuseProtection.recordGeneration(rateLimitContext);
+        
+        await this.recordSecurityEvent({
+          tenantId,
+          userId,
+          type: 'MFA_GENERATION_REQUESTED',
+          method: 'SMS',
+          destinationHash: this.identityService?.hashDestination?.(normalizedPhone),
+          ipHash: context?.ip ? this.identityService?.hashIp?.(context.ip) : undefined,
+        });
+      }
+
+      // Check provider availability (fail closed)
       if (!this.smsProvider.isConfigured()) {
         logger.warn('SMS MFA requested but provider not configured', {
           userId,
@@ -376,11 +475,19 @@ export class MFAService {
    * 
    * REFACTORED: Now uses atomic challenge locking to prevent race conditions.
    * Verifies against mfa_challenges table with proper state machine.
+   * 
+   * SECURITY: Verification rate limiting to prevent brute force attacks
    */
   async verifySMSOTP(
     userId: string,
     code: string,
-    challengeId?: string
+    challengeId?: string,
+    context?: {
+      ip?: string;
+      deviceId?: string;
+      sessionId?: string;
+      tenantId?: string;
+    }
   ): Promise<MFAVerificationResult> {
     const client = await this.pool.connect();
 
@@ -413,6 +520,61 @@ export class MFAService {
         };
       }
 
+      // Check verification rate limiting
+      if (this.abuseProtection && context?.tenantId) {
+        const rateLimitContext = {
+          tenantId: context.tenantId,
+          userId,
+          challengeId: challenge.id,
+          ip: context?.ip,
+          deviceId: context?.deviceId,
+          sessionId: context?.sessionId,
+          purpose: 'LOGIN' as const,
+          method: 'SMS' as const,
+        };
+
+        const decision = await this.abuseProtection.checkVerification(rateLimitContext);
+
+        if (!decision.allowed) {
+          await client.query('ROLLBACK');
+
+          logger.warn('SMS OTP verification blocked by rate limit', {
+            userId,
+            challengeId: challenge.id,
+            reason: decision.reason,
+          });
+
+          await this.recordSecurityEvent({
+            tenantId: context.tenantId,
+            userId,
+            challengeId: challenge.id,
+            type: 'MFA_VERIFICATION_RATE_LIMITED',
+            method: 'SMS',
+            ipHash: context?.ip ? this.identityService?.hashIp?.(context.ip) : undefined,
+            reason: decision.reason,
+            metadata: {
+              retryAfterMs: decision.retryAfterMs,
+            },
+          });
+
+          return {
+            success: false,
+            method: 'sms',
+            challengeId: challenge.id,
+            error: 'Too many verification attempts. Please try again later.',
+          };
+        }
+
+        await this.recordSecurityEvent({
+          tenantId: context.tenantId,
+          userId,
+          challengeId: challenge.id,
+          type: 'MFA_VERIFICATION_REQUESTED',
+          method: 'SMS',
+          ipHash: context?.ip ? this.identityService?.hashIp?.(context.ip) : undefined,
+        });
+      }
+
       // Validate challenge status
       if (challenge.status !== 'SENT') {
         await client.query('ROLLBACK');
@@ -428,6 +590,16 @@ export class MFAService {
       if (challenge.expiresAt <= new Date()) {
         await this.challengeRepo.markExpired(challenge.id, client);
         await client.query('COMMIT');
+
+        if (context?.tenantId) {
+          await this.recordSecurityEvent({
+            tenantId: context.tenantId,
+            userId,
+            challengeId: challenge.id,
+            type: 'MFA_CHALLENGE_EXPIRED',
+            method: 'SMS',
+          });
+        }
 
         return {
           success: false,
@@ -448,6 +620,18 @@ export class MFAService {
           attempts: challenge.verificationAttempts,
         });
 
+        if (context?.tenantId) {
+          await this.recordSecurityEvent({
+            tenantId: context.tenantId,
+            userId,
+            challengeId: challenge.id,
+            type: 'MFA_CHALLENGE_LOCKED',
+            method: 'SMS',
+            attempts: challenge.verificationAttempts,
+            limit: challenge.maxVerificationAttempts,
+          });
+        }
+
         return {
           success: false,
           method: 'sms',
@@ -465,6 +649,33 @@ export class MFAService {
         await this.recordFailedAttempt(userId, 'sms', client);
         await client.query('COMMIT');
 
+        // Record verification failure with abuse protection
+        if (this.abuseProtection && context?.tenantId) {
+          const rateLimitContext = {
+            tenantId: context.tenantId,
+            userId,
+            challengeId: challenge.id,
+            ip: context?.ip,
+            deviceId: context?.deviceId,
+            sessionId: context?.sessionId,
+            purpose: 'LOGIN' as const,
+            method: 'SMS' as const,
+          };
+
+          await this.abuseProtection.recordVerificationFailure(rateLimitContext);
+
+          await this.recordSecurityEvent({
+            tenantId: context.tenantId,
+            userId,
+            challengeId: challenge.id,
+            type: 'MFA_VERIFICATION_FAILED',
+            method: 'SMS',
+            ipHash: context?.ip ? this.identityService?.hashIp?.(context.ip) : undefined,
+            attempts: challenge.verificationAttempts + 1,
+            limit: challenge.maxVerificationAttempts,
+          });
+        }
+
         return {
           success: false,
           method: 'sms',
@@ -477,6 +688,31 @@ export class MFAService {
       await this.challengeRepo.markVerified(challenge.id, client);
       await this.recordSuccessfulVerification(userId, 'sms', client);
       await client.query('COMMIT');
+
+      // Record success with abuse protection
+      if (this.abuseProtection && context?.tenantId) {
+        const rateLimitContext = {
+          tenantId: context.tenantId,
+          userId,
+          challengeId: challenge.id,
+          ip: context?.ip,
+          deviceId: context?.deviceId,
+          sessionId: context?.sessionId,
+          purpose: 'LOGIN' as const,
+          method: 'SMS' as const,
+        };
+
+        await this.abuseProtection.recordVerificationSuccess(rateLimitContext);
+
+        await this.recordSecurityEvent({
+          tenantId: context.tenantId,
+          userId,
+          challengeId: challenge.id,
+          type: 'MFA_VERIFICATION_SUCCEEDED',
+          method: 'SMS',
+          ipHash: context?.ip ? this.identityService?.hashIp?.(context.ip) : undefined,
+        });
+      }
 
       logger.info('SMS OTP verified successfully', {
         challengeId: challenge.id,
@@ -869,19 +1105,77 @@ export class MFAService {
   /**
    * Resend SMS OTP (creates new challenge, supersedes old one)
    * 
-   * NEW: Implements proper resend with rate limiting and supersede logic
+   * SECURITY: Implements proper rate limiting and resend cooldown
+   * 
+   * NOTE: Rate limiting integration requires MfaAbuseProtectionService.
+   * If not configured, falls back to basic resend without distributed throttling.
+   * 
+   * For full protection, initialize MFA service with:
+   * ```
+   * const mfaService = new MFAService(pool, {
+   *   abuseProtection: mfaAbuseProtectionService,
+   *   securityEventRepo: mfaSecurityEventRepo,
+   *   ipResolver: ipResolver,
+   * });
+   * ```
    */
   async resendSMSOTP(
     userId: string,
     tenantId: string,
-    phoneNumber: string
+    phoneNumber: string,
+    context?: {
+      ip?: string;
+      deviceId?: string;
+      sessionId?: string;
+      resendCount?: number;
+    }
   ): Promise<MfaOtpDispatchResult> {
     try {
-      // Check rate limiting
-      // TODO: Implement proper rate limiting via mfa_rate_limits table
+      // Check resend cooldown if abuse protection is configured
+      if (this.abuseProtection) {
+        const cooldownCheck = await this.abuseProtection.checkResendCooldown(
+          tenantId,
+          userId,
+          'SMS',
+          context?.resendCount || 0
+        );
+
+        if (!cooldownCheck.allowed) {
+          logger.warn('SMS OTP resend blocked by cooldown', {
+            userId,
+            cooldownSeconds: cooldownCheck.cooldownSeconds,
+          });
+
+          // Record rate limit event
+          await this.recordSecurityEvent({
+            tenantId,
+            userId,
+            type: 'MFA_GENERATION_RATE_LIMITED',
+            method: 'SMS',
+            reason: 'RESEND_COOLDOWN',
+            metadata: {
+              cooldownSeconds: cooldownCheck.cooldownSeconds,
+              retryAfterMs: cooldownCheck.retryAfterMs,
+            },
+          });
+
+          return {
+            status: 'provider_unavailable',
+            reason: `Please wait ${cooldownCheck.cooldownSeconds} seconds before resending`,
+          };
+        }
+
+        // Record resend
+        await this.abuseProtection.recordResend(
+          tenantId,
+          userId,
+          'SMS',
+          cooldownCheck.cooldownSeconds || 30
+        );
+      }
 
       // Dispatch new OTP (dispatcher will supersede old challenges)
-      return await this.sendSMSOTP(userId, tenantId, phoneNumber);
+      return await this.sendSMSOTP(userId, tenantId, phoneNumber, context);
     } catch (error) {
       logger.error('SMS OTP resend failed', { userId, error });
 
@@ -957,5 +1251,37 @@ export class MFAService {
       ) VALUES ($1, $2, false, NOW())`,
       [userId, method]
     );
+  }
+
+  /**
+   * Record security event (async fire-and-forget)
+   */
+  private async recordSecurityEvent(params: {
+    tenantId: string;
+    userId?: string;
+    challengeId?: string;
+    type: string;
+    method: 'SMS' | 'EMAIL' | 'TOTP';
+    ipHash?: string;
+    deviceHash?: string;
+    destinationHash?: string;
+    attempts?: number;
+    limit?: number;
+    reason?: string;
+    metadata?: Record<string, any>;
+  }): Promise<void> {
+    if (!this.securityEventRepo) {
+      return; // Security events disabled
+    }
+
+    try {
+      await this.securityEventRepo.create(params);
+    } catch (error) {
+      // Don't fail the operation if event logging fails
+      logger.error('Failed to record MFA security event', {
+        type: params.type,
+        error,
+      });
+    }
   }
 }

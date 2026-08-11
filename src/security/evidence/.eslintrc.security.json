@@ -1,0 +1,29 @@
+{
+  "extends": ["../../../.eslintrc.production.json"],
+  "plugins": ["@typescript-eslint"],
+  "rules": {
+    "no-restricted-syntax": [
+      "error",
+      {
+        "selector": "TSTypeAnnotation[typeAnnotation.type='TSBooleanKeyword'] > * > Identifier[name=/^(secure|verified|healthy|protected|compliant|valid|tamper|ransomware|attestation)/i]",
+        "message": "Security functions should return SecurityEvidence<T>, not boolean. Use healthyEvidence(), unhealthyEvidence(), or unknownEvidence() instead."
+      },
+      {
+        "selector": "ReturnStatement > Literal[value=true]",
+        "message": "Security collectors must not return raw 'true'. Return explicit evidence using healthyEvidence() or unknownEvidence()."
+      },
+      {
+        "selector": "Property[key.name=/^(secureBoot|ransomware|tamper|protected|attestation)$/] > Literal[value=true]",
+        "message": "Security status fields must not be boolean literals. Use SecurityEvidence types instead."
+      }
+    ]
+  },
+  "overrides": [
+    {
+      "files": ["**/*.test.ts", "**/__tests__/**"],
+      "rules": {
+        "no-restricted-syntax": "off"
+      }
+    }
+  ]
+}
