@@ -6,9 +6,9 @@
 
 import { EventEmitter } from 'events';
 import { Pool } from 'pg';
-import { DigitalTwinService } from '../services/digital-twin.service';
-import { AssetRepository } from '../repositories';
-import { TwinEvent } from '../models';
+import { DigitalTwinService } from '../services/digital-twin.service.js';
+import { AssetRepository } from '../repositories.js';
+import { TwinEvent } from '../models.js';
 
 export interface TwinEventPayload {
   assetId: string;

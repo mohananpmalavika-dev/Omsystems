@@ -4,7 +4,7 @@
  * Exports all repository implementations
  */
 
-export * from './cash-van-session.repository';
-export * from './cash-van-monitor.repository';
-export * from './expected-visit.repository';
-export * from './personnel-authorization.repository';
+export * from './cash-van-session.repository.js';
+export * from './cash-van-monitor.repository.js';
+export * from './expected-visit.repository.js';
+export * from './personnel-authorization.repository.js';

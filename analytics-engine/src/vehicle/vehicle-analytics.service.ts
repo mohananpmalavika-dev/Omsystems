@@ -338,7 +338,7 @@ export class VehicleAnalyticsService {
     
     // Check track quality
     const lastPosition = track.positions[track.positions.length - 1];
-    if (lastPosition.confidence < this.config.minVehicleConfidence) {
+    if (!lastPosition || lastPosition.confidence < this.config.minVehicleConfidence) {
       return false;
     }
     

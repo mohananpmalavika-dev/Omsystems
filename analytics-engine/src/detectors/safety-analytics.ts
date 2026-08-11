@@ -613,7 +613,7 @@ export class SafetyAnalyticsDetector extends BaseDetector {
     // Use integrated spill detector
     try {
       const spills = await this.spillDetector.detectSpills({
-        data: frame.data as Uint8Array,
+        data: new Uint8Array(frame.imageData),
         width: frame.width,
         height: frame.height,
         timestamp: frame.timestamp,
@@ -647,7 +647,7 @@ export class SafetyAnalyticsDetector extends BaseDetector {
     // Use integrated arc flash detector
     try {
       const events = this.arcFlashDetector.detectArcFlash({
-        data: frame.data as Uint8Array,
+        data: new Uint8Array(frame.imageData),
         width: frame.width,
         height: frame.height,
         timestamp: frame.timestamp,
@@ -1117,17 +1117,7 @@ export class SafetyAnalyticsDetector extends BaseDetector {
   /**
    * Generate safety report
    */
-  generateSafetyReport(timeRange: { start: Date; end: Date }): {
-    period: { start: string; end: string };
-    compliance: ReturnType<typeof this.getComplianceStats>;
-    hazards: {
-      total: number;
-      byType: Record<string, number>;
-      bySeverity: Record<string, number>;
-    };
-    equipment: ReturnType<typeof this.getFireEquipmentStatus>;
-    exits: ReturnType<typeof this.getExitStatus>;
-  } {
+  generateSafetyReport(timeRange: { start: Date; end: Date }): any {
     const compliance = this.getComplianceStats();
     const hazards = this.getActiveHazards();
 

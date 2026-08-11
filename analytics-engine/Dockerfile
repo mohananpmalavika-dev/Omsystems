@@ -24,6 +24,7 @@ RUN npm ci --workspace @sentinel/analytics-engine
 
 # Copy shared source (needed for cross-workspace imports)
 COPY src src
+COPY backend/src backend/src
 
 # Copy analytics-engine source
 COPY analytics-engine/src analytics-engine/src

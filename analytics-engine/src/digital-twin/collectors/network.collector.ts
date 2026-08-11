@@ -5,15 +5,15 @@
  */
 
 import { Pool } from 'pg';
-import { BaseCollector } from './base-collector';
+import { BaseCollector } from './base-collector.js';
 import {
   DigitalTwinAsset,
   TwinRelationship,
   CollectorResult,
   createAsset,
   NetworkDeviceMetadata
-} from '../models';
-import { createUplinkRelationship, createDependency } from '../models/relationship';
+} from '../models.js';
+import { createUplinkRelationship, createDependency } from '../models/relationship.js';
 
 export class NetworkCollector extends BaseCollector {
   constructor(private readonly pool: Pool) {

@@ -4,7 +4,7 @@
  * These tests ensure that the architecture prevents false success claims.
  */
 
-import { CommandResultBuilder, AssistantErrorCode } from '../types/assistant-command';
+import { CommandResultBuilder, AssistantErrorCode } from '../types/assistant-command.js';
 
 describe('CommandResultBuilder', () => {
   describe('verifiedSuccess', () => {

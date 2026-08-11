@@ -10,7 +10,7 @@ import {
     TrackedObjectType,
     BoundingBox,
     Point,
-} from './tracking-observation';
+} from './tracking-observation.js';
 
 /**
  * Generic detection with tracking info

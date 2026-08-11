@@ -39,9 +39,9 @@
  * ## Usage
  * 
  * ```typescript
- * import { createAIAssistantV2 } from './assistant';
- * import { commandRegistry } from './assistant/registry';
- * import { StartCameraCommand, StopCameraCommand } from './assistant/commands';
+ * import { createAIAssistantV2 } from './assistant.js';
+ * import { commandRegistry } from './assistant/registry.js';
+ * import { StartCameraCommand, StopCameraCommand } from './assistant/commands.js';
  * 
  * // Register commands
  * commandRegistry.register(

@@ -4,8 +4,8 @@
  * Ensures presenter never invents operational claims.
  */
 
-import { DefaultAssistantPresenter } from '../presentation/assistant-presenter';
-import type { AssistantEvidence, AssistantErrorCode } from '../types/assistant-command';
+import { DefaultAssistantPresenter } from '../presentation/assistant-presenter.js';
+import type { AssistantEvidence, AssistantErrorCode } from '../types/assistant-command.js';
 
 describe('DefaultAssistantPresenter', () => {
   let presenter: DefaultAssistantPresenter;

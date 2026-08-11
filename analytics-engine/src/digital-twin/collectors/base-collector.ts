@@ -4,7 +4,7 @@
  * Common interface for all infrastructure collectors.
  */
 
-import { DigitalTwinAsset, TwinRelationship, CollectorResult } from '../models';
+import { DigitalTwinAsset, TwinRelationship, CollectorResult } from '../models.js';
 
 export interface TwinCollector {
   /**

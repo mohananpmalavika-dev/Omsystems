@@ -75,7 +75,7 @@ router.get(
             framework: {
               count: report.summary.framework,
               percentage: Math.round((report.summary.framework / report.summary.total) * 100),
-              description: 'Interface exists, actual inference doesn't',
+              description: 'Interface exists, actual inference does not exist',
             },
             unavailable: {
               count: report.summary.unavailable,

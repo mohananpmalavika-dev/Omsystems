@@ -4,5 +4,5 @@
  * Export all service classes.
  */
 
-export { DigitalTwinService } from './digital-twin.service';
-export { SecurityPostureService } from './security-posture.service';
+export { DigitalTwinService } from './digital-twin.service.js';
+export { SecurityPostureService } from './security-posture.service.js';

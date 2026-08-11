@@ -11,7 +11,7 @@ import {
   PersonnelRules,
   UnloadingRules,
   AccessRules,
-} from '../models/cash-van-session';
+} from '../models/cash-van-session.js';
 import { v4 as uuidv4 } from 'uuid';
 
 export interface CreateMonitorInput {
@@ -324,6 +324,19 @@ export class CashVanMonitorRepository {
         this.branchIndex.delete(monitor.branchId);
       }
     }
+  }
+
+  /**
+   * Find all active monitors
+   */
+  async findActiveMonitors(): Promise<CashVanMonitorConfig[]> {
+    const monitors: CashVanMonitorConfig[] = [];
+    for (const monitor of this.monitors.values()) {
+      if (monitor.enabled) {
+        monitors.push(monitor);
+      }
+    }
+    return monitors;
   }
 
   /**

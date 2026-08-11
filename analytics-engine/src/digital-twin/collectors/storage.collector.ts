@@ -5,14 +5,14 @@
  */
 
 import { Pool } from 'pg';
-import { BaseCollector } from './base-collector';
+import { BaseCollector } from './base-collector.js';
 import {
   DigitalTwinAsset,
   TwinRelationship,
   CollectorResult,
   createAsset,
   StorageMetadata
-} from '../models';
+} from '../models.js';
 
 export class StorageCollector extends BaseCollector {
   constructor(private readonly pool: Pool) {

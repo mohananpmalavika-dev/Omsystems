@@ -4,4 +4,4 @@
  * Export API route registration.
  */
 
-export { registerDigitalTwinRoutes } from './digital-twin.routes';
+export { registerDigitalTwinRoutes } from './digital-twin.routes.js';

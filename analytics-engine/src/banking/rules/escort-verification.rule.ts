@@ -4,7 +4,7 @@
  * Verifies that required security guards/escorts are present and identified
  */
 
-import { BaseRule, RuleContext, RuleResult } from './rule-engine';
+import { BaseRule, RuleContext, RuleResult } from './rule-engine.js';
 
 export class EscortVerificationRule extends BaseRule {
   constructor() {

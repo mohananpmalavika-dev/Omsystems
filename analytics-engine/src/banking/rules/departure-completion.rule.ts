@@ -4,7 +4,7 @@
  * Verifies that transfer completed before vehicle departed
  */
 
-import { BaseRule, RuleContext, RuleResult } from './rule-engine';
+import { BaseRule, RuleContext, RuleResult } from './rule-engine.js';
 
 export class DepartureCompletionRule extends BaseRule {
   constructor() {

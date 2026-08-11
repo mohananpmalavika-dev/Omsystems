@@ -9,9 +9,9 @@ import type {
   CameraControlService,
   CameraOperationResult,
   CameraControlResult,
-  CameraService,
-  CameraStatus
+  CameraService
 } from '../services/camera-service.interface.js';
+import { CameraStatus } from '../services/camera-service.interface.js';
 
 /**
  * Camera Control Service Provider Implementation
@@ -35,15 +35,15 @@ export class CameraControlServiceProvider implements CameraControlService {
     const initialState = await this.cameraService.getRuntimeState(cameraId);
     
     // If already running, return success immediately
-    if (initialState.status === 'ONLINE' && initialState.streamConnected) {
+    if (initialState.status === CameraStatus.ONLINE && initialState.streamConnected) {
       return {
         operationId: 'n/a',
         cameraId,
-        requestedState: 'ONLINE',
+        requestedState: CameraStatus.ONLINE,
         previousState: initialState.status,
         accepted: true,
         verified: true,
-        finalState: 'ONLINE',
+        finalState: CameraStatus.ONLINE,
         streamConnected: true
       };
     }
@@ -58,7 +58,7 @@ export class CameraControlServiceProvider implements CameraControlService {
         return {
           operationId: operation.id || 'unknown',
           cameraId,
-          requestedState: 'ONLINE',
+          requestedState: CameraStatus.ONLINE,
           previousState: initialState.status,
           accepted: false,
           reason: operation.error || 'Camera start request rejected',
@@ -82,29 +82,29 @@ export class CameraControlServiceProvider implements CameraControlService {
         const currentState = await this.cameraService.getRuntimeState(cameraId);
         
         // Check if camera reached running state
-        if (currentState.status === 'ONLINE' && currentState.streamConnected) {
+        if (currentState.status === CameraStatus.ONLINE && currentState.streamConnected) {
           return {
             operationId: operation.id || 'unknown',
             cameraId,
-            requestedState: 'ONLINE',
+            requestedState: CameraStatus.ONLINE,
             previousState: initialState.status,
             accepted: true,
             verified: true,
-            finalState: 'ONLINE',
+            finalState: CameraStatus.ONLINE,
             streamConnected: true
           };
         }
         
         // Check for error state
-        if (currentState.status === 'ERROR') {
+        if (currentState.status === CameraStatus.ERROR) {
           return {
             operationId: operation.id || 'unknown',
             cameraId,
-            requestedState: 'ONLINE',
+            requestedState: CameraStatus.ONLINE,
             previousState: initialState.status,
             accepted: true,
             verified: false,
-            finalState: 'ERROR',
+            finalState: CameraStatus.ERROR,
             streamConnected: false,
             reason: 'Camera entered error state during startup'
           };
@@ -119,7 +119,7 @@ export class CameraControlServiceProvider implements CameraControlService {
       return {
         operationId: operation.id || 'unknown',
         cameraId,
-        requestedState: 'ONLINE',
+        requestedState: CameraStatus.ONLINE,
         previousState: initialState.status,
         accepted: true,
         verified: false,
@@ -131,13 +131,15 @@ export class CameraControlServiceProvider implements CameraControlService {
     } catch (error) {
       console.error('[CameraControlService] Error starting camera:', error);
       
+      const errorMessage = error instanceof Error ? error.message : 'Camera control service error';
+      
       return {
         operationId: 'error',
         cameraId,
-        requestedState: 'ONLINE',
+        requestedState: CameraStatus.ONLINE,
         previousState: initialState.status,
         accepted: false,
-        reason: error.message || 'Camera control service error',
+        reason: errorMessage,
         verified: false,
         finalState: initialState.status,
         streamConnected: false
@@ -156,15 +158,15 @@ export class CameraControlServiceProvider implements CameraControlService {
     const initialState = await this.cameraService.getRuntimeState(cameraId);
     
     // If already stopped, return success immediately
-    if (initialState.status === 'OFFLINE') {
+    if (initialState.status === CameraStatus.OFFLINE) {
       return {
         operationId: 'n/a',
         cameraId,
-        requestedState: 'OFFLINE',
+        requestedState: CameraStatus.OFFLINE,
         previousState: initialState.status,
         accepted: true,
         verified: true,
-        finalState: 'OFFLINE',
+        finalState: CameraStatus.OFFLINE,
         streamConnected: false
       };
     }
@@ -179,7 +181,7 @@ export class CameraControlServiceProvider implements CameraControlService {
         return {
           operationId: operation.id || 'unknown',
           cameraId,
-          requestedState: 'OFFLINE',
+          requestedState: CameraStatus.OFFLINE,
           previousState: initialState.status,
           accepted: false,
           reason: operation.error || 'Camera stop request rejected',
@@ -202,15 +204,15 @@ export class CameraControlServiceProvider implements CameraControlService {
         
         const currentState = await this.cameraService.getRuntimeState(cameraId);
         
-        if (currentState.status === 'OFFLINE') {
+        if (currentState.status === CameraStatus.OFFLINE) {
           return {
             operationId: operation.id || 'unknown',
             cameraId,
-            requestedState: 'OFFLINE',
+            requestedState: CameraStatus.OFFLINE,
             previousState: initialState.status,
             accepted: true,
             verified: true,
-            finalState: 'OFFLINE',
+            finalState: CameraStatus.OFFLINE,
             streamConnected: false
           };
         }
@@ -224,7 +226,7 @@ export class CameraControlServiceProvider implements CameraControlService {
       return {
         operationId: operation.id || 'unknown',
         cameraId,
-        requestedState: 'OFFLINE',
+        requestedState: CameraStatus.OFFLINE,
         previousState: initialState.status,
         accepted: true,
         verified: false,
@@ -236,13 +238,15 @@ export class CameraControlServiceProvider implements CameraControlService {
     } catch (error) {
       console.error('[CameraControlService] Error stopping camera:', error);
       
+      const errorMessage = error instanceof Error ? error.message : 'Camera control service error';
+      
       return {
         operationId: 'error',
         cameraId,
-        requestedState: 'OFFLINE',
+        requestedState: CameraStatus.OFFLINE,
         previousState: initialState.status,
         accepted: false,
-        reason: error.message || 'Camera control service error',
+        reason: errorMessage,
         verified: false,
         finalState: initialState.status,
         streamConnected: initialState.streamConnected
@@ -273,19 +277,20 @@ export class CameraControlServiceProvider implements CameraControlService {
       return {
         operationId: operation.id || 'unknown',
         cameraId,
-        requestedState: 'ONLINE',
+        requestedState: CameraStatus.ONLINE,
         previousState: initialState.status,
         accepted: operation.success,
         reason: operation.error
       };
     } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       return {
         operationId: 'error',
         cameraId,
-        requestedState: 'ONLINE',
+        requestedState: CameraStatus.ONLINE,
         previousState: initialState.status,
         accepted: false,
-        reason: error.message
+        reason: errorMessage
       };
     }
   }
@@ -299,19 +304,20 @@ export class CameraControlServiceProvider implements CameraControlService {
       return {
         operationId: operation.id || 'unknown',
         cameraId,
-        requestedState: 'OFFLINE',
+        requestedState: CameraStatus.OFFLINE,
         previousState: initialState.status,
         accepted: operation.success,
         reason: operation.error
       };
     } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       return {
         operationId: 'error',
         cameraId,
-        requestedState: 'OFFLINE',
+        requestedState: CameraStatus.OFFLINE,
         previousState: initialState.status,
         accepted: false,
-        reason: error.message
+        reason: errorMessage
       };
     }
   }

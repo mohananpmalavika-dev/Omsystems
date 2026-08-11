@@ -4,12 +4,12 @@
  * Ensures search never invents detection IDs and handles zero results truthfully.
  */
 
-import { SearchDetectionsCommand } from '../commands/search/search-detections.command';
-import type { DetectionSearchService } from '../services/detection-search-service.interface';
-import type { CameraService } from '../services/camera-service.interface';
-import type { AuthorizationService } from '../types/authorization';
-import type { AssistantAuditService } from '../types/audit';
-import type { AssistantContext } from '../types/assistant-command';
+import { SearchDetectionsCommand } from '../commands/search/search-detections.command.js';
+import type { DetectionSearchService } from '../services/detection-search-service.interface.js';
+import type { CameraService } from '../services/camera-service.interface.js';
+import type { AuthorizationService } from '../types/authorization.js';
+import type { AssistantAuditService } from '../types/audit.js';
+import type { AssistantContext } from '../types/assistant-command.js';
 
 describe('SearchDetectionsCommand', () => {
   let command: SearchDetectionsCommand;

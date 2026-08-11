@@ -4,5 +4,5 @@
  * Exports workflow engine and event consumer
  */
 
-export * from './cash-van-workflow';
-export * from './event-consumer';
+export * from './cash-van-workflow.js';
+export * from './event-consumer.js';

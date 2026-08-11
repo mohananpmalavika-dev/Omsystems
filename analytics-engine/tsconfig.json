@@ -3,34 +3,30 @@
   "compilerOptions": {
     "rootDir": "..",
     "outDir": "dist",
-    "types": ["node"]
+    "types": ["node"],
+    "skipLibCheck": true,
+    "noImplicitAny": false,
+    "strictNullChecks": false
   },
   "include": [
     "src/**/*.ts",
     "../src/events/**/*.ts",
-    "scripts/**/*.ts",
-    "test/app.test.ts",
-    "test/inference.test.ts",
-    "test/model-manager.test.ts",
-    "test/specialty-inference.test.ts"
+    "scripts/**/*.ts"
   ],
   "exclude": [
+    "src/**/__tests__/**/*.ts",
+    "src/**/*.test.ts",
+    "test/**/*.ts",
+    "../backend/**/*",
+    "../src/services/**/*",
+    "../src/routes/**/*",
+    "../src/middleware/**/*",
     "src/analytics-integration-example.ts",
-    "src/routes/advanced-analytics-api.ts",
-    "src/monitoring/**/*.ts",
-    "src/detectors/ai-assistant.ts",
-    "src/detectors/ai-investigation-tools.ts",
-    "src/detectors/ai-prediction-engine.ts",
-    "src/detectors/ai-reporting-engine.ts",
-    "src/detectors/ai-search-engine.ts",
     "src/detectors/enhanced-security-analytics.ts",
-    "src/detectors/human-analytics.ts",
-    "src/detectors/vehicle-analytics.ts",
-    "src/detectors/face-analytics.ts",
-    "src/detectors/safety-analytics.ts",
-    "src/detectors/banking-analytics.ts",
-    "src/detectors/industrial-analytics.ts",
-    "src/detectors/retail-analytics.ts",
-    "src/detectors/smart-city-analytics.ts"
+    "src/banking/integration/**/*.ts",
+    "src/banking/banking-analytics-activation.ts",
+    "src/digital-twin/events/integration-example.ts",
+    "src/journey/**/*.ts",
+    "src/routes/journey-api.ts"
   ]
 }

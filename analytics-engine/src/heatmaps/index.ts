@@ -2,10 +2,10 @@
  * Heatmap module exports
  */
 
-export * from './heatmap-types';
-export * from './heatmap-accumulator';
-export * from './heatmap-store';
-export * from './heatmap-service';
-export * from './heatmap-renderer';
-export * from './heatmap-registry';
-export * from './heatmap-integration';
+export * from './heatmap-types.js';
+export * from './heatmap-accumulator.js';
+export * from './heatmap-store.js';
+export * from './heatmap-service.js';
+export * from './heatmap-renderer.js';
+export * from './heatmap-registry.js';
+export * from './heatmap-integration.js';

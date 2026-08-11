@@ -8,12 +8,12 @@ import {
   BankingObservation,
   getBankingEventBus,
   BankingEventBus,
-} from '../events';
+} from '../events.js';
 
 import {
   CashVanWorkflow,
   getCashVanWorkflow,
-} from './cash-van-workflow';
+} from './cash-van-workflow.js';
 
 /**
  * Banking Event Consumer

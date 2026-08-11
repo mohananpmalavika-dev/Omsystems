@@ -16,19 +16,19 @@
  */
 
 // Models
-export * from './models';
+export * from './models.js';
 
 // Repositories
-export * from './repositories';
+export * from './repositories.js';
 
 // Collectors
-export * from './collectors';
+export * from './collectors.js';
 
 // Services
-export * from './services';
+export * from './services.js';
 
 // Events
-export * from './events';
+export * from './events.js';
 
 // API
-export * from './api';
+export * from './api.js';

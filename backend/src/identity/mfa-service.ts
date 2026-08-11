@@ -1039,7 +1039,6 @@ export class MFAService {
 
     return false;
   }
-}
 
   /**
    * Get available MFA methods with provider health status

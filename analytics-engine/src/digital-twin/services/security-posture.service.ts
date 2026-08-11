@@ -5,7 +5,7 @@
  */
 
 import { Pool } from 'pg';
-import { AssetRepository } from '../repositories';
+import { AssetRepository } from '../repositories.js';
 import {
   SecurityPosture,
   SecurityRecommendation,
@@ -17,7 +17,7 @@ import {
   calculateCompliancePercentage,
   assessSecurityTrend,
   AssetType
-} from '../models';
+} from '../models.js';
 
 export class SecurityPostureService {
   private assetRepo: AssetRepository;

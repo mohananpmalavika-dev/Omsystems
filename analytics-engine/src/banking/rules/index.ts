@@ -4,13 +4,13 @@
  * Exports rule engine and all rule implementations
  */
 
-export * from './rule-engine';
-export * from './authorized-vehicle.rule';
-export * from './scheduled-arrival.rule';
-export * from './minimum-personnel.rule';
-export * from './escort-verification.rule';
-export * from './unloading-duration.rule';
-export * from './transfer-route.rule';
-export * from './access-correlation.rule';
-export * from './object-escort.rule';
-export * from './departure-completion.rule';
+export * from './rule-engine.js';
+export * from './authorized-vehicle.rule.js';
+export * from './scheduled-arrival.rule.js';
+export * from './minimum-personnel.rule.js';
+export * from './escort-verification.rule.js';
+export * from './unloading-duration.rule.js';
+export * from './transfer-route.rule.js';
+export * from './access-correlation.rule.js';
+export * from './object-escort.rule.js';
+export * from './departure-completion.rule.js';

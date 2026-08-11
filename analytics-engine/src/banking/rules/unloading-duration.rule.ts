@@ -4,7 +4,7 @@
  * Verifies that unloading process completes within acceptable time
  */
 
-import { BaseRule, RuleContext, RuleResult } from './rule-engine';
+import { BaseRule, RuleContext, RuleResult } from './rule-engine.js';
 
 export class UnloadingDurationRule extends BaseRule {
   constructor() {

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import type { LucideIcon } from "lucide-react";
 import {
   Activity,
@@ -14,6 +14,7 @@ import {
   Camera,
   ChevronDown,
   ChevronRight,
+  ChevronsUpDown,
   CircleUserRound,
   ClipboardCheck,
   Command,
@@ -227,6 +228,7 @@ export const quickActions: NavItem[] = [
   { label: "Add a vendor", href: "/maintenance/vendors/new", icon: Handshake },
   { label: "Add an AMC contract", href: "/maintenance/amc/new", icon: FileClock },
   { label: "Add a processing purpose", href: "/maintenance/privacy/purposes/new", icon: LockKeyhole },
+  { label: "Report a privacy breach", href: "/maintenance/privacy/breaches/new", icon: ShieldAlert },
   { label: "Add a requirement", href: "/compliance/requirements/new", icon: FileCheck2 },
   { label: "Add a risk", href: "/compliance/risks/new", icon: ShieldAlert },
 ];
@@ -251,6 +253,8 @@ const pageMeta = [
 ];
 
 const AppLayoutContext = createContext(false);
+const OPEN_GROUPS_STORAGE_KEY = "sentinel-grid-open-navigation-groups";
+const RECENT_MODULES_STORAGE_KEY = "sentinel-grid-recent-modules";
 
 export function AppLayout({ children, incidentCount = 0, cameraCount = 0 }: AppLayoutProps) {
   const alreadyInsideAppLayout = useContext(AppLayoutContext);
@@ -264,9 +268,13 @@ export function AppLayout({ children, incidentCount = 0, cameraCount = 0 }: AppL
 }
 
 function AppLayoutFrame({ children, incidentCount = 0, cameraCount = 0 }: AppLayoutProps) {
+  const router = useRouter();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [commandOpen, setCommandOpen] = useState(false);
   const [commandQuery, setCommandQuery] = useState("");
+  const [activeCommandIndex, setActiveCommandIndex] = useState(0);
+  const [openGroups, setOpenGroups] = useState<Set<string>>(() => new Set());
+  const [recentHrefs, setRecentHrefs] = useState<string[]>([]);
   const pathname = usePathname() || "/";
   const currentPage = pageMeta
     .filter((item) => item.path === "/" ? pathname === "/" : pathname === item.path || pathname.startsWith(`${item.path}/`))
@@ -280,16 +288,75 @@ function AppLayoutFrame({ children, incidentCount = 0, cameraCount = 0 }: AppLay
     .filter((route) => route === "/" ? pathname === "/" : pathname === route || pathname.startsWith(`${route}/`))
     .sort((left, right) => right.length - left.length)[0];
   const isActive = (href: string) => normalizedRoute(href) === activeRoute;
+  const activeGroup = navigation.find((group) => group.items.some((item) => isActive(item.href)));
+  const moduleCount = navigation.reduce((total, group) => total + group.items.length, 0);
+  const allGroupsOpen = openGroups.size === navigation.length;
 
   const searchableModules = useMemo(() => navigation.flatMap((group) =>
     group.items.map((item) => ({ ...item, section: group.label }))), []);
   const commandResults = useMemo(() => {
     const query = commandQuery.trim().toLowerCase();
-    if (!query) return searchableModules.slice(0, 10);
+    if (!query) {
+      const recentItems = recentHrefs
+        .map((href) => searchableModules.find((item) => item.href === href))
+        .filter((item): item is (typeof searchableModules)[number] => Boolean(item))
+        .map((item) => ({ ...item, recent: true }));
+      const recentSet = new Set(recentHrefs);
+      return [
+        ...recentItems,
+        ...searchableModules
+          .filter((item) => !recentSet.has(item.href))
+          .map((item) => ({ ...item, recent: false })),
+      ].slice(0, 12);
+    }
     return searchableModules.filter((item) =>
       `${item.label} ${item.section} ${item.href}`.toLowerCase().includes(query)
-    ).slice(0, 12);
-  }, [commandQuery, searchableModules]);
+    ).slice(0, 12).map((item) => ({ ...item, recent: false }));
+  }, [commandQuery, recentHrefs, searchableModules]);
+
+  useEffect(() => {
+    try {
+      const storedGroups = JSON.parse(window.localStorage.getItem(OPEN_GROUPS_STORAGE_KEY) || "[]");
+      const validGroups = Array.isArray(storedGroups)
+        ? storedGroups.filter((label): label is string => navigation.some((group) => group.label === label))
+        : [];
+      if (activeGroup && !validGroups.includes(activeGroup.label)) validGroups.push(activeGroup.label);
+      setOpenGroups(new Set(validGroups));
+    } catch {
+      setOpenGroups(new Set(activeGroup ? [activeGroup.label] : []));
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!activeGroup) return;
+    setOpenGroups((current) => {
+      if (current.has(activeGroup.label)) return current;
+      const next = new Set(current).add(activeGroup.label);
+      window.localStorage.setItem(OPEN_GROUPS_STORAGE_KEY, JSON.stringify([...next]));
+      return next;
+    });
+  }, [activeGroup?.label]);
+
+  useEffect(() => {
+    try {
+      const storedRecents = JSON.parse(window.localStorage.getItem(RECENT_MODULES_STORAGE_KEY) || "[]");
+      const validRecents = Array.isArray(storedRecents)
+        ? storedRecents.filter((href): href is string => searchableModules.some((item) => item.href === href))
+        : [];
+      const currentHref = searchableModules.find((item) => normalizedRoute(item.href) === activeRoute)?.href;
+      const next = currentHref
+        ? [currentHref, ...validRecents.filter((href) => href !== currentHref)].slice(0, 5)
+        : validRecents.slice(0, 5);
+      setRecentHrefs(next);
+      window.localStorage.setItem(RECENT_MODULES_STORAGE_KEY, JSON.stringify(next));
+    } catch {
+      setRecentHrefs([]);
+    }
+  }, [activeRoute, searchableModules]);
+
+  useEffect(() => {
+    setActiveCommandIndex(0);
+  }, [commandOpen, commandQuery]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -304,6 +371,21 @@ function AppLayoutFrame({ children, incidentCount = 0, cameraCount = 0 }: AppLay
   }, []);
 
   const closeSidebar = () => setSidebarOpen(false);
+  const persistOpenGroups = (next: Set<string>) => {
+    setOpenGroups(next);
+    window.localStorage.setItem(OPEN_GROUPS_STORAGE_KEY, JSON.stringify([...next]));
+  };
+  const toggleAllGroups = () => {
+    persistOpenGroups(allGroupsOpen
+      ? new Set(activeGroup ? [activeGroup.label] : [])
+      : new Set(navigation.map((group) => group.label)));
+  };
+  const openCommandResult = (href: string) => {
+    setCommandOpen(false);
+    setCommandQuery("");
+    closeSidebar();
+    router.push(href);
+  };
 
   return (
     <div className="app-shell">
@@ -342,12 +424,38 @@ function AppLayoutFrame({ children, incidentCount = 0, cameraCount = 0 }: AppLay
           </Link>
         </div>
 
+        <div className="nav-utility">
+          <Link href="/modules" className={isActive("/modules") ? "active" : ""} onClick={closeSidebar}>
+            <LayoutGrid size={14} />
+            <span>All modules</span>
+            <small>{moduleCount}</small>
+          </Link>
+          <button
+            type="button"
+            onClick={toggleAllGroups}
+            aria-label={allGroupsOpen ? "Collapse navigation sections" : "Expand navigation sections"}
+            title={allGroupsOpen ? "Collapse sections" : "Expand sections"}
+          >
+            <ChevronsUpDown size={15} />
+          </button>
+        </div>
+
         <nav className="main-nav" aria-label="Main navigation">
           {navigation.map((group) => {
             const groupIsActive = group.items.some((item) => isActive(item.href));
             const GroupIcon = group.icon;
             return (
-            <details className="nav-group" key={group.label} open={groupIsActive}>
+            <details
+              className="nav-group"
+              key={group.label}
+              open={groupIsActive || openGroups.has(group.label)}
+              onToggle={(event) => {
+                const next = new Set(openGroups);
+                if (event.currentTarget.open) next.add(group.label);
+                else if (!groupIsActive) next.delete(group.label);
+                persistOpenGroups(next);
+              }}
+            >
               <summary>
                 <span className="nav-group-label"><GroupIcon size={14} /><span>{group.label}</span></span>
                 <span className="nav-group-meta"><small>{group.items.length}</small><ChevronRight size={13} /></span>
@@ -386,6 +494,11 @@ function AppLayoutFrame({ children, incidentCount = 0, cameraCount = 0 }: AppLay
             <span>Help &amp; support</span>
             <ChevronRight size={15} />
           </Link>
+          <div className="sidebar-legal" aria-label="Legal links">
+            <Link href="/privacy" onClick={closeSidebar}>Privacy</Link>
+            <span aria-hidden="true">•</span>
+            <Link href="/terms" onClick={closeSidebar}>Terms</Link>
+          </div>
           <Link href="/maintenance/health" className="sidebar-status" onClick={closeSidebar}>
             <div className="pulse-icon"><Wifi size={16} /></div>
             <div><strong>Platform status</strong><span>Open infrastructure health</span></div>
@@ -419,7 +532,8 @@ function AppLayoutFrame({ children, incidentCount = 0, cameraCount = 0 }: AppLay
           </button>
           <div className="topbar-context">
             <div className="breadcrumbs">
-              <span>Sentinel Grid</span><ChevronRight size={12} /><span>{currentPage.section}</span>
+              <Link href="/">Sentinel Grid</Link><ChevronRight size={12} />
+              {activeGroup ? <Link href={activeGroup.items[0].href}>{currentPage.section}</Link> : <span>{currentPage.section}</span>}
             </div>
             <p className="topbar-title">{currentPage.title}</p>
           </div>
@@ -463,22 +577,48 @@ function AppLayoutFrame({ children, incidentCount = 0, cameraCount = 0 }: AppLay
                 autoFocus
                 value={commandQuery}
                 onChange={(event) => setCommandQuery(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "ArrowDown") {
+                    event.preventDefault();
+                    setActiveCommandIndex((index) => (index + 1) % Math.max(commandResults.length, 1));
+                  } else if (event.key === "ArrowUp") {
+                    event.preventDefault();
+                    setActiveCommandIndex((index) => (index - 1 + Math.max(commandResults.length, 1)) % Math.max(commandResults.length, 1));
+                  } else if (event.key === "Enter" && commandResults[activeCommandIndex]) {
+                    event.preventDefault();
+                    openCommandResult(commandResults[activeCommandIndex].href);
+                  }
+                }}
                 placeholder="Search cameras, incidents, reports, maintenance..."
                 aria-label="Search all modules"
+                aria-controls="command-results-list"
+                aria-activedescendant={commandResults[activeCommandIndex] ? `command-result-${activeCommandIndex}` : undefined}
               />
               <button type="button" onClick={() => setCommandOpen(false)} aria-label="Close module search"><X size={17} /></button>
             </div>
-            <div className="command-results">
+            <div className="command-results" id="command-results-list" role="listbox" aria-label="Module destinations">
               <div className="command-results-heading">
-                <span>{commandQuery ? "Search results" : "Popular destinations"}</span>
+                <span>{commandQuery ? "Search results" : recentHrefs.length ? "Recent & suggested" : "Popular destinations"}</span>
                 <Link href="/modules" onClick={() => setCommandOpen(false)}>View all modules <LayoutGrid size={13} /></Link>
               </div>
-              {commandResults.length > 0 ? commandResults.map((item) => {
+              {commandResults.length > 0 ? commandResults.map((item, index) => {
                 const Icon = item.icon;
                 return (
-                  <Link href={item.href} key={`${item.section}-${item.href}`} onClick={() => setCommandOpen(false)}>
+                  <Link
+                    href={item.href}
+                    key={`${item.section}-${item.href}`}
+                    id={`command-result-${index}`}
+                    role="option"
+                    aria-selected={activeCommandIndex === index}
+                    className={activeCommandIndex === index ? "active" : ""}
+                    onMouseEnter={() => setActiveCommandIndex(index)}
+                    onClick={(event) => {
+                      event.preventDefault();
+                      openCommandResult(item.href);
+                    }}
+                  >
                     <span className="command-result-icon"><Icon size={17} /></span>
-                    <span><strong>{item.label}</strong><small>{item.section}</small></span>
+                    <span><strong>{item.label}</strong><small>{item.section}{item.recent ? " · Recently opened" : ""}</small></span>
                     <ChevronRight size={15} />
                   </Link>
                 );
@@ -486,7 +626,7 @@ function AppLayoutFrame({ children, incidentCount = 0, cameraCount = 0 }: AppLay
                 <div className="command-empty"><Search size={22} /><strong>No matching module</strong><span>Try a feature name such as camera, report, audit or branch.</span></div>
               )}
             </div>
-            <footer><span><kbd>Enter</kbd> open</span><span><kbd>Esc</kbd> close</span><strong>{searchableModules.length} modules available</strong></footer>
+            <footer><span><kbd>↑↓</kbd> navigate</span><span><kbd>Enter</kbd> open</span><span><kbd>Esc</kbd> close</span><strong>{searchableModules.length} modules available</strong></footer>
           </section>
         </div>
       )}

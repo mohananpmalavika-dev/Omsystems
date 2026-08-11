@@ -28,6 +28,9 @@ import {
   AcknowledgeAlertPayload,
   AssignAlertPayload,
   ResolveAlertPayload,
+  EscalateAlertPayload,
+  SuppressAlertPayload,
+  AddAlertCommentPayload,
   CreateWorkOrderPayload
 } from '../types/operational-health';
 

@@ -4,7 +4,7 @@
  * Verifies that transfer objects remain escorted by authorized personnel
  */
 
-import { BaseRule, RuleContext, RuleResult } from './rule-engine';
+import { BaseRule, RuleContext, RuleResult } from './rule-engine.js';
 
 export class ObjectEscortRule extends BaseRule {
   constructor() {

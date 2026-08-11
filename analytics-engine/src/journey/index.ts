@@ -5,7 +5,7 @@
  * 
  * @example
  * ```typescript
- * import { initializeJourneySystem, JourneyService } from './journey';
+ * import { initializeJourneySystem, JourneyService } from './journey.js';
  * 
  * // Initialize on startup
  * await initializeJourneySystem(pool);

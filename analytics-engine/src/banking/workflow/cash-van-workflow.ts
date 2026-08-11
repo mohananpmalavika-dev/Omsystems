@@ -24,7 +24,7 @@ import {
   isZoneEvent,
   isAccessEvent,
   isObjectEvent,
-} from '../events/banking-events';
+} from '../events/banking-events.js';
 
 import {
   CashVanSession,
@@ -35,33 +35,33 @@ import {
   SessionAccessEvent,
   ZoneVisit,
   WorkflowAssessment,
-} from '../models/cash-van-session';
+} from '../models/cash-van-session.js';
 
 import {
   CashVanSessionRepository,
   getCashVanSessionRepository,
-} from '../repositories/cash-van-session.repository';
+} from '../repositories/cash-van-session.repository.js';
 
 import {
   CashVanMonitorRepository,
   getCashVanMonitorRepository,
-} from '../repositories/cash-van-monitor.repository';
+} from '../repositories/cash-van-monitor.repository.js';
 
 import {
   ExpectedVisitRepository,
   getExpectedVisitRepository,
-} from '../repositories/expected-visit.repository';
+} from '../repositories/expected-visit.repository.js';
 
 import {
   PersonnelAuthorizationRepository,
   getPersonnelAuthorizationRepository,
-} from '../repositories/personnel-authorization.repository';
+} from '../repositories/personnel-authorization.repository.js';
 
 import {
   CashVanRuleEngine,
   getCashVanRuleEngine,
   determineWorkflowAssessment,
-} from '../rules/rule-engine';
+} from '../rules/rule-engine.js';
 
 /**
  * Cash Van Workflow Engine

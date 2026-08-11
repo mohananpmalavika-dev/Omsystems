@@ -5,7 +5,7 @@
  */
 
 import { Pool } from 'pg';
-import { TwinRelationship, RelationshipType, isDependencyRelationship } from '../models/relationship';
+import { TwinRelationship, RelationshipType, isDependencyRelationship } from '../models/relationship.js';
 
 export class RelationshipRepository {
   constructor(private readonly pool: Pool) {}

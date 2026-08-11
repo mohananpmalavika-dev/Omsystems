@@ -10,9 +10,9 @@
 
 import { Router, Request, Response } from 'express';
 import { body, param, query, validationResult } from 'express-validator';
-import { JourneyService } from '../journey/journey.service';
-import { TopologyService } from '../journey/topology.service';
-import { Logger } from '../core/logger';
+import { JourneyService } from '../journey/journey.service.js';
+import { TopologyService } from '../journey/topology.service.js';
+import { Logger } from '../core/logger.js';
 
 const router = Router();
 const logger = Logger.getInstance();

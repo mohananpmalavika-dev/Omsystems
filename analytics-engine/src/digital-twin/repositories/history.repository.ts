@@ -5,7 +5,7 @@
  */
 
 import { Pool } from 'pg';
-import { TwinStateSnapshot, TwinEvent } from '../models';
+import { TwinStateSnapshot, TwinEvent } from '../models.js';
 
 export class HistoryRepository {
   constructor(private readonly pool: Pool) {}

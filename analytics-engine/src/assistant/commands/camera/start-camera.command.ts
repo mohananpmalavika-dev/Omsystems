@@ -17,9 +17,9 @@ import type {
   CommandResult,
   AssistantContext,
   AssistantErrorCode,
-  AssistantEvidence,
-  CommandResultBuilder
+  AssistantEvidence
 } from '../../types/index.js';
+import { CommandResultBuilder } from '../../types/index.js';
 import type { AuthorizationService } from '../../types/authorization.js';
 import type { AssistantAuditService } from '../../types/audit.js';
 import type {
@@ -34,6 +34,7 @@ import type {
 export interface StartCameraInput {
   /** Camera reference (ID, name, or partial match) */
   cameraReference: string;
+  [key: string]: unknown;
 }
 
 /**

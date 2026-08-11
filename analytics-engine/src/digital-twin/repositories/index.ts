@@ -4,6 +4,6 @@
  * Export all repository classes.
  */
 
-export { AssetRepository } from './asset.repository';
-export { RelationshipRepository } from './relationship.repository';
-export { HistoryRepository } from './history.repository';
+export { AssetRepository } from './asset.repository.js';
+export { RelationshipRepository } from './relationship.repository.js';
+export { HistoryRepository } from './history.repository.js';

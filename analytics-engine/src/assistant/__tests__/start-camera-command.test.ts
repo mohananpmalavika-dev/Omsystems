@@ -4,11 +4,11 @@
  * Critical tests to prevent false confirmation of camera start operations.
  */
 
-import { StartCameraCommand } from '../commands/camera/start-camera.command';
-import type { CameraService, CameraControlService } from '../services/camera-service.interface';
-import type { AuthorizationService } from '../types/authorization';
-import type { AssistantAuditService } from '../types/audit';
-import type { AssistantContext } from '../types/assistant-command';
+import { StartCameraCommand } from '../commands/camera/start-camera.command.js';
+import type { CameraService, CameraControlService } from '../services/camera-service.interface.js';
+import type { AuthorizationService } from '../types/authorization.js';
+import type { AssistantAuditService } from '../types/audit.js';
+import type { AssistantContext } from '../types/assistant-command.js';
 
 describe('StartCameraCommand', () => {
   let command: StartCameraCommand;

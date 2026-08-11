@@ -9,7 +9,7 @@
  */
 
 import sharp from 'sharp';
-import { HeatmapRenderRequest, HeatmapNormalization } from './heatmap-types';
+import { HeatmapRenderRequest, HeatmapNormalization } from './heatmap-types.js';
 
 export interface ColorMap {
     name: string;

@@ -4,11 +4,11 @@
  * Export all digital twin model types.
  */
 
-export * from './asset';
-export * from './relationship';
-export * from './topology';
-export * from './blast-radius';
-export * from './security-posture';
+export * from './asset.js';
+export * from './relationship.js';
+export * from './topology.js';
+export * from './blast-radius.js';
+export * from './security-posture.js';
 
 /**
  * Historical state snapshot

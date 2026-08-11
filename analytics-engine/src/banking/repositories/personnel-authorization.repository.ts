@@ -4,7 +4,7 @@
  * Manages personnel roles and authorizations for banking operations
  */
 
-import { PersonnelAuthorization, BankingRole } from '../models/cash-van-session';
+import { PersonnelAuthorization, BankingRole } from '../models/cash-van-session.js';
 import { v4 as uuidv4 } from 'uuid';
 
 export interface CreatePersonnelInput {

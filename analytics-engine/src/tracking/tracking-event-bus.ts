@@ -6,7 +6,7 @@
  */
 
 import { EventEmitter } from 'node:events';
-import { TrackingObservation, TrackStartEvent, TrackEndEvent } from './tracking-observation';
+import { TrackingObservation, TrackStartEvent, TrackEndEvent } from './tracking-observation.js';
 
 export type TrackingEventType = 
     | 'tracking.observation'

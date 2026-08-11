@@ -4,7 +4,7 @@
  * Manages scheduled cash van visits
  */
 
-import { CashVanVisit, ExpectedPersonnel } from '../models/cash-van-session';
+import { CashVanVisit, ExpectedPersonnel } from '../models/cash-van-session.js';
 import { v4 as uuidv4 } from 'uuid';
 
 export interface CreateVisitInput {

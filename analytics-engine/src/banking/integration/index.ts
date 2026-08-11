@@ -2,4 +2,4 @@
  * Banking Integration Module
  */
 
-export * from './event-publishers';
+export * from './event-publishers.js';

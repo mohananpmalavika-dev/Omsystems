@@ -218,6 +218,49 @@ export class CommandCenterService {
     const decision = await this.store.checkAccess(user, action.requiredPermission, action.branchId);
     if (!decision?.allowed) throw new CommandCenterError("action_not_found", 404);
   }
+
+  /**
+   * Enhanced diagnosis using autonomous RCA engine
+   */
+  async enhancedDiagnosis(
+    user: User,
+    branchId: string,
+    options: {
+      from?: string;
+      to?: string;
+      includeHistorical?: boolean;
+    } = {}
+  ): Promise<import("./rca/types.js").RCADiagnosis> {
+    const { analyzeEnhanced } = await import("./rca.js");
+    
+    const decision = await this.store.checkAccess(user, "recording:view", branchId);
+    if (!decision?.allowed) throw new CommandCenterError("branch_not_found", 404);
+    
+    const now = new Date();
+    const to = options.to ?? now.toISOString();
+    const from = options.from ?? new Date(Date.parse(to) - 24 * 60 * 60 * 1000).toISOString();
+    
+    // Build operational graph and timeline
+    const [graph, timeline] = await Promise.all([
+      buildOperationalGraph(this.store, user, branchId, now),
+      buildTimeline(this.store, user.tenantId, branchId, { from, to }),
+    ]);
+    
+    // Run enhanced RCA analysis
+    const enhancedResult = await analyzeEnhanced(graph, timeline, {
+      tenantId: user.tenantId,
+      branchId,
+      includeHistorical: options.includeHistorical ?? true,
+    });
+    
+    // Return enhanced diagnosis if available and higher confidence
+    if (enhancedResult.enhancedDiagnosis) {
+      return enhancedResult.enhancedDiagnosis;
+    }
+    
+    // Fallback: should not reach here as analyzeEnhanced always returns diagnosis
+    throw new CommandCenterError("enhanced_diagnosis_unavailable", 500);
+  }
 }
 
 export class CommandCenterError extends Error {
@@ -310,46 +353,3 @@ function actionId(caseId: string, type: CommandActionType) { return `cca_${creat
 function normalize(value: string) { return value.trim().toLowerCase().replace(/[^a-z0-9]+/g, " "); }
 function label(value: string) { return value.replaceAll("_", " ").replaceAll("-", " ").replace(/\b\w/g, (letter) => letter.toUpperCase()); }
 function newest(values: string[]) { return values.filter(Boolean).sort().at(-1) ?? new Date().toISOString(); }
-
-  /**
-   * Enhanced diagnosis using autonomous RCA engine
-   */
-  async enhancedDiagnosis(
-    user: User,
-    branchId: string,
-    options: {
-      from?: string;
-      to?: string;
-      includeHistorical?: boolean;
-    } = {}
-  ): Promise<import("./rca/types.js").RCADiagnosis> {
-    const { analyzeEnhanced } = await import("./rca.js");
-    
-    const decision = await this.store.checkAccess(user, "recording:view", branchId);
-    if (!decision?.allowed) throw new CommandCenterError("branch_not_found", 404);
-    
-    const now = new Date();
-    const to = options.to ?? now.toISOString();
-    const from = options.from ?? new Date(Date.parse(to) - 24 * 60 * 60 * 1000).toISOString();
-    
-    // Build operational graph and timeline
-    const [graph, timeline] = await Promise.all([
-      buildOperationalGraph(this.store, user, branchId, now),
-      buildTimeline(this.store, user.tenantId, branchId, { from, to }),
-    ]);
-    
-    // Run enhanced RCA analysis
-    const enhancedResult = await analyzeEnhanced(graph, timeline, {
-      tenantId: user.tenantId,
-      branchId,
-      includeHistorical: options.includeHistorical ?? true,
-    });
-    
-    // Return enhanced diagnosis if available and higher confidence
-    if (enhancedResult.enhancedDiagnosis) {
-      return enhancedResult.enhancedDiagnosis;
-    }
-    
-    // Fallback: should not reach here as analyzeEnhanced always returns diagnosis
-    throw new CommandCenterError("enhanced_diagnosis_unavailable", 500);
-  }

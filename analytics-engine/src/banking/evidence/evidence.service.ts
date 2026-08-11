@@ -12,12 +12,12 @@ import {
   CashVanSession,
   EvidenceReference,
   CashVanViolation,
-} from '../models/cash-van-session';
+} from '../models/cash-van-session.js';
 
 import {
   CashVanSessionRepository,
   getCashVanSessionRepository,
-} from '../repositories/cash-van-session.repository';
+} from '../repositories/cash-van-session.repository.js';
 
 /**
  * Evidence clip request

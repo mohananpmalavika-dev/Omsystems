@@ -4,7 +4,7 @@
  * Verifies that secure zone entry correlates with access control events
  */
 
-import { BaseRule, RuleContext, RuleResult } from './rule-engine';
+import { BaseRule, RuleContext, RuleResult } from './rule-engine.js';
 
 export class AccessCorrelationRule extends BaseRule {
   constructor() {

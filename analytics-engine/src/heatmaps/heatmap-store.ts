@@ -11,7 +11,7 @@ import {
     HeatmapBucket,
     StoredHeatmapBucket,
     HeatmapMetric,
-} from './heatmap-types';
+} from './heatmap-types.js';
 
 const gzipAsync = promisify(gzip);
 const gunzipAsync = promisify(gunzip);

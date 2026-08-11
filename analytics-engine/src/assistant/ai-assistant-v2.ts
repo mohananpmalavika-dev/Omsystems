@@ -211,11 +211,13 @@ export class AIAssistantV2 {
           timestamp: new Date()
         };
       } else {
+        // At this point, result must be CommandFailure
+        const failure = result as CommandFailure;
         response = this.presenter.formatFailure({
-          code: result.code,
-          message: result.message || 'Operation failed',
+          code: failure.code,
+          message: failure.message || 'Operation failed',
           intent: parsed.intent,
-          retryable: result.retryable
+          retryable: failure.retryable
         });
       }
       
@@ -234,12 +236,14 @@ export class AIAssistantV2 {
     } catch (error) {
       console.error('[AIAssistantV2] Error processing query:', error);
       
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      
       return {
         success: false,
         message: 'An unexpected error occurred while processing your request.',
         error: {
           code: 'INTERNAL_ERROR' as any,
-          message: error.message || 'Unknown error',
+          message: errorMessage,
           retryable: true
         },
         requestId,
@@ -456,14 +460,14 @@ export class AIAssistantV2 {
         
         // Camera number
         const cameraMatch = query.match(/camera[- ]?(\d+|[a-z0-9]+)/i);
-        if (cameraMatch) {
+        if (cameraMatch && cameraMatch[1]) {
           entities.push({ type: 'camera', value: cameraMatch[1], confidence: 0.95 });
           parameters.camera = cameraMatch[1];
         }
         
         // Color
         const colorMatch = query.match(/(red|blue|green|yellow|black|white|gray)/i);
-        if (colorMatch) {
+        if (colorMatch && colorMatch[1]) {
           entities.push({ type: 'color', value: colorMatch[1], confidence: 0.95 });
           parameters.color = colorMatch[1].toLowerCase();
         }

@@ -4,11 +4,11 @@
  * Ensures system status never reports invented metrics and handles UNKNOWN states.
  */
 
-import { SystemStatusCommand } from '../commands/system/system-status.command';
-import type { SystemHealthService } from '../services/system-health-service.interface';
-import type { AuthorizationService } from '../types/authorization';
-import type { AssistantAuditService } from '../types/audit';
-import type { AssistantContext } from '../types/assistant-command';
+import { SystemStatusCommand } from '../commands/system/system-status.command.js';
+import type { SystemHealthService } from '../services/system-health-service.interface.js';
+import type { AuthorizationService } from '../types/authorization.js';
+import type { AssistantAuditService } from '../types/audit.js';
+import type { AssistantContext } from '../types/assistant-command.js';
 
 describe('SystemStatusCommand', () => {
   let command: SystemStatusCommand;

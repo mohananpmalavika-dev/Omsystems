@@ -4,5 +4,5 @@
  * Exports event types, event bus, and utilities
  */
 
-export * from './banking-events';
-export * from './banking-event-bus';
+export * from './banking-events.js';
+export * from './banking-event-bus.js';

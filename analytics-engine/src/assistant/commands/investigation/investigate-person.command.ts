@@ -10,9 +10,9 @@ import type {
   CommandResult,
   AssistantContext,
   AssistantErrorCode,
-  AssistantEvidence,
-  CommandResultBuilder
+  AssistantEvidence
 } from '../../types/index.js';
+import { CommandResultBuilder } from '../../types/index.js';
 import type { AuthorizationService } from '../../types/authorization.js';
 import type { AssistantAuditService } from '../../types/audit.js';
 import type {
@@ -43,6 +43,8 @@ export interface InvestigatePersonInput {
   
   /** Camera filters */
   cameraIds?: string[];
+  
+  [key: string]: unknown;
 }
 
 /**
@@ -121,7 +123,9 @@ export class InvestigatePersonCommand implements AssistantCommand<InvestigatePer
           );
         }
         
-        subjectDetectionId = searchResult.results[0].detectionId;
+        if (searchResult.results && searchResult.results.length > 0 && searchResult.results[0]) {
+          subjectDetectionId = searchResult.results[0].detectionId;
+        }
       }
       
       if (!subjectDetectionId) {
@@ -149,12 +153,16 @@ export class InvestigatePersonCommand implements AssistantCommand<InvestigatePer
       
       // Create investigation
       try {
+        const timeRange = input.timeRange && input.timeRange.from && input.timeRange.to 
+          ? { from: input.timeRange.from, to: input.timeRange.to }
+          : undefined;
+        
         const investigation = await this.investigationService.create({
           type: 'person',
           subjectDetectionId,
           requestedBy: context.user.id,
           options: {
-            timeRange: input.timeRange,
+            timeRange,
             cameraIds: input.cameraIds,
             minConfidence: 0.75
           }

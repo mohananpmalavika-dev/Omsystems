@@ -24,6 +24,13 @@ export interface VehicleColorResult {
   hsvValues?: { h: number; s: number; v: number };
 }
 
+export interface BoundingBox {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
 export interface ImageMatrix {
   data: Buffer | Uint8Array;
   width: number;

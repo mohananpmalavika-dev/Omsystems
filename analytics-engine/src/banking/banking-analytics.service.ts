@@ -8,22 +8,22 @@
 import {
   CashVanSessionRepository,
   getCashVanSessionRepository,
-} from './repositories/cash-van-session.repository';
+} from './repositories/cash-van-session.repository.js';
 
 import {
   CashVanMonitorRepository,
   getCashVanMonitorRepository,
-} from './repositories/cash-van-monitor.repository';
+} from './repositories/cash-van-monitor.repository.js';
 
 import {
   ExpectedVisitRepository,
   getExpectedVisitRepository,
-} from './repositories/expected-visit.repository';
+} from './repositories/expected-visit.repository.js';
 
 import {
   CashVanRuleEngine,
   getCashVanRuleEngine,
-} from './rules/rule-engine';
+} from './rules/rule-engine.js';
 
 import {
   AuthorizedVehicleRule,
@@ -35,28 +35,28 @@ import {
   AccessCorrelationRule,
   ObjectEscortRule,
   DepartureCompletionRule,
-} from './rules';
+} from './rules.js';
 
 import {
   CashVanWorkflow,
   getCashVanWorkflow,
-} from './workflow/cash-van-workflow';
+} from './workflow/cash-van-workflow.js';
 
 import {
   BankingEventConsumer,
   getBankingEventConsumer,
-} from './workflow/event-consumer';
+} from './workflow/event-consumer.js';
 
 import {
   BankingEventBus,
   getBankingEventBus,
-} from './events/banking-event-bus';
+} from './events/banking-event-bus.js';
 
 import {
   CashVanSession,
   CashVanMonitorConfig,
   WorkflowAssessment,
-} from './models/cash-van-session';
+} from './models/cash-van-session.js';
 
 /**
  * Banking Analytics Findings

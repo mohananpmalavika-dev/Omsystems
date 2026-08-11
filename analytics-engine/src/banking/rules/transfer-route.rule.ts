@@ -4,7 +4,7 @@
  * Verifies that cash transfer follows approved route through zones
  */
 
-import { BaseRule, RuleContext, RuleResult } from './rule-engine';
+import { BaseRule, RuleContext, RuleResult } from './rule-engine.js';
 
 export class TransferRouteRule extends BaseRule {
   constructor() {

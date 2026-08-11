@@ -159,40 +159,21 @@ export async function createExampleMonitor(
     tenantId,
     branchId,
     name: config.name,
-    monitorType: 'cash-van',
-    zones: {
-      loading: config.loadingZoneId,
-      unloading: config.unloadingZoneId,
-    },
-    rules: {
-      authorizedVehicleCheck: true,
-      scheduledArrivalCheck: true,
-      minimumPersonnelCheck: true,
-      escortVerification: true,
-      unloadingDurationCheck: true,
-      transferRouteCheck: true,
-      accessCorrelation: true,
-      objectEscortCheck: true,
-      departureCompletion: true,
-    },
-    policies: {
-      authorizedVehicles: config.authorizedVehicles,
-      minimumPersonnel: config.minimumPersonnel,
-      maxUnloadingDuration: config.maxUnloadingDuration,
-      requireEscort: true,
-      requireDualAuthorization: true,
-    },
-    alertConfig: {
-      severity: 'critical',
-      notifyOperators: true,
-      notifySecurity: true,
-      requireAcknowledgment: true,
-    },
-    isActive: true,
+    arrivalZoneId: config.loadingZoneId,
+    unloadingZoneId: config.unloadingZoneId,
+  });
+  
+  // Update with additional configuration
+  await monitorRepo.updateUnloadingRules(monitor.id, {
+    maxDurationSeconds: config.maxUnloadingDuration,
+  });
+  
+  await monitorRepo.updatePersonnelRules(monitor.id, {
+    minimumPersonnel: config.minimumPersonnel,
   });
 
-  console.log(`✓ Created example monitor: ${config.name} (${monitor.monitorId})`);
-  return monitor.monitorId;
+  console.log(`✓ Created example monitor: ${config.name} (${monitor.id})`);
+  return monitor.id;
 }
 
 /**

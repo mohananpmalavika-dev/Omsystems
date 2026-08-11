@@ -4,7 +4,7 @@
  * Verifies that the vehicle is authorized for cash van operations
  */
 
-import { BaseRule, RuleContext, RuleResult } from './rule-engine';
+import { BaseRule, RuleContext, RuleResult } from './rule-engine.js';
 
 export class AuthorizedVehicleRule extends BaseRule {
   constructor() {

@@ -4,7 +4,7 @@
  * Aggregate security state and vulnerability analysis.
  */
 
-import { AssetType } from './asset';
+import { AssetType } from './asset.js';
 
 /**
  * Security posture for a scope (enterprise, region, branch, or asset)

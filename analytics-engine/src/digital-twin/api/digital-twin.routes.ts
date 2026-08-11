@@ -7,7 +7,7 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import { Pool } from 'pg';
-import { DigitalTwinService, SecurityPostureService } from '../services';
+import { DigitalTwinService, SecurityPostureService } from '../services.js';
 
 // Request schemas
 const assetIdParam = z.object({
@@ -46,8 +46,12 @@ const securityTrendQueryParams = z.object({
  */
 export async function registerDigitalTwinRoutes(
   app: FastifyInstance,
-  pool: Pool
+  pool?: Pool
 ): Promise<void> {
+  if (!pool) {
+    app.log.info('Digital Twin routes skipped: database pool not provided');
+    return;
+  }
   const twinService = new DigitalTwinService(pool);
   const securityService = new SecurityPostureService(pool);
 

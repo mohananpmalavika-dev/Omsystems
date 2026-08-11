@@ -17,7 +17,7 @@ import {
   AccessControlEvent,
   ObjectObservedEvent,
   ObjectUnattendedEvent,
-} from '../events';
+} from '../events.js';
 
 /**
  * Vehicle Detection Publisher
