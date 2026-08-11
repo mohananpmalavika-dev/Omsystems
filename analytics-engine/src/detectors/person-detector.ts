@@ -8,6 +8,7 @@ import { BaseDetector, calculateIoU, type DetectionFrame, type DetectionResult, 
 import { getModelManager } from "../model-manager.js";
 import { YoloPersonInference } from "../inference/yolo-person-inference.js";
 import { modelUnavailableReason } from "../inference/configured-model-inference.js";
+import { TrackingEventBus, buildTrackingObservations, type FrameContext } from "../tracking/index.js";
 
 export interface PersonTrack {
   trackId: string;
@@ -24,6 +25,7 @@ export class PersonDetector extends BaseDetector {
   private tracks = new Map<string, PersonTrack>();
   private isModelLoaded = false;
   private inference: YoloPersonInference | null = null;
+  private trackingBus: TrackingEventBus | null = null;
   
   // Configuration
   private readonly TRACKING_TIMEOUT_MS = 5000; // 5 seconds
@@ -32,6 +34,13 @@ export class PersonDetector extends BaseDetector {
 
   constructor() {
     super("person", "2.0.0");
+  }
+
+  /**
+   * Set tracking event bus for publishing observations
+   */
+  setTrackingBus(bus: TrackingEventBus): void {
+    this.trackingBus = bus;
   }
 
   async initialize(): Promise<void> {
@@ -56,6 +65,11 @@ export class PersonDetector extends BaseDetector {
     // Update tracking for each detected person
     const tracked = this.updateTracking(persons, frame.timestamp);
     
+    // Publish tracking observations to event bus
+    if (this.trackingBus && tracked.length > 0) {
+      this.publishTrackingObservations(tracked, frame);
+    }
+    
     const results: DetectionResult[] = [];
     
     if (tracked.length > 0) {
@@ -77,6 +91,43 @@ export class PersonDetector extends BaseDetector {
     }
 
     return results;
+  }
+
+  /**
+   * Publish tracking observations to event bus
+   */
+  private publishTrackingObservations(tracked: any[], frame: DetectionFrame): void {
+    if (!this.trackingBus) return;
+
+    // Build frame context
+    const context: FrameContext = {
+      tenantId: frame.tenantId || 'default',
+      branchId: frame.branchId,
+      cameraId: frame.cameraId,
+      frameId: frame.frameId,
+      timestamp: frame.timestamp,
+      frameWidth: frame.width,
+      frameHeight: frame.height,
+    };
+
+    // Convert tracked persons to observations
+    const observations = buildTrackingObservations(
+      tracked.map(person => ({
+        trackId: person.trackId,
+        label: 'person',
+        confidence: person.confidence,
+        boundingBox: person.boundingBox,
+        timestamp: frame.timestamp,
+        dwellTimeSeconds: person.dwellTimeSeconds,
+        isStationary: person.isStationary,
+      })),
+      context,
+    );
+
+    // Publish each observation
+    for (const observation of observations) {
+      this.trackingBus.publish(observation);
+    }
   }
 
   /**

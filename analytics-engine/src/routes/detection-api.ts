@@ -53,15 +53,17 @@ export async function registerDetectionApiRoutes(
   });
 
   // ============================================================================
-  // HEAT MAP ENDPOINTS
+  // HEAT MAP ENDPOINTS (LEGACY - Use /v1/analytics/heatmaps/:cameraId instead)
   // ============================================================================
 
   /**
-   * Get current heat map
+   * Get current heat map (deprecated)
+   * @deprecated Use /v1/analytics/heatmaps/:cameraId for full functionality
    */
   app.get("/v1/analytics/heatmap", async (request, reply) => {
     const query = z.object({
       format: z.enum(["grid", "image", "points"]).default("grid"),
+      cameraId: z.string().optional(),
     }).parse(request.query);
 
     const heatMap = pipeline.getHeatMap();
@@ -77,6 +79,12 @@ export async function registerDetectionApiRoutes(
         dimensions: {
           width: heatMap[0]?.length || 0,
           height: heatMap.length,
+        },
+        deprecation: {
+          message: "This endpoint is deprecated. Use /v1/analytics/heatmaps/:cameraId for full heatmap functionality including image rendering, time ranges, and overlays.",
+          newEndpoint: query.cameraId 
+            ? `/v1/analytics/heatmaps/${query.cameraId}`
+            : "/v1/analytics/heatmaps/:cameraId",
         },
       };
     }
@@ -95,21 +103,54 @@ export async function registerDetectionApiRoutes(
           }
         }
       }
-      return { points };
+      return { 
+        points,
+        deprecation: {
+          message: "This endpoint is deprecated. Use /v1/analytics/heatmaps/:cameraId for full heatmap functionality.",
+          newEndpoint: query.cameraId 
+            ? `/v1/analytics/heatmaps/${query.cameraId}`
+            : "/v1/analytics/heatmaps/:cameraId",
+        },
+      };
     }
 
-    // TODO: Implement image format (PNG heat map overlay)
-    return reply.code(501).send({ error: "image_format_not_implemented" });
+    if (query.format === "image") {
+      // Redirect to new heatmap API
+      if (!query.cameraId) {
+        return reply.code(400).send({
+          error: "camera_id_required",
+          message: "cameraId query parameter is required for image format",
+          hint: "Use /v1/analytics/heatmaps/:cameraId?format=png for image rendering",
+        });
+      }
+
+      return reply.code(301).send({
+        error: "endpoint_moved",
+        message: "Image format heatmaps have moved to a new endpoint",
+        newEndpoint: `/v1/analytics/heatmaps/${query.cameraId}?format=png`,
+        hint: "The new endpoint supports PNG/JPEG rendering, transparent overlays, multiple color maps, and time range queries",
+      });
+    }
+
+    return { error: "invalid_format" };
   });
 
   /**
-   * Reset heat map
+   * Reset heat map (deprecated)
+   * @deprecated Heatmaps now use time-bucketed persistent storage
    */
   app.post("/v1/analytics/heatmap/reset", async (request, reply) => {
     const detector = pipeline.getDetector("heatmap");
     if (detector && "reset" in detector) {
       (detector as any).reset();
-      return { success: true, message: "Heat map reset" };
+      return { 
+        success: true, 
+        message: "Legacy heat map reset (in-memory only)",
+        deprecation: {
+          message: "This endpoint resets legacy in-memory heatmaps only. New heatmap system uses persistent time-bucketed storage.",
+          cleanup: "Use DELETE /v1/analytics/heatmaps/:cameraId?before=<timestamp> to delete old heatmap data",
+        },
+      };
     }
     return reply.code(404).send({ error: "detector_not_found" });
   });

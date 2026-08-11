@@ -1,12 +1,20 @@
 /**
  * Safety Analytics Module
  * Comprehensive PPE detection, fire/smoke monitoring, and workplace safety analytics
- * Uses zero-cost open-source models: Custom YOLOv8 (PPE) + Fire/Smoke Detector
+ * Integrated with Zone Engine, Object Tracking, and Event Correlation
  */
 
 import { randomUUID } from "node:crypto";
 import { BaseDetector, type DetectionFrame, type DetectionResult, calculateIoU } from "./base-detector.js";
 import { getInferencePipeline } from "../inference/unified-inference-pipeline.js";
+import { ZoneEngine } from "./safety/zone-engine.js";
+import { MultiObjectTracker, type Detection } from "./safety/object-tracker.js";
+import { ZoneComplianceDetector } from "./safety/zone-compliance-detector.js";
+import { EmergencyExitMonitor } from "./safety/exit-monitor.js";
+import { FireSafetyEquipmentMonitor } from "./safety/equipment-monitor.js";
+import { SpillDetector } from "./safety/spill-detector.js";
+import { ArcFlashDetector } from "./safety/arc-flash-detector.js";
+import { EventCorrelationEngine, type SafetySignal } from "./safety/event-correlation-engine.js";
 
 // ============================================================================
 // Type Definitions
@@ -110,6 +118,7 @@ export interface ExitMonitor {
 // ============================================================================
 
 export class SafetyAnalyticsDetector extends BaseDetector {
+  // Legacy maps for backward compatibility
   private ppeDetections = new Map<string, PPEDetection[]>();
   private complianceRecords = new Map<string, PPECompliance>();
   private activeViolations = new Map<string, PPEViolation>();
@@ -117,6 +126,16 @@ export class SafetyAnalyticsDetector extends BaseDetector {
   private safetyZones = new Map<string, SafetyZone>();
   private fireExtinguishers = new Map<string, FireExtinguisherMonitor>();
   private exitMonitors = new Map<string, ExitMonitor>();
+  
+  // New integrated components
+  private zoneEngine: ZoneEngine;
+  private objectTracker: MultiObjectTracker;
+  private zoneComplianceDetector: ZoneComplianceDetector;
+  private exitMonitor: EmergencyExitMonitor;
+  private equipmentMonitor: FireSafetyEquipmentMonitor;
+  private spillDetector: SpillDetector;
+  private arcFlashDetector: ArcFlashDetector;
+  private correlationEngine: EventCorrelationEngine;
   
   private isModelLoaded = false;
   private ppeModel: any;  // Custom YOLOv8 for PPE detection
@@ -141,7 +160,32 @@ export class SafetyAnalyticsDetector extends BaseDetector {
   ];
 
   constructor() {
-    super("safety-analytics", "3.0.0");
+    super("safety-analytics", "4.0.0"); // Version bump for major upgrade
+    
+    // Initialize new components
+    this.zoneEngine = new ZoneEngine();
+    this.objectTracker = new MultiObjectTracker({
+      maxAge: 30,
+      minHits: 3,
+      iouThreshold: 0.3,
+    });
+    this.zoneComplianceDetector = new ZoneComplianceDetector(
+      this.zoneEngine,
+      this.objectTracker as any
+    );
+    this.exitMonitor = new EmergencyExitMonitor(
+      this.zoneEngine,
+      this.objectTracker as any
+    );
+    this.equipmentMonitor = new FireSafetyEquipmentMonitor(
+      this.objectTracker as any
+    );
+    this.spillDetector = new SpillDetector(
+      this.objectTracker as any,
+      this.zoneEngine
+    );
+    this.arcFlashDetector = new ArcFlashDetector(this.zoneEngine);
+    this.correlationEngine = new EventCorrelationEngine();
   }
 
   async initialize(): Promise<void> {
@@ -206,6 +250,9 @@ export class SafetyAnalyticsDetector extends BaseDetector {
 
     const results: DetectionResult[] = [];
 
+    // Step 0: Update object tracking with all detections
+    const trackedObjects = await this.updateObjectTracking(frame);
+
     // Step 1: Detect PPE (helmet, vest, gloves, etc.)
     const ppeDetections = await this.detectPPE(frame);
 
@@ -215,7 +262,7 @@ export class SafetyAnalyticsDetector extends BaseDetector {
     // Step 3: Detect fire and smoke
     const fireSmoke = await this.detectFireSmoke(frame);
 
-    // Step 4: Detect other hazards
+    // Step 4: Detect other hazards (spills, arc flash)
     const hazards = await this.detectHazards(frame);
 
     // Step 5: Monitor fire safety equipment
@@ -226,6 +273,15 @@ export class SafetyAnalyticsDetector extends BaseDetector {
 
     // Step 7: Check zone compliance
     const zoneViolations = this.checkZoneCompliance(frame);
+
+    // Step 8: Process signals through correlation engine
+    const correlatedEvents = this.processCorrelationSignals(frame, {
+      fireSmoke,
+      hazards,
+      complianceChecks,
+      equipmentStatus,
+      exitStatus,
+    });
 
     // Generate detection results
     if (ppeDetections.length > 0) {
@@ -257,6 +313,11 @@ export class SafetyAnalyticsDetector extends BaseDetector {
 
     if (zoneViolations.length > 0) {
       results.push(...zoneViolations);
+    }
+
+    // Add correlated events
+    if (correlatedEvents.length > 0) {
+      results.push(...this.createCorrelatedEventResults(correlatedEvents));
     }
 
     return results;
@@ -396,9 +457,9 @@ export class SafetyAnalyticsDetector extends BaseDetector {
   }
 
   private findPersonZone(personTrackId: string, frame: DetectionFrame): SafetyZone | undefined {
-    // TODO: Get person position from tracking data
-    // For now, return undefined
-    return undefined;
+    // Use integrated zone engine to find person's zone
+    const trackedPerson = this.zoneEngine.getTrackedPerson(personTrackId);
+    return trackedPerson?.zone;
   }
 
   private createOrUpdateViolation(
@@ -549,13 +610,71 @@ export class SafetyAnalyticsDetector extends BaseDetector {
   }
 
   private async detectSpills(frame: DetectionFrame): Promise<HazardDetection[]> {
-    // TODO: Detect spills using color/texture analysis
-    return [];
+    // Use integrated spill detector
+    try {
+      const spills = await this.spillDetector.detectSpills({
+        data: frame.data as Uint8Array,
+        width: frame.width,
+        height: frame.height,
+        timestamp: frame.timestamp,
+      });
+
+      return spills.map(spill => ({
+        hazardId: spill.id,
+        hazardType: spill.type as HazardType,
+        severity: spill.severity,
+        confidence: spill.confidence,
+        boundingBox: spill.boundingBox,
+        location: spill.location,
+        isActive: true,
+        firstDetected: spill.firstDetected,
+        lastDetected: spill.lastDetected,
+        duration: spill.duration,
+        spreading: spill.isGrowing,
+        metadata: {
+          area: spill.area,
+          slipRisk: spill.slipRisk,
+          peopleNearby: spill.peopleNearby,
+        },
+      }));
+    } catch (error) {
+      console.warn('Spill detection failed:', error);
+      return [];
+    }
   }
 
   private async detectArcFlash(frame: DetectionFrame): Promise<HazardDetection[]> {
-    // TODO: Detect arc flash using bright flash detection
-    return [];
+    // Use integrated arc flash detector
+    try {
+      const events = this.arcFlashDetector.detectArcFlash({
+        data: frame.data as Uint8Array,
+        width: frame.width,
+        height: frame.height,
+        timestamp: frame.timestamp,
+      });
+
+      return events.map(event => ({
+        hazardId: event.id,
+        hazardType: 'arc_flash' as HazardType,
+        severity: event.severity,
+        confidence: event.confidence,
+        boundingBox: event.boundingBox,
+        location: event.location,
+        isActive: true,
+        firstDetected: event.firstDetected,
+        lastDetected: event.lastDetected,
+        duration: event.duration,
+        metadata: {
+          brightness: event.brightness,
+          blueWhiteRatio: event.blueWhiteRatio,
+          isElectricalZone: event.isElectricalZone,
+          peopleNearby: event.peopleNearby,
+        },
+      }));
+    } catch (error) {
+      console.warn('Arc flash detection failed:', error);
+      return [];
+    }
   }
 
   // ============================================================================
@@ -566,36 +685,35 @@ export class SafetyAnalyticsDetector extends BaseDetector {
     present: FireExtinguisherMonitor[];
     missing: FireExtinguisherMonitor[];
   } {
-    const present: FireExtinguisherMonitor[] = [];
-    const missing: FireExtinguisherMonitor[] = [];
+    // Use integrated equipment monitor
+    try {
+      const statuses = this.equipmentMonitor.checkAllEquipment(frame.timestamp);
+      const present: FireExtinguisherMonitor[] = [];
+      const missing: FireExtinguisherMonitor[] = [];
 
-    // TODO: Detect fire extinguishers in frame
-    // For each configured location, check if extinguisher is present
+      for (const status of statuses) {
+        const monitor: FireExtinguisherMonitor = {
+          equipmentId: status.equipmentId,
+          location: status.location,
+          boundingBox: { x: 0, y: 0, width: 0, height: 0 },
+          isPresent: status.isPresent,
+          lastSeen: status.lastSeen || frame.timestamp,
+          missingDuration: status.missingDuration,
+          alertSent: status.status === 'missing' || status.status === 'critical',
+        };
 
-    for (const [equipmentId, monitor] of this.fireExtinguishers.entries()) {
-      const isDetected = false;  // TODO: Check if detected in frame
-
-      if (isDetected) {
-        monitor.isPresent = true;
-        monitor.lastSeen = frame.timestamp;
-        monitor.missingDuration = undefined;
-        monitor.alertSent = false;
-        present.push(monitor);
-      } else {
-        monitor.isPresent = false;
-        if (monitor.lastSeen) {
-          monitor.missingDuration = (frame.timestamp.getTime() - monitor.lastSeen.getTime()) / 1000;
-        }
-        
-        // Alert if missing for more than 5 minutes
-        if (monitor.missingDuration && monitor.missingDuration > 300 && !monitor.alertSent) {
+        if (status.isPresent) {
+          present.push(monitor);
+        } else if (status.missingDuration && status.missingDuration > 300) {
           missing.push(monitor);
-          monitor.alertSent = true;
         }
       }
-    }
 
-    return { present, missing };
+      return { present, missing };
+    } catch (error) {
+      console.warn('Equipment monitoring failed:', error);
+      return { present: [], missing: [] };
+    }
   }
 
   // ============================================================================
@@ -606,28 +724,34 @@ export class SafetyAnalyticsDetector extends BaseDetector {
     clear: ExitMonitor[];
     blocked: ExitMonitor[];
   } {
-    const clear: ExitMonitor[] = [];
-    const blocked: ExitMonitor[] = [];
+    // Use integrated exit monitor
+    try {
+      const statuses = this.exitMonitor.checkAllExits(frame.timestamp);
+      const clear: ExitMonitor[] = [];
+      const blocked: ExitMonitor[] = [];
 
-    // TODO: Check if exits are blocked by objects or people
+      for (const status of statuses) {
+        const monitor: ExitMonitor = {
+          exitId: status.exitId,
+          location: status.exitName,
+          polygon: [],
+          isBlocked: status.isBlocked,
+          blockingSince: undefined,
+          clearanceRequired: 1.5,
+        };
 
-    for (const [exitId, monitor] of this.exitMonitors.entries()) {
-      const isBlocked = false;  // TODO: Detect blockage
-
-      if (isBlocked && !monitor.isBlocked) {
-        monitor.isBlocked = true;
-        monitor.blockingSince = frame.timestamp;
-        blocked.push(monitor);
-      } else if (!isBlocked && monitor.isBlocked) {
-        monitor.isBlocked = false;
-        monitor.blockingSince = undefined;
-        clear.push(monitor);
-      } else if (isBlocked) {
-        blocked.push(monitor);
+        if (status.isBlocked) {
+          blocked.push(monitor);
+        } else {
+          clear.push(monitor);
+        }
       }
-    }
 
-    return { clear, blocked };
+      return { clear, blocked };
+    } catch (error) {
+      console.warn('Exit monitoring failed:', error);
+      return { clear: [], blocked: [] };
+    }
   }
 
   // ============================================================================
@@ -635,12 +759,40 @@ export class SafetyAnalyticsDetector extends BaseDetector {
   // ============================================================================
 
   private checkZoneCompliance(frame: DetectionFrame): DetectionResult[] {
-    const results: DetectionResult[] = [];
+    // Use integrated zone compliance detector
+    try {
+      const violations = this.zoneComplianceDetector.checkCompliance(frame.timestamp);
+      const results: DetectionResult[] = [];
 
-    // TODO: Check if persons in restricted zones have authorization
-    // TODO: Check if zone occupancy exceeds limits
+      if (violations.length > 0) {
+        results.push({
+          detectionType: "zone-compliance-violation",
+          confidence: 0.90,
+          objects: violations.map(v => ({
+            label: v.type,
+            confidence: 0.90,
+            trackId: v.personId || v.id,
+            boundingBox: { x: 0, y: 0, width: 0, height: 0 },
+          })),
+          metadata: {
+            violations: violations.map(v => ({
+              id: v.id,
+              type: v.type,
+              severity: v.severity,
+              zone: v.zoneName,
+              description: v.description,
+              duration: v.duration,
+            })),
+          },
+          requiresAlert: violations.some(v => v.severity === 'critical' || v.severity === 'high'),
+        });
+      }
 
-    return results;
+      return results;
+    } catch (error) {
+      console.warn('Zone compliance check failed:', error);
+      return [];
+    }
   }
 
   // ============================================================================
@@ -1005,6 +1157,220 @@ export class SafetyAnalyticsDetector extends BaseDetector {
       },
       equipment: this.getFireEquipmentStatus(),
       exits: this.getExitStatus(),
+    };
+  }
+
+  // ============================================================================
+  // Object Tracking Integration
+  // ============================================================================
+
+  /**
+   * Update object tracking with frame detections
+   */
+  private async updateObjectTracking(frame: DetectionFrame): Promise<any[]> {
+    try {
+      const pipeline = getInferencePipeline();
+      const detections = await pipeline.detectObjects(frame, ['person', 'vehicle', 'box', 'chair', 'table']);
+      
+      // Convert to tracker format
+      const trackerDetections: Detection[] = detections.map(d => ({
+        label: d.label,
+        confidence: d.confidence,
+        boundingBox: d.boundingBox,
+      }));
+
+      // Update tracker
+      const trackedObjects = this.objectTracker.update(trackerDetections, frame.timestamp);
+
+      // Update zone engine with tracked persons
+      for (const obj of trackedObjects) {
+        if (obj.label === 'person') {
+          this.zoneEngine.updatePersonPosition(
+            obj.trackId,
+            obj.position,
+            obj.boundingBox
+          );
+        }
+      }
+
+      return trackedObjects;
+    } catch (error) {
+      console.warn('Object tracking update failed:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Process signals through correlation engine
+   */
+  private processCorrelationSignals(
+    frame: DetectionFrame,
+    detections: {
+      fireSmoke: HazardDetection[];
+      hazards: HazardDetection[];
+      complianceChecks: PPECompliance[];
+      equipmentStatus: { present: any[]; missing: any[] };
+      exitStatus: { clear: any[]; blocked: any[] };
+    }
+  ): any[] {
+    try {
+      const signals: Omit<SafetySignal, 'id'>[] = [];
+
+      // Fire and smoke signals
+      for (const hazard of detections.fireSmoke) {
+        signals.push({
+          type: hazard.hazardType === 'fire' ? 'fire' : 'smoke',
+          confidence: hazard.confidence,
+          location: hazard.location,
+          timestamp: frame.timestamp,
+          metadata: { hazardId: hazard.hazardId },
+        });
+      }
+
+      // Spill and arc flash signals
+      for (const hazard of detections.hazards) {
+        if (hazard.hazardType === 'spill' || hazard.hazardType === 'chemical_spill') {
+          signals.push({
+            type: 'spill',
+            confidence: hazard.confidence,
+            location: hazard.location,
+            timestamp: frame.timestamp,
+            metadata: { hazardId: hazard.hazardId },
+          });
+        } else if (hazard.hazardType === 'arc_flash') {
+          signals.push({
+            type: 'arc_flash',
+            confidence: hazard.confidence,
+            location: hazard.location,
+            timestamp: frame.timestamp,
+            metadata: { hazardId: hazard.hazardId },
+          });
+        }
+      }
+
+      // Compliance violation signals
+      for (const check of detections.complianceChecks) {
+        if (!check.isCompliant) {
+          signals.push({
+            type: 'missing_ppe',
+            confidence: (100 - check.complianceRate) / 100,
+            location: { x: 0.5, y: 0.5 }, // Placeholder
+            timestamp: frame.timestamp,
+            metadata: {
+              personId: check.personTrackId,
+              missingPPE: check.missing,
+            },
+          });
+        }
+      }
+
+      // Equipment missing signals
+      if (detections.equipmentStatus.missing.length > 0) {
+        for (const equipment of detections.equipmentStatus.missing) {
+          signals.push({
+            type: 'equipment_missing',
+            confidence: 0.95,
+            location: equipment.location,
+            timestamp: frame.timestamp,
+            metadata: { equipmentId: equipment.equipmentId },
+          });
+        }
+      }
+
+      // Exit blocked signals
+      if (detections.exitStatus.blocked.length > 0) {
+        for (const exit of detections.exitStatus.blocked) {
+          signals.push({
+            type: 'exit_blocked',
+            confidence: 0.92,
+            location: { x: 0.5, y: 0.5 }, // Placeholder
+            timestamp: frame.timestamp,
+            metadata: { exitId: exit.exitId },
+          });
+        }
+      }
+
+      // Process all signals
+      return this.correlationEngine.processSignals(signals);
+    } catch (error) {
+      console.warn('Signal correlation failed:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Create detection results for correlated events
+   */
+  private createCorrelatedEventResults(events: any[]): DetectionResult[] {
+    return events.map(event => ({
+      detectionType: `correlated-${event.type}`,
+      confidence: event.confidence,
+      objects: event.signals.map((s: any) => ({
+        label: s.type,
+        confidence: s.confidence,
+        trackId: s.id,
+        boundingBox: { x: 0, y: 0, width: 0, height: 0 },
+      })),
+      metadata: {
+        correlationId: event.id,
+        ruleName: event.ruleName,
+        severity: event.severity,
+        signalCount: event.signals.length,
+        description: event.description,
+        peopleAffected: event.peopleAffected,
+        requiresImmediateAction: event.requiresImmediateAction,
+      },
+      requiresAlert: event.requiresImmediateAction,
+    }));
+  }
+
+  // ============================================================================
+  // Public API Extensions
+  // ============================================================================
+
+  /**
+   * Get zone engine instance
+   */
+  getZoneEngine(): ZoneEngine {
+    return this.zoneEngine;
+  }
+
+  /**
+   * Get object tracker instance
+   */
+  getObjectTracker(): MultiObjectTracker {
+    return this.objectTracker;
+  }
+
+  /**
+   * Get correlation engine instance
+   */
+  getCorrelationEngine(): EventCorrelationEngine {
+    return this.correlationEngine;
+  }
+
+  /**
+   * Get comprehensive safety dashboard data
+   */
+  getSafetyDashboard(): {
+    zones: any;
+    tracking: any;
+    compliance: any;
+    exits: any;
+    equipment: any;
+    spills: any;
+    arcFlash: any;
+    correlation: any;
+  } {
+    return {
+      zones: this.zoneEngine.getZoneStatistics(),
+      tracking: this.objectTracker.getStatistics(),
+      compliance: this.zoneComplianceDetector.getStatistics(),
+      exits: this.exitMonitor.getSummaryStatistics(),
+      equipment: this.equipmentMonitor.getAnalytics(),
+      spills: this.spillDetector.getAnalytics(),
+      arcFlash: this.arcFlashDetector.getAnalytics(),
+      correlation: this.correlationEngine.getStatistics(),
     };
   }
 

@@ -8,6 +8,7 @@ import { BaseDetector, calculateIoU, type DetectionFrame, type DetectionResult, 
 import { getModelManager } from "../model-manager.js";
 import { YoloCocoInference } from "../inference/yolo-coco-inference.js";
 import { modelUnavailableReason } from "../inference/configured-model-inference.js";
+import { TrackingEventBus, buildTrackingObservations, type FrameContext } from "../tracking/index.js";
 
 export type VehicleType = "car" | "motorcycle" | "bus" | "truck" | "bicycle" | "auto-rickshaw";
 
@@ -27,12 +28,20 @@ export class VehicleDetector extends BaseDetector {
   private isModelLoaded = false;
   private inference: YoloCocoInference | null = null;
   private modelLoadError: string | undefined;
+  private trackingBus: TrackingEventBus | null = null;
 
   private readonly TRACKING_TIMEOUT_MS = 10000; // 10 seconds
   private readonly MIN_CONFIDENCE = 0.6;
 
   constructor() {
     super("vehicle", "2.0.0");
+  }
+
+  /**
+   * Set tracking event bus for publishing observations
+   */
+  setTrackingBus(bus: TrackingEventBus): void {
+    this.trackingBus = bus;
   }
 
   async initialize(): Promise<void> {
@@ -58,6 +67,11 @@ export class VehicleDetector extends BaseDetector {
     const vehicles = await this.detectVehiclesInFrame(frame);
     const tracked = this.updateTracking(vehicles, frame.timestamp);
 
+    // Publish tracking observations to event bus
+    if (this.trackingBus && tracked.length > 0) {
+      this.publishTrackingObservations(tracked, frame);
+    }
+
     const results: DetectionResult[] = [];
 
     if (tracked.length > 0) {
@@ -80,6 +94,44 @@ export class VehicleDetector extends BaseDetector {
     }
 
     return results;
+  }
+
+  /**
+   * Publish tracking observations to event bus
+   */
+  private publishTrackingObservations(tracked: any[], frame: DetectionFrame): void {
+    if (!this.trackingBus) return;
+
+    // Build frame context
+    const context: FrameContext = {
+      tenantId: frame.tenantId || 'default',
+      branchId: frame.branchId,
+      cameraId: frame.cameraId,
+      frameId: frame.frameId,
+      timestamp: frame.timestamp,
+      frameWidth: frame.width,
+      frameHeight: frame.height,
+    };
+
+    // Convert tracked vehicles to observations
+    const observations = buildTrackingObservations(
+      tracked.map(vehicle => ({
+        trackId: vehicle.trackId,
+        label: vehicle.vehicleType,
+        confidence: vehicle.confidence,
+        boundingBox: vehicle.boundingBox,
+        timestamp: frame.timestamp,
+        speed: vehicle.speed,
+        direction: vehicle.direction,
+        dwellTimeSeconds: vehicle.dwellTimeSeconds,
+      })),
+      context,
+    );
+
+    // Publish each observation
+    for (const observation of observations) {
+      this.trackingBus.publish(observation);
+    }
   }
 
   /**
