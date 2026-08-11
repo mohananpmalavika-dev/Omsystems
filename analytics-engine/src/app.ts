@@ -112,6 +112,32 @@ export function buildAnalyticsEngine(options: AnalyticsEngineOptions) {
     app.log.error({ err: error, initializationError: pipelineInitializationError }, "Failed to initialize analytics pipeline");
   });
 
+  // Initialize banking analytics integration after pipeline is ready
+  pipelineReady.then(() => {
+    if (!pipelineInitializationError && process.env.ENABLE_BANKING_ANALYTICS === 'true') {
+      void import("./banking/banking-analytics-activation.js").then(async (module) => {
+        try {
+          await module.activateBankingAnalytics(pipeline, {
+            enableVehicleEvents: true,
+            enableAnprEvents: true,
+            enablePersonEvents: true,
+            enableFaceEvents: true,
+            enableZoneEvents: true,
+            enableAccessEvents: true,
+            enableObjectEvents: true,
+            autoStartWorkflows: true,
+            preloadMonitors: true,
+          });
+          app.log.info('Banking analytics system activated');
+        } catch (error) {
+          app.log.warn({ err: error }, "Banking analytics activation failed - system will remain inactive");
+        }
+      });
+    }
+  }).catch(() => {
+    // Pipeline initialization already logged the error
+  });
+
   // Initialize statistics service (optional - requires DATABASE_URL)
   void import("./statistics-integration.js").then(async (module) => {
     try {

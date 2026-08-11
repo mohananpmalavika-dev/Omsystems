@@ -24,9 +24,28 @@ import {
   ChevronDown,
   ChevronUp
 } from 'lucide-react';
-import { formatDistanceToNow } from 'date-fns';
 
 type ComplianceState = 'healthy' | 'unhealthy' | 'unknown';
+
+function formatDistanceToNow(value: Date, options?: { addSuffix?: boolean }) {
+  const elapsedSeconds = Math.round((Date.now() - value.getTime()) / 1000);
+  const absoluteSeconds = Math.abs(elapsedSeconds);
+  const units: Array<[Intl.RelativeTimeFormatUnit, number]> = [
+    ['year', 365 * 24 * 60 * 60],
+    ['month', 30 * 24 * 60 * 60],
+    ['week', 7 * 24 * 60 * 60],
+    ['day', 24 * 60 * 60],
+    ['hour', 60 * 60],
+    ['minute', 60],
+    ['second', 1],
+  ];
+  const [unit, divisor] = units.find(([, seconds]) => absoluteSeconds >= seconds) ?? units.at(-1)!;
+  const amount = -Math.round(elapsedSeconds / divisor);
+  if (options?.addSuffix) {
+    return new Intl.RelativeTimeFormat(undefined, { numeric: 'auto' }).format(amount, unit);
+  }
+  return `${Math.abs(amount)} ${unit}${Math.abs(amount) === 1 ? '' : 's'}`;
+}
 
 interface CheckResult {
   status: ComplianceState;

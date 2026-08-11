@@ -17,9 +17,11 @@ import { EncryptionAdapter } from '../security-posture/adapters/encryption.adapt
 import { SecretsManagementAdapter } from '../security-posture/adapters/secrets-management.adapter';
 import { ThreatDetectionAdapter } from '../security-posture/adapters/threat-detection.adapter';
 import { PlatformIntegrityAdapter } from '../security-posture/adapters/platform-integrity.adapter';
+import { AttestationAdapter } from '../security-posture/adapters/attestation.adapter';
 import { createTenantContext } from '../security-posture/contracts/telemetry-context';
 import type { SecurityTelemetryResult } from '../security-posture/contracts/telemetry-result';
 import { getCollectorHealthService } from '../security-posture/services/collector-health.service';
+import { Pool } from 'pg';
 
 export interface SecurityTelemetryMetric {
   name: string;
@@ -154,14 +156,16 @@ export class SecurityPostureTelemetryService {
   private secretsAdapter: SecretsManagementAdapter;
   private threatAdapter: ThreatDetectionAdapter;
   private platformAdapter: PlatformIntegrityAdapter;
+  private attestationAdapter: AttestationAdapter;
   
-  constructor() {
+  constructor(private pool?: Pool) {
     // Initialize adapters
     this.networkAdapter = new NetworkSecurityAdapter();
     this.encryptionAdapter = new EncryptionAdapter();
     this.secretsAdapter = new SecretsManagementAdapter();
     this.threatAdapter = new ThreatDetectionAdapter();
     this.platformAdapter = new PlatformIntegrityAdapter();
+    this.attestationAdapter = pool ? new AttestationAdapter(pool) : null as any;
     
     // Register adapters with health service
     const healthService = getCollectorHealthService();
@@ -170,6 +174,9 @@ export class SecurityPostureTelemetryService {
     healthService.registerCollector(this.secretsAdapter as any);
     healthService.registerCollector(this.threatAdapter as any);
     healthService.registerCollector(this.platformAdapter as any);
+    if (this.attestationAdapter) {
+      healthService.registerCollector(this.attestationAdapter as any);
+    }
   }
   
   /**
@@ -186,12 +193,14 @@ export class SecurityPostureTelemetryService {
       secretsResults,
       threatResults,
       platformResults,
+      attestationResults,
     ] = await Promise.allSettled([
       this.networkAdapter.collect(context),
       this.encryptionAdapter.collect(context),
       this.secretsAdapter.collect(context),
       this.threatAdapter.collect(context),
       this.platformAdapter.collect(context),
+      this.attestationAdapter ? this.attestationAdapter.collect(context) : Promise.resolve([]),
     ]);
     
     // Process adapter results into legacy telemetry format
@@ -212,7 +221,8 @@ export class SecurityPostureTelemetryService {
     );
     
     const tpm = this.mapTPMTelemetry(
-      platformResults.status === 'fulfilled' ? platformResults.value : []
+      platformResults.status === 'fulfilled' ? platformResults.value : [],
+      attestationResults.status === 'fulfilled' ? attestationResults.value : []
     );
     
     const tamper = this.mapTamperTelemetry(
@@ -449,45 +459,99 @@ export class SecurityPostureTelemetryService {
   
   /**
    * Map TPM adapter results to legacy telemetry format
+   * Now uses REAL attestation data from attestation adapter
    */
-  private mapTPMTelemetry(results: SecurityTelemetryResult[]): TPMTelemetry {
+  private mapTPMTelemetry(
+    platformResults: SecurityTelemetryResult[],
+    attestationResults: SecurityTelemetryResult[]
+  ): TPMTelemetry {
     const timestamp = new Date();
     
-    const tpm = results.find(r => r.source === 'tpm');
-    const attestation = results.find(r => r.source === 'tpm-attestation');
-    const pcr = results.find(r => r.source === 'pcr-validation');
+    const tpm = platformResults.find(r => r.source === 'tpm');
+    const attestation = attestationResults.find(r => r.source === 'tpm-attestation');
+    const attestationSuccess = attestationResults.find(r => r.source === 'attestation-success-rate');
+    const attestationFailures = attestationResults.find(r => r.source === 'attestation-failures');
+    const policyCompliance = attestationResults.find(r => r.source === 'boot-policy-compliance');
     
     return {
       tpmPresent: this.mapToMetric(
         'TPM Present',
-        tpm,
+        tpm || attestation,
         'count',
         timestamp
       ),
       tpmVersion: this.mapToMetric(
         'TPM Version 2.0+',
-        tpm,
+        tpm || attestation,
         'count',
         timestamp
       ),
-      attestationSuccess: this.mapToMetric(
-        'Successful Attestations',
-        attestation,
-        'count',
-        timestamp
-      ),
-      attestationFailures: this.mapToMetric(
-        'Failed Attestations',
-        attestation,
-        'count',
-        timestamp
-      ),
-      pcrValidation: this.mapToMetric(
-        'PCR Validation',
-        pcr,
-        'percentage',
-        timestamp
-      ),
+      attestationSuccess: attestationSuccess ? {
+        name: 'Successful Attestations',
+        value: attestationSuccess.value?.verified || 0,
+        unit: 'count',
+        source: attestationSuccess.source,
+        timestamp: attestationSuccess.observedAt,
+        freshness: attestationSuccess.quality.freshness > 0.8 ? 'current' : 
+                   attestationSuccess.quality.freshness > 0.3 ? 'stale' : 'unknown',
+        available: attestationSuccess.available,
+        confidence: attestationSuccess.quality.confidence,
+        metadata: attestationSuccess.evidence
+      } : {
+        name: 'Successful Attestations',
+        value: 0,
+        unit: 'count',
+        source: 'attestation:success',
+        timestamp,
+        freshness: 'unknown',
+        available: false,
+        confidence: 0,
+        errorMessage: 'Attestation telemetry not available'
+      },
+      attestationFailures: attestationFailures ? {
+        name: 'Failed Attestations',
+        value: attestationFailures.value?.failureCount || 0,
+        unit: 'count',
+        source: attestationFailures.source,
+        timestamp: attestationFailures.observedAt,
+        freshness: attestationFailures.quality.freshness > 0.8 ? 'current' : 
+                   attestationFailures.quality.freshness > 0.3 ? 'stale' : 'unknown',
+        available: attestationFailures.available,
+        confidence: attestationFailures.quality.confidence,
+        metadata: attestationFailures.evidence
+      } : {
+        name: 'Failed Attestations',
+        value: 0,
+        unit: 'count',
+        source: 'attestation:failures',
+        timestamp,
+        freshness: 'unknown',
+        available: false,
+        confidence: 0,
+        errorMessage: 'Attestation telemetry not available'
+      },
+      pcrValidation: policyCompliance ? {
+        name: 'PCR Validation',
+        value: policyCompliance.value?.complianceRate || 0,
+        unit: 'percentage',
+        source: policyCompliance.source,
+        timestamp: policyCompliance.observedAt,
+        freshness: policyCompliance.quality.freshness > 0.8 ? 'current' : 
+                   policyCompliance.quality.freshness > 0.3 ? 'stale' : 'unknown',
+        available: policyCompliance.available,
+        confidence: policyCompliance.quality.confidence,
+        metadata: policyCompliance.evidence
+      } : {
+        name: 'PCR Validation',
+        value: 0,
+        unit: 'percentage',
+        source: 'attestation:pcr-validation',
+        timestamp,
+        freshness: 'unknown',
+        available: false,
+        confidence: 0,
+        errorMessage: 'Policy compliance telemetry not available'
+      }
     };
   }
   
@@ -759,9 +823,9 @@ export class SecurityPostureTelemetryService {
  */
 let instance: SecurityPostureTelemetryService | null = null;
 
-export function getSecurityPostureTelemetryService(): SecurityPostureTelemetryService {
+export function getSecurityPostureTelemetryService(pool?: Pool): SecurityPostureTelemetryService {
   if (!instance) {
-    instance = new SecurityPostureTelemetryService();
+    instance = new SecurityPostureTelemetryService(pool);
   }
   return instance;
 }

@@ -286,15 +286,14 @@ export class SecureBootTPMService {
     stageName: string,
     expectedHash: string
   ): Promise<BootStage> {
-    // In production: retrieve actual hash from device
-    // For now, simulate verification
-    const actualHash = expectedHash; // Would come from device
-    const valid = actualHash === expectedHash;
-
+    // SECURITY: TPM attestation evidence not yet implemented
+    // Returning UNKNOWN status instead of false positive verification
+    // This stage requires TPM quote with signed PCR values
+    
     return {
       name: stageName,
-      hash: actualHash,
-      valid,
+      hash: '(not attested)',
+      valid: false,
       timestamp: new Date()
     };
   }
@@ -304,13 +303,16 @@ export class SecureBootTPMService {
     signature: any,
     ekCertificate?: string
   ): Promise<boolean> {
-    // In production: verify signature using EK certificate public key
-    // For now, return true
-    return true;
+    // SECURITY: TPM quote signature verification not yet implemented
+    // Must verify using Attestation Key (AK) public key, not EK
+    // Returns false until proper cryptographic verification is implemented
+    return false;
   }
 
   private async verifyPCRValues(pcrValues: Record<string, string>): Promise<boolean> {
-    // In production: compare against known good baseline
+    // SECURITY: PCR policy verification not yet implemented
+    // Must compare against tenant-approved boot policy baselines
+    // Must verify PCR digest matches TPM quote
     // Check PCR 0-7 for boot components
     // PCR 0: BIOS/UEFI
     // PCR 1: BIOS/UEFI configuration
@@ -321,7 +323,8 @@ export class SecureBootTPMService {
     // PCR 6: Resume from sleep
     // PCR 7: Secure boot state
 
-    return true;
+    // Returns false until policy-driven verification is implemented
+    return false;
   }
 
   private async checkAttestationFreshness(timestamp: Date): Promise<boolean> {

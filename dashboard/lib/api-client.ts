@@ -888,6 +888,62 @@ export const analyticsApi = {
     }),
 };
 
+export const bankingAnalyticsApi = {
+  listSessions: (filters: { tenantId: string; branchId?: string }) => {
+    const params = new URLSearchParams({ tenantId: filters.tenantId });
+    if (filters.branchId) params.set('branchId', filters.branchId);
+    return fetchApi<{ success: boolean; data: any[]; count: number }>(
+      `/v1/banking/sessions?${params}`,
+    );
+  },
+  getSummary: (tenantId: string, branchId?: string) => {
+    const params = new URLSearchParams({ tenantId });
+    if (branchId) params.set('branchId', branchId);
+    return fetchApi<{ success: boolean; data: any }>(
+      `/v1/banking/sessions/summary?${params}`,
+    );
+  },
+  listMonitors: (tenantId: string, branchId: string) =>
+    fetchApi<{ success: boolean; data: any[]; count: number }>(
+      `/v1/banking/monitors?${new URLSearchParams({ tenantId, branchId })}`,
+    ),
+  createMonitor: (data: {
+    tenantId: string;
+    branchId: string;
+    name: string;
+    description?: string;
+    arrivalZoneId: string;
+    unloadingZoneId: string;
+    secureEntryZoneId?: string;
+  }) => fetchApi<{ success: boolean; data: any }>('/v1/banking/monitors', {
+    method: 'POST', body: JSON.stringify(data),
+  }),
+  listVisits: (branchId: string, startDate?: string, endDate?: string) => {
+    const params = new URLSearchParams({ branchId });
+    if (startDate) params.set('startDate', startDate);
+    if (endDate) params.set('endDate', endDate);
+    return fetchApi<{ success: boolean; data: any[]; count: number }>(
+      `/v1/banking/visits?${params}`,
+    );
+  },
+  createVisit: (data: {
+    tenantId: string;
+    branchId: string;
+    expectedPlate?: string;
+    providerName?: string;
+    expectedArrivalStart: string;
+    expectedArrivalEnd: string;
+    notes?: string;
+  }) => fetchApi<{ success: boolean; data: any }>('/v1/banking/visits', {
+    method: 'POST', body: JSON.stringify(data),
+  }),
+  generateEvidence: (sessionId: string) =>
+    fetchApi<{ success: boolean; data: any }>(
+      `/v1/banking/sessions/${encodeURIComponent(sessionId)}/evidence`,
+      { method: 'POST', body: JSON.stringify({}) },
+    ),
+};
+
 export const cameraPermissionApi = {
   listUserGrants: (userId: string) => 
     fetchApi<{ data: any[] }>(`/v1/users/${userId}/camera-grants`),

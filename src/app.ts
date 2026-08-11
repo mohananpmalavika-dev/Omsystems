@@ -2134,6 +2134,15 @@ export async function buildApp(options?: {
   } catch (err: unknown) {
     app.log.error({ err }, 'failed to register capabilities routes');
   }
+
+  // Register banking analytics routes
+  try {
+    const { registerBankingAnalyticsApiRoutes } = await import('../analytics-engine/src/routes/banking-analytics-api.js');
+    await registerBankingAnalyticsApiRoutes(app, {});
+    app.log.info('Banking analytics routes registered');
+  } catch (err: unknown) {
+    app.log.error({ err }, 'failed to register banking analytics routes');
+  }
   const alertWorker = setInterval(() => {
     void alertDispatcher.drainOnce().catch((error) => app.log.error({ error }, "Alert outbox drain failed"));
   }, 5_000);

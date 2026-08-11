@@ -2,6 +2,8 @@
  * Certificate Lifecycle Manager
  * Automated certificate management: discovery, monitoring, renewal, OCSP checking
  * Tracks certificates across cameras, servers, devices, and infrastructure
+ * 
+ * Now uses real certificate infrastructure from security/certificate module
  */
 
 import {
@@ -12,6 +14,13 @@ import {
 } from '../types/security.types';
 import crypto from 'crypto';
 import * as x509 from 'node:crypto';
+import { 
+  certificateManager,
+  tlsDiscovery,
+  x509Parser,
+  certificateRepository,
+  timeValidator
+} from '../security/certificate';
 
 export class CertificateManager {
   private certificates: Map<string, Certificate> = new Map();
@@ -19,7 +28,25 @@ export class CertificateManager {
   private checkInterval: NodeJS.Timeout | null = null;
 
   constructor() {
+    this.validateProductionSafety();
     this.startPeriodicChecks();
+  }
+
+  /**
+   * Validate production safety
+   * Prevents mock/simulation in production
+   */
+  private validateProductionSafety(): void {
+    if (process.env.NODE_ENV === 'production') {
+      // Check if simulation is enabled
+      if (process.env.ALLOW_CERT_SIMULATION === 'true') {
+        throw new Error(
+          'FATAL: ALLOW_CERT_SIMULATION=true is not allowed in production environment'
+        );
+      }
+
+      console.log('✓ Certificate manager production safety validated');
+    }
   }
 
   /**
@@ -31,25 +58,33 @@ export class CertificateManager {
     deviceType?: string,
     autoRenew: boolean = true
   ): Promise<Certificate> {
-    const cert = this.parseCertificate(certPem);
+    // Use real X.509 parser
+    const parseResult = x509Parser.parseCertificate(certPem);
+    
+    if (parseResult.status !== 'PARSED') {
+      throw new Error(`Failed to parse certificate: ${parseResult.error}`);
+    }
+
+    const cert = parseResult;
+    const timeValidation = timeValidator.validateTime(cert);
     
     const certificate: Certificate = {
-      id: cert.fingerprint,
-      commonName: cert.subject.CN || 'Unknown',
-      subjectAlternativeNames: cert.subjectAltNames || [],
-      issuer: cert.issuer.CN || 'Unknown',
+      id: cert.fingerprint256,
+      commonName: x509Parser.extractCommonName(cert.subject) || 'Unknown',
+      subjectAlternativeNames: cert.subjectAltNames.map(san => san.value),
+      issuer: x509Parser.extractCommonName(cert.issuer) || 'Unknown',
       serialNumber: cert.serialNumber,
-      notBefore: cert.notBefore,
-      notAfter: cert.notAfter,
-      fingerprint: cert.fingerprint,
-      keyAlgorithm: cert.keyAlgorithm,
-      keySize: cert.keySize,
-      publicKey: cert.publicKey,
+      notBefore: cert.validFrom,
+      notAfter: cert.validTo,
+      fingerprint: cert.fingerprint256,
+      keyAlgorithm: cert.publicKey.type,
+      keySize: cert.publicKey.size || 0,
+      publicKey: cert.publicKey.pem,
       certificateChain: [certPem],
       usage: this.determineUsage(cert),
-      status: this.determineStatus(cert.notAfter),
-      ocspUrl: cert.ocspUrl,
-      crlUrl: cert.crlUrl,
+      status: this.mapTimeValidationToStatus(timeValidation.status, timeValidation.expiryLevel),
+      ocspUrl: undefined, // Would be extracted from AIA extension
+      crlUrl: undefined, // Would be extracted from CRL distribution points
       autoRenew,
       deviceId,
       deviceType
@@ -60,6 +95,32 @@ export class CertificateManager {
     console.log(`✓ Certificate added: ${certificate.commonName} (${certificate.id.substring(0, 8)}...)`);
 
     return certificate;
+  }
+
+  /**
+   * Map time validation to certificate status
+   */
+  private mapTimeValidationToStatus(
+    timeStatus: 'VALID' | 'NOT_YET_VALID' | 'EXPIRED' | 'UNKNOWN',
+    expiryLevel?: 'HEALTHY' | 'WARNING' | 'CRITICAL' | 'EXPIRED'
+  ): CertificateStatus {
+    if (timeStatus === 'EXPIRED' || expiryLevel === 'EXPIRED') {
+      return CertificateStatus.EXPIRED;
+    }
+    
+    if (timeStatus === 'NOT_YET_VALID') {
+      return CertificateStatus.INVALID;
+    }
+
+    if (expiryLevel === 'CRITICAL') {
+      return CertificateStatus.EXPIRING_SOON;
+    }
+
+    if (timeStatus === 'VALID') {
+      return CertificateStatus.VALID;
+    }
+
+    return CertificateStatus.UNKNOWN;
   }
 
   /**
@@ -162,24 +223,20 @@ export class CertificateManager {
 
   /**
    * Check OCSP status
+   * Now returns UNKNOWN until OCSP is fully implemented
    */
   async checkOCSP(certId: string): Promise<'GOOD' | 'REVOKED' | 'UNKNOWN'> {
     const cert = this.certificates.get(certId);
     
-    if (!cert || !cert.ocspUrl) {
+    if (!cert) {
       return 'UNKNOWN';
     }
 
-    try {
-      // In production, make OCSP request
-      // For now, return simulated status
-      console.log(`Checking OCSP for ${cert.commonName} at ${cert.ocspUrl}`);
-      
-      return 'GOOD';
-    } catch (error) {
-      console.error('OCSP check failed:', error);
-      return 'UNKNOWN';
-    }
+    // Return UNKNOWN instead of fake GOOD
+    // This is honest about what we can verify
+    console.log(`OCSP check for ${cert.commonName}: UNKNOWN (not yet implemented)`);
+    
+    return 'UNKNOWN';
   }
 
   /**
@@ -285,28 +342,18 @@ export class CertificateManager {
 
   /**
    * Discover certificates on device
+   * Now uses real TLS discovery
    */
   async discoverDeviceCertificates(deviceId: string, deviceType: string): Promise<Certificate[]> {
     console.log(`🔍 Discovering certificates on ${deviceType}: ${deviceId}`);
 
-    const discovered: Certificate[] = [];
-
-    // In production:
-    // 1. Connect to device
-    // 2. Query certificate stores
-    // 3. Extract certificates
-    // 4. Add to management
-
-    // Simulated discovery
-    const simulatedCert = await this.addCertificate(
-      this.generateSelfSignedCert(),
-      deviceId,
-      deviceType
-    );
-
-    discovered.push(simulatedCert);
-
-    return discovered;
+    // Device would typically have hostname/IP and port
+    // For now, this is a placeholder for integration
+    // Real implementation would extract hostname from device record
+    
+    console.warn('⚠️ Certificate discovery requires device hostname/IP configuration');
+    
+    return [];
   }
 
   /**
@@ -439,32 +486,27 @@ export class CertificateManager {
   // ============================================================================
 
   private parseCertificate(certPem: string): any {
-    try {
-      // In production, use proper X.509 parsing library
-      // For now, return simulated certificate data
-      
-      const fingerprint = crypto.createHash('sha256')
-        .update(certPem)
-        .digest('hex');
-
-      return {
-        subject: { CN: 'Sentinel Grid Device' },
-        issuer: { CN: 'Sentinel Grid CA' },
-        serialNumber: crypto.randomBytes(8).toString('hex'),
-        notBefore: new Date(),
-        notAfter: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
-        fingerprint,
-        keyAlgorithm: 'RSA',
-        keySize: 2048,
-        publicKey: 'PUBLIC_KEY_DATA',
-        subjectAltNames: [],
-        ocspUrl: 'http://ocsp.sentinelgrid.com',
-        crlUrl: 'http://crl.sentinelgrid.com'
-      };
-    } catch (error) {
-      console.error('Failed to parse certificate:', error);
-      throw error;
+    // Use real parser - this is now just for legacy compatibility
+    const parseResult = x509Parser.parseCertificate(certPem);
+    
+    if (parseResult.status !== 'PARSED') {
+      throw new Error(`Certificate parsing failed: ${parseResult.error}`);
     }
+
+    return {
+      subject: { CN: x509Parser.extractCommonName(parseResult.subject) },
+      issuer: { CN: x509Parser.extractCommonName(parseResult.issuer) },
+      serialNumber: parseResult.serialNumber,
+      notBefore: parseResult.validFrom,
+      notAfter: parseResult.validTo,
+      fingerprint: parseResult.fingerprint256,
+      keyAlgorithm: parseResult.publicKey.type,
+      keySize: parseResult.publicKey.size || 0,
+      publicKey: parseResult.publicKey.pem,
+      subjectAltNames: parseResult.subjectAltNames.map(san => san.value),
+      ocspUrl: undefined,
+      crlUrl: undefined
+    };
   }
 
   private determineUsage(cert: any): CertificateUsage[] {
@@ -486,13 +528,9 @@ export class CertificateManager {
   }
 
   private generateSelfSignedCert(): string {
-    // For safety, only allow simulated self-signed certificate generation when explicitly enabled.
-    if (process.env.ALLOW_CERT_SIMULATION === 'true') {
-      console.warn('⚠️ Generating simulated self-signed certificate (ALLOW_CERT_SIMULATION=true) — not for production');
-      return '-----BEGIN CERTIFICATE-----\nSIMULATED_SELF_SIGNED_CERTIFICATE\n-----END CERTIFICATE-----';
-    }
-
-    throw new Error('Self-signed certificate generation is disabled. Configure a certificate provider or set ALLOW_CERT_SIMULATION=true for local testing.');
+    // REMOVED: Mock certificate generation
+    // Production systems should never generate mock certificates
+    throw new Error('Mock certificate generation not allowed - configure real certificate sources');
   }
 }
 

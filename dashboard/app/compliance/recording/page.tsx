@@ -15,6 +15,8 @@ import {
   type RecordingComplianceResult 
 } from '../../../components/recording-compliance/RecordingComplianceStatus';
 import { AlertTriangle, CheckCircle, HelpCircle, RefreshCw } from 'lucide-react';
+import { cameraInventoryApi } from '@/lib/api-client';
+import type { Branch, Camera } from '@/lib/types';
 
 export default function RecordingCompliancePage() {
   const [cameras, setCameras] = React.useState<Array<{
@@ -36,24 +38,32 @@ export default function RecordingCompliancePage() {
   async function fetchCameras() {
     try {
       setLoading(true);
+
+      const { data: branchData } = await cameraInventoryApi.listBranches('live:view');
+      const branches = branchData as Branch[];
+      const cameraGroups = await Promise.all(branches.map(async (branch) => {
+        const { data } = await cameraInventoryApi.listByBranch(branch.id, 'live:view');
+        return (data as Camera[]).map((camera) => ({
+          ...camera,
+          branchName: camera.branchName || branch.name,
+        }));
+      }));
+      const camerasData = cameraGroups.flat().filter((camera) => Boolean(camera.recorderId));
       
-      // Get all cameras with recorders
-      const camerasResponse = await fetch('/api/cameras?hasRecorder=true');
-      const camerasData = await camerasResponse.json();
-      
-      setCameras(
-        camerasData.map((camera: any) => ({
+      const pendingCameras = camerasData.map((camera) => ({
           id: camera.id,
           name: camera.name,
           branchName: camera.branchName,
           loading: true
-        }))
-      );
-      
-      // Fetch compliance for each camera
-      for (const camera of camerasData) {
-        fetchCameraCompliance(camera.id);
-      }
+      }));
+      setCameras(pendingCameras);
+
+      const checkedCameras = await Promise.all(pendingCameras.map(async (camera) => ({
+        ...camera,
+        ...(await loadCameraCompliance(camera.id)),
+        loading: false,
+      })));
+      setCameras(checkedCameras);
       
     } catch (error) {
       console.error('Failed to fetch cameras:', error);
@@ -63,33 +73,23 @@ export default function RecordingCompliancePage() {
   }
   
   async function fetchCameraCompliance(cameraId: string) {
+    const result = await loadCameraCompliance(cameraId);
+    setCameras(prev => prev.map(cam => cam.id === cameraId
+      ? { ...cam, ...result, loading: false }
+      : cam));
+  }
+
+  async function loadCameraCompliance(cameraId: string): Promise<{
+    compliance?: RecordingComplianceResult;
+    error?: string;
+  }> {
     try {
       const response = await fetch(`/api/recording-compliance/${cameraId}`);
-      
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
-      }
-      
-      const compliance = await response.json();
-      
-      setCameras(prev =>
-        prev.map(cam =>
-          cam.id === cameraId
-            ? { ...cam, compliance, loading: false }
-            : cam
-        )
-      );
-      
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      return { compliance: await response.json(), error: undefined };
     } catch (error) {
       console.error(`Failed to fetch compliance for camera ${cameraId}:`, error);
-      
-      setCameras(prev =>
-        prev.map(cam =>
-          cam.id === cameraId
-            ? { ...cam, loading: false, error: String(error) }
-            : cam
-        )
-      );
+      return { error: String(error) };
     }
   }
   
@@ -188,7 +188,7 @@ export default function RecordingCompliancePage() {
         {/* Important Notice */}
         <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
           <div className="flex items-start gap-3">
-            <div className="text-blue-600 mt-0.5">ℹ️</div>
+            <HelpCircle className="mt-0.5 h-5 w-5 text-blue-600" />
             <div className="flex-1">
               <h3 className="font-semibold text-blue-900 mb-1">
                 Evidence-Based Verification

@@ -61,7 +61,7 @@ interface TopologyVisualizationProps {
 
 const nodeTypes: NodeTypes = {
   default: TopologyNode,
-};
+} as unknown as NodeTypes;
 
 export function TopologyVisualization({
   rootId,

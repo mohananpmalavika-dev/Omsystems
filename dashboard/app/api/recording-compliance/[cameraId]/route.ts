@@ -9,10 +9,10 @@ import { NextRequest, NextResponse } from 'next/server';
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { cameraId: string } }
+  { params }: { params: Promise<{ cameraId: string }> }
 ) {
   try {
-    const { cameraId } = params;
+    const { cameraId } = await params;
     
     // Call backend API
     const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';

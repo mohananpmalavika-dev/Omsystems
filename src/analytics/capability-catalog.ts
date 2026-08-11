@@ -90,11 +90,74 @@ export const AI_CAPABILITY_DOMAINS: AiCapabilityDomain[] = [
     c("cash-van-arrival", "Cash van arrival"), c("strong-room-entry", "Strong room entry", "derived", "P1"),
     c("cash-tray-left-open", "Cash tray left open", "open-model", "P1"), c("dual-control-verification", "Dual control verification", "derived", "P1"),
   ]},
-  { id: "industrial", name: "Industrial analytics", description: "Machines, material handling, hazards, and worker safety", capabilities: [
-    c("forklift", "Forklift detection"), c("crane", "Crane detection"), c("machine-running", "Machine running", "derived"),
-    c("machine-idle", "Machine idle", "derived"), c("conveyor-blockage", "Conveyor blockage", "open-model", "P2"),
-    c("restricted-machinery-zone", "Restricted machinery zone", "derived", "P1"), c("worker-near-hazard", "Worker near hazard", "derived", "P1"),
-    c("fall-from-height", "Fall from height", "open-model", "P1"), c("smoke-near-machine", "Smoke near machine", "derived", "P1"),
+  
+  /**
+   * Industrial Analytics v2.0 - Architectural Overview
+   * 
+   * The industrial analytics capabilities now use a layered architecture:
+   * 
+   * 1. Detection Layer (open-model):
+   *    - Equipment detection via ONNX Runtime (YOLOv8-based)
+   *    - Model path: INDUSTRIAL_EQUIPMENT_MODEL_PATH
+   *    - Classes: forklift, crane, excavator, conveyor, AGV, etc.
+   *    - NO simulated detection - real inference or capability reports unavailable
+   * 
+   * 2. Tracking Layer (derived):
+   *    - IoU-based multi-object tracking with Kalman filtering
+   *    - Maintains equipment identity across frames
+   *    - Velocity estimation, trajectory, zone tracking
+   *    - Movement state: moving, stationary, unknown
+   * 
+   * 3. Analytics Layer (derived):
+   *    - Rule-based safety evaluation (IndustrialRuleEngine)
+   *    - Proximity detection (worker-equipment distance)
+   *    - Zone violations (equipment/person in restricted areas)
+   *    - Idle detection (equipment stationary beyond threshold)
+   *    - Temporal confirmation (reduces false positives)
+   * 
+   * Capability Status:
+   * - Available: Model deployed, tracker active, rules registered
+   * - Degraded: Person detector unavailable (proximity limited)
+   * - Unavailable: Equipment model not deployed
+   * 
+   * Health monitoring runs every 60s and reports exact dependency status.
+   */
+  { id: "industrial", name: "Industrial analytics", description: "Equipment detection, tracking, safety zones, and worker proximity (v2.0 - Real Detection)", capabilities: [
+    // Equipment detection (now using real ONNX models, not simulated)
+    c("forklift", "Forklift detection", "open-model"), 
+    c("pallet-jack", "Pallet jack detection", "open-model"),
+    c("reach-truck", "Reach truck detection", "open-model"),
+    c("crane", "Crane detection", "open-model"), 
+    c("overhead-crane", "Overhead crane detection", "open-model"),
+    c("excavator", "Excavator detection", "open-model"),
+    c("bulldozer", "Bulldozer detection", "open-model"),
+    c("loader", "Loader detection", "open-model"),
+    c("conveyor-belt", "Conveyor belt detection", "open-model"),
+    c("cnc-machine", "CNC machine detection", "open-model"),
+    c("agv", "AGV detection", "open-model"),
+    c("robot-arm", "Robot arm detection", "open-model"),
+    
+    // Equipment tracking and state (derived from detections + tracker)
+    c("equipment-tracking", "Equipment tracking", "derived"),
+    c("equipment-velocity", "Equipment velocity estimation", "derived"),
+    c("equipment-trajectory", "Equipment trajectory", "derived"),
+    c("machine-running", "Machine running state", "derived"),
+    c("machine-idle", "Machine idle state", "derived"),
+    c("machine-stationary", "Machine stationary detection", "derived"),
+    
+    // Safety analytics (derived from rules engine)
+    c("unsafe-proximity", "Unsafe worker-equipment proximity", "derived", "P1"),
+    c("equipment-restricted-zone", "Equipment in restricted zone", "derived", "P1"), 
+    c("person-equipment-zone", "Person in equipment-only zone", "derived", "P1"),
+    c("equipment-idle-too-long", "Equipment idle too long", "derived", "P2"),
+    c("restricted-machinery-zone", "Restricted machinery zone violation", "derived", "P1"), 
+    c("worker-near-hazard", "Worker near hazard", "derived", "P1"),
+    c("equipment-pedestrian-zone", "Equipment in pedestrian zone", "derived", "P1"),
+    
+    // Other safety features (open-model)
+    c("conveyor-blockage", "Conveyor blockage", "open-model", "P2"),
+    c("fall-from-height", "Fall from height", "open-model", "P1"), 
+    c("smoke-near-machine", "Smoke near machine", "derived", "P1"),
   ]},
   { id: "smart-city", name: "Smart city analytics", description: "Road, pedestrian, crowd, and environmental events", capabilities: [
     c("traffic-counting", "Traffic counting", "derived"), c("congestion", "Congestion detection", "derived"),

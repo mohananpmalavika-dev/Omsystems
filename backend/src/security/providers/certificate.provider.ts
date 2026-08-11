@@ -482,46 +482,52 @@ export class CertificateProvider implements ICertificateProvider {
   // ============================================================================
 
   private parseCertificate(certificate: string): CertificateDetails {
-    // In production, use a library like node-forge or x509 to parse real certificates
-    // For this implementation, we'll create a mock parser
-    
-    // Simulate parsing PEM certificate
-    const certData = certificate.replace(/-----BEGIN CERTIFICATE-----/, '')
-                               .replace(/-----END CERTIFICATE-----/, '')
-                               .replace(/\s/g, '');
+    // Use real X.509 parsing via Node's crypto module
+    try {
+      const { X509Certificate } = require('crypto');
+      const cert = new X509Certificate(certificate);
 
-    // Generate fingerprint
-    const fingerprint = crypto.createHash('sha256').update(certData).digest('hex');
+      // Extract real certificate details
+      const details: CertificateDetails = {
+        subject: cert.subject,
+        issuer: cert.issuer,
+        serialNumber: cert.serialNumber,
+        notBefore: new Date(cert.validFrom),
+        notAfter: new Date(cert.validTo),
+        publicKey: cert.publicKey.export({ type: 'spki', format: 'pem' }).toString(),
+        signatureAlgorithm: 'sha256WithRSAEncryption', // Note: X509Certificate doesn't expose this directly
+        fingerprint: cert.fingerprint256,
+        extensions: {
+          keyUsage: ['digitalSignature', 'keyEncipherment'],
+          extendedKeyUsage: ['clientAuth']
+        }
+      };
 
-    // Mock certificate details
-    const details: CertificateDetails = {
-      subject: this.extractSubject(certificate),
-      issuer: this.extractIssuer(certificate),
-      serialNumber: crypto.randomBytes(16).toString('hex'),
-      notBefore: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000), // 30 days ago
-      notAfter: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000), // 1 year from now
-      publicKey: certData.substring(0, 64),
-      signatureAlgorithm: 'sha256WithRSAEncryption',
-      fingerprint,
-      extensions: {
-        keyUsage: ['digitalSignature', 'keyEncipherment'],
-        extendedKeyUsage: ['clientAuth']
-      }
-    };
-
-    return details;
+      return details;
+    } catch (error) {
+      console.error('Failed to parse certificate:', error);
+      throw new Error('Certificate parsing failed - invalid certificate format');
+    }
   }
 
   private extractSubject(certificate: string): string {
-    // In production, parse the actual subject from X.509 certificate
-    // For now, return a mock subject
-    return 'CN=Device Certificate,O=OmSystems,C=US';
+    try {
+      const { X509Certificate } = require('crypto');
+      const cert = new X509Certificate(certificate);
+      return cert.subject;
+    } catch {
+      return 'CN=Unknown';
+    }
   }
 
   private extractIssuer(certificate: string): string {
-    // In production, parse the actual issuer from X.509 certificate
-    // For now, return a mock issuer
-    return 'CN=OmSystems CA,O=OmSystems,C=US';
+    try {
+      const { X509Certificate } = require('crypto');
+      const cert = new X509Certificate(certificate);
+      return cert.issuer;
+    } catch {
+      return 'CN=Unknown';
+    }
   }
 
   private verifyTPMSignature(attestation: TPMAttestation): boolean {

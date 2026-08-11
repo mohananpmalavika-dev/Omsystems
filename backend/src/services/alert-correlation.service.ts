@@ -277,7 +277,7 @@ export class AlertCorrelationService {
   }
 
   /**
-   * Store incident in Redis
+   * Store incident in Redis and optionally persist to DB
    */
   private async storeIncident(incident: Incident): Promise<void> {
     const key = `${this.keyPrefix}:incidents:${incident.id}`;
@@ -288,6 +288,12 @@ export class AlertCorrelationService {
         JSON.stringify(incident),
         'EX',
         86400, // 24 hours
+      );
+      
+      // Emit event for persistence (will be handled by incident service)
+      await this.redis.publish(
+        'incident:created',
+        JSON.stringify({ incidentId: incident.id }),
       );
     } catch (error) {
       console.error('[AlertCorrelation] Error storing incident:', error);

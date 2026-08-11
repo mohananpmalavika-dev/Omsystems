@@ -193,7 +193,7 @@ function RcaPanel({ diagnosis }: { diagnosis?: Diagnosis }) {
       <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
         <p className="text-xs uppercase tracking-[.2em] text-slate-500">Why Sentinel thinks this</p>
         <ul className="mt-3 space-y-2 text-sm text-slate-300">
-          {supportItems.map((item) => <li key={item.id} className="flex gap-2"><CheckCircle2 className="mt-1 h-4 w-4 shrink-0 text-emerald-400"/> <span>{item.title}: {item.detail}</span></li>)}
+          {supportItems.map((item) => <li key={item.id} className="flex gap-2"><CheckCircle2 className="mt-1 h-4 w-4 shrink-0 text-emerald-400"/> <span>{item.assertion}</span></li>)}
         </ul>
       </div>
       {diagnosis.rootCause.confidenceDetails?.length ? <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4">

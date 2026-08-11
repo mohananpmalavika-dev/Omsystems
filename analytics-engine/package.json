@@ -10,7 +10,8 @@
     "test": "vitest run test/app.test.ts test/inference.test.ts test/specialty-inference.test.ts test/model-manager.test.ts",
     "models:download": "tsx scripts/provision-models.ts",
     "models:verify": "tsx scripts/verify-models.ts",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "setup-banking-demo": "tsx scripts/setup-banking-demo.ts"
   },
   "dependencies": {
     "exceljs": "^4.4.0",
