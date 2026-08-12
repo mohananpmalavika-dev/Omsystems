@@ -261,7 +261,14 @@ export async function registerDigitalTwinRoutes(
     async (request, reply) => {
       try {
         const simulation = failureSimulationBody.parse(request.body);
-        const result = await twinService.simulateFailure(simulation);
+        // Ensure assetId is present (it's required by the schema)
+        const result = await twinService.simulateFailure({
+          assetId: simulation.assetId,
+          failureType: simulation.failureType,
+          duration: simulation.duration,
+          cascadeFailures: simulation.cascadeFailures,
+          cascadeThreshold: simulation.cascadeThreshold
+        });
 
         return reply.send(result);
       } catch (error) {

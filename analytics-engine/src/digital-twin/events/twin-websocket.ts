@@ -4,7 +4,7 @@
  * Manages WebSocket connections for real-time digital twin updates.
  */
 
-import { Server as WebSocketServer, WebSocket } from 'ws';
+import { WebSocketServer, WebSocket } from 'ws';
 import { Server as HTTPServer } from 'http';
 import { EventEmitter } from 'events';
 import { TwinEventPayload } from './twin-event-handler.js';

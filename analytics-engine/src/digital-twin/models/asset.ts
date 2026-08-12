@@ -113,6 +113,7 @@ export interface CameraMetadata {
   ptzCapable?: boolean;
   zone?: string;
   coverage?: string[];
+  [key: string]: unknown;
 }
 
 export interface NetworkDeviceMetadata {
@@ -125,6 +126,7 @@ export interface NetworkDeviceMetadata {
   poeEnabled?: boolean;
   vlan?: number;
   bandwidth?: string;
+  [key: string]: unknown;
 }
 
 export interface StorageMetadata {
@@ -136,6 +138,7 @@ export interface StorageMetadata {
   location?: string;
   redundancy?: boolean;
   compressionEnabled?: boolean;
+  [key: string]: unknown;
 }
 
 export interface RecorderMetadata {
@@ -147,6 +150,7 @@ export interface RecorderMetadata {
   usedChannels?: number;
   recordingCapacity?: number;
   recordingFormat?: string;
+  [key: string]: unknown;
 }
 
 export interface BranchMetadata {
@@ -158,6 +162,7 @@ export interface BranchMetadata {
   operatingHours?: string;
   contactPerson?: string;
   contactPhone?: string;
+  [key: string]: unknown;
 }
 
 /**

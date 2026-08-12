@@ -58,6 +58,7 @@ export interface NetworkConnectionMetadata {
   vlan?: number;
   bandwidth?: string;
   protocol?: string;
+  [key: string]: unknown;
 }
 
 export interface RecordingRelationshipMetadata {
@@ -65,12 +66,14 @@ export interface RecordingRelationshipMetadata {
   recordingMode?: 'continuous' | 'motion' | 'scheduled';
   quality?: string;
   fps?: number;
+  [key: string]: unknown;
 }
 
 export interface StorageRelationshipMetadata {
   retentionDays?: number;
   redundancy?: boolean;
   compressionRatio?: number;
+  [key: string]: unknown;
 }
 
 /**
