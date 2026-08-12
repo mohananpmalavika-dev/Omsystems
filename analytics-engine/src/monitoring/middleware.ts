@@ -51,12 +51,15 @@ export function registerMonitoringHooks(fastify: FastifyInstance): void {
     }, 'http');
 
     activeConnections.inc();
+    // Store start time on request for duration calculation
+    (request as any).startTime = Date.now();
   });
 
   // Track request metrics
   fastify.addHook('onResponse', async (request: FastifyRequest, reply: FastifyReply) => {
     activeConnections.dec();
 
+    const start = (request as any).startTime || Date.now();
     const duration = Date.now() - start; // Calculate duration in milliseconds
     const durationSeconds = duration / 1000; // Convert to seconds
     const route = request.routeOptions?.url || request.url;

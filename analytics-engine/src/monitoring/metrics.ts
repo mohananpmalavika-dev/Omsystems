@@ -3,10 +3,10 @@
  * Tracks detections, performance, system health, and API metrics
  */
 
-import { Register, Counter, Histogram, Gauge, collectDefaultMetrics } from 'prom-client';
+import { register, Counter, Histogram, Gauge, collectDefaultMetrics } from 'prom-client';
 
 // Create separate registry for analytics metrics
-export const metricsRegistry = new Register();
+export const metricsRegistry = register;
 
 // Enable default system metrics (CPU, memory, event loop, etc.)
 collectDefaultMetrics({ 

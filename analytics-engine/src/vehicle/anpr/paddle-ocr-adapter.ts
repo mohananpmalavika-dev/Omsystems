@@ -78,12 +78,15 @@ export class PaddlePlateRecognizer implements PlateRecognizer {
     const timeoutId = setTimeout(() => controller.abort(), this.timeout);
     
     try {
+      // Convert Buffer to Uint8Array for fetch body compatibility
+      const uint8Array = new Uint8Array(imageBuffer);
+      
       const response = await fetch(`${this.serviceUrl}/ocr/recognize`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/octet-stream',
         },
-        body: imageBuffer,
+        body: uint8Array,
         signal: controller.signal,
       });
       
