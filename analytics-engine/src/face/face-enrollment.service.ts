@@ -106,7 +106,7 @@ export class FaceEnrollmentService {
       }
 
       // Check for duplicates if enabled
-      if (this.config.checkDuplicates && successfulEmbeddings.length > 0) {
+      if (this.config.checkDuplicates && successfulEmbeddings.length > 0 && successfulEmbeddings[0].embedding) {
         const firstEmbedding = successfulEmbeddings[0].embedding!;
         const searchService = this.recognitionService.getServices().search;
         

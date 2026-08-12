@@ -217,6 +217,7 @@ export interface FaceMatchEvent {
 export interface EnrollmentImageResult {
   success: boolean;
   embeddingId?: string;
+  embedding?: Float32Array; // Actual embedding vector for storage
   quality?: number;
   error?: string;
   reason?: FaceQualityRejectionReason[];

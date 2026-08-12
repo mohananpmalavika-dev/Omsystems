@@ -106,7 +106,7 @@ async function preloadMonitorConfigurations(): Promise<void> {
     console.log(`     Loaded ${monitors.length} active monitor(s)`);
     
     for (const monitor of monitors) {
-      console.log(`     - ${monitor.name} (${monitor.monitorType})`);
+      console.log(`     - ${monitor.name}`);
     }
   } catch (error) {
     console.warn('     Warning: Could not preload monitors:', error);

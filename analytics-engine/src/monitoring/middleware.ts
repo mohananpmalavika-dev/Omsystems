@@ -57,7 +57,8 @@ export function registerMonitoringHooks(fastify: FastifyInstance): void {
   fastify.addHook('onResponse', async (request: FastifyRequest, reply: FastifyReply) => {
     activeConnections.dec();
 
-    const duration = reply.getResponseTime() / 1000; // Convert to seconds
+    const duration = Date.now() - start; // Calculate duration in milliseconds
+    const durationSeconds = duration / 1000; // Convert to seconds
     const route = request.routeOptions?.url || request.url;
     const requestSize = parseInt(request.headers['content-length'] as string || '0', 10);
     

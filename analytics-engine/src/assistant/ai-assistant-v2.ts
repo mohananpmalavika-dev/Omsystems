@@ -212,7 +212,7 @@ export class AIAssistantV2 {
         };
       } else {
         // At this point, result must be CommandFailure
-        const failure = result as CommandFailure;
+        const failure = result as import('./types/assistant-command.js').CommandFailure;
         response = this.presenter.formatFailure({
           code: failure.code,
           message: failure.message || 'Operation failed',
