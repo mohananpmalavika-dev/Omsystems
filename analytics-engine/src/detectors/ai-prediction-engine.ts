@@ -680,7 +680,7 @@ export class AIPredictionEngine extends BaseDetector {
     // Calculate slope and intercept
     const sumX = timestamps.reduce((a, b) => a + b, 0);
     const sumY = values.reduce((a, b) => a + b, 0);
-    const sumXY = timestamps.reduce((sum, x, i) => sum + x * values[i], 0);
+    const sumXY = timestamps.reduce((sum, x, i) => sum + x * (values[i] ?? 0), 0);
     const sumXX = timestamps.reduce((sum, x) => sum + x * x, 0);
     
     const slope = (n * sumXY - sumX * sumY) / (n * sumXX - sumX * sumX);
@@ -691,6 +691,7 @@ export class AIPredictionEngine extends BaseDetector {
     const lastPoint = historical[historical.length - 1];
     if (!lastPoint) return [];
     const lastDate = lastPoint.timestamp;
+    if (!lastDate) return [];
     
     for (let i = 1; i <= days; i++) {
       const futureDate = new Date(lastDate);

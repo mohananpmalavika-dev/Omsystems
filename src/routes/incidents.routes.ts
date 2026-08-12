@@ -280,11 +280,11 @@ export async function registerIncidentsRoutes(app: FastifyInstance, store: Contr
       incidentType: body.incidentType ?? 'other',
       severity: body.severity,
       detectionSource: body.detectionSource ?? 'manual-operator',
-      occurredAt: body.occurredAt,
+      occurredAt: body.occurredAt ?? new Date().toISOString(),
       reportedBy: request.currentUser.id,
       estimatedLoss: body.estimatedLoss,
       injuryDetails: body.injuryDetails,
-      confidentialityLevel: body.confidentialityLevel ?? 'internal' as any,
+      confidentialityLevel: body.confidentialityLevel ?? 'internal',
       policeRequired: body.policeRequired,
       insuranceRequired: body.insuranceRequired,
     });
