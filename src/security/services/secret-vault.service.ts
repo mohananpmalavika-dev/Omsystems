@@ -65,7 +65,7 @@ export class SecretVaultService extends EventEmitter implements ISecretVaultServ
         Buffer.from(encrypted, 'base64')
       ]);
       
-      return encryptedValue;
+      return combined.toString('base64');
     } catch (error: unknown) {
       throw new Error(`Encryption failed: ${error instanceof Error ? error.message : String(error)}`);
     }
