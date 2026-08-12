@@ -61,7 +61,10 @@ export class SecurityServicesFactory extends EventEmitter {
       this.passwordRotation = new PasswordRotationService(this.secretVault);
       this.hsm = new HSMService();
       this.zeroTrust = new ZeroTrustPolicyEngine();
-      this.securityPosture = new SecurityPostureService();
+      this.securityPosture = new SecurityPostureService({
+        environment: (process.env.NODE_ENV as 'development' | 'test' | 'production') || 'production',
+        enforceStrictness: process.env.NODE_ENV === 'production'
+      });
       
       // Wire up event handlers
       this.setupEventHandlers();

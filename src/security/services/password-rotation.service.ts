@@ -330,8 +330,10 @@ export class PasswordRotationService extends EventEmitter implements IPasswordRo
     
     // Generate random password
     for (let i = 0; i < policy.minLength; i++) {
-      const randomIndex = randomBytes[i] % charset.length;
-      password += charset[randomIndex];
+      const randomIndex = randomBytes[i];
+      if (randomIndex !== undefined) {
+        password += charset[randomIndex % charset.length];
+      }
     }
     
     // Ensure policy requirements are met
