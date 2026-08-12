@@ -3,16 +3,15 @@
  * Export all integration bridges and services
  */
 
-export { DigitalTwinBridge } from './digital-twin-bridge';
-export { EnhancedRootCauseService } from './enhanced-root-cause.service';
+export { DigitalTwinBridge } from './digital-twin-bridge.js';
 export type {
   TwinAsset,
   TwinRelationship,
   TwinDependency,
   BlastRadiusResult,
   TopologyGraph,
-} from './digital-twin-bridge';
-export type { EnhancedRootCause } from './enhanced-root-cause.service';
+} from './digital-twin-bridge.js';
 
-// Re-export existing integrations
-export * from './analytics-bridge';
+// Note: enhanced-root-cause.service and digital-twin-bridge are available as separate exports above
+// analytics-bridge re-exports removed to avoid TSX dependency issues
+

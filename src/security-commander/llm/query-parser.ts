@@ -136,18 +136,18 @@ export class QueryParser {
    */
   private extractTimeRange(query: string): CommanderQuery['timeRange'] {
     const minuteMatch = query.match(/last\s+(\d+)\s+minutes?/i);
-    if (minuteMatch) {
-      return { relativeMinutes: parseInt(minuteMatch[1]) };
+    if (minuteMatch && minuteMatch[1]) {
+      return { relativeMinutes: parseInt(minuteMatch[1]!, 10) };
     }
 
     const hourMatch = query.match(/last\s+(\d+)\s+hours?/i);
-    if (hourMatch) {
-      return { relativeHours: parseInt(hourMatch[1]) };
+    if (hourMatch && hourMatch[1]) {
+      return { relativeHours: parseInt(hourMatch[1]!, 10) };
     }
 
     const dayMatch = query.match(/last\s+(\d+)\s+days?/i);
-    if (dayMatch) {
-      return { relativeDays: parseInt(dayMatch[1]) };
+    if (dayMatch && dayMatch[1]) {
+      return { relativeDays: parseInt(dayMatch[1]!, 10) };
     }
 
     // Default to last 30 minutes
@@ -224,7 +224,10 @@ Respond ONLY with valid JSON matching this schema:
         timeRange: validated.timeRange,
         filters: validated.filters as any,
         scope: validated.scope as any,
-        target: validated.target,
+        target: validated.target && validated.target.type ? {
+          type: validated.target.type as any,
+          id: validated.target.id,
+        } : undefined,
         naturalLanguageQuery: query,
       };
     } catch (error) {
