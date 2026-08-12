@@ -535,8 +535,10 @@ export async function registerOperationalHealthRoutes(
     });
     if (query.status) recorders = recorders.filter((recorder) => recorder.status === query.status);
     recorders.sort((left, right) => {
-      const rank = { offline: 0, degraded: 1, unknown: 2, online: 3 } as const;
-      return rank[left.status] - rank[right.status] || left.branchName.localeCompare(right.branchName);
+      const rank: { [key: string]: number } = { offline: 0, degraded: 1, unknown: 2, online: 3 };
+      const leftRank = rank[left.status] ?? 2;
+      const rightRank = rank[right.status] ?? 2;
+      return leftRank - rightRank || left.branchName.localeCompare(right.branchName);
     });
     return { success: true, data: {
       recorders,

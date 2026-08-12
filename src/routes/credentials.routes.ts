@@ -239,6 +239,15 @@ export async function registerCredentialsRoutes(app: FastifyInstance, pool: Pool
     for (let i = 0; i < credentials.length; i++) {
       const cred = credentials[i];
       
+      if (!cred) {
+        results.failed++;
+        results.errors.push({
+          index: i,
+          error: 'Missing credential entry',
+        });
+        continue;
+      }
+      
       try {
         await pool.query(
           `INSERT INTO camera_credentials 

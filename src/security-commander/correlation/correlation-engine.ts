@@ -288,9 +288,10 @@ export class CorrelationEngine {
    * Check if events share context (entity, location, or time)
    */
   private eventsShareContext(a: SecurityEvent, b: SecurityEvent): boolean {
-    return !!(
+    return (
       canCorrelateByEntity(a, b) ||
-      (a.location?.zoneId && b.location?.zoneId && a.location.zoneId === b.location.zoneId)
+      (a.location?.zoneId && b.location?.zoneId && a.location.zoneId === b.location.zoneId) ||
+      false
     );
   }
 
@@ -323,7 +324,11 @@ export class CorrelationEngine {
     const firstEvent = sortedEvents[0];
     const lastEvent = sortedEvents[sortedEvents.length - 1];
     
-    if (!firstEvent || !lastEvent) {
+    if (!firstEvent) {
+      throw new Error('Cannot create incident from empty events array');
+    }
+    
+    if (!lastEvent) {
       throw new Error('Cannot create incident from empty events array');
     }
 

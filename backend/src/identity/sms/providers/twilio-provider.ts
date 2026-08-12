@@ -6,7 +6,7 @@
  * API Docs: https://www.twilio.com/docs/sms/api
  */
 
-import axios, { AxiosError } from 'axios';
+import axios, { isAxiosError, type AxiosError } from 'axios';
 import { logger } from '../../../utils/logger.js';
 import type {
   SmsProvider,
@@ -87,9 +87,10 @@ export class TwilioSmsProvider implements SmsProvider {
       const latencyMs = Date.now() - startTime;
 
       if (axios.isAxiosError(error)) {
+        const axiosError = error as AxiosError;
         return {
           healthy: false,
-          reason: error.response?.data?.message || error.message,
+          reason: axiosError.response?.data?.message || axiosError.message,
           latencyMs,
         };
       }
@@ -167,7 +168,7 @@ export class TwilioSmsProvider implements SmsProvider {
       const latencyMs = Date.now() - startTime;
 
       if (axios.isAxiosError(error)) {
-        return this.handleAxiosError(error, latencyMs);
+        return this.handleAxiosError(error as AxiosError, latencyMs);
       }
 
       logger.error('Twilio SMS send failed', { error });

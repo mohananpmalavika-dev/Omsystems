@@ -7,7 +7,7 @@
  * API Docs: https://docs.msg91.com/p/tf9GTextN/e/Otp3vZ8TL/MSG91
  */
 
-import axios, { AxiosError } from 'axios';
+import axios, { isAxiosError, type AxiosError } from 'axios';
 import { logger } from '../../../utils/logger.js';
 import type {
   SmsProvider,
@@ -89,9 +89,10 @@ export class Msg91SmsProvider implements SmsProvider {
       const latencyMs = Date.now() - startTime;
 
       if (axios.isAxiosError(error)) {
+        const axiosError = error as AxiosError;
         return {
           healthy: false,
-          reason: error.response?.data?.message || error.message,
+          reason: axiosError.response?.data?.message || axiosError.message,
           latencyMs,
         };
       }
@@ -171,7 +172,7 @@ export class Msg91SmsProvider implements SmsProvider {
       const latencyMs = Date.now() - startTime;
 
       if (axios.isAxiosError(error)) {
-        return this.handleAxiosError(error, latencyMs);
+        return this.handleAxiosError(error as AxiosError, latencyMs);
       }
 
       logger.error('MSG91 SMS send failed', { error });

@@ -4,7 +4,7 @@
  * Supports Azure AD, Auth0, Okta, Google, Keycloak, and any OIDC-compliant provider
  */
 
-import { Issuer, Client, generators, TokenSet, UserinfoResponse } from 'openid-client';
+import * as openidClient from 'openid-client';
 import { Pool } from 'pg';
 import { logger } from '../utils/logger.js';
 import crypto from 'crypto';
@@ -78,8 +78,8 @@ export interface AuthorizationRequest {
 export class OIDCAuthProvider {
   private config: OIDCConfiguration;
   private pool: Pool;
-  private issuer: Issuer | null = null;
-  private client: Client | null = null;
+  private issuer: openidClient.Issuer | null = null;
+  private client: openidClient.Client | null = null;
   private pendingRequests: Map<string, { 
     codeVerifier?: string; 
     nonce: string; 
@@ -107,7 +107,7 @@ export class OIDCAuthProvider {
       
       logger.info('Discovering OIDC configuration', { discoveryUrl });
       
-      this.issuer = await Issuer.discover(discoveryUrl);
+      this.issuer = await openidClient.Issuer.discover(discoveryUrl);
       
       this.client = new this.issuer.Client({
         client_id: this.config.clientId,
@@ -141,8 +141,8 @@ export class OIDCAuthProvider {
       throw new Error('OIDC provider not initialized');
     }
 
-    const state = generators.state();
-    const nonce = generators.nonce();
+    const state = openidClient.generators.state();
+    const nonce = openidClient.generators.nonce();
     
     let authParams: any = {
       scope: this.config.scopes.join(' '),
@@ -154,8 +154,8 @@ export class OIDCAuthProvider {
 
     // Add PKCE if enabled
     if (this.config.usePKCE) {
-      codeVerifier = generators.codeVerifier();
-      const codeChallenge = generators.codeChallenge(codeVerifier);
+      codeVerifier = openidClient.generators.codeVerifier();
+      const codeChallenge = openidClient.generators.codeChallenge(codeVerifier);
       authParams.code_challenge = codeChallenge;
       authParams.code_challenge_method = 'S256';
     }
@@ -215,7 +215,7 @@ export class OIDCAuthProvider {
         tokenParams.code_verifier = pending.codeVerifier;
       }
 
-      const tokenSet: TokenSet = await this.client.callback(
+      const tokenSet: openidClient.TokenSet = await this.client.callback(
         this.config.redirectUri,
         { code, state },
         { nonce: pending.nonce, state }
@@ -229,7 +229,7 @@ export class OIDCAuthProvider {
       }
 
       // Fetch additional user info if available
-      let userinfo: UserinfoResponse | null = null;
+      let userinfo: openidClient.UserInfoResponse | null = null;
       if (this.issuer?.metadata.userinfo_endpoint && tokenSet.access_token) {
         userinfo = await this.client.userinfo(tokenSet.access_token);
       }
@@ -267,7 +267,7 @@ export class OIDCAuthProvider {
    */
   private extractUserFromClaims(
     claims: any,
-    userinfo: UserinfoResponse | null
+    userinfo: openidClient.UserInfoResponse | null
   ): OIDCUser {
     const mapping = this.config.attributeMapping;
     
@@ -449,7 +449,7 @@ export class OIDCAuthProvider {
   private async createSession(
     tenantId: string,
     userId: string,
-    tokenSet: TokenSet,
+    tokenSet: openidClient.TokenSet,
     metadata?: {
       ipAddress?: string;
       userAgent?: string;

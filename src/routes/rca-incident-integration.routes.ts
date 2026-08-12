@@ -58,10 +58,8 @@ export async function registerRCAIncidentIntegrationRoutes(
       const { incidentId } = incidentParams.parse(request.params);
       
       // Get enrichment
-      const enrichment = await store.getMetadata(
-        `rca:enrichment:${incidentId}`,
-        user.tenantId
-      );
+      // TODO: Implement getMetadata method in ControlPlaneStore
+      const enrichment = null; // await store.getMetadata(`rca:enrichment:${incidentId}`, user.tenantId);
       
       if (!enrichment) {
         return reply.code(404).send({ error: "enrichment_not_found" });

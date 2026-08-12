@@ -225,4 +225,52 @@ export class SecurityPostureService {
       tamperConditionCollector: !!this.tamperConditionCollector,
     };
   }
+
+  /**
+   * Get current security posture (stub for dashboard compatibility)
+   * TODO: Implement full posture aggregation
+   */
+  async getPosture() {
+    return {
+      overall: 'unknown',
+      score: 0,
+      lastEvaluated: new Date(),
+    };
+  }
+
+  /**
+   * Calculate security posture (stub for dashboard compatibility)
+   * TODO: Implement posture calculation
+   */
+  async calculatePosture() {
+    return this.getPosture();
+  }
+
+  /**
+   * Get posture history (stub for dashboard compatibility)
+   * TODO: Implement history tracking
+   */
+  async getPostureHistory(tenantId: string, days: number = 30) {
+    return [];
+  }
+
+  /**
+   * List security issues (stub for dashboard compatibility)
+   * TODO: Implement issue tracking
+   */
+  async listIssues(tenantId: string, filters?: any) {
+    return [];
+  }
+
+  /**
+   * Resolve a security issue (stub for dashboard compatibility)
+   * TODO: Implement issue resolution
+   */
+  async resolveIssue(tenantId: string, issueId: string, resolution: any) {
+    return {
+      id: issueId,
+      resolved: true,
+      resolvedAt: new Date(),
+    };
+  }
 }

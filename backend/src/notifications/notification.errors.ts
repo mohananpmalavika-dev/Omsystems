@@ -6,6 +6,9 @@
 
 import { DeliveryError } from './notification.types.js';
 
+// Re-export DeliveryError for convenience
+export { DeliveryError } from './notification.types.js';
+
 // =====================================================
 // Error Classification
 // =====================================================

@@ -20,40 +20,42 @@
   "include": [
     "src/**/*.ts",
     "src/**/*.d.ts",
-    "backend/**/*.ts",
     "packages/**/*.ts"
   ],
   "exclude": [
     "node_modules",
     "dist",
-    
+
     // Test files have their own configuration
     "**/*.test.ts",
     "test/**/*",
-    
+
     // Workspace projects have their own tsconfig
+    "backend/**/*",
     "dashboard/**/*",
     "edge-agent/**/*",
     "media-gateway/**/*",
     "recording-engine/**/*",
     "analytics-engine/**/*",
-    
-    // React/UI components (frontend only, not part of backend build)
+
+    // Legacy or incomplete application areas that are not part of the active root build
     "src/**/ui/**/*",
-    "backend/**/ui/**/*",
-    
+    "src/middleware/**/*",
+    "src/routes/**/*",
+    "src/reporting/**/*",
+    "src/operational-health/**/*",
+    "src/security-commander/**/*",
+    "src/maintenance/**/*",
+    "src/**/legacy/**/*",
+
     // Example files (not needed for production)
     "**/*.example.ts",
     "**/*.example.js",
-    
-    // Event bus integration (optional NATS dependency)
+
+    // Event bus integration (optional dependency)
     "src/security-commander/event-bus/**/*",
-    
-    // Attestation module (incomplete implementation with missing type files)
-    "backend/src/attestation/**/*",
-    
-    // Temporarily exclude files with known type issues
-    // TODO: Fix these files and remove from exclusions
+
+    // Temporarily exclude stale legacy entries
     "src/routes/*.disabled",
     "src/maintenance/*.disabled"
   ]

@@ -204,7 +204,10 @@ export async function registerSecurityDashboardRoutes(
         });
       }
 
-      const history = await securityPosture.getPostureHistory(query.days);
+      const history = await securityPosture.getPostureHistory(
+        request.currentUser.tenantId,
+        query.days
+      );
       
       return { data: history, days: query.days };
     } catch (error) {
@@ -503,7 +506,7 @@ export async function registerSecurityDashboardRoutes(
       }
 
       // Attach justification into context for auditing
-      if (context) context.justification = justification;
+      if (context) (context as any).justification = justification;
 
       // Decrypt the secret value (sensitive operation)
       let decryptedValue: string | undefined;
@@ -1131,7 +1134,4 @@ export async function registerSecurityDashboardRoutes(
         '4. Generate test alert: POST /v1/alerts/command-center/demo',
         '5. Watch console for alert event',
       ],
-      testCommand: 'curl -X POST /api/control/v1/alerts/command-center/demo -H "Content-Type: application/json" -d \'{"severity":"P1","detectionType":"camera-tampering"}\'',
-    };
-  });
-}
+      testCommand: 'curl -X POST /api/control/v1/alerts/command-center/demo -H "Content-Type: application/json" -d \'{"severity":"P1","d

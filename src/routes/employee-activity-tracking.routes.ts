@@ -248,9 +248,9 @@ export async function registerEmployeeActivityTrackingRoutes(
       await store.updateControlRoomActivity(
         params.activityId,
         request.currentUser.id,
-        body.alertCount !== undefined ? body.alertCount : null,
-        body.incidentCount !== undefined ? body.incidentCount : null,
-        body.cameraSwitchCount !== undefined ? body.cameraSwitchCount : null
+        body.alertCount,
+        body.incidentCount,
+        body.cameraSwitchCount
       );
       
       return { status: 'updated' };

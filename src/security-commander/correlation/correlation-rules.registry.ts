@@ -25,7 +25,7 @@ export const CORRELATION_RULES: CorrelationRule[] = [
     severity: 'critical',
     priority: 100,
     generateTitle: (events) => {
-      const doorId = events[0]?.entities?.doorId ?? 'Unknown Door';
+      const doorId = events.find(e => e.entities?.doorId)?.entities?.doorId ?? 'Unknown Door';
       return `Unauthorized Entry Attempt at ${doorId}`;
     },
     generateExplanation: (events) => {
@@ -141,7 +141,7 @@ export const CORRELATION_RULES: CorrelationRule[] = [
     severity: 'high',
     priority: 70,
     generateTitle: (events) => {
-      const doorId = events[0]?.entities?.doorId ?? 'Unknown Door';
+      const doorId = events.find(e => e.entities?.doorId)?.entities?.doorId ?? 'Unknown Door';
       return `${events.length} Failed Access Attempts at ${doorId}`;
     },
     generateExplanation: (events) => {
@@ -216,7 +216,7 @@ export const CORRELATION_RULES: CorrelationRule[] = [
     priority: 60,
     generateTitle: () => 'Suspicious Loitering Detected',
     generateExplanation: (events) => {
-      const location = events[0]?.location?.zone ?? 'unknown area';
+      const location = events.find(e => e.location?.zone)?.location?.zone ?? 'unknown area';
       return `Person detected loitering in ${location}. Duration and behavior suggest suspicious activity.`;
     },
   },

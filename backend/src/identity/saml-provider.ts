@@ -133,14 +133,14 @@ export class SAMLAuthProvider {
 
     return new SAMLStrategy(
       samlConfig,
-      async (profile: Profile | null, done: VerifiedCallback) => {
+      async (profile: Profile | null | undefined, done: VerifiedCallback) => {
         try {
           if (!profile) {
             return done(new Error('SAML profile is null'));
           }
 
           const user = this.extractUserFromProfile(profile);
-          return done(null, user);
+          return done(null, user as any);
         } catch (error) {
           logger.error('SAML profile verification failed', { error });
           return done(error as Error);
@@ -178,7 +178,7 @@ export class SAMLAuthProvider {
     }
 
     return {
-      nameID: profile.nameID,
+      nameID: profile.nameID || '',
       nameIDFormat: profile.nameIDFormat || this.config.identifierFormat || 'emailAddress',
       sessionIndex: profile.sessionIndex,
       email,
@@ -212,19 +212,23 @@ export class SAMLAuthProvider {
    */
   async getLoginUrl(relayState?: string): Promise<string> {
     return new Promise((resolve, reject) => {
-      this.strategy.generateServiceProviderMetadata(
-        this.config.spCertificate,
-        this.config.spCertificate
-      );
+      try {
+        this.strategy.generateServiceProviderMetadata(
+          this.config.spCertificate,
+          this.config.spCertificate
+        );
 
-      const params = new URLSearchParams();
-      if (relayState) {
-        params.set('RelayState', relayState);
+        const params = new URLSearchParams();
+        if (relayState) {
+          params.set('RelayState', relayState);
+        }
+
+        // Generate login URL
+        const url = `${this.config.idpSsoUrl}?${params.toString()}`;
+        resolve(url);
+      } catch (error) {
+        reject(error);
       }
-
-      // Generate login URL
-      const url = `${this.config.idpSsoUrl}?${params.toString()}`;
-      resolve(url);
     });
   }
 
@@ -262,7 +266,7 @@ export class SAMLAuthProvider {
             const session = await this.createSession(
               tenantId,
               dbUser.id,
-              user.nameID,
+              user.nameID || '',
               user.sessionIndex,
               metadata
             );
@@ -463,11 +467,11 @@ export class SAMLAuthProvider {
     return new Promise((resolve, reject) => {
       this.strategy.logout(
         { user: { nameID, nameIDFormat: this.config.identifierFormat, sessionIndex } } as any,
-        (err: any, url: string) => {
+        (err: Error | null, url?: string | null) => {
           if (err) {
             return reject(err);
           }
-          resolve(url);
+          resolve(url || '');
         }
       );
     });
