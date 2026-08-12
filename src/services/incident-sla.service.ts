@@ -346,7 +346,8 @@ export class IncidentSLAService {
       const incident = await this.store.getIncident(incidentId);
       if (!incident) return;
       
-      const config = SLA_CONFIGS[incident.severity] || SLA_CONFIGS['P3'];
+      const config = SLA_CONFIGS[incident.severity];
+      if (!config) return;
       
       // Check if acknowledged
       if (incident.status === 'acknowledged' || incident.status === 'under-investigation') {
@@ -368,7 +369,8 @@ export class IncidentSLAService {
       const incident = await this.store.getIncident(incidentId);
       if (!incident) return;
       
-      const config = SLA_CONFIGS[incident.severity] || SLA_CONFIGS['P3'];
+      const config = SLA_CONFIGS[incident.severity];
+      if (!config) return;
       
       // Check if investigation started
       if (incident.status === 'under-investigation' || incident.status === 'resolved') {
@@ -391,7 +393,8 @@ export class IncidentSLAService {
     severity: string
   ): Promise<void> {
     try {
-      const config = SLA_CONFIGS[severity] || SLA_CONFIGS['P3'];
+      const config = SLA_CONFIGS[severity];
+      if (!config) return;
       
       // Add breach event
       await this.store.addIncidentEvent({
@@ -441,7 +444,18 @@ export class IncidentSLAService {
       const incident = await this.store.getIncident(incidentId);
       if (!incident) return null;
       
-      const config = SLA_CONFIGS[incident.severity] || SLA_CONFIGS['P3'];
+      const config = SLA_CONFIGS[incident.severity];
+      if (!config) {
+        return {
+          incidentId: incident.id ?? '',
+          severity: incident.severity,
+          status: incident.status,
+          createdAt: new Date(incident.createdAt),
+          slaConfig: SLA_CONFIGS['P3'], // Default config
+          breaches: {},
+        };
+      }
+      
       const createdAt = new Date(incident.createdAt);
       const now = new Date();
       
@@ -471,7 +485,7 @@ export class IncidentSLAService {
       }
       
       return {
-        incidentId: incident.id,
+        incidentId: incident.id ?? '',
         severity: incident.severity,
         status: incident.status,
         createdAt,

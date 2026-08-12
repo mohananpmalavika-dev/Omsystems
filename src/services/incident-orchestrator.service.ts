@@ -119,7 +119,7 @@ export class IncidentOrchestrator {
       
       return {
         action: 'created',
-        incidentId: result.incident.id,
+        incidentId: result.incident.id ?? '',
         verification,
         result,
         reason: 'New incident created from AI detection',
@@ -165,13 +165,13 @@ export class IncidentOrchestrator {
       let preservation;
       try {
         preservation = await this.preservationService.preserveEvidence({
-          incidentId: incident.id,
-          tenantId: event.tenantId,
-          branchId: event.branchId,
-          primaryCameraId: event.cameraId,
-          incidentTime: event.detectionTime,
+          incidentId: incident.id ?? '',
+          tenantId: event.tenantId ?? '',
+          branchId: event.branchId ?? undefined,
+          primaryCameraId: event.cameraId ?? '',
+          incidentTime: event.detectionTime ?? new Date().toISOString(),
           severity: verification.recommendedSeverity,
-          detectionType: event.detectionType,
+          detectionType: event.detectionType ?? '',
           preservedBy: 'system',
         });
         
@@ -185,10 +185,10 @@ export class IncidentOrchestrator {
       let assignment;
       try {
         assignment = await this.slaService.autoAssign({
-          incidentId: incident.id,
-          tenantId: event.tenantId,
-          branchId: event.branchId,
-          incidentType: event.detectionType,
+          incidentId: incident.id ?? '',
+          tenantId: event.tenantId ?? '',
+          branchId: event.branchId ?? undefined,
+          incidentType: event.detectionType ?? '',
           severity: verification.recommendedSeverity,
         });
         
@@ -201,10 +201,10 @@ export class IncidentOrchestrator {
       }
       
       // Step 3: Create default tasks based on incident type
-      await this.createDefaultTasks(incident.id, event.detectionType, verification.recommendedSeverity);
+      await this.createDefaultTasks(incident.id ?? '', event.detectionType ?? '', verification.recommendedSeverity);
       
       // Step 4: Get SLA status
-      const slaStatus = await this.slaService.getSLAStatus(incident.id);
+      const slaStatus = await this.slaService.getSLAStatus(incident.id ?? '');
       
       // Log performance
       const duration = Date.now() - startTime;
@@ -215,10 +215,10 @@ export class IncidentOrchestrator {
       if (this.options.enableRCAEnrichment && incident.branchId) {
         try {
           const enrichmentResult = await this.rcaService.enrichIncidentWithRCA(
-            incident.id,
+            incident.id ?? '',
             { 
               id: 'system',
-              tenantId: event.tenantId,
+              tenantId: event.tenantId ?? '',
               email: 'system@sentinel.local',
               role: 'system',
               name: 'System'
@@ -283,7 +283,7 @@ export class IncidentOrchestrator {
     let preservation;
     if (input.cameraId && input.occurredAt) {
       preservation = await this.preservationService.preserveEvidence({
-        incidentId: incident.id,
+        incidentId: incident.id ?? '',
         tenantId: input.tenantId,
         branchId: input.branchId,
         primaryCameraId: input.cameraId,
@@ -296,7 +296,7 @@ export class IncidentOrchestrator {
     
     // Auto-assign
     const assignment = await this.slaService.autoAssign({
-      incidentId: incident.id,
+      incidentId: incident.id ?? '',
       tenantId: input.tenantId,
       branchId: input.branchId,
       incidentType: input.incidentType,
@@ -304,7 +304,7 @@ export class IncidentOrchestrator {
     });
     
     // Create default tasks
-    await this.createDefaultTasks(incident.id, input.incidentType, input.severity);
+    await this.createDefaultTasks(incident.id ?? '', input.incidentType, input.severity);
     
     return {
       incident,

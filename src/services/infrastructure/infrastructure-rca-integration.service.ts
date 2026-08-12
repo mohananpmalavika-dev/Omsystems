@@ -65,7 +65,11 @@ interface CorrelationResult {
 // ============================================
 
 export class InfrastructureRcaIntegrationService {
-  constructor(private pool: Pool) {}
+  private logger?: Console;
+
+  constructor(private pool: Pool, logger?: Console) {
+    this.logger = logger;
+  }
 
   /**
    * Main entry point: Investigate a camera incident and correlate with infrastructure
