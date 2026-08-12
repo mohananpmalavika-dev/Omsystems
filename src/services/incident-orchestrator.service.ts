@@ -141,19 +141,19 @@ export class IncidentOrchestrator {
     
     try {
       // Generate incident number
-      const incidentNumber = await this.generateIncidentNumber(event.tenantId, event.branchId);
+      const incidentNumber = await this.generateIncidentNumber(event.tenantId ?? '', event.branchId ?? undefined);
       
       // Create incident
       const incident = await this.store.createIncident({
-        tenantId: event.tenantId,
-        branchId: event.branchId,
+        tenantId: event.tenantId ?? '',
+        branchId: event.branchId ?? undefined,
         incidentNumber,
         title: this.generateIncidentTitle(event),
         description: this.generateIncidentDescription(event, verification),
-        incidentType: event.detectionType,
+        incidentType: event.detectionType ?? '',
         severity: verification.recommendedSeverity,
         detectionSource: 'ai-analytics',
-        occurredAt: event.detectionTime,
+        occurredAt: event.detectionTime ?? new Date().toISOString(),
         reportedBy: 'system',
         aiConfidence: event.confidence,
         detectionCount: 1,
@@ -511,7 +511,8 @@ export class IncidentOrchestrator {
       'tailgating': 'Tailgating Detected',
     };
     
-    return titleMap[event.detectionType] || `${event.detectionType} Detection`;
+    const detectionType = event.detectionType ?? '';
+    return titleMap[detectionType] || `${detectionType} Detection`;
   }
   
   /**

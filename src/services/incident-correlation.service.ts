@@ -404,10 +404,10 @@ export class IncidentCorrelationService {
    */
   private generateCorrelationKey(event: DetectionEvent): string {
     const key: CorrelationKey = {
-      tenantId: event.tenantId,
-      branchId: event.branchId,
-      cameraId: event.cameraId,
-      detectionType: event.detectionType,
+      tenantId: event.tenantId ?? '',
+      branchId: event.branchId ?? undefined,
+      cameraId: event.cameraId ?? '',
+      detectionType: event.detectionType ?? '',
       zone: event.zone,
       trackedObjectId: event.trackedObjectId,
     };
@@ -448,7 +448,8 @@ export class IncidentCorrelationService {
       'suspicious-behavior': 'Suspicious Behavior Detected',
     };
     
-    const baseTitle = typeMap[event.detectionType] || `${event.detectionType} Detection`;
+    const detectionType = event.detectionType ?? '';
+    const baseTitle = typeMap[detectionType] || `${detectionType} Detection`;
     
     if (count > 1) {
       return `${baseTitle} (${count} detections)`;
@@ -469,12 +470,17 @@ export class IncidentCorrelationService {
     lines.push(`AI-detected ${primary.detectionType} event with ${Math.round(primary.confidence * 100)}% confidence.`);
     
     if (all.length > 1) {
-      const firstTime = new Date(all[0].detectionTime);
-      const lastTime = new Date(all[all.length - 1].detectionTime);
-      const durationMinutes = Math.round((lastTime.getTime() - firstTime.getTime()) / 60000);
+      const firstEvent = all[0];
+      const lastEvent = all[all.length - 1];
       
-      lines.push(`Total detections: ${all.length} over ${durationMinutes} minute(s).`);
-      lines.push(`Average confidence: ${Math.round((all.reduce((sum, e) => sum + e.confidence, 0) / all.length) * 100)}%.`);
+      if (firstEvent?.detectionTime && lastEvent?.detectionTime) {
+        const firstTime = new Date(firstEvent.detectionTime);
+        const lastTime = new Date(lastEvent.detectionTime);
+        const durationMinutes = Math.round((lastTime.getTime() - firstTime.getTime()) / 60000);
+      
+        lines.push(`Total detections: ${all.length} over ${durationMinutes} minute(s).`);
+        lines.push(`Average confidence: ${Math.round((all.reduce((sum, e) => sum + e.confidence, 0) / all.length) * 100)}%.`);
+      }
     }
     
     if (primary.zone) {
@@ -512,9 +518,11 @@ export class IncidentCorrelationService {
     
     // Clean up old buffered events
     for (const [key, events] of this.detectionBuffer.entries()) {
-      const validEvents = events.filter(e => 
-        now - new Date(e.detectionTime).getTime() < 60 * 60 * 1000 // Keep for 1 hour max
-      );
+      const validEvents = events.filter(e => {
+        const detectionTime = e.detectionTime;
+        if (!detectionTime) return false;
+        return now - new Date(detectionTime).getTime() < 60 * 60 * 1000; // Keep for 1 hour max
+      });
       
       if (validEvents.length === 0) {
         this.detectionBuffer.delete(key);

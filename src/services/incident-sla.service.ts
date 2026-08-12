@@ -446,12 +446,17 @@ export class IncidentSLAService {
       
       const config = SLA_CONFIGS[incident.severity];
       if (!config) {
+        const defaultConfig = SLA_CONFIGS['P3'];
+        if (!defaultConfig) {
+          // This should never happen, but TypeScript needs the check
+          throw new Error('Default SLA config P3 not found');
+        }
         return {
           incidentId: incident.id ?? '',
           severity: incident.severity,
           status: incident.status,
           createdAt: new Date(incident.createdAt),
-          slaConfig: SLA_CONFIGS['P3'], // Default config
+          slaConfig: defaultConfig,
           breaches: {},
         };
       }
