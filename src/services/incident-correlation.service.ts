@@ -257,11 +257,13 @@ export class IncidentCorrelationService {
     if (shouldCreateImmediately) {
       const incident = await this.createIncident(event);
       
+      const detectionTime = event.detectionTime ?? new Date().toISOString();
+      
       this.activeCorrelations.set(correlationKey, {
-        incidentId: incident.id,
+        incidentId: incident.id ?? '',
         correlationKey,
-        firstDetectionAt: new Date(event.detectionTime),
-        lastDetectionAt: new Date(event.detectionTime),
+        firstDetectionAt: new Date(detectionTime),
+        lastDetectionAt: new Date(detectionTime),
         detectionCount: 1,
         maxConfidence: event.confidence,
         highestSeverity: event.severity,
@@ -271,7 +273,7 @@ export class IncidentCorrelationService {
       
       return {
         action: 'create',
-        incidentId: incident.id,
+        incidentId: incident.id ?? '',
         reason: 'High-confidence or critical severity event',
       };
     }
@@ -283,9 +285,11 @@ export class IncidentCorrelationService {
     
     // Clean old buffered events outside correlation window
     const windowMs = config.correlationWindow * 60 * 1000;
-    const validEvents = bufferedEvents.filter(e => 
-      Date.now() - new Date(e.detectionTime).getTime() < windowMs
-    );
+    const validEvents = bufferedEvents.filter(e => {
+      const detectionTime = e.detectionTime;
+      if (!detectionTime) return false;
+      return Date.now() - new Date(detectionTime).getTime() < windowMs;
+    });
     this.detectionBuffer.set(correlationKey, validEvents);
     
     // Check if threshold reached
@@ -293,11 +297,15 @@ export class IncidentCorrelationService {
       // Create incident from accumulated detections
       const incident = await this.createIncident(event, validEvents);
       
+      const firstEvent = validEvents[0];
+      const firstDetectionTime = firstEvent?.detectionTime ?? new Date().toISOString();
+      const lastDetectionTime = event.detectionTime ?? new Date().toISOString();
+      
       this.activeCorrelations.set(correlationKey, {
-        incidentId: incident.id,
+        incidentId: incident.id ?? '',
         correlationKey,
-        firstDetectionAt: new Date(validEvents[0].detectionTime),
-        lastDetectionAt: new Date(event.detectionTime),
+        firstDetectionAt: new Date(firstDetectionTime),
+        lastDetectionAt: new Date(lastDetectionTime),
         detectionCount: validEvents.length,
         maxConfidence: Math.max(...validEvents.map(e => e.confidence)),
         highestSeverity: event.severity,
@@ -309,7 +317,7 @@ export class IncidentCorrelationService {
       
       return {
         action: 'create',
-        incidentId: incident.id,
+        incidentId: incident.id ?? '',
         reason: `Detection threshold reached (${validEvents.length} detections in ${config.correlationWindow}min)`,
       };
     }
@@ -335,14 +343,14 @@ export class IncidentCorrelationService {
     const description = this.generateIncidentDescription(primaryEvent, allEvents);
     
     const incident = await this.store.createIncident({
-      tenantId: primaryEvent.tenantId,
-      branchId: primaryEvent.branchId,
+      tenantId: primaryEvent.tenantId ?? '',
+      branchId: primaryEvent.branchId ?? undefined,
       title,
       description,
-      incidentType: primaryEvent.detectionType,
+      incidentType: primaryEvent.detectionType ?? '',
       severity: primaryEvent.severity,
       detectionSource: 'ai-analytics',
-      occurredAt: primaryEvent.detectionTime,
+      occurredAt: primaryEvent.detectionTime ?? new Date().toISOString(),
       reportedBy: 'system',
       aiConfidence: maxConfidence,
       detectionCount,
@@ -350,8 +358,8 @@ export class IncidentCorrelationService {
     
     // Add camera
     await this.store.addIncidentCamera(
-      incident.id,
-      primaryEvent.cameraId,
+      incident.id ?? '',
+      primaryEvent.cameraId ?? '',
       true,
       'system'
     );
@@ -359,13 +367,13 @@ export class IncidentCorrelationService {
     // Add all detection events to timeline
     for (const event of allEvents) {
       await this.store.addIncidentEvent({
-        incidentId: incident.id,
+        incidentId: incident.id ?? '',
         eventType: 'detection',
-        description: `${event.detectionType} detected (confidence: ${Math.round(event.confidence * 100)}%)`,
+        description: `${event.detectionType ?? 'unknown'} detected (confidence: ${Math.round(event.confidence * 100)}%)`,
         details: {
-          detectionType: event.detectionType,
+          detectionType: event.detectionType ?? '',
           confidence: event.confidence,
-          cameraId: event.cameraId,
+          cameraId: event.cameraId ?? '',
           zone: event.zone,
           trackedObjectId: event.trackedObjectId,
           metadata: event.metadata,
@@ -467,7 +475,8 @@ export class IncidentCorrelationService {
   ): string {
     const lines: string[] = [];
     
-    lines.push(`AI-detected ${primary.detectionType} event with ${Math.round(primary.confidence * 100)}% confidence.`);
+    const detectionType = primary.detectionType ?? 'unknown';
+    lines.push(`AI-detected ${detectionType} event with ${Math.round(primary.confidence * 100)}% confidence.`);
     
     if (all.length > 1) {
       const firstEvent = all[0];

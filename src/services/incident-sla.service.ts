@@ -316,7 +316,34 @@ export class IncidentSLAService {
    * Start SLA timers for an incident
    */
   async startSLATimers(incidentId: string, severity: string): Promise<void> {
-    const config = SLA_CONFIGS[severity] || SLA_CONFIGS['P3'];
+    const config = SLA_CONFIGS[severity];
+    if (!config) {
+      this.logger?.warn(`No SLA config found for severity ${severity}, using P3 default`);
+      const defaultConfig = SLA_CONFIGS['P3'];
+      if (!defaultConfig) return;
+      
+      const now = Date.now();
+      
+      // Schedule acknowledgement check
+      const acknowledgeTimer = setTimeout(
+        () => this.checkAcknowledgement(incidentId),
+        defaultConfig.acknowledgeWithinMinutes * 60 * 1000
+      );
+      
+      this.slaTimers.set(`${incidentId}:acknowledge`, acknowledgeTimer);
+      
+      // Schedule investigation check
+      const investigateTimer = setTimeout(
+        () => this.checkInvestigation(incidentId),
+        defaultConfig.investigateWithinMinutes * 60 * 1000
+      );
+      
+      this.slaTimers.set(`${incidentId}:investigate`, investigateTimer);
+      
+      this.logger?.log(`SLA timers started for incident ${incidentId} (${severity})`);
+      return;
+    }
+    
     const now = Date.now();
     
     // Schedule acknowledgement check
