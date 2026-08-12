@@ -87,7 +87,7 @@ export class CommandCenterService {
    */
   private async getPredictiveHealth(tenantId: string, branchId: string) {
     try {
-      const result = await this.store.execute(
+      const result = await this.store.query(
         `SELECT prediction_data FROM branch_risk_predictions
          WHERE branch_id = $1 AND tenant_id = $2 AND expires_at > NOW()
          ORDER BY horizon_hours, created_at DESC

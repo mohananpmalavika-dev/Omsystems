@@ -361,32 +361,27 @@ export class RCAStore {
    * Index diagnosis by fingerprint
    */
   private async indexByFingerprint(diagnosis: StoredRCADiagnosis): Promise<void> {
-    const indexKey = `rca:index:fingerprint:${diagnosis.tenantId}`;
-    const index = (await this.store.getMetadata(indexKey, diagnosis.tenantId)) as Record<string, string[]> | null || {};
-    
-    if (!index[diagnosis.caseFingerprint]) {
-      index[diagnosis.caseFingerprint] = [];
-    }
-    
-    index[diagnosis.caseFingerprint]!.push(diagnosis.id);
-    
-    await this.store.setMetadata(indexKey, diagnosis.tenantId, index);
+    // TODO: Implement proper metadata storage in ControlPlaneStore
+    // const indexKey = `rca:index:fingerprint:${diagnosis.tenantId}`;
+    // const index = (await this.store.getMetadata(indexKey, diagnosis.tenantId)) as Record<string, string[]> | null || {};
+    // if (!index[diagnosis.caseFingerprint]) {
+    //   index[diagnosis.caseFingerprint] = [];
+    // }
+    // index[diagnosis.caseFingerprint]!.push(diagnosis.id);
+    // await this.store.setMetadata(indexKey, diagnosis.tenantId, index);
   }
   
   /**
    * Index diagnosis by branch
    */
   private async indexByBranch(diagnosis: StoredRCADiagnosis): Promise<void> {
-    const indexKey = `rca:index:branch:${diagnosis.tenantId}:${diagnosis.branchId}`;
-    const index = (await this.store.getMetadata(indexKey, diagnosis.tenantId)) as string[] | null || [];
-    
-    index.unshift(diagnosis.id); // Most recent first
-    
-    // Keep last 100 diagnoses per branch
-    if (index.length > 100) {
-      index.pop();
-    }
-    
-    await this.store.setMetadata(indexKey, diagnosis.tenantId, index);
+    // TODO: Implement proper metadata storage in ControlPlaneStore
+    // const indexKey = `rca:index:branch:${diagnosis.tenantId}:${diagnosis.branchId}`;
+    // const index = (await this.store.getMetadata(indexKey, diagnosis.tenantId)) as string[] | null || [];
+    // index.unshift(diagnosis.id); // Most recent first
+    // if (index.length > 100) {
+    //   index.pop();
+    // }
+    // await this.store.setMetadata(indexKey, diagnosis.tenantId, index);
   }
 }
