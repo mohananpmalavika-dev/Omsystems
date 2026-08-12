@@ -300,8 +300,8 @@ export class RCAStore {
     avgConfidence: number;
     avgTimeToResolve: number;
   }> {
-    const outcomeIndexKey = `rca:index:outcomes:${tenantId}`;
-    const outcomes = (await this.store.getMetadata(outcomeIndexKey, tenantId)) as RCACaseOutcome[] | null || [];
+    // TODO: Implement proper metadata storage in ControlPlaneStore
+    const outcomes: RCACaseOutcome[] = []; // Placeholder - would fetch from metadata storage
     
     // Filter outcomes
     const filtered = outcomes.filter(outcome => {
