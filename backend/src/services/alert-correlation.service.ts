@@ -439,8 +439,8 @@ export class AlertCorrelationService {
       },
       
       incidentBuilder: (pattern, alerts) => {
-        const dvrId = alerts[0].dvrId;
-        const branchId = alerts[0].branchId;
+        const dvrId = alerts[0]?.dvrId;
+        const branchId = alerts[0]?.branchId;
         
         return {
           type: 'infrastructure_failure',
@@ -486,7 +486,7 @@ export class AlertCorrelationService {
       },
       
       incidentBuilder: (pattern, alerts) => {
-        const branchId = alerts[0].branchId;
+        const branchId = alerts[0]?.branchId;
         
         return {
           type: 'mass_event',

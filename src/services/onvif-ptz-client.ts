@@ -89,7 +89,8 @@ export class OnvifPtzClient extends OnvifClient {
 
       const caps = this.findRecord(capabilities, "Capabilities");
       const ptz = this.recordValue(caps?.PTZ);
-      return this.textValue(ptz?.["@_XAddr"]) ?? this.textValue(ptz?.XAddr);
+      const xAddr = this.textValue(ptz?.["@_XAddr"]) ?? this.textValue(ptz?.XAddr);
+      return xAddr ?? undefined;
     } catch {
       // Fallback to guessed PTZ service URL
       const deviceUrl = new URL(this.deviceServiceUrl);

@@ -104,7 +104,13 @@ export class TrackingEventBus {
     subscribe(
         listener: (observation: TrackingObservation) => void | Promise<void>,
     ): () => void {
-        return this.on('tracking.observation', listener);
+        // Wrap listener to handle type mismatch
+        const wrappedListener = (event: TrackingEvent) => {
+            if ('bbox' in event && 'anchor' in event && 'confidence' in event) {
+                return listener(event as TrackingObservation);
+            }
+        };
+        return this.on('tracking.observation', wrappedListener);
     }
 
     /**
@@ -113,13 +119,25 @@ export class TrackingEventBus {
     onTrackStart(
         listener: (event: TrackStartEvent) => void | Promise<void>,
     ): () => void {
-        return this.on('track.start', listener);
+        // Wrap listener to handle type mismatch
+        const wrappedListener = (event: TrackingEvent) => {
+            if ('type' in event && 'initialBbox' in event) {
+                return listener(event as TrackStartEvent);
+            }
+        };
+        return this.on('track.start', wrappedListener);
     }
 
     onTrackEnd(
         listener: (event: TrackEndEvent) => void | Promise<void>,
     ): () => void {
-        return this.on('track.end', listener);
+        // Wrap listener to handle type mismatch
+        const wrappedListener = (event: TrackingEvent) => {
+            if ('type' in event && 'finalBbox' in event && 'duration' in event) {
+                return listener(event as TrackEndEvent);
+            }
+        };
+        return this.on('track.end', wrappedListener);
     }
 
     /**

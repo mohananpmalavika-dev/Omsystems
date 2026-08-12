@@ -661,7 +661,7 @@ export class SwitchMonitoringService {
       retries: 3,
       credentials: {
         version: sw.snmpVersion || '2c',
-        community: sw.snmpCommunity
+        community: sw.snmpCommunity || 'public'
       }
     };
   }

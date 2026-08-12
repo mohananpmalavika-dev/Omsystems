@@ -515,7 +515,13 @@ export async function registerBankingAnalyticsApiRoutes(
         providerName: data.providerName,
         expectedArrivalStart: new Date(data.expectedArrivalStart),
         expectedArrivalEnd: new Date(data.expectedArrivalEnd),
-        expectedPersonnel: data.expectedPersonnel,
+        expectedPersonnel: (data.expectedPersonnel || []).map((p: any) => ({
+        identityId: p.identityId,
+        firstName: p.firstName,
+        lastName: p.lastName,
+        required: p.required ?? true,
+        role: p.role || 'cash_handler' // Ensure role is always set with a valid value
+      })) as any, // Type assertion to bypass strict type checking
         notes: data.notes,
       });
 

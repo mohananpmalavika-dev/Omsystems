@@ -346,6 +346,8 @@ export class IncidentSLAService {
       const incident = await this.store.getIncident(incidentId);
       if (!incident) return;
       
+      const config = SLA_CONFIGS[incident.severity] || SLA_CONFIGS['P3'];
+      
       // Check if acknowledged
       if (incident.status === 'acknowledged' || incident.status === 'under-investigation') {
         return;
@@ -365,6 +367,8 @@ export class IncidentSLAService {
     try {
       const incident = await this.store.getIncident(incidentId);
       if (!incident) return;
+      
+      const config = SLA_CONFIGS[incident.severity] || SLA_CONFIGS['P3'];
       
       // Check if investigation started
       if (incident.status === 'under-investigation' || incident.status === 'resolved') {

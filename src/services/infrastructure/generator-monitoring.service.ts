@@ -142,7 +142,7 @@ export class GeneratorMonitoringService {
     
     // Parse fuel data
     const fuelLevelPercent = this.parseNumeric(snmpData[oids.fuelLevel]);
-    const fuelLevelLiters = generator.fuel_tank_capacity_liters 
+    const fuelLevelLiters = generator.fuel_tank_capacity_liters && fuelLevelPercent !== undefined
       ? (fuelLevelPercent / 100) * generator.fuel_tank_capacity_liters
       : undefined;
     

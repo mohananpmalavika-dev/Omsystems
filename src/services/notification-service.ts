@@ -464,13 +464,15 @@ export class NotificationService {
    * Generate alert email template
    */
   generateAlertEmailTemplate(alert: any): { subject: string; body: string; html: string } {
-    const severityEmoji = {
+    const severityEmoji: Record<string, string> = {
       critical: '🔴',
       warning: '⚠️',
       info: 'ℹ️',
-    }[alert.severity] || '•';
+    };
+    
+    const emoji = severityEmoji[alert.severity] || '•';
 
-    const subject = `${severityEmoji} [${alert.severity.toUpperCase()}] ${alert.title}`;
+    const subject = `${emoji} [${alert.severity.toUpperCase()}] ${alert.title}`;
 
     const body = `
 Alert Details:

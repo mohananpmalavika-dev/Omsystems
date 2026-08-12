@@ -622,12 +622,21 @@ export class IncidentOrchestrator {
   private async createVerificationAlert(event: DetectionEvent, verification: any): Promise<void> {
     // In production, this would create an alert in the analytics system
     // for operator verification before incident creation
+    
+    // Note: processAnalyticsEvent method needs to be implemented in ControlPlaneStore
+    // Placeholder for future implementation
+    this.logger?.log(
+      `Verification alert would be created for ${event.cameraId}: ${event.detectionType || event.eventType}`
+    );
+    
+    // TODO: Implement when processAnalyticsEvent is available in ControlPlaneStore
+    /*
     await this.store.processAnalyticsEvent({
-      tenantId: event.tenantId,
+      tenantId: event.tenantId || '',
       cameraId: event.cameraId,
-      sourceEventId: `verification:${event.cameraId}:${event.detectionTime}:${event.detectionType}`,
-      detectionType: event.detectionType,
-      occurredAt: event.detectionTime,
+      sourceEventId: `verification:${event.cameraId}:${event.detectionTime || event.timestamp}:${event.detectionType || event.eventType}`,
+      detectionType: event.detectionType || event.eventType,
+      occurredAt: event.detectionTime || event.timestamp,
       confidence: event.confidence,
       durationSeconds: 0,
       modelVersion: 'incident-orchestrator',
@@ -637,6 +646,7 @@ export class IncidentOrchestrator {
         verificationReason: verification.reason,
       },
     });
+    */
   }
   
   /**

@@ -212,6 +212,8 @@ export class OnnxObjectDetector extends BaseInferenceProvider {
     tensor: Float32Array;
     originalWidth: number;
     originalHeight: number;
+    inputWidth: number;
+    inputHeight: number;
     scale: number;
     padX: number;
     padY: number;
@@ -268,9 +270,13 @@ export class OnnxObjectDetector extends BaseInferenceProvider {
       tensor,
       originalWidth: width,
       originalHeight: height,
+      inputWidth: targetWidth,
+      inputHeight: targetHeight,
       scale,
       padX,
       padY,
+      inputWidth: targetWidth,
+      inputHeight: targetHeight,
     };
   }
 

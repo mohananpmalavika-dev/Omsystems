@@ -367,10 +367,12 @@ export class AlertCounterCacheService {
       
       for (const line of lines) {
         if (line.startsWith('keyspace_hits:')) {
-          hits = parseInt(line.split(':')[1], 10);
+          const value = line.split(':')[1];
+          if (value) hits = parseInt(value, 10);
         }
         if (line.startsWith('keyspace_misses:')) {
-          misses = parseInt(line.split(':')[1], 10);
+          const value = line.split(':')[1];
+          if (value) misses = parseInt(value, 10);
         }
       }
 

@@ -157,7 +157,19 @@ router.get('/equipment/:cameraId', (req: Request, res: Response) => {
     const { cameraId } = req.params;
     const sceneRegistry = getSceneStateRegistry();
     const scene = sceneRegistry.getSceneState(cameraId);
-    const equipment = scene.getAllTracks?.() || [];
+    
+    // Check if scene has the getAllTracks method
+    if (!scene || typeof scene.getAllTracks !== 'function') {
+      res.json({
+        cameraId,
+        equipment: [],
+        count: 0,
+        timestamp: new Date(),
+      });
+      return;
+    }
+    
+    const equipment = scene.getAllTracks();
 
     res.json({
       cameraId,

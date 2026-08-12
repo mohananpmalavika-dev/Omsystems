@@ -720,11 +720,16 @@ export class InfrastructureRcaIntegrationService {
   ): Promise<void> {
     const cameraNames = affectedCameras
       .map(r => r.infrastructureRootCause?.affectedComponents.find(c => c.componentType === 'camera'))
-      .filter(Boolean)
-      .map(c => c!.componentName)
+      .filter((c): c is NonNullable<typeof c> => c !== undefined && c !== null)
+      .map(c => c.componentName)
       .join(', ');
 
-    const firstRootCause = affectedCameras[0].infrastructureRootCause!;
+    const firstRootCause = affectedCameras[0]?.infrastructureRootCause;
+    
+    if (!firstRootCause) {
+      this.logger?.warn(`Cannot create unified incident: no root cause found`);
+      return;
+    }
 
     await this.pool.query(
       `INSERT INTO unified_incidents (
