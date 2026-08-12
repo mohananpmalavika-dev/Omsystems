@@ -4,6 +4,7 @@
  */
 
 import { BaseEvidenceCollector, type SecurityEvidence, EvidenceSource } from './base-evidence-collector.js';
+import type { EvidenceCollectorConfig } from '../types.js';
 
 export interface TamperEvent {
   deviceId: string;
@@ -32,7 +33,10 @@ export class TamperDetectionCollector extends BaseEvidenceCollector {
   readonly id = 'tamper-detection';
   readonly name = 'Physical Tamper Detection';
   readonly description = 'Monitors edge devices for physical tampering attempts';
-  private lastError?: string;
+
+  constructor(config: EvidenceCollectorConfig = { enabled: true }) {
+    super('Physical Tamper Detection', 'threat_detection', config);
+  }
 
   async collect(): Promise<SecurityEvidence[]> {
     const now = new Date();
@@ -76,7 +80,8 @@ export class TamperDetectionCollector extends BaseEvidenceCollector {
         )
       ];
     } catch (error) {
-      this.lastError = error instanceof Error ? error.message : 'Unknown error';
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      console.error('Tamper detection collection error:', errorMessage);
       throw error;
     }
   }

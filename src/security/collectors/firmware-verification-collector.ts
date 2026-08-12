@@ -3,7 +3,8 @@
  * Verifies firmware signatures and detects unauthorized changes
  */
 
-import { BaseEvidenceCollector, type SecurityEvidence, EvidenceSource } from './base-evidence-collector';
+import { BaseEvidenceCollector, type SecurityEvidence, EvidenceSource } from './base-evidence-collector.js';
+import type { EvidenceCollectorConfig } from '../types.js';
 
 export interface FirmwareStatus {
   deviceId: string;
@@ -31,12 +32,16 @@ export interface FirmwareVerificationEvidence extends SecurityEvidence {
   };
 }
 
-export class FirmwareVerificationCollector extends BaseEvidenceCollector<FirmwareVerificationEvidence> {
+export class FirmwareVerificationCollector extends BaseEvidenceCollector {
   readonly id = 'firmware-verification';
   readonly name = 'Firmware Integrity Verification';
   readonly description = 'Verifies firmware signatures and detects unauthorized changes';
 
-  async collect(): Promise<FirmwareVerificationEvidence> {
+  constructor(config: EvidenceCollectorConfig = { enabled: true }) {
+    super('Firmware Integrity Verification', 'device_identity_check', config);
+  }
+
+  async collect(): Promise<SecurityEvidence[]> {
     const now = new Date();
     
     try {
@@ -60,29 +65,29 @@ export class FirmwareVerificationCollector extends BaseEvidenceCollector<Firmwar
       const verificationRate = totalDevices > 0 ? (validSignatures / totalDevices) * 100 : 0;
       const confidence = Math.round(verificationRate);
 
-      return {
-        type: 'firmware_verification',
-        value: {
-          totalDevices,
-          devicesVerified,
-          validSignatures,
-          invalidSignatures,
-          missingSignatures,
-          hashMismatches,
-          devicesRequiringAttention,
-        },
-        source: this.isSimulation() ? EvidenceSource.SIMULATED : EvidenceSource.LIVE,
-        timestamp: now,
-        freshness: 'fresh',
-        confidence,
-        provenance: {
-          collector: this.id,
-          version: '1.0.0',
-          collectionMethod: this.isSimulation() ? 'simulation' : 'firmware_api',
-        },
-      };
+      return [
+        this.createEvidence(
+          {
+            type: 'firmware_verification',
+            totalDevices,
+            devicesVerified,
+            validSignatures,
+            invalidSignatures,
+            missingSignatures,
+            hashMismatches,
+            devicesRequiringAttention,
+          },
+          confidence,
+          {
+            collector: this.id,
+            version: '1.0.0',
+            collectionMethod: this.isSimulation() ? 'simulation' : 'firmware_api',
+          }
+        )
+      ];
     } catch (error) {
-      this.lastError = error instanceof Error ? error.message : 'Unknown error';
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      console.error('Firmware verification collection error:', errorMessage);
       throw error;
     }
   }

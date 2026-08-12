@@ -5,7 +5,8 @@
  * Sprint 2: Production implementation with real verification
  */
 
-import { BaseEvidenceCollector, type SecurityEvidence, EvidenceSource } from './base-evidence-collector';
+import { BaseEvidenceCollector, type SecurityEvidence, EvidenceSource } from './base-evidence-collector.js';
+import type { EvidenceCollectorConfig } from '../types.js';
 import { exec } from 'child_process';
 import { promisify } from 'util';
 import * as tls from 'tls';
@@ -53,12 +54,16 @@ export interface EncryptionEvidenceData extends SecurityEvidence {
   };
 }
 
-export class EncryptionEvidenceCollector extends BaseEvidenceCollector<EncryptionEvidenceData> {
+export class EncryptionEvidenceCollector extends BaseEvidenceCollector {
   readonly id = 'encryption-evidence';
   readonly name = 'Encryption Evidence Verification';
   readonly description = 'Verifies encryption implementation across storage, transit, and database';
 
-  async collect(): Promise<EncryptionEvidenceData> {
+  constructor(config: EvidenceCollectorConfig = { enabled: true }) {
+    super('Encryption Evidence Verification', 'video_encryption_scan', config);
+  }
+
+  async collect(): Promise<SecurityEvidence[]> {
     const now = new Date();
     
     try {
@@ -100,29 +105,29 @@ export class EncryptionEvidenceCollector extends BaseEvidenceCollector<Encryptio
       const encryptionRate = totalComponents > 0 ? (encrypted / totalComponents) * 100 : 0;
       const confidence = Math.round(encryptionRate);
 
-      return {
-        type: 'encryption_evidence',
-        value: {
-          totalComponents,
-          encrypted,
-          notEncrypted,
-          encryptionByCategory,
-          keyManagement,
-          keyRotation,
-          componentsRequiringAttention,
-        },
-        source: EvidenceSource.LIVE,
-        timestamp: now,
-        freshness: 'fresh',
-        confidence,
-        provenance: {
-          collector: this.id,
-          version: '1.0.0',
-          collectionMethod: 'direct_verification',
-        },
-      };
+      return [
+        this.createEvidence(
+          {
+            type: 'encryption_evidence',
+            totalComponents,
+            encrypted,
+            notEncrypted,
+            encryptionByCategory,
+            keyManagement,
+            keyRotation,
+            componentsRequiringAttention,
+          },
+          confidence,
+          {
+            collector: this.id,
+            version: '1.0.0',
+            collectionMethod: 'direct_verification',
+          }
+        )
+      ];
     } catch (error) {
-      this.lastError = error instanceof Error ? error.message : 'Unknown error';
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      console.error('Encryption evidence collection error:', errorMessage);
       throw error;
     }
   }

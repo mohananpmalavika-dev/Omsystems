@@ -4,6 +4,7 @@
  */
 
 import { BaseEvidenceCollector, type SecurityEvidence, EvidenceSource } from './base-evidence-collector.js';
+import type { EvidenceCollectorConfig } from '../types.js';
 
 export interface TPMAttestationData {
   deviceId: string;
@@ -32,7 +33,10 @@ export class TPMAttestationCollector extends BaseEvidenceCollector {
   readonly id = 'tpm-attestation';
   readonly name = 'TPM Device Attestation';
   readonly description = 'Collects hardware-backed device identity verification status';
-  private lastError?: string;
+
+  constructor(config: EvidenceCollectorConfig = { enabled: true }) {
+    super('TPM Device Attestation', 'tpm_attestation', config);
+  }
 
   async collect(): Promise<SecurityEvidence[]> {
     const now = new Date();
@@ -77,7 +81,8 @@ export class TPMAttestationCollector extends BaseEvidenceCollector {
         )
       ];
     } catch (error) {
-      this.lastError = error instanceof Error ? error.message : 'Unknown error';
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      console.error('TPM attestation collection error:', errorMessage);
       throw error;
     }
   }

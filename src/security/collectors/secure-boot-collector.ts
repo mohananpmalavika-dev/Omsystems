@@ -6,6 +6,7 @@
  */
 
 import { BaseEvidenceCollector, type SecurityEvidence, EvidenceSource } from './base-evidence-collector.js';
+import type { EvidenceCollectorConfig } from '../types.js';
 import { exec } from 'child_process';
 import { promisify } from 'util';
 import * as os from 'os';
@@ -46,7 +47,10 @@ export class SecureBootCollector extends BaseEvidenceCollector {
   readonly id = 'secure-boot';
   readonly name = 'Secure Boot Verification';
   readonly description = 'Verifies UEFI Secure Boot status and boot chain integrity';
-  private lastError?: string;
+
+  constructor(config: EvidenceCollectorConfig = { enabled: true }) {
+    super('Secure Boot Verification', 'device_identity_check', config);
+  }
 
   async collect(): Promise<SecurityEvidence[]> {
     const now = new Date();
@@ -89,7 +93,8 @@ export class SecureBootCollector extends BaseEvidenceCollector {
         )
       ];
     } catch (error) {
-      this.lastError = error instanceof Error ? error.message : 'Unknown error';
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      console.error('Secure boot collection error:', errorMessage);
       throw error;
     }
   }

@@ -23,6 +23,9 @@ export interface IEvidenceCollector {
   collect(): Promise<SecurityEvidence[]>;
   isHealthy(): Promise<boolean>;
   getStatus(): CollectorHealth;
+  collectSafely(): Promise<SecurityEvidence[]>;
+  getCachedEvidence(): SecurityEvidence[];
+  clearCache(): void;
 }
 
 export interface CollectorHealth {

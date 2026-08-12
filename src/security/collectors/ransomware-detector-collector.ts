@@ -4,6 +4,7 @@
  */
 
 import { BaseEvidenceCollector, type SecurityEvidence, EvidenceSource } from './base-evidence-collector.js';
+import type { EvidenceCollectorConfig } from '../types.js';
 
 export interface RansomwareIndicator {
   deviceId: string;
@@ -33,7 +34,10 @@ export class RansomwareDetectorCollector extends BaseEvidenceCollector {
   readonly id = 'ransomware-detector';
   readonly name = 'Ransomware Detection';
   readonly description = 'Behavioral analysis for ransomware activity detection';
-  private lastError?: string;
+
+  constructor(config: EvidenceCollectorConfig = { enabled: true }) {
+    super('Ransomware Detection', 'threat_detection', config);
+  }
 
   async collect(): Promise<SecurityEvidence[]> {
     const now = new Date();
@@ -77,7 +81,8 @@ export class RansomwareDetectorCollector extends BaseEvidenceCollector {
         )
       ];
     } catch (error) {
-      this.lastError = error instanceof Error ? error.message : 'Unknown error';
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      console.error('Ransomware detector collection error:', errorMessage);
       throw error;
     }
   }
