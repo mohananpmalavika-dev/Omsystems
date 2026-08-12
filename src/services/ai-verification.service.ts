@@ -385,15 +385,19 @@ export class AIVerificationService {
       // Check if camera type matches critical types for this detection
       const rule = VERIFICATION_RULES[detectionType];
       if (rule?.criticalCameraTypes && camera.locationType) {
-        if (rule.criticalCameraTypes.includes(camera.locationType)) {
+        const locationType: string = camera.locationType;
+        if (rule.criticalCameraTypes.includes(locationType)) {
           return 1.0;
         }
       }
       
       // Base criticality on location type
       const criticalTypes = ['vault', 'atm', 'cash-counter', 'server-room', 'entrance'];
-      if (camera.locationType && criticalTypes.includes(camera.locationType)) {
-        return 0.8;
+      if (camera.locationType) {
+        const locationType: string = camera.locationType;
+        if (criticalTypes.includes(locationType)) {
+          return 0.8;
+        }
       }
       
       return 0.5;

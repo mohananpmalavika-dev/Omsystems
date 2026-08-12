@@ -300,6 +300,9 @@ export class AIIncidentSummaryService {
 
     const firstAlert = sortedAlerts[0];
     const lastAlert = sortedAlerts[sortedAlerts.length - 1];
+    if (!firstAlert || !lastAlert) {
+      throw new Error('Cannot create cluster from empty alerts array');
+    }
 
     const firstTime = new Date(getOccurredAt(firstAlert)).getTime();
     const lastTime = new Date(getOccurredAt(lastAlert)).getTime();
@@ -378,6 +381,10 @@ export class AIIncidentSummaryService {
 
     // Find most common type
     const sortedTypes = Object.entries(typeCounts).sort((a, b) => b[1] - a[1]);
+    
+    if (sortedTypes.length === 0) {
+      return 'general-alert';
+    }
 
     // Map to incident category
     const primaryType = sortedTypes[0][0];
