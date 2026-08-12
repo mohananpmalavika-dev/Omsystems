@@ -160,8 +160,8 @@ export function isValidAlertTransition(
   from: AlertStatus,
   to: AlertStatus
 ): boolean {
-  const validTransitions = ALERT_STATUS_TRANSITIONS[from] ?? [];
-  return validTransitions.includes(to as AlertStatus);
+  const validTransitions: readonly AlertStatus[] = ALERT_STATUS_TRANSITIONS[from] ?? [];
+  return validTransitions.includes(to);
 }
 
 /**

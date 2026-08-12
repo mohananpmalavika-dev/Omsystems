@@ -284,7 +284,7 @@ export async function registerIncidentsRoutes(app: FastifyInstance, store: Contr
       reportedBy: request.currentUser.id,
       estimatedLoss: body.estimatedLoss,
       injuryDetails: body.injuryDetails,
-      confidentialityLevel: body.confidentialityLevel ?? '',
+      confidentialityLevel: (body.confidentialityLevel ?? '') as string,
       policeRequired: body.policeRequired,
       insuranceRequired: body.insuranceRequired,
     });

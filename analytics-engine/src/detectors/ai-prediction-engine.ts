@@ -400,7 +400,11 @@ export class AIPredictionEngine extends BaseDetector {
     }
     
     const recent = hardware.healthHistory.slice(-30);
-    const currentHealth = recent[recent.length - 1].score;
+    const lastSample = recent[recent.length - 1];
+    if (!lastSample) {
+      return null;
+    }
+    const currentHealth = lastSample.score;
     
     // Calculate trend
     const trend = this.calculateTrend(recent.map(h => ({
@@ -735,7 +739,7 @@ export class AIPredictionEngine extends BaseDetector {
   
   private findPeakTime<T>(pattern: Map<T, number>): T {
     let peakTime: T | undefined;
-    let maxCount = 0;
+    let maxCount = Number.NEGATIVE_INFINITY;
     
     for (const [time, count] of pattern.entries()) {
       if (count > maxCount) {
@@ -744,7 +748,7 @@ export class AIPredictionEngine extends BaseDetector {
       }
     }
     
-    return peakTime!;
+    return peakTime ?? Array.from(pattern.keys())[0] as T;
   }
   
   private getHardwareRecommendations(

@@ -272,7 +272,7 @@ export async function registerAnalyticsPhase2Routes(
     const decision = await store.checkAccess(
       request.currentUser,
       "face:view",
-      undefined,
+      "",
     );
     if (!decision?.allowed) {
       return reply.code(403).send({ error: "forbidden" });
@@ -423,7 +423,7 @@ export async function registerAnalyticsPhase2Routes(
       const decision = await store.checkAccess(
         request.currentUser,
         "anpr:manage-watchlist",
-        undefined,
+        "",
       );
       if (!decision?.allowed) {
         return reply.code(403).send({ error: "forbidden" });
@@ -569,7 +569,7 @@ export async function registerAnalyticsPhase2Routes(
       const decision = await store.checkAccess(
         request.currentUser,
         "anpr:view",
-        null,
+        "",
       );
       if (!decision?.allowed) {
         return reply.code(403).send({ error: "forbidden" });

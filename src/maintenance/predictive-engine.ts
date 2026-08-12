@@ -348,13 +348,13 @@ export class PredictiveMaintenanceEngine {
   /**
    * Calculate battery degradation rate (% per month)
    */
-  private calculateBatteryDegradationRate(batteryData: Record<string, number>): number {
+  private calculateBatteryDegradationRate(batteryData: Record<string, number | undefined>): number {
     let degradationRate = 0.5; // Base degradation: 0.5% per month
 
-    if (batteryData.cycleCount > 1000) degradationRate += 0.3;
-    if (batteryData.temperature > 35) degradationRate += 0.2;
-    if (batteryData.internalImpedance > 100) degradationRate += 0.4;
-    if (batteryData.chargeTime > 120) degradationRate += 0.2;
+    if ((batteryData.cycleCount ?? 0) > 1000) degradationRate += 0.3;
+    if ((batteryData.temperature ?? 0) > 35) degradationRate += 0.2;
+    if ((batteryData.internalImpedance ?? 0) > 100) degradationRate += 0.4;
+    if ((batteryData.chargeTime ?? 0) > 120) degradationRate += 0.2;
 
     return degradationRate;
   }
@@ -430,14 +430,14 @@ export class PredictiveMaintenanceEngine {
   /**
    * Assess camera degradation trend
    */
-  private assessCameraDegradation(cameraMetrics: Record<string, number>): "stable" | "slow-degradation" | "rapid-degradation" {
+  private assessCameraDegradation(cameraMetrics: Record<string, number | undefined>): "stable" | "slow-degradation" | "rapid-degradation" {
     let degradationScore = 0;
 
-    if (cameraMetrics.fpsConsistency < 0.9) degradationScore += 1;
-    if (cameraMetrics.bitrateVariance > 20) degradationScore += 1;
-    if (cameraMetrics.frameDropRate > 0.01) degradationScore += 2;
-    if (cameraMetrics.sensorTemperature > 50) degradationScore += 1;
-    if (cameraMetrics.focusAccuracy < 0.8) degradationScore += 1;
+    if ((cameraMetrics.fpsConsistency ?? 0) < 0.9) degradationScore += 1;
+    if ((cameraMetrics.bitrateVariance ?? 0) > 20) degradationScore += 1;
+    if ((cameraMetrics.frameDropRate ?? 0) > 0.01) degradationScore += 2;
+    if ((cameraMetrics.sensorTemperature ?? 0) > 50) degradationScore += 1;
+    if ((cameraMetrics.focusAccuracy ?? 0) < 0.8) degradationScore += 1;
 
     if (degradationScore >= 4) return "rapid-degradation";
     if (degradationScore >= 2) return "slow-degradation";

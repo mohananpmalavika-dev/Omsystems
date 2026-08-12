@@ -172,7 +172,10 @@ export class MemoryDigitalTwinState implements DigitalTwinState {
   async listZones(floorId: string) { return [...this.zones.values()].filter((item) => item.floorId === floorId).map(clone); }
   async recordEvent(input: TwinEventInput) {
     const key = `${input.tenantId}:${input.idempotencyKey}`; const existingId = this.eventKeys.get(key);
-    if (existingId) return { event: clone(this.events.get(existingId)!), duplicate: true };
+    if (existingId) {
+      const existing = this.events.get(existingId);
+      if (existing) return { event: clone(existing), duplicate: true };
+    }
     const event = eventValue(randomUUID(), input); this.events.set(event.id, event); this.eventKeys.set(key, event.id); return { event: clone(event), duplicate: false };
   }
   async listEvents(floorId: string, from: string, to: string, limit: number) { return [...this.events.values()].filter((item) => item.floorId === floorId && item.occurredAt >= from && item.occurredAt <= to).sort((a, b) => a.occurredAt.localeCompare(b.occurredAt)).slice(-limit).map(clone); }

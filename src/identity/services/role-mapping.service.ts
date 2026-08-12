@@ -529,10 +529,15 @@ export class RoleMappingService {
 
         const role = await this.getRole(mapping.roleId);
 
+        const mappingRow = result.rows[0];
+        if (!mappingRow) {
+          throw new Error('Failed to bulk upsert role mapping');
+        }
+
         results.push({
-          ...result.rows[0],
+          ...mappingRow,
           roleName: role.name,
-        });
+        } as RoleMapping);
       }
 
       await client.query('COMMIT');

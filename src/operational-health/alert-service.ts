@@ -112,7 +112,7 @@ export function canPerformAction(
 ): boolean {
   const state = ALERT_STATE_MACHINE[currentStatus as AlertStatusState];
   if (!state) return false;
-  return (state.actions as AlertAction[]).includes(action);
+  return (state.actions as readonly AlertAction[]).includes(action);
 }
 
 /**

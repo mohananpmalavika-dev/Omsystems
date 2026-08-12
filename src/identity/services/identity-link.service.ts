@@ -192,15 +192,15 @@ export class IdentityLinkService {
         await client.query('COMMIT');
 
         // Link already exists
-        const existingLink = existing.rows[0];
+        const existingRow = existing.rows[0];
 
         // Check if it's linked to a different user (conflict)
-        if (existingLink.userId !== input.userId) {
+        if (existingRow.userId !== input.userId) {
           throw new EnterpriseAuthError(
             'IDENTITY_CONFLICT',
             'External identity is already linked to a different user',
             {
-              existingUserId: existingLink.userId,
+              existingUserId: existingRow.userId,
               requestedUserId: input.userId,
               providerId: input.providerId,
               externalSubject: input.externalSubject,

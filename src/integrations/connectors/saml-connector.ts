@@ -473,7 +473,7 @@ export class SAMLConnector extends BaseConnector {
       
       const decoded = Buffer.from(samlRequest, 'base64').toString('utf8');
       const match = decoded.match(/ID="([^"]+)"/);
-      return match ? match[1] : '';
+      return match && match[1] ? match[1] : '';
     } catch {
       return '';
     }

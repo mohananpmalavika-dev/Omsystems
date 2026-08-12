@@ -248,9 +248,9 @@ export async function registerEmployeeActivityTrackingRoutes(
       await store.updateControlRoomActivity(
         params.activityId,
         request.currentUser.id,
-        body.alertCount,
-        body.incidentCount,
-        body.cameraSwitchCount
+        body.alertCount ?? null,
+        body.incidentCount ?? null,
+        body.cameraSwitchCount ?? null
       );
       
       return { status: 'updated' };
@@ -413,8 +413,8 @@ export async function registerEmployeeActivityTrackingRoutes(
     
     try {
       const userId = query.userId || request.currentUser.id;
-      const startDate = query.startDate || new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-      const endDate = query.endDate || new Date().toISOString().split('T')[0];
+      const startDate = query.startDate || new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]!;
+      const endDate = query.endDate || new Date().toISOString().split('T')[0]!;
       
       const summaries = await store.getDailySummary(
         request.currentUser.tenantId,

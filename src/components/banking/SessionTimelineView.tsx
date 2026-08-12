@@ -109,7 +109,15 @@ export const SessionTimelineView: React.FC<SessionTimelineViewProps> = ({
     );
   }
 
-  const frame = frames[currentFrame];
+  const frame = frames[currentFrame] ?? frames[0];
+
+  if (!frame) {
+    return (
+      <div className="bg-white rounded-lg shadow-sm p-6 text-center">
+        <p className="text-gray-600">No timeline data available</p>
+      </div>
+    );
+  }
 
   return (
     <div className="bg-white rounded-lg shadow-sm">
