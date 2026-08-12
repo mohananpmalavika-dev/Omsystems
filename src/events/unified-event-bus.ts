@@ -5,7 +5,18 @@
  */
 
 import { EventEmitter } from 'events';
-import type { DistributedEventBus } from '../../backend/src/services/distributed-event-bus.service.js';
+
+/**
+ * DistributedEventBus interface to avoid importing from backend during build
+ */
+interface DistributedEventBus {
+  publish(channel: string, data: any): Promise<void>;
+  subscribe(channel: string, handler: (data: any) => void): Promise<void>;
+  subscribePattern(pattern: string, handler: (channel: string, data: any) => void): Promise<void>;
+  unsubscribe(channel: string): Promise<void>;
+  healthCheck(): Promise<boolean>;
+  disconnect(): Promise<void>;
+}
 
 export interface IEventBus {
   publish(event: string, data: any): Promise<void>;
