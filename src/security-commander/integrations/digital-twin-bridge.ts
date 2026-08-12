@@ -215,7 +215,7 @@ export class DigitalTwinBridge {
         by_type: byType,
         critical_services: criticalServices.slice(0, 10), // Top 10
         business_impact: {
-          coverage_loss: `${byType.camera || 0} cameras affected`,
+          coverage_loss: `${(byType.camera ?? 0)} cameras affected`,
           operational_impact: operationalImpact,
           estimated_downtime: this.estimateDowntime(sourceAsset.asset_type),
           affected_zones: Array.from(affectedZones),

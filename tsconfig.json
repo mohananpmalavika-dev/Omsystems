@@ -42,6 +42,10 @@
     "src/**/ui/**/*",
     "backend/**/ui/**/*",
     
+    // Example files (not needed for production)
+    "**/*.example.ts",
+    "**/*.example.js",
+    
     // Temporarily exclude files with known type issues
     // TODO: Fix these files and remove from exclusions
     "src/routes/*.disabled",

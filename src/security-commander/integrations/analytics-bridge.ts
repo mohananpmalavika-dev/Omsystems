@@ -64,9 +64,8 @@ export class AnalyticsBridge {
     };
 
     return this.ingestionService.ingestEvent(rawEvent, {
-      tenantId: context.tenantId ?? detection.tenantId ?? '',
-      branchId: context.branchId ?? detection.branchId,
       ...context,
+      tenantId: detection.tenantId ?? context.tenantId ?? '',
     });
   }
 

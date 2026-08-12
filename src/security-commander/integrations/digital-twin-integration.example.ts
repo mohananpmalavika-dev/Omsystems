@@ -4,9 +4,9 @@
  */
 
 import { Pool } from 'pg';
-import { DigitalTwinBridge } from './digital-twin-bridge';
-import { EnhancedRootCauseService } from './enhanced-root-cause.service';
-import type { SecurityIncident, SecurityEvent } from '../types';
+import { DigitalTwinBridge } from './digital-twin-bridge.js';
+import { EnhancedRootCauseService } from './enhanced-root-cause.service.js';
+import type { SecurityIncident, SecurityEvent } from '../types/index.js';
 
 /**
  * Example 1: Initialize Digital Twin bridge
@@ -49,13 +49,13 @@ async function analyzeIncidentWithDigitalTwin(
   if (rootCause.dependencyAnalysis) {
     console.log('\nDependency Analysis:');
     console.log(`Common Dependencies: ${rootCause.dependencyAnalysis.commonDependencies.length}`);
-    rootCause.dependencyAnalysis.commonDependencies.forEach((dep) => {
+    rootCause.dependencyAnalysis.commonDependencies.forEach((dep: any) => {
       console.log(`  - ${dep.asset_type}: ${dep.name} (health: ${dep.health_score})`);
     });
 
     if (rootCause.dependencyAnalysis.singlePointsOfFailure.length > 0) {
       console.log('\nSingle Points of Failure:');
-      rootCause.dependencyAnalysis.singlePointsOfFailure.forEach((spof) => {
+      rootCause.dependencyAnalysis.singlePointsOfFailure.forEach((spof: any) => {
         console.log(`  - ${spof}`);
       });
     }
@@ -70,13 +70,13 @@ async function analyzeIncidentWithDigitalTwin(
     }
 
     console.log('\nDependency Chain:');
-    rootCause.dependencyAnalysis.topologyContext.dependencyChain.forEach((link, idx) => {
+    rootCause.dependencyAnalysis.topologyContext.dependencyChain.forEach((link: any, idx: any) => {
       console.log(`  ${idx + 1}. ${link}`);
     });
   }
 
   console.log('\nContributing Factors:');
-  rootCause.contributingFactors.forEach((factor) => {
+  rootCause.contributingFactors.forEach((factor: any) => {
     console.log(`  - ${factor}`);
   });
 

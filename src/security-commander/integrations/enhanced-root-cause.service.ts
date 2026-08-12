@@ -3,10 +3,20 @@
  * Integrates Digital Twin for dependency-aware root cause determination
  */
 
-import type { DigitalTwinBridge, TwinAsset, BlastRadiusResult } from './digital-twin-bridge';
-import type { SecurityEvent, SecurityIncident, RootCause } from '../types';
+import type { DigitalTwinBridge, TwinAsset, BlastRadiusResult } from './digital-twin-bridge.js';
+import type { SecurityEvent, SecurityIncident } from '../types/index.js';
+
+/**
+ * Base root cause information
+ */
+export interface RootCause {
+  confidence: number;
+  explanation: string;
+  contributingFactors: string[];
+}
 
 export interface EnhancedRootCause extends RootCause {
+  primaryEventType: string;
   dependencyAnalysis?: {
     commonDependencies: TwinAsset[];
     singlePointsOfFailure: string[];
