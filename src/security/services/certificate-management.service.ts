@@ -116,8 +116,8 @@ export class CertificateManagementService extends EventEmitter implements ICerti
       this.emit('certificate:imported', { certificateId: certificate.id, name, commonName });
 
       return certificate;
-    } catch (error) {
-      throw new Error(`Failed to import certificate: ${error.message}`);
+    } catch (error: unknown) {
+      throw new Error(`Failed to import certificate: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
@@ -241,9 +241,9 @@ export class CertificateManagementService extends EventEmitter implements ICerti
           check.status = CertificateStatus.REVOKED;
           check.validationErrors.push('Certificate has been revoked');
         }
-      } catch (error) {
+      } catch (error: unknown) {
         // OCSP check failed - non-fatal
-        console.warn(`OCSP check failed for certificate ${id}:`, error.message);
+        console.warn(`OCSP check failed for certificate ${id}:`, error instanceof Error ? error.message : String(error));
       }
       
       // Update certificate status
@@ -264,9 +264,9 @@ export class CertificateManagementService extends EventEmitter implements ICerti
       this.emit('certificate:verified', { certificateId: id, status: check.status });
       
       return check;
-    } catch (error) {
+    } catch (error: unknown) {
       check.status = CertificateStatus.INVALID;
-      check.validationErrors.push(error.message);
+      check.validationErrors.push(error instanceof Error ? error.message : String(error));
       return check;
     }
   }
@@ -325,8 +325,8 @@ export class CertificateManagementService extends EventEmitter implements ICerti
       });
       
       return renewedCert;
-    } catch (error) {
-      throw new Error(`Failed to renew certificate: ${error.message}`);
+    } catch (error: unknown) {
+      throw new Error(`Failed to renew certificate: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
@@ -399,11 +399,11 @@ export class CertificateManagementService extends EventEmitter implements ICerti
         try {
           const renewedCert = await this.renewCertificate(cert.id);
           renewed.push(renewedCert);
-        } catch (error) {
+        } catch (error: unknown) {
           console.error(`Failed to auto-renew certificate ${cert.id}:`, error);
           this.emit('certificate:renewal-failed', {
             certificateId: cert.id,
-            error: error.message
+            error: error instanceof Error ? error.message : String(error)
           });
         }
       }
@@ -702,11 +702,11 @@ export class CertificateManagementService extends EventEmitter implements ICerti
           monitoringActive: this.monitoringInterval !== null
         }
       };
-    } catch (error) {
+    } catch (error: unknown) {
       return {
         status: 'unhealthy',
         details: {
-          error: error.message
+          error: error instanceof Error ? error.message : String(error)
         }
       };
     }

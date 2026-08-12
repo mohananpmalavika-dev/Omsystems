@@ -56,7 +56,7 @@ export class SecurityServicesFactory extends EventEmitter {
   async initialize(): Promise<void> {
     try {
       // Initialize services in dependency order
-      this.secretVault = new SecretVaultService();
+      this.secretVault = new SecretVaultService(process.env.VAULT_MASTER_PASSWORD);
       this.certificateManagement = new CertificateManagementService();
       this.passwordRotation = new PasswordRotationService(this.secretVault);
       this.hsm = new HSMService();
@@ -68,9 +68,9 @@ export class SecurityServicesFactory extends EventEmitter {
       
       this.emit('security:initialized');
       console.log('Security services initialized successfully');
-    } catch (error) {
-      this.emit('security:initialization-failed', { error: error.message });
-      throw new Error(`Failed to initialize security services: ${error.message}`);
+    } catch (error: unknown) {
+      this.emit('security:initialization-failed', { error: error instanceof Error ? error.message : String(error) });
+      throw new Error(`Failed to initialize security services: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
   

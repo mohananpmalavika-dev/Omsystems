@@ -369,10 +369,10 @@ export class ImmutableStorageService extends EventEmitter implements IImmutableS
           objectsWithLegalHolds: legalHolds
         }
       };
-    } catch (error) {
+    } catch (error: unknown) {
       return {
         status: 'unhealthy',
-        details: { error: error.message }
+        details: { error: error instanceof Error ? error.message : String(error) }
       };
     }
   }

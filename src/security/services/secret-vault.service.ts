@@ -517,9 +517,9 @@ export class SecretVaultService extends EventEmitter implements ISecretVaultServ
         try {
           await this.rotateSecret(secret.id);
           console.log(`Auto-rotated secret: ${secret.name}`);
-        } catch (error) {
+        } catch (error: unknown) {
           console.error(`Failed to auto-rotate secret ${secret.name}:`, error);
-          this.emit('secret:rotation-failed', { secretId: secret.id, error: error.message });
+          this.emit('secret:rotation-failed', { secretId: secret.id, error: error instanceof Error ? error.message : String(error) });
         }
       }
     }

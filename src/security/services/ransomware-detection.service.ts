@@ -415,10 +415,10 @@ export class RansomwareDetectionService extends EventEmitter implements IRansomw
           detectionActive: this.detectionInterval !== null
         }
       };
-    } catch (error) {
+    } catch (error: unknown) {
       return {
         status: 'unhealthy',
-        details: { error: error.message }
+        details: { error: error instanceof Error ? error.message : String(error) }
       };
     }
   }

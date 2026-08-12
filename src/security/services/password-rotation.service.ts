@@ -314,8 +314,8 @@ export class PasswordRotationService extends EventEmitter implements IPasswordRo
       );
       
       this.emit('job:rolled-back', { jobId, targetId: target.id });
-    } catch (error) {
-      throw new Error(`Rollback failed: ${error.message}`);
+    } catch (error: unknown) {
+      throw new Error(`Rollback failed: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
@@ -461,19 +461,19 @@ export class PasswordRotationService extends EventEmitter implements IPasswordRo
       );
 
       this.emit('rotation:success', { jobId, targetId: target.id });
-    } catch (error) {
+    } catch (error: unknown) {
       await db.collection('password_rotation_jobs').updateOne(
         { id: jobId },
         {
           $set: {
             status: RotationStatus.FAILED,
             completedAt: new Date(),
-            error: error.message
+            error: error instanceof Error ? error.message : String(error)
           }
         }
       );
 
-      this.emit('rotation:failed', { jobId, targetId: target.id, error: error.message });
+      this.emit('rotation:failed', { jobId, targetId: target.id, error: error instanceof Error ? error.message : String(error) });
       
       throw error;
     }
@@ -534,8 +534,8 @@ export class PasswordRotationService extends EventEmitter implements IPasswordRo
         headers: { 'Content-Type': 'application/soap+xml' },
         timeout: 10000
       });
-    } catch (error) {
-      throw new Error(`Failed to apply ONVIF password: ${error.message}`);
+    } catch (error: unknown) {
+      throw new Error(`Failed to apply ONVIF password: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
@@ -562,8 +562,8 @@ export class PasswordRotationService extends EventEmitter implements IPasswordRo
       }, {
         timeout: 10000
       });
-    } catch (error) {
-      throw new Error(`Failed to apply HTTP password: ${error.message}`);
+    } catch (error: unknown) {
+      throw new Error(`Failed to apply HTTP password: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
@@ -708,11 +708,11 @@ export class PasswordRotationService extends EventEmitter implements IPasswordRo
           schedulerActive: this.schedulerInterval !== null
         }
       };
-    } catch (error) {
+    } catch (error: unknown) {
       return {
         status: 'unhealthy',
         details: {
-          error: error.message
+          error: error instanceof Error ? error.message : String(error)
         }
       };
     }

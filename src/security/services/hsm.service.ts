@@ -131,9 +131,9 @@ export class HSMService extends EventEmitter implements IHSMService {
       this.emit('key:generated', { keyId: key.id, label, algorithm });
 
       return key;
-    } catch (error) {
+    } catch (error: unknown) {
       await this.logOperation(HSMOperationType.GENERATE_KEY, label, false);
-      throw new Error(`Failed to generate key: ${error.message}`);
+      throw new Error(`Failed to generate key: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
@@ -227,9 +227,9 @@ export class HSMService extends EventEmitter implements IHSMService {
       this.emit('operation:sign', { keyId, dataSize: data.length });
 
       return signature;
-    } catch (error) {
+    } catch (error: unknown) {
       await this.logOperation(HSMOperationType.SIGN, keyId, false);
-      throw new Error(`Signing failed: ${error.message}`);
+      throw new Error(`Signing failed: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
@@ -250,9 +250,9 @@ export class HSMService extends EventEmitter implements IHSMService {
       await this.logOperation(HSMOperationType.VERIFY, keyId, true);
 
       return valid;
-    } catch (error) {
+    } catch (error: unknown) {
       await this.logOperation(HSMOperationType.VERIFY, keyId, false);
-      throw new Error(`Verification failed: ${error.message}`);
+      throw new Error(`Verification failed: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
@@ -272,9 +272,9 @@ export class HSMService extends EventEmitter implements IHSMService {
       await this.logOperation(HSMOperationType.ENCRYPT, keyId, true);
 
       return ciphertext;
-    } catch (error) {
+    } catch (error: unknown) {
       await this.logOperation(HSMOperationType.ENCRYPT, keyId, false);
-      throw new Error(`Encryption failed: ${error.message}`);
+      throw new Error(`Encryption failed: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
@@ -294,9 +294,9 @@ export class HSMService extends EventEmitter implements IHSMService {
       await this.logOperation(HSMOperationType.DECRYPT, keyId, true);
 
       return plaintext;
-    } catch (error) {
+    } catch (error: unknown) {
       await this.logOperation(HSMOperationType.DECRYPT, keyId, false);
-      throw new Error(`Decryption failed: ${error.message}`);
+      throw new Error(`Decryption failed: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
