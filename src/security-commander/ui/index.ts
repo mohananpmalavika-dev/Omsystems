@@ -7,7 +7,7 @@
 export * from './components/index.js';
 
 // Context and hooks
-export { CommanderProvider, useCommander } from './context/CommanderContext.js';
+export { CommanderProvider, useCommander } from './context/CommanderContext';
 export * from './hooks/index.js';
 
 // Types

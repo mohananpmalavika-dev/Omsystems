@@ -6,7 +6,7 @@
 import type {
   Investigation,
   CommanderResponse,
-  SecurityIncident,
+  Incident,
   SecurityEvent,
   Evidence,
   RecommendedAction,
@@ -25,7 +25,7 @@ export interface ChatMessage {
 
 // UI state for investigation viewer
 export interface InvestigationViewState {
-  selectedIncident?: SecurityIncident;
+  selectedIncident?: Incident;
   selectedEvent?: SecurityEvent;
   selectedEvidence?: Evidence;
   timelineFilter?: TimelineFilter;
@@ -80,7 +80,7 @@ export interface SecurityNotification {
   title: string;
   message: string;
   timestamp: Date;
-  incident?: SecurityIncident;
+  incident?: Incident;
   autoClose?: boolean;
 }
 
@@ -114,9 +114,9 @@ export interface InvestigationViewerProps {
 
 export interface TimelineViewProps {
   events: SecurityEvent[];
-  incidents?: SecurityIncident[];
+  incidents?: Incident[];
   onEventSelect?: (event: SecurityEvent) => void;
-  onIncidentSelect?: (incident: SecurityIncident) => void;
+  onIncidentSelect?: (incident: Incident) => void;
   filter?: TimelineFilter;
   className?: string;
 }
@@ -128,7 +128,7 @@ export interface EvidenceGalleryProps {
 }
 
 export interface IncidentCardProps {
-  incident: SecurityIncident;
+  incident: Incident;
   expanded?: boolean;
   onToggle?: () => void;
   onInvestigate?: () => void;
