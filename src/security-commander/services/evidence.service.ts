@@ -359,7 +359,7 @@ export class EvidenceService {
     // This is a placeholder - implement based on your storage structure
     const dateStr = timestamp.toISOString().split('T')[0];
     return join(
-      this.options.evidenceStoragePath,
+      this.options.evidenceStoragePath || '/var/lib/sentinel/evidence',
       'archives',
       cameraId,
       dateStr,

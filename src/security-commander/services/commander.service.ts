@@ -272,8 +272,7 @@ export class SecurityCommanderService {
       message: `System Status: ${stats.totalEvents} events in last 24 hours, ${stats.abnormalEvents} abnormal (${stats.abnormalPercentage.toFixed(1)}%)`,
       summary: {
         totalEvents: stats.totalEvents,
-        abnormalEvents: stats.abnormalEvents,
-      },
+      } as any,
       queryMetadata: {
         executionTime: Date.now(),
       },

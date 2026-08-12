@@ -130,7 +130,7 @@ export interface CommanderResponse {
   evidence?: EvidenceSummary[];
 
   /** Recommended actions */
-  recommendedActions?: RecommedAction[];
+  recommendedActions?: RecommendedAction[];
 
   /** Summary statistics */
   summary?: {

@@ -550,7 +550,7 @@ export class InvestigationRepository {
         from: new Date(row.time_range_from),
         to: new Date(row.time_range_to),
       },
-      scope: this.parseJson(row.scope, {}),
+      scope: this.parseJson(row.scope, { type: 'enterprise' } as any),
       incidents: [], // Populated separately if needed
       evidence: [], // Populated separately
       timeline: [], // Populated separately

@@ -666,7 +666,7 @@ export class AcmeCertificateAuthorityProvider
     
     return {
       certificatePem,
-      chainPem: chainPem.join('\n'),
+      chainPem,
       serialNumber: cert.serialNumber,
       notBefore: cert.validity.notBefore,
       notAfter: cert.validity.notAfter,

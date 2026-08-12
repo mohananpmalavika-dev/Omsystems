@@ -115,7 +115,7 @@ export class EventIngestionService {
         errors: [
           ...errors,
           {
-            event: events[0],
+            event: events[0]!,
             error: `Bulk insertion failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
           },
         ],
