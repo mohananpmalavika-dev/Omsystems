@@ -61,7 +61,7 @@ export { KeyProviderStartupPolicy, validateProviderStartup } from './key-provide
 export * from './types.js';
 
 // Errors
-export * from './errors.js';
+export { KeyProviderError, KeyNotFoundError, UnsupportedAlgorithmError, UnsupportedOperationError, InvalidSignatureError, SessionExhaustedError, DeviceError, InvalidInputError, KeyPolicyViolationError, ProductionSafetyViolationError, ModuleLoadFailedError, TokenNotPresentError, AuthenticationFailedError, PermissionDeniedError, InitializationFailedError } from './errors.js';
 
 // Helper to create complete KeyService
 export async function createKeyService(config: {
@@ -69,11 +69,12 @@ export async function createKeyService(config: {
   requirements?: import('./types.js').KeyProviderRequirements;
   environment?: string;
   simulationAllowed?: boolean;
-}): Promise<KeyService> {
+}): Promise<import('./key.service.js').KeyService> {
   const environment = config.environment ?? process.env.NODE_ENV ?? 'development';
   
   // Create provider
-  const provider = await KeyProviderFactory.createProvider(config.providerConfig);
+  const { KeyProviderFactory: Factory } = await import('./key-provider.factory.js');
+  const provider = await Factory.createProvider(config.providerConfig);
   
   // Validate against requirements
   if (config.requirements) {
@@ -96,6 +97,7 @@ export async function createKeyService(config: {
   const audit = new KeyAuditService();
   
   // Create and initialize key service
+  const { KeyService } = await import('./key.service.js');
   const keyService = new KeyService(provider, registry, policy, audit);
   await keyService.initialize();
   

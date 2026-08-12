@@ -256,7 +256,7 @@ export class KeyAuditService {
     ]).toArray();
     
     for (const seq of suspiciousSequences) {
-      const ops = seq.operations;
+      const ops = seq.operations as Array<{ success: boolean; timestamp: Date }>;
       let consecutiveFailures = 0;
       
       for (const op of ops) {
@@ -274,7 +274,7 @@ export class KeyAuditService {
     }
     
     return {
-      keysWithHighFailureRate: failuresByKey.map(f => ({
+      keysWithHighFailureRate: failuresByKey.map((f: any) => ({
         keyId: f._id,
         failureCount: f.failureCount
       })),

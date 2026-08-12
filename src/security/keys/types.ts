@@ -215,6 +215,7 @@ export interface GenerateKeyRequest {
   };
   policy: KeyPolicy;
   tenantId?: string;
+  context?: OperationContext;
   metadata?: Record<string, unknown>;
 }
 

@@ -97,9 +97,10 @@ export class LDAPConnector extends EventEmitter {
     try {
       await this.testConnection(config.tenantId);
       console.log(`[LDAP] Registered tenant: ${config.tenantId}`);
-    } catch (error) {
+    } catch (error: unknown) {
+      const errorMsg = error instanceof Error ? error.message : String(error);
       console.error(`[LDAP] Failed to register tenant ${config.tenantId}:`, error);
-      throw new Error(`LDAP tenant registration failed: ${error.message}`);
+      throw new Error(`LDAP tenant registration failed: ${errorMsg}`);
     }
   }
   
@@ -187,8 +188,11 @@ export class LDAPConnector extends EventEmitter {
     try {
       await this.bindClient(client, userDN, password);
       client.unbind();
-    } catch (error) {
+    } catch (error: unknown) {
       client.unbind();
+      if (error instanceof Error) {
+        throw new Error(`Invalid credentials: ${error.message}`);
+      }
       throw new Error('Invalid credentials');
     }
   }
@@ -288,8 +292,11 @@ export class LDAPConnector extends EventEmitter {
       }
       client.unbind();
       return true;
-    } catch (error) {
+    } catch (error: unknown) {
       client.unbind();
+      if (error instanceof Error) {
+        throw new Error(`Connection test failed: ${error.message}`);
+      }
       throw error;
     }
   }
@@ -486,8 +493,8 @@ export class LDAPConnector extends EventEmitter {
       
       for (let i = pool.length - 1; i >= 0; i--) {
         const conn = pool[i];
-        if (!conn.inUse && now - conn.lastUsed > idleTimeout) {
-          conn.client.unbind();
+        if (conn && !conn.inUse && now - conn.lastUsed > idleTimeout) {
+          conn.client?.unbind();
           pool.splice(i, 1);
         }
       }

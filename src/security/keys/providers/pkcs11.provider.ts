@@ -653,7 +653,8 @@ export class PKCS11Provider implements KeyProvider {
       throw new Error('Secret manager PIN retrieval not yet implemented');
     }
     
-    throw new Error(`Unsupported PIN source type: ${pinSource.type}`);
+    const _exhaustiveCheck: never = pinSource;
+    throw new Error(`Unsupported PIN source type: ${(_exhaustiveCheck as any).type}`);
   }
 
   // ============================================================================
@@ -723,7 +724,8 @@ export class PKCS11Provider implements KeyProvider {
     plaintext: Buffer
   ): Promise<{ ciphertext: Buffer; iv: Buffer; authTag?: Buffer }> {
     // TODO: Implement PKCS#11 encryption
-    throw new Error('PKCS#11 encryption requires pkcs11js implementation');
+    const error: any = new Error('PKCS#11 encryption requires pkcs11js implementation');
+    throw error;
   }
 
   private async performDecrypt(

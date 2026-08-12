@@ -171,18 +171,20 @@ export class EvidenceValidator {
         });
       }
 
-      if (evidence.source !== 'LIVE') {
+      const sourceVal = evidence.source;
+      if (sourceVal !== 'LIVE') {
         errors.push({
           field: 'source',
-          message: `HEALTHY state requires source=LIVE, got: ${evidence.source}`,
+          message: `HEALTHY state requires source=LIVE, got: ${sourceVal}`,
           severity: 'error',
         });
       }
 
-      if (evidence.reason !== 'VERIFIED') {
+      const reasonVal = evidence.reason;
+      if (reasonVal !== 'VERIFIED') {
         warnings.push({
           field: 'reason',
-          message: `HEALTHY state typically has reason=VERIFIED, got: ${evidence.reason}`,
+          message: `HEALTHY state typically has reason=VERIFIED, got: ${reasonVal}`,
           severity: 'warning',
         });
       }
@@ -214,18 +216,20 @@ export class EvidenceValidator {
         });
       }
 
-      if (evidence.source !== 'LIVE') {
+      const sourceVal = evidence.source;
+      if (sourceVal !== 'LIVE') {
         errors.push({
           field: 'source',
-          message: `UNHEALTHY state requires source=LIVE, got: ${evidence.source}`,
+          message: `UNHEALTHY state requires source=LIVE, got: ${sourceVal}`,
           severity: 'error',
         });
       }
 
-      if (evidence.reason !== 'CONTROL_FAILED') {
+      const reasonVal = evidence.reason;
+      if (reasonVal !== 'CONTROL_FAILED') {
         warnings.push({
           field: 'reason',
-          message: `UNHEALTHY state typically has reason=CONTROL_FAILED, got: ${evidence.reason}`,
+          message: `UNHEALTHY state typically has reason=CONTROL_FAILED, got: ${reasonVal}`,
           severity: 'warning',
         });
       }
@@ -257,18 +261,29 @@ export class EvidenceValidator {
         });
       }
 
-      if (evidence.source === 'LIVE') {
+      if (evidence.source !== 'UNAVAILABLE' && evidence.source !== 'SIMULATED') {
         errors.push({
           field: 'source',
-          message: 'UNKNOWN state cannot have source=LIVE',
+          message: `UNKNOWN state requires source=UNAVAILABLE or SIMULATED, got: ${evidence.source}`,
           severity: 'error',
         });
       }
 
-      if (evidence.reason === 'VERIFIED' || evidence.reason === 'CONTROL_FAILED') {
+      const validReasons: Array<SecurityEvidence['reason']> = [
+        'COLLECTOR_UNAVAILABLE',
+        'NOT_SUPPORTED',
+        'NOT_CONFIGURED',
+        'STALE_EVIDENCE',
+        'SIMULATED_DATA',
+        'PERMISSION_DENIED',
+        'TIMEOUT',
+        'INVALID_RESPONSE',
+        'NO_EVIDENCE'
+      ];
+      if (!validReasons.includes(evidence.reason)) {
         errors.push({
           field: 'reason',
-          message: `UNKNOWN state cannot have reason=${evidence.reason}`,
+          message: `UNKNOWN state has invalid reason: ${evidence.reason}`,
           severity: 'error',
         });
       }
@@ -348,10 +363,10 @@ export class EvidenceValidator {
 
     if (environment === 'production') {
       // Simulated data is not allowed in production
-      if (evidence.source === 'SIMULATED' && evidence.state !== 'UNKNOWN') {
+      if (evidence.source === 'SIMULATED') {
         errors.push({
           field: 'source',
-          message: 'SIMULATED evidence must be downgraded to UNKNOWN in production',
+          message: 'SIMULATED evidence is not allowed in production',
           severity: 'error',
         });
       }

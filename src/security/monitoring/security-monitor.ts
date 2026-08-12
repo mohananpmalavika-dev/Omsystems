@@ -288,8 +288,9 @@ export class SecurityMonitor extends EventEmitter {
           data: { criticalIssues: posture.criticalIssues }
         });
       }
-    } catch (error) {
-      console.error('Security posture check failed:', error);
+    } catch (error: unknown) {
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      console.error('Security posture check failed:', errorMsg);
     }
   }
 
@@ -492,10 +493,11 @@ export class SecurityMonitor extends EventEmitter {
         status: 'healthy',
         details: stats
       };
-    } catch (error) {
+    } catch (error: unknown) {
+      const errorMsg = error instanceof Error ? error.message : String(error);
       return {
         status: 'unhealthy',
-        details: { error: error.message }
+        details: { error: errorMsg }
       };
     }
   }
