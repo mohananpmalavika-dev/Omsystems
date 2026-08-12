@@ -158,8 +158,8 @@ router.get('/equipment/:cameraId', (req: Request, res: Response) => {
     const sceneRegistry = getSceneStateRegistry();
     const scene = sceneRegistry.getSceneState(cameraId);
     
-    // Check if scene has the getAllTracks method
-    if (!scene || typeof scene.getAllTracks !== 'function') {
+    // Check if scene exists and has the getAllTracks method
+    if (!scene || typeof (scene as any).getAllTracks !== 'function') {
       res.json({
         cameraId,
         equipment: [],
@@ -169,7 +169,7 @@ router.get('/equipment/:cameraId', (req: Request, res: Response) => {
       return;
     }
     
-    const equipment = scene.getAllTracks();
+    const equipment = (scene as any).getAllTracks();
 
     res.json({
       cameraId,

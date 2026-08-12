@@ -959,19 +959,20 @@ export async function registerAdvancedAnalyticsRoutes(
       return reply.code(404).send({ error: "Industrial analytics not enabled" });
     }
 
-    const violations = industrial.getSafetyViolations?.(
-      undefined,
-      query.severity,
-      query.since ? new Date(query.since) : undefined
-    );
-
-    // If method doesn't exist, return empty array
-    if (!violations) {
+    // Check if method exists before calling (use type assertion for optional methods)
+    const industrialAny = industrial as any;
+    if (typeof industrialAny.getSafetyViolations !== 'function') {
       return {
         count: 0,
         violations: []
       };
     }
+
+    const violations = industrialAny.getSafetyViolations(
+      undefined,
+      query.severity,
+      query.since ? new Date(query.since) : undefined
+    );
 
     return {
       count: violations.length,
@@ -988,10 +989,9 @@ export async function registerAdvancedAnalyticsRoutes(
       return reply.code(404).send({ error: "Industrial analytics not enabled" });
     }
 
-    const metrics = industrial.calculateProductionMetrics?.();
-
-    // If method doesn't exist, return default metrics
-    if (!metrics) {
+    // Check if method exists before calling (use type assertion for optional methods)
+    const industrialAny = industrial as any;
+    if (typeof industrialAny.calculateProductionMetrics !== 'function') {
       return {
         unitsProduced: 0,
         efficiency: 0,
@@ -1001,6 +1001,8 @@ export async function registerAdvancedAnalyticsRoutes(
         activeWorkers: 0
       };
     }
+
+    const metrics = industrialAny.calculateProductionMetrics();
 
     return {
       unitsProduced: metrics.unitsProduced,

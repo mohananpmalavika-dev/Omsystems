@@ -275,8 +275,6 @@ export class OnnxObjectDetector extends BaseInferenceProvider {
       scale,
       padX,
       padY,
-      inputWidth: targetWidth,
-      inputHeight: targetHeight,
     };
   }
 
@@ -330,6 +328,8 @@ export class OnnxObjectDetector extends BaseInferenceProvider {
     preprocessing: {
       originalWidth: number;
       originalHeight: number;
+      inputWidth: number;
+      inputHeight: number;
       scale: number;
       padX: number;
       padY: number;
@@ -371,10 +371,13 @@ export class OnnxObjectDetector extends BaseInferenceProvider {
       const x = cx - w / 2;
       const y = cy - h / 2;
 
-      // Restore original coordinates
+      // Restore original coordinates (provide complete PreprocessedImage with dummy tensor)
       const restored = restoreBoundingBox(
         { x, y, width: w, height: h },
-        preprocessing
+        {
+          ...preprocessing,
+          tensor: new Float32Array(0) // Dummy tensor - not used for coordinate restoration
+        }
       );
 
       const className = this.manifest.labels[maxClassId] || 'unknown';
