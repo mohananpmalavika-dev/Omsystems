@@ -888,6 +888,152 @@ export const analyticsApi = {
     }),
 };
 
+export type IdentityWatchlist = {
+  id: string;
+  name: string;
+  description?: string | null;
+  list_type?: string;
+  listType?: string;
+  enabled?: boolean;
+  alert_on_match?: boolean;
+  alertOnMatch?: boolean;
+  alert_severity?: string;
+  alertSeverity?: string;
+  created_at?: string;
+  createdAt?: string;
+};
+
+export type FaceWatchlistPerson = {
+  id: string;
+  external_id?: string | null;
+  externalId?: string | null;
+  full_name?: string;
+  fullName?: string;
+  gender?: string | null;
+  enrolled_at?: string;
+  enrolledAt?: string;
+  last_seen_at?: string | null;
+  lastSeenAt?: string | null;
+  match_count?: number | string;
+  matchCount?: number | string;
+  embedding_count?: number | string;
+  embeddingCount?: number | string;
+};
+
+export type FaceRecognitionEvent = {
+  id: string;
+  camera_id?: string;
+  cameraId?: string;
+  camera_name?: string | null;
+  cameraName?: string | null;
+  person_name?: string | null;
+  personName?: string | null;
+  watchlist_name?: string | null;
+  watchlistName?: string | null;
+  similarity_score?: number | string;
+  similarityScore?: number | string;
+  face_quality?: number | string | null;
+  faceQuality?: number | string | null;
+  snapshot_reference?: string | null;
+  snapshotReference?: string | null;
+  occurred_at?: string;
+  occurredAt?: string;
+};
+
+export type AnprEvent = {
+  id: string;
+  plate_number?: string;
+  plateNumber?: string;
+  plate_confidence?: number | string;
+  plateConfidence?: number | string;
+  camera_name?: string | null;
+  cameraName?: string | null;
+  vehicle_type?: string | null;
+  vehicleType?: string | null;
+  vehicle_color?: string | null;
+  vehicleColor?: string | null;
+  entry_direction?: string | null;
+  entryDirection?: string | null;
+  watchlist_name?: string | null;
+  watchlistName?: string | null;
+  watchlist_reason?: string | null;
+  watchlistReason?: string | null;
+  snapshot_reference?: string | null;
+  snapshotReference?: string | null;
+  occurred_at?: string;
+  occurredAt?: string;
+};
+
+export const identityAnalyticsApi = {
+  listFaceWatchlists: () =>
+    fetchApi<{ data: IdentityWatchlist[] }>('/v1/analytics/face-watchlists'),
+  createFaceWatchlist: (data: {
+    name: string;
+    description?: string;
+    listType: 'security' | 'vip' | 'staff' | 'blacklist' | 'missing-person';
+    alertOnMatch: boolean;
+    alertSeverity: 'P1' | 'P2' | 'P3' | 'P4' | 'P5';
+  }) => fetchApi<{ data: IdentityWatchlist }>('/v1/analytics/face-watchlists', {
+    method: 'POST', body: JSON.stringify(data),
+  }),
+  listFacePersons: (watchlistId: string) =>
+    fetchApi<{ data: FaceWatchlistPerson[] }>(
+      `/v1/analytics/face-watchlists/${encodeURIComponent(watchlistId)}/persons`,
+    ),
+  enrollFacePerson: (watchlistId: string, data: {
+    fullName: string;
+    externalId?: string;
+    dateOfBirth?: string;
+    gender?: 'male' | 'female' | 'other' | 'unknown';
+    notes?: string;
+  }) => fetchApi<{ data: FaceWatchlistPerson }>(
+    `/v1/analytics/face-watchlists/${encodeURIComponent(watchlistId)}/persons`,
+    { method: 'POST', body: JSON.stringify({ ...data, metadata: {} }) },
+  ),
+  listFaceEvents: (filters?: { watchlistId?: string; minSimilarity?: number; limit?: number }) => {
+    const params = new URLSearchParams();
+    if (filters?.watchlistId) params.set('watchlistId', filters.watchlistId);
+    if (filters?.minSimilarity !== undefined) params.set('minSimilarity', String(filters.minSimilarity));
+    params.set('limit', String(filters?.limit ?? 100));
+    return fetchApi<{ data: FaceRecognitionEvent[] }>(`/v1/analytics/face-events?${params}`);
+  },
+  listAnprWatchlists: () =>
+    fetchApi<{ data: IdentityWatchlist[] }>('/v1/analytics/anpr-watchlists'),
+  createAnprWatchlist: (data: {
+    name: string;
+    description?: string;
+    listType: 'alert' | 'stolen' | 'wanted' | 'vip' | 'staff' | 'blacklist';
+    alertOnMatch: boolean;
+    alertSeverity: 'P1' | 'P2' | 'P3' | 'P4' | 'P5';
+    alertAuthorities: boolean;
+  }) => fetchApi<{ data: IdentityWatchlist }>('/v1/analytics/anpr-watchlists', {
+    method: 'POST', body: JSON.stringify(data),
+  }),
+  addAnprPlate: (watchlistId: string, data: {
+    plateNumber: string;
+    countryCode: string;
+    regionCode?: string;
+    vehicleMake?: string;
+    vehicleModel?: string;
+    vehicleColor?: string;
+    vehicleType?: 'car' | 'motorcycle' | 'bus' | 'truck' | 'other';
+    ownerName?: string;
+    reason: string;
+    notes?: string;
+    expiresAt?: string;
+  }) => fetchApi<{ data: { id: string; plate_number?: string; plateNumber?: string; added_at?: string; addedAt?: string } }>(
+    `/v1/analytics/anpr-watchlists/${encodeURIComponent(watchlistId)}/plates`,
+    { method: 'POST', body: JSON.stringify(data) },
+  ),
+  listAnprEvents: (filters?: { watchlistId?: string; plateNumber?: string; limit?: number }) => {
+    const params = new URLSearchParams();
+    if (filters?.watchlistId) params.set('watchlistId', filters.watchlistId);
+    if (filters?.plateNumber) params.set('plateNumber', filters.plateNumber);
+    params.set('limit', String(filters?.limit ?? 100));
+    return fetchApi<{ data: AnprEvent[] }>(`/v1/analytics/anpr-events?${params}`);
+  },
+};
+
 export const bankingAnalyticsApi = {
   listSessions: (filters: { tenantId: string; branchId?: string }) => {
     const params = new URLSearchParams({ tenantId: filters.tenantId });

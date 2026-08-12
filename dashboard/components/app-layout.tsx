@@ -12,6 +12,7 @@ import {
   Building2,
   CalendarClock,
   Camera,
+  CarFront,
   ChevronDown,
   ChevronRight,
   ChevronsUpDown,
@@ -46,6 +47,7 @@ import {
   Plus,
   Radar,
   Search,
+  ScanFace,
   Server,
   Settings,
   Shield,
@@ -112,7 +114,9 @@ export const navigation: NavGroup[] = [
       { label: "Video analytics", href: "/analytics", icon: Activity },
       { label: "Analytics dashboard", href: "/analytics/dashboard", icon: TrendingUp },
       { label: "People analytics", href: "/analytics/people", icon: UserRoundCog },
+      { label: "Face recognition", href: "/analytics/face-recognition", icon: ScanFace },
       { label: "Vehicle & ANPR", href: "/analytics/vehicles", icon: Truck },
+      { label: "ANPR watchlists", href: "/analytics/anpr", icon: CarFront },
       { label: "Banking analytics", href: "/analytics/banking", icon: Landmark },
       { label: "Industrial safety", href: "/analytics/industrial", icon: Factory },
       { label: "Infrastructure twin", href: "/infrastructure-twin", icon: Network },
@@ -231,6 +235,8 @@ export const quickActions: NavItem[] = [
   { label: "Report a privacy breach", href: "/maintenance/privacy/breaches/new", icon: ShieldAlert },
   { label: "Add a requirement", href: "/compliance/requirements/new", icon: FileCheck2 },
   { label: "Add a risk", href: "/compliance/risks/new", icon: ShieldAlert },
+  { label: "Create a face watchlist", href: "/analytics/face-recognition?create=watchlist", icon: ScanFace },
+  { label: "Create an ANPR watchlist", href: "/analytics/anpr?create=watchlist", icon: CarFront },
 ];
 
 const pageMeta = [

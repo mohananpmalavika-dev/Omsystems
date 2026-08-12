@@ -12,12 +12,16 @@ COPY edge-agent/tsconfig.build.json ./edge-agent/tsconfig.build.json
 COPY media-gateway/package.json ./media-gateway/package.json
 COPY recording-engine/package.json ./recording-engine/package.json
 COPY analytics-engine/package.json ./analytics-engine/package.json
+COPY root-cause-analysis-engine/package.json ./root-cause-analysis-engine/package.json
 RUN npm ci
 COPY tsconfig.json ./
 COPY edge-agent/scripts ./edge-agent/scripts
 COPY edge-agent/THIRD_PARTY_NOTICES.txt ./edge-agent/THIRD_PARTY_NOTICES.txt
 RUN npm run fetch:windows-runtime --workspace @sentinel/edge-agent
 COPY src ./src
+COPY analytics-engine ./analytics-engine
+COPY backend ./backend
+COPY root-cause-analysis-engine ./root-cause-analysis-engine
 COPY edge-agent/src ./edge-agent/src
 COPY edge-agent/installer ./edge-agent/installer
 RUN npm run build \
@@ -35,12 +39,16 @@ WORKDIR /app
 COPY package*.json ./
 COPY dashboard/package.json ./dashboard/package.json
 COPY edge-agent/package.json ./edge-agent/package.json
-COPY --from=build /app/edge-agent/build ./edge-agent/build
-COPY --from=build /app/edge-agent/release ./edge-agent/release
-COPY --from=build /app/edge-agent/installer ./edge-agent/installer
 COPY media-gateway/package.json ./media-gateway/package.json
 COPY recording-engine/package.json ./recording-engine/package.json
 COPY analytics-engine/package.json ./analytics-engine/package.json
+COPY root-cause-analysis-engine/package.json ./root-cause-analysis-engine/package.json
+COPY --from=build /app/analytics-engine ./analytics-engine
+COPY --from=build /app/backend ./backend
+COPY --from=build /app/root-cause-analysis-engine ./root-cause-analysis-engine
+COPY --from=build /app/edge-agent/build ./edge-agent/build
+COPY --from=build /app/edge-agent/release ./edge-agent/release
+COPY --from=build /app/edge-agent/installer ./edge-agent/installer
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /runtime/control-plane ./control-plane
 COPY --from=build /runtime/control-plane ./dist/src
