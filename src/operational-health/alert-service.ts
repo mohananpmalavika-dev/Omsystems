@@ -124,7 +124,8 @@ export function canTransitionTo(
 ): boolean {
   const state = ALERT_STATE_MACHINE[currentStatus as AlertStatusState];
   if (!state) return false;
-  return state.validTransitions.includes(newStatus);
+  const validTransitions: readonly string[] = state.validTransitions as readonly string[];
+  return validTransitions.includes(newStatus);
 }
 
 /**
@@ -223,7 +224,7 @@ export class OperationalAlertService {
     // (Could add permission check here: await this.requirePermission(assignee, "alerts.receive"))
 
     // Validate state transition if changing status
-    const newStatus = alert.status === "assigned" ? "assigned" : "assigned";
+    const newStatus: AlertStatus = "assigned";
     if (alert.status !== newStatus && !canTransitionTo(alert.status, newStatus)) {
       throw new InvalidAlertTransitionError(alert.status, newStatus);
     }

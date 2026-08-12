@@ -76,7 +76,6 @@ export class SecureBootCollector extends BaseEvidenceCollector {
       return [
         this.createEvidence(
           {
-            type: 'secure_boot',
             totalDevices,
             secureBootEnabled,
             secureBootDisabled,

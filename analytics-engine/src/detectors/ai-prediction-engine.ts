@@ -688,7 +688,9 @@ export class AIPredictionEngine extends BaseDetector {
     
     // Generate forecast
     const forecast: DataPoint[] = [];
-    const lastDate = historical[historical.length - 1].timestamp;
+    const lastPoint = historical[historical.length - 1];
+    if (!lastPoint) return [];
+    const lastDate = lastPoint.timestamp;
     
     for (let i = 1; i <= days; i++) {
       const futureDate = new Date(lastDate);
@@ -748,7 +750,8 @@ export class AIPredictionEngine extends BaseDetector {
       }
     }
     
-    return peakTime ?? Array.from(pattern.keys())[0] as T;
+    const keys = Array.from(pattern.keys());
+    return peakTime ?? (keys[0] as T);
   }
   
   private getHardwareRecommendations(
@@ -914,9 +917,10 @@ export class AIPredictionEngine extends BaseDetector {
       },
       hardware: {
         total: this.hardwareHealth.size,
-        atRisk: Array.from(this.hardwareHealth.values()).filter(
-          h => h.healthHistory[h.healthHistory.length - 1]?.score < 60
-        ).length
+        atRisk: Array.from(this.hardwareHealth.values()).filter((h) => {
+          const latest = h.healthHistory[h.healthHistory.length - 1];
+          return (latest?.score ?? 100) < 60;
+        }).length
       },
       storage: {
         total: this.storageMetrics.size,

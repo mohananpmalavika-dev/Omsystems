@@ -64,7 +64,6 @@ export class RansomwareDetectorCollector extends BaseEvidenceCollector {
       return [
         this.createEvidence(
           {
-            type: 'ransomware_detection',
             totalDevices,
             devicesMonitored,
             activeThreats,

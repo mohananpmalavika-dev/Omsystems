@@ -64,7 +64,6 @@ export class TPMAttestationCollector extends BaseEvidenceCollector {
       return [
         this.createEvidence(
           {
-            type: 'tpm_attestation',
             totalDevices,
             validAttestations,
             invalidAttestations,

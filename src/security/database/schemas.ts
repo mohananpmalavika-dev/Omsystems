@@ -447,7 +447,7 @@ export async function initializeSecurityCollections(db: any): Promise<void> {
             if (index.expireAfterSeconds !== undefined) indexOptions.expireAfterSeconds = index.expireAfterSeconds;
 
             await db.collection(collectionName).createIndex(index.key, indexOptions);
-          } catch (error) {
+          } catch (error: any) {
             // Index may already exist
             const errorMessage = error instanceof Error ? error.message : String(error);
             if (!errorMessage.includes('already exists')) {

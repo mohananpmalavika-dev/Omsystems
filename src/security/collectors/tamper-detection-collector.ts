@@ -63,7 +63,6 @@ export class TamperDetectionCollector extends BaseEvidenceCollector {
       return [
         this.createEvidence(
           {
-            type: 'tamper_detection',
             totalDevices,
             devicesMonitored,
             tamperEventsLast24h,

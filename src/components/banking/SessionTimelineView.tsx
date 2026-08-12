@@ -110,8 +110,10 @@ export const SessionTimelineView: React.FC<SessionTimelineViewProps> = ({
   }
 
   const frame = frames[currentFrame] ?? frames[0];
+  const firstFrame = frames[0];
+  const lastFrame = frames[frames.length - 1];
 
-  if (!frame) {
+  if (!frame || !firstFrame || !lastFrame) {
     return (
       <div className="bg-white rounded-lg shadow-sm p-6 text-center">
         <p className="text-gray-600">No timeline data available</p>
@@ -167,9 +169,9 @@ export const SessionTimelineView: React.FC<SessionTimelineViewProps> = ({
             className="w-full"
           />
           <div className="flex justify-between text-xs text-gray-600 mt-2">
-            <span>{new Date(frames[0].timestamp).toLocaleTimeString()}</span>
+            <span>{frames[0] ? new Date(frames[0].timestamp).toLocaleTimeString() : ''}</span>
             <span>
-              {new Date(frames[frames.length - 1].timestamp).toLocaleTimeString()}
+              {frames[frames.length - 1] ? new Date(frames[frames.length - 1].timestamp).toLocaleTimeString() : ''}
             </span>
           </div>
         </div>
