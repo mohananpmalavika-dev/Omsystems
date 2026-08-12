@@ -98,7 +98,9 @@ export class MfaLockoutPolicyService {
         failedChallenges,
         rateLimitEvents: rateLimitCount,
         failureCount,
-        ...context,
+        ipAddress: context.ipAddress,
+        userAgent: context.userAgent,
+        countryCode: context.countryCode,
       });
 
       logger.debug('Lockout evaluation', {
@@ -485,8 +487,8 @@ export class MfaLockoutPolicyService {
 
       for (const event of events) {
         const level = event.metadata?.level as MfaRestriction | undefined;
-        if (level && lockoutsByLevel.hasOwnProperty(level)) {
-          lockoutsByLevel[level]++;
+        if (level && level in lockoutsByLevel) {
+          lockoutsByLevel[level as keyof typeof lockoutsByLevel]++;
         }
 
         const duration = event.metadata?.durationSeconds as number | undefined;

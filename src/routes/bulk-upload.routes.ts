@@ -78,6 +78,7 @@ export async function registerBulkUploadRoutes(
 
     for (let i = 0; i < branches.length; i++) {
       const branch = branches[i];
+      if (!branch) continue;
 
       try {
         // Validate branch data
@@ -168,6 +169,7 @@ export async function registerBulkUploadRoutes(
 
     for (let i = 0; i < employees.length; i++) {
       const employee = employees[i];
+      if (!employee) continue;
 
       try {
         // Validate employee data

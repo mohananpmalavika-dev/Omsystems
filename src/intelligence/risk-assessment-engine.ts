@@ -5,8 +5,8 @@
  */
 
 import { randomUUID } from 'crypto';
-import type { Prediction } from '../../analytics-engine/src/detectors/ai-prediction-engine';
-import type { RiskAssessment } from './types';
+import type { Prediction } from '../../analytics-engine/src/detectors/ai-prediction-engine.js';
+import type { RiskAssessment } from './types.js';
 
 export class RiskAssessmentEngine {
   /**
@@ -24,8 +24,8 @@ export class RiskAssessmentEngine {
     });
 
     // Factor 2: Severity (30% weight)
-    const severityMap = { low: 0.25, medium: 0.5, high: 0.75, critical: 1.0 };
-    const severityContribution = (severityMap[prediction.prediction.severity] || 0) * 30;
+    const severityMap: Record<string, number> = { low: 0.25, medium: 0.5, high: 0.75, critical: 1.0 };
+    const severityContribution = (severityMap[prediction.prediction.severity as string] || 0) * 30;
     factors.push({
       factor: 'Severity',
       weight: 0.3,

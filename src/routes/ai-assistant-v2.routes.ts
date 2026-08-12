@@ -21,7 +21,8 @@ import {
   SystemStatusCommand,
   SearchDetectionsCommand
 } from '../../analytics-engine/src/assistant/commands/index.js';
-import { CommandRisk, CapabilityHealth } from '../../analytics-engine/src/assistant/types/index.js';
+import { CommandRisk } from '../../analytics-engine/src/assistant/types/index.js';
+// CapabilityHealth not exported, removed import
 
 // Feature flag
 const ENABLE_ASSISTANT_V2 = process.env.USE_ASSISTANT_V2 === 'true' || false;
@@ -68,7 +69,7 @@ function createAssistantInstance(app: FastifyInstance): AIAssistantV2 | null {
         } catch (error) {
           return {
             success: false,
-            error: error.message
+            error: (error as Error).message
           };
         }
       },
@@ -88,7 +89,7 @@ function createAssistantInstance(app: FastifyInstance): AIAssistantV2 | null {
         } catch (error) {
           return {
             success: false,
-            error: error.message
+            error: (error as Error).message
           };
         }
       }
@@ -435,5 +436,3 @@ app.get('/health', async (request: FastifyRequest, reply: FastifyReply) => {
 });
 
 }
-
-export default aiAssistantV2Routes;

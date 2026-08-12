@@ -297,7 +297,7 @@ export async function registerAlertCommandCenterRoutes(
         if (value) reply.header(name, value);
       }
       if (!upstream.body) return reply.send();
-      return reply.send(Readable.fromWeb(upstream.body));
+      return reply.send(Readable.fromWeb(upstream.body as any));
     } catch (error) {
       app.log.error({ error, alertId, kind }, "Alert evidence asset proxy failed");
       return reply.code(502).send({ error: "alert_evidence_service_unavailable" });

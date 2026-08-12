@@ -7,7 +7,7 @@ import {
   CapabilityDefinition,
   CapabilityTier,
   CapabilityStatus,
-} from './capability-registry';
+} from './capability-registry.js';
 
 /**
  * All system capabilities

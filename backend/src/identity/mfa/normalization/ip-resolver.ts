@@ -159,7 +159,7 @@ export class IpResolver {
     // Convert IPv4-mapped IPv6 to IPv4
     // ::ffff:192.168.1.1 → 192.168.1.1
     const ipv4MappedMatch = normalized.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/);
-    if (ipv4MappedMatch) {
+    if (ipv4MappedMatch && ipv4MappedMatch[1]) {
       normalized = ipv4MappedMatch[1];
     }
 

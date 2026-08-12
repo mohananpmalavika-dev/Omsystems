@@ -5,9 +5,9 @@
  */
 
 import { randomUUID } from 'crypto';
-import type { Prediction } from '../../analytics-engine/src/detectors/ai-prediction-engine';
-import type { RootCauseAnalysis } from '../../root-cause-analysis-engine/src/types';
-import type { RiskAssessment, Recommendation } from './types';
+import type { Prediction } from '../../analytics-engine/src/detectors/ai-prediction-engine.js';
+import type { RootCauseAnalysis } from '../../root-cause-analysis-engine/src/types.js';
+import type { RiskAssessment, Recommendation } from './types.js';
 
 export class RecommendationEngine {
   /**
@@ -21,7 +21,7 @@ export class RecommendationEngine {
 
     // Use prediction's built-in recommendations
     if (prediction.recommendations && prediction.recommendations.length > 0) {
-      prediction.recommendations.forEach((rec, index) => {
+      prediction.recommendations.forEach((rec: string, index: number) => {
         const priority = this.determinePriority(prediction, riskAssessment, index);
         const category = this.determineCategory(prediction.type);
 
@@ -45,7 +45,7 @@ export class RecommendationEngine {
 
     // Add preventive action recommendations
     if (prediction.preventiveActions && prediction.preventiveActions.length > 0) {
-      prediction.preventiveActions.forEach((action) => {
+      prediction.preventiveActions.forEach((action: string) => {
         recommendations.push({
           id: `rec_${randomUUID()}`,
           sourceId: prediction.target,
@@ -101,7 +101,7 @@ export class RecommendationEngine {
     const recommendations: Recommendation[] = [];
 
     // Remediation steps → Immediate/Short-term recommendations
-    rca.remediationSteps.forEach((step) => {
+    rca.remediationSteps.forEach((step: string) => {
       recommendations.push({
         id: `rec_${randomUUID()}`,
         sourceId: rca.incidentId,
@@ -120,7 +120,7 @@ export class RecommendationEngine {
     });
 
     // Preventive measures → Long-term recommendations
-    rca.preventiveMeasures.forEach((measure) => {
+    rca.preventiveMeasures.forEach((measure: string) => {
       recommendations.push({
         id: `rec_${randomUUID()}`,
         sourceId: rca.incidentId,

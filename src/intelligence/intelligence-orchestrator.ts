@@ -9,8 +9,8 @@
 
 import { EventEmitter } from 'events';
 import { randomUUID } from 'crypto';
-import type { Prediction } from '../../analytics-engine/src/detectors/ai-prediction-engine';
-import type { RootCauseAnalysis } from '../../root-cause-analysis-engine/src/types';
+import type { Prediction } from '../../analytics-engine/src/detectors/ai-prediction-engine.js';
+import type { RootCauseAnalysis } from '../../root-cause-analysis-engine/src/types.js';
 import type {
   RiskAssessment,
   Recommendation,
@@ -18,10 +18,10 @@ import type {
   IntelligenceFeedback,
   IntelligenceDashboard,
   IntelligenceContext,
-} from './types';
-import { RiskAssessmentEngine } from './risk-assessment-engine';
-import { RecommendationEngine } from './recommendation-engine';
-import { PreventiveActionExecutor } from './preventive-action-executor';
+} from './types.js';
+import { RiskAssessmentEngine } from './risk-assessment-engine.js';
+import { RecommendationEngine } from './recommendation-engine.js';
+import { PreventiveActionExecutor } from './preventive-action-executor.js';
 
 export class IntelligenceOrchestrator extends EventEmitter {
   private riskEngine: RiskAssessmentEngine;

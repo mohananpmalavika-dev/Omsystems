@@ -5,8 +5,8 @@
  * Prediction → Risk → Alert → RCA → Recommendation → Prevention
  */
 
-import type { Prediction } from '../../analytics-engine/src/detectors/ai-prediction-engine';
-import type { RootCauseAnalysis } from '../../root-cause-analysis-engine/src/types';
+import type { Prediction } from '../../analytics-engine/src/detectors/ai-prediction-engine.js';
+import type { RootCauseAnalysis } from '../../root-cause-analysis-engine/src/types.js';
 
 export { Prediction, RootCauseAnalysis };
 

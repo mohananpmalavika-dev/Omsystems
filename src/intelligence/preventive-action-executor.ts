@@ -6,7 +6,7 @@
 
 import { EventEmitter } from 'events';
 import { randomUUID } from 'crypto';
-import type { Recommendation, PreventiveAction } from './types';
+import type { Recommendation, PreventiveAction } from './types.js';
 
 export class PreventiveActionExecutor extends EventEmitter {
   /**

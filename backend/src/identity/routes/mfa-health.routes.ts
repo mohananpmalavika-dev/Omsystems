@@ -9,7 +9,8 @@
  * - /metrics/prometheus - Prometheus-formatted metrics
  */
 
-import express, { Request, Response } from 'express';
+import express from 'express';
+import type { Request, Response } from 'express';
 import { Pool } from 'pg';
 import { MfaMetricsService } from '../services/mfa-metrics.service.js';
 import { createSmsProvider, loadSmsProviderConfig } from '../sms/sms-provider.interface.js';
@@ -162,18 +163,22 @@ export function createMfaHealthRoutes(pool: Pool): express.Router {
             }
           : null,
         health: {
+      const response = {
+        health: {
           healthy: queueDepth.pending < 1000 && ageMinutes < 5,
           warnings: [] as string[],
         },
-      });
+      };
 
       if (queueDepth.pending >= 1000) {
-        res.json().health.warnings.push('High queue depth');
+        response.health.warnings.push('High queue depth');
       }
 
       if (ageMinutes >= 5) {
-        res.json().health.warnings.push('Old messages in queue');
+        response.health.warnings.push('Old messages in queue');
       }
+
+      res.json(response);
     } catch (error) {
       logger.error('Queue health check failed', { error });
       res.status(500).json({ error: 'Failed to check queue health' });
@@ -186,7 +191,7 @@ export function createMfaHealthRoutes(pool: Pool): express.Router {
    */
   router.get('/metrics', async (req: Request, res: Response) => {
     try {
-      const since = req.query.since
+      const since = req.query?.since
         ? new Date(req.query.since as string)
         : new Date(Date.now() - 3600000); // Last hour by default
 
@@ -211,7 +216,7 @@ export function createMfaHealthRoutes(pool: Pool): express.Router {
    */
   router.get('/metrics/prometheus', async (req: Request, res: Response) => {
     try {
-      const since = req.query.since
+      const since = req.query?.since
         ? new Date(req.query.since as string)
         : undefined;
 

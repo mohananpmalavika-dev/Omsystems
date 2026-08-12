@@ -238,7 +238,10 @@ export async function registerSecurityDashboardRoutes(
         });
       }
 
-      const issues = await securityPosture.listIssues(query);
+      const issues = await securityPosture.listIssues(
+        request.currentUser.tenantId,
+        query
+      );
       
       return { data: issues };
     } catch (error) {
@@ -271,7 +274,11 @@ export async function registerSecurityDashboardRoutes(
         });
       }
 
-      await securityPosture.resolveIssue(params.issueId, request.currentUser.id);
+      await securityPosture.resolveIssue(
+        request.currentUser.tenantId,
+        params.issueId,
+        { userId: request.currentUser.id, notes: body.notes }
+      );
       
       await store.writeAudit({
         tenantId: request.currentUser.tenantId,
@@ -1134,4 +1141,7 @@ export async function registerSecurityDashboardRoutes(
         '4. Generate test alert: POST /v1/alerts/command-center/demo',
         '5. Watch console for alert event',
       ],
-      testCommand: 'curl -X POST /api/control/v1/alerts/command-center/demo -H "Content-Type: application/json" -d \'{"severity":"P1","d
+      testCommand: 'curl -X POST /api/control/v1/alerts/command-center/demo -H "Content-Type: application/json" -d \'{"severity":"P1","detectionType":"camera-tampering"}\'',
+    };
+  });
+}

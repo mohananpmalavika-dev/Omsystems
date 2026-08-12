@@ -7,13 +7,13 @@ import { FastifyInstance } from 'fastify';
 import {
   getCapabilityRegistry,
   CapabilityTier,
-} from '../capabilities/capability-registry';
+} from '../capabilities/capability-registry.js';
 import {
   initializeCapabilities,
   getCapabilityStats,
   getCapabilitiesByTier,
   getCapabilitiesByCategory,
-} from '../capabilities/capability-definitions';
+} from '../capabilities/capability-definitions.js';
 
 export default async function capabilitiesRoutes(fastify: FastifyInstance) {
   const registry = getCapabilityRegistry();

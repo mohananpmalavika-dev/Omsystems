@@ -1,17 +1,19 @@
 {
   "compilerOptions": {
     "target": "ES2022",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
     "rootDir": ".",
     "outDir": "dist",
-    
+    "jsx": "react-jsx",
+
     // STRICT MODE ENABLED
     // Production code should be type-safe
     "strict": true,
     "noUncheckedIndexedAccess": true,
-    "exactOptionalPropertyTypes": false, // Still too strict for some legacy code
-    
+    "exactOptionalPropertyTypes": false,
+
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,
     "skipLibCheck": true,

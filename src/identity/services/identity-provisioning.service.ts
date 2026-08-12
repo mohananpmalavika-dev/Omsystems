@@ -363,9 +363,18 @@ export class IdentityProvisioningService {
 
     const membership = result.rows[0];
 
+    if (!membership) {
+      throw new AccountStatusError(
+        'ACCOUNT_NOT_ACTIVE',
+        'Tenant membership not found',
+        userId,
+        { tenantId }
+      );
+    }
+
     if (membership.status !== 'ACTIVE') {
       throw new AccountStatusError(
-        'MEMBERSHIP_DISABLED',
+        'ACCOUNT_NOT_ACTIVE',
         'Tenant membership is not active',
         userId,
         { tenantId, membershipStatus: membership.status }
@@ -476,6 +485,9 @@ export class IdentityProvisioningService {
    */
   private generateUsername(email: string): string {
     const localPart = email.split('@')[0];
+    if (!localPart) {
+      return 'user';
+    }
     // Remove special characters and make lowercase
     return localPart.toLowerCase().replace(/[^a-z0-9._-]/g, '_');
   }

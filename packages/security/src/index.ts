@@ -1,7 +1,7 @@
-import { createIdentityService, type IdentityService } from '../../identity/src/index.ts';
-import { createAuthorizationService, type AuthorizationService } from '../../authorization/src/index.ts';
-import { createCryptoService, type CryptoService } from '../../crypto/src/index.ts';
-import { createObservabilityService, type ObservabilityService } from '../../observability/src/index.ts';
+import { createIdentityService, type IdentityService } from '../../identity/src/index.js';
+import { createAuthorizationService, type AuthorizationService } from '../../authorization/src/index.js';
+import { createCryptoService, type CryptoService } from '../../crypto/src/index.js';
+import { createObservabilityService, type ObservabilityService } from '../../observability/src/index.js';
 
 export interface SecurityServiceRegistry {
   identity: IdentityService;

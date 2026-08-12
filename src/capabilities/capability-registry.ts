@@ -29,7 +29,7 @@ export interface CapabilityDefinition {
   requiredServices?: string[];
   requiredConfig?: string[];
   healthCheck?: () => Promise<boolean>;
-  metadata?: {
+  metadata?: Record<string, unknown> & {
     version?: string;
     deployedAt?: string;
     lastVerified?: string;
@@ -201,10 +201,11 @@ export class CapabilityRegistry {
    */
   getSummary(): {
     total: number;
+    active: number;
+    planned: number;
+    deprecated: number;
     byTier: Record<CapabilityTier, number>;
-    byStatus: Record<CapabilityStatus, number>;
-    available: number;
-    unavailable: number;
+    byCategory: Record<string, number>;
   } {
     const all = this.getAll();
     
@@ -214,35 +215,24 @@ export class CapabilityRegistry {
       [CapabilityTier.PLANNED]: 0,
     };
 
-    const byStatus = {
-      [CapabilityStatus.ACTIVE]: 0,
-      [CapabilityStatus.INACTIVE]: 0,
-      [CapabilityStatus.ERROR]: 0,
-      [CapabilityStatus.NOT_CONFIGURED]: 0,
-      [CapabilityStatus.UNAVAILABLE]: 0,
-    };
-
-    let available = 0;
-    let unavailable = 0;
+    const byCategory: Record<string, number> = {};
 
     for (const capability of all) {
       byTier[capability.tier]++;
-      byStatus[capability.status]++;
-
-      const check = this.lastCheckResults.get(capability.id);
-      if (check?.available) {
-        available++;
-      } else {
-        unavailable++;
-      }
+      byCategory[capability.category] = (byCategory[capability.category] ?? 0) + 1;
     }
+
+    const active = all.filter((capability) => capability.status === CapabilityStatus.ACTIVE).length;
+    const planned = all.filter((capability) => capability.tier === CapabilityTier.PLANNED).length;
+    const deprecated = all.filter((capability) => capability.status === CapabilityStatus.UNAVAILABLE).length;
 
     return {
       total: all.length,
+      active,
+      planned,
+      deprecated,
       byTier,
-      byStatus,
-      available,
-      unavailable,
+      byCategory,
     };
   }
 
@@ -251,7 +241,14 @@ export class CapabilityRegistry {
    */
   async exportForAPI(): Promise<{
     capabilities: Array<CapabilityDefinition & { check: CapabilityCheck }>;
-    summary: ReturnType<typeof this.getSummary>;
+    summary: {
+      total: number;
+      active: number;
+      planned: number;
+      deprecated: number;
+      byTier: Record<CapabilityTier, number>;
+      byCategory: Record<string, number>;
+    };
   }> {
     await this.checkAll();
 

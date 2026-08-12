@@ -385,10 +385,11 @@ export class IdentityLinkService {
     );
 
     if (subjectCheck.rows.length > 0) {
+      const conflictingUserId = subjectCheck.rows[0]?.userId;
       return {
         subjectConflict: true,
         emailConflict: false,
-        conflictingUserId: subjectCheck.rows[0].userId,
+        conflictingUserId,
       };
     }
 

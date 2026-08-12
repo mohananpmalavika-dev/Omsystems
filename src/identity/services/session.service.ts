@@ -360,6 +360,14 @@ export class SessionService {
 
     const session = result.rows[0];
 
+    if (!session) {
+      throw new SessionError(
+        'REFRESH_TOKEN_INVALID',
+        'Refresh token not found',
+        ''
+      );
+    }
+
     // Check expiration
     if (session.expiresAt < new Date()) {
       throw new SessionError(
