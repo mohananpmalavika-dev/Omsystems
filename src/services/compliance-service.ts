@@ -80,9 +80,10 @@ export class ComplianceService {
       // Assess each requirement
       for (const requirement of requirements) {
         const requirementId = requirement.id ? String(requirement.id) : '';
+        const tenantId = assessment.tenantId || '';
         const result = await this.assessRequirement(
           requirementId,
-          assessment.tenantId ?? '',
+          tenantId,
           assessment.branchNodeId,
           assessment.assessmentPeriodStart,
           assessment.assessmentPeriodEnd

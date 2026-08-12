@@ -181,6 +181,13 @@ export class RCAEngine {
     // Update certainty based on comprehensive analysis
     candidate.certainty = certaintyAssessment.certainty;
     
+    // Calculate confidence interval
+    const confidenceInterval = calculateConfidenceInterval(
+      candidate.confidence,
+      candidate.supportingEvidence.length,
+      candidate.contradictingEvidence.length
+    );
+    
     // Update confidence details
     candidate.confidenceDetails = candidate.confidenceDetails || [];
     

@@ -555,7 +555,7 @@ export class DVRNVRMonitorService extends EventEmitter {
   private extractKeyValue(text: string, key: string): string | undefined {
     const regex = new RegExp(`${key}=([^\\n\\r]+)`, "i");
     const match = text.match(regex);
-    return match ? match[1].trim() : undefined;
+    return match?.[1]?.trim();
   }
 
   /**
