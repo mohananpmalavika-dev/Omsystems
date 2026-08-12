@@ -39,8 +39,8 @@
     "analytics-engine/**/*",
     
     // React/UI components (frontend only, not part of backend build)
-    "src/**/ui/**/*.tsx",
-    "backend/**/ui/**/*.tsx",
+    "src/**/ui/**/*",
+    "backend/**/ui/**/*",
     
     // Temporarily exclude files with known type issues
     // TODO: Fix these files and remove from exclusions
