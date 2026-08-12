@@ -5,7 +5,7 @@
 
 import type { Pool } from 'pg';
 import { FaceEnrollmentService } from '../../analytics-engine/src/face/face-enrollment.service.js';
-import type { EnrollPersonInput as EngineEnrollPersonInput, EnrollmentResult as EngineEnrollmentResult } from '../../analytics-engine/src/face/face-enrollment.service.js';
+import type { EnrollPersonInput as EngineEnrollPersonInput } from '../../analytics-engine/src/face/face-enrollment.service.js';
 import type { EnrollmentResult } from '../../analytics-engine/src/face/face.types.js';
 
 export interface CreateWatchlistInput {

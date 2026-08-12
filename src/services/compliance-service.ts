@@ -81,12 +81,15 @@ export class ComplianceService {
       for (const requirement of requirements) {
         const requirementId = requirement.id ? String(requirement.id) : '';
         const tenantId = assessment.tenantId || '';
+        const periodStart = assessment.assessmentPeriodStart || new Date().toISOString();
+        const periodEnd = assessment.assessmentPeriodEnd || new Date().toISOString();
+        
         const result = await this.assessRequirement(
           requirementId,
           tenantId,
           assessment.branchNodeId,
-          assessment.assessmentPeriodStart,
-          assessment.assessmentPeriodEnd
+          periodStart,
+          periodEnd
         );
         results.push(result);
       }

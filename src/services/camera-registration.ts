@@ -31,7 +31,10 @@ export function parseBulkCameraCsv(csv: string): BulkCameraRegistrationRow[] {
   const lines = trimmed.split(/\r?\n/).filter((line) => line.trim().length > 0);
   if (lines.length < 2) return [];
 
-  const header = lines[0].split(",").map((value) => value.trim().toLowerCase());
+  const firstLine = lines[0];
+  if (!firstLine) return [];
+  
+  const header = firstLine.split(",").map((value) => value.trim().toLowerCase());
   const expectedHeaders = [
     "branchcode",
     "cameraname",
@@ -69,7 +72,7 @@ export function parseBulkCameraCsv(csv: string): BulkCameraRegistrationRow[] {
 
     if (!parsed.success) {
       const issue = parsed.error.issues[0];
-      const field = issue.path[0];
+      const field = issue?.path[0] ?? 'unknown field';
       throw new Error(`Bulk registration row ${index + 1} is missing ${field}`);
     }
 

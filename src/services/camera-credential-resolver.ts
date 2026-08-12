@@ -237,10 +237,16 @@ export class CameraCredentialResolver {
 
     const row = result.rows[0];
     const port = row.onvif_port || 80;
+    const ipAddress = row.ip_address;
+    
+    if (!ipAddress) {
+      return null;
+    }
+    
     return {
-      host: row.ip_address,
+      host: ipAddress,
       port,
-      serviceUrl: `http://${row.ip_address}:${port}/onvif/device_service`,
+      serviceUrl: `http://${ipAddress}:${port}/onvif/device_service`,
     };
   }
 

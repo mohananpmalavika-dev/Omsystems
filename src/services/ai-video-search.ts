@@ -864,8 +864,8 @@ export class AIVideoSearchService {
           score,
           matchType,
           cameraId: row.camera_id,
-          cameraName: row.camera_name,
-          branchId: row.branch_id,
+          cameraName: row.camera_name || 'Unknown Camera',
+          branchId: row.branch_id || '',
           timestamp: new Date(row.timestamp).toISOString(),
           object: videoObject,
           segmentId: row.segment_id,
@@ -1072,7 +1072,7 @@ export class AIVideoSearchService {
         if (combinedConfidence >= 0.5 && !seenCameras.has(row.camera_id)) {
           detections.push({
             cameraId: row.camera_id,
-            cameraName: row.camera_name,
+            cameraName: row.camera_name || 'Unknown Camera',
             timestamp: new Date(row.first_seen).toISOString(),
             attributes: row.attributes,
             confidence: combinedConfidence,
@@ -1119,8 +1119,8 @@ export class AIVideoSearchService {
       );
     }
 
-    const firstSeen = detections[0].timestamp;
-    const lastSeen = detections[detections.length - 1].timestamp;
+    const firstSeen = detections[0]?.timestamp || new Date().toISOString();
+    const lastSeen = detections[detections.length - 1]?.timestamp || new Date().toISOString();
     const totalDuration = Math.round(
       (new Date(lastSeen).getTime() - new Date(firstSeen).getTime()) / 1000
     );
@@ -1327,21 +1327,21 @@ export class AIVideoSearchService {
 
     const detections = result.rows.map(row => ({
       cameraId: row.camera_id,
-      cameraName: row.camera_name,
+      cameraName: row.camera_name || 'Unknown Camera',
       timestamp: new Date(row.first_seen).toISOString(),
       attributes: row.attributes,
       confidence: parseFloat(row.confidence),
     }));
 
-    const firstSeen = detections[0].timestamp;
-    const lastSeen = detections[detections.length - 1].timestamp;
+    const firstSeen = detections[0]?.timestamp || new Date().toISOString();
+    const lastSeen = detections[detections.length - 1]?.timestamp || new Date().toISOString();
     const totalDuration = Math.round(
       (new Date(lastSeen).getTime() - new Date(firstSeen).getTime()) / 1000
     );
 
     const track: CrossCameraTrack = {
       trackingId,
-      objectType: result.rows[0].object_type,
+      objectType: result.rows[0]?.object_type || 'unknown',
       detections,
       firstSeen,
       lastSeen,
@@ -1841,8 +1841,8 @@ export class AIVideoSearchService {
           score: similarity,
           matchType,
           cameraId: row.camera_id,
-          cameraName: row.camera_name,
-          branchId: row.branch_id,
+          cameraName: row.camera_name || 'Unknown Camera',
+          branchId: row.branch_id || '',
           timestamp: new Date(row.timestamp).toISOString(),
           object: videoObject,
           segmentId: row.segment_id,

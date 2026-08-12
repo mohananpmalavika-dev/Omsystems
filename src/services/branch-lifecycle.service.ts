@@ -6,7 +6,7 @@
  */
 
 import type { ControlPlaneStore, OrganizationStore } from '../control-plane-store.js';
-import type { EventBus } from '../events/event-bus.js';
+import type { EventBus } from '../infrastructure/event-bus/event-bus.js';
 import {
   BranchStatus,
   BranchLifecycleError,
