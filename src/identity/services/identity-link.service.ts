@@ -209,11 +209,25 @@ export class IdentityLinkService {
         }
 
         // Return existing link
-        return (await this.findByExternalIdentity(
+        const existingLink = await this.findByExternalIdentity(
           input.tenantId,
           input.providerId,
           input.externalSubject
-        ))!;
+        );
+
+        if (!existingLink) {
+          throw new EnterpriseAuthError(
+            'IDENTITY_NOT_FOUND',
+            'Existing identity link could not be reloaded',
+            {
+              tenantId: input.tenantId,
+              providerId: input.providerId,
+              externalSubject: input.externalSubject,
+            }
+          );
+        }
+
+        return existingLink;
       }
 
       // Check for conflicting subject (same subject, different provider)
@@ -271,7 +285,12 @@ export class IdentityLinkService {
 
       await client.query('COMMIT');
 
-      return result.rows[0];
+      const link = result.rows[0];
+      if (!link) {
+        throw new Error('Failed to create identity link');
+      }
+
+      return link;
     } catch (error) {
       await client.query('ROLLBACK');
       throw error;

@@ -446,7 +446,7 @@ export class SAMLConnector extends BaseConnector {
     const loginUrl = await saml.getAuthorizeUrlAsync(relayState || '', {});
     
     // Extract request ID for InResponseTo validation
-    const requestId = this.extractRequestId(loginUrl);
+    const requestId = this.extractRequestId(loginUrl) ?? '';
     
     // Cache request ID for replay protection
     if (requestId) {

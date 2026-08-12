@@ -300,7 +300,7 @@ export class AuthenticationPolicyError extends EnterpriseAuthError {
 export class ProtocolValidationError extends EnterpriseAuthError {
   constructor(
     code: Extract<EnterpriseAuthErrorCode,
-      'STATE_MISMATCH' | 'NONCE_MISMATCH' | 'AUDIENCE_MISMATCH' | 
+      'INVALID_SIGNATURE' | 'STATE_MISMATCH' | 'NONCE_MISMATCH' | 'AUDIENCE_MISMATCH' | 
       'ISSUER_MISMATCH' | 'DESTINATION_MISMATCH' | 'INRESPONSETO_MISMATCH' |
       'ASSERTION_EXPIRED' | 'ASSERTION_NOT_YET_VALID' | 'ASSERTION_REPLAY'>,
     message: string,

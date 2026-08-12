@@ -341,10 +341,15 @@ export class RoleMappingService {
       ]
     );
 
+    const mapping = result.rows[0];
+    if (!mapping) {
+      throw new Error('Role mapping creation did not return a row');
+    }
+
     return {
-      ...result.rows[0],
+      ...mapping,
       roleName: role.name,
-    };
+    } as RoleMapping;
   }
 
   /**
@@ -403,12 +408,16 @@ export class RoleMappingService {
     }
 
     const mapping = result.rows[0];
+    if (!mapping) {
+      throw new Error('Role mapping not found after update');
+    }
+
     const role = await this.getRole(mapping.roleId);
 
     return {
       ...mapping,
       roleName: role.name,
-    };
+    } as RoleMapping;
   }
 
   /**

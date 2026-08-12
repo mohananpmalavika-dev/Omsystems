@@ -195,7 +195,8 @@ export class LDAPIdentityAdapter implements EnterpriseIdentityAdapter {
         );
       }
 
-      const entry = searchEntries[0] as SearchEntry;
+      const entry = searchEntries[0] as unknown as Record<string, unknown> & { dn?: string };
+      const dn = typeof entry.dn === 'string' ? entry.dn : '';
 
       // Convert attributes to simple object
       const attributes: { [key: string]: string | string[] } = {};
@@ -204,14 +205,15 @@ export class LDAPIdentityAdapter implements EnterpriseIdentityAdapter {
         if (key === 'dn') continue;
         
         if (Array.isArray(values)) {
-          attributes[key] = values.length === 1 ? values[0] : values;
-        } else {
+          const firstValue = values[0];
+          attributes[key] = values.length === 1 && typeof firstValue === 'string' ? firstValue : values.filter((value): value is string => typeof value === 'string');
+        } else if (typeof values === 'string') {
           attributes[key] = values;
         }
       }
 
       return {
-        dn: entry.dn,
+        dn,
         attributes,
       };
 
@@ -315,10 +317,18 @@ export class LDAPIdentityAdapter implements EnterpriseIdentityAdapter {
       });
 
       // Return group DNs or CNs
-      return searchEntries.map(entry => {
-        const e = entry as SearchEntry;
-        return e.cn ? (Array.isArray(e.cn) ? e.cn[0] : e.cn) : e.dn;
-      });
+      return searchEntries.map((entry) => {
+        const e = entry as unknown as Record<string, unknown> & { cn?: string | string[]; dn?: string };
+        const cnValue = e.cn;
+        const dnValue = e.dn;
+        if (Array.isArray(cnValue)) {
+          return typeof cnValue[0] === 'string' ? cnValue[0] : String(dnValue ?? '');
+        }
+        if (typeof cnValue === 'string' && cnValue.length > 0) {
+          return cnValue;
+        }
+        return typeof dnValue === 'string' ? dnValue : '';
+      }).filter((value) => value.length > 0);
 
     } catch (error) {
       // Group retrieval failure is not fatal

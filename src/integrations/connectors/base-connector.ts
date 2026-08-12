@@ -73,6 +73,11 @@ export abstract class BaseConnector implements IntegrationConnector {
     // Check if limit exceeded
     if (this.requestTimestamps.length >= maxRequestsPerMinute) {
       const oldestTimestamp = this.requestTimestamps[0];
+      if (oldestTimestamp === undefined) {
+        this.requestTimestamps.push(now);
+        return;
+      }
+
       const waitMs = windowMs - (now - oldestTimestamp);
       
       if (waitMs > 0) {

@@ -106,7 +106,7 @@ export default async function capabilitiesRoutes(fastify: FastifyInstance) {
 
       // Check each capability
       const results = await Promise.all(
-        capabilities.map(async (cap) => {
+        capabilities.map(async (cap: any) => {
           const check = await registry.checkCapability(cap.id);
           return {
             ...cap,
@@ -160,7 +160,7 @@ export default async function capabilitiesRoutes(fastify: FastifyInstance) {
 
       // Check each capability
       const results = await Promise.all(
-        capabilities.map(async (cap) => {
+        capabilities.map(async (cap: any) => {
           const check = await registry.checkCapability(cap.id);
           return {
             ...cap,
@@ -246,7 +246,7 @@ export default async function capabilitiesRoutes(fastify: FastifyInstance) {
         data: {
           summary,
           checksPerformed: results.size,
-          results: Array.from(results.entries()).map(([id, check]) => ({
+          results: Array.from(results.entries()).map(([id, check]: [any, any]) => ({
             id,
             ...check,
           })),

@@ -254,15 +254,21 @@ export class PredictiveMaintenanceEngine {
   /**
    * Calculate SMART score based on SMART attributes
    */
-  private calculateSmartScore(smartData: Record<string, number>): number {
+  private calculateSmartScore(smartData: Record<string, number | undefined>): number {
     let score = 100;
 
+    const reallocatedSectorCount = smartData.reallocatedSectorCount ?? 0;
+    const readErrorRate = smartData.readErrorRate ?? 0;
+    const seekErrorRate = smartData.seekErrorRate ?? 0;
+    const uncorrectableErrorCount = smartData.uncorrectableErrorCount ?? 0;
+    const spinRetryCount = smartData.spinRetryCount ?? 0;
+
     // Penalize for bad attributes
-    if (smartData.reallocatedSectorCount > 100) score -= 20;
-    if (smartData.readErrorRate > 1000) score -= 15;
-    if (smartData.seekErrorRate > 1000) score -= 15;
-    if (smartData.uncorrectableErrorCount > 0) score -= 25;
-    if (smartData.spinRetryCount > 10) score -= 10;
+    if (reallocatedSectorCount > 100) score -= 20;
+    if (readErrorRate > 1000) score -= 15;
+    if (seekErrorRate > 1000) score -= 15;
+    if (uncorrectableErrorCount > 0) score -= 25;
+    if (spinRetryCount > 10) score -= 10;
 
     return Math.max(0, score);
   }
@@ -523,38 +529,38 @@ export class PredictiveMaintenanceEngine {
     this.predictions.set(deviceId, predictions);
   }
 
-  private getSmartFailureFactors(smartData: Record<string, number>): string[] {
+  private getSmartFailureFactors(smartData: Record<string, number | undefined>): string[] {
     const factors: string[] = [];
-    if (smartData.reallocatedSectorCount > 50)
+    if ((smartData.reallocatedSectorCount ?? 0) > 50)
       factors.push("High reallocated sector count");
-    if (smartData.readErrorRate > 500) factors.push("Elevated read error rate");
-    if (smartData.seekErrorRate > 500) factors.push("High seek error rate");
-    if (smartData.uncorrectableErrorCount > 0) factors.push("Uncorrectable errors detected");
+    if ((smartData.readErrorRate ?? 0) > 500) factors.push("Elevated read error rate");
+    if ((smartData.seekErrorRate ?? 0) > 500) factors.push("High seek error rate");
+    if ((smartData.uncorrectableErrorCount ?? 0) > 0) factors.push("Uncorrectable errors detected");
     return factors.length > 0 ? factors : ["Normal SMART values"];
   }
 
-  private getBatteryFailureFactors(batteryData: Record<string, number>): string[] {
+  private getBatteryFailureFactors(batteryData: Record<string, number | undefined>): string[] {
     const factors: string[] = [];
-    if (batteryData.currentCapacityPercent < 80)
+    if ((batteryData.currentCapacityPercent ?? 0) < 80)
       factors.push("Battery capacity declining");
-    if (batteryData.cycleCount > 500) factors.push("High cycle count");
-    if (batteryData.temperature > 35) factors.push("Operating temperature elevated");
-    if (batteryData.internalImpedance > 80)
+    if ((batteryData.cycleCount ?? 0) > 500) factors.push("High cycle count");
+    if ((batteryData.temperature ?? 0) > 35) factors.push("Operating temperature elevated");
+    if ((batteryData.internalImpedance ?? 0) > 80)
       factors.push("Internal impedance increasing");
     return factors.length > 0 ? factors : ["Battery in good condition"];
   }
 
-  private getCameraFailureFactors(cameraMetrics: Record<string, number>): string[] {
+  private getCameraFailureFactors(cameraMetrics: Record<string, number | undefined | undefined>): string[] {
     const factors: string[] = [];
-    if (cameraMetrics.fpsConsistency < 0.8) factors.push("FPS consistency declining");
-    if (cameraMetrics.frameDropRate > 0.005) factors.push("Frame drops increasing");
-    if (cameraMetrics.sensorTemperature > 55) factors.push("Sensor temperature elevated");
-    if (cameraMetrics.focusAccuracy < 0.7) factors.push("Focus accuracy degrading");
+    if ((cameraMetrics.fpsConsistency ?? 0) < 0.8) factors.push("FPS consistency declining");
+    if ((cameraMetrics.frameDropRate ?? 0) > 0.005) factors.push("Frame drops increasing");
+    if ((cameraMetrics.sensorTemperature ?? 0) > 55) factors.push("Sensor temperature elevated");
+    if ((cameraMetrics.focusAccuracy ?? 0) < 0.7) factors.push("Focus accuracy degrading");
     return factors.length > 0 ? factors : ["Camera operating normally"];
   }
 
   private getStorageRecommendations(
-    smartData: Record<string, number>,
+    smartData: Record<string, number | undefined>,
     smartScore: number
   ): string[] {
     if (smartScore > 80) {

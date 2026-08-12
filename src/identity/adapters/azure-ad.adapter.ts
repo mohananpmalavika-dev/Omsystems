@@ -189,7 +189,12 @@ export class AzureADIdentityAdapter implements EnterpriseIdentityAdapter {
     }
 
     try {
-      const payloadJson = Buffer.from(parts[1], 'base64url').toString('utf8');
+      const payloadPart = parts[1];
+      if (!payloadPart) {
+        throw new InvalidTokenError('Malformed JWT payload', 'ID');
+      }
+
+      const payloadJson = Buffer.from(payloadPart, 'base64url').toString('utf8');
       const claims = JSON.parse(payloadJson) as AzureADTokenClaims;
 
       // Validate issuer
@@ -333,7 +338,7 @@ export class AzureADIdentityAdapter implements EnterpriseIdentityAdapter {
       givenName: claims.given_name,
       familyName: claims.family_name,
       groups,
-      claims: claims as Record<string, unknown>,
+      claims: claims as unknown as Record<string, unknown>,
       authenticatedAt: new Date(claims.iat * 1000),
       assurance,
     };
