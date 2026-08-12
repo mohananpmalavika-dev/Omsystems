@@ -3,4 +3,4 @@
  * Export all custom React hooks
  */
 
-export { useCommanderApi } from './useCommanderApi';
+export { useCommanderApi } from './useCommanderApi.js';

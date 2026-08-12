@@ -2,7 +2,7 @@
  * Formatting utilities for Security Commander UI
  */
 
-import type { SeverityLevel, ConfidenceLevel } from '../types/ui-types';
+import type { SeverityLevel, ConfidenceLevel } from '../types/ui-types.js';
 
 // Format timestamp
 export function formatTimestamp(date: Date | string): string {
@@ -115,8 +115,9 @@ export function truncateText(text: string, maxLength: number): string {
 export function formatAssetId(assetId: string): string {
   // Extract readable part from asset ID (e.g., "camera_123" -> "Camera 123")
   const match = assetId.match(/^([a-z]+)_(.+)$/);
-  if (match) {
-    const [, type, id] = match;
+  if (match && match[1] && match[2]) {
+    const type = match[1];
+    const id = match[2];
     return `${formatEventType(type)} ${id}`;
   }
   return assetId;

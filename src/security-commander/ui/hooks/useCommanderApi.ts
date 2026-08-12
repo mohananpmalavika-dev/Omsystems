@@ -7,8 +7,8 @@ import { useState, useCallback } from 'react';
 import type {
   Investigation,
   CommanderResponse,
-} from '../../types';
-import type { ApiResponse } from '../types/ui-types';
+} from '../../types/index.js';
+import type { ApiResponse } from '../types/ui-types.js';
 
 // API configuration
 const API_BASE_URL = process.env.REACT_APP_COMMANDER_API_URL || 'http://localhost:3000/api/security-commander';

@@ -10,4 +10,3 @@ export * from './certificate-store.js';
 
 // Re-export domain types for convenience
 export * from '../domain/certificate-lifecycle.types.js';
-export * from '../domain/certificate-lifecycle.errors.js';

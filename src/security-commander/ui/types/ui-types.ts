@@ -10,7 +10,7 @@ import type {
   SecurityEvent,
   Evidence,
   RecommendedAction,
-} from '../../types';
+} from '../../types/index.js';
 
 // Message types for chat interface
 export interface ChatMessage {
