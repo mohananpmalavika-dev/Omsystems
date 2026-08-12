@@ -655,17 +655,23 @@ export class AcmeCertificateAuthorityProvider
     const certificatePem = certs[0];
     const chainPem = certs.slice(1);
 
+    if (!certificatePem) {
+      throw new Error('No certificate found in response');
+    }
+
     // Parse certificate
     const cert = forge.pki.certificateFromPem(certificatePem);
 
+    const commonName = cert.issuer.getField('CN');
+    
     return {
       certificatePem,
-      chainPem,
+      chainPem: chainPem.join('\n'),
       serialNumber: cert.serialNumber,
       notBefore: cert.validity.notBefore,
       notAfter: cert.validity.notAfter,
       fingerprintSha256: this.computeFingerprint(certificatePem),
-      issuer: cert.issuer.getField('CN')?.value || 'Unknown',
+      issuer: commonName?.value?.toString() || 'Unknown',
       providerRequestId: certificateUrl,
       issuedAt: new Date()
     };
