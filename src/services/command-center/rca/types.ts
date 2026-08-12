@@ -86,7 +86,7 @@ export interface RootCauseCandidate {
   
   explanation: string;
   recommendedActions: string[];
-  confidenceDetails?: string[]; // Added for detailed confidence breakdown
+  confidenceDetails: string[]; // Detailed confidence breakdown
 }
 
 /**

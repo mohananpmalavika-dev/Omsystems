@@ -5,7 +5,7 @@
 
 import { randomUUID } from 'node:crypto';
 import type { ZoneEngine } from './zone-engine.js';
-import type { ObjectTracker, TrackedObject, BoundingBox } from './object-tracker.js';
+import type { ObjectTracker, MultiObjectTracker, TrackedObject, BoundingBox } from './object-tracker.js';
 
 // ============================================================================
 // Type Definitions
@@ -75,7 +75,7 @@ export interface ExitAnalytics {
 
 export class EmergencyExitMonitor {
   private zoneEngine: ZoneEngine;
-  private objectTracker: ObjectTracker;
+  private objectTracker: ObjectTracker | MultiObjectTracker;
   private exitZones = new Map<string, ExitZone>();
   private activeBlockages = new Map<string, ExitBlockage>();
   private blockageHistory: ExitBlockage[] = [];
@@ -92,7 +92,7 @@ export class EmergencyExitMonitor {
     'barrel', 'container'
   ];
 
-  constructor(zoneEngine: ZoneEngine, objectTracker: ObjectTracker) {
+  constructor(zoneEngine: ZoneEngine, objectTracker: ObjectTracker | MultiObjectTracker) {
     this.zoneEngine = zoneEngine;
     this.objectTracker = objectTracker;
     this.startExitMonitoring();
@@ -169,7 +169,10 @@ export class EmergencyExitMonitor {
    * Check single exit for blockages
    */
   checkExit(exit: ExitZone, timestamp: Date): ExitStatus {
-    const trackedObjects = this.objectTracker.getActiveTracks();
+    // Handle both ObjectTracker and MultiObjectTracker
+    const trackedObjects = 'getActiveTracks' in this.objectTracker
+      ? this.objectTracker.getActiveTracks()
+      : this.objectTracker.getAllTracks();
 
     // Get objects in exit polygon
     const objectsInExit = this.getObjectsInPolygon(trackedObjects, exit.polygon);

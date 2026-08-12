@@ -474,6 +474,18 @@ export class EvidencePreservationService {
   ): PreservationConfig {
     const baseConfig = PRESERVATION_CONFIGS[severity] || PRESERVATION_CONFIGS['P3'];
     
+    if (!baseConfig) {
+      // Return a default config if not found
+      return {
+        preRollMinutes: 2,
+        postRollMinutes: 5,
+        applyLegalHold: true,
+        includeNearbyCameras: false,
+        generateChecksums: true,
+        recordChainOfCustody: true,
+      };
+    }
+    
     const detTypeConfig = detectionType ? DETECTION_TYPE_CONFIGS[detectionType] : undefined;
     
     if (detTypeConfig) {

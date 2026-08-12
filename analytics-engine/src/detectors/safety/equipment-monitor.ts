@@ -4,7 +4,7 @@
  */
 
 import { randomUUID } from 'node:crypto';
-import type { ObjectTracker, TrackedObject, BoundingBox } from './object-tracker.js';
+import type { ObjectTracker, MultiObjectTracker, TrackedObject, BoundingBox } from './object-tracker.js';
 
 // ============================================================================
 // Type Definitions
@@ -89,7 +89,7 @@ export interface EquipmentAnalytics {
 // ============================================================================
 
 export class FireSafetyEquipmentMonitor {
-  private objectTracker: ObjectTracker;
+  private objectTracker: ObjectTracker | MultiObjectTracker;
   private equipment = new Map<string, SafetyEquipment>();
   private detectionHistory = new Map<string, EquipmentDetection[]>();
   private activeIncidents = new Map<string, EquipmentIncident>();
@@ -112,7 +112,7 @@ export class FireSafetyEquipmentMonitor {
     fire_alarm: ['fire_alarm', 'alarm_button', 'fire_alarm_pull'],
   };
 
-  constructor(objectTracker: ObjectTracker) {
+  constructor(objectTracker: ObjectTracker | MultiObjectTracker) {
     this.objectTracker = objectTracker;
     this.startEquipmentMonitoring();
   }
@@ -182,7 +182,11 @@ export class FireSafetyEquipmentMonitor {
    */
   checkAllEquipment(timestamp: Date = new Date()): EquipmentStatus[] {
     const statuses: EquipmentStatus[] = [];
-    const trackedObjects = this.objectTracker.getActiveTracks();
+    
+    // Handle both ObjectTracker and MultiObjectTracker
+    const trackedObjects = 'getActiveTracks' in this.objectTracker
+      ? this.objectTracker.getActiveTracks()
+      : this.objectTracker.getAllTracks();
 
     for (const equipment of this.equipment.values()) {
       const status = this.checkEquipment(equipment, trackedObjects, timestamp);

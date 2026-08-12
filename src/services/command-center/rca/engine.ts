@@ -181,17 +181,8 @@ export class RCAEngine {
     // Update certainty based on comprehensive analysis
     candidate.certainty = certaintyAssessment.certainty;
     
-    // Calculate confidence interval
-    const confidenceInterval = calculateConfidenceInterval(
-      candidate.confidence,
-      candidate.supportingEvidence.length,
-      candidate.contradictingEvidence.length
-    );
-    
-    // Add confidence details
-    if (!candidate.confidenceDetails) {
-      candidate.confidenceDetails = [];
-    }
+    // Update confidence details
+    candidate.confidenceDetails = candidate.confidenceDetails || [];
     
     candidate.confidenceDetails.push(
       `Evidence Quality: ${evidenceQuality.quality.toUpperCase()} (${evidenceQuality.score}/100)`
@@ -309,6 +300,11 @@ export class RCAEngine {
         "Check UPS and power infrastructure health",
         "Review device-level health metrics and logs",
         "Manual investigation required to identify root cause",
+      ],
+      
+      confidenceDetails: [
+        "Insufficient evidence for confident diagnosis",
+        "Additional telemetry sources required",
       ],
     };
   }

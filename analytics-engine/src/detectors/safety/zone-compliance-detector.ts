@@ -5,7 +5,7 @@
 
 import { randomUUID } from 'node:crypto';
 import type { ZoneEngine, SafetyZone, TrackedPerson, ZoneOccupancy } from './zone-engine.js';
-import type { ObjectTracker, TrackedObject } from './object-tracker.js';
+import type { ObjectTracker, MultiObjectTracker, TrackedObject } from './object-tracker.js';
 
 // ============================================================================
 // Type Definitions
@@ -82,14 +82,14 @@ export interface ComplianceReport {
 
 export class ZoneComplianceDetector {
   private zoneEngine: ZoneEngine;
-  private objectTracker: ObjectTracker;
+  private objectTracker: ObjectTracker | MultiObjectTracker;
   private rules = new Map<string, ZoneRule>();
   private violations = new Map<string, ComplianceViolation>();
   private personContext = new Map<string, PersonContext>();
   private violationHistory: ComplianceViolation[] = [];
   private readonly maxHistorySize = 10000;
 
-  constructor(zoneEngine: ZoneEngine, objectTracker: ObjectTracker) {
+  constructor(zoneEngine: ZoneEngine, objectTracker: ObjectTracker | MultiObjectTracker) {
     this.zoneEngine = zoneEngine;
     this.objectTracker = objectTracker;
     this.startComplianceMonitoring();

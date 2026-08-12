@@ -4,7 +4,7 @@
  */
 
 import { randomUUID } from 'node:crypto';
-import type { ObjectTracker, TrackedObject } from './object-tracker.js';
+import type { ObjectTracker, MultiObjectTracker, TrackedObject } from './object-tracker.js';
 import type { ZoneEngine } from './zone-engine.js';
 
 // ============================================================================
@@ -84,7 +84,7 @@ export interface SpillAnalytics {
 // ============================================================================
 
 export class SpillDetector {
-  private objectTracker: ObjectTracker;
+  private objectTracker: ObjectTracker | MultiObjectTracker;
   private zoneEngine: ZoneEngine;
   private activeSpills = new Map<string, SpillDetection>();
   private incidents = new Map<string, SpillIncident>();
@@ -105,7 +105,7 @@ export class SpillDetector {
     'liquid_spill', 'spill', 'puddle', 'leak'
   ];
 
-  constructor(objectTracker: ObjectTracker, zoneEngine: ZoneEngine) {
+  constructor(objectTracker: ObjectTracker | MultiObjectTracker, zoneEngine: ZoneEngine) {
     this.objectTracker = objectTracker;
     this.zoneEngine = zoneEngine;
     this.startSpillMonitoring();
@@ -382,7 +382,12 @@ export class SpillDetector {
    * Analyze spill risk based on people nearby
    */
   private analyzeSpillRisk(timestamp: Date): void {
-    const trackedPersons = this.objectTracker.getTracksByLabel('person');
+    // Handle both ObjectTracker and MultiObjectTracker
+    const allTracks = 'getActiveTracks' in this.objectTracker
+      ? this.objectTracker.getActiveTracks()
+      : this.objectTracker.getAllTracks();
+    
+    const trackedPersons = allTracks.filter(track => track.label === 'person');
 
     for (const spill of this.activeSpills.values()) {
       // Count people nearby

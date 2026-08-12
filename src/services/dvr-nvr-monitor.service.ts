@@ -419,7 +419,7 @@ export class DVRNVRMonitorService extends EventEmitter {
         status: "online",
         firmwareVersion: this.extractKeyValue(data, "version"),
         uptime: parseInt(this.extractKeyValue(data, "uptime") || "0"),
-        hddStatus: this.parseRecorderStorageInfo(storageText),
+        hddStatus: storageText ? this.parseRecorderStorageInfo(storageText) : undefined,
       };
     } catch (error) {
       return {

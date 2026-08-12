@@ -688,8 +688,10 @@ export class ComplianceService {
       throw new Error('Certificate verification not found or already revoked');
     }
 
+    const verificationId = String(result.rows[0]?.id);
+
     // Revoke the verification
-    await this.auditRepo.revokeCertificateVerification(result.rows[0].id, {
+    await this.auditRepo.revokeCertificateVerification(verificationId, {
       revokedBy: input.revokedBy,
       revocationReason: input.revocationReason,
     });

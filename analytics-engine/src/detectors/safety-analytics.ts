@@ -171,17 +171,17 @@ export class SafetyAnalyticsDetector extends BaseDetector {
     });
     this.zoneComplianceDetector = new ZoneComplianceDetector(
       this.zoneEngine,
-      this.objectTracker as any
+      this.objectTracker
     );
     this.exitMonitor = new EmergencyExitMonitor(
       this.zoneEngine,
-      this.objectTracker as any
+      this.objectTracker
     );
     this.equipmentMonitor = new FireSafetyEquipmentMonitor(
-      this.objectTracker as any
+      this.objectTracker
     );
     this.spillDetector = new SpillDetector(
-      this.objectTracker as any,
+      this.objectTracker,
       this.zoneEngine
     );
     this.arcFlashDetector = new ArcFlashDetector(this.zoneEngine);
