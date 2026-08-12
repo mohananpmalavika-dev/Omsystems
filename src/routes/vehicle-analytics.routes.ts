@@ -12,7 +12,7 @@ export function createVehicleAnalyticsRoutes(
   eventRepository: VehicleEventRepository,
   journeyService: VehicleJourneyService,
   watchlistService: VehicleWatchlistService
-): Router {
+) {
   const router = Router();
   
   /**
@@ -28,17 +28,17 @@ export function createVehicleAnalyticsRoutes(
       
       const query = {
         tenantId,
-        cameraIds: req.query.cameraIds ? String(req.query.cameraIds).split(',') : undefined,
-        vehicleTypes: req.query.vehicleTypes ? String(req.query.vehicleTypes).split(',') : undefined,
-        colors: req.query.colors ? String(req.query.colors).split(',') : undefined,
-        normalizedPlate: req.query.plate ? String(req.query.plate) : undefined,
-        from: req.query.from ? new Date(String(req.query.from)) : undefined,
-        to: req.query.to ? new Date(String(req.query.to)) : undefined,
-        direction: req.query.direction as any,
-        limit: req.query.limit ? parseInt(String(req.query.limit)) : 50,
-        offset: req.query.offset ? parseInt(String(req.query.offset)) : 0,
-        orderBy: (req.query.orderBy as any) || 'occurredAt',
-        orderDirection: (req.query.orderDirection as any) || 'desc',
+        cameraIds: req.query?.cameraIds ? String(req.query.cameraIds).split(',') : undefined,
+        vehicleTypes: req.query?.vehicleTypes ? String(req.query.vehicleTypes).split(',') : undefined,
+        colors: req.query?.colors ? String(req.query.colors).split(',') : undefined,
+        normalizedPlate: req.query?.plate ? String(req.query.plate) : undefined,
+        from: req.query?.from ? new Date(String(req.query.from)) : undefined,
+        to: req.query?.to ? new Date(String(req.query.to)) : undefined,
+        direction: req.query?.direction as any,
+        limit: req.query?.limit ? parseInt(String(req.query.limit)) : 50,
+        offset: req.query?.offset ? parseInt(String(req.query.offset)) : 0,
+        orderBy: (req.query?.orderBy as any) || 'occurredAt',
+        orderDirection: (req.query?.orderDirection as any) || 'desc',
       };
       
       const events = await eventRepository.search(query);
@@ -70,7 +70,7 @@ export function createVehicleAnalyticsRoutes(
         return res.status(401).json({ error: 'Unauthorized' });
       }
       
-      const event = await eventRepository.findById(tenantId, req.params.eventId);
+      const event = await eventRepository.findById(tenantId, req.params?.eventId || '');
       
       if (!event) {
         return res.status(404).json({ error: 'Event not found' });
@@ -94,8 +94,8 @@ export function createVehicleAnalyticsRoutes(
         return res.status(401).json({ error: 'Unauthorized' });
       }
       
-      const plate = req.params.plate.toUpperCase().replace(/[^A-Z0-9]/g, '');
-      const minConfidence = req.query.minConfidence 
+      const plate = (req.params?.plate || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+      const minConfidence = req.query?.minConfidence 
         ? parseFloat(String(req.query.minConfidence))
         : 0.7;
       
@@ -126,13 +126,13 @@ export function createVehicleAnalyticsRoutes(
         return res.status(401).json({ error: 'Unauthorized' });
       }
       
-      const plate = req.params.plate.toUpperCase().replace(/[^A-Z0-9]/g, '');
+      const plate = (req.params?.plate || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
       
-      const from = req.query.from 
+      const from = req.query?.from 
         ? new Date(String(req.query.from))
         : new Date(Date.now() - 7 * 24 * 60 * 60 * 1000); // 7 days ago
       
-      const to = req.query.to
+      const to = req.query?.to
         ? new Date(String(req.query.to))
         : new Date();
       
@@ -166,7 +166,7 @@ export function createVehicleAnalyticsRoutes(
         return res.status(401).json({ error: 'Unauthorized' });
       }
       
-      const plate = req.params.plate.toUpperCase().replace(/[^A-Z0-9]/g, '');
+      const plate = (req.params?.plate || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
       const lastSeen = await journeyService.getLastSeen(tenantId, plate);
       
       if (!lastSeen) {
@@ -191,15 +191,15 @@ export function createVehicleAnalyticsRoutes(
         return res.status(401).json({ error: 'Unauthorized' });
       }
       
-      const from = req.query.from
+      const from = req.query?.from
         ? new Date(String(req.query.from))
         : new Date(Date.now() - 24 * 60 * 60 * 1000); // 24 hours
       
-      const to = req.query.to
+      const to = req.query?.to
         ? new Date(String(req.query.to))
         : new Date();
       
-      const cameraIds = req.query.cameraIds
+      const cameraIds = req.query?.cameraIds
         ? String(req.query.cameraIds).split(',')
         : undefined;
       
@@ -289,7 +289,7 @@ export function createVehicleAnalyticsRoutes(
         return res.status(401).json({ error: 'Unauthorized' });
       }
       
-      const removed = await watchlistService.removeEntry(tenantId, req.params.entryId);
+      const removed = await watchlistService.removeEntry(tenantId, req.params?.entryId || '');
       
       if (!removed) {
         return res.status(404).json({ error: 'Watchlist entry not found' });
@@ -313,7 +313,7 @@ export function createVehicleAnalyticsRoutes(
         return res.status(401).json({ error: 'Unauthorized' });
       }
       
-      const status = req.query.status as string;
+      const status = req.query?.status as string;
       
       let matches = status === 'pending'
         ? watchlistService.getPendingMatches(tenantId)
@@ -340,7 +340,7 @@ export function createVehicleAnalyticsRoutes(
         return res.status(401).json({ error: 'Unauthorized' });
       }
       
-      await watchlistService.acknowledgeMatch(req.params.matchId, userId);
+      await watchlistService.acknowledgeMatch(req.params?.matchId || '', userId);
       
       res.json({ success: true });
     } catch (error) {

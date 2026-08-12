@@ -103,6 +103,10 @@ export async function registerBulkUploadRoutes(
           },
         });
 
+        if (!createdBranch) {
+          throw new Error("Failed to create branch - no result returned");
+        }
+
         results.created++;
         results.created_branches.push({
           index: i,

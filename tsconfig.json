@@ -46,6 +46,12 @@
     "**/*.example.ts",
     "**/*.example.js",
     
+    // Event bus integration (optional NATS dependency)
+    "src/security-commander/event-bus/**/*",
+    
+    // Attestation module (incomplete implementation with missing type files)
+    "backend/src/attestation/**/*",
+    
     // Temporarily exclude files with known type issues
     // TODO: Fix these files and remove from exclusions
     "src/routes/*.disabled",

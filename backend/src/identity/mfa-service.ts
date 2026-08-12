@@ -985,36 +985,6 @@ export class MFAService {
   }
 
   /**
-   * Record successful MFA verification
-   */
-  private async recordSuccessfulVerification(
-    userId: string,
-    method: MFAMethod
-  ): Promise<void> {
-    await this.pool.query(
-      `INSERT INTO mfa_verification_log (
-        user_id, method, success, verified_at
-      ) VALUES ($1, $2, true, NOW())`,
-      [userId, method]
-    );
-  }
-
-  /**
-   * Record failed MFA attempt
-   */
-  private async recordFailedAttempt(
-    userId: string,
-    method: MFAMethod
-  ): Promise<void> {
-    await this.pool.query(
-      `INSERT INTO mfa_verification_log (
-        user_id, method, success, verified_at
-      ) VALUES ($1, $2, false, NOW())`,
-      [userId, method]
-    );
-  }
-
-  /**
    * Check for suspicious MFA activity
    */
   async checkSuspiciousActivity(userId: string): Promise<boolean> {

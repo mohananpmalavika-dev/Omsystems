@@ -4,7 +4,8 @@
  * REST API endpoints for the Security Commander.
  */
 
-import type { Request, Response, NextFunction } from 'express';
+import type { Request, Response } from 'express';
+import type { NextFunction } from 'express-serve-static-core';
 import { SecurityCommanderService } from '../services/commander.service.js';
 import type { CommanderContext } from '../types/index.js';
 
@@ -61,7 +62,7 @@ export class SecurityCommanderController {
   ): Promise<void> => {
     try {
       const tenantId = (req as any).user?.tenantId || (req as any).tenantId;
-      const limit = parseInt(req.query.limit as string) || 10;
+      const limit = parseInt((req.query?.limit as string) || '10');
 
       const investigations = await this.commanderService.getRecentInvestigations(
         tenantId,
@@ -87,7 +88,15 @@ export class SecurityCommanderController {
     next: NextFunction
   ): Promise<void> => {
     try {
-      const { id } = req.params;
+      const { id } = req.params as { id?: string };
+      
+      if (!id) {
+        res.status(400).json({
+          error: 'Bad request',
+          message: 'Investigation ID is required',
+        });
+        return;
+      }
 
       const investigation = await this.commanderService.getInvestigation(id);
 

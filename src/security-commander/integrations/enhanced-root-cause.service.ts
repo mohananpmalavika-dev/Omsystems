@@ -4,7 +4,7 @@
  */
 
 import type { DigitalTwinBridge, TwinAsset, BlastRadiusResult } from './digital-twin-bridge.js';
-import type { SecurityEvent, SecurityIncident } from '../types/index.js';
+import type { SecurityEvent } from '../types/index.js';
 
 /**
  * Base root cause information
@@ -39,12 +39,12 @@ export class EnhancedRootCauseService {
    * Analyze root cause with Digital Twin context
    */
   async analyzeRootCause(
-    incident: SecurityIncident,
+    incident: any,
     events: SecurityEvent[]
   ): Promise<EnhancedRootCause> {
-    // Extract asset IDs from events
+    // Extract asset IDs from events (use source.id as assetId)
     const assetIds = events
-      .map((e) => e.assetId)
+      .map((e) => e.source?.id)
       .filter((id): id is string => id !== undefined);
 
     // Get unique asset IDs
@@ -139,7 +139,7 @@ export class EnhancedRootCauseService {
     // Strategy 1: If there's a common dependency that failed, it's likely the root cause
     for (const dep of commonDependencies) {
       const hasFailureEvent = events.some(
-        (e) => e.assetId === dep.id && this.isFailureEvent(e.eventType)
+        (e) => e.source?.id === dep.id && this.isFailureEvent(e.type)
       );
       if (hasFailureEvent) {
         return dep;
@@ -152,8 +152,8 @@ export class EnhancedRootCauseService {
     );
 
     for (const event of sortedEvents) {
-      if (this.isFailureEvent(event.eventType) && event.assetId) {
-        const asset = await this.digitalTwinBridge.getAsset(event.assetId);
+      if (this.isFailureEvent(event.type) && event.source?.id) {
+        const asset = await this.digitalTwinBridge.getAsset(event.source.id);
         if (asset) {
           return asset;
         }
@@ -219,11 +219,11 @@ export class EnhancedRootCauseService {
     // Count event types
     const eventTypeCounts = new Map<string, number>();
     events.forEach((event) => {
-      eventTypeCounts.set(event.eventType, (eventTypeCounts.get(event.eventType) || 0) + 1);
+      eventTypeCounts.set(event.type, (eventTypeCounts.get(event.type) || 0) + 1);
     });
 
     // Find most common
-    let primaryType = events[0]?.eventType || 'unknown';
+    let primaryType = events[0]?.type || 'unknown';
     let maxCount = 0;
 
     eventTypeCounts.forEach((count, type) => {
@@ -240,18 +240,18 @@ export class EnhancedRootCauseService {
    * Generate human-readable explanation
    */
   private generateExplanation(
-    incident: SecurityIncident,
+    incident: any,
     events: SecurityEvent[],
     rootCause: TwinAsset | null,
     commonDependencies: TwinAsset[],
     blastRadius: BlastRadiusResult | null
   ): string {
     if (rootCause && blastRadius) {
-      const downtimeEstimate = blastRadius.business_impact.estimated_downtime || 'unknown';
+      const downtimeEstimate = blastRadius.business_impact?.estimated_downtime || 'unknown';
       return `Infrastructure failure detected: ${rootCause.asset_type} "${rootCause.name}" has failed, ` +
         `affecting ${blastRadius.total_affected} dependent assets including ` +
-        `${blastRadius.by_type.camera || 0} cameras. ` +
-        `This is causing ${incident.events.length} security events across multiple assets. ` +
+        `${blastRadius.by_type?.camera || 0} cameras. ` +
+        `This is causing ${incident.events?.length || events.length} security events across multiple assets. ` +
         `Estimated recovery time: ${downtimeEstimate}.`;
     }
 
@@ -264,7 +264,8 @@ export class EnhancedRootCauseService {
         `This suggests an infrastructure-level issue rather than individual asset failures.`;
     }
 
-    return `Incident involves ${events.length} events across ${incident.affectedAssets.length} assets. ` +
+    const affectedAssetCount = incident.affectedAssets?.length || new Set(events.map(e => e.source?.id)).size;
+    return `Incident involves ${events.length} events across ${affectedAssetCount} assets. ` +
       `Root cause analysis suggests correlated failures, but no single infrastructure dependency identified.`;
   }
 
@@ -293,7 +294,10 @@ export class EnhancedRootCauseService {
     // Factor 3: Single point of failure
     const spofDeps = commonDependencies.filter((d) => d.metadata?.isSinglePointOfFailure);
     if (spofDeps.length > 0) {
-      factors.push(`Single point of failure detected: ${spofDeps[0].name}`);
+      const firstSpof = spofDeps[0];
+      if (firstSpof) {
+        factors.push(`Single point of failure detected: ${firstSpof.name}`);
+      }
     }
 
     // Factor 4: Geographic/zone clustering
@@ -303,7 +307,7 @@ export class EnhancedRootCauseService {
     }
 
     // Factor 5: Similar event types
-    const uniqueEventTypes = new Set(events.map((e) => e.eventType));
+    const uniqueEventTypes = new Set(events.map((e) => e.type));
     if (uniqueEventTypes.size === 1) {
       factors.push(`All events of same type: ${Array.from(uniqueEventTypes)[0]}`);
     }
@@ -365,10 +369,10 @@ export class EnhancedRootCauseService {
   private extractZones(events: SecurityEvent[]): string[] {
     const zones = new Set<string>();
     events.forEach((event) => {
-      if (event.metadata?.zone) {
-        zones.add(event.metadata.zone);
+      if (event.location?.zone) {
+        zones.add(event.location.zone);
       }
-      if (event.metadata?.location) {
+      if (event.metadata?.location && typeof event.metadata.location === 'string') {
         zones.add(event.metadata.location);
       }
     });

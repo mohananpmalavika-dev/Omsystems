@@ -3,7 +3,7 @@
  * Initialize Redis-based event bus for horizontal scaling
  */
 
-import { initializeDistributedEventBus, getDistributedEventBus } from '../services/distributed-event-bus.service';
+import { initializeDistributedEventBus, getDistributedEventBus } from '../services/distributed-event-bus.service.js';
 
 export async function initializeDistributedEvents(): Promise<void> {
   const enabled = process.env.DISTRIBUTED_EVENTS === 'true';

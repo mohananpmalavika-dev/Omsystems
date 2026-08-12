@@ -346,7 +346,12 @@ export class LDAPAuthProvider {
               );
 
               if (memberOfAttr) {
-                groups = memberOfAttr.values.map(this.extractGroupName.bind(this));
+                const values = memberOfAttr.values;
+                if (Array.isArray(values)) {
+                  groups = values.map(this.extractGroupName.bind(this));
+                } else if (typeof values === 'string') {
+                  groups = [this.extractGroupName(values)];
+                }
               }
             });
 
@@ -386,7 +391,10 @@ export class LDAPAuthProvider {
               );
 
               if (nameAttr && nameAttr.values.length > 0) {
-                groups.push(nameAttr.values[0]);
+                const value = nameAttr.values[0];
+                if (value) {
+                  groups.push(value);
+                }
               }
             });
 
@@ -414,7 +422,7 @@ export class LDAPAuthProvider {
   private extractGroupName(groupDN: string): string {
     // Extract CN from DN (e.g., "CN=Admins,OU=Groups,DC=example,DC=com" -> "Admins")
     const match = groupDN.match(/^CN=([^,]+)/i);
-    return match ? match[1] : groupDN;
+    return match?.[1] || groupDN;
   }
 
   /**

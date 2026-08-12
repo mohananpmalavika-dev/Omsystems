@@ -133,6 +133,9 @@ export class CorrelationEngine {
 
     // Use highest priority match
     const match = matches[0];
+    if (!match) {
+      return null;
+    }
 
     // Check if this should update an existing incident
     const fingerprint = this.generateFingerprint(match);
@@ -285,7 +288,7 @@ export class CorrelationEngine {
    * Check if events share context (entity, location, or time)
    */
   private eventsShareContext(a: SecurityEvent, b: SecurityEvent): boolean {
-    return (
+    return !!(
       canCorrelateByEntity(a, b) ||
       (a.location?.zoneId && b.location?.zoneId && a.location.zoneId === b.location.zoneId)
     );
@@ -319,6 +322,10 @@ export class CorrelationEngine {
 
     const firstEvent = sortedEvents[0];
     const lastEvent = sortedEvents[sortedEvents.length - 1];
+    
+    if (!firstEvent || !lastEvent) {
+      throw new Error('Cannot create incident from empty events array');
+    }
 
     // Generate title and explanation
     const title = rule.generateTitle
@@ -458,8 +465,9 @@ export class CorrelationEngine {
     const eventIds = events.map(e => e.id).sort().join(',');
 
     // Include branch and zone for locality
-    const branchId = events[0].branchId ?? '';
-    const zoneId = events[0].location?.zoneId ?? '';
+    const firstEvent = events[0];
+    const branchId = firstEvent?.branchId ?? '';
+    const zoneId = firstEvent?.location?.zoneId ?? '';
 
     // Generate hash
     const hash = createHash('sha256');

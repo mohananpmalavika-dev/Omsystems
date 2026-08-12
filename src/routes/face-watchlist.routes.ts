@@ -11,6 +11,22 @@ import { authenticateJWT } from '../middleware/auth.js';
 import { validateRequest } from '../middleware/validation.js';
 import { checkPermission } from '../middleware/permissions.js';
 
+// Type declaration for Express.Multer namespace
+declare global {
+  namespace Express {
+    namespace Multer {
+      interface File {
+        fieldname: string;
+        originalname: string;
+        encoding: string;
+        mimetype: string;
+        size: number;
+        buffer: Buffer;
+      }
+    }
+  }
+}
+
 const router = Router();
 
 // Configure multer for image uploads
@@ -20,7 +36,7 @@ const upload = multer({
     fileSize: 10 * 1024 * 1024, // 10MB
     files: 10,
   },
-  fileFilter: (req, file, cb) => {
+  fileFilter: (req: any, file: any, cb: any) => {
     const allowedMimes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
     if (allowedMimes.includes(file.mimetype)) {
       cb(null, true);
@@ -49,7 +65,7 @@ const createWatchlistSchema = z.object({
 const updateWatchlistSchema = createWatchlistSchema.partial();
 
 const enrollPersonSchema = z.object({
-  displayName: z.string().min(1).max(255),
+  fullName: z.string().min(1).max(255),
   externalId: z.string().optional(),
   metadata: z.record(z.unknown()).optional(),
 });
@@ -262,7 +278,7 @@ router.post(
       const result = await service.enrollPerson({
         tenantId,
         watchlistId,
-        displayName: req.body.displayName,
+        fullName: req.body.fullName,
         externalId: req.body.externalId,
         images,
         metadata: req.body.metadata,

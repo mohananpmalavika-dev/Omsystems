@@ -451,7 +451,8 @@ export class VehicleJourneyService {
   private buildPathDescription(appearances: JourneyAppearance[]): string {
     if (appearances.length === 0) return '';
     if (appearances.length === 1) {
-      return `Seen at ${appearances[0].cameraName || appearances[0].cameraId}`;
+      const firstAppearance = appearances[0];
+      return `Seen at ${firstAppearance?.cameraName || firstAppearance?.cameraId || 'Unknown'}`;
     }
     
     const locations = appearances.map(a => a.cameraName || a.cameraId);

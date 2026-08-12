@@ -189,10 +189,11 @@ export class DigitalTwinBridge {
 
       // Determine operational impact
       const totalAffected = affectedAssets.length;
+      const cameraCount = byType.camera ?? 0;
       let operationalImpact: BlastRadiusResult['business_impact']['operational_impact'];
-      if (totalAffected > 50 || byType.camera > 20) {
+      if (totalAffected > 50 || cameraCount > 20) {
         operationalImpact = 'critical';
-      } else if (totalAffected > 20 || byType.camera > 10) {
+      } else if (totalAffected > 20 || cameraCount > 10) {
         operationalImpact = 'severe';
       } else if (totalAffected > 5) {
         operationalImpact = 'moderate';

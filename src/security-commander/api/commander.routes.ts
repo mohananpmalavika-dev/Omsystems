@@ -3,11 +3,12 @@
  */
 
 import { Router } from 'express';
+import type { Router as IRouter } from 'express-serve-static-core';
 import type { Pool } from 'pg';
 import { SecurityCommanderService } from '../services/commander.service.js';
 import { SecurityCommanderController } from './commander.controller.js';
 
-export function createCommanderRoutes(pool: Pool): Router {
+export function createCommanderRoutes(pool: Pool): IRouter {
   const router = Router();
 
   // Initialize service and controller

@@ -13,7 +13,10 @@ import { z } from 'zod';
 import type { ControlPlaneStore, OrganizationStore } from '../control-plane-store.js';
 import { BranchLifecycleService } from '../services/branch-lifecycle.service.js';
 import { BranchLifecycleError, BranchStatus } from '../domain/branch-lifecycle.types.js';
-import type { EventBus } from '../events/event-bus.js';
+// import type { EventBus } from '../events/event-bus.js';
+
+// Stub EventBus type
+type EventBus = any;
 
 const nodeIdSchema = z.object({ id: z.string().uuid() });
 

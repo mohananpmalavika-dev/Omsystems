@@ -134,9 +134,10 @@ export async function registerEnterpriseAuthRoutes(
     const { code, state, error: authError } = request.query as any;
 
     if (authError) {
+      const queryAny = request.query as any;
       return reply.code(400).send({
         error: 'AUTHENTICATION_FAILED',
-        message: request.query.error_description || authError,
+        message: queryAny.error_description || authError,
       });
     }
 

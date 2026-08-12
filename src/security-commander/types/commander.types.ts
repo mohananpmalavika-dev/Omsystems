@@ -294,26 +294,3 @@ export interface AbnormalityScore {
     correlatedSignals: number;
   };
 }
-
-/**
- * Correlation match
- */
-export interface CorrelationMatch {
-  /** Event IDs that matched */
-  eventIds: string[];
-
-  /** Rule that matched */
-  ruleId: string;
-
-  /** Rule name */
-  ruleName: string;
-
-  /** Confidence */
-  confidence: number;
-
-  /** Incident type to create */
-  incidentType: IncidentType;
-
-  /** Severity */
-  severity: SecuritySeverity;
-}

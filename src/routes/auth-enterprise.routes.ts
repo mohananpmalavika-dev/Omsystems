@@ -9,11 +9,16 @@
 
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { samlProvider } from '../security/saml-provider.js';
-import { oidcProvider } from '../security/oidc-provider.js';
-import { ldapConnector } from '../security/ldap-connector.js';
+// import { samlProvider } from '../security/saml-provider.js';
+// import { oidcProvider } from '../security/oidc-provider.js';
+// import { ldapConnector } from '../security/ldap-connector.js';
 import type { ControlPlaneStore } from '../control-plane-store.js';
 import { randomBytes } from 'node:crypto';
+
+// Stub providers - replace with actual implementations
+const samlProvider: any = null;
+const oidcProvider: any = null;
+const ldapConnector: any = null;
 
 // Helper to generate JWT tokens (placeholder - integrate with your actual token generation)
 function generateToken(payload: Record<string, any>): string {

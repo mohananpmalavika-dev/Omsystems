@@ -280,7 +280,10 @@ export class OtpGenerator {
     let result = '';
 
     for (let i = 0; i < length; i++) {
-      result += chars[bytes[i] % chars.length];
+      const byte = bytes[i];
+      if (byte !== undefined) {
+        result += chars[byte % chars.length];
+      }
     }
 
     return result;
