@@ -474,11 +474,13 @@ export class EvidencePreservationService {
   ): PreservationConfig {
     const baseConfig = PRESERVATION_CONFIGS[severity] || PRESERVATION_CONFIGS['P3'];
     
-    if (detectionType && DETECTION_TYPE_CONFIGS[detectionType]) {
+    const detTypeConfig = detectionType ? DETECTION_TYPE_CONFIGS[detectionType] : undefined;
+    
+    if (detTypeConfig) {
       return {
         ...baseConfig,
-        ...DETECTION_TYPE_CONFIGS[detectionType],
-      };
+        ...detTypeConfig,
+      } as PreservationConfig;
     }
     
     return baseConfig;

@@ -174,7 +174,8 @@ export class IncidentCorrelationService {
     reason: string;
   }> {
     const correlationKey = this.generateCorrelationKey(event);
-    const config = CORRELATION_CONFIGS[event.detectionType] || DEFAULT_CONFIG;
+    const detectionType = event.detectionType ?? '';
+    const config = CORRELATION_CONFIGS[detectionType] || DEFAULT_CONFIG;
     
     // Check if there's an active incident for this correlation key
     const activeIncident = this.activeCorrelations.get(correlationKey);
@@ -201,23 +202,25 @@ export class IncidentCorrelationService {
       }
       
       // Update existing incident
-      activeIncident.lastDetectionAt = new Date(event.detectionTime);
+      const eventDetectionTime = event.detectionTime ?? new Date().toISOString();
+      activeIncident.lastDetectionAt = new Date(eventDetectionTime);
       activeIncident.detectionCount++;
       activeIncident.maxConfidence = Math.max(activeIncident.maxConfidence, event.confidence);
       
-      if (this.compareSeverity(event.severity, activeIncident.highestSeverity) > 0) {
-        activeIncident.highestSeverity = event.severity;
+      const eventSeverity = event.severity ?? 'P5';
+      if (this.compareSeverity(eventSeverity, activeIncident.highestSeverity) > 0) {
+        activeIncident.highestSeverity = eventSeverity;
       }
       
       // Add detection to incident timeline
       await this.store.addIncidentEvent({
         incidentId: activeIncident.incidentId,
         eventType: 'detection',
-        description: `${event.detectionType} detected (confidence: ${Math.round(event.confidence * 100)}%)`,
+        description: `${event.detectionType ?? 'unknown'} detected (confidence: ${Math.round(event.confidence * 100)}%)`,
         details: {
-          detectionType: event.detectionType,
+          detectionType: event.detectionType ?? '',
           confidence: event.confidence,
-          cameraId: event.cameraId,
+          cameraId: event.cameraId ?? '',
           zone: event.zone,
           trackedObjectId: event.trackedObjectId,
           metadata: event.metadata,
@@ -251,7 +254,7 @@ export class IncidentCorrelationService {
     // Check if this is a high-priority event that should create incident immediately
     const shouldCreateImmediately = 
       event.confidence >= 0.85 || 
-      ['P1', 'P2'].includes(event.severity) ||
+      ['P1', 'P2'].includes(event.severity ?? '') ||
       config.minDetectionsThreshold === 1;
     
     if (shouldCreateImmediately) {
@@ -266,7 +269,7 @@ export class IncidentCorrelationService {
         lastDetectionAt: new Date(detectionTime),
         detectionCount: 1,
         maxConfidence: event.confidence,
-        highestSeverity: event.severity,
+        highestSeverity: event.severity ?? 'P5',
         status: incident.status,
         cooldownEndsAt: new Date(Date.now() + config.cooldownPeriod * 60 * 1000),
       });
@@ -308,7 +311,7 @@ export class IncidentCorrelationService {
         lastDetectionAt: new Date(lastDetectionTime),
         detectionCount: validEvents.length,
         maxConfidence: Math.max(...validEvents.map(e => e.confidence)),
-        highestSeverity: event.severity,
+        highestSeverity: event.severity ?? 'P5',
         status: incident.status,
         cooldownEndsAt: new Date(Date.now() + config.cooldownPeriod * 60 * 1000),
       });
@@ -348,7 +351,7 @@ export class IncidentCorrelationService {
       title,
       description,
       incidentType: primaryEvent.detectionType ?? '',
-      severity: primaryEvent.severity,
+      severity: primaryEvent.severity ?? 'P5',
       detectionSource: 'ai-analytics',
       occurredAt: primaryEvent.detectionTime ?? new Date().toISOString(),
       reportedBy: 'system',
@@ -394,7 +397,9 @@ export class IncidentCorrelationService {
       if (correlation.incidentId === incidentId) {
         correlation.status = 'closed';
         
-        const config = CORRELATION_CONFIGS[correlation.correlationKey.split(':')[3]] || DEFAULT_CONFIG;
+        const keyParts = correlation.correlationKey.split(':');
+        const detectionType = keyParts[3] ?? '';
+        const config = CORRELATION_CONFIGS[detectionType] || DEFAULT_CONFIG;
         correlation.cooldownEndsAt = new Date(Date.now() + config.cooldownPeriod * 60 * 1000);
         
         // Remove from active correlations after cooldown

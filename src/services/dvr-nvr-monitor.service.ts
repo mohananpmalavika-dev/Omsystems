@@ -503,6 +503,7 @@ export class DVRNVRMonitorService extends EventEmitter {
     const blocks = [...xml.matchAll(/<(?:hdd|HDD)>([\s\S]*?)<\/(?:hdd|HDD)>/g)].map((match) => match[1]);
     const sources = blocks.length ? blocks : [xml];
     const raw = sources.map((block, index) => {
+      if (!block) return null;
       const read = (tag: string) => block.match(new RegExp(`<${tag}>([^<]+)<\\/${tag}>`, "i"))?.[1];
       return {
         diskNo: read("id") ?? index + 1,
@@ -514,7 +515,7 @@ export class DVRNVRMonitorService extends EventEmitter {
         powerOnHours: read("powerOnHours"), reallocatedSectors: read("reallocatedSectors"),
         pendingSectors: read("pendingSectors"), uncorrectableSectors: read("uncorrectableSectors"),
       };
-    });
+    }).filter((item): item is NonNullable<typeof item> => item !== null);
     const disks = normalizeRecorderHddStatus(raw);
     return disks.length ? disks : undefined;
   }
@@ -528,10 +529,11 @@ export class DVRNVRMonitorService extends EventEmitter {
       const grouped = new Map<string, Record<string, unknown>>();
       for (const line of payload.split(/\r?\n/)) {
         const match = line.match(/(?:Storage|Disk|HDD)(?:\[|\.)(\d+)\]?\.([^=]+)=(.*)$/i);
-        if (!match) continue;
-        const record = grouped.get(match[1]) ?? { diskNo: Number(match[1]) + 1 };
+        if (!match || !match[1] || !match[2] || !match[3]) continue;
+        const diskIndex = match[1];
+        const record = grouped.get(diskIndex) ?? { diskNo: Number(diskIndex) + 1 };
         record[match[2]] = match[3].trim();
-        grouped.set(match[1], record);
+        grouped.set(diskIndex, record);
       }
       const disks = normalizeRecorderHddStatus([...grouped.values()]);
       return disks.length ? disks : undefined;

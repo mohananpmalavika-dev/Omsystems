@@ -272,17 +272,14 @@ export class RCAStore {
     );
     
     // Index by fingerprint for pattern learning
-    const outcomeIndexKey = `rca:index:outcomes:${tenantId}`;
-    const outcomeIndex = (await this.store.getMetadata(outcomeIndexKey, tenantId)) as RCACaseOutcome[] | null || [];
-    
-    outcomeIndex.push(outcome);
-    
-    // Keep last 1000 outcomes
-    if (outcomeIndex.length > 1000) {
-      outcomeIndex.shift();
-    }
-    
-    await this.store.setMetadata(outcomeIndexKey, tenantId, outcomeIndex);
+    // TODO: Implement proper metadata storage in ControlPlaneStore
+    // const outcomeIndexKey = `rca:index:outcomes:${tenantId}`;
+    // const outcomeIndex = (await this.store.getMetadata(outcomeIndexKey, tenantId)) as RCACaseOutcome[] | null || [];
+    // outcomeIndex.push(outcome);
+    // if (outcomeIndex.length > 1000) {
+    //   outcomeIndex.shift();
+    // }
+    // await this.store.setMetadata(outcomeIndexKey, tenantId, outcomeIndex);
   }
   
   /**

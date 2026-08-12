@@ -5,7 +5,8 @@
 
 import type { Pool } from 'pg';
 import { FaceEnrollmentService } from '../../analytics-engine/src/face/face-enrollment.service.js';
-import type { EnrollPersonInput, EnrollmentResult } from '../../analytics-engine/src/face/face.types.js';
+import type { EnrollPersonInput as EngineEnrollPersonInput, EnrollmentResult as EngineEnrollmentResult } from '../../analytics-engine/src/face/face-enrollment.service.js';
+import type { EnrollmentResult } from '../../analytics-engine/src/face/face.types.js';
 
 export interface CreateWatchlistInput {
   tenantId: string;
@@ -344,7 +345,7 @@ export class FaceWatchlistService {
   /**
    * Enroll person in watchlist
    */
-  async enrollPerson(input: EnrollPersonInput): Promise<EnrollmentResult> {
+  async enrollPerson(input: EngineEnrollPersonInput): Promise<EnrollmentResult> {
     return this.enrollmentService.enrollPerson(input);
   }
 

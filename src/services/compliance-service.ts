@@ -79,9 +79,10 @@ export class ComplianceService {
 
       // Assess each requirement
       for (const requirement of requirements) {
+        const requirementId = requirement.id ? String(requirement.id) : '';
         const result = await this.assessRequirement(
-          String(requirement.id),
-          assessment.tenantId,
+          requirementId,
+          assessment.tenantId ?? '',
           assessment.branchNodeId,
           assessment.assessmentPeriodStart,
           assessment.assessmentPeriodEnd
@@ -304,10 +305,10 @@ export class ComplianceService {
       await this.complianceRepo.updateComplianceTest(String(test.id), {
         ...test,
         status: testResult.status === 'passed' ? 'passed' : testResult.status === 'failed' ? 'failed' : 'not_started' as any,
-        findings: testResult.findings,
+        findings: 'findings' in testResult ? testResult.findings : '',
         passFail: testResult.status === 'passed',
-        score: testResult.score,
-        recommendations: testResult.recommendations,
+        score: 'score' in testResult ? testResult.score : 0,
+        recommendations: 'recommendations' in testResult ? testResult.recommendations : '',
       });
 
       // Update control test dates
@@ -637,9 +638,11 @@ export class ComplianceService {
     }
 
     // Verify document hash
+    const certificateMetadata = certificate.metadata ?? {};
+    const documentHash = certificate.documentHash ?? '';
     const documentHashValid = this.verifyDocumentHash(
-      certificate.metadata,
-      certificate.documentHash
+      certificateMetadata,
+      documentHash
     );
 
     if (!documentHashValid) {
