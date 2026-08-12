@@ -48,17 +48,17 @@ export class SamlProvider {
   constructor(config: SamlConfig) {
     this.config = config;
 
-    const samlConfig: BaseSamlConfig = {
+    const samlConfig: any = {
       entryPoint: config.idpUrl,
       issuer: config.spEntityId,
       callbackUrl: config.spCallbackUrl,
-      cert: config.idpCertificate,
+      cert: [config.idpCertificate],
       audience: config.audience || config.spEntityId,
       signatureAlgorithm: config.signatureAlgorithm || 'sha256',
       digestAlgorithm: config.digestAlgorithm || 'sha256',
       wantAssertionsSigned: config.wantAssertionsSigned ?? true,
       wantAuthnResponseSigned: config.wantAuthnResponseSigned ?? true,
-      validateInResponseTo: true,
+      validateInResponseTo: 'always' as any,
       requestIdExpirationPeriodMs: 600000, // 10 minutes
       cacheProvider: {
         saveAsync: async (key: string, value: string) => {
@@ -66,13 +66,17 @@ export class SamlProvider {
             created: new Date(),
             relayState: value
           });
+          return null;
         },
         getAsync: async (key: string) => {
           const entry = this.pendingRequests.get(key);
           return entry?.relayState || null;
         },
-        removeAsync: async (key: string) => {
-          this.pendingRequests.delete(key);
+        removeAsync: async (key: string | null) => {
+          if (key) {
+            this.pendingRequests.delete(key);
+          }
+          return null;
         }
       }
     };
@@ -84,7 +88,7 @@ export class SamlProvider {
    * Get SSO login URL (SP-initiated flow)
    */
   async getLoginUrl(relayState?: string): Promise<{ url: string; requestId: string }> {
-    const url = await this.saml.getAuthorizeUrlAsync(relayState || '', {});
+    const url = await this.saml.getAuthorizeUrlAsync(relayState || '', '' as any, {} as any);
     
     // Extract request ID from URL
     const requestId = this.extractRequestId(url);
@@ -97,12 +101,16 @@ export class SamlProvider {
    */
   async validateResponse(samlResponse: string, relayState?: string): Promise<SamlUser> {
     try {
-      const profile = await this.saml.validatePostResponseAsync({
+      const result = await this.saml.validatePostResponseAsync({
         SAMLResponse: samlResponse
       });
 
-      return this.mapProfile(profile);
-    } catch (error) {
+      if (!result.profile) {
+        throw new Error('No profile returned from SAML response');
+      }
+
+      return this.mapProfile(result.profile);
+    } catch (error: unknown) {
       throw new Error(`SAML validation failed: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
@@ -111,7 +119,7 @@ export class SamlProvider {
    * Generate logout URL
    */
   async getLogoutUrl(user: { nameId: string; sessionIndex?: string }): Promise<string> {
-    const url = await this.saml.getLogoutUrlAsync(user, {});
+    const url = await this.saml.getLogoutUrlAsync(user as any, '' as any, {} as any);
     return url;
   }
 
@@ -144,30 +152,30 @@ export class SamlProvider {
     const mapping = this.config.attributeMapping || {};
     
     const userId = mapping.userId 
-      ? profile[mapping.userId] || profile.nameID
-      : profile.nameID;
+      ? String((profile as any)[mapping.userId] || profile.nameID)
+      : String(profile.nameID);
 
     const email = mapping.email
-      ? profile[mapping.email] || profile.email
-      : profile.email;
+      ? String((profile as any)[mapping.email] || (profile as any).email || '')
+      : String((profile as any).email || '');
 
     const displayName = mapping.displayName
-      ? profile[mapping.displayName] || profile.displayName
-      : profile.displayName;
+      ? String((profile as any)[mapping.displayName] || (profile as any).displayName || '')
+      : String((profile as any).displayName || '');
 
     let groups: string[] = [];
-    if (mapping.groups && profile[mapping.groups]) {
-      const groupsValue = profile[mapping.groups];
+    if (mapping.groups && (profile as any)[mapping.groups]) {
+      const groupsValue = (profile as any)[mapping.groups];
       groups = Array.isArray(groupsValue) ? groupsValue : [groupsValue];
     }
 
     return {
       nameId: userId,
-      email,
-      displayName,
+      email: email || undefined,
+      displayName: displayName || undefined,
       groups,
-      attributes: profile,
-      sessionIndex: profile.sessionIndex
+      attributes: profile as any,
+      sessionIndex: (profile as any).sessionIndex
     };
   }
 
@@ -183,7 +191,7 @@ export class SamlProvider {
       // Decode and extract ID (simplified - in production parse XML)
       const decoded = Buffer.from(samlRequest, 'base64').toString();
       const idMatch = decoded.match(/ID="([^"]+)"/);
-      return idMatch ? idMatch[1] : '';
+      return idMatch?.[1] || '';
     } catch {
       return '';
     }
