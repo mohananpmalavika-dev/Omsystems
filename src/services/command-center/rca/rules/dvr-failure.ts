@@ -183,6 +183,10 @@ export function evaluateDVRFailure(
     },
     explanation,
     recommendedActions,
+    confidenceDetails: [
+      `${matchedConditions.length} conditions matched out of ${conditions.length} evaluated`,
+      `Confidence score: ${normalizedScore}/100 based on weighted evidence`,
+    ],
   };
 }
 

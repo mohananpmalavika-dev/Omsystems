@@ -491,14 +491,14 @@ export class AIVideoSearchService {
 
     // Extract license plate patterns
     const plateMatch = lowerQuery.match(/\b([A-Z0-9]{2,10})\b/);
-    if (plateMatch && parsedQuery.objectType === "vehicle") {
+    if (plateMatch && plateMatch[1] && parsedQuery.objectType === "vehicle") {
       parsedQuery.attributes!.licensePlate = plateMatch[1].toUpperCase();
     }
 
     // Extract confidence requirements
     const confidenceMatch = lowerQuery.match(/\b(\d+)%?\s*confidence\b/);
-    if (confidenceMatch) {
-      parsedQuery.minConfidence = parseInt(confidenceMatch[1]) / 100;
+    if (confidenceMatch && confidenceMatch[1]) {
+      parsedQuery.minConfidence = parseInt(confidenceMatch[1], 10) / 100;
     } else if (lowerQuery.includes("high confidence") || lowerQuery.includes("certain")) {
       parsedQuery.minConfidence = 0.8;
     } else if (lowerQuery.includes("any") || lowerQuery.includes("possible")) {
@@ -562,24 +562,24 @@ export class AIVideoSearchService {
     
     // Last N hours/days/minutes
     const lastHoursMatch = query.match(/\blast (\d+) hours?\b/);
-    if (lastHoursMatch) {
-      const hours = parseInt(lastHoursMatch[1]);
+    if (lastHoursMatch && lastHoursMatch[1]) {
+      const hours = parseInt(lastHoursMatch[1], 10);
       const from = new Date(now);
       from.setHours(from.getHours() - hours);
       return { from: from.toISOString() };
     }
     
     const lastDaysMatch = query.match(/\blast (\d+) days?\b/);
-    if (lastDaysMatch) {
-      const days = parseInt(lastDaysMatch[1]);
+    if (lastDaysMatch && lastDaysMatch[1]) {
+      const days = parseInt(lastDaysMatch[1], 10);
       const from = new Date(now);
       from.setDate(from.getDate() - days);
       return { from: from.toISOString() };
     }
     
     const lastMinutesMatch = query.match(/\blast (\d+) minutes?\b/);
-    if (lastMinutesMatch) {
-      const minutes = parseInt(lastMinutesMatch[1]);
+    if (lastMinutesMatch && lastMinutesMatch[1]) {
+      const minutes = parseInt(lastMinutesMatch[1], 10);
       const from = new Date(now);
       from.setMinutes(from.getMinutes() - minutes);
       return { from: from.toISOString() };
@@ -610,10 +610,10 @@ export class AIVideoSearchService {
     
     // Between times (e.g., "between 2pm and 4pm")
     const betweenMatch = query.match(/between (\d+)(am|pm)? and (\d+)(am|pm)?/);
-    if (betweenMatch) {
-      const startHour = parseInt(betweenMatch[1]);
+    if (betweenMatch && betweenMatch[1] && betweenMatch[3]) {
+      const startHour = parseInt(betweenMatch[1], 10);
       const startPeriod = betweenMatch[2];
-      const endHour = parseInt(betweenMatch[3]);
+      const endHour = parseInt(betweenMatch[3], 10);
       const endPeriod = betweenMatch[4];
       
       const from = new Date(now);
@@ -1703,12 +1703,14 @@ export class AIVideoSearchService {
     let norm2 = 0;
 
     for (let i = 0; i < embedding1.length; i++) {
-      dotProduct += embedding1[i] * embedding2[i];
-      norm1 += embedding1[i] * embedding1[i];
-      norm2 += embedding2[i] * embedding2[i];
+      dotProduct += (embedding1[i] ?? 0) * (embedding2[i] ?? 0);
+      norm1 += (embedding1[i] ?? 0) * (embedding1[i] ?? 0);
+      norm2 += (embedding2[i] ?? 0) * (embedding2[i] ?? 0);
     }
 
-    return dotProduct / (Math.sqrt(norm1) * Math.sqrt(norm2));
+    const denom = Math.sqrt(norm1) * Math.sqrt(norm2);
+    if (denom === 0) return 0;
+    return dotProduct / denom;
   }
 
   /**

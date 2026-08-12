@@ -4,9 +4,39 @@
  */
 
 import type { Pool } from 'pg';
-import { FaceEnrollmentService } from '../../analytics-engine/src/face/face-enrollment.service.js';
-import type { EnrollPersonInput as EngineEnrollPersonInput } from '../../analytics-engine/src/face/face-enrollment.service.js';
-import type { EnrollmentResult } from '../../analytics-engine/src/face/face.types.js';
+
+// Stub types for analytics-engine face module
+// TODO: Move to shared types package or import from compiled analytics-engine dist
+interface EnrollmentResult {
+  personId: string;
+  embeddingId: string;
+  quality: number;
+  success: boolean;
+}
+
+interface EnrollPersonInput {
+  tenantId: string;
+  watchlistId?: string;
+  fullName: string;
+  externalId?: string;
+  dateOfBirth?: Date;
+  gender?: string;
+  notes?: string;
+  metadata?: Record<string, unknown>;
+  imageBuffer: Buffer;
+}
+
+class FaceEnrollmentService {
+  async enrollPerson(input: EnrollPersonInput): Promise<EnrollmentResult> {
+    throw new Error('FaceEnrollmentService not initialized - requires analytics-engine integration');
+  }
+  
+  async removePerson(tenantId: string, personId: string, actorId: string): Promise<void> {
+    throw new Error('FaceEnrollmentService not initialized - requires analytics-engine integration');
+  }
+}
+
+type EngineEnrollPersonInput = EnrollPersonInput;
 
 export interface CreateWatchlistInput {
   tenantId: string;

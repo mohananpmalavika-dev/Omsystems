@@ -604,7 +604,14 @@ export class BranchLifecycleService {
     }
 
     try {
-      await this.eventBus.publish(event.type, event.payload);
+      await this.eventBus.publish(
+        event.type,
+        event.payload,
+        {
+          tenantId: event.payload.tenantId || 'system',
+          branchId: event.payload.branchId,
+        }
+      );
     } catch (error) {
       console.error('Error publishing lifecycle event:', error);
       // Don't throw - event publication failure shouldn't block the operation
