@@ -222,8 +222,8 @@ Respond ONLY with valid JSON matching this schema:
       return {
         intent: validated.intent,
         timeRange: validated.timeRange,
-        filters: validated.filters,
-        scope: validated.scope,
+        filters: validated.filters as any,
+        scope: validated.scope as any,
         target: validated.target,
         naturalLanguageQuery: query,
       };

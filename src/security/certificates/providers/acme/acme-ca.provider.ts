@@ -24,9 +24,10 @@ import {
 } from '../../ports/index.js';
 import { AcmeChallengeProvider } from './challenge-provider.js';
 import axios from 'axios';
-import type { AxiosInstance } from 'axios';
 import * as crypto from 'crypto';
 import * as forge from 'node-forge';
+
+type AxiosInstance = ReturnType<typeof axios.create>;
 
 export interface AcmeProviderConfig {
   directoryUrl: string;

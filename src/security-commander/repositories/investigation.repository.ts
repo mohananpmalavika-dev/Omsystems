@@ -181,7 +181,7 @@ export class InvestigationRepository {
       incidentCount: inv.incidentSummaries?.length ?? 0,
       criticalIncidentCount: inv.incidents.filter(i => i.severity === 'critical').length,
       highIncidentCount: inv.incidents.filter(i => i.severity === 'high').length,
-      evidenceCount: inv.evidenceCount,
+      evidenceCount: inv.evidence?.length ?? 0,
       affectedBranches: [], // Can be enriched
       assignedTo: inv.assignedTo,
       summary: inv.summary,
