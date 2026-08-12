@@ -128,7 +128,7 @@ export class AccessCorrelationRule extends BaseRule {
             personTrackId: person.trackId,
             identityId: person.identityId,
             zoneEntryTime: secureZoneEntry.enteredAt,
-            accessEventId: correlatedEvents[0].eventId,
+            accessEventId: correlatedEvents[0]?.eventId || 'unknown',
           });
         }
       }

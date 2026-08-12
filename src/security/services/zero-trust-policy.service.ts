@@ -438,10 +438,10 @@ export class ZeroTrustPolicyEngine extends EventEmitter implements IZeroTrustPol
           activeSessions: sessionCount
         }
       };
-    } catch (error) {
+    } catch (error: unknown) {
       return {
         status: 'unhealthy',
-        details: { error: error.message }
+        details: { error: error instanceof Error ? error.message : String(error) }
       };
     }
   }

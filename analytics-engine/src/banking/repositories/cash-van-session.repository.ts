@@ -261,7 +261,10 @@ export class CashVanSessionRepository {
     if (update.updatePersonnel) {
       const index = session.personnel.findIndex(p => p.trackId === update.updatePersonnel!.trackId);
       if (index >= 0) {
-        session.personnel[index] = { ...session.personnel[index], ...update.updatePersonnel };
+        session.personnel[index] = {
+          ...session.personnel[index],
+          ...update.updatePersonnel
+        } as ObservedPerson;
       }
     }
 

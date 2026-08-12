@@ -139,6 +139,8 @@ export class VehicleJourneyService {
     
     for (let i = 0; i < reliableEvents.length; i++) {
       const event = reliableEvents[i];
+      if (!event) continue; // Skip if event is undefined
+      
       const prev = i > 0 ? reliableEvents[i - 1] : null;
       
       const timeSincePrevious = prev
@@ -179,14 +181,21 @@ export class VehicleJourneyService {
       ? speeds.reduce((sum, s) => sum + s, 0) / speeds.length
       : undefined;
     
+    // Ensure we have at least one reliable event
+    const firstEvent = reliableEvents[0];
+    const lastEvent = reliableEvents[reliableEvents.length - 1];
+    
+    if (!firstEvent || !lastEvent) {
+      throw new Error('Cannot build journey without reliable events');
+    }
+    
     return {
       plate,
-      vehicleType: reliableEvents[0].vehicleType,
-      color: reliableEvents[0].color,
-      startedAt: reliableEvents[0].occurredAt,
-      endedAt: reliableEvents[reliableEvents.length - 1].occurredAt,
-      totalDuration: (reliableEvents[reliableEvents.length - 1].occurredAt.getTime() - 
-                     reliableEvents[0].occurredAt.getTime()) / 1000,
+      vehicleType: firstEvent.vehicleType,
+      color: firstEvent.color,
+      startedAt: firstEvent.occurredAt,
+      endedAt: lastEvent.occurredAt,
+      totalDuration: (lastEvent.occurredAt.getTime() - firstEvent.occurredAt.getTime()) / 1000,
       appearances,
       route,
       estimatedPath: this.buildPathDescription(appearances),
@@ -217,6 +226,9 @@ export class VehicleJourneyService {
     for (let i = 1; i < journey.appearances.length; i++) {
       const prev = journey.appearances[i - 1];
       const current = journey.appearances[i];
+      
+      // Skip if either element is undefined
+      if (!prev || !current) continue;
       
       // Check if transition is possible
       const connection = this.findConnection(prev.cameraId, current.cameraId);
@@ -336,6 +348,7 @@ export class VehicleJourneyService {
     if (events.length === 0) return null;
     
     const event = events[0];
+    if (!event) return null;
     
     return {
       eventId: event.id,

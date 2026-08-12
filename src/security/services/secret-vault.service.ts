@@ -65,9 +65,9 @@ export class SecretVaultService extends EventEmitter implements ISecretVaultServ
         Buffer.from(encrypted, 'base64')
       ]);
       
-      return combined.toString('base64');
-    } catch (error) {
-      throw new Error(`Encryption failed: ${error.message}`);
+      return encryptedValue;
+    } catch (error: unknown) {
+      throw new Error(`Encryption failed: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
@@ -90,8 +90,8 @@ export class SecretVaultService extends EventEmitter implements ISecretVaultServ
       decrypted += decipher.final('utf8');
       
       return decrypted;
-    } catch (error) {
-      throw new Error(`Decryption failed: ${error.message}`);
+    } catch (error: unknown) {
+      throw new Error(`Decryption failed: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
@@ -138,9 +138,9 @@ export class SecretVaultService extends EventEmitter implements ISecretVaultServ
       this.emit('secret:created', { secretId: secret.id, name, type });
       
       return secret;
-    } catch (error) {
+    } catch (error: unknown) {
       await this.logAccess('unknown', 'system', 'create', false);
-      throw new Error(`Failed to create secret: ${error.message}`);
+      throw new Error(`Failed to create secret: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
@@ -233,9 +233,9 @@ export class SecretVaultService extends EventEmitter implements ISecretVaultServ
       this.emit('secret:updated', { secretId: id, version: newVersion });
       
       return updatedSecret.value;
-    } catch (error) {
+    } catch (error: unknown) {
       await this.logAccess(id, 'system', 'write', false);
-      throw new Error(`Failed to update secret: ${error.message}`);
+      throw new Error(`Failed to update secret: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
@@ -260,9 +260,9 @@ export class SecretVaultService extends EventEmitter implements ISecretVaultServ
       await this.logAccess(id, 'system', 'delete', true);
       
       this.emit('secret:deleted', { secretId: id });
-    } catch (error) {
+    } catch (error: unknown) {
       await this.logAccess(id, 'system', 'delete', false);
-      throw new Error(`Failed to delete secret: ${error.message}`);
+      throw new Error(`Failed to delete secret: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
@@ -349,9 +349,9 @@ export class SecretVaultService extends EventEmitter implements ISecretVaultServ
       this.emit('secret:rotated', { secretId: id });
       
       return rotatedSecret;
-    } catch (error) {
+    } catch (error: unknown) {
       await this.logAccess(id, 'system', 'rotate', false);
-      throw new Error(`Failed to rotate secret: ${error.message}`);
+      throw new Error(`Failed to rotate secret: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
@@ -582,7 +582,7 @@ export class SecretVaultService extends EventEmitter implements ISecretVaultServ
     const exportData = {
       version: '1.0',
       exportedAt: new Date().toISOString(),
-      secrets: secrets.map(s => ({
+      secrets: secrets.map((s: any) => ({
         ...s,
         value: undefined, // Don't export encrypted values in plaintext
         _encrypted: true
@@ -622,11 +622,11 @@ export class SecretVaultService extends EventEmitter implements ISecretVaultServ
           encryptionTest: 'passed'
         }
       };
-    } catch (error) {
+    } catch (error: unknown) {
       return {
         status: 'unhealthy',
         details: {
-          error: error.message
+          error: error instanceof Error ? error.message : String(error)
         }
       };
     }

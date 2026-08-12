@@ -172,7 +172,8 @@ export class AIVerificationService {
    * Verify AI detection and determine action
    */
   async verifyDetection(event: DetectionEvent): Promise<VerificationDecision> {
-    const rule = VERIFICATION_RULES[event.detectionType] || this.getDefaultRule(event.detectionType);
+    const detectionType = event.detectionType || event.eventType || 'unknown';
+    const rule = VERIFICATION_RULES[detectionType] || this.getDefaultRule(detectionType);
     
     // Calculate verification score
     const factors = await this.calculateFactors(event);
@@ -198,7 +199,7 @@ export class AIVerificationService {
     };
     
     this.logger?.log(
-      `Verification decision for ${event.detectionType}: ${mode} (score: ${score.toFixed(2)}, confidence: ${Math.round(event.confidence * 100)}%)`
+      `Verification decision for ${detectionType}: ${mode} (score: ${score.toFixed(2)}, confidence: ${Math.round(event.confidence * 100)}%)`
     );
     
     return decision;
@@ -212,14 +213,16 @@ export class AIVerificationService {
     const detectionConfidence = event.confidence;
     
     // Rule severity (how critical this detection type is)
-    const rule = VERIFICATION_RULES[event.detectionType];
+    const detectionType = event.detectionType || event.eventType || 'unknown';
+    const rule = VERIFICATION_RULES[detectionType];
     const ruleSeverity = rule ? this.getSeverityScore(rule.severityMap.high) : 0.5;
     
     // Camera criticality
-    const cameraCriticality = await this.getCameraCriticality(event.cameraId, event.detectionType);
+    const cameraCriticality = await this.getCameraCriticality(event.cameraId, detectionType);
     
     // Schedule match (is this during expected business hours?)
-    const scheduleMatch = this.getScheduleMatch(event.detectionTime, rule?.businessHoursOnly);
+    const detectionTime = event.detectionTime || event.timestamp;
+    const scheduleMatch = this.getScheduleMatch(detectionTime, rule?.businessHoursOnly);
     
     // Zone type criticality
     const zoneType = this.getZoneCriticality(event.zone, rule?.criticalZones);
@@ -334,8 +337,9 @@ export class AIVerificationService {
       return true;
     }
     
+    const detectionType = event.detectionType || event.eventType || 'unknown';
     const criticalTypes = ['fire', 'weapon', 'panic-alarm', 'intrusion'];
-    if (criticalTypes.includes(event.detectionType)) {
+    if (criticalTypes.includes(detectionType)) {
       return true;
     }
     
@@ -385,7 +389,7 @@ export class AIVerificationService {
       // Check if camera type matches critical types for this detection
       const rule = VERIFICATION_RULES[detectionType];
       if (rule?.criticalCameraTypes && camera.locationType) {
-        const locationType: string = camera.locationType;
+        const locationType = String(camera.locationType);
         if (rule.criticalCameraTypes.includes(locationType)) {
           return 1.0;
         }
@@ -394,7 +398,7 @@ export class AIVerificationService {
       // Base criticality on location type
       const criticalTypes = ['vault', 'atm', 'cash-counter', 'server-room', 'entrance'];
       if (camera.locationType) {
-        const locationType: string = camera.locationType;
+        const locationType = String(camera.locationType);
         if (criticalTypes.includes(locationType)) {
           return 0.8;
         }

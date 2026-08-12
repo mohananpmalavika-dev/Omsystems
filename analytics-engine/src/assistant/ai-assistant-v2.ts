@@ -21,7 +21,7 @@
  * - Maintaining conversation history
  */
 
-import type { IntentParser, ParsedQuery, IntentType } from './types/parsed-query.js';
+import type { IntentParser, ParsedQuery, IntentType, Entity } from './types/parsed-query.js';
 import type { AssistantContext } from './types/assistant-command.js';
 import type { AssistantResponse } from './types/assistant-response.js';
 import { commandRegistry, type AssistantCommandRegistry } from './registry/command-registry.js';
@@ -455,7 +455,7 @@ export class AIAssistantV2 {
         }
         
         // Extract entities
-        const entities = [];
+        const entities: Entity[] = [];
         const parameters: any = {};
         
         // Camera number

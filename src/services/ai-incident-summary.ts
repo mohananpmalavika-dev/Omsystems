@@ -300,6 +300,8 @@ export class AIIncidentSummaryService {
 
     const firstAlert = sortedAlerts[0];
     const lastAlert = sortedAlerts[sortedAlerts.length - 1];
+    
+    // Ensure alerts array is not empty
     if (!firstAlert || !lastAlert) {
       throw new Error('Cannot create cluster from empty alerts array');
     }
@@ -387,7 +389,11 @@ export class AIIncidentSummaryService {
     }
 
     // Map to incident category
-    const primaryType = sortedTypes[0][0];
+    const primaryEntry = sortedTypes[0];
+    if (!primaryEntry) {
+      return 'general-alert';
+    }
+    const primaryType = primaryEntry[0];
     return this.mapToIncidentCategory(primaryType);
   }
 
@@ -577,7 +583,12 @@ export class AIIncidentSummaryService {
    */
   private generateClusterId(tenantId: string, alert: AnalyticsAlert): string {
     const date = new Date(getOccurredAt(alert));
-    const dateStr = date.toISOString().split("T")[0].replace(/-/g, "");
+    const isoString = date.toISOString();
+    const datePart = isoString.split("T")[0];
+    if (!datePart) {
+      throw new Error('Invalid date for cluster ID generation');
+    }
+    const dateStr = datePart.replace(/-/g, "");
     const random = Math.random().toString(36).substring(2, 8).toUpperCase();
 
     return `CLU-${tenantId.substring(0, 3).toUpperCase()}-${dateStr}-${random}`;

@@ -99,8 +99,8 @@ export class VideoEncryptionService extends EventEmitter implements IVideoEncryp
       this.emit('video:encrypted', { videoId, encryptedVideoId: encryptedVideo.id });
       
       return encryptedVideo;
-    } catch (error) {
-      throw new Error(`Video encryption failed: ${error.message}`);
+    } catch (error: unknown) {
+      throw new Error(`Video encryption failed: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
@@ -146,8 +146,8 @@ export class VideoEncryptionService extends EventEmitter implements IVideoEncryp
       );
       
       this.emit('video:decrypted', { encryptedVideoId, outputPath });
-    } catch (error) {
-      throw new Error(`Video decryption failed: ${error.message}`);
+    } catch (error: unknown) {
+      throw new Error(`Video decryption failed: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
@@ -292,10 +292,10 @@ export class VideoEncryptionService extends EventEmitter implements IVideoEncryp
           algorithm: this.config.algorithm
         }
       };
-    } catch (error) {
+    } catch (error: unknown) {
       return {
         status: 'unhealthy',
-        details: { error: error.message }
+        details: { error: error instanceof Error ? error.message : String(error) }
       };
     }
   }

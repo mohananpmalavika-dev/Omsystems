@@ -304,10 +304,10 @@ export class TamperDetectionService extends EventEmitter implements ITamperDetec
           recentEvents24h: recentEvents
         }
       };
-    } catch (error) {
+    } catch (error: unknown) {
       return {
         status: 'unhealthy',
-        details: { error: error.message }
+        details: { error: error instanceof Error ? error.message : String(error) }
       };
     }
   }
