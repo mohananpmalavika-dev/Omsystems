@@ -3,7 +3,7 @@
  * Verifies hardware-backed device identity and integrity
  */
 
-import { BaseEvidenceCollector, type SecurityEvidence, EvidenceSource } from './base-evidence-collector';
+import { BaseEvidenceCollector, type SecurityEvidence, EvidenceSource } from './base-evidence-collector.js';
 
 export interface TPMAttestationData {
   deviceId: string;
@@ -28,12 +28,13 @@ export interface TPMAttestationEvidence extends SecurityEvidence {
   };
 }
 
-export class TPMAttestationCollector extends BaseEvidenceCollector<TPMAttestationEvidence> {
+export class TPMAttestationCollector extends BaseEvidenceCollector {
   readonly id = 'tpm-attestation';
   readonly name = 'TPM Device Attestation';
   readonly description = 'Collects hardware-backed device identity verification status';
+  private lastError?: string;
 
-  async collect(): Promise<TPMAttestationEvidence> {
+  async collect(): Promise<SecurityEvidence[]> {
     const now = new Date();
     
     try {
@@ -56,26 +57,25 @@ export class TPMAttestationCollector extends BaseEvidenceCollector<TPMAttestatio
       const attestationRate = totalDevices > 0 ? (validAttestations / totalDevices) * 100 : 0;
       const confidence = Math.round(attestationRate);
 
-      return {
-        type: 'tpm_attestation',
-        value: {
-          totalDevices,
-          validAttestations,
-          invalidAttestations,
-          unknownStatus,
-          notConfigured,
-          devicesRequiringAttestation,
-        },
-        source: this.isSimulation() ? EvidenceSource.SIMULATED : EvidenceSource.LIVE,
-        timestamp: now,
-        freshness: 'fresh',
-        confidence,
-        provenance: {
-          collector: this.id,
-          version: '1.0.0',
-          collectionMethod: this.isSimulation() ? 'simulation' : 'tpm_api',
-        },
-      };
+      return [
+        this.createEvidence(
+          {
+            type: 'tpm_attestation',
+            totalDevices,
+            validAttestations,
+            invalidAttestations,
+            unknownStatus,
+            notConfigured,
+            devicesRequiringAttestation,
+          },
+          confidence,
+          {
+            collector: this.id,
+            version: '1.0.0',
+            collectionMethod: this.isSimulation() ? 'simulation' : 'tpm_api',
+          }
+        )
+      ];
     } catch (error) {
       this.lastError = error instanceof Error ? error.message : 'Unknown error';
       throw error;

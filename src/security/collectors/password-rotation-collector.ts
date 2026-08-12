@@ -39,8 +39,8 @@ export class PasswordRotationCollector extends BaseEvidenceCollector {
         })
         .toArray();
 
-      const successfulJobs = recentJobs.filter(j => j.status === 'success').length;
-      const failedJobs = recentJobs.filter(j => j.status === 'failed').length;
+      const successfulJobs = recentJobs.filter((j: any) => j.status === 'success').length;
+      const failedJobs = recentJobs.filter((j: any) => j.status === 'failed').length;
 
       // Evidence: Rotation compliance
       const compliance = totalTargets > 0
@@ -54,7 +54,7 @@ export class PasswordRotationCollector extends BaseEvidenceCollector {
             enabledTargets,
             overdueCount: overdueTargets.length,
             compliancePercent: compliance,
-            overdueTargets: overdueTargets.map(t => ({
+            overdueTargets: overdueTargets.map((t: any) => ({
               id: t.id,
               name: t.name,
               type: t.type,
@@ -94,7 +94,7 @@ export class PasswordRotationCollector extends BaseEvidenceCollector {
 
       // Evidence: Failed rotation details (if any)
       const recentFailedJobs = recentJobs
-        .filter(j => j.status === 'failed')
+        .filter((j: any) => j.status === 'failed')
         .slice(0, 10); // Last 10 failures
 
       if (recentFailedJobs.length > 0) {
@@ -102,7 +102,7 @@ export class PasswordRotationCollector extends BaseEvidenceCollector {
           this.createEvidence(
             {
               failureCount: recentFailedJobs.length,
-              failures: recentFailedJobs.map(j => ({
+              failures: recentFailedJobs.map((j: any) => ({
                 id: j.id,
                 targetId: j.targetId,
                 scheduledAt: j.scheduledAt,

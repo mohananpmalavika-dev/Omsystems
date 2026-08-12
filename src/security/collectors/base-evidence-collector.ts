@@ -11,6 +11,10 @@ import {
 } from '../types.js';
 import { v4 as uuidv4 } from 'uuid';
 
+// Re-export types for use in subclasses
+export type { SecurityEvidence };
+export { EvidenceSource };
+
 export interface IEvidenceCollector {
   readonly name: string;
   readonly type: EvidenceSource;

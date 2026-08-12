@@ -3,7 +3,7 @@
  * Monitors for ransomware behavioral indicators
  */
 
-import { BaseEvidenceCollector, type SecurityEvidence, EvidenceSource } from './base-evidence-collector';
+import { BaseEvidenceCollector, type SecurityEvidence, EvidenceSource } from './base-evidence-collector.js';
 
 export interface RansomwareIndicator {
   deviceId: string;
@@ -29,12 +29,13 @@ export interface RansomwareDetectionEvidence extends SecurityEvidence {
   };
 }
 
-export class RansomwareDetectorCollector extends BaseEvidenceCollector<RansomwareDetectionEvidence> {
+export class RansomwareDetectorCollector extends BaseEvidenceCollector {
   readonly id = 'ransomware-detector';
   readonly name = 'Ransomware Detection';
   readonly description = 'Behavioral analysis for ransomware activity detection';
+  private lastError?: string;
 
-  async collect(): Promise<RansomwareDetectionEvidence> {
+  async collect(): Promise<SecurityEvidence[]> {
     const now = new Date();
     const last7Days = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
     
@@ -56,26 +57,25 @@ export class RansomwareDetectorCollector extends BaseEvidenceCollector<Ransomwar
       // Calculate confidence (0% if active threats exist)
       const confidence = activeThreats === 0 ? 100 : 0;
 
-      return {
-        type: 'ransomware_detection',
-        value: {
-          totalDevices,
-          devicesMonitored,
-          activeThreats,
-          indicatorsLast7Days,
-          containedThreats,
-          recentIndicators,
-        },
-        source: this.isSimulation() ? EvidenceSource.SIMULATED : EvidenceSource.LIVE,
-        timestamp: now,
-        freshness: 'fresh',
-        confidence,
-        provenance: {
-          collector: this.id,
-          version: '1.0.0',
-          collectionMethod: this.isSimulation() ? 'simulation' : 'behavioral_analysis',
-        },
-      };
+      return [
+        this.createEvidence(
+          {
+            type: 'ransomware_detection',
+            totalDevices,
+            devicesMonitored,
+            activeThreats,
+            indicatorsLast7Days,
+            containedThreats,
+            recentIndicators,
+          },
+          confidence,
+          {
+            collector: this.id,
+            version: '1.0.0',
+            collectionMethod: this.isSimulation() ? 'simulation' : 'behavioral_analysis',
+          }
+        )
+      ];
     } catch (error) {
       this.lastError = error instanceof Error ? error.message : 'Unknown error';
       throw error;

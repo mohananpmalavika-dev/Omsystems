@@ -449,8 +449,9 @@ export async function initializeSecurityCollections(db: any): Promise<void> {
             await db.collection(collectionName).createIndex(index.key, indexOptions);
           } catch (error) {
             // Index may already exist
-            if (!error.message.includes('already exists')) {
-              console.warn(`Warning creating index on ${collectionName}:`, error.message);
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            if (!errorMessage.includes('already exists')) {
+              console.warn(`Warning creating index on ${collectionName}:`, errorMessage);
             }
           }
         }

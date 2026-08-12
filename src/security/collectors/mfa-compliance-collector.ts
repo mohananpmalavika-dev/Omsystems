@@ -44,7 +44,7 @@ export class MFAComplianceCollector extends BaseEvidenceCollector {
         })
         .toArray();
 
-      const mfaVerifiedLogins = recentLogins.filter(log => log.mfaVerified).length;
+      const mfaVerifiedLogins = recentLogins.filter((log: any) => log.mfaVerified).length;
       const totalLogins = recentLogins.length;
 
       // Calculate compliance metrics
@@ -124,7 +124,7 @@ export class MFAComplianceCollector extends BaseEvidenceCollector {
           this.createEvidence(
             {
               count: totalUsers - mfaEnabledUsers,
-              users: usersWithoutMFA.map(u => ({
+              users: usersWithoutMFA.map((u: any) => ({
                 id: u.id,
                 email: u.email,
                 name: u.name,

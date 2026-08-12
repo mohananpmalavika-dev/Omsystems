@@ -5,7 +5,7 @@
  * Sprint 2: Production implementation with real OS integration
  */
 
-import { BaseEvidenceCollector, type SecurityEvidence, EvidenceSource } from './base-evidence-collector';
+import { BaseEvidenceCollector, type SecurityEvidence, EvidenceSource } from './base-evidence-collector.js';
 import { exec } from 'child_process';
 import { promisify } from 'util';
 import * as os from 'os';
@@ -42,12 +42,13 @@ export interface SecureBootEvidence extends SecurityEvidence {
   };
 }
 
-export class SecureBootCollector extends BaseEvidenceCollector<SecureBootEvidence> {
+export class SecureBootCollector extends BaseEvidenceCollector {
   readonly id = 'secure-boot';
   readonly name = 'Secure Boot Verification';
   readonly description = 'Verifies UEFI Secure Boot status and boot chain integrity';
+  private lastError?: string;
 
-  async collect(): Promise<SecureBootEvidence> {
+  async collect(): Promise<SecurityEvidence[]> {
     const now = new Date();
     
     try {
@@ -68,26 +69,25 @@ export class SecureBootCollector extends BaseEvidenceCollector<SecureBootEvidenc
       const secureBootRate = totalDevices > 0 ? (secureBootEnabled / totalDevices) * 100 : 0;
       const confidence = Math.round(secureBootRate);
 
-      return {
-        type: 'secure_boot',
-        value: {
-          totalDevices,
-          secureBootEnabled,
-          secureBootDisabled,
-          legacyBiosMode,
-          integrityFailures,
-          devicesRequiringAttention,
-        },
-        source: EvidenceSource.LIVE,
-        timestamp: now,
-        freshness: 'fresh',
-        confidence,
-        provenance: {
-          collector: this.id,
-          version: '1.0.0',
-          collectionMethod: 'system_api',
-        },
-      };
+      return [
+        this.createEvidence(
+          {
+            type: 'secure_boot',
+            totalDevices,
+            secureBootEnabled,
+            secureBootDisabled,
+            legacyBiosMode,
+            integrityFailures,
+            devicesRequiringAttention,
+          },
+          confidence,
+          {
+            collector: this.id,
+            version: '1.0.0',
+            collectionMethod: 'system_api',
+          }
+        )
+      ];
     } catch (error) {
       this.lastError = error instanceof Error ? error.message : 'Unknown error';
       throw error;

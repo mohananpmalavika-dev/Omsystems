@@ -3,7 +3,7 @@
  * Monitors edge devices for physical tampering attempts
  */
 
-import { BaseEvidenceCollector, type SecurityEvidence, EvidenceSource } from './base-evidence-collector';
+import { BaseEvidenceCollector, type SecurityEvidence, EvidenceSource } from './base-evidence-collector.js';
 
 export interface TamperEvent {
   deviceId: string;
@@ -28,12 +28,13 @@ export interface TamperDetectionEvidence extends SecurityEvidence {
   };
 }
 
-export class TamperDetectionCollector extends BaseEvidenceCollector<TamperDetectionEvidence> {
+export class TamperDetectionCollector extends BaseEvidenceCollector {
   readonly id = 'tamper-detection';
   readonly name = 'Physical Tamper Detection';
   readonly description = 'Monitors edge devices for physical tampering attempts';
+  private lastError?: string;
 
-  async collect(): Promise<TamperDetectionEvidence> {
+  async collect(): Promise<SecurityEvidence[]> {
     const now = new Date();
     const last24h = new Date(now.getTime() - 24 * 60 * 60 * 1000);
     
@@ -55,26 +56,25 @@ export class TamperDetectionCollector extends BaseEvidenceCollector<TamperDetect
       // Calculate confidence (100% if no unresolved critical events)
       const confidence = criticalEvents === 0 ? 100 : Math.max(0, 100 - (criticalEvents * 20));
 
-      return {
-        type: 'tamper_detection',
-        value: {
-          totalDevices,
-          devicesMonitored,
-          tamperEventsLast24h,
-          unresolvedEvents,
-          criticalEvents,
-          recentEvents,
-        },
-        source: this.isSimulation() ? EvidenceSource.SIMULATED : EvidenceSource.LIVE,
-        timestamp: now,
-        freshness: 'fresh',
-        confidence,
-        provenance: {
-          collector: this.id,
-          version: '1.0.0',
-          collectionMethod: this.isSimulation() ? 'simulation' : 'edge_agent_telemetry',
-        },
-      };
+      return [
+        this.createEvidence(
+          {
+            type: 'tamper_detection',
+            totalDevices,
+            devicesMonitored,
+            tamperEventsLast24h,
+            unresolvedEvents,
+            criticalEvents,
+            recentEvents,
+          },
+          confidence,
+          {
+            collector: this.id,
+            version: '1.0.0',
+            collectionMethod: this.isSimulation() ? 'simulation' : 'edge_agent_telemetry',
+          }
+        )
+      ];
     } catch (error) {
       this.lastError = error instanceof Error ? error.message : 'Unknown error';
       throw error;
