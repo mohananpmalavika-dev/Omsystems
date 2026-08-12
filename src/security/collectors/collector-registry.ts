@@ -30,14 +30,16 @@ export class CollectorRegistry extends EventEmitter {
   register(collector: IEvidenceCollector): void {
     this.collectors.set(collector.type, collector);
     
-    // Forward collector events
-    collector.on('evidence:collected', (data) => {
-      this.emit('evidence:collected', data);
-    });
-    
-    collector.on('evidence:error', (data) => {
-      this.emit('evidence:error', data);
-    });
+    // Forward collector events if collector is an EventEmitter
+    if ('on' in collector && typeof (collector as any).on === 'function') {
+      (collector as any).on('evidence:collected', (data: any) => {
+        this.emit('evidence:collected', data);
+      });
+      
+      (collector as any).on('evidence:error', (data: any) => {
+        this.emit('evidence:error', data);
+      });
+    }
   }
 
   /**

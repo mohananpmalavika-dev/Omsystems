@@ -23,7 +23,8 @@ import {
   CertificateRequestRejectedError
 } from '../../ports/index.js';
 import { AcmeChallengeProvider } from './challenge-provider.js';
-import axios, { AxiosInstance } from 'axios';
+import axios from 'axios';
+import type { AxiosInstance } from 'axios';
 import * as crypto from 'crypto';
 import * as forge from 'node-forge';
 
@@ -664,7 +665,7 @@ export class AcmeCertificateAuthorityProvider
       notBefore: cert.validity.notBefore,
       notAfter: cert.validity.notAfter,
       fingerprintSha256: this.computeFingerprint(certificatePem),
-      issuer: cert.issuer.getField('CN')?.value || '',
+      issuer: cert.issuer.getField('CN')?.value || 'Unknown',
       providerRequestId: certificateUrl,
       issuedAt: new Date()
     };

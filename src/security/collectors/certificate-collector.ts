@@ -50,7 +50,7 @@ export class CertificateCollector extends BaseEvidenceCollector {
             valid: validCerts,
             expired: expiredCerts,
             expiringSoon: expiringSoonCerts,
-            certificates: certificates.map(c => ({
+            certificates: certificates.map((c: any) => ({
               id: c.id,
               name: c.name,
               status: c.status,
@@ -108,7 +108,7 @@ export class CertificateCollector extends BaseEvidenceCollector {
       }
 
       // Evidence: Certificate usage analysis
-      const usageStats = certificates.reduce((acc, cert) => {
+      const usageStats = certificates.reduce((acc: any, cert: any) => {
         const usageCount = cert.usedBy?.length || 0;
         if (usageCount === 0) acc.unused++;
         else if (usageCount > 5) acc.highlyUsed++;
