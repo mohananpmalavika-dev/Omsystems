@@ -152,12 +152,16 @@ export class InMemoryCapabilityRepository implements CapabilityRepository {
     // Remove from history
     const indices: number[] = [];
     for (let i = 0; i < this.history.length; i++) {
-      if (this.history[i].tenantId === tenantId && this.history[i].deviceId === deviceId) {
+      const entry = this.history[i];
+      if (entry && entry.tenantId === tenantId && entry.deviceId === deviceId) {
         indices.push(i);
       }
     }
     for (let i = indices.length - 1; i >= 0; i--) {
-      this.history.splice(indices[i], 1);
+      const index = indices[i];
+      if (index !== undefined) {
+        this.history.splice(index, 1);
+      }
     }
   }
 
@@ -197,7 +201,7 @@ export class InMemoryCapabilityRepository implements CapabilityRepository {
     let current: any = capSet;
 
     for (let i = 0; i < parts.length - 1; i++) {
-      const part = parts[i];
+      const part = parts[i]!;
       if (!current[part]) {
         current[part] = {};
       }
@@ -205,6 +209,8 @@ export class InMemoryCapabilityRepository implements CapabilityRepository {
     }
 
     const lastPart = parts[parts.length - 1];
-    current[lastPart] = value;
+    if (lastPart) {
+      current[lastPart] = value;
+    }
   }
 }
