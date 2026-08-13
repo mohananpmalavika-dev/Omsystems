@@ -729,7 +729,9 @@ export class MemoryStore implements ControlPlaneStore {
       id: randomUUID(), branchId, edgeAgentId: agent.id, status: "queued",
       requestedAt: new Date().toISOString(), startedAt: null, completedAt: null,
       resultCount: 0, provisionedCount: 0, credentialsRequiredCount: 0,
-      pendingVerificationCount: 0, error: null,
+      pendingVerificationCount: 0, verifiedCount: 0, recorderCount: 0,
+      timeSynchronizedCount: 0, timeDriftCount: 0,
+      analyticsCompatibleCount: 0, duplicateCount: 0, error: null,
     };
     this.edgeScanJobs.set(job.id, job);
     return job;
@@ -738,6 +740,12 @@ export class MemoryStore implements ControlPlaneStore {
   async getEdgeScanJob(branchId: string, jobId: string) {
     const job = this.edgeScanJobs.get(jobId);
     return job?.branchId === branchId ? job : undefined;
+  }
+
+  async getLatestEdgeScanJob(branchId: string) {
+    return [...this.edgeScanJobs.values()]
+      .filter((job) => job.branchId === branchId)
+      .sort((left, right) => right.requestedAt.localeCompare(left.requestedAt))[0];
   }
 
   async claimEdgeScanJob(edgeAgentId: string) {
@@ -758,6 +766,12 @@ export class MemoryStore implements ControlPlaneStore {
       provisionedCount?: number;
       credentialsRequiredCount?: number;
       pendingVerificationCount?: number;
+      verifiedCount?: number;
+      recorderCount?: number;
+      timeSynchronizedCount?: number;
+      timeDriftCount?: number;
+      analyticsCompatibleCount?: number;
+      duplicateCount?: number;
       error?: string;
     },
   ) {
@@ -769,6 +783,12 @@ export class MemoryStore implements ControlPlaneStore {
       provisionedCount: result.provisionedCount ?? 0,
       credentialsRequiredCount: result.credentialsRequiredCount ?? 0,
       pendingVerificationCount: result.pendingVerificationCount ?? 0,
+      verifiedCount: result.verifiedCount ?? 0,
+      recorderCount: result.recorderCount ?? 0,
+      timeSynchronizedCount: result.timeSynchronizedCount ?? 0,
+      timeDriftCount: result.timeDriftCount ?? 0,
+      analyticsCompatibleCount: result.analyticsCompatibleCount ?? 0,
+      duplicateCount: result.duplicateCount ?? 0,
       error: result.error ?? null,
       completedAt: new Date().toISOString(),
     });

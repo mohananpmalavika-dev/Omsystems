@@ -45,6 +45,12 @@ type ScanRow = {
   provisioned_count: number;
   credentials_required_count: number;
   pending_verification_count: number;
+  verified_count: number;
+  recorder_count: number;
+  time_synchronized_count: number;
+  time_drift_count: number;
+  analytics_compatible_count: number;
+  duplicate_count: number;
   error: string | null;
 };
 
@@ -61,6 +67,12 @@ function mapScan(row: ScanRow): EdgeScanJob {
     provisionedCount: row.provisioned_count,
     credentialsRequiredCount: row.credentials_required_count,
     pendingVerificationCount: row.pending_verification_count,
+    verifiedCount: row.verified_count,
+    recorderCount: row.recorder_count,
+    timeSynchronizedCount: row.time_synchronized_count,
+    timeDriftCount: row.time_drift_count,
+    analyticsCompatibleCount: row.analytics_compatible_count,
+    duplicateCount: row.duplicate_count,
     error: row.error,
   };
 }
@@ -147,7 +159,9 @@ export class EdgeAgentRepository {
        RETURNING id::text, branch_node_id::text, edge_agent_id::text, status,
                  requested_at, started_at, completed_at, result_count,
                  provisioned_count, credentials_required_count,
-                 pending_verification_count, error`,
+                 pending_verification_count, verified_count, recorder_count,
+                 time_synchronized_count, time_drift_count,
+                 analytics_compatible_count, duplicate_count, error`,
       [branchId, edgeAgentId ?? null],
     );
     if (!result.rows[0]) throw new Error("edge_agent_not_found");
@@ -159,9 +173,28 @@ export class EdgeAgentRepository {
       `SELECT id::text, branch_node_id::text, edge_agent_id::text, status,
               requested_at, started_at, completed_at, result_count,
               provisioned_count, credentials_required_count,
-              pending_verification_count, error
+              pending_verification_count, verified_count, recorder_count,
+              time_synchronized_count, time_drift_count,
+              analytics_compatible_count, duplicate_count, error
        FROM edge_scan_jobs WHERE id = $1 AND branch_node_id = $2`,
       [jobId, branchId],
+    );
+    return result.rows[0] ? mapScan(result.rows[0]) : undefined;
+  }
+
+  async getLatestScanJob(branchId: string) {
+    const result = await this.pool.query<ScanRow>(
+      `SELECT id::text, branch_node_id::text, edge_agent_id::text, status,
+              requested_at, started_at, completed_at, result_count,
+              provisioned_count, credentials_required_count,
+              pending_verification_count, verified_count, recorder_count,
+              time_synchronized_count, time_drift_count,
+              analytics_compatible_count, duplicate_count, error
+       FROM edge_scan_jobs
+       WHERE branch_node_id = $1
+       ORDER BY requested_at DESC
+       LIMIT 1`,
+      [branchId],
     );
     return result.rows[0] ? mapScan(result.rows[0]) : undefined;
   }
@@ -182,6 +215,9 @@ export class EdgeAgentRepository {
                  job.status, job.requested_at, job.started_at, job.completed_at,
                  job.result_count, job.provisioned_count,
                  job.credentials_required_count, job.pending_verification_count,
+                 job.verified_count, job.recorder_count,
+                 job.time_synchronized_count, job.time_drift_count,
+                 job.analytics_compatible_count, job.duplicate_count,
                  job.error`,
       [edgeAgentId],
     );
@@ -197,6 +233,12 @@ export class EdgeAgentRepository {
       provisionedCount?: number;
       credentialsRequiredCount?: number;
       pendingVerificationCount?: number;
+      verifiedCount?: number;
+      recorderCount?: number;
+      timeSynchronizedCount?: number;
+      timeDriftCount?: number;
+      analyticsCompatibleCount?: number;
+      duplicateCount?: number;
       error?: string;
     },
   ) {
@@ -204,12 +246,17 @@ export class EdgeAgentRepository {
       `UPDATE edge_scan_jobs
        SET status = $3::edge_scan_status, result_count = $4,
            error = $5, completed_at = now(), provisioned_count = $6,
-           credentials_required_count = $7, pending_verification_count = $8
+           credentials_required_count = $7, pending_verification_count = $8,
+           verified_count = $9, recorder_count = $10,
+           time_synchronized_count = $11, time_drift_count = $12,
+           analytics_compatible_count = $13, duplicate_count = $14
        WHERE id = $1 AND edge_agent_id = $2 AND status = 'running'
        RETURNING id::text, branch_node_id::text, edge_agent_id::text, status,
                  requested_at, started_at, completed_at, result_count,
                  provisioned_count, credentials_required_count,
-                 pending_verification_count, error`,
+                 pending_verification_count, verified_count, recorder_count,
+                 time_synchronized_count, time_drift_count,
+                 analytics_compatible_count, duplicate_count, error`,
       [
         jobId,
         edgeAgentId,
@@ -219,6 +266,12 @@ export class EdgeAgentRepository {
         result.provisionedCount ?? 0,
         result.credentialsRequiredCount ?? 0,
         result.pendingVerificationCount ?? 0,
+        result.verifiedCount ?? 0,
+        result.recorderCount ?? 0,
+        result.timeSynchronizedCount ?? 0,
+        result.timeDriftCount ?? 0,
+        result.analyticsCompatibleCount ?? 0,
+        result.duplicateCount ?? 0,
       ],
     );
     return updated.rows[0] ? mapScan(updated.rows[0]) : undefined;
@@ -255,11 +308,12 @@ export class EdgeAgentRepository {
             recorder_serial_number, serial_number, firmware_version, display_name,
             credentials_required, stream_verified, rtsp_validated, compatibility,
             duplicate_status, compatibility_status, hardware_id,
-            existing_device_association, status_reason, discovery_layers, status)
+            existing_device_association, status_reason, time_synchronization,
+            discovery_layers, status)
          SELECT n.tenant_id, n.id, $2, $3, $4, $5, $6, $7, $8::inet,
                 $9::macaddr, $10, $11, $12, $13, $14, $15, $16::jsonb,
                 $17::jsonb, $18, $19, $20, $21, $22, $23, $24, $25, $26,
-                $27, $28, $29, $30, $31, $32, $33, $34::jsonb, $35::discovery_status
+                $27, $28, $29, $30, $31, $32, $33, $34, $35::jsonb, $36::discovery_status
          FROM resource_nodes n
          JOIN edge_agents agent
            ON agent.id = $2
@@ -298,6 +352,7 @@ export class EdgeAgentRepository {
              hardware_id = EXCLUDED.hardware_id,
              existing_device_association = EXCLUDED.existing_device_association,
              status_reason = EXCLUDED.status_reason,
+             time_synchronization = EXCLUDED.time_synchronization,
              discovery_layers = EXCLUDED.discovery_layers,
              status = CASE
                WHEN camera_discoveries.status = 'rejected' THEN camera_discoveries.status
@@ -319,7 +374,8 @@ export class EdgeAgentRepository {
          input.rtspValidated ?? null, input.compatibility ?? null,
          duplicateStatus, input.compatibilityStatus ?? null,
          input.hardwareId ?? null, existingAssociation, statusReason,
-         JSON.stringify(discoveryLayers), identity.cameraId ? "approved" : "pending"],
+         input.timeSynchronization ?? null, JSON.stringify(discoveryLayers),
+         identity.cameraId ? "approved" : "pending"],
       );
       const row = result.rows[0];
       if (!row) throw new Error("invalid_branch");
@@ -383,6 +439,7 @@ export class EdgeAgentRepository {
       hardware_id: string | null;
       existing_device_association: string | null;
       status_reason: string | null;
+      time_synchronization: DiscoveredCamera["timeSynchronization"] | null;
       discovery_layers: DiscoveredCamera["discoveryLayers"] | string;
     }>(
       `SELECT id::text, device_identity_id::text, branch_node_id::text, edge_agent_id::text,
@@ -396,7 +453,7 @@ export class EdgeAgentRepository {
               serial_number, firmware_version, display_name, credentials_required,
               stream_verified, rtsp_validated, compatibility, duplicate_status,
               compatibility_status, hardware_id, existing_device_association,
-              status_reason, discovery_layers
+              status_reason, time_synchronization, discovery_layers
        FROM camera_discoveries
        WHERE branch_node_id = $1 AND status = 'pending'
        ORDER BY discovered_at DESC`,
@@ -442,6 +499,7 @@ export class EdgeAgentRepository {
       ...(row.hardware_id ? { hardwareId: row.hardware_id } : {}),
       ...(row.existing_device_association ? { existingDeviceAssociation: row.existing_device_association } : {}),
       ...(row.status_reason ? { statusReason: row.status_reason } : {}),
+      ...(row.time_synchronization ? { timeSynchronization: row.time_synchronization } : {}),
       discoveryLayers: typeof row.discovery_layers === "string"
         ? JSON.parse(row.discovery_layers)
         : row.discovery_layers,

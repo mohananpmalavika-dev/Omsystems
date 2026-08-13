@@ -489,6 +489,7 @@ async function scanBranch(options: { persistStreamSecrets?: boolean } = {}) {
               preferredFor: profile.preferredFor,
             })),
             capabilities: device.capabilities,
+            ...(device.timeSynchronization ? { timeSynchronization: device.timeSynchronization } : {}),
             statusReason: channel.reasonCodes.join(",").slice(0, 200),
             ...(channelFingerprint ? { hardwareId: channelFingerprint } : {}),
             discoveryLayers: channelLayers,
@@ -635,6 +636,7 @@ async function scanBranch(options: { persistStreamSecrets?: boolean } = {}) {
         rtspPort: 554,
         profiles,
         capabilities: device.capabilities,
+        ...(device.timeSynchronization ? { timeSynchronization: device.timeSynchronization } : {}),
         discoveryLayers,
         ...(streamVerified ? {} : { statusReason: "rtsp_stream_unverified" }),
       });

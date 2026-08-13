@@ -347,6 +347,9 @@ export class PostgresStore
   async getEdgeScanJob(branchId: string, jobId: string) {
     return this.agents.getScanJob(branchId, jobId);
   }
+  async getLatestEdgeScanJob(branchId: string) {
+    return this.agents.getLatestScanJob(branchId);
+  }
   async claimEdgeScanJob(edgeAgentId: string) {
     return this.agents.claimScanJob(edgeAgentId);
   }

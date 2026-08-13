@@ -14,7 +14,7 @@ import {
   AttestationChallenge,
   TpmQuoteEvidence,
   AttestationError
-} from './attestation-provider.interface';
+} from './attestation-provider.interface.js';
 
 const execAsync = promisify(exec);
 
@@ -70,12 +70,15 @@ export class LinuxTpmProvider implements AttestationProvider {
       // Get TPM info
       const tpmInfo = await this.getTpmInfo();
 
-      return {
+      const identity: AttestationIdentity = {
         akPublicKeyPem,
-        akName: tpmInfo.akName,
         tpmManufacturer: tpmInfo.manufacturer,
         tpmFirmwareVersion: tpmInfo.firmwareVersion
       };
+      if (tpmInfo.akName !== undefined) {
+        identity.akName = tpmInfo.akName;
+      }
+      return identity;
     } catch (error: any) {
       throw new AttestationError(
         'Failed to get attestation identity',
@@ -125,13 +128,16 @@ export class LinuxTpmProvider implements AttestationProvider {
         // Get secure boot state
         const secureBootState = await this.getSecureBootState();
 
-        return {
+        const evidence: TpmQuoteEvidence = {
           quote: quoteBuffer.toString('base64'),
           signature: signatureBuffer.toString('base64'),
           pcrSelection: challenge.pcrSelection,
           pcrValues,
-          secureBootState: secureBootState || undefined
         };
+        if (secureBootState !== null) {
+          evidence.secureBootState = secureBootState;
+        }
+        return evidence;
       } finally {
         // Cleanup temp files
         await fs.rm(tmpDir, { recursive: true, force: true });
@@ -157,10 +163,13 @@ export class LinuxTpmProvider implements AttestationProvider {
 
       const enabled = stdout.toLowerCase().includes('enabled');
 
-      return {
+      const result: { enabled: boolean; mode?: string } = {
         enabled,
-        mode: enabled ? 'USER' : undefined
       };
+      if (enabled) {
+        result.mode = 'USER';
+      }
+      return result;
     } catch (error) {
       // SecureBoot info not available
       return null;
@@ -257,8 +266,10 @@ export class LinuxTpmProvider implements AttestationProvider {
       } else if (trimmed && currentAlgo === hashAlgo) {
         const match = trimmed.match(/^(\d+)\s*:\s*(?:0x)?([0-9A-Fa-f]+)$/);
         if (match) {
-          const [, pcr, value] = match;
-          pcrValues[pcr] = value.toLowerCase();
+          const [, pcrStr, value] = match;
+          if (pcrStr && value) {
+            pcrValues[pcrStr] = value.toLowerCase();
+          }
         }
       }
     }
@@ -285,11 +296,11 @@ export class LinuxTpmProvider implements AttestationProvider {
       for (const line of lines) {
         if (line.includes('TPM2_PT_MANUFACTURER')) {
           const match = line.match(/:\s*(.+)$/);
-          if (match) manufacturer = match[1].trim();
+          if (match?.[1]) manufacturer = match[1].trim();
         }
         if (line.includes('TPM2_PT_FIRMWARE_VERSION')) {
           const match = line.match(/:\s*(.+)$/);
-          if (match) firmwareVersion = match[1].trim();
+          if (match?.[1]) firmwareVersion = match[1].trim();
         }
       }
 
@@ -300,16 +311,23 @@ export class LinuxTpmProvider implements AttestationProvider {
           `tpm2_readpublic -c ${this.akContextPath} | grep "name:"`
         );
         const match = nameOut.match(/name:\s*(.+)$/);
-        if (match) akName = match[1].trim();
+        if (match?.[1]) akName = match[1].trim();
       } catch {
         // AK name not available
       }
 
-      return {
+      const result: {
+        manufacturer: string;
+        firmwareVersion: string;
+        akName?: string;
+      } = {
         manufacturer,
         firmwareVersion,
-        akName
       };
+      if (akName !== undefined) {
+        result.akName = akName;
+      }
+      return result;
     } catch (error) {
       return {
         manufacturer: 'Unknown',

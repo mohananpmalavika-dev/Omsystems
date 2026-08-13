@@ -31,6 +31,8 @@ export interface OnvifDeviceDetails {
   services: string[];
   capabilityTests: Array<{ name: string; status: "pass" | "fail" | "unsupported" | "vendor-specific"; detail?: string }>;
   inspectionLayers: OnvifInspectionLayer[];
+  timeSynchronization?: "synchronized" | "drifted" | "unknown";
+  clockOffsetMs?: number;
 }
 
 export class OnvifClient {
@@ -151,6 +153,26 @@ export class OnvifClient {
     }
     const profiles = rawProfiles.map(parseProfile).filter((item): item is OnvifProfile => Boolean(item));
 
+    let clockOffsetMs: number | undefined;
+    try {
+      const timeDocument = await this.call(
+        this.deviceServiceUrl,
+        "http://www.onvif.org/ver10/device/wsdl/GetSystemDateAndTime",
+        `<tds:GetSystemDateAndTime/>`,
+        `xmlns:tds="http://www.onvif.org/ver10/device/wsdl"`,
+      );
+      const deviceTime = parseOnvifUtcDateTime(timeDocument);
+      if (deviceTime !== undefined) clockOffsetMs = deviceTime - Date.now();
+    } catch {
+      // Time support is optional. Unknown remains explicit evidence rather than
+      // being guessed from a successful authenticated device-info request.
+    }
+    const timeSynchronization = clockOffsetMs === undefined
+      ? "unknown" as const
+      : Math.abs(clockOffsetMs) <= 30_000
+        ? "synchronized" as const
+        : "drifted" as const;
+
     const services = buildServices(caps, Boolean(mediaServiceUrl), profiles.length > 0);
     const capabilityTests = buildCapabilityTests({
       manufacturer: textValue(infoResponse?.Manufacturer) ?? "unknown",
@@ -182,6 +204,8 @@ export class OnvifClient {
       services,
       capabilityTests,
       inspectionLayers,
+      timeSynchronization,
+      ...(clockOffsetMs !== undefined ? { clockOffsetMs } : {}),
     };
   }
 
@@ -431,6 +455,25 @@ function buildCapabilityTests(input: {
     { name: "Imaging control", status: input.services.includes("Imaging") ? "pass" as const : "unsupported" as const, detail: input.services.includes("Imaging") ? "Imaging service available" : "Imaging service unavailable" },
     { name: "Firmware upgrade", status: input.firmwareVersion && input.firmwareVersion !== "unknown" ? "vendor-specific" as const : "unsupported" as const, detail: input.firmwareVersion && input.firmwareVersion !== "unknown" ? "Vendor-specific upgrade path required" : "Firmware version unavailable" },
   ];
+}
+
+function parseOnvifUtcDateTime(document: unknown) {
+  const response = findRecord(document, "GetSystemDateAndTimeResponse");
+  const system = recordValue(response?.SystemDateAndTime);
+  // Only UTC is safe to compare with the trusted reference clock. A local-only
+  // response has no reliable offset without complete ONVIF timezone metadata.
+  const dateTime = recordValue(system?.UTCDateTime);
+  const date = recordValue(dateTime?.Date);
+  const time = recordValue(dateTime?.Time);
+  const year = numberValue(date?.Year);
+  const month = numberValue(date?.Month);
+  const day = numberValue(date?.Day);
+  const hour = numberValue(time?.Hour);
+  const minute = numberValue(time?.Minute);
+  const second = numberValue(time?.Second);
+  if (!year || !month || !day) return undefined;
+  const timestamp = Date.UTC(year, month - 1, day, hour, minute, second);
+  return Number.isFinite(timestamp) ? timestamp : undefined;
 }
 
 function guessedMediaServiceUrls(deviceServiceUrl: string) {

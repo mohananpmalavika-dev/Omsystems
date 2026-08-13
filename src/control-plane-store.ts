@@ -639,6 +639,7 @@ export interface ControlPlaneStore {
   }): Promise<VideoWallLayout>;
   createEdgeScanJob(branchId: string, edgeAgentId?: string): Promise<EdgeScanJob>;
   getEdgeScanJob(branchId: string, jobId: string): Promise<EdgeScanJob | undefined>;
+  getLatestEdgeScanJob(branchId: string): Promise<EdgeScanJob | undefined>;
   claimEdgeScanJob(edgeAgentId: string): Promise<EdgeScanJob | undefined>;
   completeEdgeScanJob(
     edgeAgentId: string,
@@ -649,6 +650,12 @@ export interface ControlPlaneStore {
       provisionedCount?: number;
       credentialsRequiredCount?: number;
       pendingVerificationCount?: number;
+      verifiedCount?: number;
+      recorderCount?: number;
+      timeSynchronizedCount?: number;
+      timeDriftCount?: number;
+      analyticsCompatibleCount?: number;
+      duplicateCount?: number;
       error?: string;
     },
   ): Promise<EdgeScanJob | undefined>;

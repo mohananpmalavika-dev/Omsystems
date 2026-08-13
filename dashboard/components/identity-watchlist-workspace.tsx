@@ -32,43 +32,79 @@ import {
 
 type WorkspaceMode = "face" | "anpr";
 type DialogKind = "face-watchlist" | "face-person" | "anpr-watchlist" | "anpr-plate";
+type Severity = "P1" | "P2" | "P3" | "P4" | "P5";
+type FaceWatchlistFormValue = {
+  name: string;
+  description: string;
+  listType: "security" | "vip" | "staff" | "blacklist" | "missing-person";
+  alertOnMatch: boolean;
+  alertSeverity: Severity;
+};
+type FacePersonFormValue = {
+  fullName: string;
+  externalId: string;
+  dateOfBirth: string;
+  gender: "male" | "female" | "other" | "unknown";
+  notes: string;
+};
+type AnprWatchlistFormValue = {
+  name: string;
+  description: string;
+  listType: "alert" | "stolen" | "wanted" | "vip" | "staff" | "blacklist";
+  alertOnMatch: boolean;
+  alertSeverity: Severity;
+  alertAuthorities: boolean;
+};
+type PlateFormValue = {
+  plateNumber: string;
+  countryCode: string;
+  regionCode: string;
+  vehicleMake: string;
+  vehicleModel: string;
+  vehicleColor: string;
+  vehicleType: "car" | "motorcycle" | "bus" | "truck" | "other";
+  ownerName: string;
+  reason: string;
+  notes: string;
+  expiresAt: string;
+};
 
 const inputClass = "mt-2 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2.5 text-sm text-slate-100 outline-none transition focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/10";
 const labelClass = "text-xs font-semibold text-slate-400";
 
-const emptyFaceWatchlist = {
+const emptyFaceWatchlist: FaceWatchlistFormValue = {
   name: "",
   description: "",
-  listType: "security" as const,
+  listType: "security",
   alertOnMatch: true,
-  alertSeverity: "P2" as const,
+  alertSeverity: "P2",
 };
 
-const emptyFacePerson = {
+const emptyFacePerson: FacePersonFormValue = {
   fullName: "",
   externalId: "",
   dateOfBirth: "",
-  gender: "unknown" as const,
+  gender: "unknown",
   notes: "",
 };
 
-const emptyAnprWatchlist = {
+const emptyAnprWatchlist: AnprWatchlistFormValue = {
   name: "",
   description: "",
-  listType: "alert" as const,
+  listType: "alert",
   alertOnMatch: true,
-  alertSeverity: "P2" as const,
+  alertSeverity: "P2",
   alertAuthorities: false,
 };
 
-const emptyPlate = {
+const emptyPlate: PlateFormValue = {
   plateNumber: "",
   countryCode: "IN",
   regionCode: "",
   vehicleMake: "",
   vehicleModel: "",
   vehicleColor: "",
-  vehicleType: "car" as const,
+  vehicleType: "car",
   ownerName: "",
   reason: "",
   notes: "",

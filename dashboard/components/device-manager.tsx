@@ -14,8 +14,9 @@ import {
   X,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { cameraInventoryApi, deviceInventoryApi } from "@/lib/api-client";
+import { cameraInventoryApi, deviceInventoryApi, provisioningApi } from "@/lib/api-client";
 import { BranchConnectivityPanel } from "@/components/branch-connectivity-panel";
+import { ProvisioningRun } from "@/components/provisioning-run";
 import type {
   Branch,
   Camera as CameraRecord,
@@ -433,14 +434,14 @@ export function DeviceManager() {
       camera.duplicateStatus !== "duplicate" && camera.compatibility === "compatible",
     );
     let provisioned = job.provisionedCount ?? 0;
-    if (readyToProvision) {
+    if (readyToProvision && provisioned === 0) {
       const provisioning = await cameraInventoryApi.approveAllDiscovered(selectedBranch, {
         recordingMode: "continuous",
         retentionDays: 180,
         enableAnalytics: true,
         enableAlerts: true,
       }) as { summary: { provisioned: number }; results: AutoProvisionResult[] };
-      provisioned += provisioning.summary.provisioned;
+      provisioned = provisioning.summary.provisioned;
       setAutoProvisionResults(provisioning.results);
       for (const result of provisioning.results) {
         if (result.status === "provisioned" || result.status === "partial") {
@@ -469,8 +470,10 @@ export function DeviceManager() {
 
   async function startConnectedCameraScan(gateway: EdgeAgent) {
     if (!selectedBranch) return;
-    const scan = await cameraInventoryApi.startScan(selectedBranch, gateway.id) as { id: string; status: string; branchId: string };
-    const outcome = await completeCameraScan(scan.id, gateway.id);
+    const { run } = await provisioningApi.start(selectedBranch, gateway.id) as {
+      run: { id: string; status: string; branchId: string };
+    };
+    const outcome = await completeCameraScan(run.id, gateway.id);
     setNotice(`Camera scan completed. Found ${outcome.found} devices. ${outcome.provisioned} verified live streams were activated${outcome.credentialsRequired ? `; ${outcome.credentialsRequired} need credentials` : ""}.`);
   }
 
@@ -868,6 +871,15 @@ export function DeviceManager() {
         </select>
         {branches.length === 0 && !loading && <span>You do not have device configuration permission for any branch.</span>}
       </div>
+
+      <ProvisioningRun
+        branchId={selectedBranch}
+        refreshing={scanning}
+        onStart={() => void scanCameras()}
+        onInstallAgent={openScannerInstaller}
+        onProvideCredentials={() => setShowDiscoveredList(true)}
+        onChanged={() => void refreshBranch(selectedBranch)}
+      />
 
       <details className="device-advanced">
         <summary>Advanced connection setup</summary>

@@ -1,6 +1,6 @@
 // API client for backend communication
 
-import type { AlertNotificationPolicy, AlertNotificationPolicyInput } from '@/lib/types';
+import type { AlertNotificationPolicy, AlertNotificationPolicyInput, ProvisioningRun } from '@/lib/types';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE || '/api/control';
 
@@ -886,6 +886,27 @@ export const analyticsApi = {
     fetchApi<any>(`/v1/analytics/alerts/${encodeURIComponent(alertId)}/incidents`, {
       method: 'POST', body: JSON.stringify(data),
     }),
+};
+
+export const provisioningApi = {
+  start: (branchId: string, edgeAgentId?: string) =>
+    fetchApi<{ run: ProvisioningRun }>(
+      `/v1/branches/${encodeURIComponent(branchId)}/provisioning`,
+      { method: "POST", body: JSON.stringify(edgeAgentId ? { edgeAgentId } : {}) },
+    ),
+  getLatest: (branchId: string) =>
+    fetchApi<{ run: ProvisioningRun }>(
+      `/v1/branches/${encodeURIComponent(branchId)}/provisioning`,
+    ),
+  get: (branchId: string, runId: string) =>
+    fetchApi<{ run: ProvisioningRun }>(
+      `/v1/branches/${encodeURIComponent(branchId)}/provisioning/${encodeURIComponent(runId)}`,
+    ),
+  retry: (branchId: string, runId: string) =>
+    fetchApi<{ run: ProvisioningRun }>(
+      `/v1/branches/${encodeURIComponent(branchId)}/provisioning/${encodeURIComponent(runId)}/retry`,
+      { method: "POST", body: "{}" },
+    ),
 };
 
 export type IdentityWatchlist = {

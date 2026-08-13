@@ -48,6 +48,12 @@ export interface ProvisioningStatus {
   completedAt?: Date;
 }
 
+/**
+ * @deprecated This service belongs to the unmounted legacy Express backend.
+ * The production control plane uses the durable edge scan workflow exposed by
+ * POST /v1/branches/:branchId/provisioning. Keep this adapter fail-closed so a
+ * stale import can never mark a physical branch active from simulated checks.
+ */
 export class ZeroTouchProvisioningService {
   constructor(private pool: Pool) {}
 
@@ -256,47 +262,9 @@ export class ZeroTouchProvisioningService {
     const client = await this.pool.connect();
     
     try {
-      // Network configuration
-      await this.updateProvisioningStep(client, branchId, 'Network Configuration', 'in_progress');
-      await this.configureNetwork(client, branchId);
-      await this.updateProvisioningStep(client, branchId, 'Network Configuration', 'completed');
-
-      // Camera discovery
-      await this.updateProvisioningStep(client, branchId, 'Camera Discovery', 'in_progress');
-      await this.discoverCameras(client, branchId);
-      await this.updateProvisioningStep(client, branchId, 'Camera Discovery', 'completed');
-
-      // Storage setup
-      await this.updateProvisioningStep(client, branchId, 'Storage Setup', 'in_progress');
-      await this.setupStorage(client, branchId);
-      await this.updateProvisioningStep(client, branchId, 'Storage Setup', 'completed');
-
-      // Configuration applied
-      await this.updateProvisioningStep(client, branchId, 'Configuration Applied', 'completed');
-
-      // Health check
-      await this.updateProvisioningStep(client, branchId, 'Health Check', 'in_progress');
-      const healthPassed = await this.performHealthCheck(client, branchId);
-      
-      if (healthPassed) {
-        await this.updateProvisioningStep(client, branchId, 'Health Check', 'completed');
-        
-        // Activate branch
-        await this.updateProvisioningStep(client, branchId, 'Activation', 'in_progress');
-        await this.activateBranch(client, branchId);
-        await this.updateProvisioningStep(client, branchId, 'Activation', 'completed');
-
-        // Update overall status
-        await client.query(
-          `UPDATE provisioning_status SET status = 'active', progress = 100, completed_at = NOW() WHERE branch_id = $1`,
-          [branchId]
-        );
-
-        await client.query(
-          `UPDATE branches SET status = 'active' WHERE id = $1`,
-          [branchId]
-        );
-      }
+      throw new Error(
+        'legacy_zero_touch_executor_disabled: use POST /v1/branches/:branchId/provisioning on the active control plane'
+      );
 
     } catch (error) {
       await client.query(
@@ -404,29 +372,4 @@ export class ZeroTouchProvisioningService {
     };
   }
 
-  private async configureNetwork(client: any, branchId: string): Promise<void> {
-    // Auto-configure network settings
-    await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate configuration
-  }
-
-  private async discoverCameras(client: any, branchId: string): Promise<void> {
-    // Auto-discover cameras on network
-    await new Promise(resolve => setTimeout(resolve, 2000)); // Simulate discovery
-  }
-
-  private async setupStorage(client: any, branchId: string): Promise<void> {
-    // Setup storage configuration
-    await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate setup
-  }
-
-  private async performHealthCheck(client: any, branchId: string): Promise<boolean> {
-    // Perform system health check
-    await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate health check
-    return true;
-  }
-
-  private async activateBranch(client: any, branchId: string): Promise<void> {
-    // Final activation steps
-    await new Promise(resolve => setTimeout(resolve, 500));
-  }
 }

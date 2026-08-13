@@ -15,6 +15,7 @@ import {
 import { actions, type Action, type Camera, type RecordingJob } from "./domain/models.js";
 import { createAuthMiddleware, RateLimiter } from "./middleware/auth.middleware.js";
 import { buildPlaybackTimeline } from "./recording/playback-timeline.js";
+import { RecorderService, type RecorderProviderResolver } from "./vms/index.js";
 import { calculateRecordingStorage } from "./recording/storage-calculator.js";
 import { registerAuthRoutes } from "./routes/auth.routes.js";
 import { registerEnterpriseAuthRoutes } from "./routes/auth-enterprise.routes.js";
@@ -71,6 +72,7 @@ import { registerOperationalReportRoutes } from "./routes/operational-reports.ro
 import { registerFederationRoutes } from "./routes/federation.routes.js";
 import { registerEmployeeActivityTrackingRoutes } from "./routes/employee-activity-tracking.routes.js";
 import { registerIntegrationRoutes } from "./routes/integrations.routes.js";
+import { registerProvisioningRoutes } from "./routes/provisioning.routes.js";
 import { autoProvisionVerifiedCameras } from "./services/camera-auto-provision.js";
 import {
   EmptyFederationLocalSearchProvider,
@@ -403,6 +405,8 @@ export async function buildApp(options?: {
   edgePresenceCache?: EdgePresenceCacheContract;
   edgeTunnelProvider?: ManagedEdgeTunnelProvider;
   requireManagedEdgeTunnel?: boolean;
+  /** Optional edge/vendor provider resolver for on-demand recorder operations. */
+  recorderProviderResolver?: RecorderProviderResolver;
 }): Promise<FastifyInstance> {
   // PRODUCTION SECRET VALIDATION
   // In production mode, validate all critical secrets before proceeding
@@ -424,6 +428,7 @@ export async function buildApp(options?: {
     trustProxy: Boolean(options?.edgeBridgeSharedKey),
   });
   const store = options?.store ?? new MemoryStore();
+  const recorderService = new RecorderService(store, options?.recorderProviderResolver);
   const edgePresenceCache = options?.edgePresenceCache;
   const runtimeGuard = new RuntimeGuard(options?.maxInFlightRequests ?? Number(process.env.MAX_IN_FLIGHT_REQUESTS ?? 500));
   runtimeGuard.register(app);
@@ -1044,6 +1049,7 @@ export async function buildApp(options?: {
       sourceType: item.sourceType ?? "ip-camera",
       recorderId: item.recorderId,
       recorderChannel: item.recorderChannel,
+      timeSynchronization: item.timeSynchronization ?? "unknown",
     })) };
   });
 
@@ -1111,7 +1117,24 @@ export async function buildApp(options?: {
     let credentialsRequiredCount = 0;
     let pendingVerificationCount = 0;
     let activationFailedCount = 0;
+    let verifiedCount = 0;
+    let recorderCount = 0;
+    let timeSynchronizedCount = 0;
+    let timeDriftCount = 0;
+    let analyticsCompatibleCount = 0;
+    let duplicateCount = 0;
     if (result.status === "completed") {
+      const runStartedAt = Date.parse(existingJob.startedAt ?? existingJob.requestedAt);
+      const discoveries = (await store.listDiscoveredCameras(agent.branchId))
+        .filter((item) => item.edgeAgentId === id &&
+          (!Number.isFinite(runStartedAt) || Date.parse(item.discoveredAt) >= runStartedAt));
+      verifiedCount = discoveries.filter((item) => item.streamVerified === true).length;
+      recorderCount = new Set(discoveries.flatMap((item) => item.recorderId ? [item.recorderId] : [])).size;
+      timeSynchronizedCount = discoveries.filter((item) => item.timeSynchronization === "synchronized").length;
+      timeDriftCount = discoveries.filter((item) => item.timeSynchronization === "drifted").length;
+      analyticsCompatibleCount = discoveries.filter((item) => item.streamVerified === true &&
+        item.profiles.some((profile) => ["H264", "H265", "MJPEG"].includes(profile.codec))).length;
+      duplicateCount = discoveries.filter((item) => item.duplicateStatus === "duplicate").length;
       const activation = await autoProvisionVerifiedCameras(store, agent.branchId, { edgeAgentId: id });
       provisionedCount = activation.summary.provisioned;
       credentialsRequiredCount = activation.summary.credentialsRequired;
@@ -1125,6 +1148,12 @@ export async function buildApp(options?: {
       provisionedCount,
       credentialsRequiredCount,
       pendingVerificationCount,
+      verifiedCount,
+      recorderCount,
+      timeSynchronizedCount,
+      timeDriftCount,
+      analyticsCompatibleCount,
+      duplicateCount,
       ...(result.error ? { error: result.error } : {}),
     });
     if (job) {
@@ -1143,6 +1172,12 @@ export async function buildApp(options?: {
             provisionedCount,
             credentialsRequiredCount,
             pendingVerificationCount,
+            verifiedCount,
+            recorderCount,
+            timeSynchronizedCount,
+            timeDriftCount,
+            analyticsCompatibleCount,
+            duplicateCount,
             failedCount: activationFailedCount,
           },
         }).catch(() => undefined);
@@ -1627,14 +1662,55 @@ export async function buildApp(options?: {
     if (!(await requireCameraActionAccess(
       request, reply, store, camera, "recording:view",
     ))) return;
-    const segments = await store.listRecordingSegments(id, query.from, query.to);
     const job = await store.getRecordingJob(id);
+    const vms = await recorderService.getCameraRecordingView({
+      tenantId: request.currentUser.tenantId,
+      camera,
+      from: query.from,
+      to: query.to,
+    });
+    const segments = vms.recordingSearch.state === "AVAILABLE"
+      ? vms.recordingSearch.value.segments.flatMap((segment) => {
+          if (segment.source !== "PLATFORM" || !segment.platformSegmentId) return [];
+          return [{
+            id: segment.platformSegmentId,
+            cameraId: segment.cameraId,
+            jobId: "",
+            startedAt: segment.startTime,
+            endedAt: segment.endTime,
+            storagePath: "",
+            sizeBytes: 0,
+            storageNodeExternalId: "",
+            storageTier: "hot" as const,
+            status: segment.playbackAvailable ? "ready" as const : "error" as const,
+            createdAt: segment.startTime,
+          }];
+        })
+      : [];
     return {
-      ...buildPlaybackTimeline(segments, query.from, query.to),
-      source: job?.primaryRecordingStorage ?? "sentinel-local",
-      transferMode: job?.primaryRecordingStorage === "recorder-local" ? "on-demand" : "local-index",
-      cloudArchivePolicy: job?.cloudArchivePolicy ?? "none",
+      ...(vms.source === "PLATFORM"
+        ? buildPlaybackTimeline(await store.listRecordingSegments(id, query.from, query.to), query.from, query.to)
+        : { segments, gaps: [], recordedSeconds: 0, requestedSeconds: Math.round((to - from) / 1_000), coveragePercent: null }),
+      source: job?.primaryRecordingStorage ?? (vms.source === "RECORDER" ? "recorder-local" : "sentinel-local"),
+      transferMode: vms.source === "RECORDER" ? "on-demand" : "local-index",
+      cloudArchivePolicy: job?.cloudArchivePolicy ?? (vms.source === "RECORDER" ? "incident-evidence-only" : "none"),
+      vms,
     };
+  });
+
+  app.get("/v1/cameras/:id/timeline", async (request, reply) => {
+    const { id } = idParams.parse(request.params);
+    const query = z.object({ from: z.string().datetime(), to: z.string().datetime() }).parse(request.query);
+    const from = Date.parse(query.from);
+    const to = Date.parse(query.to);
+    if (to <= from || to - from > 31 * 86_400_000) return reply.code(400).send({ error: "invalid_timeline_window" });
+    const camera = await store.getCamera(id);
+    if (!camera) return reply.code(404).send({ error: "camera_not_found" });
+    if (!(await requireCameraActionAccess(request, reply, store, camera, "recording:view"))) return;
+    const vms = await recorderService.getCameraRecordingView({
+      tenantId: request.currentUser.tenantId, camera, from: query.from, to: query.to,
+    });
+    return { cameraId: id, recorderId: vms.recorderId, source: vms.source, timeline: vms.timeline };
   });
 
   app.post("/v1/recording/storage-calculator", async (request) => {
@@ -1937,6 +2013,7 @@ export async function buildApp(options?: {
       : undefined,
   });
   await registerEdgeDiscoveryBootstrapRoutes(app, store, pool);
+  await registerProvisioningRoutes(app, store);
 
   app.post("/v1/edge-agents/:id/live-sessions/consume", async (request, reply) => {
     const { id } = edgeAgentParams.parse(request.params);

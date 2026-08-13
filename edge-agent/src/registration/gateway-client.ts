@@ -25,6 +25,7 @@ export interface DiscoveredCameraPayload {
   compatibilityStatus?: "compatible" | "incompatible" | "review-required";
   hardwareId?: string;
   existingDeviceAssociation?: string;
+  timeSynchronization?: "synchronized" | "drifted" | "unknown";
   onvifSupport?: boolean;
   onvifServices?: string[];
   onvifCapabilityTests?: Array<{ name: string; status: "pass" | "fail" | "unsupported" | "vendor-specific"; detail?: string }>;

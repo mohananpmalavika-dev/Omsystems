@@ -33,7 +33,8 @@ describe("OnvifClient authentication compatibility", () => {
               </tt:Resolution>
             </tt:VideoEncoderConfiguration>
           </trt:Profiles></trt:GetProfilesResponse></s:Body>
-        </s:Envelope>`));
+        </s:Envelope>`))
+      .mockResolvedValueOnce(xmlResponse(systemDateTimeXml(new Date())));
 
     const client = new OnvifClient(
       "http://camera.local/onvif/device_service",
@@ -42,7 +43,8 @@ describe("OnvifClient authentication compatibility", () => {
     const device = await client.inspect();
 
     expect(device.model).toBe("Camera");
-    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(device.timeSynchronization).toBe("synchronized");
+    expect(fetchMock).toHaveBeenCalledTimes(4);
     for (const [, request] of fetchMock.mock.calls) {
       expect(String(request?.body)).not.toContain("UsernameToken");
     }
@@ -167,5 +169,19 @@ function profilesXml() {
         <tt:Encoding>H264</tt:Encoding><tt:Resolution><tt:Width>1920</tt:Width><tt:Height>1080</tt:Height></tt:Resolution>
       </tt:VideoEncoderConfiguration>
     </trt:Profiles></trt:GetProfilesResponse></s:Body>
+  </s:Envelope>`;
+}
+
+function systemDateTimeXml(value: Date) {
+  return `<s:Envelope xmlns:s="http://www.w3.org/2003/05/soap-envelope"
+    xmlns:tds="http://www.onvif.org/ver10/device/wsdl"
+    xmlns:tt="http://www.onvif.org/ver10/schema">
+    <s:Body><tds:GetSystemDateAndTimeResponse><tds:SystemDateAndTime>
+      <tt:UTCDateTime><tt:Time>
+        <tt:Hour>${value.getUTCHours()}</tt:Hour><tt:Minute>${value.getUTCMinutes()}</tt:Minute><tt:Second>${value.getUTCSeconds()}</tt:Second>
+      </tt:Time><tt:Date>
+        <tt:Year>${value.getUTCFullYear()}</tt:Year><tt:Month>${value.getUTCMonth() + 1}</tt:Month><tt:Day>${value.getUTCDate()}</tt:Day>
+      </tt:Date></tt:UTCDateTime>
+    </tds:SystemDateAndTime></tds:GetSystemDateAndTimeResponse></s:Body>
   </s:Envelope>`;
 }

@@ -643,6 +643,12 @@ export interface EdgeScanJob {
   provisionedCount: number;
   credentialsRequiredCount: number;
   pendingVerificationCount: number;
+  verifiedCount: number;
+  recorderCount: number;
+  timeSynchronizedCount: number;
+  timeDriftCount: number;
+  analyticsCompatibleCount: number;
+  duplicateCount: number;
   error: string | null;
 }
 

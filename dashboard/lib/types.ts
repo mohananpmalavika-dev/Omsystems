@@ -444,7 +444,63 @@ export interface EdgeScanJob {
   provisionedCount: number;
   credentialsRequiredCount: number;
   pendingVerificationCount: number;
+  verifiedCount: number;
+  recorderCount: number;
+  timeSynchronizedCount: number;
+  timeDriftCount: number;
+  analyticsCompatibleCount: number;
+  duplicateCount: number;
   error: string | null;
+}
+
+export type ProvisioningStepStatus =
+  | "pending" | "running" | "completed" | "warning" | "blocked" | "failed" | "skipped";
+
+export interface ProvisioningRun {
+  id: string;
+  branchId: string;
+  edgeAgentId?: string;
+  status: "not_started" | "queued" | "running" | "waiting_for_input" | "blocked" | "failed" | "active";
+  currentStage: string;
+  completedUnits: number;
+  totalUnits: number;
+  progressPercent: number;
+  readyForActivation: boolean;
+  startedAt?: string;
+  completedAt?: string;
+  steps: Array<{
+    id: string;
+    label: string;
+    status: ProvisioningStepStatus;
+    completedUnits: number;
+    totalUnits: number;
+    evidence: string;
+    errorCode?: string;
+    action?: "install-agent" | "provide-credentials" | "retry";
+  }>;
+  issues: Array<{
+    code: string;
+    severity: "warning" | "blocker";
+    resourceId: string;
+    message: string;
+    recommendedAction: string;
+  }>;
+  summary: {
+    agents: number;
+    agentsOnline: number;
+    discoveredDevices: number;
+    recorders: number;
+    importedChannels: number;
+    verifiedStreams: number;
+    credentialsRequired: number;
+    duplicateDevices: number;
+    timeSynchronized: number;
+    timeDrifted: number;
+    storageHealthy: number;
+    recordingsVerified: number;
+    analyticsCompatible: number;
+    analyticsAssigned: number;
+  };
 }
 
 export type AnalyticsDetectionType = string;

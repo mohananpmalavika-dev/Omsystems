@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertTriangle, CalendarClock, CheckCircle2, Clapperboard, LoaderCircle, Play, RefreshCw, SlidersHorizontal, Video } from "lucide-react";
+import { AlertTriangle, CalendarClock, CheckCircle2, Clapperboard, LoaderCircle, Play, RefreshCw, Video } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import type { Branch, Camera, RecordingJob, RecordingSegment } from "@/lib/types";
@@ -11,6 +11,20 @@ type HealthEvent = {
   severity: "info" | "warning" | "critical";
   message: string;
   occurredAt: string;
+};
+
+type Availability<T> =
+  | { state: "AVAILABLE"; value: T; observedAt: string; freshness: "FRESH" | "STALE"; confidence: number }
+  | { state: "UNAVAILABLE"; reason: string; message: string; observedAt: string; retryable: boolean }
+  | { state: "UNSUPPORTED"; reason: string };
+
+type VmsView = {
+  source: "RECORDER" | "PLATFORM";
+  recorderId: string | null;
+  capabilities: Record<string, { support: "SUPPORTED" | "PARTIAL" | "UNSUPPORTED"; reason?: string }>;
+  recordingStatus: Availability<{ configured: boolean | null; active: boolean | null; latestSegmentAt: string | null }>;
+  recordingSearch: Availability<{ summary?: { oldestContinuousAt: string | null; newestPlayableAt: string | null; gapCount: number; largestGapSeconds: number; playbackVerified: boolean | null; reasonCodes: string[] } }>;
+  timeline: Availability<{ coverageComplete: boolean; intervals: Array<{ start: string; end: string; state: "RECORDED" | "MISSING" | "UNKNOWN"; segmentId?: string; reason?: string }> }>;
 };
 
 export function RecordingWorkspace() {
@@ -26,6 +40,7 @@ export function RecordingWorkspace() {
   const [job, setJob] = useState<RecordingJob>();
   const [segments, setSegments] = useState<RecordingSegment[]>([]);
   const [health, setHealth] = useState<HealthEvent[]>([]);
+  const [vms, setVms] = useState<VmsView>();
   const [selected, setSelected] = useState<RecordingSegment>();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string>();
@@ -53,7 +68,7 @@ export function RecordingWorkspace() {
       .then((body: { data: Camera[] }) => {
         setCameras(body.data);
         setCameraId(body.data.some((camera) => camera.id === requestedCameraId) ? requestedCameraId : body.data[0]?.id ?? "");
-        setSegments([]); setSelected(undefined); setHealth([]); setJob(undefined);
+        setSegments([]); setSelected(undefined); setHealth([]); setJob(undefined); setVms(undefined);
       })
       .catch(() => setError("Cameras for this branch are unavailable."));
   }, [branchId, requestedCameraId]);
@@ -78,13 +93,20 @@ export function RecordingWorkspace() {
       ]);
       if (!policyResponse.ok || !playbackResponse.ok || !healthResponse.ok) throw new Error();
       const policy = await policyResponse.json() as RecordingJob;
-      const playback = await playbackResponse.json() as { segments: RecordingSegment[] };
+      const playback = await playbackResponse.json() as { segments: RecordingSegment[]; vms: VmsView };
       const events = await healthResponse.json() as { data: HealthEvent[] };
-      setJob(policy); setSegments(playback.segments); setHealth(events.data);
+      setJob(policy); setSegments(playback.segments); setHealth(events.data); setVms(playback.vms);
       setSelected((current) => current && playback.segments.some((item) => item.id === current.id) ? current : playback.segments.find((item) => item.status === "ready"));
     } catch (reason) { setError(reason instanceof Error ? reason.message : "Recording data could not be loaded. Check recorder and access permissions."); }
     finally { setLoading(false); }
   };
+
+  const recordingState = vms?.recordingStatus.state === "AVAILABLE"
+    ? vms.recordingStatus.value.active === true ? "Recording" : vms.recordingStatus.value.active === false ? "Stopped" : "Unknown"
+    : "Unverified";
+  const archiveSummary = vms?.recordingSearch.state === "AVAILABLE" ? vms.recordingSearch.value.summary : undefined;
+  const timelineIntervals = vms?.timeline.state === "AVAILABLE" ? vms.timeline.value.intervals : [];
+  const playbackCapability = vms?.capabilities.playback;
 
   return (
     <main className="recording-workspace">
@@ -104,19 +126,27 @@ export function RecordingWorkspace() {
       {error && <div className="error-banner"><AlertTriangle size={17} />{error}</div>}
       {job && <section className="recording-summary">
         <article><span>Primary recorder</span><strong>{job.primaryRecordingStorage === "recorder-local" ? "Branch DVR/NVR" : "Sentinel"}</strong><small>{job.mode} recording at source</small></article>
-        <article><span>{job.primaryRecordingStorage === "recorder-local" ? "Transfer policy" : "Coverage"}</span><strong>{job.primaryRecordingStorage === "recorder-local" ? "On demand" : `${coverage}%`}</strong><small>{job.primaryRecordingStorage === "recorder-local" ? "No continuous WAN video transfer" : `${segments.length} indexed segments in selected range`}</small></article>
+        <article><span>{job.primaryRecordingStorage === "recorder-local" ? "Recorder evidence" : "Coverage"}</span><strong>{job.primaryRecordingStorage === "recorder-local" ? recordingState : `${coverage}%`}</strong><small>{job.primaryRecordingStorage === "recorder-local" ? (archiveSummary?.newestPlayableAt ? `Latest archive ${formatTime(archiveSummary.newestPlayableAt)}` : availabilityMessage(vms?.recordingSearch)) : `${segments.length} indexed segments in selected range`}</small></article>
         <article><span>Off-site archive</span><strong>{job.cloudArchivePolicy === "incident-evidence-only" ? "Incidents only" : "Disabled"}</strong><small>Snapshots and selected clips only</small></article>
-        <article><span>Recorder health</span><strong className={criticalFault ? "fault" : "healthy"}>{criticalFault ? "Fault present" : "No critical fault"}</strong><small>{criticalFault?.message ?? "Review event history below"}</small></article>
+        <article><span>Playback capability</span><strong className={playbackCapability?.support === "UNSUPPORTED" ? "fault" : "healthy"}>{playbackCapability?.support ?? "Unverified"}</strong><small>{playbackCapability?.reason ?? "Browser delivery is normalized by Sentinel"}</small></article>
+      </section>}
+
+      {vms && <section className="vms-truth-panel" aria-label="Recorder evidence state">
+        <div><strong>{vms.source === "RECORDER" ? `Recorder ${vms.recorderId ?? "unmapped"}` : "Sentinel recording index"}</strong><span>{availabilityMessage(vms.recordingStatus)}</span></div>
+        <div className="vms-timeline" aria-label="Recording availability timeline">
+          {timelineIntervals.map((interval, index) => <span key={`${interval.start}-${index}`} className={`vms-interval ${interval.state.toLowerCase()}`} style={timelineStyle(interval.start, interval.end, from, to)} title={`${interval.state}: ${formatTime(interval.start)} – ${formatTime(interval.end)}${interval.reason ? ` · ${interval.reason}` : ""}`} />)}
+        </div>
+        <div className="vms-legend"><span><i className="recorded" />Recorded</span><span><i className="missing" />Missing</span><span><i className="unknown" />Unknown / not observed</span>{vms.timeline.state === "AVAILABLE" && !vms.timeline.value.coverageComplete ? <em>Recorder summary only; gaps are not fabricated.</em> : null}</div>
       </section>}
 
       <section className="recording-content">
         <article className="recording-player-card">
           <div className="recording-section-heading"><div><CalendarClock size={18} /><h2>{camera?.name ?? "Select a camera"}</h2></div>{selected && <span>{formatTime(selected.startedAt)} – {formatTime(selected.endedAt)}</span>}</div>
-          {selected ? <video key={selected.id} className="recording-player" controls preload="metadata"><source src={`/api/recordings/play?segmentId=${encodeURIComponent(selected.id)}`} type="video/mp4" />Your browser cannot play this recording.</video> : <div className="recording-empty"><Clapperboard size={30} /><strong>No playable segment selected</strong><span>Load a time range containing indexed footage.</span></div>}
+          {selected ? <video key={selected.id} className="recording-player" controls preload="metadata"><source src={`/api/recordings/play?segmentId=${encodeURIComponent(selected.id)}`} type="video/mp4" />Your browser cannot play this recording.</video> : <div className="recording-empty"><Clapperboard size={30} /><strong>{vms?.source === "RECORDER" ? "Recorder playback is not available in this browser session" : "No playable segment selected"}</strong><span>{vms?.source === "RECORDER" ? availabilityMessage(vms.recordingSearch) : "Load a time range containing indexed footage."}</span></div>}
         </article>
         <article className="recording-segment-card">
-          <div className="recording-section-heading"><div><Play size={18} /><h2>Indexed segments</h2></div><span>{segments.length}</span></div>
-          <div className="segment-list">{segments.length === 0 ? <div className="recording-empty"><CheckCircle2 size={25} /><span>No indexed footage in this window.</span></div> : segments.map((segment) => <button key={segment.id} className={`segment-row ${selected?.id === segment.id ? "selected" : ""}`} onClick={() => setSelected(segment)} disabled={segment.status !== "ready"}><span className={`segment-status ${segment.status}`} /><span><strong>{formatTime(segment.startedAt)}</strong><small>{segment.codec?.toUpperCase() ?? "MP4"} · {formatBytes(segment.sizeBytes)}</small></span><span>{Math.max(1, Math.round((Date.parse(segment.endedAt) - Date.parse(segment.startedAt)) / 1000))}s</span></button>)}</div>
+          <div className="recording-section-heading"><div><Play size={18} /><h2>{vms?.source === "RECORDER" ? "Playable recorder clips" : "Indexed segments"}</h2></div><span>{segments.length}</span></div>
+          <div className="segment-list">{segments.length === 0 ? <div className="recording-empty"><CheckCircle2 size={25} /><span>{vms?.source === "RECORDER" ? "No browser-deliverable recorder clips were returned. This does not mean footage is absent." : "No indexed footage in this window."}</span></div> : segments.map((segment) => <button key={segment.id} className={`segment-row ${selected?.id === segment.id ? "selected" : ""}`} onClick={() => setSelected(segment)} disabled={segment.status !== "ready"}><span className={`segment-status ${segment.status}`} /><span><strong>{formatTime(segment.startedAt)}</strong><small>{segment.codec?.toUpperCase() ?? "MP4"} · {formatBytes(segment.sizeBytes)}</small></span><span>{Math.max(1, Math.round((Date.parse(segment.endedAt) - Date.parse(segment.startedAt)) / 1000))}s</span></button>)}</div>
         </article>
       </section>
 
@@ -129,3 +159,16 @@ function toLocalInput(value: number) { const date = new Date(value - new Date().
 function formatTime(value: string) { return new Date(value).toLocaleString(); }
 function formatBytes(value: number) { return value > 1_000_000 ? `${(value / 1_000_000).toFixed(1)} MB` : `${Math.max(1, Math.round(value / 1_000))} KB`; }
 function coveragePercent(segments: RecordingSegment[], from: string, to: string) { const duration = Date.parse(to) - Date.parse(from); if (duration <= 0) return 0; const recorded = segments.filter((segment) => segment.status === "ready").reduce((total, segment) => total + Math.max(0, Date.parse(segment.endedAt) - Date.parse(segment.startedAt)), 0); return Math.min(100, Number((recorded / duration * 100).toFixed(2))); }
+function availabilityMessage(value: Availability<unknown> | undefined) {
+  if (!value) return "Not observed yet";
+  if (value.state === "UNAVAILABLE") return value.message;
+  if (value.state === "UNSUPPORTED") return value.reason;
+  return `${value.freshness === "STALE" ? "Stale" : "Observed"} ${formatTime(value.observedAt)}`;
+}
+function timelineStyle(start: string, end: string, from: string, to: string) {
+  const range = Date.parse(to) - Date.parse(from);
+  if (range <= 0) return { left: "0%", width: "0%" };
+  const left = Math.max(0, (Date.parse(start) - Date.parse(from)) / range * 100);
+  const right = Math.min(100, (Date.parse(end) - Date.parse(from)) / range * 100);
+  return { left: `${left}%`, width: `${Math.max(0, right - left)}%` };
+}

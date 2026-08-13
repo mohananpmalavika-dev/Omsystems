@@ -8,8 +8,8 @@ import {
   AttestationProvider,
   AttestationChallenge,
   AttestationError
-} from './attestation-provider.interface';
-import { LinuxTpmProvider } from './linux-tpm-provider';
+} from './attestation-provider.interface.js';
+import { LinuxTpmProvider } from './linux-tpm-provider.js';
 
 export class AttestationClient {
   private provider: AttestationProvider;
