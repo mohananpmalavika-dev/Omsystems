@@ -315,13 +315,13 @@ function extractCapabilities(prefix: string, obj: any, path: string[] = []): Dev
         capabilities.push({
           path: `${prefix}.${fullPath}`,
           label: formatLabel(key),
-          state: value.state,
-          available: value.available,
-          confidence: value.confidence ?? 0,
-          verificationLevel: value.verificationLevel ?? "DECLARED",
-          limitations: value.limitations,
-          discoveredAt: value.discoveredAt,
-          verifiedAt: value.verifiedAt,
+          state: value.state as CapabilityState,
+          available: value.available as boolean,
+          confidence: (value.confidence ?? 0) as number,
+          verificationLevel: (value.verificationLevel ?? "DECLARED") as "DECLARED" | "DISCOVERED" | "VERIFIED",
+          limitations: value.limitations as string[] | undefined,
+          discoveredAt: value.discoveredAt as string | undefined,
+          verifiedAt: value.verifiedAt as string | undefined,
         });
       } else {
         // Recurse into nested object
