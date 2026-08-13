@@ -72,16 +72,6 @@ export class CapabilityResolutionService {
       deviceId,
       tenantId,
       lastUpdatedAt: new Date(),
-      video: {},
-      recording: {},
-      audio: {},
-      ptz: {},
-      events: {},
-      analytics: {},
-      storage: {},
-      network: {},
-      security: {},
-      management: {},
     };
 
     // Resolve each capability
@@ -274,7 +264,7 @@ export class CapabilityResolutionService {
       e.reason?.toLowerCase().includes("unavailable"),
     );
 
-    if (hasUnavailable && highest.verified) {
+    if (hasUnavailable && highest?.verified) {
       return "UNAVAILABLE";
     }
 
@@ -286,12 +276,12 @@ export class CapabilityResolutionService {
     }
 
     // If verified with high confidence, mark as supported
-    if (highest.verified && highest.confidence >= 0.7) {
+    if (highest?.verified && (highest?.confidence ?? 0) >= 0.7) {
       return "SUPPORTED";
     }
 
     // If discovered with reasonable confidence, mark as supported
-    if (highest.confidence >= 0.5) {
+    if ((highest?.confidence ?? 0) >= 0.5) {
       return "SUPPORTED";
     }
 
@@ -441,7 +431,7 @@ export class CapabilityResolutionService {
     let current: any = capabilitySet;
 
     for (let i = 0; i < parts.length - 1; i++) {
-      const part = parts[i];
+      const part = parts[i]!;
       if (!current[part]) {
         current[part] = {};
       }
@@ -449,6 +439,8 @@ export class CapabilityResolutionService {
     }
 
     const lastPart = parts[parts.length - 1];
-    current[lastPart] = capability;
+    if (lastPart) {
+      current[lastPart] = capability;
+    }
   }
 }

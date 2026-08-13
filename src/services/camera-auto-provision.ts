@@ -1,6 +1,7 @@
 import type { ControlPlaneStore } from "../control-plane-store.js";
 import type { DiscoveredCamera, RecordingJob } from "../domain/models.js";
 import { CAMERA_AI_RULE_BUNDLE, ensureCameraAiBundle } from "../analytics/camera-ai-bundle.js";
+import type { DeviceCapabilityRegistry } from "../device-capabilities/index.js";
 
 export interface CameraProvisionResult {
   discoveryId: string;
@@ -12,6 +13,13 @@ export interface CameraProvisionResult {
     recording: string;
     analytics: string;
     alerts: string;
+    capabilities: string;
+  };
+  capabilities?: {
+    discovered: number;
+    verified: number;
+    supported: number;
+    unavailable: number;
   };
 }
 
@@ -37,6 +45,8 @@ interface CameraProvisionOptions {
   enableAnalytics?: boolean;
   enableAlerts?: boolean;
   createdBy?: string;
+  capabilityRegistry?: DeviceCapabilityRegistry;
+  discoverCapabilities?: boolean;
 }
 
 function retentionTiers(retentionDays: number) {
@@ -174,6 +184,7 @@ export async function autoProvisionVerifiedCameras(
           recording: "waiting-for-stream",
           analytics: "waiting-for-stream",
           alerts: "waiting-for-stream",
+          capabilities: "not-attempted",
         },
       });
       summary.needsAttention++;
@@ -219,6 +230,37 @@ export async function autoProvisionVerifiedCameras(
         );
       }
 
+      // Discover capabilities if registry provided
+      let capabilitiesResult;
+      if (options.capabilityRegistry && (options.discoverCapabilities ?? true)) {
+        try {
+          const capabilities = await options.capabilityRegistry.refreshCapabilities(
+            branch.tenantId,
+            camera.id,
+          );
+
+          // Count capabilities by state
+          const counts = countCapabilitiesByState(capabilities);
+          capabilitiesResult = {
+            discovered: counts.total,
+            verified: counts.verified,
+            supported: counts.supported,
+            unavailable: counts.unavailable,
+          };
+        } catch (error) {
+          console.warn(
+            `Failed to discover capabilities for camera ${camera.id}:`,
+            error instanceof Error ? error.message : String(error),
+          );
+          capabilitiesResult = {
+            discovered: 0,
+            verified: 0,
+            supported: 0,
+            unavailable: 0,
+          };
+        }
+      }
+
       results.push({
         discoveryId: discovered.id,
         cameraId: camera.id,
@@ -231,7 +273,9 @@ export async function autoProvisionVerifiedCameras(
           recording: isRecorderBacked(discovered) ? "recorder-local" : "configured",
           analytics: analyticsEnabled ? "active" : "disabled",
           alerts: analyticsEnabled && alertsEnabled ? "enabled" : "disabled",
+          capabilities: capabilitiesResult ? "discovered" : "skipped",
         },
+        capabilities: capabilitiesResult,
       });
       summary.provisioned++;
     } catch (error) {
@@ -245,4 +289,39 @@ export async function autoProvisionVerifiedCameras(
   }
 
   return { summary, results };
+}
+
+/**
+ * Count capabilities by state for provisioning summary.
+ */
+function countCapabilitiesByState(capabilities: any): {
+  total: number;
+  verified: number;
+  supported: number;
+  unavailable: number;
+} {
+  let total = 0;
+  let verified = 0;
+  let supported = 0;
+  let unavailable = 0;
+
+  function traverse(obj: any): void {
+    if (!obj || typeof obj !== "object") return;
+
+    if ("state" in obj && "verificationLevel" in obj) {
+      // This is a capability
+      total++;
+      if (obj.verificationLevel === "VERIFIED") verified++;
+      if (obj.state === "SUPPORTED") supported++;
+      if (obj.state === "UNAVAILABLE") unavailable++;
+    } else {
+      // Traverse nested objects
+      for (const value of Object.values(obj)) {
+        traverse(value);
+      }
+    }
+  }
+
+  traverse(capabilities);
+  return { total, verified, supported, unavailable };
 }

@@ -20,6 +20,8 @@ import type { CapabilityRepository } from "./repositories/capability.repository.
 import type { CapabilityResolutionService } from "./capability-resolution.service.js";
 import { EventEmitter } from "node:events";
 import type { DeviceCapabilityChanged } from "./capability.types.js";
+import { capabilityEvents } from "./events/capability-event-bus.js";
+import { CapabilityDriftDetector } from "./events/capability-drift-detector.js";
 
 /**
  * Default cache TTL in seconds.
@@ -34,12 +36,15 @@ const DEFAULT_REVERIFICATION_AGE = 60; // 1 minute
 export class CapabilityRegistryService implements DeviceCapabilityRegistry {
   private readonly events = new EventEmitter();
   private readonly cache = new Map<string, CachedCapabilitySet>();
+  private readonly driftDetector: CapabilityDriftDetector;
 
   constructor(
     private readonly discoveryService: CapabilityDiscoveryService,
     private readonly resolutionService: CapabilityResolutionService,
     private readonly repository: CapabilityRepository,
-  ) {}
+  ) {
+    this.driftDetector = new CapabilityDriftDetector(capabilityEvents);
+  }
 
   /**
    * Get all capabilities for a device.
@@ -319,7 +324,11 @@ export class CapabilityRegistryService implements DeviceCapabilityRegistry {
     for (const change of changes) {
       this.events.emit("capability-changed", change);
       await this.repository.recordCapabilityChange(change);
+      await capabilityEvents.publishCapabilityChanged(change);
     }
+
+    // Detect drift patterns
+    await this.driftDetector.detectDrift(previous, current);
   }
 
   private findCapabilityChanges(
