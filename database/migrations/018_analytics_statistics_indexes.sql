@@ -34,9 +34,9 @@ ON analytics_events (tenant_id, status, detection_type, occurred_at DESC);
 
 -- Index for branch-level aggregations (requires join to cameras)
 -- Composite index to support branch filtering efficiently
-CREATE INDEX IF NOT EXISTS cameras_branch_id_idx
-ON cameras (branch_id)
-WHERE branch_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS cameras_branch_node_id_idx
+ON cameras (branch_node_id)
+WHERE branch_node_id IS NOT NULL;
 
 -- Optimize analytics_alerts queries for severity aggregation
 CREATE INDEX IF NOT EXISTS analytics_alerts_event_severity_idx
