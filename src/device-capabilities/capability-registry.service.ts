@@ -33,7 +33,7 @@ const DEFAULT_CACHE_TTL = 300; // 5 minutes
  */
 const DEFAULT_REVERIFICATION_AGE = 60; // 1 minute
 
-export class CapabilityRegistryService implements DeviceCapabilityRegistry {
+export class CapabilityRegistryService {
   private readonly events = new EventEmitter();
   private readonly cache = new Map<string, CachedCapabilitySet>();
   private readonly driftDetector: CapabilityDriftDetector;

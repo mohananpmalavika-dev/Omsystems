@@ -132,8 +132,10 @@ export class RtspCapabilityProbe implements CapabilityProbe {
     }
 
     // Mock SDP response
+    const ip = device.ipAddress ?? "192.168.1.100";
+
     const mockSdp = `v=0
-o=- 0 0 IN IP4 ${device.ipAddress || "192.168.1.100"}
+  o=- 0 0 IN IP4 ${ip}
 s=RTSP Session
 t=0 0
 m=video 0 RTP/AVP 96

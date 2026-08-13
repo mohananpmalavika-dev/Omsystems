@@ -148,21 +148,12 @@ export class InMemoryCapabilityRepository implements CapabilityRepository {
   async deleteDeviceCapabilities(tenantId: string, deviceId: string): Promise<void> {
     const key = this.getKey(tenantId, deviceId);
     this.capabilities.delete(key);
-
-    // Remove from history
-    const indices: number[] = [];
-    for (let i = 0; i < this.history.length; i++) {
-      const entry = this.history[i];
-      if (entry && entry.tenantId === tenantId && entry.deviceId === deviceId) {
-        indices.push(i);
-      }
-    }
-    for (let i = indices.length - 1; i >= 0; i--) {
-      const index = indices[i];
-      if (index !== undefined) {
-        this.history.splice(index, 1);
-      }
-    }
+    // Remove from history (mutate existing array to satisfy readonly)
+    const remaining = this.history.filter((entry) => {
+      return !(entry && entry.tenantId === tenantId && entry.deviceId === deviceId);
+    });
+    this.history.length = 0;
+    for (const e of remaining) this.history.push(e);
   }
 
   // ============ PRIVATE METHODS ============

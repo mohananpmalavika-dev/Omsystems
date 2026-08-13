@@ -96,7 +96,7 @@ export { CapabilityDriftDetector } from "./events/capability-drift-detector.js";
 export function createCapabilityRegistry(options: {
   repository?: CapabilityRepository;
   probes?: CapabilityProbe[];
-} = {}): DeviceCapabilityRegistry {
+} = {}): CapabilityRegistryService {
   const {
     repository = new InMemoryCapabilityRepository(),
     probes = [

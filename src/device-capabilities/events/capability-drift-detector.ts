@@ -1,6 +1,6 @@
 /**
  * Capability Drift Detector
- * 
+ *
  * Monitors capability changes and detects meaningful drift patterns.
  */
 
@@ -10,6 +10,7 @@ import type {
   CapabilityDriftType,
   DeviceCapabilitySet,
   Capability,
+  CapabilityKey,
 } from "../capability.types.js";
 import type { CapabilityEventBus } from "./capability-event-bus.js";
 
@@ -17,29 +18,19 @@ import type { CapabilityEventBus } from "./capability-event-bus.js";
  * Drift detection thresholds.
  */
 export interface DriftDetectionConfig {
-  /** Minimum confidence drop to trigger drift (0-1) */
   minConfidenceDrop: number;
-
-  /** Time window to compare capabilities (in seconds) */
   comparisonWindowSeconds: number;
-
-  /** Whether to detect firmware-related drift */
   detectFirmwareDrift: boolean;
-
-  /** Whether to detect license-related drift */
   detectLicenseDrift: boolean;
 }
 
 const DEFAULT_CONFIG: DriftDetectionConfig = {
   minConfidenceDrop: 0.2,
-  comparisonWindowSeconds: 3600, // 1 hour
+  comparisonWindowSeconds: 3600,
   detectFirmwareDrift: true,
   detectLicenseDrift: true,
 };
 
-/**
- * Capability drift detector.
- */
 export class CapabilityDriftDetector {
   private readonly config: DriftDetectionConfig;
   private readonly previousCapabilities = new Map<string, DeviceCapabilitySet>();
@@ -51,9 +42,6 @@ export class CapabilityDriftDetector {
     this.config = { ...DEFAULT_CONFIG, ...config };
   }
 
-  /**
-   * Detect drift between capability sets.
-   */
   async detectDrift(
     previous: DeviceCapabilitySet,
     current: DeviceCapabilitySet,
@@ -66,58 +54,35 @@ export class CapabilityDriftDetector {
       previous,
     );
 
-    // Compare each capability domain
-    driftEvents.push(...(this.compareCapabilities(previous.video, current.video, "video") as CapabilityDriftEvent[]));
-    driftEvents.push(
-      ...(this.compareCapabilities(previous.recording, current.recording, "recording") as CapabilityDriftEvent[]),
-    );
-    driftEvents.push(...(this.compareCapabilities(previous.ptz, current.ptz, "ptz") as CapabilityDriftEvent[]));
-    driftEvents.push(...(this.compareCapabilities(previous.audio, current.audio, "audio") as CapabilityDriftEvent[]));
-    driftEvents.push(...(this.compareCapabilities(previous.events, current.events, "events") as CapabilityDriftEvent[]));
-    driftEvents.push(
-      ...(this.compareCapabilities(previous.analytics, current.analytics, "analytics") as CapabilityDriftEvent[]),
-    );
-    driftEvents.push(
-      ...(this.compareCapabilities(previous.storage, current.storage, "storage") as CapabilityDriftEvent[]),
-    );
-    driftEvents.push(
-      ...(this.compareCapabilities(previous.network, current.network, "network") as CapabilityDriftEvent[]),
-    );
-    driftEvents.push(
-      ...(this.compareCapabilities(previous.security, current.security, "security") as CapabilityDriftEvent[]),
-    );
-    driftEvents.push(
-      ...(this.compareCapabilities(previous.management, current.management, "management") as CapabilityDriftEvent[]),
-    );
+    // Compare each capability domain and include tenant/device context
+    driftEvents.push(...this.compareCapabilities(previous.video, current.video, "video", current.tenantId, current.deviceId));
+    driftEvents.push(...this.compareCapabilities(previous.recording, current.recording, "recording", current.tenantId, current.deviceId));
+    driftEvents.push(...this.compareCapabilities(previous.ptz, current.ptz, "ptz", current.tenantId, current.deviceId));
+    driftEvents.push(...this.compareCapabilities(previous.audio, current.audio, "audio", current.tenantId, current.deviceId));
+    driftEvents.push(...this.compareCapabilities(previous.events, current.events, "events", current.tenantId, current.deviceId));
+    driftEvents.push(...this.compareCapabilities(previous.analytics, current.analytics, "analytics", current.tenantId, current.deviceId));
+    driftEvents.push(...this.compareCapabilities(previous.storage, current.storage, "storage", current.tenantId, current.deviceId));
+    driftEvents.push(...this.compareCapabilities(previous.network, current.network, "network", current.tenantId, current.deviceId));
+    driftEvents.push(...this.compareCapabilities(previous.security, current.security, "security", current.tenantId, current.deviceId));
+    driftEvents.push(...this.compareCapabilities(previous.management, current.management, "management", current.tenantId, current.deviceId));
 
-    // Add context to events
+    // Enrich events and publish them
     for (const event of driftEvents) {
-      event.tenantId = current.tenantId;
-      event.deviceId = current.deviceId;
-      event.detectedAt = new Date();
       event.probableCause = this.inferCause(event, previous, current);
-    }
-
-    // Publish drift events
-    for (const event of driftEvents) {
       await this.eventBus.publishCapabilityDrift(event);
     }
 
     return driftEvents;
   }
 
-  /**
-   * Compare capability objects and detect changes.
-   */
   private compareCapabilities(
     previous: any,
     current: any,
     prefix: string,
-  ): Omit<CapabilityDriftEvent, "tenantId" | "deviceId" | "detectedAt" | "probableCause">[] {
-    const events: Omit<
-      CapabilityDriftEvent,
-      "tenantId" | "deviceId" | "detectedAt" | "probableCause"
-    >[] = [];
+    tenantId: string,
+    deviceId: string,
+  ): CapabilityDriftEvent[] {
+    const events: CapabilityDriftEvent[] = [];
 
     if (!previous && !current) return events;
 
@@ -128,8 +93,11 @@ export class CapabilityDriftDetector {
         if (cap.capability.state === "SUPPORTED") {
           events.push({
             driftType: "CAPABILITY_ADDED",
-            capability: cap.path as any,
+            capability: cap.path as CapabilityKey,
             newValue: cap.capability.state,
+            tenantId,
+            deviceId,
+            detectedAt: new Date(),
           });
         }
       }
@@ -143,8 +111,11 @@ export class CapabilityDriftDetector {
         if (cap.capability.state === "SUPPORTED") {
           events.push({
             driftType: "CAPABILITY_REMOVED",
-            capability: cap.path as any,
+            capability: cap.path as CapabilityKey,
             previousValue: cap.capability.state,
+            tenantId,
+            deviceId,
+            detectedAt: new Date(),
           });
         }
       }
@@ -152,7 +123,7 @@ export class CapabilityDriftDetector {
     }
 
     // Compare nested capabilities
-    for (const key of Object.keys({ ...previous, ...current })) {
+    for (const key of Object.keys({ ...(previous || {}), ...(current || {}) })) {
       const prevValue = previous?.[key];
       const currValue = current?.[key];
 
@@ -161,131 +132,146 @@ export class CapabilityDriftDetector {
         const currCap = currValue as Capability;
         const capPath = `${prefix}.${key}`;
 
-        // Check for state changes
+        // State changes
         if (prevCap?.state !== currCap.state) {
-          events.push(
-            ...this.detectStateChange(capPath, prevCap, currCap),
-          );
+          events.push(...this.detectStateChange(capPath, prevCap, currCap, tenantId, deviceId));
         }
 
-        // Check for availability changes
+        // Availability changes
         if (prevCap && prevCap.available !== currCap.available) {
           if (!currCap.available && prevCap.available) {
             events.push({
               driftType: "CAPABILITY_UNAVAILABLE",
-              capability: capPath as any,
+              capability: capPath as CapabilityKey,
               previousValue: "available",
               newValue: "unavailable",
+              tenantId,
+              deviceId,
+              detectedAt: new Date(),
             });
           } else if (currCap.available && !prevCap.available) {
             events.push({
               driftType: "CAPABILITY_RECOVERED",
-              capability: capPath as any,
+              capability: capPath as CapabilityKey,
               previousValue: "unavailable",
               newValue: "available",
+              tenantId,
+              deviceId,
+              detectedAt: new Date(),
             });
           }
         }
 
-        // Check for confidence drops
+        // Confidence drops
         if (
           prevCap &&
+          typeof currCap.confidence === "number" &&
+          typeof prevCap.confidence === "number" &&
           currCap.confidence < prevCap.confidence - this.config.minConfidenceDrop
         ) {
           events.push({
             driftType: "CAPABILITY_DEGRADED",
-            capability: capPath as any,
+            capability: capPath as CapabilityKey,
             previousValue: prevCap.confidence.toFixed(2),
             newValue: currCap.confidence.toFixed(2),
+            tenantId,
+            deviceId,
+            detectedAt: new Date(),
           });
         }
       } else if (typeof currValue === "object" && currValue !== null) {
-        // Recurse into nested objects
-        events.push(
-          ...this.compareCapabilities(prevValue, currValue, `${prefix}.${key}`),
-        );
+        events.push(...this.compareCapabilities(prevValue, currValue, `${prefix}.${key}`, tenantId, deviceId));
       }
     }
 
     return events;
   }
 
-  /**
-   * Detect state change drift.
-   */
   private detectStateChange(
     path: string,
     previous: Capability | undefined,
     current: Capability,
-  ): Omit<CapabilityDriftEvent, "tenantId" | "deviceId" | "detectedAt" | "probableCause">[] {
-    const events: Omit<
-      CapabilityDriftEvent,
-      "tenantId" | "deviceId" | "detectedAt" | "probableCause"
-    >[] = [];
+    tenantId: string,
+    deviceId: string,
+  ): CapabilityDriftEvent[] {
+    const events: CapabilityDriftEvent[] = [];
 
     if (!previous) {
       if (current.state === "SUPPORTED") {
         events.push({
           driftType: "CAPABILITY_ADDED",
-          capability: path as any,
+          capability: path as CapabilityKey,
           newValue: current.state,
+          tenantId,
+          deviceId,
+          detectedAt: new Date(),
         });
       }
       return events;
     }
 
-    // State transitions
     if (previous.state === "SUPPORTED" && current.state !== "SUPPORTED") {
       if (current.state === "UNAVAILABLE") {
         events.push({
           driftType: "CAPABILITY_UNAVAILABLE",
-          capability: path as any,
+          capability: path as CapabilityKey,
           previousValue: previous.state,
           newValue: current.state,
+          tenantId,
+          deviceId,
+          detectedAt: new Date(),
         });
       } else if (current.state === "DEGRADED") {
         events.push({
           driftType: "CAPABILITY_DEGRADED",
-          capability: path as any,
+          capability: path as CapabilityKey,
           previousValue: previous.state,
           newValue: current.state,
+          tenantId,
+          deviceId,
+          detectedAt: new Date(),
         });
       } else if (current.state === "UNSUPPORTED") {
         events.push({
           driftType: "CAPABILITY_REMOVED",
-          capability: path as any,
+          capability: path as CapabilityKey,
           previousValue: previous.state,
           newValue: current.state,
+          tenantId,
+          deviceId,
+          detectedAt: new Date(),
         });
       }
     } else if (previous.state !== "SUPPORTED" && current.state === "SUPPORTED") {
       events.push({
         driftType: "CAPABILITY_RECOVERED",
-        capability: path as any,
+        capability: path as CapabilityKey,
         previousValue: previous.state,
         newValue: current.state,
+        tenantId,
+        deviceId,
+        detectedAt: new Date(),
       });
     } else if (previous.state !== current.state) {
       events.push({
         driftType: "CAPABILITY_CONFIGURATION_CHANGED",
-        capability: path as any,
+        capability: path as CapabilityKey,
         previousValue: previous.state,
         newValue: current.state,
+        tenantId,
+        deviceId,
+        detectedAt: new Date(),
       });
     }
 
     return events;
   }
 
-  /**
-   * Infer probable cause of drift.
-   */
   private inferCause(
-    event: Omit<CapabilityDriftEvent, "probableCause">,
+    event: CapabilityDriftEvent,
     previous: DeviceCapabilitySet,
     current: DeviceCapabilitySet,
   ): string | undefined {
-    // Check for firmware changes
     if (this.config.detectFirmwareDrift) {
       const prevFirmware = previous.management?.firmwareVersion;
       const currFirmware = current.management?.firmwareVersion;
@@ -298,7 +284,6 @@ export class CapabilityDriftDetector {
       }
     }
 
-    // Check for credential issues
     if (
       event.driftType === "CAPABILITY_UNAVAILABLE" &&
       event.capability.includes("network")
@@ -306,21 +291,18 @@ export class CapabilityDriftDetector {
       return "Possible credential expiry or network authentication failure";
     }
 
-    // Check for security-related drift
     if (event.capability.includes("security")) {
       if (event.driftType === "CAPABILITY_REMOVED" || event.driftType === "CAPABILITY_UNAVAILABLE") {
         return "Security configuration change or certificate expiry";
       }
     }
 
-    // Check for storage-related drift
     if (event.capability.includes("storage")) {
       if (event.driftType === "CAPABILITY_UNAVAILABLE") {
         return "Storage device removed or failed";
       }
     }
 
-    // Generic inference based on drift type
     const typeInferences: Record<CapabilityDriftType, string> = {
       CAPABILITY_ADDED: "Device reconfiguration or firmware upgrade",
       CAPABILITY_REMOVED: "Configuration change or hardware limitation",
@@ -333,29 +315,22 @@ export class CapabilityDriftDetector {
     return typeInferences[event.driftType];
   }
 
-  /**
-   * Check if object is a Capability.
-   */
   private isCapability(obj: any): obj is Capability {
     return (
       obj &&
       typeof obj === "object" &&
       "state" in obj &&
-      "available" in obj &&
-      "confidence" in obj
+      "available" in obj
     );
   }
 
-  /**
-   * Extract all capabilities from an object.
-   */
   private extractCapabilities(
     obj: any,
     prefix: string,
   ): Array<{ path: string; capability: Capability }> {
     const result: Array<{ path: string; capability: Capability }> = [];
 
-    for (const [key, value] of Object.entries(obj)) {
+    for (const [key, value] of Object.entries(obj || {})) {
       if (this.isCapability(value)) {
         result.push({
           path: `${prefix}.${key}`,
@@ -369,9 +344,6 @@ export class CapabilityDriftDetector {
     return result;
   }
 
-  /**
-   * Get cache key.
-   */
   private getKey(tenantId: string, deviceId: string): string {
     return `${tenantId}:${deviceId}`;
   }
