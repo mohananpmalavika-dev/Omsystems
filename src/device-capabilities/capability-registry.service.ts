@@ -52,8 +52,30 @@ export class CapabilityRegistryService implements DeviceCapabilityRegistry {
   async getCapabilities(
     tenantId: string,
     deviceId: string,
-    options: CapabilityQueryOptions = {},
-  ): Promise<DeviceCapabilitySet> {
+    options?: CapabilityQueryOptions,
+  ): Promise<DeviceCapabilitySet>;
+  async getCapabilities(
+    tenantId: string,
+    deviceId: string,
+    capabilities: CapabilityKey[],
+    options?: CapabilityQueryOptions,
+  ): Promise<Map<CapabilityKey, Capability>>;
+  async getCapabilities(
+    tenantId: string,
+    deviceId: string,
+    arg?: any,
+    maybeOptions?: any,
+  ): Promise<any> {
+    // Normalize args
+    let requestedCapabilities: CapabilityKey[] | undefined;
+    let options: CapabilityQueryOptions = {};
+    if (Array.isArray(arg)) {
+      requestedCapabilities = arg as CapabilityKey[];
+      options = maybeOptions ?? {};
+    } else {
+      options = arg ?? {};
+    }
+
     const cacheKey = this.getCacheKey(tenantId, deviceId);
     const maxAge = options.maxAge ?? DEFAULT_CACHE_TTL;
 
@@ -61,28 +83,62 @@ export class CapabilityRegistryService implements DeviceCapabilityRegistry {
     if (!options.forceRefresh) {
       const cached = this.cache.get(cacheKey);
       if (cached && !this.isCacheStale(cached, maxAge)) {
-        return cached.capabilities;
+        const cachedSet = cached.capabilities;
+        if (requestedCapabilities) {
+          const map = new Map<CapabilityKey, Capability>();
+          for (const key of requestedCapabilities) {
+            const cap = this.extractCapability(cachedSet, key);
+            if (cap) map.set(key, cap);
+          }
+          return map;
+        }
+        return cachedSet;
       }
     }
 
-    // Load from database
+    // Load from repository
     const stored = await this.repository.getDeviceCapabilities(tenantId, deviceId);
 
     if (stored && !options.forceRefresh) {
-      // Check if stored data is fresh enough
       const age = Date.now() - stored.lastUpdatedAt.getTime();
       if (age / 1000 < maxAge) {
         this.updateCache(tenantId, deviceId, stored);
+        if (requestedCapabilities) {
+          const map = new Map<CapabilityKey, Capability>();
+          for (const key of requestedCapabilities) {
+            const cap = this.extractCapability(stored, key);
+            if (cap) map.set(key, cap);
+          }
+          return map;
+        }
         return stored;
       }
     }
 
     // Refresh from device if no stored data or force refresh
     if (!stored || options.forceRefresh) {
-      return this.refreshCapabilities(tenantId, deviceId);
+      const refreshed = await this.refreshCapabilities(tenantId, deviceId);
+      if (requestedCapabilities) {
+        const map = new Map<CapabilityKey, Capability>();
+        for (const key of requestedCapabilities) {
+          const cap = this.extractCapability(refreshed, key);
+          if (cap) map.set(key, cap);
+        }
+        return map;
+      }
+      return refreshed;
     }
 
-    return stored;
+    if (requestedCapabilities) {
+      const map = new Map<CapabilityKey, Capability>();
+      for (const key of requestedCapabilities) {
+        const cap = this.extractCapability(stored as DeviceCapabilitySet, key);
+        if (cap) map.set(key, cap);
+      }
+      return map;
+    }
+
+    return stored as DeviceCapabilitySet;
   }
 
   /**
