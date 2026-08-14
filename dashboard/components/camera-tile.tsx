@@ -20,6 +20,7 @@ import { useRef, useState } from "react";
 import type { Camera, LiveSessionResponse, RecordingJob, RecordingMode } from "@/lib/types";
 import { HlsPlayer } from "./hls-player";
 import { PtzControl } from "./ptz-control";
+import { HoldToTalkButton } from "./hold-to-talk-button";
 
 export function CameraTile({
   camera,
@@ -214,6 +215,15 @@ export function CameraTile({
             <button aria-label="Audio available" title="Audio available">
               <Volume2 size={15} />
             </button>
+          )}
+          {(camera.capabilities.audio || camera.capabilities.talkback?.supported) && (
+            <HoldToTalkButton
+              cameraId={camera.id}
+              disabled={!isActive || camera.status === "offline"}
+              unsupportedReason={camera.capabilities.talkback?.supported === false
+                ? camera.capabilities.talkback.reason ?? "two-way audio is not supported"
+                : undefined}
+            />
           )}
           {camera.capabilities.ptz && (
             <button aria-label="PTZ controls" title="PTZ controls" onClick={() => setShowPtzControl(!showPtzControl)} disabled={!isActive}>

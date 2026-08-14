@@ -12,12 +12,14 @@ import {
   Router,
   Search,
   X,
+  QrCode,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { cameraInventoryApi, deviceInventoryApi, provisioningApi } from "@/lib/api-client";
 import { discoveryDeviceTypeLabel, discoveryModelLabel } from "@/lib/discovery-display";
 import { BranchConnectivityPanel } from "@/components/branch-connectivity-panel";
 import { ProvisioningRun } from "@/components/provisioning-run";
+import { QRCredentialScanner } from "@/components/qr-credential-scanner";
 import type {
   Branch,
   Camera as CameraRecord,
@@ -199,6 +201,7 @@ export function DeviceManager() {
   const [credentialActivation, setCredentialActivation] = useState<any>();
   const [activationUsername, setActivationUsername] = useState("");
   const [activationPassword, setActivationPassword] = useState("");
+  const [showQRScanner, setShowQRScanner] = useState(false);
   const [registrationMode, setRegistrationMode] = useState<"automatic" | "manual" | "bulk">("automatic");
   const [selectedDiscoveryId, setSelectedDiscoveryId] = useState<string>();
   const [previewDiscoveryId, setPreviewDiscoveryId] = useState<string>();
@@ -1266,6 +1269,22 @@ export function DeviceManager() {
               </div>
               <div className="form-group"><label htmlFor="activationUsername">Username <span className="required">*</span></label><input id="activationUsername" value={activationUsername} onChange={(event) => setActivationUsername(event.target.value)} autoComplete="username" required /></div>
               <div className="form-group"><label htmlFor="activationPassword">Password <span className="required">*</span></label><input id="activationPassword" type="password" value={activationPassword} onChange={(event) => setActivationPassword(event.target.value)} autoComplete="current-password" required /></div>
+              
+              <div className="qr-credential-options">
+                <p className="qr-help-text">Or extract credentials from camera QR code:</p>
+                <div className="qr-button-group">
+                  <button
+                    type="button"
+                    className="qr-option-btn"
+                    onClick={() => setShowQRScanner(true)}
+                    disabled={saving}
+                  >
+                    <QrCode size={18} />
+                    Scan or Upload QR Code
+                  </button>
+                </div>
+              </div>
+
               <p className="field-help">This login is saved only for this detected IP address. No broadcast discovery, subnet scan, or other camera probe will run.</p>
               <div className="modal-actions"><button type="button" className="secondary-button" onClick={() => { setCredentialActivation(undefined); setActivationPassword(""); }} disabled={saving}>Cancel</button><button className="primary-button" disabled={saving || !activationUsername.trim() || !activationPassword}>{saving ? "Verifying this device…" : "Save & verify this device"}</button></div>
             </form>
@@ -1421,6 +1440,18 @@ export function DeviceManager() {
             </form>
           </div>
         </div>
+      )}
+      
+      {showQRScanner && (
+        <QRCredentialScanner
+          onCredentialsExtracted={(username, password) => {
+            setActivationUsername(username);
+            setActivationPassword(password);
+            setShowQRScanner(false);
+            setNotice("Credentials extracted from QR code successfully!");
+          }}
+          onClose={() => setShowQRScanner(false)}
+        />
       )}
     </div>
   );

@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>QR Credential Scanner Demo</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #f1f5f9;
+      padding: 2rem;
+    }
+    
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+    
+    header {
+      background: white;
+      padding: 2rem;
+      border-radius: 12px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      margin-bottom: 2rem;
+    }
+    
+    h1 {
+      color: #1e293b;
+      margin-bottom: 0.5rem;
+    }
+    
+    .subtitle {
+      color: #64748b;
+      font-size: 1.125rem;
+    }
+    
+    .flow-diagram {
+      background: white;
+      padding: 2rem;
+      border-radius: 12px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      margin-bottom: 2rem;
+    }
+    
+    .flow-step {
+      display: flex;
+      align-items: center;
+      margin: 1.5rem 0;
+      padding: 1.5rem;
+      background: #f8fafc;
+      border-radius: 8px;
+      border-left: 4px solid #3b82f6;
+    }
+    
+    .step-number {
+      width: 40px;
+      height: 40px;
+      background: #3b82f6;
+      color: white;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: bold;
+      font-size: 1.25rem;
+      margin-right: 1.5rem;
+      flex-shrink: 0;
+    }
+    
+    .step-content h3 {
+      color: #1e293b;
+      margin-bottom: 0.5rem;
+    }
+    
+    .step-content p {
+      color: #64748b;
+      line-height: 1.6;
+    }
+    
+    .arrow {
+      text-align: center;
+      color: #94a3b8;
+      font-size: 2rem;
+      margin: 0.5rem 0;
+    }
+    
+    .feature-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 1.5rem;
+      margin-bottom: 2rem;
+    }
+    
+    .feature-card {
+      background: white;
+      padding: 1.5rem;
+      border-radius: 12px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    
+    .feature-icon {
+      width: 50px;
+      height: 50px;
+      background: #dbeafe;
+      color: #3b82f6;
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.5rem;
+      margin-bottom: 1rem;
+    }
+    
+    .feature-card h3 {
+      color: #1e293b;
+      margin-bottom: 0.5rem;
+    }
+    
+    .feature-card p {
+      color: #64748b;
+      font-size: 0.875rem;
+      line-height: 1.6;
+    }
+    
+    .demo-section {
+      background: white;
+      padding: 2rem;
+      border-radius: 12px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      margin-bottom: 2rem;
+    }
+    
+    .demo-section h2 {
+      color: #1e293b;
+      margin-bottom: 1.5rem;
+    }
+    
+    .qr-examples {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 1rem;
+    }
+    
+    .qr-example {
+      padding: 1rem;
+      background: #f8fafc;
+      border-radius: 8px;
+      border: 1px solid #e2e8f0;
+    }
+    
+    .qr-example h4 {
+      color: #475569;
+      font-size: 0.875rem;
+      margin-bottom: 0.5rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    
+    .qr-example code {
+      display: block;
+      background: white;
+      padding: 0.75rem;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      color: #1e293b;
+      overflow-x: auto;
+      font-family: 'Courier New', monospace;
+    }
+    
+    .cta-section {
+      background: linear-gradient(135deg, #3b82f6 0%, #1e40af 100%);
+      color: white;
+      padding: 3rem 2rem;
+      border-radius: 12px;
+      text-align: center;
+    }
+    
+    .cta-section h2 {
+      margin-bottom: 1rem;
+    }
+    
+    .cta-section p {
+      font-size: 1.125rem;
+      margin-bottom: 2rem;
+      opacity: 0.95;
+    }
+    
+    .btn {
+      display: inline-block;
+      padding: 0.875rem 2rem;
+      background: white;
+      color: #3b82f6;
+      border-radius: 8px;
+      text-decoration: none;
+      font-weight: 600;
+      transition: transform 0.2s;
+    }
+    
+    .btn:hover {
+      transform: translateY(-2px);
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>📷 QR Credential Scanner</h1>
+      <p class="subtitle">Extract camera login credentials from QR codes instantly</p>
+    </header>
+    
+    <div class="flow-diagram">
+      <h2 style="margin-bottom: 2rem; color: #1e293b;">How It Works</h2>
+      
+      <div class="flow-step">
+        <div class="step-number">1</div>
+        <div class="step-content">
+          <h3>Navigate to Branch Onboarding</h3>
+          <p>Go to Admin → Branch Onboarding and select your branch location</p>
+        </div>
+      </div>
+      
+      <div class="arrow">↓</div>
+      
+      <div class="flow-step">
+        <div class="step-number">2</div>
+        <div class="step-content">
+          <h3>Scan for Cameras</h3>
+          <p>Click "Scan cameras" to discover all cameras on the network</p>
+        </div>
+      </div>
+      
+      <div class="arrow">↓</div>
+      
+      <div class="flow-step">
+        <div class="step-number">3</div>
+        <div class="step-content">
+          <h3>Device Needs Credentials</h3>
+          <p>When a camera shows "Login required", click "Enter login & password"</p>
+        </div>
+      </div>
+      
+      <div class="arrow">↓</div>
+      
+      <div class="flow-step" style="border-left-color: #10b981;">
+        <div class="step-number" style="background: #10b981;">✓</div>
+        <div class="step-content">
+          <h3>Use QR Scanner</h3>
+          <p>Click "Scan or Upload QR Code" → Choose scanning method → Credentials auto-fill!</p>
+        </div>
+      </div>
+    </div>
+    
+    <div class="feature-grid">
+      <div class="feature-card">
+        <div class="feature-icon">📸</div>
+        <h3>Camera Scan</h3>
+        <p>Use your device camera to scan QR codes in real-time. Hold the code in frame for 2-3 seconds.</p>
+      </div>
+      
+      <div class="feature-card">
+        <div class="feature-icon">🖼️</div>
+        <h3>Image Upload</h3>
+        <p>Upload a saved QR code image from your computer or phone. Supports JPEG, PNG, and more.</p>
+      </div>
+      
+      <div class="feature-card">
+        <div class="feature-icon">🔄</div>
+        <h3>Multiple Formats</h3>
+        <p>Automatically detects and parses JSON, key-value, URL, and comma-separated QR formats.</p>
+      </div>
+      
+      <div class="feature-card">
+        <div class="feature-icon">🔐</div>
+        <h3>Secure</h3>
+        <p>Credentials processed locally in memory. No storage, no logging, no cloud transmission.</p>
+      </div>
+      
+      <div class="feature-card">
+        <div class="feature-icon">📱</div>
+        <h3>Mobile Ready</h3>
+        <p>Works seamlessly on phones, tablets, and desktops with responsive design.</p>
+      </div>
+      
+      <div class="feature-card">
+        <div class="feature-icon">⚡</div>
+        <h3>Instant</h3>
+        <p>No manual typing. Scan and submit in seconds. Save time on bulk camera deployments.</p>
+      </div>
+    </div>
+    
+    <div class="demo-section">
+      <h2>Supported QR Code Formats</h2>
+      <p style="color: #64748b; margin-bottom: 1.5rem;">
+        The scanner automatically detects and parses these common formats:
+      </p>
+      
+      <div class="qr-examples">
+        <div class="qr-example">
+          <h4>JSON Format</h4>
+          <code>{"user":"admin",<br>"pwd":"pass123"}</code>
+        </div>
+        
+        <div class="qr-example">
+          <h4>Key-Value Format</h4>
+          <code>USER:admin;<br>PWD:pass123</code>
+        </div>
+        
+        <div class="qr-example">
+          <h4>URL Format</h4>
+          <code>http://cam?<br>user=admin&<br>pwd=pass123</code>
+        </div>
+        
+        <div class="qr-example">
+          <h4>Comma Format</h4>
+          <code>deviceID,<br>admin,<br>pass123,<br>192.168.1.1</code>
+        </div>
+      </div>
+    </div>
+    
+    <div class="cta-section">
+      <h2>Ready to Try It?</h2>
+      <p>Start using the QR credential scanner in your branch onboarding workflow today</p>
+      <a href="/admin/branch-onboarding" class="btn">Go to Branch Onboarding →</a>
+    </div>
+  </div>
+</body>
+</html>

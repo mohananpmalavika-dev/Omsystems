@@ -374,8 +374,8 @@ export class PostgresStore
   async updateCameraStatus(id: string, status: CameraStatus) {
     return this.cameras.updateStatus(id, status);
   }
-  async createLiveSession(cameraId: string, userId: string) {
-    return this.cameras.createLiveSession(cameraId, userId);
+  async createLiveSession(cameraId: string, userId: string, purpose: "view" | "talk" = "view") {
+    return this.cameras.createLiveSession(cameraId, userId, purpose);
   }
   async consumeLiveSession(token: string) {
     return this.cameras.consumeLiveSession(token);

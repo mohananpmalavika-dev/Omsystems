@@ -5,6 +5,7 @@ export interface ConsumedSession {
   userId: string;
   tenantId: string;
   connectionSecretRef: string;
+  purpose?: "view" | "talk";
   profiles: Array<{
     name: string;
     codec: string;

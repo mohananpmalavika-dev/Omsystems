@@ -1,5 +1,6 @@
 export const actions = [
   "live:view",
+  "audio:talk",
   "recording:view",
   "evidence:export",
   "ptz:operate",
@@ -177,6 +178,26 @@ export interface CameraCapabilities {
   ptz: boolean;
   audio: boolean;
   events: boolean;
+  /**
+   * Two-way audio is independent from camera-to-operator audio. Older records
+   * omit this field and are checked by the edge adapter on first use.
+   */
+  talkback?: CameraTalkbackCapability;
+}
+
+export type TalkbackTransport =
+  | "onvif-rtsp-backchannel"
+  | "vendor-adapter"
+  | "none"
+  | "unknown";
+
+export interface CameraTalkbackCapability {
+  supported: boolean;
+  transport: TalkbackTransport;
+  codecs?: Array<"PCMA" | "PCMU" | "AAC" | "OPUS" | "unknown">;
+  sampleRates?: number[];
+  verifiedAt?: string;
+  reason?: string;
 }
 
 export interface CameraSpecifications {
@@ -772,6 +793,7 @@ export interface LiveSession {
   token: string;
   expiresAt: string;
   mediaGatewayUrl?: string;
+  purpose?: "view" | "talk";
 }
 
 export interface ConsumedLiveSession {
@@ -782,6 +804,14 @@ export interface ConsumedLiveSession {
   tenantId: string;
   connectionSecretRef: string;
   profiles: CameraProfile[];
+  purpose?: "view" | "talk";
+  vendor?: CameraVendor;
+  model?: string;
+  protocol?: Camera["protocol"];
+  sourceType?: CameraSourceType;
+  channel?: number;
+  recorderChannel?: number;
+  capabilities?: CameraCapabilities;
 }
 
 export type RecordingMode = "continuous" | "motion" | "scheduled" | "event" | "manual";

@@ -265,6 +265,13 @@ export interface Camera {
     audio: boolean;
     events: boolean;
     analytics?: string[];
+    talkback?: {
+      supported: boolean;
+      transport: "onvif-rtsp-backchannel" | "vendor-adapter" | "none" | "unknown";
+      codecs?: Array<"PCMA" | "PCMU" | "AAC" | "OPUS" | "unknown">;
+      sampleRates?: number[];
+      reason?: string;
+    };
   };
 }
 
@@ -455,6 +462,21 @@ export interface EdgeScanJob {
   analyticsCompatibleCount: number;
   duplicateCount: number;
   error: string | null;
+}
+
+export interface TalkSessionResponse {
+  sessionId: string;
+  cameraId: string;
+  expiresAt: string;
+  adapter: string;
+  audio: {
+    url: string;
+    endUrl: string;
+    bearerToken: string;
+    contentType: "audio/L16;rate=8000;channels=1";
+    codec: "PCMA" | "PCMU";
+    sampleRate: 8000;
+  };
 }
 
 export type ProvisioningStepStatus =

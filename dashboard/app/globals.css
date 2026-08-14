@@ -547,6 +547,11 @@ button { cursor: pointer; }
   animation: scanning-progress 3s ease-in-out infinite;
   z-index: 3;
 }
+.tile-actions .hold-to-talk { width: auto; min-width: 31px; padding: 0 8px; gap: 5px; user-select: none; touch-action: none; }
+.tile-actions .hold-to-talk .talk-label { display: none; font-size: 9px; font-weight: 800; letter-spacing: .03em; text-transform: uppercase; }
+.tile-actions .hold-to-talk.is-talking { width: auto; border-color: rgba(248,113,113,.9); background: rgba(185,28,28,.9); box-shadow: 0 0 0 3px rgba(239,68,68,.22); }
+.tile-actions .hold-to-talk.is-talking .talk-label { display: inline; }
+.tile-actions .hold-to-talk.has-error { border-color: rgba(251,191,36,.8); color: #fef3c7; }
 
 @keyframes scanning-progress {
   0% { width: 0%; }
@@ -5069,4 +5074,60 @@ button, a { -webkit-tap-highlight-color: transparent; }
   .employee-report-control-actions { grid-template-columns: repeat(2,minmax(0,1fr)); }
   .employee-report-stats, .employee-monitoring-grid, .employee-action-grid { grid-template-columns: 1fr; }
   .employee-report-stats article:last-child { grid-column: auto; }
+}
+
+/* QR Credential Scanner Styles */
+.qr-credential-options {
+  margin: 1.5rem 0;
+  padding: 1rem;
+  background: #f8fafc;
+  border-radius: 8px;
+  border: 1px dashed #cbd5e1;
+}
+
+.qr-help-text {
+  margin: 0 0 0.75rem;
+  font-size: 0.875rem;
+  color: #64748b;
+  font-weight: 500;
+}
+
+.qr-button-group {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.qr-option-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.625rem 1rem;
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #1e293b;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.qr-option-btn:hover:not(:disabled) {
+  background: #f1f5f9;
+  border-color: #94a3b8;
+  transform: translateY(-1px);
+}
+
+.qr-option-btn:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.qr-option-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.qr-option-btn svg {
+  flex-shrink: 0;
 }

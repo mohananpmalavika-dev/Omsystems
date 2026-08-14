@@ -124,7 +124,7 @@ const seedUsers: User[] = [
 ];
 
 const operatorActions: Action[] = [
-  "live:view", "recording:view", "alarm:acknowledge",
+  "live:view", "audio:talk", "recording:view", "alarm:acknowledge",
   "analytics:view", "alerts:acknowledge",
   "incident:view", "incident:create",
 ];
@@ -151,7 +151,7 @@ const seedGrants: AccessGrant[] = [
     userId: "user-global-admin", 
     scopeNodeId: "company-1", 
     actions: [
-      "live:view", "recording:view", "evidence:export", "ptz:operate", "alarm:acknowledge", 
+      "live:view", "audio:talk", "recording:view", "evidence:export", "ptz:operate", "alarm:acknowledge",
       "device:configure", "user:manage", "audit:view", "org:manage", 
       "analytics:view", "analytics:configure", "alerts:acknowledge", "alerts:escalate", "analytics:export",
       "incident:create", "incident:view", "incident:update", "incident:assign", "incident:escalate", "incident:close", "incident:reopen",
@@ -176,7 +176,7 @@ const seedGrants: AccessGrant[] = [
     userId: "user-branch-manager", 
     scopeNodeId: "branch-blr-001", 
     actions: [
-      "live:view", "recording:view", 
+      "live:view", "audio:talk", "recording:view",
       "analytics:view", "analytics:configure", "alerts:acknowledge", "alerts:escalate", "analytics:export",
       "incident:view", "incident:create", "incident:update", "incident:assign", "incident:escalate",
       "investigation:view",
@@ -1195,7 +1195,7 @@ export class MemoryStore implements ControlPlaneStore {
     return camera;
   }
 
-  async createLiveSession(cameraId: string, userId: string): Promise<LiveSession> {
+  async createLiveSession(cameraId: string, userId: string, purpose: "view" | "talk" = "view"): Promise<LiveSession> {
     const camera = this.cameras.get(cameraId);
     const mediaGatewayUrl = camera?.edgeAgentId
       ? this.edgeAgents.get(camera.edgeAgentId)?.publicMediaUrl
@@ -1204,6 +1204,7 @@ export class MemoryStore implements ControlPlaneStore {
       id: randomUUID(), cameraId, userId,
       token: randomBytes(32).toString("base64url"),
       expiresAt: new Date(Date.now() + 60_000).toISOString(),
+      purpose,
       ...(mediaGatewayUrl ? { mediaGatewayUrl } : {}),
     };
     this.liveSessions.set(session.id, {
@@ -1235,6 +1236,14 @@ export class MemoryStore implements ControlPlaneStore {
       tenantId: user.tenantId,
       connectionSecretRef: camera.connectionSecretRef,
       profiles: camera.profiles,
+      purpose: session.purpose ?? "view",
+      vendor: camera.vendor,
+      model: camera.model,
+      protocol: camera.protocol,
+      ...(camera.sourceType ? { sourceType: camera.sourceType } : {}),
+      channel: camera.channel,
+      ...(camera.recorderChannel !== undefined ? { recorderChannel: camera.recorderChannel } : {}),
+      capabilities: camera.capabilities,
     };
   }
 

@@ -161,6 +161,14 @@ const capabilitiesSchema = z.object({
   ptz: z.boolean(),
   audio: z.boolean(),
   events: z.boolean(),
+  talkback: z.object({
+    supported: z.boolean(),
+    transport: z.enum(["onvif-rtsp-backchannel", "vendor-adapter", "none", "unknown"]),
+    codecs: z.array(z.enum(["PCMA", "PCMU", "AAC", "OPUS", "unknown"])).optional(),
+    sampleRates: z.array(z.number().int().positive().max(192_000)).optional(),
+    verifiedAt: z.string().datetime().optional(),
+    reason: z.string().trim().max(300).optional(),
+  }).optional(),
 });
 const onvifCapabilityTestSchema = z.object({
   name: z.string().trim().min(1).max(120),
@@ -1322,6 +1330,7 @@ export async function buildApp(options?: {
         ptz: parsed.capabilities.ptz,
         audio: parsed.capabilities.audio,
         events: parsed.capabilities.events,
+        ...(parsed.capabilities.talkback ? { talkback: parsed.capabilities.talkback } : {}),
       },
     };
     const discovery = await store.createDiscovery(branchId, discoveryInput);
@@ -1486,6 +1495,32 @@ export async function buildApp(options?: {
     const session = await store.createLiveSession(id, request.currentUser.id);
     await audit(request, store, "live_session.created", camera.nodeId, "success", {
       sessionId: session.id,
+    });
+    return reply.code(201).send(session);
+  });
+
+  app.post("/v1/cameras/:id/talk-sessions", async (request, reply) => {
+    const { id } = idParams.parse(request.params);
+    const camera = await store.getCamera(id);
+    if (!camera) return reply.code(404).send({ error: "camera_not_found" });
+    if (!(await requireCameraActionAccess(request, reply, store, camera, "audio:talk"))) {
+      await audit(request, store, "talk_session.created", camera.nodeId, "denied");
+      return;
+    }
+    if (camera.capabilities.talkback?.supported === false ||
+        (!camera.capabilities.audio && camera.capabilities.talkback?.supported !== true)) {
+      return reply.code(409).send({
+        error: "talkback_not_supported",
+        reason: camera.capabilities.talkback?.reason ?? "device_does_not_advertise_two_way_audio",
+      });
+    }
+    const session = await store.createLiveSession(id, request.currentUser.id, "talk");
+    await audit(request, store, "talk_session.created", camera.nodeId, "success", {
+      sessionId: session.id,
+      cameraId: camera.id,
+      branchId: camera.branchId,
+      sourceType: camera.sourceType ?? "ip-camera",
+      recorderChannel: camera.recorderChannel ?? camera.channel,
     });
     return reply.code(201).send(session);
   });
@@ -1983,7 +2018,7 @@ export async function buildApp(options?: {
     await store.writeAudit({
       tenantId: session.tenantId,
       actorUserId: session.userId,
-      action: "live_session.consumed",
+      action: session.purpose === "talk" ? "talk_session.consumed" : "live_session.consumed",
       resourceNodeId: session.cameraNodeId,
       outcome: "success",
       details: { sessionId: session.id },
@@ -2042,6 +2077,55 @@ export async function buildApp(options?: {
       return reply.code(403).send({ error: "live_session_agent_mismatch" });
     }
     return consumed;
+  });
+
+  app.post("/v1/edge-agents/:id/talk-sessions/:sessionId/complete", async (request, reply) => {
+    const { id, sessionId } = z.object({ id: z.string().min(1), sessionId: z.string().min(1) }).parse(request.params);
+    const body = z.object({
+      cameraId: z.string().min(1),
+      userId: z.string().min(1),
+      startedAt: z.string().datetime(),
+      endedAt: z.string().datetime(),
+      durationMs: z.number().int().min(0).max(3_600_000),
+      outcome: z.enum(["success", "failure"]),
+      adapter: z.string().min(1).max(120),
+      codec: z.string().min(1).max(32).optional(),
+      bytesSent: z.number().int().min(0).optional(),
+      error: z.string().min(1).max(300).optional(),
+    }).parse(request.body);
+    const agent = await store.heartbeatEdgeAgent(
+      id,
+      request.headers["x-edge-agent-version"] as string || "unknown",
+    );
+    if (!agent) return reply.code(404).send({ error: "edge_agent_not_found" });
+    const camera = await store.getCamera(body.cameraId);
+    const user = await store.getUser(body.userId);
+    const cameraNode = camera ? await store.getNode(camera.nodeId) : undefined;
+    if (!camera || camera.edgeAgentId !== id || !cameraNode || !user || user.tenantId !== cameraNode.tenantId) {
+      return reply.code(403).send({ error: "talk_session_agent_mismatch" });
+    }
+    await store.writeAudit({
+      tenantId: user.tenantId,
+      actorUserId: user.id,
+      action: "talk_session.completed",
+      resourceNodeId: camera.nodeId,
+      outcome: body.outcome,
+      details: {
+        sessionId,
+        cameraId: camera.id,
+        branchId: camera.branchId,
+        sourceType: camera.sourceType ?? "ip-camera",
+        recorderChannel: camera.recorderChannel ?? camera.channel,
+        startedAt: body.startedAt,
+        endedAt: body.endedAt,
+        durationMs: body.durationMs,
+        adapter: body.adapter,
+        ...(body.codec ? { codec: body.codec } : {}),
+        ...(body.bytesSent !== undefined ? { bytesSent: body.bytesSent } : {}),
+        ...(body.error ? { error: body.error } : {}),
+      },
+    });
+    return reply.code(202).send({ accepted: true });
   });
   await registerCameraDiscoveryRoutes(app, store, pool);
   await registerRecorderLifecycleRoutes(app, store);
@@ -2368,6 +2452,7 @@ function isEdgeAgentIngressRoute(method: string, url: string) {
   if (method === "POST" && /^\/v1\/edge-agents\/[^/]+\/heartbeat$/.test(path)) return true;
   if (method === "GET" && /^\/v1\/edge-agents\/[^/]+\/cameras\/monitoring$/.test(path)) return true;
   if (method === "POST" && /^\/v1\/edge-agents\/[^/]+\/live-sessions\/consume$/.test(path)) return true;
+  if (method === "POST" && /^\/v1\/edge-agents\/[^/]+\/talk-sessions\/[^/]+\/complete$/.test(path)) return true;
   if (method === "GET" && /^\/v1\/edge-agents\/[^/]+\/scan-jobs\/next$/.test(path)) return true;
   if (method === "POST" && /^\/v1\/edge-agents\/[^/]+\/scan-jobs\/[^/]+\/complete$/.test(path)) return true;
   if (method === "POST" && /^\/v1\/edge-agents\/[^/]+\/(?:telemetry|recorder-hdd|recorder-archive)$/.test(path)) return true;

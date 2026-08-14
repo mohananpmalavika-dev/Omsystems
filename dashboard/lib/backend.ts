@@ -1,5 +1,5 @@
 import { demoBranches, demoCameras } from "./demo-data";
-import type { Branch, Camera, LiveSessionResponse, RecordingJob, RecordingSegment } from "./types";
+import type { Branch, Camera, LiveSessionResponse, RecordingJob, RecordingSegment, TalkSessionResponse } from "./types";
 import { isBrowserDirectMediaUrl } from "./media-routing";
 
 export async function listBranches(employeeSession?: string): Promise<Branch[]> {
@@ -153,7 +153,11 @@ async function controlFetch(
     },
     cache: "no-store",
   });
-  if (!response.ok) throw new Error(`Control plane returned ${response.status}`);
+  if (!response.ok) {
+    const body = await response.clone().json().catch(() => ({})) as { error?: unknown };
+    const code = typeof body.error === "string" ? body.error : `Control plane returned ${response.status}`;
+    throw new Error(code);
+  }
   return response;
 }
 
@@ -167,6 +171,44 @@ function runtimeEnv(name: string | string[], fallback: string) {
   }
   const value = Reflect.get(process.env, name) as string | undefined;
   return value ?? fallback;
+}
+
+export async function startTalk(
+  cameraId: string,
+  employeeSession?: string,
+): Promise<TalkSessionResponse | {
+  cameraId: string;
+  direct: { url: string; controlPlaneToken: string };
+}> {
+  if (isDemoMode()) throw new Error("talkback_unavailable_in_demo");
+  const permission = await controlFetch(
+    `/v1/cameras/${encodeURIComponent(cameraId)}/talk-sessions`,
+    { method: "POST", body: "{}" },
+    employeeSession,
+  );
+  const controlSession = await permission.json() as { token: string; mediaGatewayUrl?: string };
+  const mediaGatewayUrl = controlSession.mediaGatewayUrl ??
+    runtimeEnv("MEDIA_GATEWAY_INTERNAL_URL", "http://localhost:8090");
+  if (controlSession.mediaGatewayUrl && isBrowserDirectMediaUrl(mediaGatewayUrl)) {
+    return {
+      cameraId,
+      direct: {
+        url: new URL("/v1/talk/start", normalizeHttpOrigin(mediaGatewayUrl)).toString(),
+        controlPlaneToken: controlSession.token,
+      },
+    };
+  }
+  const response = await fetch(new URL("/v1/talk/start", normalizeHttpOrigin(mediaGatewayUrl)), {
+    method: "POST",
+    headers: bridgeHeaders(),
+    body: JSON.stringify({ controlPlaneToken: controlSession.token }),
+    cache: "no-store",
+  });
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({})) as { error?: unknown };
+    throw new Error(typeof body.error === "string" ? body.error : "talkback_unavailable");
+  }
+  return await response.json() as TalkSessionResponse;
 }
 
 function normalizeHttpOrigin(value: string) {

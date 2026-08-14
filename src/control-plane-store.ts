@@ -691,7 +691,7 @@ export interface ControlPlaneStore {
     id: string,
     status: CameraStatus,
   ): Promise<Camera | undefined>;
-  createLiveSession(cameraId: string, userId: string): Promise<LiveSession>;
+  createLiveSession(cameraId: string, userId: string, purpose?: "view" | "talk"): Promise<LiveSession>;
   consumeLiveSession(token: string): Promise<ConsumedLiveSession | undefined>;
   getRecordingJob(cameraId: string): Promise<RecordingJob | undefined>;
   /** Batch form used by fleet retention projections to avoid one query per camera. */

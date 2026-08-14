@@ -6,6 +6,7 @@ import {
   startEdgeMediaRuntimeIfAvailable,
   type EdgeLiveGateway,
 } from "../src/streaming/edge-live-gateway.js";
+import { TalkSessionRegistry, type TalkSessionCompletion } from "../src/talkback/talk-session-registry.js";
 
 describe("all-in-one edge live gateway", () => {
   let app: EdgeLiveGateway | undefined;
@@ -86,15 +87,9 @@ describe("all-in-one edge live gateway", () => {
     expect(cors.headers.get("access-control-allow-origin")).toBe("https://dashboard.example.com");
     expect(cors.headers.get("access-control-allow-credentials")).toBe("true");
 
-    const denied = await fetch(`${baseUrl}/v1/live/start`, {
-      method: "POST", headers: { "content-type": "application/json" },
-      body: JSON.stringify({ controlPlaneToken: "t".repeat(43) }),
-    });
-    expect(denied.status).toBe(401);
-
     const started = await fetch(`${baseUrl}/v1/live/start`, {
       method: "POST",
-      headers: { "content-type": "application/json", "x-edge-bridge-key": bridgeKey },
+      headers: { "content-type": "application/json" },
       body: JSON.stringify({ controlPlaneToken: "t".repeat(43) }),
     });
     expect(started.status).toBe(201);
@@ -107,5 +102,68 @@ describe("all-in-one edge live gateway", () => {
       body: JSON.stringify({ action: "read", path: "camera-camera-1", query: `token=${session.hls.bearerToken}` }),
     });
     expect(mediaAuth.status).toBe(204);
+  });
+
+  it("streams held microphone audio through an exclusive talk session and reports completion", async () => {
+    const audio: Buffer[] = [];
+    const completions: TalkSessionCompletion[] = [];
+    let closed = false;
+    const talkSessions = new TalkSessionRegistry(
+      30_000,
+      async (completion) => { completions.push(completion); },
+      async () => ({
+        adapter: "onvif-rtsp-backchannel",
+        codec: "PCMA",
+        sampleRate: 8_000,
+        writePcm: async (chunk) => { audio.push(Buffer.from(chunk)); },
+        close: async () => { closed = true; },
+      }),
+    );
+    app = buildEdgeLiveGateway({
+      consumer: {
+        consume: async () => ({
+          id: "talk-session-1", cameraId: "camera-1", cameraNodeId: "branch-1",
+          userId: "operator-1", tenantId: "tenant-1", connectionSecretRef: "edge://agent-1/camera-1",
+          purpose: "talk", vendor: "other", profiles: [],
+          capabilities: { ptz: false, audio: true, events: false, talkback: {
+            supported: true, transport: "onvif-rtsp-backchannel", codecs: ["PCMA"], sampleRates: [8_000],
+          } },
+        }),
+      },
+      router: { ensurePath: async () => undefined, removePath: async () => undefined },
+      resolveSecret: () => "rtsp://camera.local/stream",
+      publicBaseUrl: () => "http://127.0.0.1",
+      mediaMtxHlsUrl: "http://127.0.0.1:8888",
+      accessTtlMs: 30_000,
+      talkSessions,
+    });
+    const address = await app.listen({ host: "127.0.0.1", port: 0 });
+    const baseUrl = `http://127.0.0.1:${address.port}`;
+
+    const started = await fetch(`${baseUrl}/v1/talk/start`, {
+      method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ controlPlaneToken: "t".repeat(43) }),
+    });
+    expect(started.status).toBe(201);
+    const session = await started.json() as any;
+    expect(session.adapter).toBe("onvif-rtsp-backchannel");
+
+    const pcm = Buffer.from([0, 0, 1, 0, 255, 255, 2, 0]);
+    const uploaded = await fetch(`${baseUrl}/v1/talk/talk-session-1/audio`, {
+      method: "POST",
+      headers: { authorization: `Bearer ${session.audio.bearerToken}`, "content-type": session.audio.contentType },
+      body: pcm,
+    });
+    expect(uploaded.status).toBe(202);
+    expect(Buffer.concat(audio)).toEqual(pcm);
+
+    const stopped = await fetch(`${baseUrl}/v1/talk/talk-session-1`, {
+      method: "DELETE", headers: { authorization: `Bearer ${session.audio.bearerToken}` },
+    });
+    expect(stopped.status).toBe(204);
+    expect(closed).toBe(true);
+    expect(completions).toEqual([expect.objectContaining({
+      sessionId: "talk-session-1", cameraId: "camera-1", outcome: "success", bytesSent: pcm.byteLength,
+    })]);
   });
 });

@@ -8,6 +8,8 @@ import type { EdgeConfig } from "../config.js";
 import type { ConsumedLiveSession, GatewayClient } from "../registration/gateway-client.js";
 import type { LocalStreamSecretStore } from "./secret-store.js";
 import { logger } from "../utils/logger.js";
+import { TalkSessionRegistry } from "../talkback/talk-session-registry.js";
+import { TalkbackTransportError } from "../talkback/rtsp-backchannel.js";
 
 interface MediaRouter {
   ensurePath(path: string, sourceUri: string): Promise<void>;
@@ -38,18 +40,25 @@ interface LiveGatewayOptions {
   publicBaseUrl: () => string;
   mediaMtxHlsUrl: string;
   accessTtlMs: number;
+  onTalkComplete?: ConstructorParameters<typeof TalkSessionRegistry>[1];
+  talkSessions?: TalkSessionRegistry;
 }
 
 export class EdgeLiveGateway {
   private readonly access: EdgeAccessRegistry;
+  private readonly talk: TalkSessionRegistry;
   private readonly server: Server;
 
   constructor(private readonly options: LiveGatewayOptions) {
     this.access = new EdgeAccessRegistry(options.router, options.accessTtlMs);
+    this.talk = options.talkSessions ?? new TalkSessionRegistry(options.accessTtlMs, options.onTalkComplete);
     this.server = createServer((request, response) => {
       void this.handle(request, response).catch((error) => {
         logger.error("Edge live gateway request failed", { error: error instanceof Error ? error.message : String(error) });
-        if (!response.headersSent) sendJson(response, 502, { error: "media_gateway_failure" });
+        if (!response.headersSent) {
+          if (error instanceof TalkbackTransportError) sendJson(response, error.status, { error: error.code });
+          else sendJson(response, 502, { error: "media_gateway_failure" });
+        }
         else response.destroy(error instanceof Error ? error : undefined);
       });
     });
@@ -69,13 +78,14 @@ export class EdgeLiveGateway {
   }
 
   async close() {
+    await this.talk.close();
     if (!this.server.listening) return;
     await new Promise<void>((resolve, reject) => this.server.close((error) => error ? reject(error) : resolve()));
   }
 
   private async handle(request: IncomingMessage, response: ServerResponse) {
     const url = new URL(request.url ?? "/", "http://edge.local");
-    if (url.pathname === "/v1/live/start") {
+    if (url.pathname === "/v1/live/start" || url.pathname === "/v1/talk/start" || url.pathname.startsWith("/v1/talk/")) {
       setCorsHeaders(request, response);
       if (request.method === "OPTIONS") { response.writeHead(204).end(); return; }
     }
@@ -86,14 +96,12 @@ export class EdgeLiveGateway {
       return this.proxyHls(request, response);
     }
     if (request.method === "POST" && url.pathname === "/v1/live/start") {
-      if (this.options.edgeBridgeSharedKey && !secureEqualHeader(request.headers["x-edge-bridge-key"], this.options.edgeBridgeSharedKey)) {
-        return sendJson(response, 401, { error: "invalid_bridge_identity" });
-      }
       const body = await readJsonBody(request);
       if (typeof body.controlPlaneToken !== "string" || body.controlPlaneToken.length < 32) {
         return sendJson(response, 400, { error: "invalid_request" });
       }
       const consumed = await this.options.consumer.consume(body.controlPlaneToken);
+      if (consumed.purpose === "talk") return sendJson(response, 403, { error: "invalid_live_session" });
       const sourceUri = this.options.resolveSecret(consumed.connectionSecretRef);
       if (!sourceUri) return sendJson(response, 503, { error: "stream_secret_unavailable" });
       const path = `camera-${safeIdentifier(consumed.cameraId)}`;
@@ -109,6 +117,49 @@ export class EdgeLiveGateway {
           bearerToken: session.token,
         },
       });
+    }
+    if (request.method === "POST" && url.pathname === "/v1/talk/start") {
+      const body = await readJsonBody(request);
+      if (typeof body.controlPlaneToken !== "string" || body.controlPlaneToken.length < 32) {
+        return sendJson(response, 400, { error: "invalid_request" });
+      }
+      const consumed = await this.options.consumer.consume(body.controlPlaneToken);
+      if (consumed.purpose !== "talk") return sendJson(response, 403, { error: "invalid_talk_session" });
+      const sourceUri = this.options.resolveSecret(consumed.connectionSecretRef);
+      if (!sourceUri) return sendJson(response, 503, { error: "stream_secret_unavailable" });
+      const session = await this.talk.start(consumed, sourceUri);
+      const base = stripSlash(this.options.publicBaseUrl());
+      return sendJson(response, 201, {
+        sessionId: session.id,
+        cameraId: session.cameraId,
+        expiresAt: session.expiresAt,
+        adapter: session.adapter,
+        audio: {
+          url: `${base}/v1/talk/${encodeURIComponent(session.id)}/audio`,
+          endUrl: `${base}/v1/talk/${encodeURIComponent(session.id)}`,
+          bearerToken: session.token,
+          contentType: "audio/L16;rate=8000;channels=1",
+          codec: session.codec,
+          sampleRate: session.sampleRate,
+        },
+      });
+    }
+    const talkMatch = url.pathname.match(/^\/v1\/talk\/([^/]+)(?:\/(audio))?$/);
+    if (talkMatch) {
+      const id = decodeURIComponent(talkMatch[1]!);
+      const token = bearerToken(request.headers.authorization);
+      if (request.method === "POST" && talkMatch[2] === "audio") {
+        const pcm = await readBinaryBody(request, 32_000);
+        await this.talk.append(id, token, pcm);
+        response.writeHead(202).end();
+        return;
+      }
+      if (request.method === "DELETE" && !talkMatch[2]) {
+        this.talk.authorize(id, token);
+        await this.talk.stop(id);
+        response.writeHead(204).end();
+        return;
+      }
     }
     if (request.method === "POST" && url.pathname === "/internal/mediamtx/auth") {
       const body = await readJsonBody(request);
@@ -193,6 +244,9 @@ export async function startEdgeMediaRuntime(input: EdgeMediaRuntimeInput): Promi
     publicBaseUrl: () => resolvedPublicUrl,
     mediaMtxHlsUrl: config.MEDIAMTX_HLS_URL,
     accessTtlMs: config.MEDIA_ACCESS_TTL_SECONDS * 1_000,
+    onTalkComplete: async (completion) => {
+      await input.gateway.completeTalkSession(input.agentId, completion.sessionId, completion);
+    },
   });
   await liveGateway.listen({ host: config.EDGE_LIVE_GATEWAY_HOST, port: config.EDGE_LIVE_GATEWAY_PORT });
 
@@ -435,14 +489,27 @@ function forwardMediaHeaders(headers: IncomingHttpHeaders) {
   }
   return forwarded;
 }
+async function readBinaryBody(request: IncomingMessage, maximumBytes: number) {
+  const chunks: Buffer[] = []; let length = 0;
+  for await (const chunk of request) {
+    const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk); length += buffer.length;
+    if (length > maximumBytes) throw new TalkbackTransportError("audio_chunk_too_large", 413);
+    chunks.push(buffer);
+  }
+  return new Uint8Array(Buffer.concat(chunks));
+}
 
 function setCorsHeaders(request: IncomingMessage, response: ServerResponse) {
   const origin = typeof request.headers.origin === "string" ? request.headers.origin : "*";
   response.setHeader("Access-Control-Allow-Origin", origin);
-  response.setHeader("Access-Control-Allow-Headers", "Content-Type");
-  response.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
+  response.setHeader("Access-Control-Allow-Headers", "Authorization, Content-Type");
+  response.setHeader("Access-Control-Allow-Methods", "POST, DELETE, OPTIONS");
   if (request.headers["access-control-request-private-network"] === "true") {
     response.setHeader("Access-Control-Allow-Private-Network", "true");
   }
   response.setHeader("Vary", "Origin");
+}
+function bearerToken(value: string | undefined) {
+  const match = value?.match(/^Bearer\s+(.+)$/i);
+  return match?.[1] ?? "";
 }

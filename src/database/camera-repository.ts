@@ -603,16 +603,16 @@ export class CameraRepository {
     return result.rowCount ? this.findById(id) : undefined;
   }
 
-  async createLiveSession(cameraId: string, userId: string): Promise<LiveSession> {
+  async createLiveSession(cameraId: string, userId: string, purpose: "view" | "talk" = "view"): Promise<LiveSession> {
     const id = randomUUID();
     const token = randomBytes(32).toString("base64url");
     const tokenHash = createHash("sha256").update(token).digest();
     const expiresAt = new Date(Date.now() + 60_000);
     await this.pool.query(
       `INSERT INTO live_sessions
-         (id, camera_id, user_id, token_hash, expires_at)
-       VALUES ($1, $2, $3, $4, $5)`,
-      [id, cameraId, userId, tokenHash, expiresAt],
+         (id, camera_id, user_id, token_hash, expires_at, purpose)
+       VALUES ($1, $2, $3, $4, $5, $6)`,
+      [id, cameraId, userId, tokenHash, expiresAt, purpose],
     );
     const route = await this.pool.query<{ public_media_url: string | null }>(
       `SELECT agent.public_media_url
@@ -628,6 +628,7 @@ export class CameraRepository {
       userId,
       token,
       expiresAt: expiresAt.toISOString(),
+      purpose,
       ...(mediaGatewayUrl ? { mediaGatewayUrl } : {}),
     };
   }
@@ -642,6 +643,14 @@ export class CameraRepository {
       tenant_id: string;
       connection_secret_ref: string;
       profiles: CameraProfile[];
+      purpose: "view" | "talk";
+      vendor: Camera["vendor"];
+      model: string;
+      protocol: Camera["protocol"];
+      source_type: Camera["sourceType"] | null;
+      channel: number;
+      recorder_channel: number | null;
+      capabilities: Camera["capabilities"];
     }>(
       `WITH consumed AS (
          UPDATE live_sessions
@@ -649,12 +658,14 @@ export class CameraRepository {
          WHERE token_hash = $1
            AND consumed_at IS NULL
            AND expires_at > now()
-         RETURNING id, camera_id, user_id
+         RETURNING id, camera_id, user_id, purpose
        )
        SELECT consumed.id::text, camera.id::text AS camera_id,
               camera.resource_node_id::text, app_user.id::text AS user_id,
               app_user.tenant_id::text, camera.connection_secret_ref,
-              camera.profiles
+              camera.profiles, consumed.purpose, camera.vendor, camera.model,
+              camera.protocol, camera.source_type, camera.channel,
+              camera.recorder_channel, camera.capabilities
        FROM consumed
        JOIN cameras camera ON camera.id = consumed.camera_id
        JOIN users app_user ON app_user.id = consumed.user_id`,
@@ -670,6 +681,14 @@ export class CameraRepository {
           tenantId: row.tenant_id,
           connectionSecretRef: row.connection_secret_ref,
           profiles: row.profiles,
+          purpose: row.purpose,
+          vendor: row.vendor,
+          model: row.model,
+          protocol: row.protocol,
+          ...(row.source_type ? { sourceType: row.source_type } : {}),
+          channel: row.channel,
+          ...(row.recorder_channel !== null ? { recorderChannel: row.recorder_channel } : {}),
+          capabilities: row.capabilities,
         }
       : undefined;
   }

@@ -48,7 +48,19 @@ export interface DiscoveredCameraPayload {
     bitrateKbps?: number;
     preferredFor?: Array<"recording" | "live" | "analytics">;
   }>;
-  capabilities: { ptz: boolean; audio: boolean; events: boolean };
+  capabilities: {
+    ptz: boolean;
+    audio: boolean;
+    events: boolean;
+    talkback?: {
+      supported: boolean;
+      transport: "onvif-rtsp-backchannel" | "vendor-adapter" | "none" | "unknown";
+      codecs?: Array<"PCMA" | "PCMU" | "AAC" | "OPUS" | "unknown">;
+      sampleRates?: number[];
+      verifiedAt?: string;
+      reason?: string;
+    };
+  };
   sourceType?: "ip-camera" | "analog-dvr-channel" | "nvr-channel";
   recorderId?: string;
   recorderChannel?: number;
@@ -119,6 +131,25 @@ export interface ConsumedLiveSession {
   tenantId: string;
   connectionSecretRef: string;
   profiles: Array<{ name: string; codec: string; width: number; height: number }>;
+  purpose?: "view" | "talk";
+  vendor?: "hikvision" | "cp-plus" | "other";
+  model?: string;
+  protocol?: "onvif-t" | "onvif-s" | "rtsp" | "vendor-adapter";
+  sourceType?: "ip-camera" | "analog-dvr-channel" | "nvr-channel";
+  channel?: number;
+  recorderChannel?: number;
+  capabilities?: {
+    ptz: boolean;
+    audio: boolean;
+    events: boolean;
+    talkback?: {
+      supported: boolean;
+      transport: "onvif-rtsp-backchannel" | "vendor-adapter" | "none" | "unknown";
+      codecs?: Array<"PCMA" | "PCMU" | "AAC" | "OPUS" | "unknown">;
+      sampleRates?: number[];
+      reason?: string;
+    };
+  };
 }
 
 export interface EdgeCommand {
@@ -282,6 +313,24 @@ export class GatewayClient {
     return this.request<ConsumedLiveSession>(
       `/v1/edge-agents/${encodeURIComponent(agentId)}/live-sessions/consume`,
       { method: "POST", body: JSON.stringify({ token }) },
+    );
+  }
+
+  async completeTalkSession(agentId: string, sessionId: string, payload: {
+    cameraId: string;
+    userId: string;
+    startedAt: string;
+    endedAt: string;
+    durationMs: number;
+    outcome: "success" | "failure";
+    adapter: string;
+    codec?: string;
+    bytesSent?: number;
+    error?: string;
+  }) {
+    return this.requestOrQueue<{ accepted: boolean }>(
+      `/v1/edge-agents/${encodeURIComponent(agentId)}/talk-sessions/${encodeURIComponent(sessionId)}/complete`,
+      { method: "POST", body: JSON.stringify(payload) },
     );
   }
 

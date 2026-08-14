@@ -83,6 +83,7 @@ export async function buildMediaGateway(options: {
     const consumed = await options.controlPlane.consumeLiveSession(
       body.controlPlaneToken,
     );
+    if (consumed.purpose === "talk") throw new GatewayError(403, "invalid_live_session");
     const sourceUri = await options.secrets.resolve(
       consumed.connectionSecretRef,
     );
