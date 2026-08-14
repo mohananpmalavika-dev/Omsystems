@@ -40,6 +40,7 @@ export interface CameraProvisionOutcome {
 
 interface CameraProvisionOptions {
   edgeAgentId?: string;
+  ipAddresses?: readonly string[];
   recordingMode?: "continuous" | "motion";
   retentionDays?: number;
   enableAnalytics?: boolean;
@@ -144,8 +145,10 @@ export async function autoProvisionVerifiedCameras(
   if (!branch || branch.type !== "branch") throw new Error("branch_not_found");
 
   const discoveredForBranch = await store.listDiscoveredCameras(branchId);
+  const allowedIpAddresses = options.ipAddresses ? new Set(options.ipAddresses) : undefined;
   const agentDiscoveries = discoveredForBranch.filter((discovered) =>
-    !options.edgeAgentId || discovered.edgeAgentId === options.edgeAgentId
+    (!options.edgeAgentId || discovered.edgeAgentId === options.edgeAgentId) &&
+    (!allowedIpAddresses || allowedIpAddresses.has(discovered.ipAddress))
   );
   const supersededLoginIds = new Set(supersededRecorderCredentialDiscoveryIds(agentDiscoveries));
   await Promise.all([...supersededLoginIds].map((discoveryId) =>

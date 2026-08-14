@@ -720,13 +720,19 @@ export class MemoryStore implements ControlPlaneStore {
     return structuredClone(layout);
   }
 
-  async createEdgeScanJob(branchId: string, edgeAgentId?: string) {
+  async createEdgeScanJob(branchId: string, edgeAgentId?: string, target?: import("./control-plane-store.js").EdgeScanTarget) {
     const agent = edgeAgentId
       ? this.edgeAgents.get(edgeAgentId)
       : [...this.edgeAgents.values()].find((item) => item.branchId === branchId && item.status === "online");
     if (!agent || agent.branchId !== branchId || agent.status !== "online") throw new Error("edge_agent_not_connected");
     const job: EdgeScanJob = {
       id: randomUUID(), branchId, edgeAgentId: agent.id, status: "queued",
+      scope: target ? "device" : "branch",
+      ...(target ? {
+        targetDiscoveryId: target.discoveryId,
+        targetIpAddress: target.ipAddress,
+        ...(target.onvifPort ? { targetOnvifPort: target.onvifPort } : {}),
+      } : {}),
       requestedAt: new Date().toISOString(), startedAt: null, completedAt: null,
       resultCount: 0, provisionedCount: 0, credentialsRequiredCount: 0,
       pendingVerificationCount: 0, verifiedCount: 0, recorderCount: 0,
@@ -744,7 +750,7 @@ export class MemoryStore implements ControlPlaneStore {
 
   async getLatestEdgeScanJob(branchId: string) {
     return [...this.edgeScanJobs.values()]
-      .filter((job) => job.branchId === branchId)
+      .filter((job) => job.branchId === branchId && job.scope !== "device")
       .sort((left, right) => right.requestedAt.localeCompare(left.requestedAt))[0];
   }
 

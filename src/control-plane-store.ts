@@ -116,6 +116,12 @@ export interface CameraDiscoveryInput {
   capabilities: CameraCapabilities;
 }
 
+export interface EdgeScanTarget {
+  discoveryId: string;
+  ipAddress: string;
+  onvifPort?: number;
+}
+
 export interface CameraApprovalInput {
   discoveryId: string;
   name: string;
@@ -637,7 +643,7 @@ export interface ControlPlaneStore {
     tenantId: string; userId: string; name: string; gridSize: VideoWallGridSize;
     cameraPositions: VideoWallLayout["cameraPositions"];
   }): Promise<VideoWallLayout>;
-  createEdgeScanJob(branchId: string, edgeAgentId?: string): Promise<EdgeScanJob>;
+  createEdgeScanJob(branchId: string, edgeAgentId?: string, target?: EdgeScanTarget): Promise<EdgeScanJob>;
   getEdgeScanJob(branchId: string, jobId: string): Promise<EdgeScanJob | undefined>;
   getLatestEdgeScanJob(branchId: string): Promise<EdgeScanJob | undefined>;
   claimEdgeScanJob(edgeAgentId: string): Promise<EdgeScanJob | undefined>;

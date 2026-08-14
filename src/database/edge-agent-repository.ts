@@ -1,6 +1,6 @@
 import type { Pool } from "pg";
 import type { DiscoveredCamera, EdgeAgent, EdgeScanJob } from "../domain/models.js";
-import type { CameraDiscoveryInput } from "../control-plane-store.js";
+import type { CameraDiscoveryInput, EdgeScanTarget } from "../control-plane-store.js";
 import type { DeviceIdentityRepository } from "./device-identity-repository.js";
 import { normalizeMacAddress, normalizeOnvifUuid } from "../device-identity.js";
 
@@ -37,6 +37,10 @@ type ScanRow = {
   id: string;
   branch_node_id: string;
   edge_agent_id: string;
+  scan_scope: "branch" | "device";
+  target_discovery_id: string | null;
+  target_ip_address: string | null;
+  target_onvif_port: number | null;
   status: EdgeScanJob["status"];
   requested_at: Date;
   started_at: Date | null;
@@ -59,6 +63,10 @@ function mapScan(row: ScanRow): EdgeScanJob {
     id: row.id,
     branchId: row.branch_node_id,
     edgeAgentId: row.edge_agent_id,
+    scope: row.scan_scope,
+    ...(row.target_discovery_id ? { targetDiscoveryId: row.target_discovery_id } : {}),
+    ...(row.target_ip_address ? { targetIpAddress: row.target_ip_address } : {}),
+    ...(row.target_onvif_port ? { targetOnvifPort: row.target_onvif_port } : {}),
     status: row.status,
     requestedAt: row.requested_at.toISOString(),
     startedAt: row.started_at?.toISOString() ?? null,
@@ -140,10 +148,13 @@ export class EdgeAgentRepository {
     return result.rows[0] ? mapAgent(result.rows[0]) : undefined;
   }
 
-  async createScanJob(branchId: string, edgeAgentId?: string) {
+  async createScanJob(branchId: string, edgeAgentId?: string, target?: EdgeScanTarget) {
     const result = await this.pool.query<ScanRow>(
-      `INSERT INTO edge_scan_jobs (tenant_id, branch_node_id, edge_agent_id)
-       SELECT branch.tenant_id, branch.id, agent.id
+      `INSERT INTO edge_scan_jobs
+         (tenant_id, branch_node_id, edge_agent_id, scan_scope,
+          target_discovery_id, target_ip_address, target_onvif_port)
+       SELECT branch.tenant_id, branch.id, agent.id, $3,
+              $4::uuid, $5::inet, $6
        FROM resource_nodes branch
        JOIN LATERAL (
          SELECT id
@@ -156,13 +167,22 @@ export class EdgeAgentRepository {
          LIMIT 1
        ) agent ON true
        WHERE branch.id = $1 AND branch.node_type = 'branch'
-       RETURNING id::text, branch_node_id::text, edge_agent_id::text, status,
+       RETURNING id::text, branch_node_id::text, edge_agent_id::text,
+                 scan_scope, target_discovery_id::text,
+                 host(target_ip_address) AS target_ip_address, target_onvif_port, status,
                  requested_at, started_at, completed_at, result_count,
                  provisioned_count, credentials_required_count,
                  pending_verification_count, verified_count, recorder_count,
                  time_synchronized_count, time_drift_count,
                  analytics_compatible_count, duplicate_count, error`,
-      [branchId, edgeAgentId ?? null],
+      [
+        branchId,
+        edgeAgentId ?? null,
+        target ? "device" : "branch",
+        target?.discoveryId ?? null,
+        target?.ipAddress ?? null,
+        target?.onvifPort ?? null,
+      ],
     );
     if (!result.rows[0]) throw new Error("edge_agent_not_found");
     return mapScan(result.rows[0]);
@@ -170,7 +190,9 @@ export class EdgeAgentRepository {
 
   async getScanJob(branchId: string, jobId: string) {
     const result = await this.pool.query<ScanRow>(
-      `SELECT id::text, branch_node_id::text, edge_agent_id::text, status,
+      `SELECT id::text, branch_node_id::text, edge_agent_id::text,
+              scan_scope, target_discovery_id::text,
+              host(target_ip_address) AS target_ip_address, target_onvif_port, status,
               requested_at, started_at, completed_at, result_count,
               provisioned_count, credentials_required_count,
               pending_verification_count, verified_count, recorder_count,
@@ -184,14 +206,16 @@ export class EdgeAgentRepository {
 
   async getLatestScanJob(branchId: string) {
     const result = await this.pool.query<ScanRow>(
-      `SELECT id::text, branch_node_id::text, edge_agent_id::text, status,
+      `SELECT id::text, branch_node_id::text, edge_agent_id::text,
+              scan_scope, target_discovery_id::text,
+              host(target_ip_address) AS target_ip_address, target_onvif_port, status,
               requested_at, started_at, completed_at, result_count,
               provisioned_count, credentials_required_count,
               pending_verification_count, verified_count, recorder_count,
               time_synchronized_count, time_drift_count,
               analytics_compatible_count, duplicate_count, error
        FROM edge_scan_jobs
-       WHERE branch_node_id = $1
+       WHERE branch_node_id = $1 AND scan_scope = 'branch'
        ORDER BY requested_at DESC
        LIMIT 1`,
       [branchId],
@@ -212,6 +236,8 @@ export class EdgeAgentRepository {
        FROM next_job
        WHERE job.id = next_job.id
        RETURNING job.id::text, job.branch_node_id::text, job.edge_agent_id::text,
+                 job.scan_scope, job.target_discovery_id::text,
+                 host(job.target_ip_address) AS target_ip_address, job.target_onvif_port,
                  job.status, job.requested_at, job.started_at, job.completed_at,
                  job.result_count, job.provisioned_count,
                  job.credentials_required_count, job.pending_verification_count,
@@ -251,7 +277,9 @@ export class EdgeAgentRepository {
            time_synchronized_count = $11, time_drift_count = $12,
            analytics_compatible_count = $13, duplicate_count = $14
        WHERE id = $1 AND edge_agent_id = $2 AND status = 'running'
-       RETURNING id::text, branch_node_id::text, edge_agent_id::text, status,
+       RETURNING id::text, branch_node_id::text, edge_agent_id::text,
+                 scan_scope, target_discovery_id::text,
+                 host(target_ip_address) AS target_ip_address, target_onvif_port, status,
                  requested_at, started_at, completed_at, result_count,
                  provisioned_count, credentials_required_count,
                  pending_verification_count, verified_count, recorder_count,

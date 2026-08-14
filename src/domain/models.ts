@@ -635,6 +635,10 @@ export interface EdgeScanJob {
   id: string;
   branchId: string;
   edgeAgentId: string;
+  scope?: "branch" | "device";
+  targetDiscoveryId?: string;
+  targetIpAddress?: string;
+  targetOnvifPort?: number;
   status: "queued" | "running" | "completed" | "failed";
   requestedAt: string;
   startedAt: string | null;

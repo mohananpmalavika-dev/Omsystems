@@ -341,8 +341,8 @@ export class PostgresStore
       gridSize: input.gridSize, cameraPositions: input.cameraPositions,
     });
   }
-  async createEdgeScanJob(branchId: string, edgeAgentId?: string) {
-    return this.agents.createScanJob(branchId, edgeAgentId);
+  async createEdgeScanJob(branchId: string, edgeAgentId?: string, target?: import("../control-plane-store.js").EdgeScanTarget) {
+    return this.agents.createScanJob(branchId, edgeAgentId, target);
   }
   async getEdgeScanJob(branchId: string, jobId: string) {
     return this.agents.getScanJob(branchId, jobId);
