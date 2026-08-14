@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { cameraInventoryApi, deviceInventoryApi, provisioningApi } from "@/lib/api-client";
+import { discoveryDeviceTypeLabel, discoveryModelLabel } from "@/lib/discovery-display";
 import { BranchConnectivityPanel } from "@/components/branch-connectivity-panel";
 import { ProvisioningRun } from "@/components/provisioning-run";
 import type {
@@ -1044,7 +1045,7 @@ export function DeviceManager() {
                     <div className="discovery-camera-head">
                       <div>
                         <strong>{item.displayName || item.model || `${item.vendor} device`}</strong>
-                        <span>{item.ipAddress} · {item.onvifPort ? `ONVIF ${item.onvifPort}` : "Stream endpoint pending"}</span>
+                        <span>IP address: {item.ipAddress} · Model: {discoveryModelLabel(item)} · Type: {discoveryDeviceTypeLabel(item)}</span>
                       </div>
                       <div className="discovery-badge-stack">
                         {item.reviewStatus !== "approved" ? <span className="review-pill">Pending review</span> : null}
@@ -1057,7 +1058,7 @@ export function DeviceManager() {
                       {item.sourceType === "analog-dvr-channel" ? <span className="discovery-chip positive">Analog via DVR · CH {item.recorderChannel}</span> : null}
                       {item.sourceType === "nvr-channel" ? <span className="discovery-chip positive">NVR channel · CH {item.recorderChannel}</span> : null}
                       <span className="discovery-chip">{item.vendor}</span>
-                      <span className="discovery-chip">{item.model || "Model pending"}</span>
+                      <span className="discovery-chip">{discoveryDeviceTypeLabel(item)}</span>
                       <span className="discovery-chip">{item.discoveryMethod ?? "ONVIF discovery"}</span>
                       <span className={`discovery-chip ${item.onvifSupport ? "positive" : "neutral"}`}>{item.onvifSupport ? "ONVIF supported" : "ONVIF unknown"}</span>
                       <span className={`discovery-chip ${item.streamVerified ? "positive" : item.credentialsRequired ? "warn" : "neutral"}`}>{item.streamVerified ? "Stream verified" : item.credentialsRequired ? "Login required" : "Stream pending"}</span>
@@ -1255,7 +1256,14 @@ export function DeviceManager() {
           <div className="modal-container">
             <div className="modal-header"><h2>Device login required</h2><button type="button" className="icon-button" onClick={() => { setCredentialActivation(undefined); setActivationPassword(""); }} disabled={saving}><X size={20} /></button></div>
             <form className="modal-form" onSubmit={activateDiscoveredCamera}>
-              <div className="form-info-banner"><Camera size={16} />Found {credentialActivation.displayName || credentialActivation.model || "a camera/DVR"} at {credentialActivation.ipAddress}, but its saved login did not match. Enter the device username and password; Sentinel Grid will probe only this IP address and discover channels belonging to this device.</div>
+              <div className="form-info-banner credential-device-banner">
+                <Camera size={16} />
+                <div className="credential-device-summary">
+                  <strong>{credentialActivation.displayName || credentialActivation.model || "Detected device"}</strong>
+                  <span><b>IP address:</b> {credentialActivation.ipAddress} · <b>Model:</b> {discoveryModelLabel(credentialActivation)} · <b>Type:</b> {discoveryDeviceTypeLabel(credentialActivation)}</span>
+                  <small>Its saved login did not match. Enter the device username and password; Sentinel Grid will probe only this IP address and discover channels belonging to this device.</small>
+                </div>
+              </div>
               <div className="form-group"><label htmlFor="activationUsername">Username <span className="required">*</span></label><input id="activationUsername" value={activationUsername} onChange={(event) => setActivationUsername(event.target.value)} autoComplete="username" required /></div>
               <div className="form-group"><label htmlFor="activationPassword">Password <span className="required">*</span></label><input id="activationPassword" type="password" value={activationPassword} onChange={(event) => setActivationPassword(event.target.value)} autoComplete="current-password" required /></div>
               <p className="field-help">This login is saved only for this detected IP address. No broadcast discovery, subnet scan, or other camera probe will run.</p>
@@ -1297,7 +1305,8 @@ export function DeviceManager() {
                     {discoveredCameras.map((camera) => (
                       <div key={camera.id} className="discovered-camera-item">
                         <div className="camera-details">
-                          <strong>{camera.displayName || camera.model} @ {camera.ipAddress}</strong>
+                          <strong>{camera.displayName || camera.model || "Detected device"}</strong>
+                          <small>IP address: {camera.ipAddress} · Model: {discoveryModelLabel(camera)} · Type: {discoveryDeviceTypeLabel(camera)}</small>
                           <small>{camera.vendor} · {camera.discoveryMethod ?? "discovery"} · ONVIF port {camera.onvifPort}</small>
                           <small>{camera.serialNumber ? `SN ${camera.serialNumber}` : "Serial pending"} · {camera.macAddress ?? "MAC pending"}</small>
                           <small className="profiles">{camera.profiles.map((p: any) => `${p.codec} ${p.width}x${p.height}`).join(", ")}</small>

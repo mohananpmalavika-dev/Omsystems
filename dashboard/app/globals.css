@@ -768,6 +768,11 @@ select, textarea { font: inherit; }
 .login-error, .form-info-banner { display: flex; gap: 8px; padding: 10px; border-radius: 8px; font-size: 10px; }
 .login-error { color: #a83e45; background: #ffeded; }
 .form-info-banner { color: #355f9d; background: #eaf2ff; }
+.credential-device-banner > svg { flex: 0 0 auto; margin-top: 2px; }
+.credential-device-summary { display: grid; gap: 3px; min-width: 0; }
+.credential-device-summary strong { color: #214f90; font-size: 11px; }
+.credential-device-summary span, .credential-device-summary small { line-height: 1.45; }
+.credential-device-summary small { color: #5674a0; }
 .field-help { display: block; margin-top: 5px; color: #7a8697; font-size: 9px; line-height: 1.45; }
 
 /* Remote branch camera onboarding */

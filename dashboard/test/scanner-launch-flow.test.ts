@@ -24,6 +24,11 @@ describe("website scanner launch flow", () => {
     expect(source).toContain("Device login required");
     expect(source).toContain("Enter login & password");
     expect(source).toContain("Save & verify this device");
+    expect(source).toContain("discoveryModelLabel(credentialActivation)");
+    expect(source).toContain("discoveryDeviceTypeLabel(credentialActivation)");
+    expect(source).toContain("IP address:");
+    expect(source).toContain("Model:");
+    expect(source).toContain("Type:");
     expect(source).toContain("No broadcast discovery, subnet scan, or other camera probe will run.");
     expect(source).toContain('job.scope !== "device" && readyToProvision');
     expect(source).toContain("cameraInventoryApi.activateDiscovery");
