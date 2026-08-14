@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { Eye, EyeOff, ShieldCheck, AlertCircle, Info } from "lucide-react";
+import { useState, useEffect, useRef } from "react";
+import { Eye, EyeOff, ShieldCheck, AlertCircle, Info, QrCode } from "lucide-react";
 import { authApi } from "@/lib/api-client";
 import { resetLocalEdgeAutostart } from "@/lib/local-edge-autostart";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -13,6 +13,9 @@ interface LoginFormProps {
 export function LoginForm({ onSuccess }: LoginFormProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const qrCanvasRef = useRef<HTMLCanvasElement>(null);
+  const [showQR, setShowQR] = useState(false);
+  const [loginUrl, setLoginUrl] = useState("");
   const [formData, setFormData] = useState({
     username: "",
     password: "",
@@ -42,6 +45,51 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
       setInfo('You have been signed out successfully.');
     }
   }, [searchParams]);
+
+  // Generate QR code with current login URL
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const currentUrl = window.location.origin + window.location.pathname;
+      setLoginUrl(currentUrl);
+    }
+  }, []);
+
+  // Generate QR code when URL is set and QR is shown
+  useEffect(() => {
+    if (!showQR || !loginUrl || !qrCanvasRef.current) return;
+
+    // Load QRCode library dynamically from CDN
+    const script = document.getElementById('qrcode-script');
+    if (!script) {
+      const qrScript = document.createElement('script');
+      qrScript.id = 'qrcode-script';
+      qrScript.src = 'https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js';
+      qrScript.onload = () => generateQR();
+      document.head.appendChild(qrScript);
+    } else {
+      generateQR();
+    }
+
+    function generateQR() {
+      if (typeof window !== 'undefined' && (window as any).QRCode && qrCanvasRef.current) {
+        (window as any).QRCode.toCanvas(
+          qrCanvasRef.current,
+          loginUrl,
+          {
+            width: 200,
+            margin: 2,
+            color: {
+              dark: '#1e293b',
+              light: '#ffffff',
+            },
+          },
+          (error: any) => {
+            if (error) console.error('QR generation error:', error);
+          }
+        );
+      }
+    }
+  }, [showQR, loginUrl]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -346,6 +394,30 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
               Contact Support
             </a>
           </p>
+        </div>
+
+        <div className="login-qr-section">
+          <button
+            type="button"
+            className="qr-toggle-btn"
+            onClick={() => setShowQR(!showQR)}
+          >
+            <QrCode size={18} />
+            {showQR ? "Hide Login QR Code" : "Show Login QR Code"}
+          </button>
+          
+          {showQR && (
+            <div className="qr-display">
+              <p className="qr-label">Scan to access login page</p>
+              <div className="qr-canvas-wrapper">
+                <canvas ref={qrCanvasRef} />
+              </div>
+              <p className="qr-url">{loginUrl}</p>
+              <small className="qr-note">
+                Share this QR code to allow others to access the login page from their mobile devices
+              </small>
+            </div>
+          )}
         </div>
       </div>
 
