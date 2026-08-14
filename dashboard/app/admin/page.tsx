@@ -11,6 +11,7 @@ import { UserForm } from "@/components/user-form";
 import { UserList } from "@/components/user-list";
 import { organizationApi, userApi } from "@/lib/api-client";
 import { CreateOrganizationForm } from "@/components/create-organization-form";
+import { OrganizationVisibilityFix } from "@/components/organization-visibility-fix";
 
 type SelectedRecord = {
   id: string;
@@ -141,6 +142,10 @@ export default function AdminPage() {
                 Skip and Continue Anyway
               </button>
             </div>
+            
+            {/* Show visibility fix diagnostic if creation fails */}
+            <OrganizationVisibilityFix />
+            
             <CreateOrganizationForm onSuccess={handleOrganizationCreated} />
           </section>
         </div>

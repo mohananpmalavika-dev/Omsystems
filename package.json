@@ -80,7 +80,9 @@
     "cameras:delete:branch": "node scripts/delete-cameras.mjs --branch",
     "cameras:delete:id": "node scripts/delete-cameras.mjs --id",
     "db:delete:cameras-and-edges": "node scripts/delete-all-cameras-and-edges.mjs",
-    "db:nuke:cameras": "node scripts/delete-all-cameras-and-edges.mjs"
+    "db:nuke:cameras": "node scripts/delete-all-cameras-and-edges.mjs",
+    "fix:org-visibility": "node fix-org-visibility.mjs",
+    "diagnose:org": "psql $DATABASE_URL -f diagnose-org-issue.sql"
   },
   "engines": {
     "node": ">=22"

@@ -2136,8 +2136,8 @@ export class PostgresStore
     return this.activityTracking.startActivitySession(userId, tenantId, deviceInfo, ipAddress, locationInfo);
   }
 
-  async endActivitySession(sessionId: string, userId: string): Promise<void> {
-    return this.activityTracking.endActivitySession(sessionId, userId);
+  async endActivitySession(sessionId: string, userId: string, terminationReason?: string): Promise<void> {
+    return this.activityTracking.endActivitySession(sessionId, userId, terminationReason);
   }
 
   async updateSessionHeartbeat(sessionId: string, userId: string): Promise<void> {
@@ -2323,6 +2323,19 @@ export class PostgresStore
     months: number
   ): Promise<any[]> {
     return this.activityTracking.getMonthlySummary(tenantId, userId, year, months);
+  }
+
+  async getActivityTimeline(
+    tenantId: string,
+    userId: string,
+    startDate: string,
+    endDate: string,
+    limit: number,
+    offset: number
+  ): Promise<{ events: any[]; total: number }> {
+    return this.activityTracking.getActivityTimeline(
+      tenantId, userId, startDate, endDate, limit, offset
+    );
   }
 
   async getComprehensiveReport(

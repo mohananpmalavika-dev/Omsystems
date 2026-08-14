@@ -5,6 +5,7 @@ import { LogOut, MonitorSmartphone, RefreshCw, ShieldCheck, Trash2 } from "lucid
 import { AppLayout } from "@/components/app-layout";
 import { PageHero } from "@/components/page-hero";
 import { authApi } from "@/lib/api-client";
+import { logoutAllSessions } from "@/lib/auth-manager";
 
 type Session = Awaited<ReturnType<typeof authApi.listSessions>>["data"][number];
 export default function AccountSecurityPage() {
@@ -12,7 +13,7 @@ export default function AccountSecurityPage() {
   const load = useCallback(async()=>{try{setSessions((await authApi.listSessions()).data);setError("");}catch(e){setError(e instanceof Error?e.message:"Unable to load sessions.");}},[]);
   useEffect(()=>{void load();},[load]);
   async function revoke(id:string){await authApi.revokeSession(id);await load();}
-  async function logoutAll(){await authApi.logoutAll();window.location.assign("/login");}
+  async function logoutAll(){await logoutAllSessions();}
   return <AppLayout><main className="account-security-page space-y-6 p-6">
     <PageHero eyebrow="Account security" title="Active sessions" description="Review devices signed into your account and revoke anything unfamiliar." icon={ShieldCheck} actions={<button className="btn-secondary flex items-center gap-2" onClick={()=>void load()}><RefreshCw size={16}/>Refresh</button>} />
     {error && <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-red-700" role="alert">{error}</div>}

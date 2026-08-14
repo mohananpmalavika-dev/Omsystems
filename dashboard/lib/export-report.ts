@@ -24,6 +24,7 @@ interface ReportData {
   controlRoomSummary: any;
   branchMonitoring: any[];
   actionSummary: any[];
+  timeline?: any[];
 }
 
 /**
@@ -55,6 +56,8 @@ export function exportReportAsCSV(data: ReportData, filename?: string): void {
   csvRows.push('Metric,Value');
   csvRows.push(`Total Sessions,${data.sessionSummary.total_sessions}`);
   csvRows.push(`Total Duration,${formatDuration(data.sessionSummary.total_duration_seconds)}`);
+  csvRows.push(`Active Duration,${formatDuration(data.sessionSummary.active_duration_seconds)}`);
+  csvRows.push(`Idle Duration,${formatDuration(data.sessionSummary.idle_duration_seconds)}`);
   csvRows.push(`Average Session Duration,${formatDuration(data.sessionSummary.avg_session_duration_seconds)}`);
   csvRows.push('');
   
@@ -93,6 +96,25 @@ export function exportReportAsCSV(data: ReportData, filename?: string): void {
   data.actionSummary.forEach(action => {
     csvRows.push(`${action.action_category},${action.action_count}`);
   });
+
+  if (data.timeline?.length) {
+    csvRows.push('');
+    csvRows.push('Complete Login-to-Logout Timeline');
+    csvRows.push('Time,Event,Title,Description,Module,Branch,Duration Seconds,Outcome,Session');
+    data.timeline.forEach((event) => {
+      csvRows.push([
+        event.event_time,
+        event.event_type,
+        event.title,
+        event.description,
+        event.module_name,
+        event.branch_name,
+        event.duration_seconds,
+        event.outcome,
+        event.session_id,
+      ].map(csvCell).join(','));
+    });
+  }
   
   // Create CSV blob and download
   const csvContent = csvRows.join('\n');
@@ -291,6 +313,24 @@ function generateReportHTML(data: ReportData): string {
       <div class="stat-value">${formatDuration(data.sessionSummary.avg_session_duration_seconds)}</div>
     </div>
   </div>
+
+  ${data.timeline?.length ? `
+    <h2>Complete Login-to-Logout Timeline</h2>
+    <table>
+      <thead><tr><th>Time</th><th>Event</th><th>Activity</th><th>Module / Branch</th><th>Duration / Outcome</th></tr></thead>
+      <tbody>
+        ${data.timeline.map(event => `
+          <tr>
+            <td>${escapeHtml(new Date(event.event_time).toLocaleString())}</td>
+            <td>${escapeHtml(String(event.event_type).replace(/_/g, ' '))}</td>
+            <td>${escapeHtml(event.title)}<br><small>${escapeHtml(event.description || '')}</small></td>
+            <td>${escapeHtml(event.module_name || 'Platform')}${event.branch_name ? ` / ${escapeHtml(event.branch_name)}` : ''}</td>
+            <td>${event.duration_seconds == null ? escapeHtml(event.outcome || 'Recorded') : formatDuration(event.duration_seconds)}</td>
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>
+  ` : ''}
   
   <h2>Module Usage</h2>
   <table>
@@ -390,6 +430,21 @@ function formatDuration(seconds: number): string {
   const hours = Math.floor(seconds / 3600);
   const minutes = Math.floor((seconds % 3600) / 60);
   return `${hours}h ${minutes}m`;
+}
+
+function csvCell(value: unknown): string {
+  const raw = value == null ? '' : String(value);
+  const text = /^[=+\-@]/.test(raw) ? `'${raw}` : raw;
+  return `"${text.replaceAll('"', '""')}"`;
+}
+
+function escapeHtml(value: unknown): string {
+  return String(value ?? '')
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#039;');
 }
 
 /**

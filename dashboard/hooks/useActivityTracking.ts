@@ -91,10 +91,10 @@ export function useSearchTracking(moduleName: string) {
     featureName?: string
   ) => {
     trackAction('search', 'data_view', {
-      actionDescription: `Searched for: ${query}`,
+      actionDescription: 'Performed a search',
       featureName,
       actionMetadata: {
-        query,
+        queryLength: query.length,
         resultsCount,
         timestamp: new Date().toISOString(),
       },
@@ -145,7 +145,8 @@ export function useFilterTracking(moduleName: string) {
       actionDescription: `Applied filter: ${filterName}`,
       actionMetadata: {
         filterName,
-        filterValue,
+        valueType: Array.isArray(filterValue) ? 'array' : typeof filterValue,
+        selectionCount: Array.isArray(filterValue) ? filterValue.length : filterValue == null ? 0 : 1,
         timestamp: new Date().toISOString(),
       },
     });
@@ -329,11 +330,11 @@ export function useIncidentTracking(moduleName: string) {
   ) => {
     trackAction('incident_close', 'incident_management', {
       actionTarget: incidentId,
-      actionDescription: `Closed incident with resolution: ${resolution}`,
+      actionDescription: 'Closed incident',
       featureName: 'incident_management',
       actionMetadata: {
         incidentId,
-        resolution,
+        resolutionProvided: resolution.trim().length > 0,
         timestamp: new Date().toISOString(),
       },
     });

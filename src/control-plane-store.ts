@@ -1860,7 +1860,7 @@ export interface ActivityTrackingStore {
     ipAddress: string,
     locationInfo?: any
   ): Promise<string>;
-  endActivitySession(sessionId: string, userId: string): Promise<void>;
+  endActivitySession(sessionId: string, userId: string, terminationReason?: string): Promise<void>;
   updateSessionHeartbeat(sessionId: string, userId: string): Promise<void>;
   
   // Page Visit Tracking
@@ -1986,6 +1986,14 @@ export interface ActivityTrackingStore {
     year: number,
     months: number
   ): Promise<any[]>;
+  getActivityTimeline(
+    tenantId: string,
+    userId: string,
+    startDate: string,
+    endDate: string,
+    limit: number,
+    offset: number
+  ): Promise<{ events: any[]; total: number }>;
   getComprehensiveReport(
     tenantId: string,
     userId: string,

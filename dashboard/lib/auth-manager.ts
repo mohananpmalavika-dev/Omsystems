@@ -13,7 +13,7 @@ async function endActivitySession(): Promise<void> {
     const sessionId = sessionStorage.getItem('activitySessionId');
     const token = sessionStorage.getItem('activityAccessToken') || localStorage.getItem('accessToken');
     
-    if (!sessionId || !token) return;
+    if (!sessionId) return;
     
     const apiBase = process.env.NEXT_PUBLIC_API_BASE || '/api/control';
     
@@ -21,9 +21,12 @@ async function endActivitySession(): Promise<void> {
     await fetch(`${apiBase}/v1/activity/sessions/${sessionId}/end`, {
       method: 'POST',
       headers: {
-        'x-sentinel-session': token,
+        'Content-Type': 'application/json',
+        ...(token ? { 'x-sentinel-session': token } : {}),
       },
       credentials: 'include',
+      keepalive: true,
+      body: JSON.stringify({ terminationReason: 'user_logout' }),
     });
     
     console.log('[AuthManager] Activity session ended:', sessionId);

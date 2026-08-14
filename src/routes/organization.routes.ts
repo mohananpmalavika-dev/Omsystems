@@ -76,6 +76,51 @@ export async function registerOrganizationRoutes(
     return { data: filterOrganizationTree(nodes, visible) };
   });
 
+  // Debug endpoint to check organization visibility issues
+  app.get("/v1/organization/debug", async (request) => {
+    const tenantId = request.currentUser.tenantId;
+    
+    // Get all organization nodes for this tenant (unfiltered)
+    const allNodes = await store.listOrganizationNodes(
+      tenantId,
+      undefined,
+      undefined,
+      false
+    );
+    
+    // Get visible nodes for current user
+    const visible = await visibleOrganizationNodeIds(request, store);
+    const visibleNodes = allNodes.filter((node) => visible.has(node.id));
+    
+    // Get user's role and assignments
+    const userInfo = {
+      id: request.currentUser.id,
+      username: request.currentUser.username,
+      role: request.currentUser.role,
+      tenantId: request.currentUser.tenantId,
+    };
+    
+    return {
+      debug: {
+        user: userInfo,
+        totalNodesInTenant: allNodes.length,
+        visibleNodes: visibleNodes.length,
+        hiddenNodes: allNodes.length - visibleNodes.length,
+        companyNodes: allNodes.filter(n => n.type === 'company').length,
+        visibleCompanyNodes: visibleNodes.filter(n => n.type === 'company').length,
+      },
+      allNodes: allNodes.map(n => ({
+        id: n.id,
+        name: n.name,
+        type: n.type,
+        isVisible: visible.has(n.id),
+      })),
+      recommendation: allNodes.length > 0 && visibleNodes.length === 0
+        ? "Organization exists but you have no permissions. Contact admin to grant company_admin role or assign you to the organization node."
+        : null,
+    };
+  });
+
   // Get organization statistics
   app.get("/v1/organization/statistics", async (request) => {
     if (

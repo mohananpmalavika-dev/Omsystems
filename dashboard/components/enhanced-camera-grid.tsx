@@ -47,6 +47,7 @@ export interface EnhancedCameraGridProps {
   maxConcurrentStreams?: number;
   priorityCameraIds?: string[];
   onActiveStreamsChange?: (count: number) => void;
+  onMonitoredCamerasChange?: (cameraIds: string[]) => void;
 }
 
 interface VisibleRange {
@@ -64,6 +65,7 @@ export function EnhancedCameraGrid({
   maxConcurrentStreams = 36,
   priorityCameraIds = [],
   onActiveStreamsChange,
+  onMonitoredCamerasChange,
 }: EnhancedCameraGridProps) {
   const [gridSize, setGridSize] = useState<GridSize>(
     initialLayout?.gridSize || "2x2"
@@ -114,6 +116,12 @@ export function EnhancedCameraGrid({
   );
 
   useEffect(() => onActiveStreamsChange?.(sessions.size), [onActiveStreamsChange, sessions.size]);
+
+  useEffect(() => {
+    onMonitoredCamerasChange?.(
+      [...gridPositions.values()].map((entry) => entry.camera.id).sort(),
+    );
+  }, [gridPositions, onMonitoredCamerasChange]);
 
   useEffect(() => {
     const saved = Number(window.localStorage.getItem("sentinel.decoderCapacity"));
@@ -829,6 +837,9 @@ export function EnhancedCameraGrid({
             <div 
               key={i} 
               className="grid-camera-slot"
+              data-activity-camera-id={camera.id}
+              data-activity-branch-id={camera.branchId}
+              data-activity-branch-name={camera.branchName}
               draggable
               onDragStart={() => handleDragStart(i, camera)}
               onDragOver={handleDragOver}

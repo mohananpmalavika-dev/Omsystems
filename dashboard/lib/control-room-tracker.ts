@@ -5,6 +5,7 @@
  */
 
 let currentControlRoomActivityId: string | null = null;
+let controlRoomStartPromise: Promise<string | null> | null = null;
 let activityMetrics = {
   alertCount: 0,
   incidentCount: 0,
@@ -25,6 +26,14 @@ function getAccessToken(): string | null {
          null;
 }
 
+function activityHeaders(json = false): HeadersInit {
+  const headers: Record<string, string> = {};
+  const token = getAccessToken();
+  if (json) headers['Content-Type'] = 'application/json';
+  if (token) headers['x-sentinel-session'] = token;
+  return headers;
+}
+
 /**
  * Start control room monitoring activity
  */
@@ -38,22 +47,21 @@ export async function startControlRoomActivity(
   branchNames: string[] = [],
   monitoringMode: 'live' | 'review' | 'investigation' | 'alert_response' = 'live'
 ): Promise<string | null> {
+  if (currentControlRoomActivityId) return currentControlRoomActivityId;
+  if (controlRoomStartPromise) return controlRoomStartPromise;
+
   const sessionId = sessionStorage.getItem('activitySessionId');
   const pageVisitId = sessionStorage.getItem('currentPageVisitId');
-  const token = getAccessToken();
   
-  if (!sessionId || !token) {
+  if (!sessionId) {
     console.warn('[ControlRoomTracker] No active session, skipping control room tracking');
     return null;
   }
   
-  try {
+  controlRoomStartPromise = (async () => { try {
     const response = await fetch(`${getApiBase()}/v1/activity/control-room/start`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-sentinel-session': token,
-      },
+      headers: activityHeaders(true),
       credentials: 'include',
       body: JSON.stringify({
         sessionId,
@@ -93,7 +101,11 @@ export async function startControlRoomActivity(
   } catch (error) {
     console.error('[ControlRoomTracker] Error starting control room activity:', error);
     return null;
-  }
+  } finally {
+    controlRoomStartPromise = null;
+  } })();
+
+  return controlRoomStartPromise;
 }
 
 /**
@@ -102,9 +114,6 @@ export async function startControlRoomActivity(
 export async function endControlRoomActivity(): Promise<void> {
   if (!currentControlRoomActivityId) return;
   
-  const token = getAccessToken();
-  if (!token) return;
-  
   try {
     // Calculate duration
     const activityId = currentControlRoomActivityId;
@@ -112,11 +121,9 @@ export async function endControlRoomActivity(): Promise<void> {
     
     await fetch(`${getApiBase()}/v1/activity/control-room/${activityId}/end`, {
       method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-sentinel-session': token,
-      },
+      headers: activityHeaders(true),
       credentials: 'include',
+      keepalive: true,
       body: JSON.stringify({
         durationSeconds,
         alertCount: activityMetrics.alertCount,
@@ -154,16 +161,10 @@ async function updateControlRoomMetrics(
 ): Promise<void> {
   if (!currentControlRoomActivityId) return;
   
-  const token = getAccessToken();
-  if (!token) return;
-  
   try {
     await fetch(`${getApiBase()}/v1/activity/control-room/${currentControlRoomActivityId}`, {
       method: 'PATCH',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-sentinel-session': token,
-      },
+      headers: activityHeaders(true),
       credentials: 'include',
       body: JSON.stringify({
         alertCount,

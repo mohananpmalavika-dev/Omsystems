@@ -1,6 +1,6 @@
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyRequest } from "fastify";
 import { z } from "zod";
-import type { ActivityTrackingStore, ControlPlaneStore } from "../control-plane-store.js";
+import type { ActivityTrackingStore, ControlPlaneStore, UserManagementStore } from "../control-plane-store.js";
 
 // ============================================
 // Schemas for validation
@@ -11,7 +11,12 @@ const startSessionSchema = z.object({
     browser: z.string().optional(),
     os: z.string().optional(),
     deviceType: z.string().optional(),
-    screenResolution: z.string().optional(),
+    screenResolution: z.string().max(50).optional(),
+    userAgent: z.string().max(500).optional(),
+    platform: z.string().max(100).optional(),
+    language: z.string().max(50).optional(),
+    viewportSize: z.string().max(50).optional(),
+    timezone: z.string().max(100).optional(),
   }).optional(),
   locationInfo: z.object({
     country: z.string().optional(),
@@ -21,11 +26,11 @@ const startSessionSchema = z.object({
 
 const trackPageVisitSchema = z.object({
   sessionId: z.string().uuid(),
-  pagePath: z.string(),
-  pageTitle: z.string().optional(),
-  pageModule: z.string(),
-  pageCategory: z.string().optional(),
-  referrerPath: z.string().optional(),
+  pagePath: z.string().max(500),
+  pageTitle: z.string().max(255).optional(),
+  pageModule: z.string().max(100),
+  pageCategory: z.string().max(100).optional(),
+  referrerPath: z.string().max(500).nullable().optional(),
   queryParameters: z.record(z.any()).optional(),
 });
 
@@ -41,15 +46,15 @@ const endPageVisitSchema = z.object({
 
 const trackControlRoomActivitySchema = z.object({
   sessionId: z.string().uuid(),
-  pageVisitId: z.string().uuid().optional(),
+  pageVisitId: z.string().uuid().nullable().optional(),
   monitoringType: z.enum(['single_branch', 'branch_group', 'multi_branch', 'camera', 'camera_group']),
   branchNodeId: z.string().uuid().optional(),
   branchGroupId: z.string().uuid().optional(),
-  branchGroupName: z.string().optional(),
+  branchGroupName: z.string().max(255).nullable().optional(),
   cameraIds: z.array(z.string().uuid()).optional().default([]),
   branchIds: z.array(z.string().uuid()).optional().default([]),
-  branchNames: z.array(z.string()).optional().default([]),
-  monitoringMode: z.string().optional().default('live'),
+  branchNames: z.array(z.string().max(255)).max(500).optional().default([]),
+  monitoringMode: z.string().max(50).optional().default('live'),
 });
 
 const endControlRoomActivitySchema = z.object({
@@ -64,15 +69,64 @@ const endControlRoomActivitySchema = z.object({
 
 const trackActionSchema = z.object({
   sessionId: z.string().uuid(),
-  pageVisitId: z.string().uuid().optional(),
-  actionType: z.string(),
-  actionCategory: z.string(),
-  actionTarget: z.string().optional(),
-  actionDescription: z.string().optional(),
-  moduleName: z.string(),
-  featureName: z.string().optional(),
+  pageVisitId: z.string().uuid().nullable().optional(),
+  actionType: z.string().min(1).max(100),
+  actionCategory: z.string().min(1).max(50),
+  actionTarget: z.string().max(255).optional(),
+  actionDescription: z.string().max(500).optional(),
+  moduleName: z.string().min(1).max(100),
+  featureName: z.string().max(100).optional(),
   actionMetadata: z.record(z.any()).optional(),
 });
+
+const endSessionSchema = z.object({
+  terminationReason: z.enum(['user_logout', 'browser_exit', 'session_timeout', 'component_unmount'])
+    .optional()
+    .default('user_logout'),
+});
+
+const sensitiveMetadataKey = /password|passcode|secret|token|credential|authorization|cookie|api.?key|private.?key|query|search.?term/i;
+
+function sanitizeActivityMetadata(value: unknown, depth = 0): unknown {
+  if (depth > 3) return '[truncated]';
+  if (value === null || typeof value === 'boolean' || typeof value === 'number') return value;
+  if (typeof value === 'string') return value.slice(0, 250);
+  if (Array.isArray(value)) return value.slice(0, 50).map((item) => sanitizeActivityMetadata(item, depth + 1));
+  if (typeof value !== 'object') return String(value).slice(0, 250);
+
+  const sanitized: Record<string, unknown> = {};
+  for (const [key, item] of Object.entries(value as Record<string, unknown>).slice(0, 50)) {
+    sanitized[key.slice(0, 100)] = sensitiveMetadataKey.test(key)
+      ? '[redacted]'
+      : sanitizeActivityMetadata(item, depth + 1);
+  }
+  return sanitized;
+}
+
+function safeQueryContext(value: Record<string, unknown> | undefined): Record<string, unknown> {
+  const allowed = new Set(['branchId', 'cameraId', 'view', 'tab', 'mode']);
+  return Object.fromEntries(Object.entries(value ?? {})
+    .filter(([key, item]) => allowed.has(key) && typeof item === 'string')
+    .map(([key, item]) => [key, String(item).slice(0, 100)]));
+}
+
+type ActivityRouteStore = ControlPlaneStore & ActivityTrackingStore & UserManagementStore;
+
+async function canViewEmployeeActivity(
+  request: FastifyRequest,
+  store: ActivityRouteStore,
+  targetUserId: string,
+): Promise<boolean> {
+  if (targetUserId === request.currentUser.id) return true;
+  const target = await store.getUserDetails(targetUserId);
+  if (!target || target.tenantId !== request.currentUser.tenantId) return false;
+  if (request.currentUser.role === 'super_admin') return true;
+  const primary = target.organizations?.find((assignment: any) => assignment.isPrimary)
+    ?? target.organizations?.[0];
+  if (!primary?.scopeNodeId) return false;
+  const decision = await store.checkAccess(request.currentUser, 'audit:view', primary.scopeNodeId);
+  return decision?.allowed === true;
+}
 
 // ============================================
 // Route Registration
@@ -80,7 +134,7 @@ const trackActionSchema = z.object({
 
 export async function registerEmployeeActivityTrackingRoutes(
   app: FastifyInstance,
-  store: ControlPlaneStore & ActivityTrackingStore,
+  store: ActivityRouteStore,
 ) {
   app.log.info('Employee activity tracking routes registered');
   
@@ -109,9 +163,10 @@ export async function registerEmployeeActivityTrackingRoutes(
   
   app.post("/v1/activity/sessions/:sessionId/end", async (request, reply) => {
     const params = z.object({ sessionId: z.string().uuid() }).parse(request.params);
+    const body = endSessionSchema.parse(request.body ?? {});
     
     try {
-      await store.endActivitySession(params.sessionId, request.currentUser.id);
+      await store.endActivitySession(params.sessionId, request.currentUser.id, body.terminationReason);
       return { status: 'ended' };
     } catch (error) {
       app.log.error({ err: error }, "Error ending activity session");
@@ -148,7 +203,7 @@ export async function registerEmployeeActivityTrackingRoutes(
         body.pageModule,
         body.pageCategory || null,
         body.referrerPath || null,
-        body.queryParameters || {}
+        safeQueryContext(body.queryParameters)
       );
       
       return { pageVisitId, status: 'tracked' };
@@ -279,7 +334,7 @@ export async function registerEmployeeActivityTrackingRoutes(
         body.actionDescription || null,
         body.moduleName,
         body.featureName || null,
-        body.actionMetadata || {}
+        sanitizeActivityMetadata(body.actionMetadata || {})
       );
       
       return { status: 'tracked' };
@@ -328,6 +383,9 @@ export async function registerEmployeeActivityTrackingRoutes(
     
     try {
       const userId = query.userId || request.currentUser.id;
+      if (!(await canViewEmployeeActivity(request, store, userId))) {
+        return reply.code(403).send({ error: 'forbidden' });
+      }
       const result = await store.getActivitySessions(
         request.currentUser.tenantId,
         userId,
@@ -357,6 +415,9 @@ export async function registerEmployeeActivityTrackingRoutes(
     
     try {
       const userId = query.userId || request.currentUser.id;
+      if (!(await canViewEmployeeActivity(request, store, userId))) {
+        return reply.code(403).send({ error: 'forbidden' });
+      }
       const pageVisits = await store.getPageVisits(
         request.currentUser.tenantId,
         userId,
@@ -387,6 +448,9 @@ export async function registerEmployeeActivityTrackingRoutes(
     
     try {
       const userId = query.userId || request.currentUser.id;
+      if (!(await canViewEmployeeActivity(request, store, userId))) {
+        return reply.code(403).send({ error: 'forbidden' });
+      }
       const activities = await store.getControlRoomActivities(
         request.currentUser.tenantId,
         userId,
@@ -413,6 +477,9 @@ export async function registerEmployeeActivityTrackingRoutes(
     
     try {
       const userId = query.userId || request.currentUser.id;
+      if (!(await canViewEmployeeActivity(request, store, userId))) {
+        return reply.code(403).send({ error: 'forbidden' });
+      }
       const startDate = query.startDate || new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]!;
       const endDate = query.endDate || new Date().toISOString().split('T')[0]!;
       
@@ -439,6 +506,9 @@ export async function registerEmployeeActivityTrackingRoutes(
     
     try {
       const userId = query.userId || request.currentUser.id;
+      if (!(await canViewEmployeeActivity(request, store, userId))) {
+        return reply.code(403).send({ error: 'forbidden' });
+      }
       const year = query.year || new Date().getFullYear();
       
       const summaries = await store.getWeeklySummary(
@@ -464,6 +534,9 @@ export async function registerEmployeeActivityTrackingRoutes(
     
     try {
       const userId = query.userId || request.currentUser.id;
+      if (!(await canViewEmployeeActivity(request, store, userId))) {
+        return reply.code(403).send({ error: 'forbidden' });
+      }
       const year = query.year || new Date().getFullYear();
       
       const summaries = await store.getMonthlySummary(
@@ -480,6 +553,35 @@ export async function registerEmployeeActivityTrackingRoutes(
     }
   });
   
+  app.get("/v1/activity/timeline", async (request, reply) => {
+    const query = z.object({
+      userId: z.string().uuid().optional(),
+      startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+      endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+      limit: z.coerce.number().int().min(1).max(500).optional().default(200),
+      offset: z.coerce.number().int().min(0).optional().default(0),
+    }).parse(request.query);
+
+    try {
+      const userId = query.userId || request.currentUser.id;
+      if (!(await canViewEmployeeActivity(request, store, userId))) {
+        return reply.code(403).send({ error: 'forbidden' });
+      }
+      const result = await store.getActivityTimeline(
+        request.currentUser.tenantId,
+        userId,
+        query.startDate,
+        query.endDate,
+        query.limit,
+        query.offset,
+      );
+      return { data: result.events, total: result.total, limit: query.limit, offset: query.offset };
+    } catch (error) {
+      app.log.error({ err: error }, "Error fetching employee activity timeline");
+      return reply.code(500).send({ error: "Failed to fetch activity timeline" });
+    }
+  });
+
   app.get("/v1/activity/report/comprehensive", async (request, reply) => {
     const query = z.object({
       userId: z.string().uuid().optional(),
@@ -489,6 +591,9 @@ export async function registerEmployeeActivityTrackingRoutes(
     
     try {
       const userId = query.userId || request.currentUser.id;
+      if (!(await canViewEmployeeActivity(request, store, userId))) {
+        return reply.code(403).send({ error: 'forbidden' });
+      }
       const report = await store.getComprehensiveReport(
         request.currentUser.tenantId,
         userId,

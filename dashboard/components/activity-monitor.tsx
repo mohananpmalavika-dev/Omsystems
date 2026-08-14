@@ -17,6 +17,9 @@ interface ActivityMonitorProps {
 let activityTracker: ActivityTrackerInstance | null = null;
 let currentSessionId: string | null = null;
 let currentPageVisitId: string | null = null;
+let sessionStartPromise: Promise<string | null> | null = null;
+let pageTransitionPromise: Promise<void> = Promise.resolve();
+let removeActivityListeners: (() => void) | null = null;
 
 interface ActivityTrackerInstance {
   sessionId: string | null;
@@ -26,6 +29,7 @@ interface ActivityTrackerInstance {
   idleTimer: NodeJS.Timeout | null;
   lastActivityTime: Date;
   isIdle: boolean;
+  pageVisitStartTime: Date;
   activeTimeStart: Date;
   totalActiveTime: number;
   totalIdleTime: number;
@@ -44,6 +48,16 @@ function getAccessToken(): string | null {
   return sessionStorage.getItem('activityAccessToken') || 
          localStorage.getItem('accessToken') || 
          null;
+}
+
+function activityHeaders(json = false): HeadersInit {
+  const headers: Record<string, string> = {};
+  const token = getAccessToken();
+  if (json) headers['Content-Type'] = 'application/json';
+  // Legacy deployments still accept this header. Current deployments use the
+  // HttpOnly session cookie, so a JavaScript-readable token is not required.
+  if (token) headers['x-sentinel-session'] = token;
+  return headers;
 }
 
 function getUserId(): string | null {
@@ -77,21 +91,19 @@ function getDeviceInfo() {
  * Start activity session
  */
 async function startSession(): Promise<string | null> {
-  const token = getAccessToken();
   const userId = getUserId();
   
-  if (!token || !userId) {
-    console.warn('[ActivityMonitor] No auth token or user ID, skipping session start');
+  if (!userId) {
+    console.warn('[ActivityMonitor] No authenticated user, skipping session start');
     return null;
   }
+
+  if (sessionStartPromise) return sessionStartPromise;
   
-  try {
+  sessionStartPromise = (async () => { try {
     const response = await fetch(`${getApiBase()}/v1/activity/sessions/start`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-sentinel-session': token,
-      },
+      headers: activityHeaders(true),
       credentials: 'include',
       body: JSON.stringify({
         deviceInfo: getDeviceInfo(),
@@ -108,7 +120,8 @@ async function startSession(): Promise<string | null> {
     
     // Store for recovery
     sessionStorage.setItem('activitySessionId', data.sessionId);
-    sessionStorage.setItem('activityAccessToken', token);
+    const token = getAccessToken();
+    if (token) sessionStorage.setItem('activityAccessToken', token);
     
     console.log('[ActivityMonitor] Session started:', data.sessionId);
     
@@ -119,7 +132,11 @@ async function startSession(): Promise<string | null> {
   } catch (error) {
     console.error('[ActivityMonitor] Error starting session:', error);
     return null;
-  }
+  } finally {
+    sessionStartPromise = null;
+  } })();
+
+  return sessionStartPromise;
 }
 
 /**
@@ -132,15 +149,12 @@ async function endSession(): Promise<void> {
     // End current page visit first
     await endPageVisit();
     
-    const token = getAccessToken();
-    if (!token) return;
-    
     await fetch(`${getApiBase()}/v1/activity/sessions/${currentSessionId}/end`, {
       method: 'POST',
-      headers: {
-        'x-sentinel-session': token,
-      },
+      headers: activityHeaders(true),
       credentials: 'include',
+      keepalive: true,
+      body: JSON.stringify({ terminationReason: 'component_unmount' }),
     });
     
     console.log('[ActivityMonitor] Session ended:', currentSessionId);
@@ -165,15 +179,9 @@ function startHeartbeat() {
     if (!currentSessionId) return;
     
     try {
-      const token = getAccessToken();
-      if (!token) return;
-      
       await fetch(`${getApiBase()}/v1/activity/heartbeat`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-sentinel-session': token,
-        },
+        headers: activityHeaders(true),
         credentials: 'include',
         body: JSON.stringify({ sessionId: currentSessionId }),
       });
@@ -211,15 +219,9 @@ async function trackPageVisit(
   await endPageVisit();
   
   try {
-    const token = getAccessToken();
-    if (!token) return null;
-    
     const response = await fetch(`${getApiBase()}/v1/activity/page-visits`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-sentinel-session': token,
-      },
+      headers: activityHeaders(true),
       credentials: 'include',
       body: JSON.stringify({
         sessionId: currentSessionId,
@@ -228,7 +230,9 @@ async function trackPageVisit(
         pageModule,
         pageCategory,
         referrerPath: currentPageVisitId ? document.referrer : null,
-        queryParameters: Object.fromEntries(new URLSearchParams(window.location.search)),
+        // Query strings can contain searches, tokens, or personal data. Branch
+        // and camera context is captured explicitly by monitoring events.
+        queryParameters: {},
       }),
     });
     
@@ -243,7 +247,8 @@ async function trackPageVisit(
     // Reset tracking metrics
     if (activityTracker) {
       activityTracker.pageVisitId = data.pageVisitId;
-      activityTracker.activeTimeStart = new Date();
+      activityTracker.pageVisitStartTime = new Date();
+      activityTracker.activeTimeStart = activityTracker.pageVisitStartTime;
       activityTracker.totalActiveTime = 0;
       activityTracker.totalIdleTime = 0;
       activityTracker.clickCount = 0;
@@ -275,27 +280,28 @@ async function endPageVisit(): Promise<void> {
   if (!currentPageVisitId || !activityTracker) return;
   
   try {
-    const token = getAccessToken();
-    if (!token) return;
-    
+    const now = new Date();
     const durationSeconds = Math.floor(
-      (new Date().getTime() - activityTracker.activeTimeStart.getTime()) / 1000
+      (now.getTime() - activityTracker.pageVisitStartTime.getTime()) / 1000
     );
     
-    // Update active/idle time
-    if (!activityTracker.isIdle) {
+    // Finalize whichever activity phase is currently open.
+    if (activityTracker.isIdle) {
+      activityTracker.totalIdleTime += Math.floor(
+        (now.getTime() - activityTracker.activeTimeStart.getTime()) / 1000
+      );
+    } else {
       activityTracker.totalActiveTime += Math.floor(
-        (new Date().getTime() - activityTracker.activeTimeStart.getTime()) / 1000
+        (now.getTime() - activityTracker.activeTimeStart.getTime()) / 1000
       );
     }
+    activityTracker.activeTimeStart = now;
     
     await fetch(`${getApiBase()}/v1/activity/page-visits/${currentPageVisitId}/end`, {
       method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-sentinel-session': token,
-      },
+      headers: activityHeaders(true),
       credentials: 'include',
+      keepalive: true,
       body: JSON.stringify({
         pageVisitId: currentPageVisitId,
         durationSeconds,
@@ -333,16 +339,11 @@ export async function trackUserAction(
   if (!currentSessionId) return;
   
   try {
-    const token = getAccessToken();
-    if (!token) return;
-    
     await fetch(`${getApiBase()}/v1/activity/actions`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-sentinel-session': token,
-      },
+      headers: activityHeaders(true),
       credentials: 'include',
+      keepalive: true,
       body: JSON.stringify({
         sessionId: currentSessionId,
         pageVisitId: currentPageVisitId,
@@ -395,7 +396,7 @@ function resetIdleTimer() {
   }
   
   activityTracker.idleTimer = setTimeout(() => {
-    if (!activityTracker) return;
+    if (!activityTracker || activityTracker.isIdle) return;
     
     const activeEnd = new Date();
     activityTracker.totalActiveTime += Math.floor(
@@ -420,23 +421,93 @@ function calculateScrollDepth(): number {
   return Math.min(100, Math.round((scrollTop + windowHeight) / documentHeight * 100));
 }
 
+const SENSITIVE_LABEL = /password|passcode|secret|token|credential|api\s*key|private\s*key/i;
+
+function safeControlLabel(element: HTMLElement): string {
+  const candidate = element.dataset.activityAction ||
+    element.getAttribute('aria-label') ||
+    element.getAttribute('title') ||
+    element.getAttribute('name') ||
+    element.id ||
+    element.textContent ||
+    element.tagName.toLowerCase();
+  const normalized = candidate.replace(/\s+/g, ' ').trim().slice(0, 120);
+  if (!normalized || SENSITIVE_LABEL.test(normalized)) return 'redacted_control';
+  return normalized;
+}
+
+function captureControlClick(event: MouseEvent) {
+  const origin = event.target instanceof Element ? event.target : null;
+  const control = origin?.closest<HTMLElement>(
+    'button, a, [role="button"], [role="menuitem"], [data-activity-action]',
+  );
+  if (!control || control.dataset.activityIgnore === 'true') return;
+
+  const label = safeControlLabel(control);
+  const isLink = control instanceof HTMLAnchorElement;
+  let destination: string | undefined;
+  if (isLink && control.href) {
+    try {
+      destination = new URL(control.href, window.location.origin).pathname;
+    } catch {
+      destination = undefined;
+    }
+  }
+
+  const context = control.closest<HTMLElement>('[data-activity-branch-id], [data-activity-camera-id]') || control;
+  const metadata: Record<string, string> = {
+    captureSource: 'delegated_click',
+    elementRole: control.getAttribute('role') || control.tagName.toLowerCase(),
+    pagePath: window.location.pathname,
+  };
+  if (destination) metadata.destination = destination;
+  if (context.dataset.activityBranchId) metadata.branchId = context.dataset.activityBranchId;
+  if (context.dataset.activityBranchName) metadata.branchName = context.dataset.activityBranchName.slice(0, 120);
+  if (context.dataset.activityCameraId) metadata.cameraId = context.dataset.activityCameraId;
+
+  void trackUserAction('button_click', isLink ? 'navigation' : 'interaction', getPageModule(window.location.pathname), {
+    actionTarget: label,
+    actionDescription: `${isLink ? 'Opened' : 'Clicked'} ${label}`,
+    featureName: control.dataset.activityFeature,
+    actionMetadata: metadata,
+  });
+}
+
+function captureFormSubmit(event: SubmitEvent) {
+  const form = event.target instanceof HTMLFormElement ? event.target : null;
+  if (!form || form.dataset.activityIgnore === 'true') return;
+  const label = safeControlLabel(form);
+  void trackUserAction('form_submit', 'data_entry', getPageModule(window.location.pathname), {
+    actionTarget: label,
+    actionDescription: `Submitted ${label}`,
+    actionMetadata: {
+      captureSource: 'delegated_submit',
+      pagePath: window.location.pathname,
+      // Deliberately never capture field names or values here.
+      fieldCount: String(form.elements.length),
+    },
+  });
+}
+
 /**
  * Initialize activity listeners
  */
 function initializeListeners() {
-  if (typeof window === 'undefined') return;
+  if (typeof window === 'undefined' || removeActivityListeners) return;
   
   // Track clicks
-  document.addEventListener('click', () => {
+  const onClick = (event: MouseEvent) => {
     handleActivity();
     if (activityTracker) {
       activityTracker.clickCount++;
     }
-  });
+    captureControlClick(event);
+  };
+  document.addEventListener('click', onClick);
   
   // Track scroll
   let scrollTimeout: NodeJS.Timeout;
-  document.addEventListener('scroll', () => {
+  const onScroll = () => {
     handleActivity();
     clearTimeout(scrollTimeout);
     scrollTimeout = setTimeout(() => {
@@ -447,24 +518,25 @@ function initializeListeners() {
         }
       }
     }, 100);
-  });
+  };
+  document.addEventListener('scroll', onScroll, { passive: true });
   
   // Track keyboard
-  document.addEventListener('keydown', () => {
-    handleActivity();
-  });
+  const onKeydown = () => handleActivity();
+  document.addEventListener('keydown', onKeydown);
   
   // Track mouse movement
   let mouseMoveTimeout: NodeJS.Timeout;
-  document.addEventListener('mousemove', () => {
+  const onMousemove = () => {
     clearTimeout(mouseMoveTimeout);
     mouseMoveTimeout = setTimeout(() => {
       handleActivity();
     }, 200);
-  });
+  };
+  document.addEventListener('mousemove', onMousemove, { passive: true });
   
   // Track form interactions
-  document.addEventListener('input', (e) => {
+  const onInput = (e: Event) => {
     handleActivity();
     if (activityTracker &&
         ((e.target as HTMLElement).tagName === 'INPUT' ||
@@ -472,30 +544,67 @@ function initializeListeners() {
          (e.target as HTMLElement).tagName === 'SELECT')) {
       activityTracker.formInteractions++;
     }
-  });
+  };
+  document.addEventListener('input', onInput);
+  document.addEventListener('submit', captureFormSubmit);
   
   // Handle visibility change
-  document.addEventListener('visibilitychange', () => {
+  const onVisibilityChange = () => {
     if (document.visibilityState === 'hidden') {
-      // Save state when tab becomes hidden
       if (activityTracker && !activityTracker.isIdle) {
+        if (activityTracker.idleTimer) clearTimeout(activityTracker.idleTimer);
         activityTracker.totalActiveTime += Math.floor(
           (new Date().getTime() - activityTracker.activeTimeStart.getTime()) / 1000
         );
-      }
-    } else {
-      // Resume tracking when tab becomes visible
-      if (activityTracker) {
+        activityTracker.isIdle = true;
         activityTracker.activeTimeStart = new Date();
       }
+    } else {
+      if (activityTracker) {
+        if (activityTracker.isIdle) {
+          activityTracker.totalIdleTime += Math.floor(
+            (new Date().getTime() - activityTracker.activeTimeStart.getTime()) / 1000
+          );
+        }
+        activityTracker.isIdle = false;
+        activityTracker.activeTimeStart = new Date();
+        resetIdleTimer();
+      }
     }
-  });
+  };
+  document.addEventListener('visibilitychange', onVisibilityChange);
   
   // Handle before unload
-  window.addEventListener('beforeunload', async () => {
-    // Try to end page visit (may not complete due to browser constraints)
-    await endPageVisit();
-  });
+  const onBeforeUnload = () => {
+    const sessionId = currentSessionId;
+    if (!sessionId) return;
+    // The session endpoint closes the active page and monitoring record on the
+    // server. keepalive gives refresh/browser-close requests time to finish.
+    void fetch(`${getApiBase()}/v1/activity/sessions/${sessionId}/end`, {
+      method: 'POST',
+      headers: activityHeaders(true),
+      credentials: 'include',
+      keepalive: true,
+      body: JSON.stringify({ terminationReason: 'browser_exit' }),
+    });
+    sessionStorage.removeItem('activitySessionId');
+    sessionStorage.removeItem('currentPageVisitId');
+  };
+  window.addEventListener('beforeunload', onBeforeUnload);
+
+  removeActivityListeners = () => {
+    document.removeEventListener('click', onClick);
+    document.removeEventListener('scroll', onScroll);
+    document.removeEventListener('keydown', onKeydown);
+    document.removeEventListener('mousemove', onMousemove);
+    document.removeEventListener('input', onInput);
+    document.removeEventListener('submit', captureFormSubmit);
+    document.removeEventListener('visibilitychange', onVisibilityChange);
+    window.removeEventListener('beforeunload', onBeforeUnload);
+    clearTimeout(scrollTimeout);
+    clearTimeout(mouseMoveTimeout);
+    removeActivityListeners = null;
+  };
 }
 
 /**
@@ -544,85 +653,73 @@ export function ActivityMonitor({ children }: ActivityMonitorProps) {
   const isInitializedRef = useRef(false);
   const previousPathRef = useRef<string>('');
   
-  // Initialize tracker on mount
+  // Initialize after authentication, then serialize the first page entry behind
+  // session creation so it cannot be lost while the request is in flight.
   useEffect(() => {
-    if (isInitializedRef.current) return;
-    
-    // Check if we're on an auth page
     const isAuthPage = pathname?.startsWith('/login') || 
                        pathname?.startsWith('/forgot-password') || 
                        pathname?.startsWith('/reset-password');
-    
-    if (isAuthPage) return;
-    
-    // Initialize tracker instance
-    if (!activityTracker) {
-      activityTracker = {
-        sessionId: null,
-        pageVisitId: null,
-        isInitialized: false,
-        heartbeatInterval: null,
-        idleTimer: null,
-        lastActivityTime: new Date(),
-        isIdle: false,
-        activeTimeStart: new Date(),
-        totalActiveTime: 0,
-        totalIdleTime: 0,
-        clickCount: 0,
-        maxScrollDepth: 0,
-        formInteractions: 0,
-      };
-    }
-    
-    // Check if we have a user logged in
-    const userId = getUserId();
-    if (!userId) return;
-    
-    // Try to recover existing session
-    const savedSessionId = sessionStorage.getItem('activitySessionId');
-    if (savedSessionId) {
-      currentSessionId = savedSessionId;
-      console.log('[ActivityMonitor] Recovered session:', savedSessionId);
-      startHeartbeat();
-    } else {
-      // Start new session
-      startSession();
-    }
-    
-    // Initialize activity listeners
-    initializeListeners();
-    
-    activityTracker.isInitialized = true;
-    isInitializedRef.current = true;
-    
-    // Cleanup on unmount
-    return () => {
-      endSession();
+    if (!pathname || isAuthPage || !getUserId()) return;
+
+    let cancelled = false;
+    const initializeAndTrack = async () => {
+      if (!activityTracker) {
+        activityTracker = {
+          sessionId: null,
+          pageVisitId: null,
+          isInitialized: false,
+          heartbeatInterval: null,
+          idleTimer: null,
+          lastActivityTime: new Date(),
+          isIdle: false,
+          pageVisitStartTime: new Date(),
+          activeTimeStart: new Date(),
+          totalActiveTime: 0,
+          totalIdleTime: 0,
+          clickCount: 0,
+          maxScrollDepth: 0,
+          formInteractions: 0,
+        };
+      }
+
+      initializeListeners();
+
+      if (!currentSessionId) {
+        const savedSessionId = sessionStorage.getItem('activitySessionId');
+        if (savedSessionId) {
+          currentSessionId = savedSessionId;
+          startHeartbeat();
+        } else {
+          await startSession();
+        }
+      }
+
+      if (cancelled || !currentSessionId || !activityTracker) return;
+      activityTracker.sessionId = currentSessionId;
+      activityTracker.isInitialized = true;
+      isInitializedRef.current = true;
+
+      if (pathname === previousPathRef.current) return;
+      previousPathRef.current = pathname;
+      const module = getPageModule(pathname);
+      pageTransitionPromise = pageTransitionPromise
+        .catch(() => undefined)
+        .then(async () => {
+          await trackPageVisit(pathname, module, getPageCategory(module));
+        });
+      await pageTransitionPromise;
     };
+
+    void initializeAndTrack();
+    return () => { cancelled = true; };
   }, [pathname]);
-  
-  // Track page changes
-  useEffect(() => {
-    if (!pathname || !activityTracker?.isInitialized) return;
-    
-    // Skip auth pages
-    const isAuthPage = pathname.startsWith('/login') || 
-                       pathname.startsWith('/forgot-password') || 
-                       pathname.startsWith('/reset-password');
-    
-    if (isAuthPage) return;
-    
-    // Skip if same page
-    if (pathname === previousPathRef.current) return;
-    
-    previousPathRef.current = pathname;
-    
-    // Track the page visit
-    const module = getPageModule(pathname);
-    const category = getPageCategory(module);
-    
-    trackPageVisit(pathname, module, category);
-  }, [pathname]);
+
+  useEffect(() => () => {
+    removeActivityListeners?.();
+    if (activityTracker?.idleTimer) clearTimeout(activityTracker.idleTimer);
+    void endSession();
+    isInitializedRef.current = false;
+  }, []);
   
   return <>{children}</>;
 }

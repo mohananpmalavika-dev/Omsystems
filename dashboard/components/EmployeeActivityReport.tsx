@@ -39,6 +39,8 @@ interface User {
 interface SessionSummary {
   total_sessions: number;
   total_duration_seconds: number;
+  active_duration_seconds: number;
+  idle_duration_seconds: number;
   avg_session_duration_seconds: number;
   first_login: string | null;
   last_logout: string | null;
@@ -77,6 +79,23 @@ interface ComprehensiveReport {
   actionSummary: Array<{ action_category: string; action_count: number }>;
 }
 
+interface TimelineEvent {
+  event_id: string;
+  event_type: "session_login" | "session_logout" | "page_enter" | "page_exit" |
+    "monitoring_start" | "monitoring_end" | "user_action" | "transaction";
+  event_time: string;
+  session_id: string | null;
+  page_visit_id: string | null;
+  module_name: string | null;
+  title: string;
+  description: string;
+  duration_seconds: number | null;
+  branch_id: string | null;
+  branch_name: string | null;
+  outcome: string | null;
+  metadata: Record<string, unknown>;
+}
+
 type ReportPeriod = "seven-days" | "four-weeks" | "quarter" | "custom";
 
 function dateValue(daysAgo = 0) {
@@ -106,6 +125,8 @@ function normalizeReport(value: any): ComprehensiveReport {
     sessionSummary: {
       total_sessions: numberValue(value?.sessionSummary?.total_sessions),
       total_duration_seconds: numberValue(value?.sessionSummary?.total_duration_seconds),
+      active_duration_seconds: numberValue(value?.sessionSummary?.active_duration_seconds),
+      idle_duration_seconds: numberValue(value?.sessionSummary?.idle_duration_seconds),
       avg_session_duration_seconds: numberValue(value?.sessionSummary?.avg_session_duration_seconds),
       first_login: value?.sessionSummary?.first_login ?? null,
       last_logout: value?.sessionSummary?.last_logout ?? null,
@@ -137,6 +158,24 @@ function normalizeReport(value: any): ComprehensiveReport {
   };
 }
 
+function normalizeTimeline(value: any): TimelineEvent[] {
+  return Array.isArray(value) ? value.map((event: any) => ({
+    event_id: String(event.event_id ?? ""),
+    event_type: String(event.event_type ?? "user_action") as TimelineEvent["event_type"],
+    event_time: String(event.event_time ?? ""),
+    session_id: event.session_id ? String(event.session_id) : null,
+    page_visit_id: event.page_visit_id ? String(event.page_visit_id) : null,
+    module_name: event.module_name ? String(event.module_name) : null,
+    title: String(event.title ?? "Activity"),
+    description: String(event.description ?? ""),
+    duration_seconds: event.duration_seconds == null ? null : numberValue(event.duration_seconds),
+    branch_id: event.branch_id ? String(event.branch_id) : null,
+    branch_name: event.branch_name ? String(event.branch_name) : null,
+    outcome: event.outcome ? String(event.outcome) : null,
+    metadata: event.metadata && typeof event.metadata === "object" ? event.metadata : {},
+  })) : [];
+}
+
 async function responseJson(response: Response) {
   const body = await response.json().catch(() => ({}));
   if (!response.ok) {
@@ -160,6 +199,9 @@ export function EmployeeActivityReport({
   const [selectedUserId, setSelectedUserId] = useState(currentUserId ?? "");
   const [users, setUsers] = useState<User[]>([]);
   const [report, setReport] = useState<ComprehensiveReport | null>(null);
+  const [timeline, setTimeline] = useState<TimelineEvent[]>([]);
+  const [timelineTotal, setTimelineTotal] = useState(0);
+  const [timelineLoading, setTimelineLoading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [usersLoading, setUsersLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -208,16 +250,52 @@ export function EmployeeActivityReport({
       const userId = selectedUserId || currentUserId;
       const params = new URLSearchParams({ startDate, endDate });
       if (userId) params.set("userId", userId);
-      const response = await fetch(`${apiBaseUrl}/v1/activity/report/comprehensive?${params}`, requestOptions);
-      const body = await responseJson(response);
+      const timelineParams = new URLSearchParams(params);
+      timelineParams.set("limit", "200");
+      timelineParams.set("offset", "0");
+      const [reportResponse, timelineResponse] = await Promise.all([
+        fetch(`${apiBaseUrl}/v1/activity/report/comprehensive?${params}`, requestOptions),
+        fetch(`${apiBaseUrl}/v1/activity/timeline?${timelineParams}`, requestOptions),
+      ]);
+      const [body, timelineBody] = await Promise.all([
+        responseJson(reportResponse),
+        responseJson(timelineResponse),
+      ]);
       setReport(normalizeReport(body));
+      setTimeline(normalizeTimeline(timelineBody.data));
+      setTimelineTotal(numberValue(timelineBody.total));
     } catch (reason) {
       setReport(null);
+      setTimeline([]);
+      setTimelineTotal(0);
       setError(reason instanceof Error ? reason.message : "Unable to load the employee activity report.");
     } finally {
       setLoading(false);
     }
   }, [apiBaseUrl, currentUserId, endDate, requestOptions, selectedUserId, startDate]);
+
+  const loadMoreTimeline = useCallback(async () => {
+    if (timelineLoading || timeline.length >= timelineTotal) return;
+    setTimelineLoading(true);
+    try {
+      const params = new URLSearchParams({
+        startDate,
+        endDate,
+        limit: "200",
+        offset: String(timeline.length),
+      });
+      const userId = selectedUserId || currentUserId;
+      if (userId) params.set("userId", userId);
+      const response = await fetch(`${apiBaseUrl}/v1/activity/timeline?${params}`, requestOptions);
+      const body = await responseJson(response);
+      setTimeline((current) => [...current, ...normalizeTimeline(body.data)]);
+      setTimelineTotal(numberValue(body.total));
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Unable to load more activity events.");
+    } finally {
+      setTimelineLoading(false);
+    }
+  }, [apiBaseUrl, currentUserId, endDate, requestOptions, selectedUserId, startDate, timeline.length, timelineLoading, timelineTotal]);
 
   useEffect(() => { void fetchUsers(); }, [fetchUsers]);
   useEffect(() => { void fetchReport(); }, [fetchReport]);
@@ -244,7 +322,7 @@ export function EmployeeActivityReport({
     const moduleCount = report.moduleUsage.length;
     trackExport('employee_activity_report', moduleCount, format);
     
-    exportReport(report, { format });
+    exportReport({ ...report, timeline }, { format });
   };
 
   const formatDuration = (seconds: number) => {
@@ -300,7 +378,7 @@ export function EmployeeActivityReport({
 
           <section className="employee-report-stats">
             <ReportStat icon={Clock3} label="Sessions" value={report.sessionSummary.total_sessions.toLocaleString()} detail="Authenticated logins" />
-            <ReportStat icon={Activity} label="Active time" value={formatDuration(report.sessionSummary.total_duration_seconds)} detail="Across Sentinel Grid" />
+            <ReportStat icon={Activity} label="Active time" value={formatDuration(report.sessionSummary.active_duration_seconds)} detail={`${formatDuration(report.sessionSummary.idle_duration_seconds)} idle`} />
             <ReportStat icon={MonitorPlay} label="Monitoring time" value={formatDuration(report.controlRoomSummary.total_monitoring_seconds)} detail={`${report.controlRoomSummary.total_monitoring_sessions} control-room sessions`} />
             <ReportStat icon={Building2} label="Branches covered" value={report.controlRoomSummary.unique_branches_monitored.toLocaleString()} detail="Unique monitored branches" />
             <ReportStat icon={BarChart3} label="Recorded actions" value={totalActions.toLocaleString()} detail="Auditable operator actions" />
@@ -348,6 +426,26 @@ export function EmployeeActivityReport({
               </div>
             </section>
           </div>
+
+          <section className="employee-report-panel employee-timeline-panel">
+            <div className="employee-timeline-heading">
+              <PanelHeader icon={Activity} eyebrow="Login-to-logout evidence" title="Complete employee timeline" description="Page entries and exits, interactions, monitoring context and verified server transactions" />
+              <span>{timeline.length.toLocaleString()} of {timelineTotal.toLocaleString()} events</span>
+            </div>
+            <div className="employee-timeline-table">
+              <div className="employee-timeline-head"><span>Time</span><span>Event</span><span>Workspace / branch</span><span>Duration / result</span></div>
+              {timeline.map((event) => (
+                <article className="employee-timeline-row" key={event.event_id}>
+                  <time dateTime={event.event_time}>{event.event_time ? new Date(event.event_time).toLocaleString() : "—"}</time>
+                  <div><span className={`employee-event-type employee-event-${event.event_type}`}>{event.event_type.replaceAll("_", " ")}</span><strong>{event.title}</strong><small>{event.description}</small></div>
+                  <div><strong>{event.module_name?.replaceAll("_", " ") || "Platform"}</strong><small>{event.branch_name || "No branch scope"}</small></div>
+                  <div><strong>{event.duration_seconds == null ? (event.outcome || "Recorded") : formatDuration(event.duration_seconds)}</strong><small>{event.session_id ? `Session ${event.session_id.slice(0, 8)}` : "Immutable audit event"}</small></div>
+                </article>
+              ))}
+              {timeline.length === 0 && <EmptyReportState text="No login-to-logout events were recorded during this period." />}
+            </div>
+            {timeline.length < timelineTotal && <button type="button" className="employee-timeline-more" onClick={() => void loadMoreTimeline()} disabled={timelineLoading}>{timelineLoading ? <LoaderCircle className="spin" size={15} /> : <Activity size={15} />}Load more events</button>}
+          </section>
         </>
       ) : null}
     </div>
