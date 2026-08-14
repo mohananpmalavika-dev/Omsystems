@@ -68,6 +68,42 @@ export async function registerProvisioningRoutes(
     };
   });
 
+  app.post("/v1/branches/:branchId/provisioning/:runId/skip-credentials", async (request, reply) => {
+    const { branchId, runId } = runParams.parse(request.params);
+    if (!(await requireDeviceAccess(request, reply, store, branchId))) return;
+    const existing = await store.getEdgeScanJob(branchId, runId);
+    if (!existing) return reply.code(404).send({ error: "provisioning_run_not_found" });
+    if (existing.status !== "completed" || existing.scope === "device") {
+      return reply.code(409).send({ error: "provisioning_run_not_ready_to_skip_credentials" });
+    }
+
+    const current = await buildProvisioningRunView(store, branchId, request.currentUser, existing);
+    if (!current.canSkipCredentialResolution) {
+      return reply.code(409).send({
+        error: "credential_skip_requires_verified_camera",
+        message: "Verify at least one camera stream before deferring the remaining device credentials.",
+      });
+    }
+    const skipped = await store.skipEdgeScanJobCredentials(branchId, runId);
+    if (!skipped) return reply.code(409).send({ error: "provisioning_run_not_ready_to_skip_credentials" });
+    await store.writeAudit({
+      tenantId: request.currentUser.tenantId,
+      actorUserId: request.currentUser.id,
+      action: "zero_touch_provisioning.credentials_deferred",
+      resourceNodeId: branchId,
+      outcome: "success",
+      sourceIp: request.ip,
+      details: {
+        runId,
+        edgeAgentId: existing.edgeAgentId,
+        deferredCredentialCount: current.summary.credentialsRequired,
+      },
+    });
+    return reply.code(200).send({
+      run: await buildProvisioningRunView(store, branchId, request.currentUser, skipped),
+    });
+  });
+
   app.post("/v1/branches/:branchId/provisioning/:runId/retry", async (request, reply) => {
     const { branchId, runId } = runParams.parse(request.params);
     if (!(await requireDeviceAccess(request, reply, store, branchId))) return;

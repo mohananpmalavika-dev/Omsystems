@@ -652,6 +652,119 @@ export function createOperationalHealthRoutes(pool: Pool): Router {
     }
   });
 
+  /**
+   * POST /v1/operations/health/edge-agents/:id/reconnect
+   * Attempt to reconnect an offline Edge Agent
+   */
+  router.post('/edge-agents/:id/reconnect', async (req: AuthRequest, res: Response) => {
+    try {
+      const { tenantId, userId } = req.context || {};
+      const { id } = req.params;
+      const { reconnectCameras = true } = req.body;
+      
+      if (!tenantId || !userId) {
+        return res.status(401).json({
+          success: false,
+          error: 'Unauthorized'
+        });
+      }
+      
+      const result = await healthService.reconnectEdgeAgent(
+        id,
+        tenantId,
+        userId,
+        reconnectCameras
+      );
+      
+      res.json({
+        success: true,
+        message: 'Edge Agent reconnection initiated',
+        data: result
+      });
+    } catch (error) {
+      console.error('Error reconnecting Edge Agent:', error);
+      res.status(500).json({
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to reconnect Edge Agent'
+      });
+    }
+  });
+
+  /**
+   * POST /v1/operations/health/cameras/bulk-online
+   * Bring multiple cameras online
+   */
+  router.post('/cameras/bulk-online', async (req: AuthRequest, res: Response) => {
+    try {
+      const { tenantId, userId } = req.context || {};
+      const { cameraIds, branchId, edgeAgentId } = req.body;
+      
+      if (!tenantId || !userId) {
+        return res.status(401).json({
+          success: false,
+          error: 'Unauthorized'
+        });
+      }
+
+      if (!cameraIds && !branchId && !edgeAgentId) {
+        return res.status(400).json({
+          success: false,
+          error: 'At least one of cameraIds, branchId, or edgeAgentId is required'
+        });
+      }
+      
+      const result = await healthService.bringCamerasOnline(
+        tenantId,
+        userId,
+        { cameraIds, branchId, edgeAgentId }
+      );
+      
+      res.json({
+        success: true,
+        message: 'Camera reconnection initiated',
+        data: result
+      });
+    } catch (error) {
+      console.error('Error bringing cameras online:', error);
+      res.status(500).json({
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to bring cameras online'
+      });
+    }
+  });
+
+  /**
+   * POST /v1/operations/health/cameras/:id/reconnect
+   * Attempt to reconnect an offline camera
+   */
+  router.post('/cameras/:id/reconnect', async (req: AuthRequest, res: Response) => {
+    try {
+      const { tenantId, userId } = req.context || {};
+      const { id } = req.params;
+      
+      if (!tenantId || !userId) {
+        return res.status(401).json({
+          success: false,
+          error: 'Unauthorized'
+        });
+      }
+      
+      const result = await healthService.reconnectCamera(id, tenantId, userId);
+      
+      res.json({
+        success: true,
+        message: 'Camera reconnection initiated',
+        data: result
+      });
+    } catch (error) {
+      console.error('Error reconnecting camera:', error);
+      res.status(500).json({
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to reconnect camera'
+      });
+    }
+  });
+
   return router;
 }
 

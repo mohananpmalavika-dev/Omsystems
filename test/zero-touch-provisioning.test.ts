@@ -84,6 +84,24 @@ describe("zero-touch provisioning integration", () => {
       action: "provide-credentials",
     });
 
+    const skipped = await app.inject({
+      method: "POST",
+      url: `/v1/branches/branch-blr-001/provisioning/${runId}/skip-credentials`,
+      headers,
+    });
+    expect(skipped.statusCode).toBe(200);
+    expect(skipped.json().run).toMatchObject({
+      credentialsSkipped: true,
+      canSkipCredentialResolution: false,
+      status: "blocked",
+    });
+    expect(skipped.json().run.steps.find((step: any) => step.id === "credential-resolution")).toMatchObject({
+      status: "skipped",
+    });
+    expect(skipped.json().run.issues).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: "DEVICE_CREDENTIAL_DEFERRED", severity: "warning" }),
+    ]));
+
     await app.close();
   });
 
@@ -96,7 +114,7 @@ describe("zero-touch provisioning integration", () => {
         requestedAt: now, startedAt: now, completedAt: now, resultCount: 4,
         provisionedCount: 4, credentialsRequiredCount: 0, pendingVerificationCount: 0,
         verifiedCount: 4, recorderCount: 1, timeSynchronizedCount: 4, timeDriftCount: 0,
-        analyticsCompatibleCount: 4, duplicateCount: 0, error: null,
+        analyticsCompatibleCount: 4, duplicateCount: 0, credentialsSkippedAt: null, error: null,
       },
       agents: [{
         id: "agent-1", branchId: "branch-1", name: "edge", version: "1.0.0",
@@ -138,7 +156,7 @@ describe("zero-touch provisioning integration", () => {
         requestedAt: now, startedAt: now, completedAt: now, resultCount: 1,
         provisionedCount: 1, credentialsRequiredCount: 0, pendingVerificationCount: 0,
         verifiedCount: 1, recorderCount: 0, timeSynchronizedCount: 1, timeDriftCount: 0,
-        analyticsCompatibleCount: 1, duplicateCount: 0, error: null,
+        analyticsCompatibleCount: 1, duplicateCount: 0, credentialsSkippedAt: null, error: null,
       },
       agents: [{
         id: "agent-1", branchId: "branch-1", name: "edge", version: "1.0.0",

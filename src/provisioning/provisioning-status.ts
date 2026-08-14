@@ -54,6 +54,8 @@ export interface ProvisioningRunView {
   totalUnits: number;
   progressPercent: number;
   readyForActivation: boolean;
+  credentialsSkipped: boolean;
+  canSkipCredentialResolution: boolean;
   startedAt?: string;
   completedAt?: string;
   steps: ProvisioningStepView[];
@@ -126,6 +128,7 @@ export async function buildProvisioningRunView(
     agents,
     pendingDiscoveries: runDiscoveries,
     importedCameraIds: runCameras.map((camera) => camera.id),
+    connectedCameraCount: cameras.filter((camera) => camera.status === "online").length,
     recordingJobs,
     storageNodes,
     analyticsCameraIds: [...new Set(analyticsRules.filter((rule) => rule.enabled).map((rule) => rule.cameraId))],
@@ -142,6 +145,8 @@ export function projectProvisioningRun(input: {
   agents: EdgeAgent[];
   pendingDiscoveries: DiscoveredCamera[];
   importedCameraIds: string[];
+  /** Existing approved cameras that are currently reporting a usable stream. */
+  connectedCameraCount?: number;
   recordingJobs: RecordingJob[];
   storageNodes: RecordingStorageNode[];
   analyticsCameraIds: string[];
@@ -162,6 +167,9 @@ export function projectProvisioningRun(input: {
     input.job?.provisionedCount ?? 0,
     input.pendingDiscoveries.filter((device) => device.streamVerified === true).length,
   );
+  const credentialsSkipped = Boolean(input.job?.credentialsSkippedAt);
+  const canSkipCredentialResolution = credentialsRequired > 0 && !credentialsSkipped &&
+    (verifiedStreams > 0 || (input.connectedCameraCount ?? 0) > 0);
   const recorderTelemetry = input.telemetry.filter((item) => item.deviceType === "recorder");
   const diskTelemetry = input.telemetry.filter((item) => item.deviceType === "disk");
   const archiveTelemetry = input.telemetry.filter((item) => item.deviceType === "archive");
@@ -227,6 +235,7 @@ export function projectProvisioningRun(input: {
     noDevicesDiscovered,
     noVerifiedStreams,
     timeDrifted,
+    credentialsSkipped,
   });
 
   const steps: ProvisioningStepView[] = [
@@ -255,11 +264,13 @@ export function projectProvisioningRun(input: {
     ),
     step(
       "credential-resolution", "Credential resolution",
-      credentialsRequired > 0 ? "blocked" : discoveredDevices > 0 ? "completed" : "pending",
-      Math.max(0, discoveredDevices - credentialsRequired), Math.max(1, discoveredDevices),
-      credentialsRequired > 0 ? `${credentialsRequired} device(s) require an authorized credential` : "Known branch and device credential profiles resolved",
-      credentialsRequired > 0 ? "DEVICE_CREDENTIAL_REQUIRED" : undefined,
-      credentialsRequired > 0 ? "provide-credentials" : undefined,
+      credentialsSkipped ? "skipped" : credentialsRequired > 0 ? "blocked" : discoveredDevices > 0 ? "completed" : "pending",
+      credentialsSkipped ? Math.max(1, discoveredDevices) : Math.max(0, discoveredDevices - credentialsRequired), Math.max(1, discoveredDevices),
+      credentialsSkipped
+        ? `${credentialsRequired} device(s) deferred; their credentials can be supplied in a later scan`
+        : credentialsRequired > 0 ? `${credentialsRequired} device(s) require an authorized credential` : "Known branch and device credential profiles resolved",
+      credentialsSkipped ? undefined : credentialsRequired > 0 ? "DEVICE_CREDENTIAL_REQUIRED" : undefined,
+      credentialsSkipped ? undefined : credentialsRequired > 0 ? "provide-credentials" : undefined,
     ),
     step(
       "stream-verification", "RTSP stream verification",
@@ -331,7 +342,7 @@ export function projectProvisioningRun(input: {
   const completedUnits = steps.reduce((total, item) => total + Math.min(item.completedUnits, item.totalUnits), 0);
   const totalUnits = steps.reduce((total, item) => total + item.totalUnits, 0);
   const status = failed ? "failed"
-    : credentialsRequired > 0 ? "waiting_for_input"
+    : credentialsRequired > 0 && !credentialsSkipped ? "waiting_for_input"
       : blockers.length > 0 ? "blocked"
         : readyForActivation ? "active"
           : input.job?.status === "queued" ? "queued"
@@ -348,6 +359,8 @@ export function projectProvisioningRun(input: {
     totalUnits,
     progressPercent: totalUnits > 0 ? Math.round((completedUnits / totalUnits) * 1_000) / 10 : 0,
     readyForActivation,
+    credentialsSkipped,
+    canSkipCredentialResolution,
     ...(input.job?.requestedAt ? { startedAt: input.job.requestedAt } : {}),
     ...(input.job?.completedAt ? { completedAt: input.job.completedAt } : {}),
     steps,
@@ -382,6 +395,7 @@ function provisioningIssues(input: {
   noDevicesDiscovered: boolean;
   noVerifiedStreams: boolean;
   timeDrifted: number;
+  credentialsSkipped: boolean;
 }) {
   const issues: ProvisioningIssue[] = [];
   if (input.onlineAgents.length === 0) issues.push({
@@ -401,9 +415,14 @@ function provisioningIssues(input: {
   });
   for (const device of input.pendingDiscoveries) {
     if (device.credentialsRequired) issues.push({
-      code: "DEVICE_CREDENTIAL_REQUIRED", severity: "blocker", resourceId: device.id,
-      message: `${device.displayName ?? device.model} requires credentials.`,
-      recommendedAction: "Provide the authorized device login once; only the affected device will be rescanned.",
+      code: input.credentialsSkipped ? "DEVICE_CREDENTIAL_DEFERRED" : "DEVICE_CREDENTIAL_REQUIRED",
+      severity: input.credentialsSkipped ? "warning" : "blocker", resourceId: device.id,
+      message: input.credentialsSkipped
+        ? `${device.displayName ?? device.model} was deferred because its credentials are unavailable.`
+        : `${device.displayName ?? device.model} requires credentials.`,
+      recommendedAction: input.credentialsSkipped
+        ? "Provide the authorized device login in a later scan to add this device."
+        : "Provide the authorized device login once; only the affected device will be rescanned.",
     });
     else if (!device.streamVerified) issues.push({
       code: "RTSP_NO_VIDEO", severity: "warning", resourceId: device.id,

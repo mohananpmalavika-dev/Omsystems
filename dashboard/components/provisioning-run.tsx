@@ -32,6 +32,7 @@ export function ProvisioningRun({
   const [run, setRun] = useState<ProvisioningRunModel>();
   const [error, setError] = useState<string>();
   const [retrying, setRetrying] = useState(false);
+  const [skippingCredentials, setSkippingCredentials] = useState(false);
 
   useEffect(() => {
     if (!branchId) {
@@ -75,6 +76,21 @@ export function ProvisioningRun({
     }
   }
 
+  async function skipUnavailableCredentials() {
+    if (!run || !run.canSkipCredentialResolution) return;
+    setSkippingCredentials(true);
+    setError(undefined);
+    try {
+      const response = await provisioningApi.skipCredentials(branchId, run.id);
+      setRun(response.run);
+      onChanged?.();
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Unable to defer the unavailable device credentials.");
+    } finally {
+      setSkippingCredentials(false);
+    }
+  }
+
   if (!branchId) return null;
 
   const headline = run?.status === "active" ? "Branch evidence verified"
@@ -96,12 +112,15 @@ export function ProvisioningRun({
         </div>
         <div className="ztp-actions">
           {run?.status === "waiting_for_input" ? <button className="primary-button" onClick={onProvideCredentials}>Provide credentials</button> : null}
+          {run?.canSkipCredentialResolution ? <button className="secondary-button" disabled={skippingCredentials} onClick={() => void skipUnavailableCredentials()}>{skippingCredentials ? "Skipping…" : "Skip unavailable devices"}</button> : null}
           {run?.status === "failed" || run?.status === "blocked" ? <button className="secondary-button" disabled={retrying} onClick={() => void retry()}><RefreshCw size={14}/>{retrying ? "Retrying..." : "Retry run"}</button> : null}
           {!run || run.status === "not_started" || run.status === "active" ? <button className="primary-button" onClick={onStart} disabled={refreshing}>{refreshing ? "Starting..." : run?.status === "active" ? "Run again" : "Start provisioning"}</button> : null}
         </div>
       </div>
 
       {error ? <div className="device-message error"><AlertTriangle size={15}/>{error}</div> : null}
+
+      {run?.canSkipCredentialResolution ? <p className="ztp-skip-note">A verified camera is already available. Skipping keeps the remaining devices pending and asks for their credentials again in a future scan.</p> : null}
 
       {run ? <>
         <div className="ztp-progress-copy"><span>{run.completedUnits} of {run.totalUnits} evidence units complete</span><strong>{run.progressPercent.toFixed(1)}%</strong></div>

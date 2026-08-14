@@ -916,6 +916,11 @@ export const provisioningApi = {
       `/v1/branches/${encodeURIComponent(branchId)}/provisioning/${encodeURIComponent(runId)}/retry`,
       { method: "POST", body: "{}" },
     ),
+  skipCredentials: (branchId: string, runId: string) =>
+    fetchApi<{ run: ProvisioningRun }>(
+      `/v1/branches/${encodeURIComponent(branchId)}/provisioning/${encodeURIComponent(runId)}/skip-credentials`,
+      { method: "POST", body: "{}" },
+    ),
 };
 
 export type IdentityWatchlist = {

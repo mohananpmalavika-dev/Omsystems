@@ -674,6 +674,8 @@ export interface EdgeScanJob {
   timeDriftCount: number;
   analyticsCompatibleCount: number;
   duplicateCount: number;
+  /** Operator explicitly deferred devices whose credentials are unavailable for this branch scan. */
+  credentialsSkippedAt: string | null;
   error: string | null;
 }
 

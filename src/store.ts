@@ -737,7 +737,8 @@ export class MemoryStore implements ControlPlaneStore {
       resultCount: 0, provisionedCount: 0, credentialsRequiredCount: 0,
       pendingVerificationCount: 0, verifiedCount: 0, recorderCount: 0,
       timeSynchronizedCount: 0, timeDriftCount: 0,
-      analyticsCompatibleCount: 0, duplicateCount: 0, error: null,
+      analyticsCompatibleCount: 0, duplicateCount: 0,
+      credentialsSkippedAt: null, error: null,
     };
     this.edgeScanJobs.set(job.id, job);
     return job;
@@ -752,6 +753,15 @@ export class MemoryStore implements ControlPlaneStore {
     return [...this.edgeScanJobs.values()]
       .filter((job) => job.branchId === branchId && job.scope !== "device")
       .sort((left, right) => right.requestedAt.localeCompare(left.requestedAt))[0];
+  }
+
+  async skipEdgeScanJobCredentials(branchId: string, jobId: string) {
+    const job = this.edgeScanJobs.get(jobId);
+    if (!job || job.branchId !== branchId || job.scope === "device" || job.status !== "completed") {
+      return undefined;
+    }
+    if (!job.credentialsSkippedAt) job.credentialsSkippedAt = new Date().toISOString();
+    return job;
   }
 
   async claimEdgeScanJob(edgeAgentId: string) {

@@ -363,3 +363,90 @@ export async function createWorkOrderFromAlert(
   if (!data.success) throw new Error(data.error || 'Invalid response');
   return data.data;
 }
+
+
+/**
+ * Reconnect an offline Edge Agent
+ */
+export async function reconnectEdgeAgent(
+  edgeAgentId: string,
+  reconnectCameras: boolean = true
+): Promise<{
+  edgeAgentId: string;
+  commandId: string;
+  status: string;
+  branchId: string;
+  branchName: string;
+  reconnectCameras: boolean;
+  camerasAffected: number;
+  message: string;
+}> {
+  const response = await fetch(`${API_BASE}/health/edge-agents/${edgeAgentId}/reconnect`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify({ reconnectCameras }),
+  });
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ error: 'Unknown error' }));
+    throw new Error(error.error || 'Failed to reconnect Edge Agent');
+  }
+  const data = await response.json();
+  return data.data;
+}
+
+/**
+ * Bring cameras online (bulk operation)
+ */
+export async function bringCamerasOnline(params: {
+  cameraIds?: string[];
+  branchId?: string;
+  edgeAgentId?: string;
+}): Promise<{
+  camerasAffected: number;
+  cameraIds?: string[];
+  commandIds?: string[];
+  status: string;
+  message: string;
+}> {
+  const response = await fetch(`${API_BASE}/health/cameras/bulk-online`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify(params),
+  });
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ error: 'Unknown error' }));
+    throw new Error(error.error || 'Failed to bring cameras online');
+  }
+  const data = await response.json();
+  return data.data;
+}
+
+/**
+ * Reconnect a single offline camera
+ */
+export async function reconnectCamera(
+  cameraId: string
+): Promise<{
+  cameraId: string;
+  cameraName: string;
+  commandId: string;
+  status: string;
+  branchId: string;
+  branchName: string;
+  message: string;
+}> {
+  const response = await fetch(`${API_BASE}/health/cameras/${cameraId}/reconnect`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify({}),
+  });
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ error: 'Unknown error' }));
+    throw new Error(error.error || 'Failed to reconnect camera');
+  }
+  const data = await response.json();
+  return data.data;
+}

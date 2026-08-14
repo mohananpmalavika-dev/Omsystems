@@ -16,11 +16,13 @@ import {
   ShieldCheck,
   Wifi,
   WifiOff,
+  Power,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useOperationalHealthStream } from "@/hooks/useOperationalHealthStream";
 import type { BranchHealth } from "@/lib/types/operational-health";
 import { getTimeAgo } from "@/lib/types/operational-health";
+import { reconnectEdgeAgent, bringCamerasOnline } from "@/lib/api/operational-health";
 
 type GatewayFilter = "all" | "ready" | "offline" | "tunnel_missing" | "not_enrolled";
 type BranchPage = { branches: BranchHealth[]; total: number; limit: number; offset: number };
@@ -169,12 +171,54 @@ export function BranchGatewayFleet() {
 }
 
 function GatewayRow({ branch }: { branch: BranchHealth }) {
+  const [reconnecting, setReconnecting] = useState(false);
+  const [reconnectSuccess, setReconnectSuccess] = useState(false);
+  const [reconnectError, setReconnectError] = useState<string | null>(null);
+
   const state = readiness(branch);
   const presentation = readinessPresentation(state);
   const cameras = percent(branch.onlineCameras, branch.totalCameras);
   const recordings = percent(branch.recordingCameras, branch.totalCameras);
   const internetTone = branch.internetStatus === "online" ? "text-emerald-700" : branch.internetStatus === "failover" || branch.internetStatus === "degraded" ? "text-amber-700" : "text-red-700";
-  return <Link href={`/operations/branches/${branch.id}`} className="grid gap-3 px-5 py-4 transition hover:bg-blue-50/40 xl:grid-cols-[minmax(220px,1.6fr)_130px_130px_150px_130px_46px] xl:items-center">
+  
+  const isOffline = state === "offline";
+  const canReconnect = isOffline && !reconnecting && !reconnectSuccess;
+
+  const handleReconnect = async (withCameras: boolean) => {
+    setReconnecting(true);
+    setReconnectError(null);
+    setReconnectSuccess(false);
+
+    try {
+      // Get the edge agent ID for this branch
+      // This assumes branches endpoint includes edge agent info
+      const response = await fetch(`/api/control/v1/branches/${branch.id}/edge-agents`);
+      if (!response.ok) throw new Error('Failed to fetch edge agents');
+      
+      const { data: agents } = await response.json();
+      const offlineAgent = agents.find((a: any) => a.status === 'offline');
+      
+      if (!offlineAgent) {
+        throw new Error('No offline edge agent found');
+      }
+
+      await reconnectEdgeAgent(offlineAgent.id, withCameras);
+      setReconnectSuccess(true);
+      
+      setTimeout(() => {
+        setReconnectSuccess(false);
+      }, 3000);
+    } catch (error) {
+      setReconnectError(error instanceof Error ? error.message : 'Failed to reconnect');
+      setTimeout(() => {
+        setReconnectError(null);
+      }, 5000);
+    } finally {
+      setReconnecting(false);
+    }
+  };
+
+  return <div className="grid gap-3 px-5 py-4 transition hover:bg-blue-50/40 xl:grid-cols-[minmax(220px,1.6fr)_130px_130px_150px_130px_46px] xl:items-center">
     <div className="min-w-0">
       <div className="flex items-center gap-2"><span className={`h-2.5 w-2.5 flex-none rounded-full ${presentation.dot}`}/><strong className="truncate text-sm text-slate-900">{branch.name}</strong></div>
       <p className="mt-1 truncate pl-[18px] text-xs text-slate-500">{branch.region} · {branch.code}</p>
@@ -186,8 +230,60 @@ function GatewayRow({ branch }: { branch: BranchHealth }) {
     <ProgressFact icon={Camera} label={`${branch.onlineCameras}/${branch.totalCameras} online`} value={cameras}/>
     <ProgressFact icon={FileVideo2} label={`${branch.recordingCameras}/${branch.totalCameras} verified`} value={recordings}/>
     <div className={`flex items-center gap-2 text-xs font-semibold capitalize ${internetTone}`}><Wifi size={15}/>{branch.internetStatus ?? "unknown"}</div>
-    <span className="hidden h-9 w-9 place-items-center rounded-lg border border-slate-200 text-slate-500 xl:grid"><ChevronRight size={16}/></span>
-  </Link>;
+    
+    {isOffline ? (
+      <div className="flex gap-1 xl:col-span-1">
+        <button
+          onClick={(e) => {
+            e.preventDefault();
+            handleReconnect(false);
+          }}
+          disabled={!canReconnect}
+          className="flex-1 px-2 py-1 bg-red-600 text-white text-[10px] font-semibold rounded hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1"
+          title="Reconnect Edge Agent"
+        >
+          {reconnecting ? (
+            <RefreshCw size={12} className="animate-spin" />
+          ) : reconnectSuccess ? (
+            <CheckCircle2 size={12} />
+          ) : (
+            <Power size={12} />
+          )}
+        </button>
+        <button
+          onClick={(e) => {
+            e.preventDefault();
+            handleReconnect(true);
+          }}
+          disabled={!canReconnect}
+          className="flex-1 px-2 py-1 bg-red-700 text-white text-[10px] font-semibold rounded hover:bg-red-800 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1"
+          title="Reconnect Edge Agent and restore cameras"
+        >
+          {reconnecting ? (
+            <RefreshCw size={12} className="animate-spin" />
+          ) : reconnectSuccess ? (
+            <CheckCircle2 size={12} />
+          ) : (
+            <>
+              <Power size={12} />
+              <Camera size={12} />
+            </>
+          )}
+        </button>
+      </div>
+    ) : (
+      <Link href={`/operations/branches/${branch.id}`} className="hidden h-9 w-9 place-items-center rounded-lg border border-slate-200 text-slate-500 xl:grid">
+        <ChevronRight size={16}/>
+      </Link>
+    )}
+    
+    {reconnectError && (
+      <div className="xl:col-span-6 text-xs text-red-600 bg-red-50 px-3 py-2 rounded">
+        <AlertTriangle size={12} className="inline mr-1" />
+        {reconnectError}
+      </div>
+    )}
+  </div>;
 }
 
 function ProgressFact({ icon: Icon, label, value }: { icon: typeof Camera; label: string; value: number }) {

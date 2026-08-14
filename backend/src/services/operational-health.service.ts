@@ -1039,3 +1039,383 @@ export class OperationalHealthService {
     return { clause, params, alertClause };
   }
 }
+
+  /**
+   * Reconnect an offline Edge Agent
+   * Attempts to restore connectivity and optionally reconnect associated cameras
+   */
+  async reconnectEdgeAgent(
+    edgeAgentId: string,
+    tenantId: string,
+    userId: string,
+    reconnectCameras: boolean = true
+  ) {
+    const client = await this.pool.connect();
+    
+    try {
+      await client.query('BEGIN');
+
+      // Verify Edge Agent exists and get branch info
+      const agentQuery = `
+        SELECT ea.*, b.name as branch_name, b.code as branch_code
+        FROM edge_agents ea
+        JOIN branches b ON b.id = ea.branch_id
+        WHERE ea.id = $1 AND b.tenant_id = $2
+      `;
+      const agentResult = await client.query(agentQuery, [edgeAgentId, tenantId]);
+
+      if (agentResult.rows.length === 0) {
+        throw new Error('Edge Agent not found or access denied');
+      }
+
+      const agent = agentResult.rows[0];
+
+      // Create reconnection command for the Edge Agent
+      const commandId = `cmd_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      const insertCommandQuery = `
+        INSERT INTO edge_commands (
+          id, edge_agent_id, branch_id, command_type, status, 
+          created_by, created_at, payload
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, NOW(), $7)
+        RETURNING id, status
+      `;
+      
+      await client.query(insertCommandQuery, [
+        commandId,
+        edgeAgentId,
+        agent.branch_id,
+        'reconnect',
+        'pending',
+        userId,
+        JSON.stringify({ 
+          reason: 'manual_reconnection',
+          reconnectCameras,
+          requestedAt: new Date().toISOString()
+        })
+      ]);
+
+      // Update Edge Agent status to indicate reconnection attempt
+      const updateAgentQuery = `
+        UPDATE edge_agents
+        SET 
+          reconnection_attempted_at = NOW(),
+          reconnection_attempted_by = $2
+        WHERE id = $1
+      `;
+      await client.query(updateAgentQuery, [edgeAgentId, userId]);
+
+      // Log the reconnection attempt
+      const auditQuery = `
+        INSERT INTO audit_log (
+          tenant_id, actor_user_id, action, resource_node_id,
+          outcome, source_ip, details, timestamp
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
+      `;
+      
+      await client.query(auditQuery, [
+        tenantId,
+        userId,
+        'edge_agent.reconnection_initiated',
+        agent.branch_id,
+        'pending',
+        null,
+        JSON.stringify({
+          edgeAgentId,
+          commandId,
+          reconnectCameras,
+          agentStatus: agent.status
+        })
+      ]);
+
+      let camerasAffected = 0;
+      
+      // If reconnectCameras is true, create recovery commands for offline cameras
+      if (reconnectCameras) {
+        const camerasQuery = `
+          SELECT id, name
+          FROM cameras
+          WHERE branch_id = $1 
+            AND (online_status = 'offline' OR online_status = 'unknown')
+        `;
+        const camerasResult = await client.query(camerasQuery, [agent.branch_id]);
+        camerasAffected = camerasResult.rows.length;
+
+        // Mark cameras for recovery
+        if (camerasAffected > 0) {
+          const cameraIds = camerasResult.rows.map(c => c.id);
+          const updateCamerasQuery = `
+            UPDATE cameras
+            SET 
+              recovery_attempted_at = NOW(),
+              recovery_status = 'pending'
+            WHERE id = ANY($1::text[])
+          `;
+          await client.query(updateCamerasQuery, [cameraIds]);
+        }
+      }
+
+      await client.query('COMMIT');
+
+      return {
+        edgeAgentId,
+        commandId,
+        status: 'pending',
+        branchId: agent.branch_id,
+        branchName: agent.branch_name,
+        reconnectCameras,
+        camerasAffected,
+        message: `Reconnection command sent to Edge Agent. ${camerasAffected} cameras will be recovered.`
+      };
+
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  /**
+   * Bring cameras online (bulk operation)
+   */
+  async bringCamerasOnline(
+    tenantId: string,
+    userId: string,
+    filters: { cameraIds?: string[]; branchId?: string; edgeAgentId?: string }
+  ) {
+    const client = await this.pool.connect();
+
+    try {
+      await client.query('BEGIN');
+
+      let cameraIds: string[] = [];
+
+      if (filters.cameraIds && filters.cameraIds.length > 0) {
+        // Use provided camera IDs
+        cameraIds = filters.cameraIds;
+      } else if (filters.edgeAgentId) {
+        // Get all offline cameras for the Edge Agent's branch
+        const query = `
+          SELECT c.id
+          FROM cameras c
+          JOIN edge_agents ea ON ea.branch_id = c.branch_id
+          JOIN branches b ON b.id = c.branch_id
+          WHERE ea.id = $1 
+            AND b.tenant_id = $2
+            AND (c.online_status = 'offline' OR c.online_status = 'unknown')
+        `;
+        const result = await client.query(query, [filters.edgeAgentId, tenantId]);
+        cameraIds = result.rows.map(row => row.id);
+      } else if (filters.branchId) {
+        // Get all offline cameras for the branch
+        const query = `
+          SELECT c.id
+          FROM cameras c
+          JOIN branches b ON b.id = c.branch_id
+          WHERE c.branch_id = $1 
+            AND b.tenant_id = $2
+            AND (c.online_status = 'offline' OR c.online_status = 'unknown')
+        `;
+        const result = await client.query(query, [filters.branchId, tenantId]);
+        cameraIds = result.rows.map(row => row.id);
+      }
+
+      if (cameraIds.length === 0) {
+        await client.query('COMMIT');
+        return {
+          camerasAffected: 0,
+          message: 'No offline cameras found matching the criteria'
+        };
+      }
+
+      // Update cameras to mark for recovery
+      const updateQuery = `
+        UPDATE cameras
+        SET 
+          recovery_attempted_at = NOW(),
+          recovery_status = 'pending',
+          recovery_initiated_by = $2
+        WHERE id = ANY($1::text[])
+      `;
+      await client.query(updateQuery, [cameraIds, userId]);
+
+      // Create recovery commands for each camera
+      const commandInserts = cameraIds.map((cameraId, index) => {
+        const commandId = `cmd_${Date.now()}_${index}_${Math.random().toString(36).substr(2, 9)}`;
+        return {
+          id: commandId,
+          cameraId,
+          type: 'recover-camera',
+          status: 'pending',
+          createdBy: userId
+        };
+      });
+
+      // Insert recovery commands
+      if (commandInserts.length > 0) {
+        const insertCommandsQuery = `
+          INSERT INTO camera_commands (
+            id, camera_id, command_type, status, created_by, created_at, payload
+          )
+          SELECT 
+            unnest($1::text[]),
+            unnest($2::text[]),
+            'recover-camera',
+            'pending',
+            $3,
+            NOW(),
+            '{}'::jsonb
+        `;
+        await client.query(insertCommandsQuery, [
+          commandInserts.map(c => c.id),
+          commandInserts.map(c => c.cameraId),
+          userId
+        ]);
+      }
+
+      // Log audit event
+      const auditQuery = `
+        INSERT INTO audit_log (
+          tenant_id, actor_user_id, action, resource_node_id,
+          outcome, details, timestamp
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, NOW())
+      `;
+      
+      const branchId = filters.branchId || (await client.query(
+        'SELECT branch_id FROM cameras WHERE id = $1',
+        [cameraIds[0]]
+      )).rows[0]?.branch_id;
+
+      await client.query(auditQuery, [
+        tenantId,
+        userId,
+        'cameras.bulk_recovery_initiated',
+        branchId,
+        'pending',
+        JSON.stringify({
+          cameraCount: cameraIds.length,
+          filters,
+          commandIds: commandInserts.map(c => c.id)
+        })
+      ]);
+
+      await client.query('COMMIT');
+
+      return {
+        camerasAffected: cameraIds.length,
+        cameraIds,
+        commandIds: commandInserts.map(c => c.id),
+        status: 'pending',
+        message: `Recovery initiated for ${cameraIds.length} camera(s)`
+      };
+
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  /**
+   * Reconnect a single offline camera
+   */
+  async reconnectCamera(cameraId: string, tenantId: string, userId: string) {
+    const client = await this.pool.connect();
+
+    try {
+      await client.query('BEGIN');
+
+      // Verify camera exists and get info
+      const cameraQuery = `
+        SELECT c.*, b.name as branch_name, b.code as branch_code
+        FROM cameras c
+        JOIN branches b ON b.id = c.branch_id
+        WHERE c.id = $1 AND b.tenant_id = $2
+      `;
+      const cameraResult = await client.query(cameraQuery, [cameraId, tenantId]);
+
+      if (cameraResult.rows.length === 0) {
+        throw new Error('Camera not found or access denied');
+      }
+
+      const camera = cameraResult.rows[0];
+
+      // Create recovery command
+      const commandId = `cmd_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      const insertCommandQuery = `
+        INSERT INTO camera_commands (
+          id, camera_id, command_type, status, created_by, created_at, payload
+        )
+        VALUES ($1, $2, $3, $4, $5, NOW(), $6)
+        RETURNING id, status
+      `;
+      
+      await client.query(insertCommandQuery, [
+        commandId,
+        cameraId,
+        'recover-camera',
+        'pending',
+        userId,
+        JSON.stringify({
+          reason: 'manual_reconnection',
+          requestedAt: new Date().toISOString()
+        })
+      ]);
+
+      // Update camera status
+      const updateCameraQuery = `
+        UPDATE cameras
+        SET 
+          recovery_attempted_at = NOW(),
+          recovery_status = 'pending',
+          recovery_initiated_by = $2
+        WHERE id = $1
+      `;
+      await client.query(updateCameraQuery, [cameraId, userId]);
+
+      // Log audit event
+      const auditQuery = `
+        INSERT INTO audit_log (
+          tenant_id, actor_user_id, action, resource_node_id,
+          outcome, details, timestamp
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, NOW())
+      `;
+      
+      await client.query(auditQuery, [
+        tenantId,
+        userId,
+        'camera.reconnection_initiated',
+        camera.branch_id,
+        'pending',
+        JSON.stringify({
+          cameraId,
+          cameraName: camera.name,
+          commandId,
+          previousStatus: camera.online_status
+        })
+      ]);
+
+      await client.query('COMMIT');
+
+      return {
+        cameraId,
+        cameraName: camera.name,
+        commandId,
+        status: 'pending',
+        branchId: camera.branch_id,
+        branchName: camera.branch_name,
+        message: `Recovery command sent for camera ${camera.name}`
+      };
+
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  }

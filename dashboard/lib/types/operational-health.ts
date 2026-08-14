@@ -130,6 +130,9 @@ export interface EdgeAgentHealth {
   branchId?: string;
   branchName?: string;
   branchCode?: string;
+  reconnectionAttemptedAt?: string | null;
+  reconnectionAttemptedBy?: string | null;
+  reconnectionStatus?: 'pending' | 'in_progress' | 'success' | 'failed' | null;
 }
 
 /**
@@ -171,6 +174,9 @@ export interface CameraHealth {
   imageFrozen: boolean;
   blackScreen: boolean;
   retention?: Omit<RetentionHealth, 'branchId' | 'branchName' | 'cameraName'>;
+  recoveryAttemptedAt?: string | null;
+  recoveryStatus?: 'pending' | 'in_progress' | 'success' | 'failed' | null;
+  recoveryInitiatedBy?: string | null;
 }
 
 /**

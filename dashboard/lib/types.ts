@@ -461,6 +461,7 @@ export interface EdgeScanJob {
   timeDriftCount: number;
   analyticsCompatibleCount: number;
   duplicateCount: number;
+  credentialsSkippedAt: string | null;
   error: string | null;
 }
 
@@ -492,6 +493,8 @@ export interface ProvisioningRun {
   totalUnits: number;
   progressPercent: number;
   readyForActivation: boolean;
+  credentialsSkipped: boolean;
+  canSkipCredentialResolution: boolean;
   startedAt?: string;
   completedAt?: string;
   steps: Array<{

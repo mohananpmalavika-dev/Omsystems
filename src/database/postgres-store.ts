@@ -350,6 +350,9 @@ export class PostgresStore
   async getLatestEdgeScanJob(branchId: string) {
     return this.agents.getLatestScanJob(branchId);
   }
+  async skipEdgeScanJobCredentials(branchId: string, jobId: string) {
+    return this.agents.skipScanJobCredentials(branchId, jobId);
+  }
   async claimEdgeScanJob(edgeAgentId: string) {
     return this.agents.claimScanJob(edgeAgentId);
   }

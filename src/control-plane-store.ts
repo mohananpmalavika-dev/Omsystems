@@ -646,6 +646,7 @@ export interface ControlPlaneStore {
   createEdgeScanJob(branchId: string, edgeAgentId?: string, target?: EdgeScanTarget): Promise<EdgeScanJob>;
   getEdgeScanJob(branchId: string, jobId: string): Promise<EdgeScanJob | undefined>;
   getLatestEdgeScanJob(branchId: string): Promise<EdgeScanJob | undefined>;
+  skipEdgeScanJobCredentials(branchId: string, jobId: string): Promise<EdgeScanJob | undefined>;
   claimEdgeScanJob(edgeAgentId: string): Promise<EdgeScanJob | undefined>;
   completeEdgeScanJob(
     edgeAgentId: string,

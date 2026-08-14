@@ -921,6 +921,7 @@ select, textarea { font: inherit; }
 .ztp-mark.active { background: #dcf5e9; color: #168258; }
 .ztp-mark.blocked, .ztp-mark.waiting_for_input, .ztp-mark.failed { background: #fff0e6; color: #c26027; }
 .ztp-actions { gap: 8px; }
+.ztp-skip-note { margin: -4px 0 0; color: #61718a; font-size: 12px; line-height: 1.45; }
 .ztp-progress-copy { justify-content: space-between; color: #61718a; font-size: 10px; }
 .ztp-progress-copy strong { color: #243d5b; font-size: 12px; }
 .ztp-progress { height: 8px; overflow: hidden; border-radius: 999px; background: #e6edf5; }
