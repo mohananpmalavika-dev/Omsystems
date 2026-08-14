@@ -2,7 +2,11 @@
 
 ## What Just Happened?
 
-I've successfully added **QR code scanning** to your camera onboarding system! Now you can extract camera credentials by simply scanning or uploading the QR code.
+I've successfully added **THREE powerful features** to your camera onboarding system:
+
+1. 📸 **QR Code Scanner** - Scan or upload QR codes to extract credentials
+2. 🔑 **Default Credential Suggester** - One-click to try common defaults (NEW!)
+3. ⚡ **Auto-Fill Integration** - Instant credential entry
 
 ---
 
@@ -18,6 +22,35 @@ I've successfully added **QR code scanning** to your camera onboarding system! N
 **This will show you what's in your QR code!**
 
 ---
+
+## 🔑 NEW: Try Default Credentials (Instant!)
+
+When adding your camera, you'll now see **5 smart suggestions**:
+
+```
+┌─────────────────────────────────────┐
+│ ℹ️  Try Default Credentials         │
+├─────────────────────────────────────┤
+│ Click to auto-fill:                 │
+│                                     │
+│ #1  admin / admin          Try →   │
+│     Most common default             │
+│                                     │
+│ #2  admin / 12345          Try →   │
+│     Second most common              │
+│                                     │
+│ #3  admin / 592944         Try →   │
+│     Last 6 digits (your camera)     │
+│                                     │
+│ #4  admin / 888888         Try →   │
+│     TrueCloud default               │
+│                                     │
+│ #5  admin / (empty)        Try →   │
+│     Blank password                  │
+└─────────────────────────────────────┘
+```
+
+**One click = Auto-filled form!** ✨
 
 ## 📱 Your Camera Details
 

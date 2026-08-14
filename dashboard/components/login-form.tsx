@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { Eye, EyeOff, ShieldCheck, AlertCircle, Info } from "lucide-react";
 import { authApi } from "@/lib/api-client";
+import { resetLocalEdgeAutostart } from "@/lib/local-edge-autostart";
 import { useRouter, useSearchParams } from "next/navigation";
 
 interface LoginFormProps {
@@ -62,6 +63,7 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
 
       // Successful login - activity tracking will start automatically via ActivityMonitor
       console.log('[LoginForm] Login successful, redirecting to dashboard');
+      resetLocalEdgeAutostart();
       
       if (onSuccess) {
         onSuccess();
@@ -123,6 +125,7 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
         newPassword,
         formData.tenantSlug || undefined
       );
+      resetLocalEdgeAutostart();
 
       if (onSuccess) {
         onSuccess();

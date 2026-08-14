@@ -20,6 +20,7 @@ import { discoveryDeviceTypeLabel, discoveryModelLabel } from "@/lib/discovery-d
 import { BranchConnectivityPanel } from "@/components/branch-connectivity-panel";
 import { ProvisioningRun } from "@/components/provisioning-run";
 import { QRCredentialScanner } from "@/components/qr-credential-scanner";
+import { DefaultCredentialSuggester } from "@/components/default-credential-suggester";
 import type {
   Branch,
   Camera as CameraRecord,
@@ -1267,6 +1268,17 @@ export function DeviceManager() {
                   <small>Its saved login did not match. Enter the device username and password; Sentinel Grid will probe only this IP address and discover channels belonging to this device.</small>
                 </div>
               </div>
+              
+              <DefaultCredentialSuggester
+                deviceId={credentialActivation.id || credentialActivation.serialNumber}
+                manufacturer={credentialActivation.manufacturer || credentialActivation.vendor}
+                onSelectCredential={(username, password) => {
+                  setActivationUsername(username);
+                  setActivationPassword(password);
+                  setNotice(`Credentials set to: ${username} / ${password || '(empty)'}. Click "Save & verify" to test.`);
+                }}
+              />
+              
               <div className="form-group"><label htmlFor="activationUsername">Username <span className="required">*</span></label><input id="activationUsername" value={activationUsername} onChange={(event) => setActivationUsername(event.target.value)} autoComplete="username" required /></div>
               <div className="form-group"><label htmlFor="activationPassword">Password <span className="required">*</span></label><input id="activationPassword" type="password" value={activationPassword} onChange={(event) => setActivationPassword(event.target.value)} autoComplete="current-password" required /></div>
               

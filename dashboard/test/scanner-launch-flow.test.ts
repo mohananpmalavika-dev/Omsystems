@@ -12,6 +12,17 @@ describe("website scanner launch flow", () => {
     expect(source).toContain('"Repair scanner" : "Install scanner"');
   });
 
+  it("asks the installed local edge to start after each successful login", async () => {
+    const sessionProvider = await readFile("dashboard/components/session-provider.tsx", "utf8");
+    const loginForm = await readFile("dashboard/components/login-form.tsx", "utf8");
+    const autostart = await readFile("dashboard/lib/local-edge-autostart.ts", "utf8");
+
+    expect(sessionProvider).toContain("requestLocalEdgeAutostart()");
+    expect(loginForm).toContain("resetLocalEdgeAutostart()");
+    expect(autostart).toContain('launcher.src = "sentinel-grid-scanner://start"');
+    expect(autostart).toContain("window.sessionStorage.setItem");
+  });
+
   it("opens a login prompt for discovered devices that reject saved credentials", async () => {
     const source = await readFile("dashboard/components/device-manager.tsx", "utf8");
 

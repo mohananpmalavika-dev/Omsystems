@@ -8,6 +8,7 @@
 import { useEffect } from 'react';
 import { usePathname } from 'next/navigation';
 import { setupSessionGuard } from '@/lib/session-guard';
+import { requestLocalEdgeAutostart } from '@/lib/local-edge-autostart';
 
 interface SessionProviderProps {
   children: React.ReactNode;
@@ -27,6 +28,7 @@ export function SessionProvider({ children }: SessionProviderProps) {
 
     if (!isAuthPage) {
       setupSessionGuard();
+      requestLocalEdgeAutostart();
     }
   }, [pathname]);
 
