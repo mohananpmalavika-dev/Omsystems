@@ -1,83 +1,14 @@
-# 📷 QR Credential Scanner - Complete
+# QR Camera Onboarding
 
-## 🎉 Feature Complete!
+The Branch Onboarding credential prompt can scan a QR code with the browser camera or decode an uploaded QR image. QR decoding stays in the browser; decoded QR contents are not logged or stored.
 
-Two new options added to camera credential input:
+## Supported QR data
 
-```
-┌─────────────────────────────────────────┐
-│  Device Login Required                  │
-├─────────────────────────────────────────┤
-│                                         │
-│  Username: [_______________]            │
-│  Password: [_______________]            │
-│                                         │
-│  ┌─────────────────────────────────┐   │
-│  │ 📸 Scan or Upload QR Code   ←NEW│   │
-│  └─────────────────────────────────┘   │
-│                                         │
-│  [Cancel]  [Save & Verify]              │
-└─────────────────────────────────────────┘
-```
+- Camera credentials in JSON, key-value, URL query, or comma-separated formats. The dashboard fills the local device username and password before the operator verifies the camera through the Branch Gateway.
+- TrueCloud device-sharing QR codes (`openapi.dvr163.com/share/device`). The dashboard recognizes these codes and indicates whether their expiry time has passed, but never stores or displays their token.
 
-## ⚡ Quick Start
+## TrueCloud limitation
 
-### 1. Test Your QR Code (30 seconds)
-```
-→ Go to: https://webqr.com
-→ Upload your QR screenshot
-→ View credentials
-```
+A TrueCloud sharing QR code is an account-to-account share link. It does not expose an ONVIF endpoint, RTSP URL, camera password, or usable video stream. Claim the QR code in the authenticated TrueCloud application first. To monitor that camera in Sentinel Grid, enable its local ONVIF or RTSP service and provide the private IP address and device credentials through the normal onboarding flow.
 
-### 2. Test The Feature (2 minutes)
-```bash
-cd dashboard
-npm run dev
-# Open: http://localhost:3000/admin/branch-onboarding
-# Click: "Scan or Upload QR Code"
-```
-
-### 3. Deploy (1 minute)
-```bash
-git add .
-git commit -m "Add QR scanner"
-git push
-```
-
-## 📊 Your Camera
-
-```
-Device ID: 4835592944
-Brand: TrueCloud
-Valid: 2026/08/14
-
-Try:
-→ admin / admin
-→ admin / 12345
-→ admin / 592944
-```
-
-## 📚 Documentation
-
-| File | Purpose |
-|------|---------|
-| `START_HERE.md` | ⭐ Begin here |
-| `QUICK_START.md` | Quick reference |
-| `YOUR_CAMERA_GUIDE.md` | Your camera specifics |
-| `TEST_YOUR_QR.md` | Testing instructions |
-| `QR_CREDENTIAL_SCANNER_GUIDE.md` | Full implementation guide |
-
-## ✅ Status
-
-- ✅ Feature built
-- ✅ Tested locally
-- ✅ Documented
-- ✅ Ready to deploy
-
-## 🎯 Next Actions
-
-1. **Test QR**: https://webqr.com
-2. **Try Feature**: `npm run dev`
-3. **Deploy**: `git push`
-
-**Questions?** Read `START_HERE.md`
+A direct TrueCloud cloud integration requires vendor-issued API credentials and documented stream-access APIs; it cannot be established from a share QR code alone.

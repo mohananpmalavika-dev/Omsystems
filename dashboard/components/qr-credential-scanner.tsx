@@ -1,20 +1,13 @@
 "use client";
 
 import { Camera, Upload, X, AlertTriangle, CheckCircle2 } from "lucide-react";
+import jsQR from "jsqr";
 import { useState, useRef, useEffect } from "react";
+import { parseQrPayload, type QrPayload } from "@/lib/qr-payload";
 
 interface QRCredentialScannerProps {
   onCredentialsExtracted: (username: string, password: string) => void;
   onClose: () => void;
-}
-
-interface DecodedCredentials {
-  username?: string;
-  password?: string;
-  user?: string;
-  pwd?: string;
-  id?: string;
-  ip?: string;
 }
 
 export function QRCredentialScanner({ onCredentialsExtracted, onClose }: QRCredentialScannerProps) {
@@ -23,10 +16,12 @@ export function QRCredentialScanner({ onCredentialsExtracted, onClose }: QRCrede
   const [success, setSuccess] = useState<string>();
   const [scanning, setScanning] = useState(false);
   const [stream, setStream] = useState<MediaStream | null>(null);
+  const [scanResult, setScanResult] = useState<QrPayload>();
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const scanIntervalRef = useRef<number | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
 
   useEffect(() => {
     return () => {
@@ -34,24 +29,33 @@ export function QRCredentialScanner({ onCredentialsExtracted, onClose }: QRCrede
     };
   }, []);
 
+  useEffect(() => {
+    const video = videoRef.current;
+    if (mode !== "camera" || !stream || !video) return;
+
+    video.srcObject = stream;
+    void video.play()
+      .then(startQRDetection)
+      .catch(() => {
+        setError("Unable to start the camera preview. Please upload the QR image instead.");
+        stopCamera();
+      });
+  }, [mode, stream]);
+
   async function startCameraScanning() {
     setMode("camera");
     setError(undefined);
     setSuccess(undefined);
+    setScanResult(undefined);
     setScanning(true);
 
     try {
       const mediaStream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: "environment" },
       });
+      streamRef.current = mediaStream;
       setStream(mediaStream);
-
-      if (videoRef.current) {
-        videoRef.current.srcObject = mediaStream;
-        await videoRef.current.play();
-        startQRDetection();
-      }
-    } catch (err) {
+    } catch {
       setError("Unable to access camera. Please check permissions.");
       setScanning(false);
     }
@@ -60,10 +64,11 @@ export function QRCredentialScanner({ onCredentialsExtracted, onClose }: QRCrede
   function stopCamera() {
     if (scanIntervalRef.current !== null) {
       window.clearInterval(scanIntervalRef.current);
-    scanIntervalRef.current = null;
+      scanIntervalRef.current = null;
     }
-    if (stream) {
-      stream.getTracks().forEach((track) => track.stop());
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
       setStream(null);
     }
     setScanning(false);
@@ -95,33 +100,29 @@ export function QRCredentialScanner({ onCredentialsExtracted, onClose }: QRCrede
   }
 
   function detectQRCode(imageData: ImageData): string | null {
-    // Use jsQR library if available
-    if (typeof window !== "undefined" && "jsQR" in window) {
-      const jsQR = (window as any).jsQR;
-      const code = jsQR(imageData.data, imageData.width, imageData.height, {
-        inversionAttempts: "dontInvert",
-      });
-      return code?.data ?? null;
-    }
-    return null;
+    const code = jsQR(imageData.data, imageData.width, imageData.height, {
+      inversionAttempts: "attemptBoth",
+    });
+    return code?.data ?? null;
   }
 
   function handleQRCodeDetected(qrData: string) {
     stopCamera();
-    setSuccess("QR code detected! Extracting credentials...");
+    const result = parseQrPayload(qrData);
+    setMode(null);
 
-    try {
-      const credentials = parseCredentials(qrData);
-      if (credentials.username && credentials.password) {
-        setTimeout(() => {
-          onCredentialsExtracted(credentials.username!, credentials.password!);
-        }, 500);
-      } else {
-        setError("QR code found, but no credentials detected. Please try uploading the image instead or enter credentials manually.");
-      }
-    } catch (err) {
-      setError("Could not parse QR code data. Please try again or enter credentials manually.");
+    if (result.kind === "credentials") {
+      setSuccess("QR code decoded. Filling in the camera credentials…");
+      window.setTimeout(() => onCredentialsExtracted(result.username, result.password), 250);
+      return;
     }
+
+    if (result.kind === "truecloud-share") {
+      setScanResult(result);
+      return;
+    }
+
+    setError("This QR code does not include usable camera credentials. Enter the local ONVIF or RTSP login manually.");
   }
 
   async function handleFileUpload(event: React.ChangeEvent<HTMLInputElement>) {
@@ -131,6 +132,7 @@ export function QRCredentialScanner({ onCredentialsExtracted, onClose }: QRCrede
     setMode("upload");
     setError(undefined);
     setSuccess(undefined);
+    setScanResult(undefined);
     setScanning(true);
 
     try {
@@ -140,11 +142,10 @@ export function QRCredentialScanner({ onCredentialsExtracted, onClose }: QRCrede
       if (code) {
         handleQRCodeDetected(code);
       } else {
-        // jsQR is the primary decoder - no server fallback needed
         setError("Could not decode QR code from image. Please ensure the image is clear and the QR code is visible.");
         setScanning(false);
       }
-    } catch (err) {
+    } catch {
       setError("Could not read QR code from image. Please ensure the image is clear and the QR code is visible.");
     } finally {
       setScanning(false);
@@ -183,70 +184,6 @@ export function QRCredentialScanner({ onCredentialsExtracted, onClose }: QRCrede
     });
   }
 
-  async function tryServerSideDecoding(file: File) {
-    // Server-side decoding is optional fallback
-    // Most decoding happens client-side with jsQR
-    setError("Could not decode QR code on client. Please ensure the QR code is clear and visible.");
-    setScanning(false);
-  }
-
-  function parseCredentials(qrData: string): DecodedCredentials {
-    const credentials: DecodedCredentials = {};
-
-    // Try JSON format
-    try {
-      const json = JSON.parse(qrData);
-      credentials.username = json.user || json.username || json.USER || json.USERNAME;
-      credentials.password = json.pwd || json.password || json.PWD || json.PASSWORD;
-      return credentials;
-    } catch (e) {
-      // Not JSON, continue with other formats
-    }
-
-    // Try key-value format (ID:xxx;USER:xxx;PWD:xxx)
-    if (qrData.includes(";") && qrData.includes(":")) {
-      const pairs = qrData.split(";");
-      pairs.forEach((pair) => {
-        const [key, value] = pair.split(":");
-        if (key && value) {
-          const upperKey = key.trim().toUpperCase();
-          if (upperKey === "USER" || upperKey === "USERNAME") {
-            credentials.username = value.trim();
-          } else if (upperKey === "PWD" || upperKey === "PASSWORD" || upperKey === "PASS") {
-            credentials.password = value.trim();
-          }
-        }
-      });
-      return credentials;
-    }
-
-    // Try URL format
-    if (qrData.startsWith("http") || qrData.includes("://")) {
-      try {
-        const url = new URL(qrData);
-        credentials.username = url.searchParams.get("user") || url.searchParams.get("username") || undefined;
-        credentials.password = url.searchParams.get("pwd") || url.searchParams.get("password") || undefined;
-        if (credentials.username || credentials.password) {
-          return credentials;
-        }
-      } catch (e) {
-        // Not a valid URL
-      }
-    }
-
-    // Try comma-separated format (deviceId,username,password,...)
-    if (qrData.includes(",")) {
-      const parts = qrData.split(",");
-      if (parts.length >= 3) {
-        credentials.username = parts[1]?.trim();
-        credentials.password = parts[2]?.trim();
-        return credentials;
-      }
-    }
-
-    return credentials;
-  }
-
   return (
     <div className="qr-scanner-overlay">
       <div className="qr-scanner-container">
@@ -279,7 +216,27 @@ export function QRCredentialScanner({ onCredentialsExtracted, onClose }: QRCrede
             </div>
           )}
 
-          {!mode && (
+          {scanResult?.kind === "truecloud-share" && (
+            <div className="truecloud-result">
+              <h4>TrueCloud device-sharing QR code detected</h4>
+              <p>
+                This code shares a device through the TrueCloud service. It does not contain an ONVIF or RTSP address, or a camera login.
+              </p>
+              <p>
+                {scanResult.expired
+                  ? "This share code has expired. Generate a new QR code in TrueCloud and scan it there before returning here."
+                  : `Claim this code in the authenticated TrueCloud app${scanResult.expiresAt ? ` before ${scanResult.expiresAt.toLocaleString()}` : ""}.`}
+              </p>
+              <p>
+                To add the camera to Sentinel Grid, enable ONVIF or RTSP on the camera's local network, then enter its private IP address and device credentials in this form.
+              </p>
+              <button type="button" className="secondary-button" onClick={() => setScanResult(undefined)}>
+                Scan another QR code
+              </button>
+            </div>
+          )}
+
+          {!mode && !scanResult && (
             <div className="qr-scanner-options">
               <p className="qr-scanner-description">
                 Choose how you want to extract camera credentials from the QR code:
@@ -355,7 +312,8 @@ export function QRCredentialScanner({ onCredentialsExtracted, onClose }: QRCrede
               <li>Ensure the QR code is well-lit and in focus</li>
               <li>Hold the camera steady for 2-3 seconds</li>
               <li>For uploads, use a clear photo without glare</li>
-              <li>Common default credentials: admin/admin, admin/12345</li>
+              <li>Use only QR codes from a camera you own or are authorized to manage</li>
+              <li>TrueCloud sharing codes must be claimed in the TrueCloud app before local camera setup</li>
             </ul>
           </div>
         </div>
@@ -527,6 +485,26 @@ export function QRCredentialScanner({ onCredentialsExtracted, onClose }: QRCrede
 
         .qr-scanner-help li {
           margin: 0.25rem 0;
+        }
+
+        .truecloud-result {
+          margin-bottom: 1.5rem;
+          padding: 1rem;
+          border: 1px solid #bfdbfe;
+          border-radius: 8px;
+          background: #eff6ff;
+          color: #1e3a8a;
+          font-size: 0.875rem;
+          line-height: 1.5;
+        }
+
+        .truecloud-result h4 {
+          margin: 0 0 0.5rem;
+          font-size: 1rem;
+        }
+
+        .truecloud-result p {
+          margin: 0.5rem 0;
         }
 
         @media (max-width: 640px) {
