@@ -2144,6 +2144,10 @@ export class PostgresStore
     return this.activityTracking.updateSessionHeartbeat(sessionId, userId);
   }
 
+  async expireStaleActivitySessions(staleAfterSeconds: number): Promise<number> {
+    return this.activityTracking.expireStaleActivitySessions(staleAfterSeconds);
+  }
+
   async trackPageVisit(
     userId: string,
     tenantId: string,

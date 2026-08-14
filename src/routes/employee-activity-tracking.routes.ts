@@ -137,6 +137,21 @@ export async function registerEmployeeActivityTrackingRoutes(
   store: ActivityRouteStore,
 ) {
   app.log.info('Employee activity tracking routes registered');
+
+  // Heartbeats arrive every 30 seconds. Five missed heartbeats closes a
+  // session after a crash, power loss, or severed network connection.
+  const expireStaleSessions = async () => {
+    try {
+      const expired = await store.expireStaleActivitySessions(150);
+      if (expired > 0) app.log.info({ expired }, 'Expired stale employee activity sessions');
+    } catch (error) {
+      app.log.error({ err: error }, 'Failed to expire stale employee activity sessions');
+    }
+  };
+  const expiryTimer = setInterval(() => { void expireStaleSessions(); }, 60_000);
+  expiryTimer.unref();
+  app.addHook('onClose', async () => clearInterval(expiryTimer));
+  void expireStaleSessions();
   
   // ============================================
   // Session Management

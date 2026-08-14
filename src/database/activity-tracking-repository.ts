@@ -124,6 +124,96 @@ export class ActivityTrackingRepository {
     );
   }
 
+  async expireStaleActivitySessions(staleAfterSeconds: number): Promise<number> {
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      const stale = await client.query<{ id: string; user_id: string }>(
+        `SELECT id::text, user_id::text
+         FROM user_activity_sessions
+         WHERE session_status = 'active' AND logout_time IS NULL
+           AND last_activity_time < CURRENT_TIMESTAMP - ($1 * INTERVAL '1 second')
+         FOR UPDATE SKIP LOCKED`,
+        [staleAfterSeconds]
+      );
+      if (stale.rows.length === 0) {
+        await client.query('COMMIT');
+        return 0;
+      }
+
+      const sessionIds = stale.rows.map((row) => row.id);
+      await client.query(
+        `UPDATE user_page_visits page
+         SET visit_end_time = GREATEST(page.visit_start_time, session.last_activity_time),
+             duration_seconds = EXTRACT(EPOCH FROM (
+               GREATEST(page.visit_start_time, session.last_activity_time) - page.visit_start_time
+             ))::INT,
+             active_time_seconds = CASE
+               WHEN page.active_time_seconds = 0 AND page.idle_time_seconds = 0
+               THEN EXTRACT(EPOCH FROM (
+                 GREATEST(page.visit_start_time, session.last_activity_time) - page.visit_start_time
+               ))::INT
+               ELSE page.active_time_seconds
+             END,
+             updated_at = CURRENT_TIMESTAMP
+         FROM user_activity_sessions session
+         WHERE page.session_id = session.id AND page.session_id = ANY($1::uuid[])
+           AND page.visit_end_time IS NULL`,
+        [sessionIds]
+      );
+      await client.query(
+        `UPDATE control_room_monitoring_activity activity
+         SET monitoring_end_time = GREATEST(activity.monitoring_start_time, session.last_activity_time),
+             duration_seconds = EXTRACT(EPOCH FROM (
+               GREATEST(activity.monitoring_start_time, session.last_activity_time) - activity.monitoring_start_time
+             ))::INT,
+             updated_at = CURRENT_TIMESTAMP
+         FROM user_activity_sessions session
+         WHERE activity.session_id = session.id AND activity.session_id = ANY($1::uuid[])
+           AND activity.monitoring_end_time IS NULL`,
+        [sessionIds]
+      );
+      await client.query(
+        `UPDATE user_activity_sessions session
+         SET logout_time = session.last_activity_time,
+             total_duration_seconds = EXTRACT(EPOCH FROM (session.last_activity_time - session.login_time))::INT,
+             active_duration_seconds = COALESCE((
+               SELECT SUM(page.active_time_seconds) FROM user_page_visits page WHERE page.session_id = session.id
+             ), 0)::INT,
+             idle_duration_seconds = COALESCE((
+               SELECT SUM(page.idle_time_seconds) FROM user_page_visits page WHERE page.session_id = session.id
+             ), 0)::INT,
+             session_status = 'expired',
+             termination_reason = 'session_timeout',
+             updated_at = CURRENT_TIMESTAMP
+         WHERE session.id = ANY($1::uuid[]) AND session.logout_time IS NULL`,
+        [sessionIds]
+      );
+      await client.query(
+        `UPDATE user_current_activity
+         SET is_online = false,
+             is_in_control_room = false,
+             current_branch_id = NULL,
+             current_branch_name = NULL,
+             current_branch_group = NULL,
+             monitoring_camera_count = 0,
+             updated_at = CURRENT_TIMESTAMP
+         WHERE session_id = ANY($1::uuid[])`,
+        [sessionIds]
+      );
+      for (const userId of new Set(stale.rows.map((row) => row.user_id))) {
+        await client.query(`SELECT update_user_daily_activity_summary($1::uuid, CURRENT_DATE)`, [userId]);
+      }
+      await client.query('COMMIT');
+      return stale.rows.length;
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
   // ============================================
   // Page Visit Tracking
   // ============================================
