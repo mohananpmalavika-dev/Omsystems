@@ -26,7 +26,7 @@ export function QRCredentialScanner({ onCredentialsExtracted, onClose }: QRCrede
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const scanIntervalRef = useRef<number>();
+  const scanIntervalRef = useRef<number | null>(null);
 
   useEffect(() => {
     return () => {
@@ -58,9 +58,9 @@ export function QRCredentialScanner({ onCredentialsExtracted, onClose }: QRCrede
   }
 
   function stopCamera() {
-    if (scanIntervalRef.current) {
+    if (scanIntervalRef.current !== null) {
       window.clearInterval(scanIntervalRef.current);
-      scanIntervalRef.current = undefined;
+    scanIntervalRef.current = null;
     }
     if (stream) {
       stream.getTracks().forEach((track) => track.stop());
