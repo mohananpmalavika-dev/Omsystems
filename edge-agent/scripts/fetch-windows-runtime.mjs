@@ -12,8 +12,10 @@ const assets = [
   {
     name: "FFmpeg 8.1.2 LGPL shared build",
     file: "ffmpeg.zip",
-    url: "https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-07-30-13-32/ffmpeg-n8.1.2-32-gcfa62de001-win64-lgpl-shared-8.1.zip",
-    sha256: "23429f940316ea92e376f6946c0a1f1b9043c930f3bc068228461d65ae24f8b8",
+    // BtbN removes ordinary daily autobuilds after 14 days. Month-end builds
+    // are retained for two years and keep this checksum-pinned build stable.
+    url: "https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-07-31-14-10/ffmpeg-n8.1.2-34-g9b6c8969e0-win64-lgpl-shared-8.1.zip",
+    sha256: "c222a490dde4e7059f45495deef6bfb98dbcacc2b43df5b607546252037aa95c",
   },
   {
     name: "MediaMTX 1.17.1",
