@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
+// Use server-side env variables for API routes
+const API_BASE_URL = process.env.CONTROL_PLANE_URL || 
+                      process.env.CONTROL_PLANE_INTERNAL_URL || 
+                      process.env.NEXT_PUBLIC_API_URL || 
+                      'http://localhost:8080';
 
 /**
  * GET /api/audit/maintenance
