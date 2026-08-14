@@ -140,8 +140,9 @@ export function QRCredentialScanner({ onCredentialsExtracted, onClose }: QRCrede
       if (code) {
         handleQRCodeDetected(code);
       } else {
-        // Try using server-side decoding as fallback
-        await tryServerSideDecoding(file);
+        // jsQR is the primary decoder - no server fallback needed
+        setError("Could not decode QR code from image. Please ensure the image is clear and the QR code is visible.");
+        setScanning(false);
       }
     } catch (err) {
       setError("Could not read QR code from image. Please ensure the image is clear and the QR code is visible.");
@@ -183,29 +184,10 @@ export function QRCredentialScanner({ onCredentialsExtracted, onClose }: QRCrede
   }
 
   async function tryServerSideDecoding(file: File) {
-    try {
-      const formData = new FormData();
-      formData.append("image", file);
-
-      const response = await fetch("/api/decode-qr", {
-        method: "POST",
-        body: formData,
-      });
-
-      if (!response.ok) {
-        throw new Error("Server decoding failed");
-      }
-
-      const data = await response.json();
-      if (data.qrData) {
-        handleQRCodeDetected(data.qrData);
-      } else {
-        throw new Error("No QR code found in image");
-      }
-    } catch (err) {
-      setError("Could not decode QR code. Please ensure the image contains a valid QR code.");
-      setScanning(false);
-    }
+    // Server-side decoding is optional fallback
+    // Most decoding happens client-side with jsQR
+    setError("Could not decode QR code on client. Please ensure the QR code is clear and visible.");
+    setScanning(false);
   }
 
   function parseCredentials(qrData: string): DecodedCredentials {

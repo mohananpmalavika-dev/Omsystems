@@ -21,8 +21,19 @@ export function HoldToTalkButton({ cameraId, disabled, unsupportedReason }: {
   const releaseRequested = useRef(false);
   const queue = useRef<ArrayBuffer[]>([]);
   const sending = useRef(false);
+  const finishRef = useRef<() => Promise<void>>(async () => undefined);
 
-  useEffect(() => () => { releaseRequested.current = true; void finish(); }, []);
+  useEffect(() => {
+    const release = () => { releaseRequested.current = true; void finishRef.current(); };
+    const releaseWhenHidden = () => { if (document.hidden) release(); };
+    window.addEventListener("blur", release);
+    document.addEventListener("visibilitychange", releaseWhenHidden);
+    return () => {
+      window.removeEventListener("blur", release);
+      document.removeEventListener("visibilitychange", releaseWhenHidden);
+      release();
+    };
+  }, []);
 
   const begin = async () => {
     if (disabled || unsupportedReason || state === "connecting" || state === "talking") return;
@@ -82,6 +93,7 @@ export function HoldToTalkButton({ cameraId, disabled, unsupportedReason }: {
     if (session) await stopTalk(session).catch(() => undefined);
     if (returnIdle) setState("idle");
   };
+  finishRef.current = finish;
 
   const release = () => { releaseRequested.current = true; void finish(); };
   const title = unsupportedReason ? `Talk unavailable: ${unsupportedReason}` :
