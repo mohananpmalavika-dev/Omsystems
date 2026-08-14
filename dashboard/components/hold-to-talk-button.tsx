@@ -40,7 +40,7 @@ export function HoldToTalkButton({ cameraId, disabled, unsupportedReason }: {
       contextRef.current = context;
       await context.resume();
       const source = context.createMediaStreamSource(stream);
-      const processor = context.createScriptProcessor(2048, 1, 1);
+      const processor = context.createScriptProcessor(1024, 1, 1);
       const silent = context.createGain(); silent.gain.value = 0;
       processorRef.current = processor;
       processor.onaudioprocess = (event) => {
