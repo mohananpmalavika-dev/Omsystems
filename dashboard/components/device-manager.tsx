@@ -445,7 +445,7 @@ export function DeviceManager() {
       camera.duplicateStatus !== "duplicate" && camera.compatibility === "compatible",
     );
     let provisioned = job.provisionedCount ?? 0;
-    if (readyToProvision && provisioned === 0) {
+    if (job.scope !== "device" && readyToProvision && provisioned === 0) {
       const provisioning = await cameraInventoryApi.approveAllDiscovered(selectedBranch, {
         recordingMode: "continuous",
         retentionDays: 180,
@@ -587,6 +587,13 @@ export function DeviceManager() {
             : "Credentials were saved, but the device stream could not be verified yet.",
       );
     } catch (reason) {
+      if (isAgentUpdateRequired(reason)) {
+        setCredentialActivation(undefined);
+        setActivationPassword("");
+        openScannerInstaller();
+        setError("Repair the Sentinel Grid Scanner once before verifying credentials. This safety update guarantees that only the selected device is probed.");
+        return;
+      }
       setError(messageOf(reason, "Unable to activate this device with the supplied credentials."));
     } finally {
       setSaving(false);
@@ -1248,11 +1255,11 @@ export function DeviceManager() {
           <div className="modal-container">
             <div className="modal-header"><h2>Device login required</h2><button type="button" className="icon-button" onClick={() => { setCredentialActivation(undefined); setActivationPassword(""); }} disabled={saving}><X size={20} /></button></div>
             <form className="modal-form" onSubmit={activateDiscoveredCamera}>
-              <div className="form-info-banner"><Camera size={16} />Found {credentialActivation.displayName || credentialActivation.model || "a camera/DVR"} at {credentialActivation.ipAddress}, but its saved login did not match. Enter the device username and password; Sentinel Grid will rescan it and discover its channels automatically.</div>
+              <div className="form-info-banner"><Camera size={16} />Found {credentialActivation.displayName || credentialActivation.model || "a camera/DVR"} at {credentialActivation.ipAddress}, but its saved login did not match. Enter the device username and password; Sentinel Grid will probe only this IP address and discover channels belonging to this device.</div>
               <div className="form-group"><label htmlFor="activationUsername">Username <span className="required">*</span></label><input id="activationUsername" value={activationUsername} onChange={(event) => setActivationUsername(event.target.value)} autoComplete="username" required /></div>
               <div className="form-group"><label htmlFor="activationPassword">Password <span className="required">*</span></label><input id="activationPassword" type="password" value={activationPassword} onChange={(event) => setActivationPassword(event.target.value)} autoComplete="current-password" required /></div>
-              <p className="field-help">This login is saved for this detected IP address and sent only to its branch scanner. No IP address or DVR channel needs to be entered manually.</p>
-              <div className="modal-actions"><button type="button" className="secondary-button" onClick={() => { setCredentialActivation(undefined); setActivationPassword(""); }} disabled={saving}>Cancel</button><button className="primary-button" disabled={saving || !activationUsername.trim() || !activationPassword}>{saving ? "Verifying…" : "Save login & rescan"}</button></div>
+              <p className="field-help">This login is saved only for this detected IP address. No broadcast discovery, subnet scan, or other camera probe will run.</p>
+              <div className="modal-actions"><button type="button" className="secondary-button" onClick={() => { setCredentialActivation(undefined); setActivationPassword(""); }} disabled={saving}>Cancel</button><button className="primary-button" disabled={saving || !activationUsername.trim() || !activationPassword}>{saving ? "Verifying this device…" : "Save & verify this device"}</button></div>
             </form>
           </div>
         </div>
@@ -1425,6 +1432,12 @@ function isScannerUnavailable(reason: unknown) {
   if (!reason || typeof reason !== "object") return false;
   const details = (reason as { details?: { error?: string } }).details;
   return details?.error === "edge_agent_not_connected";
+}
+
+function isAgentUpdateRequired(reason: unknown) {
+  if (!reason || typeof reason !== "object") return false;
+  const details = (reason as { details?: { error?: string } }).details;
+  return details?.error === "edge_agent_update_required";
 }
 
 function wait(milliseconds: number) {

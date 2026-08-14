@@ -59,6 +59,10 @@ export interface EdgeScanJob {
   id: string;
   branchId: string;
   edgeAgentId: string;
+  scope?: "branch" | "device";
+  targetDiscoveryId?: string;
+  targetIpAddress?: string;
+  targetOnvifPort?: number;
   status: "running";
 }
 

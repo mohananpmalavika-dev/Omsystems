@@ -129,7 +129,7 @@ export async function registerBranchConnectivityRoutes(
         ? "VPN selected. Register IP cameras or DVR channels with their private VPN-routable addresses."
         : managedTunnel
           ? "Stable secure internet access is provisioned. The branch scanner will receive the outbound tunnel automatically; no router port forwarding is required."
-          : "Temporary secure internet access is enabled for testing. Repair the scanner to version 0.1.6; its endpoint refreshes automatically after each restart.",
+          : "Temporary secure internet access is enabled for testing. Repair the scanner to version 0.1.7; its endpoint refreshes automatically after each restart.",
     });
   });
 

@@ -172,7 +172,7 @@ export function BranchConnectivityPanel({
 
           <div className="connectivity-guidance">
             {activeTransport === "vpn" || form.primaryTransport === "vpn" ? <p><ShieldCheck size={14} /> Sentinel uses the router’s existing site-to-site VPN route. Configure the routers separately; never enter VPN or camera passwords here.</p> : null}
-            {activeTransport === "cloudflare-tunnel" || form.primaryTransport === "cloudflare-tunnel" ? <p><Cloud size={14} /> Secure internet mode needs the Sentinel scanner running at the branch. {managedTunnel ? `Internet endpoint: ${managedTunnel.hostname} (${managedTunnel.status}).` : managedInternetAvailable === false ? "Saving asks scanner version 0.1.6 to create a temporary test endpoint." : "Saving provisions the endpoint automatically."}</p> : null}
+            {activeTransport === "cloudflare-tunnel" || form.primaryTransport === "cloudflare-tunnel" ? <p><Cloud size={14} /> Secure internet mode needs the Sentinel scanner running at the branch. {managedTunnel ? `Internet endpoint: ${managedTunnel.hostname} (${managedTunnel.status}).` : managedInternetAvailable === false ? "Saving asks scanner version 0.1.7 to create a temporary test endpoint." : "Saving provisions the endpoint automatically."}</p> : null}
             <p><CheckCircle2 size={14} /> IP cameras use their private IP. Analog cameras are added as a DVR/NVR private IP plus channel number; their continuous video stays on the recorder.</p>
           </div>
 

@@ -3,6 +3,7 @@ import { discoverOnvifDevices } from "./discovery/onvif-discovery.js";
 import { onvifServiceCandidates } from "./discovery/onvif-service-candidates.js";
 import { createDeviceFingerprint } from "./discovery/device-fingerprint.js";
 import { discoverRtspDevices } from "./discovery/rtsp-network-scan.js";
+import { targetFromScanJob, targetedOnvifEndpoint, type DeviceScanTarget } from "./discovery/targeted-scan.js";
 import { attachCredentials, OnvifClient } from "./devices/onvif-client.js";
 import { compatibilityNotes, normalizeVendor } from "./devices/compatibility-registry.js";
 import { GatewayClient, type DiscoveredCameraPayload } from "./registration/gateway-client.js";
@@ -50,7 +51,7 @@ if (runtime.embeddedEnvironmentFile && (argv.length === 0 || hasArgument(argv, "
   process.exit(0);
 }
 if (hasArgument(argv, "--version")) {
-  process.stdout.write("Sentinel Grid Edge Agent 0.1.6\n");
+  process.stdout.write("Sentinel Grid Edge Agent 0.1.7\n");
   process.exit(0);
 }
 const config = loadConfigOrExit();
@@ -258,7 +259,8 @@ while (!stopping) {
     if (job) {
       try {
         dbCredentialProvider.invalidate();
-        const resultCount = await scanBranch();
+        const target = targetFromScanJob(job);
+        const resultCount = await scanBranch(target ? { target } : {});
         await control.completeScanJob(agentId, job.id, {
           status: "completed",
           resultCount,
@@ -297,22 +299,26 @@ async function discoveryCredentials(host: string) {
   };
 }
 
-async function scanBranch(options: { persistStreamSecrets?: boolean } = {}) {
+async function scanBranch(options: { persistStreamSecrets?: boolean; target?: DeviceScanTarget } = {}) {
   const persistStreamSecrets = options.persistStreamSecrets ?? true;
   const configuredEndpoints = config.ONVIF_ENDPOINTS
     .split(",")
     .map((value) => value.trim())
     .filter(Boolean);
-  const endpoints = configuredEndpoints.length > 0
-    ? configuredEndpoints.map((serviceUrl) => ({
+  const endpoints = options.target
+    ? [targetedOnvifEndpoint(options.target)]
+    : configuredEndpoints.length > 0
+      ? configuredEndpoints.map((serviceUrl) => ({
         endpointReference: null,
         xaddrs: [serviceUrl],
         scopes: [],
         types: [],
         remoteAddress: new URL(serviceUrl).hostname,
       }))
-    : await discoverOnvifDevices(config.DISCOVERY_TIMEOUT_MS);
-  logger.info(`Discovered ${endpoints.length} ONVIF endpoint(s)`);
+      : await discoverOnvifDevices(config.DISCOVERY_TIMEOUT_MS);
+  logger.info(options.target
+    ? `Probing only device ${options.target.ipAddress}`
+    : `Discovered ${endpoints.length} ONVIF endpoint(s)`);
   let submitted = 0;
 
   for (const endpoint of endpoints) {
@@ -723,7 +729,7 @@ async function scanBranch(options: { persistStreamSecrets?: boolean } = {}) {
       }
     }
   }
-  if (config.RTSP_SCAN_ENABLED) {
+  if (config.RTSP_SCAN_ENABLED && !options.target) {
     try {
       const ports = String(config.RTSP_SCAN_PORTS).split(",").map((p) => Number(p.trim())).filter(Boolean);
       const paths = String(config.RTSP_SCAN_PATHS).split(",").map((p) => p.trim()).filter(Boolean);
@@ -1024,7 +1030,7 @@ async function executeEdgeCommand(type: string, payload: Record<string, unknown>
         password: decrypted.password,
         host: decrypted.scope.host,
       });
-      const discovered = await scanBranch();
+      const discovered = await scanBranch({ target: { ipAddress: decrypted.scope.host } });
       return { result: { ...saved, rediscovered: discovered } };
     }
     case "apply-update": {

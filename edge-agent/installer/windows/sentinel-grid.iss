@@ -3,14 +3,14 @@
 
 [Setup]
 AppName=Sentinel Grid Edge Agent
-AppVersion=0.1.6
+AppVersion=0.1.7
 AppPublisher=Sentinel Grid
 AppPublisherURL=https://sentinel-grid.com
 AppSupportURL=https://sentinel-grid.com/support
 DefaultDirName={autopf}\Sentinel Grid\Edge Agent
 DefaultGroupName=Sentinel Grid
 OutputDir=output
-OutputBaseFilename=SentinelGridInstaller-v0.1.6-windows
+OutputBaseFilename=SentinelGridInstaller-v0.1.7-windows
 Compression=lzma2/max
 SolidCompression=yes
 PrivilegesRequired=admin
@@ -139,7 +139,7 @@ begin
       'Installation Date: ' + GetDateTimeString('yyyy-mm-dd hh:nn:ss', #0, #0) + #13#10 +
       'Branch Name: ' + BranchName + #13#10 +
       'Installation Path: ' + ExpandConstant('{app}') + #13#10 +
-      'Version: 0.1.6',
+      'Version: 0.1.7',
       False);
   end;
 end;

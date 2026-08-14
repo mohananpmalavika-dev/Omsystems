@@ -1024,7 +1024,10 @@ export async function buildApp(options?: {
     const query = z.object({ branchId: z.string() }).parse(request.query);
     const job = await store.getEdgeScanJob(query.branchId, scanId);
     if (!job) return reply.code(404).send({ error: "scan_not_found" });
-    const discoveries = await store.listDiscoveredCameras(query.branchId);
+    const branchDiscoveries = await store.listDiscoveredCameras(query.branchId);
+    const discoveries = job.scope === "device" && job.targetIpAddress
+      ? branchDiscoveries.filter((item) => item.ipAddress === job.targetIpAddress)
+      : branchDiscoveries;
     return { data: discoveries.map((item) => ({
       discoveryId: item.id,
       edgeAgentId: item.edgeAgentId,
@@ -1127,7 +1130,9 @@ export async function buildApp(options?: {
       const runStartedAt = Date.parse(existingJob.startedAt ?? existingJob.requestedAt);
       const discoveries = (await store.listDiscoveredCameras(agent.branchId))
         .filter((item) => item.edgeAgentId === id &&
-          (!Number.isFinite(runStartedAt) || Date.parse(item.discoveredAt) >= runStartedAt));
+          (!Number.isFinite(runStartedAt) || Date.parse(item.discoveredAt) >= runStartedAt) &&
+          (existingJob.scope !== "device" || !existingJob.targetIpAddress ||
+            item.ipAddress === existingJob.targetIpAddress));
       verifiedCount = discoveries.filter((item) => item.streamVerified === true).length;
       recorderCount = new Set(discoveries.flatMap((item) => item.recorderId ? [item.recorderId] : [])).size;
       timeSynchronizedCount = discoveries.filter((item) => item.timeSynchronization === "synchronized").length;
@@ -1135,7 +1140,12 @@ export async function buildApp(options?: {
       analyticsCompatibleCount = discoveries.filter((item) => item.streamVerified === true &&
         item.profiles.some((profile) => ["H264", "H265", "MJPEG"].includes(profile.codec))).length;
       duplicateCount = discoveries.filter((item) => item.duplicateStatus === "duplicate").length;
-      const activation = await autoProvisionVerifiedCameras(store, agent.branchId, { edgeAgentId: id });
+      const activation = await autoProvisionVerifiedCameras(store, agent.branchId, {
+        edgeAgentId: id,
+        ...(existingJob.scope === "device" && existingJob.targetIpAddress
+          ? { ipAddresses: [existingJob.targetIpAddress] }
+          : {}),
+      });
       provisionedCount = activation.summary.provisioned;
       credentialsRequiredCount = activation.summary.credentialsRequired;
       pendingVerificationCount = activation.summary.pendingVerification;
@@ -1169,6 +1179,8 @@ export async function buildApp(options?: {
           details: {
             scanJobId: jobId,
             edgeAgentId: id,
+            scanScope: existingJob.scope ?? "branch",
+            ...(existingJob.targetDiscoveryId ? { targetDiscoveryId: existingJob.targetDiscoveryId } : {}),
             provisionedCount,
             credentialsRequiredCount,
             pendingVerificationCount,

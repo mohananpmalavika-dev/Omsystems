@@ -35,6 +35,8 @@ const activateDiscoveryBody = z.object({
   password: z.string().min(1).max(1_024),
 });
 
+const targetedVerificationMinimumAgentVersion = "0.1.7";
+
 /**
  * Lists pending ONVIF discoveries. Submission, approval, and camera inventory
  * remain on the existing control-plane routes so they retain the same
@@ -171,6 +173,13 @@ export async function registerCameraDiscoveryRoutes(
         message: "Connect the branch scanner to verify this device.",
       });
     }
+    if (!supportsTargetedVerification(agent.version)) {
+      return reply.code(409).send({
+        error: "edge_agent_update_required",
+        minimumVersion: targetedVerificationMinimumAgentVersion,
+        message: "Repair the Sentinel Grid Scanner before verifying credentials. Older scanners cannot guarantee a single-device probe.",
+      });
+    }
 
     const client = await pool.connect();
     try {
@@ -194,7 +203,11 @@ export async function registerCameraDiscoveryRoutes(
       client.release();
     }
 
-    const scan = await store.createEdgeScanJob(branchId, discovered.edgeAgentId);
+    const scan = await store.createEdgeScanJob(branchId, discovered.edgeAgentId, {
+      discoveryId: discovered.id,
+      ipAddress: discovered.ipAddress,
+      onvifPort: discovered.onvifPort,
+    });
     await store.writeAudit({
       tenantId: branch.tenantId,
       actorUserId: request.currentUser.id,
@@ -202,12 +215,20 @@ export async function registerCameraDiscoveryRoutes(
       resourceNodeId: branchId,
       outcome: "success",
       sourceIp: request.ip,
-      details: { discoveryId, edgeAgentId: discovered.edgeAgentId, credentialScope: "host-specific" },
+      details: {
+        discoveryId,
+        edgeAgentId: discovered.edgeAgentId,
+        credentialScope: "host-specific",
+        scanScope: "device",
+        targetIpAddress: discovered.ipAddress,
+      },
     });
     return reply.code(202).send({
       scanId: scan.id,
       status: scan.status,
-      message: "Credentials saved. The branch gateway is verifying the device now.",
+      scope: "device",
+      targetDiscoveryId: discovered.id,
+      message: "Credentials saved. The branch gateway is verifying only this device.",
     });
   });
 
@@ -291,4 +312,15 @@ export async function registerCameraDiscoveryRoutes(
 
     return { success: true, message: "Display name updated" };
   });
+}
+
+function supportsTargetedVerification(version: string) {
+  const current = version.match(/^(\d+)\.(\d+)\.(\d+)/)?.slice(1).map(Number);
+  const minimum = targetedVerificationMinimumAgentVersion.split(".").map(Number);
+  if (!current || current.length !== 3) return false;
+  for (let index = 0; index < minimum.length; index++) {
+    if (current[index]! > minimum[index]!) return true;
+    if (current[index]! < minimum[index]!) return false;
+  }
+  return true;
 }
