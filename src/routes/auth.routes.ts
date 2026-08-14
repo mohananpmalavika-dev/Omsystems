@@ -6,12 +6,17 @@ import type {
   ControlPlaneStore,
   UserManagementStore,
 } from "../control-plane-store.js";
-import { hashPassword, verifyPassword } from "../security/password.js";
+import {
+  hashPassword,
+  passwordHashAlgorithm,
+  passwordNeedsRehash,
+  verifyPassword,
+} from "../security/password.js";
 
 const loginSchema = z.object({
-  username: z.string().min(1),
+  username: z.string().trim().min(1),
   password: z.string().min(1),
-  tenantSlug: z.string().min(1).optional(),
+  tenantSlug: z.string().trim().min(1).optional(),
 });
 
 const refreshTokenSchema = z.object({
@@ -78,13 +83,32 @@ export async function registerAuthRoutes(
       );
 
       if (!isPasswordValid) {
-        // Record failed login attempt
-        await store.recordFailedLogin(user.id);
+        const algorithm = passwordHashAlgorithm(user.passwordHash);
+        if (algorithm === "missing" || algorithm === "unsupported") {
+          app.log.warn(
+            { userId: user.id, passwordHashAlgorithm: algorithm },
+            "Login rejected because the account has no supported password hash",
+          );
+        } else {
+          // Configuration faults must not consume a user's login attempts or
+          // lock the account. Count only a real mismatch against a usable hash.
+          await store.recordFailedLogin(user.id);
+        }
 
         return reply.code(401).send({
           error: "invalid_credentials",
           message: "Invalid username or password",
         });
+      }
+
+      // Older deployment/setup scripts wrote BCrypt records. Accept them once,
+      // then transparently move the account to the current salted Scrypt format.
+      if (passwordNeedsRehash(user.passwordHash)) {
+        await store.updateUserPassword(
+          user.id,
+          await hashPassword(body.password),
+          user.mustChangePassword ?? false,
+        );
       }
 
       // Generate session tokens

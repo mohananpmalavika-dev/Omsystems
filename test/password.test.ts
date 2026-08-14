@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { hashPassword, verifyPassword } from "../src/security/password.js";
+import bcrypt from "bcryptjs";
+import {
+  hashPassword,
+  passwordNeedsRehash,
+  verifyPassword,
+} from "../src/security/password.js";
 
 describe("employee password hashing", () => {
   it("stores a salted scrypt hash and verifies only the correct password", async () => {
@@ -18,5 +23,14 @@ describe("employee password hashing", () => {
     await expect(
       verifyPassword("anything", "bcrypt$not-supported"),
     ).resolves.toBe(false);
+  });
+
+  it("accepts legacy BCrypt records so they can be upgraded after login", async () => {
+    const encoded = await bcrypt.hash("Legacy Render Password", 4);
+
+    await expect(verifyPassword("Legacy Render Password", encoded)).resolves.toBe(true);
+    await expect(verifyPassword("incorrect", encoded)).resolves.toBe(false);
+    expect(passwordNeedsRehash(encoded)).toBe(true);
+    expect(passwordNeedsRehash(await hashPassword("current"))).toBe(false);
   });
 });
