@@ -3,6 +3,7 @@ import { z } from "zod";
 import type {
   ControlPlaneStore,
   OrganizationStore,
+  UserManagementStore,
 } from "../control-plane-store.js";
 
 const createNodeSchema = z.object({
@@ -66,58 +67,26 @@ const nodeIdSchema = z.object({ id: z.string().uuid() });
 
 export async function registerOrganizationRoutes(
   app: FastifyInstance,
-  store: ControlPlaneStore & OrganizationStore,
+  store: ControlPlaneStore & OrganizationStore & UserManagementStore,
 ) {
   // Get organizational hierarchy tree
   app.get("/v1/organization/tree", async (request) => {
     const tenantId = request.currentUser.tenantId;
     const nodes = await store.getOrganizationTree(tenantId);
     const visible = await visibleOrganizationNodeIds(request, store);
-    return { data: filterOrganizationTree(nodes, visible) };
-  });
+    const data = filterOrganizationTree(nodes, visible);
+    const organizationExists = nodes.length > 0;
 
-  // Debug endpoint to check organization visibility issues
-  app.get("/v1/organization/debug", async (request) => {
-    const tenantId = request.currentUser.tenantId;
-    
-    // Get all organization nodes for this tenant (unfiltered)
-    const allNodes = await store.listOrganizationNodes(
-      tenantId,
-      undefined,
-      undefined,
-      false
-    );
-    
-    // Get visible nodes for current user
-    const visible = await visibleOrganizationNodeIds(request, store);
-    const visibleNodes = allNodes.filter((node) => visible.has(node.id));
-    
-    // Get user's role and assignments
-    const userInfo = {
-      id: request.currentUser.id,
-      username: request.currentUser.username,
-      role: request.currentUser.role,
-      tenantId: request.currentUser.tenantId,
-    };
-    
     return {
-      debug: {
-        user: userInfo,
-        totalNodesInTenant: allNodes.length,
-        visibleNodes: visibleNodes.length,
-        hiddenNodes: allNodes.length - visibleNodes.length,
-        companyNodes: allNodes.filter(n => n.type === 'company').length,
-        visibleCompanyNodes: visibleNodes.filter(n => n.type === 'company').length,
+      data,
+      meta: {
+        organizationExists,
+        accessRestricted: organizationExists && data.length === 0,
+        canCreateRoot:
+          !organizationExists &&
+          (request.currentUser.role === "super_admin" ||
+            request.currentUser.role === "company_admin"),
       },
-      allNodes: allNodes.map(n => ({
-        id: n.id,
-        name: n.name,
-        type: n.type,
-        isVisible: visible.has(n.id),
-      })),
-      recommendation: allNodes.length > 0 && visibleNodes.length === 0
-        ? "Organization exists but you have no permissions. Contact admin to grant company_admin role or assign you to the organization node."
-        : null,
     };
   });
 
@@ -253,24 +222,20 @@ export async function registerOrganizationRoutes(
         });
       }
 
-      // Check if organization already exists (only allow one company node per tenant)
-      try {
-        const existingNodes = await store.listOrganizationNodes(
-          request.currentUser.tenantId,
-          "company",
-          undefined,
-          false
-        );
-        
-        if (existingNodes.length > 0) {
-          return reply.code(409).send({ 
-            error: "organization_already_exists",
-            message: "An organization already exists for this tenant. Only one company node is allowed per tenant."
-          });
-        }
-      } catch (err) {
-        // If error checking existing nodes, log but allow to proceed
-        console.error("Error checking existing organization:", err);
+      // Fail closed if this existence check errors. Proceeding after a
+      // transient database failure can create a duplicate company root.
+      const existingNodes = await store.listOrganizationNodes(
+        request.currentUser.tenantId,
+        "company",
+        undefined,
+        false,
+      );
+
+      if (existingNodes.length > 0) {
+        return reply.code(409).send({
+          error: "organization_already_exists",
+          message: "An organization already exists for this tenant. Only one company node is allowed per tenant.",
+        });
       }
     } else if (
       !(await requireAccess(
@@ -288,6 +253,17 @@ export async function registerOrganizationRoutes(
       request.currentUser.tenantId,
       body,
     );
+
+    // Authorization is default-deny. Give the root creator the role-derived
+    // grants on the new root so the organization remains visible after setup.
+    if (!body.parentNodeId) {
+      await store.assignUserToOrganization(
+        request.currentUser.id,
+        node.id,
+        true,
+        request.currentUser.id,
+      );
+    }
 
     await store.writeAudit({
       tenantId: request.currentUser.tenantId,

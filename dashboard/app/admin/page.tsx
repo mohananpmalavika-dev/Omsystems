@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeft, Building2, Camera, ShieldCheck, Users, Server } from "lucide-react";
+import { AlertTriangle, ArrowLeft, Building2, Camera, ShieldCheck, Users, Server } from "lucide-react";
 import { useEffect, useState } from "react";
 import { AppLayout } from "@/components/app-layout";
 import { CameraPermissionManager } from "@/components/camera-permission-manager";
@@ -11,7 +11,10 @@ import { UserForm } from "@/components/user-form";
 import { UserList } from "@/components/user-list";
 import { organizationApi, userApi } from "@/lib/api-client";
 import { CreateOrganizationForm } from "@/components/create-organization-form";
-import { OrganizationVisibilityFix } from "@/components/organization-visibility-fix";
+import {
+  getOrganizationAvailability,
+  type OrganizationAvailability,
+} from "@/lib/organization-state";
 
 type SelectedRecord = {
   id: string;
@@ -28,8 +31,11 @@ export default function AdminPage() {
   const [editUser, setEditUser] = useState<SelectedRecord | undefined>();
   const [creatingUser, setCreatingUser] = useState(false);
   const [permissionUser, setPermissionUser] = useState<SelectedRecord | undefined>();
-  const [hasOrganization, setHasOrganization] = useState<boolean | null>(null);
-  const [isLoadingOrg, setIsLoadingOrg] = useState(true);
+  const [organizationState, setOrganizationState] = useState<
+    OrganizationAvailability | "loading" | "error"
+  >("loading");
+  const [organizationError, setOrganizationError] = useState<string | null>(null);
+  const [canCreateRoot, setCanCreateRoot] = useState(false);
 
   useEffect(() => {
     checkOrganizationExists();
@@ -42,16 +48,19 @@ export default function AdminPage() {
 
   const checkOrganizationExists = async () => {
     try {
-      setIsLoadingOrg(true);
+      setOrganizationState("loading");
+      setOrganizationError(null);
       const response = await organizationApi.getTree();
-      // Check if there's at least one company node
-      const hasCompany = response.data && response.data.length > 0;
-      setHasOrganization(hasCompany);
-    } catch (error) {
+      setCanCreateRoot(response.meta.canCreateRoot);
+      setOrganizationState(getOrganizationAvailability(response));
+    } catch (error: unknown) {
       console.error("Failed to check organization:", error);
-      setHasOrganization(false);
-    } finally {
-      setIsLoadingOrg(false);
+      setOrganizationError(
+        error instanceof Error
+          ? error.message
+          : "The organization service is temporarily unavailable.",
+      );
+      setOrganizationState("error");
     }
   };
 
@@ -76,12 +85,11 @@ export default function AdminPage() {
   };
 
   const handleOrganizationCreated = () => {
-    setHasOrganization(true);
     refresh();
   };
 
   // Show loading state
-  if (isLoadingOrg) {
+  if (organizationState === "loading") {
     return (
       <AppLayout>
         <div className="admin-shell">
@@ -105,8 +113,72 @@ export default function AdminPage() {
     );
   }
 
-  // Show organization creation form if no organization exists
-  if (hasOrganization === false) {
+  if (organizationState === "error") {
+    return (
+      <AppLayout>
+        <div className="admin-shell">
+          <header className="admin-header">
+            <div>
+              <a href="/" className="admin-back"><ArrowLeft size={15} /> Security operations</a>
+              <div className="admin-title">
+                <span><ShieldCheck size={22} /></span>
+                <div>
+                  <h1>Organization & access</h1>
+                  <p>Organization status unavailable</p>
+                </div>
+              </div>
+            </div>
+          </header>
+          <section className="admin-panel">
+            <div role="alert" style={{ maxWidth: 640, margin: "3rem auto", textAlign: "center" }}>
+              <AlertTriangle size={42} style={{ color: "#dc2626", marginBottom: "1rem" }} />
+              <h2>We couldn&apos;t load the organization</h2>
+              <p style={{ color: "#667286" }}>{organizationError}</p>
+              <button className="btn btn-primary" onClick={() => void checkOrganizationExists()}>
+                Retry
+              </button>
+            </div>
+          </section>
+        </div>
+      </AppLayout>
+    );
+  }
+
+  if (organizationState === "restricted") {
+    return (
+      <AppLayout>
+        <div className="admin-shell">
+          <header className="admin-header">
+            <div>
+              <a href="/" className="admin-back"><ArrowLeft size={15} /> Security operations</a>
+              <div className="admin-title">
+                <span><ShieldCheck size={22} /></span>
+                <div>
+                  <h1>Organization & access</h1>
+                  <p>Your employee account needs an organization assignment</p>
+                </div>
+              </div>
+            </div>
+          </header>
+          <section className="admin-panel">
+            <div role="status" style={{ maxWidth: 680, margin: "3rem auto", textAlign: "center" }}>
+              <ShieldCheck size={46} style={{ color: "#d97706", marginBottom: "1rem" }} />
+              <h2>Organization access required</h2>
+              <p style={{ color: "#667286", lineHeight: 1.6 }}>
+                An organization already exists, but your employee account is not assigned to a permitted scope.
+                Ask a company administrator to assign you to the appropriate company, region, area, or branch.
+              </p>
+              <a className="btn btn-primary" href="/">Return to security operations</a>
+            </div>
+          </section>
+        </div>
+      </AppLayout>
+    );
+  }
+
+  // Only a successful API response confirming an empty tenant may expose the
+  // root creation form.
+  if (organizationState === "empty") {
     return (
       <AppLayout>
         <div className="admin-shell">
@@ -117,36 +189,24 @@ export default function AdminPage() {
                 <span><ShieldCheck size={22} /></span>
                 <div>
                   <h1>Organization Setup</h1>
-                  <p>Create your organization to get started</p>
+                  <p>{canCreateRoot ? "Create your organization to get started" : "Organization setup is pending"}</p>
                 </div>
               </div>
             </div>
           </header>
           <section className="admin-panel">
-            <div style={{ marginBottom: "1rem", padding: "1rem", background: "#fff3cd", borderRadius: "8px" }}>
-              <p style={{ margin: 0, color: "#856404" }}>
-                No organization found. Create one to start managing branches, employees, and cameras.
-              </p>
-              <button
-                onClick={() => setHasOrganization(true)}
-                style={{
-                  marginTop: "0.5rem",
-                  padding: "0.5rem 1rem",
-                  background: "#6c757d",
-                  color: "white",
-                  border: "none",
-                  borderRadius: "4px",
-                  cursor: "pointer"
-                }}
-              >
-                Skip and Continue Anyway
-              </button>
-            </div>
-            
-            {/* Show visibility fix diagnostic if creation fails */}
-            <OrganizationVisibilityFix />
-            
-            <CreateOrganizationForm onSuccess={handleOrganizationCreated} />
+            {canCreateRoot ? (
+              <CreateOrganizationForm onSuccess={handleOrganizationCreated} />
+            ) : (
+              <div role="status" style={{ maxWidth: 680, margin: "3rem auto", textAlign: "center" }}>
+                <Building2 size={46} style={{ color: "#d97706", marginBottom: "1rem" }} />
+                <h2>No organization has been configured</h2>
+                <p style={{ color: "#667286", lineHeight: 1.6 }}>
+                  A super administrator or company administrator must create the organization before employees can be assigned.
+                </p>
+                <a className="btn btn-primary" href="/">Return to security operations</a>
+              </div>
+            )}
           </section>
         </div>
       </AppLayout>

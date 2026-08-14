@@ -279,8 +279,17 @@ export const authApi = {
   },
 };
 
+export type OrganizationTreeResponse = {
+  data: any[];
+  meta: {
+    organizationExists: boolean;
+    accessRestricted: boolean;
+    canCreateRoot: boolean;
+  };
+};
+
 export const organizationApi = {
-  getTree: () => fetchApi<{ data: any[] }>('/v1/organization/tree'),
+  getTree: () => fetchApi<OrganizationTreeResponse>('/v1/organization/tree'),
   
   getStatistics: () => fetchApi<any>('/v1/organization/statistics'),
   

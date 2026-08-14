@@ -54,8 +54,6 @@ export function OrganizationTree({
       setLoading(true);
       setError(null);
       const response = await organizationApi.getTree();
-      console.log('Organization tree response:', response);
-      console.log('Tree data:', response.data);
       setTree(response.data);
     } catch (err: any) {
       console.error('Failed to load organization tree:', err);
@@ -234,7 +232,7 @@ export function OrganizationTree({
             No Organization Visible
           </h3>
           <p style={{ marginBottom: '1rem', color: '#6b7280' }}>
-            The organization tree is empty or you don't have permission to view it.
+            No organization nodes are available for your account. Refresh the page or contact your administrator.
           </p>
           <div style={{
             background: '#fef3c7',
@@ -252,30 +250,6 @@ export function OrganizationTree({
               <strong>To fix:</strong> Grant your user "org:manage" or "live:view" permissions on the organization nodes, or contact your system administrator.
             </p>
           </div>
-          {onAddChild && (
-            <button 
-              onClick={() => onAddChild({ id: 'root', name: 'Root', type: 'root', isActive: true } as any)}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '0.5rem',
-                padding: '0.75rem 1.5rem',
-                background: '#3b82f6',
-                color: 'white',
-                border: 'none',
-                borderRadius: '0.5rem',
-                fontSize: '1rem',
-                fontWeight: 500,
-                cursor: 'pointer',
-                transition: 'background 0.2s'
-              }}
-              onMouseOver={(e) => e.currentTarget.style.background = '#2563eb'}
-              onMouseOut={(e) => e.currentTarget.style.background = '#3b82f6'}
-            >
-              <Plus size={16} />
-              Try Creating Company Anyway
-            </button>
-          )}
         </div>
       </div>
     );
