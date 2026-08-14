@@ -194,6 +194,7 @@ export function DeviceManager() {
   const [showCameraForm, setShowCameraForm] = useState(false);
   const [showGatewayForm, setShowGatewayForm] = useState(false);
   const [showDiscoveredList, setShowDiscoveredList] = useState(false);
+  const [loadingDiscoveries, setLoadingDiscoveries] = useState(false);
   const [credentialActivation, setCredentialActivation] = useState<any>();
   const [activationUsername, setActivationUsername] = useState("");
   const [activationPassword, setActivationPassword] = useState("");
@@ -310,37 +311,47 @@ export function DeviceManager() {
     setLoading(true);
     setError(undefined);
     try {
-      const [gatewayResponse, cameraResponse, discoveredResponse, inventoryResponse] = await Promise.all([
+      const [gatewayResult, cameraResult, discoveredResult, inventoryResult] = await Promise.allSettled([
         cameraInventoryApi.listGateways(branchId),
         cameraInventoryApi.listByBranch(branchId),
         cameraInventoryApi.listDiscovered(branchId),
         deviceInventoryApi.list(branchId),
       ]);
-      setGateways(gatewayResponse.data);
-      setCameras(cameraResponse.data);
-      setDiscoveredCameras(discoveredResponse.data);
-      setDiscoveryReviewState((previous) => {
-        const next = { ...previous };
-        for (const camera of discoveredResponse.data) {
-          if (!next[camera.id]) {
-            next[camera.id] = {
-              reviewStatus: camera.duplicateStatus === "duplicate"
-                ? "duplicate"
-                : camera.duplicateStatus === "review-required"
-                  ? "review-required"
-                  : "pending",
-            };
-          }
-        }
-        return next;
-      });
-      setInventoryRecords(inventoryResponse.data);
-      return discoveredResponse.data;
-    } catch (reason) {
-      setError(messageOf(reason, "Unable to load devices for this branch."));
+      if (gatewayResult.status === "fulfilled") setGateways(gatewayResult.value.data);
+      if (cameraResult.status === "fulfilled") setCameras(cameraResult.value.data);
+      if (inventoryResult.status === "fulfilled") setInventoryRecords(inventoryResult.value.data);
+      if (discoveredResult.status === "fulfilled") {
+        setDiscoveredCameras(discoveredResult.value.data);
+        updateDiscoveryReviewState(discoveredResult.value.data);
+      }
+
+      const failedResult = [gatewayResult, cameraResult, discoveredResult, inventoryResult]
+        .find((result) => result.status === "rejected");
+      if (failedResult?.status === "rejected") {
+        setError(messageOf(failedResult.reason, "Some branch device information could not be loaded."));
+      }
+      return discoveredResult.status === "fulfilled" ? discoveredResult.value.data : [];
     } finally {
       setLoading(false);
     }
+  }
+
+  function updateDiscoveryReviewState(discoveries: any[]) {
+    setDiscoveryReviewState((previous) => {
+      const next = { ...previous };
+      for (const camera of discoveries) {
+        if (!next[camera.id]) {
+          next[camera.id] = {
+            reviewStatus: camera.duplicateStatus === "duplicate"
+              ? "duplicate"
+              : camera.duplicateStatus === "review-required"
+                ? "review-required"
+                : "pending",
+          };
+        }
+      }
+      return next;
+    });
   }
 
   function openCameraForm() {
@@ -523,9 +534,36 @@ export function DeviceManager() {
 
   function openCredentialActivation(discovered: any) {
     setCredentialActivation(discovered);
+    setShowDiscoveredList(false);
     setActivationUsername("");
     setActivationPassword("");
     setError(undefined);
+  }
+
+  async function openPendingCredentials() {
+    if (!selectedBranch) return;
+    setLoadingDiscoveries(true);
+    setShowDiscoveredList(true);
+    setError(undefined);
+    try {
+      const response = await cameraInventoryApi.listDiscovered(selectedBranch);
+      const discoveries = response.data ?? [];
+      setDiscoveredCameras(discoveries);
+      updateDiscoveryReviewState(discoveries);
+
+      const credentialCandidates = discoveries.filter((camera) => camera.credentialsRequired);
+      if (credentialCandidates.length === 1) {
+        openCredentialActivation(credentialCandidates[0]);
+      } else if (credentialCandidates.length === 0) {
+        setShowDiscoveredList(false);
+        setError("No pending device login was returned. Run the camera scan again to refresh the provisioning evidence.");
+      }
+    } catch (reason) {
+      setShowDiscoveredList(false);
+      setError(messageOf(reason, "Unable to load devices that require credentials."));
+    } finally {
+      setLoadingDiscoveries(false);
+    }
   }
 
   async function activateDiscoveredCamera(event: React.FormEvent) {
@@ -877,7 +915,7 @@ export function DeviceManager() {
         refreshing={scanning}
         onStart={() => void scanCameras()}
         onInstallAgent={openScannerInstaller}
-        onProvideCredentials={() => setShowDiscoveredList(true)}
+        onProvideCredentials={() => void openPendingCredentials()}
         onChanged={() => void refreshBranch(selectedBranch)}
       />
 
@@ -1241,7 +1279,9 @@ export function DeviceManager() {
                   ))}
                 </div>
               )}
-              {discoveredCameras.length === 0 ? (
+              {loadingDiscoveries ? (
+                <div className="loading-state"><Activity className="spin" />Loading devices that require credentials…</div>
+              ) : discoveredCameras.length === 0 ? (
                 <div className="device-empty"><Camera size={30} /><strong>{autoProvisionResults.length > 0 ? "Provisioning complete" : "No cameras discovered"}</strong><span>{autoProvisionResults.length > 0 ? "Verified cameras are now configured. Devices needing attention remain clearly identified above." : "Make sure the Edge Agent is online in the camera network, then scan again."}</span></div>
               ) : (
                 <>
@@ -1256,6 +1296,11 @@ export function DeviceManager() {
                           <small className="profiles">{camera.profiles.map((p: any) => `${p.codec} ${p.width}x${p.height}`).join(", ")}</small>
                         </div>
                         <div className="discovery-card-actions">
+                          {camera.credentialsRequired ? (
+                            <button type="button" className="primary-button" onClick={() => openCredentialActivation(camera)} disabled={saving || scanning}>
+                              Enter login &amp; password
+                            </button>
+                          ) : null}
                           <button className="secondary-button" onClick={() => previewDiscoveredCamera(camera)} disabled={saving}>
                             {previewDiscoveryId === camera.id ? "Previewing" : "Preview"}
                           </button>
@@ -1266,11 +1311,9 @@ export function DeviceManager() {
                             <button type="button" className="primary-button" onClick={() => void renameDiscoveredCamera(camera.id, previewNameDraft)} disabled={saving || !previewNameDraft.trim()}>Save name</button>
                             <input value={rejectReason} onChange={(event) => setRejectReason(event.target.value)} placeholder="Reject reason" />
                             <button type="button" className="secondary-button" onClick={() => void rejectDiscoveredCamera(camera.id, rejectReason)} disabled={saving}>Reject</button>
-                            {camera.credentialsRequired ? (
-                              <button type="button" className="primary-button" onClick={() => openCredentialActivation(camera)} disabled={saving || scanning}>Enter login & password</button>
-                            ) : (
+                            {!camera.credentialsRequired ? (
                               <button type="button" className="primary-button" onClick={() => void approveDiscoveredCamera(camera)} disabled={saving || !camera.streamVerified}>Approve & start live</button>
-                            )}
+                            ) : null}
                           </div>
                         )}
                       </div>
@@ -1280,7 +1323,7 @@ export function DeviceManager() {
               )}
               <div className="modal-actions">
                 <button className="secondary-button" onClick={() => setShowDiscoveredList(false)}>Close</button>
-                {discoveredCameras.length > 0 && (
+                {!loadingDiscoveries && discoveredCameras.length > 0 && (
                   <button className="primary-button" onClick={() => void approveAllDiscovered()} disabled={saving}>
                     {saving ? "Provisioning…" : `Approve all & start (${discoveredCameras.length})`}
                   </button>
