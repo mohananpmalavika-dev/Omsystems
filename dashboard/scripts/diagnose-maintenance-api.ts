@@ -24,7 +24,8 @@ async function diagnose() {
       console.log(`❌ Backend returned status ${healthResponse.status}\n`);
     }
   } catch (error) {
-    console.log(`❌ Cannot reach backend: ${error.message}\n`);
+    const msg = error instanceof Error ? error.message : String(error);
+    console.log(`❌ Cannot reach backend: ${msg}\n`);
     return;
   }
 
@@ -44,7 +45,8 @@ async function diagnose() {
       console.log(`⚠️  Unexpected status: ${response.status}\n`);
     }
   } catch (error) {
-    console.log(`❌ Error testing route: ${error.message}\n`);
+    const msg = error instanceof Error ? error.message : String(error);
+    console.log(`❌ Error testing route: ${msg}\n`);
   }
 
   // Test 3: Environment variables
@@ -73,7 +75,8 @@ async function diagnose() {
     console.log(`   Protocol: ${url.protocol}`);
     console.log('   ✅ URL is valid\n');
   } catch (error) {
-    console.log(`   ❌ Invalid URL: ${error.message}\n`);
+    const msg = error instanceof Error ? error.message : String(error);
+    console.log(`   ❌ Invalid URL: ${msg}\n`);
   }
 
   console.log('📋 Summary');
