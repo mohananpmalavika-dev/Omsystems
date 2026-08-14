@@ -95,6 +95,7 @@ export function ProvisioningRun({
 
   const headline = run?.status === "active" ? "Branch evidence verified"
     : run?.status === "waiting_for_input" ? "Operator input required"
+      : run?.status === "awaiting_evidence" ? "Automatic scan complete"
       : run?.status === "blocked" ? "Activation blocked"
         : run?.status === "failed" ? "Provisioning failed"
           : run?.status === "running" || run?.status === "queued" ? "Provisioning in progress"
@@ -113,6 +114,7 @@ export function ProvisioningRun({
         <div className="ztp-actions">
           {run?.status === "waiting_for_input" ? <button className="primary-button" onClick={onProvideCredentials}>Provide credentials</button> : null}
           {run?.canSkipCredentialResolution ? <button className="secondary-button" disabled={skippingCredentials} onClick={() => void skipUnavailableCredentials()}>{skippingCredentials ? "Skipping…" : "Skip unavailable devices"}</button> : null}
+          {run?.status === "awaiting_evidence" ? <button className="primary-button" onClick={onStart} disabled={refreshing}>{refreshing ? "Checking…" : "Recheck verification"}</button> : null}
           {run?.status === "failed" || run?.status === "blocked" ? <button className="secondary-button" disabled={retrying} onClick={() => void retry()}><RefreshCw size={14}/>{retrying ? "Retrying..." : "Retry run"}</button> : null}
           {!run || run.status === "not_started" || run.status === "active" ? <button className="primary-button" onClick={onStart} disabled={refreshing}>{refreshing ? "Starting..." : run?.status === "active" ? "Run again" : "Start provisioning"}</button> : null}
         </div>
@@ -121,6 +123,7 @@ export function ProvisioningRun({
       {error ? <div className="device-message error"><AlertTriangle size={15}/>{error}</div> : null}
 
       {run?.canSkipCredentialResolution ? <p className="ztp-skip-note">A verified camera is already available. Skipping keeps the remaining devices pending and asks for their credentials again in a future scan.</p> : null}
+      {run?.status === "awaiting_evidence" ? <p className="ztp-skip-note">The automatic scan has finished—no RTSP check is still running. This stage updates when the Branch Gateway reports new video evidence or you choose Recheck verification.</p> : null}
 
       {run ? <>
         <div className="ztp-progress-copy"><span>{run.completedUnits} of {run.totalUnits} evidence units complete</span><strong>{run.progressPercent.toFixed(1)}%</strong></div>

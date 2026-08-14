@@ -747,6 +747,40 @@ export function DeviceManager() {
     }
   }
 
+  async function handleReconnectGateway(gatewayId: string, withCameras: boolean) {
+    if (!selectedBranch) return;
+    setSaving(true);
+    setError(undefined);
+    try {
+      const response = await fetch(`/api/control/v1/operations/health/edge-agents/${gatewayId}/reconnect`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ reconnectCameras: withCameras }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+        throw new Error(errorData.error || 'Failed to reconnect Edge Agent');
+      }
+
+      const { data } = await response.json();
+      setNotice(
+        `Reconnection initiated for Edge Agent${withCameras ? ` and ${data.camerasAffected} camera(s)` : ''}. ` +
+        `Status will update automatically.`
+      );
+      
+      // Refresh the branch data after a short delay
+      setTimeout(() => {
+        void refreshBranch(selectedBranch);
+      }, 2000);
+    } catch (reason) {
+      setError(messageOf(reason, "Edge Agent reconnection failed."));
+    } finally {
+      setSaving(false);
+    }
+  }
+
   async function addInventoryRecord(event: React.FormEvent) {
     event.preventDefault();
     if (!selectedBranch) return;
@@ -968,9 +1002,34 @@ export function DeviceManager() {
                   </small>
                 </div>
                 <div className="gateway-actions" aria-label={`Remote actions for ${gateway.name}`}>
-                  <button type="button" title="Rediscover cameras and recorders" disabled={saving || gateway.status !== "online"} onClick={() => void issueGatewayCommand(gateway, "rediscover")}><Network size={13}/></button>
-                  <button type="button" title="Collect redacted diagnostics" disabled={saving || gateway.status !== "online"} onClick={() => void issueGatewayCommand(gateway, "collect-logs")}><Activity size={13}/></button>
-                  <button type="button" title="Restart the branch media service" disabled={saving || gateway.status !== "online"} onClick={() => void issueGatewayCommand(gateway, "restart-media")}><RefreshCw size={13}/></button>
+                  {gateway.status === "offline" ? (
+                    <>
+                      <button 
+                        type="button" 
+                        title="Reconnect Edge Agent" 
+                        disabled={saving}
+                        onClick={() => void handleReconnectGateway(gateway.id, false)}
+                        style={{ backgroundColor: '#dc2626', color: 'white', padding: '4px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: 600 }}
+                      >
+                        <RefreshCw size={13}/> Reconnect
+                      </button>
+                      <button 
+                        type="button" 
+                        title="Reconnect Edge Agent and restore all cameras" 
+                        disabled={saving}
+                        onClick={() => void handleReconnectGateway(gateway.id, true)}
+                        style={{ backgroundColor: '#b91c1c', color: 'white', padding: '4px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: 600 }}
+                      >
+                        <RefreshCw size={13}/> + Cameras
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <button type="button" title="Rediscover cameras and recorders" disabled={saving || gateway.status !== "online"} onClick={() => void issueGatewayCommand(gateway, "rediscover")}><Network size={13}/></button>
+                      <button type="button" title="Collect redacted diagnostics" disabled={saving || gateway.status !== "online"} onClick={() => void issueGatewayCommand(gateway, "collect-logs")}><Activity size={13}/></button>
+                      <button type="button" title="Restart the branch media service" disabled={saving || gateway.status !== "online"} onClick={() => void issueGatewayCommand(gateway, "restart-media")}><RefreshCw size={13}/></button>
+                    </>
+                  )}
                 </div>
                 <code title={gateway.id}>{gateway.id.slice(0, 8)}</code>
               </article>

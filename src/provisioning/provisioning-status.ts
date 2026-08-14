@@ -46,6 +46,7 @@ export interface ProvisioningRunView {
     | "queued"
     | "running"
     | "waiting_for_input"
+    | "awaiting_evidence"
     | "blocked"
     | "failed"
     | "active";
@@ -105,12 +106,19 @@ export async function buildProvisioningRunView(
     branchId,
     "device:configure",
   );
-  const runCameras = job
+  const scopedRunCameras = job
     ? cameras.filter((camera) =>
       camera.edgeAgentId === job.edgeAgentId &&
       (!Number.isFinite(runStartedAt) || Date.parse(camera.firstSeenAt ?? "") >= runStartedAt)
     )
     : cameras;
+  // When credentials are deliberately deferred, the currently online branch
+  // cameras are the evidence that allowed the operator to continue. Include
+  // them in subsequent stages instead of showing RTSP as perpetually pending.
+  const runCameras = job?.credentialsSkippedAt
+    ? [...new Map([...scopedRunCameras, ...cameras.filter((camera) => camera.status === "online")]
+      .map((camera) => [camera.id, camera])).values()]
+    : scopedRunCameras;
   const now = new Date().toISOString();
   const recentWindowStart = new Date(Date.now() - 24 * 60 * 60 * 1_000).toISOString();
   const [recordingJobs, analyticsRules, recentSegments] = await Promise.all([
@@ -154,6 +162,7 @@ export function projectProvisioningRun(input: {
   telemetry: OperationalTelemetryEnvelope[];
 }): ProvisioningRunView {
   const onlineAgents = input.agents.filter((agent) => agent.status === "online");
+  const connectedCameraCount = input.connectedCameraCount ?? 0;
   const credentialsRequired = Math.max(
     input.job?.credentialsRequiredCount ?? 0,
     input.pendingDiscoveries.filter((device) => device.credentialsRequired === true).length,
@@ -166,10 +175,10 @@ export function projectProvisioningRun(input: {
     input.job?.verifiedCount ?? 0,
     input.job?.provisionedCount ?? 0,
     input.pendingDiscoveries.filter((device) => device.streamVerified === true).length,
+    connectedCameraCount,
   );
   const credentialsSkipped = Boolean(input.job?.credentialsSkippedAt);
-  const canSkipCredentialResolution = credentialsRequired > 0 && !credentialsSkipped &&
-    (verifiedStreams > 0 || (input.connectedCameraCount ?? 0) > 0);
+  const canSkipCredentialResolution = credentialsRequired > 0 && !credentialsSkipped && verifiedStreams > 0;
   const recorderTelemetry = input.telemetry.filter((item) => item.deviceType === "recorder");
   const diskTelemetry = input.telemetry.filter((item) => item.deviceType === "disk");
   const archiveTelemetry = input.telemetry.filter((item) => item.deviceType === "archive");
@@ -201,7 +210,7 @@ export function projectProvisioningRun(input: {
     input.pendingDiscoveries.filter(isAnalyticsCompatible).length,
   );
   const importedChannels = input.job
-    ? input.job.provisionedCount
+    ? Math.max(input.job.provisionedCount, input.importedCameraIds.length)
     : input.importedCameraIds.length;
   const analyticsAssigned = Math.min(input.analyticsCameraIds.length, importedChannels);
   const discoveredDevices = input.job
@@ -346,7 +355,8 @@ export function projectProvisioningRun(input: {
       : blockers.length > 0 ? "blocked"
         : readyForActivation ? "active"
           : input.job?.status === "queued" ? "queued"
-            : input.job ? "running" : "not_started";
+            : input.job?.status === "running" ? "running"
+              : input.job ? "awaiting_evidence" : "not_started";
   const currentStage = steps.find((item) => !["completed", "skipped"].includes(item.status))?.label ?? "Active";
 
   return {

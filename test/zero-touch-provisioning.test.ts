@@ -147,6 +147,41 @@ describe("zero-touch provisioning integration", () => {
     ]));
   });
 
+  it("does not present completed scans as an indefinitely running RTSP check after credentials are skipped", () => {
+    const now = new Date().toISOString();
+    const projected = projectProvisioningRun({
+      branchId: "branch-1",
+      job: {
+        id: "run-1", branchId: "branch-1", edgeAgentId: "agent-1", status: "completed",
+        requestedAt: now, startedAt: now, completedAt: now, resultCount: 1,
+        provisionedCount: 0, credentialsRequiredCount: 1, pendingVerificationCount: 0,
+        verifiedCount: 0, recorderCount: 0, timeSynchronizedCount: 0, timeDriftCount: 0,
+        analyticsCompatibleCount: 0, duplicateCount: 0, credentialsSkippedAt: now, error: null,
+      },
+      agents: [{
+        id: "agent-1", branchId: "branch-1", name: "edge", version: "1.0.0",
+        status: "online", lastSeenAt: now,
+      }],
+      pendingDiscoveries: [discovery("agent-1", "192.168.50.21", {
+        streamVerified: false,
+        credentialsRequired: true,
+      })],
+      importedCameraIds: [],
+      connectedCameraCount: 1,
+      recordingJobs: [],
+      storageNodes: [],
+      analyticsCameraIds: [],
+      recentPlatformRecordingCameraIds: [],
+      telemetry: [],
+    });
+
+    expect(projected.status).toBe("awaiting_evidence");
+    expect(projected.summary.verifiedStreams).toBe(1);
+    expect(projected.steps.find((step) => step.id === "stream-verification")).toMatchObject({
+      status: "completed",
+    });
+  });
+
   it("marks a run active only when current stream, storage and recording evidence all pass", () => {
     const now = new Date().toISOString();
     const projected = projectProvisioningRun({

@@ -487,7 +487,7 @@ export interface ProvisioningRun {
   id: string;
   branchId: string;
   edgeAgentId?: string;
-  status: "not_started" | "queued" | "running" | "waiting_for_input" | "blocked" | "failed" | "active";
+  status: "not_started" | "queued" | "running" | "waiting_for_input" | "awaiting_evidence" | "blocked" | "failed" | "active";
   currentStage: string;
   completedUnits: number;
   totalUnits: number;
