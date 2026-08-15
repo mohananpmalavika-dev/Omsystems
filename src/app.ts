@@ -2387,8 +2387,9 @@ export async function buildApp(options?: {
 
   // Register banking analytics routes
   try {
-    const { registerBankingAnalyticsApiRoutes } = await import('../analytics-engine/dist/analytics-engine/src/routes/banking-analytics-api.js');
-    await registerBankingAnalyticsApiRoutes(app, {});
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const bankingModule = require('../analytics-engine/dist/analytics-engine/src/routes/banking-analytics-api.js');
+    await bankingModule.registerBankingAnalyticsApiRoutes(app, {});
     app.log.info('Banking analytics routes registered');
   } catch (err: unknown) {
     app.log.error({ err }, 'failed to register banking analytics routes');

@@ -268,8 +268,8 @@ export async function registerDashboardRoutes(
         : 0;
 
       const metrics: StorageMetrics = {
-        totalCapacityBytes,
-        usedCapacityBytes,
+        totalCapacityBytes: totalCapacity,
+        usedCapacityBytes: usedCapacity,
         availableCapacityBytes,
         utilizationPercentage,
         forecastFullDays,
