@@ -19,6 +19,7 @@ import { CameraTile } from "./camera-tile";
 import {
   DECODER_CAPACITY_OPTIONS,
   clampDecoderLimit,
+  createDefaultGridAssignments,
   getDecoderCapacityOptions,
 } from "./enhanced-camera-grid-model";
 import { useDecoderBudgetManager } from "./decoderBudgetManager";
@@ -252,20 +253,35 @@ export function EnhancedCameraGrid({
     loadSavedLayouts();
   }, []);
 
-  // Initialize from saved layout
+  // Initialize from a saved layout. If its camera IDs are no longer present
+  // in the current API response, populate the wall with available cameras.
   useEffect(() => {
-    if (initialLayout && cameras.length > 0 && !initialLayoutApplied.current) {
-      const posMap = new Map();
-      initialLayout.positions.forEach((pos) => {
-        const camera = cameras.find((c) => c.id === pos.cameraId);
-        if (camera) {
-          posMap.set(pos.position, { camera, stream: pos.stream, priority: 0 });
-        }
-      });
-      setGridPositions(posMap);
-      initialLayoutApplied.current = true;
+    if (cameras.length === 0 || initialLayoutApplied.current) return;
+
+    const camerasById = new Map(cameras.map((camera) => [camera.id, camera]));
+    const posMap = new Map<number, { camera: Camera; stream: "main" | "sub"; priority: number }>();
+
+    initialLayout?.positions.forEach((position) => {
+      const camera = camerasById.get(position.cameraId);
+      if (camera && position.position < totalPositions) {
+        posMap.set(position.position, { camera, stream: position.stream, priority: 0 });
+      }
+    });
+
+    if (posMap.size === 0) {
+      const stream = totalPositions >= 16 ? "sub" : "main";
+      createDefaultGridAssignments(cameras.map((camera) => camera.id), totalPositions, stream)
+        .forEach((assignment) => {
+          const camera = camerasById.get(assignment.cameraId);
+          if (camera) {
+            posMap.set(assignment.position, { camera, stream: assignment.stream, priority: 0 });
+          }
+        });
     }
-  }, [initialLayout, cameras]);
+
+    setGridPositions(posMap);
+    initialLayoutApplied.current = true;
+  }, [initialLayout, cameras, totalPositions]);
 
   // Adaptive layout: prioritize cameras with alerts
   useEffect(() => {

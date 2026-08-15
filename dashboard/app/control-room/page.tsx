@@ -101,7 +101,7 @@ export default function ControlRoomPage() {
   const [liveDataMode, setLiveDataMode] = useState<"live" | "fallback">("fallback");
   const [activeView, setActiveView] = useState<"grid" | "handover">("grid");
   const [loading, setLoading] = useState(true);
-  const [initialLayout, setInitialLayout] = useState<GridLayout | undefined>(getFallbackLayout(FALLBACK_CAMERAS));
+  const [initialLayout, setInitialLayout] = useState<GridLayout | undefined>();
   const [monitoredCameraIds, setMonitoredCameraIds] = useState<string[]>([]);
   const monitoredCameraSignatureRef = useRef("");
   const monitoredCameraSet = new Set(monitoredCameraIds);
