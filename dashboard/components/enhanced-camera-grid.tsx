@@ -1279,6 +1279,7 @@ export function EnhancedCameraGrid({
       `}</style>
     </div>
   );
+  }
   // Top-level render uses the StreamSchedulerProvider which centralizes scheduling
   return (
     <StreamSchedulerProvider onStartStream={(req) => void handleStartLive(req.cameraId, req.stream)} decoderLimitInitial={decoderLimit} sequencingInitial={sequencing}>

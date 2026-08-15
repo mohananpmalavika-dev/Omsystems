@@ -25,7 +25,14 @@ export function BranchDetailView({ health, onClose, onRefresh }: BranchDetailVie
     UNKNOWN: 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200',
   };
 
-  const StatCard = ({ label, value, status, details }: any) => (
+  interface StatCardProps {
+    label: string;
+    value: React.ReactNode;
+    status: HealthState;
+    details?: React.ReactNode;
+  }
+
+  const StatCard: React.FC<StatCardProps> = ({ label, value, status, details }) => (
     <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4">
       <div className="flex items-center justify-between mb-2">
         <span className="text-sm font-medium text-gray-600 dark:text-gray-400">{label}</span>
