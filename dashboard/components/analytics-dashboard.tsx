@@ -12,6 +12,7 @@ import {
 import { useEffect, useState } from "react";
 import { analyticsApi, cameraInventoryApi } from "@/lib/api-client";
 import type { Branch, Camera } from "@/lib/types";
+import { useCapabilities } from "@/hooks/useCapabilities";
 
 interface MetricsSummary {
   totalAlerts: number;
@@ -45,6 +46,7 @@ interface QueueData {
 }
 
 export function AnalyticsDashboard() {
+  const { isAvailable, isPartial, getCapability } = useCapabilities();
   const [branches, setBranches] = useState<Branch[]>([]);
   const [cameras, setCameras] = useState<Camera[]>([]);
   const [selectedBranch, setSelectedBranch] = useState("");
@@ -151,9 +153,41 @@ export function AnalyticsDashboard() {
     }
   };
 
-  const exportReport = async () => {
-    // TODO: Implement CSV/PDF export
-    alert("Export functionality coming soon");
+  const exportReport = async (format: 'csv' | 'pdf' | 'excel') => {
+    // Check capability before attempting export
+    const capabilityId = `analytics.export.${format}`;
+    
+    if (!isAvailable(capabilityId) && !isPartial(capabilityId)) {
+      const capability = getCapability(capabilityId);
+      alert(capability?.reason || `${format.toUpperCase()} export is not currently available`);
+      return;
+    }
+    
+    try {
+      const { from, to } = getTimeRange(timeRange);
+      const response = await fetch(
+        `/v1/branches/${selectedBranch}/analytics/export/${format}?from=${from}&to=${to}`,
+        { credentials: 'include' }
+      );
+      
+      if (!response.ok) {
+        throw new Error(`Export failed: ${response.statusText}`);
+      }
+      
+      // Trigger download
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `analytics-${selectedBranch}-${Date.now()}.${format}`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      
+    } catch (err) {
+      alert(`Export failed: ${readable(err)}`);
+    }
   };
 
   return (
@@ -188,9 +222,26 @@ export function AnalyticsDashboard() {
           <button onClick={() => void loadDashboardData()} title="Refresh data">
             <RefreshCw size={16} />
           </button>
-          <button onClick={() => void exportReport()} title="Export report">
-            <Download size={16} /> Export
-          </button>
+          {/* Show export buttons only if at least one format is available */}
+          {(isAvailable('analytics.export.csv') || isAvailable('analytics.export.pdf') || isAvailable('analytics.export.excel')) && (
+            <div className="export-buttons">
+              {isAvailable('analytics.export.csv') && (
+                <button onClick={() => void exportReport('csv')} title="Export as CSV">
+                  <Download size={16} /> CSV
+                </button>
+              )}
+              {(isAvailable('analytics.export.pdf') || isPartial('analytics.export.pdf')) && (
+                <button onClick={() => void exportReport('pdf')} title="Export as PDF">
+                  <Download size={16} /> PDF
+                </button>
+              )}
+              {isAvailable('analytics.export.excel') && (
+                <button onClick={() => void exportReport('excel')} title="Export as Excel">
+                  <Download size={16} /> Excel
+                </button>
+              )}
+            </div>
+          )}
         </div>
       </header>
 

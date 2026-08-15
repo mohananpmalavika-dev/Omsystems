@@ -64,6 +64,7 @@ import { registerEdgeAgentPackageRoutes } from "./routes/edge-agent-package.rout
 import { registerEdgeDiscoveryBootstrapRoutes } from "./routes/edge-discovery-bootstrap.routes.js";
 import { registerEdgeGatewayOperationsRoutes } from "./routes/edge-gateway-operations.routes.js";
 import { registerOperationalHealthRoutes } from "./routes/operational-health.routes.js";
+import { registerBranchCommandCenterRoutes } from "./routes/branch-command-center.routes.js";
 import { registerEnterpriseInfrastructureRoutes } from "./routes/enterprise-infrastructure.routes.js";
 import { registerVideoWallRoutes } from "./routes/video-wall.routes.js";
 import { registerAlertCommandCenterRoutes } from "./routes/alert-command-center.routes.js";
@@ -2211,6 +2212,7 @@ export async function buildApp(options?: {
   // available for both the in-memory development runtime and PostgreSQL.
   await registerMaintenanceRoutes(app, store);
   await registerOperationalHealthRoutes(app, store);
+  await registerBranchCommandCenterRoutes(app, store);
   await registerEnterpriseInfrastructureRoutes(app, store);
   await registerVideoWallRoutes(app, store);
   await registerFederationRoutes(app, store, federationManager, {

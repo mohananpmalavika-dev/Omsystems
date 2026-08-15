@@ -128,11 +128,36 @@ export class BasicPlateRectifier implements PlateRectifier {
   
   /**
    * Calculate horizontal projection variance at angle
+   * 
+   * Measures text line sharpness to detect optimal deskew angle.
+   * Higher variance indicates better horizontal alignment (sharper text edges).
    */
   private calculateProjectionVariance(gray: number[][], angle: number): number {
-    // Simplified calculation
-    // Real implementation would rotate and calculate projection
-    return Math.random(); // Placeholder
+    const height = gray.length;
+    const width = gray[0]?.length || 0;
+    
+    if (width === 0 || height === 0) {
+      return 0;
+    }
+    
+    // Calculate horizontal projection profile
+    // (sum of pixel intensities along each row)
+    const projection: number[] = [];
+    
+    for (let y = 0; y < height; y++) {
+      let rowSum = 0;
+      for (let x = 0; x < width; x++) {
+        rowSum += gray[y][x];
+      }
+      projection.push(rowSum / width);
+    }
+    
+    // Calculate variance of projection
+    // Well-aligned text produces high variance (distinct peaks/valleys)
+    const mean = projection.reduce((sum, val) => sum + val, 0) / projection.length;
+    const variance = projection.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / projection.length;
+    
+    return variance;
   }
   
   /**

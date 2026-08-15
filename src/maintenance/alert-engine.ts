@@ -291,18 +291,43 @@ export class AlertEngine {
 
   /**
    * Process all alerts
+   * Iterates through all tenants and processes their alerts
    */
   private async processAlerts(): Promise<void> {
     try {
-      // TODO: Implement proper tenant iteration
-      const tenants: any[] = []; // Placeholder
-
-      for (const tenant of tenants) {
-        await this.processHealthAlerts(tenant.id);
-        await this.processMaintenanceAlerts(tenant.id);
-        await this.processSlaAlerts(tenant.id);
-        await this.cleanupExpiredAlerts();
+      // Query all active tenants from the store
+      let tenants: any[] = [];
+      
+      try {
+        // Get all tenants with active subscription
+        tenants = await this.store.listTenants();
+        
+        if (!tenants || tenants.length === 0) {
+          this.logger.debug('No tenants found for alert processing');
+          return;
+        }
+        
+        this.logger.debug(`Processing alerts for ${tenants.length} tenant(s)`);
+      } catch (error) {
+        this.logger.error('Failed to query tenants for alert processing:', error);
+        return;
       }
+
+      // Process alerts for each tenant
+      for (const tenant of tenants) {
+        try {
+          await this.processHealthAlerts(tenant.id);
+          await this.processMaintenanceAlerts(tenant.id);
+          await this.processSlaAlerts(tenant.id);
+        } catch (error) {
+          this.logger.error(`Error processing alerts for tenant ${tenant.id}:`, error);
+          // Continue processing other tenants
+        }
+      }
+      
+      // Clean up expired alerts across all tenants
+      await this.cleanupExpiredAlerts();
+      
     } catch (error) {
       this.logger.error('Error in alert processing:', error);
     }
@@ -465,6 +490,7 @@ export class AlertEngine {
 
   /**
    * Send email notification
+   * Uses NotificationService to resolve recipients and send emails
    */
   private async sendEmailNotification(alert: Alert): Promise<void> {
     try {
@@ -475,25 +501,48 @@ export class AlertEngine {
       if (notificationService) {
         const template = notificationService.generateAlertEmailTemplate(alert);
         
-        // Get admin emails from tenant configuration
-        // In production, query tenant settings for notification recipients
-        const recipients = ['admin@example.com']; // TODO: Get from tenant settings
+        // Use notification service to resolve recipients
+        // This will query tenant settings for admin emails, escalation contacts, etc.
+        const recipients = await notificationService.resolveRecipients({
+          tenantId: alert.tenantId,
+          notificationType: 'maintenance.alert',
+          severity: alert.severity,
+          branchId: alert.branchNodeId,
+          assetId: alert.assetId,
+        });
 
-        await notificationService.sendEmail(
-          {
-            to: recipients,
-            subject: template.subject,
-            body: template.body,
-            html: template.html,
-          },
-          alert.tenantId
-        );
+        if (recipients.email && recipients.email.length > 0) {
+          await notificationService.sendEmail(
+            {
+              to: recipients.email,
+              subject: template.subject,
+              body: template.body,
+              html: template.html,
+            },
+            alert.tenantId
+          );
+          
+          this.logger.info(`Email notification sent to ${recipients.email.length} recipient(s)`, {
+            alertId: alert.id,
+            tenantId: alert.tenantId,
+          });
+        } else {
+          this.logger.warn('No email recipients configured for alert', {
+            alertId: alert.id,
+            tenantId: alert.tenantId,
+          });
+        }
       } else {
-        // Fallback: Log notification
+        // Fallback: Log notification (dev/test environments)
         this.logger.info('Email notification (service not configured):', {
-          to: 'admin@example.com',
-          subject: `[${alert.severity.toUpperCase()}] ${alert.title}`,
-          body: alert.description,
+          alert: {
+            id: alert.id,
+            tenantId: alert.tenantId,
+            severity: alert.severity,
+            title: alert.title,
+            description: alert.description,
+          },
+          note: 'Configure NotificationService to send real emails',
         });
       }
     } catch (error) {
@@ -503,6 +552,7 @@ export class AlertEngine {
 
   /**
    * Send SMS notification
+   * Uses NotificationService to resolve recipients and send SMS
    */
   private async sendSmsNotification(alert: Alert): Promise<void> {
     try {
@@ -510,20 +560,45 @@ export class AlertEngine {
       const notificationService = getNotificationService();
 
       if (notificationService) {
-        // Get SMS recipients from tenant configuration
-        const recipients = ['+1234567890']; // TODO: Get from tenant settings
+        // Use notification service to resolve recipients
+        const recipients = await notificationService.resolveRecipients({
+          tenantId: alert.tenantId,
+          notificationType: 'maintenance.alert',
+          severity: alert.severity,
+          branchId: alert.branchNodeId,
+          assetId: alert.assetId,
+        });
 
-        await notificationService.sendSms(
-          {
-            to: recipients,
-            body: `[${alert.severity.toUpperCase()}] ${alert.title}: ${alert.description}`,
-          },
-          alert.tenantId
-        );
+        if (recipients.sms && recipients.sms.length > 0) {
+          await notificationService.sendSms(
+            {
+              to: recipients.sms,
+              body: `[${alert.severity.toUpperCase()}] ${alert.title}: ${alert.description}`,
+            },
+            alert.tenantId
+          );
+          
+          this.logger.info(`SMS notification sent to ${recipients.sms.length} recipient(s)`, {
+            alertId: alert.id,
+            tenantId: alert.tenantId,
+          });
+        } else {
+          this.logger.warn('No SMS recipients configured for alert', {
+            alertId: alert.id,
+            tenantId: alert.tenantId,
+            severity: alert.severity,
+          });
+        }
       } else {
+        // Fallback: Log notification (dev/test environments)
         this.logger.info('SMS notification (service not configured):', {
-          to: '+1234567890',
-          message: `[${alert.severity.toUpperCase()}] ${alert.title}: ${alert.description}`,
+          alert: {
+            id: alert.id,
+            tenantId: alert.tenantId,
+            severity: alert.severity,
+            message: `[${alert.severity.toUpperCase()}] ${alert.title}: ${alert.description}`,
+          },
+          note: 'Configure NotificationService to send real SMS',
         });
       }
     } catch (error) {

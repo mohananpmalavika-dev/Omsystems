@@ -47,11 +47,14 @@ export function BranchHeader({ snapshot, onRefresh }: BranchHeaderProps) {
     }
   };
 
-  const formatLastSeen = (date: Date | undefined) => {
+  const formatLastSeen = (date: Date | string | undefined) => {
     if (!date) return 'Unknown';
-    
+
+    const parsedDate = date instanceof Date ? date : new Date(date);
+    if (Number.isNaN(parsedDate.getTime())) return 'Unknown';
+
     const now = new Date();
-    const diff = now.getTime() - new Date(date).getTime();
+    const diff = now.getTime() - parsedDate.getTime();
     const seconds = Math.floor(diff / 1000);
 
     if (seconds < 60) return `${seconds} sec ago`;

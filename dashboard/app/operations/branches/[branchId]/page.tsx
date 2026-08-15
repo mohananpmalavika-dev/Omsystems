@@ -17,20 +17,27 @@ import { BranchCommandCenter } from '@/components/branch-command-center/branch-c
 import { BranchOperationalSnapshot } from '@/types/branch-operational-snapshot';
 
 export default function BranchCommandCenterPage() {
-  const params = useParams();
+  const params = useParams<{ branchId?: string }>();
   const searchParams = useSearchParams();
-  const branchId = params.branchId as string;
+  const branchId = params?.branchId ?? '';
 
   const [snapshot, setSnapshot] = useState<BranchOperationalSnapshot | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   // URL state
-  const focusedCamera = searchParams.get('camera');
-  const filter = searchParams.get('filter');
-  const tab = searchParams.get('tab');
+  const search = searchParams ?? new URLSearchParams();
+  const focusedCamera = search.get('camera');
+  const filter = search.get('filter');
+  const tab = search.get('tab');
 
   useEffect(() => {
+    if (!branchId) {
+      setError('Branch ID is missing.');
+      setLoading(false);
+      return;
+    }
+
     fetchSnapshot();
 
     // Refresh every 30 seconds
@@ -102,6 +109,22 @@ export default function BranchCommandCenterPage() {
           >
             Retry
           </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (!branchId) {
+    return (
+      <div className="flex items-center justify-center h-screen bg-gray-50 dark:bg-gray-900">
+        <div className="text-center max-w-md">
+          <div className="text-red-500 text-5xl mb-4">⚠</div>
+          <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
+            Missing Branch Route
+          </h2>
+          <p className="text-gray-600 dark:text-gray-400">
+            This branch page could not resolve a valid branch ID.
+          </p>
         </div>
       </div>
     );

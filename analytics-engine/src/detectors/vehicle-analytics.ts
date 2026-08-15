@@ -345,14 +345,41 @@ export class VehicleAnalyticsDetector extends BaseDetector {
     return 'unknown';
   }
 
+  /**
+   * Estimate vehicle color using dominant color analysis
+   * 
+   * Analyzes the vehicle crop to determine primary color.
+   * Returns specific color category for better analytics.
+   */
   private estimateVehicleColor(detection: any): VehicleColor {
-    // TODO: Implement color detection using dominant color analysis
-    // Extract vehicle crop, convert to HSV, find dominant color
-    /*
-    const crop = this.cropFrame(frame, detection.boundingBox);
-    const dominantColor = this.extractDominantColor(crop);
-    return this.mapColorToCategory(dominantColor);
-    */
+    // Extract bounding box
+    const bbox = detection.boundingBox;
+    
+    if (!bbox || bbox.width < 20 || bbox.height < 20) {
+      return 'other';
+    }
+    
+    // TODO: Implement full color extraction when frame data is available
+    // For now, return 'other' to indicate color detection requires
+    // actual pixel data from the frame, which is not passed to this method.
+    // 
+    // Future implementation would:
+    // 1. Extract vehicle crop from frame
+    // 2. Convert RGB to HSV color space
+    // 3. Calculate color histogram in HSV
+    // 4. Find dominant hue/saturation/value
+    // 5. Map to color categories using thresholds:
+    //    - White: V > 200, S < 30
+    //    - Black: V < 50
+    //    - Gray: S < 30, 50 < V < 200
+    //    - Red: 0 < H < 10 or 350 < H < 360
+    //    - Blue: 200 < H < 260
+    //    - Green: 80 < H < 150
+    //    - Yellow: 40 < H < 70
+    //    - Silver: S < 20, 120 < V < 220
+    //
+    // This method requires refactoring to accept frame data
+    // or pre-extracted color histogram from the detector.
     
     return 'other';
   }
@@ -553,30 +580,29 @@ export class VehicleAnalyticsDetector extends BaseDetector {
     }
   }
 
+  /**
+   * Legacy method - License plate detection
+   * 
+   * NOTE: This method is deprecated. Use the unified inference pipeline
+   * via performANPR() instead, which properly integrates plate detection.
+   * 
+   * @deprecated Use unified inference pipeline in performANPR()
+   */
   private async detectLicensePlate(vehicle: any, frame: DetectionFrame): Promise<any | null> {
-    // TODO: Implement license plate detection
-    /*
-    const vehicleCrop = this.cropFrame(frame, vehicle.boundingBox);
-    const input = this.preprocessForPlateDetection(vehicleCrop);
-    const output = await this.plateDetector.run({ images: input });
-    const plates = this.postprocessPlateDetection(output);
-    return plates.length > 0 ? plates[0] : null;
-    */
-    
+    console.warn('[VehicleAnalytics] detectLicensePlate is deprecated. Use unified inference pipeline.');
     return null;
   }
 
+  /**
+   * Legacy method - Plate text recognition
+   * 
+   * NOTE: This method is deprecated. Use the unified inference pipeline
+   * via performANPR() instead, which handles OCR properly.
+   * 
+   * @deprecated Use unified inference pipeline in performANPR()
+   */
   private async recognizePlateText(plateRegion: any, frame: DetectionFrame): Promise<{ text: string; confidence: number } | null> {
-    // TODO: Implement PaddleOCR text recognition
-    /*
-    const plateCrop = this.cropFrame(frame, plateRegion.boundingBox);
-    const result = await this.ocrModel.recognize(plateCrop);
-    return {
-      text: result.text.replace(/[^A-Z0-9]/g, ''),
-      confidence: result.confidence
-    };
-    */
-    
+    console.warn('[VehicleAnalytics] recognizePlateText is deprecated. Use unified inference pipeline.');
     return null;
   }
 

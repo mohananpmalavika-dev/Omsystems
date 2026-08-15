@@ -1,290 +1,474 @@
 /**
  * Capabilities API Routes
- * Expose capability tier status (REAL vs READY vs PLANNED) to frontend
+ * 
+ * Provides UI components with real-time capability availability information.
+ * This prevents showing features that are not yet implemented or currently unavailable.
+ * 
+ * Core Principle:
+ * - UI should query capabilities before showing features
+ * - Features that return UNAVAILABLE should be hidden, not shown with "coming soon" alerts
+ * - Capabilities can change at runtime (service restarts, feature flags, etc.)
  */
 
-import { FastifyInstance } from 'fastify';
-import {
-  getCapabilityRegistry,
-  CapabilityTier,
-} from '../capabilities/capability-registry.js';
-import {
-  initializeCapabilities,
-  getCapabilityStats,
-  getCapabilitiesByTier,
-  getCapabilitiesByCategory,
-} from '../capabilities/capability-definitions.js';
+import { Router, type Request, type Response } from 'express';
+import { logger } from '../utils/logger.js';
 
-export default async function capabilitiesRoutes(fastify: FastifyInstance) {
-  const registry = getCapabilityRegistry();
+const router = Router();
 
-  // Initialize capabilities on first request
-  let initialized = false;
-  const ensureInitialized = () => {
-    if (!initialized) {
-      initializeCapabilities(registry);
-      initialized = true;
-    }
-  };
+/**
+ * Capability states
+ */
+type CapabilityState = 
+  | 'AVAILABLE'       // Feature is fully implemented and working
+  | 'PARTIAL'         // Feature is partially working (some sub-features unavailable)
+  | 'UNAVAILABLE'     // Feature not implemented or service unavailable
+  | 'DISABLED';       // Feature disabled by configuration
 
+/**
+ * Capability information
+ */
+interface CapabilityInfo {
+  id: string;
+  name: string;
+  state: CapabilityState;
+  reason?: string;
+  since?: string;
+  dependencies?: string[];
+}
+
+/**
+ * Capability registry
+ * 
+ * This should be populated from actual service checks, not hardcoded.
+ * In production, capabilities should be discovered dynamically.
+ */
+class CapabilityRegistry {
+  private capabilities: Map<string, CapabilityInfo> = new Map();
+  
+  constructor() {
+    this.initializeCapabilities();
+  }
+  
   /**
-   * GET /v1/capabilities
-   * Get all capabilities with their current status
+   * Initialize capability states
+   * 
+   * TODO: Replace with dynamic service discovery
    */
-  fastify.get('/v1/capabilities', async (request, reply) => {
-    ensureInitialized();
-
-    try {
-      const result = await registry.exportForAPI();
-      
-      reply.send({
-        success: true,
-        data: result,
-        timestamp: new Date().toISOString(),
-      });
-    } catch (error) {
-      fastify.log.error(error, 'Failed to get capabilities');
-      reply.status(500).send({
-        success: false,
-        error: 'Failed to retrieve capabilities',
-        message: error instanceof Error ? error.message : 'Unknown error',
-      });
-    }
-  });
-
+  private initializeCapabilities(): void {
+    // Analytics & Reporting
+    this.register({
+      id: 'analytics.export.csv',
+      name: 'CSV Export',
+      state: 'AVAILABLE',
+      reason: 'Analog camera CSV export fully implemented'
+    });
+    
+    this.register({
+      id: 'analytics.export.pdf',
+      name: 'PDF Export',
+      state: 'PARTIAL',
+      reason: 'PDF generation implemented but some report types incomplete'
+    });
+    
+    this.register({
+      id: 'analytics.export.excel',
+      name: 'Excel Export',
+      state: 'AVAILABLE',
+      reason: 'Excel export via exceljs library'
+    });
+    
+    // Video Search & Timeline
+    this.register({
+      id: 'video.search',
+      name: 'Video Search',
+      state: 'AVAILABLE',
+      reason: 'AI-powered video search operational'
+    });
+    
+    this.register({
+      id: 'video.timeline',
+      name: 'Timeline Visualization',
+      state: 'UNAVAILABLE',
+      reason: 'Timeline component not yet implemented',
+      dependencies: ['video.search']
+    });
+    
+    // Health & Monitoring
+    this.register({
+      id: 'health.charts',
+      name: 'Health Charts',
+      state: 'PARTIAL',
+      reason: 'Basic charts implemented, advanced visualizations incomplete'
+    });
+    
+    this.register({
+      id: 'health.predictions',
+      name: 'Predictive Health',
+      state: 'PARTIAL',
+      reason: 'Framework exists but telemetry collectors incomplete'
+    });
+    
+    // Maps & Digital Twin
+    this.register({
+      id: 'maps.live',
+      name: 'Live Map View',
+      state: 'AVAILABLE',
+      reason: 'Leaflet-based mapping operational'
+    });
+    
+    this.register({
+      id: 'maps.heatmap',
+      name: 'Heat Map Overlay',
+      state: 'AVAILABLE',
+      reason: 'Heat map generation and rendering complete'
+    });
+    
+    this.register({
+      id: 'digital-twin.status',
+      name: 'Digital Twin Status Overlay',
+      state: 'AVAILABLE',
+      reason: 'Real-time device status overlay operational'
+    });
+    
+    this.register({
+      id: 'digital-twin.video',
+      name: 'Digital Twin Live Video',
+      state: 'AVAILABLE',
+      reason: 'Live video streaming via media gateway'
+    });
+    
+    // Incidents & Investigations
+    this.register({
+      id: 'incidents.create',
+      name: 'Create Incident',
+      state: 'AVAILABLE'
+    });
+    
+    this.register({
+      id: 'incidents.workflow',
+      name: 'Incident Workflow',
+      state: 'AVAILABLE',
+      reason: 'SOP workflow engine operational'
+    });
+    
+    this.register({
+      id: 'incidents.map',
+      name: 'Incident Map View',
+      state: 'AVAILABLE',
+      reason: 'Incident location mapping functional'
+    });
+    
+    this.register({
+      id: 'investigation.reid',
+      name: 'Person Re-Identification',
+      state: 'PARTIAL',
+      reason: 'ReID framework exists, embedding extraction incomplete'
+    });
+    
+    this.register({
+      id: 'investigation.journey',
+      name: 'Cross-Camera Journey',
+      state: 'PARTIAL',
+      reason: 'Journey tracking partially implemented'
+    });
+    
+    // AI Assistant
+    this.register({
+      id: 'assistant.nlp',
+      name: 'Natural Language Processing',
+      state: process.env.OPENAI_API_KEY ? 'AVAILABLE' : 'PARTIAL',
+      reason: process.env.OPENAI_API_KEY 
+        ? 'ChatGPT Plus integration active'
+        : 'Rule-based parser only (no GPT-4)'
+    });
+    
+    this.register({
+      id: 'assistant.commands',
+      name: 'AI Assistant Commands',
+      state: 'AVAILABLE',
+      reason: 'Command registry operational'
+    });
+    
+    // Recording & Storage
+    this.register({
+      id: 'recording.verification',
+      name: 'Recording Verification',
+      state: 'AVAILABLE',
+      reason: 'ffprobe-based verification operational'
+    });
+    
+    this.register({
+      id: 'recording.cloud',
+      name: 'Cloud Archive',
+      state: 'UNAVAILABLE',
+      reason: 'Cloud archive adapter not yet implemented'
+    });
+    
+    this.register({
+      id: 'recording.san',
+      name: 'SAN Storage',
+      state: 'UNAVAILABLE',
+      reason: 'SAN storage adapter not yet implemented'
+    });
+    
+    // Device Management
+    this.register({
+      id: 'devices.onvif',
+      name: 'ONVIF Integration',
+      state: 'AVAILABLE',
+      reason: 'Full ONVIF recorder adapter implemented'
+    });
+    
+    this.register({
+      id: 'devices.hikvision',
+      name: 'Hikvision Integration',
+      state: 'PARTIAL',
+      reason: 'ISAPI transport ready, XML parsing incomplete'
+    });
+    
+    this.register({
+      id: 'devices.dahua',
+      name: 'Dahua Integration',
+      state: 'PARTIAL',
+      reason: 'Basic adapter exists, many methods unfinished'
+    });
+    
+    // Security & Compliance
+    this.register({
+      id: 'security.tpm',
+      name: 'TPM Attestation',
+      state: 'PARTIAL',
+      reason: 'Framework exists, quote verification incomplete'
+    });
+    
+    this.register({
+      id: 'security.secure-boot',
+      name: 'Secure Boot',
+      state: 'PARTIAL',
+      reason: 'Detection implemented, verification incomplete'
+    });
+    
+    this.register({
+      id: 'compliance.reports',
+      name: 'Compliance Reports',
+      state: 'AVAILABLE',
+      reason: 'Report generation operational'
+    });
+  }
+  
   /**
-   * GET /v1/capabilities/summary
-   * Get summary statistics
+   * Register a capability
    */
-  fastify.get('/v1/capabilities/summary', async (request, reply) => {
-    ensureInitialized();
-
-    try {
-      const summary = registry.getSummary();
-      const stats = getCapabilityStats();
-
-      reply.send({
-        success: true,
-        data: {
-          ...summary,
-          stats,
-        },
-        timestamp: new Date().toISOString(),
-      });
-    } catch (error) {
-      fastify.log.error(error, 'Failed to get capability summary');
-      reply.status(500).send({
-        success: false,
-        error: 'Failed to retrieve capability summary',
-        message: error instanceof Error ? error.message : 'Unknown error',
-      });
-    }
-  });
-
+  register(capability: CapabilityInfo): void {
+    this.capabilities.set(capability.id, {
+      ...capability,
+      since: capability.since || new Date().toISOString()
+    });
+  }
+  
   /**
-   * GET /v1/capabilities/tier/:tier
-   * Get capabilities by tier (REAL, READY, PLANNED)
+   * Get capability by ID
    */
-  fastify.get<{
-    Params: { tier: string };
-  }>('/v1/capabilities/tier/:tier', async (request, reply) => {
-    ensureInitialized();
-
-    const { tier } = request.params;
-
-    // Validate tier
-    if (!['REAL', 'READY', 'PLANNED'].includes(tier.toUpperCase())) {
-      return reply.status(400).send({
-        success: false,
-        error: 'Invalid tier',
-        message: 'Tier must be one of: REAL, READY, PLANNED',
-      });
-    }
-
-    try {
-      const capabilities = getCapabilitiesByTier(tier.toUpperCase() as CapabilityTier);
-
-      // Check each capability
-      const results = await Promise.all(
-        capabilities.map(async (cap: any) => {
-          const check = await registry.checkCapability(cap.id);
-          return {
-            ...cap,
-            check,
-          };
-        })
-      );
-
-      reply.send({
-        success: true,
-        data: {
-          tier: tier.toUpperCase(),
-          count: results.length,
-          capabilities: results,
-        },
-        timestamp: new Date().toISOString(),
-      });
-    } catch (error) {
-      fastify.log.error(error, `Failed to get capabilities for tier ${tier}`);
-      reply.status(500).send({
-        success: false,
-        error: 'Failed to retrieve capabilities',
-        message: error instanceof Error ? error.message : 'Unknown error',
-      });
-    }
-  });
-
+  get(id: string): CapabilityInfo | undefined {
+    return this.capabilities.get(id);
+  }
+  
   /**
-   * GET /v1/capabilities/category/:category
+   * Get all capabilities
+   */
+  getAll(): CapabilityInfo[] {
+    return Array.from(this.capabilities.values());
+  }
+  
+  /**
+   * Get capabilities by state
+   */
+  getByState(state: CapabilityState): CapabilityInfo[] {
+    return this.getAll().filter(cap => cap.state === state);
+  }
+  
+  /**
    * Get capabilities by category
    */
-  fastify.get<{
-    Params: { category: string };
-  }>('/v1/capabilities/category/:category', async (request, reply) => {
-    ensureInitialized();
-
-    const { category } = request.params;
-
-    // Validate category
-    const validCategories = ['security', 'analytics', 'infrastructure', 'operations', 'integration'];
-    if (!validCategories.includes(category.toLowerCase())) {
-      return reply.status(400).send({
-        success: false,
-        error: 'Invalid category',
-        message: `Category must be one of: ${validCategories.join(', ')}`,
-      });
-    }
-
-    try {
-      const capabilities = getCapabilitiesByCategory(category.toLowerCase() as any);
-
-      // Check each capability
-      const results = await Promise.all(
-        capabilities.map(async (cap: any) => {
-          const check = await registry.checkCapability(cap.id);
-          return {
-            ...cap,
-            check,
-          };
-        })
-      );
-
-      reply.send({
-        success: true,
-        data: {
-          category: category.toLowerCase(),
-          count: results.length,
-          capabilities: results,
-        },
-        timestamp: new Date().toISOString(),
-      });
-    } catch (error) {
-      fastify.log.error(error, `Failed to get capabilities for category ${category}`);
-      reply.status(500).send({
-        success: false,
-        error: 'Failed to retrieve capabilities',
-        message: error instanceof Error ? error.message : 'Unknown error',
-      });
-    }
-  });
-
+  getByCategory(category: string): CapabilityInfo[] {
+    return this.getAll().filter(cap => cap.id.startsWith(category + '.'));
+  }
+  
   /**
-   * GET /v1/capabilities/:id
-   * Get specific capability details with health check
+   * Check if capability is available
    */
-  fastify.get<{
-    Params: { id: string };
-  }>('/v1/capabilities/:id', async (request, reply) => {
-    ensureInitialized();
-
-    const { id } = request.params;
-
-    try {
-      const capability = registry.get(id);
-
-      if (!capability) {
-        return reply.status(404).send({
-          success: false,
-          error: 'Capability not found',
-          message: `No capability found with ID: ${id}`,
-        });
-      }
-
-      const check = await registry.checkCapability(id);
-
-      reply.send({
-        success: true,
-        data: {
-          ...capability,
-          check,
-        },
-        timestamp: new Date().toISOString(),
-      });
-    } catch (error) {
-      fastify.log.error(error, `Failed to get capability ${id}`);
-      reply.status(500).send({
-        success: false,
-        error: 'Failed to retrieve capability',
-        message: error instanceof Error ? error.message : 'Unknown error',
-      });
-    }
-  });
-
+  isAvailable(id: string): boolean {
+    const capability = this.get(id);
+    return capability?.state === 'AVAILABLE';
+  }
+  
   /**
-   * POST /v1/capabilities/check
-   * Force health check on all capabilities
+   * Update capability state
    */
-  fastify.post('/v1/capabilities/check', async (request, reply) => {
-    ensureInitialized();
-
-    try {
-      const results = await registry.checkAll();
-      const summary = registry.getSummary();
-
-      reply.send({
-        success: true,
-        data: {
-          summary,
-          checksPerformed: results.size,
-          results: Array.from(results.entries()).map(([id, check]: [any, any]) => ({
-            id,
-            ...check,
-          })),
-        },
-        timestamp: new Date().toISOString(),
-      });
-    } catch (error) {
-      fastify.log.error(error, 'Failed to check capabilities');
-      reply.status(500).send({
-        success: false,
-        error: 'Failed to check capabilities',
-        message: error instanceof Error ? error.message : 'Unknown error',
-      });
+  updateState(id: string, state: CapabilityState, reason?: string): void {
+    const capability = this.capabilities.get(id);
+    if (capability) {
+      capability.state = state;
+      capability.reason = reason;
+      capability.since = new Date().toISOString();
     }
-  });
-
-  /**
-   * GET /v1/capabilities/stats
-   * Get implementation statistics
-   */
-  fastify.get('/v1/capabilities/stats', async (request, reply) => {
-    ensureInitialized();
-
-    try {
-      const stats = getCapabilityStats();
-
-      reply.send({
-        success: true,
-        data: stats,
-        timestamp: new Date().toISOString(),
-      });
-    } catch (error) {
-      fastify.log.error(error, 'Failed to get capability stats');
-      reply.status(500).send({
-        success: false,
-        error: 'Failed to retrieve capability statistics',
-        message: error instanceof Error ? error.message : 'Unknown error',
-      });
-    }
-  });
+  }
 }
+
+// Singleton registry
+const capabilityRegistry = new CapabilityRegistry();
+
+/**
+ * GET /api/capabilities
+ * Get all capabilities
+ */
+router.get('/', async (req: Request, res: Response) => {
+  try {
+    const capabilities = capabilityRegistry.getAll();
+    
+    res.json({
+      success: true,
+      capabilities,
+      timestamp: new Date().toISOString()
+    });
+    
+  } catch (error) {
+    logger.error('Failed to get capabilities', { error });
+    res.status(500).json({
+      success: false,
+      error: 'Failed to retrieve capabilities'
+    });
+  }
+});
+
+/**
+ * GET /api/capabilities/:id
+ * Get specific capability
+ */
+router.get('/:id', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const capability = capabilityRegistry.get(id);
+    
+    if (!capability) {
+      return res.status(404).json({
+        success: false,
+        error: `Capability '${id}' not found`
+      });
+    }
+    
+    res.json({
+      success: true,
+      capability
+    });
+    
+  } catch (error) {
+    logger.error('Failed to get capability', { error, id: req.params.id });
+    res.status(500).json({
+      success: false,
+      error: 'Failed to retrieve capability'
+    });
+  }
+});
+
+/**
+ * GET /api/capabilities/state/:state
+ * Get capabilities by state
+ */
+router.get('/state/:state', async (req: Request, res: Response) => {
+  try {
+    const { state } = req.params;
+    
+    if (!['AVAILABLE', 'PARTIAL', 'UNAVAILABLE', 'DISABLED'].includes(state)) {
+      return res.status(400).json({
+        success: false,
+        error: `Invalid state: ${state}`
+      });
+    }
+    
+    const capabilities = capabilityRegistry.getByState(state as CapabilityState);
+    
+    res.json({
+      success: true,
+      capabilities,
+      count: capabilities.length
+    });
+    
+  } catch (error) {
+    logger.error('Failed to get capabilities by state', { error, state: req.params.state });
+    res.status(500).json({
+      success: false,
+      error: 'Failed to retrieve capabilities'
+    });
+  }
+});
+
+/**
+ * GET /api/capabilities/category/:category
+ * Get capabilities by category
+ */
+router.get('/category/:category', async (req: Request, res: Response) => {
+  try {
+    const { category } = req.params;
+    const capabilities = capabilityRegistry.getByCategory(category);
+    
+    res.json({
+      success: true,
+      capabilities,
+      count: capabilities.length,
+      category
+    });
+    
+  } catch (error) {
+    logger.error('Failed to get capabilities by category', { error, category: req.params.category });
+    res.status(500).json({
+      success: false,
+      error: 'Failed to retrieve capabilities'
+    });
+  }
+});
+
+/**
+ * POST /api/capabilities/check
+ * Check multiple capabilities at once
+ */
+router.post('/check', async (req: Request, res: Response) => {
+  try {
+    const { capabilities: ids } = req.body;
+    
+    if (!Array.isArray(ids)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Expected array of capability IDs'
+      });
+    }
+    
+    const results: Record<string, boolean> = {};
+    const details: Record<string, CapabilityInfo | null> = {};
+    
+    for (const id of ids) {
+      const capability = capabilityRegistry.get(id);
+      results[id] = capability?.state === 'AVAILABLE';
+      details[id] = capability || null;
+    }
+    
+    res.json({
+      success: true,
+      results,
+      details
+    });
+    
+  } catch (error) {
+    logger.error('Failed to check capabilities', { error });
+    res.status(500).json({
+      success: false,
+      error: 'Failed to check capabilities'
+    });
+  }
+});
+
+/**
+ * Export registry for programmatic access
+ */
+export { capabilityRegistry, type CapabilityInfo, type CapabilityState };
+export default router;

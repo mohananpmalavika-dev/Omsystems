@@ -45,6 +45,8 @@
  */
 
 import { BaseDetector, type DetectionFrame, DetectionResult } from './base-detector.js';
+import { Pool } from 'pg';
+import { getIncidentQueryService } from '../services/incident-query.service.js';
 
 /**
  * Report configuration
@@ -221,8 +223,12 @@ export class AIReportingEngine extends BaseDetector {
     avgGenerationTime: 0
   };
   
-  constructor() {
+  // Database pool for incident queries
+  private pool: Pool | null = null;
+  
+  constructor(pool?: Pool) {
     super('ai-reporting-engine', '1.0.0');
+    this.pool = pool || null;
   }
   
   async initialize(): Promise<void> {
@@ -257,7 +263,10 @@ export class AIReportingEngine extends BaseDetector {
   /**
    * Generate daily incident summary
    */
-  async generateDailyIncidentSummary(date: Date = new Date()): Promise<GeneratedReport> {
+  async generateDailyIncidentSummary(
+    tenantId: string,
+    date: Date = new Date()
+  ): Promise<GeneratedReport> {
     const startTime = Date.now();
     
     const startOfDay = new Date(date);
@@ -265,32 +274,22 @@ export class AIReportingEngine extends BaseDetector {
     const endOfDay = new Date(date);
     endOfDay.setHours(23, 59, 59, 999);
     
-    // Aggregate incident data (would come from other modules)
-    const incidents = this.getIncidentsInRange(startOfDay, endOfDay);
+    // Get incident data from database
+    const incidents = await this.getIncidentsInRange(tenantId, startOfDay, endOfDay);
     
     const totalIncidents = incidents.length;
     const criticalIncidents = incidents.filter(i => i.severity === 'critical').length;
+    const highIncidents = incidents.filter(i => i.severity === 'high').length;
     const resolvedIncidents = incidents.filter(i => i.resolved).length;
     
     // Top incident types
-    const incidentTypeCount = new Map<string, number>();
-    incidents.forEach(i => {
-      incidentTypeCount.set(i.type, (incidentTypeCount.get(i.type) || 0) + 1);
-    });
-    
-    const topTypes = Array.from(incidentTypeCount.entries())
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 5);
+    const topTypes = await this.getTopIncidentTypes(tenantId, startOfDay, endOfDay, 5);
     
     // Top locations
-    const locationCount = new Map<string, number>();
-    incidents.forEach(i => {
-      locationCount.set(i.location, (locationCount.get(i.location) || 0) + 1);
-    });
+    const topLocations = await this.getTopIncidentLocations(tenantId, startOfDay, endOfDay, 5);
     
-    const topLocations = Array.from(locationCount.entries())
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 5);
+    // Hourly distribution
+    const hourlyDistribution = await this.getHourlyDistribution(tenantId, startOfDay, endOfDay);
     
     const report: GeneratedReport = {
       id: `daily_incident_${date.toISOString().split('T')[0]}`,
@@ -315,10 +314,15 @@ export class AIReportingEngine extends BaseDetector {
             trend: criticalIncidents > 5 ? 'up' : 'stable'
           },
           {
+            name: 'High Priority Incidents',
+            value: highIncidents,
+            trend: 'stable'
+          },
+          {
             name: 'Resolution Rate',
             value: totalIncidents > 0 ? Math.round((resolvedIncidents / totalIncidents) * 100) : 0,
             unit: '%',
-            trend: 'up'
+            trend: resolvedIncidents / totalIncidents > 0.8 ? 'up' : 'stable'
           }
         ]
       },
@@ -327,13 +331,13 @@ export class AIReportingEngine extends BaseDetector {
           id: 'top_types',
           title: 'Top Incident Types',
           type: 'table',
-          data: topTypes.map(([type, count]) => ({ type, count }))
+          data: topTypes
         },
         {
           id: 'top_locations',
           title: 'Top Incident Locations',
           type: 'table',
-          data: topLocations.map(([location, count]) => ({ location, count }))
+          data: topLocations
         },
         {
           id: 'hourly_distribution',
@@ -344,7 +348,7 @@ export class AIReportingEngine extends BaseDetector {
             xAxis: 'hour',
             yAxis: 'count'
           },
-          data: this.getHourlyDistribution(incidents)
+          data: hourlyDistribution
         }
       ],
       insights: this.generateIncidentInsights(incidents),
@@ -1116,33 +1120,98 @@ export class AIReportingEngine extends BaseDetector {
   // Helper Methods
   // ===========================
   
-  private getIncidentsInRange(start: Date, end: Date): any[] {
-    // In production, would query from database or other modules
-    // Mock data for demonstration
-    return [
-      { type: 'intrusion', location: 'Branch A', severity: 'high', timestamp: new Date(), resolved: true },
-      { type: 'fire_alarm', location: 'Branch B', severity: 'critical', timestamp: new Date(), resolved: true },
-      { type: 'loitering', location: 'Branch A', severity: 'medium', timestamp: new Date(), resolved: false }
-    ];
+  /**
+   * Get incidents in range from database
+   * 
+   * IMPORTANT: This now queries real incident data from PostgreSQL
+   * No mock data is returned
+   */
+  private async getIncidentsInRange(tenantId: string, start: Date, end: Date): Promise<any[]> {
+    if (!this.pool) {
+      console.warn('[AIReportingEngine] Database pool not configured, cannot query incidents');
+      return [];
+    }
+
+    try {
+      const queryService = getIncidentQueryService(this.pool);
+      const incidents = await queryService.getIncidentsInRange(tenantId, start, end);
+      return incidents;
+    } catch (error) {
+      console.error('[AIReportingEngine] Failed to query incidents:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Get top incident types from database
+   */
+  private async getTopIncidentTypes(
+    tenantId: string,
+    start: Date,
+    end: Date,
+    limit: number
+  ): Promise<Array<{ type: string; count: number }>> {
+    if (!this.pool) {
+      return [];
+    }
+
+    try {
+      const queryService = getIncidentQueryService(this.pool);
+      return await queryService.getIncidentTypeDistribution(tenantId, start, end, limit);
+    } catch (error) {
+      console.error('[AIReportingEngine] Failed to query incident types:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Get top incident locations from database
+   */
+  private async getTopIncidentLocations(
+    tenantId: string,
+    start: Date,
+    end: Date,
+    limit: number
+  ): Promise<Array<{ location: string; count: number }>> {
+    if (!this.pool) {
+      return [];
+    }
+
+    try {
+      const queryService = getIncidentQueryService(this.pool);
+      return await queryService.getIncidentLocationDistribution(tenantId, start, end, limit);
+    } catch (error) {
+      console.error('[AIReportingEngine] Failed to query incident locations:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Get hourly distribution from database
+   */
+  private async getHourlyDistribution(
+    tenantId: string,
+    start: Date,
+    end: Date
+  ): Promise<Array<{ hour: number; count: number }>> {
+    if (!this.pool) {
+      // Return empty 24-hour array if database not available
+      return Array.from({ length: 24 }, (_, hour) => ({ hour, count: 0 }));
+    }
+
+    try {
+      const queryService = getIncidentQueryService(this.pool);
+      return await queryService.getHourlyDistribution(tenantId, start, end);
+    } catch (error) {
+      console.error('[AIReportingEngine] Failed to query hourly distribution:', error);
+      return Array.from({ length: 24 }, (_, hour) => ({ hour, count: 0 }));
+    }
   }
   
-  private getHourlyDistribution(incidents: any[]): any[] {
-    const distribution = new Map<number, number>();
-    
-    for (let hour = 0; hour < 24; hour++) {
-      distribution.set(hour, 0);
-    }
-    
-    incidents.forEach(incident => {
-      const hour = incident.timestamp.getHours();
-      distribution.set(hour, (distribution.get(hour) || 0) + 1);
-    });
-    
-    return Array.from(distribution.entries()).map(([hour, count]) => ({
-      hour,
-      count
-    }));
-  }
+  /**
+   * Remove old getHourlyDistribution that operated on in-memory incidents
+   * Now replaced by database query method above
+   */
   
   private generateIncidentInsights(incidents: any[]): any[] {
     const insights = [];
@@ -1318,19 +1387,32 @@ export class AIReportingEngine extends BaseDetector {
 /**
  * Export factory function
  */
-export function createAIReportingEngine(): AIReportingEngine {
-  return new AIReportingEngine();
+export function createAIReportingEngine(pool?: Pool): AIReportingEngine {
+  return new AIReportingEngine(pool);
 }
 
 /**
  * Example Usage:
  * 
- * // Initialize reporting engine
- * const reporting = createAIReportingEngine();
+ * import { Pool } from 'pg';
  * 
- * // Generate daily incident summary
- * const dailyReport = await reporting.generateDailyIncidentSummary();
+ * // Initialize database connection
+ * const pool = new Pool({
+ *   host: 'localhost',
+ *   database: 'surveillance',
+ *   user: 'postgres',
+ *   password: 'password',
+ * });
+ * 
+ * // Initialize reporting engine with database access
+ * const reporting = createAIReportingEngine(pool);
+ * 
+ * // Generate daily incident summary (requires tenantId)
+ * const tenantId = '550e8400-e29b-41d4-a716-446655440000';
+ * const dailyReport = await reporting.generateDailyIncidentSummary(tenantId);
  * console.log('Daily Report:', dailyReport.summary);
+ * console.log('Total Incidents:', dailyReport.summary.keyMetrics[0].value);
+ * console.log('Data Source: Real PostgreSQL database');
  * 
  * // Generate weekly analytics
  * const weeklyReport = await reporting.generateWeeklyAnalyticsSummary();
@@ -1344,11 +1426,18 @@ export function createAIReportingEngine(): AIReportingEngine {
  * const dashboard = await reporting.generateExecutiveDashboard();
  * console.log('Dashboard KPIs:', dashboard.kpis);
  * 
- * // Export report
- * const filename = await reporting.exportReport(dailyReport, 'csv');
+ * // Export report to PDF
+ * const filename = await reporting.exportReport(dailyReport, 'pdf');
  * console.log('Exported to:', filename);
+ * 
+ * // Export to Excel
+ * const excelFile = await reporting.exportReport(dailyReport, 'excel');
+ * console.log('Excel report:', excelFile);
  * 
  * // Get metrics
  * const metrics = reporting.getMetrics();
  * console.log('Reporting metrics:', metrics);
+ * 
+ * // NOTE: All incident data is now retrieved from PostgreSQL
+ * // No mock data is generated
  */
