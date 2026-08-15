@@ -54,7 +54,6 @@ export function useVideoWallScheduler({ decoderLimit }: { decoderLimit: number }
           priority: "P4_VISIBLE",
           priorityScore: 0,
           decoderAllocated: actualMode === "MAIN_STREAM" || actualMode === "SUB_STREAM",
-          degradationReason: "NONE",
         } as CameraPlaybackState);
       }
     } catch (e) {
