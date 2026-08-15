@@ -35,6 +35,7 @@ import { registerUserRoutes } from "./routes/user.routes.js";
 import { registerAnalyticsRoutes } from "./routes/analytics.routes.js";
 import { registerReportsRoutes } from "./routes/reports.routes.js";
 import { registerLiveOperationsRoutes } from "./routes/live-operations.routes.js";
+import { registerMediaSessionRoutes } from "./routes/media-session.routes.js";
 import { registerDashboardRoutes } from "./routes/dashboard.routes.js";
 import { registerCredentialsRoutes } from "./routes/credentials.routes.js";
 import { registerBulkUploadRoutes } from "./routes/bulk-upload.routes.js";
@@ -2344,6 +2345,23 @@ export async function buildApp(options?: {
   });
   await registerEvidenceRoutes(app, store, exportWorker);
   await registerLiveOperationsRoutes(app, store);
+  registerMediaSessionRoutes(app, store);
+  
+  // Register media orchestration routes
+  try {
+    const { mediaRoutes } = await import("./media/media.routes.js");
+    await app.register(mediaRoutes, { prefix: "/api/media" });
+    
+    // Initialize media integrations
+    const { getMediaIntegrationService } = await import("./media/integration.service.js");
+    const integrationService = getMediaIntegrationService(store);
+    await integrationService.initialize();
+    
+    app.log.info("Media orchestration routes and integrations initialized");
+  } catch (err: unknown) {
+    app.log.error({ err }, "Failed to register media orchestration routes");
+  }
+  
   await registerDashboardRoutes(app, store);
   await registerCredentialsRoutes(app, (store as any).pool);
   await registerBulkUploadRoutes(app, store);
