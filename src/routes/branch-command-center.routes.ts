@@ -87,8 +87,8 @@ export async function registerBranchCommandCenterRoutes(
         lastSeenAt: snapshot.network.observedAt,
       },
       gateway: {
-        status: snapshot.network.gatewayOnline ? "ONLINE" : "ONLINE",
-        lastHeartbeatAt: snapshot.network.lastProbeAt,
+        status: snapshot.network.gateway?.reachable ? "ONLINE" : "OFFLINE",
+        lastHeartbeatAt: snapshot.network.gateway?.lastSeenAt ?? snapshot.network.observedAt,
         version: "1.4.2",
       },
       recorder: {
