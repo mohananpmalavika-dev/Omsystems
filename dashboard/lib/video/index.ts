@@ -26,8 +26,9 @@ export type {
   CameraContext,
   CapacityBenchmarkResult,
   CameraDeviceState,
-  TileGeometry,
 } from "./types";
+
+export type { TileGeometry } from "./stream-utils";
 
 // Stream Utilities
 export {

@@ -42,6 +42,7 @@ export interface SnapshotServiceCallbacks {
 export class SnapshotService {
   private snapshots: Map<string, SnapshotMetadata> = new Map();
   private intervals: Map<string, NodeJS.Timeout> = new Map();
+  private priorities: Map<string, CameraPriorityClass> = new Map();
   private callbacks: SnapshotServiceCallbacks;
   private baseUrl: string;
 
@@ -58,6 +59,10 @@ export class SnapshotService {
     priority: CameraPriorityClass,
     customIntervalMs?: number
   ): void {
+    if (!customIntervalMs && this.intervals.has(cameraId) && this.priorities.get(cameraId) === priority) {
+      return;
+    }
+
     // Clear existing interval if any
     this.stopSnapshot(cameraId);
 
@@ -74,6 +79,7 @@ export class SnapshotService {
     }, intervalMs);
 
     this.intervals.set(cameraId, interval);
+    this.priorities.set(cameraId, priority);
   }
 
   /**
@@ -84,6 +90,7 @@ export class SnapshotService {
     if (interval) {
       clearInterval(interval);
       this.intervals.delete(cameraId);
+      this.priorities.delete(cameraId);
       console.log(`[SnapshotService] Stopped snapshots for ${cameraId}`);
     }
   }
@@ -131,6 +138,10 @@ export class SnapshotService {
     return this.intervals.size;
   }
 
+  setCallbacks(callbacks: SnapshotServiceCallbacks): void {
+    this.callbacks = callbacks;
+  }
+
   // ==========================================================================
   // PRIVATE METHODS
   // ==========================================================================
@@ -143,7 +154,8 @@ export class SnapshotService {
     priority: CameraPriorityClass
   ): Promise<void> {
     try {
-      const url = `${this.baseUrl}/cameras/${cameraId}/snapshot?t=${Date.now()}`;
+      const baseUrl = this.baseUrl.replace(/\/$/, "");
+      const url = `${baseUrl}/${encodeURIComponent(cameraId)}/snapshot?t=${Date.now()}`;
       
       const response = await fetch(url, {
         method: 'GET',

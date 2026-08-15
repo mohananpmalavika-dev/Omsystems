@@ -136,6 +136,47 @@ export function createOperationalHealthRoutes(pool: Pool): Router {
   });
 
   /**
+   * GET /v1/operations/health/branches/:branchId/operational-snapshot
+   *
+   * Alias endpoint that returns a single canonical operational snapshot for a branch.
+   * Designed for Branch Command Center pages to fetch one coherent payload.
+   */
+  router.get('/branches/:branchId/operational-snapshot', async (req: AuthRequest, res: Response) => {
+    try {
+      const { tenantId, userScope } = req.context || {};
+      const { branchId } = req.params;
+
+      if (!tenantId) {
+        return res.status(401).json({
+          success: false,
+          error: 'Unauthorized'
+        });
+      }
+
+      const snapshot = await healthService.getBranchHealth(tenantId, branchId);
+
+      if (!snapshot) {
+        return res.status(404).json({
+          success: false,
+          error: 'Branch not found'
+        });
+      }
+
+      // Return the same canonical health model as the detailed branch endpoint
+      res.json({
+        success: true,
+        data: snapshot
+      });
+    } catch (error) {
+      console.error('Error fetching operational snapshot:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Failed to fetch operational snapshot'
+      });
+    }
+  });
+
+  /**
    * GET /v1/operations/health/cameras
    * Get camera health metrics with filtering
    */

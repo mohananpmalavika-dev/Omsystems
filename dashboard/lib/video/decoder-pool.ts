@@ -26,6 +26,7 @@ export interface DecoderPoolCallbacks {
 
 export class DecoderPool {
   private handles: Map<string, DecoderHandle> = new Map();
+  private previousFrameCounts = new Map<string, { totalFrames: number; droppedFrames: number }>();
   private callbacks: DecoderPoolCallbacks;
   private nextHandleId = 0;
 
@@ -94,6 +95,7 @@ export class DecoderPool {
     }
 
     this.handles.delete(cameraId);
+    this.previousFrameCounts.delete(cameraId);
     this.callbacks.onDecoderReleased?.(cameraId);
   }
 
@@ -163,6 +165,18 @@ export class DecoderPool {
     }
 
     handle.videoElement = videoElement;
+  }
+
+  /**
+   * Clear a React-owned video element reference without releasing the decoder
+   * reservation. A replacement player can attach again on its next render.
+   */
+  detachVideoElement(cameraId: string, videoElement?: HTMLVideoElement): void {
+    const handle = this.handles.get(cameraId);
+    if (!handle || (videoElement && handle.videoElement !== videoElement)) {
+      return;
+    }
+    handle.videoElement = undefined;
   }
 
   /**
@@ -300,10 +314,22 @@ export class DecoderPool {
         const totalFrames = quality.totalVideoFrames || 0;
         const droppedFrames = quality.droppedVideoFrames || 0;
 
+        const cameraId = Array.from(this.handles.entries()).find(
+          ([, handle]) => handle.videoElement === videoElement,
+        )?.[0];
+        const previous = cameraId ? this.previousFrameCounts.get(cameraId) : undefined;
+        const decodedSinceLastSample = Math.max(0, totalFrames - (previous?.totalFrames ?? totalFrames));
+        const droppedSinceLastSample = Math.max(0, droppedFrames - (previous?.droppedFrames ?? droppedFrames));
+        if (cameraId) {
+          this.previousFrameCounts.set(cameraId, { totalFrames, droppedFrames });
+        }
+
         return {
           totalFrames,
           droppedFrames,
-          droppedFrameRatio: totalFrames > 0 ? droppedFrames / totalFrames : 0,
+          droppedFrameRatio: decodedSinceLastSample > 0
+            ? droppedSinceLastSample / decodedSinceLastSample
+            : 0,
           bufferHealthMs: this.estimateBufferHealth(videoElement),
           stallCount: 0, // Would need to track separately
         };

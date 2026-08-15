@@ -488,6 +488,22 @@ button { cursor: pointer; }
 .camera-meta span { display: block; margin-top: 2px; color: #8c96a4; font-size: 8px; }
 .camera-channel { display: flex; align-items: center; gap: 4px; color: #8c96a4; font-size: 8px; }
 .live-video { width: 100%; height: 100%; object-fit: cover; }
+.viewer-playback-status {
+  position: absolute;
+  left: 8px;
+  bottom: 8px;
+  max-width: calc(100% - 16px);
+  overflow: hidden;
+  color: #e5e7eb;
+  background: rgba(15, 23, 42, .8);
+  border-radius: 4px;
+  padding: 3px 6px;
+  font-size: 10px;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  text-transform: capitalize;
+  white-space: nowrap;
+}
 .feed-error {
   position: absolute; inset: 0; display: grid; place-items: center; padding: 20px;
   color: #ffc1c1; background: #26191d; text-align: center; font-size: 10px;

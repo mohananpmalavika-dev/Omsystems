@@ -115,7 +115,8 @@ export type DegradationReason =
   | "PIXEL_CAPACITY"
   | "NETWORK"
   | "STREAM_FAILURE"
-  | "EVICTED_BY_PRIORITY";
+  | "EVICTED_BY_PRIORITY"
+  | "DEVICE_OFFLINE";
 
 export interface CameraPlaybackState {
   cameraId: string;
@@ -140,6 +141,7 @@ export interface ScheduledCamera {
   reason: ScheduleReason;
   streamProfile?: StreamProfile;
   streamCost?: StreamCost;
+  degradationReason?: DegradationReason;
 }
 
 export type ScheduleReason =
@@ -210,10 +212,17 @@ export interface CameraContext {
   isVisible: boolean;
   branchSelected: boolean;
   isRotationallyDue: boolean;
+  /** Device reachability is independent from the viewer's playback decision. */
+  isOnline?: boolean;
+  /** A temporary viewer-side stream failure; it does not change device health. */
+  streamUnavailable?: boolean;
   
   // Available streams
   mainStream?: StreamProfile;
   subStream?: StreamProfile;
+  /** All advertised alternatives, ordered by the capability API preference. */
+  mainStreams?: StreamProfile[];
+  subStreams?: StreamProfile[];
   
   // Current state
   currentPlaybackState?: CameraPlaybackState;

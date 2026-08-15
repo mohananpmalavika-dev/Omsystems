@@ -28,8 +28,7 @@ import { TileStateIndicator } from "./tile-state-indicator";
 import type { Camera, LiveSessionResponse, RecordingJob, RecordingMode } from "@/lib/types";
 import type { TileStreamState, PresentationMode } from "@/lib/media-types";
 import { startLiveFromBrowser } from "@/lib/live-client";
-import { StreamSchedulerProvider, useStreamScheduler } from "./stream-scheduler";
-import { useVideoWallScheduler } from "@/hooks/useVideoWallScheduler";
+import { useVideoWallScheduler } from "@/hooks/use-video-wall-scheduler";
 
 export type GridSize = "1x1" | "2x2" | "3x3" | "4x4" | "5x5" | "6x6" | "7x7" | "8x8" | "9x9" | "10x10" | "11x11" | "12x12";
 
@@ -117,12 +116,13 @@ export function EnhancedCameraGrid({
   const [savedLayouts, setSavedLayouts] = useState<GridLayout[]>([]);
   const [visibleRange, setVisibleRange] = useState<VisibleRange>({ start: 0, end: 50 });
   const [sequencing, setSequencing] = useState(true);
-  const [sequenceOffset, setSequenceOffset] = useState(0);
+  const [operatorSelectedCameraId, setOperatorSelectedCameraId] = useState<string | null>(null);
   const [draggedCamera, setDraggedCamera] = useState<{ camera: Camera; fromPosition: number } | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const observerRef = useRef<IntersectionObserver | null>(null);
   const autoAttempted = useRef(new Set<string>());
   const initialLayoutApplied = useRef(false);
+  const activeStreamTypesRef = useRef(new Map<string, "main" | "sub">());
 
   // Track which cameras have orchestrator-managed sessions
   const orchestratorSessions = useMemo(() => {
@@ -151,7 +151,6 @@ export function EnhancedCameraGrid({
   };
 
   const totalPositions = gridSizeMap[gridSize];
-  const prioritySet = useMemo(() => new Set(priorityCameraIds), [priorityCameraIds]);
   const decoderCapacityOptions = useMemo(
     () => getDecoderCapacityOptions(maxConcurrentStreams),
     [maxConcurrentStreams],
@@ -159,33 +158,59 @@ export function EnhancedCameraGrid({
 
   // Use the DecoderBudgetManager hook (dynamic budget based on hardware/GPU and maxConcurrentStreams)
   const {
-    decoderBudget,
     decoderLimit,
     setUserPreference: setDecoderPreference,
     setActiveCount,
   } = useDecoderBudgetManager({ maxConcurrentStreams, enableGPUAcceleration });
 
-  // Phase 1: lightweight scheduler wrapper exposes conservative viewer capacity and per-camera scheduled states
-  const { capacity, scheduledStates } = useVideoWallScheduler({ decoderLimit });
+  const schedulerGridPositions = useMemo(() => new Map(
+    Array.from(gridPositions.entries()).map(([position, entry]) => [position, {
+      cameraId: entry.camera.id,
+      stream: entry.stream,
+      priority: entry.priority,
+    }]),
+  ), [gridPositions]);
+  const schedulerTileGeometry = useMemo(() => {
+    const columns = Number(gridSize.split("x")[0]);
+    const viewportWidth = containerRef.current?.clientWidth ??
+      (typeof window === "undefined" ? 1280 : window.innerWidth);
+    const width = Math.max(1, Math.floor(viewportWidth / columns));
+    return { width, height: Math.max(1, Math.floor(width * 9 / 16)) };
+  }, [gridSize]);
+  const {
+    schedule,
+    playbackStates,
+    snapshotUrls,
+    capacity,
+    budget,
+    activeDecoderCount,
+    snapshotCount,
+    attachVideoElement,
+    markPlaybackActive,
+    markPlaybackDeferred,
+    reportPlaybackFailure,
+  } = useVideoWallScheduler({
+    cameras,
+    visibleRange,
+    gridPositions: schedulerGridPositions,
+    priorityCameraIds,
+    operatorSelectedCameraId,
+    maxDecoderLimit: decoderLimit,
+    rotationEnabled: sequencing,
+    tileGeometry: schedulerTileGeometry,
+  });
 
   useEffect(() => {
-    // keep the budget aware of current active sessions
-    setActiveCount(sessions.size);
-  }, [sessions.size, setActiveCount]);
+    setActiveCount(activeDecoderCount);
+  }, [activeDecoderCount, setActiveCount]);
 
-  useEffect(() => onActiveStreamsChange?.(sessions.size), [onActiveStreamsChange, sessions.size]);
+  useEffect(() => onActiveStreamsChange?.(activeDecoderCount), [activeDecoderCount, onActiveStreamsChange]);
 
   useEffect(() => {
     onMonitoredCamerasChange?.(
       [...gridPositions.values()].map((entry) => entry.camera.id).sort(),
     );
   }, [gridPositions, onMonitoredCamerasChange]);
-
-  useEffect(() => {
-    if (!sequencing || gridPositions.size <= decoderLimit) return;
-    const timer = window.setInterval(() => setSequenceOffset((current) => current + decoderLimit), 15_000);
-    return () => window.clearInterval(timer);
-  }, [decoderLimit, gridPositions.size, sequencing]);
 
   // GPU acceleration classes
   const gpuAccelClass = enableGPUAcceleration ? "gpu-accelerated" : "";
@@ -373,7 +398,7 @@ export function EnhancedCameraGrid({
   };
 
   const handleStartLive = useCallback(async (cameraId: string, stream: "main" | "sub" = "sub") => {
-    if (sessions.has(cameraId) || loading.has(cameraId) || sessions.size + loading.size >= decoderLimit) return;
+    if (sessions.has(cameraId) || loading.has(cameraId)) return;
     setLoading((prev) => new Set(prev).add(cameraId));
 
     try {
@@ -391,13 +416,15 @@ export function EnhancedCameraGrid({
       const result = await requestSession(cameraId, branchId, {
         purpose,
         preferredQuality: quality,
-        priority: priorityCameraIds.includes(cameraId) ? 800 : 0,
+        priority: operatorSelectedCameraId === cameraId || priorityCameraIds.includes(cameraId) ? 1_000 : 0,
       });
 
       if (result.session) {
         // Use traditional live client for actual streaming
         const session = await startLiveFromBrowser(cameraId, stream);
         setSessions((prev) => new Map(prev).set(cameraId, session));
+        activeStreamTypesRef.current.set(cameraId, stream);
+        markPlaybackActive(cameraId);
 
         // Update stream state based on quality
         const streamState: TileStreamState = stream === "main" 
@@ -406,10 +433,13 @@ export function EnhancedCameraGrid({
         updateStreamState(cameraId, streamState);
       } else {
         updateStreamState(cameraId, "ERROR", result.reason);
+        reportPlaybackFailure(cameraId, result.reason);
       }
     } catch (error) {
       console.error("Live session error:", error);
-      updateStreamState(cameraId, "ERROR", error instanceof Error ? error.message : "Unknown error");
+      const reason = error instanceof Error ? error.message : "Unknown error";
+      updateStreamState(cameraId, "ERROR", reason);
+      reportPlaybackFailure(cameraId, reason);
     } finally {
       setLoading((prev) => {
         const newSet = new Set(prev);
@@ -417,13 +447,62 @@ export function EnhancedCameraGrid({
         return newSet;
       });
     }
-  }, [decoderLimit, loading, sessions, cameras, requestSession, updateStreamState, presentationMode, priorityCameraIds]);
+  }, [
+    cameras,
+    loading,
+    markPlaybackActive,
+    operatorSelectedCameraId,
+    presentationMode,
+    priorityCameraIds,
+    reportPlaybackFailure,
+    requestSession,
+    sessions,
+    updateStreamState,
+  ]);
 
-  // Only visible slots own browser decoders. Dense walls start substreams first
-  // and cap concurrent sessions even when the saved layout contains 144 slots.
-  // Scheduling is delegated to StreamSchedulerProvider below. The provider will invoke onStartStream
-  // which is implemented by handleStartLive. This avoids each tile starting decoders independently and
-  // centralizes sequencing/priority decisions in one place.
+  const handleRequestLive = useCallback((cameraId: string) => {
+    setOperatorSelectedCameraId(cameraId);
+    updateStreamState(cameraId, "QUEUED");
+  }, [updateStreamState]);
+
+  useEffect(() => {
+    const desiredLive = new Map(
+      Array.from(schedule.values())
+        .filter((scheduled) => scheduled.mode === "MAIN_STREAM" || scheduled.mode === "SUB_STREAM")
+        .map((scheduled) => [
+          scheduled.cameraId,
+          scheduled.mode === "MAIN_STREAM" ? "main" as const : "sub" as const,
+        ]),
+    );
+
+    for (const [cameraId] of sessions) {
+      const desiredStream = desiredLive.get(cameraId);
+      if (desiredStream && activeStreamTypesRef.current.get(cameraId) === desiredStream) continue;
+      activeStreamTypesRef.current.delete(cameraId);
+      markPlaybackDeferred(cameraId);
+      updateStreamState(cameraId, "PAUSED");
+      setSessions((current) => {
+        const next = new Map(current);
+        next.delete(cameraId);
+        return next;
+      });
+      void closeSession(cameraId);
+    }
+
+    for (const [cameraId, stream] of desiredLive) {
+      if (!sessions.has(cameraId) && !loading.has(cameraId)) {
+        void handleStartLive(cameraId, stream);
+      }
+    }
+  }, [
+    closeSession,
+    handleStartLive,
+    loading,
+    markPlaybackDeferred,
+    schedule,
+    sessions,
+    updateStreamState,
+  ]);
 
   const handleToggleRecording = async (cameraId: string) => {
     const camera = cameras.find((item) => item.id === cameraId);
@@ -642,21 +721,8 @@ export function EnhancedCameraGrid({
     );
   }, [enableVirtualScrolling, totalPositions, visibleRange]);
 
-  function GridContent() {
-    const scheduler = useStreamScheduler();
-
-    useEffect(() => {
-      // inform scheduler about grid positions and visible range
-      const posMap = new Map<number, { cameraId: string; stream: "main" | "sub"; priority?: number }>();
-      for (const [pos, entry] of gridPositions) posMap.set(pos, { cameraId: entry.camera.id, stream: entry.stream, priority: entry.priority });
-      scheduler.setGridPositions(posMap);
-      scheduler.setVisibleRange(visibleRange.start, visibleRange.end);
-      scheduler.setPrioritySet(prioritySet);
-      scheduler.setDecoderLimit(decoderLimit);
-    }, [gridPositions, visibleRange, prioritySet, decoderLimit, scheduler]);
-
-    return (
-      <div className="camera-grid-container">
+  return (
+    <div className="camera-grid-container">
       <div className="grid-toolbar">
         <div className="grid-size-selector">
           <button
@@ -778,7 +844,12 @@ export function EnhancedCameraGrid({
           )}
           {capacity && (
             <span className="capacity-control" title="Viewer capacity recommendation">
-              Recommended decoders: {capacity.recommendedDecoderLimit} · Bandwidth cap: {capacity.maxAggregateBitrateMbps} Mbps
+              Live {activeDecoderCount}/{budget?.decoderBudget ?? capacity.recommendedDecoderLimit} · {snapshotCount} snapshots
+            </span>
+          )}
+          {budget && (
+            <span className="capacity-control" title="Resource-aware viewer budget">
+              {budget.bitrateUsageMbps.toFixed(1)}/{budget.bitrateBudgetMbps} Mbps · {(budget.pixelsPerSecondUsage / 1_000_000).toFixed(0)}/{(budget.pixelsPerSecondBudget / 1_000_000).toFixed(0)} MP/s
             </span>
           )}
 
@@ -798,7 +869,7 @@ export function EnhancedCameraGrid({
           </button>
           <div className="performance-indicators">
             <span className="performance-badge decoder-badge">
-              {sessions.size}/{decoderLimit} live
+              {activeDecoderCount}/{budget?.decoderBudget ?? decoderLimit} live
             </span>
             {enableVirtualScrolling && totalPositions > 36 && (
               <span className="performance-badge">
@@ -914,6 +985,19 @@ export function EnhancedCameraGrid({
             );
           }
 
+          const scheduledCamera = schedule.get(camera.id);
+          const playbackState = playbackStates.get(camera.id);
+          const viewerStreamState: TileStreamState = sessions.has(camera.id)
+            ? activeStreamTypesRef.current.get(camera.id) === "main"
+              ? "LIVE_MAINSTREAM"
+              : "LIVE_SUBSTREAM"
+            : scheduledCamera?.mode === "MAIN_STREAM" || scheduledCamera?.mode === "SUB_STREAM"
+              ? "QUEUED"
+              : scheduledCamera?.mode === "SNAPSHOT" || scheduledCamera?.mode === "ROTATING"
+                ? "PAUSED"
+                : tileStates.get(camera.id)?.streamState || "METADATA_ONLY";
+          const viewerReason = playbackState?.degradationReason;
+
           return (
             <VisibilityTracker
               key={i}
@@ -932,9 +1016,9 @@ export function EnhancedCameraGrid({
               >
                 <div className="slot-controls">
                   <TileStateIndicator
-                    streamState={tileStates.get(camera.id)?.streamState || "METADATA_ONLY"}
-                    degraded={tileStates.get(camera.id)?.degraded}
-                    error={tileStates.get(camera.id)?.lastError}
+                    streamState={viewerStreamState}
+                    degraded={Boolean(viewerReason && viewerReason !== "DEVICE_OFFLINE")}
+                    error={viewerReason?.replaceAll("_", " ").toLowerCase() || tileStates.get(camera.id)?.lastError}
                     compact
                   />
                   <button
@@ -956,7 +1040,13 @@ export function EnhancedCameraGrid({
                   camera={camera}
                   session={sessions.get(camera.id)}
                   loading={loading.has(camera.id)}
-                  onStart={() => scheduler.requestStream(camera.id, entry.stream)}
+                  onStart={() => handleRequestLive(camera.id)}
+                  playbackMode={playbackState?.actualMode}
+                  desiredPlaybackMode={scheduledCamera?.mode}
+                  degradationReason={viewerReason}
+                  snapshotUrl={snapshotUrls.get(camera.id)}
+                  onVideoElementChange={(videoElement) => attachVideoElement(camera.id, videoElement)}
+                  onPlaybackError={(reason) => reportPlaybackFailure(camera.id, reason)}
                   index={i}
                   recording={recordings.get(camera.id)}
                   recordingLoading={loading.has(camera.id)}
@@ -1287,12 +1377,5 @@ export function EnhancedCameraGrid({
         }
       `}</style>
     </div>
-  );
-  }
-  // Top-level render uses the StreamSchedulerProvider which centralizes scheduling
-  return (
-    <StreamSchedulerProvider onStartStream={(req) => void handleStartLive(req.cameraId, req.stream)} decoderLimitInitial={decoderLimit} sequencingInitial={sequencing}>
-      <GridContent />
-    </StreamSchedulerProvider>
   );
 }

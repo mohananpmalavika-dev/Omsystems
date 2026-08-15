@@ -8,11 +8,13 @@ export function HlsPlayer({
   bearerToken,
   cameraName,
   onPlaybackError,
+  onVideoElementChange,
 }: {
   url: string;
   bearerToken: string;
   cameraName: string;
   onPlaybackError?: () => void;
+  onVideoElementChange?: (videoElement: HTMLVideoElement | null) => void;
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const playbackErrorRef = useRef(onPlaybackError);
@@ -21,6 +23,13 @@ export function HlsPlayer({
   useEffect(() => {
     playbackErrorRef.current = onPlaybackError;
   }, [onPlaybackError]);
+
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+    onVideoElementChange?.(video);
+    return () => onVideoElementChange?.(null);
+  }, [onVideoElementChange]);
 
   useEffect(() => {
     const video = videoRef.current;

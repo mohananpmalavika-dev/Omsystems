@@ -76,6 +76,20 @@ export async function fetchBranchHealthDetail(branchId: string): Promise<BranchH
 }
 
 /**
+ * Fetch branch operational snapshot (single canonical payload for Branch Command Center)
+ *
+ * This is an alias to the backend snapshot endpoint which returns the canonical
+ * branch health model meant to be consumed by the Branch Command Center UI.
+ */
+export async function fetchBranchOperationalSnapshot(branchId: string): Promise<any> {
+  const response = await fetch(`${API_BASE}/health/branches/${branchId}/operational-snapshot`);
+  if (!response.ok) throw new Error('Failed to fetch branch operational snapshot');
+  const data: ApiResponse<any> = await response.json();
+  if (!data.success || !data.data) throw new Error(data.error || 'Invalid response');
+  return data.data;
+}
+
+/**
  * Fetch cameras health
  */
 export async function fetchCamerasHealth(filters?: CameraHealthFilters) {

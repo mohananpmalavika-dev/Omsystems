@@ -1,5 +1,20 @@
 export type CameraStatus = "online" | "offline" | "degraded" | "unknown" | "alert";
 
+/**
+ * A stream profile advertised by the recorder, camera, or media gateway.
+ * The viewer uses these declared costs when deciding whether a stream can be
+ * decoded locally; it must not infer a main-stream profile in the browser.
+ */
+export interface CameraStreamProfile {
+  type: "MAIN" | "SUB" | "THUMBNAIL";
+  codec: "H264" | "H265" | "AV1" | "MJPEG" | "UNKNOWN";
+  width: number;
+  height: number;
+  fps: number;
+  estimatedBitrateKbps: number;
+  uri?: string;
+}
+
 export type BranchLifecycleStatus = 'ACTIVE' | 'DISABLED' | 'ARCHIVED';
 
 export interface Branch {
@@ -263,6 +278,11 @@ export interface Camera {
   // Optional stream URLs (may be provided by backend or edge agent)
   rtspUrl?: string;
   subStreamUrl?: string;
+  /**
+   * Profiles supplied by the camera capability API. Legacy cameras without
+   * this data use conservative main/substream defaults in the wall scheduler.
+   */
+  streamProfiles?: CameraStreamProfile[];
   capabilities: {
     ptz: boolean;
     audio: boolean;

@@ -238,16 +238,38 @@ export interface TileGeometry {
 export function chooseStreamProfile(
   camera: CameraContext,
   tile: TileGeometry,
-  priorityClass: CameraPriorityClass
+  priorityClass: CameraPriorityClass,
+  viewerCapacity?: Pick<ViewerCapacity, "supportedCodecs" | "preferredCodec">
 ): StreamProfile | undefined {
+  const compatibleProfile = (
+    preferred: StreamProfile | undefined,
+    alternatives: StreamProfile[] | undefined,
+  ): StreamProfile | undefined => {
+    const profiles = alternatives?.length ? alternatives : preferred ? [preferred] : [];
+    if (profiles.length === 0) return undefined;
+
+    const supported = viewerCapacity?.supportedCodecs;
+    const supportedProfiles = supported?.length
+      ? profiles.filter((profile) => supported.includes(profile.codec))
+      : profiles;
+    const candidates = supportedProfiles.length ? supportedProfiles : profiles;
+
+    return candidates.find((profile) => profile.codec === viewerCapacity?.preferredCodec)
+      ?? candidates.find((profile) => profile.codec === "H264")
+      ?? candidates[0];
+  };
+
+  const main = compatibleProfile(camera.mainStream, camera.mainStreams);
+  const sub = compatibleProfile(camera.subStream, camera.subStreams);
+
   // P0 (operator focused) always gets main stream if available
-  if (priorityClass === "P0_OPERATOR_PINNED" && camera.mainStream) {
-    return camera.mainStream;
+  if (priorityClass === "P0_OPERATOR_PINNED" && main) {
+    return main;
   }
   
   // Small tiles should use substream
   if (tile.width < 640 || tile.height < 360) {
-    return camera.subStream || camera.mainStream;
+    return sub || main;
   }
   
   // Medium tiles (4x4 grid or larger single view)
@@ -256,15 +278,15 @@ export function chooseStreamProfile(
     if (
       (priorityClass === "P1_CRITICAL" || priorityClass === "P2_HIGH") &&
       tile.width >= 800 &&
-      camera.mainStream
+      main
     ) {
-      return camera.mainStream;
+      return main;
     }
     
-    return camera.subStream || camera.mainStream;
+    return sub || main;
   }
   
-  return camera.subStream || camera.mainStream;
+  return sub || main;
 }
 
 // ============================================================================

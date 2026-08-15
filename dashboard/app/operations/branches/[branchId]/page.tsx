@@ -20,7 +20,7 @@ import {
   getTimeAgo
 } from "@/lib/types/operational-health";
 import { 
-  fetchBranchHealthDetail,
+  fetchBranchOperationalSnapshot,
   fetchAllCamerasHealth,
   fetchOperationalAlerts
 } from "@/lib/api/operational-health";
@@ -48,15 +48,29 @@ export default function BranchHealthDetailPage() {
   const fetchData = useCallback(async () => {
     try {
       setLoading(true);
-      
-      const [branchData, camerasData, alertsData] = await Promise.all([
-        fetchBranchHealthDetail(branchId),
-        fetchAllCamerasHealth({ branchId }),
+
+      // Fetch the canonical branch snapshot and active alerts in parallel
+      const [snapshotData, alertsData] = await Promise.all([
+        fetchBranchOperationalSnapshot(branchId),
         fetchOperationalAlerts({ branchId, status: 'active', limit: 20 })
       ]);
-      
-      setBranch(branchData);
-      setCameras(camerasData.cameras || []);
+
+      // snapshotData is expected to be compatible with the existing BranchHealthDetail shape
+      setBranch(snapshotData as BranchHealthDetail);
+
+      // If the snapshot contains cameras use them, otherwise fallback to the paginated cameras API
+      if (Array.isArray((snapshotData as any).cameras) && (snapshotData as any).cameras.length > 0) {
+        setCameras((snapshotData as any).cameras as CameraHealth[]);
+      } else {
+        try {
+          const camerasData = await fetchAllCamerasHealth({ branchId });
+          setCameras(camerasData.cameras || []);
+        } catch (err) {
+          console.warn('Failed to fetch cameras separately, continuing without camera list', err);
+          setCameras([]);
+        }
+      }
+
       setAlerts(alertsData.alerts || []);
       setLastRefresh(new Date());
     } catch (error) {

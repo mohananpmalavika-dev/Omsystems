@@ -16,8 +16,9 @@ import {
   Volume2,
   SlidersHorizontal,
 } from "lucide-react";
-import { useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import type { Camera, LiveSessionResponse, RecordingJob, RecordingMode } from "@/lib/types";
+import type { CameraPlaybackMode, DegradationReason } from "@/lib/video/types";
 import { HlsPlayer } from "./hls-player";
 import { PtzControl } from "./ptz-control";
 import { HoldToTalkButton } from "./hold-to-talk-button";
@@ -35,6 +36,12 @@ export function CameraTile({
   onUpdateRecording,
   onBookmark,
   onCreateIncident,
+  playbackMode,
+  desiredPlaybackMode,
+  degradationReason,
+  snapshotUrl,
+  onVideoElementChange,
+  onPlaybackError,
 }: {
   camera: Camera;
   session?: LiveSessionResponse;
@@ -48,6 +55,12 @@ export function CameraTile({
   onUpdateRecording?: (cameraId: string, update: Partial<Omit<RecordingJob, "id" | "cameraId" | "status">>) => void;
   onBookmark: () => void;
   onCreateIncident: () => void;
+  playbackMode?: CameraPlaybackMode;
+  desiredPlaybackMode?: CameraPlaybackMode;
+  degradationReason?: DegradationReason;
+  snapshotUrl?: string;
+  onVideoElementChange?: (videoElement: HTMLVideoElement | null) => void;
+  onPlaybackError?: (reason?: string) => void;
 }) {
   const tileRef = useRef<HTMLElement>(null);
   const isActive = Boolean(session);
@@ -64,6 +77,16 @@ export function CameraTile({
   const [settingsScheduleDays, setSettingsScheduleDays] = useState<number[]>(recording?.schedule?.windows?.[0]?.days ?? [1, 2, 3, 4, 5]);
   const [settingsScheduleStart, setSettingsScheduleStart] = useState(recording?.schedule?.windows?.[0]?.start ?? "09:00");
   const [settingsScheduleEnd, setSettingsScheduleEnd] = useState(recording?.schedule?.windows?.[0]?.end ?? "18:00");
+  const handleVideoElementChange = useCallback((videoElement: HTMLVideoElement | null) => {
+    onVideoElementChange?.(videoElement);
+  }, [onVideoElementChange]);
+  const deferredDescription = degradationReason
+    ? degradationReason.replaceAll("_", " ").toLowerCase()
+    : desiredPlaybackMode === "SNAPSHOT"
+      ? "snapshot refresh"
+      : desiredPlaybackMode === "ROTATING"
+        ? "rotation queue"
+        : null;
 
   const scheduleDayOptions = [
     { label: "Sun", value: 0 },
@@ -163,7 +186,14 @@ export function CameraTile({
               url={session.hls.url}
               bearerToken={session.hls.bearerToken}
               cameraName={camera.name}
-              onPlaybackError={onStart}
+              onPlaybackError={() => onPlaybackError?.("HLS playback failed")}
+              onVideoElementChange={handleVideoElementChange}
+            />
+          ) : snapshotUrl ? (
+            <img
+              src={snapshotUrl}
+              alt={`Latest snapshot from ${camera.name}`}
+              className="live-video"
             />
           ) : (
           <div className={`simulated-feed feed-${(index % 4) + 1}`}>
@@ -202,6 +232,11 @@ export function CameraTile({
             )}
             {loading ? "Authorizing…" : "Watch live"}
           </button>
+        )}
+        {!isActive && deferredDescription && (
+          <span className="viewer-playback-status" title={`Viewer state: ${deferredDescription}`}>
+            {playbackMode === "SUSPENDED" ? `Live deferred: ${deferredDescription}` : deferredDescription}
+          </span>
         )}
 
         <div className="tile-actions">

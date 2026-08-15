@@ -26,7 +26,7 @@ const DEFAULT_DECODER_LIMIT = 24; // Conservative starting point
 const MIN_DECODER_LIMIT = 8;
 const MAX_DECODER_LIMIT = 48;
 const CAPACITY_SAFETY_MARGIN = 0.85; // Use 85% of measured capacity
-const EMERGENCY_RESERVE_RATIO = 0.15; // 15% reserved for P1 alerts
+const EMERGENCY_RESERVE_RATIO = 0.1; // Four slots on a 36-decoder wall
 
 // Default budgets (can be overridden by detection)
 const DEFAULT_BITRATE_BUDGET_MBPS = 25;
@@ -97,7 +97,9 @@ export class ViewerCapacityManager {
     const capacity = await this.getCapacity();
     
     const total = capacity.recommendedDecoderLimit;
-    const emergencyReserve = Math.ceil(total * EMERGENCY_RESERVE_RATIO);
+    const emergencyReserve = total > 1
+      ? Math.min(total - 1, Math.max(1, Math.round(total * EMERGENCY_RESERVE_RATIO)))
+      : 0;
     const normal = total - emergencyReserve;
 
     return {
@@ -240,7 +242,7 @@ export class ViewerCapacityManager {
     try {
       // Check for GPU availability
       const canvas = document.createElement("canvas");
-      const gl = canvas.getGLContext?.("webgl2") || canvas.getContext("webgl");
+      const gl = canvas.getContext("webgl2") || canvas.getContext("webgl");
       
       if (!gl) {
         return "UNAVAILABLE";
@@ -319,17 +321,16 @@ export class ViewerCapacityManager {
     }
 
     // Check available memory
-    if (typeof performance !== "undefined" && "memory" in performance) {
-      // @ts-ignore - memory is non-standard
-      const memory = performance.memory;
-      if (memory) {
-        const availableGB = memory.jsHeapSizeLimit / (1024 * 1024 * 1024);
-        
-        if (availableGB < 2) {
-          estimatedCapacity = Math.min(estimatedCapacity, 16);
-        } else if (availableGB > 4) {
-          estimatedCapacity = Math.min(estimatedCapacity + 8, MAX_DECODER_LIMIT);
-        }
+    const memory = (performance as Performance & {
+      memory?: { jsHeapSizeLimit: number };
+    }).memory;
+    if (memory) {
+      const availableGB = memory.jsHeapSizeLimit / (1024 * 1024 * 1024);
+      
+      if (availableGB < 2) {
+        estimatedCapacity = Math.min(estimatedCapacity, 16);
+      } else if (availableGB > 4) {
+        estimatedCapacity = Math.min(estimatedCapacity + 8, MAX_DECODER_LIMIT);
       }
     }
 
