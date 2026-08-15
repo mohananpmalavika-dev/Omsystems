@@ -2217,12 +2217,23 @@ export async function buildApp(options?: {
     localSearchProvider: federationLocalSearchProvider,
   });
 
-  // Security Posture API endpoint
-  app.get("/api/security/posture", async () => {
-    // The security-operations module is not yet compatible with the control
-    // plane's Node ESM/type contracts. Keep this route explicitly unavailable
-    // instead of breaking the production build or presenting partial data.
-    return unavailableSecurityPosture();
+  // Security operations is intentionally based on data that the control plane
+  // already observes.  Do not let optional external collectors (EDR, TPM,
+  // certificate authority, etc.) make the whole page unavailable: their
+  // evidence is reported separately as UNKNOWN until it is actually supplied.
+  app.get("/api/security/posture", async (request, reply) => {
+    const user = request.currentUser;
+    if (!user) return reply.code(401).send({ error: "unauthorized" });
+
+    try {
+      return await buildLiveSecurityOperationsPosture(store, user);
+    } catch (error) {
+      app.log.error({ error, tenantId: user.tenantId }, "failed to build live security operations posture");
+      return reply.code(500).send({
+        available: false,
+        reason: "security_operations_data_unavailable",
+      });
+    }
   });
   if (extendedStore) {
     await registerDeviceManagementRoutes(app, extendedStore);
@@ -2760,24 +2771,193 @@ function startExportWorker(
   app.log.info({ interval }, "Export worker started");
 }
 
-function unavailableSecurityPosture() {
+async function buildLiveSecurityOperationsPosture(
+  store: ControlPlaneStore,
+  user: NonNullable<Awaited<ReturnType<ControlPlaneStore["getUser"]>>>,
+) {
+  const branches = await store.listAccessibleNodes(user, "analytics:view", "branch");
+  const branchIds = branches.map((branch) => branch.id);
+  const cameras = (await Promise.all(
+    branches.map((branch) => store.listCamerasByBranch(user, branch.id, "analytics:view")),
+  )).flat();
+  const [edgeAgentsByBranch, recordingJobs, storageNodes, telemetry] = await Promise.all([
+    Promise.all(branchIds.map((branchId) => store.listEdgeAgentsByBranch(branchId))),
+    store.listRecordingJobs(cameras.map((camera) => camera.id)),
+    store.listRecordingStorageNodes(user.tenantId),
+    store.listLatestOperationalTelemetry(user.tenantId, branchIds),
+  ]);
+  const edgeAgents = edgeAgentsByBranch.flat();
+  const now = new Date().toISOString();
+
+  const onlineCameras = cameras.filter((camera) => camera.status === "online");
+  const offlineCameras = cameras.filter((camera) => camera.status === "offline");
+  const degradedCameras = cameras.filter((camera) => camera.status === "degraded");
+  const unknownCameras = cameras.filter((camera) => camera.status === "unknown");
+  const onlineEdgeAgents = edgeAgents.filter((agent) => agent.status === "online");
+  const offlineEdgeAgents = edgeAgents.filter((agent) => agent.status === "offline");
+  const pendingEdgeAgents = edgeAgents.filter((agent) => agent.status === "pending");
+  const enabledRecordingJobs = recordingJobs.filter((job) => job.enabled);
+  const stoppedRecordingJobs = recordingJobs.filter((job) => !job.enabled);
+  const healthyStorageNodes = storageNodes.filter((node) => node.status === "healthy");
+  const impairedStorageNodes = storageNodes.filter((node) => node.status === "warning" || node.status === "critical" || node.status === "offline");
+
+  const cameraAvailability = percentage(onlineCameras.length, cameras.length);
+  const edgeAvailability = percentage(onlineEdgeAgents.length, edgeAgents.length);
+  const recordingCoverage = percentage(enabledRecordingJobs.length, cameras.length);
+  const storageHealth = percentage(healthyStorageNodes.length, storageNodes.length);
+  const observedScores = [cameraAvailability, edgeAvailability, recordingCoverage, storageHealth]
+    .filter((score): score is number => score !== null);
+  const operationalCoverage = observedScores.length > 0
+    ? Math.round(observedScores.reduce((total, score) => total + score, 0) / observedScores.length)
+    : null;
+
+  const latestObservation = [
+    ...telemetry.map((item) => item.observedAt),
+    ...cameras.map((camera) => camera.lastSeenAt).filter((value): value is string => !!value),
+    ...edgeAgents.map((agent) => agent.lastSeenAt).filter((value): value is string => !!value),
+    ...storageNodes.map((node) => node.lastSeenAt),
+  ].sort().at(-1) ?? null;
+
+  const liveAlerts = [
+    ...offlineCameras.map((camera) => ({
+      id: `camera-offline:${camera.id}`,
+      type: "camera_connectivity",
+      severity: "HIGH" as const,
+      title: `${camera.name} is offline`,
+      timestamp: camera.lastSeenAt ?? latestObservation ?? now,
+      acknowledged: false,
+    })),
+    ...degradedCameras.map((camera) => ({
+      id: `camera-degraded:${camera.id}`,
+      type: "camera_connectivity",
+      severity: "MEDIUM" as const,
+      title: `${camera.name} is degraded`,
+      timestamp: camera.lastSeenAt ?? latestObservation ?? now,
+      acknowledged: false,
+    })),
+    ...offlineEdgeAgents.map((agent) => ({
+      id: `edge-agent-offline:${agent.id}`,
+      type: "edge_agent_connectivity",
+      severity: "HIGH" as const,
+      title: `${agent.name} edge agent is offline`,
+      timestamp: agent.lastSeenAt ?? latestObservation ?? now,
+      acknowledged: false,
+    })),
+    ...impairedStorageNodes.map((node) => ({
+      id: `storage-${node.status}:${node.id}`,
+      type: "recording_storage",
+      severity: (node.status === "critical" || node.status === "offline" ? "HIGH" : "MEDIUM") as "HIGH" | "MEDIUM",
+      title: `${node.name} storage is ${node.status}`,
+      timestamp: node.lastSeenAt,
+      acknowledged: false,
+    })),
+    ...stoppedRecordingJobs.map((job) => ({
+      id: `recording-stopped:${job.cameraId}`,
+      type: "recording_coverage",
+      severity: "HIGH" as const,
+      title: `Recording is disabled for camera ${job.cameraId}`,
+      timestamp: job.updatedAt,
+      acknowledged: false,
+    })),
+  ].sort((left, right) => right.timestamp.localeCompare(left.timestamp));
+
+  const camerasWithSecretReference = cameras.filter((camera) => Boolean(camera.connectionSecretRef)).length;
+  const camerasWithCertificateMetadata = cameras.filter((camera) => Boolean(camera.certificateRef || camera.certificateFingerprint)).length;
+  const hasTelemetry = telemetry.length > 0;
+  const state = operationalCoverage === null
+    ? "unknown"
+    : liveAlerts.some((alert) => alert.severity === "HIGH") || operationalCoverage < 80
+      ? "attention"
+      : "healthy";
+
   return {
-    available: false,
-    provenance: "UNAVAILABLE" as const,
-    reason: "security_posture_collectors_not_configured",
-    overallScore: 0,
-    timestamp: new Date().toISOString(),
-    metrics: {
-      zeroTrust: { score: 0, devicesCompliant: 0, devicesTotal: 0, highRiskSessions: 0 },
-      encryption: { score: 0, videosEncrypted: 0, videosTotal: 0, tlsCompliance: 0 },
-      certificates: { score: 0, healthy: 0, expiringSoon: 0, expired: 0, revoked: 0 },
-      secrets: { status: "UNKNOWN", rotationCompliance: 0, expiring: 0 },
-      ransomware: { activeThreats: 0, eventsToday: 0, riskLevel: "UNKNOWN" },
-      tamper: { activeEvents: 0, criticalEvents: 0, resolvedToday: 0 },
-      secureBoot: { score: 0, compliantDevices: 0, totalDevices: 0 },
-      tpm: { score: 0, attestedDevices: 0, totalDevices: 0, failedAttestations: 0 },
+    available: true,
+    provenance: "LIVE" as const,
+    timestamp: now,
+    summary: {
+      state,
+      operationalCoverage,
+      branchCount: branches.length,
+      liveSignalCount: cameras.length + edgeAgents.length + recordingJobs.length + storageNodes.length + telemetry.length,
+      latestObservation,
+      telemetryConnected: hasTelemetry,
     },
-    alerts: [],
-    trends: [],
+    operations: {
+      cameras: {
+        total: cameras.length,
+        online: onlineCameras.length,
+        offline: offlineCameras.length,
+        degraded: degradedCameras.length,
+        unknown: unknownCameras.length,
+        availability: cameraAvailability,
+      },
+      edgeAgents: {
+        total: edgeAgents.length,
+        online: onlineEdgeAgents.length,
+        offline: offlineEdgeAgents.length,
+        pending: pendingEdgeAgents.length,
+        availability: edgeAvailability,
+      },
+      recordings: {
+        total: cameras.length,
+        configured: recordingJobs.length,
+        enabled: enabledRecordingJobs.length,
+        stopped: stoppedRecordingJobs.length,
+        coverage: recordingCoverage,
+      },
+      storage: {
+        total: storageNodes.length,
+        healthy: healthyStorageNodes.length,
+        impaired: impairedStorageNodes.length,
+        health: storageHealth,
+      },
+    },
+    evidence: [
+      {
+        id: "secret-references",
+        label: "Camera secret references",
+        state: cameras.length === 0 ? "unknown" : camerasWithSecretReference === cameras.length ? "observed" : "attention",
+        detail: cameras.length === 0
+          ? "No camera configuration is in scope."
+          : `${camerasWithSecretReference} of ${cameras.length} cameras use an opaque secret reference.`,
+      },
+      {
+        id: "certificate-metadata",
+        label: "Device certificate metadata",
+        state: camerasWithCertificateMetadata > 0 ? "observed" : "unknown",
+        detail: camerasWithCertificateMetadata > 0
+          ? `${camerasWithCertificateMetadata} camera${camerasWithCertificateMetadata === 1 ? "" : "s"} report certificate metadata.`
+          : "No certificate validity or expiry evidence has been reported.",
+      },
+      {
+        id: "secure-boot",
+        label: "Secure Boot",
+        state: "unknown",
+        detail: "Awaiting an attestation from an enrolled edge device.",
+      },
+      {
+        id: "tpm",
+        label: "TPM attestation",
+        state: "unknown",
+        detail: "Awaiting a signed TPM quote from an enrolled edge device.",
+      },
+      {
+        id: "ransomware",
+        label: "Ransomware protection",
+        state: "unknown",
+        detail: "Awaiting EDR or threat-detection collector evidence.",
+      },
+      {
+        id: "tamper",
+        label: "Tamper protection",
+        state: "unknown",
+        detail: "Awaiting tamper-sensor evidence from an edge device.",
+      },
+    ],
+    alerts: liveAlerts,
   };
+}
+
+function percentage(numerator: number, denominator: number): number | null {
+  return denominator > 0 ? Math.round((numerator / denominator) * 100) : null;
 }

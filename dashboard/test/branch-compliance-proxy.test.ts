@@ -9,7 +9,7 @@ afterEach(() => {
 
 describe("branch compliance dashboard proxy", () => {
   it("uses the authenticated dashboard BFF and preserves the API envelope", async () => {
-    const upstream = vi.fn(async () => Response.json({
+    const upstream = vi.fn<typeof fetch>(async () => Response.json({
       data: [{ branchId: "branch-1", overallComplianceScore: 98 }],
     }));
     vi.stubGlobal("fetch", upstream);
@@ -31,7 +31,7 @@ describe("branch compliance dashboard proxy", () => {
   });
 
   it("forwards structured upstream failures instead of converting them to a generic 500", async () => {
-    vi.stubGlobal("fetch", vi.fn(async () => Response.json(
+    vi.stubGlobal("fetch", vi.fn<typeof fetch>(async () => Response.json(
       { error: "forbidden", message: "Audit access is required" },
       { status: 403 },
     )));
