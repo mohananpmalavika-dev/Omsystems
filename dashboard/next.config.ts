@@ -12,6 +12,18 @@ const nextConfig: NextConfig = {
       headers: [{ key: "Permissions-Policy", value: "microphone=(self), camera=(), geolocation=()" }],
     }];
   },
+  async rewrites() {
+    return [
+      {
+        source: "/v1/:path*",
+        destination: "http://localhost:8080/v1/:path*",
+      },
+      {
+        source: "/internal/:path*",
+        destination: "http://localhost:8080/internal/:path*",
+      },
+    ];
+  },
 };
 
 export default nextConfig;

@@ -27,6 +27,7 @@ export default function BranchCompliancePage() {
   const router = useRouter();
   const [branches, setBranches] = useState<BranchCompliance[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [sortBy, setSortBy] = useState<'score' | 'name'>('score');
 
   useEffect(() => {
@@ -35,11 +36,28 @@ export default function BranchCompliancePage() {
 
   const fetchBranchCompliance = async () => {
     try {
+      setError(null);
       const response = await fetch('/api/audit/branch-compliance');
-      const data = await response.json();
+      const payload: unknown = await response.json().catch(() => null);
+      if (!response.ok) {
+        const message = isApiError(payload)
+          ? payload.message ?? payload.error
+          : 'Unable to load branch compliance data';
+        throw new Error(message);
+      }
+
+      const data = Array.isArray(payload)
+        ? payload
+        : isBranchComplianceResponse(payload)
+          ? payload.data
+          : null;
+      if (!data) throw new Error('The compliance service returned an invalid response');
+
       setBranches(data);
-    } catch (error) {
-      console.error('Failed to fetch branch compliance:', error);
+    } catch (reason) {
+      console.error('Failed to fetch branch compliance:', reason);
+      setBranches([]);
+      setError(reason instanceof Error ? reason.message : 'Unable to load branch compliance data');
     } finally {
       setLoading(false);
     }
@@ -90,6 +108,12 @@ export default function BranchCompliancePage() {
         <h1 className="text-3xl font-bold text-gray-900">Branch Compliance Summary</h1>
         <p className="text-gray-600 mt-1">Comprehensive compliance overview across all branches</p>
       </div>
+
+      {error && (
+        <div className="mb-6 rounded-lg border border-red-200 bg-red-50 p-4 text-red-800" role="alert">
+          {error}
+        </div>
+      )}
 
       {/* Overall Statistics */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
@@ -269,4 +293,12 @@ export default function BranchCompliancePage() {
       )}
     </div>
   );
+}
+
+function isBranchComplianceResponse(value: unknown): value is { data: BranchCompliance[] } {
+  return typeof value === 'object' && value !== null && Array.isArray((value as { data?: unknown }).data);
+}
+
+function isApiError(value: unknown): value is { error?: string; message?: string } {
+  return typeof value === 'object' && value !== null;
 }

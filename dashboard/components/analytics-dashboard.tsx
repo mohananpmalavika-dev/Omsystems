@@ -95,7 +95,7 @@ export function AnalyticsDashboard() {
     try {
       const { from, to } = getTimeRange(timeRange);
       const response = await fetch(
-        `/api/v1/branches/${selectedBranch}/analytics/summary?from=${from}&to=${to}`,
+        `/v1/branches/${selectedBranch}/analytics/summary?from=${from}&to=${to}`,
       );
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
@@ -120,13 +120,13 @@ export function AnalyticsDashboard() {
 
       const [footfallRes, dwellRes, queueRes] = await Promise.all([
         fetch(
-          `/api/v1/cameras/${selectedCamera}/analytics/footfall?from=${from}&to=${to}&interval=hour`,
+          `/v1/cameras/${selectedCamera}/analytics/footfall?from=${from}&to=${to}&interval=hour`,
         ),
         fetch(
-          `/api/v1/cameras/${selectedCamera}/analytics/dwell-time?from=${from}&to=${to}&interval=hour`,
+          `/v1/cameras/${selectedCamera}/analytics/dwell-time?from=${from}&to=${to}&interval=hour`,
         ),
         fetch(
-          `/api/v1/cameras/${selectedCamera}/analytics/queue?from=${from}&to=${to}&interval=hour`,
+          `/v1/cameras/${selectedCamera}/analytics/queue?from=${from}&to=${to}&interval=hour`,
         ),
       ]);
 
