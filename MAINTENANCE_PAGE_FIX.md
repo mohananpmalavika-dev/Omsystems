@@ -16,14 +16,14 @@ The API routes in `dashboard/app/api/audit/maintenance/` were using `process.env
 #### `dashboard/.env.local`
 Added:
 ```
-NEXT_PUBLIC_API_URL=https://sentinel-grid-control-plane1.onrender.com
+NEXT_PUBLIC_API_URL=https://sentinel-grid-control-plane-nqc0.onrender.com
 ```
 
 #### `dashboard/.env.production`
 Updated:
 ```
-CONTROL_PLANE_URL=https://sentinel-grid-control-plane1.onrender.com
-NEXT_PUBLIC_API_URL=https://sentinel-grid-control-plane1.onrender.com
+CONTROL_PLANE_URL=https://sentinel-grid-control-plane-nqc0.onrender.com
+NEXT_PUBLIC_API_URL=https://sentinel-grid-control-plane-nqc0.onrender.com
 ```
 
 ### 2. Fixed API Routes
@@ -56,8 +56,8 @@ This provides a proper fallback chain that works in all environments.
 2. **Navigate to Environment variables**
 3. **Add or update these variables:**
    ```
-   CONTROL_PLANE_URL=https://sentinel-grid-control-plane1.onrender.com
-   CONTROL_PLANE_INTERNAL_URL=https://sentinel-grid-control-plane1.onrender.com
+CONTROL_PLANE_URL=https://sentinel-grid-control-plane-nqc0.onrender.com
+CONTROL_PLANE_INTERNAL_URL=https://sentinel-grid-control-plane-nqc0.onrender.com
    ```
 4. **Trigger a new deployment** or wait for auto-deploy from git push
 
@@ -67,8 +67,8 @@ This provides a proper fallback chain that works in all environments.
 2. **Navigate to Environment Variables**
 3. **Add these variables for Production:**
    ```
-   CONTROL_PLANE_URL=https://sentinel-grid-control-plane1.onrender.com
-   CONTROL_PLANE_INTERNAL_URL=https://sentinel-grid-control-plane1.onrender.com
+CONTROL_PLANE_URL=https://sentinel-grid-control-plane-nqc0.onrender.com
+CONTROL_PLANE_INTERNAL_URL=https://sentinel-grid-control-plane-nqc0.onrender.com
    ```
 4. **Redeploy** your application
 
@@ -115,11 +115,11 @@ To test locally before deploying:
 1. **Set environment variables:**
    ```bash
    cd dashboard
-   export CONTROL_PLANE_URL=https://sentinel-grid-control-plane1.onrender.com
+export CONTROL_PLANE_URL=https://sentinel-grid-control-plane-nqc0.onrender.com
    # or on Windows CMD:
-   set CONTROL_PLANE_URL=https://sentinel-grid-control-plane1.onrender.com
+set CONTROL_PLANE_URL=https://sentinel-grid-control-plane-nqc0.onrender.com
    # or on Windows PowerShell:
-   $env:CONTROL_PLANE_URL="https://sentinel-grid-control-plane1.onrender.com"
+$env:CONTROL_PLANE_URL="https://sentinel-grid-control-plane-nqc0.onrender.com"
    ```
 
 2. **Run the dashboard:**

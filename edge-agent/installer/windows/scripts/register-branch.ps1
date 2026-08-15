@@ -1,7 +1,7 @@
 # Sentinel Grid zero-touch branch bootstrap.
 param(
     [string]$AppPath = (Split-Path -Parent $PSScriptRoot),
-    [string]$ControlPlaneUrl = "https://sentinel-grid-control-plane1.onrender.com"
+    [string]$ControlPlaneUrl = "https://sentinel-grid-control-plane-nqc0.onrender.com"
 )
 
 $ErrorActionPreference = "Stop"

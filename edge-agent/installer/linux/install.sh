@@ -4,7 +4,7 @@ set -euo pipefail
 
 INSTALL_DIR="${SENTINEL_INSTALL_DIR:-/opt/sentinel-grid/edge-agent}"
 SERVICE_NAME="sentinel-grid-edge-agent"
-CONTROL_PLANE_URL="${SENTINEL_CONTROL_PLANE_URL:-https://sentinel-grid-control-plane1.onrender.com}"
+CONTROL_PLANE_URL="${SENTINEL_CONTROL_PLANE_URL:-https://sentinel-grid-control-plane-nqc0.onrender.com}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 if [[ "${EUID}" -ne 0 ]]; then

@@ -5,7 +5,7 @@
  * This queries the production API to check gateway status
  */
 
-const CONTROL_PLANE_URL = 'https://sentinel-grid-control-plane1.onrender.com';
+const CONTROL_PLANE_URL = 'https://sentinel-grid-control-plane-nqc0.onrender.com';
 const BRANCH_ID = '00000000-0000-4000-8000-000000000104';
 
 // You'll need to get a valid token from the dashboard

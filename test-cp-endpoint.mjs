@@ -1,6 +1,6 @@
 // Test if the control plane endpoint exists
 const response = await fetch(
-  "https://sentinel-grid-control-plane1.onrender.com/v1/cameras/e3d027f8-9c42-4c8b-bbf2-39c91eb756fb/live-sessions",
+  "https://sentinel-grid-control-plane-nqc0.onrender.com/v1/cameras/e3d027f8-9c42-4c8b-bbf2-39c91eb756fb/live-sessions",
   {
     method: "POST",
     headers: {

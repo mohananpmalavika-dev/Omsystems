@@ -1,6 +1,6 @@
 // Register tunnel URL with control plane
 const EDGE_AGENT_ID = "6a570d4a-2c71-415f-b59a-643cf50d55c5";
-const CONTROL_PLANE_URL = "https://sentinel-grid-control-plane1.onrender.com";
+const CONTROL_PLANE_URL = "https://sentinel-grid-control-plane-nqc0.onrender.com";
 const EDGE_BRIDGE_KEY = process.env.EDGE_BRIDGE_SHARED_KEY ?? "";
 const TUNNEL_URL = process.argv[2];
 

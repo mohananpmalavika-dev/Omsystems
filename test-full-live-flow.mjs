@@ -1,7 +1,7 @@
 // Test the complete live session flow
 import { createHash } from "node:crypto";
 
-const CONTROL_PLANE_URL = "https://sentinel-grid-control-plane1.onrender.com";
+const CONTROL_PLANE_URL = "https://sentinel-grid-control-plane-nqc0.onrender.com";
 const MEDIA_GATEWAY_URL = "https://sentinel-grid-media-gateway1.onrender.com";
 const EDGE_BRIDGE_SHARED_KEY = process.env.EDGE_BRIDGE_SHARED_KEY ?? "";
 const DEV_USER_ID = "00000000-0000-4000-8000-000000000001";
