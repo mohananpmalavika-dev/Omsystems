@@ -1,3 +1,5 @@
+"use client";
+
 import { useCallback, useEffect, useState } from "react";
 import { Activity, Camera, Clock, Fingerprint, RefreshCw, Server, ServerOff } from "lucide-react";
 import { fetchRecordersHealth } from "@/lib/api/operational-health";
