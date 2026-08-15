@@ -8,7 +8,7 @@
 'use client';
 
 import React from 'react';
-import { OperationalDashboardSummary, BranchHealthFilter, HealthState } from '../../../types/operational-health.types';
+import { OperationalDashboardSummary, BranchHealthFilter, HealthState, ConnectivityState } from '../../../types/operational-health.types';
 
 interface OperationalSummaryKPIsProps {
   summary: OperationalDashboardSummary;
@@ -83,7 +83,7 @@ export function OperationalSummaryKPIs({ summary, onFilterClick }: OperationalSu
       value: summary.network.offline,
       sublabel: 'Offline',
       color: summary.network.offline > 0 ? 'red' : 'green',
-      filter: summary.network.offline > 0 ? { internetStates: ['OFFLINE'] } : undefined,
+      filter: summary.network.offline > 0 ? { internetStates: ['OFFLINE' as ConnectivityState] } : undefined,
     },
     {
       label: 'P1 Alerts',
