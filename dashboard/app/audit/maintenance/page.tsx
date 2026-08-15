@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { AlertTriangle, ClipboardCheck, RefreshCw } from "lucide-react";
+import { ClipboardCheck, RefreshCw } from "lucide-react";
 import { ModulePage, ModuleStatus } from "@/components/module-page";
 import { maintenanceApi } from "@/lib/api-client";
 import type { WorkOrder } from "@/lib/types";
@@ -13,7 +13,7 @@ type SeverityFilter = "all" | WorkOrder["severity"];
 export default function MaintenanceAuditPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const branchNodeId = searchParams.get("branchNodeId");
+  const branchNodeId = searchParams?.get("branchNodeId") ?? null;
   const [workOrders, setWorkOrders] = useState<WorkOrder[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
