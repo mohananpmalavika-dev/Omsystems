@@ -12,7 +12,7 @@ export interface AuthorizationDecision {
 }
 
 function contains(scope: ResourceNode, resource: ResourceNode): boolean {
-  return resource.path.includes(scope.id);
+  return Array.isArray(resource.path) ? resource.path.includes(scope.id) : resource.id === scope.id || resource.parentId === scope.id;
 }
 
 /**

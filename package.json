@@ -35,6 +35,7 @@
     "test:hdd:compatibility": "tsx test/hdd-health/test-runner.ts compatibility",
     "test:recorder:compatibility": "tsx test/recorder-compatibility/test-runner.ts",
     "test:branch:command-center": "tsx test/branch-command-center/test-runner.ts",
+    "test:video-wall": "tsx test/video-wall/test-runner.ts",
     "test:internet:acceptance": "tsx test/internet-health/test-runner.ts",
     "test:hdd:collect": "tsx test/hdd-health/test-runner.ts collect",
     "test:hdd:thresholds": "tsx test/hdd-health/test-runner.ts thresholds",

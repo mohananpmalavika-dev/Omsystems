@@ -29,7 +29,7 @@ async function runAllTests() {
 
   const store = new MemoryStore();
   const branchId = "branch-178";
-  const tenantId = "tenant-default";
+  const tenantId = "omsystems";
 
   store.nodes.set(branchId, {
     id: branchId,
@@ -38,6 +38,7 @@ async function runAllTests() {
     code: "BR-178",
     type: "branch",
     parentId: "company-1",
+    path: ["company-1", branchId],
     metadata: {},
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),

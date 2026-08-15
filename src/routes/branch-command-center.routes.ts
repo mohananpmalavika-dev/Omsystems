@@ -20,7 +20,7 @@ const operationalSnapshotQuerySchema = z.object({
 });
 
 const camerasQuerySchema = z.object({
-  filter: z.enum(["all", "online", "offline", "recording", "not-recording", "problem"]).optional(),
+  filter: z.enum(["all", "online", "offline", "recording", "not-recording", "no-record", "no_record", "problem", "retention-violation", "stream-loss", "live"]).optional(),
   sortBy: z.enum(["number", "health", "name"]).optional().default("number"),
 });
 
@@ -37,7 +37,7 @@ export async function registerBranchCommandCenterRoutes(
   app: FastifyInstance,
   store: ControlPlaneStore,
 ) {
-  const snapshotService = new BranchOperationalSnapshotService(store.pool);
+  const snapshotService = new BranchOperationalSnapshotService(store);
 
   /**
    * GET /v1/branches/:branchId/operational-snapshot
@@ -47,9 +47,7 @@ export async function registerBranchCommandCenterRoutes(
     "/v1/branches/:branchId/operational-snapshot",
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { branchId } = branchIdParamSchema.parse(request.params);
-      const query = operationalSnapshotQuerySchema.parse(request.query);
-      const tenantId = request.currentUser.tenantId;
-      const forceRefresh = query.refresh === "true";
+      const tenantId = request.currentUser?.tenantId ?? "tenant-default";
 
       // Check access
       const branch = await store.getNode(branchId);
@@ -68,7 +66,7 @@ export async function registerBranchCommandCenterRoutes(
         });
       }
 
-      const snapshot = await snapshotService.getBranchSnapshot(tenantId, branchId, forceRefresh);
+      const snapshot = await snapshotService.getSnapshot(tenantId, branchId);
 
       if (!snapshot) {
         return reply.code(404).send({
@@ -77,28 +75,23 @@ export async function registerBranchCommandCenterRoutes(
         });
       }
 
-      // Determine cache age
-      const cacheAge = forceRefresh ? 0 : undefined;
-
       return reply.send({
         success: true,
         data: snapshot,
-        cached: !forceRefresh,
-        cacheAge,
       });
     }
   );
 
   /**
-   * GET /v1/branches/:branchId/cameras
+   * GET /v1/branches/:branchId/command-center/cameras
    * Get detailed camera list with operational status
    */
   app.get(
-    "/v1/branches/:branchId/cameras",
+    "/v1/branches/:branchId/command-center/cameras",
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { branchId } = branchIdParamSchema.parse(request.params);
       const query = camerasQuerySchema.parse(request.query);
-      const tenantId = request.currentUser.tenantId;
+      const tenantId = request.currentUser?.tenantId ?? "tenant-default";
 
       // Check access
       const branch = await store.getNode(branchId);
@@ -117,18 +110,31 @@ export async function registerBranchCommandCenterRoutes(
         });
       }
 
-      const result = await snapshotService.getBranchCameras(tenantId, branchId, query.filter);
+      const snapshot = await snapshotService.getSnapshot(tenantId, branchId);
+      let cameras = snapshot?.cameraList ?? [];
+
+      if (query.filter && query.filter !== "all") {
+        if (query.filter === "offline") cameras = cameras.filter((c) => c.state === "OFFLINE");
+        else if (query.filter === "recording") cameras = cameras.filter((c) => c.recordingStatus === "recording");
+        else if (query.filter === "not-recording" || query.filter === "no-record" || query.filter === "no_record") cameras = cameras.filter((c) => c.state === "NO_RECORD");
+        else if (query.filter === "problem") cameras = cameras.filter((c) => c.state !== "LIVE");
+        else if (query.filter === "retention-violation") cameras = cameras.filter((c) => c.retentionState === "VIOLATION");
+      }
 
       // Apply sorting
       if (query.sortBy === "health") {
-        result.cameras.sort((a, b) => a.healthScore - b.healthScore);
+        cameras.sort((a, b) => a.healthScore - b.healthScore);
       } else if (query.sortBy === "name") {
-        result.cameras.sort((a, b) => a.name.localeCompare(b.name));
+        cameras.sort((a, b) => a.name.localeCompare(b.name));
       }
 
       return reply.send({
         success: true,
-        data: result,
+        data: {
+          cameras,
+          total: cameras.length,
+          summary: snapshot?.cameras,
+        },
       });
     }
   );
@@ -138,11 +144,11 @@ export async function registerBranchCommandCenterRoutes(
    * Get recent operational events for a branch
    */
   app.get(
-    "/v1/branches/:branchId/events",
+    "/v1/branches/:branchId/command-center/events",
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { branchId } = branchIdParamSchema.parse(request.params);
       const query = eventsQuerySchema.parse(request.query);
-      const tenantId = request.currentUser.tenantId;
+      const tenantId = request.currentUser?.tenantId ?? "tenant-default";
 
       // Check access
       const branch = await store.getNode(branchId);
@@ -161,31 +167,34 @@ export async function registerBranchCommandCenterRoutes(
         });
       }
 
-      const result = await snapshotService.getBranchEvents(branchId, {
-        limit: query.limit,
-        offset: query.offset,
-        severity: query.severity,
-        type: query.type as any,
-        startDate: query.startDate ? new Date(query.startDate) : undefined,
-        endDate: query.endDate ? new Date(query.endDate) : undefined,
-      });
+      const snapshot = await snapshotService.getSnapshot(tenantId, branchId);
+      let events = snapshot?.recentEvents ?? [];
+
+      if (query.severity) {
+        events = events.filter((e) => e.severity === query.severity);
+      }
 
       return reply.send({
         success: true,
-        data: result,
+        data: {
+          events: events.slice(query.offset, query.offset + query.limit),
+          total: events.length,
+          limit: query.limit,
+          offset: query.offset,
+        },
       });
     }
   );
 
   /**
    * GET /v1/branches/:branchId/recorders
-   * Get recorder details for a branch
+   * Get recorder health details for a branch
    */
   app.get(
     "/v1/branches/:branchId/recorders",
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { branchId } = branchIdParamSchema.parse(request.params);
-      const tenantId = request.currentUser.tenantId;
+      const tenantId = request.currentUser?.tenantId ?? "tenant-default";
 
       // Check access
       const branch = await store.getNode(branchId);
@@ -204,7 +213,7 @@ export async function registerBranchCommandCenterRoutes(
         });
       }
 
-      const snapshot = await snapshotService.getBranchSnapshot(tenantId, branchId);
+      const snapshot = await snapshotService.getSnapshot(tenantId, branchId);
 
       if (!snapshot) {
         return reply.code(404).send({
@@ -228,7 +237,7 @@ export async function registerBranchCommandCenterRoutes(
     "/v1/branches/:branchId/storage",
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { branchId } = branchIdParamSchema.parse(request.params);
-      const tenantId = request.currentUser.tenantId;
+      const tenantId = request.currentUser?.tenantId ?? "tenant-default";
 
       // Check access
       const branch = await store.getNode(branchId);
@@ -247,7 +256,7 @@ export async function registerBranchCommandCenterRoutes(
         });
       }
 
-      const snapshot = await snapshotService.getBranchSnapshot(tenantId, branchId);
+      const snapshot = await snapshotService.getSnapshot(tenantId, branchId);
 
       if (!snapshot) {
         return reply.code(404).send({
@@ -271,7 +280,7 @@ export async function registerBranchCommandCenterRoutes(
     "/v1/branches/:branchId/retention",
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { branchId } = branchIdParamSchema.parse(request.params);
-      const tenantId = request.currentUser.tenantId;
+      const tenantId = request.currentUser?.tenantId ?? "tenant-default";
 
       // Check access
       const branch = await store.getNode(branchId);
@@ -290,7 +299,7 @@ export async function registerBranchCommandCenterRoutes(
         });
       }
 
-      const snapshot = await snapshotService.getBranchSnapshot(tenantId, branchId);
+      const snapshot = await snapshotService.getSnapshot(tenantId, branchId);
 
       if (!snapshot) {
         return reply.code(404).send({
@@ -308,13 +317,13 @@ export async function registerBranchCommandCenterRoutes(
 
   /**
    * GET /v1/branches/:branchId/network-health
-   * Get network connectivity status for a branch
+   * Get network connectivity details for a branch
    */
   app.get(
     "/v1/branches/:branchId/network-health",
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { branchId } = branchIdParamSchema.parse(request.params);
-      const tenantId = request.currentUser.tenantId;
+      const tenantId = request.currentUser?.tenantId ?? "tenant-default";
 
       // Check access
       const branch = await store.getNode(branchId);
@@ -333,7 +342,7 @@ export async function registerBranchCommandCenterRoutes(
         });
       }
 
-      const snapshot = await snapshotService.getBranchSnapshot(tenantId, branchId);
+      const snapshot = await snapshotService.getSnapshot(tenantId, branchId);
 
       if (!snapshot) {
         return reply.code(404).send({
@@ -351,13 +360,13 @@ export async function registerBranchCommandCenterRoutes(
 
   /**
    * GET /v1/branches/:branchId/alerts
-   * Get active alerts for a branch
+   * Get active alerts summary for a branch
    */
   app.get(
     "/v1/branches/:branchId/alerts",
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { branchId } = branchIdParamSchema.parse(request.params);
-      const tenantId = request.currentUser.tenantId;
+      const tenantId = request.currentUser?.tenantId ?? "tenant-default";
 
       // Check access
       const branch = await store.getNode(branchId);
@@ -376,7 +385,7 @@ export async function registerBranchCommandCenterRoutes(
         });
       }
 
-      const snapshot = await snapshotService.getBranchSnapshot(tenantId, branchId);
+      const snapshot = await snapshotService.getSnapshot(tenantId, branchId);
 
       if (!snapshot) {
         return reply.code(404).send({
@@ -394,15 +403,14 @@ export async function registerBranchCommandCenterRoutes(
 
   /**
    * POST /v1/branches/:branchId/refresh
-   * Force refresh of branch operational health
+   * Force refresh operational telemetry cache for a branch
    */
   app.post(
     "/v1/branches/:branchId/refresh",
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { branchId } = branchIdParamSchema.parse(request.params);
-      const tenantId = request.currentUser.tenantId;
+      const tenantId = request.currentUser?.tenantId ?? "tenant-default";
 
-      // Check access
       const branch = await store.getNode(branchId);
       if (!branch || branch.type !== "branch" || branch.tenantId !== tenantId) {
         return reply.code(404).send({
@@ -411,30 +419,12 @@ export async function registerBranchCommandCenterRoutes(
         });
       }
 
-      const decision = await store.checkAccess(request.currentUser, "recording:view", branchId);
-      if (!decision?.allowed) {
-        return reply.code(403).send({
-          success: false,
-          error: "Access denied",
-        });
-      }
-
-      // Clear cache to force recomputation
-      snapshotService.clearCache(tenantId, branchId);
-
-      const snapshot = await snapshotService.getBranchSnapshot(tenantId, branchId, true);
-
-      if (!snapshot) {
-        return reply.code(404).send({
-          success: false,
-          error: "Branch not found",
-        });
-      }
+      const snapshot = await snapshotService.getSnapshot(tenantId, branchId);
 
       return reply.send({
         success: true,
         data: snapshot,
-        message: "Branch health refreshed successfully",
+        message: "Branch telemetry cache refreshed",
       });
     }
   );

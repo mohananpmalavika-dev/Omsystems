@@ -170,7 +170,6 @@ export async function registerBranchOperationalSnapshotRoutes(
     };
 
     app.get(`${prefix}/branches/:branchId/command-center/network`, handleNetwork);
-    app.get(`${prefix}/branches/:branchId/network-health`, handleNetwork);
 
     // 7. Branch Active Alerts
     const handleAlerts = async (request: any, reply: any) => {
@@ -191,7 +190,6 @@ export async function registerBranchOperationalSnapshotRoutes(
     };
 
     app.get(`${prefix}/branches/:branchId/command-center/alerts`, handleAlerts);
-    app.get(`${prefix}/branches/:branchId/alerts`, handleAlerts);
 
     // 8. Branch Operational Events Timeline
     const handleEvents = async (request: any, reply: any) => {
@@ -208,21 +206,6 @@ export async function registerBranchOperationalSnapshotRoutes(
     };
 
     app.get(`${prefix}/branches/:branchId/command-center/events`, handleEvents);
-    app.get(`${prefix}/branches/:branchId/events`, handleEvents);
-
-    // Try registering standard REST paths for dashboard compatibility
-    try {
-      app.get(`${prefix}/branches/:branchId/cameras`, handleCameras);
-    } catch {}
-    try {
-      app.get(`${prefix}/branches/:branchId/storage`, handleStorage);
-    } catch {}
-    try {
-      app.get(`${prefix}/branches/:branchId/retention`, handleRetention);
-    } catch {}
-    try {
-      app.get(`${prefix}/branches/:branchId/recorders`, handleRecorders);
-    } catch {}
 
     // 9. Media Live Sessions (Explicit start, renew, and terminate)
     app.post(`${prefix}/media/live-sessions`, async (request, reply) => {
@@ -234,23 +217,22 @@ export async function registerBranchOperationalSnapshotRoutes(
       const qualityUpper = body.quality.toUpperCase();
       const playbackUrl = `/api/media/streams/${encodeURIComponent(body.cameraId)}/${qualityUpper.toLowerCase()}/index.m3u8`;
 
-      const session = {
+      const sessionData = {
         sessionId,
         cameraId: body.cameraId,
         quality: qualityUpper,
-        protocol: body.transport.toUpperCase(),
+        protocol: body.transport,
         playbackUrl,
         createdAt: now.toISOString(),
         expiresAt,
-        renewAfterSeconds: 240,
+        renewAfterSeconds: 240, // Recommend renew at 4 minutes
       };
 
-      activeLiveSessions.set(sessionId, session);
+      activeLiveSessions.set(sessionId, sessionData);
 
       return reply.code(201).send({
         success: true,
-        data: session,
-        session,
+        data: sessionData,
       });
     });
 
@@ -285,6 +267,64 @@ export async function registerBranchOperationalSnapshotRoutes(
     });
   };
 
-  registerEndpoints("/v1");
   registerEndpoints("/api/v1");
+
+  // Register live-session media endpoints on /v1 for client compatibility
+  app.post("/v1/media/live-sessions", async (request, reply) => {
+    const body = liveSessionRequestSchema.parse(request.body ?? {});
+    const sessionId = `ls_${randomUUID().slice(0, 12)}`;
+    const now = new Date();
+    const expiresAt = new Date(now.getTime() + 300 * 1000).toISOString();
+
+    const qualityUpper = body.quality.toUpperCase();
+    const playbackUrl = `/api/media/streams/${encodeURIComponent(body.cameraId)}/${qualityUpper.toLowerCase()}/index.m3u8`;
+
+    const sessionData = {
+      sessionId,
+      cameraId: body.cameraId,
+      quality: qualityUpper,
+      protocol: body.transport,
+      playbackUrl,
+      createdAt: now.toISOString(),
+      expiresAt,
+      renewAfterSeconds: 240,
+    };
+
+    activeLiveSessions.set(sessionId, sessionData);
+
+    return reply.code(201).send({
+      success: true,
+      data: sessionData,
+    });
+  });
+
+  app.post("/v1/media/live-sessions/:id/renew", async (request, reply) => {
+    const { id } = sessionIdParams.parse(request.params);
+    const existing = activeLiveSessions.get(id);
+
+    const now = new Date();
+    const newExpiry = new Date(now.getTime() + 300 * 1000).toISOString();
+
+    if (existing) {
+      existing.expiresAt = newExpiry;
+    }
+
+    return reply.code(200).send({
+      success: true,
+      sessionId: id,
+      expiresAt: newExpiry,
+      renewAfterSeconds: 240,
+    });
+  });
+
+  app.delete("/v1/media/live-sessions/:id", async (request, reply) => {
+    const { id } = sessionIdParams.parse(request.params);
+    activeLiveSessions.delete(id);
+
+    return reply.code(200).send({
+      success: true,
+      terminated: true,
+      sessionId: id,
+    });
+  });
 }
