@@ -206,7 +206,99 @@ export interface BranchOperationalSnapshot {
 }
 
 export class BranchOperationalSnapshotService {
+  private readonly cache = new Map<string, { snapshot: BranchOperationalSnapshot; cachedAt: number }>();
+
   constructor(private readonly store: ControlPlaneStore) {}
+
+  async getBranchSnapshot(
+    tenantId: string,
+    branchId: string,
+    forceRefresh = false,
+  ): Promise<BranchOperationalSnapshot | null> {
+    const cacheKey = `${tenantId}:${branchId}`;
+
+    if (forceRefresh) {
+      this.cache.delete(cacheKey);
+    }
+
+    const cached = this.cache.get(cacheKey);
+    if (cached && Date.now() - cached.cachedAt < 30_000) {
+      return cached.snapshot;
+    }
+
+    const snapshot = await this.getSnapshot(tenantId, branchId);
+    if (snapshot) {
+      this.cache.set(cacheKey, { snapshot, cachedAt: Date.now() });
+    }
+
+    return snapshot;
+  }
+
+  clearCache(tenantId: string, branchId: string): void {
+    this.cache.delete(`${tenantId}:${branchId}`);
+  }
+
+  async getBranchCameras(
+    tenantId: string,
+    branchId: string,
+    filter: "all" | "online" | "offline" | "recording" | "not-recording" | "problem" = "all",
+  ): Promise<{ cameras: CameraOperationalStatus[]; summary: BranchOperationalSnapshot["cameras"] }> {
+    const snapshot = await this.getSnapshot(tenantId, branchId);
+    let cameras = snapshot?.cameraList ?? [];
+
+    if (filter && filter !== "all") {
+      if (filter === "offline") {
+        cameras = cameras.filter((camera) => camera.onlineStatus === "offline");
+      } else if (filter === "not-recording") {
+        cameras = cameras.filter((camera) => camera.recordingStatus !== "recording");
+      } else if (filter === "recording") {
+        cameras = cameras.filter((camera) => camera.recordingStatus === "recording");
+      } else if (filter === "online") {
+        cameras = cameras.filter((camera) => camera.onlineStatus === "online");
+      } else if (filter === "problem") {
+        cameras = cameras.filter((camera) => camera.onlineStatus === "offline" || camera.recordingStatus !== "recording");
+      }
+    }
+
+    return {
+      cameras,
+      summary: snapshot?.cameras ?? {
+        total: cameras.length,
+        online: 0,
+        offline: 0,
+        recording: 0,
+        notRecording: 0,
+        streamLoss: 0,
+        videoLoss: 0,
+        healthyCount: 0,
+        warningCount: 0,
+        criticalCount: 0,
+        state: "UNKNOWN",
+      },
+    };
+  }
+
+  async getBranchEvents(
+    branchId: string,
+    options: {
+      limit?: number;
+      offset?: number;
+      startDate?: Date;
+      endDate?: Date;
+      severity?: "INFO" | "WARNING" | "HIGH" | "CRITICAL";
+      type?: string;
+    } = {},
+  ): Promise<{ events: BranchOperationalSnapshot["recentEvents"]; total: number }> {
+    const node = await this.store.getNode(branchId);
+    const tenantId = node?.tenantId ?? "tenant-default";
+    const snapshot = await this.getSnapshot(tenantId, branchId);
+    const events = snapshot?.recentEvents ?? [];
+
+    return {
+      events: options.type ? events.filter((event) => event.type === options.type) : events,
+      total: options.type ? events.filter((event) => event.type === options.type).length : events.length,
+    };
+  }
 
   async getSnapshot(tenantId: string, branchId: string): Promise<BranchOperationalSnapshot | null> {
     const branch = await this.store.getNode(branchId);

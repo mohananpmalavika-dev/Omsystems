@@ -345,7 +345,7 @@ router.get('/', async (req: Request, res: Response) => {
  * GET /api/capabilities/:id
  * Get specific capability
  */
-router.get('/:id', async (req: Request, res: Response) => {
+router.get('/:id', async (req: Request<{ id: string }>, res: Response) => {
   try {
     const { id } = req.params;
     const capability = capabilityRegistry.get(id);
@@ -375,7 +375,7 @@ router.get('/:id', async (req: Request, res: Response) => {
  * GET /api/capabilities/state/:state
  * Get capabilities by state
  */
-router.get('/state/:state', async (req: Request, res: Response) => {
+router.get('/state/:state', async (req: Request<{ state: string }>, res: Response) => {
   try {
     const { state } = req.params;
     
@@ -407,7 +407,7 @@ router.get('/state/:state', async (req: Request, res: Response) => {
  * GET /api/capabilities/category/:category
  * Get capabilities by category
  */
-router.get('/category/:category', async (req: Request, res: Response) => {
+router.get('/category/:category', async (req: Request<{ category: string }>, res: Response) => {
   try {
     const { category } = req.params;
     const capabilities = capabilityRegistry.getByCategory(category);
