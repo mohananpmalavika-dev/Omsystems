@@ -492,24 +492,3 @@ export type RansomwareProtectionResult = Evidence<RansomwareProtectionEvidence>;
 // ============================================================================
 // Exports
 // ============================================================================
-
-export type {
-  Evidence,
-  ProvenanceEvidence,
-  EvidenceState,
-  EvidenceSource,
-};
-
-export {
-  verified,
-  failed,
-  unknown,
-  unsupported,
-  simulated,
-  isVerified,
-  isLive,
-  isSimulated,
-  getEvidenceAge,
-  isStale,
-  combineEvidence,
-};
