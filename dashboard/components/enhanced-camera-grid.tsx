@@ -29,6 +29,7 @@ import type { Camera, LiveSessionResponse, RecordingJob, RecordingMode } from "@
 import type { TileStreamState, PresentationMode } from "@/lib/media-types";
 import { startLiveFromBrowser } from "@/lib/live-client";
 import { StreamSchedulerProvider, useStreamScheduler } from "./stream-scheduler";
+import { useVideoWallScheduler } from "@/hooks/useVideoWallScheduler";
 
 export type GridSize = "1x1" | "2x2" | "3x3" | "4x4" | "5x5" | "6x6" | "7x7" | "8x8" | "9x9" | "10x10" | "11x11" | "12x12";
 
@@ -163,6 +164,9 @@ export function EnhancedCameraGrid({
     setUserPreference: setDecoderPreference,
     setActiveCount,
   } = useDecoderBudgetManager({ maxConcurrentStreams, enableGPUAcceleration });
+
+  // Phase 1: lightweight scheduler wrapper exposes conservative viewer capacity and per-camera scheduled states
+  const { capacity, scheduledStates } = useVideoWallScheduler({ decoderLimit });
 
   useEffect(() => {
     // keep the budget aware of current active sessions
@@ -770,6 +774,11 @@ export function EnhancedCameraGrid({
           {workstationMetrics && (
             <span className="capacity-control" title="Current workstation decoder utilization">
               Decoder Load: {workstationMetrics.decoderLoadPercent.toFixed(0)}%
+            </span>
+          )}
+          {capacity && (
+            <span className="capacity-control" title="Viewer capacity recommendation">
+              Recommended decoders: {capacity.recommendedDecoderLimit} · Bandwidth cap: {capacity.maxAggregateBitrateMbps} Mbps
             </span>
           )}
 
