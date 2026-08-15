@@ -779,11 +779,13 @@ export async function registerAdvancedAnalyticsRoutes(
    */
   app.post("/v1/analytics/reports/daily", async (request, reply) => {
     const body = z.object({
+      tenantId: z.string().optional(),
       date: z.string()
     }).parse(request.body);
 
     const reporting = pipeline.getAIReportingEngine();
-    const report = await reporting.generateDailyIncidentSummary(new Date(body.date));
+    const tenantId = body.tenantId ?? 'default';
+    const report = await reporting.generateDailyIncidentSummary(tenantId, new Date(body.date));
 
     return {
       reportId: report.id,
@@ -799,6 +801,7 @@ export async function registerAdvancedAnalyticsRoutes(
    */
   app.post("/v1/analytics/reports/weekly", async (request, reply) => {
     const body = z.object({
+      tenantId: z.string().optional(),
       weekStart: z.string()
     }).parse(request.body);
 

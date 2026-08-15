@@ -165,8 +165,8 @@ export class OpenAIIntentParser implements IntentParser {
         return result;
         
       } catch (error) {
-        logger.error('OpenAI API error', {
-          error: error instanceof Error ? error.message : String(error),
+        const message = error instanceof Error ? error.message : String(error);
+        logger.error('OpenAI API error', new Error(message), {
           query: sanitized.substring(0, 100)
         });
         
@@ -380,8 +380,8 @@ Respond with JSON only.`;
       };
       
     } catch (error) {
-      logger.error('Failed to parse OpenAI response', {
-        error: error instanceof Error ? error.message : String(error),
+      const message = error instanceof Error ? error.message : String(error);
+      logger.error('Failed to parse OpenAI response', new Error(message), {
         response: response.substring(0, 200)
       });
       

@@ -73,6 +73,9 @@ export interface ParsedQuery {
   
   /** Original user query */
   originalQuery: string;
+
+  /** Optional reasoning returned by the LLM parser */
+  reasoning?: string;
 }
 
 /**
