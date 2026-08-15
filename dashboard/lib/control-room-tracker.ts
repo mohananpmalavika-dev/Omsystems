@@ -78,7 +78,11 @@ export async function startControlRoomActivity(
     });
     
     if (!response.ok) {
-      console.error('[ControlRoomTracker] Failed to start control room activity:', response.status);
+      const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+      console.error('[ControlRoomTracker] Failed to start control room activity:', {
+        status: response.status,
+        error: errorData
+      });
       return null;
     }
     

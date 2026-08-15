@@ -97,10 +97,14 @@ export function AnalyticsDashboard() {
       const response = await fetch(
         `/api/v1/branches/${selectedBranch}/analytics/summary?from=${from}&to=${to}`,
       );
-      if (!response.ok) throw new Error("Failed to load analytics summary");
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+        throw new Error(errorData.error || `Failed to load analytics summary (${response.status})`);
+      }
       const data = await response.json();
       setSummary(data);
     } catch (err) {
+      console.error('[AnalyticsDashboard] Error loading summary:', err);
       setError(readable(err));
     } finally {
       setLoading(false);

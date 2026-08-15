@@ -277,8 +277,13 @@ export async function registerEmployeeActivityTrackingRoutes(
       
       return { activityId, status: 'started' };
     } catch (error) {
-      app.log.error({ err: error }, "Error starting control room activity");
-      return reply.code(500).send({ error: "Failed to start control room activity" });
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      app.log.error({ err: error, sessionId: body.sessionId, userId: request.currentUser.id }, 
+        "Error starting control room activity");
+      return reply.code(500).send({ 
+        error: "Failed to start control room activity",
+        details: errorMessage
+      });
     }
   });
   

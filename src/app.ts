@@ -41,6 +41,7 @@ import { registerBulkUploadRoutes } from "./routes/bulk-upload.routes.js";
 import { registerAnalyticsPhase2Routes } from "./routes/analytics-phase2.routes.js";
 import { adminCameraManagementRoutes } from "./routes/admin-camera-management.routes.js";
 import { registerIncidentsRoutes } from "./routes/incidents.routes.js";
+import { registerAuditRoutes } from "./routes/audit.routes.js";
 import { registerComplianceRoutes } from "./routes/compliance.routes.js";
 import { registerComplianceEnhancedRoutes } from "./routes/compliance-enhanced.routes.js";
 import { registerPrivacyRoutes } from "./routes/privacy.routes.js";
@@ -2161,6 +2162,7 @@ export async function buildApp(options?: {
     await registerUserRoutes(app, extendedStore);
     await registerCameraPermissionRoutes(app, extendedStore);
     await registerCctvInfrastructureRoutes(app, extendedStore);
+    await registerAuditRoutes(app, extendedStore, extendedStore.audits);
     await registerComplianceRoutes(app, extendedStore);
     await registerComplianceEnhancedRoutes(app, extendedStore);
     await registerMaintenanceDashboardRoutes(app, extendedStore);

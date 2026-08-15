@@ -291,6 +291,31 @@ export class ActivityTrackingRepository {
     branchNames: string[],
     monitoringMode: string
   ): Promise<string> {
+    // First verify session exists and is active
+    const sessionCheck = await this.pool.query(
+      `SELECT id FROM user_activity_sessions
+       WHERE id = $1 AND user_id = $2 AND tenant_id = $3 AND logout_time IS NULL`,
+      [sessionId, userId, tenantId]
+    );
+    
+    if (sessionCheck.rows.length === 0) {
+      throw new Error('Invalid or expired session');
+    }
+    
+    // If pageVisitId provided, verify it exists
+    if (pageVisitId) {
+      const pageCheck = await this.pool.query(
+        `SELECT id FROM user_page_visits
+         WHERE id = $1 AND user_id = $2 AND session_id = $3`,
+        [pageVisitId, userId, sessionId]
+      );
+      
+      if (pageCheck.rows.length === 0) {
+        throw new Error('Invalid page visit ID');
+      }
+    }
+    
+    // Insert the control room activity
     const result = await this.pool.query(
       `INSERT INTO control_room_monitoring_activity (
         tenant_id, user_id, session_id, page_visit_id, monitoring_type,
@@ -298,14 +323,7 @@ export class ActivityTrackingRepository {
         camera_ids, camera_count, branch_ids, branch_names,
         monitoring_mode, monitoring_start_time
       )
-      SELECT $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, CURRENT_TIMESTAMP
-      FROM user_activity_sessions session
-      WHERE session.id = $3 AND session.user_id = $2 AND session.tenant_id = $1
-        AND session.logout_time IS NULL
-        AND ($4::uuid IS NULL OR EXISTS (
-          SELECT 1 FROM user_page_visits page
-          WHERE page.id = $4 AND page.user_id = $2 AND page.session_id = $3
-        ))
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, CURRENT_TIMESTAMP)
       RETURNING id`,
       [
         tenantId, userId, sessionId, pageVisitId, monitoringType,
@@ -314,6 +332,10 @@ export class ActivityTrackingRepository {
         monitoringMode
       ]
     );
+    
+    if (result.rows.length === 0) {
+      throw new Error('Failed to create control room activity record');
+    }
     
     // Update current activity
     await this.pool.query(
