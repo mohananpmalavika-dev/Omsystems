@@ -119,21 +119,8 @@ export function EnhancedCameraGrid({
   const [operatorSelectedCameraId, setOperatorSelectedCameraId] = useState<string | null>(null);
   const [draggedCamera, setDraggedCamera] = useState<{ camera: Camera; fromPosition: number } | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const observerRef = useRef<IntersectionObserver | null>(null);
-  const autoAttempted = useRef(new Set<string>());
   const initialLayoutApplied = useRef(false);
   const activeStreamTypesRef = useRef(new Map<string, "main" | "sub">());
-
-  // Track which cameras have orchestrator-managed sessions
-  const orchestratorSessions = useMemo(() => {
-    const map = new Map<string, boolean>();
-    tileStates.forEach((state, cameraId) => {
-      if (state.session) {
-        map.set(cameraId, true);
-      }
-    });
-    return map;
-  }, [tileStates]);
 
   const gridSizeMap = {
     "1x1": 1,
