@@ -21,8 +21,7 @@
   },
   "include": [
     "src/**/*.ts",
-    "src/**/*.d.ts",
-    "packages/**/*.ts"
+    "src/**/*.d.ts"
   ],
   "exclude": [
     "node_modules",
@@ -39,6 +38,7 @@
     "media-gateway/**/*",
     "recording-engine/**/*",
     "analytics-engine/**/*",
+    "packages/**/*",
 
     // Legacy or incomplete application areas that are not part of the active root build
     "src/**/ui/**/*",

@@ -5,6 +5,7 @@
  * Run these tests against every new driver implementation.
  */
 
+import { describe, it, expect } from "vitest";
 import type { RecorderDriver } from "../core/recorder-driver.interface.js";
 import type { RecorderContext } from "../core/recorder-driver.types.js";
 
@@ -295,7 +296,7 @@ export function runDriverContractTests(options: ContractTestOptions) {
         
         try {
           await driver.probe(invalidCtx, { timeoutMs: 2000 });
-          fail("Should have thrown error");
+          expect.fail("Should have thrown error");
         } catch (error: any) {
           expect(error).toBeDefined();
           expect(error.name).toBeDefined();

@@ -5,7 +5,8 @@
  * Implements RecorderHttpTransport with actual network operations.
  */
 
-import axios, { type AxiosInstance, type AxiosError, type AxiosRequestConfig } from "axios";
+import axios from "axios";
+import type { AxiosInstance, AxiosError, AxiosRequestConfig } from "axios";
 import type { RecorderContext } from "../core/recorder-driver.types.js";
 import {
   RecorderDriverError,

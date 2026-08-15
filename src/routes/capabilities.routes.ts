@@ -347,11 +347,11 @@ router.get('/', async (req: Request, res: Response) => {
  */
 router.get('/:id', async (req: Request, res: Response) => {
   try {
-    const { id } = (req.params ?? {}) as { id?: string };
+    const id = req.params?.id;
     if (!id) {
       return res.status(400).json({
         success: false,
-        error: 'Capability id is required'
+        error: 'Capability ID is required'
       });
     }
     const capability = capabilityRegistry.get(id);
@@ -369,7 +369,7 @@ router.get('/:id', async (req: Request, res: Response) => {
     });
     
   } catch (error) {
-    logger.error('Failed to get capability', { error, id: req.params.id });
+    logger.error('Failed to get capability', { error, id: req.params?.id });
     res.status(500).json({
       success: false,
       error: 'Failed to retrieve capability'
@@ -383,15 +383,9 @@ router.get('/:id', async (req: Request, res: Response) => {
  */
 router.get('/state/:state', async (req: Request, res: Response) => {
   try {
-    const { state } = (req.params ?? {}) as { state?: string };
-    if (!state) {
-      return res.status(400).json({
-        success: false,
-        error: 'Capability state is required'
-      });
-    }
+    const state = req.params?.state;
     
-    if (!['AVAILABLE', 'PARTIAL', 'UNAVAILABLE', 'DISABLED'].includes(state)) {
+    if (!state || !['AVAILABLE', 'PARTIAL', 'UNAVAILABLE', 'DISABLED'].includes(state)) {
       return res.status(400).json({
         success: false,
         error: `Invalid state: ${state}`
@@ -407,7 +401,7 @@ router.get('/state/:state', async (req: Request, res: Response) => {
     });
     
   } catch (error) {
-    logger.error('Failed to get capabilities by state', { error, state: req.params.state });
+    logger.error('Failed to get capabilities by state', { error, state: req.params?.state });
     res.status(500).json({
       success: false,
       error: 'Failed to retrieve capabilities'
@@ -421,11 +415,11 @@ router.get('/state/:state', async (req: Request, res: Response) => {
  */
 router.get('/category/:category', async (req: Request, res: Response) => {
   try {
-    const { category } = (req.params ?? {}) as { category?: string };
+    const category = req.params?.category;
     if (!category) {
       return res.status(400).json({
         success: false,
-        error: 'Capability category is required'
+        error: 'Category is required'
       });
     }
     const capabilities = capabilityRegistry.getByCategory(category);
@@ -438,7 +432,7 @@ router.get('/category/:category', async (req: Request, res: Response) => {
     });
     
   } catch (error) {
-    logger.error('Failed to get capabilities by category', { error, category: req.params.category });
+    logger.error('Failed to get capabilities by category', { error, category: req.params?.category });
     res.status(500).json({
       success: false,
       error: 'Failed to retrieve capabilities'
