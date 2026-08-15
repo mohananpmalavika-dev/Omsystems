@@ -72,7 +72,7 @@ export class PostgresStore
   private readonly agents: EdgeAgentRepository;
   private readonly deviceIdentities: DeviceIdentityRepository;
   private readonly edgeOperations: EdgeOperationsRepository;
-  private readonly audits: AuditRepository;
+  readonly audits: AuditRepository;
   private readonly recordings: RecordingRepository;
   private readonly liveOperations: LiveOperationsRepository;
   private readonly analytics: AnalyticsRepository;

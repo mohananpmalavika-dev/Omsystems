@@ -13,4 +13,31 @@ describe('maintenance routes (basic)', async () => {
     const body = JSON.parse(list.body);
     expect(body.data.length).toBeGreaterThan(0);
   });
+
+  it('returns work orders in the dashboard data envelope', async () => {
+    const headers = { 'x-user-id': 'user-global-admin' };
+    const create = await app.inject({
+      method: 'POST',
+      url: '/v1/maintenance/workorders',
+      headers,
+      payload: {
+        workOrderNumber: 'WO-MAINT-001',
+        problem: 'Camera 12 requires a lens inspection.',
+        severity: 'high',
+        status: 'open',
+      },
+    });
+    expect(create.statusCode).toBe(201);
+
+    const list = await app.inject({ method: 'GET', url: '/v1/maintenance/workorders', headers });
+    expect(list.statusCode).toBe(200);
+    expect(list.json()).toMatchObject({
+      data: [expect.objectContaining({
+        workOrderNumber: 'WO-MAINT-001',
+        problem: 'Camera 12 requires a lens inspection.',
+        severity: 'high',
+        status: 'open',
+      })],
+    });
+  });
 });
