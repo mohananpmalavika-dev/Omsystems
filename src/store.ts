@@ -1,4 +1,5 @@
 import { createHash, randomBytes, randomUUID } from "node:crypto";
+import type { ProvisioningStageId } from "./provisioning/stages.js";
 import type {
   AccessGrant,
   Action,
@@ -738,7 +739,7 @@ export class MemoryStore implements ControlPlaneStore {
       pendingVerificationCount: 0, verifiedCount: 0, recorderCount: 0,
       timeSynchronizedCount: 0, timeDriftCount: 0,
       analyticsCompatibleCount: 0, duplicateCount: 0,
-      credentialsSkippedAt: null, error: null,
+      credentialsSkippedAt: null, skippedStages: {}, error: null,
     };
     this.edgeScanJobs.set(job.id, job);
     return job;
@@ -760,7 +761,20 @@ export class MemoryStore implements ControlPlaneStore {
     if (!job || job.branchId !== branchId || job.scope === "device" || job.status !== "completed") {
       return undefined;
     }
-    if (!job.credentialsSkippedAt) job.credentialsSkippedAt = new Date().toISOString();
+    const skippedAt = new Date().toISOString();
+    if (!job.credentialsSkippedAt) job.credentialsSkippedAt = skippedAt;
+    job.skippedStages = { ...job.skippedStages, "credential-resolution": skippedAt };
+    return job;
+  }
+
+  async skipEdgeScanJobStage(branchId: string, jobId: string, stageId: ProvisioningStageId) {
+    const job = this.edgeScanJobs.get(jobId);
+    if (!job || job.branchId !== branchId || job.scope === "device") return undefined;
+    const skippedAt = new Date().toISOString();
+    job.skippedStages = { ...job.skippedStages, [stageId]: job.skippedStages?.[stageId] ?? skippedAt };
+    if (stageId === "credential-resolution" && !job.credentialsSkippedAt) {
+      job.credentialsSkippedAt = skippedAt;
+    }
     return job;
   }
 

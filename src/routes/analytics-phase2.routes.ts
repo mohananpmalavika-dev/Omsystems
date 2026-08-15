@@ -298,11 +298,11 @@ export async function registerAnalyticsPhase2Routes(
       conditions.push(`fe.camera_id = $${paramIndex++}`);
       params.push(query.cameraId);
     }
-    if (query.watchlistId) {
+    if (query.watchlistId && query.watchlistId.trim() !== "") {
       conditions.push(`fe.watchlist_id = $${paramIndex++}`);
       params.push(query.watchlistId);
     }
-    if (query.personId) {
+    if (query.personId && query.personId.trim() !== "") {
       conditions.push(`fe.person_id = $${paramIndex++}`);
       params.push(query.personId);
     }
@@ -502,7 +502,7 @@ export async function registerAnalyticsPhase2Routes(
       conditions.push(`ae.occurred_at < $${paramIndex++}`);
       params.push(query.to);
     }
-    if (query.cameraId) {
+    if (query.cameraId && query.cameraId.trim() !== "") {
       conditions.push(`ae.camera_id = $${paramIndex++}`);
       params.push(query.cameraId);
     }
@@ -510,7 +510,7 @@ export async function registerAnalyticsPhase2Routes(
       conditions.push(`ae.plate_number ILIKE $${paramIndex++}`);
       params.push(`%${query.plateNumber.toUpperCase()}%`);
     }
-    if (query.watchlistId) {
+    if (query.watchlistId && query.watchlistId.trim() !== "") {
       conditions.push(`ae.watchlist_id = $${paramIndex++}`);
       params.push(query.watchlistId);
     }
@@ -722,7 +722,7 @@ export async function registerAnalyticsPhase2Routes(
       conditions.push(`be.occurred_at < $${paramIndex++}`);
       params.push(query.to);
     }
-    if (query.cameraId) {
+    if (query.cameraId && query.cameraId.trim() !== "") {
       conditions.push(`be.camera_id = $${paramIndex++}`);
       params.push(query.cameraId);
     }

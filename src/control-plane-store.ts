@@ -68,6 +68,7 @@ import type {
 } from "./domain/models.js";
 import type { AuthorizationDecision } from "./domain/authorization.js";
 import type { OperationalHealthPolicy, OperationalTelemetryEnvelope, VideoWallLayout, VideoWallGridSize } from "./operational-health/types.js";
+import type { ProvisioningStageId } from "./provisioning/stages.js";
 import type {
   OperationalReportSchedule, OperationalReportRun, OperationalReportArtifact,
   OperationalReportDelivery,
@@ -647,6 +648,7 @@ export interface ControlPlaneStore {
   getEdgeScanJob(branchId: string, jobId: string): Promise<EdgeScanJob | undefined>;
   getLatestEdgeScanJob(branchId: string): Promise<EdgeScanJob | undefined>;
   skipEdgeScanJobCredentials(branchId: string, jobId: string): Promise<EdgeScanJob | undefined>;
+  skipEdgeScanJobStage(branchId: string, jobId: string, stageId: ProvisioningStageId): Promise<EdgeScanJob | undefined>;
   claimEdgeScanJob(edgeAgentId: string): Promise<EdgeScanJob | undefined>;
   completeEdgeScanJob(
     edgeAgentId: string,

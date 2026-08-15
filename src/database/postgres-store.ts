@@ -7,6 +7,7 @@ import type {
   DeviceInventoryInput,
   DeviceInventoryRecord,
 } from "../control-plane-store.js";
+import type { ProvisioningStageId } from "../provisioning/stages.js";
 import type {
   Action,
   AuditEventInput,
@@ -352,6 +353,9 @@ export class PostgresStore
   }
   async skipEdgeScanJobCredentials(branchId: string, jobId: string) {
     return this.agents.skipScanJobCredentials(branchId, jobId);
+  }
+  async skipEdgeScanJobStage(branchId: string, jobId: string, stageId: ProvisioningStageId) {
+    return this.agents.skipScanJobStage(branchId, jobId, stageId);
   }
   async claimEdgeScanJob(edgeAgentId: string) {
     return this.agents.claimScanJob(edgeAgentId);

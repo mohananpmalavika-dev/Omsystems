@@ -676,6 +676,8 @@ export interface EdgeScanJob {
   duplicateCount: number;
   /** Operator explicitly deferred devices whose credentials are unavailable for this branch scan. */
   credentialsSkippedAt: string | null;
+  /** Stages explicitly deferred by an operator; each value is the defer timestamp. */
+  skippedStages?: Record<string, string>;
   error: string | null;
 }
 

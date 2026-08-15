@@ -921,6 +921,11 @@ export const provisioningApi = {
       `/v1/branches/${encodeURIComponent(branchId)}/provisioning/${encodeURIComponent(runId)}/skip-credentials`,
       { method: "POST", body: "{}" },
     ),
+  skipStage: (branchId: string, runId: string, stageId: string) =>
+    fetchApi<{ run: ProvisioningRun }>(
+      `/v1/branches/${encodeURIComponent(branchId)}/provisioning/${encodeURIComponent(runId)}/stages/${encodeURIComponent(stageId)}/skip`,
+      { method: "POST", body: "{}" },
+    ),
 };
 
 export type IdentityWatchlist = {
@@ -1027,7 +1032,7 @@ export const identityAnalyticsApi = {
   ),
   listFaceEvents: (filters?: { watchlistId?: string; minSimilarity?: number; limit?: number }) => {
     const params = new URLSearchParams();
-    if (filters?.watchlistId) params.set('watchlistId', filters.watchlistId);
+    if (filters?.watchlistId && filters.watchlistId.trim() !== "") params.set('watchlistId', filters.watchlistId);
     if (filters?.minSimilarity !== undefined) params.set('minSimilarity', String(filters.minSimilarity));
     params.set('limit', String(filters?.limit ?? 100));
     return fetchApi<{ data: FaceRecognitionEvent[] }>(`/v1/analytics/face-events?${params}`);
@@ -1062,8 +1067,8 @@ export const identityAnalyticsApi = {
   ),
   listAnprEvents: (filters?: { watchlistId?: string; plateNumber?: string; limit?: number }) => {
     const params = new URLSearchParams();
-    if (filters?.watchlistId) params.set('watchlistId', filters.watchlistId);
-    if (filters?.plateNumber) params.set('plateNumber', filters.plateNumber);
+    if (filters?.watchlistId && filters.watchlistId.trim() !== "") params.set('watchlistId', filters.watchlistId);
+    if (filters?.plateNumber && filters.plateNumber.trim() !== "") params.set('plateNumber', filters.plateNumber);
     params.set('limit', String(filters?.limit ?? 100));
     return fetchApi<{ data: AnprEvent[] }>(`/v1/analytics/anpr-events?${params}`);
   },

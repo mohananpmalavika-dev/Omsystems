@@ -238,6 +238,3 @@ function validPublicOrigin(value: string | undefined) {
     return undefined;
   }
 }
-
-
-

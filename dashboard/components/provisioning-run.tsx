@@ -33,6 +33,7 @@ export function ProvisioningRun({
   const [error, setError] = useState<string>();
   const [retrying, setRetrying] = useState(false);
   const [skippingCredentials, setSkippingCredentials] = useState(false);
+  const [skippingStageId, setSkippingStageId] = useState<string>();
 
   useEffect(() => {
     if (!branchId) {
@@ -91,6 +92,21 @@ export function ProvisioningRun({
     }
   }
 
+  async function skipStage(stageId: string) {
+    if (!run || !run.steps.find((stage) => stage.id === stageId)?.canSkip) return;
+    setSkippingStageId(stageId);
+    setError(undefined);
+    try {
+      const response = await provisioningApi.skipStage(branchId, run.id, stageId);
+      setRun(response.run);
+      onChanged?.();
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Unable to skip this provisioning stage.");
+    } finally {
+      setSkippingStageId(undefined);
+    }
+  }
+
   if (!branchId) return null;
 
   const headline = run?.status === "active" ? "Branch evidence verified"
@@ -140,7 +156,14 @@ export function ProvisioningRun({
           {run.steps.map((step) => <article className={`ztp-step ${step.status}`} key={step.id}>
             <StepIcon status={step.status}/>
             <div><strong>{step.label}</strong><span>{step.evidence}</span></div>
-            <small>{step.totalUnits > 1 ? `${step.completedUnits}/${step.totalUnits}` : step.status.replaceAll("_", " ")}</small>
+            <div className="ztp-step-state">
+              <small>{step.totalUnits > 1 ? `${step.completedUnits}/${step.totalUnits}` : step.status.replaceAll("_", " ")}</small>
+              {step.canSkip ? <button
+                className="ztp-stage-skip"
+                disabled={Boolean(skippingStageId)}
+                onClick={() => void skipStage(step.id)}
+              >{skippingStageId === step.id ? <Loader2 className="spin" size={12}/> : "Skip"}</button> : null}
+            </div>
           </article>)}
         </div>
         {run.issues.length > 0 ? <div className="ztp-issues">

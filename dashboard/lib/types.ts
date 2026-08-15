@@ -506,6 +506,8 @@ export interface ProvisioningRun {
     evidence: string;
     errorCode?: string;
     action?: "install-agent" | "provide-credentials" | "retry";
+    canSkip: boolean;
+    skippedAt?: string;
   }>;
   issues: Array<{
     code: string;

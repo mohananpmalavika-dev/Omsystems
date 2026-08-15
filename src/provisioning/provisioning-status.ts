@@ -27,6 +27,8 @@ export interface ProvisioningStepView {
   evidence: string;
   errorCode?: string;
   action?: "install-agent" | "provide-credentials" | "retry";
+  canSkip: boolean;
+  skippedAt?: string;
 }
 
 export interface ProvisioningIssue {
@@ -177,7 +179,15 @@ export function projectProvisioningRun(input: {
     input.pendingDiscoveries.filter((device) => device.streamVerified === true).length,
     connectedCameraCount,
   );
-  const credentialsSkipped = Boolean(input.job?.credentialsSkippedAt);
+  const credentialsSkipped = Boolean(
+    input.job?.credentialsSkippedAt ?? input.job?.skippedStages?.["credential-resolution"],
+  );
+  const skippedStages: Record<string, string> = {
+    ...(input.job?.skippedStages ?? {}),
+    ...(credentialsSkipped && !input.job?.skippedStages?.["credential-resolution"]
+      ? { "credential-resolution": input.job?.credentialsSkippedAt ?? input.job?.completedAt ?? input.job?.requestedAt ?? "" }
+      : {}),
+  };
   const canSkipCredentialResolution = credentialsRequired > 0 && !credentialsSkipped && verifiedStreams > 0;
   const recorderTelemetry = input.telemetry.filter((item) => item.deviceType === "recorder");
   const diskTelemetry = input.telemetry.filter((item) => item.deviceType === "disk");
@@ -247,7 +257,7 @@ export function projectProvisioningRun(input: {
     credentialsSkipped,
   });
 
-  const steps: ProvisioningStepView[] = [
+  const computedSteps: ProvisioningStepView[] = [
     step("branch-registration", "Branch registration", "completed", 1, 1, "Branch inventory record exists"),
     step(
       "edge-enrollment", "Edge agent enrollment",
@@ -340,7 +350,7 @@ export function projectProvisioningRun(input: {
   const evidenceReady = scanCompleted && onlineAgents.length > 0 && importedChannels > 0 &&
     verifiedStreams > 0 && recordingConfigured && storageHealthy > 0 && recordingEvidenceReady;
   const readyForActivation = evidenceReady && blockers.length === 0;
-  steps.push(step(
+  computedSteps.push(step(
     "activation", "Activation policy",
     failed ? "failed" : readyForActivation ? "completed" : blockers.length > 0 ? "blocked" : "pending",
     readyForActivation ? 1 : 0, 1,
@@ -348,6 +358,12 @@ export function projectProvisioningRun(input: {
     blockers[0]?.code,
   ));
 
+  const steps = computedSteps.map((item) => applyStageSkip(
+    item,
+    skippedStages[item.id],
+    Boolean(input.job && input.job.scope !== "device"),
+    canSkipCredentialResolution,
+  ));
   const completedUnits = steps.reduce((total, item) => total + Math.min(item.completedUnits, item.totalUnits), 0);
   const totalUnits = steps.reduce((total, item) => total + item.totalUnits, 0);
   const status = failed ? "failed"
@@ -357,7 +373,8 @@ export function projectProvisioningRun(input: {
           : input.job?.status === "queued" ? "queued"
             : input.job?.status === "running" ? "running"
               : input.job ? "awaiting_evidence" : "not_started";
-  const currentStage = steps.find((item) => !["completed", "skipped"].includes(item.status))?.label ?? "Active";
+  const currentStage = steps.find((item) => !["completed", "skipped"].includes(item.status))?.label
+    ?? (readyForActivation ? "Active" : "Operator review required");
 
   return {
     id: input.job?.id ?? `branch:${input.branchId}`,
@@ -497,7 +514,34 @@ function step(
 ): ProvisioningStepView {
   return {
     id, label, status, completedUnits, totalUnits, evidence,
+    canSkip: false,
     ...(errorCode ? { errorCode } : {}),
     ...(action ? { action } : {}),
+  };
+}
+
+function applyStageSkip(
+  stage: ProvisioningStepView,
+  skippedAt: string | undefined,
+  hasBranchRun: boolean,
+  canSkipCredentialResolution: boolean,
+): ProvisioningStepView {
+  if (skippedAt !== undefined) {
+    return {
+      ...stage,
+      status: "skipped",
+      completedUnits: stage.totalUnits,
+      evidence: "Skipped by an operator for this provisioning run.",
+      canSkip: false,
+      skippedAt,
+      errorCode: undefined,
+      action: undefined,
+    };
+  }
+  return {
+    ...stage,
+    canSkip: hasBranchRun && stage.status !== "completed" && (
+      stage.id !== "credential-resolution" || canSkipCredentialResolution
+    ),
   };
 }

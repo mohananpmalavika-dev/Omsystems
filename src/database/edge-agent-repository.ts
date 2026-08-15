@@ -2,6 +2,7 @@ import type { Pool } from "pg";
 import type { DiscoveredCamera, EdgeAgent, EdgeScanJob } from "../domain/models.js";
 import type { CameraDiscoveryInput, EdgeScanTarget } from "../control-plane-store.js";
 import type { DeviceIdentityRepository } from "./device-identity-repository.js";
+import type { ProvisioningStageId } from "../provisioning/stages.js";
 import { normalizeMacAddress, normalizeOnvifUuid } from "../device-identity.js";
 
 type AgentRow = {
@@ -56,6 +57,7 @@ type ScanRow = {
   analytics_compatible_count: number;
   duplicate_count: number;
   credentials_skipped_at: Date | null;
+  skipped_stages: Record<string, string> | null;
   error: string | null;
 };
 
@@ -83,6 +85,7 @@ function mapScan(row: ScanRow): EdgeScanJob {
     analyticsCompatibleCount: row.analytics_compatible_count,
     duplicateCount: row.duplicate_count,
     credentialsSkippedAt: row.credentials_skipped_at?.toISOString() ?? null,
+    skippedStages: row.skipped_stages ?? {},
     error: row.error,
   };
 }
@@ -176,7 +179,7 @@ export class EdgeAgentRepository {
                  provisioned_count, credentials_required_count,
                  pending_verification_count, verified_count, recorder_count,
                  time_synchronized_count, time_drift_count,
-                 analytics_compatible_count, duplicate_count, credentials_skipped_at, error`,
+                 analytics_compatible_count, duplicate_count, credentials_skipped_at, skipped_stages, error`,
       [
         branchId,
         edgeAgentId ?? null,
@@ -199,7 +202,7 @@ export class EdgeAgentRepository {
               provisioned_count, credentials_required_count,
               pending_verification_count, verified_count, recorder_count,
               time_synchronized_count, time_drift_count,
-              analytics_compatible_count, duplicate_count, credentials_skipped_at, error
+              analytics_compatible_count, duplicate_count, credentials_skipped_at, skipped_stages, error
        FROM edge_scan_jobs WHERE id = $1 AND branch_node_id = $2`,
       [jobId, branchId],
     );
@@ -215,7 +218,7 @@ export class EdgeAgentRepository {
               provisioned_count, credentials_required_count,
               pending_verification_count, verified_count, recorder_count,
               time_synchronized_count, time_drift_count,
-              analytics_compatible_count, duplicate_count, credentials_skipped_at, error
+              analytics_compatible_count, duplicate_count, credentials_skipped_at, skipped_stages, error
        FROM edge_scan_jobs
        WHERE branch_node_id = $1 AND scan_scope = 'branch'
        ORDER BY requested_at DESC
@@ -246,7 +249,7 @@ export class EdgeAgentRepository {
                  job.verified_count, job.recorder_count,
                  job.time_synchronized_count, job.time_drift_count,
                  job.analytics_compatible_count, job.duplicate_count,
-                 job.credentials_skipped_at, job.error`,
+                 job.credentials_skipped_at, job.skipped_stages, job.error`,
       [edgeAgentId],
     );
     return result.rows[0] ? mapScan(result.rows[0]) : undefined;
@@ -255,7 +258,9 @@ export class EdgeAgentRepository {
   async skipScanJobCredentials(branchId: string, jobId: string) {
     const updated = await this.pool.query<ScanRow>(
       `UPDATE edge_scan_jobs
-       SET credentials_skipped_at = COALESCE(credentials_skipped_at, now())
+       SET credentials_skipped_at = COALESCE(credentials_skipped_at, now()),
+           skipped_stages = COALESCE(skipped_stages, '{}'::jsonb)
+             || jsonb_build_object('credential-resolution', now()::text)
        WHERE id = $1 AND branch_node_id = $2
          AND scan_scope = 'branch' AND status = 'completed'
        RETURNING id::text, branch_node_id::text, edge_agent_id::text,
@@ -266,8 +271,32 @@ export class EdgeAgentRepository {
                  pending_verification_count, verified_count, recorder_count,
                  time_synchronized_count, time_drift_count,
                  analytics_compatible_count, duplicate_count,
-                 credentials_skipped_at, error`,
+                 credentials_skipped_at, skipped_stages, error`,
       [jobId, branchId],
+    );
+    return updated.rows[0] ? mapScan(updated.rows[0]) : undefined;
+  }
+
+  async skipScanJobStage(branchId: string, jobId: string, stageId: ProvisioningStageId) {
+    const updated = await this.pool.query<ScanRow>(
+      `UPDATE edge_scan_jobs
+       SET skipped_stages = COALESCE(skipped_stages, '{}'::jsonb)
+             || jsonb_build_object($3::text, now()::text),
+           credentials_skipped_at = CASE
+             WHEN $3::text = 'credential-resolution' THEN COALESCE(credentials_skipped_at, now())
+             ELSE credentials_skipped_at
+           END
+       WHERE id = $1 AND branch_node_id = $2 AND scan_scope = 'branch'
+       RETURNING id::text, branch_node_id::text, edge_agent_id::text,
+                 scan_scope, target_discovery_id::text,
+                 host(target_ip_address) AS target_ip_address, target_onvif_port, status,
+                 requested_at, started_at, completed_at, result_count,
+                 provisioned_count, credentials_required_count,
+                 pending_verification_count, verified_count, recorder_count,
+                 time_synchronized_count, time_drift_count,
+                 analytics_compatible_count, duplicate_count,
+                 credentials_skipped_at, skipped_stages, error`,
+      [jobId, branchId, stageId],
     );
     return updated.rows[0] ? mapScan(updated.rows[0]) : undefined;
   }
@@ -306,7 +335,7 @@ export class EdgeAgentRepository {
                  provisioned_count, credentials_required_count,
                  pending_verification_count, verified_count, recorder_count,
                  time_synchronized_count, time_drift_count,
-                 analytics_compatible_count, duplicate_count, credentials_skipped_at, error`,
+                 analytics_compatible_count, duplicate_count, credentials_skipped_at, skipped_stages, error`,
       [
         jobId,
         edgeAgentId,

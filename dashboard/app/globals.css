@@ -911,7 +911,7 @@ select, textarea { font: inherit; }
 .auto-provision-row.partial { border-left: 3px solid #d99a24; }
 .auto-provision-row.needs-attention, .auto-provision-row.failed { border-left: 3px solid #d84a4a; }
 .ztp-panel { display: grid; gap: 14px; margin: 16px 0; padding: 18px; border: 1px solid #d8e3f0; border-radius: 16px; background: linear-gradient(145deg, #fff, #f6faff); box-shadow: 0 8px 28px rgba(22, 45, 80, .06); }
-.ztp-header, .ztp-title, .ztp-actions, .ztp-progress-copy, .ztp-step, .ztp-issues article, .ztp-empty { display: flex; align-items: center; }
+.ztp-header, .ztp-title, .ztp-actions, .ztp-progress-copy, .ztp-step, .ztp-step-state, .ztp-issues article, .ztp-empty { display: flex; align-items: center; }
 .ztp-header { justify-content: space-between; gap: 16px; }
 .ztp-title { gap: 11px; }
 .ztp-title h3, .ztp-title p, .ztp-step strong, .ztp-step span, .ztp-issues strong, .ztp-issues span { margin: 0; }
@@ -939,7 +939,11 @@ select, textarea { font: inherit; }
 .ztp-step div { display: grid; gap: 2px; min-width: 0; flex: 1; }
 .ztp-step strong { color: #263d56; font-size: 11px; }
 .ztp-step span { overflow: hidden; color: #718095; font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
+.ztp-step-state { flex: 0 0 auto; flex-direction: column; align-items: flex-end; gap: 5px; }
 .ztp-step small { font-size: 9px; text-transform: capitalize; }
+.ztp-stage-skip { min-width: 38px; padding: 3px 6px; border: 1px solid #c7d5e5; border-radius: 5px; background: #fff; color: #48637f; font-size: 9px; font-weight: 700; line-height: 1; }
+.ztp-stage-skip:hover:not(:disabled) { border-color: #4f81ba; color: #1f5f9e; background: #f4f8fd; }
+.ztp-stage-skip:disabled { cursor: wait; opacity: .65; }
 .ztp-issues { display: grid; gap: 6px; }
 .ztp-issues article { gap: 8px; padding: 9px 10px; border-radius: 9px; background: #fff8e7; color: #a46a09; }
 .ztp-issues article.blocker { background: #fff0f0; color: #bd3f3f; }

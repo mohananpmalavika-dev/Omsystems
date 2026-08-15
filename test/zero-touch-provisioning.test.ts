@@ -102,8 +102,26 @@ describe("zero-touch provisioning integration", () => {
       expect.objectContaining({ code: "DEVICE_CREDENTIAL_DEFERRED", severity: "warning" }),
     ]));
 
+    const stageSkipped = await app.inject({
+      method: "POST",
+      url: `/v1/branches/branch-blr-001/provisioning/${runId}/stages/time-verification/skip`,
+      headers,
+    });
+    expect(stageSkipped.statusCode).toBe(200);
+    expect(stageSkipped.json().run.steps.find((step: any) => step.id === "time-verification")).toMatchObject({
+      status: "skipped",
+      canSkip: false,
+    });
+
+    const completedStage = await app.inject({
+      method: "POST",
+      url: `/v1/branches/branch-blr-001/provisioning/${runId}/stages/branch-registration/skip`,
+      headers,
+    });
+    expect(completedStage.statusCode).toBe(409);
+
     await app.close();
-  });
+  }, 15_000);
 
   it("does not allow a completed function call to hide storage or recording blockers", () => {
     const now = new Date().toISOString();

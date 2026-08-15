@@ -2,9 +2,11 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 import type { ControlPlaneStore } from "../control-plane-store.js";
 import { buildProvisioningRunView } from "../provisioning/provisioning-status.js";
+import { PROVISIONING_STAGE_IDS } from "../provisioning/stages.js";
 
 const branchParams = z.object({ branchId: z.string().min(1) });
 const runParams = z.object({ branchId: z.string().min(1), runId: z.string().min(1) });
+const stageSkipParams = runParams.extend({ stageId: z.enum(PROVISIONING_STAGE_IDS) });
 const startBody = z.object({ edgeAgentId: z.string().min(1).optional() }).strict();
 
 export async function registerProvisioningRoutes(
@@ -98,6 +100,38 @@ export async function registerProvisioningRoutes(
         edgeAgentId: existing.edgeAgentId,
         deferredCredentialCount: current.summary.credentialsRequired,
       },
+    });
+    return reply.code(200).send({
+      run: await buildProvisioningRunView(store, branchId, request.currentUser, skipped),
+    });
+  });
+
+  app.post("/v1/branches/:branchId/provisioning/:runId/stages/:stageId/skip", async (request, reply) => {
+    const { branchId, runId, stageId } = stageSkipParams.parse(request.params);
+    if (!(await requireDeviceAccess(request, reply, store, branchId))) return;
+    const existing = await store.getEdgeScanJob(branchId, runId);
+    if (!existing) return reply.code(404).send({ error: "provisioning_run_not_found" });
+    if (existing.scope === "device") return reply.code(409).send({ error: "provisioning_stage_skip_not_available" });
+
+    const current = await buildProvisioningRunView(store, branchId, request.currentUser, existing);
+    const stage = current.steps.find((item) => item.id === stageId);
+    if (!stage?.canSkip) {
+      return reply.code(409).send({
+        error: "provisioning_stage_not_skippable",
+        message: "Only incomplete stages in this branch provisioning run can be skipped.",
+      });
+    }
+
+    const skipped = await store.skipEdgeScanJobStage(branchId, runId, stageId);
+    if (!skipped) return reply.code(409).send({ error: "provisioning_stage_skip_not_available" });
+    await store.writeAudit({
+      tenantId: request.currentUser.tenantId,
+      actorUserId: request.currentUser.id,
+      action: "zero_touch_provisioning.stage_skipped",
+      resourceNodeId: branchId,
+      outcome: "success",
+      sourceIp: request.ip,
+      details: { runId, edgeAgentId: existing.edgeAgentId, stageId, stageLabel: stage.label, previousStatus: stage.status },
     });
     return reply.code(200).send({
       run: await buildProvisioningRunView(store, branchId, request.currentUser, skipped),
