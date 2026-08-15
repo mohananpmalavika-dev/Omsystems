@@ -38,6 +38,14 @@ export interface HealthSummary {
   edgeAgentsWarning: number;
   edgeAgentsUnknown: number;
   timestamp: string;
+  totalRecorders?: number;
+  recordersOnline?: number;
+  recordersOffline?: number;
+  criticalDisks?: number;
+  retentionViolations?: number;
+  internetOffline?: number;
+  internetDegraded?: number;
+  p1Alerts?: number;
 }
 
 /**
@@ -57,7 +65,16 @@ export interface BranchHealth {
   totalRecorders?: number;
   onlineRecorders?: number;
   recorderStatus?: 'online' | 'offline' | 'warning' | 'unknown';
+  storageStatus?: 'healthy' | 'warning' | 'critical' | 'unknown';
+  smartFailures?: number;
+  retentionDays?: number | null;
+  retentionRequiredDays?: number;
+  retentionCompliant?: boolean;
   criticalAlerts: number;
+  p1Alerts?: number;
+  issuesCount?: number;
+  primaryReason?: string;
+  reasons?: Array<{ code: string; message: string; severity: string }>;
   edgeAgentStatus: EdgeAgentStatus;
   edgeAgentHeartbeat: string;
   gatewayCount?: number;

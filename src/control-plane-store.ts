@@ -2012,13 +2012,36 @@ export interface ActivityTrackingStore {
   ): Promise<any>;
 }
 
+import type {
+  RecorderDeviceProfile,
+  IdentityEvidence,
+  ApiFamilyEvidence,
+  CompatibilityCatalogEntry,
+} from "./types/recorder-profile.types.js";
+
+export interface RecorderProfileStore {
+  upsertRecorderProfile(profile: RecorderDeviceProfile): Promise<void>;
+  getRecorderProfile(recorderId: string): Promise<RecorderDeviceProfile | null>;
+  listRecorderProfiles(filter?: { tenantId?: string; branchId?: string }): Promise<RecorderDeviceProfile[]>;
+  getRecorderEvidence(recorderId: string): Promise<{
+    identityEvidence: IdentityEvidence[];
+    apiEvidence: ApiFamilyEvidence[];
+    capabilities: any;
+    signature: string;
+    lastFingerprintedAt: string;
+  } | null>;
+  queueRecorderRefingerprint(recorderId: string, reason: string, probeFamilies?: string[]): Promise<{ queued: boolean; taskId?: string }>;
+  getCompatibilityCatalog(): Promise<CompatibilityCatalogEntry[]>;
+}
+
 export type ExtendedControlPlaneStore = ControlPlaneStore &
   CctvInfrastructureStore &
   OrganizationStore &
   UserManagementStore &
   AuthenticationStore &
   CameraPermissionStore &
-  ActivityTrackingStore;
+  ActivityTrackingStore &
+  RecorderProfileStore;
 
 export function hasExtendedInfrastructure(
   store: ControlPlaneStore,
@@ -2029,3 +2052,4 @@ export function hasExtendedInfrastructure(
     typeof candidate.findUserByUsername === "function" &&
     typeof candidate.checkCameraAccess === "function";
 }
+

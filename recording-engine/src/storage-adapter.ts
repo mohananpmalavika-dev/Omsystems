@@ -200,6 +200,7 @@ export class LocalDiskStorageAdapter implements StorageDestinationAdapter {
         error: error instanceof Error ? error.message : String(error),
       };
     }
+  }
 }
 
 export class NfsStorageAdapter implements StorageDestinationAdapter {

@@ -134,10 +134,77 @@ export async function probeRecorder(config: RecorderConfig, timeoutMs: number, o
   }
 }
 
+import { RecorderFingerprintService } from "../recorders/fingerprint/recorder-fingerprint.service.js";
+import { RecorderProfileRepository } from "../recorders/profiles/recorder-profile.repository.js";
+import { RecorderProtocolRouter } from "../recorders/routing/recorder-protocol-router.js";
+import { AdapterFallbackExecutor } from "../recorders/adapters/adapter-fallback-executor.js";
+import { DahuaRecorderAdapter } from "../recorders/adapters/dahua-recorder.adapter.js";
+import { OnvifRecorderAdapter } from "../recorders/adapters/onvif-recorder.adapter.js";
+import { HikvisionRecorderAdapter } from "../recorders/adapters/hikvision-recorder.adapter.js";
+import { RtspRecorderAdapter } from "../recorders/adapters/rtsp-recorder.adapter.js";
+import type {
+  ProbeContext,
+  RecorderDeviceProfile,
+  RecorderOperation,
+} from "../recorders/types/recorder-profile.types.js";
+
+const globalProfileRepo = new RecorderProfileRepository();
+const globalFingerprintService = new RecorderFingerprintService({ profileRepo: globalProfileRepo });
+const globalProtocolRouter = new RecorderProtocolRouter();
+const globalAdapterExecutor = new AdapterFallbackExecutor()
+  .register(new DahuaRecorderAdapter())
+  .register(new OnvifRecorderAdapter())
+  .register(new HikvisionRecorderAdapter())
+  .register(new RtspRecorderAdapter());
+
+export async function resolveRecorderProfile(config: RecorderConfig, timeoutMs = 8000): Promise<RecorderDeviceProfile> {
+  const cached = await globalProfileRepo.get(config.id);
+  if (cached && !globalProfileRepo.isExpired(cached)) {
+    return cached;
+  }
+
+  const probeCtx: ProbeContext = {
+    recorderId: config.id,
+    host: config.host,
+    port: config.port,
+    httpPorts: [config.port],
+    rtspPort: config.rtspPort ?? 554,
+    secure: config.secure,
+    username: config.username,
+    password: config.password,
+    credentialRef: `vault://recorder/${config.id}`,
+    configuredVendor: config.vendor,
+    requestTimeoutMs: timeoutMs,
+    maxRequests: 20,
+    abortSignal: AbortSignal.timeout(timeoutMs * 3),
+  };
+
+  return globalFingerprintService.fingerprint(probeCtx);
+}
+
+export async function executeRecorderOperation<T>(
+  op: RecorderOperation,
+  config: RecorderConfig,
+  params?: Record<string, unknown>,
+): Promise<T> {
+  const profile = await resolveRecorderProfile(config);
+  const candidates = globalProtocolRouter.select(op, profile);
+
+  return globalAdapterExecutor.executeWithFallback<T>(op, candidates, {
+    recorderId: config.id,
+    host: config.host,
+    port: config.port,
+    secure: config.secure,
+    username: config.username,
+    password: config.password,
+    rtspPort: config.rtspPort,
+    params,
+  });
+}
+
 /**
- * Only vendors whose native protocol is known are selected automatically.
- * Other brands remain fully discoverable through ONVIF and can opt into a
- * native family after that exact OEM/model/firmware is validated in the lab.
+ * Native protocol selection. Vendor string serves as a hint; genuine capability
+ * is resolved through resolveRecorderProfile and the RecorderProtocolRouter.
  */
 export function recorderApiFamily(config: Pick<RecorderConfig, "vendor" | "apiFamily">): NonNullable<RecorderConfig["apiFamily"]> {
   if (config.apiFamily) return config.apiFamily;

@@ -170,7 +170,7 @@ export default function OperationalHealthDashboard() {
 
       {exportMessage && <p className="overview-message">{exportMessage} <a href="/reports">Open reports</a></p>}
 
-      {summary && <BranchSummaryWidget summary={summary} onSelect={selectBranchFilter} />}
+      {summary && <BranchSummaryWidget summary={summary} activeFilter={branchFilter} onSelect={selectBranchFilter} />}
 
       {/* Top-level KPIs */}
       <div className="overview-kpi-grid">

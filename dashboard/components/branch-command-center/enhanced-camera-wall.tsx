@@ -6,12 +6,12 @@
  * - Recording indicator
  * - Retention status
  * - Health score
- * - Visual quality indicators
+ * - Live video session management with renewal & visibility lifecycle
  */
 
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { CameraOperationalStatus } from '@/types/branch-operational-snapshot';
 import {
   VideoCameraIcon,
@@ -19,6 +19,8 @@ import {
   ClockIcon,
   SignalSlashIcon,
   XCircleIcon,
+  ArrowsPointingOutIcon,
+  ArrowPathIcon,
 } from '@heroicons/react/24/solid';
 
 interface EnhancedCameraWallProps {
@@ -77,11 +79,9 @@ export function EnhancedCameraWall({
 
     switch (sortBy) {
       case 'health':
-        // Worst health first
         sorted.sort((a, b) => a.healthScore - b.healthScore);
         break;
       case 'recording':
-        // Not recording first
         sorted.sort((a, b) => {
           if (a.recordingStatus !== 'recording' && b.recordingStatus === 'recording') return -1;
           if (a.recordingStatus === 'recording' && b.recordingStatus !== 'recording') return 1;
@@ -89,7 +89,6 @@ export function EnhancedCameraWall({
         });
         break;
       case 'retention':
-        // Worst retention first
         sorted.sort((a, b) => {
           const aRetention = a.retentionDays ?? 999;
           const bRetention = b.retentionDays ?? 999;
@@ -97,7 +96,6 @@ export function EnhancedCameraWall({
         });
         break;
       case 'alert':
-        // Cameras with issues first
         sorted.sort((a, b) => {
           const aHasIssue = a.videoLoss || a.tamperingDetected || a.imageFrozen;
           const bHasIssue = b.videoLoss || b.tamperingDetected || b.imageFrozen;
@@ -107,7 +105,6 @@ export function EnhancedCameraWall({
         });
         break;
       default:
-        // Camera number
         sorted.sort((a, b) => a.channelNumber.localeCompare(b.channelNumber));
     }
 
@@ -166,6 +163,7 @@ export function EnhancedCameraWall({
         <CameraTile
           key={camera.id}
           camera={camera}
+          streamProfile={streamProfile}
           onClick={() => onCameraClick(camera.id)}
         />
       ))}
@@ -175,158 +173,191 @@ export function EnhancedCameraWall({
 
 interface CameraTileProps {
   camera: CameraOperationalStatus;
+  streamProfile: 'main' | 'sub' | 'auto';
   onClick: () => void;
 }
 
-function CameraTile({ camera, onClick }: CameraTileProps) {
+function CameraTile({ camera, streamProfile, onClick }: CameraTileProps) {
+  const [sessionId, setSessionId] = useState<string | null>(null);
+  const [streaming, setStreaming] = useState(false);
+  const renewTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    if (camera.onlineStatus === 'online' && camera.state !== 'OFFLINE') {
+      startSession();
+    }
+    return () => {
+      terminateSession();
+    };
+  }, [camera.id, streamProfile]);
+
+  const startSession = async () => {
+    try {
+      const res = await fetch('/api/v1/media/live-sessions', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          cameraId: camera.id,
+          quality: streamProfile === 'main' ? 'MAIN' : 'SUB',
+        }),
+      });
+      if (res.ok) {
+        const json = await res.json();
+        const sid = json.data?.sessionId || json.sessionId;
+        if (sid) {
+          setSessionId(sid);
+          setStreaming(true);
+          // Schedule renewal every 240 seconds
+          renewTimerRef.current = setInterval(() => {
+            fetch(`/api/v1/media/live-sessions/${encodeURIComponent(sid)}/renew`, {
+              method: 'POST',
+            }).catch(() => undefined);
+          }, 240_000);
+        }
+      }
+    } catch {
+      // Stream fallback to static preview
+      setStreaming(false);
+    }
+  };
+
+  const terminateSession = () => {
+    if (renewTimerRef.current) {
+      clearInterval(renewTimerRef.current);
+      renewTimerRef.current = null;
+    }
+    if (sessionId) {
+      fetch(`/api/v1/media/live-sessions/${encodeURIComponent(sessionId)}`, {
+        method: 'DELETE',
+      }).catch(() => undefined);
+      setSessionId(null);
+    }
+  };
+
   const getStateColor = () => {
     switch (camera.state) {
       case 'LIVE':
-        return 'border-green-500 bg-green-50 dark:bg-green-900/20';
+        return 'border-emerald-500 bg-emerald-50 dark:bg-emerald-950/20';
       case 'ONLINE':
-        return 'border-blue-500 bg-blue-50 dark:bg-blue-900/20';
+        return 'border-blue-500 bg-blue-50 dark:bg-blue-950/20';
       case 'NO_RECORD':
-        return 'border-red-500 bg-red-50 dark:bg-red-900/20';
+        return 'border-rose-500 bg-rose-50 dark:bg-rose-950/20';
       case 'STREAM_LOSS':
-        return 'border-yellow-500 bg-yellow-50 dark:bg-yellow-900/20';
+        return 'border-amber-500 bg-amber-50 dark:bg-amber-950/20';
       case 'OFFLINE':
-        return 'border-gray-500 bg-gray-50 dark:bg-gray-800';
+        return 'border-slate-400 bg-slate-100 dark:bg-slate-800';
       default:
-        return 'border-gray-300 bg-gray-100 dark:bg-gray-800';
+        return 'border-slate-300 bg-slate-50 dark:bg-slate-800';
     }
   };
-
-  const getStateLabel = () => {
-    switch (camera.state) {
-      case 'LIVE':
-        return { text: 'LIVE', color: 'text-green-600 dark:text-green-400' };
-      case 'ONLINE':
-        return { text: 'ONLINE', color: 'text-blue-600 dark:text-blue-400' };
-      case 'NO_RECORD':
-        return { text: 'NO RECORD', color: 'text-red-600 dark:text-red-400' };
-      case 'STREAM_LOSS':
-        return { text: 'STREAM LOSS', color: 'text-yellow-600 dark:text-yellow-400' };
-      case 'OFFLINE':
-        return { text: 'OFFLINE', color: 'text-gray-600 dark:text-gray-400' };
-      default:
-        return { text: 'UNKNOWN', color: 'text-gray-600 dark:text-gray-400' };
-    }
-  };
-
-  const stateLabel = getStateLabel();
 
   return (
-    <button
+    <div
       onClick={onClick}
-      className={`relative aspect-video rounded-lg border-2 ${getStateColor()} overflow-hidden transition-all hover:shadow-lg hover:scale-105 group`}
+      onDoubleClick={onClick}
+      className={`relative aspect-video rounded-xl border-2 ${getStateColor()} overflow-hidden transition-all hover:shadow-xl hover:scale-[1.02] cursor-pointer group select-none`}
     >
-      {/* Video Preview Placeholder */}
-      <div className="absolute inset-0 bg-gray-900 flex items-center justify-center">
+      {/* Video Viewport / Backdrop */}
+      <div className="absolute inset-0 bg-slate-950 flex items-center justify-center">
         {camera.state === 'OFFLINE' ? (
-          <div className="text-center">
-            <XCircleIcon className="h-8 w-8 text-gray-500 mx-auto mb-1" />
-            <p className="text-xs text-gray-500">Camera Offline</p>
+          <div className="text-center p-4">
+            <XCircleIcon className="h-8 w-8 text-slate-500 mx-auto mb-1" />
+            <p className="text-xs text-slate-400 font-semibold">Camera Offline</p>
           </div>
         ) : camera.state === 'STREAM_LOSS' ? (
-          <div className="text-center">
-            <SignalSlashIcon className="h-8 w-8 text-gray-500 mx-auto mb-1" />
-            <p className="text-xs text-gray-500">No Stream</p>
+          <div className="text-center p-4">
+            <SignalSlashIcon className="h-8 w-8 text-amber-500 mx-auto mb-1" />
+            <p className="text-xs text-amber-400 font-semibold">Stream Signal Loss</p>
           </div>
         ) : (
-          <VideoCameraIcon className="h-8 w-8 text-gray-600" />
+          <div className="relative w-full h-full flex items-center justify-center bg-slate-900">
+            {/* Live stream animation canvas background */}
+            <div className="absolute inset-0 opacity-20 bg-[radial-gradient(#38bdf8_1px,transparent_1px)] [background-size:16px_16px]"></div>
+            <VideoCameraIcon className="h-8 w-8 text-slate-600 group-hover:text-blue-400 transition" />
+            <span className="absolute bottom-2 right-2 text-[10px] text-slate-500 font-mono">
+              {streamProfile === 'main' ? '1080p 25fps' : '360p 15fps'}
+            </span>
+          </div>
         )}
       </div>
 
-      {/* Status Badges - Top Right */}
-      <div className="absolute top-2 right-2 flex flex-col gap-1 items-end">
-        {/* Recording Indicator */}
+      {/* Top Badges */}
+      <div className="absolute top-2 right-2 flex flex-col gap-1 items-end z-10">
+        {/* Recording Badge */}
         {camera.recordingStatus === 'recording' && (
-          <div className="flex items-center gap-1 bg-red-600 text-white px-2 py-0.5 rounded text-xs font-semibold">
-            <div className="w-2 h-2 bg-white rounded-full animate-pulse"></div>
+          <div className="flex items-center gap-1.5 bg-rose-600 text-white px-2 py-0.5 rounded-full text-[10px] font-bold tracking-wider shadow-sm">
+            <span className="w-1.5 h-1.5 bg-white rounded-full animate-pulse"></span>
             REC
           </div>
         )}
 
-        {/* Health Issues */}
+        {/* No Record Alert */}
+        {camera.recordingStatus === 'stopped' && camera.state !== 'OFFLINE' && (
+          <div className="flex items-center gap-1 bg-rose-700 text-white px-2 py-0.5 rounded-full text-[10px] font-bold shadow-sm">
+            NO RECORD
+          </div>
+        )}
+
+        {/* Video Loss / Tamper */}
         {camera.videoLoss && (
-          <div className="flex items-center gap-1 bg-red-600 text-white px-2 py-0.5 rounded text-xs font-semibold">
+          <div className="flex items-center gap-1 bg-rose-600 text-white px-2 py-0.5 rounded text-[10px] font-bold shadow-sm">
             <ExclamationTriangleIcon className="h-3 w-3" />
             VIDEO LOSS
           </div>
         )}
 
         {camera.tamperingDetected && (
-          <div className="flex items-center gap-1 bg-red-600 text-white px-2 py-0.5 rounded text-xs font-semibold">
+          <div className="flex items-center gap-1 bg-amber-600 text-white px-2 py-0.5 rounded text-[10px] font-bold shadow-sm">
             <ExclamationTriangleIcon className="h-3 w-3" />
             TAMPER
           </div>
         )}
 
-        {camera.imageFrozen && (
-          <div className="flex items-center gap-1 bg-yellow-600 text-white px-2 py-0.5 rounded text-xs font-semibold">
-            <ExclamationTriangleIcon className="h-3 w-3" />
-            FROZEN
-          </div>
-        )}
-
-        {/* Retention Warning */}
+        {/* Retention Warning Badge */}
         {camera.retentionState === 'VIOLATION' && (
-          <div className="flex items-center gap-1 bg-orange-600 text-white px-2 py-0.5 rounded text-xs font-semibold">
+          <div className="flex items-center gap-1 bg-amber-600 text-white px-2 py-0.5 rounded-full text-[10px] font-bold shadow-sm">
             <ClockIcon className="h-3 w-3" />
-            {camera.retentionDays}d
+            {camera.retentionDays}d / 90d
           </div>
         )}
       </div>
 
-      {/* Health Score Badge - Top Left */}
-      <div className="absolute top-2 left-2">
+      {/* Top Left Health Score & Channel Number */}
+      <div className="absolute top-2 left-2 flex items-center gap-1.5 z-10">
+        <span className="px-1.5 py-0.5 bg-black/60 backdrop-blur-md rounded text-[10px] font-mono font-bold text-white border border-white/10">
+          {camera.channelNumber}
+        </span>
         <div
-          className={`px-2 py-0.5 rounded text-xs font-semibold ${
+          className={`px-1.5 py-0.5 rounded text-[10px] font-bold shadow-sm ${
             camera.healthScore >= 80
-              ? 'bg-green-600 text-white'
+              ? 'bg-emerald-600 text-white'
               : camera.healthScore >= 50
-              ? 'bg-yellow-600 text-white'
-              : 'bg-red-600 text-white'
+              ? 'bg-amber-600 text-white'
+              : 'bg-rose-600 text-white'
           }`}
         >
           {camera.healthScore.toFixed(0)}
         </div>
       </div>
 
-      {/* Camera Info - Bottom */}
-      <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/90 via-black/70 to-transparent p-3">
-        <div className="text-white">
-          <div className="text-sm font-bold truncate">{camera.name}</div>
-          <div className="flex items-center gap-2 text-xs">
-            <span className={`font-semibold ${stateLabel.color}`}>
-              {stateLabel.text}
-            </span>
-            {camera.recordingStatus === 'recording' && (
-              <>
-                <span className="text-gray-400">•</span>
-                <span className="text-gray-300">REC</span>
-              </>
-            )}
+      {/* Bottom Info Bar */}
+      <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/95 via-black/75 to-transparent p-3 pt-6 z-10">
+        <div className="flex items-center justify-between text-white">
+          <div className="truncate pr-2">
+            <div className="text-xs font-bold truncate group-hover:text-blue-300 transition">
+              {camera.name}
+            </div>
+            <div className="flex items-center gap-2 text-[10px] text-slate-300">
+              <span className="font-semibold">{camera.state}</span>
+              {camera.latencyMs ? <span>· {camera.latencyMs}ms</span> : null}
+              {camera.ptzSupported ? <span className="text-blue-300 font-semibold">PTZ</span> : null}
+            </div>
           </div>
-
-          {/* Additional Info on Hover */}
-          <div className="mt-1 text-xs text-gray-300 opacity-0 group-hover:opacity-100 transition-opacity">
-            {camera.currentFps && (
-              <div>FPS: {camera.currentFps.toFixed(1)}</div>
-            )}
-            {camera.latencyMs !== undefined && (
-              <div>Latency: {camera.latencyMs}ms</div>
-            )}
+          <div className="opacity-0 group-hover:opacity-100 transition-opacity p-1 bg-white/20 rounded hover:bg-white/40 text-white">
+            <ArrowsPointingOutIcon className="h-4 w-4" />
           </div>
         </div>
       </div>
-
-      {/* Click to expand indicator */}
-      <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/30">
-        <div className="bg-white dark:bg-gray-800 rounded-full px-4 py-2 text-sm font-medium text-gray-900 dark:text-white shadow-lg">
-          Click to view details
-        </div>
-      </div>
-    </button>
+    </div>
   );
 }

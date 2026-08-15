@@ -125,7 +125,7 @@ export function BranchHeader({ snapshot, onRefresh }: BranchHeaderProps) {
               </span>
               <span>•</span>
               <span>
-                Last Health Poll: <span className="font-medium">{formatLastSeen(snapshot.lastTelemetryAt)}</span>
+                Last Health Poll: <span className="font-medium">{formatLastSeen(snapshot.lastTelemetryAt ? new Date(snapshot.lastTelemetryAt) : undefined)}</span>
               </span>
             </div>
 

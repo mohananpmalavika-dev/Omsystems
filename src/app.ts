@@ -28,6 +28,8 @@ import {
   transportIsAllowed,
 } from "./routes/branch-connectivity.routes.js";
 import { registerRecorderLifecycleRoutes } from "./routes/recorder-lifecycle.routes.js";
+import { registerRecorderProfileRoutes } from "./routes/recorder-profile.routes.js";
+import { registerBranchOperationalSnapshotRoutes } from "./routes/branch-operational-snapshot.routes.js";
 import { registerCctvInfrastructureRoutes } from "./routes/cctv-infrastructure.js";
 import { registerOrganizationRoutes } from "./routes/organization.routes.js";
 import { registerBranchLifecycleRoutes } from "./routes/branch-lifecycle.routes.js";
@@ -2414,6 +2416,22 @@ export async function buildApp(options?: {
     app.log.info('Capabilities routes registered');
   } catch (err: unknown) {
     app.log.error({ err }, 'failed to register capabilities routes');
+  }
+
+  // Register Recorder Profiles & Compatibility routes
+  try {
+    await registerRecorderProfileRoutes(app, store);
+    app.log.info('Recorder profile and compatibility routes registered');
+  } catch (err: unknown) {
+    app.log.error({ err }, 'failed to register recorder profile routes');
+  }
+
+  // Register Branch Operational Snapshot & Command Center routes
+  try {
+    await registerBranchOperationalSnapshotRoutes(app, store);
+    app.log.info('Branch operational snapshot routes registered');
+  } catch (err: unknown) {
+    app.log.error({ err }, 'failed to register branch operational snapshot routes');
   }
 
   // Register banking analytics routes

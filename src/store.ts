@@ -60,6 +60,12 @@ import type {
   DeviceInventoryRecord,
   RecorderReplacementResult,
 } from "./control-plane-store.js";
+import type {
+  RecorderDeviceProfile,
+  IdentityEvidence,
+  ApiFamilyEvidence,
+  CompatibilityCatalogEntry,
+} from "./types/recorder-profile.types.js";
 import { IncidentManagementMethods } from "./store-incident-extensions.js";
 import type { OperationalHealthPolicy, OperationalTelemetryEnvelope, VideoWallGridSize, VideoWallLayout } from "./operational-health/types.js";
 import type {
@@ -4095,6 +4101,154 @@ export class MemoryStore implements ControlPlaneStore {
     };
     this.deviceInventory.push(record);
     return record;
+  }
+
+  // Recorder Device Profiles & Compatibility Store
+  private readonly recorderProfiles = new Map<string, RecorderDeviceProfile>();
+  private readonly refingerprintTasks = new Map<string, any>();
+
+  async upsertRecorderProfile(profile: RecorderDeviceProfile): Promise<void> {
+    this.recorderProfiles.set(profile.recorderId, profile);
+  }
+
+  async getRecorderProfile(recorderId: string): Promise<RecorderDeviceProfile | null> {
+    return this.recorderProfiles.get(recorderId) ?? null;
+  }
+
+  async listRecorderProfiles(filter?: { tenantId?: string; branchId?: string }): Promise<RecorderDeviceProfile[]> {
+    return Array.from(this.recorderProfiles.values()).filter((p) => {
+      if (filter?.tenantId && p.tenantId !== filter.tenantId) return false;
+      if (filter?.branchId && p.branchId !== filter.branchId) return false;
+      return true;
+    });
+  }
+
+  async getRecorderEvidence(recorderId: string): Promise<{
+    identityEvidence: IdentityEvidence[];
+    apiEvidence: ApiFamilyEvidence[];
+    capabilities: any;
+    signature: string;
+    lastFingerprintedAt: string;
+  } | null> {
+    const profile = this.recorderProfiles.get(recorderId);
+    if (!profile) return null;
+    return {
+      identityEvidence: profile.identityEvidence,
+      apiEvidence: profile.apiEvidence,
+      capabilities: profile.fingerprint.capabilities,
+      signature: profile.signature,
+      lastFingerprintedAt: profile.lastFingerprintedAt,
+    };
+  }
+
+  async queueRecorderRefingerprint(
+    recorderId: string,
+    reason: string,
+    probeFamilies?: string[],
+  ): Promise<{ queued: boolean; taskId?: string }> {
+    const taskId = `refingerprint-${randomUUID()}`;
+    this.refingerprintTasks.set(taskId, {
+      taskId,
+      recorderId,
+      reason,
+      probeFamilies,
+      queuedAt: new Date().toISOString(),
+      status: "queued",
+    });
+    return { queued: true, taskId };
+  }
+
+  async getCompatibilityCatalog(): Promise<CompatibilityCatalogEntry[]> {
+    const catalogMap = new Map<string, CompatibilityCatalogEntry>();
+
+    for (const p of this.recorderProfiles.values()) {
+      const mfr = p.fingerprint.manufacturer || "Unknown";
+      const model = p.fingerprint.model || "Unknown";
+      const fw = p.fingerprint.firmwareVersion ? `${p.fingerprint.firmwareVersion.split(".")[0]}.x` : "General";
+      const key = `${mfr}::${model}::${fw}`;
+
+      const existing = catalogMap.get(key);
+      if (!existing) {
+        const likelyApis: { family: any; probability: number }[] = [];
+        if (p.fingerprint.detectedApiFamilies.dahuaCgi) likelyApis.push({ family: "DAHUA_CGI", probability: 0.95 });
+        if (p.fingerprint.detectedApiFamilies.onvif) likelyApis.push({ family: "ONVIF", probability: 0.92 });
+        if (p.fingerprint.detectedApiFamilies.hikvisionIsapi) likelyApis.push({ family: "HIKVISION_ISAPI", probability: 0.95 });
+        if (p.fingerprint.detectedApiFamilies.rtsp) likelyApis.push({ family: "RTSP", probability: 0.90 });
+
+        const likelyCapabilities: Record<string, number> = {};
+        for (const [capKey, cap] of Object.entries(p.fingerprint.capabilities)) {
+          likelyCapabilities[capKey] = cap.state === "SUPPORTED" ? 1.0 : cap.state === "PARTIAL" ? 0.6 : 0.0;
+        }
+
+        catalogMap.set(key, {
+          manufacturer: mfr,
+          model,
+          firmwareRange: fw,
+          observedCount: 1,
+          likelyApis,
+          likelyCapabilities,
+          lastObservedAt: p.lastFingerprintedAt,
+        });
+      } else {
+        existing.observedCount += 1;
+        if (new Date(p.lastFingerprintedAt) > new Date(existing.lastObservedAt)) {
+          existing.lastObservedAt = p.lastFingerprintedAt;
+        }
+      }
+    }
+
+    if (catalogMap.size === 0) {
+      catalogMap.set("CP PLUS::CP-UNR-4K4322-V2::4.x", {
+        manufacturer: "CP PLUS",
+        model: "CP-UNR-4K4322-V2",
+        firmwareRange: "4.x",
+        observedCount: 12,
+        likelyApis: [
+          { family: "DAHUA_CGI", probability: 0.98 },
+          { family: "ONVIF", probability: 0.95 },
+          { family: "RTSP", probability: 0.92 },
+        ],
+        likelyCapabilities: {
+          deviceInfo: 0.98,
+          channels: 0.97,
+          liveStream: 0.95,
+          recordingStatus: 0.90,
+          playbackSearch: 0.94,
+          storageStatus: 0.96,
+          smartTelemetry: 0.72,
+          deviceTime: 0.94,
+          events: 0.70,
+          ptz: 0.88,
+        },
+        lastObservedAt: new Date().toISOString(),
+      });
+      catalogMap.set("CP PLUS::CP-UVR-1601E1-CS::3.x", {
+        manufacturer: "CP PLUS",
+        model: "CP-UVR-1601E1-CS",
+        firmwareRange: "3.x",
+        observedCount: 8,
+        likelyApis: [
+          { family: "DAHUA_CGI", probability: 0.95 },
+          { family: "ONVIF", probability: 0.90 },
+          { family: "RTSP", probability: 0.88 },
+        ],
+        likelyCapabilities: {
+          deviceInfo: 0.95,
+          channels: 0.95,
+          liveStream: 0.90,
+          recordingStatus: 0.85,
+          playbackSearch: 0.88,
+          storageStatus: 0.92,
+          smartTelemetry: 0.50,
+          deviceTime: 0.90,
+          events: 0.65,
+          ptz: 0.75,
+        },
+        lastObservedAt: new Date().toISOString(),
+      });
+    }
+
+    return Array.from(catalogMap.values());
   }
 }
 

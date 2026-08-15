@@ -44,6 +44,30 @@ export function createOperationalHealthRoutes(pool: Pool): Router {
   });
 
   /**
+   * GET /api/v1/operational-health/summary
+   * Alias for /dashboard to support standard summary contract
+   */
+  router.get('/summary', async (req: Request, res: Response) => {
+    try {
+      const tenantId = req.user?.tenantId;
+      if (!tenantId) {
+        return res.status(401).json({ error: 'Unauthorized' });
+      }
+      const summary = await healthService.getDashboardSummary(tenantId);
+      res.json({
+        success: true,
+        data: summary,
+      });
+    } catch (error) {
+      console.error('Summary error:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Failed to retrieve operational health summary',
+      });
+    }
+  });
+
+  /**
    * GET /api/v1/operational-health/branches
    * 
    * Get branch health mosaic (lightweight items for 400+ branches)
