@@ -1,0 +1,8 @@
+table.ChannelTitle[0]=Front Entrance
+table.ChannelTitle[1]=Back Door
+table.ChannelTitle[2]=Parking Lot
+table.ChannelTitle[3]=Reception
+table.ChannelTitle[4]=Warehouse
+table.ChannelTitle[5]=Loading Bay
+table.ChannelTitle[6]=Server Room
+table.ChannelTitle[7]=Office Area

@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<VideoInputChannelList version="2.0" xmlns="http://www.hikvision.com/ver20/XMLSchema">
+  <VideoInputChannel version="2.0">
+    <id>1</id>
+    <name>Camera 1</name>
+    <enabled>true</enabled>
+  </VideoInputChannel>
+  <VideoInputChannel version="2.0">
+    <id>2</id>
+    <name>Camera 2</name>
+    <enabled>true</enabled>
+  </VideoInputChannel>
+  <VideoInputChannel version="2.0">
+    <id>3</id>
+    <name>Camera 3</name>
+    <enabled>true</enabled>
+  </VideoInputChannel>
+  <VideoInputChannel version="2.0">
+    <id>4</id>
+    <name>Camera 4</name>
+    <enabled>false</enabled>
+  </VideoInputChannel>
+</VideoInputChannelList>

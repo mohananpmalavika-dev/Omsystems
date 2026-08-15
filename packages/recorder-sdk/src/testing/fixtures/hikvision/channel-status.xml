@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<InputProxyChannelStatusList version="2.0" xmlns="http://www.hikvision.com/ver20/XMLSchema">
+  <InputProxyChannelStatus version="2.0">
+    <id>1</id>
+    <online>true</online>
+  </InputProxyChannelStatus>
+  <InputProxyChannelStatus version="2.0">
+    <id>2</id>
+    <online>true</online>
+  </InputProxyChannelStatus>
+  <InputProxyChannelStatus version="2.0">
+    <id>3</id>
+    <online>false</online>
+  </InputProxyChannelStatus>
+  <InputProxyChannelStatus version="2.0">
+    <id>4</id>
+    <online>false</online>
+  </InputProxyChannelStatus>
+</InputProxyChannelStatusList>

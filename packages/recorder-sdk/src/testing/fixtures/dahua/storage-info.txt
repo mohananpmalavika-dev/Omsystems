@@ -1,0 +1,10 @@
+info[0].Name=sda1
+info[0].State=ok
+info[0].TotalBytes=2000398934016
+info[0].FreeBytes=1500298934016
+info[0].Type=HDD
+info[1].Name=sdb1
+info[1].State=ok
+info[1].TotalBytes=2000398934016
+info[1].FreeBytes=1800298934016
+info[1].Type=HDD

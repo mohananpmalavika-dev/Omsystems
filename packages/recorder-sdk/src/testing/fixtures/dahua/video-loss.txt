@@ -1,0 +1,3 @@
+channels[3]=true
+channels[5]=true
+result=3,5
