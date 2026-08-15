@@ -13,11 +13,7 @@
   "dependencies": {
     "@emotion/react": "^11.14.0",
     "@emotion/styled": "^11.14.1",
-<<<<<<< HEAD
-    "@heroicons/react": "^2.1.5",
-=======
     "@heroicons/react": "^2.2.0",
->>>>>>> 12e49d4 (feat: implement 400-branch surveillance operations command center, interactive KPI ribbon, 5-pillar mosaic, and CP PLUS recorder compatibility layer)
     "@mui/icons-material": "^9.2.0",
     "@mui/material": "^9.2.0",
     "hls.js": "^1.6.13",
