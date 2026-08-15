@@ -21,6 +21,7 @@ import {
   clampDecoderLimit,
   getDecoderCapacityOptions,
 } from "./enhanced-camera-grid-model";
+import { useDecoderBudgetManager } from "./decoderBudgetManager";
 import type { Camera, LiveSessionResponse, RecordingJob, RecordingMode } from "@/lib/types";
 import { startLiveFromBrowser } from "@/lib/live-client";
 
@@ -70,8 +71,10 @@ export function EnhancedCameraGrid({
   const [gridSize, setGridSize] = useState<GridSize>(
     initialLayout?.gridSize || "2x2"
   );
+  type TileStreamState = "METADATA_ONLY" | "QUEUED" | "CONNECTING" | "LIVE_SUBSTREAM" | "LIVE_MAINSTREAM" | "PAUSED" | "ERROR";
+
   const [gridPositions, setGridPositions] = useState<
-    Map<number, { camera: Camera; stream: "main" | "sub"; priority?: number }>
+    Map<number, { camera: Camera; stream: "main" | "sub"; priority?: number; state?: TileStreamState }>
   >(new Map());
   const [sessions, setSessions] = useState<Map<string, LiveSessionResponse>>(
     new Map()
@@ -84,7 +87,9 @@ export function EnhancedCameraGrid({
   const [layoutName, setLayoutName] = useState(initialLayout?.name || "");
   const [savedLayouts, setSavedLayouts] = useState<GridLayout[]>([]);
   const [visibleRange, setVisibleRange] = useState<VisibleRange>({ start: 0, end: 50 });
-  const [decoderLimit, setDecoderLimit] = useState(() => clampDecoderLimit(maxConcurrentStreams, maxConcurrentStreams));
+  // Decoder budget is computed dynamically based on client capability and configured maxConcurrentStreams.
+  // This replaces a fixed decoderLimit so the system treats the grid as a viewport rather than an
+  // unbounded set of live decoders.
   const [sequencing, setSequencing] = useState(true);
   const [sequenceOffset, setSequenceOffset] = useState(0);
   const [draggedCamera, setDraggedCamera] = useState<{ camera: Camera; fromPosition: number } | null>(null);
@@ -115,6 +120,19 @@ export function EnhancedCameraGrid({
     [maxConcurrentStreams],
   );
 
+  // Use the DecoderBudgetManager hook (dynamic budget based on hardware/GPU and maxConcurrentStreams)
+  const {
+    decoderBudget,
+    decoderLimit,
+    setUserPreference: setDecoderPreference,
+    setActiveCount,
+  } = useDecoderBudgetManager({ maxConcurrentStreams, enableGPUAcceleration });
+
+  useEffect(() => {
+    // keep the budget aware of current active sessions
+    setActiveCount(sessions.size);
+  }, [sessions.size, setActiveCount]);
+
   useEffect(() => onActiveStreamsChange?.(sessions.size), [onActiveStreamsChange, sessions.size]);
 
   useEffect(() => {
@@ -122,17 +140,6 @@ export function EnhancedCameraGrid({
       [...gridPositions.values()].map((entry) => entry.camera.id).sort(),
     );
   }, [gridPositions, onMonitoredCamerasChange]);
-
-  useEffect(() => {
-    const saved = Number(window.localStorage.getItem("sentinel.decoderCapacity"));
-    if (DECODER_CAPACITY_OPTIONS.includes(saved as typeof DECODER_CAPACITY_OPTIONS[number])) {
-      setDecoderLimit(clampDecoderLimit(saved, maxConcurrentStreams));
-    }
-  }, [maxConcurrentStreams]);
-
-  useEffect(() => {
-    setDecoderLimit((current) => clampDecoderLimit(current, maxConcurrentStreams));
-  }, [maxConcurrentStreams]);
 
   useEffect(() => {
     if (!sequencing || gridPositions.size <= decoderLimit) return;
@@ -693,8 +700,7 @@ export function EnhancedCameraGrid({
               disabled={decoderCapacityOptions.length === 1}
               onChange={(event) => {
                 const value = clampDecoderLimit(Number(event.target.value), maxConcurrentStreams);
-                setDecoderLimit(value);
-                window.localStorage.setItem("sentinel.decoderCapacity", String(value));
+                setDecoderPreference(value);
               }}
             >
               {decoderCapacityOptions.map((option) => (
@@ -706,6 +712,10 @@ export function EnhancedCameraGrid({
           </label>
           <span className="capacity-control" title="Grid positions may exceed the live-stream decoder cap">
             {totalPositions} channels · {decoderLimit} live max
+          </span>
+
+          <span className="capacity-control" title="Unlimited branch/device enrollment with dynamically scalable live-monitoring capacity">
+            Unlimited enrollment · Dynamic live capacity
           </span>
           <button
             className={`btn-secondary ${sequencing ? "active-control" : ""}`}
