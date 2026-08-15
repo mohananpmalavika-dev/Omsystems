@@ -260,6 +260,9 @@ export interface Camera {
   connectionTransport?: "vpn" | "cloudflare-tunnel" | "edge-gateway";
   recorderId?: string;
   recorderChannel?: number;
+  // Optional stream URLs (may be provided by backend or edge agent)
+  rtspUrl?: string;
+  subStreamUrl?: string;
   capabilities: {
     ptz: boolean;
     audio: boolean;

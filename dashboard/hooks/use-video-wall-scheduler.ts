@@ -175,7 +175,7 @@ export function useVideoWallScheduler(
           height: 1080,
           fps: 25,
           estimatedBitrateKbps: 4096,
-          uri: camera.rtspUrl,
+          uri: (camera as any).rtspUrl ?? undefined,
         },
         subStream: {
           cameraId: camera.id,
@@ -185,7 +185,7 @@ export function useVideoWallScheduler(
           height: 360,
           fps: 10,
           estimatedBitrateKbps: 512,
-          uri: camera.subStreamUrl,
+          uri: (camera as any).subStreamUrl ?? undefined,
         },
       };
     });
