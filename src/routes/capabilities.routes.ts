@@ -345,9 +345,15 @@ router.get('/', async (req: Request, res: Response) => {
  * GET /api/capabilities/:id
  * Get specific capability
  */
-router.get('/:id', async (req: Request<{ id: string }>, res: Response) => {
+router.get('/:id', async (req: Request, res: Response) => {
   try {
-    const { id } = req.params;
+    const { id } = (req.params ?? {}) as { id?: string };
+    if (!id) {
+      return res.status(400).json({
+        success: false,
+        error: 'Capability id is required'
+      });
+    }
     const capability = capabilityRegistry.get(id);
     
     if (!capability) {
@@ -375,9 +381,15 @@ router.get('/:id', async (req: Request<{ id: string }>, res: Response) => {
  * GET /api/capabilities/state/:state
  * Get capabilities by state
  */
-router.get('/state/:state', async (req: Request<{ state: string }>, res: Response) => {
+router.get('/state/:state', async (req: Request, res: Response) => {
   try {
-    const { state } = req.params;
+    const { state } = (req.params ?? {}) as { state?: string };
+    if (!state) {
+      return res.status(400).json({
+        success: false,
+        error: 'Capability state is required'
+      });
+    }
     
     if (!['AVAILABLE', 'PARTIAL', 'UNAVAILABLE', 'DISABLED'].includes(state)) {
       return res.status(400).json({
@@ -407,9 +419,15 @@ router.get('/state/:state', async (req: Request<{ state: string }>, res: Respons
  * GET /api/capabilities/category/:category
  * Get capabilities by category
  */
-router.get('/category/:category', async (req: Request<{ category: string }>, res: Response) => {
+router.get('/category/:category', async (req: Request, res: Response) => {
   try {
-    const { category } = req.params;
+    const { category } = (req.params ?? {}) as { category?: string };
+    if (!category) {
+      return res.status(400).json({
+        success: false,
+        error: 'Capability category is required'
+      });
+    }
     const capabilities = capabilityRegistry.getByCategory(category);
     
     res.json({

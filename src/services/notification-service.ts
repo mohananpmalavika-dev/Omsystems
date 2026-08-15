@@ -70,6 +70,28 @@ export class NotificationService {
     this.logger = logger || console;
   }
 
+  async resolveRecipients(input: {
+    tenantId: string;
+    notificationType: string;
+    severity?: string;
+    branchId?: string;
+    assetId?: string;
+  }): Promise<{ email: string[]; sms: string[]; webhook?: string[] }> {
+    const scope = input.tenantId;
+    const emailRecipients = this.config.email?.from ? [this.config.email.from] : [];
+    const smsRecipients = this.config.sms?.from ? [this.config.sms.from] : [];
+
+    if (scope && !emailRecipients.length && !smsRecipients.length) {
+      return { email: [], sms: [] };
+    }
+
+    return {
+      email: emailRecipients,
+      sms: smsRecipients,
+      webhook: [],
+    };
+  }
+
   /**
    * Send email notification
    */

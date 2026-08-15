@@ -535,6 +535,7 @@ export interface AnalyticsAlertTransitionInput {
 export interface ControlPlaneStore {
   close(): Promise<void>;
   getUser(identity: string): Promise<User | undefined>;
+  listTenants(): Promise<Array<{ id: string; name?: string; tenantId: string }>>;
   getNode(id: string): Promise<ResourceNode | undefined>;
   checkAccess(
     user: User,

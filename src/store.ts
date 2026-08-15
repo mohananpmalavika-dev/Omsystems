@@ -368,6 +368,16 @@ export class MemoryStore implements ControlPlaneStore {
     return this.users.get(identity);
   }
 
+  async listTenants() {
+    return [...this.nodes.values()]
+      .filter((node) => node.type === "company")
+      .map((node) => ({
+        id: node.id,
+        name: node.name,
+        tenantId: node.tenantId,
+      }));
+  }
+
   async getNode(id: string) {
     return this.nodes.get(id);
   }
