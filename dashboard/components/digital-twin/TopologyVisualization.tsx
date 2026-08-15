@@ -48,6 +48,7 @@ interface TopologyData {
     warning: number;
     critical: number;
     offline: number;
+    unknown: number;
   };
 }
 
@@ -259,6 +260,10 @@ export function TopologyVisualization({
             <div className="flex items-center justify-between">
               <span className="text-gray-500">● Offline:</span>
               <span className="font-semibold">{topology.healthySummary.offline}</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-gray-400">● Unknown:</span>
+              <span className="font-semibold">{topology.healthySummary.unknown}</span>
             </div>
           </div>
           <button

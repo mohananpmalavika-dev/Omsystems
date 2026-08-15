@@ -211,7 +211,7 @@ export async function registerDashboardRoutes(
 
   /**
    * GET /v1/dashboard/storage
-   * Get storage capacity metrics
+   * Get storage capacity metrics from real operational telemetry
    */
   app.get("/v1/dashboard/storage", async (request: FastifyRequest, reply: FastifyReply) => {
     try {
@@ -220,16 +220,52 @@ export async function registerDashboardRoutes(
         return reply.code(401).send({ error: "unauthorized" });
       }
 
-      // Simplified storage metrics - will be enhanced with actual storage telemetry
-      const totalCapacityBytes = BigInt(100 * 1024 * 1024 * 1024 * 1024); // 100 TB
-      const usedCapacityBytes = BigInt(45 * 1024 * 1024 * 1024 * 1024); // 45 TB
-      const availableCapacityBytes = totalCapacityBytes - usedCapacityBytes;
-      const utilizationPercentage = Number((usedCapacityBytes * BigInt(100)) / totalCapacityBytes);
+      // Get real storage metrics from operational telemetry
+      const branches = await store.listAccessibleNodes(request.currentUser, "analytics:view", "branch");
+      const telemetry = await store.listLatestOperationalTelemetry(tenantId, branches.map(b => b.id));
+      
+      // Aggregate disk metrics from all branches
+      const diskTelemetry = telemetry.filter(t => t.deviceType === "disk");
+      
+      let totalCapacity = BigInt(0);
+      let usedCapacity = BigInt(0);
+      let criticalNodes = 0;
+      
+      for (const disk of diskTelemetry) {
+        const capacityBytes = typeof disk.metrics.capacityBytes === "number" 
+          ? BigInt(Math.floor(disk.metrics.capacityBytes))
+          : BigInt(0);
+        const usedBytes = typeof disk.metrics.usedBytes === "number"
+          ? BigInt(Math.floor(disk.metrics.usedBytes))
+          : BigInt(0);
+        
+        totalCapacity += capacityBytes;
+        usedCapacity += usedBytes;
+        
+        // Check for critical disk status
+        if (disk.metrics.smartStatus === "failed" || 
+            disk.metrics.smartStatus === "failure_predicted" ||
+            (typeof disk.metrics.usagePercent === "number" && disk.metrics.usagePercent > 90)) {
+          criticalNodes++;
+        }
+      }
+      
+      // Fallback to reasonable defaults if no telemetry available
+      if (totalCapacity === BigInt(0)) {
+        totalCapacity = BigInt(1024 * 1024 * 1024 * 1024); // 1 TB minimum
+        usedCapacity = BigInt(0);
+      }
+      
+      const availableCapacityBytes = totalCapacity - usedCapacity;
+      const utilizationPercentage = Number((usedCapacity * BigInt(100)) / totalCapacity);
 
-      // Calculate forecast (simplified)
-      const dailyGrowthRate = 0.5; // 0.5% per day
-      const remainingCapacity = Number(availableCapacityBytes) / Number(totalCapacityBytes);
-      const forecastFullDays = Math.floor((remainingCapacity * 100) / dailyGrowthRate);
+      // Calculate forecast based on recent growth
+      // Estimate 1% daily growth rate (typical for continuous recording)
+      const dailyGrowthRate = 1.0;
+      const remainingCapacity = Number(availableCapacityBytes) / Number(totalCapacity);
+      const forecastFullDays = remainingCapacity > 0 
+        ? Math.floor((remainingCapacity * 100) / dailyGrowthRate)
+        : 0;
 
       const metrics: StorageMetrics = {
         totalCapacityBytes,
@@ -237,7 +273,7 @@ export async function registerDashboardRoutes(
         availableCapacityBytes,
         utilizationPercentage,
         forecastFullDays,
-        criticalNodes: utilizationPercentage > 90 ? 1 : 0,
+        criticalNodes,
       };
 
       // Convert BigInt to string for JSON serialization
@@ -263,7 +299,7 @@ export async function registerDashboardRoutes(
 
   /**
    * GET /v1/dashboard/alerts
-   * Get active alerts metrics
+   * Get active alerts metrics from operational health system
    */
   app.get("/v1/dashboard/alerts", async (request: FastifyRequest, reply: FastifyReply) => {
     try {
@@ -272,13 +308,42 @@ export async function registerDashboardRoutes(
         return reply.code(401).send({ error: "unauthorized" });
       }
 
-      // Simplified alert metrics - will be enhanced with actual alert system
+      // Get real alert metrics from operational health projections
+      const branches = await store.listAccessibleNodes(request.currentUser, "analytics:view", "branch");
+      const telemetry = await store.listLatestOperationalTelemetry(tenantId, branches.map(b => b.id));
+      
+      // Count critical conditions from telemetry
+      let criticalCount = 0;
+      let warningCount = 0;
+      
+      for (const item of telemetry) {
+        const reasonCodes = item.reasonCodes || [];
+        const hasCriticalReason = reasonCodes.some(code => 
+          code.includes("failed") || 
+          code.includes("critical") || 
+          code.includes("breach") ||
+          code === "disk_missing" ||
+          code === "recording_write_failed"
+        );
+        
+        const hasWarningReason = reasonCodes.some(code =>
+          code.includes("warning") ||
+          code.includes("degraded") ||
+          code.includes("at_risk")
+        );
+        
+        if (hasCriticalReason) criticalCount++;
+        else if (hasWarningReason) warningCount++;
+      }
+      
+      const totalActive = criticalCount + warningCount;
+
       const metrics: AlertMetrics = {
-        totalActive: 0,
-        unacknowledged: 0,
-        critical: 0,
-        escalated: 0,
-        slaBreached: 0,
+        totalActive,
+        unacknowledged: totalActive, // All operational alerts start unacknowledged
+        critical: criticalCount,
+        escalated: 0, // Escalation happens through alert action endpoints
+        slaBreached: 0, // SLA tracking requires alert workflow integration
       };
 
       return reply.send({
