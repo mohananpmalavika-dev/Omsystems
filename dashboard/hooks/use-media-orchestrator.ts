@@ -38,7 +38,7 @@ export function useMediaOrchestrator(options: MediaOrchestratorOptions) {
   const [clientCapabilities, setClientCapabilities] = useState<ClientMediaCapabilities | null>(null);
   
   const sessionsRef = useRef<Map<string, MediaSession>>(new Map());
-  const heartbeatTimerRef = useRef<NodeJS.Timeout>();
+  const heartbeatTimerRef = useRef<ReturnType<typeof setInterval> | undefined>(undefined);
   const visibilityObserverRef = useRef<IntersectionObserver | null>(null);
 
   /**
