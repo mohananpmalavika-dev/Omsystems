@@ -2162,7 +2162,9 @@ export async function buildApp(options?: {
     await registerUserRoutes(app, extendedStore);
     await registerCameraPermissionRoutes(app, extendedStore);
     await registerCctvInfrastructureRoutes(app, extendedStore);
-    await registerAuditRoutes(app, extendedStore, extendedStore.audits);
+    if (hasAuditRepository(extendedStore)) {
+      await registerAuditRoutes(app, extendedStore, extendedStore.audits);
+    }
     await registerComplianceRoutes(app, extendedStore);
     await registerComplianceEnhancedRoutes(app, extendedStore);
     await registerMaintenanceDashboardRoutes(app, extendedStore);
@@ -2529,6 +2531,13 @@ function safeCamera(camera: Camera) {
     ...safe,
     profiles: safe.profiles.map(({ rtspUri: _rtspUri, ...profile }) => profile),
   };
+}
+
+function hasAuditRepository<T extends ControlPlaneStore>(
+  store: T,
+): store is T & { audits: Parameters<typeof registerAuditRoutes>[2] } {
+  const candidate = store as { audits?: { getBranchComplianceSummary?: unknown } };
+  return typeof candidate.audits?.getBranchComplianceSummary === "function";
 }
 
 async function requireAccess(
