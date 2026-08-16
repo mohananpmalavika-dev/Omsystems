@@ -38,6 +38,7 @@ import { registerDeviceHealthRoutes } from "./routes/device-health.routes.js";
 import { registerRecordingContinuityRoutes } from "./routes/recording-continuity.routes.js";
 import { registerCentralMonitoringRoutes } from "./routes/central-monitoring.routes.js";
 import { registerOnDemandMediaRoutes } from "./routes/on-demand-media.routes.js";
+import { registerAiAlertsRoutes } from "./routes/ai-alerts.routes.js";
 import { registerCctvInfrastructureRoutes } from "./routes/cctv-infrastructure.js";
 import { registerOrganizationRoutes } from "./routes/organization.routes.js";
 import { registerBranchLifecycleRoutes } from "./routes/branch-lifecycle.routes.js";
@@ -92,6 +93,7 @@ import { registerAlertOperationsRoutes } from "./routes/alert-operations.routes.
 import { registerSlaReportRoutes } from "./routes/sla-reports.routes.js";
 import { registerClockMonitoringRoutes } from "./routes/clock-monitoring.routes.js";
 import { registerEdgeGatewayRoutes } from "./routes/edge-gateway.routes.js";
+import { registerEvidenceCaptureRoutes } from "./routes/evidence-capture.routes.js";
 import { autoProvisionVerifiedCameras } from "./services/camera-auto-provision.js";
 import {
   EmptyFederationLocalSearchProvider,
@@ -2520,6 +2522,14 @@ export async function buildApp(options?: {
     app.log.error({ err }, 'failed to register on-demand media routes');
   }
 
+  // Register Normalized AI Alerts & Surveillance Event routes
+  try {
+    await registerAiAlertsRoutes(app);
+    app.log.info('Normalized AI alerts and surveillance event routes registered');
+  } catch (err: unknown) {
+    app.log.error({ err }, 'failed to register AI alerts routes');
+  }
+
   // Register First-Class Evidence-Driven Branch Internet & WAN Connectivity routes
   try {
     await registerConnectivityHealthRoutes(app, store);
@@ -2558,6 +2568,14 @@ export async function buildApp(options?: {
     app.log.info('Edge Gateway protocol and media session routes registered');
   } catch (err: unknown) {
     app.log.error({ err }, 'failed to register edge gateway routes');
+  }
+
+  // Register Guaranteed Alert Evidence & Forensic Verification routes
+  try {
+    await registerEvidenceCaptureRoutes(app, store);
+    app.log.info('Guaranteed alert evidence capture routes registered');
+  } catch (err: unknown) {
+    app.log.error({ err }, 'failed to register evidence capture routes');
   }
 
   // Register banking analytics routes
