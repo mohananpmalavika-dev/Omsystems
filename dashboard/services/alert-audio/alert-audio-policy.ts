@@ -2,7 +2,7 @@
  * Alert Audio Severity Policies & Priority Definitions
  */
 
-import type { AlertSeverity, AudioSeverityPolicy } from "./alert-audio.types.js";
+import type { AlertSeverity, AudioSeverityPolicy } from "./alert-audio.types";
 
 export const ALERT_PRIORITIES: Record<AlertSeverity, number> = {
   P1: 4,

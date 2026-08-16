@@ -8,12 +8,18 @@ import type {
   LinkState,
   VpnEvidence,
   WanPath,
-} from "../../../../backend/src/connectivity/domain/connectivity.types.js";
+} from "./connectivity.types.js";
 
 export interface ProbeSample {
   timestamp: Date;
   success: boolean;
   latencyMs?: number | undefined;
+}
+
+export interface DefaultRoute {
+  dev: string;
+  via?: string | undefined;
+  metric?: number | undefined;
 }
 
 export class LatencyCalculator {
@@ -44,9 +50,9 @@ export class DefaultRouteParser {
   /**
    * Parses 'ip route show default' or similar routing table output
    */
-  static parse(output: string): Array<{ dev: string; via?: string; metric?: number }> {
+  static parse(output: string): DefaultRoute[] {
     const lines = output.trim().split("\n");
-    const routes: Array<{ dev: string; via?: string; metric?: number }> = [];
+    const routes: DefaultRoute[] = [];
 
     for (const line of lines) {
       const devMatch = line.match(/dev\s+([^\s]+)/);
@@ -56,7 +62,7 @@ export class DefaultRouteParser {
       if (devMatch && devMatch[1]) {
         routes.push({
           dev: devMatch[1],
-          via: viaMatch?.[1],
+          via: viaMatch?.[1] ?? undefined,
           metric: metricMatch ? parseInt(metricMatch[1]!, 10) : 0,
         });
       }
@@ -66,9 +72,9 @@ export class DefaultRouteParser {
   }
 
   static identifyCurrentPath(
-    routes: Array<{ dev: string; metric?: number }>,
+    routes: DefaultRoute[],
     primaryDev: string,
-    backupDev?: string,
+    backupDev?: string | undefined,
   ): WanPath {
     if (!routes.length) return "UNKNOWN";
     const best = routes[0];

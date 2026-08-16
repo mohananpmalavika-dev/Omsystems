@@ -6,7 +6,7 @@ import type {
   LinkState,
   VpnEvidence,
   WanPath,
-} from "../../../../backend/src/connectivity/domain/connectivity.types.js";
+} from "./connectivity.types.js";
 import {
   DefaultRouteParser,
   LatencyCalculator,

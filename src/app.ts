@@ -31,6 +31,7 @@ import { registerRecorderLifecycleRoutes } from "./routes/recorder-lifecycle.rou
 import { registerRecorderProfileRoutes } from "./routes/recorder-profile.routes.js";
 import { registerBranchOperationalSnapshotRoutes } from "./routes/branch-operational-snapshot.routes.js";
 import { registerRetentionRoutes } from "./retention/routes/retention.routes.js";
+import { registerAlertAudioRoutes } from "./routes/alert-audio.routes.js";
 import { registerCctvInfrastructureRoutes } from "./routes/cctv-infrastructure.js";
 import { registerOrganizationRoutes } from "./routes/organization.routes.js";
 import { registerBranchLifecycleRoutes } from "./routes/branch-lifecycle.routes.js";
@@ -2452,6 +2453,14 @@ export async function buildApp(options?: {
     app.log.info('Enterprise storage and SMART health routes registered');
   } catch (err: unknown) {
     app.log.error({ err }, 'failed to register enterprise storage health routes');
+  }
+
+  // Register Control Room Alert Audio Subsystem routes
+  try {
+    await registerAlertAudioRoutes(app);
+    app.log.info('Control room alert audio routes registered');
+  } catch (err: unknown) {
+    app.log.error({ err }, 'failed to register control room alert audio routes');
   }
 
   // Register First-Class Evidence-Driven Branch Internet & WAN Connectivity routes
