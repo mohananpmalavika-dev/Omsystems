@@ -1,6 +1,6 @@
 export type OperationalReportFormat = "csv" | "xlsx" | "pdf";
 export type OperationalReportTemplate = "comprehensive" | "branch_health_summary" | "camera_availability" |
-  "alert_summary" | "recorder_status" | "hdd_health" | "retention_compliance";
+  "alert_summary" | "recorder_status" | "hdd_health" | "retention_compliance" | "daily_surveillance_health";
 export type OperationalReportRunStatus = "queued" | "running" | "completed" | "failed" | "dead";
 
 export interface OperationalReportFilters {

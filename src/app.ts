@@ -33,6 +33,7 @@ import { registerBranchOperationalSnapshotRoutes } from "./routes/branch-operati
 import { registerRetentionRoutes } from "./retention/routes/retention.routes.js";
 import { registerAlertAudioRoutes } from "./routes/alert-audio.routes.js";
 import { registerNotificationRoutes } from "./routes/notification.routes.js";
+import { registerDailySurveillanceReportRoutes } from "./routes/daily-surveillance-report.routes.js";
 import { registerCctvInfrastructureRoutes } from "./routes/cctv-infrastructure.js";
 import { registerOrganizationRoutes } from "./routes/organization.routes.js";
 import { registerBranchLifecycleRoutes } from "./routes/branch-lifecycle.routes.js";
@@ -84,6 +85,7 @@ import { registerProvisioningRoutes } from "./routes/provisioning.routes.js";
 import { registerStorageHealthRoutes } from "./routes/storage-health.routes.js";
 import { registerConnectivityHealthRoutes } from "./routes/connectivity-health.routes.js";
 import { registerAlertOperationsRoutes } from "./routes/alert-operations.routes.js";
+import { registerSlaReportRoutes } from "./routes/sla-reports.routes.js";
 import { autoProvisionVerifiedCameras } from "./services/camera-auto-provision.js";
 import {
   EmptyFederationLocalSearchProvider,
@@ -2472,6 +2474,14 @@ export async function buildApp(options?: {
     app.log.error({ err }, 'failed to register notification subsystem routes');
   }
 
+  // Register Daily Surveillance Health Report Subsystem routes
+  try {
+    await registerDailySurveillanceReportRoutes(app);
+    app.log.info('Daily surveillance health report routes registered');
+  } catch (err: unknown) {
+    app.log.error({ err }, 'failed to register daily surveillance health report routes');
+  }
+
   // Register First-Class Evidence-Driven Branch Internet & WAN Connectivity routes
   try {
     await registerConnectivityHealthRoutes(app, store);
@@ -2486,6 +2496,14 @@ export async function buildApp(options?: {
     app.log.info('Real-time alert operations routes registered');
   } catch (err: unknown) {
     app.log.error({ err }, 'failed to register real-time alert operations routes');
+  }
+
+  // Register Historical SLA Metrics & Daily Health Aggregation routes
+  try {
+    await registerSlaReportRoutes(app, store);
+    app.log.info('Historical SLA reports and aggregation routes registered');
+  } catch (err: unknown) {
+    app.log.error({ err }, 'failed to register SLA reports routes');
   }
 
   // Register banking analytics routes

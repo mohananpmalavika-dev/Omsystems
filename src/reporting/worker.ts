@@ -133,7 +133,7 @@ async function pdf(report:DailyOperationalReport,template:OperationalReportTempl
 
 export function reportSections(report:DailyOperationalReport,template:OperationalReportTemplate){
   const all=[{name:"Branches",recordType:"branch",rows:report.branches},{name:"Cameras",recordType:"camera",rows:report.cameras},{name:"Alerts",recordType:"alert",rows:report.alerts},{name:"Exceptions",recordType:"exception",rows:report.exceptions}] as const;
-  if(template==="comprehensive")return all;
+  if(template==="comprehensive" || template==="daily_surveillance_health")return all;
   if(template==="branch_health_summary")return [all[0]];
   if(template==="camera_availability")return [all[1]];
   if(template==="alert_summary")return [all[2]];

@@ -6,7 +6,7 @@ import { AppLayout } from "@/components/app-layout";
 import { PageHero } from "@/components/page-hero";
 
 type Format="csv"|"xlsx"|"pdf";
-type Template="comprehensive"|"branch_health_summary"|"camera_availability"|"alert_summary"|"recorder_status"|"hdd_health"|"retention_compliance";
+type Template="daily_surveillance_health"|"comprehensive"|"branch_health_summary"|"camera_availability"|"alert_summary"|"recorder_status"|"hdd_health"|"retention_compliance";
 type Filters={region?:string;branchId?:string;deviceStatus?:string;alertType?:string;severity?:string;alertState?:string;from?:string;to?:string};
 type Schedule={id:string;name:string;timezone:string;dailyAt:string;template:Template;formats:Format[];recipients:string[];filters:Filters;enabled:boolean;lastRunAt:string|null;nextRunAt:string};
 type Artifact={id:string;format:Format;filename:string;sizeBytes:number;expiresAt:string;downloadUrl:string};
@@ -15,6 +15,7 @@ type Run={id:string;status:string;template:Template;formats:Format[];filters:Fil
 type DeliveryConfiguration={configured:boolean;provider:"smtp"|"sendgrid"|"ses"|"webhook"|"custom"};
 
 const REPORT_TEMPLATES: Array<{id: Template; name: string; description: string}> = [
+  {id: "daily_surveillance_health", name: "Daily Surveillance Health Report", description: "Executive summary, 10-dimension health, exceptions requiring action, audit integrity"},
   {id: "comprehensive", name: "Comprehensive Daily Surveillance", description: "All metrics: branches, cameras, alerts, DVRs, storage, retention"},
   {id: "branch_health_summary", name: "Branch Health Summary", description: "Per-branch health scores, component status, critical alerts"},
   {id: "camera_availability", name: "Camera Availability", description: "Camera online/offline status, quality metrics, uptime"},
