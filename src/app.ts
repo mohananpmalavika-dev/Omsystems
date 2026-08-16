@@ -61,6 +61,7 @@ import { registerIncidentsRoutes } from "./routes/incidents.routes.js";
 import { registerMorningHealthDigestRoutes } from "./routes/morning-health-digest.routes.js";
 import { registerVirtualGuardRoutes } from "./routes/virtual-guard.routes.js";
 import { registerQrtDispatchRoutes } from "./routes/qrt-dispatch.routes.js";
+import { registerHAClusterRoutes } from "./routes/ha-cluster.routes.js";
 import { registerAdminDatabaseRoutes } from "./routes/admin-database.routes.js";
 import { registerAuditRoutes } from "./routes/audit.routes.js";
 import { registerComplianceRoutes } from "./routes/compliance.routes.js";
@@ -119,6 +120,8 @@ import {
 } from "./media/index.js";
 import { PlaybookEngineService } from "./incidents/services/playbook-engine.service.js";
 import { registerPlaybookEngineRoutes } from "./routes/playbook-engine.routes.js";
+import { AIQualityPlatformFacade } from "./ai-quality/index.js";
+import { registerAiQualityRoutes } from "./routes/ai-quality.routes.js";
 import { autoProvisionVerifiedCameras } from "./services/camera-auto-provision.js";
 import {
   EmptyFederationLocalSearchProvider,
@@ -2540,12 +2543,13 @@ export async function buildApp(options?: {
     app.log.error({ err }, 'failed to register central monitoring routes');
   }
 
-  // Register Morning Health Digest, Virtual Guard, and QRT Dispatch routes
+  // Register Morning Health Digest, Virtual Guard, QRT Dispatch, and HA Cluster routes
   try {
     await registerMorningHealthDigestRoutes(app, store);
     await registerVirtualGuardRoutes(app, store);
     await registerQrtDispatchRoutes(app, store);
-    app.log.info('Morning digest, Virtual guard, and QRT dispatch routes registered');
+    await registerHAClusterRoutes(app, store);
+    app.log.info('Morning digest, Virtual guard, QRT dispatch, and HA Cluster routes registered');
   } catch (err: unknown) {
     app.log.error({ err }, 'failed to register extended enterprise features');
   }
@@ -2745,6 +2749,15 @@ export async function buildApp(options?: {
     app.log.info("Stateful Incident Playbook Engine & Dynamic Operator SOP routes registered");
   } catch (err: unknown) {
     app.log.error({ err }, "failed to register incident playbook engine routes");
+  }
+
+  // Register AI Quality, Model Registry, Benchmarks & Certification routes
+  try {
+    const aiQualityPlatform = new AIQualityPlatformFacade();
+    await registerAiQualityRoutes(app, aiQualityPlatform);
+    app.log.info("AI Model Quality, Evaluation & Certification Platform routes registered");
+  } catch (err: unknown) {
+    app.log.error({ err }, "failed to register AI quality platform routes");
   }
   const alertWorker = setInterval(() => {
     void alertDispatcher.drainOnce().catch((error) => app.log.error({ error }, "Alert outbox drain failed"));
