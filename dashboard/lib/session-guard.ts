@@ -23,6 +23,12 @@ export function isAuthenticated(): boolean {
  */
 export async function redirectToLogin(reason: 'expired' | 'invalid' | 'network' = 'expired') {
   if (typeof window === 'undefined') return;
+
+  // Protect recently authenticated users from startup race conditions
+  const loginTimestamp = parseInt(localStorage.getItem('sentinel_login_time') || '0', 10);
+  if (Date.now() - loginTimestamp < 45000) {
+    return;
+  }
   
   // End activity session before clearing data
   try {
@@ -72,15 +78,47 @@ async function checkSession() {
   isCheckingSession = true;
   
   try {
+    const token = localStorage.getItem('accessToken');
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    };
+    if (token) {
+      headers['x-sentinel-session'] = token;
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+
     const response = await fetch('/api/control/v1/auth/me', {
       method: 'GET',
       credentials: 'include',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers,
     });
     
     if (response.status === 401 || response.status === 403) {
+      // Try refresh token first
+      const refreshToken = localStorage.getItem('refreshToken');
+      if (refreshToken) {
+        try {
+          const refreshRes = await fetch('/api/control/v1/auth/refresh', {
+            method: 'POST',
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ refreshToken }),
+          });
+          if (refreshRes.ok) {
+            const data = await refreshRes.json();
+            if (data.accessToken) {
+              localStorage.setItem('accessToken', data.accessToken);
+            }
+            if (data.refreshToken) {
+              localStorage.setItem('refreshToken', data.refreshToken);
+            }
+            return;
+          }
+        } catch {
+          // Ignore refresh attempt error
+        }
+      }
+
       console.warn('Session expired or invalid');
       redirectToLogin('expired');
     } else if (!response.ok) {

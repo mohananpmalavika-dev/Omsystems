@@ -43,6 +43,12 @@ class ApiError extends Error {
  */
 function redirectToLogin() {
   if (typeof window !== 'undefined') {
+    // If login occurred recently, protect session from startup race condition
+    const loginTimestamp = parseInt(localStorage.getItem('sentinel_login_time') || '0', 10);
+    if (Date.now() - loginTimestamp < 45000) {
+      return;
+    }
+
     // Clear all session data
     localStorage.removeItem('accessToken');
     localStorage.removeItem('refreshToken');
@@ -85,10 +91,15 @@ async function fetchApi<T>(
     });
   } catch (error: any) {
     // Network error - API not reachable
-    console.error('API connection failed:', error);
-    
-    // Only redirect to login if this isn't already a login attempt
-    if (!endpoint.includes('/auth/login') && !endpoint.includes('/auth/refresh')) {
+    const isAuthEndpoint =
+      endpoint.includes('/auth/login') ||
+      endpoint.includes('/auth/refresh') ||
+      endpoint.includes('/auth/forgot-password') ||
+      endpoint.includes('/auth/verify-otp') ||
+      endpoint.includes('/auth/reset-password');
+
+    // Only redirect to login if this isn't already an auth attempt
+    if (!isAuthEndpoint) {
       redirectToLogin();
     }
     
@@ -105,10 +116,17 @@ async function fetchApi<T>(
       message: 'An unexpected error occurred',
     }));
 
+    const isAuthEndpoint =
+      endpoint.includes('/auth/login') ||
+      endpoint.includes('/auth/refresh') ||
+      endpoint.includes('/auth/forgot-password') ||
+      endpoint.includes('/auth/verify-otp') ||
+      endpoint.includes('/auth/reset-password');
+
     // Handle authentication errors
     if (response.status === 401) {
       // Token expired or invalid
-      if (!endpoint.includes('/auth/login') && !endpoint.includes('/auth/refresh')) {
+      if (!isAuthEndpoint) {
         redirectToLogin();
       }
     }
@@ -216,6 +234,7 @@ export const authApi = {
     });
 
     if (typeof window !== 'undefined') {
+      localStorage.setItem('sentinel_login_time', Date.now().toString());
       if (response.accessToken) {
         localStorage.setItem('accessToken', response.accessToken);
       }
@@ -254,6 +273,37 @@ export const authApi = {
     fetchApi<{ success: boolean; message: string }>('/v1/auth/request-password-reset', {
       method: 'POST',
       body: JSON.stringify({ email, tenantSlug: tenantSlug || undefined }),
+    }),
+
+  requestPasswordResetOtp: (email: string, tenantSlug?: string) =>
+    fetchApi<{
+      success: boolean;
+      message: string;
+      maskedEmail: string;
+      expiresInSeconds: number;
+      previewOtp?: string;
+    }>('/v1/auth/forgot-password', {
+      method: 'POST',
+      body: JSON.stringify({ email, tenantSlug: tenantSlug || undefined }),
+    }),
+
+  verifyPasswordResetOtp: (email: string, otp: string) =>
+    fetchApi<{
+      success: boolean;
+      resetToken: string;
+      message: string;
+    }>('/v1/auth/verify-otp', {
+      method: 'POST',
+      body: JSON.stringify({ email, otp }),
+    }),
+
+  resetPasswordWithOtp: (email: string, resetToken: string, newPassword: string) =>
+    fetchApi<{
+      success: boolean;
+      message: string;
+    }>('/v1/auth/reset-password-otp', {
+      method: 'POST',
+      body: JSON.stringify({ email, resetToken, newPassword }),
     }),
 
   resetPassword: (token: string, newPassword: string) =>

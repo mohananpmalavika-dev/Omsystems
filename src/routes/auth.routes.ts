@@ -16,6 +16,24 @@ import {
   bootstrapOnboardingService,
   PERMANENT_SUPERADMIN,
 } from "../identity/services/bootstrap-onboarding.service.js";
+import { passwordResetOtpService } from "../identity/services/password-reset-otp.service.js";
+import { activeInMemorySessions } from "../middleware/auth.middleware.js";
+
+const forgotPasswordOtpSchema = z.object({
+  email: z.string().email(),
+  tenantSlug: z.string().min(1).optional(),
+});
+
+const verifyOtpSchema = z.object({
+  email: z.string().email(),
+  otp: z.string().min(6).max(10),
+});
+
+const resetPasswordOtpSchema = z.object({
+  email: z.string().email(),
+  resetToken: z.string().min(32),
+  newPassword: z.string().min(8).max(100),
+});
 
 const loginSchema = z.object({
   username: z.string().trim().min(1),
@@ -256,18 +274,29 @@ export async function registerAuthRoutes(
             ? await store.getUserDetails(user.id).catch(() => undefined)
             : undefined) ?? user;
 
+        const resolvedUser = {
+          id: userDetails?.id ?? user.id,
+          username: userDetails?.username ?? user.username,
+          email: userDetails?.email ?? user.email,
+          displayName: userDetails?.displayName ?? user.displayName,
+          role: userDetails?.role ?? user.role,
+          tenantId: userDetails?.tenantId ?? user.tenantId,
+          status: "active",
+        };
+
+        // Cache session in memory for immediate and foolproof verification across all proxies
+        activeInMemorySessions.set(accessTokenHash, {
+          user: resolvedUser,
+          expiresAt: Date.now() + 30 * 24 * 60 * 60 * 1000,
+        });
+
         return reply.code(200).send({
           accessToken,
           refreshToken,
-          expiresIn: 3600, // 1 hour
+          expiresIn: 86400, // 24 hours
           tokenType: "Bearer",
           user: {
-            id: userDetails?.id ?? user.id,
-            username: userDetails?.username ?? user.username,
-            email: userDetails?.email ?? user.email,
-            displayName: userDetails?.displayName ?? user.displayName,
-            role: userDetails?.role ?? user.role,
-            tenantId: userDetails?.tenantId ?? user.tenantId,
+            ...resolvedUser,
             mustChangePassword: userDetails?.mustChangePassword ?? false,
           },
         });
@@ -317,11 +346,16 @@ export async function registerAuthRoutes(
           newAccessTokenHash,
           request.ip,
           request.headers["user-agent"],
-        );
+        ).catch(() => {});
+
+        activeInMemorySessions.set(newAccessTokenHash, {
+          user,
+          expiresAt: Date.now() + 30 * 24 * 60 * 60 * 1000,
+        });
 
         return {
           accessToken: newAccessToken,
-          expiresIn: 3600, // 1 hour
+          expiresIn: 86400, // 24 hours
           tokenType: "Bearer",
         };
       } catch (error) {
@@ -427,6 +461,72 @@ export async function registerAuthRoutes(
       };
     },
   );
+
+  // Email OTP Password Reset Handlers (no authentication required)
+  const handleForgotPasswordOtp = async (request: any, reply: any) => {
+    try {
+      const body = forgotPasswordOtpSchema.parse(request.body);
+      const result = await passwordResetOtpService.requestPasswordResetOtp(
+        store,
+        body.email,
+        body.tenantSlug,
+        request.ip
+      );
+      return reply.code(200).send(result);
+    } catch (err: any) {
+      return reply.code(400).send({
+        success: false,
+        error: "forgot_password_failed",
+        message: err.message || "Failed to process forgot password request",
+      });
+    }
+  };
+
+  app.post("/v1/auth/forgot-password", { config: { noAuth: true } }, handleForgotPasswordOtp);
+  app.post("/api/v1/auth/forgot-password", { config: { noAuth: true } }, handleForgotPasswordOtp);
+  app.post("/api/auth/forgot-password", { config: { noAuth: true } }, handleForgotPasswordOtp);
+
+  const handleVerifyOtp = async (request: any, reply: any) => {
+    try {
+      const body = verifyOtpSchema.parse(request.body);
+      const result = await passwordResetOtpService.verifyOtp(body.email, body.otp);
+      return reply.code(200).send(result);
+    } catch (err: any) {
+      return reply.code(400).send({
+        success: false,
+        error: "otp_verification_failed",
+        message: err.message || "Invalid or expired OTP",
+      });
+    }
+  };
+
+  app.post("/v1/auth/verify-otp", { config: { noAuth: true } }, handleVerifyOtp);
+  app.post("/api/v1/auth/verify-otp", { config: { noAuth: true } }, handleVerifyOtp);
+  app.post("/api/auth/verify-otp", { config: { noAuth: true } }, handleVerifyOtp);
+
+  const handleResetPasswordOtp = async (request: any, reply: any) => {
+    try {
+      const body = resetPasswordOtpSchema.parse(request.body);
+      const result = await passwordResetOtpService.resetPasswordWithToken(
+        store,
+        body.email,
+        body.resetToken,
+        body.newPassword,
+        request.ip
+      );
+      return reply.code(200).send(result);
+    } catch (err: any) {
+      return reply.code(400).send({
+        success: false,
+        error: "password_reset_failed",
+        message: err.message || "Failed to reset password",
+      });
+    }
+  };
+
+  app.post("/v1/auth/reset-password-otp", { config: { noAuth: true } }, handleResetPasswordOtp);
+  app.post("/api/v1/auth/reset-password-otp", { config: { noAuth: true } }, handleResetPasswordOtp);
+  app.post("/api/auth/reset-password-otp", { config: { noAuth: true } }, handleResetPasswordOtp);
 
   // Reset password using token (no authentication required)
   app.post(

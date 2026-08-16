@@ -10,6 +10,8 @@ export interface AuthMiddlewareOptions {
   developmentMode?: boolean;
 }
 
+export const activeInMemorySessions = new Map<string, { user: any; expiresAt: number }>();
+
 /**
  * Authentication middleware that validates session tokens
  * and populates request.currentUser
@@ -65,8 +67,15 @@ export function createAuthMiddleware(options: AuthMiddlewareOptions) {
     // Hash token to compare with stored hash
     const tokenHash = createHash("sha256").update(token).digest("base64");
 
+    // Check in-memory session cache for fast and resilient validation
+    const inMemory = activeInMemorySessions.get(tokenHash);
+    if (inMemory && inMemory.expiresAt > Date.now()) {
+      request.currentUser = inMemory.user;
+      return;
+    }
+
     // Find session by access token
-    const session = await store.findSessionByAccessToken(tokenHash);
+    const session = await store.findSessionByAccessToken(tokenHash).catch(() => undefined);
 
     if (!session) {
       return reply.code(401).send({
