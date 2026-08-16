@@ -5,7 +5,7 @@
  * Focus on false-positive scenarios where broken recorders could appear healthy.
  */
 
-import { describe, it, expect, beforeEach, jest } from '@jest/globals';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import type { Pool } from 'pg';
 import { RecorderHealthChecker } from '../recorder-health-checker.js';
 import type { RecorderAdapter } from '../recorder-adapter.interface.js';
@@ -13,7 +13,7 @@ import type { Recorder, CameraWithRecorder, ComplianceState } from '../types/ind
 
 // Mock pool
 const mockPool = {
-  query: jest.fn()
+  query: vi.fn()
 } as unknown as Pool;
 
 // Mock recorder and camera
@@ -43,10 +43,10 @@ describe('RecorderHealthChecker - False Positive Prevention', () => {
   
   beforeEach(() => {
     checker = new RecorderHealthChecker(mockPool);
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     
     // Mock database query for last verified healthy time
-    (mockPool.query as jest.Mock).mockResolvedValue({ rows: [] });
+    (mockPool.query as any).mockResolvedValue({ rows: [] });
   });
   
   /**
@@ -65,21 +65,21 @@ describe('RecorderHealthChecker - False Positive Prevention', () => {
         retentionQuery: true,
         channelEnumeration: true
       }),
-      testConnection: jest.fn().mockResolvedValue({
+      testConnection: vi.fn().mockResolvedValue({
         status: 'unknown' as ComplianceState,
         message: 'Connection timed out',
         errorCode: 'NETWORK_TIMEOUT',
         checkedAt: new Date()
       }),
-      authenticate: jest.fn(),
-      getChannel: jest.fn(),
-      getStreamStatus: jest.fn(),
-      getRecordingStatus: jest.fn(),
-      getLatestRecording: jest.fn(),
-      getOldestRecording: jest.fn(),
-      getStorageStatus: jest.fn(),
-      getDeviceTime: jest.fn(),
-      disconnect: jest.fn()
+      authenticate: vi.fn(),
+      getChannel: vi.fn(),
+      getStreamStatus: vi.fn(),
+      getRecordingStatus: vi.fn(),
+      getLatestRecording: vi.fn(),
+      getOldestRecording: vi.fn(),
+      getStorageStatus: vi.fn(),
+      getDeviceTime: vi.fn(),
+      disconnect: vi.fn()
     };
     
     const result = await checker.check({
@@ -116,27 +116,27 @@ describe('RecorderHealthChecker - False Positive Prevention', () => {
         retentionQuery: true,
         channelEnumeration: true
       }),
-      testConnection: jest.fn().mockResolvedValue({
+      testConnection: vi.fn().mockResolvedValue({
         status: 'healthy' as ComplianceState,
         value: true,
         latencyMs: 50,
         checkedAt: new Date()
       }),
-      authenticate: jest.fn().mockResolvedValue({
+      authenticate: vi.fn().mockResolvedValue({
         status: 'unhealthy' as ComplianceState,
         value: false,
         message: 'Invalid credentials',
         errorCode: 'AUTHENTICATION_FAILED',
         checkedAt: new Date()
       }),
-      getChannel: jest.fn(),
-      getStreamStatus: jest.fn(),
-      getRecordingStatus: jest.fn(),
-      getLatestRecording: jest.fn(),
-      getOldestRecording: jest.fn(),
-      getStorageStatus: jest.fn(),
-      getDeviceTime: jest.fn(),
-      disconnect: jest.fn()
+      getChannel: vi.fn(),
+      getStreamStatus: vi.fn(),
+      getRecordingStatus: vi.fn(),
+      getLatestRecording: vi.fn(),
+      getOldestRecording: vi.fn(),
+      getStorageStatus: vi.fn(),
+      getDeviceTime: vi.fn(),
+      disconnect: vi.fn()
     };
     
     const result = await checker.check({
@@ -178,54 +178,54 @@ describe('RecorderHealthChecker - False Positive Prevention', () => {
         retentionQuery: true,
         channelEnumeration: true
       }),
-      testConnection: jest.fn().mockResolvedValue({
+      testConnection: vi.fn().mockResolvedValue({
         status: 'healthy' as ComplianceState,
         value: true,
         checkedAt: new Date()
       }),
-      authenticate: jest.fn().mockResolvedValue({
+      authenticate: vi.fn().mockResolvedValue({
         status: 'healthy' as ComplianceState,
         value: true,
         checkedAt: new Date()
       }),
-      getChannel: jest.fn().mockResolvedValue({
+      getChannel: vi.fn().mockResolvedValue({
         status: 'healthy' as ComplianceState,
         value: { id: '1', enabled: true },
         checkedAt: new Date()
       }),
-      getStreamStatus: jest.fn().mockResolvedValue({
+      getStreamStatus: vi.fn().mockResolvedValue({
         status: 'healthy' as ComplianceState,
         value: 'streaming',
         checkedAt: new Date()
       }),
-      getRecordingStatus: jest.fn().mockResolvedValue({
+      getRecordingStatus: vi.fn().mockResolvedValue({
         status: 'healthy' as ComplianceState,
         value: 'recording',
         checkedAt: new Date()
       }),
       // CRITICAL: Return stale recording
-      getLatestRecording: jest.fn().mockResolvedValue({
+      getLatestRecording: vi.fn().mockResolvedValue({
         recordingId: 'rec-1',
         startTime: new Date(twoHoursAgo.getTime() - 3600000),
         endTime: twoHoursAgo, // 2 hours ago
         durationSeconds: 3600
       }),
-      getOldestRecording: jest.fn().mockResolvedValue({
+      getOldestRecording: vi.fn().mockResolvedValue({
         recordingId: 'rec-old',
         startTime: new Date(Date.now() - 180 * 24 * 60 * 60 * 1000),
         endTime: new Date(Date.now() - 180 * 24 * 60 * 60 * 1000 + 3600000),
         durationSeconds: 3600
       }),
-      getStorageStatus: jest.fn().mockResolvedValue({
+      getStorageStatus: vi.fn().mockResolvedValue({
         status: 'healthy' as ComplianceState,
         checkedAt: new Date()
       }),
-      getDeviceTime: jest.fn().mockResolvedValue({
+      getDeviceTime: vi.fn().mockResolvedValue({
         status: 'healthy' as ComplianceState,
         value: new Date(),
         checkedAt: new Date()
       }),
-      disconnect: jest.fn()
+      disconnect: vi.fn()
     };
     
     const result = await checker.check({
@@ -261,42 +261,42 @@ describe('RecorderHealthChecker - False Positive Prevention', () => {
         retentionQuery: true,
         channelEnumeration: true
       }),
-      testConnection: jest.fn().mockResolvedValue({
+      testConnection: vi.fn().mockResolvedValue({
         status: 'healthy' as ComplianceState,
         value: true,
         checkedAt: new Date()
       }),
-      authenticate: jest.fn().mockResolvedValue({
+      authenticate: vi.fn().mockResolvedValue({
         status: 'healthy' as ComplianceState,
         value: true,
         checkedAt: new Date()
       }),
-      getChannel: jest.fn().mockResolvedValue({
+      getChannel: vi.fn().mockResolvedValue({
         status: 'healthy' as ComplianceState,
         value: { id: '1', enabled: true },
         checkedAt: new Date()
       }),
-      getStreamStatus: jest.fn().mockResolvedValue({
+      getStreamStatus: vi.fn().mockResolvedValue({
         status: 'healthy' as ComplianceState,
         checkedAt: new Date()
       }),
-      getRecordingStatus: jest.fn().mockResolvedValue({
+      getRecordingStatus: vi.fn().mockResolvedValue({
         status: 'healthy' as ComplianceState,
         checkedAt: new Date()
       }),
       // No recordings found
-      getLatestRecording: jest.fn().mockResolvedValue(null),
-      getOldestRecording: jest.fn().mockResolvedValue(null),
-      getStorageStatus: jest.fn().mockResolvedValue({
+      getLatestRecording: vi.fn().mockResolvedValue(null),
+      getOldestRecording: vi.fn().mockResolvedValue(null),
+      getStorageStatus: vi.fn().mockResolvedValue({
         status: 'healthy' as ComplianceState,
         checkedAt: new Date()
       }),
-      getDeviceTime: jest.fn().mockResolvedValue({
+      getDeviceTime: vi.fn().mockResolvedValue({
         status: 'healthy' as ComplianceState,
         value: new Date(),
         checkedAt: new Date()
       }),
-      disconnect: jest.fn()
+      disconnect: vi.fn()
     };
     
     const now = new Date();
@@ -338,46 +338,46 @@ describe('RecorderHealthChecker - False Positive Prevention', () => {
         retentionQuery: true,
         channelEnumeration: true
       }),
-      testConnection: jest.fn().mockResolvedValue({
+      testConnection: vi.fn().mockResolvedValue({
         status: 'healthy' as ComplianceState,
         value: true,
         checkedAt: new Date()
       }),
-      authenticate: jest.fn().mockResolvedValue({
+      authenticate: vi.fn().mockResolvedValue({
         status: 'healthy' as ComplianceState,
         value: true,
         checkedAt: new Date()
       }),
-      getChannel: jest.fn().mockResolvedValue({
+      getChannel: vi.fn().mockResolvedValue({
         status: 'healthy' as ComplianceState,
         value: { id: '1', enabled: true },
         checkedAt: new Date()
       }),
-      getStreamStatus: jest.fn().mockResolvedValue({
+      getStreamStatus: vi.fn().mockResolvedValue({
         status: 'healthy' as ComplianceState,
         value: 'streaming',
         checkedAt: new Date()
       }),
       // CRITICAL: Recording stopped
-      getRecordingStatus: jest.fn().mockResolvedValue({
+      getRecordingStatus: vi.fn().mockResolvedValue({
         status: 'unhealthy' as ComplianceState,
         value: 'stopped',
         message: 'Recording stopped',
         errorCode: 'RECORDING_STOPPED',
         checkedAt: new Date()
       }),
-      getLatestRecording: jest.fn().mockResolvedValue(null),
-      getOldestRecording: jest.fn().mockResolvedValue(null),
-      getStorageStatus: jest.fn().mockResolvedValue({
+      getLatestRecording: vi.fn().mockResolvedValue(null),
+      getOldestRecording: vi.fn().mockResolvedValue(null),
+      getStorageStatus: vi.fn().mockResolvedValue({
         status: 'healthy' as ComplianceState,
         checkedAt: new Date()
       }),
-      getDeviceTime: jest.fn().mockResolvedValue({
+      getDeviceTime: vi.fn().mockResolvedValue({
         status: 'healthy' as ComplianceState,
         value: new Date(),
         checkedAt: new Date()
       }),
-      disconnect: jest.fn()
+      disconnect: vi.fn()
     };
     
     const result = await checker.check({
@@ -410,43 +410,43 @@ describe('RecorderHealthChecker - False Positive Prevention', () => {
         retentionQuery: true,
         channelEnumeration: true
       }),
-      testConnection: jest.fn().mockResolvedValue({
+      testConnection: vi.fn().mockResolvedValue({
         status: 'healthy' as ComplianceState,
         value: true,
         checkedAt: new Date()
       }),
-      authenticate: jest.fn().mockResolvedValue({
+      authenticate: vi.fn().mockResolvedValue({
         status: 'healthy' as ComplianceState,
         value: true,
         checkedAt: new Date()
       }),
-      getChannel: jest.fn().mockResolvedValue({
+      getChannel: vi.fn().mockResolvedValue({
         status: 'healthy' as ComplianceState,
         value: { id: '1', enabled: true },
         checkedAt: new Date()
       }),
-      getStreamStatus: jest.fn().mockResolvedValue({
+      getStreamStatus: vi.fn().mockResolvedValue({
         status: 'healthy' as ComplianceState,
         checkedAt: new Date()
       }),
-      getRecordingStatus: jest.fn().mockResolvedValue({
+      getRecordingStatus: vi.fn().mockResolvedValue({
         status: 'healthy' as ComplianceState,
         checkedAt: new Date()
       }),
-      getLatestRecording: jest.fn().mockResolvedValue({
+      getLatestRecording: vi.fn().mockResolvedValue({
         recordingId: 'rec-1',
         startTime: new Date(Date.now() - 120000),
         endTime: new Date(Date.now() - 60000),
         durationSeconds: 60
       }),
-      getOldestRecording: jest.fn().mockResolvedValue({
+      getOldestRecording: vi.fn().mockResolvedValue({
         recordingId: 'rec-old',
         startTime: new Date(Date.now() - 180 * 24 * 60 * 60 * 1000),
         endTime: new Date(Date.now() - 180 * 24 * 60 * 60 * 1000 + 3600000),
         durationSeconds: 3600
       }),
       // CRITICAL: Disk failed
-      getStorageStatus: jest.fn().mockResolvedValue({
+      getStorageStatus: vi.fn().mockResolvedValue({
         status: 'unhealthy' as ComplianceState,
         message: '1 disk failed',
         errorCode: 'DISK_FAILED',
@@ -455,12 +455,12 @@ describe('RecorderHealthChecker - False Positive Prevention', () => {
         ],
         checkedAt: new Date()
       }),
-      getDeviceTime: jest.fn().mockResolvedValue({
+      getDeviceTime: vi.fn().mockResolvedValue({
         status: 'healthy' as ComplianceState,
         value: new Date(),
         checkedAt: new Date()
       }),
-      disconnect: jest.fn()
+      disconnect: vi.fn()
     };
     
     const result = await checker.check({
@@ -492,54 +492,54 @@ describe('RecorderHealthChecker - False Positive Prevention', () => {
         retentionQuery: true,
         channelEnumeration: true
       }),
-      testConnection: jest.fn().mockResolvedValue({
+      testConnection: vi.fn().mockResolvedValue({
         status: 'healthy' as ComplianceState,
         value: true,
         checkedAt: new Date()
       }),
-      authenticate: jest.fn().mockResolvedValue({
+      authenticate: vi.fn().mockResolvedValue({
         status: 'healthy' as ComplianceState,
         value: true,
         checkedAt: new Date()
       }),
-      getChannel: jest.fn().mockResolvedValue({
+      getChannel: vi.fn().mockResolvedValue({
         status: 'healthy' as ComplianceState,
         value: { id: '1', enabled: true },
         checkedAt: new Date()
       }),
-      getStreamStatus: jest.fn().mockResolvedValue({
+      getStreamStatus: vi.fn().mockResolvedValue({
         status: 'healthy' as ComplianceState,
         checkedAt: new Date()
       }),
-      getRecordingStatus: jest.fn().mockResolvedValue({
+      getRecordingStatus: vi.fn().mockResolvedValue({
         status: 'healthy' as ComplianceState,
         checkedAt: new Date()
       }),
-      getLatestRecording: jest.fn().mockResolvedValue({
+      getLatestRecording: vi.fn().mockResolvedValue({
         recordingId: 'rec-1',
         startTime: new Date(Date.now() - 120000),
         endTime: new Date(Date.now() - 60000),
         durationSeconds: 60
       }),
-      getOldestRecording: jest.fn().mockResolvedValue({
+      getOldestRecording: vi.fn().mockResolvedValue({
         recordingId: 'rec-old',
         startTime: new Date(Date.now() - 180 * 24 * 60 * 60 * 1000),
         endTime: new Date(Date.now() - 180 * 24 * 60 * 60 * 1000 + 3600000),
         durationSeconds: 3600
       }),
       // Storage check returns UNKNOWN (unsupported)
-      getStorageStatus: jest.fn().mockResolvedValue({
+      getStorageStatus: vi.fn().mockResolvedValue({
         status: 'unknown' as ComplianceState,
         message: 'Storage status not supported by adapter',
         errorCode: 'UNSUPPORTED_FEATURE',
         checkedAt: new Date()
       }),
-      getDeviceTime: jest.fn().mockResolvedValue({
+      getDeviceTime: vi.fn().mockResolvedValue({
         status: 'healthy' as ComplianceState,
         value: new Date(),
         checkedAt: new Date()
       }),
-      disconnect: jest.fn()
+      disconnect: vi.fn()
     };
     
     const result = await checker.check({
@@ -572,51 +572,51 @@ describe('RecorderHealthChecker - False Positive Prevention', () => {
         retentionQuery: false,
         channelEnumeration: false
       }),
-      testConnection: jest.fn().mockResolvedValue({
+      testConnection: vi.fn().mockResolvedValue({
         status: 'healthy' as ComplianceState,
         value: true,
         checkedAt: new Date()
       }),
       // All other features return UNKNOWN
-      authenticate: jest.fn().mockResolvedValue({
+      authenticate: vi.fn().mockResolvedValue({
         status: 'unknown' as ComplianceState,
         message: 'Authentication not supported',
         errorCode: 'UNSUPPORTED_FEATURE',
         checkedAt: new Date()
       }),
-      getChannel: jest.fn().mockResolvedValue({
+      getChannel: vi.fn().mockResolvedValue({
         status: 'unknown' as ComplianceState,
         message: 'Channel verification not supported',
         errorCode: 'UNSUPPORTED_FEATURE',
         checkedAt: new Date()
       }),
-      getStreamStatus: jest.fn().mockResolvedValue({
+      getStreamStatus: vi.fn().mockResolvedValue({
         status: 'unknown' as ComplianceState,
         message: 'Stream status not supported',
         errorCode: 'UNSUPPORTED_FEATURE',
         checkedAt: new Date()
       }),
-      getRecordingStatus: jest.fn().mockResolvedValue({
+      getRecordingStatus: vi.fn().mockResolvedValue({
         status: 'unknown' as ComplianceState,
         message: 'Recording status not supported',
         errorCode: 'UNSUPPORTED_FEATURE',
         checkedAt: new Date()
       }),
-      getLatestRecording: jest.fn().mockResolvedValue(null),
-      getOldestRecording: jest.fn().mockResolvedValue(null),
-      getStorageStatus: jest.fn().mockResolvedValue({
+      getLatestRecording: vi.fn().mockResolvedValue(null),
+      getOldestRecording: vi.fn().mockResolvedValue(null),
+      getStorageStatus: vi.fn().mockResolvedValue({
         status: 'unknown' as ComplianceState,
         message: 'Storage status not supported',
         errorCode: 'UNSUPPORTED_FEATURE',
         checkedAt: new Date()
       }),
-      getDeviceTime: jest.fn().mockResolvedValue({
+      getDeviceTime: vi.fn().mockResolvedValue({
         status: 'unknown' as ComplianceState,
         message: 'Device time not supported',
         errorCode: 'UNSUPPORTED_FEATURE',
         checkedAt: new Date()
       }),
-      disconnect: jest.fn()
+      disconnect: vi.fn()
     };
     
     const result = await checker.check({

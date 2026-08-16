@@ -1,0 +1,13 @@
+table.StorageDevice[0].Name=SATA-1
+table.StorageDevice[0].State=ON
+table.StorageDevice[0].Status=NORMAL
+table.StorageDevice[0].TotalBytes=4000787030016
+table.StorageDevice[0].FreeBytes=400078703001
+table.StorageDevice[0].SmartStatus=NORMAL
+
+table.StorageDevice[1].Name=SATA-2
+table.StorageDevice[1].State=ON
+table.StorageDevice[1].Status=WARN
+table.StorageDevice[1].TotalBytes=4000787030016
+table.StorageDevice[1].FreeBytes=350078703001
+table.StorageDevice[1].SmartStatus=WARNING

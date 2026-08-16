@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<VideoInputChannelList version="2.0" xmlns="http://www.hikvision.com/networks/schemas/2012/04/01">
+  <VideoInputChannel>
+    <id>1</id>
+    <name>CAM01-Entrance</name>
+    <videoInputEnabled>true</videoInputEnabled>
+  </VideoInputChannel>
+  <VideoInputChannel>
+    <id>2</id>
+    <name>CAM02-Teller1</name>
+    <videoInputEnabled>true</videoInputEnabled>
+  </VideoInputChannel>
+  <VideoInputChannel>
+    <id>3</id>
+    <name>CAM03-Teller2</name>
+    <videoInputEnabled>true</videoInputEnabled>
+  </VideoInputChannel>
+  <VideoInputChannel>
+    <id>4</id>
+    <name>CAM04-Lobby</name>
+    <videoInputEnabled>false</videoInputEnabled>
+  </VideoInputChannel>
+  <VideoInputChannel>
+    <id>5</id>
+    <name>CAM05-ATM</name>
+    <videoInputEnabled>true</videoInputEnabled>
+  </VideoInputChannel>
+  <VideoInputChannel>
+    <id>6</id>
+    <name>CAM06-BackOffice</name>
+    <videoInputEnabled>true</videoInputEnabled>
+  </VideoInputChannel>
+  <VideoInputChannel>
+    <id>7</id>
+    <name>CAM07-CashVault</name>
+    <videoInputEnabled>true</videoInputEnabled>
+  </VideoInputChannel>
+  <VideoInputChannel>
+    <id>8</id>
+    <name>CAM08-ServerRoom</name>
+    <videoInputEnabled>true</videoInputEnabled>
+  </VideoInputChannel>
+</VideoInputChannelList>

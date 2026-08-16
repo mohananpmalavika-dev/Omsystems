@@ -8,7 +8,7 @@
 import type {
   RecorderDriver,
   DriverDetector,
-  DriverDetectionResult
+  DriverDetectionResult,
 } from "./recorder-driver.interface.js";
 import type { RecorderProtocol } from "./recorder-driver.types.js";
 
@@ -20,37 +20,52 @@ import type { RecorderProtocol } from "./recorder-driver.types.js";
 export class RecorderDriverRegistry {
   private drivers = new Map<RecorderProtocol, () => RecorderDriver>();
   private detector?: DriverDetector;
-  
+
   /**
-   * Register a driver
+   * Register a driver or factory
    */
-  register(
-    protocol: RecorderProtocol,
-    factory: () => RecorderDriver
-  ): void {
-    this.drivers.set(protocol, factory);
+  register(driverOrProtocol: RecorderDriver | RecorderProtocol, factory?: () => RecorderDriver): void {
+    if (typeof driverOrProtocol === "string") {
+      if (factory) {
+        this.drivers.set(driverOrProtocol, factory);
+      }
+    } else {
+      const driver = driverOrProtocol;
+      this.drivers.set(driver.protocol, () => driver);
+    }
   }
-  
+
   /**
    * Set driver detector
    */
   setDetector(detector: DriverDetector): void {
     this.detector = detector;
   }
-  
+
   /**
    * Get driver by protocol
    */
   getDriver(protocol: RecorderProtocol): RecorderDriver {
     const factory = this.drivers.get(protocol);
-    
     if (!factory) {
       throw new UnsupportedProtocolError(protocol);
     }
-    
     return factory();
   }
-  
+
+  get(protocol: RecorderProtocol): RecorderDriver | undefined {
+    const factory = this.drivers.get(protocol);
+    return factory ? factory() : undefined;
+  }
+
+  has(protocol: RecorderProtocol): boolean {
+    return this.drivers.has(protocol);
+  }
+
+  size(): number {
+    return this.drivers.size;
+  }
+
   /**
    * Detect and get driver
    * 
@@ -77,25 +92,19 @@ export class RecorderDriverRegistry {
     if (!this.detector) {
       throw new Error("Driver detector not configured");
     }
-    
-    const detection = await this.detector.detect(
-      endpoint,
-      credentials,
-      options
-    );
-    
+
+    const detection = await this.detector.detect(endpoint, credentials, options);
     const driver = this.getDriver(detection.protocol);
-    
     return { driver, detection };
   }
-  
+
   /**
    * List available protocols
    */
   getAvailableProtocols(): RecorderProtocol[] {
     return Array.from(this.drivers.keys());
   }
-  
+
   /**
    * Check if protocol is supported
    */
@@ -103,6 +112,8 @@ export class RecorderDriverRegistry {
     return this.drivers.has(protocol);
   }
 }
+
+export const DriverRegistry = RecorderDriverRegistry;
 
 /**
  * Unsupported protocol error

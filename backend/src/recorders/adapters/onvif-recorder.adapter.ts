@@ -2,22 +2,15 @@
  * ONVIF Recorder Adapter
  * 
  * Implements standardized ONVIF protocol for recorder communication.
- * ONVIF provides good coverage for:
+ * Provides coverage for:
  * - Device management (GetDeviceInformation, GetSystemDateAndTime)
- * - Media profiles (GetProfiles, GetVideoSources)
- * - Recording control (GetRecordingStatus)
- * - Storage information (GetStorageConfiguration)
+ * - Media profiles (GetProfiles, GetProfile, GetVideoSources, GetStreamUri)
+ * - Recording control & jobs (GetRecordings, GetRecordingJobs)
+ * - Storage configurations (GetStorageConfigurations)
+ * - Search service (FindRecordings, GetRecordingSummary)
  * 
- * Authentication: WS-Security UsernameToken with timestamp and digest
- * Protocol: SOAP 1.2 over HTTP
- * 
- * References:
- * - ONVIF Core Specification: https://www.onvif.org/specs/core/ONVIF-Core-Specification.pdf
- * - ONVIF Device Management: https://www.onvif.org/ver10/device/wsdl/devicemgmt.wsdl
- * - ONVIF Media Service: https://www.onvif.org/ver10/media/wsdl/media.wsdl
- * 
- * Note: Archive search and detailed disk health may be limited
- * compared to vendor-specific APIs.
+ * Authentication: WS-Security UsernameToken with Created timestamp, Nonce, and PasswordDigest.
+ * Protocol: SOAP 1.2 over HTTP.
  */
 
 import type {
@@ -44,6 +37,7 @@ export class OnvifRecorderAdapter extends BaseRecorderAdapter implements Recorde
   private deviceServicePath = '/onvif/device_service';
   private mediaServicePath = '/onvif/media_service';
   private recordingServicePath = '/onvif/recording_service';
+  private searchServicePath = '/onvif/search_service';
   
   constructor(
     recorder: Recorder,
@@ -52,9 +46,10 @@ export class OnvifRecorderAdapter extends BaseRecorderAdapter implements Recorde
   ) {
     super(recorder, connection, config);
     
-    // Configure XML parser for ONVIF responses
+    // Configure XML parser for ONVIF responses (remove namespace prefixes)
     this.xmlParser = new XMLParser({
       ignoreAttributes: false,
+      removeNSPrefix: true,
       attributeNamePrefix: '@_',
       textNodeName: '#text',
       parseAttributeValue: true,
@@ -76,35 +71,37 @@ export class OnvifRecorderAdapter extends BaseRecorderAdapter implements Recorde
   
   /**
    * ONVIF capabilities
-   * Good for media and recording, limited for storage details
    */
   getCapabilities(): RecorderCapabilities {
     return {
       liveStreamStatus: true,
       recordingStatus: true,
-      archiveSearch: true, // Limited
-      storageStatus: true, // Basic only
-      diskHealth: false, // Not in standard ONVIF
+      archiveSearch: true,
+      storageStatus: true,
+      diskHealth: false, // Standard ONVIF does not provide disk S.M.A.R.T.
       deviceTime: true,
-      retentionQuery: false, // Not reliably available
+      retentionQuery: false,
       channelEnumeration: true
     };
   }
   
+  /**
+   * Test basic connection to ONVIF device service
+   */
   async testConnection(): Promise<ConnectionStatus> {
     const startTime = Date.now();
     
     try {
-      // ONVIF device management endpoint
+      const soapBody = `<GetSystemDateAndTime xmlns="http://www.onvif.org/ver10/device/wsdl"/>`;
       const result = await this.withTimeout(
-        this.httpClient.post('/onvif/device_service', this.buildGetSystemDateAndTimeRequest()),
+        this.makeSoapRequest(this.deviceServicePath, soapBody, 'GetSystemDateAndTime', false),
         this.config.connectionTimeoutMs,
         'testConnection'
       );
       
       const latencyMs = Date.now() - startTime;
       
-      if (result.status !== undefined) {
+      if (result.status === 200 || (result.status && result.status < 500)) {
         this.connected = true;
         
         return {
@@ -117,7 +114,7 @@ export class OnvifRecorderAdapter extends BaseRecorderAdapter implements Recorde
       }
       
       return this.createUnknownResult<boolean>(
-        'No response from ONVIF device',
+        `Unexpected HTTP ${result.status} from ONVIF endpoint`,
         'DEVICE_UNREACHABLE'
       );
       
@@ -139,14 +136,13 @@ export class OnvifRecorderAdapter extends BaseRecorderAdapter implements Recorde
     }
   }
   
+  /**
+   * Authenticate with ONVIF using WS-Security UsernameToken
+   */
   async authenticate(): Promise<AuthenticationStatus> {
     try {
-      // ONVIF uses WS-Security with username token
-      const result = await this.httpClient.post(
-        '/onvif/device_service',
-        this.buildGetDeviceInformationRequest(),
-        this.buildOnvifAuthHeaders()
-      );
+      const soapBody = `<GetDeviceInformation xmlns="http://www.onvif.org/ver10/device/wsdl"/>`;
+      const result = await this.makeSoapRequest(this.deviceServicePath, soapBody, 'GetDeviceInformation', true);
       
       if (result.status === 200) {
         this.authenticated = true;
@@ -155,12 +151,12 @@ export class OnvifRecorderAdapter extends BaseRecorderAdapter implements Recorde
           status: 'healthy',
           value: true,
           method: 'token',
-          message: 'ONVIF authentication successful',
+          message: 'ONVIF WS-Security authentication successful',
           checkedAt: new Date()
         };
       }
       
-      if (result.status === 401) {
+      if (result.status === 401 || result.status === 403) {
         return this.createUnhealthyResult<boolean>(
           'Invalid ONVIF credentials',
           'AUTHENTICATION_FAILED',
@@ -191,25 +187,25 @@ export class OnvifRecorderAdapter extends BaseRecorderAdapter implements Recorde
     }
   }
   
+  /**
+   * Get device information
+   */
   async getDeviceInfo(): Promise<CheckResult<RecorderDeviceInfo>> {
     try {
-      const soapBody = `
-        <GetDeviceInformation xmlns="http://www.onvif.org/ver10/device/wsdl"/>
-      `;
-      
-      const result = await this.makeSoapRequest(this.deviceServicePath, soapBody, 'GetDeviceInformation');
+      const soapBody = `<GetDeviceInformation xmlns="http://www.onvif.org/ver10/device/wsdl"/>`;
+      const result = await this.makeSoapRequest(this.deviceServicePath, soapBody, 'GetDeviceInformation', true);
       
       if (result.status === 200 && result.data) {
-        const parsed = this.xmlParser.parse(result.data);
+        const parsed = typeof result.data === 'string' ? this.xmlParser.parse(result.data) : result.data;
         const deviceInfo = this.extractFromSoapResponse(parsed, 'GetDeviceInformationResponse');
         
         if (deviceInfo) {
           const info: RecorderDeviceInfo = {
-            manufacturer: deviceInfo.Manufacturer || 'Unknown',
-            model: deviceInfo.Model || 'Unknown',
-            serialNumber: deviceInfo.SerialNumber,
-            firmwareVersion: deviceInfo.FirmwareVersion,
-            hardwareId: deviceInfo.HardwareId
+            manufacturer: deviceInfo.Manufacturer || deviceInfo.manufacturer || 'Unknown',
+            model: deviceInfo.Model || deviceInfo.model || 'Unknown',
+            serialNumber: deviceInfo.SerialNumber || deviceInfo.serialNumber || undefined,
+            firmwareVersion: deviceInfo.FirmwareVersion || deviceInfo.firmwareVersion || undefined,
+            hardwareId: deviceInfo.HardwareId || deviceInfo.hardwareId || undefined
           };
           
           logger.debug('ONVIF device info retrieved', {
@@ -243,33 +239,34 @@ export class OnvifRecorderAdapter extends BaseRecorderAdapter implements Recorde
     }
   }
   
+  /**
+   * Get all channels / media profiles
+   */
   async getChannels(): Promise<CheckResult<RecorderChannel[]>> {
     try {
-      // ONVIF uses "Profiles" which combine video source + encoder
-      const soapBody = `
-        <GetProfiles xmlns="http://www.onvif.org/ver10/media/wsdl"/>
-      `;
-      
-      const result = await this.makeSoapRequest(this.mediaServicePath, soapBody, 'GetProfiles');
+      const soapBody = `<GetProfiles xmlns="http://www.onvif.org/ver10/media/wsdl"/>`;
+      const result = await this.makeSoapRequest(this.mediaServicePath, soapBody, 'GetProfiles', true);
       
       if (result.status === 200 && result.data) {
-        const parsed = this.xmlParser.parse(result.data);
+        const parsed = typeof result.data === 'string' ? this.xmlParser.parse(result.data) : result.data;
         const response = this.extractFromSoapResponse(parsed, 'GetProfilesResponse');
         
-        if (response && response.Profiles) {
-          const profiles = Array.isArray(response.Profiles) ? response.Profiles : [response.Profiles];
+        if (response && (response.Profiles || response.profiles)) {
+          const raw = response.Profiles || response.profiles;
+          const rawProfiles = Array.isArray(raw) ? raw : [raw];
           
-          const channels: RecorderChannel[] = profiles.map((profile: any) => {
-            const profileToken = profile['@_token'] || profile.token;
-            const name = profile.Name || profileToken;
-            const videoSourceToken = profile.VideoSourceConfiguration?.SourceToken;
+          const channels: RecorderChannel[] = rawProfiles.map((profile: any) => {
+            const profileToken = profile['@_token'] || profile.token || String(profile.Name || profile.name || 'ch1');
+            const name = profile.Name || profile.name || `Profile ${profileToken}`;
+            const vsc = profile.VideoSourceConfiguration || profile.videoSourceConfiguration;
+            const videoSourceToken = vsc?.SourceToken || vsc?.sourceToken || vsc?.['@_token'];
             
             return {
-              id: profileToken,
-              name,
-              enabled: true, // ONVIF profiles are enabled by default
-              recordingEnabled: true, // Assume recording if profile exists
-              videoSourceToken
+              id: String(profileToken),
+              name: String(name),
+              enabled: true,
+              recordingEnabled: true,
+              videoSourceToken: videoSourceToken ? String(videoSourceToken) : undefined
             };
           });
           
@@ -303,6 +300,9 @@ export class OnvifRecorderAdapter extends BaseRecorderAdapter implements Recorde
     }
   }
   
+  /**
+   * Get single channel by profile token
+   */
   async getChannel(channelId: string): Promise<CheckResult<RecorderChannel>> {
     try {
       const soapBody = `
@@ -311,21 +311,21 @@ export class OnvifRecorderAdapter extends BaseRecorderAdapter implements Recorde
         </GetProfile>
       `;
       
-      const result = await this.makeSoapRequest(this.mediaServicePath, soapBody, 'GetProfile');
+      const result = await this.makeSoapRequest(this.mediaServicePath, soapBody, 'GetProfile', true);
       
       if (result.status === 200 && result.data) {
-        const parsed = this.xmlParser.parse(result.data);
+        const parsed = typeof result.data === 'string' ? this.xmlParser.parse(result.data) : result.data;
         const response = this.extractFromSoapResponse(parsed, 'GetProfileResponse');
         
-        if (response && response.Profile) {
-          const profile = response.Profile;
+        if (response && (response.Profile || response.profile)) {
+          const profile = response.Profile || response.profile;
           const profileToken = profile['@_token'] || profile.token || channelId;
-          const name = profile.Name || profileToken;
+          const name = profile.Name || profile.name || profileToken;
           
           const channel: RecorderChannel = {
-            id: profileToken,
-            name,
-            enabled: profile['@_fixed'] !== 'true', // Fixed profiles can't be changed
+            id: String(profileToken),
+            name: String(name),
+            enabled: profile['@_fixed'] !== 'true',
             recordingEnabled: true
           };
           
@@ -357,9 +357,11 @@ export class OnvifRecorderAdapter extends BaseRecorderAdapter implements Recorde
     }
   }
   
+  /**
+   * Get stream status
+   */
   async getStreamStatus(channelId: string): Promise<StreamStatus> {
     try {
-      // Get stream URI to verify stream availability
       const soapBody = `
         <GetStreamUri xmlns="http://www.onvif.org/ver10/media/wsdl">
           <ProfileToken>${this.escapeXml(channelId)}</ProfileToken>
@@ -372,14 +374,15 @@ export class OnvifRecorderAdapter extends BaseRecorderAdapter implements Recorde
         </GetStreamUri>
       `;
       
-      const result = await this.makeSoapRequest(this.mediaServicePath, soapBody, 'GetStreamUri');
+      const result = await this.makeSoapRequest(this.mediaServicePath, soapBody, 'GetStreamUri', true);
       
       if (result.status === 200 && result.data) {
-        const parsed = this.xmlParser.parse(result.data);
+        const parsed = typeof result.data === 'string' ? this.xmlParser.parse(result.data) : result.data;
         const response = this.extractFromSoapResponse(parsed, 'GetStreamUriResponse');
         
-        if (response && response.MediaUri && response.MediaUri.Uri) {
-          const streamUri = response.MediaUri.Uri;
+        const mediaUri = response?.MediaUri || response?.mediaUri;
+        if (mediaUri && (mediaUri.Uri || mediaUri.uri)) {
+          const streamUri = mediaUri.Uri || mediaUri.uri;
           
           logger.debug('ONVIF stream URI retrieved', {
             recorderId: this.recorder.id,
@@ -387,7 +390,6 @@ export class OnvifRecorderAdapter extends BaseRecorderAdapter implements Recorde
             streamUri
           });
           
-          // Stream URI exists - assume streaming
           return this.createHealthyResult<string>(
             'streaming',
             'Stream URI available'
@@ -417,35 +419,32 @@ export class OnvifRecorderAdapter extends BaseRecorderAdapter implements Recorde
     }
   }
   
+  /**
+   * Get recording status
+   */
   async getRecordingStatus(channelId: string): Promise<RecordingStatus> {
     try {
-      // ONVIF Recording Service - GetRecordingJobs
-      // Note: Some devices may not have recording service enabled
-      const soapBody = `
-        <GetRecordings xmlns="http://www.onvif.org/ver10/recording/wsdl"/>
-      `;
-      
-      const result = await this.makeSoapRequest(this.recordingServicePath, soapBody, 'GetRecordings');
+      const soapBody = `<GetRecordings xmlns="http://www.onvif.org/ver10/recording/wsdl"/>`;
+      const result = await this.makeSoapRequest(this.recordingServicePath, soapBody, 'GetRecordings', true);
       
       if (result.status === 200 && result.data) {
-        const parsed = this.xmlParser.parse(result.data);
+        const parsed = typeof result.data === 'string' ? this.xmlParser.parse(result.data) : result.data;
         const response = this.extractFromSoapResponse(parsed, 'GetRecordingsResponse');
         
-        if (response && response.RecordingItem) {
-          const recordings = Array.isArray(response.RecordingItem) 
-            ? response.RecordingItem 
-            : [response.RecordingItem];
+        const raw = response?.RecordingItem || response?.recordingItem;
+        if (raw) {
+          const recordings = Array.isArray(raw) ? raw : [raw];
           
-          // Check if any recording matches our profile/channel
           const matchingRecording = recordings.find((rec: any) => {
-            const source = rec.Source?.SourceId || rec.Source;
-            return source === channelId || source?.token === channelId;
+            const source = rec.Source?.SourceId || rec.Source || rec.source?.sourceId || rec.source;
+            return source === channelId || source?.token === channelId || rec.RecordingToken === channelId || rec.recordingToken === channelId;
           });
           
           if (matchingRecording) {
-            const state = matchingRecording.RecordingStatus || matchingRecording['@_status'];
+            const state = matchingRecording.RecordingStatus || matchingRecording['@_status'] || matchingRecording.Status || matchingRecording.status;
+            const isRecording = String(state).toLowerCase() === 'recording';
             
-            if (state === 'Recording' || state === 'recording') {
+            if (isRecording) {
               return this.createHealthyResult<string>(
                 'recording',
                 'Recording active'
@@ -460,7 +459,6 @@ export class OnvifRecorderAdapter extends BaseRecorderAdapter implements Recorde
           }
         }
         
-        // No recording found for this channel
         return this.createUnhealthyResult<string>(
           'No recording configured for this profile',
           'RECORDING_NOT_CONFIGURED',
@@ -468,8 +466,17 @@ export class OnvifRecorderAdapter extends BaseRecorderAdapter implements Recorde
         );
       }
       
-      if (result.status === 404 || result.status === 400) {
-        // Recording service not available
+      if (result.status === 404 || result.status === 400 || result.status === 500) {
+        // Recording service not enabled, check archive fallback
+        const latest = await this.getLatestRecording(channelId);
+        if (latest) {
+          const ageSeconds = (Date.now() - latest.endTime.getTime()) / 1000;
+          if (ageSeconds <= 300) {
+            return this.createHealthyResult<string>('recording', 'Recent recording segment found');
+          }
+          return this.createUnhealthyResult<string>('No recent recordings found', 'RECORDING_STOPPED', 'stopped');
+        }
+        
         return this.createUnknownResult<string>(
           'Recording service not available on this device',
           'UNSUPPORTED_FEATURE'
@@ -495,9 +502,11 @@ export class OnvifRecorderAdapter extends BaseRecorderAdapter implements Recorde
     }
   }
   
+  /**
+   * Search latest recording
+   */
   async getLatestRecording(channelId: string): Promise<RecordingArchiveInfo | null> {
     try {
-      // ONVIF FindRecordings - search for most recent
       const endTime = new Date();
       const startTime = new Date(endTime.getTime() - 60 * 60 * 1000); // Last hour
       
@@ -505,35 +514,39 @@ export class OnvifRecorderAdapter extends BaseRecorderAdapter implements Recorde
         <FindRecordings xmlns="http://www.onvif.org/ver10/search/wsdl">
           <StartPoint>${startTime.toISOString()}</StartPoint>
           <EndPoint>${endTime.toISOString()}</EndPoint>
-          <MaxMatches>1</MaxMatches>
+          <MaxMatches>10</MaxMatches>
           <IncludeRecordings>true</IncludeRecordings>
         </FindRecordings>
       `;
       
-      const result = await this.makeSoapRequest('/onvif/search_service', soapBody, 'FindRecordings');
+      const result = await this.makeSoapRequest(this.searchServicePath, soapBody, 'FindRecordings', true);
       
       if (result.status === 200 && result.data) {
-        const parsed = this.xmlParser.parse(result.data);
+        const parsed = typeof result.data === 'string' ? this.xmlParser.parse(result.data) : result.data;
         const response = this.extractFromSoapResponse(parsed, 'FindRecordingsResponse');
         
-        if (response && response.RecordingInformation) {
-          const recordings = Array.isArray(response.RecordingInformation)
-            ? response.RecordingInformation
-            : [response.RecordingInformation];
+        const raw = response?.RecordingInformation || response?.recordingInformation;
+        if (raw) {
+          const recordings = Array.isArray(raw) ? raw : [raw];
           
           if (recordings.length > 0) {
-            const latest = recordings[0];
+            const sorted = recordings.sort((a: any, b: any) => {
+              const aTime = new Date(a.LatestRecording || a.EndTime || a.latestRecording || a.endTime || 0).getTime();
+              const bTime = new Date(b.LatestRecording || b.EndTime || b.latestRecording || b.endTime || 0).getTime();
+              return bTime - aTime;
+            });
+            
+            const latest = sorted[0];
             return {
-              startTime: new Date(latest.EarliestRecording || latest.StartTime),
-              endTime: new Date(latest.LatestRecording || latest.EndTime),
-              recordingToken: latest.RecordingToken || latest['@_token'],
-              sizeBytes: latest.DataFrom ? parseInt(latest.DataFrom) : undefined
+              startTime: new Date(latest.EarliestRecording || latest.StartTime || latest.earliestRecording || latest.startTime || startTime),
+              endTime: new Date(latest.LatestRecording || latest.EndTime || latest.latestRecording || latest.endTime || endTime),
+              recordingToken: latest.RecordingToken || latest['@_token'] || latest.recordingToken || channelId,
+              sizeBytes: (latest.DataFrom || latest.dataFrom) ? parseInt(latest.DataFrom || latest.dataFrom, 10) : undefined
             };
           }
         }
       }
       
-      // No recordings found or search not supported
       return null;
       
     } catch (error) {
@@ -546,9 +559,11 @@ export class OnvifRecorderAdapter extends BaseRecorderAdapter implements Recorde
     }
   }
   
+  /**
+   * Search oldest recording
+   */
   async getOldestRecording(channelId: string): Promise<RecordingArchiveInfo | null> {
     try {
-      // Search from far past
       const endTime = new Date();
       const startTime = new Date(endTime.getTime() - 180 * 24 * 60 * 60 * 1000); // 180 days ago
       
@@ -556,36 +571,34 @@ export class OnvifRecorderAdapter extends BaseRecorderAdapter implements Recorde
         <FindRecordings xmlns="http://www.onvif.org/ver10/search/wsdl">
           <StartPoint>${startTime.toISOString()}</StartPoint>
           <EndPoint>${endTime.toISOString()}</EndPoint>
-          <MaxMatches>1</MaxMatches>
+          <MaxMatches>10</MaxMatches>
           <IncludeRecordings>true</IncludeRecordings>
         </FindRecordings>
       `;
       
-      const result = await this.makeSoapRequest('/onvif/search_service', soapBody, 'FindRecordings');
+      const result = await this.makeSoapRequest(this.searchServicePath, soapBody, 'FindRecordings', true);
       
       if (result.status === 200 && result.data) {
-        const parsed = this.xmlParser.parse(result.data);
+        const parsed = typeof result.data === 'string' ? this.xmlParser.parse(result.data) : result.data;
         const response = this.extractFromSoapResponse(parsed, 'FindRecordingsResponse');
         
-        if (response && response.RecordingInformation) {
-          const recordings = Array.isArray(response.RecordingInformation)
-            ? response.RecordingInformation
-            : [response.RecordingInformation];
+        const raw = response?.RecordingInformation || response?.recordingInformation;
+        if (raw) {
+          const recordings = Array.isArray(raw) ? raw : [raw];
           
-          // Sort by earliest time
           const sortedRecordings = recordings.sort((a: any, b: any) => {
-            const aTime = new Date(a.EarliestRecording || a.StartTime).getTime();
-            const bTime = new Date(b.EarliestRecording || b.StartTime).getTime();
+            const aTime = new Date(a.EarliestRecording || a.StartTime || a.earliestRecording || a.startTime || 0).getTime();
+            const bTime = new Date(b.EarliestRecording || b.StartTime || b.earliestRecording || b.startTime || 0).getTime();
             return aTime - bTime;
           });
           
           if (sortedRecordings.length > 0) {
             const oldest = sortedRecordings[0];
             return {
-              startTime: new Date(oldest.EarliestRecording || oldest.StartTime),
-              endTime: new Date(oldest.LatestRecording || oldest.EndTime),
-              recordingToken: oldest.RecordingToken || oldest['@_token'],
-              sizeBytes: oldest.DataFrom ? parseInt(oldest.DataFrom) : undefined
+              startTime: new Date(oldest.EarliestRecording || oldest.StartTime || oldest.earliestRecording || oldest.startTime || startTime),
+              endTime: new Date(oldest.LatestRecording || oldest.EndTime || oldest.latestRecording || oldest.endTime || endTime),
+              recordingToken: oldest.RecordingToken || oldest['@_token'] || oldest.recordingToken || channelId,
+              sizeBytes: (oldest.DataFrom || oldest.dataFrom) ? parseInt(oldest.DataFrom || oldest.dataFrom, 10) : undefined
             };
           }
         }
@@ -594,7 +607,7 @@ export class OnvifRecorderAdapter extends BaseRecorderAdapter implements Recorde
       return null;
       
     } catch (error) {
-      logger.warn('ONVIF recording search failed or not supported', {
+      logger.warn('ONVIF oldest recording search failed or not supported', {
         recorderId: this.recorder.id,
         channelId,
         error: this.normalizeError(error)
@@ -603,51 +616,48 @@ export class OnvifRecorderAdapter extends BaseRecorderAdapter implements Recorde
     }
   }
   
+  /**
+   * Get storage status from ONVIF GetStorageConfigurations
+   */
   async getStorageStatus(): Promise<StorageCheckResult> {
     try {
-      // ONVIF GetStorageConfiguration
-      const soapBody = `
-        <GetStorageConfigurations xmlns="http://www.onvif.org/ver10/device/wsdl"/>
-      `;
-      
-      const result = await this.makeSoapRequest(this.deviceServicePath, soapBody, 'GetStorageConfigurations');
+      const soapBody = `<GetStorageConfigurations xmlns="http://www.onvif.org/ver10/device/wsdl"/>`;
+      const result = await this.makeSoapRequest(this.deviceServicePath, soapBody, 'GetStorageConfigurations', true);
       
       if (result.status === 200 && result.data) {
-        const parsed = this.xmlParser.parse(result.data);
+        const parsed = typeof result.data === 'string' ? this.xmlParser.parse(result.data) : result.data;
         const response = this.extractFromSoapResponse(parsed, 'GetStorageConfigurationsResponse');
         
-        if (response && response.StorageConfiguration) {
-          const storageConfigs = Array.isArray(response.StorageConfiguration)
-            ? response.StorageConfiguration
-            : [response.StorageConfiguration];
+        const raw = response?.StorageConfiguration || response?.storageConfiguration;
+        if (raw) {
+          const storageConfigs = Array.isArray(raw) ? raw : [raw];
           
-          // Calculate total storage
           let totalBytes = 0;
           let usedBytes = 0;
           const disks: any[] = [];
           
           for (const config of storageConfigs) {
-            const data = config.Data;
+            const data = config.Data || config.data || config;
             if (data) {
-              const capacityMB = parseFloat(data.TotalBytes || data.Capacity || 0);
-              const usedMB = parseFloat(data.UsedBytes || data.Used || 0);
+              const capacity = parseFloat(data.TotalBytes || data.totalBytes || data.Capacity || data.capacity || 0);
+              const used = parseFloat(data.UsedBytes || data.usedBytes || data.Used || data.used || 0);
+              const free = Math.max(0, capacity - used);
               
-              totalBytes += capacityMB;
-              usedBytes += usedMB;
+              totalBytes += capacity;
+              usedBytes += used;
               
               disks.push({
-                id: config['@_token'] || config.token,
-                type: data.Type || 'unknown',
-                state: 'healthy', // ONVIF doesn't provide detailed disk health
-                capacityBytes: capacityMB,
-                usedBytes: usedMB
+                id: config['@_token'] || config.token || `disk-${disks.length + 1}`,
+                state: 'normal',
+                capacityBytes: capacity,
+                usedBytes: used,
+                freeBytes: free
               });
             }
           }
           
           const usagePercent = totalBytes > 0 ? (usedBytes / totalBytes) * 100 : 0;
           
-          // Check for storage issues
           if (usagePercent >= 95) {
             return {
               status: 'unhealthy',
@@ -655,6 +665,7 @@ export class OnvifRecorderAdapter extends BaseRecorderAdapter implements Recorde
               errorCode: 'STORAGE_FULL',
               totalBytes,
               usedBytes,
+              freeBytes: Math.max(0, totalBytes - usedBytes),
               usagePercent,
               disks,
               checkedAt: new Date()
@@ -666,6 +677,7 @@ export class OnvifRecorderAdapter extends BaseRecorderAdapter implements Recorde
             message: 'Storage operational',
             totalBytes,
             usedBytes,
+            freeBytes: Math.max(0, totalBytes - usedBytes),
             usagePercent,
             disks,
             checkedAt: new Date()
@@ -691,41 +703,46 @@ export class OnvifRecorderAdapter extends BaseRecorderAdapter implements Recorde
     }
   }
   
+  /**
+   * Get device time and calculate clock drift
+   */
   async getDeviceTime(): Promise<CheckResult<Date>> {
     try {
-      const soapBody = `
-        <GetSystemDateAndTime xmlns="http://www.onvif.org/ver10/device/wsdl"/>
-      `;
-      
-      const result = await this.makeSoapRequest(this.deviceServicePath, soapBody, 'GetSystemDateAndTime');
+      const soapBody = `<GetSystemDateAndTime xmlns="http://www.onvif.org/ver10/device/wsdl"/>`;
+      const result = await this.makeSoapRequest(this.deviceServicePath, soapBody, 'GetSystemDateAndTime', false);
       
       if (result.status === 200 && result.data) {
-        const parsed = this.xmlParser.parse(result.data);
+        const parsed = typeof result.data === 'string' ? this.xmlParser.parse(result.data) : result.data;
         const response = this.extractFromSoapResponse(parsed, 'GetSystemDateAndTimeResponse');
         
-        if (response && response.SystemDateAndTime) {
-          const dateTime = response.SystemDateAndTime;
-          const utc = dateTime.UTCDateTime || dateTime.LocalDateTime;
+        const dateTime = response?.SystemDateAndTime || response?.systemDateAndTime;
+        if (dateTime) {
+          const utc = dateTime.UTCDateTime || dateTime.utcDateTime || dateTime.LocalDateTime || dateTime.localDateTime;
           
-          if (utc && utc.Date && utc.Time) {
-            const deviceTime = new Date(
-              utc.Date.Year,
-              utc.Date.Month - 1, // JS months are 0-indexed
-              utc.Date.Day,
-              utc.Time.Hour,
-              utc.Time.Minute,
-              utc.Time.Second
-            );
+          if (utc) {
+            const d = utc.Date || utc.date;
+            const t = utc.Time || utc.time;
             
-            logger.debug('ONVIF device time retrieved', {
-              recorderId: this.recorder.id,
-              deviceTime: deviceTime.toISOString()
-            });
-            
-            return this.createHealthyResult<Date>(
-              deviceTime,
-              'Device time retrieved'
-            );
+            if (d && t) {
+              const deviceTime = new Date(Date.UTC(
+                parseInt(d.Year || d.year, 10),
+                parseInt(d.Month || d.month, 10) - 1,
+                parseInt(d.Day || d.day, 10),
+                parseInt(t.Hour || t.hour, 10),
+                parseInt(t.Minute || t.minute, 10),
+                parseInt(t.Second || t.second, 10)
+              ));
+              
+              logger.debug('ONVIF device time retrieved', {
+                recorderId: this.recorder.id,
+                deviceTime: deviceTime.toISOString()
+              });
+              
+              return this.createHealthyResult<Date>(
+                deviceTime,
+                'Device time retrieved'
+              );
+            }
           }
         }
       }
@@ -745,41 +762,36 @@ export class OnvifRecorderAdapter extends BaseRecorderAdapter implements Recorde
   }
   
   /**
-   * ONVIF SOAP request helpers
-   */
-  
-  /**
-   * Make SOAP request with WS-Security authentication
+   * Make SOAP 1.2 request with optional WS-Security authentication
    */
   private async makeSoapRequest(
     servicePath: string,
     soapBody: string,
-    action: string
+    action: string,
+    includeAuth: boolean = true
   ): Promise<any> {
-    const soapEnvelope = this.buildSoapEnvelope(soapBody);
+    const soapEnvelope = this.buildSoapEnvelope(soapBody, includeAuth);
     
     return await this.httpClient.post(servicePath, soapEnvelope, {
       headers: {
-        'Content-Type': 'application/soap+xml; charset=utf-8; action="http://www.onvif.org/ver10/device/wsdl/' + action + '"',
+        'Content-Type': `application/soap+xml; charset=utf-8; action="http://www.onvif.org/ver10/device/wsdl/${action}"`,
         'Connection': 'keep-alive'
       }
     });
   }
   
   /**
-   * Build SOAP 1.2 envelope with WS-Security UsernameToken
+   * Build SOAP 1.2 envelope
    */
-  private buildSoapEnvelope(body: string): string {
-    const wsSecurityHeader = this.buildWsSecurityHeader();
+  private buildSoapEnvelope(body: string, includeAuth: boolean = true): string {
+    const wsSecurityHeader = includeAuth ? this.buildWsSecurityHeader() : '';
     
     return `<?xml version="1.0" encoding="UTF-8"?>
 <soap:Envelope 
   xmlns:soap="http://www.w3.org/2003/05/soap-envelope"
   xmlns:wsse="http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-wssecurity-secext-1.0.xsd"
   xmlns:wsu="http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-wssecurity-utility-1.0.xsd">
-  <soap:Header>
-    ${wsSecurityHeader}
-  </soap:Header>
+  ${includeAuth ? `<soap:Header>${wsSecurityHeader}</soap:Header>` : '<soap:Header/>'}
   <soap:Body>
     ${body}
   </soap:Body>
@@ -787,20 +799,14 @@ export class OnvifRecorderAdapter extends BaseRecorderAdapter implements Recorde
   }
   
   /**
-   * Build WS-Security UsernameToken with timestamp and digest
-   * 
-   * ONVIF requires:
-   * - Timestamp (Created)
-   * - Nonce (random bytes)
-   * - Password Digest = Base64(SHA-1(Nonce + Created + Password))
+   * Build WS-Security UsernameToken header
    */
   private buildWsSecurityHeader(): string {
     const created = new Date().toISOString();
     const nonce = randomBytes(16);
     const nonceBase64 = nonce.toString('base64');
     
-    // Password Digest = Base64(SHA-1(Nonce + Created + Password))
-    const password = this.connection.credentials.password;
+    const password = this.connection.credentials.password || '';
     const digestInput = Buffer.concat([
       nonce,
       Buffer.from(created, 'utf8'),
@@ -822,21 +828,18 @@ export class OnvifRecorderAdapter extends BaseRecorderAdapter implements Recorde
    * Extract response from SOAP envelope
    */
   private extractFromSoapResponse(parsed: any, responseName: string): any {
-    // Navigate SOAP envelope structure
-    const envelope = parsed['soap:Envelope'] || parsed['SOAP-ENV:Envelope'] || parsed.Envelope;
-    if (!envelope) return null;
+    if (!parsed) return null;
     
-    const body = envelope['soap:Body'] || envelope['SOAP-ENV:Body'] || envelope.Body;
-    if (!body) return null;
+    const envelope = parsed.Envelope || parsed['soap:Envelope'] || parsed;
+    const body = envelope.Body || envelope['soap:Body'] || envelope;
     
-    // Find response by name (with or without namespace prefix)
-    for (const key in body) {
+    for (const key of Object.keys(body)) {
       if (key.endsWith(responseName) || key === responseName) {
         return body[key];
       }
     }
     
-    return null;
+    return body[responseName] || parsed[responseName] || null;
   }
   
   /**
@@ -849,18 +852,5 @@ export class OnvifRecorderAdapter extends BaseRecorderAdapter implements Recorde
       .replace(/>/g, '&gt;')
       .replace(/"/g, '&quot;')
       .replace(/'/g, '&apos;');
-  }
-  
-  // Remove old placeholder methods
-  private buildGetSystemDateAndTimeRequest(): string {
-    throw new Error('Use makeSoapRequest instead');
-  }
-  
-  private buildGetDeviceInformationRequest(): string {
-    throw new Error('Use makeSoapRequest instead');
-  }
-  
-  private buildOnvifAuthHeaders() {
-    throw new Error('Auth is now in SOAP envelope');
   }
 }

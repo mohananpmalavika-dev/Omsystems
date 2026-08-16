@@ -5,7 +5,7 @@
  * and returns UNKNOWN for unsupported features
  */
 
-import { describe, it, expect, jest } from '@jest/globals';
+import { describe, it, expect, vi } from 'vitest';
 import { GenericRecorderAdapter } from '../adapters/generic-recorder.adapter.js';
 import type { Recorder } from '../types/index.js';
 import type { RecorderConnection } from '../recorder-adapter.interface.js';

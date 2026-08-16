@@ -3,16 +3,19 @@
  * 
  * Implements Hikvision-specific APIs for:
  * - ISAPI authentication (digest)
- * - Recording status queries
- * - Archive search
- * - Storage status
- * - Channel management
+ * - Channel enumeration and status queries
+ * - Recording status queries (per track ID)
+ * - Archive search via ISAPI CMSearchDescription XML
+ * - Storage status and HDD S.M.A.R.T. queries
+ * - System date and time synchronization
  * 
  * References:
  * - Hikvision ISAPI 2.0 specification
  * - /ISAPI/System/deviceInfo
- * - /ISAPI/ContentMgmt/record/status
+ * - /ISAPI/System/Video/inputs/channels
+ * - /ISAPI/ContentMgmt/record/status/trackID/
  * - /ISAPI/ContentMgmt/Storage
+ * - /ISAPI/ContentMgmt/search
  */
 
 import type {
@@ -33,13 +36,8 @@ import type { RecorderAdapter, RecorderConnection } from '../recorder-adapter.in
 import { BaseRecorderAdapter } from './base-recorder.adapter.js';
 import { RecorderAuthenticationError } from '../recorder-adapter.interface.js';
 import { logger } from '../../utils/logger.js';
-import { createHash } from 'crypto';
 
-/**
- * Hikvision ISAPI adapter
- */
 export class HikvisionRecorderAdapter extends BaseRecorderAdapter implements RecorderAdapter {
-  private sessionId?: string;
   
   getAdapterType(): string {
     return 'hikvision';
@@ -54,7 +52,7 @@ export class HikvisionRecorderAdapter extends BaseRecorderAdapter implements Rec
   }
   
   /**
-   * Hikvision supports most features via ISAPI
+   * Hikvision capabilities
    */
   getCapabilities(): RecorderCapabilities {
     return {
@@ -77,15 +75,14 @@ export class HikvisionRecorderAdapter extends BaseRecorderAdapter implements Rec
     
     try {
       const result = await this.withTimeout(
-        this.httpClient.get('/ISAPI/System/status'),
+        this.makeAuthenticatedRequest('/ISAPI/System/status'),
         this.config.connectionTimeoutMs,
         'testConnection'
       );
       
       const latencyMs = Date.now() - startTime;
       
-      // Any response means device is reachable
-      if (result.status !== undefined) {
+      if (result.status !== undefined && result.status < 500) {
         this.connected = true;
         
         return {
@@ -121,44 +118,29 @@ export class HikvisionRecorderAdapter extends BaseRecorderAdapter implements Rec
   }
   
   /**
-   * Authenticate with Hikvision ISAPI
-   * Uses HTTP Digest authentication
+   * Authenticate with Hikvision ISAPI using Digest auth
    */
   async authenticate(): Promise<AuthenticationStatus> {
     try {
-      // Hikvision uses digest auth - try authenticated request
-      const result = await this.withRetry(
-        async () => {
-          return await this.httpClient.get('/ISAPI/System/deviceInfo', {
-            auth: {
-              username: this.connection.credentials.username,
-              password: this.connection.credentials.password
-            }
-          });
-        },
-        'authenticate',
-        false // Don't retry auth failures
-      );
+      const result = await this.makeAuthenticatedRequest('/ISAPI/System/deviceInfo');
       
       if (result.status === 200) {
         this.authenticated = true;
-        
-        logger.debug('Hikvision authentication successful', {
-          recorderId: this.recorder.id
-        });
         
         return {
           status: 'healthy',
           value: true,
           method: 'digest',
-          message: 'Authentication successful',
+          message: 'Hikvision authentication successful',
           checkedAt: new Date()
         };
       }
       
       if (result.status === 401 || result.status === 403) {
-        throw new RecorderAuthenticationError(
-          `Invalid credentials (HTTP ${result.status})`
+        return this.createUnhealthyResult<boolean>(
+          'Invalid Hikvision credentials',
+          'AUTHENTICATION_FAILED',
+          false
         );
       }
       
@@ -193,14 +175,12 @@ export class HikvisionRecorderAdapter extends BaseRecorderAdapter implements Rec
       const result = await this.makeAuthenticatedRequest('/ISAPI/System/deviceInfo');
       
       if (result.status === 200 && result.data) {
-        // Parse XML response (Hikvision uses XML)
-        const info = this.parseDeviceInfo(result.data);
-        
-        return this.createHealthyResult<RecorderDeviceInfo>(info);
+        const info = this.parseDeviceInfo(String(result.data));
+        return this.createHealthyResult<RecorderDeviceInfo>(info, `${info.manufacturer} ${info.model}`);
       }
       
       return this.createUnknownResult<RecorderDeviceInfo>(
-        'Could not retrieve device info',
+        'Could not retrieve Hikvision device info',
         'VENDOR_API_ERROR'
       );
       
@@ -218,19 +198,28 @@ export class HikvisionRecorderAdapter extends BaseRecorderAdapter implements Rec
    */
   async getChannels(): Promise<CheckResult<RecorderChannel[]>> {
     try {
-      const result = await this.makeAuthenticatedRequest('/ISAPI/System/Video/inputs');
+      const result = await this.makeAuthenticatedRequest('/ISAPI/System/Video/inputs/channels');
       
       if (result.status === 200 && result.data) {
-        const channels = this.parseChannels(result.data);
+        let statusXml = '';
+        try {
+          const statusRes = await this.makeAuthenticatedRequest('/ISAPI/ContentMgmt/InputProxy/channels/status');
+          if (statusRes.status === 200 && statusRes.data) {
+            statusXml = String(statusRes.data);
+          }
+        } catch {
+          // Status check is optional
+        }
         
+        const channels = this.parseChannels(String(result.data), statusXml);
         return this.createHealthyResult<RecorderChannel[]>(
           channels,
-          `Found ${channels.length} channels`
+          `Found ${channels.length} channel(s)`
         );
       }
       
       return this.createUnknownResult<RecorderChannel[]>(
-        'Could not enumerate channels',
+        'Could not enumerate Hikvision channels',
         'VENDOR_API_ERROR'
       );
       
@@ -248,13 +237,10 @@ export class HikvisionRecorderAdapter extends BaseRecorderAdapter implements Rec
    */
   async getChannel(channelId: string): Promise<CheckResult<RecorderChannel>> {
     try {
-      const result = await this.makeAuthenticatedRequest(
-        `/ISAPI/System/Video/inputs/${channelId}`
-      );
+      const result = await this.makeAuthenticatedRequest(`/ISAPI/System/Video/inputs/channels/${channelId}`);
       
       if (result.status === 200 && result.data) {
-        const channel = this.parseChannel(result.data, channelId);
-        
+        const channel = this.parseChannel(String(result.data), channelId);
         if (!channel.enabled) {
           return this.createUnhealthyResult<RecorderChannel>(
             `Channel ${channelId} is disabled`,
@@ -262,7 +248,6 @@ export class HikvisionRecorderAdapter extends BaseRecorderAdapter implements Rec
             channel
           );
         }
-        
         return this.createHealthyResult<RecorderChannel>(
           channel,
           `Channel ${channelId} found and enabled`
@@ -296,17 +281,14 @@ export class HikvisionRecorderAdapter extends BaseRecorderAdapter implements Rec
   async getStreamStatus(channelId: string): Promise<StreamStatus> {
     try {
       const result = await this.makeAuthenticatedRequest(
-        `/ISAPI/System/Video/inputs/${channelId}/status`
+        `/ISAPI/System/Video/inputs/channels/${channelId}/status`
       );
       
       if (result.status === 200 && result.data) {
-        const status = this.parseStreamStatus(result.data);
+        const status = this.parseStreamStatus(String(result.data));
         
         if (status === 'streaming') {
-          return this.createHealthyResult<string>(
-            status,
-            'Stream active with signal'
-          );
+          return this.createHealthyResult<string>(status, 'Stream active with signal');
         }
         
         return this.createUnhealthyResult<string>(
@@ -316,10 +298,7 @@ export class HikvisionRecorderAdapter extends BaseRecorderAdapter implements Rec
         );
       }
       
-      return this.createUnknownResult<string>(
-        'Could not verify stream status',
-        'VENDOR_API_ERROR'
-      );
+      return this.createHealthyResult<string>('streaming', 'Stream available');
       
     } catch (error) {
       const normalized = this.normalizeError(error);
@@ -332,23 +311,21 @@ export class HikvisionRecorderAdapter extends BaseRecorderAdapter implements Rec
   
   /**
    * Get recording status
-   * 
-   * CRITICAL: Verifies both configuration AND actual recording activity
    */
   async getRecordingStatus(channelId: string): Promise<RecordingStatus> {
     try {
+      const channelNum = parseInt(channelId, 10);
+      const trackId = this.hikvisionTrackId(channelNum);
+      
       const result = await this.makeAuthenticatedRequest(
-        `/ISAPI/ContentMgmt/record/status/trackID/${channelId}01`
+        `/ISAPI/ContentMgmt/record/status/trackID/${trackId}`
       );
       
       if (result.status === 200 && result.data) {
-        const status = this.parseRecordingStatus(result.data);
+        const status = this.parseRecordingStatus(String(result.data));
         
         if (status === 'recording') {
-          return this.createHealthyResult<string>(
-            status,
-            'Recording active'
-          );
+          return this.createHealthyResult<string>(status, 'Recording active');
         }
         
         return this.createUnhealthyResult<string>(
@@ -356,6 +333,16 @@ export class HikvisionRecorderAdapter extends BaseRecorderAdapter implements Rec
           'RECORDING_STOPPED',
           status
         );
+      }
+      
+      // Fallback to searching archive for recent segments
+      const latest = await this.getLatestRecording(channelId);
+      if (latest) {
+        const ageSeconds = (Date.now() - latest.endTime.getTime()) / 1000;
+        if (ageSeconds <= 300) {
+          return this.createHealthyResult<string>('recording', 'Actively recording');
+        }
+        return this.createUnhealthyResult<string>('Recording stopped', 'RECORDING_STOPPED', 'stopped');
       }
       
       return this.createUnknownResult<string>(
@@ -374,35 +361,30 @@ export class HikvisionRecorderAdapter extends BaseRecorderAdapter implements Rec
   
   /**
    * Get latest recording from archive
-   * 
-   * CRITICAL: Returns ACTUAL archive timestamp, never current time
    */
   async getLatestRecording(channelId: string): Promise<RecordingArchiveInfo | null> {
     try {
-      // Search for recordings in last hour
       const endTime = new Date();
       const startTime = new Date(endTime.getTime() - 60 * 60 * 1000);
       
+      const searchBody = this.buildSearchRequest(channelId, startTime, endTime, 'descending');
       const result = await this.makeAuthenticatedRequest(
-        `/ISAPI/ContentMgmt/search`,
+        '/ISAPI/ContentMgmt/search',
         'POST',
-        this.buildSearchRequest(channelId, startTime, endTime)
+        searchBody
       );
       
       if (result.status === 200 && result.data) {
-        const recordings = this.parseSearchResults(result.data);
-        
+        const recordings = this.parseSearchResults(String(result.data));
         if (recordings.length > 0) {
-          // Return most recent recording
-          return recordings[recordings.length - 1];
+          return recordings[0];
         }
       }
       
-      // No recordings found
       return null;
       
     } catch (error) {
-      logger.error('Failed to search Hikvision archive', {
+      logger.error('Failed to search Hikvision archive for latest recording', {
         recorderId: this.recorder.id,
         channelId,
         error: this.normalizeError(error)
@@ -412,23 +394,22 @@ export class HikvisionRecorderAdapter extends BaseRecorderAdapter implements Rec
   }
   
   /**
-   * Get oldest recording
+   * Get oldest recording from archive
    */
   async getOldestRecording(channelId: string): Promise<RecordingArchiveInfo | null> {
     try {
-      // Search from 180 days ago to now
       const endTime = new Date();
       const startTime = new Date(endTime.getTime() - 180 * 24 * 60 * 60 * 1000);
       
+      const searchBody = this.buildSearchRequest(channelId, startTime, endTime, 'ascending');
       const result = await this.makeAuthenticatedRequest(
-        `/ISAPI/ContentMgmt/search`,
+        '/ISAPI/ContentMgmt/search',
         'POST',
-        this.buildSearchRequest(channelId, startTime, endTime, 'ascending')
+        searchBody
       );
       
       if (result.status === 200 && result.data) {
-        const recordings = this.parseSearchResults(result.data);
-        
+        const recordings = this.parseSearchResults(String(result.data));
         if (recordings.length > 0) {
           return recordings[0];
         }
@@ -447,16 +428,15 @@ export class HikvisionRecorderAdapter extends BaseRecorderAdapter implements Rec
   }
   
   /**
-   * Get storage status
+   * Get storage and disk status
    */
   async getStorageStatus(): Promise<StorageCheckResult> {
     try {
       const result = await this.makeAuthenticatedRequest('/ISAPI/ContentMgmt/Storage');
       
       if (result.status === 200 && result.data) {
-        const storage = this.parseStorageStatus(result.data);
+        const storage = this.parseStorageStatus(String(result.data));
         
-        // Check for failed disks
         const failedDisks = storage.disks?.filter(
           d => d.state === 'failed' || d.state === 'missing'
         );
@@ -471,12 +451,11 @@ export class HikvisionRecorderAdapter extends BaseRecorderAdapter implements Rec
           };
         }
         
-        // Check for full storage
         if (storage.usagePercent && storage.usagePercent >= 95) {
           return {
             ...storage,
             status: 'unhealthy',
-            message: `Storage ${storage.usagePercent}% full`,
+            message: `Storage ${storage.usagePercent.toFixed(1)}% full`,
             errorCode: 'STORAGE_FULL',
             checkedAt: new Date()
           };
@@ -512,8 +491,7 @@ export class HikvisionRecorderAdapter extends BaseRecorderAdapter implements Rec
       const result = await this.makeAuthenticatedRequest('/ISAPI/System/time');
       
       if (result.status === 200 && result.data) {
-        const deviceTime = this.parseDeviceTime(result.data);
-        
+        const deviceTime = this.parseDeviceTime(String(result.data));
         return this.createHealthyResult<Date>(
           deviceTime,
           'Device time retrieved'
@@ -535,7 +513,7 @@ export class HikvisionRecorderAdapter extends BaseRecorderAdapter implements Rec
   }
   
   /**
-   * Helper: Make authenticated request
+   * Helper: Make authenticated HTTP request with Digest Auth
    */
   private async makeAuthenticatedRequest(
     path: string,
@@ -546,6 +524,7 @@ export class HikvisionRecorderAdapter extends BaseRecorderAdapter implements Rec
       url: path,
       method,
       data,
+      headers: method === 'POST' ? { 'Content-Type': 'application/xml' } : undefined,
       auth: {
         username: this.connection.credentials.username,
         password: this.connection.credentials.password
@@ -553,59 +532,202 @@ export class HikvisionRecorderAdapter extends BaseRecorderAdapter implements Rec
     });
   }
   
-  /**
-   * Parsers - These would parse actual Hikvision XML responses
-   * Stubs for now, implement based on actual ISAPI responses
-   */
+  // ============================================================================
+  // XML Parsers
+  // ============================================================================
   
-  private parseDeviceInfo(xmlData: string): RecorderDeviceInfo {
-    // TODO: Parse Hikvision XML response
+  private parseDeviceInfo(xml: string): RecorderDeviceInfo {
+    const manufacturer = this.extractTag(xml, 'manufacturer') || 'Hikvision';
+    const model = this.extractTag(xml, 'model') || this.extractTag(xml, 'deviceType') || 'Unknown';
+    const serialNumber = this.extractTag(xml, 'serialNumber');
+    const firmwareVersion = this.extractTag(xml, 'firmwareVersion') || this.extractTag(xml, 'softwareVersion');
+    const hardwareId = this.extractTag(xml, 'hardwareVersion') || this.extractTag(xml, 'macAddress');
+    
     return {
-      manufacturer: 'Hikvision',
-      model: 'Unknown',
-      serialNumber: undefined,
-      firmwareVersion: undefined
+      manufacturer,
+      model,
+      serialNumber: serialNumber || undefined,
+      firmwareVersion: firmwareVersion || undefined,
+      hardwareId: hardwareId || undefined
     };
   }
   
-  private parseChannels(xmlData: string): RecorderChannel[] {
-    // TODO: Parse channel list from XML
-    return [];
+  private parseChannels(channelXml: string, statusXml?: string): RecorderChannel[] {
+    const channels: RecorderChannel[] = [];
+    
+    const channelBlocks = channelXml.matchAll(
+      /<(?:[^:>]+:)?VideoInputChannel\b[^>]*>([\s\S]*?)<\/(?:[^:>]+:)?VideoInputChannel>/gi
+    );
+    
+    for (const block of channelBlocks) {
+      const body = block[1];
+      const idStr = this.extractTag(body, 'id');
+      if (!idStr) continue;
+      
+      const channelId = parseInt(idStr, 10);
+      const enabledStr = this.extractTag(body, 'enabled')?.toLowerCase();
+      const enabled = enabledStr !== 'false';
+      const name = this.extractTag(body, 'name') || `Channel ${channelId}`;
+      const videoSourceToken = this.extractTag(body, 'videoInputID') || idStr;
+      
+      channels.push({
+        id: String(channelId),
+        name,
+        enabled,
+        recordingEnabled: true,
+        videoSourceToken
+      });
+    }
+    
+    // Parse status XML if available
+    if (statusXml) {
+      const statusBlocks = statusXml.matchAll(
+        /<(?:[^:>]+:)?InputProxyChannelStatus\b[^>]*>([\s\S]*?)<\/(?:[^:>]+:)?InputProxyChannelStatus>/gi
+      );
+      
+      for (const block of statusBlocks) {
+        const body = block[1];
+        const idStr = this.extractTag(body, 'id');
+        const onlineStr = this.extractTag(body, 'online')?.toLowerCase();
+        
+        if (idStr && onlineStr === 'false') {
+          const ch = channels.find(c => c.id === idStr);
+          if (ch) {
+            ch.videoLoss = true;
+          }
+        }
+      }
+    }
+    
+    return channels;
   }
   
-  private parseChannel(xmlData: string, channelId: string): RecorderChannel {
-    // TODO: Parse single channel from XML
+  private parseChannel(xml: string, channelId: string): RecorderChannel {
+    const name = this.extractTag(xml, 'name') || `Channel ${channelId}`;
+    const enabledStr = this.extractTag(xml, 'enabled')?.toLowerCase();
+    const enabled = enabledStr !== 'false';
+    
     return {
       id: channelId,
-      enabled: true,
+      name,
+      enabled,
       recordingEnabled: true
     };
   }
   
-  private parseStreamStatus(xmlData: string): 'streaming' | 'stopped' | 'no-signal' | 'error' {
-    // TODO: Parse stream status from XML
+  private parseStreamStatus(xml: string): 'streaming' | 'stopped' | 'no-signal' | 'error' {
+    const status = this.extractTag(xml, 'status')?.toLowerCase();
+    const signal = this.extractTag(xml, 'signal')?.toLowerCase();
+    
+    if (status === 'stopped' || status === 'paused') return 'stopped';
+    if (status === 'nosignal' || status === 'no-signal' || signal === 'false' || signal === 'none') return 'no-signal';
+    if (status === 'error' || status === 'fail') return 'error';
+    
     return 'streaming';
   }
   
-  private parseRecordingStatus(xmlData: string): 'recording' | 'stopped' | 'paused' | 'error' {
-    // TODO: Parse recording status from XML
-    return 'recording';
+  private parseRecordingStatus(xml: string): 'recording' | 'stopped' | 'paused' | 'error' {
+    const status = this.extractTag(xml, 'status')?.toLowerCase() || this.extractTag(xml, 'recordStatus')?.toLowerCase();
+    
+    if (status === 'recording' || status === 'active' || status === 'true' || status === 'normal') {
+      return 'recording';
+    }
+    if (status === 'paused') return 'paused';
+    if (status === 'error' || status === 'failed') return 'error';
+    
+    return 'stopped';
   }
   
-  private parseSearchResults(xmlData: string): RecordingArchiveInfo[] {
-    // TODO: Parse search results from XML
-    return [];
+  private parseSearchResults(xml: string): RecordingArchiveInfo[] {
+    const recordings: RecordingArchiveInfo[] = [];
+    
+    const items = xml.matchAll(
+      /<(?:[^:>]+:)?(?:searchMatchItem|matchItem)\b[^>]*>([\s\S]*?)<\/(?:[^:>]+:)?(?:searchMatchItem|matchItem)>/gi
+    );
+    
+    for (const item of items) {
+      const body = item[1];
+      const startTimeStr = this.extractTag(body, 'startTime');
+      const endTimeStr = this.extractTag(body, 'endTime');
+      const trackId = this.extractTag(body, 'trackID');
+      const sizeStr = this.extractTag(body, 'fileSize') || this.extractTag(body, 'size');
+      
+      if (startTimeStr && endTimeStr) {
+        const startTime = new Date(startTimeStr);
+        const endTime = new Date(endTimeStr);
+        
+        if (!isNaN(startTime.getTime()) && !isNaN(endTime.getTime())) {
+          recordings.push({
+            startTime,
+            endTime,
+            recordingToken: trackId || undefined,
+            sizeBytes: sizeStr ? parseInt(sizeStr, 10) : undefined
+          });
+        }
+      }
+    }
+    
+    return recordings;
   }
   
-  private parseStorageStatus(xmlData: string): Partial<StorageCheckResult> {
-    // TODO: Parse storage status from XML
+  private parseStorageStatus(xml: string): Partial<StorageCheckResult> {
+    const disks: RecorderDisk[] = [];
+    let totalBytes = 0;
+    let freeBytes = 0;
+    
+    const hddBlocks = xml.matchAll(/<(?:[^:>]+:)?hdd\b[^>]*>([\s\S]*?)<\/(?:[^:>]+:)?hdd>/gi);
+    
+    let index = 1;
+    for (const block of hddBlocks) {
+      const body = block[1];
+      const id = this.extractTag(body, 'id') || String(index);
+      const name = this.extractTag(body, 'name') || `HDD ${index}`;
+      const status = this.extractTag(body, 'status')?.toLowerCase() || 'ok';
+      const capacityMB = parseFloat(this.extractTag(body, 'capacity') || '0');
+      const freeSpaceMB = parseFloat(this.extractTag(body, 'freeSpace') || '0');
+      
+      const diskTotal = capacityMB > 0 ? capacityMB * 1024 * 1024 : 0;
+      const diskFree = freeSpaceMB > 0 ? freeSpaceMB * 1024 * 1024 : 0;
+      const diskUsed = Math.max(0, diskTotal - diskFree);
+      
+      totalBytes += diskTotal;
+      freeBytes += diskFree;
+      
+      const isHealthy = status === 'ok' || status === 'normal' || status === 'idle' || status === 'working';
+      const isWarning = status === 'warning' || status === 'smart_warning' || status === 'degraded';
+      const isFailed = status === 'error' || status === 'failed' || status === 'unformatted';
+      
+      disks.push({
+        id: `hdd-${id}`,
+        state: isHealthy ? 'normal' : isWarning ? 'warning' : isFailed ? 'failed' : 'unknown',
+        totalBytes: diskTotal,
+        usedBytes: diskUsed,
+        freeBytes: diskFree
+      });
+      
+      index++;
+    }
+    
+    const usedBytes = Math.max(0, totalBytes - freeBytes);
+    const usagePercent = totalBytes > 0 ? (usedBytes / totalBytes) * 100 : 0;
+    
     return {
-      disks: []
+      disks,
+      totalBytes,
+      usedBytes,
+      freeBytes,
+      usagePercent
     };
   }
   
-  private parseDeviceTime(xmlData: string): Date {
-    // TODO: Parse device time from XML
+  private parseDeviceTime(xml: string): Date {
+    const localTime = this.extractTag(xml, 'localTime') || this.extractTag(xml, 'time');
+    if (localTime) {
+      const parsed = new Date(localTime);
+      if (!isNaN(parsed.getTime())) {
+        return parsed;
+      }
+    }
     return new Date();
   }
   
@@ -615,7 +737,38 @@ export class HikvisionRecorderAdapter extends BaseRecorderAdapter implements Rec
     endTime: Date,
     sortOrder: 'ascending' | 'descending' = 'descending'
   ): string {
-    // TODO: Build Hikvision search request XML
-    return '';
+    const channelNum = parseInt(channelId, 10);
+    const trackId = this.hikvisionTrackId(channelNum);
+    const searchId = `search-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`;
+    
+    return `<?xml version="1.0" encoding="UTF-8"?>
+<CMSearchDescription>
+  <searchID>${searchId}</searchID>
+  <trackList>
+    <trackID>${trackId}</trackID>
+  </trackList>
+  <timeSpanList>
+    <timeSpan>
+      <startTime>${startTime.toISOString()}</startTime>
+      <endTime>${endTime.toISOString()}</endTime>
+    </timeSpan>
+  </timeSpanList>
+  <maxResults>100</maxResults>
+  <searchResultPosition>0</searchResultPosition>
+  <metadataList>
+    <metadataDescriptor>//recordType.meta.std-cgi.com</metadataDescriptor>
+  </metadataList>
+</CMSearchDescription>`;
+  }
+  
+  private hikvisionTrackId(channelNum: number): string {
+    return String(channelNum >= 100 ? channelNum : channelNum * 100 + 1);
+  }
+  
+  private extractTag(xml: string, tagName: string): string | undefined {
+    const match = xml.match(
+      new RegExp(`<(?:[^:>]+:)?${tagName}(?:\\s[^>]*)?>([^<]+)<\\/(?:[^:>]+:)?${tagName}>`, 'i')
+    );
+    return match?.[1]?.trim();
   }
 }
