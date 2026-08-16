@@ -35,14 +35,14 @@ export function CommandCenterView() {
     setLoading(true);
     try {
       const [sumRes, branchRes] = await Promise.all([
-        fetch("/api/v1/operations/command-center"),
-        fetch("/api/v1/operations/branches"),
+        fetch("/api/control/v1/operations/command-center", { credentials: "include" }),
+        fetch("/api/control/v1/operations/branches", { credentials: "include" }),
       ]);
-      const sumData = await sumRes.json();
-      const branchData = await branchRes.json();
+      const sumData = await sumRes.json().catch(() => ({}));
+      const branchData = await branchRes.json().catch(() => ({}));
 
-      if (sumData.success) setSummary(sumData.data);
-      if (branchData.success) setBranches(branchData.data);
+      if (sumData?.success && sumData?.data) setSummary(sumData.data);
+      if (branchData?.success && Array.isArray(branchData?.data)) setBranches(branchData.data);
     } catch (err) {
       console.error("Failed to load command center data:", err);
     } finally {
@@ -56,12 +56,16 @@ export function CommandCenterView() {
     return () => clearInterval(interval);
   }, []);
 
+  const totalBranchesCount = summary?.branches?.total ?? branches.length;
+  const totalCamerasCount = summary?.cameras?.total ?? 0;
+
   const filteredBranches = branches.filter((b) => {
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
-      if (!b.name.toLowerCase().includes(q) && !b.branchCode.toLowerCase().includes(q)) return false;
+      if (!b.name?.toLowerCase().includes(q) && !b.branchCode?.toLowerCase().includes(q)) return false;
     }
     if (selectedStatus !== "ALL" && b.operationalState !== selectedStatus) return false;
+    if (selectedRegion !== "ALL" && b.region !== selectedRegion) return false;
     return true;
   });
 
@@ -77,7 +81,7 @@ export function CommandCenterView() {
             </span>
           </div>
           <p className="text-sm text-slate-400 mt-1">
-            400 Banking Branches • 4,000 Channels • Universal Edge Health & Incident Triage
+            {totalBranchesCount} {totalBranchesCount === 1 ? "Branch" : "Branches"} • {totalCamerasCount.toLocaleString()} {totalCamerasCount === 1 ? "Channel" : "Channels"} • Live Surveillance & Incident Triage
           </p>
         </div>
 
@@ -110,11 +114,11 @@ export function CommandCenterView() {
             <Building2 className="w-4 h-4 text-blue-400" />
           </div>
           <div className="text-2xl font-bold text-white tracking-tight">
-            {summary?.branches?.total || 400}
+            {totalBranchesCount}
           </div>
           <div className="flex items-center gap-2 text-xs">
-            <span className="text-emerald-400 font-medium">{summary?.branches?.healthy || 356} healthy</span>
-            <span className="text-rose-400 font-medium">{summary?.branches?.critical || 8} critical</span>
+            <span className="text-emerald-400 font-medium">{summary?.branches?.healthy ?? 0} healthy</span>
+            <span className="text-rose-400 font-medium">{summary?.branches?.critical ?? 0} critical</span>
           </div>
         </div>
 
@@ -125,11 +129,11 @@ export function CommandCenterView() {
             <Camera className="w-4 h-4 text-emerald-400" />
           </div>
           <div className="text-2xl font-bold text-white tracking-tight">
-            {summary?.cameras?.total || 4000}
+            {totalCamerasCount}
           </div>
           <div className="flex items-center gap-2 text-xs">
-            <span className="text-emerald-400 font-medium">{summary?.cameras?.healthy || 3840} stream</span>
-            <span className="text-amber-400 font-medium">{summary?.cameras?.recordingFailure || 31} no rec</span>
+            <span className="text-emerald-400 font-medium">{summary?.cameras?.healthy ?? 0} stream</span>
+            <span className="text-amber-400 font-medium">{summary?.cameras?.recordingFailure ?? 0} no rec</span>
           </div>
         </div>
 
@@ -140,11 +144,11 @@ export function CommandCenterView() {
             <Server className="w-4 h-4 text-purple-400" />
           </div>
           <div className="text-2xl font-bold text-white tracking-tight">
-            {summary?.recorders?.total || 400}
+            {summary?.recorders?.total ?? 0}
           </div>
           <div className="flex items-center gap-2 text-xs">
-            <span className="text-emerald-400 font-medium">{summary?.recorders?.online || 388} online</span>
-            <span className="text-slate-400 font-medium">{summary?.recorders?.maintenance || 4} maint</span>
+            <span className="text-emerald-400 font-medium">{summary?.recorders?.online ?? 0} online</span>
+            <span className="text-slate-400 font-medium">{summary?.recorders?.maintenance ?? 0} maint</span>
           </div>
         </div>
 
@@ -155,11 +159,11 @@ export function CommandCenterView() {
             <Database className="w-4 h-4 text-amber-400" />
           </div>
           <div className="text-2xl font-bold text-white tracking-tight">
-            {summary?.storage?.totalDisks || 800}
+            {summary?.storage?.totalDisks ?? 0}
           </div>
           <div className="flex items-center gap-2 text-xs">
-            <span className="text-emerald-400 font-medium">{summary?.storage?.healthy || 762} passed</span>
-            <span className="text-amber-400 font-medium">{summary?.storage?.warning || 31} SMART</span>
+            <span className="text-emerald-400 font-medium">{summary?.storage?.healthy ?? 0} passed</span>
+            <span className="text-amber-400 font-medium">{summary?.storage?.warning ?? 0} SMART</span>
           </div>
         </div>
 
@@ -170,11 +174,13 @@ export function CommandCenterView() {
             <FileCheck2 className="w-4 h-4 text-cyan-400" />
           </div>
           <div className="text-2xl font-bold text-white tracking-tight">
-            93.0%
+            {summary?.retention?.compliantBranches !== undefined && totalBranchesCount > 0
+              ? `${Math.round((summary.retention.compliantBranches / totalBranchesCount) * 100)}%`
+              : totalBranchesCount === 0 ? "100%" : "—"}
           </div>
           <div className="flex items-center gap-2 text-xs">
-            <span className="text-emerald-400 font-medium">{summary?.retention?.compliantBranches || 372} comp</span>
-            <span className="text-rose-400 font-medium">{summary?.retention?.violationBranches || 9} viol</span>
+            <span className="text-emerald-400 font-medium">{summary?.retention?.compliantBranches ?? 0} comp</span>
+            <span className="text-rose-400 font-medium">{summary?.retention?.violationBranches ?? 0} viol</span>
           </div>
         </div>
 
@@ -185,12 +191,12 @@ export function CommandCenterView() {
             <ShieldAlert className="w-4 h-4 text-rose-400" />
           </div>
           <div className="text-2xl font-bold text-rose-200 tracking-tight">
-            {summary?.alerts?.p1Open || 3}
+            {summary?.alerts?.p1Open ?? 0}
           </div>
           <div className="flex items-center gap-2 text-xs text-rose-300/80">
-            <span>{summary?.alerts?.unacknowledged || 14} unack</span>
+            <span>{summary?.alerts?.unacknowledged ?? 0} unack</span>
             <span>•</span>
-            <span>{summary?.incidents?.active || 3} incidents</span>
+            <span>{summary?.incidents?.active ?? 0} incidents</span>
           </div>
         </div>
       </div>
@@ -203,12 +209,12 @@ export function CommandCenterView() {
             <h2 className="text-base font-semibold text-white">Attention Required (Immediate Triage)</h2>
           </div>
           <span className="text-xs text-slate-400">
-            {summary?.attentionRequired?.length || 4} Critical Exceptions Pending
+            {(summary?.attentionRequired?.length ?? 0)} Critical Exceptions Pending
           </span>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          {summary?.attentionRequired?.map((item: any) => (
+          {(summary?.attentionRequired ?? []).map((item: any) => (
             <Link
               key={item.id}
               href={item.actionUrl}
@@ -229,6 +235,11 @@ export function CommandCenterView() {
               <ArrowUpRight className="w-4 h-4 text-slate-500 group-hover:text-blue-400 transition-colors shrink-0 mt-1" />
             </Link>
           ))}
+          {(!summary?.attentionRequired || summary.attentionRequired.length === 0) && (
+            <div className="col-span-2 p-4 text-center text-xs text-slate-500 bg-slate-950/40 rounded-xl border border-slate-800/60">
+              No immediate critical triage items pending. All branches operating within normal parameters.
+            </div>
+          )}
         </div>
       </div>
 
@@ -240,7 +251,7 @@ export function CommandCenterView() {
             href="/operations/branches"
             className="text-xs text-blue-400 hover:text-blue-300 font-medium transition-colors"
           >
-            View All 400 Branches →
+            View All Fleet Branches →
           </Link>
         </div>
 
@@ -270,65 +281,73 @@ export function CommandCenterView() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800/60">
-                {filteredBranches.map((b) => (
-                  <tr
-                    key={b.branchId}
-                    className="hover:bg-slate-800/40 transition-colors cursor-pointer"
-                  >
-                    <td className="px-4 py-3.5">
-                      <Link href={`/operations/branches/${b.branchId}`} className="block">
-                        <div className="font-semibold text-slate-100 hover:text-blue-400 transition-colors">
-                          {b.name}
-                        </div>
-                        <div className="text-slate-500 font-mono text-[11px]">{b.branchCode} • {b.region}</div>
-                      </Link>
-                    </td>
-                    <td className="px-4 py-3.5">
-                      <StatusBadge status={b.operationalState} size="sm" />
-                    </td>
-                    <td className="px-4 py-3.5">
-                      <div className="flex items-center gap-1.5">
-                        <Wifi className={`w-3.5 h-3.5 ${b.internet.state === 'HEALTHY' ? 'text-emerald-400' : 'text-rose-400'}`} />
-                        <span>{b.internet.mode} ({b.internet.latencyMs}ms)</span>
-                      </div>
-                    </td>
-                    <td className="px-4 py-3.5">
-                      <div className="font-medium">
-                        {b.cameras.healthy}/{b.cameras.total} Streaming
-                      </div>
-                      {b.cameras.notRecording > 0 && (
-                        <div className="text-rose-400 font-medium text-[11px]">
-                          {b.cameras.notRecording} No Record
-                        </div>
-                      )}
-                    </td>
-                    <td className="px-4 py-3.5">
-                      <div className={b.retention.compliant ? "text-emerald-400" : "text-rose-400"}>
-                        {b.retention.observedDays} / {b.retention.requiredDays} Days
-                      </div>
-                    </td>
-                    <td className="px-4 py-3.5">
-                      <StatusBadge status={b.storage.state} size="sm" />
-                    </td>
-                    <td className="px-4 py-3.5">
-                      {b.alerts.p1 > 0 ? (
-                        <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-rose-950 text-rose-300 border border-rose-800">
-                          P1 × {b.alerts.p1}
-                        </span>
-                      ) : (
-                        <span className="text-slate-500">0 P1</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3.5 text-right">
-                      <Link
-                        href={`/operations/branches/${b.branchId}`}
-                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium transition-colors"
-                      >
-                        Workspace →
-                      </Link>
+                {filteredBranches.length === 0 ? (
+                  <tr>
+                    <td colSpan={8} className="px-4 py-8 text-center text-slate-500">
+                      No branches enrolled yet. Create or onboard your first branch to begin live surveillance monitoring.
                     </td>
                   </tr>
-                ))}
+                ) : (
+                  filteredBranches.map((b) => (
+                    <tr
+                      key={b.branchId}
+                      className="hover:bg-slate-800/40 transition-colors cursor-pointer"
+                    >
+                      <td className="px-4 py-3.5">
+                        <Link href={`/operations/branches/${b.branchId}`} className="block">
+                          <div className="font-semibold text-slate-100 hover:text-blue-400 transition-colors">
+                            {b.name}
+                          </div>
+                          <div className="text-slate-500 font-mono text-[11px]">{b.branchCode} • {b.region}</div>
+                        </Link>
+                      </td>
+                      <td className="px-4 py-3.5">
+                        <StatusBadge status={b.operationalState} size="sm" />
+                      </td>
+                      <td className="px-4 py-3.5">
+                        <div className="flex items-center gap-1.5">
+                          <Wifi className={`w-3.5 h-3.5 ${b.internet?.state === 'HEALTHY' ? 'text-emerald-400' : 'text-rose-400'}`} />
+                          <span>{b.internet?.mode || 'OFFLINE'} ({b.internet?.latencyMs || 0}ms)</span>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3.5">
+                        <div className="font-medium">
+                          {b.cameras?.healthy || 0}/{b.cameras?.total || 0} Streaming
+                        </div>
+                        {(b.cameras?.notRecording ?? 0) > 0 && (
+                          <div className="text-rose-400 font-medium text-[11px]">
+                            {b.cameras.notRecording} No Record
+                          </div>
+                        )}
+                      </td>
+                      <td className="px-4 py-3.5">
+                        <div className={b.retention?.compliant ? "text-emerald-400" : "text-rose-400"}>
+                          {b.retention?.observedDays ?? 0} / {b.retention?.requiredDays ?? 90} Days
+                        </div>
+                      </td>
+                      <td className="px-4 py-3.5">
+                        <StatusBadge status={b.storage?.state || "UNKNOWN"} size="sm" />
+                      </td>
+                      <td className="px-4 py-3.5">
+                        {(b.alerts?.p1 ?? 0) > 0 ? (
+                          <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-rose-950 text-rose-300 border border-rose-800">
+                            P1 × {b.alerts.p1}
+                          </span>
+                        ) : (
+                          <span className="text-slate-500">0 P1</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3.5 text-right">
+                        <Link
+                          href={`/operations/branches/${b.branchId}`}
+                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium transition-colors"
+                        >
+                          Workspace →
+                        </Link>
+                      </td>
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
           </div>

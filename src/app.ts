@@ -2574,7 +2574,7 @@ export async function buildApp(options?: {
 
   // Register Unified Operations & Product Surface routes
   try {
-    await registerUnifiedOperationsRoutes(app);
+    await registerUnifiedOperationsRoutes(app, store);
     app.log.info('Unified operations and product surface routes registered');
   } catch (err: unknown) {
     app.log.error({ err }, 'failed to register unified operations routes');

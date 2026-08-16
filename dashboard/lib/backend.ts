@@ -150,7 +150,7 @@ function demoRecording(cameraId: string): RecordingJob {
 }
 
 function isDemoMode() {
-  return runtimeEnv("DASHBOARD_DEMO_MODE", "true") !== "false";
+  return runtimeEnv("DASHBOARD_DEMO_MODE", "false") === "true";
 }
 
 async function controlFetch(

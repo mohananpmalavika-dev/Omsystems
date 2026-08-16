@@ -4,13 +4,15 @@
 
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import { unifiedOperationsService } from "../operations/index.js";
+import type { ControlPlaneStore } from "../control-plane-store.js";
 
-export async function registerUnifiedOperationsRoutes(app: FastifyInstance) {
+export async function registerUnifiedOperationsRoutes(app: FastifyInstance, store?: ControlPlaneStore) {
   /**
    * GET /api/v1/operations/command-center
    */
-  const handleGetCommandCenter = async (_request: FastifyRequest, reply: FastifyReply) => {
-    const summary = await unifiedOperationsService.getCommandCenterSummary();
+  const handleGetCommandCenter = async (request: FastifyRequest, reply: FastifyReply) => {
+    const tenantId = (request as any).currentUser?.tenantId || "tenant-default";
+    const summary = await unifiedOperationsService.getCommandCenterSummary(tenantId, store);
     return reply.send({ success: true, data: summary });
   };
 
@@ -20,8 +22,9 @@ export async function registerUnifiedOperationsRoutes(app: FastifyInstance) {
   /**
    * GET /api/v1/operations/attention-required
    */
-  const handleGetAttentionRequired = async (_request: FastifyRequest, reply: FastifyReply) => {
-    const summary = await unifiedOperationsService.getCommandCenterSummary();
+  const handleGetAttentionRequired = async (request: FastifyRequest, reply: FastifyReply) => {
+    const tenantId = (request as any).currentUser?.tenantId || "tenant-default";
+    const summary = await unifiedOperationsService.getCommandCenterSummary(tenantId, store);
     return reply.send({ success: true, count: summary.attentionRequired.length, data: summary.attentionRequired });
   };
 
@@ -31,8 +34,9 @@ export async function registerUnifiedOperationsRoutes(app: FastifyInstance) {
   /**
    * GET /api/v1/operations/branches
    */
-  const handleGetBranches = async (_request: FastifyRequest, reply: FastifyReply) => {
-    const branches = await unifiedOperationsService.getFleetBranchSummaries();
+  const handleGetBranches = async (request: FastifyRequest, reply: FastifyReply) => {
+    const tenantId = (request as any).currentUser?.tenantId || "tenant-default";
+    const branches = await unifiedOperationsService.getFleetBranchSummaries(tenantId, store);
     return reply.send({ success: true, count: branches.length, data: branches });
   };
 
@@ -44,7 +48,8 @@ export async function registerUnifiedOperationsRoutes(app: FastifyInstance) {
    */
   const handleGetBranchWorkspace = async (request: FastifyRequest, reply: FastifyReply) => {
     const params = request.params as any;
-    const workspace = await unifiedOperationsService.getBranch360Workspace(params.id);
+    const tenantId = (request as any).currentUser?.tenantId || "tenant-default";
+    const workspace = await unifiedOperationsService.getBranch360Workspace(params.id, tenantId, store);
     return reply.send({ success: true, data: workspace });
   };
 
@@ -56,7 +61,8 @@ export async function registerUnifiedOperationsRoutes(app: FastifyInstance) {
    */
   const handleUniversalSearch = async (request: FastifyRequest, reply: FastifyReply) => {
     const query = (request.query as any) || {};
-    const result = await unifiedOperationsService.getUniversalSearch(query.q || "");
+    const tenantId = (request as any).currentUser?.tenantId || "tenant-default";
+    const result = await unifiedOperationsService.getUniversalSearch(query.q || "", tenantId, store);
     return reply.send({ success: true, count: result.matches.length, data: result });
   };
 

@@ -57,7 +57,7 @@ export default function FleetBranchesPage() {
           <div>
             <h1 className="text-xl font-bold text-white">Fleet Branches Status Board</h1>
             <p className="text-xs text-slate-400 mt-1">
-              Authoritative edge telemetry & health projections across all 400 branches
+              Authoritative edge telemetry & health projections across all fleet branches
             </p>
           </div>
           <button
