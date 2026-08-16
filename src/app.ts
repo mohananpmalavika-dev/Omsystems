@@ -109,6 +109,14 @@ import { registerStaleHealthRoutes } from "./routes/stale-health.routes.js";
 import { registerSurveillancePolicyRoutes } from "./routes/surveillance-policy.routes.js";
 import { registerP0ControlPlaneRoutes } from "./routes/p0-control-plane.routes.js";
 import { registerLocalAiAnalyticsRoutes } from "./routes/local-ai-analytics.routes.js";
+import {
+  RedisStreamLeaseRepository,
+  RedisMediaGatewayRegistry,
+  RedisViewerSessionRepository,
+  PostgresCameraCapabilityRepository,
+  MediaOrchestrator,
+  registerMediaOrchestratorRoutes,
+} from "./media/index.js";
 import { autoProvisionVerifiedCameras } from "./services/camera-auto-provision.js";
 import {
   EmptyFederationLocalSearchProvider,
@@ -2708,6 +2716,24 @@ export async function buildApp(options?: {
     app.log.info('Banking analytics routes registered');
   } catch (err: unknown) {
     app.log.error({ err }, 'failed to register banking analytics routes');
+  }
+
+  // Register Distributed Media Orchestrator & Stream Scheduler routes
+  try {
+    const streamLeaseRepo = new RedisStreamLeaseRepository();
+    const gatewayRegistry = new RedisMediaGatewayRegistry();
+    const sessionRepo = new RedisViewerSessionRepository();
+    const capabilityRepo = new PostgresCameraCapabilityRepository(pool);
+    const mediaOrchestrator = new MediaOrchestrator(
+      streamLeaseRepo,
+      gatewayRegistry,
+      sessionRepo,
+      capabilityRepo,
+    );
+    await registerMediaOrchestratorRoutes(app, mediaOrchestrator);
+    app.log.info("Distributed Media Orchestration & Scheduling routes registered");
+  } catch (err: unknown) {
+    app.log.error({ err }, "failed to register media orchestration routes");
   }
   const alertWorker = setInterval(() => {
     void alertDispatcher.drainOnce().catch((error) => app.log.error({ error }, "Alert outbox drain failed"));
