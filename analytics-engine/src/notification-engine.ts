@@ -46,6 +46,14 @@ export class NotificationEngine {
     this.sharedKey = options.sharedKey;
   }
 
+  getStatus() {
+    return {
+      status: "operational",
+      controlPlaneUrl: this.controlPlaneUrl,
+      mode: "authoritative-control-plane",
+    };
+  }
+
   /**
    * Queue notification intent for authoritative delivery by control plane
    */

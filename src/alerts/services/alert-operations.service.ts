@@ -64,11 +64,11 @@ export class AlertOperationsService {
     const candidate = this.normalizer.normalize(rawEvent);
 
     // 1. Check Deduplication & Suppression Window
-    const dupCheck = this.deduplication.checkDuplicate(candidate, this.alerts);
+    const dupCheck = await this.deduplication.checkDuplicate(candidate, this.alerts);
     if (dupCheck.isDuplicate && dupCheck.existingAlert) {
       const existing = dupCheck.existingAlert;
-      existing.occurrenceCount += 1;
-      existing.lastSeenAt = new Date();
+      existing.occurrenceCount = dupCheck.dedupResult?.occurrenceCount ?? (existing.occurrenceCount + 1);
+      existing.lastSeenAt = new Date(dupCheck.dedupResult?.lastSeenAt ?? Date.now());
       existing.revision += 1;
 
       this.publish({
@@ -125,7 +125,7 @@ export class AlertOperationsService {
     };
 
     this.alerts.set(alertId, alert);
-    this.deduplication.registerWindow(alert);
+    await this.deduplication.registerWindow(alert);
 
     this.addAuditEvent(alertId, candidate.tenantId, "CREATED", undefined, "System Ingestion", {
       severity: alert.severity,
