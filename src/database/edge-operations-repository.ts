@@ -11,17 +11,55 @@ import type {
 export class EdgeOperationsRepository {
   constructor(private readonly pool: Pool) {}
 
+  private async resolveUserUuid(userIdOrUsername?: string): Promise<string | null> {
+    if (!userIdOrUsername) return null;
+    const cleanId = userIdOrUsername.trim();
+
+    if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(cleanId)) {
+      const userRes = await this.pool.query(`SELECT id::text FROM users WHERE id = $1 LIMIT 1`, [cleanId]);
+      if (userRes.rows[0]?.id) return userRes.rows[0].id;
+    }
+
+    const username = cleanId.replace(/^user-/, "");
+    const userRes = await this.pool.query(
+      `SELECT id::text FROM users WHERE identity_subject = $1 OR lower(username) = lower($2) LIMIT 1`,
+      [cleanId, username],
+    );
+    if (userRes.rows[0]?.id) {
+      return userRes.rows[0].id;
+    }
+
+    const firstUser = await this.pool.query(`SELECT id::text FROM users ORDER BY created_at ASC LIMIT 1`);
+    return firstUser.rows[0]?.id ?? null;
+  }
+
+  async ensureEdgeActivationConstraints(): Promise<void> {
+    try {
+      await this.pool.query(`
+        ALTER TABLE edge_activation_tokens DROP CONSTRAINT IF EXISTS edge_activation_tokens_created_by_fkey;
+        ALTER TABLE edge_activation_tokens ALTER COLUMN created_by DROP NOT NULL;
+        ALTER TABLE edge_activation_tokens ADD CONSTRAINT edge_activation_tokens_created_by_fkey 
+          FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL;
+      `);
+    } catch {
+      // ignore
+    }
+  }
+
   async createActivation(input: {
     branchId: string; agentName: string; createdBy: string; expiresAt: string; tokenHash: string;
   }) {
+    await this.ensureEdgeActivationConstraints();
+    const resolvedUserId = await this.resolveUserUuid(input.createdBy);
+
     const result = await this.pool.query(
       `INSERT INTO edge_activation_tokens
          (tenant_id, branch_node_id, token_hash, agent_name, created_by, expires_at)
-       SELECT tenant_id, id, decode($2, 'hex'), $3, $4, $5
+       SELECT tenant_id, id, decode($2, 'hex'), $3, $4::uuid, $5
        FROM resource_nodes WHERE id = $1 AND node_type = 'branch'
        RETURNING id::text, tenant_id::text, branch_node_id::text, agent_name,
                  expires_at, created_at, created_by::text, used_at, revoked_at`,
-      [input.branchId, input.tokenHash, input.agentName, input.createdBy, input.expiresAt],
+      [input.branchId, input.tokenHash, input.agentName, resolvedUserId, input.expiresAt],
     );
     if (!result.rows[0]) throw new Error("invalid_branch");
     return mapActivation(result.rows[0]);

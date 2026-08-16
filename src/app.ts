@@ -117,6 +117,8 @@ import {
   MediaOrchestrator,
   registerMediaOrchestratorRoutes,
 } from "./media/index.js";
+import { PlaybookEngineService } from "./incidents/services/playbook-engine.service.js";
+import { registerPlaybookEngineRoutes } from "./routes/playbook-engine.routes.js";
 import { autoProvisionVerifiedCameras } from "./services/camera-auto-provision.js";
 import {
   EmptyFederationLocalSearchProvider,
@@ -2734,6 +2736,15 @@ export async function buildApp(options?: {
     app.log.info("Distributed Media Orchestration & Scheduling routes registered");
   } catch (err: unknown) {
     app.log.error({ err }, "failed to register media orchestration routes");
+  }
+
+  // Register Stateful Incident Playbook Engine & Dynamic Operator SOP routes
+  try {
+    const playbookEngine = new PlaybookEngineService();
+    await registerPlaybookEngineRoutes(app, playbookEngine, store);
+    app.log.info("Stateful Incident Playbook Engine & Dynamic Operator SOP routes registered");
+  } catch (err: unknown) {
+    app.log.error({ err }, "failed to register incident playbook engine routes");
   }
   const alertWorker = setInterval(() => {
     void alertDispatcher.drainOnce().catch((error) => app.log.error({ error }, "Alert outbox drain failed"));
