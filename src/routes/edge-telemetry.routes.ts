@@ -79,7 +79,28 @@ export async function registerEdgeTelemetryRoutes(app: FastifyInstance) {
     if (!current) {
       return reply.status(404).send({ success: false, error: "Branch telemetry state not found" });
     }
-    return reply.send({ success: true, data: current });
+
+    const { staleDataEvaluatorService, DEFAULT_OBSERVATION_TTLS } = await import("../telemetry/index.js");
+    const metadata = staleDataEvaluatorService.evaluateMetadata(
+      current.lastReportedAt,
+      current.overallState,
+      DEFAULT_OBSERVATION_TTLS.BRANCH_STATE_TTL_SECONDS
+    );
+
+    return reply.send({
+      success: true,
+      data: {
+        ...current,
+        effectiveState: metadata.effectiveState,
+        isStale: metadata.isStale,
+        freshnessStatus: metadata.freshnessStatus,
+        observedAt: metadata.observedAt,
+        expiresAt: metadata.expiresAt,
+        ttlSeconds: metadata.ttlSeconds,
+        stalenessReason: metadata.stalenessReason,
+        lastObservedAgoSeconds: metadata.lastObservedAgoSeconds,
+      },
+    });
   };
 
   app.get("/api/v1/telemetry/branches/:branchId/current", handleGetBranchCurrent);
