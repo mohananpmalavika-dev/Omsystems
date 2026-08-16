@@ -102,6 +102,28 @@ export type FingerprintReason =
   | "FAILURE_DRIFT"
   | "MANUAL";
 
+export interface RecorderOperationRoutes {
+  deviceInfo: ApiFamily;
+  channels: ApiFamily;
+  liveStream: ApiFamily;
+  recordingStatus: ApiFamily;
+  playbackSearch: ApiFamily;
+  storage: ApiFamily;
+  smart: ApiFamily;
+  deviceTime: ApiFamily;
+  events?: ApiFamily;
+  ptz?: ApiFamily;
+}
+
+export interface CompatibilitySignature {
+  manufacturerPattern: RegExp;
+  modelPattern: RegExp;
+  firmwareRange?: string;
+  preferredProbeOrder: ApiFamily[];
+  knownCapabilities?: Partial<Record<keyof RecorderCapabilities, SupportState>>;
+  quirks?: string[];
+}
+
 export interface RecorderDeviceProfile {
   profileVersion: number;
   recorderId: string;
@@ -110,6 +132,8 @@ export interface RecorderDeviceProfile {
 
   configuredVendor?: string | undefined; // user/admin input only
   fingerprint: RecorderFingerprint;
+
+  operationRoutes?: RecorderOperationRoutes | undefined;
 
   identityEvidence: IdentityEvidence[];
   apiEvidence: ApiFamilyEvidence[];
