@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import type { Pool } from "pg";
 import type {
   Action,
@@ -229,25 +230,28 @@ export class ResourceRepository {
     name: string,
   ): Promise<ResourceNode> {
     const resolvedTenantId = await this.resolveTenantUuid(tenantId);
-    const result = await this.pool.query<ResourceRow>(
-      `WITH parent AS (
-         SELECT id, tenant_id, path
-         FROM resource_nodes
-         WHERE id = $2 AND tenant_id = $1
-       ), new_id AS (
-         SELECT gen_random_uuid() AS id
-       )
-       INSERT INTO resource_nodes
-         (id, tenant_id, parent_id, node_type, name, path, lifecycle_status)
-       SELECT new_id.id, parent.tenant_id, parent.id, 'branch', $3,
-              parent.path || text2ltree(replace(new_id.id::text, '-', '_')),
-              'ACTIVE'
-       FROM parent, new_id
-       RETURNING id::text, parent_id::text, tenant_id::text, node_type, name,
-                 path::text`,
-      [resolvedTenantId, parentNodeId, name],
+    const parentRes = await this.pool.query<ResourceRow>(
+      `SELECT id::text, path::text, tenant_id::text
+       FROM resource_nodes
+       WHERE id = $1::uuid AND tenant_id = $2::uuid LIMIT 1`,
+      [parentNodeId, resolvedTenantId],
     );
-    if (!result.rows[0]) throw new Error("invalid_parent");
+    const parent = parentRes.rows[0];
+    if (!parent) throw new Error("invalid_parent");
+
+    const id = randomUUID();
+    const ltreeId = id.replaceAll("-", "_");
+    const newPath = `${parent.path}.${ltreeId}`;
+
+    const result = await this.pool.query<ResourceRow>(
+      `INSERT INTO resource_nodes
+         (id, tenant_id, parent_id, node_type, name, path, lifecycle_status)
+       VALUES
+         ($1::uuid, $2::uuid, $3::uuid, 'branch', $4::text, text2ltree($5), 'ACTIVE')
+       RETURNING id::text, parent_id::text, tenant_id::text, node_type, name, path::text`,
+      [id, resolvedTenantId, parent.id, name, newPath],
+    );
+    if (!result.rows[0]) throw new Error("failed_to_create_branch");
     return mapNode(result.rows[0]);
   }
 

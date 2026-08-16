@@ -97,8 +97,9 @@ export function AIInvestigationReportGenerator({ incidentId }: { incidentId: str
     if (!report) return;
     
     try {
-      await fetch(`/api/v1/ai/investigation-reports/${report.id}/approve`, {
+      await fetch(`/api/control/v1/ai/investigation-reports/${report.id}/approve`, {
         method: "POST",
+        credentials: "include",
       });
       // Reload report
       generateReport();
@@ -111,8 +112,9 @@ export function AIInvestigationReportGenerator({ incidentId }: { incidentId: str
     if (!report) return;
     
     try {
-      await fetch(`/api/v1/ai/investigation-reports/${report.id}/finalize`, {
+      await fetch(`/api/control/v1/ai/investigation-reports/${report.id}/finalize`, {
         method: "POST",
+        credentials: "include",
       });
       // Reload report
       generateReport();

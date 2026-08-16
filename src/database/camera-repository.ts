@@ -402,14 +402,15 @@ export class CameraRepository {
     input: CameraApprovalInput,
   ) {
     const nodeId = randomUUID();
+    const ltreeId = nodeId.replaceAll("-", "_");
     await client.query(
       `INSERT INTO resource_nodes
          (id, tenant_id, parent_id, node_type, name, path)
-       SELECT $1::uuid, tenant_id, id, 'camera', $3,
-              path || text2ltree(replace($1::text, '-', '_'))
+       SELECT $1::uuid, tenant_id, id, 'camera', $3::text,
+              path || text2ltree($4)
        FROM resource_nodes
        WHERE id = $2::uuid AND node_type = 'branch'`,
-      [nodeId, branchId, input.name],
+      [nodeId, branchId, input.name, ltreeId],
     );
     const result = await client.query<CameraRow>(
        `INSERT INTO cameras
@@ -532,13 +533,14 @@ export class CameraRepository {
         return existing.rows[0] ? mapCamera(existing.rows[0]) : undefined;
       }
       const nodeId = randomUUID();
+      const ltreeId = nodeId.replaceAll("-", "_");
       const createdNode = await client.query(
         `INSERT INTO resource_nodes (id, tenant_id, parent_id, node_type, name, path)
-         SELECT $1::uuid, tenant_id, id, 'camera', $3,
-                path || text2ltree(replace($1::text, '-', '_'))
+         SELECT $1::uuid, tenant_id, id, 'camera', $3::text,
+                path || text2ltree($4)
          FROM resource_nodes
          WHERE id = $2::uuid AND node_type = 'branch'`,
-        [nodeId, branchId, input.name],
+        [nodeId, branchId, input.name, ltreeId],
       );
       if (createdNode.rowCount !== 1) {
         await client.query("ROLLBACK");

@@ -402,29 +402,71 @@ export class InfrastructureRepository {
   async createOrganizationNode(tenantId: string, input: any) {
     const resolvedTenantId = await this.resolveTenantUuid(tenantId);
     const id = randomUUID();
-    const result = await this.pool.query(
-      `INSERT INTO resource_nodes (
-         id, tenant_id, parent_id, node_type, name, path, code, description,
-         address, contact_info, metadata
-       )
-       SELECT $1, $2, parent.id, $4::resource_node_type, $5,
-              CASE WHEN parent.id IS NULL
-                THEN text2ltree(replace($1::text,'-','_'))
-                ELSE parent.path || text2ltree(replace($1::text,'-','_'))
-              END,
-              $6, $7, $8::jsonb, $9::jsonb, $10::jsonb
-       FROM (SELECT id, path FROM resource_nodes WHERE id=$3::uuid
-             UNION ALL SELECT NULL::uuid, NULL::ltree WHERE $3::uuid IS NULL) parent
-       RETURNING id::text`,
-      [
-        id, resolvedTenantId, input.parentNodeId ?? null, input.nodeType, input.name,
-        input.code ?? null, input.description ?? null,
-        JSON.stringify(input.address ?? {}), JSON.stringify(input.contactInfo ?? {}),
-        JSON.stringify(input.metadata ?? {}),
-      ],
-    );
-    if (!result.rows[0]) throw new Error("invalid_parent");
-    return this.getOrganizationNodeDetails(id);
+    const ltreeId = id.replaceAll("-", "_");
+
+    if (input.parentNodeId) {
+      const parentRes = await this.pool.query(
+        `SELECT id::text, path::text FROM resource_nodes WHERE id = $1::uuid AND tenant_id = $2::uuid LIMIT 1`,
+        [input.parentNodeId, resolvedTenantId],
+      );
+      const parent = parentRes.rows[0];
+      if (!parent) {
+        throw new Error("invalid_parent");
+      }
+      const newPath = `${parent.path}.${ltreeId}`;
+      const result = await this.pool.query(
+        `INSERT INTO resource_nodes (
+           id, tenant_id, parent_id, node_type, name, path, code, description,
+           address, contact_info, metadata
+         )
+         VALUES (
+           $1::uuid, $2::uuid, $3::uuid, $4::resource_node_type, $5::text,
+           text2ltree($6), $7::text, $8::text, $9::jsonb, $10::jsonb, $11::jsonb
+         )
+         RETURNING id::text`,
+        [
+          id,
+          resolvedTenantId,
+          parent.id,
+          input.nodeType,
+          input.name,
+          newPath,
+          input.code ?? null,
+          input.description ?? null,
+          JSON.stringify(input.address ?? {}),
+          JSON.stringify(input.contactInfo ?? {}),
+          JSON.stringify(input.metadata ?? {}),
+        ],
+      );
+      if (!result.rows[0]) throw new Error("failed_to_create_node");
+      return this.getOrganizationNodeDetails(id);
+    } else {
+      const result = await this.pool.query(
+        `INSERT INTO resource_nodes (
+           id, tenant_id, parent_id, node_type, name, path, code, description,
+           address, contact_info, metadata
+         )
+         VALUES (
+           $1::uuid, $2::uuid, NULL, $3::resource_node_type, $4::text,
+           text2ltree($5), $6::text, $7::text, $8::jsonb, $9::jsonb, $10::jsonb
+         )
+         RETURNING id::text`,
+        [
+          id,
+          resolvedTenantId,
+          input.nodeType,
+          input.name,
+          ltreeId,
+          input.code ?? null,
+          input.description ?? null,
+          JSON.stringify(input.address ?? {}),
+          JSON.stringify(input.contactInfo ?? {}),
+          JSON.stringify(input.metadata ?? {}),
+        ],
+      );
+      if (!result.rows[0]) throw new Error("failed_to_create_node");
+      return this.getOrganizationNodeDetails(id);
+    }
   }
 
   async updateOrganizationNode(id: string, input: any) {

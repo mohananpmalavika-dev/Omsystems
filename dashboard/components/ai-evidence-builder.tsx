@@ -95,10 +95,15 @@ export function AIEvidenceBuilder({ incidentId }: { incidentId: string }) {
   const loadPackages = async () => {
     setLoading(true);
     try {
-      // Would fetch packages for this incident
-      // const response = await fetch(`/api/v1/incidents/${incidentId}/evidence-packages`);
-      // const data = await response.json();
-      // setPackages(data);
+      const response = await fetch(`/api/control/v1/incidents/${incidentId}/evidence-packages`, { credentials: "include" });
+      if (response.ok) {
+        const data = await response.json();
+        if (Array.isArray(data)) {
+          setPackages(data);
+        } else if (data && Array.isArray(data.data)) {
+          setPackages(data.data);
+        }
+      }
     } catch (error) {
       console.error("Failed to load packages:", error);
     } finally {
@@ -113,13 +118,13 @@ export function AIEvidenceBuilder({ incidentId }: { incidentId: string }) {
       const body: any = { incidentId };
 
       if (type === "court") {
-        endpoint = "/api/v1/ai/evidence-packages/court";
+        endpoint = "/api/control/v1/ai/evidence-packages/court";
       } else if (type === "police") {
-        endpoint = "/api/v1/ai/evidence-packages/police";
+        endpoint = "/api/control/v1/ai/evidence-packages/police";
       } else if (type === "insurance") {
-        endpoint = "/api/v1/ai/evidence-packages/insurance";
+        endpoint = "/api/control/v1/ai/evidence-packages/insurance";
       } else {
-        endpoint = "/api/v1/ai/evidence-packages";
+        endpoint = "/api/control/v1/ai/evidence-packages";
         body.title = packageConfig.title;
         body.packageType = packageConfig.packageType;
         body.includeOriginalVideo = packageConfig.includeOriginalVideo;
@@ -134,6 +139,7 @@ export function AIEvidenceBuilder({ incidentId }: { incidentId: string }) {
       const response = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify(body),
       });
 
