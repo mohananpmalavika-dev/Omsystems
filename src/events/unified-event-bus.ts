@@ -251,3 +251,5 @@ export async function checkEventBusHealth(): Promise<{
     };
   }
 }
+
+export const unifiedEventBus: IEventBus = new InMemoryEventBus();

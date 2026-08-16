@@ -36,6 +36,7 @@ import { registerNotificationRoutes } from "./routes/notification.routes.js";
 import { registerDailySurveillanceReportRoutes } from "./routes/daily-surveillance-report.routes.js";
 import { registerDeviceHealthRoutes } from "./routes/device-health.routes.js";
 import { registerRecordingContinuityRoutes } from "./routes/recording-continuity.routes.js";
+import { registerCentralMonitoringRoutes } from "./routes/central-monitoring.routes.js";
 import { registerCctvInfrastructureRoutes } from "./routes/cctv-infrastructure.js";
 import { registerOrganizationRoutes } from "./routes/organization.routes.js";
 import { registerBranchLifecycleRoutes } from "./routes/branch-lifecycle.routes.js";
@@ -89,6 +90,7 @@ import { registerConnectivityHealthRoutes } from "./routes/connectivity-health.r
 import { registerAlertOperationsRoutes } from "./routes/alert-operations.routes.js";
 import { registerSlaReportRoutes } from "./routes/sla-reports.routes.js";
 import { registerClockMonitoringRoutes } from "./routes/clock-monitoring.routes.js";
+import { registerEdgeGatewayRoutes } from "./routes/edge-gateway.routes.js";
 import { autoProvisionVerifiedCameras } from "./services/camera-auto-provision.js";
 import {
   EmptyFederationLocalSearchProvider,
@@ -2501,6 +2503,14 @@ export async function buildApp(options?: {
     app.log.error({ err }, 'failed to register recording continuity routes');
   }
 
+  // Register Scalable Central Monitoring Station & Priority Work Queue routes
+  try {
+    await registerCentralMonitoringRoutes(app);
+    app.log.info('Central monitoring station and work queue routes registered');
+  } catch (err: unknown) {
+    app.log.error({ err }, 'failed to register central monitoring routes');
+  }
+
   // Register First-Class Evidence-Driven Branch Internet & WAN Connectivity routes
   try {
     await registerConnectivityHealthRoutes(app, store);
@@ -2531,6 +2541,14 @@ export async function buildApp(options?: {
     app.log.info('Clock and time-drift monitoring routes registered');
   } catch (err: unknown) {
     app.log.error({ err }, 'failed to register clock monitoring routes');
+  }
+
+  // Register Edge Gateway Protocol & On-Demand Media Session routes
+  try {
+    await registerEdgeGatewayRoutes(app, store);
+    app.log.info('Edge Gateway protocol and media session routes registered');
+  } catch (err: unknown) {
+    app.log.error({ err }, 'failed to register edge gateway routes');
   }
 
   // Register banking analytics routes
