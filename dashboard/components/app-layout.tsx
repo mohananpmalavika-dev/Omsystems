@@ -183,6 +183,10 @@ const pageMeta = [
   { path: "/terms", section: "Legal", title: "Terms of service" },
 ];
 
+import { ThemeProvider } from "@/components/ui/theme-provider";
+import { ThemeSwitcher } from "@/components/ui/theme-switcher";
+import { OrgBrandingProvider, useOrgBranding } from "@/components/ui/org-branding-provider";
+
 const AppLayoutContext = createContext(false);
 const OPEN_GROUPS_STORAGE_KEY = "sentinel-grid-open-navigation-groups";
 const RECENT_MODULES_STORAGE_KEY = "sentinel-grid-recent-modules";
@@ -192,14 +196,19 @@ export function AppLayout({ children, incidentCount = 0, cameraCount = 0 }: AppL
   if (alreadyInsideAppLayout) return <>{children}</>;
 
   return (
-    <AppLayoutContext.Provider value>
-      <AppLayoutFrame incidentCount={incidentCount} cameraCount={cameraCount}>{children}</AppLayoutFrame>
-    </AppLayoutContext.Provider>
+    <ThemeProvider>
+      <OrgBrandingProvider>
+        <AppLayoutContext.Provider value>
+          <AppLayoutFrame incidentCount={incidentCount} cameraCount={cameraCount}>{children}</AppLayoutFrame>
+        </AppLayoutContext.Provider>
+      </OrgBrandingProvider>
+    </ThemeProvider>
   );
 }
 
 function AppLayoutFrame({ children, incidentCount = 0, cameraCount = 0 }: AppLayoutProps) {
   const router = useRouter();
+  const { branding } = useOrgBranding();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [commandOpen, setCommandOpen] = useState(false);
   const [commandQuery, setCommandQuery] = useState("");
@@ -327,10 +336,16 @@ function AppLayoutFrame({ children, incidentCount = 0, cameraCount = 0 }: AppLay
       />
       <aside className={`sidebar ${sidebarOpen ? "open" : ""}`}>
         <div className="brand">
-          <div className="brand-mark"><ShieldCheck size={22} /></div>
+          {branding.logoUrl ? (
+            <div className="brand-mark custom-logo">
+              <img src={branding.logoUrl} alt={branding.orgName || "Organization Logo"} className="org-logo-img" />
+            </div>
+          ) : (
+            <div className="brand-mark"><ShieldCheck size={22} /></div>
+          )}
           <div className="brand-copy">
-            <strong>Sentinel Grid</strong>
-            <span>Enterprise operations</span>
+            <strong>{branding.orgName || "Sentinel Grid"}</strong>
+            <span>{branding.tagline || "Enterprise operations"}</span>
           </div>
           <button className="mobile-close" onClick={closeSidebar} aria-label="Close navigation">
             <X size={19} />
@@ -470,6 +485,7 @@ function AppLayoutFrame({ children, incidentCount = 0, cameraCount = 0 }: AppLay
           </div>
           <div className="topbar-actions">
             <div className="live-state"><i /> Live operations <span>IST</span></div>
+            <ThemeSwitcher />
             <details className="create-menu">
               <summary><Plus size={15} /><span>Create</span><ChevronDown size={13} /></summary>
               <div className="create-menu-panel">

@@ -104,6 +104,7 @@ import { registerDigitalTwinHealthRoutes } from "./routes/digital-twin-health.ro
 import { registerStaleHealthRoutes } from "./routes/stale-health.routes.js";
 import { registerSurveillancePolicyRoutes } from "./routes/surveillance-policy.routes.js";
 import { registerP0ControlPlaneRoutes } from "./routes/p0-control-plane.routes.js";
+import { registerLocalAiAnalyticsRoutes } from "./routes/local-ai-analytics.routes.js";
 import { autoProvisionVerifiedCameras } from "./services/camera-auto-provision.js";
 import {
   EmptyFederationLocalSearchProvider,
@@ -2666,6 +2667,14 @@ export async function buildApp(options?: {
     app.log.info('P0 unified drivers, camera verification and 400-branch mosaic routes registered');
   } catch (err: unknown) {
     app.log.error({ err }, 'failed to register P0 control plane routes');
+  }
+
+  // Register 100% Free Local Open-Source AI Analytics routes
+  try {
+    await registerLocalAiAnalyticsRoutes(app);
+    app.log.info('Local open-source AI analytics routes registered (100% Free / Zero Cloud Billing)');
+  } catch (err: unknown) {
+    app.log.error({ err }, 'failed to register local AI analytics routes');
   }
 
   // Register banking analytics routes

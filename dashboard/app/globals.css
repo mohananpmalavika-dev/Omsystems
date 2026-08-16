@@ -2,18 +2,77 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
+:root,
+[data-theme="dark"] {
   --navy: #0b1424;
   --navy-2: #111d30;
-  --ink: #172033;
-  --muted: #6d7789;
-  --line: #e1e6ee;
+  --ink: #f1f5f9;
+  --muted: #94a3b8;
+  --line: #1e293b;
+  --surface: #0f172a;
+  --canvas: #020617;
+  --blue: #3b82f6;
+  --green: #10b981;
+  --amber: #f59e0b;
+  --red: #ef4444;
+  --sidebar-bg: #0b1424;
+  --topbar-bg: #0f172a;
+  --card-bg: #0f172a;
+  --card-border: #1e293b;
+}
+
+[data-theme="navy"] {
+  --navy: #070d1e;
+  --navy-2: #0e1730;
+  --ink: #e2e8f0;
+  --muted: #94a3b8;
+  --line: #172554;
+  --surface: #0b1329;
+  --canvas: #030712;
+  --blue: #06b6d4;
+  --green: #10b981;
+  --amber: #f59e0b;
+  --red: #f43f5e;
+  --sidebar-bg: #070d1e;
+  --topbar-bg: #0b1329;
+  --card-bg: #0b1329;
+  --card-border: #172554;
+}
+
+[data-theme="light"] {
+  --navy: #f8fafc;
+  --navy-2: #f1f5f9;
+  --ink: #0f172a;
+  --muted: #64748b;
+  --line: #e2e8f0;
   --surface: #ffffff;
-  --canvas: #f3f6fa;
-  --blue: #2878ff;
-  --green: #20b883;
-  --amber: #e8a225;
-  --red: #ed5d5d;
+  --canvas: #f8fafc;
+  --blue: #2563eb;
+  --green: #059669;
+  --amber: #d97706;
+  --red: #dc2626;
+  --sidebar-bg: #0f172a;
+  --topbar-bg: #ffffff;
+  --card-bg: #ffffff;
+  --card-border: #e2e8f0;
+}
+
+[data-theme="emerald"] {
+  --navy: #04120e;
+  --navy-2: #08211a;
+  --ink: #ecfdf5;
+  --muted: #6ee7b7;
+  --line: #064e3b;
+  --surface: #061a14;
+  --canvas: #020c09;
+  --blue: #10b981;
+  --green: #34d399;
+  --amber: #fbbf24;
+  --red: #f87171;
+  --sidebar-bg: #04120e;
+  --topbar-bg: #061a14;
+  --card-bg: #061a14;
+  --card-border: #064e3b;
 }
 
 * { box-sizing: border-box; }
@@ -24,9 +83,28 @@ body {
   background: var(--canvas);
   font-family: Inter, "Segoe UI", Arial, sans-serif;
   -webkit-font-smoothing: antialiased;
+  transition: background-color 0.2s ease, color 0.2s ease;
 }
 button, input { font: inherit; }
 button { cursor: pointer; }
+
+.org-logo-img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  border-radius: 8px;
+}
+.brand-mark.custom-logo {
+  background: transparent !important;
+  box-shadow: none !important;
+  padding: 2px;
+}
+.login-org-logo {
+  max-height: 48px;
+  max-width: 160px;
+  object-fit: contain;
+  margin-bottom: 8px;
+}
 
 .app-shell { min-height: 100vh; }
 .sidebar {

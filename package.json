@@ -72,6 +72,7 @@
     "test:stale:semantics": "tsx test/operational-health/stale-semantics-runner.ts",
     "test:surveillance:policy": "tsx test/surveillance-policy/surveillance-policy-runner.ts",
     "test:p0:readiness": "tsx test/p0-readiness/p0-implementation-runner.ts",
+    "test:local:ai": "tsx test/ai/local-ai-pipeline.test.ts",
     "test:hdd:collect": "tsx test/hdd-health/test-runner.ts collect",
     "test:hdd:thresholds": "tsx test/hdd-health/test-runner.ts thresholds",
     "test:hdd:parsing": "tsx test/hdd-health/test-runner.ts parsing",

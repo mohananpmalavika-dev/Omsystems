@@ -7,11 +7,26 @@ import { authApi } from "@/lib/api-client";
 import { resetLocalEdgeAutostart } from "@/lib/local-edge-autostart";
 import { useRouter, useSearchParams } from "next/navigation";
 
+import { ThemeProvider } from "@/components/ui/theme-provider";
+import { ThemeSwitcher } from "@/components/ui/theme-switcher";
+import { OrgBrandingProvider, useOrgBranding } from "@/components/ui/org-branding-provider";
+
 interface LoginFormProps {
   onSuccess?: () => void;
 }
 
-export function LoginForm({ onSuccess }: LoginFormProps) {
+export function LoginForm(props: LoginFormProps) {
+  return (
+    <ThemeProvider>
+      <OrgBrandingProvider>
+        <LoginFormInner {...props} />
+      </OrgBrandingProvider>
+    </ThemeProvider>
+  );
+}
+
+function LoginFormInner({ onSuccess }: LoginFormProps) {
+  const { branding } = useOrgBranding();
   const router = useRouter();
   const searchParams = useSearchParams();
   const qrCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -292,12 +307,19 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
     <div className="login-container">
       <div className="login-card">
         <div className="login-header">
+          <div style={{ display: "flex", justifyContent: "flex-end", width: "100%", marginBottom: "4px" }}>
+            <ThemeSwitcher />
+          </div>
           <div className="login-brand">
-            <ShieldCheck size={32} className="brand-icon" />
-            <h1>Sentinel Grid</h1>
+            {branding.logoUrl ? (
+              <img src={branding.logoUrl} alt={branding.orgName || "Organization Logo"} className="login-org-logo" />
+            ) : (
+              <ShieldCheck size={32} className="brand-icon" />
+            )}
+            <h1>{branding.orgName || "Sentinel Grid"}</h1>
           </div>
           <p className="login-subtitle">
-            Sign in to access your security dashboard
+            {branding.tagline || "Sign in to access your security dashboard"}
           </p>
         </div>
 

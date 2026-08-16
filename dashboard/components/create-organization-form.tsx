@@ -1,14 +1,18 @@
 "use client";
 
-import { Building2, CheckCircle } from "lucide-react";
-import { useState, FormEvent } from "react";
+import { Building2, CheckCircle, Upload, Image as ImageIcon, X } from "lucide-react";
+import { useState, FormEvent, useRef } from "react";
 import { organizationApi } from "@/lib/api-client";
+import { useOrgBranding } from "@/components/ui/org-branding-provider";
 
 interface CreateOrganizationFormProps {
   onSuccess: () => void;
 }
 
 export function CreateOrganizationForm({ onSuccess }: CreateOrganizationFormProps) {
+  const { updateBranding } = useOrgBranding();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [logoPreview, setLogoPreview] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     name: "",
     code: "",
@@ -30,6 +34,24 @@ export function CreateOrganizationForm({ onSuccess }: CreateOrganizationFormProp
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const handleLogoFile = (file: File) => {
+    if (!file.type.startsWith("image/")) {
+      setError("Please upload a valid image file (PNG, SVG, JPG, WebP)");
+      return;
+    }
+    if (file.size > 2 * 1024 * 1024) {
+      setError("Logo file size must be less than 2MB");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const dataUrl = e.target?.result as string;
+      setLogoPreview(dataUrl);
+      setError(null);
+    };
+    reader.readAsDataURL(file);
+  };
+
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setError(null);
@@ -50,6 +72,10 @@ export function CreateOrganizationForm({ onSuccess }: CreateOrganizationFormProp
         payload.description = formData.description.trim();
       }
 
+      if (logoPreview) {
+        payload.logoUrl = logoPreview;
+      }
+
       // Add address if any field is filled
       const hasAddress = Object.values(formData.address).some((v) => v.trim());
       if (hasAddress) {
@@ -63,6 +89,14 @@ export function CreateOrganizationForm({ onSuccess }: CreateOrganizationFormProp
       }
 
       await organizationApi.createNode(payload);
+
+      // Sync global branding across all pages immediately
+      updateBranding({
+        orgName: formData.name.trim(),
+        orgCode: formData.code.trim() || "COMPANY-ROOT",
+        logoUrl: logoPreview,
+      });
+
       onSuccess();
     } catch (err: any) {
       console.error("Failed to create organization:", err);
@@ -115,12 +149,16 @@ export function CreateOrganizationForm({ onSuccess }: CreateOrganizationFormProp
     <div className="create-organization-container">
       <div className="create-organization-card">
         <div className="create-organization-icon">
-          <Building2 size={48} className="text-blue-600" />
+          {logoPreview ? (
+            <img src={logoPreview} alt="Organization Logo" className="w-16 h-16 object-contain rounded-xl shadow-md border border-slate-700 bg-slate-900 p-1" />
+          ) : (
+            <Building2 size={48} className="text-blue-600" />
+          )}
         </div>
         
         <h2 className="create-organization-title">Create Your Organization</h2>
         <p className="create-organization-subtitle">
-          Set up your company information to start managing your security operations
+          Set up your company information, upload your brand logo, and customize your security operations
         </p>
 
         <form onSubmit={handleSubmit} className="create-organization-form">
@@ -129,6 +167,64 @@ export function CreateOrganizationForm({ onSuccess }: CreateOrganizationFormProp
               {error}
             </div>
           )}
+
+          <div className="form-section">
+            <h3 className="form-section-title">Brand &amp; Logo</h3>
+            
+            <div className="form-group">
+              <label className="form-label">Organization Logo</label>
+              <div 
+                className="border-2 border-dashed border-slate-300 dark:border-slate-700 rounded-xl p-4 text-center hover:border-blue-500 transition-colors cursor-pointer bg-slate-50 dark:bg-slate-900/50"
+                onClick={() => fileInputRef.current?.click()}
+                onDragOver={(e) => { e.preventDefault(); }}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+                    handleLogoFile(e.dataTransfer.files[0]);
+                  }
+                }}
+              >
+                <input 
+                  type="file" 
+                  ref={fileInputRef} 
+                  onChange={(e) => {
+                    if (e.target.files && e.target.files[0]) {
+                      handleLogoFile(e.target.files[0]);
+                    }
+                  }} 
+                  accept="image/png,image/jpeg,image/svg+xml,image/webp" 
+                  className="hidden" 
+                />
+                
+                {logoPreview ? (
+                  <div className="flex flex-col items-center gap-2">
+                    <img src={logoPreview} alt="Uploaded logo preview" className="max-h-20 max-w-[200px] object-contain rounded-lg shadow-sm border border-slate-700 p-1 bg-white" />
+                    <div className="flex items-center gap-2 mt-1">
+                      <span className="text-xs text-emerald-500 font-medium">Logo uploaded</span>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setLogoPreview(null);
+                        }}
+                        className="text-xs text-rose-500 hover:text-rose-600 font-medium flex items-center gap-1"
+                      >
+                        <X size={12} /> Remove
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center gap-2 text-slate-500 dark:text-slate-400">
+                    <Upload size={24} className="text-blue-500" />
+                    <div className="text-xs font-medium">
+                      <span className="text-blue-500 font-semibold">Click to upload</span> or drag and drop your organization logo
+                    </div>
+                    <div className="text-[11px] text-slate-400">SVG, PNG, JPG, or WebP (max 2MB) • Displayed across all pages</div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
 
           <div className="form-section">
             <h3 className="form-section-title">Basic Information</h3>
