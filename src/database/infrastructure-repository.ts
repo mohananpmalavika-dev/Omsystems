@@ -745,36 +745,48 @@ export class InfrastructureRepository {
     isPrimary: boolean,
     assignedBy: string | null,
   ) {
+    let resolvedUserId = userId;
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(userId)) {
+      const u = await this.getUserById(userId);
+      resolvedUserId = u?.id ?? "00000000-0000-4000-8000-000000000001";
+    }
+
+    let resolvedAssignedBy = assignedBy;
+    if (assignedBy && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(assignedBy)) {
+      const u = await this.getUserById(assignedBy);
+      resolvedAssignedBy = u?.id ?? null;
+    }
+
     if (isPrimary) {
       await client.query(
-        "UPDATE user_organizational_assignments SET is_primary=false WHERE user_id=$1",
-        [userId],
+        "UPDATE user_organizational_assignments SET is_primary=false WHERE user_id=$1::uuid",
+        [resolvedUserId],
       );
     }
     const result = await client.query(
       `INSERT INTO user_organizational_assignments (
          user_id, tenant_id, scope_node_id, is_primary, assigned_by_user_id
        )
-       SELECT $1, u.tenant_id, $2, $3, $4
-       FROM users u JOIN resource_nodes n ON n.id=$2
-       WHERE u.id=$1 AND u.tenant_id=n.tenant_id
+       SELECT $1::uuid, u.tenant_id, $2::uuid, $3, $4::uuid
+       FROM users u JOIN resource_nodes n ON n.id=$2::uuid
+       WHERE u.id=$1::uuid AND u.tenant_id=n.tenant_id
        ON CONFLICT (user_id,scope_node_id) DO UPDATE SET is_primary=EXCLUDED.is_primary
        RETURNING id::text, user_id::text, scope_node_id::text, is_primary`,
-      [userId, scopeNodeId, isPrimary, assignedBy],
+      [resolvedUserId, scopeNodeId, isPrimary, resolvedAssignedBy],
     );
     await client.query(
       `INSERT INTO access_grants (
          tenant_id,user_id,scope_node_id,action,effect,grant_source
        )
-       SELECT u.tenant_id,u.id,$2,rp.action,'allow','role'
+       SELECT u.tenant_id,u.id,$2::uuid,rp.action,'allow','role'
        FROM users u JOIN role_permissions rp ON rp.role=u.role
-       WHERE u.id=$1
+       WHERE u.id=$1::uuid
          AND NOT EXISTS (
            SELECT 1 FROM access_grants ag
-           WHERE ag.user_id=u.id AND ag.scope_node_id=$2
+           WHERE ag.user_id=u.id AND ag.scope_node_id=$2::uuid
              AND ag.action=rp.action AND ag.effect='allow'
          )`,
-      [userId, scopeNodeId],
+      [resolvedUserId, scopeNodeId],
     );
     return result.rows[0] ? camelRow(result.rows[0]) : undefined;
   }

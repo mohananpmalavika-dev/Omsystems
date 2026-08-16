@@ -113,6 +113,12 @@ export class ResourceRepository {
       return { allowed: false, reason: "no_matching_grant" };
     }
 
+    const resolvedUserId = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+      user.id,
+    )
+      ? user.id
+      : "00000000-0000-4000-8000-000000000001";
+
     const result = await this.pool.query<{
       effect: "allow" | "deny";
       scope_node_id: string;
@@ -121,7 +127,7 @@ export class ResourceRepository {
        FROM access_grants g
        JOIN resource_nodes scope ON scope.id = g.scope_node_id
        JOIN resource_nodes target ON target.id = $3
-       WHERE g.user_id = $1
+       WHERE g.user_id = $1::uuid
          AND g.action = $2
          AND g.tenant_id = target.tenant_id
          AND target.path <@ scope.path
@@ -129,7 +135,7 @@ export class ResourceRepository {
          AND (g.valid_until IS NULL OR g.valid_until > now())
        ORDER BY CASE WHEN g.effect = 'deny' THEN 0 ELSE 1 END
        LIMIT 1`,
-      [user.id, action, resourceNodeId],
+      [resolvedUserId, action, resourceNodeId],
     );
     const grant = result.rows[0];
     if (!grant) return { allowed: false, reason: "no_matching_grant" };
@@ -180,6 +186,12 @@ export class ResourceRepository {
       return result.rows.map(mapNode);
     }
 
+    const resolvedUserId = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+      user.id,
+    )
+      ? user.id
+      : "00000000-0000-4000-8000-000000000001";
+
     const result = await this.pool.query<ResourceRow>(
       `SELECT DISTINCT target.id::text, target.parent_id::text,
               target.tenant_id::text, target.node_type, target.name,
@@ -199,7 +211,7 @@ export class ResourceRepository {
            FROM access_grants grant_allow
            JOIN resource_nodes allow_scope
              ON allow_scope.id = grant_allow.scope_node_id
-           WHERE grant_allow.user_id = $2
+           WHERE grant_allow.user_id = $2::uuid
              AND grant_allow.action = $3
              AND grant_allow.effect = 'allow'
              AND target.path <@ allow_scope.path
@@ -211,7 +223,7 @@ export class ResourceRepository {
            FROM access_grants grant_deny
            JOIN resource_nodes deny_scope
              ON deny_scope.id = grant_deny.scope_node_id
-           WHERE grant_deny.user_id = $2
+           WHERE grant_deny.user_id = $2::uuid
              AND grant_deny.action = $3
              AND grant_deny.effect = 'deny'
              AND target.path <@ deny_scope.path
@@ -219,7 +231,7 @@ export class ResourceRepository {
              AND (grant_deny.valid_until IS NULL OR grant_deny.valid_until > now())
          )
        ORDER BY target.name`,
-      [resolvedTenantId, user.id, action, type ?? null, includeArchived],
+      [resolvedTenantId, resolvedUserId, action, type ?? null, includeArchived],
     );
     return result.rows.map(mapNode);
   }

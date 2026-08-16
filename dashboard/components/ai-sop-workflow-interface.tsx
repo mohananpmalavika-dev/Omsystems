@@ -95,17 +95,18 @@ export function AISOPWorkflowInterface({ executionId }: { executionId?: string }
   const loadExecution = async () => {
     setLoading(true);
     try {
-      const response = await fetch(`/api/v1/ai/sop-executions/${executionId}`);
+      const response = await fetch(`/api/control/v1/ai/sop-executions/${executionId}`, { credentials: "include" });
       const data = await response.json();
-      setExecution(data.execution);
+      setExecution(data.execution || data.data || data);
 
       // Load current step
       const stepResponse = await fetch(
-        `/api/v1/ai/sop-executions/${executionId}/current-step`
+        `/api/control/v1/ai/sop-executions/${executionId}/current-step`,
+        { credentials: "include" }
       );
       const stepData = await stepResponse.json();
-      setCurrentStep(stepData.step);
-      setCurrentStepResult(stepData.result);
+      setCurrentStep(stepData.step || stepData.data?.step);
+      setCurrentStepResult(stepData.result || stepData.data?.result);
     } catch (error) {
       console.error("Failed to load SOP execution:", error);
     } finally {
@@ -119,10 +120,11 @@ export function AISOPWorkflowInterface({ executionId }: { executionId?: string }
     setLoading(true);
     try {
       const response = await fetch(
-        `/api/v1/ai/sop-executions/${execution.id}/steps/${currentStep.stepNumber}/complete`,
+        `/api/control/v1/ai/sop-executions/${execution.id}/steps/${currentStep.stepNumber}/complete`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
+          credentials: "include",
           body: JSON.stringify({
             result,
             response: stepResponse,
@@ -132,7 +134,7 @@ export function AISOPWorkflowInterface({ executionId }: { executionId?: string }
       );
 
       const data = await response.json();
-      setExecution(data);
+      setExecution(data.data || data);
       setStepResponse({});
       setComments("");
 
@@ -151,16 +153,17 @@ export function AISOPWorkflowInterface({ executionId }: { executionId?: string }
     setLoading(true);
     try {
       const response = await fetch(
-        `/api/v1/ai/sop-executions/${execution.id}/steps/${currentStep.stepNumber}/skip`,
+        `/api/control/v1/ai/sop-executions/${execution.id}/steps/${currentStep.stepNumber}/skip`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
+          credentials: "include",
           body: JSON.stringify({ reason: skipReason }),
         }
       );
 
       const data = await response.json();
-      setExecution(data);
+      setExecution(data.data || data);
       setSkipReason("");
 
       // Reload to get next step
@@ -180,9 +183,10 @@ export function AISOPWorkflowInterface({ executionId }: { executionId?: string }
 
     setLoading(true);
     try {
-      await fetch(`/api/v1/ai/sop-executions/${execution.id}/escalate`, {
+      await fetch(`/api/control/v1/ai/sop-executions/${execution.id}/escalate`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify({ reason, recipients }),
       });
 
@@ -199,9 +203,10 @@ export function AISOPWorkflowInterface({ executionId }: { executionId?: string }
 
     setLoading(true);
     try {
-      await fetch(`/api/v1/ai/sop-executions/${execution.id}/complete`, {
+      await fetch(`/api/control/v1/ai/sop-executions/${execution.id}/complete`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify({ summary: "SOP completed successfully" }),
       });
 

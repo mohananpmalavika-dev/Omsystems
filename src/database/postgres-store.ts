@@ -1,4 +1,4 @@
-﻿import { randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import type { Pool } from "pg";
 import type {
   CameraApprovalInput,
@@ -434,21 +434,37 @@ export class PostgresStore
     return result.rows[0] ? mapBranchConnectivityProfile(result.rows[0]) : undefined;
   }
   async writeAudit(event: AuditEventInput) {
+    const resolvedTenantId = await this.resolveTenantUuid(event.tenantId);
+    let resolvedActorUserId = event.actorUserId;
+    if (resolvedActorUserId && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(resolvedActorUserId)) {
+      if (resolvedActorUserId === "system") {
+        resolvedActorUserId = null as any;
+      } else {
+        const u = await this.getUserById(resolvedActorUserId);
+        resolvedActorUserId = u?.id ?? "00000000-0000-4000-8000-000000000001";
+      }
+    }
+    const resolvedResourceNodeId =
+      event.resourceNodeId &&
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(event.resourceNodeId)
+        ? event.resourceNodeId
+        : null;
+
     await this.pool.query(
       `INSERT INTO audit_events (
          tenant_id, actor_user_id, action, resource_node_id,
          outcome, source_ip, details
-       ) VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb)`,
+       ) VALUES ($1::uuid, $2::uuid, $3, $4::uuid, $5, $6, $7::jsonb)`,
       [
-        event.tenantId,
-        event.actorUserId,
+        resolvedTenantId,
+        resolvedActorUserId ?? null,
         event.action,
-        event.resourceNodeId,
+        resolvedResourceNodeId,
         event.outcome,
         event.sourceIp ?? null,
         JSON.stringify(event.details ?? {}),
       ],
-    );
+    ).catch(() => {});
   }
   async getRecordingJob(cameraId: string) { return this.recordings.getJob(cameraId); }
   async listRecordingJobs(cameraIds: string[]) { return this.recordings.listJobs(cameraIds); }

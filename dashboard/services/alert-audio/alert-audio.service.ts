@@ -347,9 +347,10 @@ export class AlertAudioService {
 
     // Forward to backend async
     if (typeof window !== "undefined" && typeof fetch !== "undefined") {
-      void fetch("/api/v1/alerts/audio/audit", {
+      void fetch("/api/control/v1/alerts/audio/audit", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify(event),
       }).catch(() => {
         // Local audit buffer preserved

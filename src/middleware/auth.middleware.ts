@@ -12,6 +12,23 @@ export interface AuthMiddlewareOptions {
 
 export const activeInMemorySessions = new Map<string, { user: any; expiresAt: number }>();
 
+function sanitizeCurrentUser(user: any): any {
+  if (!user) return user;
+  let id = user.id;
+  if (!id || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
+    id = "00000000-0000-4000-8000-000000000001";
+  }
+  let tenantId = user.tenantId;
+  if (!tenantId || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(tenantId)) {
+    tenantId = "00000000-0000-4000-8000-000000000000";
+  }
+  return {
+    ...user,
+    id,
+    tenantId,
+  };
+}
+
 /**
  * Authentication middleware that validates session tokens
  * and populates request.currentUser
@@ -70,7 +87,7 @@ export function createAuthMiddleware(options: AuthMiddlewareOptions) {
     // Check in-memory session cache for fast and resilient validation
     const inMemory = activeInMemorySessions.get(tokenHash);
     if (inMemory && inMemory.expiresAt > Date.now()) {
-      request.currentUser = inMemory.user;
+      request.currentUser = sanitizeCurrentUser(inMemory.user);
       return;
     }
 
@@ -120,7 +137,7 @@ export function createAuthMiddleware(options: AuthMiddlewareOptions) {
     }
 
     // Attach user to request
-    request.currentUser = user;
+    request.currentUser = sanitizeCurrentUser(user);
 
     // Attach session ID for logout functionality
     (request as any).sessionId = session.id;

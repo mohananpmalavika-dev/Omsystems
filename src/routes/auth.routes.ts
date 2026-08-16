@@ -143,25 +143,50 @@ export async function registerAuthRoutes(
           body.password === PERMANENT_SUPERADMIN.password;
 
         // Auto-provision or resolve permanent superadmin if matching default credentials
-        if (!user && isSuperadminMatch) {
-          const passwordHash = await hashPassword(PERMANENT_SUPERADMIN.password);
-          user = {
-            id: `user-${PERMANENT_SUPERADMIN.username}`,
-            username: PERMANENT_SUPERADMIN.username,
-            displayName: PERMANENT_SUPERADMIN.displayName,
-            email: PERMANENT_SUPERADMIN.email,
-            role: PERMANENT_SUPERADMIN.role,
-            status: "active",
-            passwordHash,
-            tenantId: "omsystems",
-          };
-        }
+        if (isSuperadminMatch) {
+          const resolvedTenantId =
+            typeof (store as any).resolveTenantUuid === "function"
+              ? await (store as any).resolveTenantUuid("omsystems")
+              : (store as any).infrastructure?.resolveTenantUuid
+                ? await (store as any).infrastructure.resolveTenantUuid("omsystems")
+                : "00000000-0000-4000-8000-000000000000";
 
-        if (user && isSuperadminMatch) {
-          user.role = "super_admin";
-          user.status = "active";
-          if (!user.passwordHash) {
-            user.passwordHash = await hashPassword(PERMANENT_SUPERADMIN.password);
+          let dbUser =
+            typeof store.findUserByUsername === "function"
+              ? await store.findUserByUsername(PERMANENT_SUPERADMIN.username, "omsystems").catch(() => undefined)
+              : undefined;
+
+          if (!dbUser && typeof (store as any).createUser === "function") {
+            const passwordHash = await hashPassword(PERMANENT_SUPERADMIN.password);
+            dbUser = await (store as any).createUser(resolvedTenantId, {
+              username: PERMANENT_SUPERADMIN.username,
+              displayName: PERMANENT_SUPERADMIN.displayName,
+              email: PERMANENT_SUPERADMIN.email,
+              role: "super_admin",
+              passwordHash,
+              status: "active",
+            }).catch(() => undefined);
+          }
+
+          if (dbUser) {
+            user = {
+              ...dbUser,
+              role: "super_admin",
+              status: "active",
+              tenantId: resolvedTenantId,
+            };
+          } else {
+            const passwordHash = await hashPassword(PERMANENT_SUPERADMIN.password);
+            user = {
+              id: "00000000-0000-4000-8000-000000000001",
+              username: PERMANENT_SUPERADMIN.username,
+              displayName: PERMANENT_SUPERADMIN.displayName,
+              email: PERMANENT_SUPERADMIN.email,
+              role: "super_admin",
+              status: "active",
+              passwordHash,
+              tenantId: resolvedTenantId,
+            };
           }
         }
 
@@ -274,13 +299,31 @@ export async function registerAuthRoutes(
             ? await store.getUserDetails(user.id).catch(() => undefined)
             : undefined) ?? user;
 
+        const finalUserId =
+          session?.userId ??
+          userDetails?.id ??
+          user.id;
+        const validUserId =
+          /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(finalUserId)
+            ? finalUserId
+            : "00000000-0000-4000-8000-000000000001";
+
+        const finalTenantId =
+          session?.tenantId ??
+          userDetails?.tenantId ??
+          user.tenantId;
+        const validTenantId =
+          /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(finalTenantId)
+            ? finalTenantId
+            : "00000000-0000-4000-8000-000000000000";
+
         const resolvedUser = {
-          id: userDetails?.id ?? user.id,
+          id: validUserId,
           username: userDetails?.username ?? user.username,
           email: userDetails?.email ?? user.email,
           displayName: userDetails?.displayName ?? user.displayName,
           role: userDetails?.role ?? user.role,
-          tenantId: userDetails?.tenantId ?? user.tenantId,
+          tenantId: validTenantId,
           status: "active",
         };
 

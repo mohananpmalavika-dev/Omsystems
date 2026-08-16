@@ -69,16 +69,11 @@ export function UnifiedIncidentWorkflow({ incidentId }: IncidentWorkflowProps) {
   const loadIncident = async () => {
     setLoading(true);
     try {
-      const response = await fetch(`/api/v1/incidents/${incidentId}`);
-      const data = await response.json();
-      setIncident(data);
-
-      // Check if SOP is running
-      // const sopResponse = await fetch(`/api/v1/incidents/${incidentId}/sop-execution`);
-      // if (sopResponse.ok) {
-      //   const sopData = await sopResponse.json();
-      //   setSopExecution(sopData);
-      // }
+      const response = await fetch(`/api/control/v1/incidents/${incidentId}`, { credentials: "include" });
+      if (response.ok) {
+        const data = await response.json();
+        setIncident(data.data || data);
+      }
     } catch (error) {
       console.error("Failed to load incident:", error);
     } finally {
@@ -89,20 +84,30 @@ export function UnifiedIncidentWorkflow({ incidentId }: IncidentWorkflowProps) {
   const loadStats = async () => {
     try {
       // Load various statistics
-      const cameras = await fetch(`/api/v1/incidents/${incidentId}/cameras`);
-      const clips = await fetch(`/api/v1/incidents/${incidentId}/clips`);
-      const snapshots = await fetch(`/api/v1/incidents/${incidentId}/snapshots`);
-      const packages = await fetch(`/api/v1/incidents/${incidentId}/evidence-packages`);
-      const timeline = await fetch(`/api/v1/incidents/${incidentId}/timeline`);
-      const participants = await fetch(`/api/v1/incidents/${incidentId}/participants`);
+      const [cameras, clips, snapshots, packages, timeline, participants] = await Promise.all([
+        fetch(`/api/control/v1/incidents/${incidentId}/cameras`, { credentials: "include" }).catch(() => null),
+        fetch(`/api/control/v1/incidents/${incidentId}/clips`, { credentials: "include" }).catch(() => null),
+        fetch(`/api/control/v1/incidents/${incidentId}/snapshots`, { credentials: "include" }).catch(() => null),
+        fetch(`/api/control/v1/incidents/${incidentId}/evidence-packages`, { credentials: "include" }).catch(() => null),
+        fetch(`/api/control/v1/incidents/${incidentId}/timeline`, { credentials: "include" }).catch(() => null),
+        fetch(`/api/control/v1/incidents/${incidentId}/participants`, { credentials: "include" }).catch(() => null),
+      ]);
+
+      const parseJsonLen = async (res: Response | null) => {
+        if (!res || !res.ok) return 0;
+        const j = await res.json().catch(() => null);
+        if (Array.isArray(j)) return j.length;
+        if (j && Array.isArray(j.data)) return j.data.length;
+        return 0;
+      };
 
       setStats({
-        totalCameras: (await cameras.json()).length || 0,
-        videoClips: (await clips.json()).length || 0,
-        snapshots: (await snapshots.json()).length || 0,
-        evidencePackages: (await packages.json()).length || 0,
-        timelineEvents: (await timeline.json()).length || 0,
-        involvedPersons: (await participants.json()).length || 0,
+        totalCameras: await parseJsonLen(cameras),
+        videoClips: await parseJsonLen(clips),
+        snapshots: await parseJsonLen(snapshots),
+        evidencePackages: await parseJsonLen(packages),
+        timelineEvents: await parseJsonLen(timeline),
+        involvedPersons: await parseJsonLen(participants),
       });
     } catch (error) {
       console.error("Failed to load stats:", error);

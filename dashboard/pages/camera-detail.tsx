@@ -57,7 +57,7 @@ export function CameraDetailView() {
     
     const hours = timeRange === '1h' ? 1 : timeRange === '24h' ? 24 : 168;
     
-    fetch(`/api/v1/cameras/${cameraId}/health-history?hours=${hours}`)
+    fetch(`/api/control/v1/cameras/${cameraId}/health-history?hours=${hours}`, { credentials: "include" })
       .then((res) => res.json())
       .then((data) => {
         if (data.success) {
@@ -91,8 +91,9 @@ export function CameraDetailView() {
     
     setIsRecovering(true);
     try {
-      const response = await fetch(`/api/v1/cameras/${cameraId}/health-check`, {
+      const response = await fetch(`/api/control/v1/cameras/${cameraId}/health-check`, {
         method: 'POST',
+        credentials: "include",
       });
       const data = await response.json();
       
@@ -120,9 +121,10 @@ export function CameraDetailView() {
     
     setIsRecovering(true);
     try {
-      const response = await fetch(`/api/v1/cameras/${cameraId}/recover`, {
+      const response = await fetch(`/api/control/v1/cameras/${cameraId}/recover`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: "include",
         body: JSON.stringify({ steps, autoEscalate: true }),
       });
       const data = await response.json();
