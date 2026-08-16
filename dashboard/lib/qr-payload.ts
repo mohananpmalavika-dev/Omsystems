@@ -7,6 +7,14 @@ export type QrPayload =
       deviceId?: string;
     }
   | {
+      kind: "device-uid";
+      uid: string;
+      model?: string;
+      productCode?: string;
+      serialNumber?: string;
+      ipAddress?: string;
+    }
+  | {
       kind: "truecloud-share";
       expiresAt?: Date;
       expired: boolean;
@@ -34,15 +42,31 @@ export function parseQrPayload(rawPayload: string, now = Date.now()): QrPayload 
     ?? parseKeyValueFields(payload)
     ?? parseCommaSeparatedFields(payload);
 
-  if (!fields?.username || !fields.password) return { kind: "unsupported" };
+  if (fields?.username && fields.password) {
+    return {
+      kind: "credentials",
+      username: fields.username,
+      password: fields.password,
+      ...(fields.ipAddress ? { ipAddress: fields.ipAddress } : {}),
+      ...(fields.deviceId ? { deviceId: fields.deviceId } : {}),
+    };
+  }
 
-  return {
-    kind: "credentials",
-    username: fields.username,
-    password: fields.password,
-    ...(fields.ipAddress ? { ipAddress: fields.ipAddress } : {}),
-    ...(fields.deviceId ? { deviceId: fields.deviceId } : {}),
-  };
+  // Check if payload is a Device UID / Serial sticker (e.g. 4835592944, 09GV062534, T18061, or P2P alphanumeric UID)
+  const cleaned = payload.replace(/[\r\n\t]/g, " ").trim();
+  const uidMatch = cleaned.match(/^([A-Za-z0-9_-]{6,32})$/);
+  if (uidMatch || fields?.deviceId || cleaned.includes("T18061") || /^\d{8,16}$/.test(cleaned)) {
+    const uid = fields?.deviceId || uidMatch?.[1] || cleaned.split(" ")[0];
+    return {
+      kind: "device-uid",
+      uid: uid,
+      model: cleaned.includes("T18061") ? "T18061-W" : undefined,
+      productCode: cleaned.includes("T18061-BA") ? "T18061-BA" : undefined,
+      serialNumber: uid,
+    };
+  }
+
+  return { kind: "unsupported" };
 }
 
 function parseTrueCloudShare(payload: string, now: number): Extract<QrPayload, { kind: "truecloud-share" }> | undefined {

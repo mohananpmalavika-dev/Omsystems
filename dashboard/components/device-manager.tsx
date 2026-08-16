@@ -1521,6 +1521,21 @@ export function DeviceManager() {
             setShowQRScanner(false);
             setNotice("Credentials extracted from QR code successfully!");
           }}
+          onDeviceIdentified={(device) => {
+            setCameraForm((form) => ({
+              ...form,
+              name: `Robot PTZ (${device.model || device.uid})`,
+              model: device.model || "T18061-W",
+              vendor: "other",
+              ptz: true,
+              audio: true,
+              events: true,
+            }));
+            setDiscoveryManufacturer(device.vendor || "Trueview / TrueCloud");
+            setDiscoverySerialNumber(device.uid);
+            setShowQRScanner(false);
+            setNotice(`Camera ${device.model || device.uid} recognized from QR code! Enter local IP to connect.`);
+          }}
           onClose={() => setShowQRScanner(false)}
         />
       )}

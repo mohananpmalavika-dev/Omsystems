@@ -1,22 +1,32 @@
 "use client";
 
-import { Camera, Upload, X, AlertTriangle, CheckCircle2 } from "lucide-react";
+import { Camera, Upload, X, AlertTriangle, CheckCircle2, Wifi, QrCode, Cpu, ShieldCheck } from "lucide-react";
 import jsQR from "jsqr";
+import QRCode from "qrcode";
 import { useState, useRef, useEffect } from "react";
 import { parseQrPayload, type QrPayload } from "@/lib/qr-payload";
 
 interface QRCredentialScannerProps {
   onCredentialsExtracted: (username: string, password: string) => void;
+  onDeviceIdentified?: (device: { uid: string; model?: string; productCode?: string; vendor?: string }) => void;
   onClose: () => void;
 }
 
-export function QRCredentialScanner({ onCredentialsExtracted, onClose }: QRCredentialScannerProps) {
+export function QRCredentialScanner({ onCredentialsExtracted, onDeviceIdentified, onClose }: QRCredentialScannerProps) {
+  const [tab, setTab] = useState<"scan" | "wifi-pair">("scan");
   const [mode, setMode] = useState<"camera" | "upload" | null>(null);
   const [error, setError] = useState<string>();
   const [success, setSuccess] = useState<string>();
   const [scanning, setScanning] = useState(false);
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [scanResult, setScanResult] = useState<QrPayload>();
+  
+  // Wi-Fi pairing generator state
+  const [wifiSsid, setWifiSsid] = useState("");
+  const [wifiPassword, setWifiPassword] = useState("");
+  const [wifiQrUrl, setWifiQrUrl] = useState<string | null>(null);
+  const [wifiLoading, setWifiLoading] = useState(false);
+
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -117,12 +127,26 @@ export function QRCredentialScanner({ onCredentialsExtracted, onClose }: QRCrede
       return;
     }
 
+    if (result.kind === "device-uid") {
+      setScanResult(result);
+      setSuccess(`Recognized Device UID: ${result.uid}`);
+      if (onDeviceIdentified) {
+        onDeviceIdentified({
+          uid: result.uid,
+          model: result.model || "T18061-W",
+          productCode: result.productCode || "T18061-BA",
+          vendor: "trueview",
+        });
+      }
+      return;
+    }
+
     if (result.kind === "truecloud-share") {
       setScanResult(result);
       return;
     }
 
-    setError("This QR code does not include usable camera credentials. Enter the local ONVIF or RTSP login manually.");
+    setError("This QR code format was not recognized. You can enter the device details manually.");
   }
 
   async function handleFileUpload(event: React.ChangeEvent<HTMLInputElement>) {
@@ -149,6 +173,33 @@ export function QRCredentialScanner({ onCredentialsExtracted, onClose }: QRCrede
       setError("Could not read QR code from image. Please ensure the image is clear and the QR code is visible.");
     } finally {
       setScanning(false);
+    }
+  }
+
+  async function generateWifiPairingQr(e: React.FormEvent) {
+    e.preventDefault();
+    if (!wifiSsid.trim()) return;
+
+    setWifiLoading(true);
+    try {
+      // Standard SmartConfig / Tuya / TrueCloud Wi-Fi pairing payload
+      const wifiPayload = JSON.stringify({
+        s: wifiSsid.trim(),
+        p: wifiPassword,
+        t: "WPA2",
+      });
+
+      const dataUrl = await QRCode.toDataURL(wifiPayload, {
+        width: 260,
+        margin: 2,
+        color: { dark: "#0f172a", light: "#ffffff" },
+      });
+
+      setWifiQrUrl(dataUrl);
+    } catch (err: any) {
+      setError("Failed to generate Wi-Fi QR code");
+    } finally {
+      setWifiLoading(false);
     }
   }
 
@@ -188,7 +239,10 @@ export function QRCredentialScanner({ onCredentialsExtracted, onClose }: QRCrede
     <div className="qr-scanner-overlay">
       <div className="qr-scanner-container">
         <div className="modal-header">
-          <h3>Scan or Upload QR Code</h3>
+          <div>
+            <h3>Connect Camera via QR Code</h3>
+            <p className="text-xs text-slate-500">Scan camera body sticker, or generate a pairing QR for the camera lens</p>
+          </div>
           <button
             type="button"
             className="icon-button"
@@ -198,6 +252,35 @@ export function QRCredentialScanner({ onCredentialsExtracted, onClose }: QRCrede
             }}
           >
             <X size={20} />
+          </button>
+        </div>
+
+        <div className="flex border-b border-slate-200 dark:border-slate-800 px-6 pt-2 gap-4">
+          <button
+            type="button"
+            onClick={() => setTab("scan")}
+            className={`pb-2 text-xs font-semibold flex items-center gap-1.5 border-b-2 transition-all ${
+              tab === "scan"
+                ? "border-blue-600 text-blue-600 dark:text-blue-400"
+                : "border-transparent text-slate-500 hover:text-slate-700"
+            }`}
+          >
+            <QrCode size={14} /> Scan Camera QR / UID
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              stopCamera();
+              setMode(null);
+              setTab("wifi-pair");
+            }}
+            className={`pb-2 text-xs font-semibold flex items-center gap-1.5 border-b-2 transition-all ${
+              tab === "wifi-pair"
+                ? "border-blue-600 text-blue-600 dark:text-blue-400"
+                : "border-transparent text-slate-500 hover:text-slate-700"
+            }`}
+          >
+            <Wifi size={14} /> Wi-Fi Pairing (Lens Scan)
           </button>
         </div>
 
@@ -216,7 +299,50 @@ export function QRCredentialScanner({ onCredentialsExtracted, onClose }: QRCrede
             </div>
           )}
 
-          {scanResult?.kind === "truecloud-share" && (
+          {tab === "scan" && scanResult?.kind === "device-uid" && (
+            <div className="device-uid-result p-4 rounded-xl border border-blue-500/30 bg-blue-500/10 mb-4 space-y-3">
+              <div className="flex items-center gap-2">
+                <ShieldCheck size={20} className="text-blue-500" />
+                <h4 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+                  Camera Recognized: Trueview Robot Pan-Tilt ({scanResult.model || "T18061-W"})
+                </h4>
+              </div>
+              <div className="text-xs text-slate-600 dark:text-slate-300 space-y-1">
+                <div><strong>Scanned UID:</strong> <code className="bg-slate-200 dark:bg-slate-800 px-1.5 py-0.5 rounded text-blue-600 dark:text-blue-400 font-mono">{scanResult.uid}</code></div>
+                <div><strong>Product Code:</strong> {scanResult.productCode || "T18061-BA (3MP Wi-Fi Robot)"}</div>
+                <div><strong>Streaming Protocol:</strong> RTSP (Port 554) • Happytime RTSP Server</div>
+                <div><strong>Recommended Stream URL:</strong> <code className="text-[11px] bg-slate-200 dark:bg-slate-800 px-1.5 py-0.5 rounded font-mono">rtsp://admin:&lt;PASSWORD&gt;@&lt;IP&gt;:554/stream1</code></div>
+              </div>
+              <div className="flex gap-2 pt-2">
+                <button
+                  type="button"
+                  className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-semibold shadow-sm transition-all"
+                  onClick={() => {
+                    if (onDeviceIdentified) {
+                      onDeviceIdentified({
+                        uid: scanResult.uid,
+                        model: scanResult.model || "T18061-W",
+                        productCode: scanResult.productCode || "T18061-BA",
+                        vendor: "trueview",
+                      });
+                    }
+                    onClose();
+                  }}
+                >
+                  Apply &amp; Auto-Fill Camera Form
+                </button>
+                <button
+                  type="button"
+                  className="px-3 py-1.5 bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-lg text-xs font-medium transition-all"
+                  onClick={() => setScanResult(undefined)}
+                >
+                  Scan Another
+                </button>
+              </div>
+            </div>
+          )}
+
+          {tab === "scan" && scanResult?.kind === "truecloud-share" && (
             <div className="truecloud-result">
               <h4>TrueCloud device-sharing QR code detected</h4>
               <p>
@@ -236,10 +362,10 @@ export function QRCredentialScanner({ onCredentialsExtracted, onClose }: QRCrede
             </div>
           )}
 
-          {!mode && !scanResult && (
+          {tab === "scan" && !mode && !scanResult && (
             <div className="qr-scanner-options">
               <p className="qr-scanner-description">
-                Choose how you want to extract camera credentials from the QR code:
+                Scan the QR code sticker on the camera body or upload a photo to auto-detect model and parameters:
               </p>
               <div className="qr-scanner-buttons">
                 <button
@@ -249,7 +375,7 @@ export function QRCredentialScanner({ onCredentialsExtracted, onClose }: QRCrede
                 >
                   <Camera size={24} />
                   <span>Scan QR Code</span>
-                  <small>Use your device camera to scan</small>
+                  <small>Use webcam or phone camera</small>
                 </button>
                 <button
                   type="button"
@@ -257,8 +383,8 @@ export function QRCredentialScanner({ onCredentialsExtracted, onClose }: QRCrede
                   onClick={() => fileInputRef.current?.click()}
                 >
                   <Upload size={24} />
-                  <span>Upload QR Image</span>
-                  <small>Select a saved QR code image</small>
+                  <span>Upload Photo of QR</span>
+                  <small>Select camera sticker image</small>
                 </button>
               </div>
               <input
@@ -271,7 +397,7 @@ export function QRCredentialScanner({ onCredentialsExtracted, onClose }: QRCrede
             </div>
           )}
 
-          {mode === "camera" && (
+          {tab === "scan" && mode === "camera" && (
             <div className="qr-camera-view">
               <video
                 ref={videoRef}
@@ -297,10 +423,63 @@ export function QRCredentialScanner({ onCredentialsExtracted, onClose }: QRCrede
             </div>
           )}
 
-          {mode === "upload" && scanning && (
+          {tab === "scan" && mode === "upload" && scanning && (
             <div className="qr-upload-processing">
               <div className="loading-spinner" />
               <p>Processing image...</p>
+            </div>
+          )}
+
+          {tab === "wifi-pair" && (
+            <div className="wifi-pairing-pane space-y-4">
+              <div className="text-xs text-slate-600 dark:text-slate-300">
+                Generate a Smart Wi-Fi Pairing QR code. Point your camera lens at the screen (15–20 cm away) to connect it to your Wi-Fi network automatically.
+              </div>
+              <form onSubmit={generateWifiPairingQr} className="space-y-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Wi-Fi Network Name (SSID)</label>
+                  <input
+                    type="text"
+                    required
+                    value={wifiSsid}
+                    onChange={(e) => setWifiSsid(e.target.value)}
+                    placeholder="e.g. MyHome_WiFi_2.4G"
+                    className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs text-slate-900 dark:text-slate-100"
+                  />
+                  <small className="text-[10px] text-slate-500">Note: Trueview/Tuya Wi-Fi cameras connect to 2.4GHz Wi-Fi.</small>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Wi-Fi Password</label>
+                  <input
+                    type="password"
+                    value={wifiPassword}
+                    onChange={(e) => setWifiPassword(e.target.value)}
+                    placeholder="Enter Wi-Fi password"
+                    className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs text-slate-900 dark:text-slate-100"
+                  />
+                </div>
+                <button
+                  type="submit"
+                  disabled={wifiLoading || !wifiSsid.trim()}
+                  className="w-full py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-semibold transition-all shadow-sm flex items-center justify-center gap-1.5"
+                >
+                  <QrCode size={14} /> Generate Wi-Fi Pairing QR
+                </button>
+              </form>
+
+              {wifiQrUrl && (
+                <div className="mt-4 p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/60 text-center flex flex-col items-center gap-2">
+                  <div className="p-3 bg-white rounded-xl shadow-md border border-slate-200">
+                    <img src={wifiQrUrl} alt="Wi-Fi Pairing QR" width={220} height={220} className="rounded-lg" />
+                  </div>
+                  <p className="text-xs font-semibold text-slate-800 dark:text-slate-200">
+                    Point camera lens at this QR code from 15–20 cm away
+                  </p>
+                  <small className="text-[11px] text-slate-500">
+                    When the camera beeps and says "Connecting to Wi-Fi", it will join your network and acquire an IP address.
+                  </small>
+                </div>
+              )}
             </div>
           )}
 
