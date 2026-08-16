@@ -387,10 +387,13 @@ export const TABLE_REGISTRY: Record<string, TableDefinition> = {
     ],
     getRows: async (store) => {
       if (store.operationalHealthPolicies instanceof Map) {
-        return Array.from(store.operationalHealthPolicies.entries()).map(([branchId, policy]: [string, any]) => ({
-          branchId,
-          ...policy,
-        }));
+        return Array.from(store.operationalHealthPolicies.entries()).map((entry: any) => {
+          const [branchId, policy] = entry as [string, any];
+          return {
+            branchId,
+            ...policy,
+          };
+        });
       }
       return [];
     },

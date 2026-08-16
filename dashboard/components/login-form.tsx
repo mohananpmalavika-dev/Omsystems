@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import { Eye, EyeOff, ShieldCheck, AlertCircle, Info, QrCode } from "lucide-react";
 import QRCode from "qrcode";
-import { authApi } from "@/lib/api-client";
+import { authApi, organizationApi } from "@/lib/api-client";
 import { resetLocalEdgeAutostart } from "@/lib/local-edge-autostart";
 import { useRouter, useSearchParams } from "next/navigation";
 
@@ -135,7 +135,17 @@ function LoginFormInner({ onSuccess }: LoginFormProps) {
       if (onSuccess) {
         onSuccess();
       } else {
-        router.push("/");
+        let targetPath = "/";
+        try {
+          const orgTree = await organizationApi.getTree().catch(() => null);
+          const hasOrg = orgTree?.data && Array.isArray(orgTree.data) && orgTree.data.some((n: any) => n.type === "company" || n.nodeType === "company");
+          if (!hasOrg) {
+            targetPath = "/admin";
+          }
+        } catch {
+          targetPath = "/admin";
+        }
+        router.push(targetPath);
       }
     } catch (err: any) {
       console.error("Login failed:", err);
