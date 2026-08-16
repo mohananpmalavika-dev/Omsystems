@@ -58,6 +58,9 @@ import { registerBulkUploadRoutes } from "./routes/bulk-upload.routes.js";
 import { registerAnalyticsPhase2Routes } from "./routes/analytics-phase2.routes.js";
 import { adminCameraManagementRoutes } from "./routes/admin-camera-management.routes.js";
 import { registerIncidentsRoutes } from "./routes/incidents.routes.js";
+import { registerMorningHealthDigestRoutes } from "./routes/morning-health-digest.routes.js";
+import { registerVirtualGuardRoutes } from "./routes/virtual-guard.routes.js";
+import { registerQrtDispatchRoutes } from "./routes/qrt-dispatch.routes.js";
 import { registerAdminDatabaseRoutes } from "./routes/admin-database.routes.js";
 import { registerAuditRoutes } from "./routes/audit.routes.js";
 import { registerComplianceRoutes } from "./routes/compliance.routes.js";
@@ -2525,6 +2528,16 @@ export async function buildApp(options?: {
     app.log.info('Central monitoring station and work queue routes registered');
   } catch (err: unknown) {
     app.log.error({ err }, 'failed to register central monitoring routes');
+  }
+
+  // Register Morning Health Digest, Virtual Guard, and QRT Dispatch routes
+  try {
+    await registerMorningHealthDigestRoutes(app, store);
+    await registerVirtualGuardRoutes(app, store);
+    await registerQrtDispatchRoutes(app, store);
+    app.log.info('Morning digest, Virtual guard, and QRT dispatch routes registered');
+  } catch (err: unknown) {
+    app.log.error({ err }, 'failed to register extended enterprise features');
   }
 
   // Register On-Demand Media & Local Video Residency routes

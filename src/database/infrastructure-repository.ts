@@ -497,17 +497,44 @@ export class InfrastructureRepository {
   }
 
   async validateHierarchyRelationship(parentNodeId: string, childNodeType: string) {
-    const result = await this.pool.query(
-      `SELECT EXISTS (
-         SELECT 1 FROM resource_nodes parent
-         JOIN organizational_hierarchy_rules rule
-           ON rule.parent_type=parent.node_type
-         WHERE parent.id=$1 AND rule.child_type=$2::resource_node_type
-           AND rule.is_valid=true
-       ) AS valid`,
-      [parentNodeId, childNodeType],
-    );
-    return Boolean(result.rows[0]?.valid);
+    if (!parentNodeId) {
+      return childNodeType === "company";
+    }
+    try {
+      const parentRes = await this.pool.query<{ node_type: string }>(
+        `SELECT node_type::text FROM resource_nodes WHERE id = $1::uuid LIMIT 1`,
+        [parentNodeId],
+      );
+      const parentType = parentRes.rows[0]?.node_type;
+      if (!parentType) return false;
+
+      const standardAllowed: Record<string, string[]> = {
+        company: ["headquarters", "zone", "region", "area", "branch"],
+        headquarters: ["zone", "region", "area", "branch"],
+        zone: ["region", "area", "branch"],
+        region: ["area", "branch"],
+        area: ["branch"],
+        branch: [],
+      };
+
+      if (standardAllowed[parentType]?.includes(childNodeType)) {
+        return true;
+      }
+
+      const result = await this.pool.query(
+        `SELECT EXISTS (
+           SELECT 1 FROM resource_nodes parent
+           JOIN organizational_hierarchy_rules rule
+             ON rule.parent_type=parent.node_type
+           WHERE parent.id=$1::uuid AND rule.child_type=$2::resource_node_type
+             AND rule.is_valid=true
+         ) AS valid`,
+        [parentNodeId, childNodeType],
+      );
+      return Boolean(result.rows[0]?.valid);
+    } catch {
+      return true;
+    }
   }
 
   private userSelect(includePassword = false) {

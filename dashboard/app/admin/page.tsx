@@ -27,6 +27,7 @@ export default function AdminPage() {
   const [tab, setTab] = useState<"organization" | "users" | "devices">("organization");
   const [revision, setRevision] = useState(0);
   const [parentNode, setParentNode] = useState<SelectedRecord | undefined>();
+  const [initialNodeType, setInitialNodeType] = useState<string | undefined>();
   const [editNode, setEditNode] = useState<SelectedRecord | undefined>();
   const [editUser, setEditUser] = useState<SelectedRecord | undefined>();
   const [creatingUser, setCreatingUser] = useState(false);
@@ -66,6 +67,7 @@ export default function AdminPage() {
 
   const refresh = () => {
     setParentNode(undefined);
+    setInitialNodeType(undefined);
     setEditNode(undefined);
     setEditUser(undefined);
     setCreatingUser(false);
@@ -280,7 +282,10 @@ export default function AdminPage() {
             </div>
             <OrganizationTree
               key={`organization-${revision}`}
-              onAddChild={(node) => setParentNode(node)}
+              onAddChild={(node, defaultType) => {
+                setParentNode(node);
+                setInitialNodeType(defaultType);
+              }}
               onEditNode={(node) => setEditNode(node)}
               onDeleteNode={(node) => void deleteNode(node)}
             />
@@ -302,9 +307,11 @@ export default function AdminPage() {
         <OrgNodeForm
           parentNode={parentNode as any}
           editNode={editNode}
+          initialNodeType={initialNodeType}
           onSuccess={refresh}
           onCancel={() => {
             setParentNode(undefined);
+            setInitialNodeType(undefined);
             setEditNode(undefined);
           }}
         />

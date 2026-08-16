@@ -951,29 +951,91 @@ select, textarea { font: inherit; }
 
 .modal-overlay {
   position: fixed; inset: 0; z-index: 100; display: grid; place-items: center; padding: 22px;
-  background: rgba(8,17,30,.58); backdrop-filter: blur(3px);
+  background: rgba(8,17,30,.65); backdrop-filter: blur(4px);
 }
 .modal-container {
   width: min(650px, 100%); max-height: calc(100vh - 44px); overflow: auto;
-  border: 1px solid rgba(255,255,255,.2); border-radius: 14px; background: white;
+  border: 1px solid #cbd5e1; border-radius: 14px; background: #ffffff !important;
+  color: #0f172a !important;
   box-shadow: 0 30px 90px rgba(3,12,25,.35);
 }
 .modal-container.modal-large { width: min(900px, 100%); }
 .modal-header {
   position: sticky; top: 0; z-index: 2; min-height: 61px; display: flex; align-items: center;
-  justify-content: space-between; padding: 0 20px; background: white; border-bottom: 1px solid var(--line);
+  justify-content: space-between; padding: 0 20px; background: #ffffff !important; border-bottom: 1px solid #e2e8f0 !important;
+  color: #0f172a !important;
 }
-.modal-header h2 { margin: 0; font-size: 16px; }
-.modal-form, .modal-body { padding: 20px; }
+.modal-header h2, .modal-header h3 { margin: 0; font-size: 16px; font-weight: 700; color: #0f172a !important; }
+.modal-header .icon-button {
+  display: flex; align-items: center; justify-content: center; width: 32px; height: 32px;
+  border-radius: 8px; border: 1px solid #e2e8f0; background: #f8fafc; color: #475569;
+  cursor: pointer; transition: all 0.15s;
+}
+.modal-header .icon-button:hover { background: #e2e8f0; color: #0f172a; }
+.modal-form, .modal-body { padding: 20px; background: #ffffff !important; color: #0f172a !important; }
 .form-section { margin-bottom: 22px; }
-.form-section h3 { margin: 0 0 12px; font-size: 12px; }
+.form-section h3, .form-section h4 {
+  margin: 0 0 12px; font-size: 11px; font-weight: 700; color: #475569 !important;
+  text-transform: uppercase; letter-spacing: 0.05em;
+}
 .form-row { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 12px; }
 .form-group { margin-bottom: 12px; }
-.form-group label { display: block; margin-bottom: 5px; color: #4e5b6d; font-size: 10px; font-weight: 650; }
-.required { color: #d74e55; }
+.form-group label { display: block; margin-bottom: 5px; color: #334155 !important; font-size: 11px; font-weight: 650; }
+.required { color: #dc2626; }
+.form-group select,
+.form-group input,
+.form-group textarea,
+.modal-form select,
+.modal-form input,
+.modal-form textarea {
+  width: 100%; min-height: 38px; padding: 6px 12px; border: 1px solid #cbd5e1 !important;
+  border-radius: 8px; background-color: #ffffff !important; color: #0f172a !important;
+  font-size: 13px; font-weight: 500; outline: none; transition: border-color 0.15s, box-shadow 0.15s;
+}
+.form-group select:focus,
+.form-group input:focus,
+.form-group textarea:focus,
+.modal-form select:focus,
+.modal-form input:focus,
+.modal-form textarea:focus {
+  border-color: #2563eb !important;
+  box-shadow: 0 0 0 3px rgba(37,99,235,0.12) !important;
+}
+.form-group select option,
+.modal-form select option {
+  color: #0f172a !important;
+  background-color: #ffffff !important;
+  font-size: 13px;
+  padding: 6px 10px;
+}
+.form-group input::placeholder,
+.form-group textarea::placeholder,
+.modal-form input::placeholder,
+.modal-form textarea::placeholder {
+  color: #94a3b8 !important;
+  opacity: 1;
+}
 .modal-actions {
   position: sticky; bottom: 0; display: flex; justify-content: flex-end; gap: 8px;
-  padding: 14px 20px; border-top: 1px solid var(--line); background: white;
+  padding: 14px 20px; border-top: 1px solid #e2e8f0; background: #ffffff !important;
+}
+.modal-actions .secondary-button,
+.modal-actions .btn-secondary {
+  padding: 8px 16px; border: 1px solid #cbd5e1; border-radius: 8px; background: #f8fafc;
+  color: #334155; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.15s;
+}
+.modal-actions .secondary-button:hover,
+.modal-actions .btn-secondary:hover {
+  background: #f1f5f9; color: #0f172a;
+}
+.modal-actions .primary-button,
+.modal-actions .btn-primary {
+  padding: 8px 18px; border: none; border-radius: 8px; background: #2563eb;
+  color: #ffffff !important; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.15s;
+}
+.modal-actions .primary-button:hover,
+.modal-actions .btn-primary:hover {
+  background: #1d4ed8;
 }
 .permission-tabs { display: flex; gap: 5px; padding: 12px 20px 0; }
 .tab-button {
