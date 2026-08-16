@@ -35,6 +35,7 @@ import { registerAlertAudioRoutes } from "./routes/alert-audio.routes.js";
 import { registerNotificationRoutes } from "./routes/notification.routes.js";
 import { registerDailySurveillanceReportRoutes } from "./routes/daily-surveillance-report.routes.js";
 import { registerDeviceHealthRoutes } from "./routes/device-health.routes.js";
+import { registerRecordingContinuityRoutes } from "./routes/recording-continuity.routes.js";
 import { registerCctvInfrastructureRoutes } from "./routes/cctv-infrastructure.js";
 import { registerOrganizationRoutes } from "./routes/organization.routes.js";
 import { registerBranchLifecycleRoutes } from "./routes/branch-lifecycle.routes.js";
@@ -2490,6 +2491,14 @@ export async function buildApp(options?: {
     app.log.info('Capability-aware device health routes registered');
   } catch (err: unknown) {
     app.log.error({ err }, 'failed to register device health routes');
+  }
+
+  // Register First-Class Recording Continuity Subsystem routes
+  try {
+    await registerRecordingContinuityRoutes(app);
+    app.log.info('Recording continuity subsystem routes registered');
+  } catch (err: unknown) {
+    app.log.error({ err }, 'failed to register recording continuity routes');
   }
 
   // Register First-Class Evidence-Driven Branch Internet & WAN Connectivity routes
