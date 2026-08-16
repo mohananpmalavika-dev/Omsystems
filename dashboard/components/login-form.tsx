@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { Eye, EyeOff, ShieldCheck, AlertCircle, Info, QrCode } from "lucide-react";
+import QRCode from "qrcode";
 import { authApi } from "@/lib/api-client";
 import { resetLocalEdgeAutostart } from "@/lib/local-edge-autostart";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -16,6 +17,7 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
   const qrCanvasRef = useRef<HTMLCanvasElement>(null);
   const [showQR, setShowQR] = useState(false);
   const [loginUrl, setLoginUrl] = useState("");
+  const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     username: "",
     password: "",
@@ -54,40 +56,44 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
     }
   }, []);
 
-  // Generate QR code when URL is set and QR is shown
+  // Generate QR code data URL directly using bundled library
   useEffect(() => {
-    if (!showQR || !loginUrl || !qrCanvasRef.current) return;
+    if (!loginUrl) return;
 
-    // Load QRCode library dynamically from CDN
-    const script = document.getElementById('qrcode-script');
-    if (!script) {
-      const qrScript = document.createElement('script');
-      qrScript.id = 'qrcode-script';
-      qrScript.src = 'https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js';
-      qrScript.onload = () => generateQR();
-      document.head.appendChild(qrScript);
-    } else {
-      generateQR();
-    }
+    QRCode.toDataURL(loginUrl, {
+      width: 200,
+      margin: 2,
+      color: {
+        dark: '#1e293b',
+        light: '#ffffff',
+      },
+    })
+      .then((dataUrl) => {
+        setQrDataUrl(dataUrl);
+      })
+      .catch((err) => {
+        console.error('Failed to generate QR data URL:', err);
+      });
+  }, [loginUrl]);
 
-    function generateQR() {
-      if (typeof window !== 'undefined' && (window as any).QRCode && qrCanvasRef.current) {
-        (window as any).QRCode.toCanvas(
-          qrCanvasRef.current,
-          loginUrl,
-          {
-            width: 200,
-            margin: 2,
-            color: {
-              dark: '#1e293b',
-              light: '#ffffff',
-            },
+  // Also draw to canvas as a fallback when shown
+  useEffect(() => {
+    if (showQR && loginUrl && qrCanvasRef.current) {
+      QRCode.toCanvas(
+        qrCanvasRef.current,
+        loginUrl,
+        {
+          width: 200,
+          margin: 2,
+          color: {
+            dark: '#1e293b',
+            light: '#ffffff',
           },
-          (error: any) => {
-            if (error) console.error('QR generation error:', error);
-          }
-        );
-      }
+        },
+        (err) => {
+          if (err) console.error('Failed to render canvas QR:', err);
+        }
+      );
     }
   }, [showQR, loginUrl]);
 
@@ -409,8 +415,19 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
           {showQR && (
             <div className="qr-display">
               <p className="qr-label">Scan to access login page</p>
-              <div className="qr-canvas-wrapper">
-                <canvas ref={qrCanvasRef} />
+              <div className="qr-canvas-wrapper" style={{ display: "flex", justifyContent: "center", alignItems: "center", minHeight: "200px", padding: "8px" }}>
+                {qrDataUrl ? (
+                  <img
+                    src={qrDataUrl}
+                    alt="Login QR Code"
+                    width={200}
+                    height={200}
+                    className="qr-image"
+                    style={{ borderRadius: "8px", background: "#ffffff", padding: "4px" }}
+                  />
+                ) : (
+                  <canvas ref={qrCanvasRef} width={200} height={200} />
+                )}
               </div>
               <p className="qr-url">{loginUrl}</p>
               <small className="qr-note">
