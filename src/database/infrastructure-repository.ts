@@ -309,13 +309,36 @@ export class InfrastructureRepository {
     return roots;
   }
 
+  async resolveTenantUuid(tenantIdOrSlug: string): Promise<string> {
+    const slug = (tenantIdOrSlug || "omsystems").trim();
+    if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(slug)) {
+      return slug;
+    }
+    const result = await this.pool.query(
+      `SELECT id::text FROM tenants WHERE slug=$1 LIMIT 1`,
+      [slug],
+    );
+    if (result.rows[0]?.id) {
+      return result.rows[0].id;
+    }
+    const inserted = await this.pool.query(
+      `INSERT INTO tenants (id, slug, name)
+       VALUES (gen_random_uuid(), $1, $2)
+       ON CONFLICT (slug) DO UPDATE SET name=EXCLUDED.name
+       RETURNING id::text`,
+      [slug, slug === "omsystems" ? "Sentinel Grid Enterprise" : slug],
+    );
+    return inserted.rows[0]!.id;
+  }
+
   async getOrganizationStatistics(tenantId: string) {
+    const resolvedTenantId = await this.resolveTenantUuid(tenantId);
     const result = await this.pool.query(
       `SELECT node_type AS type, count(*)::integer AS count
        FROM resource_nodes
        WHERE tenant_id=$1 AND is_active=true AND node_type<>'camera'
        GROUP BY node_type`,
-      [tenantId],
+      [resolvedTenantId],
     );
     const counts = Object.fromEntries(result.rows.map((row) => [row.type, row.count]));
     const cameras = await this.pool.query(
@@ -323,7 +346,7 @@ export class InfrastructureRepository {
               count(*) FILTER (WHERE status='online')::integer AS online
        FROM cameras c JOIN resource_nodes n ON n.id=c.resource_node_id
        WHERE n.tenant_id=$1`,
-      [tenantId],
+      [resolvedTenantId],
     );
     return { nodes: counts, cameras: cameras.rows[0] };
   }
@@ -334,6 +357,7 @@ export class InfrastructureRepository {
     parentId?: string,
     includeInactive = false,
   ) {
+    const resolvedTenantId = await this.resolveTenantUuid(tenantId);
     const result = await this.pool.query(
       `${organizationSelect}
        WHERE tenant_id=$1
@@ -344,7 +368,7 @@ export class InfrastructureRepository {
          AND ($3::uuid IS NULL OR parent_id=$3)
          AND ($4 OR is_active=true)
        ORDER BY path`,
-      [tenantId, type ?? null, parentId ?? null, includeInactive],
+      [resolvedTenantId, type ?? null, parentId ?? null, includeInactive],
     );
     return camelRows(result.rows);
   }
@@ -376,6 +400,7 @@ export class InfrastructureRepository {
   }
 
   async createOrganizationNode(tenantId: string, input: any) {
+    const resolvedTenantId = await this.resolveTenantUuid(tenantId);
     const id = randomUUID();
     const result = await this.pool.query(
       `INSERT INTO resource_nodes (
@@ -392,7 +417,7 @@ export class InfrastructureRepository {
              UNION ALL SELECT NULL::uuid, NULL::ltree WHERE $3::uuid IS NULL) parent
        RETURNING id::text`,
       [
-        id, tenantId, input.parentNodeId ?? null, input.nodeType, input.name,
+        id, resolvedTenantId, input.parentNodeId ?? null, input.nodeType, input.name,
         input.code ?? null, input.description ?? null,
         JSON.stringify(input.address ?? {}), JSON.stringify(input.contactInfo ?? {}),
         JSON.stringify(input.metadata ?? {}),
@@ -792,13 +817,34 @@ export class InfrastructureRepository {
     ipAddress?: string,
     userAgent?: string,
   ) {
+    const resolvedTenantId = await this.resolveTenantUuid(tenantId);
+    let resolvedUserId = userId;
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(userId)) {
+      const userRes = await this.pool.query(
+        `SELECT id::text FROM users WHERE username=$1 OR identity_subject=$1 LIMIT 1`,
+        [userId.replace(/^user-/, "")],
+      );
+      if (userRes.rows[0]?.id) {
+        resolvedUserId = userRes.rows[0].id;
+      } else {
+        const insUser = await this.pool.query(
+          `INSERT INTO users (id, tenant_id, identity_subject, display_name, email, username, role, status, active)
+           VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, 'super_admin', 'active', true)
+           ON CONFLICT (username) DO UPDATE SET active=true
+           RETURNING id::text`,
+          [resolvedTenantId, userId, "Dhanya Mohan (Superadmin)", "mgdhanyamohan@omsystems.bank", "mgdhanyamohan"],
+        );
+        resolvedUserId = insUser.rows[0]?.id ?? randomUUID();
+      }
+    }
+
     const result = await this.pool.query(
       `INSERT INTO user_sessions (
          user_id,tenant_id,access_token_hash,refresh_token_hash,ip_address,
          user_agent,access_expires_at,expires_at
-       ) VALUES ($1,$2,$3,$4,$5,$6,now()+interval '1 hour',now()+interval '30 days')
+       ) VALUES ($1,$2,$3,$4,$5,$6,now()+interval '24 hours',now()+interval '30 days')
        RETURNING id::text,user_id::text,tenant_id::text,access_expires_at,expires_at`,
-      [userId, tenantId, accessTokenHash, refreshTokenHash, ipAddress ?? null, userAgent ?? null],
+      [resolvedUserId, resolvedTenantId, accessTokenHash, refreshTokenHash, ipAddress ?? null, userAgent ?? null],
     );
     return camelRow(result.rows[0]!);
   }

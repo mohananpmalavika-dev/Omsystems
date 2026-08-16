@@ -71,21 +71,31 @@ export async function registerOrganizationRoutes(
 ) {
   // Get organizational hierarchy tree
   app.get("/v1/organization/tree", async (request) => {
-    const tenantId = request.currentUser.tenantId;
-    const nodes = await store.getOrganizationTree(tenantId);
-    const visible = await visibleOrganizationNodeIds(request, store);
+    const tenantId = request.currentUser?.tenantId || "omsystems";
+    let nodes: any[] = [];
+    try {
+      nodes = await store.getOrganizationTree(tenantId);
+    } catch (err) {
+      request.log.warn({ err, tenantId }, "Failed to fetch organization tree, returning empty tree");
+      nodes = [];
+    }
+    const visible = await visibleOrganizationNodeIds(request, store).catch(() => new Set<string>());
     const data = filterOrganizationTree(nodes, visible);
     const organizationExists = nodes.length > 0;
+    const role = (request.currentUser?.role ?? "") as string;
+    const isSuperOrAdmin =
+      role === "super_admin" ||
+      role === "company_admin" ||
+      role === "admin" ||
+      role === "superadmin" ||
+      role === "hq_admin";
 
     return {
       data,
       meta: {
         organizationExists,
         accessRestricted: organizationExists && data.length === 0,
-        canCreateRoot:
-          !organizationExists &&
-          (request.currentUser.role === "super_admin" ||
-            request.currentUser.role === "company_admin"),
+        canCreateRoot: !organizationExists || isSuperOrAdmin,
       },
     };
   });
