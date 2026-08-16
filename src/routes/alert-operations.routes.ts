@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import type { ControlPlaneStore } from "../control-plane-store.js";
-import { AlertOperationsService } from "../../backend/src/alerts/services/alert-operations.service.js";
+import { AlertOperationsService } from "../alerts/services/alert-operations.service.js";
 
 const alertIdParamSchema = z.object({ id: z.string().min(1) });
 

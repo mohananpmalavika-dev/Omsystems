@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import type { ControlPlaneStore } from "../control-plane-store.js";
-import { BranchConnectivityService } from "../../backend/src/connectivity/services/branch-connectivity.service.js";
+import { BranchConnectivityService } from "../connectivity/services/branch-connectivity.service.js";
 
 const branchIdParamSchema = z.object({ id: z.string().min(1) });
 const edgeAgentIdParamSchema = z.object({ id: z.string().min(1) });

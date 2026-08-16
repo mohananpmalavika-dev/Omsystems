@@ -41,6 +41,7 @@
     "test:camera:health": "tsx test/camera-health/camera-health-runner.ts",
     "test:retention": "tsx test/retention/retention-runner.ts",
     "test:alert:audio": "tsx test/alert-audio/alert-audio-runner.ts",
+    "test:notifications": "tsx test/notifications/notification-consolidation-runner.ts",
     "test:branch:command-center": "tsx test/branch-command-center/test-runner.ts",
     "test:branch:e2e": "tsx test/branch-command-center/command-center-e2e-runner.ts",
     "test:video-wall": "tsx test/video-wall/test-runner.ts",

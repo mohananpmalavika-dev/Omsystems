@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import type { ControlPlaneStore } from "../control-plane-store.js";
-import { DiskHealthService } from "../../backend/src/storage/services/disk-health.service.js";
+import { DiskHealthService } from "../storage/services/disk-health.service.js";
 
 const diskIdParamSchema = z.object({ id: z.string().min(1) });
 const recorderIdParamSchema = z.object({ id: z.string().min(1) });

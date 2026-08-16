@@ -1,6 +1,9 @@
 /**
  * Notification Engine
- * Handles multi-channel notifications for analytics alerts
+ * 
+ * @deprecated Legacy analytics notification engine.
+ * All notification routing, policies, and outbox delivery are now consolidated
+ * in `src/notifications/` (NotificationService). This class serves as a backwards-compatible facade.
  */
 
 export interface NotificationChannel {
