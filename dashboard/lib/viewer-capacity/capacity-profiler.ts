@@ -5,7 +5,7 @@
  * and persists learned workstation profiles across browser restarts.
  */
 
-import type { ViewerCapacity, WorkstationProfile } from "./types.js";
+import type { ViewerCapacity, WorkstationProfile } from "./types";
 
 const DEFAULT_CONSERVATIVE_CAPACITY: ViewerCapacity = {
   maxVideoDecoders: 16,

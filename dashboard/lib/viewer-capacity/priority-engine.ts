@@ -5,7 +5,7 @@
  * fairness across multi-branch deployments.
  */
 
-import type { FairnessPolicy, StreamCandidate, StreamPriority } from "./types.js";
+import type { FairnessPolicy, StreamCandidate, StreamPriority } from "./types";
 
 export const DEFAULT_FAIRNESS_POLICY: FairnessPolicy = {
   maxNormalStreamsPerBranch: 4,

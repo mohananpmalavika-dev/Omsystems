@@ -6,7 +6,7 @@
  * shrink or expand decoder capacity.
  */
 
-import type { CapacityPressure, ViewerPerformance } from "./types.js";
+import type { CapacityPressure, ViewerPerformance } from "./types";
 
 export interface PlaybackQualitySample {
   cameraId: string;

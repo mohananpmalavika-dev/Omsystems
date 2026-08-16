@@ -5,13 +5,13 @@
  * estimation, priority-driven admission control, and preemption workflows.
  */
 
-import { profileWorkstation, WorkstationProfileStore } from "./capacity-profiler.js";
-import { detectCodecCapabilities, selectPreferredCodec } from "./codec-capability.js";
-import { DecoderScheduler } from "./decoder-scheduler.js";
-import { ViewerEventBus } from "./event-bus.js";
-import { PerformanceMonitor } from "./performance-monitor.js";
-import { calculatePriorityScore, resolvePriorityTier } from "./priority-engine.js";
-import { calculateStreamCost } from "./stream-cost-estimator.js";
+import { profileWorkstation, WorkstationProfileStore } from "./capacity-profiler";
+import { detectCodecCapabilities, selectPreferredCodec } from "./codec-capability";
+import { DecoderScheduler } from "./decoder-scheduler";
+import { ViewerEventBus } from "./event-bus";
+import { PerformanceMonitor } from "./performance-monitor";
+import { calculatePriorityScore, resolvePriorityTier } from "./priority-engine";
+import { calculateStreamCost } from "./stream-cost-estimator";
 import type {
   AdmissionDecision,
   AdmissionResult,
@@ -21,7 +21,7 @@ import type {
   ViewerCapacity,
   ViewerEntitlement,
   ViewerPerformance,
-} from "./types.js";
+} from "./types";
 
 export const DEFAULT_VIEWER_ENTITLEMENT: ViewerEntitlement = {
   maxGridPositions: 144,

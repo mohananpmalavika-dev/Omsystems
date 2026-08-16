@@ -5,7 +5,7 @@
  * and normalized decoder units) for video streams.
  */
 
-import type { RequestedQuality, StreamProfile, StreamType } from "./types.js";
+import type { RequestedQuality, StreamProfile, StreamType } from "./types";
 
 export const QUALITY_POLICY = {
   THUMBNAIL: {

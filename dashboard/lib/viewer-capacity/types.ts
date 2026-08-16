@@ -64,6 +64,7 @@ export type StreamState =
   | "LOW_FPS"
   | "THUMBNAIL"
   | "ROTATING"
+  | "SNAPSHOT"
   | "SUSPENDED";
 
 export interface StreamCandidate {

@@ -5,7 +5,7 @@
  * smoothness, and power efficiency for H.264, H.265 (HEVC), and AV1.
  */
 
-import type { CodecType, StreamProfile, StreamState } from "./types.js";
+import type { CodecType, StreamProfile, StreamState } from "./types";
 
 export interface CodecDecodingCapability {
   codec: CodecType;

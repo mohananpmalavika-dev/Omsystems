@@ -5,8 +5,8 @@
  * deterministic eviction, lease hold-time management, and unallocated tile rotation.
  */
 
-import { calculateStreamCost, pixelsPerSecond } from "./stream-cost-estimator.js";
-import { calculatePriorityScore, resolvePriorityTier } from "./priority-engine.js";
+import { calculateStreamCost, pixelsPerSecond } from "./stream-cost-estimator";
+import { calculatePriorityScore, resolvePriorityTier } from "./priority-engine";
 import type {
   AdmissionDecision,
   AdmissionResult,
@@ -17,7 +17,7 @@ import type {
   StreamPriority,
   StreamState,
   ViewerCapacity,
-} from "./types.js";
+} from "./types";
 
 export const DEFAULT_POOL_POLICY: DecoderPoolPolicy = {
   targetInteractiveSlots: 4,
