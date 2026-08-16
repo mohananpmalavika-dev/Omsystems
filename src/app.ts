@@ -34,6 +34,7 @@ import { registerRetentionRoutes } from "./retention/routes/retention.routes.js"
 import { registerAlertAudioRoutes } from "./routes/alert-audio.routes.js";
 import { registerNotificationRoutes } from "./routes/notification.routes.js";
 import { registerDailySurveillanceReportRoutes } from "./routes/daily-surveillance-report.routes.js";
+import { registerDeviceHealthRoutes } from "./routes/device-health.routes.js";
 import { registerCctvInfrastructureRoutes } from "./routes/cctv-infrastructure.js";
 import { registerOrganizationRoutes } from "./routes/organization.routes.js";
 import { registerBranchLifecycleRoutes } from "./routes/branch-lifecycle.routes.js";
@@ -86,6 +87,7 @@ import { registerStorageHealthRoutes } from "./routes/storage-health.routes.js";
 import { registerConnectivityHealthRoutes } from "./routes/connectivity-health.routes.js";
 import { registerAlertOperationsRoutes } from "./routes/alert-operations.routes.js";
 import { registerSlaReportRoutes } from "./routes/sla-reports.routes.js";
+import { registerClockMonitoringRoutes } from "./routes/clock-monitoring.routes.js";
 import { autoProvisionVerifiedCameras } from "./services/camera-auto-provision.js";
 import {
   EmptyFederationLocalSearchProvider,
@@ -2482,6 +2484,14 @@ export async function buildApp(options?: {
     app.log.error({ err }, 'failed to register daily surveillance health report routes');
   }
 
+  // Register Capability-Aware Device Health Subsystem routes
+  try {
+    await registerDeviceHealthRoutes(app);
+    app.log.info('Capability-aware device health routes registered');
+  } catch (err: unknown) {
+    app.log.error({ err }, 'failed to register device health routes');
+  }
+
   // Register First-Class Evidence-Driven Branch Internet & WAN Connectivity routes
   try {
     await registerConnectivityHealthRoutes(app, store);
@@ -2504,6 +2514,14 @@ export async function buildApp(options?: {
     app.log.info('Historical SLA reports and aggregation routes registered');
   } catch (err: unknown) {
     app.log.error({ err }, 'failed to register SLA reports routes');
+  }
+
+  // Register Clock & Time-Drift Monitoring routes
+  try {
+    await registerClockMonitoringRoutes(app, store);
+    app.log.info('Clock and time-drift monitoring routes registered');
+  } catch (err: unknown) {
+    app.log.error({ err }, 'failed to register clock monitoring routes');
   }
 
   // Register banking analytics routes
