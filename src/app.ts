@@ -81,6 +81,7 @@ import { registerIntegrationRoutes } from "./routes/integrations.routes.js";
 import { registerProvisioningRoutes } from "./routes/provisioning.routes.js";
 import { registerStorageHealthRoutes } from "./routes/storage-health.routes.js";
 import { registerConnectivityHealthRoutes } from "./routes/connectivity-health.routes.js";
+import { registerAlertOperationsRoutes } from "./routes/alert-operations.routes.js";
 import { autoProvisionVerifiedCameras } from "./services/camera-auto-provision.js";
 import {
   EmptyFederationLocalSearchProvider,
@@ -2459,6 +2460,14 @@ export async function buildApp(options?: {
     app.log.info('Branch internet and WAN connectivity routes registered');
   } catch (err: unknown) {
     app.log.error({ err }, 'failed to register branch connectivity routes');
+  }
+
+  // Register Production-Grade Real-Time Alert Operations routes
+  try {
+    await registerAlertOperationsRoutes(app, store);
+    app.log.info('Real-time alert operations routes registered');
+  } catch (err: unknown) {
+    app.log.error({ err }, 'failed to register real-time alert operations routes');
   }
 
   // Register banking analytics routes
