@@ -14,7 +14,7 @@ import type {
   StorageArray,
 } from "../domain/storage-array.js";
 import { EvidenceFusionService } from "../evaluation/evidence-fusion.service.js";
-import { DiskHealthEvaluator } from "../evaluation/disk-health.evaluator.ts";
+import { DiskHealthEvaluator } from "../evaluation/disk-health.evaluator.js";
 import { DiskFailurePredictor } from "../prediction/disk-failure-predictor.js";
 
 export class DiskHealthService {
