@@ -7,7 +7,8 @@ import {
   maintenanceResolverService,
   MaintenanceWindow,
 } from "../../src/maintenance/index.js";
-import { app } from "../../src/app.js";
+import { buildApp } from "../../src/app.js";
+import { MemoryStore } from "../../src/store.js";
 
 async function runMaintenanceWindowsTests() {
   console.log("================================================================================");
@@ -181,11 +182,15 @@ async function runMaintenanceWindowsTests() {
 
   // Suite 6: Fastify REST API Endpoints Verification
   console.log("\nSuite 6: Fastify REST API Endpoints Verification");
+  const app = await buildApp(new MemoryStore());
   await app.ready();
+
+  const headers = { "x-user-id": "user-superadmin-mgdhanyamohan" };
 
   const createResp = await app.inject({
     method: "POST",
     url: "/api/v1/maintenance-windows",
+    headers,
     payload: {
       tenantId: "bank-corp",
       branchId: "branch-300",
@@ -202,6 +207,7 @@ async function runMaintenanceWindowsTests() {
   const approveResp = await app.inject({
     method: "POST",
     url: `/api/v1/maintenance-windows/${createdWindow.id}/approve`,
+    headers,
     payload: { approvedByUserId: "manager-02" },
   });
   assert(approveResp.statusCode === 200, "POST /api/v1/maintenance-windows/:id/approve succeeds (200 OK)");
@@ -209,12 +215,14 @@ async function runMaintenanceWindowsTests() {
   const getActiveResp = await app.inject({
     method: "GET",
     url: "/api/v1/maintenance-windows/active/branch-300",
+    headers,
   });
   assert(getActiveResp.statusCode === 200, "GET /api/v1/maintenance-windows/active/:branchId returns active window");
 
   const cancelResp = await app.inject({
     method: "POST",
     url: `/api/v1/maintenance-windows/${createdWindow.id}/cancel`,
+    headers,
   });
   assert(cancelResp.statusCode === 200, "POST /api/v1/maintenance-windows/:id/cancel cancels window");
 

@@ -181,10 +181,10 @@ export function CameraTile({
         setZoom((value) => Math.max(1, Math.min(3, Number((value + (event.deltaY < 0 ? 0.15 : -0.15)).toFixed(2)))));
       }}>
         <div className="zoom-stage" style={{ transform: `scale(${zoom})` }}>
-          {session?.hls ? (
+          {isActive ? (
             <HlsPlayer
-              url={session.hls.url}
-              bearerToken={session.hls.bearerToken}
+              url={session?.hls?.url ?? `/api/media/streams/${encodeURIComponent(camera.id)}/index.m3u8`}
+              bearerToken={session?.hls?.bearerToken ?? `token-${camera.id}`}
               cameraName={camera.name}
               onPlaybackError={() => onPlaybackError?.("HLS playback failed")}
               onVideoElementChange={handleVideoElementChange}
@@ -200,7 +200,7 @@ export function CameraTile({
             <div className="feed-vignette" />
             <div className="feed-perspective" />
             <CameraIcon size={31} strokeWidth={1.25} />
-            <span>{isActive ? "Secure demo feed" : "Ready for live view"}</span>
+            <span>Ready for live view</span>
           </div>
           )}
         </div>

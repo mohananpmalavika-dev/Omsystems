@@ -12,9 +12,16 @@ export async function startLiveFromBrowser(
   cameraId: string,
   profile: "main" | "sub" = "sub",
 ): Promise<LiveSessionResponse> {
+  const token = typeof window !== "undefined" ? localStorage.getItem("accessToken") : null;
+  const headers: Record<string, string> = { "content-type": "application/json" };
+  if (token) {
+    headers["x-sentinel-session"] = token;
+    headers["authorization"] = `Bearer ${token}`;
+  }
+
   const authorization = await fetch("/api/live", {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers,
     credentials: "include",
     body: JSON.stringify({ cameraId, profile }),
   });

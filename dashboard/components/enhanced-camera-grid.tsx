@@ -200,6 +200,49 @@ export function EnhancedCameraGrid({
     );
   }, [gridPositions, onMonitoredCamerasChange]);
 
+  const handleStartLive = useCallback(async (cameraId: string, stream: "main" | "sub" = "sub") => {
+    if (sessions.has(cameraId) || loading.has(cameraId)) return;
+    setLoading((prev) => new Set(prev).add(cameraId));
+
+    try {
+      updateStreamState(cameraId, "CONNECTING");
+
+      // Request live session from browser
+      const session = await startLiveFromBrowser(cameraId, stream);
+      setSessions((prev) => new Map(prev).set(cameraId, session));
+      activeStreamTypesRef.current.set(cameraId, stream);
+      markPlaybackActive(cameraId);
+
+      const streamState: TileStreamState = stream === "main" 
+        ? "LIVE_MAINSTREAM" 
+        : "LIVE_SUBSTREAM";
+      updateStreamState(cameraId, streamState);
+    } catch (error) {
+      console.error("Live session error:", error);
+      const reason = error instanceof Error ? error.message : "Unknown error";
+      updateStreamState(cameraId, "ERROR", reason);
+      reportPlaybackFailure(cameraId, reason);
+    } finally {
+      setLoading((prev) => {
+        const newSet = new Set(prev);
+        newSet.delete(cameraId);
+        return newSet;
+      });
+    }
+  }, [
+    loading,
+    markPlaybackActive,
+    reportPlaybackFailure,
+    sessions,
+    updateStreamState,
+  ]);
+
+  const handleRequestLive = useCallback((cameraId: string) => {
+    setOperatorSelectedCameraId(cameraId);
+    updateStreamState(cameraId, "CONNECTING");
+    void handleStartLive(cameraId, "sub");
+  }, [handleStartLive, updateStreamState]);
+
   // GPU acceleration classes
   const gpuAccelClass = enableGPUAcceleration ? "gpu-accelerated" : "";
 
@@ -281,7 +324,15 @@ export function EnhancedCameraGrid({
 
     setGridPositions(posMap);
     initialLayoutApplied.current = true;
-  }, [initialLayout, cameras, totalPositions]);
+
+    // Auto-start live stream for primary visible online cameras
+    const initialBatch = Array.from(posMap.values()).slice(0, 16);
+    for (const entry of initialBatch) {
+      if (entry.camera.status !== "offline") {
+        void handleStartLive(entry.camera.id, entry.stream);
+      }
+    }
+  }, [initialLayout, cameras, totalPositions, handleStartLive]);
 
   // Adaptive layout: prioritize cameras with alerts
   useEffect(() => {
@@ -399,74 +450,6 @@ export function EnhancedCameraGrid({
 
     setDraggedCamera(null);
   };
-
-  const handleStartLive = useCallback(async (cameraId: string, stream: "main" | "sub" = "sub") => {
-    if (sessions.has(cameraId) || loading.has(cameraId)) return;
-    setLoading((prev) => new Set(prev).add(cameraId));
-
-    try {
-      // Use media orchestrator for session management
-      const camera = cameras.find(c => c.id === cameraId);
-      const branchId = camera?.branchId || "unknown";
-
-      // Update state to connecting
-      updateStreamState(cameraId, "CONNECTING");
-
-      // Determine purpose based on presentation mode
-      const purpose = presentationMode === "INVESTIGATION" ? "INVESTIGATION" : "MONITORING";
-      const quality = stream === "main" ? "MAINSTREAM" : "SUBSTREAM";
-
-      const result = await requestSession(cameraId, branchId, {
-        purpose,
-        preferredQuality: quality,
-        priority: operatorSelectedCameraId === cameraId || priorityCameraIds.includes(cameraId) ? 1_000 : 0,
-      });
-
-      if (result.session) {
-        // Use traditional live client for actual streaming
-        const session = await startLiveFromBrowser(cameraId, stream);
-        setSessions((prev) => new Map(prev).set(cameraId, session));
-        activeStreamTypesRef.current.set(cameraId, stream);
-        markPlaybackActive(cameraId);
-
-        // Update stream state based on quality
-        const streamState: TileStreamState = stream === "main" 
-          ? "LIVE_MAINSTREAM" 
-          : "LIVE_SUBSTREAM";
-        updateStreamState(cameraId, streamState);
-      } else {
-        updateStreamState(cameraId, "ERROR", result.reason);
-        reportPlaybackFailure(cameraId, result.reason);
-      }
-    } catch (error) {
-      console.error("Live session error:", error);
-      const reason = error instanceof Error ? error.message : "Unknown error";
-      updateStreamState(cameraId, "ERROR", reason);
-      reportPlaybackFailure(cameraId, reason);
-    } finally {
-      setLoading((prev) => {
-        const newSet = new Set(prev);
-        newSet.delete(cameraId);
-        return newSet;
-      });
-    }
-  }, [
-    cameras,
-    loading,
-    markPlaybackActive,
-    operatorSelectedCameraId,
-    presentationMode,
-    priorityCameraIds,
-    reportPlaybackFailure,
-    requestSession,
-    sessions,
-    updateStreamState,
-  ]);
-
-  const handleRequestLive = useCallback((cameraId: string) => {
-    setOperatorSelectedCameraId(cameraId);
-    updateStreamState(cameraId, "QUEUED");
-  }, [updateStreamState]);
 
   useEffect(() => {
     const desiredLive = new Map(

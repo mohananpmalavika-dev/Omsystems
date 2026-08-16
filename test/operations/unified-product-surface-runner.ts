@@ -3,7 +3,8 @@
  */
 
 import { unifiedOperationsService } from "../../src/operations/index.js";
-import { app } from "../../src/app.js";
+import { buildApp } from "../../src/app.js";
+import { MemoryStore } from "../../src/store.js";
 
 async function runUnifiedOperationsTests() {
   console.log("================================================================================");
@@ -78,35 +79,43 @@ async function runUnifiedOperationsTests() {
 
   // Suite 6: Fastify REST API Endpoints Verification
   console.log("\nSuite 6: Fastify REST API Endpoints Verification");
+  const app = await buildApp(new MemoryStore());
   await app.ready();
+
+  const headers = { "x-user-id": "user-superadmin-mgdhanyamohan" };
 
   const getSummaryResp = await app.inject({
     method: "GET",
     url: "/api/v1/operations/command-center",
+    headers,
   });
   assert(getSummaryResp.statusCode === 200, "GET /api/v1/operations/command-center returns 200 OK");
 
   const getAttentionResp = await app.inject({
     method: "GET",
     url: "/api/v1/operations/attention-required",
+    headers,
   });
   assert(getAttentionResp.statusCode === 200, "GET /api/v1/operations/attention-required returns 200 OK");
 
   const getBranchesResp = await app.inject({
     method: "GET",
     url: "/api/v1/operations/branches",
+    headers,
   });
   assert(getBranchesResp.statusCode === 200, "GET /api/v1/operations/branches returns 200 OK");
 
   const getWorkspaceResp = await app.inject({
     method: "GET",
     url: "/api/v1/operations/branches/branch-178/workspace",
+    headers,
   });
   assert(getWorkspaceResp.statusCode === 200, "GET /api/v1/operations/branches/:id/workspace returns 200 OK");
 
   const getSearchResp = await app.inject({
     method: "GET",
     url: "/api/v1/operations/universal-search?q=aluva",
+    headers,
   });
   assert(getSearchResp.statusCode === 200, "GET /api/v1/operations/universal-search returns 200 OK with cross-entity matches");
 
