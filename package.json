@@ -46,6 +46,7 @@
     "test:device:capabilities": "tsx test/device-health/device-health-capability-runner.ts",
     "test:recording:continuity": "tsx test/recording-continuity/recording-continuity-runner.ts",
     "test:monitoring:queue": "tsx test/monitoring/central-monitoring-queue-runner.ts",
+    "test:media:on-demand": "tsx test/media/on-demand-video-runner.ts",
     "test:branch:command-center": "tsx test/branch-command-center/test-runner.ts",
     "test:branch:e2e": "tsx test/branch-command-center/command-center-e2e-runner.ts",
     "test:video-wall": "tsx test/video-wall/test-runner.ts",

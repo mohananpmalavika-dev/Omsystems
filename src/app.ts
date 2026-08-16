@@ -37,6 +37,7 @@ import { registerDailySurveillanceReportRoutes } from "./routes/daily-surveillan
 import { registerDeviceHealthRoutes } from "./routes/device-health.routes.js";
 import { registerRecordingContinuityRoutes } from "./routes/recording-continuity.routes.js";
 import { registerCentralMonitoringRoutes } from "./routes/central-monitoring.routes.js";
+import { registerOnDemandMediaRoutes } from "./routes/on-demand-media.routes.js";
 import { registerCctvInfrastructureRoutes } from "./routes/cctv-infrastructure.js";
 import { registerOrganizationRoutes } from "./routes/organization.routes.js";
 import { registerBranchLifecycleRoutes } from "./routes/branch-lifecycle.routes.js";
@@ -2509,6 +2510,14 @@ export async function buildApp(options?: {
     app.log.info('Central monitoring station and work queue routes registered');
   } catch (err: unknown) {
     app.log.error({ err }, 'failed to register central monitoring routes');
+  }
+
+  // Register On-Demand Media & Local Video Residency routes
+  try {
+    await registerOnDemandMediaRoutes(app);
+    app.log.info('On-demand media and local video residency routes registered');
+  } catch (err: unknown) {
+    app.log.error({ err }, 'failed to register on-demand media routes');
   }
 
   // Register First-Class Evidence-Driven Branch Internet & WAN Connectivity routes
