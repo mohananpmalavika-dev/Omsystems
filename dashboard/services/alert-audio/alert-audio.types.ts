@@ -22,7 +22,7 @@ export interface AlertAudioStatus {
   selectedOutputDeviceLabel?: string | undefined;
   outputRouting: "SELECTED_DEVICE" | "SYSTEM_DEFAULT" | "UNSUPPORTED";
 
-  audioContextState?: ("suspended" | "running" | "closed") | undefined;
+  audioContextState?: ("suspended" | "running" | "closed" | "interrupted") | undefined;
 
   lastSuccessfulPlaybackAt?: string | undefined;
   lastPlaybackFailureAt?: string | undefined;
