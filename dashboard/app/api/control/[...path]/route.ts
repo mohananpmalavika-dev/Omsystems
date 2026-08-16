@@ -106,6 +106,8 @@ async function proxyControlRequest(request: NextRequest, context: RouteContext) 
         user?: unknown;
       };
       const publicPayload = {
+        accessToken: payload.accessToken,
+        refreshToken: payload.refreshToken,
         expiresIn: payload.expiresIn,
         tokenType: payload.tokenType,
         ...(payload.user ? { user: payload.user } : {}),
@@ -114,18 +116,18 @@ async function proxyControlRequest(request: NextRequest, context: RouteContext) 
         status: response.status,
         headers: { "cache-control": "no-store" },
       });
-      const secure = request.nextUrl.protocol === "https:";
+      const secure = request.nextUrl.protocol === "https:" || process.env.NODE_ENV === "production";
       outgoing.cookies.set("sentinel_access", payload.accessToken, {
         httpOnly: true,
-        sameSite: "strict",
+        sameSite: "lax",
         secure,
         path: "/",
-        maxAge: payload.expiresIn,
+        maxAge: payload.expiresIn || 86400,
       });
       if (payload.refreshToken) {
         outgoing.cookies.set("sentinel_refresh", payload.refreshToken, {
           httpOnly: true,
-          sameSite: "strict",
+          sameSite: "lax",
           secure,
           path: "/",
           maxAge: 30 * 24 * 60 * 60,

@@ -206,6 +206,8 @@ async function downloadApi(endpoint: string, options: RequestInit = {}): Promise
 export const authApi = {
   login: async (username: string, password: string, tenantSlug?: string) => {
     const response = await fetchApi<{
+      accessToken?: string;
+      refreshToken?: string;
       expiresIn: number;
       user: any;
     }>('/v1/auth/login', {
@@ -213,11 +215,16 @@ export const authApi = {
       body: JSON.stringify({ username, password, tenantSlug }),
     });
 
-    // Tokens are held by the BFF in HttpOnly cookies. Retain only display data.
     if (typeof window !== 'undefined') {
-      localStorage.removeItem('accessToken');
-      localStorage.removeItem('refreshToken');
-      localStorage.setItem('user', JSON.stringify(response.user));
+      if (response.accessToken) {
+        localStorage.setItem('accessToken', response.accessToken);
+      }
+      if (response.refreshToken) {
+        localStorage.setItem('refreshToken', response.refreshToken);
+      }
+      if (response.user) {
+        localStorage.setItem('user', JSON.stringify(response.user));
+      }
     }
 
     return response;
