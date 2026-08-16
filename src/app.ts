@@ -42,6 +42,7 @@ import { registerAiAlertsRoutes } from "./routes/ai-alerts.routes.js";
 import { registerAlertIncidentsRoutes } from "./routes/alert-incidents.routes.js";
 import { registerPerformanceBenchmarkRoutes } from "./routes/performance-benchmarks.routes.js";
 import { registerEdgeTelemetryRoutes } from "./routes/edge-telemetry.routes.js";
+import { registerMaintenanceWindowsRoutes } from "./routes/maintenance-windows.routes.js";
 import { registerCctvInfrastructureRoutes } from "./routes/cctv-infrastructure.js";
 import { registerOrganizationRoutes } from "./routes/organization.routes.js";
 import { registerBranchLifecycleRoutes } from "./routes/branch-lifecycle.routes.js";
@@ -99,6 +100,7 @@ import { registerEdgeGatewayRoutes } from "./routes/edge-gateway.routes.js";
 import { registerEvidenceCaptureRoutes } from "./routes/evidence-capture.routes.js";
 import { registerDeduplicationRoutes } from "./routes/deduplication.routes.js";
 import { registerDigitalTwinHealthRoutes } from "./routes/digital-twin-health.routes.js";
+import { registerStaleHealthRoutes } from "./routes/stale-health.routes.js";
 import { autoProvisionVerifiedCameras } from "./services/camera-auto-provision.js";
 import {
   EmptyFederationLocalSearchProvider,
@@ -2559,6 +2561,14 @@ export async function buildApp(options?: {
     app.log.error({ err }, 'failed to register edge telemetry routes');
   }
 
+  // Register Maintenance Windows & Operational State routes
+  try {
+    await registerMaintenanceWindowsRoutes(app);
+    app.log.info('Maintenance windows and operational state routes registered');
+  } catch (err: unknown) {
+    app.log.error({ err }, 'failed to register maintenance windows routes');
+  }
+
   // Register First-Class Evidence-Driven Branch Internet & WAN Connectivity routes
   try {
     await registerConnectivityHealthRoutes(app, store);
@@ -2621,6 +2631,14 @@ export async function buildApp(options?: {
     app.log.info('Digital Twin branch health routes registered');
   } catch (err: unknown) {
     app.log.error({ err }, 'failed to register digital twin health routes');
+  }
+
+  // Register Stale-Data Semantics & Health Freshness routes
+  try {
+    await registerStaleHealthRoutes(app, {});
+    app.log.info('Stale health semantics and freshness routes registered');
+  } catch (err: unknown) {
+    app.log.error({ err }, 'failed to register stale health routes');
   }
 
   // Register banking analytics routes
