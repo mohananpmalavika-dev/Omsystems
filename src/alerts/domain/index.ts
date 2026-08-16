@@ -1,4 +1,5 @@
 export * from "./operational-alert.types.js";
+export * from "./detection-event.types.js";
 export type {
   CanonicalAlertType,
   SurveillanceZone,

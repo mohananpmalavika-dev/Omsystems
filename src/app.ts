@@ -39,6 +39,7 @@ import { registerRecordingContinuityRoutes } from "./routes/recording-continuity
 import { registerCentralMonitoringRoutes } from "./routes/central-monitoring.routes.js";
 import { registerOnDemandMediaRoutes } from "./routes/on-demand-media.routes.js";
 import { registerAiAlertsRoutes } from "./routes/ai-alerts.routes.js";
+import { registerAlertIncidentsRoutes } from "./routes/alert-incidents.routes.js";
 import { registerCctvInfrastructureRoutes } from "./routes/cctv-infrastructure.js";
 import { registerOrganizationRoutes } from "./routes/organization.routes.js";
 import { registerBranchLifecycleRoutes } from "./routes/branch-lifecycle.routes.js";
@@ -94,6 +95,7 @@ import { registerSlaReportRoutes } from "./routes/sla-reports.routes.js";
 import { registerClockMonitoringRoutes } from "./routes/clock-monitoring.routes.js";
 import { registerEdgeGatewayRoutes } from "./routes/edge-gateway.routes.js";
 import { registerEvidenceCaptureRoutes } from "./routes/evidence-capture.routes.js";
+import { registerDeduplicationRoutes } from "./routes/deduplication.routes.js";
 import { autoProvisionVerifiedCameras } from "./services/camera-auto-provision.js";
 import {
   EmptyFederationLocalSearchProvider,
@@ -2530,6 +2532,14 @@ export async function buildApp(options?: {
     app.log.error({ err }, 'failed to register AI alerts routes');
   }
 
+  // Register Alert Incidents & Storm Suppression routes
+  try {
+    await registerAlertIncidentsRoutes(app);
+    app.log.info('Alert incidents and storm suppression routes registered');
+  } catch (err: unknown) {
+    app.log.error({ err }, 'failed to register alert incidents routes');
+  }
+
   // Register First-Class Evidence-Driven Branch Internet & WAN Connectivity routes
   try {
     await registerConnectivityHealthRoutes(app, store);
@@ -2576,6 +2586,14 @@ export async function buildApp(options?: {
     app.log.info('Guaranteed alert evidence capture routes registered');
   } catch (err: unknown) {
     app.log.error({ err }, 'failed to register evidence capture routes');
+  }
+
+  // Register AI Alert Deduplication & Temporal Aggregation routes
+  try {
+    await registerDeduplicationRoutes(app, store);
+    app.log.info('AI alert deduplication and aggregation routes registered');
+  } catch (err: unknown) {
+    app.log.error({ err }, 'failed to register alert deduplication routes');
   }
 
   // Register banking analytics routes

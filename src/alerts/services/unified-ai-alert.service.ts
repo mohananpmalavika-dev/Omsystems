@@ -7,12 +7,15 @@
 
 import type { RawAiDetectionEvent } from "../domain/raw-ai-event.types.js";
 import type { SurveillanceAlert, CanonicalAlertType, AlertSeverity, AlertLifecycleState } from "../domain/surveillance-alert.types.js";
+import type { NormalizedDetection } from "../domain/detection-event.types.js";
 import { alertNormalizerRegistry, AlertNormalizerRegistry } from "../normalizers/alert-normalizer-registry.js";
 import { alertEnrichmentService, AlertEnrichmentService } from "./alert-enrichment.service.js";
 import { contextualSeverityPolicyService, ContextualSeverityPolicyService } from "./contextual-severity-policy.service.js";
 import { aiAlertDeduplicationService, AiAlertDeduplicationService } from "./ai-alert-deduplication.service.js";
 import { aiAlertCorrelationService, AiAlertCorrelationService } from "./ai-alert-correlation.service.js";
 import { alertPresentationService, AlertPresentationService } from "./alert-presentation.service.js";
+import { temporalAggregatorService, TemporalAggregatorService } from "./temporal-aggregator.service.js";
+import { advancedDeduplicationService, AdvancedDeduplicationService } from "./advanced-deduplication.service.js";
 import { publishEvent } from "../../events/unified-event-bus.js";
 
 export class UnifiedAiAlertService {
@@ -24,8 +27,87 @@ export class UnifiedAiAlertService {
     private readonly severityPolicy: ContextualSeverityPolicyService = contextualSeverityPolicyService,
     private readonly dedup: AiAlertDeduplicationService = aiAlertDeduplicationService,
     private readonly correlation: AiAlertCorrelationService = aiAlertCorrelationService,
-    private readonly presentation: AlertPresentationService = alertPresentationService
+    private readonly presentation: AlertPresentationService = alertPresentationService,
+    private readonly temporalAggregator: TemporalAggregatorService = temporalAggregatorService,
+    private readonly advancedDedup: AdvancedDeduplicationService = advancedDeduplicationService,
   ) {}
+
+  async ingestDetection(detection: NormalizedDetection): Promise<{ alert: SurveillanceAlert; action: "CREATED" | "MERGED" | "REOPENED" | "SUPPRESSED" }> {
+    // 1. Temporal Aggregation
+    const { event } = this.temporalAggregator.aggregate(detection);
+
+    // 2. Advanced Deduplication
+    const dedupRes = this.advancedDedup.processEvent(event, detection.detectedAt);
+
+    if (dedupRes.action === "MERGED" || dedupRes.action === "REOPENED") {
+      const existing = this.alerts.get(dedupRes.alertId!);
+      if (existing) {
+        existing.occurrenceCount = dedupRes.occurrenceCount;
+        existing.lastSeenAt = detection.detectedAt;
+        if (detection.confidence) {
+          existing.confidence = Math.max(existing.confidence ?? 0, detection.confidence);
+        }
+        return { alert: existing, action: dedupRes.action };
+      }
+    }
+
+    // 3. Create Canonical Alert
+    const canonicalType = (detection.detectionType.toUpperCase() as CanonicalAlertType) || "INTRUSION";
+    const enriched = this.enrichment.enrich({
+      rawEventId: detection.id,
+      tenantId: detection.tenantId,
+      branchId: detection.branchId,
+      cameraId: detection.cameraId,
+      alertType: canonicalType,
+      vendorEventType: detection.detectionType,
+      vendorSource: detection.detectorId,
+      occurredAt: detection.detectedAt,
+      confidence: detection.confidence ?? 0.95,
+      title: `${canonicalType} Detected`,
+      description: `Object ${detection.trackId ?? "detected"} in ${detection.zoneId ?? "zone"}`,
+      attributes: detection.metadata ?? {},
+    }, detection.detectedAt);
+
+    const severity = this.severityPolicy.evaluateSeverity({
+      alertType: canonicalType,
+      zone: enriched.zone,
+      isAfterHours: enriched.isAfterHours,
+      confidence: detection.confidence ?? 0.95,
+    });
+
+    const alertId = dedupRes.alertId ?? `alert-${canonicalType.toLowerCase()}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+    const presentation = this.presentation.getPresentation(canonicalType, severity);
+
+    const alert: SurveillanceAlert = {
+      id: alertId,
+      tenantId: detection.tenantId,
+      branchId: detection.branchId,
+      branchName: enriched.branchName,
+      zone: enriched.zone,
+      cameraId: detection.cameraId,
+      cameraName: enriched.cameraName,
+      alertType: canonicalType,
+      vendorEventType: detection.detectionType,
+      vendorSource: detection.detectorId,
+      severity,
+      detectedAt: detection.detectedAt,
+      occurredAt: detection.detectedAt,
+      title: `${canonicalType} Detected`,
+      description: `Object ${detection.trackId ?? "detected"} in ${detection.zoneId ?? "zone"}`,
+      confidence: detection.confidence ?? 0.95,
+      detectorLifecycle: "START",
+      occurrenceCount: event.detectionCount,
+      firstSeenAt: detection.detectedAt,
+      lastSeenAt: detection.detectedAt,
+      status: "NEW",
+      attributes: detection.metadata ?? {},
+      presentation,
+      schemaVersion: 1,
+    };
+
+    this.alerts.set(alertId, alert);
+    return { alert, action: "CREATED" };
+  }
 
   async ingestRawAiEvent(rawEvent: RawAiDetectionEvent): Promise<{ alert: SurveillanceAlert; isDeduplicated: boolean }> {
     // 1. Normalize
