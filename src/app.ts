@@ -40,6 +40,7 @@ import { registerCentralMonitoringRoutes } from "./routes/central-monitoring.rou
 import { registerOnDemandMediaRoutes } from "./routes/on-demand-media.routes.js";
 import { registerAiAlertsRoutes } from "./routes/ai-alerts.routes.js";
 import { registerAlertIncidentsRoutes } from "./routes/alert-incidents.routes.js";
+import { registerPerformanceBenchmarkRoutes } from "./routes/performance-benchmarks.routes.js";
 import { registerCctvInfrastructureRoutes } from "./routes/cctv-infrastructure.js";
 import { registerOrganizationRoutes } from "./routes/organization.routes.js";
 import { registerBranchLifecycleRoutes } from "./routes/branch-lifecycle.routes.js";
@@ -96,6 +97,7 @@ import { registerClockMonitoringRoutes } from "./routes/clock-monitoring.routes.
 import { registerEdgeGatewayRoutes } from "./routes/edge-gateway.routes.js";
 import { registerEvidenceCaptureRoutes } from "./routes/evidence-capture.routes.js";
 import { registerDeduplicationRoutes } from "./routes/deduplication.routes.js";
+import { registerDigitalTwinHealthRoutes } from "./routes/digital-twin-health.routes.js";
 import { autoProvisionVerifiedCameras } from "./services/camera-auto-provision.js";
 import {
   EmptyFederationLocalSearchProvider,
@@ -2540,6 +2542,14 @@ export async function buildApp(options?: {
     app.log.error({ err }, 'failed to register alert incidents routes');
   }
 
+  // Register Capacity Benchmarks & SLO Performance routes
+  try {
+    await registerPerformanceBenchmarkRoutes(app);
+    app.log.info('Capacity benchmark and SLO performance routes registered');
+  } catch (err: unknown) {
+    app.log.error({ err }, 'failed to register performance benchmark routes');
+  }
+
   // Register First-Class Evidence-Driven Branch Internet & WAN Connectivity routes
   try {
     await registerConnectivityHealthRoutes(app, store);
@@ -2594,6 +2604,14 @@ export async function buildApp(options?: {
     app.log.info('AI alert deduplication and aggregation routes registered');
   } catch (err: unknown) {
     app.log.error({ err }, 'failed to register alert deduplication routes');
+  }
+
+  // Register Digital Twin Branch Health & Root-Cause Analysis routes
+  try {
+    await registerDigitalTwinHealthRoutes(app, store);
+    app.log.info('Digital Twin branch health routes registered');
+  } catch (err: unknown) {
+    app.log.error({ err }, 'failed to register digital twin health routes');
   }
 
   // Register banking analytics routes

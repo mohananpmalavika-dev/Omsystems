@@ -115,6 +115,8 @@ export interface SurveillanceAlert {
 
   correlationId?: string | undefined;
   incidentId?: string | undefined;
+  isSuppressed?: boolean | undefined;
+  suppressionStatus?: string | undefined;
 
   attributes: Record<string, unknown>;
   presentation: AlertPresentationTokens;
