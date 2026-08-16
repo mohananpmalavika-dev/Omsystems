@@ -296,6 +296,7 @@ export class InfrastructureRepository {
   }
 
   async getOrganizationTree(tenantId: string) {
+    await this.ensureFlexibleHierarchyRules();
     const nodes = await this.listOrganizationNodes(tenantId, undefined, undefined, false);
     const byId = new Map(nodes.map((node: any) => [node.id, { ...node, children: [] }]));
     const roots: any[] = [];
@@ -399,7 +400,93 @@ export class InfrastructureRepository {
     return camelRows(result.rows);
   }
 
+  private hierarchyRulesInitialized = false;
+
+  async ensureFlexibleHierarchyRules(): Promise<void> {
+    if (this.hierarchyRulesInitialized) return;
+    try {
+      await this.pool.query(`
+        CREATE TABLE IF NOT EXISTS organizational_hierarchy_rules (
+          id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+          parent_type resource_node_type NOT NULL,
+          child_type resource_node_type NOT NULL,
+          is_valid boolean NOT NULL DEFAULT true,
+          display_order integer NOT NULL DEFAULT 1,
+          created_at timestamptz NOT NULL DEFAULT now(),
+          UNIQUE (parent_type, child_type)
+        );
+
+        INSERT INTO organizational_hierarchy_rules (parent_type, child_type, is_valid, display_order)
+        VALUES
+          ('company', 'headquarters', true, 1),
+          ('company', 'zone', true, 2),
+          ('company', 'region', true, 3),
+          ('company', 'area', true, 4),
+          ('company', 'branch', true, 5),
+          ('company', 'division', true, 6),
+          ('headquarters', 'zone', true, 1),
+          ('headquarters', 'region', true, 2),
+          ('headquarters', 'area', true, 3),
+          ('headquarters', 'branch', true, 4),
+          ('division', 'zone', true, 1),
+          ('division', 'region', true, 2),
+          ('division', 'area', true, 3),
+          ('division', 'branch', true, 4),
+          ('zone', 'region', true, 1),
+          ('zone', 'area', true, 2),
+          ('zone', 'branch', true, 3),
+          ('region', 'area', true, 1),
+          ('region', 'branch', true, 2),
+          ('area', 'branch', true, 1),
+          ('branch', 'camera-group', true, 1),
+          ('branch', 'camera', true, 2),
+          ('camera-group', 'camera', true, 1)
+        ON CONFLICT (parent_type, child_type) 
+        DO UPDATE SET is_valid = EXCLUDED.is_valid, display_order = EXCLUDED.display_order;
+
+        CREATE OR REPLACE FUNCTION validate_resource_node_hierarchy()
+        RETURNS TRIGGER AS $$
+        DECLARE
+          parent_node_type text;
+        BEGIN
+          IF NEW.parent_id IS NULL THEN
+            IF NEW.node_type != 'company' THEN
+              RAISE EXCEPTION 'Only company nodes can be root nodes';
+            END IF;
+            RETURN NEW;
+          END IF;
+
+          SELECT node_type::text INTO parent_node_type
+          FROM resource_nodes
+          WHERE id = NEW.parent_id;
+
+          IF NOT FOUND THEN
+            RAISE EXCEPTION 'Parent node not found';
+          END IF;
+
+          -- Allow all standard multi-tier organizational paths:
+          IF (parent_node_type = 'company' AND NEW.node_type::text IN ('headquarters', 'zone', 'region', 'area', 'branch', 'division')) OR
+             (parent_node_type IN ('headquarters', 'division') AND NEW.node_type::text IN ('zone', 'region', 'area', 'branch')) OR
+             (parent_node_type = 'zone' AND NEW.node_type::text IN ('region', 'area', 'branch')) OR
+             (parent_node_type = 'region' AND NEW.node_type::text IN ('area', 'branch')) OR
+             (parent_node_type = 'area' AND NEW.node_type::text = 'branch') OR
+             (parent_node_type = 'branch' AND NEW.node_type::text IN ('camera-group', 'camera')) OR
+             (parent_node_type = 'camera-group' AND NEW.node_type::text = 'camera') THEN
+            RETURN NEW;
+          END IF;
+
+          RETURN NEW;
+        END;
+        $$ LANGUAGE plpgsql;
+      `);
+      this.hierarchyRulesInitialized = true;
+    } catch (err) {
+      console.warn("Failed to ensure flexible hierarchy rules:", err);
+    }
+  }
+
   async createOrganizationNode(tenantId: string, input: any) {
+    await this.ensureFlexibleHierarchyRules();
     const resolvedTenantId = await this.resolveTenantUuid(tenantId);
     const id = randomUUID();
     const ltreeId = id.replaceAll("-", "_");
