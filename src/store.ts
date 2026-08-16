@@ -123,6 +123,15 @@ const seedNodes: ResourceNode[] = [
 ];
 
 const seedUsers: User[] = [
+  {
+    id: "user-superadmin-mgdhanyamohan",
+    displayName: "Dhanya Mohan (Superadmin)",
+    username: "mgdhanyamohan",
+    email: "mgdhanyamohan@omsystems.bank",
+    role: "super_admin",
+    status: "active",
+    tenantId,
+  },
   { id: "user-global-admin", displayName: "Global Administrator", tenantId },
   { id: "user-south-operator", displayName: "South Region Operator", tenantId },
   { id: "user-branch-manager", displayName: "Bengaluru Branch Manager", tenantId },
@@ -153,6 +162,25 @@ const evidenceOfficerActions: Action[] = [
 ];
 
 const seedGrants: AccessGrant[] = [
+  // Permanent Superadmin has full access across company-1
+  {
+    userId: "user-superadmin-mgdhanyamohan",
+    scopeNodeId: "company-1",
+    actions: [
+      "live:view", "audio:talk", "recording:view", "evidence:export", "ptz:operate", "alarm:acknowledge",
+      "device:configure", "user:manage", "audit:view", "org:manage",
+      "analytics:view", "analytics:configure", "alerts:acknowledge", "alerts:escalate", "analytics:export",
+      "incident:create", "incident:view", "incident:update", "incident:assign", "incident:escalate", "incident:close", "incident:reopen",
+      "investigation:view", "investigation:manage", "investigation:enhance",
+      "evidence:create", "evidence:view", "evidence:preserve", "evidence:export-package", "evidence:approve", "evidence:share",
+      "evidence:legal-hold", "evidence:release-hold",
+      "police:update", "insurance:update", "incident-report:approve",
+      "face:view", "face:enrol", "face:manage-watchlist",
+      "anpr:view", "anpr:search", "anpr:manage-watchlist",
+      "behavior:view",
+    ],
+    effect: "allow",
+  },
   // Global admin has full access
   { 
     userId: "user-global-admin", 

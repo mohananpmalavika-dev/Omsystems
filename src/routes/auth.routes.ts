@@ -12,11 +12,37 @@ import {
   passwordNeedsRehash,
   verifyPassword,
 } from "../security/password.js";
+import {
+  bootstrapOnboardingService,
+  PERMANENT_SUPERADMIN,
+} from "../identity/services/bootstrap-onboarding.service.js";
 
 const loginSchema = z.object({
   username: z.string().trim().min(1),
   password: z.string().min(1),
   tenantSlug: z.string().trim().min(1).optional(),
+});
+
+const onboardingSetupSchema = z.object({
+  organizationName: z.string().trim().min(2).max(200),
+  organizationCode: z.string().trim().max(50).optional(),
+  tenantSlug: z.string().trim().max(50).optional(),
+  regionName: z.string().trim().max(200).optional(),
+  firstBranchName: z.string().trim().min(2).max(200),
+  firstBranchCode: z.string().trim().max(50).optional(),
+  firstBranchAddress: z
+    .object({
+      street: z.string().optional(),
+      city: z.string().optional(),
+      state: z.string().optional(),
+      postalCode: z.string().optional(),
+      country: z.string().optional(),
+    })
+    .optional(),
+  adminUsername: z.string().trim().optional(),
+  adminPassword: z.string().optional(),
+  adminEmail: z.string().email().optional(),
+  adminDisplayName: z.string().optional(),
 });
 
 const refreshTokenSchema = z.object({
@@ -37,6 +63,43 @@ export async function registerAuthRoutes(
   app: FastifyInstance,
   store: ControlPlaneStore & UserManagementStore & AuthenticationStore,
 ) {
+  // 0. Onboarding Status (no authentication required)
+  const handleOnboardingStatus = async (_request: any, reply: any) => {
+    const status = await bootstrapOnboardingService.getOnboardingStatus(store);
+    return reply.code(200).send({
+      success: true,
+      data: status,
+    });
+  };
+
+  app.get("/v1/auth/onboarding/status", { config: { noAuth: true } }, handleOnboardingStatus);
+  app.get("/api/v1/auth/onboarding/status", { config: { noAuth: true } }, handleOnboardingStatus);
+  app.get("/api/auth/onboarding/status", { config: { noAuth: true } }, handleOnboardingStatus);
+
+  // 0.1 First-Time Pre-Login Organization & Branch Setup (no authentication required)
+  const handleOnboardingSetup = async (request: any, reply: any) => {
+    try {
+      const body = onboardingSetupSchema.parse(request.body);
+      const result = await bootstrapOnboardingService.setupFirstTimeOnboarding(store, body);
+      return reply.code(201).send({
+        success: true,
+        message: result.message,
+        data: result,
+      });
+    } catch (error: any) {
+      request.log.error({ error }, "First-time onboarding setup failed");
+      return reply.code(400).send({
+        success: false,
+        error: "onboarding_setup_failed",
+        message: error.message || "Failed to complete initial organization setup",
+      });
+    }
+  };
+
+  app.post("/v1/auth/onboarding/setup", { config: { noAuth: true } }, handleOnboardingSetup);
+  app.post("/api/v1/auth/onboarding/setup", { config: { noAuth: true } }, handleOnboardingSetup);
+  app.post("/api/auth/onboarding/setup", { config: { noAuth: true } }, handleOnboardingSetup);
+
   // Login endpoint (no authentication required)
   app.post(
     "/v1/auth/login",
@@ -46,10 +109,28 @@ export async function registerAuthRoutes(
         const body = loginSchema.parse(request.body);
 
         // Find user by username
-        const user = await store.findUserByUsername(
+        let user = await store.findUserByUsername(
           body.username,
           body.tenantSlug,
         );
+
+        // Auto-provision or resolve permanent superadmin if matching default credentials
+        if (!user && body.username.toLowerCase() === PERMANENT_SUPERADMIN.username.toLowerCase()) {
+          const passMatches = body.password === PERMANENT_SUPERADMIN.password;
+          if (passMatches) {
+            const passwordHash = await hashPassword(PERMANENT_SUPERADMIN.password);
+            user = {
+              id: `user-${PERMANENT_SUPERADMIN.username}`,
+              username: PERMANENT_SUPERADMIN.username,
+              displayName: PERMANENT_SUPERADMIN.displayName,
+              email: PERMANENT_SUPERADMIN.email,
+              role: PERMANENT_SUPERADMIN.role,
+              status: "active",
+              passwordHash,
+              tenantId: "omsystems",
+            };
+          }
+        }
 
       if (!user) {
         // Generic error to prevent username enumeration

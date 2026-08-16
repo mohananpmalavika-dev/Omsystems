@@ -41,6 +41,7 @@ import { registerOnDemandMediaRoutes } from "./routes/on-demand-media.routes.js"
 import { registerAiAlertsRoutes } from "./routes/ai-alerts.routes.js";
 import { registerAlertIncidentsRoutes } from "./routes/alert-incidents.routes.js";
 import { registerPerformanceBenchmarkRoutes } from "./routes/performance-benchmarks.routes.js";
+import { registerEdgeTelemetryRoutes } from "./routes/edge-telemetry.routes.js";
 import { registerCctvInfrastructureRoutes } from "./routes/cctv-infrastructure.js";
 import { registerOrganizationRoutes } from "./routes/organization.routes.js";
 import { registerBranchLifecycleRoutes } from "./routes/branch-lifecycle.routes.js";
@@ -2548,6 +2549,14 @@ export async function buildApp(options?: {
     app.log.info('Capacity benchmark and SLO performance routes registered');
   } catch (err: unknown) {
     app.log.error({ err }, 'failed to register performance benchmark routes');
+  }
+
+  // Register Edge Telemetry Ingestion routes
+  try {
+    await registerEdgeTelemetryRoutes(app);
+    app.log.info('Edge telemetry ingestion and agent liveness routes registered');
+  } catch (err: unknown) {
+    app.log.error({ err }, 'failed to register edge telemetry routes');
   }
 
   // Register First-Class Evidence-Driven Branch Internet & WAN Connectivity routes

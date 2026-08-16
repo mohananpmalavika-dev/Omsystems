@@ -8,3 +8,4 @@ export * from './verified-external-identity.js';
 export * from './authenticated-principal.js';
 export * from './identity-provider.js';
 export * from './auth-errors.js';
+export * from './onboarding.types.js';
