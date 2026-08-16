@@ -139,6 +139,7 @@ export const navigation: NavGroup[] = [
     label: "ADMINISTRATION",
     icon: UserRoundCog,
     items: [
+      { label: "Database Tables & Data", href: "/admin/database", icon: Database },
       { label: "Branch Onboarding", href: "/admin/branch-onboarding", icon: Building2, badge: "cameras" },
       { label: "Device Registry", href: "/maintenance/device-management", icon: SlidersHorizontal },
       { label: "Notification Policies", href: "/operations/alert-notification-policy", icon: SlidersHorizontal },

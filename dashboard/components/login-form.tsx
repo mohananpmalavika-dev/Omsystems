@@ -119,50 +119,31 @@ function LoginFormInner({ onSuccess }: LoginFormProps) {
 
     try {
       const response = await authApi.login(
-        formData.username,
+        formData.username.trim(),
         formData.password,
-        formData.tenantSlug || undefined
+        formData.tenantSlug.trim() || undefined
       );
 
-      if (response.user.mustChangePassword) {
+      if ((response as any)?.mustChangePassword) {
         setMustChangePassword(true);
+        setInfo("You must change your password before continuing.");
         setLoading(false);
         return;
       }
 
-      // Successful login - activity tracking will start automatically via ActivityMonitor
-      console.log('[LoginForm] Login successful, redirecting to dashboard');
       resetLocalEdgeAutostart();
-      
       if (onSuccess) {
         onSuccess();
       } else {
         router.push("/");
       }
     } catch (err: any) {
-      if (err.statusCode === 403) {
-        if (err.details?.error === "account_locked") {
-          setError(
-            "Your account has been locked due to too many failed login attempts. Please try again later or contact support."
-          );
-        } else if (err.details?.error === "account_suspended") {
-          setError(
-            "Your account has been suspended. Please contact your administrator."
-          );
-        } else if (err.details?.error === "account_inactive") {
-          setError(
-            "Your account is inactive. Please contact your administrator."
-          );
-        } else {
-          setError(err.message || "Access denied");
-        }
-      } else if (err.statusCode === 429) {
-        setError(
-          "Too many login attempts. Please wait a few minutes and try again."
-        );
-      } else {
-        setError(err.message || "Invalid username or password");
-      }
+      console.error("Login failed:", err);
+      setError(
+        err.response?.data?.message ||
+        err.message ||
+        "Invalid username or password"
+      );
     } finally {
       setLoading(false);
     }
@@ -170,14 +151,14 @@ function LoginFormInner({ onSuccess }: LoginFormProps) {
 
   const handlePasswordChange = async (e: React.FormEvent) => {
     e.preventDefault();
-
+    
     if (newPassword !== confirmPassword) {
       setError("Passwords do not match");
       return;
     }
 
     if (newPassword.length < 8) {
-      setError("Password must be at least 8 characters");
+      setError("Password must be at least 8 characters long");
       return;
     }
 
@@ -185,37 +166,37 @@ function LoginFormInner({ onSuccess }: LoginFormProps) {
     setError(null);
 
     try {
-      const user = JSON.parse(localStorage.getItem("user") || "{}");
-      await authApi.changePassword(user.id, formData.password, newPassword);
-
-      // Re-login with new password
-      await authApi.login(
-        formData.username,
-        newPassword,
-        formData.tenantSlug || undefined
+      const user = JSON.parse(localStorage.getItem('user') || '{}');
+      await authApi.changePassword(
+        user.id || 'me',
+        formData.password,
+        newPassword
       );
-      resetLocalEdgeAutostart();
 
+      setMustChangePassword(false);
+      resetLocalEdgeAutostart();
       if (onSuccess) {
         onSuccess();
       } else {
         router.push("/");
       }
     } catch (err: any) {
-      setError(err.message || "Failed to change password");
+      console.error("Password change failed:", err);
+      setError(
+        err.response?.data?.message ||
+        err.message ||
+        "Failed to change password"
+      );
     } finally {
       setLoading(false);
     }
   };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setFormData((prev) => ({
-      ...prev,
+    setFormData({
+      ...formData,
       [e.target.name]: e.target.value,
-    }));
-    // Clear error and info when user starts typing
-    if (error) setError(null);
-    if (info) setInfo(null);
+    });
   };
 
   if (mustChangePassword) {
@@ -225,9 +206,11 @@ function LoginFormInner({ onSuccess }: LoginFormProps) {
           <div className="login-header">
             <div className="login-brand">
               <ShieldCheck size={32} className="brand-icon" />
-              <h1>Sentinel Grid</h1>
+              <h1>Change Password</h1>
             </div>
-            <p className="login-subtitle">Change Your Password</p>
+            <p className="login-subtitle">
+              Please set a new password for your account
+            </p>
           </div>
 
           {error && (
@@ -237,51 +220,43 @@ function LoginFormInner({ onSuccess }: LoginFormProps) {
             </div>
           )}
 
-          <form onSubmit={handlePasswordChange} className="login-form">
-            <div className="form-info-banner">
-              <AlertCircle size={16} />
-              <p>
-                For security reasons, you must change your password before
-                continuing.
-              </p>
+          {info && (
+            <div className="login-info">
+              <Info size={16} />
+              <span>{info}</span>
             </div>
+          )}
 
+          <form onSubmit={handlePasswordChange} className="login-form">
             <div className="form-group">
               <label htmlFor="newPassword">New Password</label>
-              <div className="password-input-wrapper">
-                <input
-                  type={showPassword ? "text" : "password"}
-                  id="newPassword"
-                  name="newPassword"
-                  value={newPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
-                  required
-                  minLength={8}
-                  placeholder="At least 8 characters"
-                  disabled={loading}
-                />
-                <button
-                  type="button"
-                  className="password-toggle-btn"
-                  onClick={() => setShowPassword(!showPassword)}
-                  tabIndex={-1}
-                  aria-label={showPassword ? "Hide password" : "Show password"}
-                >
-                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-                </button>
-              </div>
+              <input
+                type="password"
+                id="newPassword"
+                name="newPassword"
+                className="login-input"
+                style={{ color: "#0f172a", backgroundColor: "#ffffff", caretColor: "#0f172a" }}
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                required
+                placeholder="Enter new password"
+                disabled={loading}
+                autoFocus
+              />
             </div>
 
             <div className="form-group">
-              <label htmlFor="confirmPassword">Confirm New Password</label>
+              <label htmlFor="confirmPassword">Confirm Password</label>
               <input
-                type={showPassword ? "text" : "password"}
+                type="password"
                 id="confirmPassword"
                 name="confirmPassword"
+                className="login-input"
+                style={{ color: "#0f172a", backgroundColor: "#ffffff", caretColor: "#0f172a" }}
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 required
-                placeholder="Re-enter new password"
+                placeholder="Confirm new password"
                 disabled={loading}
               />
             </div>
@@ -291,7 +266,7 @@ function LoginFormInner({ onSuccess }: LoginFormProps) {
               className="login-button"
               disabled={loading}
             >
-              {loading ? "Changing Password..." : "Change Password"}
+              {loading ? "Updating..." : "Update Password & Continue"}
             </button>
           </form>
         </div>
@@ -344,6 +319,8 @@ function LoginFormInner({ onSuccess }: LoginFormProps) {
               type="text"
               id="username"
               name="username"
+              className="login-input"
+              style={{ color: "#0f172a", backgroundColor: "#ffffff", caretColor: "#0f172a" }}
               value={formData.username}
               onChange={handleChange}
               required
@@ -361,6 +338,8 @@ function LoginFormInner({ onSuccess }: LoginFormProps) {
                 type={showPassword ? "text" : "password"}
                 id="password"
                 name="password"
+                className="login-input"
+                style={{ color: "#0f172a", backgroundColor: "#ffffff", caretColor: "#0f172a" }}
                 value={formData.password}
                 onChange={handleChange}
                 required
@@ -389,6 +368,8 @@ function LoginFormInner({ onSuccess }: LoginFormProps) {
               type="text"
               id="tenantSlug"
               name="tenantSlug"
+              className="login-input"
+              style={{ color: "#0f172a", backgroundColor: "#ffffff", caretColor: "#0f172a" }}
               value={formData.tenantSlug}
               onChange={handleChange}
               placeholder="Leave blank if not required"

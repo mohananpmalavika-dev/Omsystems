@@ -3745,33 +3745,63 @@ button, a { -webkit-tap-highlight-color: transparent; }
 .login-form .form-group label { color: #334155 !important; font-size: 11px !important; font-weight: 650 !important; margin-bottom: 6px !important; display: block !important; }
 .login-form input[type="text"],
 .login-form input[type="password"],
-.login-form input[type="email"] {
+.login-form input[type="email"],
+.login-input {
   width: 100% !important;
   height: 44px !important;
   border-radius: 10px !important;
   border: 1.5px solid #cbd5e1 !important;
-  background: #ffffff !important;
+  background-color: #ffffff !important;
   color: #0f172a !important;
+  -webkit-text-fill-color: #0f172a !important;
+  caret-color: #0f172a !important;
   font-size: 14px !important;
   font-weight: 500 !important;
   padding: 0 14px !important;
   transition: border-color 0.15s ease, box-shadow 0.15s ease !important;
 }
+.password-input-wrapper {
+  position: relative;
+  width: 100%;
+}
+.password-input-wrapper input {
+  padding-right: 42px !important;
+  color: #0f172a !important;
+  -webkit-text-fill-color: #0f172a !important;
+  background-color: #ffffff !important;
+  caret-color: #0f172a !important;
+}
+.password-input-wrapper input[type="password"] {
+  letter-spacing: 0.12em;
+}
 .login-form input[type="text"]:focus,
 .login-form input[type="password"]:focus,
-.login-form input[type="email"]:focus {
+.login-form input[type="email"]:focus,
+.login-input:focus {
   border-color: #2563eb !important;
   outline: none !important;
   box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.18) !important;
   color: #0f172a !important;
+  -webkit-text-fill-color: #0f172a !important;
+}
+.login-form input:-webkit-autofill,
+.login-form input:-webkit-autofill:hover, 
+.login-form input:-webkit-autofill:focus, 
+.login-form input:-webkit-autofill:active {
+  -webkit-box-shadow: 0 0 0 30px #ffffff inset !important;
+  -webkit-text-fill-color: #0f172a !important;
+  box-shadow: 0 0 0 30px #ffffff inset !important;
+  caret-color: #0f172a !important;
 }
 .login-form input::placeholder {
   color: #94a3b8 !important;
+  -webkit-text-fill-color: #94a3b8 !important;
   opacity: 1 !important;
 }
 .password-toggle-btn {
-  position: absolute; right: 5px; top: 7px; width: 31px; height: 29px;
+  position: absolute; right: 8px; top: 8px; width: 28px; height: 28px;
   display: grid; place-items: center; border: 0; background: transparent; color: #64748b !important;
+  cursor: pointer; z-index: 2;
 }
 .password-toggle-btn:hover {
   color: #0f172a !important;

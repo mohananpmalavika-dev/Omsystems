@@ -58,6 +58,7 @@ import { registerBulkUploadRoutes } from "./routes/bulk-upload.routes.js";
 import { registerAnalyticsPhase2Routes } from "./routes/analytics-phase2.routes.js";
 import { adminCameraManagementRoutes } from "./routes/admin-camera-management.routes.js";
 import { registerIncidentsRoutes } from "./routes/incidents.routes.js";
+import { registerAdminDatabaseRoutes } from "./routes/admin-database.routes.js";
 import { registerAuditRoutes } from "./routes/audit.routes.js";
 import { registerComplianceRoutes } from "./routes/compliance.routes.js";
 import { registerComplianceEnhancedRoutes } from "./routes/compliance-enhanced.routes.js";
@@ -2555,6 +2556,14 @@ export async function buildApp(options?: {
     app.log.info('Capacity benchmark and SLO performance routes registered');
   } catch (err: unknown) {
     app.log.error({ err }, 'failed to register performance benchmark routes');
+  }
+
+  // Register Admin Database & Table Management routes
+  try {
+    await registerAdminDatabaseRoutes(app, store);
+    app.log.info('Admin database and table management routes registered');
+  } catch (err: unknown) {
+    app.log.error({ err }, 'failed to register admin database routes');
   }
 
   // Register Edge Telemetry Ingestion routes
