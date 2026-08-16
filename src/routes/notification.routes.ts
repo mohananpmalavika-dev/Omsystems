@@ -195,4 +195,78 @@ export async function registerNotificationRoutes(app: FastifyInstance) {
 
   app.get("/api/v1/notifications/dead-letters", handleDeadLetters);
   app.get("/v1/notifications/dead-letters", handleDeadLetters);
+
+  /**
+   * POST /api/v1/notifications/test-resolution & /v1/notifications/test-resolution
+   * Diagnostic preview of recipient resolution for administrators
+   */
+  const handleTestResolution = async (request: FastifyRequest, reply: FastifyReply) => {
+    const body = request.body as any;
+    const { recipientResolver } = await import("../notifications/application/recipient-resolver.js");
+
+    const tenantId = body?.tenantId ?? "tenant-bank-01";
+    const branchId = body?.branchId ?? "branch-thrissur-14";
+    const priority = body?.priority ?? "P1";
+    const occurredAt = body?.timestamp ? new Date(body.timestamp) : new Date();
+
+    const selectors = body?.selectors ?? [
+      { type: "TENANT_ROLE", role: "HO_OPERATOR" },
+      { type: "BRANCH_ROLE", role: "BRANCH_MANAGER" },
+      { type: "REGION_ROLE", role: "REGIONAL_SECURITY_OFFICER" },
+      { type: "ON_CALL", scheduleKey: "SURVEILLANCE_AFTER_HOURS" },
+    ];
+
+    const requiredChannels = body?.channels ?? ["dashboard", "sms", "email", "voice"];
+
+    const result = await recipientResolver.resolveComprehensive({
+      context: {
+        tenantId,
+        alertId: "test-routing",
+        branchId,
+        priority,
+        alertType: "admin_test",
+        occurredAt,
+        escalationLevel: 0,
+      },
+      selectors,
+      requiredChannels,
+    });
+
+    return reply.status(200).send({
+      success: true,
+      data: {
+        branchId,
+        priority,
+        uniqueRecipientsCount: result.recipients.length,
+        recipients: result.recipients,
+        warnings: result.warnings,
+        evaluatedSelectors: result.evaluatedSelectors,
+        resolvedAt: result.resolvedAt,
+      },
+    });
+  };
+
+  app.post("/api/v1/notifications/test-resolution", handleTestResolution);
+  app.post("/v1/notifications/test-resolution", handleTestResolution);
+
+  /**
+   * GET /api/v1/notifications/readiness & /v1/notifications/readiness
+   * Preflight branch readiness audit
+   */
+  const handleReadiness = async (request: FastifyRequest, reply: FastifyReply) => {
+    const query = request.query as { tenantId?: string; branchId?: string };
+    const { recipientResolver } = await import("../notifications/application/recipient-resolver.js");
+
+    const tenantId = query?.tenantId ?? "tenant-bank-01";
+    const branchId = query?.branchId ?? "branch-thrissur-14";
+
+    const report = await recipientResolver.checkBranchReadiness(tenantId, branchId);
+    return reply.status(200).send({
+      success: true,
+      data: report,
+    });
+  };
+
+  app.get("/api/v1/notifications/readiness", handleReadiness);
+  app.get("/v1/notifications/readiness", handleReadiness);
 }

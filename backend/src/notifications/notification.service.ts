@@ -244,8 +244,7 @@ export class NotificationService implements INotificationService {
   ): Promise<ResolvedRecipient> {
     const { recipient } = request;
 
-    // For now, pass through direct addresses
-    // TODO: Implement full recipient resolution with user lookup
+    // Pass through direct addresses if supplied
     const resolved: ResolvedRecipient = {
       userId: recipient.userId,
       email: recipient.email,
@@ -254,19 +253,21 @@ export class NotificationService implements INotificationService {
       webhookUrl: recipient.webhookUrl
     };
 
-    // If userId provided but no contact info, we should look up from user table
-    if (recipient.userId && !recipient.email && !recipient.phone) {
-      // TODO: Implement user lookup
-      // const user = await this.getUserContact(recipient.userId, request.tenantId);
-      // resolved.email = user.email;
-      // resolved.phone = user.phone;
-      
-      // TODO: Load push devices
-      // const devices = await this.repository.getUserPushDevices(
-      //   recipient.userId,
-      //   request.tenantId
-      // );
-      // resolved.pushTokens = devices.map(d => d.pushToken);
+    // When userId provided, perform authoritative profile and verified endpoint lookup
+    if (recipient.userId) {
+      const { userDirectoryService } = await import("../../src/notifications/application/user-directory.service.js");
+      const profile = await userDirectoryService.getNotificationProfile(request.tenantId, recipient.userId);
+      if (profile) {
+        if (!resolved.email && profile.email?.verified && profile.email.enabled) {
+          resolved.email = profile.email.value;
+        }
+        if (!resolved.phone && profile.phone?.verified && profile.phone.enabled) {
+          resolved.phone = profile.phone.value;
+        }
+        if (resolved.pushTokens.length === 0 && profile.pushDevices.length > 0) {
+          resolved.pushTokens = profile.pushDevices.filter((d) => d.verified && d.enabled).map((d) => d.value);
+        }
+      }
     }
 
     return resolved;

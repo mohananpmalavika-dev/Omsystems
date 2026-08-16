@@ -49,6 +49,7 @@
     "test:internet:acceptance": "tsx test/internet-health/test-runner.ts",
     "test:internet:connectivity": "tsx test/internet-health/branch-connectivity-runner.ts",
     "test:alerts:operations": "tsx test/alerts/alert-operations-runner.ts",
+    "test:notifications:recipients": "tsx test/notifications/recipient-resolution-runner.ts",
     "test:hdd:collect": "tsx test/hdd-health/test-runner.ts collect",
     "test:hdd:thresholds": "tsx test/hdd-health/test-runner.ts thresholds",
     "test:hdd:parsing": "tsx test/hdd-health/test-runner.ts parsing",
