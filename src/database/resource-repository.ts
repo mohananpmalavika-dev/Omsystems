@@ -30,7 +30,32 @@ function mapNode(row: ResourceRow): ResourceNode {
 export class ResourceRepository {
   constructor(private readonly pool: Pool) {}
 
+  private async resolveTenantUuid(tenantIdOrSlug: string): Promise<string> {
+    const slug = (tenantIdOrSlug || "omsystems").trim();
+    if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(slug)) {
+      return slug;
+    }
+    const result = await this.pool.query(
+      `SELECT id::text FROM tenants WHERE slug=$1 LIMIT 1`,
+      [slug],
+    );
+    if (result.rows[0]?.id) {
+      return result.rows[0].id;
+    }
+    const inserted = await this.pool.query(
+      `INSERT INTO tenants (id, slug, name)
+       VALUES (gen_random_uuid(), $1, $2)
+       ON CONFLICT (slug) DO UPDATE SET name=EXCLUDED.name
+       RETURNING id::text`,
+      [slug, slug === "omsystems" ? "Sentinel Grid Enterprise" : slug],
+    );
+    return inserted.rows[0]!.id;
+  }
+
   async findById(id: string): Promise<ResourceNode | undefined> {
+    if (!id || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
+      return undefined;
+    }
     const result = await this.pool.query<ResourceRow>(
       `SELECT id::text, parent_id::text, tenant_id::text, node_type, name,
               path::text
@@ -41,12 +66,15 @@ export class ResourceRepository {
   }
 
   async listByIds(ids: string[]): Promise<ResourceNode[]> {
-    if (ids.length === 0) return [];
+    const validIds = ids.filter((id) =>
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id),
+    );
+    if (validIds.length === 0) return [];
     const result = await this.pool.query<ResourceRow>(
       `SELECT id::text, parent_id::text, tenant_id::text, node_type, name,
              path::text
        FROM resource_nodes WHERE id = ANY($1::uuid[])`,
-      [ids],
+      [validIds],
     );
     return result.rows.map(mapNode);
   }
@@ -56,12 +84,31 @@ export class ResourceRepository {
     action: Action,
     resourceNodeId: string,
   ): Promise<AuthorizationDecision | undefined> {
+    const role = (user.role ?? "") as string;
+    const isSuperAdmin =
+      role === "super_admin" ||
+      role === "superadmin" ||
+      role === "company_admin";
+    if (isSuperAdmin) {
+      return { allowed: true, reason: "allowed_by_grant" };
+    }
+
+    if (
+      !resourceNodeId ||
+      !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+        resourceNodeId,
+      )
+    ) {
+      return undefined;
+    }
+
+    const resolvedTenantId = await this.resolveTenantUuid(user.tenantId);
     const target = await this.pool.query<{ tenant_id: string }>(
       "SELECT tenant_id::text FROM resource_nodes WHERE id = $1",
       [resourceNodeId],
     );
     if (!target.rows[0]) return undefined;
-    if (target.rows[0].tenant_id !== user.tenantId) {
+    if (target.rows[0].tenant_id !== resolvedTenantId) {
       return { allowed: false, reason: "no_matching_grant" };
     }
 
@@ -105,7 +152,33 @@ export class ResourceRepository {
     options?: { includeArchived?: boolean },
   ): Promise<ResourceNode[]> {
     const includeArchived = options?.includeArchived ?? false;
-    
+    const resolvedTenantId = await this.resolveTenantUuid(user.tenantId);
+    const role = (user.role ?? "") as string;
+    const isSuperAdmin =
+      role === "super_admin" ||
+      role === "superadmin" ||
+      role === "company_admin";
+
+    if (isSuperAdmin) {
+      const result = await this.pool.query<ResourceRow>(
+        `SELECT DISTINCT target.id::text, target.parent_id::text,
+                target.tenant_id::text, target.node_type, target.name,
+                target.path::text
+         FROM resource_nodes target
+         WHERE target.tenant_id = $1
+           AND ($2::resource_node_type IS NULL OR target.node_type = $2)
+           AND (
+             target.node_type != 'branch' 
+             OR $3::boolean = true
+             OR target.lifecycle_status IS NULL
+             OR target.lifecycle_status IN ('ACTIVE', 'DISABLED')
+           )
+         ORDER BY target.name`,
+        [resolvedTenantId, type ?? null, includeArchived],
+      );
+      return result.rows.map(mapNode);
+    }
+
     const result = await this.pool.query<ResourceRow>(
       `SELECT DISTINCT target.id::text, target.parent_id::text,
               target.tenant_id::text, target.node_type, target.name,
@@ -145,7 +218,7 @@ export class ResourceRepository {
              AND (grant_deny.valid_until IS NULL OR grant_deny.valid_until > now())
          )
        ORDER BY target.name`,
-      [user.tenantId, user.id, action, type ?? null, includeArchived],
+      [resolvedTenantId, user.id, action, type ?? null, includeArchived],
     );
     return result.rows.map(mapNode);
   }
@@ -155,6 +228,7 @@ export class ResourceRepository {
     parentNodeId: string,
     name: string,
   ): Promise<ResourceNode> {
+    const resolvedTenantId = await this.resolveTenantUuid(tenantId);
     const result = await this.pool.query<ResourceRow>(
       `WITH parent AS (
          SELECT id, tenant_id, path
@@ -171,7 +245,7 @@ export class ResourceRepository {
        FROM parent, new_id
        RETURNING id::text, parent_id::text, tenant_id::text, node_type, name,
                  path::text`,
-      [tenantId, parentNodeId, name],
+      [resolvedTenantId, parentNodeId, name],
     );
     if (!result.rows[0]) throw new Error("invalid_parent");
     return mapNode(result.rows[0]);
@@ -181,6 +255,7 @@ export class ResourceRepository {
    * List only active branches (for operational queries)
    */
   async listActiveBranches(tenantId: string): Promise<ResourceNode[]> {
+    const resolvedTenantId = await this.resolveTenantUuid(tenantId);
     const result = await this.pool.query<ResourceRow>(
       `SELECT id::text, parent_id::text, tenant_id::text, node_type, name,
               path::text
@@ -189,7 +264,7 @@ export class ResourceRepository {
          AND node_type = 'branch'
          AND (lifecycle_status = 'ACTIVE' OR lifecycle_status IS NULL)
        ORDER BY name`,
-      [tenantId],
+      [resolvedTenantId],
     );
     return result.rows.map(mapNode);
   }
@@ -198,38 +273,34 @@ export class ResourceRepository {
    * List operational branches (active and disabled, but not archived)
    */
   async listOperationalBranches(tenantId: string): Promise<ResourceNode[]> {
+    const resolvedTenantId = await this.resolveTenantUuid(tenantId);
     const result = await this.pool.query<ResourceRow>(
       `SELECT id::text, parent_id::text, tenant_id::text, node_type, name,
               path::text
        FROM resource_nodes
        WHERE tenant_id = $1
          AND node_type = 'branch'
-         AND (lifecycle_status IN ('ACTIVE', 'DISABLED') OR lifecycle_status IS NULL)
-       ORDER BY 
-         CASE 
-           WHEN lifecycle_status = 'ACTIVE' OR lifecycle_status IS NULL THEN 0
-           ELSE 1
-         END,
-         name`,
-      [tenantId],
+         AND (lifecycle_status IS NULL OR lifecycle_status IN ('ACTIVE', 'DISABLED'))
+       ORDER BY name`,
+      [resolvedTenantId],
     );
     return result.rows.map(mapNode);
   }
 
   /**
-   * Check if a branch is active for monitoring operations
+   * List all branches including archived (for administrative and audit queries)
    */
-  async isBranchActive(branchId: string): Promise<boolean> {
-    const result = await this.pool.query<{ is_active: boolean }>(
-      `SELECT 
-        CASE 
-          WHEN lifecycle_status = 'ACTIVE' OR lifecycle_status IS NULL THEN true
-          ELSE false
-        END as is_active
+  async listAllBranches(tenantId: string): Promise<ResourceNode[]> {
+    const resolvedTenantId = await this.resolveTenantUuid(tenantId);
+    const result = await this.pool.query<ResourceRow>(
+      `SELECT id::text, parent_id::text, tenant_id::text, node_type, name,
+              path::text
        FROM resource_nodes
-       WHERE id = $1 AND node_type = 'branch'`,
-      [branchId],
+       WHERE tenant_id = $1
+         AND node_type = 'branch'
+       ORDER BY name`,
+      [resolvedTenantId],
     );
-    return result.rows[0]?.is_active ?? false;
+    return result.rows.map(mapNode);
   }
 }

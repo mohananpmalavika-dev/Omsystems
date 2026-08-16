@@ -467,6 +467,7 @@ export async function buildApp(options?: {
   const app = Fastify({
     logger: options?.logger ?? false,
     trustProxy: Boolean(options?.edgeBridgeSharedKey),
+    bodyLimit: 50 * 1024 * 1024,
   });
   const store = options?.store ?? new MemoryStore();
   const recorderService = new RecorderService(store, options?.recorderProviderResolver);

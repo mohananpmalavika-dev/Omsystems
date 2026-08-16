@@ -488,6 +488,14 @@ export class InfrastructureRepository {
   }
 
   async getUserById(id: string) {
+    if (!id) return undefined;
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
+      const result = await this.pool.query(
+        `${this.userSelect()} WHERE u.identity_subject=$1 OR lower(u.username)=lower($2) LIMIT 1`,
+        [id, id.replace(/^user-/, "")],
+      );
+      return result.rows[0] ? camelRow(result.rows[0]) : undefined;
+    }
     const result = await this.pool.query(`${this.userSelect()} WHERE u.id=$1`, [id]);
     return result.rows[0] ? camelRow(result.rows[0]) : undefined;
   }
@@ -501,7 +509,7 @@ export class InfrastructureRepository {
        FROM user_organizational_assignments uoa
        JOIN resource_nodes rn ON rn.id=uoa.scope_node_id
        WHERE uoa.user_id=$1 ORDER BY uoa.is_primary DESC, rn.name`,
-      [id],
+      [user.id],
     );
     return { ...user, organizations: camelRows(assignments.rows) };
   }

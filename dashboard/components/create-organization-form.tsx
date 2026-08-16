@@ -39,15 +39,48 @@ export function CreateOrganizationForm({ onSuccess }: CreateOrganizationFormProp
       setError("Please upload a valid image file (PNG, SVG, JPG, WebP)");
       return;
     }
-    if (file.size > 2 * 1024 * 1024) {
-      setError("Logo file size must be less than 2MB");
+    if (file.size > 10 * 1024 * 1024) {
+      setError("Logo file size must be less than 10MB");
       return;
     }
     const reader = new FileReader();
     reader.onload = (e) => {
-      const dataUrl = e.target?.result as string;
-      setLogoPreview(dataUrl);
-      setError(null);
+      const rawDataUrl = e.target?.result as string;
+      if (file.type === "image/svg+xml") {
+        setLogoPreview(rawDataUrl);
+        setError(null);
+        return;
+      }
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        const maxDimension = 320;
+        let width = img.width;
+        let height = img.height;
+        if (width > height && width > maxDimension) {
+          height = Math.round((height * maxDimension) / width);
+          width = maxDimension;
+        } else if (height > maxDimension) {
+          width = Math.round((width * maxDimension) / height);
+          height = maxDimension;
+        }
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext("2d");
+        if (ctx) {
+          ctx.drawImage(img, 0, 0, width, height);
+          const compressedDataUrl = canvas.toDataURL("image/webp", 0.85);
+          setLogoPreview(compressedDataUrl);
+        } else {
+          setLogoPreview(rawDataUrl);
+        }
+        setError(null);
+      };
+      img.onerror = () => {
+        setLogoPreview(rawDataUrl);
+        setError(null);
+      };
+      img.src = rawDataUrl;
     };
     reader.readAsDataURL(file);
   };

@@ -37,6 +37,28 @@ const ruleSelection = `
 export class AnalyticsRepository {
   constructor(private readonly pool: Pool) {}
 
+  private async resolveTenantUuid(tenantIdOrSlug: string): Promise<string> {
+    const slug = (tenantIdOrSlug || "omsystems").trim();
+    if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(slug)) {
+      return slug;
+    }
+    const result = await this.pool.query(
+      `SELECT id::text FROM tenants WHERE slug=$1 LIMIT 1`,
+      [slug],
+    );
+    if (result.rows[0]?.id) {
+      return result.rows[0].id;
+    }
+    const inserted = await this.pool.query(
+      `INSERT INTO tenants (id, slug, name)
+       VALUES (gen_random_uuid(), $1, $2)
+       ON CONFLICT (slug) DO UPDATE SET name=EXCLUDED.name
+       RETURNING id::text`,
+      [slug, slug === "omsystems" ? "Sentinel Grid Enterprise" : slug],
+    );
+    return inserted.rows[0]!.id;
+  }
+
   async listRules(cameraId: string): Promise<AnalyticsRule[]> {
     const result = await this.pool.query(
       `${ruleSelection}
@@ -325,6 +347,7 @@ export class AnalyticsRepository {
   }
 
   async listAlerts(tenantId: string, filters: AnalyticsAlertFilters): Promise<AnalyticsAlert[]> {
+    const resolvedTenantId = await this.resolveTenantUuid(tenantId);
     const result = await this.pool.query(
       `SELECT alert.* FROM analytics_alerts alert
        JOIN cameras camera ON camera.id=alert.camera_id
@@ -336,7 +359,7 @@ export class AnalyticsRepository {
          AND ($6::timestamptz IS NULL OR alert.last_detected_at >= $6)
          AND ($7::timestamptz IS NULL OR alert.first_detected_at <= $7)
        ORDER BY alert.last_detected_at DESC LIMIT $8`,
-      [tenantId, filters.cameraId ?? null, filters.branchId ?? null,
+      [resolvedTenantId, filters.cameraId ?? null, filters.branchId ?? null,
         filters.status ?? null, filters.severity ?? null, filters.from ?? null,
         filters.to ?? null, filters.limit],
     );
@@ -344,6 +367,7 @@ export class AnalyticsRepository {
   }
 
   async countAlerts(tenantId: string, filters: AnalyticsAlertFilters): Promise<Record<AnalyticsAlert["severity"], number>> {
+    const resolvedTenantId = await this.resolveTenantUuid(tenantId);
     const result = await this.pool.query(
       `SELECT
          COUNT(*) FILTER (WHERE alert.severity='P1' AND alert.status NOT IN ('resolved','false_alarm','suppressed')) AS p1,
@@ -358,7 +382,7 @@ export class AnalyticsRepository {
          AND ($3::uuid IS NULL OR camera.branch_node_id=$3)
          AND ($4::timestamptz IS NULL OR alert.last_detected_at >= $4)
          AND ($5::timestamptz IS NULL OR alert.first_detected_at <= $5)`,
-      [tenantId, filters.cameraId ?? null, filters.branchId ?? null, filters.from ?? null, filters.to ?? null],
+      [resolvedTenantId, filters.cameraId ?? null, filters.branchId ?? null, filters.from ?? null, filters.to ?? null],
     );
     const row = result.rows[0] ?? {};
     return {
@@ -375,6 +399,7 @@ export class AnalyticsRepository {
     tenantId: string,
     input: { snapshotReference?: string; clipReference?: string },
   ): Promise<AnalyticsAlert | undefined> {
+    const resolvedTenantId = await this.resolveTenantUuid(tenantId);
     const result = await this.pool.query(
       `UPDATE analytics_alerts
        SET snapshot_reference=COALESCE(snapshot_reference,$3),
@@ -389,15 +414,16 @@ export class AnalyticsRepository {
              THEN now() ELSE updated_at END
        WHERE id=$1 AND tenant_id=$2
        RETURNING *`,
-      [id, tenantId, input.snapshotReference ?? null, input.clipReference ?? null],
+      [id, resolvedTenantId, input.snapshotReference ?? null, input.clipReference ?? null],
     );
     return result.rows[0] ? mapAlert(result.rows[0]) : undefined;
   }
 
   async getAlert(id: string, tenantId: string): Promise<AnalyticsAlert | undefined> {
+    const resolvedTenantId = await this.resolveTenantUuid(tenantId);
     const result = await this.pool.query(
       "SELECT * FROM analytics_alerts WHERE id=$1 AND tenant_id=$2",
-      [id, tenantId],
+      [id, resolvedTenantId],
     );
     return result.rows[0] ? mapAlert(result.rows[0]) : undefined;
   }

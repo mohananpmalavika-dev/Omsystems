@@ -3,6 +3,50 @@ import type { Pool } from "pg";
 export class ActivityTrackingRepository {
   constructor(private pool: Pool) {}
 
+  private async resolveTenantUuid(tenantIdOrSlug: string): Promise<string> {
+    const slug = (tenantIdOrSlug || "omsystems").trim();
+    if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(slug)) {
+      return slug;
+    }
+    const result = await this.pool.query(
+      `SELECT id::text FROM tenants WHERE slug=$1 LIMIT 1`,
+      [slug],
+    );
+    if (result.rows[0]?.id) {
+      return result.rows[0].id;
+    }
+    const inserted = await this.pool.query(
+      `INSERT INTO tenants (id, slug, name)
+       VALUES (gen_random_uuid(), $1, $2)
+       ON CONFLICT (slug) DO UPDATE SET name=EXCLUDED.name
+       RETURNING id::text`,
+      [slug, slug === "omsystems" ? "Sentinel Grid Enterprise" : slug],
+    );
+    return inserted.rows[0]!.id;
+  }
+
+  private async resolveUserUuid(userId: string, tenantId: string): Promise<string> {
+    if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(userId)) {
+      return userId;
+    }
+    const username = userId.replace(/^user-/, "");
+    const userRes = await this.pool.query(
+      `SELECT id::text FROM users WHERE username=$1 OR identity_subject=$2 LIMIT 1`,
+      [username, userId],
+    );
+    if (userRes.rows[0]?.id) {
+      return userRes.rows[0].id;
+    }
+    const insUser = await this.pool.query(
+      `INSERT INTO users (id, tenant_id, identity_subject, display_name, email, username, role, status, active)
+       VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, 'super_admin', 'active', true)
+       ON CONFLICT (username) DO UPDATE SET active=true
+       RETURNING id::text`,
+      [tenantId, userId, "Dhanya Mohan (Superadmin)", "mgdhanyamohan@omsystems.bank", username],
+    );
+    return insUser.rows[0]?.id ?? "00000000-0000-0000-0000-000000000001";
+  }
+
   // ============================================
   // Session Management
   // ============================================
@@ -14,13 +58,16 @@ export class ActivityTrackingRepository {
     ipAddress: string,
     locationInfo?: any
   ): Promise<string> {
+    const resolvedTenantId = await this.resolveTenantUuid(tenantId);
+    const resolvedUserId = await this.resolveUserUuid(userId, resolvedTenantId);
+
     const result = await this.pool.query(
       `INSERT INTO user_activity_sessions (
         tenant_id, user_id, device_info, ip_address, location_info,
         session_status, login_time, last_activity_time
       ) VALUES ($1, $2, $3, $4, $5, 'active', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
       RETURNING id`,
-      [tenantId, userId, JSON.stringify(deviceInfo || {}), ipAddress, JSON.stringify(locationInfo || {})]
+      [resolvedTenantId, resolvedUserId, JSON.stringify(deviceInfo || {}), ipAddress, JSON.stringify(locationInfo || {})]
     );
     
     // Update current activity status
@@ -33,7 +80,7 @@ export class ActivityTrackingRepository {
          is_online = true,
          last_activity_time = CURRENT_TIMESTAMP,
          updated_at = CURRENT_TIMESTAMP`,
-      [userId, tenantId, result.rows[0].id]
+      [resolvedUserId, resolvedTenantId, result.rows[0].id]
     );
     
     return result.rows[0].id;

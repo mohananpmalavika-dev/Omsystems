@@ -415,8 +415,19 @@ export async function registerAuthRoutes(
 
   // Get current user info
   app.get("/v1/auth/me", async (request) => {
-    const userDetails = await store.getUserDetails(request.currentUser.id);
-    return userDetails;
+    const user = request.currentUser;
+    if (!user) {
+      return null;
+    }
+    try {
+      const userDetails =
+        typeof store.getUserDetails === "function"
+          ? await store.getUserDetails(user.id).catch(() => undefined)
+          : undefined;
+      return userDetails ?? user;
+    } catch {
+      return user;
+    }
   });
 
   // Request password reset (no authentication required)
