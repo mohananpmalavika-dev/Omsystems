@@ -27,8 +27,8 @@ export default function AlertsPage() {
       if (statusFilter !== "all") params.append("status", statusFilter);
 
       const [alertsData, engineData] = await Promise.all([
-        fetch(`/api/v1/maintenance/alerts?${params.toString()}`).then((r) => r.json()),
-        fetch("/api/v1/maintenance/alerts/engine/status").then((r) => r.json()),
+        fetch(`/api/control/v1/maintenance/alerts?${params.toString()}`, { credentials: "include" }).then((r) => (r.ok ? r.json() : { data: [] })),
+        fetch("/api/control/v1/maintenance/alerts/engine/status", { credentials: "include" }).then((r) => (r.ok ? r.json() : null)),
       ]);
 
       setAlerts(alertsData.data || []);
@@ -51,9 +51,10 @@ export default function AlertsPage() {
 
   const handleAcknowledge = async (alertId: string) => {
     try {
-      await fetch(`/api/v1/maintenance/alerts/${alertId}/acknowledge`, {
+      await fetch(`/api/control/v1/maintenance/alerts/${alertId}/acknowledge`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify({ notes: "Acknowledged from dashboard" }),
       });
 
@@ -69,9 +70,10 @@ export default function AlertsPage() {
     if (!resolution) return;
 
     try {
-      await fetch(`/api/v1/maintenance/alerts/${alertId}/resolve`, {
+      await fetch(`/api/control/v1/maintenance/alerts/${alertId}/resolve`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify({ resolution }),
       });
 

@@ -98,9 +98,10 @@ export function AIChatWithVideo({ branchId }: { branchId?: string }) {
 
     try {
       // Perform search
-      const response = await fetch("/api/v1/ai/video/search", {
+      const response = await fetch("/api/control/v1/ai/video/search", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify({
           query: inputValue,
           branchId,

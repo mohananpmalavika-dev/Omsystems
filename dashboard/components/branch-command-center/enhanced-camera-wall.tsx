@@ -193,9 +193,10 @@ function CameraTile({ camera, streamProfile, onClick }: CameraTileProps) {
 
   const startSession = async () => {
     try {
-      const res = await fetch('/api/v1/media/live-sessions', {
+      const res = await fetch('/api/control/v1/media/live-sessions', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({
           cameraId: camera.id,
           quality: streamProfile === 'main' ? 'MAIN' : 'SUB',
@@ -209,8 +210,9 @@ function CameraTile({ camera, streamProfile, onClick }: CameraTileProps) {
           setStreaming(true);
           // Schedule renewal every 240 seconds
           renewTimerRef.current = setInterval(() => {
-            fetch(`/api/v1/media/live-sessions/${encodeURIComponent(sid)}/renew`, {
+            fetch(`/api/control/v1/media/live-sessions/${encodeURIComponent(sid)}/renew`, {
               method: 'POST',
+              credentials: 'include',
             }).catch(() => undefined);
           }, 240_000);
         }
@@ -221,16 +223,18 @@ function CameraTile({ camera, streamProfile, onClick }: CameraTileProps) {
     }
   };
 
-  const terminateSession = () => {
+  const terminateSession = async () => {
     if (renewTimerRef.current) {
       clearInterval(renewTimerRef.current);
       renewTimerRef.current = null;
     }
     if (sessionId) {
-      fetch(`/api/v1/media/live-sessions/${encodeURIComponent(sessionId)}`, {
-        method: 'DELETE',
+      fetch(`/api/control/v1/media/live-sessions/${encodeURIComponent(sessionId)}/terminate`, {
+        method: 'POST',
+        credentials: 'include',
       }).catch(() => undefined);
       setSessionId(null);
+      setStreaming(false);
     }
   };
 

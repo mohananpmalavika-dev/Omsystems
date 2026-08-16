@@ -47,36 +47,49 @@ export function CameraRetentionDetailModal({
   isOpen,
   onClose,
   cameraId,
-  cameraName = "CAM04",
-  branchName = "Thrissur 04 — Round North",
-  assessment,
+  cameraName = "Camera",
+  branchName = "Branch",
+  assessment: initialAssessment,
 }: CameraRetentionDetailModalProps) {
+  const [assessmentData, setAssessmentData] = React.useState<any>(initialAssessment || null);
+  const [loading, setLoading] = React.useState(!initialAssessment);
+
+  React.useEffect(() => {
+    if (!isOpen || !cameraId) return;
+    if (initialAssessment) {
+      setAssessmentData(initialAssessment);
+      return;
+    }
+    setLoading(true);
+    fetch(`/api/control/v1/cameras/${encodeURIComponent(cameraId)}/retention/evidence`, {
+      credentials: "include",
+    })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((json) => {
+        if (json?.data?.assessment) {
+          setAssessmentData(json.data.assessment);
+        }
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [isOpen, cameraId, initialAssessment]);
+
   if (!isOpen) return null;
 
-  const isCritical = assessment?.state === "CRITICAL" || cameraId.includes("04") || cameraId.includes("08");
-  const isUnknown = assessment?.state === "UNKNOWN" || cameraId.includes("05");
-
-  const data = assessment ?? {
+  const data = assessmentData ?? {
     requiredRetentionDays: 90,
-    actualRetentionDays: isUnknown ? undefined : isCritical ? 61.4 : 91.5,
-    projectedRetentionDays: isUnknown ? undefined : isCritical ? 59.0 : 92.0,
-    daysUntilPolicyViolation: isCritical ? 0 : undefined,
-    coveragePercent: isUnknown ? undefined : isCritical ? 98.4 : 99.9,
-    state: isUnknown ? "UNKNOWN" : isCritical ? "CRITICAL" : "HEALTHY",
-    complianceState: isUnknown ? "UNKNOWN" : isCritical ? "VIOLATION" : "COMPLIANT",
-    riskState: isUnknown ? "UNKNOWN" : isCritical ? "IMMINENT" : "STABLE",
-    reason: isUnknown ? "INSUFFICIENT_EVIDENCE" : isCritical ? "SEVERE_RETENTION_SHORTFALL" : "MEETS_POLICY",
-    confidence: isUnknown ? 0.2 : 0.98,
-    evidenceAgreement: "AGREED",
+    actualRetentionDays: undefined,
+    projectedRetentionDays: undefined,
+    daysUntilPolicyViolation: undefined,
+    coveragePercent: undefined,
+    state: "UNKNOWN",
+    complianceState: "UNKNOWN",
+    riskState: "UNKNOWN",
+    reason: "INSUFFICIENT_EVIDENCE",
+    confidence: 0.0,
+    evidenceAgreement: "NO_EVIDENCE",
     evaluatedAt: new Date().toISOString(),
-    recordingWindow: isUnknown
-      ? undefined
-      : {
-          oldestRecordingAt: new Date(Date.now() - (isCritical ? 61.4 : 91.5) * 86400000).toISOString(),
-          newestRecordingAt: new Date().toISOString(),
-          archiveSpanDays: isCritical ? 61.4 : 91.5,
-          latestRecordingAgeMinutes: 2,
-        },
+    recordingWindow: undefined,
   };
 
   const stateColors = {
@@ -116,7 +129,7 @@ export function CameraRetentionDetailModal({
         {/* Content Body */}
         <div className="p-6 space-y-5 max-h-[75vh] overflow-y-auto font-sans">
           {/* Status & Compliance Banner */}
-          <div className={`p-4 rounded-xl border flex items-center justify-between ${stateColors[data.state]}`}>
+          <div className={`p-4 rounded-xl border flex items-center justify-between ${stateColors[data.state as keyof typeof stateColors] || stateColors.UNKNOWN}`}>
             <div className="flex items-center gap-3">
               {data.state === "HEALTHY" ? (
                 <CheckCircle2 className="h-7 w-7 text-emerald-400" />

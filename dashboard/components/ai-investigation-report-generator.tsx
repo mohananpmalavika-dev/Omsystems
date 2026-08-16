@@ -54,16 +54,19 @@ export function AIInvestigationReportGenerator({ incidentId }: { incidentId: str
   const generateReport = async () => {
     setGenerating(true);
     try {
-      const response = await fetch("/api/v1/ai/investigation-reports", {
+      const response = await fetch("/api/control/v1/ai/investigation-reports", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify({
           incidentId,
           reportType: selectedReportType,
         }),
       });
-      const data = await response.json();
-      setReport(data);
+      if (response.ok) {
+        const data = await response.json();
+        setReport(data);
+      }
     } catch (error) {
       console.error("Failed to generate report:", error);
     } finally {
@@ -76,7 +79,8 @@ export function AIInvestigationReportGenerator({ incidentId }: { incidentId: str
     
     try {
       const response = await fetch(
-        `/api/v1/ai/investigation-reports/${report.id}/export?format=${format}`
+        `/api/control/v1/ai/investigation-reports/${report.id}/export?format=${format}`,
+        { credentials: "include" }
       );
       const blob = await response.blob();
       const url = window.URL.createObjectURL(blob);

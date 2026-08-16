@@ -112,31 +112,37 @@ export function UnifiedIncidentWorkflow({ incidentId }: IncidentWorkflowProps) {
   const startSOP = async () => {
     try {
       // Select appropriate SOP
-      const selectResponse = await fetch("/api/v1/ai/sops/select", {
+      const selectResponse = await fetch("/api/control/v1/ai/sops/select", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify({
           incidentType: incident?.incidentType,
           severity: incident?.severity,
           context: { branchId: incident?.branchId },
         }),
       });
-      const sop = await selectResponse.json();
+      if (selectResponse.ok) {
+        const sop = await selectResponse.json();
 
-      if (sop) {
-        // Start SOP execution
-        const execResponse = await fetch("/api/v1/ai/sop-executions", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            sopId: sop.id,
-            incidentId,
-            branchId: incident?.branchId,
-          }),
-        });
-        const execution = await execResponse.json();
-        setSopExecution(execution);
-        setActiveTab("sop");
+        if (sop) {
+          // Start SOP execution
+          const execResponse = await fetch("/api/control/v1/ai/sop-executions", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            credentials: "include",
+            body: JSON.stringify({
+              sopId: sop.id,
+              incidentId,
+              branchId: incident?.branchId,
+            }),
+          });
+          if (execResponse.ok) {
+            const execution = await execResponse.json();
+            setSopExecution(execution);
+            setActiveTab("sop");
+          }
+        }
       }
     } catch (error) {
       console.error("Failed to start SOP:", error);

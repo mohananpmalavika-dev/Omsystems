@@ -2463,7 +2463,7 @@ export async function buildApp(options?: {
 
   // Register First-Class Retention Compliance Subsystem routes
   try {
-    await registerRetentionRoutes(app);
+    await registerRetentionRoutes(app, store);
     app.log.info('Retention compliance subsystem routes registered');
   } catch (err: unknown) {
     app.log.error({ err }, 'failed to register retention compliance routes');

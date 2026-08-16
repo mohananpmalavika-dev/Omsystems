@@ -7,12 +7,16 @@ export function HlsPlayer({
   url,
   bearerToken,
   cameraName,
+  muted = true,
+  volume = 1.0,
   onPlaybackError,
   onVideoElementChange,
 }: {
   url: string;
   bearerToken: string;
   cameraName: string;
+  muted?: boolean;
+  volume?: number;
   onPlaybackError?: () => void;
   onVideoElementChange?: (videoElement: HTMLVideoElement | null) => void;
 }) {
@@ -24,6 +28,13 @@ export function HlsPlayer({
   useEffect(() => {
     playbackErrorRef.current = onPlaybackError;
   }, [onPlaybackError]);
+
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+    video.muted = muted;
+    video.volume = volume;
+  }, [muted, volume]);
 
   useEffect(() => {
     const video = videoRef.current;
@@ -218,7 +229,7 @@ export function HlsPlayer({
       ref={videoRef}
       className="live-video"
       aria-label={`Live video from ${cameraName}`}
-      muted
+      muted={muted}
       playsInline
       autoPlay
     />

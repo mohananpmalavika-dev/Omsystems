@@ -145,17 +145,20 @@ export function AIIncidentSummaryDashboard() {
 
   const loadClusters = async () => {
     try {
-      const response = await fetch("/api/v1/ai/incidents/correlate", {
+      const response = await fetch("/api/control/v1/ai/incidents/correlate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify({
           from: new Date(new Date().setHours(0, 0, 0, 0)).toISOString(),
           to: new Date().toISOString(),
           limit: 100,
         }),
       });
-      const data = await response.json();
-      setClusters(data.clusters || []);
+      if (response.ok) {
+        const data = await response.json();
+        setClusters(data.clusters || []);
+      }
     } catch (error) {
       console.error("Failed to load clusters:", error);
     }

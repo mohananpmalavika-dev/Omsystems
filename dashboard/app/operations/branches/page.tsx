@@ -25,10 +25,15 @@ export default function FleetBranchesPage() {
   const loadBranches = async () => {
     setLoading(true);
     try {
-      const res = await fetch("/api/v1/operations/branches");
-      const data = await res.json();
-      if (data.success) {
-        setBranches(data.data);
+      const res = await fetch("/api/control/v1/operations/health/branches?limit=200", {
+        credentials: "include",
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success) {
+          const list = data.data?.branches || (Array.isArray(data.data) ? data.data : []);
+          setBranches(list);
+        }
       }
     } catch (err) {
       console.error("Failed to load branches:", err);

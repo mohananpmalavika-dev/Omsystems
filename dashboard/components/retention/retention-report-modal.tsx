@@ -45,66 +45,39 @@ export interface RetentionReportModalProps {
 export function RetentionReportModal({
   isOpen,
   onClose,
-  report,
+  report: initialReport,
 }: RetentionReportModalProps) {
+  const [reportData, setReportData] = React.useState<any>(initialReport || null);
+  const [loading, setLoading] = React.useState(!initialReport);
+
+  React.useEffect(() => {
+    if (!isOpen) return;
+    if (initialReport) {
+      setReportData(initialReport);
+      return;
+    }
+    setLoading(true);
+    fetch("/api/control/v1/retention/reports/daily", { credentials: "include" })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((json) => {
+        if (json?.data) setReportData(json.data);
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [isOpen, initialReport]);
+
   if (!isOpen) return null;
 
-  const data = report ?? {
+  const data = reportData ?? {
     date: new Date().toISOString().split("T")[0],
-    totalBranches: 400,
-    fullyCompliant: 351,
-    atRisk: 19,
-    retentionViolations: 17,
-    criticalViolations: 8,
-    unableToVerify: 5,
-    worstOffenders: [
-      {
-        branchId: "branch-204",
-        branchName: "Thrissur 04 — Round North",
-        requiredDays: 90,
-        actualDays: 61.0,
-        deficitDays: 29.0,
-        state: "CRITICAL",
-      },
-      {
-        branchId: "branch-178",
-        branchName: "Aluva Central — Bank Square",
-        requiredDays: 90,
-        actualDays: 61.4,
-        deficitDays: 28.6,
-        state: "CRITICAL",
-      },
-      {
-        branchId: "branch-111",
-        branchName: "Kottayam 11 — Collectorate Jn",
-        requiredDays: 90,
-        actualDays: 66.0,
-        deficitDays: 24.0,
-        state: "CRITICAL",
-      },
-      {
-        branchId: "branch-013",
-        branchName: "Kochi 13 — Marine Drive",
-        requiredDays: 90,
-        actualDays: 72.0,
-        deficitDays: 18.0,
-        state: "VIOLATION",
-      },
-    ],
-    predictedViolations7Days: [
-      {
-        branchId: "branch-102",
-        branchName: "Kochi 02 — Palarivattom",
-        predictedDays: 87.0,
-        daysUntilViolation: 2,
-      },
-      {
-        branchId: "branch-055",
-        branchName: "Calicut 05 — Mavoor Road",
-        predictedDays: 88.5,
-        daysUntilViolation: 4,
-      },
-    ],
+    totalBranches: 0,
+    fullyCompliant: 0,
+    atRisk: 0,
+    retentionViolations: 0,
+    criticalViolations: 0,
+    unableToVerify: 0,
+    worstOffenders: [],
+    predictedViolations7Days: [],
   };
 
   return (
@@ -174,7 +147,7 @@ export function RetentionReportModal({
                 <div className="col-span-2 text-center">Actual</div>
                 <div className="col-span-3 text-right">Deficit</div>
               </div>
-              {data.worstOffenders.map((o) => (
+              {data.worstOffenders.map((o: any) => (
                 <div key={o.branchId} className="grid grid-cols-12 py-2.5 px-3 items-center">
                   <div className="col-span-5 font-semibold text-slate-200 truncate">
                     {o.branchName}
@@ -202,7 +175,7 @@ export function RetentionReportModal({
                 <div className="col-span-3 text-center">Predicted Retention</div>
                 <div className="col-span-3 text-right">Estimated Violation</div>
               </div>
-              {data.predictedViolations7Days.map((p) => (
+              {data.predictedViolations7Days.map((p: any) => (
                 <div key={p.branchId} className="grid grid-cols-12 py-2.5 px-3 items-center">
                   <div className="col-span-6 font-semibold text-slate-200 truncate">
                     {p.branchName}

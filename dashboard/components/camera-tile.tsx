@@ -14,6 +14,7 @@ import {
   ZoomIn,
   ZoomOut,
   Volume2,
+  VolumeX,
   SlidersHorizontal,
 } from "lucide-react";
 import { useCallback, useRef, useState } from "react";
@@ -65,6 +66,7 @@ export function CameraTile({
   const tileRef = useRef<HTMLElement>(null);
   const isActive = Boolean(session);
   const [zoom, setZoom] = useState(1);
+  const [isMuted, setIsMuted] = useState(true);
   const [showPtzControl, setShowPtzControl] = useState(false);
   const [showRecordingSettings, setShowRecordingSettings] = useState(false);
   const [settingsPreRollSeconds, setSettingsPreRollSeconds] = useState(recording?.preRollSeconds ?? 30);
@@ -181,11 +183,12 @@ export function CameraTile({
         setZoom((value) => Math.max(1, Math.min(3, Number((value + (event.deltaY < 0 ? 0.15 : -0.15)).toFixed(2)))));
       }}>
         <div className="zoom-stage" style={{ transform: `scale(${zoom})` }}>
-          {isActive ? (
+          {isActive && session?.hls ? (
             <HlsPlayer
-              url={session?.hls?.url ?? `/api/media/streams/${encodeURIComponent(camera.id)}/index.m3u8`}
-              bearerToken={session?.hls?.bearerToken ?? `token-${camera.id}`}
+              url={session.hls.url}
+              bearerToken={session.hls.bearerToken ?? ""}
               cameraName={camera.name}
+              muted={isMuted}
               onPlaybackError={() => onPlaybackError?.("HLS playback failed")}
               onVideoElementChange={handleVideoElementChange}
             />
@@ -247,8 +250,14 @@ export function CameraTile({
             <Siren size={15} />
           </button>
           {camera.capabilities.audio && (
-            <button aria-label="Audio available" title="Audio available">
-              <Volume2 size={15} />
+            <button
+              aria-label={isMuted ? "Unmute audio (Listen to camera)" : "Mute camera audio"}
+              title={isMuted ? "Click to hear live audio from camera" : "Mute camera audio (Listening)"}
+              className={!isMuted ? "audio-listening-active" : ""}
+              onClick={() => setIsMuted(!isMuted)}
+              disabled={!isActive}
+            >
+              {isMuted ? <VolumeX size={15} /> : <Volume2 size={15} className="text-emerald-400" />}
             </button>
           )}
           {(camera.capabilities.audio || camera.capabilities.talkback?.supported) && (

@@ -9,10 +9,7 @@ import {
   RefreshCw,
   FileText,
   Building,
-  Layers,
   HardDrive,
-  Calendar,
-  Grid,
 } from "lucide-react";
 import { BranchRetentionTable, type BranchRetentionRow } from "./branch-retention-table";
 import { RetentionReportModal } from "./retention-report-modal";
@@ -30,166 +27,23 @@ export function RetentionComplianceDashboard() {
   async function fetchRetentionData() {
     setLoading(true);
     try {
-      const resp = await fetch("/api/v1/retention/branches?limit=400");
+      const resp = await fetch("/api/control/v1/retention/branches?limit=400", {
+        credentials: "include",
+      });
       if (resp.ok) {
         const json = await resp.json();
-        setBranches(json.data.branches);
+        setBranches(json.data?.branches || []);
       } else {
-        // Fallback sample data if backend endpoint is unavailable
-        setBranches(generateFallbackBranches());
+        setBranches([]);
       }
     } catch {
-      setBranches(generateFallbackBranches());
+      setBranches([]);
     } finally {
       setLoading(false);
     }
   }
 
-  function generateFallbackBranches(): BranchRetentionRow[] {
-    const list: BranchRetentionRow[] = [
-      {
-        branchId: "branch-101",
-        branchName: "Kochi 01 — MG Road",
-        cameraCount: 16,
-        healthy: 16,
-        warning: 0,
-        violation: 0,
-        critical: 0,
-        unknown: 0,
-        worstRetentionDays: 93.5,
-        requiredRetentionDays: 90,
-        state: "HEALTHY",
-        complianceState: "COMPLIANT",
-        riskState: "STABLE",
-        averageCoveragePercent: 99.9,
-        daysUntilViolation: undefined,
-        lastCheckedAt: new Date(),
-      },
-      {
-        branchId: "branch-102",
-        branchName: "Kochi 02 — Palarivattom",
-        cameraCount: 16,
-        healthy: 16,
-        warning: 0,
-        violation: 0,
-        critical: 0,
-        unknown: 0,
-        worstRetentionDays: 92.0,
-        requiredRetentionDays: 90,
-        state: "HEALTHY",
-        complianceState: "COMPLIANT",
-        riskState: "AT_RISK",
-        averageCoveragePercent: 99.7,
-        daysUntilViolation: 2,
-        lastCheckedAt: new Date(),
-      },
-      {
-        branchId: "branch-178",
-        branchName: "Aluva Central — Bank Square",
-        cameraCount: 16,
-        healthy: 14,
-        warning: 0,
-        violation: 1,
-        critical: 1,
-        unknown: 0,
-        worstRetentionDays: 61.4,
-        requiredRetentionDays: 90,
-        state: "CRITICAL",
-        complianceState: "VIOLATION",
-        riskState: "IMMINENT",
-        averageCoveragePercent: 98.4,
-        daysUntilViolation: 0,
-        lastCheckedAt: new Date(),
-      },
-      {
-        branchId: "branch-204",
-        branchName: "Thrissur 04 — Round North",
-        cameraCount: 16,
-        healthy: 12,
-        warning: 2,
-        violation: 1,
-        critical: 1,
-        unknown: 0,
-        worstRetentionDays: 61.0,
-        requiredRetentionDays: 90,
-        state: "CRITICAL",
-        complianceState: "VIOLATION",
-        riskState: "IMMINENT",
-        averageCoveragePercent: 98.5,
-        daysUntilViolation: 0,
-        lastCheckedAt: new Date(),
-      },
-      {
-        branchId: "branch-303",
-        branchName: "Kannur 03 — Fort Road",
-        cameraCount: 16,
-        healthy: 0,
-        warning: 0,
-        violation: 0,
-        critical: 0,
-        unknown: 16,
-        worstRetentionDays: undefined,
-        requiredRetentionDays: 90,
-        state: "UNKNOWN",
-        complianceState: "UNKNOWN",
-        riskState: "UNKNOWN",
-        averageCoveragePercent: 0,
-        daysUntilViolation: undefined,
-        lastCheckedAt: new Date(),
-      },
-    ];
-
-    for (let i = 6; i <= 400; i++) {
-      const isCritical = i % 45 === 0;
-      const isViolation = i % 25 === 0;
-      const isUnknown = i % 75 === 0;
-      const isWarning = i % 18 === 0;
-
-      let state: "HEALTHY" | "WARNING" | "VIOLATION" | "CRITICAL" | "UNKNOWN" = "HEALTHY";
-      let complianceState: "COMPLIANT" | "VIOLATION" | "UNKNOWN" = "COMPLIANT";
-      let worst = 94.0 + (i % 10);
-
-      if (isCritical) {
-        state = "CRITICAL";
-        complianceState = "VIOLATION";
-        worst = 60.0 + (i % 12);
-      } else if (isViolation) {
-        state = "VIOLATION";
-        complianceState = "VIOLATION";
-        worst = 85.0 + (i % 4);
-      } else if (isUnknown) {
-        state = "UNKNOWN";
-        complianceState = "UNKNOWN";
-        worst = 0;
-      } else if (isWarning) {
-        state = "WARNING";
-        worst = 91.0;
-      }
-
-      list.push({
-        branchId: `branch-${i}`,
-        branchName: `Branch ${String(i).padStart(3, "0")} — District ${Math.floor(i / 50) + 1}`,
-        cameraCount: 16,
-        healthy: state === "HEALTHY" ? 16 : 14,
-        warning: state === "WARNING" ? 2 : 0,
-        violation: state === "VIOLATION" ? 1 : 0,
-        critical: state === "CRITICAL" ? 1 : 0,
-        unknown: state === "UNKNOWN" ? 16 : 0,
-        worstRetentionDays: state === "UNKNOWN" ? undefined : worst,
-        requiredRetentionDays: 90,
-        state,
-        complianceState,
-        riskState: state === "CRITICAL" || isWarning ? "AT_RISK" : "STABLE",
-        averageCoveragePercent: state === "UNKNOWN" ? 0 : 99.5,
-        daysUntilViolation: isWarning ? 3 : undefined,
-        lastCheckedAt: new Date(),
-      });
-    }
-
-    return list;
-  }
-
-  // Summary Metrics
+  // Summary Metrics computed from live data
   const total = branches.length;
   const compliant = branches.filter((b) => b.complianceState === "COMPLIANT").length;
   const atRisk = branches.filter((b) => b.riskState === "AT_RISK" || b.riskState === "IMMINENT").length;
@@ -215,7 +69,7 @@ export function RetentionComplianceDashboard() {
             <span>Banking CCTV Retention Compliance Subsystem</span>
           </h1>
           <p className="text-xs text-slate-400 mt-1">
-            Auditable physical archive verification across 400 branches • Mandatory 90-Day Policy Invariant
+            Auditable physical archive verification across {total > 0 ? `${total} live branches` : "fleet"} • Mandatory 90-Day Policy Invariant
           </p>
         </div>
 
@@ -322,7 +176,22 @@ export function RetentionComplianceDashboard() {
       </div>
 
       {/* Branch Table */}
-      <BranchRetentionTable branches={filteredBranches} />
+      {loading ? (
+        <div className="p-12 text-center text-slate-400 border border-slate-800 rounded-xl bg-slate-900/40">
+          <RefreshCw className="h-6 w-6 animate-spin mx-auto mb-2 text-sky-400" />
+          <p className="text-sm">Loading live retention telemetry across fleet...</p>
+        </div>
+      ) : filteredBranches.length === 0 ? (
+        <div className="p-12 text-center text-slate-400 border border-slate-800 rounded-xl bg-slate-900/40">
+          <Building className="h-8 w-8 mx-auto mb-3 text-slate-500" />
+          <p className="text-base font-medium text-slate-200 mb-1">No live branches matching filter</p>
+          <p className="text-xs text-slate-500 max-w-md mx-auto">
+            Enrolling branch Edge Agents and configuring CCTV recorders will automatically stream verified archive evidence into this retention dashboard.
+          </p>
+        </div>
+      ) : (
+        <BranchRetentionTable branches={filteredBranches} />
+      )}
 
       {/* Daily Audit Report Modal */}
       <RetentionReportModal isOpen={showReportModal} onClose={() => setShowReportModal(false)} />
