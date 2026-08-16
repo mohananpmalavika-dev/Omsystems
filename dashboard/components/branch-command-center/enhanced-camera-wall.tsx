@@ -317,11 +317,11 @@ function CameraTile({ camera, streamProfile, onClick }: CameraTileProps) {
           </div>
         )}
 
-        {/* Retention Warning Badge */}
+        {/* Retention Warning Badge - Highlighted in Red for Immediate Attention */}
         {camera.retentionState === 'VIOLATION' && (
-          <div className="flex items-center gap-1 bg-amber-600 text-white px-2 py-0.5 rounded-full text-[10px] font-bold shadow-sm">
+          <div className="flex items-center gap-1 bg-rose-600 text-white px-2 py-0.5 rounded-full text-[10px] font-bold shadow-sm shadow-rose-950 animate-pulse border border-rose-400">
             <ClockIcon className="h-3 w-3" />
-            {camera.retentionDays}d / 90d
+            {camera.retentionDays}d / 90d (DEFICIT)
           </div>
         )}
       </div>

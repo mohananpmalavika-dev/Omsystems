@@ -30,6 +30,7 @@ export function FleetFilterBar({
     { label: "Warning", value: "WARNING" },
     { label: "Critical", value: "CRITICAL" },
     { label: "Offline", value: "OFFLINE" },
+    { label: "🔴 Retention Deficit (< Required)", value: "RETENTION_DEFICIT" },
     { label: "Maintenance", value: "MAINTENANCE" },
   ],
   selectedRegion,

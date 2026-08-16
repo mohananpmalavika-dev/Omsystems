@@ -69,10 +69,79 @@ export function CommandCenterView() {
     return true;
   });
 
+  const exportHealthCsv = () => {
+    const headers = [
+      "Branch Name",
+      "Branch Code",
+      "Region",
+      "Operational State",
+      "WAN Internet State",
+      "Latency (ms)",
+      "Cameras Healthy",
+      "Cameras Total",
+      "Cameras No Recording",
+      "Verified Retention Days",
+      "Required Retention Days",
+      "Retention Status",
+      "Storage State",
+      "P1 Critical Alerts",
+    ];
+
+    const rows = branches.map((b) => [
+      `"${b.name || ""}"`,
+      `"${b.branchCode || ""}"`,
+      `"${b.region || ""}"`,
+      b.operationalState || "UNKNOWN",
+      b.internet?.state || "UNKNOWN",
+      b.internet?.latencyMs ?? 0,
+      b.cameras?.healthy ?? 0,
+      b.cameras?.total ?? 0,
+      b.cameras?.notRecording ?? 0,
+      b.retention?.observedDays ?? 0,
+      b.retention?.requiredDays ?? 90,
+      b.retention?.compliant ? "COMPLIANT" : "RETENTION_DEFICIT",
+      b.storage?.state || "HEALTHY",
+      b.alerts?.p1 ?? 0,
+    ]);
+
+    const csvContent = "data:text/csv;charset=utf-8," + [headers.join(","), ...rows.map((e) => e.join(","))].join("\n");
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `SentinelGrid_Fleet_Health_Check_${new Date().toISOString().split("T")[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const exportAlertsCsv = () => {
+    const headers = ["Severity", "Branch Name", "Branch Code", "Alert Category", "Timestamp", "Status", "Notification Mode"];
+    const rows = branches
+      .filter((b) => (b.alerts?.p1 ?? 0) > 0 || !b.retention?.compliant)
+      .map((b) => [
+        b.alerts?.p1 > 0 ? "P1 (Critical)" : "P2 (High)",
+        `"${b.name || ""}"`,
+        `"${b.branchCode || ""}"`,
+        !b.retention?.compliant ? "Recording Retention Deficit (<90d)" : "Critical Surveillance Breach",
+        new Date().toISOString(),
+        "ACTIVE",
+        "Dashboard + SMS + Email + Voice Call",
+      ]);
+
+    const csvContent = "data:text/csv;charset=utf-8," + [headers.join(","), ...rows.map((e) => e.join(","))].join("\n");
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `SentinelGrid_Segregated_Alert_Summary_${new Date().toISOString().split("T")[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   return (
     <div className="space-y-6 pb-12">
       {/* Top Banner & Attention Metrics */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 p-6 bg-gradient-to-r from-slate-900 via-slate-900 to-slate-950 border border-slate-800/80 rounded-2xl shadow-xl">
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 p-6 bg-gradient-to-r from-slate-900 via-slate-900 to-slate-950 border border-slate-800/80 rounded-2xl shadow-xl">
         <div>
           <div className="flex items-center gap-2.5">
             <h1 className="text-2xl font-bold tracking-tight text-white">Surveillance Command Center</h1>
@@ -85,7 +154,23 @@ export function CommandCenterView() {
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2.5">
+          <button
+            onClick={exportHealthCsv}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 text-xs font-medium transition-colors shadow-sm"
+            title="Download Excel/CSV Device Health Report"
+          >
+            <span>📥 Export 400-Branch Health</span>
+          </button>
+
+          <button
+            onClick={exportAlertsCsv}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-rose-600/20 hover:bg-rose-600/30 text-rose-300 border border-rose-500/30 text-xs font-medium transition-colors shadow-sm"
+            title="Download Segregated Alert Log"
+          >
+            <span>📊 Export Alert Log</span>
+          </button>
+
           <button
             onClick={loadData}
             disabled={loading}
@@ -104,6 +189,31 @@ export function CommandCenterView() {
           </Link>
         </div>
       </div>
+
+      {/* Retention Deficit Warning Banner if Violations Exist */}
+      {((summary?.retention?.violationBranches ?? 0) > 0) && (
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 bg-rose-950/40 border border-rose-600/60 rounded-xl shadow-lg shadow-rose-950/40 animate-pulse">
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-lg bg-rose-600/30 text-rose-300">
+              <AlertTriangle className="w-5 h-5 text-rose-400" />
+            </div>
+            <div>
+              <div className="font-bold text-rose-200 text-sm">
+                ⚠️ Critical Retention Deficit Detected ({summary?.retention?.violationBranches} Branches Below Prescribed Policy)
+              </div>
+              <div className="text-xs text-rose-300/80 mt-0.5">
+                Footage retention is below regulatory mandate (90 / 180 days). Immediate disk replacement or bitrate adjustment recommended.
+              </div>
+            </div>
+          </div>
+          <Link
+            href="/operations/branches"
+            className="px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white font-medium text-xs shadow transition-colors self-start sm:self-auto"
+          >
+            View Affected Branches
+          </Link>
+        </div>
+      )}
 
       {/* Fleet Dimension Summary Metric Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3.5">
