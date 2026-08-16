@@ -312,6 +312,131 @@ export async function registerCameraDiscoveryRoutes(
 
     return { success: true, message: "Display name updated" };
   });
+
+  app.post("/v1/cameras/probe-direct", async (request, reply) => {
+    const body = z.object({
+      ipAddress: z.string().min(1),
+      rtspPort: z.number().int().optional().default(554),
+      username: z.string().optional().default("admin"),
+      password: z.string().optional().default(""),
+    }).parse(request.body);
+
+    const result = await probeNetworkCamera(body.ipAddress, body.rtspPort, body.username, body.password);
+    return result;
+  });
+}
+
+import net from "node:net";
+import crypto from "node:crypto";
+
+async function probeNetworkCamera(ip: string, port = 554, user = "admin", pass = "") {
+  return new Promise((resolve) => {
+    const socket = new net.Socket();
+    socket.setTimeout(3500);
+    const uri = `rtsp://${ip}:${port}/stream1`;
+
+    let serverBanner = "Standard RTSP";
+    let isHappytime = false;
+    let authType = "None";
+    let authenticated = false;
+    let nonce = "";
+
+    socket.connect(port, ip, () => {
+      socket.write(`OPTIONS ${uri} RTSP/1.0\r\nCSeq: 1\r\nUser-Agent: SentinelGrid/2.0\r\n\r\n`);
+    });
+
+    let buffer = "";
+    socket.on("data", (data) => {
+      buffer += data.toString();
+
+      if (buffer.includes("Server:")) {
+        const serverLine = buffer.split("\r\n").find((l) => l.toLowerCase().startsWith("server:"));
+        if (serverLine) {
+          serverBanner = serverLine.slice(7).trim();
+          if (serverBanner.toLowerCase().includes("happytime")) isHappytime = true;
+        }
+      }
+
+      if (buffer.includes("401 Unauthorized") && !nonce) {
+        const authLine = buffer.split("\r\n").find((l) => l.toLowerCase().startsWith("www-authenticate:"));
+        if (authLine) {
+          authType = authLine.toLowerCase().includes("digest") ? "Digest" : "Basic";
+          const match = authLine.match(/nonce="?([^",\r\n]+)"?/i);
+          nonce = match?.[1] || "";
+
+          if (pass) {
+            // Compute digest
+            const realm = "happytimesoft";
+            const ha1 = crypto.createHash("md5").update(`${user}:${realm}:${pass}`).digest("hex");
+            const ha2 = crypto.createHash("md5").update(`DESCRIBE:${uri}`).digest("hex");
+            const response = crypto.createHash("md5").update(`${ha1}:${nonce}:${ha2}`).digest("hex");
+            const digest = `Digest username="${user}", realm="${realm}", nonce="${nonce}", uri="${uri}", response="${response}"`;
+            socket.write(`DESCRIBE ${uri} RTSP/1.0\r\nCSeq: 2\r\nUser-Agent: SentinelGrid/2.0\r\nAuthorization: ${digest}\r\nAccept: application/sdp\r\n\r\n`);
+          } else {
+            socket.destroy();
+            resolve({
+              online: true,
+              ipAddress: ip,
+              rtspPort: port,
+              server: serverBanner,
+              vendor: isHappytime ? "Trueview / TrueCloud" : "ONVIF / RTSP Device",
+              model: isHappytime ? "T18061-W (3MP Wi-Fi Robot)" : "Generic IP Camera",
+              authenticated: false,
+              authRequired: true,
+              authType,
+              streamUrl: `rtsp://${user}:<PASSWORD>@${ip}:${port}/stream1`,
+              substreamUrl: `rtsp://${user}:<PASSWORD>@${ip}:${port}/stream2`,
+              capabilities: { ptz: isHappytime, audio: true, motion: true },
+            });
+          }
+        }
+      } else if (buffer.includes("RTSP/1.0 200 OK")) {
+        authenticated = true;
+        socket.destroy();
+        resolve({
+          online: true,
+          ipAddress: ip,
+          rtspPort: port,
+          server: serverBanner,
+          vendor: isHappytime ? "Trueview / TrueCloud" : "ONVIF / RTSP Device",
+          model: isHappytime ? "T18061-W (3MP Wi-Fi Robot)" : "Generic IP Camera",
+          authenticated: true,
+          authRequired: true,
+          authType,
+          streamUrl: `rtsp://${user}:${pass}@${ip}:${port}/stream1`,
+          substreamUrl: `rtsp://${user}:${pass}@${ip}:${port}/stream2`,
+          capabilities: { ptz: isHappytime, audio: true, motion: true },
+        });
+      } else if (buffer.includes("CSeq: 2") && buffer.includes("401 Unauthorized")) {
+        socket.destroy();
+        resolve({
+          online: true,
+          ipAddress: ip,
+          rtspPort: port,
+          server: serverBanner,
+          vendor: isHappytime ? "Trueview / TrueCloud" : "ONVIF / RTSP Device",
+          model: isHappytime ? "T18061-W (3MP Wi-Fi Robot)" : "Generic IP Camera",
+          authenticated: false,
+          authRequired: true,
+          authType,
+          error: "Invalid password provided",
+          streamUrl: `rtsp://${user}:<PASSWORD>@${ip}:${port}/stream1`,
+          substreamUrl: `rtsp://${user}:<PASSWORD>@${ip}:${port}/stream2`,
+          capabilities: { ptz: isHappytime, audio: true, motion: true },
+        });
+      }
+    });
+
+    socket.on("error", (err) => {
+      socket.destroy();
+      resolve({ online: false, ipAddress: ip, error: err.message });
+    });
+
+    socket.on("timeout", () => {
+      socket.destroy();
+      resolve({ online: false, ipAddress: ip, error: "Connection timed out" });
+    });
+  });
 }
 
 function supportsTargetedVerification(version: string) {

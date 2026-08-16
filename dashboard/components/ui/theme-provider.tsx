@@ -57,20 +57,36 @@ const ThemeContext = createContext<ThemeContextValue>({
 
 const STORAGE_KEY = "sentinel-grid-active-theme";
 
+export function applyThemeToDocument(theme: ThemeMode) {
+  if (typeof document === "undefined") return;
+  const root = document.documentElement;
+  root.setAttribute("data-theme", theme);
+  root.style.colorScheme = theme === "light" ? "light" : "dark";
+  
+  if (theme === "light") {
+    root.classList.remove("dark");
+    root.classList.add("light");
+  } else {
+    root.classList.remove("light");
+    root.classList.add("dark");
+  }
+
+  window.dispatchEvent(new CustomEvent("sentinel-theme-change", { detail: { theme } }));
+}
+
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [theme, setThemeState] = useState<ThemeMode>("dark");
 
   useEffect(() => {
     try {
       const savedTheme = localStorage.getItem(STORAGE_KEY) as ThemeMode | null;
-      if (savedTheme && AVAILABLE_THEMES.some((t) => t.id === savedTheme)) {
-        setThemeState(savedTheme);
-        document.documentElement.setAttribute("data-theme", savedTheme);
-      } else {
-        document.documentElement.setAttribute("data-theme", "dark");
-      }
+      const initialTheme = savedTheme && AVAILABLE_THEMES.some((t) => t.id === savedTheme)
+        ? savedTheme
+        : "dark";
+      setThemeState(initialTheme);
+      applyThemeToDocument(initialTheme);
     } catch {
-      document.documentElement.setAttribute("data-theme", "dark");
+      applyThemeToDocument("dark");
     }
   }, []);
 
@@ -78,7 +94,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     setThemeState(newTheme);
     try {
       localStorage.setItem(STORAGE_KEY, newTheme);
-      document.documentElement.setAttribute("data-theme", newTheme);
+      applyThemeToDocument(newTheme);
     } catch (e) {
       console.error("Failed to save theme to localStorage:", e);
     }

@@ -322,8 +322,50 @@ async function endPageVisit(): Promise<void> {
   }
 }
 
+let pendingActionTimer: NodeJS.Timeout | null = null;
+const actionQueue: Array<{
+  actionType: string;
+  actionCategory: string;
+  moduleName: string;
+  options?: {
+    actionTarget?: string;
+    actionDescription?: string;
+    featureName?: string;
+    actionMetadata?: Record<string, any>;
+  };
+}> = [];
+
+async function flushActionQueue(): Promise<void> {
+  if (!currentSessionId || actionQueue.length === 0) return;
+  const items = actionQueue.splice(0, 10);
+  for (const item of items) {
+    try {
+      await fetch(`${getApiBase()}/v1/activity/actions`, {
+        method: 'POST',
+        headers: activityHeaders(true),
+        credentials: 'include',
+        keepalive: true,
+        body: JSON.stringify({
+          sessionId: currentSessionId,
+          pageVisitId: currentPageVisitId,
+          actionType: item.actionType,
+          actionCategory: item.actionCategory,
+          actionTarget: item.options?.actionTarget,
+          actionDescription: item.options?.actionDescription,
+          moduleName: item.moduleName,
+          featureName: item.options?.featureName,
+          actionMetadata: item.options?.actionMetadata,
+        }),
+      });
+    } catch (error) {
+      // Non-blocking telemetry
+      break;
+    }
+  }
+}
+
 /**
- * Track user action
+ * Track user action (throttled & non-blocking)
  */
 export async function trackUserAction(
   actionType: string,
@@ -338,29 +380,13 @@ export async function trackUserAction(
 ): Promise<void> {
   if (!currentSessionId) return;
   
-  try {
-    await fetch(`${getApiBase()}/v1/activity/actions`, {
-      method: 'POST',
-      headers: activityHeaders(true),
-      credentials: 'include',
-      keepalive: true,
-      body: JSON.stringify({
-        sessionId: currentSessionId,
-        pageVisitId: currentPageVisitId,
-        actionType,
-        actionCategory,
-        actionTarget: options?.actionTarget,
-        actionDescription: options?.actionDescription,
-        moduleName,
-        featureName: options?.featureName,
-        actionMetadata: options?.actionMetadata,
-      }),
-    });
-    
-    console.log('[ActivityMonitor] Action tracked:', actionType);
-  } catch (error) {
-    console.error('[ActivityMonitor] Error tracking action:', error);
-  }
+  actionQueue.push({ actionType, actionCategory, moduleName, options });
+  if (actionQueue.length > 30) actionQueue.shift();
+
+  if (pendingActionTimer) clearTimeout(pendingActionTimer);
+  pendingActionTimer = setTimeout(() => {
+    void flushActionQueue();
+  }, 1000);
 }
 
 /**

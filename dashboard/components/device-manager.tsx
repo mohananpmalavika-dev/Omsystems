@@ -13,6 +13,7 @@ import {
   Search,
   X,
   QrCode,
+  Wifi,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { cameraInventoryApi, deviceInventoryApi, provisioningApi } from "@/lib/api-client";
@@ -198,6 +199,78 @@ export function DeviceManager() {
   const [showCameraForm, setShowCameraForm] = useState(false);
   const [showGatewayForm, setShowGatewayForm] = useState(false);
   const [showDiscoveredList, setShowDiscoveredList] = useState(false);
+  const [showDirectProbeModal, setShowDirectProbeModal] = useState(false);
+  const [probeIp, setProbeIp] = useState("192.168.29.196");
+  const [probePort, setProbePort] = useState("554");
+  const [probePassword, setProbePassword] = useState("");
+  const [probing, setProbing] = useState(false);
+  const [probeResult, setProbeResult] = useState<any>(null);
+
+  async function runDirectProbe() {
+    if (!probeIp.trim()) return;
+    setProbing(true);
+    setError(undefined);
+    try {
+      const res = await cameraInventoryApi.probeDirect({
+        ipAddress: probeIp.trim(),
+        rtspPort: Number(probePort) || 554,
+        username: "admin",
+        password: probePassword,
+      });
+      setProbeResult(res);
+      if (res.online) {
+        setNotice(`Camera at ${probeIp} responded (${res.server || "RTSP"}).`);
+      } else {
+        setError(`Camera at ${probeIp} is unreachable: ${res.error || "Connection error"}`);
+      }
+    } catch (err: any) {
+      setError(err.message || "Failed to probe camera");
+    } finally {
+      setProbing(false);
+    }
+  }
+
+  async function enrollProbedCamera() {
+    if (!probeResult || !selectedBranch) return;
+    setSaving(true);
+    try {
+      await cameraInventoryApi.approveCamera(selectedBranch, {
+        discoveryId: "",
+        name: `Trueview Robot (${probeResult.model || "T18061-W"})`,
+        channel: 1,
+        protocol: "rtsp",
+        connectionTransport: "vpn",
+        sourceType: "ip-camera",
+        manufacturer: "Trueview / TrueCloud",
+        model: probeResult.model || "T18061-W",
+        ipAddress: probeIp.trim(),
+        onvifPort: 80,
+        rtspPort: Number(probePort) || 554,
+        profiles: [{
+          name: "main",
+          codec: "H264",
+          width: 1920,
+          height: 1080,
+          role: "main",
+          frameRate: 15,
+          bitrateKbps: 2048,
+          preferredFor: ["recording", "live", "analytics"],
+        }],
+        capabilities: {
+          ptz: probeResult.capabilities?.ptz ?? true,
+          audio: probeResult.capabilities?.audio ?? true,
+          events: true,
+        },
+      });
+      setShowDirectProbeModal(false);
+      setNotice(`Camera at ${probeIp} successfully enrolled in ${activeBranch?.name}!`);
+      await refreshBranch(selectedBranch);
+    } catch (err: any) {
+      setError(messageOf(err, "Failed to enroll camera"));
+    } finally {
+      setSaving(false);
+    }
+  }
   const [loadingDiscoveries, setLoadingDiscoveries] = useState(false);
   const [credentialActivation, setCredentialActivation] = useState<any>();
   const [activationUsername, setActivationUsername] = useState("");
@@ -926,6 +999,9 @@ export function DeviceManager() {
           <button className="primary-button" onClick={() => void scanCameras()} disabled={!selectedBranch || scanning || saving} title="Automatically search local network, VPN routes, and the managed tunnel">
             <Search size={15} /> {scanning ? "Searching cameras..." : "Scan cameras"}
           </button>
+          <button className="secondary-button" onClick={() => setShowDirectProbeModal(true)} title="Directly test and connect IP camera on local subnet (e.g. 192.168.29.196)">
+            <Wifi size={15} /> Direct IP Probe
+          </button>
           {!onlineGateway && selectedBranch ? <button className="secondary-button" onClick={openScannerInstaller} disabled={saving} title={gateways.length > 0 ? "Repair the Sentinel Grid Scanner on this PC" : "Download the Sentinel Grid Scanner for this PC"}><Download size={15} /> {gateways.length > 0 ? "Repair scanner" : "Install scanner"}</button> : null}
         </div>
         {selectedBranch ? (
@@ -1509,6 +1585,100 @@ export function DeviceManager() {
               )}
               <div className="modal-actions"><button type="button" className="secondary-button" onClick={() => setShowCameraForm(false)}>Cancel</button><button className="primary-button" disabled={saving}>{saving ? (registrationMode === "bulk" ? "Importing…" : "Adding camera…") : registrationMode === "bulk" ? "Import cameras" : "Add camera"}</button></div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {showDirectProbeModal && (
+        <div className="modal-overlay">
+          <div className="modal-container">
+            <div className="modal-header">
+              <h2>Direct IP / Camera Live Probe &amp; Connect</h2>
+              <button type="button" className="icon-button" onClick={() => setShowDirectProbeModal(false)}>
+                <X size={20} />
+              </button>
+            </div>
+            <div className="modal-body space-y-4">
+              <p className="text-xs text-slate-500">
+                Directly probe any IP/Wi-Fi camera (Trueview, Hikvision, CP Plus, Dahua, ONVIF) on your local network.
+              </p>
+              
+              <div className="space-y-3">
+                <div className="form-group">
+                  <label htmlFor="probeIp">Camera Local IP Address <span className="required">*</span></label>
+                  <input
+                    id="probeIp"
+                    value={probeIp}
+                    onChange={(e) => setProbeIp(e.target.value)}
+                    placeholder="192.168.29.196"
+                    required
+                  />
+                </div>
+
+                <div className="form-row">
+                  <div className="form-group">
+                    <label htmlFor="probePort">RTSP Port</label>
+                    <input
+                      id="probePort"
+                      value={probePort}
+                      onChange={(e) => setProbePort(e.target.value)}
+                      placeholder="554"
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label htmlFor="probePassword">Camera Password / TrueCloud Password</label>
+                    <input
+                      id="probePassword"
+                      type="password"
+                      value={probePassword}
+                      onChange={(e) => setProbePassword(e.target.value)}
+                      placeholder="Enter password (or TrueCloud login password)"
+                    />
+                  </div>
+                </div>
+
+                <div className="modal-actions">
+                  <button
+                    type="button"
+                    className="primary-button"
+                    onClick={runDirectProbe}
+                    disabled={probing || !probeIp.trim()}
+                  >
+                    <Search size={14} /> {probing ? "Probing camera network..." : "Probe Camera"}
+                  </button>
+                </div>
+              </div>
+
+              {probeResult && (
+                <div className="p-4 rounded-xl border border-blue-500/30 bg-blue-500/10 space-y-2 mt-4 text-xs">
+                  <div className="flex items-center justify-between">
+                    <strong>Status: {probeResult.online ? "🟢 Camera Online & Responding" : "🔴 Unreachable"}</strong>
+                    <span className="font-mono text-[11px] bg-slate-200 dark:bg-slate-800 px-2 py-0.5 rounded">
+                      {probeResult.server || "RTSP 554"}
+                    </span>
+                  </div>
+
+                  {probeResult.online && (
+                    <>
+                      <div><strong>Identified Device:</strong> {probeResult.vendor} • {probeResult.model}</div>
+                      <div><strong>Stream URL:</strong> <code className="font-mono text-[11px]">{probeResult.streamUrl}</code></div>
+                      <div><strong>Authentication:</strong> {probeResult.authenticated ? "✅ Authenticated" : `⚠️ ${probeResult.authType} Auth Required (${probeResult.error || "Enter TrueCloud password"})`}</div>
+
+                      <div className="pt-2 flex gap-2">
+                        <button
+                          type="button"
+                          className="primary-button"
+                          onClick={enrollProbedCamera}
+                          disabled={saving || !selectedBranch}
+                        >
+                          <Plus size={14} /> {saving ? "Enrolling..." : "Enroll Camera into Fleet"}
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}

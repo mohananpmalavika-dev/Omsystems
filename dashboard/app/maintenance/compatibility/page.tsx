@@ -45,7 +45,7 @@ export default function CompatibilityPage() {
   async function loadRecorders() {
     try {
       setLoading(true);
-      const res = await fetch("/v1/operational-health/recorders");
+      const res = await fetch("/api/control/v1/operational-health/recorders", { credentials: "include" });
       if (res.ok) {
         const json = await res.json();
         const list = (json.recorders ?? []).map((r: any) => ({

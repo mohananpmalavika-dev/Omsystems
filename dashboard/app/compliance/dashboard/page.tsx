@@ -23,7 +23,7 @@ export default function ComplianceDashboardPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    fetch('/v1/compliance/dashboard')
+    fetch('/api/control/v1/compliance/dashboard', { credentials: 'include' })
       .then(res => {
         if (!res.ok) throw new Error('Failed to fetch dashboard');
         return res.json();

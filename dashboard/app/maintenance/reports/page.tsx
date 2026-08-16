@@ -51,7 +51,7 @@ export default function MaintenanceReportsPage() {
   const fetchReports = async () => {
     setLoading(true);
     try {
-      const response = await fetch('/v1/maintenance/reports?limit=50');
+      const response = await fetch('/api/control/v1/maintenance/reports?limit=50', { credentials: 'include' });
       const data = await response.json();
       setReports(data.data || []);
     } catch (error) {
@@ -64,7 +64,7 @@ export default function MaintenanceReportsPage() {
   const fetchScheduledReports = async () => {
     setLoading(true);
     try {
-      const response = await fetch('/v1/maintenance/reports/scheduled');
+      const response = await fetch('/api/control/v1/maintenance/reports/scheduled', { credentials: 'include' });
       const data = await response.json();
       setScheduledReports(data.data || []);
     } catch (error) {
@@ -77,9 +77,10 @@ export default function MaintenanceReportsPage() {
   const handleGenerateReport = async (formData: any) => {
     setGenerating(true);
     try {
-      const response = await fetch('/v1/maintenance/reports/generate', {
+      const response = await fetch('/api/control/v1/maintenance/reports/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify(formData),
       });
 

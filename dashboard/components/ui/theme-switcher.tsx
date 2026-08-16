@@ -33,6 +33,11 @@ export function ThemeSwitcher() {
     }
   };
 
+  const getThemeLabel = (themeId: ThemeMode) => {
+    const found = AVAILABLE_THEMES.find((t) => t.id === themeId);
+    return found ? found.name : "Theme";
+  };
+
   return (
     <div className="relative inline-block text-left" ref={dropdownRef}>
       <button
@@ -40,16 +45,16 @@ export function ThemeSwitcher() {
         onClick={() => setIsOpen(!isOpen)}
         className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-slate-700 bg-slate-800/80 hover:bg-slate-700 text-slate-200 text-xs font-medium transition-all shadow-sm"
         aria-label="Select color theme"
-        title="Switch theme"
+        title={`Current theme: ${getThemeLabel(theme)}. Click to change.`}
       >
-        <Palette size={14} className="text-blue-400" />
-        <span className="hidden sm:inline capitalize">{theme}</span>
+        {getThemeIcon(theme)}
+        <span className="hidden sm:inline">{getThemeLabel(theme)}</span>
       </button>
 
       {isOpen && (
-        <div className="absolute right-0 mt-2 w-56 rounded-xl border border-slate-800 bg-slate-900/95 backdrop-blur-md shadow-2xl p-1.5 z-50 animate-in fade-in-50 zoom-in-95 duration-100">
+        <div className="absolute right-0 mt-2 w-56 rounded-xl border border-slate-800 bg-slate-900/95 backdrop-blur-md shadow-2xl p-1.5 z-[9999] animate-in fade-in-50 zoom-in-95 duration-100">
           <div className="px-2.5 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-slate-400 border-b border-slate-800/80 mb-1">
-            Enterprise Themes
+            Select Dashboard Theme
           </div>
           <div className="space-y-1">
             {AVAILABLE_THEMES.map((t) => {

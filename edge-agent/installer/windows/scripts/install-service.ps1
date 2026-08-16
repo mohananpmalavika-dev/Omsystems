@@ -72,14 +72,14 @@ try {
     # Set service description
     sc.exe description $serviceName $description | Out-Null
     
-    # Configure service recovery options (restart on failure)
-    Write-Host "Configuring service recovery options..."
-    sc.exe failure $serviceName reset= 86400 actions= restart/60000/restart/60000/restart/60000 | Out-Null
+    # Configure service recovery options (instant restart on failure or kill)
+    Write-Host "Configuring service recovery options (instant auto-restart)..."
+    sc.exe failure $serviceName reset= 0 actions= restart/2000/restart/3000/restart/5000 | Out-Null
     
-    # Set service to restart after 60 seconds on failure
+    # Enable failure actions for process termination / crash
     sc.exe failureflag $serviceName 1 | Out-Null
     
-    Write-Host "✅ Service configured"
+    Write-Host "✅ Service auto-recovery configured (2s restart on termination)"
     
     # Start the service
     Write-Host ""

@@ -88,7 +88,7 @@ export function DVRNVRMonitorDashboard() {
 
   const loadStats = async () => {
     try {
-      const response = await fetch("/v1/dvr-nvr/monitor/stats", {
+      const response = await fetch("/api/control/v1/dvr-nvr/monitor/stats", {
         credentials: "include",
       });
 
@@ -103,7 +103,7 @@ export function DVRNVRMonitorDashboard() {
 
   const loadDevices = async () => {
     try {
-      const response = await fetch("/v1/dvr-nvr/monitor/devices", {
+      const response = await fetch("/api/control/v1/dvr-nvr/monitor/devices", {
         credentials: "include",
       });
 
@@ -120,7 +120,7 @@ export function DVRNVRMonitorDashboard() {
 
   const loadDeviceHealth = async (deviceId: string) => {
     try {
-      const response = await fetch(`/v1/dvr-nvr/monitor/devices/${deviceId}`, {
+      const response = await fetch(`/api/control/v1/dvr-nvr/monitor/devices/${encodeURIComponent(deviceId)}`, {
         credentials: "include",
       });
 

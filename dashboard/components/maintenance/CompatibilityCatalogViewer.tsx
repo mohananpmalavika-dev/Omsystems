@@ -41,7 +41,7 @@ export function CompatibilityCatalogViewer() {
     try {
       setLoading(true);
       setError(null);
-      const res = await fetch("/v1/compatibility/models");
+      const res = await fetch("/api/control/v1/compatibility/models", { credentials: "include" });
       if (!res.ok) throw new Error(`Failed to load catalog (${res.status})`);
       const json = await res.json();
       setCatalog(json.data ?? []);

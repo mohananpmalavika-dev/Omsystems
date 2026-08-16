@@ -196,13 +196,9 @@ export function AppLayout({ children, incidentCount = 0, cameraCount = 0 }: AppL
   if (alreadyInsideAppLayout) return <>{children}</>;
 
   return (
-    <ThemeProvider>
-      <OrgBrandingProvider>
-        <AppLayoutContext.Provider value>
-          <AppLayoutFrame incidentCount={incidentCount} cameraCount={cameraCount}>{children}</AppLayoutFrame>
-        </AppLayoutContext.Provider>
-      </OrgBrandingProvider>
-    </ThemeProvider>
+    <AppLayoutContext.Provider value>
+      <AppLayoutFrame incidentCount={incidentCount} cameraCount={cameraCount}>{children}</AppLayoutFrame>
+    </AppLayoutContext.Provider>
   );
 }
 

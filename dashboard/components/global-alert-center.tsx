@@ -75,12 +75,7 @@ export function GlobalAlertCenter() {
   useEffect(() => {
     if (!enabledForRoute) return;
     void load();
-    const timer = window.setInterval(load, 30_000);
-    return () => window.clearInterval(timer);
-  }, [enabledForRoute, load]);
 
-  useEffect(() => {
-    if (!enabledForRoute) return;
     const events = new EventSource("/api/control/v1/alerts/events", { withCredentials: true });
 
     // On created — fetch enriched single alert and insert
@@ -135,9 +130,8 @@ export function GlobalAlertCenter() {
       } catch { }
     });
 
-    // Periodic reconciliation
-    void load();
-    const timer = window.setInterval(load, 300_000);
+    // Fallback periodic reconciliation every 45 seconds
+    const timer = window.setInterval(load, 45_000);
     return () => {
       events.close();
       window.clearInterval(timer);

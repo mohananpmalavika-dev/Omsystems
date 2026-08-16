@@ -3,9 +3,9 @@ import { spawnSync } from "node:child_process";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const moduleDirectory = typeof __dirname === "string"
+const moduleDirectory = typeof __dirname !== "undefined"
   ? __dirname
-  : dirname(fileURLToPath(import.meta.url));
+  : (typeof import.meta !== "undefined" && import.meta.url ? dirname(fileURLToPath(import.meta.url)) : process.cwd());
 
 const ASSET_ROOT = join(moduleDirectory, "..", "vendor", "windows");
 const INSTALLER_ROOT = join(moduleDirectory, "..", "installer", "windows");

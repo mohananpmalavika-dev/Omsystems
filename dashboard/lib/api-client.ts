@@ -457,6 +457,25 @@ export const cameraInventoryApi = {
     fetchApi<{ data: any[] }>(
       `/v1/branches/${encodeURIComponent(branchId)}/cameras?action=${encodeURIComponent(action)}`
     ),
+  probeDirect: (data: { ipAddress: string; rtspPort?: number; username?: string; password?: string }) =>
+    fetchApi<{
+      online: boolean;
+      ipAddress: string;
+      rtspPort?: number;
+      server?: string;
+      vendor?: string;
+      model?: string;
+      authenticated?: boolean;
+      authRequired?: boolean;
+      authType?: string;
+      error?: string;
+      streamUrl?: string;
+      substreamUrl?: string;
+      capabilities?: { ptz: boolean; audio: boolean; motion: boolean };
+    }>('/v1/cameras/probe-direct', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
   listDiscovered: (branchId: string) =>
     fetchApi<{ data: any[] }>(
       `/v1/branches/${encodeURIComponent(branchId)}/cameras/discovered`

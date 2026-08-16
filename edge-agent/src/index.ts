@@ -29,6 +29,7 @@ import { stageSignedUpdate } from "./updates/signed-update.js";
 import { readFile } from "node:fs/promises";
 import { CameraCredentialVault, openSealedCommand, type SealedCommandEnvelope } from "./security/camera-credential-vault.js";
 import { DatabaseCredentialProvider } from "./security/database-credential-provider.js";
+import { acquireSingleInstanceLock } from "./security/instance-lock.js";
 import {
   discoverRecorderChannels,
   discoverVendorRecorderChannels,
@@ -41,6 +42,8 @@ import { recoverCamera } from "./recovery/camera-recovery.js";
 async function main() {
 const argv = process.argv.slice(2);
 const scanOnce = hasArgument(argv, "--scan-once");
+const isDiagnostic = hasArgument(argv, "--diagnose") || hasArgument(argv, "--check-config") || hasArgument(argv, "--version") || hasArgument(argv, "--verify-bundle");
+
 if (hasArgument(argv, "--verify-bundle")) {
   process.stdout.write(`${JSON.stringify({ valid: true, assets: inspectBundledWindowsRuntime() }, null, 2)}\n`);
   process.exit(0);
@@ -54,6 +57,16 @@ if (hasArgument(argv, "--version")) {
   process.stdout.write("Sentinel Grid Edge Agent 0.1.8\n");
   process.exit(0);
 }
+
+if (!scanOnce && !isDiagnostic) {
+  const lock = acquireSingleInstanceLock(runtime.homeDirectory);
+  if (!lock.acquired) {
+    logger.warn(`[SingleInstance] Sentinel Grid Edge Agent is already running (PID: ${lock.existingPid}). Exiting duplicate instance.`, { existingPid: lock.existingPid });
+    process.stdout.write(`Sentinel Grid Edge Agent is already running on this machine (PID: ${lock.existingPid}). Exiting duplicate instance.\n`);
+    process.exit(0);
+  }
+}
+
 const config = loadConfigOrExit();
 process.env.EDGE_LOG_PATH = config.EDGE_LOG_PATH;
 if (hasArgument(argv, "--check-config")) {
