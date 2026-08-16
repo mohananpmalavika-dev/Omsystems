@@ -43,6 +43,7 @@ import { registerAlertIncidentsRoutes } from "./routes/alert-incidents.routes.js
 import { registerPerformanceBenchmarkRoutes } from "./routes/performance-benchmarks.routes.js";
 import { registerEdgeTelemetryRoutes } from "./routes/edge-telemetry.routes.js";
 import { registerMaintenanceWindowsRoutes } from "./routes/maintenance-windows.routes.js";
+import { registerUnifiedOperationsRoutes } from "./routes/unified-operations.routes.js";
 import { registerCctvInfrastructureRoutes } from "./routes/cctv-infrastructure.js";
 import { registerOrganizationRoutes } from "./routes/organization.routes.js";
 import { registerBranchLifecycleRoutes } from "./routes/branch-lifecycle.routes.js";
@@ -101,6 +102,8 @@ import { registerEvidenceCaptureRoutes } from "./routes/evidence-capture.routes.
 import { registerDeduplicationRoutes } from "./routes/deduplication.routes.js";
 import { registerDigitalTwinHealthRoutes } from "./routes/digital-twin-health.routes.js";
 import { registerStaleHealthRoutes } from "./routes/stale-health.routes.js";
+import { registerSurveillancePolicyRoutes } from "./routes/surveillance-policy.routes.js";
+import { registerP0ControlPlaneRoutes } from "./routes/p0-control-plane.routes.js";
 import { autoProvisionVerifiedCameras } from "./services/camera-auto-provision.js";
 import {
   EmptyFederationLocalSearchProvider,
@@ -2569,6 +2572,14 @@ export async function buildApp(options?: {
     app.log.error({ err }, 'failed to register maintenance windows routes');
   }
 
+  // Register Unified Operations & Product Surface routes
+  try {
+    await registerUnifiedOperationsRoutes(app);
+    app.log.info('Unified operations and product surface routes registered');
+  } catch (err: unknown) {
+    app.log.error({ err }, 'failed to register unified operations routes');
+  }
+
   // Register First-Class Evidence-Driven Branch Internet & WAN Connectivity routes
   try {
     await registerConnectivityHealthRoutes(app, store);
@@ -2639,6 +2650,22 @@ export async function buildApp(options?: {
     app.log.info('Stale health semantics and freshness routes registered');
   } catch (err: unknown) {
     app.log.error({ err }, 'failed to register stale health routes');
+  }
+
+  // Register Policy-Driven Surveillance SLA & Compliance routes
+  try {
+    await registerSurveillancePolicyRoutes(app, {});
+    app.log.info('Policy-driven surveillance SLA and compliance routes registered');
+  } catch (err: unknown) {
+    app.log.error({ err }, 'failed to register surveillance policy routes');
+  }
+
+  // Register P0 Unified Recorder Drivers, True Camera Verification & 400-Branch Mosaic routes
+  try {
+    await registerP0ControlPlaneRoutes(app, {});
+    app.log.info('P0 unified drivers, camera verification and 400-branch mosaic routes registered');
+  } catch (err: unknown) {
+    app.log.error({ err }, 'failed to register P0 control plane routes');
   }
 
   // Register banking analytics routes
