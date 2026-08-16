@@ -35,8 +35,7 @@ interface ControlRoomStats {
   };
 }
 
-// Dynamic stream limit based on user tier and network capacity
-// Operators can override via settings, but defaults to safe bandwidth allocation
+
 export const getMaxConcurrentStreams = (userTier: "basic" | "standard" | "premium" | "enterprise" = "standard") => {
   const limits = {
     basic: 16,     // 16 streams @ 2 Mbps each = 32 Mbps
@@ -51,54 +50,39 @@ export const CONTROL_ROOM_MAX_CONCURRENT_STREAMS = getMaxConcurrentStreams(
   (process.env.NEXT_PUBLIC_USER_TIER as any) || "standard"
 );
 
-const FALLBACK_CAMERAS: CameraType[] = [
- { id: "cam-001", name: "Lobby West", branchId: "branch-01", branchName: "North Campus", vendor: "hikvision", model: "DS-2CD2347G2-L", status: "online", channel: 1, sourceType: "ip-camera", connectionTransport: "edge-gateway", capabilities: { ptz: false, audio: true, events: true, analytics: ["motion", "occupancy"], talkback: { supported: false, transport: "none" } } },
- { id: "cam-002", name: "Loading Bay", branchId: "branch-01", branchName: "North Campus", vendor: "hikvision", model: "DS-2CD2347G2-L", status: "online", channel: 2, sourceType: "ip-camera", connectionTransport: "edge-gateway", capabilities: { ptz: true, audio: true, events: true, analytics: ["motion", "loitering"], talkback: { supported: false, transport: "none" } } },
- { id: "cam-003", name: "Warehouse Aisle", branchId: "branch-01", branchName: "North Campus", vendor: "cp-plus", model: "CP-UNV-IPC", status: "online", channel: 3, sourceType: "ip-camera", connectionTransport: "edge-gateway", capabilities: { ptz: false, audio: true, events: true, analytics: ["motion"], talkback: { supported: false, transport: "none" } } },
- { id: "cam-004", name: "Perimeter Gate", branchId: "branch-01", branchName: "North Campus", vendor: "hikvision", model: "DS-2CD2142FWD-IW", status: "online", channel: 4, sourceType: "ip-camera", connectionTransport: "edge-gateway", capabilities: { ptz: true, audio: false, events: true, analytics: ["intrusion"], talkback: { supported: false, transport: "none" } } },
- { id: "cam-005", name: "Main Entrance", branchId: "branch-02", branchName: "Downtown Retail", vendor: "hikvision", model: "DS-2CD2347G2-L", status: "online", channel: 1, sourceType: "ip-camera", connectionTransport: "cloudflare-tunnel", capabilities: { ptz: false, audio: true, events: true, analytics: ["line-crossing", "occupancy"], talkback: { supported: false, transport: "unknown" } } },
- { id: "cam-006", name: "Cash Office", branchId: "branch-02", branchName: "Downtown Retail", vendor: "cp-plus", model: "CP-UNV-IPC", status: "degraded", channel: 2, sourceType: "ip-camera", connectionTransport: "cloudflare-tunnel", capabilities: { ptz: false, audio: true, events: true, analytics: ["motion"], talkback: { supported: false, transport: "none" } } },
- { id: "cam-007", name: "Server Room", branchId: "branch-02", branchName: "Downtown Retail", vendor: "hikvision", model: "DS-2CD2587G2-LZS", status: "online", channel: 3, sourceType: "ip-camera", connectionTransport: "edge-gateway", capabilities: { ptz: false, audio: true, events: true, analytics: ["motion"], talkback: { supported: false, transport: "none" } } },
- { id: "cam-008", name: "Parking Lot", branchId: "branch-02", branchName: "Downtown Retail", vendor: "hikvision", model: "DS-2CD2142FWD-IW", status: "online", channel: 4, sourceType: "ip-camera", connectionTransport: "cloudflare-tunnel", capabilities: { ptz: true, audio: false, events: true, analytics: ["intrusion"], talkback: { supported: false, transport: "none" } } },
- { id: "cam-009", name: "Boiler Room", branchId: "branch-03", branchName: "Industrial Park", vendor: "hikvision", model: "DS-2CD2347G2-L", status: "online", channel: 1, sourceType: "ip-camera", connectionTransport: "edge-gateway", capabilities: { ptz: false, audio: true, events: true, analytics: ["motion"], talkback: { supported: false, transport: "none" } } },
- { id: "cam-010", name: "Dock Door 2", branchId: "branch-03", branchName: "Industrial Park", vendor: "cp-plus", model: "CP-UNV-IPC", status: "online", channel: 2, sourceType: "ip-camera", connectionTransport: "edge-gateway", capabilities: { ptz: false, audio: true, events: true, analytics: ["line-crossing"], talkback: { supported: false, transport: "none" } } },
- { id: "cam-011", name: "Receiving Gate", branchId: "branch-03", branchName: "Industrial Park", vendor: "hikvision", model: "DS-2CD2142FWD-IW", status: "alert", channel: 3, sourceType: "ip-camera", connectionTransport: "edge-gateway", capabilities: { ptz: true, audio: true, events: true, analytics: ["intrusion", "fire"], talkback: { supported: false, transport: "none" } } },
- { id: "cam-012", name: "Yard North", branchId: "branch-03", branchName: "Industrial Park", vendor: "hikvision", model: "DS-2CD2142FWD-IW", status: "online", channel: 4, sourceType: "ip-camera", connectionTransport: "edge-gateway", capabilities: { ptz: true, audio: false, events: true, analytics: ["motion"], talkback: { supported: false, transport: "none" } } },
-];
-
-const FALLBACK_STATS: ControlRoomStats = {
- totalCameras: 12,
- onlineCameras: 10,
- offlineCameras: 2,
- activeStreams: 9,
- openIncidents: 3,
- unacknowledgedAlerts: 4,
- recordingCameras: 8,
- storageUsagePercent: 58,
- storageSummary: {
-   totalCount: 5,
-   warningCount: 1,
-   smartIssueCount: 0,
-   raidIssueCount: 0,
-   writeProbeFailureCount: 1,
- },
+const DEFAULT_EMPTY_STATS: ControlRoomStats = {
+  totalCameras: 0,
+  onlineCameras: 0,
+  offlineCameras: 0,
+  activeStreams: 0,
+  openIncidents: 0,
+  unacknowledgedAlerts: 0,
+  recordingCameras: 0,
+  storageUsagePercent: 0,
+  storageSummary: {
+    totalCount: 0,
+    warningCount: 0,
+    smartIssueCount: 0,
+    raidIssueCount: 0,
+    writeProbeFailureCount: 0,
+  },
 };
 
 const getFallbackLayout = (allCameras: CameraType[]): GridLayout => ({
- name: "Substream overview",
- gridSize: "4x4",
- positions: allCameras.slice(0, 16).map((camera, position) => ({
-   position,
-   cameraId: camera.id,
-   stream: "sub" as const,
- })),
+  name: "Substream overview",
+  gridSize: "4x4",
+  positions: allCameras.slice(0, 16).map((camera, position) => ({
+    position,
+    cameraId: camera.id,
+    stream: "sub" as const,
+  })),
 });
 
 export default function ControlRoomPage() {
-  const [cameras, setCameras] = useState<CameraType[]>(FALLBACK_CAMERAS);
-  const [priorityCameraIds, setPriorityCameraIds] = useState<string[]>(["cam-011", "cam-006", "cam-005"]);
-  const [stats, setStats] = useState<ControlRoomStats>(FALLBACK_STATS);
-  const [liveDataMode, setLiveDataMode] = useState<"live" | "fallback">("fallback");
+  const [cameras, setCameras] = useState<CameraType[]>([]);
+  const [priorityCameraIds, setPriorityCameraIds] = useState<string[]>([]);
+  const [stats, setStats] = useState<ControlRoomStats>(DEFAULT_EMPTY_STATS);
+  const [liveDataMode, setLiveDataMode] = useState<"live" | "fallback">("live");
   const [activeView, setActiveView] = useState<"grid" | "handover">("grid");
   const [loading, setLoading] = useState(true);
   const [initialLayout, setInitialLayout] = useState<GridLayout | undefined>();
@@ -190,7 +174,7 @@ export default function ControlRoomPage() {
     try {
       const response = await fetch("/api/control/v1/alerts/alert-center?limit=200", { credentials: "include" });
       if (!response.ok) {
-        setPriorityCameraIds(["cam-011", "cam-006", "cam-005"]);
+        setPriorityCameraIds([]);
         return false;
       }
       const body = await response.json();
@@ -201,11 +185,11 @@ export default function ControlRoomPage() {
         .map((alert: { cameraId?: string }) => alert.cameraId)
         .filter((cameraId: unknown): cameraId is string => typeof cameraId === "string")));
 
-      setPriorityCameraIds(livePriorityIds.length > 0 ? livePriorityIds : ["cam-011", "cam-006", "cam-005"]);
+      setPriorityCameraIds(livePriorityIds);
       return livePriorityIds.length > 0;
     } catch (error) {
       console.error("Failed to load priority alerts:", error);
-      setPriorityCameraIds(["cam-011", "cam-006", "cam-005"]);
+      setPriorityCameraIds([]);
       return false;
     }
   };
@@ -217,21 +201,24 @@ export default function ControlRoomPage() {
       });
 
       if (!response.ok) {
-        setCameras(FALLBACK_CAMERAS);
-        setInitialLayout((current) => current ?? getFallbackLayout(FALLBACK_CAMERAS));
+        setCameras([]);
+        setInitialLayout(undefined);
         return false;
       }
 
       const body = await response.json();
       const allCameras = (body.data ?? []) as CameraType[];
-      const resolvedCameras = allCameras.length > 0 ? allCameras : FALLBACK_CAMERAS;
-      setCameras(resolvedCameras);
-      setInitialLayout((current) => current ?? getFallbackLayout(resolvedCameras));
-      return resolvedCameras.length > 0;
+      setCameras(allCameras);
+      if (allCameras.length > 0) {
+        setInitialLayout((current) => current ?? getFallbackLayout(allCameras));
+      } else {
+        setInitialLayout(undefined);
+      }
+      return allCameras.length > 0;
     } catch (error) {
       console.error("Failed to load cameras:", error);
-      setCameras(FALLBACK_CAMERAS);
-      setInitialLayout((current) => current ?? getFallbackLayout(FALLBACK_CAMERAS));
+      setCameras([]);
+      setInitialLayout(undefined);
       return false;
     }
   };
@@ -243,27 +230,27 @@ export default function ControlRoomPage() {
       });
 
       if (!response.ok) {
-        setStats(FALLBACK_STATS);
+        setStats(DEFAULT_EMPTY_STATS);
         return false;
       }
 
       const body = await response.json();
       const data = body.data ?? body;
       const nextStats: ControlRoomStats = {
-        totalCameras: Number(data.totalCameras ?? data.total_cameras ?? FALLBACK_STATS.totalCameras),
-        onlineCameras: Number(data.camerasOnline ?? data.cameras_online ?? FALLBACK_STATS.onlineCameras),
-        offlineCameras: Number(data.camerasOffline ?? data.cameras_offline ?? FALLBACK_STATS.offlineCameras),
-        activeStreams: Number(data.activeStreams ?? data.active_streams ?? FALLBACK_STATS.activeStreams),
-        openIncidents: Number(data.openIncidents ?? data.open_incidents ?? FALLBACK_STATS.openIncidents),
-        unacknowledgedAlerts: Number(data.unacknowledgedAlerts ?? data.unacknowledged_alerts ?? FALLBACK_STATS.unacknowledgedAlerts),
-        recordingCameras: Number(data.camerasRecording ?? data.cameras_recording ?? FALLBACK_STATS.recordingCameras),
-        storageUsagePercent: Number(data.storageUsagePercent ?? data.storage_usage_percent ?? FALLBACK_STATS.storageUsagePercent),
+        totalCameras: Number(data.totalCameras ?? data.total_cameras ?? 0),
+        onlineCameras: Number(data.camerasOnline ?? data.cameras_online ?? 0),
+        offlineCameras: Number(data.camerasOffline ?? data.cameras_offline ?? 0),
+        activeStreams: Number(data.activeStreams ?? data.active_streams ?? 0),
+        openIncidents: Number(data.openIncidents ?? data.open_incidents ?? 0),
+        unacknowledgedAlerts: Number(data.unacknowledgedAlerts ?? data.unacknowledged_alerts ?? 0),
+        recordingCameras: Number(data.camerasRecording ?? data.cameras_recording ?? 0),
+        storageUsagePercent: Number(data.storageUsagePercent ?? data.storage_usage_percent ?? 0),
         storageSummary: {
-          totalCount: Number(data.storageSummary?.totalCount ?? data.storage_summary?.total_count ?? FALLBACK_STATS.storageSummary.totalCount),
-          warningCount: Number(data.storageSummary?.warningCount ?? data.storage_summary?.warning_count ?? FALLBACK_STATS.storageSummary.warningCount),
-          smartIssueCount: Number(data.storageSummary?.smartIssueCount ?? data.storage_summary?.smart_issue_count ?? FALLBACK_STATS.storageSummary.smartIssueCount),
-          raidIssueCount: Number(data.storageSummary?.raidIssueCount ?? data.storage_summary?.raid_issue_count ?? FALLBACK_STATS.storageSummary.raidIssueCount),
-          writeProbeFailureCount: Number(data.storageSummary?.writeProbeFailureCount ?? data.storage_summary?.write_probe_failure_count ?? FALLBACK_STATS.storageSummary.writeProbeFailureCount),
+          totalCount: Number(data.storageSummary?.totalCount ?? data.storage_summary?.total_count ?? 0),
+          warningCount: Number(data.storageSummary?.warningCount ?? data.storage_summary?.warning_count ?? 0),
+          smartIssueCount: Number(data.storageSummary?.smartIssueCount ?? data.storage_summary?.smart_issue_count ?? 0),
+          raidIssueCount: Number(data.storageSummary?.raidIssueCount ?? data.storage_summary?.raid_issue_count ?? 0),
+          writeProbeFailureCount: Number(data.storageSummary?.writeProbeFailureCount ?? data.storage_summary?.write_probe_failure_count ?? 0),
         },
       };
 
@@ -271,7 +258,7 @@ export default function ControlRoomPage() {
       return nextStats.totalCameras > 0 || nextStats.onlineCameras > 0;
     } catch (error) {
       console.error("Failed to load stats:", error);
-      setStats(FALLBACK_STATS);
+      setStats(DEFAULT_EMPTY_STATS);
       return false;
     }
   };
@@ -391,19 +378,39 @@ export default function ControlRoomPage() {
 
       <div className="control-room-content">
         {activeView === "grid" ? (
-          <EnhancedCameraGrid
-            cameras={cameras}
-            initialLayout={initialLayout}
-            maxConcurrentStreams={CONTROL_ROOM_MAX_CONCURRENT_STREAMS}
-            priorityCameraIds={priorityCameraIds}
-            enableVirtualScrolling
-            enableGPUAcceleration
-            onActiveStreamsChange={handleActiveStreamsChange}
-            onMonitoredCamerasChange={handleMonitoredCamerasChange}
-            onLayoutChange={(layout) => {
-              console.log("Layout saved:", layout);
-            }}
-          />
+          cameras.length === 0 ? (
+            <div className="empty-control-room-card">
+              <div className="empty-icon-wrap">
+                <Camera size={44} className="empty-icon" />
+              </div>
+              <h3 className="empty-title">No Cameras Registered Yet</h3>
+              <p className="empty-desc">
+                There are currently no active cameras in the database. Onboard a new branch or discover devices to start monitoring live video streams.
+              </p>
+              <div className="empty-actions">
+                <a href="/admin/branch-onboarding" className="btn-action-primary">
+                  + Onboard Branch
+                </a>
+                <a href="/admin/database" className="btn-action-secondary">
+                  Database & Device Manager
+                </a>
+              </div>
+            </div>
+          ) : (
+            <EnhancedCameraGrid
+              cameras={cameras}
+              initialLayout={initialLayout}
+              maxConcurrentStreams={CONTROL_ROOM_MAX_CONCURRENT_STREAMS}
+              priorityCameraIds={priorityCameraIds}
+              enableVirtualScrolling
+              enableGPUAcceleration
+              onActiveStreamsChange={handleActiveStreamsChange}
+              onMonitoredCamerasChange={handleMonitoredCamerasChange}
+              onLayoutChange={(layout) => {
+                console.log("Layout saved:", layout);
+              }}
+            />
+          )
         ) : (
           <ShiftHandoverPanel />
         )}
@@ -415,6 +422,89 @@ export default function ControlRoomPage() {
           background: #f3f4f6;
           display: flex;
           flex-direction: column;
+        }
+
+        .empty-control-room-card {
+          background: white;
+          border: 1px solid #e5e7eb;
+          border-radius: 16px;
+          padding: 64px 32px;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          text-align: center;
+          max-width: 560px;
+          margin: 40px auto;
+          box-shadow: 0 4px 20px rgba(0, 0, 0, 0.04);
+        }
+
+        .empty-icon-wrap {
+          width: 80px;
+          height: 80px;
+          border-radius: 50%;
+          background: #eff6ff;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          margin-bottom: 20px;
+          color: #3b82f6;
+        }
+
+        .empty-title {
+          font-size: 20px;
+          font-weight: 700;
+          color: #1e293b;
+          margin: 0 0 8px 0;
+        }
+
+        .empty-desc {
+          font-size: 14px;
+          color: #64748b;
+          margin: 0 0 24px 0;
+          line-height: 1.5;
+        }
+
+        .empty-actions {
+          display: flex;
+          gap: 12px;
+          flex-wrap: wrap;
+          justify-content: center;
+        }
+
+        .btn-action-primary {
+          display: inline-flex;
+          align-items: center;
+          padding: 10px 20px;
+          background: #2563eb;
+          color: white;
+          border-radius: 8px;
+          font-weight: 600;
+          font-size: 14px;
+          text-decoration: none;
+          transition: background 0.2s;
+        }
+
+        .btn-action-primary:hover {
+          background: #1d4ed8;
+        }
+
+        .btn-action-secondary {
+          display: inline-flex;
+          align-items: center;
+          padding: 10px 20px;
+          background: #f1f5f9;
+          color: #334155;
+          border: 1px solid #cbd5e1;
+          border-radius: 8px;
+          font-weight: 600;
+          font-size: 14px;
+          text-decoration: none;
+          transition: background 0.2s;
+        }
+
+        .btn-action-secondary:hover {
+          background: #e2e8f0;
         }
 
         .control-room-offline-banner {

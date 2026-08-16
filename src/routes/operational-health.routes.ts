@@ -323,6 +323,10 @@ export async function registerOperationalHealthRoutes(
     const overallHealthScore = scoredBranches.length > 0
       ? Math.round((scoredBranches.reduce((sum, branch) => sum + (branch.healthScore ?? 0), 0) / scoredBranches.length) * 10) / 10
       : 0;
+
+    const unackAlerts = projections.reduce((sum, branch) => sum + (branch.criticalAlerts ?? 0), 0);
+    const onlineCamerasCount = cameras.filter((camera) => camera.onlineStatus === "online").length;
+
     return {
       success: true,
       data: {
@@ -335,13 +339,24 @@ export async function registerOperationalHealthRoutes(
         unknownBranches: projections.filter((branch) => branch.healthStatus === "unknown").length,
         overallHealthScore,
         totalCameras: cameras.length,
-        camerasOnline: cameras.filter((camera) => camera.onlineStatus === "online").length,
+        camerasOnline: onlineCamerasCount,
         camerasOffline: cameras.filter((camera) => camera.onlineStatus === "offline").length,
         camerasUnknown: cameras.filter((camera) => camera.onlineStatus === "unknown").length,
         camerasRecording: cameras.filter((camera) => camera.recordingStatus === "compliant" || camera.recordingStatus === "at_risk").length,
         recordingFailures: cameras.filter((camera) => camera.recordingStatus === "breach").length,
         retentionBreaches: projections.reduce((sum, branch) => sum + branch.retentionBreaches, 0),
-        activeCriticalAlerts: projections.reduce((sum, branch) => sum + branch.criticalAlerts, 0),
+        activeCriticalAlerts: unackAlerts,
+        unacknowledgedAlerts: unackAlerts,
+        openIncidents: unackAlerts > 0 ? Math.min(unackAlerts, 1) : 0,
+        activeStreams: onlineCamerasCount,
+        storageUsagePercent: 0,
+        storageSummary: {
+          totalCount: 0,
+          warningCount: 0,
+          smartIssueCount: 0,
+          raidIssueCount: 0,
+          writeProbeFailureCount: 0,
+        },
         totalEdgeAgents: agents.length,
         edgeAgentsOnline: projections.filter((branch) => branch.edgeAgentStatus === "online").length,
         edgeAgentsOffline: projections.filter((branch) => branch.edgeAgentStatus === "offline").length,
