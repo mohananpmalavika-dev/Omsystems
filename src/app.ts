@@ -2266,10 +2266,10 @@ export async function buildApp(options?: {
       });
     }
   });
+  await registerAuthRoutes(app, (extendedStore ?? store) as any);
+  await registerEnterpriseAuthRoutes(app, (extendedStore ?? store) as any);
   if (extendedStore) {
     await registerDeviceManagementRoutes(app, extendedStore);
-    await registerAuthRoutes(app, extendedStore);
-    await registerEnterpriseAuthRoutes(app, extendedStore);
     await registerOrganizationRoutes(app, extendedStore);
     await registerBranchLifecycleRoutes(app, extendedStore);
     await registerUserRoutes(app, extendedStore);

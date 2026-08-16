@@ -389,11 +389,193 @@ export class MemoryStore implements ControlPlaneStore {
   readonly remediationActions: any[] = [];
   readonly complianceRisks: any[] = [];
   readonly complianceAuditLog: any[] = [];
+  readonly userSessions = new Map<string, {
+    id: string;
+    userId: string;
+    tenantId: string;
+    accessTokenHash: string;
+    refreshTokenHash: string;
+    ipAddress?: string;
+    userAgent?: string;
+    accessExpiresAt: Date;
+    expiresAt: Date;
+    lastActivityAt: Date;
+    createdAt: Date;
+  }>();
+  readonly passwordResetTokens = new Map<string, {
+    id: string;
+    userId: string;
+    tokenHash: string;
+    expiresAt: Date;
+    usedAt?: Date;
+    createdAt: Date;
+  }>();
 
   async close() {}
 
   async getUser(identity: string) {
     return this.users.get(identity);
+  }
+
+  async getUserById(id: string) {
+    return this.users.get(id);
+  }
+
+  async findUserByEmail(email: string, _tenantSlug?: string) {
+    for (const user of this.users.values()) {
+      if (user.email?.toLowerCase() === email.toLowerCase()) {
+        return user;
+      }
+    }
+    return undefined;
+  }
+
+  async findUserByUsername(username: string, _tenantSlug?: string) {
+    for (const user of this.users.values()) {
+      if (user.username?.toLowerCase() === username.toLowerCase()) {
+        return user;
+      }
+    }
+    return undefined;
+  }
+
+  async createUserSession(
+    userId: string,
+    tenantId: string,
+    accessTokenHash: string,
+    refreshTokenHash: string,
+    ipAddress?: string,
+    userAgent?: string,
+  ) {
+    const id = randomUUID();
+    const now = new Date();
+    const session = {
+      id,
+      userId,
+      tenantId,
+      accessTokenHash,
+      refreshTokenHash,
+      ipAddress,
+      userAgent,
+      accessExpiresAt: new Date(now.getTime() + 60 * 60 * 1000),
+      expiresAt: new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000),
+      lastActivityAt: now,
+      createdAt: now,
+    };
+    this.userSessions.set(id, session);
+    return {
+      id: session.id,
+      userId: session.userId,
+      tenantId: session.tenantId,
+      accessExpiresAt: session.accessExpiresAt,
+      expiresAt: session.expiresAt,
+    };
+  }
+
+  async findSessionByAccessToken(tokenHash: string) {
+    const now = new Date();
+    for (const session of this.userSessions.values()) {
+      if (session.accessTokenHash === tokenHash && session.accessExpiresAt > now && session.expiresAt > now) {
+        return { ...session };
+      }
+    }
+    return undefined;
+  }
+
+  async findSessionByRefreshToken(tokenHash: string) {
+    const now = new Date();
+    for (const session of this.userSessions.values()) {
+      if (session.refreshTokenHash === tokenHash && session.expiresAt > now) {
+        return { ...session };
+      }
+    }
+    return undefined;
+  }
+
+  async updateSessionAccessToken(
+    sessionId: string,
+    newTokenHash: string,
+    ipAddress?: string,
+    userAgent?: string,
+  ) {
+    const session = this.userSessions.get(sessionId);
+    if (session) {
+      session.accessTokenHash = newTokenHash;
+      session.accessExpiresAt = new Date(Date.now() + 60 * 60 * 1000);
+      session.lastActivityAt = new Date();
+      if (ipAddress) session.ipAddress = ipAddress;
+      if (userAgent) session.userAgent = userAgent;
+    }
+  }
+
+  async updateSessionActivity(sessionId: string) {
+    const session = this.userSessions.get(sessionId);
+    if (session) {
+      session.lastActivityAt = new Date();
+    }
+  }
+
+  async getUserSession(sessionId: string) {
+    const session = this.userSessions.get(sessionId);
+    return session ? { ...session } : undefined;
+  }
+
+  async listUserSessions(userId: string) {
+    const now = new Date();
+    const list: any[] = [];
+    for (const session of this.userSessions.values()) {
+      if (session.userId === userId && session.expiresAt > now) {
+        list.push({
+          id: session.id,
+          userId: session.userId,
+          ipAddress: session.ipAddress,
+          userAgent: session.userAgent,
+          accessExpiresAt: session.accessExpiresAt,
+          expiresAt: session.expiresAt,
+          lastActivityAt: session.lastActivityAt,
+          createdAt: session.createdAt,
+        });
+      }
+    }
+    return list.sort((a, b) => new Date(b.lastActivityAt).getTime() - new Date(a.lastActivityAt).getTime());
+  }
+
+  async deleteUserSession(sessionId: string) {
+    this.userSessions.delete(sessionId);
+  }
+
+  async deleteAllUserSessions(userId: string) {
+    for (const [id, session] of this.userSessions.entries()) {
+      if (session.userId === userId) {
+        this.userSessions.delete(id);
+      }
+    }
+  }
+
+  async createPasswordResetToken(userId: string, tokenHash: string) {
+    const id = randomUUID();
+    const now = new Date();
+    const record = {
+      id,
+      userId,
+      tokenHash,
+      expiresAt: new Date(now.getTime() + 60 * 60 * 1000),
+      createdAt: now,
+    };
+    this.passwordResetTokens.set(tokenHash, record);
+    return record;
+  }
+
+  async findPasswordResetToken(tokenHash: string) {
+    return this.passwordResetTokens.get(tokenHash);
+  }
+
+  async markPasswordResetTokenUsed(tokenId: string) {
+    for (const token of this.passwordResetTokens.values()) {
+      if (token.id === tokenId) {
+        token.usedAt = new Date();
+      }
+    }
   }
 
   async listTenants() {

@@ -259,7 +259,7 @@ export const authApi = {
     createdAt: string; expiresAt: string;
   }> }>('/v1/auth/sessions'),
 
-  revokeSession: (id: string) => fetchApi<void>(`/v1/auth/sessions/${id}`, { method: 'DELETE' }),
+  revokeSession: (id: string) => fetchApi<void>(`/v1/auth/sessions/${encodeURIComponent(id)}`, { method: 'DELETE' }),
 
   changePassword: (userId: string, currentPassword: string, newPassword: string) =>
     fetchApi<{ success: boolean }>(`/v1/users/${userId}/change-password`, {

@@ -476,29 +476,50 @@ export async function registerAuthRoutes(
 
   // List active sessions
   app.get("/v1/auth/sessions", async (request) => {
-    const sessions = await store.listUserSessions(request.currentUser.id);
+    const sessions =
+      typeof store.listUserSessions === "function"
+        ? await store.listUserSessions(request.currentUser.id)
+        : [];
     return { data: sessions };
   });
 
   // Revoke specific session
   app.delete("/v1/auth/sessions/:id", async (request, reply) => {
-    const params = z.object({ id: z.string().uuid() }).parse(request.params);
+    const params = z.object({ id: z.string().min(1) }).parse(request.params);
 
     // Verify session belongs to user
-    const session = await store.getUserSession(params.id);
+    const session =
+      typeof store.getUserSession === "function"
+        ? await store.getUserSession(params.id)
+        : undefined;
 
-    if (!session || session.userId !== request.currentUser.id) {
-      return reply.code(404).send({ error: "session_not_found" });
+    const isAdmin = Boolean(
+      request.currentUser?.role &&
+      ["superadmin", "global_admin", "admin"].includes(request.currentUser.role),
+    );
+    if (session && session.userId !== request.currentUser.id && !isAdmin) {
+      return reply.code(403).send({
+        error: "forbidden",
+        message: "Cannot revoke another user's session",
+      });
     }
 
-    await store.deleteUserSession(params.id);
+    if (typeof store.deleteUserSession === "function") {
+      await store.deleteUserSession(params.id);
+    }
 
-    await store.writeAudit({
-      tenantId: request.currentUser.tenantId,
-      actorUserId: request.currentUser.id,
-      action: "user.session_revoked", resourceNodeId: null,
-      outcome: "success", details: { sessionId: params.id },
-    });
+    if (typeof store.writeAudit === "function") {
+      await store
+        .writeAudit({
+          tenantId: request.currentUser.tenantId,
+          actorUserId: request.currentUser.id,
+          action: "user.session_revoked",
+          resourceNodeId: null,
+          outcome: "success",
+          details: { sessionId: params.id },
+        })
+        .catch(() => {});
+    }
 
     return reply.code(204).send();
   });

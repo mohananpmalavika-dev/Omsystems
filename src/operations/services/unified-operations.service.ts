@@ -14,7 +14,7 @@ import {
 } from "../domain/command-center-summary.types.js";
 import { alertIncidentRepository } from "../../incidents/index.js";
 import { maintenanceWindowRepository } from "../../maintenance/index.js";
-import type { ControlPlaneStore } from "../../control-plane-store.js";
+import { hasExtendedInfrastructure, type ControlPlaneStore } from "../../control-plane-store.js";
 
 export class UnifiedOperationsService {
   async getCommandCenterSummary(tenantId = "tenant-default", store?: ControlPlaneStore): Promise<CommandCenterSummary> {
@@ -64,11 +64,11 @@ export class UnifiedOperationsService {
         category: "P1_ALERT",
         severity: "P1",
         branchId: incident.branchId || "default-branch",
-        branchName: incident.branchId || "Active Branch",
-        entityId: incident.primaryAlertId || incident.id,
+        branchName: incident.branchName || "Active Branch",
+        entityId: incident.rootCauseAlertId || incident.id,
         entityType: "INCIDENT",
-        title: incident.title || "Surveillance Exception Detected",
-        description: incident.summary || "Incident triage active",
+        title: incident.rootCauseSummary || "Surveillance Exception Detected",
+        description: incident.rootCauseSummary || "Incident triage active",
         occurredAt: incident.startedAt ? new Date(incident.startedAt) : new Date(),
         actionUrl: `/incidents/${incident.id}`,
       });
@@ -132,7 +132,7 @@ export class UnifiedOperationsService {
   }
 
   async getFleetBranchSummaries(tenantId = "tenant-default", store?: ControlPlaneStore): Promise<BranchOperationalView[]> {
-    if (store) {
+    if (store && hasExtendedInfrastructure(store)) {
       try {
         const nodes = await store.listOrganizationNodes(tenantId, "branch", undefined, true);
         if (Array.isArray(nodes)) {
@@ -157,9 +157,9 @@ export class UnifiedOperationsService {
 
             views.push({
               branchId: node.id,
-              branchCode: node.code || (node.name || "BR").slice(0, 8).toUpperCase(),
+              branchCode: (node as any).code || (node.name || "BR").slice(0, 8).toUpperCase(),
               name: node.name,
-              region: node.region || "Default Region",
+              region: (node as any).region || "Default Region",
               operationalState: isOffline ? "OFFLINE" : isCritical ? "WARNING" : "HEALTHY",
               internet: {
                 state: isOffline ? "OFFLINE" : "HEALTHY",

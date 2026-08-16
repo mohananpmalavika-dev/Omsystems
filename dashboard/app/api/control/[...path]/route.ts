@@ -145,6 +145,16 @@ async function proxyControlRequest(request: NextRequest, context: RouteContext) 
       outgoing.cookies.delete("sentinel_refresh");
       return outgoing;
     }
+
+    if (response.status === 204 || response.status === 205 || response.status === 304) {
+      return new Response(null, {
+        status: response.status,
+        headers: {
+          "cache-control": "no-store",
+        },
+      });
+    }
+
     const responseType = response.headers.get("content-type") ?? "application/json";
     const contentDisposition = response.headers.get("content-disposition");
     const contentLength = response.headers.get("content-length");
