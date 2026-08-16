@@ -4,6 +4,7 @@
  */
 
 import { BaseDetector, type DetectionFrame, type DetectionResult } from "./base-detector.js";
+import { objectTracker } from "../tracking/object-tracker.js";
 
 export interface HeatMapConfig {
   gridWidth: number; // Number of cells horizontally
@@ -129,9 +130,17 @@ export class HeatMapGenerator extends BaseDetector {
    * Get tracked objects from frame
    */
   private async getTrackedObjects(frame: DetectionFrame): Promise<any[]> {
-    // TODO: Get tracked persons and vehicles from other detectors
-    // This should integrate with PersonDetector and VehicleDetector
-    return [];
+    const activeTracks = objectTracker.getActiveTracks(frame.cameraId);
+    return activeTracks.map((track) => {
+      const latest = track.trajectory[track.trajectory.length - 1];
+      const previous = track.trajectory.length > 1 ? track.trajectory[track.trajectory.length - 2] : undefined;
+      return {
+        trackId: track.trackId,
+        objectType: track.objectClass,
+        boundingBox: latest?.bbox || { x: 0, y: 0, width: 0.1, height: 0.1 },
+        previousPosition: previous ? { x: previous.x, y: previous.y } : undefined,
+      };
+    });
   }
 
   /**

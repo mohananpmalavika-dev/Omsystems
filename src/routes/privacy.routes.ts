@@ -7,6 +7,9 @@ import type {
   PrivacyBreachInput,
   PrivacyPurposeInput,
 } from "../control-plane-store.js";
+import { privacyPolicyService } from "../privacy/services/privacy-policy.service.js";
+import { privacyDecisionService } from "../privacy/services/privacy-decision.service.js";
+import { privacyOverrideService } from "../privacy/services/privacy-override.service.js";
 
 const idParams = z.object({ id: z.string().uuid() });
 const cameraParams = z.object({ cameraId: z.string().min(1) });
@@ -254,5 +257,109 @@ export async function registerPrivacyRoutes(
     });
 
     return breach;
+  });
+
+  // ============================================================================
+  // Static Privacy Zones & Unmasking Decision Pipeline
+  // ============================================================================
+
+  app.get("/v1/privacy/zones/:cameraId", async (request) => {
+    const { cameraId } = cameraParams.parse(request.params);
+    const zones = privacyPolicyService.getStaticZones(cameraId);
+    return { data: zones };
+  });
+
+  app.post("/v1/privacy/zones", async (request, reply) => {
+    const zoneSchema = z.object({
+      cameraId: z.string().min(1),
+      name: z.string().min(1),
+      shape: z.enum(["polygon", "rectangle"]),
+      coordinates: z.array(z.object({ x: z.number().min(0).max(1), y: z.number().min(0).max(1) })),
+      mode: z.enum(["solid", "pixelate", "blur"]),
+      appliesTo: z.enum(["live", "playback", "export", "all"]),
+      mandatory: z.boolean().optional(),
+      overrideAllowed: z.boolean().optional(),
+    });
+
+    const body = zoneSchema.parse(request.body);
+    const saved = await privacyPolicyService.setStaticZone(body);
+    return reply.code(201).send({ success: true, data: saved });
+  });
+
+  app.post("/v1/privacy/unmask/request", async (request, reply) => {
+    const unmaskRequestSchema = z.object({
+      cameraId: z.string().min(1),
+      branchId: z.string().optional(),
+      operation: z.enum(["LIVE", "PLAYBACK"]),
+      reason: z.string().min(5),
+      caseNumber: z.string().optional(),
+      incidentId: z.string().optional(),
+      durationMinutes: z.number().min(1).max(60).optional(),
+    });
+
+    const body = unmaskRequestSchema.parse(request.body);
+    const user = (request as any).currentUser;
+
+    const grant = await privacyOverrideService.requestUnmask({
+      tenantId: user?.tenantId || "default-bank-tenant",
+      userId: user?.id || "operator-01",
+      username: user?.username || "operator",
+      cameraId: body.cameraId,
+      branchId: body.branchId,
+      operation: body.operation,
+      reason: body.reason,
+      caseNumber: body.caseNumber,
+      incidentId: body.incidentId,
+      durationMinutes: body.durationMinutes,
+      sourceIp: request.ip,
+    });
+
+    return reply.code(201).send({ success: true, data: grant });
+  });
+
+  app.post("/v1/privacy/decision", async (request, reply) => {
+    const decisionSchema = z.object({
+      cameraId: z.string().min(1),
+      branchId: z.string().optional(),
+      operation: z.enum(["LIVE_VIEW", "PLAYBACK", "EXPORT"]),
+      incidentId: z.string().optional(),
+      caseNumber: z.string().optional(),
+    });
+
+    const body = decisionSchema.parse(request.body);
+    const user = (request as any).currentUser;
+
+    const principal = {
+      userId: user?.id || "operator-01",
+      tenantId: user?.tenantId || "default-bank-tenant",
+      username: user?.username || "operator",
+      email: user?.email || "operator@bank.internal",
+      displayName: user?.displayName || "Operator",
+      roles: user?.roles || ["BANK_OPERATOR"],
+      permissions: user?.permissions || [],
+      scope: { type: "ALL_BRANCHES" as const },
+      authMethod: "LOCAL" as const,
+      sessionId: "session-01",
+      issuedAt: new Date(),
+      expiresAt: new Date(Date.now() + 3600000),
+    };
+
+    const decision = await privacyDecisionService.evaluate({
+      principal,
+      cameraId: body.cameraId,
+      branchId: body.branchId,
+      operation: body.operation,
+      incidentId: body.incidentId,
+      caseNumber: body.caseNumber,
+      sourceIp: request.ip,
+    });
+
+    return reply.code(200).send({ success: true, data: decision });
+  });
+
+  app.get("/v1/privacy/audit-logs", async (request) => {
+    const user = (request as any).currentUser;
+    const logs = privacyOverrideService.getAuditLogs(user?.tenantId);
+    return { data: logs };
   });
 }

@@ -2,29 +2,69 @@
  * Enterprise Authentication Routes
  * 
  * Provides endpoints for:
- * - SAML 2.0 SSO
- * - OpenID Connect (OIDC)
- * - LDAP/Active Directory
+ * - SAML 2.0 SSO (Initiate, Callback, Metadata)
+ * - OpenID Connect / Entra ID (Initiate, Callback, Token Exchange)
+ * - LDAP / Active Directory
+ * - Local Authentication
+ * - Token Refresh & Revocation
+ * - Identity Provider Management (Admin protected)
  */
 
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
-// import { samlProvider } from '../security/saml-provider.js';
-// import { oidcProvider } from '../security/oidc-provider.js';
-// import { ldapConnector } from '../security/ldap-connector.js';
 import type { ControlPlaneStore } from '../control-plane-store.js';
-import { randomBytes } from 'node:crypto';
+import { identityService } from '../identity/services/identity.service.js';
+import { oidcProvider } from '../security/oidc-provider.js';
+import { samlProvider } from '../security/saml-provider.js';
+import { BankingPermissions } from '../identity/domain/identity.types.js';
 
-// Stub providers - replace with actual implementations
-const samlProvider: any = null;
-const oidcProvider: any = null;
-const ldapConnector: any = null;
+const samlCallbackSchema = z.object({
+  SAMLResponse: z.string().min(1),
+  RelayState: z.string().optional(),
+});
 
-// Helper to generate JWT tokens (placeholder - integrate with your actual token generation)
-function generateToken(payload: Record<string, any>): string {
-  // TODO: Replace with your actual JWT generation logic from auth middleware
-  return randomBytes(32).toString('hex');
-}
+const oidcLoginParamsSchema = z.object({
+  tenantId: z.string().min(1),
+});
+
+const oidcCallbackSchema = z.object({
+  code: z.string().optional(),
+  state: z.string().min(1),
+  id_token: z.string().optional(),
+  error: z.string().optional(),
+  error_description: z.string().optional(),
+});
+
+const ldapLoginSchema = z.object({
+  tenantId: z.string().min(1).optional(),
+  username: z.string().min(1),
+  password: z.string().min(1),
+});
+
+const localLoginSchema = z.object({
+  tenantId: z.string().min(1).optional(),
+  username: z.string().min(1),
+  password: z.string().min(1),
+});
+
+const refreshTokenSchema = z.object({
+  refreshToken: z.string().min(32),
+});
+
+const logoutSchema = z.object({
+  sessionId: z.string().min(1),
+  refreshToken: z.string().optional(),
+});
+
+const registerOidcConfigSchema = z.object({
+  tenantId: z.string().min(1),
+  provider: z.enum(['azure-ad', 'okta', 'auth0', 'keycloak', 'google', 'generic']),
+  issuerUrl: z.string().url(),
+  clientId: z.string().min(1),
+  clientSecret: z.string().optional(),
+  redirectUri: z.string().url(),
+  scopes: z.array(z.string()).optional(),
+});
 
 export async function registerEnterpriseAuthRoutes(
   app: FastifyInstance,
@@ -39,21 +79,17 @@ export async function registerEnterpriseAuthRoutes(
    * Initiate SAML SSO login
    */
   app.get('/v1/auth/saml/login/:tenantId', {
-    config: { noAuth: true }
+    config: { noAuth: true },
   }, async (request, reply) => {
     const { tenantId } = z.object({ tenantId: z.string().min(1) }).parse(request.params);
     const { redirect } = z.object({ redirect: z.string().optional() }).parse(request.query);
-    
+
     try {
-      const { loginUrl, requestId } = await samlProvider.initiateLogin(tenantId, redirect);
-      
-      // Store requestId for validation (requires session middleware)
-      // For now, client must track state
-      
-      return reply.redirect(loginUrl);
-    } catch (error) {
-      request.log.error({ error, tenantId }, 'SAML login initiation failed');
-      return reply.code(500).send({ error: 'saml_initiation_failed' });
+      const { url } = await samlProvider.getLoginUrl(redirect || '/dashboard');
+      return reply.redirect(url);
+    } catch (error: any) {
+      request.log.error({ error: error?.message, tenantId }, 'SAML login initiation failed');
+      return reply.code(500).send({ error: 'saml_initiation_failed', message: error?.message });
     }
   });
 
@@ -62,377 +98,213 @@ export async function registerEnterpriseAuthRoutes(
    * Handle SAML assertion callback from IdP
    */
   app.post('/v1/auth/saml/callback', {
-    config: { noAuth: true }
+    config: { noAuth: true },
   }, async (request, reply) => {
-    const body = z.object({
-      SAMLResponse: z.string().min(1),
-      RelayState: z.string().optional()
-    }).parse(request.body);
-    
+    const body = samlCallbackSchema.parse(request.body);
+
     try {
-      const { profile, tenantId, redirectUrl } = await samlProvider.handleCallback(body.SAMLResponse);
-      
-      // TODO: Create or update user in database
-      // const user = await store.findOrCreateSAMLUser(profile, tenantId);
-      
-      // Generate token
-      const token = generateToken({
-        userId: profile.userId,
-        email: profile.email,
-        tenantId,
-        authMethod: 'saml'
+      const authResult = await identityService.authenticate({
+        providerType: 'SAML',
+        samlResponse: body.SAMLResponse,
+        clientIp: request.ip,
+        userAgent: request.headers['user-agent'],
       });
-      
-      // Redirect to frontend with token
-      const finalRedirect = redirectUrl || '/dashboard';
-      return reply.redirect(`${finalRedirect}?token=${token}`);
-    } catch (error) {
-      request.log.error({ error }, 'SAML callback failed');
-      return reply.redirect('/login?error=saml_authentication_failed');
+
+      const redirectTarget = body.RelayState || '/dashboard';
+      const separator = redirectTarget.includes('?') ? '&' : '?';
+      return reply.redirect(`${redirectTarget}${separator}token=${authResult.accessToken}&refreshToken=${authResult.refreshToken}`);
+    } catch (error: any) {
+      request.log.error({ error: error?.message }, 'SAML callback authentication failed');
+      return reply.redirect(`/login?error=saml_authentication_failed&reason=${encodeURIComponent(error?.message || '')}`);
     }
   });
 
   /**
-   * GET /v1/auth/saml/logout/:tenantId
-   * Initiate SAML Single Logout
+   * GET /v1/auth/saml/metadata
+   * Returns SP SAML metadata XML
    */
-  app.get('/v1/auth/saml/logout/:tenantId', {
-    config: { noAuth: true }
-  }, async (request, reply) => {
-    const { tenantId } = z.object({ tenantId: z.string().min(1) }).parse(request.params);
-    const { nameId, sessionIndex } = z.object({
-      nameId: z.string(),
-      sessionIndex: z.string().optional()
-    }).parse(request.query);
-    
-    try {
-      const { logoutUrl } = await samlProvider.initiateLogout(tenantId, nameId, sessionIndex);
-      return reply.redirect(logoutUrl);
-    } catch (error) {
-      request.log.error({ error, tenantId }, 'SAML logout failed');
-      return reply.code(500).send({ error: 'saml_logout_failed' });
-    }
-  });
-
-  /**
-   * POST /v1/auth/saml/logout/callback
-   * Handle SAML logout response from IdP
-   */
-  app.post('/v1/auth/saml/logout/callback', {
-    config: { noAuth: true }
-  }, async (request, reply) => {
-    const body = z.object({
-      SAMLResponse: z.string().min(1)
-    }).parse(request.body);
-    
-    try {
-      await samlProvider.handleLogoutCallback(body.SAMLResponse);
-      return reply.redirect('/login?logged_out=true');
-    } catch (error) {
-      request.log.error({ error }, 'SAML logout callback failed');
-      return reply.redirect('/login?error=saml_logout_failed');
-    }
-  });
-
-  /**
-   * GET /v1/auth/saml/metadata/:tenantId
-   * Get SAML Service Provider metadata XML
-   */
-  app.get('/v1/auth/saml/metadata/:tenantId', {
-    config: { noAuth: true }
-  }, async (request, reply) => {
-    const { tenantId } = z.object({ tenantId: z.string().min(1) }).parse(request.params);
-    
-    try {
-      const metadata = await samlProvider.getMetadata(tenantId);
-      return reply.type('application/xml').send(metadata);
-    } catch (error) {
-      request.log.error({ error, tenantId }, 'SAML metadata generation failed');
-      return reply.code(500).send({ error: 'saml_metadata_failed' });
-    }
+  app.get('/v1/auth/saml/metadata', {
+    config: { noAuth: true },
+  }, async (_request, reply) => {
+    const metadata = samlProvider.getMetadata();
+    return reply.type('application/xml').send(metadata);
   });
 
   // ============================================================================
-  // OpenID Connect (OIDC) Routes
+  // OpenID Connect (OIDC) / Azure AD Routes
   // ============================================================================
 
   /**
    * GET /v1/auth/oidc/login/:tenantId
-   * Initiate OIDC authentication flow
+   * Initiate OIDC login with PKCE
    */
   app.get('/v1/auth/oidc/login/:tenantId', {
-    config: { noAuth: true }
+    config: { noAuth: true },
   }, async (request, reply) => {
-    const { tenantId } = z.object({ tenantId: z.string().min(1) }).parse(request.params);
+    const { tenantId } = oidcLoginParamsSchema.parse(request.params);
     const { redirect } = z.object({ redirect: z.string().optional() }).parse(request.query);
-    
+
     try {
-      const { authUrl, state } = await oidcProvider.initiateLogin(tenantId, redirect);
+      const { authUrl } = await oidcProvider.initiateLogin(tenantId, redirect);
       return reply.redirect(authUrl);
-    } catch (error) {
-      request.log.error({ error, tenantId }, 'OIDC login initiation failed');
-      return reply.code(500).send({ error: 'oidc_initiation_failed' });
+    } catch (error: any) {
+      request.log.error({ error: error?.message, tenantId }, 'OIDC initiation failed');
+      return reply.code(500).send({ error: 'oidc_initiation_failed', message: error?.message });
     }
   });
 
   /**
-   * GET /v1/auth/oidc/callback
-   * Handle OIDC callback after user authentication
+   * GET/POST /v1/auth/oidc/callback
+   * Handle OIDC Authorization Code callback
    */
-  app.get('/v1/auth/oidc/callback', {
-    config: { noAuth: true }
-  }, async (request, reply) => {
-    const { state, code, error: authError } = z.object({
-      state: z.string().optional(),
-      code: z.string().optional(),
-      error: z.string().optional()
-    }).parse(request.query);
-    
-    if (authError) {
-      return reply.redirect(`/login?error=oidc_${authError}`);
-    }
-    
-    if (!state) {
-      return reply.code(400).send({ error: 'Missing state parameter' });
-    }
-    
+  const handleOidcCallback = async (request: FastifyRequest, reply: FastifyReply) => {
+    const params = request.method === 'POST' ? request.body : request.query;
+    const body = oidcCallbackSchema.parse(params);
+
     try {
-      const callbackUrl = `${request.protocol}://${request.hostname}${request.url}`;
-      const { profile, tenantId, redirectUrl } = await oidcProvider.handleCallback(callbackUrl, state);
-      
-      // TODO: Create or update user in database
-      // const user = await store.findOrCreateOIDCUser(profile, tenantId);
-      
-      // Generate token
-      const token = generateToken({
-        userId: profile.userId,
-        email: profile.email,
-        tenantId,
-        authMethod: 'oidc'
+      const authResult = await identityService.authenticate({
+        providerType: 'OIDC',
+        oidcCallback: {
+          code: body.code,
+          state: body.state,
+          id_token: body.id_token,
+        },
+        clientIp: request.ip,
+        userAgent: request.headers['user-agent'],
       });
-      
-      // Redirect to frontend with token
-      const finalRedirect = redirectUrl || '/dashboard';
-      return reply.redirect(`${finalRedirect}?token=${token}`);
-    } catch (error) {
-      request.log.error({ error }, 'OIDC callback failed');
-      return reply.redirect('/login?error=oidc_authentication_failed');
-    }
-  });
 
-  /**
-   * GET /v1/auth/oidc/logout/:tenantId
-   * Initiate OIDC logout (RP-initiated logout)
-   */
-  app.get('/v1/auth/oidc/logout/:tenantId', {
-    config: { noAuth: true }
-  }, async (request, reply) => {
-    const { tenantId } = z.object({ tenantId: z.string().min(1) }).parse(request.params);
-    const { id_token, post_logout_redirect_uri } = z.object({
-      id_token: z.string(),
-      post_logout_redirect_uri: z.string().optional()
-    }).parse(request.query);
-    
-    try {
-      const logoutUrl = await oidcProvider.initiateLogout(tenantId, id_token, post_logout_redirect_uri);
-      
-      if (logoutUrl) {
-        return reply.redirect(logoutUrl);
-      } else {
-        // Provider doesn't support logout, just clear local session
-        return reply.redirect(post_logout_redirect_uri || '/login?logged_out=true');
-      }
-    } catch (error) {
-      request.log.error({ error, tenantId }, 'OIDC logout failed');
-      return reply.code(500).send({ error: 'oidc_logout_failed' });
+      return reply.code(200).send({
+        success: true,
+        data: authResult,
+      });
+    } catch (error: any) {
+      request.log.error({ error: error?.message }, 'OIDC callback authentication failed');
+      return reply.code(401).send({ error: 'oidc_authentication_failed', message: error?.message });
     }
-  });
+  };
+
+  app.get('/v1/auth/oidc/callback', { config: { noAuth: true } }, handleOidcCallback);
+  app.post('/v1/auth/oidc/callback', { config: { noAuth: true } }, handleOidcCallback);
 
   // ============================================================================
-  // LDAP/Active Directory Routes
+  // LDAP & Local Authentication Routes
   // ============================================================================
 
   /**
    * POST /v1/auth/ldap/login
-   * Authenticate user via LDAP
    */
   app.post('/v1/auth/ldap/login', {
-    config: { noAuth: true }
+    config: { noAuth: true },
   }, async (request, reply) => {
-    const body = z.object({
-      tenantId: z.string().min(1),
-      username: z.string().min(1),
-      password: z.string().min(1)
-    }).parse(request.body);
-    
+    const body = ldapLoginSchema.parse(request.body);
+
     try {
-      const profile = await ldapConnector.authenticate(body.tenantId, body.username, body.password);
-      
-      // TODO: Create or update user in database
-      // const user = await store.findOrCreateLDAPUser(profile, body.tenantId);
-      
-      // Generate token
-      const token = generateToken({
-        userId: profile.userId,
-        email: profile.email,
+      const authResult = await identityService.authenticate({
+        providerType: 'LDAP',
         tenantId: body.tenantId,
-        authMethod: 'ldap'
+        username: body.username,
+        password: body.password,
+        clientIp: request.ip,
+        userAgent: request.headers['user-agent'],
       });
-      
-      return reply.send({
+
+      return reply.code(200).send({
         success: true,
-        token,
-        user: {
-          userId: profile.userId,
-          email: profile.email,
-          displayName: profile.displayName,
-          firstName: profile.firstName,
-          lastName: profile.lastName,
-          groups: profile.groups
-        }
+        data: authResult,
       });
-    } catch (error) {
-      request.log.error({ error, username: body.username }, 'LDAP authentication failed');
-      return reply.code(401).send({
-        error: 'authentication_failed',
-        message: 'Invalid credentials or LDAP connection failed'
+    } catch (error: any) {
+      return reply.code(401).send({ error: 'ldap_authentication_failed', message: error?.message });
+    }
+  });
+
+  /**
+   * POST /v1/auth/local/login
+   */
+  app.post('/v1/auth/local/login', {
+    config: { noAuth: true },
+  }, async (request, reply) => {
+    const body = localLoginSchema.parse(request.body);
+
+    try {
+      const authResult = await identityService.authenticate({
+        providerType: 'LOCAL',
+        tenantId: body.tenantId,
+        username: body.username,
+        password: body.password,
+        clientIp: request.ip,
+        userAgent: request.headers['user-agent'],
       });
+
+      return reply.code(200).send({
+        success: true,
+        data: authResult,
+      });
+    } catch (error: any) {
+      return reply.code(401).send({ error: 'invalid_credentials', message: error?.message });
     }
   });
 
   // ============================================================================
-  // Tenant Configuration Management Routes (Admin only)
+  // Token Refresh & Revocation
   // ============================================================================
 
   /**
-   * POST /v1/auth/enterprise/saml/configure
-   * Configure SAML tenant (admin only)
+   * POST /v1/auth/refresh
    */
-  app.post('/v1/auth/enterprise/saml/configure', async (request, reply) => {
-    // TODO: Add admin authentication check
-    const config = z.object({
-      tenantId: z.string().min(1),
-      entryPoint: z.string().url(),
-      issuer: z.string().min(1),
-      callbackUrl: z.string().url(),
-      cert: z.string().min(1),
-      privateKey: z.string().min(1).optional(),
-      identifierFormat: z.string().optional(),
-      wantAssertionsSigned: z.boolean().optional(),
-      wantAuthnResponseSigned: z.boolean().optional()
-    }).parse(request.body);
-    
+  app.post('/v1/auth/refresh', {
+    config: { noAuth: true },
+  }, async (request, reply) => {
+    const body = refreshTokenSchema.parse(request.body);
+
     try {
-      await samlProvider.registerTenant(config);
-      return reply.send({
+      const result = await identityService.refreshSession(body.refreshToken);
+      return reply.code(200).send({
         success: true,
-        message: `SAML tenant ${config.tenantId} configured successfully`
+        data: result,
       });
-    } catch (error) {
-      request.log.error({ error, tenantId: config.tenantId }, 'SAML configuration failed');
-      return reply.code(500).send({ error: 'saml_configuration_failed' });
+    } catch (error: any) {
+      return reply.code(401).send({ error: 'invalid_refresh_token', message: error?.message });
     }
   });
 
   /**
-   * POST /v1/auth/enterprise/oidc/configure
-   * Configure OIDC tenant (admin only)
+   * POST /v1/auth/logout
    */
-  app.post('/v1/auth/enterprise/oidc/configure', async (request, reply) => {
-    // TODO: Add admin authentication check
-    const config = z.object({
-      tenantId: z.string().min(1),
-      provider: z.enum(['azure-ad', 'okta', 'auth0', 'keycloak', 'google', 'generic']),
-      issuerUrl: z.string().url(),
-      clientId: z.string().min(1),
-      clientSecret: z.string().min(1),
-      redirectUri: z.string().url(),
-      scopes: z.array(z.string()).optional()
-    }).parse(request.body);
-    
-    try {
-      await oidcProvider.registerTenant(config);
-      return reply.send({
-        success: true,
-        message: `OIDC tenant ${config.tenantId} configured successfully`
-      });
-    } catch (error) {
-      request.log.error({ error, tenantId: config.tenantId }, 'OIDC configuration failed');
-      return reply.code(500).send({ error: 'oidc_configuration_failed' });
-    }
+  app.post('/v1/auth/logout', async (request, reply) => {
+    const body = logoutSchema.parse(request.body);
+    await identityService.logout(body.sessionId, body.refreshToken);
+    return reply.code(200).send({ success: true, message: 'Logged out successfully' });
   });
 
-  /**
-   * POST /v1/auth/enterprise/ldap/configure
-   * Configure LDAP tenant (admin only)
-   */
-  app.post('/v1/auth/enterprise/ldap/configure', async (request, reply) => {
-    // TODO: Add admin authentication check
-    const config = z.object({
-      tenantId: z.string().min(1),
-      url: z.string().url(),
-      baseDN: z.string().min(1),
-      bindDN: z.string().optional(),
-      bindPassword: z.string().optional(),
-      userSearchBase: z.string().optional(),
-      userSearchFilter: z.string().optional(),
-      groupSearchBase: z.string().optional(),
-      groupSearchFilter: z.string().optional()
-    }).parse(request.body);
-    
-    try {
-      await ldapConnector.registerTenant(config);
-      return reply.send({
-        success: true,
-        message: `LDAP tenant ${config.tenantId} configured successfully`
-      });
-    } catch (error) {
-      request.log.error({ error, tenantId: config.tenantId }, 'LDAP configuration failed');
-      return reply.code(500).send({ error: 'ldap_configuration_failed' });
+  // ============================================================================
+  // Admin Identity Provider Management (Strict RBAC Guarded)
+  // ============================================================================
+
+  app.post('/v1/identity/providers/oidc', async (request: any, reply) => {
+    const user = request.currentUser;
+    if (!user || (!user.isSuperAdmin && !user.roles?.includes('SUPER_ADMIN'))) {
+      return reply.code(403).send({ error: 'forbidden', message: 'Requires identity_provider.manage permission' });
     }
+
+    const body = registerOidcConfigSchema.parse(request.body);
+    await oidcProvider.registerTenant(body);
+
+    return reply.code(201).send({
+      success: true,
+      message: `OIDC provider registered for tenant ${body.tenantId}`,
+    });
   });
 
-  /**
-   * GET /v1/auth/enterprise/test/:type/:tenantId
-   * Test enterprise auth configuration (admin only)
-   */
-  app.get('/v1/auth/enterprise/test/:type/:tenantId', async (request, reply) => {
-    // TODO: Add admin authentication check
-    const { type, tenantId } = z.object({
-      type: z.enum(['saml', 'oidc', 'ldap']),
-      tenantId: z.string().min(1)
-    }).parse(request.params);
-    
-    try {
-      let result: any;
-      
-      switch (type) {
-        case 'saml':
-          result = { configured: samlProvider.getTenantConfig(tenantId) !== undefined };
-          break;
-        
-        case 'oidc':
-          result = { configured: oidcProvider.getTenantConfig(tenantId) !== undefined };
-          break;
-        
-        case 'ldap':
-          const connected = await ldapConnector.testConnection(tenantId);
-          result = { configured: true, connected };
-          break;
-      }
-      
-      return reply.send({
-        success: true,
-        type,
-        tenantId,
-        ...result
-      });
-    } catch (error) {
-      request.log.error({ error, type, tenantId }, 'Enterprise auth test failed');
-      return reply.code(500).send({
-        success: false,
-        error: error instanceof Error ? error.message : 'Test failed'
-      });
+  app.get('/v1/identity/audit-logs', async (request: any, reply) => {
+    const user = request.currentUser;
+    if (!user || (!user.isSuperAdmin && !user.roles?.includes('SUPER_ADMIN') && !user.roles?.includes('COMPLIANCE_AUDITOR'))) {
+      return reply.code(403).send({ error: 'forbidden', message: 'Requires audit.read permission' });
     }
+
+    const logs = identityService.getAuditLogs(user.tenantId);
+    return reply.code(200).send({
+      success: true,
+      data: logs,
+    });
   });
 }
