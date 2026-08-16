@@ -30,6 +30,7 @@ import {
 import { registerRecorderLifecycleRoutes } from "./routes/recorder-lifecycle.routes.js";
 import { registerRecorderProfileRoutes } from "./routes/recorder-profile.routes.js";
 import { registerBranchOperationalSnapshotRoutes } from "./routes/branch-operational-snapshot.routes.js";
+import { registerRetentionRoutes } from "./retention/routes/retention.routes.js";
 import { registerCctvInfrastructureRoutes } from "./routes/cctv-infrastructure.js";
 import { registerOrganizationRoutes } from "./routes/organization.routes.js";
 import { registerBranchLifecycleRoutes } from "./routes/branch-lifecycle.routes.js";
@@ -78,6 +79,7 @@ import { registerFederationRoutes } from "./routes/federation.routes.js";
 import { registerEmployeeActivityTrackingRoutes } from "./routes/employee-activity-tracking.routes.js";
 import { registerIntegrationRoutes } from "./routes/integrations.routes.js";
 import { registerProvisioningRoutes } from "./routes/provisioning.routes.js";
+import { registerStorageHealthRoutes } from "./routes/storage-health.routes.js";
 import { autoProvisionVerifiedCameras } from "./services/camera-auto-provision.js";
 import {
   EmptyFederationLocalSearchProvider,
@@ -2432,6 +2434,22 @@ export async function buildApp(options?: {
     app.log.info('Branch operational snapshot routes registered');
   } catch (err: unknown) {
     app.log.error({ err }, 'failed to register branch operational snapshot routes');
+  }
+
+  // Register First-Class Retention Compliance Subsystem routes
+  try {
+    await registerRetentionRoutes(app);
+    app.log.info('Retention compliance subsystem routes registered');
+  } catch (err: unknown) {
+    app.log.error({ err }, 'failed to register retention compliance routes');
+  }
+
+  // Register First-Class SMART & Enterprise Storage Health routes
+  try {
+    await registerStorageHealthRoutes(app, store);
+    app.log.info('Enterprise storage and SMART health routes registered');
+  } catch (err: unknown) {
+    app.log.error({ err }, 'failed to register enterprise storage health routes');
   }
 
   // Register banking analytics routes

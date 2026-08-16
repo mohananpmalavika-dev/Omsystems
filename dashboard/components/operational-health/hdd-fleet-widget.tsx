@@ -1,17 +1,21 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { AlertTriangle, HardDrive, RefreshCw } from "lucide-react";
+import { AlertTriangle, HardDrive, RefreshCw, Filter, ShieldCheck, ThermometerSun, Zap } from "lucide-react";
 import type { DiskHealth } from "@/lib/types/operational-health";
 import { fetchDisksHealth } from "@/lib/api/operational-health";
 import { useOperationalHealthStream } from "@/hooks/useOperationalHealthStream";
 import { DiskHealthCard } from "./disk-health-card";
 import { rankAtRiskDisks, summarizeHddFleet } from "./hdd-fleet-model";
 
+type FleetFilter = "ALL" | "AT_RISK" | "SMART_FAILED" | "HIGH_TEMP" | "BAD_SECTORS";
+
 export function HddFleetWidget({ detailed = false, autoRefresh = true, refreshToken }: { detailed?: boolean; autoRefresh?: boolean; refreshToken?: number }) {
   const [disks, setDisks] = useState<DiskHealth[]>([]);
+  const [activeFilter, setActiveFilter] = useState<FleetFilter>("ALL");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
   const load = useCallback(async () => {
     try {
       const next = await fetchDisksHealth();
@@ -23,16 +27,30 @@ export function HddFleetWidget({ detailed = false, autoRefresh = true, refreshTo
       setLoading(false);
     }
   }, []);
+
   useEffect(() => {
     void load();
     if (!autoRefresh) return;
     const timer = setInterval(load, 30_000);
     return () => clearInterval(timer);
   }, [autoRefresh, load, refreshToken]);
+
   useOperationalHealthStream(useCallback(() => { void load(); }, [load]), refreshToken === undefined);
 
   const summary = summarizeHddFleet(disks);
-  const visibleDisks = detailed ? disks : rankAtRiskDisks(disks, 6);
+
+  // Apply exception-first filtering
+  let filtered = detailed ? disks : rankAtRiskDisks(disks, 6);
+  if (activeFilter === "AT_RISK") {
+    filtered = disks.filter((d) => d.operationalStatus !== "healthy");
+  } else if (activeFilter === "SMART_FAILED") {
+    filtered = disks.filter((d) => d.smartStatus === "failed" || d.smartStatus === "degraded");
+  } else if (activeFilter === "HIGH_TEMP") {
+    filtered = disks.filter((d) => (d.temperature ?? 0) >= 50);
+  } else if (activeFilter === "BAD_SECTORS") {
+    filtered = disks.filter((d) => d.sectorGrowth > 0 || d.reasonCodes.some((c) => c.includes("sector")));
+  }
+
   const stats = [
     ["Total HDDs", summary.total, "border-slate-200 bg-slate-50 text-slate-800"],
     ["Detected", summary.detected, "border-emerald-200 bg-emerald-50 text-emerald-800"],
@@ -56,9 +74,39 @@ export function HddFleetWidget({ detailed = false, autoRefresh = true, refreshTo
           </h2>
           <p className="mt-1 text-sm text-gray-600">SMART risk, capacity pressure, and failing disks across all accessible branches.</p>
         </div>
-        <button className="btn-secondary flex items-center gap-2" onClick={() => void load()} disabled={loading}>
-          <RefreshCw size={15} className={loading ? "animate-spin" : ""} /> Refresh
-        </button>
+        <div className="flex items-center gap-2">
+          {/* Quick Filter Buttons */}
+          <div className="flex items-center gap-1 bg-gray-100 p-1 rounded-lg text-xs">
+            <button
+              onClick={() => setActiveFilter("ALL")}
+              className={`px-2.5 py-1 rounded-md font-medium transition ${
+                activeFilter === "ALL" ? "bg-white shadow-sm text-gray-900" : "text-gray-600 hover:text-gray-900"
+              }`}
+            >
+              All
+            </button>
+            <button
+              onClick={() => setActiveFilter("AT_RISK")}
+              className={`px-2.5 py-1 rounded-md font-medium transition ${
+                activeFilter === "AT_RISK" ? "bg-red-50 text-red-700 shadow-sm" : "text-gray-600 hover:text-gray-900"
+              }`}
+            >
+              At Risk
+            </button>
+            <button
+              onClick={() => setActiveFilter("SMART_FAILED")}
+              className={`px-2.5 py-1 rounded-md font-medium transition ${
+                activeFilter === "SMART_FAILED" ? "bg-amber-50 text-amber-700 shadow-sm" : "text-gray-600 hover:text-gray-900"
+              }`}
+            >
+              SMART Alerts
+            </button>
+          </div>
+
+          <button className="btn-secondary flex items-center gap-2" onClick={() => void load()} disabled={loading}>
+            <RefreshCw size={15} className={loading ? "animate-spin" : ""} /> Refresh
+          </button>
+        </div>
       </div>
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-6">
@@ -76,13 +124,13 @@ export function HddFleetWidget({ detailed = false, autoRefresh = true, refreshTo
           No HDD telemetry received. Configure the recorder adapter to submit its HDD status payload.
         </div>
       ) : null}
-      {visibleDisks.length > 0 ? (
+      {filtered.length > 0 ? (
         <div className="mt-5">
           <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-gray-900">
-            <AlertTriangle size={16} className="text-red-600" /> {detailed ? "Disk-slot evidence" : "Highest-risk disks"}
+            <AlertTriangle size={16} className="text-red-600" /> {detailed ? "Disk-slot evidence" : "Monitored Physical Disks"}
           </h3>
           <div className="grid gap-4 lg:grid-cols-2 2xl:grid-cols-3">
-            {visibleDisks.map((disk) => <DiskHealthCard key={disk.id} disk={disk} />)}
+            {filtered.map((disk) => <DiskHealthCard key={disk.id} disk={disk} />)}
           </div>
         </div>
       ) : null}
