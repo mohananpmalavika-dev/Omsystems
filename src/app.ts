@@ -80,6 +80,7 @@ import { registerEmployeeActivityTrackingRoutes } from "./routes/employee-activi
 import { registerIntegrationRoutes } from "./routes/integrations.routes.js";
 import { registerProvisioningRoutes } from "./routes/provisioning.routes.js";
 import { registerStorageHealthRoutes } from "./routes/storage-health.routes.js";
+import { registerConnectivityHealthRoutes } from "./routes/connectivity-health.routes.js";
 import { autoProvisionVerifiedCameras } from "./services/camera-auto-provision.js";
 import {
   EmptyFederationLocalSearchProvider,
@@ -2450,6 +2451,14 @@ export async function buildApp(options?: {
     app.log.info('Enterprise storage and SMART health routes registered');
   } catch (err: unknown) {
     app.log.error({ err }, 'failed to register enterprise storage health routes');
+  }
+
+  // Register First-Class Evidence-Driven Branch Internet & WAN Connectivity routes
+  try {
+    await registerConnectivityHealthRoutes(app, store);
+    app.log.info('Branch internet and WAN connectivity routes registered');
+  } catch (err: unknown) {
+    app.log.error({ err }, 'failed to register branch connectivity routes');
   }
 
   // Register banking analytics routes
