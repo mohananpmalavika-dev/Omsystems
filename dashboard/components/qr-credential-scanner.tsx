@@ -12,12 +12,16 @@ interface QRCredentialScannerProps {
   onClose: () => void;
 }
 
+import { cameraInventoryApi } from "@/lib/api-client";
+import { Zap } from "lucide-react";
+
 export function QRCredentialScanner({ onCredentialsExtracted, onDeviceIdentified, onClose }: QRCredentialScannerProps) {
   const [tab, setTab] = useState<"scan" | "wifi-pair">("scan");
   const [mode, setMode] = useState<"camera" | "upload" | null>(null);
   const [error, setError] = useState<string>();
   const [success, setSuccess] = useState<string>();
   const [scanning, setScanning] = useState(false);
+  const [connectingQr, setConnectingQr] = useState(false);
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [scanResult, setScanResult] = useState<QrPayload>();
   
@@ -32,6 +36,31 @@ export function QRCredentialScanner({ onCredentialsExtracted, onDeviceIdentified
   const fileInputRef = useRef<HTMLInputElement>(null);
   const scanIntervalRef = useRef<number | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
+
+  async function handleDirectQrConnect() {
+    if (!scanResult || scanResult.kind !== "device-uid") return;
+    setConnectingQr(true);
+    setError(undefined);
+    try {
+      const res = await cameraInventoryApi.connectViaQr(scanResult.uid);
+      setSuccess(`✓ ${res.message}`);
+      if (onDeviceIdentified) {
+        onDeviceIdentified({
+          uid: scanResult.uid,
+          model: scanResult.model || "T18061-W",
+          productCode: scanResult.productCode || "T18061-BA",
+          vendor: "trueview",
+        });
+      }
+      setTimeout(() => {
+        onClose();
+      }, 1000);
+    } catch (err: any) {
+      setError(err.message || "Failed to connect camera via QR");
+    } finally {
+      setConnectingQr(false);
+    }
+  }
 
   useEffect(() => {
     return () => {
@@ -313,7 +342,15 @@ export function QRCredentialScanner({ onCredentialsExtracted, onDeviceIdentified
                 <div><strong>Streaming Protocol:</strong> RTSP (Port 554) • Happytime RTSP Server</div>
                 <div><strong>Recommended Stream URL:</strong> <code className="text-[11px] bg-slate-200 dark:bg-slate-800 px-1.5 py-0.5 rounded font-mono">rtsp://admin:&lt;PASSWORD&gt;@&lt;IP&gt;:554/stream1</code></div>
               </div>
-              <div className="flex gap-2 pt-2">
+              <div className="flex flex-wrap gap-2 pt-2 items-center">
+                <button
+                  type="button"
+                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold shadow-md transition-all flex items-center gap-1.5"
+                  disabled={connectingQr}
+                  onClick={handleDirectQrConnect}
+                >
+                  <Zap size={14} /> {connectingQr ? "Connecting via QR..." : "Connect Camera via QR (1-Click)"}
+                </button>
                 <button
                   type="button"
                   className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-semibold shadow-sm transition-all"
@@ -329,7 +366,7 @@ export function QRCredentialScanner({ onCredentialsExtracted, onDeviceIdentified
                     onClose();
                   }}
                 >
-                  Apply &amp; Auto-Fill Camera Form
+                  Apply &amp; Auto-Fill Form
                 </button>
                 <button
                   type="button"

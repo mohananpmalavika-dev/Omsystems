@@ -457,6 +457,19 @@ export const cameraInventoryApi = {
     fetchApi<{ data: any[] }>(
       `/v1/branches/${encodeURIComponent(branchId)}/cameras?action=${encodeURIComponent(action)}`
     ),
+  connectViaQr: (qrData: string, branchId?: string) =>
+    fetchApi<{
+      success: boolean;
+      cameraId: string;
+      uid: string;
+      model: string;
+      ipAddress: string;
+      streamUrl: string;
+      message: string;
+    }>('/v1/cameras/qr-connect', {
+      method: 'POST',
+      body: JSON.stringify({ qrData, branchId }),
+    }),
   probeDirect: (data: { ipAddress: string; rtspPort?: number; username?: string; password?: string }) =>
     fetchApi<{
       online: boolean;
