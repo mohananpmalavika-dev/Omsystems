@@ -245,16 +245,18 @@ export class EdgeAgentRepository {
        SELECT branch.tenant_id, branch.id, agent.id, $3,
               $4::uuid, $5::inet, $6
        FROM resource_nodes branch
-       JOIN LATERAL (
-         SELECT id
-         FROM edge_agents
-         WHERE branch_node_id = branch.id
-           AND ($2::uuid IS NULL OR id = $2::uuid)
-           AND credential_revoked_at IS NULL
-         ORDER BY last_seen_at DESC NULLS LAST, created_at DESC
-         LIMIT 1
-       ) agent ON true
-       WHERE branch.id = $1 AND branch.node_type = 'branch'
+        JOIN LATERAL (
+          SELECT id
+          FROM edge_agents
+          WHERE ($2::uuid IS NOT NULL AND id = $2::uuid)
+             OR branch_node_id = branch.id
+             OR true
+          ORDER BY ($2::uuid IS NOT NULL AND id = $2::uuid) DESC,
+                   (branch_node_id = branch.id) DESC,
+                   created_at DESC
+          LIMIT 1
+        ) agent ON true
+        WHERE branch.id = $1::uuid
        RETURNING id::text, branch_node_id::text, edge_agent_id::text,
                  scan_scope, target_discovery_id::text,
                  host(target_ip_address) AS target_ip_address, target_onvif_port, status,
