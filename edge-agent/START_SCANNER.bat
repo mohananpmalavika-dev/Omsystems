@@ -1,15 +1,14 @@
 @echo off
 cd /d %~dp0
-echo Starting Camera Scanner...
+echo Starting Sentinel Grid Edge Agent / Camera Scanner...
 echo.
-echo Loading configuration from .env file...
 
-REM Load environment variables from .env file
-for /f "usebackq tokens=* delims=" %%a in (".env") do (
-    set "%%a"
+if exist "start-with-env.mjs" (
+    node start-with-env.mjs
+) else (
+    npx tsx src/index.ts
 )
 
 echo.
-echo Starting scanner...
-node dist\src\index.js
+echo Scanner stopped.
 pause
