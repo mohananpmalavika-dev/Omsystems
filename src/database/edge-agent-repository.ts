@@ -189,8 +189,8 @@ export class EdgeAgentRepository {
     return result.rows[0] ? mapAgent(result.rows[0]) : undefined;
   }
 
-  async heartbeat(id: string, version: string, publicMediaUrl?: string) {
-    const result = await this.pool.query<AgentRow>(
+  async heartbeat(id: string, version: string, publicMediaUrl?: string, branchId?: string) {
+    let result = await this.pool.query<AgentRow>(
       `UPDATE edge_agents
        SET version = $2, status = 'online', last_seen_at = now(),
            public_media_url = COALESCE($3, public_media_url)
@@ -200,6 +200,28 @@ export class EdgeAgentRepository {
                  credential_issued_at, credential_revoked_at`,
       [id, version, publicMediaUrl ?? null],
     );
+
+    if (!result.rows[0]) {
+      // Auto-provision the agent row in edge_agents so heartbeats from newly installed scanners immediately succeed
+      const fallbackNode = await this.pool.query<{ id: string; tenant_id: string }>(
+        `SELECT id::text, tenant_id::text FROM resource_nodes WHERE node_type = 'branch' ORDER BY created_at DESC LIMIT 1`,
+      );
+      const targetBranchId = branchId || fallbackNode.rows[0]?.id || "00000000-0000-4000-8000-000000000001";
+      const targetTenantId = fallbackNode.rows[0]?.tenant_id || "00000000-0000-4000-8000-000000000000";
+
+      result = await this.pool.query<AgentRow>(
+        `INSERT INTO edge_agents (id, tenant_id, branch_node_id, name, version, status, last_seen_at, public_media_url)
+         VALUES ($1, $2, $3, 'Branch Edge Scanner', $4, 'online', now(), $5)
+         ON CONFLICT (id) DO UPDATE
+         SET version = EXCLUDED.version, status = 'online', last_seen_at = now(),
+             public_media_url = COALESCE(EXCLUDED.public_media_url, edge_agents.public_media_url)
+         RETURNING id::text, branch_node_id::text, name, version, status,
+                   last_seen_at, public_media_url, device_uuid,
+                   credential_issued_at, credential_revoked_at`,
+        [id, targetTenantId, targetBranchId, version, publicMediaUrl ?? null],
+      );
+    }
+
     return result.rows[0] ? mapAgent(result.rows[0]) : undefined;
   }
 
