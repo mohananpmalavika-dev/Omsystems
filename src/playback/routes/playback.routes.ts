@@ -6,6 +6,7 @@ import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import { playbackCoordinator } from '../services/playback-coordinator.service.js';
 import { IncidentPlaybackService } from '../services/incident-playback.service.js';
+import { investigationSessionService } from '../services/investigation-session.service.js';
 import { PlaybackSpeed, PlaybackDirection } from '../domain/playback.types.js';
 
 const incidentPlaybackService = new IncidentPlaybackService(playbackCoordinator);
@@ -160,5 +161,105 @@ export async function registerFirstClassPlaybackRoutes(app: FastifyInstance) {
 
     const pkg = incidentPlaybackService.createEvidencePackageFromClip(body);
     return reply.status(201).send({ success: true, data: pkg });
+  });
+
+  /**
+   * Synchronized Multi-Camera Investigation Subsystem Endpoints
+   */
+  // 12. Create Synchronized Investigation Session
+  app.post('/v1/playback/investigations', async (request: FastifyRequest, reply: FastifyReply) => {
+    const body = z.object({
+      tenantId: z.string().default('BANK-001'),
+      userId: z.string().default('investigator-anand'),
+      cameraIds: z.array(z.string()).min(1),
+      startUtc: z.string().default(new Date().toISOString()),
+      synchronizationToleranceMs: z.number().int().positive().default(100),
+    }).parse(request.body);
+
+    const session = investigationSessionService.createSession({
+      tenantId: body.tenantId,
+      userId: body.userId,
+      cameraIds: body.cameraIds,
+      startUtcMs: new Date(body.startUtc).getTime(),
+      synchronizationToleranceMs: body.synchronizationToleranceMs,
+    });
+
+    const camerasArray = Array.from(session.cameras.values());
+    return reply.status(201).send({
+      success: true,
+      data: {
+        ...session,
+        cameras: camerasArray,
+      },
+    });
+  });
+
+  // 13. Get Investigation Session State
+  app.get('/v1/playback/investigations/:id', async (request: FastifyRequest, reply: FastifyReply) => {
+    const params = request.params as { id: string };
+    const session = investigationSessionService.getSession(params.id);
+    if (!session) return reply.code(404).send({ success: false, error: 'INVESTIGATION_SESSION_NOT_FOUND' });
+    const camerasArray = Array.from(session.cameras.values());
+    return reply.send({ success: true, data: { ...session, cameras: camerasArray } });
+  });
+
+  // 14. Synchronized Seek (Barrier-based)
+  app.post('/v1/playback/investigations/:id/seek', async (request: FastifyRequest, reply: FastifyReply) => {
+    const params = request.params as { id: string };
+    const body = z.object({ utc: z.string() }).parse(request.body);
+    const targetUtcMs = new Date(body.utc).getTime();
+    const result = investigationSessionService.seek(params.id, targetUtcMs);
+    const camerasArray = Array.from(result.session.cameras.values());
+    return reply.send({
+      success: true,
+      data: {
+        ...result.session,
+        cameras: camerasArray,
+        barrierPassed: result.barrierPassed,
+      },
+    });
+  });
+
+  // 15. Investigation Play / Pause
+  app.post('/v1/playback/investigations/:id/play', async (request: FastifyRequest, reply: FastifyReply) => {
+    const params = request.params as { id: string };
+    const body = z.object({ rate: z.number().default(1.0) }).parse(request.body || {});
+    const session = investigationSessionService.play(params.id, body.rate);
+    const camerasArray = Array.from(session.cameras.values());
+    return reply.send({ success: true, data: { ...session, cameras: camerasArray } });
+  });
+
+  app.post('/v1/playback/investigations/:id/pause', async (request: FastifyRequest, reply: FastifyReply) => {
+    const params = request.params as { id: string };
+    const session = investigationSessionService.pause(params.id);
+    const camerasArray = Array.from(session.cameras.values());
+    return reply.send({ success: true, data: { ...session, cameras: camerasArray } });
+  });
+
+  // 16. Deterministic Frame Step
+  app.post('/v1/playback/investigations/:id/step', async (request: FastifyRequest, reply: FastifyReply) => {
+    const params = request.params as { id: string };
+    const body = z.object({
+      mode: z.enum(['SHARED_TIME', 'CAMERA_PHYSICAL']).default('SHARED_TIME'),
+      targetCameraId: z.string().optional(),
+    }).parse(request.body || {});
+    const session = investigationSessionService.stepFrame(params.id, body.mode, body.targetCameraId);
+    const camerasArray = Array.from(session.cameras.values());
+    return reply.send({ success: true, data: { ...session, cameras: camerasArray } });
+  });
+
+  // 17. Sync Tick & Dynamic Drift Monitor
+  app.post('/v1/playback/investigations/:id/sync-tick', async (request: FastifyRequest, reply: FastifyReply) => {
+    const params = request.params as { id: string };
+    const body = z.object({ elapsedWallClockMs: z.number().default(1000) }).parse(request.body || {});
+    const result = investigationSessionService.syncTick(params.id, body.elapsedWallClockMs);
+    return reply.send({ success: true, data: result });
+  });
+
+  // 18. Forensic Evidence Clock Metadata
+  app.get('/v1/playback/investigations/:id/evidence-metadata', async (request: FastifyRequest, reply: FastifyReply) => {
+    const params = request.params as { id: string };
+    const meta = investigationSessionService.getForensicEvidenceMetadata(params.id);
+    return reply.send({ success: true, data: meta });
   });
 }
