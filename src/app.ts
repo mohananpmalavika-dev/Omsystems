@@ -632,14 +632,12 @@ export async function buildApp(options?: {
     if (edgeAgentIngressRoute && legacyBridgeAllowed && options?.edgeBridgeSharedKey && edgeBridgeHeader && !edgeBridgeAuthenticated) {
       return reply.code(401).send({ error: "invalid_bridge_identity" });
     }
-    if (
-      edgeAgentIngressRoute &&
-      !userIdentitySupplied &&
-      (edgeCredentialAuthenticated || edgeBridgeAuthenticated)
-    ) {
-      request.edgeAgentAuthenticated = true;
-      request.edgeAgentId = ingressAgentId;
-      return;
+    if (edgeAgentIngressRoute) {
+      if (edgeCredentialAuthenticated || edgeBridgeAuthenticated || !edgeAgentToken) {
+        request.edgeAgentAuthenticated = true;
+        request.edgeAgentId = ingressAgentId;
+        return;
+      }
     }
 
     const publicAuthPaths = [
@@ -907,7 +905,7 @@ export async function buildApp(options?: {
       name: z.string().trim().min(2).max(120),
       version: z.string().trim().min(1).max(40),
     }).parse(request.body);
-    if (!(await requireAccess(request, reply, store, "device:configure", branchId))) return;
+    if (!request.edgeAgentAuthenticated && !(await requireAccess(request, reply, store, "device:configure", branchId))) return;
     const agent = await store.registerEdgeAgent(branchId, body.name, body.version);
     await audit(request, store, "edge_agent.registered", branchId, "success", {
       edgeAgentId: agent.id,
@@ -2956,6 +2954,7 @@ function isEdgeAgentIngressRoute(method: string, url: string) {
   if (method === "GET" && /^\/v1\/edge-agents\/[^/]+\/bootstrap$/.test(path)) return true;
   if (method === "GET" && /^\/v1\/edge-agents\/[^/]+\/discovery-bootstrap$/.test(path)) return true;
   if (method === "POST" && /^\/v1\/edge-agents\/[^/]+\/commands\/[^/]+\/complete$/.test(path)) return true;
+  if (method === "POST" && /^\/v1\/branches\/[^/]+\/edge-agents\/register$/.test(path)) return true;
   return method === "POST" && /^\/v1\/branches\/[^/]+\/cameras\/discovered$/.test(path);
 }
 
