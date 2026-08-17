@@ -5,7 +5,7 @@
  * This queries the production API to check gateway status
  */
 
-const CONTROL_PLANE_URL = 'https://sentinel-grid-control-plane-nqc0.onrender.com';
+const CONTROL_PLANE_URL = 'https://sentinel-grid-control-plane-ocn1.onrender.com';
 const BRANCH_ID = '00000000-0000-4000-8000-000000000104';
 
 // You'll need to get a valid token from the dashboard
@@ -15,7 +15,7 @@ const SESSION_TOKEN = process.argv[2];
 if (!SESSION_TOKEN) {
   console.log('Usage: node check-production-gateway.mjs <session-token>');
   console.log('\nTo get your session token:');
-  console.log('1. Open https://sentinel-grid-monitoring1.onrender.com in browser');
+  console.log('1. Open https://sentinel-grid-monitoring-vhid.onrender.com in browser');
   console.log('2. Open DevTools (F12)');
   console.log('3. Go to Application tab > Cookies');
   console.log('4. Copy the value of "sentinel_session"');
