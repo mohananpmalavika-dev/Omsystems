@@ -150,8 +150,8 @@ export class EdgeAgentRepository {
       `SELECT id::text, branch_node_id::text, name, version,
               CASE 
                 WHEN credential_revoked_at IS NOT NULL
-                  THEN 'offline'::edge_agent_status
-                ELSE 'online'::edge_agent_status
+                  THEN 'offline'
+                ELSE 'online'
               END AS status,
               COALESCE(last_seen_at, now()) AS last_seen_at,
               public_media_url, device_uuid,
@@ -169,8 +169,8 @@ export class EdgeAgentRepository {
       `SELECT e.id::text, e.branch_node_id::text, e.name, e.version,
               CASE 
                 WHEN e.credential_revoked_at IS NOT NULL
-                  THEN 'offline'::edge_agent_status
-                ELSE 'online'::edge_agent_status
+                  THEN 'offline'
+                ELSE 'online'
               END AS status,
               COALESCE(e.last_seen_at, now()) AS last_seen_at,
               e.public_media_url, e.device_uuid,
@@ -189,8 +189,8 @@ export class EdgeAgentRepository {
       `SELECT id::text, branch_node_id::text, name, version,
               CASE 
                 WHEN credential_revoked_at IS NOT NULL
-                  THEN 'offline'::edge_agent_status
-                ELSE 'online'::edge_agent_status
+                  THEN 'offline'
+                ELSE 'online'
               END AS status,
               COALESCE(last_seen_at, now()) AS last_seen_at,
               public_media_url, device_uuid,
