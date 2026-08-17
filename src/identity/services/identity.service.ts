@@ -346,16 +346,17 @@ export class IdentityService {
         if (!req.username || !req.password) {
           throw new Error('LDAP username and password required');
         }
-        const ldapUser = await ldapConnector.authenticate(req.username, req.password);
+        const tenantId = req.tenantId || 'default-bank-tenant';
+        const ldapUser = await ldapConnector.authenticate(tenantId, req.username, req.password);
         return {
           providerType: 'LDAP',
           providerId: 'ldap-ad',
-          externalSubject: ldapUser.dn || req.username,
-          username: ldapUser.username || req.username,
+          externalSubject: ldapUser.dn || ldapUser.userId || req.username,
+          username: ldapUser.userId || req.username,
           email: ldapUser.email || `${req.username}@bank.directory`,
           displayName: ldapUser.displayName || req.username,
           groups: ldapUser.groups || ['BANK_OPERATOR'],
-          attributes: ldapUser.attributes || {},
+          attributes: ldapUser.rawAttributes || {},
         };
       }
       default:

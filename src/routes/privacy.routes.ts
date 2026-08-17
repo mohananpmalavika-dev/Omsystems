@@ -279,6 +279,7 @@ export async function registerPrivacyRoutes(
       appliesTo: z.enum(["live", "playback", "export", "all"]),
       mandatory: z.boolean().optional(),
       overrideAllowed: z.boolean().optional(),
+      enabled: z.boolean().default(true),
     });
 
     const body = zoneSchema.parse(request.body);

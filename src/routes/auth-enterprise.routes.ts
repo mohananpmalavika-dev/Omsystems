@@ -249,9 +249,9 @@ export async function registerEnterpriseAuthRoutes(
   // ============================================================================
 
   /**
-   * POST /v1/auth/refresh
+   * POST /v1/auth/enterprise/refresh
    */
-  app.post('/v1/auth/refresh', {
+  app.post('/v1/auth/enterprise/refresh', {
     config: { noAuth: true },
   }, async (request, reply) => {
     const body = refreshTokenSchema.parse(request.body);
@@ -268,9 +268,9 @@ export async function registerEnterpriseAuthRoutes(
   });
 
   /**
-   * POST /v1/auth/logout
+   * POST /v1/auth/enterprise/logout
    */
-  app.post('/v1/auth/logout', async (request, reply) => {
+  app.post('/v1/auth/enterprise/logout', async (request, reply) => {
     const body = logoutSchema.parse(request.body);
     await identityService.logout(body.sessionId, body.refreshToken);
     return reply.code(200).send({ success: true, message: 'Logged out successfully' });

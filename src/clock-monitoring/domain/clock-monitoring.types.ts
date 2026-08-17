@@ -3,9 +3,10 @@
  */
 
 export type ClockHealthState =
-  | "SYNCHRONIZED"
+  | "HEALTHY"
   | "WARNING"
   | "CRITICAL"
+  | "SYNCHRONIZED"
   | "UNKNOWN"
   | "UNREACHABLE";
 
@@ -14,7 +15,8 @@ export type ClockSource =
   | "DAHUA_CGI"
   | "HIKVISION_ISAPI"
   | "SNMP"
-  | "EDGE_SYSTEM";
+  | "EDGE_SYSTEM"
+  | "NTP_INTERNAL";
 
 export interface DeviceTimeSample {
   startTimestampMs: number;
@@ -26,7 +28,7 @@ export interface DeviceTimeSample {
 export interface ClockEvidence {
   deviceId: string;
   deviceName: string;
-  deviceType: "CAMERA" | "RECORDER" | "GATEWAY";
+  deviceType: "CAMERA" | "RECORDER" | "GATEWAY" | "HO_TIME_SERVER";
   branchId: string;
 
   deviceTime: Date;
@@ -35,6 +37,7 @@ export interface ClockEvidence {
 
   signedOffsetSeconds: number;
   absoluteOffsetSeconds: number;
+  jitterMs?: number;
   driftRateSecondsPerHour?: number | undefined;
 
   ntpServer?: string | undefined;
@@ -58,58 +61,54 @@ export interface CameraRecorderClockComparison {
   cameraTime: Date;
   recorderTime: Date;
   relativeOffsetSeconds: number;
+  healthState: ClockHealthState;
 }
 
 export interface BranchClockHealth {
   branchId: string;
-  branchName: string;
-  overallState: ClockHealthState;
+  gatewayTime?: Date;
+  recorderTime?: Date;
+  hoTime?: Date;
+  maxOffsetSeconds: number;
+  averageJitterMs: number;
+  overallHealth: ClockHealthState;
+  devices: ClockEvidence[];
+  comparisons: CameraRecorderClockComparison[];
+  evaluatedAt: Date;
+}
 
-  gateway?: ClockEvidence | undefined;
-  recorders: ClockEvidence[];
-  cameras: ClockEvidence[];
-  cameraRecorderComparisons: CameraRecorderClockComparison[];
-
-  maxDriftSeconds: number;
-  criticalDevicesCount: number;
-  warningDevicesCount: number;
-  synchronizedDevicesCount: number;
-  unapprovedNtpCount: number;
-  timezoneMismatchCount: number;
-
-  lastEvaluatedAt: Date;
+export interface EvidenceClockManifest {
+  evidenceId: string;
+  branchId: string;
+  cameraId: string;
+  captureTimestamp: string;
+  hoReferenceTime: string;
+  gatewayTime: string;
+  nvrTime: string;
+  cameraTime: string;
+  observedOffsetSeconds: number;
+  jitterMs: number;
+  ntpSource: string;
+  clockHealthStatus: "HEALTHY" | "WARNING" | "CRITICAL";
+  forensicTimestampConfidence: "HIGH" | "MEDIUM" | "DEGRADED";
 }
 
 export interface FleetClockSummary {
   totalBranches: number;
-  compliantBranches: number;
+  healthyBranches: number;
   warningBranches: number;
   criticalBranches: number;
-
-  totalDevices: number;
-  synchronizedDevices: number;
-  warningDevices: number;
-  criticalDevices: number;
-  unapprovedNtpDevices: number;
-  timezoneMismatchDevices: number;
-
-  worstDriftDevices: Array<{
-    deviceId: string;
-    deviceName: string;
-    branchId: string;
-    offsetSeconds: number;
-    healthState: ClockHealthState;
-  }>;
+  averageOffsetSeconds: number;
+  maxDriftBranchId?: string;
+  lastSyncAt: Date;
 }
 
 export interface ClockSyncAuditEntry {
-  id: string;
+  auditId: string;
   deviceId: string;
   branchId: string;
-  action: "NTP_TRIGGER" | "MANUAL_SET_TIME" | "AUTO_CORRECT";
-  initiatedByUserId: string;
-  previousOffsetSeconds: number;
-  newOffsetSeconds: number;
-  reason: string;
+  previousOffset: number;
+  newOffset: number;
+  actionTaken: string;
   timestamp: Date;
 }

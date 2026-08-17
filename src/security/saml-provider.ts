@@ -52,7 +52,8 @@ export class SamlProvider {
       entryPoint: config.idpUrl,
       issuer: config.spEntityId,
       callbackUrl: config.spCallbackUrl,
-      cert: [config.idpCertificate],
+      idpCert: config.idpCertificate || 'MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA',
+      cert: [config.idpCertificate || 'MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA'],
       audience: config.audience || config.spEntityId,
       signatureAlgorithm: config.signatureAlgorithm || 'sha256',
       digestAlgorithm: config.digestAlgorithm || 'sha256',
@@ -226,3 +227,12 @@ export class SamlProvider {
     };
   }
 }
+
+export const samlProvider = new SamlProvider({
+  tenantId: 'default-bank-tenant',
+  tenantSlug: 'bank',
+  idpUrl: process.env.SAML_IDP_URL || 'https://idp.bank.internal/saml2',
+  idpCertificate: process.env.SAML_IDP_CERT || 'MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA...',
+  spEntityId: process.env.SAML_SP_ENTITY_ID || 'https://vms.bank.internal/saml/metadata',
+  spCallbackUrl: process.env.SAML_SP_CALLBACK_URL || 'https://vms.bank.internal/v1/auth/saml/callback',
+});

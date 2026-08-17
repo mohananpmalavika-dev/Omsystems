@@ -62,6 +62,7 @@ import { registerMorningHealthDigestRoutes } from "./routes/morning-health-diges
 import { registerVirtualGuardRoutes } from "./routes/virtual-guard.routes.js";
 import { registerQrtDispatchRoutes } from "./routes/qrt-dispatch.routes.js";
 import { registerHAClusterRoutes } from "./routes/ha-cluster.routes.js";
+import { registerEdgeLifecycleRoutes } from "./routes/edge-lifecycle.routes.js";
 import { registerAdminDatabaseRoutes } from "./routes/admin-database.routes.js";
 import { registerAuditRoutes } from "./routes/audit.routes.js";
 import { registerComplianceRoutes } from "./routes/compliance.routes.js";
@@ -122,6 +123,7 @@ import { PlaybookEngineService } from "./incidents/services/playbook-engine.serv
 import { registerPlaybookEngineRoutes } from "./routes/playbook-engine.routes.js";
 import { AIQualityPlatformFacade } from "./ai-quality/index.js";
 import { registerAiQualityRoutes } from "./routes/ai-quality.routes.js";
+import { registerEnterpriseSocOperationsRoutes } from "./routes/enterprise-soc-operations.routes.js";
 import { autoProvisionVerifiedCameras } from "./services/camera-auto-provision.js";
 import {
   EmptyFederationLocalSearchProvider,
@@ -2549,7 +2551,8 @@ export async function buildApp(options?: {
     await registerVirtualGuardRoutes(app, store);
     await registerQrtDispatchRoutes(app, store);
     await registerHAClusterRoutes(app, store);
-    app.log.info('Morning digest, Virtual guard, QRT dispatch, and HA Cluster routes registered');
+    await registerEdgeLifecycleRoutes(app, store);
+    app.log.info('Morning digest, Virtual guard, QRT dispatch, HA Cluster, and Edge Lifecycle routes registered');
   } catch (err: unknown) {
     app.log.error({ err }, 'failed to register extended enterprise features');
   }
@@ -2758,6 +2761,14 @@ export async function buildApp(options?: {
     app.log.info("AI Model Quality, Evaluation & Certification Platform routes registered");
   } catch (err: unknown) {
     app.log.error({ err }, "failed to register AI quality platform routes");
+  }
+
+  // Register Enterprise SOC Operations (Signed Config, Edge Lifecycle, Clock Drift, Maps, SOC Analytics, Maintenance, Deterministic RCA)
+  try {
+    await registerEnterpriseSocOperationsRoutes(app);
+    app.log.info("Enterprise SOC Operations routes registered");
+  } catch (err: unknown) {
+    app.log.error({ err }, "failed to register enterprise SOC operations routes");
   }
   const alertWorker = setInterval(() => {
     void alertDispatcher.drainOnce().catch((error) => app.log.error({ error }, "Alert outbox drain failed"));
