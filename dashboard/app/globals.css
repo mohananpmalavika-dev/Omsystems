@@ -870,20 +870,20 @@ select, textarea { font: inherit; }
 .admin-title p, .admin-panel-heading p { margin: 4px 0 0; color: var(--muted); font-size: 12px; }
 .admin-tabs {
   display: flex; gap: 5px; margin: 26px 28px 0; padding: 5px;
-  border: 1px solid var(--line); border-radius: 11px; background: #e9edf3;
+  border: 1px solid var(--line); border-radius: 11px; background: var(--canvas);
 }
 .admin-tabs button {
   display: flex; align-items: center; justify-content: center; gap: 7px;
-  min-height: 37px; flex: 1; color: #697589; border: 0; border-radius: 8px; background: transparent;
+  min-height: 37px; flex: 1; color: var(--muted); border: 0; border-radius: 8px; background: transparent;
   font-size: 12px; font-weight: 650;
 }
-.admin-tabs button.active { color: #1f67d7; background: white; box-shadow: 0 2px 7px rgba(20,35,58,.09); }
+.admin-tabs button.active { color: var(--blue); background: var(--surface); box-shadow: 0 2px 7px rgba(20,35,58,.09); }
 .admin-panel {
   min-height: 520px; margin: 14px 28px 44px; padding: 22px;
-  border: 1px solid var(--line); border-radius: 13px; background: white;
+  border: 1px solid var(--line); border-radius: 13px; background: var(--surface); color: var(--ink);
 }
 .admin-panel-heading { margin-bottom: 17px; }
-.admin-panel-heading h2, .list-header h2 { margin: 0; font-size: 17px; }
+.admin-panel-heading h2, .list-header h2 { margin: 0; font-size: 17px; color: var(--ink); }
 
 .org-tree { display: grid; gap: 3px; }
 .org-node-item {

@@ -5,7 +5,7 @@
 
 export interface MobileIncidentSummary {
   id: string;
-  severity: "P1" | "P2" | "P3";
+  severity: "P1" | "P2" | "P3" | "P4" | "P5";
   type: string;
   title: string;
   branch: {
@@ -15,7 +15,7 @@ export interface MobileIncidentSummary {
     phone: string;
     managerName?: string;
   };
-  camera: {
+  camera?: {
     id: string;
     name: string;
     status: "ONLINE" | "DEGRADED" | "OFFLINE";
@@ -25,29 +25,60 @@ export interface MobileIncidentSummary {
   acknowledged: boolean;
   acknowledgedBy?: string;
   acknowledgedAt?: string;
+  assignedTo?: string;
+  assignedAt?: string;
   slaRemainingSeconds: number;
-  snapshotUrl: string;
+  slaBreached?: boolean;
+  snapshotUrl?: string;
   clipUrl?: string;
   clipDurationSeconds?: number;
-  availableActions: ("ACKNOWLEDGE" | "LIVE_VIEW" | "VIEW_CLIP" | "CALL_BRANCH" | "ESCALATE")[];
+  availableActions: string[];
   timeline: Array<{
     timestamp: string;
     type: string;
     actor: string;
     message: string;
   }>;
+  aiConfidence?: number;
+  aiDiagnosis?: string;
+}
+
+export interface MobileOperatorInfo {
+  id: string;
+  name: string;
+  role: string;
+  shift: string;
+  onCall: boolean;
+}
+
+export interface MobilePredictedRisk {
+  id: string;
+  branchId: string;
+  branchName: string;
+  riskType: string;
+  probability: number;
+  timeframe: string;
+  reason: string[];
+  recommendedAction: string;
+}
+
+export interface MobileLiveEvent {
+  id: string;
+  timestamp: string;
+  type: string;
+  severity: "P1" | "P2" | "P3" | "P4" | "P5";
+  branchId?: string;
+  branchName?: string;
+  cameraId?: string;
+  cameraName?: string;
+  message: string;
 }
 
 export interface MobileHomePayload {
   criticalIncidentCount: number;
   unacknowledgedCount: number;
-  operator: {
-    id: string;
-    name: string;
-    role: string;
-    shift: string;
-    onCall: boolean;
-  };
+  myIncidentsCount: number;
+  operator: MobileOperatorInfo;
   branchHealthSummary: {
     healthy: number;
     warning: number;
@@ -55,6 +86,9 @@ export interface MobileHomePayload {
     total: number;
   };
   incidents: MobileIncidentSummary[];
+  predictedRisks: MobilePredictedRisk[];
+  liveEvents: MobileLiveEvent[];
+  lastUpdated: string;
 }
 
 export interface MobileBranchHealth {

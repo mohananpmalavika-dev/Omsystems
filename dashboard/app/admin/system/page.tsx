@@ -206,29 +206,30 @@ export default function SystemManagementPage() {
             gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
             gap: '1rem',
             padding: '1rem',
-            background: '#f8f9fa',
+            background: 'var(--canvas)',
+            border: '1px solid var(--line)',
             borderRadius: '8px',
             margin: '1rem'
           }}>
-            <div style={{ padding: '1rem', background: 'white', borderRadius: '8px' }}>
-              <div style={{ fontSize: '0.875rem', color: '#6c757d', marginBottom: '0.5rem' }}>Gateways</div>
-              <div style={{ fontSize: '2rem', fontWeight: 'bold' }}>{stats.gateways}</div>
+            <div style={{ padding: '1rem', background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: '8px', color: 'var(--ink)' }}>
+              <div style={{ fontSize: '0.875rem', color: 'var(--muted)', marginBottom: '0.5rem' }}>Gateways</div>
+              <div style={{ fontSize: '2rem', fontWeight: 'bold', color: 'var(--ink)' }}>{stats.gateways}</div>
             </div>
-            <div style={{ padding: '1rem', background: 'white', borderRadius: '8px' }}>
-              <div style={{ fontSize: '0.875rem', color: '#6c757d', marginBottom: '0.5rem' }}>Cameras</div>
-              <div style={{ fontSize: '2rem', fontWeight: 'bold' }}>{stats.cameras}</div>
+            <div style={{ padding: '1rem', background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: '8px', color: 'var(--ink)' }}>
+              <div style={{ fontSize: '0.875rem', color: 'var(--muted)', marginBottom: '0.5rem' }}>Cameras</div>
+              <div style={{ fontSize: '2rem', fontWeight: 'bold', color: 'var(--ink)' }}>{stats.cameras}</div>
             </div>
-            <div style={{ padding: '1rem', background: 'white', borderRadius: '8px' }}>
-              <div style={{ fontSize: '0.875rem', color: '#6c757d', marginBottom: '0.5rem' }}>Branches</div>
-              <div style={{ fontSize: '2rem', fontWeight: 'bold' }}>{stats.branches}</div>
+            <div style={{ padding: '1rem', background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: '8px', color: 'var(--ink)' }}>
+              <div style={{ fontSize: '0.875rem', color: 'var(--muted)', marginBottom: '0.5rem' }}>Branches</div>
+              <div style={{ fontSize: '2rem', fontWeight: 'bold', color: 'var(--ink)' }}>{stats.branches}</div>
             </div>
-            <div style={{ padding: '1rem', background: 'white', borderRadius: '8px' }}>
-              <div style={{ fontSize: '0.875rem', color: '#6c757d', marginBottom: '0.5rem' }}>Live Sessions</div>
-              <div style={{ fontSize: '2rem', fontWeight: 'bold' }}>{stats.live_sessions}</div>
+            <div style={{ padding: '1rem', background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: '8px', color: 'var(--ink)' }}>
+              <div style={{ fontSize: '0.875rem', color: 'var(--muted)', marginBottom: '0.5rem' }}>Live Sessions</div>
+              <div style={{ fontSize: '2rem', fontWeight: 'bold', color: 'var(--ink)' }}>{stats.live_sessions}</div>
             </div>
-            <div style={{ padding: '1rem', background: 'white', borderRadius: '8px' }}>
-              <div style={{ fontSize: '0.875rem', color: '#6c757d', marginBottom: '0.5rem' }}>Telemetry Records</div>
-              <div style={{ fontSize: '2rem', fontWeight: 'bold' }}>{stats.telemetry_records}</div>
+            <div style={{ padding: '1rem', background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: '8px', color: 'var(--ink)' }}>
+              <div style={{ fontSize: '0.875rem', color: 'var(--muted)', marginBottom: '0.5rem' }}>Telemetry Records</div>
+              <div style={{ fontSize: '2rem', fontWeight: 'bold', color: 'var(--ink)' }}>{stats.telemetry_records}</div>
             </div>
           </div>
         )}
@@ -319,20 +320,20 @@ export default function SystemManagementPage() {
                   ) : (
                     <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                       <thead>
-                        <tr style={{ background: '#f8f9fa', borderBottom: '2px solid #dee2e6' }}>
-                          <th style={{ padding: '1rem', textAlign: 'left' }}>Name</th>
-                          <th style={{ padding: '1rem', textAlign: 'left' }}>ID</th>
-                          <th style={{ padding: '1rem', textAlign: 'left' }}>Status</th>
-                          <th style={{ padding: '1rem', textAlign: 'left' }}>Last Seen</th>
-                          <th style={{ padding: '1rem', textAlign: 'left' }}>Created</th>
-                          <th style={{ padding: '1rem', textAlign: 'center' }}>Actions</th>
+                        <tr style={{ background: 'var(--canvas)', borderBottom: '2px solid var(--line)' }}>
+                          <th style={{ padding: '1rem', textAlign: 'left', color: 'var(--muted)' }}>Name</th>
+                          <th style={{ padding: '1rem', textAlign: 'left', color: 'var(--muted)' }}>ID</th>
+                          <th style={{ padding: '1rem', textAlign: 'left', color: 'var(--muted)' }}>Status</th>
+                          <th style={{ padding: '1rem', textAlign: 'left', color: 'var(--muted)' }}>Last Seen</th>
+                          <th style={{ padding: '1rem', textAlign: 'left', color: 'var(--muted)' }}>Created</th>
+                          <th style={{ padding: '1rem', textAlign: 'center', color: 'var(--muted)' }}>Actions</th>
                         </tr>
                       </thead>
                       <tbody>
                         {gateways.map((gateway) => (
-                          <tr key={gateway.id} style={{ borderBottom: '1px solid #dee2e6' }}>
-                            <td style={{ padding: '1rem' }}>{gateway.name}</td>
-                            <td style={{ padding: '1rem', fontFamily: 'monospace', fontSize: '0.875rem' }}>
+                          <tr key={gateway.id} style={{ borderBottom: '1px solid var(--line)' }}>
+                            <td style={{ padding: '1rem', color: 'var(--ink)' }}>{gateway.name}</td>
+                            <td style={{ padding: '1rem', fontFamily: 'monospace', fontSize: '0.875rem', color: 'var(--ink)' }}>
                               {gateway.id}
                             </td>
                             <td style={{ padding: '1rem' }}>
@@ -341,16 +342,17 @@ export default function SystemManagementPage() {
                                 borderRadius: '12px',
                                 fontSize: '0.75rem',
                                 fontWeight: '600',
-                                background: gateway.status === 'online' ? '#d4edda' : '#f8d7da',
-                                color: gateway.status === 'online' ? '#155724' : '#721c24'
+                                background: gateway.status === 'online' ? 'rgba(16, 185, 129, 0.12)' : 'rgba(239, 68, 68, 0.12)',
+                                color: gateway.status === 'online' ? 'var(--green)' : 'var(--red)',
+                                border: '1px solid rgba(148, 163, 184, 0.2)'
                               }}>
                                 {gateway.status}
                               </span>
                             </td>
-                            <td style={{ padding: '1rem', fontSize: '0.875rem' }}>
+                            <td style={{ padding: '1rem', fontSize: '0.875rem', color: 'var(--ink)' }}>
                               {gateway.last_seen_at ? new Date(gateway.last_seen_at).toLocaleString() : 'Never'}
                             </td>
-                            <td style={{ padding: '1rem', fontSize: '0.875rem' }}>
+                            <td style={{ padding: '1rem', fontSize: '0.875rem', color: 'var(--ink)' }}>
                               {new Date(gateway.created_at).toLocaleDateString()}
                             </td>
                             <td style={{ padding: '1rem', textAlign: 'center' }}>
@@ -386,34 +388,35 @@ export default function SystemManagementPage() {
                   ) : (
                     <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                       <thead>
-                        <tr style={{ background: '#f8f9fa', borderBottom: '2px solid #dee2e6' }}>
-                          <th style={{ padding: '1rem', textAlign: 'left' }}>Model</th>
-                          <th style={{ padding: '1rem', textAlign: 'left' }}>IP Address</th>
-                          <th style={{ padding: '1rem', textAlign: 'left' }}>Gateway</th>
-                          <th style={{ padding: '1rem', textAlign: 'left' }}>Status</th>
-                          <th style={{ padding: '1rem', textAlign: 'left' }}>ID</th>
-                          <th style={{ padding: '1rem', textAlign: 'center' }}>Actions</th>
+                        <tr style={{ background: 'var(--canvas)', borderBottom: '2px solid var(--line)' }}>
+                          <th style={{ padding: '1rem', textAlign: 'left', color: 'var(--muted)' }}>Model</th>
+                          <th style={{ padding: '1rem', textAlign: 'left', color: 'var(--muted)' }}>IP Address</th>
+                          <th style={{ padding: '1rem', textAlign: 'left', color: 'var(--muted)' }}>Gateway</th>
+                          <th style={{ padding: '1rem', textAlign: 'left', color: 'var(--muted)' }}>Status</th>
+                          <th style={{ padding: '1rem', textAlign: 'left', color: 'var(--muted)' }}>ID</th>
+                          <th style={{ padding: '1rem', textAlign: 'center', color: 'var(--muted)' }}>Actions</th>
                         </tr>
                       </thead>
                       <tbody>
                         {cameras.map((camera) => (
-                          <tr key={camera.id} style={{ borderBottom: '1px solid #dee2e6' }}>
-                            <td style={{ padding: '1rem' }}>{camera.model}</td>
-                            <td style={{ padding: '1rem', fontFamily: 'monospace' }}>{camera.ip_address}</td>
-                            <td style={{ padding: '1rem' }}>{camera.gateway_name || 'None'}</td>
+                          <tr key={camera.id} style={{ borderBottom: '1px solid var(--line)' }}>
+                            <td style={{ padding: '1rem', color: 'var(--ink)' }}>{camera.model}</td>
+                            <td style={{ padding: '1rem', fontFamily: 'monospace', color: 'var(--ink)' }}>{camera.ip_address}</td>
+                            <td style={{ padding: '1rem', color: 'var(--ink)' }}>{camera.gateway_name || 'None'}</td>
                             <td style={{ padding: '1rem' }}>
                               <span style={{
                                 padding: '0.25rem 0.75rem',
                                 borderRadius: '12px',
                                 fontSize: '0.75rem',
                                 fontWeight: '600',
-                                background: camera.status === 'online' ? '#d4edda' : '#f8d7da',
-                                color: camera.status === 'online' ? '#155724' : '#721c24'
+                                background: camera.status === 'online' ? 'rgba(16, 185, 129, 0.12)' : 'rgba(239, 68, 68, 0.12)',
+                                color: camera.status === 'online' ? 'var(--green)' : 'var(--red)',
+                                border: '1px solid rgba(148, 163, 184, 0.2)'
                               }}>
                                 {camera.status}
                               </span>
                             </td>
-                            <td style={{ padding: '1rem', fontFamily: 'monospace', fontSize: '0.75rem' }}>
+                            <td style={{ padding: '1rem', fontFamily: 'monospace', fontSize: '0.75rem', color: 'var(--ink)' }}>
                               {camera.id.substring(0, 8)}...
                             </td>
                             <td style={{ padding: '1rem', textAlign: 'center' }}>
@@ -449,21 +452,21 @@ export default function SystemManagementPage() {
                   ) : (
                     <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                       <thead>
-                        <tr style={{ background: '#f8f9fa', borderBottom: '2px solid #dee2e6' }}>
-                          <th style={{ padding: '1rem', textAlign: 'left' }}>Name</th>
-                          <th style={{ padding: '1rem', textAlign: 'left' }}>Address</th>
-                          <th style={{ padding: '1rem', textAlign: 'left' }}>Gateways</th>
-                          <th style={{ padding: '1rem', textAlign: 'left' }}>ID</th>
-                          <th style={{ padding: '1rem', textAlign: 'center' }}>Actions</th>
+                        <tr style={{ background: 'var(--canvas)', borderBottom: '2px solid var(--line)' }}>
+                          <th style={{ padding: '1rem', textAlign: 'left', color: 'var(--muted)' }}>Name</th>
+                          <th style={{ padding: '1rem', textAlign: 'left', color: 'var(--muted)' }}>Address</th>
+                          <th style={{ padding: '1rem', textAlign: 'left', color: 'var(--muted)' }}>Gateways</th>
+                          <th style={{ padding: '1rem', textAlign: 'left', color: 'var(--muted)' }}>ID</th>
+                          <th style={{ padding: '1rem', textAlign: 'center', color: 'var(--muted)' }}>Actions</th>
                         </tr>
                       </thead>
                       <tbody>
                         {branches.map((branch) => (
-                          <tr key={branch.id} style={{ borderBottom: '1px solid #dee2e6' }}>
-                            <td style={{ padding: '1rem', fontWeight: '600' }}>{branch.name}</td>
-                            <td style={{ padding: '1rem' }}>{branch.address || 'N/A'}</td>
-                            <td style={{ padding: '1rem' }}>{branch.gateway_count}</td>
-                            <td style={{ padding: '1rem', fontFamily: 'monospace', fontSize: '0.875rem' }}>
+                          <tr key={branch.id} style={{ borderBottom: '1px solid var(--line)' }}>
+                            <td style={{ padding: '1rem', fontWeight: '600', color: 'var(--ink)' }}>{branch.name}</td>
+                            <td style={{ padding: '1rem', color: 'var(--ink)' }}>{branch.address || 'N/A'}</td>
+                            <td style={{ padding: '1rem', color: 'var(--ink)' }}>{branch.gateway_count}</td>
+                            <td style={{ padding: '1rem', fontFamily: 'monospace', fontSize: '0.875rem', color: 'var(--ink)' }}>
                               {branch.id}
                             </td>
                             <td style={{ padding: '1rem', textAlign: 'center' }}>
@@ -507,7 +510,9 @@ export default function SystemManagementPage() {
             zIndex: 1000
           }}>
             <div style={{
-              background: 'white',
+              background: 'var(--surface)',
+              color: 'var(--ink)',
+              border: '1px solid var(--line)',
               borderRadius: '8px',
               padding: '2rem',
               maxWidth: '500px',
