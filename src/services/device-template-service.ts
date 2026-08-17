@@ -256,7 +256,7 @@ export class DeviceTemplateService {
       '{{device-name}}': device?.deviceId || '',
     };
 
-    return this.replaceVariables(settings, variables);
+    return this.replaceVariables(settings, variables) as Record<string, unknown>;
   }
 
   /**

@@ -163,7 +163,16 @@ export class DeviceCredentialService {
    * Decrypt a secret encrypted with encryptSecret().
    */
   async decryptSecret(encrypted: string): Promise<string> {
-    const [versionStr, ivHex, authTagHex, ciphertext] = encrypted.split(':');
+    const parts = encrypted.split(':');
+    if (parts.length < 4) {
+      throw new Error('Invalid encrypted credential payload');
+    }
+
+    const versionStr = parts[0];
+    const ivHex = parts[1];
+    const authTagHex = parts[2];
+    const ciphertext = parts.slice(3).join(':');
+
     if (!versionStr || !ivHex || !authTagHex || !ciphertext) {
       throw new Error('Invalid encrypted credential payload');
     }

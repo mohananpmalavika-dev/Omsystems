@@ -515,7 +515,7 @@ export async function buildApp(options?: {
     trustProxy: Boolean(options?.edgeBridgeSharedKey),
     bodyLimit: 50 * 1024 * 1024,
   });
-  const store = options?.store ?? new MemoryStore();
+  const store: ControlPlaneStore = options?.store ?? (new MemoryStore() as unknown as ControlPlaneStore);
   const recorderService = new RecorderService(store, options?.recorderProviderResolver);
   const edgePresenceCache = options?.edgePresenceCache;
   const runtimeGuard = new RuntimeGuard(options?.maxInFlightRequests ?? Number(process.env.MAX_IN_FLIGHT_REQUESTS ?? 500));

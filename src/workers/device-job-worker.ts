@@ -141,18 +141,18 @@ export class DeviceJobWorker {
    * Execute credential rotation workflow.
    */
   async executeCredentialRotation(job: DeviceConfigurationJob) {
-    const steps = [
-      { name: 'precheck', fn: this.precheckCredentialRotation },
-      { name: 'connect-device', fn: this.connectToDevice },
-      { name: 'change-password', fn: this.changeDevicePassword },
-      { name: 'verify-login', fn: this.verifyNewCredential },
-      { name: 'update-secret-store', fn: this.updateCredentialStore },
-      { name: 'reconnect-rtsp', fn: this.reconnectRtspStream },
-      { name: 'verify-video', fn: this.verifyVideoStream },
+    const steps: Array<{ name: string; fn: (job: DeviceConfigurationJob) => Promise<Record<string, any>> }> = [
+      { name: 'precheck', fn: this.precheckCredentialRotation.bind(this) },
+      { name: 'connect-device', fn: this.connectToDevice.bind(this) },
+      { name: 'change-password', fn: this.changeDevicePassword.bind(this) },
+      { name: 'verify-login', fn: this.verifyNewCredential.bind(this) },
+      { name: 'update-secret-store', fn: this.updateCredentialStore.bind(this) },
+      { name: 'reconnect-rtsp', fn: this.reconnectRtspStream.bind(this) },
+      { name: 'verify-video', fn: this.verifyVideoStream.bind(this) },
     ];
 
     for (let i = 0; i < steps.length; i++) {
-      const step = steps[i];
+      const step = steps[i]!;
 
       await this.store.createDeviceJobStep({
         jobId: job.id,
@@ -169,7 +169,7 @@ export class DeviceJobWorker {
       const stepStartTime = Date.now();
 
       try {
-        const result = await step.fn.call(this, job);
+        const result = await step.fn(job);
 
         await this.store.completeDeviceJobStep({
           jobId: job.id,
@@ -421,18 +421,18 @@ export class DeviceJobWorker {
    * Execute IP change workflow.
    */
   async executeIpChange(job: DeviceConfigurationJob) {
-    const steps = [
-      { name: 'precheck', fn: this.precheckIpChange },
-      { name: 'connect-device', fn: this.connectToDevice },
-      { name: 'apply-ip-config', fn: this.applyIpConfiguration },
-      { name: 'wait-reboot', fn: this.waitForDeviceReboot },
-      { name: 'rediscover-device', fn: this.rediscoverDevice },
-      { name: 'verify-connectivity', fn: this.verifyDeviceConnectivity },
-      { name: 'update-registry', fn: this.updateDeviceRegistry },
+    const steps: Array<{ name: string; fn: (job: DeviceConfigurationJob) => Promise<Record<string, any>> }> = [
+      { name: 'precheck', fn: this.precheckIpChange.bind(this) },
+      { name: 'connect-device', fn: this.connectToDevice.bind(this) },
+      { name: 'apply-ip-config', fn: this.applyIpConfiguration.bind(this) },
+      { name: 'wait-reboot', fn: this.waitForDeviceReboot.bind(this) },
+      { name: 'rediscover-device', fn: this.rediscoverDevice.bind(this) },
+      { name: 'verify-connectivity', fn: this.verifyDeviceConnectivity.bind(this) },
+      { name: 'update-registry', fn: this.updateDeviceRegistry.bind(this) },
     ];
 
     for (let i = 0; i < steps.length; i++) {
-      const step = steps[i];
+      const step = steps[i]!;
 
       await this.store.createDeviceJobStep({
         jobId: job.id,
@@ -445,7 +445,7 @@ export class DeviceJobWorker {
       const stepStartTime = Date.now();
 
       try {
-        const result = await step.fn.call(this, job);
+        const result = await step.fn(job);
 
         await this.store.completeDeviceJobStep({
           jobId: job.id,
