@@ -41,6 +41,7 @@ import { registerFirstClassPlaybackRoutes } from "./playback/routes/playback.rou
 import { registerForensicEvidenceExportRoutes } from "./evidence-export/routes/evidence-export.routes.js";
 import { registerDistributedStateRoutes } from "./distributed-state/routes/distributed-state.routes.js";
 import { registerReliablePtzRoutes } from "./ptz/routes/ptz.routes.js";
+import { registerMediaTokenRoutes } from "./media-auth/routes/media-token.routes.js";
 import { registerCentralMonitoringRoutes } from "./routes/central-monitoring.routes.js";
 import { registerOnDemandMediaRoutes } from "./routes/on-demand-media.routes.js";
 import { registerAiAlertsRoutes } from "./routes/ai-alerts.routes.js";
@@ -2617,6 +2618,14 @@ export async function buildApp(options?: {
     app.log.info('Reliable PTZ subsystem routes registered');
   } catch (err: unknown) {
     app.log.error({ err }, 'failed to register reliable PTZ routes');
+  }
+
+  // Register Control-Plane / Media-Plane Token Authorization routes
+  try {
+    await registerMediaTokenRoutes(app);
+    app.log.info('Media token authorization routes registered');
+  } catch (err: unknown) {
+    app.log.error({ err }, 'failed to register media token routes');
   }
 
   // Register Scalable Central Monitoring Station & Priority Work Queue routes

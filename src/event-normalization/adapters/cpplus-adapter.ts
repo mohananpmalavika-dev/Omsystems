@@ -19,9 +19,14 @@ export class CpPlusDeviceEventAdapter extends BaseDeviceEventAdapter {
     if (!raw || typeof raw !== "object") return false;
     const code = String(raw.Code || raw.code || raw.Event || raw.event || "");
     const vendor = String(raw.Vendor || raw.vendor || raw.brand || "").toUpperCase();
+
+    // Yield immediately to explicit vendor declarations from other manufacturers
+    const otherVendors = ["DAHUA", "HIKVISION", "HIK", "AXIS", "ONVIF", "EDGE_AGENT", "SENTINEL_EDGE"];
+    if (otherVendors.includes(vendor)) return false;
+
     if (vendor === "CP_PLUS" || vendor === "CPPLUS") return true;
 
-    // Signature CP PLUS / Dahua protocol event codes
+    // Signature CP PLUS / Dahua shared protocol event codes
     const cpCodes = [
       "VideoLoss",
       "VideoBlind",
