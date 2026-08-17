@@ -137,6 +137,7 @@ import { registerRecordingIndexRoutes } from "./routes/recording-index.routes.js
 import { registerInvestigationRoutes } from "./routes/investigation.routes.js";
 import { registerEnterpriseStorageRoutes } from "./routes/enterprise-storage.routes.js";
 import { registerStorageFailoverRoutes } from "./routes/storage-failover.routes.js";
+import { registerOnvifRoutes } from "./routes/onvif.routes.js";
 import { registerClientMediaSchedulerRoutes } from "./routes/client-media-scheduler.routes.js";
 import { registerAiQualityRoutes } from "./routes/ai-quality.routes.js";
 import { registerEnterpriseSocOperationsRoutes } from "./routes/enterprise-soc-operations.routes.js";
@@ -2910,15 +2911,16 @@ export async function buildApp(options?: {
     }
   }
 
-  // Register Authoritative Recording Index, Unified Investigation Search, Enterprise Storage, and Failover routes
+  // Register Authoritative Recording Index, Unified Investigation Search, Enterprise Storage, Failover, and ONVIF routes
   try {
     await registerRecordingIndexRoutes(app);
     await registerInvestigationRoutes(app);
     await registerEnterpriseStorageRoutes(app);
     await registerStorageFailoverRoutes(app);
-    app.log.info("Authoritative RecordingIndex, Unified Investigation Search, Enterprise Storage, and Failover routes registered");
+    await registerOnvifRoutes(app);
+    app.log.info("Authoritative RecordingIndex, Unified Investigation Search, Enterprise Storage, Failover, and ONVIF routes registered");
   } catch (error) {
-    app.log.error({ error }, "Failed to register recording index, investigation, and storage routes");
+    app.log.error({ error }, "Failed to register recording index, investigation, storage, and ONVIF routes");
   }
 
   app.setErrorHandler((error, _request, reply) => {
