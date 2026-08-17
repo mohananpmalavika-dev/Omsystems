@@ -368,7 +368,26 @@ button { cursor: pointer; }
   width: 38px; height: 38px; margin-left: 3px; display: grid; place-items: center;
   border-radius: 50%; color: #46617f; background: #eaf0f7;
 }
-.menu-button { display: none; border: 0; background: none; margin-right: 10px; }
+.menu-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  color: var(--ink);
+  cursor: pointer;
+  margin-right: 14px;
+  transition: all .16s ease;
+  flex-shrink: 0;
+}
+.menu-button:hover {
+  background: var(--surface-hover, rgba(255,255,255,.08));
+  border-color: var(--blue, #3b82f6);
+  color: var(--blue, #3b82f6);
+}
 
 .content { max-width: 1640px; margin: 0 auto; padding: 24px 28px 44px; }
 .error-banner {
@@ -3147,7 +3166,51 @@ button, a { -webkit-tap-highlight-color: transparent; }
 .avatar { width: 33px; height: 33px; color: #e6f0fd; background: linear-gradient(145deg, #294568, #1a2d48); }
 .sidebar-scrim { display: none; }
 
-.workspace { margin-left: 286px; min-width: 0; }
+.sidebar {
+  transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.workspace {
+  margin-left: 286px;
+  min-width: 0;
+  transition: margin-left 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.sidebar-collapse-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #94a3b8;
+  cursor: pointer;
+  margin-left: auto;
+  transition: all 0.16s ease;
+  flex-shrink: 0;
+}
+.sidebar-collapse-btn:hover {
+  background: rgba(255, 255, 255, 0.15);
+  color: #ffffff;
+  border-color: rgba(255, 255, 255, 0.25);
+}
+
+@media (max-width: 991px) {
+  .desktop-only {
+    display: none !important;
+  }
+}
+
+@media (min-width: 992px) {
+  .app-shell.sidebar-collapsed .sidebar {
+    transform: translateX(-100%) !important;
+  }
+  .app-shell.sidebar-collapsed .workspace {
+    margin-left: 0 !important;
+  }
+}
 .topbar {
   height: 80px;
   padding: 0 30px;

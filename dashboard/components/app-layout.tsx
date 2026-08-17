@@ -45,6 +45,8 @@ import {
   Menu,
   MonitorPlay,
   Network,
+  PanelLeftClose,
+  PanelLeftOpen,
   Play,
   Plus,
   Radar,
@@ -255,6 +257,7 @@ import { OrgBrandingProvider, useOrgBranding } from "@/components/ui/org-brandin
 const AppLayoutContext = createContext(false);
 const OPEN_GROUPS_STORAGE_KEY = "sentinel-grid-open-navigation-groups";
 const RECENT_MODULES_STORAGE_KEY = "sentinel-grid-recent-modules";
+const SIDEBAR_COLLAPSED_STORAGE_KEY = "sentinel-grid-sidebar-collapsed";
 
 export function AppLayout({ children, incidentCount = 0, cameraCount = 0 }: AppLayoutProps) {
   const alreadyInsideAppLayout = useContext(AppLayoutContext);
@@ -271,6 +274,7 @@ function AppLayoutFrame({ children, incidentCount = 0, cameraCount = 0 }: AppLay
   const router = useRouter();
   const { branding } = useOrgBranding();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [commandOpen, setCommandOpen] = useState(false);
   const [commandQuery, setCommandQuery] = useState("");
   const [activeCommandIndex, setActiveCommandIndex] = useState(0);
@@ -356,6 +360,25 @@ function AppLayoutFrame({ children, incidentCount = 0, cameraCount = 0 }: AppLay
   }, [activeRoute, searchableModules]);
 
   useEffect(() => {
+    try {
+      const stored = window.localStorage.getItem(SIDEBAR_COLLAPSED_STORAGE_KEY);
+      if (stored !== null) {
+        setSidebarCollapsed(stored === "true");
+      }
+    } catch {}
+  }, []);
+
+  const toggleSidebarCollapse = () => {
+    setSidebarCollapsed((prev) => {
+      const next = !prev;
+      try {
+        window.localStorage.setItem(SIDEBAR_COLLAPSED_STORAGE_KEY, String(next));
+      } catch {}
+      return next;
+    });
+  };
+
+  useEffect(() => {
     setActiveCommandIndex(0);
   }, [commandOpen, commandQuery]);
 
@@ -364,6 +387,10 @@ function AppLayoutFrame({ children, incidentCount = 0, cameraCount = 0 }: AppLay
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
         event.preventDefault();
         setCommandOpen((open) => !open);
+      }
+      if ((event.ctrlKey || event.metaKey) && (event.key.toLowerCase() === "b" || event.key === "\\")) {
+        event.preventDefault();
+        toggleSidebarCollapse();
       }
       if (event.key === "Escape") setCommandOpen(false);
     };
@@ -389,7 +416,7 @@ function AppLayoutFrame({ children, incidentCount = 0, cameraCount = 0 }: AppLay
   };
 
   return (
-    <div className="app-shell">
+    <div className={`app-shell ${sidebarCollapsed ? "sidebar-collapsed" : ""}`}>
       <button
         className={`sidebar-scrim ${sidebarOpen ? "visible" : ""}`}
         aria-label="Close navigation"
@@ -408,6 +435,15 @@ function AppLayoutFrame({ children, incidentCount = 0, cameraCount = 0 }: AppLay
             <strong>{branding.orgName || "Sentinel Grid"}</strong>
             <span>{branding.tagline || "Enterprise operations"}</span>
           </div>
+          <button
+            type="button"
+            className="sidebar-collapse-btn desktop-only"
+            onClick={toggleSidebarCollapse}
+            aria-label="Hide sidebar (Ctrl+B)"
+            title="Hide sidebar (Ctrl+B)"
+          >
+            <PanelLeftClose size={17} />
+          </button>
           <button className="mobile-close" onClick={closeSidebar} aria-label="Close navigation">
             <X size={19} />
           </button>
@@ -534,8 +570,20 @@ function AppLayoutFrame({ children, incidentCount = 0, cameraCount = 0 }: AppLay
 
       <main className="workspace">
         <header className="topbar">
-          <button className="menu-button" onClick={() => setSidebarOpen(true)} aria-label="Open navigation">
-            <Menu size={20} />
+          <button
+            type="button"
+            className="menu-button"
+            onClick={() => {
+              if (typeof window !== "undefined" && window.innerWidth >= 992) {
+                toggleSidebarCollapse();
+              } else {
+                setSidebarOpen(true);
+              }
+            }}
+            aria-label={sidebarCollapsed ? "Show sidebar menu (Ctrl+B)" : "Hide sidebar menu (Ctrl+B)"}
+            title={sidebarCollapsed ? "Show sidebar menu (Ctrl+B)" : "Hide sidebar menu (Ctrl+B)"}
+          >
+            {sidebarCollapsed ? <PanelLeftOpen size={19} /> : <PanelLeftClose size={19} />}
           </button>
           <div className="topbar-context">
             <div className="breadcrumbs">
