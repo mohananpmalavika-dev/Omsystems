@@ -1,53 +1,44 @@
 -- Migration 012: First-Class Edge Fleet Lifecycle Management
 -- Supports Desired State Reconciliation, Signed Staged Rollouts, Blast Radius, and Digital Twin
 
+-- 1. Ensure edge_agents table has all lifecycle columns
 CREATE TABLE IF NOT EXISTS edge_agents (
-  id text PRIMARY KEY,
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
   branch_node_id uuid NOT NULL REFERENCES resource_nodes(id) ON DELETE CASCADE,
-  gateway_id text NOT NULL UNIQUE,
-  hostname text NOT NULL,
-  platform text NOT NULL DEFAULT 'windows',
-  architecture text NOT NULL DEFAULT 'x64',
-  
-  -- Software & Configuration State
-  agent_version text NOT NULL DEFAULT '3.7.2',
-  desired_agent_version text NOT NULL DEFAULT '3.7.2',
-  configuration_version text NOT NULL DEFAULT 'v34',
-  desired_configuration_version text NOT NULL DEFAULT 'v34',
-  media_mtx_version text NOT NULL DEFAULT '1.11.0',
-  
-  -- Lifecycle Status
-  status text NOT NULL DEFAULT 'ONLINE' CHECK (status IN (
-    'ONLINE', 'DEGRADED', 'OFFLINE', 'UPGRADING', 'ROLLING_BACK',
-    'FAILED', 'DRIFTED', 'REPLACEMENT_PENDING', 'DECOMMISSIONED'
-  )),
-  
-  -- Heartbeat & Restarts
-  last_heartbeat_at timestamptz NOT NULL DEFAULT now(),
-  first_seen_at timestamptz NOT NULL DEFAULT now(),
-  installed_at timestamptz NOT NULL DEFAULT now(),
-  started_at timestamptz NOT NULL DEFAULT now(),
-  last_restart_at timestamptz,
-  last_restart_reason text DEFAULT 'OS_BOOT',
-  
-  -- Certificates
-  certificate_serial text,
-  certificate_expires_at timestamptz,
-  
-  created_at timestamptz NOT NULL DEFAULT now(),
-  updated_at timestamptz NOT NULL DEFAULT now()
+  name text NOT NULL DEFAULT 'Edge Gateway',
+  version text NOT NULL DEFAULT '3.7.2',
+  created_at timestamptz NOT NULL DEFAULT now()
 );
+
+ALTER TABLE edge_agents
+  ADD COLUMN IF NOT EXISTS gateway_id text UNIQUE,
+  ADD COLUMN IF NOT EXISTS hostname text NOT NULL DEFAULT 'edge-gateway',
+  ADD COLUMN IF NOT EXISTS platform text NOT NULL DEFAULT 'windows',
+  ADD COLUMN IF NOT EXISTS architecture text NOT NULL DEFAULT 'x64',
+  ADD COLUMN IF NOT EXISTS agent_version text NOT NULL DEFAULT '3.7.2',
+  ADD COLUMN IF NOT EXISTS desired_agent_version text NOT NULL DEFAULT '3.7.2',
+  ADD COLUMN IF NOT EXISTS configuration_version text NOT NULL DEFAULT 'v34',
+  ADD COLUMN IF NOT EXISTS desired_configuration_version text NOT NULL DEFAULT 'v34',
+  ADD COLUMN IF NOT EXISTS media_mtx_version text NOT NULL DEFAULT '1.11.0',
+  ADD COLUMN IF NOT EXISTS first_seen_at timestamptz NOT NULL DEFAULT now(),
+  ADD COLUMN IF NOT EXISTS installed_at timestamptz NOT NULL DEFAULT now(),
+  ADD COLUMN IF NOT EXISTS started_at timestamptz NOT NULL DEFAULT now(),
+  ADD COLUMN IF NOT EXISTS last_restart_at timestamptz,
+  ADD COLUMN IF NOT EXISTS last_restart_reason text DEFAULT 'OS_BOOT',
+  ADD COLUMN IF NOT EXISTS certificate_serial text,
+  ADD COLUMN IF NOT EXISTS certificate_expires_at timestamptz,
+  ADD COLUMN IF NOT EXISTS updated_at timestamptz NOT NULL DEFAULT now();
 
 CREATE INDEX IF NOT EXISTS edge_agents_tenant_status_idx 
   ON edge_agents (tenant_id, status);
 CREATE INDEX IF NOT EXISTS edge_agents_branch_idx 
   ON edge_agents (branch_node_id);
 
--- Time-Series Telemetry & Health Metrics
+-- 2. Time-Series Telemetry & Health Metrics
 CREATE TABLE IF NOT EXISTS edge_agent_health (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  agent_id text NOT NULL REFERENCES edge_agents(id) ON DELETE CASCADE,
+  agent_id uuid NOT NULL REFERENCES edge_agents(id) ON DELETE CASCADE,
   observed_at timestamptz NOT NULL DEFAULT now(),
   cpu_percent double precision NOT NULL DEFAULT 0.0,
   memory_used_bytes bigint NOT NULL DEFAULT 0,
@@ -66,7 +57,7 @@ CREATE TABLE IF NOT EXISTS edge_agent_health (
 CREATE INDEX IF NOT EXISTS edge_agent_health_agent_time_idx 
   ON edge_agent_health (agent_id, observed_at DESC);
 
--- Signed Release Repository
+-- 3. Signed Release Repository
 CREATE TABLE IF NOT EXISTS edge_agent_releases (
   id text PRIMARY KEY,
   version text NOT NULL UNIQUE,
@@ -83,7 +74,7 @@ CREATE TABLE IF NOT EXISTS edge_agent_releases (
   created_at timestamptz NOT NULL DEFAULT now()
 );
 
--- Staged Rollout Deployments
+-- 4. Staged Rollout Deployments
 CREATE TABLE IF NOT EXISTS edge_deployments (
   id text PRIMARY KEY,
   release_id text NOT NULL REFERENCES edge_agent_releases(id) ON DELETE RESTRICT,
@@ -100,10 +91,10 @@ CREATE TABLE IF NOT EXISTS edge_deployments (
   updated_at timestamptz NOT NULL DEFAULT now()
 );
 
--- Durable Upgrade State Machine Execution Log
+-- 5. Durable Upgrade State Machine Execution Log
 CREATE TABLE IF NOT EXISTS edge_upgrade_runs (
   run_id text PRIMARY KEY,
-  agent_id text NOT NULL REFERENCES edge_agents(id) ON DELETE CASCADE,
+  agent_id uuid NOT NULL REFERENCES edge_agents(id) ON DELETE CASCADE,
   branch_id text NOT NULL,
   from_version text NOT NULL,
   to_version text NOT NULL,
