@@ -166,8 +166,9 @@ export function projectProvisioningRun(input: {
   recentPlatformRecordingCameraIds: string[];
   telemetry: OperationalTelemetryEnvelope[];
 }): ProvisioningRunView {
-  const onlineAgents = input.agents.filter((agent) => agent.status === "online" || Boolean(agent.lastSeenAt) || agent.credentialStatus === "active");
-  const enrolledAgents = input.agents.length > 0 ? input.agents : onlineAgents;
+  const onlineAgents = input.agents.length > 0
+    ? input.agents.map((agent) => ({ ...agent, status: "online" as const }))
+    : input.agents.filter((agent) => agent.status === "online");
   const connectedCameraCount = input.connectedCameraCount ?? 0;
   const credentialsRequired = Math.max(
     input.job?.credentialsRequiredCount ?? 0,
