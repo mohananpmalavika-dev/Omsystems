@@ -40,6 +40,7 @@ import { registerRecordingContinuityRoutes } from "./routes/recording-continuity
 import { registerFirstClassPlaybackRoutes } from "./playback/routes/playback.routes.js";
 import { registerForensicEvidenceExportRoutes } from "./evidence-export/routes/evidence-export.routes.js";
 import { registerDistributedStateRoutes } from "./distributed-state/routes/distributed-state.routes.js";
+import { registerReliablePtzRoutes } from "./ptz/routes/ptz.routes.js";
 import { registerCentralMonitoringRoutes } from "./routes/central-monitoring.routes.js";
 import { registerOnDemandMediaRoutes } from "./routes/on-demand-media.routes.js";
 import { registerAiAlertsRoutes } from "./routes/ai-alerts.routes.js";
@@ -72,6 +73,7 @@ import { registerAssetLifecycleRoutes } from "./assets/routes/asset-lifecycle.ro
 import { registerAuthoritativeMediaPipelineRoutes } from "./media/routes/authoritative-media-pipeline.routes.js";
 import { registerDeviceConnectivityRoutes } from "./device-connectivity/routes/device-connectivity.routes.js";
 import { registerHaClusterRoutes } from "./media/cluster/ha-cluster.routes.js";
+import { registerAdaptiveStreamRoutes } from "./media/adaptive/adaptive-stream.routes.js";
 import { registerAdminDatabaseRoutes } from "./routes/admin-database.routes.js";
 import { registerAuditRoutes } from "./routes/audit.routes.js";
 import { registerComplianceRoutes } from "./routes/compliance.routes.js";
@@ -135,6 +137,7 @@ import { registerRecordingIndexRoutes } from "./routes/recording-index.routes.js
 import { registerInvestigationRoutes } from "./routes/investigation.routes.js";
 import { registerEnterpriseStorageRoutes } from "./routes/enterprise-storage.routes.js";
 import { registerStorageFailoverRoutes } from "./routes/storage-failover.routes.js";
+import { registerClientMediaSchedulerRoutes } from "./routes/client-media-scheduler.routes.js";
 import { registerAiQualityRoutes } from "./routes/ai-quality.routes.js";
 import { registerEnterpriseSocOperationsRoutes } from "./routes/enterprise-soc-operations.routes.js";
 import { autoProvisionVerifiedCameras } from "./services/camera-auto-provision.js";
@@ -2606,6 +2609,14 @@ export async function buildApp(options?: {
     app.log.error({ err }, 'failed to register distributed state routes');
   }
 
+  // Register Enterprise Reliable PTZ Subsystem routes
+  try {
+    await registerReliablePtzRoutes(app);
+    app.log.info('Reliable PTZ subsystem routes registered');
+  } catch (err: unknown) {
+    app.log.error({ err }, 'failed to register reliable PTZ routes');
+  }
+
   // Register Scalable Central Monitoring Station & Priority Work Queue routes
   try {
     await registerCentralMonitoringRoutes(app);
@@ -2626,7 +2637,8 @@ export async function buildApp(options?: {
     await registerAuthoritativeMediaPipelineRoutes(app);
     await registerDeviceConnectivityRoutes(app);
     await registerHaClusterRoutes(app);
-    app.log.info('Morning digest, Virtual guard, QRT dispatch, HA Cluster, Edge Lifecycle, Mobile, Asset Lifecycle, Media Pipeline, Device Connectivity, and HA Leases routes registered');
+    await registerAdaptiveStreamRoutes(app);
+    app.log.info('Morning digest, Virtual guard, QRT dispatch, HA Cluster, Edge Lifecycle, Mobile, Asset Lifecycle, Media Pipeline, Device Connectivity, HA Leases, and Adaptive Stream routes registered');
   } catch (err: unknown) {
     app.log.error({ err }, 'failed to register extended enterprise features');
   }
@@ -2814,7 +2826,8 @@ export async function buildApp(options?: {
       capabilityRepo,
     );
     await registerMediaOrchestratorRoutes(app, mediaOrchestrator);
-    app.log.info("Distributed Media Orchestration & Scheduling routes registered");
+    await registerClientMediaSchedulerRoutes(app);
+    app.log.info("Distributed Media Orchestration & Client Scheduler routes registered");
   } catch (err: unknown) {
     app.log.error({ err }, "failed to register media orchestration routes");
   }

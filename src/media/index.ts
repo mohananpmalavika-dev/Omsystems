@@ -27,3 +27,5 @@ export * from "./services/global-stream-coordinator.js";
 export * from "./services/media-orchestrator.js";
 
 export * from "./routes/media-orchestrator.routes.js";
+export * from "./scheduler/client-media-scheduler.types.js";
+export * from "./scheduler/client-media-scheduler.service.js";

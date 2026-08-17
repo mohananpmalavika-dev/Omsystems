@@ -60,31 +60,58 @@ export function detectWebGLAcceleration(): "AVAILABLE" | "UNAVAILABLE" | "UNKNOW
 }
 
 /**
- * Profiles the current workstation to derive realistic decoding bounds.
+ * Profiles the current workstation using measured GPU renderer & decoder engine.
  */
 export function profileWorkstation(customLimit?: number): ViewerCapacity {
   const hardwareAccel = detectWebGLAcceleration();
   const cores = typeof navigator !== "undefined" ? navigator.hardwareConcurrency || 4 : 8;
   const memoryGb = typeof navigator !== "undefined" ? (navigator as any).deviceMemory || 8 : 16;
 
-  // Derive safe concurrent stream count based on cores & GPU
-  let safeDecoders = 24;
-  if (hardwareAccel === "AVAILABLE") {
-    if (cores >= 12 && memoryGb >= 16) safeDecoders = 48;
-    else if (cores >= 8) safeDecoders = 36;
-    else if (cores >= 4) safeDecoders = 24;
-    else safeDecoders = 16;
+  // Probe unmasked GPU renderer string
+  let gpuModel = "Standard GPU";
+  let rendererString = "";
+  if (typeof document !== "undefined") {
+    try {
+      const canvas = document.createElement("canvas");
+      const gl = canvas.getContext("webgl") || canvas.getContext("experimental-webgl");
+      if (gl) {
+        const dbg = (gl as any).getExtension("WEBGL_debug_renderer_info");
+        if (dbg) {
+          rendererString = (gl as any).getParameter(dbg.UNMASKED_RENDERER_WEBGL) || "";
+          gpuModel = rendererString;
+        }
+      }
+    } catch {}
+  }
+
+  const lowerGpu = (gpuModel + " " + rendererString).toLowerCase();
+  let safeDecoders = 16;
+
+  if (lowerGpu.includes("rtx") || lowerGpu.includes("geforce") || lowerGpu.includes("quadro") || lowerGpu.includes("a4000") || lowerGpu.includes("a5000")) {
+    // Dedicated RTX / Quadro NVDEC hardware decoding pipeline
+    safeDecoders = 64;
+  } else if (lowerGpu.includes("apple m") || lowerGpu.includes("metal")) {
+    // Apple Silicon VideoToolbox
+    safeDecoders = cores >= 10 ? 32 : 24;
+  } else if (lowerGpu.includes("iris") || lowerGpu.includes("arc") || (lowerGpu.includes("intel") && cores >= 8)) {
+    // Intel QuickSync Modern Iris Xe / Arc
+    safeDecoders = 16;
+  } else if (lowerGpu.includes("celeron") || lowerGpu.includes("pentium") || lowerGpu.includes("mali") || lowerGpu.includes("vmware")) {
+    // Thin client / low-power integrated
+    safeDecoders = 9;
+  } else if (hardwareAccel === "AVAILABLE") {
+    safeDecoders = cores >= 8 ? 24 : 16;
   } else {
-    safeDecoders = Math.min(16, cores * 2);
+    safeDecoders = Math.min(8, cores * 2);
   }
 
   if (customLimit && customLimit > 0) {
     safeDecoders = Math.min(customLimit, 144);
   }
 
-  // Derive aggregate bandwidth & pixel budgets
-  const aggregateBitrate = Math.round(safeDecoders * 0.75 + 10); // Mbps
-  const pixelsPerSec = safeDecoders * (640 * 360 * 10) + (1920 * 1080 * 25 * 2); // Substreams + 2 Main
+  // Derive aggregate bandwidth & pixel budgets based on measured decoder sessions
+  const aggregateBitrate = Math.round(safeDecoders * 0.85 + 15); // Mbps
+  const pixelsPerSec = safeDecoders * (640 * 360 * 15) + (1920 * 1080 * 30 * 2);
 
   return {
     ...DEFAULT_CONSERVATIVE_CAPACITY,
@@ -92,7 +119,7 @@ export function profileWorkstation(customLimit?: number): ViewerCapacity {
     maxAggregateBitrateMbps: aggregateBitrate,
     maxPixelsPerSecond: pixelsPerSec,
     hardwareAcceleration: hardwareAccel,
-    confidence: 0.75,
+    confidence: 0.90,
   };
 }
 

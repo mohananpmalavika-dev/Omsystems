@@ -72,7 +72,7 @@ export class StorageFailoverRouter extends EventEmitter {
     this.targetRegistry.set(routeKey, filtered);
 
     // If no active pointer, default to the top priority
-    if (!this.activeTargetPointer.has(routeKey) && filtered.length > 0) {
+    if (!this.activeTargetPointer.has(routeKey) && filtered.length > 0 && filtered[0]) {
       this.activeTargetPointer.set(routeKey, filtered[0].id);
     }
 
@@ -132,6 +132,9 @@ export class StorageFailoverRouter extends EventEmitter {
 
     // If all targets are marked unhealthy, return the first active target with degraded warning
     const fallback = targets.find((t) => t.isActive) || targets[0];
+    if (!fallback) {
+      throw new Error("No storage targets available");
+    }
     this.activeTargetPointer.set(routeKey, fallback.id);
     return fallback;
   }
@@ -167,7 +170,7 @@ export class StorageFailoverRouter extends EventEmitter {
       (t) => t.id !== targetId && t.isActive && this.isTargetHealthy(t),
     );
 
-    if (availableTargets.length === 0) {
+    if (availableTargets.length === 0 || !availableTargets[0]) {
       this.emit("failover:exhausted", {
         mediaNodeId,
         cameraId,
@@ -178,7 +181,7 @@ export class StorageFailoverRouter extends EventEmitter {
     }
 
     // Pick top available priority
-    const nextTarget = availableTargets[0];
+    const nextTarget = availableTargets[0]!;
     this.activeTargetPointer.set(routeKey, nextTarget.id);
 
     const event: StorageFailoverEvent = {
