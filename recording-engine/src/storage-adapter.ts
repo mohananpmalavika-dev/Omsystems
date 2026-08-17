@@ -127,7 +127,7 @@ export class LocalDiskStorageAdapter implements StorageDestinationAdapter {
       memberDisks: raidArray.memberDisks,
       failedMembers: raidArray.failedMembers,
       rebuildProgressPercent: raidArray.rebuildProgressPercent,
-      hotSpareStatus: raidArray.spareMemberCount && raidArray.spareMemberCount > 0 ? "active" : "inactive",
+      hotSpareStatus: (raidArray.spareMemberCount && raidArray.spareMemberCount > 0 ? "active" : "inactive") as "active" | "inactive",
       controllerHealth: raidArray.controllerHealth,
     } : undefined;
 

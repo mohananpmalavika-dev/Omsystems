@@ -1148,6 +1148,49 @@ export interface StorageTierMigrationTask {
   createdAt: string;
 }
 
+export type StorageFailoverReason =
+  | "DISK_FULL"
+  | "STORAGE_OFFLINE"
+  | "READ_ONLY"
+  | "WRITE_FAILURE"
+  | "LATENCY_SPIKE"
+  | "MOUNT_DISCONNECTED"
+  | "MANUAL_OVERRIDE";
+
+export interface MediaNodeStorageTarget {
+  id: string;
+  tenantId: string;
+  mediaNodeId: string;
+  cameraId?: string;
+  storageNodeId: string;
+  targetName: string;
+  targetPath: string;
+  storageType: EnterpriseStorageType;
+  storageTier: "hot" | "warm" | "cold" | "archive";
+  priority: number;
+  isActive: boolean;
+  maxCapacityBytes: number;
+  spilloverThresholdPercent: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface StorageFailoverEvent {
+  id: string;
+  tenantId: string;
+  mediaNodeId: string;
+  cameraId?: string;
+  fromStorageNodeId: string;
+  fromTargetPath: string;
+  toStorageNodeId: string;
+  toTargetPath: string;
+  reason: StorageFailoverReason;
+  errorDetail?: string;
+  occurredAt: string;
+  recoveredAt?: string;
+  createdAt: string;
+}
+
 export interface RecordingHealthEvent {
   id: string;
   tenantId: string;

@@ -21,6 +21,7 @@ RUN npm run fetch:windows-runtime --workspace @sentinel/edge-agent
 COPY src ./src
 COPY analytics-engine ./analytics-engine
 COPY backend ./backend
+COPY recording-engine ./recording-engine
 COPY root-cause-analysis-engine ./root-cause-analysis-engine
 COPY edge-agent/src ./edge-agent/src
 COPY edge-agent/installer ./edge-agent/installer
@@ -45,6 +46,7 @@ COPY analytics-engine/package.json ./analytics-engine/package.json
 COPY root-cause-analysis-engine/package.json ./root-cause-analysis-engine/package.json
 COPY --from=build /app/analytics-engine ./analytics-engine
 COPY --from=build /app/backend ./backend
+COPY --from=build /app/recording-engine ./recording-engine
 COPY --from=build /app/root-cause-analysis-engine ./root-cause-analysis-engine
 COPY --from=build /app/edge-agent/build ./edge-agent/build
 COPY --from=build /app/edge-agent/release ./edge-agent/release

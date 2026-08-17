@@ -19,6 +19,33 @@ import { createStorageAdapter, type StorageStatus, type StorageType } from "./st
 import { AlertEvidenceCaptureService } from "./alert-evidence-capture.js";
 import { S3EvidenceArchive } from "./s3-evidence-archive.js";
 import { permitsSentinelTimelineWorker } from "./recording-policy.js";
+import { RecordingEngine } from "./engine/recording-engine.js";
+
+// Export bulletproof recording engine modules
+export * from "./manifest/segment-manifest.js";
+export * from "./segments/segment-checksum.js";
+export * from "./segments/keyframe-indexer.js";
+export * from "./segments/segment-validator.js";
+export * from "./segments/segment-writer.js";
+export * from "./segments/segment-finalizer.js";
+export * from "./journal/recording-journal.js";
+export * from "./journal/journal-replayer.js";
+export * from "./supervision/stream-supervisor.js";
+export * from "./supervision/stream-state-machine.js";
+export * from "./supervision/reconnect-policy.js";
+export * from "./ingest/stream-ingest.js";
+export * from "./ingest/ffmpeg-ingest.js";
+export * from "./ingest/rtsp-health.js";
+export * from "./recovery/segment-repair.js";
+export * from "./recovery/orphan-reconciler.js";
+export * from "./recovery/recovery-scanner.js";
+export * from "./gaps/recording-gap-tracker.js";
+export * from "./storage/storage-node-manager.js";
+export * from "./evidence/range-exporter.js";
+export * from "./state/checkpoint-manager.js";
+export * from "./engine/recording-session.js";
+export * from "./engine/recording-worker.js";
+export * from "./engine/recording-engine.js";
 
 // Export storage health monitoring modules
 export { storageHealthAgent, type StorageHealthReport, type PhysicalDisk, type RaidArray, type StorageRiskLevel, type DiskType, type RaidType, type SmartData } from "./storage-health-agent.js";
@@ -193,6 +220,24 @@ const storageAdapter = createStorageAdapter({
   location: config.STORAGE_NODE_LOCATION,
 });
 
+export const authoritativeRecordingEngine = new RecordingEngine({
+  rootDirectory: recordingRoot,
+  storageNodeExternalId: config.STORAGE_NODE_EXTERNAL_ID,
+  controlPlaneClient: {
+    submitSegmentIndex: async (manifest: Record<string, unknown>) => {
+      await submitSegmentIndex(manifest as any);
+    },
+    recordGap: async (payload: Record<string, unknown>) => {
+      await controlPlane("/internal/recording/gaps", {
+        method: "POST",
+        body: JSON.stringify(payload),
+      }, { enqueueOnFailure: true });
+    },
+  },
+});
+
+await authoritativeRecordingEngine.start();
+
 app.addHook("preHandler", async (request, reply) => {
   if (request.url === "/health") return;
   const value = request.headers["x-recording-engine-key"];
@@ -270,6 +315,71 @@ app.post("/internal/alert-evidence/:alertId/capture", async (request, reply) => 
     offsiteArchiveRequested: job.job.cloudArchivePolicy === "incident-evidence-only",
   });
   return reply.code(status.state === "ready" || status.state === "partial" ? 200 : 202).send(status);
+});
+
+app.post("/internal/recordings/export-range", async (request, reply) => {
+  const body = z.object({
+    cameraId: z.string().min(1),
+    fromTime: z.string().datetime(),
+    toTime: z.string().datetime(),
+    outputPath: z.string().min(1),
+    matchingSegments: z.array(z.object({
+      id: z.string(),
+      storagePath: z.string(),
+      startedAt: z.string().datetime(),
+      endedAt: z.string().datetime(),
+      sizeBytes: z.number(),
+    })),
+  }).parse(request.body);
+
+  const result = await authoritativeRecordingEngine.exportRange(
+    {
+      cameraId: body.cameraId,
+      fromTime: new Date(body.fromTime),
+      toTime: new Date(body.toTime),
+      outputPath: resolve(recordingRoot, body.outputPath),
+    },
+    body.matchingSegments.map((s) => ({
+      id: s.id,
+      storagePath: resolve(recordingRoot, s.storagePath),
+      startedAt: new Date(s.startedAt),
+      endedAt: new Date(s.endedAt),
+      sizeBytes: s.sizeBytes,
+    })),
+  );
+
+  return reply.code(result.success ? 200 : 400).send(result);
+});
+
+app.get("/internal/recordings/:cameraId/status", async (request, reply) => {
+  const { cameraId } = z.object({ cameraId: z.string().min(1) }).parse(request.params);
+  const worker = authoritativeRecordingEngine.workerPool.getWorker(cameraId);
+  if (!worker) {
+    return reply.code(404).send({ error: "camera_not_recording" });
+  }
+  return worker.session.getSupervisor().getMetrics();
+});
+
+app.get("/internal/recordings/:cameraId/gaps", async (request, reply) => {
+  const { cameraId } = z.object({ cameraId: z.string().min(1) }).parse(request.params);
+  const activeGap = authoritativeRecordingEngine.gapTracker.getActiveGap(cameraId);
+  return { cameraId, activeGap: activeGap ?? null };
+});
+
+app.get("/internal/recordings/storage/nodes", async () => {
+  return { nodes: authoritativeRecordingEngine.storageManager.getAllNodes() };
+});
+
+app.post("/internal/recordings/recovery/scan", async () => {
+  const summary = await authoritativeRecordingEngine.recoveryScanner.runPhase1FastRecovery({
+    stagingRoot: join(recordingRoot, "staging"),
+    storageRoot: join(recordingRoot, "segments"),
+    quarantineRoot: join(recordingRoot, "quarantine"),
+    tenantId: "system",
+    branchId: "main",
+    storageNode: config.STORAGE_NODE_EXTERNAL_ID,
+  });
+  return { success: true, summary };
 });
 
 app.get("/internal/alert-evidence/:alertId/status", async (request, reply) => {
@@ -436,8 +546,8 @@ function minutesSinceMidnight(hour: number, minute: number) {
 }
 
 function isTimeInRange(minutes: number, start: string, end: string) {
-  const [sh, sm] = start.split(":").map(Number);
-  const [eh, em] = end.split(":").map(Number);
+  const [sh = 0, sm = 0] = start.split(":").map(Number);
+  const [eh = 0, em = 0] = end.split(":").map(Number);
   const startMinutes = minutesSinceMidnight(sh, sm);
   const endMinutes = minutesSinceMidnight(eh, em);
   return startMinutes <= endMinutes
@@ -743,12 +853,13 @@ async function runWriteProbe() {
   }).catch(logFailure);
 
   if (probe.status === "failed") {
-    await health({
+    const dummyJob: ManagedJob = {
       tenantId: (jobs.values().next().value?.tenantId) ?? "unknown",
+      branchId: "unknown",
       cameraId: "",
+      connectionSecretRef: "none",
       job: {
         id: "",
-        cameraId: "",
         mode: "continuous",
         enabled: true,
         status: "idle",
@@ -770,9 +881,9 @@ async function runWriteProbe() {
         motionConfidenceThreshold: 0,
         cooldownSeconds: 0,
         maxEventDurationSeconds: 0,
-        updatedAt: new Date().toISOString(),
       },
-    } as ManagedJob, "storage_write_probe_failed", "critical",
+    };
+    await health(dummyJob, "storage_write_probe_failed", "critical",
       "Storage write probe failed; mounted storage may not be writable", {
         probe,
       });

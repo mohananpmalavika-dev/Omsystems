@@ -169,7 +169,7 @@ export class StorageMonitoringService {
    * Process individual disk health
    */
   private async processDiskHealth(disk: any, report: StorageHealthReport): Promise<void> {
-    const { thresholds } = this.config.alert;
+    const thresholds = this.config.alertThresholds;
 
     // Temperature alerts
     if (disk.temperatureCelsius) {

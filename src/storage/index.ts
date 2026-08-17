@@ -7,3 +7,5 @@ export * from "./providers/s3-storage.provider.js";
 export * from "./providers/archive-storage.provider.js";
 export * from "./enterprise-storage-pool.js";
 export * from "./storage-telemetry.service.js";
+export * from "./storage-failover-router.js";
+export * from "./storage-failover.service.js";

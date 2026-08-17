@@ -193,7 +193,7 @@ export class StorageHealthAgent {
         const [name, type] = parts;
         
         // Only process disk devices (not partitions, loops, etc.)
-        if (type !== "disk") continue;
+        if (!name || type !== "disk") continue;
 
         const devicePath = name.startsWith("/dev/") ? name : `/dev/${name}`;
         const size = parts[2] ? Number(parts[2]) : undefined;
@@ -272,8 +272,8 @@ export class StorageHealthAgent {
       const serialMatch = stdout.match(/Serial Number:\s*(.+)/i);
       const firmwareMatch = stdout.match(/Firmware Version:\s*(.+)/i);
       return {
-        serial: serialMatch ? serialMatch[1].trim() : undefined,
-        firmware: firmwareMatch ? firmwareMatch[1].trim() : undefined,
+        serial: serialMatch?.[1] ? serialMatch[1].trim() : undefined,
+        firmware: firmwareMatch?.[1] ? firmwareMatch[1].trim() : undefined,
       };
     } catch {
       return {};
@@ -427,14 +427,16 @@ export class StorageHealthAgent {
           let diskMatch;
           while ((diskMatch = diskRegex.exec(stdout)) !== null) {
             const [, state, , device] = diskMatch;
-            memberDisks.push(device);
-            if (state === "faulty") {
-              failedMembers.push(device);
+            if (device) {
+              memberDisks.push(device);
+              if (state === "faulty") {
+                failedMembers.push(device);
+              }
             }
           }
 
           let status: RaidArray["status"] = "unknown";
-          const stateStr = stateMatch ? stateMatch[1].toLowerCase() : "";
+          const stateStr = stateMatch?.[1] ? stateMatch[1].toLowerCase() : "";
           if (stateStr.includes("clean") || stateStr.includes("active")) {
             status = "healthy";
           } else if (stateStr.includes("rebuild") || stateStr.includes("recover")) {
@@ -484,14 +486,14 @@ export class StorageHealthAgent {
       
       for (const block of poolBlocks) {
         const lines = block.trim().split(/\r?\n/);
-        const poolName = lines[0].trim();
+        const poolName = lines[0]?.trim() || "unknown";
         
         const stateMatch = block.match(/state:\s*(\w+)/i);
         const statusMatch = block.match(/status:\s*(.+)/i);
         const scanMatch = block.match(/scan:\s*(.+)/i);
         
         let status: RaidArray["status"] = "unknown";
-        const stateStr = stateMatch ? stateMatch[1].toLowerCase() : "";
+        const stateStr = stateMatch?.[1] ? stateMatch[1].toLowerCase() : "";
         if (stateStr === "online") {
           status = "healthy";
         } else if (stateStr === "degraded") {
@@ -501,10 +503,8 @@ export class StorageHealthAgent {
         }
 
         // Check for resilver (rebuild)
-        if (scanMatch && /resilver|repair/i.test(scanMatch[1])) {
+        if (scanMatch?.[1] && /resilver|repair/i.test(scanMatch[1])) {
           status = "rebuilding";
-          const progressMatch = scanMatch[1].match(/(\d+)%/);
-          const rebuilding = progressMatch ? Number(progressMatch[1]) : undefined;
         }
 
         const memberDisks: string[] = [];
@@ -515,9 +515,11 @@ export class StorageHealthAgent {
         let diskMatch;
         while ((diskMatch = diskRegex.exec(block)) !== null) {
           const [, device, state] = diskMatch;
-          memberDisks.push(`/dev/${device}`);
-          if (state !== "ONLINE") {
-            failedMembers.push(`/dev/${device}`);
+          if (device) {
+            memberDisks.push(`/dev/${device}`);
+            if (state !== "ONLINE") {
+              failedMembers.push(`/dev/${device}`);
+            }
           }
         }
 

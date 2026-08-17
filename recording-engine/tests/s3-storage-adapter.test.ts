@@ -10,8 +10,8 @@
  *   - S3_TEST_ENDPOINT (optional, for MinIO/localstack)
  */
 
-import { describe, it, expect, beforeAll, afterAll } from '@jest/globals';
-import { createStorageAdapter } from '../src/storage-adapter';
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { createStorageAdapter } from '../src/storage-adapter.js';
 import { writeFile, unlink, mkdir } from 'fs/promises';
 import { join } from 'path';
 import { randomBytes } from 'crypto';

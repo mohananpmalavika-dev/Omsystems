@@ -134,6 +134,7 @@ import { AIQualityPlatformFacade } from "./ai-quality/index.js";
 import { registerRecordingIndexRoutes } from "./routes/recording-index.routes.js";
 import { registerInvestigationRoutes } from "./routes/investigation.routes.js";
 import { registerEnterpriseStorageRoutes } from "./routes/enterprise-storage.routes.js";
+import { registerStorageFailoverRoutes } from "./routes/storage-failover.routes.js";
 import { registerAiQualityRoutes } from "./routes/ai-quality.routes.js";
 import { registerEnterpriseSocOperationsRoutes } from "./routes/enterprise-soc-operations.routes.js";
 import { autoProvisionVerifiedCameras } from "./services/camera-auto-provision.js";
@@ -2896,12 +2897,13 @@ export async function buildApp(options?: {
     }
   }
 
-  // Register Authoritative Recording Index & Unified Investigation Search routes
+  // Register Authoritative Recording Index, Unified Investigation Search, Enterprise Storage, and Failover routes
   try {
     await registerRecordingIndexRoutes(app);
     await registerInvestigationRoutes(app);
     await registerEnterpriseStorageRoutes(app);
-    app.log.info("Authoritative RecordingIndex, Unified Investigation Search, and Enterprise Storage routes registered");
+    await registerStorageFailoverRoutes(app);
+    app.log.info("Authoritative RecordingIndex, Unified Investigation Search, Enterprise Storage, and Failover routes registered");
   } catch (error) {
     app.log.error({ error }, "Failed to register recording index, investigation, and storage routes");
   }

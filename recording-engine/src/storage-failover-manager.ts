@@ -166,7 +166,7 @@ export class StorageFailoverManager extends EventEmitter {
             this.recordFailover({
               timestamp: new Date(),
               reason: 'DISK_FULL',
-              fromTier: sortedTiers[0].name,
+              fromTier: sortedTiers[0]?.name ?? "unknown",
               toTier: tier.name,
               cameraId,
               details: `Primary storage full, failed over to ${tier.name}`
