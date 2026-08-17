@@ -33,12 +33,14 @@ export async function registerProvisioningRoutes(
       selected = await store.heartbeatEdgeAgent(selected.id, selected.version || "1.4.2");
     }
 
-    const agentForJob = selected
-      ? selected
-      : await (async () => {
-          const created = await store.registerEdgeAgent(branchId, "Branch Gateway Edge-01", "1.4.2");
-          return await store.heartbeatEdgeAgent(created.id, "1.4.2");
-        })();
+    let agentForJob = selected;
+    if (!agentForJob) {
+      const created = await store.registerEdgeAgent(branchId, "Branch Gateway Edge-01", "1.4.2");
+      agentForJob = await store.heartbeatEdgeAgent(created.id, "1.4.2");
+    }
+    if (!agentForJob) {
+      throw new Error("Unable to establish an online edge agent for provisioning.");
+    }
 
     const job = await store.createEdgeScanJob(branchId, agentForJob.id);
     await store.writeAudit({
