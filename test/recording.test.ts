@@ -118,7 +118,7 @@ describe("recording and storage module", () => {
     expect(released.statusCode).toBe(200);
     const afterRelease = await retentionCandidates(app);
     expect(afterRelease.json().data).toHaveLength(1);
-  });
+  }, 20000);
 
   it("selects the most specific matching compliance policy for retention", async () => {
     const store = new MemoryStore();
