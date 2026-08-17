@@ -91,13 +91,6 @@ function getDeviceInfo() {
  * Start activity session
  */
 async function startSession(): Promise<string | null> {
-  const userId = getUserId();
-  
-  if (!userId) {
-    console.warn('[ActivityMonitor] No authenticated user, skipping session start');
-    return null;
-  }
-
   if (sessionStartPromise) return sessionStartPromise;
   
   sessionStartPromise = (async () => { try {
