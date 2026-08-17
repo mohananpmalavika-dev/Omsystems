@@ -130,6 +130,7 @@
     "@aws-sdk/client-ses": "^3.0.0",
     "@aws-sdk/client-sns": "^3.1109.0",
     "@fastify/cors": "^11.0.0",
+    "@node-saml/passport-saml": "^5.1.0",
     "@types/leaflet": "^1.9.21",
     "@types/node-cron": "^3.0.11",
     "@types/papaparse": "^5.5.2",
@@ -165,7 +166,6 @@
     "zod": "^3.24.2"
   },
   "devDependencies": {
-    "@node-saml/passport-saml": "^5.1.0",
     "@types/express": "^4.17.21",
     "@types/jsonwebtoken": "^9.0.5",
     "@types/ldapjs": "^3.0.6",
