@@ -679,6 +679,16 @@ export class MemoryStore implements ControlPlaneStore {
     return agent ? structuredClone(agent) : undefined;
   }
 
+  async listEdgeAgents(tenantId: string) {
+    return Array.from(this.edgeAgents.values())
+      .filter(agent => {
+        // Get the branch node to find tenantId
+        const branch = this.nodes.get(agent.branchId);
+        return branch?.tenantId === tenantId;
+      })
+      .map(agent => structuredClone(agent));
+  }
+
   async createEdgeActivation(input: {
     branchId: string; agentName: string; createdBy: string; expiresAt: string; tokenHash: string;
   }) {

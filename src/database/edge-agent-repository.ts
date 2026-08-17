@@ -126,6 +126,22 @@ export class EdgeAgentRepository {
     return result.rows.map(mapAgent);
   }
 
+  async listByTenant(tenantId: string) {
+    const result = await this.pool.query<AgentRow>(
+      `SELECT e.id::text, e.branch_node_id::text, e.name, e.version,
+              CASE WHEN e.last_seen_at < now() - interval '90 seconds'
+                THEN 'offline'::edge_agent_status ELSE e.status END AS status,
+              e.last_seen_at, e.public_media_url, e.device_uuid,
+              e.credential_issued_at, e.credential_revoked_at
+       FROM edge_agents e
+       JOIN resource_nodes n ON e.branch_node_id = n.id
+       WHERE n.tenant_id = $1
+       ORDER BY e.name, e.created_at`,
+      [tenantId],
+    );
+    return result.rows.map(mapAgent);
+  }
+
   async get(id: string) {
     const result = await this.pool.query<AgentRow>(
       `SELECT id::text, branch_node_id::text, name, version,

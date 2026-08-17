@@ -261,6 +261,11 @@ export class PostgresStore
   async listEdgeAgentsByBranch(branchId: string) {
     return this.agents.listByBranch(branchId);
   }
+
+  async listEdgeAgents(tenantId: string) {
+    return this.agents.listByTenant(tenantId);
+  }
+
   async getEdgeAgent(id: string) {
     return this.agents.get(id);
   }

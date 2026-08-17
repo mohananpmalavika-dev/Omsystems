@@ -50,40 +50,112 @@ export const TABLE_REGISTRY: Record<string, TableDefinition> = {
       { name: "createdAt", label: "Created At", type: "datetime", readonly: true },
     ],
     getRows: async (store) => {
-      if (store.nodes instanceof Map) return Array.from(store.nodes.values());
+      if ('db' in store && store.db) {
+        const result = await (store as any).db.query(
+          `SELECT id::text, name, type::text, parent_id::text as "parentId",
+                  address, city, state, postal_code as "postalCode", timezone,
+                  contact_email as "contactEmail", contact_phone as "contactPhone",
+                  created_at as "createdAt"
+           FROM resource_nodes
+           ORDER BY type, name`
+        );
+        return result.rows;
+      }
+      const memStore = store as any;
+      if (memStore.nodes instanceof Map) return Array.from(memStore.nodes.values());
       return store.listBranches?.() || [];
     },
     getRow: async (store, id) => {
-      if (store.nodes instanceof Map) return store.nodes.get(id) || null;
+      if ('db' in store && store.db) {
+        const result = await (store as any).db.query(
+          `SELECT id::text, name, type::text, parent_id::text as "parentId",
+                  address, city, state, postal_code as "postalCode", timezone,
+                  contact_email as "contactEmail", contact_phone as "contactPhone",
+                  created_at as "createdAt"
+           FROM resource_nodes WHERE id = $1`,
+          [id]
+        );
+        return result.rows[0] || null;
+      }
+      const memStore = store as any;
+      if (memStore.nodes instanceof Map) return memStore.nodes.get(id) || null;
       const branches = await store.listBranches?.();
       return branches?.find((b: any) => b.id === id) || null;
     },
     createRow: async (store, data) => {
       const id = data.id || `node-${randomUUID()}`;
+      if ('db' in store && store.db) {
+        const result = await (store as any).db.query(
+          `INSERT INTO resource_nodes (id, name, type, parent_id, tenant_id, address, city, state, postal_code, timezone, contact_email, contact_phone, created_at)
+           VALUES ($1, $2, $3::node_type, $4, $5, $6, $7, $8, $9, $10, $11, $12, now())
+           RETURNING id::text, name, type::text, parent_id::text as "parentId",
+                     address, city, state, postal_code as "postalCode", timezone,
+                     contact_email as "contactEmail", contact_phone as "contactPhone",
+                     created_at as "createdAt"`,
+          [id, data.name, data.type, data.parentId, data.tenantId || '00000000-0000-4000-8000-000000000001', 
+           data.address, data.city, data.state, data.postalCode, data.timezone, data.contactEmail, data.contactPhone]
+        );
+        return result.rows[0];
+      }
       const record = {
         id,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
         ...data,
       };
-      if (store.nodes instanceof Map) {
-        store.nodes.set(id, record);
+      const memStore = store as any;
+      if (memStore.nodes instanceof Map) {
+        memStore.nodes.set(id, record);
       }
       return record;
     },
     updateRow: async (store, id, data) => {
-      if (store.nodes instanceof Map) {
-        const existing = store.nodes.get(id);
+      if ('db' in store && store.db) {
+        const result = await (store as any).db.query(
+          `UPDATE resource_nodes
+           SET name = COALESCE($2, name),
+               type = COALESCE($3::node_type, type),
+               parent_id = COALESCE($4, parent_id),
+               address = COALESCE($5, address),
+               city = COALESCE($6, city),
+               state = COALESCE($7, state),
+               postal_code = COALESCE($8, postal_code),
+               timezone = COALESCE($9, timezone),
+               contact_email = COALESCE($10, contact_email),
+               contact_phone = COALESCE($11, contact_phone),
+               updated_at = now()
+           WHERE id = $1
+           RETURNING id::text, name, type::text, parent_id::text as "parentId",
+                     address, city, state, postal_code as "postalCode", timezone,
+                     contact_email as "contactEmail", contact_phone as "contactPhone",
+                     created_at as "createdAt"`,
+          [id, data.name, data.type, data.parentId, data.address, data.city, data.state, 
+           data.postalCode, data.timezone, data.contactEmail, data.contactPhone]
+        );
+        if (result.rows.length === 0) throw new Error(`Node ${id} not found`);
+        return result.rows[0];
+      }
+      const memStore = store as any;
+      if (memStore.nodes instanceof Map) {
+        const existing = memStore.nodes.get(id);
         if (!existing) throw new Error(`Node ${id} not found`);
         const updated = { ...existing, ...data, id, updatedAt: new Date().toISOString() };
-        store.nodes.set(id, updated);
+        memStore.nodes.set(id, updated);
         return updated;
       }
       return null;
     },
     deleteRow: async (store, id) => {
-      if (store.nodes instanceof Map) {
-        return store.nodes.delete(id);
+      if ('db' in store && store.db) {
+        const result = await (store as any).db.query(
+          `DELETE FROM resource_nodes WHERE id = $1 RETURNING id`,
+          [id]
+        );
+        return result.rows.length > 0;
+      }
+      const memStore = store as any;
+      if (memStore.nodes instanceof Map) {
+        return memStore.nodes.delete(id);
       }
       return false;
     },
@@ -110,15 +182,54 @@ export const TABLE_REGISTRY: Record<string, TableDefinition> = {
       { name: "createdAt", label: "Created At", type: "datetime", readonly: true },
     ],
     getRows: async (store) => {
-      if (store.cameras instanceof Map) return Array.from(store.cameras.values());
+      if ('db' in store && store.db) {
+        const result = await (store as any).db.query(
+          `SELECT c.id::text, c.name, c.branch_node_id::text as "branchId",
+                  di.vendor, di.model, di.ipv4_address as "ipAddress",
+                  di.rtsp_url as "rtspUrl", di.mac_address as "macAddress",
+                  di.firmware_version as "firmwareVersion",
+                  c.status::text, c.capabilities, c.created_at as "createdAt"
+           FROM cameras c
+           LEFT JOIN device_identities di ON c.device_uuid = di.device_uuid
+           ORDER BY c.name, c.created_at`
+        );
+        return result.rows;
+      }
+      const memStore = store as any;
+      if (memStore.cameras instanceof Map) return Array.from(memStore.cameras.values());
       return store.listCameras?.() || [];
     },
     getRow: async (store, id) => {
-      if (store.cameras instanceof Map) return store.cameras.get(id) || null;
+      if ('db' in store && store.db) {
+        const result = await (store as any).db.query(
+          `SELECT c.id::text, c.name, c.branch_node_id::text as "branchId",
+                  di.vendor, di.model, di.ipv4_address as "ipAddress",
+                  di.rtsp_url as "rtspUrl", di.mac_address as "macAddress",
+                  di.firmware_version as "firmwareVersion",
+                  c.status::text, c.capabilities, c.created_at as "createdAt"
+           FROM cameras c
+           LEFT JOIN device_identities di ON c.device_uuid = di.device_uuid
+           WHERE c.id = $1`,
+          [id]
+        );
+        return result.rows[0] || null;
+      }
+      const memStore = store as any;
+      if (memStore.cameras instanceof Map) return memStore.cameras.get(id) || null;
       return store.getCamera?.(id) || null;
     },
     createRow: async (store, data) => {
       const id = data.id || `cam-${randomUUID()}`;
+      if ('db' in store && store.db) {
+        const result = await (store as any).db.query(
+          `INSERT INTO cameras (id, name, branch_node_id, status, capabilities, created_at)
+           VALUES ($1, $2, $3, $4::camera_status, $5, now())
+           RETURNING id::text, name, branch_node_id::text as "branchId", status::text,
+                     capabilities, created_at as "createdAt"`,
+          [id, data.name, data.branchId, data.status || 'online', data.capabilities || {}]
+        );
+        return result.rows[0];
+      }
       const record = {
         id,
         createdAt: new Date().toISOString(),
@@ -126,24 +237,49 @@ export const TABLE_REGISTRY: Record<string, TableDefinition> = {
         status: data.status || "online",
         ...data,
       };
-      if (store.cameras instanceof Map) {
-        store.cameras.set(id, record);
+      const memStore = store as any;
+      if (memStore.cameras instanceof Map) {
+        memStore.cameras.set(id, record);
       }
       return record;
     },
     updateRow: async (store, id, data) => {
-      if (store.cameras instanceof Map) {
-        const existing = store.cameras.get(id);
+      if ('db' in store && store.db) {
+        const result = await (store as any).db.query(
+          `UPDATE cameras
+           SET name = COALESCE($2, name),
+               status = COALESCE($3::camera_status, status),
+               capabilities = COALESCE($4, capabilities),
+               updated_at = now()
+           WHERE id = $1
+           RETURNING id::text, name, branch_node_id::text as "branchId", status::text,
+                     capabilities, created_at as "createdAt"`,
+          [id, data.name, data.status, data.capabilities]
+        );
+        if (result.rows.length === 0) throw new Error(`Camera ${id} not found`);
+        return result.rows[0];
+      }
+      const memStore = store as any;
+      if (memStore.cameras instanceof Map) {
+        const existing = memStore.cameras.get(id);
         if (!existing) throw new Error(`Camera ${id} not found`);
         const updated = { ...existing, ...data, id, updatedAt: new Date().toISOString() };
-        store.cameras.set(id, updated);
+        memStore.cameras.set(id, updated);
         return updated;
       }
       return null;
     },
     deleteRow: async (store, id) => {
-      if (store.cameras instanceof Map) {
-        return store.cameras.delete(id);
+      if ('db' in store && store.db) {
+        const result = await (store as any).db.query(
+          `DELETE FROM cameras WHERE id = $1 RETURNING id`,
+          [id]
+        );
+        return result.rows.length > 0;
+      }
+      const memStore = store as any;
+      if (memStore.cameras instanceof Map) {
+        return memStore.cameras.delete(id);
       }
       return false;
     },
@@ -166,40 +302,149 @@ export const TABLE_REGISTRY: Record<string, TableDefinition> = {
       { name: "enrolledAt", label: "Enrolled At", type: "datetime", readonly: true },
     ],
     getRows: async (store) => {
-      if (store.edgeAgents instanceof Map) return Array.from(store.edgeAgents.values());
-      return store.listEdgeAgents?.() || [];
+      // For PostgresStore, query the database directly
+      if ('db' in store && store.db) {
+        const result = await (store as any).db.query(
+          `SELECT e.id::text, e.branch_node_id::text as "branchId", e.name, e.version,
+                  CASE WHEN e.last_seen_at < now() - interval '90 seconds'
+                    THEN 'offline'::text ELSE e.status::text END AS status,
+                  e.last_seen_at as "lastHeartbeatAt", e.public_media_url as "publicMediaUrl",
+                  e.created_at as "enrolledAt"
+           FROM edge_agents e
+           ORDER BY e.name, e.created_at`
+        );
+        return result.rows;
+      }
+      // For MemoryStore, access the internal map through reflection
+      const memStore = store as any;
+      if (memStore.edgeAgents instanceof Map) {
+        return Array.from(memStore.edgeAgents.values()).map((agent: any) => ({
+          id: agent.id,
+          name: agent.name,
+          branchId: agent.branchId,
+          version: agent.version,
+          status: agent.status,
+          publicMediaUrl: agent.publicMediaUrl,
+          lastHeartbeatAt: agent.lastSeenAt,
+          enrolledAt: agent.credentialIssuedAt || agent.createdAt,
+        }));
+      }
+      return [];
     },
     getRow: async (store, id) => {
-      if (store.edgeAgents instanceof Map) return store.edgeAgents.get(id) || null;
-      return store.getEdgeAgent?.(id) || null;
+      if ('db' in store && store.db) {
+        const result = await (store as any).db.query(
+          `SELECT e.id::text, e.branch_node_id::text as "branchId", e.name, e.version,
+                  e.status::text, e.last_seen_at as "lastHeartbeatAt",
+                  e.public_media_url as "publicMediaUrl", e.created_at as "enrolledAt"
+           FROM edge_agents e WHERE e.id = $1`,
+          [id]
+        );
+        return result.rows[0] || null;
+      }
+      const memStore = store as any;
+      if (memStore.edgeAgents instanceof Map) {
+        const agent = memStore.edgeAgents.get(id);
+        if (!agent) return null;
+        return {
+          id: agent.id,
+          name: agent.name,
+          branchId: agent.branchId,
+          version: agent.version,
+          status: agent.status,
+          publicMediaUrl: agent.publicMediaUrl,
+          lastHeartbeatAt: agent.lastSeenAt,
+          enrolledAt: agent.credentialIssuedAt || agent.createdAt,
+        };
+      }
+      return null;
     },
     createRow: async (store, data) => {
       const id = data.id || `agent-${randomUUID()}`;
+      if ('db' in store && store.db) {
+        const result = await (store as any).db.query(
+          `INSERT INTO edge_agents (id, name, branch_node_id, version, status, public_media_url, created_at, last_seen_at)
+           VALUES ($1, $2, $3, $4, $5, $6, now(), now())
+           RETURNING id::text, branch_node_id::text as "branchId", name, version, status::text,
+                     public_media_url as "publicMediaUrl", last_seen_at as "lastHeartbeatAt",
+                     created_at as "enrolledAt"`,
+          [id, data.name, data.branchId, data.version || '1.0.0', data.status || 'online', data.publicMediaUrl]
+        );
+        return result.rows[0];
+      }
+      const memStore = store as any;
       const record = {
         id,
+        name: data.name,
+        branchId: data.branchId,
+        version: data.version || '1.0.0',
         status: data.status || "online",
-        enrolledAt: new Date().toISOString(),
-        lastHeartbeatAt: new Date().toISOString(),
-        ...data,
+        publicMediaUrl: data.publicMediaUrl,
+        lastSeenAt: new Date().toISOString(),
+        credentialIssuedAt: new Date().toISOString(),
+        createdAt: new Date().toISOString(),
       };
-      if (store.edgeAgents instanceof Map) {
-        store.edgeAgents.set(id, record);
+      if (memStore.edgeAgents instanceof Map) {
+        memStore.edgeAgents.set(id, record);
       }
-      return record;
+      return {
+        id: record.id,
+        name: record.name,
+        branchId: record.branchId,
+        version: record.version,
+        status: record.status,
+        publicMediaUrl: record.publicMediaUrl,
+        lastHeartbeatAt: record.lastSeenAt,
+        enrolledAt: record.credentialIssuedAt,
+      };
     },
     updateRow: async (store, id, data) => {
-      if (store.edgeAgents instanceof Map) {
-        const existing = store.edgeAgents.get(id);
+      if ('db' in store && store.db) {
+        const result = await (store as any).db.query(
+          `UPDATE edge_agents
+           SET name = COALESCE($2, name),
+               version = COALESCE($3, version),
+               status = COALESCE($4::edge_agent_status, status),
+               public_media_url = COALESCE($5, public_media_url)
+           WHERE id = $1
+           RETURNING id::text, branch_node_id::text as "branchId", name, version, status::text,
+                     public_media_url as "publicMediaUrl", last_seen_at as "lastHeartbeatAt",
+                     created_at as "enrolledAt"`,
+          [id, data.name, data.version, data.status, data.publicMediaUrl]
+        );
+        if (result.rows.length === 0) throw new Error(`Edge Agent ${id} not found`);
+        return result.rows[0];
+      }
+      const memStore = store as any;
+      if (memStore.edgeAgents instanceof Map) {
+        const existing = memStore.edgeAgents.get(id);
         if (!existing) throw new Error(`Edge Agent ${id} not found`);
         const updated = { ...existing, ...data, id };
-        store.edgeAgents.set(id, updated);
-        return updated;
+        memStore.edgeAgents.set(id, updated);
+        return {
+          id: updated.id,
+          name: updated.name,
+          branchId: updated.branchId,
+          version: updated.version,
+          status: updated.status,
+          publicMediaUrl: updated.publicMediaUrl,
+          lastHeartbeatAt: updated.lastSeenAt,
+          enrolledAt: updated.credentialIssuedAt || updated.createdAt,
+        };
       }
       return null;
     },
     deleteRow: async (store, id) => {
-      if (store.edgeAgents instanceof Map) {
-        return store.edgeAgents.delete(id);
+      if ('db' in store && store.db) {
+        const result = await (store as any).db.query(
+          `DELETE FROM edge_agents WHERE id = $1 RETURNING id`,
+          [id]
+        );
+        return result.rows.length > 0;
+      }
+      const memStore = store as any;
+      if (memStore.edgeAgents instanceof Map) {
+        return memStore.edgeAgents.delete(id);
       }
       return false;
     },
