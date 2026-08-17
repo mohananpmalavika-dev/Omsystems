@@ -507,6 +507,7 @@ export class PostgresStore
     );
     return result.rows[0] ? mapBranchConnectivityProfile(result.rows[0]) : undefined;
   }
+
   async writeAudit(event: AuditEventInput) {
     const resolvedTenantId = await this.resolveTenantUuid(event.tenantId);
     let resolvedActorUserId = event.actorUserId;
