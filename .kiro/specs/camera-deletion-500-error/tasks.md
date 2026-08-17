@@ -26,7 +26,7 @@
   - Mark task complete when test is written, run, and failure is documented
   - _Requirements: 2.2, 2.3, 2.4, 2.5_
 
-- [-] 2. Write preservation property tests (BEFORE implementing fix)
+- [ ] 2. Write preservation property tests (BEFORE implementing fix)
   - **Property 2: Preservation** - Successful Deletion Behavior
   - **IMPORTANT**: Follow observation-first methodology
   - Observe behavior on UNFIXED code for successful deletion scenarios:
@@ -49,7 +49,7 @@
 
 - [ ] 3. Fix for camera deletion 500 error
 
-  - [~] 3.1 Add PostgreSQL error code detection utilities
+  - [ ] 3.1 Add PostgreSQL error code detection utilities
     - Create utility functions to identify PostgreSQL error types
     - Implement `isPgError(error)` type guard function
     - Implement `isConstraintViolation(code)` function that checks for code.startsWith('23')
@@ -59,7 +59,7 @@
     - _Preservation: Must not affect successful deletion flow_
     - _Requirements: 2.2, 2.3, 2.4, 2.5, 3.1_
 
-  - [~] 3.2 Enhance missing table detection in dependent cleanup loop
+  - [ ] 3.2 Enhance missing table detection in dependent cleanup loop
     - Replace string matching `if (!String(err).includes('does not exist'))` with error code detection
     - Use PostgreSQL error code '42P01' to detect missing relations
     - Implement: `const isTableMissing = isPgError(err) && err.code === '42P01';`
@@ -69,7 +69,7 @@
     - _Preservation: Must maintain same cleanup order for existing tables_
     - _Requirements: 2.4, 3.4_
 
-  - [~] 3.3 Add constraint violation detection to catch blocks
+  - [ ] 3.3 Add constraint violation detection to catch blocks
     - Update catch blocks in both DELETE and POST endpoints
     - Add constraint violation check before returning 500
     - If constraint violation detected (code starts with '23'), return 409 with:
@@ -82,7 +82,7 @@
     - _Preservation: Must maintain rollback behavior_
     - _Requirements: 2.3, 3.1_
 
-  - [~] 3.4 Sanitize error messages in responses
+  - [ ] 3.4 Sanitize error messages in responses
     - Remove sensitive database information from all error responses
     - Return only user-friendly messages in HTTP responses
     - Never expose connection strings, table schemas, or internal details
@@ -93,7 +93,7 @@
     - _Preservation: Must maintain error logging for debugging_
     - _Requirements: 2.5, 3.1_
 
-  - [~] 3.5 Apply changes to both endpoints
+  - [ ] 3.5 Apply changes to both endpoints
     - Update `app.delete('/v1/admin/cameras/:id')` handler
     - Update `app.post('/v1/admin/cameras/delete')` handler
     - Ensure both endpoints use the same error handling logic
@@ -103,7 +103,7 @@
     - _Preservation: Must maintain all successful deletion behavior_
     - _Requirements: 2.2, 2.3, 2.4, 2.5, 3.1, 3.3, 3.5_
 
-  - [~] 3.6 Verify bug condition exploration test now passes
+  - [ ] 3.6 Verify bug condition exploration test now passes
     - **Property 1: Expected Behavior** - Proper Error Status Codes
     - **IMPORTANT**: Re-run the SAME test from task 1 - do NOT write a new test
     - The test from task 1 encodes the expected behavior
@@ -117,7 +117,7 @@
       - Error messages don't expose sensitive information
     - _Requirements: 2.2, 2.3, 2.4, 2.5_
 
-  - [~] 3.7 Verify preservation tests still pass
+  - [ ] 3.7 Verify preservation tests still pass
     - **Property 2: Preservation** - Successful Deletion Behavior
     - **IMPORTANT**: Re-run the SAME tests from task 2 - do NOT write new tests
     - Run preservation property tests from step 2
@@ -129,7 +129,7 @@
       - Database connections are still released properly
     - Confirm all tests still pass after fix (no regressions)
 
-- [~] 4. Checkpoint - Ensure all tests pass
+- [ ] 4. Checkpoint - Ensure all tests pass
   - Run all unit tests to verify the fix works correctly
   - Run all property-based tests to verify preservation guarantees
   - Run integration tests if available to verify full deletion flow

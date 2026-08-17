@@ -193,6 +193,28 @@ export interface CompliancePolicy {
   updatedAt: string;
 }
 
+export type NotificationChannel = "dashboard" | "email" | "sms" | "voice" | "push" | "webhook";
+export type AlertSeverity = "P1" | "P2" | "P3" | "P4" | "P5";
+
+export interface RecipientGroupMember {
+  id?: string;
+  displayName: string;
+  email?: string;
+  phone?: string;
+  voiceNumber?: string;
+  preferredLanguage?: string;
+  enabled: boolean;
+}
+
+export interface RecipientGroup {
+  id: string;
+  name: string;
+  tenantId?: string;
+  members: RecipientGroupMember[];
+  createdAt?: string;
+  updatedAt?: string;
+}
+
 export interface AlertNotificationPolicySchedule {
   name: string;
   days: number[];
@@ -202,26 +224,49 @@ export interface AlertNotificationPolicySchedule {
   recipients: Partial<Record<"sms" | "email" | "voice", string[]>>;
 }
 
+export interface NotificationRule {
+  channels: NotificationChannel[];
+  recipientGroupIds: string[];
+  templateId?: string;
+  requireAcknowledgement?: boolean;
+  repeatUntilAcknowledged?: boolean;
+}
+
+export interface NotificationPolicyMatrixEntry {
+  severity: AlertSeverity;
+  channels: NotificationChannel[];
+}
+
 export interface AlertNotificationPolicy {
   tenantId: string;
   recipientGroups: Partial<Record<"sms" | "email" | "voice", string[]>>;
   onCallSchedules: AlertNotificationPolicySchedule[];
-  quietHours?: { start: string; end: string; timezone: string };
+  quietHours?: { start: string; end: string; timezone: string; enabled?: boolean; bypassSeverities?: AlertSeverity[] };
   rateLimitPerMinute: number;
-  escalationAfterSeconds: Partial<Record<"P1" | "P2" | "P3" | "P4" | "P5", number>>;
+  escalationAfterSeconds: Partial<Record<AlertSeverity, number>>;
   smsTemplates?: Partial<Record<"P1" | "P2", string>>;
   smsTemplateIds?: Partial<Record<"P1" | "P2", string>>;
+  policyVersion?: number;
+  status?: "draft" | "published";
+  recipientGroupsV2?: RecipientGroup[];
+  rules?: Partial<Record<AlertSeverity, NotificationRule>>;
+  matrix?: NotificationPolicyMatrixEntry[];
   updatedAt: string;
 }
 
 export interface AlertNotificationPolicyInput {
   recipientGroups: Partial<Record<"sms" | "email" | "voice", string[]>>;
   onCallSchedules: AlertNotificationPolicySchedule[];
-  quietHours?: { start: string; end: string; timezone: string };
+  quietHours?: { start: string; end: string; timezone: string; enabled?: boolean; bypassSeverities?: AlertSeverity[] };
   rateLimitPerMinute: number;
-  escalationAfterSeconds: Partial<Record<"P1" | "P2" | "P3" | "P4" | "P5", number>>;
+  escalationAfterSeconds: Partial<Record<AlertSeverity, number>>;
   smsTemplates?: Partial<Record<"P1" | "P2", string>>;
   smsTemplateIds?: Partial<Record<"P1" | "P2", string>>;
+  policyVersion?: number;
+  status?: "draft" | "published";
+  recipientGroupsV2?: RecipientGroup[];
+  rules?: Partial<Record<AlertSeverity, NotificationRule>>;
+  matrix?: NotificationPolicyMatrixEntry[];
 }
 
 export interface ComplianceAssessment {

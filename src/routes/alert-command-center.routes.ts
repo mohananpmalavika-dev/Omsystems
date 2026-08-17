@@ -22,6 +22,14 @@ const recipients = z.object({
   email: z.array(z.string().email()).max(100).optional(),
   voice: z.array(z.string().trim().min(3).max(100)).max(100).optional(),
 }).default({});
+const quietHoursSchema = z.object({
+  enabled: z.boolean().default(true),
+  start: hhmm,
+  end: hhmm,
+  timezone: z.string().trim().min(1).max(100),
+  bypassSeverities: z.array(z.enum(["P1", "P2", "P3", "P4", "P5"])).default(["P1"]),
+});
+const notificationChannelSchema = z.enum(["dashboard", "email", "sms", "voice", "push", "webhook"]);
 const policySchema = z.object({
   recipientGroups: recipients,
   onCallSchedules: z.array(z.object({
@@ -31,7 +39,7 @@ const policySchema = z.object({
     timezone: z.string().trim().min(1).max(100),
     recipients,
   })).max(50).default([]),
-  quietHours: z.object({ start: hhmm, end: hhmm, timezone: z.string().trim().min(1).max(100) }).optional(),
+  quietHours: quietHoursSchema.optional(),
   rateLimitPerMinute: z.number().int().min(1).max(10_000).default(120),
   escalationAfterSeconds: z.object({
     P1: z.number().int().min(10).max(86_400).optional(),
@@ -40,6 +48,10 @@ const policySchema = z.object({
     P4: z.number().int().min(10).max(86_400).optional(),
     P5: z.number().int().min(10).max(86_400).optional(),
   }).default({ P1: 30, P2: 300, P3: 900 }),
+  matrix: z.array(z.object({
+    severity: z.enum(["P1", "P2", "P3", "P4", "P5"]),
+    channels: z.array(notificationChannelSchema).min(1).max(6),
+  })).optional(),
   smsTemplates: z.object({
     P1: z.string().trim().min(1).max(480).optional(),
     P2: z.string().trim().min(1).max(480).optional(),
@@ -48,6 +60,8 @@ const policySchema = z.object({
     P1: z.string().trim().min(1).max(200).optional(),
     P2: z.string().trim().min(1).max(200).optional(),
   }).default({}),
+  policyVersion: z.number().int().min(1).optional(),
+  status: z.enum(["draft", "published"]).default("draft").optional(),
 });
 
 export async function registerAlertCommandCenterRoutes(

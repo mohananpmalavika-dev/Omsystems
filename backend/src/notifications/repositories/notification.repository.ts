@@ -1,789 +1,749 @@
 /**
  * Notification Repository
- * 
- * Database operations for the notification system using PostgreSQL.
- * Implements the transactional outbox pattern with SKIP LOCKED for worker coordination.
+ * Data access layer for notification system
  */
 
-import { Pool, PoolClient } from 'pg';
-import {
-  Notification,
-  NotificationDelivery,
-  NotificationDeliveryAttempt,
-  NotificationJob,
+import type { Pool } from 'pg';
+import type {
   NotificationPolicy,
-  NotificationPreferences,
-  UserPushDevice,
-  INotificationRepository,
-  NotificationStatus
-} from '../notification.types.js';
+  NotificationPolicyVersion,
+  RecipientGroup,
+  RecipientMember,
+  NotificationOutbox,
+  NotificationDelivery,
+  EscalationJob,
+  NotificationTemplate,
+  ProviderConfig,
+  NotificationAuditLog,
+  CreateNotificationPolicyInput,
+  UpdateNotificationPolicyInput,
+  CreateRecipientGroupInput,
+  UpdateRecipientGroupInput,
+  CreateNotificationOutboxInput,
+  CreateAuditLogInput,
+  ListNotificationsQuery,
+  ListDeliveriesQuery,
+  PaginatedResult,
+  NotificationStats,
+} from '../domain/notification.types.js';
 import { logger } from '../../utils/logger.js';
 
-export class NotificationRepository implements INotificationRepository {
+export class NotificationRepository {
   constructor(private pool: Pool) {}
 
   // =====================================================
-  // Notification Operations
+  // NOTIFICATION POLICIES
   // =====================================================
 
-  async createNotification(
-    notification: Omit<Notification, 'id' | 'createdAt'>,
-    tx?: PoolClient
-  ): Promise<Notification> {
-    const client = tx || this.pool;
-    
-    const result = await client.query(
-      `INSERT INTO notifications (
-        tenant_id,
-        type,
-        source_type,
-        source_id,
-        title,
-        body,
-        metadata
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7)
-      RETURNING *`,
+  async createPolicy(input: CreateNotificationPolicyInput): Promise<NotificationPolicy> {
+    const result = await this.pool.query(
+      `INSERT INTO notification_policies (
+        tenant_id, name, description, status, scope_type,
+        scope_region_ids, scope_branch_ids, scope_device_ids, scope_alert_types,
+        p1_rule, p2_rule, p3_rule, p4_rule, p5_rule,
+        quiet_hours_enabled, quiet_hours_start, quiet_hours_end, quiet_hours_timezone, quiet_hours_bypass_severities,
+        rate_limit_per_minute, rate_limit_per_recipient_per_minute,
+        p1_escalation, p2_escalation, p3_escalation, p4_escalation, p5_escalation,
+        created_by
+      ) VALUES (
+        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14,
+        $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27
+      ) RETURNING *`,
       [
-        notification.tenantId,
-        notification.type,
-        notification.sourceType,
-        notification.sourceId,
-        notification.title,
-        notification.body,
-        JSON.stringify(notification.metadata || {})
+        input.tenantId,
+        input.name,
+        input.description,
+        'DRAFT',
+        input.scope?.type || 'TENANT',
+        input.scope?.regionIds || [],
+        input.scope?.branchIds || [],
+        input.scope?.deviceIds || [],
+        input.scope?.alertTypes || [],
+        JSON.stringify(input.p1Rule),
+        JSON.stringify(input.p2Rule),
+        JSON.stringify(input.p3Rule),
+        JSON.stringify(input.p4Rule),
+        JSON.stringify(input.p5Rule),
+        input.quietHours?.enabled || false,
+        input.quietHours?.start,
+        input.quietHours?.end,
+        input.quietHours?.timezone,
+        input.quietHours?.bypassSeverities || ['P1'],
+        input.rateLimits?.perMinute || 120,
+        input.rateLimits?.perRecipientPerMinute || 10,
+        JSON.stringify(input.p1Escalation),
+        JSON.stringify(input.p2Escalation),
+        JSON.stringify(input.p3Escalation),
+        JSON.stringify(input.p4Escalation),
+        JSON.stringify(input.p5Escalation),
+        null, // created_by - will be set by service layer
       ]
     );
 
-    return this.mapNotification(result.rows[0]);
+    return this.mapRowToPolicy(result.rows[0]);
   }
 
-  async findNotification(
-    id: string,
-    tenantId: string
-  ): Promise<Notification | null> {
+  async getPolicy(id: string): Promise<NotificationPolicy | null> {
     const result = await this.pool.query(
-      `SELECT * FROM notifications
-       WHERE id = $1 AND tenant_id = $2`,
-      [id, tenantId]
+      'SELECT * FROM notification_policies WHERE id = $1',
+      [id]
     );
 
-    return result.rows[0] ? this.mapNotification(result.rows[0]) : null;
+    return result.rows[0] ? this.mapRowToPolicy(result.rows[0]) : null;
   }
 
-  // =====================================================
-  // Delivery Operations
-  // =====================================================
+  async getTenantPolicies(tenantId: string, status?: string): Promise<NotificationPolicy[]> {
+    const query = status
+      ? 'SELECT * FROM notification_policies WHERE tenant_id = $1 AND status = $2 ORDER BY created_at DESC'
+      : 'SELECT * FROM notification_policies WHERE tenant_id = $1 ORDER BY created_at DESC';
 
-  async createDelivery(
-    delivery: Omit<NotificationDelivery, 'id' | 'createdAt' | 'attemptCount'>,
-    tx?: PoolClient
-  ): Promise<NotificationDelivery> {
-    const client = tx || this.pool;
-    
-    try {
-      const result = await client.query(
-        `INSERT INTO notification_deliveries (
-          notification_id,
-          tenant_id,
-          channel,
-          destination,
-          subject,
-          title,
-          body,
-          template_id,
-          template_data,
-          metadata,
-          priority,
-          status,
-          idempotency_key,
-          max_attempts,
-          next_attempt_at,
-          provider
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
-        RETURNING *`,
-        [
-          delivery.notificationId,
-          delivery.tenantId,
-          delivery.channel,
-          delivery.destination,
-          delivery.subject,
-          delivery.title,
-          delivery.body,
-          delivery.templateId,
-          delivery.templateData ? JSON.stringify(delivery.templateData) : null,
-          JSON.stringify(delivery.metadata || {}),
-          delivery.priority || 'normal',
-          delivery.status || 'pending',
-          delivery.idempotencyKey,
-          delivery.maxAttempts || 5,
-          delivery.nextAttemptAt || new Date(),
-          delivery.provider
-        ]
-      );
+    const params = status ? [tenantId, status] : [tenantId];
+    const result = await this.pool.query(query, params);
 
-      return this.mapDelivery(result.rows[0]);
-    } catch (error: any) {
-      // Check for idempotency key violation
-      if (error.code === '23505' && error.constraint === 'idx_deliveries_idempotency') {
-        // Fetch and return existing delivery
-        const existing = await client.query(
-          `SELECT * FROM notification_deliveries
-           WHERE tenant_id = $1 AND idempotency_key = $2 AND channel = $3`,
-          [delivery.tenantId, delivery.idempotencyKey, delivery.channel]
-        );
-        
-        if (existing.rows[0]) {
-          logger.debug('Idempotency key matched, returning existing delivery', {
-            idempotencyKey: delivery.idempotencyKey,
-            deliveryId: existing.rows[0].id
-          });
-          return this.mapDelivery(existing.rows[0]);
-        }
-      }
-      
-      throw error;
+    return result.rows.map(row => this.mapRowToPolicy(row));
+  }
+
+  async updatePolicy(id: string, input: UpdateNotificationPolicyInput): Promise<NotificationPolicy> {
+    const updates: string[] = [];
+    const values: any[] = [];
+    let paramCount = 1;
+
+    if (input.name !== undefined) {
+      updates.push(`name = $${paramCount++}`);
+      values.push(input.name);
     }
-  }
 
-  async findDelivery(
-    id: string,
-    tenantId: string
-  ): Promise<NotificationDelivery | null> {
+    if (input.description !== undefined) {
+      updates.push(`description = $${paramCount++}`);
+      values.push(input.description);
+    }
+
+    if (input.scope !== undefined) {
+      updates.push(`scope_type = $${paramCount++}`);
+      values.push(input.scope.type);
+      updates.push(`scope_region_ids = $${paramCount++}`);
+      values.push(input.scope.regionIds || []);
+      updates.push(`scope_branch_ids = $${paramCount++}`);
+      values.push(input.scope.branchIds || []);
+    }
+
+    if (input.p1Rule !== undefined) {
+      updates.push(`p1_rule = $${paramCount++}`);
+      values.push(JSON.stringify(input.p1Rule));
+    }
+
+    if (input.quietHours !== undefined) {
+      updates.push(`quiet_hours_enabled = $${paramCount++}`);
+      values.push(input.quietHours.enabled);
+      updates.push(`quiet_hours_start = $${paramCount++}`);
+      values.push(input.quietHours.start);
+      updates.push(`quiet_hours_end = $${paramCount++}`);
+      values.push(input.quietHours.end);
+      updates.push(`quiet_hours_timezone = $${paramCount++}`);
+      values.push(input.quietHours.timezone);
+    }
+
+    updates.push(`updated_at = NOW()`);
+    values.push(id);
+
     const result = await this.pool.query(
-      `SELECT * FROM notification_deliveries
-       WHERE id = $1 AND tenant_id = $2`,
-      [id, tenantId]
-    );
-
-    return result.rows[0] ? this.mapDelivery(result.rows[0]) : null;
-  }
-
-  async findDeliveriesByNotification(
-    notificationId: string,
-    tenantId: string
-  ): Promise<NotificationDelivery[]> {
-    const result = await this.pool.query(
-      `SELECT * FROM notification_deliveries
-       WHERE notification_id = $1 AND tenant_id = $2
-       ORDER BY created_at ASC`,
-      [notificationId, tenantId]
-    );
-
-    return result.rows.map(row => this.mapDelivery(row));
-  }
-
-  async updateDeliveryStatus(
-    id: string,
-    status: NotificationStatus,
-    updates: Partial<NotificationDelivery>
-  ): Promise<void> {
-    const fields: string[] = ['status = $2'];
-    const values: any[] = [id, status];
-    let paramIndex = 3;
-
-    // Build dynamic update query
-    if (updates.providerMessageId !== undefined) {
-      fields.push(`provider_message_id = $${paramIndex++}`);
-      values.push(updates.providerMessageId);
-    }
-    if (updates.lastError !== undefined) {
-      fields.push(`last_error = $${paramIndex++}`);
-      values.push(updates.lastError);
-    }
-    if (updates.lastErrorCode !== undefined) {
-      fields.push(`last_error_code = $${paramIndex++}`);
-      values.push(updates.lastErrorCode);
-    }
-    if (updates.lockedAt !== undefined) {
-      fields.push(`locked_at = $${paramIndex++}`);
-      values.push(updates.lockedAt);
-    }
-    if (updates.lockedBy !== undefined) {
-      fields.push(`locked_by = $${paramIndex++}`);
-      values.push(updates.lockedBy);
-    }
-    if (updates.nextAttemptAt !== undefined) {
-      fields.push(`next_attempt_at = $${paramIndex++}`);
-      values.push(updates.nextAttemptAt);
-    }
-
-    // Timestamp fields based on status
-    switch (status) {
-      case 'processing':
-        fields.push(`processing_at = NOW()`);
-        break;
-      case 'accepted':
-      case 'delivered':
-        fields.push(`sent_at = NOW()`);
-        if (status === 'delivered') {
-          fields.push(`delivered_at = NOW()`);
-        }
-        break;
-      case 'failed':
-        fields.push(`failed_at = NOW()`);
-        break;
-    }
-
-    await this.pool.query(
-      `UPDATE notification_deliveries
-       SET ${fields.join(', ')}
-       WHERE id = $1`,
+      `UPDATE notification_policies SET ${updates.join(', ')} WHERE id = $${paramCount} RETURNING *`,
       values
     );
+
+    return this.mapRowToPolicy(result.rows[0]);
   }
 
-  async incrementAttemptCount(
-    id: string,
-    nextAttemptAt: Date
-  ): Promise<void> {
-    await this.pool.query(
-      `UPDATE notification_deliveries
-       SET 
-         attempt_count = attempt_count + 1,
-         next_attempt_at = $2,
-         status = 'retry_wait',
-         locked_at = NULL,
-         locked_by = NULL
-       WHERE id = $1`,
-      [id, nextAttemptAt]
+  async publishPolicy(id: string, publishedBy: string): Promise<NotificationPolicy> {
+    const result = await this.pool.query(
+      `UPDATE notification_policies 
+       SET status = 'PUBLISHED', published_by = $2, published_at = NOW(), updated_at = NOW()
+       WHERE id = $1 RETURNING *`,
+      [id, publishedBy]
     );
+
+    return this.mapRowToPolicy(result.rows[0]);
   }
 
   // =====================================================
-  // Worker Job Claiming (SKIP LOCKED Pattern)
+  // RECIPIENT GROUPS
   // =====================================================
 
-  async claimPendingDeliveries(
-    workerId: string,
-    batchSize: number
-  ): Promise<NotificationJob[]> {
-    // Use a transaction to claim jobs atomically
+  async createRecipientGroup(input: CreateRecipientGroupInput): Promise<RecipientGroup> {
     const client = await this.pool.connect();
-    
+
     try {
       await client.query('BEGIN');
 
-      // Find and lock pending/retry jobs using SKIP LOCKED
-      const deliveryResult = await client.query(
-        `SELECT nd.*, n.type as notification_type, n.title as notification_title
-         FROM notification_deliveries nd
-         JOIN notifications n ON n.id = nd.notification_id
-         WHERE 
-           nd.status IN ('pending', 'retry_wait')
-           AND nd.next_attempt_at <= NOW()
-           AND nd.attempt_count < nd.max_attempts
-         ORDER BY 
-           nd.priority DESC,
-           nd.created_at ASC
-         LIMIT $1
-         FOR UPDATE OF nd SKIP LOCKED`,
-        [batchSize]
+      // Create group
+      const groupResult = await client.query(
+        `INSERT INTO notification_recipient_groups (
+          tenant_id, name, description, scope_type,
+          scope_region_ids, scope_branch_ids, scope_alert_types
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
+        [
+          input.tenantId,
+          input.name,
+          input.description,
+          input.scopeType || 'TENANT',
+          input.scopeRegionIds || [],
+          input.scopeBranchIds || [],
+          input.scopeAlertTypes || [],
+        ]
       );
 
-      if (deliveryResult.rows.length === 0) {
-        await client.query('COMMIT');
-        return [];
+      const group = groupResult.rows[0];
+
+      // Create members
+      if (input.members && input.members.length > 0) {
+        for (const member of input.members) {
+          await client.query(
+            `INSERT INTO notification_recipient_members (
+              group_id, user_id, display_name, email, phone, voice_number,
+              preferred_language, enabled
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+            [
+              group.id,
+              member.userId,
+              member.displayName,
+              member.email,
+              member.phone,
+              member.voiceNumber,
+              member.preferredLanguage || 'en',
+              member.enabled !== false,
+            ]
+          );
+        }
       }
-
-      // Update claimed jobs to processing status
-      const deliveryIds = deliveryResult.rows.map(r => r.id);
-      await client.query(
-        `UPDATE notification_deliveries
-         SET 
-           status = 'processing',
-           locked_at = NOW(),
-           locked_by = $1,
-           processing_at = NOW()
-         WHERE id = ANY($2)`,
-        [workerId, deliveryIds]
-      );
 
       await client.query('COMMIT');
 
-      // Map to job objects
-      return deliveryResult.rows.map(row => ({
-        delivery: this.mapDelivery(row),
-        notification: {
-          id: row.notification_id,
-          tenantId: row.tenant_id,
-          type: row.notification_type,
-          sourceType: row.source_type,
-          sourceId: row.source_id,
-          title: row.notification_title,
-          body: row.body,
-          metadata: row.metadata || {},
-          createdAt: row.created_at
-        }
-      }));
+      return this.getRecipientGroup(group.id);
     } catch (error) {
       await client.query('ROLLBACK');
-      logger.error('Error claiming deliveries', { error, workerId });
       throw error;
     } finally {
       client.release();
     }
   }
 
-  async resetStuckDeliveries(timeoutMinutes: number): Promise<number> {
+  async getRecipientGroup(id: string): Promise<RecipientGroup> {
+    const groupResult = await this.pool.query(
+      'SELECT * FROM notification_recipient_groups WHERE id = $1',
+      [id]
+    );
+
+    if (!groupResult.rows[0]) {
+      throw new Error('Recipient group not found');
+    }
+
+    const membersResult = await this.pool.query(
+      'SELECT * FROM notification_recipient_members WHERE group_id = $1 ORDER BY display_name',
+      [id]
+    );
+
+    const group = this.mapRowToRecipientGroup(groupResult.rows[0]);
+    group.members = membersResult.rows.map(row => this.mapRowToRecipientMember(row));
+
+    return group;
+  }
+
+  async getRecipientGroups(ids: string[]): Promise<RecipientGroup[]> {
+    if (ids.length === 0) {
+      return [];
+    }
+
+    const groups = await Promise.all(ids.map(id => this.getRecipientGroup(id)));
+    return groups;
+  }
+
+  async getTenantRecipientGroups(tenantId: string): Promise<RecipientGroup[]> {
     const result = await this.pool.query(
-      `UPDATE notification_deliveries
-       SET 
-         status = 'pending',
-         locked_at = NULL,
-         locked_by = NULL,
-         next_attempt_at = NOW()
-       WHERE 
-         status = 'processing'
-         AND locked_at < NOW() - INTERVAL '${timeoutMinutes} minutes'
-       RETURNING id`,
-      []
-    );
-
-    const count = result.rowCount || 0;
-    
-    if (count > 0) {
-      logger.warn('Reset stuck deliveries', { count, timeoutMinutes });
-    }
-
-    return count;
-  }
-
-  // =====================================================
-  // Delivery Attempt Operations
-  // =====================================================
-
-  async createDeliveryAttempt(
-    attempt: Omit<NotificationDeliveryAttempt, 'id'>,
-    tx?: PoolClient
-  ): Promise<NotificationDeliveryAttempt> {
-    const client = tx || this.pool;
-    
-    const result = await client.query(
-      `INSERT INTO notification_delivery_attempts (
-        delivery_id,
-        attempt_number,
-        provider,
-        started_at,
-        completed_at,
-        success,
-        response_code,
-        provider_message_id,
-        error_code,
-        error_message,
-        duration_ms,
-        metadata
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
-      RETURNING *`,
-      [
-        attempt.deliveryId,
-        attempt.attemptNumber,
-        attempt.provider,
-        attempt.startedAt,
-        attempt.completedAt,
-        attempt.success,
-        attempt.responseCode,
-        attempt.providerMessageId,
-        attempt.errorCode,
-        attempt.errorMessage,
-        attempt.durationMs,
-        JSON.stringify(attempt.metadata || {})
-      ]
-    );
-
-    return this.mapDeliveryAttempt(result.rows[0]);
-  }
-
-  async getDeliveryAttempts(deliveryId: string): Promise<NotificationDeliveryAttempt[]> {
-    const result = await this.pool.query(
-      `SELECT * FROM notification_delivery_attempts
-       WHERE delivery_id = $1
-       ORDER BY attempt_number ASC`,
-      [deliveryId]
-    );
-
-    return result.rows.map(row => this.mapDeliveryAttempt(row));
-  }
-
-  // =====================================================
-  // Push Device Operations
-  // =====================================================
-
-  async getUserPushDevices(
-    userId: string,
-    tenantId: string
-  ): Promise<UserPushDevice[]> {
-    const result = await this.pool.query(
-      `SELECT * FROM user_push_devices
-       WHERE user_id = $1 AND tenant_id = $2 AND active = true
-       ORDER BY last_seen_at DESC`,
-      [userId, tenantId]
-    );
-
-    return result.rows.map(row => this.mapPushDevice(row));
-  }
-
-  async registerPushDevice(
-    device: Omit<UserPushDevice, 'id' | 'createdAt' | 'updatedAt'>
-  ): Promise<UserPushDevice> {
-    // Upsert: update if token exists, insert if not
-    const result = await this.pool.query(
-      `INSERT INTO user_push_devices (
-        tenant_id,
-        user_id,
-        platform,
-        push_token,
-        active,
-        last_seen_at,
-        device_info
-      ) VALUES ($1, $2, $3, $4, $5, NOW(), $6)
-      ON CONFLICT (push_token) WHERE active = true
-      DO UPDATE SET
-        last_seen_at = NOW(),
-        device_info = EXCLUDED.device_info,
-        updated_at = NOW()
-      RETURNING *`,
-      [
-        device.tenantId,
-        device.userId,
-        device.platform,
-        device.pushToken,
-        device.active,
-        JSON.stringify(device.deviceInfo || {})
-      ]
-    );
-
-    return this.mapPushDevice(result.rows[0]);
-  }
-
-  async deactivatePushDevice(token: string): Promise<void> {
-    await this.pool.query(
-      `UPDATE user_push_devices
-       SET active = false, updated_at = NOW()
-       WHERE push_token = $1`,
-      [token]
-    );
-  }
-
-  async updatePushDeviceLastSeen(token: string): Promise<void> {
-    await this.pool.query(
-      `UPDATE user_push_devices
-       SET last_seen_at = NOW(), updated_at = NOW()
-       WHERE push_token = $1`,
-      [token]
-    );
-  }
-
-  // =====================================================
-  // Preferences Operations
-  // =====================================================
-
-  async getUserPreferences(
-    userId: string,
-    tenantId: string
-  ): Promise<NotificationPreferences | null> {
-    const result = await this.pool.query(
-      `SELECT * FROM notification_preferences
-       WHERE user_id = $1 AND tenant_id = $2`,
-      [userId, tenantId]
-    );
-
-    return result.rows[0] ? this.mapPreferences(result.rows[0]) : null;
-  }
-
-  async createUserPreferences(
-    preferences: Omit<NotificationPreferences, 'id' | 'createdAt' | 'updatedAt'>
-  ): Promise<NotificationPreferences> {
-    const result = await this.pool.query(
-      `INSERT INTO notification_preferences (
-        tenant_id,
-        user_id,
-        email_enabled,
-        sms_enabled,
-        push_enabled,
-        event_filters,
-        quiet_hours_enabled,
-        quiet_hours_start,
-        quiet_hours_end
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-      RETURNING *`,
-      [
-        preferences.tenantId,
-        preferences.userId,
-        preferences.emailEnabled,
-        preferences.smsEnabled,
-        preferences.pushEnabled,
-        JSON.stringify(preferences.eventFilters || {}),
-        preferences.quietHoursEnabled,
-        preferences.quietHoursStart,
-        preferences.quietHoursEnd
-      ]
-    );
-
-    return this.mapPreferences(result.rows[0]);
-  }
-
-  async updateUserPreferences(
-    userId: string,
-    tenantId: string,
-    updates: Partial<NotificationPreferences>
-  ): Promise<NotificationPreferences> {
-    const fields: string[] = [];
-    const values: any[] = [];
-    let paramIndex = 1;
-
-    if (updates.emailEnabled !== undefined) {
-      fields.push(`email_enabled = $${paramIndex++}`);
-      values.push(updates.emailEnabled);
-    }
-    if (updates.smsEnabled !== undefined) {
-      fields.push(`sms_enabled = $${paramIndex++}`);
-      values.push(updates.smsEnabled);
-    }
-    if (updates.pushEnabled !== undefined) {
-      fields.push(`push_enabled = $${paramIndex++}`);
-      values.push(updates.pushEnabled);
-    }
-    if (updates.eventFilters !== undefined) {
-      fields.push(`event_filters = $${paramIndex++}`);
-      values.push(JSON.stringify(updates.eventFilters));
-    }
-    if (updates.quietHoursEnabled !== undefined) {
-      fields.push(`quiet_hours_enabled = $${paramIndex++}`);
-      values.push(updates.quietHoursEnabled);
-    }
-    if (updates.quietHoursStart !== undefined) {
-      fields.push(`quiet_hours_start = $${paramIndex++}`);
-      values.push(updates.quietHoursStart);
-    }
-    if (updates.quietHoursEnd !== undefined) {
-      fields.push(`quiet_hours_end = $${paramIndex++}`);
-      values.push(updates.quietHoursEnd);
-    }
-
-    fields.push(`updated_at = NOW()`);
-    values.push(userId, tenantId);
-
-    const result = await this.pool.query(
-      `UPDATE notification_preferences
-       SET ${fields.join(', ')}
-       WHERE user_id = $${paramIndex} AND tenant_id = $${paramIndex + 1}
-       RETURNING *`,
-      values
-    );
-
-    if (!result.rows[0]) {
-      throw new Error('Preferences not found');
-    }
-
-    return this.mapPreferences(result.rows[0]);
-  }
-
-  // =====================================================
-  // Policy Operations
-  // =====================================================
-
-  async getTenantPolicies(tenantId: string): Promise<NotificationPolicy[]> {
-    const result = await this.pool.query(
-      `SELECT * FROM notification_policies
-       WHERE tenant_id = $1 AND enabled = true
-       ORDER BY event_type ASC`,
+      'SELECT * FROM notification_recipient_groups WHERE tenant_id = $1 AND deleted_at IS NULL ORDER BY name',
       [tenantId]
     );
 
-    return result.rows.map(row => this.mapPolicy(row));
+    return result.rows.map(row => this.mapRowToRecipientGroup(row));
   }
 
-  async getPolicyByEventType(
-    tenantId: string,
-    eventType: string
-  ): Promise<NotificationPolicy | null> {
-    const result = await this.pool.query(
-      `SELECT * FROM notification_policies
-       WHERE tenant_id = $1 AND event_type = $2 AND enabled = true`,
-      [tenantId, eventType]
+  // =====================================================
+  // NOTIFICATION OUTBOX
+  // =====================================================
+
+  async createOutboxEntry(input: CreateNotificationOutboxInput): Promise<NotificationOutbox> {
+    const dedupKey = this.generateDedupKey(
+      input.tenantId,
+      input.incidentId,
+      input.policyId,
+      input.escalationStep || 0,
+      input.channel,
+      input.recipientDestination
     );
 
-    return result.rows[0] ? this.mapPolicy(result.rows[0]) : null;
-  }
-
-  async createPolicy(
-    policy: Omit<NotificationPolicy, 'id' | 'createdAt' | 'updatedAt'>
-  ): Promise<NotificationPolicy> {
     const result = await this.pool.query(
-      `INSERT INTO notification_policies (
-        tenant_id,
-        event_type,
-        enabled,
-        minimum_severity,
-        channels,
-        cooldown_seconds,
-        escalation_rules
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7)
-      RETURNING *`,
+      `INSERT INTO notification_outbox (
+        tenant_id, incident_id, alert_id, policy_id, escalation_step,
+        channel, recipient_id, recipient_display_name, recipient_destination,
+        template_key, subject, body, variables, scheduled_at, dedup_key, provider_name
+      ) VALUES (
+        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16
+      ) RETURNING *`,
       [
-        policy.tenantId,
-        policy.eventType,
-        policy.enabled,
-        policy.minimumSeverity,
-        JSON.stringify(policy.channels),
-        policy.cooldownSeconds || 0,
-        policy.escalationRules ? JSON.stringify(policy.escalationRules) : null
+        input.tenantId,
+        input.incidentId,
+        input.alertId,
+        input.policyId,
+        input.escalationStep || 0,
+        input.channel,
+        input.recipientId,
+        input.recipientDisplayName,
+        input.recipientDestination,
+        input.templateKey,
+        input.subject,
+        input.body,
+        JSON.stringify(input.variables || {}),
+        input.scheduledAt || new Date(),
+        dedupKey,
+        input.providerName,
       ]
     );
 
-    return this.mapPolicy(result.rows[0]);
+    return this.mapRowToOutbox(result.rows[0]);
   }
 
-  // =====================================================
-  // Monitoring Queries
-  // =====================================================
-
-  async getQueueDepth(tenantId?: string): Promise<any[]> {
+  async fetchPendingNotifications(limit: number): Promise<NotificationOutbox[]> {
     const result = await this.pool.query(
-      `SELECT * FROM v_notification_queue_depth
-       ${tenantId ? 'WHERE tenant_id = $1' : ''}
-       ORDER BY count DESC`,
-      tenantId ? [tenantId] : []
+      `SELECT * FROM notification_outbox 
+       WHERE status = 'PENDING' 
+         AND available_at <= NOW()
+       ORDER BY created_at ASC
+       LIMIT $1`,
+      [limit]
     );
 
-    return result.rows;
+    return result.rows.map(row => this.mapRowToOutbox(row));
   }
 
-  async getDeliveryStats24h(tenantId?: string): Promise<any[]> {
-    const result = await this.pool.query(
-      `SELECT * FROM v_notification_delivery_stats_24h
-       ${tenantId ? 'WHERE tenant_id = $1' : ''}
-       ORDER BY total DESC`,
-      tenantId ? [tenantId] : []
+  async markAsProcessing(id: string): Promise<void> {
+    await this.pool.query(
+      `UPDATE notification_outbox 
+       SET status = 'PROCESSING', processing_started_at = NOW()
+       WHERE id = $1`,
+      [id]
     );
-
-    return result.rows;
   }
 
-  async getFailedDeliveries(tenantId: string, limit: number = 100): Promise<any[]> {
+  async updateOutboxStatus(id: string, updates: Partial<NotificationOutbox>): Promise<void> {
+    const sets: string[] = [];
+    const values: any[] = [];
+    let paramCount = 1;
+
+    if (updates.status) {
+      sets.push(`status = $${paramCount++}`);
+      values.push(updates.status);
+    }
+
+    if (updates.attemptCount !== undefined) {
+      sets.push(`attempt_count = $${paramCount++}`);
+      values.push(updates.attemptCount);
+    }
+
+    if (updates.providerMessageId) {
+      sets.push(`provider_message_id = $${paramCount++}`);
+      values.push(updates.providerMessageId);
+    }
+
+    if (updates.lastErrorCode) {
+      sets.push(`last_error_code = $${paramCount++}`);
+      values.push(updates.lastErrorCode);
+    }
+
+    if (updates.lastErrorMessage) {
+      sets.push(`last_error_message = $${paramCount++}`);
+      values.push(updates.lastErrorMessage);
+    }
+
+    if (updates.errorHistory) {
+      sets.push(`error_history = $${paramCount++}`);
+      values.push(JSON.stringify(updates.errorHistory));
+    }
+
+    if (updates.availableAt) {
+      sets.push(`available_at = $${paramCount++}`);
+      values.push(updates.availableAt);
+    }
+
+    if (updates.processedAt) {
+      sets.push(`processed_at = $${paramCount++}`);
+      values.push(updates.processedAt);
+    }
+
+    if (updates.failedAt) {
+      sets.push(`failed_at = $${paramCount++}`);
+      values.push(updates.failedAt);
+    }
+
+    values.push(id);
+
+    await this.pool.query(
+      `UPDATE notification_outbox SET ${sets.join(', ')} WHERE id = $${paramCount}`,
+      values
+    );
+  }
+
+  async findStuckNotifications(timeoutMs: number): Promise<NotificationOutbox[]> {
+    const timeoutDate = new Date(Date.now() - timeoutMs);
+
     const result = await this.pool.query(
-      `SELECT * FROM v_notification_failures
-       WHERE tenant_id = $1
-       LIMIT $2`,
-      [tenantId, limit]
+      `SELECT * FROM notification_outbox 
+       WHERE status = 'PROCESSING' 
+         AND processing_started_at < $1`,
+      [timeoutDate]
     );
 
-    return result.rows;
+    return result.rows.map(row => this.mapRowToOutbox(row));
+  }
+
+  async cancelPendingNotifications(incidentId: string): Promise<number> {
+    const result = await this.pool.query(
+      `UPDATE notification_outbox 
+       SET status = 'CANCELLED', cancelled_at = NOW()
+       WHERE incident_id = $1 
+         AND status IN ('PENDING', 'RETRYING')`,
+      [incidentId]
+    );
+
+    return result.rowCount || 0;
   }
 
   // =====================================================
-  // Mapping Functions
+  // NOTIFICATION DELIVERIES
   // =====================================================
 
-  private mapNotification(row: any): Notification {
+  async createDelivery(delivery: Partial<NotificationDelivery>): Promise<NotificationDelivery> {
+    const result = await this.pool.query(
+      `INSERT INTO notification_deliveries (
+        tenant_id, outbox_id, incident_id, channel,
+        recipient_id, recipient_display_name, recipient_destination_masked,
+        provider_name, provider_message_id, status, attempt_number,
+        sent_at, delivered_at, failed_at, error_code, error_message, latency_ms
+      ) VALUES (
+        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17
+      ) RETURNING *`,
+      [
+        delivery.tenantId,
+        delivery.outboxId,
+        delivery.incidentId,
+        delivery.channel,
+        delivery.recipientId,
+        delivery.recipientDisplayName,
+        delivery.recipientDestinationMasked,
+        delivery.providerName,
+        delivery.providerMessageId,
+        delivery.status,
+        delivery.attemptNumber,
+        delivery.sentAt,
+        delivery.deliveredAt,
+        delivery.failedAt,
+        delivery.errorCode,
+        delivery.errorMessage,
+        delivery.latencyMs,
+      ]
+    );
+
+    return this.mapRowToDelivery(result.rows[0]);
+  }
+
+  async getIncidentDeliveries(incidentId: string): Promise<NotificationDelivery[]> {
+    const result = await this.pool.query(
+      `SELECT * FROM notification_deliveries 
+       WHERE incident_id = $1 
+       ORDER BY created_at ASC`,
+      [incidentId]
+    );
+
+    return result.rows.map(row => this.mapRowToDelivery(row));
+  }
+
+  // =====================================================
+  // ESCALATION JOBS
+  // =====================================================
+
+  async createEscalationJob(job: Partial<EscalationJob>): Promise<EscalationJob> {
+    const result = await this.pool.query(
+      `INSERT INTO notification_escalation_jobs (
+        tenant_id, incident_id, policy_id, severity,
+        current_step, total_steps, status, next_escalation_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
+      [
+        job.tenantId,
+        job.incidentId,
+        job.policyId,
+        job.severity,
+        job.currentStep,
+        job.totalSteps,
+        job.status,
+        job.nextEscalationAt,
+      ]
+    );
+
+    return this.mapRowToEscalationJob(result.rows[0]);
+  }
+
+  async findDueEscalationJobs(): Promise<EscalationJob[]> {
+    const result = await this.pool.query(
+      `SELECT * FROM notification_escalation_jobs 
+       WHERE status = 'ACTIVE' 
+         AND next_escalation_at <= NOW()
+       ORDER BY next_escalation_at ASC`
+    );
+
+    return result.rows.map(row => this.mapRowToEscalationJob(row));
+  }
+
+  async findActiveEscalationJobs(incidentId: string): Promise<EscalationJob[]> {
+    const result = await this.pool.query(
+      `SELECT * FROM notification_escalation_jobs 
+       WHERE incident_id = $1 AND status = 'ACTIVE'`,
+      [incidentId]
+    );
+
+    return result.rows.map(row => this.mapRowToEscalationJob(row));
+  }
+
+  async updateEscalationJob(id: string, updates: Partial<EscalationJob>): Promise<void> {
+    const sets: string[] = [];
+    const values: any[] = [];
+    let paramCount = 1;
+
+    Object.entries(updates).forEach(([key, value]) => {
+      if (value !== undefined) {
+        sets.push(`${this.camelToSnake(key)} = $${paramCount++}`);
+        values.push(value);
+      }
+    });
+
+    values.push(id);
+
+    await this.pool.query(
+      `UPDATE notification_escalation_jobs SET ${sets.join(', ')} WHERE id = $${paramCount}`,
+      values
+    );
+  }
+
+  // =====================================================
+  // AUDIT LOG
+  // =====================================================
+
+  async createAuditLog(input: CreateAuditLogInput): Promise<void> {
+    await this.pool.query(
+      `INSERT INTO notification_audit_log (
+        tenant_id, actor_id, actor_role, action, resource_type, resource_id,
+        previous_value, new_value, ip_address, user_agent
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+      [
+        input.tenantId,
+        input.actorId,
+        input.actorRole,
+        input.action,
+        input.resourceType,
+        input.resourceId,
+        JSON.stringify(input.previousValue),
+        JSON.stringify(input.newValue),
+        input.ipAddress,
+        input.userAgent,
+      ]
+    );
+  }
+
+  // =====================================================
+  // HELPER METHODS
+  // =====================================================
+
+  private generateDedupKey(
+    tenantId: string,
+    incidentId: string | undefined,
+    policyId: string | undefined,
+    escalationStep: number,
+    channel: string,
+    recipientDestination: string
+  ): string {
+    return [
+      tenantId,
+      incidentId || 'null',
+      policyId || 'null',
+      escalationStep,
+      channel,
+      recipientDestination,
+    ].join(':');
+  }
+
+  private mapRowToPolicy(row: any): NotificationPolicy {
     return {
       id: row.id,
       tenantId: row.tenant_id,
-      type: row.type,
-      sourceType: row.source_type,
-      sourceId: row.source_id,
-      title: row.title,
-      body: row.body,
-      metadata: row.metadata || {},
-      createdAt: row.created_at
+      name: row.name,
+      description: row.description,
+      version: row.version,
+      status: row.status,
+      scope: {
+        type: row.scope_type,
+        regionIds: row.scope_region_ids,
+        branchIds: row.scope_branch_ids,
+        deviceIds: row.scope_device_ids,
+        alertTypes: row.scope_alert_types,
+      },
+      p1Rule: row.p1_rule,
+      p2Rule: row.p2_rule,
+      p3Rule: row.p3_rule,
+      p4Rule: row.p4_rule,
+      p5Rule: row.p5_rule,
+      quietHours: row.quiet_hours_enabled ? {
+        enabled: row.quiet_hours_enabled,
+        start: row.quiet_hours_start,
+        end: row.quiet_hours_end,
+        timezone: row.quiet_hours_timezone,
+        bypassSeverities: row.quiet_hours_bypass_severities,
+      } : undefined,
+      rateLimits: {
+        perMinute: row.rate_limit_per_minute,
+        perRecipientPerMinute: row.rate_limit_per_recipient_per_minute,
+      },
+      p1Escalation: row.p1_escalation,
+      p2Escalation: row.p2_escalation,
+      p3Escalation: row.p3_escalation,
+      p4Escalation: row.p4_escalation,
+      p5Escalation: row.p5_escalation,
+      createdBy: row.created_by,
+      updatedBy: row.updated_by,
+      approvedBy: row.approved_by,
+      publishedBy: row.published_by,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+      approvedAt: row.approved_at,
+      publishedAt: row.published_at,
     };
   }
 
-  private mapDelivery(row: any): NotificationDelivery {
+  private mapRowToRecipientGroup(row: any): RecipientGroup {
     return {
       id: row.id,
-      notificationId: row.notification_id,
       tenantId: row.tenant_id,
+      name: row.name,
+      description: row.description,
+      scopeType: row.scope_type,
+      scopeRegionIds: row.scope_region_ids,
+      scopeBranchIds: row.scope_branch_ids,
+      scopeAlertTypes: row.scope_alert_types,
+      createdBy: row.created_by,
+      updatedBy: row.updated_by,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+      deletedAt: row.deleted_at,
+    };
+  }
+
+  private mapRowToRecipientMember(row: any): RecipientMember {
+    return {
+      id: row.id,
+      groupId: row.group_id,
+      userId: row.user_id,
+      displayName: row.display_name,
+      email: row.email,
+      phone: row.phone,
+      voiceNumber: row.voice_number,
+      preferredLanguage: row.preferred_language,
+      enabled: row.enabled,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    };
+  }
+
+  private mapRowToOutbox(row: any): NotificationOutbox {
+    return {
+      id: row.id,
+      tenantId: row.tenant_id,
+      incidentId: row.incident_id,
+      alertId: row.alert_id,
+      policyId: row.policy_id,
+      escalationStep: row.escalation_step,
       channel: row.channel,
-      destination: row.destination,
+      recipientId: row.recipient_id,
+      recipientDisplayName: row.recipient_display_name,
+      recipientDestination: row.recipient_destination,
+      recipientDestinationMasked: row.recipient_destination_masked,
+      templateKey: row.template_key,
       subject: row.subject,
-      title: row.title,
       body: row.body,
-      templateId: row.template_id,
-      templateData: row.template_data || undefined,
-      metadata: row.metadata || {},
-      priority: row.priority,
+      variables: row.variables,
       status: row.status,
-      idempotencyKey: row.idempotency_key,
       attemptCount: row.attempt_count,
       maxAttempts: row.max_attempts,
-      nextAttemptAt: row.next_attempt_at,
-      lockedAt: row.locked_at,
-      lockedBy: row.locked_by,
-      provider: row.provider,
+      availableAt: row.available_at,
+      scheduledAt: row.scheduled_at,
+      providerName: row.provider_name,
       providerMessageId: row.provider_message_id,
-      lastError: row.last_error,
-      lastErrorCode: row.last_error_code,
+      dedupKey: row.dedup_key,
       createdAt: row.created_at,
-      processingAt: row.processing_at,
+      processingStartedAt: row.processing_started_at,
+      processedAt: row.processed_at,
+      deliveredAt: row.delivered_at,
+      failedAt: row.failed_at,
+      cancelledAt: row.cancelled_at,
+      lastErrorCode: row.last_error_code,
+      lastErrorMessage: row.last_error_message,
+      errorHistory: row.error_history || [],
+    };
+  }
+
+  private mapRowToDelivery(row: any): NotificationDelivery {
+    return {
+      id: row.id,
+      tenantId: row.tenant_id,
+      outboxId: row.outbox_id,
+      incidentId: row.incident_id,
+      channel: row.channel,
+      recipientId: row.recipient_id,
+      recipientDisplayName: row.recipient_display_name,
+      recipientDestinationMasked: row.recipient_destination_masked,
+      providerName: row.provider_name,
+      providerMessageId: row.provider_message_id,
+      status: row.status,
+      attemptNumber: row.attempt_number,
       sentAt: row.sent_at,
       deliveredAt: row.delivered_at,
-      failedAt: row.failed_at
-    };
-  }
-
-  private mapDeliveryAttempt(row: any): NotificationDeliveryAttempt {
-    return {
-      id: row.id,
-      deliveryId: row.delivery_id,
-      attemptNumber: row.attempt_number,
-      provider: row.provider,
-      startedAt: row.started_at,
-      completedAt: row.completed_at,
-      success: row.success,
-      responseCode: row.response_code,
-      providerMessageId: row.provider_message_id,
+      failedAt: row.failed_at,
+      acknowledgedAt: row.acknowledged_at,
+      acknowledgedBy: row.acknowledged_by,
       errorCode: row.error_code,
       errorMessage: row.error_message,
-      durationMs: row.duration_ms,
-      metadata: row.metadata || {}
+      latencyMs: row.latency_ms,
+      createdAt: row.created_at,
     };
   }
 
-  private mapPushDevice(row: any): UserPushDevice {
+  private mapRowToEscalationJob(row: any): EscalationJob {
     return {
       id: row.id,
       tenantId: row.tenant_id,
-      userId: row.user_id,
-      platform: row.platform,
-      pushToken: row.push_token,
-      active: row.active,
-      lastSeenAt: row.last_seen_at,
-      deviceInfo: row.device_info || {},
+      incidentId: row.incident_id,
+      policyId: row.policy_id,
+      severity: row.severity,
+      currentStep: row.current_step,
+      totalSteps: row.total_steps,
+      status: row.status,
+      nextEscalationAt: row.next_escalation_at,
+      acknowledgedAt: row.acknowledged_at,
+      acknowledgedBy: row.acknowledged_by,
+      cancelledAt: row.cancelled_at,
+      cancelledReason: row.cancelled_reason,
+      completedAt: row.completed_at,
       createdAt: row.created_at,
-      updatedAt: row.updated_at
+      updatedAt: row.updated_at,
     };
   }
 
-  private mapPreferences(row: any): NotificationPreferences {
-    return {
-      id: row.id,
-      tenantId: row.tenant_id,
-      userId: row.user_id,
-      emailEnabled: row.email_enabled,
-      smsEnabled: row.sms_enabled,
-      pushEnabled: row.push_enabled,
-      eventFilters: row.event_filters || {},
-      quietHoursEnabled: row.quiet_hours_enabled,
-      quietHoursStart: row.quiet_hours_start,
-      quietHoursEnd: row.quiet_hours_end,
-      createdAt: row.created_at,
-      updatedAt: row.updated_at
-    };
-  }
-
-  private mapPolicy(row: any): NotificationPolicy {
-    return {
-      id: row.id,
-      tenantId: row.tenant_id,
-      eventType: row.event_type,
-      enabled: row.enabled,
-      minimumSeverity: row.minimum_severity,
-      channels: row.channels || [],
-      cooldownSeconds: row.cooldown_seconds || 0,
-      escalationRules: row.escalation_rules,
-      createdAt: row.created_at,
-      updatedAt: row.updated_at
-    };
+  private camelToSnake(str: string): string {
+    return str.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`);
   }
 }
