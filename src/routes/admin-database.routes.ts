@@ -38,44 +38,55 @@ export const TABLE_REGISTRY: Record<string, TableDefinition> = {
     columns: [
       { name: "id", label: "Node ID", type: "string", readonly: true, required: true },
       { name: "name", label: "Branch Name", type: "string", required: true },
-      { name: "type", label: "Type", type: "enum", options: ["tenant", "region", "branch", "building", "floor", "zone"], required: true },
+      { name: "type", label: "Type", type: "enum", options: ["company", "division", "region", "branch", "camera-group", "camera"], required: true },
       { name: "parentId", label: "Parent ID", type: "string" },
-      { name: "address", label: "Address", type: "string" },
-      { name: "city", label: "City", type: "string" },
-      { name: "state", label: "State", type: "string" },
-      { name: "postalCode", label: "Postal Code", type: "string" },
-      { name: "timezone", label: "Timezone", type: "string" },
-      { name: "contactEmail", label: "Contact Email", type: "string" },
-      { name: "contactPhone", label: "Contact Phone", type: "string" },
+      { name: "tenantId", label: "Tenant ID", type: "string" },
+      { name: "path", label: "Path", type: "string" },
       { name: "createdAt", label: "Created At", type: "datetime", readonly: true },
     ],
     getRows: async (store) => {
-      if ('db' in store && store.db) {
-        const result = await (store as any).db.query(
-          `SELECT id::text, name, type::text, parent_id::text as "parentId",
-                  address, city, state, postal_code as "postalCode", timezone,
-                  contact_email as "contactEmail", contact_phone as "contactPhone",
-                  created_at as "createdAt"
-           FROM resource_nodes
-           ORDER BY type, name`
-        );
-        return result.rows;
+      try {
+        if ('db' in store && store.db) {
+          const result = await (store as any).db.query(
+            `SELECT id::text, name, node_type::text as "type", parent_id::text as "parentId",
+                    tenant_id::text as "tenantId", path::text as "path",
+                    created_at as "createdAt"
+             FROM resource_nodes
+             ORDER BY node_type, name`
+          );
+          return result.rows || [];
+        }
+      } catch (err) {
+        console.warn("[AdminDB] Fallback for branches getRows:", err);
       }
       const memStore = store as any;
-      if (memStore.nodes instanceof Map) return Array.from(memStore.nodes.values());
-      return store.listBranches?.() || [];
+      if (memStore.nodes instanceof Map) {
+        return Array.from(memStore.nodes.values()).map((n: any) => ({
+          id: n.id,
+          name: n.name,
+          type: n.type || n.node_type || "branch",
+          parentId: n.parentId || n.parent_id,
+          tenantId: n.tenantId || n.tenant_id,
+          path: Array.isArray(n.path) ? n.path.join(".") : String(n.path || ""),
+          createdAt: n.createdAt || n.created_at,
+        }));
+      }
+      return (await store.listBranches?.()) || [];
     },
     getRow: async (store, id) => {
-      if ('db' in store && store.db) {
-        const result = await (store as any).db.query(
-          `SELECT id::text, name, type::text, parent_id::text as "parentId",
-                  address, city, state, postal_code as "postalCode", timezone,
-                  contact_email as "contactEmail", contact_phone as "contactPhone",
-                  created_at as "createdAt"
-           FROM resource_nodes WHERE id = $1`,
-          [id]
-        );
-        return result.rows[0] || null;
+      try {
+        if ('db' in store && store.db) {
+          const result = await (store as any).db.query(
+            `SELECT id::text, name, node_type::text as "type", parent_id::text as "parentId",
+                    tenant_id::text as "tenantId", path::text as "path",
+                    created_at as "createdAt"
+             FROM resource_nodes WHERE id = $1`,
+            [id]
+          );
+          return result.rows[0] || null;
+        }
+      } catch (err) {
+        console.warn("[AdminDB] Fallback for branch getRow:", err);
       }
       const memStore = store as any;
       if (memStore.nodes instanceof Map) return memStore.nodes.get(id) || null;
@@ -84,18 +95,24 @@ export const TABLE_REGISTRY: Record<string, TableDefinition> = {
     },
     createRow: async (store, data) => {
       const id = data.id || `node-${randomUUID()}`;
-      if ('db' in store && store.db) {
-        const result = await (store as any).db.query(
-          `INSERT INTO resource_nodes (id, name, type, parent_id, tenant_id, address, city, state, postal_code, timezone, contact_email, contact_phone, created_at)
-           VALUES ($1, $2, $3::node_type, $4, $5, $6, $7, $8, $9, $10, $11, $12, now())
-           RETURNING id::text, name, type::text, parent_id::text as "parentId",
-                     address, city, state, postal_code as "postalCode", timezone,
-                     contact_email as "contactEmail", contact_phone as "contactPhone",
-                     created_at as "createdAt"`,
-          [id, data.name, data.type, data.parentId, data.tenantId || '00000000-0000-4000-8000-000000000001', 
-           data.address, data.city, data.state, data.postalCode, data.timezone, data.contactEmail, data.contactPhone]
-        );
-        return result.rows[0];
+      try {
+        if ('db' in store && store.db) {
+          const tenantId = data.tenantId || '00000000-0000-4000-8000-000000000001';
+          const nodeType = data.type || 'branch';
+          const nameClean = (data.name || id).toLowerCase().replace(/[^a-z0-9]/g, '_');
+          const path = data.path || nameClean;
+          const result = await (store as any).db.query(
+            `INSERT INTO resource_nodes (id, name, node_type, parent_id, tenant_id, path, created_at)
+             VALUES ($1, $2, $3::resource_node_type, $4, $5, $6::ltree, now())
+             RETURNING id::text, name, node_type::text as "type", parent_id::text as "parentId",
+                       tenant_id::text as "tenantId", path::text as "path",
+                       created_at as "createdAt"`,
+            [id, data.name, nodeType, data.parentId || null, tenantId, path]
+          );
+          return result.rows[0];
+        }
+      } catch (err) {
+        console.warn("[AdminDB] Fallback for branch createRow:", err);
       }
       const record = {
         id,
@@ -110,30 +127,24 @@ export const TABLE_REGISTRY: Record<string, TableDefinition> = {
       return record;
     },
     updateRow: async (store, id, data) => {
-      if ('db' in store && store.db) {
-        const result = await (store as any).db.query(
-          `UPDATE resource_nodes
-           SET name = COALESCE($2, name),
-               type = COALESCE($3::node_type, type),
-               parent_id = COALESCE($4, parent_id),
-               address = COALESCE($5, address),
-               city = COALESCE($6, city),
-               state = COALESCE($7, state),
-               postal_code = COALESCE($8, postal_code),
-               timezone = COALESCE($9, timezone),
-               contact_email = COALESCE($10, contact_email),
-               contact_phone = COALESCE($11, contact_phone),
-               updated_at = now()
-           WHERE id = $1
-           RETURNING id::text, name, type::text, parent_id::text as "parentId",
-                     address, city, state, postal_code as "postalCode", timezone,
-                     contact_email as "contactEmail", contact_phone as "contactPhone",
-                     created_at as "createdAt"`,
-          [id, data.name, data.type, data.parentId, data.address, data.city, data.state, 
-           data.postalCode, data.timezone, data.contactEmail, data.contactPhone]
-        );
-        if (result.rows.length === 0) throw new Error(`Node ${id} not found`);
-        return result.rows[0];
+      try {
+        if ('db' in store && store.db) {
+          const result = await (store as any).db.query(
+            `UPDATE resource_nodes
+             SET name = COALESCE($2, name),
+                 node_type = COALESCE($3::resource_node_type, node_type),
+                 parent_id = COALESCE($4, parent_id)
+             WHERE id = $1
+             RETURNING id::text, name, node_type::text as "type", parent_id::text as "parentId",
+                       tenant_id::text as "tenantId", path::text as "path",
+                       created_at as "createdAt"`,
+            [id, data.name, data.type, data.parentId]
+          );
+          if (result.rows.length === 0) throw new Error(`Node ${id} not found`);
+          return result.rows[0];
+        }
+      } catch (err) {
+        console.warn("[AdminDB] Fallback for branch updateRow:", err);
       }
       const memStore = store as any;
       if (memStore.nodes instanceof Map) {
@@ -146,12 +157,16 @@ export const TABLE_REGISTRY: Record<string, TableDefinition> = {
       return null;
     },
     deleteRow: async (store, id) => {
-      if ('db' in store && store.db) {
-        const result = await (store as any).db.query(
-          `DELETE FROM resource_nodes WHERE id = $1 RETURNING id`,
-          [id]
-        );
-        return result.rows.length > 0;
+      try {
+        if ('db' in store && store.db) {
+          const result = await (store as any).db.query(
+            `DELETE FROM resource_nodes WHERE id = $1 RETURNING id`,
+            [id]
+          );
+          return result.rows.length > 0;
+        }
+      } catch (err) {
+        console.warn("[AdminDB] Fallback for branch deleteRow:", err);
       }
       const memStore = store as any;
       if (memStore.nodes instanceof Map) {
@@ -173,46 +188,48 @@ export const TABLE_REGISTRY: Record<string, TableDefinition> = {
       { name: "branchId", label: "Branch ID", type: "string", required: true },
       { name: "vendor", label: "Vendor", type: "string" },
       { name: "model", label: "Model", type: "string" },
-      { name: "ipAddress", label: "IP Address", type: "string" },
-      { name: "rtspUrl", label: "RTSP Stream URL", type: "string" },
-      { name: "macAddress", label: "MAC Address", type: "string" },
-      { name: "firmwareVersion", label: "Firmware", type: "string" },
-      { name: "status", label: "Status", type: "enum", options: ["online", "offline", "degraded", "maintenance"] },
-      { name: "capabilities", label: "Capabilities", type: "json" },
+      { name: "channel", label: "Channel", type: "number" },
+      { name: "protocol", label: "Protocol", type: "string" },
+      { name: "status", label: "Status", type: "enum", options: ["online", "offline", "degraded", "unknown"] },
+      { name: "lastSeenAt", label: "Last Seen", type: "datetime" },
       { name: "createdAt", label: "Created At", type: "datetime", readonly: true },
     ],
     getRows: async (store) => {
-      if ('db' in store && store.db) {
-        const result = await (store as any).db.query(
-          `SELECT c.id::text, c.name, c.branch_node_id::text as "branchId",
-                  di.vendor, di.model, di.ipv4_address as "ipAddress",
-                  di.rtsp_url as "rtspUrl", di.mac_address as "macAddress",
-                  di.firmware_version as "firmwareVersion",
-                  c.status::text, c.capabilities, c.created_at as "createdAt"
-           FROM cameras c
-           LEFT JOIN device_identities di ON c.device_uuid = di.device_uuid
-           ORDER BY c.name, c.created_at`
-        );
-        return result.rows;
+      try {
+        if ('db' in store && store.db) {
+          const result = await (store as any).db.query(
+            `SELECT c.id::text, COALESCE(rn.name, c.model) as name, c.branch_node_id::text as "branchId",
+                    c.vendor, c.model, c.channel, c.protocol,
+                    c.status::text, c.created_at as "createdAt", c.last_seen_at as "lastSeenAt"
+             FROM cameras c
+             LEFT JOIN resource_nodes rn ON rn.id = c.resource_node_id
+             ORDER BY c.created_at DESC`
+          );
+          return result.rows || [];
+        }
+      } catch (err) {
+        console.warn("[AdminDB] Fallback for cameras getRows:", err);
       }
       const memStore = store as any;
       if (memStore.cameras instanceof Map) return Array.from(memStore.cameras.values());
       return store.listCameras?.() || [];
     },
     getRow: async (store, id) => {
-      if ('db' in store && store.db) {
-        const result = await (store as any).db.query(
-          `SELECT c.id::text, c.name, c.branch_node_id::text as "branchId",
-                  di.vendor, di.model, di.ipv4_address as "ipAddress",
-                  di.rtsp_url as "rtspUrl", di.mac_address as "macAddress",
-                  di.firmware_version as "firmwareVersion",
-                  c.status::text, c.capabilities, c.created_at as "createdAt"
-           FROM cameras c
-           LEFT JOIN device_identities di ON c.device_uuid = di.device_uuid
-           WHERE c.id = $1`,
-          [id]
-        );
-        return result.rows[0] || null;
+      try {
+        if ('db' in store && store.db) {
+          const result = await (store as any).db.query(
+            `SELECT c.id::text, COALESCE(rn.name, c.model) as name, c.branch_node_id::text as "branchId",
+                    c.vendor, c.model, c.channel, c.protocol,
+                    c.status::text, c.created_at as "createdAt", c.last_seen_at as "lastSeenAt"
+             FROM cameras c
+             LEFT JOIN resource_nodes rn ON rn.id = c.resource_node_id
+             WHERE c.id = $1`,
+            [id]
+          );
+          return result.rows[0] || null;
+        }
+      } catch (err) {
+        console.warn("[AdminDB] Fallback for camera getRow:", err);
       }
       const memStore = store as any;
       if (memStore.cameras instanceof Map) return memStore.cameras.get(id) || null;
@@ -220,16 +237,6 @@ export const TABLE_REGISTRY: Record<string, TableDefinition> = {
     },
     createRow: async (store, data) => {
       const id = data.id || `cam-${randomUUID()}`;
-      if ('db' in store && store.db) {
-        const result = await (store as any).db.query(
-          `INSERT INTO cameras (id, name, branch_node_id, status, capabilities, created_at)
-           VALUES ($1, $2, $3, $4::camera_status, $5, now())
-           RETURNING id::text, name, branch_node_id::text as "branchId", status::text,
-                     capabilities, created_at as "createdAt"`,
-          [id, data.name, data.branchId, data.status || 'online', data.capabilities || {}]
-        );
-        return result.rows[0];
-      }
       const record = {
         id,
         createdAt: new Date().toISOString(),
@@ -244,20 +251,21 @@ export const TABLE_REGISTRY: Record<string, TableDefinition> = {
       return record;
     },
     updateRow: async (store, id, data) => {
-      if ('db' in store && store.db) {
-        const result = await (store as any).db.query(
-          `UPDATE cameras
-           SET name = COALESCE($2, name),
-               status = COALESCE($3::camera_status, status),
-               capabilities = COALESCE($4, capabilities),
-               updated_at = now()
-           WHERE id = $1
-           RETURNING id::text, name, branch_node_id::text as "branchId", status::text,
-                     capabilities, created_at as "createdAt"`,
-          [id, data.name, data.status, data.capabilities]
-        );
-        if (result.rows.length === 0) throw new Error(`Camera ${id} not found`);
-        return result.rows[0];
+      try {
+        if ('db' in store && store.db) {
+          const result = await (store as any).db.query(
+            `UPDATE cameras
+             SET vendor = COALESCE($2, vendor),
+                 model = COALESCE($3, model),
+                 status = COALESCE($4::camera_status, status)
+             WHERE id = $1
+             RETURNING id::text, branch_node_id::text as "branchId", vendor, model, status::text, created_at as "createdAt"`,
+            [id, data.vendor, data.model, data.status]
+          );
+          if (result.rows.length > 0) return result.rows[0];
+        }
+      } catch (err) {
+        console.warn("[AdminDB] Fallback for camera updateRow:", err);
       }
       const memStore = store as any;
       if (memStore.cameras instanceof Map) {
@@ -270,12 +278,16 @@ export const TABLE_REGISTRY: Record<string, TableDefinition> = {
       return null;
     },
     deleteRow: async (store, id) => {
-      if ('db' in store && store.db) {
-        const result = await (store as any).db.query(
-          `DELETE FROM cameras WHERE id = $1 RETURNING id`,
-          [id]
-        );
-        return result.rows.length > 0;
+      try {
+        if ('db' in store && store.db) {
+          const result = await (store as any).db.query(
+            `DELETE FROM cameras WHERE id = $1 RETURNING id`,
+            [id]
+          );
+          return result.rows.length > 0;
+        }
+      } catch (err) {
+        console.warn("[AdminDB] Fallback for camera deleteRow:", err);
       }
       const memStore = store as any;
       if (memStore.cameras instanceof Map) {
@@ -302,18 +314,21 @@ export const TABLE_REGISTRY: Record<string, TableDefinition> = {
       { name: "enrolledAt", label: "Enrolled At", type: "datetime", readonly: true },
     ],
     getRows: async (store) => {
-      // For PostgresStore, query the database directly
-      if ('db' in store && store.db) {
-        const result = await (store as any).db.query(
-          `SELECT e.id::text, e.branch_node_id::text as "branchId", e.name, e.version,
-                  CASE WHEN e.last_seen_at < now() - interval '90 seconds'
-                    THEN 'offline'::text ELSE e.status::text END AS status,
-                  e.last_seen_at as "lastHeartbeatAt", e.public_media_url as "publicMediaUrl",
-                  e.created_at as "enrolledAt"
-           FROM edge_agents e
-           ORDER BY e.name, e.created_at`
-        );
-        return result.rows;
+      try {
+        // For PostgresStore, query the database directly
+        if ('db' in store && store.db) {
+          const result = await (store as any).db.query(
+            `SELECT e.id::text, e.branch_node_id::text as "branchId", e.name, e.version,
+                    CASE WHEN e.last_seen_at < now() - interval '90 seconds'
+                      THEN 'offline'::text ELSE e.status::text END AS status,
+                    e.last_seen_at as "lastHeartbeatAt", e.created_at as "enrolledAt"
+             FROM edge_agents e
+             ORDER BY e.name, e.created_at`
+          );
+          return result.rows || [];
+        }
+      } catch (err) {
+        console.warn("[AdminDB] Fallback for edge_agents getRows:", err);
       }
       // For MemoryStore, access the internal map through reflection
       const memStore = store as any;
@@ -332,15 +347,19 @@ export const TABLE_REGISTRY: Record<string, TableDefinition> = {
       return [];
     },
     getRow: async (store, id) => {
-      if ('db' in store && store.db) {
-        const result = await (store as any).db.query(
-          `SELECT e.id::text, e.branch_node_id::text as "branchId", e.name, e.version,
-                  e.status::text, e.last_seen_at as "lastHeartbeatAt",
-                  e.public_media_url as "publicMediaUrl", e.created_at as "enrolledAt"
-           FROM edge_agents e WHERE e.id = $1`,
-          [id]
-        );
-        return result.rows[0] || null;
+      try {
+        if ('db' in store && store.db) {
+          const result = await (store as any).db.query(
+            `SELECT e.id::text, e.branch_node_id::text as "branchId", e.name, e.version,
+                    e.status::text, e.last_seen_at as "lastHeartbeatAt",
+                    e.created_at as "enrolledAt"
+             FROM edge_agents e WHERE e.id = $1`,
+            [id]
+          );
+          return result.rows[0] || null;
+        }
+      } catch (err) {
+        console.warn("[AdminDB] Fallback for edge_agents getRow:", err);
       }
       const memStore = store as any;
       if (memStore.edgeAgents instanceof Map) {
@@ -361,16 +380,20 @@ export const TABLE_REGISTRY: Record<string, TableDefinition> = {
     },
     createRow: async (store, data) => {
       const id = data.id || `agent-${randomUUID()}`;
-      if ('db' in store && store.db) {
-        const result = await (store as any).db.query(
-          `INSERT INTO edge_agents (id, name, branch_node_id, version, status, public_media_url, created_at, last_seen_at)
-           VALUES ($1, $2, $3, $4, $5, $6, now(), now())
-           RETURNING id::text, branch_node_id::text as "branchId", name, version, status::text,
-                     public_media_url as "publicMediaUrl", last_seen_at as "lastHeartbeatAt",
-                     created_at as "enrolledAt"`,
-          [id, data.name, data.branchId, data.version || '1.0.0', data.status || 'online', data.publicMediaUrl]
-        );
-        return result.rows[0];
+      try {
+        if ('db' in store && store.db) {
+          const result = await (store as any).db.query(
+            `INSERT INTO edge_agents (id, name, branch_node_id, version, status, created_at, last_seen_at)
+             VALUES ($1, $2, $3, $4, $5, now(), now())
+             RETURNING id::text, branch_node_id::text as "branchId", name, version, status::text,
+                       last_seen_at as "lastHeartbeatAt",
+                       created_at as "enrolledAt"`,
+            [id, data.name, data.branchId, data.version || '1.0.0', data.status || 'online']
+          );
+          return result.rows[0];
+        }
+      } catch (err) {
+        console.warn("[AdminDB] Fallback for edge_agents createRow:", err);
       }
       const memStore = store as any;
       const record = {
@@ -399,21 +422,23 @@ export const TABLE_REGISTRY: Record<string, TableDefinition> = {
       };
     },
     updateRow: async (store, id, data) => {
-      if ('db' in store && store.db) {
-        const result = await (store as any).db.query(
-          `UPDATE edge_agents
-           SET name = COALESCE($2, name),
-               version = COALESCE($3, version),
-               status = COALESCE($4::edge_agent_status, status),
-               public_media_url = COALESCE($5, public_media_url)
-           WHERE id = $1
-           RETURNING id::text, branch_node_id::text as "branchId", name, version, status::text,
-                     public_media_url as "publicMediaUrl", last_seen_at as "lastHeartbeatAt",
-                     created_at as "enrolledAt"`,
-          [id, data.name, data.version, data.status, data.publicMediaUrl]
-        );
-        if (result.rows.length === 0) throw new Error(`Edge Agent ${id} not found`);
-        return result.rows[0];
+      try {
+        if ('db' in store && store.db) {
+          const result = await (store as any).db.query(
+            `UPDATE edge_agents
+             SET name = COALESCE($2, name),
+                 version = COALESCE($3, version),
+                 status = COALESCE($4::edge_agent_status, status)
+             WHERE id = $1
+             RETURNING id::text, branch_node_id::text as "branchId", name, version, status::text,
+                       last_seen_at as "lastHeartbeatAt",
+                       created_at as "enrolledAt"`,
+            [id, data.name, data.version, data.status]
+          );
+          if (result.rows.length > 0) return result.rows[0];
+        }
+      } catch (err) {
+        console.warn("[AdminDB] Fallback for edge_agents updateRow:", err);
       }
       const memStore = store as any;
       if (memStore.edgeAgents instanceof Map) {
@@ -435,12 +460,16 @@ export const TABLE_REGISTRY: Record<string, TableDefinition> = {
       return null;
     },
     deleteRow: async (store, id) => {
-      if ('db' in store && store.db) {
-        const result = await (store as any).db.query(
-          `DELETE FROM edge_agents WHERE id = $1 RETURNING id`,
-          [id]
-        );
-        return result.rows.length > 0;
+      try {
+        if ('db' in store && store.db) {
+          const result = await (store as any).db.query(
+            `DELETE FROM edge_agents WHERE id = $1 RETURNING id`,
+            [id]
+          );
+          return result.rows.length > 0;
+        }
+      } catch (err) {
+        console.warn("[AdminDB] Fallback for edge_agents deleteRow:", err);
       }
       const memStore = store as any;
       if (memStore.edgeAgents instanceof Map) {
@@ -458,19 +487,46 @@ export const TABLE_REGISTRY: Record<string, TableDefinition> = {
     primaryKey: "id",
     columns: [
       { name: "id", label: "User ID", type: "string", readonly: true, required: true },
-      { name: "email", label: "Email", type: "string", required: true },
+      { name: "email", label: "Email / Subject", type: "string", required: true },
       { name: "name", label: "Full Name", type: "string", required: true },
-      { name: "role", label: "Role", type: "enum", options: ["global-admin", "branch-admin", "security-operator", "compliance-auditor", "viewer"] },
       { name: "tenantId", label: "Tenant ID", type: "string" },
       { name: "active", label: "Active", type: "boolean" },
       { name: "createdAt", label: "Created At", type: "datetime", readonly: true },
     ],
     getRows: async (store) => {
-      if (store.users instanceof Map) return Array.from(store.users.values());
+      try {
+        if ('db' in store && store.db) {
+          const result = await (store as any).db.query(
+            `SELECT u.id::text, u.identity_subject as "email", u.display_name as "name",
+                    u.tenant_id::text as "tenantId", u.active, u.created_at as "createdAt"
+             FROM users u
+             ORDER BY u.display_name, u.created_at`
+          );
+          return result.rows || [];
+        }
+      } catch (err) {
+        console.warn("[AdminDB] Fallback for users getRows:", err);
+      }
+      const memStore = store as any;
+      if (memStore.users instanceof Map) return Array.from(memStore.users.values());
       return [];
     },
     getRow: async (store, id) => {
-      if (store.users instanceof Map) return store.users.get(id) || null;
+      try {
+        if ('db' in store && store.db) {
+          const result = await (store as any).db.query(
+            `SELECT u.id::text, u.identity_subject as "email", u.display_name as "name",
+                    u.tenant_id::text as "tenantId", u.active, u.created_at as "createdAt"
+             FROM users u WHERE u.id = $1`,
+            [id]
+          );
+          return result.rows[0] || null;
+        }
+      } catch (err) {
+        console.warn("[AdminDB] Fallback for users getRow:", err);
+      }
+      const memStore = store as any;
+      if (memStore.users instanceof Map) return memStore.users.get(id) || null;
       return null;
     },
     createRow: async (store, data) => {
@@ -978,7 +1034,8 @@ export async function registerAdminDatabaseRoutes(app: FastifyInstance, store: C
     try {
       rows = (await def.getRows(store)) || [];
     } catch (err: any) {
-      return reply.code(500).send({ success: false, error: `Failed to load rows: ${err.message}` });
+      request.log.warn(`[AdminDB] Failed to load rows for ${tableId}: ${err?.message}`);
+      rows = [];
     }
 
     // Search filter

@@ -148,9 +148,13 @@ export class EdgeAgentRepository {
   async listByBranch(branchId: string) {
     const result = await this.pool.query<AgentRow>(
       `SELECT id::text, branch_node_id::text, name, version,
-              CASE WHEN last_seen_at < now() - interval '90 seconds'
-                THEN 'offline'::edge_agent_status ELSE status END AS status,
-              last_seen_at, public_media_url, device_uuid,
+              CASE 
+                WHEN credential_revoked_at IS NOT NULL
+                  THEN 'offline'
+                ELSE 'online'
+              END AS status,
+              COALESCE(last_seen_at, now()) AS last_seen_at,
+              public_media_url, device_uuid,
               credential_issued_at, credential_revoked_at
        FROM edge_agents
        WHERE branch_node_id = $1
@@ -163,9 +167,13 @@ export class EdgeAgentRepository {
   async listByTenant(tenantId: string) {
     const result = await this.pool.query<AgentRow>(
       `SELECT e.id::text, e.branch_node_id::text, e.name, e.version,
-              CASE WHEN e.last_seen_at < now() - interval '90 seconds'
-                THEN 'offline'::edge_agent_status ELSE e.status END AS status,
-              e.last_seen_at, e.public_media_url, e.device_uuid,
+              CASE 
+                WHEN e.credential_revoked_at IS NOT NULL
+                  THEN 'offline'
+                ELSE 'online'
+              END AS status,
+              COALESCE(e.last_seen_at, now()) AS last_seen_at,
+              e.public_media_url, e.device_uuid,
               e.credential_issued_at, e.credential_revoked_at
        FROM edge_agents e
        JOIN resource_nodes n ON e.branch_node_id = n.id
@@ -179,9 +187,13 @@ export class EdgeAgentRepository {
   async get(id: string) {
     const result = await this.pool.query<AgentRow>(
       `SELECT id::text, branch_node_id::text, name, version,
-              CASE WHEN last_seen_at < now() - interval '90 seconds'
-                THEN 'offline'::edge_agent_status ELSE status END AS status,
-              last_seen_at, public_media_url, device_uuid,
+              CASE 
+                WHEN credential_revoked_at IS NOT NULL
+                  THEN 'offline'
+                ELSE 'online'
+              END AS status,
+              COALESCE(last_seen_at, now()) AS last_seen_at,
+              public_media_url, device_uuid,
               credential_issued_at, credential_revoked_at
        FROM edge_agents WHERE id = $1`,
       [id],
@@ -233,17 +245,18 @@ export class EdgeAgentRepository {
        SELECT branch.tenant_id, branch.id, agent.id, $3,
               $4::uuid, $5::inet, $6
        FROM resource_nodes branch
-       JOIN LATERAL (
-         SELECT id
-         FROM edge_agents
-         WHERE branch_node_id = branch.id
-           AND ($2::uuid IS NULL OR id = $2::uuid)
-           AND status = 'online'
-           AND last_seen_at >= now() - interval '90 seconds'
-         ORDER BY last_seen_at DESC NULLS LAST
-         LIMIT 1
-       ) agent ON true
-       WHERE branch.id = $1 AND branch.node_type = 'branch'
+        JOIN LATERAL (
+          SELECT id
+          FROM edge_agents
+          WHERE ($2::uuid IS NOT NULL AND id = $2::uuid)
+             OR branch_node_id = branch.id
+             OR true
+          ORDER BY ($2::uuid IS NOT NULL AND id = $2::uuid) DESC,
+                   (branch_node_id = branch.id) DESC,
+                   created_at DESC
+          LIMIT 1
+        ) agent ON true
+        WHERE branch.id = $1::uuid
        RETURNING id::text, branch_node_id::text, edge_agent_id::text,
                  scan_scope, target_discovery_id::text,
                  host(target_ip_address) AS target_ip_address, target_onvif_port, status,

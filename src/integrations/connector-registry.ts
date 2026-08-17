@@ -21,9 +21,6 @@ export class ConnectorRegistry {
    * Register a connector implementation
    */
   register(connector: IntegrationConnector): void {
-    if (this.connectors.has(connector.type)) {
-      throw new Error(`Connector for ${connector.type} is already registered`);
-    }
     this.connectors.set(connector.type, connector);
   }
 
