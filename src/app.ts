@@ -42,6 +42,7 @@ import { registerForensicEvidenceExportRoutes } from "./evidence-export/routes/e
 import { registerDistributedStateRoutes } from "./distributed-state/routes/distributed-state.routes.js";
 import { registerReliablePtzRoutes } from "./ptz/routes/ptz.routes.js";
 import { registerMediaTokenRoutes } from "./media-auth/routes/media-token.routes.js";
+import { registerOfflineSyncRoutes } from "./offline-sync/routes/offline-sync.routes.js";
 import { registerCentralMonitoringRoutes } from "./routes/central-monitoring.routes.js";
 import { registerOnDemandMediaRoutes } from "./routes/on-demand-media.routes.js";
 import { registerAiAlertsRoutes } from "./routes/ai-alerts.routes.js";
@@ -76,6 +77,7 @@ import { registerDeviceConnectivityRoutes } from "./device-connectivity/routes/d
 import { registerHaClusterRoutes } from "./media/cluster/ha-cluster.routes.js";
 import { registerAdaptiveStreamRoutes } from "./media/adaptive/adaptive-stream.routes.js";
 import { registerEdgeProductRoutes } from "./edge-product/routes/edge-product.routes.js";
+import { registerObservabilityRoutes } from "./observability/observability.routes.js";
 import { registerAdminDatabaseRoutes } from "./routes/admin-database.routes.js";
 import { registerAuditRoutes } from "./routes/audit.routes.js";
 import { registerComplianceRoutes } from "./routes/compliance.routes.js";
@@ -144,6 +146,7 @@ import { registerClientMediaSchedulerRoutes } from "./routes/client-media-schedu
 import { registerAiQualityRoutes } from "./routes/ai-quality.routes.js";
 import { registerEnterpriseSocOperationsRoutes } from "./routes/enterprise-soc-operations.routes.js";
 import { registerEventNormalizationRoutes } from "./event-normalization/routes/event-normalization.routes.js";
+import { registerChaosTestingRoutes } from "./chaos-testing/routes/chaos-testing.routes.js";
 import { autoProvisionVerifiedCameras } from "./services/camera-auto-provision.js";
 import {
   EmptyFederationLocalSearchProvider,
@@ -2629,6 +2632,14 @@ export async function buildApp(options?: {
     app.log.error({ err }, 'failed to register media token routes');
   }
 
+  // Register Offline Edge Survivability & Store-and-Forward Sync routes
+  try {
+    await registerOfflineSyncRoutes(app);
+    app.log.info('Offline edge sync and store-and-forward routes registered');
+  } catch (err: unknown) {
+    app.log.error({ err }, 'failed to register offline sync routes');
+  }
+
   // Register Scalable Central Monitoring Station & Priority Work Queue routes
   try {
     await registerCentralMonitoringRoutes(app);
@@ -2651,7 +2662,8 @@ export async function buildApp(options?: {
     await registerHaClusterRoutes(app);
     await registerAdaptiveStreamRoutes(app);
     await registerEdgeProductRoutes(app);
-    app.log.info('Morning digest, Virtual guard, QRT dispatch, HA Cluster, Edge Lifecycle, Mobile, Asset Lifecycle, Media Pipeline, Device Connectivity, HA Leases, Adaptive Stream, and Edge Product routes registered');
+    await registerObservabilityRoutes(app);
+    app.log.info('Morning digest, Virtual guard, QRT dispatch, HA Cluster, Edge Lifecycle, Mobile, Asset Lifecycle, Media Pipeline, Device Connectivity, HA Leases, Adaptive Stream, Edge Product, and Prometheus Observability routes registered');
   } catch (err: unknown) {
     app.log.error({ err }, 'failed to register extended enterprise features');
   }
@@ -2877,6 +2889,14 @@ export async function buildApp(options?: {
     app.log.info("Event Normalization routes registered (CP PLUS, Dahua, Hikvision, Axis, ONVIF, Edge Agent)");
   } catch (err: unknown) {
     app.log.error({ err }, "failed to register event normalization routes");
+  }
+
+  // Register Chaos Testing & Resiliency Engine (13 Failure Modes & 6 Recovery Guarantees)
+  try {
+    await registerChaosTestingRoutes(app);
+    app.log.info("Chaos Testing & Resiliency Engine routes registered");
+  } catch (err: unknown) {
+    app.log.error({ err }, "failed to register chaos testing routes");
   }
   const alertWorker = setInterval(() => {
     void alertDispatcher.drainOnce().catch((error) => app.log.error({ error }, "Alert outbox drain failed"));
