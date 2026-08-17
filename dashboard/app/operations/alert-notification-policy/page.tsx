@@ -1,10 +1,51 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { Bell, Clock3, Plus, Save, Trash2 } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { Bell, Clock3, Plus, Save, ShieldCheck, Trash2 } from "lucide-react";
 import { ModulePage } from "@/components/module-page";
 import { alertPolicyApi } from "@/lib/api-client";
 import type { AlertNotificationPolicy, AlertNotificationPolicyInput, AlertNotificationPolicySchedule } from "@/lib/types";
+
+const TIMEZONE_OPTIONS = [
+  "UTC",
+  "America/New_York",
+  "America/Chicago",
+  "America/Denver",
+  "America/Los_Angeles",
+  "Europe/London",
+  "Europe/Paris",
+  "Europe/Berlin",
+  "Asia/Dubai",
+  "Asia/Kolkata",
+  "Asia/Singapore",
+  "Asia/Tokyo",
+  "Australia/Sydney",
+];
+
+const DEFAULT_POLICY_INPUT: AlertNotificationPolicyInput = {
+  recipientGroups: {
+    email: [],
+    sms: [],
+    voice: [],
+  },
+  onCallSchedules: [],
+  quietHours: {
+    start: "22:00",
+    end: "06:00",
+    timezone: "UTC",
+    enabled: true,
+  },
+  rateLimitPerMinute: 120,
+  escalationAfterSeconds: {
+    P1: 30,
+    P2: 300,
+    P3: 900,
+    P4: 3600,
+    P5: 7200,
+  },
+  smsTemplates: {},
+  smsTemplateIds: {},
+};
 
 function normalizeList(value: string | undefined) {
   return value?.split(/[,\n]+/).map((item) => item.trim()).filter(Boolean) ?? [];
@@ -22,6 +63,8 @@ export default function AlertNotificationPolicyPage() {
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [matrix, setMatrix] = useState<Record<string, string[]> | null>(null);
+  const [isDirty, setIsDirty] = useState(false);
+  const [, setSaveState] = useState<"idle" | "saving" | "saved" | "unsaved" | "failed">("idle");
 
   const loadPolicy = async () => {
     setLoading(true);

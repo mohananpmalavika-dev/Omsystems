@@ -32,13 +32,16 @@ export async function registerProvisioningRoutes(
     if (selected && selected.status !== "online") {
       selected = await store.heartbeatEdgeAgent(selected.id, selected.version || "1.4.2");
     }
-    if (!selected) {
-      selected = await store.registerEdgeAgent(branchId, "Branch Gateway Edge-01", "1.4.2");
-      selected = await store.heartbeatEdgeAgent(selected.id, "1.4.2");
-    }
-    const agentId = selected ? selected.id : (agents[0]?.id || "default-agent");
 
-    const job = await store.createEdgeScanJob(branchId, agentId);
+    let agentForJob = selected;
+    if (!agentForJob) {
+      const created = await store.registerEdgeAgent(branchId, "Branch Gateway Edge-01", "1.4.2");
+      agentForJob = await store.heartbeatEdgeAgent(created.id, "1.4.2");
+    }
+    if (!agentForJob) {
+      throw new Error("Unable to establish an online edge agent for provisioning.");
+    }
+    const job = await store.createEdgeScanJob(branchId, agentForJob.id);
     await store.writeAudit({
       tenantId: request.currentUser.tenantId,
       actorUserId: request.currentUser.id,
@@ -46,7 +49,7 @@ export async function registerProvisioningRoutes(
       resourceNodeId: branchId,
       outcome: "success",
       sourceIp: request.ip,
-      details: { runId: job.id, edgeAgentId: agentId },
+      details: { runId: job.id, edgeAgentId: agentForJob.id },
     });
     return reply.code(202).send({
       run: await buildProvisioningRunView(store, branchId, request.currentUser, job),
