@@ -148,7 +148,7 @@ if ([string]::IsNullOrWhiteSpace($activationCode) -or $activationCode.StartsWith
 
 # The one-time activation code is consumed on first boot. The resulting unique
 # identity and all camera credentials live in separately encrypted local files.
-& icacls.exe $ConfigPath /inheritance:r /grant:r '*S-1-5-18:(F)' '*S-1-5-32-544:(F)' | Out-Null
+& icacls.exe $ConfigPath /inheritance:r /grant:r '*S-1-5-18:(F)' '*S-1-5-32-544:(F)' '*S-1-5-32-545:(R)' | Out-Null
 if ($LASTEXITCODE -ne 0) { throw "Failed to protect the edge-agent configuration file." }
 
 Write-Host "Validating edge-agent configuration..." -ForegroundColor Cyan
