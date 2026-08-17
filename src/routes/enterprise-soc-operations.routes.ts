@@ -7,6 +7,8 @@ import { EdgeAgentLifecycleService } from "../edge-agent/services/edge-agent-lif
 import { ClockMonitoringService } from "../clock-monitoring/services/clock-monitoring.service.js";
 import { MaintenanceTicketingService } from "../maintenance/services/maintenance-ticketing.service.js";
 import { DeterministicRcaService } from "../services/command-center/deterministic-rca.service.js";
+import { synchronizedPlaybackService } from "../vms/services/synchronized-playback.service.js";
+import { investigationWorkspaceService } from "../incidents/services/investigation-workspace.service.js";
 
 export async function registerEnterpriseSocOperationsRoutes(app: FastifyInstance) {
   await registerSignedConfigRoutes(app);
@@ -165,5 +167,104 @@ export async function registerEnterpriseSocOperationsRoutes(app: FastifyInstance
 
     const rca = await rcaService.analyzeBranchOutage(body);
     return { rca };
+  });
+
+  // 8. Synchronized Multi-Camera Playback Sessions
+  app.post("/v1/vms/sync-playback/sessions", async (req: FastifyRequest) => {
+    const body = z
+      .object({
+        tenantId: z.string(),
+        branchId: z.string(),
+        title: z.string(),
+        cameraIds: z.array(z.string()).min(1),
+        startTime: z.string().datetime(),
+        endTime: z.string().datetime(),
+      })
+      .parse(req.body);
+    const session = await synchronizedPlaybackService.createSession(body);
+    return { success: true, data: session };
+  });
+
+  app.get("/v1/vms/sync-playback/sessions/:sessionId", async (req: FastifyRequest, reply: FastifyReply) => {
+    const { sessionId } = req.params as { sessionId: string };
+    const session = await synchronizedPlaybackService.getSession(sessionId);
+    if (!session) return reply.code(404).send({ success: false, error: "SESSION_NOT_FOUND" });
+    return { success: true, data: session };
+  });
+
+  app.post("/v1/vms/sync-playback/sessions/:sessionId/seek", async (req: FastifyRequest) => {
+    const { sessionId } = req.params as { sessionId: string };
+    const body = z.object({ targetTimestamp: z.string().datetime() }).parse(req.body);
+    const session = await synchronizedPlaybackService.seek(sessionId, body.targetTimestamp);
+    return { success: true, data: session };
+  });
+
+  app.post("/v1/vms/sync-playback/sessions/:sessionId/state", async (req: FastifyRequest) => {
+    const { sessionId } = req.params as { sessionId: string };
+    const body = z
+      .object({
+        state: z.enum(["PLAYING", "PAUSED", "BUFFERING", "STOPPED"]),
+        speed: z.number().default(1.0),
+      })
+      .parse(req.body);
+    const session = await synchronizedPlaybackService.setPlaybackState(sessionId, body.state, body.speed);
+    return { success: true, data: session };
+  });
+
+  app.post("/v1/vms/sync-playback/sessions/:sessionId/bookmarks", async (req: FastifyRequest) => {
+    const { sessionId } = req.params as { sessionId: string };
+    const body = z
+      .object({
+        timestamp: z.string().datetime(),
+        label: z.string(),
+        createdByUser: z.string(),
+      })
+      .parse(req.body);
+    const session = await synchronizedPlaybackService.addBookmark(
+      sessionId,
+      body.timestamp,
+      body.label,
+      body.createdByUser
+    );
+    return { success: true, data: session };
+  });
+
+  // 9. Investigation Case Workspaces
+  app.post("/v1/investigations/cases", async (req: FastifyRequest) => {
+    const body = z
+      .object({
+        tenantId: z.string(),
+        branchId: z.string(),
+        title: z.string(),
+        description: z.string(),
+        leadInvestigator: z.string(),
+        incidentIds: z.array(z.string()).optional(),
+        cameraIds: z.array(z.string()).min(1),
+        timeRangeStart: z.string().datetime(),
+        timeRangeEnd: z.string().datetime(),
+      })
+      .parse(req.body);
+    const caseDossier = await investigationWorkspaceService.createCase(body);
+    return { success: true, data: caseDossier };
+  });
+
+  app.get("/v1/investigations/cases/:caseId", async (req: FastifyRequest, reply: FastifyReply) => {
+    const { caseId } = req.params as { caseId: string };
+    const caseDossier = await investigationWorkspaceService.getCase(caseId);
+    if (!caseDossier) return reply.code(404).send({ success: false, error: "CASE_NOT_FOUND" });
+    return { success: true, data: caseDossier };
+  });
+
+  app.post("/v1/investigations/cases/:caseId/notes", async (req: FastifyRequest) => {
+    const { caseId } = req.params as { caseId: string };
+    const body = z.object({ author: z.string(), content: z.string() }).parse(req.body);
+    const caseDossier = await investigationWorkspaceService.addNote(caseId, body.author, body.content);
+    return { success: true, data: caseDossier };
+  });
+
+  app.post("/v1/investigations/cases/:caseId/legal-hold", async (req: FastifyRequest) => {
+    const { caseId } = req.params as { caseId: string };
+    const caseDossier = await investigationWorkspaceService.placeUnderLegalHold(caseId);
+    return { success: true, data: caseDossier };
   });
 }

@@ -64,6 +64,7 @@ import { registerQrtDispatchRoutes } from "./routes/qrt-dispatch.routes.js";
 import { registerHAClusterRoutes } from "./routes/ha-cluster.routes.js";
 import { registerEdgeLifecycleRoutes } from "./routes/edge-lifecycle.routes.js";
 import { registerMobileOperationsRoutes } from "./routes/mobile-operations.routes.js";
+import { registerAssetLifecycleRoutes } from "./assets/routes/asset-lifecycle.routes.js";
 import { registerAdminDatabaseRoutes } from "./routes/admin-database.routes.js";
 import { registerAuditRoutes } from "./routes/audit.routes.js";
 import { registerComplianceRoutes } from "./routes/compliance.routes.js";
@@ -2554,7 +2555,8 @@ export async function buildApp(options?: {
     await registerHAClusterRoutes(app, store);
     await registerEdgeLifecycleRoutes(app, store);
     await registerMobileOperationsRoutes(app, store);
-    app.log.info('Morning digest, Virtual guard, QRT dispatch, HA Cluster, Edge Lifecycle, and Mobile routes registered');
+    await registerAssetLifecycleRoutes(app);
+    app.log.info('Morning digest, Virtual guard, QRT dispatch, HA Cluster, Edge Lifecycle, Mobile, and Asset Lifecycle routes registered');
   } catch (err: unknown) {
     app.log.error({ err }, 'failed to register extended enterprise features');
   }
