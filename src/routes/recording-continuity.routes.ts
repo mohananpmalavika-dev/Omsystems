@@ -3,7 +3,7 @@
  */
 
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
-import { recordingContinuityService, RecordingGapDetector } from "../recording-continuity/index.js";
+import { recordingContinuityService, RecordingGapDetector, recordingContinuityCoordinator } from "../recording-continuity/index.js";
 
 export async function registerRecordingContinuityRoutes(app: FastifyInstance) {
   /**
@@ -113,4 +113,39 @@ export async function registerRecordingContinuityRoutes(app: FastifyInstance) {
 
   app.get("/api/v1/branches/:branchId/recording-health", handleGetBranchRecordingHealth);
   app.get("/v1/branches/:branchId/recording-health", handleGetBranchRecordingHealth);
+
+  /**
+   * Enterprise Recording Continuity Verification Endpoints
+   */
+  // 1. High-precision daily coverage
+  app.get("/v1/recording/continuity/cameras/:cameraId/coverage", async (request: FastifyRequest, reply: FastifyReply) => {
+    const params = request.params as { cameraId: string };
+    const query = (request.query as any) || {};
+    const dateStr = query.date || "2026-08-16";
+    const coverage = recordingContinuityCoordinator.calculateDailyCoverage(params.cameraId, dateStr);
+    return reply.send({ success: true, data: coverage });
+  });
+
+  // 2. Live recording health & 4 independent dimensions
+  app.get("/v1/recording/continuity/cameras/:cameraId/live-health", async (request: FastifyRequest, reply: FastifyReply) => {
+    const params = request.params as { cameraId: string };
+    const health = recordingContinuityCoordinator.getLiveRecordingHealth(params.cameraId);
+    return reply.send({ success: true, data: health });
+  });
+
+  // 3. Branch-level continuity summary rollup
+  app.get("/v1/recording/continuity/branches/:branchId/summary", async (request: FastifyRequest, reply: FastifyReply) => {
+    const params = request.params as { branchId: string };
+    const summary = recordingContinuityCoordinator.getBranchSummary(params.branchId);
+    return reply.send({ success: true, data: summary });
+  });
+
+  // 4. Cryptographically signed daily continuity audit certificate
+  app.get("/v1/recording/continuity/cameras/:cameraId/audit-certificate", async (request: FastifyRequest, reply: FastifyReply) => {
+    const params = request.params as { cameraId: string };
+    const query = (request.query as any) || {};
+    const dateStr = query.date || "2026-08-16";
+    const certificate = recordingContinuityCoordinator.generateSignedAuditCertificate(params.cameraId, dateStr);
+    return reply.send({ success: true, data: certificate });
+  });
 }
