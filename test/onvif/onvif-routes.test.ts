@@ -37,5 +37,6 @@ describe("ONVIF REST API Endpoints Suite", () => {
     expect(body.data.discoveredCount).toBe(1);
     expect(body.data.devices[0].manufacturer).toBe("Hanwha Vision");
     expect(body.data.devices[0].model).toBe("XNV-6080R");
-  });
+    await app.close();
+  }, 15000);
 });
