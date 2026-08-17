@@ -32,12 +32,15 @@ export async function registerProvisioningRoutes(
     if (selected && selected.status !== "online") {
       selected = await store.heartbeatEdgeAgent(selected.id, selected.version || "1.4.2");
     }
-    if (!selected) {
-      selected = await store.registerEdgeAgent(branchId, "Branch Gateway Edge-01", "1.4.2");
-      selected = await store.heartbeatEdgeAgent(selected.id, "1.4.2");
-    }
 
-    const job = await store.createEdgeScanJob(branchId, selected.id);
+    const agentForJob = selected
+      ? selected
+      : await (async () => {
+          const created = await store.registerEdgeAgent(branchId, "Branch Gateway Edge-01", "1.4.2");
+          return await store.heartbeatEdgeAgent(created.id, "1.4.2");
+        })();
+
+    const job = await store.createEdgeScanJob(branchId, agentForJob.id);
     await store.writeAudit({
       tenantId: request.currentUser.tenantId,
       actorUserId: request.currentUser.id,
@@ -45,7 +48,7 @@ export async function registerProvisioningRoutes(
       resourceNodeId: branchId,
       outcome: "success",
       sourceIp: request.ip,
-      details: { runId: job.id, edgeAgentId: selected.id },
+      details: { runId: job.id, edgeAgentId: agentForJob.id },
     });
     return reply.code(202).send({
       run: await buildProvisioningRunView(store, branchId, request.currentUser, job),
