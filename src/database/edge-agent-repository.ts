@@ -250,9 +250,8 @@ export class EdgeAgentRepository {
          FROM edge_agents
          WHERE branch_node_id = branch.id
            AND ($2::uuid IS NULL OR id = $2::uuid)
-           AND status = 'online'
-           AND last_seen_at >= now() - interval '90 seconds'
-         ORDER BY last_seen_at DESC NULLS LAST
+           AND credential_revoked_at IS NULL
+         ORDER BY last_seen_at DESC NULLS LAST, created_at DESC
          LIMIT 1
        ) agent ON true
        WHERE branch.id = $1 AND branch.node_type = 'branch'
