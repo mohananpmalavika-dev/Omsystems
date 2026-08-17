@@ -2661,6 +2661,35 @@ export async function buildApp(options?: {
     } catch (err: unknown) {
       app.log.error({ err }, 'failed to initialize security services - security posture will be unavailable');
     }
+
+    // Initialize Device Management Job Worker
+    try {
+      const { DeviceJobWorker } = await import("./workers/device-job-worker.js");
+      const { DeviceCredentialService } = await import("./services/device-credential-service.js");
+      const { IpamService } = await import("./services/ipam-service.js");
+      const { DeviceTemplateService } = await import("./services/device-template-service.js");
+      
+      const credentialService = new DeviceCredentialService();
+      const ipamService = new IpamService();
+      const templateService = new DeviceTemplateService();
+      
+      const deviceJobWorker = new DeviceJobWorker(
+        extendedStore,
+        credentialService,
+        ipamService,
+        templateService,
+        app.log
+      );
+      
+      deviceJobWorker.start();
+      app.log.info('Device configuration job worker started');
+      
+      app.addHook('onClose', async () => {
+        deviceJobWorker.stop();
+      });
+    } catch (err: unknown) {
+      app.log.error({ err }, 'failed to start device configuration job worker');
+    }
   }
   await registerPrivacyRoutes(app, store);
   await registerReportsRoutes(app, store);

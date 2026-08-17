@@ -474,16 +474,52 @@ export const deviceInventoryApi = {
 };
 
 export const deviceManagementApi = {
+  // Devices
+  listDevices: (branchId?: string, filters?: { deviceType?: string; status?: string; limit?: number; offset?: number }) => {
+    const params = new URLSearchParams();
+    if (branchId) params.append('branchId', branchId);
+    if (filters?.deviceType) params.append('deviceType', filters.deviceType);
+    if (filters?.status) params.append('status', filters.status);
+    if (filters?.limit) params.append('limit', filters.limit.toString());
+    if (filters?.offset) params.append('offset', filters.offset.toString());
+    return fetchApi<{ data: any[]; total: number }>(`/v1/device-management/devices?${params.toString()}`);
+  },
+  getDevice: (deviceId: string) => fetchApi<{ data: any }>(`/v1/device-management/devices/${encodeURIComponent(deviceId)}`),
+
+  // Credential Rotation
   startPasswordRotation: (data: {
     deviceId: string;
     reason: string;
     rotationMode: 'scheduled' | 'emergency';
-    newPassword: string;
-  }) => fetchApi<any>('/v1/device-management/password-rotation', {
+  }) => fetchApi<{ jobId: string; status: string; message: string }>('/v1/device-management/password-rotation', {
     method: 'POST', body: JSON.stringify(data),
   }),
   listPasswordRotations: () => fetchApi<{ data: any[] }>('/v1/device-management/password-rotations'),
-  createDeviceTemplate: (data: {
+
+  // IP Management
+  assignIpAddress: (data: {
+    deviceId: string;
+    branchId: string;
+    ipAddress: string;
+    subnet: string;
+    reservationType: 'static' | 'dhcp-reservation';
+  }) => fetchApi<{ jobId: string; status: string; message: string }>('/v1/device-management/ip-assignment', {
+    method: 'POST', body: JSON.stringify(data),
+  }),
+  getIpConflicts: (branchId?: string) => {
+    const params = branchId ? `?branchId=${encodeURIComponent(branchId)}` : '';
+    return fetchApi<{ data: any[] }>(`/v1/device-management/ip-conflicts${params}`);
+  },
+  getBranchNetwork: (branchId: string) => fetchApi<{ data: any }>(`/v1/device-management/branch-network/${encodeURIComponent(branchId)}`),
+
+  // Templates
+  listTemplates: (filters?: { status?: string; templateType?: string }) => {
+    const params = new URLSearchParams();
+    if (filters?.status) params.append('status', filters.status);
+    if (filters?.templateType) params.append('templateType', filters.templateType);
+    return fetchApi<{ data: any[] }>(`/v1/device-management/templates?${params.toString()}`);
+  },
+  createTemplate: (data: {
     name: string;
     templateType: string;
     category: string;
@@ -491,20 +527,30 @@ export const deviceManagementApi = {
   }) => fetchApi<any>('/v1/device-management/templates', {
     method: 'POST', body: JSON.stringify(data),
   }),
-  listDeviceTemplates: () => fetchApi<{ data: any[] }>('/v1/device-management/templates'),
-  applyDeviceTemplate: (templateId: string, deviceId: string) => fetchApi<any>(`/v1/device-management/templates/${encodeURIComponent(templateId)}/apply`, {
+  publishTemplate: (templateId: string) => fetchApi<{ data: any }>(`/v1/device-management/templates/${encodeURIComponent(templateId)}/publish`, {
+    method: 'POST',
+  }),
+  applyTemplate: (templateId: string, deviceId: string) => fetchApi<{ jobId: string; status: string; message: string }>(`/v1/device-management/templates/${encodeURIComponent(templateId)}/apply`, {
     method: 'POST', body: JSON.stringify({ deviceId }),
   }),
-  getDeviceTemplateDrift: (templateId: string, deviceId: string) => fetchApi<any>(`/v1/device-management/templates/${encodeURIComponent(templateId)}/drift?deviceId=${encodeURIComponent(deviceId)}`),
-  assignDeviceIpAddress: (data: {
-    deviceId: string;
-    ipAddress: string;
-    subnet: string;
-    reservationStatus: 'dhcp' | 'static' | 'reserved';
-  }) => fetchApi<any>('/v1/device-management/ip-change', {
-    method: 'POST', body: JSON.stringify(data),
-  }),
-  getIpConflicts: () => fetchApi<{ data: any[] }>('/v1/device-management/ip-conflicts'),
+  listTemplateDevices: (templateId: string) => fetchApi<{ data: any[] }>(`/v1/device-management/templates/${encodeURIComponent(templateId)}/devices`),
+
+  // Configuration Drift
+  getDeviceDrift: (deviceId: string, templateId?: string) => {
+    const params = templateId ? `?templateId=${encodeURIComponent(templateId)}` : '';
+    return fetchApi<{ data: any }>(`/v1/device-management/devices/${encodeURIComponent(deviceId)}/drift${params}`);
+  },
+
+  // Jobs
+  listJobs: (filters?: { deviceId?: string; status?: string; limit?: number }) => {
+    const params = new URLSearchParams();
+    if (filters?.deviceId) params.append('deviceId', filters.deviceId);
+    if (filters?.status) params.append('status', filters.status);
+    if (filters?.limit) params.append('limit', filters.limit.toString());
+    return fetchApi<{ data: any[] }>(`/v1/device-management/jobs?${params.toString()}`);
+  },
+  getJob: (jobId: string) => fetchApi<{ data: any }>(`/v1/device-management/jobs/${encodeURIComponent(jobId)}`),
+  getJobSteps: (jobId: string) => fetchApi<{ data: any[] }>(`/v1/device-management/jobs/${encodeURIComponent(jobId)}/steps`),
 };
 
 export const cameraInventoryApi = {

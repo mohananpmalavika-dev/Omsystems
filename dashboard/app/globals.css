@@ -20,6 +20,14 @@ html.dark {
   --topbar-bg: #0b1424;
   --card-bg: #0f172a;
   --card-border: #1e293b;
+  --sidebar-text: #dce5f2;
+  --sidebar-muted: #71829c;
+  --sidebar-border: rgba(255, 255, 255, 0.07);
+  --sidebar-hover: rgba(255, 255, 255, 0.04);
+  --sidebar-active: rgba(44, 123, 241, 0.23);
+  --sidebar-active-strong: #438cff;
+  --sidebar-status-bg: rgba(33, 167, 119, 0.06);
+  --sidebar-status-border: rgba(78, 210, 161, 0.12);
 }
 
 [data-theme="navy"] {
@@ -53,10 +61,18 @@ html.light {
   --green: #059669;
   --amber: #d97706;
   --red: #dc2626;
-  --sidebar-bg: #0f172a;
+  --sidebar-bg: #f8fafc;
   --topbar-bg: #ffffff;
   --card-bg: #ffffff;
   --card-border: #e2e8f0;
+  --sidebar-text: #0f172a;
+  --sidebar-muted: #64748b;
+  --sidebar-border: rgba(15, 23, 42, 0.08);
+  --sidebar-hover: rgba(15, 23, 42, 0.04);
+  --sidebar-active: rgba(37, 99, 235, 0.08);
+  --sidebar-active-strong: #2563eb;
+  --sidebar-status-bg: rgba(59, 130, 246, 0.06);
+  --sidebar-status-border: rgba(59, 130, 246, 0.12);
 }
 
 /* Theme-safe text contrast guards for legacy Tailwind utility classes used inside the route surface.
@@ -289,11 +305,11 @@ button { cursor: pointer; }
   inset: 0 auto 0 0;
   z-index: 30;
   width: 252px;
-  color: #dce5f2;
+  color: var(--sidebar-text);
   background:
     radial-gradient(circle at 30% 0%, rgba(47, 115, 202, .14), transparent 30%),
-    var(--navy);
-  border-right: 1px solid rgba(255,255,255,.07);
+    var(--sidebar-bg);
+  border-right: 1px solid var(--sidebar-border);
   display: flex;
   flex-direction: column;
   padding: 22px 16px 16px;
@@ -305,63 +321,63 @@ button { cursor: pointer; }
   color: white; background: linear-gradient(145deg, #3688ff, #185fd5);
   box-shadow: 0 8px 24px rgba(34, 111, 230, .3);
 }
-.brand strong { display: block; color: #fff; font-size: 17px; letter-spacing: -.3px; }
-.brand span { color: #6f87a8; font-size: 9px; letter-spacing: 2.6px; }
-.mobile-close { display: none; margin-left: auto; color: white; background: none; border: 0; }
+.brand strong { display: block; color: var(--ink); font-size: 17px; letter-spacing: -.3px; }
+.brand span { color: var(--sidebar-muted); font-size: 9px; letter-spacing: 2.6px; }
+.mobile-close { display: none; margin-left: auto; color: var(--ink); background: none; border: 0; }
 .command-search {
-  height: 38px; border: 1px solid rgba(255,255,255,.1); border-radius: 9px;
+  height: 38px; border: 1px solid var(--line); border-radius: 9px;
   display: flex; align-items: center; gap: 9px; padding: 0 10px;
-  background: rgba(255,255,255,.04); color: #71829c; font-size: 12px;
+  background: var(--surface); color: var(--sidebar-muted); font-size: 12px;
 }
 .command-search span { flex: 1; }
 .command-search kbd {
   display: flex; align-items: center; gap: 2px; padding: 3px 5px;
-  border: 1px solid rgba(255,255,255,.09); border-radius: 5px;
-  background: rgba(255,255,255,.04); font-size: 9px;
+  border: 1px solid var(--line); border-radius: 5px;
+  background: var(--surface); font-size: 9px;
 }
 .main-nav { margin-top: 19px; flex: 1; }
 .main-nav p {
-  margin: 20px 11px 7px; color: #526680; font-size: 9px;
+  margin: 20px 11px 7px; color: var(--muted); font-size: 9px;
   font-weight: 700; letter-spacing: 1.5px;
 }
 .main-nav a {
   position: relative; display: flex; align-items: center; gap: 11px;
   height: 42px; padding: 0 11px; margin: 2px 0; border-radius: 8px;
-  color: #93a3b9; text-decoration: none; font-size: 13px; font-weight: 500;
+  color: var(--sidebar-muted); text-decoration: none; font-size: 13px; font-weight: 500;
 }
-.main-nav a:hover { color: #e8eef7; background: rgba(255,255,255,.04); }
+.main-nav a:hover { color: var(--ink); background: var(--sidebar-hover); }
 .main-nav a.active {
-  color: white; background: linear-gradient(90deg, rgba(44,123,241,.23), rgba(44,123,241,.08));
+  color: var(--ink); background: linear-gradient(90deg, var(--sidebar-active), rgba(44, 123, 241, 0.08));
 }
 .main-nav a.active::before {
   content: ""; position: absolute; left: -16px; width: 3px; height: 24px;
-  border-radius: 0 3px 3px 0; background: #438cff;
+  border-radius: 0 3px 3px 0; background: var(--sidebar-active-strong);
 }
 .nav-count, .alert-count {
   margin-left: auto; min-width: 21px; height: 19px; padding: 0 6px;
   display: grid; place-items: center; border-radius: 8px;
-  background: rgba(255,255,255,.07); color: #8ea0b8; font-size: 10px;
+  background: rgba(255,255,255,.07); color: var(--sidebar-muted); font-size: 10px;
 }
 .alert-count { color: #ffb8b8; background: rgba(239, 82, 82, .18); }
 .sidebar-status {
   display: flex; align-items: center; gap: 9px; padding: 12px 10px;
-  border: 1px solid rgba(78, 210, 161, .12); border-radius: 10px;
-  background: rgba(33, 167, 119, .06);
+  border: 1px solid var(--sidebar-status-border); border-radius: 10px;
+  background: var(--sidebar-status-bg);
 }
 .pulse-icon {
   width: 29px; height: 29px; border-radius: 8px; display: grid; place-items: center;
   color: #4ed2a1; background: rgba(78,210,161,.1);
 }
 .sidebar-status div:nth-child(2) { flex: 1; }
-.sidebar-status strong, .sidebar-user strong { display: block; font-size: 11px; color: #dbe7f5; }
-.sidebar-status span, .sidebar-user span { color: #60738e; font-size: 9px; }
+.sidebar-status strong, .sidebar-user strong { display: block; font-size: 11px; color: var(--ink); }
+.sidebar-status span, .sidebar-user span { color: var(--sidebar-muted); font-size: 9px; }
 .sidebar-user {
   display: flex; align-items: center; gap: 10px; margin-top: 12px;
-  padding: 12px 8px 2px; border-top: 1px solid rgba(255,255,255,.07);
+  padding: 12px 8px 2px; border-top: 1px solid var(--sidebar-border);
 }
 .avatar {
   width: 31px; height: 31px; display: grid; place-items: center;
-  border-radius: 50%; color: #dbe8fc; background: #223753; font-size: 10px; font-weight: 700;
+  border-radius: 50%; color: var(--ink); background: color-mix(in srgb, var(--surface) 75%, transparent); font-size: 10px; font-weight: 700;
 }
 .sidebar-user div:nth-child(2) { flex: 1; }
 
@@ -390,7 +406,7 @@ button { cursor: pointer; }
 }
 .top-avatar {
   width: 38px; height: 38px; margin-left: 3px; display: grid; place-items: center;
-  border-radius: 50%; color: #46617f; background: #eaf0f7;
+  border-radius: 50%; color: var(--ink); background: var(--surface); border: 1px solid var(--line);
 }
 .menu-button {
   display: inline-flex;

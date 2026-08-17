@@ -285,7 +285,7 @@ const seedDeviceIdentities: DeviceIdentity[] = seedCameras.map((camera) => ({
   lastSeenAt: new Date(0).toISOString(),
 }));
 
-export class MemoryStore implements ControlPlaneStore {
+export class MemoryStore {
   readonly nodes = new Map(seedNodes.map((node) => [node.id, structuredClone(node)]));
   readonly users = new Map(seedUsers.map((user) => [user.id, structuredClone(user)]));
   readonly cameras = new Map(seedCameras.map((camera) => [camera.id, structuredClone(camera)]));

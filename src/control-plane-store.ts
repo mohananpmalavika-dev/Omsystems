@@ -240,6 +240,7 @@ export interface DeviceInventoryRecord {
   tenant: string;
   region: string;
   branch: string;
+  branchNodeId?: string;
   deviceType: string;
   manufacturer: string;
   model: string;
@@ -268,6 +269,7 @@ export interface DeviceInventoryInput {
   tenant: string;
   region: string;
   branch: string;
+  branchNodeId?: string;
   deviceType: string;
   manufacturer: string;
   model: string;
@@ -1321,39 +1323,144 @@ export interface ControlPlaneStore {
   writeAudit(event: AuditEventInput): Promise<void>;
   createMaintenanceAsset(input: MaintenanceAssetInput): Promise<MaintenanceAsset>;
   listMaintenanceAssets(tenantId: string, category?: AssetCategory): Promise<MaintenanceAsset[]>;
-  startPasswordRotation(input: {
+  // ============ DEVICE MANAGEMENT - Credentials ============
+  createDeviceCredential(input: {
     tenantId: string;
     deviceId: string;
+    credentialVersion: number;
+    username: string;
+    encryptedSecret: string;
+    encryptionKeyVersion: number;
+    status: 'active' | 'rotating' | 'superseded' | 'revoked';
+    replacesCredentialId?: string;
+  }): Promise<any>;
+  getCurrentDeviceCredential(deviceId: string): Promise<any | undefined>;
+  getDeviceCredential(credentialId: string): Promise<any | undefined>;
+  getPreviousDeviceCredential(deviceId: string): Promise<any | undefined>;
+  activateDeviceCredential(credentialId: string): Promise<any>;
+  supersedePreviousCredentials(deviceId: string, newCredentialId: string): Promise<void>;
+  listPasswordRotations(tenantId: string): Promise<any[]>;
+  
+  // ============ DEVICE MANAGEMENT - Configuration Jobs ============
+  createDeviceConfigurationJob(input: {
+    tenantId: string;
+    deviceId: string;
+    jobType: 'credential-rotation' | 'ip-change' | 'template-apply' | 'firmware-upgrade' | 'reboot';
     requestedBy: string;
     reason: string;
-    rotationMode: 'scheduled' | 'emergency';
-    newPassword: string;
+    priority: 'low' | 'normal' | 'high' | 'critical';
+    payload: Record<string, any>;
+    status: string;
+    edgeAgentId?: string;
   }): Promise<any>;
-  listPasswordRotations(tenantId: string): Promise<any[]>;
+  getDeviceConfigurationJob(jobId: string): Promise<any | undefined>;
+  listDeviceConfigurationJobs(tenantId: string, filters?: { deviceId?: string; status?: string; limit?: number }): Promise<any[]>;
+  claimDeviceConfigurationJobs(input: { limit: number; now: string }): Promise<any[]>;
+  updateDeviceJobStatus(jobId: string, updates: {
+    status?: string;
+    attempts?: number;
+    error?: string;
+    nextAttemptAt?: string;
+    startedAt?: string;
+    completedAt?: string;
+  }): Promise<any>;
+  updateDeviceJobResult(jobId: string, result: Record<string, any>): Promise<any>;
+  
+  // ============ DEVICE MANAGEMENT - Job Steps ============
+  createDeviceJobStep(input: {
+    jobId: string;
+    stepNumber: number;
+    stepName: string;
+    status: 'pending' | 'running' | 'completed' | 'failed' | 'skipped';
+    startedAt?: string;
+  }): Promise<any>;
+  completeDeviceJobStep(input: {
+    jobId: string;
+    stepNumber: number;
+    status: 'completed' | 'failed' | 'skipped';
+    completedAt: string;
+    durationMs?: number;
+    result?: Record<string, any>;
+    error?: string;
+  }): Promise<any>;
+  listDeviceJobSteps(jobId: string): Promise<any[]>;
+  
+  // ============ DEVICE MANAGEMENT - IPAM ============
+  createBranchNetwork(input: {
+    tenantId: string;
+    branchId: string;
+    networkCidr: string;
+    gateway: string;
+    dnsServers?: string[];
+    vlanId?: number;
+    dhcpRangeStart?: string;
+    dhcpRangeEnd?: string;
+    reservedRangeStart?: string;
+    reservedRangeEnd?: string;
+  }): Promise<any>;
+  getBranchNetwork(branchId: string): Promise<any | undefined>;
+  updateBranchNetwork(branchId: string, input: any): Promise<any | undefined>;
+  
+  createIpAssignment(input: {
+    tenantId: string;
+    branchId: string;
+    deviceId: string;
+    ipAddress: string;
+    macAddress?: string;
+    subnetCidr: string;
+    reservationType: 'static' | 'dhcp-reservation' | 'dynamic';
+    assignedBy: string;
+    status: 'assigned' | 'pending' | 'conflict' | 'released';
+  }): Promise<any>;
+  getIpAssignment(assignmentId: string): Promise<any | undefined>;
+  updateIpAssignment(assignmentId: string, updates: { status?: string; verifiedAt?: string }): Promise<any>;
+  getIpAssignmentsByIp(branchId: string, ipAddress: string, excludeDeviceId?: string): Promise<any[]>;
+  listIpAssignmentsByBranch(branchId: string): Promise<any[]>;
+  getIpConflicts(branchId: string): Promise<any[]>;
+  
+  // ============ DEVICE MANAGEMENT - Templates ============
   createDeviceTemplate(input: {
     tenantId: string;
     name: string;
     templateType: 'camera-configuration' | 'recording' | 'analytics' | 'privacy' | 'network' | 'security-hardening' | 'location';
     category: string;
+    version: number;
     settings: Record<string, unknown>;
     createdBy: string;
+    status: 'draft' | 'active' | 'deprecated';
   }): Promise<any>;
-  applyDeviceTemplate(input: {
+  getDeviceTemplate(templateId: string): Promise<any | undefined>;
+  listDeviceTemplates(tenantId: string, filters?: { name?: string; status?: string; templateType?: string }): Promise<any[]>;
+  updateDeviceTemplate(templateId: string, updates: { status?: string; settings?: Record<string, unknown> }): Promise<any>;
+  
+  createDeviceTemplateAssignment(input: {
     tenantId: string;
     deviceId: string;
     templateId: string;
+    templateVersion: number;
     appliedBy: string;
+    verificationStatus: 'pending' | 'verified' | 'drifted' | 'failed';
   }): Promise<any>;
-  getDeviceTemplateDrift(deviceId: string, templateId: string): Promise<any>;
-  assignDeviceIpAddress(input: {
+  getDeviceTemplateAssignment(deviceId: string, templateId: string): Promise<any | undefined>;
+  listDeviceTemplateAssignments(templateId: string): Promise<any[]>;
+  updateDeviceTemplateAssignment(assignmentId: string, updates: { verificationStatus?: string; verifiedAt?: string }): Promise<any>;
+  
+  // ============ DEVICE MANAGEMENT - Configuration Drift ============
+  createConfigurationDrift(input: {
     tenantId: string;
     deviceId: string;
-    ipAddress: string;
-    subnet: string;
-    assignedBy: string;
-    reservationStatus: 'dhcp' | 'static' | 'reserved';
+    templateId?: string;
+    driftType: string;
+    desiredValue: any;
+    actualValue: any;
+    acknowledged: boolean;
   }): Promise<any>;
-  getIpConflicts(tenantId: string): Promise<any[]>;
+  listConfigurationDrift(deviceId: string, filters?: { acknowledged?: boolean; templateId?: string }): Promise<any[]>;
+  acknowledgeConfigurationDrift(driftId: string, acknowledgedBy: string): Promise<any>;
+  
+  // ============ DEVICE MANAGEMENT - Helper Methods ============
+  getCameraByDeviceId(deviceId: string): Promise<Camera | undefined>;
+  updateCameraConnectionSecret(cameraId: string, credentialId: string): Promise<void>;
   getMaintenanceAsset(id: string): Promise<MaintenanceAsset | undefined>;
   updateMaintenanceAsset(id: string, input: MaintenanceAssetUpdate): Promise<MaintenanceAsset | undefined>;
   createWorkOrder(input: WorkOrderInput): Promise<WorkOrder>;
