@@ -38,6 +38,7 @@ import { registerDailySurveillanceReportRoutes } from "./routes/daily-surveillan
 import { registerDeviceHealthRoutes } from "./routes/device-health.routes.js";
 import { registerRecordingContinuityRoutes } from "./routes/recording-continuity.routes.js";
 import { registerFirstClassPlaybackRoutes } from "./playback/routes/playback.routes.js";
+import { registerForensicEvidenceExportRoutes } from "./evidence-export/routes/evidence-export.routes.js";
 import { registerCentralMonitoringRoutes } from "./routes/central-monitoring.routes.js";
 import { registerOnDemandMediaRoutes } from "./routes/on-demand-media.routes.js";
 import { registerAiAlertsRoutes } from "./routes/ai-alerts.routes.js";
@@ -128,6 +129,8 @@ import {
 import { PlaybookEngineService } from "./incidents/services/playbook-engine.service.js";
 import { registerPlaybookEngineRoutes } from "./routes/playbook-engine.routes.js";
 import { AIQualityPlatformFacade } from "./ai-quality/index.js";
+import { registerRecordingIndexRoutes } from "./routes/recording-index.routes.js";
+import { registerInvestigationRoutes } from "./routes/investigation.routes.js";
 import { registerAiQualityRoutes } from "./routes/ai-quality.routes.js";
 import { registerEnterpriseSocOperationsRoutes } from "./routes/enterprise-soc-operations.routes.js";
 import { autoProvisionVerifiedCameras } from "./services/camera-auto-provision.js";
@@ -2583,6 +2586,14 @@ export async function buildApp(options?: {
     app.log.error({ err }, 'failed to register first-class playback routes');
   }
 
+  // Register Forensic-Grade Evidence Export Subsystem routes
+  try {
+    await registerForensicEvidenceExportRoutes(app);
+    app.log.info('Forensic evidence export routes registered');
+  } catch (err: unknown) {
+    app.log.error({ err }, 'failed to register forensic evidence export routes');
+  }
+
   // Register Scalable Central Monitoring Station & Priority Work Queue routes
   try {
     await registerCentralMonitoringRoutes(app);
@@ -2871,6 +2882,15 @@ export async function buildApp(options?: {
     } catch (error) {
       app.log.error({ error }, "Failed to initialize DVR/NVR monitor service");
     }
+  }
+
+  // Register Authoritative Recording Index & Unified Investigation Search routes
+  try {
+    await registerRecordingIndexRoutes(app);
+    await registerInvestigationRoutes(app);
+    app.log.info("Authoritative RecordingIndex and Unified Investigation Search routes registered");
+  } catch (error) {
+    app.log.error({ error }, "Failed to register recording index and investigation routes");
   }
 
   app.setErrorHandler((error, _request, reply) => {
