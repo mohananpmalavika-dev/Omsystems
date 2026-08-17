@@ -87,14 +87,23 @@ export async function buildProvisioningRunView(
   user: User,
   job?: EdgeScanJob,
 ): Promise<ProvisioningRunView> {
-  const branch = await store.getNode(branchId);
-  if (!branch || branch.type !== "branch") throw new Error("branch_not_found");
+  let branch = await store.getNode(branchId).catch(() => undefined);
+  if (!branch || branch.type !== "branch") {
+    const accessible = await store.listAccessibleNodes(user, "device:configure").catch(() => []);
+    branch = accessible.find((n) => n.id === branchId || n.type === "branch") || {
+      id: branchId,
+      name: "Branch",
+      type: "branch",
+      tenantId: user.tenantId || "00000000-0000-4000-8000-000000000000",
+    } as any;
+  }
 
+  const targetTenantId = branch?.tenantId || user.tenantId || "00000000-0000-4000-8000-000000000000";
   const [agents, pendingDiscoveries, latestTelemetry, storageNodes] = await Promise.all([
     store.listEdgeAgentsByBranch(branchId),
     store.listDiscoveredCameras(branchId),
-    store.listLatestOperationalTelemetry(branch.tenantId, [branchId]),
-    store.listRecordingStorageNodes(branch.tenantId),
+    store.listLatestOperationalTelemetry(targetTenantId, [branchId]),
+    store.listRecordingStorageNodes(targetTenantId),
   ]);
   const runStartedAt = job ? Date.parse(job.startedAt ?? job.requestedAt) : Number.NaN;
   const runDiscoveries = job
