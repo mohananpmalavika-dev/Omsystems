@@ -1,5 +1,6 @@
 import type { Pool } from "pg";
 import type { RecordingSegment } from "../domain/models.js";
+import { recordingIndexService } from "../recording-index/recording-index.service.js";
 
 export interface PlaybackSession {
   id: string;
@@ -163,29 +164,44 @@ export class PlaybackEngine {
       }
     }
 
-    // Get segments for each camera
+    // Get authoritative recording search result from RecordingIndex
+    const searchResult = await recordingIndexService.findRecording({
+      tenantId: input.tenantId,
+      cameraIds: input.cameraIds,
+      from: new Date(input.fromTime),
+      to: new Date(input.toTime),
+      includeKeyframes: true,
+      includeGaps: true,
+    });
+
     const cameras = await Promise.all(
-      input.cameraIds.map(async (cameraId) => {
+      searchResult.cameras.map(async (camRes) => {
         const cameraResult = await this.pool.query(
-          `SELECT * FROM cameras WHERE id = $1`,
-          [cameraId],
+          `SELECT name FROM cameras WHERE id = $1`,
+          [camRes.cameraId],
         );
 
-        const segmentsResult = await this.pool.query(
-          `SELECT * FROM recording_segments
-           WHERE camera_id = $1 
-           AND started_at >= $2::timestamptz 
-           AND ended_at <= $3::timestamptz
-           AND status = 'ready'
-           ORDER BY started_at ASC`,
-          [cameraId, input.fromTime, input.toTime],
-        );
+        const mappedSegments: RecordingSegment[] = camRes.segments.map((s) => ({
+          id: s.segmentId,
+          cameraId: s.cameraId,
+          jobId: "default",
+          startedAt: s.startTime.toISOString(),
+          endedAt: s.endTime.toISOString(),
+          storagePath: s.storage.uri,
+          sizeBytes: s.fileSize,
+          storageNodeExternalId: s.storage.nodeId || "sentinel-local",
+          storageTier: s.storage.tier.toLowerCase() as "hot" | "warm" | "cold",
+          status: s.storage.available ? "ready" : "error",
+          checksumSha256: s.sha256,
+          codec: s.codec,
+          createdAt: s.startTime.toISOString(),
+        }));
 
         return {
-          cameraId,
-          name: cameraResult.rows[0]?.name || cameraId,
-          segments: segmentsResult.rows.map(mapSegment),
-          timeOffset: timeOffsets[cameraId] || 0,
+          cameraId: camRes.cameraId,
+          name: cameraResult.rows[0]?.name || camRes.cameraId,
+          segments: mappedSegments,
+          timeOffset: timeOffsets[camRes.cameraId] || 0,
         };
       }),
     );
@@ -198,6 +214,49 @@ export class PlaybackEngine {
       toTime: input.toTime,
       layout,
     };
+  }
+
+  /**
+   * Resolves the nearest earlier keyframe IDR and byte offset for instant, sub-second seeking
+   */
+  async resolveSeekPoint(cameraId: string, targetTime: string): Promise<{
+    segment?: RecordingSegment;
+    keyframeOffset?: number;
+    keyframePts?: number;
+    keyframeWallClock?: string;
+    directSeekAvailable: boolean;
+  }> {
+    const targetDate = new Date(targetTime);
+    const keyframeLookup = await recordingIndexService.findNearestKeyframe(cameraId, targetDate);
+
+    if (keyframeLookup) {
+      const seg = await recordingIndexService.findSegmentAt(cameraId, targetDate);
+      const mappedSegment: RecordingSegment | undefined = seg ? {
+        id: seg.segmentId,
+        cameraId: seg.cameraId,
+        jobId: "default",
+        startedAt: seg.startTime.toISOString(),
+        endedAt: seg.endTime.toISOString(),
+        storagePath: seg.storage.uri,
+        sizeBytes: seg.fileSize,
+        storageNodeExternalId: seg.storage.nodeId || "sentinel-local",
+        storageTier: seg.storage.tier.toLowerCase() as "hot" | "warm" | "cold",
+        status: seg.storage.available ? "ready" : "error",
+        checksumSha256: seg.sha256,
+        codec: seg.codec,
+        createdAt: seg.startTime.toISOString(),
+      } : undefined;
+
+      return {
+        segment: mappedSegment,
+        keyframeOffset: keyframeLookup.byteOffset ?? 0,
+        keyframePts: keyframeLookup.pts ?? 0,
+        keyframeWallClock: keyframeLookup.nearestKeyframeTime.toISOString(),
+        directSeekAvailable: true,
+      };
+    }
+
+    return { directSeekAvailable: false };
   }
 
   /**

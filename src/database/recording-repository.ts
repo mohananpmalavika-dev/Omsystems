@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { Pool } from "pg";
 import type {
+  DbRecordingGap,
   RecordingHealthEvent,
   RecordingJob,
   RecordingLegalHold,
@@ -108,24 +109,127 @@ export class RecordingRepository {
     return result.rows[0] ? mapSegment(result.rows[0]) : undefined;
   }
 
-  async createSegment(input: Omit<RecordingSegment, "id" | "createdAt">) {
+  async createSegment(input: Omit<RecordingSegment, "id" | "createdAt"> & { id?: string }) {
+    const segmentId = input.id ?? randomUUID();
     const result = await this.pool.query(
       `INSERT INTO recording_segments (
          id, camera_id, job_id, started_at, ended_at, storage_path, size_bytes,
-         storage_node_external_id, storage_tier, status, checksum_sha256, codec
-       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+         storage_node_external_id, storage_tier, status, checksum_sha256, codec,
+         first_pts, last_pts, first_dts, last_dts, time_base, source_start, source_end,
+         clock_offset_ms, timestamp_health, keyframe_count, keyframe_index,
+         width, height, fps, duration_ms, health, segment_state, manifest_json
+       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30)
        ON CONFLICT (camera_id, storage_path) DO UPDATE SET
          ended_at=EXCLUDED.ended_at, size_bytes=EXCLUDED.size_bytes,
          storage_node_external_id=EXCLUDED.storage_node_external_id,
          storage_tier=EXCLUDED.storage_tier, status=EXCLUDED.status,
-         checksum_sha256=EXCLUDED.checksum_sha256, codec=EXCLUDED.codec
+         checksum_sha256=EXCLUDED.checksum_sha256, codec=EXCLUDED.codec,
+         first_pts=COALESCE(EXCLUDED.first_pts, recording_segments.first_pts),
+         last_pts=COALESCE(EXCLUDED.last_pts, recording_segments.last_pts),
+         first_dts=COALESCE(EXCLUDED.first_dts, recording_segments.first_dts),
+         last_dts=COALESCE(EXCLUDED.last_dts, recording_segments.last_dts),
+         time_base=COALESCE(EXCLUDED.time_base, recording_segments.time_base),
+         source_start=COALESCE(EXCLUDED.source_start, recording_segments.source_start),
+         source_end=COALESCE(EXCLUDED.source_end, recording_segments.source_end),
+         clock_offset_ms=COALESCE(EXCLUDED.clock_offset_ms, recording_segments.clock_offset_ms),
+         timestamp_health=COALESCE(EXCLUDED.timestamp_health, recording_segments.timestamp_health),
+         keyframe_count=COALESCE(EXCLUDED.keyframe_count, recording_segments.keyframe_count),
+         keyframe_index=COALESCE(EXCLUDED.keyframe_index, recording_segments.keyframe_index),
+         width=COALESCE(EXCLUDED.width, recording_segments.width),
+         height=COALESCE(EXCLUDED.height, recording_segments.height),
+         fps=COALESCE(EXCLUDED.fps, recording_segments.fps),
+         duration_ms=COALESCE(EXCLUDED.duration_ms, recording_segments.duration_ms),
+         health=COALESCE(EXCLUDED.health, recording_segments.health),
+         segment_state=COALESCE(EXCLUDED.segment_state, recording_segments.segment_state),
+         manifest_json=COALESCE(EXCLUDED.manifest_json, recording_segments.manifest_json)
        RETURNING *`,
-      [randomUUID(), input.cameraId, input.jobId, input.startedAt, input.endedAt,
-        input.storagePath, input.sizeBytes, input.storageNodeExternalId,
-        input.storageTier, input.status, input.checksumSha256 ?? null,
-        input.codec ?? null],
+      [
+        segmentId,
+        input.cameraId,
+        input.jobId,
+        input.startedAt,
+        input.endedAt,
+        input.storagePath,
+        input.sizeBytes,
+        input.storageNodeExternalId,
+        input.storageTier,
+        input.status,
+        input.checksumSha256 ?? null,
+        input.codec ?? null,
+        input.firstPts ?? null,
+        input.lastPts ?? null,
+        input.firstDts ?? null,
+        input.lastDts ?? null,
+        input.timeBase ?? null,
+        input.sourceStart ?? null,
+        input.sourceEnd ?? null,
+        input.clockOffsetMs ?? 0,
+        input.timestampHealth ?? "HEALTHY",
+        input.keyframeCount ?? 0,
+        input.keyframeIndex ? JSON.stringify(input.keyframeIndex) : null,
+        input.width ?? null,
+        input.height ?? null,
+        input.fps ?? null,
+        input.durationMs ?? null,
+        input.health ?? "HEALTHY",
+        input.segmentState ?? "AVAILABLE",
+        input.manifestJson ? JSON.stringify(input.manifestJson) : null,
+      ],
     );
     return mapSegment(result.rows[0]);
+  }
+
+  async upsertSegment(input: RecordingSegment): Promise<RecordingSegment> {
+    return this.createSegment(input);
+  }
+
+  async recordGap(input: {
+    tenantId?: string;
+    branchId?: string;
+    cameraId: string;
+    startTime: string;
+    endTime?: string;
+    reason: DbRecordingGap["reason"];
+    detail?: Record<string, unknown>;
+  }): Promise<DbRecordingGap> {
+    const result = await this.pool.query(
+      `INSERT INTO recording_gaps (
+         tenant_id, branch_id, camera_id, start_time, end_time, reason, detail, detected_at
+       ) VALUES ($1, $2, $3, $4, $5, $6, $7, now())
+       RETURNING *`,
+      [
+        input.tenantId ?? null,
+        input.branchId ?? null,
+        input.cameraId,
+        input.startTime,
+        input.endTime ?? null,
+        input.reason,
+        JSON.stringify(input.detail ?? {}),
+      ],
+    );
+    return mapGap(result.rows[0]);
+  }
+
+  async resolveGap(gapId: string, resolvedAt: string = new Date().toISOString()): Promise<DbRecordingGap | undefined> {
+    const result = await this.pool.query(
+      `UPDATE recording_gaps
+       SET resolved_at = $2, end_time = COALESCE(end_time, $2)
+       WHERE id = $1 RETURNING *`,
+      [gapId, resolvedAt],
+    );
+    return result.rows[0] ? mapGap(result.rows[0]) : undefined;
+  }
+
+  async listGaps(cameraId: string, from?: string, to?: string): Promise<DbRecordingGap[]> {
+    const result = await this.pool.query(
+      `SELECT * FROM recording_gaps
+       WHERE camera_id = $1
+         AND ($2::timestamptz IS NULL OR start_time >= $2::timestamptz)
+         AND ($3::timestamptz IS NULL OR start_time <= $3::timestamptz)
+       ORDER BY start_time DESC`,
+      [cameraId, from ?? null, to ?? null],
+    );
+    return result.rows.map(mapGap);
   }
 
   async updateJobStatus(cameraId: string, status: RecordingJob["status"]) {
@@ -558,14 +662,58 @@ function mapJob(row: any): RecordingJob {
     updatedAt: new Date(row.updated_at).toISOString() };
 }
 function mapSegment(row: any): RecordingSegment {
-  return { id: row.id, cameraId: row.camera_id, jobId: row.job_id,
-    startedAt: new Date(row.started_at).toISOString(), endedAt: new Date(row.ended_at).toISOString(),
-    storagePath: row.storage_path, sizeBytes: Number(row.size_bytes),
+  return {
+    id: row.id,
+    cameraId: row.camera_id,
+    jobId: row.job_id,
+    startedAt: new Date(row.started_at).toISOString(),
+    endedAt: new Date(row.ended_at).toISOString(),
+    storagePath: row.storage_path,
+    sizeBytes: Number(row.size_bytes),
     storageNodeExternalId: row.storage_node_external_id,
-    storageTier: row.storage_tier, status: row.status,
+    storageTier: row.storage_tier,
+    status: row.status,
     checksumSha256: row.checksum_sha256 ?? undefined,
     codec: row.codec ?? undefined,
-    createdAt: new Date(row.created_at).toISOString() };
+    firstPts: row.first_pts != null ? Number(row.first_pts) : undefined,
+    lastPts: row.last_pts != null ? Number(row.last_pts) : undefined,
+    firstDts: row.first_dts != null ? Number(row.first_dts) : undefined,
+    lastDts: row.last_dts != null ? Number(row.last_dts) : undefined,
+    timeBase: row.time_base ?? undefined,
+    sourceStart: row.source_start ? new Date(row.source_start).toISOString() : undefined,
+    sourceEnd: row.source_end ? new Date(row.source_end).toISOString() : undefined,
+    clockOffsetMs: row.clock_offset_ms != null ? Number(row.clock_offset_ms) : undefined,
+    timestampHealth: row.timestamp_health ?? undefined,
+    keyframeCount: row.keyframe_count != null ? Number(row.keyframe_count) : undefined,
+    keyframeIndex: typeof row.keyframe_index === "string"
+      ? JSON.parse(row.keyframe_index)
+      : row.keyframe_index ?? undefined,
+    width: row.width != null ? Number(row.width) : undefined,
+    height: row.height != null ? Number(row.height) : undefined,
+    fps: row.fps != null ? Number(row.fps) : undefined,
+    durationMs: row.duration_ms != null ? Number(row.duration_ms) : undefined,
+    health: row.health ?? "HEALTHY",
+    segmentState: row.segment_state ?? "AVAILABLE",
+    manifestJson: typeof row.manifest_json === "string"
+      ? JSON.parse(row.manifest_json)
+      : row.manifest_json ?? undefined,
+    createdAt: new Date(row.created_at).toISOString(),
+  };
+}
+
+function mapGap(row: any): DbRecordingGap {
+  return {
+    id: row.id,
+    tenantId: row.tenant_id ?? undefined,
+    branchId: row.branch_id ?? undefined,
+    cameraId: row.camera_id,
+    startTime: new Date(row.start_time).toISOString(),
+    endTime: row.end_time ? new Date(row.end_time).toISOString() : undefined,
+    reason: row.reason,
+    detail: typeof row.detail === "string" ? JSON.parse(row.detail) : row.detail ?? {},
+    detectedAt: new Date(row.detected_at).toISOString(),
+    resolvedAt: row.resolved_at ? new Date(row.resolved_at).toISOString() : undefined,
+  };
 }
 
 function mapLegalHold(row: any): RecordingLegalHold {

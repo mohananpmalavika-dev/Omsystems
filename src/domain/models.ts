@@ -881,6 +881,25 @@ export interface RecordingJob {
   updatedAt: string;
 }
 
+export interface KeyframeIndexItem {
+  pts: number;
+  wallClock: string;
+  offset: number;
+}
+
+export type RecordingSegmentHealth = "HEALTHY" | "CORRUPT" | "INCOMPLETE" | "QUARANTINED" | "MISSING";
+export type RecordingSegmentLifecycleState =
+  | "CREATING"
+  | "WRITING"
+  | "CLOSING"
+  | "VALIDATING"
+  | "HASHING"
+  | "INDEX_PENDING"
+  | "AVAILABLE"
+  | "INCOMPLETE"
+  | "CORRUPT"
+  | "QUARANTINED";
+
 export interface RecordingSegment {
   id: string;
   cameraId: string;
@@ -894,7 +913,96 @@ export interface RecordingSegment {
   status: "ready" | "moving" | "deleted" | "error";
   checksumSha256?: string | undefined;
   codec?: string | undefined;
+  firstPts?: number | undefined;
+  lastPts?: number | undefined;
+  firstDts?: number | undefined;
+  lastDts?: number | undefined;
+  timeBase?: string | undefined;
+  sourceStart?: string | undefined;
+  sourceEnd?: string | undefined;
+  clockOffsetMs?: number | undefined;
+  timestampHealth?: "HEALTHY" | "DRIFTING" | "DISCONTINUITY" | "REGRESSION" | undefined;
+  keyframeCount?: number | undefined;
+  keyframeIndex?: KeyframeIndexItem[] | undefined;
+  width?: number | undefined;
+  height?: number | undefined;
+  fps?: number | undefined;
+  durationMs?: number | undefined;
+  health?: RecordingSegmentHealth | undefined;
+  segmentState?: RecordingSegmentLifecycleState | undefined;
+  archiveState?: "ONLINE" | "NEARLINE" | "ARCHIVED" | "RESTORING" | "OFFLINE" | "DELETED" | "LEGAL_HOLD" | undefined;
+  storageUri?: string | undefined;
+  deviceStartTime?: string | undefined;
+  deviceEndTime?: string | undefined;
+  clockUncertaintyMs?: number | undefined;
+  bitrate?: number | undefined;
+  startsWithKeyframe?: boolean | undefined;
+  manifestJson?: Record<string, unknown> | undefined;
   createdAt: string;
+  indexedAt?: string | undefined;
+}
+
+export interface DbRecordingKeyframe {
+  segmentId: string;
+  timestamp: string;
+  pts?: number | undefined;
+  dts?: number | undefined;
+  byteOffset?: number | undefined;
+}
+
+export interface DbRecordingSegmentLocation {
+  id: string;
+  segmentId: string;
+  storageNodeId?: string | undefined;
+  storageTier: "HOT" | "WARM" | "COLD" | "ARCHIVE";
+  storageUri: string;
+  state: "ONLINE" | "OFFLINE" | "MIGRATING" | "DELETED";
+  createdAt: string;
+  removedAt?: string | undefined;
+}
+
+export interface DbInvestigationEvent {
+  id: string;
+  tenantId: string;
+  branchId?: string | undefined;
+  cameraId?: string | undefined;
+  deviceId?: string | undefined;
+  zoneId?: string | undefined;
+  eventType: string;
+  eventSubtype?: string | undefined;
+  severity: "INFO" | "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
+  startTime: string;
+  endTime?: string | undefined;
+  source?: string | undefined;
+  objectType?: string | undefined;
+  objectId?: string | undefined;
+  confidence?: number | undefined;
+  metadata: Record<string, unknown>;
+  incidentId?: string | undefined;
+  alertId?: string | undefined;
+  createdAt: string;
+}
+
+export interface DbRecordingGap {
+  id: string;
+  tenantId?: string | undefined;
+  branchId?: string | undefined;
+  cameraId: string;
+  startTime: string;
+  endTime?: string | undefined;
+  reason:
+    | "CAMERA_OFFLINE"
+    | "NETWORK_DOWN"
+    | "AUTH_FAILURE"
+    | "RTSP_FAILURE"
+    | "STORAGE_FULL"
+    | "STORAGE_UNAVAILABLE"
+    | "PROCESS_CRASH"
+    | "TIMESTAMP_INVALID"
+    | "UNKNOWN";
+  detail?: Record<string, unknown> | undefined;
+  detectedAt: string;
+  resolvedAt?: string | undefined;
 }
 
 export interface RecordingLegalHold {
@@ -945,18 +1053,35 @@ export interface RecordingStorageProbeResult {
   error?: string | undefined;
 }
 
+export type EnterpriseStorageHealthState =
+  | "HEALTHY"
+  | "DEGRADED"
+  | "READ_ONLY"
+  | "FULL"
+  | "OFFLINE"
+  | "REBUILDING";
+
+export type EnterpriseStorageType =
+  | "local-disk"
+  | "nas"
+  | "san"
+  | "s3"
+  | "archive";
+
 export interface RecordingStorageNode {
   id: string;
   tenantId: string;
   externalId: string;
   name: string;
   scopeNodeId?: string | undefined;
-  supportedTiers: Array<"hot" | "warm" | "cold">;
+  supportedTiers: Array<"hot" | "warm" | "cold" | "archive">;
+  tierPrimary?: "hot" | "warm" | "cold" | "archive";
   capacityBytes: number;
   usedBytes: number;
   availableBytes: number;
   status: "healthy" | "warning" | "critical" | "offline";
-  storageType?: "local-disk" | "nfs" | "smb" | "s3" | "cloud-archive" | "san";
+  healthState?: EnterpriseStorageHealthState;
+  storageType?: "local-disk" | "nfs" | "smb" | "s3" | "cloud-archive" | "san" | "nas" | "archive";
   supportedProtocols?: string[];
   location?: string;
   mountPath?: string;
@@ -964,10 +1089,63 @@ export interface RecordingStorageNode {
   writeMbps?: number | undefined;
   readMbps?: number | undefined;
   latencyMs?: number | undefined;
+  readIops?: number;
+  writeIops?: number;
+  totalIops?: number;
+  p95WriteLatencyMs?: number;
+  p95ReadLatencyMs?: number;
+  inodeUsedPercent?: number;
+  filesystemType?: string;
+  filesystemMountOptions?: string;
+  isReadOnly?: boolean;
+  totalWritesAttempted?: number;
+  failedWritesCount?: number;
+  corruptedSegmentsCount?: number;
+  segmentFailureRate?: number;
+  digitalTwinAssetId?: string;
   smart?: RecordingStorageSmart | undefined;
   raid?: RecordingStorageRaid | undefined;
   lastWriteProbe?: RecordingStorageProbeResult | undefined;
   lastSeenAt: string;
+}
+
+export interface StorageMetricsTelemetry {
+  id: string;
+  tenantId: string;
+  storageNodeId: string;
+  healthState: EnterpriseStorageHealthState;
+  capacityBytes: number;
+  usedBytes: number;
+  availableBytes: number;
+  usagePercent: number;
+  readIops: number;
+  writeIops: number;
+  writeLatencyMs: number;
+  readLatencyMs: number;
+  p95WriteLatencyMs: number;
+  p95ReadLatencyMs: number;
+  segmentFailureRate: number;
+  temperatureCelsius?: number;
+  smartSummary?: Record<string, unknown>;
+  raidSummary?: Record<string, unknown>;
+  recordedAt: string;
+}
+
+export interface StorageTierMigrationTask {
+  id: string;
+  tenantId: string;
+  segmentId: string;
+  sourceNodeId: string;
+  targetNodeId: string;
+  sourceTier: "hot" | "warm" | "cold" | "archive";
+  targetTier: "hot" | "warm" | "cold" | "archive";
+  status: "PENDING" | "IN_PROGRESS" | "COMPLETED" | "FAILED" | "CANCELLED";
+  bytesTransferred: number;
+  totalBytes: number;
+  errorMessage?: string;
+  startedAt?: string;
+  completedAt?: string;
+  createdAt: string;
 }
 
 export interface RecordingHealthEvent {

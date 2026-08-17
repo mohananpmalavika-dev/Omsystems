@@ -8,7 +8,8 @@ import {
   RecordingGapRootCauseClassifier,
   type RecordingSegment,
 } from "../../src/recording-continuity/index.js";
-import { app } from "../../src/app.js";
+import Fastify from "fastify";
+import { registerRecordingContinuityRoutes } from "../../src/routes/recording-continuity.routes.js";
 
 async function runRecordingContinuityTests() {
   console.log("================================================================================");
@@ -130,6 +131,8 @@ async function runRecordingContinuityTests() {
 
   // Suite 7: Fastify REST API Endpoints Verification
   console.log("\nSuite 7: Fastify REST API Endpoints Verification");
+  const app = Fastify();
+  await registerRecordingContinuityRoutes(app);
   await app.ready();
 
   const contResp = await app.inject({

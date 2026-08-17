@@ -39,6 +39,7 @@ import { registerDeviceHealthRoutes } from "./routes/device-health.routes.js";
 import { registerRecordingContinuityRoutes } from "./routes/recording-continuity.routes.js";
 import { registerFirstClassPlaybackRoutes } from "./playback/routes/playback.routes.js";
 import { registerForensicEvidenceExportRoutes } from "./evidence-export/routes/evidence-export.routes.js";
+import { registerDistributedStateRoutes } from "./distributed-state/routes/distributed-state.routes.js";
 import { registerCentralMonitoringRoutes } from "./routes/central-monitoring.routes.js";
 import { registerOnDemandMediaRoutes } from "./routes/on-demand-media.routes.js";
 import { registerAiAlertsRoutes } from "./routes/ai-alerts.routes.js";
@@ -70,6 +71,7 @@ import { registerMobileOperationsRoutes } from "./routes/mobile-operations.route
 import { registerAssetLifecycleRoutes } from "./assets/routes/asset-lifecycle.routes.js";
 import { registerAuthoritativeMediaPipelineRoutes } from "./media/routes/authoritative-media-pipeline.routes.js";
 import { registerDeviceConnectivityRoutes } from "./device-connectivity/routes/device-connectivity.routes.js";
+import { registerHaClusterRoutes } from "./media/cluster/ha-cluster.routes.js";
 import { registerAdminDatabaseRoutes } from "./routes/admin-database.routes.js";
 import { registerAuditRoutes } from "./routes/audit.routes.js";
 import { registerComplianceRoutes } from "./routes/compliance.routes.js";
@@ -131,6 +133,7 @@ import { registerPlaybookEngineRoutes } from "./routes/playbook-engine.routes.js
 import { AIQualityPlatformFacade } from "./ai-quality/index.js";
 import { registerRecordingIndexRoutes } from "./routes/recording-index.routes.js";
 import { registerInvestigationRoutes } from "./routes/investigation.routes.js";
+import { registerEnterpriseStorageRoutes } from "./routes/enterprise-storage.routes.js";
 import { registerAiQualityRoutes } from "./routes/ai-quality.routes.js";
 import { registerEnterpriseSocOperationsRoutes } from "./routes/enterprise-soc-operations.routes.js";
 import { autoProvisionVerifiedCameras } from "./services/camera-auto-provision.js";
@@ -2594,6 +2597,14 @@ export async function buildApp(options?: {
     app.log.error({ err }, 'failed to register forensic evidence export routes');
   }
 
+  // Register Distributed Runtime State & Leases routes
+  try {
+    await registerDistributedStateRoutes(app);
+    app.log.info('Distributed runtime state and lease routes registered');
+  } catch (err: unknown) {
+    app.log.error({ err }, 'failed to register distributed state routes');
+  }
+
   // Register Scalable Central Monitoring Station & Priority Work Queue routes
   try {
     await registerCentralMonitoringRoutes(app);
@@ -2613,7 +2624,8 @@ export async function buildApp(options?: {
     await registerAssetLifecycleRoutes(app);
     await registerAuthoritativeMediaPipelineRoutes(app);
     await registerDeviceConnectivityRoutes(app);
-    app.log.info('Morning digest, Virtual guard, QRT dispatch, HA Cluster, Edge Lifecycle, Mobile, Asset Lifecycle, Media Pipeline, and Device Connectivity routes registered');
+    await registerHaClusterRoutes(app);
+    app.log.info('Morning digest, Virtual guard, QRT dispatch, HA Cluster, Edge Lifecycle, Mobile, Asset Lifecycle, Media Pipeline, Device Connectivity, and HA Leases routes registered');
   } catch (err: unknown) {
     app.log.error({ err }, 'failed to register extended enterprise features');
   }
@@ -2888,9 +2900,10 @@ export async function buildApp(options?: {
   try {
     await registerRecordingIndexRoutes(app);
     await registerInvestigationRoutes(app);
-    app.log.info("Authoritative RecordingIndex and Unified Investigation Search routes registered");
+    await registerEnterpriseStorageRoutes(app);
+    app.log.info("Authoritative RecordingIndex, Unified Investigation Search, and Enterprise Storage routes registered");
   } catch (error) {
-    app.log.error({ error }, "Failed to register recording index and investigation routes");
+    app.log.error({ error }, "Failed to register recording index, investigation, and storage routes");
   }
 
   app.setErrorHandler((error, _request, reply) => {
