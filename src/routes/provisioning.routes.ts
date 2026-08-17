@@ -36,8 +36,9 @@ export async function registerProvisioningRoutes(
       selected = await store.registerEdgeAgent(branchId, "Branch Gateway Edge-01", "1.4.2");
       selected = await store.heartbeatEdgeAgent(selected.id, "1.4.2");
     }
+    const agentId = selected ? selected.id : (agents[0]?.id || "default-agent");
 
-    const job = await store.createEdgeScanJob(branchId, selected.id);
+    const job = await store.createEdgeScanJob(branchId, agentId);
     await store.writeAudit({
       tenantId: request.currentUser.tenantId,
       actorUserId: request.currentUser.id,
@@ -45,7 +46,7 @@ export async function registerProvisioningRoutes(
       resourceNodeId: branchId,
       outcome: "success",
       sourceIp: request.ip,
-      details: { runId: job.id, edgeAgentId: selected.id },
+      details: { runId: job.id, edgeAgentId: agentId },
     });
     return reply.code(202).send({
       run: await buildProvisioningRunView(store, branchId, request.currentUser, job),
