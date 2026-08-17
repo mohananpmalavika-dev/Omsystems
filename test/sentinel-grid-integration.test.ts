@@ -4,11 +4,13 @@ import { clockMonitoringService } from '../src/clock-monitoring/services/clock-m
 import { fleetRolloutControllerService } from '../src/config-management/services/fleet-rollout-controller.service.js';
 import { signedConfigService } from '../src/config-management/services/signed-config.service.js';
 import { forensicEvidencePackageService } from '../src/evidence/services/forensic-evidence-package.service.js';
-import { privacyPolicyService } from '../src/privacy/services/privacy-policy.service.js';
+import { privacyDecisionService } from '../src/privacy/services/privacy-decision.service.js';
+import { BankingPermissions } from '../src/identity/domain/identity.types.js';
 import { socOperatorAnalyticsService } from '../src/analytics/services/soc-operator-analytics.service.js';
 import { synchronizedPlaybackService } from '../src/vms/services/synchronized-playback.service.js';
 import { investigationWorkspaceService } from '../src/incidents/services/investigation-workspace.service.js';
-import { productionAnalyticsEngine } from '../src/analytics/services/production-analytics-engine.service.js';
+import { analyticsRegistry, AnalyticsMaturity } from '../analytics-engine/src/core/analytics-registry.js';
+import { ObjectTracker } from '../analytics-engine/src/tracking/object-tracker.js';
 
 describe('SENTINEL GRID / BANK VMS: End-to-End Enterprise Architecture Verification', () => {
   it('executes complete Sentinel Grid flow: Control Plane -> Edge Gateways -> NVRs -> Analytics -> Forensics -> SOC', async () => {
@@ -34,14 +36,13 @@ describe('SENTINEL GRID / BANK VMS: End-to-End Enterprise Architecture Verificat
     expect(branchClock?.averageJitterMs).toBeDefined();
 
     // 3. CERTIFIED AI DETECTOR & MULTI-OBJECT TRACKING
-    const aiFrame = {
-      width: 1920,
-      height: 1080,
-      timestamp: new Date().toISOString(),
-      frameData: Buffer.from('vault-security-frame-data'),
-    };
-    const analyticsResult = await productionAnalyticsEngine.processFrame('CAM-118-14', aiFrame);
-    expect(analyticsResult.detections.length).toBeGreaterThanOrEqual(1);
+    const capabilities = analyticsRegistry.listCapabilities({ maturity: AnalyticsMaturity.CERTIFIED });
+    expect(capabilities.length).toBeGreaterThanOrEqual(4);
+    const tracker = new ObjectTracker();
+    const tracks = tracker.update('CAM-118-14', [
+      { classId: 'person', confidence: 0.95, bbox: { x: 0.2, y: 0.3, width: 0.1, height: 0.25 }, timestamp: 1000 },
+    ], 1000);
+    expect(tracks.length).toBe(1);
 
     // 4. SYNCHRONIZED MULTI-CAMERA PLAYBACK
     const playbackSession = await synchronizedPlaybackService.createSession({
@@ -84,33 +85,127 @@ describe('SENTINEL GRID / BANK VMS: End-to-End Enterprise Architecture Verificat
       media: { snapshotBuffer, clipBuffer },
     });
 
-    expect(evidencePkg.manifest.signatures.length).toBeGreaterThanOrEqual(1);
+    expect(evidencePkg.signature).toBeDefined();
+    expect(evidencePkg.signature?.algorithm).toBe('Ed25519');
     expect(evidencePkg.timeSync.hoTime).toBeDefined();
     expect(evidencePkg.timeSync.gatewayTime).toBeDefined();
     expect(evidencePkg.timeSync.nvrTime).toBeDefined();
     expect(evidencePkg.timeSync.cameraTime).toBeDefined();
 
     // 7. PRIVACY REDACTION & DUAL-AUTHORIZATION GOVERNANCE
-    const privacyEval = await privacyPolicyService.evaluateMediaAccess(
-      'operator-regular',
-      'CAM-118-14',
-      'BR-118',
-      'EXPORT'
-    );
-    expect(privacyEval.requiresMasking).toBe(true);
-    expect(privacyEval.activePolicy.faceBlur).toBe(true);
+    const privacyDecision = await privacyDecisionService.evaluate({
+      principal: {
+        userId: 'usr-operator-01',
+        tenantId: 'BANK-001',
+        username: 'operator.anand',
+        email: 'anand@bank.internal',
+        displayName: 'Anand Operator',
+        roles: ['BANK_OPERATOR'],
+        permissions: [BankingPermissions.CAMERA_LIVE_VIEW, BankingPermissions.CAMERA_PLAYBACK_VIEW],
+        scope: { type: 'ALL_BRANCHES' },
+        authMethod: 'LOCAL',
+        sessionId: 'sess-01',
+        issuedAt: new Date(),
+        expiresAt: new Date(Date.now() + 3600000),
+      },
+      cameraId: 'CAM-118-14',
+      operation: 'LIVE_VIEW',
+    });
+    expect(privacyDecision.allow).toBe(true);
+    expect(privacyDecision.mode).toBe('MASKED');
+    expect(privacyDecision.transformations.faceBlur).toBe(true);
 
     // 8. 400-BRANCH SIGNED CONFIG ROLLOUT (5% -> 25% -> 50% -> 100%)
-    const draftVersion = await signedConfigService.createDraftVersion('BANK-001', 'sec-admin', 'Fleet hardening release');
-    await signedConfigService.validateVersion(draftVersion.id);
-    const approvedVersion = await signedConfigService.approveVersion(draftVersion.id, 'sec-lead-approver', 'Approved for rollout');
-    const signedVersion = await signedConfigService.signVersion(approvedVersion.id);
+    const sampleConfig = {
+      schemaVersion: '3.1',
+      network: {
+        dnsServers: ['10.100.1.10', '10.100.1.11'],
+        ntpServers: ['time.bank.internal'],
+        gatewayIp: '10.100.1.1',
+        subnetMask: '255.255.255.0',
+        uplinkBandwidthMbps: 100,
+      },
+      cameras: [
+        {
+          id: 'CAM-01',
+          channel: 1,
+          name: 'Main Lobby Entrance',
+          ip: '10.100.1.21',
+          resolution: '1920x1080',
+          fps: 25,
+          bitrateKbps: 2048,
+          codec: 'H265',
+          streamProfile: 'main' as const,
+          credentialRef: 'secret://branch/BR-001/camera/CAM-01',
+          analyticsAssigned: ['intrusion'],
+          enabled: true,
+        },
+      ],
+      recorder: {
+        nvrId: 'NVR-01',
+        name: 'Branch Main NVR',
+        manufacturer: 'CP PLUS',
+        model: 'CP-UNR-4K4322-V3',
+        managementIp: '10.100.1.10',
+        storageTargets: ['/dev/sda1'],
+        recordingMode: 'CONTINUOUS' as const,
+        ntpServer: 'time.bank.internal',
+        credentialRef: 'secret://branch/BR-001/recorder/NVR-01',
+        channelsCount: 32,
+      },
+      retention: {
+        continuousDays: 90,
+        alertFootageDays: 180,
+        forensicEvidenceDays: 365,
+        storagePurgeThresholdPercent: 90,
+      },
+      analytics: {
+        detectorVersions: { intrusion: '2.4.0' },
+        schedules: { after_hours: '20:00-06:00' },
+        sensitivityThresholds: { intrusion: 0.85 },
+        zonesCount: 2,
+      },
+      security: {
+        minTlsVersion: 'TLS1.3',
+        certificateThumbprints: ['SHA256:CERT-THUMB-01'],
+        allowedCiphers: ['TLS_AES_256_GCM_SHA384'],
+        enforceSignedConfig: true,
+      },
+    };
 
-    const rollout = await fleetRolloutControllerService.startRollout(signedVersion.manifest, 'sec-lead-approver');
-    expect(rollout.totalBranches).toBe(400);
+    const draftVersion = await signedConfigService.createDraftVersion(
+      {
+        tenantId: 'BANK-001',
+        version: 35,
+        config: sampleConfig,
+        changeDescription: 'Fleet hardening release',
+      },
+      'sec-admin'
+    );
+    await signedConfigService.validateVersion(draftVersion.id);
+    const approvedVersion = await signedConfigService.approveVersion({
+      versionId: draftVersion.id,
+      approver: 'sec-lead-approver',
+      role: 'CHIEF_SECURITY_OFFICER',
+      decision: 'APPROVED',
+      comments: 'Approved for rollout',
+    });
+    const signedManifest = await signedConfigService.signVersion(approvedVersion.id);
+
+    const rollout = await fleetRolloutControllerService.createRollout({
+      tenantId: 'BANK-001',
+      configVersionId: approvedVersion.id,
+      createdBy: 'sec-lead-approver',
+    });
     expect(rollout.stages.length).toBe(4);
-    expect(rollout.stages[0]?.cohortPercentage).toBe(5);
-    expect(rollout.stages[0]?.branchCount).toBe(20);
+    expect(rollout.stages[0]?.percentage).toBe(5);
+    expect(rollout.stages[0]?.targetBranchCount).toBe(20);
+    expect(rollout.stages[1]?.percentage).toBe(25);
+    expect(rollout.stages[1]?.targetBranchCount).toBe(100);
+    expect(rollout.stages[2]?.percentage).toBe(50);
+    expect(rollout.stages[2]?.targetBranchCount).toBe(200);
+    expect(rollout.stages[3]?.percentage).toBe(100);
+    expect(rollout.stages[3]?.targetBranchCount).toBe(400);
 
     // 9. SOC OPERATOR PERFORMANCE & SLA LEARNING
     const socSummary = await socOperatorAnalyticsService.getDashboardSummary('LAST_30_DAYS');

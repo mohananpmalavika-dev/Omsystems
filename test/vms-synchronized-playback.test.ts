@@ -104,7 +104,9 @@ describe('VMS Synchronized Multi-Camera Playback & Investigation Workspace Subsy
 
     expect(updatedCase.evidencePackageIds.length).toBe(1);
     expect(evidencePackage.id).toBeDefined();
-    expect(evidencePackage.manifest.signatures.length).toBeGreaterThanOrEqual(1);
+    expect(evidencePackage.signature).toBeDefined();
+    expect(evidencePackage.signature?.signature).toBeDefined();
+    expect(evidencePackage.signature?.algorithm).toBe('Ed25519');
     expect(evidencePackage.timeSync.clockHealthStatus).toBeDefined();
   });
 });
