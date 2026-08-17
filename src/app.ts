@@ -142,11 +142,14 @@ import { registerInvestigationRoutes } from "./routes/investigation.routes.js";
 import { registerEnterpriseStorageRoutes } from "./routes/enterprise-storage.routes.js";
 import { registerStorageFailoverRoutes } from "./routes/storage-failover.routes.js";
 import { registerOnvifRoutes } from "./routes/onvif.routes.js";
+import { registerSloRoutes } from "./routes/slo.routes.js";
+import { registerCeoScreenRoutes } from "./routes/ceo-screen.routes.js";
 import { registerClientMediaSchedulerRoutes } from "./routes/client-media-scheduler.routes.js";
 import { registerAiQualityRoutes } from "./routes/ai-quality.routes.js";
 import { registerEnterpriseSocOperationsRoutes } from "./routes/enterprise-soc-operations.routes.js";
 import { registerEventNormalizationRoutes } from "./event-normalization/routes/event-normalization.routes.js";
 import { registerChaosTestingRoutes } from "./chaos-testing/routes/chaos-testing.routes.js";
+import { registerCompatibilityLabRoutes } from "./routes/compatibility-lab.routes.js";
 import { autoProvisionVerifiedCameras } from "./services/camera-auto-provision.js";
 import {
   EmptyFederationLocalSearchProvider,
@@ -2857,6 +2860,14 @@ export async function buildApp(options?: {
     app.log.error({ err }, "failed to register media orchestration routes");
   }
 
+  // Register Hardware Compatibility Lab routes
+  try {
+    await registerCompatibilityLabRoutes(app);
+    app.log.info("Hardware Compatibility Lab routes registered");
+  } catch (err: unknown) {
+    app.log.error({ err }, "failed to register compatibility lab routes");
+  }
+
   // Register Stateful Incident Playbook Engine & Dynamic Operator SOP routes
   try {
     const playbookEngine = new PlaybookEngineService();
@@ -2958,7 +2969,9 @@ export async function buildApp(options?: {
     await registerEnterpriseStorageRoutes(app);
     await registerStorageFailoverRoutes(app);
     await registerOnvifRoutes(app);
-    app.log.info("Authoritative RecordingIndex, Unified Investigation Search, Enterprise Storage, Failover, and ONVIF routes registered");
+    await registerSloRoutes(app);
+    await registerCeoScreenRoutes(app);
+    app.log.info("Authoritative RecordingIndex, Unified Investigation Search, Enterprise Storage, Failover, ONVIF, SLO, and CEO Screen routes registered");
   } catch (error) {
     app.log.error({ error }, "Failed to register recording index, investigation, storage, and ONVIF routes");
   }
