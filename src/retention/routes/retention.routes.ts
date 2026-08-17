@@ -19,6 +19,7 @@ import {
   type RetentionComplianceState,
   type RetentionRiskState,
 } from "../index.js";
+import { retentionEngine } from "../services/retention-engine.service.js";
 
 async function loadLiveBranchRetentionSummaries(store?: ControlPlaneStore, tenantId: string = "tenant-default"): Promise<BranchRetentionSummary[]> {
   if (!store) return [];
@@ -388,4 +389,80 @@ export async function registerRetentionRoutes(app: FastifyInstance, store?: Cont
 
   app.get("/api/v1/retention/audit", handleRetentionAudit);
   app.get("/v1/retention/audit", handleRetentionAudit);
+
+  /**
+   * Enterprise Retention Engine Endpoints
+   */
+  // 1. Camera Comprehensive Retention Status
+  app.get("/v1/retention/engine/cameras/:cameraId", async (request: FastifyRequest, reply: FastifyReply) => {
+    const params = request.params as { cameraId: string };
+    const query = (request.query as any) || {};
+    const status = retentionEngine.evaluateCameraRetention({
+      cameraId: params.cameraId,
+      cameraGroup: query.cameraGroup || "ATM",
+      branchId: query.branchId || "BR-118",
+      tenantId: query.tenantId || "BANK-001",
+    });
+    return reply.send({ success: true, data: status });
+  });
+
+  // 2. Branch Retention Overview & Capacity Forecast
+  app.get("/v1/retention/engine/branches/:branchId", async (request: FastifyRequest, reply: FastifyReply) => {
+    const params = request.params as { branchId: string };
+    const overview = retentionEngine.getBranchOverview(params.branchId);
+    return reply.send({ success: true, data: overview });
+  });
+
+  // 3. Pre-Deployment Retention Policy Simulation
+  app.post("/v1/retention/simulate", async (request: FastifyRequest, reply: FastifyReply) => {
+    const body = z.object({
+      tenantId: z.string().default("BANK-001"),
+      policyName: z.string().default("ATM 180-Day Regulatory Policy"),
+      targetScope: z.object({
+        branches: z.array(z.string()).optional(),
+        cameraGroups: z.array(z.string()).optional(),
+        cameras: z.array(z.string()).optional(),
+      }).default({}),
+      proposedMinimumDays: z.number().int().min(1).default(180),
+      proposedTargetDays: z.number().int().min(1).default(190),
+    }).parse(request.body);
+
+    const simulation = retentionEngine.simulateRetentionChange(body);
+    return reply.send({ success: true, data: simulation });
+  });
+
+  // 4. Create Legal Hold
+  app.post("/v1/retention/legal-holds", async (request: FastifyRequest, reply: FastifyReply) => {
+    const body = z.object({
+      tenantId: z.string().default("BANK-001"),
+      caseNumber: z.string(),
+      reason: z.string(),
+      createdBy: z.string().default("sec-officer"),
+      scope: z.object({
+        branches: z.array(z.string()).optional(),
+        cameras: z.array(z.string()).optional(),
+        startTime: z.coerce.date(),
+        endTime: z.coerce.date(),
+      }),
+    }).parse(request.body);
+
+    const hold = retentionEngine.createLegalHold(body);
+    return reply.status(201).send({ success: true, data: hold });
+  });
+
+  // 5. Release Legal Hold
+  app.post("/v1/retention/legal-holds/:id/release", async (request: FastifyRequest, reply: FastifyReply) => {
+    const params = request.params as { id: string };
+    const body = z.object({ approvedBy: z.string().default("chief-security-officer") }).parse(request.body);
+    const released = retentionEngine.releaseLegalHold(params.id, body.approvedBy);
+    if (!released) return reply.code(404).send({ success: false, error: "LEGAL_HOLD_NOT_FOUND" });
+    return reply.send({ success: true, data: released });
+  });
+
+  // 6. List Active Legal Holds
+  app.get("/v1/retention/legal-holds", async (request: FastifyRequest, reply: FastifyReply) => {
+    const query = (request.query as any) || {};
+    const holds = retentionEngine.getLegalHolds(query.cameraId, query.branchId);
+    return reply.send({ success: true, data: holds });
+  });
 }
