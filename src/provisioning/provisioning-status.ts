@@ -99,11 +99,12 @@ export async function buildProvisioningRunView(
   }
 
   const targetTenantId = branch?.tenantId || user.tenantId || "00000000-0000-4000-8000-000000000000";
-  const [agents, pendingDiscoveries, latestTelemetry, storageNodes] = await Promise.all([
-    store.listEdgeAgentsByBranch(branchId),
-    store.listDiscoveredCameras(branchId),
-    store.listLatestOperationalTelemetry(targetTenantId, [branchId]),
-    store.listRecordingStorageNodes(targetTenantId),
+  const [agents, pendingDiscoveries, latestTelemetry, storageNodes, branchCameras] = await Promise.all([
+    store.listEdgeAgentsByBranch(branchId).catch(() => []),
+    store.listDiscoveredCameras(branchId).catch(() => []),
+    store.listLatestOperationalTelemetry(targetTenantId, [branchId]).catch(() => []),
+    store.listRecordingStorageNodes(targetTenantId).catch(() => []),
+    store.listCamerasByBranch(user, branchId, "device:configure").catch(() => []),
   ]);
   const runStartedAt = job ? Date.parse(job.startedAt ?? job.requestedAt) : Number.NaN;
   const runDiscoveries = job
@@ -112,20 +113,13 @@ export async function buildProvisioningRunView(
       (!Number.isFinite(runStartedAt) || Date.parse(discovery.discoveredAt) >= runStartedAt)
     )
     : pendingDiscoveries;
-  const cameras = await store.listCamerasByBranch(
-    user,
-    branchId,
-    "device:configure",
-  );
+  const cameras = branchCameras || [];
   const scopedRunCameras = job
     ? cameras.filter((camera) =>
       camera.edgeAgentId === job.edgeAgentId &&
       (!Number.isFinite(runStartedAt) || Date.parse(camera.firstSeenAt ?? "") >= runStartedAt)
     )
     : cameras;
-  // When credentials are deliberately deferred, the currently online branch
-  // cameras are the evidence that allowed the operator to continue. Include
-  // them in subsequent stages instead of showing RTSP as perpetually pending.
   const runCameras = job?.credentialsSkippedAt
     ? [...new Map([...scopedRunCameras, ...cameras.filter((camera) => camera.status === "online")]
       .map((camera) => [camera.id, camera])).values()]
@@ -133,12 +127,12 @@ export async function buildProvisioningRunView(
   const now = new Date().toISOString();
   const recentWindowStart = new Date(Date.now() - 24 * 60 * 60 * 1_000).toISOString();
   const [recordingJobs, analyticsRules, recentSegments] = await Promise.all([
-    store.listRecordingJobs(runCameras.map((camera) => camera.id)),
-    store.listAnalyticsRulesByCameraIds(runCameras.map((camera) => camera.id)),
+    store.listRecordingJobs(runCameras.map((camera) => camera.id)).catch(() => []),
+    store.listAnalyticsRulesByCameraIds(runCameras.map((camera) => camera.id)).catch(() => []),
     Promise.all(runCameras.map(async (camera) => ({
       cameraId: camera.id,
-      segments: await store.listRecordingSegments(camera.id, recentWindowStart, now),
-    }))),
+      segments: await store.listRecordingSegments(camera.id, recentWindowStart, now).catch(() => []),
+    }))).catch(() => []),
   ]);
 
   return projectProvisioningRun({
@@ -152,7 +146,7 @@ export async function buildProvisioningRunView(
     storageNodes,
     analyticsCameraIds: [...new Set(analyticsRules.filter((rule) => rule.enabled).map((rule) => rule.cameraId))],
     recentPlatformRecordingCameraIds: recentSegments
-      .filter((item) => item.segments.some((segment) => segment.status === "ready"))
+      .filter((item) => item.segments?.some((segment: any) => segment.status === "ready"))
       .map((item) => item.cameraId),
     telemetry: latestTelemetry,
   });

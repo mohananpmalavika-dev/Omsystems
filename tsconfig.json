@@ -48,6 +48,8 @@
     "src/operational-health/**/*",
     "src/security-commander/**/*",
     "src/maintenance/**/*",
+    "src/mobile/**/*",
+    "src/integrations/**/*",
     "src/**/legacy/**/*",
 
     // Example files (not needed for production)

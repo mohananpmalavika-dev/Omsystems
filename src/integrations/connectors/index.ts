@@ -7,6 +7,17 @@
 
 import { connectorRegistry } from '../connector-registry.js';
 
+// Video & Surveillance
+import { CPPlusConnector } from './cpplus-connector.js';
+import { OnvifConnector } from './onvif-connector.js';
+
+// Physical Security & Access Control
+import { AccessControlConnector } from './access-control-connector.js';
+
+// Notifications & Webhook
+import { SMTPConnector } from './smtp-connector.js';
+import { WebhookConnector } from './webhook-connector.js';
+
 // Identity & Access Management
 import { LDAPConnector } from './ldap-connector.js';
 import { AzureADConnector } from './azure-ad-connector.js';
@@ -33,6 +44,17 @@ import { MQTTConnector } from './mqtt-connector.js';
  * Register all available connectors
  */
 export function registerAllConnectors(): void {
+  // Video & Surveillance
+  connectorRegistry.register(new CPPlusConnector());
+  connectorRegistry.register(new OnvifConnector());
+
+  // Physical Security
+  connectorRegistry.register(new AccessControlConnector());
+
+  // Notifications & Webhooks
+  connectorRegistry.register(new SMTPConnector());
+  connectorRegistry.register(new WebhookConnector());
+
   // Identity & Access Management
   connectorRegistry.register(new LDAPConnector());
   connectorRegistry.register(new AzureADConnector());

@@ -6,9 +6,12 @@
  */
 
 export type IntegrationCategory = 
+  | 'surveillance'
+  | 'security'
   | 'identity'
   | 'itsm'
   | 'messaging'
+  | 'notifications'
   | 'siem'
   | 'monitoring'
   | 'industrial'
@@ -16,6 +19,17 @@ export type IntegrationCategory =
   | 'webhook';
 
 export type IntegrationType =
+  // Video & Surveillance
+  | 'cpplus'
+  | 'onvif'
+  | 'dahua'
+  | 'hikvision'
+  | 'axis'
+  | 'rtsp'
+  // Security & Physical
+  | 'access_control'
+  | 'fire_alarm'
+  | 'intrusion_panel'
   // Identity & Access Management
   | 'active_directory'
   | 'ldap'
@@ -27,7 +41,9 @@ export type IntegrationType =
   // ITSM
   | 'servicenow'
   | 'jira'
-  // Messaging
+  // Messaging & Notifications
+  | 'smtp'
+  | 'sms'
   | 'microsoft_teams'
   | 'slack'
   | 'whatsapp_business'
@@ -51,7 +67,7 @@ export type IntegrationType =
   // Generic
   | 'webhook';
 
-export type IntegrationStatus = 'active' | 'inactive' | 'error' | 'testing';
+export type IntegrationStatus = 'active' | 'inactive' | 'error' | 'testing' | 'healthy' | 'degraded' | 'failed' | 'disabled' | 'configuring';
 
 export type IntegrationEventType =
   // Authentication events
