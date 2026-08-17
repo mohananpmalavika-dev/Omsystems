@@ -43,6 +43,7 @@ import { registerDistributedStateRoutes } from "./distributed-state/routes/distr
 import { registerReliablePtzRoutes } from "./ptz/routes/ptz.routes.js";
 import { registerMediaTokenRoutes } from "./media-auth/routes/media-token.routes.js";
 import { registerOfflineSyncRoutes } from "./offline-sync/routes/offline-sync.routes.js";
+import { registerRemoteOpsRoutes } from "./remote-ops/routes/remote-ops.routes.js";
 import { registerCentralMonitoringRoutes } from "./routes/central-monitoring.routes.js";
 import { registerOnDemandMediaRoutes } from "./routes/on-demand-media.routes.js";
 import { registerAiAlertsRoutes } from "./routes/ai-alerts.routes.js";
@@ -78,6 +79,7 @@ import { registerHaClusterRoutes } from "./media/cluster/ha-cluster.routes.js";
 import { registerAdaptiveStreamRoutes } from "./media/adaptive/adaptive-stream.routes.js";
 import { registerEdgeProductRoutes } from "./edge-product/routes/edge-product.routes.js";
 import { registerObservabilityRoutes } from "./observability/observability.routes.js";
+import { registerZeroTouchRoutes } from "./zero-touch/routes/zero-touch.routes.js";
 import { registerAdminDatabaseRoutes } from "./routes/admin-database.routes.js";
 import { registerAuditRoutes } from "./routes/audit.routes.js";
 import { registerComplianceRoutes } from "./routes/compliance.routes.js";
@@ -2643,6 +2645,14 @@ export async function buildApp(options?: {
     app.log.error({ err }, 'failed to register offline sync routes');
   }
 
+  // Register Remote CCTV Infrastructure Operations & Technician Replacement routes
+  try {
+    await registerRemoteOpsRoutes(app);
+    app.log.info('Remote CCTV infrastructure operations routes registered');
+  } catch (err: unknown) {
+    app.log.error({ err }, 'failed to register remote ops routes');
+  }
+
   // Register Scalable Central Monitoring Station & Priority Work Queue routes
   try {
     await registerCentralMonitoringRoutes(app);
@@ -2666,7 +2676,8 @@ export async function buildApp(options?: {
     await registerAdaptiveStreamRoutes(app);
     await registerEdgeProductRoutes(app);
     await registerObservabilityRoutes(app);
-    app.log.info('Morning digest, Virtual guard, QRT dispatch, HA Cluster, Edge Lifecycle, Mobile, Asset Lifecycle, Media Pipeline, Device Connectivity, HA Leases, Adaptive Stream, Edge Product, and Prometheus Observability routes registered');
+    await registerZeroTouchRoutes(app);
+    app.log.info('Morning digest, Virtual guard, QRT dispatch, HA Cluster, Edge Lifecycle, Mobile, Asset Lifecycle, Media Pipeline, Device Connectivity, HA Leases, Adaptive Stream, Edge Product, Prometheus Observability, and Zero-Touch Brownfield routes registered');
   } catch (err: unknown) {
     app.log.error({ err }, 'failed to register extended enterprise features');
   }
