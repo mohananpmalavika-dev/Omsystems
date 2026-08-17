@@ -795,8 +795,10 @@ function knownValue(value: string | null | undefined) {
 }
 
 function discoveryCodec(value: string | null | undefined): DiscoveredCameraPayload["profiles"][number]["codec"] {
-  const normalized = value?.toUpperCase();
-  if (normalized === "H264" || normalized === "H265" || normalized === "MJPEG") return normalized;
+  const normalized = value?.trim().replace(/[.\s_-]/g, "").toUpperCase();
+  if (normalized === "H264" || normalized === "AVC" || normalized === "AVC1") return "H264";
+  if (normalized === "H265" || normalized === "HEVC" || normalized === "HEV1" || normalized === "HVC1") return "H265";
+  if (normalized === "MJPEG" || normalized === "MJPG" || normalized === "JPEG") return "MJPEG";
   return "unknown";
 }
 
