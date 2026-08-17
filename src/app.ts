@@ -37,6 +37,7 @@ import { registerNotificationRoutes } from "./routes/notification.routes.js";
 import { registerDailySurveillanceReportRoutes } from "./routes/daily-surveillance-report.routes.js";
 import { registerDeviceHealthRoutes } from "./routes/device-health.routes.js";
 import { registerRecordingContinuityRoutes } from "./routes/recording-continuity.routes.js";
+import { registerFirstClassPlaybackRoutes } from "./playback/routes/playback.routes.js";
 import { registerCentralMonitoringRoutes } from "./routes/central-monitoring.routes.js";
 import { registerOnDemandMediaRoutes } from "./routes/on-demand-media.routes.js";
 import { registerAiAlertsRoutes } from "./routes/ai-alerts.routes.js";
@@ -2572,6 +2573,14 @@ export async function buildApp(options?: {
     app.log.info('Recording continuity subsystem routes registered');
   } catch (err: unknown) {
     app.log.error({ err }, 'failed to register recording continuity routes');
+  }
+
+  // Register First-Class Playback and Unified Timeline routes
+  try {
+    await registerFirstClassPlaybackRoutes(app);
+    app.log.info('First-class playback and unified timeline routes registered');
+  } catch (err: unknown) {
+    app.log.error({ err }, 'failed to register first-class playback routes');
   }
 
   // Register Scalable Central Monitoring Station & Priority Work Queue routes
