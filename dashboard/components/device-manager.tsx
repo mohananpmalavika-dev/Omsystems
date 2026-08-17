@@ -14,6 +14,7 @@ import {
   X,
   QrCode,
   Wifi,
+  Zap,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { cameraInventoryApi, deviceInventoryApi, provisioningApi } from "@/lib/api-client";
@@ -267,6 +268,21 @@ export function DeviceManager() {
       await refreshBranch(selectedBranch);
     } catch (err: any) {
       setError(messageOf(err, "Failed to enroll camera"));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function activateEdgeOnline() {
+    if (!selectedBranch) return;
+    setSaving(true);
+    setError(undefined);
+    try {
+      const res = await provisioningApi.activateEdgeOnline(selectedBranch);
+      setNotice(res.message || "Branch Edge Gateway is now online and active.");
+      await refreshBranch(selectedBranch);
+    } catch (err: any) {
+      setError(messageOf(err, "Failed to activate Edge Agent online"));
     } finally {
       setSaving(false);
     }
@@ -998,6 +1014,15 @@ export function DeviceManager() {
         <div className="device-toolbar-actions">
           <button className="primary-button" onClick={() => void scanCameras()} disabled={!selectedBranch || scanning || saving} title="Automatically search local network, VPN routes, and the managed tunnel">
             <Search size={15} /> {scanning ? "Searching cameras..." : "Scan cameras"}
+          </button>
+          <button
+            className="secondary-button"
+            style={{ background: "rgba(16, 185, 129, 0.15)", color: "#34d399", borderColor: "#059669", fontWeight: 600 }}
+            onClick={() => void activateEdgeOnline()}
+            disabled={!selectedBranch || saving}
+            title="Bring Edge Agent online immediately for this branch"
+          >
+            <Zap size={15} /> Activate Edge Online
           </button>
           <button className="secondary-button" onClick={() => setShowDirectProbeModal(true)} title="Directly test and connect IP camera on local subnet (e.g. 192.168.29.196)">
             <Wifi size={15} /> Direct IP Probe

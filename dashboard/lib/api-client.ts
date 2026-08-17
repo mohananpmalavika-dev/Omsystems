@@ -1015,6 +1015,16 @@ export const provisioningApi = {
       `/v1/branches/${encodeURIComponent(branchId)}/provisioning/${encodeURIComponent(runId)}/stages/${encodeURIComponent(stageId)}/skip`,
       { method: "POST", body: "{}" },
     ),
+  activateEdgeOnline: (branchId: string) =>
+    fetchApi<{ success: boolean; agent: any; message: string }>(
+      `/v1/branches/${encodeURIComponent(branchId)}/activate-edge-online`,
+      { method: "POST", body: "{}" },
+    ),
+  executeStep: (branchId: string, stepId: string) =>
+    fetchApi<{ success: boolean; message: string }>(
+      `/v1/branches/${encodeURIComponent(branchId)}/provisioning/step/${encodeURIComponent(stepId)}/execute`,
+      { method: "POST", body: "{}" },
+    ),
 };
 
 export type IdentityWatchlist = {
