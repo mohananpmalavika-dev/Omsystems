@@ -865,10 +865,25 @@ export class InfrastructureRepository {
       resolvedUserId = u?.id ?? "00000000-0000-4000-8000-000000000001";
     }
 
-    let resolvedAssignedBy = assignedBy;
-    if (assignedBy && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(assignedBy)) {
-      const u = await this.getUserById(assignedBy);
-      resolvedAssignedBy = u?.id ?? null;
+    // Validate that assignedBy refers to an existing user
+    let resolvedAssignedBy: string | null = null;
+    if (assignedBy) {
+      let userToCheck = assignedBy;
+      // If not a UUID, try to resolve it
+      if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(assignedBy)) {
+        const u = await this.getUserById(assignedBy);
+        userToCheck = u?.id ?? '';
+      }
+      // Verify the user exists in the database
+      if (userToCheck) {
+        const existingUser = await client.query(
+          'SELECT id FROM users WHERE id = $1::uuid',
+          [userToCheck]
+        );
+        if (existingUser.rows.length > 0) {
+          resolvedAssignedBy = userToCheck;
+        }
+      }
     }
 
     if (isPrimary) {
