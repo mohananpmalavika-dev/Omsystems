@@ -63,10 +63,19 @@ export interface EvidenceTimeSync {
   captureEnd: string;
   serverTime: string;
   deviceTime?: string;
+  hoTime?: string;
+  gatewayTime?: string;
+  nvrTime?: string;
+  cameraTime?: string;
   clockOffsetMs?: number;
+  observedOffsetSeconds?: number;
+  jitterMs?: number;
   ntpSynchronized?: boolean;
   ntpServer?: string;
+  lastSyncAt?: string;
   clockDriftMsPerDay?: number;
+  clockHealthStatus?: 'HEALTHY' | 'WARNING' | 'CRITICAL';
+  forensicConfidence?: 'HIGH' | 'MEDIUM' | 'DEGRADED';
 }
 
 export interface ForensicManifest {

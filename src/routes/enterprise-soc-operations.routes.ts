@@ -1,18 +1,18 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import { z } from "zod";
 import { registerSignedConfigRoutes } from "../config-management/routes/signed-config.routes.js";
+import { registerOperationalMapRoutes } from "./operational-map.routes.js";
 import { EdgeAgentLifecycleService } from "../edge-agent/services/edge-agent-lifecycle.service.js";
 import { ClockMonitoringService } from "../clock-monitoring/services/clock-monitoring.service.js";
-import { OperationalMapService } from "../operations/services/operational-map.service.js";
 import { SocOperatorAnalyticsService } from "../analytics/services/soc-operator-analytics.service.js";
 import { MaintenanceTicketingService } from "../maintenance/services/maintenance-ticketing.service.js";
 import { DeterministicRcaService } from "../services/command-center/deterministic-rca.service.js";
 
 export async function registerEnterpriseSocOperationsRoutes(app: FastifyInstance) {
   await registerSignedConfigRoutes(app);
+  await registerOperationalMapRoutes(app);
   const edgeAgentService = new EdgeAgentLifecycleService();
   const clockService = new ClockMonitoringService();
-  const mapService = new OperationalMapService();
   const analyticsService = new SocOperatorAnalyticsService();
   const maintenanceService = new MaintenanceTicketingService();
   const rcaService = new DeterministicRcaService();
@@ -40,18 +40,6 @@ export async function registerEnterpriseSocOperationsRoutes(app: FastifyInstance
       query.cameraId || "cam-301-17",
     );
     return { manifest };
-  });
-
-  // 4. Operational Maps Drilldown
-  app.get("/v1/map/hierarchy", async (req: FastifyRequest) => {
-    const parentId = (req.query as any)?.parentId;
-    const nodes = await mapService.getChildrenNodes(parentId);
-    return { data: nodes };
-  });
-  app.get("/v1/map/floor-plan/:branchId", async (req: FastifyRequest) => {
-    const { branchId } = req.params as { branchId: string };
-    const plan = await mapService.getFloorPlan(branchId);
-    return { data: plan };
   });
 
   // 5. SOC Analytics

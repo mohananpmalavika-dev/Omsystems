@@ -20,6 +20,7 @@ import type {
   ManifestSignature,
 } from '../domain/forensic-evidence.types.js';
 import { canonicalJsonStringify, chainOfCustodyService } from './chain-of-custody.service.js';
+import { clockMonitoringService } from '../../clock-monitoring/services/clock-monitoring.service.js';
 
 export interface CreatePackageInput {
   tenantId: string;
@@ -92,16 +93,35 @@ export class ForensicEvidencePackageService {
       adapterVersion: '2.4.1',
     };
 
-    // 2. Time Synchronization
+    // 2. Time Synchronization & Clock Drift Integration
+    let clockManifest;
+    try {
+      clockManifest = await clockMonitoringService.buildEvidenceClockManifest(
+        evidenceId,
+        input.branchId,
+        input.cameraId
+      );
+    } catch {
+      // Fallback
+    }
+
     const timeSync: EvidenceTimeSync = {
       captureStart: input.captureStart,
       captureEnd: input.captureEnd,
       serverTime,
       deviceTime,
+      hoTime: clockManifest?.hoReferenceTime || serverTime,
+      gatewayTime: clockManifest?.gatewayTime || serverTime,
+      nvrTime: clockManifest?.nvrTime || deviceTime,
+      cameraTime: clockManifest?.cameraTime || deviceTime,
       clockOffsetMs,
-      ntpSynchronized: Math.abs(clockOffsetMs) < 2000,
-      ntpServer: 'time.bank.internal',
+      observedOffsetSeconds: clockManifest?.observedOffsetSeconds ?? Number((Math.abs(clockOffsetMs) / 1000).toFixed(2)),
+      jitterMs: clockManifest?.jitterMs ?? 10,
+      ntpSynchronized: clockManifest ? clockManifest.clockHealthStatus === 'HEALTHY' : Math.abs(clockOffsetMs) < 2000,
+      ntpServer: clockManifest?.ntpSource || 'time.bank.internal',
       clockDriftMsPerDay: 45,
+      clockHealthStatus: clockManifest?.clockHealthStatus || (Math.abs(clockOffsetMs) > 30000 ? 'CRITICAL' : Math.abs(clockOffsetMs) > 5000 ? 'WARNING' : 'HEALTHY'),
+      forensicConfidence: clockManifest?.forensicTimestampConfidence || (Math.abs(clockOffsetMs) < 5000 ? 'HIGH' : Math.abs(clockOffsetMs) <= 30000 ? 'MEDIUM' : 'DEGRADED'),
     };
 
     // 3. Artifacts Generation & Hashing
