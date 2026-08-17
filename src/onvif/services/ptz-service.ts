@@ -169,23 +169,31 @@ export class PtzService {
       credentials: this.credentials,
     });
 
-    const ptTag = SoapClient.extractTag(response, "PanTilt");
-    const zoomTag = SoapClient.extractTag(response, "Zoom");
+    const positionTag = SoapClient.extractTag(response, "Position") || response;
+    const ptTag = SoapClient.extractSelfClosingTag(positionTag, "PanTilt");
+    const zoomTag = SoapClient.extractSelfClosingTag(positionTag, "Zoom");
     const moveTag = SoapClient.extractTag(response, "MoveStatus");
 
     let panTiltPos: { x: number; y: number } | undefined;
     if (ptTag) {
-      panTiltPos = {
-        x: parseFloat(SoapClient.extractAttribute(ptTag, "x") || "0"),
-        y: parseFloat(SoapClient.extractAttribute(ptTag, "y") || "0"),
-      };
+      const xAttr = SoapClient.extractAttribute(ptTag, "x") || SoapClient.extractTag(ptTag, "x");
+      const yAttr = SoapClient.extractAttribute(ptTag, "y") || SoapClient.extractTag(ptTag, "y");
+      if (xAttr !== null && yAttr !== null) {
+        panTiltPos = {
+          x: parseFloat(xAttr),
+          y: parseFloat(yAttr),
+        };
+      }
     }
 
     let zoomPos: { x: number } | undefined;
     if (zoomTag) {
-      zoomPos = {
-        x: parseFloat(SoapClient.extractAttribute(zoomTag, "x") || "0"),
-      };
+      const zAttr = SoapClient.extractAttribute(zoomTag, "x") || SoapClient.extractTag(zoomTag, "x");
+      if (zAttr !== null) {
+        zoomPos = {
+          x: parseFloat(zAttr),
+        };
+      }
     }
 
     const ptMove = moveTag ? (SoapClient.extractTag(moveTag, "PanTilt") as any) || "IDLE" : "IDLE";

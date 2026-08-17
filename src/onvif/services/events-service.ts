@@ -112,18 +112,18 @@ export class EventsService {
 
         propertyOperation = SoapClient.extractAttribute(messageTag, "PropertyOperation") as any;
 
-        const sourceTag = SoapClient.extractTag(messageTag, "Source");
+        const sourceTag = SoapClient.extractTag(messageTag, "Source") || messageTag;
         if (sourceTag) {
-          const simpleItem = SoapClient.extractTag(sourceTag, "SimpleItem");
+          const simpleItem = SoapClient.extractSelfClosingTag(sourceTag, "SimpleItem") || SoapClient.extractTag(sourceTag, "SimpleItem");
           if (simpleItem) {
             sourceName = SoapClient.extractAttribute(simpleItem, "Name") ?? undefined;
             sourceValue = SoapClient.extractAttribute(simpleItem, "Value") ?? undefined;
           }
         }
 
-        const dataTag = SoapClient.extractTag(messageTag, "Data");
+        const dataTag = SoapClient.extractTag(messageTag, "Data") || messageTag;
         if (dataTag) {
-          const simpleItem = SoapClient.extractTag(dataTag, "SimpleItem");
+          const simpleItem = SoapClient.extractSelfClosingTag(dataTag, "SimpleItem") || SoapClient.extractTag(dataTag, "SimpleItem");
           if (simpleItem) {
             dataName = SoapClient.extractAttribute(simpleItem, "Name") ?? undefined;
             const val = SoapClient.extractAttribute(simpleItem, "Value");

@@ -85,7 +85,7 @@ export class SoapClient {
         const faultMsg = fault
           ? `SOAP Fault [${fault.code}${fault.subcode ? `/${fault.subcode}` : ""}]: ${fault.reason}`
           : `HTTP ${res.status} ${res.statusText}: ${responseText.slice(0, 300)}`;
-        throw new SoapError(faultMsg, fault, res.status);
+        throw new SoapError(faultMsg, fault ?? undefined, res.status);
       }
 
       // Check if response contains a SOAP Fault inside a 200 OK
@@ -144,7 +144,7 @@ export class SoapClient {
     // Matches <prefix:tagName ...>value</prefix:tagName> or <tagName ...>value</tagName>
     const regex = new RegExp(`<(?:[\\w-]+:)?${tagName}(?:\\s+[^>]*)?>([\\s\\S]*?)<\\/(?:[\\w-]+:)?${tagName}>`, "i");
     const match = xml.match(regex);
-    return match ? match[1].trim() : null;
+    return (match && match[1]) ? match[1].trim() : null;
   }
 
   static extractAllTags(xml: string, tagName: string): string[] {
@@ -152,15 +152,37 @@ export class SoapClient {
     const regex = new RegExp(`<(?:[\\w-]+:)?${tagName}(?:\\s+[^>]*)?>([\\s\\S]*?)<\\/(?:[\\w-]+:)?${tagName}>`, "gi");
     let match;
     while ((match = regex.exec(xml)) !== null) {
-      results.push(match[1].trim());
+      if (match[1]) results.push(match[1].trim());
     }
     return results;
+  }
+
+  /**
+   * Extracts full tag matches including the opening element `<prefix:tagName ...>...</prefix:tagName>` or `<prefix:tagName ... />`
+   */
+  static extractAllFullTags(xml: string, tagName: string): string[] {
+    const results: string[] = [];
+    const regex = new RegExp(
+      `<(?:[\\w-]+:)?${tagName}(?:\\s+[^>]*)?(?:\\/>|>([\\s\\S]*?)<\\/(?:[\\w-]+:)?${tagName}>)`,
+      "gi",
+    );
+    let match;
+    while ((match = regex.exec(xml)) !== null) {
+      if (match[0]) results.push(match[0].trim());
+    }
+    return results;
+  }
+
+  static extractSelfClosingTag(xml: string, tagName: string): string | null {
+    const regex = new RegExp(`<(?:[\\w-]+:)?${tagName}(?:\\s+[^>]*)?\\/?>`, "i");
+    const match = xml.match(regex);
+    return (match && match[0]) ? match[0].trim() : null;
   }
 
   static extractAttribute(tagXml: string, attrName: string): string | null {
     const regex = new RegExp(`${attrName}=["']([^"']+)["']`, "i");
     const match = tagXml.match(regex);
-    return match ? match[1] : null;
+    return (match && match[1]) ? match[1] : null;
   }
 
   private parseSoapFault(xml: string): SoapFault | null {

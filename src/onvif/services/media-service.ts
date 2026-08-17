@@ -69,7 +69,7 @@ export class MediaService {
       credentials: this.credentials,
     });
 
-    const profileTags = SoapClient.extractAllTags(response, "Profiles");
+    const profileTags = SoapClient.extractAllFullTags(response, "Profiles");
     const profiles: OnvifMediaProfile[] = [];
 
     for (const pXml of profileTags) {
@@ -77,28 +77,28 @@ export class MediaService {
       const name = SoapClient.extractTag(pXml, "Name") || token;
       const fixed = SoapClient.extractAttribute(pXml, "fixed") === "true";
 
-      const vsConfigTag = SoapClient.extractTag(pXml, "VideoSourceConfiguration");
-      const vsToken = vsConfigTag ? SoapClient.extractAttribute(vsConfigTag, "token") ?? undefined : undefined;
+      const vsConfigFull = SoapClient.extractAllFullTags(pXml, "VideoSourceConfiguration")[0];
+      const vsToken = vsConfigFull ? SoapClient.extractAttribute(vsConfigFull, "token") ?? undefined : undefined;
 
-      const veConfigTag = SoapClient.extractTag(pXml, "VideoEncoderConfiguration");
+      const veConfigFull = SoapClient.extractAllFullTags(pXml, "VideoEncoderConfiguration")[0];
       let videoEncoderConfig: VideoEncoderConfiguration | undefined;
 
-      if (veConfigTag) {
-        const veToken = SoapClient.extractAttribute(veConfigTag, "token") || "ve_token";
-        const veName = SoapClient.extractTag(veConfigTag, "Name") || "video_encoder";
-        const encoding = (SoapClient.extractTag(veConfigTag, "Encoding") as any) || "H264";
+      if (veConfigFull) {
+        const veToken = SoapClient.extractAttribute(veConfigFull, "token") || "ve_token";
+        const veName = SoapClient.extractTag(veConfigFull, "Name") || "video_encoder";
+        const encoding = (SoapClient.extractTag(veConfigFull, "Encoding") as any) || "H264";
 
-        const resTag = SoapClient.extractTag(veConfigTag, "Resolution");
+        const resTag = SoapClient.extractTag(veConfigFull, "Resolution");
         const width = resTag ? parseInt(SoapClient.extractTag(resTag, "Width") || "1920", 10) : 1920;
         const height = resTag ? parseInt(SoapClient.extractTag(resTag, "Height") || "1080", 10) : 1080;
 
-        const quality = parseFloat(SoapClient.extractTag(veConfigTag, "Quality") || "5");
+        const quality = parseFloat(SoapClient.extractTag(veConfigFull, "Quality") || "5");
 
-        const rateControlTag = SoapClient.extractTag(veConfigTag, "RateControl");
+        const rateControlTag = SoapClient.extractTag(veConfigFull, "RateControl");
         const framerateLimit = rateControlTag ? parseInt(SoapClient.extractTag(rateControlTag, "FrameRateLimit") || "30", 10) : 30;
         const bitrateLimitKbps = rateControlTag ? parseInt(SoapClient.extractTag(rateControlTag, "BitrateLimit") || "4096", 10) : 4096;
 
-        const h264Tag = SoapClient.extractTag(veConfigTag, "H264");
+        const h264Tag = SoapClient.extractTag(veConfigFull, "H264");
         const govLength = h264Tag ? parseInt(SoapClient.extractTag(h264Tag, "GovLength") || "30", 10) : undefined;
         const h264Profile = h264Tag ? (SoapClient.extractTag(h264Tag, "H264Profile") as any) ?? undefined : undefined;
 

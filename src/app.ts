@@ -141,6 +141,7 @@ import { registerOnvifRoutes } from "./routes/onvif.routes.js";
 import { registerClientMediaSchedulerRoutes } from "./routes/client-media-scheduler.routes.js";
 import { registerAiQualityRoutes } from "./routes/ai-quality.routes.js";
 import { registerEnterpriseSocOperationsRoutes } from "./routes/enterprise-soc-operations.routes.js";
+import { registerEventNormalizationRoutes } from "./event-normalization/routes/event-normalization.routes.js";
 import { autoProvisionVerifiedCameras } from "./services/camera-auto-provision.js";
 import {
   EmptyFederationLocalSearchProvider,
@@ -2857,6 +2858,14 @@ export async function buildApp(options?: {
     app.log.info("Enterprise SOC Operations routes registered");
   } catch (err: unknown) {
     app.log.error({ err }, "failed to register enterprise SOC operations routes");
+  }
+
+  // Register Vendor-Neutral Event Ingestion & Normalization
+  try {
+    await registerEventNormalizationRoutes(app);
+    app.log.info("Event Normalization routes registered (CP PLUS, Dahua, Hikvision, Axis, ONVIF, Edge Agent)");
+  } catch (err: unknown) {
+    app.log.error({ err }, "failed to register event normalization routes");
   }
   const alertWorker = setInterval(() => {
     void alertDispatcher.drainOnce().catch((error) => app.log.error({ error }, "Alert outbox drain failed"));

@@ -188,8 +188,9 @@ export class OnvifCameraClient {
 
   private async getDefaultProfileToken(): Promise<string> {
     const profiles = await this.getProfiles();
-    if (profiles.length === 0) throw new Error("No media profiles available on this camera");
-    return profiles[0].token;
+    const first = profiles[0];
+    if (!first) throw new Error("No media profiles available on this camera");
+    return first.token;
   }
 
   private async getDefaultVideoSourceToken(): Promise<string> {

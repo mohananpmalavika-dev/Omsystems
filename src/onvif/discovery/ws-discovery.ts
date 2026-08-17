@@ -165,14 +165,15 @@ export class WsDiscovery {
         } else if (decoded.includes("/manufacturer/")) {
           manufacturer = decoded.split("/manufacturer/")[1];
         } else if (decoded.includes("/Profile/")) {
-          profiles.push(decoded.split("/Profile/")[1]);
+          const prof = decoded.split("/Profile/")[1];
+          if (prof) profiles.push(prof);
         }
       }
 
       // Try to parse IP & Port from XAddrs
       let ip = remoteIp;
       let port = remotePort;
-      if (xaddrs.length > 0) {
+      if (xaddrs.length > 0 && xaddrs[0]) {
         try {
           const parsedUrl = new URL(xaddrs[0]);
           ip = parsedUrl.hostname;
