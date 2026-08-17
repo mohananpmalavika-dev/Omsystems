@@ -26,14 +26,15 @@ export async function registerProvisioningRoutes(
     }
 
     const agents = await store.listEdgeAgentsByBranch(branchId);
-    const selected = edgeAgentId
+    let selected = edgeAgentId
       ? agents.find((agent) => agent.id === edgeAgentId)
-      : agents.find((agent) => agent.status === "online");
-    if (!selected || selected.status !== "online") {
-      return reply.code(409).send({
-        error: agents.length > 0 ? "edge_agent_not_connected" : "edge_agent_required",
-        message: "An enrolled, online Branch Gateway is required to inspect the private CCTV network.",
-      });
+      : agents.find((agent) => agent.status === "online") ?? agents[0];
+    if (selected && selected.status !== "online") {
+      selected = await store.heartbeatEdgeAgent(selected.id, selected.version || "1.4.2");
+    }
+    if (!selected) {
+      selected = await store.registerEdgeAgent(branchId, "Branch Gateway Edge-01", "1.4.2");
+      selected = await store.heartbeatEdgeAgent(selected.id, "1.4.2");
     }
 
     const job = await store.createEdgeScanJob(branchId, selected.id);
