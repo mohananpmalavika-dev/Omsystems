@@ -41,7 +41,7 @@ export function StatusBadge({
   label,
   className = "",
 }: StatusBadgeProps) {
-  const normStatus = (status || "UNKNOWN").toUpperCase();
+  const normStatus = (typeof status === 'string' ? status : status ? String(status) : "UNKNOWN").toUpperCase();
 
   let bgClass = "bg-slate-800/60 text-slate-300 border-slate-700/60";
   let IconComponent = HelpCircle;
