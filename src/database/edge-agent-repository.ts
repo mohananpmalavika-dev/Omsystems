@@ -148,8 +148,13 @@ export class EdgeAgentRepository {
   async listByBranch(branchId: string) {
     const result = await this.pool.query<AgentRow>(
       `SELECT id::text, branch_node_id::text, name, version,
-              CASE WHEN last_seen_at < now() - interval '90 seconds'
-                THEN 'offline'::edge_agent_status ELSE status END AS status,
+              CASE 
+                WHEN status = 'online' AND (last_seen_at IS NULL OR last_seen_at >= now() - interval '15 minutes')
+                  THEN 'online'::edge_agent_status
+                WHEN last_seen_at < now() - interval '15 minutes'
+                  THEN 'offline'::edge_agent_status
+                ELSE status 
+              END AS status,
               last_seen_at, public_media_url, device_uuid,
               credential_issued_at, credential_revoked_at
        FROM edge_agents
@@ -163,8 +168,13 @@ export class EdgeAgentRepository {
   async listByTenant(tenantId: string) {
     const result = await this.pool.query<AgentRow>(
       `SELECT e.id::text, e.branch_node_id::text, e.name, e.version,
-              CASE WHEN e.last_seen_at < now() - interval '90 seconds'
-                THEN 'offline'::edge_agent_status ELSE e.status END AS status,
+              CASE 
+                WHEN e.status = 'online' AND (e.last_seen_at IS NULL OR e.last_seen_at >= now() - interval '15 minutes')
+                  THEN 'online'::edge_agent_status
+                WHEN e.last_seen_at < now() - interval '15 minutes'
+                  THEN 'offline'::edge_agent_status
+                ELSE e.status 
+              END AS status,
               e.last_seen_at, e.public_media_url, e.device_uuid,
               e.credential_issued_at, e.credential_revoked_at
        FROM edge_agents e
@@ -179,8 +189,13 @@ export class EdgeAgentRepository {
   async get(id: string) {
     const result = await this.pool.query<AgentRow>(
       `SELECT id::text, branch_node_id::text, name, version,
-              CASE WHEN last_seen_at < now() - interval '90 seconds'
-                THEN 'offline'::edge_agent_status ELSE status END AS status,
+              CASE 
+                WHEN status = 'online' AND (last_seen_at IS NULL OR last_seen_at >= now() - interval '15 minutes')
+                  THEN 'online'::edge_agent_status
+                WHEN last_seen_at < now() - interval '15 minutes'
+                  THEN 'offline'::edge_agent_status
+                ELSE status 
+              END AS status,
               last_seen_at, public_media_url, device_uuid,
               credential_issued_at, credential_revoked_at
        FROM edge_agents WHERE id = $1`,
