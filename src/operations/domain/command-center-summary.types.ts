@@ -2,14 +2,14 @@
  * Unified Surveillance Operating System Domain Contracts
  * 
  * Provides unified operational read models, attention matrix, 360-degree branch workspace,
- * and universal entity search.
+ * predictive failure intelligence, and universal entity search.
  */
 
 import type { OperationalStatus } from "../../maintenance/domain/maintenance-window.types.js";
 
 export interface AttentionRequiredItem {
   id: string;
-  category: "P1_ALERT" | "RECORDING_FAILURE" | "RETENTION_VIOLATION" | "INTERNET_OUTAGE" | "STORAGE_CRITICAL" | "MASS_INCIDENT";
+  category: "P1_ALERT" | "RECORDING_FAILURE" | "RETENTION_VIOLATION" | "INTERNET_OUTAGE" | "STORAGE_CRITICAL" | "MASS_INCIDENT" | "PREDICTED_FAILURE";
   severity: "P1" | "P2" | "CRITICAL" | "WARNING";
   branchId: string;
   branchName: string;
@@ -19,10 +19,101 @@ export interface AttentionRequiredItem {
   description: string;
   occurredAt: Date;
   actionUrl: string;
+  recommendedAction?: string;
+  riskProbabilityPct?: number;
+}
+
+export interface PredictedFailureItem {
+  branchId: string;
+  branchName: string;
+  region: string;
+  failureType: "RECORDING_FAILURE" | "STORAGE_FAILURE" | "NETWORK_OUTAGE" | "CAMERA_CLUSTER_DROP";
+  failureProbability: number; // 0 - 100
+  expectedWindow: string; // e.g. "24–48 hours"
+  likelyCause: string;
+  severity: "HIGH" | "MEDIUM" | "LOW";
+  contributingFactors: Array<{ factor: string; percentage: number }>;
+  recommendedAction: string;
+}
+
+export interface FleetHealthBreakdown {
+  score: number; // 0 - 100
+  trendPct: number; // e.g. +2.3% vs yesterday
+  subscores: {
+    infrastructure: number;
+    cameras: number;
+    recording: number;
+    network: number;
+    storage: number;
+    retention: number;
+  };
+}
+
+export interface ChangeSinceYesterday {
+  camerasRestored: number;
+  camerasOffline: number;
+  branchesDegraded: number;
+  criticalIncidents: number;
+  predictedFailures: number;
+}
+
+export interface BusinessImpactSummary {
+  branchesAffected: number;
+  camerasAffected: number;
+  surveillanceExposureMinutes: number;
+  complianceRisksCount: number;
+  vaultOrAtmExposures: number;
+}
+
+export interface LiveIncidentItem {
+  id: string;
+  severityColor: "RED" | "ORANGE" | "YELLOW" | "BLUE";
+  branchCode: string;
+  branchName: string;
+  headline: string;
+  riskPct?: number;
+  startedAgo: string;
+  actionUrl: string;
+}
+
+export interface AiOperationsBriefing {
+  status: "NORMAL" | "ANOMALIES_DETECTED" | "CRITICAL_ISSUES";
+  headline: string;
+  summaryText: string;
+  criticalItemsCount: number;
+  recommendedAction: string;
+  items: Array<{
+    branchId: string;
+    branchCode: string;
+    branchName: string;
+    issue: string;
+    actionLabel: string;
+  }>;
 }
 
 export interface CommandCenterSummary {
   generatedAt: Date;
+  lastTelemetryTimestamp: string;
+  agentHeartbeatSecondsAgo: number;
+
+  // Executive Operational Intelligence Metrics
+  fleetHealth: FleetHealthBreakdown;
+  predictedFailuresSummary: {
+    total: number;
+    highRiskCount: number;
+    mediumRiskCount: number;
+    horizon: string;
+    nextLikelyFailure: PredictedFailureItem;
+    allPredictions: PredictedFailureItem[];
+  };
+
+  atRiskBranchesCount: number;
+  atRiskTrend: number;
+
+  changeSinceYesterday: ChangeSinceYesterday;
+  businessImpact: BusinessImpactSummary;
+  liveIncidents: LiveIncidentItem[];
+  aiBriefing: AiOperationsBriefing;
 
   branches: {
     total: number;
@@ -31,6 +122,7 @@ export interface CommandCenterSummary {
     critical: number;
     offline: number;
     maintenance: number;
+    unprovisioned: number;
     unknown: number;
   };
 
@@ -41,6 +133,14 @@ export interface CommandCenterSummary {
     recordingFailure: number;
     maintenance: number;
     unknown: number;
+    trendPct: number;
+  };
+
+  recording: {
+    healthyPct: number;
+    trendPct: number;
+    totalRecording: number;
+    totalFailing: number;
   };
 
   recorders: {
@@ -51,6 +151,8 @@ export interface CommandCenterSummary {
   };
 
   storage: {
+    healthyPct: number;
+    trendPct: number;
     totalDisks: number;
     healthy: number;
     warning: number;
@@ -58,7 +160,9 @@ export interface CommandCenterSummary {
   };
 
   retention: {
-    requiredDays: number;
+    compliancePct: number;
+    configuredMandateDays: number;
+    policyTag: string; // e.g. "90d ✓" or "180d ✓"
     compliantBranches: number;
     warningBranches: number;
     violationBranches: number;
@@ -91,12 +195,23 @@ export interface BranchOperationalView {
   branchCode: string;
   name: string;
   region: string;
-  operationalState: OperationalStatus;
+  operationalState: OperationalStatus | "NOT_PROVISIONED" | "MONITORING_INCOMPLETE" | "STALE";
+
+  healthScore: number; // 0 - 100
+
+  risk: {
+    level: "LOW" | "MEDIUM" | "HIGH";
+    probabilityPct?: number;
+    horizonHours?: number;
+    indicator?: string;
+  };
 
   internet: {
     state: string;
     mode: string;
     latencyMs: number;
+    packetLossPct?: number;
+    jitterMs?: number;
   };
 
   cameras: {
@@ -107,22 +222,33 @@ export interface BranchOperationalView {
     maintenance: number;
   };
 
+  recording: {
+    totalChannels: number;
+    recordingChannels: number;
+    status: "HEALTHY" | "DEGRADED" | "FAILED" | "NOT_PROVISIONED";
+  };
+
   recorders: {
     total: number;
     online: number;
     offline: number;
+    temperatureC?: number;
+    cpuPct?: number;
   };
 
   storage: {
     diskCount: number;
-    state: string;
+    state: "HEALTHY" | "WARNING" | "CRITICAL" | "UNKNOWN";
     minFreePercent: number;
+    smartWarningsCount?: number;
+    disks?: Array<{ name: string; status: string; smart: string }>;
   };
 
   retention: {
     requiredDays: number;
     observedDays: number;
     compliant: boolean;
+    displayTag: string; // e.g. "90d ✓"
   };
 
   alerts: {
@@ -130,8 +256,15 @@ export interface BranchOperationalView {
     p2: number;
   };
 
+  telemetry: {
+    lastReportedAt: Date;
+    secondsAgo: number;
+    isStale: boolean;
+  };
+
+  aiDiagnosis?: string;
+  recommendedAction?: string;
   openIncidents: number;
-  lastReportedAt: Date;
 }
 
 export interface Branch360Workspace {
@@ -156,6 +289,8 @@ export interface Branch360Workspace {
     channelsTotal: number;
     channelsRecording: number;
     clockOffsetSeconds: number;
+    temperatureC?: number;
+    cpuPct?: number;
   }>;
   disks: Array<{
     diskId: string;
@@ -171,6 +306,7 @@ export interface Branch360Workspace {
     currentMode: string;
     latencyMs: number;
     packetLossPct: number;
+    jitterMs?: number;
     vpnConnected: boolean;
   };
   activeAlerts: Array<{
@@ -187,6 +323,8 @@ export interface Branch360Workspace {
     startedAt: Date;
     status: string;
   }>;
+  aiDiagnosis?: string;
+  recommendedAction?: string;
 }
 
 export interface UniversalSearchResult {

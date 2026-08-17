@@ -3,6 +3,7 @@
  *
  * Distills fleet-wide infrastructure telemetry, predictive forecasts,
  * compliance mandates, and operational logs into the 5 Executive Answers.
+ * Supports clean empty state when starting with a fresh database.
  */
 
 import { randomUUID } from "node:crypto";
@@ -27,19 +28,22 @@ export class CeoScreenEngine {
   private predictions: Map<string, AtRiskBranchPrediction> = new Map();
   private complianceRisks: Map<string, ComplianceRiskItem> = new Map();
   private criticalZones: CriticalZoneExposure[] = [];
-  private totalBranchesMonitored = 450;
+  private totalBranchesMonitored = 0;
 
-  constructor() {
-    this.seedDefaultExecutiveState();
+  constructor(autoSeed = false) {
+    if (autoSeed) {
+      this.seedDefaultExecutiveState();
+    }
   }
 
-  // ─── Default Executive State Benchmark ──────────────────────────────────────
+  // ─── Default Executive State Benchmark (Test / Demo Helper) ──────────────────
 
   public seedDefaultExecutiveState(): void {
     this.actions.clear();
     this.degradedBranches.clear();
     this.predictions.clear();
     this.complianceRisks.clear();
+    this.totalBranchesMonitored = 450;
 
     // 1. WHAT IS BROKEN: 27 Degraded Branches
     const brokenRegions = [
@@ -286,10 +290,16 @@ export class CeoScreenEngine {
     const degradedCount = degradedList.length;
     const criticalCount = degradedList.filter((b) => b.severity === "CRITICAL").length;
     const healthyCount = Math.max(0, this.totalBranchesMonitored - degradedCount);
-    const fleetHealthPct = Math.round((healthyCount / this.totalBranchesMonitored) * 1000) / 10;
+    const fleetHealthPct = this.totalBranchesMonitored > 0
+      ? Math.round((healthyCount / this.totalBranchesMonitored) * 1000) / 10
+      : 100;
+
+    const headline = degradedCount === 0
+      ? "Zero branches degraded (Fleet 100% healthy)"
+      : `${degradedCount} branches degraded`;
 
     return {
-      summaryHeadline: `${degradedCount} branches degraded`,
+      summaryHeadline: headline,
       totalBranchesMonitored: this.totalBranchesMonitored,
       degradedBranchesCount: degradedCount,
       criticalBranchesCount: criticalCount,
@@ -305,8 +315,12 @@ export class CeoScreenEngine {
     const highRisk = preds.filter((p) => p.failureLikelihoodPct >= 75).length;
     const moderateRisk = preds.filter((p) => p.failureLikelihoodPct < 75).length;
 
+    const headline = preds.length === 0
+      ? "Zero predicted failures within 72 hours"
+      : `${preds.length} branches high risk within 72 hours`;
+
     return {
-      summaryHeadline: `${preds.length} branches high risk within 72 hours`,
+      summaryHeadline: headline,
       highRiskBranchesCount: highRisk,
       moderateRiskBranchesCount: moderateRisk,
       forecastHorizonHours: 72,
@@ -315,8 +329,20 @@ export class CeoScreenEngine {
   }
 
   public getWhy(): WhyAnswer {
-    // Breakdown across the 5 core hardware/infrastructure pillars:
-    // HDD / Network / DVR / Camera / Power
+    if (this.degradedBranches.size === 0) {
+      return {
+        summaryHeadline: "All hardware subsystems operating normally (100% healthy)",
+        attributions: [
+          { category: "HDD", displayName: "Hard Disk & Storage", percentageContribution: 0, affectedBranchesCount: 0, affectedDevicesCount: 0, primarySymptom: "Nominal", details: [] },
+          { category: "NETWORK", displayName: "WAN & ISP Connectivity", percentageContribution: 0, affectedBranchesCount: 0, affectedDevicesCount: 0, primarySymptom: "Nominal", details: [] },
+          { category: "DVR", displayName: "Recorder & Media Nodes", percentageContribution: 0, affectedBranchesCount: 0, affectedDevicesCount: 0, primarySymptom: "Nominal", details: [] },
+          { category: "CAMERA", displayName: "Camera & Lens Sensors", percentageContribution: 0, affectedBranchesCount: 0, affectedDevicesCount: 0, primarySymptom: "Nominal", details: [] },
+          { category: "POWER", displayName: "Power & UPS Infrastructure", percentageContribution: 0, affectedBranchesCount: 0, affectedDevicesCount: 0, primarySymptom: "Nominal", details: [] },
+        ],
+        dominantCause: "HDD",
+      };
+    }
+
     const rootCauses: Record<RootCauseCategory, { count: number; devices: number; symptoms: string[] }> = {
       HDD: { count: 11, devices: 14, symptoms: ["SMART Reallocated Sectors", "Write Latency Spikes", "Storage Degradation"] },
       NETWORK: { count: 8, devices: 19, symptoms: ["WAN Packet Loss", "ISP Jitter", "Tunnel Retransmits"] },
@@ -369,12 +395,26 @@ export class CeoScreenEngine {
 
   public getBusinessImpact(): BusinessImpactAnswer {
     const complianceList = Array.from(this.complianceRisks.values());
-    const totalBlind = this.criticalZones.reduce((sum, z) => sum + z.camerasBlind, 0) + 15; // 63 total
+    const totalBlind = this.criticalZones.reduce((sum, z) => sum + z.camerasBlind, 0);
+
+    if (totalBlind === 0 && complianceList.length === 0) {
+      return {
+        summaryHeadline: "0 cameras affected / 0 branches / 0 compliance risks",
+        totalCamerasAffected: 0,
+        criticalBranchesImpacted: 0,
+        activeComplianceRisksCount: 0,
+        complianceRisks: [],
+        criticalZoneExposures: [],
+        estimatedOperationalRiskScore: 0,
+      };
+    }
+
     const branchesWithVaultOrComplianceRisk = 11;
+    const allBlind = totalBlind + 15;
 
     return {
-      summaryHeadline: `${totalBlind} cameras / ${branchesWithVaultOrComplianceRisk} branches / ${complianceList.length} compliance risks`,
-      totalCamerasAffected: totalBlind,
+      summaryHeadline: `${allBlind} cameras / ${branchesWithVaultOrComplianceRisk} branches / ${complianceList.length} compliance risks`,
+      totalCamerasAffected: allBlind,
       criticalBranchesImpacted: branchesWithVaultOrComplianceRisk,
       activeComplianceRisksCount: complianceList.length,
       complianceRisks: complianceList,
@@ -389,7 +429,7 @@ export class CeoScreenEngine {
     const headline = actionList.map((a) => a.title).join(" • ");
 
     return {
-      summaryHeadline: headline || "All immediate remediation actions completed",
+      summaryHeadline: headline || "No immediate remediation actions required (Fleet Nominal)",
       immediateActionsCount: pendingActions.length,
       actions: actionList,
     };
@@ -439,7 +479,6 @@ export class CeoScreenEngine {
     action.executedBy = operatorId;
     action.executionResult = `Successfully triggered ${action.type} for targets [${action.targetBranchIds.join(", ")}]`;
 
-    // Simulated side effect: resolve related degraded branch or prediction
     if (action.type === "RESTART_DVR") {
       action.targetBranchIds.forEach((bId) => {
         const branch = this.degradedBranches.get(bId);
@@ -474,8 +513,9 @@ export class CeoScreenEngine {
     this.predictions.clear();
     this.complianceRisks.clear();
     this.criticalZones = [];
+    this.totalBranchesMonitored = 0;
   }
 }
 
 // Global Singleton Instance
-export const ceoScreenEngine = new CeoScreenEngine();
+export const ceoScreenEngine = new CeoScreenEngine(false);
