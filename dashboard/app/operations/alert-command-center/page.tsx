@@ -59,7 +59,7 @@ import {
   X,
   Zap,
 } from "lucide-react";
-import type { LiveSessionResponse } from "@/lib/types";
+import type { AnalyticsSeverity, LiveSessionResponse } from "@/lib/types";
 import {
   dashboardEvidenceUrl,
   evidenceAvailable,
@@ -81,7 +81,7 @@ export interface CorrelatedIncidentGroup {
   branchName: string;
   rootCause: string;
   primaryAlertId: string;
-  severity: "P1" | "P2" | "P3" | "P4";
+  severity: AnalyticsSeverity;
   alertCount: number;
   alerts: CommandAlert[];
   detectedAt: string;
@@ -104,7 +104,7 @@ export interface PredictiveAlert {
   detectedAt: string;
 }
 
-// ─── Seeded Synthetic / Mock Initial Signals for Realism ─────────────────────
+// ─── Seeded Synthetic Signals for Realism ─────────────────────────────────────
 
 const SEEDED_PREDICTIVE_ALERTS: PredictiveAlert[] = [
   {
@@ -159,7 +159,7 @@ const SEEDED_LIVE_STREAM_EVENTS = [
 export default function AlertCommandCenterPage() {
   const [alerts, setAlerts] = useState<CommandAlert[]>([]);
   const [counts, setCounts] = useState<Record<string, number>>({ P1: 0, P2: 0, P3: 0, P4: 0 });
-  const [severityFilter, setSeverityFilter] = useState<string>("");
+  const [severityFilter, setSeverityFilter] = useState<string>("all");
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [slaFilter, setSlaFilter] = useState<string>("all");
@@ -185,7 +185,9 @@ export default function AlertCommandCenterPage() {
 
   const load = useCallback(async () => {
     const params = new URLSearchParams({ limit: "200" });
-    if (severityFilter && severityFilter !== "PREDICTED") params.set("severity", severityFilter);
+    if (severityFilter && severityFilter !== "all" && severityFilter !== "PREDICTED") {
+      params.set("severity", severityFilter);
+    }
     try {
       const response = await fetch(`/api/control/v1/alerts/command-center?${params}`, {
         cache: "no-store",
@@ -367,14 +369,14 @@ export default function AlertCommandCenterPage() {
   const filteredAlerts = useMemo(() => {
     return alerts.filter((alert) => {
       // Severity
-      if (severityFilter && severityFilter !== "PREDICTED" && alert.severity !== severityFilter) return false;
+      if (severityFilter !== "all" && severityFilter !== "PREDICTED" && alert.severity !== severityFilter) return false;
       // Category
       if (categoryFilter !== "all" && getCategory(alert) !== categoryFilter) return false;
       // Status
       if (statusFilter !== "all") {
         if (statusFilter === "new" && alert.status !== "new") return false;
         if (statusFilter === "acknowledged" && alert.status !== "acknowledged") return false;
-        if (statusFilter === "assigned" && alert.status !== "assigned" && !alert.assignee) return false;
+        if (statusFilter === "assigned" && !alert.assignedTo) return false;
         if (statusFilter === "resolved" && !["resolved", "false_alarm", "suppressed"].includes(alert.status)) return false;
       }
       // SLA
@@ -402,7 +404,6 @@ export default function AlertCommandCenterPage() {
   // ─── Correlated Incidents Grouping Engine (9 alerts → 1 incident) ───────────
 
   const correlatedGroups = useMemo((): CorrelatedIncidentGroup[] => {
-    // Generate synthetic group for Branch A214 infrastructure power/network failure
     const a214Alerts = filteredAlerts.filter((a) => a.branchName.includes("A214") || a.branchId.includes("a214"));
     const otherAlerts = filteredAlerts.filter((a) => !a.branchName.includes("A214") && !a.branchId.includes("a214"));
 
@@ -456,7 +457,7 @@ export default function AlertCommandCenterPage() {
     return groups;
   }, [filteredAlerts]);
 
-  // Operational KPI counts with enhanced telemetry
+  // Operational KPI counts
   const p1Count = counts.P1 || alerts.filter((a) => a.severity === "P1").length || 3;
   const p2Count = counts.P2 || alerts.filter((a) => a.severity === "P2").length || 8;
   const p3Count = counts.P3 || alerts.filter((a) => a.severity === "P3").length || 17;
@@ -522,7 +523,7 @@ export default function AlertCommandCenterPage() {
             type="button"
             disabled={demoLoading}
             onClick={() => void generateSyntheticAlert()}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/40 text-amber-900 dark:text-amber-200 hover:bg-amber-100 transition disabled:opacity-50"
+            className="flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold rounded-lg border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/40 text-amber-900 dark:text-amber-200 hover:bg-amber-100 transition disabled:opacity-50"
             title="Generate a synthetic P1 hardware/recording alert for pipeline verification"
           >
             <Zap size={14} className="text-amber-600" />
@@ -586,7 +587,7 @@ export default function AlertCommandCenterPage() {
         {/* P1 — Critical */}
         <button
           type="button"
-          onClick={() => setSeverityFilter(severityFilter === "P1" ? "" : "P1")}
+          onClick={() => setSeverityFilter(severityFilter === "P1" ? "all" : "P1")}
           className={`card text-left p-3.5 transition rounded-xl border-l-[6px] border-l-red-600 hover:shadow-md ${
             severityFilter === "P1" ? "ring-2 ring-red-500 bg-red-50/40 dark:bg-red-950/30" : "bg-white dark:bg-gray-900"
           }`}
@@ -614,7 +615,7 @@ export default function AlertCommandCenterPage() {
         {/* P2 — High */}
         <button
           type="button"
-          onClick={() => setSeverityFilter(severityFilter === "P2" ? "" : "P2")}
+          onClick={() => setSeverityFilter(severityFilter === "P2" ? "all" : "P2")}
           className={`card text-left p-3.5 transition rounded-xl border-l-[6px] border-l-orange-500 hover:shadow-md ${
             severityFilter === "P2" ? "ring-2 ring-orange-500 bg-orange-50/40 dark:bg-orange-950/30" : "bg-white dark:bg-gray-900"
           }`}
@@ -641,7 +642,7 @@ export default function AlertCommandCenterPage() {
         {/* P3 — Medium */}
         <button
           type="button"
-          onClick={() => setSeverityFilter(severityFilter === "P3" ? "" : "P3")}
+          onClick={() => setSeverityFilter(severityFilter === "P3" ? "all" : "P3")}
           className={`card text-left p-3.5 transition rounded-xl border-l-[6px] border-l-blue-500 hover:shadow-md ${
             severityFilter === "P3" ? "ring-2 ring-blue-500 bg-blue-50/40 dark:bg-blue-950/30" : "bg-white dark:bg-gray-900"
           }`}
@@ -666,7 +667,7 @@ export default function AlertCommandCenterPage() {
         {/* P4 — Low */}
         <button
           type="button"
-          onClick={() => setSeverityFilter(severityFilter === "P4" ? "" : "P4")}
+          onClick={() => setSeverityFilter(severityFilter === "P4" ? "all" : "P4")}
           className={`card text-left p-3.5 transition rounded-xl border-l-[6px] border-l-slate-400 hover:shadow-md ${
             severityFilter === "P4" ? "ring-2 ring-slate-400 bg-slate-50/50 dark:bg-slate-900/40" : "bg-white dark:bg-gray-900"
           }`}
@@ -691,7 +692,7 @@ export default function AlertCommandCenterPage() {
         {/* 🔮 PREDICTED (Predictive AI) */}
         <button
           type="button"
-          onClick={() => setSeverityFilter(severityFilter === "PREDICTED" ? "" : "PREDICTED")}
+          onClick={() => setSeverityFilter(severityFilter === "PREDICTED" ? "all" : "PREDICTED")}
           className={`card text-left p-3.5 transition rounded-xl border-l-[6px] border-l-purple-600 hover:shadow-md col-span-2 sm:col-span-1 ${
             severityFilter === "PREDICTED" ? "ring-2 ring-purple-500 bg-purple-50/50 dark:bg-purple-950/30" : "bg-white dark:bg-gray-900"
           }`}
@@ -881,10 +882,10 @@ export default function AlertCommandCenterPage() {
               <option value="healthy">🟢 Healthy</option>
             </select>
 
-            {(severityFilter || categoryFilter !== "all" || statusFilter !== "all" || slaFilter !== "all" || searchQuery) && (
+            {(severityFilter !== "all" || categoryFilter !== "all" || statusFilter !== "all" || slaFilter !== "all" || searchQuery) && (
               <button
                 onClick={() => {
-                  setSeverityFilter("");
+                  setSeverityFilter("all");
                   setCategoryFilter("all");
                   setStatusFilter("all");
                   setSlaFilter("all");
@@ -1110,7 +1111,7 @@ export default function AlertCommandCenterPage() {
                 </div>
                 <button
                   onClick={() => {
-                    setSeverityFilter("");
+                    setSeverityFilter("all");
                     setCategoryFilter("all");
                     setStatusFilter("all");
                     setSearchQuery("");
@@ -1443,7 +1444,7 @@ function AlertInvestigationPanel({
 
         <div className="aspect-video bg-gray-950 rounded-lg grid place-items-center overflow-hidden relative border border-gray-800">
           {session?.hls ? (
-            <HlsPlayer url={session.hls.url} bearerToken={session.hls.bearerToken} cameraName={alert?.cameraName} />
+            <HlsPlayer url={session.hls.url} bearerToken={session.hls.bearerToken || ""} cameraName={alert?.cameraName || "Camera Stream"} />
           ) : snapshotReady && snapshotUrl ? (
             <img src={snapshotUrl} alt="Alert snapshot" className="w-full h-full object-contain" />
           ) : (
