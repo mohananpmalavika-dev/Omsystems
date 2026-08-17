@@ -75,6 +75,7 @@ import { registerAuthoritativeMediaPipelineRoutes } from "./media/routes/authori
 import { registerDeviceConnectivityRoutes } from "./device-connectivity/routes/device-connectivity.routes.js";
 import { registerHaClusterRoutes } from "./media/cluster/ha-cluster.routes.js";
 import { registerAdaptiveStreamRoutes } from "./media/adaptive/adaptive-stream.routes.js";
+import { registerEdgeProductRoutes } from "./edge-product/routes/edge-product.routes.js";
 import { registerAdminDatabaseRoutes } from "./routes/admin-database.routes.js";
 import { registerAuditRoutes } from "./routes/audit.routes.js";
 import { registerComplianceRoutes } from "./routes/compliance.routes.js";
@@ -2649,7 +2650,8 @@ export async function buildApp(options?: {
     await registerDeviceConnectivityRoutes(app);
     await registerHaClusterRoutes(app);
     await registerAdaptiveStreamRoutes(app);
-    app.log.info('Morning digest, Virtual guard, QRT dispatch, HA Cluster, Edge Lifecycle, Mobile, Asset Lifecycle, Media Pipeline, Device Connectivity, HA Leases, and Adaptive Stream routes registered');
+    await registerEdgeProductRoutes(app);
+    app.log.info('Morning digest, Virtual guard, QRT dispatch, HA Cluster, Edge Lifecycle, Mobile, Asset Lifecycle, Media Pipeline, Device Connectivity, HA Leases, Adaptive Stream, and Edge Product routes registered');
   } catch (err: unknown) {
     app.log.error({ err }, 'failed to register extended enterprise features');
   }
