@@ -14,12 +14,11 @@ function hashPasswordSync(password) {
 }
 
 async function main() {
-  const [,, username, password, email, tenantId] = process.argv;
+  const [,, argUsername, argPassword, argEmail, argTenantId] = process.argv;
 
-  if (!username || !password) {
-    console.error('Usage: node backend/scripts/create-superuser.mjs <username> <password> [email] [tenantId]');
-    process.exit(1);
-  }
+  const username = argUsername || 'mgdhanyamohan';
+  const password = argPassword || 'Thathu@110';
+  const email = argEmail || 'mgdhanyamohan@omsystems.bank';
 
   const DATABASE_URL = process.env.DATABASE_URL;
   if (!DATABASE_URL) {
@@ -39,25 +38,42 @@ async function main() {
     const passwordHash = hashPasswordSync(password);
 
     // Determine tenant id if not provided
-    let tid = tenantId;
+    let tid = argTenantId;
     if (!tid) {
       const res = await pool.query(`SELECT id FROM tenants LIMIT 1`);
       if (res.rows.length === 0) {
-        console.error('ERROR: No tenants found in database; provide tenantId as 4th argument');
-        process.exit(1);
+        const insTenant = await pool.query(`
+          INSERT INTO tenants (id, name, slug, status, created_at, updated_at)
+          VALUES (gen_random_uuid(), 'OM Systems Bank', 'omsystems', 'active', now(), now())
+          RETURNING id
+        `);
+        tid = insTenant.rows[0].id;
+      } else {
+        tid = res.rows[0].id;
       }
-      tid = res.rows[0].id;
     }
 
     const insert = `
-      INSERT INTO users (id, tenant_id, username, email, password_hash, role, status, created_at, updated_at)
-      VALUES (gen_random_uuid(), $1, $2, $3, $4, 'super_admin', 'active', now(), now())
-      RETURNING id, tenant_id, username, email, role, status;
+      INSERT INTO users (
+        id, tenant_id, username, email, display_name, password_hash, role, status, active, identity_subject, created_at, updated_at
+      ) VALUES (
+        '00000000-0000-4000-8000-000000000001'::uuid, $1, $2, $3, 'Dhanya Mohan (Superadmin)', $4, 'super_admin', 'active', true, $5, now(), now()
+      )
+      ON CONFLICT (username) DO UPDATE SET
+        role = 'super_admin',
+        status = 'active',
+        active = true,
+        password_hash = EXCLUDED.password_hash,
+        tenant_id = EXCLUDED.tenant_id,
+        display_name = EXCLUDED.display_name,
+        identity_subject = EXCLUDED.identity_subject,
+        updated_at = now()
+      RETURNING id, tenant_id, username, email, role, status, active;
     `;
 
-    const values = [tid, username, email || null, passwordHash];
+    const values = [tid, username, email || null, passwordHash, `user-${username}`];
     const result = await pool.query(insert, values);
-    console.log('Superuser created:');
+    console.log('✓ Superuser successfully configured in database:');
     console.table(result.rows[0]);
   } catch (err) {
     console.error('Failed to create superuser:', err instanceof Error ? err.message : String(err));

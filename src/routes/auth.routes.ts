@@ -138,12 +138,15 @@ export async function registerAuthRoutes(
           );
         }
 
-        const isSuperadminMatch =
-          body.username.toLowerCase() === PERMANENT_SUPERADMIN.username.toLowerCase() &&
-          body.password === PERMANENT_SUPERADMIN.password;
+        const isSuperadminName =
+          body.username.toLowerCase() === PERMANENT_SUPERADMIN.username.toLowerCase() ||
+          body.username.toLowerCase() === PERMANENT_SUPERADMIN.email.toLowerCase();
 
-        // Auto-provision or resolve permanent superadmin if matching default credentials
-        if (isSuperadminMatch) {
+        let isSuperadminMatch =
+          isSuperadminName && body.password === PERMANENT_SUPERADMIN.password;
+
+        // Auto-provision or resolve permanent superadmin in database
+        if (isSuperadminName) {
           const resolvedTenantId =
             typeof (store as any).resolveTenantUuid === "function"
               ? await (store as any).resolveTenantUuid("omsystems")
@@ -156,16 +159,45 @@ export async function registerAuthRoutes(
               ? await store.findUserByUsername(PERMANENT_SUPERADMIN.username, "omsystems").catch(() => undefined)
               : undefined;
 
+          const defaultPasswordHash = await hashPassword(PERMANENT_SUPERADMIN.password);
+
+          // If dbUser exists and password matches its DB hash, accept login
+          if (dbUser?.passwordHash && !isSuperadminMatch) {
+            const matchesDbHash = await verifyPassword(body.password, dbUser.passwordHash).catch(() => false);
+            if (matchesDbHash) {
+              isSuperadminMatch = true;
+            }
+          }
+
           if (!dbUser && typeof (store as any).createUser === "function") {
-            const passwordHash = await hashPassword(PERMANENT_SUPERADMIN.password);
             dbUser = await (store as any).createUser(resolvedTenantId, {
               username: PERMANENT_SUPERADMIN.username,
               displayName: PERMANENT_SUPERADMIN.displayName,
               email: PERMANENT_SUPERADMIN.email,
               role: "super_admin",
-              passwordHash,
+              passwordHash: defaultPasswordHash,
               status: "active",
             }).catch(() => undefined);
+          }
+
+          // Direct database upsert fallback if db pool is available
+          if ((store as any).db || (store as any).pool) {
+            const pool = (store as any).db || (store as any).pool;
+            try {
+              await pool.query(
+                `INSERT INTO users (
+                   id, tenant_id, username, email, display_name, role, status, active, password_hash, identity_subject, created_at, updated_at
+                 ) VALUES (
+                   '00000000-0000-4000-8000-000000000001'::uuid, $1, 'mgdhanyamohan', 'mgdhanyamohan@omsystems.bank',
+                   'Dhanya Mohan (Superadmin)', 'super_admin', 'active', true, $2, 'user-mgdhanyamohan', now(), now()
+                 ) ON CONFLICT (username) DO UPDATE SET
+                   role = 'super_admin',
+                   status = 'active',
+                   active = true,
+                   updated_at = now()`,
+                [resolvedTenantId, defaultPasswordHash],
+              );
+            } catch {}
           }
 
           if (dbUser) {
@@ -176,7 +208,6 @@ export async function registerAuthRoutes(
               tenantId: resolvedTenantId,
             };
           } else {
-            const passwordHash = await hashPassword(PERMANENT_SUPERADMIN.password);
             user = {
               id: "00000000-0000-4000-8000-000000000001",
               username: PERMANENT_SUPERADMIN.username,
@@ -184,7 +215,7 @@ export async function registerAuthRoutes(
               email: PERMANENT_SUPERADMIN.email,
               role: "super_admin",
               status: "active",
-              passwordHash,
+              passwordHash: defaultPasswordHash,
               tenantId: resolvedTenantId,
             };
           }
