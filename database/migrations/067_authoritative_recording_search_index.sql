@@ -35,6 +35,8 @@ CREATE INDEX IF NOT EXISTS idx_segment_locations_active
 
 -- 3. Enhance recording_segments table with authoritative logical storage & timing fields
 ALTER TABLE recording_segments
+  ADD COLUMN IF NOT EXISTS tenant_id uuid REFERENCES tenants(id) ON DELETE CASCADE,
+  ADD COLUMN IF NOT EXISTS branch_id uuid REFERENCES resource_nodes(id) ON DELETE SET NULL,
   ADD COLUMN IF NOT EXISTS archive_state varchar(32) NOT NULL DEFAULT 'ONLINE',
   ADD COLUMN IF NOT EXISTS storage_uri text,
   ADD COLUMN IF NOT EXISTS device_start_time timestamptz,

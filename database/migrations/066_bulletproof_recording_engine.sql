@@ -1,19 +1,44 @@
 -- 066_bulletproof_recording_engine.sql
 -- Enterprise-grade bulletproof VMS recording engine schema enhancements
 
--- 1. Create recording_gaps table for audit compliance, SLA tracking, and forensic analysis
+-- 1. Create or enhance recording_gaps table for audit compliance, SLA tracking, and forensic analysis
 CREATE TABLE IF NOT EXISTS recording_gaps (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   tenant_id uuid REFERENCES tenants(id) ON DELETE CASCADE,
   branch_id uuid REFERENCES resource_nodes(id) ON DELETE SET NULL,
   camera_id uuid NOT NULL REFERENCES cameras(id) ON DELETE CASCADE,
-  start_time timestamptz NOT NULL,
+  start_time timestamptz,
   end_time timestamptz,
-  reason varchar(64) NOT NULL,
+  reason varchar(64) DEFAULT 'unknown',
   detail jsonb NOT NULL DEFAULT '{}'::jsonb,
   detected_at timestamptz NOT NULL DEFAULT now(),
   resolved_at timestamptz
 );
+
+-- Ensure all columns exist even if recording_gaps was created by earlier migrations
+ALTER TABLE recording_gaps
+  ADD COLUMN IF NOT EXISTS tenant_id uuid REFERENCES tenants(id) ON DELETE CASCADE,
+  ADD COLUMN IF NOT EXISTS branch_id uuid REFERENCES resource_nodes(id) ON DELETE SET NULL,
+  ADD COLUMN IF NOT EXISTS camera_id uuid REFERENCES cameras(id) ON DELETE CASCADE,
+  ADD COLUMN IF NOT EXISTS start_time timestamptz,
+  ADD COLUMN IF NOT EXISTS end_time timestamptz,
+  ADD COLUMN IF NOT EXISTS gap_start timestamptz,
+  ADD COLUMN IF NOT EXISTS gap_end timestamptz,
+  ADD COLUMN IF NOT EXISTS gap_duration_seconds integer,
+  ADD COLUMN IF NOT EXISTS gap_type text,
+  ADD COLUMN IF NOT EXISTS reason varchar(64) DEFAULT 'unknown',
+  ADD COLUMN IF NOT EXISTS detail jsonb NOT NULL DEFAULT '{}'::jsonb,
+  ADD COLUMN IF NOT EXISTS root_cause text,
+  ADD COLUMN IF NOT EXISTS resolution text,
+  ADD COLUMN IF NOT EXISTS detected_at timestamptz NOT NULL DEFAULT now(),
+  ADD COLUMN IF NOT EXISTS resolved_at timestamptz;
+
+-- Synchronize legacy column names if present
+UPDATE recording_gaps SET start_time = gap_start WHERE start_time IS NULL AND gap_start IS NOT NULL;
+UPDATE recording_gaps SET end_time = gap_end WHERE end_time IS NULL AND gap_end IS NOT NULL;
+UPDATE recording_gaps SET gap_start = start_time WHERE gap_start IS NULL AND start_time IS NOT NULL;
+UPDATE recording_gaps SET gap_end = end_time WHERE gap_end IS NULL AND end_time IS NOT NULL;
+UPDATE recording_gaps SET reason = COALESCE(reason, gap_type, 'unknown') WHERE reason IS NULL;
 
 CREATE INDEX IF NOT EXISTS idx_recording_gaps_camera ON recording_gaps (camera_id, start_time DESC);
 CREATE INDEX IF NOT EXISTS idx_recording_gaps_tenant_branch ON recording_gaps (tenant_id, branch_id, detected_at DESC);
