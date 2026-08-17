@@ -231,23 +231,56 @@ export default function AlertNotificationPolicyPage() {
         </div>
 
         <section className="card p-5 space-y-4">
-          <header className="flex items-center gap-2 text-sm font-semibold"><Clock3 size={16} />Recipient groups</header>
+          <header className="flex items-center gap-2 text-sm font-semibold text-slate-900">
+            <Clock3 size={16} className="text-slate-700" />
+            <span>Recipient groups</span>
+          </header>
           <div className="grid gap-4 md:grid-cols-3">
-            <label className="field">Email recipients<textarea value={displayList(input.recipientGroups.email)} onChange={(event) => setGroupRecipients("email", event.target.value)} className="field-input" placeholder="one@example.com\nother@example.com" /></label>
-            <label className="field">SMS recipients<textarea value={displayList(input.recipientGroups.sms)} onChange={(event) => setGroupRecipients("sms", event.target.value)} className="field-input" placeholder="+919100000001\n+919100000002" /></label>
-            <label className="field">Voice recipients<textarea value={displayList(input.recipientGroups.voice)} onChange={(event) => setGroupRecipients("voice", event.target.value)} className="field-input" placeholder="+918888888888\n+918888888889" /></label>
+            <label className="field">
+              <span className="text-sm font-medium text-slate-900 mb-1.5 block">Email recipients</span>
+              <textarea 
+                value={displayList(input.recipientGroups.email)} 
+                onChange={(event) => setGroupRecipients("email", event.target.value)} 
+                className="field-input" 
+                rows={4}
+                placeholder="one@example.com&#10;other@example.com" 
+              />
+            </label>
+            <label className="field">
+              <span className="text-sm font-medium text-slate-900 mb-1.5 block">SMS recipients</span>
+              <textarea 
+                value={displayList(input.recipientGroups.sms)} 
+                onChange={(event) => setGroupRecipients("sms", event.target.value)} 
+                className="field-input" 
+                rows={4}
+                placeholder="+919100000001&#10;+919100000002" 
+              />
+            </label>
+            <label className="field">
+              <span className="text-sm font-medium text-slate-900 mb-1.5 block">Voice recipients</span>
+              <textarea 
+                value={displayList(input.recipientGroups.voice)} 
+                onChange={(event) => setGroupRecipients("voice", event.target.value)} 
+                className="field-input" 
+                rows={4}
+                placeholder="+918888888888&#10;+918888888889" 
+              />
+            </label>
           </div>
         </section>
 
         <section className="card p-5 space-y-4">
-          <header className="flex items-center gap-2 text-sm font-semibold"><Bell size={16} />Notification matrix</header>
+          <header className="flex items-center gap-2 text-sm font-semibold text-slate-900">
+            <Bell size={16} className="text-slate-700" />
+            <span>Notification matrix</span>
+          </header>
           <div className="grid gap-4 md:grid-cols-5">
             {severityMatrix.map(({ severity, channels }) => (
-              <div key={severity} className="rounded border border-slate-200 bg-slate-50 p-3">
-                <div className="text-sm font-semibold text-slate-900">{severity}</div>
-                <div className="mt-2 flex flex-wrap gap-1.5 text-[11px] text-slate-700">
+              <div key={severity} className="rounded-lg border border-slate-300 bg-slate-50 p-4">
+                <div className="text-base font-bold text-slate-900 mb-3">{severity}</div>
+                <div className="flex flex-col gap-1.5 text-xs text-slate-800">
                   {channels.map((channel) => (
-                    <span key={`${severity}-${channel}`} className="rounded border border-slate-300 bg-white px-2 py-0.5 uppercase">
+                    <span key={`${severity}-${channel}`} className="rounded border border-slate-400 bg-white px-2 py-1 font-medium capitalize">
                       {channel}
                     </span>
                   ))}
@@ -258,31 +291,109 @@ export default function AlertNotificationPolicyPage() {
         </section>
 
         <section className="card p-5 space-y-4">
-          <header className="flex items-center gap-2 text-sm font-semibold"><Clock3 size={16} />Quiet hours</header>
+          <header className="flex items-center gap-2 text-sm font-semibold text-slate-900">
+            <Clock3 size={16} className="text-slate-700" />
+            <span>Quiet hours</span>
+          </header>
           <div className="grid gap-4 md:grid-cols-5">
-            <label className="field">Start<input type="time" value={input.quietHours?.start ?? "22:00"} onChange={(event) => { const nextQuietHours = { ...(input.quietHours ?? { timezone: "UTC" }), start: event.target.value, end: input.quietHours?.end ?? "06:00" }; setInput({ ...input, quietHours: nextQuietHours }); setIsDirty(true); setSaveState("unsaved"); }} className="field-input" /></label>
-            <label className="field">End<input type="time" value={input.quietHours?.end ?? "06:00"} onChange={(event) => { const nextQuietHours = { ...(input.quietHours ?? { timezone: "UTC", start: "22:00" }), start: input.quietHours?.start ?? "22:00", end: event.target.value }; setInput({ ...input, quietHours: nextQuietHours }); setIsDirty(true); setSaveState("unsaved"); }} className="field-input" /></label>
-            <label className="field">Timezone<select value={input.quietHours?.timezone ?? "UTC"} onChange={(event) => { const nextQuietHours = { ...(input.quietHours ?? { start: "22:00", end: "06:00" }), timezone: event.target.value }; setInput({ ...input, quietHours: nextQuietHours }); setIsDirty(true); setSaveState("unsaved"); }} className="field-input">
-              {TIMEZONE_OPTIONS.map((timezone) => <option key={timezone} value={timezone}>{timezone}</option>)}
-            </select></label>
-            <label className="field">Rate limit per minute<input type="number" min={1} value={input.rateLimitPerMinute} onChange={(event) => { setInput({ ...input, rateLimitPerMinute: Number(event.target.value) }); setIsDirty(true); setSaveState("unsaved"); }} className="field-input" /></label>
-            <label className="field">Enabled<input type="checkbox" checked={input.quietHours?.enabled ?? true} onChange={(event) => { const nextQuietHours = { ...(input.quietHours ?? { start: "22:00", end: "06:00", timezone: "UTC" }), enabled: event.target.checked }; setInput({ ...input, quietHours: nextQuietHours }); setIsDirty(true); setSaveState("unsaved"); }} className="field-input" /></label>
+            <label className="field">
+              <span className="text-sm font-medium text-slate-900 mb-1.5 block">Start</span>
+              <input 
+                type="time" 
+                value={input.quietHours?.start ?? "22:00"} 
+                onChange={(event) => { 
+                  const nextQuietHours = { ...(input.quietHours ?? { timezone: "UTC" }), start: event.target.value, end: input.quietHours?.end ?? "06:00" }; 
+                  setInput({ ...input, quietHours: nextQuietHours }); 
+                  setIsDirty(true); 
+                  setSaveState("unsaved"); 
+                }} 
+                className="field-input" 
+              />
+            </label>
+            <label className="field">
+              <span className="text-sm font-medium text-slate-900 mb-1.5 block">End</span>
+              <input 
+                type="time" 
+                value={input.quietHours?.end ?? "06:00"} 
+                onChange={(event) => { 
+                  const nextQuietHours = { ...(input.quietHours ?? { timezone: "UTC", start: "22:00" }), start: input.quietHours?.start ?? "22:00", end: event.target.value }; 
+                  setInput({ ...input, quietHours: nextQuietHours }); 
+                  setIsDirty(true); 
+                  setSaveState("unsaved"); 
+                }} 
+                className="field-input" 
+              />
+            </label>
+            <label className="field">
+              <span className="text-sm font-medium text-slate-900 mb-1.5 block">Timezone</span>
+              <select 
+                value={input.quietHours?.timezone ?? "UTC"} 
+                onChange={(event) => { 
+                  const nextQuietHours = { ...(input.quietHours ?? { start: "22:00", end: "06:00" }), timezone: event.target.value }; 
+                  setInput({ ...input, quietHours: nextQuietHours }); 
+                  setIsDirty(true); 
+                  setSaveState("unsaved"); 
+                }} 
+                className="field-input"
+              >
+                {TIMEZONE_OPTIONS.map((timezone) => <option key={timezone} value={timezone}>{timezone}</option>)}
+              </select>
+            </label>
+            <label className="field">
+              <span className="text-sm font-medium text-slate-900 mb-1.5 block">Rate limit per minute</span>
+              <input 
+                type="number" 
+                min={1} 
+                value={input.rateLimitPerMinute} 
+                onChange={(event) => { 
+                  setInput({ ...input, rateLimitPerMinute: Number(event.target.value) }); 
+                  setIsDirty(true); 
+                  setSaveState("unsaved"); 
+                }} 
+                className="field-input" 
+              />
+            </label>
+            <label className="field flex flex-col justify-end">
+              <div className="flex items-center gap-2 h-10">
+                <input 
+                  type="checkbox" 
+                  checked={input.quietHours?.enabled ?? true} 
+                  onChange={(event) => { 
+                    const nextQuietHours = { ...(input.quietHours ?? { start: "22:00", end: "06:00", timezone: "UTC" }), enabled: event.target.checked }; 
+                    setInput({ ...input, quietHours: nextQuietHours }); 
+                    setIsDirty(true); 
+                    setSaveState("unsaved"); 
+                  }} 
+                  className="w-4 h-4 text-blue-600 border-slate-300 rounded focus:ring-2 focus:ring-blue-500" 
+                />
+                <span className="text-sm font-medium text-slate-900">Enabled</span>
+              </div>
+            </label>
           </div>
         </section>
 
         <section className="card p-5 space-y-4">
-          <header className="flex items-center gap-2 text-sm font-semibold"><Bell size={16} />Escalation timing</header>
-          <div className="grid gap-4 md:grid-cols-3">
+          <header className="flex items-center gap-2 text-sm font-semibold text-slate-900">
+            <Bell size={16} className="text-slate-700" />
+            <span>Escalation timing</span>
+          </header>
+          <div className="grid gap-4 md:grid-cols-5">
             {(["P1", "P2", "P3", "P4", "P5"] as const).map((severity) => (
               <label key={severity} className="field">
-                {severity} escalation seconds
-                <input type="number" min={10} value={input.escalationAfterSeconds[severity] ?? 0} onChange={(event) => setInput({
-                  ...input,
-                  escalationAfterSeconds: {
-                    ...input.escalationAfterSeconds,
-                    [severity]: Number(event.target.value),
-                  },
-                })} className="field-input" />
+                <span className="text-sm font-medium text-slate-900 mb-1.5 block">{severity} escalation seconds</span>
+                <input 
+                  type="number" 
+                  min={0} 
+                  value={input.escalationAfterSeconds[severity] ?? 0} 
+                  onChange={(event) => setInput({
+                    ...input,
+                    escalationAfterSeconds: {
+                      ...input.escalationAfterSeconds,
+                      [severity]: Number(event.target.value),
+                    },
+                  })} 
+                  className="field-input" 
+                />
               </label>
             ))}
           </div>
@@ -290,8 +401,14 @@ export default function AlertNotificationPolicyPage() {
 
         <section className="card p-5 space-y-4">
           <header className="flex items-center justify-between gap-2">
-            <div className="flex items-center gap-2 text-sm font-semibold"><Bell size={16} />On-call schedules</div>
-            <button type="button" className="btn-secondary flex items-center gap-2" onClick={addSchedule}><Plus size={14} />Add schedule</button>
+            <div className="flex items-center gap-2 text-sm font-semibold text-slate-900">
+              <Bell size={16} className="text-slate-700" />
+              <span>On-call schedules</span>
+            </div>
+            <button type="button" className="btn-secondary flex items-center gap-2" onClick={addSchedule}>
+              <Plus size={14} />
+              <span>Add schedule</span>
+            </button>
           </header>
           <div className="space-y-4">
             {input.onCallSchedules.length === 0 ? <p className="text-sm text-gray-600">No on-call schedules configured yet.</p> : null}

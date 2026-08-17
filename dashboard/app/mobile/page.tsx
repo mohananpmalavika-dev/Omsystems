@@ -1,7 +1,7 @@
 "use client";
 
-import { MobileSocOperatorView } from "@/components/mobile-soc-operator-view";
+import { MobileCommandCenter } from "@/components/mobile-command-center";
 
 export default function MobilePage() {
-  return <MobileSocOperatorView />;
+  return <MobileCommandCenter />;
 }
