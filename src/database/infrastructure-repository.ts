@@ -890,6 +890,19 @@ export class InfrastructureRepository {
   }
 
   async createUser(tenantId: string, input: any) {
+    let resolvedTenantId = await this.resolveTenantUuid(tenantId);
+
+    // If primaryOrgNodeId is specified, inherit tenant_id from the node if possible
+    if (input.primaryOrgNodeId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(input.primaryOrgNodeId)) {
+      const nodeTenant = await this.pool.query(
+        `SELECT tenant_id::text FROM resource_nodes WHERE id = $1::uuid LIMIT 1`,
+        [input.primaryOrgNodeId],
+      ).catch(() => ({ rows: [] }));
+      if (nodeTenant.rows[0]?.tenant_id) {
+        resolvedTenantId = await this.resolveTenantUuid(nodeTenant.rows[0].tenant_id);
+      }
+    }
+
     const client = await this.pool.connect();
     try {
       await client.query("BEGIN");
@@ -903,7 +916,7 @@ export class InfrastructureRepository {
            $1,$2,$3,$4,$5,$6,$7,$8,$9::user_role,'active',$10,$11,$12,$13,$14,true
          ) RETURNING id::text`,
         [
-          tenantId, input.username, input.displayName, input.email,
+          resolvedTenantId, input.username, input.displayName, input.email,
           input.username, input.passwordHash, input.employeeId ?? null,
           input.phoneNumber ?? null, input.role, input.department ?? null,
           input.designation ?? null, input.dateOfJoining ?? null,
@@ -911,7 +924,9 @@ export class InfrastructureRepository {
         ],
       );
       const id = result.rows[0]!.id;
-      await this.assignOrganization(client, id, input.primaryOrgNodeId, true, input.createdBy ?? null);
+      if (input.primaryOrgNodeId) {
+        await this.assignOrganization(client, id, input.primaryOrgNodeId, true, input.createdBy ?? null);
+      }
       await client.query("COMMIT");
       return this.getUserWithPassword(id);
     } catch (error) {

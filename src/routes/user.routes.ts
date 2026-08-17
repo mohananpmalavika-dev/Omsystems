@@ -194,7 +194,7 @@ export async function registerUserRoutes(
     });
 
     await store.writeAudit({
-      tenantId: request.currentUser.tenantId,
+      tenantId: user.tenantId || request.currentUser.tenantId,
       actorUserId: request.currentUser.id,
       action: "user.created",
       resourceNodeId: body.primaryOrgNodeId,
