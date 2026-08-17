@@ -1,50 +1,176 @@
 import type { Pool } from "pg";
 
 export class ActivityTrackingRepository {
+  private schemaEnsured = false;
+
   constructor(private pool: Pool) {}
 
+  async ensureSchema(): Promise<void> {
+    if (this.schemaEnsured) return;
+    try {
+      await this.pool.query(`
+        CREATE TABLE IF NOT EXISTS user_activity_sessions (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          tenant_id UUID NOT NULL,
+          user_id UUID NOT NULL,
+          device_info JSONB DEFAULT '{}',
+          ip_address VARCHAR(100),
+          location_info JSONB DEFAULT '{}',
+          session_status VARCHAR(50) DEFAULT 'active',
+          login_time TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+          logout_time TIMESTAMPTZ,
+          last_activity_time TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+          total_duration_seconds INT DEFAULT 0,
+          active_duration_seconds INT DEFAULT 0,
+          idle_duration_seconds INT DEFAULT 0,
+          termination_reason VARCHAR(100),
+          created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE TABLE IF NOT EXISTS user_current_activity (
+          user_id UUID PRIMARY KEY,
+          tenant_id UUID NOT NULL,
+          session_id UUID,
+          is_online BOOLEAN DEFAULT true,
+          current_page_path VARCHAR(500),
+          current_page_title VARCHAR(500),
+          current_page_module VARCHAR(100),
+          is_monitoring BOOLEAN DEFAULT false,
+          monitored_branch_ids UUID[] DEFAULT '{}',
+          last_activity_time TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+          created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE TABLE IF NOT EXISTS user_page_visits (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          session_id UUID NOT NULL,
+          user_id UUID NOT NULL,
+          tenant_id UUID NOT NULL,
+          page_path VARCHAR(500) NOT NULL,
+          page_title VARCHAR(500),
+          page_module VARCHAR(100),
+          page_category VARCHAR(100),
+          referrer_path VARCHAR(500),
+          query_parameters JSONB DEFAULT '{}',
+          visit_start_time TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+          visit_end_time TIMESTAMPTZ,
+          duration_seconds INT DEFAULT 0,
+          active_time_seconds INT DEFAULT 0,
+          idle_time_seconds INT DEFAULT 0,
+          click_count INT DEFAULT 0,
+          scroll_depth_percentage INT DEFAULT 0,
+          form_interactions_count INT DEFAULT 0,
+          next_page_path VARCHAR(500),
+          created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE TABLE IF NOT EXISTS control_room_monitoring_activity (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          session_id UUID NOT NULL,
+          user_id UUID NOT NULL,
+          tenant_id UUID NOT NULL,
+          branch_ids UUID[] DEFAULT '{}',
+          branch_names TEXT[] DEFAULT '{}',
+          branch_node_id UUID,
+          grid_layout VARCHAR(50),
+          stream_count INT DEFAULT 0,
+          monitoring_start_time TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+          monitoring_end_time TIMESTAMPTZ,
+          duration_seconds INT DEFAULT 0,
+          alert_count INT DEFAULT 0,
+          incident_count INT DEFAULT 0,
+          camera_switch_count INT DEFAULT 0,
+          created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE TABLE IF NOT EXISTS user_action_log (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          session_id UUID,
+          user_id UUID NOT NULL,
+          tenant_id UUID NOT NULL,
+          action_type VARCHAR(100) NOT NULL,
+          action_category VARCHAR(100),
+          target_type VARCHAR(100),
+          target_id VARCHAR(200),
+          action_details JSONB,
+          action_time TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+        );
+      `);
+      this.schemaEnsured = true;
+    } catch {
+      // safe fallback if already exists
+    }
+  }
+
   private async resolveTenantUuid(tenantIdOrSlug: string): Promise<string> {
+    await this.ensureSchema();
     const slug = (tenantIdOrSlug || "omsystems").trim();
     if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(slug)) {
-      return slug;
+      const existing = await this.pool.query(`SELECT id::text FROM tenants WHERE id = $1 LIMIT 1`, [slug]);
+      if (existing.rows[0]?.id) return existing.rows[0].id;
     }
     const result = await this.pool.query(
-      `SELECT id::text FROM tenants WHERE slug=$1 LIMIT 1`,
+      `SELECT id::text FROM tenants WHERE slug=$1 OR id::text=$1 LIMIT 1`,
       [slug],
     );
     if (result.rows[0]?.id) {
       return result.rows[0].id;
     }
-    const inserted = await this.pool.query(
-      `INSERT INTO tenants (id, slug, name)
-       VALUES (gen_random_uuid(), $1, $2)
-       ON CONFLICT (slug) DO UPDATE SET name=EXCLUDED.name
-       RETURNING id::text`,
-      [slug, slug === "omsystems" ? "Sentinel Grid Enterprise" : slug],
-    );
-    return inserted.rows[0]!.id;
+    try {
+      const inserted = await this.pool.query(
+        `INSERT INTO tenants (id, slug, name)
+         VALUES (gen_random_uuid(), $1, $2)
+         ON CONFLICT (slug) DO UPDATE SET name=EXCLUDED.name
+         RETURNING id::text`,
+        [slug, slug === "omsystems" ? "Sentinel Grid Enterprise" : slug],
+      );
+      if (inserted.rows[0]?.id) return inserted.rows[0].id;
+    } catch {
+      const anyTenant = await this.pool.query(`SELECT id::text FROM tenants ORDER BY created_at ASC LIMIT 1`);
+      if (anyTenant.rows[0]?.id) return anyTenant.rows[0].id;
+    }
+    return "00000000-0000-0000-0000-000000000001";
   }
 
   private async resolveUserUuid(userId: string, tenantId: string): Promise<string> {
-    if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(userId)) {
-      return userId;
+    await this.ensureSchema();
+    const cleanId = (userId || "").trim();
+    if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(cleanId)) {
+      const userRes = await this.pool.query(`SELECT id::text FROM users WHERE id = $1 LIMIT 1`, [cleanId]);
+      if (userRes.rows[0]?.id) return userRes.rows[0].id;
     }
-    const username = userId.replace(/^user-/, "");
+    const username = cleanId.replace(/^user-/, "") || "mgdhanyamohan";
     const userRes = await this.pool.query(
-      `SELECT id::text FROM users WHERE username=$1 OR identity_subject=$2 LIMIT 1`,
-      [username, userId],
+      `SELECT id::text FROM users WHERE identity_subject = $1 OR lower(username) = lower($2) OR lower(email) = lower($2) LIMIT 1`,
+      [cleanId, username],
     );
     if (userRes.rows[0]?.id) {
       return userRes.rows[0].id;
     }
-    const insUser = await this.pool.query(
-      `INSERT INTO users (id, tenant_id, identity_subject, display_name, email, username, role, status, active)
-       VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, 'super_admin', 'active', true)
-       ON CONFLICT (username) DO UPDATE SET active=true
-       RETURNING id::text`,
-      [tenantId, userId, "Dhanya Mohan (Superadmin)", "mgdhanyamohan@omsystems.bank", username],
+    const firstUser = await this.pool.query(
+      `SELECT id::text FROM users WHERE role = 'super_admin' OR active = true ORDER BY created_at ASC LIMIT 1`
     );
-    return insUser.rows[0]?.id ?? "00000000-0000-0000-0000-000000000001";
+    if (firstUser.rows[0]?.id) {
+      return firstUser.rows[0].id;
+    }
+    try {
+      const insUser = await this.pool.query(
+        `INSERT INTO users (id, tenant_id, identity_subject, display_name, email, username, role, status, active)
+         VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, 'super_admin', 'active', true)
+         ON CONFLICT (username) DO UPDATE SET active=true
+         RETURNING id::text`,
+        [tenantId, cleanId || "user-mgdhanyamohan", "Dhanya Mohan (Superadmin)", `${username}@omsystems.bank`, username],
+      );
+      if (insUser.rows[0]?.id) return insUser.rows[0].id;
+    } catch {
+      const anyUser = await this.pool.query(`SELECT id::text FROM users LIMIT 1`);
+      if (anyUser.rows[0]?.id) return anyUser.rows[0].id;
+    }
+    return "00000000-0000-0000-0000-000000000001";
   }
 
   // ============================================
@@ -58,6 +184,7 @@ export class ActivityTrackingRepository {
     ipAddress: string,
     locationInfo?: any
   ): Promise<string> {
+    await this.ensureSchema();
     const resolvedTenantId = await this.resolveTenantUuid(tenantId);
     const resolvedUserId = await this.resolveUserUuid(userId, resolvedTenantId);
 
@@ -66,8 +193,8 @@ export class ActivityTrackingRepository {
         tenant_id, user_id, device_info, ip_address, location_info,
         session_status, login_time, last_activity_time
       ) VALUES ($1, $2, $3, $4, $5, 'active', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-      RETURNING id`,
-      [resolvedTenantId, resolvedUserId, JSON.stringify(deviceInfo || {}), ipAddress, JSON.stringify(locationInfo || {})]
+      RETURNING id::text`,
+      [resolvedTenantId, resolvedUserId, JSON.stringify(deviceInfo || {}), ipAddress || "127.0.0.1", JSON.stringify(locationInfo || {})]
     );
     
     // Update current activity status

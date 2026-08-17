@@ -4,6 +4,7 @@ import { AuthoritativeStreamManagerService } from "../pipeline/authoritative-str
 import { RecordingIndexService } from "../pipeline/recording-index.service.js";
 import { PlaybackPipelineService } from "../pipeline/playback-pipeline.service.js";
 import { EvidenceExportPipelineService } from "../pipeline/evidence-export-pipeline.service.js";
+import { streamSupervisorManager } from "../supervision/stream-supervisor-manager.js";
 
 const streamManager = new AuthoritativeStreamManagerService();
 const recordingIndex = new RecordingIndexService();
@@ -153,5 +154,33 @@ export async function registerAuthoritativeMediaPipelineRoutes(app: FastifyInsta
   app.post("/v1/media/pipeline/chaos/failover-node", async () => {
     const result = streamManager.simulateNodeFailover("media-node-01");
     return { success: true, message: "Media Gateway node failover simulated.", data: result };
+  });
+
+  // 6. Stream Supervision Diagnostics & Camera Operational Health
+  app.get("/v1/media/supervision/cameras/:cameraId", async (req: FastifyRequest) => {
+    const { cameraId } = req.params as { cameraId: string };
+    const state = streamSupervisorManager.getCameraOperationalState(cameraId);
+    return { success: true, data: state };
+  });
+
+  app.get("/v1/media/supervision/streams/:streamId", async (req: FastifyRequest, reply: FastifyReply) => {
+    const { streamId } = req.params as { streamId: string };
+    const supervisor = streamSupervisorManager.getSupervisor(streamId);
+    if (!supervisor) return reply.code(404).send({ success: false, error: "STREAM_NOT_FOUND" });
+    return { success: true, data: supervisor.getStatus() };
+  });
+
+  app.get("/v1/media/supervision/availability/:cameraId", async (req: FastifyRequest) => {
+    const { cameraId } = req.params as { cameraId: string };
+    const availability = streamSupervisorManager.computeAvailability(cameraId);
+    return { success: true, data: availability };
+  });
+
+  app.post("/v1/media/supervision/streams/:streamId/reconnect", async (req: FastifyRequest, reply: FastifyReply) => {
+    const { streamId } = req.params as { streamId: string };
+    const supervisor = streamSupervisorManager.getSupervisor(streamId);
+    if (!supervisor) return reply.code(404).send({ success: false, error: "STREAM_NOT_FOUND" });
+    await supervisor.reconnect("Manual operator reconnect request");
+    return { success: true, message: "Stream reconnect initiated with backoff & jitter.", data: supervisor.getStatus() };
   });
 }
