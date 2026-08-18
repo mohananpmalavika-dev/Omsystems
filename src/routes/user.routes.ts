@@ -125,13 +125,18 @@ export async function registerUserRoutes(
         request.currentUser,
         "user:manage",
       ).catch(() => []);
-      if (manageableNodes.length === 0 && request.currentUser.role !== "super_admin") {
+      if (manageableNodes.length === 0 && request.currentUser.role !== "super_admin" && request.currentUser.role !== "company_admin") {
         return { data: [request.currentUser], total: 1 };
       }
 
+      // Super admins and company admins can see all users in their tenant without hierarchical filtering
+      const filters = (request.currentUser.role === "super_admin" || request.currentUser.role === "company_admin")
+        ? query
+        : { ...query, managerUserId: request.currentUser.id };
+
       const result = await store.listUsers(
         request.currentUser.tenantId || "00000000-0000-4000-8000-000000000000",
-        { ...query, managerUserId: request.currentUser.id },
+        filters,
       ).catch(() => ({ data: [request.currentUser], total: 1 }));
 
       const data = result.data.filter(
