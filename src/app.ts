@@ -1526,7 +1526,7 @@ export async function buildApp(options?: {
         audio: parsed.capabilities.audio,
         events: parsed.capabilities.events,
         ...(parsed.capabilities.talkback ? { talkback: parsed.capabilities.talkback } : {}),
-      },
+      } as any,
     };
     const discovery = await store.createDiscovery(branchId, discoveryInput);
 
@@ -2130,9 +2130,9 @@ export async function buildApp(options?: {
       latencyMs: input.latencyMs,
       temperatureCelsius: input.temperatureCelsius,
       writeMbps: input.writeMbps,
-      smart: input.smart,
-      raid: input.raid,
-      lastWriteProbe: input.lastWriteProbe,
+      smart: input.smart as any,
+      raid: input.raid as any,
+      lastWriteProbe: input.lastWriteProbe as any,
     });
   });
 

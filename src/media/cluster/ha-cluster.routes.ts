@@ -82,7 +82,7 @@ export async function registerHaClusterRoutes(app: FastifyInstance) {
       storagePath: z.string().optional().default(""),
     }).parse(request.body);
 
-    const result = fencingTokenService.verifyAndCommitSegment(body);
+    const result = fencingTokenService.verifyAndCommitSegment(body as any);
     if (!result.accepted) {
       return reply.code(409).send({
         success: false,

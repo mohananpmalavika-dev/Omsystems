@@ -74,7 +74,7 @@ export async function registerDistributedStateRoutes(app: FastifyInstance) {
       windowMs: z.number().optional(),
     }).parse(request.body);
 
-    const result = alertDeduplicationService.checkAndRecordAlert(body);
+    const result = alertDeduplicationService.checkAndRecordAlert(body as any);
     return reply.send({ success: true, data: result });
   });
 }

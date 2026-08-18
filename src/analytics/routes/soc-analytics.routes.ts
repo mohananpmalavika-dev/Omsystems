@@ -107,7 +107,7 @@ export async function registerSocAnalyticsRoutes(
       acknowledgedAt: body.acknowledgedAt ? new Date(body.acknowledgedAt) : undefined,
       investigationStartedAt: body.investigationStartedAt ? new Date(body.investigationStartedAt) : undefined,
       resolvedAt: body.resolvedAt ? new Date(body.resolvedAt) : undefined,
-    });
+    } as any);
 
     return reply.code(201).send({ success: true, message: 'Incident lifecycle record ingested' });
   });

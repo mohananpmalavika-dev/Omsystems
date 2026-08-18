@@ -26,7 +26,7 @@ export async function registerForensicEvidenceExportRoutes(app: FastifyInstance)
       applyLegalHold: z.boolean().default(true),
     }).parse(request.body);
 
-    const manifest = await evidenceExportService.exportEvidencePackage(body);
+    const manifest = await evidenceExportService.exportEvidencePackage(body as any);
     return reply.status(201).send({ success: true, data: manifest });
   });
 
@@ -67,7 +67,7 @@ export async function registerForensicEvidenceExportRoutes(app: FastifyInstance)
     const custodyEvent = chainOfCustodyService.appendEvent(params.id, {
       ...body,
       timestamp: new Date().toISOString(),
-    });
+    } as any);
 
     return reply.status(201).send({ success: true, data: custodyEvent });
   });

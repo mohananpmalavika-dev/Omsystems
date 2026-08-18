@@ -43,7 +43,7 @@ export async function registerAssetLifecycleRoutes(app: FastifyInstance) {
       .parse(req.body);
 
     try {
-      const transaction = await assetService.executeReplacementTransaction(body);
+      const transaction = await assetService.executeReplacementTransaction(body as any);
       return {
         success: true,
         message: `Device successfully replaced. Channel mappings preserved and Digital Twin updated.`,

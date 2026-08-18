@@ -427,7 +427,7 @@ export async function registerRetentionRoutes(app: FastifyInstance, store?: Cont
       proposedTargetDays: z.number().int().min(1).default(190),
     }).parse(request.body);
 
-    const simulation = retentionEngine.simulateRetentionChange(body);
+    const simulation = retentionEngine.simulateRetentionChange(body as any);
     return reply.send({ success: true, data: simulation });
   });
 
@@ -446,7 +446,7 @@ export async function registerRetentionRoutes(app: FastifyInstance, store?: Cont
       }),
     }).parse(request.body);
 
-    const hold = retentionEngine.createLegalHold(body);
+    const hold = retentionEngine.createLegalHold(body as any);
     return reply.status(201).send({ success: true, data: hold });
   });
 

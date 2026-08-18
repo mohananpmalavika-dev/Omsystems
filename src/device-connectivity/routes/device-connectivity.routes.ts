@@ -16,7 +16,7 @@ export async function registerDeviceConnectivityRoutes(app: FastifyInstance) {
       })
       .parse(req.body);
 
-    const { adapter, probeResult } = await DeviceAdapterResolver.resolveBestAdapter(body);
+    const { adapter, probeResult } = await DeviceAdapterResolver.resolveBestAdapter(body as any);
     return {
       success: true,
       data: {
@@ -36,7 +36,7 @@ export async function registerDeviceConnectivityRoutes(app: FastifyInstance) {
       })
       .parse(req.body);
 
-    const verification = await connectivityService.verifyStream(body);
+    const verification = await connectivityService.verifyStream(body as any);
     return { success: true, data: verification };
   });
 
