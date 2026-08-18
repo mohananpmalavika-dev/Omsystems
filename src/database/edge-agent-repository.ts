@@ -525,7 +525,7 @@ export class EdgeAgentRepository {
              discovered_at = now()
          RETURNING id::text, discovered_at, status`,
         [branchId, input.edgeAgentId, identity.deviceIdentityId,
-         input.discoveryMethod, input.manufacturer ?? input.vendor, input.vendor,
+         normalizeCameraDiscoveryMethod(input.discoveryMethod), input.manufacturer ?? input.vendor, input.vendor,
          input.model, input.ipAddress, normalizedMac,
          input.onvifEndpointReference ?? null, onvifUuid ?? null,
          input.certificateRef ?? null, input.certificateFingerprint ?? null,
@@ -671,4 +671,20 @@ export class EdgeAgentRepository {
       status: row.status as "pending" | "approved" | "rejected",
     }));
   }
+}
+
+function normalizeCameraDiscoveryMethod(method?: string): string {
+  const allowed = new Set([
+    "onvif-ws-discovery",
+    "configured-ip-range",
+    "manual-ip-registration",
+    "csv-bulk-import",
+    "nvr-dvr-channel-discovery",
+    "vendor-api-discovery",
+    "snmp-discovery",
+    "edge-agent-reported-inventory",
+  ]);
+  if (!method) return "edge-agent-reported-inventory";
+  if (method === "rtsp-network-scan") return "configured-ip-range";
+  return allowed.has(method) ? method : "edge-agent-reported-inventory";
 }

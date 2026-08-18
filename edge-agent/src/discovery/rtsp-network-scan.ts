@@ -384,7 +384,7 @@ export async function discoverRtspDevices(
                 const isDvr = path.includes("channel=") || path.includes("Channels/");
                 const payload = {
                   edgeAgentId: agentId,
-                  discoveryMethod: "rtsp-network-scan",
+                  discoveryMethod: "configured-ip-range",
                   vendor: "other",
                   manufacturer: "unknown",
                   model: isDvr ? "DVR / NVR Multi-Channel" : "IP Camera",
