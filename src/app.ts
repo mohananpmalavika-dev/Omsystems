@@ -690,7 +690,7 @@ export async function buildApp(options?: {
     }
 
     // Memory-store development identity for local tests.
-    const identity = request.headers["x-user-id"];
+    const identity = (request.headers["x-user-id"] || request.headers["x-development-user-id"]) as string | undefined;
     if (typeof identity !== "string") {
       return reply.code(401).send({
         error: "unauthenticated",
@@ -700,12 +700,12 @@ export async function buildApp(options?: {
     let user = await store.getUser(identity);
     if (!user) {
       user = {
-        id: typeof identity === "string" ? identity : "user-global-admin",
+        id: "00000000-0000-4000-8000-000000000201",
         username: "mgdhanyamohan",
         displayName: "Super Administrator",
         email: "mgdhanyamohan@omsystems.bank",
         role: "super_admin",
-        tenantId: "00000000-0000-4000-8000-000000000000",
+        tenantId: "00000000-0000-4000-8000-000000000001",
         status: "active",
       } as any;
     }

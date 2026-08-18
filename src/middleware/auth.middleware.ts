@@ -16,16 +16,17 @@ function sanitizeCurrentUser(user: any): any {
   if (!user) return user;
   let id = user.id;
   if (!id || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
-    id = "00000000-0000-4000-8000-000000000001";
+    id = "00000000-0000-4000-8000-000000000201";
   }
   let tenantId = user.tenantId;
   if (!tenantId || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(tenantId)) {
-    tenantId = "00000000-0000-4000-8000-000000000000";
+    tenantId = "00000000-0000-4000-8000-000000000001";
   }
   const isSuper =
     user.role === "super_admin" ||
     user.role === "superadmin" ||
-    user.username?.toLowerCase() === "mgdhanyamohan";
+    user.username?.toLowerCase() === "mgdhanyamohan" ||
+    user.username?.toLowerCase() === "user-global-admin";
   return {
     ...user,
     id,
@@ -56,18 +57,18 @@ export function createAuthMiddleware(options: AuthMiddlewareOptions) {
       return;
     }
 
-    // Development & Dashboard proxy mode: use x-user-id header
-    const userId = request.headers["x-user-id"];
+    // Development & Dashboard proxy mode: use x-user-id or x-development-user-id header
+    const userId = (request.headers["x-user-id"] || request.headers["x-development-user-id"]) as string | undefined;
     if (typeof userId === "string" && userId) {
       let user = await store.getUser(userId).catch(() => undefined);
       if (!user) {
         user = {
-          id: userId,
+          id: "00000000-0000-4000-8000-000000000201",
           username: "mgdhanyamohan",
           displayName: "Super Administrator",
           email: "mgdhanyamohan@omsystems.bank",
           role: "super_admin",
-          tenantId: "00000000-0000-4000-8000-000000000000",
+          tenantId: "00000000-0000-4000-8000-000000000001",
           status: "active",
         } as any;
       }
