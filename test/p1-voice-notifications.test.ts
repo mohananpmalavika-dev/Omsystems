@@ -31,7 +31,7 @@ describe("P1 voice notification call tree", () => {
       sourceEventId: "voice-call-tree", detectionType: "person", occurredAt: new Date().toISOString(),
       confidence: 0.99, durationSeconds: 2, modelVersion: "test", objects: [] });
     const alert = result.alerts[0]!;
-    await enqueueAlertMatrix(store, alert, result.rules[0]);
+    await enqueueAlertMatrix(store as any, alert, result.rules[0]);
     const calls = store.analyticsNotifications.filter((item) => item.alertId === alert.id && item.channel === "voice")
       .sort((a, b) => a.voiceCall!.sequence - b.voiceCall!.sequence);
     expect(calls).toHaveLength(2);

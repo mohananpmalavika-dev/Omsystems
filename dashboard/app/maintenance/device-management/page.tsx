@@ -2,18 +2,9 @@
 
 import React, { useState } from "react";
 import Link from "next/link";
-import { DeviceSelector } from "@/components/device-management/device-selector";
+import { DeviceSelector, type Device } from "@/components/device-management/device-selector";
 import { CredentialRotationForm } from "@/components/device-management/credential-rotation-form";
 import { JobMonitor } from "@/components/device-management/job-monitor";
-
-interface Device {
-  id: string;
-  deviceId: string;
-  manufacturer: string;
-  model: string;
-  healthStatus: string;
-  capabilities?: string[];
-}
 
 export default function DeviceManagementPage() {
   const [selectedBranch, setSelectedBranch] = useState<string>("");

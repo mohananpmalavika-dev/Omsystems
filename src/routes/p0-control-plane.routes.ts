@@ -73,7 +73,7 @@ export const registerP0ControlPlaneRoutes: FastifyPluginAsync = async (app: Fast
   // 4. Run True 6-Layer Camera Health Verification
   app.post("/v1/cameras/verify", async (request, reply) => {
     const body = verifyCameraSchema.parse(request.body);
-    const observation = cameraVerificationService.evaluateCameraHealth(body);
+    const observation = cameraVerificationService.evaluateCameraHealth(body as any);
     return reply.code(200).send({
       success: true,
       data: observation,

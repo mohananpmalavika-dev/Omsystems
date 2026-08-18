@@ -74,7 +74,7 @@ export async function registerOperationalMapRoutes(
     });
 
     const body = schema.parse(request.body);
-    const result = await service.updateAssetOperationalTelemetry(body);
+    const result = await service.updateAssetOperationalTelemetry(body as any);
     return reply.code(200).send({ success: true, data: result });
   });
 

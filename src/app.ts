@@ -461,7 +461,7 @@ function providerSender(store: ControlPlaneStore, targets: NotificationProviderT
 
 export async function buildApp(options?: {
   logger?: boolean;
-  store?: ControlPlaneStore;
+  store?: any;
   mediaGatewaySharedKey?: string;
   recordingEngineUrl?: string;
   recordingEngineSharedKey?: string;

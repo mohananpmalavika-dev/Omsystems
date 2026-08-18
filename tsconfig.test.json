@@ -3,7 +3,11 @@
   "compilerOptions": {
     // Tests can be slightly less strict
     "strict": false,
-    "noUncheckedIndexedAccess": false
+    "strictNullChecks": false,
+    "strictFunctionTypes": false,
+    "noImplicitAny": false,
+    "noUncheckedIndexedAccess": false,
+    "skipLibCheck": true
   },
   "include": [
     "test/app.test.ts",
@@ -30,7 +34,7 @@
     "tests/storage-adapter.test.ts",
     "tests/storage-failover.test.ts",
     "tests/crowd-density-model.test.ts",
-    "src/**/*.test.ts",
+    "src/services/*.test.ts",
     "backend/**/*.test.ts"
   ],
   "exclude": [

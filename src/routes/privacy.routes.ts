@@ -283,7 +283,7 @@ export async function registerPrivacyRoutes(
     });
 
     const body = zoneSchema.parse(request.body);
-    const saved = await privacyPolicyService.setStaticZone(body);
+    const saved = await privacyPolicyService.setStaticZone(body as any);
     return reply.code(201).send({ success: true, data: saved });
   });
 

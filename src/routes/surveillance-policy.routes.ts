@@ -71,7 +71,7 @@ export const registerSurveillancePolicyRoutes: FastifyPluginAsync = async (app: 
   app.post("/v1/surveillance-policies", async (request, reply) => {
     const tenantId = (request.body as any)?.tenantId ?? "omsystems";
     const body = createPolicySchema.parse(request.body);
-    const policy = await surveillancePolicyResolver.createPolicy(tenantId, body);
+    const policy = await surveillancePolicyResolver.createPolicy(tenantId, body as any);
     return reply.code(201).send({ success: true, data: policy });
   });
 

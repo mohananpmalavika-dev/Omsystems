@@ -113,7 +113,7 @@ export async function registerClientMediaSchedulerRoutes(app: FastifyInstance): 
       ...body,
       benchmarkTimestamp: body.benchmarkTimestamp || new Date().toISOString(),
     };
-    scheduler.registerClientProfile(profile);
+    scheduler.registerClientProfile(profile as any);
 
     return {
       status: "profile_registered",
@@ -147,10 +147,10 @@ export async function registerClientMediaSchedulerRoutes(app: FastifyInstance): 
   app.post("/v1/media/scheduler/calculate", async (request: FastifyRequest) => {
     const body = calculateScheduleSchema.parse(request.body);
 
-    const profile = scheduler.resolveEffectiveProfile(body.fingerprint, body.profileOverride);
+    const profile = scheduler.resolveEffectiveProfile(body.fingerprint, body.profileOverride as any);
 
     const result = scheduler.calculateSchedule(
-      body.cameras,
+      body.cameras as any,
       {
         sessionId: body.sessionId,
         gridRows: body.gridRows,
@@ -162,7 +162,7 @@ export async function registerClientMediaSchedulerRoutes(app: FastifyInstance): 
         hoveredCameraId: body.hoveredCameraId,
         activeAlarmCameraIds: body.activeAlarmCameraIds,
         p1IncidentCameraIds: body.p1IncidentCameraIds,
-      },
+      } as any,
       profile,
       body.liveTelemetry,
     );

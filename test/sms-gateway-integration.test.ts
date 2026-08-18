@@ -22,10 +22,10 @@ describe("P1 SMS delivery", () => {
       sent.push(...messages); return messages.map((_, index) => ({ id: `sms-${index}` }));
     } };
     const tokens = new VoiceCallbackTokens("sms-test-secret");
-    const sms = new SmsNotificationSender(store, provider, "https://alerts.example.com", tokens);
+    const sms = new SmsNotificationSender(store as any, provider, "https://alerts.example.com", tokens);
     const standard = { async send(notification: any) { return { providerId: `internal-${notification.id}` }; } };
     const sender = new RoutedAlertNotificationSender(standard, standard, sms);
-    const dispatcher = new AlertNotificationDispatcher(store, sender);
+    const dispatcher = new AlertNotificationDispatcher(store as any, sender);
     const rule = await store.createAnalyticsRule("omsystems", "cam-001", "user-global-admin", {
       name: "P1 SMS", detectionType: "vehicle", enabled: true, objectClasses: [], minConfidence: 0.5,
       minDurationSeconds: 0, direction: "any", severity: "P1", cooldownSeconds: 60, recipients: [],
@@ -33,7 +33,7 @@ describe("P1 SMS delivery", () => {
     const result = await store.processAnalyticsEvent({ tenantId: "omsystems", cameraId: "cam-001",
       sourceEventId: "sms-batch", detectionType: "vehicle", occurredAt: new Date().toISOString(), confidence: 0.9,
       durationSeconds: 1, modelVersion: "test", objects: [] });
-    await enqueueAlertMatrix(store, result.alerts[0]!, rule);
+    await enqueueAlertMatrix(store as any, result.alerts[0]!, rule);
     await dispatcher.drainOnce();
     const deliveries = store.analyticsNotifications.filter((item) => item.channel === "sms");
     expect(sent).toHaveLength(1);

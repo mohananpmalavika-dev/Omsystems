@@ -75,7 +75,7 @@ export async function registerStorageFailoverRoutes(
    */
   app.post("/api/v1/storage/failover/targets", async (request: FastifyRequest, reply: FastifyReply) => {
     const input = configureTargetSchema.parse(request.body);
-    const entry = await service.configureTarget(input);
+    const entry = await service.configureTarget(input as any);
 
     return reply.code(201).send({
       success: true,

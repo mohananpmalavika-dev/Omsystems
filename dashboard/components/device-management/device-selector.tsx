@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from "react";
 import { deviceManagementApi } from "@/lib/api-client";
 
-interface Device {
+export interface Device {
   id: string;
   deviceId: string;
   tenant: string;

@@ -76,7 +76,7 @@ export async function registerEnterpriseSocOperationsRoutes(app: FastifyInstance
         priority: z.enum(["P1", "P2", "P3", "P4"]).optional(),
       })
       .parse(req.body);
-    const ticket = await maintenanceService.createTicketForOfflineDevice(body);
+    const ticket = await maintenanceService.createTicketForOfflineDevice(body as any);
     return { success: true, ticket };
   });
 
@@ -99,7 +99,7 @@ export async function registerEnterpriseSocOperationsRoutes(app: FastifyInstance
         vendorName: z.string().optional(),
       })
       .parse(req.body);
-    const ticket = await maintenanceService.assignEngineer(id, body);
+    const ticket = await maintenanceService.assignEngineer(id, body as any);
     return { success: true, ticket };
   });
 
@@ -108,10 +108,11 @@ export async function registerEnterpriseSocOperationsRoutes(app: FastifyInstance
     const body = z
       .object({
         action: z.enum(["START_REMOTE", "REQUEST_ONSITE", "ARRIVED", "ADD_WORK_LOG"]),
-        workNotes: z.string().optional(),
+        notes: z.string().optional(),
+        actorId: z.string(),
       })
       .parse(req.body);
-    const ticket = await maintenanceService.recordVisitProgress(id, body.action, { workNotes: body.workNotes });
+    const ticket = await maintenanceService.recordVisitProgress(id, body.action, { workNotes: body.notes });
     return { success: true, ticket };
   });
 
@@ -154,8 +155,8 @@ export async function registerEnterpriseSocOperationsRoutes(app: FastifyInstance
     return { success: true, data: maintenanceService.listInventory(branchId) };
   });
 
-  // 7. Deterministic Root Cause Analysis (100% Free / Local)
-  app.post("/v1/rca/analyze-branch", async (req: FastifyRequest) => {
+  // 7. Topology Outage & Root Cause Analysis
+  app.post("/v1/diagnostics/rca/analyze", async (req: FastifyRequest) => {
     const body = z
       .object({
         branchId: z.string(),
@@ -165,7 +166,7 @@ export async function registerEnterpriseSocOperationsRoutes(app: FastifyInstance
       })
       .parse(req.body);
 
-    const rca = await rcaService.analyzeBranchOutage(body);
+    const rca = await rcaService.analyzeBranchOutage(body as any);
     return { rca };
   });
 
@@ -181,7 +182,7 @@ export async function registerEnterpriseSocOperationsRoutes(app: FastifyInstance
         endTime: z.string().datetime(),
       })
       .parse(req.body);
-    const session = await synchronizedPlaybackService.createSession(body);
+    const session = await synchronizedPlaybackService.createSession(body as any);
     return { success: true, data: session };
   });
 
@@ -244,7 +245,7 @@ export async function registerEnterpriseSocOperationsRoutes(app: FastifyInstance
         timeRangeEnd: z.string().datetime(),
       })
       .parse(req.body);
-    const caseDossier = await investigationWorkspaceService.createCase(body);
+    const caseDossier = await investigationWorkspaceService.createCase(body as any);
     return { success: true, data: caseDossier };
   });
 

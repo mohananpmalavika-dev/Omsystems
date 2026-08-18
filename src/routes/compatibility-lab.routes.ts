@@ -288,7 +288,7 @@ export async function registerCompatibilityLabRoutes(app: FastifyInstance): Prom
       const runResult = await runner.runTests({
         target: target as CompatibilityMatrixEntry["target"],
         features: features as CompatibilityFeature[] | undefined,
-        connection,
+        connection: connection as any,
         probeTimeoutMs,
         sentinelVersion: "0.1.0",
       });

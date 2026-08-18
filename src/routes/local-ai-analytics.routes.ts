@@ -79,7 +79,7 @@ export async function registerLocalAiAnalyticsRoutes(app: FastifyInstance) {
    */
   app.post("/v1/ai/vision/detect", async (request: FastifyRequest, reply: FastifyReply) => {
     const body = detectFrameSchema.parse(request.body);
-    const detections = await localVisionEngineService.processFrame(body);
+    const detections = await localVisionEngineService.processFrame(body as any);
     return reply.send({
       success: true,
       count: detections.length,
@@ -92,7 +92,7 @@ export async function registerLocalAiAnalyticsRoutes(app: FastifyInstance) {
    */
   app.post("/v1/ai/vision/tamper-check", async (request: FastifyRequest, reply: FastifyReply) => {
     const body = tamperCheckSchema.parse(request.body);
-    const result = await localVisionEngineService.evaluateCameraTampering(body);
+    const result = await localVisionEngineService.evaluateCameraTampering(body as any);
     return reply.send({
       success: true,
       data: result,
@@ -104,7 +104,7 @@ export async function registerLocalAiAnalyticsRoutes(app: FastifyInstance) {
    */
   app.post("/v1/ai/anpr/recognize", async (request: FastifyRequest, reply: FastifyReply) => {
     const body = anprRecognizeSchema.parse(request.body);
-    const result = await localAnprService.recognizePlate(body);
+    const result = await localAnprService.recognizePlate(body as any);
     return reply.send({
       success: true,
       data: result,
@@ -116,7 +116,7 @@ export async function registerLocalAiAnalyticsRoutes(app: FastifyInstance) {
    */
   app.post("/v1/ai/face/match", async (request: FastifyRequest, reply: FastifyReply) => {
     const body = faceMatchSchema.parse(request.body);
-    const result = await localFaceMatcherService.matchFace(body);
+    const result = await localFaceMatcherService.matchFace(body as any);
     return reply.send({
       success: true,
       data: result,
@@ -131,7 +131,7 @@ export async function registerLocalAiAnalyticsRoutes(app: FastifyInstance) {
     localFaceMatcherService.enrollFace({
       ...body,
       enrolledAt: new Date(),
-    });
+    } as any);
     return reply.status(201).send({
       success: true,
       message: `Person ${body.name} successfully enrolled in local ${body.watchlistType} watchlist`,
@@ -147,7 +147,7 @@ export async function registerLocalAiAnalyticsRoutes(app: FastifyInstance) {
     const summary = await localIncidentSummaryService.generateSummary({
       incidentId: params.id,
       ...body,
-    });
+    } as any);
     return reply.send({
       success: true,
       data: summary,

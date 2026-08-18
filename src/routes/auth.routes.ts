@@ -98,7 +98,7 @@ export async function registerAuthRoutes(
   const handleOnboardingSetup = async (request: any, reply: any) => {
     try {
       const body = onboardingSetupSchema.parse(request.body);
-      const result = await bootstrapOnboardingService.setupFirstTimeOnboarding(store, body);
+      const result = await bootstrapOnboardingService.setupFirstTimeOnboarding(store, body as any);
       return reply.code(201).send({
         success: true,
         message: result.message,
