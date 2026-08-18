@@ -30,6 +30,10 @@ export async function fingerprintHttpRecorder(
     const title = decodeHtml(body.match(/<title[^>]*>([^<]{1,200})<\/title>/i)?.[1] ?? "").trim();
     const server = response.headers.get("server") ?? "";
     const evidence = `${title} ${server} ${body.slice(0, 64_000)}`;
+
+    if (looksLikeRouterOrGateway(evidence)) {
+      return undefined;
+    }
     if (!looksLikeRecorder(evidence)) return undefined;
 
     const vendor = identifyVendorFamily(evidence);
@@ -45,6 +49,36 @@ export async function fingerprintHttpRecorder(
     };
   } catch {
     return undefined;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+export function looksLikeRouterOrGateway(value: string) {
+  return /\b(?:tenda|tp-link|tplink|d-link|dlink|netgear|asus|linksys|mikrotik|openwrt|dd-wrt|huawei|zte|broadband\s*router|wireless\s*router|home\s*gateway|wifi\s*router|mini_httpd|goahead-webs|rompager|boa\b|router\s*management|admin\s*login)\b/i.test(value);
+}
+
+export async function isRouterHost(
+  host: string,
+  timeoutMs = 2000,
+  fetchImpl: typeof fetch = fetch,
+): Promise<boolean> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetchImpl(`http://${hostForUrl(host)}/`, {
+      method: "GET",
+      redirect: "manual",
+      signal: controller.signal,
+      headers: { Accept: "text/html,application/xhtml+xml" },
+    });
+    const body = (await response.text()).slice(0, 64_000);
+    const title = decodeHtml(body.match(/<title[^>]*>([^<]{1,200})<\/title>/i)?.[1] ?? "").trim();
+    const server = response.headers.get("server") ?? "";
+    const evidence = `${title} ${server} ${body}`;
+    return looksLikeRouterOrGateway(evidence);
+  } catch {
+    return false;
   } finally {
     clearTimeout(timeout);
   }

@@ -8,9 +8,10 @@ import {
 import { probeRtsp } from "../streaming/rtsp-probe.js";
 import { logger } from "../utils/logger.js";
 import { createDeviceFingerprint } from "./device-fingerprint.js";
-import { resolveNeighborMac } from "./network-neighbor.js";
+import { resolveNeighborMac, detectDefaultGatewayIps } from "./network-neighbor.js";
 import {
   fingerprintHttpRecorder,
+  isRouterHost,
   type HttpRecorderFingerprint,
 } from "./recorder-http-fingerprint.js";
 
@@ -244,16 +245,17 @@ export async function discoverRtspDevices(
     "/live/ch0",
     "/live.sdp",
     "/stream",
-    "/h264",
-    "/",
   ];
   const paths = options.paths.length ? options.paths : defaultPaths;
   const ffprobePath = options.ffprobePath;
-  const timeoutMs = Math.max(options.timeoutMs || 4000, 3500);
-  const concurrency = Math.max(1, options.concurrency || 25);
+  const timeoutMs = Math.max(options.timeoutMs || 3000, 2500);
+  const concurrency = Math.max(1, Math.min(options.concurrency || 4, 8));
   const username = options.username ?? "";
   const password = options.password ?? "";
-  const ports = options.ports && options.ports.length > 0 ? options.ports : [554, 80, 8000, 8080, 8899, 34567, 37777, 8554];
+
+  // Dedicated RTSP streaming ports only (never blast RTSP requests to pure HTTP ports like 80/8080)
+  const rtspStreamingPorts = [554, 8554, 5554, 10554, 37777, 8000, 34567];
+  const httpFingerprintPorts = [80, 8080, 8899];
 
   const zeroTouchCreds = [
     ...(username ? [{ username, password }] : []),
@@ -269,6 +271,24 @@ export async function discoverRtspDevices(
 
   const candidates = new Set<string>();
   const excludedHosts = new Set(options.excludeHosts ?? []);
+
+  // 1. Exclude host's own local network interfaces
+  const localIfaces = os.networkInterfaces();
+  for (const iface of Object.values(localIfaces)) {
+    if (iface) {
+      for (const addr of iface) {
+        if (addr.address) excludedHosts.add(addr.address);
+      }
+    }
+  }
+
+  // 2. Automatically detect and exclude default gateway/router IP (e.g. Tenda, TP-Link router)
+  const detectedGateways = await detectDefaultGatewayIps();
+  for (const gw of detectedGateways) {
+    excludedHosts.add(gw);
+    logger.info("Excluding default network gateway/router from camera scan", { gateway: gw });
+  }
+
   for (const host of options.hosts ?? []) candidates.add(host);
   for (const cidr of cidrList) {
     const ips = ipsFromCidr(cidr);
@@ -280,85 +300,110 @@ export async function discoverRtspDevices(
   const hosts = [...candidates].filter((host) => !excludedHosts.has(host));
 
   async function scanHost(ip: string) {
-      try {
-        let unverifiedEndpoint: UnverifiedRtspEndpoint | undefined;
-        const storedCredentials = await options.credentialsForHost?.(ip);
-        const hostCreds = storedCredentials ? [storedCredentials, ...zeroTouchCreds] : zeroTouchCreds;
+    // Add small pacing delay to protect home/SOHO routers from connection saturation
+    await new Promise((r) => setTimeout(r, 20));
 
-        for (const port of ports) {
-          const reachable = await tryTcpConnect(ip, port, Math.max(500, Math.min(timeoutMs, 3000)));
-          if (!reachable) continue;
-          unverifiedEndpoint ??= { port, credentialsRequired: false };
+    // Check if host is a router/gateway (e.g. Tenda, TP-Link web interface at .1 or .254)
+    if (ip.endsWith(".1") || ip.endsWith(".254")) {
+      const isRouter = await isRouterHost(ip, 1500);
+      if (isRouter) {
+        logger.info("Host identified as network router/gateway; skipping camera scan", { ip });
+        return;
+      }
+    }
 
-          const recorderFingerprint = await fingerprintHttpRecorder(ip, timeoutMs);
-          if (recorderFingerprint) {
-            for (const cred of hostCreds) {
-              const recorder = await discoverRtspRecorderChannels({
-                host: ip,
-                ports: [port],
-                vendor: recorderFingerprint.vendor,
-                username: cred.username,
-                password: cred.password,
-                ...(options.recorderMaxChannels ? { maxChannels: options.recorderMaxChannels } : {}),
-                probe: (uri) => probeRtsp(uri, ffprobePath, timeoutMs),
-              });
-              if (recorder.channels.length > 0) {
-                await submitRecorderChannels(ip, port, recorderFingerprint, recorder.channels);
-                return;
-              }
+    try {
+      let unverifiedEndpoint: UnverifiedRtspEndpoint | undefined;
+      const storedCredentials = await options.credentialsForHost?.(ip);
+      const hostCreds = storedCredentials ? [storedCredentials, ...zeroTouchCreds] : zeroTouchCreds;
+
+      // 1. Check HTTP recorder fingerprint on web ports (with router protection)
+      for (const port of httpFingerprintPorts) {
+        const httpReachable = await tryTcpConnect(ip, port, 1500);
+        if (!httpReachable) continue;
+
+        const isRouter = await isRouterHost(ip, 1500);
+        if (isRouter) {
+          logger.info("Host identified as router/gateway web management; skipping", { ip });
+          return;
+        }
+
+        const recorderFingerprint = await fingerprintHttpRecorder(ip, timeoutMs);
+        if (recorderFingerprint) {
+          for (const cred of hostCreds) {
+            const recorder = await discoverRtspRecorderChannels({
+              host: ip,
+              ports: [554, 8554, 8000, 37777],
+              vendor: recorderFingerprint.vendor,
+              username: cred.username,
+              password: cred.password,
+              ...(options.recorderMaxChannels ? { maxChannels: options.recorderMaxChannels } : {}),
+              probe: (uri) => probeRtsp(uri, ffprobePath, timeoutMs),
+            });
+            if (recorder.channels.length > 0) {
+              await submitRecorderChannels(ip, port, recorderFingerprint, recorder.channels);
+              return;
             }
           }
+        }
+      }
 
-          // Try multi-channel DVR / IP Camera candidate paths with zero-touch credentials
-          for (const cred of hostCreds) {
-            let foundWorkingCred = false;
-            for (const path of paths) {
-              let uri = `rtsp://${ip}:${port}${path}`;
-              if (port === 554) uri = `rtsp://${ip}${path}`;
-              const authed = cred.username ? attachCredentials(uri, { username: cred.username, password: cred.password }) : uri;
-              const probe = await probeRtsp(authed, ffprobePath, timeoutMs).catch((e) => ({
-                reachable: false,
-                codec: null,
-                width: null,
-                height: null,
-                error: e instanceof Error ? e.message : String(e),
-              }));
+      // 2. Probe dedicated RTSP streaming ports
+      for (const port of rtspStreamingPorts) {
+        const reachable = await tryTcpConnect(ip, port, Math.max(500, Math.min(timeoutMs, 2500)));
+        if (!reachable) continue;
+        unverifiedEndpoint ??= { port, credentialsRequired: false };
 
-              if (!probe.reachable && isCredentialRejected(probe.error)) {
-                unverifiedEndpoint = {
-                  ...(unverifiedEndpoint ?? { port }),
-                  credentialsRequired: true,
+        // Try multi-channel DVR / IP Camera candidate paths with zero-touch credentials
+        for (const cred of hostCreds) {
+          let foundWorkingCred = false;
+          for (const path of paths) {
+            let uri = `rtsp://${ip}:${port}${path}`;
+            if (port === 554) uri = `rtsp://${ip}${path}`;
+            const authed = cred.username ? attachCredentials(uri, { username: cred.username, password: cred.password }) : uri;
+            const probe = await probeRtsp(authed, ffprobePath, timeoutMs).catch((e) => ({
+              reachable: false,
+              codec: null,
+              width: null,
+              height: null,
+              error: e instanceof Error ? e.message : String(e),
+            }));
+
+            if (!probe.reachable && isCredentialRejected(probe.error)) {
+              unverifiedEndpoint = {
+                ...(unverifiedEndpoint ?? { port }),
+                credentialsRequired: true,
+              };
+            }
+
+            if (probe && probe.reachable) {
+              foundWorkingCred = true;
+              try {
+                const macAddress = await resolveNeighborMac(ip);
+                const hardwareId = createDeviceFingerprint(macAddress ? { macAddress } : {});
+                const isDvr = path.includes("channel=") || path.includes("Channels/");
+                const payload = {
+                  edgeAgentId: agentId,
+                  discoveryMethod: "rtsp-network-scan",
+                  vendor: "other",
+                  manufacturer: "unknown",
+                  model: isDvr ? "DVR / NVR Multi-Channel" : "IP Camera",
+                  ipAddress: ip,
+                  ...(macAddress ? { macAddress } : {}),
+                  ...(hardwareId ? { hardwareId } : {}),
+                  onvifPort: 80,
+                  rtspPort: port,
+                  displayName: isDvr ? `Discovered DVR ${ip}` : `Discovered camera ${ip}`,
+                  credentialsRequired: false,
+                  streamVerified: true,
+                  rtspValidated: true,
+                  compatibility: "compatible",
+                  duplicateStatus: "unique",
+                  compatibilityStatus: "compatible",
+                  profiles: [{ name: "main", codec: normalizeRtspDiscoveryCodec(probe.codec), width: probe.width ?? 1920, height: probe.height ?? 1080 }],
+                  capabilities: { ptz: false, audio: true, events: true },
+                  discoveryLayers: rtspDiscoveryLayers(true, Boolean(hardwareId)),
                 };
-              }
-
-              if (probe && probe.reachable) {
-                foundWorkingCred = true;
-                try {
-                  const macAddress = await resolveNeighborMac(ip);
-                  const hardwareId = createDeviceFingerprint(macAddress ? { macAddress } : {});
-                  const isDvr = path.includes("channel=") || path.includes("Channels/") || recorderFingerprint;
-                  const payload = {
-                    edgeAgentId: agentId,
-                    discoveryMethod: "rtsp-network-scan",
-                    vendor: recorderFingerprint?.vendor || "other",
-                    manufacturer: recorderFingerprint?.vendor || "unknown",
-                    model: isDvr ? "DVR / NVR Multi-Channel" : "IP Camera",
-                    ipAddress: ip,
-                    ...(macAddress ? { macAddress } : {}),
-                    ...(hardwareId ? { hardwareId } : {}),
-                    onvifPort: 80,
-                    rtspPort: port,
-                    displayName: isDvr ? `Discovered DVR ${ip}` : `Discovered camera ${ip}`,
-                    credentialsRequired: false,
-                    streamVerified: true,
-                    rtspValidated: true,
-                    compatibility: "compatible",
-                    duplicateStatus: "unique",
-                    compatibilityStatus: "compatible",
-                    profiles: [{ name: "main", codec: normalizeRtspDiscoveryCodec(probe.codec), width: probe.width ?? 1920, height: probe.height ?? 1080 }],
-                    capabilities: { ptz: false, audio: true, events: true },
-                    discoveryLayers: rtspDiscoveryLayers(true, Boolean(hardwareId)),
-                  };
                   const discovery = await control.submitDiscovery(branchId, payload);
                   submittedCount += 1;
                   if (persistStreamSecrets && secretsStore) {
