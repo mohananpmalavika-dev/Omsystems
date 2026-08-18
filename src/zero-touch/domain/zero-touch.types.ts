@@ -75,6 +75,7 @@ export interface DiscoveredChannelReview {
   hasPtz: boolean;
   validationState: "PENDING" | "VALIDATED" | "AUTH_FAILED" | "UNREACHABLE";
   isApproved: boolean;
+  streamVerified?: boolean; // Simple boolean flag for stream verification status
   streamVerification?: StreamVerificationDetails;
   errorMessage?: string;
 }
@@ -94,6 +95,7 @@ export interface DiscoveredDeviceReviewItem {
   channels: DiscoveredChannelReview[];
   reviewStatus: "DISCOVERED" | "VALIDATED" | "AWAITING_CREDENTIALS" | "APPROVED" | "REJECTED" | "REGISTERED";
   credentialsRequired: boolean;
+  streamVerified?: boolean; // Simple boolean flag indicating if device has verified streaming
   credentialVaultKey?: string;
   discoveredAt: string;
   lastValidatedAt?: string;

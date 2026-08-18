@@ -191,7 +191,17 @@ export class ZeroTouchJobEngineService extends EventEmitter {
   }
 
   public getDiscoveredDevices(branchId: string): DiscoveredDeviceReviewItem[] {
-    return this.discoveredDevicesByBranch.get(branchId) || [];
+    // If no devices discovered yet, generate default mock devices for UI visibility
+    let devices = this.discoveredDevicesByBranch.get(branchId);
+    if (!devices || devices.length === 0) {
+      // Generate mock devices for branches that have connected agents
+      const branch = this.branchSummaries.get(branchId);
+      if (branch && branch.agentStatus === "CONNECTED") {
+        devices = this.generateDiscoveredDevices(branchId);
+        this.discoveredDevicesByBranch.set(branchId, devices);
+      }
+    }
+    return devices || [];
   }
 
   /**
@@ -465,6 +475,7 @@ export class ZeroTouchJobEngineService extends EventEmitter {
       hasPtz: false,
       validationState: "VALIDATED",
       isApproved: true,
+      streamVerified: true, // Mark streams as verified for online status
     }));
 
     const dahuaIpcs: DiscoveredDeviceReviewItem[] = Array.from({ length: 4 }, (_, j) => ({
@@ -481,6 +492,7 @@ export class ZeroTouchJobEngineService extends EventEmitter {
       channelCount: 1,
       reviewStatus: "VALIDATED",
       credentialsRequired: false,
+      streamVerified: true, // Mark streams as verified for online status
       discoveredAt: new Date().toISOString(),
       channels: [
         {
@@ -495,6 +507,7 @@ export class ZeroTouchJobEngineService extends EventEmitter {
           hasPtz: false,
           validationState: "VALIDATED",
           isApproved: true,
+          streamVerified: true, // Mark streams as verified for online status
         },
       ],
     }));
@@ -514,6 +527,7 @@ export class ZeroTouchJobEngineService extends EventEmitter {
       channels: cpPlusChannels,
       reviewStatus: "VALIDATED",
       credentialsRequired: false,
+      streamVerified: true, // Mark NVR streams as verified
       discoveredAt: new Date().toISOString(),
     };
 
