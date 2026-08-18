@@ -134,7 +134,7 @@ describe('SENTINEL GRID / BANK VMS: End-to-End Enterprise Architecture Verificat
           resolution: '1920x1080',
           fps: 25,
           bitrateKbps: 2048,
-          codec: 'H265',
+          codec: 'H265' as const,
           streamProfile: 'main' as const,
           credentialRef: 'secret://branch/BR-001/camera/CAM-01',
           analyticsAssigned: ['intrusion'],
@@ -166,7 +166,7 @@ describe('SENTINEL GRID / BANK VMS: End-to-End Enterprise Architecture Verificat
         zonesCount: 2,
       },
       security: {
-        minTlsVersion: 'TLS1.3',
+        minTlsVersion: 'TLS1.3' as const,
         certificateThumbprints: ['SHA256:CERT-THUMB-01'],
         allowedCiphers: ['TLS_AES_256_GCM_SHA384'],
         enforceSignedConfig: true,
@@ -178,7 +178,7 @@ describe('SENTINEL GRID / BANK VMS: End-to-End Enterprise Architecture Verificat
         tenantId: 'BANK-001',
         version: 35,
         config: sampleConfig,
-        changeDescription: 'Fleet hardening release',
+        changeReason: 'Fleet hardening release',
       },
       'sec-admin'
     );

@@ -5,10 +5,10 @@
  * budgeting, and scheduling.
  */
 
-export * from "./types";
-export * from "./decoder-capacity";
-export * from "./camera-priority";
-export * from "./stream-selector";
-export * from "./viewport-tracker";
-export * from "./playback-budget";
-export * from "./decoder-scheduler";
+export * from "./types.js";
+export * from "./decoder-capacity.js";
+export * from "./camera-priority.js";
+export * from "./stream-selector.js";
+export * from "./viewport-tracker.js";
+export * from "./playback-budget.js";
+export * from "./decoder-scheduler.js";

@@ -42,44 +42,71 @@ describe('WebSocket Authentication Security', () => {
     await pool.end();
   });
 
-  describe('JWT Token Validation', () => {
-    it('should reject connection without token', (done) => {
-      const socket = io(`http://localhost:${TEST_PORT}`, {
-        auth: {}
-      });
-
-      socket.on('connect_error', (error) => {
-        expect(error.message).toBe('Authentication token required');
+  function waitForConnectError(socket: Socket): Promise<Error> {
+    return new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => {
         socket.close();
-        done();
-      });
-
-      socket.on('connect', () => {
+        reject(new Error('Connection error timeout'));
+      }, 4000);
+      socket.once('connect_error', (error) => {
+        clearTimeout(timeout);
         socket.close();
-        done(new Error('Should not connect without token'));
+        resolve(error);
+      });
+      socket.once('connect', () => {
+        clearTimeout(timeout);
+        socket.close();
+        reject(new Error('Unexpected successful connection'));
       });
     });
+  }
 
-    it('should reject connection with invalid token', (done) => {
+  function waitForSubscription(socket: Socket, channels: string[]): Promise<{ channels: string[] }> {
+    return new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        socket.close();
+        reject(new Error('Subscription timeout'));
+      }, 4000);
+      socket.once('connect', () => {
+        socket.emit('subscribe', channels);
+      });
+      socket.once('subscribed', (data) => {
+        clearTimeout(timeout);
+        socket.close();
+        resolve(data);
+      });
+      socket.once('connect_error', (error) => {
+        clearTimeout(timeout);
+        socket.close();
+        reject(error);
+      });
+    });
+  }
+
+  describe('JWT Token Validation', () => {
+    it('should reject connection without token', async () => {
+      const socket = io(`http://localhost:${TEST_PORT}`, {
+        auth: {},
+        reconnection: false,
+      });
+
+      const error = await waitForConnectError(socket);
+      expect(error.message).toBe('Authentication token required');
+    });
+
+    it('should reject connection with invalid token', async () => {
       const socket = io(`http://localhost:${TEST_PORT}`, {
         auth: {
           token: 'invalid-token-format'
-        }
+        },
+        reconnection: false,
       });
 
-      socket.on('connect_error', (error) => {
-        expect(error.message).toContain('Invalid or expired authentication token');
-        socket.close();
-        done();
-      });
-
-      socket.on('connect', () => {
-        socket.close();
-        done(new Error('Should not connect with invalid token'));
-      });
+      const error = await waitForConnectError(socket);
+      expect(error.message).toContain('Invalid or expired authentication token');
     });
 
-    it('should reject connection with expired token', (done) => {
+    it('should reject connection with expired token', async () => {
       const expiredToken = sign(
         {
           userId: 'test-user-id',
@@ -95,22 +122,15 @@ describe('WebSocket Authentication Security', () => {
       const socket = io(`http://localhost:${TEST_PORT}`, {
         auth: {
           token: expiredToken
-        }
+        },
+        reconnection: false,
       });
 
-      socket.on('connect_error', (error) => {
-        expect(error.message).toContain('Invalid or expired authentication token');
-        socket.close();
-        done();
-      });
-
-      socket.on('connect', () => {
-        socket.close();
-        done(new Error('Should not connect with expired token'));
-      });
+      const error = await waitForConnectError(socket);
+      expect(error.message).toContain('Invalid or expired authentication token');
     });
 
-    it('should reject token with missing required fields', (done) => {
+    it('should reject token with missing required fields', async () => {
       const incompleteToken = sign(
         {
           userId: 'test-user-id',
@@ -122,22 +142,15 @@ describe('WebSocket Authentication Security', () => {
       const socket = io(`http://localhost:${TEST_PORT}`, {
         auth: {
           token: incompleteToken
-        }
+        },
+        reconnection: false,
       });
 
-      socket.on('connect_error', (error) => {
-        expect(error.message).toContain('Invalid or expired authentication token');
-        socket.close();
-        done();
-      });
-
-      socket.on('connect', () => {
-        socket.close();
-        done(new Error('Should not connect with incomplete token'));
-      });
+      const error = await waitForConnectError(socket);
+      expect(error.message).toContain('Invalid or expired authentication token');
     });
 
-    it('should reject token with wrong issuer', (done) => {
+    it('should reject token with wrong issuer', async () => {
       const token = sign(
         {
           userId: 'test-user-id',
@@ -154,22 +167,15 @@ describe('WebSocket Authentication Security', () => {
       const socket = io(`http://localhost:${TEST_PORT}`, {
         auth: {
           token: token
-        }
+        },
+        reconnection: false,
       });
 
-      socket.on('connect_error', (error) => {
-        expect(error.message).toContain('Invalid or expired authentication token');
-        socket.close();
-        done();
-      });
-
-      socket.on('connect', () => {
-        socket.close();
-        done(new Error('Should not connect with wrong issuer'));
-      });
+      const error = await waitForConnectError(socket);
+      expect(error.message).toContain('Invalid or expired authentication token');
     });
 
-    it('should reject token with wrong secret', (done) => {
+    it('should reject token with wrong secret', async () => {
       const token = sign(
         {
           userId: 'test-user-id',
@@ -186,25 +192,17 @@ describe('WebSocket Authentication Security', () => {
       const socket = io(`http://localhost:${TEST_PORT}`, {
         auth: {
           token: token
-        }
+        },
+        reconnection: false,
       });
 
-      socket.on('connect_error', (error) => {
-        expect(error.message).toContain('Invalid or expired authentication token');
-        socket.close();
-        done();
-      });
-
-      socket.on('connect', () => {
-        socket.close();
-        done(new Error('Should not connect with wrong secret'));
-      });
+      const error = await waitForConnectError(socket);
+      expect(error.message).toContain('Invalid or expired authentication token');
     });
   });
 
   describe('Channel Access Control', () => {
     let validToken: string;
-    let operatorSocket: Socket;
 
     beforeEach(() => {
       validToken = sign(
@@ -222,72 +220,39 @@ describe('WebSocket Authentication Security', () => {
       );
     });
 
-    it('should allow operator to subscribe to cameras channel', (done) => {
-      operatorSocket = io(`http://localhost:${TEST_PORT}`, {
-        auth: { token: validToken }
+    it('should allow operator to subscribe to cameras channel', async () => {
+      const socket = io(`http://localhost:${TEST_PORT}`, {
+        auth: { token: validToken },
+        reconnection: false,
       });
 
-      operatorSocket.on('connect', () => {
-        operatorSocket.emit('subscribe', ['cameras']);
-      });
-
-      operatorSocket.on('subscribed', (data) => {
-        expect(data.channels).toContain('cameras');
-        operatorSocket.close();
-        done();
-      });
-
-      operatorSocket.on('connect_error', (error) => {
-        operatorSocket.close();
-        done(error);
-      });
+      const data = await waitForSubscription(socket, ['cameras']);
+      expect(data.channels).toContain('cameras');
     });
 
-    it('should deny operator access to global-dashboard channel', (done) => {
-      operatorSocket = io(`http://localhost:${TEST_PORT}`, {
-        auth: { token: validToken }
+    it('should deny operator access to global-dashboard channel', async () => {
+      const socket = io(`http://localhost:${TEST_PORT}`, {
+        auth: { token: validToken },
+        reconnection: false,
       });
 
-      operatorSocket.on('connect', () => {
-        operatorSocket.emit('subscribe', ['global-dashboard']);
-      });
-
-      operatorSocket.on('subscribed', (data) => {
-        expect(data.channels).not.toContain('global-dashboard');
-        operatorSocket.close();
-        done();
-      });
-
-      operatorSocket.on('connect_error', (error) => {
-        operatorSocket.close();
-        done(error);
-      });
+      const data = await waitForSubscription(socket, ['global-dashboard']);
+      expect(data.channels).not.toContain('global-dashboard');
     });
 
-    it('should deny operator access to central-monitoring channel', (done) => {
-      operatorSocket = io(`http://localhost:${TEST_PORT}`, {
-        auth: { token: validToken }
+    it('should deny operator access to central-monitoring channel', async () => {
+      const socket = io(`http://localhost:${TEST_PORT}`, {
+        auth: { token: validToken },
+        reconnection: false,
       });
 
-      operatorSocket.on('connect', () => {
-        operatorSocket.emit('subscribe', ['central-monitoring']);
-      });
-
-      operatorSocket.on('subscribed', (data) => {
-        expect(data.channels).not.toContain('central-monitoring');
-        operatorSocket.close();
-        done();
-      });
-
-      operatorSocket.on('connect_error', (error) => {
-        operatorSocket.close();
-        done(error);
-      });
+      const data = await waitForSubscription(socket, ['central-monitoring']);
+      expect(data.channels).not.toContain('central-monitoring');
     });
   });
 
   describe('Role-Based Access Control', () => {
-    it('should allow super_admin full access', (done) => {
+    it('should allow super_admin full access', async () => {
       const adminToken = sign(
         {
           userId: 'admin-user-id',
@@ -303,34 +268,24 @@ describe('WebSocket Authentication Security', () => {
       );
 
       const socket = io(`http://localhost:${TEST_PORT}`, {
-        auth: { token: adminToken }
+        auth: { token: adminToken },
+        reconnection: false,
       });
 
-      socket.on('connect', () => {
-        socket.emit('subscribe', [
-          'global-dashboard',
-          'central-monitoring',
-          'alerts',
-          'incidents'
-        ]);
-      });
+      const data = await waitForSubscription(socket, [
+        'global-dashboard',
+        'central-monitoring',
+        'alerts',
+        'incidents'
+      ]);
 
-      socket.on('subscribed', (data) => {
-        expect(data.channels).toContain('global-dashboard');
-        expect(data.channels).toContain('central-monitoring');
-        expect(data.channels).toContain('alerts');
-        expect(data.channels).toContain('incidents');
-        socket.close();
-        done();
-      });
-
-      socket.on('connect_error', (error) => {
-        socket.close();
-        done(error);
-      });
+      expect(data.channels).toContain('global-dashboard');
+      expect(data.channels).toContain('central-monitoring');
+      expect(data.channels).toContain('alerts');
+      expect(data.channels).toContain('incidents');
     });
 
-    it('should restrict branch_manager to appropriate channels', (done) => {
+    it('should restrict branch_manager to appropriate channels', async () => {
       const managerToken = sign(
         {
           userId: 'manager-user-id',
@@ -346,33 +301,23 @@ describe('WebSocket Authentication Security', () => {
       );
 
       const socket = io(`http://localhost:${TEST_PORT}`, {
-        auth: { token: managerToken }
+        auth: { token: managerToken },
+        reconnection: false,
       });
 
-      socket.on('connect', () => {
-        socket.emit('subscribe', [
-          'alerts',
-          'incidents',
-          'cameras',
-          'branch-health',
-          'global-dashboard' // Should be denied
-        ]);
-      });
+      const data = await waitForSubscription(socket, [
+        'alerts',
+        'incidents',
+        'cameras',
+        'branch-health',
+        'global-dashboard' // Should be denied
+      ]);
 
-      socket.on('subscribed', (data) => {
-        expect(data.channels).toContain('alerts');
-        expect(data.channels).toContain('incidents');
-        expect(data.channels).toContain('cameras');
-        expect(data.channels).toContain('branch-health');
-        expect(data.channels).not.toContain('global-dashboard');
-        socket.close();
-        done();
-      });
-
-      socket.on('connect_error', (error) => {
-        socket.close();
-        done(error);
-      });
+      expect(data.channels).toContain('alerts');
+      expect(data.channels).toContain('incidents');
+      expect(data.channels).toContain('cameras');
+      expect(data.channels).toContain('branch-health');
+      expect(data.channels).not.toContain('global-dashboard');
     });
   });
 
@@ -407,16 +352,24 @@ describe('WebSocket Authentication Security', () => {
       );
 
       const socket1 = io(`http://localhost:${TEST_PORT}`, {
-        auth: { token: tenant1Token }
+        auth: { token: tenant1Token },
+        reconnection: false,
       });
 
       const socket2 = io(`http://localhost:${TEST_PORT}`, {
-        auth: { token: tenant2Token }
+        auth: { token: tenant2Token },
+        reconnection: false,
       });
 
       await Promise.all([
-        new Promise<void>((resolve) => socket1.on('connect', resolve)),
-        new Promise<void>((resolve) => socket2.on('connect', resolve))
+        new Promise<void>((resolve, reject) => {
+          socket1.once('connect', resolve);
+          socket1.once('connect_error', reject);
+        }),
+        new Promise<void>((resolve, reject) => {
+          socket2.once('connect', resolve);
+          socket2.once('connect_error', reject);
+        })
       ]);
 
       const stats = wsManager.getStatistics();
@@ -430,7 +383,7 @@ describe('WebSocket Authentication Security', () => {
   });
 
   describe('Security Edge Cases', () => {
-    it('should reject unknown channel types', (done) => {
+    it('should reject unknown channel types', async () => {
       const token = sign(
         {
           userId: 'test-user-id',
@@ -446,26 +399,15 @@ describe('WebSocket Authentication Security', () => {
       );
 
       const socket = io(`http://localhost:${TEST_PORT}`, {
-        auth: { token }
+        auth: { token },
+        reconnection: false,
       });
 
-      socket.on('connect', () => {
-        socket.emit('subscribe', ['unknown-channel-type']);
-      });
-
-      socket.on('subscribed', (data) => {
-        expect(data.channels).not.toContain('unknown-channel-type');
-        socket.close();
-        done();
-      });
-
-      socket.on('connect_error', (error) => {
-        socket.close();
-        done(error);
-      });
+      const data = await waitForSubscription(socket, ['unknown-channel-type']);
+      expect(data.channels).not.toContain('unknown-channel-type');
     });
 
-    it('should validate branch channel format', (done) => {
+    it('should validate branch channel format', async () => {
       const token = sign(
         {
           userId: 'test-user-id',
@@ -481,23 +423,12 @@ describe('WebSocket Authentication Security', () => {
       );
 
       const socket = io(`http://localhost:${TEST_PORT}`, {
-        auth: { token }
+        auth: { token },
+        reconnection: false,
       });
 
-      socket.on('connect', () => {
-        socket.emit('subscribe', ['branch:']); // Invalid format (no branch ID)
-      });
-
-      socket.on('subscribed', (data) => {
-        expect(data.channels).not.toContain('branch:');
-        socket.close();
-        done();
-      });
-
-      socket.on('connect_error', (error) => {
-        socket.close();
-        done(error);
-      });
+      const data = await waitForSubscription(socket, ['branch:']); // Invalid format (no branch ID)
+      expect(data.channels).not.toContain('branch:');
     });
   });
 });

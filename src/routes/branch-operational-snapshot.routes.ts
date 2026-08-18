@@ -267,6 +267,7 @@ export async function registerBranchOperationalSnapshotRoutes(
     });
   };
 
+  registerEndpoints("/v1");
   registerEndpoints("/api/v1");
 
   // Register live-session media endpoints on /v1 for client compatibility

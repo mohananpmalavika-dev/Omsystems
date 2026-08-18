@@ -12,7 +12,7 @@ import { RansomwareDetectorCollector } from '../../src/security/collectors/ranso
 import { FirmwareVerificationCollector } from '../../src/security/collectors/firmware-verification-collector.js';
 import { EncryptionEvidenceCollector } from '../../src/security/collectors/encryption-evidence-collector.js';
 import { PasswordRotationCollector } from '../../src/security/collectors/password-rotation-collector.js';
-import { EvidenceSource } from '../../src/security/collectors/base-evidence-collector.js';
+import type { EvidenceSource } from '../../src/security/collectors/base-evidence-collector.js';
 
 describe('Sprint 2: Security Collectors Production Verification', () => {
   let registry: any;
@@ -37,7 +37,7 @@ describe('Sprint 2: Security Collectors Production Verification', () => {
     it('should collect TPM attestation data', async () => {
       const collector = new TPMAttestationCollector({ enabled: true });
       
-      const evidence = await collector.collect();
+      const [evidence]: any[] = await collector.collect();
       
       expect(evidence).toBeDefined();
       expect(evidence.type).toBe('tpm_attestation');
@@ -57,12 +57,12 @@ describe('Sprint 2: Security Collectors Production Verification', () => {
     it('should collect Secure Boot status', async () => {
       const collector = new SecureBootCollector({ enabled: true });
       
-      const evidence = await collector.collect();
+      const [evidence]: any[] = await collector.collect();
       
       expect(evidence).toBeDefined();
       expect(evidence.type).toBe('secure_boot');
       expect(evidence.value.totalDevices).toBeGreaterThanOrEqual(1); // At least local device
-      expect(evidence.source).toBe(EvidenceSource.LIVE);
+      expect(evidence.source).toBe('live');
       expect(evidence.provenance.collectionMethod).toBe('system_api');
       
       console.log('✓ Secure Boot Collector');
@@ -74,7 +74,7 @@ describe('Sprint 2: Security Collectors Production Verification', () => {
 
     it('should detect platform correctly', async () => {
       const collector = new SecureBootCollector({ enabled: true });
-      const evidence = await collector.collect();
+      const [evidence]: any[] = await collector.collect();
       
       if (evidence.value.totalDevices > 0) {
         const firstDevice = evidence.value.devicesRequiringAttention[0] || 
@@ -89,7 +89,7 @@ describe('Sprint 2: Security Collectors Production Verification', () => {
     it('should collect ransomware indicators', async () => {
       const collector = new RansomwareDetectorCollector({ enabled: true });
       
-      const evidence = await collector.collect();
+      const [evidence]: any[] = await collector.collect();
       
       expect(evidence).toBeDefined();
       expect(evidence.type).toBe('ransomware_detection');
@@ -114,7 +114,7 @@ describe('Sprint 2: Security Collectors Production Verification', () => {
     it('should collect firmware verification status', async () => {
       const collector = new FirmwareVerificationCollector({ enabled: true });
       
-      const evidence = await collector.collect();
+      const [evidence]: any[] = await collector.collect();
       
       expect(evidence).toBeDefined();
       expect(evidence.type).toBe('firmware_verification');
@@ -133,12 +133,12 @@ describe('Sprint 2: Security Collectors Production Verification', () => {
     it('should collect encryption evidence', async () => {
       const collector = new EncryptionEvidenceCollector({ enabled: true });
       
-      const evidence = await collector.collect();
+      const [evidence]: any[] = await collector.collect();
       
       expect(evidence).toBeDefined();
       expect(evidence.type).toBe('encryption_evidence');
       expect(evidence.value.totalComponents).toBeGreaterThan(0);
-      expect(evidence.source).toBe(EvidenceSource.LIVE);
+      expect(evidence.source).toBe('live');
       
       // Verify all categories are checked
       expect(evidence.value.encryptionByCategory).toBeDefined();
@@ -159,7 +159,7 @@ describe('Sprint 2: Security Collectors Production Verification', () => {
 
     it('should verify key management', async () => {
       const collector = new EncryptionEvidenceCollector({ enabled: true });
-      const evidence = await collector.collect();
+      const [evidence]: any[] = await collector.collect();
       
       expect(evidence.value.keyManagement).toBeDefined();
       expect(evidence.value.keyManagement.hsmStored).toBeGreaterThanOrEqual(0);
@@ -173,7 +173,7 @@ describe('Sprint 2: Security Collectors Production Verification', () => {
 
     it('should track key rotation', async () => {
       const collector = new EncryptionEvidenceCollector({ enabled: true });
-      const evidence = await collector.collect();
+      const [evidence]: any[] = await collector.collect();
       
       expect(evidence.value.keyRotation).toBeDefined();
       expect(evidence.value.keyRotation.current).toBeGreaterThanOrEqual(0);
@@ -191,7 +191,7 @@ describe('Sprint 2: Security Collectors Production Verification', () => {
     it('should collect password rotation data', async () => {
       const collector = new PasswordRotationCollector({ enabled: true });
       
-      const evidence = await collector.collect();
+      const [evidence]: any[] = await collector.collect();
       
       expect(evidence).toBeDefined();
       expect(evidence.type).toBe('password_rotation_check');
@@ -273,9 +273,9 @@ describe('Sprint 2: Security Collectors Production Verification', () => {
       ];
       
       for (const collector of collectors) {
-        const evidence = await collector.collect();
+        const [evidence]: any[] = await collector.collect();
         
-        expect(evidence.source).toBe(EvidenceSource.LIVE);
+        expect(evidence.source).toBe('live');
         expect(evidence.provenance.collectionMethod).not.toContain('simulation');
       }
       

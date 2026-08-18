@@ -5,12 +5,12 @@
  * performance monitoring, and declarative scheduling.
  */
 
-export * from "./types";
-export * from "./stream-cost-estimator";
-export * from "./codec-capability";
-export * from "./priority-engine";
-export * from "./performance-monitor";
-export * from "./capacity-profiler";
-export * from "./event-bus";
-export * from "./decoder-scheduler";
-export * from "./capacity-manager";
+export * from "./types.js";
+export * from "./stream-cost-estimator.js";
+export * from "./codec-capability.js";
+export * from "./priority-engine.js";
+export * from "./performance-monitor.js";
+export * from "./capacity-profiler.js";
+export * from "./event-bus.js";
+export * from "./decoder-scheduler.js";
+export * from "./capacity-manager.js";

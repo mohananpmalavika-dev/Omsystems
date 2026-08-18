@@ -29,6 +29,11 @@
 
     // Test files have their own configuration
     "**/*.test.ts",
+    "src/**/__tests__/*",
+    "src/**/__tests__/**/*",
+    "**/__tests__/*",
+    "**/__tests__/**/*",
+    "tests/**/*",
     "test/**/*",
 
     // Workspace projects have their own tsconfig

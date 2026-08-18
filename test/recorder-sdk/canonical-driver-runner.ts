@@ -76,7 +76,7 @@ async function runCanonicalDriverTests() {
   assert(cpInfo.serialNumber === "9L02A8BPAP00178", "Extracts CP PLUS serial number");
   assert(cpInfo.channelCapacity === 16, "Extracts 16 channel capacity");
 
-  const cpStorage = parseDahuaStorage(cpStorageText);
+  const cpStorage: any = parseDahuaStorage(cpStorageText);
   assert(cpStorage.disks.total === 2, "Parses 2 physical storage disks");
   assert(cpStorage.disks.healthy === 1 && cpStorage.disks.warning === 1, "Correctly identifies 1 healthy and 1 warning disk");
   assert(cpStorage.volumes[1]?.smartHealth === "WARNING", "Flags SMART warning on Disk 2");
@@ -107,7 +107,7 @@ async function runCanonicalDriverTests() {
   assert(hikInfo.model === "DS-7616NI-I2/16P", "Extracts Hikvision model");
   assert(hikInfo.firmwareVersion?.includes("V4.61"), "Extracts firmware version");
 
-  const hikStorage = parseHikvisionStorage(hikStorageXml);
+  const hikStorage: any = parseHikvisionStorage(hikStorageXml);
   assert(hikStorage.disks.total === 2, "Parses 2 physical SATA disks");
   assert(hikStorage.volumes[1]?.smartHealth === "WARNING", "Identifies SMART warning on HDD-2");
 
@@ -165,7 +165,7 @@ async function runCanonicalDriverTests() {
   const streamDescriptor = await session.streams.resolve({
     channelNumber: 1,
     streamType: "SUB",
-  });
+  } as any);
   assert(streamDescriptor.protocol === "RTSP", "session.streams.resolve() returns RTSP descriptor");
   assert(streamDescriptor.width === 640 && streamDescriptor.height === 360, "Substream resolution is 640x360");
 
@@ -173,7 +173,7 @@ async function runCanonicalDriverTests() {
     channelNumber: 1,
     from: new Date(Date.now() - 90 * 86400000),
     to: new Date(),
-  });
+  } as any);
   assert(searchResult.segments.length > 0, "session.recordings.search() returns recording archive segments");
 
   // 6. Universal Retention Verification via Driver Search

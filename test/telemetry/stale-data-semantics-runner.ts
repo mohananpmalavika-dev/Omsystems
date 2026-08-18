@@ -12,9 +12,10 @@ import {
   CameraHealthCollector,
   StorageHealthCollector,
 } from "../../src/telemetry/index.js";
-import { app } from "../../src/app.js";
+import { buildApp } from "../../src/app.js";
 
 async function runStaleDataSemanticsTests() {
+  const app = await buildApp();
   console.log("================================================================================");
   console.log("  STALE DATA SEMANTICS & OBSERVATION TTL - VERIFICATION RUNNER");
   console.log("================================================================================\n");

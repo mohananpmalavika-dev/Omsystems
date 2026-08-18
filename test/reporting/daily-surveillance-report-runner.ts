@@ -8,9 +8,10 @@ import { dailySurveillanceReportService } from "../../src/reporting/services/dai
 import { renderDailySurveillanceHealthPdf } from "../../src/reporting/renderers/daily-surveillance-pdf.renderer.js";
 import { renderDailySurveillanceHealthXlsx } from "../../src/reporting/renderers/daily-surveillance-xlsx.renderer.js";
 import { renderDailySurveillanceHealthCsv } from "../../src/reporting/renderers/daily-surveillance-csv.renderer.js";
-import { app } from "../../src/app.js";
+import { buildApp } from "../../src/app.js";
 
 async function runDailySurveillanceReportTests() {
+  const app = await buildApp();
   console.log("================================================================================");
   console.log("  DAILY SURVEILLANCE HEALTH REPORT - COMPREHENSIVE VERIFICATION RUNNER");
   console.log("================================================================================\n");

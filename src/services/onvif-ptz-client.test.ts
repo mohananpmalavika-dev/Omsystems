@@ -7,10 +7,55 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { OnvifPtzClient } from "./onvif-ptz-client.js";
 
 describe("OnvifPtzClient", () => {
-  let fetchMock: ReturnType<typeof vi.spyOn>;
+  let fetchMock: any;
 
   beforeEach(() => {
-    fetchMock = vi.spyOn(globalThis, "fetch");
+    fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (url: any, init: any) => {
+      const body = String(init?.body ?? "");
+      if (body.includes("GetDeviceInformation")) {
+        return xmlResponse(deviceInfoXml());
+      }
+      if (body.includes("GetCapabilities")) {
+        return xmlResponse(capabilitiesWithPtzXml());
+      }
+      if (body.includes("GetProfiles")) {
+        return xmlResponse(profilesXml());
+      }
+      if (body.includes("GetSystemDateAndTime")) {
+        return xmlResponse(systemDateAndTimeXml());
+      }
+      if (body.includes("GetConfigurations")) {
+        return xmlResponse(ptzConfigurationsXml());
+      }
+      if (body.includes("AbsoluteMove")) {
+        return xmlResponse(absoluteMoveResponseXml());
+      }
+      if (body.includes("ContinuousMove")) {
+        return xmlResponse(continuousMoveResponseXml());
+      }
+      if (body.includes("Stop")) {
+        return xmlResponse(stopResponseXml());
+      }
+      if (body.includes("GetPresets")) {
+        return xmlResponse(getPresetsResponseXml());
+      }
+      if (body.includes("GotoPreset")) {
+        return xmlResponse(gotoPresetResponseXml());
+      }
+      if (body.includes("SetPreset")) {
+        return xmlResponse(setPresetResponseXml("preset1"));
+      }
+      if (body.includes("RemovePreset")) {
+        return xmlResponse(removePresetResponseXml());
+      }
+      if (body.includes("GetStatus")) {
+        return xmlResponse(getStatusResponseXml());
+      }
+      if (body.includes("GotoHomePosition")) {
+        return xmlResponse(gotoHomeResponseXml());
+      }
+      return xmlResponse(`<s:Envelope xmlns:s="http://www.w3.org/2003/05/soap-envelope"><s:Body/></s:Envelope>`);
+    });
   });
 
   afterEach(() => {
@@ -514,6 +559,23 @@ function xmlResponse(body: string) {
     status: 200,
     headers: { "content-type": "application/soap+xml" },
   });
+}
+
+function systemDateAndTimeXml() {
+  return `<s:Envelope xmlns:s="http://www.w3.org/2003/05/soap-envelope"
+    xmlns:tds="http://www.onvif.org/ver10/device/wsdl"
+    xmlns:tt="http://www.onvif.org/ver10/schema">
+    <s:Body><tds:GetSystemDateAndTimeResponse>
+      <tds:SystemDateAndTime>
+        <tt:DateTimeType>Manual</tt:DateTimeType>
+        <tt:DaylightSavings>false</tt:DaylightSavings>
+        <tt:UTCDateTime>
+          <tt:Time><tt:Hour>12</tt:Hour><tt:Minute>0</tt:Minute><tt:Second>0</tt:Second></tt:Time>
+          <tt:Date><tt:Year>2026</tt:Year><tt:Month>8</tt:Month><tt:Day>1</tt:Day></tt:Date>
+        </tt:UTCDateTime>
+      </tds:SystemDateAndTime>
+    </tds:GetSystemDateAndTimeResponse></s:Body>
+  </s:Envelope>`;
 }
 
 function deviceInfoXml() {

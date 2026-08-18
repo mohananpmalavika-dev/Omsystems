@@ -55,7 +55,7 @@ export class SecurityPostureService {
   private logger: { error: (ctx: any, msg: string) => void };
   
   constructor(
-    private readonly config: SecurityPostureConfig,
+    private readonly config: SecurityPostureConfig = { environment: 'development', enforceStrictness: false },
     private readonly secureBootCollector?: SecureBootCollector,
     private readonly ransomwareCollector?: RansomwareCollector,
     private readonly tamperProtectionCollector?: TamperProtectionCollector,

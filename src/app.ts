@@ -656,7 +656,16 @@ export async function buildApp(options?: {
       return reply.code(401).send({ error: "invalid_bridge_identity" });
     }
     if (edgeAgentIngressRoute) {
-      if (edgeCredentialAuthenticated || edgeBridgeAuthenticated || !edgeAgentToken) {
+      if (edgeCredentialAuthenticated || (edgeBridgeAuthenticated && !userIdentitySupplied)) {
+        request.edgeAgentAuthenticated = true;
+        request.edgeAgentId = ingressAgentId;
+        return;
+      }
+      if (options?.edgeBridgeSharedKey || (options?.authMode ?? "development") !== "development") {
+        if (!userIdentitySupplied) {
+          return reply.code(401).send({ error: "unauthenticated", message: "Edge bridge key or agent token required" });
+        }
+      } else if (!userIdentitySupplied) {
         request.edgeAgentAuthenticated = true;
         request.edgeAgentId = ingressAgentId;
         return;
@@ -1521,38 +1530,6 @@ export async function buildApp(options?: {
     };
     const discovery = await store.createDiscovery(branchId, discoveryInput);
 
-    // Auto-provision verified cameras directly to Live View & AI Analytics without requiring manual review
-    if (discovery.status === "pending" && (discovery.streamVerified || parsed.streamVerified || parsed.rtspValidated || !parsed.credentialsRequired)) {
-      try {
-        const defaultProfile = parsed.profiles[0];
-        const autoApprovalInput: CameraApprovalInput = {
-          discoveryId: discovery.id,
-          name: parsed.displayName || `${parsed.manufacturer || parsed.vendor || "Camera"} (${parsed.ipAddress})`,
-          channel: parsed.recorderChannel || 1,
-          protocol: (parsed.sourceType === "analog-dvr-channel" || parsed.sourceType === "nvr-channel" ? "vendor-adapter" : "onvif-t") as any,
-          connectionSecretRef: `edge://branch/${branchId}/camera/${parsed.ipAddress}`,
-          connectionTransport: "edge-gateway",
-          manufacturer: parsed.manufacturer || parsed.vendor,
-          model: parsed.model,
-          serialNumber: parsed.serialNumber,
-          macAddress: parsed.macAddress,
-          ipAddress: parsed.ipAddress,
-          onvifPort: parsed.onvifPort,
-          rtspPort: parsed.rtspPort,
-          streamProfile: defaultProfile?.name || "main",
-          sourceType: parsed.sourceType || "ip-camera",
-          recorderId: parsed.recorderId,
-          recorderChannel: parsed.recorderChannel,
-          recorderSerialNumber: parsed.recorderSerialNumber,
-        };
-        const camera = await store.approveCamera(branchId, autoApprovalInput);
-        if (camera) {
-          await store.upsertRecordingJob(camera.id, initialRecordingJobForSource(parsed.sourceType));
-        }
-      } catch {
-        // Stays in pending discovery if auto-approval encounters constraints
-      }
-    }
 
     if (request.edgeAgentAuthenticated) {
       const branch = await store.getNode(branchId);

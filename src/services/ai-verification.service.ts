@@ -221,7 +221,7 @@ export class AIVerificationService {
     const cameraCriticality = await this.getCameraCriticality(event.cameraId, detectionType);
     
     // Schedule match (is this during expected business hours?)
-    const detectionTime = event.detectionTime || event.timestamp;
+    const detectionTime = event.detectionTime || event.timestamp || new Date().toISOString();
     const scheduleMatch = this.getScheduleMatch(detectionTime, rule?.businessHoursOnly);
     
     // Zone type criticality

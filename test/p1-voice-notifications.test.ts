@@ -79,7 +79,7 @@ describe("P1 voice notification call tree", () => {
 
 describe("voice provider adapters", () => {
   it("builds a Twilio Voice request with IVR, callbacks, recording and authentication", async () => {
-    const fetcher = vi.fn(async () => new Response(JSON.stringify({ sid: "CA123" }), { status: 201,
+    const fetcher: any = vi.fn(async () => new Response(JSON.stringify({ sid: "CA123" }), { status: 201,
       headers: { "content-type": "application/json" } }));
     const provider = new TwilioVoiceProvider("AC123", "token", "+911", fetcher as typeof fetch);
     await expect(provider.placeCall({ to: "+912", messageUrl: "https://a/ivr", statusUrl: "https://a/status",
@@ -91,7 +91,7 @@ describe("voice provider adapters", () => {
   });
 
   it("builds an Exotel connect request with recording callbacks", async () => {
-    const fetcher = vi.fn(async () => new Response(JSON.stringify({ Call: { Sid: "exotel-1" } }), { status: 200,
+    const fetcher: any = vi.fn(async () => new Response(JSON.stringify({ Call: { Sid: "exotel-1" } }), { status: 200,
       headers: { "content-type": "application/json" } }));
     const provider = new ExotelVoiceProvider("account", "key", "token", "+911", "api.in.exotel.com", fetcher as typeof fetch);
     await expect(provider.placeCall({ to: "+912", messageUrl: "https://a/ivr", statusUrl: "https://a/status",

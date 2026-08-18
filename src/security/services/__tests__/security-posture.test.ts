@@ -8,19 +8,20 @@
  * 4. Never converts failures to HEALTHY
  */
 
-import { SecurityPostureService } from '../security-posture.service';
+import { describe, it, expect, beforeEach, vi as jest } from 'vitest';
+import { SecurityPostureService } from '../security-posture.service.js';
 import type {
   SecureBootCollector,
   RansomwareCollector,
   TamperProtectionCollector,
   TamperConditionCollector,
   SecurityCollectionContext,
-} from '../../evidence/security-evidence-types';
+} from '../../evidence/security-evidence-types.js';
 import {
   healthyEvidence,
   unhealthyEvidence,
   unknownEvidence,
-} from '../../evidence/security-evidence-types';
+} from '../../evidence/security-evidence-types.js';
 
 describe('SecurityPostureService', () => {
   let mockSecureBootCollector: jest.Mocked<SecureBootCollector>;

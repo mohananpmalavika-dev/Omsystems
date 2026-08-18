@@ -307,7 +307,7 @@ describe('Alert Action Security - Authentication Boundary', () => {
       };
 
       expect(validPayload.comment).toBeDefined();
-      expect(invalidPayload.comment).toBeUndefined();
+      expect((invalidPayload as any).comment).toBeUndefined();
       // Schema refine would reject invalidPayload
     });
 

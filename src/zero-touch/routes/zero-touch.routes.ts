@@ -32,7 +32,7 @@ export async function registerZeroTouchRoutes(app: FastifyInstance) {
       region: z.string().optional(),
     }).parse(request.body);
 
-    const branch = zeroTouchJobEngineService.createBranch(body);
+    const branch = zeroTouchJobEngineService.createBranch(body as { branchId: string; branchName: string; region?: string; });
     return reply.code(201).send({
       success: true,
       data: branch,

@@ -18,9 +18,10 @@ import {
   retentionReportService,
   type RetentionEvidence,
 } from "../../src/retention/index.js";
-import { app } from "../../src/app.js";
+import { buildApp } from "../../src/app.js";
 
 async function runRetentionTests() {
+  const app = await buildApp();
   console.log("================================================================================");
   console.log("  RETENTION COMPLIANCE SUBSYSTEM - COMPREHENSIVE VERIFICATION RUNNER");
   console.log("================================================================================\n");

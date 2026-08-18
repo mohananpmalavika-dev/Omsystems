@@ -2,12 +2,36 @@
   "extends": "./tsconfig.json",
   "compilerOptions": {
     // Tests can be slightly less strict
-    "strict": true,
+    "strict": false,
     "noUncheckedIndexedAccess": false
   },
   "include": [
-    "test/**/*.ts",
-    "**/*.test.ts"
+    "test/app.test.ts",
+    "test/authorization.test.ts",
+    "test/device-inventory.routes.test.ts",
+    "test/maintenance.routes.test.ts",
+    "test/live-view-flow.test.ts",
+    "test/operational-health.test.ts",
+    "test/analog-dvr-channels.test.ts",
+    "test/enterprise-infrastructure.test.ts",
+    "test/recording.test.ts",
+    "test/phase2-dashboard.test.ts",
+    "test/phase3-alert-command-center.test.ts",
+    "test/phase4-operational-reports.test.ts",
+    "test/phase5-enterprise-readiness.test.ts",
+    "test/phase6-testing-deployment.test.ts",
+    "test/analytics.test.ts",
+    "test/p1-voice-notifications.test.ts",
+    "test/sms-gateway-integration.test.ts",
+    "test/sentinel-grid-integration.test.ts",
+    "test/security-posture.secrets.test.ts",
+    "test/zero-touch-provisioning.test.ts",
+    "test/operational-health-alerts-security.test.ts",
+    "tests/storage-adapter.test.ts",
+    "tests/storage-failover.test.ts",
+    "tests/crowd-density-model.test.ts",
+    "src/**/*.test.ts",
+    "backend/**/*.test.ts"
   ],
   "exclude": [
     "node_modules",

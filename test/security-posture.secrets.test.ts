@@ -40,7 +40,7 @@ describe('SecurityPostureService - secrets collector', () => {
       listSecrets: vi.fn(async (filters?: any) => {
         if (filters?.expiringSoon) return expiring;
         if (filters?.needsRotation) return needsRotation;
-        return secrets.concat(expiring);
+        return (secrets as any[]).concat(expiring);
       })
     };
 

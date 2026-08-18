@@ -187,8 +187,8 @@ async function runViewerCapacityTests() {
     maxAlarmStreamsPerBranch: 16,
   });
 
-  const b1NormalCount = fairList.filter((c) => c.alertSeverity !== "CRITICAL").length;
-  const b1CritCount = fairList.filter((c) => c.alertSeverity === "CRITICAL").length;
+  const b1NormalCount = fairList.filter((c: any) => c.alertSeverity !== "CRITICAL").length;
+  const b1CritCount = fairList.filter((c: any) => c.alertSeverity === "CRITICAL").length;
 
   assert(b1NormalCount === 4, "Branch-01 normal streams capped at 4 (fairness enforced)");
   assert(b1CritCount === 2, "Branch-01 critical alarms bypass normal quota");

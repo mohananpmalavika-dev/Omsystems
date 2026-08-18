@@ -12,9 +12,10 @@ import {
   CompressionService,
   telemetryIngestionService,
 } from "../../src/telemetry/index.js";
-import { app } from "../../src/app.js";
+import { buildApp } from "../../src/app.js";
 
 async function runEdgeTelemetryTests() {
+  const app = await buildApp();
   console.log("================================================================================");
   console.log("  EDGE BATCH HEALTH COLLECTION & COMPRESSED TELEMETRY - VERIFICATION RUNNER");
   console.log("================================================================================\n");

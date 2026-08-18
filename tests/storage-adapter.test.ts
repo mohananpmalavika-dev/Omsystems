@@ -4,7 +4,7 @@
  * Tests for S3 metrics fix and SMB adapter implementation
  */
 
-import { describe, test, expect, beforeEach, afterEach, jest } from '@jest/globals';
+import { describe, test, expect, beforeEach, afterEach, vi as jest } from 'vitest';
 
 describe('S3 Storage Adapter - P0 #3', () => {
   

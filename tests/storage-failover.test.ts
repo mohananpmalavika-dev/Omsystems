@@ -10,7 +10,7 @@
  * These tests verify zero data loss during storage failures
  */
 
-import { describe, test, expect, beforeEach, afterEach } from 'vitest';
+import { describe, test, expect, beforeEach, afterEach, vi as jest } from 'vitest';
 import { StorageFailoverManager } from '../recording-engine/src/storage-failover-manager.js';
 import type { StorageDestinationAdapter, StorageMetrics, StorageProbeResult } from '../recording-engine/src/storage-adapter.js';
 

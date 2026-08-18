@@ -3,29 +3,26 @@
  * P0 Blocker #2 - Ensures crowd density detector never manufactures confidence
  */
 
-import { describe, it, expect, beforeEach, afterEach, jest } from '@jest/globals';
-import type { DetectionFrame, DetectionResult } from '../analytics-engine/src/detectors/base-detector';
+import { describe, it, expect, beforeEach, afterEach, vi as jest } from 'vitest';
+import type { DetectionFrame, DetectionResult } from '../analytics-engine/src/detectors/base-detector.js';
 
 // Mock the unified inference pipeline
-let mockPipelineDetectObjects: jest.Mock;
-let mockGetInferencePipeline: jest.Mock;
+let mockPipelineDetectObjects: any;
+let mockGetInferencePipeline: any;
 
-jest.unstable_mockModule('../analytics-engine/src/inference/unified-inference-pipeline.js', () => ({
-  getInferencePipeline: () => mockGetInferencePipeline(),
-}));
-
-// Import after mocking
 const { CrowdDensityDetector } = await import('../analytics-engine/src/detectors/crowd-density-detector.js');
 
 describe('P0 Blocker #2: Crowd Density Model Integrity', () => {
   let detector: InstanceType<typeof CrowdDensityDetector>;
-  let testFrame: DetectionFrame;
+  let testFrame: any;
 
   beforeEach(() => {
     detector = new CrowdDensityDetector();
     
     testFrame = {
       frameData: Buffer.alloc(1000),
+      imageData: Buffer.alloc(1000),
+      tenantId: 'tenant-1',
       timestamp: new Date('2026-08-09T10:00:00Z'),
       cameraId: 'camera-1',
       frameIndex: 100,
@@ -176,9 +173,9 @@ describe('P0 Blocker #2: Crowd Density Model Integrity', () => {
       expect(crowdResult?.confidence).not.toBe(0.95);
 
       // Should include confidence factors in metadata
-      expect(crowdResult?.metadata.confidenceFactors).toBeDefined();
-      expect(crowdResult?.metadata.confidenceFactors.personDetectionQuality).toBeDefined();
-      expect(crowdResult?.metadata.confidenceFactors.severityLevel).toBeDefined();
+      expect((crowdResult?.metadata as any)?.confidenceFactors).toBeDefined();
+      expect((crowdResult?.metadata as any)?.confidenceFactors?.personDetectionQuality).toBeDefined();
+      expect((crowdResult?.metadata as any)?.confidenceFactors?.severityLevel).toBeDefined();
     });
 
     it('should increase confidence for dangerous crowding levels', async () => {
@@ -195,7 +192,7 @@ describe('P0 Blocker #2: Crowd Density Model Integrity', () => {
       const crowdResult = results.find(r => r.detectionType === 'crowd-density');
 
       expect(crowdResult?.confidence).toBeGreaterThan(0.90);
-      expect(crowdResult?.metadata.confidenceFactors.severityLevel).toBe(1.0);
+      expect((crowdResult?.metadata as any)?.confidenceFactors?.severityLevel).toBe(1.0);
       expect(crowdResult?.requiresAlert).toBe(true);
     });
 

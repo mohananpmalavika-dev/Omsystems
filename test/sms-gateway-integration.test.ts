@@ -74,7 +74,7 @@ describe("P1 SMS delivery", () => {
 
 describe("SMS gateway adapters", () => {
   it("submits one MSG91 bulk request", async () => {
-    const fetcher = vi.fn(async () => new Response(JSON.stringify({ request_id: "req-1" }), { status: 200 }));
+    const fetcher: any = vi.fn(async () => new Response(JSON.stringify({ request_id: "req-1" }), { status: 200 }));
     const provider = new Msg91SmsProvider("key", fetcher as typeof fetch);
     const variables = { branch: "Mumbai", title: "Alert", camera: "Gate", time: "now", alertId: "A1", severity: "P1" };
     const result = await provider.sendBulk([{ to: "+9191", body: "one", statusUrl: "https://a/status", templateId: "flow-1", variables },
@@ -86,13 +86,13 @@ describe("SMS gateway adapters", () => {
   });
 
   it("supports TextLocal and Twilio delivery callbacks", async () => {
-    const textFetch = vi.fn(async () => new Response(JSON.stringify({ messages: [{ id: "tl-1" }] }), { status: 200 }));
+    const textFetch: any = vi.fn(async () => new Response(JSON.stringify({ messages: [{ id: "tl-1" }] }), { status: 200 }));
     const textlocal = new TextLocalSmsProvider("key", "OMSYST", textFetch as typeof fetch);
     await expect(textlocal.sendBulk([{ to: "9191", body: "alert", statusUrl: "https://a/status" }]))
       .resolves.toEqual([{ id: "tl-1" }]);
     expect(String(textFetch.mock.calls[0]?.[1]?.body)).toContain("receipt_url=https%3A%2F%2Fa%2Fstatus");
 
-    const twilioFetch = vi.fn(async () => new Response(JSON.stringify({ sid: "SM1" }), { status: 201 }));
+    const twilioFetch: any = vi.fn(async () => new Response(JSON.stringify({ sid: "SM1" }), { status: 201 }));
     const twilio = new TwilioSmsProvider("AC1", "token", "+911", twilioFetch as typeof fetch);
     await expect(twilio.sendBulk([{ to: "+912", body: "alert", statusUrl: "https://a/status" }]))
       .resolves.toEqual([{ id: "SM1" }]);

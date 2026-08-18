@@ -7,13 +7,13 @@ import { CameraCredentialResolver, parseCredentialRef } from "./camera-credentia
 import type { Pool } from "pg";
 
 describe("CameraCredentialResolver", () => {
-  let mockPool: Pool;
+  let mockPool: any;
   let resolver: CameraCredentialResolver;
 
   beforeEach(() => {
     mockPool = {
       query: vi.fn(),
-    } as unknown as Pool;
+    };
     resolver = new CameraCredentialResolver(mockPool);
   });
 
@@ -74,7 +74,7 @@ describe("CameraCredentialResolver", () => {
 
   describe("Branch Credentials", () => {
     it("should resolve branch:// reference with camera credentials", async () => {
-      vi.mocked(mockPool.query).mockResolvedValueOnce({
+      mockPool.query.mockResolvedValueOnce({
         rows: [
           {
             ip_address: "192.168.1.100",
@@ -102,7 +102,7 @@ describe("CameraCredentialResolver", () => {
     });
 
     it("should use branch default credentials when camera has none", async () => {
-      vi.mocked(mockPool.query).mockResolvedValueOnce({
+      mockPool.query.mockResolvedValueOnce({
         rows: [
           {
             ip_address: "192.168.1.100",
@@ -129,7 +129,7 @@ describe("CameraCredentialResolver", () => {
     });
 
     it("should return null when camera not found", async () => {
-      vi.mocked(mockPool.query).mockResolvedValueOnce({
+      mockPool.query.mockResolvedValueOnce({
         rows: [],
         command: "",
         rowCount: 0,
@@ -146,7 +146,7 @@ describe("CameraCredentialResolver", () => {
     });
 
     it("should return null when camera has no IP address", async () => {
-      vi.mocked(mockPool.query).mockResolvedValueOnce({
+      mockPool.query.mockResolvedValueOnce({
         rows: [
           {
             ip_address: null,
@@ -174,7 +174,7 @@ describe("CameraCredentialResolver", () => {
 
   describe("Vault Credentials", () => {
     it("should resolve vault:// reference", async () => {
-      vi.mocked(mockPool.query).mockResolvedValueOnce({
+      mockPool.query.mockResolvedValueOnce({
         rows: [
           {
             ip_address: "192.168.1.100",
@@ -216,7 +216,7 @@ describe("CameraCredentialResolver", () => {
 
   describe("Camera Credential Lookup", () => {
     it("should resolve credentials from camera ID", async () => {
-      vi.mocked(mockPool.query).mockResolvedValueOnce({
+      mockPool.query.mockResolvedValueOnce({
         rows: [
           {
             ipAddress: "192.168.1.100",
@@ -241,7 +241,7 @@ describe("CameraCredentialResolver", () => {
 
   describe("Get Camera ONVIF Endpoint", () => {
     it("should get ONVIF endpoint for camera", async () => {
-      vi.mocked(mockPool.query).mockResolvedValueOnce({
+      mockPool.query.mockResolvedValueOnce({
         rows: [
           {
             ip_address: "192.168.1.100",
@@ -263,7 +263,7 @@ describe("CameraCredentialResolver", () => {
     });
 
     it("should use default port 80 when not specified", async () => {
-      vi.mocked(mockPool.query).mockResolvedValueOnce({
+      mockPool.query.mockResolvedValueOnce({
         rows: [
           {
             ip_address: "192.168.1.100",
@@ -282,7 +282,7 @@ describe("CameraCredentialResolver", () => {
     });
 
     it("should return null when camera not found", async () => {
-      vi.mocked(mockPool.query).mockResolvedValueOnce({
+      mockPool.query.mockResolvedValueOnce({
         rows: [],
         command: "",
         rowCount: 0,
@@ -300,7 +300,7 @@ describe("CameraCredentialResolver", () => {
 
   describe("Store Credentials", () => {
     it("should store camera credentials", async () => {
-      vi.mocked(mockPool.query).mockResolvedValueOnce({
+      mockPool.query.mockResolvedValueOnce({
         rows: [],
         command: "UPDATE",
         rowCount: 1,
@@ -365,3 +365,4 @@ describe("parseCredentialRef", () => {
     expect(parsed.type).toBe("unknown");
   });
 });
+

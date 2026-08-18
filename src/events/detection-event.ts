@@ -14,7 +14,7 @@ export type SeverityLevel = 'P1' | 'P2' | 'P3' | 'P4' | 'P5' | 'critical' | 'hig
 
 export interface DetectionEvent {
   // Unique event identifier
-  eventId: string;
+  eventId?: string;
 
   // Tenant / organizational context
   tenantId?: string;
@@ -27,11 +27,11 @@ export interface DetectionEvent {
 
   // Timestamps
   // Use ISO-8601 strings for portability across services
-  timestamp: string;
+  timestamp?: string;
   detectionTime?: string;
 
   // Canonical event type (e.g., "person", "vehicle", "face", "anpr", "fire", "intrusion")
-  eventType: string;
+  eventType?: string;
   // Backwards-compatible alias used in some parts of the codebase
   detectionType?: string;
 
