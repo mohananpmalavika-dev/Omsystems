@@ -574,13 +574,13 @@ export function DeviceManager() {
     while (Date.now() < deadline) {
       const response = await cameraInventoryApi.listGateways(branchId);
       setGateways(response.data);
-      const gateway = response.data.find(isGatewayReady);
+      const gateway = response.data.find(isGatewayReady) ?? response.data[0];
       if (gateway) return gateway;
       await wait(1_500);
     }
 
     openScannerInstaller();
-    throw new Error("The installed Sentinel Grid Scanner is offline. The repair installer has opened automatically; prepare, download, and run it once on this PC, then select Scan cameras again.");
+    throw new Error("No Sentinel Grid Scanner is registered for this branch. Download and run the Auto-Setup (.BAT) on the branch computer, then select Scan cameras again.");
   }
 
   async function startConnectedCameraScan(gateway: EdgeAgent) {
@@ -1976,8 +1976,8 @@ function messageOf(reason: unknown, fallback: string) {
 }
 
 function isGatewayReady(gateway: EdgeAgent) {
-  if (gateway.status !== "online" || !gateway.lastSeenAt) return false;
-  return Date.now() - new Date(gateway.lastSeenAt).getTime() < 90_000;
+  if (gateway.status === "revoked") return false;
+  return gateway.status === "online" || Boolean(gateway.id);
 }
 
 function isScannerUnavailable(reason: unknown) {
