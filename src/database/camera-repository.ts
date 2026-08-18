@@ -171,7 +171,12 @@ export class CameraRepository {
 
   async listByEdgeAgent(edgeAgentId: string) {
     const result = await this.pool.query<CameraRow>(
-      `${selectCamera} WHERE cameras.edge_agent_id = $1::uuid ORDER BY camera_node.name`,
+      `${selectCamera}
+       WHERE (
+         cameras.edge_agent_id = $1::uuid
+         OR cameras.branch_node_id = (SELECT branch_node_id FROM edge_agents WHERE id = $1::uuid)
+       )
+       ORDER BY camera_node.name`,
       [edgeAgentId],
     );
     return result.rows.map(mapCamera);
@@ -446,12 +451,12 @@ export class CameraRepository {
     const result = await client.query<CameraRow>(
        `INSERT INTO cameras
           (resource_node_id, branch_node_id, edge_agent_id, device_identity_id, vendor, model,
-          channel, protocol, profiles, capabilities, connection_secret_ref,
+          channel, protocol, status, last_seen_at, profiles, capabilities, connection_secret_ref,
           connection_transport, ip_address, source_type, recorder_id, recorder_channel,
           recorder_serial_number, serial_number, mac_address, firmware_version,
           onvif_uuid, certificate_ref, certificate_fingerprint,
           first_seen_at, identity_last_seen_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10::jsonb, $11,
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'online'::camera_status, now(), $9::jsonb, $10::jsonb, $11,
                $12, $13::inet, $14, $15, $16, $17, $18, $19::macaddr, $20,
                $21, $22, $23, $24, $25)
        RETURNING id::text, device_identity_id::text, model AS name, resource_node_id::text,
@@ -588,10 +593,10 @@ export class CameraRepository {
             protocol, profiles, capabilities, connection_secret_ref, connection_transport,
             ip_address, source_type, recorder_id, recorder_channel, recorder_serial_number,
             serial_number, mac_address, onvif_uuid, certificate_ref,
-            certificate_fingerprint, first_seen_at, identity_last_seen_at)
+            certificate_fingerprint, first_seen_at, identity_last_seen_at, status, last_seen_at)
          VALUES ($1::uuid, $2::uuid, NULL, $3::uuid, $4, $5, $6, $7, $8::jsonb, $9::jsonb,
                  $10, $11, $12::inet, $13, $14, $15, $16, $17, $18::macaddr,
-                 $19, $20, $21, now(), now())
+                 $19, $20, $21, now(), now(), 'online'::camera_status, now())
          RETURNING id::text`,
         [
           nodeId, branchId, identity.deviceIdentityId, vendor,
