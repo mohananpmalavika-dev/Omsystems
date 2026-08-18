@@ -481,10 +481,9 @@ export class EdgeAgentRepository {
                 $17::jsonb, $18, $19, $20, $21, $22, $23, $24, $25, $26,
                 $27, $28, $29, $30, $31, $32, $33, $34, $35::jsonb, $36::discovery_status
          FROM resource_nodes n
-         JOIN edge_agents agent
+         LEFT JOIN edge_agents agent
            ON agent.id = $2
           AND agent.branch_node_id = n.id
-          AND agent.tenant_id = n.tenant_id
          WHERE n.id = $1 AND n.node_type = 'branch'
          ON CONFLICT (branch_node_id, device_identity_id) DO UPDATE
          SET edge_agent_id = EXCLUDED.edge_agent_id,
