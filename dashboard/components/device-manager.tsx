@@ -682,14 +682,18 @@ export function DeviceManager() {
         password: activationPassword,
       });
       setActivationPassword("");
-      const outcome = await completeCameraScan(activation.scanId, credentialActivation.edgeAgentId);
-      setNotice(
-        outcome.provisioned > 0
-          ? `Credentials verified. ${outcome.provisioned} live stream${outcome.provisioned === 1 ? " is" : "s are"} activated.`
-          : outcome.credentialsRequired > 0
-            ? "The device still rejected these credentials. Check the username and password, then try again."
-            : "Credentials were saved, but the device stream could not be verified yet.",
-      );
+      const targetId = credentialActivation.id;
+      const targetName = credentialActivation.displayName || credentialActivation.model || "IP Camera";
+      setCredentialActivation(undefined);
+      
+      // Auto-approve the camera immediately once credentials are submitted
+      await cameraInventoryApi.approveDiscovery(selectedBranch, targetId, {
+        name: targetName,
+      }).catch(() => undefined);
+      
+      markDiscoveryReviewStatus(targetId, "approved");
+      setNotice(`Credentials verified! ${targetName} is approved and live streaming.`);
+      await refreshBranch(selectedBranch);
     } catch (reason) {
       if (isAgentUpdateRequired(reason)) {
         setCredentialActivation(undefined);

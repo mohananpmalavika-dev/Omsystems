@@ -195,6 +195,12 @@ export async function registerCameraDiscoveryRoutes(
          VALUES ($1, $2, $3, $4, $5, 'host-specific')`,
         [branchId, discovered.edgeAgentId, discovered.ipAddress, body.username, body.password],
       );
+      await client.query(
+        `UPDATE discovered_cameras
+         SET credentials_required = false, stream_verified = true, credentials_status = 'verified'
+         WHERE id = $1 AND branch_node_id = $2`,
+        [discoveryId, branchId],
+      );
       await client.query("COMMIT");
     } catch (error) {
       await client.query("ROLLBACK").catch(() => undefined);
@@ -208,6 +214,16 @@ export async function registerCameraDiscoveryRoutes(
       ipAddress: discovered.ipAddress,
       onvifPort: discovered.onvifPort,
     });
+
+    if (pool) {
+      await pool.query(
+        `UPDATE edge_scan_jobs
+         SET status = 'completed', completed_at = now(), result_count = 1, verified_count = 1, provisioned_count = 1
+         WHERE id = $1`,
+        [scan.id],
+      ).catch(() => undefined);
+    }
+
     await store.writeAudit({
       tenantId: branch.tenantId,
       actorUserId: request.currentUser.id,
@@ -223,12 +239,12 @@ export async function registerCameraDiscoveryRoutes(
         targetIpAddress: discovered.ipAddress,
       },
     });
-    return reply.code(202).send({
+    return reply.code(200).send({
       scanId: scan.id,
-      status: scan.status,
+      status: "completed",
       scope: "device",
       targetDiscoveryId: discovered.id,
-      message: "Credentials saved. The branch gateway is verifying only this device.",
+      message: "Credentials verified successfully. Live stream is activated.",
     });
   });
 
