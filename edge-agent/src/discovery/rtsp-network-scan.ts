@@ -257,6 +257,7 @@ export async function discoverRtspDevices(
 
   const zeroTouchCreds = [
     ...(username ? [{ username, password }] : []),
+    { username: "admin", password: "RAM@4344" },
     { username: "admin", password: "Thathu@110" },
     { username: "admin", password: "admin123" },
     { username: "admin", password: "Admin@123" },
