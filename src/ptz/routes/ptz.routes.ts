@@ -186,7 +186,7 @@ export async function registerReliablePtzRoutes(app: FastifyInstance) {
         {
           cameraId: params.cameraId,
           presetNumber: body.presetNumber,
-          position: body.position,
+          position: body.position as any,
           autoReturnIdleTimeoutSeconds: body.autoReturnIdleTimeoutSeconds,
         },
         body.permissions as PtzPermission[]

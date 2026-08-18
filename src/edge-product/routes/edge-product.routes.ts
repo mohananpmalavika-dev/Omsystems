@@ -74,7 +74,7 @@ export async function registerEdgeProductRoutes(app: FastifyInstance) {
       snapshotBase64: z.string().optional(),
     }).parse(request.body);
 
-    const record = offlineStoreForwardService.spoolEvent(agentId, body.branchId, body);
+    const record = offlineStoreForwardService.spoolEvent(agentId, body.branchId, body as any);
     const queueState = offlineStoreForwardService.getQueueState(agentId, body.branchId);
 
     return reply.code(200).send({

@@ -7,6 +7,7 @@ import {
   CheckCircle2,
   AlertTriangle,
   Copy,
+  Download,
   Terminal,
   Search,
   Server,
@@ -80,6 +81,55 @@ export function ZeroTouchOnboardingView() {
     navigator.clipboard.writeText(text);
     setCopiedKey(key);
     setTimeout(() => setCopiedKey(null), 2000);
+  };
+
+  const handleDownloadBatch = (branchId: string, branchName: string, psCommand?: string) => {
+    const origin = typeof window !== "undefined" ? window.location.origin : "https://sentinel-grid-monitoring-vhid.onrender.com";
+    const command = psCommand || `iwr -useb '${origin}/api/control/v1/branches/${branchId}/install.ps1' | iex`;
+    const content = `@echo off
+setlocal EnableDelayedExpansion
+
+:: Check for Administrator privileges
+net session >nul 2>&1
+if %errorlevel% neq 0 (
+    echo [!] Administrator privileges required. Requesting elevation...
+    powershell -Command "Start-Process '%~f0' -Verb RunAs"
+    exit /b
+)
+
+title Sentinel Grid Edge Agent - 1-Click Auto Setup
+cls
+echo ================================================================
+echo          SENTINEL GRID CCTV SECURITY - 1-CLICK AUTO SETUP
+echo ================================================================
+echo Target Branch: ${branchName.replace(/"/g, "")} (${branchId})
+echo.
+echo [*] Connecting to Sentinel Grid Cloud Control Plane...
+echo [*] Downloading and configuring Edge Agent background service...
+echo [*] Probing local network for ONVIF IP cameras, RTSP streams, and DVRs...
+echo.
+
+powershell -NoProfile -ExecutionPolicy Bypass -Command "${command.replace(/"/g, "'")}"
+
+echo.
+echo ================================================================
+echo   SUCCESS: Sentinel Grid Edge Agent is installed and running!
+echo   It will continuously monitor this branch 24/7 in the background.
+echo ================================================================
+echo.
+pause
+`;
+    const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    const safeName = (branchName || "Branch").replace(/[^a-zA-Z0-9_-]/g, "_");
+    a.href = url;
+    a.download = `Install_SentinelGrid_${safeName}.bat`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    setToastMsg({ type: "success", text: `1-Click installer "Install_SentinelGrid_${safeName}.bat" downloaded! Just double-click to install.` });
   };
 
   const fetchFleet = async () => {
@@ -661,8 +711,33 @@ export function ZeroTouchOnboardingView() {
             </div>
 
             <div className="space-y-3 font-mono text-xs">
+              {/* Highlighted 1-Click Auto-Setup Button for Non-Tech Staff */}
+              <div className="p-3.5 rounded-xl bg-gradient-to-r from-emerald-950/80 to-teal-950/80 border border-emerald-500/40 flex flex-col sm:flex-row sm:items-center justify-between gap-3 font-sans">
+                <div>
+                  <div className="text-emerald-300 font-bold text-sm flex items-center gap-1.5">
+                    <Zap className="w-4 h-4 text-emerald-400 fill-emerald-400" />
+                    1-Click Auto Setup (.BAT)
+                  </div>
+                  <p className="text-xs text-slate-300 mt-0.5">
+                    No PowerShell or technical knowledge needed. Double-click to auto-install & start!
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => handleDownloadBatch(
+                    enrollModalBranch.branchId,
+                    enrollModalBranch.branchName,
+                    enrollModalBranch.enrollmentPackage?.installerScripts?.windowsPowerShell
+                  )}
+                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-lg shadow-lg shadow-emerald-900/30 flex items-center justify-center gap-2 shrink-0 transition-all"
+                >
+                  <Download className="w-4 h-4" />
+                  Download Auto-Setup (.BAT)
+                </button>
+              </div>
+
               <div className="bg-slate-950 border border-slate-800 rounded-xl p-3 space-y-1.5">
-                <div className="flex items-center justify-between text-slate-400 text-[11px]">
+                <div className="flex items-center justify-between text-slate-400 text-[11px] font-sans">
                   <span className="text-indigo-300 font-semibold">Windows Edge Appliance (PowerShell 1-Liner)</span>
                   <button
                     onClick={() => handleCopy(enrollModalBranch.enrollmentPackage.installerScripts.windowsPowerShell, "ps")}
@@ -678,7 +753,7 @@ export function ZeroTouchOnboardingView() {
               </div>
 
               <div className="bg-slate-950 border border-slate-800 rounded-xl p-3 space-y-1.5">
-                <div className="flex items-center justify-between text-slate-400 text-[11px]">
+                <div className="flex items-center justify-between text-slate-400 text-[11px] font-sans">
                   <span className="text-cyan-300 font-semibold">Linux Edge Gateway / NUC (Bash 1-Liner)</span>
                   <button
                     onClick={() => handleCopy(enrollModalBranch.enrollmentPackage.installerScripts.linuxBash, "bash")}

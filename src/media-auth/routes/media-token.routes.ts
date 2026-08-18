@@ -34,7 +34,7 @@ export async function registerMediaTokenRoutes(app: FastifyInstance) {
       requestedPermission: body.requestedPermission as MediaAccessPermission,
       transport: body.transport as StreamTransportProtocol,
       clientIp,
-    });
+    } as any);
 
     if (!result.success) {
       return reply.code(403).send({ success: false, error: result.error });

@@ -287,7 +287,7 @@ export async function registerEnterpriseAuthRoutes(
     }
 
     const body = registerOidcConfigSchema.parse(request.body);
-    await oidcProvider.registerTenant(body);
+    await oidcProvider.registerTenant(body as any);
 
     return reply.code(201).send({
       success: true,

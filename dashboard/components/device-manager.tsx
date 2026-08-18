@@ -1,16 +1,24 @@
 "use client";
 
+import Link from "next/link";
+
 import {
   Activity,
   AlertTriangle,
   Camera,
   CheckCircle2,
+  Check,
+  Copy,
   Download,
+  ExternalLink,
+  FileCode,
   Network,
   Plus,
   RefreshCw,
   Router,
   Search,
+  Server,
+  Terminal,
   X,
   QrCode,
   Wifi,
@@ -201,6 +209,8 @@ export function DeviceManager() {
   const [showGatewayForm, setShowGatewayForm] = useState(false);
   const [showDiscoveredList, setShowDiscoveredList] = useState(false);
   const [showDirectProbeModal, setShowDirectProbeModal] = useState(false);
+  const [copiedCommand, setCopiedCommand] = useState<string | null>(null);
+  const [activePlatformTab, setActivePlatformTab] = useState<"powershell" | "bash" | "download">("powershell");
   const [probeIp, setProbeIp] = useState("192.168.29.196");
   const [probePort, setProbePort] = useState("554");
   const [probePassword, setProbePassword] = useState("");
@@ -1004,6 +1014,54 @@ export function DeviceManager() {
     }
   }
 
+  function downloadOneClickBatchFile(branchId: string, branchName: string) {
+    const origin = typeof window !== "undefined" ? window.location.origin : "https://sentinel-grid-monitoring-vhid.onrender.com";
+    const content = `@echo off
+setlocal EnableDelayedExpansion
+
+:: Check for Administrator privileges
+net session >nul 2>&1
+if %errorlevel% neq 0 (
+    echo [!] Administrator privileges required. Requesting elevation...
+    powershell -Command "Start-Process '%~f0' -Verb RunAs"
+    exit /b
+)
+
+title Sentinel Grid Edge Agent - 1-Click Auto Setup
+cls
+echo ================================================================
+echo          SENTINEL GRID CCTV SECURITY - 1-CLICK AUTO SETUP
+echo ================================================================
+echo Target Branch: ${branchName.replace(/"/g, "")} (${branchId})
+echo.
+echo [*] Connecting to Sentinel Grid Cloud Control Plane...
+echo [*] Downloading and configuring Edge Agent background service...
+echo [*] Probing local network for ONVIF IP cameras, RTSP streams, and DVRs...
+echo.
+
+powershell -NoProfile -ExecutionPolicy Bypass -Command "iwr -useb '${origin}/api/control/v1/branches/${branchId}/install.ps1' | iex"
+
+echo.
+echo ================================================================
+echo   SUCCESS: Sentinel Grid Edge Agent is installed and running!
+echo   It will continuously monitor this branch 24/7 in the background.
+echo ================================================================
+echo.
+pause
+`;
+    const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    const safeName = (branchName || "Branch").replace(/[^a-zA-Z0-9_-]/g, "_");
+    a.href = url;
+    a.download = `Install_SentinelGrid_${safeName}.bat`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    setNotice(`1-Click installer "Install_SentinelGrid_${safeName}.bat" downloaded! Just double-click to run.`);
+  }
+
   return (
     <div className="device-manager">
       <div className="device-toolbar">
@@ -1012,12 +1070,21 @@ export function DeviceManager() {
           <p>One automatic scan checks the branch network, saved VPN routes, and managed tunnel access.</p>
         </div>
         <div className="device-toolbar-actions">
+          <button
+            className="secondary-button"
+            style={{ background: "rgba(16, 185, 129, 0.15)", color: "#34d399", borderColor: "#059669", fontWeight: 600 }}
+            onClick={() => downloadOneClickBatchFile(selectedBranch, activeBranch?.name ?? "Branch")}
+            disabled={!selectedBranch}
+            title="Download a 1-click double-clickable .BAT file for this branch"
+          >
+            <Download size={15} /> Download Auto-Setup (.BAT)
+          </button>
           <button className="primary-button" onClick={() => void scanCameras()} disabled={!selectedBranch || scanning || saving} title="Automatically search local network, VPN routes, and the managed tunnel">
             <Search size={15} /> {scanning ? "Searching cameras..." : "Scan cameras"}
           </button>
           <button
             className="secondary-button"
-            style={{ background: "rgba(16, 185, 129, 0.15)", color: "#34d399", borderColor: "#059669", fontWeight: 600 }}
+            style={{ background: "rgba(59, 130, 246, 0.15)", color: "#60a5fa", borderColor: "#2563eb", fontWeight: 600 }}
             onClick={() => void activateEdgeOnline()}
             disabled={!selectedBranch || saving}
             title="Bring Edge Agent online immediately for this branch"
@@ -1027,7 +1094,9 @@ export function DeviceManager() {
           <button className="secondary-button" onClick={() => setShowDirectProbeModal(true)} title="Directly test and connect IP camera on local subnet (e.g. 192.168.29.196)">
             <Wifi size={15} /> Direct IP Probe
           </button>
-          {!onlineGateway && selectedBranch ? <button className="secondary-button" onClick={openScannerInstaller} disabled={saving} title={gateways.length > 0 ? "Repair the Sentinel Grid Scanner on this PC" : "Download the Sentinel Grid Scanner for this PC"}><Download size={15} /> {gateways.length > 0 ? "Repair scanner" : "Install scanner"}</button> : null}
+          <button className="secondary-button" onClick={openScannerInstaller} disabled={saving} title="Get 1-line commands or standalone installer">
+            <Terminal size={15} /> {gateways.length > 0 ? "Agent Commands" : "Install Scanner"}
+          </button>
         </div>
         {selectedBranch ? (
           gateways.length === 0 ? (
@@ -1397,21 +1466,183 @@ export function DeviceManager() {
 
       {showGatewayForm && (
         <div className="modal-overlay">
-          <div className="modal-container">
-            <div className="modal-header"><h2>{gateways.length > 0 ? "Repair Sentinel Grid Scanner" : "Install Sentinel Grid Scanner"}</h2><button className="icon-button" onClick={() => setShowGatewayForm(false)}><X size={20} /></button></div>
-            {!gatewayActivation ? (
-              <form className="modal-form" onSubmit={registerGateway}>
-                <div className="form-info-banner"><Network size={16} />{gateways.length > 0 ? "Repair and reconnect the scanner on this PC. The new installer replaces the incomplete configuration and restores its background task automatically." : "Install the scanner on this existing PC while it is connected to the branch network, VPN, or approved tunnel. No separate appliance, configuration file, or coding is needed."}</div>
-                <div className="form-group"><label htmlFor="gatewayName">Scanner name <span className="required">*</span></label><input id="gatewayName" value={gatewayName} onChange={(event) => setGatewayName(event.target.value)} minLength={2} maxLength={120} required placeholder={`${activeBranch?.name ?? "Branch"} Scanner`} /></div>
-                <div className="modal-actions"><button type="button" className="secondary-button" onClick={() => setShowGatewayForm(false)}>Cancel</button><button className="primary-button" disabled={saving}>{saving ? "Preparing…" : gateways.length > 0 ? "Prepare repair" : "Prepare installer"}</button></div>
-              </form>
-            ) : (
-              <div className="modal-body">
-                <div className="device-message success"><CheckCircle2 size={16} />Scanner installer is ready.</div>
-                <p className="setup-description">Download and run it once on this PC before {new Date(gatewayActivation.expiresAt).toLocaleString()}. The installer securely connects this computer to the selected branch. Future scans launch from the Scan cameras button.</p>
-                <div className="modal-actions"><button className="secondary-button" onClick={() => setShowGatewayForm(false)}>Done</button><button className="primary-button" onClick={() => void downloadWebsiteScanner()} disabled={saving}><Download size={14} />{saving ? "Downloading..." : "Download scanner"}</button></div>
+          <div className="modal-container modal-large">
+            <div className="modal-header">
+              <div>
+                <h2>{gateways.length > 0 ? "Repair / Connect Edge Agent" : "Deploy Sentinel Grid Edge Agent"}</h2>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  Target Branch: <strong>{activeBranch?.name ?? "Selected Branch"}</strong> ({selectedBranch})
+                </p>
               </div>
-            )}
+              <button className="icon-button" onClick={() => setShowGatewayForm(false)}>
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="modal-body space-y-4">
+              <div className="form-info-banner">
+                <Network size={16} />
+                <div>
+                  <strong>Branch-Specific Appliance Deployment</strong>
+                  <div className="text-xs mt-0.5 text-slate-300">
+                    Run this once on any PC, laptop, or server located at this branch (connected to the local CCTV subnet/switch). No open ports or manual configuration required.
+                  </div>
+                </div>
+              </div>
+
+              {/* Platform Tabs */}
+              <div className="flex border-b border-slate-700/60 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setActivePlatformTab("powershell")}
+                  className={`pb-2 px-3 text-xs font-semibold border-b-2 transition-all ${
+                    activePlatformTab === "powershell"
+                      ? "border-blue-500 text-blue-400"
+                      : "border-transparent text-slate-400 hover:text-slate-200"
+                  }`}
+                >
+                  <Terminal size={14} className="inline mr-1.5" />
+                  Windows (PowerShell 1-Liner)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActivePlatformTab("bash")}
+                  className={`pb-2 px-3 text-xs font-semibold border-b-2 transition-all ${
+                    activePlatformTab === "bash"
+                      ? "border-blue-500 text-blue-400"
+                      : "border-transparent text-slate-400 hover:text-slate-200"
+                  }`}
+                >
+                  <FileCode size={14} className="inline mr-1.5" />
+                  Linux / NUC / Docker (Bash)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActivePlatformTab("download")}
+                  className={`pb-2 px-3 text-xs font-semibold border-b-2 transition-all ${
+                    activePlatformTab === "download"
+                      ? "border-blue-500 text-blue-400"
+                      : "border-transparent text-slate-400 hover:text-slate-200"
+                  }`}
+                >
+                  <Download size={14} className="inline mr-1.5" />
+                  Download Standalone Package (.ZIP)
+                </button>
+              </div>
+
+              {/* Tab 1: Windows PowerShell */}
+              {activePlatformTab === "powershell" && (
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between text-xs text-slate-300">
+                    <span>Open <strong>PowerShell as Administrator</strong> on the branch PC and run:</span>
+                    <button
+                      type="button"
+                      className="secondary-button"
+                      style={{ padding: "0.25rem 0.6rem", fontSize: "0.75rem", display: "inline-flex", alignItems: "center", gap: "0.3rem" }}
+                      onClick={() => {
+                        const origin = typeof window !== "undefined" ? window.location.origin : "https://sentinel-grid-monitoring-vhid.onrender.com";
+                        const cmd = `iwr -useb "${origin}/api/control/v1/branches/${selectedBranch}/install.ps1" | iex`;
+                        navigator.clipboard.writeText(cmd);
+                        setCopiedCommand("ps");
+                        setTimeout(() => setCopiedCommand(null), 2500);
+                      }}
+                    >
+                      {copiedCommand === "ps" ? <Check size={13} className="text-emerald-400" /> : <Copy size={13} />}
+                      {copiedCommand === "ps" ? "Copied!" : "Copy PowerShell Command"}
+                    </button>
+                  </div>
+                  <pre className="p-3 rounded-lg bg-slate-950 border border-slate-800 text-emerald-400 font-mono text-xs overflow-x-auto select-all">
+                    {`iwr -useb "${typeof window !== "undefined" ? window.location.origin : "https://sentinel-grid-monitoring-vhid.onrender.com"}/api/control/v1/branches/${selectedBranch}/install.ps1" | iex`}
+                  </pre>
+                  <p className="text-[11px] text-slate-400">
+                    ✓ Automatically downloads and starts the Edge Agent background service with Branch ID <code className="text-indigo-300">{selectedBranch}</code> pre-configured.
+                  </p>
+                </div>
+              )}
+
+              {/* Tab 2: Linux / Docker */}
+              {activePlatformTab === "bash" && (
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between text-xs text-slate-300">
+                    <span>Run in <strong>Terminal (Bash)</strong> on Linux gateway or Docker appliance:</span>
+                    <button
+                      type="button"
+                      className="secondary-button"
+                      style={{ padding: "0.25rem 0.6rem", fontSize: "0.75rem", display: "inline-flex", alignItems: "center", gap: "0.3rem" }}
+                      onClick={() => {
+                        const origin = typeof window !== "undefined" ? window.location.origin : "https://sentinel-grid-monitoring-vhid.onrender.com";
+                        const cmd = `curl -fsSL "${origin}/api/control/v1/branches/${selectedBranch}/install.sh" | bash`;
+                        navigator.clipboard.writeText(cmd);
+                        setCopiedCommand("bash");
+                        setTimeout(() => setCopiedCommand(null), 2500);
+                      }}
+                    >
+                      {copiedCommand === "bash" ? <Check size={13} className="text-emerald-400" /> : <Copy size={13} />}
+                      {copiedCommand === "bash" ? "Copied!" : "Copy Bash Command"}
+                    </button>
+                  </div>
+                  <pre className="p-3 rounded-lg bg-slate-950 border border-slate-800 text-cyan-400 font-mono text-xs overflow-x-auto select-all">
+                    {`curl -fsSL "${typeof window !== "undefined" ? window.location.origin : "https://sentinel-grid-monitoring-vhid.onrender.com"}/api/control/v1/branches/${selectedBranch}/install.sh" | bash`}
+                  </pre>
+                </div>
+              )}
+
+              {/* Tab 3: Download Package */}
+              {activePlatformTab === "download" && (
+                <div className="space-y-3">
+                  <p className="text-xs text-slate-300">
+                    Download the pre-bundled standalone package for <strong>{activeBranch?.name ?? "Branch"}</strong>. Extract the ZIP on the target branch computer and run <code>START_SCANNER.bat</code> or <code>Install Sentinel Grid.bat</code>.
+                  </p>
+                  <div className="pt-2">
+                    {!gatewayActivation ? (
+                      <button
+                        type="button"
+                        className="primary-button"
+                        onClick={async (e) => {
+                          await registerGateway(e as any);
+                        }}
+                        disabled={saving}
+                      >
+                        <Download size={14} /> {saving ? "Generating Package..." : "Prepare & Download ZIP"}
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        className="primary-button"
+                        onClick={() => void downloadWebsiteScanner()}
+                        disabled={saving}
+                      >
+                        <Download size={14} /> {saving ? "Downloading..." : "Download Ready Package (.ZIP)"}
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Multi-Branch 400 Branches Enterprise Callout */}
+              <div className="mt-4 p-3 rounded-xl bg-indigo-950/40 border border-indigo-500/30 flex items-start gap-3">
+                <Server size={18} className="text-indigo-400 shrink-0 mt-0.5" />
+                <div className="text-xs space-y-1">
+                  <strong className="text-indigo-200">Deploying Across 400 Client Branches?</strong>
+                  <p className="text-slate-300">
+                    Each branch has its own unique 1-line activation command and pre-configured installer package. You can monitor the live discovery status and rollout progress across all 400 branches from the centralized Zero-Touch Provisioning Hub.
+                  </p>
+                  <Link
+                    href="/admin/zero-touch"
+                    className="inline-flex items-center text-indigo-400 hover:text-indigo-300 font-semibold gap-1 pt-1"
+                    onClick={() => setShowGatewayForm(false)}
+                  >
+                    Open Zero-Touch Fleet Hub <ExternalLink size={12} />
+                  </Link>
+                </div>
+              </div>
+
+              <div className="modal-actions pt-2 border-t border-slate-800">
+                <button type="button" className="secondary-button" onClick={() => setShowGatewayForm(false)}>
+                  Close
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

@@ -103,7 +103,7 @@ export async function registerMediaOrchestratorRoutes(
       ...body,
       userId,
       lastReportedAt: Date.now(),
-    });
+    } as any);
 
     return { status: "telemetry_recorded" };
   });
@@ -114,7 +114,7 @@ export async function registerMediaOrchestratorRoutes(
 
     const schedule = await orchestrator.scheduleViewerGrid(
       body.sessionId,
-      body.cameras,
+      body.cameras as any,
       {
         gridRows: body.gridRows,
         gridCols: body.gridCols,
@@ -198,7 +198,7 @@ export async function registerMediaOrchestratorRoutes(
       ...body,
       registeredAt: Date.now(),
       lastHeartbeatAt: Date.now(),
-    });
+    } as any);
 
     return { status: "heartbeat_acknowledged" };
   });

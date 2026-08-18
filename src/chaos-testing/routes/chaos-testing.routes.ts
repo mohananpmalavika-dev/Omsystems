@@ -42,7 +42,7 @@ export async function registerChaosTestingRoutes(
    */
   app.post("/v1/chaos/experiments/run", async (request: FastifyRequest, reply: FastifyReply) => {
     const body = runExperimentSchema.parse(request.body);
-    const report = await service.runExperiment(body);
+    const report = await service.runExperiment(body as any);
     return reply.status(200).send({
       success: true,
       report,

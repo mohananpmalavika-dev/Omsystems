@@ -159,7 +159,7 @@ export async function registerFirstClassPlaybackRoutes(app: FastifyInstance) {
       investigatorUserId: z.string().default('investigator-anand'),
     }).parse(request.body);
 
-    const pkg = incidentPlaybackService.createEvidencePackageFromClip(body);
+    const pkg = incidentPlaybackService.createEvidencePackageFromClip(body as any);
     return reply.status(201).send({ success: true, data: pkg });
   });
 

@@ -10,10 +10,8 @@
  * - Capabilities can change at runtime (service restarts, feature flags, etc.)
  */
 
-import { Router, type Request, type Response } from 'express';
+import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { logger } from '../utils/logger.js';
-
-const router = Router();
 
 /**
  * Capability states
@@ -318,169 +316,170 @@ class CapabilityRegistry {
 // Singleton registry
 const capabilityRegistry = new CapabilityRegistry();
 
-/**
- * GET /api/capabilities
- * Get all capabilities
- */
-router.get('/', async (req: Request, res: Response) => {
-  try {
-    const capabilities = capabilityRegistry.getAll();
-    
-    res.json({
-      success: true,
-      capabilities,
-      timestamp: new Date().toISOString()
-    });
-    
-  } catch (error) {
-    logger.error('Failed to get capabilities', { error });
-    res.status(500).json({
-      success: false,
-      error: 'Failed to retrieve capabilities'
-    });
-  }
-});
+export default async function capabilitiesRoutes(app: FastifyInstance) {
+  /**
+   * GET /api/capabilities
+   * Get all capabilities
+   */
+  app.get('/api/capabilities', async (_req: FastifyRequest, reply: FastifyReply) => {
+    try {
+      const capabilities = capabilityRegistry.getAll();
+      
+      return reply.send({
+        success: true,
+        capabilities,
+        timestamp: new Date().toISOString()
+      });
+      
+    } catch (error) {
+      logger.error('Failed to get capabilities', { error });
+      return reply.code(500).send({
+        success: false,
+        error: 'Failed to retrieve capabilities'
+      });
+    }
+  });
 
-/**
- * GET /api/capabilities/:id
- * Get specific capability
- */
-router.get('/:id', async (req: Request, res: Response) => {
-  try {
-    const id = req.params?.id;
-    if (!id) {
-      return res.status(400).json({
-        success: false,
-        error: 'Capability ID is required'
-      });
-    }
-    const capability = capabilityRegistry.get(id);
-    
-    if (!capability) {
-      return res.status(404).json({
-        success: false,
-        error: `Capability '${id}' not found`
-      });
-    }
-    
-    res.json({
-      success: true,
-      capability
-    });
-    
-  } catch (error) {
-    logger.error('Failed to get capability', { error, id: req.params?.id });
-    res.status(500).json({
-      success: false,
-      error: 'Failed to retrieve capability'
-    });
-  }
-});
-
-/**
- * GET /api/capabilities/state/:state
- * Get capabilities by state
- */
-router.get('/state/:state', async (req: Request, res: Response) => {
-  try {
-    const state = req.params?.state;
-    
-    if (!state || !['AVAILABLE', 'PARTIAL', 'UNAVAILABLE', 'DISABLED'].includes(state)) {
-      return res.status(400).json({
-        success: false,
-        error: `Invalid state: ${state}`
-      });
-    }
-    
-    const capabilities = capabilityRegistry.getByState(state as CapabilityState);
-    
-    res.json({
-      success: true,
-      capabilities,
-      count: capabilities.length
-    });
-    
-  } catch (error) {
-    logger.error('Failed to get capabilities by state', { error, state: req.params?.state });
-    res.status(500).json({
-      success: false,
-      error: 'Failed to retrieve capabilities'
-    });
-  }
-});
-
-/**
- * GET /api/capabilities/category/:category
- * Get capabilities by category
- */
-router.get('/category/:category', async (req: Request, res: Response) => {
-  try {
-    const category = req.params?.category;
-    if (!category) {
-      return res.status(400).json({
-        success: false,
-        error: 'Category is required'
-      });
-    }
-    const capabilities = capabilityRegistry.getByCategory(category);
-    
-    res.json({
-      success: true,
-      capabilities,
-      count: capabilities.length,
-      category
-    });
-    
-  } catch (error) {
-    logger.error('Failed to get capabilities by category', { error, category: req.params?.category });
-    res.status(500).json({
-      success: false,
-      error: 'Failed to retrieve capabilities'
-    });
-  }
-});
-
-/**
- * POST /api/capabilities/check
- * Check multiple capabilities at once
- */
-router.post('/check', async (req: Request, res: Response) => {
-  try {
-    const { capabilities: ids } = req.body;
-    
-    if (!Array.isArray(ids)) {
-      return res.status(400).json({
-        success: false,
-        error: 'Expected array of capability IDs'
-      });
-    }
-    
-    const results: Record<string, boolean> = {};
-    const details: Record<string, CapabilityInfo | null> = {};
-    
-    for (const id of ids) {
+  /**
+   * GET /api/capabilities/:id
+   * Get specific capability
+   */
+  app.get('/api/capabilities/:id', async (req: FastifyRequest, reply: FastifyReply) => {
+    try {
+      const id = (req.params as any)?.id;
+      if (!id) {
+        return reply.code(400).send({
+          success: false,
+          error: 'Capability ID is required'
+        });
+      }
       const capability = capabilityRegistry.get(id);
-      results[id] = capability?.state === 'AVAILABLE';
-      details[id] = capability || null;
+      
+      if (!capability) {
+        return reply.code(404).send({
+          success: false,
+          error: `Capability '${id}' not found`
+        });
+      }
+      
+      return reply.send({
+        success: true,
+        capability
+      });
+      
+    } catch (error) {
+      logger.error('Failed to get capability', { error, id: (req.params as any)?.id });
+      return reply.code(500).send({
+        success: false,
+        error: 'Failed to retrieve capability'
+      });
     }
-    
-    res.json({
-      success: true,
-      results,
-      details
-    });
-    
-  } catch (error) {
-    logger.error('Failed to check capabilities', { error });
-    res.status(500).json({
-      success: false,
-      error: 'Failed to check capabilities'
-    });
-  }
-});
+  });
+
+  /**
+   * GET /api/capabilities/state/:state
+   * Get capabilities by state
+   */
+  app.get('/api/capabilities/state/:state', async (req: FastifyRequest, reply: FastifyReply) => {
+    try {
+      const state = (req.params as any)?.state;
+      
+      if (!state || !['AVAILABLE', 'PARTIAL', 'UNAVAILABLE', 'DISABLED'].includes(state)) {
+        return reply.code(400).send({
+          success: false,
+          error: `Invalid state: ${state}`
+        });
+      }
+      
+      const capabilities = capabilityRegistry.getByState(state as CapabilityState);
+      
+      return reply.send({
+        success: true,
+        capabilities,
+        count: capabilities.length
+      });
+      
+    } catch (error) {
+      logger.error('Failed to get capabilities by state', { error, state: (req.params as any)?.state });
+      return reply.code(500).send({
+        success: false,
+        error: 'Failed to retrieve capabilities'
+      });
+    }
+  });
+
+  /**
+   * GET /api/capabilities/category/:category
+   * Get capabilities by category
+   */
+  app.get('/api/capabilities/category/:category', async (req: FastifyRequest, reply: FastifyReply) => {
+    try {
+      const category = (req.params as any)?.category;
+      if (!category) {
+        return reply.code(400).send({
+          success: false,
+          error: 'Category is required'
+        });
+      }
+      const capabilities = capabilityRegistry.getByCategory(category);
+      
+      return reply.send({
+        success: true,
+        capabilities,
+        count: capabilities.length,
+        category
+      });
+      
+    } catch (error) {
+      logger.error('Failed to get capabilities by category', { error, category: (req.params as any)?.category });
+      return reply.code(500).send({
+        success: false,
+        error: 'Failed to retrieve capabilities'
+      });
+    }
+  });
+
+  /**
+   * POST /api/capabilities/check
+   * Check multiple capabilities at once
+   */
+  app.post('/api/capabilities/check', async (req: FastifyRequest, reply: FastifyReply) => {
+    try {
+      const { capabilities: ids } = (req.body as any) || {};
+      
+      if (!Array.isArray(ids)) {
+        return reply.code(400).send({
+          success: false,
+          error: 'Expected array of capability IDs'
+        });
+      }
+      
+      const results: Record<string, boolean> = {};
+      const details: Record<string, CapabilityInfo | null> = {};
+      
+      for (const id of ids) {
+        const capability = capabilityRegistry.get(id);
+        results[id] = capability?.state === 'AVAILABLE';
+        details[id] = capability || null;
+      }
+      
+      return reply.send({
+        success: true,
+        results,
+        details
+      });
+      
+    } catch (error) {
+      logger.error('Failed to check capabilities', { error });
+      return reply.code(500).send({
+        success: false,
+        error: 'Failed to check capabilities'
+      });
+    }
+  });
+}
 
 /**
  * Export registry for programmatic access
  */
 export { capabilityRegistry, type CapabilityInfo, type CapabilityState };
-export default router;

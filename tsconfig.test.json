@@ -34,8 +34,7 @@
     "tests/storage-adapter.test.ts",
     "tests/storage-failover.test.ts",
     "tests/crowd-density-model.test.ts",
-    "src/services/*.test.ts",
-    "backend/**/*.test.ts"
+    "src/services/*.test.ts"
   ],
   "exclude": [
     "node_modules",

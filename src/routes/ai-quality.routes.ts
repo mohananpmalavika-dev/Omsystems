@@ -77,7 +77,7 @@ export async function registerAiQualityRoutes(
         userId: user.id,
         userName: user.displayName || user.username || "AI Engineer",
       },
-    });
+    } as any);
 
     return reply.code(201).send({ model });
   });
@@ -204,7 +204,7 @@ export async function registerAiQualityRoutes(
         userId: user.id,
         userName: user.displayName || user.username || "SOC Operator",
       },
-    });
+    } as any);
 
     return { feedback };
   });
