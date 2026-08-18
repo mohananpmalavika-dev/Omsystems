@@ -497,27 +497,37 @@ export function DeviceManager() {
     // 300 s window: edge agents claim jobs only on heartbeat (up to ~60 s latency)
     // plus ONVIF WS-Discovery can take 20-40 s on a large subnet.
     const deadline = Date.now() + 300_000;
-    let job = await cameraInventoryApi.getScan(selectedBranch, scanId) as EdgeScanJob;
-
+    const startTime = Date.now();
     while (job.status === "queued" || job.status === "running") {
       if (scanAbortedRef.current) {
         setNotice("Camera scan was stopped.");
         return { found: 0, provisioned: 0, credentialsRequired: 0 };
       }
       if (Date.now() >= deadline) {
-        setNotice("Camera scan is queued and will continue when the Branch Gateway checks in.");
-        return { found: 0, provisioned: 0, credentialsRequired: 0 };
+        break;
       }
       await wait(1_500);
       if (scanAbortedRef.current) {
         setNotice("Camera scan was stopped.");
         return { found: 0, provisioned: 0, credentialsRequired: 0 };
       }
-      job = await cameraInventoryApi.getScan(selectedBranch, scanId) as EdgeScanJob;
+      try {
+        const liveDiscovered = await cameraInventoryApi.listDiscovered(selectedBranch);
+        if (liveDiscovered?.data?.length > 0) {
+          setDiscoveredCameras(liveDiscovered.data);
+          if (Date.now() - startTime > 12_000) {
+            break;
+          }
+        }
+      } catch {}
+      job = await cameraInventoryApi.getScan(selectedBranch, scanId).catch(() => job) as EdgeScanJob;
     }
 
     if (job.status === "failed") {
-      throw new Error(job.error ?? "Branch Gateway scan failed.");
+      const liveDiscovered = await cameraInventoryApi.listDiscovered(selectedBranch).catch(() => ({ data: [] }));
+      if (!liveDiscovered?.data?.length) {
+        throw new Error(job.error ?? "Branch Gateway scan failed.");
+      }
     }
 
     const results = await cameraInventoryApi.getScanResults(selectedBranch, scanId);

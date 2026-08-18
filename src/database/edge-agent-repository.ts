@@ -316,9 +316,11 @@ export class EdgeAgentRepository {
   async claimScanJob(edgeAgentId: string) {
     const result = await this.pool.query<ScanRow>(
       `WITH next_job AS (
-         SELECT id FROM edge_scan_jobs
-         WHERE edge_agent_id = $1 AND status = 'queued'
-         ORDER BY requested_at
+         SELECT job.id FROM edge_scan_jobs job
+         JOIN edge_agents agent ON agent.id = $1::uuid
+         WHERE (job.edge_agent_id = agent.id OR job.branch_node_id = agent.branch_node_id)
+           AND job.status = 'queued'
+         ORDER BY job.requested_at
          FOR UPDATE SKIP LOCKED LIMIT 1
        )
        UPDATE edge_scan_jobs job
