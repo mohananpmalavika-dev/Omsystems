@@ -58,9 +58,12 @@ export class IpamService {
     // 3. Check for conflicts
     const conflicts = await this.checkIpConflicts(input.branchId, input.ipAddress, input.deviceId);
     if (conflicts.length > 0) {
-      throw new Error(
-        `IP ${input.ipAddress} is already assigned to device ${conflicts[0].deviceId}`
-      );
+      const firstConflict = conflicts[0];
+      if (firstConflict) {
+        throw new Error(
+          `IP ${input.ipAddress} is already assigned to device ${firstConflict.deviceId}`
+        );
+      }
     }
 
     // 4. Create assignment record (status: pending)
@@ -136,22 +139,20 @@ export class IpamService {
     }
 
     // Validate IP is not gateway
-    if (ipAddress === network.gateway) {
+    const gateway = network.gateway;
+    if (gateway && ipAddress === gateway) {
       throw new Error(`IP ${ipAddress} is the gateway address`);
     }
 
-    const reservedRangeStart = network.reservedRangeStart;
-    const reservedRangeEnd = network.reservedRangeEnd;
-
     // Validate IP is in reserved range if configured
-    if (reservedRangeStart && reservedRangeEnd) {
+    if (network.reservedRangeStart && network.reservedRangeEnd) {
       const ipNum = this.ipToNumber(ipAddress);
-      const startNum = this.ipToNumber(reservedRangeStart);
-      const endNum = this.ipToNumber(reservedRangeEnd);
+      const startNum = this.ipToNumber(network.reservedRangeStart);
+      const endNum = this.ipToNumber(network.reservedRangeEnd);
 
       if (ipNum < startNum || ipNum > endNum) {
         throw new Error(
-          `IP ${ipAddress} is outside reserved range ${reservedRangeStart}-${reservedRangeEnd}`
+          `IP ${ipAddress} is outside reserved range ${network.reservedRangeStart}-${network.reservedRangeEnd}`
         );
       }
     }

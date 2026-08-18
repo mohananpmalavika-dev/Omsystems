@@ -33,7 +33,9 @@ export class RedisProbe extends BaseInfrastructureProbe<RedisNodeHealth[]> {
     this.masterName = config.masterName;
     this.password = config.password;
 
-    this.sentinelClient = new IORedis({
+    // Use default export or create instance from module directly
+    const Redis = IORedis as any;
+    this.sentinelClient = new Redis({
       sentinels: config.sentinels,
       name: config.masterName,
       sentinelRetryStrategy: (times: number) => Math.min(times * 100, 2000),
@@ -109,7 +111,8 @@ export class RedisProbe extends BaseInfrastructureProbe<RedisNodeHealth[]> {
     let client: any = null;
 
     try {
-      client = new IORedis({
+      const Redis = IORedis as any;
+      client = new Redis({
         host,
         port,
         password: this.password,
@@ -173,7 +176,8 @@ export class RedisProbe extends BaseInfrastructureProbe<RedisNodeHealth[]> {
     let client: any = null;
 
     try {
-      client = new IORedis({
+      const Redis = IORedis as any;
+      client = new Redis({
         host,
         port,
         password: this.password,
