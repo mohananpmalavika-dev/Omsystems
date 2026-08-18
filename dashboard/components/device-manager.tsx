@@ -498,6 +498,7 @@ export function DeviceManager() {
     // plus ONVIF WS-Discovery can take 20-40 s on a large subnet.
     const deadline = Date.now() + 300_000;
     const startTime = Date.now();
+    let job = await cameraInventoryApi.getScan(selectedBranch, scanId).catch(() => ({ status: "running" })) as EdgeScanJob;
     while (job.status === "queued" || job.status === "running") {
       if (scanAbortedRef.current) {
         setNotice("Camera scan was stopped.");
