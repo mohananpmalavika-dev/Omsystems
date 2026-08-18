@@ -691,6 +691,11 @@ export const cameraInventoryApi = {
       `/v1/branches/${encodeURIComponent(branchId)}/cameras/discovered`,
       { method: 'POST', body: JSON.stringify(data) }
     ),
+  createCamera: (branchId: string, data: any) =>
+    fetchApi<any>(
+      `/v1/branches/${encodeURIComponent(branchId)}/cameras`,
+      { method: 'POST', body: JSON.stringify(data) }
+    ),
   approveCamera: (branchId: string, data: any) =>
     fetchApi<any>(
       `/v1/branches/${encodeURIComponent(branchId)}/cameras`,
