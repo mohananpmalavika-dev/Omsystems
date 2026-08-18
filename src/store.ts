@@ -1249,10 +1249,26 @@ export class MemoryStore {
     const discovery = this.discoveries.get(input.discoveryId);
     const branch = this.nodes.get(branchId);
     if (!discovery || discovery.branchId !== branchId || !branch) return undefined;
-    const identity = this.deviceIdentities.get(discovery.deviceIdentityId);
-    if (!identity) throw new Error("device_identity_not_found");
-    if (identity.cameraId) {
-      const existingCamera = this.cameras.get(identity.cameraId);
+    let identity: DeviceIdentity | undefined = discovery.deviceIdentityId ? this.deviceIdentities.get(discovery.deviceIdentityId) : undefined;
+    if (!identity) {
+      const identityId = randomUUID();
+      const newIdentity: DeviceIdentity = {
+        id: identityId,
+        deviceId: identityId,
+        branchId,
+        tenantId: branch.tenantId,
+        serialNumber: input.serialNumber || discovery.serialNumber,
+        macAddress: input.macAddress || discovery.macAddress,
+        firstSeenAt: new Date().toISOString(),
+        lastSeenAt: new Date().toISOString(),
+      } as any;
+      this.deviceIdentities.set(identityId, newIdentity);
+      discovery.deviceIdentityId = identityId;
+      identity = newIdentity;
+    }
+    const resolvedIdentity: DeviceIdentity = identity;
+    if (resolvedIdentity.cameraId) {
+      const existingCamera = this.cameras.get(resolvedIdentity.cameraId);
       if (!existingCamera) throw new Error("identity_camera_not_found");
       Object.assign(existingCamera, clean({
         edgeAgentId: discovery.edgeAgentId,
@@ -1263,10 +1279,10 @@ export class MemoryStore {
         onvifUuid: input.onvifUuid ?? discovery.onvifUuid,
         certificateRef: input.certificateRef ?? discovery.certificateRef,
         certificateFingerprint: input.certificateFingerprint ?? discovery.certificateFingerprint,
-        lastSeenAt: identity.lastSeenAt,
+        lastSeenAt: resolvedIdentity.lastSeenAt,
       }));
       existingCamera.connectionSecretRef = input.connectionSecretRef;
-      identity.credentialRef = input.connectionSecretRef;
+      resolvedIdentity.credentialRef = input.connectionSecretRef;
       discovery.status = "approved";
       return existingCamera;
     }
@@ -1276,7 +1292,7 @@ export class MemoryStore {
       name: input.name, path: [...branch.path, nodeId],
     });
     const camera: Camera = {
-      id: randomUUID(), deviceIdentityId: identity.deviceId,
+      id: randomUUID(), deviceIdentityId: resolvedIdentity.deviceId,
       name: input.name, nodeId, branchId, vendor: discovery.vendor,
       model: discovery.model, channel: input.channel, protocol: input.protocol,
       status: "unknown", profiles: discovery.profiles,
@@ -1295,13 +1311,13 @@ export class MemoryStore {
       onvifUuid: input.onvifUuid ?? discovery.onvifUuid,
       certificateRef: input.certificateRef ?? discovery.certificateRef,
       certificateFingerprint: input.certificateFingerprint ?? discovery.certificateFingerprint,
-      firstSeenAt: identity.firstSeenAt,
-      lastSeenAt: identity.lastSeenAt,
+      firstSeenAt: resolvedIdentity.firstSeenAt,
+      lastSeenAt: resolvedIdentity.lastSeenAt,
     };
     discovery.status = "approved";
     this.cameras.set(camera.id, camera);
-    identity.cameraId = camera.id;
-    identity.credentialRef = input.connectionSecretRef;
+    resolvedIdentity.cameraId = camera.id;
+    resolvedIdentity.credentialRef = input.connectionSecretRef;
     return camera;
   }
 

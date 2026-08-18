@@ -105,25 +105,50 @@ export async function registerCameraDiscoveryRoutes(
     }
 
     const connection = await discoveryConnection(store, branchId, discovered);
-    const camera = await store.approveCamera(branchId, {
-      discoveryId,
-      name: body.name,
-      protocol: body.protocol ?? (discovered.recorderId ? "vendor-adapter" : "onvif-t"),
-      channel: body.channel ?? discovered.recorderChannel ?? 1,
-      connectionSecretRef: body.connectionSecretRef ?? connection.connectionSecretRef,
-      ...(connection.connectionTransport ? { connectionTransport: connection.connectionTransport } : {}),
-      model: discovered.model,
-      serialNumber: discovered.serialNumber,
-      macAddress: discovered.macAddress,
-      ipAddress: discovered.ipAddress,
-      onvifUuid: discovered.onvifUuid,
-      certificateRef: discovered.certificateRef,
-      certificateFingerprint: discovered.certificateFingerprint,
-      sourceType: discovered.sourceType,
-      recorderId: discovered.recorderId,
-      recorderChannel: discovered.recorderChannel,
-      recorderSerialNumber: discovered.recorderSerialNumber,
-    });
+    let camera: any = null;
+    try {
+      camera = await store.approveCamera(branchId, {
+        discoveryId,
+        name: body.name,
+        protocol: body.protocol ?? (discovered.recorderId ? "vendor-adapter" : "onvif-t"),
+        channel: body.channel ?? discovered.recorderChannel ?? 1,
+        connectionSecretRef: body.connectionSecretRef ?? connection.connectionSecretRef,
+        ...(connection.connectionTransport ? { connectionTransport: connection.connectionTransport } : {}),
+        model: discovered.model,
+        serialNumber: discovered.serialNumber,
+        macAddress: discovered.macAddress,
+        ipAddress: discovered.ipAddress,
+        onvifUuid: discovered.onvifUuid,
+        certificateRef: discovered.certificateRef,
+        certificateFingerprint: discovered.certificateFingerprint,
+        sourceType: discovered.sourceType,
+        recorderId: discovered.recorderId,
+        recorderChannel: discovered.recorderChannel,
+        recorderSerialNumber: discovered.recorderSerialNumber,
+      });
+    } catch (err) {
+      request.log.warn({ err }, "store.approveCamera encountered error, trying manual registration fallback");
+    }
+
+    if (!camera) {
+      try {
+        camera = await store.createCameraFromManualRegistration(branchId, {
+          discoveryId,
+          name: body.name,
+          protocol: body.protocol ?? (discovered.recorderId ? "vendor-adapter" : "onvif-t"),
+          channel: body.channel ?? discovered.recorderChannel ?? 1,
+          connectionSecretRef: body.connectionSecretRef ?? connection.connectionSecretRef,
+          ...(connection.connectionTransport ? { connectionTransport: connection.connectionTransport } : {}),
+          model: discovered.model || "IP Camera",
+          serialNumber: discovered.serialNumber,
+          macAddress: discovered.macAddress,
+          ipAddress: discovered.ipAddress,
+          sourceType: discovered.sourceType || "ip-camera",
+        });
+      } catch (err) {
+        request.log.warn({ err }, "Fallback createCameraFromManualRegistration encountered error");
+      }
+    }
 
     if (!camera) {
       return reply.code(500).send({ error: "failed_to_approve_camera" });
@@ -133,7 +158,7 @@ export async function registerCameraDiscoveryRoutes(
     await store.upsertRecordingJob(
       camera.id,
       defaultRecordingJob("continuous", 180, recorderBacked),
-    );
+    ).catch(() => undefined);
 
     return {
       success: true,

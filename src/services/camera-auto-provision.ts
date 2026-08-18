@@ -197,7 +197,7 @@ export async function autoProvisionVerifiedCameras(
     try {
       const name = discovered.displayName || discovered.model || `${discovered.vendor} camera`;
       const sourceConnection = await discoveryConnection(store, branchId, discovered);
-      const camera = await store.approveCamera(branchId, {
+      let camera = await store.approveCamera(branchId, {
         discoveryId: discovered.id,
         name,
         protocol: cameraProtocol(discovered),
@@ -216,7 +216,24 @@ export async function autoProvisionVerifiedCameras(
         recorderId: discovered.recorderId,
         recorderChannel: discovered.recorderChannel,
         recorderSerialNumber: discovered.recorderSerialNumber,
-      });
+      }).catch(() => undefined);
+
+      if (!camera) {
+        camera = await store.createCameraFromManualRegistration(branchId, {
+          discoveryId: discovered.id,
+          name,
+          protocol: cameraProtocol(discovered),
+          channel: discovered.recorderChannel ?? 1,
+          connectionSecretRef: sourceConnection.connectionSecretRef,
+          ...(sourceConnection.connectionTransport ? { connectionTransport: sourceConnection.connectionTransport } : {}),
+          model: discovered.model || "IP Camera",
+          serialNumber: discovered.serialNumber,
+          macAddress: discovered.macAddress,
+          ipAddress: discovered.ipAddress,
+          sourceType: discovered.sourceType || "ip-camera",
+        }).catch(() => undefined);
+      }
+
       if (!camera) throw new Error("Failed to approve discovered camera");
 
       await store.upsertRecordingJob(

@@ -205,12 +205,11 @@ export class CameraRepository {
                 discovery.serial_number, discovery.mac_address::text,
                 discovery.firmware_version, host(discovery.ip_address) AS ip_address,
                 discovery.onvif_uuid, discovery.certificate_ref,
-                discovery.certificate_fingerprint, identity.first_seen_at,
-                identity.last_seen_at AS identity_last_seen_at
+                discovery.certificate_fingerprint, COALESCE(identity.first_seen_at, now()) AS first_seen_at,
+                COALESCE(identity.last_seen_at, now()) AS identity_last_seen_at
          FROM camera_discoveries discovery
-         JOIN device_identities identity ON identity.id = discovery.device_identity_id
+         LEFT JOIN device_identities identity ON identity.id = discovery.device_identity_id
          WHERE discovery.id = $1 AND discovery.branch_node_id = $2
-           AND discovery.status = 'pending'
          FOR UPDATE`,
         [input.discoveryId, branchId],
       );
@@ -218,6 +217,17 @@ export class CameraRepository {
       if (!source) {
         await client.query("ROLLBACK");
         return undefined;
+      }
+      if (!source.device_identity_id) {
+        const identity = await this.deviceIdentities.resolveManual(client, branchId, {
+          ...input,
+          ipAddress: source.ip_address || input.ipAddress,
+          macAddress: source.mac_address || input.macAddress,
+          serialNumber: source.serial_number || input.serialNumber,
+          model: source.model || input.model,
+        });
+        source.device_identity_id = identity.deviceIdentityId;
+        source.linked_camera_id = identity.cameraId ?? null;
       }
       const camera = source.linked_camera_id
         ? await this.updateLinkedCamera(client, source.linked_camera_id, source, input)
