@@ -114,7 +114,7 @@ export class RecorderManager {
       };
     }
 
-    if (vendorHint === "onvif") {
+    if ((vendorHint as string) === "onvif") {
       return {
         driver: this.registry.get("onvif")!,
         protocol: "onvif",

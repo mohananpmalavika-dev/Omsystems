@@ -44,10 +44,10 @@ export type RecorderProtocol =
  */
 export interface RecorderIdentity {
   /** Vendor/manufacturer name */
-  vendor: RecorderVendor;
+  vendor?: RecorderVendor;
   
   /** Protocol family this device uses */
-  protocolFamily: RecorderProtocol;
+  protocolFamily?: RecorderProtocol;
   
   /** Raw manufacturer string from device */
   manufacturer?: string;
@@ -151,7 +151,7 @@ export interface CapabilityState {
   supported: boolean;
   
   /** How was support determined? */
-  source: "discovered" | "vendor" | "onvif" | "configuration" | "unknown";
+  source: "discovered" | "vendor" | "onvif" | "configuration" | "generic" | "unknown" | string;
   
   /** Confidence level (0-1) */
   confidence: number;
@@ -167,36 +167,36 @@ export interface CapabilityState {
  */
 export interface RecorderCapabilities {
   // Video streaming
-  liveVideo: CapabilityState;
-  subStream: CapabilityState;
+  liveVideo?: CapabilityState;
+  subStream?: CapabilityState;
   
   // Channel management
-  channelEnumeration: CapabilityState;
+  channelEnumeration?: CapabilityState;
   
   // Recording verification
-  recordingStatus: CapabilityState;
-  recordingSearch: CapabilityState;
-  playback: CapabilityState;
-  recordingExport: CapabilityState;
+  recordingStatus?: CapabilityState;
+  recordingSearch?: CapabilityState;
+  playback?: CapabilityState;
+  recordingExport?: CapabilityState;
   
   // Storage monitoring
-  storageTelemetry: CapabilityState;
-  retentionTelemetry: CapabilityState;
+  storageTelemetry?: CapabilityState;
+  retentionTelemetry?: CapabilityState;
   
   // Time management
-  deviceTime: CapabilityState;
-  ntpStatus: CapabilityState;
+  deviceTime?: CapabilityState;
+  ntpStatus?: CapabilityState;
   
   // Event monitoring
-  videoLossEvents: CapabilityState;
-  motionEvents: CapabilityState;
+  videoLossEvents?: CapabilityState;
+  motionEvents?: CapabilityState;
   
   // PTZ control
-  ptz: CapabilityState;
+  ptz?: CapabilityState;
   
   // Protocol support
-  vendorApi: CapabilityState;
-  onvif: CapabilityState;
+  vendorApi?: CapabilityState;
+  onvif?: CapabilityState;
   
   // Storage health alias
   storageHealth?: CapabilityState;
@@ -216,7 +216,7 @@ export interface DeviceInfo extends RecorderIdentity {
   macAddress?: string;
   
   /** Detected at timestamp */
-  detectedAt: Date;
+  detectedAt?: Date;
   [key: string]: any;
 }
 
@@ -326,16 +326,16 @@ export type ChannelRecordingState =
  */
 export interface RecorderChannel {
   /** Channel ID (stable across reboots) */
-  id: string;
+  id?: string;
   
   /** Channel index/number (1-based typically) */
-  index: number;
+  index?: number;
   
   /** Channel name/label */
   name?: string;
   
   /** Is channel enabled? */
-  enabled: boolean;
+  enabled?: boolean;
   
   /** Source type */
   sourceType: ChannelSourceType;
@@ -357,6 +357,9 @@ export interface RecorderChannel {
   
   /** Channel ID alias */
   channelId?: string;
+  
+  /** Channel number alias */
+  channelNumber?: number;
   
   /** Video loss flag */
   videoLoss?: boolean;
@@ -492,13 +495,13 @@ export interface RecordingSearchResult {
   segments: RecordingSegment[];
   
   /** Total matches */
-  totalCount: number;
+  totalCount?: number;
   
   /** Has more results */
-  hasMore: boolean;
+  hasMore?: boolean;
   
   /** Search completed successfully */
-  success: boolean;
+  success?: boolean;
   
   /** Availability reason if not successful */
   reason?: string;

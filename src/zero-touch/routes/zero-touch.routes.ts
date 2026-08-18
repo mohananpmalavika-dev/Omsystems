@@ -50,11 +50,17 @@ export async function registerZeroTouchRoutes(app: FastifyInstance) {
       expiryMinutes: z.number().int().positive().default(15),
     }).parse(request.body || {});
 
+    const publicBase = (request.headers["x-sentinel-public-api-base"] as string) ||
+      process.env.CONTROL_PLANE_PUBLIC_URL ||
+      process.env.RENDER_EXTERNAL_URL ||
+      "https://sentinel-grid-monitoring-vhid.onrender.com";
+
     const pkg = zeroTouchEnrollmentService.generateEnrollmentPackage(
       branchId,
       branchName,
       body.tenantId,
       body.expiryMinutes,
+      publicBase,
     );
 
     return reply.code(201).send({

@@ -1976,7 +1976,7 @@ function messageOf(reason: unknown, fallback: string) {
 }
 
 function isGatewayReady(gateway: EdgeAgent) {
-  if (gateway.status === "revoked") return false;
+  if ((gateway.status as string) === "revoked") return false;
   return gateway.status === "online" || Boolean(gateway.id);
 }
 

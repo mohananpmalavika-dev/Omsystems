@@ -11,7 +11,11 @@ import type { EnrollmentPackage } from "../domain/zero-touch.types.js";
 export class ZeroTouchEnrollmentService extends EventEmitter {
   private packages = new Map<string, EnrollmentPackage>();
 
-  constructor(private controlPlaneBaseUrl = "https://control.sentinelgrid.internal") {
+  constructor(
+    private controlPlaneBaseUrl = process.env.CONTROL_PLANE_PUBLIC_URL ||
+      process.env.RENDER_EXTERNAL_URL ||
+      "https://sentinel-grid-monitoring-vhid.onrender.com",
+  ) {
     super();
   }
 
@@ -23,11 +27,12 @@ export class ZeroTouchEnrollmentService extends EventEmitter {
     branchName: string,
     tenantId = "tenant-bank-01",
     expiryMinutes = 15,
+    customBaseUrl?: string,
   ): EnrollmentPackage {
     const cleanBranch = branchId.replace(/[^a-zA-Z0-9]/g, "").toUpperCase();
     const token = `ENR-${cleanBranch}-${randomBytes(4).toString("hex").toUpperCase()}`;
     const expiresAt = new Date(Date.now() + expiryMinutes * 60 * 1000).toISOString();
-    const controlPlaneUrl = this.controlPlaneBaseUrl;
+    const controlPlaneUrl = customBaseUrl || this.controlPlaneBaseUrl;
 
     const windowsPowerShell = `powershell -NoProfile -ExecutionPolicy Bypass -Command "iwr -useb ${controlPlaneUrl}/api/v1/zero-touch/bootstrap/win?token=${token} | iex"`;
     const linuxBash = `curl -fsSL ${controlPlaneUrl}/api/v1/zero-touch/bootstrap/linux?token=${token} | sudo bash`;

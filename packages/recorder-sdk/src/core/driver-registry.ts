@@ -113,7 +113,7 @@ export class RecorderDriverRegistry {
   }
 }
 
-export const DriverRegistry = RecorderDriverRegistry;
+export { RecorderDriverRegistry as DriverRegistry };
 
 /**
  * Unsupported protocol error
