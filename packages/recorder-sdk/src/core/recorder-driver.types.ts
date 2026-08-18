@@ -63,6 +63,11 @@ export interface RecorderIdentity {
   
   /** Device serial number */
   serialNumber?: string;
+  
+  /** Legacy device type */
+  deviceType?: string;
+  
+  [key: string]: any;
 }
 
 /**
@@ -80,6 +85,7 @@ export interface DeviceEndpoint {
   
   /** Base URL */
   baseUrl: string;
+  [key: string]: any;
 }
 
 /**
@@ -92,6 +98,7 @@ export interface CredentialRef {
   
   /** Credential type hint */
   type: "basic" | "digest" | "api-key" | "token";
+  [key: string]: any;
 }
 
 /**
@@ -122,6 +129,7 @@ export interface RecorderContext {
   
   /** Request timeout override (ms) */
   timeoutMs?: number;
+  [key: string]: any;
 }
 
 /**
@@ -150,6 +158,7 @@ export interface CapabilityState {
   
   /** Optional reason for unavailability */
   reason?: string;
+  [key: string]: any;
 }
 
 /**
@@ -188,6 +197,11 @@ export interface RecorderCapabilities {
   // Protocol support
   vendorApi: CapabilityState;
   onvif: CapabilityState;
+  
+  // Storage health alias
+  storageHealth?: CapabilityState;
+  
+  [key: string]: any;
 }
 
 /**
@@ -203,6 +217,7 @@ export interface DeviceInfo extends RecorderIdentity {
   
   /** Detected at timestamp */
   detectedAt: Date;
+  [key: string]: any;
 }
 
 /**
@@ -241,6 +256,10 @@ export interface StorageVolume {
   
   /** RAID/group membership */
   groupId?: string;
+  
+  /** Volume name */
+  name?: string;
+  [key: string]: any;
 }
 
 /**
@@ -270,6 +289,10 @@ export interface StorageStatus {
   
   /** When was this observed */
   observedAt: Date;
+  
+  /** Total bytes alias */
+  totalBytes?: number;
+  [key: string]: any;
 }
 
 /**
@@ -331,6 +354,14 @@ export interface RecorderChannel {
   
   /** Raw vendor channel data */
   rawVendorData?: Record<string, unknown>;
+  
+  /** Channel ID alias */
+  channelId?: string;
+  
+  /** Video loss flag */
+  videoLoss?: boolean;
+  
+  [key: string]: any;
 }
 
 /**
@@ -363,6 +394,11 @@ export interface StreamEndpoint {
   
   /** Bitrate (bps) */
   bitrate?: number;
+  
+  /** Stream type alias */
+  streamType?: string;
+  
+  [key: string]: any;
 }
 
 /**
@@ -371,13 +407,21 @@ export interface StreamEndpoint {
  */
 export interface StreamRequest {
   /** Channel ID */
-  channelId: string;
+  channelId?: string;
+  
+  /** Channel number alias */
+  channelNumber?: number | string;
   
   /** Stream profile */
-  profile: StreamProfile;
+  profile?: StreamProfile;
+  
+  /** Stream type alias */
+  streamType?: string;
   
   /** Prefer specific transport */
   preferredProtocol?: "RTSP" | "HTTP";
+  
+  [key: string]: any;
 }
 
 /**
@@ -389,7 +433,10 @@ export interface RecordingSegment {
   id: string;
   
   /** Channel ID */
-  channelId: string;
+  channelId?: string;
+  
+  /** Channel number alias */
+  channelNumber?: number | string;
   
   /** Start time */
   startTime: Date;
@@ -405,6 +452,8 @@ export interface RecordingSegment {
   
   /** Recording type */
   recordingType?: "continuous" | "event" | "manual";
+  
+  [key: string]: any;
 }
 
 /**
@@ -412,7 +461,10 @@ export interface RecordingSegment {
  */
 export interface RecordingSearchRequest {
   /** Channel ID */
-  channelId: string;
+  channelId?: string;
+  
+  /** Channel number alias */
+  channelNumber?: number | string;
   
   /** Search start time */
   from: Date;
@@ -428,6 +480,8 @@ export interface RecordingSearchRequest {
   
   /** Recording type filter */
   recordingType?: "continuous" | "event" | "manual";
+  
+  [key: string]: any;
 }
 
 /**
@@ -448,6 +502,14 @@ export interface RecordingSearchResult {
   
   /** Availability reason if not successful */
   reason?: string;
+  
+  /** Channel ID alias */
+  channelId?: string;
+  
+  /** Channel number alias */
+  channelNumber?: number | string;
+  
+  [key: string]: any;
 }
 
 /**

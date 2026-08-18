@@ -104,6 +104,7 @@ export interface HttpRequestOptions {
     password: string;
     type?: "basic" | "digest";
   };
+  [key: string]: any;
 }
 
 /**

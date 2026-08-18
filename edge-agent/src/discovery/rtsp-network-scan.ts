@@ -61,7 +61,6 @@ function isPrivateCameraNetwork(address: string) {
   return (value >= 0x0a000000 && value <= 0x0affffff) ||
     (value >= 0xac100000 && value <= 0xac1fffff) ||
     (value >= 0xc0a80000 && value <= 0xc0a8ffff) ||
-    (value >= 0xa9fe0000 && value <= 0xa9feffff) ||
     (value >= 0x64400000 && value <= 0x647fffff);
 }
 
