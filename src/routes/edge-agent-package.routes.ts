@@ -321,7 +321,7 @@ export async function registerEdgeAgentPackageRoutes(
       '                    type = "CP PLUS UVR HD DVR - Channel $ch"',
       "                    channel = $ch",
       '                    sourceType = "analog-dvr-channel"',
-      '                    recorderId = "recorder-$($targetIP.Replace(`.`, `-`))"',
+      '                    recorderId = "recorder-" + ($targetIP -replace "\\.", "-")',
       "                    port = 554",
       "                }",
       "            }",
