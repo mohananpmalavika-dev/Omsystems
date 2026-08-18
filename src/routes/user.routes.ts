@@ -134,16 +134,36 @@ export async function registerUserRoutes(
         ? query
         : { ...query, managerUserId: request.currentUser.id };
 
+      console.log('[DEBUG] User list query:', {
+        currentUserRole: request.currentUser.role,
+        currentUserId: request.currentUser.id,
+        tenantId: request.currentUser.tenantId,
+        filters,
+        isSuperAdmin: request.currentUser.role === "super_admin",
+        isCompanyAdmin: request.currentUser.role === "company_admin"
+      });
+
       const result = await store.listUsers(
         request.currentUser.tenantId || "00000000-0000-4000-8000-000000000000",
         filters,
       ).catch(() => ({ data: [request.currentUser], total: 1 }));
+
+      console.log('[DEBUG] User list result:', {
+        rawDataCount: result.data.length,
+        total: result.total
+      });
 
       const data = result.data.filter(
         (user: any) =>
           user.id === request.currentUser.id ||
           canManageRole(request.currentUser.role, user.role),
       );
+
+      console.log('[DEBUG] Filtered user list:', {
+        filteredCount: data.length,
+        userRoles: data.map((u: any) => ({ id: u.id, role: u.role, name: u.displayName }))
+      });
+
       return { data, total: data.length };
     } catch {
       return { data: [request.currentUser].filter(Boolean), total: request.currentUser ? 1 : 0 };
