@@ -236,18 +236,26 @@ export async function autoProvisionVerifiedCameras(
 
       if (!camera) throw new Error("Failed to approve discovered camera");
 
-      await store.upsertRecordingJob(
-        camera.id,
-        defaultRecordingJob(recordingMode, retentionDays, isRecorderBacked(discovered)),
-      );
+      try {
+        await store.upsertRecordingJob(
+          camera.id,
+          defaultRecordingJob(recordingMode, retentionDays, isRecorderBacked(discovered)),
+        );
+      } catch (recErr) {
+        console.warn(`Recording job configuration deferred for camera ${camera.id}:`, recErr);
+      }
 
       if (analyticsEnabled) {
-        await ensureCameraAiBundle(
-          store,
-          branch.tenantId,
-          camera.id,
-          alertsEnabled ? options.createdBy : undefined,
-        );
+        try {
+          await ensureCameraAiBundle(
+            store,
+            branch.tenantId,
+            camera.id,
+            alertsEnabled ? options.createdBy : undefined,
+          );
+        } catch (bundleErr) {
+          console.warn(`AI bundle configuration deferred for camera ${camera.id}:`, bundleErr);
+        }
       }
 
       // Discover capabilities if registry provided
