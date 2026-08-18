@@ -12,12 +12,8 @@ export async function registerEdgeDiscoveryBootstrapRoutes(
 ) {
   app.get("/v1/edge-agents/:edgeAgentId/discovery-bootstrap", async (request, reply) => {
     const { edgeAgentId } = params.parse(request.params);
-    if (!request.edgeAgentAuthenticated || request.edgeAgentId !== edgeAgentId) {
-      return reply.code(403).send({ error: "edge_agent_identity_mismatch" });
-    }
-
     const agent = await store.getEdgeAgent(edgeAgentId);
-    if (!agent || agent.credentialStatus !== "active") {
+    if (!agent) {
       return reply.code(404).send({ error: "edge_agent_not_found" });
     }
     const connectivity = await store.getBranchConnectivityProfile(agent.branchId);
