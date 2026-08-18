@@ -494,7 +494,9 @@ export function DeviceManager() {
   async function completeCameraScan(scanId: string, fallbackEdgeAgentId?: string) {
     if (!selectedBranch) return { found: 0, provisioned: 0, credentialsRequired: 0 };
     setLastScanAt(new Date().toISOString());
-    const deadline = Date.now() + 120_000;
+    // 300 s window: edge agents claim jobs only on heartbeat (up to ~60 s latency)
+    // plus ONVIF WS-Discovery can take 20-40 s on a large subnet.
+    const deadline = Date.now() + 300_000;
     let job = await cameraInventoryApi.getScan(selectedBranch, scanId) as EdgeScanJob;
 
     while (job.status === "queued" || job.status === "running") {
@@ -591,7 +593,7 @@ export function DeviceManager() {
     while (Date.now() < deadline) {
       const response = await cameraInventoryApi.listGateways(branchId);
       setGateways(response.data);
-      const gateway = response.data.find(isGatewayReady) ?? response.data[0];
+      const gateway = response.data.find(isGatewayReady);
       if (gateway) return gateway;
       await wait(1_500);
     }
@@ -602,11 +604,11 @@ export function DeviceManager() {
 
   async function startConnectedCameraScan(gateway: EdgeAgent) {
     if (!selectedBranch) return;
-    const { run } = await provisioningApi.start(selectedBranch, gateway.id) as {
-      run: { id: string; status: string; branchId: string };
-    };
-    const outcome = await completeCameraScan(run.id, gateway.id);
-    setNotice(`Camera scan completed. Found ${outcome.found} devices. ${outcome.provisioned} verified live streams were activated${outcome.credentialsRequired ? `; ${outcome.credentialsRequired} need credentials` : ""}.`);
+    // Use the device-scan API (not the provisioning API) so the edge agent
+    // picks up the job via its heartbeat poll and we track the right scan ID.
+    const job = await cameraInventoryApi.startScan(selectedBranch, gateway.id);
+    const outcome = await completeCameraScan(job.id, gateway.id);
+    setNotice(`Camera scan completed. Found ${outcome.found} devices. ${outcome.provisioned} verified live streams were activated${outcome.credentialsRequired ? `; ${outcome.credentialsRequired} need credentials` : ``}.`);
   }
 
   function openScannerInstaller() {
@@ -2089,7 +2091,9 @@ function messageOf(reason: unknown, fallback: string) {
 
 function isGatewayReady(gateway: EdgeAgent) {
   if ((gateway.status as string) === "revoked") return false;
-  return gateway.status === "online" || Boolean(gateway.id);
+  // Only treat a gateway as ready when it is actually connected; an offline
+  // gateway with a valid ID would still cause a 409 on the scan endpoint.
+  return gateway.status === "online";
 }
 
 function isScannerUnavailable(reason: unknown) {
