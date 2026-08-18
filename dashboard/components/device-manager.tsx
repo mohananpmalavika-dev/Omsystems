@@ -1014,6 +1014,54 @@ export function DeviceManager() {
     }
   }
 
+  function downloadOneClickBatchFile(branchId: string, branchName: string) {
+    const origin = typeof window !== "undefined" ? window.location.origin : "https://sentinel-grid-monitoring-vhid.onrender.com";
+    const content = `@echo off
+setlocal EnableDelayedExpansion
+
+:: Check for Administrator privileges
+net session >nul 2>&1
+if %errorlevel% neq 0 (
+    echo [!] Administrator privileges required. Requesting elevation...
+    powershell -Command "Start-Process '%~f0' -Verb RunAs"
+    exit /b
+)
+
+title Sentinel Grid Edge Agent - 1-Click Auto Setup
+cls
+echo ================================================================
+echo          SENTINEL GRID CCTV SECURITY - 1-CLICK AUTO SETUP
+echo ================================================================
+echo Target Branch: ${branchName.replace(/"/g, "")} (${branchId})
+echo.
+echo [*] Connecting to Sentinel Grid Cloud Control Plane...
+echo [*] Downloading and configuring Edge Agent background service...
+echo [*] Probing local network for ONVIF IP cameras, RTSP streams, and DVRs...
+echo.
+
+powershell -NoProfile -ExecutionPolicy Bypass -Command "iwr -useb '${origin}/api/control/v1/branches/${branchId}/install.ps1' | iex"
+
+echo.
+echo ================================================================
+echo   SUCCESS: Sentinel Grid Edge Agent is installed and running!
+echo   It will continuously monitor this branch 24/7 in the background.
+echo ================================================================
+echo.
+pause
+`;
+    const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    const safeName = (branchName || "Branch").replace(/[^a-zA-Z0-9_-]/g, "_");
+    a.href = url;
+    a.download = `Install_SentinelGrid_${safeName}.bat`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    setNotice(`1-Click installer "Install_SentinelGrid_${safeName}.bat" downloaded! Just double-click to run.`);
+  }
+
   return (
     <div className="device-manager">
       <div className="device-toolbar">
@@ -1022,12 +1070,21 @@ export function DeviceManager() {
           <p>One automatic scan checks the branch network, saved VPN routes, and managed tunnel access.</p>
         </div>
         <div className="device-toolbar-actions">
+          <button
+            className="secondary-button"
+            style={{ background: "rgba(16, 185, 129, 0.15)", color: "#34d399", borderColor: "#059669", fontWeight: 600 }}
+            onClick={() => downloadOneClickBatchFile(selectedBranch, activeBranch?.name ?? "Branch")}
+            disabled={!selectedBranch}
+            title="Download a 1-click double-clickable .BAT file for this branch"
+          >
+            <Download size={15} /> Download Auto-Setup (.BAT)
+          </button>
           <button className="primary-button" onClick={() => void scanCameras()} disabled={!selectedBranch || scanning || saving} title="Automatically search local network, VPN routes, and the managed tunnel">
             <Search size={15} /> {scanning ? "Searching cameras..." : "Scan cameras"}
           </button>
           <button
             className="secondary-button"
-            style={{ background: "rgba(16, 185, 129, 0.15)", color: "#34d399", borderColor: "#059669", fontWeight: 600 }}
+            style={{ background: "rgba(59, 130, 246, 0.15)", color: "#60a5fa", borderColor: "#2563eb", fontWeight: 600 }}
             onClick={() => void activateEdgeOnline()}
             disabled={!selectedBranch || saving}
             title="Bring Edge Agent online immediately for this branch"
@@ -1037,7 +1094,9 @@ export function DeviceManager() {
           <button className="secondary-button" onClick={() => setShowDirectProbeModal(true)} title="Directly test and connect IP camera on local subnet (e.g. 192.168.29.196)">
             <Wifi size={15} /> Direct IP Probe
           </button>
-          {!onlineGateway && selectedBranch ? <button className="secondary-button" onClick={openScannerInstaller} disabled={saving} title={gateways.length > 0 ? "Repair the Sentinel Grid Scanner on this PC" : "Download the Sentinel Grid Scanner for this PC"}><Download size={15} /> {gateways.length > 0 ? "Repair scanner" : "Install scanner"}</button> : null}
+          <button className="secondary-button" onClick={openScannerInstaller} disabled={saving} title="Get 1-line commands or standalone installer">
+            <Terminal size={15} /> {gateways.length > 0 ? "Agent Commands" : "Install Scanner"}
+          </button>
         </div>
         {selectedBranch ? (
           gateways.length === 0 ? (

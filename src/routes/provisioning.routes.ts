@@ -19,10 +19,16 @@ export async function registerProvisioningRoutes(
     const { edgeAgentId } = startBody.parse(request.body ?? {});
     const existing = await store.getLatestEdgeScanJob(branchId);
     if (existing && (existing.status === "queued" || existing.status === "running")) {
-      return reply.code(409).send({
-        error: "provisioning_in_progress",
-        run: await buildProvisioningRunView(store, branchId, request.currentUser, existing),
-      });
+      const jobTime = existing.requestedAt || existing.startedAt;
+      const isRecent = jobTime && (Date.now() - new Date(jobTime).getTime() < 120_000);
+      if (isRecent) {
+        return reply.code(200).send({
+          status: "provisioning_in_progress",
+          message: "Provisioning is currently in progress for this branch.",
+          run: await buildProvisioningRunView(store, branchId, request.currentUser, existing),
+        });
+      }
+      // If older than 2 minutes without finishing, allow starting a fresh job to unblock
     }
 
     const agents = await store.listEdgeAgentsByBranch(branchId);
@@ -193,7 +199,15 @@ export async function registerProvisioningRoutes(
     const existing = await store.getEdgeScanJob(branchId, runId);
     if (!existing) return reply.code(404).send({ error: "provisioning_run_not_found" });
     if (existing.status !== "completed" && existing.status !== "failed") {
-      return reply.code(409).send({ error: "provisioning_run_not_retryable" });
+      const jobTime = existing.requestedAt || existing.startedAt;
+      const isRecent = jobTime && (Date.now() - new Date(jobTime).getTime() < 60_000);
+      if (isRecent) {
+        return reply.code(200).send({
+          status: "provisioning_in_progress",
+          message: "Provisioning is currently in progress.",
+          run: await buildProvisioningRunView(store, branchId, request.currentUser, existing),
+        });
+      }
     }
     const agents = await store.listEdgeAgentsByBranch(branchId);
     let selected = agents.find((agent) => agent.id === existing.edgeAgentId && agent.status === "online") ??
