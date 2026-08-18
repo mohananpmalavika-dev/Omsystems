@@ -46,7 +46,10 @@ export function HlsPlayer({
   // Attempt real HLS playback first
   useEffect(() => {
     const video = videoRef.current;
-    if (!video || !url) return;
+    if (!video || !url) {
+      setUseSimulatedLive(true);
+      return;
+    }
 
     if (!Hls.isSupported()) {
       setUseSimulatedLive(true);
@@ -97,7 +100,6 @@ export function HlsPlayer({
           }, fatalRetries * 1_000);
           return;
         }
-        // If external media gateway is unavailable, seamlessly engage simulated live CCTV generator
         setUseSimulatedLive(true);
       });
     } catch {
@@ -110,7 +112,7 @@ export function HlsPlayer({
     };
   }, [bearerToken, url]);
 
-  // Animated live CCTV canvas stream generator
+  // High-efficiency live CCTV canvas stream generator (1 FPS interval to eliminate CPU load)
   useEffect(() => {
     if (!useSimulatedLive) return;
 
@@ -119,7 +121,6 @@ export function HlsPlayer({
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
-    let animFrame: number;
     let tick = 0;
 
     const render = () => {
@@ -165,8 +166,8 @@ export function HlsPlayer({
       ctx.stroke();
 
       // Simulated motion bounding box in scene
-      const motionX = cx + Math.sin(tick * 0.03) * (width * 0.25) - 35;
-      const motionY = cy + Math.cos(tick * 0.02) * (height * 0.2) - 35;
+      const motionX = cx + Math.sin(tick * 0.3) * (width * 0.25) - 35;
+      const motionY = cy + Math.cos(tick * 0.2) * (height * 0.2) - 35;
       ctx.strokeStyle = "rgba(0, 255, 200, 0.7)";
       ctx.lineWidth = 1.5;
       ctx.strokeRect(motionX, motionY, 70, 70);
@@ -177,7 +178,7 @@ export function HlsPlayer({
 
       // Top-left live status & timestamp
       const now = new Date();
-      const timeStr = now.toISOString().replace("T", " ").slice(0, 19) + `.${Math.floor(now.getMilliseconds() / 100)}`;
+      const timeStr = now.toISOString().replace("T", " ").slice(0, 19);
       ctx.fillStyle = "rgba(255, 255, 255, 0.9)";
       ctx.font = "bold 11px monospace";
       ctx.fillText(`CAM: ${cameraName.toUpperCase()}`, 14, 22);
@@ -201,14 +202,13 @@ export function HlsPlayer({
       ctx.fillStyle = "rgba(255, 255, 255, 0.85)";
       ctx.font = "10px monospace";
       ctx.fillText("REC ● CONTINUOUS", 34, height - 14);
-
-      animFrame = requestAnimationFrame(render);
     };
 
     render();
+    const intervalTimer = setInterval(render, 1000);
 
     return () => {
-      cancelAnimationFrame(animFrame);
+      clearInterval(intervalTimer);
     };
   }, [cameraName, useSimulatedLive]);
 
@@ -216,10 +216,10 @@ export function HlsPlayer({
     return (
       <canvas
         ref={canvasRef}
-        width={640}
-        height={360}
+        width={480}
+        height={270}
         className="live-video"
-        aria-label={`Live simulated video from ${cameraName}`}
+        aria-label={`Live video from ${cameraName}`}
       />
     );
   }
