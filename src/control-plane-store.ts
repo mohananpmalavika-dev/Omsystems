@@ -736,12 +736,12 @@ export interface ControlPlaneStore {
     externalId: string;
     name: string;
     scopeNodeId?: string | undefined;
-    supportedTiers: Array<"hot" | "warm" | "cold">;
+    supportedTiers: Array<"hot" | "warm" | "cold" | "archive">;
     capacityBytes: number;
     usedBytes: number;
     availableBytes: number;
     status: "healthy" | "warning" | "critical" | "offline";
-    storageType?: "local-disk" | "nfs" | "smb" | "s3" | "cloud-archive" | "san";
+    storageType?: "local-disk" | "nfs" | "smb" | "s3" | "cloud-archive" | "san" | "nas" | "archive";
     supportedProtocols?: string[];
     location?: string;
     mountPath?: string;
@@ -749,6 +749,9 @@ export interface ControlPlaneStore {
     writeMbps?: number | undefined;
     readMbps?: number | undefined;
     latencyMs?: number | undefined;
+    smart?: RecordingStorageSmart | undefined;
+    raid?: RecordingStorageRaid | undefined;
+    lastWriteProbe?: RecordingStorageProbeResult | undefined;
   }): Promise<RecordingStorageNode>;
   listRecordingStorageNodes(tenantId: string): Promise<RecordingStorageNode[]>;
   createRecordingHealthEvent(input: {

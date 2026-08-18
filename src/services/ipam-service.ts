@@ -123,7 +123,7 @@ export class IpamService {
    * Validate IP address is in valid range and meets requirements.
    */
   async validateIpAddress(branchId: string, ipAddress: string, subnet: string): Promise<void> {
-    const network = await this.store.getBranchNetwork(branchId) as BranchNetwork | undefined;
+    const network: BranchNetwork | undefined = await this.store.getBranchNetwork(branchId) as BranchNetwork | undefined;
 
     if (!network) {
       throw new Error(`No network configuration found for branch ${branchId}`);
@@ -140,15 +140,18 @@ export class IpamService {
       throw new Error(`IP ${ipAddress} is the gateway address`);
     }
 
+    const reservedRangeStart = network.reservedRangeStart;
+    const reservedRangeEnd = network.reservedRangeEnd;
+
     // Validate IP is in reserved range if configured
-    if (network.reservedRangeStart && network.reservedRangeEnd) {
+    if (reservedRangeStart && reservedRangeEnd) {
       const ipNum = this.ipToNumber(ipAddress);
-      const startNum = this.ipToNumber(network.reservedRangeStart);
-      const endNum = this.ipToNumber(network.reservedRangeEnd);
+      const startNum = this.ipToNumber(reservedRangeStart);
+      const endNum = this.ipToNumber(reservedRangeEnd);
 
       if (ipNum < startNum || ipNum > endNum) {
         throw new Error(
-          `IP ${ipAddress} is outside reserved range ${network.reservedRangeStart}-${network.reservedRangeEnd}`
+          `IP ${ipAddress} is outside reserved range ${reservedRangeStart}-${reservedRangeEnd}`
         );
       }
     }

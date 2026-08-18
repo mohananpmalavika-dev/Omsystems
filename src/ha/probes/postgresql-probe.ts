@@ -21,7 +21,7 @@ interface PostgreSQLProbeConfig {
     database: string;
     user: string;
     password: string;
-    expectedRole?: "primary" | "standby";
+    expectedRole?: "primary" | "standby-sync" | "standby-async";
   }>;
   timeoutMs?: number;
 }
@@ -89,8 +89,12 @@ export class PostgreSQLProbe extends BaseInfrastructureProbe<PostgreSQLNodeHealt
       const roleResult = await client.query<{ role: string }>(
         "SELECT CASE WHEN pg_is_in_recovery() THEN 'standby' ELSE 'primary' END AS role",
       );
-      const role = roleResult.rows[0]?.role === "primary" ? "primary" : 
-                   nodeConfig.expectedRole === "standby-sync" ? "standby-sync" : "standby-async";
+      const actualRole = roleResult.rows[0]?.role;
+      const role: PostgreSQLNodeHealth["role"] = actualRole === "primary"
+        ? "primary"
+        : nodeConfig.expectedRole === "standby-async"
+          ? "standby-async"
+          : "standby-sync";
 
       // Get replication state (for standbys)
       let replicationState: PostgreSQLNodeHealth["replicationState"] = "n/a";

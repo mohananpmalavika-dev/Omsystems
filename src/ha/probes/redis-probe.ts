@@ -9,7 +9,7 @@
  * - Performance metrics
  */
 
-import Redis from "ioredis";
+import IORedis from "ioredis";
 import { BaseInfrastructureProbe } from "./base-probe.js";
 import type { RedisNodeHealth } from "../domain/ha-telemetry.types.js";
 
@@ -24,7 +24,7 @@ interface RedisProbeConfig {
 }
 
 export class RedisProbe extends BaseInfrastructureProbe<RedisNodeHealth[]> {
-  private sentinelClient: Redis;
+  private sentinelClient: any;
   private masterName: string;
   private password?: string;
 
@@ -33,10 +33,10 @@ export class RedisProbe extends BaseInfrastructureProbe<RedisNodeHealth[]> {
     this.masterName = config.masterName;
     this.password = config.password;
 
-    this.sentinelClient = new Redis({
+    this.sentinelClient = new IORedis({
       sentinels: config.sentinels,
       name: config.masterName,
-      sentinelRetryStrategy: (times) => Math.min(times * 100, 2000),
+      sentinelRetryStrategy: (times: number) => Math.min(times * 100, 2000),
       connectTimeout: 5000,
     });
   }
@@ -106,10 +106,10 @@ export class RedisProbe extends BaseInfrastructureProbe<RedisNodeHealth[]> {
     const host = infoMap.get("ip") || "unknown";
     const port = parseInt(infoMap.get("port") || "6379", 10);
 
-    let client: Redis | null = null;
+    let client: any = null;
 
     try {
-      client = new Redis({
+      client = new IORedis({
         host,
         port,
         password: this.password,
@@ -170,10 +170,10 @@ export class RedisProbe extends BaseInfrastructureProbe<RedisNodeHealth[]> {
     const port = parseInt(infoMap.get("port") || "6379", 10);
     const masterLinkStatus = infoMap.get("master-link-status");
 
-    let client: Redis | null = null;
+    let client: any = null;
 
     try {
-      client = new Redis({
+      client = new IORedis({
         host,
         port,
         password: this.password,

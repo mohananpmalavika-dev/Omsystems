@@ -2488,21 +2488,7 @@ export async function buildApp(options?: {
     // Initialize Device Management Job Worker
     try {
       const { DeviceJobWorker } = await import("./workers/device-job-worker.js");
-      const { DeviceCredentialService } = await import("./services/device-credential-service.js");
-      const { IpamService } = await import("./services/ipam-service.js");
-      const { DeviceTemplateService } = await import("./services/device-template-service.js");
-      
-      const credentialService = new DeviceCredentialService();
-      const ipamService = new IpamService();
-      const templateService = new DeviceTemplateService();
-      
-      const deviceJobWorker = new DeviceJobWorker(
-        extendedStore,
-        credentialService,
-        ipamService,
-        templateService,
-        app.log
-      );
+      const deviceJobWorker = new DeviceJobWorker(extendedStore);
       
       deviceJobWorker.start();
       app.log.info('Device configuration job worker started');

@@ -168,10 +168,10 @@ export class DeviceCredentialService {
       throw new Error('Invalid encrypted credential payload');
     }
 
-    const versionStr = parts[0];
-    const ivHex = parts[1];
-    const authTagHex = parts[2];
-    const ciphertext = parts.slice(3).join(':');
+    const versionStr = parts[0] ?? '';
+    const ivHex = parts[1] ?? '';
+    const authTagHex = parts[2] ?? '';
+    const ciphertext = parts.slice(3).join(':') ?? '';
 
     if (!versionStr || !ivHex || !authTagHex || !ciphertext) {
       throw new Error('Invalid encrypted credential payload');
@@ -213,14 +213,24 @@ export class DeviceCredentialService {
   }
 
   private randomChar(chars: string): string {
-    return chars[crypto.randomInt(0, chars.length)];
+    const index = crypto.randomInt(0, chars.length);
+    const char = chars[index];
+    if (!char) {
+      throw new Error('Failed to generate random credential character');
+    }
+    return char;
   }
 
   private shuffleString(str: string): string {
     const arr = str.split('');
     for (let i = arr.length - 1; i > 0; i--) {
       const j = crypto.randomInt(0, i + 1);
-      [arr[i], arr[j]] = [arr[j], arr[i]];
+      const left = arr[i];
+      const right = arr[j];
+      if (left === undefined || right === undefined) {
+        continue;
+      }
+      [arr[i], arr[j]] = [right, left];
     }
     return arr.join('');
   }
