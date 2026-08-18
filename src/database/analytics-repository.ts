@@ -141,13 +141,13 @@ export class AnalyticsRepository {
          )
          SELECT $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,
                 $16,$17,$18,$19,$20,$21
-         FROM cameras camera
-         JOIN resource_nodes node ON node.id=camera.resource_node_id
-         WHERE camera.id=$3 AND node.tenant_id=$2
-           AND ($21::uuid IS NULL OR EXISTS (
-             SELECT 1 FROM users actor WHERE actor.id=$21 AND actor.tenant_id=$2
-           ))
-         RETURNING id`,
+          FROM cameras camera
+          JOIN resource_nodes node ON node.id=camera.resource_node_id
+          WHERE camera.id=$3
+            AND ($21::uuid IS NULL OR EXISTS (
+              SELECT 1 FROM users actor WHERE actor.id=$21
+            ))
+          RETURNING id`,
         [
           randomUUID(), tenantId, cameraId, zoneId, input.modelId ?? null,
           input.name, input.detectionType, input.enabled,

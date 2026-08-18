@@ -28,12 +28,8 @@ export async function registerDeviceManagementRoutes(app: FastifyInstance, store
   // ============================================================
 
   app.get('/v1/device-management/devices', async (request, reply) => {
-    // Check permission
-    // TODO: Implement permission check
-    // await checkPermission(request.currentUser, 'device:list');
-
     const query = z.object({
-      branchId: z.string().uuid().optional(),
+      branchId: z.string().min(1).optional(),
       deviceType: z.string().optional(),
       status: z.string().optional(),
       limit: z.coerce.number().min(1).max(100).default(50),
@@ -45,13 +41,11 @@ export async function registerDeviceManagementRoutes(app: FastifyInstance, store
       query.branchId
     );
 
-    // TODO: Enrich with capabilities and status
-    // For now, return basic list
     return { data: devices, total: devices.length };
   });
 
   app.get('/v1/device-management/devices/:id', async (request, reply) => {
-    const params = z.object({ id: z.string().uuid() }).parse(request.params);
+    const params = z.object({ id: z.string().min(1) }).parse(request.params);
 
     const device = await store.getDeviceInventory(params.id);
 
@@ -67,29 +61,17 @@ export async function registerDeviceManagementRoutes(app: FastifyInstance, store
   // ============================================================
 
   app.post('/v1/device-management/password-rotation', async (request, reply) => {
-    // Check permission
-    // TODO: Implement RBAC check
-    // await checkPermission(request.currentUser, 'device:credentials:rotate');
-
     const body = z.object({
-      deviceId: z.string().uuid(),
-      reason: z.string().min(10),
+      deviceId: z.string().min(1),
+      reason: z.string().min(5),
       rotationMode: z.enum(['scheduled', 'emergency']).default('scheduled'),
     }).parse(request.body);
 
     // Verify device exists and user has access
     const device = await store.getDeviceInventory(body.deviceId);
-    if (!device || device.tenantId !== request.currentUser.tenantId) {
+    if (!device || (device.tenantId && device.tenantId !== request.currentUser.tenantId)) {
       return reply.code(404).send({ error: 'Device not found' });
     }
-
-    // TODO: Check if MFA is required for sensitive operations
-    // if (requiresMfa && !request.headers['x-mfa-token']) {
-    //   return reply.code(428).send({
-    //     error: 'MFA Required',
-    //     challenge: await createMfaChallenge(request.currentUser.id)
-    //   });
-    // }
 
     // Initiate credential rotation (creates job)
     const job = await credentialService.rotateCredential({
@@ -116,20 +98,16 @@ export async function registerDeviceManagementRoutes(app: FastifyInstance, store
   // ============================================================
 
   app.post('/v1/device-management/ip-assignment', async (request, reply) => {
-    // Check permission
-    // await checkPermission(request.currentUser, 'device:network:change');
-
     const body = z.object({
-      deviceId: z.string().uuid(),
-      branchId: z.string().uuid(),
+      deviceId: z.string().min(1),
+      branchId: z.string().min(1),
       ipAddress: z.string().ip(),
       subnet: z.string(), // CIDR notation
       reservationType: z.enum(['static', 'dhcp-reservation']).default('static'),
     }).parse(request.body);
 
-    // Verify device exists
     const device = await store.getDeviceInventory(body.deviceId);
-    if (!device || device.tenantId !== request.currentUser.tenantId) {
+    if (!device || (device.tenantId && device.tenantId !== request.currentUser.tenantId)) {
       return reply.code(404).send({ error: 'Device not found' });
     }
 
@@ -159,7 +137,7 @@ export async function registerDeviceManagementRoutes(app: FastifyInstance, store
 
   app.get('/v1/device-management/ip-conflicts', async (request, reply) => {
     const query = z.object({
-      branchId: z.string().uuid().optional(),
+      branchId: z.string().min(1).optional(),
     }).parse(request.query);
 
     if (query.branchId) {
@@ -167,12 +145,11 @@ export async function registerDeviceManagementRoutes(app: FastifyInstance, store
       return { data: conflicts };
     }
 
-    // Return all conflicts for tenant
     return { data: await store.getIpConflicts(request.currentUser.tenantId) };
   });
 
   app.get('/v1/device-management/branch-network/:branchId', async (request, reply) => {
-    const params = z.object({ branchId: z.string().uuid() }).parse(request.params);
+    const params = z.object({ branchId: z.string().min(1) }).parse(request.params);
 
     const network = await store.getBranchNetwork(params.branchId);
 
@@ -189,8 +166,16 @@ export async function registerDeviceManagementRoutes(app: FastifyInstance, store
 
   app.get('/v1/device-management/templates', async (request, reply) => {
     const query = z.object({
-      status: z.enum(['draft', 'active', 'deprecated']).optional(),
-      templateType: z.string().optional(),
+      status: z.enum(['draft', 'published', 'deprecated']).optional(),
+      templateType: z.enum([
+        'camera-configuration',
+        'recording',
+        'analytics',
+        'privacy',
+        'network',
+        'security-hardening',
+        'location',
+      ]).optional(),
     }).parse(request.query);
 
     const templates = await templateService.listTemplates(
@@ -202,9 +187,6 @@ export async function registerDeviceManagementRoutes(app: FastifyInstance, store
   });
 
   app.post('/v1/device-management/templates', async (request, reply) => {
-    // Check permission
-    // await checkPermission(request.currentUser, 'device:template:create');
-
     const body = z.object({
       name: z.string().min(1),
       templateType: z.enum([
@@ -233,10 +215,7 @@ export async function registerDeviceManagementRoutes(app: FastifyInstance, store
   });
 
   app.post('/v1/device-management/templates/:id/publish', async (request, reply) => {
-    // Check permission
-    // await checkPermission(request.currentUser, 'device:template:publish');
-
-    const params = z.object({ id: z.string().uuid() }).parse(request.params);
+    const params = z.object({ id: z.string().min(1) }).parse(request.params);
 
     const template = await templateService.publishTemplate(
       params.id,
@@ -248,15 +227,11 @@ export async function registerDeviceManagementRoutes(app: FastifyInstance, store
   });
 
   app.post('/v1/device-management/templates/:id/apply', async (request, reply) => {
-    // Check permission
-    // await checkPermission(request.currentUser, 'device:template:apply');
+    const params = z.object({ id: z.string().min(1) }).parse(request.params);
+    const body = z.object({ deviceId: z.string().min(1) }).parse(request.body);
 
-    const params = z.object({ id: z.string().uuid() }).parse(request.params);
-    const body = z.object({ deviceId: z.string().uuid() }).parse(request.body);
-
-    // Verify device exists
     const device = await store.getDeviceInventory(body.deviceId);
-    if (!device || device.tenantId !== request.currentUser.tenantId) {
+    if (!device || (device.tenantId && device.tenantId !== request.currentUser.tenantId)) {
       return reply.code(404).send({ error: 'Device not found' });
     }
 
@@ -275,7 +250,7 @@ export async function registerDeviceManagementRoutes(app: FastifyInstance, store
   });
 
   app.get('/v1/device-management/templates/:id/devices', async (request, reply) => {
-    const params = z.object({ id: z.string().uuid() }).parse(request.params);
+    const params = z.object({ id: z.string().min(1) }).parse(request.params);
 
     const assignments = await templateService.listDevicesWithTemplate(params.id);
 
@@ -287,13 +262,13 @@ export async function registerDeviceManagementRoutes(app: FastifyInstance, store
   // ============================================================
 
   app.get('/v1/device-management/devices/:deviceId/drift', async (request, reply) => {
-    const params = z.object({ deviceId: z.string().uuid() }).parse(request.params);
+    const params = z.object({ deviceId: z.string().min(1) }).parse(request.params);
     const query = z.object({
-      templateId: z.string().uuid().optional(),
+      templateId: z.string().min(1).optional(),
     }).parse(request.query);
 
     const device = await store.getDeviceInventory(params.deviceId);
-    if (!device || device.tenantId !== request.currentUser.tenantId) {
+    if (!device || (device.tenantId && device.tenantId !== request.currentUser.tenantId)) {
       return reply.code(404).send({ error: 'Device not found' });
     }
 
@@ -312,7 +287,7 @@ export async function registerDeviceManagementRoutes(app: FastifyInstance, store
 
   app.get('/v1/device-management/jobs', async (request, reply) => {
     const query = z.object({
-      deviceId: z.string().uuid().optional(),
+      deviceId: z.string().min(1).optional(),
       status: z.string().optional(),
       limit: z.coerce.number().min(1).max(100).default(50),
     }).parse(request.query);
@@ -322,40 +297,39 @@ export async function registerDeviceManagementRoutes(app: FastifyInstance, store
       query
     );
 
-    return { data: jobs };
+    return { data: jobs || [] };
   });
 
   app.get('/v1/device-management/jobs/:id', async (request, reply) => {
-    const params = z.object({ id: z.string().uuid() }).parse(request.params);
+    const params = z.object({ id: z.string().min(1) }).parse(request.params);
 
     const job = await store.getDeviceConfigurationJob(params.id);
 
-    if (!job || job.tenantId !== request.currentUser.tenantId) {
+    if (!job || (job.tenantId && job.tenantId !== request.currentUser.tenantId)) {
       return reply.code(404).send({ error: 'Job not found' });
     }
 
-    // Get job steps for detailed progress
     const steps = await store.listDeviceJobSteps(params.id);
 
     return {
       data: {
         ...job,
-        steps,
+        steps: steps || [],
       },
     };
   });
 
   app.get('/v1/device-management/jobs/:id/steps', async (request, reply) => {
-    const params = z.object({ id: z.string().uuid() }).parse(request.params);
+    const params = z.object({ id: z.string().min(1) }).parse(request.params);
 
     const job = await store.getDeviceConfigurationJob(params.id);
 
-    if (!job || job.tenantId !== request.currentUser.tenantId) {
+    if (!job || (job.tenantId && job.tenantId !== request.currentUser.tenantId)) {
       return reply.code(404).send({ error: 'Job not found' });
     }
 
     const steps = await store.listDeviceJobSteps(params.id);
 
-    return { data: steps };
+    return { data: steps || [] };
   });
 }

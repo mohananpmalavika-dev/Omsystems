@@ -316,9 +316,11 @@ export class EdgeAgentRepository {
   async claimScanJob(edgeAgentId: string) {
     const result = await this.pool.query<ScanRow>(
       `WITH next_job AS (
-         SELECT id FROM edge_scan_jobs
-         WHERE edge_agent_id = $1 AND status = 'queued'
-         ORDER BY requested_at
+         SELECT job.id FROM edge_scan_jobs job
+         JOIN edge_agents agent ON agent.id = $1::uuid
+         WHERE (job.edge_agent_id = agent.id OR job.branch_node_id = agent.branch_node_id)
+           AND job.status = 'queued'
+         ORDER BY job.requested_at
          FOR UPDATE SKIP LOCKED LIMIT 1
        )
        UPDATE edge_scan_jobs job
@@ -525,7 +527,7 @@ export class EdgeAgentRepository {
              discovered_at = now()
          RETURNING id::text, discovered_at, status`,
         [branchId, input.edgeAgentId, identity.deviceIdentityId,
-         input.discoveryMethod, input.manufacturer ?? input.vendor, input.vendor,
+         normalizeCameraDiscoveryMethod(input.discoveryMethod), input.manufacturer ?? input.vendor, input.vendor,
          input.model, input.ipAddress, normalizedMac,
          input.onvifEndpointReference ?? null, onvifUuid ?? null,
          input.certificateRef ?? null, input.certificateFingerprint ?? null,
@@ -671,4 +673,20 @@ export class EdgeAgentRepository {
       status: row.status as "pending" | "approved" | "rejected",
     }));
   }
+}
+
+function normalizeCameraDiscoveryMethod(method?: string): string {
+  const allowed = new Set([
+    "onvif-ws-discovery",
+    "configured-ip-range",
+    "manual-ip-registration",
+    "csv-bulk-import",
+    "nvr-dvr-channel-discovery",
+    "vendor-api-discovery",
+    "snmp-discovery",
+    "edge-agent-reported-inventory",
+  ]);
+  if (!method) return "edge-agent-reported-inventory";
+  if (method === "rtsp-network-scan") return "configured-ip-range";
+  return allowed.has(method) ? method : "edge-agent-reported-inventory";
 }

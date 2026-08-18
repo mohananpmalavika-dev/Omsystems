@@ -25,12 +25,10 @@ const schema = z.object({
   RTSP_SCAN_PORTS: z.string().default("554,8554"),
   // Comma-separated list of common RTSP path suffixes to try
   RTSP_SCAN_PATHS: z.string().default("/,/stream,/h264,/live.sdp,/mpeg4,/Streaming/Channels/101,/cam/realmonitor?channel=1&subtype=1,/cam/realmonitor?channel=1&subtype=0"),
-  // Concurrency for the active TCP/connect+probe scanner
-  RTSP_SCAN_CONCURRENCY: z.coerce.number().int().min(1).max(500).default(50),
+  // Concurrency for the active TCP/connect+probe scanner (kept low to protect home/SOHO routers)
+  RTSP_SCAN_CONCURRENCY: z.coerce.number().int().min(1).max(50).default(4),
   // Timeout for individual RTSP probe/connect attempts (ms)
-  // DVRs often need several seconds to authenticate and deliver the first
-  // keyframe. A short timeout makes valid saved credentials look rejected.
-  RTSP_SCAN_TIMEOUT_MS: z.coerce.number().int().min(250).max(30_000).default(8000),
+  RTSP_SCAN_TIMEOUT_MS: z.coerce.number().int().min(250).max(10_000).default(3000),
   LIVE_MEDIA_ENABLED: z.enum(["true", "false"]).default("false").transform((value) => value === "true"),
   EDGE_MANAGED_MEDIA_BOOTSTRAP: z.enum(["true", "false"]).default("false").transform((value) => value === "true"),
   EDGE_LIVE_GATEWAY_HOST: z.string().default("127.0.0.1"),

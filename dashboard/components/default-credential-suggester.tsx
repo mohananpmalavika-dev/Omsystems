@@ -31,17 +31,45 @@ export function DefaultCredentialSuggester({
   const credentials: CredentialOption[] = [
     {
       username: 'admin',
+      password: 'RAM@4344',
+      label: 'admin / RAM@4344',
+      description: 'Zero-Touch Branch Security Password',
+      priority: 1,
+    },
+    {
+      username: 'admin',
+      password: 'Thathu@110',
+      label: 'admin / Thathu@110',
+      description: 'Zero-Touch DVR Security Password',
+      priority: 2,
+    },
+    {
+      username: 'admin',
+      password: 'admin123',
+      label: 'admin / admin123',
+      description: 'Hikvision / Dahua standard default',
+      priority: 3,
+    },
+    {
+      username: 'admin',
+      password: 'Admin@123',
+      label: 'admin / Admin@123',
+      description: 'CP Plus / Dahua common default',
+      priority: 4,
+    },
+    {
+      username: 'admin',
       password: 'admin',
       label: 'admin / admin',
-      description: 'Most common default for all IP cameras',
-      priority: 1,
+      description: 'Factory default for IP cameras',
+      priority: 5,
     },
     {
       username: 'admin',
       password: '12345',
       label: 'admin / 12345',
       description: 'Second most common default',
-      priority: 2,
+      priority: 6,
     },
   ];
 

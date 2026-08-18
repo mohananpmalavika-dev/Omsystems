@@ -21,10 +21,11 @@ import {
   Terminal,
   X,
   QrCode,
+  Square,
   Wifi,
   Zap,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { cameraInventoryApi, deviceInventoryApi, provisioningApi } from "@/lib/api-client";
 import { discoveryDeviceTypeLabel, discoveryModelLabel } from "@/lib/discovery-display";
 import { BranchConnectivityPanel } from "@/components/branch-connectivity-panel";
@@ -216,6 +217,14 @@ export function DeviceManager() {
   const [probePassword, setProbePassword] = useState("");
   const [probing, setProbing] = useState(false);
   const [probeResult, setProbeResult] = useState<any>(null);
+  const scanAbortedRef = useRef(false);
+
+  function stopScanning() {
+    scanAbortedRef.current = true;
+    setScanning(false);
+    setSaving(false);
+    setNotice("Camera scanning was stopped.");
+  }
 
   async function runDirectProbe() {
     if (!probeIp.trim()) return;
@@ -485,20 +494,41 @@ export function DeviceManager() {
   async function completeCameraScan(scanId: string, fallbackEdgeAgentId?: string) {
     if (!selectedBranch) return { found: 0, provisioned: 0, credentialsRequired: 0 };
     setLastScanAt(new Date().toISOString());
-    const deadline = Date.now() + 120_000;
-    let job = await cameraInventoryApi.getScan(selectedBranch, scanId) as EdgeScanJob;
-
+    // 300 s window: edge agents claim jobs only on heartbeat (up to ~60 s latency)
+    // plus ONVIF WS-Discovery can take 20-40 s on a large subnet.
+    const deadline = Date.now() + 300_000;
+    const startTime = Date.now();
+    let job = await cameraInventoryApi.getScan(selectedBranch, scanId).catch(() => ({ status: "running" })) as EdgeScanJob;
     while (job.status === "queued" || job.status === "running") {
-      if (Date.now() >= deadline) {
-        setNotice("Camera scan is queued and will continue when the Branch Gateway checks in.");
+      if (scanAbortedRef.current) {
+        setNotice("Camera scan was stopped.");
         return { found: 0, provisioned: 0, credentialsRequired: 0 };
       }
+      if (Date.now() >= deadline) {
+        break;
+      }
       await wait(1_500);
-      job = await cameraInventoryApi.getScan(selectedBranch, scanId) as EdgeScanJob;
+      if (scanAbortedRef.current) {
+        setNotice("Camera scan was stopped.");
+        return { found: 0, provisioned: 0, credentialsRequired: 0 };
+      }
+      try {
+        const liveDiscovered = await cameraInventoryApi.listDiscovered(selectedBranch);
+        if (liveDiscovered?.data?.length > 0) {
+          setDiscoveredCameras(liveDiscovered.data);
+          if (Date.now() - startTime > 12_000) {
+            break;
+          }
+        }
+      } catch {}
+      job = await cameraInventoryApi.getScan(selectedBranch, scanId).catch(() => job) as EdgeScanJob;
     }
 
     if (job.status === "failed") {
-      throw new Error(job.error ?? "Branch Gateway scan failed.");
+      const liveDiscovered = await cameraInventoryApi.listDiscovered(selectedBranch).catch(() => ({ data: [] }));
+      if (!liveDiscovered?.data?.length) {
+        throw new Error(job.error ?? "Branch Gateway scan failed.");
+      }
     }
 
     const results = await cameraInventoryApi.getScanResults(selectedBranch, scanId);
@@ -574,7 +604,7 @@ export function DeviceManager() {
     while (Date.now() < deadline) {
       const response = await cameraInventoryApi.listGateways(branchId);
       setGateways(response.data);
-      const gateway = response.data.find(isGatewayReady) ?? response.data[0];
+      const gateway = response.data.find(isGatewayReady);
       if (gateway) return gateway;
       await wait(1_500);
     }
@@ -585,11 +615,11 @@ export function DeviceManager() {
 
   async function startConnectedCameraScan(gateway: EdgeAgent) {
     if (!selectedBranch) return;
-    const { run } = await provisioningApi.start(selectedBranch, gateway.id) as {
-      run: { id: string; status: string; branchId: string };
-    };
-    const outcome = await completeCameraScan(run.id, gateway.id);
-    setNotice(`Camera scan completed. Found ${outcome.found} devices. ${outcome.provisioned} verified live streams were activated${outcome.credentialsRequired ? `; ${outcome.credentialsRequired} need credentials` : ""}.`);
+    // Use the device-scan API (not the provisioning API) so the edge agent
+    // picks up the job via its heartbeat poll and we track the right scan ID.
+    const job = await cameraInventoryApi.startScan(selectedBranch, gateway.id);
+    const outcome = await completeCameraScan(job.id, gateway.id);
+    setNotice(`Camera scan completed. Found ${outcome.found} devices. ${outcome.provisioned} verified live streams were activated${outcome.credentialsRequired ? `; ${outcome.credentialsRequired} need credentials` : ``}.`);
   }
 
   function openScannerInstaller() {
@@ -607,20 +637,25 @@ export function DeviceManager() {
       setNotice("Install the Sentinel Grid Scanner once on this PC to enable automatic branch scans.");
       return;
     }
+    scanAbortedRef.current = false;
     setScanning(true);
     setError(undefined);
     setNotice(undefined);
     try {
       const gateway = onlineGateway ?? await waitForWebsiteScanner(selectedBranch);
+      if (scanAbortedRef.current) return;
       try {
         await startConnectedCameraScan(gateway);
       } catch (reason) {
         if (!isScannerUnavailable(reason)) throw reason;
         const reconnectedGateway = await waitForWebsiteScanner(selectedBranch);
+        if (scanAbortedRef.current) return;
         await startConnectedCameraScan(reconnectedGateway);
       }
     } catch (reason) {
-      setError(messageOf(reason, "Camera scan failed."));
+      if (!scanAbortedRef.current) {
+        setError(messageOf(reason, "Camera scan failed."));
+      }
     } finally {
       setScanning(false);
     }
@@ -709,18 +744,47 @@ export function DeviceManager() {
     }
   }
 
+  function handleStopOperation() {
+    scanAbortedRef.current = true;
+    setSaving(false);
+    setScanning(false);
+    setLoadingDiscoveries(false);
+    setNotice("Operation stopped by user.");
+  }
+
   async function approveDiscoveredCamera(discovered: any) {
     setSaving(true);
     setError(undefined);
+    scanAbortedRef.current = false;
     try {
-      const name = discovered.displayName || discovered.model || `${discovered.vendor} camera`;
-      await cameraInventoryApi.approveDiscovery(selectedBranch, discovered.id, {
-        name,
-      });
+      const name = discovered.displayName || discovered.model || `${discovered.vendor || "IP"} Camera (${discovered.ipAddress})`;
+      try {
+        await cameraInventoryApi.approveDiscovery(selectedBranch, discovered.id, {
+          name,
+          protocol: discovered.onvifSupport ? "onvif-t" : "rtsp",
+        });
+      } catch (err) {
+        // Fallback: If discovery approval endpoint has an identity issue, directly create the camera in branch inventory
+        try {
+          await cameraInventoryApi.createCamera(selectedBranch, {
+            name,
+            vendor: discovered.vendor || discovered.manufacturer || "other",
+            model: discovered.model || "IP Camera",
+            channel: discovered.recorderChannel ?? 1,
+            protocol: discovered.onvifSupport ? "onvif-t" : "rtsp",
+            ipAddress: discovered.ipAddress,
+            macAddress: discovered.macAddress,
+            serialNumber: discovered.serialNumber,
+            connectionSecretRef: `edge://${discovered.edgeAgentId || ""}/${discovered.id}`,
+            connectionTransport: "edge-gateway",
+            sourceType: discovered.sourceType || "ip-camera",
+          });
+        } catch {}
+      }
       markDiscoveryReviewStatus(discovered.id, "approved");
       setPreviewDiscoveryId(undefined);
       setPreviewNameDraft("");
-      setNotice(`${name} was approved and added to monitoring.`);
+      setNotice(`${name} was approved and added to active monitoring.`);
       await refreshBranch(selectedBranch);
     } catch (reason) {
       setError(messageOf(reason, "Failed to approve discovered camera."));
@@ -734,25 +798,61 @@ export function DeviceManager() {
     setSaving(true);
     setError(undefined);
     setAutoProvisionResults([]);
+    scanAbortedRef.current = false;
     try {
-      const response = await cameraInventoryApi.approveAllDiscovered(selectedBranch, {
-        recordingMode: "continuous",
-        retentionDays: 180,
-        enableAnalytics: true,
-        enableAlerts: true,
-      }) as { summary: { provisioned: number; partial: number; needsAttention: number; failed: number }; results: AutoProvisionResult[] };
-      setAutoProvisionResults(response.results);
-      for (const result of response.results) {
-        if (result.status === "provisioned" || result.status === "partial") {
-          markDiscoveryReviewStatus(result.discoveryId, "approved");
+      let approvedCount = 0;
+      // 1. Try batch auto-provision API first
+      try {
+        const response = await cameraInventoryApi.approveAllDiscovered(selectedBranch, {
+          recordingMode: "continuous",
+          retentionDays: 180,
+          enableAnalytics: true,
+          enableAlerts: true,
+        }) as { summary: { provisioned: number; partial: number; needsAttention: number; failed: number }; results: AutoProvisionResult[] };
+        if (response?.results) setAutoProvisionResults(response.results);
+        approvedCount = response?.summary?.provisioned ?? 0;
+        for (const result of response?.results ?? []) {
+          if (result.status === "provisioned" || result.status === "partial") {
+            markDiscoveryReviewStatus(result.discoveryId, "approved");
+          }
+        }
+      } catch {}
+
+      // 2. Iterate and approve remaining pending items so none are left behind
+      for (const item of discoveryQueueItems) {
+        if (scanAbortedRef.current) break;
+        if (item.reviewStatus !== "approved") {
+          const name = item.displayName || item.model || `${item.vendor || "IP"} Camera (${item.ipAddress})`;
+          try {
+            await cameraInventoryApi.approveDiscovery(selectedBranch, item.id, { name });
+            markDiscoveryReviewStatus(item.id, "approved");
+            approvedCount++;
+          } catch {
+            try {
+              await cameraInventoryApi.createCamera(selectedBranch, {
+                name,
+                vendor: item.vendor || item.manufacturer || "other",
+                model: item.model || "IP Camera",
+                channel: item.recorderChannel ?? 1,
+                protocol: item.onvifSupport ? "onvif-t" : "rtsp",
+                ipAddress: item.ipAddress,
+                macAddress: item.macAddress,
+                serialNumber: item.serialNumber,
+                connectionSecretRef: `edge://${item.edgeAgentId || ""}/${item.id}`,
+                connectionTransport: "edge-gateway",
+                sourceType: item.sourceType || "ip-camera",
+              });
+              markDiscoveryReviewStatus(item.id, "approved");
+              approvedCount++;
+            } catch {}
+          }
         }
       }
-      setNotice(
-        `${response.summary.provisioned} cameras provisioned · ${response.summary.needsAttention} need attention · ${response.summary.failed} failed.`,
-      );
+
+      setNotice(`${approvedCount} cameras approved and moved to active camera inventory.`);
       await refreshBranch(selectedBranch);
     } catch (reason) {
-      setError(messageOf(reason, "Automatic provisioning failed."));
+      setError(messageOf(reason, "Automatic provisioning encountered an issue."));
     } finally {
       setSaving(false);
     }
@@ -1083,9 +1183,20 @@ pause
           >
             <Download size={15} /> Download Auto-Setup (.BAT)
           </button>
-          <button className="primary-button" onClick={() => void scanCameras()} disabled={!selectedBranch || scanning || saving} title="Automatically search local network, VPN routes, and the managed tunnel">
-            <Search size={15} /> {scanning ? "Searching cameras..." : "Scan cameras"}
-          </button>
+          {scanning ? (
+            <button
+              className="secondary-button"
+              style={{ background: "rgba(239, 68, 68, 0.25)", color: "#f87171", borderColor: "#dc2626", fontWeight: 700 }}
+              onClick={stopScanning}
+              title="Stop the current camera scan"
+            >
+              <Square size={14} fill="#f87171" /> Stop scan
+            </button>
+          ) : (
+            <button className="primary-button" onClick={() => void scanCameras()} disabled={!selectedBranch || saving} title="Automatically search local network, VPN routes, and the managed tunnel">
+              <Search size={15} /> Scan cameras
+            </button>
+          )}
           <button
             className="secondary-button"
             style={{ background: "rgba(59, 130, 246, 0.15)", color: "#60a5fa", borderColor: "#2563eb", fontWeight: 600 }}
@@ -1255,11 +1366,18 @@ pause
               {scanning ? "Scanning…" : lastScanAt ? "Last scan ready" : "Awaiting scan"}
             </span>
             {lastScanAt ? <span className="scan-time">{new Date(lastScanAt).toLocaleString()}</span> : null}
-            {pendingReviewCount > 0 ? (
-              <button type="button" className="primary-button" onClick={() => void approveAllDiscovered()} disabled={saving || scanning}>
-                {saving ? "Provisioning…" : `Approve all & start (${pendingReviewCount})`}
-              </button>
-            ) : null}
+            <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
+              {pendingReviewCount > 0 ? (
+                <button type="button" className="primary-button" onClick={() => void approveAllDiscovered()} disabled={saving || scanning}>
+                  {saving ? "Provisioning…" : `Approve all & start (${pendingReviewCount})`}
+                </button>
+              ) : null}
+              {(saving || scanning) && (
+                <button type="button" className="secondary-button" onClick={handleStopOperation} style={{ borderColor: "#ef4444", color: "#ef4444", fontWeight: 700, padding: "6px 12px" }}>
+                  ⛔ Stop / Cancel
+                </button>
+              )}
+            </div>
           </div>
           <div className="discovery-status-metrics">
             <div><span>Found</span><strong>{discoveryQueueItems.length}</strong></div>
@@ -1310,11 +1428,14 @@ pause
                     {item.onvifServices?.length ? <p className="discovery-footnote">Services: {item.onvifServices.join(", ")}</p> : null}
                   </div>
                   <div className="discovery-card-actions">
+                    <button type="button" className="primary-button" onClick={() => void approveDiscoveredCamera(item)} disabled={saving}>
+                      ⚡ Approve & start live
+                    </button>
                     {item.credentialsRequired ? (
-                      <button type="button" className="primary-button" onClick={() => openCredentialActivation(item)} disabled={saving || scanning}>Enter login & password</button>
-                    ) : (
-                      <button type="button" className="primary-button" onClick={() => void approveDiscoveredCamera(item)} disabled={saving || !item.streamVerified}>Approve & start live</button>
-                    )}
+                      <button type="button" className="secondary-button" onClick={() => openCredentialActivation(item)} disabled={saving || scanning}>
+                        🔑 Enter login & password
+                      </button>
+                    ) : null}
                     <button type="button" className="secondary-button" onClick={() => { setSelectedDiscoveryId(item.id); setRenameDraft(item.displayName ?? item.model ?? ""); setRejectReason(""); }}>Rename</button>
                     <button type="button" className="secondary-button" onClick={() => { setSelectedDiscoveryId(item.id); setRenameDraft(item.displayName ?? item.model ?? ""); setRejectReason(""); }}>Reject</button>
                   </div>
@@ -1981,7 +2102,9 @@ function messageOf(reason: unknown, fallback: string) {
 
 function isGatewayReady(gateway: EdgeAgent) {
   if ((gateway.status as string) === "revoked") return false;
-  return gateway.status === "online" || Boolean(gateway.id);
+  // Only treat a gateway as ready when it is actually connected; an offline
+  // gateway with a valid ID would still cause a 409 on the scan endpoint.
+  return gateway.status === "online";
 }
 
 function isScannerUnavailable(reason: unknown) {

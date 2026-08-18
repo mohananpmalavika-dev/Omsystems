@@ -91,7 +91,7 @@ export function observationFromApproval(input: CameraApprovalInput): DeviceIdent
 
 export function identityClaims(observation: DeviceIdentityObservation): DeviceIdentityClaim[] {
   const claims: DeviceIdentityClaim[] = [];
-  const channelSuffix = observation.deviceType !== "ip-camera" && observation.channel && observation.channel > 0
+  const channelSuffix = observation.channel && observation.channel > 0
     ? `|channel|${observation.channel}`
     : "";
   const recorderSerial = nonEmpty(observation.dvrSerialNumber)?.toUpperCase();

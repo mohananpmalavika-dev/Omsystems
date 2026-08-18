@@ -197,7 +197,7 @@ export async function autoProvisionVerifiedCameras(
     try {
       const name = discovered.displayName || discovered.model || `${discovered.vendor} camera`;
       const sourceConnection = await discoveryConnection(store, branchId, discovered);
-      const camera = await store.approveCamera(branchId, {
+      let camera = await store.approveCamera(branchId, {
         discoveryId: discovered.id,
         name,
         protocol: cameraProtocol(discovered),
@@ -216,21 +216,46 @@ export async function autoProvisionVerifiedCameras(
         recorderId: discovered.recorderId,
         recorderChannel: discovered.recorderChannel,
         recorderSerialNumber: discovered.recorderSerialNumber,
-      });
+      }).catch(() => undefined);
+
+      if (!camera) {
+        camera = await store.createCameraFromManualRegistration(branchId, {
+          discoveryId: discovered.id,
+          name,
+          protocol: cameraProtocol(discovered),
+          channel: discovered.recorderChannel ?? 1,
+          connectionSecretRef: sourceConnection.connectionSecretRef,
+          ...(sourceConnection.connectionTransport ? { connectionTransport: sourceConnection.connectionTransport } : {}),
+          model: discovered.model || "IP Camera",
+          serialNumber: discovered.serialNumber,
+          macAddress: discovered.macAddress,
+          ipAddress: discovered.ipAddress,
+          sourceType: discovered.sourceType || "ip-camera",
+        }).catch(() => undefined);
+      }
+
       if (!camera) throw new Error("Failed to approve discovered camera");
 
-      await store.upsertRecordingJob(
-        camera.id,
-        defaultRecordingJob(recordingMode, retentionDays, isRecorderBacked(discovered)),
-      );
+      try {
+        await store.upsertRecordingJob(
+          camera.id,
+          defaultRecordingJob(recordingMode, retentionDays, isRecorderBacked(discovered)),
+        );
+      } catch (recErr) {
+        console.warn(`Recording job configuration deferred for camera ${camera.id}:`, recErr);
+      }
 
       if (analyticsEnabled) {
-        await ensureCameraAiBundle(
-          store,
-          branch.tenantId,
-          camera.id,
-          alertsEnabled ? options.createdBy : undefined,
-        );
+        try {
+          await ensureCameraAiBundle(
+            store,
+            branch.tenantId,
+            camera.id,
+            alertsEnabled ? options.createdBy : undefined,
+          );
+        } catch (bundleErr) {
+          console.warn(`AI bundle configuration deferred for camera ${camera.id}:`, bundleErr);
+        }
       }
 
       // Discover capabilities if registry provided

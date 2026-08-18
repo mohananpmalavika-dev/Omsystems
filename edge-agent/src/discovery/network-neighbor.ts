@@ -33,3 +33,35 @@ export function parseNeighborMac(value: string) {
     ? undefined
     : normalized;
 }
+
+export async function detectDefaultGatewayIps(): Promise<string[]> {
+  const gateways = new Set<string>();
+  const isWindows = process.platform === "win32";
+
+  try {
+    if (isWindows) {
+      const { stdout } = await execFileAsync("route", ["print", "0.0.0.0"], {
+        timeout: 2_000,
+        windowsHide: true,
+      });
+      // Match lines like: 0.0.0.0          0.0.0.0      192.168.29.1     192.168.29.155
+      const matches = stdout.matchAll(/0\.0\.0\.0\s+0\.0\.0\.0\s+(\d{1,3}(?:\.\d{1,3}){3})/g);
+      for (const match of matches) {
+        if (match[1] && !match[1].startsWith("127.")) {
+          gateways.add(match[1]);
+        }
+      }
+    } else {
+      const { stdout } = await execFileAsync("ip", ["route", "show", "default"], {
+        timeout: 2_000,
+      });
+      // Match: default via 192.168.1.1 dev eth0
+      const match = stdout.match(/default\s+via\s+(\d{1,3}(?:\.\d{1,3}){3})/);
+      if (match?.[1]) gateways.add(match[1]);
+    }
+  } catch {
+    // Non-fatal if command fails
+  }
+
+  return [...gateways];
+}
