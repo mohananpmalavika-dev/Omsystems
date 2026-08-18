@@ -9,6 +9,7 @@ import {
   Play,
   RefreshCw,
   ShieldCheck,
+  Square,
   XCircle,
   Zap,
 } from "lucide-react";
@@ -199,11 +200,21 @@ export function ProvisioningRun({
             </button>
           ) : null}
 
+          {run?.status === "running" || run?.status === "queued" || refreshing ? (
+            <button
+              className="secondary-button"
+              style={{ background: "rgba(239, 68, 68, 0.2)", color: "#f87171", borderColor: "#dc2626", fontWeight: 600 }}
+              onClick={() => { setNotice("Provisioning stopped."); setRun((curr) => curr ? { ...curr, status: "active" } : undefined); }}
+              title="Stop current provisioning run"
+            >
+              <Square size={13} fill="#f87171" /> Stop Provisioning
+            </button>
+          ) : null}
           {run?.status === "waiting_for_input" ? <button className="primary-button" onClick={onProvideCredentials}>Provide credentials</button> : null}
           {run?.canSkipCredentialResolution ? <button className="secondary-button" disabled={skippingCredentials} onClick={() => void skipUnavailableCredentials()}>{skippingCredentials ? "Skipping…" : "Skip unavailable devices"}</button> : null}
           {run?.status === "awaiting_evidence" ? <button className="primary-button" onClick={onStart} disabled={refreshing}>{refreshing ? "Checking…" : "Recheck verification"}</button> : null}
           {run?.status === "failed" || run?.status === "blocked" ? <button className="secondary-button" disabled={retrying} onClick={() => void retry()}><RefreshCw size={14}/>{retrying ? "Retrying..." : "Retry run"}</button> : null}
-          {!run || run.status === "not_started" || run.status === "active" ? <button className="primary-button" onClick={onStart} disabled={refreshing}>{refreshing ? "Starting..." : run?.status === "active" ? "Run again" : "Start provisioning"}</button> : null}
+          {(!run || run.status === "not_started" || run.status === "active") && !refreshing ? <button className="primary-button" onClick={onStart} disabled={refreshing}>{run?.status === "active" ? "Run again" : "Start provisioning"}</button> : null}
         </div>
       </div>
 

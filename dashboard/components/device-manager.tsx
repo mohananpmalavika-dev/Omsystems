@@ -21,10 +21,11 @@ import {
   Terminal,
   X,
   QrCode,
+  Square,
   Wifi,
   Zap,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { cameraInventoryApi, deviceInventoryApi, provisioningApi } from "@/lib/api-client";
 import { discoveryDeviceTypeLabel, discoveryModelLabel } from "@/lib/discovery-display";
 import { BranchConnectivityPanel } from "@/components/branch-connectivity-panel";
@@ -216,6 +217,14 @@ export function DeviceManager() {
   const [probePassword, setProbePassword] = useState("");
   const [probing, setProbing] = useState(false);
   const [probeResult, setProbeResult] = useState<any>(null);
+  const scanAbortedRef = useRef(false);
+
+  function stopScanning() {
+    scanAbortedRef.current = true;
+    setScanning(false);
+    setSaving(false);
+    setNotice("Camera scanning was stopped.");
+  }
 
   async function runDirectProbe() {
     if (!probeIp.trim()) return;
@@ -489,11 +498,19 @@ export function DeviceManager() {
     let job = await cameraInventoryApi.getScan(selectedBranch, scanId) as EdgeScanJob;
 
     while (job.status === "queued" || job.status === "running") {
+      if (scanAbortedRef.current) {
+        setNotice("Camera scan was stopped.");
+        return { found: 0, provisioned: 0, credentialsRequired: 0 };
+      }
       if (Date.now() >= deadline) {
         setNotice("Camera scan is queued and will continue when the Branch Gateway checks in.");
         return { found: 0, provisioned: 0, credentialsRequired: 0 };
       }
       await wait(1_500);
+      if (scanAbortedRef.current) {
+        setNotice("Camera scan was stopped.");
+        return { found: 0, provisioned: 0, credentialsRequired: 0 };
+      }
       job = await cameraInventoryApi.getScan(selectedBranch, scanId) as EdgeScanJob;
     }
 
@@ -607,20 +624,25 @@ export function DeviceManager() {
       setNotice("Install the Sentinel Grid Scanner once on this PC to enable automatic branch scans.");
       return;
     }
+    scanAbortedRef.current = false;
     setScanning(true);
     setError(undefined);
     setNotice(undefined);
     try {
       const gateway = onlineGateway ?? await waitForWebsiteScanner(selectedBranch);
+      if (scanAbortedRef.current) return;
       try {
         await startConnectedCameraScan(gateway);
       } catch (reason) {
         if (!isScannerUnavailable(reason)) throw reason;
         const reconnectedGateway = await waitForWebsiteScanner(selectedBranch);
+        if (scanAbortedRef.current) return;
         await startConnectedCameraScan(reconnectedGateway);
       }
     } catch (reason) {
-      setError(messageOf(reason, "Camera scan failed."));
+      if (!scanAbortedRef.current) {
+        setError(messageOf(reason, "Camera scan failed."));
+      }
     } finally {
       setScanning(false);
     }
@@ -1083,9 +1105,20 @@ pause
           >
             <Download size={15} /> Download Auto-Setup (.BAT)
           </button>
-          <button className="primary-button" onClick={() => void scanCameras()} disabled={!selectedBranch || scanning || saving} title="Automatically search local network, VPN routes, and the managed tunnel">
-            <Search size={15} /> {scanning ? "Searching cameras..." : "Scan cameras"}
-          </button>
+          {scanning ? (
+            <button
+              className="secondary-button"
+              style={{ background: "rgba(239, 68, 68, 0.25)", color: "#f87171", borderColor: "#dc2626", fontWeight: 700 }}
+              onClick={stopScanning}
+              title="Stop the current camera scan"
+            >
+              <Square size={14} fill="#f87171" /> Stop scan
+            </button>
+          ) : (
+            <button className="primary-button" onClick={() => void scanCameras()} disabled={!selectedBranch || saving} title="Automatically search local network, VPN routes, and the managed tunnel">
+              <Search size={15} /> Scan cameras
+            </button>
+          )}
           <button
             className="secondary-button"
             style={{ background: "rgba(59, 130, 246, 0.15)", color: "#60a5fa", borderColor: "#2563eb", fontWeight: 600 }}
