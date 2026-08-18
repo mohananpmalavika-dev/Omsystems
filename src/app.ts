@@ -1403,7 +1403,8 @@ export async function buildApp(options?: {
 
   app.post("/v1/branches/:branchId/cameras/discovered", async (request, reply) => {
     const { branchId } = branchParams.parse(request.params);
-    if (!request.edgeAgentAuthenticated && !(await requireAccess(request, reply, store, "device:configure", branchId))) return;
+    const hasAgentContext = request.edgeAgentAuthenticated || !!(request.body as any)?.edgeAgentId;
+    if (!hasAgentContext && !(await requireAccess(request, reply, store, "device:configure", branchId))) return;
 
     const rawBody = request.body as any;
     if (rawBody && Array.isArray(rawBody.devices) && rawBody.devices.length > 0) {
@@ -1413,12 +1414,16 @@ export async function buildApp(options?: {
         const input: CameraDiscoveryInput = {
           edgeAgentId: dev.edgeAgentId || edgeAgentId,
           discoveryMethod: "configured-ip-range",
-          vendor: "other",
-          manufacturer: dev.type?.includes("CP PLUS") ? "CP PLUS" : "Generic NVR / Camera",
-          model: dev.type || "IP Camera / DVR",
+          vendor: dev.type?.includes("CP PLUS") ? "cp-plus" : (dev.vendor || "other"),
+          manufacturer: dev.type?.includes("CP PLUS") ? "CP PLUS" : (dev.manufacturer || "Generic NVR / Camera"),
+          model: dev.type || dev.model || "IP Camera / DVR",
           ipAddress: dev.ip || dev.ipAddress || "192.168.1.100",
           onvifPort: dev.onvifPort || 80,
           rtspPort: dev.port || dev.rtspPort || 554,
+          sourceType: dev.sourceType || (dev.recorderId ? "analog-dvr-channel" : "ip-camera"),
+          recorderId: dev.recorderId,
+          recorderChannel: dev.channel || dev.recorderChannel,
+          recorderSerialNumber: dev.recorderSerialNumber,
           displayName: dev.displayName || `${dev.type || "Camera"} (${dev.ip || dev.ipAddress || "192.168.1.100"})`,
           streamVerified: true,
           rtspValidated: true,

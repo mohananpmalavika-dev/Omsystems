@@ -655,8 +655,10 @@ export class CameraRepository {
     const route = await this.pool.query<{ public_media_url: string | null }>(
       `SELECT agent.public_media_url
        FROM cameras camera
-       LEFT JOIN edge_agents agent ON agent.id = camera.edge_agent_id
-       WHERE camera.id = $1`,
+       LEFT JOIN edge_agents agent ON (agent.id = camera.edge_agent_id OR agent.branch_node_id = camera.branch_node_id)
+       WHERE camera.id = $1
+       ORDER BY (agent.status = 'online') DESC, agent.last_seen_at DESC NULLS LAST
+       LIMIT 1`,
       [cameraId],
     );
     const mediaGatewayUrl = route.rows[0]?.public_media_url ?? undefined;
