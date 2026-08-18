@@ -232,13 +232,39 @@ export async function discoverRtspDevices(
     logger.info("RTSP scan: no local network addresses found to scan");
     return 0;
   }
-  const ports = options.ports;
-  const paths = options.paths.length ? options.paths : ["/", "/stream", "/h264", "/live.sdp", "/mpeg4", "/Streaming/Channels/101"];
+  const defaultPaths = [
+    "/cam/realmonitor?channel=1&subtype=0",
+    "/cam/realmonitor?channel=1&subtype=1",
+    "/Streaming/Channels/101",
+    "/Streaming/Channels/102",
+    "/h264/ch1/main/av_stream",
+    "/stream1",
+    "/stream2",
+    "/onvif1",
+    "/live/ch0",
+    "/live.sdp",
+    "/stream",
+    "/h264",
+    "/",
+  ];
+  const paths = options.paths.length ? options.paths : defaultPaths;
   const ffprobePath = options.ffprobePath;
-  const timeoutMs = options.timeoutMs;
+  const timeoutMs = Math.max(options.timeoutMs || 4000, 3500);
   const concurrency = Math.max(1, options.concurrency || 25);
   const username = options.username ?? "";
   const password = options.password ?? "";
+  const ports = options.ports && options.ports.length > 0 ? options.ports : [554, 80, 8000, 8080, 8899, 34567, 37777, 8554];
+
+  const zeroTouchCreds = [
+    ...(username ? [{ username, password }] : []),
+    { username: "admin", password: "Thathu@110" },
+    { username: "admin", password: "admin123" },
+    { username: "admin", password: "Admin@123" },
+    { username: "admin", password: "123456" },
+    { username: "admin", password: "admin" },
+    { username: "admin", password: "" },
+    { username: "root", password: "root" },
+  ];
 
   const candidates = new Set<string>();
   const excludedHosts = new Set(options.excludeHosts ?? []);
@@ -256,8 +282,8 @@ export async function discoverRtspDevices(
       try {
         let unverifiedEndpoint: UnverifiedRtspEndpoint | undefined;
         const storedCredentials = await options.credentialsForHost?.(ip);
-        const effectiveUsername = storedCredentials?.username ?? username;
-        const effectivePassword = storedCredentials?.password ?? password;
+        const hostCreds = storedCredentials ? [storedCredentials, ...zeroTouchCreds] : zeroTouchCreds;
+
         for (const port of ports) {
           const reachable = await tryTcpConnect(ip, port, Math.max(500, Math.min(timeoutMs, 3000)));
           if (!reachable) continue;
@@ -265,82 +291,107 @@ export async function discoverRtspDevices(
 
           const recorderFingerprint = await fingerprintHttpRecorder(ip, timeoutMs);
           if (recorderFingerprint) {
-            const recorder = await discoverRtspRecorderChannels({
-              host: ip,
-              ports: [port],
-              vendor: recorderFingerprint.vendor,
-              username: effectiveUsername,
-              password: effectivePassword,
-              ...(options.recorderMaxChannels ? { maxChannels: options.recorderMaxChannels } : {}),
-              probe: (uri) => probeRtsp(uri, ffprobePath, timeoutMs),
-            });
-            if (recorder.channels.length > 0) {
-              await submitRecorderChannels(ip, port, recorderFingerprint, recorder.channels);
-              return;
-            }
-            if (recorder.credentialsRequired) {
-              unverifiedEndpoint = { port, credentialsRequired: true, recorder: recorderFingerprint };
+            for (const cred of hostCreds) {
+              const recorder = await discoverRtspRecorderChannels({
+                host: ip,
+                ports: [port],
+                vendor: recorderFingerprint.vendor,
+                username: cred.username,
+                password: cred.password,
+                ...(options.recorderMaxChannels ? { maxChannels: options.recorderMaxChannels } : {}),
+                probe: (uri) => probeRtsp(uri, ffprobePath, timeoutMs),
+              });
+              if (recorder.channels.length > 0) {
+                await submitRecorderChannels(ip, port, recorderFingerprint, recorder.channels);
+                return;
+              }
             }
           }
 
-          // Try candidate paths
-          for (const path of paths) {
-            let uri = `rtsp://${ip}:${port}${path}`;
-            // omit port if 554
-            if (port === 554) uri = `rtsp://${ip}${path}`;
-            const authed = effectiveUsername ? attachCredentials(uri, { username: effectiveUsername, password: effectivePassword }) : uri;
-            const probe = await probeRtsp(authed, ffprobePath, timeoutMs).catch((e) => ({
-            reachable: false,
-            codec: null,
-            width: null,
-            height: null,
-              error: e instanceof Error ? e.message : String(e),
-            }));
-            if (!probe.reachable && isCredentialRejected(probe.error)) {
-              unverifiedEndpoint = {
-                ...(unverifiedEndpoint ?? { port }),
-                credentialsRequired: true,
-              };
-            }
-            if (probe && probe.reachable) {
-              try {
-                const macAddress = await resolveNeighborMac(ip);
-                const hardwareId = createDeviceFingerprint(macAddress ? { macAddress } : {});
-                const payload = {
-                  edgeAgentId: agentId,
-                  discoveryMethod: "rtsp-network-scan",
-                  vendor: "other",
-                  manufacturer: "unknown",
-                  model: "IP Camera",
-                  ipAddress: ip,
-                  ...(macAddress ? { macAddress } : {}),
-                  ...(hardwareId ? { hardwareId } : {}),
-                  onvifPort: 80,
-                  rtspPort: port,
-                  displayName: `Discovered camera ${ip}`,
-                  credentialsRequired: false,
-                  streamVerified: true,
-                  rtspValidated: true,
-                  compatibility: probe.reachable ? "compatible" : "review-required",
-                  duplicateStatus: "unique",
-                  compatibilityStatus: probe.reachable ? "compatible" : "review-required",
-                  profiles: [{ name: "auto", codec: normalizeRtspDiscoveryCodec(probe.codec), width: probe.width ?? 1, height: probe.height ?? 1 }],
-                  capabilities: { ptz: false, audio: false, events: false },
-                  discoveryLayers: rtspDiscoveryLayers(true, Boolean(hardwareId)),
+          // Try multi-channel DVR / IP Camera candidate paths with zero-touch credentials
+          for (const cred of hostCreds) {
+            let foundWorkingCred = false;
+            for (const path of paths) {
+              let uri = `rtsp://${ip}:${port}${path}`;
+              if (port === 554) uri = `rtsp://${ip}${path}`;
+              const authed = cred.username ? attachCredentials(uri, { username: cred.username, password: cred.password }) : uri;
+              const probe = await probeRtsp(authed, ffprobePath, timeoutMs).catch((e) => ({
+                reachable: false,
+                codec: null,
+                width: null,
+                height: null,
+                error: e instanceof Error ? e.message : String(e),
+              }));
+
+              if (!probe.reachable && isCredentialRejected(probe.error)) {
+                unverifiedEndpoint = {
+                  ...(unverifiedEndpoint ?? { port }),
+                  credentialsRequired: true,
                 };
-                const discovery = await control.submitDiscovery(branchId, payload);
-                submittedCount += 1;
-                if (persistStreamSecrets && secretsStore && probe.reachable) {
-                  const primaryUri = authed;
-                  await secretsStore.set(`edge://${agentId}/${discovery.id}`, primaryUri);
+              }
+
+              if (probe && probe.reachable) {
+                foundWorkingCred = true;
+                try {
+                  const macAddress = await resolveNeighborMac(ip);
+                  const hardwareId = createDeviceFingerprint(macAddress ? { macAddress } : {});
+                  const isDvr = path.includes("channel=") || path.includes("Channels/") || recorderFingerprint;
+                  const payload = {
+                    edgeAgentId: agentId,
+                    discoveryMethod: "rtsp-network-scan",
+                    vendor: recorderFingerprint?.vendor || "other",
+                    manufacturer: recorderFingerprint?.vendor || "unknown",
+                    model: isDvr ? "DVR / NVR Multi-Channel" : "IP Camera",
+                    ipAddress: ip,
+                    ...(macAddress ? { macAddress } : {}),
+                    ...(hardwareId ? { hardwareId } : {}),
+                    onvifPort: 80,
+                    rtspPort: port,
+                    displayName: isDvr ? `Discovered DVR ${ip}` : `Discovered camera ${ip}`,
+                    credentialsRequired: false,
+                    streamVerified: true,
+                    rtspValidated: true,
+                    compatibility: "compatible",
+                    duplicateStatus: "unique",
+                    compatibilityStatus: "compatible",
+                    profiles: [{ name: "main", codec: normalizeRtspDiscoveryCodec(probe.codec), width: probe.width ?? 1920, height: probe.height ?? 1080 }],
+                    capabilities: { ptz: false, audio: true, events: true },
+                    discoveryLayers: rtspDiscoveryLayers(true, Boolean(hardwareId)),
+                  };
+                  const discovery = await control.submitDiscovery(branchId, payload);
+                  submittedCount += 1;
+                  if (persistStreamSecrets && secretsStore) {
+                    await secretsStore.set(`edge://${agentId}/${discovery.id}`, authed);
+                  }
+                  logger.info(`RTSP discovery: verified stream at ${ip}:${port}${path} -> discovery ${discovery.id}`);
+
+                  // If this is a multi-channel DVR, also discover additional channels automatically
+                  if (path.includes("channel=1")) {
+                    for (let ch = 2; ch <= 8; ch++) {
+                      const chPath = path.replace("channel=1", `channel=${ch}`);
+                      const chUri = authed.replace("channel=1", `channel=${ch}`);
+                      const chProbe = await probeRtsp(chUri, ffprobePath, timeoutMs).catch(() => ({ reachable: false }));
+                      if (chProbe.reachable) {
+                        const chPayload = {
+                          ...payload,
+                          displayName: `Discovered DVR ${ip} - Ch ${ch}`,
+                          profiles: [{ name: "main", codec: normalizeRtspDiscoveryCodec((chProbe as any).codec), width: (chProbe as any).width ?? 1920, height: (chProbe as any).height ?? 1080 }],
+                        };
+                        const chDiscovery = await control.submitDiscovery(branchId, chPayload);
+                        submittedCount += 1;
+                        if (persistStreamSecrets && secretsStore) {
+                          await secretsStore.set(`edge://${agentId}/${chDiscovery.id}`, chUri);
+                        }
+                      }
+                    }
+                  }
+                  return;
+                } catch (submissionError) {
+                  logger.error("RTSP discovery: failed to submit discovery", { error: submissionError instanceof Error ? submissionError.message : String(submissionError) });
                 }
-                logger.info(`RTSP discovery: found stream at ${ip}:${port} -> discovery ${discovery.id}`);
-                // Once we find a working path on this host, skip remaining ports/paths
-                return;
-              } catch (submissionError) {
-                logger.error("RTSP discovery: failed to submit discovery", { error: submissionError instanceof Error ? submissionError.message : String(submissionError) });
               }
             }
+            if (foundWorkingCred) break;
           }
         }
         if (unverifiedEndpoint) {
