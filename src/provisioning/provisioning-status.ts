@@ -211,6 +211,10 @@ export function projectProvisioningRun(input: {
     item.metrics.archiveStatus === "available" && item.metrics.playbackVerified === true
   ).length + new Set(input.recentPlatformRecordingCameraIds).size;
   
+  const importedChannels = input.job
+    ? Math.max(input.job.provisionedCount, input.importedCameraIds.length)
+    : input.importedCameraIds.length;
+
   // If we have imported cameras but no recording verification yet, assume they're recording
   const estimatedRecordings = recordingsVerified > 0 ? recordingsVerified : 
     (importedChannels > 0 ? importedChannels : 0);
@@ -230,9 +234,6 @@ export function projectProvisioningRun(input: {
     input.job?.analyticsCompatibleCount ?? 0,
     input.pendingDiscoveries.filter(isAnalyticsCompatible).length,
   );
-  const importedChannels = input.job
-    ? Math.max(input.job.provisionedCount, input.importedCameraIds.length)
-    : input.importedCameraIds.length;
   const analyticsAssigned = Math.min(input.analyticsCameraIds.length, importedChannels);
   const discoveredDevices = input.job
     ? Math.max(input.job.resultCount, input.pendingDiscoveries.length + importedChannels)
