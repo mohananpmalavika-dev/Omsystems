@@ -41,7 +41,7 @@ The service will activate automatically in the background.
 
 Your activation code might be expired (60-minute TTL):
 
-1. Open: https://sentinel-grid-monitoring-xgrr.onrender.com/admin/branch-onboarding
+1. Open: https://sentinel-grid-monitoring-b54f.onrender.com/admin/branch-onboarding
 2. Click **"Install Scanner"** tab  
 3. Generate **new activation code**
 4. Download **fresh installer**
@@ -59,7 +59,7 @@ Your services might still have old URLs configured:
 CONTROL_PLANE_PUBLIC_URL=https://sentinel-grid-control-plane-3i3r.onrender.com
 ```
 
-**Dashboard** (sentinel-grid-monitoring-xgrr):
+**Dashboard** (sentinel-grid-monitoring-b54f):
 ```
 CONTROL_PLANE_API_URL=https://sentinel-grid-control-plane-3i3r.onrender.com
 ```
@@ -109,7 +109,7 @@ Use UptimeRobot to ping every 5 minutes:
 
 1. Sign up: https://uptimerobot.com (free)
 2. Add monitors:
-   - https://sentinel-grid-monitoring-xgrr.onrender.com/health
+   - https://sentinel-grid-monitoring-b54f.onrender.com/health
    - https://sentinel-grid-control-plane-3i3r.onrender.com/health
    - https://sentinel-grid-analytics-engine-6woo.onrender.com/health
    - https://sentinel-grid-media-gateway-ltkx.onrender.com/health

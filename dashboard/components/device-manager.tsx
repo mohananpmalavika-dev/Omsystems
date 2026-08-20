@@ -1141,7 +1141,7 @@ export function DeviceManager() {
   }
 
   function downloadOneClickBatchFile(branchId: string, branchName: string) {
-    const origin = typeof window !== "undefined" ? window.location.origin : "https://sentinel-grid-monitoring-xgrr.onrender.com";
+    const origin = typeof window !== "undefined" ? window.location.origin : "https://sentinel-grid-monitoring-b54f.onrender.com";
     const cleanBranchName = (branchName || "Branch").replace(/["\r\n]/g, "");
     const content = `@echo off
 setlocal EnableDelayedExpansion
@@ -1783,7 +1783,7 @@ pause
                       className="secondary-button"
                       style={{ padding: "0.25rem 0.6rem", fontSize: "0.75rem", display: "inline-flex", alignItems: "center", gap: "0.3rem" }}
                       onClick={() => {
-                        const origin = typeof window !== "undefined" ? window.location.origin : "https://sentinel-grid-monitoring-xgrr.onrender.com";
+                        const origin = typeof window !== "undefined" ? window.location.origin : "https://sentinel-grid-monitoring-b54f.onrender.com";
                         const cmd = `iwr -useb "${origin}/api/control/v1/branches/${selectedBranch}/install.ps1" | iex`;
                         navigator.clipboard.writeText(cmd);
                         setCopiedCommand("ps");
@@ -1795,7 +1795,7 @@ pause
                     </button>
                   </div>
                   <pre className="p-3 rounded-lg bg-slate-950 border border-slate-800 text-emerald-400 font-mono text-xs overflow-x-auto select-all">
-                    {`iwr -useb "${typeof window !== "undefined" ? window.location.origin : "https://sentinel-grid-monitoring-xgrr.onrender.com"}/api/control/v1/branches/${selectedBranch}/install.ps1" | iex`}
+                    {`iwr -useb "${typeof window !== "undefined" ? window.location.origin : "https://sentinel-grid-monitoring-b54f.onrender.com"}/api/control/v1/branches/${selectedBranch}/install.ps1" | iex`}
                   </pre>
                   <p className="text-[11px] text-slate-400">
                     ✓ Automatically downloads and starts the Edge Agent background service with Branch ID <code className="text-indigo-300">{selectedBranch}</code> pre-configured.
@@ -1813,7 +1813,7 @@ pause
                       className="secondary-button"
                       style={{ padding: "0.25rem 0.6rem", fontSize: "0.75rem", display: "inline-flex", alignItems: "center", gap: "0.3rem" }}
                       onClick={() => {
-                        const origin = typeof window !== "undefined" ? window.location.origin : "https://sentinel-grid-monitoring-xgrr.onrender.com";
+                        const origin = typeof window !== "undefined" ? window.location.origin : "https://sentinel-grid-monitoring-b54f.onrender.com";
                         const cmd = `curl -fsSL "${origin}/api/control/v1/branches/${selectedBranch}/install.sh" | bash`;
                         navigator.clipboard.writeText(cmd);
                         setCopiedCommand("bash");

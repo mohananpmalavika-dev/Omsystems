@@ -6,7 +6,7 @@ Your Sentinel Grid platform URLs have been updated throughout the codebase:
 
 ### Official Render Service URLs:
 
-1. **Dashboard**: `https://sentinel-grid-monitoring-xgrr.onrender.com`
+1. **Dashboard**: `https://sentinel-grid-monitoring-b54f.onrender.com`
 2. **Control Plane**: `https://sentinel-grid-control-plane-3i3r.onrender.com`
 3. **Analytics Engine**: `https://sentinel-grid-analytics-engine-6woo.onrender.com`
 4. **Media Gateway**: `https://sentinel-grid-media-gateway-ltkx.onrender.com`
@@ -37,7 +37,7 @@ Your Sentinel Grid platform URLs have been updated throughout the codebase:
 
 Each service needs environment variables updated:
 
-**Dashboard** (sentinel-grid-monitoring-xgrr):
+**Dashboard** (sentinel-grid-monitoring-b54f):
 ```bash
 CONTROL_PLANE_API_URL=https://sentinel-grid-control-plane-3i3r.onrender.com
 ANALYTICS_ENGINE_URL=https://sentinel-grid-analytics-engine-6woo.onrender.com

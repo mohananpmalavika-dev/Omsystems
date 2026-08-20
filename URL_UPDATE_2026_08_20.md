@@ -7,14 +7,14 @@ All Render.com service URLs have been updated to the latest deployment instances
 1. **Control Plane**: `https://sentinel-grid-control-plane-3i3r.onrender.com`
 2. **Media Gateway**: `https://sentinel-grid-media-gateway-ltkx.onrender.com`
 3. **Analytics Engine**: `https://sentinel-grid-analytics-engine-6woo.onrender.com`
-4. **Dashboard/Monitoring**: `https://sentinel-grid-monitoring-xgrr.onrender.com`
+4. **Dashboard/Monitoring**: `https://sentinel-grid-monitoring-b54f.onrender.com`
 
 ## Previous URLs (Now Obsolete)
 
 - Control Plane: ~~`sentinel-grid-control-plane-ocn1.onrender.com`~~
 - Media Gateway: ~~`sentinel-grid-media-gateway-04ae.onrender.com`~~
 - Analytics Engine: ~~`sentinel-grid-analytics-engine-j0py.onrender.com`~~
-- Dashboard: ~~`sentinel-grid-monitoring-vhid.onrender.com`~~
+- Dashboard: ~~`sentinel-grid-monitoring-vhid.onrender.com`~~ → ~~`sentinel-grid-monitoring-xgrr.onrender.com`~~
 
 ## Files Updated
 
@@ -47,7 +47,7 @@ Each service must be redeployed for environment variable changes to take effect:
 ### 2. Download Fresh Edge Agent Installers
 All branch locations must download new installer packages with updated URLs:
 
-1. Go to: https://sentinel-grid-monitoring-xgrr.onrender.com/admin/branch-onboarding
+1. Go to: https://sentinel-grid-monitoring-b54f.onrender.com/admin/branch-onboarding
 2. Navigate to "Install Scanner" tab
 3. Download fresh installer for each branch
 
@@ -58,7 +58,7 @@ If using UptimeRobot for health monitoring:
 
 1. Sign in to https://uptimerobot.com
 2. Update monitor URLs to:
-   - https://sentinel-grid-monitoring-xgrr.onrender.com/health
+   - https://sentinel-grid-monitoring-b54f.onrender.com/health
    - https://sentinel-grid-control-plane-3i3r.onrender.com/health
    - https://sentinel-grid-analytics-engine-6woo.onrender.com/health
    - https://sentinel-grid-media-gateway-ltkx.onrender.com/health
@@ -77,7 +77,7 @@ curl https://sentinel-grid-analytics-engine-6woo.onrender.com/health
 curl https://sentinel-grid-media-gateway-ltkx.onrender.com/health
 
 # Dashboard
-curl https://sentinel-grid-monitoring-xgrr.onrender.com/health
+curl https://sentinel-grid-monitoring-b54f.onrender.com/health
 ```
 
 ## Why URLs Changed
@@ -131,7 +131,7 @@ git push
 
 Once all services are deployed and healthy:
 
-1. **Test Dashboard Access**: https://sentinel-grid-monitoring-xgrr.onrender.com
+1. **Test Dashboard Access**: https://sentinel-grid-monitoring-b54f.onrender.com
 2. **Test API**: Check control plane `/health` endpoint
 3. **Test Analytics**: Check analytics engine status
 4. **Download Installer**: Generate new activation code and download fresh installer
