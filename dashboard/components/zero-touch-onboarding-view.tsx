@@ -357,12 +357,12 @@ Write-Host "================================================================" -F
     const a = document.createElement("a");
     const safeName = (branchName || "Branch").replace(/[^a-zA-Z0-9_-]/g, "_");
     a.href = url;
-    a.download = `Install_SentinelGrid_${safeName}.bat`;
+    a.download = `Install_KryptonVision_${safeName}.bat`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
-    setToastMsg({ type: "success", text: `1-Click installer "Install_SentinelGrid_${safeName}.bat" downloaded! Just double-click to install.` });
+    setToastMsg({ type: "success", text: `1-Click installer "Install_KryptonVision_${safeName}.bat" downloaded! Just double-click to install.` });
   }, []);
 
   const fetchFleet = useCallback(async () => {
@@ -649,9 +649,9 @@ Write-Host "================================================================" -F
           maxUses: 1,
           usedCount: 0,
           installerScripts: {
-            windowsPowerShell: `powershell -NoProfile -ExecutionPolicy Bypass -Command "iwr -useb https://control.sentinelgrid.internal/api/v1/zero-touch/bootstrap/win?token=ENR-${branch.branchId.toUpperCase()}-8F29B81C | iex"`,
-            linuxBash: `curl -fsSL https://control.sentinelgrid.internal/api/v1/zero-touch/bootstrap/linux?token=ENR-${branch.branchId.toUpperCase()}-8F29B81C | sudo bash`,
-            dockerCompose: `docker run -d --restart always --net host -e ENROLLMENT_TOKEN="ENR-${branch.branchId.toUpperCase()}-8F29B81C" sentinelgrid/edge-agent:latest`,
+            windowsPowerShell: `powershell -NoProfile -ExecutionPolicy Bypass -Command "iwr -useb https://control.kryptonvision.internal/api/v1/zero-touch/bootstrap/win?token=ENR-${branch.branchId.toUpperCase()}-8F29B81C | iex"`,
+            linuxBash: `curl -fsSL https://control.kryptonvision.internal/api/v1/zero-touch/bootstrap/linux?token=ENR-${branch.branchId.toUpperCase()}-8F29B81C | sudo bash`,
+            dockerCompose: `docker run -d --restart always --net host -e ENROLLMENT_TOKEN="ENR-${branch.branchId.toUpperCase()}-8F29B81C" kryptonvision/edge-agent:latest`,
           },
         },
       });

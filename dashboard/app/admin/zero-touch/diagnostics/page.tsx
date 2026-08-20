@@ -42,7 +42,7 @@ export default function ZeroTouchDiagnosticsPage() {
         generatedAt: new Date().toISOString(),
         mTLSStatus: {
           clientCertSerial: "5A:18:9B:4C:33:01",
-          san: `agent-${branchId.toLowerCase()}.sentinelgrid.internal`,
+          san: `agent-${branchId.toLowerCase()}.kryptonvision.internal`,
           thumbprint: "SHA256:7B8F9A01C4E2551029486103A8921104882194819048",
           isValid: true,
           expiresAt: new Date(Date.now() + 365 * 24 * 3600 * 1000).toISOString(),

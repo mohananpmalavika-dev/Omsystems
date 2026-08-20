@@ -2,7 +2,7 @@
 
 ## Current Deployment
 
-**Service URL:** https://sentinel-grid-analytics-engine-6woo.onrender.com  
+**Service URL:** https://kryptonvision-analytics-engine-6woo.onrender.com  
 **Current State:** 🟡 **AI_DEGRADED** (Functional but no local inference)  
 **Date Checked:** 2026-08-20
 
@@ -46,7 +46,7 @@
 
 ```bash
 # Check overall status
-curl https://sentinel-grid-analytics-engine-6woo.onrender.com/health | jq '.aiState'
+curl https://kryptonvision-analytics-engine-6woo.onrender.com/health | jq '.aiState'
 
 # Expected output: "AI_DEGRADED"
 ```
@@ -111,7 +111,7 @@ NODE_ENV: production
 
 5. **Deploy & Verify**
    ```bash
-   curl https://sentinel-grid-analytics-engine-6woo.onrender.com/health | jq '.aiState'
+   curl https://kryptonvision-analytics-engine-6woo.onrender.com/health | jq '.aiState'
    # Should return: "AI_OPERATIONAL"
    ```
 
@@ -144,10 +144,10 @@ NODE_ENV: production
 curl https://sentinel-grid-analytics-engine-6woo.onrender.com/health | jq
 
 # Just AI state
-curl https://sentinel-grid-analytics-engine-6woo.onrender.com/health | jq '.aiState'
+curl https://kryptonvision-analytics-engine-6woo.onrender.com/health | jq '.aiState'
 
 # Model status
-curl https://sentinel-grid-analytics-engine-u2sf.onrender.com/health | jq '.pipeline.models'
+curl https://kryptonvision-analytics-engine-u2sf.onrender.com/health | jq '.pipeline.models'
 
 # Active detectors
 curl https://sentinel-grid-analytics-engine-u2sf.onrender.com/health | jq '.pipeline.detectors | with_entries(select(.value.status == "healthy"))'

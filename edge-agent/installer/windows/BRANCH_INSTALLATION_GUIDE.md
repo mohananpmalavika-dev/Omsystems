@@ -1,4 +1,4 @@
-# Sentinel Grid Edge Agent - Branch Installation Guide
+# KryptonVision Edge Agent - Branch Installation Guide
 
 ## For IT Administrators
 
@@ -9,7 +9,7 @@ cd C:\Omsystems\edge-agent
 .\scripts\build-installer.ps1
 ```
 
-This creates: `dist\SentinelGridEdgeAgentInstaller.exe`
+This creates: `dist\KryptonVisionEdgeAgentInstaller.exe`
 
 ### Step 2: Generate Installation Keys
 
@@ -27,7 +27,7 @@ Save the generated keys securely and provide them to branch managers.
 
 ### Step 3: Distribute the Installer
 
-1. Upload `SentinelGridEdgeAgentInstaller.exe` to:
+1. Upload `KryptonVisionEdgeAgentInstaller.exe` to:
    - Company file share
    - Cloud storage (OneDrive, Google Drive, etc.)
    - Company intranet
@@ -43,7 +43,7 @@ Save the generated keys securely and provide them to branch managers.
 
 ### What is this?
 
-This is the Sentinel Grid camera monitoring software. It needs to be installed on one computer at your branch to monitor all security cameras.
+This is the KryptonVision camera monitoring software. It needs to be installed on one computer at your branch to monitor all security cameras.
 
 ### Requirements
 
@@ -55,7 +55,7 @@ This is the Sentinel Grid camera monitoring software. It needs to be installed o
 ### Installation Steps
 
 1. **Download the installer**
-   - Get `SentinelGridEdgeAgentInstaller.exe` from the link provided by IT
+   - Get `KryptonVisionEdgeAgentInstaller.exe` from the link provided by IT
 
 2. **Run the installer**
    - Double-click the downloaded file
@@ -110,7 +110,7 @@ For help, contact:
 
 ### What the Installer Does
 
-1. Creates installation directory: `C:\Program Files\Sentinel Grid\Edge Agent`
+1. Creates installation directory: `C:\Program Files\KryptonVision\Edge Agent`
 2. Copies `edge-agent.exe` 
 3. Creates configuration file with:
    - Control plane URL: `https://sentinel-grid-control-plane-ocn1.onrender.com`
@@ -122,7 +122,7 @@ For help, contact:
 ### Files Installed
 
 ```
-C:\Program Files\Sentinel Grid\Edge Agent\
+C:\Program Files\KryptonVision\Edge Agent\
 ├── edge-agent.exe          # Main executable
 ├── config\
 │   └── edge-agent.env      # Configuration (secured)
@@ -133,7 +133,7 @@ C:\Program Files\Sentinel Grid\Edge Agent\
 
 ### Scheduled Task
 
-- **Name:** Sentinel Grid Edge Agent
+- **Name:** KryptonVision Edge Agent
 - **Runs as:** SYSTEM
 - **Trigger:** At system startup
 - **Auto-restart:** Yes (every 1 minute if fails)

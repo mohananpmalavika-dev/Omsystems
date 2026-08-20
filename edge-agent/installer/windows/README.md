@@ -1,6 +1,6 @@
-# Sentinel Grid Windows Installer
+# KryptonVision Windows Installer
 
-This directory contains the one-click installer for deploying Sentinel Grid Edge Agent to branch locations.
+This directory contains the one-click installer for deploying KryptonVision Edge Agent to branch locations.
 
 ## Quick Start
 
@@ -11,7 +11,7 @@ cd edge-agent/installer/windows
 .\build-installer.ps1
 ```
 
-Output: `output/SentinelGridInstaller-v0.1.0-windows.exe`
+Output: `output/KryptonVisionInstaller-v0.1.0-windows.exe`
 
 ### Distribute to Branches
 
@@ -69,7 +69,7 @@ cd installer/windows
 
 ### Files
 ```
-C:\Program Files\Sentinel Grid\Edge Agent\
+C:\Program Files\KryptonVision\Edge Agent\
 ├── edge-agent.exe              # Main executable
 ├── runtime\
 │   ├── mediamtx.exe           # Media streaming server
@@ -85,8 +85,8 @@ C:\Program Files\Sentinel Grid\Edge Agent\
 ```
 
 ### Windows Service
-- **Name:** SentinelGridEdgeAgent
-- **Display Name:** Sentinel Grid Edge Agent
+- **Name:** KryptonVisionEdgeAgent
+- **Display Name:** KryptonVision Edge Agent
 - **Startup:** Automatic
 - **Recovery:** Auto-restart on failure
 
@@ -108,7 +108,7 @@ C:\Program Files\Sentinel Grid\Edge Agent\
 ## User Experience
 
 ### Installation (Branch Personnel)
-1. Download `SentinelGridInstaller-v0.1.0-windows.exe`
+1. Download `KryptonVisionInstaller-v0.1.0-windows.exe`
 2. Double-click to run
 3. Click "Next"
 4. Enter branch name (e.g., "Mumbai Office")
@@ -161,11 +161,11 @@ Edit `scripts/register-branch.ps1`:
 ### Test on Clean Machine
 
 1. Use a fresh Windows VM or test PC
-2. Install: `SentinelGridInstaller-v0.1.0-windows.exe`
+2. Install: `KryptonVisionInstaller-v0.1.0-windows.exe`
 3. Verify:
    ```powershell
    Get-Service SentinelGridEdgeAgent
-   Get-Content "C:\Program Files\Sentinel Grid\Edge Agent\logs\edge-agent.log" -Tail 20
+   Get-Content "C:\Program Files\KryptonVision\Edge Agent\logs\edge-agent.log" -Tail 20
    ```
 4. Check dashboard for new branch
 
@@ -202,7 +202,7 @@ Edit `scripts/register-branch.ps1`:
 
 **Issue:** "Service won't start"  
 **Solution:**
-- Check logs at: `C:\Program Files\Sentinel Grid\Edge Agent\logs\`
+- Check logs at: `C:\Program Files\KryptonVision\Edge Agent\logs\`
 - Verify all runtime files are present
 - Check Windows Event Viewer
 

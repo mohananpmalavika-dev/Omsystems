@@ -44,7 +44,7 @@ export class SMTPEmailProvider extends BaseNotificationProvider {
     });
 
     this.fromAddress = smtpConfig.fromAddress;
-    this.fromName = smtpConfig.fromName || 'Sentinel Grid Alerts';
+    this.fromName = smtpConfig.fromName || 'KryptonVision Alerts';
 
     // Verify connection
     try {
@@ -94,7 +94,7 @@ export class SMTPEmailProvider extends BaseNotificationProvider {
           ? `"${this.fromName}" <${this.fromAddress}>`
           : this.fromAddress,
         to: message.recipientDestination,
-        subject: message.subject || 'Sentinel Grid Notification',
+        subject: message.subject || 'KryptonVision Notification',
         text: message.body,
         html: this.convertToHTML(message.body),
         headers: {
@@ -186,13 +186,13 @@ export class SMTPEmailProvider extends BaseNotificationProvider {
 </head>
 <body>
   <div class="header">
-    <h2 style="margin: 0;">Sentinel Grid Alert</h2>
+    <h2 style="margin: 0;">KryptonVision Alert</h2>
   </div>
   <div class="content">
     <pre>${text}</pre>
   </div>
   <div class="footer">
-    <p>This is an automated notification from Sentinel Grid.<br>
+    <p>This is an automated notification from KryptonVision.<br>
     Please do not reply to this email.</p>
   </div>
 </body>

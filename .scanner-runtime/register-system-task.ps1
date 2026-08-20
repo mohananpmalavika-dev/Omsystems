@@ -2,8 +2,8 @@
 param()
 
 $ErrorActionPreference = "Stop"
-$taskName = "Sentinel Grid Edge Agent"
-$installDirectory = "C:\Program Files\Sentinel Grid\Edge Agent"
+$taskName = "KryptonVision Edge Agent"
+$installDirectory = "C:\Program Files\KryptonVision\Edge Agent"
 $scannerExecutable = Join-Path $installDirectory "edge-agent.exe"
 $scannerConfig = Join-Path $installDirectory "config\edge-agent.env"
 
@@ -40,7 +40,7 @@ Register-ScheduledTask `
   -Trigger $trigger `
   -Principal $principal `
   -Settings $settings `
-  -Description "Sentinel Grid branch camera, recorder, storage and network monitoring agent" `
+  -Description "KryptonVision branch camera, recorder, storage and network monitoring agent" `
   -Force | Out-Null
 
 Start-ScheduledTask -TaskName $taskName

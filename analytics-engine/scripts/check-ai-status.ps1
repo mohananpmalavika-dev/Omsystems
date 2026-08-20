@@ -1,9 +1,9 @@
 # PowerShell script to check AI Engine status on Render
 # Usage: .\check-ai-status.ps1
 
-$HEALTH_URL = "https://sentinel-grid-analytics-engine-u2sf.onrender.com/health"
+$HEALTH_URL = "https://kryptonvision-analytics-engine-u2sf.onrender.com/health"
 
-Write-Host "=== Sentinel Analytics Engine Health Check ===" -ForegroundColor Cyan
+Write-Host "=== KryptonVision Analytics Engine Health Check ===" -ForegroundColor Cyan
 Write-Host ""
 
 try {

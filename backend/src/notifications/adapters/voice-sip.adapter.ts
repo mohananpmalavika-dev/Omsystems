@@ -107,7 +107,7 @@ export class VoiceSIPProvider extends BaseNotificationProvider {
    */
   private generateVoiceScript(body: string, metadata?: Record<string, any>): string {
     // Add voice-specific formatting
-    const intro = 'This is a critical Sentinel Grid alert.';
+    const intro = 'This is a critical KryptonVision alert.';
     const outro = 'Press 1 to acknowledge. Press 2 to repeat this message.';
     
     // Clean up text for better speech synthesis
@@ -246,7 +246,7 @@ export class TwilioVoiceProvider extends BaseNotificationProvider {
     return `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
   <Say voice="alice" language="en-US">
-    This is a critical Sentinel Grid alert. ${body}
+    This is a critical KryptonVision alert. ${body}
   </Say>
   <Gather numDigits="1" action="/twilio/voice/acknowledge" method="POST">
     <Say>Press 1 to acknowledge this alert. Press 2 to repeat.</Say>

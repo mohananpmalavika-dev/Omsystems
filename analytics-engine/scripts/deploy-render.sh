@@ -4,7 +4,7 @@
 
 set -e
 
-echo "🚀 Sentinel Grid Analytics Engine - Render Deployment"
+echo "🚀 KryptonVision Analytics Engine - Render Deployment"
 echo "======================================================"
 echo ""
 

@@ -3,7 +3,7 @@
 
 $ErrorActionPreference = "Stop"
 
-Write-Host "🚀 Sentinel Grid Analytics Engine - Render Deployment" -ForegroundColor Cyan
+Write-Host "🚀 KryptonVision Analytics Engine - Render Deployment" -ForegroundColor Cyan
 Write-Host "======================================================" -ForegroundColor Cyan
 Write-Host ""
 

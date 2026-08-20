@@ -1371,12 +1371,12 @@ try {
     const a = document.createElement("a");
     const safeName = (branchName || "Branch").replace(/[^a-zA-Z0-9_-]/g, "_");
     a.href = url;
-    a.download = `Install_SentinelGrid_${safeName}.bat`;
+    a.download = `Install_KryptonVision_${safeName}.bat`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
-    setNotice(`1-Click installer "Install_SentinelGrid_${safeName}.bat" downloaded! Just double-click to run.`);
+    setNotice(`1-Click installer "Install_KryptonVision_${safeName}.bat" downloaded! Just double-click to run.`);
   }
 
   return (

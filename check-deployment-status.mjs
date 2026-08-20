@@ -20,7 +20,7 @@ async function checkEndpoint(name, url) {
     const start = Date.now();
     const response = await fetch(url, { 
       method: 'GET',
-      headers: { 'User-Agent': 'SentinelGrid-Diagnostic/1.0' },
+      headers: { 'User-Agent': 'KryptonVision-Diagnostic/1.0' },
       timeout: 5000
     });
     const duration = Date.now() - start;

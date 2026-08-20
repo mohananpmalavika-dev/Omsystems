@@ -1,15 +1,15 @@
-import { DeviceIdentityStore } from "../../tmp/sentinel-grid-publish-virtual-scan/edge-agent/src/security/device-identity.ts";
-import { GatewayClient } from "../../tmp/sentinel-grid-publish-virtual-scan/edge-agent/src/registration/gateway-client.ts";
+import { DeviceIdentityStore } from "../../tmp/kryptonvision-publish-virtual-scan/edge-agent/src/security/device-identity.ts";
+import { GatewayClient } from "../../tmp/kryptonvision-publish-virtual-scan/edge-agent/src/registration/gateway-client.ts";
 
 const identity = await new DeviceIdentityStore(
-  "C:/Program Files/Sentinel Grid/Edge Agent/data/device-identity.enc",
-  "C:/Program Files/Sentinel Grid/Edge Agent/data/device-identity.key",
+  "C:/Program Files/KryptonVision/Edge Agent/data/device-identity.enc",
+  "C:/Program Files/KryptonVision/Edge Agent/data/device-identity.key",
 ).load();
 
 if (!identity) throw new Error("scanner_identity_missing");
 
 const gateway = new GatewayClient(
-  "https://sentinel-grid-control-plane-ocn1.onrender.com",
+  "https://kryptonvision-control-plane-ocn1.onrender.com",
   undefined,
 );
 gateway.useEdgeCredential(identity.credential);

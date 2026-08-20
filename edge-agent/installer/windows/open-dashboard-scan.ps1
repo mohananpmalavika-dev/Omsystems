@@ -4,7 +4,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 $taskName = "Sentinel Grid Edge Agent"
-$serviceName = "SentinelGridEdgeAgent"
+$serviceName = "KryptonVisionEdgeAgent"
 
 try {
   $task = Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue

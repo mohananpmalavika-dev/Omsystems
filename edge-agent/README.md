@@ -1,4 +1,4 @@
-# Sentinel Grid Edge Agent
+# KryptonVision Edge Agent
 
 The Windows edge agent discovers ONVIF cameras and recorders on a branch LAN,
 checks RTSP/device health, and reports heartbeat and telemetry to the Sentinel
@@ -40,7 +40,7 @@ assets. Later builds reuse the verified cache under `edge-agent/vendor`.
 3. Copy that one `.exe` to the branch PC and double-click it. Approve the
    Windows administrator prompt and enter the ONVIF camera password.
 
-The installer copies the agent under `C:\Program Files\Sentinel Grid\Edge
+The installer copies the agent under `C:\Program Files\KryptonVision\Edge
 Agent`, protects its credential file, validates it, authenticates with the
 dashboard, extracts the bundled media tools, and creates a SYSTEM startup task
 with automatic restart.
@@ -54,7 +54,7 @@ edge bridge credential.
 When an operator connects a Windows laptop to the same LAN/VLAN as a branch's
 cameras and recorders, download **Local PC scan** from Branches & devices.
 Extract the ZIP and double-click `Run Local Discovery.cmd`. The scanner reads
-the branch's saved ONVIF/DVR credentials from Sentinel Grid for this one run,
+the branch's saved ONVIF/DVR credentials from KryptonVision for this one run,
 so no local configuration or password prompt is required. Credentials are not
 saved on the laptop.
 
@@ -66,7 +66,7 @@ It discovers:
 
 The scanner exits after the scan. It does not install a service, create a
 tunnel, relay video, or leave the laptop as a 24/7 dependency. Review the
-discoveries in Sentinel Grid afterwards. For a VPN branch, approved devices use
+discoveries in KryptonVision afterwards. For a VPN branch, approved devices use
 the configured router route; for a tunnel branch, use the permanent gateway.
 
 The single installer contains:
@@ -80,8 +80,8 @@ The single installer contains:
 ## Diagnostics
 
 ```powershell
-& 'C:\Program Files\Sentinel Grid\Edge Agent\edge-agent.exe' `
-  --config 'C:\Program Files\Sentinel Grid\Edge Agent\config\edge-agent.env' `
+& 'C:\Program Files\KryptonVision\Edge Agent\edge-agent.exe' `
+  --config 'C:\Program Files\KryptonVision\Edge Agent\config\edge-agent.env' `
   --diagnose
 
 Get-ScheduledTask -TaskName 'Sentinel Grid Edge Agent'

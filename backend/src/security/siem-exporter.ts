@@ -270,8 +270,8 @@ export class SIEMExporter {
     const version = 1;
     const priority = this.calculatePriority(event.severity);
     const timestamp = event.timestamp.toISOString();
-    const hostname = process.env.HOSTNAME || 'sentinel-grid';
-    const appName = 'sentinel-grid';
+    const hostname = process.env.HOSTNAME || 'kryptonvision';
+    const appName = 'kryptonvision';
     const procId = process.pid;
     const msgId = event.eventType;
 
@@ -298,7 +298,7 @@ export class SIEMExporter {
     if (event.sourceIp) sgData.push(`sourceIp="${event.sourceIp}"`);
     if (event.targetResource) sgData.push(`targetResource="${event.targetResource}"`);
     
-    sdElements.push(`[sentinelgrid@32473 ${sgData.join(' ')}]`);
+    sdElements.push(`[kryptonvision@32473 ${sgData.join(' ')}]`);
 
     return sdElements.join('');
   }
@@ -405,8 +405,8 @@ export class SIEMExporter {
 
     const splunkEvents = events.map(event => ({
       time: Math.floor(event.timestamp.getTime() / 1000),
-      source: 'sentinel-grid',
-      sourcetype: this.config.splunkSourceType || 'sentinel:security',
+      source: 'kryptonvision',
+      sourcetype: this.config.splunkSourceType || 'kryptonvision:security',
       index: this.config.splunkIndex,
       event: {
         eventId: event.eventId,
@@ -454,7 +454,7 @@ export class SIEMExporter {
   private formatQRadarLEF(event: SecurityEvent): string {
     const fields: string[] = [];
     
-    fields.push(`LogSourceName=sentinel-grid`);
+    fields.push(`LogSourceName=kryptonvision`);
     fields.push(`EventName=${event.eventType}`);
     fields.push(`EventTime=${Math.floor(event.timestamp.getTime() / 1000)}`);
     fields.push(`Severity=${event.severity}`);
@@ -477,7 +477,7 @@ export class SIEMExporter {
       throw new Error('Azure Sentinel configuration missing');
     }
 
-    const logType = this.config.azureSentinelLogType || 'SentinelGrid';
+    const logType = this.config.azureSentinelLogType || 'KryptonVision';
     const body = JSON.stringify(events.map(event => ({
       TimeGenerated: event.timestamp.toISOString(),
       EventId: event.eventId,

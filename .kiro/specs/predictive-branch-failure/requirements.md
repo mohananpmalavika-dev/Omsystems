@@ -2,7 +2,7 @@
 
 ## Introduction
 
-Transform Sentinel Grid from reactive surveillance monitoring into predictive infrastructure management by predicting device failures before they affect recording operations. This feature enables operators to take preventive action based on time-bound failure predictions with evidence-based recommendations.
+Transform KryptonVision from reactive surveillance monitoring into predictive infrastructure management by predicting device failures before they affect recording operations. This feature enables operators to take preventive action based on time-bound failure predictions with evidence-based recommendations.
 
 ## Glossary
 

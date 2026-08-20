@@ -1,18 +1,18 @@
 $ErrorActionPreference = "Stop"
 
-$installDirectory = "C:\Program Files\Sentinel Grid\Edge Agent"
+$installDirectory = "C:\Program Files\KryptonVision\Edge Agent"
 $archiveRoot = Join-Path $installDirectory "data\identity-archive"
 $sourceDirectory = Join-Path $archiveRoot "20260809T101537Z-4de517f5"
 $dataDirectory = Join-Path $installDirectory "data"
 $executable = Join-Path $installDirectory "edge-agent.exe"
 $configPath = Join-Path $installDirectory "config\edge-agent.env"
-$taskName = "Sentinel Grid Edge Agent"
+$taskName = "KryptonVision Edge Agent"
 $resultPath = "C:\Omsystems\.scanner-runtime\recovery-result.log"
 
 $resolvedArchiveRoot = [IO.Path]::GetFullPath($archiveRoot).TrimEnd('\') + '\'
 $resolvedSource = [IO.Path]::GetFullPath($sourceDirectory).TrimEnd('\') + '\'
 if (-not $resolvedSource.StartsWith($resolvedArchiveRoot, [StringComparison]::OrdinalIgnoreCase)) {
-  throw "The recovery identity is outside the Sentinel Grid archive."
+  throw "The recovery identity is outside the KryptonVision archive."
 }
 
 foreach ($name in @("device-identity.enc", "device-identity.key")) {
@@ -39,7 +39,7 @@ if ($existingTask) {
   Stop-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
   Unregister-ScheduledTask -TaskName $taskName -Confirm:$false
 }
-Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger -Principal $principal -Settings $settings -Description "Sentinel Grid branch camera, recorder, storage and network monitoring agent" | Out-Null
+Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger -Principal $principal -Settings $settings -Description "KryptonVision branch camera, recorder, storage and network monitoring agent" | Out-Null
 Start-ScheduledTask -TaskName $taskName
 Start-Sleep -Seconds 3
 $task = Get-ScheduledTask -TaskName $taskName

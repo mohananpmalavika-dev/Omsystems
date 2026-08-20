@@ -1,7 +1,7 @@
 {
-  "name": "@sentinel-grid/ai-engine",
+  "name": "@kryptonvision/ai-engine",
   "version": "1.0.0",
-  "description": "AI Analytics Engine for Sentinel Grid - Microservice for video analytics and detection",
+  "description": "AI Analytics Engine for KryptonVision - Microservice for video analytics and detection",
   "type": "module",
   "main": "dist/index.js",
   "scripts": {

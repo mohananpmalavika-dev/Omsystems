@@ -166,7 +166,7 @@ Expected output:
 
 Verify stream secrets are stored correctly:
 ```powershell
-$installDir = "C:\Program Files\Sentinel Grid\Edge Agent"
+$installDir = "C:\Program Files\KryptonVision\Edge Agent"
 $secretsPath = Join-Path $installDir "data\stream-secrets.json"
 $secrets = Get-Content $secretsPath | ConvertFrom-Json
 $secrets | ConvertTo-Json -Depth 10
@@ -241,13 +241,13 @@ const stream = await response.json();
 ### Check Edge Agent Logs
 ```powershell
 # Real-time tail
-Get-Content "C:\Program Files\Sentinel Grid\Edge Agent\logs\edge-agent.log" -Tail 50 -Wait
+Get-Content "C:\Program Files\KryptonVision\Edge Agent\logs\edge-agent.log" -Tail 50 -Wait
 
 # Search for errors
-Select-String "error" "C:\Program Files\Sentinel Grid\Edge Agent\logs\edge-agent.log" | Select-Object -Last 10
+Select-String "error" "C:\Program Files\KryptonVision\Edge Agent\logs\edge-agent.log" | Select-Object -Last 10
 
 # Check camera sync
-Select-String "Synchronized.*camera" "C:\Program Files\Sentinel Grid\Edge Agent\logs\edge-agent.log" | Select-Object -Last 5
+Select-String "Synchronized.*camera" "C:\Program Files\KryptonVision\Edge Agent\logs\edge-agent.log" | Select-Object -Last 5
 ```
 
 ### Check MediaMTX Logs
@@ -269,9 +269,9 @@ MediaMTX logs are piped through the edge agent and appear as:
 
 ### Issue: Port 8090 not listening
 **Solution**: 
-1. Check if edge agent is running: `Get-ScheduledTask -TaskName "Sentinel Grid Edge Agent"`
+1. Check if edge agent is running: `Get-ScheduledTask -TaskName "KryptonVision Edge Agent"`
 2. Check for port conflicts: `Get-NetTCPConnection -LocalPort 8090`
-3. Check firewall: `Get-NetFirewallRule -DisplayName "Sentinel Grid Private Live Video"`
+3. Check firewall: `Get-NetFirewallRule -DisplayName "KryptonVision Private Live Video"`
 
 ### Issue: MediaMTX not starting
 **Solution**:

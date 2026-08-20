@@ -171,7 +171,7 @@ export default function FleetBranchesPage() {
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement("a");
     link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `SentinelGrid_Branch_Health_Report_${new Date().toISOString().split("T")[0]}.csv`);
+    link.setAttribute("download", `KryptonVision_Branch_Health_Report_${new Date().toISOString().split("T")[0]}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -195,7 +195,7 @@ export default function FleetBranchesPage() {
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement("a");
     link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `SentinelGrid_Segregated_Alerts_Report_${new Date().toISOString().split("T")[0]}.csv`);
+    link.setAttribute("download", `KryptonVision_Segregated_Alerts_Report_${new Date().toISOString().split("T")[0]}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);

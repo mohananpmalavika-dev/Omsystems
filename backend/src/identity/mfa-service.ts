@@ -159,7 +159,7 @@ export class MFAService {
   async setupTOTP(
     userId: string,
     tenantId: string,
-    issuer: string = 'Sentinel Grid'
+    issuer: string = 'KryptonVision'
   ): Promise<TOTPSetup> {
     try {
       // Generate secret

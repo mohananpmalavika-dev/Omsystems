@@ -4,7 +4,7 @@
 echo "=== Analytics Engine Health Check ==="
 echo ""
 
-HEALTH_URL="https://sentinel-grid-analytics-engine-u2sf.onrender.com/health"
+HEALTH_URL="https://kryptonvision-analytics-engine-u2sf.onrender.com/health"
 
 echo "Fetching health status..."
 curl -s $HEALTH_URL | jq '{

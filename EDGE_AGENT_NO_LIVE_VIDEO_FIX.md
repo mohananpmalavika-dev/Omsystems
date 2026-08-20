@@ -57,7 +57,7 @@ Later logs show:
 ### Step 1: Check Edge Agent Status
 
 ```powershell
-Get-Content "C:\Program Files\Sentinel Grid\Edge Agent\logs\edge-agent.log" -Tail 50
+Get-Content "C:\Program Files\KryptonVision\Edge Agent\logs\edge-agent.log" -Tail 50
 ```
 
 Look for:
@@ -178,7 +178,7 @@ After fixing the code and reinstalling:
 **Via Edge Agent Command:**
 ```powershell
 # This forces immediate rediscovery
-Restart-ScheduledTask -TaskName "Sentinel Grid Edge Agent"
+Restart-ScheduledTask -TaskName "KryptonVision Edge Agent"
 ```
 
 #### 3. Check Control Plane Status
@@ -258,7 +258,7 @@ If control plane is down:
 Get-ScheduledTask -TaskName "Sentinel Grid Edge Agent" | Select-Object State
 
 # 2. Check last 50 log entries
-Get-Content "C:\Program Files\Sentinel Grid\Edge Agent\logs\edge-agent.log" -Tail 50
+Get-Content "C:\Program Files\KryptonVision\Edge Agent\logs\edge-agent.log" -Tail 50
 
 # 3. Check for discovery events
 Get-Content "C:\Program Files\Sentinel Grid\Edge Agent\logs\edge-agent.log" | Select-String "discovered"

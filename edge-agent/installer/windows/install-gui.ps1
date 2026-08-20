@@ -207,7 +207,7 @@ LIVE_MEDIA_ENABLED="false"
         
         # Create Windows Service
         UpdateProgress 70 "Installing Windows service..."
-        $serviceName = "SentinelGridEdgeAgent"
+        $serviceName = "KryptonVisionEdgeAgent"
         $existingService = Get-Service -Name $serviceName -ErrorAction SilentlyContinue
         if ($existingService) {
             Stop-Service -Name $serviceName -Force -ErrorAction SilentlyContinue
