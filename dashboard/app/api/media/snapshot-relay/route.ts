@@ -1,5 +1,8 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
+import { promises as fs } from "node:fs";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
 
 export const dynamic = "force-dynamic";
 
@@ -9,6 +12,20 @@ if (!globalFrames.__realCctvFrames) {
   globalFrames.__realCctvFrames = new Map();
 }
 const frameStore = globalFrames.__realCctvFrames;
+const FRAME_DIR = join(tmpdir(), "sentinel_cctv_frames");
+
+async function ensureFrameDir() {
+  try {
+    await fs.mkdir(FRAME_DIR, { recursive: true });
+  } catch {
+    // Already exists
+  }
+}
+void ensureFrameDir();
+
+function sanitizeKey(k: string): string {
+  return k.replace(/[^a-zA-Z0-9_-]/g, "_").toLowerCase();
+}
 
 export async function GET(request: NextRequest) {
   const url = new URL(request.url);
@@ -16,7 +33,7 @@ export async function GET(request: NextRequest) {
 
   const now = Date.now();
   
-  // Try exact, lowercase, and channel number extraction (e.g. "ch 1", "ch 2", "ch 7")
+  // Try memory first
   let cached = frameStore.get(targetKey) || frameStore.get(targetKey.toLowerCase());
   
   if (!cached) {
@@ -28,9 +45,6 @@ export async function GET(request: NextRequest) {
   }
 
   if (cached && cached.buffer.length > 0) {
-    if (now - cached.updatedAt > 15000) {
-      return NextResponse.json({ error: "frame_stale", target: targetKey, ageMs: now - cached.updatedAt }, { status: 404 });
-    }
     return new NextResponse(new Uint8Array(cached.buffer), {
       status: 200,
       headers: {
@@ -40,6 +54,25 @@ export async function GET(request: NextRequest) {
         "X-Frame-Updated": String(cached.updatedAt),
       },
     });
+  }
+
+  // Fallback to disk cache
+  try {
+    const diskPath = join(FRAME_DIR, `${sanitizeKey(targetKey)}.jpg`);
+    const fileBuf = await fs.readFile(diskPath);
+    if (fileBuf && fileBuf.length > 0) {
+      return new NextResponse(new Uint8Array(fileBuf), {
+        status: 200,
+        headers: {
+          "Content-Type": "image/jpeg",
+          "Cache-Control": "no-store, no-cache, must-revalidate",
+          "X-Camera-Id": targetKey,
+          "X-Frame-Updated": String(now),
+        },
+      });
+    }
+  } catch {
+    // Disk file not found
   }
 
   return NextResponse.json({ error: "no_frame_available", target: targetKey }, { status: 404 });
@@ -63,14 +96,19 @@ export async function POST(request: NextRequest) {
     }
 
     if (imageBuffer.length > 500) {
-      frameStore.set(targetKey, {
+      const entry = {
         buffer: imageBuffer,
         updatedAt: Date.now(),
-      });
-      frameStore.set(targetKey.toLowerCase(), {
-        buffer: imageBuffer,
-        updatedAt: Date.now(),
-      });
+      };
+      frameStore.set(targetKey, entry);
+      frameStore.set(targetKey.toLowerCase(), entry);
+
+      // Save to disk asynchronously
+      void ensureFrameDir().then(() => {
+        const diskPath = join(FRAME_DIR, `${sanitizeKey(targetKey)}.jpg`);
+        return fs.writeFile(diskPath, imageBuffer);
+      }).catch(() => undefined);
+
       return NextResponse.json({ success: true, target: targetKey, size: imageBuffer.length });
     }
 
