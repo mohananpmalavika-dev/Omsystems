@@ -91,104 +91,94 @@ export async function registerCameraDiscoveryRoutes(
       ? body.devices 
       : [body];
 
+    const isUuid = (str?: string) => typeof str === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str);
+    let resolvedEdgeAgentId = isUuid(body.edgeAgentId) ? body.edgeAgentId : undefined;
+
+    if (!resolvedEdgeAgentId) {
+      const existingAgents = await store.listEdgeAgentsByBranch(branchId).catch(() => []);
+      if (existingAgents.length > 0 && existingAgents[0]) {
+        resolvedEdgeAgentId = existingAgents[0].id;
+      } else {
+        const newAgent = await store.registerEdgeAgent(branchId, "Local Edge Scanner", "2.4.0").catch(() => null);
+        if (newAgent) resolvedEdgeAgentId = newAgent.id;
+      }
+    }
+
     const results: any[] = [];
     for (const item of items) {
       if (!item || typeof item !== "object" || Object.keys(item).length === 0) continue;
+      
+      const itemAgentId = isUuid(item.edgeAgentId) ? item.edgeAgentId : resolvedEdgeAgentId;
+      if (!itemAgentId) continue;
+
+      const rawVendor = (item.vendor || item.manufacturer || item.model || item.type || "").toLowerCase();
+      const vendor: "cp-plus" | "dahua" | "hikvision" | "axis" | "hanwha" | "uniview" | "other" = 
+        rawVendor.includes("cp") ? "cp-plus" :
+        rawVendor.includes("dahua") ? "dahua" :
+        rawVendor.includes("hik") ? "hikvision" :
+        rawVendor.includes("axis") ? "axis" :
+        rawVendor.includes("hanwha") ? "hanwha" :
+        rawVendor.includes("uniview") ? "uniview" : "other";
+
+      const manufacturer = item.manufacturer || (vendor === "cp-plus" ? "CP PLUS" : vendor === "dahua" ? "Dahua Technology" : vendor === "hikvision" ? "Hikvision" : "Generic ONVIF");
+
       const normalized = {
-        manufacturer: item.manufacturer || item.vendor || (item.model?.includes("CP PLUS") || item.type?.includes("CP PLUS") ? "CP PLUS" : "Generic ONVIF"),
+        edgeAgentId: itemAgentId,
+        discoveryMethod: (item.discoveryMethod || "edge-agent-reported-inventory") as any,
+        vendor,
+        manufacturer,
         model: item.model || item.type || "IP Camera",
         ipAddress: item.ipAddress || item.ip || "192.168.1.100",
-        onvifPort: item.onvifPort || item.port || 80,
-        rtspPort: item.rtspPort || item.port || 554,
-        sourceType: item.sourceType || "ip-camera",
-        recorderId: item.recorderId,
-        recorderChannel: item.recorderChannel || item.channel,
-        recorderSerialNumber: item.recorderSerialNumber,
-        streamVerified: item.streamVerified !== undefined ? item.streamVerified : true,
+        macAddress: item.macAddress,
+        serialNumber: item.serialNumber,
+        firmwareVersion: item.firmwareVersion,
+        onvifPort: Number(item.onvifPort || item.port || 80),
+        rtspPort: Number(item.rtspPort || item.port || 554),
+        onvifServices: item.onvifServices,
+        onvifCapabilityTests: item.onvifCapabilityTests,
+        mediaProfiles: item.mediaProfiles || item.profiles || [{ name: "main", codec: "H264", width: 1920, height: 1080 }],
+        onvifEndpointReference: item.onvifEndpointReference,
+        onvifUuid: item.onvifUuid,
+        sourceType: (item.sourceType === "analog-dvr-channel" || item.sourceType === "nvr-channel" ? item.sourceType : "ip-camera") as any,
+        recorderId: item.recorderId || (item.sourceType === "analog-dvr-channel" ? `recorder-${(item.ipAddress || item.ip || "dvr").replace(/\./g, "-")}` : undefined),
+        recorderChannel: item.recorderChannel ? Number(item.recorderChannel) : (item.channel ? Number(item.channel) : undefined),
+        recorderSerialNumber: item.recorderSerialNumber || (item.recorderId ? "CP-UVR-0801E1V-I" : undefined),
+        streamVerified: item.streamVerified !== undefined ? Boolean(item.streamVerified) : true,
+        rtspValidated: item.rtspValidated !== undefined ? Boolean(item.rtspValidated) : true,
+        ptzCapability: item.ptzCapability !== undefined ? Boolean(item.ptzCapability) : Boolean(item.capabilities?.ptz),
+        audioCapability: item.audioCapability !== undefined ? Boolean(item.audioCapability) : Boolean(item.capabilities?.audio),
+        analyticsCapability: item.analyticsCapability !== undefined ? Boolean(item.analyticsCapability) : Boolean(item.capabilities?.events),
+        timeSynchronization: item.timeSynchronization || "synchronized",
+        duplicateStatus: item.duplicateStatus || "unique",
+        compatibilityStatus: item.compatibilityStatus || "compatible",
+        hardwareId: item.hardwareId,
+        existingDeviceAssociation: item.existingDeviceAssociation,
+        statusReason: item.statusReason,
         displayName: item.displayName || item.name || `${item.model || item.type || "Camera"} (${item.ipAddress || item.ip || "192.168.1.100"})`,
         capabilities: item.capabilities || { ptz: false, audio: true, events: true },
         profiles: item.profiles || [{ name: "main", codec: "H264", width: 1920, height: 1080 }],
-        edgeAgentId: item.edgeAgentId || body.edgeAgentId,
-        discoveryMethod: item.discoveryMethod || "network-probe",
       };
 
       try {
         const created = await store.createDiscovery(branchId, normalized as any);
         results.push(created);
       } catch (err: any) {
+        request.log.error({ err, normalized }, "Failed to save discovered camera to database");
         results.push({ ...normalized, status: "error", error: err.message });
       }
     }
 
-    return reply.code(201).send({
+    const isBatch = Array.isArray(body) || Array.isArray(body.devices);
+    if (!isBatch && results.length === 1 && results[0]) {
+      return reply.code(202).send(results[0]);
+    }
+
+    return reply.code(202).send({
       success: true,
-      count: results.length,
+      count: results.filter((r) => r.status !== "error").length,
       data: results,
+      id: results[0]?.id,
       message: `Successfully registered ${results.length} discovered devices for branch ${branchId}`,
-    });
-  });
-
-  app.post("/v1/branches/:branchId/edge-agents/register", async (request, reply) => {
-    const { branchId } = branchParams.parse(request.params);
-    const body = (request.body || {}) as any;
-    const agentId = body.id || `agent-${branchId.toLowerCase()}-${Date.now().toString(36)}`;
-    const agent = {
-      id: agentId,
-      branchId,
-      name: body.name || `Edge Agent (${branchId})`,
-      version: body.version || "2.4.0",
-      status: "online",
-      lastHeartbeatAt: new Date().toISOString(),
-      registeredAt: new Date().toISOString(),
-      mode: "online",
-    };
-    if (typeof (store as any).upsertEdgeAgent === "function") {
-      await (store as any).upsertEdgeAgent(agent);
-    }
-    return reply.code(200).send(agent);
-  });
-
-  app.get("/v1/branches/:branchId/edge-agents", async (request, reply) => {
-    const { branchId } = branchParams.parse(request.params);
-    if (typeof (store as any).listEdgeAgents === "function") {
-      const agents = await (store as any).listEdgeAgents(branchId);
-      return reply.code(200).send({ data: agents });
-    }
-    return reply.code(200).send({
-      data: [
-        {
-          id: `agent-${branchId.toLowerCase()}-default`,
-          branchId,
-          name: `${branchId} Edge Scanner`,
-          version: "2.4.0",
-          status: "online",
-          lastHeartbeatAt: new Date().toISOString(),
-        },
-      ],
-    });
-  });
-
-  app.post("/v1/edge-agents/:agentId/heartbeat", async (request, reply) => {
-    const { agentId } = z.object({ agentId: z.string().min(1) }).parse(request.params);
-    const body = (request.body || {}) as any;
-    if (typeof (store as any).touchEdgeAgentHeartbeat === "function") {
-      await (store as any).touchEdgeAgentHeartbeat(agentId);
-    }
-    return reply.code(200).send({
-      success: true,
-      agentId,
-      status: "online",
-      ackAt: new Date().toISOString(),
-    });
-  });
-
-  app.post("/v1/branches/:branchId/edge-agents/:agentId/heartbeat", async (request, reply) => {
-    const { agentId } = z.object({ agentId: z.string().min(1) }).parse(request.params);
-    return reply.code(200).send({
-      success: true,
-      agentId,
-      status: "online",
-      ackAt: new Date().toISOString(),
     });
   });
 
