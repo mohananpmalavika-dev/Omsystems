@@ -32,10 +32,10 @@ CREATE TABLE IF NOT EXISTS user_activity_sessions (
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE INDEX idx_user_activity_sessions_user ON user_activity_sessions(user_id, login_time DESC);
-CREATE INDEX idx_user_activity_sessions_tenant ON user_activity_sessions(tenant_id, login_time DESC);
-CREATE INDEX idx_user_activity_sessions_status ON user_activity_sessions(session_status) WHERE session_status = 'active';
-CREATE INDEX idx_user_activity_sessions_logout ON user_activity_sessions(logout_time DESC) WHERE logout_time IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_user_activity_sessions_user ON user_activity_sessions(user_id, login_time DESC);
+CREATE INDEX IF NOT EXISTS idx_user_activity_sessions_tenant ON user_activity_sessions(tenant_id, login_time DESC);
+CREATE INDEX IF NOT EXISTS idx_user_activity_sessions_status ON user_activity_sessions(session_status) WHERE session_status = 'active';
+CREATE INDEX IF NOT EXISTS idx_user_activity_sessions_logout ON user_activity_sessions(logout_time DESC) WHERE logout_time IS NOT NULL;
 
 -- ============================================
 -- Page Visit Tracking
@@ -76,11 +76,11 @@ CREATE TABLE IF NOT EXISTS user_page_visits (
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE INDEX idx_page_visits_user_session ON user_page_visits(user_id, session_id, visit_start_time DESC);
-CREATE INDEX idx_page_visits_tenant ON user_page_visits(tenant_id, visit_start_time DESC);
-CREATE INDEX idx_page_visits_module ON user_page_visits(page_module, visit_start_time DESC);
-CREATE INDEX idx_page_visits_session ON user_page_visits(session_id, visit_start_time ASC);
-CREATE INDEX idx_page_visits_active ON user_page_visits(visit_end_time) WHERE visit_end_time IS NULL;
+CREATE INDEX IF NOT EXISTS idx_page_visits_user_session ON user_page_visits(user_id, session_id, visit_start_time DESC);
+CREATE INDEX IF NOT EXISTS idx_page_visits_tenant ON user_page_visits(tenant_id, visit_start_time DESC);
+CREATE INDEX IF NOT EXISTS idx_page_visits_module ON user_page_visits(page_module, visit_start_time DESC);
+CREATE INDEX IF NOT EXISTS idx_page_visits_session ON user_page_visits(session_id, visit_start_time ASC);
+CREATE INDEX IF NOT EXISTS idx_page_visits_active ON user_page_visits(visit_end_time) WHERE visit_end_time IS NULL;
 
 -- ============================================
 -- Control Room Activity Tracking
@@ -125,11 +125,11 @@ CREATE TABLE IF NOT EXISTS control_room_monitoring_activity (
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE INDEX idx_control_room_activity_user ON control_room_monitoring_activity(user_id, monitoring_start_time DESC);
-CREATE INDEX idx_control_room_activity_session ON control_room_monitoring_activity(session_id, monitoring_start_time ASC);
-CREATE INDEX idx_control_room_activity_branch ON control_room_monitoring_activity(branch_node_id, monitoring_start_time DESC);
-CREATE INDEX idx_control_room_activity_tenant ON control_room_monitoring_activity(tenant_id, monitoring_start_time DESC);
-CREATE INDEX idx_control_room_activity_active ON control_room_monitoring_activity(monitoring_end_time) WHERE monitoring_end_time IS NULL;
+CREATE INDEX IF NOT EXISTS idx_control_room_activity_user ON control_room_monitoring_activity(user_id, monitoring_start_time DESC);
+CREATE INDEX IF NOT EXISTS idx_control_room_activity_session ON control_room_monitoring_activity(session_id, monitoring_start_time ASC);
+CREATE INDEX IF NOT EXISTS idx_control_room_activity_branch ON control_room_monitoring_activity(branch_node_id, monitoring_start_time DESC);
+CREATE INDEX IF NOT EXISTS idx_control_room_activity_tenant ON control_room_monitoring_activity(tenant_id, monitoring_start_time DESC);
+CREATE INDEX IF NOT EXISTS idx_control_room_activity_active ON control_room_monitoring_activity(monitoring_end_time) WHERE monitoring_end_time IS NULL;
 
 -- ============================================
 -- User Action Log (Detailed activity tracking)
@@ -158,11 +158,11 @@ CREATE TABLE IF NOT EXISTS user_action_log (
   action_time TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE INDEX idx_user_action_log_user ON user_action_log(user_id, action_time DESC);
-CREATE INDEX idx_user_action_log_session ON user_action_log(session_id, action_time ASC);
-CREATE INDEX idx_user_action_log_tenant_time ON user_action_log(tenant_id, action_time DESC);
-CREATE INDEX idx_user_action_log_type ON user_action_log(action_type, action_time DESC);
-CREATE INDEX idx_user_action_log_module ON user_action_log(module_name, action_time DESC);
+CREATE INDEX IF NOT EXISTS idx_user_action_log_user ON user_action_log(user_id, action_time DESC);
+CREATE INDEX IF NOT EXISTS idx_user_action_log_session ON user_action_log(session_id, action_time ASC);
+CREATE INDEX IF NOT EXISTS idx_user_action_log_tenant_time ON user_action_log(tenant_id, action_time DESC);
+CREATE INDEX IF NOT EXISTS idx_user_action_log_type ON user_action_log(action_type, action_time DESC);
+CREATE INDEX IF NOT EXISTS idx_user_action_log_module ON user_action_log(module_name, action_time DESC);
 
 -- ============================================
 -- Daily Activity Summary (Aggregated metrics)
@@ -211,9 +211,9 @@ CREATE TABLE IF NOT EXISTS user_activity_daily_summary (
   UNIQUE(user_id, summary_date)
 );
 
-CREATE INDEX idx_user_daily_summary_user_date ON user_activity_daily_summary(user_id, summary_date DESC);
-CREATE INDEX idx_user_daily_summary_tenant_date ON user_activity_daily_summary(tenant_id, summary_date DESC);
-CREATE INDEX idx_user_daily_summary_date ON user_activity_daily_summary(summary_date DESC);
+CREATE INDEX IF NOT EXISTS idx_user_daily_summary_user_date ON user_activity_daily_summary(user_id, summary_date DESC);
+CREATE INDEX IF NOT EXISTS idx_user_daily_summary_tenant_date ON user_activity_daily_summary(tenant_id, summary_date DESC);
+CREATE INDEX IF NOT EXISTS idx_user_daily_summary_date ON user_activity_daily_summary(summary_date DESC);
 
 -- ============================================
 -- Weekly Activity Summary
@@ -254,8 +254,8 @@ CREATE TABLE IF NOT EXISTS user_activity_weekly_summary (
   UNIQUE(user_id, week_start_date)
 );
 
-CREATE INDEX idx_user_weekly_summary_user ON user_activity_weekly_summary(user_id, week_start_date DESC);
-CREATE INDEX idx_user_weekly_summary_tenant ON user_activity_weekly_summary(tenant_id, week_start_date DESC);
+CREATE INDEX IF NOT EXISTS idx_user_weekly_summary_user ON user_activity_weekly_summary(user_id, week_start_date DESC);
+CREATE INDEX IF NOT EXISTS idx_user_weekly_summary_tenant ON user_activity_weekly_summary(tenant_id, week_start_date DESC);
 
 -- ============================================
 -- Monthly Activity Summary
@@ -299,8 +299,8 @@ CREATE TABLE IF NOT EXISTS user_activity_monthly_summary (
   UNIQUE(user_id, year, month)
 );
 
-CREATE INDEX idx_user_monthly_summary_user ON user_activity_monthly_summary(user_id, year DESC, month DESC);
-CREATE INDEX idx_user_monthly_summary_tenant ON user_activity_monthly_summary(tenant_id, year DESC, month DESC);
+CREATE INDEX IF NOT EXISTS idx_user_monthly_summary_user ON user_activity_monthly_summary(user_id, year DESC, month DESC);
+CREATE INDEX IF NOT EXISTS idx_user_monthly_summary_tenant ON user_activity_monthly_summary(tenant_id, year DESC, month DESC);
 
 -- ============================================
 -- Real-time Activity Status (Current activity)
@@ -330,9 +330,9 @@ CREATE TABLE IF NOT EXISTS user_current_activity (
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE INDEX idx_user_current_activity_tenant ON user_current_activity(tenant_id);
-CREATE INDEX idx_user_current_activity_online ON user_current_activity(is_online) WHERE is_online = true;
-CREATE INDEX idx_user_current_activity_control_room ON user_current_activity(is_in_control_room, current_branch_id) WHERE is_in_control_room = true;
+CREATE INDEX IF NOT EXISTS idx_user_current_activity_tenant ON user_current_activity(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_user_current_activity_online ON user_current_activity(is_online) WHERE is_online = true;
+CREATE INDEX IF NOT EXISTS idx_user_current_activity_control_room ON user_current_activity(is_in_control_room, current_branch_id) WHERE is_in_control_room = true;
 
 -- ============================================
 -- Activity Report Definitions (Configurable reports)
@@ -360,7 +360,7 @@ CREATE TABLE IF NOT EXISTS activity_report_definitions (
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE INDEX idx_activity_report_defs_tenant ON activity_report_definitions(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_activity_report_defs_tenant ON activity_report_definitions(tenant_id);
 
 -- ============================================
 -- Functions for automatic summary generation
@@ -529,6 +529,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+DROP TRIGGER IF EXISTS trg_update_current_activity_on_page_visit ON user_page_visits;
 CREATE TRIGGER trg_update_current_activity_on_page_visit
   AFTER INSERT ON user_page_visits
   FOR EACH ROW
