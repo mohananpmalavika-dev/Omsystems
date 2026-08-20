@@ -1160,6 +1160,7 @@ select, textarea { font: inherit; }
 .device-toolbar { justify-content: space-between; gap: 14px; }
 .device-toolbar h2 { margin: 0; font-size: 17px; }
 .device-toolbar p, .device-card-heading p { margin: 4px 0 0; color: var(--muted); font-size: 10px; }
+.device-card-heading p { color: #687890; }
 .device-toolbar-actions { gap: 8px; }
 .device-advanced { border: 1px solid var(--line); border-radius: 10px; background: #fafbfd; }
 .device-advanced summary { padding: 12px 14px; color: #40536d; cursor: pointer; font-size: 10px; font-weight: 700; }
@@ -1213,7 +1214,7 @@ select, textarea { font: inherit; }
 .connectivity-feedback.success { color: #157455; background: #e8f8f2; }
 .connectivity-empty { margin: 12px 0 0; color: #73859b; font-size: 10px; }
 .device-columns { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 13px; }
-.device-card { min-height: 280px; padding: 15px; border: 1px solid var(--line); border-radius: 11px; background: #fbfcfe; }
+.device-card { min-height: 280px; padding: 15px; color: #172640; border: 1px solid var(--line); border-radius: 11px; background: #fbfcfe; }
 .device-card-heading { gap: 9px; padding-bottom: 12px; border-bottom: 1px solid #e8ecf2; }
 .device-card-heading > svg { color: #3477db; }
 .device-card-heading h3 { margin: 0; font-size: 12px; }
