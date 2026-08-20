@@ -29,6 +29,7 @@ import {
   type FaceWatchlistPerson,
   type IdentityWatchlist,
 } from "@/lib/api-client";
+import { AiLiveCameraInspector } from "./ai-live-camera-inspector";
 
 type WorkspaceMode = "face" | "anpr";
 type DialogKind = "face-watchlist" | "face-person" | "anpr-watchlist" | "anpr-plate";
@@ -329,6 +330,12 @@ export function IdentityWatchlistWorkspace({ initialMode }: { initialMode: Works
         <Metric icon={<Eye />} label="Recent events" value={currentEvents.length} detail="latest authorized results" />
         <Metric icon={<ShieldCheck />} label="Priority policies" value={criticalLists} detail="P1 or P2 notification" />
       </section>
+
+      <AiLiveCameraInspector
+        mode={mode}
+        title={mode === "face" ? "Live Face Recognition Stream & AI Pipeline" : "Live ANPR Vehicle Stream & AI Pipeline"}
+        onDetectionTriggered={() => void refresh()}
+      />
 
       <section className="mb-5 flex flex-wrap items-end gap-3 rounded-2xl border border-slate-800 bg-slate-900/80 p-4">
         <label className={`min-w-[240px] flex-1 ${labelClass}`}>Watchlist scope
