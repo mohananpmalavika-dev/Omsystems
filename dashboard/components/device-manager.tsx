@@ -799,6 +799,11 @@ export function DeviceManager() {
   }
 
   async function approveDiscoveredCamera(discovered: any) {
+    if (discovered.credentialsRequired) {
+      openCredentialActivation(discovered);
+      setNotice(`Authentication required: Enter username & password for ${discovered.displayName || discovered.ipAddress} to verify and connect.`);
+      return;
+    }
     setSaving(true);
     setError(undefined);
     scanAbortedRef.current = false;
@@ -830,7 +835,7 @@ export function DeviceManager() {
       markDiscoveryReviewStatus(discovered.id, "approved");
       setPreviewDiscoveryId(undefined);
       setPreviewNameDraft("");
-      setNotice(`${name} was approved and added to active monitoring.`);
+      setNotice(`${name} verified, approved, and added to active camera list.`);
       await refreshBranch(selectedBranch);
     } catch (reason) {
       setError(messageOf(reason, "Failed to approve discovered camera."));
@@ -864,9 +869,14 @@ export function DeviceManager() {
         }
       } catch {}
 
-      // 2. Iterate and approve remaining pending items so none are left behind
+      // 2. Iterate and approve ONLY verified cameras with valid credentials
+      let unauthenticatedCount = 0;
       for (const item of discoveryQueueItems) {
         if (scanAbortedRef.current) break;
+        if (item.credentialsRequired || !item.streamVerified) {
+          unauthenticatedCount++;
+          continue;
+        }
         if (item.reviewStatus !== "approved") {
           const name = item.displayName || item.model || `${item.vendor || "IP"} Camera (${item.ipAddress})`;
           try {
@@ -895,7 +905,13 @@ export function DeviceManager() {
         }
       }
 
-      setNotice(`${approvedCount} cameras approved and moved to active camera inventory.`);
+      if (approvedCount > 0 && unauthenticatedCount > 0) {
+        setNotice(`${approvedCount} verified cameras approved and added to active camera list. ${unauthenticatedCount} device(s) require login credentials before they can be added.`);
+      } else if (approvedCount > 0) {
+        setNotice(`${approvedCount} verified cameras approved and moved to active camera inventory.`);
+      } else if (unauthenticatedCount > 0) {
+        setNotice(`${unauthenticatedCount} camera(s) require login credentials. Click 'Enter login & password' on each camera to verify.`);
+      }
       await refreshBranch(selectedBranch);
     } catch (reason) {
       setError(messageOf(reason, "Automatic provisioning encountered an issue."));
@@ -1641,14 +1657,21 @@ try {
                     {item.onvifServices?.length ? <p className="discovery-footnote">Services: {item.onvifServices.join(", ")}</p> : null}
                   </div>
                   <div className="discovery-card-actions">
-                    <button type="button" className="primary-button" onClick={() => void approveDiscoveredCamera(item)} disabled={saving}>
-                      ⚡ Approve & start live
-                    </button>
                     {item.credentialsRequired ? (
-                      <button type="button" className="secondary-button" onClick={() => openCredentialActivation(item)} disabled={saving || scanning}>
-                        🔑 Enter login & password
+                      <button
+                        type="button"
+                        className="primary-button"
+                        style={{ backgroundColor: "#d97706", borderColor: "#b45309", fontWeight: 700 }}
+                        onClick={() => openCredentialActivation(item)}
+                        disabled={saving || scanning}
+                      >
+                        🔑 Enter Username & Password to Verify
                       </button>
-                    ) : null}
+                    ) : (
+                      <button type="button" className="primary-button" onClick={() => void approveDiscoveredCamera(item)} disabled={saving}>
+                        ⚡ Approve & Add to Camera List
+                      </button>
+                    )}
                     <button type="button" className="secondary-button" onClick={() => { setSelectedDiscoveryId(item.id); setRenameDraft(item.displayName ?? item.model ?? ""); setRejectReason(""); }}>Rename</button>
                     <button type="button" className="secondary-button" onClick={() => { setSelectedDiscoveryId(item.id); setRenameDraft(item.displayName ?? item.model ?? ""); setRejectReason(""); }}>Reject</button>
                   </div>
