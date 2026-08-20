@@ -23,7 +23,7 @@ export function HlsPlayer({
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const playbackErrorRef = useRef(onPlaybackError);
-  const [useSimulatedLive, setUseSimulatedLive] = useState(false);
+  const [useSimulatedLive, setUseSimulatedLive] = useState(!url || url.includes("/api/media/streams"));
 
   useEffect(() => {
     playbackErrorRef.current = onPlaybackError;

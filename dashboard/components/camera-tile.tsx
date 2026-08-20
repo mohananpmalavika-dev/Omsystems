@@ -64,7 +64,7 @@ export function CameraTile({
   onPlaybackError?: (reason?: string) => void;
 }) {
   const tileRef = useRef<HTMLElement>(null);
-  const isActive = Boolean(session);
+  const isActive = camera.status !== "offline";
   const [zoom, setZoom] = useState(1);
   const [isMuted, setIsMuted] = useState(true);
   const [showPtzControl, setShowPtzControl] = useState(false);

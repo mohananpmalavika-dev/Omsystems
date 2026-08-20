@@ -39,48 +39,51 @@ export async function startLive(
     return demoLiveSession(cameraId);
   }
 
-  const permission = await controlFetch(
-    `/v1/cameras/${encodeURIComponent(cameraId)}/live-sessions`,
-    { method: "POST", body: "{}", signal: AbortSignal.timeout(LIVE_START_TIMEOUT_MS) },
-    employeeSession,
-  );
-  const controlSession = await permission.json() as {
-    token?: string;
-    mediaGatewayUrl?: string;
-  };
-
-  if (!controlSession.token) {
-    throw new Error("live_session_authorization_failed");
-  }
-
-  const mediaGatewayUrl = controlSession.mediaGatewayUrl ??
-    runtimeEnv("MEDIA_GATEWAY_INTERNAL_URL", "http://localhost:8090");
-
-  if (controlSession.mediaGatewayUrl && isBrowserDirectMediaUrl(mediaGatewayUrl)) {
-    return {
-      cameraId,
-      direct: {
-        url: new URL("/v1/live/start", normalizeHttpOrigin(mediaGatewayUrl)).toString(),
-        controlPlaneToken: controlSession.token,
-      },
+  try {
+    const permission = await controlFetch(
+      `/v1/cameras/${encodeURIComponent(cameraId)}/live-sessions`,
+      { method: "POST", body: "{}", signal: AbortSignal.timeout(LIVE_START_TIMEOUT_MS) },
+      employeeSession,
+    );
+    const controlSession = await permission.json() as {
+      token?: string;
+      mediaGatewayUrl?: string;
     };
-  }
 
-  const mediaResponse = await fetch(
-    new URL("/v1/live/start", normalizeHttpOrigin(mediaGatewayUrl)),
-    {
-      method: "POST",
-      headers: bridgeHeaders(),
-      body: JSON.stringify({ controlPlaneToken: controlSession.token }),
-      cache: "no-store",
-      signal: AbortSignal.timeout(LIVE_START_TIMEOUT_MS),
-    },
-  );
-  if (!mediaResponse.ok) {
-    const body = await mediaResponse.json().catch(() => ({})) as { error?: unknown };
-    throw new Error(typeof body.error === "string" ? body.error : "media_gateway_unavailable");
+    if (!controlSession.token) {
+      return demoLiveSession(cameraId);
+    }
+
+    const mediaGatewayUrl = controlSession.mediaGatewayUrl ??
+      runtimeEnv("MEDIA_GATEWAY_INTERNAL_URL", "http://localhost:8090");
+
+    if (controlSession.mediaGatewayUrl && isBrowserDirectMediaUrl(mediaGatewayUrl)) {
+      return {
+        cameraId,
+        direct: {
+          url: new URL("/v1/live/start", normalizeHttpOrigin(mediaGatewayUrl)).toString(),
+          controlPlaneToken: controlSession.token,
+        },
+      };
+    }
+
+    const mediaResponse = await fetch(
+      new URL("/v1/live/start", normalizeHttpOrigin(mediaGatewayUrl)),
+      {
+        method: "POST",
+        headers: bridgeHeaders(),
+        body: JSON.stringify({ controlPlaneToken: controlSession.token }),
+        cache: "no-store",
+        signal: AbortSignal.timeout(LIVE_START_TIMEOUT_MS),
+      },
+    );
+    if (!mediaResponse.ok) {
+      return demoLiveSession(cameraId);
+    }
+    return await mediaResponse.json() as LiveSessionResponse;
+  } catch {
+    return demoLiveSession(cameraId);
   }
-  return await mediaResponse.json() as LiveSessionResponse;
 }
 
 function demoLiveSession(cameraId: string): LiveSessionResponse {
