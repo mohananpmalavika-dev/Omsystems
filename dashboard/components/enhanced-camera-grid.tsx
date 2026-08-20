@@ -200,26 +200,21 @@ export function EnhancedCameraGrid({
     );
   }, [gridPositions, onMonitoredCamerasChange]);
 
-  const handleStartLive = useCallback(async (cameraId: string, stream: "main" | "sub" = "sub") => {
-    if (sessions.has(cameraId) || loading.has(cameraId)) return;
-    setLoading((prev) => new Set(prev).add(cameraId));
+  const sessionsRef = useRef<Map<string, LiveSessionResponse>>(new Map());
+  const loadingRef = useRef<Set<string>>(new Set());
 
-    // Safety timeout to guarantee tiles never hang on Authorizing...
-    const timeoutTimer = setTimeout(() => {
-      setLoading((prev) => {
-        const next = new Set(prev);
-        next.delete(cameraId);
-        return next;
-      });
-    }, 3000);
+  const handleStartLive = useCallback(async (cameraId: string, stream: "main" | "sub" = "sub") => {
+    if (sessionsRef.current.has(cameraId) || loadingRef.current.has(cameraId)) return;
+    loadingRef.current.add(cameraId);
+    setLoading(new Set(loadingRef.current));
 
     try {
       updateStreamState(cameraId, "CONNECTING");
 
       // Request live session from browser
       const session = await startLiveFromBrowser(cameraId, stream);
-      clearTimeout(timeoutTimer);
-      setSessions((prev) => new Map(prev).set(cameraId, session));
+      sessionsRef.current.set(cameraId, session);
+      setSessions(new Map(sessionsRef.current));
       activeStreamTypesRef.current.set(cameraId, stream);
       markPlaybackActive(cameraId);
 
@@ -228,15 +223,13 @@ export function EnhancedCameraGrid({
         : "LIVE_SUBSTREAM";
       updateStreamState(cameraId, streamState);
     } catch (error) {
-      clearTimeout(timeoutTimer);
       console.warn("Live session startup fallback for", cameraId, error);
       const reason = error instanceof Error ? error.message : "Unknown error";
       updateStreamState(cameraId, "ERROR", reason);
       reportPlaybackFailure(cameraId, reason);
       
       // Populate active fallback live session so video renders immediately
-      setSessions((prev) => {
-        if (prev.has(cameraId)) return prev;
+      if (!sessionsRef.current.has(cameraId)) {
         const fallbackSession: LiveSessionResponse = {
           demo: true,
           sessionId: `session-${Date.now()}-${cameraId}`,
@@ -247,22 +240,17 @@ export function EnhancedCameraGrid({
             bearerToken: `token-${cameraId}`,
           },
         };
-        return new Map(prev).set(cameraId, fallbackSession);
-      });
+        sessionsRef.current.set(cameraId, fallbackSession);
+        setSessions(new Map(sessionsRef.current));
+      }
       markPlaybackActive(cameraId);
     } finally {
-      clearTimeout(timeoutTimer);
-      setLoading((prev) => {
-        const newSet = new Set(prev);
-        newSet.delete(cameraId);
-        return newSet;
-      });
+      loadingRef.current.delete(cameraId);
+      setLoading(new Set(loadingRef.current));
     }
   }, [
-    loading,
     markPlaybackActive,
     reportPlaybackFailure,
-    sessions,
     updateStreamState,
   ]);
 
@@ -329,6 +317,7 @@ export function EnhancedCameraGrid({
   // in the current API response, populate the wall with available cameras.
   useEffect(() => {
     if (cameras.length === 0 || initialLayoutApplied.current) return;
+    initialLayoutApplied.current = true;
 
     const camerasById = new Map(cameras.map((camera) => [camera.id, camera]));
     const posMap = new Map<number, { camera: Camera; stream: "main" | "sub"; priority: number }>();
@@ -352,9 +341,8 @@ export function EnhancedCameraGrid({
     }
 
     setGridPositions(posMap);
-    initialLayoutApplied.current = true;
 
-    // Auto-start live stream for primary visible online cameras with staggered scheduling
+    // Auto-start live stream for primary visible online cameras with staggered scheduling ONCE
     const initialBatch = Array.from(posMap.values()).slice(0, 16);
     initialBatch.forEach((entry, idx) => {
       if (entry.camera.status !== "offline") {
@@ -363,7 +351,8 @@ export function EnhancedCameraGrid({
         }, idx * 60);
       }
     });
-  }, [initialLayout, cameras, totalPositions, handleStartLive]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cameras, totalPositions]);
 
   // Adaptive layout: prioritize cameras with alerts
   useEffect(() => {

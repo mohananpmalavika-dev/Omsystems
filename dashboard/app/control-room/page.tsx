@@ -114,38 +114,28 @@ export default function ControlRoomPage() {
 
   useEffect(() => {
     if (loading || !monitoringSignature) return;
-    let disposed = false;
-    let retryTimer: ReturnType<typeof setTimeout> | undefined;
 
-    const beginMonitoring = async () => {
-      const branchMap = new Map<string, string>();
-      for (const camera of monitoredCameras) {
-        if (camera.branchId) branchMap.set(camera.branchId, camera.branchName || camera.branchId);
-      }
-      const branchIds = [...branchMap.keys()];
-      const branchNames = [...branchMap.values()];
-      const activityId = await startControlRoomActivity(
-        branchIds.length === 1 ? "single_branch" : "multi_branch",
-        branchIds.length === 1 ? branchIds[0] : undefined,
-        undefined,
-        undefined,
-        monitoredCameras.map((camera) => camera.id),
-        branchIds,
-        branchNames,
-        "live",
-      );
-      // The global activity session may still be starting on the first render.
-      if (!activityId && !disposed) retryTimer = setTimeout(beginMonitoring, 1000);
-    };
+    const branchMap = new Map<string, string>();
+    for (const camera of monitoredCameras) {
+      if (camera.branchId) branchMap.set(camera.branchId, camera.branchName || camera.branchId);
+    }
+    const branchIds = [...branchMap.keys()];
+    const branchNames = [...branchMap.values()];
+    
+    void startControlRoomActivity(
+      branchIds.length === 1 ? "single_branch" : "multi_branch",
+      branchIds.length === 1 ? branchIds[0] : undefined,
+      undefined,
+      undefined,
+      monitoredCameras.map((camera) => camera.id),
+      branchIds,
+      branchNames,
+      "live",
+    ).catch(() => null);
 
-    void beginMonitoring();
     return () => {
-      disposed = true;
-      if (retryTimer) clearTimeout(retryTimer);
-      void endControlRoomActivity();
+      void endControlRoomActivity().catch(() => null);
     };
-  // The signature prevents the 30-second camera refresh from splitting one
-  // monitoring interval when the monitored set has not actually changed.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loading, monitoringSignature]);
 
