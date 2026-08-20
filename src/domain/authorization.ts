@@ -70,5 +70,31 @@ export function authorize(
     };
   }
 
+  // Check direct primaryOrgNodeId / branchId / scopeNodeId on user
+  const directScopeId = (user as any).primaryOrgNodeId || (user as any).scopeNodeId || (user as any).branchId;
+  if (directScopeId) {
+    if (directScopeId === resource.id) {
+      return { allowed: true, reason: "allowed_by_grant", matchingScopeId: directScopeId };
+    }
+    const directScope = nodesById.get(directScopeId);
+    if (directScope && contains(directScope, resource)) {
+      return { allowed: true, reason: "allowed_by_grant", matchingScopeId: directScopeId };
+    }
+  }
+
+  // Check multiple assigned organizations / branches
+  if (Array.isArray((user as any).organizations)) {
+    for (const org of (user as any).organizations) {
+      const orgNodeId = org.nodeId || org.id;
+      if (orgNodeId === resource.id) {
+        return { allowed: true, reason: "allowed_by_grant", matchingScopeId: orgNodeId };
+      }
+      const orgScope = nodesById.get(orgNodeId);
+      if (orgScope && contains(orgScope, resource)) {
+        return { allowed: true, reason: "allowed_by_grant", matchingScopeId: orgNodeId };
+      }
+    }
+  }
+
   return { allowed: false, reason: "no_matching_grant" };
 }

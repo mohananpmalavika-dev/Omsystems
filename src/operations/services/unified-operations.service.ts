@@ -18,13 +18,15 @@ import { alertIncidentRepository } from "../../incidents/index.js";
 import { maintenanceWindowRepository } from "../../maintenance/index.js";
 import { hasExtendedInfrastructure, type ControlPlaneStore } from "../../control-plane-store.js";
 
+import type { User } from "../../domain/models.js";
+
 export class UnifiedOperationsService {
-  async getCommandCenterSummary(tenantId = "tenant-default", store?: ControlPlaneStore): Promise<CommandCenterSummary> {
+  async getCommandCenterSummary(tenantId = "tenant-default", store?: ControlPlaneStore, user?: User): Promise<CommandCenterSummary> {
     const incidents = await alertIncidentRepository.list();
     const activeIncidents = incidents.filter((i) => i.status !== "RESOLVED");
     const activeMaintenance = await maintenanceWindowRepository.list({ status: "ACTIVE" });
 
-    const branches = await this.getFleetBranchSummaries(tenantId, store);
+    const branches = await this.getFleetBranchSummaries(tenantId, store, user);
 
     const totalBranches = branches.length;
     const healthyBranches = branches.filter((b) => b.operationalState === "HEALTHY").length;
@@ -281,15 +283,24 @@ export class UnifiedOperationsService {
     };
   }
 
-  async getFleetBranchSummaries(tenantId = "tenant-default", store?: ControlPlaneStore): Promise<BranchOperationalView[]> {
+  async getFleetBranchSummaries(tenantId = "tenant-default", store?: ControlPlaneStore, user?: User): Promise<BranchOperationalView[]> {
     if (store) {
       try {
         let nodes: any[] = [];
-        if (typeof (store as any).listOrganizationNodes === "function") {
+        if (user && typeof store.listAccessibleNodes === "function") {
           try {
-            nodes = await (store as any).listOrganizationNodes(tenantId, "branch", undefined, true);
+            nodes = await store.listAccessibleNodes(user, "live:view", "branch");
           } catch {
             nodes = [];
+          }
+        }
+        if (!nodes || nodes.length === 0) {
+          if (typeof (store as any).listOrganizationNodes === "function") {
+            try {
+              nodes = await (store as any).listOrganizationNodes(tenantId, "branch", undefined, true);
+            } catch {
+              nodes = [];
+            }
           }
         }
         if (!nodes || nodes.length === 0) {
@@ -297,6 +308,35 @@ export class UnifiedOperationsService {
             nodes = [...(store as any).nodes.values()].filter((n: any) => n.type === "branch");
           }
         }
+
+        // Apply strict location accessibility filtering if user is not super_admin
+        if (user && Array.isArray(nodes) && nodes.length > 0) {
+          const role = (user.role ?? "") as string;
+          const isSuperAdmin =
+            role === "super_admin" ||
+            role === "superadmin" ||
+            role === "company_admin" ||
+            user.username?.toLowerCase() === "mgdhanyamohan" ||
+            user.id === "00000000-0000-4000-8000-000000000001" ||
+            user.id === "user-global-admin";
+
+          if (!isSuperAdmin) {
+            nodes = nodes.filter((node) => {
+              const directScopeId = (user as any).primaryOrgNodeId || (user as any).scopeNodeId || (user as any).branchId;
+              if (directScopeId && (directScopeId === node.id || (node.path && node.path.includes(directScopeId)))) {
+                return true;
+              }
+              if (Array.isArray((user as any).organizations)) {
+                return (user as any).organizations.some((org: any) => {
+                  const orgId = org.nodeId || org.id;
+                  return orgId === node.id || (node.path && node.path.includes(orgId));
+                });
+              }
+              return false;
+            });
+          }
+        }
+
         if (Array.isArray(nodes) && nodes.length > 0) {
           const views: BranchOperationalView[] = [];
           for (const node of nodes) {

@@ -12,7 +12,8 @@ export async function registerUnifiedOperationsRoutes(app: FastifyInstance, stor
    */
   const handleGetCommandCenter = async (request: FastifyRequest, reply: FastifyReply) => {
     const tenantId = (request as any).currentUser?.tenantId || "tenant-default";
-    const summary = await unifiedOperationsService.getCommandCenterSummary(tenantId, store);
+    const user = (request as any).currentUser;
+    const summary = await unifiedOperationsService.getCommandCenterSummary(tenantId, store, user);
     return reply.send({ success: true, data: summary });
   };
 
@@ -24,7 +25,8 @@ export async function registerUnifiedOperationsRoutes(app: FastifyInstance, stor
    */
   const handleGetAttentionRequired = async (request: FastifyRequest, reply: FastifyReply) => {
     const tenantId = (request as any).currentUser?.tenantId || "tenant-default";
-    const summary = await unifiedOperationsService.getCommandCenterSummary(tenantId, store);
+    const user = (request as any).currentUser;
+    const summary = await unifiedOperationsService.getCommandCenterSummary(tenantId, store, user);
     return reply.send({ success: true, count: summary.attentionRequired.length, data: summary.attentionRequired });
   };
 
@@ -36,7 +38,8 @@ export async function registerUnifiedOperationsRoutes(app: FastifyInstance, stor
    */
   const handleGetBranches = async (request: FastifyRequest, reply: FastifyReply) => {
     const tenantId = (request as any).currentUser?.tenantId || "tenant-default";
-    const branches = await unifiedOperationsService.getFleetBranchSummaries(tenantId, store);
+    const user = (request as any).currentUser;
+    const branches = await unifiedOperationsService.getFleetBranchSummaries(tenantId, store, user);
     return reply.send({ success: true, count: branches.length, data: branches });
   };
 
