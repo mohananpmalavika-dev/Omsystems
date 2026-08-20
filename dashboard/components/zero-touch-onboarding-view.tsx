@@ -309,39 +309,48 @@ export function ZeroTouchOnboardingView() {
 
   const handleDownloadBatch = useCallback((branchId: string, branchName: string, psCommand?: string) => {
     const origin = typeof window !== "undefined" ? window.location.origin : "https://sentinel-grid-monitoring-vhid.onrender.com";
+    const cleanBranchName = (branchName || "Branch").replace(/["\r\n]/g, "");
     const command = psCommand || `iwr -useb '${origin}/api/control/v1/branches/${branchId}/install.ps1' | iex`;
-    const content = `@echo off
-setlocal EnableDelayedExpansion
-
-:: Check for Administrator privileges
-net session >nul 2>&1
-if %errorlevel% neq 0 (
-    echo [!] Administrator privileges required. Requesting elevation...
-    powershell -Command "Start-Process '%~f0' -Verb RunAs"
-    exit /b
-)
-
+    const content = `<# :
+@echo off
+setlocal
 title Sentinel Grid Edge Agent - 1-Click Auto Setup
+color 0B
 cls
-echo ================================================================
-echo          SENTINEL GRID CCTV SECURITY - 1-CLICK AUTO SETUP
-echo ================================================================
-echo Target Branch: ${branchName.replace(/"/g, "")} (${branchId})
-echo.
-echo [*] Connecting to Sentinel Grid Cloud Control Plane...
-echo [*] Downloading and configuring Edge Agent background service...
-echo [*] Probing local network for ONVIF IP cameras, RTSP streams, and DVRs...
-echo.
-
-powershell -NoProfile -ExecutionPolicy Bypass -Command "${command.replace(/"/g, "'")}"
-
+powershell -NoProfile -ExecutionPolicy Bypass -Command "[ScriptBlock]::Create([IO.File]::ReadAllText('%~f0')).Invoke()"
 echo.
 echo ================================================================
-echo   SUCCESS: Sentinel Grid Edge Agent is installed and running!
-echo   It will continuously monitor this branch 24/7 in the background.
+echo  Sentinel Grid Edge Process Terminated.
 echo ================================================================
-echo.
 pause
+goto :eof
+#>
+
+Write-Host "================================================================" -ForegroundColor Cyan
+Write-Host "         SENTINEL GRID CCTV SECURITY - 1-CLICK AUTO SETUP" -ForegroundColor Cyan
+Write-Host "================================================================" -ForegroundColor Cyan
+Write-Host "Target Branch: ${cleanBranchName} (${branchId})" -ForegroundColor White
+Write-Host ""
+Write-Host "[*] Connecting to Sentinel Grid Cloud Control Plane..." -ForegroundColor Yellow
+Write-Host "[*] Downloading and configuring Edge Agent background service..." -ForegroundColor Yellow
+Write-Host "[*] Probing local network for ONVIF IP cameras, RTSP streams, and DVRs..." -ForegroundColor Yellow
+Write-Host ""
+
+try {
+  [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]'Tls12'
+} catch {}
+
+try {
+  ${command}
+} catch {
+  Write-Host (" [!] Error: " + $_.Exception.Message) -ForegroundColor Red
+}
+
+Write-Host ""
+Write-Host "================================================================" -ForegroundColor Green
+Write-Host "  SUCCESS: Sentinel Grid Edge Agent is installed and running!" -ForegroundColor Green
+Write-Host "  It will continuously monitor this branch 24/7 in the background." -ForegroundColor Green
+Write-Host "================================================================" -ForegroundColor Green
 `;
     const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
     const url = URL.createObjectURL(blob);

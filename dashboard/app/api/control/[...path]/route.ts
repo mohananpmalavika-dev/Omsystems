@@ -108,7 +108,7 @@ async function proxyControlRequest(request: NextRequest, context: RouteContext) 
       const branchId = path[2] || "branch-default";
       const origin = request.nextUrl.origin;
       const script = `# Sentinel Grid Edge Agent 1-Click Setup
-[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 -bor [Net.SecurityProtocolType]::Tls13
+try { [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]'Tls12' } catch {}
 $ErrorActionPreference = 'SilentlyContinue'
 $branchId = "${branchId}"
 $origin = "${origin}"
