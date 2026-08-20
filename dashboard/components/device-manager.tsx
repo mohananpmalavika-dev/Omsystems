@@ -1238,19 +1238,19 @@ powershell -NoProfile -ExecutionPolicy Bypass -Command ^
   "    Write-Host $errMsg -ForegroundColor Yellow; " ^
   "    $successCount = 0; " ^
   "    foreach ($dev in $discoveredDevices) { " ^
+  "      $dev.edgeAgentId = $agentId; " ^
+  "      $devJson = $dev | ConvertTo-Json -Depth 3; " ^
   "      try { " ^
-  "        $dev.edgeAgentId = $agentId; " ^
-  "        $devJson = $dev | ConvertTo-Json -Depth 3; " ^
-  "        $result = Invoke-RestMethod -Uri ($apiBase + '/branches/' + $branchId + '/cameras/discovered') -Method Post -Body $devJson -ContentType 'application/json' -TimeoutSec 8; " ^
+  "        $result = Invoke-RestMethod -Uri ($apiBase + '/branches/' + $branchId + '/cameras/discovered') -Method Post -Body $devJson -ContentType 'application/json' -TimeoutSec 8 -ErrorAction Stop; " ^
   "        $successCount++; " ^
   "      } catch { " ^
   "        $failMsg = '    [!] Device sync failed: ' + $dev.displayName; " ^
   "        Write-Host $failMsg -ForegroundColor DarkYellow; " ^
-  "      } " ^
+  "      }; " ^
   "    }; " ^
   "    $summaryMsg = ' [+] Individual device registration complete! (' + $successCount + '/' + $discoveredDevices.Count + ' devices synced)'; " ^
   "    Write-Host $summaryMsg -ForegroundColor Green; " ^
-  "  } " ^
+  "  }; " ^
   "  Write-Host ''; " ^
   "  Write-Host '==============================================================================' -ForegroundColor Green; " ^
   "  Write-Host ' SUCCESS: Sentinel Grid Edge Agent is ACTIVE and SYNCED!' -ForegroundColor Green; " ^
@@ -1264,14 +1264,14 @@ powershell -NoProfile -ExecutionPolicy Bypass -Command ^
   "    Start-Sleep -Seconds 15; " ^
   "    $hbCount++; " ^
   "    try { " ^
-  "      Invoke-RestMethod -Uri ($apiBase + '/edge-agents/' + $agentId + '/heartbeat') -Method Post -Body $hbPayload -ContentType 'application/json' -TimeoutSec 5 | Out-Null; " ^
+  "      Invoke-RestMethod -Uri ($apiBase + '/edge-agents/' + $agentId + '/heartbeat') -Method Post -Body $hbPayload -ContentType 'application/json' -TimeoutSec 5 -ErrorAction Stop | Out-Null; " ^
   "      $hbOkMsg = '  [Heartbeat #' + $hbCount + '] Edge agent status: HEALTHY (ping acknowledged at ' + (Get-Date -Format 'HH:mm:ss') + ')'; " ^
   "      Write-Host $hbOkMsg -ForegroundColor Gray; " ^
   "    } catch { " ^
   "      $hbSentMsg = '  [Heartbeat #' + $hbCount + '] Edge heartbeat ping sent at ' + (Get-Date -Format 'HH:mm:ss'); " ^
   "      Write-Host $hbSentMsg -ForegroundColor DarkGray; " ^
-  "    } " ^
-  "  } " ^
+  "    }; " ^
+  "  }; " ^
   "} catch { " ^
   "  Write-Host ''; " ^
   "  $errorMsg = ' [!] ERROR: ' + $_.Exception.Message; " ^
