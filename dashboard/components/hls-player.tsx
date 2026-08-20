@@ -89,7 +89,7 @@ export function HlsPlayer({
 
       hls.on(Hls.Events.ERROR, (_event, data) => {
         if (!data.fatal) return;
-        if (fatalRetries < 2) {
+        if (fatalRetries < 1) {
           fatalRetries += 1;
           retryTimer = setTimeout(() => {
             if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
@@ -97,8 +97,12 @@ export function HlsPlayer({
             } else {
               hls?.startLoad();
             }
-          }, fatalRetries * 1_000);
+          }, 800);
           return;
+        }
+        if (hls) {
+          hls.destroy();
+          hls = null;
         }
         setUseSimulatedLive(true);
         playbackErrorRef.current?.();
@@ -110,11 +114,14 @@ export function HlsPlayer({
 
     return () => {
       if (retryTimer) clearTimeout(retryTimer);
-      if (hls) hls.destroy();
+      if (hls) {
+        hls.destroy();
+        hls = null;
+      }
     };
   }, [bearerToken, url]);
 
-  // High-efficiency live CCTV canvas stream generator (1 FPS interval to eliminate CPU load)
+  // High-efficiency live CCTV canvas stream generator using requestAnimationFrame
   useEffect(() => {
     if (!useSimulatedLive) return;
 
@@ -124,6 +131,8 @@ export function HlsPlayer({
     if (!ctx) return;
 
     let tick = 0;
+    let frameId: number;
+    let lastRender = 0;
 
     const render = () => {
       tick++;
@@ -207,10 +216,17 @@ export function HlsPlayer({
     };
 
     render();
-    const intervalTimer = setInterval(render, 1000);
+    const renderFrame = (timestamp: number) => {
+      if (timestamp - lastRender >= 1000) {
+        lastRender = timestamp;
+        render();
+      }
+      frameId = requestAnimationFrame(renderFrame);
+    };
+    frameId = requestAnimationFrame(renderFrame);
 
     return () => {
-      clearInterval(intervalTimer);
+      cancelAnimationFrame(frameId);
     };
   }, [cameraName, useSimulatedLive]);
 

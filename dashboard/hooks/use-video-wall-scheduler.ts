@@ -25,7 +25,7 @@ import type {
 } from "@/lib/video/types";
 import { ViewerCapacityManager } from "@/lib/video/viewer-capacity-manager";
 
-const SCHEDULER_INTERVAL_MS = 2_000;
+const SCHEDULER_INTERVAL_MS = 8_000;
 const STREAM_FAILURE_COOLDOWN_MS = 15_000;
 
 export interface VideoWallGridPosition {

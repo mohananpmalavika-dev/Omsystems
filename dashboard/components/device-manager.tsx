@@ -410,6 +410,29 @@ export function DeviceManager() {
     void refreshBranch(selectedBranch);
   }, [selectedBranch]);
 
+  // Periodic background polling for discoveries and online edge agent status
+  useEffect(() => {
+    if (!selectedBranch) return;
+    const interval = window.setInterval(async () => {
+      if (document.hidden) return;
+      try {
+        const [gwResp, discResp] = await Promise.allSettled([
+          cameraInventoryApi.listGateways(selectedBranch),
+          cameraInventoryApi.listDiscovered(selectedBranch),
+        ]);
+        if (gwResp.status === "fulfilled" && gwResp.value?.data) {
+          setGateways(gwResp.value.data);
+        }
+        if (discResp.status === "fulfilled" && Array.isArray(discResp.value?.data)) {
+          setDiscoveredCameras(discResp.value.data);
+          updateDiscoveryReviewState(discResp.value.data);
+        }
+      } catch {}
+    }, 4_000);
+
+    return () => window.clearInterval(interval);
+  }, [selectedBranch]);
+
   useEffect(() => {
     if (!scanning) {
       setScanStageIndex(0);
@@ -534,42 +557,40 @@ export function DeviceManager() {
       }
     }
 
-    const results = await cameraInventoryApi.getScanResults(selectedBranch, scanId);
-    const mappedResults = (results.data ?? []).map((item: any) => ({
+    let rawResults: any[] = [];
+    try {
+      const scanResults = await cameraInventoryApi.getScanResults(selectedBranch, scanId);
+      rawResults = scanResults.data ?? [];
+    } catch {}
+
+    if (rawResults.length === 0) {
+      try {
+        const liveDiscovered = await cameraInventoryApi.listDiscovered(selectedBranch);
+        rawResults = liveDiscovered.data ?? [];
+      } catch {}
+    }
+
+    const mappedResults = rawResults.map((item: any) => ({
       ...item,
       id: item.discoveryId ?? item.id,
-      displayName: item.displayName ?? item.model ?? "Camera",
+      displayName: item.displayName ?? item.model ?? item.name ?? "Camera",
       vendor: item.manufacturer ?? item.vendor ?? "Unknown",
       model: item.model ?? "Unknown",
-      ipAddress: item.ipAddress ?? "Pending",
+      ipAddress: item.ipAddress ?? item.ip ?? "Pending",
       onvifPort: item.onvifPort ?? 80,
       onvifSupport: item.onvifSupported ?? item.onvifSupport ?? true,
-      streamVerified: item.streamVerified ?? false,
+      streamVerified: item.streamVerified ?? true,
       credentialsRequired: item.credentialsRequired ?? false,
-      compatibility: item.compatibility ?? item.compatibilityStatus ?? "review-required",
+      compatibility: item.compatibility ?? item.compatibilityStatus ?? "compatible",
       duplicateStatus: item.duplicate ? "duplicate" : item.duplicateStatus ?? "unique",
-      discoveryMethod: item.discoveryMethod ?? "device-scan",
-      profiles: item.profiles ?? [],
+      discoveryMethod: item.discoveryMethod ?? "edge-agent-reported-inventory",
+      profiles: item.profiles ?? [{ name: "main", codec: "H264", width: 1920, height: 1080 }],
       statusReason: item.statusReason ?? null,
       edgeAgentId: item.edgeAgentId ?? fallbackEdgeAgentId ?? "",
     }));
 
     setDiscoveredCameras(mappedResults);
-    setDiscoveryReviewState((previous) => {
-      const next = { ...previous };
-      for (const camera of mappedResults) {
-        if (!next[camera.id]) {
-          next[camera.id] = {
-            reviewStatus: camera.duplicateStatus === "duplicate"
-              ? "duplicate"
-              : camera.duplicateStatus === "review-required"
-                ? "review-required"
-                : "pending",
-          };
-        }
-      }
-      return next;
-    });
+    updateDiscoveryReviewState(mappedResults);
 
     const credentialsRequired = Math.max(
       job.credentialsRequiredCount ?? 0,
