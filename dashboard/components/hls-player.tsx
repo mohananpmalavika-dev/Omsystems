@@ -24,6 +24,34 @@ export function HlsPlayer({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const playbackErrorRef = useRef(onPlaybackError);
   const [useSimulatedLive, setUseSimulatedLive] = useState(!url || url.includes("/api/media/streams"));
+  const [realStreamUrl, setRealStreamUrl] = useState<string | null>(null);
+
+  // Check for local Real CCTV Stream Bridge (http://127.0.0.1:8090)
+  useEffect(() => {
+    let active = true;
+    const match = (cameraName || "").match(/(?:ch|channel|cam)\s*(\d+)/i);
+    const ch = match ? Number(match[1]) : 1;
+    const probeUrl = `http://127.0.0.1:8090/snapshot/${ch}?t=${Date.now()}`;
+
+    const img = new Image();
+    img.onload = () => {
+      if (active) {
+        setRealStreamUrl(`http://127.0.0.1:8090/stream/${ch}`);
+      }
+    };
+    img.onerror = () => {
+      if (active) {
+        setRealStreamUrl(null);
+      }
+    };
+    img.src = probeUrl;
+
+    return () => {
+      active = false;
+      img.onload = null;
+      img.onerror = null;
+    };
+  }, [cameraName]);
 
   useEffect(() => {
     playbackErrorRef.current = onPlaybackError;
@@ -248,6 +276,22 @@ export function HlsPlayer({
       cancelAnimationFrame(frameId);
     };
   }, [cameraName, useSimulatedLive]);
+
+  if (realStreamUrl) {
+    return (
+      <div className="relative w-full h-full bg-black overflow-hidden flex items-center justify-center">
+        <img
+          src={realStreamUrl}
+          alt={`Real Live Camera Feed - ${cameraName}`}
+          className="live-video object-cover w-full h-full"
+        />
+        <div className="absolute top-2 left-2 flex items-center gap-1.5 bg-black/80 px-2 py-0.5 rounded text-[9.5px] font-mono text-emerald-400 border border-emerald-500/30 backdrop-blur-sm pointer-events-none">
+          <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+          REAL CCTV FEED · {cameraName.toUpperCase()}
+        </div>
+      </div>
+    );
+  }
 
   if (useSimulatedLive) {
     return (
