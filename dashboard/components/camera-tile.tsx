@@ -188,6 +188,7 @@ export function CameraTile({
               url={session.hls.url}
               bearerToken={session.hls.bearerToken ?? ""}
               cameraName={camera.name}
+              cameraId={camera.id}
               muted={isMuted}
               onPlaybackError={() => onPlaybackError?.("HLS playback failed")}
               onVideoElementChange={handleVideoElementChange}
@@ -203,6 +204,7 @@ export function CameraTile({
               url=""
               bearerToken=""
               cameraName={camera.name}
+              cameraId={camera.id}
               muted={isMuted}
               onPlaybackError={() => onPlaybackError?.("HLS playback failed")}
               onVideoElementChange={handleVideoElementChange}

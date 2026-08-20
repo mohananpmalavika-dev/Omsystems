@@ -87,8 +87,13 @@ export function CommandCenterView() {
     return () => clearInterval(interval);
   }, []);
 
-  const totalBranchesCount = summary?.branches?.total ?? branches.length ?? 0;
-  const totalCamerasCount = summary?.cameras?.total ?? 0;
+  const totalBranchesCount = branches.length > 0 ? branches.length : (summary?.branches?.total ?? 0);
+  const totalCamerasCount = (summary?.cameras?.total && summary.cameras.total > 0) 
+    ? summary.cameras.total 
+    : branches.reduce((acc, b) => acc + (b.cameras?.total || 0), 0);
+  const onlineCamerasCount = (summary?.cameras?.healthy && summary.cameras.healthy > 0)
+    ? summary.cameras.healthy
+    : branches.reduce((acc, b) => acc + (b.cameras?.healthy || 0), 0);
 
   const filteredBranches = useMemo(() => {
     return branches.filter((b) => {
@@ -394,10 +399,10 @@ export function CommandCenterView() {
             <Camera className="w-3.5 h-3.5 text-slate-400" />
           </div>
           <div className="text-2xl font-black text-white">
-            {summary?.cameras?.healthy?.toLocaleString() || 0} <span className="text-xs text-slate-500 font-normal">/ {totalCamerasCount}</span>
+            {onlineCamerasCount.toLocaleString()} <span className="text-xs text-slate-500 font-normal">/ {totalCamerasCount}</span>
           </div>
           <div className="text-[11px] text-slate-400 font-medium">
-            {totalCamerasCount === 0 ? "No Cameras" : `${summary?.cameras?.healthy || 0} Online`}
+            {totalCamerasCount === 0 ? "No Cameras" : `${onlineCamerasCount} Online`}
           </div>
         </div>
 

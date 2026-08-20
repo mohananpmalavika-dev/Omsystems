@@ -3,7 +3,8 @@ import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
 
-const globalFrames = globalThis as unknown as { __realCctvFrames?: Map<number, { buffer: Buffer; updatedAt: number }> };
+// Global dynamic frame cache for real camera feeds across all client branches
+const globalFrames = globalThis as unknown as { __realCctvFrames?: Map<string, { buffer: Buffer; updatedAt: number }> };
 if (!globalFrames.__realCctvFrames) {
   globalFrames.__realCctvFrames = new Map();
 }
@@ -11,36 +12,34 @@ const frameStore = globalFrames.__realCctvFrames;
 
 export async function GET(request: NextRequest) {
   const url = new URL(request.url);
-  const chParam = url.searchParams.get("channel") || url.searchParams.get("ch") || "1";
-  const ch = Number(chParam) || 1;
+  const targetKey = url.searchParams.get("cameraId") || url.searchParams.get("id") || url.searchParams.get("channel") || url.searchParams.get("ch") || "default";
 
-  const cached = frameStore.get(ch);
+  const cached = frameStore.get(targetKey) || frameStore.get(targetKey.toLowerCase());
   if (cached && cached.buffer.length > 0) {
     return new NextResponse(new Uint8Array(cached.buffer), {
       status: 200,
       headers: {
         "Content-Type": "image/jpeg",
         "Cache-Control": "no-store, no-cache, must-revalidate",
-        "X-CCTV-Channel": String(ch),
-        "X-CCTV-Updated": String(cached.updatedAt),
+        "X-Camera-Id": targetKey,
+        "X-Frame-Updated": String(cached.updatedAt),
       },
     });
   }
 
-  return NextResponse.json({ error: "no_frame_available", channel: ch }, { status: 404 });
+  return NextResponse.json({ error: "no_frame_available", target: targetKey }, { status: 404 });
 }
 
 export async function POST(request: NextRequest) {
   try {
     const url = new URL(request.url);
-    const chParam = url.searchParams.get("channel") || url.searchParams.get("ch") || "1";
-    const ch = Number(chParam) || 1;
+    const targetKey = url.searchParams.get("cameraId") || url.searchParams.get("id") || url.searchParams.get("channel") || url.searchParams.get("ch") || "default";
 
     const contentType = request.headers.get("content-type") || "";
     let imageBuffer: Buffer;
 
     if (contentType.includes("application/json")) {
-      const body = await request.json() as { channel?: number; imageBase64?: string; base64?: string };
+      const body = await request.json() as { cameraId?: string; channel?: number | string; imageBase64?: string; base64?: string };
       const base64Data = body.imageBase64 || body.base64 || "";
       imageBuffer = Buffer.from(base64Data.replace(/^data:image\/\w+;base64,/, ""), "base64");
     } else {
@@ -49,11 +48,15 @@ export async function POST(request: NextRequest) {
     }
 
     if (imageBuffer.length > 500) {
-      frameStore.set(ch, {
+      frameStore.set(targetKey, {
         buffer: imageBuffer,
         updatedAt: Date.now(),
       });
-      return NextResponse.json({ success: true, channel: ch, size: imageBuffer.length });
+      frameStore.set(targetKey.toLowerCase(), {
+        buffer: imageBuffer,
+        updatedAt: Date.now(),
+      });
+      return NextResponse.json({ success: true, target: targetKey, size: imageBuffer.length });
     }
 
     return NextResponse.json({ error: "invalid_frame_data" }, { status: 400 });

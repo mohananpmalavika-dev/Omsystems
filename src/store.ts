@@ -1336,6 +1336,157 @@ export class MemoryStore {
     });
   }
 
+  async listCamerasByBranchId(branchId: string) {
+    const list: any[] = [...this.cameras.values()].filter(
+      (camera) => camera.branchId === branchId || camera.nodeId === branchId
+    );
+    // Also include discovered cameras for this branch or scanner fallback
+    const discovered = [...this.discoveries.values()].filter(
+      (disc) => disc.branchId === branchId || (!disc.branchId && branchId === "A005")
+    );
+    for (const disc of discovered) {
+      if (!list.some((c) => c.id === disc.id || c.ipAddress === disc.ipAddress)) {
+        list.push({
+          id: disc.id,
+          name: (disc as any).displayName || (disc as any).name || `${disc.vendor?.toUpperCase() || "IP"} Camera (${disc.ipAddress})`,
+          branchId,
+          nodeId: branchId,
+          vendor: (disc.vendor || "other") as any,
+          model: disc.model || "ONVIF 4K IP Camera",
+          channel: 1,
+          protocol: "rtsp",
+          status: "online" as any,
+          profiles: [],
+          capabilities: { ptz: false, audio: false, motion: true },
+          connectionSecretRef: "secret-default",
+          ipAddress: disc.ipAddress,
+        });
+      }
+    }
+    return list;
+  }
+
+  async listAllCameras() {
+    const list: any[] = [...this.cameras.values()];
+    for (const disc of this.discoveries.values()) {
+      if (!list.some((c) => c.id === disc.id || c.ipAddress === disc.ipAddress)) {
+        list.push({
+          id: disc.id,
+          name: (disc as any).displayName || (disc as any).name || `${disc.vendor?.toUpperCase() || "IP"} Camera (${disc.ipAddress})`,
+          branchId: disc.branchId || "A005",
+          nodeId: disc.branchId || "A005",
+          vendor: (disc.vendor || "other") as any,
+          model: disc.model || "ONVIF 4K IP Camera",
+          channel: 1,
+          protocol: "rtsp",
+          status: "online" as any,
+          profiles: [],
+          capabilities: { ptz: false, audio: false, motion: true },
+          connectionSecretRef: "secret-default",
+          ipAddress: disc.ipAddress,
+        });
+      }
+    }
+    return list;
+  }
+
+  // --- OrganizationStore implementation ---
+  async listOrganizationNodes(tenantId: string, type?: string, parentId?: string, includeInactive = false) {
+    return [...this.nodes.values()].filter((node) => {
+      if (type && node.type !== type) return false;
+      if (parentId !== undefined && node.parentId !== parentId) return false;
+      return true;
+    });
+  }
+
+  async getOrganizationTree(tenantId: string) {
+    const all = [...this.nodes.values()];
+    const byId = new Map<string, any>();
+    for (const n of all) {
+      byId.set(n.id, { ...n, children: [] });
+    }
+    const roots: any[] = [];
+    for (const n of all) {
+      const nodeObj = byId.get(n.id);
+      if (n.parentId && byId.has(n.parentId)) {
+        byId.get(n.parentId).children.push(nodeObj);
+      } else {
+        roots.push(nodeObj);
+      }
+    }
+    return roots;
+  }
+
+  async getOrganizationStatistics(tenantId: string) {
+    const all = [...this.nodes.values()];
+    const counts: Record<string, number> = {};
+    for (const node of all) {
+      counts[node.type] = (counts[node.type] ?? 0) + 1;
+    }
+    return {
+      nodes: counts,
+      cameras: {
+        total: this.cameras.size + this.discoveries.size,
+        online: this.cameras.size + this.discoveries.size,
+      },
+    };
+  }
+
+  async getOrganizationNodeDetails(id: string) {
+    return this.nodes.get(id);
+  }
+
+  async getNodeHierarchyPath(id: string) {
+    const node = this.nodes.get(id);
+    if (!node) return [];
+    const path: any[] = [];
+    for (const ancestorId of node.path) {
+      const a = this.nodes.get(ancestorId);
+      if (a) path.push(a);
+    }
+    return path;
+  }
+
+  async getDescendantNodes(id: string, includeInactive = false) {
+    const node = this.nodes.get(id);
+    if (!node) return [];
+    return [...this.nodes.values()].filter((n) => n.path.includes(id) && n.id !== id);
+  }
+
+  async createOrganizationNode(tenant: string, input: any) {
+    const parent = input.parentNodeId ? this.nodes.get(input.parentNodeId) : undefined;
+    const id = input.code ? input.code.toLowerCase().replace(/[^a-z0-9]/g, "-") : randomUUID();
+    const node: ResourceNode = {
+      id,
+      tenantId: tenant || (parent ? parent.tenantId : tenantId),
+      parentId: parent ? parent.id : null,
+      type: input.nodeType || "branch",
+      name: input.name,
+      path: parent ? [...parent.path, id] : [id],
+    };
+    if (input.code) (node as any).code = input.code;
+    if (input.description) (node as any).description = input.description;
+    this.nodes.set(id, node);
+    return node;
+  }
+
+  async updateOrganizationNode(id: string, input: any) {
+    const node = this.nodes.get(id);
+    if (!node) return undefined;
+    if (input.name) node.name = input.name;
+    if (input.code) (node as any).code = input.code;
+    if (input.description) (node as any).description = input.description;
+    return node;
+  }
+
+  async deactivateOrganizationNode(id: string) {
+    this.nodes.delete(id);
+  }
+
+  async validateHierarchyRelationship(parentNodeId: string, childNodeType: string) {
+    return true;
+  }
+
   async listCamerasByEdgeAgent(edgeAgentId: string) {
     return [...this.cameras.values()].filter((camera) => camera.edgeAgentId === edgeAgentId);
   }

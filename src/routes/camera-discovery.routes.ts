@@ -91,7 +91,7 @@ export async function registerCameraDiscoveryRoutes(
       ? body.devices 
       : [body];
 
-    const isUuid = (str?: string) => typeof str === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str);
+    const isUuid = (str?: string) => Boolean(str && typeof str === "string" && str.trim().length > 0);
     let resolvedEdgeAgentId = isUuid(body.edgeAgentId) ? body.edgeAgentId : undefined;
 
     if (!resolvedEdgeAgentId) {

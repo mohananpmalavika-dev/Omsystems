@@ -7,6 +7,7 @@ export function HlsPlayer({
   url,
   bearerToken,
   cameraName,
+  cameraId,
   muted = true,
   volume = 1.0,
   onPlaybackError,
@@ -15,6 +16,7 @@ export function HlsPlayer({
   url: string;
   bearerToken: string;
   cameraName: string;
+  cameraId?: string;
   muted?: boolean;
   volume?: number;
   onPlaybackError?: () => void;
@@ -26,19 +28,11 @@ export function HlsPlayer({
   const [useSimulatedLive, setUseSimulatedLive] = useState(!url || url.includes("/api/media/streams"));
   const [realStreamUrl, setRealStreamUrl] = useState<string | null>(null);
 
-  // Load real CCTV hardware stream / snapshot from same-origin relay or local bridge
+  // Load real CCTV hardware stream / snapshot dynamically from same-origin relay
   useEffect(() => {
     let active = true;
-    let ch = 1;
-    if (cameraName?.includes("58") || cameraName?.toLowerCase().includes("dahua")) {
-      ch = 9;
-    } else {
-      const match = (cameraName || "").match(/(?:ch|channel|cam)\s*(\d+)/i);
-      ch = match ? Number(match[1]) : 1;
-    }
-
-    const relayUrl = `/api/media/snapshot-relay?channel=${ch}`;
-    const localUrl = `http://127.0.0.1:8090/snapshot/${ch}`;
+    const targetKey = cameraId || cameraName || "default";
+    const relayUrl = `/api/media/snapshot-relay?cameraId=${encodeURIComponent(targetKey)}`;
 
     const updateFrame = () => {
       if (!active) return;
@@ -49,17 +43,7 @@ export function HlsPlayer({
         }
       };
       img.onerror = () => {
-        // Fallback check to local direct bridge
-        const localImg = new Image();
-        localImg.onload = () => {
-          if (active) {
-            setRealStreamUrl(`http://127.0.0.1:8090/stream/${ch}`);
-          }
-        };
-        localImg.onerror = () => {
-          if (active) setRealStreamUrl(null);
-        };
-        localImg.src = `${localUrl}?t=${Date.now()}`;
+        if (active) setRealStreamUrl(null);
       };
       img.src = `${relayUrl}&t=${Date.now()}`;
     };
@@ -71,7 +55,7 @@ export function HlsPlayer({
       active = false;
       clearInterval(interval);
     };
-  }, [cameraName]);
+  }, [cameraId, cameraName]);
 
   useEffect(() => {
     playbackErrorRef.current = onPlaybackError;
