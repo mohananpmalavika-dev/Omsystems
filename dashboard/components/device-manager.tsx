@@ -336,7 +336,7 @@ export function DeviceManager() {
   const activeBranch = branches.find((branch) => branch.id === selectedBranch);
   const onlineGateway = gateways.find(isGatewayReady);
   const discoveryQueueItems = useMemo(() => discoveredCameras.map((camera) => {
-    const reviewStatus = discoveryReviewState[camera.id]?.reviewStatus ?? (camera.duplicateStatus === "duplicate" ? "duplicate" : camera.duplicateStatus === "review-required" ? "review-required" : "pending");
+    const reviewStatus = discoveryReviewState[camera.id]?.reviewStatus ?? (camera.duplicateStatus === "duplicate" ? "duplicate" : camera.duplicateStatus === "review-required" ? "review-required" : (camera.status === "approved" ? "approved" : "pending"));
     return {
       ...camera,
       reviewStatus,
@@ -349,6 +349,9 @@ export function DeviceManager() {
             : "Pending",
     };
   }), [discoveredCameras, discoveryReviewState]);
+  const pendingDiscoveryQueueItems = useMemo(() => {
+    return discoveryQueueItems.filter((item) => item.reviewStatus !== "approved" && item.status !== "approved");
+  }, [discoveryQueueItems]);
   const filteredInventoryRecords = useMemo(() => {
     const query = inventorySearch.trim().toLowerCase();
     return inventoryRecords.filter((record) => {
@@ -375,8 +378,8 @@ export function DeviceManager() {
       return left.deviceId.localeCompare(right.deviceId);
     });
   }, [inventoryRecords, inventoryDeviceTypeFilter, inventoryHealthFilter, inventoryLifecycleFilter, inventorySearch, inventorySort]);
-  const pendingReviewCount = discoveryQueueItems.filter((item) => item.reviewStatus !== "approved").length;
-  const approvedReviewCount = discoveryQueueItems.filter((item) => item.reviewStatus === "approved").length;
+  const pendingReviewCount = pendingDiscoveryQueueItems.length;
+  const approvedReviewCount = discoveryQueueItems.filter((item) => item.reviewStatus === "approved" || item.status === "approved").length;
 
   useEffect(() => {
     void cameraInventoryApi.listBranches("device:configure")
@@ -1196,9 +1199,18 @@ try {
   Write-Host " [*] [2/4] Detecting Local Network & Probing CCTV Devices..." -ForegroundColor Cyan
   $localIP = '192.168.1.100'
   try {
-    $ipObj = Get-NetIPAddress -AddressFamily IPv4 | Where-Object { $_.InterfaceAlias -notmatch 'Loopback' -and $_.IPAddress -notmatch '^169\\.254' } | Select-Object -First 1
+    $ipObj = Get-NetIPAddress -AddressFamily IPv4 | Where-Object { 
+      $_.InterfaceAlias -notmatch 'Loopback|vEthernet|WSL|Hyper-V|VirtualBox|VMware|Docker|Tailscale|ZeroTier|Npcap' -and 
+      $_.IPAddress -notmatch '^(169\.254|127\.)' 
+    } | Sort-Object -Property InterfaceIndex | Select-Object -First 1
     if ($ipObj) { $localIP = $ipObj.IPAddress }
   } catch {}
+  if ($localIP -eq '192.168.1.100') {
+    try {
+      $ipObj2 = Get-NetIPAddress -AddressFamily IPv4 | Where-Object { $_.InterfaceAlias -notmatch 'Loopback' -and $_.IPAddress -notmatch '^(169\.254|127\.)' } | Select-Object -First 1
+      if ($ipObj2) { $localIP = $ipObj2.IPAddress }
+    } catch {}
+  }
   $subnetPrefix = ($localIP -split '\\.')[0..2] -join '.'
   Write-Host " [+] Local LAN Subnet detected: $subnetPrefix.0/24 (Gateway: $subnetPrefix.1)" -ForegroundColor Green
 
@@ -1239,6 +1251,54 @@ try {
     displayName = "Dahua 4K Dome ($subnetPrefix.58)"
     edgeAgentId = $agentId
   }
+
+  # Dynamically discover any other active IP cameras / ONVIF devices on the local subnet
+  try {
+    $activeIps = @()
+    $arpLines = (arp -a) -split "`r?`n"
+    foreach ($line in $arpLines) {
+      if ($line -match "($([regex]::Escape($subnetPrefix))\.\d+)\s+([0-9a-fA-F-]{17})") {
+        $ip = $matches[1]
+        if ($ip -ne "$subnetPrefix.1" -and $ip -ne $localIP -and $ip -ne "$subnetPrefix.255" -and -not ($activeIps -contains $ip)) {
+          $activeIps += $ip
+        }
+      }
+    }
+    foreach ($candidateIp in ($activeIps | Select-Object -Unique)) {
+      if ($candidateIp -eq "$subnetPrefix.171" -or $candidateIp -eq "$subnetPrefix.58") { continue }
+      $openPort = $null
+      foreach ($p in @(554, 80, 8080, 8000, 8899, 37777, 5000)) {
+        try {
+          $tcp = New-Object System.Net.Sockets.TcpClient
+          $iar = $tcp.BeginConnect($candidateIp, $p, $null, $null)
+          if ($iar.AsyncWaitHandle.WaitOne(300, $false) -and $tcp.Connected) {
+            $openPort = $p
+            $tcp.EndConnect($iar)
+            $tcp.Close()
+            break
+          }
+          $tcp.Close()
+        } catch {}
+      }
+      if ($openPort) {
+        $discoveredDevices += @{
+          ipAddress = $candidateIp
+          model = "Network IP Camera ($candidateIp)"
+          type = "ONVIF IP Camera"
+          channel = 1
+          sourceType = 'ip-camera'
+          port = $openPort
+          rtspPort = if ($openPort -eq 554) { 554 } else { 554 }
+          onvifPort = if ($openPort -eq 554) { 80 } else { $openPort }
+          vendor = 'other'
+          manufacturer = 'Generic ONVIF'
+          streamVerified = $true
+          displayName = "IP Camera ($candidateIp)"
+          edgeAgentId = $agentId
+        }
+      }
+    }
+  } catch {}
   Write-Host " [+] Discovered $($discoveredDevices.Count) appliances across local network!" -ForegroundColor Green
   Write-Host ""
 
@@ -1513,16 +1573,16 @@ try {
           </div>
           <div className="discovery-status-metrics">
             <div><span>Found</span><strong>{discoveryQueueItems.length}</strong></div>
-            <div><span>Pending</span><strong>{pendingReviewCount}</strong></div>
+            <div><span>Pending</span><strong>{pendingDiscoveryQueueItems.length}</strong></div>
             <div><span>Approved</span><strong>{approvedReviewCount}</strong></div>
           </div>
           {scanning ? <span className="scanning-progress" aria-hidden="true" /> : null}
         </div>
-        {discoveryQueueItems.length === 0 ? (
-          <div className="device-empty"><Camera size={25} /><strong>No pending discoveries</strong><span>Use the single camera scan to search the branch network without entering IP addresses manually.</span></div>
+        {pendingDiscoveryQueueItems.length === 0 ? (
+          <div className="device-empty"><Camera size={25} /><strong>No pending discoveries</strong><span>{approvedReviewCount > 0 ? "All discovered cameras have been approved and added to active branch monitoring." : "Use the single camera scan to search the branch network without entering IP addresses manually."}</span></div>
         ) : (
           <div className="discovery-camera-list">
-            {discoveryQueueItems.map((item) => {
+            {pendingDiscoveryQueueItems.map((item) => {
               const profileText = Array.isArray(item.profiles) && item.profiles.length > 0
                 ? item.profiles.map((profile: any) => `${profile.codec} ${profile.width}x${profile.height}`).join(" • ")
                 : "Profile data pending";
