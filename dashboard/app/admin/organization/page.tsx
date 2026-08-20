@@ -216,22 +216,51 @@ export default function OrganizationHierarchyPage() {
   async function startWebcam() {
     setCameraError(null);
     try {
-      if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: "user" },
-          audio: false,
-        });
-        streamRef.current = stream;
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream;
-          await videoRef.current.play();
-        }
-        setIsCameraActive(true);
-      } else {
-        setCameraError("Webcam not supported by your browser");
+      // Check if mediaDevices API is available
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        setCameraError("Camera access is not supported in your browser. Please use a modern browser like Chrome, Firefox, or Edge.");
+        return;
       }
+
+      // Check if page is served over HTTPS or localhost
+      const isSecureContext = window.isSecureContext;
+      if (!isSecureContext) {
+        setCameraError("Camera access requires HTTPS or localhost. Please access this page through https:// or http://localhost");
+        return;
+      }
+
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: "user" },
+        audio: false,
+      });
+      
+      streamRef.current = stream;
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        await videoRef.current.play();
+      }
+      setIsCameraActive(true);
     } catch (err: any) {
-      setCameraError("Could not access camera: " + (err.message || "Permission denied"));
+      console.error("Camera access error:", err);
+      
+      // Provide user-friendly error messages
+      let errorMessage = "Could not access camera. ";
+      
+      if (err.name === "NotAllowedError" || err.name === "PermissionDeniedError") {
+        errorMessage += "Permission denied. Please allow camera access in your browser settings and try again.";
+      } else if (err.name === "NotFoundError" || err.name === "DevicesNotFoundError") {
+        errorMessage += "No camera found. Please connect a camera and try again.";
+      } else if (err.name === "NotReadableError" || err.name === "TrackStartError") {
+        errorMessage += "Camera is already in use by another application. Please close other apps using the camera.";
+      } else if (err.name === "OverconstrainedError") {
+        errorMessage += "Camera does not meet the required specifications.";
+      } else if (err.name === "SecurityError") {
+        errorMessage += "Camera access blocked for security reasons. Please check your browser settings.";
+      } else {
+        errorMessage += err.message || "Unknown error occurred.";
+      }
+      
+      setCameraError(errorMessage);
       setIsCameraActive(false);
     }
   }
@@ -1210,6 +1239,27 @@ export default function OrganizationHierarchyPage() {
                     <div className="relative w-full h-full flex items-center justify-center bg-slate-950">
                       <img src={empPhotoData} alt="Captured Face" className="h-full object-contain" />
                       <div className="absolute bottom-2 right-2 px-2 py-1 bg-emerald-950/90 border border-emerald-500/40 text-emerald-300 text-[10px] font-mono rounded flex items-center gap-1">
+                        <Camera size={10} /> Photo Captured
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="text-center text-slate-400 p-6 space-y-3">
+                      <ScanFace size={48} className="mx-auto text-slate-600" />
+                      <p className="text-xs font-medium">No photo captured yet.</p>
+                      <p className="text-[10px] text-slate-500 max-w-xs">
+                        Use your webcam or upload a clear frontal portrait.
+                      </p>
+                      <div className="text-[10px] text-slate-600 bg-slate-950/50 p-2 rounded border border-slate-800 text-left max-w-xs mx-auto">
+                        <p className="font-semibold text-slate-500 mb-1">📋 Camera Access Tips:</p>
+                        <ul className="list-disc ml-4 space-y-0.5">
+                          <li>Your browser will ask for camera permission</li>
+                          <li>Click "Allow" when prompted</li>
+                          <li>Ensure page is on HTTPS or localhost</li>
+                        </ul>
+                      </div>
+                    </div>
+                  )}
+                </div>
                         <CheckCircle2 size={11} /> Face Captured
                       </div>
                     </div>
@@ -1226,9 +1276,30 @@ export default function OrganizationHierarchyPage() {
                 <canvas ref={canvasRef} className="hidden" />
 
                 {cameraError && (
-                  <p className="text-[11px] text-red-400 bg-red-950/30 p-2 rounded border border-red-500/20">
-                    {cameraError}
-                  </p>
+                  <div className="text-[11px] text-red-400 bg-red-950/30 p-3 rounded border border-red-500/20 space-y-2">
+                    <p className="font-semibold">⚠️ Camera Access Issue</p>
+                    <p>{cameraError}</p>
+                    {cameraError.includes("Permission denied") && (
+                      <div className="text-[10px] text-slate-400 mt-2 space-y-1">
+                        <p className="font-semibold">How to fix:</p>
+                        <ol className="list-decimal ml-4 space-y-0.5">
+                          <li>Click the camera icon in your browser's address bar</li>
+                          <li>Select "Allow" for camera access</li>
+                          <li>Reload the page and try again</li>
+                        </ol>
+                      </div>
+                    )}
+                    {cameraError.includes("HTTPS or localhost") && (
+                      <div className="text-[10px] text-slate-400 mt-2 space-y-1">
+                        <p className="font-semibold">Solution:</p>
+                        <p>Camera access requires secure connection. Please access via:</p>
+                        <ul className="list-disc ml-4 space-y-0.5">
+                          <li>https:// (recommended for production)</li>
+                          <li>http://localhost (for development)</li>
+                        </ul>
+                      </div>
+                    )}
+                  </div>
                 )}
 
                 {/* Camera & Upload Controls */}

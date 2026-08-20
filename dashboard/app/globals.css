@@ -3471,7 +3471,7 @@ button, a { -webkit-tap-highlight-color: transparent; }
   box-shadow: 0 2px 6px rgba(17,35,62,.035);
 }
 
-.workspace :where(input:not([type="checkbox"]):not([type="radio"]), select, textarea) {
+.workspace :where(input:not([type="checkbox"]):not([type="radio"]), select, textarea):not([class*="bg-slate-"]):not([class*="bg-gray-"]):not([class*="bg-zinc-"]) {
   color: #22324a;
   border-color: #d7e0eb;
   border-radius: 9px;
@@ -3479,10 +3479,47 @@ button, a { -webkit-tap-highlight-color: transparent; }
   box-shadow: inset 0 1px 2px rgba(14,30,53,.025);
   transition: border-color .16s ease, box-shadow .16s ease;
 }
-.workspace :where(input:not([type="checkbox"]):not([type="radio"]), select, textarea):focus {
+.workspace :where(input:not([type="checkbox"]):not([type="radio"]), select, textarea):not([class*="bg-slate-"]):not([class*="bg-gray-"]):not([class*="bg-zinc-"]):focus {
   border-color: #89aaf4;
   box-shadow: 0 0 0 3px rgba(53,107,245,.11);
   outline: none;
+}
+
+/* Keep explicitly dark utility controls readable inside the shared workspace shell. */
+[data-theme="dark"] .route-surface :where(
+  input[class*="bg-slate-"],
+  select[class*="bg-slate-"],
+  textarea[class*="bg-slate-"],
+  input[class*="bg-gray-"],
+  select[class*="bg-gray-"],
+  textarea[class*="bg-gray-"],
+  input[class*="bg-zinc-"],
+  select[class*="bg-zinc-"],
+  textarea[class*="bg-zinc-"]
+) {
+  color: #e2e8f0 !important;
+  background-color: #0f172a !important;
+  border-color: #334155 !important;
+  color-scheme: dark;
+}
+[data-theme="dark"] .route-surface :where(
+  input[class*="bg-slate-"]::placeholder,
+  textarea[class*="bg-slate-"]::placeholder,
+  input[class*="bg-gray-"]::placeholder,
+  textarea[class*="bg-gray-"]::placeholder,
+  input[class*="bg-zinc-"]::placeholder,
+  textarea[class*="bg-zinc-"]::placeholder
+) {
+  color: #94a3b8 !important;
+  opacity: 1;
+}
+[data-theme="dark"] .route-surface :where(
+  select[class*="bg-slate-"] option,
+  select[class*="bg-gray-"] option,
+  select[class*="bg-zinc-"] option
+) {
+  color: #e2e8f0 !important;
+  background-color: #0f172a !important;
 }
 .workspace table { width: 100%; overflow: hidden; border: 1px solid var(--line); border-radius: 12px; background: #fff; border-collapse: separate !important; border-spacing: 0; box-shadow: var(--shadow-sm); }
 .workspace thead { background: #f6f8fb; }
