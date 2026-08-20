@@ -8,9 +8,12 @@ interface BrowserDirectLiveStart {
   };
 }
 
+const LIVE_START_TIMEOUT_MS = 8_000;
+
 export async function startLiveFromBrowser(
   cameraId: string,
   profile: "main" | "sub" = "sub",
+  signal: AbortSignal = AbortSignal.timeout(LIVE_START_TIMEOUT_MS),
 ): Promise<LiveSessionResponse> {
   const token = typeof window !== "undefined" ? localStorage.getItem("accessToken") : null;
   const headers: Record<string, string> = { "content-type": "application/json" };
@@ -19,22 +22,34 @@ export async function startLiveFromBrowser(
     headers["authorization"] = `Bearer ${token}`;
   }
 
-  const authorization = await fetch("/api/live", {
-    method: "POST",
-    headers,
-    credentials: "include",
-    body: JSON.stringify({ cameraId, profile }),
-  });
+  let authorization: Response;
+  try {
+    authorization = await fetch("/api/live", {
+      method: "POST",
+      headers,
+      credentials: "include",
+      body: JSON.stringify({ cameraId, profile }),
+      signal,
+    });
+  } catch (error) {
+    throw timeoutError(error);
+  }
   const body = await readJson(authorization);
   if (!authorization.ok) throw new Error(errorCode(body, "live_session_unavailable"));
   if (!isBrowserDirectLiveStart(body)) return body as LiveSessionResponse;
 
-  const localResponse = await fetch(body.direct.url, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ controlPlaneToken: body.direct.controlPlaneToken }),
-    cache: "no-store",
-  });
+  let localResponse: Response;
+  try {
+    localResponse = await fetch(body.direct.url, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ controlPlaneToken: body.direct.controlPlaneToken }),
+      cache: "no-store",
+      signal,
+    });
+  } catch (error) {
+    throw timeoutError(error);
+  }
   const localBody = await readJson(localResponse);
   if (!localResponse.ok) throw new Error(errorCode(localBody, "local_media_gateway_unavailable"));
   return localBody as LiveSessionResponse;
@@ -56,4 +71,10 @@ function errorCode(value: unknown, fallback: string) {
   if (!value || typeof value !== "object") return fallback;
   const error = Reflect.get(value, "error");
   return typeof error === "string" ? error : fallback;
+}
+
+function timeoutError(error: unknown) {
+  return error instanceof DOMException && error.name === "TimeoutError"
+    ? new Error("live_session_timeout")
+    : error;
 }

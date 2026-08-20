@@ -2,6 +2,8 @@ import { demoBranches, demoCameras } from "./demo-data";
 import type { Branch, Camera, LiveSessionResponse, RecordingJob, RecordingSegment, TalkSessionResponse } from "./types";
 import { isBrowserDirectMediaUrl } from "./media-routing";
 
+const LIVE_START_TIMEOUT_MS = 8_000;
+
 export async function listBranches(employeeSession?: string): Promise<Branch[]> {
   if (isDemoMode()) return demoBranches;
   const response = await controlFetch("/v1/branches", undefined, employeeSession);
@@ -39,7 +41,7 @@ export async function startLive(
 
   const permission = await controlFetch(
     `/v1/cameras/${encodeURIComponent(cameraId)}/live-sessions`,
-    { method: "POST", body: "{}" },
+    { method: "POST", body: "{}", signal: AbortSignal.timeout(LIVE_START_TIMEOUT_MS) },
     employeeSession,
   );
   const controlSession = await permission.json() as {
@@ -71,6 +73,7 @@ export async function startLive(
       headers: bridgeHeaders(),
       body: JSON.stringify({ controlPlaneToken: controlSession.token }),
       cache: "no-store",
+      signal: AbortSignal.timeout(LIVE_START_TIMEOUT_MS),
     },
   );
   if (!mediaResponse.ok) {
