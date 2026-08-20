@@ -1141,12 +1141,8 @@ export function DeviceManager() {
   }
 
   function downloadOneClickBatchFile(branchId: string, branchName: string) {
-<<<<<<< HEAD
     const origin = typeof window !== "undefined" ? window.location.origin : "https://sentinel-grid-monitoring-xgrr.onrender.com";
-=======
-    const origin = typeof window !== "undefined" ? window.location.origin : "https://sentinel-grid-monitoring-vhid.onrender.com";
     const cleanBranchName = (branchName || "Branch").replace(/["\r\n]/g, "");
->>>>>>> f57bb899d582a104a28458465a475cf55a6645e2
     const content = `@echo off
 setlocal EnableDelayedExpansion
 title Sentinel Grid CCTV Edge Agent - 1-Click Auto Setup
