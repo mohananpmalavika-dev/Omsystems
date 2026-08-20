@@ -2,6 +2,7 @@
 
 import Hls from "hls.js";
 import { useEffect, useRef, useState } from "react";
+import { Loader2, RotateCw } from "lucide-react";
 
 export function HlsPlayer({
   url,
@@ -27,35 +28,70 @@ export function HlsPlayer({
   const playbackErrorRef = useRef(onPlaybackError);
   const [useSimulatedLive, setUseSimulatedLive] = useState(!url || url.includes("/api/media/streams"));
   const [realStreamUrl, setRealStreamUrl] = useState<string | null>(null);
+  const [streamStatus, setStreamStatus] = useState<"live" | "reconnecting">("live");
+  const [lastFrameTime, setLastFrameTime] = useState<number>(Date.now());
+  const currentBlobUrlRef = useRef<string | null>(null);
 
-  // Load real CCTV hardware stream / snapshot dynamically from same-origin relay
+  // Load real CCTV hardware stream / snapshot dynamically with leak-free watchdog
   useEffect(() => {
     let active = true;
+    let abortCtrl: AbortController | null = null;
     const targetKey = cameraId || cameraName || "default";
     const relayUrl = `/api/media/snapshot-relay?cameraId=${encodeURIComponent(targetKey)}`;
 
-    const updateFrame = () => {
+    const fetchNextFrame = async () => {
       if (!active) return;
-      const img = new Image();
-      img.onload = () => {
-        if (active) {
-          setRealStreamUrl(`${relayUrl}&t=${Date.now()}`);
+      try {
+        abortCtrl?.abort();
+        abortCtrl = new AbortController();
+        const timeoutId = setTimeout(() => abortCtrl?.abort(), 3000);
+
+        const res = await fetch(`${relayUrl}&t=${Date.now()}`, {
+          signal: abortCtrl.signal,
+          cache: "no-store",
+        });
+        clearTimeout(timeoutId);
+
+        if (!active) return;
+
+        if (res.ok) {
+          const blob = await res.blob();
+          if (!active) return;
+
+          const newBlobUrl = URL.createObjectURL(blob);
+          if (currentBlobUrlRef.current) {
+            URL.revokeObjectURL(currentBlobUrlRef.current);
+          }
+          currentBlobUrlRef.current = newBlobUrl;
+          setRealStreamUrl(newBlobUrl);
+          setLastFrameTime(Date.now());
+          setStreamStatus("live");
+        } else {
+          if (Date.now() - lastFrameTime > 6000) {
+            setStreamStatus("reconnecting");
+          }
         }
-      };
-      img.onerror = () => {
-        if (active) setRealStreamUrl(null);
-      };
-      img.src = `${relayUrl}&t=${Date.now()}`;
+      } catch {
+        if (!active) return;
+        if (Date.now() - lastFrameTime > 6000) {
+          setStreamStatus("reconnecting");
+        }
+      }
     };
 
-    updateFrame();
-    const interval = setInterval(updateFrame, 1500);
+    fetchNextFrame();
+    const interval = setInterval(fetchNextFrame, 1200);
 
     return () => {
       active = false;
+      abortCtrl?.abort();
       clearInterval(interval);
+      if (currentBlobUrlRef.current) {
+        URL.revokeObjectURL(currentBlobUrlRef.current);
+        currentBlobUrlRef.current = null;
+      }
     };
-  }, [cameraId, cameraName]);
+  }, [cameraId, cameraName, lastFrameTime]);
 
   useEffect(() => {
     playbackErrorRef.current = onPlaybackError;
@@ -281,9 +317,9 @@ export function HlsPlayer({
     };
   }, [cameraName, useSimulatedLive]);
 
-  if (realStreamUrl) {
+  if (realStreamUrl && streamStatus !== "reconnecting") {
     return (
-      <div className="relative w-full h-full bg-black overflow-hidden flex items-center justify-center">
+      <div className="relative w-full h-full bg-black overflow-hidden flex items-center justify-center group">
         <img
           src={realStreamUrl}
           alt={`Real Live Camera Feed - ${cameraName}`}
@@ -292,6 +328,32 @@ export function HlsPlayer({
         <div className="absolute top-2 left-2 flex items-center gap-1.5 bg-black/80 px-2 py-0.5 rounded text-[9.5px] font-mono text-emerald-400 border border-emerald-500/30 backdrop-blur-sm pointer-events-none">
           <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
           REAL CCTV FEED · {cameraName.toUpperCase()}
+        </div>
+      </div>
+    );
+  }
+
+  if (streamStatus === "reconnecting") {
+    return (
+      <div className="relative w-full h-full bg-slate-950 flex flex-col items-center justify-center text-slate-400 p-4">
+        {realStreamUrl ? (
+          <img
+            src={realStreamUrl}
+            alt={cameraName}
+            className="absolute inset-0 w-full h-full object-cover opacity-20 filter blur-md"
+          />
+        ) : null}
+        <div className="relative z-10 flex flex-col items-center gap-2 bg-black/80 p-3.5 rounded-lg border border-amber-500/30 backdrop-blur-md">
+          <Loader2 className="spin text-amber-400" size={20} />
+          <span className="text-xs font-mono text-amber-300 font-medium">Reconnecting Live Feed…</span>
+          <span className="text-[10px] text-slate-400">{cameraName}</span>
+          <button
+            type="button"
+            className="mt-1 px-3 py-1 bg-blue-600/80 hover:bg-blue-600 text-white rounded text-[11px] font-sans flex items-center gap-1.5 transition-colors pointer-events-auto"
+            onClick={() => { setLastFrameTime(Date.now()); setStreamStatus("live"); }}
+          >
+            <RotateCw size={12} /> Force Reconnect
+          </button>
         </div>
       </div>
     );

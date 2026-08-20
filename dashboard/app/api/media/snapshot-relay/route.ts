@@ -14,8 +14,12 @@ export async function GET(request: NextRequest) {
   const url = new URL(request.url);
   const targetKey = url.searchParams.get("cameraId") || url.searchParams.get("id") || url.searchParams.get("channel") || url.searchParams.get("ch") || "default";
 
+  const now = Date.now();
   const cached = frameStore.get(targetKey) || frameStore.get(targetKey.toLowerCase());
   if (cached && cached.buffer.length > 0) {
+    if (now - cached.updatedAt > 8000) {
+      return NextResponse.json({ error: "frame_stale", target: targetKey, ageMs: now - cached.updatedAt }, { status: 404 });
+    }
     return new NextResponse(new Uint8Array(cached.buffer), {
       status: 200,
       headers: {
