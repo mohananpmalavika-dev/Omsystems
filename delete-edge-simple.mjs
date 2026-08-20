@@ -42,6 +42,15 @@ async function main() {
 
     console.log('🗑️  Deleting...\n');
 
+    // Delete live sessions first (they reference cameras)
+    console.log('  ↳ Deleting live sessions...');
+    try {
+      const liveResult = await pool.query('DELETE FROM live_sessions');
+      console.log(`    ✓ Deleted ${liveResult.rowCount} live sessions\n`);
+    } catch (e) {
+      console.log(`    (skipped: ${e.message.split('\n')[0]})\n`);
+    }
+
     // Delete camera discoveries first (they reference edge agents)
     console.log('  ↳ Deleting camera discoveries...');
     try {
@@ -97,6 +106,7 @@ async function main() {
 
   } catch (error) {
     console.error('\n❌ ERROR:', error.message);
+    console.error('Full error:', error);
     process.exit(1);
   } finally {
     await pool.end();

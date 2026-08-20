@@ -101,9 +101,11 @@ export function HlsPlayer({
           return;
         }
         setUseSimulatedLive(true);
+        playbackErrorRef.current?.();
       });
     } catch {
       setUseSimulatedLive(true);
+      playbackErrorRef.current?.();
     }
 
     return () => {
@@ -214,13 +216,12 @@ export function HlsPlayer({
 
   if (useSimulatedLive) {
     return (
-      <canvas
-        ref={canvasRef}
-        width={480}
-        height={270}
-        className="live-video"
-        aria-label={`Live video from ${cameraName}`}
-      />
+      <div
+        className="live-video grid place-items-center bg-slate-950 px-4 text-center text-xs text-slate-300"
+        role="status"
+      >
+        Live stream unavailable for {cameraName}
+      </div>
     );
   }
 

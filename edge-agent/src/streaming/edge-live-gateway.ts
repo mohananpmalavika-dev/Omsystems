@@ -416,20 +416,30 @@ function startManagedProcess(name: string, executable: string, args: string[], c
 }
 
 async function startQuickTunnel(executable: string, origin: string, cwd: string) {
-  const child = startManagedProcess("Cloudflare Tunnel", executable, ["tunnel", "--no-autoupdate", "--url", origin], cwd);
+  const child = startManagedProcess("Cloudflare Tunnel", executable, [
+    "tunnel",
+    "--edge-ip-version", "4",
+    "--no-autoupdate",
+    "--url", origin,
+  ], cwd);
   const publicUrl = await new Promise<string>((resolve, reject) => {
     const timeout = setTimeout(() => reject(new Error("Cloudflare quick tunnel did not provide a URL within 30 seconds")), 30_000);
     let output = "";
     const inspect = (chunk: Buffer) => {
       output = `${output}${chunk.toString("utf8")}`.slice(-8_192);
-      const match = output.match(/https:\/\/[a-z0-9-]+\.trycloudflare\.com/i);
-      if (match) { clearTimeout(timeout); resolve(match[0]); }
+      const publicUrl = extractQuickTunnelUrl(output);
+      if (publicUrl) { clearTimeout(timeout); resolve(publicUrl); }
     };
     child.stdout.on("data", inspect); child.stderr.on("data", inspect);
     child.once("error", (error) => { clearTimeout(timeout); reject(error); });
     child.once("exit", (code) => { clearTimeout(timeout); reject(new Error(`Cloudflare quick tunnel exited (${code})`)); });
   });
   return { process: child, publicUrl };
+}
+
+export function extractQuickTunnelUrl(output: string) {
+  const matches = output.match(/https:\/\/[a-z0-9-]+\.trycloudflare\.com/gi) ?? [];
+  return matches.find((url) => new URL(url).hostname !== "api.trycloudflare.com");
 }
 
 function startNamedTunnel(executable: string, token: string, cwd: string) {

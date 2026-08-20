@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import {
   buildEdgeLiveGateway,
+  extractQuickTunnelUrl,
   resolvePrivateMediaGatewayUrl,
   resolveMediaTunnelMode,
   startEdgeMediaRuntimeIfAvailable,
@@ -25,6 +26,15 @@ describe("all-in-one edge live gateway", () => {
       CLOUDFLARED_TUNNEL_TOKEN: "managed-tunnel-token",
       PUBLIC_MEDIA_GATEWAY_URL: "https://branch.media.example.com",
     })).toBe("named");
+  });
+
+  it("does not mistake Cloudflare's API endpoint for the public tunnel", () => {
+    expect(extractQuickTunnelUrl(
+      "Post https://api.trycloudflare.com/tunnel failed",
+    )).toBeUndefined();
+    expect(extractQuickTunnelUrl(
+      "Your quick Tunnel is https://blue-tree.trycloudflare.com",
+    )).toBe("https://blue-tree.trycloudflare.com");
   });
 
   it("keeps discovery available when optional live media cannot start", async () => {

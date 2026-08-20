@@ -10,8 +10,7 @@ export async function POST(request: NextRequest) {
     const sessionToken =
       request.cookies.get("sentinel_access")?.value ||
       request.headers.get("x-sentinel-session") ||
-      request.headers.get("authorization")?.replace(/^Bearer\s+/i, "") ||
-      "authenticated-operator-session";
+      request.headers.get("authorization")?.replace(/^Bearer\s+/i, "");
 
     const body = z.object({
       cameraId: z.string().min(1),
@@ -22,7 +21,7 @@ export async function POST(request: NextRequest) {
 
     const result = await startLive(
       body.cameraId,
-      sessionToken,
+      sessionToken ?? undefined,
     );
 
     return NextResponse.json(result, { status: 201 });
