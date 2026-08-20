@@ -33,6 +33,10 @@ const createUserSchema = z.object({
   dateOfBirth: z.string().optional(),
   reportingToUserId: z.string().min(1).optional(),
   primaryOrgNodeId: z.string().min(1),
+  photoUrl: z.string().optional(),
+  avatarUrl: z.string().optional(),
+  facePhotoBase64: z.string().optional(),
+  faceEnrolled: z.boolean().optional(),
 });
 
 const updateUserSchema = z.object({
@@ -63,6 +67,10 @@ const updateUserSchema = z.object({
   dateOfBirth: z.string().optional(),
   reportingToUserId: z.string().min(1).nullable().optional(),
   preferences: z.record(z.unknown()).optional(),
+  photoUrl: z.string().optional(),
+  avatarUrl: z.string().optional(),
+  facePhotoBase64: z.string().optional(),
+  faceEnrolled: z.boolean().optional(),
 });
 
 const assignOrgSchema = z.object({
