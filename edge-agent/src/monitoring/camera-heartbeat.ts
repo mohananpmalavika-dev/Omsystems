@@ -6,7 +6,7 @@
 
 import { createHash } from "node:crypto";
 import { measureCameraPacketLoss } from "./camera-packet-loss.js";
-import { captureRtspRgbFrame, measureRtspStream } from "../streaming/rtsp-probe.js";
+import { captureRtspJpegFrame, captureRtspRgbFrame, measureRtspStream } from "../streaming/rtsp-probe.js";
 import { assessAnalogRgbFrame, type AnalogSignalState } from "./analog-signal-quality.js";
 import { logger } from "../utils/logger.js";
 import type { AnalyticsFramePayload, TelemetryPayload } from "../registration/gateway-client.js";
@@ -209,14 +209,26 @@ export class CameraHeartbeatService {
 
     const analyticsWidth = 320;
     const analyticsHeight = 180;
-    const [packetLoss, frame] = await Promise.all([
+    const [packetLoss, frame, jpegFrame] = await Promise.all([
       measureCameraPacketLoss(rtspUrl),
       captureRtspRgbFrame(rtspUrl, this.ffmpegPath, 10_000, analyticsWidth, analyticsHeight),
+      captureRtspJpegFrame(rtspUrl, this.ffmpegPath, 8_000, 640, 360).catch(() => null),
     ]);
     const frameHealth = frame
       ? assessAnalogRgbFrame(this.frameStates.get(camera.id), frame, analyticsWidth, analyticsHeight)
       : null;
     if (frameHealth) this.frameStates.set(camera.id, frameHealth.state);
+
+    // Relay live JPEG frame directly to Cloud Video Wall for real-time monitoring
+    if (jpegFrame && jpegFrame.length > 500) {
+      const relayEndpoint = `${this.apiEndpoint.replace(/\/api\/control.*$/, '')}/api/media/snapshot-relay?cameraId=${encodeURIComponent(camera.id)}`;
+      void fetch(relayEndpoint, {
+        method: "POST",
+        headers: { "Content-Type": "image/jpeg" },
+        body: new Uint8Array(jpegFrame),
+      }).catch(() => undefined);
+    }
+
     if (frame && this.analyticsFrameSender) {
       await this.analyticsFrameSender({
         cameraId: camera.id,

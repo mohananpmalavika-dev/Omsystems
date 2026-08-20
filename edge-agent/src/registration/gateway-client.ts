@@ -107,6 +107,8 @@ export interface AnalyticsFramePayload {
 export interface MonitoringCamera {
   id: string;
   name: string;
+  ipAddress?: string;
+  rtspPort?: number;
   connectionSecretRef: string;
   profiles: Array<{
     name: string;
