@@ -499,14 +499,23 @@ export async function buildApp(options?: {
   // In production mode, validate all critical secrets before proceeding
   // This ensures we fail fast with clear error messages rather than
   // silently accepting development defaults
-  if (process.env.NODE_ENV === 'production') {
+  // Only validate if we're in production mode OR if explicitly enabled
+  const shouldValidateSecrets = process.env.NODE_ENV === 'production' || 
+                                  process.env.VALIDATE_SECRETS === 'true';
+  
+  if (shouldValidateSecrets) {
     try {
       const { validateProductionSecrets } = await import('../backend/src/services/production-secret-validator.service.js');
       validateProductionSecrets();
       console.log('✅ Production secret validation passed');
     } catch (error) {
       console.error(error instanceof Error ? error.message : String(error));
-      throw new Error('Production secret validation failed. Cannot start application with insecure configuration.');
+      // Only throw in production - allow development to continue with warnings
+      if (process.env.NODE_ENV === 'production') {
+        throw new Error('Production secret validation failed. Cannot start application with insecure configuration.');
+      } else {
+        console.warn('⚠️  Secret validation failed in development mode - continuing with warnings');
+      }
     }
   }
   
@@ -531,16 +540,18 @@ export async function buildApp(options?: {
   const voiceProviderNames = alertProviderNames(process.env.ALERT_VOICE_PROVIDER, process.env.ALERT_VOICE_FAILOVER_PROVIDER);
   const smsProviderNames = alertProviderNames(process.env.ALERT_SMS_PROVIDER, process.env.ALERT_SMS_FAILOVER_PROVIDER);
   const voiceCallbackSecret = options?.voiceCallbackSecret ?? process.env.ALERT_VOICE_CALLBACK_SECRET;
-  if ((voiceProviderNames.length > 0 || smsProviderNames.length > 0) && !voiceCallbackSecret) {
+  const needsVoiceCallbackSecret = voiceProviderNames.length > 0 || smsProviderNames.length > 0;
+  
+  if (needsVoiceCallbackSecret && !voiceCallbackSecret) {
     throw new Error("ALERT_VOICE_CALLBACK_SECRET is required when provider callbacks are enabled");
   }
   
   // PRODUCTION SAFETY: No development defaults in production
   // Development mode: use safe default for local testing
-  // Production mode: must be explicitly configured or startup fails
+  // Production mode: must be explicitly configured only if voice/SMS providers are configured
   const effectiveVoiceCallbackSecret = voiceCallbackSecret ?? 
-    (process.env.NODE_ENV === 'production' 
-      ? (() => { throw new Error("ALERT_VOICE_CALLBACK_SECRET must be configured in production"); })()
+    (needsVoiceCallbackSecret && process.env.NODE_ENV === 'production' 
+      ? (() => { throw new Error("ALERT_VOICE_CALLBACK_SECRET must be configured in production when using voice/SMS providers"); })()
       : "development-voice-callback-secret-change-me");
   
   const voiceTokens = new VoiceCallbackTokens(effectiveVoiceCallbackSecret);

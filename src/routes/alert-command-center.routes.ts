@@ -71,8 +71,9 @@ export async function registerAlertCommandCenterRoutes(
   workerKey?: string,
   voiceTokens = (() => {
     const secret = process.env.ALERT_VOICE_CALLBACK_SECRET;
-    if (process.env.NODE_ENV === 'production' && !secret) {
-      throw new Error("ALERT_VOICE_CALLBACK_SECRET must be configured in production");
+    const hasVoiceProvider = process.env.ALERT_VOICE_PROVIDER || process.env.ALERT_SMS_PROVIDER;
+    if (process.env.NODE_ENV === 'production' && !secret && hasVoiceProvider) {
+      throw new Error("ALERT_VOICE_CALLBACK_SECRET must be configured in production when using voice/SMS providers");
     }
     return new VoiceCallbackTokens(secret ?? "development-voice-callback-secret-change-me");
   })(),
