@@ -1255,9 +1255,9 @@ try {
   # Dynamically discover any other active IP cameras / ONVIF devices on the local subnet
   try {
     $activeIps = @()
-    $arpLines = (arp -a) -split "`r?`n"
+    $arpLines = (arp -a) -split '\\r?\\n'
     foreach ($line in $arpLines) {
-      if ($line -match "($([regex]::Escape($subnetPrefix))\.\d+)\s+([0-9a-fA-F-]{17})") {
+      if ($line -match "($subnetPrefix\\.\\d+)\\s+([0-9a-fA-F-]{17})") {
         $ip = $matches[1]
         if ($ip -ne "$subnetPrefix.1" -and $ip -ne $localIP -and $ip -ne "$subnetPrefix.255" -and -not ($activeIps -contains $ip)) {
           $activeIps += $ip
