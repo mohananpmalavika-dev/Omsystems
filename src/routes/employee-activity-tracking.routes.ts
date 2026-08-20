@@ -45,14 +45,14 @@ const endPageVisitSchema = z.object({
 });
 
 const trackControlRoomActivitySchema = z.object({
-  sessionId: z.string().uuid(),
-  pageVisitId: z.string().uuid().nullable().optional(),
-  monitoringType: z.enum(['single_branch', 'branch_group', 'multi_branch', 'camera', 'camera_group']),
-  branchNodeId: z.string().uuid().optional(),
-  branchGroupId: z.string().uuid().optional(),
+  sessionId: z.string(),
+  pageVisitId: z.string().nullable().optional(),
+  monitoringType: z.enum(['single_branch', 'branch_group', 'multi_branch', 'camera', 'camera_group']).optional().default('multi_branch'),
+  branchNodeId: z.string().optional(),
+  branchGroupId: z.string().optional(),
   branchGroupName: z.string().max(255).nullable().optional(),
-  cameraIds: z.array(z.string().uuid()).optional().default([]),
-  branchIds: z.array(z.string().uuid()).optional().default([]),
+  cameraIds: z.array(z.string()).optional().default([]),
+  branchIds: z.array(z.string()).optional().default([]),
   branchNames: z.array(z.string().max(255)).max(500).optional().default([]),
   monitoringMode: z.string().max(50).optional().default('live'),
 });

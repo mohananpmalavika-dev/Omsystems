@@ -26,6 +26,7 @@ export interface DecoderPoolCallbacks {
 
 export class DecoderPool {
   private handles: Map<string, DecoderHandle> = new Map();
+  private pendingVideoElements = new Map<string, HTMLVideoElement>();
   private previousFrameCounts = new Map<string, { totalFrames: number; droppedFrames: number }>();
   private callbacks: DecoderPoolCallbacks;
   private nextHandleId = 0;
@@ -54,10 +55,16 @@ export class DecoderPool {
     }
 
     // Create new handle
+    const pendingVideo = this.pendingVideoElements.get(cameraId);
+    if (pendingVideo) {
+      this.pendingVideoElements.delete(cameraId);
+    }
+
     const handle: DecoderHandle = {
       id: `decoder-${this.nextHandleId++}`,
       cameraId,
       streamProfile: profile,
+      videoElement: pendingVideo,
       activatedAt: Date.now(),
     };
 
@@ -78,6 +85,7 @@ export class DecoderPool {
    * Release a decoder
    */
   async release(cameraId: string): Promise<void> {
+    this.pendingVideoElements.delete(cameraId);
     const handle = this.handles.get(cameraId);
     if (!handle) {
       return;
@@ -160,7 +168,7 @@ export class DecoderPool {
   ): void {
     const handle = this.handles.get(cameraId);
     if (!handle) {
-      console.warn(`[DecoderPool] Cannot attach video - no handle for ${cameraId}`);
+      this.pendingVideoElements.set(cameraId, videoElement);
       return;
     }
 
@@ -172,6 +180,7 @@ export class DecoderPool {
    * reservation. A replacement player can attach again on its next render.
    */
   detachVideoElement(cameraId: string, videoElement?: HTMLVideoElement): void {
+    this.pendingVideoElements.delete(cameraId);
     const handle = this.handles.get(cameraId);
     if (!handle || (videoElement && handle.videoElement !== videoElement)) {
       return;

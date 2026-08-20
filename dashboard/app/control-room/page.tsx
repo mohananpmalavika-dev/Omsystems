@@ -160,9 +160,22 @@ export default function ControlRoomPage() {
     }
   };
 
+  const getAuthHeaders = (): HeadersInit => {
+    const token = typeof window !== "undefined" ? localStorage.getItem("accessToken") : null;
+    const headers: Record<string, string> = { "Content-Type": "application/json" };
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+      headers["x-sentinel-session"] = token;
+    }
+    return headers;
+  };
+
   const loadPriorityAlerts = async (): Promise<boolean> => {
     try {
-      const response = await fetch("/api/control/v1/alerts/alert-center?limit=200", { credentials: "include" });
+      const response = await fetch("/api/control/v1/alerts/alert-center?limit=200", {
+        headers: getAuthHeaders(),
+        credentials: "include",
+      });
       if (!response.ok) {
         setPriorityCameraIds([]);
         return false;
@@ -187,6 +200,7 @@ export default function ControlRoomPage() {
   const loadCameras = async (): Promise<boolean> => {
     try {
       const response = await fetch("/api/control/v1/cameras?limit=500&action=live%3Aview", {
+        headers: getAuthHeaders(),
         credentials: "include",
       });
 
@@ -216,6 +230,7 @@ export default function ControlRoomPage() {
   const loadStats = async (): Promise<boolean> => {
     try {
       const response = await fetch("/api/control/v1/operations/health/summary", {
+        headers: getAuthHeaders(),
         credentials: "include",
       });
 
