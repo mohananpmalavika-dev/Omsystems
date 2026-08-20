@@ -533,6 +533,13 @@ export interface User {
   status?: UserStatus;
   username?: string;
   email?: string;
+  photoUrl?: string;
+  avatarUrl?: string;
+  facePhotoBase64?: string;
+  faceEnrolled?: boolean;
+  faceEnrolledAt?: string;
+  department?: string;
+  designation?: string;
 }
 
 export type UserRole =
