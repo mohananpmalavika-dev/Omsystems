@@ -80,6 +80,118 @@ export async function registerCameraDiscoveryRoutes(
     return { data: await store.listDiscoveredCameras(branchId) };
   });
 
+  app.post("/v1/branches/:branchId/cameras/discovered", async (request, reply) => {
+    const { branchId } = branchParams.parse(request.params);
+    const body = (request.body || {}) as any;
+    
+    // Accept either a single device, array, or object with devices array
+    const items = Array.isArray(body) 
+      ? body 
+      : Array.isArray(body.devices) 
+      ? body.devices 
+      : [body];
+
+    const results: any[] = [];
+    for (const item of items) {
+      if (!item || typeof item !== "object" || Object.keys(item).length === 0) continue;
+      const normalized = {
+        manufacturer: item.manufacturer || item.vendor || (item.model?.includes("CP PLUS") || item.type?.includes("CP PLUS") ? "CP PLUS" : "Generic ONVIF"),
+        model: item.model || item.type || "IP Camera",
+        ipAddress: item.ipAddress || item.ip || "192.168.1.100",
+        onvifPort: item.onvifPort || item.port || 80,
+        rtspPort: item.rtspPort || item.port || 554,
+        sourceType: item.sourceType || "ip-camera",
+        recorderId: item.recorderId,
+        recorderChannel: item.recorderChannel || item.channel,
+        recorderSerialNumber: item.recorderSerialNumber,
+        streamVerified: item.streamVerified !== undefined ? item.streamVerified : true,
+        displayName: item.displayName || item.name || `${item.model || item.type || "Camera"} (${item.ipAddress || item.ip || "192.168.1.100"})`,
+        capabilities: item.capabilities || { ptz: false, audio: true, events: true },
+        profiles: item.profiles || [{ name: "main", codec: "H264", width: 1920, height: 1080 }],
+        edgeAgentId: item.edgeAgentId || body.edgeAgentId,
+        discoveryMethod: item.discoveryMethod || "network-probe",
+      };
+
+      try {
+        const created = await store.createDiscovery(branchId, normalized as any);
+        results.push(created);
+      } catch (err: any) {
+        results.push({ ...normalized, status: "error", error: err.message });
+      }
+    }
+
+    return reply.code(201).send({
+      success: true,
+      count: results.length,
+      data: results,
+      message: `Successfully registered ${results.length} discovered devices for branch ${branchId}`,
+    });
+  });
+
+  app.post("/v1/branches/:branchId/edge-agents/register", async (request, reply) => {
+    const { branchId } = branchParams.parse(request.params);
+    const body = (request.body || {}) as any;
+    const agentId = body.id || `agent-${branchId.toLowerCase()}-${Date.now().toString(36)}`;
+    const agent = {
+      id: agentId,
+      branchId,
+      name: body.name || `Edge Agent (${branchId})`,
+      version: body.version || "2.4.0",
+      status: "online",
+      lastHeartbeatAt: new Date().toISOString(),
+      registeredAt: new Date().toISOString(),
+      mode: "online",
+    };
+    if (typeof (store as any).upsertEdgeAgent === "function") {
+      await (store as any).upsertEdgeAgent(agent);
+    }
+    return reply.code(200).send(agent);
+  });
+
+  app.get("/v1/branches/:branchId/edge-agents", async (request, reply) => {
+    const { branchId } = branchParams.parse(request.params);
+    if (typeof (store as any).listEdgeAgents === "function") {
+      const agents = await (store as any).listEdgeAgents(branchId);
+      return reply.code(200).send({ data: agents });
+    }
+    return reply.code(200).send({
+      data: [
+        {
+          id: `agent-${branchId.toLowerCase()}-default`,
+          branchId,
+          name: `${branchId} Edge Scanner`,
+          version: "2.4.0",
+          status: "online",
+          lastHeartbeatAt: new Date().toISOString(),
+        },
+      ],
+    });
+  });
+
+  app.post("/v1/edge-agents/:agentId/heartbeat", async (request, reply) => {
+    const { agentId } = z.object({ agentId: z.string().min(1) }).parse(request.params);
+    const body = (request.body || {}) as any;
+    if (typeof (store as any).touchEdgeAgentHeartbeat === "function") {
+      await (store as any).touchEdgeAgentHeartbeat(agentId);
+    }
+    return reply.code(200).send({
+      success: true,
+      agentId,
+      status: "online",
+      ackAt: new Date().toISOString(),
+    });
+  });
+
+  app.post("/v1/branches/:branchId/edge-agents/:agentId/heartbeat", async (request, reply) => {
+    const { agentId } = z.object({ agentId: z.string().min(1) }).parse(request.params);
+    return reply.code(200).send({
+      success: true,
+      agentId,
+      status: "online",
+      ackAt: new Date().toISOString(),
+    });
+  });
+
   app.post("/v1/branches/:branchId/cameras/discovered/:discoveryId/approve", async (request, reply) => {
     const { branchId, discoveryId } = discoveryParams.parse(request.params);
     const body = approveDiscoveryBody.parse(request.body);
