@@ -1230,14 +1230,19 @@ powershell -NoProfile -ExecutionPolicy Bypass -Command ^
   "    $syncResp = Invoke-RestMethod -Uri ($apiBase + '/branches/' + $branchId + '/cameras/discovered') -Method Post -Body $syncPayload -ContentType 'application/json' -TimeoutSec 15; " ^
   "    Write-Host (' [+] Sync complete: ' + $discoveredDevices.Count + ' devices populated in Branch Wizard!') -ForegroundColor Green; " ^
   "  } catch { " ^
-  "    Write-Host ('  [!] Batch sync notice: ' + $_.Exception.Message + '. Syncing devices individually...') -ForegroundColor Yellow; " ^
+  "    Write-Host ('  [!] Batch sync error: ' + $_.Exception.Message + '. Syncing devices individually...') -ForegroundColor Yellow; " ^
+  "    $successCount = 0; " ^
   "    foreach ($dev in $discoveredDevices) { " ^
   "      try { " ^
-  "        $devJson = $dev | ConvertTo-Json; " ^
-  "        Invoke-RestMethod -Uri ($apiBase + '/branches/' + $branchId + '/cameras/discovered') -Method Post -Body $devJson -ContentType 'application/json' -TimeoutSec 5 | Out-Null; " ^
-  "      } catch {} " ^
+  "        $dev.edgeAgentId = $agentId; " ^
+  "        $devJson = $dev | ConvertTo-Json -Depth 3; " ^
+  "        $result = Invoke-RestMethod -Uri ($apiBase + '/branches/' + $branchId + '/cameras/discovered') -Method Post -Body $devJson -ContentType 'application/json' -TimeoutSec 8; " ^
+  "        $successCount++; " ^
+  "      } catch { " ^
+  "        Write-Host ('    [!] Device sync failed: ' + $dev.displayName + ' - ' + $_.Exception.Message) -ForegroundColor DarkYellow; " ^
+  "      } " ^
   "    }; " ^
-  "    Write-Host ' [+] Individual device registration complete!' -ForegroundColor Green; " ^
+  "    Write-Host (' [+] Individual device registration complete! (' + $successCount + '/' + $discoveredDevices.Count + ' devices synced)') -ForegroundColor Green; " ^
   "  } " ^
   "  Write-Host ''; " ^
   "  Write-Host '==============================================================================' -ForegroundColor Green; " ^
