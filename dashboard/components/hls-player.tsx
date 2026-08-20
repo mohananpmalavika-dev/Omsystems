@@ -26,30 +26,45 @@ export function HlsPlayer({
   const [useSimulatedLive, setUseSimulatedLive] = useState(!url || url.includes("/api/media/streams"));
   const [realStreamUrl, setRealStreamUrl] = useState<string | null>(null);
 
-  // Check for local Real CCTV Stream Bridge (http://127.0.0.1:8090)
+  // Load real CCTV hardware stream / snapshot from same-origin relay or local bridge
   useEffect(() => {
     let active = true;
     const match = (cameraName || "").match(/(?:ch|channel|cam)\s*(\d+)/i);
     const ch = match ? Number(match[1]) : 1;
-    const probeUrl = `http://127.0.0.1:8090/snapshot/${ch}?t=${Date.now()}`;
 
-    const img = new Image();
-    img.onload = () => {
-      if (active) {
-        setRealStreamUrl(`http://127.0.0.1:8090/stream/${ch}`);
-      }
+    const relayUrl = `/api/media/snapshot-relay?channel=${ch}`;
+    const localUrl = `http://127.0.0.1:8090/snapshot/${ch}`;
+
+    const updateFrame = () => {
+      if (!active) return;
+      const img = new Image();
+      img.onload = () => {
+        if (active) {
+          setRealStreamUrl(`${relayUrl}&t=${Date.now()}`);
+        }
+      };
+      img.onerror = () => {
+        // Fallback check to local direct bridge
+        const localImg = new Image();
+        localImg.onload = () => {
+          if (active) {
+            setRealStreamUrl(`http://127.0.0.1:8090/stream/${ch}`);
+          }
+        };
+        localImg.onerror = () => {
+          if (active) setRealStreamUrl(null);
+        };
+        localImg.src = `${localUrl}?t=${Date.now()}`;
+      };
+      img.src = `${relayUrl}&t=${Date.now()}`;
     };
-    img.onerror = () => {
-      if (active) {
-        setRealStreamUrl(null);
-      }
-    };
-    img.src = probeUrl;
+
+    updateFrame();
+    const interval = setInterval(updateFrame, 1500);
 
     return () => {
       active = false;
-      img.onload = null;
-      img.onerror = null;
+      clearInterval(interval);
     };
   }, [cameraName]);
 
