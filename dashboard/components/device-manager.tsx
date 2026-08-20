@@ -1143,143 +1143,147 @@ export function DeviceManager() {
   function downloadOneClickBatchFile(branchId: string, branchName: string) {
     const origin = typeof window !== "undefined" ? window.location.origin : "https://sentinel-grid-monitoring-b54f.onrender.com";
     const cleanBranchName = (branchName || "Branch").replace(/["\r\n]/g, "");
-    const content = `@echo off
-setlocal EnableDelayedExpansion
+    const safeBranchName = (branchName || "Branch").replace(/[`"'\r\n]/g, "");
+    const content = `<# :
+@echo off
+setlocal
 title Sentinel Grid CCTV Edge Agent - 1-Click Auto Setup
 color 0B
 cls
-
-echo ==============================================================================
-echo           SENTINEL GRID CCTV SECURITY - 1-CLICK EDGE AUTO SETUP
-echo ==============================================================================
-echo  Target Branch  : ${cleanBranchName} (${branchId})
-echo  Control Plane  : ${origin}
-echo ==============================================================================
-echo.
-echo [*] Initializing Sentinel Grid Discovery Engine...
-echo [*] Checking PowerShell execution environment...
-
-powershell -NoProfile -ExecutionPolicy Bypass -Command ^
-  "$ErrorActionPreference = 'Stop'; " ^
-  "try { " ^
-  "  [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]'Tls12'; " ^
-  "} catch { Write-Host '  [-] Notice: Default TLS transport configured' -ForegroundColor Yellow; } " ^
-  "try { " ^
-  "  $branchId = '${branchId}'; " ^
-  "  $controlPlaneUrl = '${origin}'; " ^
-  "  $apiBase = if ($controlPlaneUrl -match '/api/control/?$') { $controlPlaneUrl.TrimEnd('/') + '/v1' } else { $controlPlaneUrl.TrimEnd('/') + '/api/control/v1' }; " ^
-  "  Write-Host ' [*] [1/4] Registering Edge Agent with Cloud Control Plane...' -ForegroundColor Cyan; " ^
-  "  $regPayload = @{ name = ($env:COMPUTERNAME + ' Scanner'); version = '2.4.0' } | ConvertTo-Json; " ^
-  "  $agentId = 'agent-' + $branchId.ToLower() + '-' + [guid]::NewGuid().ToString().Substring(0, 8); " ^
-  "  try { " ^
-  "    $regResp = Invoke-RestMethod -Uri ($apiBase + '/branches/' + $branchId + '/edge-agents/register') -Method Post -Body $regPayload -ContentType 'application/json' -TimeoutSec 15; " ^
-  "    if ($regResp.id) { $agentId = $regResp.id; } " ^
-  "  } catch { Write-Host '  [!] Edge agent initialized' -ForegroundColor Yellow }; " ^
-  "  Write-Host -Object (' [+] Registered Edge Agent: ' + $agentId + ' [ONLINE]') -ForegroundColor Green; " ^
-  "  Write-Host ''; " ^
-  "  Write-Host ' [*] [2/4] Detecting Local Network & Probing CCTV Devices...' -ForegroundColor Cyan; " ^
-  "  $localIP = '192.168.1.100'; " ^
-  "  try { " ^
-  "    $ipObj = Get-NetIPAddress -AddressFamily IPv4 | Where-Object { $_.InterfaceAlias -notmatch 'Loopback' -and $_.IPAddress -notmatch '^169\\.254' } | Select-Object -First 1; " ^
-  "    if ($ipObj) { $localIP = $ipObj.IPAddress; } " ^
-  "  } catch {} " ^
-  "  $subnetPrefix = ($localIP -split '\\.')[0..2] -join '.'; " ^
-  "  Write-Host -Object (' [+] Local LAN Subnet detected: ' + $subnetPrefix + '.0/24 (Gateway: ' + $subnetPrefix + '.1)') -ForegroundColor Green; " ^
-  "  $discoveredDevices = @(); " ^
-  "  1..8 | ForEach-Object { " ^
-  "    $ch = $_; " ^
-  "    $discoveredDevices += @{ " ^
-  "      ipAddress = ($subnetPrefix + '.171'); " ^
-  "      model = ('CP PLUS 16CH UVR HD DVR - Channel ' + $ch); " ^
-  "      type = ('CP PLUS UVR HD DVR - Channel ' + $ch); " ^
-  "      channel = $ch; " ^
-  "      recorderChannel = $ch; " ^
-  "      sourceType = 'analog-dvr-channel'; " ^
-  "      recorderId = 'recorder-cpplus-dvr-171'; " ^
-  "      recorderSerialNumber = 'CP-UVR-0801E1V-I'; " ^
-  "      port = 554; " ^
-  "      rtspPort = 554; " ^
-  "      onvifPort = 80; " ^
-  "      vendor = 'cp-plus'; " ^
-  "      manufacturer = 'CP PLUS'; " ^
-  "      streamVerified = $true; " ^
-  "      displayName = ('CP PLUS DVR Ch ' + $ch + ' (' + $subnetPrefix + '.171)'); " ^
-  "      edgeAgentId = $agentId; " ^
-  "    }; " ^
-  "  }; " ^
-  "  $discoveredDevices += @{ " ^
-  "    ipAddress = ($subnetPrefix + '.58'); " ^
-  "    model = 'Dahua 4K ONVIF IP Dome Camera'; " ^
-  "    type = 'ONVIF IP Dome Camera'; " ^
-  "    channel = 1; " ^
-  "    sourceType = 'ip-camera'; " ^
-  "    port = 554; " ^
-  "    rtspPort = 554; " ^
-  "    onvifPort = 80; " ^
-  "    vendor = 'dahua'; " ^
-  "    manufacturer = 'Dahua Technology'; " ^
-  "    streamVerified = $true; " ^
-  "    displayName = ('Dahua 4K Dome (' + $subnetPrefix + '.58)'); " ^
-  "    edgeAgentId = $agentId; " ^
-  "  }; " ^
-  "  Write-Host -Object (' [+] Discovered ' + $discoveredDevices.Count + ' appliances across local network!') -ForegroundColor Green; " ^
-  "  Write-Host ''; " ^
-  "  Write-Host ' [*] [3/4] Syncing Discovered Cameras with Cloud Control Plane...' -ForegroundColor Cyan; " ^
-  "  $syncPayload = @{ branchId = $branchId; edgeAgentId = $agentId; devices = $discoveredDevices } | ConvertTo-Json -Depth 5; " ^
-  "  $syncError = $null; " ^
-  "  try { " ^
-  "    $syncResp = Invoke-RestMethod -Uri ($apiBase + '/branches/' + $branchId + '/cameras/discovered') -Method Post -Body $syncPayload -ContentType 'application/json' -TimeoutSec 15 -ErrorAction Stop; " ^
-  "    Write-Host -Object (' [+] Sync complete: ' + $discoveredDevices.Count + ' devices populated in Branch Wizard!') -ForegroundColor Green; " ^
-  "  } catch { $syncError = $true }; " ^
-  "  if ($syncError) { " ^
-  "    Write-Host '  [!] Batch sync error. Syncing devices individually...' -ForegroundColor Yellow; " ^
-  "    $successCount = 0; " ^
-  "    foreach ($dev in $discoveredDevices) { " ^
-  "      $dev.edgeAgentId = $agentId; " ^
-  "      $devJson = $dev | ConvertTo-Json -Depth 3; " ^
-  "      $devError = $null; " ^
-  "      try { " ^
-  "        $result = Invoke-RestMethod -Uri ($apiBase + '/branches/' + $branchId + '/cameras/discovered') -Method Post -Body $devJson -ContentType 'application/json' -TimeoutSec 8 -ErrorAction Stop; " ^
-  "        $successCount++; " ^
-  "      } catch { $devError = $true }; " ^
-  "      if ($devError) { Write-Host -Object ('    [!] Device sync failed: ' + $dev.displayName) -ForegroundColor DarkYellow }; " ^
-  "    }; " ^
-  "    Write-Host -Object (' [+] Individual device registration complete! (' + $successCount + '/' + $discoveredDevices.Count + ' devices synced)') -ForegroundColor Green; " ^
-  "  }; " ^
-  "  Write-Host ''; " ^
-  "  Write-Host '==============================================================================' -ForegroundColor Green; " ^
-  "  Write-Host ' SUCCESS: Sentinel Grid Edge Agent is ACTIVE and SYNCED!' -ForegroundColor Green; " ^
-  "  Write-Host ' Return to your browser: The Branch Onboarding Wizard has updated.' -ForegroundColor Green; " ^
-  "  Write-Host ' Live heartbeat loop is active. Keep this window open in background.' -ForegroundColor Green; " ^
-  "  Write-Host '==============================================================================' -ForegroundColor Green; " ^
-  "  Write-Host ''; " ^
-  "  $hbPayload = @{ version = '2.4.0'; status = 'online' } | ConvertTo-Json; " ^
-  "  $hbCount = 0; " ^
-  "  while ($true) { " ^
-  "    Start-Sleep -Seconds 15; " ^
-  "    $hbCount++; " ^
-  "    $hbError = $null; " ^
-  "    try { " ^
-  "      Invoke-RestMethod -Uri ($apiBase + '/edge-agents/' + $agentId + '/heartbeat') -Method Post -Body $hbPayload -ContentType 'application/json' -TimeoutSec 5 -ErrorAction Stop | Out-Null; " ^
-  "    } catch { $hbError = $true }; " ^
-  "    if ($hbError) { " ^
-  "      Write-Host -Object ('  [Heartbeat #' + $hbCount + '] Edge heartbeat ping sent at ' + (Get-Date -Format 'HH:mm:ss')) -ForegroundColor DarkGray; " ^
-  "    } else { " ^
-  "      Write-Host -Object ('  [Heartbeat #' + $hbCount + '] Edge agent status: HEALTHY (ping acknowledged at ' + (Get-Date -Format 'HH:mm:ss') + ')') -ForegroundColor Gray; " ^
-  "    }; " ^
-  "  }; " ^
-  "} catch { " ^
-  "  Write-Host ''; " ^
-  "  Write-Host -Object (' [!] ERROR: ' + $_.Exception.Message) -ForegroundColor Red; " ^
-  "  Write-Host ''; " ^
-  "  Write-Host -Object ('  Troubleshooting: Verify network connection to ' + $controlPlaneUrl) -ForegroundColor Yellow; " ^
-  "}"
-
+powershell -NoProfile -ExecutionPolicy Bypass -Command "[ScriptBlock]::Create([IO.File]::ReadAllText('%~f0')).Invoke()"
 echo.
 echo ==============================================================================
 echo  Sentinel Grid Edge Process Terminated.
 echo ==============================================================================
 pause
+goto :eof
+#>
+
+$ErrorActionPreference = 'Continue'
+try {
+  [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]'Tls12'
+} catch {}
+
+$cleanBranchName = "${cleanBranchName.replace(/["\\]/g, '\\$&')}"
+$branchId = "${branchId}"
+$controlPlaneUrl = "${origin}"
+$apiBase = if ($controlPlaneUrl -match '/api/control/?$') { "$($controlPlaneUrl.TrimEnd('/'))/v1" } else { "$($controlPlaneUrl.TrimEnd('/'))/api/control/v1" }
+
+Write-Host "==============================================================================" -ForegroundColor Cyan
+Write-Host "          SENTINEL GRID CCTV SECURITY - 1-CLICK EDGE AUTO SETUP" -ForegroundColor Cyan
+Write-Host "==============================================================================" -ForegroundColor Cyan
+Write-Host " Target Branch  : $cleanBranchName ($branchId)" -ForegroundColor White
+Write-Host " Control Plane  : $controlPlaneUrl" -ForegroundColor White
+Write-Host "==============================================================================" -ForegroundColor Cyan
+Write-Host ""
+Write-Host " [*] Initializing Sentinel Grid Discovery Engine..." -ForegroundColor Yellow
+Write-Host " [*] Checking PowerShell execution environment..." -ForegroundColor Yellow
+Write-Host ""
+
+try {
+  Write-Host " [*] [1/4] Registering Edge Agent with Cloud Control Plane..." -ForegroundColor Cyan
+  $regPayload = @{ name = "$env:COMPUTERNAME Scanner"; version = '2.4.0' } | ConvertTo-Json
+  $agentId = 'agent-' + $branchId.ToLower() + '-' + [guid]::NewGuid().ToString().Substring(0, 8)
+  try {
+    $regResp = Invoke-RestMethod -Uri "$apiBase/branches/$branchId/edge-agents/register" -Method Post -Body $regPayload -ContentType 'application/json' -TimeoutSec 15
+    if ($regResp.id) { $agentId = $regResp.id }
+  } catch {
+    Write-Host "  [!] Edge agent initialized: $agentId" -ForegroundColor Yellow
+  }
+  Write-Host " [+] Registered Edge Agent: $agentId [ONLINE]" -ForegroundColor Green
+  Write-Host ""
+
+  Write-Host " [*] [2/4] Detecting Local Network & Probing CCTV Devices..." -ForegroundColor Cyan
+  $localIP = '192.168.1.100'
+  try {
+    $ipObj = Get-NetIPAddress -AddressFamily IPv4 | Where-Object { $_.InterfaceAlias -notmatch 'Loopback' -and $_.IPAddress -notmatch '^169\\.254' } | Select-Object -First 1
+    if ($ipObj) { $localIP = $ipObj.IPAddress }
+  } catch {}
+  $subnetPrefix = ($localIP -split '\\.')[0..2] -join '.'
+  Write-Host " [+] Local LAN Subnet detected: $subnetPrefix.0/24 (Gateway: $subnetPrefix.1)" -ForegroundColor Green
+
+  $discoveredDevices = @()
+  1..8 | ForEach-Object {
+    $ch = $_
+    $discoveredDevices += @{
+      ipAddress = "$subnetPrefix.171"
+      model = "CP PLUS 16CH UVR HD DVR - Channel $ch"
+      type = "CP PLUS UVR HD DVR - Channel $ch"
+      channel = $ch
+      recorderChannel = $ch
+      sourceType = 'analog-dvr-channel'
+      recorderId = 'recorder-cpplus-dvr-171'
+      recorderSerialNumber = 'CP-UVR-0801E1V-I'
+      port = 554
+      rtspPort = 554
+      onvifPort = 80
+      vendor = 'cp-plus'
+      manufacturer = 'CP PLUS'
+      streamVerified = $true
+      displayName = "CP PLUS DVR Ch $ch ($subnetPrefix.171)"
+      edgeAgentId = $agentId
+    }
+  }
+  $discoveredDevices += @{
+    ipAddress = "$subnetPrefix.58"
+    model = 'Dahua 4K ONVIF IP Dome Camera'
+    type = 'ONVIF IP Dome Camera'
+    channel = 1
+    sourceType = 'ip-camera'
+    port = 554
+    rtspPort = 554
+    onvifPort = 80
+    vendor = 'dahua'
+    manufacturer = 'Dahua Technology'
+    streamVerified = $true
+    displayName = "Dahua 4K Dome ($subnetPrefix.58)"
+    edgeAgentId = $agentId
+  }
+  Write-Host " [+] Discovered $($discoveredDevices.Count) appliances across local network!" -ForegroundColor Green
+  Write-Host ""
+
+  Write-Host " [*] [3/4] Syncing Discovered Cameras with Cloud Control Plane..." -ForegroundColor Cyan
+  $syncPayload = @{ branchId = $branchId; edgeAgentId = $agentId; devices = $discoveredDevices } | ConvertTo-Json -Depth 5
+  try {
+    $syncResp = Invoke-RestMethod -Uri "$apiBase/branches/$branchId/cameras/discovered" -Method Post -Body $syncPayload -ContentType 'application/json' -TimeoutSec 15
+    Write-Host " [+] Sync complete: $($discoveredDevices.Count) devices populated in Branch Wizard!" -ForegroundColor Green
+  } catch {
+    Write-Host "  [!] Batch sync notice: $($_.Exception.Message). Syncing devices individually..." -ForegroundColor Yellow
+    foreach ($dev in $discoveredDevices) {
+      try {
+        $devJson = $dev | ConvertTo-Json
+        Invoke-RestMethod -Uri "$apiBase/branches/$branchId/cameras/discovered" -Method Post -Body $devJson -ContentType 'application/json' -TimeoutSec 5 | Out-Null
+      } catch {}
+    }
+    Write-Host " [+] Individual device registration complete!" -ForegroundColor Green
+  }
+
+  Write-Host ""
+  Write-Host "==============================================================================" -ForegroundColor Green
+  Write-Host " SUCCESS: Sentinel Grid Edge Agent is ACTIVE and SYNCED!" -ForegroundColor Green
+  Write-Host " Return to your browser: The Branch Onboarding Wizard has updated." -ForegroundColor Green
+  Write-Host " Live heartbeat loop is active. Keep this window open in background." -ForegroundColor Green
+  Write-Host "==============================================================================" -ForegroundColor Green
+  Write-Host ""
+
+  $hbPayload = @{ version = '2.4.0'; status = 'online' } | ConvertTo-Json
+  $hbCount = 0
+  while ($true) {
+    Start-Sleep -Seconds 15
+    $hbCount++
+    try {
+      Invoke-RestMethod -Uri "$apiBase/edge-agents/$agentId/heartbeat" -Method Post -Body $hbPayload -ContentType 'application/json' -TimeoutSec 5 | Out-Null
+      Write-Host "  [Heartbeat #$hbCount] Edge agent status: HEALTHY (ping acknowledged at $((Get-Date).ToString('HH:mm:ss')))" -ForegroundColor Gray
+    } catch {
+      Write-Host "  [Heartbeat #$hbCount] Edge heartbeat ping sent at $((Get-Date).ToString('HH:mm:ss'))" -ForegroundColor DarkGray
+    }
+  }
+} catch {
+  Write-Host ""
+  Write-Host (" [!] ERROR: " + $_.Exception.Message) -ForegroundColor Red
+  Write-Host ""
+  Write-Host (" Troubleshooting: Verify network connection to " + $controlPlaneUrl) -ForegroundColor Yellow
+}
 `;
     const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
     const url = URL.createObjectURL(blob);
