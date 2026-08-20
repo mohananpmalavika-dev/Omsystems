@@ -15,9 +15,20 @@ export async function GET(request: NextRequest) {
   const targetKey = url.searchParams.get("cameraId") || url.searchParams.get("id") || url.searchParams.get("channel") || url.searchParams.get("ch") || "default";
 
   const now = Date.now();
-  const cached = frameStore.get(targetKey) || frameStore.get(targetKey.toLowerCase());
+  
+  // Try exact, lowercase, and channel number extraction (e.g. "ch 1", "ch 2", "ch 7")
+  let cached = frameStore.get(targetKey) || frameStore.get(targetKey.toLowerCase());
+  
+  if (!cached) {
+    const chMatch = targetKey.match(/ch(?:annel)?\s*([1-8])/i) || targetKey.match(/ch-?([1-8])/i);
+    if (chMatch) {
+      const chNum = chMatch[1];
+      cached = frameStore.get(`ch${chNum}`) || frameStore.get(`CP PLUS DVR Ch ${chNum}`) || frameStore.get(`192.168.29.171:${chNum}`);
+    }
+  }
+
   if (cached && cached.buffer.length > 0) {
-    if (now - cached.updatedAt > 8000) {
+    if (now - cached.updatedAt > 15000) {
       return NextResponse.json({ error: "frame_stale", target: targetKey, ageMs: now - cached.updatedAt }, { status: 404 });
     }
     return new NextResponse(new Uint8Array(cached.buffer), {
