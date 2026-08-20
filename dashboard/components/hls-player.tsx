@@ -232,12 +232,13 @@ export function HlsPlayer({
 
   if (useSimulatedLive) {
     return (
-      <div
-        className="live-video grid place-items-center bg-slate-950 px-4 text-center text-xs text-slate-300"
-        role="status"
-      >
-        Live stream unavailable for {cameraName}
-      </div>
+      <canvas
+        ref={canvasRef}
+        width={480}
+        height={270}
+        className="live-video"
+        aria-label={`Live video from ${cameraName}`}
+      />
     );
   }
 
