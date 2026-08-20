@@ -29,8 +29,13 @@ export function HlsPlayer({
   // Load real CCTV hardware stream / snapshot from same-origin relay or local bridge
   useEffect(() => {
     let active = true;
-    const match = (cameraName || "").match(/(?:ch|channel|cam)\s*(\d+)/i);
-    const ch = match ? Number(match[1]) : 1;
+    let ch = 1;
+    if (cameraName?.includes("29.58") || cameraName?.toLowerCase().includes("dahua")) {
+      ch = 9;
+    } else {
+      const match = (cameraName || "").match(/(?:ch|channel|cam)\s*(\d+)/i);
+      ch = match ? Number(match[1]) : 1;
+    }
 
     const relayUrl = `/api/media/snapshot-relay?channel=${ch}`;
     const localUrl = `http://127.0.0.1:8090/snapshot/${ch}`;
