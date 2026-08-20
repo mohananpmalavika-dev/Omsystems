@@ -1175,7 +1175,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -Command ^
   "    $regResp = Invoke-RestMethod -Uri ($apiBase + '/branches/' + $branchId + '/edge-agents/register') -Method Post -Body $regPayload -ContentType 'application/json' -TimeoutSec 15; " ^
   "    if ($regResp.id) { $agentId = $regResp.id; } " ^
   "  } catch { Write-Host '  [!] Edge agent initialized' -ForegroundColor Yellow }; " ^
-  "  Write-Host (' [+] Registered Edge Agent: ' + $agentId + ' [ONLINE]') -ForegroundColor Green; " ^
+  "  Write-Host -Object (' [+] Registered Edge Agent: ' + $agentId + ' [ONLINE]') -ForegroundColor Green; " ^
   "  Write-Host ''; " ^
   "  Write-Host ' [*] [2/4] Detecting Local Network & Probing CCTV Devices...' -ForegroundColor Cyan; " ^
   "  $localIP = '192.168.1.100'; " ^
@@ -1184,7 +1184,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -Command ^
   "    if ($ipObj) { $localIP = $ipObj.IPAddress; } " ^
   "  } catch {} " ^
   "  $subnetPrefix = ($localIP -split '\\.')[0..2] -join '.'; " ^
-  "  Write-Host (' [+] Local LAN Subnet detected: ' + $subnetPrefix + '.0/24 (Gateway: ' + $subnetPrefix + '.1)') -ForegroundColor Green; " ^
+  "  Write-Host -Object (' [+] Local LAN Subnet detected: ' + $subnetPrefix + '.0/24 (Gateway: ' + $subnetPrefix + '.1)') -ForegroundColor Green; " ^
   "  $discoveredDevices = @(); " ^
   "  1..8 | ForEach-Object { " ^
   "    $ch = $_; " ^
@@ -1222,14 +1222,14 @@ powershell -NoProfile -ExecutionPolicy Bypass -Command ^
   "    displayName = ('Dahua 4K Dome (' + $subnetPrefix + '.58)'); " ^
   "    edgeAgentId = $agentId; " ^
   "  }; " ^
-  "  Write-Host (' [+] Discovered ' + $discoveredDevices.Count + ' appliances across local network!') -ForegroundColor Green; " ^
+  "  Write-Host -Object (' [+] Discovered ' + $discoveredDevices.Count + ' appliances across local network!') -ForegroundColor Green; " ^
   "  Write-Host ''; " ^
   "  Write-Host ' [*] [3/4] Syncing Discovered Cameras with Cloud Control Plane...' -ForegroundColor Cyan; " ^
   "  $syncPayload = @{ branchId = $branchId; edgeAgentId = $agentId; devices = $discoveredDevices } | ConvertTo-Json -Depth 5; " ^
   "  $syncError = $null; " ^
   "  try { " ^
   "    $syncResp = Invoke-RestMethod -Uri ($apiBase + '/branches/' + $branchId + '/cameras/discovered') -Method Post -Body $syncPayload -ContentType 'application/json' -TimeoutSec 15 -ErrorAction Stop; " ^
-  "    Write-Host (' [+] Sync complete: ' + $discoveredDevices.Count + ' devices populated in Branch Wizard!') -ForegroundColor Green; " ^
+  "    Write-Host -Object (' [+] Sync complete: ' + $discoveredDevices.Count + ' devices populated in Branch Wizard!') -ForegroundColor Green; " ^
   "  } catch { $syncError = $true }; " ^
   "  if ($syncError) { " ^
   "    Write-Host '  [!] Batch sync error. Syncing devices individually...' -ForegroundColor Yellow; " ^
@@ -1242,9 +1242,9 @@ powershell -NoProfile -ExecutionPolicy Bypass -Command ^
   "        $result = Invoke-RestMethod -Uri ($apiBase + '/branches/' + $branchId + '/cameras/discovered') -Method Post -Body $devJson -ContentType 'application/json' -TimeoutSec 8 -ErrorAction Stop; " ^
   "        $successCount++; " ^
   "      } catch { $devError = $true }; " ^
-  "      if ($devError) { Write-Host ('    [!] Device sync failed: ' + $dev.displayName) -ForegroundColor DarkYellow }; " ^
+  "      if ($devError) { Write-Host -Object ('    [!] Device sync failed: ' + $dev.displayName) -ForegroundColor DarkYellow }; " ^
   "    }; " ^
-  "    Write-Host (' [+] Individual device registration complete! (' + $successCount + '/' + $discoveredDevices.Count + ' devices synced)') -ForegroundColor Green; " ^
+  "    Write-Host -Object (' [+] Individual device registration complete! (' + $successCount + '/' + $discoveredDevices.Count + ' devices synced)') -ForegroundColor Green; " ^
   "  }; " ^
   "  Write-Host ''; " ^
   "  Write-Host '==============================================================================' -ForegroundColor Green; " ^
@@ -1263,16 +1263,16 @@ powershell -NoProfile -ExecutionPolicy Bypass -Command ^
   "      Invoke-RestMethod -Uri ($apiBase + '/edge-agents/' + $agentId + '/heartbeat') -Method Post -Body $hbPayload -ContentType 'application/json' -TimeoutSec 5 -ErrorAction Stop | Out-Null; " ^
   "    } catch { $hbError = $true }; " ^
   "    if ($hbError) { " ^
-  "      Write-Host ('  [Heartbeat #' + $hbCount + '] Edge heartbeat ping sent at ' + (Get-Date -Format 'HH:mm:ss')) -ForegroundColor DarkGray; " ^
+  "      Write-Host -Object ('  [Heartbeat #' + $hbCount + '] Edge heartbeat ping sent at ' + (Get-Date -Format 'HH:mm:ss')) -ForegroundColor DarkGray; " ^
   "    } else { " ^
-  "      Write-Host ('  [Heartbeat #' + $hbCount + '] Edge agent status: HEALTHY (ping acknowledged at ' + (Get-Date -Format 'HH:mm:ss') + ')') -ForegroundColor Gray; " ^
+  "      Write-Host -Object ('  [Heartbeat #' + $hbCount + '] Edge agent status: HEALTHY (ping acknowledged at ' + (Get-Date -Format 'HH:mm:ss') + ')') -ForegroundColor Gray; " ^
   "    }; " ^
   "  }; " ^
   "} catch { " ^
   "  Write-Host ''; " ^
-  "  Write-Host (' [!] ERROR: ' + $_.Exception.Message) -ForegroundColor Red; " ^
+  "  Write-Host -Object (' [!] ERROR: ' + $_.Exception.Message) -ForegroundColor Red; " ^
   "  Write-Host ''; " ^
-  "  Write-Host ('  Troubleshooting: Verify network connection to ' + $controlPlaneUrl) -ForegroundColor Yellow; " ^
+  "  Write-Host -Object ('  Troubleshooting: Verify network connection to ' + $controlPlaneUrl) -ForegroundColor Yellow; " ^
   "}"
 
 echo.
