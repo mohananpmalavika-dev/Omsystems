@@ -30,7 +30,7 @@ export function HlsPlayer({
   useEffect(() => {
     let active = true;
     let ch = 1;
-    if (cameraName?.includes("29.58") || cameraName?.toLowerCase().includes("dahua")) {
+    if (cameraName?.includes("58") || cameraName?.toLowerCase().includes("dahua")) {
       ch = 9;
     } else {
       const match = (cameraName || "").match(/(?:ch|channel|cam)\s*(\d+)/i);
