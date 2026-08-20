@@ -1167,9 +1167,9 @@ powershell -NoProfile -ExecutionPolicy Bypass -Command ^
   "try { " ^
   "  $branchId = '${branchId}'; " ^
   "  $controlPlaneUrl = '${origin}'; " ^
-  "  $apiBase = if ($controlPlaneUrl -match '/api/control/?$') { \"$($controlPlaneUrl.TrimEnd('/'))/v1\" } else { \"$($controlPlaneUrl.TrimEnd('/'))/api/control/v1\" }; " ^
+  "  $apiBase = if ($controlPlaneUrl -match '/api/control/?$') { $controlPlaneUrl.TrimEnd('/') + '/v1' } else { $controlPlaneUrl.TrimEnd('/') + '/api/control/v1' }; " ^
   "  Write-Host ' [*] [1/4] Registering Edge Agent with Cloud Control Plane...' -ForegroundColor Cyan; " ^
-  "  $regPayload = @{ name = \"$env:COMPUTERNAME Scanner\"; version = '2.4.0' } | ConvertTo-Json; " ^
+  "  $regPayload = @{ name = ($env:COMPUTERNAME + ' Scanner'); version = '2.4.0' } | ConvertTo-Json; " ^
   "  $agentId = 'agent-' + $branchId.ToLower() + '-' + [guid]::NewGuid().ToString().Substring(0, 8); " ^
   "  try { " ^
   "    $regResp = Invoke-RestMethod -Uri \"$apiBase/branches/$branchId/edge-agents/register\" -Method Post -Body $regPayload -ContentType 'application/json' -TimeoutSec 15; " ^
@@ -1184,14 +1184,14 @@ powershell -NoProfile -ExecutionPolicy Bypass -Command ^
   "    if ($ipObj) { $localIP = $ipObj.IPAddress; } " ^
   "  } catch {} " ^
   "  $subnetPrefix = ($localIP -split '\\.')[0..2] -join '.'; " ^
-  "  Write-Host \" [+] Local LAN Subnet detected: $subnetPrefix.0/24 (Gateway: $subnetPrefix.1)\" -ForegroundColor Green; " ^
+  "  Write-Host (' [+] Local LAN Subnet detected: ' + $subnetPrefix + '.0/24 (Gateway: ' + $subnetPrefix + '.1)') -ForegroundColor Green; " ^
   "  $discoveredDevices = @(); " ^
   "  1..8 | ForEach-Object { " ^
   "    $ch = $_; " ^
   "    $discoveredDevices += @{ " ^
-  "      ipAddress = \"$subnetPrefix.171\"; " ^
-  "      model = \"CP PLUS 16CH UVR HD DVR - Channel $ch\"; " ^
-  "      type = \"CP PLUS UVR HD DVR - Channel $ch\"; " ^
+  "      ipAddress = ($subnetPrefix + '.171'); " ^
+  "      model = ('CP PLUS 16CH UVR HD DVR - Channel ' + $ch); " ^
+  "      type = ('CP PLUS UVR HD DVR - Channel ' + $ch); " ^
   "      channel = $ch; " ^
   "      recorderChannel = $ch; " ^
   "      sourceType = 'analog-dvr-channel'; " ^
@@ -1203,12 +1203,12 @@ powershell -NoProfile -ExecutionPolicy Bypass -Command ^
   "      vendor = 'cp-plus'; " ^
   "      manufacturer = 'CP PLUS'; " ^
   "      streamVerified = $true; " ^
-  "      displayName = \"CP PLUS DVR Ch $ch ($subnetPrefix.171)\"; " ^
+  "      displayName = ('CP PLUS DVR Ch ' + $ch + ' (' + $subnetPrefix + '.171)'); " ^
   "      edgeAgentId = $agentId; " ^
   "    }; " ^
   "  }; " ^
   "  $discoveredDevices += @{ " ^
-  "    ipAddress = \"$subnetPrefix.58\"; " ^
+  "    ipAddress = ($subnetPrefix + '.58'); " ^
   "    model = 'Dahua 4K ONVIF IP Dome Camera'; " ^
   "    type = 'ONVIF IP Dome Camera'; " ^
   "    channel = 1; " ^
@@ -1219,18 +1219,18 @@ powershell -NoProfile -ExecutionPolicy Bypass -Command ^
   "    vendor = 'dahua'; " ^
   "    manufacturer = 'Dahua Technology'; " ^
   "    streamVerified = $true; " ^
-  "    displayName = \"Dahua 4K Dome ($subnetPrefix.58)\"; " ^
+  "    displayName = ('Dahua 4K Dome (' + $subnetPrefix + '.58)'); " ^
   "    edgeAgentId = $agentId; " ^
   "  }; " ^
-  "  Write-Host \" [+] Discovered $($discoveredDevices.Count) appliances across local network!\" -ForegroundColor Green; " ^
+  "  Write-Host (' [+] Discovered ' + $discoveredDevices.Count + ' appliances across local network!') -ForegroundColor Green; " ^
   "  Write-Host ''; " ^
   "  Write-Host ' [*] [3/4] Syncing Discovered Cameras with Cloud Control Plane...' -ForegroundColor Cyan; " ^
   "  $syncPayload = @{ branchId = $branchId; edgeAgentId = $agentId; devices = $discoveredDevices } | ConvertTo-Json -Depth 5; " ^
   "  try { " ^
   "    $syncResp = Invoke-RestMethod -Uri \"$apiBase/branches/$branchId/cameras/discovered\" -Method Post -Body $syncPayload -ContentType 'application/json' -TimeoutSec 15; " ^
-  "    Write-Host \" [+] Sync complete: $($discoveredDevices.Count) devices populated in Branch Wizard!\" -ForegroundColor Green; " ^
+  "    Write-Host (' [+] Sync complete: ' + $discoveredDevices.Count + ' devices populated in Branch Wizard!') -ForegroundColor Green; " ^
   "  } catch { " ^
-  "    Write-Host \"  [!] Batch sync notice: $($_.Exception.Message). Syncing devices individually...\" -ForegroundColor Yellow; " ^
+  "    Write-Host ('  [!] Batch sync notice: ' + $_.Exception.Message + '. Syncing devices individually...') -ForegroundColor Yellow; " ^
   "    foreach ($dev in $discoveredDevices) { " ^
   "      try { " ^
   "        $devJson = $dev | ConvertTo-Json; " ^
@@ -1253,9 +1253,9 @@ powershell -NoProfile -ExecutionPolicy Bypass -Command ^
   "    $hbCount++; " ^
   "    try { " ^
   "      Invoke-RestMethod -Uri \"$apiBase/edge-agents/$agentId/heartbeat\" -Method Post -Body $hbPayload -ContentType 'application/json' -TimeoutSec 5 | Out-Null; " ^
-  "      Write-Host \"  [Heartbeat #$hbCount] Edge agent status: HEALTHY (ping acknowledged at $(Get-Date -Format 'HH:mm:ss'))\" -ForegroundColor Gray; " ^
+  "      Write-Host ('  [Heartbeat #' + $hbCount + '] Edge agent status: HEALTHY (ping acknowledged at ' + (Get-Date -Format 'HH:mm:ss') + ')') -ForegroundColor Gray; " ^
   "    } catch { " ^
-  "      Write-Host \"  [Heartbeat #$hbCount] Edge heartbeat ping sent at $(Get-Date -Format 'HH:mm:ss')\" -ForegroundColor DarkGray; " ^
+  "      Write-Host ('  [Heartbeat #' + $hbCount + '] Edge heartbeat ping sent at ' + (Get-Date -Format 'HH:mm:ss')) -ForegroundColor DarkGray; " ^
   "    } " ^
   "  } " ^
   "} catch { " ^
