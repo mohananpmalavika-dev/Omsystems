@@ -1172,10 +1172,10 @@ powershell -NoProfile -ExecutionPolicy Bypass -Command ^
   "  $regPayload = @{ name = ($env:COMPUTERNAME + ' Scanner'); version = '2.4.0' } | ConvertTo-Json; " ^
   "  $agentId = 'agent-' + $branchId.ToLower() + '-' + [guid]::NewGuid().ToString().Substring(0, 8); " ^
   "  try { " ^
-  "    $regResp = Invoke-RestMethod -Uri \"$apiBase/branches/$branchId/edge-agents/register\" -Method Post -Body $regPayload -ContentType 'application/json' -TimeoutSec 15; " ^
+  "    $regResp = Invoke-RestMethod -Uri ($apiBase + '/branches/' + $branchId + '/edge-agents/register') -Method Post -Body $regPayload -ContentType 'application/json' -TimeoutSec 15; " ^
   "    if ($regResp.id) { $agentId = $regResp.id; } " ^
-  "  } catch { Write-Host \"  [!] Edge agent initialized: $agentId\" -ForegroundColor Yellow; } " ^
-  "  Write-Host \" [+] Registered Edge Agent: $agentId [ONLINE]\" -ForegroundColor Green; " ^
+  "  } catch { Write-Host ('  [!] Edge agent initialized: ' + $agentId) -ForegroundColor Yellow; } " ^
+  "  Write-Host (' [+] Registered Edge Agent: ' + $agentId + ' [ONLINE]') -ForegroundColor Green; " ^
   "  Write-Host ''; " ^
   "  Write-Host ' [*] [2/4] Detecting Local Network & Probing CCTV Devices...' -ForegroundColor Cyan; " ^
   "  $localIP = '192.168.1.100'; " ^
@@ -1227,17 +1227,17 @@ powershell -NoProfile -ExecutionPolicy Bypass -Command ^
   "  Write-Host ' [*] [3/4] Syncing Discovered Cameras with Cloud Control Plane...' -ForegroundColor Cyan; " ^
   "  $syncPayload = @{ branchId = $branchId; edgeAgentId = $agentId; devices = $discoveredDevices } | ConvertTo-Json -Depth 5; " ^
   "  try { " ^
-  "    $syncResp = Invoke-RestMethod -Uri \"$apiBase/branches/$branchId/cameras/discovered\" -Method Post -Body $syncPayload -ContentType 'application/json' -TimeoutSec 15; " ^
+  "    $syncResp = Invoke-RestMethod -Uri ($apiBase + '/branches/' + $branchId + '/cameras/discovered') -Method Post -Body $syncPayload -ContentType 'application/json' -TimeoutSec 15; " ^
   "    Write-Host (' [+] Sync complete: ' + $discoveredDevices.Count + ' devices populated in Branch Wizard!') -ForegroundColor Green; " ^
   "  } catch { " ^
   "    Write-Host ('  [!] Batch sync notice: ' + $_.Exception.Message + '. Syncing devices individually...') -ForegroundColor Yellow; " ^
   "    foreach ($dev in $discoveredDevices) { " ^
   "      try { " ^
   "        $devJson = $dev | ConvertTo-Json; " ^
-  "        Invoke-RestMethod -Uri \"$apiBase/branches/$branchId/cameras/discovered\" -Method Post -Body $devJson -ContentType 'application/json' -TimeoutSec 5 | Out-Null; " ^
+  "        Invoke-RestMethod -Uri ($apiBase + '/branches/' + $branchId + '/cameras/discovered') -Method Post -Body $devJson -ContentType 'application/json' -TimeoutSec 5 | Out-Null; " ^
   "      } catch {} " ^
-  "    } " ^
-  "    Write-Host \" [+] Individual device registration complete!\" -ForegroundColor Green; " ^
+  "    }; " ^
+  "    Write-Host ' [+] Individual device registration complete!' -ForegroundColor Green; " ^
   "  } " ^
   "  Write-Host ''; " ^
   "  Write-Host '==============================================================================' -ForegroundColor Green; " ^
@@ -1252,7 +1252,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -Command ^
   "    Start-Sleep -Seconds 15; " ^
   "    $hbCount++; " ^
   "    try { " ^
-  "      Invoke-RestMethod -Uri \"$apiBase/edge-agents/$agentId/heartbeat\" -Method Post -Body $hbPayload -ContentType 'application/json' -TimeoutSec 5 | Out-Null; " ^
+  "      Invoke-RestMethod -Uri ($apiBase + '/edge-agents/' + $agentId + '/heartbeat') -Method Post -Body $hbPayload -ContentType 'application/json' -TimeoutSec 5 | Out-Null; " ^
   "      Write-Host ('  [Heartbeat #' + $hbCount + '] Edge agent status: HEALTHY (ping acknowledged at ' + (Get-Date -Format 'HH:mm:ss') + ')') -ForegroundColor Gray; " ^
   "    } catch { " ^
   "      Write-Host ('  [Heartbeat #' + $hbCount + '] Edge heartbeat ping sent at ' + (Get-Date -Format 'HH:mm:ss')) -ForegroundColor DarkGray; " ^
@@ -1262,7 +1262,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -Command ^
   "  Write-Host ''; " ^
   "  Write-Host (' [!] ERROR: ' + $_.Exception.Message) -ForegroundColor Red; " ^
   "  Write-Host ''; " ^
-  "  Write-Host ' Troubleshooting: Verify network connection to ' + $controlPlaneUrl -ForegroundColor Yellow; " ^
+  "  Write-Host ('  Troubleshooting: Verify network connection to ' + $controlPlaneUrl) -ForegroundColor Yellow; " ^
   "}"
 
 echo.
