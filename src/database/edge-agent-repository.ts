@@ -521,7 +521,7 @@ export class EdgeAgentRepository {
              discovery_layers = EXCLUDED.discovery_layers,
              status = CASE
                WHEN camera_discoveries.status = 'rejected' THEN camera_discoveries.status
-               ELSE EXCLUDED.status
+               ELSE 'pending'::discovery_status
              END,
              discovered_at = now()
          RETURNING id::text, discovered_at, status`,
@@ -540,7 +540,7 @@ export class EdgeAgentRepository {
          duplicateStatus, input.compatibilityStatus ?? null,
          input.hardwareId ?? null, existingAssociation, statusReason,
          input.timeSynchronization ?? null, JSON.stringify(discoveryLayers),
-         identity.cameraId ? "approved" : "pending"],
+         "pending"],
       );
       const row = result.rows[0];
       if (!row) throw new Error("invalid_branch");

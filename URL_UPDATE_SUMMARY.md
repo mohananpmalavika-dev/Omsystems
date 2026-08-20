@@ -6,10 +6,10 @@ Your Sentinel Grid platform URLs have been updated throughout the codebase:
 
 ### Official Render Service URLs:
 
-1. **Dashboard**: `https://sentinel-grid-monitoring-vhid.onrender.com`
-2. **Control Plane**: `https://sentinel-grid-control-plane-ocn1.onrender.com`
-3. **Analytics Engine**: `https://sentinel-grid-analytics-engine-j0py.onrender.com`
-4. **Media Gateway**: `https://sentinel-grid-media-gateway-04ae.onrender.com`
+1. **Dashboard**: `https://sentinel-grid-monitoring-xgrr.onrender.com`
+2. **Control Plane**: `https://sentinel-grid-control-plane-3i3r.onrender.com`
+3. **Analytics Engine**: `https://sentinel-grid-analytics-engine-6woo.onrender.com`
+4. **Media Gateway**: `https://sentinel-grid-media-gateway-ltkx.onrender.com`
 
 ## Files Updated
 
@@ -37,11 +37,11 @@ Your Sentinel Grid platform URLs have been updated throughout the codebase:
 
 Each service needs environment variables updated:
 
-**Dashboard** (sentinel-grid-monitoring-vhid):
+**Dashboard** (sentinel-grid-monitoring-xgrr):
 ```bash
-CONTROL_PLANE_API_URL=https://sentinel-grid-control-plane-ocn1.onrender.com
-ANALYTICS_ENGINE_URL=https://sentinel-grid-analytics-engine-j0py.onrender.com
-MEDIA_GATEWAY_URL=https://sentinel-grid-media-gateway-04ae.onrender.com
+CONTROL_PLANE_API_URL=https://sentinel-grid-control-plane-3i3r.onrender.com
+ANALYTICS_ENGINE_URL=https://sentinel-grid-analytics-engine-6woo.onrender.com
+MEDIA_GATEWAY_URL=https://sentinel-grid-media-gateway-ltkx.onrender.com
 NEXT_PUBLIC_DASHBOARD_URL=https://sentinel-grid-monitoring-vhid.onrender.com
 ```
 

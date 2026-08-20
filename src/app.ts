@@ -2360,7 +2360,7 @@ export async function buildApp(options?: {
     });
     return reply.code(202).send({ accepted: true });
   });
-  await registerCameraDiscoveryRoutes(app, store, pool);
+  // await registerCameraDiscoveryRoutes(app, store, pool); // Temporarily disabled due to route conflicts with existing discovery routes
   await registerRecorderLifecycleRoutes(app, store);
   await registerCommandCenterRoutes(app, store);
   await registerRCAIncidentIntegrationRoutes(app, store);

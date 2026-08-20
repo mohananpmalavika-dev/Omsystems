@@ -82,8 +82,8 @@ The `-Force` flag means **always overwrite**, no merging, no prompts.
 
 ### ✅ Required - Download Fresh Installer When:
 1. **Render URLs change** (like we just did)
-   - Old: `sentinel-grid-control-plane-nqc0.onrender.com`
-   - New: `sentinel-grid-control-plane-ocn1.onrender.com`
+   - Old: `sentinel-grid-control-plane-ocn1.onrender.com`
+   - New: `sentinel-grid-control-plane-3i3r.onrender.com`
 
 2. **Activation code expires** (60-minute TTL)
    - Each installer has unique activation code
@@ -109,8 +109,8 @@ The `-Force` flag means **always overwrite**, no merging, no prompts.
 ### Before URL Fix:
 ```env
 # Old .env
-CONTROL_PLANE_INTERNAL_URL=https://sentinel-grid-control-plane-nqc0.onrender.com  ❌ WRONG
-ANALYTICS_ENGINE_URL=https://sentinel-grid-analytics-engine.onrender.com           ❌ WRONG
+CONTROL_PLANE_INTERNAL_URL=https://sentinel-grid-control-plane-ocn1.onrender.com  ❌ OLD
+ANALYTICS_ENGINE_URL=https://sentinel-grid-analytics-engine-j0py.onrender.com     ❌ OLD
 ```
 
 Installers downloaded had **wrong URLs embedded** → Edge agents couldn't connect.
@@ -118,8 +118,8 @@ Installers downloaded had **wrong URLs embedded** → Edge agents couldn't conne
 ### After URL Fix:
 ```env
 # Updated .env
-CONTROL_PLANE_PUBLIC_URL=https://sentinel-grid-control-plane-ocn1.onrender.com    ✅ CORRECT
-ANALYTICS_ENGINE_URL=https://sentinel-grid-analytics-engine-j0py.onrender.com     ✅ CORRECT
+CONTROL_PLANE_PUBLIC_URL=https://sentinel-grid-control-plane-3i3r.onrender.com    ✅ CORRECT
+ANALYTICS_ENGINE_URL=https://sentinel-grid-analytics-engine-6woo.onrender.com     ✅ CORRECT
 ```
 
 **You must download fresh installer** to get correct URLs embedded.

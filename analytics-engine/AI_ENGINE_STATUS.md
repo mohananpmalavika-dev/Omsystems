@@ -2,9 +2,9 @@
 
 ## Current Deployment
 
-**Service URL:** https://sentinel-grid-analytics-engine-j0py.onrender.com  
+**Service URL:** https://sentinel-grid-analytics-engine-6woo.onrender.com  
 **Current State:** 🟡 **AI_DEGRADED** (Functional but no local inference)  
-**Date Checked:** 2026-08-17
+**Date Checked:** 2026-08-20
 
 ## What's Working ✅
 
@@ -46,7 +46,7 @@
 
 ```bash
 # Check overall status
-curl https://sentinel-grid-analytics-engine-j0py.onrender.com/health | jq '.aiState'
+curl https://sentinel-grid-analytics-engine-6woo.onrender.com/health | jq '.aiState'
 
 # Expected output: "AI_DEGRADED"
 ```
@@ -111,7 +111,7 @@ NODE_ENV: production
 
 5. **Deploy & Verify**
    ```bash
-   curl https://sentinel-grid-analytics-engine-j0py.onrender.com/health | jq '.aiState'
+   curl https://sentinel-grid-analytics-engine-6woo.onrender.com/health | jq '.aiState'
    # Should return: "AI_OPERATIONAL"
    ```
 
@@ -141,10 +141,10 @@ NODE_ENV: production
 
 ```bash
 # Full health report
-curl https://sentinel-grid-analytics-engine-j0py.onrender.com/health | jq
+curl https://sentinel-grid-analytics-engine-6woo.onrender.com/health | jq
 
 # Just AI state
-curl https://sentinel-grid-analytics-engine-j0py.onrender.com/health | jq '.aiState'
+curl https://sentinel-grid-analytics-engine-6woo.onrender.com/health | jq '.aiState'
 
 # Model status
 curl https://sentinel-grid-analytics-engine-u2sf.onrender.com/health | jq '.pipeline.models'

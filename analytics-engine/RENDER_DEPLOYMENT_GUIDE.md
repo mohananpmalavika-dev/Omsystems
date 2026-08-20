@@ -2,7 +2,7 @@
 
 ## Current Status
 
-**Service URL:** https://sentinel-grid-analytics-engine-j0py.onrender.com
+**Service URL:** https://sentinel-grid-analytics-engine-6woo.onrender.com
 
 **Current State:** 🟡 **DEGRADED** (Online but missing AI models)
 
@@ -147,7 +147,7 @@ disk:
 #### Step 5: Verify AI State
 
 ```bash
-curl https://sentinel-grid-analytics-engine-j0py.onrender.com/health | jq '.aiState'
+curl https://sentinel-grid-analytics-engine-6woo.onrender.com/health | jq '.aiState'
 # Should return: "AI_OPERATIONAL"
 ```
 
@@ -240,14 +240,14 @@ stream.on('end', () => console.log(hash.digest('hex')));
 
 ```bash
 # Quick status
-curl https://sentinel-grid-analytics-engine-j0py.onrender.com/health | jq '.aiState'
+curl https://sentinel-grid-analytics-engine-6woo.onrender.com/health | jq '.aiState'
 
 # Full health check
-curl https://sentinel-grid-analytics-engine-j0py.onrender.com/health | jq
+curl https://sentinel-grid-analytics-engine-6woo.onrender.com/health | jq
 
 # Per-camera status (requires authentication)
 curl -H "x-analytics-source-key: YOUR_KEY" \
-  https://sentinel-grid-analytics-engine-j0py.onrender.com/v1/analytics/cameras/cam123/status
+  https://sentinel-grid-analytics-engine-6woo.onrender.com/v1/analytics/cameras/cam123/status
 ```
 
 ### Common Issues

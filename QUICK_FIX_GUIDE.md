@@ -41,7 +41,7 @@ The service will activate automatically in the background.
 
 Your activation code might be expired (60-minute TTL):
 
-1. Open: https://sentinel-grid-monitoring-vhid.onrender.com/admin/branch-onboarding
+1. Open: https://sentinel-grid-monitoring-xgrr.onrender.com/admin/branch-onboarding
 2. Click **"Install Scanner"** tab  
 3. Generate **new activation code**
 4. Download **fresh installer**
@@ -54,14 +54,14 @@ Your services might still have old URLs configured:
 1. Go to: https://dashboard.render.com
 2. For each service, update environment variables:
 
-**Control Plane** (sentinel-grid-control-plane-ocn1):
+**Control Plane** (sentinel-grid-control-plane-3i3r):
 ```
-CONTROL_PLANE_PUBLIC_URL=https://sentinel-grid-control-plane-ocn1.onrender.com
+CONTROL_PLANE_PUBLIC_URL=https://sentinel-grid-control-plane-3i3r.onrender.com
 ```
 
-**Dashboard** (sentinel-grid-monitoring-vhid):
+**Dashboard** (sentinel-grid-monitoring-xgrr):
 ```
-CONTROL_PLANE_API_URL=https://sentinel-grid-control-plane-ocn1.onrender.com
+CONTROL_PLANE_API_URL=https://sentinel-grid-control-plane-3i3r.onrender.com
 ```
 
 3. Click **"Save Changes"**
@@ -109,10 +109,10 @@ Use UptimeRobot to ping every 5 minutes:
 
 1. Sign up: https://uptimerobot.com (free)
 2. Add monitors:
-   - https://sentinel-grid-monitoring-vhid.onrender.com/health
-   - https://sentinel-grid-control-plane-ocn1.onrender.com/health
-   - https://sentinel-grid-analytics-engine-j0py.onrender.com/health
-   - https://sentinel-grid-media-gateway-04ae.onrender.com/health
+   - https://sentinel-grid-monitoring-xgrr.onrender.com/health
+   - https://sentinel-grid-control-plane-3i3r.onrender.com/health
+   - https://sentinel-grid-analytics-engine-6woo.onrender.com/health
+   - https://sentinel-grid-media-gateway-ltkx.onrender.com/health
 3. Set interval: 5 minutes
 4. Services stay warm 24/7 (but uses your 550 free hours faster)
 

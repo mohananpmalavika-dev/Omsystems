@@ -14,7 +14,7 @@ const configSchema = z.object({
   LOG_LEVEL: z
     .enum(["fatal", "error", "warn", "info", "debug", "trace", "silent"])
     .default("info"),
-  AUTH_MODE: z.enum(["development", "session", "oidc"]).default("development"),
+  AUTH_MODE: z.enum(["development", "session", "oidc"]),
   DATABASE_URL: z.string().url().optional(),
   REDIS_URL: z.preprocess((value) => value === "" ? undefined : value, z.string().url().optional()),
   EDGE_PRESENCE_TTL_SECONDS: z.coerce.number().int().min(15).max(600).default(90),
@@ -36,9 +36,7 @@ const configSchema = z.object({
     (value) => value === "" ? undefined : value,
     z.string().regex(/^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/i).optional(),
   ),
-  MEDIA_GATEWAY_SHARED_KEY: z.string().min(32).default(
-    "development-media-gateway-key-change-me",
-  ),
+  MEDIA_GATEWAY_SHARED_KEY: z.string().min(32),
   EDGE_BRIDGE_SHARED_KEY: z.preprocess(
     (value) => value === "" ? undefined : value,
     z.string().min(32).optional(),
@@ -73,7 +71,7 @@ const configSchema = z.object({
   ),
   FEDERATION_PEER_TIMEOUT_MS: z.coerce.number().int().min(500).max(60_000).default(8_000),
   FEDERATION_HEARTBEAT_TTL_SECONDS: z.coerce.number().int().min(15).max(3_600).default(90),
-  REPORT_DOWNLOAD_SECRET: z.string().min(32).default("development-report-download-secret-change-me"),
+  REPORT_DOWNLOAD_SECRET: z.string().min(32),
   REPORT_WORKER_SHARED_KEY: z.string().min(32).optional(),
   MAX_IN_FLIGHT_REQUESTS: z.coerce.number().int().min(10).max(10_000).default(500),
 }).superRefine((config, context) => {
