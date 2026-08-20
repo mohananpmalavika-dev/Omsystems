@@ -1239,7 +1239,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -Command ^
   "        $result = Invoke-RestMethod -Uri ($apiBase + '/branches/' + $branchId + '/cameras/discovered') -Method Post -Body $devJson -ContentType 'application/json' -TimeoutSec 8; " ^
   "        $successCount++; " ^
   "      } catch { " ^
-  "        Write-Host ('    [!] Device sync failed: ' + $dev.displayName + ' - ' + $_.Exception.Message) -ForegroundColor DarkYellow; " ^
+  "        Write-Host ('    [!] Device sync failed: ' + $dev.displayName) -ForegroundColor DarkYellow; " ^
   "      } " ^
   "    }; " ^
   "    Write-Host (' [+] Individual device registration complete! (' + $successCount + '/' + $discoveredDevices.Count + ' devices synced)') -ForegroundColor Green; " ^
