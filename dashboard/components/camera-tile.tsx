@@ -251,26 +251,22 @@ export function CameraTile({
           <button aria-label="Create incident" title="Create incident and protect recording" onClick={onCreateIncident} disabled={!isActive}>
             <Siren size={15} />
           </button>
-          {camera.capabilities.audio && (
-            <button
-              aria-label={isMuted ? "Unmute audio (Listen to camera)" : "Mute camera audio"}
-              title={isMuted ? "Click to hear live audio from camera" : "Mute camera audio (Listening)"}
-              className={!isMuted ? "audio-listening-active" : ""}
-              onClick={() => setIsMuted(!isMuted)}
-              disabled={!isActive}
-            >
-              {isMuted ? <VolumeX size={15} /> : <Volume2 size={15} className="text-emerald-400" />}
-            </button>
-          )}
-          {(camera.capabilities.audio || camera.capabilities.talkback?.supported) && (
-            <HoldToTalkButton
-              cameraId={camera.id}
-              disabled={!isActive || camera.status === "offline"}
-              unsupportedReason={camera.capabilities.talkback?.supported === false
-                ? camera.capabilities.talkback.reason ?? "two-way audio is not supported"
-                : undefined}
-            />
-          )}
+          <button
+            aria-label={isMuted ? "Unmute audio (Listen to camera)" : "Mute camera audio"}
+            title={isMuted ? "Click to hear live audio from camera" : "Mute camera audio (Listening)"}
+            className={!isMuted ? "audio-listening-active text-emerald-400" : ""}
+            onClick={() => setIsMuted(!isMuted)}
+            disabled={!isActive}
+          >
+            {isMuted ? <VolumeX size={15} /> : <Volume2 size={15} className="text-emerald-400" />}
+          </button>
+          <HoldToTalkButton
+            cameraId={camera.id}
+            disabled={!isActive || camera.status === "offline"}
+            unsupportedReason={camera.capabilities?.talkback?.supported === false
+              ? camera.capabilities.talkback.reason ?? "two-way audio is not supported"
+              : undefined}
+          />
           {camera.capabilities.ptz && (
             <button aria-label="PTZ controls" title="PTZ controls" onClick={() => setShowPtzControl(!showPtzControl)} disabled={!isActive}>
               <Move3D size={15} />
