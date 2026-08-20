@@ -125,7 +125,7 @@ export function EnhancedCameraGrid({
   const containerRef = useRef<HTMLDivElement>(null);
   const initialLayoutApplied = useRef(false);
   const activeStreamTypesRef = useRef(new Map<string, "main" | "sub">());
-  const pendingLiveStartsRef = useRef(new Set<string>());
+  const liveStartControllersRef = useRef(new Map<string, AbortController>());
   const activeLiveStartsRef = useRef(0);
 
   const gridSizeMap = {
@@ -209,25 +209,28 @@ export function EnhancedCameraGrid({
   const loadingRef = useRef<Set<string>>(new Set());
 
   const handleStartLive = useCallback(async (cameraId: string, stream: "main" | "sub" = "sub") => {
-    if (sessions.has(cameraId) || loading.has(cameraId)) return;
-    setLoading((prev) => new Set(prev).add(cameraId));
+    if (
+      sessionsRef.current.has(cameraId) ||
+      loadingRef.current.has(cameraId) ||
+      activeLiveStartsRef.current >= MAX_PARALLEL_LIVE_STARTS
+    ) return;
 
-    // Safety timeout to guarantee tiles never hang on Authorizing...
-    const timeoutTimer = setTimeout(() => {
-      setLoading((prev) => {
-        const next = new Set(prev);
-        next.delete(cameraId);
-        return next;
-      });
-    }, 3000);
+    loadingRef.current.add(cameraId);
+    activeLiveStartsRef.current += 1;
+    setLoading(new Set(loadingRef.current));
+
+    const controller = new AbortController();
+    liveStartControllersRef.current.set(cameraId, controller);
+    const timeoutTimer = setTimeout(
+      () => controller.abort(new DOMException("Live session timed out", "TimeoutError")),
+      LIVE_START_TIMEOUT_MS,
+    );
 
     try {
       updateStreamState(cameraId, "CONNECTING");
-
-      // Request live session from browser
-      const session = await startLiveFromBrowser(cameraId, stream);
-      clearTimeout(timeoutTimer);
-      setSessions((prev) => new Map(prev).set(cameraId, session));
+      const session = await startLiveFromBrowser(cameraId, stream, controller.signal);
+      sessionsRef.current.set(cameraId, session);
+      setSessions(new Map(sessionsRef.current));
       activeStreamTypesRef.current.set(cameraId, stream);
       markPlaybackActive(cameraId);
 
@@ -236,41 +239,28 @@ export function EnhancedCameraGrid({
         : "LIVE_SUBSTREAM";
       updateStreamState(cameraId, streamState);
     } catch (error) {
-      clearTimeout(timeoutTimer);
-      console.warn("Live session startup fallback for", cameraId, error);
+      console.warn("Live session startup failed for", cameraId, error);
       const reason = error instanceof Error ? error.message : "Unknown error";
       updateStreamState(cameraId, "ERROR", reason);
       reportPlaybackFailure(cameraId, reason);
-      
-      // Populate active fallback live session so video renders immediately
-      setSessions((prev) => {
-        if (prev.has(cameraId)) return prev;
-        const fallbackSession: LiveSessionResponse = {
-          demo: true,
-          sessionId: `session-${Date.now()}-${cameraId}`,
-          cameraId,
-          expiresAt: new Date(Date.now() + 600_000).toISOString(),
-          hls: {
-            url: `/api/media/streams/${encodeURIComponent(cameraId)}/index.m3u8`,
-            bearerToken: `token-${cameraId}`,
-          },
-        };
-        return new Map(prev).set(cameraId, fallbackSession);
-      });
-      markPlaybackActive(cameraId);
     } finally {
       clearTimeout(timeoutTimer);
-      setLoading((prev) => {
-        const newSet = new Set(prev);
-        newSet.delete(cameraId);
-        return newSet;
-      });
+      liveStartControllersRef.current.delete(cameraId);
+      loadingRef.current.delete(cameraId);
+      activeLiveStartsRef.current = Math.max(0, activeLiveStartsRef.current - 1);
+      setLoading(new Set(loadingRef.current));
     }
   }, [
     markPlaybackActive,
     reportPlaybackFailure,
     updateStreamState,
   ]);
+
+  useEffect(() => () => {
+    for (const controller of liveStartControllersRef.current.values()) {
+      controller.abort();
+    }
+  }, []);
 
   const handleRequestLive = useCallback((cameraId: string) => {
     setOperatorSelectedCameraId(cameraId);
@@ -505,11 +495,8 @@ export function EnhancedCameraGrid({
       activeStreamTypesRef.current.delete(cameraId);
       markPlaybackDeferred(cameraId);
       updateStreamState(cameraId, "PAUSED");
-      setSessions((current) => {
-        const next = new Map(current);
-        next.delete(cameraId);
-        return next;
-      });
+      sessionsRef.current.delete(cameraId);
+      setSessions(new Map(sessionsRef.current));
       void closeSession(cameraId);
     }
 
