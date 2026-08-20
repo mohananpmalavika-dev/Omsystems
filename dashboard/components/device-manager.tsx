@@ -1229,21 +1229,24 @@ powershell -NoProfile -ExecutionPolicy Bypass -Command ^
   "  Write-Host ''; " ^
   "  Write-Host ' [*] [3/4] Syncing Discovered Cameras with Cloud Control Plane...' -ForegroundColor Cyan; " ^
   "  $syncPayload = @{ branchId = $branchId; edgeAgentId = $agentId; devices = $discoveredDevices } | ConvertTo-Json -Depth 5; " ^
+  "  $syncError = $null; " ^
   "  try { " ^
-  "    $syncResp = Invoke-RestMethod -Uri ($apiBase + '/branches/' + $branchId + '/cameras/discovered') -Method Post -Body $syncPayload -ContentType 'application/json' -TimeoutSec 15; " ^
+  "    $syncResp = Invoke-RestMethod -Uri ($apiBase + '/branches/' + $branchId + '/cameras/discovered') -Method Post -Body $syncPayload -ContentType 'application/json' -TimeoutSec 15 -ErrorAction Stop; " ^
   "    $msg = ' [+] Sync complete: ' + $discoveredDevices.Count + ' devices populated in Branch Wizard!'; " ^
   "    Write-Host $msg -ForegroundColor Green; " ^
-  "  } catch { " ^
-  "    $errMsg = '  [!] Batch sync error. Syncing devices individually...'; " ^
-  "    Write-Host $errMsg -ForegroundColor Yellow; " ^
+  "  } catch { $syncError = $true }; " ^
+  "  if ($syncError) { " ^
+  "    Write-Host '  [!] Batch sync error. Syncing devices individually...' -ForegroundColor Yellow; " ^
   "    $successCount = 0; " ^
   "    foreach ($dev in $discoveredDevices) { " ^
   "      $dev.edgeAgentId = $agentId; " ^
   "      $devJson = $dev | ConvertTo-Json -Depth 3; " ^
+  "      $devError = $null; " ^
   "      try { " ^
   "        $result = Invoke-RestMethod -Uri ($apiBase + '/branches/' + $branchId + '/cameras/discovered') -Method Post -Body $devJson -ContentType 'application/json' -TimeoutSec 8 -ErrorAction Stop; " ^
   "        $successCount++; " ^
-  "      } catch { " ^
+  "      } catch { $devError = $true }; " ^
+  "      if ($devError) { " ^
   "        $failMsg = '    [!] Device sync failed: ' + $dev.displayName; " ^
   "        Write-Host $failMsg -ForegroundColor DarkYellow; " ^
   "      }; " ^
@@ -1263,13 +1266,16 @@ powershell -NoProfile -ExecutionPolicy Bypass -Command ^
   "  while ($true) { " ^
   "    Start-Sleep -Seconds 15; " ^
   "    $hbCount++; " ^
+  "    $hbError = $null; " ^
   "    try { " ^
   "      Invoke-RestMethod -Uri ($apiBase + '/edge-agents/' + $agentId + '/heartbeat') -Method Post -Body $hbPayload -ContentType 'application/json' -TimeoutSec 5 -ErrorAction Stop | Out-Null; " ^
-  "      $hbOkMsg = '  [Heartbeat #' + $hbCount + '] Edge agent status: HEALTHY (ping acknowledged at ' + (Get-Date -Format 'HH:mm:ss') + ')'; " ^
-  "      Write-Host $hbOkMsg -ForegroundColor Gray; " ^
-  "    } catch { " ^
+  "    } catch { $hbError = $true }; " ^
+  "    if ($hbError) { " ^
   "      $hbSentMsg = '  [Heartbeat #' + $hbCount + '] Edge heartbeat ping sent at ' + (Get-Date -Format 'HH:mm:ss'); " ^
   "      Write-Host $hbSentMsg -ForegroundColor DarkGray; " ^
+  "    } else { " ^
+  "      $hbOkMsg = '  [Heartbeat #' + $hbCount + '] Edge agent status: HEALTHY (ping acknowledged at ' + (Get-Date -Format 'HH:mm:ss') + ')'; " ^
+  "      Write-Host $hbOkMsg -ForegroundColor Gray; " ^
   "    }; " ^
   "  }; " ^
   "} catch { " ^
