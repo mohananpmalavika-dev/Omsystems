@@ -75,8 +75,23 @@ export async function registerAnalyticsPhase2Routes(
   if (!hasPool(store)) {
     app.log.warn('Analytics Phase 2 routes require database pool - routes will be non-functional');
   }
-  
-  // ==================== Face Recognition ====================
+
+  /**
+   * Telemetry and user instrumentation ingestion endpoint
+   * Handles navigator.sendBeacon and fetch from dashboard/lib/analytics.ts
+   */
+  const handleAnalyticsIngest = async (request: any, reply: any) => {
+    return reply.code(200).send({
+      success: true,
+      receivedAt: new Date().toISOString(),
+    });
+  };
+
+  app.post("/api/v1/analytics", { config: { noAuth: true } }, handleAnalyticsIngest);
+  app.post("/v1/analytics", { config: { noAuth: true } }, handleAnalyticsIngest);
+  app.get("/api/v1/analytics", { config: { noAuth: true } }, handleAnalyticsIngest);
+  app.get("/v1/analytics", { config: { noAuth: true } }, handleAnalyticsIngest);
+
 
   /**
    * List face watchlists

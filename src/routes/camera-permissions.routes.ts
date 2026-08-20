@@ -7,8 +7,8 @@ import type {
 } from "../control-plane-store.js";
 
 const cameraSpecificGrantSchema = z.object({
-  userId: z.string().uuid(),
-  cameraId: z.string().uuid(),
+  userId: z.string().min(1),
+  cameraId: z.string().min(1),
   effect: z.enum(["allow", "deny"]),
   reason: z.string().max(500).optional(),
   validFrom: z.string().optional(),
@@ -16,7 +16,7 @@ const cameraSpecificGrantSchema = z.object({
 });
 
 const cameraAccessRequestSchema = z.object({
-  cameraId: z.string().uuid(),
+  cameraId: z.string().min(1),
   justification: z.string().min(10).max(1000),
   requestedFrom: z.string().datetime(),
   requestedUntil: z.string().datetime(),
@@ -31,8 +31,8 @@ const reviewAccessRequestSchema = z.object({
 });
 
 const timeRestrictionSchema = z.object({
-  cameraId: z.string().uuid().optional(),
-  scopeNodeId: z.string().uuid().optional(),
+  cameraId: z.string().min(1).optional(),
+  scopeNodeId: z.string().min(1).optional(),
   dayOfWeek: z.number().int().min(0).max(6).optional(),
   timeFrom: z.string().regex(/^\d{2}:\d{2}:\d{2}$/),
   timeUntil: z.string().regex(/^\d{2}:\d{2}:\d{2}$/),
@@ -46,7 +46,7 @@ const timeRestrictionSchema = z.object({
 const accessGroupSchema = z.object({
   name: z.string().trim().min(2).max(200),
   description: z.string().max(1000).optional(),
-  scopeNodeId: z.string().uuid().optional(),
+  scopeNodeId: z.string().min(1).optional(),
 });
 
 const updateCameraSensitivitySchema = z.object({
@@ -71,7 +71,7 @@ export async function registerCameraPermissionRoutes(
 
   // List camera-specific grants for a user
   app.get("/v1/users/:userId/camera-grants", async (request, reply) => {
-    const params = z.object({ userId: z.string().uuid() }).parse(request.params);
+    const params = z.object({ userId: z.string().min(1) }).parse(request.params);
 
     // Check permission
     if (
@@ -94,7 +94,7 @@ export async function registerCameraPermissionRoutes(
 
   // List camera-specific grants for a camera
   app.get("/v1/cameras/:cameraId/grants", async (request, reply) => {
-    const params = z.object({ cameraId: z.string().uuid() }).parse(request.params);
+    const params = z.object({ cameraId: z.string().min(1) }).parse(request.params);
     const camera = await store.getCamera(params.cameraId);
     if (!camera) return reply.code(404).send({ error: "camera_not_found" });
 
@@ -141,7 +141,7 @@ export async function registerCameraPermissionRoutes(
 
   // Revoke camera-specific grant
   app.delete("/v1/camera-grants/:id", async (request, reply) => {
-    const params = z.object({ id: z.string().uuid() }).parse(request.params);
+    const params = z.object({ id: z.string().min(1) }).parse(request.params);
 
     // Check permission
     if (!(await hasPermission(request, store, "device:configure"))) {
@@ -171,8 +171,8 @@ export async function registerCameraPermissionRoutes(
         status: z
           .enum(["pending", "approved", "rejected", "expired", "revoked"])
           .optional(),
-        userId: z.string().uuid().optional(),
-        cameraId: z.string().uuid().optional(),
+        userId: z.string().min(1).optional(),
+        cameraId: z.string().min(1).optional(),
       })
       .parse(request.query);
 
@@ -291,7 +291,7 @@ export async function registerCameraPermissionRoutes(
   app.post(
     "/v1/camera-access-requests/:id/review",
     async (request, reply) => {
-      const params = z.object({ id: z.string().uuid() }).parse(request.params);
+      const params = z.object({ id: z.string().min(1) }).parse(request.params);
       const body = reviewAccessRequestSchema.parse(request.body);
       const pendingRequest = await store.getCameraAccessRequest(params.id);
       if (!pendingRequest) {
@@ -333,7 +333,7 @@ export async function registerCameraPermissionRoutes(
 
   // Revoke access request
   app.post("/v1/camera-access-requests/:id/revoke", async (request, reply) => {
-    const params = z.object({ id: z.string().uuid() }).parse(request.params);
+    const params = z.object({ id: z.string().min(1) }).parse(request.params);
 
     // Check permission (owner or admin)
     const accessRequest = await store.getCameraAccessRequest(params.id);
@@ -372,8 +372,8 @@ export async function registerCameraPermissionRoutes(
   app.get("/v1/time-restrictions", async (request) => {
     const query = z
       .object({
-        cameraId: z.string().uuid().optional(),
-        scopeNodeId: z.string().uuid().optional(),
+        cameraId: z.string().min(1).optional(),
+        scopeNodeId: z.string().min(1).optional(),
       })
       .parse(request.query);
 
@@ -423,7 +423,7 @@ export async function registerCameraPermissionRoutes(
 
   // Delete time restriction
   app.delete("/v1/time-restrictions/:id", async (request, reply) => {
-    const params = z.object({ id: z.string().uuid() }).parse(request.params);
+    const params = z.object({ id: z.string().min(1) }).parse(request.params);
 
     // Check permission
     if (!(await hasPermission(request, store, "device:configure"))) {
@@ -450,7 +450,7 @@ export async function registerCameraPermissionRoutes(
   app.get("/v1/camera-access-groups", async (request) => {
     const query = z
       .object({
-        scopeNodeId: z.string().uuid().optional(),
+        scopeNodeId: z.string().min(1).optional(),
       })
       .parse(request.query);
 
@@ -464,7 +464,7 @@ export async function registerCameraPermissionRoutes(
 
   // Get access group details
   app.get("/v1/camera-access-groups/:id", async (request, reply) => {
-    const params = z.object({ id: z.string().uuid() }).parse(request.params);
+    const params = z.object({ id: z.string().min(1) }).parse(request.params);
 
     const group = await store.getCameraAccessGroupDetails(params.id);
 
@@ -507,8 +507,8 @@ export async function registerCameraPermissionRoutes(
 
   // Add camera to access group
   app.post("/v1/camera-access-groups/:id/cameras", async (request, reply) => {
-    const params = z.object({ id: z.string().uuid() }).parse(request.params);
-    const body = z.object({ cameraId: z.string().uuid() }).parse(request.body);
+    const params = z.object({ id: z.string().min(1) }).parse(request.params);
+    const body = z.object({ cameraId: z.string().min(1) }).parse(request.body);
     const camera = await store.getCamera(body.cameraId);
     if (!camera) return reply.code(404).send({ error: "camera_not_found" });
 
@@ -531,8 +531,8 @@ export async function registerCameraPermissionRoutes(
     async (request, reply) => {
       const params = z
         .object({
-          id: z.string().uuid(),
-          cameraId: z.string().uuid(),
+          id: z.string().min(1),
+          cameraId: z.string().min(1),
         })
         .parse(request.params);
 
@@ -550,10 +550,10 @@ export async function registerCameraPermissionRoutes(
 
   // Assign user to access group
   app.post("/v1/camera-access-groups/:id/users", async (request, reply) => {
-    const params = z.object({ id: z.string().uuid() }).parse(request.params);
+    const params = z.object({ id: z.string().min(1) }).parse(request.params);
     const body = z
       .object({
-        userId: z.string().uuid(),
+        userId: z.string().min(1),
         effect: z.enum(["allow", "deny"]).default("allow"),
       })
       .parse(request.body);
@@ -579,8 +579,8 @@ export async function registerCameraPermissionRoutes(
     async (request, reply) => {
       const params = z
         .object({
-          id: z.string().uuid(),
-          userId: z.string().uuid(),
+          id: z.string().min(1),
+          userId: z.string().min(1),
         })
         .parse(request.params);
 
@@ -599,7 +599,7 @@ export async function registerCameraPermissionRoutes(
 
   // Update camera sensitivity settings
   app.patch("/v1/cameras/:id/sensitivity", async (request, reply) => {
-    const params = z.object({ id: z.string().uuid() }).parse(request.params);
+    const params = z.object({ id: z.string().min(1) }).parse(request.params);
     const body = updateCameraSensitivitySchema.parse(request.body);
     const existing = await store.getCamera(params.id);
     if (!existing) return reply.code(404).send({ error: "camera_not_found" });
@@ -631,7 +631,7 @@ export async function registerCameraPermissionRoutes(
 
   // Check camera access for current user
   app.get("/v1/cameras/:id/check-access", async (request, reply) => {
-    const params = z.object({ id: z.string().uuid() }).parse(request.params);
+    const params = z.object({ id: z.string().min(1) }).parse(request.params);
     const query = z
       .object({
         action: z.string().default("live:view"),
@@ -649,7 +649,7 @@ export async function registerCameraPermissionRoutes(
 
   // Get camera access summary
   app.get("/v1/cameras/:id/access-summary", async (request, reply) => {
-    const params = z.object({ id: z.string().uuid() }).parse(request.params);
+    const params = z.object({ id: z.string().min(1) }).parse(request.params);
     const camera = await store.getCamera(params.id);
     if (!camera) return reply.code(404).send({ error: "camera_not_found" });
 

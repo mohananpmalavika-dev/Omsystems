@@ -195,8 +195,8 @@ export const navigation: NavGroup[] = [
     label: "ADMINISTRATION",
     icon: Settings,
     items: [
-      { label: "Organization & Structure", href: "/admin", icon: Building2 },
-      { label: "Employees & Permissions", href: "/admin?tab=users", icon: Users },
+      { label: "Organization & Location Hierarchy", href: "/admin/organization", icon: Building2 },
+      { label: "Employees & Location Grants", href: "/admin/organization", icon: Users },
       { label: "Branch Onboarding Wizard", href: "/admin/branch-onboarding", icon: Building2, badge: "cameras" },
       { label: "Zero-Touch Provisioning (ZTP)", href: "/admin/zero-touch", icon: Cpu },
       { label: "AI Quality & Model Registry", href: "/admin/ai-quality", icon: Sparkles },

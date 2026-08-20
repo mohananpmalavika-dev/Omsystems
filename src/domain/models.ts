@@ -54,6 +54,9 @@ export type NodeType =
   | "region"
   | "area"
   | "branch"
+  | "building"
+  | "floor"
+  | "location-group"
   | "camera-group"
   | "camera";
 
@@ -67,7 +70,7 @@ export interface ResourceNode {
   path: string[];
 }
 
-export type CameraVendor = "hikvision" | "cp-plus" | "other";
+export type CameraVendor = "hikvision" | "cp-plus" | "dahua" | "axis" | "uniview" | "hanwha" | "other";
 export type CameraStatus = "online" | "offline" | "degraded" | "unknown";
 export type CameraSourceType = "ip-camera" | "analog-dvr-channel" | "nvr-channel";
 export type CameraStreamRole = "main" | "sub" | "unknown";
@@ -149,6 +152,8 @@ export interface Camera {
   macAddress?: string;
   firmwareVersion?: string;
   ipAddress?: string;
+  onvifPort?: number;
+  rtspPort?: number;
   onvifUuid?: string;
   certificateRef?: string;
   certificateFingerprint?: string;

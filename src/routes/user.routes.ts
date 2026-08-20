@@ -31,8 +31,8 @@ const createUserSchema = z.object({
   designation: z.string().max(100).optional(),
   dateOfJoining: z.string().optional(),
   dateOfBirth: z.string().optional(),
-  reportingToUserId: z.string().uuid().optional(),
-  primaryOrgNodeId: z.string().uuid(),
+  reportingToUserId: z.string().min(1).optional(),
+  primaryOrgNodeId: z.string().min(1),
 });
 
 const updateUserSchema = z.object({
@@ -61,12 +61,12 @@ const updateUserSchema = z.object({
   designation: z.string().max(100).optional(),
   dateOfJoining: z.string().optional(),
   dateOfBirth: z.string().optional(),
-  reportingToUserId: z.string().uuid().nullable().optional(),
+  reportingToUserId: z.string().min(1).nullable().optional(),
   preferences: z.record(z.unknown()).optional(),
 });
 
 const assignOrgSchema = z.object({
-  scopeNodeId: z.string().uuid(),
+  scopeNodeId: z.string().min(1),
   isPrimary: z.boolean().default(false),
 });
 
@@ -79,7 +79,7 @@ const resetPasswordSchema = z.object({
   newPassword: z.string().min(8).max(100),
 });
 
-const userIdSchema = z.object({ id: z.string().uuid() });
+const userIdSchema = z.object({ id: z.string().min(1) });
 
 export async function registerUserRoutes(
   app: FastifyInstance,
@@ -114,7 +114,7 @@ export async function registerUserRoutes(
               "locked",
             ])
             .optional(),
-          orgNodeId: z.string().uuid().optional(),
+          orgNodeId: z.string().min(1).optional(),
           search: z.string().optional(),
           limit: z.coerce.number().int().min(1).max(100).default(50),
           offset: z.coerce.number().int().min(0).default(0),
@@ -360,8 +360,8 @@ export async function registerUserRoutes(
     async (request, reply) => {
       const params = z
         .object({
-          id: z.string().uuid(),
-          nodeId: z.string().uuid(),
+          id: z.string().min(1),
+          nodeId: z.string().min(1),
         })
         .parse(request.params);
 

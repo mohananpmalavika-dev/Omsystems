@@ -7,14 +7,18 @@ import type {
 } from "../control-plane-store.js";
 
 const createNodeSchema = z.object({
-  parentNodeId: z.string().uuid().optional(),
+  parentNodeId: z.string().min(1).optional(),
   nodeType: z.enum([
     "company",
     "headquarters",
     "zone",
+    "division",
     "region",
     "area",
     "branch",
+    "building",
+    "floor",
+    "location-group",
     "camera-group",
   ]),
   name: z.string().trim().min(2).max(200),
@@ -63,7 +67,7 @@ const updateNodeSchema = z.object({
   isActive: z.boolean().optional(),
 });
 
-const nodeIdSchema = z.object({ id: z.string().uuid() });
+const nodeIdSchema = z.object({ id: z.string().min(1) });
 
 export async function registerOrganizationRoutes(
   app: FastifyInstance,
@@ -135,13 +139,17 @@ export async function registerOrganizationRoutes(
             "company",
             "headquarters",
             "zone",
+            "division",
             "region",
             "area",
             "branch",
+            "building",
+            "floor",
+            "location-group",
             "camera-group",
           ])
           .optional(),
-        parentId: z.string().uuid().optional(),
+        parentId: z.string().min(1).optional(),
         includeInactive: z.coerce.boolean().default(false),
       })
       .parse(request.query);
@@ -458,7 +466,7 @@ export async function registerOrganizationRoutes(
   app.post("/v1/organization/validate-hierarchy", async (request, reply) => {
     const body = z
       .object({
-        parentNodeId: z.string().uuid(),
+        parentNodeId: z.string().min(1),
         childNodeType: z.enum([
           "company",
           "headquarters",

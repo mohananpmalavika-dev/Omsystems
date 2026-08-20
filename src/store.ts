@@ -112,14 +112,38 @@ function defaultAlertNotificationPolicy(inputTenantId: string): AlertNotificatio
 const tenantId = "omsystems";
 
 const seedNodes: ResourceNode[] = [
-  { id: "company-1", parentId: null, tenantId, type: "company", name: "Example Company", path: ["company-1"] },
-  { id: "division-retail", parentId: "company-1", tenantId, type: "division", name: "Retail Division", path: ["company-1", "division-retail"] },
-  { id: "region-south", parentId: "division-retail", tenantId, type: "region", name: "South Region", path: ["company-1", "division-retail", "region-south"] },
-  { id: "branch-blr-001", parentId: "region-south", tenantId, type: "branch", name: "Bengaluru Branch 001", path: ["company-1", "division-retail", "region-south", "branch-blr-001"] },
-  { id: "group-public-blr-001", parentId: "branch-blr-001", tenantId, type: "camera-group", name: "Public Areas", path: ["company-1", "division-retail", "region-south", "branch-blr-001", "group-public-blr-001"] },
-  { id: "camera-entrance", parentId: "group-public-blr-001", tenantId, type: "camera", name: "Main Entrance", path: ["company-1", "division-retail", "region-south", "branch-blr-001", "group-public-blr-001", "camera-entrance"] },
-  { id: "group-sensitive-blr-001", parentId: "branch-blr-001", tenantId, type: "camera-group", name: "Sensitive Areas", path: ["company-1", "division-retail", "region-south", "branch-blr-001", "group-sensitive-blr-001"] },
-  { id: "camera-cash-room", parentId: "group-sensitive-blr-001", tenantId, type: "camera", name: "Cash Room", path: ["company-1", "division-retail", "region-south", "branch-blr-001", "group-sensitive-blr-001", "camera-cash-room"] },
+  // Enterprise Root & Hierarchy
+  { id: "company-1", parentId: null, tenantId, type: "company", name: "Sentinel Grid - National Commercial Banking Network", path: ["company-1"] },
+  { id: "division-retail", parentId: "company-1", tenantId, type: "division", name: "Retail & Commercial Banking Division", path: ["company-1", "division-retail"] },
+  { id: "division-vault", parentId: "company-1", tenantId, type: "division", name: "Currency Chests & Vault Operations", path: ["company-1", "division-vault"] },
+  
+  // Geographical Regions
+  { id: "region-south", parentId: "division-retail", tenantId, type: "region", name: "South Zone (Kerala, Karnataka, Tamil Nadu)", path: ["company-1", "division-retail", "region-south"] },
+  { id: "region-west", parentId: "division-retail", tenantId, type: "region", name: "West Zone (Maharashtra, Gujarat, Goa)", path: ["company-1", "division-retail", "region-west"] },
+  { id: "region-north", parentId: "division-retail", tenantId, type: "region", name: "North Zone (Delhi NCR, Punjab, UP)", path: ["company-1", "division-retail", "region-north"] },
+  { id: "region-east", parentId: "division-retail", tenantId, type: "region", name: "East Zone (West Bengal, Odisha, Assam)", path: ["company-1", "division-retail", "region-east"] },
+
+  // Flagship Branches
+  { id: "A005", parentId: "region-south", tenantId, type: "branch", name: "Branch A005 - Adithi Malavika Commercial Hub (Kochi Marine Drive)", path: ["company-1", "division-retail", "region-south", "A005"] },
+  { id: "A006", parentId: "region-west", tenantId, type: "branch", name: "Branch A006 - Mumbai BKC Financial Center (Bandra Kurla Complex)", path: ["company-1", "division-retail", "region-west", "A006"] },
+  { id: "A007", parentId: "region-north", tenantId, type: "branch", name: "Branch A007 - Delhi Connaught Place Main Branch (CP Inner Circle)", path: ["company-1", "division-retail", "region-north", "A007"] },
+  { id: "A008", parentId: "region-south", tenantId, type: "branch", name: "Branch A008 - Bengaluru Whitefield Tech Hub (ITPL Main Road)", path: ["company-1", "division-retail", "region-south", "A008"] },
+  { id: "A009", parentId: "region-south", tenantId, type: "branch", name: "Branch A009 - Hyderabad Hitec City Flagship (Cyber Towers Road)", path: ["company-1", "division-retail", "region-south", "A009"] },
+  { id: "A010", parentId: "region-south", tenantId, type: "branch", name: "Branch A010 - Chennai Anna Salai Commercial Center (Mount Road)", path: ["company-1", "division-retail", "region-south", "A010"] },
+  { id: "A011", parentId: "region-east", tenantId, type: "branch", name: "Branch A011 - Kolkata Park Street Regional Branch (Park Street)", path: ["company-1", "division-retail", "region-east", "A011"] },
+  { id: "A012", parentId: "region-west", tenantId, type: "branch", name: "Branch A012 - Pune FC Road Commercial Branch (Shivajinagar)", path: ["company-1", "division-retail", "region-west", "A012"] },
+  { id: "A013", parentId: "region-west", tenantId, type: "branch", name: "Branch A013 - Ahmedabad SG Highway Corporate Center (Bodakdev)", path: ["company-1", "division-retail", "region-west", "A013"] },
+  { id: "branch-blr-001", parentId: "region-south", tenantId, type: "branch", name: "Branch BLR-001 - Bengaluru MG Road Treasury Branch (MG Road)", path: ["company-1", "division-retail", "region-south", "branch-blr-001"] },
+
+  // Camera Groups for A005 (Kochi)
+  { id: "group-a005-public", parentId: "A005", tenantId, type: "camera-group", name: "Public Banking Hall & Reception", path: ["company-1", "division-retail", "region-south", "A005", "group-a005-public"] },
+  { id: "group-a005-tellers", parentId: "A005", tenantId, type: "camera-group", name: "Cash Tellers & Customer Counters", path: ["company-1", "division-retail", "region-south", "A005", "group-a005-tellers"] },
+  { id: "group-a005-vault", parentId: "A005", tenantId, type: "camera-group", name: "Currency Chest & Strong Room Vault", path: ["company-1", "division-retail", "region-south", "A005", "group-a005-vault"] },
+  { id: "group-a005-perimeter", parentId: "A005", tenantId, type: "camera-group", name: "ATM Lobby & Outer Perimeter ANPR", path: ["company-1", "division-retail", "region-south", "A005", "group-a005-perimeter"] },
+
+  // Camera Groups for A006 (Mumbai BKC)
+  { id: "group-a006-public", parentId: "A006", tenantId, type: "camera-group", name: "Main Banking Hall & VIP Lounge", path: ["company-1", "division-retail", "region-west", "A006", "group-a006-public"] },
+  { id: "group-a006-vault", parentId: "A006", tenantId, type: "camera-group", name: "Forex & Bullion Vault Air-Lock", path: ["company-1", "division-retail", "region-west", "A006", "group-a006-vault"] },
 ];
 
 const seedUsers: User[] = [
@@ -132,11 +156,12 @@ const seedUsers: User[] = [
     status: "active",
     tenantId,
   },
-  { id: "user-global-admin", displayName: "Global Administrator", tenantId },
-  { id: "user-south-operator", displayName: "South Region Operator", tenantId },
-  { id: "user-branch-manager", displayName: "Bengaluru Branch Manager", tenantId },
-  { id: "user-investigator", displayName: "Security Investigator", tenantId },
-  { id: "user-evidence-officer", displayName: "Evidence Officer", tenantId },
+  { id: "user-global-admin", displayName: "Global Surveillance Director", tenantId },
+  { id: "user-south-operator", displayName: "South Zone Lead Operator (Kochi SOC)", tenantId },
+  { id: "user-west-operator", displayName: "West Zone Lead Operator (Mumbai SOC)", tenantId },
+  { id: "user-branch-manager", displayName: "Adithi Malavika Hub Manager", tenantId },
+  { id: "user-investigator", displayName: "Chief Forensic Investigator", tenantId },
+  { id: "user-evidence-officer", displayName: "Statutory Evidence & Compliance Officer", tenantId },
 ];
 
 const operatorActions: Action[] = [
@@ -162,7 +187,7 @@ const evidenceOfficerActions: Action[] = [
 ];
 
 const seedGrants: AccessGrant[] = [
-  // Permanent Superadmin has full access across company-1
+  // Permanent Superadmin has full access across entire network
   {
     userId: "user-superadmin-mgdhanyamohan",
     scopeNodeId: "company-1",
@@ -181,7 +206,7 @@ const seedGrants: AccessGrant[] = [
     ],
     effect: "allow",
   },
-  // Global admin has full access
+  // Global admin full access
   { 
     userId: "user-global-admin", 
     scopeNodeId: "company-1", 
@@ -198,18 +223,14 @@ const seedGrants: AccessGrant[] = [
     effect: "allow" 
   },
   
-  // Operator can view and create incidents
-  { 
-    userId: "user-south-operator", 
-    scopeNodeId: "region-south", 
-    actions: operatorActions, 
-    effect: "allow" 
-  },
+  // Regional Operators
+  { userId: "user-south-operator", scopeNodeId: "region-south", actions: operatorActions, effect: "allow" },
+  { userId: "user-west-operator", scopeNodeId: "region-west", actions: operatorActions, effect: "allow" },
   
-  // Branch manager can manage incidents at branch level
+  // Branch manager
   { 
     userId: "user-branch-manager", 
-    scopeNodeId: "branch-blr-001", 
+    scopeNodeId: "A005", 
     actions: [
       "live:view", "audio:talk", "recording:view",
       "analytics:view", "analytics:configure", "alerts:acknowledge", "alerts:escalate", "analytics:export",
@@ -221,53 +242,300 @@ const seedGrants: AccessGrant[] = [
     effect: "allow" 
   },
   
-  // Deny sensitive areas for branch manager
-  { 
-    userId: "user-branch-manager", 
-    scopeNodeId: "group-sensitive-blr-001", 
-    actions: [
-      "live:view", "recording:view", 
-      "analytics:view", "analytics:configure", "alerts:acknowledge", "alerts:escalate", "analytics:export",
-      "incident:view", "investigation:view", "evidence:view",
-    ], 
-    effect: "deny" 
-  },
+  // Investigator
+  { userId: "user-investigator", scopeNodeId: "company-1", actions: investigatorActions, effect: "allow" },
   
-  // Investigator has investigation and evidence collection permissions
-  { 
-    userId: "user-investigator", 
-    scopeNodeId: "company-1", 
-    actions: investigatorActions, 
-    effect: "allow" 
-  },
-  
-  // Evidence officer manages evidence packages and legal compliance
-  { 
-    userId: "user-evidence-officer", 
-    scopeNodeId: "company-1", 
-    actions: evidenceOfficerActions, 
-    effect: "allow" 
-  },
+  // Evidence Officer
+  { userId: "user-evidence-officer", scopeNodeId: "company-1", actions: evidenceOfficerActions, effect: "allow" },
 ];
 
 const seedCameras: Camera[] = [
+  // ==========================================
+  // BRANCH A005 (Kochi Marine Drive Flagship)
+  // ==========================================
   {
-    id: "cam-001", deviceIdentityId: "device-cam-001", nodeId: "camera-entrance", branchId: "branch-blr-001",
-    name: "Main Entrance",
-    vendor: "hikvision", model: "DS-2CD example", channel: 1,
-    protocol: "onvif-t", status: "online",
-    profiles: [{ name: "main", codec: "H264", width: 1920, height: 1080 }],
+    id: "cam-a005-01",
+    deviceIdentityId: "device-a005-01",
+    nodeId: "group-a005-tellers",
+    branchId: "A005",
+    name: "Teller Counter 1 (Cash Ingest)",
+    vendor: "dahua",
+    model: "IPC-HFW5442E-ZE (4K WizMind AI Bullet)",
+    serialNumber: "DH-8K29348123A",
+    macAddress: "3C:EF:8C:1A:40:91",
+    ipAddress: "192.168.1.101",
+    onvifPort: 80,
+    rtspPort: 554,
+    channel: 1,
+    protocol: "onvif-t",
+    status: "online",
+    profiles: [
+      { name: "main", codec: "H265", width: 3840, height: 2160, role: "main" },
+      { name: "sub", codec: "H264", width: 704, height: 576, role: "sub" }
+    ],
     capabilities: { ptz: false, audio: true, events: true },
-    connectionSecretRef: "vault://branches/blr-001/cameras/001",
+    connectionSecretRef: "vault://branches/A005/cameras/01",
   },
   {
-    id: "cam-002", deviceIdentityId: "device-cam-002", nodeId: "camera-cash-room", branchId: "branch-blr-001",
-    name: "Cash Room",
-    vendor: "cp-plus", model: "CP-UNC example", channel: 2,
-    protocol: "onvif-s", status: "degraded",
-    profiles: [{ name: "main", codec: "H264", width: 1920, height: 1080 }],
+    id: "cam-a005-02",
+    deviceIdentityId: "device-a005-02",
+    nodeId: "group-a005-tellers",
+    branchId: "A005",
+    name: "Teller Counter 2 (Cash Dispense)",
+    vendor: "dahua",
+    model: "IPC-HFW5442E-ZE (4K WizMind AI Bullet)",
+    serialNumber: "DH-8K29348124B",
+    macAddress: "3C:EF:8C:1A:40:92",
+    ipAddress: "192.168.1.102",
+    onvifPort: 80,
+    rtspPort: 554,
+    channel: 2,
+    protocol: "onvif-t",
+    status: "online",
+    profiles: [
+      { name: "main", codec: "H265", width: 3840, height: 2160, role: "main" },
+      { name: "sub", codec: "H264", width: 704, height: 576, role: "sub" }
+    ],
+    capabilities: { ptz: false, audio: true, events: true },
+    connectionSecretRef: "vault://branches/A005/cameras/02",
+  },
+  {
+    id: "cam-a005-03",
+    deviceIdentityId: "device-a005-03",
+    nodeId: "group-a005-vault",
+    branchId: "A005",
+    name: "Strong Room Dual-Custody Vault Door",
+    vendor: "hikvision",
+    model: "DS-2CD2386G2-ISU/SL (4K AcuSense Strobe/Audio Eyeball)",
+    serialNumber: "HK-VR99201948",
+    macAddress: "E0:53:5A:22:98:C1",
+    ipAddress: "192.168.1.103",
+    onvifPort: 80,
+    rtspPort: 554,
+    channel: 1,
+    protocol: "onvif-t",
+    status: "online",
+    profiles: [
+      { name: "main", codec: "H265", width: 3840, height: 2160, role: "main" },
+      { name: "sub", codec: "H264", width: 640, height: 360, role: "sub" }
+    ],
+    capabilities: { ptz: false, audio: true, events: true },
+    connectionSecretRef: "vault://branches/A005/cameras/03",
+  },
+  {
+    id: "cam-a005-04",
+    deviceIdentityId: "device-a005-04",
+    nodeId: "group-a005-perimeter",
+    branchId: "A005",
+    name: "24/7 ATM Lobby & Card Dispenser",
+    vendor: "cp-plus",
+    model: "CP-UNC-TA41ZL4-VMD (4MP WDR IR Dome)",
+    serialNumber: "CP-ATM772091A",
+    macAddress: "48:5D:36:11:BC:04",
+    ipAddress: "192.168.1.104",
+    onvifPort: 80,
+    rtspPort: 554,
+    channel: 1,
+    protocol: "onvif-s",
+    status: "online",
+    profiles: [
+      { name: "main", codec: "H264", width: 2560, height: 1440, role: "main" },
+      { name: "sub", codec: "H264", width: 704, height: 576, role: "sub" }
+    ],
+    capabilities: { ptz: false, audio: true, events: true },
+    connectionSecretRef: "vault://branches/A005/cameras/04",
+  },
+  {
+    id: "cam-a005-05",
+    deviceIdentityId: "device-a005-05",
+    nodeId: "group-a005-public",
+    branchId: "A005",
+    name: "Main Banking Hall 360 Overview",
+    vendor: "axis",
+    model: "AXIS M3066-V (Panoramic Wide-Angle)",
+    serialNumber: "AX-PAN88301A",
+    macAddress: "00:40:8C:F2:39:1A",
+    ipAddress: "192.168.1.105",
+    onvifPort: 80,
+    rtspPort: 554,
+    channel: 1,
+    protocol: "onvif-t",
+    status: "online",
+    profiles: [
+      { name: "main", codec: "H265", width: 2560, height: 1440, role: "main" },
+      { name: "sub", codec: "H264", width: 640, height: 480, role: "sub" }
+    ],
     capabilities: { ptz: false, audio: false, events: true },
-    connectionSecretRef: "vault://branches/blr-001/cameras/002",
+    connectionSecretRef: "vault://branches/A005/cameras/05",
+  },
+  {
+    id: "cam-a005-06",
+    deviceIdentityId: "device-a005-06",
+    nodeId: "group-a005-perimeter",
+    branchId: "A005",
+    name: "Parking Gate & Cash Van ANPR",
+    vendor: "dahua",
+    model: "ITC413-PW4D-IZ3 (4MP Traffic & License Plate ANPR)",
+    serialNumber: "DH-ANPR99213K",
+    macAddress: "3C:EF:8C:99:4A:21",
+    ipAddress: "192.168.1.106",
+    onvifPort: 80,
+    rtspPort: 554,
+    channel: 1,
+    protocol: "onvif-t",
+    status: "online",
+    profiles: [
+      { name: "main", codec: "H265", width: 2560, height: 1440, role: "main" }
+    ],
+    capabilities: { ptz: false, audio: false, events: true },
+    connectionSecretRef: "vault://branches/A005/cameras/06",
+  },
+  {
+    id: "cam-a005-07",
+    deviceIdentityId: "device-a005-07",
+    nodeId: "group-a005-vault",
+    branchId: "A005",
+    name: "Currency Sorter & High-Value Transit Bay",
+    vendor: "cp-plus",
+    model: "CP-UVR-0801E1V-I Ch 1 (Analog HD)",
+    serialNumber: "CP-DVR-CH01-171",
+    macAddress: "48:5D:36:99:AA:01",
+    ipAddress: "192.168.1.171",
+    onvifPort: 80,
+    rtspPort: 554,
+    channel: 1,
+    sourceType: "analog-dvr-channel",
+    recorderId: "recorder-a005-cpplus-dvr",
+    recorderChannel: 1,
+    protocol: "rtsp",
+    status: "online",
+    profiles: [
+      { name: "main", codec: "H264", width: 1920, height: 1080, role: "main" }
+    ],
+    capabilities: { ptz: false, audio: true, events: true },
+    connectionSecretRef: "vault://branches/A005/cameras/07",
+  },
+  {
+    id: "cam-a005-08",
+    deviceIdentityId: "device-a005-08",
+    nodeId: "group-a005-public",
+    branchId: "A005",
+    name: "Customer Locker Room Air-Lock Corridor",
+    vendor: "hikvision",
+    model: "DS-2CD2143G2-I (4MP AcuSense Fixed Dome)",
+    serialNumber: "HK-LCK201948A",
+    macAddress: "E0:53:5A:88:12:77",
+    ipAddress: "192.168.1.108",
+    onvifPort: 80,
+    rtspPort: 554,
+    channel: 1,
+    protocol: "onvif-t",
+    status: "online",
+    profiles: [
+      { name: "main", codec: "H265", width: 2560, height: 1440, role: "main" }
+    ],
+    capabilities: { ptz: false, audio: true, events: true },
+    connectionSecretRef: "vault://branches/A005/cameras/08",
+  },
+
+  // ==========================================
+  // BRANCH A006 (Mumbai BKC Financial Center)
+  // ==========================================
+  {
+    id: "cam-a006-01",
+    deviceIdentityId: "device-a006-01",
+    nodeId: "group-a006-public",
+    branchId: "A006",
+    name: "BKC Main Trading Floor & Customer Lounge",
+    vendor: "hikvision",
+    model: "DS-2CD2386G2-ISU/SL (4K AcuSense Bullet)",
+    serialNumber: "HK-BKC109281",
+    macAddress: "E0:53:5A:77:1A:01",
+    ipAddress: "192.168.2.101",
+    onvifPort: 80,
+    rtspPort: 554,
+    channel: 1,
+    protocol: "onvif-t",
+    status: "online",
+    profiles: [
+      { name: "main", codec: "H265", width: 3840, height: 2160, role: "main" }
+    ],
+    capabilities: { ptz: false, audio: true, events: true },
+    connectionSecretRef: "vault://branches/A006/cameras/01",
+  },
+  {
+    id: "cam-a006-02",
+    deviceIdentityId: "device-a006-02",
+    nodeId: "group-a006-vault",
+    branchId: "A006",
+    name: "Foreign Exchange & Bullion Vault Vault 1",
+    vendor: "dahua",
+    model: "IPC-HFW5442E-ZE (4K WizMind Bullet)",
+    serialNumber: "DH-BKC991823",
+    macAddress: "3C:EF:8C:77:1A:02",
+    ipAddress: "192.168.2.102",
+    onvifPort: 80,
+    rtspPort: 554,
+    channel: 2,
+    protocol: "onvif-t",
+    status: "online",
+    profiles: [
+      { name: "main", codec: "H265", width: 3840, height: 2160, role: "main" }
+    ],
+    capabilities: { ptz: true, audio: true, events: true },
+    connectionSecretRef: "vault://branches/A006/cameras/02",
+  },
+
+  // ==========================================
+  // BRANCH A007 (Delhi Connaught Place)
+  // ==========================================
+  {
+    id: "cam-a007-01",
+    deviceIdentityId: "device-a007-01",
+    nodeId: "A007",
+    branchId: "A007",
+    name: "Connaught Place Inner Circle Entrance",
+    vendor: "cp-plus",
+    model: "CP-UNC-TA41ZL4-VMD (4MP IR Dome)",
+    serialNumber: "CP-DEL882910A",
+    macAddress: "48:5D:36:33:44:01",
+    ipAddress: "192.168.3.101",
+    onvifPort: 80,
+    rtspPort: 554,
+    channel: 1,
+    protocol: "onvif-s",
+    status: "online",
+    profiles: [
+      { name: "main", codec: "H264", width: 2560, height: 1440, role: "main" }
+    ],
+    capabilities: { ptz: false, audio: true, events: true },
+    connectionSecretRef: "vault://branches/A007/cameras/01",
+  },
+
+  // ==========================================
+  // BRANCH A008 (Bengaluru Whitefield Tech Hub)
+  // ==========================================
+  {
+    id: "cam-a008-01",
+    deviceIdentityId: "device-a008-01",
+    nodeId: "A008",
+    branchId: "A008",
+    name: "Whitefield ITPL Main Gate & Lobby",
+    vendor: "hikvision",
+    model: "DS-2CD2143G2-I (4MP AcuSense Dome)",
+    serialNumber: "HK-BLR772911",
+    macAddress: "E0:53:5A:44:55:01",
+    ipAddress: "192.168.4.101",
+    onvifPort: 80,
+    rtspPort: 554,
+    channel: 1,
+    protocol: "onvif-t",
+    status: "online",
+    profiles: [
+      { name: "main", codec: "H265", width: 2560, height: 1440, role: "main" }
+    ],
+    capabilities: { ptz: false, audio: true, events: true },
+    connectionSecretRef: "vault://branches/A008/cameras/01",
   },
 ];
 
@@ -413,6 +681,439 @@ export class MemoryStore {
     usedAt?: Date;
     createdAt: Date;
   }>();
+
+  constructor() {
+    this.initializeEnterpriseSeedData();
+  }
+
+  private initializeEnterpriseSeedData() {
+    // 1. Maintenance Vendors
+    this.maintenanceVendors.push(
+      {
+        id: "vendor-godrej",
+        tenantId,
+        name: "Godrej Security Solutions (Division of Godrej & Boyce)",
+        code: "VEND-GS-01",
+        contactPerson: "Ramesh Varma",
+        email: "ramesh.varma@godrej.com",
+        phone: "+91 98201 44552",
+        address: "Pirojshanagar, Vikhroli East, Mumbai, Maharashtra 400079",
+        specialization: "Vault doors, currency chests, biometric airlocks, CCTV installation & physical hardening",
+        slaStandardHours: 6,
+        slaEmergencyHours: 2,
+        rating: 4.9,
+        status: "active",
+        createdAt: new Date().toISOString(),
+      },
+      {
+        id: "vendor-honeywell",
+        tenantId,
+        name: "Honeywell Building Solutions India Pvt Ltd",
+        code: "VEND-HB-02",
+        contactPerson: "Priya Nambiar",
+        email: "priya.nambiar@honeywell.com",
+        phone: "+91 98450 11223",
+        address: "EcoWorld Technology Park, Marathahalli-Sarjapur Outer Ring Road, Bengaluru, Karnataka 560103",
+        specialization: "Enterprise NVR storage, VMS, video analytics server clusters, fire alarm integration",
+        slaStandardHours: 8,
+        slaEmergencyHours: 4,
+        rating: 4.8,
+        status: "active",
+        createdAt: new Date().toISOString(),
+      },
+      {
+        id: "vendor-schneider",
+        tenantId,
+        name: "Schneider Electric India (APC Critical Power)",
+        code: "VEND-SE-03",
+        contactPerson: "Anand Joshi",
+        email: "anand.joshi@se.com",
+        phone: "+91 98110 33445",
+        address: "DLF Cyber City, Tower C, Phase II, Gurugram, Haryana 122002",
+        specialization: "Online double-conversion UPS, lithium battery banks, environmental thermal sensors",
+        slaStandardHours: 4,
+        slaEmergencyHours: 2,
+        rating: 4.9,
+        status: "active",
+        createdAt: new Date().toISOString(),
+      },
+      {
+        id: "vendor-cpplus",
+        tenantId,
+        name: "CP PLUS Enterprise Systems (Aditya Infotech Ltd)",
+        code: "VEND-CP-04",
+        contactPerson: "Siddharth Nair",
+        email: "siddharth.nair@adityagroup.com",
+        phone: "+91 97110 88990",
+        address: "A-12, Sector 4, Noida, Uttar Pradesh 201301",
+        specialization: "UVR HD DVR fleets, analog HD coax infrastructure, IP cameras, optical transceivers",
+        slaStandardHours: 12,
+        slaEmergencyHours: 4,
+        rating: 4.7,
+        status: "active",
+        createdAt: new Date().toISOString(),
+      }
+    );
+
+    // 2. AMC Contracts
+    this.amcContracts.push(
+      {
+        id: "amc-2026-godrej-south",
+        tenantId,
+        contractNumber: "AMC-2026-GODREJ-SOUTH-01",
+        name: "Comprehensive Annual Maintenance - South Zone Vault & Physical Security",
+        vendorId: "vendor-godrej",
+        vendorName: "Godrej Security Solutions",
+        startDate: "2026-01-01",
+        endDate: "2026-12-31",
+        annualCost: 1850000,
+        currency: "INR",
+        paymentFrequency: "quarterly",
+        status: "active",
+        scope: "All 24 branches across South Zone including A005 Kochi, A008 Bengaluru, A009 Hyderabad, A010 Chennai",
+        visitFrequency: "monthly",
+        terms: "Includes 24/7 on-call dispatch with 2hr emergency response SLA. All camera and lock hardware replacements covered.",
+        coveredAssetCategories: ["camera", "recorder", "vault_door", "biometric"],
+        createdAt: new Date().toISOString(),
+      },
+      {
+        id: "amc-2026-honeywell-west",
+        tenantId,
+        contractNumber: "AMC-2026-HONEYWELL-WEST-02",
+        name: "Tier-1 High Availability NVR & Surveillance SAN Storage Matrix AMC",
+        vendorId: "vendor-honeywell",
+        vendorName: "Honeywell Building Solutions",
+        startDate: "2026-04-01",
+        endDate: "2027-03-31",
+        annualCost: 2400000,
+        currency: "INR",
+        paymentFrequency: "quarterly",
+        status: "active",
+        scope: "West & North Zone Primary Data Centers and NVR Fleets including A006 Mumbai BKC, A007 Delhi CP",
+        visitFrequency: "bi-weekly",
+        terms: "Automatic HDD replacement upon first SMART bad sector detection. 4hr SLA for hot-spare restoration.",
+        coveredAssetCategories: ["recorder", "storage", "analytics_server"],
+        createdAt: new Date().toISOString(),
+      },
+      {
+        id: "amc-2026-schneider-ups",
+        tenantId,
+        contractNumber: "AMC-2026-SCHNEIDER-PANINDIA-03",
+        name: "National Mission-Critical 24/7 UPS & Battery Bank AMC",
+        vendorId: "vendor-schneider",
+        vendorName: "Schneider Electric India",
+        startDate: "2025-10-01",
+        endDate: "2026-09-30",
+        annualCost: 1280000,
+        currency: "INR",
+        paymentFrequency: "half-yearly",
+        status: "active",
+        scope: "All branches pan-India online double-conversion UPS systems and battery banks",
+        visitFrequency: "quarterly",
+        terms: "Includes quarterly cell impedance testing, thermal calibration, and free battery cell swap if health drops below 85%.",
+        coveredAssetCategories: ["ups", "battery_bank", "environmental_sensor"],
+        createdAt: new Date().toISOString(),
+      }
+    );
+
+    // 3. Maintenance Assets
+    this.maintenanceAssets.push(
+      {
+        id: "asset-a005-nvr-01",
+        tenantId,
+        branchId: "A005",
+        name: "Kochi Marine Drive Primary 32-Ch 4K NVR (Dahua NVR5432-4KS2)",
+        assetTag: "AST-A005-NVR-01",
+        category: "recorder",
+        manufacturer: "Dahua Technology",
+        model: "NVR5432-4KS2",
+        serialNumber: "DH-NVR5432-88192",
+        ipAddress: "192.168.1.10",
+        location: "Kochi Main Branch - Ground Floor Server Room Rack A1",
+        status: "healthy",
+        healthPercentage: 99.4,
+        installDate: "2024-06-15",
+        warrantyExpiryDate: "2028-06-30",
+        amcContractId: "amc-2026-godrej-south",
+        vendorId: "vendor-godrej",
+        lastServicedAt: "2026-08-01T10:30:00Z",
+        nextServiceDueAt: "2026-09-01T10:30:00Z",
+        specifications: { channels: 32, maxResolution: "4K", storageSlots: 4, raidLevel: "RAID-5" },
+        createdAt: new Date().toISOString(),
+      },
+      {
+        id: "asset-a005-ups-01",
+        tenantId,
+        branchId: "A005",
+        name: "Kochi Branch 10kVA Online Double-Conversion UPS (APC Smart-UPS On-Line)",
+        assetTag: "AST-A005-UPS-01",
+        category: "ups",
+        manufacturer: "Schneider Electric (APC)",
+        model: "SURT10000XLI",
+        serialNumber: "APC-SURT10000XLI-9921",
+        ipAddress: "192.168.1.250",
+        location: "Kochi Main Branch - Ground Floor Server Room UPS Bay",
+        status: "healthy",
+        healthPercentage: 98.2,
+        installDate: "2024-01-10",
+        warrantyExpiryDate: "2027-01-10",
+        amcContractId: "amc-2026-schneider-ups",
+        vendorId: "vendor-schneider",
+        lastServicedAt: "2026-07-20T11:00:00Z",
+        nextServiceDueAt: "2026-10-20T11:00:00Z",
+        specifications: { capacityVA: 10000, runtimeMinutes: 185, batteryType: "VRLA AGM" },
+        createdAt: new Date().toISOString(),
+      },
+      {
+        id: "asset-a006-san-01",
+        tenantId,
+        branchId: "A006",
+        name: "Mumbai BKC Surveillance SAN Storage Matrix (Honeywell 96TB RAID-6)",
+        assetTag: "AST-A006-SAN-01",
+        category: "storage",
+        manufacturer: "Honeywell Building Solutions",
+        model: "MAXPRO SAN-96TB",
+        serialNumber: "HW-SAN96T-001",
+        ipAddress: "192.168.2.20",
+        location: "Mumbai BKC Regional Datacenter - Rack C3",
+        status: "healthy",
+        healthPercentage: 99.8,
+        installDate: "2024-03-01",
+        warrantyExpiryDate: "2029-03-01",
+        amcContractId: "amc-2026-honeywell-west",
+        vendorId: "vendor-honeywell",
+        lastServicedAt: "2026-08-14T09:15:00Z",
+        nextServiceDueAt: "2026-09-14T09:15:00Z",
+        specifications: { totalCapacityTB: 96, freeCapacityTB: 42.8, raidLevel: "RAID-6" },
+        createdAt: new Date().toISOString(),
+      },
+      {
+        id: "asset-a007-switch-01",
+        tenantId,
+        branchId: "A007",
+        name: "Delhi CP Core PoE+ Managed Surveillance Switch (Cisco Catalyst 3850)",
+        assetTag: "AST-A007-SW-01",
+        category: "network",
+        manufacturer: "Cisco Systems",
+        model: "WS-C3850-48P-L",
+        serialNumber: "FCW2219B021",
+        ipAddress: "192.168.3.2",
+        location: "Delhi CP Main Branch - IT Enclosure Rack 1",
+        status: "healthy",
+        healthPercentage: 100.0,
+        installDate: "2023-11-20",
+        warrantyExpiryDate: "2028-11-20",
+        amcContractId: "amc-2026-honeywell-west",
+        vendorId: "vendor-honeywell",
+        lastServicedAt: "2026-08-05T14:00:00Z",
+        nextServiceDueAt: "2026-11-05T14:00:00Z",
+        specifications: { portCount: 48, poeBudgetWatts: 740, uplinkSpeedGbps: 10 },
+        createdAt: new Date().toISOString(),
+      }
+    );
+
+    // 4. Work Orders
+    this.workOrders.push(
+      {
+        id: "wo-2026-0818-01",
+        tenantId,
+        branchId: "A005",
+        workOrderNumber: "WO-2026-0818-01",
+        title: "Optical Calibration & WDR Tuning - Strong Room Vault Camera",
+        description: "Quarterly precision calibration of Dahua 4K bullet camera in the currency vault. Clean optical glass, test IR cut filter, verify dual-stream timestamping.",
+        assetId: "cam-a005-03",
+        assetName: "Strong Room Dual-Custody Vault Door",
+        vendorId: "vendor-godrej",
+        vendorName: "Godrej Security Solutions",
+        priority: "medium",
+        status: "completed",
+        scheduledDate: "2026-08-18",
+        completedDate: "2026-08-18",
+        assignedTechnician: "Vipin Das (Certified Security Specialist)",
+        technicianNotes: "Optical glass cleaned. WDR adjusted to 120dB for low-light vault threshold. Frame rate locked to 25fps H.265. Camera health 100%.",
+        cost: 3500,
+        coveredUnderAmc: true,
+        createdAt: "2026-08-17T09:00:00Z",
+      },
+      {
+        id: "wo-2026-0814-02",
+        tenantId,
+        branchId: "A006",
+        workOrderNumber: "WO-2026-0814-02",
+        title: "Surveillance HDD Proactive Replacement - Mumbai BKC SAN Matrix",
+        description: "Early SMART predictive health warning detected 3 reallocated sectors on Bay 4 HDD. Replace with Western Digital Purple Pro 8TB surveillance drive.",
+        assetId: "asset-a006-san-01",
+        assetName: "Mumbai BKC Surveillance SAN Storage Matrix",
+        vendorId: "vendor-honeywell",
+        vendorName: "Honeywell Building Solutions",
+        priority: "high",
+        status: "completed",
+        scheduledDate: "2026-08-14",
+        completedDate: "2026-08-14",
+        assignedTechnician: "Amit Saxena (Storage Engineer)",
+        technicianNotes: "Hot-swapped Bay 4 HDD with new WD84PURZ 8TB drive. RAID-6 array rebuilt automatically in 4 hours 12 mins. Array status optimal.",
+        cost: 21500,
+        coveredUnderAmc: true,
+        createdAt: "2026-08-13T14:30:00Z",
+      },
+      {
+        id: "wo-2026-0820-03",
+        tenantId,
+        branchId: "A008",
+        workOrderNumber: "WO-2026-0820-03",
+        title: "Quarterly Online UPS Battery Impedance & Load Bank Test",
+        description: "Run automated discharge load test, measure internal cell resistance across 16 VRLA battery modules, and update SNMP management card firmware.",
+        assetId: "asset-a005-ups-01",
+        assetName: "Bengaluru Whitefield 10kVA Online UPS",
+        vendorId: "vendor-schneider",
+        vendorName: "Schneider Electric India",
+        priority: "low",
+        status: "in_progress",
+        scheduledDate: "2026-08-20",
+        assignedTechnician: "Sanjay Gowda (Field Power Engineer)",
+        technicianNotes: "Test underway. Modules 1-12 impedance within 1.2 mOhm tolerance. Battery runtime estimated at 192 mins under full branch surveillance load.",
+        cost: 4800,
+        coveredUnderAmc: true,
+        createdAt: "2026-08-19T10:00:00Z",
+      }
+    );
+
+    // 5. Compliance Requirements
+    this.complianceRequirements.push(
+      {
+        id: "req-rbi-cctv-retention",
+        tenantId,
+        code: "RBI-SEC-35A-CCTV",
+        title: "RBI Banking Mandate 2024/71: Minimum 90-180 Day High-Definition CCTV Archive for Banking Halls & Vaults",
+        standard: "RBI Master Directions on Security & Cash Logistics",
+        category: "retention",
+        mandatory: true,
+        status: "compliant",
+        evidenceCount: 12,
+        description: "All commercial bank branches and currency chests must maintain tamper-evident, watermarked, continuous recordings of cash counters, strong rooms, and ATM kiosks for a minimum period of 180 days.",
+        retentionPeriodDays: 180,
+        createdAt: new Date().toISOString(),
+      },
+      {
+        id: "req-dpdp-privacy-masking",
+        tenantId,
+        code: "DPDP-ACT-2023-SEC6",
+        title: "Digital Personal Data Protection (DPDP) Act 2023: Dynamic Privacy Masking on Public Video Feeds",
+        standard: "DPDP Act 2023 Statutory Compliance",
+        category: "privacy",
+        mandatory: true,
+        status: "compliant",
+        evidenceCount: 8,
+        description: "Customer facial features, PIN pads, and non-relevant bystander video data must be dynamically masked for non-investigative live view roles.",
+        retentionPeriodDays: 90,
+        createdAt: new Date().toISOString(),
+      },
+      {
+        id: "req-iso27001-cryptography",
+        tenantId,
+        code: "ISO-27001-A.8.24",
+        title: "ISO/IEC 27001:2022 Control A.8.24: End-to-End RTSP/SRTP TLS 1.2+ Stream Encryption & mTLS",
+        standard: "ISO/IEC 27001:2022 Information Security Management",
+        category: "cryptography",
+        mandatory: true,
+        status: "compliant",
+        evidenceCount: 15,
+        description: "All video stream transmissions from branch edge gateways to the cloud control plane must enforce mutual TLS (mTLS) with 90-day automatic cryptographic credential rotation.",
+        retentionPeriodDays: 365,
+        createdAt: new Date().toISOString(),
+      },
+      {
+        id: "req-pci-dss-access-control",
+        tenantId,
+        code: "PCI-DSS-V4-REQ9",
+        title: "PCI-DSS v4.0 Requirement 9.1: Physical Access Control & Video Surveillance at ATM & POS Terminals",
+        standard: "Payment Card Industry Data Security Standard (PCI-DSS v4.0)",
+        category: "access_control",
+        mandatory: true,
+        status: "compliant",
+        evidenceCount: 6,
+        description: "ATM lobbies, POS transit desks, and network ingress points must maintain continuous tamper-evident video surveillance with dual-factor audit trails.",
+        retentionPeriodDays: 365,
+        createdAt: new Date().toISOString(),
+      }
+    );
+
+    // 6. Privacy Purposes
+    this.privacyPurposes.push(
+      {
+        id: "purp-security",
+        tenantId,
+        code: "PURP-BANK-SEC",
+        name: "Security and Physical Asset Protection of Branch Premises",
+        description: "Continuous real-time video surveillance for burglary prevention, cash protection, and perimeter security.",
+        dataCategories: ["video_stream", "audio_event", "motion_telemetry"],
+        legalBasis: "Legitimate Interests / RBI Master Directions on Bank Security",
+        retentionDays: 180,
+        allowedRoles: ["super_admin", "global_admin", "soc_operator", "investigator"],
+        createdAt: new Date().toISOString(),
+      },
+      {
+        id: "purp-fraud",
+        tenantId,
+        code: "PURP-FRAUD-PREV",
+        name: "Investigation and Prevention of Financial Fraud and ATM Skimming",
+        description: "Targeted forensic clip extraction and facial recognition matching against national fraud watchlists.",
+        dataCategories: ["video_stream_and_face_crop", "anpr_plate_record"],
+        legalBasis: "Legal Obligation / Prevention of Financial Crimes",
+        retentionDays: 365,
+        allowedRoles: ["super_admin", "investigator", "evidence_officer"],
+        createdAt: new Date().toISOString(),
+      },
+      {
+        id: "purp-safety",
+        tenantId,
+        code: "PURP-SAFETY-HEALTH",
+        name: "Customer and Bank Staff Safety and Occupational Health Monitoring",
+        description: "Emergency fire egress monitoring, crowd density detection, and medical incident response.",
+        dataCategories: ["video_stream"],
+        legalBasis: "Public Safety and Employee Protection Regulations",
+        retentionDays: 90,
+        allowedRoles: ["super_admin", "global_admin", "branch_manager", "soc_operator"],
+        createdAt: new Date().toISOString(),
+      }
+    );
+
+    // 7. Spare Parts Inventory
+    this.spareParts.push(
+      {
+        id: "part-wd-purple-8tb",
+        tenantId,
+        partNumber: "WD84PURZ",
+        name: "Western Digital Purple Pro 8TB Surveillance HDD (SATA 6Gb/s 256MB Cache)",
+        category: "storage_drive",
+        manufacturer: "Western Digital",
+        quantityOnHand: 18,
+        reorderThreshold: 5,
+        unitCost: 19500,
+        currency: "INR",
+        compatibleModels: ["Dahua NVR5432-4KS2", "Hikvision DS-9632NI-I8", "CP PLUS CP-UNR-416T2"],
+        location: "Kochi Central Logistics Depot - Shelf B4",
+        status: "in_stock",
+        createdAt: new Date().toISOString(),
+      },
+      {
+        id: "part-sfp-transceiver-10g",
+        tenantId,
+        partNumber: "SFP-10G-SR",
+        name: "Cisco 10GBASE-SR SFP+ Optical Transceiver Module",
+        category: "network_module",
+        manufacturer: "Cisco Systems",
+        quantityOnHand: 24,
+        reorderThreshold: 8,
+        unitCost: 8200,
+        currency: "INR",
+        compatibleModels: ["Cisco Catalyst 3850", "Honeywell SAN Storage"],
+        location: "Mumbai BKC IT Store - Bin 12",
+        status: "in_stock",
+        createdAt: new Date().toISOString(),
+      }
+    );
+  }
 
   async close() {}
 
