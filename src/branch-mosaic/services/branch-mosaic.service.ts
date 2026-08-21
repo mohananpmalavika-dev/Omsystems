@@ -119,51 +119,10 @@ export class BranchMosaicService {
   async getBranchDrilldown(branchId: string): Promise<BranchDrilldownDetail | undefined> {
     const projection = this.branchProjections.get(branchId);
     if (!projection) return undefined;
-
     return {
       projection,
-      devices: [
-        {
-          id: `${branchId}-DVR-01`,
-          name: "Main Branch DVR-01 (CP PLUS)",
-          type: "RECORDER",
-          state: projection.recorder.unhealthy > 0 ? "UNHEALTHY" : "HEALTHY",
-          details: { model: "CP-UNR-4K4322-V2", firmware: "4.120.0000000.2.R", storage: "2 x 4TB Purple" },
-        },
-        {
-          id: `${branchId}-CAM-01`,
-          name: "Main Entrance",
-          type: "CAMERA",
-          state: projection.overallState === "UNHEALTHY" ? "UNKNOWN" : "HEALTHY",
-          details: { channel: 1, resolution: "1080p", fps: 25, recording: true },
-        },
-        {
-          id: `${branchId}-CAM-02`,
-          name: "Cash Counter",
-          type: "CAMERA",
-          state: projection.overallState === "UNHEALTHY" ? "UNKNOWN" : "HEALTHY",
-          details: { channel: 2, resolution: "1080p", fps: 25, recording: true },
-        },
-      ],
-      activeAlerts:
-        projection.alerts.p1 > 0
-          ? [
-              {
-                id: `alert-${branchId}-01`,
-                severity: "P1",
-                title: "Branch Internet Connectivity Outage",
-                occurredAt: projection.lastObservedAt,
-              },
-            ]
-          : [],
-      rootCause:
-        projection.branchId === "BR-088"
-          ? {
-              entityId: "WAN-BR88",
-              entityType: "INTERNET",
-              reason: "Primary Airtel WAN connection dropped, LTE backup failed handshake",
-            }
-          : undefined,
+      devices: [],
+      activeAlerts: [],
     };
   }
 }
