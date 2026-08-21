@@ -7,7 +7,7 @@
 
 'use client';
 
-import { useState, useEffect } from 'react';
+import { Suspense, useState, useEffect } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { 
   Shield, 
@@ -45,7 +45,7 @@ interface DeviceTypeBreakdown {
   icon: any;
 }
 
-export default function SecurityDeviceHubPage() {
+function SecurityDeviceHubContent() {
   const searchParams = useSearchParams();
   const selectedCategory = searchParams?.get('category') || 'all';
   const [stats, setStats] = useState<DeviceStats>({
@@ -346,5 +346,13 @@ export default function SecurityDeviceHubPage() {
         </Link>
       </div>
     </div>
+  );
+}
+
+export default function SecurityDeviceHubPage() {
+  return (
+    <Suspense fallback={null}>
+      <SecurityDeviceHubContent />
+    </Suspense>
   );
 }
