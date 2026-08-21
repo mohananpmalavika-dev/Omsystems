@@ -22,13 +22,21 @@ FROM node:22-alpine AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 ENV PORT=8080
+
+# Copy package files first
+COPY --from=builder /app/package.json ./package.json
+COPY --from=builder /app/package-lock.json ./package-lock.json
+
+# Install production dependencies
+RUN npm ci --omit=dev
+
+# Copy built application
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/backend ./backend
 COPY --from=builder /app/edge-agent/build ./edge-agent/build
 COPY --from=builder /app/edge-agent/installer ./edge-agent/installer
 COPY --from=builder /app/edge-agent/package.json ./edge-agent/package.json
-COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/package.json ./package.json
+
 EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
   CMD wget -qO- http://localhost:8080/health || exit 1
