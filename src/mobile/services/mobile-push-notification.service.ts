@@ -14,6 +14,7 @@
  */
 
 import { EventEmitter } from "node:events";
+import { randomUUID } from "node:crypto";
 import type { Pool } from "pg";
 import type { ControlPlaneStore } from "../../control-plane-store.js";
 import { AlertOperationsService, type AlertRealtimeEvent } from "../../alerts/services/alert-operations.service.js";
@@ -295,7 +296,7 @@ export class MobilePushNotificationService extends EventEmitter {
     clickAction?: string;
   }): Promise<PushNotificationMessage> {
     const notification: PushNotificationMessage = {
-      id: `notif-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      id: `notif-${randomUUID()}`,
       userId: params.userId,
       tenantId: params.tenantId,
       title: params.title,
@@ -407,7 +408,7 @@ export class MobilePushNotificationService extends EventEmitter {
     // const admin = require('firebase-admin');
     // const response = await admin.messaging().send(fcmPayload);
     
-    return true; // Simulated success
+    throw new Error("FCM provider is not configured");
   }
 
   /**
@@ -447,7 +448,7 @@ export class MobilePushNotificationService extends EventEmitter {
     //   JSON.stringify(webPushPayload)
     // );
 
-    return true; // Simulated success
+    throw new Error("Web Push provider is not configured");
   }
 
   /**
@@ -455,7 +456,7 @@ export class MobilePushNotificationService extends EventEmitter {
    */
   async registerDevice(device: Omit<PushNotificationDevice, "id" | "createdAt" | "lastUsedAt">): Promise<PushNotificationDevice> {
     const newDevice: PushNotificationDevice = {
-      id: `device-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      id: `device-${randomUUID()}`,
       ...device,
       createdAt: new Date(),
       lastUsedAt: new Date(),

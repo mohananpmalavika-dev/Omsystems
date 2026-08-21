@@ -6,6 +6,7 @@
  */
 
 import type { PlaybackSession } from "../domain/media-session.types.js";
+import { randomBytes, randomUUID } from "node:crypto";
 import { videoAccessAuditService, VideoAccessAuditService } from "./video-access-audit.service.js";
 
 export class PlaybackSessionService {
@@ -22,7 +23,9 @@ export class PlaybackSessionService {
     userId: string;
     sourceIp?: string | undefined;
   }): Promise<PlaybackSession> {
-    const id = `pb-sess-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    const urlTemplate = process.env.MEDIA_PLAYBACK_URL_TEMPLATE;
+    if (!urlTemplate) throw new Error("MEDIA_PLAYBACK_URL_TEMPLATE is not configured");
+    const id = `pb-sess-${randomUUID()}`;
     const now = new Date();
     const expiresAt = new Date(now.getTime() + 900_000); // 15 minutes TTL
 
@@ -35,8 +38,14 @@ export class PlaybackSessionService {
       to: options.to,
       requestedByUserId: options.userId,
       state: "READY",
-      streamUrl: `wss://edge-gw-178.local/webrtc/playback?session=${id}&cam=${options.cameraId}&from=${options.from.getTime()}&to=${options.to.getTime()}`,
-      sessionToken: `token-${id}-${Math.random().toString(36).slice(2, 12)}`,
+      streamUrl: urlTemplate
+        .replaceAll("{sessionId}", encodeURIComponent(id))
+        .replaceAll("{tenantId}", encodeURIComponent(options.tenantId))
+        .replaceAll("{branchId}", encodeURIComponent(options.branchId))
+        .replaceAll("{cameraId}", encodeURIComponent(options.cameraId))
+        .replaceAll("{from}", String(options.from.getTime()))
+        .replaceAll("{to}", String(options.to.getTime())),
+      sessionToken: randomBytes(32).toString("base64url"),
       createdAt: now,
       expiresAt,
     };

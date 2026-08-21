@@ -62,7 +62,8 @@ export async function registerCeoScreenRoutes(app: FastifyInstance): Promise<voi
       reply: FastifyReply,
     ) => {
       const { actionId } = req.params;
-      const operatorId = req.body?.operatorId || "ceo-executive";
+      if (!req.currentUser) return reply.status(401).send({ success: false, error: "Authentication required" });
+      const operatorId = req.currentUser.id;
 
       try {
         const result = ceoScreenEngine.executeAction(actionId, operatorId);
@@ -83,10 +84,9 @@ export async function registerCeoScreenRoutes(app: FastifyInstance): Promise<voi
 
   // POST /api/v1/ceo-screen/reset — Reset to baseline scenario
   app.post("/api/v1/ceo-screen/reset", async (_req: FastifyRequest, reply: FastifyReply) => {
-    ceoScreenEngine.seedDefaultExecutiveState();
-    return reply.status(200).send({
-      success: true,
-      message: "CEO Screen state reset to benchmark scenario",
+    return reply.status(410).send({
+      success: false,
+      error: "benchmark_reset_removed",
     });
   });
 

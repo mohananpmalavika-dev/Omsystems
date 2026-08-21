@@ -8,6 +8,7 @@ import {
   evidenceCapturePipelineService,
 } from "../../evidence/services/evidence-capture-pipeline.service.js";
 import type { EvidenceFailureCode } from "../../evidence/domain/evidence.types.js";
+import { managedAlertEvidenceReferences } from "../evidence-capture.js";
 
 export interface EvidenceJobOptions {
   alertId: string;
@@ -89,12 +90,13 @@ export class AlertEvidencePipelineService {
         FAILED: "FAILED",
       };
 
+      const managedReferences = managedAlertEvidenceReferences(options.alertId);
       evidence = {
         state: stateMap[record.status] || "FAILED",
         snapshotState: record.snapshot ? "READY" : "FAILED",
         clipState: record.videoClip ? "READY" : "FAILED",
-        snapshotUrl: record.snapshot?.url,
-        clipUrl: record.videoClip?.url,
+        snapshotUrl: record.snapshot ? managedReferences.snapshotReference : undefined,
+        clipUrl: record.videoClip ? managedReferences.clipReference : undefined,
         clipDurationSeconds: preSec + postSec,
         preEventSeconds: preSec,
         postEventSeconds: postSec,

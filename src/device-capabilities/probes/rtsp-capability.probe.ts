@@ -11,6 +11,8 @@ import type {
   DeviceIdentity,
 } from "../capability-probe.interface.js";
 import { ProbeError } from "../capability-probe.interface.js";
+import { createConnection, type Socket } from "node:net";
+import { connect as createTlsConnection } from "node:tls";
 
 /**
  * RTSP capability probe.
@@ -122,8 +124,6 @@ export class RtspCapabilityProbe implements CapabilityProbe {
     sdp?: string;
     error?: string;
   }> {
-    // TODO: Implement actual RTSP DESCRIBE
-    // For now, return mock success for devices with RTSP URI
     if (!device.rtspUri) {
       return {
         success: false,
@@ -131,25 +131,60 @@ export class RtspCapabilityProbe implements CapabilityProbe {
       };
     }
 
-    // Mock SDP response
-    const ip = device.ipAddress ?? "192.168.1.100";
+    try {
+      const endpoint = new URL(device.rtspUri);
+      if (endpoint.protocol !== "rtsp:" && endpoint.protocol !== "rtsps:") {
+        return { success: false, error: `Unsupported RTSP protocol ${endpoint.protocol}` };
+      }
+      const secure = endpoint.protocol === "rtsps:";
+      const port = endpoint.port ? Number(endpoint.port) : secure ? 322 : 554;
+      const requestEndpoint = new URL(endpoint);
+      requestEndpoint.username = "";
+      requestEndpoint.password = "";
 
-    const mockSdp = `v=0
-  o=- 0 0 IN IP4 ${ip}
-s=RTSP Session
-t=0 0
-m=video 0 RTP/AVP 96
-a=rtpmap:96 H264/90000
-a=fmtp:96 profile-level-id=420029
-a=control:trackID=0
-m=audio 0 RTP/AVP 97
-a=rtpmap:97 MPEG4-GENERIC/16000/1
-a=control:trackID=1`;
-
-    return {
-      success: true,
-      sdp: mockSdp,
-    };
+      return await new Promise((resolve) => {
+        let response = Buffer.alloc(0);
+        let settled = false;
+        const finish = (result: { success: boolean; sdp?: string; error?: string }) => {
+          if (settled) return;
+          settled = true;
+          socket.destroy();
+          resolve(result);
+        };
+        const onConnected = () => {
+          socket.write(
+            `DESCRIBE ${requestEndpoint.toString()} RTSP/1.0\r\nCSeq: 1\r\nAccept: application/sdp\r\nUser-Agent: Sentinel-Grid/1.0\r\n\r\n`,
+          );
+        };
+        const socket: Socket = secure
+          ? createTlsConnection({ host: endpoint.hostname, port, servername: endpoint.hostname, rejectUnauthorized: true }, onConnected)
+          : createConnection({ host: endpoint.hostname, port }, onConnected);
+        socket.setTimeout(5_000);
+        socket.on("data", (chunk: Buffer) => {
+          response = Buffer.concat([response, chunk]);
+          const headerEnd = response.indexOf("\r\n\r\n");
+          if (headerEnd < 0) return;
+          const headers = response.subarray(0, headerEnd).toString("utf8");
+          const statusCode = Number(headers.match(/^RTSP\/\d\.\d\s+(\d{3})/i)?.[1]);
+          const contentLength = Number(headers.match(/\r\nContent-Length:\s*(\d+)/i)?.[1] ?? 0);
+          if (statusCode !== 200) {
+            finish({ success: false, error: `RTSP DESCRIBE returned ${Number.isFinite(statusCode) ? statusCode : "an invalid response"}` });
+            return;
+          }
+          const body = response.subarray(headerEnd + 4);
+          if (body.length < contentLength) return;
+          const sdp = body.subarray(0, contentLength || body.length).toString("utf8").trim();
+          finish(sdp ? { success: true, sdp } : { success: false, error: "RTSP DESCRIBE returned no SDP" });
+        });
+        socket.on("timeout", () => finish({ success: false, error: "RTSP DESCRIBE timed out" }));
+        socket.on("error", (error) => finish({ success: false, error: error.message }));
+        socket.on("close", () => {
+          if (!settled) finish({ success: false, error: "RTSP connection closed before a complete response" });
+        });
+      });
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : "Invalid RTSP endpoint" };
+    }
   }
 
   private extractCodecCapabilities(

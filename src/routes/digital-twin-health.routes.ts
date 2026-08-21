@@ -1,4 +1,5 @@
 import type { FastifyInstance } from "fastify";
+import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import type { ControlPlaneStore } from "../control-plane-store.js";
 import {
@@ -36,6 +37,7 @@ export async function registerDigitalTwinHealthRoutes(
   const registerEndpoints = (prefix: string) => {
     // 1. Control Room Branch Health List
     app.get(`${prefix}/control-room/branches`, async (request, reply) => {
+      if (!request.currentUser) return reply.code(401).send({ success: false, error: "Authentication required" });
       const list = projection.listControlRoomBranches();
       return reply.code(200).send({
         success: true,
@@ -46,6 +48,7 @@ export async function registerDigitalTwinHealthRoutes(
 
     // 2. Branch Health Projection
     app.get(`${prefix}/branches/:id/twin/health`, async (request, reply) => {
+      if (!request.currentUser) return reply.code(401).send({ success: false, error: "Authentication required" });
       const { id } = idParamSchema.parse(request.params);
       const proj = projection.getBranchProjection(id);
       return reply.code(200).send({
@@ -56,6 +59,7 @@ export async function registerDigitalTwinHealthRoutes(
 
     // 3. Branch Topology Graph (Nodes & Relationships)
     app.get(`${prefix}/branches/:id/twin/topology`, async (request, reply) => {
+      if (!request.currentUser) return reply.code(401).send({ success: false, error: "Authentication required" });
       const { id } = idParamSchema.parse(request.params);
       const nodes = topology.listNodes(id);
       const relationships = topology.getRelationships(id);
@@ -73,6 +77,7 @@ export async function registerDigitalTwinHealthRoutes(
 
     // 4. Current Active Infrastructure Incident & Impacted Services
     app.get(`${prefix}/branches/:id/twin/incidents/current`, async (request, reply) => {
+      if (!request.currentUser) return reply.code(401).send({ success: false, error: "Authentication required" });
       const { id } = idParamSchema.parse(request.params);
       const incident = analyzer.getActiveIncident(id);
       if (!incident) {
@@ -90,24 +95,45 @@ export async function registerDigitalTwinHealthRoutes(
 
     // 5. Ingest Collector Observation
     app.post(`${prefix}/twin/observations`, async (request, reply) => {
-      const body = request.body as any;
-      if (!body || !body.nodeId || !body.metric) {
-        return reply.code(400).send({
-          success: false,
-          error: "nodeId and metric are required",
-        });
+      const user = request.currentUser;
+      if (!user) return reply.code(401).send({ success: false, error: "Authentication required" });
+      const body = z.object({
+        id: z.string().min(1).optional(),
+        branchId: z.string().min(1),
+        nodeId: z.string().min(1),
+        metric: z.enum([
+          "NETWORK_REACHABLE",
+          "STREAM_AVAILABLE",
+          "VIDEO_DECODABLE",
+          "RECORDING_ACTIVE",
+          "RECORDER_ONLINE",
+          "DISK_HEALTH",
+          "RETENTION_DAYS",
+          "INTERNET_REACHABLE",
+          "PACKET_LOSS",
+          "LATENCY",
+          "CLOCK_OFFSET",
+        ]),
+        value: z.unknown(),
+        observedAt: z.coerce.date(),
+        source: z.string().min(1),
+        confidence: z.number().min(0).max(1),
+      }).parse(request.body);
+      const node = topology.getNode(body.nodeId);
+      if (!node || node.branchId !== body.branchId || node.tenantId !== user.tenantId) {
+        return reply.code(404).send({ success: false, error: "Twin node not found or access denied" });
       }
 
       const obs = {
-        id: body.id ?? `obs-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-        tenantId: body.tenantId ?? "tenant-bank-01",
-        branchId: body.branchId ?? "branch-118",
+        id: body.id ?? `obs-${randomUUID()}`,
+        tenantId: user.tenantId,
+        branchId: body.branchId,
         nodeId: body.nodeId,
         metric: body.metric,
         value: body.value,
-        observedAt: body.observedAt ? new Date(body.observedAt) : new Date(),
-        source: body.source ?? "collector-network",
-        confidence: body.confidence ?? 1.0,
+        observedAt: body.observedAt,
+        source: body.source,
+        confidence: body.confidence,
       };
 
       const res = consumer.consumeObservation(obs);

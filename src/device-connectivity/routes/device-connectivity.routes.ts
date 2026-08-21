@@ -7,7 +7,7 @@ const connectivityService = new DeviceConnectivityService();
 
 export async function registerDeviceConnectivityRoutes(app: FastifyInstance) {
   // 1. Progressive Fingerprinting Probe
-  app.post("/v1/connectivity/probe", async (req: FastifyRequest) => {
+  app.post("/v1/connectivity/probe", async (req: FastifyRequest, reply: FastifyReply) => {
     const body = z
       .object({
         host: z.string(),
@@ -16,19 +16,16 @@ export async function registerDeviceConnectivityRoutes(app: FastifyInstance) {
       })
       .parse(req.body);
 
-    const { adapter, probeResult } = await DeviceAdapterResolver.resolveBestAdapter(body as any);
-    return {
-      success: true,
-      data: {
-        resolvedAdapter: adapter.adapterType,
-        adapterVersion: adapter.adapterVersion,
-        probe: probeResult,
-      },
-    };
+    try {
+      const { adapter, probeResult } = await DeviceAdapterResolver.resolveBestAdapter(body as any);
+      return { success: true, data: { resolvedAdapter: adapter.adapterType, adapterVersion: adapter.adapterVersion, probe: probeResult } };
+    } catch (error) {
+      return reply.code(503).send({ success: false, error: error instanceof Error ? error.message : "No verified adapter available" });
+    }
   });
 
   // 2. 8-Factor Stream Verification (Beyond ping / port 554)
-  app.post("/v1/connectivity/verify-stream", async (req: FastifyRequest) => {
+  app.post("/v1/connectivity/verify-stream", async (req: FastifyRequest, reply: FastifyReply) => {
     const body = z
       .object({
         host: z.string(),
@@ -37,7 +34,7 @@ export async function registerDeviceConnectivityRoutes(app: FastifyInstance) {
       .parse(req.body);
 
     const verification = await connectivityService.verifyStream(body as any);
-    return { success: true, data: verification };
+    return reply.code(503).send({ success: false, error: "RTSP verification transport is not configured", data: verification });
   });
 
   // 3. Asynchronous Onboarding Workflow
@@ -46,9 +43,9 @@ export async function registerDeviceConnectivityRoutes(app: FastifyInstance) {
       .object({
         host: z.string(),
         port: z.number().default(554),
-        branchId: z.string().default("BR-118"),
-        expectedManufacturer: z.string().default("CP PLUS"),
-        credentialRef: z.string().default("vault:cred:br118-cpplus"),
+        branchId: z.string().min(1),
+        expectedManufacturer: z.string().min(1).optional(),
+        credentialRef: z.string().min(1),
       })
       .parse(req.body);
 
@@ -57,7 +54,7 @@ export async function registerDeviceConnectivityRoutes(app: FastifyInstance) {
         { host: body.host, port: body.port, branchId: body.branchId, expectedManufacturer: body.expectedManufacturer },
         { credentialRef: body.credentialRef },
       );
-      return { success: true, message: "Device successfully probed, authenticated and 8-factor verified.", data: result };
+      return { success: true, data: result };
     } catch (err: any) {
       return reply.code(400).send({ success: false, error: err.message });
     }
