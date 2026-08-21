@@ -53,11 +53,17 @@ export class SecurityDeviceService extends BackendSecurityDeviceService {
 		return [];
 	}
 
-	async getDeviceEvents(filters: any, limit = 100): Promise<any[]> {
+	getDeviceEvents(tenantId: string, request: any): Promise<any[]>;
+	getDeviceEvents(filters: any, limit?: number): Promise<any[]>;
+	async getDeviceEvents(first: any, second?: any): Promise<any[]> {
+		if (typeof second !== 'number') {
+			return super.getDeviceEvents(first, second || {});
+		}
+
 		const request = {
-			...(filters || {}),
-			deviceIds: filters?.deviceId ? [filters.deviceId] : undefined,
-			limit,
+			...(first || {}),
+			deviceIds: first?.deviceId ? [first.deviceId] : undefined,
+			limit: second || 100,
 		};
 
 		return this.getDeviceEventsInternal(this.tenantId, request);
@@ -67,20 +73,33 @@ export class SecurityDeviceService extends BackendSecurityDeviceService {
 		return super.getDeviceEvents(tenantId, request);
 	}
 
-	async executeCommand(
+	executeCommand(tenantId: string, deviceId: string, request: any, requestedBy: string): Promise<any>;
+	executeCommand(
 		deviceId: string,
 		command: string,
 		requestedBy: string,
 		parameters?: Record<string, any>,
 		reason?: string,
 		mfaToken?: string
+	): Promise<any>;
+	async executeCommand(
+		first: string,
+		second: string,
+		third: any,
+		fourth?: any,
+		fifth?: string,
+		sixth?: string
 	): Promise<any> {
-		return super.executeCommand(this.tenantId, deviceId, {
-			command: command as any,
-			parameters: parameters || {},
-			reason,
-			requiresMFA: !!mfaToken,
-		}, requestedBy);
+		if (typeof third === 'object') {
+			return super.executeCommand(first, second, third, fourth);
+		}
+
+		return super.executeCommand(this.tenantId, first, {
+			command: second as any,
+			parameters: fourth || {},
+			reason: fifth,
+			requiresMFA: !!sixth,
+		}, third);
 	}
 }
 

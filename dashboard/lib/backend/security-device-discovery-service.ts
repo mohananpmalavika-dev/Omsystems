@@ -33,12 +33,28 @@ export class SecurityDeviceDiscoveryService extends BackendSecurityDeviceDiscove
 		return SecurityDeviceDiscoveryService.instance;
 	}
 
-	async approveDiscoveredDevice(deviceId: string, reviewedBy: string): Promise<void> {
-		return super.approveDiscoveredDevice(this.tenantId, deviceId, reviewedBy);
+	approveDiscoveredDevice(tenantId: string, deviceId: string, reviewedBy: string): Promise<void>;
+	approveDiscoveredDevice(deviceId: string, reviewedBy: string): Promise<void>;
+	async approveDiscoveredDevice(
+		first: string,
+		second: string,
+		third?: string
+	): Promise<void> {
+		return third
+			? super.approveDiscoveredDevice(first, second, third)
+			: super.approveDiscoveredDevice(this.tenantId, first, second);
 	}
 
-	async rejectDiscoveredDevice(deviceId: string, reviewedBy: string = 'system'): Promise<void> {
-		return super.rejectDiscoveredDevice(this.tenantId, deviceId, reviewedBy);
+	rejectDiscoveredDevice(tenantId: string, deviceId: string, reviewedBy: string): Promise<void>;
+	rejectDiscoveredDevice(deviceId: string, reviewedBy?: string): Promise<void>;
+	async rejectDiscoveredDevice(
+		first: string,
+		second?: string,
+		third?: string
+	): Promise<void> {
+		return third
+			? super.rejectDiscoveredDevice(first, second!, third)
+			: super.rejectDiscoveredDevice(this.tenantId, first, second || 'system');
 	}
 
 	async listDiscoveredDevices(jobId?: string, status?: string): Promise<any[]> {
@@ -51,22 +67,51 @@ export class SecurityDeviceDiscoveryService extends BackendSecurityDeviceDiscove
 		return result.devices;
 	}
 
-	async listDiscoveryJobs(status?: string): Promise<any[]> {
+	listDiscoveryJobs(tenantId: string, filters: any): Promise<any>;
+	listDiscoveryJobs(status?: string): Promise<any[]>;
+	async listDiscoveryJobs(first?: string, filters?: any): Promise<any> {
+		if (filters !== undefined) {
+			return super.listDiscoveryJobs(first!, filters);
+		}
+
 		const result = await super.listDiscoveryJobs(this.tenantId, {
-			status,
+			status: first,
 			limit: 100,
 		});
 
 		return result.jobs;
 	}
 
-	async startDiscovery(
+	startDiscovery(
+		tenantId: string,
+		branchId: string | null,
+		networkRange: string,
+		options: any,
+		createdBy: string
+	): Promise<any>;
+	startDiscovery(
 		branchId: string,
 		networkRanges: string | string[],
 		protocols?: string[],
 		initiatedBy?: string,
 		options?: any
+	): Promise<any>;
+	async startDiscovery(
+		first: string,
+		second: string | null | string[],
+		third?: string | string[],
+		fourth?: any,
+		fifth?: any
 	): Promise<any> {
+		if (fifth !== undefined) {
+			return super.startDiscovery(first, second as string | null, third as any, fourth, fifth);
+		}
+
+		const branchId = first;
+		const networkRanges = second as string | string[];
+		const protocols = third as string[] | undefined;
+		const initiatedBy = fourth as string | undefined;
+		const options = fifth;
 		const addr = Array.isArray(networkRanges) ? networkRanges.join(',') : networkRanges;
 		const normalizedOptions = {
 			deepScan: false,
