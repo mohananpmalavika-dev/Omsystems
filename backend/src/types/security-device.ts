@@ -631,7 +631,7 @@ export interface SecurityDeviceAdapter {
  * Discovery options
  */
 export interface DiscoveryOptions {
-  timeout Seconds?: number;
+  timeoutSeconds?: number;
   includeDeviceTypes?: SecurityDeviceType[];
   excludeDeviceTypes?: SecurityDeviceType[];
   deepScan?: boolean;
