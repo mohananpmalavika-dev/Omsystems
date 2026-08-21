@@ -23,8 +23,9 @@ export async function GET(
     }
 
     const { deviceId } = await params;
+    const searchParams = request.nextUrl.searchParams;
     const filters: any = {
-      deviceId: params.deviceId,
+      deviceId,
     };
 
     if (searchParams.get('eventType')) filters.eventType = searchParams.get('eventType')!;

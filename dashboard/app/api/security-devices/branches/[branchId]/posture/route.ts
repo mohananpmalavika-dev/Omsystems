@@ -23,7 +23,8 @@ export async function GET(
     }
 
     const { branchId } = await params;
-    const posture = await service.getBranchSecurityPosture(params.branchId);
+    const service = SecurityDeviceService.getInstance();
+    const posture = await service.getBranchSecurityPosture(branchId);
 
     if (!posture) {
       return NextResponse.json(

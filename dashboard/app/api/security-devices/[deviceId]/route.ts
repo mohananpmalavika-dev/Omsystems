@@ -22,8 +22,9 @@ export async function GET(
       );
     }
 
+      const service = SecurityDeviceService.getInstance();
     const { deviceId } = await params;
-    const device = await service.getDeviceById(params.deviceId);
+    const device = await service.getDeviceById(deviceId);
 
     if (!device) {
       return NextResponse.json(

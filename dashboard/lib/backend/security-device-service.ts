@@ -11,6 +11,12 @@ import { SecurityDeviceService as BackendSecurityDeviceService } from '../../../
 
 export class SecurityDeviceService extends BackendSecurityDeviceService {
 	private static instance: SecurityDeviceService | null = null;
+	private readonly tenantId: string;
+
+	constructor(pool: Pool) {
+		super(pool);
+		this.tenantId = process.env.DEFAULT_TENANT_ID || 'default-tenant';
+	}
 
 	static getInstance(): SecurityDeviceService {
 		if (!SecurityDeviceService.instance) {
@@ -25,6 +31,56 @@ export class SecurityDeviceService extends BackendSecurityDeviceService {
 		}
 
 		return SecurityDeviceService.instance;
+	}
+
+	async getAllDevices(filters: any = {}): Promise<any[]> {
+		const result = await this.listDevices({
+			tenantId: this.tenantId,
+			...(filters || {}),
+		});
+		return result.devices;
+	}
+
+	async getDeviceById(deviceId: string): Promise<any> {
+		return this.getDevice(this.tenantId, deviceId);
+	}
+
+	async getBranchSecurityPosture(branchId: string): Promise<any> {
+		return this.getBranchPosture(this.tenantId, branchId);
+	}
+
+	async getDeviceHealthHistory(deviceId: string, hours = 24): Promise<any[]> {
+		return [];
+	}
+
+	async getDeviceEvents(filters: any, limit = 100): Promise<any[]> {
+		const request = {
+			...(filters || {}),
+			deviceIds: filters?.deviceId ? [filters.deviceId] : undefined,
+			limit,
+		};
+
+		return this.getDeviceEventsInternal(this.tenantId, request);
+	}
+
+	private async getDeviceEventsInternal(tenantId: string, request: any): Promise<any[]> {
+		return super.getDeviceEvents(tenantId, request);
+	}
+
+	async executeCommand(
+		deviceId: string,
+		command: string,
+		requestedBy: string,
+		parameters?: Record<string, any>,
+		reason?: string,
+		mfaToken?: string
+	): Promise<any> {
+		return super.executeCommand(this.tenantId, deviceId, {
+			command: command as any,
+			parameters: parameters || {},
+			reason,
+			requiresMFA: !!mfaToken,
+		}, requestedBy);
 	}
 }
 

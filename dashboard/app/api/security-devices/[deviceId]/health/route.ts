@@ -23,10 +23,11 @@ export async function GET(
     }
 
     const { deviceId } = await params;
+    const searchParams = request.nextUrl.searchParams;
     const hours = parseInt(searchParams.get('hours') || '24');
 
     const service = SecurityDeviceService.getInstance();
-    const history = await service.getDeviceHealthHistory(params.deviceId, hours);
+    const history = await service.getDeviceHealthHistory(deviceId, hours);
 
     return NextResponse.json({ data: history });
   } catch (error) {
