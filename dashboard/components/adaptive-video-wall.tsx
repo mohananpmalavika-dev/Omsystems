@@ -426,7 +426,7 @@ export function AdaptiveVideoWall() {
           </div>
         </div>
       )}
-    </section>
+    </div>
   );
 }
 

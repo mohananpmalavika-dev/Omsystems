@@ -440,7 +440,7 @@ export interface SecurityDeviceHealthSnapshot {
   lastErrorAt?: Date;
   
   // Maintenance indicators
-  uptime Seconds?: number;
+  uptimeSeconds?: number;
   lastRebootAt?: Date;
   lastMaintenanceAt?: Date;
   nextMaintenanceDue?: Date;
