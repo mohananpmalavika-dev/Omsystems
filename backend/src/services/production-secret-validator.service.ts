@@ -77,12 +77,13 @@ export class ProductionSecretValidator {
         description: 'PostgreSQL connection string with credentials',
       },
       
-      // Redis (required for distributed state in production)
+      // Redis (optional - falls back to in-memory event bus if not provided)
       {
         name: 'Redis URL',
         envVar: 'REDIS_URL',
         envVarFile: 'REDIS_URL_FILE',
-        required: 'production',
+        required: 'conditional',
+        condition: () => process.env.REQUIRE_REDIS === 'true' || process.env.EVENT_BUS_MODE === 'redis',
         description: 'Redis connection URL for distributed state/rate limiting',
       },
       
@@ -379,24 +380,26 @@ export class ProductionSecretValidator {
     const uniqueChars = new Set(value).size;
     const ratio = uniqueChars / value.length;
     
-    // If less than 40% unique characters, likely low entropy
-    if (ratio < 0.4) {
+    // If less than 20% unique characters, likely low entropy
+    if (ratio < 0.2) {
       return true;
     }
     
-    // Check for sequential patterns (aaa, 111, abc, 123, etc.)
-    for (let i = 0; i < value.length - 2; i++) {
-      const a = value.charCodeAt(i);
-      const b = value.charCodeAt(i + 1);
-      const c = value.charCodeAt(i + 2);
-      
-      // Same character repeated
-      if (a === b && b === c) {
-        return true;
+    // Check for excessive repeating character runs (e.g., aaaaaa)
+    if (/(.)\1{5,}/.test(value)) {
+      return true;
+    }
+    
+    // Check for 6+ sequential characters (e.g. 123456, abcdef)
+    for (let i = 0; i < value.length - 5; i++) {
+      let sequential = true;
+      for (let j = 0; j < 5; j++) {
+        if (value.charCodeAt(i + j + 1) !== value.charCodeAt(i + j) + 1) {
+          sequential = false;
+          break;
+        }
       }
-      
-      // Sequential characters
-      if (b === a + 1 && c === b + 1) {
+      if (sequential) {
         return true;
       }
     }
