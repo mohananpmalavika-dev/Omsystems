@@ -34,6 +34,25 @@ export class SecurityDeviceDiscoveryService extends BackendSecurityDeviceDiscove
 	async rejectDiscoveredDevice(deviceId: string, reviewedBy: string = 'system'): Promise<void> {
 		return super.rejectDiscoveredDevice(this.tenantId, deviceId, reviewedBy);
 	}
+
+	async listDiscoveredDevices(jobId?: string, status?: string): Promise<any[]> {
+		const result = await super.getDiscoveredDevices(this.tenantId, {
+			jobId,
+			enrollmentStatus: status,
+			limit: 100,
+		});
+
+		return result.devices;
+	}
+
+	async listDiscoveryJobs(status?: string): Promise<any[]> {
+		const result = await super.listDiscoveryJobs(this.tenantId, {
+			status,
+			limit: 100,
+		});
+
+		return result.jobs;
+	}
 }
 
 export default SecurityDeviceDiscoveryService;
