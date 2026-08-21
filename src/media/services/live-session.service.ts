@@ -5,6 +5,7 @@
  * of temporary, on-demand live video sessions between operator browsers and branch edge gateways.
  */
 
+import { randomBytes, randomUUID } from "node:crypto";
 import type { LiveSession, StreamQuality, SessionPurpose, BranchNetworkState, EdgeGatewayCapacity } from "../domain/media-session.types.js";
 import { StreamProfileSelector } from "./stream-profile-selector.js";
 import { edgeMediaProxyService, EdgeMediaProxyService } from "./edge-media-proxy.service.js";
@@ -19,32 +20,7 @@ export class LiveSessionService {
   constructor(
     private readonly proxy: EdgeMediaProxyService = edgeMediaProxyService,
     private readonly audit: VideoAccessAuditService = videoAccessAuditService
-  ) {
-    this.seedDefaultInfrastructure();
-  }
-
-  private seedDefaultInfrastructure() {
-    this.networkStates.set("branch-178", {
-      mode: "PRIMARY",
-      uploadMbps: 50,
-      latencyMs: 18,
-      packetLossPct: 0.01,
-    });
-
-    this.gatewayCapacities.set("edge-gw-178", {
-      gatewayId: "edge-gw-178",
-      branchId: "branch-178",
-      maxRtspInputs: 64,
-      maxWebRtcOutputs: 32,
-      maxTranscode1080p: 4,
-      activeRtspInputs: 4,
-      activeWebRtcOutputs: 2,
-      activeTranscodes: 0,
-      cpuPct: 28,
-      memoryPct: 35,
-      online: true,
-    });
-  }
+  ) {}
 
   setBranchNetworkState(branchId: string, state: BranchNetworkState) {
     this.networkStates.set(branchId, state);
@@ -65,12 +41,15 @@ export class LiveSessionService {
     sourceIp?: string | undefined;
     ttlMinutes?: number | undefined;
   }): Promise<LiveSession> {
-    const id = `live-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    const id = `live-${randomUUID()}`;
     const purpose = options.purpose || "LIVE_VIEW";
     const requestedQuality = options.quality || "AUTO";
     const network = this.networkStates.get(options.branchId);
-    const edgeGatewayId = `edge-gw-${options.branchId.replace("branch-", "")}`;
-    const gateway = this.gatewayCapacities.get(edgeGatewayId);
+    const gateway = Array.from(this.gatewayCapacities.values()).find(
+      (item) => item.branchId === options.branchId && item.online,
+    );
+    if (!gateway) throw new Error(`online_edge_gateway_not_found:${options.branchId}`);
+    const edgeGatewayId = gateway.gatewayId;
 
     // 1. Adaptive Quality Selection
     const { resolvedQuality, mediaMode } = StreamProfileSelector.select({
@@ -102,19 +81,11 @@ export class LiveSessionService {
       state: "ACTIVE",
       edgeGatewayId,
       streamUrl,
-      sessionToken: `token-${id}-${Math.random().toString(36).slice(2, 12)}`,
+      sessionToken: randomBytes(32).toString("base64url"),
       createdAt: now,
       startedAt: now,
       lastActivityAt: now,
       expiresAt,
-      metrics: {
-        bitrateKbps: resolvedQuality === "MAINSTREAM" ? 2048 : 512,
-        fps: 25,
-        width: resolvedQuality === "MAINSTREAM" ? 1920 : 640,
-        height: resolvedQuality === "MAINSTREAM" ? 1080 : 360,
-        packetLossPct: 0.0,
-        reconnectCount: 0,
-      },
     };
 
     this.sessions.set(id, session);

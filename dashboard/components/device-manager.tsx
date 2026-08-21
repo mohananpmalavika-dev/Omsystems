@@ -23,10 +23,9 @@ import {
   QrCode,
   Square,
   Wifi,
-  Zap,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { cameraInventoryApi, deviceInventoryApi, provisioningApi } from "@/lib/api-client";
+import { cameraInventoryApi, deviceInventoryApi } from "@/lib/api-client";
 import { discoveryDeviceTypeLabel, discoveryModelLabel } from "@/lib/discovery-display";
 import { BranchConnectivityPanel } from "@/components/branch-connectivity-panel";
 import { ProvisioningRun } from "@/components/provisioning-run";
@@ -211,7 +210,7 @@ export function DeviceManager() {
   const [showDiscoveredList, setShowDiscoveredList] = useState(false);
   const [showDirectProbeModal, setShowDirectProbeModal] = useState(false);
   const [copiedCommand, setCopiedCommand] = useState<string | null>(null);
-  const [activePlatformTab, setActivePlatformTab] = useState<"powershell" | "bash" | "download">("powershell");
+  const [activePlatformTab] = useState<"download">("download");
   const [probeIp, setProbeIp] = useState("");
   const [probePort, setProbePort] = useState("");
   const [probeUsername, setProbeUsername] = useState("");
@@ -283,20 +282,6 @@ export function DeviceManager() {
     }
   }
 
-  async function activateEdgeOnline() {
-    if (!selectedBranch) return;
-    setSaving(true);
-    setError(undefined);
-    try {
-      const res = await provisioningApi.activateEdgeOnline(selectedBranch);
-      setNotice(res.message || "Branch Edge Gateway is now online and active.");
-      await refreshBranch(selectedBranch);
-    } catch (err: any) {
-      setError(messageOf(err, "Failed to activate Edge Agent online"));
-    } finally {
-      setSaving(false);
-    }
-  }
   const [loadingDiscoveries, setLoadingDiscoveries] = useState(false);
   const [credentialActivation, setCredentialActivation] = useState<any>();
   const [activationUsername, setActivationUsername] = useState("");
@@ -1387,15 +1372,6 @@ try {
               <Search size={15} /> Scan cameras
             </button>
           )}
-          <button
-            className="secondary-button"
-            style={{ background: "rgba(59, 130, 246, 0.15)", color: "#60a5fa", borderColor: "#2563eb", fontWeight: 600 }}
-            onClick={() => void activateEdgeOnline()}
-            disabled={!selectedBranch || saving}
-            title="Bring Edge Agent online immediately for this branch"
-          >
-            <Zap size={15} /> Activate Edge Online
-          </button>
           <button className="secondary-button" onClick={() => setShowDirectProbeModal(true)} title="Directly test and connect an IP camera on the configured local subnet">
             <Wifi size={15} /> Direct IP Probe
           </button>

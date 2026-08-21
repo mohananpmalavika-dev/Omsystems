@@ -79,7 +79,7 @@ export abstract class BaseRecorderDriver implements RecorderDriver {
       recorderId: this.config.recorderId,
       branchId: this.config.branchId,
       vendor: this.vendor,
-      model: info.value?.model ?? "CP-UNR-4K",
+      model: info.value?.model ?? "UNKNOWN",
       firmwareVersion: info.value?.firmwareVersion,
       connectivity: conn,
       channels: {

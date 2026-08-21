@@ -21,23 +21,23 @@ export async function registerEvidenceCaptureRoutes(
     // 1. Enqueue Guaranteed Evidence Capture Job
     app.post(`${prefix}/evidence/jobs`, async (request, reply) => {
       const body = request.body as any;
-      if (!body || !body.alertId || !body.branchId || !body.cameraId) {
+      const tenantId = request.currentUser?.tenantId;
+      if (!body || !body.alertId || !body.branchId || !body.cameraId || !body.alertType || !body.severity || !body.detectedAt || !tenantId) {
         return reply.code(400).send({
           success: false,
-          error: "alertId, branchId, and cameraId are required",
+          error: "alertId, branchId, cameraId, alertType, severity, detectedAt, and an authenticated tenant are required",
         });
       }
 
       const evidence = await pipeline.enqueueEvidenceCapture({
         alertId: body.alertId,
-        tenantId: body.tenantId ?? "tenant-bank-01",
+        tenantId,
         branchId: body.branchId,
         cameraId: body.cameraId,
-        alertType: body.alertType ?? "intrusion",
-        severity: body.severity ?? "P1",
-        detectedAt: body.detectedAt ? new Date(body.detectedAt) : new Date(),
+        alertType: body.alertType,
+        severity: body.severity,
+        detectedAt: new Date(body.detectedAt),
         preferredSource: body.preferredSource,
-        mockFailureCode: body.mockFailureCode,
       });
 
       return reply.code(201).send({

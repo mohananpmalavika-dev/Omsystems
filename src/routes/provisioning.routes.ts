@@ -210,15 +210,13 @@ export async function registerProvisioningRoutes(
       }
     }
     const agents = await store.listEdgeAgentsByBranch(branchId);
-    let selected = agents.find((agent) => agent.id === existing.edgeAgentId && agent.status === "online") ??
+    const selected = agents.find((agent) => agent.id === existing.edgeAgentId && agent.status === "online") ??
       agents.find((agent) => agent.status === "online");
     if (!selected) {
-      // Auto-mark first agent online or register fresh gateway
-      if (agents[0]) {
-        selected = await store.heartbeatEdgeAgent(agents[0].id, "0.1.8");
-      } else {
-        selected = await store.registerEdgeAgent(branchId, "Branch Edge Scanner", "0.1.8");
-      }
+      return reply.code(409).send({
+        error: "online_edge_agent_required",
+        message: "Start the enrolled branch edge agent before retrying provisioning.",
+      });
     }
     const replacement = await store.createEdgeScanJob(branchId, selected?.id);
     await store.writeAudit({
@@ -241,28 +239,11 @@ export async function registerProvisioningRoutes(
    */
   app.post("/v1/branches/:branchId/activate-edge-online", async (request, reply) => {
     const { branchId } = branchParams.parse(request.params);
-    try {
-      const agents = await store.listEdgeAgentsByBranch(branchId);
-      let agent = agents[0];
-      if (agent) {
-        agent = await store.heartbeatEdgeAgent(agent.id, agent.version || "1.4.2");
-      } else {
-        const registered = await store.registerEdgeAgent(branchId, "Branch Edge Gateway", "1.4.2");
-        agent = await store.heartbeatEdgeAgent(registered.id, "1.4.2");
-      }
-      return reply.code(200).send({
-        success: true,
-        agent,
-        message: "Branch Edge Gateway is now online and active.",
-      });
-    } catch (err: any) {
-      request.log.error({ err }, "Failed to activate edge agent online");
-      return reply.code(200).send({
-        success: true,
-        agent: { id: "agent-" + branchId, name: "Branch Edge Gateway", status: "online" },
-        message: "Branch Edge Gateway is now online and active.",
-      });
-    }
+    return reply.code(410).send({
+      error: "remote_edge_activation_removed",
+      branchId,
+      message: "An edge agent becomes online only after the signed package starts and sends an authenticated heartbeat.",
+    });
   });
 
   /**
@@ -275,27 +256,12 @@ export async function registerProvisioningRoutes(
       stepId: z.string().min(1),
     }).parse(request.params);
 
-    try {
-      if (params.stepId === "edge-enrollment") {
-        const agents = await store.listEdgeAgentsByBranch(params.branchId);
-        if (agents[0]) {
-          await store.heartbeatEdgeAgent(agents[0].id, "0.1.8");
-        } else {
-          const fresh = await store.registerEdgeAgent(params.branchId, "Branch Edge Gateway", "0.1.8");
-          await store.heartbeatEdgeAgent(fresh.id, "0.1.8");
-        }
-      }
-      return reply.code(200).send({
-        success: true,
-        message: `Step ${params.stepId} completed successfully.`,
-      });
-    } catch (err: any) {
-      request.log.error({ err }, "Failed to execute provisioning step");
-      return reply.code(200).send({
-        success: true,
-        message: `Step ${params.stepId} initiated.`,
-      });
-    }
+    return reply.code(410).send({
+      error: "manual_provisioning_step_execution_removed",
+      branchId: params.branchId,
+      stepId: params.stepId,
+      message: "Provisioning stages are completed only by authenticated edge-agent job results.",
+    });
   });
 }
 

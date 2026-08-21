@@ -14,8 +14,25 @@ interface SharedStream {
   graceTimer?: NodeJS.Timeout | undefined;
 }
 
+interface ConfiguredStream {
+  rtspSourceUri: string;
+  playbackUrl: string;
+}
+
 export class EdgeMediaProxyService {
   private activeStreams: Map<string, SharedStream> = new Map(); // key: `${cameraId}:${quality}`
+  private configuredStreams: Map<string, ConfiguredStream> = new Map();
+
+  configureStream(
+    cameraId: string,
+    quality: "SUBSTREAM" | "MAINSTREAM",
+    config: ConfiguredStream,
+  ): void {
+    if (!config.rtspSourceUri || !config.playbackUrl) {
+      throw new Error("edge_media_stream_configuration_incomplete");
+    }
+    this.configuredStreams.set(`${cameraId}:${quality}`, { ...config });
+  }
 
   async acquireStream(
     cameraId: string,
@@ -27,12 +44,13 @@ export class EdgeMediaProxyService {
     let isNewUpstreamSource = false;
 
     if (!shared) {
-      // Open local upstream RTSP connection to NVR (Edge resolves credentials locally)
+      const configured = this.configuredStreams.get(key);
+      if (!configured) throw new Error(`edge_media_stream_not_configured:${key}`);
       isNewUpstreamSource = true;
       shared = {
         cameraId,
         quality,
-        rtspSourceUri: `rtsp://edge-local-vault@192.168.10.44:554/cam/realmonitor?channel=1&subtype=${quality === "SUBSTREAM" ? 1 : 0}`,
+        rtspSourceUri: configured.rtspSourceUri,
         subscribers: new Set(),
         startedAt: new Date(),
       };
@@ -45,8 +63,7 @@ export class EdgeMediaProxyService {
 
     shared.subscribers.add(sessionId);
 
-    // Return ephemeral WebRTC transport URL
-    const streamUrl = `wss://edge-gw-178.local/webrtc/live?session=${sessionId}&cam=${cameraId}&q=${quality.toLowerCase()}`;
+    const streamUrl = this.configuredStreams.get(key)!.playbackUrl;
     return {
       streamUrl,
       isNewUpstreamSource,
@@ -86,6 +103,7 @@ export class EdgeMediaProxyService {
       if (stream.graceTimer) clearTimeout(stream.graceTimer);
     }
     this.activeStreams.clear();
+    this.configuredStreams.clear();
   }
 }
 

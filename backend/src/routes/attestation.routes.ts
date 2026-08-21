@@ -18,7 +18,7 @@ import {
 export function createAttestationRoutes(pool: Pool): Router {
   const router = Router();
   const attestationService = new AttestationService(pool, {
-    mockVerifier: process.env.TPM_MOCK_VERIFIER === 'true',
+    mockVerifier: process.env.NODE_ENV !== 'production' && process.env.TPM_MOCK_VERIFIER === 'true',
     useTpm2Tools: process.env.TPM_USE_TPM2_TOOLS === 'true'
   });
   const challengeService = new AttestationChallengeService(pool);

@@ -6,6 +6,8 @@ COPY src/ ./src/
 COPY packages/ ./packages/
 COPY analytics-engine/ ./analytics-engine/
 COPY edge-agent/ ./edge-agent/
+COPY backend/ ./backend/
+COPY root-cause-analysis-engine/ ./root-cause-analysis-engine/
 RUN npm ci --ignore-scripts
 RUN npm run build
 
