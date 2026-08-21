@@ -243,9 +243,9 @@ export function CommandCenterView() {
   const predicted = summary?.predictedFailuresSummary?.nextLikelyFailure;
 
   return (
-    <div className="space-y-4 pb-12 text-slate-100 font-sans">
+    <div className="command-center-page space-y-4 pb-12 text-slate-100 font-sans">
       {/* Top Banner & Header */}
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 p-5 bg-gradient-to-r from-slate-900 via-slate-900 to-slate-950 border border-slate-800 rounded-xl shadow-lg">
+      <div className="command-center-hero flex flex-col lg:flex-row lg:items-center justify-between gap-4 p-5 bg-gradient-to-r from-slate-900 via-slate-900 to-slate-950 border border-slate-800 rounded-xl shadow-lg">
         <div>
           <div className="flex items-center gap-3">
             <h1 className="text-2xl font-extrabold tracking-tight text-white flex items-center gap-2">
@@ -311,7 +311,7 @@ export function CommandCenterView() {
       )}
 
       {/* Global "Ask Sentinel" AI Command Bar */}
-      <div className="p-3 bg-slate-900/90 border border-indigo-900/50 rounded-xl shadow-md">
+      <div className="command-center-ai-bar p-3 bg-slate-900/90 border border-indigo-900/50 rounded-xl shadow-md">
         <form onSubmit={handleAskSentinel} className="flex items-center gap-2">
           <div className="p-1.5 rounded-lg bg-indigo-600/20 text-indigo-400">
             <Sparkles className="w-4 h-4" />
@@ -372,7 +372,7 @@ export function CommandCenterView() {
       )}
 
       {/* Row 1 & 2: Operational Intelligence Cards Grid */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3">
+      <div className="command-center-metrics grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3">
         {/* 1. Fleet Health Score */}
         <div className="p-3.5 rounded-xl bg-slate-900/80 border border-slate-800 hover:border-slate-700 transition-all space-y-1">
           <div className="flex items-center justify-between text-slate-400">
@@ -491,7 +491,7 @@ export function CommandCenterView() {
 
       {/* Signature Predicted Failures Card if Failures Predicted */}
       {predicted && (
-        <div className="p-5 rounded-2xl bg-gradient-to-r from-slate-900 via-rose-950/20 to-slate-900 border border-rose-900/50 shadow-xl space-y-4">
+        <div className="command-center-prediction p-5 rounded-2xl bg-gradient-to-r from-slate-900 via-rose-950/20 to-slate-900 border border-rose-900/50 shadow-xl space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-800/80 pb-3">
             <div className="flex items-center gap-2.5">
               <div className="p-2 rounded-lg bg-rose-600/30 text-rose-300">
@@ -559,7 +559,7 @@ export function CommandCenterView() {
       )}
 
       {/* Dynamic AI Operations Briefing */}
-      <div className="p-4 rounded-xl bg-slate-900/90 border border-slate-800 shadow-md space-y-3">
+      <div className="command-center-briefing p-4 rounded-xl bg-slate-900/90 border border-slate-800 shadow-md space-y-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Sparkles className="w-4 h-4 text-indigo-400" />
@@ -587,7 +587,7 @@ export function CommandCenterView() {
       </div>
 
       {/* Live Incidents Strip */}
-      <div className="p-2.5 rounded-xl bg-slate-950/70 border border-slate-800 flex items-center gap-3 overflow-x-auto text-xs">
+      <div className="command-center-live-strip p-2.5 rounded-xl bg-slate-950/70 border border-slate-800 flex items-center gap-3 overflow-x-auto text-xs">
         <span className="text-[11px] font-bold text-rose-400 uppercase tracking-wider shrink-0 flex items-center gap-1">
           <Radio className="w-3 h-3 animate-pulse" />
           LIVE INCIDENTS:
@@ -611,7 +611,7 @@ export function CommandCenterView() {
       </div>
 
       {/* Fleet Branch Operational Board */}
-      <div className="space-y-3">
+      <div className="command-center-fleet space-y-3">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
           <div className="flex items-center gap-3">
             <h2 className="text-lg font-bold text-white">Fleet Operational Board</h2>

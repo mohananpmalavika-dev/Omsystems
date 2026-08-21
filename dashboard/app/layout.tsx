@@ -16,7 +16,7 @@ const THEME_SCRIPT = `
 (function() {
   try {
     var stored = localStorage.getItem('sentinel-grid-active-theme');
-    var theme = (stored === 'light' || stored === 'navy' || stored === 'emerald' || stored === 'dark') ? stored : 'dark';
+    var theme = (stored === 'light' || stored === 'navy' || stored === 'emerald' || stored === 'dark') ? stored : 'light';
     document.documentElement.setAttribute('data-theme', theme);
     document.documentElement.style.colorScheme = theme === 'light' ? 'light' : 'dark';
     if (theme === 'light') {
@@ -27,8 +27,8 @@ const THEME_SCRIPT = `
       document.documentElement.classList.add('dark');
     }
   } catch (e) {
-    document.documentElement.setAttribute('data-theme', 'dark');
-    document.documentElement.classList.add('dark');
+    document.documentElement.setAttribute('data-theme', 'light');
+    document.documentElement.classList.add('light');
   }
 })();
 `;

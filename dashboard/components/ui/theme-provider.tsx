@@ -50,7 +50,7 @@ interface ThemeContextValue {
 }
 
 const ThemeContext = createContext<ThemeContextValue>({
-  theme: "dark",
+  theme: "light",
   setTheme: () => {},
   availableThemes: AVAILABLE_THEMES,
 });
@@ -75,18 +75,18 @@ export function applyThemeToDocument(theme: ThemeMode) {
 }
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [theme, setThemeState] = useState<ThemeMode>("dark");
+  const [theme, setThemeState] = useState<ThemeMode>("light");
 
   useEffect(() => {
     try {
       const savedTheme = localStorage.getItem(STORAGE_KEY) as ThemeMode | null;
       const initialTheme = savedTheme && AVAILABLE_THEMES.some((t) => t.id === savedTheme)
         ? savedTheme
-        : "dark";
+        : "light";
       setThemeState(initialTheme);
       applyThemeToDocument(initialTheme);
     } catch {
-      applyThemeToDocument("dark");
+      applyThemeToDocument("light");
     }
   }, []);
 
