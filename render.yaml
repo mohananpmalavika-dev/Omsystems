@@ -26,7 +26,10 @@ services:
           name: sentinel-grid-db
           property: connectionString
       - key: REDIS_URL
-        sync: false
+        fromService:
+          type: redis
+          name: sentinel-grid-redis
+          property: connectionString
       - key: CONTROL_PLANE_PUBLIC_URL
         fromService:
           type: web
@@ -238,6 +241,12 @@ services:
         value: "false"
       - key: LOG_TO_FILE
         value: "false"
+
+  - type: redis
+    name: sentinel-grid-redis
+    plan: starter
+    region: singapore
+    maxmemoryPolicy: noeviction
 
 databases:
   - name: sentinel-grid-db

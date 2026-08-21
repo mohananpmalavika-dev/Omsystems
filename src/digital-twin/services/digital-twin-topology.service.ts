@@ -10,7 +10,6 @@ export class DigitalTwinTopologyService {
   private readonly relationships: TwinRelationship[] = [];
 
   constructor() {
-    this.seedDefaultTopology();
   }
 
   addNode(node: TwinNode): void {

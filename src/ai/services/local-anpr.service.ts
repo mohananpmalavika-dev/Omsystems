@@ -18,28 +18,6 @@ export interface LocalWatchlistPlate {
 export class LocalAnprService {
   private watchlist = new Map<string, LocalWatchlistPlate>();
 
-  constructor() {
-    this.seedDefaultWatchlist();
-  }
-
-  private seedDefaultWatchlist() {
-    this.addWatchlistEntry({
-      plateNumber: "KL-07-CD-1234",
-      listType: "SUSPICIOUS",
-      notes: "Vehicle identified in previous night-time branch surveillance alert",
-    });
-    this.addWatchlistEntry({
-      plateNumber: "DL-01-AB-9999",
-      listType: "STOLEN",
-      notes: "Reported stolen cash transit support vehicle",
-    });
-    this.addWatchlistEntry({
-      plateNumber: "MH-02-CB-5555",
-      listType: "VIP",
-      notes: "Regional Area Executive Director",
-    });
-  }
-
   addWatchlistEntry(entry: LocalWatchlistPlate) {
     const norm = this.normalizePlate(entry.plateNumber);
     this.watchlist.set(norm, entry);
@@ -56,11 +34,15 @@ export class LocalAnprService {
   async recognizePlate(options: {
     cameraId: string;
     branchId: string;
-    rawText?: string;
-    rawImageBase64?: string;
+    rawText: string;
+    confidence: number;
+    vehicleType?: AnprRecognitionResult["vehicleType"];
     boundingBox?: BoundingBox;
   }): Promise<AnprRecognitionResult> {
-    const raw = (options.rawText || "KL07CD1234").trim();
+    const raw = options.rawText.trim();
+    if (!raw) {
+      throw new Error("OCR text is required; no ANPR inference provider is configured for raw images");
+    }
     const normalized = this.normalizePlate(raw);
     const stateCode = this.extractStateCode(normalized);
 
@@ -73,13 +55,13 @@ export class LocalAnprService {
       recognizedAt: new Date(),
       plateNumber: this.formatPlate(normalized),
       normalizedPlate: normalized,
-      confidence: 0.96,
-      vehicleType: "CAR",
+      confidence: options.confidence,
+      vehicleType: options.vehicleType ?? "UNKNOWN",
       stateCode,
       isWatchlistMatch: Boolean(match),
       matchedWatchlistId: match ? `wl-${match.listType.toLowerCase()}` : undefined,
       matchedListType: match?.listType,
-      boundingBox: options.boundingBox ?? { x: 0.35, y: 0.6, width: 0.3, height: 0.15 },
+      boundingBox: options.boundingBox,
     };
   }
 

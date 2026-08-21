@@ -30,7 +30,6 @@ export class EdgeGatewayManagerService {
   private readonly configurations = new Map<string, EdgeConfiguration>();
 
   constructor() {
-    this.seedDefaultGateways();
   }
 
   async registerEdgeGateway(params: {

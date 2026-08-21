@@ -17,7 +17,6 @@ export class MaintenanceTicketingService {
   private readonly inventory = new Map<string, DeviceHardwareInventory>();
 
   constructor() {
-    this.seedDefaultData();
   }
 
   private seedDefaultData(): void {

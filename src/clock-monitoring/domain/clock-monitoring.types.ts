@@ -100,7 +100,7 @@ export interface FleetClockSummary {
   criticalBranches: number;
   averageOffsetSeconds: number;
   maxDriftBranchId?: string;
-  lastSyncAt: Date;
+  lastSyncAt?: Date;
 }
 
 export interface ClockSyncAuditEntry {

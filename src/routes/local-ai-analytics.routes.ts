@@ -20,7 +20,7 @@ const detectFrameSchema = z.object({
   hardwareEvent: z.object({
     vendor: z.enum(["CP_PLUS", "DAHUA", "HIKVISION", "ONVIF"]),
     eventType: z.string(),
-    confidence: z.number().optional(),
+      confidence: z.number().min(0).max(1),
     trackId: z.string().optional(),
   }).optional(),
 });
@@ -28,16 +28,23 @@ const detectFrameSchema = z.object({
 const tamperCheckSchema = z.object({
   cameraId: z.string().min(1),
   branchId: z.string().min(1),
-  frameVariance: z.number().optional(),
-  ssimScore: z.number().optional(),
-  isStreamReceivingBytes: z.boolean().optional(),
+  frameVariance: z.number(),
+  ssimScore: z.number().min(0).max(1),
+  isStreamReceivingBytes: z.boolean(),
 });
 
 const anprRecognizeSchema = z.object({
   cameraId: z.string().min(1),
   branchId: z.string().min(1),
-  rawText: z.string().optional(),
-  rawImageBase64: z.string().optional(),
+  rawText: z.string().min(1),
+  confidence: z.number().min(0).max(1),
+  vehicleType: z.enum(["CAR", "TRUCK", "BUS", "MOTORCYCLE", "VAN", "UNKNOWN"]).optional(),
+  boundingBox: z.object({
+    x: z.number(),
+    y: z.number(),
+    width: z.number().positive(),
+    height: z.number().positive(),
+  }).optional(),
 });
 
 const faceMatchSchema = z.object({
@@ -144,13 +151,14 @@ export async function registerLocalAiAnalyticsRoutes(app: FastifyInstance) {
   app.post("/v1/ai/incidents/:id/summarize", async (request: FastifyRequest, reply: FastifyReply) => {
     const params = request.params as any;
     const body = incidentSummarizeSchema.parse(request.body);
-    const summary = await localIncidentSummaryService.generateSummary({
-      incidentId: params.id,
-      ...body,
-    } as any);
-    return reply.send({
-      success: true,
-      data: summary,
-    });
+    try {
+      await localIncidentSummaryService.generateSummary({ incidentId: params.id, ...body } as any);
+      return reply.code(503).send({ success: false, error: "incident_summarization_unavailable" });
+    } catch (error) {
+      return reply.code(503).send({
+        success: false,
+        error: error instanceof Error ? error.message : "incident_summarization_unavailable",
+      });
+    }
   });
 }

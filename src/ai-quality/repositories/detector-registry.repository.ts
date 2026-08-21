@@ -12,7 +12,6 @@ export class DetectorRegistryRepository {
   private readonly hardwareProfiles = new Map<string, HardwareProfile>();
 
   constructor() {
-    this.seedDefaults();
   }
 
   private seedDefaults(): void {

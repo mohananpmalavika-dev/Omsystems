@@ -4,14 +4,11 @@ import type {
   EdgeUpgradePackage,
 } from "../domain/edge-agent-lifecycle.types.js";
 
-const SIGNING_SECRET = process.env.EDGE_UPGRADE_SECRET || "omsystems-edge-agent-release-key-2026";
-
 export class EdgeAgentLifecycleService {
   private readonly nodes = new Map<string, EdgeAgentNode>(); // gatewayId -> node
   private readonly packages = new Map<string, EdgeUpgradePackage>(); // packageId -> package
 
   constructor() {
-    this.seedDefaultEdgeNodes();
   }
 
   private seedDefaultEdgeNodes(): void {

@@ -9,22 +9,19 @@ import type {
 } from "../domain/clock-monitoring.types.js";
 import { ClockOffsetEstimator } from "./clock-offset-estimator.js";
 
-export const APPROVED_NTP_SERVERS = new Set([
-  "time.bank.internal",
-  "10.100.1.5",
-  "10.100.1.6",
-  "ntp.bank.corp",
-  "edge-gateway.local",
-]);
+export const APPROVED_NTP_SERVERS = new Set(
+  (process.env.APPROVED_NTP_SERVERS ?? "")
+    .split(",")
+    .map((server) => server.trim())
+    .filter(Boolean),
+);
 
 export class ClockMonitoringService {
   private readonly deviceEvidence = new Map<string, ClockEvidence>();
   private readonly deviceHistory = new Map<string, ClockEvidence[]>();
   private readonly auditLog: ClockSyncAuditEntry[] = [];
 
-  constructor() {
-    this.seedDefaultBranchClocks();
-  }
+  constructor() {}
 
   /**
    * Determine health state based on strict bank surveillance threshold rules:
@@ -78,7 +75,10 @@ export class ClockMonitoringService {
     const ho = all.find((e) => e.deviceType === "HO_TIME_SERVER");
 
     const maxOffset = Math.max(...all.map((e) => e.absoluteOffsetSeconds), 0);
-    const avgJitter = all.reduce((acc, e) => acc + (e.jitterMs || 10), 0) / (all.length || 1);
+    const jitterSamples = all.flatMap((e) => e.jitterMs === undefined ? [] : [e.jitterMs]);
+    const avgJitter = jitterSamples.length > 0
+      ? jitterSamples.reduce((acc, jitter) => acc + jitter, 0) / jitterSamples.length
+      : 0;
 
     const overallHealth = this.classifyOffsetHealth(maxOffset);
 
@@ -105,7 +105,7 @@ export class ClockMonitoringService {
       branchId,
       gatewayTime: gateway?.deviceTime,
       recorderTime: recorder?.deviceTime,
-      hoTime: ho?.deviceTime || new Date(),
+      hoTime: ho?.deviceTime,
       maxOffsetSeconds: maxOffset,
       averageJitterMs: Number(avgJitter.toFixed(1)),
       overallHealth,
@@ -129,15 +129,20 @@ export class ClockMonitoringService {
       else critical++;
     }
 
-    const avgOffset = all.reduce((acc, e) => acc + e.absoluteOffsetSeconds, 0) / (all.length || 1);
+    const avgOffset = all.length > 0
+      ? all.reduce((acc, e) => acc + e.absoluteOffsetSeconds, 0) / all.length
+      : 0;
+    const lastSyncAt = all
+      .flatMap((e) => e.lastSyncAt ? [e.lastSyncAt] : [])
+      .sort((a, b) => b.getTime() - a.getTime())[0];
 
     return {
-      totalBranches: branches.size || 400,
-      healthyBranches: healthy || 385,
-      warningBranches: warning || 12,
-      criticalBranches: critical || 3,
+      totalBranches: branches.size,
+      healthyBranches: healthy,
+      warningBranches: warning,
+      criticalBranches: critical,
       averageOffsetSeconds: Number(avgOffset.toFixed(2)),
-      lastSyncAt: new Date(),
+      lastSyncAt,
     };
   }
 
@@ -148,34 +153,13 @@ export class ClockMonitoringService {
 
   async syncDeviceClock(
     deviceIdOrOptions: string | { deviceId: string; branchId?: string; action?: string; initiatedByUserId?: string; reason?: string; targetNtpServer?: string },
-    targetNtpServer = "time.bank.internal"
+    targetNtpServer = ""
   ): Promise<{ success: boolean; deviceId: string; ntpServer: string }> {
     const deviceId = typeof deviceIdOrOptions === "string" ? deviceIdOrOptions : deviceIdOrOptions.deviceId;
     const ntp = typeof deviceIdOrOptions === "object" && deviceIdOrOptions.targetNtpServer ? deviceIdOrOptions.targetNtpServer : targetNtpServer;
-
-    const existing = this.deviceEvidence.get(deviceId);
-    if (existing) {
-      const prevOffset = existing.absoluteOffsetSeconds;
-      existing.absoluteOffsetSeconds = 0.2;
-      existing.signedOffsetSeconds = 0.2;
-      existing.ntpServer = ntp;
-      existing.ntpSynchronized = true;
-      existing.ntpWhitelisted = true;
-      existing.healthState = "HEALTHY";
-      existing.lastSyncAt = new Date();
-
-      this.auditLog.push({
-        auditId: `audit-sync-${Date.now()}`,
-        deviceId,
-        branchId: existing.branchId,
-        previousOffset: prevOffset,
-        newOffset: 0.2,
-        actionTaken: `Force synchronized to ${ntp}`,
-        timestamp: new Date(),
-      });
-    }
-
-    return { success: true, deviceId, ntpServer: ntp };
+    throw new Error(
+      `Clock synchronization transport is not configured for ${deviceId}${ntp ? ` (${ntp})` : ""}`,
+    );
   }
 
   async listAuditEntries(limitOrDeviceId?: number | string): Promise<ClockSyncAuditEntry[]> {
@@ -192,17 +176,17 @@ export class ClockMonitoringService {
     branchId: string,
     cameraId: string,
   ): Promise<EvidenceClockManifest> {
-    const now = new Date();
     const cameraEvidence = this.deviceEvidence.get(cameraId);
     const branchHealth = await this.getBranchClockHealth(branchId);
+    if (!cameraEvidence || !branchHealth?.hoTime || !branchHealth.gatewayTime || !branchHealth.recorderTime) {
+      throw new Error(`Complete observed clock evidence is unavailable for ${branchId}/${cameraId}`);
+    }
+    if (!cameraEvidence.ntpServer || cameraEvidence.jitterMs === undefined) {
+      throw new Error(`Camera clock source evidence is incomplete for ${cameraId}`);
+    }
 
-    const hoTime = new Date();
-    const gatewayTime = branchHealth?.gatewayTime || new Date(hoTime.getTime() - 800);
-    const nvrTime = branchHealth?.recorderTime || new Date(hoTime.getTime() - 1200);
-    const cameraTime = cameraEvidence?.deviceTime || new Date(hoTime.getTime() - 1500);
-
-    const offsetSec = cameraEvidence?.absoluteOffsetSeconds ?? 1.5;
-    const jitter = cameraEvidence?.jitterMs ?? 12;
+    const offsetSec = cameraEvidence.absoluteOffsetSeconds;
+    const jitter = cameraEvidence.jitterMs;
     const status = this.classifyOffsetHealth(offsetSec);
 
     const forensicConfidence =
@@ -212,14 +196,14 @@ export class ClockMonitoringService {
       evidenceId,
       branchId,
       cameraId,
-      captureTimestamp: now.toISOString(),
-      hoReferenceTime: hoTime.toISOString(),
-      gatewayTime: gatewayTime.toISOString(),
-      nvrTime: nvrTime.toISOString(),
-      cameraTime: cameraTime.toISOString(),
+      captureTimestamp: cameraEvidence.observedAt.toISOString(),
+      hoReferenceTime: branchHealth.hoTime.toISOString(),
+      gatewayTime: branchHealth.gatewayTime.toISOString(),
+      nvrTime: branchHealth.recorderTime.toISOString(),
+      cameraTime: cameraEvidence.deviceTime.toISOString(),
       observedOffsetSeconds: Number(offsetSec.toFixed(2)),
       jitterMs: jitter,
-      ntpSource: cameraEvidence?.ntpServer || "time.bank.internal",
+      ntpSource: cameraEvidence.ntpServer,
       clockHealthStatus: status as any,
       forensicTimestampConfidence: forensicConfidence,
     };

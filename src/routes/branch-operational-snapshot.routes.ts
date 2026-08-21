@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import type { ControlPlaneStore } from "../control-plane-store.js";
-import { BranchOperationalSnapshotService } from "../services/branch-operational-snapshot.service.js";
+import { BranchOperationalSnapshotService } from "../services/branch-operational-snapshot.production.service.js";
 import { randomUUID } from "node:crypto";
 
 const branchParams = z.object({ branchId: z.string().min(1) });

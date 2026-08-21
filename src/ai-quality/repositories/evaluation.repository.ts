@@ -8,7 +8,6 @@ export class EvaluationRepository {
   private readonly certifications = new Map<string, ModelCertification>(); // modelVersionId -> certification
 
   constructor() {
-    this.seedDefaultEvaluations();
   }
 
   private seedDefaultEvaluations(): void {

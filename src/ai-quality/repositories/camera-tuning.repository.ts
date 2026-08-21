@@ -7,7 +7,6 @@ export class CameraTuningRepository {
   private readonly configs = new Map<string, CameraDetectorConfiguration>(); // key: `${cameraId}:${detectorId}`
 
   constructor() {
-    this.seedDefaultCameraTunings();
   }
 
   private seedDefaultCameraTunings(): void {

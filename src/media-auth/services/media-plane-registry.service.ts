@@ -11,7 +11,6 @@ export class MediaPlaneRegistryService {
   private readonly HEARTBEAT_TIMEOUT_MS = 30_000; // 30s
 
   constructor() {
-    this.seedDefaultNodes();
   }
 
   private seedDefaultNodes() {

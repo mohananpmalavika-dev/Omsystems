@@ -17,7 +17,6 @@ export class BranchConnectivityService {
   private readonly recoveryCounters = new Map<string, number>();
 
   constructor(private readonly pool?: Pool) {
-    this.seedDefaultBranches();
   }
 
   async ingestTelemetry(health: BranchConnectivityHealth): Promise<BranchConnectivityHealth> {

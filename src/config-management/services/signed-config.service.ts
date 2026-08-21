@@ -27,7 +27,6 @@ export class SignedConfigService {
   private activeVersionId: string | null = null;
 
   constructor() {
-    this.seedDefaultFleetConfig();
   }
 
   private seedDefaultFleetConfig(): void {

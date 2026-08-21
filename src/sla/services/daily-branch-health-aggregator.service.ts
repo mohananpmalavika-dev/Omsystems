@@ -26,7 +26,6 @@ export class DailyBranchHealthAggregatorService {
   private readonly targets: SlaPolicyTarget = DEFAULT_SLA_TARGETS;
 
   constructor() {
-    this.seedDefaultHistoricalData();
   }
 
   async getDailyBranchAggregate(

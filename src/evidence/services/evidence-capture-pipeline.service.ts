@@ -46,7 +46,6 @@ export class EvidenceCapturePipelineService {
     private readonly storageService: EvidenceStorageService = evidenceStorageService,
     private readonly recordingClient?: AlertEvidenceClient,
   ) {
-    this.seedDefaultEvidence();
   }
 
   /**

@@ -16,7 +16,6 @@ export class ClockSynchronizationService {
   private epochs = new Map<string, ClockEpoch[]>();
 
   constructor() {
-    this.seedDefaultClocks();
   }
 
   private seedDefaultClocks() {

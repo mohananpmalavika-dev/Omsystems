@@ -20,33 +20,6 @@ export interface WatchlistFaceRecord {
 export class LocalFaceMatcherService {
   private watchlist = new Map<string, WatchlistFaceRecord>();
 
-  constructor() {
-    this.seedDefaultWatchlist();
-  }
-
-  private seedDefaultWatchlist() {
-    // Generate a deterministic unit vector for test/seeded profiles
-    const vecWanted = this.createSyntheticVector(0.5);
-    this.enrollFace({
-      personId: "person-w-01",
-      name: "Suspect Person A",
-      watchlistType: "WANTED",
-      embeddingVector: vecWanted,
-      notes: "Known unauthorized physical intruder",
-      enrolledAt: new Date(),
-    });
-
-    const vecVip = this.createSyntheticVector(0.8);
-    this.enrollFace({
-      personId: "person-vip-01",
-      name: "Managing Director",
-      watchlistType: "VIP",
-      embeddingVector: vecVip,
-      notes: "Priority executive visitor",
-      enrolledAt: new Date(),
-    });
-  }
-
   enrollFace(record: WatchlistFaceRecord) {
     this.watchlist.set(record.personId, record);
   }
@@ -123,20 +96,6 @@ export class LocalFaceMatcherService {
     return Math.max(0, Math.min(1, dotProduct / denominator));
   }
 
-  /**
-   * Create a synthetic normalized 512-dimension unit vector for deterministic testing
-   */
-  createSyntheticVector(seed: number): number[] {
-    const vec: number[] = [];
-    let norm = 0;
-    for (let i = 0; i < 512; i++) {
-      const val = Math.sin(seed * (i + 1));
-      vec.push(val);
-      norm += val * val;
-    }
-    const mag = Math.sqrt(norm);
-    return vec.map((v) => v / mag);
-  }
 }
 
 export const localFaceMatcherService = new LocalFaceMatcherService();

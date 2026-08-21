@@ -14,7 +14,6 @@ export class UserDirectoryService {
   private readonly profiles = new Map<string, UserNotificationProfile>();
 
   constructor() {
-    this.seedDefaultUsers();
   }
 
   static normalizePhoneNumber(raw: string): string {

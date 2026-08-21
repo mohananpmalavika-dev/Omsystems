@@ -42,7 +42,6 @@ export class AlertOperationsService {
   private readonly subscribers = new Set<(event: AlertRealtimeEvent) => void>();
 
   constructor(private readonly pool?: Pool) {
-    this.seedDefaultAlerts();
   }
 
   subscribe(listener: (event: AlertRealtimeEvent) => void): () => void {

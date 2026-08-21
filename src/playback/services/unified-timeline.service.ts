@@ -29,7 +29,6 @@ export class UnifiedTimelineService {
   private bookmarks: PlaybackBookmark[] = [];
 
   constructor() {
-    this.seedDefaultTimeline();
   }
 
   private seedDefaultTimeline() {
