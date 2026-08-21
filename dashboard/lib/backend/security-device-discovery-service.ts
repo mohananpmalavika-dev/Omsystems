@@ -26,6 +26,14 @@ export class SecurityDeviceDiscoveryService extends BackendSecurityDeviceDiscove
 
 		return SecurityDeviceDiscoveryService.instance;
 	}
+
+	async approveDiscoveredDevice(deviceId: string, reviewedBy: string): Promise<void> {
+		return super.approveDiscoveredDevice(this.tenantId, deviceId, reviewedBy);
+	}
+
+	async rejectDiscoveredDevice(deviceId: string, reviewedBy: string = 'system'): Promise<void> {
+		return super.rejectDiscoveredDevice(this.tenantId, deviceId, reviewedBy);
+	}
 }
 
 export default SecurityDeviceDiscoveryService;
