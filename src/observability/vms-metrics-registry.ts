@@ -290,7 +290,6 @@ export class VmsMetricsRegistry {
 
   constructor() {
   }
-  }
 
   /**
    * Formats all metrics into official Prometheus standard exposition format

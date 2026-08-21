@@ -98,7 +98,7 @@ export class ZeroTouchAutoProvisionerService extends EventEmitter {
     const report: ZeroTouchOnboardingReport = {
       onboardingId,
       branchId,
-      branchName: this.enrollmentService.getBranchStatus(branchId)?.branchName || branchId,
+      branchName: branchId,
       agentId,
       stage: "MONITORING_ACTIVE",
       totalDevicesFound: discoveredDevices.length,
@@ -116,12 +116,6 @@ export class ZeroTouchAutoProvisionerService extends EventEmitter {
 
     // Update branch onboarding state to MONITORING_ACTIVE (100% complete)
     this.enrollmentService.updateBranchStage(branchId, "MONITORING_ACTIVE", 100);
-    const branchStatus = this.enrollmentService.getBranchStatus(branchId);
-    if (branchStatus) {
-      branchStatus.camerasDiscovered = provisionedCameras.length;
-      branchStatus.camerasProvisioned = provisionedCameras.length;
-      branchStatus.elapsedSeconds = elapsedSeconds;
-    }
 
     this.emit("provisioning:completed", report);
     return report;

@@ -26,43 +26,6 @@ export class HaFailoverCoordinator {
     private readonly supervisor: CameraSupervisorService,
     private readonly fencingService: FencingTokenService,
   ) {
-    this.seedRecentEvents();
-  }
-
-  private seedRecentEvents() {
-    const now = Date.now();
-    const mockEvents: HaEvent[] = [
-      {
-        id: randomUUID(),
-        type: "CAMERA_FAILOVER_COMPLETED",
-        tenantId: "tenant-blr-main",
-        cameraId: "CAM-BLR-01",
-        previousNode: "media-node-01",
-        newNode: "media-node-02",
-        previousEpoch: 18451,
-        newEpoch: 18452,
-        failureDetectedAt: new Date(now - 14_400_000).toISOString(),
-        streamRestoredAt: new Date(now - 14_396_100).toISOString(),
-        recordingGapMs: 3900,
-        reason: "Node heartbeat timeout during routine maintenance",
-        timestamp: new Date(now - 14_396_100).toISOString(),
-      },
-      {
-        id: randomUUID(),
-        type: "SPLIT_BRAIN_PREVENTED",
-        tenantId: "tenant-blr-main",
-        cameraId: "CAM-BLR-04",
-        previousNode: "media-node-01",
-        previousEpoch: 18450,
-        newEpoch: 18451,
-        details: { rejectedSegmentPath: "recordings/stale-01.mkv", tokenReceived: 18450, requiredToken: 18451 },
-        reason: "Stale owner attempt rejected after network partition recovery",
-        timestamp: new Date(now - 7_200_000).toISOString(),
-      },
-    ];
-
-    this.events.push(...mockEvents);
-    this.failoverLatencySamplesMs.push(3900, 4200, 3100, 4800);
   }
 
   /**
