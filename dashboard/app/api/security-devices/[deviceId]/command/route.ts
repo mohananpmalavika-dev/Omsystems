@@ -11,7 +11,7 @@ export const dynamic = 'force-dynamic';
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { deviceId: string } }
+  { params }: { params: Promise<{ deviceId: string }> }
 ) {
   try {
     const sessionToken = request.cookies.get('sentinel_access')?.value;
@@ -22,6 +22,7 @@ export async function POST(
       );
     }
 
+    const { deviceId } = await params;
     const body = await request.json();
     const { command, parameters, reason, mfaToken } = body;
 
@@ -36,7 +37,7 @@ export async function POST(
 
     // Execute command with RBAC and MFA checks
     const result = await service.executeCommand(
-      params.deviceId,
+      deviceId,
       command,
       sessionToken, // userId derived from session
       parameters,
