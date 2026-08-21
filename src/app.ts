@@ -34,11 +34,9 @@ import { registerRetentionRoutes } from "./retention/routes/retention.routes.js"
 import { registerAlertAudioRoutes } from "./routes/alert-audio.routes.js";
 import { registerNotificationRoutes } from "./routes/notification.routes.js";
 import { registerDeviceHealthRoutes } from "./routes/device-health.routes.js";
-import { registerRecordingContinuityRoutes } from "./routes/recording-continuity.routes.js";
 import { registerDistributedStateRoutes } from "./distributed-state/routes/distributed-state.routes.js";
 import { registerReliablePtzRoutes } from "./ptz/routes/ptz.routes.js";
 import { registerMediaTokenRoutes } from "./media-auth/routes/media-token.routes.js";
-import { registerOfflineSyncRoutes } from "./offline-sync/routes/offline-sync.routes.js";
 import { registerCentralMonitoringRoutes } from "./routes/central-monitoring.routes.js";
 import { registerOnDemandMediaRoutes } from "./routes/on-demand-media.routes.js";
 import { registerEdgeTelemetryRoutes } from "./routes/edge-telemetry.routes.js";
@@ -105,7 +103,6 @@ import { registerStorageHealthRoutes } from "./routes/storage-health.routes.js";
 import { registerConnectivityHealthRoutes } from "./routes/connectivity-health.routes.js";
 import { registerAlertOperationsRoutes } from "./routes/alert-operations.routes.js";
 import { registerClockMonitoringRoutes } from "./routes/clock-monitoring.routes.js";
-import { registerEdgeGatewayRoutes } from "./routes/edge-gateway.routes.js";
 import { registerDigitalTwinHealthRoutes } from "./routes/digital-twin-health.routes.js";
 import { registerStaleHealthRoutes } from "./routes/stale-health.routes.js";
 import { registerSurveillancePolicyRoutes } from "./routes/surveillance-policy.routes.js";
@@ -2451,14 +2448,6 @@ export async function buildApp(options?: {
     app.log.error({ err }, 'failed to register device health routes');
   }
 
-  // Register First-Class Recording Continuity Subsystem routes
-  try {
-    await registerRecordingContinuityRoutes(app);
-    app.log.info('Recording continuity subsystem routes registered');
-  } catch (err: unknown) {
-    app.log.error({ err }, 'failed to register recording continuity routes');
-  }
-
   // Register Distributed Runtime State & Leases routes
   try {
     await registerDistributedStateRoutes(app);
@@ -2481,14 +2470,6 @@ export async function buildApp(options?: {
     app.log.info('Media token authorization routes registered');
   } catch (err: unknown) {
     app.log.error({ err }, 'failed to register media token routes');
-  }
-
-  // Register Offline Edge Survivability & Store-and-Forward Sync routes
-  try {
-    await registerOfflineSyncRoutes(app);
-    app.log.info('Offline edge sync and store-and-forward routes registered');
-  } catch (err: unknown) {
-    app.log.error({ err }, 'failed to register offline sync routes');
   }
 
   // Register Scalable Central Monitoring Station & Priority Work Queue routes
@@ -2577,14 +2558,6 @@ export async function buildApp(options?: {
     app.log.info('Clock and time-drift monitoring routes registered');
   } catch (err: unknown) {
     app.log.error({ err }, 'failed to register clock monitoring routes');
-  }
-
-  // Register Edge Gateway Protocol & On-Demand Media Session routes
-  try {
-    await registerEdgeGatewayRoutes(app, store);
-    app.log.info('Edge Gateway protocol and media session routes registered');
-  } catch (err: unknown) {
-    app.log.error({ err }, 'failed to register edge gateway routes');
   }
 
   // Register Digital Twin Branch Health & Root-Cause Analysis routes

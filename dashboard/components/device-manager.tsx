@@ -892,21 +892,29 @@ export function DeviceManager() {
 
   async function registerGateway(event: React.FormEvent) {
     event.preventDefault();
-    if (!selectedBranch) return;
+    if (!selectedBranch || !activeBranch) return;
     setSaving(true);
     setError(undefined);
     try {
+      // Use gatewayName if it's set (from the form), otherwise use branch name
+      const agentName = gatewayName.trim() || `${activeBranch.name} Scanner`;
       const activation = await cameraInventoryApi.createGatewayActivation(selectedBranch, {
-        agentName: gatewayName,
+        agentName,
         ttlMinutes: 60,
       });
       setGatewayActivation(activation);
       setGatewayName("");
-      setNotice(activation.bootstrap.media.managed
-        ? `Gateway and named media tunnel created. ${activation.bootstrap.media.publicUrl ?? "The stable hostname"} is delivered automatically on first boot.`
-        : "One-time activation created. Managed media tunnels are not configured on this control plane.");
+      
+      // If this was for download (no gateway name form), show download-specific message
+      if (!gatewayName.trim()) {
+        setNotice(`Package prepared for ${agentName}. Click "Download Ready Package" to get the installer.`);
+      } else {
+        setNotice(activation.bootstrap.media.managed
+          ? `Gateway and named media tunnel created. ${activation.bootstrap.media.publicUrl ?? "The stable hostname"} is delivered automatically on first boot.`
+          : "One-time activation created. Managed media tunnels are not configured on this control plane.");
+      }
     } catch (reason) {
-      setError(messageOf(reason, "Gateway registration failed."));
+      setError(messageOf(reason, "Unable to prepare the installer package."));
     } finally {
       setSaving(false);
     }

@@ -77,29 +77,14 @@ export class CameraSupervisorService {
       startedAt: new Date().toISOString(),
     };
 
-    // Transition state machine
+    // A lease proves ownership only; it is not evidence that the camera stream
+    // is connected. Until a real ingest worker is injected, release the lease
+    // instead of presenting a synthetic STREAMING worker.
     worker.state = "CONNECTING";
-    // Simulate stream connection
-    worker.state = "STREAMING";
-    worker.lastFrameAt = new Date().toISOString();
-    worker.lastKeyframeAt = new Date().toISOString();
+    await this.leaseManager.release(lease);
+    worker.context.abortController.abort("MEDIA_INGEST_WORKER_NOT_CONFIGURED");
+    return null;
 
-    // 3. Setup periodic renewal loop
-    worker.renewIntervalTimer = setInterval(async () => {
-      if (abortController.signal.aborted) {
-        clearInterval(worker.renewIntervalTimer);
-        return;
-      }
-
-      const renewed = await this.leaseManager.renew(lease, this.leaseTtlMs);
-      if (!renewed) {
-        // LEASE LOST -> Instantly abort all active worker operations
-        this.terminateWorker(tenantId, cameraId, "LEASE_RENEWAL_FAILED");
-      }
-    }, this.renewIntervalMs);
-
-    this.workers.set(workerKey, worker);
-    return worker;
   }
 
   /**
