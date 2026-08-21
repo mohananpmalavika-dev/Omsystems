@@ -19,9 +19,7 @@ import {
   makeEntryId,
   computeOverallRating,
 } from "../compatibility-lab/services/lab-matrix.store.js";
-import { LabTestRunner, OfflineLabTransport } from "../compatibility-lab/services/lab-test-runner.service.js";
 import { MatrixPublisher } from "../compatibility-lab/export/matrix-publisher.js";
-import { KNOWN_DEVICES } from "../compatibility-lab/fixtures/known-devices.js";
 import type {
   CompatibilityFeature,
   CompatibilityMatrixEntry,
@@ -96,7 +94,6 @@ const RunTestSchema = z.object({
     password: z.string().min(1),
   }),
   probeTimeoutMs: z.number().int().min(1000).max(30_000).optional(),
-  offline: z.boolean().default(false), // If true, uses OfflineLabTransport (no real network)
 });
 
 // ─── Route Registration ───────────────────────────────────────────────────────
@@ -104,9 +101,6 @@ const RunTestSchema = z.object({
 export async function registerCompatibilityLabRoutes(app: FastifyInstance): Promise<void> {
   const store = getLabMatrixStore("0.1.0");
   const publisher = new MatrixPublisher(store, "0.1.0");
-
-  // Seed known devices on startup (as UNTESTED stubs)
-  store.seedFromFixtures([...KNOWN_DEVICES]);
 
   // ── GET /matrix ───────────────────────────────────────────────────────────
 
@@ -278,22 +272,10 @@ export async function registerCompatibilityLabRoutes(app: FastifyInstance): Prom
         return reply.code(400).send({ error: "validation_failed", issues: parsed.error.issues });
       }
 
-      const { target, features, connection, probeTimeoutMs, offline } = parsed.data;
-
-      // In this version we always use offline transport unless explicitly provided
-      // Real transport injection happens at the service level in future iterations
-      const transport = new OfflineLabTransport();
-      const runner = new LabTestRunner(store, transport, "0.1.0");
-
-      const runResult = await runner.runTests({
-        target: target as CompatibilityMatrixEntry["target"],
-        features: features as CompatibilityFeature[] | undefined,
-        connection: connection as any,
-        probeTimeoutMs,
-        sentinelVersion: "0.1.0",
+      return reply.code(501).send({
+        error: "compatibility_lab_transport_not_configured",
+        message: "Configure a real ONVIF/ISAPI/vendor lab transport before running hardware tests.",
       });
-
-      return reply.code(200).send(runResult);
     },
   );
 }

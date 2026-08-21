@@ -210,7 +210,7 @@ export function DeviceManager() {
   const [showDiscoveredList, setShowDiscoveredList] = useState(false);
   const [showDirectProbeModal, setShowDirectProbeModal] = useState(false);
   const [copiedCommand, setCopiedCommand] = useState<string | null>(null);
-  const [activePlatformTab] = useState<"download">("download");
+  const [activePlatformTab, setActivePlatformTab] = useState<"powershell" | "bash" | "download">("download");
   const [probeIp, setProbeIp] = useState("");
   const [probePort, setProbePort] = useState("");
   const [probeUsername, setProbeUsername] = useState("");
@@ -1792,7 +1792,7 @@ try {
               <div className="flex border-b border-slate-700/60 gap-2">
                 <button
                   type="button"
-                  onClick={() => setActivePlatformTab("powershell")}
+                  disabled
                   className={`pb-2 px-3 text-xs font-semibold border-b-2 transition-all ${
                     activePlatformTab === "powershell"
                       ? "border-blue-500 text-blue-400"
@@ -1800,11 +1800,11 @@ try {
                   }`}
                 >
                   <Terminal size={14} className="inline mr-1.5" />
-                  Windows (PowerShell 1-Liner)
+                  Legacy PowerShell removed
                 </button>
                 <button
                   type="button"
-                  onClick={() => setActivePlatformTab("bash")}
+                  disabled
                   className={`pb-2 px-3 text-xs font-semibold border-b-2 transition-all ${
                     activePlatformTab === "bash"
                       ? "border-blue-500 text-blue-400"
@@ -1812,7 +1812,7 @@ try {
                   }`}
                 >
                   <FileCode size={14} className="inline mr-1.5" />
-                  Linux / NUC / Docker (Bash)
+                  Legacy Bash installer removed
                 </button>
                 <button
                   type="button"

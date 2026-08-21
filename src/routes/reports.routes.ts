@@ -428,11 +428,9 @@ export async function registerReportsRoutes(
         reportData = await store.listIncidents(request.currentUser.tenantId, { limit: 1000 });
         break;
       case "system-health":
-        // Call the system health endpoint logic
-        reportData = { status: "healthy", timestamp: new Date().toISOString() };
-        break;
+        return reply.code(501).send({ error: "system_health_report_provider_not_configured" });
       default:
-        reportData = { message: "Report type not yet implemented" };
+        return reply.code(501).send({ error: "report_type_not_implemented", reportType: body.reportType });
     }
 
     // Format based on requested format
@@ -449,46 +447,16 @@ export async function registerReportsRoutes(
       reply.header("Content-Disposition", `attachment; filename="${body.reportType}-report.csv"`);
       return csvData;
     } else {
-      return {
-        message: "PDF export not yet implemented",
-        reportType: body.reportType,
-        generatedAt: new Date().toISOString(),
-      };
+      return reply.code(501).send({ error: "pdf_report_export_not_configured", reportType: body.reportType });
     }
   });
 
   // Scheduled reports configuration
-  app.get("/v1/reports/scheduled", async (request) => {
-    // Mock scheduled reports - would come from database
-    return {
-      scheduledReports: [
-        {
-          id: "sched-1",
-          name: "Daily Operations Report",
-          reportType: "operations",
-          schedule: "0 0 * * *", // Daily at midnight
-          format: "pdf",
-          recipients: ["admin@example.com"],
-          enabled: true,
-          lastRun: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
-          nextRun: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
-        },
-        {
-          id: "sched-2",
-          name: "Weekly Compliance Report",
-          reportType: "compliance",
-          schedule: "0 0 * * 0", // Weekly on Sunday
-          format: "pdf",
-          recipients: ["compliance@example.com"],
-          enabled: true,
-          lastRun: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(),
-          nextRun: new Date(Date.now()).toISOString(),
-        },
-      ],
-    };
+  app.get("/v1/reports/scheduled", async (_request, reply) => {
+    return reply.code(501).send({ error: "scheduled_report_store_not_configured" });
   });
 
-  app.post("/v1/reports/scheduled", async (request) => {
+  app.post("/v1/reports/scheduled", async (request, reply) => {
     const bodySchema = z.object({
       name: z.string().min(1),
       reportType: z.string(),
@@ -500,28 +468,17 @@ export async function registerReportsRoutes(
 
     const body = bodySchema.parse(request.body);
 
-    // Would save to database
-    return {
-      id: `sched-${Date.now()}`,
-      ...body,
-      createdAt: new Date().toISOString(),
-      lastRun: null,
-      nextRun: calculateNextRun(body.schedule),
-    };
+    return reply.code(501).send({ error: "scheduled_report_store_not_configured" });
   });
 
-  app.delete("/v1/reports/scheduled/:id", async (request) => {
+  app.delete("/v1/reports/scheduled/:id", async (request, reply) => {
     const paramsSchema = z.object({
       id: z.string(),
     });
 
     const params = paramsSchema.parse(request.params);
 
-    // Would delete from database
-    return {
-      success: true,
-      message: `Scheduled report ${params.id} deleted`,
-    };
+    return reply.code(501).send({ error: "scheduled_report_store_not_configured", id: params.id });
   });
 }
 
