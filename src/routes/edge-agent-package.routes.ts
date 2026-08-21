@@ -471,25 +471,31 @@ export async function registerEdgeAgentPackageRoutes(
         controlPlanePublicUrl: requireControlPlaneUrl(request, options.controlPlanePublicUrl),
       };
 
-      // Create a lightweight batch installer that works without PowerShell execution policy issues
+      // Read the batch template
       const bootstrapTemplate = await readFile(join(root, "installer", "bootstrap-installer.bat"), "utf8");
       
-      // Embed the activation parameters directly in the batch file
-      const bootstrapScript = `@echo off
-REM Sentinel Grid Edge Agent Bootstrap Installer
-REM Branch: ${branch.name}
-REM Activation ID: ${body.activationId}
-
-setlocal EnableDelayedExpansion
-
-REM Embedded activation parameters
+      // Find where parameters are checked and inject our values before that
+      const lines = bootstrapTemplate.split('\n');
+      const paramCheckIndex = lines.findIndex(line => line.includes('if "%ActivationCode%"==""'));
+      
+      if (paramCheckIndex === -1) {
+        throw new Error("Batch template is missing parameter validation");
+      }
+      
+      // Create the script with embedded parameters
+      const header = lines.slice(0, 11).join('\n'); // Keep the header
+      const embeddedParams = `
+REM ========== EMBEDDED ACTIVATION PARAMETERS ==========
 set "ActivationCode=${body.activationCode}"
 set "ControlPlaneUrl=${packageOptions.controlPlanePublicUrl}"
-set "AgentName=${body.agentName}"
+set "AgentName=${body.agentName.replace(/"/g, '""')}"
 set "BranchId=${branchId}"
 set "ActivationId=${body.activationId}"
-
-${bootstrapTemplate.split('\n').slice(14).join('\n')}`; // Skip the first 14 lines (header and param parsing)
+REM ====================================================
+`;
+      const rest = lines.slice(paramCheckIndex).join('\n'); // Keep everything after param validation
+      
+      const bootstrapScript = header + embeddedParams + rest;
       
       const safeBranchName = branch.name.replace(/[^a-zA-Z0-9_-]/g, "-");
       await store.writeAudit({
