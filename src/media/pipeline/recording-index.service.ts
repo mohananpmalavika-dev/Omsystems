@@ -35,42 +35,6 @@ export class RecordingIndexService {
   private segments = new Map<string, RecordingSegment>();
   private gaps: RecordingGap[] = [];
 
-  constructor() {
-    this.seedInitialSegments();
-  }
-
-  private seedInitialSegments() {
-    const now = new Date();
-    const oneHourAgo = new Date(now.getTime() - 3600 * 1000);
-
-    // Create continuous 15-minute segments for CAM-27
-    for (let i = 0; i < 4; i++) {
-      const segStart = new Date(oneHourAgo.getTime() + i * 15 * 60 * 1000);
-      const segEnd = new Date(segStart.getTime() + 15 * 60 * 1000);
-
-      const segment: RecordingSegment = {
-        id: `seg-cam27-${Date.now()}-${i}`,
-        tenantId: "omsystems",
-        branchId: "BR-118",
-        cameraId: "cam-27",
-        streamProfileId: "main",
-        startTime: segStart.toISOString(),
-        endTime: segEnd.toISOString(),
-        serverStartTime: segStart.toISOString(),
-        durationMs: 15 * 60 * 1000,
-        codec: "h265",
-        resolution: "3840x2160",
-        bytes: 460800000, // ~440 MB
-        storageNodeId: "storage-volume-07",
-        storagePath: `/mnt/surveillance/volumes/vol07/BR-118/CAM-27/2026/08/17/seg-${String(i + 1).padStart(4, "0")}.mp4`,
-        sha256: `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b8${i + 5}`,
-        status: "complete",
-      };
-
-      this.segments.set(segment.id, segment);
-    }
-  }
-
   /**
    * Query timeline index for continuous segments and detected gaps.
    * Playback and Evidence services strictly query this index - never scan raw disks.

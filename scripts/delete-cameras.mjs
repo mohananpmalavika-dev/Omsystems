@@ -28,7 +28,8 @@ const testOnly = args.includes('--test');
 const confirm = args.includes('--confirm');
 
 // Database connection
-const DATABASE_URL = process.env.DATABASE_URL || 'postgresql://postgres:postgres@localhost:5432/sentinel';
+const DATABASE_URL = process.env.DATABASE_URL;
+if (!DATABASE_URL) throw new Error('DATABASE_URL is required');
 const pool = new Pool({ connectionString: DATABASE_URL });
 
 // Color output

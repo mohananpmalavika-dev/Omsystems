@@ -43,7 +43,7 @@ export default function DeviceManagementPage() {
   // Network tab form states
   const [networkInfo, setNetworkInfo] = useState<any>(null);
   const [targetIp, setTargetIp] = useState("");
-  const [targetSubnet, setTargetSubnet] = useState("255.255.255.0");
+  const [targetSubnet, setTargetSubnet] = useState("");
   const [ipAssignmentStatus, setIpAssignmentStatus] = useState<string | null>(null);
 
   // Template / Drift states
@@ -60,31 +60,18 @@ export default function DeviceManagementPage() {
             id: b.id || b.branchId || b.code,
             name: b.name || b.branchName || `Branch ${b.code || b.id}`,
             code: b.code || b.branchId,
-            region: b.region || b.zone || 'Commercial Zone',
+            region: b.region || b.zone,
             city: b.city || b.location,
           }));
           setBranches(mapped);
           setSelectedBranch(mapped[0].id);
         } else {
-          // Fallback realistic branches
-          const defaultBranches = [
-            { id: "A005", name: "Branch A005 - Adithi Malavika Commercial", code: "A005", region: "South Zone", city: "Kochi" },
-            { id: "A006", name: "Branch A006 - Mumbai BKC Flagship", code: "A006", region: "West Zone", city: "Mumbai" },
-            { id: "A007", name: "Branch A007 - Delhi Connaught Place", code: "A007", region: "North Zone", city: "New Delhi" },
-            { id: "A008", name: "Branch A008 - Bengaluru Whitefield Hub", code: "A008", region: "South Zone", city: "Bengaluru" },
-          ];
-          setBranches(defaultBranches);
-          setSelectedBranch(defaultBranches[0].id);
+          setBranches([]);
+          setSelectedBranch("");
         }
       } catch {
-        const defaultBranches = [
-          { id: "A005", name: "Branch A005 - Adithi Malavika Commercial", code: "A005", region: "South Zone", city: "Kochi" },
-          { id: "A006", name: "Branch A006 - Mumbai BKC Flagship", code: "A006", region: "West Zone", city: "Mumbai" },
-          { id: "A007", name: "Branch A007 - Delhi Connaught Place", code: "A007", region: "North Zone", city: "New Delhi" },
-          { id: "A008", name: "Branch A008 - Bengaluru Whitefield Hub", code: "A008", region: "South Zone", city: "Bengaluru" },
-        ];
-        setBranches(defaultBranches);
-        setSelectedBranch(defaultBranches[0].id);
+        setBranches([]);
+        setSelectedBranch("");
       } finally {
         setLoadingBranches(false);
       }
@@ -107,12 +94,12 @@ export default function DeviceManagementPage() {
     if (selectedBranch) {
       deviceManagementApi.getBranchNetwork(selectedBranch)
         .then(res => setNetworkInfo(res.data))
-        .catch(() => setNetworkInfo({ networkCidr: "192.168.1.0/24", gateway: "192.168.1.1", vlanId: 10 }));
+        .catch(() => setNetworkInfo(null));
     }
 
     deviceManagementApi.getDeviceDrift(selectedDevice.id)
       .then(res => setDriftInfo(res.data))
-      .catch(() => setDriftInfo({ status: "compliant", lastChecked: new Date().toISOString() }));
+      .catch(() => setDriftInfo(null));
   }, [selectedDevice, selectedBranch]);
 
   const handleIpAssign = async (e: React.FormEvent) => {

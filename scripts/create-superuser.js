@@ -99,7 +99,7 @@ async function createSuperuser() {
     console.log(`  Username: ${username}`);
     console.log('  Password: stored in the approved secrets provider');
     console.log(`  Database: omcamera_y1ej`);
-    console.log(`  Host: dpg-d9m3b1rm8hqs739pr5ag-a.oregon-postgres.render.com`);
+    console.log('  Host: supplied through DATABASE_URL at runtime');
     console.log('\nConnection string: supplied through DATABASE_URL at runtime');
 
   } catch (error) {

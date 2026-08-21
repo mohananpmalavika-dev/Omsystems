@@ -53,60 +53,6 @@ export class AuthoritativeStreamManagerService {
   private activeNodeId = "media-node-03";
   private currentGeneration = 843;
 
-  constructor() {
-    this.seedInitialStreams();
-  }
-
-  private seedInitialStreams() {
-    const now = new Date();
-
-    const stream27: StreamSession = {
-      id: "stream:omsystems:cam-27:main",
-      tenantId: "omsystems",
-      cameraId: "cam-27",
-      cameraName: "Vault Door Primary (CAM-27)",
-      branchId: "BR-118",
-      channelId: "17",
-      profileId: "main",
-      ownerNodeId: this.activeNodeId,
-      leaseGeneration: this.currentGeneration,
-      leaseExpiresAt: new Date(now.getTime() + 15000).toISOString(),
-      state: "streaming",
-      source: {
-        protocol: "rtsp",
-        uri: "rtsp://192.168.29.200:554/cam/realmonitor?channel=17&subtype=0",
-        transport: "tcp",
-        codec: "h265",
-        authRef: "vault:cred:cpplus-vault",
-        deviceTimestamp: now,
-      },
-      startedAt: new Date(now.getTime() - 86400000).toISOString(),
-      lastPacketAt: now.toISOString(),
-      lastFrameAt: now.toISOString(),
-      lastKeyframeAt: new Date(now.getTime() - 1200).toISOString(),
-      fps: 25,
-      bitrateBps: 4093291,
-      reconnectCount: 0,
-      consumers: [
-        {
-          id: "cons-rec-481",
-          type: "recording",
-          consumerRef: "recording:rec-481",
-          attachedAt: new Date(now.getTime() - 86400000).toISOString(),
-          isPermanent: true,
-        },
-        {
-          id: "cons-live-993",
-          type: "live",
-          consumerRef: "live:session-993",
-          attachedAt: new Date(now.getTime() - 45000).toISOString(),
-        },
-      ],
-    };
-
-    this.activeStreams.set(stream27.id, stream27);
-  }
-
   /**
    * Acquire a stream for a consumer (Recording, Live View, or Analytics).
    * Guarantees 1 single upstream RTSP connection to the camera.

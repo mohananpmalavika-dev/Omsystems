@@ -1,4 +1,4 @@
-import type { FastifyPluginAsync } from "fastify";
+import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import type { ControlPlaneStore } from "../control-plane-store.js";
 import { UnifiedOperationsService } from "../operations/services/unified-operations.service.js";
@@ -17,10 +17,10 @@ interface P0ControlPlaneOptions {
   store: ControlPlaneStore;
 }
 
-export const registerP0ControlPlaneRoutes: FastifyPluginAsync<P0ControlPlaneOptions> = async (
-  app,
-  options,
-) => {
+export async function registerP0ControlPlaneRoutes(
+  app: FastifyInstance,
+  options: P0ControlPlaneOptions,
+): Promise<void> {
   const operations = new UnifiedOperationsService();
 
   app.get("/v1/mosaic/branches", async (request, reply) => {
@@ -90,12 +90,12 @@ export const registerP0ControlPlaneRoutes: FastifyPluginAsync<P0ControlPlaneOpti
   app.post("/v1/recorders/drivers/probe", async (request, reply) => {
     const user = request.currentUser;
     if (!user) return reply.code(401).send({ error: "authentication_required" });
-    if (user.role !== "admin" && user.role !== "superadmin") {
+    if (user.role !== "super_admin") {
       return reply.code(403).send({ error: "admin_role_required" });
     }
 
     const body = probeDriverSchema.parse(request.body);
-    const accessible = await options.store.listCamerasByBranch(user, body.branchId);
+    const accessible = await options.store.listCamerasByBranch(user, body.branchId, "live:view");
     if (accessible.length === 0) {
       return reply.code(404).send({ error: "branch_not_found_or_not_authorized" });
     }
@@ -118,4 +118,4 @@ export const registerP0ControlPlaneRoutes: FastifyPluginAsync<P0ControlPlaneOpti
       message: "Use authenticated edge telemetry and recorder observations.",
     });
   });
-};
+}

@@ -18,10 +18,10 @@ services:
     command: >
       redis-server
       --appendonly yes
-      --requirepass ${REDIS_PASSWORD:-development-only-password}
+      --requirepass ${REDIS_PASSWORD:?REDIS_PASSWORD is required}
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "redis-cli", "--no-auth-warning", "-a", "${REDIS_PASSWORD:-development-only-password}", "ping"]
+      test: ["CMD", "redis-cli", "--no-auth-warning", "-a", "${REDIS_PASSWORD:?REDIS_PASSWORD is required}", "ping"]
       interval: 5s
       timeout: 3s
       retries: 3
@@ -33,7 +33,7 @@ services:
     environment:
       POSTGRES_DB: sentinel_grid
       POSTGRES_USER: ${DB_USER:-postgres}
-      POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
     ports:
       - "5432:5432"
     volumes:
@@ -53,13 +53,13 @@ services:
     container_name: oms-control-plane-1
     environment:
       # Database
-      DATABASE_URL: postgresql://${DB_USER:-postgres}:${DB_PASSWORD:-postgres}@postgres:5432/sentinel_grid
+      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is required}
       
       # Distributed Events
       DISTRIBUTED_EVENTS: "true"
       REDIS_HOST: redis
       REDIS_PORT: 6379
-      REDIS_PASSWORD: ${REDIS_PASSWORD:-development-only-password}
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD is required}
       REDIS_DB: 0
       EVENT_BUS_NAMESPACE: oms
       SERVER_ID: control-plane-1
@@ -69,7 +69,7 @@ services:
       NODE_ENV: development
       
       # JWT
-      JWT_SECRET: ${JWT_SECRET:-dev-secret-change-in-production}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
     ports:
       - "3000:3000"
     depends_on:
@@ -87,13 +87,13 @@ services:
     container_name: oms-control-plane-2
     environment:
       # Database
-      DATABASE_URL: postgresql://${DB_USER:-postgres}:${DB_PASSWORD:-postgres}@postgres:5432/sentinel_grid
+      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is required}
       
       # Distributed Events
       DISTRIBUTED_EVENTS: "true"
       REDIS_HOST: redis
       REDIS_PORT: 6379
-      REDIS_PASSWORD: ${REDIS_PASSWORD:-development-only-password}
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD is required}
       REDIS_DB: 0
       EVENT_BUS_NAMESPACE: oms
       SERVER_ID: control-plane-2
@@ -103,7 +103,7 @@ services:
       NODE_ENV: development
       
       # JWT
-      JWT_SECRET: ${JWT_SECRET:-dev-secret-change-in-production}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
     ports:
       - "3001:3000"
     depends_on:
@@ -121,13 +121,13 @@ services:
     container_name: oms-control-plane-3
     environment:
       # Database
-      DATABASE_URL: postgresql://${DB_USER:-postgres}:${DB_PASSWORD:-postgres}@postgres:5432/sentinel_grid
+      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is required}
       
       # Distributed Events
       DISTRIBUTED_EVENTS: "true"
       REDIS_HOST: redis
       REDIS_PORT: 6379
-      REDIS_PASSWORD: ${REDIS_PASSWORD:-development-only-password}
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD is required}
       REDIS_DB: 0
       EVENT_BUS_NAMESPACE: oms
       SERVER_ID: control-plane-3
@@ -137,7 +137,7 @@ services:
       NODE_ENV: development
       
       # JWT
-      JWT_SECRET: ${JWT_SECRET:-dev-secret-change-in-production}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
     ports:
       - "3002:3000"
     depends_on:

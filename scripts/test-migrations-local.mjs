@@ -13,7 +13,8 @@ const expectedMigrationCount = readdirSync(
   join(dirname(scriptPath), "..", "database", "migrations"),
 ).filter((filename) => filename.endsWith(".sql")).length;
 const containerName = `sentinel-migration-test-${process.pid}`;
-const databaseUrl = "postgresql://testuser:testpass@127.0.0.1:5433/sentinel_test";
+const databaseUrl = process.env.DATABASE_URL;
+if (!databaseUrl) throw new Error('DATABASE_URL is required');
 
 function run(command, args, options = {}) {
   return new Promise((resolvePromise, reject) => {

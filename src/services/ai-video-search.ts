@@ -1514,180 +1514,64 @@ export class AIVideoSearchService {
    */
   async generateEmbedding(
     videoPath: string,
-    objectBoundingBox?: { x: number; y: number; width: number; height: number }
+    objectBoundingBox?: { x: number; y: number; width: number; height: number },
   ): Promise<number[]> {
-    // Check if ML service is available
-    const mlServiceUrl = process.env.ML_SERVICE_URL || process.env.ANALYTICS_ENGINE_URL;
-    
-    if (mlServiceUrl) {
-      try {
-        // Call external ML service for embedding generation
-        const response = await fetch(`${mlServiceUrl}/api/embeddings/generate`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "Authorization": `Bearer ${process.env.ML_SERVICE_KEY || ""}`,
-          },
-          body: JSON.stringify({
-            videoPath,
-            boundingBox: objectBoundingBox,
-            model: "clip-vit-base-patch32",
-          }),
-        });
-
-        if (response.ok) {
-          const data = await response.json();
-          return data.embedding;
-        }
-      } catch (error) {
-        console.warn("ML service unavailable, using feature-based embeddings", error);
-      }
-    }
-
-    // Fallback: Generate feature-based embedding
-    return this.generateFeatureBasedEmbedding(videoPath, objectBoundingBox);
+    return this.requestEmbedding({
+      videoPath,
+      ...(objectBoundingBox ? { boundingBox: objectBoundingBox } : {}),
+      model: "clip-vit-base-patch32",
+    });
   }
 
-  /**
-   * Generate feature-based embedding from video metadata
-   * This provides a reasonable embedding based on visual features without ML models
-   */
-  private async generateFeatureBasedEmbedding(
-    videoPath: string,
-    objectBoundingBox?: { x: number; y: number; width: number; height: number }
-  ): Promise<number[]> {
-    // Generate 512-dimensional embedding based on extractable features
-    const embedding = new Array(512).fill(0);
-
-    // Use video path hash for consistent randomization
-    const pathHash = this.simpleHash(videoPath);
-    
-    // Generate deterministic "features" based on path
-    for (let i = 0; i < 512; i++) {
-      const seed = pathHash + i;
-      embedding[i] = this.seededRandom(seed);
-    }
-
-    // If bounding box provided, adjust embedding based on position/size
-    if (objectBoundingBox) {
-      const { x, y, width, height } = objectBoundingBox;
-      
-      // Spatial features (first 64 dimensions)
-      for (let i = 0; i < 64; i++) {
-        embedding[i] = embedding[i] * 0.7 + (x + y) / 2000 * 0.3;
-      }
-      
-      // Size features (next 64 dimensions)
-      for (let i = 64; i < 128; i++) {
-        embedding[i] = embedding[i] * 0.7 + (width * height) / 10000 * 0.3;
-      }
-    }
-
-    // Normalize to unit vector
-    return this.normalizeVector(embedding);
-  }
-
-  /**
-   * Generate embedding from object attributes (for similarity search)
-   */
   async generateAttributeEmbedding(attributes: VideoObjectAttributes): Promise<number[]> {
-    const embedding = new Array(512).fill(0);
-
-    // Color embeddings (dimensions 0-127)
-    const colorDims = {
-      red: [1, 0.2, 0.2],
-      blue: [0.2, 0.2, 1],
-      green: [0.2, 1, 0.2],
-      yellow: [1, 1, 0.2],
-      black: [0.1, 0.1, 0.1],
-      white: [0.9, 0.9, 0.9],
-      gray: [0.5, 0.5, 0.5],
-      orange: [1, 0.6, 0.2],
-      purple: [0.6, 0.2, 0.8],
-      pink: [1, 0.6, 0.8],
-      brown: [0.6, 0.4, 0.2],
-    };
-
-    // Upper clothing color
-    if (attributes.upperClothingColor) {
-      const colorVec = colorDims[attributes.upperClothingColor as keyof typeof colorDims] || [0.5, 0.5, 0.5];
-      for (let i = 0; i < 32; i++) {
-        embedding[i] = colorVec[i % 3];
-      }
-    }
-
-    // Lower clothing color
-    if (attributes.lowerClothingColor) {
-      const colorVec = colorDims[attributes.lowerClothingColor as keyof typeof colorDims] || [0.5, 0.5, 0.5];
-      for (let i = 32; i < 64; i++) {
-        embedding[i] = colorVec[i % 3];
-      }
-    }
-
-    // Vehicle color
-    if (attributes.vehicleColor) {
-      const colorVec = colorDims[attributes.vehicleColor as keyof typeof colorDims] || [0.5, 0.5, 0.5];
-      for (let i = 64; i < 96; i++) {
-        embedding[i] = colorVec[i % 3];
-      }
-    }
-
-    // Accessory features (dimensions 128-255)
-    if (attributes.hasBag) embedding[128] = 1.0;
-    if (attributes.hasBackpack) embedding[129] = 1.0;
-    if (attributes.hasHat) embedding[130] = 1.0;
-    if (attributes.hasGlasses) embedding[131] = 1.0;
-
-    // Vehicle type features (dimensions 256-383)
-    const vehicleTypeMap: Record<string, number> = {
-      car: 0, truck: 1, motorcycle: 2, bicycle: 3, bus: 4, van: 5
-    };
-    if (attributes.vehicleType) {
-      const typeIndex = vehicleTypeMap[attributes.vehicleType] || 0;
-      embedding[256 + typeIndex * 8] = 1.0;
-    }
-
-    // Movement features (dimensions 384-511)
-    const speedMap: Record<string, number> = {
-      stationary: 0, walking: 0.3, running: 0.7, slow: 0.2, moderate: 0.5, fast: 0.8
-    };
-    if (attributes.speed) {
-      const speedValue = speedMap[attributes.speed] || 0.5;
-      for (let i = 384; i < 400; i++) {
-        embedding[i] = speedValue;
-      }
-    }
-
-    return this.normalizeVector(embedding);
+    return this.requestEmbedding({
+      attributes,
+      model: "clip-vit-base-patch32",
+    });
   }
 
-  /**
-   * Simple hash function for deterministic randomization
-   */
-  private simpleHash(str: string): number {
-    let hash = 0;
-    for (let i = 0; i < str.length; i++) {
-      const char = str.charCodeAt(i);
-      hash = ((hash << 5) - hash) + char;
-      hash = hash & hash;
+  private async requestEmbedding(payload: Record<string, unknown>): Promise<number[]> {
+    const serviceUrl = process.env.ML_SERVICE_URL ?? process.env.ANALYTICS_ENGINE_URL;
+    const serviceKey = process.env.ML_SERVICE_KEY;
+    if (!serviceUrl || !serviceKey) {
+      throw new FeatureUnavailableError("ml_embedding_service_not_configured");
     }
-    return Math.abs(hash);
-  }
 
-  /**
-   * Seeded random number generator
-   */
-  private seededRandom(seed: number): number {
-    const x = Math.sin(seed) * 10000;
-    return x - Math.floor(x);
-  }
+    let endpoint: URL;
+    try {
+      endpoint = new URL("/api/embeddings/generate", serviceUrl);
+    } catch {
+      throw new FeatureUnavailableError("ml_embedding_service_url_invalid");
+    }
 
-  /**
-   * Normalize vector to unit length
-   */
-  private normalizeVector(vector: number[]): number[] {
-    const magnitude = Math.sqrt(vector.reduce((sum, val) => sum + val * val, 0));
-    return magnitude > 0 ? vector.map(val => val / magnitude) : vector;
+    let response: Response;
+    try {
+      response = await fetch(endpoint, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${serviceKey}`,
+        },
+        body: JSON.stringify(payload),
+        signal: AbortSignal.timeout(15_000),
+      });
+    } catch {
+      throw new FeatureUnavailableError("ml_embedding_service_unavailable");
+    }
+
+    if (!response.ok) {
+      throw new FeatureUnavailableError(`ml_embedding_service_error_${response.status}`);
+    }
+
+    const data = await response.json() as { embedding?: unknown };
+    if (
+      !Array.isArray(data.embedding)
+      || data.embedding.length === 0
+      || !data.embedding.every((value) => typeof value === "number" && Number.isFinite(value))
+    ) {
+      throw new FeatureUnavailableError("ml_embedding_response_invalid");
+    }
+    return data.embedding;
   }
 
   /**

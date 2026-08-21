@@ -66,10 +66,7 @@ import { registerMorningHealthDigestRoutes } from "./routes/morning-health-diges
 import { registerVirtualGuardRoutes } from "./routes/virtual-guard.routes.js";
 import { registerQrtDispatchRoutes } from "./routes/qrt-dispatch.routes.js";
 import { registerHAClusterRoutes } from "./routes/ha-cluster.routes.js";
-import { registerEdgeLifecycleRoutes } from "./routes/edge-lifecycle.routes.js";
 import { registerMobileOperationsRoutes } from "./routes/mobile-operations.routes.js";
-import { registerAssetLifecycleRoutes } from "./assets/routes/asset-lifecycle.routes.js";
-import { registerAuthoritativeMediaPipelineRoutes } from "./media/routes/authoritative-media-pipeline.routes.js";
 import { registerDeviceConnectivityRoutes } from "./device-connectivity/routes/device-connectivity.routes.js";
 import { registerHaClusterRoutes } from "./media/cluster/ha-cluster.routes.js";
 import { registerAdaptiveStreamRoutes } from "./media/adaptive/adaptive-stream.routes.js";
@@ -2527,10 +2524,7 @@ export async function buildApp(options?: {
     await registerVirtualGuardRoutes(app, store);
     await registerQrtDispatchRoutes(app, store);
     await registerHAClusterRoutes(app, store);
-    await registerEdgeLifecycleRoutes(app, store);
     await registerMobileOperationsRoutes(app, store);
-    await registerAssetLifecycleRoutes(app);
-    await registerAuthoritativeMediaPipelineRoutes(app);
     await registerDeviceConnectivityRoutes(app);
     await registerHaClusterRoutes(app);
     await registerAdaptiveStreamRoutes(app);

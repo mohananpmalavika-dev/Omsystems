@@ -91,7 +91,7 @@ COMMIT;
 
 ### Local Development
 ```
-postgresql://sentinel:local-development-only@localhost:5432/sentinel
+postgresql://username:password@localhost:5432/sentinel
 ```
 
 ### Render.com Production

@@ -24,71 +24,19 @@ interface BranchNetworkCardProps {
 export function BranchNetworkCard({ branchId }: BranchNetworkCardProps) {
   const [data, setData] = useState<BranchConnectivityHealth | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   const fetchConnectivity = async () => {
     try {
       setLoading(true);
+      setError(null);
       const res = await fetch(`/api/v1/branches/${encodeURIComponent(branchId)}/connectivity`);
-      if (res.ok) {
-        const json = await res.json();
-        setData(json);
-      }
-    } catch {
-      // Fallback demo data
-      setData({
-        branchId,
-        state: "FAILOVER",
-        currentPath: "BACKUP",
-        primary: {
-          interfaceId: "eth0",
-          role: "PRIMARY",
-          providerName: "Jio Fiber 300M",
-          state: "OFFLINE",
-          gatewayReachable: false,
-          internetReachable: false,
-          packetLossPct: 100,
-          dnsWorking: false,
-          observedAt: new Date(),
-          source: "EDGE_AGENT",
-        },
-        backup: {
-          interfaceId: "wwan0",
-          role: "BACKUP",
-          providerName: "Airtel LTE 4G",
-          state: "ONLINE",
-          gatewayReachable: true,
-          internetReachable: true,
-          latencyMs: 68,
-          jitterMs: 4.2,
-          packetLossPct: 1.1,
-          dnsWorking: true,
-          publicIp: "49.37.112.5",
-          observedAt: new Date(),
-          source: "EDGE_AGENT",
-        },
-        vpn: {
-          state: "CONNECTED",
-          peer: "vpn-central-gw.internal",
-          tunnelInterface: "wg0",
-          latencyMs: 82,
-          lastHandshakeAt: new Date(Date.now() - 6000),
-          observedAt: new Date(),
-          source: "WIREGUARD",
-        },
-        failoverActive: true,
-        lastOutage: {
-          id: "outage-1",
-          branchId,
-          startedAt: new Date(Date.now() - 14 * 60 * 1000),
-          affectedPath: "PRIMARY",
-          primaryAvailable: false,
-          backupAvailable: true,
-          failoverSuccessful: true,
-          reason: "Primary ISP fiber cut. LTE failover active.",
-        },
-        observedAt: new Date(),
-        confidence: 0.98,
-      });
+      if (!res.ok) throw new Error(`Connectivity request failed (${res.status})`);
+      const json = await res.json();
+      setData(json);
+    } catch (reason) {
+      setData(null);
+      setError(reason instanceof Error ? reason.message : "Connectivity telemetry unavailable");
     } finally {
       setLoading(false);
     }
@@ -105,6 +53,15 @@ export function BranchNetworkCard({ branchId }: BranchNetworkCardProps) {
       <div className="p-5 rounded-2xl bg-slate-900 border border-slate-800 text-slate-400 flex items-center gap-2">
         <RefreshCw className="w-4 h-4 animate-spin" />
         <span>Loading WAN connectivity telemetry...</span>
+      </div>
+    );
+  }
+
+  if (!data) {
+    return (
+      <div className="p-5 rounded-2xl bg-slate-900 border border-slate-800 text-slate-400">
+        <div className="flex items-center gap-2 text-amber-300"><AlertTriangle className="w-4 h-4" />WAN telemetry unavailable</div>
+        {error && <p className="mt-2 text-xs text-slate-500">{error}</p>}
       </div>
     );
   }
@@ -150,7 +107,7 @@ export function BranchNetworkCard({ branchId }: BranchNetworkCardProps) {
       </div>
 
       {/* Path Failover Alert Banner */}
-      {data?.state === "FAILOVER" && (
+            {data.state === "FAILOVER" && (
         <div className="p-3 bg-orange-950/70 border border-orange-800 rounded-xl flex items-center justify-between text-xs text-orange-200">
           <div className="flex items-center gap-2">
             <AlertTriangle className="w-4 h-4 text-orange-400 shrink-0" />
@@ -182,7 +139,7 @@ export function BranchNetworkCard({ branchId }: BranchNetworkCardProps) {
           </div>
 
           <div className="text-xs font-bold text-slate-100">
-            {data?.primary.providerName ?? "Primary Fiber Link"}
+            {data.primary.providerName ?? "Not reported"}
           </div>
 
           <div className="space-y-1 text-[11px] text-slate-400 font-mono">
@@ -221,7 +178,7 @@ export function BranchNetworkCard({ branchId }: BranchNetworkCardProps) {
           </div>
 
           <div className="text-xs font-bold text-slate-100">
-            {data?.backup?.providerName ?? "Backup LTE / 4G"}
+            {data.backup?.providerName ?? "Not reported"}
           </div>
 
           <div className="space-y-1 text-[11px] text-slate-400 font-mono">
@@ -258,7 +215,7 @@ export function BranchNetworkCard({ branchId }: BranchNetworkCardProps) {
           </div>
 
           <div className="text-xs font-bold text-slate-100">
-            {data?.vpn?.source ?? "WIREGUARD"} ({data?.vpn?.tunnelInterface ?? "wg0"})
+            {data.vpn ? `${data.vpn.source} (${data.vpn.tunnelInterface})` : "Not reported"}
           </div>
 
           <div className="space-y-1 text-[11px] text-slate-400 font-mono">
@@ -268,11 +225,15 @@ export function BranchNetworkCard({ branchId }: BranchNetworkCardProps) {
             </div>
             <div className="flex justify-between">
               <span>Peer:</span>
-              <span className="text-slate-300 truncate max-w-[120px]">{data?.vpn?.peer ?? "central-gw"}</span>
+              <span className="text-slate-300 truncate max-w-[120px]">{data.vpn?.peer ?? "--"}</span>
             </div>
             <div className="flex justify-between">
               <span>Handshake:</span>
-              <span className="text-emerald-400">7s ago</span>
+              <span className="text-emerald-400">
+                {data.vpn?.lastHandshakeAt
+                  ? `${Math.max(0, Math.round((Date.now() - new Date(data.vpn.lastHandshakeAt).getTime()) / 1000))}s ago`
+                  : "--"}
+              </span>
             </div>
           </div>
         </div>
