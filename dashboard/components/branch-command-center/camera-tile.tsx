@@ -1,21 +1,22 @@
 "use client";
 
-import React, { useState } from "react";
+import { useState, type MouseEvent, type ReactNode } from "react";
 import {
-  Video,
-  WifiOff,
   AlertOctagon,
-  Pin,
-  Maximize2,
-  MoreVertical,
-  ShieldAlert,
-  Play,
   Camera as CameraIcon,
   Layers,
-  Activity,
+  LoaderCircle,
+  Maximize2,
+  Pin,
+  Radio,
+  ShieldAlert,
+  WifiOff,
 } from "lucide-react";
-import type { BranchCameraOperationalState } from "./types";
+import { HlsPlayer } from "@/components/hls-player";
+import { startLiveFromBrowser } from "@/lib/live-client";
+import type { LiveSessionResponse } from "@/lib/types";
 import { CameraDiagnosticModal } from "./camera-diagnostic-modal";
+import type { BranchCameraOperationalState } from "./types";
 
 export interface CameraTileProps {
   camera: BranchCameraOperationalState;
@@ -31,7 +32,7 @@ export interface CameraTileProps {
 
 export function CameraTile({
   camera,
-  isDecoderAllocated = true,
+  isDecoderAllocated = false,
   isPinned = false,
   isSelected = false,
   quality = "SUB",
@@ -41,160 +42,176 @@ export function CameraTile({
   onInvestigate,
 }: CameraTileProps) {
   const [showDiagnosticModal, setShowDiagnosticModal] = useState(false);
+  const [session, setSession] = useState<LiveSessionResponse | null>(null);
+  const [starting, setStarting] = useState(false);
+  const [streamError, setStreamError] = useState<string | null>(null);
 
   const isOffline = camera.health.connectivity === "OFFLINE" || camera.health.videoLoss === "DETECTED";
   const isNotRecording = camera.health.recording === "NOT_RECORDING";
   const isAlarmActive = Boolean(camera.alertActive || camera.alertSeverity);
   const isCriticalAlarm = camera.alertSeverity === "CRITICAL";
+  const live = Boolean(session?.hls?.url);
+  const advertisedProfile = quality === "MAIN"
+    ? camera.streamProfiles?.main
+    : camera.streamProfiles?.sub ?? camera.streamProfiles?.main;
+  const width = Number(advertisedProfile?.width);
+  const height = Number(advertisedProfile?.height);
+  const fps = Number(advertisedProfile?.fps);
+  const profileLabel = Number.isFinite(width) && Number.isFinite(height) && width > 0 && height > 0
+    ? `${width}×${height}${Number.isFinite(fps) && fps > 0 ? ` ${fps}fps` : ""}`
+    : null;
 
-  // Determine operational presentation badge
-  let presentationBadge = (
-    <span className="px-2 py-0.5 text-[10px] font-bold rounded bg-emerald-950/90 text-emerald-300 border border-emerald-700">
-      LIVE ✓ RECORD ✓
-    </span>
+  const startLive = async (event: MouseEvent<HTMLButtonElement>) => {
+    event.stopPropagation();
+    setStarting(true);
+    setStreamError(null);
+    try {
+      const nextSession = await startLiveFromBrowser(camera.cameraId, quality === "MAIN" ? "main" : "sub");
+      if (!nextSession.hls?.url) throw new Error("No playable HLS stream was returned by the media gateway.");
+      setSession(nextSession);
+    } catch (reason) {
+      setSession(null);
+      setStreamError(reason instanceof Error ? reason.message : "Live stream is unavailable.");
+    } finally {
+      setStarting(false);
+    }
+  };
+
+  const presentationBadge = isOffline ? (
+    <StatusBadge tone="rose">SIGNAL LOST</StatusBadge>
+  ) : isNotRecording ? (
+    <StatusBadge tone="amber">NOT RECORDING</StatusBadge>
+  ) : live && camera.health.recording === "RECORDING" ? (
+    <StatusBadge tone="emerald">LIVE · RECORDING</StatusBadge>
+  ) : camera.health.recording === "RECORDING" ? (
+    <StatusBadge tone="emerald">RECORDING</StatusBadge>
+  ) : (
+    <StatusBadge tone="slate">{isDecoderAllocated ? "READY" : "QUEUED"}</StatusBadge>
   );
-
-  if (isOffline) {
-    presentationBadge = (
-      <span className="px-2 py-0.5 text-[10px] font-bold rounded bg-rose-950/90 text-rose-300 border border-rose-700">
-        SIGNAL LOST
-      </span>
-    );
-  } else if (isNotRecording) {
-    presentationBadge = (
-      <span className="px-2 py-0.5 text-[10px] font-bold rounded bg-amber-950/90 text-amber-300 border border-amber-700">
-        LIVE ✓ RECORD ✕
-      </span>
-    );
-  } else if (!isDecoderAllocated) {
-    presentationBadge = (
-      <span className="px-2 py-0.5 text-[10px] font-bold rounded bg-slate-800 text-slate-300 border border-slate-700">
-        SNAPSHOT
-      </span>
-    );
-  }
 
   return (
     <>
       <div
         onClick={() => onSelect?.(camera.cameraId)}
         onDoubleClick={() => onDoubleClick?.(camera.cameraId)}
-        className={`group relative flex flex-col justify-between aspect-video rounded-lg overflow-hidden bg-slate-900 border transition-all cursor-pointer select-none ${
+        className={`group relative flex aspect-video select-none flex-col justify-between overflow-hidden rounded-lg border bg-slate-900 transition-all ${
           isCriticalAlarm
-            ? "border-rose-500 ring-2 ring-rose-500/50 shadow-rose-950/50 shadow-lg"
+            ? "border-rose-500 ring-2 ring-rose-500/50 shadow-lg shadow-rose-950/50"
             : isSelected
-            ? "border-sky-500 ring-2 ring-sky-500/40"
-            : "border-slate-800 hover:border-slate-700"
+              ? "border-sky-500 ring-2 ring-sky-500/40"
+              : "border-slate-800 hover:border-slate-700"
         }`}
       >
-        {/* Top Overlay Bar */}
-        <div className="absolute top-0 inset-x-0 z-20 flex items-center justify-between p-2 bg-gradient-to-b from-black/80 via-black/40 to-transparent">
+        <div className="absolute inset-x-0 top-0 z-20 flex items-center justify-between bg-gradient-to-b from-black/80 via-black/40 to-transparent p-2">
           <div className="flex items-center gap-1.5 font-mono text-xs font-semibold text-slate-100 drop-shadow">
-            <CameraIcon className="w-3.5 h-3.5 text-slate-400" />
+            <CameraIcon className="h-3.5 w-3.5 text-slate-400" />
             <span>{camera.name || `CH-${camera.channelNumber}`}</span>
           </div>
-
           <div className="flex items-center gap-1.5">
             {presentationBadge}
-
             <button
-              title="View 7-Layer Video Path Diagnostics"
-              onClick={(e) => {
-                e.stopPropagation();
+              type="button"
+              title="View video path diagnostics"
+              onClick={(event) => {
+                event.stopPropagation();
                 setShowDiagnosticModal(true);
               }}
-              className="p-1 rounded text-slate-400 hover:text-indigo-300 hover:bg-slate-800 transition-colors"
+              className="rounded p-1 text-slate-400 transition-colors hover:bg-slate-800 hover:text-indigo-300"
             >
-              <Layers className="w-3.5 h-3.5" />
+              <Layers className="h-3.5 w-3.5" />
             </button>
-
             <button
-              onClick={(e) => {
-                e.stopPropagation();
+              type="button"
+              title={isPinned ? "Unpin camera" : "Pin camera"}
+              onClick={(event) => {
+                event.stopPropagation();
                 onPinToggle?.(camera.cameraId);
               }}
-              className={`p-1 rounded transition-colors ${
-                isPinned ? "text-amber-400 bg-amber-950/70" : "text-slate-400 opacity-0 group-hover:opacity-100 hover:text-slate-200"
+              className={`rounded p-1 transition-colors ${
+                isPinned ? "bg-amber-950/70 text-amber-400" : "text-slate-400 opacity-0 hover:text-slate-200 group-hover:opacity-100"
               }`}
             >
-              <Pin className="w-3.5 h-3.5" />
+              <Pin className="h-3.5 w-3.5" />
             </button>
           </div>
         </div>
 
-        {/* Main Tile Body */}
-        <div className="relative flex-1 w-full h-full flex items-center justify-center bg-slate-950">
+        <div className="relative flex h-full w-full flex-1 items-center justify-center bg-slate-950">
           {isOffline ? (
-            // Offline Screen
             <div className="flex flex-col items-center justify-center p-4 text-center">
-              <WifiOff className="w-8 h-8 text-rose-400/80 mb-2" />
-              <div className="text-xs font-semibold text-rose-300 font-mono">SIGNAL LOST</div>
-              <div className="text-[10px] text-slate-500 mt-1">Check NVR Channel Loss</div>
+              <WifiOff className="mb-2 h-8 w-8 text-rose-400/80" />
+              <div className="font-mono text-xs font-semibold text-rose-300">SIGNAL LOST</div>
+              <div className="mt-1 text-[10px] text-slate-500">Camera or recorder channel is unavailable</div>
             </div>
+          ) : session?.hls ? (
+            <HlsPlayer
+              url={session.hls.url}
+              bearerToken={session.hls.bearerToken ?? ""}
+              cameraName={camera.name}
+              cameraId={camera.cameraId}
+            />
           ) : (
-            // Video / Snapshot Emulation Display
-            <div className="relative w-full h-full flex items-center justify-center bg-slate-900 overflow-hidden">
-              {/* Simulated Live Frame Background */}
-              <div className="absolute inset-0 bg-gradient-to-tr from-slate-950 via-slate-900 to-slate-800 flex items-center justify-center">
-                <span className="text-slate-700 font-mono text-xs font-bold tracking-widest uppercase">
-                  {isDecoderAllocated ? `${quality} STREAM` : "STATIC SNAPSHOT"}
-                </span>
-              </div>
-
-              {/* Critical Alert Overlay */}
-              {isAlarmActive && (
-                <div className="absolute inset-x-0 bottom-8 z-20 flex items-center gap-1.5 px-3 py-1 bg-rose-950/90 border-y border-rose-700 text-rose-200 text-[11px] font-mono font-bold animate-pulse">
-                  <ShieldAlert className="w-3.5 h-3.5 text-rose-400 shrink-0" />
-                  <span className="truncate">ALARM: Intrusion detected</span>
-                </div>
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-slate-950 px-5 text-center">
+              <CameraIcon className="h-7 w-7 text-slate-600" />
+              <span className="text-xs font-medium text-slate-400">
+                {streamError || (isDecoderAllocated ? "Live stream not started" : "Waiting for decoder capacity")}
+              </span>
+              {isDecoderAllocated && (
+                <button
+                  type="button"
+                  onClick={startLive}
+                  disabled={starting}
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-500 disabled:opacity-60"
+                >
+                  {starting ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> : <Radio className="h-3.5 w-3.5" />}
+                  {starting ? "Authorizing…" : "Watch live"}
+                </button>
               )}
+            </div>
+          )}
+
+          {isAlarmActive && (
+            <div className="absolute inset-x-0 bottom-8 z-20 flex items-center gap-1.5 border-y border-rose-700 bg-rose-950/90 px-3 py-1 font-mono text-[11px] font-bold text-rose-200">
+              <ShieldAlert className="h-3.5 w-3.5 shrink-0 text-rose-400" />
+              <span className="truncate">ACTIVE {camera.alertSeverity ?? "CAMERA"} ALERT</span>
             </div>
           )}
         </div>
 
-        {/* Bottom Status Footer */}
-        <div className="absolute bottom-0 inset-x-0 z-20 flex items-center justify-between px-2.5 py-1.5 bg-gradient-to-t from-black/90 via-black/50 to-transparent text-[11px] font-mono">
-          {/* Left: Stream / Recording Status */}
+        <div className="absolute inset-x-0 bottom-0 z-20 flex items-center justify-between bg-gradient-to-t from-black/90 via-black/50 to-transparent px-2.5 py-1.5 font-mono text-[11px]">
           <div className="flex items-center gap-2">
-            {!isOffline && (
-              <>
-                <div className="flex items-center gap-1 text-emerald-400 font-medium">
-                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
-                  <span>LIVE</span>
-                </div>
-
-                {isNotRecording ? (
-                  <div
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onInvestigate?.(camera.cameraId);
-                    }}
-                    className="flex items-center gap-1 text-rose-400 font-bold hover:underline cursor-pointer"
-                  >
-                    <AlertOctagon className="w-3 h-3" />
-                    <span>REC ✕</span>
-                  </div>
-                ) : (
-                  <div className="flex items-center gap-1 text-emerald-400">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-                    <span>REC ●</span>
-                  </div>
-                )}
-              </>
+            {live && (
+              <div className="flex items-center gap-1 font-medium text-emerald-400">
+                <span className="h-2 w-2 rounded-full bg-emerald-500" />
+                <span>LIVE</span>
+              </div>
             )}
+            {isNotRecording ? (
+              <button
+                type="button"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onInvestigate?.(camera.cameraId);
+                }}
+                className="flex items-center gap-1 font-bold text-rose-400 hover:underline"
+              >
+                <AlertOctagon className="h-3 w-3" />
+                <span>NOT RECORDING</span>
+              </button>
+            ) : camera.health.recording === "RECORDING" ? (
+              <div className="flex items-center gap-1 text-emerald-400">
+                <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+                <span>RECORDING</span>
+              </div>
+            ) : null}
           </div>
-
-          {/* Right: Resolution Profile & Expand Icon */}
           <div className="flex items-center gap-2 text-slate-400">
-            {!isOffline && (
-              <span className="text-[10px] uppercase">{quality === "MAIN" ? "1080p" : "360p"}</span>
-            )}
-            <Maximize2 className="w-3 h-3 opacity-0 group-hover:opacity-100 hover:text-slate-200" />
+            {profileLabel && <span className="text-[10px] uppercase">{profileLabel}</span>}
+            <Maximize2 className="h-3 w-3 opacity-0 group-hover:opacity-100" />
           </div>
         </div>
       </div>
 
-      {/* 7-Layer Diagnostic Modal */}
       <CameraDiagnosticModal
         isOpen={showDiagnosticModal}
         onClose={() => setShowDiagnosticModal(false)}
@@ -202,4 +219,20 @@ export function CameraTile({
       />
     </>
   );
+}
+
+function StatusBadge({
+  tone,
+  children,
+}: {
+  tone: "rose" | "amber" | "emerald" | "slate";
+  children: ReactNode;
+}) {
+  const classes = {
+    rose: "border-rose-700 bg-rose-950/90 text-rose-300",
+    amber: "border-amber-700 bg-amber-950/90 text-amber-300",
+    emerald: "border-emerald-700 bg-emerald-950/90 text-emerald-300",
+    slate: "border-slate-700 bg-slate-800 text-slate-300",
+  };
+  return <span className={`rounded border px-2 py-0.5 text-[10px] font-bold ${classes[tone]}`}>{children}</span>;
 }

@@ -5,7 +5,45 @@ import { CameraTile } from "./camera-tile";
 import { ViewerCapacityIndicator } from "../video-wall/viewer-capacity-indicator";
 import { useViewerCapacity } from "@/hooks/use-viewer-capacity";
 import type { BranchCameraOperationalState, CameraFilter } from "./types";
-import type { StreamCandidate } from "@/lib/viewer-capacity";
+import type { CodecType, StreamCandidate, StreamProfile, TransportType } from "@/lib/viewer-capacity";
+
+function getAdvertisedStream(camera: BranchCameraOperationalState, selected: boolean): StreamProfile | null {
+  const advertised = selected
+    ? camera.streamProfiles?.main
+    : camera.streamProfiles?.sub ?? camera.streamProfiles?.main;
+  if (!advertised || typeof advertised !== "object") return null;
+
+  const codecValue = String(advertised.codec ?? "").toUpperCase();
+  const codec: CodecType | null = codecValue === "H264" || codecValue === "H265" || codecValue === "AV1"
+    ? codecValue
+    : null;
+  const transportValue = String(advertised.transport ?? "OTHER").toUpperCase();
+  const transport: TransportType = transportValue === "WEBRTC" || transportValue === "HLS" || transportValue === "MSE"
+    ? transportValue
+    : "OTHER";
+  const width = Number(advertised.width);
+  const height = Number(advertised.height);
+  const fps = Number(advertised.fps);
+  const bitrateMbps = Number(advertised.bitrateMbps ?? (
+    advertised.bitrateKbps !== undefined
+      ? Number(advertised.bitrateKbps) / 1000
+      : Number(advertised.estimatedBitrateKbps) / 1000
+  ));
+  if (!codec || ![width, height, fps, bitrateMbps].every((value) => Number.isFinite(value) && value > 0)) {
+    return null;
+  }
+
+  return {
+    cameraId: camera.cameraId,
+    codec,
+    width,
+    height,
+    fps,
+    bitrateMbps,
+    streamType: selected ? "MAIN" : "SUB",
+    transport,
+  };
+}
 
 export interface BranchCameraWallProps {
   branchId: string;
@@ -34,35 +72,29 @@ export function BranchCameraWall({
 
   // Map cameras to scheduling candidates
   const candidates: StreamCandidate[] = useMemo(() => {
-    return cameras.map((cam, index) => {
+    return cameras.flatMap((cam) => {
       const isSelected = cam.cameraId === selectedCameraId;
       const isPinned = pinnedCameraIds.has(cam.cameraId);
       const isAlarm = Boolean(cam.alertActive || cam.alertSeverity);
       const isOffline = cam.health.connectivity === "OFFLINE";
       const isNotRecording = cam.health.recording === "NOT_RECORDING";
 
-      return {
+      const stream = getAdvertisedStream(cam, isSelected);
+      if (!stream) return [];
+
+      return [{
         cameraId: cam.cameraId,
         branchId,
         priority: isSelected ? "P0" : isAlarm ? "P1" : isPinned ? "P3" : isNotRecording ? "P2" : "P4",
         requestedQuality: isSelected ? "FOCUSED" : "GRID",
-        stream: {
-          cameraId: cam.cameraId,
-          codec: "H264",
-          width: isSelected ? 1920 : 640,
-          height: isSelected ? 1080 : 360,
-          fps: isSelected ? 25 : 8,
-          bitrateMbps: isSelected ? 3.5 : 0.45,
-          streamType: isSelected ? "MAIN" : "SUB",
-          transport: "WEBRTC",
-        },
+        stream,
         visible: true,
         selected: isSelected,
         alarmActive: isAlarm,
         alertSeverity: cam.alertSeverity,
         pinned: isPinned,
         healthState: isOffline ? "OFFLINE" : isNotRecording ? "WARNING" : "HEALTHY",
-      };
+      }];
     });
   }, [cameras, branchId, selectedCameraId, pinnedCameraIds]);
 

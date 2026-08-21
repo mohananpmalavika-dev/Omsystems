@@ -115,16 +115,16 @@ export interface HaEvent {
 }
 
 export interface HaClusterMetrics {
-  totalCameras: number;
+  totalCameras: number | null;
   protectedCameras: number;
-  unprotectedCameras: number;
+  unprotectedCameras: number | null;
   failoversToday: number;
   successfulFailovers: number;
   failedFailovers: number;
-  medianRecoveryMs: number;
-  p95RecoveryMs: number;
-  p99RecoveryMs: number;
-  maxRecordingGapMs: number;
+  medianRecoveryMs: number | null;
+  p95RecoveryMs: number | null;
+  p99RecoveryMs: number | null;
+  maxRecordingGapMs: number | null;
   activeNodes: number;
   healthyNodes: number;
   totalCapacityHeadroomPct: number;

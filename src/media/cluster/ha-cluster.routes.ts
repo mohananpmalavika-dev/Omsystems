@@ -14,11 +14,12 @@ import {
 
 export async function registerHaClusterRoutes(app: FastifyInstance) {
   // 1. Cluster Status & SLA Performance
-  app.get("/api/ha/status", async (_request, reply) => {
+  app.get("/api/ha/status", async (request, reply) => {
+    const tenantId = request.currentUser.tenantId;
     const nodes = mediaNodeRegistry.listAllNodes();
-    const metrics = haFailoverCoordinator.getMetrics();
-    const recentEvents = haFailoverCoordinator.getRecentEvents(10);
-    const activeLeases = await cameraLeaseService.listActiveLeases();
+    const activeLeases = await cameraLeaseService.listActiveLeases(tenantId);
+    const metrics = haFailoverCoordinator.getMetrics(activeLeases, tenantId);
+    const recentEvents = haFailoverCoordinator.getRecentEvents(10, tenantId);
 
     return reply.code(200).send({
       success: true,
@@ -33,11 +34,7 @@ export async function registerHaClusterRoutes(app: FastifyInstance) {
 
   // 2. Active Distributed Leases
   app.get("/api/ha/leases", async (request, reply) => {
-    const query = z.object({
-      tenantId: z.string().optional(),
-    }).parse(request.query);
-
-    const leases = await cameraLeaseService.listActiveLeases(query.tenantId);
+    const leases = await cameraLeaseService.listActiveLeases(request.currentUser.tenantId);
     return reply.code(200).send({
       success: true,
       data: leases,
@@ -46,11 +43,7 @@ export async function registerHaClusterRoutes(app: FastifyInstance) {
 
   // 3. Camera Placement Plans across Failure Domains
   app.get("/api/ha/placements", async (request, reply) => {
-    const query = z.object({
-      tenantId: z.string().optional(),
-    }).parse(request.query);
-
-    const plans = mediaPlacementService.listPlacementPlans(query.tenantId);
+    const plans = mediaPlacementService.listPlacementPlans(request.currentUser.tenantId);
     return reply.code(200).send({
       success: true,
       data: plans,
@@ -58,8 +51,8 @@ export async function registerHaClusterRoutes(app: FastifyInstance) {
   });
 
   // 4. HA Audit Events
-  app.get("/api/ha/events", async (_request, reply) => {
-    const events = haFailoverCoordinator.getRecentEvents(50);
+  app.get("/api/ha/events", async (request, reply) => {
+    const events = haFailoverCoordinator.getRecentEvents(50, request.currentUser.tenantId);
     return reply.code(200).send({
       success: true,
       data: events,
@@ -81,6 +74,10 @@ export async function registerHaClusterRoutes(app: FastifyInstance) {
       codec: z.string().min(1),
       storagePath: z.string().min(1),
     }).parse(request.body);
+
+    if (body.tenantId !== request.currentUser.tenantId) {
+      return reply.code(403).send({ success: false, error: "cross_tenant_segment_commit_denied" });
+    }
 
     const result = fencingTokenService.verifyAndCommitSegment(body as any);
     if (!result.accepted) {

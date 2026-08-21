@@ -230,8 +230,6 @@ export default function AlertCommandCenterPage() {
     return () => events.close();
   }, []);
 
-  // ─── Synthetic Alert Generator ───────────────────────────────────────────────
-
   // ─── Operational Actions ────────────────────────────────────────────────────
 
   const act = async (alert: CommandAlert, action: "acknowledge" | "escalate" | "assign" | "resolve" | "suppress") => {
@@ -448,7 +446,6 @@ export default function AlertCommandCenterPage() {
             <span>Create Incident</span>
           </Link>
 
-          {/* Test P1 Alert Synthetic Button */}
           {/* Policies link */}
           <Link
             href="/operations/alert-notification-policy"

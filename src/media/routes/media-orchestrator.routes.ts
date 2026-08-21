@@ -81,8 +81,8 @@ export async function registerMediaOrchestratorRoutes(
   // 1. Create or register viewer session
   app.post("/v1/media/viewer/session", async (request: FastifyRequest, reply: FastifyReply) => {
     const body = createSessionSchema.parse(request.body || {});
-    const userId = (request as any).currentUser?.id || "user-anonymous";
-    const tenantId = (request as any).currentUser?.tenantId || "tenant-default";
+    const userId = request.currentUser.id;
+    const tenantId = request.currentUser.tenantId;
 
     const session = await orchestrator.createViewerSession(
       userId,

@@ -722,13 +722,12 @@ export function DeviceManager() {
       const targetName = credentialActivation.displayName || credentialActivation.model || "IP Camera";
       setCredentialActivation(undefined);
       
-      // Auto-approve the camera immediately once credentials are submitted
       await cameraInventoryApi.approveDiscovery(selectedBranch, targetId, {
         name: targetName,
-      }).catch(() => undefined);
+      });
       
       markDiscoveryReviewStatus(targetId, "approved");
-      setNotice(`Credentials verified! ${targetName} is approved and live streaming.`);
+      setNotice(`Credentials verified and ${targetName} was approved.`);
       await refreshBranch(selectedBranch);
     } catch (reason) {
       if (isAgentUpdateRequired(reason)) {
@@ -764,29 +763,10 @@ export function DeviceManager() {
     scanAbortedRef.current = false;
     try {
       const name = discovered.displayName || discovered.model || `${discovered.vendor || "IP"} Camera (${discovered.ipAddress})`;
-      try {
-        await cameraInventoryApi.approveDiscovery(selectedBranch, discovered.id, {
-          name,
-          protocol: discovered.onvifSupport ? "onvif-t" : "rtsp",
-        });
-      } catch (err) {
-        // Fallback: If discovery approval endpoint has an identity issue, directly create the camera in branch inventory
-        try {
-          await cameraInventoryApi.createCamera(selectedBranch, {
-            name,
-            vendor: discovered.vendor || discovered.manufacturer || "other",
-            model: discovered.model || "IP Camera",
-            channel: discovered.recorderChannel ?? 1,
-            protocol: discovered.onvifSupport ? "onvif-t" : "rtsp",
-            ipAddress: discovered.ipAddress,
-            macAddress: discovered.macAddress,
-            serialNumber: discovered.serialNumber,
-            connectionSecretRef: `edge://${discovered.edgeAgentId || ""}/${discovered.id}`,
-            connectionTransport: "edge-gateway",
-            sourceType: discovered.sourceType || "ip-camera",
-          });
-        } catch {}
-      }
+      await cameraInventoryApi.approveDiscovery(selectedBranch, discovered.id, {
+        name,
+        protocol: discovered.onvifSupport ? "onvif-t" : "rtsp",
+      });
       markDiscoveryReviewStatus(discovered.id, "approved");
       setPreviewDiscoveryId(undefined);
       setPreviewNameDraft("");

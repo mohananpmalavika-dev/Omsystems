@@ -64,7 +64,6 @@ import {
   Workflow,
   Wrench,
   X,
-  Zap,
 } from "lucide-react";
 import { AppLayout } from "@/components/app-layout";
 
@@ -141,207 +140,10 @@ interface DeadLetterRecord {
   payload?: any;
 }
 
-const CATALOG_ITEMS: ConnectorCatalogItem[] = [
-  // Video & Surveillance
-  {
-    type: "cpplus",
-    category: "surveillance",
-    name: "CP PLUS Fleet (NVR / DVR)",
-    vendor: "CP PLUS Germany / India",
-    description: "Enterprise NVR/DVR fleet synchronization, channel auto-discovery, sub-stream orchestration, and PTZ telemetry.",
-    version: "2.4.0",
-    isPopular: true,
-    configSchema: {
-      requiredFields: ["endpoint", "username", "password"],
-      optionalFields: ["port", "transport", "channelRange", "pollingIntervalSeconds"],
-      secrets: ["password"],
-    },
-  },
-  {
-    type: "onvif",
-    category: "surveillance",
-    name: "ONVIF Profile S/G/T Generic",
-    vendor: "ONVIF Standard",
-    description: "Vendor-agnostic surveillance camera discovery, PTZ presets, event webhooks, and RTSP stream negotiation.",
-    version: "2.1.0",
-    isPopular: true,
-    configSchema: {
-      requiredFields: ["serviceUrl", "username", "password"],
-      optionalFields: ["authMode", "wsSecurityTimeoutSeconds"],
-      secrets: ["password"],
-    },
-  },
-  {
-    type: "dahua",
-    category: "surveillance",
-    name: "Dahua DH-IPC / NVR Gateway",
-    vendor: "Dahua Technology",
-    description: "Direct RPC integration with Dahua recording appliances for AI metadata, tripwires, and dual storage.",
-    version: "2.0.1",
-    configSchema: {
-      requiredFields: ["ipAddress", "port", "credentials"],
-      secrets: ["credentials"],
-    },
-  },
-  {
-    type: "hikvision",
-    category: "surveillance",
-    name: "Hikvision ISAPI Gateway",
-    vendor: "Hikvision Digital",
-    description: "ISAPI XML/JSON bridge for Hikvision NVRs, ANPR plates, thermal sensors, and perimeter alerts.",
-    version: "2.2.0",
-    configSchema: {
-      requiredFields: ["isapiUrl", "authDigestKey"],
-      secrets: ["authDigestKey"],
-    },
-  },
-
-  // Security & Access Control
-  {
-    type: "access_control",
-    category: "security",
-    name: "Physical Access Control (PACS)",
-    vendor: "Generic PACS REST / HID / Lenel",
-    description: "Bi-directional badge swipe correlation, tailgating alarms, turnstile overrides, and vault lock sync.",
-    version: "1.8.0",
-    isPopular: true,
-    configSchema: {
-      requiredFields: ["controllerApiUrl", "apiKey"],
-      optionalFields: ["branchMappingTag", "mTLSCertificateRef"],
-      secrets: ["apiKey"],
-    },
-  },
-  {
-    type: "fire_alarm",
-    category: "security",
-    name: "Fire & Smoke Alarm Panel",
-    vendor: "Honeywell / Siemens / Morley",
-    description: "Dry contact and BACnet/IP integration for automatic camera pop-up during fire and evacuation triggers.",
-    version: "1.3.0",
-    configSchema: {
-      requiredFields: ["panelIpAddress", "bacnetNodeId"],
-    },
-  },
-
-  // SOC & SIEM
-  {
-    type: "syslog",
-    category: "siem",
-    name: "Syslog RFC 5424 / CEF SIEM",
-    vendor: "Common Event Format (CEF)",
-    description: "Streams encrypted TLS syslog records formatted in CEF for bank SOC analysis and central log compliance.",
-    version: "2.8.0",
-    isPopular: true,
-    configSchema: {
-      requiredFields: ["host", "port", "facility", "format"],
-      optionalFields: ["tlsCertRef", "appName"],
-      secrets: ["tlsCertRef"],
-    },
-  },
-  {
-    type: "splunk",
-    category: "siem",
-    name: "Splunk Enterprise HEC",
-    vendor: "Splunk Inc.",
-    description: "High-throughput JSON HTTP Event Collector (HEC) for real-time security indexing, alerts, and dashboards.",
-    version: "3.1.0",
-    isPopular: true,
-    configSchema: {
-      requiredFields: ["hecUrl", "hecToken"],
-      optionalFields: ["index", "sourcetype"],
-      secrets: ["hecToken"],
-    },
-  },
-
-  // Operations & ITSM
-  {
-    type: "servicenow",
-    category: "itsm",
-    name: "ServiceNow ITSM & CMDB",
-    vendor: "ServiceNow",
-    description: "Automates camera failure tickets, physical security incident escalations, and CMDB hardware inventory sync.",
-    version: "3.4.0",
-    isPopular: true,
-    configSchema: {
-      requiredFields: ["instanceUrl", "clientId", "clientSecret"],
-      optionalFields: ["incidentTable", "assignmentGroup"],
-      secrets: ["clientSecret"],
-    },
-  },
-  {
-    type: "jira",
-    category: "itsm",
-    name: "Jira Service Management",
-    vendor: "Atlassian",
-    description: "Creates and updates branch hardware repair issues and field technician dispatch tickets.",
-    version: "2.0.0",
-    configSchema: {
-      requiredFields: ["jiraDomain", "apiToken", "projectKey"],
-      secrets: ["apiToken"],
-    },
-  },
-
-  // Notifications & Messaging
-  {
-    type: "smtp",
-    category: "notifications",
-    name: "SMTP Alert Notification Gateway",
-    vendor: "Enterprise SMTP / TLS",
-    description: "Dispatches cryptographic P1 incident escalation emails, shift turnover digests, and PDF evidence attachments.",
-    version: "3.0.0",
-    isPopular: true,
-    configSchema: {
-      requiredFields: ["host", "port", "username", "password", "fromAddress"],
-      optionalFields: ["requireTls", "defaultRecipients"],
-      secrets: ["password"],
-    },
-  },
-  {
-    type: "microsoft_teams",
-    category: "notifications",
-    name: "Microsoft Teams Webhook",
-    vendor: "Microsoft 365",
-    description: "Posts rich Adaptive Cards for real-time branch intrusion alarms and high-priority video snapshots to Teams channels.",
-    version: "2.2.0",
-    configSchema: {
-      requiredFields: ["webhookUrl"],
-      secrets: ["webhookUrl"],
-    },
-  },
-
-  // IAM & Enterprise
-  {
-    type: "active_directory",
-    category: "identity",
-    name: "Active Directory / LDAP IAM",
-    vendor: "Microsoft AD / OpenLDAP",
-    description: "Continuous enterprise user synchronization, operator role mapping, and branch permission segregation.",
-    version: "2.6.0",
-    isPopular: true,
-    configSchema: {
-      requiredFields: ["ldapUrl", "baseDn", "bindDn", "bindPassword"],
-      secrets: ["bindPassword"],
-    },
-  },
-  {
-    type: "webhook",
-    category: "webhook",
-    name: "Enterprise REST Webhook Dispatcher",
-    vendor: "Sentinel Grid Engine",
-    description: "Sends HMAC-SHA256 signed JSON payloads with automatic exponential backoff, jitter, and idempotency.",
-    version: "2.5.0",
-    isPopular: true,
-    configSchema: {
-      requiredFields: ["webhookUrl", "sharedSecret"],
-      optionalFields: ["timeoutMs", "retryAttempts"],
-      secrets: ["sharedSecret"],
-    },
-  },
-];
 
 export default function IntegrationsPage() {
   const [integrations, setIntegrations] = useState<IntegrationInstance[]>([]);
-  const [catalog, setCatalog] = useState<ConnectorCatalogItem[]>(CATALOG_ITEMS);
+  const [catalog, setCatalog] = useState<ConnectorCatalogItem[]>([]);
   const [deliveries, setDeliveries] = useState<DeliveryRecord[]>([]);
   const [deadLetters, setDeadLetters] = useState<DeadLetterRecord[]>([]);
   const [workspace, setWorkspace] = useState<WorkspaceTab>("connectors");
@@ -360,8 +162,6 @@ export default function IntegrationsPage() {
   const [activeDetailItem, setActiveDetailItem] = useState<IntegrationInstance | null>(null);
   const [showTestModal, setShowTestModal] = useState(false);
   const [testResult, setTestResult] = useState<{ success: boolean; message: string; details?: any; testing?: boolean } | null>(null);
-  const [showSimulateModal, setShowSimulateModal] = useState(false);
-  const [simulating, setSimulating] = useState(false);
 
   // Fetch initial data
   const load = useCallback(async () => {
@@ -395,7 +195,7 @@ export default function IntegrationsPage() {
         setDeadLetters(resQueues.value.deadLetters);
       }
     } catch {
-      setError("Unable to load latest integration telemetry. Working with cached state.");
+      setError("Unable to load integration telemetry.");
     } finally {
       setLoading(false);
     }
@@ -504,27 +304,6 @@ export default function IntegrationsPage() {
     }
   };
 
-  const simulateSyntheticEvent = async (eventType: string, payload: any) => {
-    setSimulating(true);
-    try {
-      const res = await fetch(`${API_BASE}/events`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ eventType, payload }),
-        credentials: "include",
-      });
-      const data = await res.json();
-      setNotice(data.message || `Event "${eventType}" successfully emitted to integration pipelines.`);
-      setShowSimulateModal(false);
-      setWorkspace("activity");
-      await load();
-    } catch {
-      setError("Failed to emit synthetic event.");
-    } finally {
-      setSimulating(false);
-    }
-  };
-
   return (
     <AppLayout>
       <main className="mx-auto max-w-[1580px] space-y-6 px-4 py-6 sm:px-6 lg:px-8">
@@ -545,14 +324,6 @@ export default function IntegrationsPage() {
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2.5">
-              <button
-                type="button"
-                onClick={() => setShowSimulateModal(true)}
-                className="inline-flex items-center gap-2 rounded-xl border border-white/20 bg-white/10 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-white/20"
-              >
-                <Zap size={16} className="text-amber-400" />
-                Simulate Event
-              </button>
               <button
                 type="button"
                 onClick={() => void load()}
@@ -757,7 +528,6 @@ export default function IntegrationsPage() {
                 deliveries={deliveries}
                 busyId={busyId}
                 onRetry={retryDelivery}
-                onSimulate={() => setShowSimulateModal(true)}
               />
             )}
 
@@ -835,14 +605,6 @@ export default function IntegrationsPage() {
         <TestConnectionModal result={testResult} onClose={() => setShowTestModal(false)} />
       )}
 
-      {/* Synthetic Event Simulator Modal */}
-      {showSimulateModal && (
-        <SyntheticEventSimulatorModal
-          simulating={simulating}
-          onClose={() => setShowSimulateModal(false)}
-          onSimulate={simulateSyntheticEvent}
-        />
-      )}
     </AppLayout>
   );
 }
@@ -1049,12 +811,10 @@ function DeliveryActivityView({
   deliveries,
   busyId,
   onRetry,
-  onSimulate,
 }: {
   deliveries: DeliveryRecord[];
   busyId: string | null;
   onRetry: (delivery: DeliveryRecord) => void;
-  onSimulate: () => void;
 }) {
   const [filterStatus, setFilterStatus] = useState<"all" | "delivered" | "failed">("all");
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -1104,13 +864,6 @@ function DeliveryActivityView({
               Failed / Retrying ({deliveries.filter((d) => !d.success).length})
             </button>
           </div>
-          <button
-            type="button"
-            onClick={onSimulate}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-cyan-300 bg-cyan-50 px-3 py-1.5 text-xs font-bold text-cyan-800 hover:bg-cyan-100"
-          >
-            <Zap size={14} /> Send Test Event
-          </button>
         </div>
       </div>
 
@@ -1933,111 +1686,6 @@ function TestConnectionModal({
             className="rounded-xl bg-slate-900 px-4 py-2 text-xs font-bold text-white hover:bg-slate-800"
           >
             Close
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// -------------------------------------------------------------------------------------------------
-// SYNTHETIC EVENT SIMULATOR MODAL
-// -------------------------------------------------------------------------------------------------
-function SyntheticEventSimulatorModal({
-  simulating,
-  onClose,
-  onSimulate,
-}: {
-  simulating: boolean;
-  onClose: () => void;
-  onSimulate: (eventType: string, payload: any) => void;
-}) {
-  const [eventType, setEventType] = useState("alert.created");
-  const [severity, setSeverity] = useState("P1_CRITICAL");
-  const [branchCode, setBranchCode] = useState("KL-EKM-004");
-
-  const handleDispatch = () => {
-    onSimulate(eventType, {
-      alertType: "VAULT_DOOR_TAMPER",
-      severity,
-      branchCode,
-      timestamp: new Date().toISOString(),
-      confidence: 0.99,
-    });
-  };
-
-  return (
-    <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/60 p-4" role="dialog">
-      <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl space-y-4">
-        <div className="flex items-start justify-between">
-          <div className="flex items-center gap-2">
-            <Zap size={20} className="text-amber-500" />
-            <h3 className="text-base font-bold text-slate-900">Synthetic Event Simulator</h3>
-          </div>
-          <button type="button" onClick={onClose} className="rounded-lg p-1 text-slate-400 hover:bg-slate-100">
-            <X size={18} />
-          </button>
-        </div>
-
-        <p className="text-xs text-slate-500">
-          Emit a synthetic event into the Sentinel Grid Event Bus to verify that CP PLUS, ServiceNow, SIEM, and SMTP
-          connectors process and deliver messages properly.
-        </p>
-
-        <div className="space-y-3 text-xs">
-          <div>
-            <label className="font-bold text-slate-700">Event Type</label>
-            <select
-              value={eventType}
-              onChange={(e) => setEventType(e.target.value)}
-              className="mt-1 w-full rounded-xl border border-slate-300 p-2 text-slate-800"
-            >
-              <option value="alert.created">alert.created (High Priority Alarm)</option>
-              <option value="camera.offline">camera.offline (Hardware Disconnect)</option>
-              <option value="incident.created">incident.created (Escalated Case)</option>
-              <option value="user.failed_login">user.failed_login (IAM Audit)</option>
-            </select>
-          </div>
-
-          <div>
-            <label className="font-bold text-slate-700">Severity</label>
-            <select
-              value={severity}
-              onChange={(e) => setSeverity(e.target.value)}
-              className="mt-1 w-full rounded-xl border border-slate-300 p-2 text-slate-800"
-            >
-              <option value="P1_CRITICAL">P1 - Critical (Vault / Cash Counter)</option>
-              <option value="P2_HIGH">P2 - High (Perimeter Intrusion)</option>
-              <option value="P3_MEDIUM">P3 - Medium (Loitering)</option>
-            </select>
-          </div>
-
-          <div>
-            <label className="font-bold text-slate-700">Branch Code</label>
-            <input
-              value={branchCode}
-              onChange={(e) => setBranchCode(e.target.value)}
-              className="mt-1 w-full rounded-xl border border-slate-300 p-2 text-slate-800 font-mono"
-            />
-          </div>
-        </div>
-
-        <div className="flex justify-end gap-2 pt-2">
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-xl border border-slate-200 px-4 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50"
-          >
-            Cancel
-          </button>
-          <button
-            type="button"
-            onClick={handleDispatch}
-            disabled={simulating}
-            className="inline-flex items-center gap-1.5 rounded-xl bg-cyan-500 px-4 py-2 text-xs font-bold text-slate-950 hover:bg-cyan-400 disabled:opacity-50"
-          >
-            <Play size={13} className={simulating ? "animate-spin" : ""} />
-            {simulating ? "Dispatching..." : "Simulate & Dispatch"}
           </button>
         </div>
       </div>

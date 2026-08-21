@@ -17,7 +17,6 @@ import type { FencingTokenService } from "./fencing-token.service.js";
 
 export class HaFailoverCoordinator {
   private readonly events: HaEvent[] = [];
-  private readonly failoverLatencySamplesMs: number[] = [];
 
   constructor(
     private readonly leaseManager: CameraLeaseManager,
@@ -112,7 +111,6 @@ export class HaFailoverCoordinator {
     // 5. Calculate recovery latency and recording gap
     const streamRestoredAt = new Date().toISOString();
     const recordingGapMs = Math.max(100, Date.now() - detectTime + 1200);
-    this.failoverLatencySamplesMs.push(recordingGapMs);
 
     const completeEvent: HaEvent = {
       id: randomUUID(),
@@ -163,7 +161,7 @@ export class HaFailoverCoordinator {
     };
   }
 
-  getMetrics(): HaClusterMetrics {
+  getMetrics(activeLeases: CameraLease[], tenantId: string): HaClusterMetrics {
     const allNodes = this.nodeRegistry.listAllNodes();
     const healthyNodes = allNodes.filter((n) => n.status === "HEALTHY");
 
@@ -171,20 +169,27 @@ export class HaFailoverCoordinator {
     const totalCurrentStreams = allNodes.reduce((acc, n) => acc + n.capacity.currentCameras, 0);
     const totalCapacityHeadroomPct = totalMaxStreams > 0 ? Math.round(((totalMaxStreams - totalCurrentStreams) / totalMaxStreams) * 100) : 0;
 
-    const latencies = [...this.failoverLatencySamplesMs].sort((a, b) => a - b);
-    const medianRecoveryMs = latencies.length ? latencies[Math.floor(latencies.length / 2)]! : 4100;
-    const p95RecoveryMs = latencies.length ? latencies[Math.floor(latencies.length * 0.95)]! : 5200;
-    const p99RecoveryMs = latencies.length ? latencies[Math.floor(latencies.length * 0.99)]! : 6100;
-    const maxRecordingGapMs = latencies.length ? Math.max(...latencies) : 6200;
+    const tenantEvents = this.events.filter((event) => event.tenantId === tenantId);
+    const latencies = tenantEvents
+      .map((event) => event.recordingGapMs)
+      .filter((value): value is number => typeof value === "number")
+      .sort((a, b) => a - b);
+    const medianRecoveryMs = latencies.length ? latencies[Math.floor(latencies.length / 2)]! : null;
+    const p95RecoveryMs = latencies.length ? latencies[Math.min(latencies.length - 1, Math.floor(latencies.length * 0.95))]! : null;
+    const p99RecoveryMs = latencies.length ? latencies[Math.min(latencies.length - 1, Math.floor(latencies.length * 0.99))]! : null;
+    const maxRecordingGapMs = latencies.length ? Math.max(...latencies) : null;
 
-    const failoverEventsToday = this.events.filter((e) => e.type.startsWith("CAMERA_FAILOVER_"));
+    const today = new Date().toISOString().slice(0, 10);
+    const failoverEventsToday = tenantEvents.filter(
+      (event) => event.type.startsWith("CAMERA_FAILOVER_") && event.timestamp.startsWith(today),
+    );
     const successfulFailovers = failoverEventsToday.filter((e) => e.type === "CAMERA_FAILOVER_COMPLETED").length;
     const failedFailovers = failoverEventsToday.filter((e) => e.type === "CAMERA_FAILOVER_FAILED").length;
 
     return {
-      totalCameras: 120,
-      protectedCameras: 118,
-      unprotectedCameras: 2,
+      totalCameras: null,
+      protectedCameras: new Set(activeLeases.map((lease) => lease.cameraId)).size,
+      unprotectedCameras: null,
       failoversToday: failoverEventsToday.length,
       successfulFailovers,
       failedFailovers,
@@ -195,11 +200,14 @@ export class HaFailoverCoordinator {
       activeNodes: allNodes.filter((n) => n.status !== "OFFLINE").length,
       healthyNodes: healthyNodes.length,
       totalCapacityHeadroomPct,
-      lastFailoverEvent: this.events.find((e) => e.type === "CAMERA_FAILOVER_COMPLETED"),
+      ...(tenantEvents.find((event) => event.type === "CAMERA_FAILOVER_COMPLETED")
+        ? { lastFailoverEvent: tenantEvents.find((event) => event.type === "CAMERA_FAILOVER_COMPLETED") }
+        : {}),
     };
   }
 
-  getRecentEvents(limit = 20): HaEvent[] {
-    return this.events.slice(0, limit);
+  getRecentEvents(limit = 20, tenantId?: string): HaEvent[] {
+    const events = tenantId ? this.events.filter((event) => event.tenantId === tenantId) : this.events;
+    return events.slice(0, limit);
   }
 }

@@ -8,13 +8,9 @@ import type {
   MediaSession,
   ClientMediaCapabilities,
   TileStreamState,
-  PlatformCapacityMetrics,
-  WorkstationCapacityMetrics,
 } from "@/lib/media-types";
 
 export interface MediaOrchestratorOptions {
-  userId: string;
-  tenantId: string;
   autoRegisterClient?: boolean;
   heartbeatIntervalMs?: number;
 }
@@ -33,8 +29,6 @@ export function useMediaOrchestrator(options: MediaOrchestratorOptions) {
   const [tileStates, setTileStates] = useState<Map<string, CameraTileState>>(
     new Map()
   );
-  const [platformMetrics, setPlatformMetrics] = useState<PlatformCapacityMetrics | null>(null);
-  const [workstationMetrics, setWorkstationMetrics] = useState<WorkstationCapacityMetrics | null>(null);
   const [clientCapabilities, setClientCapabilities] = useState<ClientMediaCapabilities | null>(null);
   
   const sessionsRef = useRef<Map<string, MediaSession>>(new Map());
@@ -297,42 +291,6 @@ export function useMediaOrchestrator(options: MediaOrchestratorOptions) {
   );
 
   /**
-   * Fetch platform metrics
-   */
-  const fetchPlatformMetrics = useCallback(async () => {
-    try {
-      const response = await fetch("/api/media/metrics/platform", {
-        credentials: "include",
-      });
-
-      if (response.ok) {
-        const metrics = await response.json();
-        setPlatformMetrics(metrics);
-      }
-    } catch (error) {
-      console.error("Failed to fetch platform metrics:", error);
-    }
-  }, []);
-
-  /**
-   * Fetch workstation metrics
-   */
-  const fetchWorkstationMetrics = useCallback(async () => {
-    try {
-      const response = await fetch("/api/media/metrics/workstation", {
-        credentials: "include",
-      });
-
-      if (response.ok) {
-        const metrics = await response.json();
-        setWorkstationMetrics(metrics);
-      }
-    } catch (error) {
-      console.error("Failed to fetch workstation metrics:", error);
-    }
-  }, []);
-
-  /**
    * Initialize intersection observer for visibility tracking
    */
   const initVisibilityTracking = useCallback(
@@ -391,19 +349,6 @@ export function useMediaOrchestrator(options: MediaOrchestratorOptions) {
     };
   }, [options.heartbeatIntervalMs, sendHeartbeats]);
 
-  // Fetch metrics periodically
-  useEffect(() => {
-    fetchPlatformMetrics();
-    fetchWorkstationMetrics();
-
-    const metricsTimer = setInterval(() => {
-      fetchPlatformMetrics();
-      fetchWorkstationMetrics();
-    }, 60_000); // Every minute
-
-    return () => clearInterval(metricsTimer);
-  }, [fetchPlatformMetrics, fetchWorkstationMetrics]);
-
   // Cleanup on unmount
   useEffect(() => {
     return () => {
@@ -421,8 +366,6 @@ export function useMediaOrchestrator(options: MediaOrchestratorOptions) {
   return {
     // State
     tileStates,
-    platformMetrics,
-    workstationMetrics,
     clientCapabilities,
 
     // Actions

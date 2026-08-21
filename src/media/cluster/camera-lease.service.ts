@@ -153,7 +153,7 @@ export class CameraLeaseService implements CameraLeaseManager {
     const existing = this.memoryLeases.get(key);
     if (existing && existing.expiresAt > now) return null;
 
-    const currentToken = (this.memoryFencingTokens.get(key) ?? 100) + 1;
+    const currentToken = (this.memoryFencingTokens.get(key) ?? 0) + 1;
     this.memoryFencingTokens.set(key, currentToken);
     const lease: CameraLease = {
       tenantId,
@@ -282,12 +282,12 @@ export class CameraLeaseService implements CameraLeaseManager {
     if (this.redisClient) {
       try {
         const raw = await this.redisClient.get(this.tokenKey(tenantId, cameraId));
-        return raw ? Number(raw) : 100;
+        return raw ? Number(raw) : 0;
       } catch (error) {
         return this.redisFailure(error);
       }
     }
     if (!this.useMemoryStore()) return this.failWithoutRedis();
-    return this.memoryFencingTokens.get(`${tenantId}:${cameraId}`) ?? 100;
+    return this.memoryFencingTokens.get(`${tenantId}:${cameraId}`) ?? 0;
   }
 }

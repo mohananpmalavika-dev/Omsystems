@@ -112,35 +112,13 @@ export function UnifiedIncidentWorkflow({ incidentId }: { incidentId: string }) 
         const json = await res.json();
         setWorkspace(json.data || json);
       } else {
-        // Fallback default structure if incident endpoint is simulated
-        setWorkspace({
-          incident: {
-            id: incidentId,
-            incidentNumber: `INC-${incidentId.slice(0, 6).toUpperCase()}`,
-            title: "P1 Vault Intrusion Alarm",
-            incidentType: "VAULT_INTRUSION",
-            severity: "P1",
-            status: "INVESTIGATING",
-            occurredAt: new Date().toISOString(),
-          },
-          playbook: {
-            instanceId: "inst-1",
-            playbookId: "vault-intrusion-p1",
-            playbookName: "P1 Vault Intrusion & Breach Response",
-            playbookVersion: 1,
-            status: "RUNNING",
-            startedAt: new Date().toISOString(),
-          },
-          steps: [],
-          currentStepIds: [],
-          allowedActions: ["COMPLETE_STEP", "RECORD_DECISION"],
-          blockedResolutionReasons: ["Mandatory step 'Verify Live Camera Stream' is incomplete"],
-          decisions: [],
-          auditTimeline: [],
-        });
+        const body = await res.json().catch(() => null);
+        throw new Error(body?.message || body?.error || `Unable to load incident workspace (${res.status})`);
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Failed to load incident workspace:", err);
+      setWorkspace(null);
+      setErrorMessage(err instanceof Error ? err.message : "Unable to load incident workspace.");
     } finally {
       setLoading(false);
     }
@@ -150,25 +128,18 @@ export function UnifiedIncidentWorkflow({ incidentId }: { incidentId: string }) 
     setSubmitting(true);
     setErrorMessage(null);
 
-    // Provide structured evidence depending on step type
+    // Evidence-bearing steps must be completed by their dedicated workflows so
+    // that the server receives authoritative camera, clip, and call records.
     let evidencePayload: any = undefined;
     let resultPayload: any = undefined;
 
-    if (step.type === "LIVE_VIDEO_REVIEW") {
-      evidencePayload = {
-        cameraId: workspace?.incident.cameraId || "cam-vault-primary",
-        viewDurationSeconds: 30,
-      };
-      resultPayload = { cameraVerified: true, feedHealthy: true };
-    } else if (step.type === "EVIDENCE_REVIEW") {
-      evidencePayload = {
-        clipId: `clip-${incidentId}-pre15-post30`,
-        snapshotId: `snap-${incidentId}-ingress`,
-      };
-      resultPayload = { motionConfirmed: true, ingressLocation: "Vault Grille Door" };
-    } else if (step.type === "EXTERNAL_CALL") {
-      resultPayload = { callStatus: "CONNECTED", notes: "Branch manager contacted" };
-    } else if (step.type === "DECISION") {
+    if (["LIVE_VIDEO_REVIEW", "EVIDENCE_REVIEW", "EXTERNAL_CALL"].includes(step.type)) {
+      setErrorMessage(`${step.title} requires verified evidence from its operational workflow before completion.`);
+      setSubmitting(false);
+      return;
+    }
+
+    if (step.type === "DECISION") {
       setSelectedDecisionStepId(step.stepId);
       setShowDecisionModal(true);
       setSubmitting(false);

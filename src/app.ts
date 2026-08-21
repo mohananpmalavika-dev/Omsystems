@@ -64,8 +64,6 @@ import { adminCameraManagementRoutes } from "./routes/admin-camera-management.ro
 import { registerIncidentsRoutes } from "./routes/incidents.routes.js";
 import { registerMorningHealthDigestRoutes } from "./routes/morning-health-digest.routes.js";
 import { registerVirtualGuardRoutes } from "./routes/virtual-guard.routes.js";
-import { registerQrtDispatchRoutes } from "./routes/qrt-dispatch.routes.js";
-import { registerHAClusterRoutes } from "./routes/ha-cluster.routes.js";
 import { registerMobileOperationsRoutes } from "./routes/mobile-operations.routes.js";
 import { registerDeviceConnectivityRoutes } from "./device-connectivity/routes/device-connectivity.routes.js";
 import { registerHaClusterRoutes } from "./media/cluster/ha-cluster.routes.js";
@@ -142,7 +140,6 @@ import { registerClientMediaSchedulerRoutes } from "./routes/client-media-schedu
 import { registerAiQualityRoutes } from "./routes/ai-quality.routes.js";
 import { registerEnterpriseSocOperationsRoutes } from "./routes/enterprise-soc-operations.routes.js";
 import { registerEventNormalizationRoutes } from "./event-normalization/routes/event-normalization.routes.js";
-import { registerChaosTestingRoutes } from "./chaos-testing/routes/chaos-testing.routes.js";
 import { registerCompatibilityLabRoutes } from "./routes/compatibility-lab.routes.js";
 import { autoProvisionVerifiedCameras } from "./services/camera-auto-provision.js";
 import {
@@ -2522,8 +2519,6 @@ export async function buildApp(options?: {
   try {
     await registerMorningHealthDigestRoutes(app, store);
     await registerVirtualGuardRoutes(app, store);
-    await registerQrtDispatchRoutes(app, store);
-    await registerHAClusterRoutes(app, store);
     await registerMobileOperationsRoutes(app, store);
     await registerDeviceConnectivityRoutes(app);
     await registerHaClusterRoutes(app);
@@ -2767,13 +2762,6 @@ export async function buildApp(options?: {
     app.log.error({ err }, "failed to register event normalization routes");
   }
 
-  // Register Chaos Testing & Resiliency Engine (13 Failure Modes & 6 Recovery Guarantees)
-  try {
-    await registerChaosTestingRoutes(app);
-    app.log.info("Chaos Testing & Resiliency Engine routes registered");
-  } catch (err: unknown) {
-    app.log.error({ err }, "failed to register chaos testing routes");
-  }
   const alertWorker = setInterval(() => {
     void alertDispatcher.drainOnce().catch((error) => app.log.error({ error }, "Alert outbox drain failed"));
   }, 5_000);

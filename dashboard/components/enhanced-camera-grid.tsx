@@ -56,8 +56,6 @@ export interface EnhancedCameraGridProps {
   onActiveStreamsChange?: (count: number) => void;
   onMonitoredCamerasChange?: (cameraIds: string[]) => void;
   presentationMode?: PresentationMode;
-  userId?: string;
-  tenantId?: string;
 }
 
 interface VisibleRange {
@@ -80,8 +78,6 @@ export function EnhancedCameraGrid({
   onActiveStreamsChange,
   onMonitoredCamerasChange,
   presentationMode = "LIVE_MONITORING",
-  userId = "default-user",
-  tenantId = "default-tenant",
 }: EnhancedCameraGridProps) {
   const [gridSize, setGridSize] = useState<GridSize>(
     initialLayout?.gridSize || "2x2"
@@ -89,16 +85,12 @@ export function EnhancedCameraGrid({
 
   // Initialize media orchestrator
   const mediaOrchestrator = useMediaOrchestrator({
-    userId,
-    tenantId,
     autoRegisterClient: true,
     heartbeatIntervalMs: 30_000,
   });
 
   const {
     tileStates,
-    platformMetrics,
-    workstationMetrics,
     requestSession,
     closeSession,
     updateStreamState,
@@ -883,11 +875,6 @@ export function EnhancedCameraGrid({
             <strong>Unlimited enrollment · Dynamic live capacity</strong>
           </span>
           
-          {workstationMetrics && (
-            <span className="capacity-control" title="Current workstation decoder utilization">
-              Decoder Load: {workstationMetrics.decoderLoadPercent.toFixed(0)}%
-            </span>
-          )}
           {capacity && (
             <span className="capacity-control" title="Viewer capacity recommendation">
               Live {activeDecoderCount}/{budget?.decoderBudget ?? capacity.recommendedDecoderLimit} · {snapshotCount} snapshots
@@ -899,12 +886,6 @@ export function EnhancedCameraGrid({
             </span>
           )}
 
-          {platformMetrics && (
-            <span className="capacity-control" title="Platform-wide statistics">
-              {platformMetrics.camerasCurrentlyOnline}/{platformMetrics.camerasEnrolled} cameras online · 
-              {platformMetrics.activeHoMediaSessions} active sessions
-            </span>
-          )}
           <button
             className={`btn-secondary ${sequencing ? "active-control" : ""}`}
             onClick={() => setSequencing((current) => !current)}

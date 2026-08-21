@@ -120,11 +120,16 @@ async function controlFetch(
   init?: RequestInit,
   employeeSession?: string,
 ) {
+  const developmentUserId = process.env.NODE_ENV !== "production"
+    ? runtimeEnv("DASHBOARD_DEV_USER_ID", "")
+    : "";
   const headers = {
     ...bridgeHeaders(),
     ...(employeeSession
       ? { authorization: `Bearer ${employeeSession}` }
-      : { "x-user-id": runtimeEnv("DASHBOARD_DEV_USER_ID", "user-global-admin") }),
+      : developmentUserId
+        ? { "x-user-id": developmentUserId }
+        : {}),
     ...init?.headers,
   };
   const response = await fetch(new URL(
