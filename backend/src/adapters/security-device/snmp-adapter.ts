@@ -252,7 +252,7 @@ export class SnmpAdapter extends BaseSecurityDeviceAdapter {
       const responseTimeMs = Date.now() - startTime;
 
       // Simulated UPS data
-      const batteryStatus = 2; // 1=unknown, 2=batteryNormal, 3=batteryLow, 4=batteryDepleted
+      const batteryStatus: number = 2; // 1=unknown, 2=batteryNormal, 3=batteryLow, 4=batteryDepleted
       const batteryPercent = 95;
       const minutesRemaining = 45;
       const batteryVoltage = 27.5;
@@ -273,7 +273,7 @@ export class SnmpAdapter extends BaseSecurityDeviceAdapter {
         health: isBatteryLow
           ? 'CRITICAL'
           : isOnBattery
-          ? 'WARNING'
+          ? 'FAIR'
           : this.mapHealthScoreToStatus(healthScore),
         healthScore: isBatteryLow ? 20 : isOnBattery ? 60 : healthScore,
         isOnline: true,
