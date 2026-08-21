@@ -86,15 +86,15 @@ const emptyCameraForm: CameraForm = {
   recorderSerialNumber: "",
   edgeAgentId: "",
   connectionSecretRef: "",
-  codec: "H264",
-  streamRole: "main",
-  width: "1920",
-  height: "1080",
-  frameRate: "15",
-  bitrateKbps: "2048",
+  codec: "unknown",
+  streamRole: "unknown",
+  width: "",
+  height: "",
+  frameRate: "",
+  bitrateKbps: "",
   ptz: false,
   audio: false,
-  events: true,
+  events: false,
 };
 
 type DeviceInventoryForm = {
@@ -157,7 +157,7 @@ type GatewayActivation = {
 
 const emptyInventoryForm: DeviceInventoryForm = {
   deviceId: "",
-  tenant: "tenant-demo",
+  tenant: "",
   region: "",
   branch: "",
   deviceType: "ip-camera",
@@ -173,7 +173,7 @@ const emptyInventoryForm: DeviceInventoryForm = {
   installationDate: "",
   warranty: "",
   amcContract: "",
-  healthStatus: "healthy",
+  healthStatus: "unknown",
   lastCommunication: "",
   configurationTemplate: "default",
   riskClassification: "medium",
@@ -195,14 +195,14 @@ export function DeviceManager() {
   const [discoverySerialNumber, setDiscoverySerialNumber] = useState("");
   const [discoveryMacAddress, setDiscoveryMacAddress] = useState("");
   const [discoveryFirmwareVersion, setDiscoveryFirmwareVersion] = useState("");
-  const [discoveryOnvifSupport, setDiscoveryOnvifSupport] = useState(true);
-  const [discoveryRtspValidated, setDiscoveryRtspValidated] = useState(true);
+  const [discoveryOnvifSupport, setDiscoveryOnvifSupport] = useState(false);
+  const [discoveryRtspValidated, setDiscoveryRtspValidated] = useState(false);
   const [discoveryPtzCapability, setDiscoveryPtzCapability] = useState(false);
   const [discoveryAudioCapability, setDiscoveryAudioCapability] = useState(false);
   const [discoveryAnalyticsCapability, setDiscoveryAnalyticsCapability] = useState(false);
   const [discoveryTimeSynchronization, setDiscoveryTimeSynchronization] = useState("unknown");
-  const [discoveryDuplicateStatus, setDiscoveryDuplicateStatus] = useState("unique");
-  const [discoveryCompatibilityStatus, setDiscoveryCompatibilityStatus] = useState("compatible");
+  const [discoveryDuplicateStatus, setDiscoveryDuplicateStatus] = useState("unknown");
+  const [discoveryCompatibilityStatus, setDiscoveryCompatibilityStatus] = useState("unknown");
   const [discoveryHardwareId, setDiscoveryHardwareId] = useState("");
   const [discoveryExistingDeviceAssociation, setDiscoveryExistingDeviceAssociation] = useState("");
   const [gatewayName, setGatewayName] = useState("");
@@ -212,8 +212,9 @@ export function DeviceManager() {
   const [showDirectProbeModal, setShowDirectProbeModal] = useState(false);
   const [copiedCommand, setCopiedCommand] = useState<string | null>(null);
   const [activePlatformTab, setActivePlatformTab] = useState<"powershell" | "bash" | "download">("powershell");
-  const [probeIp, setProbeIp] = useState("192.168.29.196");
-  const [probePort, setProbePort] = useState("554");
+  const [probeIp, setProbeIp] = useState("");
+  const [probePort, setProbePort] = useState("");
+  const [probeUsername, setProbeUsername] = useState("");
   const [probePassword, setProbePassword] = useState("");
   const [probing, setProbing] = useState(false);
   const [probeResult, setProbeResult] = useState<any>(null);

@@ -56,7 +56,7 @@ export class OnvifAdapter extends BaseSecurityDeviceAdapter {
 
     return cameras.map((camera) => {
       let port: number | undefined;
-      const serviceUrl = camera.serviceUrls[0];
+      const serviceUrl = camera.serviceUrls?.[0];
       if (serviceUrl) {
         try {
           const parsed = new URL(serviceUrl);
