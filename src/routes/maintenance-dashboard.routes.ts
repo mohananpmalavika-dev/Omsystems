@@ -56,8 +56,6 @@ export async function registerMaintenanceDashboardRoutes(
     const query = { limit: Math.min(parseInt(queryParams.limit || '50') || 50, 1000) };
     const tenantId = request.currentUser.tenantId;
     
-    // In a real implementation, this would query the camera_health table
-    // For now, returning summary based on available data
     const assets = await store.listMaintenanceAssets(tenantId, "camera");
     
     return {
@@ -66,11 +64,11 @@ export async function registerMaintenanceDashboardRoutes(
         name: a.model,
         serialNumber: a.serialNumber,
         status: a.status,
-        lastCheck: new Date().toISOString(),
+        lastCheck: a.updatedAt ?? null,
         fps: null,
         bitrate: null,
         temperature: null,
-        recordingRunning: true,
+        recordingRunning: null,
       }))
     };
   });
@@ -87,10 +85,10 @@ export async function registerMaintenanceDashboardRoutes(
         name: a.model,
         category: "storage",
         status: a.status,
-        totalCapacityGb: 10000,
-        usedCapacityGb: 7500,
-        usagePercentage: 75,
-        lastCheck: new Date().toISOString(),
+        totalCapacityGb: null,
+        usedCapacityGb: null,
+        usagePercentage: null,
+        lastCheck: a.updatedAt ?? null,
       }))
     };
   });
@@ -98,20 +96,9 @@ export async function registerMaintenanceDashboardRoutes(
   // Health Monitoring - Network status
   app.get("/v1/maintenance/health/network", async (request, reply) => {
     if (!request.currentUser?.tenantId) return reply.code(401).send({ error: "unauthorized" });
-    const tenantId = request.currentUser.tenantId;
-    
     return {
-      data: [
-        {
-          id: "network-1",
-          name: "Branch Network",
-          latencyMs: 25,
-          packetLoss: 0.1,
-          jitter: 5,
-          status: "healthy",
-          lastCheck: new Date().toISOString(),
-        }
-      ]
+      data: [],
+      telemetryAvailable: false,
     };
   });
 
@@ -126,10 +113,10 @@ export async function registerMaintenanceDashboardRoutes(
         id: a.id,
         name: a.model,
         category: "power",
-        batteryHealthPercent: 95,
-        runtimeMinutes: 480,
+        batteryHealthPercent: null,
+        runtimeMinutes: null,
         status: a.status,
-        lastCheck: new Date().toISOString(),
+        lastCheck: a.updatedAt ?? null,
       }))
     };
   });

@@ -1,102 +1,97 @@
 "use client";
 
-import React, { useState } from "react";
-import { Server, HardDrive, Cpu, Clock, CheckCircle2, AlertTriangle, ShieldCheck, Activity } from "lucide-react";
+import { Camera, Clock, HardDrive, Radio, Server } from "lucide-react";
 import type { BranchOperationalState } from "./types";
-import { RecorderDiagnosticsModal } from "./recorder-diagnostics-modal";
 
 export interface RecorderHealthPanelProps {
   state: BranchOperationalState;
 }
 
+function formatBytes(value?: number): string {
+  if (!Number.isFinite(value) || value === undefined || value < 0) return "Not reported";
+  const units = ["B", "KB", "MB", "GB", "TB", "PB"];
+  let amount = value;
+  let unit = 0;
+  while (amount >= 1024 && unit < units.length - 1) {
+    amount /= 1024;
+    unit += 1;
+  }
+  return `${amount.toFixed(unit >= 3 ? 1 : 0)} ${units[unit]}`;
+}
+
+function formatTimestamp(value?: string): string {
+  if (!value) return "Not reported";
+  const timestamp = Date.parse(value);
+  return Number.isFinite(timestamp) ? new Date(timestamp).toLocaleString() : "Not reported";
+}
+
 export function RecorderHealthPanel({ state }: RecorderHealthPanelProps) {
-  const [showDiagnostics, setShowDiagnostics] = useState(false);
+  const usedBytes = state.storage.totalBytes !== undefined && state.storage.freeBytes !== undefined
+    ? Math.max(0, state.storage.totalBytes - state.storage.freeBytes)
+    : undefined;
 
   return (
-    <>
-      <div className="bg-slate-950 border border-slate-800 rounded-xl p-5 shadow-lg space-y-4 font-mono">
-        <div className="flex items-center justify-between flex-wrap gap-2">
-          <div className="flex items-center gap-2 text-sm font-bold text-slate-100 font-sans">
-            <Server className="w-4 h-4 text-sky-400" />
-            <span>RECORDER & INFRASTRUCTURE HEALTH</span>
-          </div>
+    <div className="space-y-4 rounded-xl border border-slate-800 bg-slate-950 p-5 font-mono shadow-lg">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex items-center gap-2 font-sans text-sm font-bold text-slate-100">
+          <Server className="h-4 w-4 text-sky-400" />
+          <span>RECORDER & INFRASTRUCTURE HEALTH</span>
+        </div>
+        <span className="rounded border border-slate-700 bg-slate-900 px-2 py-0.5 text-xs font-semibold text-slate-300">
+          {state.recorder.status}
+        </span>
+      </div>
 
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setShowDiagnostics(true)}
-              className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold rounded bg-sky-950/70 hover:bg-sky-900/90 text-sky-300 border border-sky-700/80 transition"
-            >
-              <Activity className="w-3.5 h-3.5" />
-              <span>Protocol Diagnostics & Fingerprint</span>
-            </button>
-
-            <span className="px-2 py-0.5 text-xs font-semibold rounded bg-emerald-950 text-emerald-300 border border-emerald-700">
-              CP PLUS / ONVIF COMPLIANT
-            </span>
+      <div className="grid grid-cols-1 gap-4 pt-2 md:grid-cols-2 lg:grid-cols-4">
+        <div className="space-y-2 rounded-lg border border-slate-800/80 bg-slate-900/60 p-3">
+          <div className="flex items-center gap-1.5 font-sans text-[11px] uppercase tracking-wider text-slate-400">
+            <Server className="h-3.5 w-3.5" /> Recorders
           </div>
+          <div className="text-sm font-bold text-slate-200">
+            {state.recorder.online} online / {state.recorder.total} registered
+          </div>
+          <div className="text-xs text-slate-400">{state.recorder.offline} offline</div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 pt-2">
-          {/* Device Model & Channels */}
-          <div className="p-3 bg-slate-900/60 border border-slate-800/80 rounded-lg space-y-2">
-            <div className="text-[11px] uppercase tracking-wider text-slate-400 font-sans">Device Profile</div>
-            <div className="text-sm font-bold text-slate-200">DVR-01 (CP PLUS)</div>
-            <div className="text-xs text-slate-400">
-              Channels: <strong className="text-slate-200">{state.cameras.total} total</strong> ({state.cameras.recording} recording)
-            </div>
-            <div className="flex items-center gap-1.5 text-[10px] text-emerald-400">
-              <ShieldCheck className="w-3.5 h-3.5" />
-              <span>Dahua CGI & ONVIF confirmed</span>
-            </div>
+        <div className="space-y-2 rounded-lg border border-slate-800/80 bg-slate-900/60 p-3">
+          <div className="flex items-center gap-1.5 font-sans text-[11px] uppercase tracking-wider text-slate-400">
+            <Camera className="h-3.5 w-3.5" /> Camera recording
           </div>
+          <div className="text-sm font-bold text-slate-200">
+            {state.cameras.recording} recording / {state.cameras.total} registered
+          </div>
+          <div className="text-xs text-slate-400">{state.cameras.notRecording} not recording · {state.cameras.unknown} unknown</div>
+        </div>
 
-          {/* Storage Capacity & SMART Status */}
-          <div className="p-3 bg-slate-900/60 border border-slate-800/80 rounded-lg space-y-2">
-            <div className="text-[11px] uppercase tracking-wider text-slate-400 font-sans">Storage & SMART Health</div>
-            <div className="flex items-center justify-between">
-              <span className="text-sm font-bold text-slate-200">3.6 / 4.0 TB</span>
-              <span className="px-1.5 py-0.5 text-[10px] rounded bg-amber-950 text-amber-300 border border-amber-800">
-                WARNING
-              </span>
-            </div>
-            <div className="text-xs text-slate-400">
-              Disks: <strong className="text-emerald-400">{state.storage.disksHealthy} healthy</strong>,{" "}
-              <strong className="text-amber-400">{state.storage.disksWarning} warning</strong>
-            </div>
-            <div className="text-[10px] text-slate-500">Reallocated sectors detected on Disk 2</div>
+        <div className="space-y-2 rounded-lg border border-slate-800/80 bg-slate-900/60 p-3">
+          <div className="flex items-center gap-1.5 font-sans text-[11px] uppercase tracking-wider text-slate-400">
+            <HardDrive className="h-3.5 w-3.5" /> Storage telemetry
           </div>
+          <div className="text-sm font-bold text-slate-200">
+            {usedBytes === undefined ? "Capacity not reported" : `${formatBytes(usedBytes)} used`}
+          </div>
+          <div className="text-xs text-slate-400">
+            {state.storage.disksHealthy} healthy · {state.storage.disksWarning} warning · {state.storage.disksFailed} failed
+          </div>
+          {state.storage.freeBytes !== undefined && (
+            <div className="text-[10px] text-slate-500">{formatBytes(state.storage.freeBytes)} free</div>
+          )}
+        </div>
 
-          {/* Clock Synchronization & Drift */}
-          <div className="p-3 bg-slate-900/60 border border-slate-800/80 rounded-lg space-y-2">
-            <div className="text-[11px] uppercase tracking-wider text-slate-400 font-sans">Time Synchronization</div>
-            <div className="flex items-center gap-1.5 text-sm font-bold text-slate-200">
-              <Clock className="w-4 h-4 text-emerald-400" />
-              <span>+4 sec drift</span>
-            </div>
-            <div className="text-xs text-slate-400">NTP sync: Active</div>
-            <div className="text-[10px] text-slate-500">Uptime: 37 days continuous</div>
+        <div className="space-y-2 rounded-lg border border-slate-800/80 bg-slate-900/60 p-3">
+          <div className="flex items-center gap-1.5 font-sans text-[11px] uppercase tracking-wider text-slate-400">
+            <Radio className="h-3.5 w-3.5" /> Gateway telemetry
           </div>
-
-          {/* Gateway & Telemetry Polling */}
-          <div className="p-3 bg-slate-900/60 border border-slate-800/80 rounded-lg space-y-2">
-            <div className="text-[11px] uppercase tracking-wider text-slate-400 font-sans">Gateway Telemetry</div>
-            <div className="flex items-center gap-1.5 text-sm font-bold text-emerald-400">
-              <CheckCircle2 className="w-4 h-4" />
-              <span>ONLINE</span>
-            </div>
-            <div className="text-xs text-slate-400">Heartbeat: 8 sec ago</div>
-            <div className="text-[10px] text-slate-500">Telemetry Engine: v1.4.2</div>
-          </div>
+          <div className="text-sm font-bold text-slate-200">{state.gateway.status}</div>
+          <div className="text-xs text-slate-400">Heartbeat: {formatTimestamp(state.gateway.lastHeartbeatAt)}</div>
+          {state.gateway.version && <div className="text-[10px] text-slate-500">Version: {state.gateway.version}</div>}
         </div>
       </div>
 
-      {showDiagnostics && (
-        <RecorderDiagnosticsModal
-          isOpen={showDiagnostics}
-          onClose={() => setShowDiagnostics(false)}
-          recorderId="rec-branch-178-01"
-        />
-      )}
-    </>
+      <div className="flex items-center gap-1.5 text-[10px] text-slate-500">
+        <Clock className="h-3 w-3" />
+        Last health poll: {formatTimestamp(state.lastHealthPollAt)}
+      </div>
+    </div>
   );
 }

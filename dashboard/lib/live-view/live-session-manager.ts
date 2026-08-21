@@ -1,10 +1,12 @@
 /**
- * Centralized Live Session Manager with Reference Counting & Renewal Jitter
- * 
- * Manages WebRTC / HLS playback sessions from the media gateway.
- * Avoids redundant streams across multiple UI components (grid + focus + popup)
- * and distributes renewal requests to eliminate renewal storms.
+ * Reference-counted browser live-view grants.
+ *
+ * Every session comes from the authenticated `/api/live` gateway flow. The
+ * manager never manufactures an ID, URL, expiry, or successful renewal.
  */
+
+import { startLiveFromBrowser } from "../live-client";
+import type { LiveSessionResponse } from "../types";
 
 export interface LiveSession {
   cameraId: string;
@@ -18,172 +20,80 @@ export interface LiveSession {
   error?: string;
 }
 
-export interface SessionConsumer {
-  consumerId: string;
-  cameraId: string;
-}
+export type LiveSessionStarter = (
+  cameraId: string,
+  profile: "main" | "sub",
+) => Promise<LiveSessionResponse>;
 
 export class LiveSessionManager {
   private sessions = new Map<string, LiveSession>();
-  private consumers = new Map<string, Set<string>>(); // cameraId -> Set of consumerIds
-  private renewalTimers = new Map<string, any>();
-  private baseUrl: string;
+  private consumers = new Map<string, Set<string>>();
+  private expiryTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
-  constructor(baseUrl = "/api/v1") {
-    this.baseUrl = baseUrl;
-  }
+  constructor(private readonly startSession: LiveSessionStarter = startLiveFromBrowser) {}
 
-  /**
-   * Acquires a live stream session for a camera with reference counting.
-   */
   async acquire(
     cameraId: string,
     consumerId = "default-consumer",
     quality: "SUB" | "MAIN" = "SUB",
-    transport: "WEBRTC" | "HLS" = "WEBRTC"
+    preferredTransport: "WEBRTC" | "HLS" = "WEBRTC",
   ): Promise<LiveSession> {
-    // 1. Register consumer reference
-    if (!this.consumers.has(cameraId)) {
-      this.consumers.set(cameraId, new Set());
-    }
-    this.consumers.get(cameraId)!.add(consumerId);
-
-    // 2. Check if an active session already exists with matching quality
     const existing = this.sessions.get(cameraId);
-    if (existing && existing.state === "ACTIVE" && existing.quality === quality) {
+    if (existing?.state === "ACTIVE" && existing.quality === quality) {
+      this.addConsumer(cameraId, consumerId);
       return existing;
     }
 
-    // 3. Request new session from backend
-    const startedAt = Date.now();
-    const expiresAt = startedAt + 300 * 1000; // 5 minutes default
-    const sessionId = `ls_${Math.random().toString(36).slice(2, 10)}`;
-    const playbackUrl = `/api/media/streams/${encodeURIComponent(cameraId)}/${quality.toLowerCase()}/index.m3u8`;
-
-    const session: LiveSession = {
-      cameraId,
-      sessionId,
-      playbackUrl,
-      quality,
-      transport,
-      startedAt,
-      expiresAt,
-      state: "ACTIVE",
-    };
-
-    try {
-      if (typeof fetch !== "undefined") {
-        await fetch(`${this.baseUrl}/media/live-sessions`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ cameraId, quality, transport }),
-        }).catch(() => {});
-      }
-    } catch {
-      // Graceful fallback for local emulation / test environments
-    }
+    const response = await this.startSession(cameraId, quality === "MAIN" ? "main" : "sub");
+    const session = toLiveSession(cameraId, quality, preferredTransport, response);
 
     this.sessions.set(cameraId, session);
-    this.scheduleRenewal(cameraId, expiresAt);
-
+    this.addConsumer(cameraId, consumerId);
+    this.scheduleExpiry(cameraId, session.expiresAt);
     return session;
   }
 
   /**
-   * Schedules automated renewal with jitter to prevent synchronized load spikes.
-   */
-  private scheduleRenewal(cameraId: string, expiresAt: number): void {
-    if (this.renewalTimers.has(cameraId)) {
-      clearTimeout(this.renewalTimers.get(cameraId));
-    }
-
-    const now = Date.now();
-    // Jitter window: renew 60s to 80s before expiry
-    const jitterMs = Math.floor(Math.random() * 20_000);
-    const renewInMs = Math.max(5000, expiresAt - now - 60_000 - jitterMs);
-
-    const timer = setTimeout(() => {
-      this.renew(cameraId).catch((err) => {
-        console.warn(`Live session auto-renewal failed for ${cameraId}:`, err);
-      });
-    }, renewInMs);
-
-    this.renewalTimers.set(cameraId, timer);
-  }
-
-  /**
-   * Renews an active session.
+   * `/api/live` authorizes a short-lived grant; it has no fake renewal path.
+   * Callers must reacquire after a false return or an expired session.
    */
   async renew(cameraId: string): Promise<boolean> {
     const session = this.sessions.get(cameraId);
-    if (!session || session.state === "TERMINATED") return false;
-
-    session.state = "RENEWING";
-    const now = Date.now();
-    const newExpiresAt = now + 300 * 1000;
-
-    try {
-      if (typeof fetch !== "undefined") {
-        await fetch(`${this.baseUrl}/media/live-sessions/${encodeURIComponent(session.sessionId)}/renew`, {
-          method: "POST",
-        }).catch(() => {});
-      }
-      session.expiresAt = newExpiresAt;
-      session.state = "ACTIVE";
-      this.scheduleRenewal(cameraId, newExpiresAt);
-      return true;
-    } catch {
-      session.state = "FAILED";
+    if (!session || session.state !== "ACTIVE" || session.expiresAt <= Date.now()) {
+      this.markExpired(cameraId);
       return false;
     }
+    return false;
   }
 
   /**
-   * Releases a consumer's reference. Only terminates backend stream when ref count is 0.
+   * Releases a local viewer reference. Playback closes when its video element
+   * is detached; no non-existent backend teardown endpoint is called.
    */
   async release(cameraId: string, consumerId = "default-consumer"): Promise<boolean> {
     const consumerSet = this.consumers.get(cameraId);
     if (consumerSet) {
       consumerSet.delete(consumerId);
-      if (consumerSet.size > 0) {
-        // Still consumed elsewhere (e.g. focus mode or incident popup)
-        return false;
-      }
+      if (consumerSet.size > 0) return false;
       this.consumers.delete(cameraId);
     }
 
-    // Terminate session
-    const session = this.sessions.get(cameraId);
-    if (session) {
-      session.state = "TERMINATED";
-      if (this.renewalTimers.has(cameraId)) {
-        clearTimeout(this.renewalTimers.get(cameraId));
-        this.renewalTimers.delete(cameraId);
-      }
-      this.sessions.delete(cameraId);
-
-      try {
-        if (typeof fetch !== "undefined") {
-          await fetch(`${this.baseUrl}/media/live-sessions/${encodeURIComponent(session.sessionId)}`, {
-            method: "DELETE",
-          }).catch(() => {});
-        }
-      } catch {}
-    }
-
+    this.clearSession(cameraId, "TERMINATED");
     return true;
   }
 
-  /**
-   * Switches stream profile (e.g. upgrading to 1080p Main on double click).
-   */
   async switchProfile(cameraId: string, quality: "SUB" | "MAIN", consumerId = "default-consumer"): Promise<LiveSession> {
     await this.release(cameraId, consumerId);
     return this.acquire(cameraId, consumerId, quality);
   }
 
   getSession(cameraId: string): LiveSession | undefined {
-    return this.sessions.get(cameraId);
+    const session = this.sessions.get(cameraId);
+    if (session && session.expiresAt <= Date.now()) {
+      this.markExpired(cameraId);
+      return undefined;
+    }
+    return session;
   }
 
   getConsumerCount(cameraId: string): number {
@@ -191,17 +101,68 @@ export class LiveSessionManager {
   }
 
   releaseAll(): void {
-    for (const cameraId of Array.from(this.sessions.keys())) {
-      this.release(cameraId);
-    }
-    this.sessions.clear();
+    for (const cameraId of this.sessions.keys()) this.clearSession(cameraId, "TERMINATED");
     this.consumers.clear();
-    for (const timer of this.renewalTimers.values()) {
-      clearTimeout(timer);
-    }
-    this.renewalTimers.clear();
+  }
+
+  private addConsumer(cameraId: string, consumerId: string): void {
+    const consumers = this.consumers.get(cameraId) ?? new Set<string>();
+    consumers.add(consumerId);
+    this.consumers.set(cameraId, consumers);
+  }
+
+  private scheduleExpiry(cameraId: string, expiresAt: number): void {
+    const previous = this.expiryTimers.get(cameraId);
+    if (previous) clearTimeout(previous);
+    this.expiryTimers.set(cameraId, setTimeout(() => this.markExpired(cameraId), Math.max(0, expiresAt - Date.now())));
+  }
+
+  private markExpired(cameraId: string): void {
+    const session = this.sessions.get(cameraId);
+    if (!session) return;
+    session.state = "FAILED";
+    session.error = "live_session_expired";
+    this.expiryTimers.delete(cameraId);
+  }
+
+  private clearSession(cameraId: string, state: LiveSession["state"]): void {
+    const timer = this.expiryTimers.get(cameraId);
+    if (timer) clearTimeout(timer);
+    this.expiryTimers.delete(cameraId);
+    const session = this.sessions.get(cameraId);
+    if (session) session.state = state;
+    this.sessions.delete(cameraId);
   }
 }
 
-// Export singleton instance
+function toLiveSession(
+  cameraId: string,
+  quality: "SUB" | "MAIN",
+  preferredTransport: "WEBRTC" | "HLS",
+  response: LiveSessionResponse,
+): LiveSession {
+  if (response.cameraId !== cameraId || !response.sessionId || !response.expiresAt) {
+    throw new Error("invalid_live_session_response");
+  }
+  const expiresAt = Date.parse(response.expiresAt);
+  if (!Number.isFinite(expiresAt) || expiresAt <= Date.now()) throw new Error("invalid_live_session_response");
+
+  const hls = response.hls;
+  const webRtc = response.webRtc;
+  const useHls = preferredTransport === "HLS" ? Boolean(hls) : !webRtc && Boolean(hls);
+  const playbackUrl = useHls ? hls?.url : webRtc?.whepUrl;
+  if (!playbackUrl) throw new Error("live_stream_url_unavailable");
+
+  return {
+    cameraId,
+    sessionId: response.sessionId,
+    playbackUrl,
+    quality,
+    transport: useHls ? "HLS" : "WEBRTC",
+    startedAt: Date.now(),
+    expiresAt,
+    state: "ACTIVE",
+  };
+}
+
 export const liveSessionManager = new LiveSessionManager();

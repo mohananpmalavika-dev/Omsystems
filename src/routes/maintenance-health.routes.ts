@@ -45,17 +45,15 @@ export async function registerMaintenanceHealthRoutes(
 
     const tenantId = request.currentUser.tenantId;
     
-    // Get recent camera health records (last 15 minutes)
-    const fifteenMinutesAgo = new Date(Date.now() - 15 * 60 * 1000).toISOString();
-    
-    // This would query the camera_health table with filters
-    // For now, return sample data
+    // This deployment has no camera-health persistence adapter registered.
+    // Do not infer health from inventory or return sample measurements.
     return {
       data: [],
       metadata: {
         queriedAt: new Date().toISOString(),
         timeWindow: '15 minutes',
         limit: query.limit,
+        telemetryAvailable: false,
       },
     };
   });
@@ -73,9 +71,6 @@ export async function registerMaintenanceHealthRoutes(
       metrics: z.string().optional(), // Comma-separated: fps,bitrate,temperature
     }).parse(request.query);
 
-    const tenantId = request.currentUser.tenantId;
-    
-    // Query camera_health table for historical data
     const startTime = new Date(Date.now() - query.hours * 60 * 60 * 1000);
 
     return {
@@ -86,6 +81,7 @@ export async function registerMaintenanceHealthRoutes(
         hours: query.hours,
       },
       metrics: [],
+      telemetryAvailable: false,
     };
   });
 
@@ -103,10 +99,11 @@ export async function registerMaintenanceHealthRoutes(
       healthy: storageAssets.filter(a => a.status === 'operational').length,
       warning: storageAssets.filter(a => a.status === 'degraded').length,
       critical: storageAssets.filter(a => a.status === 'offline').length,
-      averageUsagePercentage: 75, // Would calculate from actual data
-      totalCapacityTb: 0,
-      usedCapacityTb: 0,
-      devicesNearingCapacity: 0, // > 80%
+      averageUsagePercentage: null,
+      totalCapacityTb: null,
+      usedCapacityTb: null,
+      devicesNearingCapacity: null,
+      telemetryAvailable: false,
       devicesList: storageAssets.map(asset => ({
         id: asset.id,
         model: asset.model,
@@ -124,36 +121,15 @@ export async function registerMaintenanceHealthRoutes(
   app.get('/v1/maintenance/health/network/branches', async (request, reply) => {
     const tenantId = request.currentUser.tenantId;
 
-    // Get all branches
-    // TODO: Implement listNodes method on store interface
-    const branches: any[] = []; // Placeholder
-
-    type BranchHealthStatus = 'healthy' | 'warning' | 'critical';
-    
-    // For each branch, get latest network health
-    const branchHealth = await Promise.all(
-      branches.map(async branch => {
-        // Query network_health table
-        return {
-          branchId: branch.id,
-          branchName: branch.name,
-          status: 'healthy' as BranchHealthStatus,
-          latencyMs: 25,
-          packetLoss: 0.2,
-          jitterMs: 5,
-          lastCheck: new Date().toISOString(),
-        };
-      })
-    );
-
     return {
-      data: branchHealth,
+      data: [],
       summary: {
-        total: branches.length,
-        healthy: branchHealth.filter(b => b.status === 'healthy').length,
-        warning: branchHealth.filter(b => b.status === 'warning').length,
-        critical: branchHealth.filter(b => b.status === 'critical').length,
+        total: 0,
+        healthy: 0,
+        warning: 0,
+        critical: 0,
       },
+      telemetryAvailable: false,
     };
   });
 
@@ -171,8 +147,9 @@ export async function registerMaintenanceHealthRoutes(
       healthy: upsAssets.filter(a => a.status === 'operational').length,
       warning: upsAssets.filter(a => a.status === 'degraded').length,
       critical: upsAssets.filter(a => a.status === 'offline').length,
-      averageBatteryHealth: 92,
-      averageRuntime: 240,
+      averageBatteryHealth: null,
+      averageRuntime: null,
+      telemetryAvailable: false,
       devices: upsAssets.map(asset => ({
         id: asset.id,
         model: asset.model,

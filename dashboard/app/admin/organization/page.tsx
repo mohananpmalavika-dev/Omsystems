@@ -7,7 +7,6 @@ import {
   FolderTree,
   Users,
   Shield,
-  ShieldCheck,
   ShieldAlert,
   Plus,
   Trash2,
@@ -32,7 +31,6 @@ import {
   Upload,
   UserCheck,
   ScanFace,
-  Sparkles,
   Check,
   RotateCcw,
 } from "lucide-react";
@@ -91,7 +89,7 @@ type CameraItem = {
 };
 
 export default function OrganizationHierarchyPage() {
-  const [activeTab, setActiveTab] = useState<"hierarchy" | "employees" | "locations">("hierarchy");
+  const [activeTab, setActiveTab] = useState<"hierarchy" | "employees">("hierarchy");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
@@ -136,16 +134,6 @@ export default function OrganizationHierarchyPage() {
   const [permScopeNodeId, setPermScopeNodeId] = useState("");
   const [permAction, setPermAction] = useState<"live:view" | "recording:view" | "ptz:operate" | "audio:talk">("live:view");
   const [permEffect, setPermEffect] = useState<"allow" | "deny">("allow");
-
-  // Location Access Simulator
-  const [simEmployeeId, setSimEmployeeId] = useState<string>("");
-  const [simCameraId, setSimCameraId] = useState<string>("");
-  const [simResult, setSimResult] = useState<{
-    allowed: boolean;
-    reason: string;
-    faceMatchScore?: number;
-    faceStatus?: string;
-  } | null>(null);
 
   useEffect(() => {
     loadAllData();
@@ -474,49 +462,6 @@ export default function OrganizationHierarchyPage() {
     }
   }
 
-  async function testPermissionSimulation() {
-    if (!simEmployeeId || !simCameraId) {
-      setError("Please select both an employee and a target camera location.");
-      return;
-    }
-    const emp = employees.find((e) => e.id === simEmployeeId);
-    const cam = cameras.find((c) => c.id === simCameraId);
-
-    try {
-      const res = await fetch(`/api/control/v1/cameras/${simCameraId}/check-access?action=live:view`);
-      const hasPhoto = Boolean(emp?.photoUrl || emp?.avatarUrl || emp?.facePhotoBase64);
-      const isRestrictedCam =
-        cam?.name.toLowerCase().includes("vault") ||
-        cam?.name.toLowerCase().includes("cash") ||
-        cam?.name.toLowerCase().includes("strong") ||
-        cam?.name.toLowerCase().includes("store");
-
-      if (res.ok) {
-        const json = await res.json();
-        const allowed = json.allowed !== false;
-        setSimResult({
-          allowed,
-          reason: json.reason || (allowed ? "Allowed by location grant hierarchy" : "Explicitly restricted / no grant"),
-          faceMatchScore: hasPhoto ? 98.4 : undefined,
-          faceStatus: hasPhoto
-            ? "Enrolled Biometric Face Verified (98.4% Confidence)"
-            : isRestrictedCam
-            ? "Caution: No face photo enrolled. Physical biometric verification at vault camera required."
-            : "Standard Access Permitted",
-        });
-      } else {
-        setSimResult({
-          allowed: false,
-          reason: "Restricted by default-deny security policy",
-          faceMatchScore: hasPhoto ? 98.4 : undefined,
-          faceStatus: "Denied by location policy override",
-        });
-      }
-    } catch {
-      setSimResult({ allowed: false, reason: "Location evaluation error" });
-    }
-  }
-
   function getNodeIcon(type: OrgNode["type"]) {
     switch (type) {
       case "company":
@@ -776,16 +721,6 @@ export default function OrganizationHierarchyPage() {
           >
             <Users size={15} /> 2. Employee Directory & Face Biometrics
           </button>
-          <button
-            onClick={() => setActiveTab("locations")}
-            className={`pb-3 px-4 text-xs font-bold transition-all border-b-2 flex items-center gap-2 ${
-              activeTab === "locations"
-                ? "border-emerald-500 text-emerald-400"
-                : "border-transparent text-slate-400 hover:text-slate-200"
-            }`}
-          >
-            <ShieldCheck size={15} /> 3. Restricted Location Biometric Simulator
-          </button>
         </div>
 
         {/* TAB 1: Hierarchy Tree */}
@@ -958,157 +893,6 @@ export default function OrganizationHierarchyPage() {
                   })}
                 </tbody>
               </table>
-            </div>
-          </div>
-        )}
-
-        {/* TAB 3: Restricted Location Biometric Simulator */}
-        {activeTab === "locations" && (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <div className="p-5 bg-slate-900/60 border border-slate-800 rounded-xl space-y-4">
-              <div>
-                <h2 className="text-base font-bold text-slate-100 flex items-center gap-2">
-                  <ShieldCheck size={18} className="text-emerald-400" />
-                  Restricted Location Biometric & RBAC Simulator
-                </h2>
-                <p className="text-xs text-slate-400 mt-0.5">
-                  Simulate live camera facial recognition and permission evaluation when an employee enters restricted zones.
-                </p>
-              </div>
-
-              <div className="space-y-3.5 text-xs">
-                <div>
-                  <label className="block text-slate-300 font-medium mb-1">Select Employee</label>
-                  <select
-                    value={simEmployeeId}
-                    onChange={(e) => setSimEmployeeId(e.target.value)}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-slate-200 text-xs"
-                  >
-                    <option value="">-- Choose Employee --</option>
-                    {employees.map((e) => (
-                      <option key={e.id} value={e.id}>
-                        {e.displayName} ({e.role} - {e.email})
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* Selected Employee Face Preview */}
-                {simEmployeeId && (
-                  <div className="p-3 bg-slate-950 border border-slate-800 rounded-xl flex items-center gap-3">
-                    {(() => {
-                      const emp = employees.find((e) => e.id === simEmployeeId);
-                      const photo = emp?.photoUrl || emp?.avatarUrl || emp?.facePhotoBase64;
-                      return photo ? (
-                        <>
-                          <img
-                            src={photo}
-                            alt={emp?.displayName}
-                            className="w-12 h-12 rounded-xl object-cover border-2 border-emerald-500"
-                          />
-                          <div>
-                            <div className="font-semibold text-slate-100">{emp?.displayName}</div>
-                            <div className="text-[11px] text-emerald-400 flex items-center gap-1 font-mono">
-                              <CheckCircle2 size={12} /> Facial Biometric Vector Enrolled
-                            </div>
-                          </div>
-                        </>
-                      ) : (
-                        <>
-                          <div className="w-12 h-12 rounded-xl bg-slate-800 flex items-center justify-center text-slate-500 font-bold">
-                            N/A
-                          </div>
-                          <div>
-                            <div className="font-semibold text-slate-100">{emp?.displayName}</div>
-                            <div className="text-[11px] text-amber-400 flex items-center gap-1">
-                              <AlertTriangle size={12} /> No Face Photo Enrolled (Standard RBAC Only)
-                            </div>
-                          </div>
-                        </>
-                      );
-                    })()}
-                  </div>
-                )}
-
-                <div>
-                  <label className="block text-slate-300 font-medium mb-1">Select Target Restricted Camera Location</label>
-                  <select
-                    value={simCameraId}
-                    onChange={(e) => setSimCameraId(e.target.value)}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-slate-200 text-xs"
-                  >
-                    <option value="">-- Choose Camera Location --</option>
-                    {cameras.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        [{c.branchId}] {c.name} ({c.model} - {c.ipAddress})
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={testPermissionSimulation}
-                  className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-500 text-slate-950 font-bold rounded-lg text-xs transition-colors flex items-center justify-center gap-2 mt-2"
-                >
-                  <ScanFace size={15} /> Verify Face & Evaluate Access
-                </button>
-              </div>
-
-              {simResult && (
-                <div
-                  className={`p-4 rounded-xl border mt-4 space-y-2 ${
-                    simResult.allowed
-                      ? "bg-emerald-950/40 border-emerald-500/40 text-emerald-300"
-                      : "bg-red-950/40 border-red-500/40 text-red-300"
-                  }`}
-                >
-                  <div className="flex items-center gap-2 font-bold text-sm">
-                    {simResult.allowed ? <CheckCircle2 size={18} /> : <XCircle size={18} />}
-                    <span>{simResult.allowed ? "CLEARANCE GRANTED" : "ACCESS DENIED & ALERT DISPATCHED"}</span>
-                  </div>
-                  <p className="text-xs opacity-90">{simResult.reason}</p>
-                  {simResult.faceStatus && (
-                    <div className="pt-2 border-t border-slate-800 text-[11px] font-mono flex items-center gap-1.5">
-                      <Sparkles size={13} className="text-amber-400" />
-                      <span>{simResult.faceStatus}</span>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-
-            {/* Location Groups Breakdown */}
-            <div className="p-5 bg-slate-900/60 border border-slate-800 rounded-xl space-y-3">
-              <h3 className="text-sm font-bold text-slate-100 flex items-center gap-2">
-                <MapPin size={16} className="text-indigo-400" />
-                Restricted Location Zones & Face Verification Policies
-              </h3>
-              <p className="text-xs text-slate-400">
-                Cameras deployed at high-risk locations enforce continuous facial recognition matching against the enrolled employee database.
-              </p>
-              <div className="grid grid-cols-2 gap-2.5 text-xs mt-3">
-                <div className="p-3 bg-slate-950 border border-slate-800 rounded-lg space-y-1">
-                  <span className="font-semibold text-slate-200 block">Strong Room / Currency Vault</span>
-                  <span className="text-[11px] text-amber-400 font-mono block">Dual-Custody + Facial Match</span>
-                  <span className="text-[10px] text-slate-500">Unrecognized face triggers immediate SOC lockdown.</span>
-                </div>
-                <div className="p-3 bg-slate-950 border border-slate-800 rounded-lg space-y-1">
-                  <span className="font-semibold text-slate-200 block">Cash Counter / Tellers</span>
-                  <span className="text-[11px] text-amber-400 font-mono block">Teller Face Verification</span>
-                  <span className="text-[10px] text-slate-500">Verifies teller presence & detects unauthorized presence.</span>
-                </div>
-                <div className="p-3 bg-slate-950 border border-slate-800 rounded-lg space-y-1">
-                  <span className="font-semibold text-slate-200 block">Main Gate & Staff Turnstile</span>
-                  <span className="text-[11px] text-emerald-400 font-mono block">Staff Auto-Pass & ANPR</span>
-                  <span className="text-[10px] text-slate-500">Hands-free employee ingress & VIP visitor alerts.</span>
-                </div>
-                <div className="p-3 bg-slate-950 border border-slate-800 rounded-lg space-y-1">
-                  <span className="font-semibold text-slate-200 block">Store Room & Server Rack</span>
-                  <span className="text-[11px] text-purple-400 font-mono block">IT & SOC Engineers Only</span>
-                  <span className="text-[10px] text-slate-500">Logs audit entries with facial snapshot verification.</span>
-                </div>
-              </div>
             </div>
           </div>
         )}

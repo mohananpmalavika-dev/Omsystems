@@ -1137,17 +1137,9 @@ export async function registerSecurityDashboardRoutes(
    * Verify SSE connection is working
    */
   app.get('/v1/security/test/sse-verify', async (request, reply) => {
-    return {
-      message: 'SSE endpoint verification',
-      sseEndpoint: '/v1/alerts/events',
-      instructions: [
-        '1. Open browser console',
-        '2. Run: const events = new EventSource("/api/control/v1/alerts/events", { withCredentials: true })',
-        '3. Add listener: events.addEventListener("alert.created", (e) => console.log(JSON.parse(e.data)))',
-        '4. Generate test alert: POST /v1/alerts/command-center/demo',
-        '5. Watch console for alert event',
-      ],
-      testCommand: 'curl -X POST /api/control/v1/alerts/command-center/demo -H "Content-Type: application/json" -d \'{"severity":"P1","detectionType":"camera-tampering"}\'',
-    };
+    return reply.code(410).send({
+      error: 'test_endpoint_removed',
+      message: 'Use authenticated operational event streams with real collector events.',
+    });
   });
 }

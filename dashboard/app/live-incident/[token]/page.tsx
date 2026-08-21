@@ -1,25 +1,33 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { useParams } from "next/navigation";
 import {
-  ShieldAlert,
-  MapPin,
-  Clock,
-  Radio,
-  CheckCircle2,
   AlertTriangle,
-  Send,
+  CheckCircle2,
   Navigation,
   PhoneCall,
+  MapPin,
   Video,
 } from "lucide-react";
 
+interface LiveIncident {
+  incidentId: string;
+  severity: string;
+  alertType: string;
+  branchName: string;
+  branchAddress?: string;
+  gpsCoordinates?: { lat: number; lng: number };
+  liveStreamUrl?: string;
+  snapshotUrl?: string;
+  status: string;
+  expiresAt: string;
+}
+
 export default function QrtLiveIncidentPage() {
   const params = useParams();
-  const token = params?.token as string;
-
-  const [incident, setIncident] = useState<any>(null);
+  const token = typeof params?.token === "string" ? params.token : "";
+  const [incident, setIncident] = useState<LiveIncident | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [responderName, setResponderName] = useState("");
@@ -27,44 +35,55 @@ export default function QrtLiveIncidentPage() {
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
-    if (!token) return;
+    if (!token) {
+      setError("This incident link is invalid.");
+      setLoading(false);
+      return;
+    }
+
     const fetchIncident = async () => {
       try {
-        const res = await fetch(`/api/control/v1/public/live-incident/${encodeURIComponent(token)}`);
-        const data = await res.json();
-        if (data.success && data.data) {
-          setIncident(data.data);
-          if (data.data.status === "ACKNOWLEDGED_ON_SCENE") {
-            setAcknowledged(true);
-          }
-        } else {
-          setError(data.message || "This QRT incident dispatch link has expired or is invalid.");
+        const response = await fetch(`/api/control/v1/public/live-incident/${encodeURIComponent(token)}`, {
+          cache: "no-store",
+        });
+        const body = await response.json().catch(() => ({}));
+        if (!response.ok || !body.success || !body.data) {
+          throw new Error(body.message || body.error || "This incident dispatch link has expired or is invalid.");
         }
-      } catch (err: any) {
-        setError("Failed to connect to Surveillance Command Center.");
+        setIncident(body.data as LiveIncident);
+        setAcknowledged(body.data.status === "ACKNOWLEDGED_ON_SCENE");
+        setError(null);
+      } catch (reason) {
+        setError(reason instanceof Error ? reason.message : "Unable to load the incident dispatch.");
       } finally {
         setLoading(false);
       }
     };
-    fetchIncident();
+
+    void fetchIncident();
   }, [token]);
 
-  const handleAcknowledgeArrival = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const acknowledgeArrival = async (event: FormEvent) => {
+    event.preventDefault();
     if (!responderName.trim()) return;
     setSubmitting(true);
+    setError(null);
     try {
-      const res = await fetch(`/api/control/v1/public/live-incident/${encodeURIComponent(token)}/arrive`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ responderName: responderName.trim() }),
-      });
-      const data = await res.json();
-      if (data.success) {
-        setAcknowledged(true);
+      const response = await fetch(
+        `/api/control/v1/public/live-incident/${encodeURIComponent(token)}/arrive`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ responderName: responderName.trim() }),
+        },
+      );
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok || !body.success) {
+        throw new Error(body.message || body.error || "Unable to acknowledge arrival.");
       }
-    } catch {
-      // ignore
+      setAcknowledged(true);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Unable to acknowledge arrival.");
     } finally {
       setSubmitting(false);
     }
@@ -72,142 +91,135 @@ export default function QrtLiveIncidentPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center text-slate-300 p-6 space-y-4">
-        <div className="w-10 h-10 border-4 border-rose-500 border-t-transparent rounded-full animate-spin" />
-        <p className="text-sm font-mono">Securing Live Incident Stream...</p>
+      <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-slate-950 p-6 text-slate-300">
+        <div className="h-10 w-10 animate-spin rounded-full border-4 border-rose-500 border-t-transparent" />
+        <p className="font-mono text-sm">Validating incident dispatch…</p>
       </div>
     );
   }
 
-  if (error || !incident) {
+  if (!incident) {
     return (
-      <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center text-slate-300 p-6 text-center">
-        <div className="p-4 bg-rose-950/60 border border-rose-800/80 rounded-2xl max-w-md space-y-3">
-          <AlertTriangle className="w-10 h-10 text-rose-400 mx-auto" />
-          <h1 className="text-lg font-bold text-white">Incident Link Expired</h1>
-          <p className="text-xs text-slate-400">
-            {error || "This secure dispatch token has expired for security compliance. Please contact Headquarters."}
-          </p>
+      <div className="flex min-h-screen flex-col items-center justify-center bg-slate-950 p-6 text-center text-slate-300">
+        <div className="max-w-md space-y-3 rounded-2xl border border-rose-800/80 bg-rose-950/60 p-4">
+          <AlertTriangle className="mx-auto h-10 w-10 text-rose-400" />
+          <h1 className="text-lg font-bold text-white">Incident link unavailable</h1>
+          <p className="text-xs text-slate-400">{error || "Contact the command center for a new dispatch link."}</p>
         </div>
       </div>
     );
   }
+
+  const hasLiveVideo = typeof incident.liveStreamUrl === "string" && incident.liveStreamUrl.trim().length > 0;
+  const hasSnapshot = typeof incident.snapshotUrl === "string" && incident.snapshotUrl.trim().length > 0;
+  const hasCoordinates = Number.isFinite(incident.gpsCoordinates?.lat) && Number.isFinite(incident.gpsCoordinates?.lng);
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col justify-between max-w-xl mx-auto border-x border-slate-800/80 shadow-2xl">
-      {/* Header Banner */}
-      <div className="p-4 bg-gradient-to-r from-rose-950 via-slate-900 to-slate-950 border-b border-rose-900/40 space-y-2">
+    <div className="mx-auto flex min-h-screen max-w-xl flex-col justify-between border-x border-slate-800/80 bg-slate-950 text-slate-100 shadow-2xl">
+      <header className="space-y-2 border-b border-rose-900/40 bg-gradient-to-r from-rose-950 via-slate-900 to-slate-950 p-4">
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <span className="flex h-3 w-3 relative">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-3 w-3 bg-rose-500"></span>
-            </span>
-            <span className="font-mono text-xs font-bold uppercase tracking-wider text-rose-300">
-              QRT Live Dispatch
-            </span>
-          </div>
-          <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-rose-600 text-white shadow-sm">
-            {incident.severity} CRITICAL
-          </span>
+          <span className="font-mono text-xs font-bold uppercase tracking-wider text-rose-300">QRT incident dispatch</span>
+          <span className="rounded-full bg-rose-600 px-2.5 py-0.5 text-xs font-bold text-white">{incident.severity}</span>
         </div>
-
-        <h1 className="text-xl font-bold text-white tracking-tight">{incident.alertType.replaceAll("_", " ")}</h1>
+        <h1 className="text-xl font-bold tracking-tight text-white">{incident.alertType.replaceAll("_", " ")}</h1>
         <div className="flex items-center gap-2 text-xs text-slate-300">
-          <MapPin className="w-3.5 h-3.5 text-blue-400 shrink-0" />
+          <MapPin className="h-3.5 w-3.5 shrink-0 text-blue-400" />
           <span className="font-semibold text-slate-200">{incident.branchName}</span>
-          <span>•</span>
-          <span className="text-slate-400 text-[11px] truncate">{incident.branchAddress}</span>
+          {incident.branchAddress && <span className="truncate text-[11px] text-slate-400">· {incident.branchAddress}</span>}
         </div>
-      </div>
+      </header>
 
-      {/* Live Stream / Camera Viewport */}
-      <div className="p-4 space-y-4 flex-1">
-        <div className="relative aspect-video rounded-xl bg-black border border-slate-800 overflow-hidden shadow-xl flex items-center justify-center">
-          <div className="absolute top-2 left-2 flex items-center gap-1.5 px-2 py-0.5 rounded bg-rose-950/80 border border-rose-600/60 text-rose-300 font-mono text-[10px] font-bold z-10">
-            <Radio className="w-3 h-3 text-rose-400 animate-pulse" />
-            <span>LIVE HO FEED</span>
-          </div>
-
-          {/* Fallback Simulated Live Feed Frame */}
-          <div className="flex flex-col items-center justify-center text-slate-400 space-y-2">
-            <Video className="w-10 h-10 text-slate-500 animate-pulse" />
-            <div className="text-xs font-mono text-center">
-              <div>Secure Encrypted RTSP Tunnel</div>
-              <div className="text-[10px] text-slate-500">{incident.branchName} • Vault Main Camera</div>
+      <main className="flex-1 space-y-4 p-4">
+        <div className="relative flex aspect-video items-center justify-center overflow-hidden rounded-xl border border-slate-800 bg-black shadow-xl">
+          {hasLiveVideo ? (
+            <video
+              src={incident.liveStreamUrl}
+              controls
+              autoPlay
+              muted
+              playsInline
+              className="h-full w-full object-contain"
+            >
+              Live video cannot be played by this browser.
+            </video>
+          ) : hasSnapshot ? (
+            <img
+              src={incident.snapshotUrl}
+              alt={`Incident snapshot from ${incident.branchName}`}
+              className="h-full w-full object-contain"
+            />
+          ) : (
+            <div className="flex flex-col items-center justify-center space-y-2 text-slate-400">
+              <Video className="h-10 w-10 text-slate-600" />
+              <div className="text-center font-mono text-xs">No incident video was provided.</div>
             </div>
-          </div>
+          )}
         </div>
 
-        {/* GPS Navigation and Action Bar */}
         <div className="grid grid-cols-2 gap-2.5">
           <a
-            href={`https://www.google.com/maps/search/?api=1&query=${incident.gpsCoordinates.lat},${incident.gpsCoordinates.lng}`}
+            href={hasCoordinates
+              ? `https://www.google.com/maps/search/?api=1&query=${incident.gpsCoordinates!.lat},${incident.gpsCoordinates!.lng}`
+              : undefined}
             target="_blank"
             rel="noopener noreferrer"
-            className="flex items-center justify-center gap-2 p-3 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-medium text-xs shadow-md transition-colors"
+            aria-disabled={!hasCoordinates}
+            className={`flex items-center justify-center gap-2 rounded-xl p-3 text-xs font-medium text-white shadow-md ${
+              hasCoordinates ? "bg-blue-600 hover:bg-blue-500" : "pointer-events-none bg-slate-700 opacity-60"
+            }`}
           >
-            <Navigation className="w-4 h-4" />
-            <span>Google Maps GPS</span>
+            <Navigation className="h-4 w-4" />
+            <span>Open map</span>
           </a>
-
           <a
             href="tel:112"
-            className="flex items-center justify-center gap-2 p-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-medium text-xs transition-colors"
+            className="flex items-center justify-center gap-2 rounded-xl border border-slate-700 bg-slate-800 p-3 text-xs font-medium text-slate-200 hover:bg-slate-700"
           >
-            <PhoneCall className="w-4 h-4 text-emerald-400" />
-            <span>Emergency Police</span>
+            <PhoneCall className="h-4 w-4 text-emerald-400" />
+            <span>Emergency services</span>
           </a>
         </div>
 
-        {/* Responder Arrival Acknowledgement */}
-        <div className="p-4 rounded-xl bg-slate-900/80 border border-slate-800 space-y-3">
-          <div className="flex items-center justify-between">
-            <h2 className="text-xs font-bold uppercase tracking-wider text-slate-300">
-              Field Responder Status
-            </h2>
-            {acknowledged ? (
-              <span className="flex items-center gap-1 text-emerald-400 text-xs font-semibold">
-                <CheckCircle2 className="w-3.5 h-3.5" />
-                <span>On Scene Acknowledged</span>
-              </span>
-            ) : (
-              <span className="text-amber-400 text-xs font-mono">En Route</span>
-            )}
-          </div>
+        {error && <p className="rounded-lg border border-rose-800 bg-rose-950/40 p-2 text-xs text-rose-300">{error}</p>}
 
+        <section className="space-y-3 rounded-xl border border-slate-800 bg-slate-900/80 p-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-xs font-bold uppercase tracking-wider text-slate-300">Field responder status</h2>
+            <span className={`text-xs font-semibold ${acknowledged ? "text-emerald-400" : "text-amber-400"}`}>
+              {acknowledged ? "On scene acknowledged" : "Awaiting arrival"}
+            </span>
+          </div>
           {acknowledged ? (
-            <div className="p-3 rounded-lg bg-emerald-950/40 border border-emerald-800/60 text-emerald-200 text-xs flex items-center gap-2">
-              <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-              <span>Headquarters SOC notified of your on-site presence. Maintain perimeter containment.</span>
+            <div className="flex items-center gap-2 rounded-lg border border-emerald-800/60 bg-emerald-950/40 p-3 text-xs text-emerald-200">
+              <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-400" />
+              Arrival was recorded by the command center.
             </div>
           ) : (
-            <form onSubmit={handleAcknowledgeArrival} className="space-y-2.5">
+            <form onSubmit={acknowledgeArrival} className="space-y-2.5">
               <input
                 type="text"
                 value={responderName}
-                onChange={(e) => setResponderName(e.target.value)}
-                placeholder="Enter Guard Name / Unit ID (e.g. Officer Vinod - Unit 4)"
+                onChange={(event) => setResponderName(event.target.value)}
+                placeholder="Enter responder name or unit ID"
                 required
-                className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-xs text-slate-200 focus:outline-none focus:border-rose-500"
+                className="w-full rounded-lg border border-slate-800 bg-slate-950 px-3 py-2 text-xs text-slate-200 focus:border-rose-500 focus:outline-none"
               />
               <button
                 type="submit"
                 disabled={submitting || !responderName.trim()}
-                className="w-full py-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow-md transition-colors flex items-center justify-center gap-2"
+                className="flex w-full items-center justify-center gap-2 rounded-lg bg-emerald-600 py-2.5 text-xs font-bold text-white hover:bg-emerald-500 disabled:opacity-60"
               >
-                <CheckCircle2 className="w-4 h-4" />
-                <span>{submitting ? "Updating SOC..." : "I Have Arrived on Scene"}</span>
+                <CheckCircle2 className="h-4 w-4" />
+                {submitting ? "Updating…" : "Acknowledge arrival"}
               </button>
             </form>
           )}
-        </div>
-      </div>
+        </section>
+      </main>
 
-      {/* Footer Audit Signature */}
-      <div className="p-3 text-center text-[10px] text-slate-500 font-mono border-t border-slate-900">
-        Sentinel Grid Enterprise SOC • Token valid until {new Date(incident.expiresAt).toLocaleTimeString()}
-      </div>
+      <footer className="border-t border-slate-900 p-3 text-center font-mono text-[10px] text-slate-500">
+        Dispatch expires {new Date(incident.expiresAt).toLocaleString()}
+      </footer>
     </div>
   );
 }
