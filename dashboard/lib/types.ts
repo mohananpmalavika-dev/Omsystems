@@ -320,6 +320,13 @@ export interface Camera {
   connectionTransport?: "vpn" | "cloudflare-tunnel" | "edge-gateway";
   recorderId?: string;
   recorderChannel?: number;
+  // Network identity — returned by the inventory API from approved discoveries
+  ipAddress?: string;
+  onvifPort?: number;
+  rtspPort?: number;
+  serialNumber?: string;
+  macAddress?: string;
+  onvifUuid?: string;
   // Optional stream URLs (may be provided by backend or edge agent)
   rtspUrl?: string;
   subStreamUrl?: string;

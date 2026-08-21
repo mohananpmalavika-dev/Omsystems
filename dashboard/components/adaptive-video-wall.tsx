@@ -445,14 +445,16 @@ export function AdaptiveVideoWall() {
 
           {/* Maximized Video Player */}
           <div className="relative aspect-video bg-slate-950 rounded-xl overflow-hidden border border-slate-800 flex items-center justify-center">
-            {sessions.get(maximizedCamera.id)?.hls ? (
-              <HlsPlayer
-                url={sessions.get(maximizedCamera.id)!.hls.url}
-                bearerToken={sessions.get(maximizedCamera.id)!.hls.bearerToken ?? ""}
-                cameraName={maximizedCamera.name}
-                cameraId={maximizedCamera.id}
-                muted={audioMuted}
-              />
+            {(() => {
+              const maxSession = sessions.get(maximizedCamera.id);
+              return maxSession?.hls ? (
+                <HlsPlayer
+                  url={maxSession.hls.url}
+                  bearerToken={maxSession.hls.bearerToken ?? ""}
+                  cameraName={maximizedCamera.name}
+                  cameraId={maximizedCamera.id}
+                  muted={audioMuted}
+                />
             ) : (
               <div className="text-center space-y-2">
                 <div className="w-14 h-14 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center mx-auto text-slate-300">
@@ -463,7 +465,9 @@ export function AdaptiveVideoWall() {
                   {maximizedCamera.vendor} • IP: {maximizedCamera.ipAddress || "Connected"} • Channel {maximizedCamera.channel}
                 </div>
               </div>
-            )}
+            )
+            })()}
+
 
             <div className="absolute top-3 left-3 bg-black/70 backdrop-blur px-2.5 py-1 rounded text-[11px] font-mono text-emerald-400 border border-emerald-500/30 flex items-center">
               <span className="w-2 h-2 rounded-full bg-emerald-400 mr-1.5 animate-pulse" />
