@@ -258,7 +258,7 @@ export class SnmpAdapter extends BaseSecurityDeviceAdapter {
       const batteryVoltage = 27.5;
       const temperature = 28;
       const loadPercent = 35;
-      const outputSource = 3; // 1=other, 2=none, 3=normal, 4=bypass, 5=battery, 6=booster, 7=reducer
+      const outputSource: number = 3; // 1=other, 2=none, 3=normal, 4=bypass, 5=battery, 6=booster, 7=reducer
 
       const isOnBattery = outputSource === 5;
       const isBatteryLow = batteryStatus === 3 || batteryPercent < 20;
