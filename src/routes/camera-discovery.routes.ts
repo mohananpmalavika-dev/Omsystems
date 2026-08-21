@@ -82,7 +82,10 @@ export async function registerCameraDiscoveryRoutes(
 
   app.post("/v1/branches/:branchId/cameras/discovered", async (request, reply) => {
     const { branchId } = branchParams.parse(request.params);
-    const body = (request.body || {}) as any;
+    const body = request.body as any;
+    if (!body || (typeof body !== "object")) {
+      return reply.code(400).send({ error: "discovery_payload_required" });
+    }
     
     // Accept either a single device, array, or object with devices array
     const items = Array.isArray(body) 
@@ -91,25 +94,20 @@ export async function registerCameraDiscoveryRoutes(
       ? body.devices 
       : [body];
 
-    const isUuid = (str?: string) => Boolean(str && typeof str === "string" && str.trim().length > 0);
-    let resolvedEdgeAgentId = isUuid(body.edgeAgentId) ? body.edgeAgentId : undefined;
-
-    if (!resolvedEdgeAgentId) {
-      const existingAgents = await store.listEdgeAgentsByBranch(branchId).catch(() => []);
-      if (existingAgents.length > 0 && existingAgents[0]) {
-        resolvedEdgeAgentId = existingAgents[0].id;
-      } else {
-        const newAgent = await store.registerEdgeAgent(branchId, "Local Edge Scanner", "2.4.0").catch(() => null);
-        if (newAgent) resolvedEdgeAgentId = newAgent.id;
-      }
-    }
+    const isPresent = (value: unknown): value is string =>
+      typeof value === "string" && value.trim().length > 0;
+    const resolvedEdgeAgentId = isPresent(body.edgeAgentId) ? body.edgeAgentId : undefined;
+    const branchAgents = await store.listEdgeAgentsByBranch(branchId);
 
     const results: any[] = [];
     for (const item of items) {
       if (!item || typeof item !== "object" || Object.keys(item).length === 0) continue;
       
-      const itemAgentId = isUuid(item.edgeAgentId) ? item.edgeAgentId : resolvedEdgeAgentId;
-      if (!itemAgentId) continue;
+      const itemAgentId = isPresent(item.edgeAgentId) ? item.edgeAgentId : resolvedEdgeAgentId;
+      if (!itemAgentId || !branchAgents.some((agent) => agent.id === itemAgentId)) {
+        results.push({ status: "error", error: "discovery_edge_agent_required" });
+        continue;
+      }
 
       const rawVendor = (item.vendor || item.manufacturer || item.model || item.type || "").toLowerCase();
       const vendor: "cp-plus" | "dahua" | "hikvision" | "axis" | "hanwha" | "uniview" | "other" = 
@@ -120,43 +118,56 @@ export async function registerCameraDiscoveryRoutes(
         rawVendor.includes("hanwha") ? "hanwha" :
         rawVendor.includes("uniview") ? "uniview" : "other";
 
-      const manufacturer = item.manufacturer || (vendor === "cp-plus" ? "CP PLUS" : vendor === "dahua" ? "Dahua Technology" : vendor === "hikvision" ? "Hikvision" : "Generic ONVIF");
+      const model = isPresent(item.model) ? item.model : isPresent(item.type) ? item.type : undefined;
+      const ipAddress = isPresent(item.ipAddress) ? item.ipAddress : isPresent(item.ip) ? item.ip : undefined;
+      const onvifPort = Number(item.onvifPort ?? item.port);
+      const rtspPort = Number(item.rtspPort ?? item.port);
+      if (!model || !ipAddress || !Number.isInteger(onvifPort) || !Number.isInteger(rtspPort)) {
+        results.push({ status: "error", error: "discovery_identity_and_ports_required" });
+        continue;
+      }
+
+      const manufacturer = isPresent(item.manufacturer) ? item.manufacturer : undefined;
+      const profiles = Array.isArray(item.profiles) ? item.profiles : Array.isArray(item.mediaProfiles) ? item.mediaProfiles : [];
+      const capabilities = item.capabilities && typeof item.capabilities === "object"
+        ? item.capabilities
+        : { ptz: false, audio: false, events: false };
 
       const normalized = {
         edgeAgentId: itemAgentId,
         discoveryMethod: (item.discoveryMethod || "edge-agent-reported-inventory") as any,
         vendor,
         manufacturer,
-        model: item.model || item.type || "IP Camera",
-        ipAddress: item.ipAddress || item.ip || "192.168.1.100",
+        model,
+        ipAddress,
         macAddress: item.macAddress,
         serialNumber: item.serialNumber,
         firmwareVersion: item.firmwareVersion,
-        onvifPort: Number(item.onvifPort || item.port || 80),
-        rtspPort: Number(item.rtspPort || item.port || 554),
+        onvifPort,
+        rtspPort,
         onvifServices: item.onvifServices,
         onvifCapabilityTests: item.onvifCapabilityTests,
-        mediaProfiles: item.mediaProfiles || item.profiles || [{ name: "main", codec: "H264", width: 1920, height: 1080 }],
+        mediaProfiles: profiles,
         onvifEndpointReference: item.onvifEndpointReference,
         onvifUuid: item.onvifUuid,
         sourceType: (item.sourceType === "analog-dvr-channel" || item.sourceType === "nvr-channel" ? item.sourceType : "ip-camera") as any,
         recorderId: item.recorderId || (item.sourceType === "analog-dvr-channel" ? `recorder-${(item.ipAddress || item.ip || "dvr").replace(/\./g, "-")}` : undefined),
         recorderChannel: item.recorderChannel ? Number(item.recorderChannel) : (item.channel ? Number(item.channel) : undefined),
-        recorderSerialNumber: item.recorderSerialNumber || (item.recorderId ? "CP-UVR-0801E1V-I" : undefined),
-        streamVerified: item.streamVerified !== undefined ? Boolean(item.streamVerified) : true,
-        rtspValidated: item.rtspValidated !== undefined ? Boolean(item.rtspValidated) : true,
+        recorderSerialNumber: item.recorderSerialNumber,
+        streamVerified: item.streamVerified === undefined ? undefined : Boolean(item.streamVerified),
+        rtspValidated: item.rtspValidated === undefined ? undefined : Boolean(item.rtspValidated),
         ptzCapability: item.ptzCapability !== undefined ? Boolean(item.ptzCapability) : Boolean(item.capabilities?.ptz),
         audioCapability: item.audioCapability !== undefined ? Boolean(item.audioCapability) : Boolean(item.capabilities?.audio),
         analyticsCapability: item.analyticsCapability !== undefined ? Boolean(item.analyticsCapability) : Boolean(item.capabilities?.events),
-        timeSynchronization: item.timeSynchronization || "synchronized",
-        duplicateStatus: item.duplicateStatus || "unique",
-        compatibilityStatus: item.compatibilityStatus || "compatible",
+        timeSynchronization: item.timeSynchronization,
+        duplicateStatus: item.duplicateStatus,
+        compatibilityStatus: item.compatibilityStatus,
         hardwareId: item.hardwareId,
         existingDeviceAssociation: item.existingDeviceAssociation,
         statusReason: item.statusReason,
-        displayName: item.displayName || item.name || `${item.model || item.type || "Camera"} (${item.ipAddress || item.ip || "192.168.1.100"})`,
-        capabilities: item.capabilities || { ptz: false, audio: true, events: true },
-        profiles: item.profiles || [{ name: "main", codec: "H264", width: 1920, height: 1080 }],
+        displayName: isPresent(item.displayName) ? item.displayName : undefined,
+        capabilities,
+        profiles,
       };
 
       try {
@@ -342,15 +353,6 @@ export async function registerCameraDiscoveryRoutes(
       onvifPort: discovered.onvifPort,
     });
 
-    if (pool) {
-      await pool.query(
-        `UPDATE edge_scan_jobs
-         SET status = 'completed', completed_at = now(), result_count = 1, verified_count = 1, provisioned_count = 1
-         WHERE id = $1`,
-        [scan.id],
-      ).catch(() => undefined);
-    }
-
     await store.writeAudit({
       tenantId: branch.tenantId,
       actorUserId: request.currentUser.id,
@@ -368,10 +370,10 @@ export async function registerCameraDiscoveryRoutes(
     });
     return reply.code(200).send({
       scanId: scan.id,
-      status: "completed",
+      status: "queued",
       scope: "device",
       targetDiscoveryId: discovered.id,
-      message: "Credentials verified successfully. Live stream is activated.",
+      message: "Credentials stored. The connected edge agent must complete the targeted verification before live streaming is enabled.",
     });
   });
 
@@ -459,9 +461,9 @@ export async function registerCameraDiscoveryRoutes(
   app.post("/v1/cameras/probe-direct", async (request, reply) => {
     const body = z.object({
       ipAddress: z.string().min(1),
-      rtspPort: z.number().int().optional().default(554),
-      username: z.string().optional().default("admin"),
-      password: z.string().optional().default(""),
+      rtspPort: z.number().int().positive(),
+      username: z.string().min(1),
+      password: z.string().min(1),
     }).parse(request.body);
 
     const result = await probeNetworkCamera(body.ipAddress, body.rtspPort, body.username, body.password);
@@ -475,41 +477,15 @@ export async function registerCameraDiscoveryRoutes(
     }).parse(request.body);
 
     const cleaned = body.qrData.replace(/[\r\n\t]/g, " ").trim();
-    const uidMatch = cleaned.match(/^([A-Za-z0-9_-]{6,32})$/);
-    const uid = uidMatch?.[1] || cleaned.split(" ")[0] || "4835592944";
-    const model = cleaned.includes("T18061") ? "T18061-W (3MP Wi-Fi Robot)" : "Wi-Fi Robot Pan-Tilt Camera";
-    const targetBranchId = body.branchId || "branch-01";
-    const streamUrl = `rtsp://192.168.29.196:554/stream1`;
-
-    try {
-      await store.approveCamera(targetBranchId, {
-        discoveryId: "",
-        name: `Trueview Robot (${uid})`,
-        channel: 1,
-        protocol: "rtsp",
-        connectionSecretRef: "",
-        manufacturer: "Trueview / TrueCloud",
-        model,
-        serialNumber: uid,
-        ipAddress: "192.168.29.196",
-        onvifPort: 80,
-        rtspPort: 554,
-        sourceType: "ip-camera",
-        connectionTransport: "vpn",
-      });
-    } catch {
-      // Continue gracefully if mock store or duplicate
+    const uidMatch = cleaned.match(/^([A-Za-z0-9_-]{6,64})$/);
+    if (!uidMatch || !body.branchId) {
+      return reply.code(400).send({ error: "qr_payload_and_branch_required" });
     }
-
-    return {
-      success: true,
-      cameraId: `cam-qr-${uid.toLowerCase()}`,
-      uid,
-      model,
-      ipAddress: "192.168.29.196",
-      streamUrl,
-      message: `Camera ${uid} (${model}) successfully connected via QR code!`,
-    };
+    return reply.code(501).send({
+      error: "qr_device_activation_requires_edge_agent",
+      uid: uidMatch[1],
+      message: "QR identity was read, but activation requires a real edge-agent discovery and credential verification result.",
+    });
   });
 }
 

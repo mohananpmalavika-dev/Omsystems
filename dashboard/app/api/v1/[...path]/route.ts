@@ -80,45 +80,6 @@ async function proxyApiV1Request(request: NextRequest, context: RouteContext) {
       headers: responseHeaders,
     });
   } catch (error) {
-    // Graceful fallback for zero-touch fleet if upstream is temporarily unready
-    if (pathString === "zero-touch/fleet") {
-      return NextResponse.json({
-        success: true,
-        data: {
-          branches: [
-            {
-              branchId: "branch-blr-01",
-              branchName: "Bengaluru Main Branch",
-              region: "South Zone",
-              status: "provisioned",
-              agentStatus: "healthy",
-              deviceCount: 8,
-              onlineDevices: 8,
-              lastHeartbeat: new Date().toISOString(),
-              slaCompliant: true,
-            },
-            {
-              branchId: "branch-mum-01",
-              branchName: "Mumbai Central",
-              region: "West Zone",
-              status: "provisioned",
-              agentStatus: "healthy",
-              deviceCount: 16,
-              onlineDevices: 16,
-              lastHeartbeat: new Date().toISOString(),
-              slaCompliant: true,
-            },
-          ],
-          slaMetrics: {
-            uptimePercentage: 99.98,
-            totalBranches: 2,
-            healthyBranches: 2,
-            criticalAlerts: 0,
-          },
-        },
-      });
-    }
-
     return NextResponse.json(
       {
         success: false,

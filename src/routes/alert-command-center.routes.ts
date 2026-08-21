@@ -173,6 +173,10 @@ export async function registerAlertCommandCenterRoutes(
   });
 
   app.post("/v1/alerts/command-center/demo", async (request, reply) => {
+    return reply.code(410).send({
+      error: "synthetic_alert_generation_removed",
+      message: "Alerts must originate from a registered camera, analytics engine, or infrastructure event source.",
+    });
     const input = z.object({
       cameraId: z.string().min(1).optional(),
       detectionType: z.string().trim().min(1).max(120).default("camera-tampering"),

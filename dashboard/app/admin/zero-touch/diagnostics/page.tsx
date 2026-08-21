@@ -55,7 +55,7 @@ export default function ZeroTouchDiagnosticsPage() {
       })
       .then((nextBranches) => {
         if (cancelled) return;
-        const normalized = nextBranches
+        const normalized: Array<{ branchId: string; branchName: string }> = nextBranches
           .filter((branch: any) => typeof branch?.branchId === "string")
           .map((branch: any) => ({ branchId: branch.branchId, branchName: branch.branchName || branch.branchId }));
         setBranches(normalized);

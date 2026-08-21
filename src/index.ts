@@ -36,6 +36,10 @@ if (config.DATABASE_URL) {
   }
 }
 
+if (!config.DATABASE_URL && config.NODE_ENV === "production") {
+  throw new Error("DATABASE_URL is required in production; refusing to start with the in-memory store");
+}
+
 const store: ControlPlaneStore = config.DATABASE_URL
   ? (new PostgresStore(createPool(config.DATABASE_URL)) as unknown as ControlPlaneStore)
   : (new MemoryStore() as unknown as ControlPlaneStore);

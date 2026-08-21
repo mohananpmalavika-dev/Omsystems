@@ -554,12 +554,15 @@ const seedDeviceIdentities: DeviceIdentity[] = seedCameras.map((camera) => ({
 }));
 
 export class MemoryStore {
-  readonly nodes = new Map(seedNodes.map((node) => [node.id, structuredClone(node)]));
-  readonly users = new Map(seedUsers.map((user) => [user.id, structuredClone(user)]));
-  readonly cameras = new Map(seedCameras.map((camera) => [camera.id, structuredClone(camera)]));
-  readonly deviceIdentities = new Map(seedDeviceIdentities.map((identity) => [identity.deviceId, structuredClone(identity)]));
+  // The in-memory store is an explicitly non-production adapter. Start empty so
+  // local/dev runs cannot silently present fixture branches, users, or cameras
+  // as operational data. Production startup requires DATABASE_URL.
+  readonly nodes = new Map<string, ResourceNode>();
+  readonly users = new Map<string, User>();
+  readonly cameras = new Map<string, Camera>();
+  readonly deviceIdentities = new Map<string, DeviceIdentity>();
   readonly deviceIdentityClaims = new Map<string, string>();
-  readonly grants = structuredClone(seedGrants);
+  readonly grants: AccessGrant[] = [];
   readonly edgeAgents = new Map<string, EdgeAgent>();
   readonly edgeScanJobs = new Map<string, EdgeScanJob>();
   readonly edgeActivations = new Map<string, EdgeActivation & { tokenHash: string }>();
@@ -683,7 +686,9 @@ export class MemoryStore {
   }>();
 
   constructor() {
-    this.initializeEnterpriseSeedData();
+    // The memory store is only a development/test adapter. Production data is
+    // loaded from PostgresStore; never manufacture an enterprise inventory in
+    // the runtime when the database is unavailable.
   }
 
   private initializeEnterpriseSeedData() {

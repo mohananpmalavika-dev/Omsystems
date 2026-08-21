@@ -8,8 +8,8 @@ import { branchEdgeOrchestratorService } from "../services/branch-edge-orchestra
 import { offlineStoreForwardService } from "../services/offline-store-forward.service.js";
 
 export async function registerEdgeProductRoutes(app: FastifyInstance) {
-  // 1. Fleet Health Summary (400 Branches)
-  app.get("/api/edge-product/fleet/summary", { config: { noAuth: true } }, async (_request, reply) => {
+  // 1. Fleet Health Summary
+  app.get("/api/edge-product/fleet/summary", async (_request, reply) => {
     const summary = branchEdgeOrchestratorService.getFleetSummary();
     return reply.code(200).send({
       success: true,
@@ -18,7 +18,7 @@ export async function registerEdgeProductRoutes(app: FastifyInstance) {
   });
 
   // 2. List All Branch Agents
-  app.get("/api/edge-product/agents", { config: { noAuth: true } }, async (_request, reply) => {
+  app.get("/api/edge-product/agents", async (_request, reply) => {
     const agents = branchEdgeOrchestratorService.listAgents();
     return reply.code(200).send({
       success: true,
@@ -27,7 +27,7 @@ export async function registerEdgeProductRoutes(app: FastifyInstance) {
   });
 
   // 3. Get Single Branch Agent
-  app.get("/api/edge-product/agents/:agentId", { config: { noAuth: true } }, async (request, reply) => {
+  app.get("/api/edge-product/agents/:agentId", async (request, reply) => {
     const { agentId } = request.params as { agentId: string };
     const agent = branchEdgeOrchestratorService.getAgent(agentId);
     if (!agent) {
@@ -37,11 +37,11 @@ export async function registerEdgeProductRoutes(app: FastifyInstance) {
   });
 
   // 4. Trigger Branch Multi-Protocol Device Discovery
-  app.post("/api/edge-product/agents/:agentId/discovery/run", { config: { noAuth: true } }, async (request, reply) => {
+  app.post("/api/edge-product/agents/:agentId/discovery/run", async (request, reply) => {
     const { agentId } = request.params as { agentId: string };
     const body = z.object({
-      subnet: z.string().default("192.168.1.0/24"),
-    }).parse(request.body || {});
+      subnet: z.string().min(1),
+    }).parse(request.body);
 
     try {
       const report = await branchEdgeOrchestratorService.runDeviceDiscovery(agentId, body.subnet);
@@ -52,7 +52,7 @@ export async function registerEdgeProductRoutes(app: FastifyInstance) {
   });
 
   // 5. Run Branch Network Diagnostics (Broadband vs LTE)
-  app.post("/api/edge-product/agents/:agentId/diagnostics/network", { config: { noAuth: true } }, async (request, reply) => {
+  app.post("/api/edge-product/agents/:agentId/diagnostics/network", async (request, reply) => {
     const { agentId } = request.params as { agentId: string };
     try {
       const diag = await branchEdgeOrchestratorService.runNetworkDiagnostics(agentId);
@@ -62,15 +62,15 @@ export async function registerEdgeProductRoutes(app: FastifyInstance) {
     }
   });
 
-  // 6. Spool Event to Local Offline Buffer (WAN Outage simulation)
-  app.post("/api/edge-product/agents/:agentId/buffer/spool", { config: { noAuth: true } }, async (request, reply) => {
+  // 6. Spool Event to Local Offline Buffer
+  app.post("/api/edge-product/agents/:agentId/buffer/spool", async (request, reply) => {
     const { agentId } = request.params as { agentId: string };
     const body = z.object({
       branchId: z.string(),
-      eventType: z.string().default("INTRUSION_ALARM"),
+      eventType: z.string().min(1),
       cameraId: z.string().optional(),
-      severity: z.enum(["P1", "P2", "P3", "INFO"]).default("P1"),
-      payload: z.record(z.unknown()).default({}),
+      severity: z.enum(["P1", "P2", "P3", "INFO"]),
+      payload: z.record(z.unknown()),
       snapshotBase64: z.string().optional(),
     }).parse(request.body);
 
@@ -84,7 +84,7 @@ export async function registerEdgeProductRoutes(app: FastifyInstance) {
   });
 
   // 7. Flush Offline Buffer Queue (Replay on WAN Reconnection)
-  app.post("/api/edge-product/agents/:agentId/buffer/replay", { config: { noAuth: true } }, async (request, reply) => {
+  app.post("/api/edge-product/agents/:agentId/buffer/replay", async (request, reply) => {
     const { agentId } = request.params as { agentId: string };
     const body = z.object({
       batchSize: z.number().int().positive().default(50),
@@ -98,7 +98,7 @@ export async function registerEdgeProductRoutes(app: FastifyInstance) {
   });
 
   // 8. Rotate Camera Credentials on Branch LAN
-  app.post("/api/edge-product/agents/:agentId/credentials/rotate", { config: { noAuth: true } }, async (request, reply) => {
+  app.post("/api/edge-product/agents/:agentId/credentials/rotate", async (request, reply) => {
     const { agentId } = request.params as { agentId: string };
     const body = z.object({
       deviceId: z.string(),
@@ -114,11 +114,11 @@ export async function registerEdgeProductRoutes(app: FastifyInstance) {
   });
 
   // 9. Sync Desired Config & Clear Drift
-  app.post("/api/edge-product/agents/:agentId/config/sync", { config: { noAuth: true } }, async (request, reply) => {
+  app.post("/api/edge-product/agents/:agentId/config/sync", async (request, reply) => {
     const { agentId } = request.params as { agentId: string };
     const body = z.object({
-      desiredRevision: z.string().default("rev-2026.08.17-a"),
-    }).parse(request.body || {});
+      desiredRevision: z.string().min(1),
+    }).parse(request.body);
 
     try {
       const config = await branchEdgeOrchestratorService.syncDesiredConfig(agentId, body.desiredRevision);
@@ -129,12 +129,12 @@ export async function registerEdgeProductRoutes(app: FastifyInstance) {
   });
 
   // 10. Deploy Staged OTA Update Rollout
-  app.post("/api/edge-product/ota/deploy", { config: { noAuth: true } }, async (request, reply) => {
+  app.post("/api/edge-product/ota/deploy", async (request, reply) => {
     const body = z.object({
-      targetVersion: z.string().default("2.4.14-ga"),
-      packageSha256: z.string().default("e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"),
-      signatureBase64: z.string().default("MEQCIE...signed..."),
-    }).parse(request.body || {});
+      targetVersion: z.string().min(1),
+      packageSha256: z.string().regex(/^[a-fA-F0-9]{64}$/),
+      signatureBase64: z.string().min(1),
+    }).parse(request.body);
 
     const rollout = await branchEdgeOrchestratorService.deployOtaRollout(
       body.targetVersion,

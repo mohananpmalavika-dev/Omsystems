@@ -54,6 +54,7 @@ export async function registerRecorderProfileRoutes(
       const profile = await service.getProfile(id);
 
       if (!profile) {
+        return reply.code(404).send({ error: "recorder_profile_not_found" });
         // Return default mock / synthesized profile for un-fingerprinted recorders
         return reply.code(200).send({
           profileVersion: 1,
@@ -136,6 +137,7 @@ export async function registerRecorderProfileRoutes(
       const profile = await service.getProfile(id);
 
       if (!profile) {
+        return reply.code(404).send({ error: "recorder_profile_not_found" });
         return reply.code(200).send({
           recorderId: id,
           capabilities: {
@@ -168,6 +170,7 @@ export async function registerRecorderProfileRoutes(
       const evidence = await service.getRedactedEvidence(id);
 
       if (!evidence) {
+        return reply.code(404).send({ error: "recorder_profile_evidence_not_found" });
         return reply.code(200).send({
           recorderId: id,
           identityEvidence: [
@@ -201,6 +204,10 @@ export async function registerRecorderProfileRoutes(
       const { id } = paramsSchema.parse(request.params);
       const profile = await service.getProfile(id);
       const evidence = await service.getRedactedEvidence(id);
+
+      if (!profile || !evidence) {
+        return reply.code(404).send({ error: "recorder_compatibility_evidence_not_found" });
+      }
 
       return reply.code(200).send({
         recorderId: id,

@@ -1016,6 +1016,10 @@ export async function registerSecurityDashboardRoutes(
    * Generate test security alerts for verification
    */
   app.post('/v1/security/test/generate-alert', async (request, reply) => {
+    return reply.code(410).send({
+      error: 'synthetic_security_alerts_removed',
+      message: 'Security alerts must be emitted by a configured collector or live event source.',
+    });
     const body = z.object({
       alertType: z.enum([
         'certificate_expiring',

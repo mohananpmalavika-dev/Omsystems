@@ -7,7 +7,7 @@ import { VehicleTracker, type VehicleDetection, type VehicleTrackState } from '.
 import { DominantColorClassifier, resolveVehicleColor, type VehicleColorResult } from './color/vehicle-color-classifier.js';
 import { YoloPlateDetector, translateBoundingBox, type PlateDetection } from './detection/license-plate-detector.js';
 import { BasicPlateRectifier, type RectifiedPlate } from './anpr/plate-rectifier.js';
-import { PaddlePlateRecognizer, MockPlateRecognizer, type PlateRecognizer } from './anpr/paddle-ocr-adapter.js';
+import { PaddlePlateRecognizer, type PlateRecognizer } from './anpr/paddle-ocr-adapter.js';
 import { PlateNormalizer, type NormalizedPlate } from './anpr/plate-normalizer.js';
 import { PlateConsensus, isReliableConsensus, type PlateConsensusResult } from './anpr/plate-consensus.js';
 import { DefaultVehicleEventFactory, type VehicleEvent } from './persistence/vehicle-event.model.js';
@@ -90,10 +90,10 @@ export class VehicleAnalyticsService {
     );
     this.plateRectifier = new BasicPlateRectifier();
     
-    // Use mock recognizer if no service URL provided
+    // Do not manufacture plate text when the OCR service is not configured.
     this.plateRecognizer = ocrServiceUrl
       ? new PaddlePlateRecognizer(ocrServiceUrl)
-      : new MockPlateRecognizer();
+      : { recognize: async () => [] };
     
     this.plateNormalizer = new PlateNormalizer();
     this.plateConsensus = new PlateConsensus(2, 0.7, 2);

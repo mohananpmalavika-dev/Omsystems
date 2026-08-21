@@ -971,12 +971,9 @@ export async function buildApp(options?: {
       return reply.code(201).send(agent);
     } catch (error: any) {
       request.log.error({ err: error }, "Failed to register edge agent");
-      return reply.code(200).send({
-        id: "edge-agent-fallback-" + Date.now(),
-        name: "Local Edge Agent",
-        version: "0.1.8",
-        status: "online",
-        branchNodeId: (request.params as any)?.branchId || "BR-GLOBAL",
+      return reply.code(503).send({
+        error: "edge_agent_registration_failed",
+        message: error instanceof Error ? error.message : "Unable to register edge agent",
       });
     }
   });

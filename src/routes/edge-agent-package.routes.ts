@@ -250,15 +250,18 @@ export async function registerEdgeAgentPackageRoutes(
    */
   app.get("/v1/branches/:branchId/install.ps1", async (request, reply) => {
     const { branchId } = branchParams.parse(request.params);
+    return reply.code(410).send({
+      error: "legacy_installer_removed",
+      branchId,
+      message: "The legacy PowerShell installer has been removed. Create an authenticated edge-agent activation and download the signed package instead.",
+    });
     let branchName = "Branch Location";
     try {
       const branch = await store.getNode(branchId);
       if (branch?.name) branchName = branch.name;
     } catch {}
 
-    const publicUrl =
-      resolveControlPlaneUrl(request, options.controlPlanePublicUrl) ||
-      "https://sentinel-grid-monitoring-vhid.onrender.com";
+    const publicUrl = resolveControlPlaneUrl(request, options.controlPlanePublicUrl);
 
     const scriptLines = [
       "# ================================================================",

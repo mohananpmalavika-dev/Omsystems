@@ -18,7 +18,12 @@ export async function registerHAClusterRoutes(
   });
 
   // Execute one of the 8 Chaos Engineering / Failure injection simulations
-  app.post("/v1/ha/simulate-failure", async (request) => {
+  app.post("/v1/ha/simulate-failure", async (request, reply) => {
+    return reply.code(410).send({
+      success: false,
+      error: "chaos_endpoints_disabled",
+      message: "Failure injection is not exposed by the production control plane.",
+    });
     const body = z
       .object({
         scenario: z.enum([

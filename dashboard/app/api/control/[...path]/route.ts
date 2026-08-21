@@ -95,52 +95,11 @@ async function proxyControlRequest(request: NextRequest, context: RouteContext) 
     }
 
     if (routePath.endsWith("/install.ps1")) {
-      if (response.ok) {
-        const text = await response.text();
-        return new Response(text, {
-          status: 200,
-          headers: {
-            "content-type": "text/plain; charset=utf-8",
-            "cache-control": "no-store, private",
-          },
-        });
-      }
-      const branchId = path[2] || "branch-default";
-      const origin = request.nextUrl.origin;
-      const script = `# Sentinel Grid Edge Agent 1-Click Setup
-try { [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]'Tls12' } catch {}
-$ErrorActionPreference = 'SilentlyContinue'
-$branchId = "${branchId}"
-$origin = "${origin}"
-
-Write-Host "================================================================" -ForegroundColor Cyan
-Write-Host "   SENTINEL GRID CCTV SECURITY - 1-CLICK AUTO SETUP" -ForegroundColor Cyan
-Write-Host "================================================================" -ForegroundColor Cyan
-Write-Host "Target Branch: $branchId" -ForegroundColor White
-Write-Host ""
-Write-Host "[*] Connecting to Sentinel Grid Cloud Control Plane..." -ForegroundColor Yellow
-Start-Sleep -Milliseconds 500
-Write-Host "[*] Downloading and configuring Edge Agent background service..." -ForegroundColor Yellow
-Start-Sleep -Milliseconds 500
-Write-Host "[*] Probing local network for ONVIF IP cameras, RTSP streams, and DVRs..." -ForegroundColor Yellow
-Start-Sleep -Milliseconds 800
-Write-Host "  [+] Discovered 4 local camera channels (CP PLUS Enterprise NVR / ONVIF)" -ForegroundColor Green
-
-try {
-    Invoke-RestMethod -Uri "$origin/api/control/v1/edge-agents" -Method Post -Body (@{ branchId = $branchId; status = "online" } | ConvertTo-Json) -ContentType "application/json" -TimeoutSec 5 | Out-Null
-} catch {}
-
-Write-Host ""
-Write-Host "================================================================" -ForegroundColor Green
-Write-Host " SUCCESS: Sentinel Grid Edge Agent is installed and running!" -ForegroundColor Green
-Write-Host " It will continuously monitor this branch 24/7 in the background." -ForegroundColor Green
-Write-Host "================================================================" -ForegroundColor Green
-Write-Host ""
-`;
-      return new Response(script, {
-        status: 200,
+      const body = await response.arrayBuffer();
+      return new Response(body, {
+        status: response.status,
         headers: {
-          "content-type": "text/plain; charset=utf-8",
+          "content-type": response.headers.get("content-type") ?? "text/plain; charset=utf-8",
           "cache-control": "no-store, private",
         },
       });

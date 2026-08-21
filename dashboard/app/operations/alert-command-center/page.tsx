@@ -104,58 +104,6 @@ export interface PredictiveAlert {
   detectedAt: string;
 }
 
-// ─── Seeded Synthetic Signals for Realism ─────────────────────────────────────
-
-const SEEDED_PREDICTIVE_ALERTS: PredictiveAlert[] = [
-  {
-    id: "pred-a214-hdd",
-    branchId: "branch-a214",
-    branchName: "Branch A214 (Downtown Vault)",
-    device: "NVR Storage Bay 2 (Seagate 8TB)",
-    predictedFailure: "Storage Controller / SATA HDD Wearout",
-    timeframe: "within 48 hours",
-    probability: 82,
-    contributingFactors: ["SMART Reallocated Sectors (+48%)", "Write Latency Spike (840ms)", "Chamber Temp >44°C"],
-    recommendedAction: "Dispatch L2 technician to hot-swap SATA HDD 2 before weekend recording cutoff.",
-    detectedAt: new Date(Date.now() - 15 * 60_000).toISOString(),
-  },
-  {
-    id: "pred-a087-poe",
-    branchId: "branch-a087",
-    branchName: "Branch A087 (North Retail)",
-    device: "PoE Switch SW-01 (Port 7)",
-    predictedFailure: "PoE Voltage Droop / Optical Stall",
-    timeframe: "within 24 hours",
-    probability: 74,
-    contributingFactors: ["PoE Budget at 96% load", "Camera CH-03 voltage ripples", "Intermittent ping loss"],
-    recommendedAction: "Rebalance PoE ports or swap power adapter to maintain 24/7 continuous feed.",
-    detectedAt: new Date(Date.now() - 42 * 60_000).toISOString(),
-  },
-  {
-    id: "pred-a032-wan",
-    branchId: "branch-a032",
-    branchName: "Branch A032 (West Logistics)",
-    device: "Primary WAN Fiber Gateway",
-    predictedFailure: "Uplink Congestion / Keyframe Drop",
-    timeframe: "within 12 hours",
-    probability: 68,
-    contributingFactors: ["BGP Route flapping", "Peak bandwidth saturation", "Packet jitter > 45ms"],
-    recommendedAction: "Failover branch media router to secondary 5G cellular backup route.",
-    detectedAt: new Date(Date.now() - 65 * 60_000).toISOString(),
-  },
-];
-
-const SEEDED_LIVE_STREAM_EVENTS = [
-  { id: "ev-1", time: "19:47:31", branch: "Branch A214", device: "Camera CH-07", event: "Recording failure detected", severity: "P1", category: "infrastructure" as const },
-  { id: "ev-2", time: "19:46:12", branch: "Branch A087", device: "Camera CH-03", event: "Person in restricted vault zone", severity: "P2", category: "security" as const },
-  { id: "ev-3", time: "19:45:54", branch: "Branch A032", device: "NVR Storage-01", event: "HDD SMART degradation alert", severity: "P2", category: "infrastructure" as const },
-  { id: "ev-4", time: "19:44:21", branch: "Branch A119", device: "WAN Link-01", event: "Packet loss > 5% on RTSP stream", severity: "P3", category: "infrastructure" as const },
-  { id: "ev-5", time: "19:42:10", branch: "Branch A214", device: "Camera CH-02", event: "Camera offline (PoE heartbeat timeout)", severity: "P1", category: "infrastructure" as const },
-  { id: "ev-6", time: "19:39:05", branch: "Branch A015", device: "Main Lobby Entrance", event: "Face watchlist match (Watchlist B)", severity: "P2", category: "security" as const },
-  { id: "ev-7", time: "19:35:40", branch: "Branch A094", device: "Cash Counter Cam", event: "Cash tray unattended (>120s)", severity: "P3", category: "safety" as const },
-  { id: "ev-8", time: "19:30:15", branch: "Branch A201", device: "Camera CH-04", event: "Video masking / lens tamper detected", severity: "P2", category: "security" as const },
-];
-
 export default function AlertCommandCenterPage() {
   const [alerts, setAlerts] = useState<CommandAlert[]>([]);
   const [counts, setCounts] = useState<Record<string, number>>({ P1: 0, P2: 0, P3: 0, P4: 0 });
@@ -169,12 +117,18 @@ export default function AlertCommandCenterPage() {
   
   const [selectedAlert, setSelectedAlert] = useState<CommandAlert | undefined>();
   const [selectedPredicted, setSelectedPredicted] = useState<PredictiveAlert | undefined>();
-  const [liveStreamEvents, setLiveStreamEvents] = useState(SEEDED_LIVE_STREAM_EVENTS);
+  const [liveStreamEvents, setLiveStreamEvents] = useState<Array<{
+    id: string;
+    time: string;
+    branch: string;
+    device: string;
+    event: string;
+    severity: string;
+    category: "infrastructure" | "security" | "safety";
+  }>>([]);
   const [connected, setConnected] = useState(false);
   const [session, setSession] = useState<LiveSessionResponse>();
   const [busy, setBusy] = useState(false);
-  const [demoMessage, setDemoMessage] = useState<string | null>(null);
-  const [demoLoading, setDemoLoading] = useState(false);
   const [globalAlertingModal, setGlobalAlertingModal] = useState(false);
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [browserPushEnabled, setBrowserPushEnabled] = useState(true);
@@ -277,30 +231,6 @@ export default function AlertCommandCenterPage() {
   }, []);
 
   // ─── Synthetic Alert Generator ───────────────────────────────────────────────
-
-  const generateSyntheticAlert = async () => {
-    setDemoMessage(null);
-    setDemoLoading(true);
-    try {
-      const response = await fetch("/api/control/v1/alerts/command-center/demo", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ detectionType: "camera-offline", severity: "P1" }),
-        credentials: "include",
-      });
-      if (response.ok) {
-        await load();
-        setDemoMessage("Generated synthetic P1 Recording/Camera Alert. Live stream and investigation panel updated.");
-      } else {
-        const body = await response.json().catch(() => null);
-        setDemoMessage(`Unable to generate synthetic alert: ${body?.error ?? response.status}`);
-      }
-    } catch (error) {
-      setDemoMessage(`Synthetic alert failed: ${error instanceof Error ? error.message : "unknown error"}`);
-    } finally {
-      setDemoLoading(false);
-    }
-  };
 
   // ─── Operational Actions ────────────────────────────────────────────────────
 
@@ -458,11 +388,11 @@ export default function AlertCommandCenterPage() {
   }, [filteredAlerts]);
 
   // Operational KPI counts
-  const p1Count = counts.P1 || alerts.filter((a) => a.severity === "P1").length || 3;
-  const p2Count = counts.P2 || alerts.filter((a) => a.severity === "P2").length || 8;
-  const p3Count = counts.P3 || alerts.filter((a) => a.severity === "P3").length || 17;
-  const p4Count = counts.P4 || alerts.filter((a) => a.severity === "P4").length || 42;
-  const predictedCount = SEEDED_PREDICTIVE_ALERTS.length;
+  const p1Count = counts.P1 ?? alerts.filter((a) => a.severity === "P1").length;
+  const p2Count = counts.P2 ?? alerts.filter((a) => a.severity === "P2").length;
+  const p3Count = counts.P3 ?? alerts.filter((a) => a.severity === "P3").length;
+  const p4Count = counts.P4 ?? alerts.filter((a) => a.severity === "P4").length;
+  const predictedCount = 0;
 
   const toggleGroupExpand = (groupId: string) => {
     setExpandedGroupIds((prev) => {
@@ -493,7 +423,7 @@ export default function AlertCommandCenterPage() {
           </h1>
           <p className="text-xs md:text-sm text-gray-600 dark:text-gray-400 mt-0.5 flex items-center gap-2">
             <span className={`w-2 h-2 rounded-full ${connected ? "bg-emerald-500 shadow-[0_0_8px_#10b981]" : "bg-amber-500"}`} />
-            Live event stream connected · <strong className="font-semibold text-gray-900 dark:text-gray-200">500 branches</strong> · <strong className="font-semibold text-gray-900 dark:text-gray-200">5,000 cameras</strong>
+            {connected ? "Live event stream connected" : "Live event stream unavailable"} · <strong className="font-semibold text-gray-900 dark:text-gray-200">{alerts.length} alerts loaded</strong>
           </p>
         </div>
 
@@ -519,17 +449,6 @@ export default function AlertCommandCenterPage() {
           </Link>
 
           {/* Test P1 Alert Synthetic Button */}
-          <button
-            type="button"
-            disabled={demoLoading}
-            onClick={() => void generateSyntheticAlert()}
-            className="flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold rounded-lg border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/40 text-amber-900 dark:text-amber-200 hover:bg-amber-100 transition disabled:opacity-50"
-            title="Generate a synthetic P1 hardware/recording alert for pipeline verification"
-          >
-            <Zap size={14} className="text-amber-600" />
-            <span>{demoLoading ? "Simulating P1…" : "⚡ Test P1 Alert"}</span>
-          </button>
-
           {/* Policies link */}
           <Link
             href="/operations/alert-notification-policy"
@@ -562,23 +481,13 @@ export default function AlertCommandCenterPage() {
             </label>
             <label className="flex items-center gap-2 p-2 bg-white dark:bg-gray-900 rounded-lg border cursor-pointer">
               <input type="checkbox" checked={autoTriageActive} onChange={(e) => setAutoTriageActive(e.target.checked)} className="rounded text-blue-600" />
-              <div><strong>AI Deduplication Engine</strong><small className="block text-gray-500">Auto-group 9 alerts → 1</small></div>
+              <div><strong>AI Deduplication Engine</strong><small className="block text-gray-500">Uses only received alert telemetry</small></div>
             </label>
             <div className="p-2 bg-white dark:bg-gray-900 rounded-lg border flex items-center justify-between">
               <div><strong>Quiet Hours (23:00 - 06:00)</strong><small className="block text-emerald-600 font-semibold">P3/P4 muted; P1 active</small></div>
               <Lock size={14} className="text-gray-400" />
             </div>
           </div>
-        </div>
-      )}
-
-      {demoMessage && (
-        <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900 dark:bg-amber-950/60 dark:border-amber-800 dark:text-amber-200 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <CheckCircle2 size={16} className="text-amber-600" />
-            <span>{demoMessage}</span>
-          </div>
-          <button onClick={() => setDemoMessage(null)}><X size={14} /></button>
         </div>
       )}
 
@@ -606,9 +515,9 @@ export default function AlertCommandCenterPage() {
           </strong>
           <p className="text-[11px] text-gray-500 dark:text-gray-400 font-medium">Active alerts</p>
           <div className="mt-2 pt-2 border-t border-gray-100 dark:border-gray-800 flex flex-wrap gap-x-2 gap-y-0.5 text-[10px]">
-            <span className="text-red-700 dark:text-red-400 font-semibold">2 unacknowledged</span>
+            <span className="text-red-700 dark:text-red-400 font-semibold">{alerts.filter((alert) => alert.severity === "P1" && alert.status === "new").length} unacknowledged</span>
             <span className="text-gray-400">•</span>
-            <span className="text-rose-600 font-bold">1 SLA breached</span>
+            <span className="text-rose-600 font-bold">{alerts.filter((alert) => alert.severity === "P1" && alert.slaDueAt && Date.parse(alert.slaDueAt) < Date.now()).length} SLA breached</span>
           </div>
         </button>
 
@@ -633,9 +542,9 @@ export default function AlertCommandCenterPage() {
           </strong>
           <p className="text-[11px] text-gray-500 dark:text-gray-400 font-medium">Active alerts</p>
           <div className="mt-2 pt-2 border-t border-gray-100 dark:border-gray-800 flex flex-wrap gap-x-2 gap-y-0.5 text-[10px]">
-            <span className="text-orange-700 dark:text-orange-400 font-semibold">5 unacknowledged</span>
+            <span className="text-orange-700 dark:text-orange-400 font-semibold">{alerts.filter((alert) => alert.severity === "P2" && alert.status === "new").length} unacknowledged</span>
             <span className="text-gray-400">•</span>
-            <span className="text-amber-600 font-medium">2 near SLA</span>
+            <span className="text-amber-600 font-medium">{alerts.filter((alert) => alert.severity === "P2" && alert.slaDueAt && Date.parse(alert.slaDueAt) - Date.now() < 900_000).length} near SLA</span>
           </div>
         </button>
 
@@ -660,7 +569,7 @@ export default function AlertCommandCenterPage() {
           </strong>
           <p className="text-[11px] text-gray-500 dark:text-gray-400 font-medium">Active alerts</p>
           <div className="mt-2 pt-2 border-t border-gray-100 dark:border-gray-800 text-[10px] text-blue-700 dark:text-blue-400 font-semibold">
-            9 unacknowledged · In queue
+            {alerts.filter((alert) => alert.severity === "P3" && alert.status === "new").length} unacknowledged · In queue
           </div>
         </button>
 
@@ -685,7 +594,7 @@ export default function AlertCommandCenterPage() {
           </strong>
           <p className="text-[11px] text-gray-500 dark:text-gray-400 font-medium">Active alerts</p>
           <div className="mt-2 pt-2 border-t border-gray-100 dark:border-gray-800 text-[10px] text-gray-500">
-            38 informational · Auto-logged
+            {alerts.filter((alert) => alert.severity === "P4").length} informational · Auto-logged
           </div>
         </button>
 
@@ -711,7 +620,7 @@ export default function AlertCommandCenterPage() {
           </strong>
           <p className="text-[11px] text-purple-700 dark:text-purple-300 font-medium">Predicted hardware risks</p>
           <div className="mt-2 pt-2 border-t border-gray-100 dark:border-gray-800 text-[10px] text-purple-800 dark:text-purple-300 font-semibold truncate">
-            A214: 82% failure prob (48h)
+            No predictive telemetry reported
           </div>
         </button>
       </section>
@@ -727,18 +636,18 @@ export default function AlertCommandCenterPage() {
               </strong>
             </div>
             <p className="text-gray-700 dark:text-gray-300">
-              <strong className="text-red-700 dark:text-red-400 font-bold">3 incidents</strong> require immediate action · <strong>63 alerts</strong> detected today · <strong>11 incidents</strong> created · <strong className="text-purple-700 dark:text-purple-300 font-bold">8 alerts predicted</strong> before failure · <strong className="text-emerald-700 dark:text-emerald-400 font-bold">92% resolved within SLA</strong>.
+              <strong className="text-red-700 dark:text-red-400 font-bold">{correlatedGroups.length} incidents</strong> currently grouped from live alerts · <strong>{alerts.length} alerts</strong> loaded from the control plane · <strong className="text-purple-700 dark:text-purple-300 font-bold">{predictedCount} predictive alerts</strong> reported.
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2 text-[11px] bg-white/80 dark:bg-gray-900/80 px-3 py-2 rounded-lg border border-indigo-100 dark:border-indigo-900">
             <span className="font-semibold text-gray-500">Since last shift:</span>
-            <span className="text-amber-700 font-bold">+12 alerts</span>
+            <span className="text-amber-700 font-bold">Live counts only</span>
             <span className="text-gray-300">•</span>
-            <span className="text-red-700 font-bold">+3 incidents</span>
+            <span className="text-red-700 font-bold">{correlatedGroups.length} incidents</span>
             <span className="text-gray-300">•</span>
-            <span className="text-emerald-700 font-bold">−7 cameras offline</span>
+            <span className="text-emerald-700 font-bold">No offline snapshot</span>
             <span className="text-gray-300">•</span>
-            <span className="text-purple-700 font-bold">+2 high-risk branches</span>
+            <span className="text-purple-700 font-bold">Predictive telemetry unavailable</span>
           </div>
         </div>
       </section>
@@ -1106,8 +1015,7 @@ export default function AlertCommandCenterPage() {
                   <p className="text-xs text-gray-500 mt-0.5">No active alerts matching your current filter criteria.</p>
                 </div>
                 <div className="text-xs text-gray-600 dark:text-gray-400 bg-gray-50 dark:bg-gray-800 p-3 rounded-lg max-w-md mx-auto space-y-1">
-                  <p><strong>Last alert:</strong> 27 minutes ago</p>
-                  <p><strong>18 alerts</strong> resolved today · <strong>100% P1 SLA compliance</strong></p>
+                  <p>No alert history is available from the connected control plane.</p>
                 </div>
                 <button
                   onClick={() => {
@@ -1206,13 +1114,13 @@ function AlertInvestigationPanel({
         <div className="grid grid-cols-2 gap-3 text-xs">
           <div className="p-3 bg-gray-50 dark:bg-gray-800/60 rounded-lg border">
             <span className="text-gray-500">Current Shift Volume</span>
-            <strong className="block text-xl text-gray-900 dark:text-white mt-0.5">63 Alerts</strong>
-            <small className="text-emerald-600 font-semibold">92% within SLA</small>
+            <strong className="block text-xl text-gray-900 dark:text-white mt-0.5">—</strong>
+            <small className="text-gray-500 font-semibold">No shift aggregate reported</small>
           </div>
           <div className="p-3 bg-gray-50 dark:bg-gray-800/60 rounded-lg border">
             <span className="text-gray-500">Active Incidents</span>
-            <strong className="block text-xl text-red-600 mt-0.5">3 P1 / 11 Total</strong>
-            <small className="text-amber-600 font-semibold">2 pending assignment</small>
+            <strong className="block text-xl text-red-600 mt-0.5">—</strong>
+            <small className="text-gray-500 font-semibold">Select a live alert for details</small>
           </div>
         </div>
 
@@ -1224,19 +1132,19 @@ function AlertInvestigationPanel({
           <div className="space-y-1.5 text-xs">
             <div className="flex items-center justify-between p-2 bg-gray-50 dark:bg-gray-800/40 rounded border">
               <span>📹 Recording Gaps &amp; Stalls</span>
-              <strong className="font-bold text-gray-900 dark:text-gray-100">27 alerts</strong>
+              <strong className="font-bold text-gray-900 dark:text-gray-100">—</strong>
             </div>
             <div className="flex items-center justify-between p-2 bg-gray-50 dark:bg-gray-800/40 rounded border">
               <span>🔌 Camera Offline / PoE Heartbeat</span>
-              <strong className="font-bold text-gray-900 dark:text-gray-100">18 alerts</strong>
+              <strong className="font-bold text-gray-900 dark:text-gray-100">—</strong>
             </div>
             <div className="flex items-center justify-between p-2 bg-gray-50 dark:bg-gray-800/40 rounded border">
               <span>🌐 Network WAN Jitter &gt;5%</span>
-              <strong className="font-bold text-gray-900 dark:text-gray-100">11 alerts</strong>
+              <strong className="font-bold text-gray-900 dark:text-gray-100">—</strong>
             </div>
             <div className="flex items-center justify-between p-2 bg-gray-50 dark:bg-gray-800/40 rounded border">
               <span>🛡️ Security / Intrusion / Masking</span>
-              <strong className="font-bold text-gray-900 dark:text-gray-100">7 alerts</strong>
+              <strong className="font-bold text-gray-900 dark:text-gray-100">—</strong>
             </div>
           </div>
         </div>
@@ -1244,18 +1152,15 @@ function AlertInvestigationPanel({
         {/* Highest Risk Branch Spotlight */}
         <div className="p-3.5 bg-gradient-to-br from-rose-50 to-orange-50 dark:from-rose-950/40 dark:to-orange-950/30 rounded-xl border border-rose-200 dark:border-rose-900 text-xs space-y-2">
           <div className="flex items-center justify-between">
-            <span className="font-bold text-rose-800 dark:text-rose-300 flex items-center gap-1.5">
-              <AlertTriangle size={14} /> Highest-Risk Branch: Branch A214
+              <span className="font-bold text-rose-800 dark:text-rose-300 flex items-center gap-1.5">
+              <AlertTriangle size={14} /> Highest-Risk Branch: not reported
             </span>
-            <span className="px-2 py-0.5 text-[10px] font-black rounded bg-rose-600 text-white">82% Risk</span>
+            <span className="px-2 py-0.5 text-[10px] font-black rounded bg-slate-500 text-white">—</span>
           </div>
           <p className="text-gray-700 dark:text-gray-300 text-[11px]">
-            Downtown Vault · 9 correlated storage &amp; power telemetry anomalies detected in last 15 minutes.
+            No predictive branch-risk telemetry is available from the control plane.
           </p>
           <div className="pt-1 flex gap-2">
-            <Link href="/operations/branches/branch-a214" className="text-blue-700 dark:text-blue-300 font-bold hover:underline">
-              Open Branch Diagnostics →
-            </Link>
           </div>
         </div>
 
@@ -1265,7 +1170,7 @@ function AlertInvestigationPanel({
             <Sparkles size={13} /> Active Predictive Failure Alerts
           </h4>
           <div className="space-y-2">
-            {SEEDED_PREDICTIVE_ALERTS.map((p) => (
+            {([] as PredictiveAlert[]).map((p) => (
               <div
                 key={p.id}
                 onClick={() => onSelectPredicted(p)}

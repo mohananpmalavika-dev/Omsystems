@@ -32,7 +32,7 @@ export class DiskHealthService {
     this.fusionService = new EvidenceFusionService();
     this.evaluator = new DiskHealthEvaluator();
     this.predictor = new DiskFailurePredictor();
-    this.seedDefaultStorage();
+    // Storage state is populated exclusively by recorder/edge SMART evidence.
   }
 
   async ingestEvidence(evidenceList: DiskEvidence[]): Promise<DiskHealthSnapshot[]> {

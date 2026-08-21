@@ -12,7 +12,7 @@ import { zeroTouchDeviceReviewService } from "../services/zero-touch-device-revi
 
 export async function registerZeroTouchRoutes(app: FastifyInstance) {
   // 1. Fleet Overview & SLA Metrics
-  app.get("/api/v1/zero-touch/fleet", { config: { noAuth: true } }, async (_request, reply) => {
+  app.get("/api/v1/zero-touch/fleet", async (_request, reply) => {
     const branches = zeroTouchJobEngineService.listBranches();
     const slaMetrics = zeroTouchJobEngineService.getFleetSlaMetrics();
     return reply.code(200).send({
@@ -25,22 +25,16 @@ export async function registerZeroTouchRoutes(app: FastifyInstance) {
   });
 
   // 2. Create Branch Profile
-  app.post("/api/v1/zero-touch/branches", { config: { noAuth: true } }, async (request, reply) => {
-    const body = z.object({
-      branchId: z.string().min(2),
-      branchName: z.string().min(2),
-      region: z.string().optional(),
-    }).parse(request.body);
-
-    const branch = zeroTouchJobEngineService.createBranch(body as { branchId: string; branchName: string; region?: string; });
-    return reply.code(201).send({
-      success: true,
-      data: branch,
+  app.post("/api/v1/zero-touch/branches", async (request, reply) => {
+    return reply.code(410).send({
+      success: false,
+      error: "legacy_zero_touch_branch_creation_disabled",
+      message: "Create branches through the authenticated control-plane organization API.",
     });
   });
 
   // 3. Generate Single-Use 15-Minute Enrollment Package
-  app.post("/api/v1/zero-touch/branches/:branchId/enrollment", { config: { noAuth: true } }, async (request, reply) => {
+  app.post("/api/v1/zero-touch/branches/:branchId/enrollment", async (request, reply) => {
     const { branchId } = request.params as { branchId: string };
     const branch = zeroTouchJobEngineService.getBranch(branchId);
     if (!branch) return reply.code(404).send({ success: false, error: "branch_not_found" });
@@ -71,7 +65,7 @@ export async function registerZeroTouchRoutes(app: FastifyInstance) {
   });
 
   // 4. Agent Bootstrap & mTLS Key Exchange
-  app.post("/api/v1/zero-touch/enrollment/exchange", { config: { noAuth: true } }, async (request, reply) => {
+  app.post("/api/v1/zero-touch/enrollment/exchange", async (request, reply) => {
     const body = z.object({
       token: z.string().min(5),
       hostname: z.string().trim().min(1),
@@ -94,7 +88,7 @@ export async function registerZeroTouchRoutes(app: FastifyInstance) {
   });
 
   // 5. Start Real Zero-Touch Provisioning Job
-  app.post("/api/v1/zero-touch/branches/:branchId/provision", { config: { noAuth: true } }, async (request, reply) => {
+  app.post("/api/v1/zero-touch/branches/:branchId/provision", async (request, reply) => {
     const { branchId } = request.params as { branchId: string };
     return reply.code(410).send({
       success: false,
@@ -104,7 +98,7 @@ export async function registerZeroTouchRoutes(app: FastifyInstance) {
   });
 
   // 6. List Active & Historical Provisioning Jobs
-  app.get("/api/v1/zero-touch/provisioning/jobs", { config: { noAuth: true } }, async (request, reply) => {
+  app.get("/api/v1/zero-touch/provisioning/jobs", async (request, reply) => {
     const query = request.query as { branchId?: string };
     const jobs = zeroTouchJobEngineService.listJobs(query.branchId);
     return reply.code(200).send({
@@ -114,7 +108,7 @@ export async function registerZeroTouchRoutes(app: FastifyInstance) {
   });
 
   // 7. Get Detailed Provisioning Job Execution
-  app.get("/api/v1/zero-touch/provisioning/jobs/:jobId", { config: { noAuth: true } }, async (request, reply) => {
+  app.get("/api/v1/zero-touch/provisioning/jobs/:jobId", async (request, reply) => {
     const { jobId } = request.params as { jobId: string };
     const job = zeroTouchJobEngineService.getJob(jobId);
     if (!job) {
@@ -127,7 +121,7 @@ export async function registerZeroTouchRoutes(app: FastifyInstance) {
   });
 
   // 8. Server-Sent Events (SSE) for Real-Time Job Progress Streaming
-  app.get("/api/v1/zero-touch/provisioning/jobs/:jobId/events", { config: { noAuth: true } }, async (request, reply) => {
+  app.get("/api/v1/zero-touch/provisioning/jobs/:jobId/events", async (request, reply) => {
     const { jobId } = request.params as { jobId: string };
     const job = zeroTouchJobEngineService.getJob(jobId);
     if (!job) {
@@ -163,7 +157,7 @@ export async function registerZeroTouchRoutes(app: FastifyInstance) {
   });
 
   // 9. Cancel Provisioning Job
-  app.post("/api/v1/zero-touch/provisioning/jobs/:jobId/cancel", { config: { noAuth: true } }, async (request, reply) => {
+  app.post("/api/v1/zero-touch/provisioning/jobs/:jobId/cancel", async (request, reply) => {
     const { jobId } = request.params as { jobId: string };
     const cancelled = zeroTouchJobEngineService.cancelJob(jobId);
     return reply.code(200).send({
@@ -173,7 +167,7 @@ export async function registerZeroTouchRoutes(app: FastifyInstance) {
   });
 
   // 10. Retry Provisioning Job
-  app.post("/api/v1/zero-touch/provisioning/jobs/:jobId/retry", { config: { noAuth: true } }, async (request, reply) => {
+  app.post("/api/v1/zero-touch/provisioning/jobs/:jobId/retry", async (request, reply) => {
     const { jobId } = request.params as { jobId: string };
     const retriedJob = await zeroTouchJobEngineService.retryJob(jobId);
     if (!retriedJob) {
@@ -186,7 +180,7 @@ export async function registerZeroTouchRoutes(app: FastifyInstance) {
   });
 
   // 11. Discovered Devices Review List
-  app.get("/api/v1/zero-touch/branches/:branchId/discovered-devices", { config: { noAuth: true } }, async (request, reply) => {
+  app.get("/api/v1/zero-touch/branches/:branchId/discovered-devices", async (request, reply) => {
     const { branchId } = request.params as { branchId: string };
     const devices = zeroTouchJobEngineService.getDiscoveredDevices(branchId);
     return reply.code(200).send({
@@ -196,12 +190,12 @@ export async function registerZeroTouchRoutes(app: FastifyInstance) {
   });
 
   // 12. Supply Credentials for Discovered Appliance
-  app.post("/api/v1/zero-touch/devices/:deviceId/credentials", { config: { noAuth: true } }, async (request, reply) => {
+  app.post("/api/v1/zero-touch/devices/:deviceId/credentials", async (request, reply) => {
     const { deviceId } = request.params as { deviceId: string };
     const body = z.object({
       branchId: z.string(),
-      username: z.string().default("admin"),
-      passwordVaultKey: z.string().default("vault-secret-key"),
+      username: z.string().min(1),
+      passwordVaultKey: z.string().min(1),
     }).parse(request.body);
 
     const result = zeroTouchDeviceReviewService.supplyCredentials(body.branchId, deviceId, {
@@ -213,7 +207,7 @@ export async function registerZeroTouchRoutes(app: FastifyInstance) {
   });
 
   // 13. Approve Specific Channels on Device
-  app.post("/api/v1/zero-touch/devices/:deviceId/approve", { config: { noAuth: true } }, async (request, reply) => {
+  app.post("/api/v1/zero-touch/devices/:deviceId/approve", async (request, reply) => {
     const { deviceId } = request.params as { deviceId: string };
     const body = z.object({
       branchId: z.string(),
@@ -225,14 +219,14 @@ export async function registerZeroTouchRoutes(app: FastifyInstance) {
   });
 
   // 14. Batch Approve All Channels on Branch
-  app.post("/api/v1/zero-touch/branches/:branchId/batch-approve", { config: { noAuth: true } }, async (request, reply) => {
+  app.post("/api/v1/zero-touch/branches/:branchId/batch-approve", async (request, reply) => {
     const { branchId } = request.params as { branchId: string };
     const result = zeroTouchDeviceReviewService.batchApproveBranch(branchId);
     return reply.code(200).send(result);
   });
 
   // 15. Engineering Diagnostic Probes & Logs
-  app.get("/api/v1/zero-touch/diagnostics/:branchId", { config: { noAuth: true } }, async (request, reply) => {
+  app.get("/api/v1/zero-touch/diagnostics/:branchId", async (request, reply) => {
     const { branchId } = request.params as { branchId: string };
     const report = zeroTouchJobEngineService.getDiagnostics(branchId);
     if (!report) return reply.code(404).send({ success: false, error: "diagnostics_not_available" });
@@ -243,25 +237,19 @@ export async function registerZeroTouchRoutes(app: FastifyInstance) {
   });
 
   // Backward compatibility routes for legacy callers
-  app.post("/api/zero-touch/branches/create-and-enroll", { config: { noAuth: true } }, async (request, reply) => {
-    const body = z.object({
-      branchId: z.string(),
-      branchName: z.string(),
-      tenantId: z.string().trim().min(1),
-    }).parse(request.body);
-
-    const pkg = zeroTouchEnrollmentService.generateEnrollmentPackage(body.branchId, body.branchName, body.tenantId, 15);
-    return reply.code(201).send({ success: true, data: pkg });
+  app.post("/api/zero-touch/branches/create-and-enroll", async (_request, reply) => {
+    return reply.code(410).send({
+      success: false,
+      error: "legacy_zero_touch_disabled",
+      message: "Create the branch in the authenticated organization API, then create an edge activation.",
+    });
   });
 
-  app.post("/api/zero-touch/enrollment/exchange", { config: { noAuth: true } }, async (request, reply) => {
-    const body = z.object({ token: z.string() }).parse(request.body);
-    const result = zeroTouchEnrollmentService.exchangeToken(body.token, {
-      hostname: "legacy-client",
-      platform: "linux",
-      macAddress: "not-provided",
-      csrPem: "not-provided",
+  app.post("/api/zero-touch/enrollment/exchange", async (_request, reply) => {
+    return reply.code(410).send({
+      success: false,
+      error: "legacy_zero_touch_disabled",
+      message: "Use the authenticated edge-agent activation flow.",
     });
-    return reply.code(result.success ? 200 : 400).send(result);
   });
 }

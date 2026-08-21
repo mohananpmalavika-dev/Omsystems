@@ -605,7 +605,7 @@ Write-Host "================================================================" -F
       const res = await fetch(`/api/v1/zero-touch/branches/${branch.branchId}/enrollment`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ expiryMinutes: 15 }),
+        body: JSON.stringify({ tenantId: branch.tenantId, expiryMinutes: 15 }),
       });
       
       if (!res.ok) {
@@ -640,21 +640,7 @@ Write-Host "================================================================" -F
         metadata: { branchId: branch.branchId },
       });
       
-      // Fallback enrollment package for demo purposes
-      setEnrollModalBranch({
-        ...branch,
-        enrollmentPackage: {
-          token: `ENR-${branch.branchId.toUpperCase()}-8F29B81C`,
-          expiresAt: new Date(Date.now() + 15 * 60 * 1000).toISOString(),
-          maxUses: 1,
-          usedCount: 0,
-          installerScripts: {
-            windowsPowerShell: `powershell -NoProfile -ExecutionPolicy Bypass -Command "iwr -useb https://control.kryptonvision.internal/api/v1/zero-touch/bootstrap/win?token=ENR-${branch.branchId.toUpperCase()}-8F29B81C | iex"`,
-            linuxBash: `curl -fsSL https://control.kryptonvision.internal/api/v1/zero-touch/bootstrap/linux?token=ENR-${branch.branchId.toUpperCase()}-8F29B81C | sudo bash`,
-            dockerCompose: `docker run -d --restart always --net host -e ENROLLMENT_TOKEN="ENR-${branch.branchId.toUpperCase()}-8F29B81C" kryptonvision/edge-agent:latest`,
-          },
-        },
-      });
+      setEnrollModalBranch(undefined);
     }
   };
 
@@ -688,8 +674,7 @@ Write-Host "================================================================" -F
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           agentId: branch.agentId,
-          scannedSubnets: ["192.168.1.0/24"],
-          createdBy: "Security Operations Lead",
+          edgeAgentId: branch.agentId,
         }),
       });
       

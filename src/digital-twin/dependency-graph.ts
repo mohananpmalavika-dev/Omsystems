@@ -47,7 +47,7 @@ export class DigitalTwinDependencyGraph {
   private edges: TwinDependencyEdge[] = [];
 
   constructor() {
-    this.seedBranchTopology("branch-178");
+    // Topology is populated from the persisted branch/device inventory.
   }
 
   addNode(node: TwinDependencyNode) {
@@ -159,7 +159,6 @@ export class DigitalTwinDependencyGraph {
   clear() {
     this.nodes.clear();
     this.edges = [];
-    this.seedBranchTopology("branch-178");
   }
 }
 

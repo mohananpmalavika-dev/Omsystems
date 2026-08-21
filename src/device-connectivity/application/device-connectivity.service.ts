@@ -25,7 +25,7 @@ export class DeviceConnectivityService {
   private verifications = new Map<string, EightFactorStreamVerification>();
 
   constructor() {
-    this.seedInitialDeviceState();
+    // Device state is populated only after a successful, real adapter session.
   }
 
   private seedInitialDeviceState() {
@@ -61,35 +61,17 @@ export class DeviceConnectivityService {
    * Execute 8-Factor Stream Verification (Beyond simple ping / port 554)
    */
   async verifyStream(target: DeviceTarget): Promise<EightFactorStreamVerification> {
-    const isOffline = target.host === "192.168.99.99"; // mock offline target
-    const now = new Date();
-
-    if (isOffline) {
-      return {
-        dnsIpResolved: true,
-        tcpConnected: false,
-        rtspOptionsDescribeOk: false,
-        authValidated: false,
-        sdpParsed: false,
-        setupPlayOk: false,
-        rtpPacketsReceived: false,
-        videoKeyframeDecoded: false,
-        overallHealthy: false,
-        verificationLatencyMs: 3000,
-      };
-    }
-
     return {
-      dnsIpResolved: true,
-      tcpConnected: true,
-      rtspOptionsDescribeOk: true,
-      authValidated: true,
-      sdpParsed: true,
-      setupPlayOk: true,
-      rtpPacketsReceived: true,
-      videoKeyframeDecoded: true,
-      overallHealthy: true,
-      verificationLatencyMs: 92,
+      dnsIpResolved: false,
+      tcpConnected: false,
+      rtspOptionsDescribeOk: false,
+      authValidated: false,
+      sdpParsed: false,
+      setupPlayOk: false,
+      rtpPacketsReceived: false,
+      videoKeyframeDecoded: false,
+      overallHealthy: false,
+      verificationLatencyMs: 0,
     };
   }
 
@@ -159,7 +141,7 @@ export class DeviceConnectivityService {
    * Compute Detailed 0-100 Connectivity Score
    */
   computeConnectivityScore(devId: string): ConnectivityScoreBreakdown {
-    const state = this.states.get(devId) || "HEALTHY";
+    const state = this.states.get(devId) || "UNREACHABLE";
     const verification = this.verifications.get(devId);
 
     if (state === "AUTH_FAILED" || state === "UNREACHABLE") {

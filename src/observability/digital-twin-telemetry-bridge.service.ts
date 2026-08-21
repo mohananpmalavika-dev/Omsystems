@@ -10,7 +10,7 @@ import { vmsMetricsRegistry } from "./vms-metrics-registry.js";
 export interface DigitalTwinCameraState {
   cameraId: string;
   branchId: string;
-  status: "STREAMING" | "OFFLINE" | "DEGRADED";
+  status: "STREAMING" | "OFFLINE" | "DEGRADED" | "UNKNOWN";
   fps: number;
   bitrateKbps: number;
   packetLossPct: number;
@@ -27,7 +27,7 @@ export interface DigitalTwinBranchState {
   networkHealthScore: number;
   lteFailoverActive: boolean;
   edgeBufferEvents: number;
-  status: "OPTIMAL" | "DEGRADED" | "CRITICAL";
+  status: "OPTIMAL" | "DEGRADED" | "CRITICAL" | "UNKNOWN";
   lastSyncAt: string;
 }
 
@@ -35,8 +35,10 @@ export class DigitalTwinTelemetryBridgeService extends EventEmitter {
   /**
    * Generates real-time camera state projection for Digital Twin consumers
    */
-  public getCameraTwinState(cameraId: string, branchId = "BR-MUM-01"): DigitalTwinCameraState {
-    const isOnline = vmsMetricsRegistry.cameraOnline.get({ camera_id: cameraId, branch_id: branchId }) === 1;
+  public getCameraTwinState(cameraId: string, branchId: string): DigitalTwinCameraState {
+    const onlineMetric = vmsMetricsRegistry.cameraOnline.get({ camera_id: cameraId, branch_id: branchId });
+    const isOnline = onlineMetric === 1;
+    const hasTelemetry = onlineMetric !== undefined;
     const fps = vmsMetricsRegistry.cameraStreamFps.get({ camera_id: cameraId, stream_type: "main" });
     const bitrate = vmsMetricsRegistry.cameraBitrateKbps.get({ camera_id: cameraId, stream_type: "main" });
     const packetLoss = vmsMetricsRegistry.cameraPacketLossPct.get({ camera_id: cameraId });
@@ -45,12 +47,12 @@ export class DigitalTwinTelemetryBridgeService extends EventEmitter {
     return {
       cameraId,
       branchId,
-      status: !isOnline ? "OFFLINE" : packetLoss > 5 ? "DEGRADED" : "STREAMING",
-      fps: isOnline ? (fps || 25) : 0,
-      bitrateKbps: isOnline ? (bitrate || 3200) : 0,
-      packetLossPct: packetLoss || 0,
-      recordingActive: isOnline && gap === 0,
-      activeGapSeconds: gap || 0,
+      status: !hasTelemetry ? "UNKNOWN" : !isOnline ? "OFFLINE" : packetLoss !== undefined && packetLoss > 5 ? "DEGRADED" : "STREAMING",
+      fps: isOnline ? (fps ?? 0) : 0,
+      bitrateKbps: isOnline ? (bitrate ?? 0) : 0,
+      packetLossPct: packetLoss ?? 0,
+      recordingActive: isOnline && gap !== undefined && gap === 0,
+      activeGapSeconds: gap ?? 0,
       lastTelemetryAt: new Date().toISOString(),
     };
   }
@@ -60,13 +62,13 @@ export class DigitalTwinTelemetryBridgeService extends EventEmitter {
    */
   public getBranchTwinState(branchId: string): DigitalTwinBranchState {
     const allCams = vmsMetricsRegistry.cameraOnline.entries().filter((e) => e.labels?.branch_id === branchId);
-    const total = allCams.length || 4;
+    const total = allCams.length;
     const online = allCams.filter((e) => e.value === 1).length;
     const offline = total - online;
     const edgeBuffer = vmsMetricsRegistry.edgeAgentBufferEvents.get({ branch_id: branchId }) || 0;
 
-    let status: "OPTIMAL" | "DEGRADED" | "CRITICAL" = "OPTIMAL";
-    if (offline > total / 2) status = "CRITICAL";
+    let status: "OPTIMAL" | "DEGRADED" | "CRITICAL" | "UNKNOWN" = total === 0 ? "UNKNOWN" : "OPTIMAL";
+    if (total > 0 && offline > total / 2) status = "CRITICAL";
     else if (offline > 0 || edgeBuffer > 0) status = "DEGRADED";
 
     return {
@@ -74,7 +76,7 @@ export class DigitalTwinTelemetryBridgeService extends EventEmitter {
       totalCameras: total,
       onlineCameras: online,
       offlineCameras: offline,
-      networkHealthScore: Math.round((online / total) * 100),
+      networkHealthScore: total > 0 ? Math.round((online / total) * 100) : 0,
       lteFailoverActive: false,
       edgeBufferEvents: edgeBuffer,
       status,
