@@ -90,7 +90,7 @@ export async function registerP0ControlPlaneRoutes(
   app.post("/v1/recorders/drivers/probe", async (request, reply) => {
     const user = request.currentUser;
     if (!user) return reply.code(401).send({ error: "authentication_required" });
-    if (user.role !== "super_admin") {
+    if (user.role !== "super_admin" && user.role !== "company_admin" && user.role !== "hq_admin") {
       return reply.code(403).send({ error: "admin_role_required" });
     }
 

@@ -43,17 +43,25 @@ export class DistributedEventBus extends EventEmitter {
     // Build Redis connection options
     const redisUrl = config.redis.url || `redis://${config.redis.host || 'localhost'}:${config.redis.port || 6379}`;
     
-    const clientOptions = {
+    const clientOptions: any = {
       url: redisUrl,
-      password: config.redis.password,
-      database: config.redis.db || 0,
       socket: {
         reconnectStrategy: (retries: number) => {
-          const delay = Math.min(retries * 50, 2000);
+          if (retries > 5) {
+            return new Error('Redis connection/auth failed. Stopping reconnect attempts.');
+          }
+          const delay = Math.min(retries * 100, 2000);
           return delay;
         },
       },
     };
+
+    if (config.redis.password) {
+      clientOptions.password = config.redis.password;
+    }
+    if (typeof config.redis.db === 'number' && config.redis.db > 0) {
+      clientOptions.database = config.redis.db;
+    }
 
     // Create separate connections for pub and sub
     this.publisher = createClient(clientOptions);
