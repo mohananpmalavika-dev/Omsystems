@@ -128,7 +128,7 @@ export class SecurityDeviceDiscoveryService {
 
       // Save discovered devices to staging table
       for (const device of filteredDevices) {
-        await this.saveDiscoveredDevice(job.tenantId, job.branchId, job.id, device);
+        await this.saveDiscoveredDevice(job.tenantId, job.branchId ?? null, job.id, device);
       }
 
       // Calculate duration

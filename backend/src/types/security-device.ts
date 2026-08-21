@@ -727,7 +727,7 @@ export interface DeviceIntegration {
   
   // Integration health
   status: 'ACTIVE' | 'INACTIVE' | 'ERROR' | 'MAINTENANCE';
-  lastSync At?: Date;
+  lastSyncAt?: Date;
   lastErrorAt?: Date;
   lastErrorMessage?: string;
   
@@ -865,6 +865,7 @@ export interface IncidentAction {
 // Request/Response DTOs
 
 export interface CreateSecurityDeviceRequest {
+  tenantId?: string;
   branchId: string;
   type: SecurityDeviceType;
   name: string;
@@ -872,6 +873,8 @@ export interface CreateSecurityDeviceRequest {
   manufacturer?: string;
   model?: string;
   serialNumber?: string;
+  firmwareVersion?: string;
+  hardwareVersion?: string;
   ipAddress?: string;
   macAddress?: string;
   port?: number;
