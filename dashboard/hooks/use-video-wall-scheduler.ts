@@ -84,31 +84,6 @@ function profileFromCapability(cameraId: string, profile: CameraStreamProfile): 
   };
 }
 
-function fallbackProfiles(camera: Camera): { main: StreamProfile; sub: StreamProfile } {
-  return {
-    main: {
-      cameraId: camera.id,
-      streamType: "MAIN",
-      codec: "H264",
-      width: 1920,
-      height: 1080,
-      fps: 25,
-      estimatedBitrateKbps: 4096,
-      uri: camera.rtspUrl,
-    },
-    sub: {
-      cameraId: camera.id,
-      streamType: "SUB",
-      codec: "H264",
-      width: 640,
-      height: 360,
-      fps: 10,
-      estimatedBitrateKbps: 512,
-      uri: camera.subStreamUrl,
-    },
-  };
-}
-
 function isLiveMode(mode: CameraPlaybackMode): boolean {
   return mode === "MAIN_STREAM" || mode === "SUB_STREAM";
 }
@@ -202,7 +177,6 @@ export function useVideoWallScheduler(
       const advertisedProfiles = (camera.streamProfiles ?? []).map((profile) => profileFromCapability(camera.id, profile));
       const mainStreams = advertisedProfiles.filter((profile) => profile.streamType === "MAIN");
       const subStreams = advertisedProfiles.filter((profile) => profile.streamType === "SUB");
-      const fallback = fallbackProfiles(camera);
       const failure = playbackFailuresRef.current.get(camera.id);
 
       return {
@@ -219,8 +193,8 @@ export function useVideoWallScheduler(
         isRotationallyDue: false,
         isOnline: camera.status !== "offline",
         streamUnavailable: Boolean(failure && failure.until > now),
-        mainStream: mainStreams[0] ?? fallback.main,
-        subStream: subStreams[0] ?? fallback.sub,
+        mainStream: mainStreams[0],
+        subStream: subStreams[0],
         mainStreams: mainStreams.length > 0 ? mainStreams : undefined,
         subStreams: subStreams.length > 0 ? subStreams : undefined,
       };
