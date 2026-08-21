@@ -667,12 +667,16 @@ export class InfrastructureRepository {
     }
   }
 
-  private userSelect(includePassword = false) {
+  private userSelect(includePassword = false, includePreferences = false) {
     return `SELECT u.id::text, u.tenant_id::text, u.identity_subject,
       u.display_name, u.email, u.username, u.employee_id, u.phone_number,
       u.role, u.status, u.department, u.designation, u.date_of_joining,
       u.date_of_birth, u.reporting_to_user_id::text, u.last_login_at,
-      u.must_change_password, u.preferences, u.active, u.created_at, u.updated_at
+      u.must_change_password, ${includePreferences ? "u.preferences" : "'{}'::jsonb AS preferences"}, u.profile_photo_url,
+      u.profile_photo_url AS photo_url, u.profile_photo_url AS avatar_url,
+      u.profile_photo_url AS face_photo_base64,
+      ((u.preferences->'faceVerification'->>'data') IS NOT NULL) AS face_enrolled,
+      u.active, u.created_at, u.updated_at
       ,(SELECT assignment.scope_node_id::text
         FROM user_organizational_assignments assignment
         WHERE assignment.user_id=u.id AND assignment.is_primary=true
@@ -755,7 +759,7 @@ export class InfrastructureRepository {
     const clean = (username || "").trim();
     if (!clean) return undefined;
     const result = await this.pool.query(
-      `${this.userSelect(true)}
+      `${this.userSelect(true, true)}
        LEFT JOIN tenants t ON t.id=u.tenant_id
        WHERE (lower(u.username)=lower($1) OR lower(u.email)=lower($1) OR u.identity_subject=$1 OR 'user-' || lower(u.username)=lower($1))
          AND ($2::text IS NULL OR t.slug=$2 OR u.role='super_admin' OR lower(u.username)='mgdhanyamohan')
@@ -916,17 +920,19 @@ export class InfrastructureRepository {
            tenant_id, identity_subject, display_name, email, username,
            password_hash, employee_id, phone_number, role, status, department,
            designation, date_of_joining, date_of_birth, reporting_to_user_id,
+           profile_photo_url, preferences,
            active
          ) VALUES (
-           $1,$2,$3,$4,$5,$6,$7,$8,$9::user_role,'active',$10,$11,$12,$13,$14,true
+           $1,$2,$3,$4,$5,$6,$7,$8,$9::user_role,'active',$10,$11,$12,$13,$14,$15,$16::jsonb,true
          ) RETURNING id::text`,
         [
           resolvedTenantId, input.username, input.displayName, input.email,
           input.username, input.passwordHash, input.employeeId ?? null,
-          input.phoneNumber ?? null, input.role, input.department ?? null,
-          input.designation ?? null, input.dateOfJoining ?? null,
-          input.dateOfBirth ?? null, input.reportingToUserId ?? null,
-        ],
+           input.phoneNumber ?? null, input.role, input.department ?? null,
+           input.designation ?? null, input.dateOfJoining ?? null,
+           input.dateOfBirth ?? null, input.reportingToUserId ?? null,
+           input.profilePhotoUrl ?? null, JSON.stringify(input.preferences ?? {}),
+         ],
       );
       const id = result.rows[0]!.id;
       if (input.primaryOrgNodeId) {
@@ -950,6 +956,7 @@ export class InfrastructureRepository {
       ["designation", input.designation], ["date_of_joining", input.dateOfJoining],
       ["date_of_birth", input.dateOfBirth],
       ["reporting_to_user_id", input.reportingToUserId, "uuid"],
+      ["profile_photo_url", input.profilePhotoUrl],
       ["preferences", input.preferences, "jsonb"],
     ];
     const supplied = mapping.filter(([, value]) => value !== undefined);

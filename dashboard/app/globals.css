@@ -4016,6 +4016,22 @@ button, a { -webkit-tap-highlight-color: transparent; }
 .forgot-password-link, .support-link { color: var(--blue); font-size: 11px; font-weight: 680; text-decoration: none; }
 .forgot-password-link:hover, .support-link:hover { color: var(--blue-dark); text-decoration: underline; }
 .login-button { min-height: 44px; font-weight: 650; }
+.face-login-section { margin-top: 16px; padding: 13px; border: 1px solid #dce5f0; border-radius: 11px; background: #f8fafc; }
+.face-login-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.face-login-heading label { color: #253752; font-size: 11px; font-weight: 700; }
+.face-login-heading p { margin: 3px 0 0; color: #718096; font-size: 9px; }
+.face-login-heading input { width: 16px; height: 16px; accent-color: var(--blue); }
+.face-login-panel { margin-top: 11px; }
+.face-login-preview { display: grid; min-height: 150px; place-items: center; overflow: hidden; border: 1px dashed #cbd8e8; border-radius: 9px; background: #eef3f8; color: #718096; }
+.face-login-preview video, .face-login-preview img { width: 100%; height: 150px; object-fit: cover; }
+.face-login-preview div { display: grid; place-items: center; gap: 6px; font-size: 10px; }
+.face-login-actions { display: flex; align-items: center; gap: 7px; margin-top: 9px; }
+.face-login-actions button, .face-login-actions label { min-height: 31px; display: inline-flex; align-items: center; justify-content: center; gap: 5px; padding: 0 9px; color: #38506f; border: 1px solid #d3deeb; border-radius: 8px; background: #fff; font-size: 9px; font-weight: 700; cursor: pointer; }
+.face-login-actions button:hover, .face-login-actions label:hover { border-color: #9bb7e8; color: var(--blue-dark); }
+.face-login-actions label { flex: 1; }
+.face-login-actions input { display: none; }
+.face-login-actions button:last-child { flex: 0 0 31px; padding: 0; color: #718096; }
+.face-login-error { margin: 8px 0 0; color: #a43d46; font-size: 9px; line-height: 1.4; }
 .login-help { margin-top: 13px; text-align: center; }
 .login-help p { margin: 0; color: #64748b !important; font-size: 11px; }
 .login-error {

@@ -9,7 +9,10 @@ export async function GET(
   context: { params: Promise<{ id: string }> },
 ) {
   try {
-    const sessionToken = request.cookies.get("sentinel_access")?.value;
+    const sessionToken =
+      request.cookies.get("sentinel_access")?.value ||
+      request.headers.get("x-sentinel-session") ||
+      request.headers.get("authorization")?.replace(/^Bearer\s+/i, "");
     if (!sessionToken) {
       return NextResponse.json(
         { error: "unauthenticated", message: "Session token required" },

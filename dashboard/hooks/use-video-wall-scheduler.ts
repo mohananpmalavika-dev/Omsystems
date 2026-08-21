@@ -151,6 +151,7 @@ export function useVideoWallScheduler(
   const actualModesRef = useRef(new Map<string, CameraPlaybackMode>());
   const playbackFailuresRef = useRef(new Map<string, { until: number; reason?: string }>());
   const scheduleRef = useRef(new Map<string, ScheduledCamera>());
+  const schedulerRunRef = useRef<Promise<void> | null>(null);
 
   const [isInitialized, setIsInitialized] = useState(false);
   const [schedule, setSchedule] = useState<Map<string, ScheduledCamera>>(new Map());
@@ -280,41 +281,52 @@ export function useVideoWallScheduler(
     setSnapshotCount(snapshotService.getActiveCount());
   }, []);
 
-  const runScheduler = useCallback(async () => {
-    const nextSchedule = await schedulerRef.current!.schedule(
-      buildCameraContexts(),
-      tileGeometry,
-      undefined,
-      { maxDecoderLimit, rotationEnabled },
+  const runScheduler = useCallback(() => {
+    if (schedulerRunRef.current) return schedulerRunRef.current;
+
+    const run = (async () => {
+      const nextSchedule = await schedulerRef.current!.schedule(
+        buildCameraContexts(),
+        tileGeometry,
+        undefined,
+        { maxDecoderLimit, rotationEnabled },
+      );
+      await reconcileDecoders(nextSchedule);
+      if (enableSnapshots) reconcileSnapshots(nextSchedule);
+
+      scheduleRef.current = nextSchedule;
+      setSchedule(nextSchedule);
+      syncPlaybackStates(nextSchedule);
+      onScheduleChange?.(nextSchedule);
+
+      const [nextCapacity, nextBudget] = await Promise.all([
+        capacityManagerRef.current!.getCapacity(),
+        capacityManagerRef.current!.getResourceBudget(),
+      ]);
+      const capacitySnapshot = { ...nextCapacity };
+      const budgetSnapshot = { ...nextBudget };
+      setCapacity(capacitySnapshot);
+      setBudget(budgetSnapshot);
+      onCapacityChange?.(capacitySnapshot, budgetSnapshot);
+
+      const capacityChanged = await capacityManagerRef.current!.monitorPerformance(
+        decoderPoolRef.current!.getAllMetrics(),
+      );
+      if (capacityChanged) {
+        const adjustedCapacity = { ...await capacityManagerRef.current!.getCapacity() };
+        const adjustedBudget = { ...await capacityManagerRef.current!.getResourceBudget() };
+        setCapacity(adjustedCapacity);
+        setBudget(adjustedBudget);
+        onCapacityChange?.(adjustedCapacity, adjustedBudget);
+      }
+    })();
+
+    schedulerRunRef.current = run;
+    run.then(
+      () => { if (schedulerRunRef.current === run) schedulerRunRef.current = null; },
+      () => { if (schedulerRunRef.current === run) schedulerRunRef.current = null; },
     );
-    await reconcileDecoders(nextSchedule);
-    if (enableSnapshots) reconcileSnapshots(nextSchedule);
-
-    scheduleRef.current = nextSchedule;
-    setSchedule(nextSchedule);
-    syncPlaybackStates(nextSchedule);
-    onScheduleChange?.(nextSchedule);
-
-    const [nextCapacity, nextBudget] = await Promise.all([
-      capacityManagerRef.current!.getCapacity(),
-      capacityManagerRef.current!.getResourceBudget(),
-    ]);
-    const capacitySnapshot = { ...nextCapacity };
-    const budgetSnapshot = { ...nextBudget };
-    setCapacity(capacitySnapshot);
-    setBudget(budgetSnapshot);
-    onCapacityChange?.(capacitySnapshot, budgetSnapshot);
-
-    const capacityChanged = await capacityManagerRef.current!.monitorPerformance(
-      decoderPoolRef.current!.getAllMetrics(),
-    );
-    if (capacityChanged) {
-      const adjustedCapacity = { ...await capacityManagerRef.current!.getCapacity() };
-      const adjustedBudget = { ...await capacityManagerRef.current!.getResourceBudget() };
-      setCapacity(adjustedCapacity);
-      setBudget(adjustedBudget);
-      onCapacityChange?.(adjustedCapacity, adjustedBudget);
-    }
+    return run;
   }, [
     buildCameraContexts,
     enableSnapshots,

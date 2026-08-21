@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { Eye, EyeOff, ShieldCheck, AlertCircle, Info, QrCode } from "lucide-react";
+import { Eye, EyeOff, ShieldCheck, AlertCircle, Info, QrCode, Camera, RotateCcw } from "lucide-react";
 import QRCode from "qrcode";
 import { authApi, organizationApi } from "@/lib/api-client";
 import { resetLocalEdgeAutostart } from "@/lib/local-edge-autostart";
@@ -30,7 +30,14 @@ function LoginFormInner({ onSuccess }: LoginFormProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const qrCanvasRef = useRef<HTMLCanvasElement>(null);
+  const faceVideoRef = useRef<HTMLVideoElement>(null);
+  const faceCanvasRef = useRef<HTMLCanvasElement>(null);
+  const faceStreamRef = useRef<MediaStream | null>(null);
   const [showQR, setShowQR] = useState(false);
+  const [showFaceScan, setShowFaceScan] = useState(false);
+  const [faceScan, setFaceScan] = useState<string | null>(null);
+  const [faceCameraActive, setFaceCameraActive] = useState(false);
+  const [faceCameraError, setFaceCameraError] = useState<string | null>(null);
   const [loginUrl, setLoginUrl] = useState("");
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
   const [formData, setFormData] = useState({
@@ -45,6 +52,8 @@ function LoginFormInner({ onSuccess }: LoginFormProps) {
   const [mustChangePassword, setMustChangePassword] = useState(false);
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+
+  useEffect(() => () => stopFaceCamera(), []);
 
   // Check for session expiry or error messages
   useEffect(() => {
@@ -114,6 +123,10 @@ function LoginFormInner({ onSuccess }: LoginFormProps) {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (showFaceScan && !faceScan) {
+      setError("Complete the facial scan before signing in.");
+      return;
+    }
     setLoading(true);
     setError(null);
 
@@ -121,7 +134,8 @@ function LoginFormInner({ onSuccess }: LoginFormProps) {
       const response = await authApi.login(
         formData.username.trim(),
         formData.password,
-        formData.tenantSlug.trim() || undefined
+        formData.tenantSlug.trim() || undefined,
+        faceScan || undefined,
       );
 
       if ((response as any)?.mustChangePassword) {
@@ -158,6 +172,50 @@ function LoginFormInner({ onSuccess }: LoginFormProps) {
       setLoading(false);
     }
   };
+
+  async function startFaceCamera() {
+    setFaceCameraError(null);
+    try {
+      if (!navigator.mediaDevices?.getUserMedia) {
+        throw new Error("Camera access is not supported in this browser.");
+      }
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: "user" },
+        audio: false,
+      });
+      faceStreamRef.current = stream;
+      setFaceCameraActive(true);
+      if (faceVideoRef.current) {
+        faceVideoRef.current.srcObject = stream;
+        await faceVideoRef.current.play();
+      }
+    } catch {
+      setFaceCameraError("Unable to access the camera. Check browser permissions and try again.");
+    }
+  }
+
+  function stopFaceCamera() {
+    faceStreamRef.current?.getTracks().forEach((track) => track.stop());
+    faceStreamRef.current = null;
+    setFaceCameraActive(false);
+  }
+
+  function captureFaceScan() {
+    const video = faceVideoRef.current;
+    const canvas = faceCanvasRef.current;
+    if (!video || !canvas || video.videoWidth === 0) {
+      setFaceCameraError("The camera is still starting. Please try again.");
+      return;
+    }
+    const sourceWidth = video.videoWidth;
+    const sourceHeight = video.videoHeight;
+    const scale = Math.min(1, 640 / sourceWidth, 640 / sourceHeight);
+    canvas.width = Math.max(1, Math.round(sourceWidth * scale));
+    canvas.height = Math.max(1, Math.round(sourceHeight * scale));
+    canvas.getContext("2d")?.drawImage(video, 0, 0, canvas.width, canvas.height);
+    setFaceScan(canvas.toDataURL("image/jpeg", 0.88));
+    stopFaceCamera();
+  }
 
   const handlePasswordChange = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -385,6 +443,52 @@ function LoginFormInner({ onSuccess }: LoginFormProps) {
               placeholder="Leave blank if not required"
               disabled={loading}
             />
+          </div>
+
+          <div className="face-login-section">
+            <div className="face-login-heading">
+              <div>
+                 <label htmlFor="face-scan-toggle">Facial scan verification</label>
+                 <p>Compare a live camera scan with the employee profile captured during enrollment.</p>
+              </div>
+              <input
+                id="face-scan-toggle"
+                type="checkbox"
+                checked={showFaceScan}
+                onChange={(event) => {
+                  setShowFaceScan(event.target.checked);
+                  if (!event.target.checked) {
+                    stopFaceCamera();
+                    setFaceScan(null);
+                    setFaceCameraError(null);
+                  }
+                }}
+                disabled={loading}
+              />
+            </div>
+            {showFaceScan && (
+              <div className="face-login-panel">
+                <div className="face-login-preview">
+                  {faceCameraActive ? (
+                    <video ref={faceVideoRef} autoPlay playsInline muted aria-label="Facial scan camera preview" />
+                  ) : faceScan ? (
+                    <img src={faceScan} alt="Facial scan preview" />
+                  ) : (
+                    <div><Camera size={24} /><span>No scan captured</span></div>
+                  )}
+                </div>
+                <canvas ref={faceCanvasRef} className="hidden" />
+                {faceCameraError && <p className="face-login-error">{faceCameraError}</p>}
+                <div className="face-login-actions">
+                  {faceCameraActive ? (
+                    <button type="button" onClick={captureFaceScan}><Camera size={14} /> Capture face</button>
+                  ) : (
+                    <button type="button" onClick={startFaceCamera}><Camera size={14} /> {faceScan ? "Retake scan" : "Open camera"}</button>
+                  )}
+                  {faceScan && <button type="button" aria-label="Clear facial scan" onClick={() => setFaceScan(null)}><RotateCcw size={14} /></button>}
+                </div>
+              </div>
+            )}
           </div>
 
           <div className="form-actions">

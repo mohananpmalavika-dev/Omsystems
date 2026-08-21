@@ -190,6 +190,7 @@ export function CameraTile({
               cameraName={camera.name}
               cameraId={camera.id}
               muted={isMuted}
+              allowDemoFallback={Boolean(session?.demo)}
               onPlaybackError={() => onPlaybackError?.("HLS playback failed")}
               onVideoElementChange={handleVideoElementChange}
             />
@@ -200,15 +201,9 @@ export function CameraTile({
               className="live-video"
             />
           ) : (
-            <HlsPlayer
-              url=""
-              bearerToken=""
-              cameraName={camera.name}
-              cameraId={camera.id}
-              muted={isMuted}
-              onPlaybackError={() => onPlaybackError?.("HLS playback failed")}
-              onVideoElementChange={handleVideoElementChange}
-            />
+            <div className="grid h-full place-items-center bg-slate-950 px-4 text-center text-xs text-slate-400">
+              {camera.status === "offline" ? "Camera offline" : "Live feed ready"}
+            </div>
           )}
         </div>
 
@@ -230,7 +225,7 @@ export function CameraTile({
           </span>
         </div>
 
-        {!isActive && camera.status !== "offline" && (
+        {!session?.hls && camera.status !== "offline" && (
           <button className="watch-button" onClick={onStart} disabled={loading}>
             {loading ? (
               <LoaderCircle size={17} className="spin" />

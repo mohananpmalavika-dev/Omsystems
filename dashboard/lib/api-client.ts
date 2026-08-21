@@ -222,7 +222,7 @@ async function downloadApi(endpoint: string, options: RequestInit = {}): Promise
 }
 
 export const authApi = {
-  login: async (username: string, password: string, tenantSlug?: string) => {
+  login: async (username: string, password: string, tenantSlug?: string, faceScan?: string) => {
     const response = await fetchApi<{
       accessToken?: string;
       refreshToken?: string;
@@ -230,7 +230,7 @@ export const authApi = {
       user: any;
     }>('/v1/auth/login', {
       method: 'POST',
-      body: JSON.stringify({ username, password, tenantSlug }),
+      body: JSON.stringify({ username, password, tenantSlug, faceScan }),
     });
 
     if (typeof window !== 'undefined') {

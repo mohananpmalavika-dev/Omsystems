@@ -51,7 +51,7 @@ export async function startLive(
     };
 
     if (!controlSession.token) {
-      return demoLiveSession(cameraId);
+      throw new Error("stream_secret_unavailable");
     }
 
     const mediaGatewayUrl = controlSession.mediaGatewayUrl ??
@@ -78,11 +78,14 @@ export async function startLive(
       },
     );
     if (!mediaResponse.ok) {
-      return demoLiveSession(cameraId);
+      const body = await mediaResponse.json().catch(() => ({})) as { error?: unknown };
+      throw new Error(typeof body.error === "string" ? body.error : "media_gateway_failure");
     }
     return await mediaResponse.json() as LiveSessionResponse;
-  } catch {
-    return demoLiveSession(cameraId);
+  } catch (error) {
+    // Do not turn an unavailable camera into a fabricated live session. The
+    // browser needs the real error so it can show a retryable offline state.
+    throw error;
   }
 }
 

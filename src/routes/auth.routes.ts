@@ -18,6 +18,7 @@ import {
 } from "../identity/services/bootstrap-onboarding.service.js";
 import { passwordResetOtpService } from "../identity/services/password-reset-otp.service.js";
 import { activeInMemorySessions } from "../middleware/auth.middleware.js";
+import { verifyEmployeeFace } from "../security/employee-face-verification.service.js";
 
 const forgotPasswordOtpSchema = z.object({
   email: z.string().email(),
@@ -39,6 +40,11 @@ const loginSchema = z.object({
   username: z.string().trim().min(1),
   password: z.string().min(1),
   tenantSlug: z.string().trim().min(1).optional(),
+  faceScan: z
+    .string()
+    .max(2_800_000)
+    .regex(/^data:image\/(jpeg|png|webp);base64,/, "Invalid facial scan payload")
+    .optional(),
 });
 
 const onboardingSetupSchema = z.object({
@@ -287,6 +293,37 @@ export async function registerAuthRoutes(
         ).catch(() => {});
       }
 
+      let faceVerificationScore: number | undefined;
+      if (body.faceScan) {
+        const faceVerification = await verifyEmployeeFace(body.faceScan, user.preferences);
+        faceVerificationScore = faceVerification.score;
+
+        if (!faceVerification.enrolled) {
+          return reply.code(403).send({
+            error: "facial_enrollment_required",
+            message: "This employee has no enrolled facial profile. Use password sign-in or ask an administrator to enroll a photo.",
+          });
+        }
+
+        if (!faceVerification.matched) {
+          if (typeof store.writeAudit === "function") {
+            await Promise.resolve(store.writeAudit({
+              tenantId: user.tenantId,
+              actorUserId: user.id,
+              action: "user.login.face_verification_failed",
+              resourceNodeId: null,
+              outcome: "failure",
+              sourceIp: request.ip,
+              details: { score: faceVerification.score, reason: faceVerification.reason },
+            })).catch(() => {});
+          }
+          return reply.code(401).send({
+            error: "facial_verification_failed",
+            message: "Facial scan does not match the enrolled employee profile.",
+          });
+        }
+      }
+
       // Generate session tokens
       const accessToken = generateToken(64);
       const refreshToken = generateToken(64);
@@ -309,19 +346,23 @@ export async function registerAuthRoutes(
 
       // Record successful login
       if (typeof store.recordSuccessfulLogin === "function") {
-        await store.recordSuccessfulLogin(user.id, request.ip).catch(() => {});
+        await Promise.resolve(store.recordSuccessfulLogin(user.id, request.ip)).catch(() => {});
       }
 
       if (typeof store.writeAudit === "function") {
-        await store.writeAudit({
+        await Promise.resolve(store.writeAudit({
           tenantId: user.tenantId,
           actorUserId: user.id,
           action: "user.login",
           resourceNodeId: null,
           outcome: "success",
           sourceIp: request.ip,
-          details: { sessionId: session.id },
-        }).catch(() => {});
+          details: {
+            sessionId: session.id,
+            faceScanProvided: Boolean(body.faceScan),
+            faceVerificationScore,
+          },
+        })).catch(() => {});
       }
 
         // Get user details
@@ -334,10 +375,10 @@ export async function registerAuthRoutes(
           session?.userId ??
           userDetails?.id ??
           user.id;
-        const validUserId =
-          /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(finalUserId)
-            ? finalUserId
-            : "00000000-0000-4000-8000-000000000001";
+        // Preserve non-UUID identities used by development adapters. The
+        // authenticated middleware still normalizes them when required by
+        // UUID-only persistence paths.
+        const validUserId = finalUserId || "00000000-0000-4000-8000-000000000001";
 
         const finalTenantId =
           session?.tenantId ??

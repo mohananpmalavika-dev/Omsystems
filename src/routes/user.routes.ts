@@ -6,6 +6,10 @@ import type {
   UserManagementStore,
 } from "../control-plane-store.js";
 import { hashPassword, verifyPassword } from "../security/password.js";
+import {
+  createEmployeeFaceTemplate,
+  faceTemplatePreferences,
+} from "../security/employee-face-verification.service.js";
 
 const createUserSchema = z.object({
   email: z.string().email(),
@@ -35,7 +39,11 @@ const createUserSchema = z.object({
   primaryOrgNodeId: z.string().min(1),
   photoUrl: z.string().optional(),
   avatarUrl: z.string().optional(),
-  facePhotoBase64: z.string().optional(),
+  facePhotoBase64: z
+    .string()
+    .max(2_800_000)
+    .regex(/^data:image\/(jpeg|png|webp);base64,/, "Invalid employee face photo")
+    .optional(),
   faceEnrolled: z.boolean().optional(),
 });
 
@@ -69,7 +77,11 @@ const updateUserSchema = z.object({
   preferences: z.record(z.unknown()).optional(),
   photoUrl: z.string().optional(),
   avatarUrl: z.string().optional(),
-  facePhotoBase64: z.string().optional(),
+  facePhotoBase64: z
+    .string()
+    .max(2_800_000)
+    .regex(/^data:image\/(jpeg|png|webp);base64,/, "Invalid employee face photo")
+    .optional(),
   faceEnrolled: z.boolean().optional(),
 });
 
@@ -221,11 +233,28 @@ export async function registerUserRoutes(
       });
     }
 
-    // Hash password
+    let biometricPreferences: Record<string, unknown> | undefined;
+    if (body.facePhotoBase64) {
+      try {
+        biometricPreferences = faceTemplatePreferences(
+          await createEmployeeFaceTemplate(body.facePhotoBase64),
+        );
+      } catch (error) {
+        return reply.code(400).send({
+          error: "invalid_face_photo",
+          message: error instanceof Error ? error.message : "Unable to process employee face photo",
+        });
+      }
+    }
+
+    // Hash password and create the server-side biometric template. The raw
+    // image is retained only as the existing profile photo field for display.
     const passwordHash = await hashPassword(body.password);
 
     const user = await store.createUser(request.currentUser.tenantId, {
       ...body,
+      profilePhotoUrl: body.facePhotoBase64 ?? body.photoUrl ?? body.avatarUrl,
+      preferences: biometricPreferences,
       passwordHash,
       createdBy: request.currentUser.id,
     });
@@ -280,19 +309,45 @@ export async function registerUserRoutes(
       });
     }
 
-    const user = await store.updateUser(id, body);
+    let updateInput: Record<string, unknown> = body;
+    if (body.facePhotoBase64) {
+      try {
+        updateInput = {
+          ...body,
+          profilePhotoUrl: body.facePhotoBase64,
+          preferences: {
+            ...(body.preferences ?? {}),
+            ...faceTemplatePreferences(
+              await createEmployeeFaceTemplate(body.facePhotoBase64),
+            ),
+          },
+        };
+      } catch (error) {
+        return reply.code(400).send({
+          error: "invalid_face_photo",
+          message: error instanceof Error ? error.message : "Unable to process employee face photo",
+        });
+      }
+    }
+
+    const user = await store.updateUser(id, updateInput);
 
     if (!user || user.tenantId !== request.currentUser.tenantId) {
       return reply.code(404).send({ error: "user_not_found" });
     }
 
+    const { facePhotoBase64: _facePhoto, ...safeChanges } = body;
     await store.writeAudit({
       tenantId: request.currentUser.tenantId,
       actorUserId: request.currentUser.id,
       action: "user.updated",
       resourceNodeId: null,
       outcome: "success",
-      details: { userId: id, changes: body },
+      details: {
+        userId: id,
+        changes: safeChanges,
+        faceVerificationUpdated: Boolean(body.facePhotoBase64),
+      },
     });
 
     const { passwordHash: _, ...safeUser } = user;

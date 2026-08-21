@@ -116,6 +116,8 @@ export default function OrganizationHierarchyPage() {
   const [showAddEmpModal, setShowAddEmpModal] = useState(false);
   const [newEmpName, setNewEmpName] = useState("");
   const [newEmpEmail, setNewEmpEmail] = useState("");
+  const [newEmpUsername, setNewEmpUsername] = useState("");
+  const [newEmpPassword, setNewEmpPassword] = useState("");
   const [newEmpRole, setNewEmpRole] = useState("operator");
   const [newEmpDesignation, setNewEmpDesignation] = useState("Security Officer");
   const [newEmpDept, setNewEmpDept] = useState("Surveillance SOC");
@@ -277,8 +279,11 @@ export default function OrganizationHierarchyPage() {
     if (!videoRef.current || !canvasRef.current) return;
     const video = videoRef.current;
     const canvas = canvasRef.current;
-    canvas.width = video.videoWidth || 640;
-    canvas.height = video.videoHeight || 480;
+    const sourceWidth = video.videoWidth || 640;
+    const sourceHeight = video.videoHeight || 480;
+    const scale = Math.min(1, 640 / sourceWidth, 640 / sourceHeight);
+    canvas.width = Math.max(1, Math.round(sourceWidth * scale));
+    canvas.height = Math.max(1, Math.round(sourceHeight * scale));
     const ctx = canvas.getContext("2d");
     if (ctx) {
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
@@ -293,6 +298,10 @@ export default function OrganizationHierarchyPage() {
     if (!file) return;
     if (!file.type.startsWith("image/")) {
       setError("Please select a valid JPG/PNG/WEBP image file.");
+      return;
+    }
+    if (file.size > 2_000_000) {
+      setError("Please choose an image smaller than 2 MB.");
       return;
     }
     const reader = new FileReader();
@@ -371,8 +380,16 @@ export default function OrganizationHierarchyPage() {
 
   async function handleCreateEmployee(e: React.FormEvent) {
     e.preventDefault();
-    if (!newEmpName.trim() || !newEmpEmail.trim() || !newEmpOrgNodeId) {
-      setError("Please fill all required fields and select an organization/branch location.");
+    if (!newEmpName.trim() || !newEmpEmail.trim() || !newEmpUsername.trim() || !newEmpPassword || !newEmpOrgNodeId) {
+      setError("Please fill all required fields, including login credentials and location scope.");
+      return;
+    }
+    if (newEmpPassword.length < 8) {
+      setError("The employee password must be at least 8 characters long.");
+      return;
+    }
+    if (!empPhotoData) {
+      setError("Capture or upload the employee's face photo before enrolling facial login.");
       return;
     }
     setSaving(true);
@@ -381,14 +398,14 @@ export default function OrganizationHierarchyPage() {
       const payload = {
         displayName: newEmpName.trim(),
         email: newEmpEmail.trim(),
+        username: newEmpUsername.trim(),
+        password: newEmpPassword,
         role: newEmpRole,
         designation: newEmpDesignation.trim(),
         department: newEmpDept.trim(),
         primaryOrgNodeId: newEmpOrgNodeId,
-        photoUrl: empPhotoData || undefined,
-        avatarUrl: empPhotoData || undefined,
         facePhotoBase64: empPhotoData || undefined,
-        faceEnrolled: Boolean(empPhotoData),
+        faceEnrolled: true,
       };
 
       const res = await fetch("/api/control/v1/users", {
@@ -410,6 +427,8 @@ export default function OrganizationHierarchyPage() {
       setShowAddEmpModal(false);
       setNewEmpName("");
       setNewEmpEmail("");
+      setNewEmpUsername("");
+      setNewEmpPassword("");
       setEmpPhotoData("");
       stopWebcam();
       await loadAllData();
@@ -1218,7 +1237,7 @@ export default function OrganizationHierarchyPage() {
               <div className="p-4 bg-slate-950 border border-slate-800 rounded-xl space-y-3">
                 <label className="block text-xs font-semibold text-slate-200 flex items-center gap-1.5">
                   <Camera size={14} className="text-amber-400" />
-                  Employee Face Photo (For Restricted Zone Verification)
+                  Employee Face Photo (Required for Facial Login)
                 </label>
 
                 {/* Live Webcam Stream or Photo Preview */}
@@ -1247,7 +1266,7 @@ export default function OrganizationHierarchyPage() {
                       <ScanFace size={48} className="mx-auto text-slate-600" />
                       <p className="text-xs font-medium">No photo captured yet.</p>
                       <p className="text-[10px] text-slate-500 max-w-xs">
-                        Use your webcam or upload a clear frontal portrait.
+                        Capture a clear frontal portrait. Login scans are checked against this enrolled profile.
                       </p>
                       <div className="text-[10px] text-slate-600 bg-slate-950/50 p-2 rounded border border-slate-800 text-left max-w-xs mx-auto">
                         <p className="font-semibold text-slate-500 mb-1">📋 Camera Access Tips:</p>
@@ -1257,17 +1276,6 @@ export default function OrganizationHierarchyPage() {
                           <li>Ensure page is on HTTPS or localhost</li>
                         </ul>
                       </div>
-                    </div>
-                  )}
-                </div>
-                        <CheckCircle2 size={11} /> Face Captured
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="text-center p-4 text-slate-500 text-xs space-y-1">
-                      <ScanFace size={36} className="mx-auto text-slate-600 opacity-80" />
-                      <p>No photo captured yet.</p>
-                      <p className="text-[10px] text-slate-600">Use your webcam or upload a clear frontal portrait.</p>
                     </div>
                   )}
                 </div>
@@ -1324,7 +1332,7 @@ export default function OrganizationHierarchyPage() {
 
                   <label className="flex-1 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold rounded-lg text-xs flex items-center justify-center gap-1.5 transition-colors border border-slate-700 cursor-pointer text-center">
                     <Upload size={14} /> Upload Image
-                    <input type="file" accept="image/*" onChange={handleFileUpload} className="hidden" />
+                    <input type="file" accept="image/jpeg,image/png,image/webp" onChange={handleFileUpload} className="hidden" />
                   </label>
 
                   {empPhotoData && (
@@ -1364,6 +1372,36 @@ export default function OrganizationHierarchyPage() {
                     onChange={(e) => setNewEmpEmail(e.target.value)}
                     className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-slate-200 text-xs"
                   />
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="block text-slate-300 font-medium mb-1">Login Username *</label>
+                    <input
+                      type="text"
+                      required
+                      minLength={3}
+                      maxLength={50}
+                      autoComplete="username"
+                      placeholder="e.g. rajesh.kumar"
+                      value={newEmpUsername}
+                      onChange={(e) => setNewEmpUsername(e.target.value)}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-slate-200 text-xs"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-slate-300 font-medium mb-1">Initial Password *</label>
+                    <input
+                      type="password"
+                      required
+                      minLength={8}
+                      autoComplete="new-password"
+                      placeholder="At least 8 characters"
+                      value={newEmpPassword}
+                      onChange={(e) => setNewEmpPassword(e.target.value)}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-slate-200 text-xs"
+                    />
+                  </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-2">

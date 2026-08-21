@@ -262,6 +262,27 @@ export function EnhancedCameraGrid({
     }
   }, []);
 
+  // Live gateway grants are short-lived. Restart each stream before expiry so
+  // a healthy tile does not freeze when its authorization token ages out.
+  useEffect(() => {
+    const timers = Array.from(sessions.entries()).flatMap(([cameraId, session]) => {
+      if (!session.expiresAt) return [];
+      const expiry = Date.parse(session.expiresAt);
+      if (!Number.isFinite(expiry)) return [];
+      const delay = Math.max(5_000, expiry - Date.now() - 60_000);
+      return [window.setTimeout(() => {
+        if (sessionsRef.current.get(cameraId) !== session) return;
+        const stream = activeStreamTypesRef.current.get(cameraId) ?? "sub";
+        sessionsRef.current.delete(cameraId);
+        activeStreamTypesRef.current.delete(cameraId);
+        setSessions(new Map(sessionsRef.current));
+        void handleStartLive(cameraId, stream);
+      }, delay)];
+    });
+
+    return () => timers.forEach((timer) => window.clearTimeout(timer));
+  }, [handleStartLive, sessions]);
+
   const handleRequestLive = useCallback((cameraId: string) => {
     setOperatorSelectedCameraId(cameraId);
     updateStreamState(cameraId, "CONNECTING");

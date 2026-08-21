@@ -197,7 +197,150 @@ export const AI_CAPABILITY_DOMAINS: AiCapabilityDomain[] = [
     c("operations-query", "Operations query", "derived"), c("alert-query", "Alert query", "derived"),
     c("branch-comparison", "Branch comparison", "derived"), c("visual-attribute-query", "Visual attribute query", "derived"),
   ]},
+  
+  /**
+   * Security Device Analytics - Unified Physical Security
+   * 
+   * Comprehensive physical security device integration and event correlation.
+   * Transforms security device infrastructure into an intelligent, automated response system.
+   * 
+   * Architecture:
+   * - Multi-protocol device adapters (ONVIF, SNMP, REST, MQTT)
+   * - Real-time event correlation engine
+   * - Automated incident creation with evidence attachment
+   * - Emergency response workflows (panic button, fire, intrusion)
+   * - Branch security posture calculation
+   * - Device health monitoring and predictive maintenance
+   * 
+   * Device Categories:
+   * - CCTV: Cameras, NVRs, DVRs (ONVIF/RTSP)
+   * - Access Control: Controllers, doors, readers (REST/MQTT)
+   * - Intrusion: Panels, sensors, glass break (SNMP/REST)
+   * - Fire Safety: Panels, detectors, suppressors (REST)
+   * - Banking: ATMs, vaults, cash counters (REST)
+   * - Power: UPS, generators (SNMP)
+   * - Network: Switches, routers (SNMP)
+   * 
+   * Correlation Capabilities:
+   * - Multi-device event fusion to single high-confidence incidents
+   * - Time-windowed event buffering with configurable thresholds
+   * - Automatic camera attachment for visual evidence
+   * - AI-generated incident summaries and recommended actions
+   * - Event suppression to prevent alert fatigue
+   * 
+   * Emergency Response:
+   * - Panic button: Instant P1, auto-attach cameras, multi-channel notifications
+   * - Fire/smoke: Evacuation protocols, zone identification
+   * - Vault access: Unauthorized access detection with audit trail
+   * - Forced entry: Perimeter breach with response coordination
+   * 
+   * Status: Core infrastructure complete, adapters deployed
+   */
+  { id: "security-devices", name: "Security device analytics", description: "Unified physical security device management, event correlation, and emergency response", capabilities: [
+    // Core device management
+    c("security-device-management", "Security device management", "core"),
+    c("security-device-health", "Security device health monitoring", "derived", "P2"),
+    c("security-device-discovery", "Network device discovery", "derived"),
+    c("security-device-enrollment", "Device enrollment and provisioning", "derived"),
+    
+    // Device protocols and adapters
+    c("onvif-integration", "ONVIF camera integration", "core"),
+    c("snmp-integration", "SNMP device integration", "core"),
+    c("rest-api-integration", "REST API device integration", "core"),
+    c("mqtt-integration", "MQTT IoT device integration", "core"),
+    
+    // Panic button and emergency
+    c("panic-button-detection", "Panic button detection", "core", "P1"),
+    c("panic-emergency-response", "Panic emergency response workflow", "derived", "P1"),
+    c("duress-button", "Duress button detection", "core", "P1"),
+    c("emergency-button", "Emergency button detection", "core", "P1"),
+    c("emergency-camera-attachment", "Emergency camera auto-attachment", "derived", "P1"),
+    
+    // Access control and doors
+    c("door-forced-open", "Door forced open detection", "core", "P1"),
+    c("door-propped-open", "Door propped open detection", "core", "P2"),
+    c("access-denied", "Access denied event", "core"),
+    c("unauthorized-access", "Unauthorized access detection", "derived", "P1"),
+    c("tailgating-access", "Tailgating detection (access)", "derived", "P2"),
+    
+    // Vault and banking security
+    c("vault-door-opened", "Vault door opened", "core", "P1"),
+    c("vault-forced-open", "Vault forced open", "core", "P1"),
+    c("vault-unauthorized-access", "Vault unauthorized access", "derived", "P1"),
+    c("vault-after-hours", "Vault access after hours", "derived", "P1"),
+    c("vault-event-correlation", "Vault event correlation", "derived", "P1"),
+    
+    // ATM security
+    c("atm-cabinet-opened", "ATM cabinet opened", "core", "P1"),
+    c("atm-tamper-detection", "ATM tamper detection", "core", "P1"),
+    c("atm-vandalism", "ATM vandalism detection", "open-model", "P1"),
+    c("atm-event-correlation", "ATM event correlation", "derived", "P1"),
+    
+    // Fire and safety devices
+    c("fire-alarm-triggered", "Fire alarm triggered", "core", "P1"),
+    c("smoke-detection-device", "Smoke detector activation", "core", "P1"),
+    c("heat-detection-device", "Heat detector activation", "core", "P1"),
+    c("fire-suppression-activated", "Fire suppression activated", "core", "P1"),
+    c("fire-event-correlation", "Fire event correlation", "derived", "P1"),
+    
+    // Intrusion detection
+    c("intrusion-panel-alarm", "Intrusion panel alarm", "core", "P1"),
+    c("motion-sensor-triggered", "Motion sensor triggered", "core", "P2"),
+    c("glass-break-sensor", "Glass break sensor", "core", "P1"),
+    c("perimeter-breach", "Perimeter breach detection", "derived", "P1"),
+    c("forced-entry-correlation", "Forced entry correlation", "derived", "P1"),
+    
+    // Power and infrastructure
+    c("ups-on-battery", "UPS on battery", "core", "P2"),
+    c("ups-low-battery", "UPS low battery", "core", "P1"),
+    c("ups-critical-battery", "UPS critical battery", "core", "P1"),
+    c("power-failure-detected", "Power failure detected", "core", "P1"),
+    c("power-failure-cascade", "Power failure cascade detection", "derived", "P1"),
+    c("generator-activated", "Generator activated", "core"),
+    
+    // Environmental monitoring
+    c("temperature-high", "Temperature high", "core", "P2"),
+    c("temperature-critical", "Temperature critical", "core", "P1"),
+    c("water-leak-detected", "Water leak detected", "core", "P1"),
+    c("flood-detected", "Flood detected", "core", "P1"),
+    c("humidity-high", "Humidity high", "core", "P2"),
+    c("gas-leak-detected", "Gas leak detected", "core", "P1"),
+    c("environmental-threat-correlation", "Environmental threat correlation", "derived", "P1"),
+    
+    // Event correlation and intelligence
+    c("multi-device-correlation", "Multi-device event correlation", "derived"),
+    c("security-incident-fusion", "Security incident fusion", "derived", "P1"),
+    c("false-positive-suppression", "False positive suppression", "derived"),
+    c("confidence-scoring", "Correlation confidence scoring", "derived"),
+    c("evidence-attachment", "Automatic evidence attachment", "derived"),
+    c("incident-timeline-reconstruction", "Incident timeline reconstruction", "derived"),
+    
+    // Branch security posture
+    c("branch-security-score", "Branch security posture score", "derived"),
+    c("device-category-health", "Device category health", "derived"),
+    c("security-risk-assessment", "Security risk assessment", "derived"),
+    c("compliance-monitoring", "Security compliance monitoring", "derived"),
+    
+    // Device commands and control
+    c("device-remote-control", "Device remote control", "core"),
+    c("device-command-rbac", "Device command RBAC", "core"),
+    c("device-command-mfa", "Device command MFA", "core"),
+    c("device-command-approval", "Device command approval workflow", "derived"),
+    c("device-command-audit", "Device command audit logging", "core"),
+    
+    // Real-time monitoring
+    c("device-status-realtime", "Real-time device status", "core"),
+    c("device-alarm-notification", "Device alarm notification", "core", "P1"),
+    c("websocket-device-events", "WebSocket device events", "core"),
+    c("soc-escalation", "SOC escalation workflow", "derived", "P1"),
+    
+    // Predictive and analytics
+    c("device-failure-prediction", "Security device failure prediction", "derived", "P2"),
+    c("pattern-anomaly-detection", "Security pattern anomaly detection", "derived", "P2"),
+    c("incident-probability-forecast", "Incident probability forecast", "derived"),
+  ]},
 ];
+
 
 export const AI_CAPABILITIES = AI_CAPABILITY_DOMAINS.flatMap((domain) =>
   domain.capabilities.map((capability) => ({ ...capability, domainId: domain.id, domainName: domain.name })),

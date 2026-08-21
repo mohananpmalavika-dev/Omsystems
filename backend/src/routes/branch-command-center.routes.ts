@@ -7,11 +7,13 @@
 
 import { Router, Request, Response } from 'express';
 import { Pool } from 'pg';
+import { Redis } from 'ioredis';
 import { BranchOperationalSnapshotService } from '../services/branch-operational-snapshot.service';
+import { SecurityDeviceCommandCenterService } from '../services/security-device-command-center.service';
 import { authenticateToken } from '../middleware/auth.middleware';
 import { validateBranchAccess } from '../middleware/branch-access.middleware';
 
-export function createBranchCommandCenterRoutes(pool: Pool): Router {
+export function createBranchCommandCenterRoutes(pool: Pool, redis?: Redis): Router {
   const router = Router();
   const snapshotService = new BranchOperationalSnapshotService(pool);
 
@@ -131,6 +133,35 @@ export function createBranchCommandCenterRoutes(pool: Pool): Router {
         res.status(500).json({
           success: false,
           error: 'Failed to fetch branch events',
+        });
+      }
+    }
+  );
+
+  /**
+   * GET /api/v1/branches/:branchId/security-devices
+   * Get security device status for Command Center
+   */
+  router.get(
+    '/:branchId/security-devices',
+    authenticateToken,
+    validateBranchAccess,
+    async (req: Request, res: Response) => {
+      try {
+        const { branchId } = req.params;
+        const securityService = SecurityDeviceCommandCenterService.getInstance(pool, redis);
+        
+        const status = await securityService.getBranchSecurityDeviceStatus(branchId);
+
+        res.json({
+          success: true,
+          data: status,
+        });
+      } catch (error) {
+        console.error('Error fetching branch security devices:', error);
+        res.status(500).json({
+          success: false,
+          error: 'Failed to fetch security device status',
         });
       }
     }
