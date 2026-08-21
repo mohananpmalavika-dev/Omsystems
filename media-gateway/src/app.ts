@@ -48,7 +48,7 @@ export async function buildMediaGateway(options: {
       method: ["GET", "HEAD", "OPTIONS"],
       url: "/hls/*",
       handler: async (request, reply) => {
-        setHlsCorsHeaders(request.headers.origin, reply);
+        setHlsCorsHeaders(request.headers.origin, request.headers["access-control-request-private-network"], reply);
         if (request.method === "OPTIONS") {
           return reply.code(204).send();
         }
@@ -190,7 +190,11 @@ function forwardMediaHeaders(headers: Record<string, unknown>) {
   return forwarded;
 }
 
-function setHlsCorsHeaders(origin: string | undefined, reply: { header(name: string, value: string): unknown }) {
+function setHlsCorsHeaders(
+  origin: string | undefined,
+  privateNetworkRequest: string | string[] | undefined,
+  reply: { header(name: string, value: string): unknown },
+) {
   if (origin) {
     reply.header("access-control-allow-origin", origin);
     reply.header("access-control-allow-credentials", "true");
@@ -200,4 +204,10 @@ function setHlsCorsHeaders(origin: string | undefined, reply: { header(name: str
   }
   reply.header("access-control-allow-headers", "Authorization, Content-Type, Range");
   reply.header("access-control-allow-methods", "GET, HEAD, OPTIONS");
+  const requestsPrivateNetwork = Array.isArray(privateNetworkRequest)
+    ? privateNetworkRequest.includes("true")
+    : privateNetworkRequest === "true";
+  if (requestsPrivateNetwork) {
+    reply.header("access-control-allow-private-network", "true");
+  }
 }

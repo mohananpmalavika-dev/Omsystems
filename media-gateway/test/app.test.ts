@@ -171,7 +171,10 @@ describe("authorized media startup", () => {
       const response = await app.inject({
         method: "GET",
         url: "/hls/camera-cam-001/index.m3u8?token=session-token",
-        headers: { origin: "https://dashboard.example" },
+        headers: {
+          origin: "https://dashboard.example",
+          "access-control-request-private-network": "true",
+        },
       });
       expect(response.statusCode).toBe(200);
       expect(response.body).toBe("#EXTM3U\n");
@@ -181,6 +184,7 @@ describe("authorized media startup", () => {
       expect(response.headers["access-control-allow-origin"]).toBe(
         "https://dashboard.example",
       );
+      expect(response.headers["access-control-allow-private-network"]).toBe("true");
     } finally {
       await new Promise<void>((resolve, reject) =>
         upstream.close((error) => error ? reject(error) : resolve())

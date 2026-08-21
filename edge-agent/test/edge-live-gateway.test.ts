@@ -91,11 +91,15 @@ describe("all-in-one edge live gateway", () => {
 
     const cors = await fetch(`${baseUrl}/hls/camera-camera-1/index.m3u8`, {
       method: "OPTIONS",
-      headers: { origin: "https://dashboard.example.com" },
+      headers: {
+        origin: "https://dashboard.example.com",
+        "access-control-request-private-network": "true",
+      },
     });
     expect(cors.status).toBe(204);
     expect(cors.headers.get("access-control-allow-origin")).toBe("https://dashboard.example.com");
     expect(cors.headers.get("access-control-allow-credentials")).toBe("true");
+    expect(cors.headers.get("access-control-allow-private-network")).toBe("true");
 
     const started = await fetch(`${baseUrl}/v1/live/start`, {
       method: "POST",

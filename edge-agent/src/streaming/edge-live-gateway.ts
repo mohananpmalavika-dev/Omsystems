@@ -184,6 +184,9 @@ export class EdgeLiveGateway {
     response.setHeader("Access-Control-Allow-Credentials", "true");
     response.setHeader("Access-Control-Allow-Headers", "Authorization, Content-Type, Range");
     response.setHeader("Access-Control-Allow-Methods", "GET, HEAD, OPTIONS");
+    if (request.headers["access-control-request-private-network"] === "true") {
+      response.setHeader("Access-Control-Allow-Private-Network", "true");
+    }
     response.setHeader("Vary", "Origin");
     if (request.method === "OPTIONS") { response.writeHead(204).end(); return; }
     const suffix = (request.url ?? "/hls/").slice("/hls".length) || "/";
