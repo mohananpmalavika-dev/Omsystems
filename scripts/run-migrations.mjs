@@ -9,16 +9,36 @@ import pg from "pg";
 const { Client } = pg;
 const scriptPath = fileURLToPath(import.meta.url);
 const migrationsDirectory = join(dirname(scriptPath), "..", "database", "migrations");
+const legacyMigrationsDirectory = join(
+  dirname(scriptPath),
+  "..",
+  "backend",
+  "database",
+  "migrations",
+);
 const migrationLockId = 7_184_225_991;
 
 function migrationFiles() {
-  return readdirSync(migrationsDirectory)
-    .filter((file) => file.endsWith(".sql"))
-    .sort((left, right) => left.localeCompare(right, undefined, { numeric: true }));
+  const filenames = new Set();
+  for (const directory of [migrationsDirectory, legacyMigrationsDirectory]) {
+    for (const file of readdirSync(directory)) {
+      if (file.endsWith(".sql")) filenames.add(file);
+    }
+  }
+  return [...filenames].sort((left, right) =>
+    left.localeCompare(right, undefined, { numeric: true }),
+  );
 }
 
 function migrationContents(filename) {
-  return readFileSync(join(migrationsDirectory, filename), "utf8");
+  for (const directory of [migrationsDirectory, legacyMigrationsDirectory]) {
+    try {
+      return readFileSync(join(directory, filename), "utf8");
+    } catch (error) {
+      if (error.code !== "ENOENT") throw error;
+    }
+  }
+  throw new Error(`Migration file not found: ${filename}`);
 }
 
 function checksum(contents) {
