@@ -8,12 +8,12 @@ COPY packages/ ./packages/
 COPY analytics-engine/ ./analytics-engine/
 COPY edge-agent/ ./edge-agent/
 COPY root-cause-analysis-engine/ ./root-cause-analysis-engine/
-RUN npm ci --ignore-scripts
+RUN npm ci
 RUN npm run build
 
 # Build edge-agent bundle for Linux downloads
 WORKDIR /app/edge-agent
-RUN npm ci --ignore-scripts
+RUN npm ci
 RUN npm run bundle
 WORKDIR /app
 
