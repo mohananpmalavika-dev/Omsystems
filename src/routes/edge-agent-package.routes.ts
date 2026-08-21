@@ -470,22 +470,16 @@ export async function registerEdgeAgentPackageRoutes(
         ...options,
         controlPlanePublicUrl: requireControlPlaneUrl(request, options.controlPlanePublicUrl),
       };
-      const executablePath = join(root, "release", "edge-agent.exe");
-      let executableSize: number;
-      try {
-        const metadata = await stat(executablePath);
-        if (!metadata.isFile()) throw new Error("not a file");
-        executableSize = metadata.size;
-      } catch {
-        throw Object.assign(new Error(`edge_agent_executable_not_built: ${executablePath}`), { code: "edge_agent_executable_not_built" });
-      }
 
-      const config = Buffer.from(branchConfiguration({
-        id: body.activationId,
-        branchId,
-        name: body.agentName,
-      }, version, packageOptions, "windows", "install", body.activationCode), "utf8");
-      const installer = streamInstaller(executablePath, config);
+      // Create a lightweight PowerShell bootstrap installer instead of the huge .exe
+      const bootstrapTemplate = await readFile(join(root, "installer", "bootstrap-installer.ps1"), "utf8");
+      const bootstrapScript = bootstrapTemplate
+        .replace("$ActivationCode,", `$ActivationCode = "${body.activationCode}",`)
+        .replace("$ControlPlaneUrl,", `$ControlPlaneUrl = "${packageOptions.controlPlanePublicUrl}",`)
+        .replace("$AgentName,", `$AgentName = "${body.agentName}",`)
+        .replace("$BranchId,", `$BranchId = "${branchId}",`)
+        .replace("$ActivationId", `$ActivationId = "${body.activationId}"`);
+      
       const safeBranchName = branch.name.replace(/[^a-zA-Z0-9_-]/g, "-");
       await store.writeAudit({
         tenantId: branch.tenantId,
@@ -494,18 +488,35 @@ export async function registerEdgeAgentPackageRoutes(
         resourceNodeId: branchId,
         outcome: "success",
         sourceIp: request.ip,
-        details: { activationId: body.activationId, version, platform: "windows", format: "single-executable" },
+        details: { activationId: body.activationId, version, platform: "windows", format: "bootstrap-powershell" },
       });
+      
       reply.header("Cache-Control", "no-store, private");
-      reply.header("Content-Type", "application/vnd.microsoft.portable-executable");
-      reply.header("Content-Length", String(executableSize + installer.footer.length));
-      reply.header("Content-Disposition", `attachment; filename="${safeBranchName}-scanner-setup.exe"`);
-      return reply.send(installer.stream);
+      reply.header("Content-Type", "application/octet-stream");
+      reply.header("Content-Disposition", `attachment; filename="${safeBranchName}-installer.ps1"`);
+      return reply.send(bootstrapScript);
     } catch (error) {
       app.log.error({ err: error, branchId }, "Failed to build edge-agent installer from activation");
       const code = error && typeof error === "object" && "code" in error ? String(error.code) : "edge_agent_package_failed";
       const status = code.endsWith("_not_built") || code.endsWith("_unavailable") ? 503 : 500;
       return reply.code(status).send({ error: code, message: error instanceof Error ? error.message : "Package generation failed" });
+    }
+  });
+
+  // Public endpoint to download the edge-agent bundle (referenced by bootstrap installer)
+  app.get("/v1/edge-agent/bundle/edge-agent.cjs", async (request, reply) => {
+    const root = await findEdgeAgentRoot(options.artifactRoot);
+    if (!root) return reply.code(404).send({ error: "edge_agent_bundle_not_found" });
+
+    try {
+      const bundlePath = join(root, "build", "edge-agent.cjs");
+      const bundle = await readRequiredFile(bundlePath, "edge_agent_bundle_not_built");
+      reply.header("Cache-Control", "public, max-age=3600");
+      reply.header("Content-Type", "application/javascript");
+      reply.header("Content-Disposition", `attachment; filename="edge-agent.cjs"`);
+      return reply.send(bundle);
+    } catch (error) {
+      return reply.code(404).send({ error: "edge_agent_bundle_not_found" });
     }
   });
 
