@@ -1,62 +1,21 @@
-FROM node:22-alpine AS build
+# Stage 1: Build
+FROM node:22-alpine AS builder
 WORKDIR /app
-# onnxruntime-node's CUDA bundle is optional and unavailable on the CPU-only
-# deployment image. Use its supported environment variable so npm ci never
-# attempts the provider download (or treats an .npmrc key as unsupported).
-ENV ONNXRUNTIME_NODE_INSTALL=skip
-COPY package*.json ./
-COPY dashboard/package.json ./dashboard/package.json
-COPY edge-agent/package.json ./edge-agent/package.json
-COPY edge-agent/tsconfig.json ./edge-agent/tsconfig.json
-COPY edge-agent/tsconfig.build.json ./edge-agent/tsconfig.build.json
-COPY media-gateway/package.json ./media-gateway/package.json
-COPY recording-engine/package.json ./recording-engine/package.json
-COPY analytics-engine/package.json ./analytics-engine/package.json
-COPY root-cause-analysis-engine/package.json ./root-cause-analysis-engine/package.json
-RUN npm ci
-COPY tsconfig.json ./
-COPY edge-agent/scripts ./edge-agent/scripts
-COPY edge-agent/THIRD_PARTY_NOTICES.txt ./edge-agent/THIRD_PARTY_NOTICES.txt
-RUN npm run fetch:windows-runtime --workspace @sentinel/edge-agent
-COPY src ./src
-COPY analytics-engine ./analytics-engine
-COPY backend ./backend
-COPY recording-engine ./recording-engine
-COPY root-cause-analysis-engine ./root-cause-analysis-engine
-COPY edge-agent/src ./edge-agent/src
-COPY edge-agent/installer ./edge-agent/installer
-RUN npm run build \
-    && npm run build --workspace @sentinel/edge-agent \
-    && npm run build:exe --workspace @sentinel/edge-agent \
-    && test -f dist/src/index.js \
-    && mkdir -p /runtime/control-plane \
-    && cp -R dist/src/. /runtime/control-plane/ \
-    && test -f /runtime/control-plane/index.js \
-    && npm prune --omit=dev
+COPY package.json package-lock.json tsconfig.json ./
+COPY src/ ./src/
+COPY packages/ ./packages/
+RUN npm ci --ignore-scripts
+RUN npm run build
 
-FROM node:22-alpine
-ENV NODE_ENV=production
+# Stage 2: Production
+FROM node:22-alpine AS runner
 WORKDIR /app
-COPY package*.json ./
-COPY dashboard/package.json ./dashboard/package.json
-COPY edge-agent/package.json ./edge-agent/package.json
-COPY media-gateway/package.json ./media-gateway/package.json
-COPY recording-engine/package.json ./recording-engine/package.json
-COPY analytics-engine/package.json ./analytics-engine/package.json
-COPY root-cause-analysis-engine/package.json ./root-cause-analysis-engine/package.json
-COPY --from=build /app/analytics-engine ./analytics-engine
-COPY --from=build /app/backend ./backend
-COPY --from=build /app/recording-engine ./recording-engine
-COPY --from=build /app/root-cause-analysis-engine ./root-cause-analysis-engine
-COPY --from=build /app/edge-agent/build ./edge-agent/build
-COPY --from=build /app/edge-agent/release ./edge-agent/release
-COPY --from=build /app/edge-agent/installer ./edge-agent/installer
-COPY --from=build /app/node_modules ./node_modules
-COPY --from=build /runtime/control-plane ./control-plane
-COPY --from=build /runtime/control-plane ./dist/src
-RUN test -f /app/control-plane/index.js && test -f /app/dist/src/index.js
-COPY scripts/run-migrations.mjs ./scripts/run-migrations.mjs
-COPY database/migrations ./database/migrations
+ENV NODE_ENV=production
+ENV PORT=8080
+COPY --from=builder /app/build ./build
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/package.json ./package.json
 EXPOSE 8080
-USER node
-CMD ["sh", "-c", "node scripts/run-migrations.mjs && node /app/control-plane/index.js"]
+HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
+  CMD wget -qO- http://localhost:8080/health || exit 1
+CMD ["node", "build/index.js"]
