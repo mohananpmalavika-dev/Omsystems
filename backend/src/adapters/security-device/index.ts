@@ -9,6 +9,7 @@ export { OnvifAdapter } from './onvif-adapter';
 export { SnmpAdapter } from './snmp-adapter';
 export { RestAdapter } from './rest-adapter';
 export { MqttAdapter } from './mqtt-adapter';
+export { AxProAdapter } from '../../integrations/hikvision/axpro';
 export {
   SecurityDeviceAdapterRegistry,
   adapterRegistry,

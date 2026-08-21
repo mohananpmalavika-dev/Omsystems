@@ -410,6 +410,7 @@ export class SecurityDeviceDiscoveryService {
             port: discovered.port,
             protocol: discovered.protocol,
             capabilities: discovered.capabilities,
+            credentialRefId: discovered.metadata?.axProConfig?.credentialSecretId,
             metadata: {
               ...discovered.metadata,
               autoEnrolled: true,

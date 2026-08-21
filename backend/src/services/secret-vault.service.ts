@@ -257,16 +257,16 @@ export class SecretVaultService {
         case SecretProvider.AWS_SECRETS_MANAGER:
           const awsSecrets = await this.client.listSecrets().promise();
           return awsSecrets.SecretList
-            ?.filter(s => s.Name?.startsWith(path))
-            .map(s => s.Name!) || [];
+            ?.filter((s: any) => s.Name?.startsWith(path))
+            .map((s: any) => s.Name!) || [];
         
         case SecretProvider.GCP_SECRET_MANAGER:
           const [gcpSecrets] = await this.client.listSecrets({
             parent: `projects/${this.config.projectId}`
           });
           return gcpSecrets
-            .filter(s => s.name?.includes(path))
-            .map(s => s.name!) || [];
+            .filter((s: any) => s.name?.includes(path))
+            .map((s: any) => s.name!) || [];
         
         case SecretProvider.LOCAL_ENCRYPTED:
           return [];

@@ -32,6 +32,22 @@ export type SecurityDeviceType =
   
   // Intrusion & alarm
   | 'INTRUSION_PANEL'
+  | 'AX_PRO_HUB'
+  | 'AX_PRO_PIR'
+  | 'AX_PRO_PIRCAM'
+  | 'AX_PRO_MAGNETIC_CONTACT'
+  | 'AX_PRO_GLASS_BREAK'
+  | 'AX_PRO_SHOCK'
+  | 'AX_PRO_SMOKE'
+  | 'AX_PRO_WATER'
+  | 'AX_PRO_TEMPERATURE'
+  | 'AX_PRO_PANIC'
+  | 'AX_PRO_KEYPAD'
+  | 'AX_PRO_TAG_READER'
+  | 'AX_PRO_KEYFOB'
+  | 'AX_PRO_SOUNDER'
+  | 'AX_PRO_REPEATER'
+  | 'AX_PRO_OUTPUT'
   | 'ALARM_ZONE'
   | 'ALARM_SIREN'
   | 'PANIC_BUTTON'
@@ -147,6 +163,8 @@ export type DeviceProtocol =
   | 'GPIO'            // General Purpose I/O
   | 'WEBSOCKET'       // WebSocket protocol
   | 'VENDOR_SDK'      // Proprietary vendor SDK
+  | 'ISAPI'           // Hikvision Intelligent Security API
+  | 'AX_PRO'          // Hikvision AX PRO integration transport
   | 'EDGE_GATEWAY'    // Abstracted through edge gateway
   | 'UNKNOWN';
 
@@ -227,6 +245,7 @@ export type SecurityDeviceEventType =
   | 'DEVICE_COMMUNICATION_FAILURE'
   | 'DEVICE_CONFIG_CHANGE'
   | 'DEVICE_FIRMWARE_UPDATE'
+  | 'AX_PRO_EVENT_UNMAPPED'
   
   // Access control events
   | 'ACCESS_GRANTED'

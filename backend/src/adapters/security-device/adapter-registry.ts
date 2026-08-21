@@ -15,6 +15,7 @@ import { OnvifAdapter } from './onvif-adapter';
 import { SnmpAdapter } from './snmp-adapter';
 import { RestAdapter } from './rest-adapter';
 import { MqttAdapter } from './mqtt-adapter';
+import { AxProAdapter } from '../../integrations/hikvision/axpro';
 
 export class SecurityDeviceAdapterRegistry {
   private static instance: SecurityDeviceAdapterRegistry;
@@ -61,6 +62,14 @@ export class SecurityDeviceAdapterRegistry {
     const mqttAdapter = new MqttAdapter();
     this.registerAdapter(mqttAdapter);
     this.mapProtocolToAdapter('MQTT', mqttAdapter.adapterName);
+
+    // Hikvision AX PRO adapter. It intentionally remains separate from the
+    // generic REST adapter because AX PRO auth, payloads, and event mappings
+    // are firmware/model-specific.
+    const axProAdapter = new AxProAdapter();
+    this.registerAdapter(axProAdapter);
+    this.mapProtocolToAdapter('AX_PRO', axProAdapter.adapterName);
+    this.mapProtocolToAdapter('ISAPI', axProAdapter.adapterName);
   }
 
   /**
