@@ -3,10 +3,10 @@ FROM node:22-alpine AS builder
 WORKDIR /app
 COPY package.json package-lock.json tsconfig.json ./
 COPY src/ ./src/
+COPY backend/ ./backend/
 COPY packages/ ./packages/
 COPY analytics-engine/ ./analytics-engine/
 COPY edge-agent/ ./edge-agent/
-COPY backend/ ./backend/
 COPY root-cause-analysis-engine/ ./root-cause-analysis-engine/
 RUN npm ci --ignore-scripts
 RUN npm run build
@@ -17,6 +17,7 @@ WORKDIR /app
 ENV NODE_ENV=production
 ENV PORT=8080
 COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/backend ./backend
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/package.json ./package.json
 EXPOSE 8080
