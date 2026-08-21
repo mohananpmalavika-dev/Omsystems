@@ -68,7 +68,7 @@ const DEFAULT_EMPTY_STATS: ControlRoomStats = {
   },
 };
 
-const getFallbackLayout = (allCameras: CameraType[]): GridLayout => ({
+const getInitialLayout = (allCameras: CameraType[]): GridLayout => ({
   name: "Substream overview",
   gridSize: "4x4",
   positions: allCameras.slice(0, 16).map((camera, position) => ({
@@ -82,7 +82,7 @@ export default function ControlRoomPage() {
   const [cameras, setCameras] = useState<CameraType[]>([]);
   const [priorityCameraIds, setPriorityCameraIds] = useState<string[]>([]);
   const [stats, setStats] = useState<ControlRoomStats>(DEFAULT_EMPTY_STATS);
-  const [liveDataMode, setLiveDataMode] = useState<"live" | "fallback">("live");
+  const [liveDataMode, setLiveDataMode] = useState<"live" | "unavailable">("live");
   const [activeView, setActiveView] = useState<"grid" | "handover">("grid");
   const [loading, setLoading] = useState(true);
   const [initialLayout, setInitialLayout] = useState<GridLayout | undefined>();
@@ -151,10 +151,10 @@ export default function ControlRoomPage() {
         || statsResult.status === "fulfilled" && statsResult.value
         || priorityResult.status === "fulfilled" && priorityResult.value;
 
-      setLiveDataMode(hasLiveData ? "live" : "fallback");
+      setLiveDataMode(hasLiveData ? "live" : "unavailable");
     } catch (error) {
       console.error("Failed to load control room data:", error);
-      setLiveDataMode("fallback");
+      setLiveDataMode("unavailable");
     } finally {
       setLoading(false);
     }
@@ -214,7 +214,7 @@ export default function ControlRoomPage() {
       const allCameras = (body.data ?? []) as CameraType[];
       setCameras(allCameras);
       if (allCameras.length > 0) {
-        setInitialLayout((current) => current ?? getFallbackLayout(allCameras));
+        setInitialLayout((current) => current ?? getInitialLayout(allCameras));
       } else {
         setInitialLayout(undefined);
       }
@@ -279,9 +279,9 @@ export default function ControlRoomPage() {
 
   return (
     <div className="control-room">
-      {liveDataMode === "fallback" ? (
+      {liveDataMode === "unavailable" ? (
         <div className="control-room-offline-banner" role="status">
-          Live operations data is temporarily unavailable, so the control room is showing the latest offline snapshot for monitoring continuity.
+          Live operations data is unavailable. No offline or generated camera data is being displayed.
         </div>
       ) : null}
 

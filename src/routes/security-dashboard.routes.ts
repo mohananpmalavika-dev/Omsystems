@@ -1020,6 +1020,8 @@ export async function registerSecurityDashboardRoutes(
       error: 'synthetic_security_alerts_removed',
       message: 'Security alerts must be emitted by a configured collector or live event source.',
     });
+    /* Synthetic alert generator removed. The endpoint above returns 410 so
+       production alerts can only come from configured collectors/event sources.
     const body = z.object({
       alertType: z.enum([
         'certificate_expiring',
@@ -1127,7 +1129,7 @@ export async function registerSecurityDashboardRoutes(
       return reply.code(500).send({
         error: error instanceof Error ? error.message : 'alert_generation_failed',
       });
-    }
+    } */
   });
 
   /**

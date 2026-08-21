@@ -67,12 +67,12 @@ export function HaFailoverView() {
       </div>
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        {[
+        {([
           ["Protected cameras", metrics.protectedCameras],
           ["Active nodes", metrics.activeNodes],
           ["Healthy nodes", metrics.healthyNodes],
           ["Failovers today", metrics.failoversToday],
-        ].map(([label, value]) => <div key={String(label)} className="rounded-xl border border-slate-800 bg-slate-900/90 p-4"><p className="text-xs text-slate-400">{label}</p><p className="mt-2 text-2xl font-bold text-slate-100">{value == null ? "—" : String(value)}</p></div>)}
+        ] as [string, unknown][]).map(([label, value]) => <div key={label} className="rounded-xl border border-slate-800 bg-slate-900/90 p-4"><p className="text-xs text-slate-400">{label}</p><p className="mt-2 text-2xl font-bold text-slate-100">{value == null ? "—" : String(value)}</p></div>)}
       </div>
 
       <div className="grid gap-4 md:grid-cols-2">

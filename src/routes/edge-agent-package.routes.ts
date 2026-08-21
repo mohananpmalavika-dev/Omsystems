@@ -255,6 +255,9 @@ export async function registerEdgeAgentPackageRoutes(
       branchId,
       message: "The legacy PowerShell installer has been removed. Create an authenticated edge-agent activation and download the signed package instead.",
     });
+    /* Legacy unauthenticated installer implementation removed. Keep no
+       executable fallback here; authenticated package routes below are the
+       only supported installation path.
     let branchName = "Branch Location";
     try {
       const branch = await store.getNode(branchId);
@@ -441,7 +444,7 @@ export async function registerEdgeAgentPackageRoutes(
 
     reply.header("Content-Type", "text/plain; charset=utf-8");
     reply.header("Cache-Control", "no-store, private");
-    return reply.send(scriptLines.join("\r\n"));
+    return reply.send(scriptLines.join("\r\n")); */
   });
 
   app.post("/v1/branches/:branchId/edge-agent-installer", async (request, reply) => {
