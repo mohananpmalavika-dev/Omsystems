@@ -125,6 +125,7 @@ export function EnhancedCameraGrid({
   const containerRef = useRef<HTMLDivElement>(null);
   const initialLayoutApplied = useRef(false);
   const activeStreamTypesRef = useRef(new Map<string, "main" | "sub">());
+  const pendingLiveStartsRef = useRef(new Map<string, "main" | "sub">());
   const liveStartControllersRef = useRef(new Map<string, AbortController>());
   const activeLiveStartsRef = useRef(0);
 
@@ -211,9 +212,13 @@ export function EnhancedCameraGrid({
   const handleStartLive = useCallback(async (cameraId: string, stream: "main" | "sub" = "sub") => {
     if (
       sessionsRef.current.has(cameraId) ||
-      loadingRef.current.has(cameraId) ||
-      activeLiveStartsRef.current >= MAX_PARALLEL_LIVE_STARTS
+      loadingRef.current.has(cameraId)
     ) return;
+
+    if (activeLiveStartsRef.current >= MAX_PARALLEL_LIVE_STARTS) {
+      pendingLiveStartsRef.current.set(cameraId, stream);
+      return;
+    }
 
     loadingRef.current.add(cameraId);
     activeLiveStartsRef.current += 1;
@@ -249,6 +254,14 @@ export function EnhancedCameraGrid({
       loadingRef.current.delete(cameraId);
       activeLiveStartsRef.current = Math.max(0, activeLiveStartsRef.current - 1);
       setLoading(new Set(loadingRef.current));
+
+      const next = pendingLiveStartsRef.current.entries().next().value as
+        | [string, "main" | "sub"]
+        | undefined;
+      if (next) {
+        pendingLiveStartsRef.current.delete(next[0]);
+        void handleStartLive(next[0], next[1]);
+      }
     }
   }, [
     markPlaybackActive,
@@ -260,6 +273,7 @@ export function EnhancedCameraGrid({
     for (const controller of liveStartControllersRef.current.values()) {
       controller.abort();
     }
+    pendingLiveStartsRef.current.clear();
   }, []);
 
   // Live gateway grants are short-lived. Restart each stream before expiry so

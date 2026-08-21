@@ -161,6 +161,7 @@ export function mapAxProEvent(
   const title = mapping.unmapped
     ? 'Hikvision AX PRO event (unmapped)'
     : `Hikvision AX PRO ${eventType.replaceAll('_', ' ').toLowerCase()}`;
+  const axProDeviceId = stringValue(findValue(payload, ['deviceID', 'deviceId', 'zoneId', 'zone', 'peripheralId']));
 
   return {
     id: randomUUID(),
@@ -188,7 +189,8 @@ export function mapAxProEvent(
     metadata: {
       source: 'hikvision-ax-pro',
       sourceEventId,
-      idempotencyKey: `HIKVISION_AX_PRO:${context.deviceId}:${sourceEventId}`,
+      axProDeviceId,
+      idempotencyKey: `HIKVISION_AX_PRO:${axProDeviceId || context.deviceId}:${sourceEventId}`,
       rawEventType: stringValue(findValue(payload, ['eventType', 'type', 'alarmType', 'eventCode'])),
       zone: stringValue(findValue(payload, ['zone', 'zoneId', 'zoneName'])),
     },

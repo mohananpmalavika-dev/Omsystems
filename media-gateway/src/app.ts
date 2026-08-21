@@ -48,6 +48,10 @@ export async function buildMediaGateway(options: {
       method: ["GET", "HEAD", "OPTIONS"],
       url: "/hls/*",
       handler: async (request, reply) => {
+        setHlsCorsHeaders(request.headers.origin, reply);
+        if (request.method === "OPTIONS") {
+          return reply.code(204).send();
+        }
         const suffix = request.raw.url?.slice("/hls".length) || "/";
         const target = new URL(suffix, options.mediaMtxHlsUrl);
         const upstream = await fetch(target, {
@@ -57,10 +61,6 @@ export async function buildMediaGateway(options: {
         reply.code(upstream.status);
         for (const name of [
           "accept-ranges",
-          "access-control-allow-credentials",
-          "access-control-allow-headers",
-          "access-control-allow-methods",
-          "access-control-allow-origin",
           "cache-control",
           "content-length",
           "content-type",
@@ -179,9 +179,25 @@ function secureEqualHeader(value: string | string[] | undefined, expected: strin
 
 function forwardMediaHeaders(headers: Record<string, unknown>) {
   const forwarded: Record<string, string> = {};
-  for (const name of ["accept", "origin", "range", "user-agent"]) {
+  // The gateway is the browser-facing CORS boundary. Forwarding the browser's
+  // Origin to MediaMTX makes its static hlsAllowOrigins setting decide whether
+  // a playlist is usable, which breaks as soon as the dashboard hostname
+  // changes (for example, when Render assigns a new service suffix).
+  for (const name of ["accept", "range", "user-agent"]) {
     const value = headers[name];
     if (typeof value === "string") forwarded[name] = value;
   }
   return forwarded;
+}
+
+function setHlsCorsHeaders(origin: string | undefined, reply: { header(name: string, value: string): unknown }) {
+  if (origin) {
+    reply.header("access-control-allow-origin", origin);
+    reply.header("access-control-allow-credentials", "true");
+    reply.header("vary", "Origin");
+  } else {
+    reply.header("access-control-allow-origin", "*");
+  }
+  reply.header("access-control-allow-headers", "Authorization, Content-Type, Range");
+  reply.header("access-control-allow-methods", "GET, HEAD, OPTIONS");
 }

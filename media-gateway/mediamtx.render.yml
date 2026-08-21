@@ -14,7 +14,7 @@ hls: yes
 hlsAddress: 127.0.0.1:8888
 hlsVariant: lowLatency
 hlsAllowOrigins:
-  - "https://sentinel-grid-monitoring.onrender.com"
+  - "*"
 
 webrtc: no
 

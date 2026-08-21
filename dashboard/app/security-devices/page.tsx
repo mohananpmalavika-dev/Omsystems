@@ -59,6 +59,7 @@ function SecurityDeviceHubContent() {
 
   const [deviceBreakdown, setDeviceBreakdown] = useState<DeviceTypeBreakdown[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
 
   const categoryTerms: Record<string, string[]> = {
@@ -82,38 +83,30 @@ function SecurityDeviceHubContent() {
 
   const loadDashboardData = async () => {
     try {
-      // TODO: Replace with actual API calls
       const response = await fetch('/api/security-devices/overview');
       const data = await response.json();
+      if (!response.ok) throw new Error(data.message || 'Security device overview is unavailable');
 
-      setStats(data.stats);
-      setDeviceBreakdown(data.breakdown);
+      setStats(data.stats || {
+        totalDevices: 0,
+        onlineDevices: 0,
+        offlineDevices: 0,
+        degradedDevices: 0,
+        alarmDevices: 0,
+        branches: 0,
+      });
+      setDeviceBreakdown((data.breakdown || []).map((device: any) => ({
+        ...device,
+        type: device.type || device.deviceType || 'Unknown',
+        icon: iconForDeviceType(device.deviceType || device.type),
+      })));
+      setError(null);
       setLoading(false);
     } catch (error) {
       console.error('Failed to load device data:', error);
-      
-      // Mock data for development
-      setStats({
-        totalDevices: 12842,
-        onlineDevices: 12410,
-        offlineDevices: 96,
-        degradedDevices: 312,
-        alarmDevices: 7,
-        branches: 400,
-      });
-
-      setDeviceBreakdown([
-        { type: 'Cameras', count: 8240, online: 8102, offline: 138, icon: Camera },
-        { type: 'NVR/DVR', count: 400, online: 394, offline: 6, icon: Activity },
-        { type: 'Access Controllers', count: 400, online: 398, offline: 2, icon: Lock },
-        { type: 'Doors', count: 1620, online: 1612, offline: 8, icon: Lock },
-        { type: 'Alarm Panels', count: 400, online: 388, offline: 12, icon: Bell },
-        { type: 'Fire Panels', count: 400, online: 396, offline: 4, icon: Flame },
-        { type: 'UPS', count: 400, online: 385, offline: 15, icon: Zap },
-        { type: 'Panic Buttons', count: 1200, online: 1198, offline: 2, icon: AlertTriangle },
-        { type: 'ATM', count: 400, online: 392, offline: 8, icon: Activity },
-      ]);
-
+      setError(error instanceof Error ? error.message : 'Security device overview is unavailable');
+      setStats({ totalDevices: 0, onlineDevices: 0, offlineDevices: 0, degradedDevices: 0, alarmDevices: 0, branches: 0 });
+      setDeviceBreakdown([]);
       setLoading(false);
     }
   };
@@ -126,7 +119,7 @@ function SecurityDeviceHubContent() {
   };
 
   const getHealthPercentage = (online: number, total: number) => {
-    return ((online / total) * 100).toFixed(1);
+    return total > 0 ? ((online / total) * 100).toFixed(1) : '0.0';
   };
 
   return (
@@ -162,6 +155,8 @@ function SecurityDeviceHubContent() {
         </div>
       </div>
 
+      {error && <div className="mb-6 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">{error}</div>}
+
       {/* Key Metrics */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
         {/* Total Devices */}
@@ -185,7 +180,7 @@ function SecurityDeviceHubContent() {
             <div className="flex items-center gap-1 text-green-600 text-sm">
               <TrendingUp className="w-4 h-4" />
               <span>
-                {((stats.onlineDevices / stats.totalDevices) * 100).toFixed(1)}%
+                {(stats.totalDevices > 0 ? (stats.onlineDevices / stats.totalDevices) * 100 : 0).toFixed(1)}%
               </span>
             </div>
           </div>
@@ -202,7 +197,7 @@ function SecurityDeviceHubContent() {
             <div className="flex items-center gap-1 text-yellow-600 text-sm">
               <TrendingDown className="w-4 h-4" />
               <span>
-                {((stats.degradedDevices / stats.totalDevices) * 100).toFixed(1)}%
+                {(stats.totalDevices > 0 ? (stats.degradedDevices / stats.totalDevices) * 100 : 0).toFixed(1)}%
               </span>
             </div>
           </div>
@@ -347,6 +342,17 @@ function SecurityDeviceHubContent() {
       </div>
     </div>
   );
+}
+
+function iconForDeviceType(type?: string) {
+  const normalized = String(type || '').toLowerCase();
+  if (normalized.includes('camera')) return Camera;
+  if (normalized.includes('fire') || normalized.includes('smoke')) return Flame;
+  if (normalized.includes('ups') || normalized.includes('power')) return Zap;
+  if (normalized.includes('panic') || normalized.includes('emergency')) return AlertTriangle;
+  if (normalized.includes('door') || normalized.includes('access') || normalized.includes('lock')) return Lock;
+  if (normalized.includes('alarm') || normalized.includes('intrusion') || normalized.includes('ax_pro')) return Bell;
+  return Activity;
 }
 
 export default function SecurityDeviceHubPage() {

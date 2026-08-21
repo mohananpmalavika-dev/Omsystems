@@ -494,7 +494,9 @@ function secureEqualHeader(value: string | string[] | undefined, expected: strin
 }
 function forwardMediaHeaders(headers: IncomingHttpHeaders) {
   const forwarded: Record<string, string> = {};
-  for (const name of ["accept", "origin", "range", "user-agent"]) {
+  // CORS is handled by the edge gateway for the browser-facing request. Do
+  // not let MediaMTX's static allow-list reject a renamed dashboard origin.
+  for (const name of ["accept", "range", "user-agent"]) {
     const value = headers[name]; if (typeof value === "string") forwarded[name] = value;
   }
   return forwarded;

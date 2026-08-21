@@ -55,6 +55,58 @@ interface CategoryStatus {
   status: 'healthy' | 'warning' | 'critical';
 }
 
+function mapBranchPosture(posture: any, branchName: string): BranchPosture {
+  const score = Number(posture.securityScore ?? posture.overallScore ?? 0);
+  const overallStatus = String(posture.overallStatus || '').toUpperCase();
+  const riskLevel: BranchPosture['riskLevel'] = overallStatus === 'CRITICAL'
+    ? 'critical'
+    : overallStatus === 'WARNING'
+      ? 'medium'
+      : score >= 90
+        ? 'low'
+        : score >= 70
+          ? 'medium'
+          : score >= 50
+            ? 'high'
+            : 'critical';
+
+  const category = (value: any): CategoryStatus => {
+    const total = Number(value?.totalDevices ?? value?.total ?? 0);
+    const online = Number(value?.onlineDevices ?? value?.online ?? 0);
+    const offline = Number(value?.offlineDevices ?? value?.offline ?? 0);
+    const degraded = Number(value?.degradedDevices ?? value?.degraded ?? Math.max(0, total - online - offline));
+    const categoryScore = Number(value?.healthScore ?? value?.score ?? (total > 0 ? (online / total) * 100 : 0));
+    const status = String(value?.status || '').toUpperCase();
+    return {
+      total,
+      online,
+      offline,
+      degraded,
+      score: categoryScore,
+      status: status === 'CRITICAL' || categoryScore < 70 ? 'critical' : status === 'WARNING' || categoryScore < 90 ? 'warning' : 'healthy',
+    };
+  };
+
+  return {
+    branchId: posture.branchId,
+    branchName,
+    overallScore: score,
+    riskLevel,
+    categories: {
+      cctv: category(posture.cctv),
+      accessControl: category(posture.accessControl),
+      intrusion: category(posture.intrusion),
+      fire: category(posture.fire),
+      banking: category(posture.banking),
+      power: category(posture.power),
+      network: category(posture.network),
+    },
+    activeAlarms: Number(posture.activeAlarms || 0),
+    criticalIssues: Number(posture.criticalIssues || 0),
+    lastUpdated: posture.lastUpdated || new Date(0).toISOString(),
+  };
+}
+
 export default function BranchSecurityPosturePage() {
   const [branches, setBranches] = useState<BranchPosture[]>([]);
   const [loading, setLoading] = useState(true);
@@ -70,9 +122,11 @@ export default function BranchSecurityPosturePage() {
 
   const loadBranchPostures = async () => {
     try {
-      // TODO: Replace with actual API call to load all branch postures
       const response = await fetch('/api/branches');
       const branchData = await response.json();
+      if (!response.ok || !Array.isArray(branchData.data)) {
+        throw new Error(branchData.message || 'Branch data is unavailable');
+      }
       
       // Load posture for each branch
       const postures: BranchPosture[] = await Promise.all(
@@ -80,69 +134,21 @@ export default function BranchSecurityPosturePage() {
           try {
             const postureRes = await fetch(`/api/security-devices/branches/${branch.id}/posture`);
             const postureData = await postureRes.json();
-            return {
-              ...postureData.data,
-              branchName: branch.name,
-            };
+            if (!postureRes.ok || !postureData.data) return null;
+            return mapBranchPosture(postureData.data, branch.name);
           } catch (error) {
-            // Return mock data if posture not available
-            return generateMockPosture(branch.id, branch.name);
+            console.error(`Failed to load posture for branch ${branch.id}:`, error);
+            return null;
           }
         })
       );
 
-      setBranches(postures.filter(Boolean));
+      setBranches(postures.filter((posture): posture is BranchPosture => posture !== null));
       setLoading(false);
     } catch (error) {
       console.error('Failed to load branch postures:', error);
       setLoading(false);
     }
-  };
-
-  const generateMockPosture = (branchId: string, branchName: string): BranchPosture => {
-    const score = Math.random() * 100;
-    const getRiskLevel = (score: number) => {
-      if (score >= 90) return 'low';
-      if (score >= 70) return 'medium';
-      if (score >= 50) return 'high';
-      return 'critical';
-    };
-
-    const generateCategory = (): CategoryStatus => {
-      const total = Math.floor(Math.random() * 30) + 10;
-      const online = Math.floor(total * (0.85 + Math.random() * 0.1));
-      const offline = Math.floor(Math.random() * 3);
-      const degraded = total - online - offline;
-      const score = (online / total) * 100;
-      
-      return {
-        total,
-        online,
-        offline,
-        degraded: Math.max(0, degraded),
-        score,
-        status: score >= 90 ? 'healthy' : score >= 70 ? 'warning' : 'critical',
-      };
-    };
-
-    return {
-      branchId,
-      branchName,
-      overallScore: score,
-      riskLevel: getRiskLevel(score),
-      categories: {
-        cctv: generateCategory(),
-        accessControl: generateCategory(),
-        intrusion: generateCategory(),
-        fire: generateCategory(),
-        banking: generateCategory(),
-        power: generateCategory(),
-        network: generateCategory(),
-      },
-      activeAlarms: Math.floor(Math.random() * 3),
-      criticalIssues: score < 70 ? Math.floor(Math.random() * 5) + 1 : 0,
-      lastUpdated: new Date().toISOString(),
-    };
   };
 
   const getRiskColor = (risk: string) => {

@@ -1,6 +1,9 @@
+import { createHmac, timingSafeEqual } from 'node:crypto';
 import { Pool } from 'pg';
 import { AxProAdapter } from './adapter';
 import { getConfiguredAxProCredentialResolver } from './credential-resolver';
+import { parseAxProPayload } from './client';
+import { extractAxProEventRecords, mapAxProEvent } from './mapper';
 import { AxProConnectionConfig, AxProIntegrationSummary } from './types';
 import { DiscoveredDevice, SecurityDeviceEvent } from '../../../types/security-device';
 
@@ -109,13 +112,13 @@ export class HikvisionAxProIntegrationService {
          AND enrollment_status IN ('APPROVED', 'ACTIVE')`,
       [tenantId, integrationId],
     );
+    const sourceDevice = devicesResult.rows.find((device) => device.type === 'AX_PRO_HUB') || devicesResult.rows[0];
+    if (!sourceDevice) return { integrationId, eventsProcessed: 0 };
     const since = row.last_sync_at ? new Date(row.last_sync_at) : undefined;
     let eventsProcessed = 0;
     try {
-      for (const deviceRow of devicesResult.rows) {
-        const events = await this.adapter.getEvents(this.mapDeviceRow(deviceRow), since);
-        eventsProcessed += await this.persistEvents(events);
-      }
+      const events = await this.adapter.getEvents(this.mapDeviceRow(sourceDevice), since);
+      eventsProcessed = await this.persistResolvedEvents(tenantId, integrationId, events);
       await this.pool.query(
         `UPDATE security_device_integrations
          SET status = 'ACTIVE', last_sync_at = NOW(), last_error_at = NULL, last_error_message = NULL,
@@ -129,6 +132,34 @@ export class HikvisionAxProIntegrationService {
       await this.recordTestResult(tenantId, integrationId, false, error instanceof Error ? error.message : String(error));
       throw error;
     }
+  }
+
+  async ingestReceiverEvent(
+    tenantId: string,
+    integrationId: string,
+    rawBody: string,
+    contentType: string,
+    signature: string | null,
+    timestampHeader: string | null,
+  ): Promise<{ accepted: number; ignored: number }> {
+    this.verifyReceiverSignature(rawBody, signature, timestampHeader);
+    const row = await this.getRow(tenantId, integrationId);
+    const payload = parseAxProPayload(rawBody, contentType);
+    const devicesResult = await this.pool.query(
+      `SELECT * FROM security_devices
+       WHERE tenant_id = $1 AND metadata->>'axProIntegrationId' = $2
+         AND enrollment_status IN ('APPROVED', 'ACTIVE')
+       ORDER BY CASE WHEN type = 'AX_PRO_HUB' THEN 0 ELSE 1 END, created_at ASC
+       LIMIT 1`,
+      [tenantId, integrationId],
+    );
+    const sourceDevice = devicesResult.rows[0];
+    if (!sourceDevice) throw new Error('No approved AX PRO device is available to receive events');
+    const config = this.rowToConfig(row);
+    const context = { tenantId, branchId: config.branchId, deviceId: sourceDevice.id };
+    const events = extractAxProEventRecords(payload).map((event) => mapAxProEvent(event, context, config));
+    const accepted = await this.persistResolvedEvents(tenantId, integrationId, events);
+    return { accepted, ignored: Math.max(0, events.length - accepted) };
   }
 
   private async persistEvents(events: SecurityDeviceEvent[]): Promise<number> {
@@ -160,6 +191,45 @@ export class HikvisionAxProIntegrationService {
       inserted += result.rowCount || 0;
     }
     return inserted;
+  }
+
+  private async persistResolvedEvents(tenantId: string, integrationId: string, events: SecurityDeviceEvent[]): Promise<number> {
+    let resolved = 0;
+    for (const event of events) {
+      const deviceId = await this.resolveEventDeviceId(tenantId, integrationId, event);
+      resolved += await this.persistEvents([{ ...event, deviceId }]);
+    }
+    return resolved;
+  }
+
+  private async resolveEventDeviceId(tenantId: string, integrationId: string, event: SecurityDeviceEvent): Promise<string> {
+    const axProDeviceId = event.metadata?.axProDeviceId;
+    if (!axProDeviceId) return event.deviceId;
+    const result = await this.pool.query(
+      `SELECT id FROM security_devices
+       WHERE tenant_id = $1 AND metadata->>'axProIntegrationId' = $2
+         AND metadata->>'axProDeviceId' = $3
+       LIMIT 1`,
+      [tenantId, integrationId, String(axProDeviceId)],
+    );
+    return result.rows[0]?.id || event.deviceId;
+  }
+
+  private verifyReceiverSignature(rawBody: string, signature: string | null, timestampHeader: string | null): void {
+    const secret = process.env.AXPRO_RECEIVER_SHARED_SECRET;
+    if (!secret) throw new Error('AXPRO_RECEIVER_SHARED_SECRET is not configured');
+    if (!signature || !timestampHeader) throw new Error('AX PRO receiver signature and timestamp are required');
+    const timestamp = Number(timestampHeader);
+    if (!Number.isFinite(timestamp) || Math.abs(Date.now() - timestamp * 1000) > 300_000) {
+      throw new Error('AX PRO receiver timestamp is expired');
+    }
+    const expected = createHmac('sha256', secret).update(`${timestamp}.${rawBody}`).digest('hex');
+    const supplied = signature.replace(/^sha256=/i, '');
+    const expectedBuffer = Buffer.from(expected, 'hex');
+    const suppliedBuffer = Buffer.from(supplied, 'hex');
+    if (expectedBuffer.length !== suppliedBuffer.length || !timingSafeEqual(expectedBuffer, suppliedBuffer)) {
+      throw new Error('AX PRO receiver signature is invalid');
+    }
   }
 
   private async stageDiscoveredDevices(
