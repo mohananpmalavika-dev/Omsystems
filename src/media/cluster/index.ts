@@ -4,6 +4,7 @@
  */
 
 import { CameraLeaseService } from "./camera-lease.service.js";
+import { Redis } from "ioredis";
 import { mediaNodeRegistry } from "./media-node-registry.js";
 import { MediaPlacementService } from "./media-placement.service.js";
 import { CameraSupervisorService } from "./camera-supervisor.service.js";
@@ -18,7 +19,17 @@ export * from "./camera-supervisor.service.js";
 export * from "./fencing-token.service.js";
 export * from "./failover-coordinator.js";
 
-export const cameraLeaseService = new CameraLeaseService();
+const cameraLeaseRedis = process.env.REDIS_URL
+  ? new Redis(process.env.REDIS_URL, {
+      enableOfflineQueue: false,
+      maxRetriesPerRequest: 1,
+      lazyConnect: false,
+    })
+  : undefined;
+
+export const cameraLeaseService = new CameraLeaseService(cameraLeaseRedis, {
+  mode: process.env.NODE_ENV === "production" ? "distributed-required" : "standalone",
+});
 export const mediaPlacementService = new MediaPlacementService(mediaNodeRegistry);
 export const cameraSupervisorService = new CameraSupervisorService(cameraLeaseService);
 export const haFailoverCoordinator = new HaFailoverCoordinator(

@@ -171,6 +171,7 @@ export interface ConfigurationDifference {
  * Branch Configuration State (Desired vs Actual)
  */
 export interface BranchConfigurationState {
+  tenantId: string;
   branchId: string;
   gatewayId: string;
   desiredVersion: number;

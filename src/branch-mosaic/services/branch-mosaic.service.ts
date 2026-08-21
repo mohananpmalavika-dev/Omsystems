@@ -76,66 +76,6 @@ export interface BranchDrilldownDetail {
 export class BranchMosaicService {
   private readonly branchProjections = new Map<string, BranchHealthProjection>();
 
-  constructor() {
-    this.seed400BranchProjections();
-  }
-
-  /**
-   * Pre-seeds and maintains 400 branches for instant sub-millisecond retrieval.
-   */
-  seed400BranchProjections(count: number = 400) {
-    const now = new Date().toISOString();
-    for (let i = 1; i <= count; i++) {
-      const branchId = `BR-${i.toString().padStart(3, "0")}`;
-      const isCritical = i === 88; // Branch 88 simulated outage
-      const isDegraded = i === 118; // Branch 118 storage/gap warning
-
-      const projection: BranchHealthProjection = {
-        branchId,
-        branchCode: `BR${i}`,
-        branchName: `Branch ${i} - ${i % 2 === 0 ? "South" : "North"} Zone`,
-        overallState: isCritical ? "UNHEALTHY" : isDegraded ? "UNHEALTHY" : "HEALTHY",
-        internet: {
-          state: isCritical ? "UNHEALTHY" : "HEALTHY",
-          latencyMs: isCritical ? undefined : 18 + (i % 10),
-          provider: i % 2 === 0 ? "Airtel Enterprise" : "Tata Communications",
-          lastVerifiedAt: now,
-        },
-        recorder: {
-          healthy: isCritical ? 0 : 2,
-          unhealthy: isCritical ? 2 : 0,
-          unknown: 0,
-        },
-        cameras: {
-          total: 16,
-          healthy: isCritical ? 0 : isDegraded ? 14 : 16,
-          unhealthy: isCritical ? 0 : isDegraded ? 2 : 0,
-          unknown: isCritical ? 16 : 0,
-        },
-        storage: {
-          warning: isDegraded ? 1 : 0,
-          critical: 0,
-        },
-        recording: {
-          compliant: isCritical ? 0 : isDegraded ? 14 : 16,
-          nonCompliant: isCritical ? 16 : isDegraded ? 2 : 0,
-        },
-        retention: {
-          minimumDays: isCritical ? undefined : isDegraded ? 74.5 : 92.5,
-          targetDays: 90,
-          compliant: isCritical ? null : isDegraded ? false : true,
-        },
-        alerts: {
-          p1: isCritical ? 1 : 0,
-          p2: isDegraded ? 1 : 0,
-          unacknowledged: isCritical ? 1 : isDegraded ? 1 : 0,
-        },
-        lastObservedAt: now,
-      };
-
-      this.branchProjections.set(branchId, projection);
-    }
-  }
 
   /**
    * Returns all 400 branch health projections in a single request.

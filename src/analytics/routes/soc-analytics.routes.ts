@@ -14,6 +14,7 @@ export async function registerSocAnalyticsRoutes(
   const extractFilter = (req: FastifyRequest): SocAnalyticsFilter => {
     const q = req.query as any;
     return {
+      tenantId: req.currentUser.tenantId,
       branchId: q.branchId,
       regionId: q.regionId,
       operatorId: q.operatorId,
@@ -88,6 +89,10 @@ export async function registerSocAnalyticsRoutes(
       regionId: z.string().min(1),
       stateId: z.string().min(1),
       operatorId: z.string().min(1),
+      operatorName: z.string().min(1).optional(),
+      operatorRole: z.enum(['SOC_OPERATOR', 'SOC_SUPERVISOR', 'CHIEF_SECURITY_OFFICER']).optional(),
+      branchName: z.string().min(1).optional(),
+      regionName: z.string().min(1).optional(),
       shift: z.enum(['MORNING', 'EVENING', 'NIGHT']),
       triggeredAt: z.string().datetime(),
       acknowledgedAt: z.string().datetime().optional(),
@@ -103,6 +108,7 @@ export async function registerSocAnalyticsRoutes(
     const body = schema.parse(req.body);
     await service.recordIncidentLifecycle({
       ...body,
+      tenantId: req.currentUser.tenantId,
       triggeredAt: new Date(body.triggeredAt),
       acknowledgedAt: body.acknowledgedAt ? new Date(body.acknowledgedAt) : undefined,
       investigationStartedAt: body.investigationStartedAt ? new Date(body.investigationStartedAt) : undefined,

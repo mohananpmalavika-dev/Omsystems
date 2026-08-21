@@ -167,11 +167,15 @@ function confirm(question: string): Promise<boolean> {
 // Main execution
 const superUserConfig: SuperUserConfig = {
   username: 'mgdhanyamohan',
-  password: 'Thathu110',
+  password: process.env.BOOTSTRAP_SUPERADMIN_PASSWORD ?? '',
   email: 'mgdhanyamohan@omsystems.com',
   firstName: 'Dhanya',
   lastName: 'Mohan'
 };
+
+if (!superUserConfig.password) {
+  throw new Error('BOOTSTRAP_SUPERADMIN_PASSWORD is required');
+}
 
 console.log('================================================');
 console.log('       SUPERUSER CREATION SCRIPT');

@@ -7,8 +7,11 @@ export async function registerOperationalMapRoutes(
   service: OperationalMapService = operationalMapService
 ) {
   // 1. Get Country Root Node (India)
-  app.get('/v1/maps/operational/root', async () => {
+  app.get('/v1/maps/operational/root', async (_request, reply) => {
     const root = await service.getRootNode();
+    if (!root) {
+      return reply.code(503).send({ success: false, error: 'OPERATIONAL_MAP_SOURCE_NOT_CONFIGURED' });
+    }
     return { success: true, data: root };
   });
 

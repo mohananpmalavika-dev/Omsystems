@@ -8,7 +8,8 @@ const pool = new Pool({
 });
 
 const username = 'mgdhanyamohan';
-const password = 'Thathu@110';
+const password = process.env.TEST_PASSWORD;
+if (!password) throw new Error('TEST_PASSWORD is required');
 const tenantSlug = null;
 
 console.log('🔍 Detailed Login Debug\n');

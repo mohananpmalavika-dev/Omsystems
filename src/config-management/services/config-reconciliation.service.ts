@@ -7,21 +7,22 @@ import { signedConfigService } from './signed-config.service.js';
 import { branchConfigurationAgentService } from './branch-configuration-agent.service.js';
 
 export class ConfigReconciliationService {
-  private defaultPolicy: DriftPolicy = 'AUTO_REMEDIATE';
+  private defaultPolicy: DriftPolicy = 'REPORT_ONLY';
 
   /**
    * Run fleetwide configuration drift audit.
    */
   async runFleetReconciliation(
-    policy: DriftPolicy = this.defaultPolicy
+    policy: DriftPolicy = this.defaultPolicy,
+    tenantId?: string,
   ): Promise<{
     evaluatedBranches: number;
     driftedCount: number;
     remediatedCount: number;
     results: DriftRemediationResult[];
   }> {
-    const states = signedConfigService.listFleetStates();
-    const activeVersion = signedConfigService.getActiveSignedVersion();
+    const states = signedConfigService.listFleetStates(tenantId);
+    const activeVersion = signedConfigService.getActiveSignedVersion(tenantId);
     const results: DriftRemediationResult[] = [];
 
     let driftedCount = 0;
@@ -53,7 +54,6 @@ export class ConfigReconciliationService {
               branchId: state.branchId,
               remediated: false,
               actionTaken: `Auto-remediation failed: ${applyRes.components[0]?.errorMessage}`,
-              incidentCreated: `INC-DRIFT-${state.branchId}`,
             });
           }
         } else if (policy === 'REQUIRE_APPROVAL') {
@@ -61,7 +61,6 @@ export class ConfigReconciliationService {
             branchId: state.branchId,
             remediated: false,
             actionTaken: 'Flagged for SOC review & approval',
-            incidentCreated: `INC-DRIFT-${state.branchId}`,
           });
         } else {
           results.push({

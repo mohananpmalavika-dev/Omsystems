@@ -11,13 +11,16 @@ import {
 } from "../notifications/index.js";
 import { VoiceCallbackTokens } from "../alerts/voice-call.js";
 
-const voiceTokens = new VoiceCallbackTokens(process.env.VOICE_TOKEN_SECRET || "sentinel-voice-secret-key-2026");
+const voiceTokens = process.env.VOICE_TOKEN_SECRET
+  ? new VoiceCallbackTokens(process.env.VOICE_TOKEN_SECRET)
+  : undefined;
 
 export async function registerNotificationRoutes(app: FastifyInstance) {
   /**
    * POST /api/v1/notifications/dispatch & /v1/notifications/dispatch
    */
   const handleDispatch = async (request: FastifyRequest, reply: FastifyReply) => {
+    if (!request.currentUser) return reply.status(401).send({ success: false, error: "Authentication required" });
     const body = request.body as any;
     if (!body?.alertId || !body?.priority || !body?.title) {
       return reply.status(400).send({
@@ -27,7 +30,7 @@ export async function registerNotificationRoutes(app: FastifyInstance) {
     }
 
     const context = {
-      tenantId: body.tenantId || "bank-corp",
+      tenantId: request.currentUser.tenantId,
       alertId: body.alertId,
       branchId: body.branchId,
       branchName: body.branchName,
@@ -61,6 +64,7 @@ export async function registerNotificationRoutes(app: FastifyInstance) {
    * GET /api/v1/notifications/outbox & /v1/notifications/outbox
    */
   const handleGetOutbox = async (request: FastifyRequest, reply: FastifyReply) => {
+    if (!request.currentUser) return reply.status(401).send({ success: false, error: "Authentication required" });
     const query = request.query as any;
     const alertId = query?.alertId;
 
@@ -84,6 +88,7 @@ export async function registerNotificationRoutes(app: FastifyInstance) {
    * GET /api/v1/notifications/providers/health & /v1/notifications/providers/health
    */
   const handleProvidersHealth = async (request: FastifyRequest, reply: FastifyReply) => {
+    if (!request.currentUser) return reply.status(401).send({ success: false, error: "Authentication required" });
     const health = await notificationWorker.checkAllProviderHealth();
     return reply.send({
       success: true,
@@ -101,6 +106,7 @@ export async function registerNotificationRoutes(app: FastifyInstance) {
    * POST /api/v1/notifications/acknowledge & /v1/notifications/acknowledge
    */
   const handleAcknowledge = async (request: FastifyRequest, reply: FastifyReply) => {
+    if (!request.currentUser) return reply.status(401).send({ success: false, error: "Authentication required" });
     const body = request.body as any;
     if (!body?.alertId) {
       return reply.status(400).send({ success: false, error: "Missing alertId" });
@@ -129,7 +135,9 @@ export async function registerNotificationRoutes(app: FastifyInstance) {
   const handleVoiceIvr = async (request: FastifyRequest, reply: FastifyReply) => {
     const query = request.query as any;
     const token = query?.token;
+    if (!voiceTokens) return reply.status(503).send({ success: false, error: "Voice callback verification is not configured" });
     const claims = token ? voiceTokens.verify(token) : undefined;
+    if (!claims) return reply.status(401).send({ success: false, error: "Invalid or expired voice callback token" });
 
     const digits = query?.Digits || (request.body as any)?.Digits;
 
@@ -183,6 +191,7 @@ export async function registerNotificationRoutes(app: FastifyInstance) {
    * GET /api/v1/notifications/dead-letters & /v1/notifications/dead-letters
    */
   const handleDeadLetters = async (request: FastifyRequest, reply: FastifyReply) => {
+    if (!request.currentUser) return reply.status(401).send({ success: false, error: "Authentication required" });
     const deadLetters = notificationOutbox.getDeadLetters();
     return reply.send({
       success: true,
@@ -201,11 +210,13 @@ export async function registerNotificationRoutes(app: FastifyInstance) {
    * Diagnostic preview of recipient resolution for administrators
    */
   const handleTestResolution = async (request: FastifyRequest, reply: FastifyReply) => {
+    if (!request.currentUser) return reply.status(401).send({ success: false, error: "Authentication required" });
     const body = request.body as any;
     const { recipientResolver } = await import("../notifications/application/recipient-resolver.js");
 
-    const tenantId = body?.tenantId ?? "tenant-bank-01";
-    const branchId = body?.branchId ?? "branch-thrissur-14";
+    const tenantId = request.currentUser.tenantId;
+    const branchId = typeof body?.branchId === "string" && body.branchId.trim() ? body.branchId.trim() : undefined;
+    if (!branchId) return reply.status(400).send({ success: false, error: "branchId is required" });
     const priority = body?.priority ?? "P1";
     const occurredAt = body?.timestamp ? new Date(body.timestamp) : new Date();
 
@@ -221,7 +232,7 @@ export async function registerNotificationRoutes(app: FastifyInstance) {
     const result = await recipientResolver.resolveComprehensive({
       context: {
         tenantId,
-        alertId: "test-routing",
+        alertId: `routing-preview:${request.currentUser.id}`,
         branchId,
         priority,
         alertType: "admin_test",
@@ -254,11 +265,13 @@ export async function registerNotificationRoutes(app: FastifyInstance) {
    * Preflight branch readiness audit
    */
   const handleReadiness = async (request: FastifyRequest, reply: FastifyReply) => {
-    const query = request.query as { tenantId?: string; branchId?: string };
+    if (!request.currentUser) return reply.status(401).send({ success: false, error: "Authentication required" });
+    const query = request.query as { branchId?: string };
     const { recipientResolver } = await import("../notifications/application/recipient-resolver.js");
 
-    const tenantId = query?.tenantId ?? "tenant-bank-01";
-    const branchId = query?.branchId ?? "branch-thrissur-14";
+    const tenantId = request.currentUser.tenantId;
+    const branchId = typeof query?.branchId === "string" && query.branchId.trim() ? query.branchId.trim() : undefined;
+    if (!branchId) return reply.status(400).send({ success: false, error: "branchId is required" });
 
     const report = await recipientResolver.checkBranchReadiness(tenantId, branchId);
     return reply.status(200).send({

@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { Redis } from "ioredis";
 import type { OperationalAlert } from "../domain/operational-alert.types.js";
 import type { NormalizedAlertCandidate } from "./alert-normalizer.service.js";
 
@@ -59,6 +60,38 @@ export interface RedisClientInterface {
   ping?(): Promise<string>;
 }
 
+export type AlertDeduplicationMode = "distributed-required" | "standalone";
+
+class IORedisAlertDeduplicationClient implements RedisClientInterface {
+  constructor(private readonly client: Redis) {}
+
+  get isOpen() {
+    return this.client.status !== "end";
+  }
+
+  async eval(script: string, options: { keys: string[]; arguments: string[] }): Promise<unknown> {
+    return this.client.eval(script, options.keys.length, ...options.keys, ...options.arguments);
+  }
+
+  async del(key: string): Promise<number> {
+    return this.client.del(key);
+  }
+
+  async ping(): Promise<string> {
+    return this.client.ping();
+  }
+}
+
+function createConfiguredRedisClient(): RedisClientInterface | undefined {
+  const url = process.env.REDIS_URL;
+  if (!url) return undefined;
+  return new IORedisAlertDeduplicationClient(new Redis(url, {
+    enableOfflineQueue: false,
+    maxRetriesPerRequest: 1,
+    lazyConnect: false,
+  }));
+}
+
 export class AlertDeduplicationService {
   private readonly memoryStore = new Map<string, {
     alertId: string;
@@ -77,7 +110,16 @@ export class AlertDeduplicationService {
     errorsTotal: 0,
   };
 
-  constructor(private readonly redisClient?: RedisClientInterface) {}
+  private readonly mode: AlertDeduplicationMode;
+  private readonly redisClient?: RedisClientInterface;
+
+  constructor(
+    redisClient?: RedisClientInterface,
+    options: { mode?: AlertDeduplicationMode } = {},
+  ) {
+    this.redisClient = redisClient ?? createConfiguredRedisClient();
+    this.mode = options.mode ?? (process.env.NODE_ENV === "production" ? "distributed-required" : "standalone");
+  }
 
   /**
    * Build deterministic, tenant-isolated SHA-256 hash deduplication key.
@@ -111,7 +153,9 @@ export class AlertDeduplicationService {
   }
 
   /**
-   * Atomically check and register an alert window in distributed Redis (or in-memory store).
+   * Atomically check and register an alert window in distributed Redis.
+   * Memory state is permitted only when no Redis client is configured and the
+   * service is explicitly running in standalone mode.
    */
   async checkAndRegister(
     identity: DedupIdentity,
@@ -123,9 +167,11 @@ export class AlertDeduplicationService {
     const policy = customPolicy ?? this.resolvePolicy(identity.alertType);
     const now = new Date().toISOString();
 
-    // If Redis is configured, execute atomic Lua script
-    if (this.redisClient && this.redisClient.isOpen !== false) {
+    // If Redis is configured, execute the atomic Lua script. A configured
+    // Redis client must never fall through to a second local state store.
+    if (this.redisClient) {
       try {
+        if (this.redisClient.isOpen === false) throw new Error("REDIS_NOT_READY");
         const luaScript = `
           local key = KEYS[1]
           local alertId = ARGV[1]
@@ -181,22 +227,16 @@ export class AlertDeduplicationService {
         };
       } catch (err: any) {
         this.metrics.errorsTotal += 1;
-        // Fail-open resilience: Never suppress security alerts when Redis fails
-        this.metrics.newTotal += 1;
-        return {
-          duplicate: false,
-          canonicalAlertId: candidateAlertId,
-          occurrenceCount: 1,
-          dedupKey: key,
-          firstSeenAt: now,
-          lastSeenAt: now,
-          degraded: true,
-          reason: `REDIS_ERROR: ${err.message}`,
-        };
+        throw new Error(`REDIS_DEDUPLICATION_UNAVAILABLE: ${err?.message ?? String(err)}`);
       }
     }
 
-    // In-memory atomic fallback
+    if (this.mode === "distributed-required") {
+      this.metrics.errorsTotal += 1;
+      throw new Error("REDIS_DEDUPLICATION_UNAVAILABLE: REDIS_URL is required");
+    }
+
+    // Explicit standalone development/test mode only.
     return this.executeInMemoryCheckAndRegister(key, candidateAlertId, policy, now);
   }
 
@@ -271,13 +311,13 @@ export class AlertDeduplicationService {
 
     if (result.duplicate) {
       const existing = activeAlerts.get(result.canonicalAlertId);
-      if (existing && existing.status !== "RESOLVED" && existing.status !== "DISMISSED") {
-        return {
-          isDuplicate: true,
-          existingAlert: existing,
-          dedupResult: result,
-        };
-      }
+      return {
+        isDuplicate: true,
+        existingAlert: existing && existing.status !== "RESOLVED" && existing.status !== "DISMISSED"
+          ? existing
+          : undefined,
+        dedupResult: result,
+      };
     }
 
     return {

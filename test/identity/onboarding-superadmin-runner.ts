@@ -22,6 +22,11 @@ function assert(condition: boolean, name: string) {
 }
 
 async function runOnboardingTests() {
+  const testPassword = process.env.BOOTSTRAP_SUPERADMIN_PASSWORD;
+  if (!testPassword) {
+    throw new Error("BOOTSTRAP_SUPERADMIN_PASSWORD is required for this verification runner");
+  }
+
   console.log("================================================================================");
   console.log("  ONBOARDING & SUPERADMIN AUTHENTICATION - VERIFICATION TEST RUNNER");
   console.log("================================================================================\n");
@@ -36,7 +41,7 @@ async function runOnboardingTests() {
   console.log("Suite 1: Permanent Superadmin Configuration");
 
   assert(PERMANENT_SUPERADMIN.username === "mgdhanyamohan", "Superadmin username is mgdhanyamohan");
-  assert(PERMANENT_SUPERADMIN.password === "Thathu@110", "Superadmin default password is Thathu@110");
+  assert(PERMANENT_SUPERADMIN.password === testPassword, "Superadmin password comes from deployment configuration");
   assert(PERMANENT_SUPERADMIN.role === "super_admin", "Superadmin role is super_admin");
 
   const seededUser = store.users.get("user-superadmin-mgdhanyamohan");
@@ -85,7 +90,7 @@ async function runOnboardingTests() {
         country: "India",
       },
       adminUsername: "mgdhanyamohan",
-      adminPassword: "Thathu@110",
+      adminPassword: testPassword,
       adminEmail: "mgdhanyamohan@omsystems.bank",
     },
   });
@@ -117,10 +122,10 @@ async function runOnboardingTests() {
     url: "/v1/auth/login",
     payload: {
       username: "mgdhanyamohan",
-      password: "Thathu@110",
+      password: testPassword,
     },
   });
-  assert(loginRes.statusCode === 200, "POST /v1/auth/login with mgdhanyamohan / Thathu@110 returns 200 OK");
+  assert(loginRes.statusCode === 200, "POST /v1/auth/login with configured superadmin password returns 200 OK");
   const loginData = JSON.parse(loginRes.body);
   assert(loginData.user.username === "mgdhanyamohan", "Returns authenticated user mgdhanyamohan");
   assert(loginData.user.role === "super_admin", "Authenticated user role is super_admin");

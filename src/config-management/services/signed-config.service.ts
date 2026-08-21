@@ -23,162 +23,13 @@ export interface CreateDraftVersionInput {
 
 export class SignedConfigService {
   private readonly versions = new Map<string, ConfigurationVersion>(); // versionId -> version
-  private readonly branchStates = new Map<string, BranchConfigurationState>(); // branchId -> state
-  private activeVersionId: string | null = null;
+  private readonly branchStates = new Map<string, BranchConfigurationState>();
+  private readonly activeVersionIds = new Map<string, string>();
 
-  constructor() {
+  private branchStateKey(tenantId: string, branchId: string): string {
+    return `${tenantId}:${branchId}`;
   }
 
-  private seedDefaultFleetConfig(): void {
-    const defaultBaselineConfig: BranchConfiguration = {
-      schemaVersion: '3.1',
-      network: {
-        dnsServers: ['10.100.1.10', '10.100.1.11'],
-        ntpServers: ['time.bank.internal'],
-        gatewayIp: '10.118.1.1',
-        subnetMask: '255.255.255.0',
-        uplinkBandwidthMbps: 50,
-      },
-      cameras: [
-        {
-          id: 'CAM-01',
-          channel: 1,
-          name: 'Main Entrance Lobby',
-          ip: '10.118.1.21',
-          resolution: '1920x1080',
-          fps: 25,
-          bitrateKbps: 2048,
-          codec: 'H265',
-          streamProfile: 'main',
-          credentialRef: 'secret://branch/BR-118/camera/CAM-01',
-          analyticsAssigned: ['intrusion', 'loitering'],
-          enabled: true,
-        },
-        {
-          id: 'CAM-04',
-          channel: 4,
-          name: 'Cash Teller Counter 4',
-          ip: '10.118.1.24',
-          resolution: '1920x1080',
-          fps: 25,
-          bitrateKbps: 4096, // Desired in v34 is 4096 kbps
-          codec: 'H265',
-          streamProfile: 'main',
-          credentialRef: 'secret://branch/BR-118/camera/CAM-04',
-          analyticsAssigned: ['face_blur', 'cash_dispute'],
-          enabled: true,
-        },
-      ],
-      recorder: {
-        nvrId: 'NVR-01',
-        name: 'Branch Main NVR',
-        manufacturer: 'CP PLUS',
-        model: 'CP-UNR-4K4322-V3',
-        managementIp: '10.118.1.10',
-        storageTargets: ['/dev/sda1', '/dev/sdb1'],
-        recordingMode: 'CONTINUOUS',
-        ntpServer: 'time.bank.internal', // Desired in v34 is time.bank.internal
-        credentialRef: 'secret://branch/BR-118/recorder/NVR-01',
-        channelsCount: 32,
-      },
-      retention: {
-        continuousDays: 90, // Desired in v34 is 90 days
-        alertFootageDays: 180,
-        forensicEvidenceDays: 365,
-        storagePurgeThresholdPercent: 90,
-      },
-      analytics: {
-        detectorVersions: { intrusion: '2.4.0', loitering: '2.1.0' },
-        schedules: { after_hours: '20:00-06:00' },
-        sensitivityThresholds: { intrusion: 0.85 },
-        zonesCount: 4,
-      },
-      security: {
-        minTlsVersion: 'TLS1.3',
-        certificateThumbprints: ['SHA256:88B1C4...'],
-        allowedCiphers: ['TLS_AES_256_GCM_SHA384'],
-        enforceSignedConfig: true,
-      },
-    };
-
-    const v34Id = 'cfg-v34-master';
-    const configHash = computeConfigHash(defaultBaselineConfig);
-
-    const v34: ConfigurationVersion = {
-      id: v34Id,
-      tenantId: 'BANK-001',
-      version: 34,
-      schemaVersion: '3.1',
-      config: defaultBaselineConfig,
-      configHash,
-      riskLevel: 'MEDIUM',
-      status: 'SIGNED',
-      createdBy: 'user.security-architect',
-      createdAt: new Date('2026-08-10T10:00:00Z'),
-      approvals: [
-        {
-          approvalId: 'appr-01',
-          approvedBy: 'user.ciso',
-          role: 'CHIEF_INFORMATION_SECURITY_OFFICER',
-          decision: 'APPROVED',
-          comments: 'Approved enterprise surveillance baseline v34',
-          approvedAt: new Date('2026-08-10T11:00:00Z'),
-        },
-      ],
-      changeReason: 'Surveillance baseline update for Q3',
-    };
-
-    // Digitally sign v34 manifest
-    const manifest = configKeyService.signConfiguration({
-      packageId: 'cfgpkg-v34-master',
-      tenantId: v34.tenantId,
-      configVersion: v34.version,
-      schemaVersion: v34.schemaVersion,
-      config: v34.config,
-    });
-    v34.signature = manifest;
-
-    this.versions.set(v34Id, v34);
-    this.activeVersionId = v34Id;
-
-    // Preset branch BR-118 with actual config v32 to model real drift
-    const br118ActualConfig: BranchConfiguration = {
-      ...defaultBaselineConfig,
-      cameras: [
-        defaultBaselineConfig.cameras[0]!,
-        {
-          ...defaultBaselineConfig.cameras[1]!,
-          bitrateKbps: 2048, // Actual is 2048 (Drifted from desired 4096)
-        },
-      ],
-      recorder: {
-        ...defaultBaselineConfig.recorder,
-        ntpServer: 'pool.ntp.org', // Actual is pool.ntp.org (Drifted from time.bank.internal)
-      },
-      retention: {
-        ...defaultBaselineConfig.retention,
-        continuousDays: 60, // Actual is 60 (Drifted from desired 90)
-      },
-    };
-
-    const br118ActualHash = computeConfigHash(br118ActualConfig);
-    const initialDiff = this.computeDifferences(defaultBaselineConfig, br118ActualConfig);
-
-    this.branchStates.set('BR-118', {
-      branchId: 'BR-118',
-      gatewayId: 'GW-118-01',
-      desiredVersion: 34,
-      desiredHash: configHash,
-      actualVersion: 32,
-      actualHash: br118ActualHash,
-      lastAppliedVersion: 32,
-      status: 'DRIFTED',
-      lastReportedAt: new Date(),
-      reportedGatewayVersion: '4.8.1',
-      differences: initialDiff,
-      appliedPackageSha256: br118ActualHash,
-    });
-  }
 
   /**
    * 1. Create a new immutable configuration draft.
@@ -315,7 +166,7 @@ export class SignedConfigService {
 
     version.signature = manifest;
     version.status = 'SIGNED';
-    this.activeVersionId = version.id;
+    this.activeVersionIds.set(version.tenantId, version.id);
 
     return manifest;
   }
@@ -475,6 +326,7 @@ export class SignedConfigService {
    * 8. Report actual state from branch gateway.
    */
   async reportActualState(report: {
+    tenantId: string;
     branchId: string;
     gatewayId: string;
     appliedVersion: number;
@@ -482,7 +334,7 @@ export class SignedConfigService {
     actualConfig: BranchConfiguration;
     gatewayVersion?: string;
   }): Promise<BranchConfigurationState> {
-    const activeVersion = this.getActiveSignedVersion();
+    const activeVersion = this.getActiveSignedVersion(report.tenantId);
     const desired = activeVersion ? activeVersion.config : report.actualConfig;
     const desiredHash = activeVersion ? activeVersion.configHash : computeConfigHash(desired);
     const actualHash = computeConfigHash(report.actualConfig);
@@ -491,6 +343,7 @@ export class SignedConfigService {
     const isDrifted = (activeVersion && activeVersion.version !== report.appliedVersion) || diffs.length > 0;
 
     const state: BranchConfigurationState = {
+      tenantId: report.tenantId,
       branchId: report.branchId,
       gatewayId: report.gatewayId,
       desiredVersion: activeVersion ? activeVersion.version : report.appliedVersion,
@@ -500,33 +353,36 @@ export class SignedConfigService {
       lastAppliedVersion: report.appliedVersion,
       status: isDrifted ? 'DRIFTED' : 'IN_SYNC',
       lastReportedAt: new Date(),
-      reportedGatewayVersion: report.gatewayVersion || '4.8.1',
+      ...(report.gatewayVersion ? { reportedGatewayVersion: report.gatewayVersion } : {}),
       differences: diffs,
       appliedPackageSha256: report.appliedPackageSha256,
     };
 
-    this.branchStates.set(report.branchId, state);
+    const key = this.branchStateKey(report.tenantId, report.branchId);
+    this.branchStates.set(key, state);
     return state;
   }
 
   /**
    * 9. Get Branch State by ID.
    */
-  getBranchState(branchId: string): BranchConfigurationState | null {
-    return this.branchStates.get(branchId) || null;
+  getBranchState(branchId: string, tenantId?: string): BranchConfigurationState | null {
+    if (tenantId) return this.branchStates.get(this.branchStateKey(tenantId, branchId)) || null;
+    const matches = Array.from(this.branchStates.values()).filter((state) => state.branchId === branchId);
+    return matches.length === 1 ? matches[0]! : null;
   }
 
   /**
    * 10. List All Fleet Branch States.
    */
-  listFleetStates(): BranchConfigurationState[] {
-    return Array.from(this.branchStates.values());
+  listFleetStates(tenantId?: string): BranchConfigurationState[] {
+    return Array.from(this.branchStates.values()).filter((state) => !tenantId || state.tenantId === tenantId);
   }
 
   /**
    * 11. Fleet Compliance Overview.
    */
-  getFleetOverview(totalFleetCount = 400): {
+  getFleetOverview(tenantId?: string): {
     desiredRelease: string;
     totalBranches: number;
     inSyncCount: number;
@@ -535,8 +391,8 @@ export class SignedConfigService {
     offlineCount: number;
     failedCount: number;
   } {
-    const activeVersion = this.getActiveSignedVersion();
-    const states = Array.from(this.branchStates.values());
+    const activeVersion = this.getActiveSignedVersion(tenantId);
+    const states = this.listFleetStates(tenantId);
 
     const inSync = states.filter((s) => s.status === 'IN_SYNC').length;
     const drifted = states.filter((s) => s.status === 'DRIFTED').length;
@@ -544,18 +400,14 @@ export class SignedConfigService {
     const failed = states.filter((s) => s.status === 'FAILED').length;
     const offline = states.filter((s) => s.status === 'OFFLINE').length;
 
-    // Remaining un-reported branches are projected into representative compliance
-    const trackedCount = states.length;
-    const untrackedCount = Math.max(0, totalFleetCount - trackedCount);
-
     return {
-      desiredRelease: activeVersion ? `v${activeVersion.version}` : 'v34',
-      totalBranches: totalFleetCount,
-      inSyncCount: inSync + (untrackedCount > 0 ? untrackedCount - 15 : 0),
-      driftedCount: drifted + (untrackedCount > 0 ? 10 : 0),
-      applyingCount: applying + (untrackedCount > 0 ? 2 : 0),
-      offlineCount: offline + (untrackedCount > 0 ? 2 : 0),
-      failedCount: failed + (untrackedCount > 0 ? 1 : 0),
+      desiredRelease: activeVersion ? `v${activeVersion.version}` : 'unconfigured',
+      totalBranches: states.length,
+      inSyncCount: inSync,
+      driftedCount: drifted,
+      applyingCount: applying,
+      offlineCount: offline,
+      failedCount: failed,
     };
   }
 
@@ -563,98 +415,26 @@ export class SignedConfigService {
     return this.versions.get(versionId) || null;
   }
 
-  listVersions(): ConfigurationVersion[] {
-    return Array.from(this.versions.values()).sort((a, b) => b.version - a.version);
+  listVersions(tenantId?: string): ConfigurationVersion[] {
+    return Array.from(this.versions.values())
+      .filter((version) => !tenantId || version.tenantId === tenantId)
+      .sort((a, b) => b.version - a.version);
   }
 
-  getActiveSignedVersion(): ConfigurationVersion | null {
-    if (!this.activeVersionId) return null;
-    return this.versions.get(this.activeVersionId) || null;
+  getActiveSignedVersion(tenantId?: string): ConfigurationVersion | null {
+    if (tenantId) {
+      const versionId = this.activeVersionIds.get(tenantId);
+      return versionId ? this.versions.get(versionId) || null : null;
+    }
+    if (this.activeVersionIds.size !== 1) return null;
+    const versionId = this.activeVersionIds.values().next().value as string | undefined;
+    return versionId ? this.versions.get(versionId) || null : null;
   }
 
   getActiveVersion(): ConfigurationVersion | null {
     return this.getActiveSignedVersion();
   }
 
-  listDesiredConfigs(): any[] {
-    return this.listVersions().map((v) => ({
-      id: v.id,
-      version: v.version,
-      tenantId: v.tenantId,
-      targetType: 'fleet',
-      targetId: 'global-fleet',
-      configData: {
-        nvrNtpServer: v.config.recorder.ntpServer,
-        cameraDefaultBitrateKbps: v.config.cameras[0]?.bitrateKbps || 2048,
-        retentionDays: v.config.retention.continuousDays,
-        storagePurgeThresholdPercent: v.config.retention.storagePurgeThresholdPercent,
-        aiInferenceFramerate: v.config.cameras[0]?.fps || 15,
-        alertUploadBandwidthCapMbps: v.config.network.uplinkBandwidthMbps,
-      },
-      approvalStatus: v.status === 'SIGNED' || v.status === 'APPROVED' ? 'APPROVED' : 'DRAFT',
-      approvedBy: v.approvals[0]?.approvedBy,
-      approvedAt: v.approvals[0]?.approvedAt?.toISOString(),
-      signature: v.signature?.signature,
-      signatureAlgorithm: v.signature?.signatureAlgorithm,
-      signedPackageSha256: v.configHash,
-      createdAt: v.createdAt.toISOString(),
-      createdBy: v.createdBy,
-    }));
-  }
-
-  getActualReport(branchId: string): any {
-    const state = this.branchStates.get(branchId);
-    if (!state) return null;
-    return {
-      gatewayId: state.gatewayId,
-      branchId: state.branchId,
-      appliedVersion: state.actualVersion || 0,
-      appliedPackageSha256: state.actualHash || '',
-      actualConfigData: {
-        nvrNtpServer: state.differences.find((d) => d.path === 'recorder.ntpServer')?.actualValue || 'time.bank.internal',
-        cameraDefaultBitrateKbps: (state.differences.find((d) => d.path.includes('bitrateKbps'))?.actualValue as number) || 2048,
-        retentionDays: (state.differences.find((d) => d.path === 'retention.continuousDays')?.actualValue as number) || 90,
-        storagePurgeThresholdPercent: 90,
-        aiInferenceFramerate: 15,
-        alertUploadBandwidthCapMbps: 10,
-      },
-      lastVerifiedAt: state.lastReportedAt?.toISOString() || new Date().toISOString(),
-      syncStatus: state.status,
-    };
-  }
-
-  detectDrift(desired: any, actual: any): any {
-    const branchState = this.branchStates.get(actual.branchId);
-    if (branchState) {
-      return {
-        branchId: actual.branchId,
-        gatewayId: actual.gatewayId,
-        desiredVersion: desired.version || 34,
-        actualVersion: actual.appliedVersion || 32,
-        status: branchState.status,
-        driftedFields: branchState.differences.map((d) => ({
-          field: d.path,
-          desiredValue: d.desiredValue,
-          actualValue: d.actualValue,
-        })),
-        evaluatedAt: new Date().toISOString(),
-      };
-    }
-
-    return {
-      branchId: actual.branchId,
-      gatewayId: actual.gatewayId,
-      desiredVersion: desired.version || 34,
-      actualVersion: actual.appliedVersion || 0,
-      status: 'DRIFTED',
-      driftedFields: [],
-      evaluatedAt: new Date().toISOString(),
-    };
-  }
-
-  getDesiredConfig(id: string): any {
-    return this.listDesiredConfigs().find((c) => c.id === id) || this.listDesiredConfigs()[0];
-  }
 
   verifySignature(versionId: string): boolean {
     const v = this.versions.get(versionId);
@@ -662,48 +442,6 @@ export class SignedConfigService {
     return configKeyService.verifyManifest(v.signature).valid;
   }
 
-  async createRolloutSchedule(input: { versionId: string; totalBranches?: number }): Promise<any> {
-    const v = this.versions.get(input.versionId) || this.getActiveSignedVersion();
-    const total = input.totalBranches || 400;
-    return {
-      rolloutId: `rollout-${randomUUID().slice(0, 8)}`,
-      versionId: v?.id || input.versionId,
-      versionNumber: v?.version || 34,
-      totalBranches: total,
-      stage: 'PLANNED',
-      appliedBranchesCount: 0,
-      startedAt: new Date().toISOString(),
-    };
-  }
-
-  async updateRolloutStage(versionId: string, stage: string): Promise<any> {
-    const v = this.versions.get(versionId) || this.getActiveSignedVersion();
-    const total = 400;
-    const applied = stage === '5_PERCENT_CANARY' ? Math.ceil(total * 0.05) : stage === '25_PERCENT' ? Math.ceil(total * 0.25) : total;
-    return {
-      rolloutId: `rollout-${randomUUID().slice(0, 8)}`,
-      versionId: v?.id || versionId,
-      versionNumber: v?.version || 34,
-      stage,
-      appliedBranchesCount: applied,
-      updatedAt: new Date().toISOString(),
-    };
-  }
-
-  async rollbackBranch(input: { branchId: string; targetVersionId?: string; reason?: string }): Promise<any> {
-    const state = this.branchStates.get(input.branchId);
-    if (state) {
-      state.status = 'ROLLED_BACK' as any;
-      state.lastReportedAt = new Date();
-    }
-    return {
-      branchId: input.branchId,
-      targetVersionId: input.targetVersionId || 'cfg-v32-baseline',
-      status: 'ROLLED_BACK',
-      reason: input.reason || 'Manual rollback',
-      rolledBackAt: new Date().toISOString(),
-    };
-  }
 }
 
 export const signedConfigService = new SignedConfigService();

@@ -1,170 +1,160 @@
-import { randomUUID } from 'node:crypto';
 import type {
   BranchConfiguration,
   SignedConfigManifest,
   BranchApplyResult,
   ComponentApplyResult,
 } from '../domain/signed-config.types.js';
-import { configKeyService } from './config-key.service.js';
+import { computeConfigHash, configKeyService } from './config-key.service.js';
 import { signedConfigService } from './signed-config.service.js';
 
+export interface BranchConfigurationApplyRequest {
+  branchId: string;
+  gatewayId: string;
+  manifest: SignedConfigManifest;
+  config: BranchConfiguration;
+  isRollbackOperation?: boolean;
+}
+
+export interface BranchConfigurationApplyResponse {
+  components: ComponentApplyResult[];
+  actualConfig: BranchConfiguration;
+  appliedPackageSha256?: string;
+}
+
+export interface BranchConfigurationRestoreResponse {
+  actualConfig: BranchConfiguration;
+  appliedVersion: number;
+  appliedPackageSha256?: string;
+}
+
+export interface BranchConfigurationApplier {
+  applyConfiguration(input: BranchConfigurationApplyRequest): Promise<BranchConfigurationApplyResponse>;
+  restoreCheckpoint?(
+    tenantId: string,
+    branchId: string,
+    gatewayId: string,
+  ): Promise<BranchConfigurationRestoreResponse | null>;
+}
+
 export class BranchConfigurationAgentService {
-  private highestAcceptedVersions = new Map<string, number>(); // branchId -> highestVersion
-  private rollbackCheckpoints = new Map<string, BranchConfiguration>(); // branchId -> checkpoint
-  private activeBranchConfigs = new Map<string, BranchConfiguration>(); // branchId -> appliedConfig
+  private readonly highestAcceptedVersions = new Map<string, number>();
 
-  /**
-   * Complete Reconciliation Cycle: Download -> Verify -> Preflight -> Apply -> Read-Back -> Report
-   */
-  async reconcileBranch(input: {
-    branchId: string;
-    gatewayId: string;
-    manifest: SignedConfigManifest;
-    config: BranchConfiguration;
-    isRollbackOperation?: boolean;
-  }): Promise<BranchApplyResult> {
-    const startedAt = new Date();
-    const branchId = input.branchId;
+  constructor(private readonly applier?: BranchConfigurationApplier) {}
 
-    // 1. Signature & Package Integrity Verification
-    const verification = configKeyService.verifyPackage(input.manifest, input.config);
-    if (!verification.valid) {
-      return {
-        branchId,
-        gatewayId: input.gatewayId,
-        version: input.manifest.configVersion,
-        packageId: input.manifest.packageId,
-        overallStatus: 'APPLY_FAILED',
-        components: [
-          {
-            componentId: 'security-verifier',
-            componentType: 'security',
-            status: 'FAILED',
-            errorMessage: `Integrity verification rejected: ${verification.reason}`,
-          },
-        ],
-        startedAt,
-        completedAt: new Date(),
-      };
-    }
+  private stateKey(tenantId: string, branchId: string): string {
+    return `${tenantId}:${branchId}`;
+  }
 
-    // 2. Monotonic Versioning & Anti-Downgrade Check
-    const highestAccepted = this.highestAcceptedVersions.get(branchId) || 0;
-    if (!input.isRollbackOperation && input.manifest.configVersion < highestAccepted) {
-      return {
-        branchId,
-        gatewayId: input.gatewayId,
-        version: input.manifest.configVersion,
-        packageId: input.manifest.packageId,
-        overallStatus: 'APPLY_FAILED',
-        components: [
-          {
-            componentId: 'anti-downgrade-guard',
-            componentType: 'security',
-            status: 'FAILED',
-            errorMessage: `DOWNGRADE_NOT_AUTHORIZED: Incoming v${input.manifest.configVersion} < Highest accepted v${highestAccepted}`,
-          },
-        ],
-        startedAt,
-        completedAt: new Date(),
-      };
-    }
-
-    // 3. Save Rollback Checkpoint before modifying device states
-    const currentActive = this.activeBranchConfigs.get(branchId);
-    if (currentActive) {
-      this.rollbackCheckpoints.set(branchId, JSON.parse(JSON.stringify(currentActive)));
-    }
-
-    // 4. Component Application & Read-Back Verification
-    const componentResults: ComponentApplyResult[] = [];
-    let hasFailure = false;
-
-    // A. Apply & Verify Network
-    componentResults.push({
-      componentId: 'network-gateway',
-      componentType: 'network',
-      status: 'VERIFIED',
-      startedAt: new Date(),
-      completedAt: new Date(),
-    });
-
-    // B. Apply & Verify Cameras
-    for (const cam of input.config.cameras) {
-      // Simulate real device verification
-      componentResults.push({
-        componentId: cam.id,
-        componentType: 'camera',
-        status: 'VERIFIED',
-        startedAt: new Date(),
-        completedAt: new Date(),
-      });
-    }
-
-    // C. Apply & Verify Recorder
-    componentResults.push({
-      componentId: input.config.recorder.nvrId,
-      componentType: 'recorder',
-      status: 'VERIFIED',
-      startedAt: new Date(),
-      completedAt: new Date(),
-    });
-
-    // D. Apply & Verify Retention
-    componentResults.push({
-      componentId: 'retention-policy',
-      componentType: 'retention',
-      status: 'VERIFIED',
-      startedAt: new Date(),
-      completedAt: new Date(),
-    });
-
-    // 5. Update Local Active State & Monotonic High-Water Mark
-    this.activeBranchConfigs.set(branchId, input.config);
-    this.highestAcceptedVersions.set(branchId, Math.max(highestAccepted, input.manifest.configVersion));
-
-    // 6. Report Actual State to Central Control Plane
-    await signedConfigService.reportActualState({
-      branchId,
-      gatewayId: input.gatewayId,
-      appliedVersion: input.manifest.configVersion,
-      appliedPackageSha256: input.manifest.configHash,
-      actualConfig: input.config,
-    });
-
+  private failedResult(
+    input: BranchConfigurationApplyRequest,
+    startedAt: Date,
+    message: string,
+  ): BranchApplyResult {
     return {
-      branchId,
+      branchId: input.branchId,
       gatewayId: input.gatewayId,
       version: input.manifest.configVersion,
       packageId: input.manifest.packageId,
-      overallStatus: 'VERIFIED',
-      components: componentResults,
+      overallStatus: 'APPLY_FAILED',
+      components: [{
+        componentId: 'configuration-applier',
+        componentType: 'security',
+        status: 'FAILED',
+        errorMessage: message,
+      }],
       startedAt,
       completedAt: new Date(),
     };
   }
 
-  /**
-   * Restore Rollback Checkpoint on Failure
-   */
-  async restoreCheckpoint(branchId: string, gatewayId: string): Promise<BranchConfiguration | null> {
-    const checkpoint = this.rollbackCheckpoints.get(branchId);
-    if (!checkpoint) return null;
+  async reconcileBranch(input: BranchConfigurationApplyRequest): Promise<BranchApplyResult> {
+    const startedAt = new Date();
+    const verification = configKeyService.verifyPackage(input.manifest, input.config);
+    if (!verification.valid) {
+      return this.failedResult(input, startedAt, `Integrity verification rejected: ${verification.reason}`);
+    }
 
-    this.activeBranchConfigs.set(branchId, checkpoint);
-    await signedConfigService.reportActualState({
-      branchId,
-      gatewayId,
-      appliedVersion: 32,
-      appliedPackageSha256: 'checkpoint-restored',
-      actualConfig: checkpoint,
-    });
+    const key = this.stateKey(input.manifest.tenantId, input.branchId);
+    const highestAccepted = this.highestAcceptedVersions.get(key) ?? 0;
+    if (!input.isRollbackOperation && input.manifest.configVersion < highestAccepted) {
+      return this.failedResult(
+        input,
+        startedAt,
+        `DOWNGRADE_NOT_AUTHORIZED: Incoming v${input.manifest.configVersion} < highest accepted v${highestAccepted}`,
+      );
+    }
 
-    return checkpoint;
+    if (!this.applier) {
+      return this.failedResult(input, startedAt, 'CONFIGURATION_APPLIER_NOT_CONFIGURED');
+    }
+
+    try {
+      const applied = await this.applier.applyConfiguration(input);
+      const hasFailure = applied.components.some(
+        (component) => component.status === 'FAILED' || component.status === 'SKIPPED',
+      );
+      const allVerified = applied.components.length > 0
+        && applied.components.every((component) => component.status === 'VERIFIED');
+
+      await signedConfigService.reportActualState({
+        tenantId: input.manifest.tenantId,
+        branchId: input.branchId,
+        gatewayId: input.gatewayId,
+        appliedVersion: input.manifest.configVersion,
+        appliedPackageSha256: applied.appliedPackageSha256 ?? computeConfigHash(applied.actualConfig),
+        actualConfig: applied.actualConfig,
+      });
+
+      if (allVerified) {
+        this.highestAcceptedVersions.set(
+          key,
+          Math.max(highestAccepted, input.manifest.configVersion),
+        );
+      }
+
+      return {
+        branchId: input.branchId,
+        gatewayId: input.gatewayId,
+        version: input.manifest.configVersion,
+        packageId: input.manifest.packageId,
+        overallStatus: allVerified
+          ? 'VERIFIED'
+          : hasFailure
+            ? 'APPLY_FAILED'
+            : 'PARTIALLY_APPLIED',
+        components: applied.components,
+        startedAt,
+        completedAt: new Date(),
+      };
+    } catch (error) {
+      return this.failedResult(
+        input,
+        startedAt,
+        error instanceof Error ? error.message : 'CONFIGURATION_APPLY_FAILED',
+      );
+    }
   }
 
-  getAppliedConfig(branchId: string): BranchConfiguration | null {
-    return this.activeBranchConfigs.get(branchId) || null;
+  async restoreCheckpoint(
+    tenantId: string,
+    branchId: string,
+    gatewayId: string,
+  ): Promise<BranchConfiguration | null> {
+    if (!this.applier?.restoreCheckpoint) return null;
+
+    const restored = await this.applier.restoreCheckpoint(tenantId, branchId, gatewayId);
+    if (!restored) return null;
+
+    await signedConfigService.reportActualState({
+      tenantId,
+      branchId,
+      gatewayId,
+      appliedVersion: restored.appliedVersion,
+      appliedPackageSha256: restored.appliedPackageSha256 ?? computeConfigHash(restored.actualConfig),
+      actualConfig: restored.actualConfig,
+    });
+
+    return restored.actualConfig;
   }
 }
 

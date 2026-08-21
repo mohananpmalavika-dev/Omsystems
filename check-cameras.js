@@ -1,8 +1,10 @@
 import pg from 'pg';
 const { Pool } = pg;
 
+const databaseUrl = process.env.DATABASE_URL;
+if (!databaseUrl) throw new Error('DATABASE_URL is required');
 const pool = new Pool({
-  connectionString: 'postgresql://aditivision_4gc4_user:vVZ8yzf7dRV7VIyOeQ6MmSQR9nHMifqa@dpg-da37mgbncjis73c09tpg-a.oregon-postgres.render.com/aditivision_4gc4',
+  connectionString: databaseUrl,
   ssl: { rejectUnauthorized: false }
 });
 

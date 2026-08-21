@@ -30,15 +30,11 @@ import {
 } from "./routes/branch-connectivity.routes.js";
 import { registerRecorderLifecycleRoutes } from "./routes/recorder-lifecycle.routes.js";
 import { registerRecorderProfileRoutes } from "./routes/recorder-profile.routes.js";
-import { registerBranchOperationalSnapshotRoutes } from "./routes/branch-operational-snapshot.routes.js";
 import { registerRetentionRoutes } from "./retention/routes/retention.routes.js";
 import { registerAlertAudioRoutes } from "./routes/alert-audio.routes.js";
 import { registerNotificationRoutes } from "./routes/notification.routes.js";
-import { registerDailySurveillanceReportRoutes } from "./routes/daily-surveillance-report.routes.js";
 import { registerDeviceHealthRoutes } from "./routes/device-health.routes.js";
 import { registerRecordingContinuityRoutes } from "./routes/recording-continuity.routes.js";
-import { registerFirstClassPlaybackRoutes } from "./playback/routes/playback.routes.js";
-import { registerForensicEvidenceExportRoutes } from "./evidence-export/routes/evidence-export.routes.js";
 import { registerDistributedStateRoutes } from "./distributed-state/routes/distributed-state.routes.js";
 import { registerReliablePtzRoutes } from "./ptz/routes/ptz.routes.js";
 import { registerMediaTokenRoutes } from "./media-auth/routes/media-token.routes.js";
@@ -92,7 +88,6 @@ import { registerMaintenanceHealthRoutes } from "./routes/maintenance-health.rou
 import { registerMaintenanceReportsRoutes } from "./routes/maintenance-reports.routes.js";
 import { registerMaintenanceExportRoutes } from "./routes/maintenance-export.routes.js";
 import { registerFirmwareManagementRoutes } from "./routes/maintenance-firmware.routes.js";
-import { registerPredictiveAnalyticsRoutes } from "./routes/maintenance-predictive.routes.js";
 import { registerEvidenceRoutes } from "./routes/evidence.routes.js";
 import { registerVideoSearchRoutes } from "./routes/video-search.routes.js";
 import { registerAIVideoSearchRoutes } from "./routes/ai-video-search.routes.js";
@@ -2247,7 +2242,6 @@ export async function buildApp(options?: {
     await registerMaintenanceReportsRoutes(app, extendedStore);
     await registerMaintenanceExportRoutes(app, extendedStore);
     await registerFirmwareManagementRoutes(app, extendedStore);
-    await registerPredictiveAnalyticsRoutes(app, extendedStore);
     await registerEmployeeActivityTrackingRoutes(app, extendedStore);
     
     // Start maintenance scheduler
@@ -2429,12 +2423,6 @@ export async function buildApp(options?: {
   }
 
   // Register Branch Operational Snapshot & Command Center routes
-  try {
-    await registerBranchOperationalSnapshotRoutes(app, store);
-    app.log.info('Branch operational snapshot routes registered');
-  } catch (err: unknown) {
-    app.log.error({ err }, 'failed to register branch operational snapshot routes');
-  }
 
   // Register First-Class Retention Compliance Subsystem routes
   try {
@@ -2468,13 +2456,6 @@ export async function buildApp(options?: {
     app.log.error({ err }, 'failed to register notification subsystem routes');
   }
 
-  // Register Daily Surveillance Health Report Subsystem routes
-  try {
-    await registerDailySurveillanceReportRoutes(app);
-    app.log.info('Daily surveillance health report routes registered');
-  } catch (err: unknown) {
-    app.log.error({ err }, 'failed to register daily surveillance health report routes');
-  }
 
   // Register Capability-Aware Device Health Subsystem routes
   try {
@@ -2490,22 +2471,6 @@ export async function buildApp(options?: {
     app.log.info('Recording continuity subsystem routes registered');
   } catch (err: unknown) {
     app.log.error({ err }, 'failed to register recording continuity routes');
-  }
-
-  // Register First-Class Playback and Unified Timeline routes
-  try {
-    await registerFirstClassPlaybackRoutes(app);
-    app.log.info('First-class playback and unified timeline routes registered');
-  } catch (err: unknown) {
-    app.log.error({ err }, 'failed to register first-class playback routes');
-  }
-
-  // Register Forensic-Grade Evidence Export Subsystem routes
-  try {
-    await registerForensicEvidenceExportRoutes(app);
-    app.log.info('Forensic evidence export routes registered');
-  } catch (err: unknown) {
-    app.log.error({ err }, 'failed to register forensic evidence export routes');
   }
 
   // Register Distributed Runtime State & Leases routes
@@ -2723,7 +2688,7 @@ export async function buildApp(options?: {
 
   // Register P0 Unified Recorder Drivers, True Camera Verification & 400-Branch Mosaic routes
   try {
-    await registerP0ControlPlaneRoutes(app, {});
+    await registerP0ControlPlaneRoutes(app, { store });
     app.log.info('P0 unified drivers, camera verification and 400-branch mosaic routes registered');
   } catch (err: unknown) {
     app.log.error({ err }, 'failed to register P0 control plane routes');

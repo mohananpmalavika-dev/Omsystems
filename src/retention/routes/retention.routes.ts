@@ -6,37 +6,32 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import { z } from "zod";
 import type { ControlPlaneStore } from "../../control-plane-store.js";
+import type { User } from "../../domain/models.js";
 import {
-  retentionPolicyService,
   retentionSummaryService,
   retentionReportService,
   retentionAuditService,
-  retentionEvidenceService,
   type BranchRetentionSummary,
   type RetentionAssessment,
-  type RetentionEvidence,
   type RetentionState,
   type RetentionComplianceState,
   type RetentionRiskState,
 } from "../index.js";
-import { retentionEngine } from "../services/retention-engine.service.js";
 
-async function loadLiveBranchRetentionSummaries(store?: ControlPlaneStore, tenantId: string = "tenant-default"): Promise<BranchRetentionSummary[]> {
+async function loadLiveBranchRetentionSummaries(store: ControlPlaneStore | undefined, user: User): Promise<BranchRetentionSummary[]> {
   if (!store) return [];
 
-  const branches = (await (store as any).listBranches?.()) || (await (store as any).listNodes?.("branch")) || [];
+  const branches = await store.listAccessibleNodes(user, "recording:view", "branch");
   if (!branches || branches.length === 0) return [];
 
   const summaries: BranchRetentionSummary[] = [];
 
   for (const branch of branches) {
-    const cameras = (await (store as any).listCameras?.(branch.id)) || [];
-    const telemetry = await store.listLatestOperationalTelemetry(tenantId, [branch.id]);
-    const policy = (await store.getOperationalHealthPolicy?.(branch.id)) || {
-      retentionDays: 90,
-      retentionWarningDays: 14,
-      maxRecordingGapSeconds: 60,
-    };
+    const cameras = await store.listCamerasByBranch(user, branch.id, "recording:view");
+    const telemetry = await store.listLatestOperationalTelemetry(user.tenantId, [branch.id]);
+    const policy = await store.getOperationalHealthPolicy(user.tenantId, branch.id)
+      ?? await store.getOperationalHealthPolicy(user.tenantId);
+    if (!policy) continue;
 
     const assessments: RetentionAssessment[] = [];
 
@@ -54,7 +49,7 @@ async function loadLiveBranchRetentionSummaries(store?: ControlPlaneStore, tenan
 
       const coveragePercent = typeof metrics.coveragePercent === "number"
         ? metrics.coveragePercent
-        : 100;
+        : undefined;
 
       let state: RetentionState = "UNKNOWN";
       let complianceState: RetentionComplianceState = "UNKNOWN";
@@ -86,9 +81,9 @@ async function loadLiveBranchRetentionSummaries(store?: ControlPlaneStore, tenan
 
       assessments.push({
         id: `assessment-${camera.id}`,
-        tenantId,
+        tenantId: user.tenantId,
         branchId: branch.id,
-        recorderId: (camera as any).recorderId || `rec-${branch.id}`,
+        recorderId: camera.recorderId ?? "unreported",
         cameraId: camera.id,
         cameraName: camera.name,
         requiredRetentionDays: policy.retentionDays,
@@ -140,11 +135,20 @@ async function loadLiveBranchRetentionSummaries(store?: ControlPlaneStore, tenan
 }
 
 export async function registerRetentionRoutes(app: FastifyInstance, store?: ControlPlaneStore) {
+  const requireUser = (request: FastifyRequest, reply: FastifyReply): User | null => {
+    if (!request.currentUser) {
+      reply.code(401).send({ success: false, error: "Authentication required" });
+      return null;
+    }
+    return request.currentUser;
+  };
   /**
    * GET /api/v1/retention/overview & /v1/retention/overview
    */
   const handleRetentionOverview = async (request: FastifyRequest, reply: FastifyReply) => {
-    const branches = await loadLiveBranchRetentionSummaries(store);
+    const user = requireUser(request, reply);
+    if (!user) return;
+    const branches = await loadLiveBranchRetentionSummaries(store, user);
     const summary = retentionSummaryService.summarizeFleet(branches);
     return reply.send({
       success: true,
@@ -162,6 +166,8 @@ export async function registerRetentionRoutes(app: FastifyInstance, store?: Cont
    * GET /api/v1/retention/branches & /v1/retention/branches
    */
   const handleRetentionBranches = async (request: FastifyRequest, reply: FastifyReply) => {
+    const user = requireUser(request, reply);
+    if (!user) return;
     const query = z
       .object({
         filter: z.enum(["all", "healthy", "warning", "violation", "critical", "unknown", "at_risk"]).optional(),
@@ -171,7 +177,7 @@ export async function registerRetentionRoutes(app: FastifyInstance, store?: Cont
       })
       .parse(request.query);
 
-    let branches = await loadLiveBranchRetentionSummaries(store);
+    let branches = await loadLiveBranchRetentionSummaries(store, user);
 
     if (query.filter && query.filter !== "all") {
       if (query.filter === "healthy") branches = branches.filter((b) => b.state === "HEALTHY");
@@ -208,6 +214,8 @@ export async function registerRetentionRoutes(app: FastifyInstance, store?: Cont
    * GET /api/v1/branches/:branchId/retention/assessment
    */
   const handleBranchAssessment = async (request: FastifyRequest, reply: FastifyReply) => {
+    const user = requireUser(request, reply);
+    if (!user) return;
     const { branchId } = z.object({ branchId: z.string() }).parse(request.params);
     const now = new Date();
 
@@ -215,19 +223,19 @@ export async function registerRetentionRoutes(app: FastifyInstance, store?: Cont
       return reply.code(404).send({ success: false, error: "store_unavailable" });
     }
 
-    const branches: any[] = (await (store as any).listBranches?.()) || (await (store as any).listNodes?.("branch")) || [];
-    const branch = branches.find((b: any) => b.id === branchId);
-    const branchName = branch?.name || `Branch ${branchId}`;
+    const branch = await store.getNode(branchId);
+    const access = branch ? await store.checkAccess(user, "recording:view", branchId) : undefined;
+    if (!branch || branch.type !== "branch" || branch.tenantId !== user.tenantId || !access?.allowed) {
+      return reply.code(404).send({ success: false, error: "branch_not_found" });
+    }
+    const branchName = branch.name;
+    const cameras = await store.listCamerasByBranch(user, branchId, "recording:view");
+    const telemetry = await store.listLatestOperationalTelemetry(user.tenantId, [branchId]);
+    const policy = await store.getOperationalHealthPolicy(user.tenantId, branchId)
+      ?? await store.getOperationalHealthPolicy(user.tenantId);
+    if (!policy) return reply.code(409).send({ success: false, error: "retention_policy_not_configured" });
 
-    const cameras: any[] = (await (store as any).listCameras?.(branchId)) || [];
-    const telemetry = await store.listLatestOperationalTelemetry("tenant-default", [branchId]);
-    const policy = (await store.getOperationalHealthPolicy?.(branchId)) || {
-      retentionDays: 90,
-      retentionWarningDays: 14,
-      maxRecordingGapSeconds: 60,
-    };
-
-    const cameraAssessments: RetentionAssessment[] = cameras.map((camera: any, i: number) => {
+    const cameraAssessments: RetentionAssessment[] = cameras.map((camera) => {
       const camTelemetry = telemetry.find(
         (t) => (t.deviceType === "camera" || t.deviceType === "archive") && t.deviceId === camera.id
       );
@@ -239,34 +247,31 @@ export async function registerRetentionRoutes(app: FastifyInstance, store?: Cont
           ? metrics.actualRetentionDays
           : undefined;
 
-      const oldestDate = actualDays !== undefined ? new Date(now.getTime() - actualDays * 86_400_000) : undefined;
-
-      const evidence: RetentionEvidence = {
-        id: `ev-${camera.id}-${Date.now()}`,
-        tenantId: "tenant-default",
+      const coveragePercent = typeof metrics.coveragePercent === "number" ? metrics.coveragePercent : undefined;
+      const state: RetentionState = actualDays === undefined ? "UNKNOWN"
+        : actualDays >= policy.retentionDays ? "HEALTHY"
+          : actualDays >= policy.retentionDays - policy.retentionWarningDays ? "WARNING"
+            : actualDays > 0 ? "VIOLATION" : "CRITICAL";
+      return {
+        id: `assessment-${camera.id}`,
+        tenantId: user.tenantId,
         branchId,
-        recorderId: (camera as any).recorderId || `rec-${branchId}-01`,
-        cameraId: camera.id,
-        source: "RECORDER_ARCHIVE",
-        quality: "PLAYBACK_CONFIRMED",
-        oldestRecordingAt: oldestDate,
-        newestRecordingAt: actualDays !== undefined ? now : undefined,
-        verifiedPlayable: actualDays !== undefined,
-        observedAt: now,
-        confidence: actualDays !== undefined ? 0.98 : 0.2,
-      };
-
-      retentionEvidenceService.recordEvidence(evidence);
-
-      return retentionPolicyService.assess({
-        tenantId: "tenant-default",
-        branchId,
-        recorderId: (camera as any).recorderId || `rec-${branchId}-01`,
+        recorderId: camera.recorderId ?? "unreported",
         cameraId: camera.id,
         cameraName: camera.name,
-        evidenceList: [evidence],
-        now,
-      });
+        requiredRetentionDays: policy.retentionDays,
+        actualRetentionDays: actualDays,
+        daysUntilPolicyViolation: actualDays === undefined ? undefined : Math.max(0, actualDays - policy.retentionDays),
+        coveragePercent,
+        state,
+        complianceState: state === "HEALTHY" || state === "WARNING" ? "COMPLIANT" : state === "UNKNOWN" ? "UNKNOWN" : "VIOLATION",
+        riskState: state === "HEALTHY" ? "STABLE" : state === "WARNING" ? "AT_RISK" : state === "UNKNOWN" ? "UNKNOWN" : "IMMINENT",
+        reason: state === "HEALTHY" ? "MEETS_POLICY" : state === "WARNING" ? "NEAR_THRESHOLD" : state === "UNKNOWN" ? "INSUFFICIENT_EVIDENCE" : "BELOW_REQUIRED_RETENTION",
+        confidence: actualDays === undefined ? 0 : 0.7,
+        evidenceAgreement: actualDays === undefined ? "NO_EVIDENCE" : "SINGLE_SOURCE",
+        evaluatedAt: now,
+        evidenceIds: [],
+      };
     });
 
     const summary = retentionSummaryService.summarizeBranch(
@@ -292,63 +297,60 @@ export async function registerRetentionRoutes(app: FastifyInstance, store?: Cont
    * GET /api/v1/cameras/:cameraId/retention/evidence
    */
   const handleCameraEvidence = async (request: FastifyRequest, reply: FastifyReply) => {
+    const user = requireUser(request, reply);
+    if (!user) return;
     const { cameraId } = z.object({ cameraId: z.string() }).parse(request.params);
     const now = new Date();
-
-    const telemetry = store ? await store.listLatestOperationalTelemetry("tenant-default") : [];
+    if (!store) return reply.code(503).send({ success: false, error: "store_unavailable" });
+    const camera = await store.getCamera(cameraId);
+    if (!camera) return reply.code(404).send({ success: false, error: "camera_not_found" });
+    const access = await store.checkAccess(user, "recording:view", camera.nodeId);
+    if (!access?.allowed) return reply.code(404).send({ success: false, error: "camera_not_found" });
+    const telemetry = await store.listLatestOperationalTelemetry(user.tenantId, [camera.branchId]);
     const camTelemetry = telemetry.find(
       (t) => (t.deviceType === "camera" || t.deviceType === "archive") && t.deviceId === cameraId
     );
-
     const metrics = (camTelemetry?.metrics || {}) as Record<string, unknown>;
     const actualDays = typeof metrics.retentionDays === "number" ? metrics.retentionDays : undefined;
-
-    const recorderEvidence: RetentionEvidence = {
-      id: `ev-rec-${cameraId}`,
-      tenantId: "tenant-default",
-      branchId: camTelemetry?.branchId || "branch-default",
-      recorderId: (camTelemetry as any)?.recorderId || "rec-default",
+    const policy = await store.getOperationalHealthPolicy(user.tenantId, camera.branchId)
+      ?? await store.getOperationalHealthPolicy(user.tenantId);
+    if (!policy) return reply.code(409).send({ success: false, error: "retention_policy_not_configured" });
+    const state: RetentionState = actualDays === undefined ? "UNKNOWN"
+      : actualDays >= policy.retentionDays ? "HEALTHY"
+        : actualDays >= policy.retentionDays - policy.retentionWarningDays ? "WARNING"
+          : actualDays > 0 ? "VIOLATION" : "CRITICAL";
+    const verified = camTelemetry?.quality === "verified";
+    const assessment: RetentionAssessment = {
+      id: `assessment-${cameraId}`,
+      tenantId: user.tenantId,
+      branchId: camera.branchId,
+      recorderId: camera.recorderId ?? "unreported",
       cameraId,
-      source: "RECORDER_ARCHIVE",
-      quality: "PLAYBACK_CONFIRMED",
-      oldestRecordingAt: actualDays ? new Date(now.getTime() - actualDays * 86_400_000) : undefined,
-      newestRecordingAt: actualDays ? now : undefined,
-      verifiedPlayable: actualDays !== undefined,
-      recordingGapMinutes: 0,
-      observedAt: now,
-      confidence: actualDays ? 0.98 : 0.2,
+      cameraName: camera.name,
+      requiredRetentionDays: policy.retentionDays,
+      actualRetentionDays: actualDays,
+      coveragePercent: typeof metrics.coveragePercent === "number" ? metrics.coveragePercent : undefined,
+      daysUntilPolicyViolation: actualDays === undefined ? undefined : Math.max(0, actualDays - policy.retentionDays),
+      state,
+      complianceState: state === "HEALTHY" || state === "WARNING" ? "COMPLIANT" : state === "UNKNOWN" ? "UNKNOWN" : "VIOLATION",
+      riskState: state === "HEALTHY" ? "STABLE" : state === "WARNING" ? "AT_RISK" : state === "UNKNOWN" ? "UNKNOWN" : "IMMINENT",
+      reason: state === "HEALTHY" ? "MEETS_POLICY" : state === "WARNING" ? "NEAR_THRESHOLD" : state === "UNKNOWN" ? "INSUFFICIENT_EVIDENCE" : "BELOW_REQUIRED_RETENTION",
+      confidence: actualDays === undefined ? 0 : verified ? 0.9 : 0.5,
+      evidenceAgreement: actualDays === undefined ? "NO_EVIDENCE" : "SINGLE_SOURCE",
+      evaluatedAt: now,
+      evidenceIds: [],
     };
-
-    const platformEvidence: RetentionEvidence = {
-      id: `ev-plat-${cameraId}`,
-      tenantId: "tenant-default",
-      branchId: camTelemetry?.branchId || "branch-default",
-      recorderId: (camTelemetry as any)?.recorderId || "rec-default",
-      cameraId,
-      source: "PLATFORM_INDEX",
-      quality: "INDEX_ONLY",
-      oldestRecordingAt: actualDays ? new Date(now.getTime() - actualDays * 86_400_000) : undefined,
-      newestRecordingAt: actualDays ? now : undefined,
-      verifiedPlayable: false,
-      observedAt: now,
-      confidence: actualDays ? 0.92 : 0.2,
-    };
-
-    const assessment = retentionPolicyService.assess({
-      tenantId: "tenant-default",
-      branchId: camTelemetry?.branchId || "branch-default",
-      recorderId: (camTelemetry as any)?.recorderId || "rec-default",
-      cameraId,
-      cameraName: cameraId,
-      evidenceList: [recorderEvidence, platformEvidence],
-      now,
-    });
 
     return reply.send({
       success: true,
       data: {
         assessment,
-        evidence: [recorderEvidence, platformEvidence],
+        evidence: [],
+        observation: camTelemetry ? {
+          source: camTelemetry.source,
+          quality: camTelemetry.quality,
+          observedAt: camTelemetry.observedAt,
+        } : null,
       },
     });
   };
@@ -360,7 +362,9 @@ export async function registerRetentionRoutes(app: FastifyInstance, store?: Cont
    * GET /api/v1/retention/reports/daily & /v1/retention/reports/daily
    */
   const handleDailyReport = async (request: FastifyRequest, reply: FastifyReply) => {
-    const branches = await loadLiveBranchRetentionSummaries(store);
+    const user = requireUser(request, reply);
+    if (!user) return;
+    const branches = await loadLiveBranchRetentionSummaries(store, user);
     const report = retentionReportService.generateDailyReport(
       new Date().toISOString().slice(0, 10),
       branches,
@@ -380,7 +384,9 @@ export async function registerRetentionRoutes(app: FastifyInstance, store?: Cont
    * GET /api/v1/retention/audit & /v1/retention/audit
    */
   const handleRetentionAudit = async (request: FastifyRequest, reply: FastifyReply) => {
-    const logs = retentionAuditService.getAuditLogs("tenant-default", 50);
+    const user = requireUser(request, reply);
+    if (!user) return;
+    const logs = retentionAuditService.getAuditLogs(user.tenantId, 50);
     return reply.send({
       success: true,
       data: logs,
@@ -390,79 +396,4 @@ export async function registerRetentionRoutes(app: FastifyInstance, store?: Cont
   app.get("/api/v1/retention/audit", handleRetentionAudit);
   app.get("/v1/retention/audit", handleRetentionAudit);
 
-  /**
-   * Enterprise Retention Engine Endpoints
-   */
-  // 1. Camera Comprehensive Retention Status
-  app.get("/v1/retention/engine/cameras/:cameraId", async (request: FastifyRequest, reply: FastifyReply) => {
-    const params = request.params as { cameraId: string };
-    const query = (request.query as any) || {};
-    const status = retentionEngine.evaluateCameraRetention({
-      cameraId: params.cameraId,
-      cameraGroup: query.cameraGroup || "ATM",
-      branchId: query.branchId || "BR-118",
-      tenantId: query.tenantId || "BANK-001",
-    });
-    return reply.send({ success: true, data: status });
-  });
-
-  // 2. Branch Retention Overview & Capacity Forecast
-  app.get("/v1/retention/engine/branches/:branchId", async (request: FastifyRequest, reply: FastifyReply) => {
-    const params = request.params as { branchId: string };
-    const overview = retentionEngine.getBranchOverview(params.branchId);
-    return reply.send({ success: true, data: overview });
-  });
-
-  // 3. Pre-Deployment Retention Policy Simulation
-  app.post("/v1/retention/simulate", async (request: FastifyRequest, reply: FastifyReply) => {
-    const body = z.object({
-      tenantId: z.string().default("BANK-001"),
-      policyName: z.string().default("ATM 180-Day Regulatory Policy"),
-      targetScope: z.object({
-        branches: z.array(z.string()).optional(),
-        cameraGroups: z.array(z.string()).optional(),
-        cameras: z.array(z.string()).optional(),
-      }).default({}),
-      proposedMinimumDays: z.number().int().min(1).default(180),
-      proposedTargetDays: z.number().int().min(1).default(190),
-    }).parse(request.body);
-
-    const simulation = retentionEngine.simulateRetentionChange(body as any);
-    return reply.send({ success: true, data: simulation });
-  });
-
-  // 4. Create Legal Hold
-  app.post("/v1/retention/legal-holds", async (request: FastifyRequest, reply: FastifyReply) => {
-    const body = z.object({
-      tenantId: z.string().default("BANK-001"),
-      caseNumber: z.string(),
-      reason: z.string(),
-      createdBy: z.string().default("sec-officer"),
-      scope: z.object({
-        branches: z.array(z.string()).optional(),
-        cameras: z.array(z.string()).optional(),
-        startTime: z.coerce.date(),
-        endTime: z.coerce.date(),
-      }),
-    }).parse(request.body);
-
-    const hold = retentionEngine.createLegalHold(body as any);
-    return reply.status(201).send({ success: true, data: hold });
-  });
-
-  // 5. Release Legal Hold
-  app.post("/v1/retention/legal-holds/:id/release", async (request: FastifyRequest, reply: FastifyReply) => {
-    const params = request.params as { id: string };
-    const body = z.object({ approvedBy: z.string().default("chief-security-officer") }).parse(request.body);
-    const released = retentionEngine.releaseLegalHold(params.id, body.approvedBy);
-    if (!released) return reply.code(404).send({ success: false, error: "LEGAL_HOLD_NOT_FOUND" });
-    return reply.send({ success: true, data: released });
-  });
-
-  // 6. List Active Legal Holds
-  app.get("/v1/retention/legal-holds", async (request: FastifyRequest, reply: FastifyReply) => {
-    const query = (request.query as any) || {};
-    const holds = retentionEngine.getLegalHolds(query.cameraId, query.branchId);
-    return reply.send({ success: true, data: holds });
-  });
 }

@@ -24,7 +24,8 @@ async function finalSetup() {
     console.log('================================================\n');
 
     const username = 'mgdhanyamohan';
-    const password = 'Thathu110';
+    const password = process.env.NEW_PASSWORD;
+    if (!password) throw new Error('NEW_PASSWORD is required');
     const email = 'mgdhanyamohan@omsystems.com';
     const displayName = 'Dhanya Mohan';
     const identitySubject = `local:${username}`;
@@ -179,7 +180,7 @@ async function finalSetup() {
     console.log('Login credentials:');
     console.log(`  URL: https://sentinel-grid-monitoring1.onrender.com`);
     console.log(`  Username: ${username}`);
-    console.log(`  Password: ${password}`);
+    console.log('  Password: stored in the approved secrets provider');
     console.log(`  Tenant Slug: ${tenantSlug} (optional)`);
     console.log('\nIf login still fails:');
     console.log('1. Check if backend server is running (502 Bad Gateway earlier)');

@@ -14,7 +14,9 @@ import type {
 
 export const PERMANENT_SUPERADMIN = {
   username: "mgdhanyamohan",
-  password: "Thathu@110",
+  // Bootstrap credentials must be supplied by the deployment environment or
+  // explicitly during first-time onboarding. Never ship a default password.
+  password: process.env.BOOTSTRAP_SUPERADMIN_PASSWORD ?? "",
   displayName: "Dhanya Mohan (Superadmin)",
   email: "mgdhanyamohan@omsystems.bank",
   role: "super_admin" as const,
@@ -66,7 +68,7 @@ export class BootstrapOnboardingService {
       requiresOrganizationSetup: orgCount === 0 || branchCount === 0,
       organizationCount: orgCount,
       branchCount,
-      superadminConfigured: true,
+      superadminConfigured: Boolean(PERMANENT_SUPERADMIN.password),
       defaultSuperadminUsername: PERMANENT_SUPERADMIN.username,
       message: isFirstTimeSetup
         ? "First-time deployment detected. Please configure your Organization and First Branch before login."
@@ -88,6 +90,9 @@ export class BootstrapOnboardingService {
 
     const adminUsername = input.adminUsername?.trim() || PERMANENT_SUPERADMIN.username;
     const adminPassword = input.adminPassword || PERMANENT_SUPERADMIN.password;
+    if (!adminPassword) {
+      throw new Error("admin_password_required");
+    }
     const adminEmail = input.adminEmail?.trim() || PERMANENT_SUPERADMIN.email;
     const adminDisplayName = input.adminDisplayName?.trim() || PERMANENT_SUPERADMIN.displayName;
 

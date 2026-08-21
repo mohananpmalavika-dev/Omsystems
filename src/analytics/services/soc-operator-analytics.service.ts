@@ -15,10 +15,6 @@ import type {
 export class SocOperatorAnalyticsService {
   private readonly records: IncidentLifecycleRecord[] = [];
 
-  constructor() {
-    this.seedRealisticIncidentHistory();
-  }
-
   /**
    * Ingest an incident lifecycle event.
    */
@@ -43,8 +39,8 @@ export class SocOperatorAnalyticsService {
         falsePositiveRatePercent: 0,
         repeatIncidentRatePercent: 0,
         unacknowledgedSlaBreaches: 0,
-        slaCompliancePercent: 100,
-        sopComplianceRatePercent: 100,
+        slaCompliancePercent: 0,
+        sopComplianceRatePercent: 0,
       };
     }
 
@@ -94,9 +90,9 @@ export class SocOperatorAnalyticsService {
       if (r.isSopCompliant) sopCompliantCount++;
     }
 
-    const mttaSeconds = ackCount > 0 ? Number((totalMttaSec / ackCount).toFixed(1)) : 14.5;
-    const mttiSeconds = invCount > 0 ? Number((totalMttiSec / invCount).toFixed(1)) : 42.0;
-    const mttrSeconds = resCount > 0 ? Number((totalMttrSec / resCount).toFixed(1)) : 180.0;
+    const mttaSeconds = ackCount > 0 ? Number((totalMttaSec / ackCount).toFixed(1)) : 0;
+    const mttiSeconds = invCount > 0 ? Number((totalMttiSec / invCount).toFixed(1)) : 0;
+    const mttrSeconds = resCount > 0 ? Number((totalMttrSec / resCount).toFixed(1)) : 0;
 
     const escalationRatePercent = Number(((escalatedCount / total) * 100).toFixed(1));
     const falsePositiveRatePercent = Number(((fpCount / total) * 100).toFixed(1));
@@ -127,6 +123,7 @@ export class SocOperatorAnalyticsService {
   private filterRecords(filter?: SocAnalyticsFilter): IncidentLifecycleRecord[] {
     if (!filter) return this.records;
     return this.records.filter((r) => {
+      if (filter.tenantId && r.tenantId !== filter.tenantId) return false;
       if (filter.branchId && r.branchId !== filter.branchId) return false;
       if (filter.regionId && r.regionId !== filter.regionId) return false;
       if (filter.operatorId && r.operatorId !== filter.operatorId) return false;
@@ -175,14 +172,6 @@ export class SocOperatorAnalyticsService {
       branchMap.set(r.branchId, list);
     }
 
-    const branchNames: Record<string, string> = {
-      'BR-118': 'Kollam Main Branch',
-      'BR-034': 'MG Road Kochi Main',
-      'BR-121': 'Trivandrum City Centre',
-      'BR-014': 'Thrissur Round East',
-      'BR-205': 'Mumbai Nariman Point',
-    };
-
     const results: BranchPerformanceMetrics[] = [];
     for (const [branchId, records] of branchMap.entries()) {
       const base = this.aggregateMetrics(records);
@@ -190,9 +179,9 @@ export class SocOperatorAnalyticsService {
       results.push({
         ...base,
         branchId,
-        branchName: branchNames[branchId] || `Branch ${branchId}`,
-        regionId: sample?.regionId || 'REG-S-KL',
-        stateId: sample?.stateId || 'KL',
+        branchName: sample?.branchName ?? branchId,
+        regionId: sample!.regionId,
+        stateId: sample!.stateId,
       });
     }
 
@@ -213,13 +202,6 @@ export class SocOperatorAnalyticsService {
       regionMap.set(r.regionId, list);
     }
 
-    const regionNames: Record<string, string> = {
-      'REG-S-KL': 'South Kerala (Kollam & TVM)',
-      'REG-C-KL': 'Central Kerala (Kochi & Thrissur)',
-      'REG-N-KL': 'North Kerala (Kozhikode & Malabar)',
-      'REG-C-MH': 'Central Maharashtra (Mumbai & Pune)',
-    };
-
     const results: RegionPerformanceMetrics[] = [];
     for (const [regionId, records] of regionMap.entries()) {
       const base = this.aggregateMetrics(records);
@@ -228,8 +210,8 @@ export class SocOperatorAnalyticsService {
       results.push({
         ...base,
         regionId,
-        regionName: regionNames[regionId] || `Region ${regionId}`,
-        stateId: sample?.stateId || 'KL',
+        regionName: sample?.regionName ?? regionId,
+        stateId: sample!.stateId,
         totalBranches: uniqueBranches,
       });
     }
@@ -250,22 +232,14 @@ export class SocOperatorAnalyticsService {
       operatorMap.set(r.operatorId, list);
     }
 
-    const operatorProfiles: Record<string, { name: string; role: 'SOC_OPERATOR' | 'SOC_SUPERVISOR' | 'CHIEF_SECURITY_OFFICER' }> = {
-      'usr-op-01': { name: 'Arun Kumar', role: 'SOC_OPERATOR' },
-      'usr-op-02': { name: 'Sneha Nair', role: 'SOC_OPERATOR' },
-      'usr-op-03': { name: 'Rahul Sharma', role: 'SOC_OPERATOR' },
-      'usr-op-04': { name: 'Vikram Singh', role: 'SOC_SUPERVISOR' },
-    };
-
     const results: OperatorSlaMetrics[] = [];
     for (const [operatorId, records] of operatorMap.entries()) {
       const base = this.aggregateMetrics(records);
-      const profile = operatorProfiles[operatorId] || { name: `Operator ${operatorId}`, role: 'SOC_OPERATOR' };
       results.push({
         ...base,
         operatorId,
-        operatorName: profile.name,
-        role: profile.role,
+        operatorName: records[0]?.operatorName ?? operatorId,
+        role: records[0]?.operatorRole ?? 'SOC_OPERATOR',
         totalIncidentsHandled: records.length,
         averageHandlingTimeSeconds: base.mttrSeconds,
       });
@@ -279,12 +253,12 @@ export class SocOperatorAnalyticsService {
    */
   async getMetricsByShift(filter?: SocAnalyticsFilter): Promise<ShiftPerformanceMetrics[]> {
     const dataset = this.filterRecords(filter);
-    const shifts: ShiftType[] = ['MORNING', 'EVENING', 'NIGHT'];
+    const shifts = Array.from(new Set(dataset.map((record) => record.shift))) as ShiftType[];
 
     const shiftMeta: Record<ShiftType, { name: string; start: string; end: string; operators: number }> = {
-      MORNING: { name: 'Morning Shift (Banking Hours)', start: '06:00', end: '14:00', operators: 8 },
-      EVENING: { name: 'Evening Shift (Cash Closing)', start: '14:00', end: '22:00', operators: 6 },
-      NIGHT: { name: 'Night Shift (Vault & Perimeter Guard)', start: '22:00', end: '06:00', operators: 4 },
+      MORNING: { name: 'Morning', start: '06:00', end: '14:00', operators: 0 },
+      EVENING: { name: 'Evening', start: '14:00', end: '22:00', operators: 0 },
+      NIGHT: { name: 'Night', start: '22:00', end: '06:00', operators: 0 },
     };
 
     const results: ShiftPerformanceMetrics[] = [];
@@ -298,7 +272,7 @@ export class SocOperatorAnalyticsService {
         shiftName: meta.name,
         startTime: meta.start,
         endTime: meta.end,
-        activeOperatorsCount: meta.operators,
+        activeOperatorsCount: new Set(records.map((record) => record.operatorId)).size,
       });
     }
 
@@ -310,17 +284,7 @@ export class SocOperatorAnalyticsService {
    */
   async getMetricsByAlertType(filter?: SocAnalyticsFilter): Promise<AlertTypePerformanceMetrics[]> {
     const dataset = this.filterRecords(filter);
-    const alertTypes: AlertCategoryType[] = [
-      'VAULT_INTRUSION',
-      'LINE_CROSSING',
-      'CROWD_LOITERING',
-      'CAMERA_TAMPER',
-      'ANPR_BLACKLIST',
-      'CASH_VAN_DELAY',
-      'RECORDER_OFFLINE',
-      'CAMERA_OFFLINE',
-      'UNAUTHORIZED_ACCESS',
-    ];
+    const alertTypes = Array.from(new Set(dataset.map((record) => record.alertType))) as AlertCategoryType[];
 
     const alertNames: Record<AlertCategoryType, { name: string; qrt: boolean }> = {
       VAULT_INTRUSION: { name: 'Vault & Strongroom Intrusion', qrt: true },
@@ -350,91 +314,6 @@ export class SocOperatorAnalyticsService {
     return results.sort((a, b) => b.totalIncidents - a.totalIncidents);
   }
 
-  private seedRealisticIncidentHistory(): void {
-    const now = Date.now();
-    const operators = ['usr-op-01', 'usr-op-02', 'usr-op-03', 'usr-op-04'];
-    const branches = ['BR-118', 'BR-034', 'BR-121', 'BR-014', 'BR-205'];
-    const regions: Record<string, string> = {
-      'BR-118': 'REG-S-KL',
-      'BR-034': 'REG-C-KL',
-      'BR-121': 'REG-S-KL',
-      'BR-014': 'REG-C-KL',
-      'BR-205': 'REG-C-MH',
-    };
-    const states: Record<string, string> = {
-      'REG-S-KL': 'KL',
-      'REG-C-KL': 'KL',
-      'REG-C-MH': 'MH',
-    };
-
-    const shifts: ShiftType[] = ['MORNING', 'EVENING', 'NIGHT'];
-    const alertTypes: AlertCategoryType[] = [
-      'VAULT_INTRUSION',
-      'LINE_CROSSING',
-      'CROWD_LOITERING',
-      'CAMERA_TAMPER',
-      'ANPR_BLACKLIST',
-      'CASH_VAN_DELAY',
-      'RECORDER_OFFLINE',
-      'CAMERA_OFFLINE',
-      'UNAUTHORIZED_ACCESS',
-    ];
-
-    // Seed 250 realistic incident records across 30 days
-    for (let i = 1; i <= 250; i++) {
-      const branchId = branches[i % branches.length]!;
-      const regionId = regions[branchId]!;
-      const stateId = states[regionId]!;
-      const operatorId = operators[i % operators.length]!;
-      const shift = shifts[i % shifts.length]!;
-      const alertType = alertTypes[i % alertTypes.length]!;
-
-      const isP1 = alertType === 'VAULT_INTRUSION' || alertType === 'ANPR_BLACKLIST' || (i % 7 === 0);
-      const isP2 = !isP1 && (alertType === 'LINE_CROSSING' || alertType === 'CASH_VAN_DELAY' || (i % 4 === 0));
-      const priority: 'P1' | 'P2' | 'P3' = isP1 ? 'P1' : isP2 ? 'P2' : 'P3';
-
-      const triggeredOffset = (250 - i) * 10800000; // spread over 30 days
-      const triggeredAt = new Date(now - triggeredOffset);
-
-      // MTTA variance: Arun Kumar (usr-op-01) fastest (12s), others 14-22s
-      const mttaSec = operatorId === 'usr-op-01' ? 12 + (i % 5) : 16 + (i % 12);
-      const acknowledgedAt = new Date(triggeredAt.getTime() + mttaSec * 1000);
-
-      // MTTI variance: 30-55s
-      const mttiSec = 35 + (i % 20);
-      const investigationStartedAt = new Date(acknowledgedAt.getTime() + mttiSec * 1000);
-
-      // MTTR variance: 120-240s
-      const mttrSec = 140 + (i % 80);
-      const resolvedAt = new Date(triggeredAt.getTime() + mttrSec * 1000);
-
-      const isEscalated = isP1 && i % 3 === 0;
-      const isFalsePositive = alertType === 'CROWD_LOITERING' && i % 4 === 0;
-      const isRepeatIncident = i % 8 === 0;
-      const isSlaBreached = mttaSec > 30; // breached if MTTA > 30s
-      const isSopCompliant = !(i % 35 === 0);
-
-      this.records.push({
-        incidentId: `INC-2026-${String(1000 + i).padStart(6, '0')}`,
-        priority,
-        alertType,
-        branchId,
-        regionId,
-        stateId,
-        operatorId,
-        shift,
-        triggeredAt,
-        acknowledgedAt,
-        investigationStartedAt,
-        resolvedAt,
-        isEscalated,
-        isFalsePositive,
-        isRepeatIncident,
-        isSlaBreached,
-        isSopCompliant,
-      });
-    }
-  }
 }
 
 export const socOperatorAnalyticsService = new SocOperatorAnalyticsService();

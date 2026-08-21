@@ -194,7 +194,7 @@ export class UnifiedOperationsService {
     const incidents = await alertIncidentRepository.list();
     const views: BranchOperationalView[] = [];
     for (const node of nodes) {
-      const snapshot = await snapshots.getBranchSnapshot(tenantId, node.id);
+      const snapshot = await snapshots.getBranchSnapshot(tenantId, node.id, false, user);
       if (!snapshot) continue;
       const unknown = (snapshot.cameraList ?? []).filter((camera) => camera.state === "UNKNOWN").length;
       const degraded = snapshot.cameras.warningCount;
@@ -256,13 +256,13 @@ export class UnifiedOperationsService {
     return views;
   }
 
-  async getBranch360Workspace(branchId: string, tenantId: string, store?: ControlPlaneStore): Promise<Branch360Workspace | null> {
-    if (!store) return null;
+  async getBranch360Workspace(branchId: string, tenantId: string, store?: ControlPlaneStore, user?: User): Promise<Branch360Workspace | null> {
+    if (!store || !user) return null;
     const snapshotService = new BranchOperationalSnapshotService(store);
-    const snapshot = await snapshotService.getBranchSnapshot(tenantId, branchId, true);
+    const snapshot = await snapshotService.getBranchSnapshot(tenantId, branchId, true, user);
     if (!snapshot) return null;
     const [branches, telemetry, incidents] = await Promise.all([
-      this.getFleetBranchSummaries(tenantId, store),
+      this.getFleetBranchSummaries(tenantId, store, user),
       store.listLatestOperationalTelemetry(tenantId, [branchId]),
       alertIncidentRepository.list(),
     ]);
@@ -320,9 +320,9 @@ export class UnifiedOperationsService {
     };
   }
 
-  async getUniversalSearch(query: string, tenantId: string, store?: ControlPlaneStore): Promise<UniversalSearchResult> {
+  async getUniversalSearch(query: string, tenantId: string, store?: ControlPlaneStore, user?: User): Promise<UniversalSearchResult> {
     const normalized = query.trim().toLowerCase();
-    const branches = await this.getFleetBranchSummaries(tenantId, store);
+    const branches = await this.getFleetBranchSummaries(tenantId, store, user);
     const matches = branches.filter((branch) => [branch.name, branch.branchCode, branch.region].some((value) => value.toLowerCase().includes(normalized))).map((branch) => ({
       entityType: "BRANCH" as const,
       entityId: branch.branchId,

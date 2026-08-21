@@ -11,9 +11,14 @@ playwright-report/
 *.tsbuildinfo
 *.log
 .scanner-runtime/*secrets*.json
+.scanner-runtime/edge-agent-token.txt
 .scanner-runtime/*.enc
 .scanner-runtime/*.key
 .scanner-runtime/*-agent-home/
+edge-agent/data/stream-secrets.json
+edge-agent/data/offline-outbox.enc
+edge-agent/data/offline-outbox.key
+repopack-output*.txt
 test/hdd-health/config.json
 test/hdd-health/reports/
 test/internet-health/evidence*.json

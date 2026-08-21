@@ -17,7 +17,8 @@ async function main() {
   const [,, argUsername, argPassword, argEmail, argTenantId] = process.argv;
 
   const username = argUsername || 'mgdhanyamohan';
-  const password = argPassword || 'Thathu@110';
+  const password = argPassword || process.env.BOOTSTRAP_SUPERADMIN_PASSWORD;
+  if (!password) throw new Error('A password argument or BOOTSTRAP_SUPERADMIN_PASSWORD is required');
   const email = argEmail || 'mgdhanyamohan@omsystems.bank';
 
   const DATABASE_URL = process.env.DATABASE_URL;

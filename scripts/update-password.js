@@ -15,10 +15,11 @@ async function updatePassword() {
 
   try {
     const username = 'mgdhanyamohan';
-    const newPassword = 'Thathu@110';
+    const newPassword = process.env.NEW_PASSWORD;
+    if (!newPassword) throw new Error('NEW_PASSWORD is required');
 
     console.log('🔐 Updating password for user:', username);
-    console.log('   New password: Thathu@110\n');
+    console.log('   New password: <provided via NEW_PASSWORD>\n');
 
     // Hash the new password
     const passwordHash = await bcrypt.hash(newPassword, 10);
@@ -51,7 +52,7 @@ async function updatePassword() {
 
     console.log('\n🎉 You can now login with:');
     console.log(`   Username: ${username}`);
-    console.log(`   Password: ${newPassword}`);
+    console.log('   Password updated; retrieve the new value from your secure input.');
 
   } catch (error) {
     console.error('❌ Error:', error.message);

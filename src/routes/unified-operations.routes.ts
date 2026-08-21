@@ -62,7 +62,7 @@ export async function registerUnifiedOperationsRoutes(app: FastifyInstance, stor
     if (!user) return;
     const decision = store ? await store.checkAccess(user, "recording:view", params.id) : undefined;
     if (!decision?.allowed) return reply.code(403).send({ success: false, error: "Access denied" });
-    const workspace = await unifiedOperationsService.getBranch360Workspace(params.id, user.tenantId, store);
+    const workspace = await unifiedOperationsService.getBranch360Workspace(params.id, user.tenantId, store, user);
     if (!workspace) return reply.code(404).send({ success: false, error: "Branch workspace not found" });
     return reply.send({ success: true, data: workspace });
   };
@@ -77,7 +77,7 @@ export async function registerUnifiedOperationsRoutes(app: FastifyInstance, stor
     const query = (request.query as any) || {};
     const user = requireUser(request, reply);
     if (!user) return;
-    const result = await unifiedOperationsService.getUniversalSearch(query.q || "", user.tenantId, store);
+    const result = await unifiedOperationsService.getUniversalSearch(query.q || "", user.tenantId, store, user);
     return reply.send({ success: true, count: result.matches.length, data: result });
   };
 

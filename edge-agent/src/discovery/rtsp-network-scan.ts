@@ -257,17 +257,10 @@ export async function discoverRtspDevices(
   const rtspStreamingPorts = [554, 8554, 5554, 10554, 37777, 8000, 34567];
   const httpFingerprintPorts = [80, 8080, 8899];
 
-  const zeroTouchCreds = [
-    ...(username ? [{ username, password }] : []),
-    { username: "admin", password: "RAM@4344" },
-    { username: "admin", password: "Thathu@110" },
-    { username: "admin", password: "admin123" },
-    { username: "admin", password: "Admin@123" },
-    { username: "admin", password: "123456" },
-    { username: "admin", password: "admin" },
-    { username: "admin", password: "" },
-    { username: "root", password: "root" },
-  ];
+  // Camera credentials are device-scoped secrets. Discovery must only use
+  // credentials explicitly supplied by the operator or credential provider;
+  // brute-forcing vendor/default passwords is unsafe on a bank network.
+  const zeroTouchCreds = username ? [{ username, password }] : [];
 
   const candidates = new Set<string>();
   const excludedHosts = new Set(options.excludeHosts ?? []);

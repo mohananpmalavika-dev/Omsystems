@@ -1,16 +1,30 @@
 /**
- * Camera Lease Service
- * Implements atomic distributed leases with monotonically increasing fencing tokens (epochs)
- * and compare-and-swap validation preventing split-brain writes.
+ * Camera ownership leases backed by Redis Lua transactions.
+ *
+ * A configured Redis client is authoritative. If it becomes unavailable this
+ * service fails closed; it never creates a second local ownership universe.
+ * Memory leases are available only when the service is explicitly running in
+ * standalone mode (development and tests).
  */
 
 import { randomUUID } from "node:crypto";
 import type { CameraLease, CameraLeaseManager } from "./camera-lease.types.js";
 
+export type CameraLeaseMode = "distributed-required" | "standalone";
+
 export interface RedisClientContract {
-  eval(script: string, numkeys: number, ...args: (string | number)[]): Promise<any>;
+  eval(script: string, numkeys: number, ...args: (string | number)[]): Promise<unknown>;
   get(key: string): Promise<string | null>;
   keys(pattern: string): Promise<string[]>;
+}
+
+export class DistributedCoordinationUnavailableError extends Error {
+  readonly code = "DISTRIBUTED_COORDINATION_UNAVAILABLE";
+
+  constructor(message = "Redis camera lease coordination is unavailable") {
+    super(message);
+    this.name = "DistributedCoordinationUnavailableError";
+  }
 }
 
 const ACQUIRE_LUA = `
@@ -41,8 +55,7 @@ if not current then return 0 end
 local obj = cjson.decode(current)
 if obj.nodeId == ARGV[1] and obj.instanceId == ARGV[2] and obj.leaseId == ARGV[3] and obj.fencingToken == tonumber(ARGV[4]) then
   obj.expiresAt = tonumber(ARGV[5]) + tonumber(ARGV[6])
-  local updated = cjson.encode(obj)
-  redis.call("SET", ownerKey, updated, "PX", ARGV[6])
+  redis.call("SET", ownerKey, cjson.encode(obj), "PX", ARGV[6])
   return 1
 end
 return 0
@@ -64,8 +77,14 @@ export class CameraLeaseService implements CameraLeaseManager {
   private readonly defaultTtlMs = 15_000;
   private readonly memoryLeases = new Map<string, { lease: CameraLease; expiresAt: number }>();
   private readonly memoryFencingTokens = new Map<string, number>();
+  private readonly mode: CameraLeaseMode;
 
-  constructor(private readonly redisClient?: RedisClientContract) {}
+  constructor(
+    private readonly redisClient?: RedisClientContract,
+    options: { mode?: CameraLeaseMode } = {},
+  ) {
+    this.mode = options.mode ?? (process.env.NODE_ENV === "production" ? "distributed-required" : "standalone");
+  }
 
   private ownerKey(tenantId: string, cameraId: string): string {
     return `vms:camera-owner:${tenantId}:${cameraId}`;
@@ -73,6 +92,27 @@ export class CameraLeaseService implements CameraLeaseManager {
 
   private tokenKey(tenantId: string, cameraId: string): string {
     return `vms:camera-fencing:${tenantId}:${cameraId}`;
+  }
+
+  private requireRedis(): RedisClientContract {
+    if (!this.redisClient) {
+      throw new DistributedCoordinationUnavailableError("Redis client is required for distributed camera leases");
+    }
+    return this.redisClient;
+  }
+
+  private redisFailure(error: unknown): never {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new DistributedCoordinationUnavailableError(`Redis lease operation failed: ${message}`);
+  }
+
+  private useMemoryStore(): boolean {
+    return !this.redisClient && this.mode === "standalone";
+  }
+
+  private failWithoutRedis(): never {
+    this.requireRedis();
+    throw new DistributedCoordinationUnavailableError();
   }
 
   async acquire(
@@ -87,13 +127,11 @@ export class CameraLeaseService implements CameraLeaseManager {
 
     if (this.redisClient) {
       try {
-        const ownerK = this.ownerKey(tenantId, cameraId);
-        const tokenK = this.tokenKey(tenantId, cameraId);
         const result = await this.redisClient.eval(
           ACQUIRE_LUA,
           2,
-          ownerK,
-          tokenK,
+          this.ownerKey(tenantId, cameraId),
+          this.tokenKey(tenantId, cameraId),
           tenantId,
           cameraId,
           nodeId,
@@ -102,24 +140,21 @@ export class CameraLeaseService implements CameraLeaseManager {
           now,
           ttlMs,
         );
-
         if (!result) return null;
-        return typeof result === "string" ? JSON.parse(result) : (result as CameraLease);
-      } catch {
-        // Fall back to memory semantics if redis temporarily errors
+        return typeof result === "string" ? JSON.parse(result) as CameraLease : result as CameraLease;
+      } catch (error) {
+        return this.redisFailure(error);
       }
     }
 
-    // Atomic in-memory implementation
+    if (!this.useMemoryStore()) return this.failWithoutRedis();
+
     const key = `${tenantId}:${cameraId}`;
     const existing = this.memoryLeases.get(key);
-    if (existing && existing.expiresAt > now) {
-      return null; // Already leased and active
-    }
+    if (existing && existing.expiresAt > now) return null;
 
     const currentToken = (this.memoryFencingTokens.get(key) ?? 100) + 1;
     this.memoryFencingTokens.set(key, currentToken);
-
     const lease: CameraLease = {
       tenantId,
       cameraId,
@@ -130,21 +165,18 @@ export class CameraLeaseService implements CameraLeaseManager {
       acquiredAt: now,
       expiresAt: now + ttlMs,
     };
-
     this.memoryLeases.set(key, { lease, expiresAt: now + ttlMs });
     return lease;
   }
 
   async renew(lease: CameraLease, ttlMs = this.defaultTtlMs): Promise<boolean> {
     const now = Date.now();
-
     if (this.redisClient) {
       try {
-        const ownerK = this.ownerKey(lease.tenantId, lease.cameraId);
         const result = await this.redisClient.eval(
           RENEW_LUA,
           1,
-          ownerK,
+          this.ownerKey(lease.tenantId, lease.cameraId),
           lease.nodeId,
           lease.instanceId,
           lease.leaseId,
@@ -152,115 +184,110 @@ export class CameraLeaseService implements CameraLeaseManager {
           now,
           ttlMs,
         );
-        if (Number(result) === 1) {
-          lease.expiresAt = now + ttlMs;
-          return true;
-        }
-        return false;
-      } catch {
-        // Fall through
+        if (Number(result) === 1) lease.expiresAt = now + ttlMs;
+        return Number(result) === 1;
+      } catch (error) {
+        return this.redisFailure(error);
       }
     }
 
-    // Atomic in-memory verification
-    const key = `${lease.tenantId}:${lease.cameraId}`;
-    const existing = this.memoryLeases.get(key);
+    if (!this.useMemoryStore()) return this.failWithoutRedis();
+    const existing = this.memoryLeases.get(`${lease.tenantId}:${lease.cameraId}`);
     if (!existing) return false;
-
-    const cur = existing.lease;
-    if (
-      cur.nodeId === lease.nodeId &&
-      cur.instanceId === lease.instanceId &&
-      cur.leaseId === lease.leaseId &&
-      cur.fencingToken === lease.fencingToken
-    ) {
-      existing.expiresAt = now + ttlMs;
-      existing.lease.expiresAt = now + ttlMs;
-      lease.expiresAt = now + ttlMs;
-      return true;
-    }
-
-    return false;
+    const current = existing.lease;
+    if (current.nodeId !== lease.nodeId || current.instanceId !== lease.instanceId || current.leaseId !== lease.leaseId || current.fencingToken !== lease.fencingToken) return false;
+    existing.expiresAt = now + ttlMs;
+    existing.lease.expiresAt = now + ttlMs;
+    lease.expiresAt = now + ttlMs;
+    return true;
   }
 
   async release(lease: CameraLease): Promise<boolean> {
     if (this.redisClient) {
       try {
-        const ownerK = this.ownerKey(lease.tenantId, lease.cameraId);
         const result = await this.redisClient.eval(
           RELEASE_LUA,
           1,
-          ownerK,
+          this.ownerKey(lease.tenantId, lease.cameraId),
           lease.nodeId,
           lease.instanceId,
           lease.leaseId,
           lease.fencingToken,
         );
         return Number(result) === 1;
-      } catch {
-        // Fall through
+      } catch (error) {
+        return this.redisFailure(error);
       }
     }
 
+    if (!this.useMemoryStore()) return this.failWithoutRedis();
     const key = `${lease.tenantId}:${lease.cameraId}`;
     const existing = this.memoryLeases.get(key);
     if (!existing) return true;
-
-    const cur = existing.lease;
-    if (
-      cur.nodeId === lease.nodeId &&
-      cur.instanceId === lease.instanceId &&
-      cur.leaseId === lease.leaseId &&
-      cur.fencingToken === lease.fencingToken
-    ) {
-      this.memoryLeases.delete(key);
-      return true;
-    }
-
-    return false;
+    const current = existing.lease;
+    if (current.nodeId !== lease.nodeId || current.instanceId !== lease.instanceId || current.leaseId !== lease.leaseId || current.fencingToken !== lease.fencingToken) return false;
+    this.memoryLeases.delete(key);
+    return true;
   }
 
   async getOwner(tenantId: string, cameraId: string): Promise<CameraLease | null> {
-    const now = Date.now();
-
     if (this.redisClient) {
       try {
         const raw = await this.redisClient.get(this.ownerKey(tenantId, cameraId));
-        if (raw) {
-          const parsed = JSON.parse(raw) as CameraLease;
-          if (parsed.expiresAt > now) return parsed;
-        }
-      } catch {
-        // Fall through
+        if (!raw) return null;
+        const lease = JSON.parse(raw) as CameraLease;
+        return lease.expiresAt > Date.now() ? lease : null;
+      } catch (error) {
+        return this.redisFailure(error);
       }
     }
 
-    const key = `${tenantId}:${cameraId}`;
-    const entry = this.memoryLeases.get(key);
-    if (entry && entry.expiresAt > now) {
-      return entry.lease;
-    }
-
-    return null;
+    if (!this.useMemoryStore()) return this.failWithoutRedis();
+    const entry = this.memoryLeases.get(`${tenantId}:${cameraId}`);
+    if (!entry || entry.expiresAt <= Date.now()) return null;
+    return entry.lease;
   }
 
   async listActiveLeases(tenantId?: string): Promise<CameraLease[]> {
-    const now = Date.now();
-    const active: CameraLease[] = [];
-
-    for (const [, entry] of this.memoryLeases.entries()) {
-      if (entry.expiresAt > now) {
-        if (!tenantId || entry.lease.tenantId === tenantId) {
-          active.push(entry.lease);
+    if (this.redisClient) {
+      try {
+        const pattern = this.ownerKey(tenantId ?? "*", "*");
+        const keys = await this.redisClient.keys(pattern);
+        const leases: CameraLease[] = [];
+        for (const key of keys) {
+          const raw = await this.redisClient.get(key);
+          if (!raw) continue;
+          const lease = JSON.parse(raw) as CameraLease;
+          if (lease.expiresAt > Date.now()) leases.push(lease);
         }
+        return leases;
+      } catch (error) {
+        return this.redisFailure(error);
       }
     }
 
+    if (!this.useMemoryStore()) return this.failWithoutRedis();
+    const active: CameraLease[] = [];
+    for (const [key, entry] of this.memoryLeases.entries()) {
+      if (entry.expiresAt <= Date.now()) {
+        this.memoryLeases.delete(key);
+      } else if (!tenantId || entry.lease.tenantId === tenantId) {
+        active.push(entry.lease);
+      }
+    }
     return active;
   }
 
   async getCurrentFencingToken(tenantId: string, cameraId: string): Promise<number> {
-    const key = `${tenantId}:${cameraId}`;
-    return this.memoryFencingTokens.get(key) ?? 100;
+    if (this.redisClient) {
+      try {
+        const raw = await this.redisClient.get(this.tokenKey(tenantId, cameraId));
+        return raw ? Number(raw) : 100;
+      } catch (error) {
+        return this.redisFailure(error);
+      }
+    }
+    if (!this.useMemoryStore()) return this.failWithoutRedis();
+    return this.memoryFencingTokens.get(`${tenantId}:${cameraId}`) ?? 100;
   }
 }

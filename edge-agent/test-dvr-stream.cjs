@@ -1,20 +1,18 @@
 const { exec } = require('child_process');
 
-const urls = [
-  'rtsp://dhanya:Aditi@2206@192.168.29.171:554/cam/realmonitor?channel=1&subtype=0',
-  'rtsp://dhanya:Aditi@2206@192.168.29.171:554/cam/realmonitor?channel=1&subtype=1',
-  'rtsp://dhanya:Aditi%402206@192.168.29.171:554/cam/realmonitor?channel=1&subtype=0',
-  'rtsp://dhanya:Aditi%402206@192.168.29.171:554/cam/realmonitor?channel=1&subtype=1',
-  'rtsp://admin:admin123@192.168.29.171:554/cam/realmonitor?channel=1&subtype=0',
-  'rtsp://admin:admin@192.168.29.171:554/cam/realmonitor?channel=1&subtype=0',
-  'rtsp://admin:Aditi@2206@192.168.29.171:554/cam/realmonitor?channel=1&subtype=0',
-  'rtsp://dhanya:Aditi@2206@192.168.29.58:554/cam/realmonitor?channel=1&subtype=0',
-  'rtsp://dhanya:Aditi@2206@192.168.29.58:554/h264/ch1/main/av_stream',
-  'rtsp://dhanya:Aditi@2206@192.168.29.58:554/user=dhanya_password=Aditi@2206_channel=1_stream=0.sdp',
-  'rtsp://admin:admin@192.168.29.58:554/h264/ch1/main/av_stream',
-  'rtsp://admin:Aditi@2206@192.168.29.58:554/h264/ch1/main/av_stream',
-  'rtsp://admin:@192.168.29.58:554/h264/ch1/main/av_stream'
+const username = process.env.CAMERA_USERNAME;
+const password = process.env.CAMERA_PASSWORD;
+if (!username || password === undefined) throw new Error('CAMERA_USERNAME and CAMERA_PASSWORD are required');
+const encodedUsername = encodeURIComponent(username);
+const encodedPassword = encodeURIComponent(password);
+const hosts = (process.env.CAMERA_HOSTS || '192.168.29.171,192.168.29.58').split(',').map((host) => host.trim()).filter(Boolean);
+const paths = [
+  '/cam/realmonitor?channel=1&subtype=0',
+  '/cam/realmonitor?channel=1&subtype=1',
+  '/h264/ch1/main/av_stream',
+  '/stream1',
 ];
+const urls = hosts.flatMap((host) => paths.map((path) => `rtsp://${encodedUsername}:${encodedPassword}@${host}:554${path}`));
 
 function probeUrl(url) {
   return new Promise((resolve) => {

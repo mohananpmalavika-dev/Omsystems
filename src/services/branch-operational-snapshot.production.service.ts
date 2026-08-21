@@ -1,4 +1,5 @@
 import type { ControlPlaneStore } from "../control-plane-store.js";
+import type { User } from "../domain/models.js";
 import type { OperationalTelemetryEnvelope } from "../operational-health/types.js";
 import { defaultOperationalHealthPolicy } from "../operational-health/types.js";
 import { telemetryStatus } from "../operational-health/service.js";
@@ -166,12 +167,17 @@ export class BranchOperationalSnapshotService {
 
   constructor(private readonly store: ControlPlaneStore) {}
 
-  async getBranchSnapshot(tenantId: string, branchId: string, forceRefresh = false): Promise<BranchOperationalSnapshot | null> {
+  async getBranchSnapshot(
+    tenantId: string,
+    branchId: string,
+    forceRefresh = false,
+    user?: User,
+  ): Promise<BranchOperationalSnapshot | null> {
     const cacheKey = `${tenantId}:${branchId}`;
     if (forceRefresh) this.cache.delete(cacheKey);
     const cached = this.cache.get(cacheKey);
     if (cached && Date.now() - cached.cachedAt < 30_000) return cached.snapshot;
-    const snapshot = await this.getSnapshot(tenantId, branchId);
+    const snapshot = await this.getSnapshot(tenantId, branchId, user);
     if (snapshot) this.cache.set(cacheKey, { snapshot, cachedAt: Date.now() });
     return snapshot;
   }
@@ -184,8 +190,9 @@ export class BranchOperationalSnapshotService {
     tenantId: string,
     branchId: string,
     filter: "all" | "online" | "offline" | "recording" | "not-recording" | "problem" = "all",
+    user?: User,
   ): Promise<{ cameras: CameraOperationalStatus[]; summary: BranchOperationalSnapshot["cameras"] }> {
-    const snapshot = await this.getBranchSnapshot(tenantId, branchId);
+    const snapshot = await this.getBranchSnapshot(tenantId, branchId, false, user);
     let cameras = snapshot?.cameraList ?? [];
     if (filter === "online") cameras = cameras.filter((camera) => camera.onlineStatus === "online");
     if (filter === "offline") cameras = cameras.filter((camera) => camera.onlineStatus === "offline");
@@ -201,10 +208,16 @@ export class BranchOperationalSnapshotService {
     };
   }
 
-  async getBranchEvents(branchId: string, options: { limit?: number; offset?: number; severity?: "INFO" | "WARNING" | "HIGH" | "CRITICAL"; type?: string } = {}) {
+  async getBranchEvents(
+    branchId: string,
+    options: { limit?: number; offset?: number; severity?: "INFO" | "WARNING" | "HIGH" | "CRITICAL"; type?: string } = {},
+    user?: User,
+  ) {
     const branch = await this.store.getNode(branchId);
-    if (!branch) return { events: [], total: 0 };
-    const snapshot = await this.getBranchSnapshot(branch.tenantId, branchId);
+    if (!branch || branch.type !== "branch" || !user || user.tenantId !== branch.tenantId) {
+      return { events: [], total: 0 };
+    }
+    const snapshot = await this.getBranchSnapshot(branch.tenantId, branchId, false, user);
     let events = snapshot?.recentEvents ?? [];
     if (options.severity) events = events.filter((event) => event.severity === options.severity);
     if (options.type) events = events.filter((event) => event.type === options.type);
@@ -213,12 +226,14 @@ export class BranchOperationalSnapshotService {
     return { events: events.slice(offset, offset + (options.limit ?? 50)), total };
   }
 
-  async getSnapshot(tenantId: string, branchId: string): Promise<BranchOperationalSnapshot | null> {
+  async getSnapshot(tenantId: string, branchId: string, user?: User): Promise<BranchOperationalSnapshot | null> {
     const branch = await this.store.getNode(branchId);
     if (!branch || branch.type !== "branch" || branch.tenantId !== tenantId) return null;
 
     const [cameras, edgeAgents, rawTelemetry, branchPolicy, tenantPolicy] = await Promise.all([
-      this.store.listCamerasByBranch({ id: "system", tenantId, role: "admin" } as never, branchId, "live:view"),
+      user && user.tenantId === tenantId
+        ? this.store.listCamerasByBranch(user, branchId, "live:view")
+        : Promise.resolve([]),
       this.store.listEdgeAgentsByBranch(branchId),
       this.store.listLatestOperationalTelemetry(tenantId, [branchId]),
       this.store.getOperationalHealthPolicy(tenantId, branchId),

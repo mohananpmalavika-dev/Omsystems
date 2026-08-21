@@ -9,7 +9,7 @@ import { readFileSync } from 'node:fs';
 
 const { Client } = pg;
 
-const DATABASE_URL = 'postgresql://omcamera_y1ej_user:0roU7pJ6wA6o9TWB9m2hVeFIKeUZE2JR@dpg-d9m3b1rm8hqs739pr5ag-a.oregon-postgres.render.com/omcamera_y1ej';
+const DATABASE_URL = process.env.DATABASE_URL;
 
 async function main() {
   const csvFile = process.argv[2];
@@ -20,11 +20,13 @@ async function main() {
     console.log('CSV Format (with header):');
     console.log('branch_id,edge_agent_id,ip_address,username,password,location_name\n');
     console.log('Example:');
-    console.log('00000000-0000-4000-8000-000000000104,6a570d4a-2c71-415f-b59a-643cf50d55c5,192.168.29.171,admin,4344@RaM4,Branch-BLR-001');
-    console.log('00000000-0000-4000-8000-000000000104,6a570d4a-2c71-415f-b59a-643cf50d55c5,,admin,4344@RaM4,Branch-BLR-001-Default\n');
+    console.log('branch_id,edge_agent_id,ip_address,username,password,location_name');
+    console.log('branch-uuid,edge-agent-uuid,192.0.2.10,admin,<password-from-secret-manager>,Branch-001\n');
     console.log('💡 Leave ip_address empty for branch-wide default credentials');
     process.exit(0);
   }
+
+  if (!DATABASE_URL) throw new Error('DATABASE_URL must be provided through the environment or secret manager');
 
   const client = new Client({
     connectionString: DATABASE_URL,

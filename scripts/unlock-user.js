@@ -42,7 +42,7 @@ async function unlockUser() {
     console.log('');
     console.log('🎉 You can now login with:');
     console.log('   Username: mgdhanyamohan');
-    console.log('   Password: Thathu@110');
+    console.log('   Use the credential stored in the approved secrets provider.');
 
   } catch (error) {
     console.error('❌ Error:', error.message);

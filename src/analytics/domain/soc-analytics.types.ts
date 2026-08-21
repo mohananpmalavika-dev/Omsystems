@@ -69,6 +69,7 @@ export interface AlertTypePerformanceMetrics extends BaseSlaMetrics {
 }
 
 export interface IncidentLifecycleRecord {
+  tenantId: string;
   incidentId: string;
   priority: 'P1' | 'P2' | 'P3';
   alertType: AlertCategoryType;
@@ -76,6 +77,10 @@ export interface IncidentLifecycleRecord {
   regionId: string;
   stateId: string;
   operatorId: string;
+  operatorName?: string;
+  operatorRole?: 'SOC_OPERATOR' | 'SOC_SUPERVISOR' | 'CHIEF_SECURITY_OFFICER';
+  branchName?: string;
+  regionName?: string;
   shift: ShiftType;
   triggeredAt: Date;
   acknowledgedAt?: Date;
@@ -100,6 +105,7 @@ export interface SocAnalyticsDashboardSummary {
 }
 
 export interface SocAnalyticsFilter {
+  tenantId?: string;
   branchId?: string;
   regionId?: string;
   operatorId?: string;

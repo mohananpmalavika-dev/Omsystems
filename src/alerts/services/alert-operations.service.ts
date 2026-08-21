@@ -87,6 +87,12 @@ export class AlertOperationsService {
       return existing;
     }
 
+    if (dupCheck.isDuplicate) {
+      // Another API instance owns the canonical alert. Creating a new local
+      // alert here would defeat Redis deduplication and create a split record.
+      throw new Error(`DUPLICATE_ALERT_CANONICAL_RECORD_UNAVAILABLE:${dupCheck.dedupResult?.canonicalAlertId ?? "unknown"}`);
+    }
+
     // 2. Create New Alert Instance
     const now = candidate.occurredAt;
     const alertId = `alert-${randomUUID()}`;

@@ -8,13 +8,14 @@ const pool = new Pool({
 });
 
 const username = 'mgdhanyamohan';
-const password = 'Thathu@110';
+const password = process.env.TEST_PASSWORD;
+if (!password) throw new Error('TEST_PASSWORD is required');
 const tenantSlug = null; // Try without tenant slug
 
 console.log('🧪 Testing login flow...\n');
 console.log('Login attempt:');
 console.log('  Username:', username);
-console.log('  Password:', password);
+console.log('  Password: <provided via TEST_PASSWORD>');
 console.log('  Tenant Slug:', tenantSlug || '(none)');
 console.log('');
 

@@ -5199,134 +5199,73 @@ export class MemoryStore {
   private readonly deviceInventory: any[] = [];
 
   async listDeviceInventory(tenantId: string, branchNodeId?: string): Promise<any[]> {
-    const fromInventory = this.deviceInventory.filter(d => 
-      (!d.tenantId || d.tenantId === tenantId) && (!branchNodeId || d.branch === branchNodeId || d.branchId === branchNodeId)
+    const fromInventory = this.deviceInventory.filter((device) =>
+      (!device.tenantId || device.tenantId === tenantId)
+      && (!branchNodeId || device.branch === branchNodeId || device.branchId === branchNodeId)
     );
-    if (fromInventory.length > 0) return fromInventory;
 
-    // Synthesize real devices from registered cameras & nodes for this branch
-    const devices: any[] = [];
-    for (const camera of this.cameras.values()) {
-      const node = this.nodes.get(camera.nodeId);
-      const branchMatch = !branchNodeId || 
-        camera.nodeId === branchNodeId || 
-        node?.id === branchNodeId || 
-        node?.name?.toLowerCase() === branchNodeId.toLowerCase() ||
-        (node && node.parentId === branchNodeId);
-
-      if (node && (!node.tenantId || node.tenantId === tenantId) && branchMatch) {
-        devices.push({
+    const registeredCameras = Array.from(this.cameras.values())
+      .filter((camera) => {
+        const node = this.nodes.get(camera.nodeId);
+        const belongsToTenant = node?.tenantId === tenantId;
+        const belongsToBranch = !branchNodeId
+          || camera.branchId === branchNodeId
+          || camera.nodeId === branchNodeId;
+        return belongsToTenant && belongsToBranch;
+      })
+      .map((camera) => {
+        const node = this.nodes.get(camera.nodeId)!;
+        return clean({
           id: camera.id,
-          deviceId: `DEV-${camera.id.substring(0, 8).toUpperCase()}`,
-          tenant: tenantId,
-          region: (node as any).region || 'Default Region',
-          branch: node.id,
-          deviceType: 'IP_CAMERA',
-          manufacturer: (camera as any).vendor || 'Axis / Dahua',
-          model: (camera as any).model || 'Network Camera 4K',
-          serialNumber: (camera as any).serialNumber || `SN-${camera.id.substring(0, 6).toUpperCase()}`,
-          ipAddress: (camera as any).ipAddress || '192.168.1.100',
-          healthStatus: camera.status === 'online' ? 'online' : 'offline',
+          deviceId: camera.deviceIdentityId ?? camera.id,
+          tenantId: node.tenantId,
+          branchId: camera.branchId,
+          nodeId: camera.nodeId,
+          deviceType: camera.sourceType ?? 'ip-camera',
+          manufacturer: camera.vendor,
+          model: camera.model,
+          serialNumber: camera.serialNumber,
+          ipAddress: camera.ipAddress,
+          healthStatus: camera.status,
           lifecycleState: 'operational',
-          capabilities: ['onvif', 'ptz', 'rtsp', 'edge-analytics'],
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
+          capabilities: camera.capabilities,
+          profiles: camera.profiles,
+          firstSeenAt: camera.firstSeenAt,
+          lastSeenAt: camera.lastSeenAt,
         });
-      }
-    }
+      });
 
-    if (devices.length > 0) return devices;
-
-    // Return realistic seeded devices for the requested branch
-    return [
-      {
-        id: `dev-${branchNodeId || 'mumbai'}-01`,
-        deviceId: `CAM-${(branchNodeId || 'MUM').toUpperCase()}-01`,
-        tenant: tenantId,
-        region: 'West Zone',
-        branch: branchNodeId || 'branch-1',
-        deviceType: 'IP_CAMERA',
-        manufacturer: 'Dahua Technology',
-        model: 'IPC-HFW5442E-ZE',
-        serialNumber: 'DH5442998101',
-        ipAddress: '192.168.1.101',
-        healthStatus: 'online',
-        lifecycleState: 'operational',
-        capabilities: ['onvif', 'rtsp', 'h265', 'ai-perimeter'],
-      },
-      {
-        id: `dev-${branchNodeId || 'mumbai'}-02`,
-        deviceId: `CAM-${(branchNodeId || 'MUM').toUpperCase()}-02`,
-        tenant: tenantId,
-        region: 'West Zone',
-        branch: branchNodeId || 'branch-1',
-        deviceType: 'IP_CAMERA',
-        manufacturer: 'CP PLUS',
-        model: 'CP-UNR-416T2',
-        serialNumber: 'CP416T2991823',
-        ipAddress: '192.168.1.10',
-        healthStatus: 'online',
-        lifecycleState: 'operational',
-        capabilities: ['nvr-16ch', 'rtsp', 'onvif', 'storage'],
-      },
-      {
-        id: `dev-${branchNodeId || 'mumbai'}-03`,
-        deviceId: `CAM-${(branchNodeId || 'MUM').toUpperCase()}-03`,
-        tenant: tenantId,
-        region: 'West Zone',
-        branch: branchNodeId || 'branch-1',
-        deviceType: 'IP_CAMERA',
-        manufacturer: 'Hikvision',
-        model: 'DS-2CD2386G2-ISU/SL',
-        serialNumber: 'HK238699104',
-        ipAddress: '192.168.1.102',
-        healthStatus: 'online',
-        lifecycleState: 'operational',
-        capabilities: ['onvif', 'rtsp', 'acusense', 'audio-alarm'],
-      },
-    ];
+    const knownIds = new Set(fromInventory.map((device) => device.id));
+    return [...fromInventory, ...registeredCameras.filter((device) => !knownIds.has(device.id))];
   }
 
   async getDeviceInventory(id: string): Promise<any | null> {
-    const fromInv = this.deviceInventory.find(d => d.id === id || d.deviceId === id);
-    if (fromInv) return fromInv;
+    const fromInventory = this.deviceInventory.find((device) => device.id === id || device.deviceId === id);
+    if (fromInventory) return fromInventory;
 
-    const camera = this.cameras.get(id);
-    if (camera) {
-      const node = this.nodes.get(camera.nodeId);
-      return {
-        id: camera.id,
-        deviceId: `DEV-${camera.id.substring(0, 8).toUpperCase()}`,
-        tenantId: node?.tenantId || 'tenant-bank-01',
-        region: (node as any)?.region || 'Default Region',
-        branch: node?.id || 'default-branch',
-        deviceType: 'IP_CAMERA',
-        manufacturer: (camera as any).vendor || 'Axis / Dahua',
-        model: (camera as any).model || 'Network Camera 4K',
-        serialNumber: (camera as any).serialNumber || `SN-${camera.id.substring(0, 6).toUpperCase()}`,
-        ipAddress: (camera as any).ipAddress || '192.168.1.100',
-        healthStatus: camera.status === 'online' ? 'online' : 'offline',
-        lifecycleState: 'operational',
-        capabilities: ['onvif', 'ptz', 'rtsp', 'edge-analytics'],
-      };
-    }
+    const camera = this.cameras.get(id)
+      ?? Array.from(this.cameras.values()).find((candidate) => candidate.deviceIdentityId === id);
+    if (!camera) return null;
 
-    // Default fallback device
-    return {
-      id,
-      deviceId: id,
-      tenantId: 'tenant-bank-01',
-      region: 'West Zone',
-      branch: 'branch-1',
-      deviceType: 'IP_CAMERA',
-      manufacturer: 'Dahua Technology',
-      model: 'IPC-HFW5442E-ZE',
-      serialNumber: 'DH5442998101',
-      ipAddress: '192.168.1.101',
-      healthStatus: 'online',
+    const node = this.nodes.get(camera.nodeId);
+    return clean({
+      id: camera.id,
+      deviceId: camera.deviceIdentityId ?? camera.id,
+      tenantId: node?.tenantId,
+      branchId: camera.branchId,
+      nodeId: camera.nodeId,
+      deviceType: camera.sourceType ?? 'ip-camera',
+      manufacturer: camera.vendor,
+      model: camera.model,
+      serialNumber: camera.serialNumber,
+      ipAddress: camera.ipAddress,
+      healthStatus: camera.status,
       lifecycleState: 'operational',
-      capabilities: ['onvif', 'rtsp', 'h265'],
-    };
+      capabilities: camera.capabilities,
+      profiles: camera.profiles,
+      firstSeenAt: camera.firstSeenAt,
+      lastSeenAt: camera.lastSeenAt,
+    });
   }
 
   async createDeviceInventoryRecord(input: any): Promise<any> {

@@ -9,7 +9,8 @@ const { Client } = pkg;
 const connectionString = process.env.DATABASE_URL;
 if (!connectionString) throw new Error('DATABASE_URL is required');
 const username = 'mgdhanyamohan';
-const password = 'Thathu110';
+const password = process.env.BOOTSTRAP_SUPERADMIN_PASSWORD;
+if (!password) throw new Error('BOOTSTRAP_SUPERADMIN_PASSWORD is required');
 
 async function createSuperuser() {
   const client = new Client({
@@ -35,13 +36,17 @@ async function createSuperuser() {
       console.log(`⚠️  User '${username}' already exists`);
       console.log('Updating password and granting privileges...');
       
-      await client.query(`ALTER USER ${username} WITH PASSWORD '${password}'`);
+      const safeUsername = username.replace(/"/g, '""');
+      const safePassword = password.replace(/'/g, "''");
+      await client.query(`ALTER USER "${safeUsername}" WITH PASSWORD '${safePassword}'`);
       console.log('✅ User password updated');
     } else {
       console.log(`Creating user '${username}' (with maximum available privileges)...`);
       
       // Create user with CREATEDB and CREATEROLE (no SUPERUSER on Render)
-      await client.query(`CREATE USER ${username} WITH CREATEDB CREATEROLE LOGIN PASSWORD '${password}'`);
+      const safeUsername = username.replace(/"/g, '""');
+      const safePassword = password.replace(/'/g, "''");
+      await client.query(`CREATE USER "${safeUsername}" WITH CREATEDB CREATEROLE LOGIN PASSWORD '${safePassword}'`);
       console.log('✅ User created successfully');
     }
 
@@ -92,11 +97,10 @@ async function createSuperuser() {
     console.log('   This user has maximum available privileges (CREATEDB, CREATEROLE, and full database access).');
     console.log('\nConnection details:');
     console.log(`  Username: ${username}`);
-    console.log(`  Password: ${password}`);
+    console.log('  Password: stored in the approved secrets provider');
     console.log(`  Database: omcamera_y1ej`);
     console.log(`  Host: dpg-d9m3b1rm8hqs739pr5ag-a.oregon-postgres.render.com`);
-    console.log('\nConnection string:');
-    console.log(`  postgresql://${username}:${password}@dpg-d9m3b1rm8hqs739pr5ag-a.oregon-postgres.render.com/omcamera_y1ej`);
+    console.log('\nConnection string: supplied through DATABASE_URL at runtime');
 
   } catch (error) {
     console.error('\n❌ Error:', error.message);

@@ -4,7 +4,7 @@
 ✅ Database contains correct user with correct password
 ✅ All organizational structures exist (company, branch)
 ✅ User is properly assigned to organization
-✅ Password hash verified: `Thathu@110` works
+✅ Password hash verified using an operator-supplied secret
 ✅ Account unlocked (login_attempts: 0)
 
 ## The Problem
@@ -22,7 +22,7 @@ The Render backend at `https://sentinel-grid-control-plane-nqc0.onrender.com` is
 
 You need to ensure the Render service is using THIS database URL:
 ```
-postgresql://omtech_user:uWpzCli9H14xNhMh9m8rA9rpmkE64O84@dpg-d9tmg9id0e5s739i01f0-a.oregon-postgres.render.com/omtech
+the deployment's `DATABASE_URL` from the approved secrets provider
 ```
 
 ### Steps:
@@ -38,7 +38,7 @@ postgresql://omtech_user:uWpzCli9H14xNhMh9m8rA9rpmkE64O84@dpg-d9tmg9id0e5s739i01
 
 ## Login Credentials (Once Connected)
 - **Username**: `mgdhanyamohan`
-- **Password**: `Thathu@110`
+- **Password**: supplied through the approved secrets provider
 - **Organization Code**: `omsystems-pilot` (optional but recommended)
 
 ## Alternative: Create User in Render's Current Database

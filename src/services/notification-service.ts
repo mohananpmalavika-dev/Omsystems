@@ -15,7 +15,9 @@ export interface NotificationConfig {
 export interface EmailConfig {
   provider: 'sendgrid' | 'ses' | 'smtp';
   from: string;
+  defaultRecipients?: string[];
   apiKey?: string;
+  awsRegion?: string;
   smtpHost?: string;
   smtpPort?: number;
   smtpUser?: string;
@@ -25,6 +27,7 @@ export interface EmailConfig {
 export interface SmsConfig {
   provider: 'twilio' | 'sns' | 'custom';
   from: string;
+  defaultRecipients?: string[];
   accountSid?: string;
   authToken?: string;
   awsRegion?: string;
@@ -77,17 +80,9 @@ export class NotificationService {
     branchId?: string;
     assetId?: string;
   }): Promise<{ email: string[]; sms: string[]; webhook?: string[] }> {
-    const scope = input.tenantId;
-    const emailRecipients = this.config.email?.from ? [this.config.email.from] : [];
-    const smsRecipients = this.config.sms?.from ? [this.config.sms.from] : [];
-
-    if (scope && !emailRecipients.length && !smsRecipients.length) {
-      return { email: [], sms: [] };
-    }
-
     return {
-      email: emailRecipients,
-      sms: smsRecipients,
+      email: this.config.email?.defaultRecipients ?? [],
+      sms: this.config.sms?.defaultRecipients ?? [],
       webhook: [],
     };
   }
@@ -262,85 +257,74 @@ export class NotificationService {
   // ============================================================================
 
   private async sendEmailViaSendGrid(message: EmailMessage): Promise<void> {
-    // Implementation using SendGrid API
-    // Example: https://github.com/sendgrid/sendgrid-nodejs
-    
     const apiKey = this.config.email?.apiKey;
     if (!apiKey) {
       throw new Error('SendGrid API key not configured');
     }
-
-    // In production, use @sendgrid/mail package:
-    // const sgMail = require('@sendgrid/mail');
-    // sgMail.setApiKey(apiKey);
-    // await sgMail.send({
-    //   to: message.to,
-    //   from: this.config.email.from,
-    //   subject: message.subject,
-    //   text: message.body,
-    //   html: message.html,
-    // });
-
-    // For now, simulate
-    this.logger.info('[SENDGRID] Would send email:', {
-      to: message.to,
-      subject: message.subject,
+    const response = await fetch('https://api.sendgrid.com/v3/mail/send', {
+      method: 'POST',
+      headers: {
+        authorization: `Bearer ${apiKey}`,
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({
+        personalizations: [{
+          to: message.to.map((email) => ({ email })),
+          cc: message.cc?.map((email) => ({ email })),
+          bcc: message.bcc?.map((email) => ({ email })),
+        }],
+        from: { email: this.config.email!.from },
+        subject: message.subject,
+        content: [
+          { type: 'text/plain', value: message.body },
+          ...(message.html ? [{ type: 'text/html', value: message.html }] : []),
+        ],
+      }),
+      signal: AbortSignal.timeout(10_000),
     });
+    if (!response.ok) throw new Error(`SendGrid delivery failed with HTTP ${response.status}`);
   }
 
   private async sendEmailViaSES(message: EmailMessage): Promise<void> {
-    // Implementation using AWS SES
-    // Example: https://docs.aws.amazon.com/sdk-for-javascript/v3/developer-guide/ses-examples-sending-email.html
-
-    // In production, use @aws-sdk/client-ses package:
-    // const { SESClient, SendEmailCommand } = require("@aws-sdk/client-ses");
-    // const client = new SESClient({ region: "us-east-1" });
-    // await client.send(new SendEmailCommand({
-    //   Source: this.config.email.from,
-    //   Destination: { ToAddresses: message.to },
-    //   Message: {
-    //     Subject: { Data: message.subject },
-    //     Body: { Text: { Data: message.body } },
-    //   },
-    // }));
-
-    this.logger.info('[AWS SES] Would send email:', {
-      to: message.to,
-      subject: message.subject,
-    });
+    const email = this.config.email;
+    if (!email?.awsRegion) throw new Error('AWS SES region not configured');
+    const { SESClient, SendEmailCommand } = await import('@aws-sdk/client-ses');
+    const client = new SESClient({ region: email.awsRegion });
+    await client.send(new SendEmailCommand({
+      Source: email.from,
+      Destination: { ToAddresses: message.to, CcAddresses: message.cc, BccAddresses: message.bcc },
+      Message: {
+        Subject: { Data: message.subject, Charset: 'UTF-8' },
+        Body: {
+          Text: { Data: message.body, Charset: 'UTF-8' },
+          ...(message.html ? { Html: { Data: message.html, Charset: 'UTF-8' } } : {}),
+        },
+      },
+    }));
   }
 
   private async sendEmailViaSMTP(message: EmailMessage): Promise<void> {
-    // Implementation using SMTP
-    // Example: https://nodemailer.com/
-
     const smtpConfig = this.config.email;
     if (!smtpConfig?.smtpHost) {
       throw new Error('SMTP configuration incomplete');
     }
-
-    // In production, use nodemailer package:
-    // const nodemailer = require('nodemailer');
-    // const transporter = nodemailer.createTransport({
-    //   host: smtpConfig.smtpHost,
-    //   port: smtpConfig.smtpPort,
-    //   auth: {
-    //     user: smtpConfig.smtpUser,
-    //     pass: smtpConfig.smtpPassword,
-    //   },
-    // });
-    // await transporter.sendMail({
-    //   from: this.config.email.from,
-    //   to: message.to.join(','),
-    //   subject: message.subject,
-    //   text: message.body,
-    //   html: message.html,
-    // });
-
-    this.logger.info('[SMTP] Would send email:', {
-      to: message.to,
-      subject: message.subject,
+    const nodemailer = await import('nodemailer');
+    const transporter = nodemailer.createTransport({
       host: smtpConfig.smtpHost,
+      port: smtpConfig.smtpPort ?? 587,
+      secure: (smtpConfig.smtpPort ?? 587) === 465,
+      ...(smtpConfig.smtpUser && smtpConfig.smtpPassword
+        ? { auth: { user: smtpConfig.smtpUser, pass: smtpConfig.smtpPassword } }
+        : {}),
+    });
+    await transporter.sendMail({
+      from: smtpConfig.from,
+      to: message.to,
+      cc: message.cc,
+      bcc: message.bcc,
+      subject: message.subject,
+      text: message.body,
+      html: message.html,
     });
   }
 
@@ -349,84 +333,51 @@ export class NotificationService {
   // ============================================================================
 
   private async sendSmsViaTwilio(message: SmsMessage): Promise<void> {
-    // Implementation using Twilio API
-    // Example: https://www.twilio.com/docs/sms/quickstart/node
-
     const smsConfig = this.config.sms;
     if (!smsConfig?.accountSid || !smsConfig?.authToken) {
       throw new Error('Twilio configuration incomplete');
     }
-
-    // In production, use twilio package:
-    // const twilio = require('twilio');
-    // const client = twilio(smsConfig.accountSid, smsConfig.authToken);
-    // for (const to of message.to) {
-    //   await client.messages.create({
-    //     body: message.body,
-    //     from: smsConfig.from,
-    //     to,
-    //   });
-    // }
-
-    this.logger.info('[TWILIO] Would send SMS:', {
-      to: message.to,
-      from: smsConfig.from,
-    });
+    const authorization = Buffer.from(`${smsConfig.accountSid}:${smsConfig.authToken}`).toString('base64');
+    for (const recipient of message.to) {
+      const response = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${encodeURIComponent(smsConfig.accountSid)}/Messages.json`, {
+        method: 'POST',
+        headers: {
+          authorization: `Basic ${authorization}`,
+          'content-type': 'application/x-www-form-urlencoded',
+        },
+        body: new URLSearchParams({ To: recipient, From: smsConfig.from, Body: message.body }),
+        signal: AbortSignal.timeout(10_000),
+      });
+      if (!response.ok) throw new Error(`Twilio delivery failed with HTTP ${response.status}`);
+    }
   }
 
   private async sendSmsViaSNS(message: SmsMessage): Promise<void> {
-    // Implementation using AWS SNS
-    // Example: https://docs.aws.amazon.com/sns/latest/dg/sns-sms-how-it-works.html
-
     const smsConfig = this.config.sms;
     if (!smsConfig?.awsRegion) {
       throw new Error('AWS SNS configuration incomplete');
     }
-
-    // In production, use @aws-sdk/client-sns package:
-    // const { SNSClient, PublishCommand } = require("@aws-sdk/client-sns");
-    // const client = new SNSClient({ region: smsConfig.awsRegion });
-    // for (const to of message.to) {
-    //   await client.send(new PublishCommand({
-    //     Message: message.body,
-    //     PhoneNumber: to,
-    //   }));
-    // }
-
-    this.logger.info('[AWS SNS] Would send SMS:', {
-      to: message.to,
-      region: smsConfig.awsRegion,
-    });
+    const { SNSClient, PublishCommand } = await import('@aws-sdk/client-sns');
+    const client = new SNSClient({ region: smsConfig.awsRegion });
+    await Promise.all(message.to.map((recipient) =>
+      client.send(new PublishCommand({ Message: message.body, PhoneNumber: recipient })),
+    ));
   }
 
   private async sendSmsViaCustom(message: SmsMessage): Promise<void> {
-    // Implementation using custom SMS gateway API
-    
     const smsConfig = this.config.sms;
     if (!smsConfig?.apiUrl || !smsConfig?.apiKey) {
       throw new Error('Custom SMS gateway configuration incomplete');
     }
-
-    // In production, make HTTP request to custom gateway:
-    // for (const to of message.to) {
-    //   await fetch(smsConfig.apiUrl, {
-    //     method: 'POST',
-    //     headers: {
-    //       'Authorization': `Bearer ${smsConfig.apiKey}`,
-    //       'Content-Type': 'application/json',
-    //     },
-    //     body: JSON.stringify({
-    //       to,
-    //       from: smsConfig.from,
-    //       message: message.body,
-    //     }),
-    //   });
-    // }
-
-    this.logger.info('[CUSTOM] Would send SMS:', {
-      to: message.to,
-      apiUrl: smsConfig.apiUrl,
-    });
+    for (const recipient of message.to) {
+      const response = await fetch(smsConfig.apiUrl, {
+        method: 'POST',
+        headers: { authorization: `Bearer ${smsConfig.apiKey}`, 'content-type': 'application/json' },
+        body: JSON.stringify({ to: recipient, from: smsConfig.from, message: message.body }),
+        signal: AbortSignal.timeout(10_000),
+      });
+      if (!response.ok) throw new Error(`Custom SMS gateway failed with HTTP ${response.status}`);
+    }
   }
 
   // ============================================================================

@@ -68,7 +68,7 @@ async function unlockAccount(username: string) {
     console.log('🎉 Account unlocked successfully!\n');
     console.log('🔑 You can now login with:');
     console.log(`   Username: ${username}`);
-    console.log(`   Password: Thathu110\n`);
+    console.log('   Use the credential stored in the approved secrets provider.\n');
 
     await pool.end();
   } catch (error: any) {

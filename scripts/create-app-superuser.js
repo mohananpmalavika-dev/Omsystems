@@ -23,7 +23,8 @@ async function createSuperUser() {
     console.log('================================================\n');
 
     const username = 'mgdhanyamohan';
-    const password = 'Thathu110';
+    const password = process.env.BOOTSTRAP_SUPERADMIN_PASSWORD;
+    if (!password) throw new Error('BOOTSTRAP_SUPERADMIN_PASSWORD is required');
     const displayName = 'Dhanya Mohan';
     const email = 'mgdhanyamohan@omsystems.com';
     const identitySubject = `local:${username}`; // Using local auth
@@ -166,7 +167,7 @@ async function createSuperUser() {
     console.log('\n🎉 Superuser setup complete!\n');
     console.log('🔑 Login Credentials:');
     console.log(`   Username: ${username}`);
-    console.log(`   Password: ${password}`);
+    console.log('   Password: stored in the approved secrets provider');
     console.log(`   Email: ${email}`);
     console.log(`   Role: ${role}`);
     console.log(`   Status: ${status}`);

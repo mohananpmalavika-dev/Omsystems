@@ -120,7 +120,7 @@ describe("Alert Deduplication State Store", () => {
     expect(res2.occurrenceCount).toBe(2);
   });
 
-  it("fails open gracefully when Redis experiences a connection failure", async () => {
+  it("fails closed when Redis experiences a connection failure", async () => {
     const faultyRedis: RedisClientInterface = {
       isOpen: true,
       async eval() {
@@ -137,12 +137,8 @@ describe("Alert Deduplication State Store", () => {
       alertType: "fire_detected",
     };
 
-    // Should FAIL-OPEN: treat as new alert rather than suppressing security alert
-    const result = await service.checkAndRegister(identity, "alert-fire-999");
-    expect(result.duplicate).toBe(false);
-    expect(result.degraded).toBe(true);
-    expect(result.reason).toContain("REDIS_ERROR");
-    expect(result.canonicalAlertId).toBe("alert-fire-999");
+    await expect(service.checkAndRegister(identity, "alert-fire-999"))
+      .rejects.toThrow("REDIS_DEDUPLICATION_UNAVAILABLE");
   });
 
   it("tracks observability metrics accurately", async () => {

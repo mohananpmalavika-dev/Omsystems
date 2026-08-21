@@ -41,14 +41,10 @@ async function checkUser() {
     
     // Test password verification
     console.log('\n🔍 Testing password verification...');
-    const testPassword = 'Thathu@110';
+    const testPassword = process.env.TEST_PASSWORD;
+    if (!testPassword) throw new Error('TEST_PASSWORD is required');
     const isValid = await bcrypt.compare(testPassword, user.password_hash);
-    console.log(`   Password "Thathu@110": ${isValid ? '✅ Valid' : '❌ Invalid'}`);
-
-    // Also test with the password from the script
-    const testPassword2 = 'Thathu110';
-    const isValid2 = await bcrypt.compare(testPassword2, user.password_hash);
-    console.log(`   Password "Thathu110": ${isValid2 ? '✅ Valid' : '❌ Invalid'}`);
+    console.log(`   Supplied password: ${isValid ? '✅ Valid' : '❌ Invalid'}`);
 
   } catch (error) {
     console.error('❌ Error:', error.message);

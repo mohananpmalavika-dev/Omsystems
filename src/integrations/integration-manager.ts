@@ -204,15 +204,12 @@ export class IntegrationManager {
       event.eventType
     );
 
-    // Queue event for each integration
-    for (const integration of integrations) {
-      if (integration.enabled && integration.status === 'active') {
-        this.eventQueue.push(fullEvent);
-      }
+    // A queued event is fanned out by deliverEvent. Enqueueing once per
+    // integration would deliver N copies to each of N connectors.
+    if (integrations.some((integration) => integration.enabled && integration.status === 'active')) {
+      this.eventQueue.push(fullEvent);
+      await this.processQueue();
     }
-
-    // Process queue
-    this.processQueue();
   }
 
   /**

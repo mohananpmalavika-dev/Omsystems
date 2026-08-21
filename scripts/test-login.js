@@ -24,7 +24,8 @@ async function testLogin() {
     console.log('================================================\n');
 
     const username = 'mgdhanyamohan';
-    const password = 'Thathu110';
+    const password = process.env.TEST_PASSWORD;
+    if (!password) throw new Error('TEST_PASSWORD is required');
     const tenantSlug = undefined; // Try without tenant slug first
 
     console.log(`Testing login for: ${username}\n`);

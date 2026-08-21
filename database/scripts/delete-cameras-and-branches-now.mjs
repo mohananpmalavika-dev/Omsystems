@@ -8,7 +8,8 @@ import pg from 'pg';
 const { Pool } = pg;
 
 // Parse DATABASE_URL from .env or use provided
-const DATABASE_URL = process.env.DATABASE_URL || 'postgresql://omtech_user:uWpzCli9H14xNhMh9m8rA9rpmkE64O84@dpg-d9tmg9id0e5s739i01f0-a.oregon-postgres.render.com/omtech';
+const DATABASE_URL = process.env.DATABASE_URL;
+if (!DATABASE_URL) throw new Error('DATABASE_URL is required');
 
 const pool = new Pool({
   connectionString: DATABASE_URL,

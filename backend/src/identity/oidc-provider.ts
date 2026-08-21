@@ -4,7 +4,23 @@
  * Supports Azure AD, Auth0, Okta, Google, Keycloak, and any OIDC-compliant provider
  */
 
-import * as openidClient from 'openid-client';
+import {
+  authorizationCodeGrant,
+  buildAuthorizationUrl,
+  calculatePKCECodeChallenge,
+  ClientSecretBasic,
+  discovery,
+  fetchUserInfo,
+  None,
+  randomNonce,
+  randomPKCECodeVerifier,
+  randomState,
+  refreshTokenGrant,
+  type Configuration,
+  type TokenEndpointResponse,
+  type TokenEndpointResponseHelpers,
+  type UserInfoResponse,
+} from 'openid-client';
 import { Pool } from 'pg';
 import { logger } from '../utils/logger.js';
 import crypto from 'crypto';
@@ -78,8 +94,7 @@ export interface AuthorizationRequest {
 export class OIDCAuthProvider {
   private config: OIDCConfiguration;
   private pool: Pool;
-  private issuer: openidClient.Issuer | null = null;
-  private client: openidClient.Client | null = null;
+  private client: Configuration | null = null;
   private pendingRequests: Map<string, { 
     codeVerifier?: string; 
     nonce: string; 
@@ -102,29 +117,26 @@ export class OIDCAuthProvider {
    */
   async initialize(): Promise<void> {
     try {
-      const discoveryUrl = this.config.discoveryUrl || 
-        `${this.config.issuer}/.well-known/openid-configuration`;
-      
-      logger.info('Discovering OIDC configuration', { discoveryUrl });
-      
-      this.issuer = await openidClient.Issuer.discover(discoveryUrl);
-      
-      this.client = new this.issuer.Client({
-        client_id: this.config.clientId,
-        client_secret: this.config.clientSecret,
-        redirect_uris: [this.config.redirectUri],
-        post_logout_redirect_uris: this.config.postLogoutRedirectUri 
-          ? [this.config.postLogoutRedirectUri]
-          : undefined,
-        response_types: ['code'],
-        token_endpoint_auth_method: this.config.clientSecret ? 'client_secret_basic' : 'none'
-      });
+      logger.info('Discovering OIDC configuration', { issuer: this.config.issuer });
 
+      this.client = await discovery(
+        new URL(this.config.issuer),
+        this.config.clientId,
+        {
+          ...(this.config.clientSecret ? { client_secret: this.config.clientSecret } : {}),
+          redirect_uris: [this.config.redirectUri],
+          response_types: ['code'],
+          token_endpoint_auth_method: this.config.clientSecret ? 'client_secret_basic' : 'none',
+        },
+        this.config.clientSecret ? ClientSecretBasic(this.config.clientSecret) : None(),
+      );
+
+      const metadata = this.client.serverMetadata();
       logger.info('OIDC provider initialized', {
-        issuer: this.issuer.metadata.issuer,
-        authorizationEndpoint: this.issuer.metadata.authorization_endpoint,
-        tokenEndpoint: this.issuer.metadata.token_endpoint,
-        userinfoEndpoint: this.issuer.metadata.userinfo_endpoint
+        issuer: metadata.issuer,
+        authorizationEndpoint: metadata.authorization_endpoint,
+        tokenEndpoint: metadata.token_endpoint,
+        userinfoEndpoint: metadata.userinfo_endpoint,
       });
 
     } catch (error) {
@@ -141,26 +153,19 @@ export class OIDCAuthProvider {
       throw new Error('OIDC provider not initialized');
     }
 
-    const state = openidClient.generators.state();
-    const nonce = openidClient.generators.nonce();
-    
-    let authParams: any = {
+    const state = randomState();
+    const nonce = randomNonce();
+    const codeVerifier = randomPKCECodeVerifier();
+    const codeChallenge = await calculatePKCECodeChallenge(codeVerifier);
+    const authUrl = buildAuthorizationUrl(this.client, {
       scope: this.config.scopes.join(' '),
       state,
-      nonce
-    };
-
-    let codeVerifier: string | undefined;
-
-    // Add PKCE if enabled
-    if (this.config.usePKCE) {
-      codeVerifier = openidClient.generators.codeVerifier();
-      const codeChallenge = openidClient.generators.codeChallenge(codeVerifier);
-      authParams.code_challenge = codeChallenge;
-      authParams.code_challenge_method = 'S256';
-    }
-
-    const authUrl = this.client.authorizationUrl(authParams);
+      nonce,
+      redirect_uri: this.config.redirectUri,
+      response_type: 'code',
+      code_challenge: codeChallenge,
+      code_challenge_method: 'S256',
+    }).toString();
 
     // Store pending request
     this.pendingRequests.set(state, {
@@ -176,7 +181,7 @@ export class OIDCAuthProvider {
       authUrl,
       state,
       nonce,
-      codeVerifier
+      codeVerifier,
     };
   }
 
@@ -205,33 +210,26 @@ export class OIDCAuthProvider {
     this.pendingRequests.delete(state);
 
     try {
-      // Exchange authorization code for tokens
-      const tokenParams: any = {
-        code,
-        redirect_uri: this.config.redirectUri
-      };
-
-      if (this.config.usePKCE && pending.codeVerifier) {
-        tokenParams.code_verifier = pending.codeVerifier;
-      }
-
-      const tokenSet: openidClient.TokenSet = await this.client.callback(
-        this.config.redirectUri,
-        { code, state },
-        { nonce: pending.nonce, state }
-      );
+      const callbackUrl = new URL(this.config.redirectUri);
+      callbackUrl.searchParams.set('code', code);
+      callbackUrl.searchParams.set('state', state);
+      const tokenSet = await authorizationCodeGrant(this.client, callbackUrl, {
+        expectedState: state,
+        expectedNonce: pending.nonce,
+        pkceCodeVerifier: pending.codeVerifier,
+      });
 
       // Validate ID token
       const claims = tokenSet.claims();
       
-      if (!claims.sub) {
+      if (!claims?.sub) {
         throw new Error('Missing subject claim in ID token');
       }
 
       // Fetch additional user info if available
-      let userinfo: openidClient.UserInfoResponse | null = null;
-      if (this.issuer?.metadata.userinfo_endpoint && tokenSet.access_token) {
-        userinfo = await this.client.userinfo(tokenSet.access_token);
+      let userinfo: UserInfoResponse | null = null;
+      if (this.client.serverMetadata().userinfo_endpoint && tokenSet.access_token) {
+        userinfo = await fetchUserInfo(this.client, tokenSet.access_token, claims.sub);
       }
 
       // Extract user information
@@ -267,7 +265,7 @@ export class OIDCAuthProvider {
    */
   private extractUserFromClaims(
     claims: any,
-    userinfo: openidClient.UserInfoResponse | null
+    userinfo: UserInfoResponse | null
   ): OIDCUser {
     const mapping = this.config.attributeMapping;
     
@@ -449,7 +447,7 @@ export class OIDCAuthProvider {
   private async createSession(
     tenantId: string,
     userId: string,
-    tokenSet: openidClient.TokenSet,
+    tokenSet: TokenEndpointResponse & TokenEndpointResponseHelpers,
     metadata?: {
       ipAddress?: string;
       userAgent?: string;
@@ -504,7 +502,7 @@ export class OIDCAuthProvider {
     }
 
     try {
-      const tokenSet = await this.client.refresh(session.refreshToken);
+      const tokenSet = await refreshTokenGrant(this.client, session.refreshToken);
 
       const expiresIn = tokenSet.expires_in || this.config.sessionDurationMinutes! * 60;
       const expiresAt = new Date(Date.now() + expiresIn * 1000);
@@ -576,7 +574,8 @@ export class OIDCAuthProvider {
    * Get end session (logout) URL
    */
   async getLogoutUrl(idToken: string): Promise<string | null> {
-    if (!this.issuer?.metadata.end_session_endpoint) {
+    const endSessionEndpoint = this.client?.serverMetadata().end_session_endpoint;
+    if (!endSessionEndpoint) {
       return null;
     }
 
@@ -585,7 +584,7 @@ export class OIDCAuthProvider {
       post_logout_redirect_uri: this.config.postLogoutRedirectUri || this.config.redirectUri
     });
 
-    return `${this.issuer.metadata.end_session_endpoint}?${params.toString()}`;
+    return `${endSessionEndpoint}?${params.toString()}`;
   }
 
   /**

@@ -5,7 +5,7 @@ const execFileAsync = promisify(execFile);
 
 export interface SmartTelemetry {
   devicePath: string;
-  telemetrySource: 'real' | 'simulated';
+  telemetrySource: 'real' | 'unavailable';
   /** `smart` has drive attributes; `storage-status` is a recorder-reported disk state only. */
   telemetryCapability: 'smart' | 'storage-status' | 'unknown';
   /** Recorder slot state is separate from drive-level SMART evidence. */
@@ -51,16 +51,15 @@ export async function collectSmartTelemetry(input: string | SmartCollectorConfig
     try {
       return await collectVendorTelemetry(config);
     } catch (error) {
-      // Fall through to simulated state below.
+      // Return an explicit unavailable state below; never manufacture SMART data.
     }
   }
 
   return {
     devicePath: config.devicePath ?? config.host ?? config.endpoint ?? 'unknown',
-    telemetrySource: 'simulated',
+    telemetrySource: 'unavailable',
     telemetryCapability: 'unknown',
     smartStatus: 'unknown',
-    failureProbability: 0,
     raw: { error: 'No real device polling path available' },
   };
 }

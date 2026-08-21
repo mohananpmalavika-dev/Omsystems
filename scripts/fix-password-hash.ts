@@ -30,7 +30,8 @@ async function fixPasswordHash() {
     console.log('🔐 Fixing password hash for mgdhanyamohan...\n');
 
     // Hash password using scrypt (same as auth system)
-    const password = 'Thathu110';
+    const password = process.env.NEW_PASSWORD;
+    if (!password) throw new Error('NEW_PASSWORD is required');
     const username = 'mgdhanyamohan';
     
     console.log('1️⃣  Hashing password with scrypt...');
@@ -96,7 +97,7 @@ async function fixPasswordHash() {
     console.log('🎉 Password fix complete!\n');
     console.log('🔑 You can now login with:');
     console.log(`   Username: ${username}`);
-    console.log(`   Password: ${password}\n`);
+    console.log('   Password hash updated; retrieve the new value from your secure input.\n');
 
     await pool.end();
   } catch (error: any) {

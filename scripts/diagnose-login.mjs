@@ -2,7 +2,8 @@ import pg from 'pg';
 import bcrypt from 'bcryptjs';
 const { Pool } = pg;
 
-const DB_URL = "postgresql://omtech_user:uWpzCli9H14xNhMh9m8rA9rpmkE64O84@dpg-d9tmg9id0e5s739i01f0-a.oregon-postgres.render.com/omtech";
+const DB_URL = process.env.DATABASE_URL;
+if (!DB_URL) throw new Error('DATABASE_URL is required');
 
 const pool = new Pool({
   connectionString: DB_URL,
@@ -58,7 +59,9 @@ console.log('   Locked Until:', user.locked_until || 'Not locked');
 
 // Step 3: Test password
 console.log('\n3️⃣ TESTING PASSWORD VERIFICATION...');
-const testPasswords = ['Thathu@110', 'Thathu110', 'thathu@110'];
+const testPassword = process.env.TEST_PASSWORD;
+if (!testPassword) throw new Error('TEST_PASSWORD is required');
+const testPasswords = [testPassword];
 
 for (const pwd of testPasswords) {
   const isValid = await bcrypt.compare(pwd, user.password_hash);
@@ -98,7 +101,7 @@ console.log('\n' + '='.repeat(60));
 console.log('\n✅ DIAGNOSIS COMPLETE\n');
 console.log('LOGIN CREDENTIALS:');
 console.log('  Username: mgdhanyamohan');
-console.log('  Password: Thathu@110');
+console.log('  Password: <provided via TEST_PASSWORD>');
 console.log('  Org Code: omsystems-pilot (optional)');
 console.log('');
 console.log('⚠️  IMPORTANT: Make sure your backend server is:');

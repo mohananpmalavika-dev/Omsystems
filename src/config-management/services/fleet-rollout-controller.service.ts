@@ -7,94 +7,78 @@ import type {
 } from '../domain/signed-config.types.js';
 import { signedConfigService } from './signed-config.service.js';
 
+export interface FleetConfigDispatcher {
+  deploy(input: {
+    rolloutId: string;
+    branchId: string;
+    version: ConfigurationVersion;
+  }): Promise<void>;
+  rollback(input: {
+    rolloutId: string;
+    branchId: string;
+    targetVersion: number;
+    reason: string;
+  }): Promise<void>;
+}
+
 export class FleetRolloutControllerService {
   private readonly rollouts = new Map<string, ConfigurationRollout>();
 
-  /**
-   * Generates a representative multi-vendor 400-branch cohort for canary rollouts.
-   */
-  generateRepresentativeCohort(totalBranches = 400): string[] {
-    const branches: string[] = [];
-    for (let i = 1; i <= totalBranches; i++) {
-      branches.push(`BR-${String(i).padStart(3, '0')}`);
-    }
-    return branches;
-  }
+  constructor(private readonly dispatcher?: FleetConfigDispatcher) {}
 
-  /**
-   * Initiate a Staged Canary Fleet Rollout (5% -> 25% -> 50% -> 100%).
-   */
   async createRollout(input: {
     configVersionId: string;
     tenantId: string;
-    totalBranches?: number;
+    branchIds: string[];
     createdBy: string;
     autoRollbackOnBreach?: boolean;
     rollbackTargetVersion?: number;
   }): Promise<ConfigurationRollout> {
     const version = signedConfigService.getVersion(input.configVersionId);
-    if (!version) throw new Error(`Version ${input.configVersionId} not found`);
-
+    if (!version || version.tenantId !== input.tenantId) {
+      throw new Error(`Version ${input.configVersionId} not found`);
+    }
     if (version.status !== 'SIGNED') {
       throw new Error(`Cannot start rollout for version in status ${version.status}. Version must be SIGNED.`);
     }
+    if (!this.dispatcher) throw new Error('FLEET_CONFIG_DISPATCHER_NOT_CONFIGURED');
 
-    const totalBranches = input.totalBranches || 400;
+    const branchIds = Array.from(new Set(input.branchIds.filter(Boolean)));
+    if (branchIds.length === 0) throw new Error('NO_REPORTED_BRANCHES');
+
+    const totalBranches = branchIds.length;
     const rolloutId = `rollout-${randomUUID().slice(0, 8)}`;
-    const allBranches = this.generateRepresentativeCohort(totalBranches);
+    const percentages = [5, 25, 50, 100] as const;
+    const names = ['5% Canary Cohort', '25% Regional Cohort', '50% Half-Fleet Wave', '100% Full Fleet Deployment'];
+    const observationMinutes = [30, 60, 60, 120];
+    const successThresholds = [98, 98, 99, 99.5];
+    const failureThresholds = [2, 2, 1, 0.5];
 
-    const stages: RolloutStage[] = [
-      {
-        stageNumber: 1,
-        name: '5% Canary Cohort',
-        percentage: 5,
-        targetBranchCount: Math.ceil(totalBranches * 0.05), // 20 branches
-        minimumObservationMinutes: 30,
-        successThresholdPercent: 98,
-        maxFailureRatePercent: 2,
-      },
-      {
-        stageNumber: 2,
-        name: '25% Regional Cohort',
-        percentage: 25,
-        targetBranchCount: Math.ceil(totalBranches * 0.25), // 100 branches
-        minimumObservationMinutes: 60,
-        successThresholdPercent: 98,
-        maxFailureRatePercent: 2,
-      },
-      {
-        stageNumber: 3,
-        name: '50% Half-Fleet Wave',
-        percentage: 50,
-        targetBranchCount: Math.ceil(totalBranches * 0.5), // 200 branches
-        minimumObservationMinutes: 60,
-        successThresholdPercent: 99,
-        maxFailureRatePercent: 1,
-      },
-      {
-        stageNumber: 4,
-        name: '100% Full Fleet Deployment',
-        percentage: 100,
-        targetBranchCount: totalBranches, // 400 branches
-        minimumObservationMinutes: 120,
-        successThresholdPercent: 99.5,
-        maxFailureRatePercent: 0.5,
-      },
-    ];
+    const stages: RolloutStage[] = percentages.map((percentage, index) => ({
+      stageNumber: index + 1,
+      name: names[index]!,
+      percentage,
+      targetBranchCount: Math.ceil(totalBranches * (percentage / 100)),
+      minimumObservationMinutes: observationMinutes[index]!,
+      successThresholdPercent: successThresholds[index]!,
+      maxFailureRatePercent: failureThresholds[index]!,
+    }));
 
     const branchAssignments = new Map<string, BranchRolloutAssignment>();
-    allBranches.forEach((bId, idx) => {
-      let stageNumber = 4;
-      if (idx < stages[0]!.targetBranchCount) stageNumber = 1;
-      else if (idx < stages[1]!.targetBranchCount) stageNumber = 2;
-      else if (idx < stages[2]!.targetBranchCount) stageNumber = 3;
-
-      branchAssignments.set(bId, {
-        branchId: bId,
-        stageNumber,
+    branchIds.forEach((branchId, index) => {
+      const ordinal = index + 1;
+      const stage = stages.find((candidate) => ordinal <= candidate.targetBranchCount) ?? stages[3]!;
+      branchAssignments.set(branchId, {
+        branchId,
+        stageNumber: stage.stageNumber,
         status: 'PENDING',
       });
     });
+
+    const parentVersion = version.parentVersionId
+      ? signedConfigService.getVersion(version.parentVersionId)
+      : null;
+    const rollbackTargetVersion = input.rollbackTargetVersion ?? parentVersion?.version;
 
     const rollout: ConfigurationRollout = {
       rolloutId,
@@ -103,7 +87,7 @@ export class FleetRolloutControllerService {
       tenantId: input.tenantId,
       scope: { type: 'FLEET' },
       stages,
-      currentStageIndex: 0, // Starts at Stage 1 (5% Canary)
+      currentStageIndex: 0,
       status: 'RUNNING',
       branchAssignments,
       healthGates: {
@@ -113,30 +97,56 @@ export class FleetRolloutControllerService {
         maxGatewayCrashRate: 0,
       },
       autoRollbackOnBreach: input.autoRollbackOnBreach ?? true,
-      rollbackTargetVersion: input.rollbackTargetVersion || (version.parentVersionId ? 32 : undefined),
+      ...(rollbackTargetVersion !== undefined ? { rollbackTargetVersion } : {}),
       createdBy: input.createdBy,
       startedAt: new Date(),
     };
 
-    // Mark stage 1 branches as DEPLOYED
-    this.deployStage(rollout, 1);
     this.rollouts.set(rolloutId, rollout);
-
+    await this.dispatchStage(rollout, version, 1);
     return rollout;
   }
 
-  private deployStage(rollout: ConfigurationRollout, stageNumber: number): void {
-    for (const [branchId, assignment] of rollout.branchAssignments.entries()) {
-      if (assignment.stageNumber === stageNumber && assignment.status === 'PENDING') {
+  private async dispatchStage(
+    rollout: ConfigurationRollout,
+    version: ConfigurationVersion,
+    stageNumber: number,
+  ): Promise<void> {
+    if (!this.dispatcher) throw new Error('FLEET_CONFIG_DISPATCHER_NOT_CONFIGURED');
+
+    for (const assignment of rollout.branchAssignments.values()) {
+      if (assignment.stageNumber !== stageNumber || assignment.status !== 'PENDING') continue;
+      try {
+        await this.dispatcher.deploy({
+          rolloutId: rollout.rolloutId,
+          branchId: assignment.branchId,
+          version,
+        });
         assignment.status = 'DEPLOYED';
         assignment.appliedAt = new Date();
+      } catch (error) {
+        assignment.status = 'FAILED';
+        assignment.error = error instanceof Error ? error.message : 'CONFIGURATION_DISPATCH_FAILED';
       }
     }
   }
 
-  /**
-   * Evaluate health gates for current stage and advance if healthy.
-   */
+  recordBranchResult(
+    rolloutId: string,
+    branchId: string,
+    result: { status: 'VERIFIED' | 'FAILED' | 'OFFLINE'; error?: string },
+  ): BranchRolloutAssignment {
+    const rollout = this.rollouts.get(rolloutId);
+    if (!rollout) throw new Error(`Rollout ${rolloutId} not found`);
+    const assignment = rollout.branchAssignments.get(branchId);
+    if (!assignment) throw new Error(`Branch ${branchId} is not assigned to rollout ${rolloutId}`);
+
+    assignment.status = result.status;
+    assignment.error = result.error;
+    if (result.status === 'VERIFIED') assignment.verifiedAt = new Date();
+    return assignment;
+  }
+
   async evaluateAndAdvance(rolloutId: string): Promise<{
     status: ConfigurationRollout['status'];
     currentStage: RolloutStage;
@@ -146,104 +156,76 @@ export class FleetRolloutControllerService {
     const rollout = this.rollouts.get(rolloutId);
     if (!rollout) throw new Error(`Rollout ${rolloutId} not found`);
 
-    const currentStage = rollout.stages[rollout.currentStageIndex];
-    if (!currentStage) {
-      rollout.status = 'COMPLETED';
-      rollout.completedAt = new Date();
-      return {
-        status: rollout.status,
-        currentStage: rollout.stages[rollout.stages.length - 1]!,
-        healthPassed: true,
-        stageMetrics: { total: rollout.branchAssignments.size, verified: rollout.branchAssignments.size, failed: 0 },
-      };
+    const currentStage = rollout.stages[rollout.currentStageIndex]!;
+    const assignments = Array.from(rollout.branchAssignments.values())
+      .filter((assignment) => assignment.stageNumber <= currentStage.stageNumber);
+    const verified = assignments.filter((assignment) => assignment.status === 'VERIFIED').length;
+    const failed = assignments.filter(
+      (assignment) => assignment.status === 'FAILED' || assignment.status === 'OFFLINE',
+    ).length;
+    const completed = verified + failed;
+    const stageMetrics = { total: assignments.length, verified, failed };
+
+    if (completed < assignments.length) {
+      return { status: rollout.status, currentStage, healthPassed: false, stageMetrics };
     }
 
-    // Measure metrics for current stage
-    let totalInStage = 0;
-    let verifiedInStage = 0;
-    let failedInStage = 0;
-
-    for (const assignment of rollout.branchAssignments.values()) {
-      if (assignment.stageNumber <= currentStage.stageNumber) {
-        totalInStage++;
-        if (assignment.status === 'VERIFIED' || assignment.status === 'DEPLOYED') {
-          verifiedInStage++;
-        } else if (assignment.status === 'FAILED') {
-          failedInStage++;
-        }
-      }
-    }
-
-    const successRate = totalInStage > 0 ? (verifiedInStage / totalInStage) * 100 : 100;
+    const successRate = assignments.length > 0 ? (verified / assignments.length) * 100 : 0;
     const healthPassed = successRate >= currentStage.successThresholdPercent;
-
     if (!healthPassed) {
-      if (rollout.autoRollbackOnBreach) {
+      if (rollout.autoRollbackOnBreach && rollout.rollbackTargetVersion !== undefined) {
         await this.triggerRollback(
           rolloutId,
-          rollout.rollbackTargetVersion || 32,
-          `Health gate breach in Stage ${currentStage.stageNumber}: Success rate ${successRate.toFixed(1)}% < ${currentStage.successThresholdPercent}%`,
-          'SYSTEM_AUTO_ROLLBACK'
+          rollout.rollbackTargetVersion,
+          `Health gate breach in stage ${currentStage.stageNumber}`,
+          'SYSTEM_AUTO_ROLLBACK',
         );
       } else {
         rollout.status = 'PAUSED';
       }
-
-      return {
-        status: rollout.status,
-        currentStage,
-        healthPassed: false,
-        stageMetrics: { total: totalInStage, verified: verifiedInStage, failed: failedInStage },
-      };
+      return { status: rollout.status, currentStage, healthPassed: false, stageMetrics };
     }
 
-    // Advance to next stage if available
-    if (rollout.currentStageIndex < rollout.stages.length - 1) {
-      rollout.currentStageIndex++;
-      const nextStage = rollout.stages[rollout.currentStageIndex]!;
-      this.deployStage(rollout, nextStage.stageNumber);
-      return {
-        status: 'RUNNING',
-        currentStage: nextStage,
-        healthPassed: true,
-        stageMetrics: { total: totalInStage, verified: verifiedInStage, failed: failedInStage },
-      };
+    if (rollout.currentStageIndex >= rollout.stages.length - 1) {
+      rollout.status = 'COMPLETED';
+      rollout.completedAt = new Date();
+      return { status: rollout.status, currentStage, healthPassed: true, stageMetrics };
     }
 
-    // All stages finished
-    rollout.status = 'COMPLETED';
-    rollout.completedAt = new Date();
-    return {
-      status: 'COMPLETED',
-      currentStage,
-      healthPassed: true,
-      stageMetrics: { total: totalInStage, verified: verifiedInStage, failed: failedInStage },
-    };
+    rollout.currentStageIndex++;
+    const nextStage = rollout.stages[rollout.currentStageIndex]!;
+    const version = signedConfigService.getVersion(rollout.configVersionId);
+    if (!version) throw new Error(`Version ${rollout.configVersionId} not found`);
+    await this.dispatchStage(rollout, version, nextStage.stageNumber);
+    return { status: rollout.status, currentStage: nextStage, healthPassed: true, stageMetrics };
   }
 
-  /**
-   * Execute controlled rollback targeting previous approved version.
-   */
   async triggerRollback(
     rolloutId: string,
     targetVersion: number,
     reason: string,
-    initiatedBy: string,
-    incidentId?: string
+    _initiatedBy: string,
+    _incidentId?: string,
   ): Promise<ConfigurationRollout> {
     const rollout = this.rollouts.get(rolloutId);
     if (!rollout) throw new Error(`Rollout ${rolloutId} not found`);
+    if (!this.dispatcher) throw new Error('FLEET_CONFIG_DISPATCHER_NOT_CONFIGURED');
 
-    rollout.status = 'ROLLED_BACK';
+    rollout.status = 'ROLLING_BACK';
     rollout.rollbackTargetVersion = targetVersion;
-
     for (const assignment of rollout.branchAssignments.values()) {
-      if (assignment.status === 'DEPLOYED' || assignment.status === 'VERIFIED') {
-        assignment.status = 'PENDING';
-        assignment.error = `Rolled back to v${targetVersion}: ${reason}`;
-      }
+      if (assignment.status !== 'DEPLOYED' && assignment.status !== 'VERIFIED') continue;
+      await this.dispatcher.rollback({
+        rolloutId,
+        branchId: assignment.branchId,
+        targetVersion,
+        reason,
+      });
+      assignment.status = 'PENDING';
+      assignment.error = undefined;
     }
-
+    rollout.status = 'ROLLED_BACK';
+    rollout.completedAt = new Date();
     return rollout;
   }
 
@@ -251,8 +233,9 @@ export class FleetRolloutControllerService {
     return this.rollouts.get(rolloutId) || null;
   }
 
-  listRollouts(): ConfigurationRollout[] {
-    return Array.from(this.rollouts.values());
+  listRollouts(tenantId?: string): ConfigurationRollout[] {
+    return Array.from(this.rollouts.values())
+      .filter((rollout) => !tenantId || rollout.tenantId === tenantId);
   }
 }
 

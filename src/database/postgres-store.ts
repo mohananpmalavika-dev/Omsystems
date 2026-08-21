@@ -121,6 +121,12 @@ export class PostgresStore
    * Guarantees that superuser mgdhanyamohan is stored and properly configured in the database
    */
   async ensureSuperUser(): Promise<void> {
+    if (!PERMANENT_SUPERADMIN.password) {
+      // A deployment must explicitly configure bootstrap credentials. Do not
+      // create or update an account with an empty or shared default password.
+      return;
+    }
+
     try {
       // 1. Resolve or create default root tenant
       let tenantRes = await this.pool.query("SELECT id::text FROM tenants WHERE slug = 'omsystems' LIMIT 1").catch(() => ({ rows: [] }));

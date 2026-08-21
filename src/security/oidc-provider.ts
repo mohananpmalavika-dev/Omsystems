@@ -1,20 +1,32 @@
 /**
- * OpenID Connect (OIDC) Authentication Provider
- * 
- * Standard OpenID Connect (OIDC) and OAuth 2.0 Authorization Code Flow
- * with PKCE (Proof Key for Code Exchange) support for enterprise IdPs:
- * Microsoft Entra ID (Azure AD), Okta, Keycloak, Auth0, PingFederate, and generic OIDC.
+ * OIDC Authorization Code + PKCE provider.
+ *
+ * Production authentication is deliberately limited to an authorization-code
+ * exchange performed by openid-client. That library validates issuer,
+ * audience, expiration, nonce, and JWKS signatures from discovered metadata.
+ * This module never decodes and trusts a JWT payload.
  */
 
-import crypto, { createHash, randomBytes } from 'node:crypto';
+import {
+  authorizationCodeGrant,
+  buildAuthorizationUrl,
+  calculatePKCECodeChallenge,
+  ClientSecretBasic,
+  discovery,
+  fetchUserInfo,
+  None,
+  randomNonce,
+  randomPKCECodeVerifier,
+  randomState,
+  type Configuration,
+} from "openid-client";
+import { Redis } from "ioredis";
 
 export interface OIDCTenantConfig {
   tenantId: string;
-  provider: 'azure-ad' | 'okta' | 'auth0' | 'keycloak' | 'google' | 'generic';
+  provider: "azure-ad" | "okta" | "auth0" | "keycloak" | "google" | "generic";
   issuerUrl: string;
   authorizationEndpoint?: string;
-  tokenEndpoint?: string;
-  userinfoEndpoint?: string;
   clientId: string;
   clientSecret?: string;
   redirectUri: string;
@@ -49,228 +61,262 @@ export interface OIDCUserProfile {
   lastName?: string;
   displayName: string;
   groups?: string[];
-  rawClaims: Record<string, any>;
+  rawClaims: Record<string, unknown>;
+}
+
+interface OIDCStateStore {
+  set(state: string, session: OIDCSession, ttlSeconds: number): Promise<void>;
+  get(state: string): Promise<OIDCSession | undefined>;
+  delete(state: string): Promise<void>;
+}
+
+class MemoryOIDCStateStore implements OIDCStateStore {
+  private readonly sessions = new Map<string, OIDCSession>();
+
+  async set(state: string, session: OIDCSession, _ttlSeconds: number): Promise<void> {
+    this.sessions.set(state, session);
+  }
+
+  async get(state: string): Promise<OIDCSession | undefined> {
+    const session = this.sessions.get(state);
+    if (session && Date.now() - session.createdAt > 15 * 60 * 1000) {
+      this.sessions.delete(state);
+      return undefined;
+    }
+    return session;
+  }
+
+  async delete(state: string): Promise<void> {
+    this.sessions.delete(state);
+  }
+}
+
+class RedisOIDCStateStore implements OIDCStateStore {
+  constructor(
+    private readonly redis: Redis,
+    private readonly prefix = "sentinel:oidc:state:",
+  ) {}
+
+  async set(state: string, session: OIDCSession, ttlSeconds: number): Promise<void> {
+    await this.redis.set(`${this.prefix}${state}`, JSON.stringify(session), "EX", ttlSeconds);
+  }
+
+  async get(state: string): Promise<OIDCSession | undefined> {
+    const value = await this.redis.get(`${this.prefix}${state}`);
+    if (!value) return undefined;
+    try {
+      const parsed = JSON.parse(value) as Partial<OIDCSession>;
+      if (
+        typeof parsed.state !== "string" ||
+        typeof parsed.nonce !== "string" ||
+        typeof parsed.codeVerifier !== "string" ||
+        typeof parsed.tenantId !== "string" ||
+        typeof parsed.createdAt !== "number"
+      ) return undefined;
+      return parsed as OIDCSession;
+    } catch {
+      return undefined;
+    }
+  }
+
+  async delete(state: string): Promise<void> {
+    await this.redis.del(`${this.prefix}${state}`);
+  }
+}
+
+function createDefaultStateStore(): OIDCStateStore {
+  const redisUrl = process.env.REDIS_URL;
+  if (redisUrl) {
+    return new RedisOIDCStateStore(new Redis(redisUrl, {
+      enableOfflineQueue: false,
+      maxRetriesPerRequest: 1,
+      lazyConnect: false,
+    }));
+  }
+
+  if (process.env.NODE_ENV === "production") {
+    return {
+      set: async () => { throw new Error("OIDC_STATE_STORE_UNAVAILABLE"); },
+      get: async () => { throw new Error("OIDC_STATE_STORE_UNAVAILABLE"); },
+      delete: async () => { throw new Error("OIDC_STATE_STORE_UNAVAILABLE"); },
+    };
+  }
+
+  // Local state is intentionally available only outside production.
+  return new MemoryOIDCStateStore();
 }
 
 export class OIDCProvider {
-  private sessions: Map<string, OIDCSession> = new Map();
-  private configs: Map<string, OIDCTenantConfig> = new Map();
-  private cleanupInterval: NodeJS.Timeout | null = null;
+  private readonly configs = new Map<string, OIDCTenantConfig>();
+  private readonly clients = new Map<string, Configuration>();
+  private readonly stateTtlSeconds = 15 * 60;
 
-  constructor() {
-    this.cleanupInterval = setInterval(() => this.cleanupExpiredSessions(), 5 * 60 * 1000);
-    if (this.cleanupInterval.unref) {
-      this.cleanupInterval.unref();
-    }
-  }
+  constructor(private readonly stateStore: OIDCStateStore = createDefaultStateStore()) {}
 
-  /**
-   * Registers or updates an OIDC tenant configuration
-   */
   async registerTenant(config: OIDCTenantConfig): Promise<void> {
-    const normalizedConfig: OIDCTenantConfig = {
-      ...config,
-      scopes: config.scopes && config.scopes.length > 0 ? config.scopes : ['openid', 'profile', 'email'],
-      requirePKCE: config.requirePKCE ?? true,
-      requireStateValidation: config.requireStateValidation ?? true,
-      clockToleranceSeconds: config.clockToleranceSeconds ?? 60,
-      authorizationEndpoint: config.authorizationEndpoint || `${config.issuerUrl.replace(/\/$/, '')}/protocol/openid-connect/auth`,
-      tokenEndpoint: config.tokenEndpoint || `${config.issuerUrl.replace(/\/$/, '')}/protocol/openid-connect/token`,
-      userinfoEndpoint: config.userinfoEndpoint || `${config.issuerUrl.replace(/\/$/, '')}/protocol/openid-connect/userinfo`,
-    };
-    this.configs.set(config.tenantId, normalizedConfig);
-  }
-
-  /**
-   * Generates authorization URL with state, nonce, and PKCE challenge
-   */
-  async initiateLogin(tenantId: string, redirectUrl?: string): Promise<{ authUrl: string; state: string; nonce: string }> {
-    const config = this.configs.get(tenantId);
-    if (!config) {
-      throw new Error(`OIDC configuration not found for tenant: ${tenantId}`);
+    const issuer = new URL(config.issuerUrl);
+    const redirect = new URL(config.redirectUri);
+    if (process.env.NODE_ENV === "production" && (issuer.protocol !== "https:" || redirect.protocol !== "https:")) {
+      throw new Error("OIDC issuer and redirect URI must use HTTPS in production");
     }
 
-    const state = randomBytes(24).toString('hex');
-    const nonce = randomBytes(24).toString('hex');
-    const codeVerifier = this.generateCodeVerifier();
-    const codeChallenge = this.generateCodeChallenge(codeVerifier);
+    this.configs.set(config.tenantId, {
+      ...config,
+      issuerUrl: issuer.toString().replace(/\/$/, ""),
+      redirectUri: redirect.toString(),
+      scopes: config.scopes?.length ? config.scopes : ["openid", "profile", "email"],
+      // These checks are mandatory for the production authorization-code flow.
+      requirePKCE: true,
+      requireStateValidation: true,
+      clockToleranceSeconds: config.clockToleranceSeconds ?? 60,
+      sessionDurationSeconds: config.sessionDurationSeconds ?? 480 * 60,
+    });
+    this.clients.delete(config.tenantId);
+  }
 
-    this.sessions.set(state, {
+  async initiateLogin(tenantId: string, redirectUrl?: string): Promise<{ authUrl: string; state: string; nonce: string }> {
+    const config = this.requireTenant(tenantId);
+    const state = randomState();
+    const nonce = randomNonce();
+    const codeVerifier = randomPKCECodeVerifier();
+    const codeChallenge = await calculatePKCECodeChallenge(codeVerifier);
+
+    await this.stateStore.set(state, {
       state,
       nonce,
       codeVerifier,
       tenantId,
-      redirectUrl,
+      ...(redirectUrl ? { redirectUrl } : {}),
       createdAt: Date.now(),
-    });
+    }, this.stateTtlSeconds);
 
-    const params = new URLSearchParams({
+    const params: Record<string, string> = {
       client_id: config.clientId,
-      response_type: 'code',
+      response_type: "code",
       redirect_uri: config.redirectUri,
-      scope: (config.scopes || ['openid', 'profile', 'email']).join(' '),
+      scope: (config.scopes ?? ["openid", "profile", "email"]).join(" "),
       state,
       nonce,
-    });
+    };
+    params.code_challenge = codeChallenge;
+    params.code_challenge_method = "S256";
 
-    if (config.requirePKCE) {
-      params.set('code_challenge', codeChallenge);
-      params.set('code_challenge_method', 'S256');
+    // Discovery is mandatory before the callback exchange. This endpoint only
+    // controls the browser redirect and never validates identity claims.
+    let authUrl: string;
+    if (process.env.NODE_ENV === "production" || config.authorizationEndpoint) {
+      const client = await this.getClient(config);
+      authUrl = buildAuthorizationUrl(client, params).toString();
+    } else {
+      const authorizationEndpoint = this.getNonProductionEndpoint(config);
+      authUrl = `${authorizationEndpoint}${authorizationEndpoint.includes("?") ? "&" : "?"}${new URLSearchParams(params).toString()}`;
     }
-
-    const authEndpoint = config.authorizationEndpoint || `${config.issuerUrl.replace(/\/$/, '')}/oauth2/v2.0/authorize`;
-    const separator = authEndpoint.includes('?') ? '&' : '?';
-    const authUrl = `${authEndpoint}${separator}${params.toString()}`;
-
     return { authUrl, state, nonce };
   }
 
-  /**
-   * Handles authorization callback, validates state/nonce, exchanges code or decodes token claims
-   */
   async handleCallback(
     callbackParams: { code?: string; state: string; id_token?: string; error?: string; error_description?: string },
   ): Promise<{ profile: OIDCUserProfile; tenantId: string; redirectUrl?: string }> {
     if (callbackParams.error) {
-      throw new Error(`OIDC IdP returned error: ${callbackParams.error} - ${callbackParams.error_description || ''}`);
+      throw new Error(`OIDC IdP returned error: ${callbackParams.error} - ${callbackParams.error_description ?? ""}`);
     }
-
-    const session = this.sessions.get(callbackParams.state);
-    if (!session) {
-      throw new Error('Invalid or expired OIDC state');
-    }
-
-    // Single-use state verification
-    this.sessions.delete(callbackParams.state);
-
-    const config = this.configs.get(session.tenantId);
-    if (!config) {
-      throw new Error(`OIDC configuration missing for tenant: ${session.tenantId}`);
-    }
-
-    let claims: Record<string, any>;
-
     if (callbackParams.id_token) {
-      claims = this.parseAndValidateJwt(callbackParams.id_token, config, session.nonce);
-    } else if (callbackParams.code) {
-      // In production callback flow, exchange authorization code using token endpoint or standard mock/provider
-      claims = await this.exchangeCodeOrDecode(callbackParams.code, config, session);
-    } else {
-      throw new Error('Missing code or id_token in callback response');
+      throw new Error("OIDC_ID_TOKEN_CALLBACK_NOT_SUPPORTED_USE_AUTHORIZATION_CODE");
     }
+    if (!callbackParams.code) throw new Error("OIDC_AUTHORIZATION_CODE_REQUIRED");
 
-    const profile = this.mapClaimsToUserProfile(claims, config);
+    const session = await this.stateStore.get(callbackParams.state);
+    if (!session || session.state !== callbackParams.state) throw new Error("Invalid or expired OIDC state");
+    // State is single-use even if token exchange fails.
+    await this.stateStore.delete(callbackParams.state);
+
+    const config = this.requireTenant(session.tenantId);
+    const client = await this.getClient(config);
+    const callbackUrl = new URL(config.redirectUri);
+    callbackUrl.searchParams.set("code", callbackParams.code);
+    callbackUrl.searchParams.set("state", callbackParams.state);
+
+    const tokenSet = await authorizationCodeGrant(client, callbackUrl, {
+      expectedState: session.state,
+      expectedNonce: session.nonce,
+      pkceCodeVerifier: session.codeVerifier,
+    });
+    const claims = tokenSet.claims();
+    if (!claims?.sub) throw new Error("OIDC token response did not contain a validated ID token subject");
+
+    const userInfo = tokenSet.access_token && client.serverMetadata().userinfo_endpoint
+      ? await fetchUserInfo(client, tokenSet.access_token, claims.sub)
+      : undefined;
+    const allClaims = { ...claims, ...(userInfo ?? {}) } as Record<string, unknown>;
 
     return {
-      profile,
+      profile: this.mapClaimsToUserProfile(allClaims, config),
       tenantId: session.tenantId,
-      redirectUrl: session.redirectUrl,
+      ...(session.redirectUrl ? { redirectUrl: session.redirectUrl } : {}),
     };
   }
 
-  /**
-   * Maps extracted claims to canonical OIDCUserProfile using custom attribute mappings
-   */
-  private mapClaimsToUserProfile(claims: Record<string, any>, config: OIDCTenantConfig): OIDCUserProfile {
-    const mapping = config.attributeMapping || {};
-    
-    const userId = (mapping.userId && claims[mapping.userId]) ||
-      claims.sub || claims.oid || claims.uid || claims.email;
+  private async getClient(config: OIDCTenantConfig): Promise<Configuration> {
+    const existing = this.clients.get(config.tenantId);
+    if (existing) return existing;
 
-    const email = (mapping.email && claims[mapping.email]) ||
-      claims.email || claims.upn || claims.preferred_username || `${userId}@${config.tenantId}.local`;
+    const client = await discovery(
+      new URL(config.issuerUrl),
+      config.clientId,
+      {
+        ...(config.clientSecret ? { client_secret: config.clientSecret } : {}),
+        redirect_uris: [config.redirectUri],
+        response_types: ["code"],
+        token_endpoint_auth_method: config.clientSecret ? "client_secret_basic" : "none",
+      },
+      config.clientSecret ? ClientSecretBasic(config.clientSecret) : None(),
+    );
+    this.clients.set(config.tenantId, client);
+    return client;
+  }
 
-    const displayName = (mapping.displayName && claims[mapping.displayName]) ||
-      claims.name || claims.displayName || email;
+  private mapClaimsToUserProfile(claims: Record<string, unknown>, config: OIDCTenantConfig): OIDCUserProfile {
+    const mapping = config.attributeMapping ?? {};
+    const userId = this.claimString(claims, mapping.userId) ?? this.claimString(claims, "sub");
+    const email = this.claimString(claims, mapping.email) ?? this.claimString(claims, "email") ?? this.claimString(claims, "preferred_username");
+    if (!userId || !email) throw new Error("OIDC identity is missing required sub or email claims");
 
-    const firstName = (mapping.firstName && claims[mapping.firstName]) ||
-      claims.given_name || claims.first_name;
-
-    const lastName = (mapping.lastName && claims[mapping.lastName]) ||
-      claims.family_name || claims.last_name;
-
-    const rawGroups = (mapping.groups && claims[mapping.groups]) || claims.groups || claims.roles || [];
-    const groups = Array.isArray(rawGroups) ? rawGroups : [String(rawGroups)];
+    const displayName = this.claimString(claims, mapping.displayName) ?? this.claimString(claims, "name") ?? email;
+    const groupsValue = claims[mapping.groups ?? "groups"] ?? claims.roles;
+    const groups = Array.isArray(groupsValue) ? groupsValue.map(String) : groupsValue ? [String(groupsValue)] : [];
 
     return {
-      userId: String(userId),
-      email: String(email).toLowerCase(),
-      firstName: firstName ? String(firstName) : undefined,
-      lastName: lastName ? String(lastName) : undefined,
-      displayName: String(displayName),
+      userId,
+      email: email.toLowerCase(),
+      firstName: this.claimString(claims, mapping.firstName) ?? this.claimString(claims, "given_name"),
+      lastName: this.claimString(claims, mapping.lastName) ?? this.claimString(claims, "family_name"),
+      displayName,
       groups,
       rawClaims: claims,
     };
   }
 
-  /**
-   * Exchanges code for tokens or simulates secure token extraction in isolated test environments
-   */
-  private async exchangeCodeOrDecode(
-    code: string,
-    config: OIDCTenantConfig,
-    session: OIDCSession
-  ): Promise<Record<string, any>> {
-    // If the code is formatted as a signed test JWT, decode directly
-    if (code.split('.').length === 3) {
-      return this.parseAndValidateJwt(code, config, session.nonce);
-    }
-
-    // Default decoded claims based on subject session
-    return {
-      iss: config.issuerUrl,
-      sub: `user_${createHash('sha256').update(code).digest('hex').substring(0, 16)}`,
-      aud: config.clientId,
-      nonce: session.nonce,
-      exp: Math.floor(Date.now() / 1000) + 3600,
-      iat: Math.floor(Date.now() / 1000),
-      email: `user@${config.tenantId}.com`,
-      name: 'Enterprise User',
-      groups: ['Bank_Security_Operators'],
-    };
+  private claimString(claims: Record<string, unknown>, key: string | undefined): string | undefined {
+    const value = key ? claims[key] : undefined;
+    return typeof value === "string" && value.trim() ? value : undefined;
   }
 
-  /**
-   * Decodes and cryptographically validates JWT claims (exp, nbf, aud, nonce)
-   */
-  private parseAndValidateJwt(jwtString: string, config: OIDCTenantConfig, expectedNonce?: string): Record<string, any> {
-    const parts = jwtString.split('.');
-    if (parts.length !== 3) {
-      throw new Error('Invalid JWT format');
+  private getNonProductionEndpoint(config: OIDCTenantConfig): string {
+    if (process.env.NODE_ENV === "production") {
+      throw new Error("OIDC authorization endpoint must be configured or obtained through provider discovery");
     }
-
-    let payload: Record<string, any>;
-    try {
-      const decodedPayload = Buffer.from(parts[1]!, 'base64url').toString('utf8');
-      payload = JSON.parse(decodedPayload);
-    } catch {
-      throw new Error('Failed to decode JWT payload');
-    }
-
-    const now = Math.floor(Date.now() / 1000);
-    const tolerance = config.clockToleranceSeconds ?? 60;
-
-    if (payload.exp && payload.exp < now - tolerance) {
-      throw new Error('Token has expired');
-    }
-
-    if (payload.nbf && payload.nbf > now + tolerance) {
-      throw new Error('Token is not active yet');
-    }
-
-    if (expectedNonce && payload.nonce && payload.nonce !== expectedNonce) {
-      throw new Error('OIDC Nonce mismatch');
-    }
-
-    return payload;
+    const suffix = config.provider === "azure-ad"
+      ? "/oauth2/v2.0/authorize"
+      : config.provider === "keycloak"
+        ? "/protocol/openid-connect/auth"
+        : "/authorize";
+    return `${config.issuerUrl}${suffix}`;
   }
 
-  private generateCodeVerifier(): string {
-    return randomBytes(32).toString('base64url');
-  }
-
-  private generateCodeChallenge(verifier: string): string {
-    return createHash('sha256').update(verifier).digest('base64url');
+  private requireTenant(tenantId: string): OIDCTenantConfig {
+    const config = this.configs.get(tenantId);
+    if (!config) throw new Error(`OIDC configuration not found for tenant: ${tenantId}`);
+    return config;
   }
 
   getTenantConfig(tenantId: string): OIDCTenantConfig | undefined {
@@ -279,23 +325,7 @@ export class OIDCProvider {
 
   removeTenant(tenantId: string): void {
     this.configs.delete(tenantId);
-  }
-
-  private cleanupExpiredSessions(): void {
-    const now = Date.now();
-    const expiryWindowMs = 15 * 60 * 1000; // 15 minutes
-    for (const [state, session] of this.sessions.entries()) {
-      if (now - session.createdAt > expiryWindowMs) {
-        this.sessions.delete(state);
-      }
-    }
-  }
-
-  destroy(): void {
-    if (this.cleanupInterval) {
-      clearInterval(this.cleanupInterval);
-      this.cleanupInterval = null;
-    }
+    this.clients.delete(tenantId);
   }
 }
 

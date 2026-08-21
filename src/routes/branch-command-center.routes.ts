@@ -34,14 +34,14 @@ export async function registerBranchCommandCenterRoutes(app: FastifyInstance, st
       reply.code(403).send({ success: false, error: "Access denied" });
       return null;
     }
-    return { branch, tenantId: currentUser.tenantId };
+    return { branch, tenantId: currentUser.tenantId, user: currentUser };
   }
 
   const operationalState = async (request: FastifyRequest, reply: FastifyReply) => {
     const { branchId } = branchIdParamSchema.parse(request.params);
     const auth = await authorizeBranch(request, reply, branchId);
     if (!auth) return;
-    const snapshot = await snapshots.getBranchSnapshot(auth.tenantId, branchId);
+    const snapshot = await snapshots.getBranchSnapshot(auth.tenantId, branchId, false, auth.user);
     if (!snapshot) return reply.code(404).send({ success: false, error: "Branch not found" });
     const capacity = snapshot.storage.capacity;
     return reply.send({
@@ -98,7 +98,7 @@ export async function registerBranchCommandCenterRoutes(app: FastifyInstance, st
     const { branchId } = branchIdParamSchema.parse(request.params);
     const auth = await authorizeBranch(request, reply, branchId);
     if (!auth) return;
-    const snapshot = await snapshots.getBranchSnapshot(auth.tenantId, branchId);
+    const snapshot = await snapshots.getBranchSnapshot(auth.tenantId, branchId, false, auth.user);
     if (!snapshot) return reply.code(404).send({ success: false, error: "Branch not found" });
     return reply.send({
       branchId,
@@ -122,7 +122,7 @@ export async function registerBranchCommandCenterRoutes(app: FastifyInstance, st
     if (!camera) return reply.code(404).send({ success: false, error: "Camera not found" });
     const auth = await authorizeBranch(request, reply, camera.branchId);
     if (!auth) return;
-    const snapshot = await snapshots.getBranchSnapshot(auth.tenantId, camera.branchId);
+    const snapshot = await snapshots.getBranchSnapshot(auth.tenantId, camera.branchId, false, auth.user);
     const health = snapshot?.cameraList?.find((item) => item.id === cameraId);
     if (!health) return reply.code(404).send({ success: false, error: "Camera health telemetry not found" });
     return reply.send(health);
@@ -134,7 +134,7 @@ export async function registerBranchCommandCenterRoutes(app: FastifyInstance, st
     const { branchId } = branchIdParamSchema.parse(request.params);
     const auth = await authorizeBranch(request, reply, branchId);
     if (!auth) return;
-    const snapshot = await snapshots.getBranchSnapshot(auth.tenantId, branchId);
+    const snapshot = await snapshots.getBranchSnapshot(auth.tenantId, branchId, false, auth.user);
     if (!snapshot) return reply.code(404).send({ success: false, error: "Branch not found" });
     return reply.send((snapshot.cameraList ?? []).map((camera) => ({
       cameraId: camera.id,
@@ -158,7 +158,7 @@ export async function registerBranchCommandCenterRoutes(app: FastifyInstance, st
     const { branchId } = branchIdParamSchema.parse(request.params);
     const auth = await authorizeBranch(request, reply, branchId);
     if (!auth) return;
-    const snapshot = await snapshots.getBranchSnapshot(auth.tenantId, branchId);
+    const snapshot = await snapshots.getBranchSnapshot(auth.tenantId, branchId, false, auth.user);
     if (!snapshot) return reply.code(404).send({ success: false, error: "Branch not found" });
     return reply.send({ success: true, data: snapshot });
   });
@@ -168,7 +168,7 @@ export async function registerBranchCommandCenterRoutes(app: FastifyInstance, st
     const query = camerasQuerySchema.parse(request.query);
     const auth = await authorizeBranch(request, reply, branchId);
     if (!auth) return;
-    const snapshot = await snapshots.getBranchSnapshot(auth.tenantId, branchId);
+    const snapshot = await snapshots.getBranchSnapshot(auth.tenantId, branchId, false, auth.user);
     if (!snapshot) return reply.code(404).send({ success: false, error: "Branch not found" });
     let cameras = [...(snapshot.cameraList ?? [])];
     const filter = query.filter;
@@ -189,7 +189,7 @@ export async function registerBranchCommandCenterRoutes(app: FastifyInstance, st
     const query = eventsQuerySchema.parse(request.query);
     const auth = await authorizeBranch(request, reply, branchId);
     if (!auth) return;
-    const result = await snapshots.getBranchEvents(branchId, query);
+    const result = await snapshots.getBranchEvents(branchId, query, auth.user);
     return reply.send({ success: true, data: { ...result, limit: query.limit, offset: query.offset } });
   });
 
@@ -198,7 +198,7 @@ export async function registerBranchCommandCenterRoutes(app: FastifyInstance, st
       const { branchId } = branchIdParamSchema.parse(request.params);
       const auth = await authorizeBranch(request, reply, branchId);
       if (!auth) return;
-      const snapshot = await snapshots.getBranchSnapshot(auth.tenantId, branchId);
+      const snapshot = await snapshots.getBranchSnapshot(auth.tenantId, branchId, false, auth.user);
       if (!snapshot) return reply.code(404).send({ success: false, error: "Branch not found" });
       return reply.send({ success: true, data: snapshot[section] });
     };
@@ -212,7 +212,7 @@ export async function registerBranchCommandCenterRoutes(app: FastifyInstance, st
     const { branchId } = branchIdParamSchema.parse(request.params);
     const auth = await authorizeBranch(request, reply, branchId);
     if (!auth) return;
-    const snapshot = await snapshots.getBranchSnapshot(auth.tenantId, branchId, true);
+    const snapshot = await snapshots.getBranchSnapshot(auth.tenantId, branchId, true, auth.user);
     return reply.send({ success: true, data: snapshot, message: "Branch snapshot recomputed from current telemetry" });
   });
 }

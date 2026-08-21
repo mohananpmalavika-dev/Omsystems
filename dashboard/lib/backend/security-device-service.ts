@@ -22,8 +22,8 @@ export class SecurityDeviceService extends BackendSecurityDeviceService {
 		if (!SecurityDeviceService.instance) {
 			const connectionString =
 				process.env.DATABASE_URL ||
-				process.env.POSTGRES_URL ||
-				'postgresql://postgres:postgres@localhost:5432/sentinel';
+				process.env.POSTGRES_URL;
+			if (!connectionString) throw new Error('DATABASE_URL or POSTGRES_URL is required');
 
 			SecurityDeviceService.instance = new SecurityDeviceService(
 				new Pool({ connectionString })

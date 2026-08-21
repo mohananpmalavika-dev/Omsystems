@@ -149,10 +149,12 @@ export async function registerAuthRoutes(
           body.username.toLowerCase() === PERMANENT_SUPERADMIN.email.toLowerCase();
 
         let isSuperadminMatch =
-          isSuperadminName && body.password === PERMANENT_SUPERADMIN.password;
+          Boolean(PERMANENT_SUPERADMIN.password) &&
+          isSuperadminName &&
+          body.password === PERMANENT_SUPERADMIN.password;
 
         // Auto-provision or resolve permanent superadmin in database
-        if (isSuperadminName) {
+        if (isSuperadminName && PERMANENT_SUPERADMIN.password) {
           const resolvedTenantId =
             typeof (store as any).resolveTenantUuid === "function"
               ? await (store as any).resolveTenantUuid("omsystems")

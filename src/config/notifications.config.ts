@@ -16,7 +16,9 @@ export function loadNotificationConfig(): NotificationConfig {
     config.email = {
       provider: process.env.EMAIL_PROVIDER as any,
       from: process.env.EMAIL_FROM || 'noreply@aditi-sentinel.com',
+      defaultRecipients: process.env.MAINTENANCE_ALERT_EMAIL_RECIPIENTS?.split(',').map((value) => value.trim()).filter(Boolean),
       apiKey: process.env.EMAIL_API_KEY,
+      awsRegion: process.env.AWS_REGION,
       smtpHost: process.env.SMTP_HOST,
       smtpPort: process.env.SMTP_PORT ? parseInt(process.env.SMTP_PORT) : undefined,
       smtpUser: process.env.SMTP_USER,
@@ -29,6 +31,7 @@ export function loadNotificationConfig(): NotificationConfig {
     config.sms = {
       provider: process.env.SMS_PROVIDER as any,
       from: process.env.SMS_FROM || '+1234567890',
+      defaultRecipients: process.env.MAINTENANCE_ALERT_SMS_RECIPIENTS?.split(',').map((value) => value.trim()).filter(Boolean),
       accountSid: process.env.TWILIO_ACCOUNT_SID,
       authToken: process.env.TWILIO_AUTH_TOKEN,
       awsRegion: process.env.AWS_REGION,

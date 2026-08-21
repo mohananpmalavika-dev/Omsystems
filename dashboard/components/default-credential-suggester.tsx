@@ -6,6 +6,7 @@ import { useState } from "react";
 interface DefaultCredentialSuggesterProps {
   deviceId?: string;
   manufacturer?: string;
+  credentialOptions?: CredentialOption[];
   onSelectCredential: (username: string, password: string) => void;
 }
 
@@ -18,94 +19,11 @@ interface CredentialOption {
 }
 
 export function DefaultCredentialSuggester({
-  deviceId,
-  manufacturer,
+  credentialOptions = [],
   onSelectCredential,
 }: DefaultCredentialSuggesterProps) {
   const [showSuggestions, setShowSuggestions] = useState(true);
-
-  // Extract last 6 digits from device ID if available
-  const last6Digits = deviceId?.replace(/\D/g, '').slice(-6) || '';
-
-  // Build credential suggestions based on device info
-  const credentials: CredentialOption[] = [
-    {
-      username: 'admin',
-      password: 'RAM@4344',
-      label: 'admin / RAM@4344',
-      description: 'Zero-Touch Branch Security Password',
-      priority: 1,
-    },
-    {
-      username: 'admin',
-      password: 'Thathu@110',
-      label: 'admin / Thathu@110',
-      description: 'Zero-Touch DVR Security Password',
-      priority: 2,
-    },
-    {
-      username: 'admin',
-      password: 'admin123',
-      label: 'admin / admin123',
-      description: 'Hikvision / Dahua standard default',
-      priority: 3,
-    },
-    {
-      username: 'admin',
-      password: 'Admin@123',
-      label: 'admin / Admin@123',
-      description: 'CP Plus / Dahua common default',
-      priority: 4,
-    },
-    {
-      username: 'admin',
-      password: 'admin',
-      label: 'admin / admin',
-      description: 'Factory default for IP cameras',
-      priority: 5,
-    },
-    {
-      username: 'admin',
-      password: '12345',
-      label: 'admin / 12345',
-      description: 'Second most common default',
-      priority: 6,
-    },
-  ];
-
-  // Add device-specific credentials
-  if (last6Digits) {
-    credentials.push({
-      username: 'admin',
-      password: last6Digits,
-      label: `admin / ${last6Digits}`,
-      description: `Last 6 digits of device ID (${deviceId})`,
-      priority: 3,
-    });
-  }
-
-  // Add manufacturer-specific credentials
-  if (manufacturer?.toLowerCase().includes('truecloud')) {
-    credentials.push({
-      username: 'admin',
-      password: '888888',
-      label: 'admin / 888888',
-      description: 'TrueCloud common default',
-      priority: 4,
-    });
-  }
-
-  // Add blank password option
-  credentials.push({
-    username: 'admin',
-    password: '',
-    label: 'admin / (empty)',
-    description: 'Some cameras have blank password',
-    priority: 5,
-  });
-
-  // Sort by priority
-  credentials.sort((a, b) => a.priority - b.priority);
+  const credentials = [...credentialOptions].sort((a, b) => a.priority - b.priority);
 
   if (!showSuggestions) {
     return (
@@ -115,7 +33,7 @@ export function DefaultCredentialSuggester({
         onClick={() => setShowSuggestions(true)}
       >
         <Key size={16} />
-        Show default credentials
+        Show credential guidance
       </button>
     );
   }
@@ -125,7 +43,7 @@ export function DefaultCredentialSuggester({
       <div className="suggester-header">
         <div className="suggester-title">
           <Info size={18} />
-          <h4>Try Default Credentials</h4>
+          <h4>Use Provisioned Credentials</h4>
         </div>
         <button
           type="button"
@@ -137,11 +55,17 @@ export function DefaultCredentialSuggester({
       </div>
 
       <p className="suggester-description">
-        Click any option below to auto-fill the form with common default credentials:
+        Use credentials issued for this device by your approved provisioning or secrets workflow.
+        This interface does not include vendor or factory default passwords.
       </p>
 
       <div className="credential-options">
-        {credentials.map((cred, index) => (
+        {credentials.length === 0 ? (
+          <div className="credential-empty">
+            No device credentials are available to auto-fill. Enter them manually or load them
+            from the approved credential provider.
+          </div>
+        ) : credentials.map((cred, index) => (
           <button
             key={index}
             type="button"
@@ -162,7 +86,7 @@ export function DefaultCredentialSuggester({
 
       <div className="suggester-footer">
         <small>
-          💡 <strong>Tip:</strong> After successful login, change the password for security
+          <strong>Security:</strong> Never reuse factory credentials; rotate device passwords after provisioning.
         </small>
       </div>
 

@@ -7,22 +7,8 @@
 
 import { connectorRegistry } from '../connector-registry.js';
 
-// Video & Surveillance
-import { CPPlusConnector } from './cpplus-connector.js';
-import { OnvifConnector } from './onvif-connector.js';
-
-// Physical Security & Access Control
-import { AccessControlConnector } from './access-control-connector.js';
-
-// Notifications & Webhook
-import { SMTPConnector } from './smtp-connector.js';
-import { WebhookConnector } from './webhook-connector.js';
-
 // Identity & Access Management
-import { LDAPConnector } from './ldap-connector.js';
 import { AzureADConnector } from './azure-ad-connector.js';
-import { SAMLConnector } from './saml-connector.js';
-import { OktaConnector } from './okta-connector.js';
 
 // ITSM
 import { ServiceNowConnector } from './servicenow-connector.js';
@@ -37,29 +23,12 @@ import { WhatsAppConnector } from './whatsapp-connector.js';
 import { SplunkConnector } from './splunk-connector.js';
 import { SyslogConnector } from './syslog-connector.js';
 
-// Industrial
-import { MQTTConnector } from './mqtt-connector.js';
-
 /**
  * Register all available connectors
  */
 export function registerAllConnectors(): void {
-  // Video & Surveillance
-  connectorRegistry.register(new CPPlusConnector());
-  connectorRegistry.register(new OnvifConnector());
-
-  // Physical Security
-  connectorRegistry.register(new AccessControlConnector());
-
-  // Notifications & Webhooks
-  connectorRegistry.register(new SMTPConnector());
-  connectorRegistry.register(new WebhookConnector());
-
   // Identity & Access Management
-  connectorRegistry.register(new LDAPConnector());
   connectorRegistry.register(new AzureADConnector());
-  connectorRegistry.register(new SAMLConnector());
-  connectorRegistry.register(new OktaConnector());
 
   // ITSM
   connectorRegistry.register(new ServiceNowConnector());
@@ -74,8 +43,6 @@ export function registerAllConnectors(): void {
   connectorRegistry.register(new SplunkConnector());
   connectorRegistry.register(new SyslogConnector());
 
-  // Industrial
-  connectorRegistry.register(new MQTTConnector());
 }
 
 /**

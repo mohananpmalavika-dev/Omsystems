@@ -6,7 +6,8 @@
 import pg from 'pg';
 const { Pool } = pg;
 
-const DATABASE_URL = 'postgresql://aditivision_user:MbtxNqDCGbyKsRhXkRsFI2uandms2MWK@dpg-da0tdi1t0dsc73ahgp1g-a.ohio-postgres.render.com/aditivision';
+const DATABASE_URL = process.env.DATABASE_URL;
+if (!DATABASE_URL) throw new Error('DATABASE_URL is required');
 
 const pool = new Pool({
   connectionString: DATABASE_URL,

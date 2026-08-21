@@ -6,6 +6,8 @@ const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: { rejectUnauthorized: false }
 });
+const testPassword = process.env.TEST_PASSWORD;
+if (!testPassword) throw new Error('TEST_PASSWORD is required');
 
 try {
   console.log('🔍 Testing login with tenant slug\n');
@@ -28,7 +30,7 @@ if (result1.rows.length > 0) {
   console.log('  Username:', user.username);
   console.log('  Tenant Slug:', user.tenant_slug);
   console.log('  Status:', user.status);
-  const valid = await bcrypt.compare('Thathu@110', user.password_hash);
+  const valid = await bcrypt.compare(testPassword, user.password_hash);
   console.log('  Password valid:', valid ? 'YES' : 'NO');
 }
 console.log('');
@@ -42,7 +44,7 @@ if (result2.rows.length > 0) {
   console.log('  Username:', user.username);
   console.log('  Tenant Slug:', user.tenant_slug);
   console.log('  Status:', user.status);
-  const valid = await bcrypt.compare('Thathu@110', user.password_hash);
+  const valid = await bcrypt.compare(testPassword, user.password_hash);
   console.log('  Password valid:', valid ? 'YES' : 'NO');
 }
 console.log('');
@@ -76,4 +78,3 @@ if (user.locked_until) {
 } finally {
   await pool.end();
 }
-

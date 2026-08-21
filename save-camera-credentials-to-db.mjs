@@ -7,15 +7,19 @@
 import pg from 'pg';
 const { Client } = pg;
 
-const DATABASE_URL = 'postgresql://omcamera_y1ej_user:0roU7pJ6wA6o9TWB9m2hVeFIKeUZE2JR@dpg-d9m3b1rm8hqs739pr5ag-a.oregon-postgres.render.com/omcamera_y1ej';
+const DATABASE_URL = process.env.DATABASE_URL;
 
 // Camera credentials to save
 const CAMERA_CREDENTIALS = {
-  username: 'admin',
-  password: '4344@RaM4',
-  branch_id: '00000000-0000-4000-8000-000000000104',
-  edge_agent_id: '6a570d4a-2c71-415f-b59a-643cf50d55c5'
+  username: process.env.CAMERA_USERNAME,
+  password: process.env.CAMERA_PASSWORD,
+  branch_id: process.env.CAMERA_BRANCH_ID,
+  edge_agent_id: process.env.CAMERA_EDGE_AGENT_ID,
 };
+
+if (!DATABASE_URL || Object.values(CAMERA_CREDENTIALS).some((value) => !value)) {
+  throw new Error('DATABASE_URL, CAMERA_USERNAME, CAMERA_PASSWORD, CAMERA_BRANCH_ID, and CAMERA_EDGE_AGENT_ID are required at runtime');
+}
 
 async function main() {
   const client = new Client({
@@ -74,7 +78,7 @@ async function main() {
     console.log(`   Branch ID: ${CAMERA_CREDENTIALS.branch_id}`);
     console.log(`   Edge Agent ID: ${CAMERA_CREDENTIALS.edge_agent_id}`);
     console.log(`   Username: ${CAMERA_CREDENTIALS.username}`);
-    console.log(`   Password: ${CAMERA_CREDENTIALS.password}`);
+    console.log('   Password: [redacted]');
     console.log(`   Record ID: ${result.rows[0].id}`);
     
     // Show all credentials in database
