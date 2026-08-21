@@ -128,24 +128,31 @@ export class EventBusFactory {
     console.log(`[EventBusFactory] Initializing ${this.mode} event bus`);
 
     if (this.mode === 'redis') {
-      // Initialize Redis-based distributed event bus
-      const redisConfig = {
-        redis: {
-          host: config?.redis?.host || process.env.REDIS_HOST || 'localhost',
-          port: config?.redis?.port || parseInt(process.env.REDIS_PORT || '6379', 10),
-          password: config?.redis?.password || process.env.REDIS_PASSWORD,
-          db: config?.redis?.db || parseInt(process.env.REDIS_DB || '0', 10),
-          url: config?.redis?.url || process.env.REDIS_URL,
-        },
-        namespace: config?.namespace || process.env.EVENT_BUS_NAMESPACE || 'sentinel',
-      };
+      try {
+        // Initialize Redis-based distributed event bus
+        const redisConfig = {
+          redis: {
+            host: config?.redis?.host || process.env.REDIS_HOST || 'localhost',
+            port: config?.redis?.port || parseInt(process.env.REDIS_PORT || '6379', 10),
+            password: config?.redis?.password || process.env.REDIS_PASSWORD,
+            db: config?.redis?.db || parseInt(process.env.REDIS_DB || '0', 10),
+            url: config?.redis?.url || process.env.REDIS_URL,
+          },
+          namespace: config?.namespace || process.env.EVENT_BUS_NAMESPACE || 'sentinel',
+        };
 
-      const { initializeDistributedEventBus } = await import('../../backend/src/services/distributed-event-bus.service.js');
-      const distributedBus = initializeDistributedEventBus(redisConfig);
-      await distributedBus.connect();
+        const { initializeDistributedEventBus } = await import('../../backend/src/services/distributed-event-bus.service.js');
+        const distributedBus = initializeDistributedEventBus(redisConfig);
+        await distributedBus.connect();
 
-      this.instance = new RedisEventBusWrapper(distributedBus);
-      console.log('[EventBusFactory] Redis event bus initialized and connected');
+        this.instance = new RedisEventBusWrapper(distributedBus);
+        console.log('[EventBusFactory] Redis event bus initialized and connected');
+      } catch (error) {
+        console.error('[EventBusFactory] Failed to connect to Redis event bus, falling back to in-memory mode:', error instanceof Error ? error.message : error);
+        this.mode = 'memory';
+        this.instance = new InMemoryEventBus();
+        console.log('[EventBusFactory] In-memory event bus fallback initialized');
+      }
     } else {
       // In-memory event bus
       this.instance = new InMemoryEventBus();

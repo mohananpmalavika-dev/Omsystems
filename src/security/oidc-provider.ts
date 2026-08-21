@@ -127,11 +127,19 @@ class RedisOIDCStateStore implements OIDCStateStore {
 function createDefaultStateStore(): OIDCStateStore {
   const redisUrl = process.env.REDIS_URL;
   if (redisUrl) {
-    return new RedisOIDCStateStore(new Redis(redisUrl, {
-      enableOfflineQueue: false,
-      maxRetriesPerRequest: 1,
-      lazyConnect: false,
-    }));
+    try {
+      const client = new Redis(redisUrl, {
+        enableOfflineQueue: false,
+        maxRetriesPerRequest: 1,
+        lazyConnect: false,
+      });
+      client.on("error", (err) => {
+        console.warn("[OIDCProvider] Redis state store connection warning:", err.message);
+      });
+      return new RedisOIDCStateStore(client);
+    } catch (err) {
+      console.warn("[OIDCProvider] Failed to create Redis state store:", err);
+    }
   }
 
   if (process.env.NODE_ENV === "production") {
