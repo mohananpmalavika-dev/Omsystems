@@ -11,6 +11,12 @@ import { SecurityDeviceDiscoveryService as BackendSecurityDeviceDiscoveryService
 
 export class SecurityDeviceDiscoveryService extends BackendSecurityDeviceDiscoveryService {
 	private static instance: SecurityDeviceDiscoveryService | null = null;
+	private readonly tenantId: string;
+
+	constructor(pool: Pool) {
+		super(pool);
+		this.tenantId = process.env.DEFAULT_TENANT_ID || 'default-tenant';
+	}
 
 	static getInstance(): SecurityDeviceDiscoveryService {
 		if (!SecurityDeviceDiscoveryService.instance) {

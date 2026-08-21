@@ -33,6 +33,21 @@ interface CameraTile {
   colorHex: string;
 }
 
+type BranchSummary = {
+  id: string;
+  name?: string;
+};
+
+type CameraRecord = {
+  id: string;
+  name?: string;
+  branchId?: string;
+  streamUrl?: string;
+  status?: string;
+};
+
+const CAMERA_REQUEST_CONCURRENCY = 4;
+
 export function AdaptiveVideoWall() {
   const [gridMode, setGridMode] = useState<GridMode>(16);
   const [maximizedCameraId, setMaximizedCameraId] = useState<string | null>(null);
