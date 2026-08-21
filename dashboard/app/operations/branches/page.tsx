@@ -105,7 +105,7 @@ function normalizeBranch(raw: RawFleetBranch): FleetBranch | null {
 
   return {
     branchId,
-    branchCode: stringOrFallback(raw.branchCode ?? raw.code, branchId),
+    branchCode: stringOrFallback(raw.branchCode ?? raw.code, "N/A"),
     name,
     region: stringOrFallback(raw.region, "Unassigned"),
     operationalState: statusValue(raw.operationalState ?? raw.healthStatus),

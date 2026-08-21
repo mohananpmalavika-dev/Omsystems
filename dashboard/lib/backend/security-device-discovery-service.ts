@@ -53,6 +53,31 @@ export class SecurityDeviceDiscoveryService extends BackendSecurityDeviceDiscove
 
 		return result.jobs;
 	}
+
+	async startDiscovery(
+		branchId: string,
+		networkRanges: string | string[],
+		protocols?: string[],
+		initiatedBy?: string,
+		options?: any
+	): Promise<any> {
+		const addr = Array.isArray(networkRanges) ? networkRanges.join(',') : networkRanges;
+		const normalizedOptions = {
+			deepScan: false,
+			includeDeviceTypes: undefined,
+			excludeDeviceTypes: undefined,
+			...(options || {}),
+			...(protocols ? { protocolFilter: protocols } : {}),
+		};
+
+		return super.startDiscovery(
+			this.tenantId,
+			branchId,
+			addr,
+			normalizedOptions,
+			initiatedBy || 'dashboard-user'
+		);
+	}
 }
 
 export default SecurityDeviceDiscoveryService;

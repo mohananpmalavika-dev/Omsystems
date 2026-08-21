@@ -47,7 +47,7 @@ interface DeviceTypeBreakdown {
 
 export default function SecurityDeviceHubPage() {
   const searchParams = useSearchParams();
-  const selectedCategory = searchParams.get('category') || 'all';
+  const selectedCategory = searchParams?.get('category') || 'all';
   const [stats, setStats] = useState<DeviceStats>({
     totalDevices: 0,
     onlineDevices: 0,

@@ -83,7 +83,11 @@ interface DeviceCommand {
 
 export default function DeviceDetailPage() {
   const params = useParams();
-  const deviceId = params.deviceId as string;
+  const deviceId = (params && typeof params === 'object' && 'deviceId' in params && params.deviceId) as string | undefined;
+
+  if (!deviceId) {
+    return null;
+  }
 
   const [device, setDevice] = useState<SecurityDevice | null>(null);
   const [healthHistory, setHealthHistory] = useState<HealthSnapshot[]>([]);
