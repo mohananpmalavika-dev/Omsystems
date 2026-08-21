@@ -11,7 +11,7 @@ export const dynamic = 'force-dynamic';
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { branchId: string } }
+  { params }: { params: Promise<{ branchId: string }> }
 ) {
   try {
     const sessionToken = request.cookies.get('sentinel_access')?.value;
@@ -22,7 +22,7 @@ export async function GET(
       );
     }
 
-    const service = SecurityDeviceService.getInstance();
+    const { branchId } = await params;
     const posture = await service.getBranchSecurityPosture(params.branchId);
 
     if (!posture) {

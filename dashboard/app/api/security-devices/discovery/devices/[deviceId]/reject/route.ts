@@ -11,7 +11,7 @@ export const dynamic = 'force-dynamic';
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { deviceId: string } }
+  { params }: { params: Promise<{ deviceId: string }> }
 ) {
   try {
     const sessionToken = request.cookies.get('sentinel_access')?.value;
@@ -22,8 +22,10 @@ export async function POST(
       );
     }
 
+    const { deviceId } = await params;
+
     const service = SecurityDeviceDiscoveryService.getInstance();
-    await service.rejectDiscoveredDevice(params.deviceId);
+    await service.rejectDiscoveredDevice(deviceId);
 
     return NextResponse.json({ success: true });
   } catch (error) {

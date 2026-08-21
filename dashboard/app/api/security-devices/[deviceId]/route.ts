@@ -11,7 +11,7 @@ export const dynamic = 'force-dynamic';
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { deviceId: string } }
+  { params }: { params: Promise<{ deviceId: string }> }
 ) {
   try {
     const sessionToken = request.cookies.get('sentinel_access')?.value;
@@ -22,7 +22,7 @@ export async function GET(
       );
     }
 
-    const service = SecurityDeviceService.getInstance();
+    const { deviceId } = await params;
     const device = await service.getDeviceById(params.deviceId);
 
     if (!device) {
