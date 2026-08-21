@@ -181,28 +181,6 @@ export async function captureRtspRgbFrame(
   return result.ok && result.stdoutBuffer.length === width * height * 3 ? result.stdoutBuffer : null;
 }
 
-/** Extracts a clear JPEG frame from live RTSP stream for cloud visual monitoring. */
-export async function captureRtspJpegFrame(
-  uri: string,
-  ffmpegPath = "ffmpeg",
-  timeoutMs = 8_000,
-  width = 640,
-  height = 360,
-): Promise<Buffer | null> {
-  const result = await runProcess(ffmpegPath, [
-    "-v", "error",
-    "-rtsp_transport", "tcp",
-    "-i", uri,
-    "-frames:v", "1",
-    "-vf", `scale=${width}:${height}`,
-    "-q:v", "4",
-    "-f", "image2",
-    "-vcodec", "mjpeg",
-    "pipe:1",
-  ], timeoutMs);
-  return result.ok && result.stdoutBuffer.length > 500 ? result.stdoutBuffer : null;
-}
-
 export function parseFrameRate(value: string | undefined): number | null {
   if (!value) return null;
   const parts = value.split("/");

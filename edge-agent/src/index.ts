@@ -918,20 +918,8 @@ async function heartbeatAndReport() {
 
 async function syncCameraHeartbeatConfig() {
   const cameras = await control.listMonitoringCameras(agentId, config.EDGE_AGENT_VERSION);
-  const resolvedConfigs = await Promise.all(cameras.map(async (camera) => {
-    let rtspUrl = secrets.get(camera.connectionSecretRef);
-    if (!rtspUrl && camera.ipAddress) {
-      const storedCreds = await dbCredentialProvider.get(camera.ipAddress).catch(() => undefined);
-      const user = storedCreds?.username || config.CAMERA_USERNAME || "admin";
-      const rawPass = storedCreds?.password || config.CAMERA_PASSWORD || "Thathu@110";
-      const pass = encodeURIComponent(rawPass);
-      const port = camera.rtspPort || 554;
-      if (camera.recorderChannel) {
-        rtspUrl = `rtsp://${user}:${pass}@${camera.ipAddress}:${port}/cam/realmonitor?channel=${camera.recorderChannel}&subtype=1`;
-      } else {
-        rtspUrl = `rtsp://${user}:${pass}@${camera.ipAddress}:${port}/cam/realmonitor?channel=1&subtype=1`;
-      }
-    }
+  cameraHeartbeat.replaceCameras(cameras.map((camera) => {
+    const rtspUrl = secrets.get(camera.connectionSecretRef);
     return {
       id: camera.id,
       name: camera.name,
@@ -939,7 +927,6 @@ async function syncCameraHeartbeatConfig() {
       enabled: true,
     };
   }));
-  cameraHeartbeat.replaceCameras(resolvedConfigs);
   const channelsByRecorder = new Map<string, Array<{ cameraId: string; channel: number }>>();
   for (const camera of cameras) {
     if (!camera.recorderId || !camera.recorderChannel) continue;
