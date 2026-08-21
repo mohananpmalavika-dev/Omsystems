@@ -123,7 +123,8 @@ export async function registerBranchOperationalSnapshotRoutes(
     // 5. Branch Retention
     const handleRetention = async (request: any, reply: any) => {
       const { branchId } = branchParams.parse(request.params);
-      const tenantId = request.currentUser?.tenantId ?? "tenant-default";
+      const tenantId = request.currentUser?.tenantId;
+      if (!tenantId) return reply.code(401).send({ error: "authenticated_tenant_required" });
       const snapshot = await service.getSnapshot(tenantId, branchId);
 
       return reply.code(200).send({
@@ -148,7 +149,8 @@ export async function registerBranchOperationalSnapshotRoutes(
     // 6. Branch Network Health
     const handleNetwork = async (request: any, reply: any) => {
       const { branchId } = branchParams.parse(request.params);
-      const tenantId = request.currentUser?.tenantId ?? "tenant-default";
+      const tenantId = request.currentUser?.tenantId;
+      if (!tenantId) return reply.code(401).send({ error: "authenticated_tenant_required" });
       const snapshot = await service.getSnapshot(tenantId, branchId);
 
       return reply.code(200).send({
@@ -166,7 +168,8 @@ export async function registerBranchOperationalSnapshotRoutes(
     // 7. Branch Active Alerts
     const handleAlerts = async (request: any, reply: any) => {
       const { branchId } = branchParams.parse(request.params);
-      const tenantId = request.currentUser?.tenantId ?? "tenant-default";
+      const tenantId = request.currentUser?.tenantId;
+      if (!tenantId) return reply.code(401).send({ error: "authenticated_tenant_required" });
       const snapshot = await service.getSnapshot(tenantId, branchId);
 
       return reply.code(200).send({
@@ -186,7 +189,8 @@ export async function registerBranchOperationalSnapshotRoutes(
     // 8. Branch Operational Events Timeline
     const handleEvents = async (request: any, reply: any) => {
       const { branchId } = branchParams.parse(request.params);
-      const tenantId = request.currentUser?.tenantId ?? "tenant-default";
+      const tenantId = request.currentUser?.tenantId;
+      if (!tenantId) return reply.code(401).send({ error: "authenticated_tenant_required" });
       const snapshot = await service.getSnapshot(tenantId, branchId);
 
       return reply.code(200).send({

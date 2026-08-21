@@ -74,7 +74,7 @@ export class TamperDetectionCollector extends BaseEvidenceCollector {
           {
             collector: this.id,
             version: '1.0.0',
-            collectionMethod: this.isSimulation() ? 'simulation' : 'edge_agent_telemetry',
+            collectionMethod: 'edge_agent_telemetry',
           }
         )
       ];
@@ -89,15 +89,6 @@ export class TamperDetectionCollector extends BaseEvidenceCollector {
    * Get monitored devices
    */
   private async getMonitoredDevices(): Promise<Array<{ id: string; tamperDetectionEnabled: boolean }>> {
-    if (this.isSimulation()) {
-      return [
-        { id: 'device-001', tamperDetectionEnabled: true },
-        { id: 'device-002', tamperDetectionEnabled: true },
-        { id: 'device-003', tamperDetectionEnabled: false },
-      ];
-    }
-
-    // Real implementation would query device database
     return [];
   }
 
@@ -105,41 +96,13 @@ export class TamperDetectionCollector extends BaseEvidenceCollector {
    * Get tamper events since timestamp
    */
   private async getTamperEvents(since: Date): Promise<TamperEvent[]> {
-    if (this.isSimulation()) {
-      return [
-        {
-          deviceId: 'device-001',
-          deviceName: 'Edge Agent - Branch 5',
-          eventType: 'case_opened',
-          severity: 'high',
-          timestamp: new Date(Date.now() - 3 * 60 * 60 * 1000), // 3 hours ago
-          location: 'Branch 5, Server Room',
-          details: 'Device case opened without authorization',
-          resolved: false,
-        },
-      ];
-    }
-
-    // Real implementation would query tamper event database
     return [];
-  }
-
-  /**
-   * Check if running in simulation mode
-   */
-  private isSimulation(): boolean {
-    return process.env.TAMPER_SIMULATION_MODE === 'true' || !process.env.EDGE_AGENT_API;
   }
 
   /**
    * Resolve tamper event
    */
   async resolveEvent(deviceId: string, eventId: string, notes: string): Promise<void> {
-    if (this.isSimulation()) {
-      console.log(`[SIMULATION] Resolving tamper event ${eventId} for device ${deviceId}`);
-      return;
-    }
-
-    // TODO: Update tamper event in database
+    throw new Error(`tamper_event_store_unavailable:${deviceId}:${eventId}`);
   }
 }

@@ -10,11 +10,26 @@ import {
   snapshotService,
   videoAccessAuditService,
 } from "../media/index.js";
+import type { SessionPurpose, StreamQuality } from "../media/domain/media-session.types.js";
 
 export async function registerOnDemandMediaRoutes(app: FastifyInstance) {
   const required = (value: unknown, field: string): string => {
     if (typeof value !== "string" || !value.trim()) throw new Error(`${field}_required`);
     return value.trim();
+  };
+  const purpose = (value: unknown): SessionPurpose => {
+    const candidate = required(value, "purpose");
+    if (!["LIVE_VIEW", "VIDEO_WALL", "ALERT", "INCIDENT", "INVESTIGATION", "PLAYBACK"].includes(candidate)) {
+      throw new Error("invalid_purpose");
+    }
+    return candidate as SessionPurpose;
+  };
+  const quality = (value: unknown): StreamQuality => {
+    const candidate = required(value, "quality");
+    if (!["THUMBNAIL", "SUBSTREAM", "MAINSTREAM", "AUTO"].includes(candidate)) {
+      throw new Error("invalid_quality");
+    }
+    return candidate as StreamQuality;
   };
   /**
    * POST /api/v1/media/live-sessions & /v1/media/live-sessions
@@ -27,8 +42,8 @@ export async function registerOnDemandMediaRoutes(app: FastifyInstance) {
       cameraId: required(body.cameraId, "cameraId"),
       cameraName: body.cameraName,
       userId: required((request as any).currentUser?.id, "userId"),
-      purpose: required(body.purpose, "purpose"),
-      quality: required(body.quality, "quality"),
+      purpose: purpose(body.purpose),
+      quality: quality(body.quality),
       sourceIp: request.ip,
     });
 

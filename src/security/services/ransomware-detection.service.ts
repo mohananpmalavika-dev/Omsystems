@@ -287,19 +287,15 @@ export class RansomwareDetectionService extends EventEmitter implements IRansomw
   }
 
   private async collectDeviceMetrics(deviceId: string): Promise<Record<string, number>> {
-    // Collect real-time metrics
-    return {
-      fileOperationsPerMinute: Math.random() * 100,
-      storageGrowthRate: Math.random() * 50,
-      processCount: Math.floor(Math.random() * 200),
-      networkTraffic: Math.random() * 1000,
-      failedAuthAttempts: Math.floor(Math.random() * 10)
-    };
+    // Metrics must come from the device/edge telemetry pipeline. Returning
+    // generated values here would create false ransomware evidence.
+    return {};
   }
 
   private async collectHistoricalMetrics(deviceId: string, days: number): Promise<number[]> {
-    // Collect historical data
-    return Array.from({ length: days * 24 }, () => Math.random() * 100);
+    // Historical telemetry is supplied by the edge agent/database. Do not
+    // synthesize a baseline when that source is unavailable.
+    return [];
   }
 
   private async evaluatePattern(

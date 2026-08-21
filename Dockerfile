@@ -4,6 +4,8 @@ WORKDIR /app
 COPY package.json package-lock.json tsconfig.json ./
 COPY src/ ./src/
 COPY packages/ ./packages/
+COPY analytics-engine/ ./analytics-engine/
+COPY edge-agent/ ./edge-agent/
 RUN npm ci --ignore-scripts
 RUN npm run build
 

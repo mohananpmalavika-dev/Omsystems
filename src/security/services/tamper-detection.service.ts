@@ -253,8 +253,7 @@ export class TamperDetectionService extends EventEmitter implements ITamperDetec
    * Read sensor value
    */
   private async readSensor(deviceId: string, sensorType: string): Promise<number> {
-    // Placeholder - would integrate with actual sensor APIs
-    return Math.random() * 100;
+    throw new Error(`tamper_sensor_telemetry_unavailable:${deviceId}:${sensorType}`);
   }
 
   /**
@@ -277,11 +276,12 @@ export class TamperDetectionService extends EventEmitter implements ITamperDetec
   private async verifyEvidence(evidence: any[]): Promise<boolean> {
     for (const item of evidence) {
       if (item.checksum) {
-        // Verify checksum
-        // Placeholder logic
+        // A checksum is only trusted after it has been verified by the
+        // configured evidence store. This legacy service has no verifier.
+        return false;
       }
     }
-    return true;
+    return evidence.length === 0;
   }
 
   private generateId(): string {

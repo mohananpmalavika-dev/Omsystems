@@ -80,6 +80,10 @@ export class SecureBootEvidenceCollector implements SecureBootCollector {
         return healthyEvidence(attestation, now, 1.0);
       }
 
+      if (!attestation.quoteVerified || !attestation.nonceVerified || !attestation.pcrPolicyVerified) {
+        return unknownEvidence('NO_EVIDENCE');
+      }
+
       // If secure boot is disabled or verification failed
       if (!attestation.secureBootEnabled) {
         return unhealthyEvidence(attestation, now, 1.0);
@@ -115,19 +119,17 @@ export class SecureBootEvidenceCollector implements SecureBootCollector {
       // 3. Validate PCR values against policy
       // 4. Check boot chain integrity
 
-      // For now, return simplified attestation
+      // Secure-Boot state alone is not a TPM attestation. Keep the observed
+      // firmware state, but mark cryptographic verification unavailable.
       return {
         deviceId,
         attestationId: `sb-win-${deviceId}-${Date.now()}`,
         secureBootEnabled,
-        quoteVerified: secureBootEnabled, // Simplified: would verify TPM quote
-        nonceVerified: secureBootEnabled,
-        pcrPolicyVerified: secureBootEnabled,
-        pcrs: {
-          0: 'placeholder-pcr0-hash',
-          7: 'placeholder-pcr7-hash',
-        },
-        policyId: 'windows-default-sb-policy',
+        quoteVerified: false,
+        nonceVerified: false,
+        pcrPolicyVerified: false,
+        pcrs: {},
+        policyId: 'unconfigured',
         attestedAt: new Date(),
       };
     } catch (error) {
@@ -153,14 +155,11 @@ export class SecureBootEvidenceCollector implements SecureBootCollector {
         deviceId,
         attestationId: `sb-linux-${deviceId}-${Date.now()}`,
         secureBootEnabled,
-        quoteVerified: secureBootEnabled,
-        nonceVerified: secureBootEnabled,
-        pcrPolicyVerified: secureBootEnabled,
-        pcrs: {
-          0: 'placeholder-pcr0-hash',
-          7: 'placeholder-pcr7-hash',
-        },
-        policyId: 'linux-default-sb-policy',
+        quoteVerified: false,
+        nonceVerified: false,
+        pcrPolicyVerified: false,
+        pcrs: {},
+        policyId: 'unconfigured',
         attestedAt: new Date(),
       };
     } catch (mokError) {

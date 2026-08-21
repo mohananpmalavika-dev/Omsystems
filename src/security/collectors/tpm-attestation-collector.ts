@@ -75,7 +75,7 @@ export class TPMAttestationCollector extends BaseEvidenceCollector {
           {
             collector: this.id,
             version: '1.0.0',
-            collectionMethod: this.isSimulation() ? 'simulation' : 'tpm_api',
+            collectionMethod: 'tpm_api',
           }
         )
       ];
@@ -90,68 +90,13 @@ export class TPMAttestationCollector extends BaseEvidenceCollector {
    * Get devices with TPM capability
    */
   private async getDevicesWithTPM(): Promise<TPMAttestationData[]> {
-    // In real implementation, query edge agents for TPM status
-    // For simulation, return sample data
-    
-    if (this.isSimulation()) {
-      return [
-        {
-          deviceId: 'edge-agent-001',
-          attestationStatus: 'valid',
-          tpmVersion: '2.0',
-          pcr0Hash: 'abc123...',
-          pcr7Hash: 'def456...',
-          endorsementKey: 'ek-001',
-          lastAttestation: new Date(Date.now() - 2 * 60 * 60 * 1000), // 2 hours ago
-        },
-        {
-          deviceId: 'edge-agent-002',
-          attestationStatus: 'valid',
-          tpmVersion: '2.0',
-          pcr0Hash: 'ghi789...',
-          pcr7Hash: 'jkl012...',
-          endorsementKey: 'ek-002',
-          lastAttestation: new Date(Date.now() - 1 * 60 * 60 * 1000), // 1 hour ago
-        },
-        {
-          deviceId: 'edge-agent-003',
-          attestationStatus: 'not_configured',
-          tpmVersion: '2.0',
-          endorsementKey: 'ek-003',
-          lastAttestation: new Date(0),
-          attestationErrors: ['TPM not configured'],
-        },
-      ];
-    }
-
-    // Real implementation would call edge agent API
-    const devices: TPMAttestationData[] = [];
-    
-    // TODO: Query actual edge agents
-    // const response = await fetch('/api/edge-agents/tpm-status');
-    // devices = await response.json();
-    
-    return devices;
-  }
-
-  /**
-   * Check if running in simulation mode
-   */
-  private isSimulation(): boolean {
-    return process.env.TPM_SIMULATION_MODE === 'true' || !process.env.TPM_API_ENDPOINT;
+    return [];
   }
 
   /**
    * Trigger attestation for a device
    */
   async triggerAttestation(deviceId: string): Promise<void> {
-    // Real implementation would trigger TPM attestation on edge device
-    if (this.isSimulation()) {
-      console.log(`[SIMULATION] Triggering TPM attestation for device ${deviceId}`);
-      return;
-    }
-
-    // TODO: Call edge agent to perform attestation
-    // await fetch(`/api/edge-agents/${deviceId}/attest`, { method: 'POST' });
+    throw new Error(`tpm_attestation_transport_unavailable:${deviceId}`);
   }
 }

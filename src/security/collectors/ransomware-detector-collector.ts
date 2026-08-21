@@ -75,7 +75,7 @@ export class RansomwareDetectorCollector extends BaseEvidenceCollector {
           {
             collector: this.id,
             version: '1.0.0',
-            collectionMethod: this.isSimulation() ? 'simulation' : 'behavioral_analysis',
+            collectionMethod: 'behavioral_analysis',
           }
         )
       ];
@@ -90,15 +90,6 @@ export class RansomwareDetectorCollector extends BaseEvidenceCollector {
    * Get monitored devices
    */
   private async getMonitoredDevices(): Promise<Array<{ id: string; ransomwareDetectionEnabled: boolean }>> {
-    if (this.isSimulation()) {
-      return [
-        { id: 'device-001', ransomwareDetectionEnabled: true },
-        { id: 'device-002', ransomwareDetectionEnabled: true },
-        { id: 'device-003', ransomwareDetectionEnabled: true },
-      ];
-    }
-
-    // Real implementation would query device database
     return [];
   }
 
@@ -106,35 +97,13 @@ export class RansomwareDetectorCollector extends BaseEvidenceCollector {
    * Get ransomware indicators since timestamp
    */
   private async getRansomwareIndicators(since: Date): Promise<RansomwareIndicator[]> {
-    if (this.isSimulation()) {
-      // Return empty array to show "no threats detected"
-      return [];
-    }
-
-    // Real implementation would query threat detection database
     return [];
-  }
-
-  /**
-   * Check if running in simulation mode
-   */
-  private isSimulation(): boolean {
-    return process.env.RANSOMWARE_SIMULATION_MODE === 'true' || !process.env.THREAT_DETECTION_API;
   }
 
   /**
    * Contain ransomware threat
    */
   async containThreat(deviceId: string, indicatorId: string): Promise<void> {
-    if (this.isSimulation()) {
-      console.log(`[SIMULATION] Containing ransomware threat ${indicatorId} on device ${deviceId}`);
-      return;
-    }
-
-    // TODO: Trigger containment actions
-    // - Isolate device from network
-    // - Stop suspicious processes
-    // - Create forensic snapshot
-    // - Alert security team
+    throw new Error(`ransomware_containment_unavailable:${deviceId}:${indicatorId}`);
   }
 }
