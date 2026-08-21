@@ -26,47 +26,26 @@ import { StatusBadge } from "@/components/ui/status-badge";
 
 export default function BranchWorkspacePage() {
   const params = useParams();
-  const branchId = (params?.branchId as string) || "branch-178";
+  const branchId = typeof params?.branchId === "string" ? params.branchId : "";
 
   const [workspace, setWorkspace] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("overview");
+  const [error, setError] = useState<string | null>(null);
 
   const loadWorkspace = async () => {
     setLoading(true);
+    setError(null);
     try {
-      const res = await fetch(`/api/v1/operations/branches/${branchId}/workspace`);
-      if (res.ok) {
-        const data = await res.json();
-        if (data.success) {
-          setWorkspace(data.data);
-          return;
-        }
-      }
-      // Fallback
-      setWorkspace({
-        branch: {
-          branchId,
-          name: `Branch ${branchId}`,
-          branchCode: `BR-${branchId}`,
-          region: "West Zone",
-          operationalState: "HEALTHY",
-          internet: { state: "HEALTHY", mode: "Primary Fiber", latencyMs: 14 },
-          cameras: { healthy: 16, total: 16 },
-        },
-        cameras: Array.from({ length: 16 }, (_, i) => ({
-          cameraId: `cam-${i + 1}`,
-          name: `Camera ${i + 1} - ${i === 0 ? "Main Entrance" : i === 1 ? "Vault Room" : i === 2 ? "Cash Counter" : "Hallway"}`,
-          state: "HEALTHY",
-          fps: 25,
-          resolution: "1920x1080",
-          bitrateKbps: 2048,
-          isRecording: true,
-        })),
-        events: [],
-      });
+      if (!branchId) throw new Error("Branch identifier is missing");
+      const res = await fetch(`/api/v1/operations/branches/${encodeURIComponent(branchId)}/workspace`, { cache: "no-store" });
+      if (!res.ok) throw new Error(`Branch workspace request failed (${res.status})`);
+      const data = await res.json();
+      if (!data.success || !data.data) throw new Error("No authoritative branch workspace was returned");
+      setWorkspace(data.data);
     } catch (err) {
-      console.error("Failed to load branch workspace:", err);
+      setWorkspace(null);
+      setError(err instanceof Error ? err.message : "Branch workspace is unavailable");
     } finally {
       setLoading(false);
     }
@@ -77,6 +56,20 @@ export default function BranchWorkspacePage() {
   }, [branchId]);
 
   const branch = workspace?.branch;
+
+  if (loading) {
+    return <div className="p-8 text-sm text-slate-400">Loading live branch telemetry…</div>;
+  }
+
+  if (!workspace) {
+    return (
+      <div className="p-8 text-center text-sm text-slate-400">
+        <p className="font-semibold text-red-300">Live branch data is unavailable.</p>
+        <p className="mt-2 text-xs">{error}</p>
+        <button onClick={loadWorkspace} className="mt-4 rounded border border-slate-700 px-3 py-2 text-xs hover:bg-slate-800">Retry</button>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
@@ -96,7 +89,7 @@ export default function BranchWorkspacePage() {
                 {branch?.operationalState && <StatusBadge status={branch.operationalState} size="sm" />}
               </div>
               <div className="text-xs text-slate-400 mt-0.5">
-                {branch?.region} • 16 Active Channels • Primary WAN: {branch?.internet?.mode || "FIBER"}
+                {branch?.region ?? "Unassigned"} • {branch?.cameras?.working ?? 0}/{branch?.cameras?.total ?? 0} observed online • WAN: {branch?.internet?.mode ?? "Unknown"}
               </div>
             </div>
           </div>
@@ -124,7 +117,7 @@ export default function BranchWorkspacePage() {
         <div className="flex items-center gap-1 border-b border-slate-800 overflow-x-auto pb-px">
           {[
             { id: "overview", label: "Overview", icon: Layers },
-            { id: "cameras", label: "Cameras (16)", icon: Camera },
+            { id: "cameras", label: `Cameras (${workspace?.cameras?.length ?? 0})`, icon: Camera },
             { id: "recorders", label: "Recorders (NVR)", icon: Server },
             { id: "storage", label: "Storage & Retention", icon: Database },
             { id: "network", label: "Network & WAN", icon: Wifi },
@@ -162,7 +155,7 @@ export default function BranchWorkspacePage() {
                   {branch?.cameras?.notRecording > 0 ? (
                     <span className="text-rose-400 font-medium">{branch?.cameras?.notRecording} channels not recording</span>
                   ) : (
-                    <span className="text-emerald-400 font-medium">All 16 channels recording</span>
+                    <span className="text-emerald-400 font-medium">All observed channels recording</span>
                   )}
                 </div>
               </div>
@@ -170,11 +163,11 @@ export default function BranchWorkspacePage() {
               <div className="p-4 rounded-xl bg-slate-900/70 border border-slate-800 space-y-1.5">
                 <span className="text-xs text-slate-400 font-medium">Retention Compliance</span>
                 <div className="text-xl font-bold text-white">
-                  {branch?.retention?.observedDays} / {branch?.retention?.requiredDays} Days
+                  {branch?.retention?.observedDays ?? "Unknown"} / {branch?.retention?.requiredDays ?? "Unknown"} Days
                 </div>
                 <div className="text-xs">
                   {branch?.retention?.compliant ? (
-                    <span className="text-emerald-400 font-medium">Compliant (Policy: 90 Days)</span>
+                    <span className="text-emerald-400 font-medium">Compliant with configured policy</span>
                   ) : (
                     <span className="text-rose-400 font-medium">Regulatory Violation</span>
                   )}
@@ -187,17 +180,17 @@ export default function BranchWorkspacePage() {
                   {branch?.storage?.diskCount} Disks ({branch?.storage?.state})
                 </div>
                 <div className="text-xs text-slate-400">
-                  Min Free: {branch?.storage?.minFreePercent}% space
+                  Min Free: {branch?.storage?.minFreePercent !== undefined ? `${branch.storage.minFreePercent}%` : "Not reported"}
                 </div>
               </div>
 
               <div className="p-4 rounded-xl bg-slate-900/70 border border-slate-800 space-y-1.5">
                 <span className="text-xs text-slate-400 font-medium">WAN Connectivity</span>
                 <div className="text-xl font-bold text-white">
-                  {branch?.internet?.mode} ({branch?.internet?.latencyMs}ms)
+                  {branch?.internet?.mode ?? "Unknown"} {branch?.internet?.latencyMs !== undefined ? `(${branch.internet.latencyMs}ms)` : ""}
                 </div>
                 <div className="text-xs text-emerald-400 font-medium">
-                  VPN Encrypted Tunnel
+                  {workspace?.network?.vpnConnected === true ? "VPN connected" : workspace?.network?.vpnConnected === false ? "VPN disconnected" : "VPN status unavailable"}
                 </div>
               </div>
             </div>
@@ -205,7 +198,7 @@ export default function BranchWorkspacePage() {
             {/* Quick Live Preview Grid */}
             <div className="p-5 rounded-2xl bg-slate-900/60 border border-slate-800 space-y-3">
               <div className="flex items-center justify-between">
-                <h3 className="text-sm font-semibold text-white">Channel Streaming Matrix (16 Cameras)</h3>
+                <h3 className="text-sm font-semibold text-white">Channel Streaming Matrix ({workspace?.cameras?.length ?? 0} Cameras)</h3>
                 <span className="text-xs text-slate-400">Local Stream Pull on Demand</span>
               </div>
               <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2">
@@ -220,7 +213,7 @@ export default function BranchWorkspacePage() {
                     </div>
                     <div className="text-[10px] text-slate-400 truncate">{cam.zone}</div>
                     <div className="text-[10px] text-slate-500 flex justify-between">
-                      <span>{cam.fps} FPS</span>
+                      <span>{cam.fps !== undefined ? `${cam.fps} FPS` : "FPS unknown"}</span>
                       <span className={cam.isRecording ? "text-emerald-400" : "text-rose-400"}>
                         {cam.isRecording ? "REC" : "NO REC"}
                       </span>
@@ -255,7 +248,7 @@ export default function BranchWorkspacePage() {
                     <td className="px-4 py-3">
                       <StatusBadge status={cam.operationalState} size="sm" />
                     </td>
-                    <td className="px-4 py-3 text-emerald-400 font-medium">H.264 Main 1080p</td>
+                    <td className="px-4 py-3 text-slate-400">{cam.isStreaming ? "Observed available" : "Unavailable"}</td>
                     <td className="px-4 py-3">
                       {cam.isRecording ? (
                         <span className="text-emerald-400 font-medium">Recording</span>
@@ -263,8 +256,8 @@ export default function BranchWorkspacePage() {
                         <span className="text-rose-400 font-medium">Stopped</span>
                       )}
                     </td>
-                    <td className="px-4 py-3">{cam.fps} FPS • {cam.bitrateKbps} Kbps</td>
-                    <td className="px-4 py-3 text-slate-400">{cam.lastRecordedAt ? new Date(cam.lastRecordedAt).toLocaleTimeString() : "Now"}</td>
+                    <td className="px-4 py-3">{cam.fps !== undefined ? `${cam.fps} FPS` : "Not reported"}{cam.bitrateKbps !== undefined ? ` • ${cam.bitrateKbps} Kbps` : ""}</td>
+                    <td className="px-4 py-3 text-slate-400">{cam.lastRecordedAt ? new Date(cam.lastRecordedAt).toLocaleTimeString() : "Unavailable"}</td>
                   </tr>
                 ))}
               </tbody>
@@ -281,8 +274,8 @@ export default function BranchWorkspacePage() {
                   <div className="flex items-center gap-3">
                     <Server className="w-5 h-5 text-purple-400" />
                     <div>
-                      <h3 className="text-sm font-bold text-white">{rec.model}</h3>
-                      <div className="text-xs text-slate-400 font-mono">IP: {rec.ipAddress} • ID: {rec.recorderId}</div>
+                      <h3 className="text-sm font-bold text-white">{rec.model ?? rec.recorderId}</h3>
+                      <div className="text-xs text-slate-400 font-mono">{rec.ipAddress ? `IP: ${rec.ipAddress} • ` : ""}ID: {rec.recorderId}</div>
                     </div>
                   </div>
                   <StatusBadge status={rec.status} size="md" />
@@ -294,11 +287,11 @@ export default function BranchWorkspacePage() {
                   </div>
                   <div>
                     <span className="text-slate-400">NTP Clock Drift</span>
-                    <div className="font-semibold text-emerald-400 mt-0.5">{rec.clockOffsetSeconds}s (Synchronized)</div>
+                    <div className="font-semibold text-slate-200 mt-0.5">{rec.clockOffsetSeconds !== undefined ? `${rec.clockOffsetSeconds}s` : "Not reported"}</div>
                   </div>
                   <div>
                     <span className="text-slate-400">Driver Protocol</span>
-                    <div className="font-semibold text-slate-200 mt-0.5">CP PLUS SDK v4.2</div>
+                    <div className="font-semibold text-slate-200 mt-0.5">Reported by edge telemetry</div>
                   </div>
                 </div>
               </div>
@@ -316,7 +309,7 @@ export default function BranchWorkspacePage() {
                     <div className="flex items-center gap-3">
                       <HardDrive className="w-5 h-5 text-amber-400" />
                       <div>
-                        <h4 className="text-sm font-bold text-white">SATA Slot {disk.slot} ({disk.capacityTb} TB)</h4>
+                        <h4 className="text-sm font-bold text-white">{disk.slot !== undefined ? `SATA Slot ${disk.slot}` : "Disk"}{disk.capacityTb !== undefined ? ` (${disk.capacityTb} TB)` : ""}</h4>
                         <div className="text-xs text-slate-400">Disk ID: {disk.diskId}</div>
                       </div>
                     </div>
@@ -325,17 +318,17 @@ export default function BranchWorkspacePage() {
                   <div className="space-y-1.5 text-xs">
                     <div className="flex justify-between text-slate-400">
                       <span>Available Free Space</span>
-                      <span className="font-semibold text-slate-200">{disk.freePercent}% Free</span>
+                      <span className="font-semibold text-slate-200">{disk.freePercent !== undefined ? `${disk.freePercent}% Free` : "Not reported"}</span>
                     </div>
                     <div className="w-full h-2 bg-slate-800 rounded-full overflow-hidden">
                       <div
-                        className={`h-full ${disk.freePercent < 10 ? 'bg-rose-500' : 'bg-blue-500'}`}
-                        style={{ width: `${100 - disk.freePercent}%` }}
+                        className={`h-full ${disk.freePercent !== undefined && disk.freePercent < 10 ? 'bg-rose-500' : 'bg-blue-500'}`}
+                        style={{ width: disk.freePercent !== undefined ? `${100 - disk.freePercent}%` : "0%" }}
                       />
                     </div>
                   </div>
                   <div className="text-xs text-slate-400 pt-2 border-t border-slate-800">
-                    Verified Footage Retention: <strong className="text-slate-200">{disk.retentionDays} Days</strong>
+                    Verified Footage Retention: <strong className="text-slate-200">{disk.retentionDays !== undefined ? `${disk.retentionDays} Days` : "Not reported"}</strong>
                   </div>
                 </div>
               ))}

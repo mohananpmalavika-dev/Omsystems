@@ -32,28 +32,30 @@ export function BranchCommandCenter({
   const [activeFilter, setActiveFilter] = useState<CameraFilter>("ALL");
   const [loading, setLoading] = useState(!initialState);
   const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   // Fetch authoritative branch operational state and cameras
   const loadBranchData = useCallback(async () => {
     try {
-      if (typeof fetch !== "undefined") {
-        const [stateRes, camRes] = await Promise.all([
-          fetch(`/api/v1/branches/${encodeURIComponent(branchId)}/operational-state`),
-          fetch(`/api/v1/branches/${encodeURIComponent(branchId)}/cameras`),
-        ]);
-
-        if (stateRes.ok) {
-          const stateData: BranchOperationalState = await stateRes.json();
-          setState(stateData);
-        }
-
-        if (camRes.ok) {
-          const camData: BranchCameraOperationalState[] = await camRes.json();
-          setCameras(camData);
-        }
+      setError(null);
+      const [stateRes, camRes] = await Promise.all([
+        fetch(`/api/v1/branches/${encodeURIComponent(branchId)}/operational-state`, { cache: "no-store" }),
+        fetch(`/api/v1/branches/${encodeURIComponent(branchId)}/cameras`, { cache: "no-store" }),
+      ]);
+      if (!stateRes.ok || !camRes.ok) {
+        throw new Error(`Branch telemetry request failed (${stateRes.status}/${camRes.status})`);
       }
+      const [stateData, camData] = await Promise.all([
+        stateRes.json() as Promise<BranchOperationalState>,
+        camRes.json() as Promise<BranchCameraOperationalState[]>,
+      ]);
+      setState(stateData);
+      setCameras(camData);
     } catch (err) {
-      console.warn("Failed to fetch branch operational data:", err);
+      setState(null);
+      setCameras([]);
+      setAlerts([]);
+      setError(err instanceof Error ? err.message : "Branch telemetry is unavailable");
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -61,108 +63,8 @@ export function BranchCommandCenter({
   }, [branchId]);
 
   useEffect(() => {
-    // Initial fetch
     loadBranchData();
-
-    // Fallback seed data if running in demo/offline mode
-    if (!state) {
-      const fallbackState: BranchOperationalState = {
-        branchId,
-        branchCode: branchId.replace("branch-", ""),
-        branchName: "Aluva",
-        overallStatus: "CRITICAL",
-        internet: {
-          status: "ONLINE",
-          latencyMs: 21,
-          packetLossPercent: 0.4,
-          lastSeenAt: new Date().toISOString(),
-        },
-        gateway: {
-          status: "ONLINE",
-          lastHeartbeatAt: new Date().toISOString(),
-          version: "1.4.2",
-        },
-        recorder: {
-          total: 1,
-          online: 1,
-          offline: 0,
-          status: "ONLINE",
-        },
-        cameras: {
-          total: 16,
-          online: 15,
-          offline: 1,
-          recording: 14,
-          notRecording: 2,
-          unknown: 0,
-        },
-        storage: {
-          status: "WARNING",
-          disksHealthy: 1,
-          disksWarning: 1,
-          disksFailed: 0,
-        },
-        retention: {
-          requiredDays: 90,
-          actualDays: 61,
-          status: "VIOLATION",
-          oldestRecordingAt: "16-Jun-2026 03:12",
-          newestRecordingAt: "16-Aug-2026 04:22",
-          coveragePercent: 67.8,
-          missingIntervals: 2,
-        },
-        lastHealthPollAt: new Date().toISOString(),
-      };
-
-      const fallbackCameras: BranchCameraOperationalState[] = Array.from({ length: 16 }, (_, i) => {
-        const num = i + 1;
-        const isOffline = num === 4;
-        const isNoRecord = num === 7 || num === 14;
-        const isAlert = num === 12;
-
-        return {
-          cameraId: `cam-${branchId}-${String(num).padStart(2, "0")}`,
-          name: `CAM${String(num).padStart(2, "0")}`,
-          channelNumber: num,
-          health: {
-            connectivity: isOffline ? "OFFLINE" : "ONLINE",
-            recording: isNoRecord ? "NOT_RECORDING" : "RECORDING",
-            stream: isOffline ? "UNAVAILABLE" : "AVAILABLE",
-            videoLoss: isOffline ? "DETECTED" : "NORMAL",
-            tamper: "NORMAL",
-          },
-          ptzSupported: num === 1,
-          alertActive: isAlert,
-          alertSeverity: isAlert ? "CRITICAL" : undefined,
-        };
-      });
-
-      setState(fallbackState);
-      setCameras(fallbackCameras);
-      setAlerts([
-        {
-          id: "alt-01",
-          cameraId: `cam-${branchId}-12`,
-          cameraName: "CAM12 (Vault)",
-          severity: "P1",
-          title: "After-Hours Motion Detected",
-          message: "Unscheduled person detection in cash vault area",
-          detectedAt: "3 mins ago",
-          acknowledged: false,
-        },
-        {
-          id: "alt-02",
-          cameraId: `cam-${branchId}-07`,
-          cameraName: "CAM07 (Lobby)",
-          severity: "P2",
-          title: "Continuous Recording Stopped",
-          message: "Channel streaming is live but disk writing halted 49 mins ago",
-          detectedAt: "49 mins ago",
-          acknowledged: false,
-        },
-      ]);
-    }
-  }, [branchId, loadBranchData, state]);
+  }, [loadBranchData]);
 
   const handleRefresh = async () => {
     setRefreshing(true);
@@ -173,11 +75,23 @@ export function BranchCommandCenter({
     setAlerts((prev) => prev.filter((a) => a.id !== alertId));
   };
 
-  if (loading || !state) {
+  if (loading) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[400px] text-slate-400 gap-3">
         <Loader2 className="w-8 h-8 animate-spin text-sky-400" />
         <span className="text-sm font-mono">Loading Branch {branchId} Command Center...</span>
+      </div>
+    );
+  }
+
+  if (!state) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[400px] text-slate-400 gap-3 p-6 text-center">
+        <p className="text-sm font-semibold text-red-300">Live branch telemetry is unavailable.</p>
+        <p className="text-xs">{error ?? "No authoritative branch state was returned."}</p>
+        <button onClick={handleRefresh} className="rounded border border-slate-700 px-3 py-2 text-xs hover:bg-slate-800">
+          Retry
+        </button>
       </div>
     );
   }

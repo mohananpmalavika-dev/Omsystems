@@ -2287,7 +2287,9 @@ function isGatewayReady(gateway: EdgeAgent) {
   if ((gateway.status as string) === "revoked") return false;
   // Only treat a gateway as ready when it is actually connected; an offline
   // gateway with a valid ID would still cause a 409 on the scan endpoint.
-  return gateway.status === "online";
+  if (gateway.status !== "online" || !gateway.lastSeenAt) return false;
+  const lastSeenAt = Date.parse(gateway.lastSeenAt);
+  return Number.isFinite(lastSeenAt) && Date.now() - lastSeenAt <= 90_000;
 }
 
 function isScannerUnavailable(reason: unknown) {

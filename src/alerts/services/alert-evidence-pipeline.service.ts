@@ -17,7 +17,6 @@ export interface EvidenceJobOptions {
   occurredAt: Date;
   preEventSeconds?: number | undefined;
   postEventSeconds?: number | undefined;
-  mockFailure?: "RECORDER_OFFLINE" | "NO_RECORDING_FOUND" | "TIMEOUT" | undefined;
 }
 
 function mapFailureReason(code?: EvidenceFailureCode): AlertEvidenceFailure["reason"] {
@@ -70,11 +69,12 @@ export class AlertEvidencePipelineService {
     onProgress?.(evidence);
 
     try {
+      if (!options.cameraId) throw new Error("Camera identity is required for evidence capture");
       const record = await this.pipeline.enqueueEvidenceCapture({
         alertId: options.alertId,
         tenantId: options.tenantId,
         branchId: options.branchId,
-        cameraId: options.cameraId || "unknown",
+        cameraId: options.cameraId,
         alertType: "OPERATIONAL_ALERT",
         severity: "P2",
         detectedAt: options.occurredAt,
@@ -90,11 +90,11 @@ export class AlertEvidencePipelineService {
       };
 
       evidence = {
-        state: stateMap[record.status] || "READY",
+        state: stateMap[record.status] || "FAILED",
         snapshotState: record.snapshot ? "READY" : "FAILED",
         clipState: record.videoClip ? "READY" : "FAILED",
-        snapshotUrl: record.snapshot?.url || `/media/snapshots/${options.alertId}.jpg`,
-        clipUrl: record.videoClip?.url || `/media/clips/${options.alertId}.mp4`,
+        snapshotUrl: record.snapshot?.url,
+        clipUrl: record.videoClip?.url,
         clipDurationSeconds: preSec + postSec,
         preEventSeconds: preSec,
         postEventSeconds: postSec,

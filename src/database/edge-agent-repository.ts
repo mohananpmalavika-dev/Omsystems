@@ -3,6 +3,7 @@ import type { DiscoveredCamera, EdgeAgent, EdgeScanJob } from "../domain/models.
 import type { CameraDiscoveryInput, EdgeScanTarget } from "../control-plane-store.js";
 import type { DeviceIdentityRepository } from "./device-identity-repository.js";
 import type { ProvisioningStageId } from "../provisioning/stages.js";
+import { EDGE_AGENT_HEARTBEAT_TTL_MS } from "../edge-agent/presence.js";
 import { normalizeMacAddress, normalizeOnvifUuid } from "../device-identity.js";
 
 type AgentRow = {
@@ -32,6 +33,18 @@ function mapAgent(row: AgentRow): EdgeAgent {
     ...(row.credential_issued_at ? { credentialIssuedAt: row.credential_issued_at.toISOString() } : {}),
     ...(row.credential_revoked_at ? { credentialRevokedAt: row.credential_revoked_at.toISOString() } : {}),
   };
+}
+
+function edgeAgentStatusSql(alias = "") {
+  const field = (name: string) => alias ? `${alias}.${name}` : name;
+  const heartbeatInterval = `${EDGE_AGENT_HEARTBEAT_TTL_MS / 1000} seconds`;
+  return `CASE
+    WHEN ${field("credential_revoked_at")} IS NOT NULL THEN 'offline'
+    WHEN ${field("last_seen_at")} IS NOT NULL
+      AND ${field("last_seen_at")} >= now() - interval '${heartbeatInterval}' THEN 'online'
+    WHEN ${field("status")} = 'pending' THEN 'pending'
+    ELSE 'offline'
+  END`;
 }
 
 type ScanRow = {
@@ -148,12 +161,8 @@ export class EdgeAgentRepository {
   async listByBranch(branchId: string) {
     const result = await this.pool.query<AgentRow>(
       `SELECT id::text, branch_node_id::text, name, version,
-              CASE 
-                WHEN credential_revoked_at IS NOT NULL
-                  THEN 'offline'
-                ELSE 'online'
-              END AS status,
-              COALESCE(last_seen_at, now()) AS last_seen_at,
+               ${edgeAgentStatusSql()} AS status,
+               last_seen_at,
               public_media_url, device_uuid,
               credential_issued_at, credential_revoked_at
        FROM edge_agents
@@ -167,12 +176,8 @@ export class EdgeAgentRepository {
   async listByTenant(tenantId: string) {
     const result = await this.pool.query<AgentRow>(
       `SELECT e.id::text, e.branch_node_id::text, e.name, e.version,
-              CASE 
-                WHEN e.credential_revoked_at IS NOT NULL
-                  THEN 'offline'
-                ELSE 'online'
-              END AS status,
-              COALESCE(e.last_seen_at, now()) AS last_seen_at,
+               ${edgeAgentStatusSql("e")} AS status,
+               e.last_seen_at,
               e.public_media_url, e.device_uuid,
               e.credential_issued_at, e.credential_revoked_at
        FROM edge_agents e
@@ -187,12 +192,8 @@ export class EdgeAgentRepository {
   async get(id: string) {
     const result = await this.pool.query<AgentRow>(
       `SELECT id::text, branch_node_id::text, name, version,
-              CASE 
-                WHEN credential_revoked_at IS NOT NULL
-                  THEN 'offline'
-                ELSE 'online'
-              END AS status,
-              COALESCE(last_seen_at, now()) AS last_seen_at,
+               ${edgeAgentStatusSql()} AS status,
+               last_seen_at,
               public_media_url, device_uuid,
               credential_issued_at, credential_revoked_at
        FROM edge_agents WHERE id = $1`,

@@ -37,15 +37,15 @@ export interface PredictedFailureItem {
 }
 
 export interface FleetHealthBreakdown {
-  score: number; // 0 - 100
+  score: number | null; // 0 - 100 when observed
   trendPct: number; // e.g. +2.3% vs yesterday
   subscores: {
-    infrastructure: number;
-    cameras: number;
-    recording: number;
-    network: number;
-    storage: number;
-    retention: number;
+    infrastructure: number | null;
+    cameras: number | null;
+    recording: number | null;
+    network: number | null;
+    storage: number | null;
+    retention: number | null;
   };
 }
 
@@ -93,8 +93,8 @@ export interface AiOperationsBriefing {
 
 export interface CommandCenterSummary {
   generatedAt: Date;
-  lastTelemetryTimestamp: string;
-  agentHeartbeatSecondsAgo: number;
+  lastTelemetryTimestamp: string | null;
+  agentHeartbeatSecondsAgo: number | null;
 
   // Executive Operational Intelligence Metrics
   fleetHealth: FleetHealthBreakdown;
@@ -102,8 +102,8 @@ export interface CommandCenterSummary {
     total: number;
     highRiskCount: number;
     mediumRiskCount: number;
-    horizon: string;
-    nextLikelyFailure: PredictedFailureItem;
+    horizon: string | null;
+    nextLikelyFailure: PredictedFailureItem | null;
     allPredictions: PredictedFailureItem[];
   };
 
@@ -203,7 +203,7 @@ export interface BranchOperationalView {
   healthScore: number; // 0 - 100
 
   risk: {
-    level: "LOW" | "MEDIUM" | "HIGH";
+    level: "LOW" | "MEDIUM" | "HIGH" | "UNKNOWN";
     probabilityPct?: number;
     horizonHours?: number;
     indicator?: string;
@@ -211,8 +211,8 @@ export interface BranchOperationalView {
 
   internet: {
     state: string;
-    mode: string;
-    latencyMs: number;
+    mode?: string;
+    latencyMs?: number;
     packetLossPct?: number;
     jitterMs?: number;
   };
@@ -248,15 +248,15 @@ export interface BranchOperationalView {
   storage: {
     diskCount: number;
     state: "HEALTHY" | "WARNING" | "CRITICAL" | "UNKNOWN";
-    minFreePercent: number;
+    minFreePercent?: number;
     smartWarningsCount?: number;
     disks?: Array<{ name: string; status: string; smart: string }>;
   };
 
   retention: {
     requiredDays: number;
-    observedDays: number;
-    compliant: boolean;
+    observedDays?: number;
+    compliant?: boolean;
     displayTag: string; // e.g. "90d ✓"
   };
 
@@ -266,8 +266,8 @@ export interface BranchOperationalView {
   };
 
   telemetry: {
-    lastReportedAt: Date;
-    secondsAgo: number;
+    lastReportedAt?: Date;
+    secondsAgo?: number;
     isStale: boolean;
   };
 
@@ -282,41 +282,41 @@ export interface Branch360Workspace {
     cameraId: string;
     name: string;
     channelNumber: number;
-    zone: string;
+    zone?: string;
     operationalState: OperationalStatus;
     isStreaming: boolean;
     isRecording: boolean;
-    fps: number;
-    bitrateKbps: number;
+    fps?: number;
+    bitrateKbps?: number;
     lastRecordedAt?: string | undefined;
   }>;
   recorders: Array<{
     recorderId: string;
-    model: string;
-    ipAddress: string;
+    model?: string;
+    ipAddress?: string;
     status: string;
     channelsTotal: number;
     channelsRecording: number;
-    clockOffsetSeconds: number;
+    clockOffsetSeconds?: number;
     temperatureC?: number;
     cpuPct?: number;
   }>;
   disks: Array<{
     diskId: string;
-    slot: number;
-    capacityTb: number;
-    freePercent: number;
+    slot?: number;
+    capacityTb?: number;
+    freePercent?: number;
     smartStatus: string;
-    retentionDays: number;
+    retentionDays?: number;
   }>;
   network: {
-    primaryIsp: string;
-    backupIsp: string;
-    currentMode: string;
-    latencyMs: number;
-    packetLossPct: number;
+    primaryIsp?: string;
+    backupIsp?: string;
+    currentMode?: string;
+    latencyMs?: number;
+    packetLossPct?: number;
     jitterMs?: number;
-    vpnConnected: boolean;
+    vpnConnected?: boolean;
   };
   activeAlerts: Array<{
     id: string;

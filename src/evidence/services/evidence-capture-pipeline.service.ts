@@ -1,18 +1,14 @@
+import { randomUUID } from "node:crypto";
 import type {
   AlertEvidenceRecord,
   EvidenceCaptureSource,
-  EvidenceFailureCode,
   EvidenceManifest,
   EvidenceSlaSummary,
-  EvidenceStatus,
 } from "../domain/evidence.types.js";
 import { EvidenceHashVerifierService } from "./evidence-hash-verifier.service.js";
 import { EvidencePolicyService, evidencePolicyService } from "./evidence-policy.service.js";
 import { EvidenceStorageService, evidenceStorageService } from "./evidence-storage.service.js";
-import {
-  type AlertEvidenceClient,
-  type AlertEvidenceCaptureStatus,
-} from "../../alerts/evidence-capture.js";
+import { HttpAlertEvidenceClient, type AlertEvidenceClient, type AlertEvidenceKind } from "../../alerts/evidence-capture.js";
 
 export interface EvidenceJobRequest {
   alertId: string;
@@ -21,59 +17,37 @@ export interface EvidenceJobRequest {
   cameraId: string;
   alertType: string;
   severity: "P1" | "P2" | "P3" | "P4";
-  detectedAt?: Date | undefined;
-  preferredSource?: EvidenceCaptureSource | undefined;
-  mockFailureCode?: EvidenceFailureCode | undefined;
+  detectedAt?: Date;
+  preferredSource?: EvidenceCaptureSource;
 }
 
-/**
- * Authoritative Evidence Capture Pipeline Service
- *
- * Owns the full lifecycle of surveillance evidence acquisition,
- * idempotency enforcement, cryptographic integrity verification,
- * tamper-evident manifest generation, and resilient object persistence.
- */
+/** Captures only bytes returned by the configured recording engine. */
 export class EvidenceCapturePipelineService {
-  private readonly evidenceRecords = new Map<string, AlertEvidenceRecord>(); // key: alertId
-  private readonly manifests = new Map<string, EvidenceManifest>(); // key: evidenceId
-  private readonly latencies: { snapshotMs: number[]; completeMs: number[] } = {
-    snapshotMs: [],
-    completeMs: [],
-  };
+  private readonly evidenceRecords = new Map<string, AlertEvidenceRecord>();
+  private readonly manifests = new Map<string, EvidenceManifest>();
+  private readonly latencies: { snapshotMs: number[]; completeMs: number[] } = { snapshotMs: [], completeMs: [] };
 
   constructor(
     private readonly policyService: EvidencePolicyService = evidencePolicyService,
     private readonly storageService: EvidenceStorageService = evidenceStorageService,
     private readonly recordingClient?: AlertEvidenceClient,
-  ) {
-  }
+  ) {}
 
-  /**
-   * Enqueue and execute guaranteed evidence capture with idempotency protection.
-   */
   async enqueueEvidenceCapture(request: EvidenceJobRequest): Promise<AlertEvidenceRecord> {
-    // 1. Idempotency Check: Prevent duplicate jobs for the same alert
     const existing = this.evidenceRecords.get(request.alertId);
-    if (existing && (existing.status === "READY" || existing.status === "CAPTURING")) {
-      return existing;
-    }
+    if (existing && ["READY", "CAPTURING", "QUEUED"].includes(existing.status)) return existing;
 
     const detectedAt = request.detectedAt ?? new Date();
     const policy = this.policyService.getPolicy(request.alertType, request.severity);
-
-    const requestedStartAt = new Date(detectedAt.getTime() - policy.preEventSeconds * 1000);
-    const requestedEndAt = new Date(detectedAt.getTime() + policy.postEventSeconds * 1000);
-
-    const evidenceId = `ev-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
     const record: AlertEvidenceRecord = {
-      id: evidenceId,
+      id: `ev-${randomUUID()}`,
       alertId: request.alertId,
       tenantId: request.tenantId,
       branchId: request.branchId,
       cameraId: request.cameraId,
       status: "QUEUED",
-      requestedStartAt,
-      requestedEndAt,
+      requestedStartAt: new Date(detectedAt.getTime() - policy.preEventSeconds * 1000),
+      requestedEndAt: new Date(detectedAt.getTime() + policy.postEventSeconds * 1000),
       detectedAt,
       preEventSeconds: policy.preEventSeconds,
       postEventSeconds: policy.postEventSeconds,
@@ -81,163 +55,56 @@ export class EvidenceCapturePipelineService {
       maxAttempts: policy.retryCount,
       createdAt: new Date(),
     };
-
     this.evidenceRecords.set(request.alertId, record);
-
-    // 2. Execute capture
     return this.executeCapture(record, request);
   }
 
   async executeCapture(record: AlertEvidenceRecord, request: EvidenceJobRequest): Promise<AlertEvidenceRecord> {
-    record.status = "CAPTURING";
     const startTime = Date.now();
-
-    // Check for simulated failure code
-    if (request.mockFailureCode) {
-      record.status = "FAILED";
-      record.failureCode = request.mockFailureCode;
-      record.failureReason = `Evidence extraction failed: ${request.mockFailureCode}`;
-      record.completedAt = new Date();
-      record.latencyMs = Date.now() - startTime;
-      return record;
+    record.status = "CAPTURING";
+    if (!this.recordingClient) {
+      return this.fail(record, "UNSUPPORTED_CAPABILITY", "Recording-engine evidence client is not configured", startTime);
     }
 
     try {
-      // 1. Immediate Snapshot Capture (T0)
-      const snapshotBuffer = Buffer.from(
-        `EVIDENCE_SNAPSHOT_IMAGE_DATA_${record.alertId}_${record.cameraId}_${record.detectedAt.toISOString()}`
-      );
-      const snapSha256 = EvidenceHashVerifierService.computeSha256(snapshotBuffer);
-      const snapKey = this.storageService.formatStorageKey({
-        tenantId: record.tenantId,
-        branchId: record.branchId,
+      const requestedDuration = record.preEventSeconds + record.postEventSeconds;
+      const capture = await this.recordingClient.capture({
         alertId: record.alertId,
-        filename: "snapshot.jpg",
-        date: record.detectedAt,
+        cameraId: record.cameraId,
+        occurredAt: record.detectedAt.toISOString(),
+        clipSeconds: requestedDuration,
       });
-
-      const snapshotAsset = await this.storageService.putAsset({
-        storageKey: snapKey,
-        data: snapshotBuffer,
-        mimeType: "image/jpeg",
-        type: "SNAPSHOT",
-        sha256: snapSha256,
-      });
-
-      record.snapshot = snapshotAsset;
-      const snapLatency = Date.now() - startTime;
-      this.latencies.snapshotMs.push(snapLatency);
-
-      // 2. Video Clip Extraction
-      const totalClipDuration = record.preEventSeconds + record.postEventSeconds;
-      const clipBuffer = Buffer.from(
-        `EVIDENCE_MP4_VIDEO_CLIP_STREAM_${record.alertId}_${record.cameraId}_${totalClipDuration}s`
-      );
-      const clipSha256 = EvidenceHashVerifierService.computeSha256(clipBuffer);
-      const clipKey = this.storageService.formatStorageKey({
-        tenantId: record.tenantId,
-        branchId: record.branchId,
-        alertId: record.alertId,
-        filename: "evidence_clip.mp4",
-        date: record.detectedAt,
-      });
-
-      const clipAsset = await this.storageService.putAsset({
-        storageKey: clipKey,
-        data: clipBuffer,
-        mimeType: "video/mp4",
-        type: "VIDEO_CLIP",
-        sha256: clipSha256,
-        durationSeconds: totalClipDuration,
-      });
-
-      record.videoClip = clipAsset;
-      record.actualStartAt = record.requestedStartAt;
-      record.actualEndAt = record.requestedEndAt;
-      record.captureSource = request.preferredSource ?? "RECORDER_ARCHIVE";
-
-      // 3. Media Verification Stage
-      record.status = "VERIFYING";
-      const verification = EvidenceHashVerifierService.verifyMediaAsset({
-        data: clipBuffer,
-        expectedMinSizeBytes: 10,
-        expectedMinDurationSeconds: totalClipDuration * 0.9,
-        actualDurationSeconds: totalClipDuration,
-      });
-
-      if (verification.valid) {
-        record.status = "READY";
-      } else {
-        record.status = "PARTIAL";
-        record.failureCode = "INSUFFICIENT_PRE_EVENT";
+      if (capture.state === "failed") {
+        return this.fail(record, "ARCHIVE_SEARCH_FAILED", capture.error ?? "Recording engine rejected evidence capture", startTime);
+      }
+      if (capture.state === "queued" || capture.state === "capturing") {
+        record.status = "CAPTURING";
+        record.latencyMs = Date.now() - startTime;
+        this.evidenceRecords.set(record.alertId, record);
+        return record;
       }
 
-      // 4. Generate Tamper-Evident Manifest
-      const manifest = EvidenceHashVerifierService.generateManifest({
-        evidenceId: record.id,
-        alertId: record.alertId,
-        branchId: record.branchId,
-        cameraId: record.cameraId,
-        detectedAt: record.detectedAt.toISOString(),
-        requestedWindow: {
-          start: record.requestedStartAt.toISOString(),
-          end: record.requestedEndAt.toISOString(),
-        },
-        actualWindow: {
-          start: record.actualStartAt.toISOString(),
-          end: record.actualEndAt.toISOString(),
-        },
-        snapshot: {
-          sha256: snapshotAsset.sha256,
-          sizeBytes: snapshotAsset.sizeBytes,
-          url: snapshotAsset.url,
-        },
-        video: {
-          sha256: clipAsset.sha256,
-          durationSeconds: totalClipDuration,
-          sizeBytes: clipAsset.sizeBytes,
-          url: clipAsset.url,
-        },
-        source: record.captureSource,
-        generatedAt: new Date().toISOString(),
-      });
+      if (capture.snapshotAvailable) {
+        record.snapshot = await this.persistRemoteAsset(record, "snapshot", "snapshot.jpg", "image/jpeg");
+        this.latencies.snapshotMs.push(Date.now() - startTime);
+      }
+      if (capture.clipAvailable) {
+        record.videoClip = await this.persistRemoteAsset(record, "clip", "evidence_clip.mp4", "video/mp4", requestedDuration);
+      }
 
-      const manifestBuffer = Buffer.from(JSON.stringify(manifest, null, 2));
-      const manifestKey = this.storageService.formatStorageKey({
-        tenantId: record.tenantId,
-        branchId: record.branchId,
-        alertId: record.alertId,
-        filename: "manifest.json",
-        date: record.detectedAt,
-      });
-
-      const manifestAsset = await this.storageService.putAsset({
-        storageKey: manifestKey,
-        data: manifestBuffer,
-        mimeType: "application/json",
-        type: "MANIFEST",
-        sha256: manifest.manifestSha256,
-      });
-
-      record.manifest = manifestAsset;
-      record.manifestHash = manifest.manifestSha256;
-      this.manifests.set(record.id, manifest);
-
-      record.completedAt = new Date();
-      const completeLatency = Date.now() - startTime;
-      record.latencyMs = completeLatency;
-      this.latencies.completeMs.push(completeLatency);
-
-      this.evidenceRecords.set(record.alertId, record);
-      return record;
-    } catch (err: any) {
-      record.status = "FAILED";
-      record.failureCode = "STORAGE_UPLOAD_FAILED";
-      record.failureReason = err.message || "Failed to persist evidence";
+      record.captureSource = request.preferredSource ?? "RECORDER_ARCHIVE";
+      record.status = record.snapshot && record.videoClip ? "READY" : record.snapshot || record.videoClip ? "PARTIAL" : "FAILED";
+      if (record.status === "FAILED") {
+        record.failureCode = "RECORDING_NOT_FOUND";
+        record.failureReason = "Recording engine returned no evidence assets";
+      }
       record.completedAt = new Date();
       record.latencyMs = Date.now() - startTime;
+      this.latencies.completeMs.push(record.latencyMs);
       this.evidenceRecords.set(record.alertId, record);
       return record;
+    } catch (error) {
+      return this.fail(record, "ARCHIVE_SEARCH_FAILED", error instanceof Error ? error.message : "Evidence capture failed", startTime);
     }
   }
 
@@ -250,56 +117,79 @@ export class EvidenceCapturePipelineService {
   }
 
   async getSlaSummary(): Promise<EvidenceSlaSummary> {
-    const list = Array.from(this.evidenceRecords.values());
-    const total = list.length;
-    const ready = list.filter((e) => e.status === "READY").length;
-    const partial = list.filter((e) => e.status === "PARTIAL").length;
-    const failed = list.filter((e) => e.status === "FAILED").length;
-
-    const snapSorted = [...this.latencies.snapshotMs].sort((a, b) => a - b);
-    const compSorted = [...this.latencies.completeMs].sort((a, b) => a - b);
-
-    const medianSnap: number = (snapSorted.length > 0 ? snapSorted[Math.floor(snapSorted.length / 2)] : 120) ?? 120;
-    const p95Snap: number = (snapSorted.length > 0 ? snapSorted[Math.floor(snapSorted.length * 0.95)] : 450) ?? 450;
-    const medianComp: number = (compSorted.length > 0 ? compSorted[Math.floor(compSorted.length / 2)] : 1200) ?? 1200;
-    const p95Comp: number = (compSorted.length > 0 ? compSorted[Math.floor(compSorted.length * 0.95)] : 2800) ?? 2800;
-
+    const list = [...this.evidenceRecords.values()];
+    const snapshotLatencies = [...this.latencies.snapshotMs].sort((a, b) => a - b);
+    const completeLatencies = [...this.latencies.completeMs].sort((a, b) => a - b);
     const failureBreakdown: Record<string, number> = {};
-    for (const e of list) {
-      if (e.failureCode) {
-        failureBreakdown[e.failureCode] = (failureBreakdown[e.failureCode] ?? 0) + 1;
-      }
-    }
-
+    for (const record of list) if (record.failureCode) failureBreakdown[record.failureCode] = (failureBreakdown[record.failureCode] ?? 0) + 1;
+    const ready = list.filter((record) => record.status === "READY").length;
     return {
-      totalRequested: total,
+      totalRequested: list.length,
       completedReady: ready,
-      completedPartial: partial,
-      failedCount: failed,
-      readyPercentage: total === 0 ? 100 : Math.round((ready / total) * 10000) / 100,
-      medianSnapshotLatencyMs: medianSnap,
-      p95SnapshotLatencyMs: p95Snap,
-      medianCompleteEvidenceLatencyMs: medianComp,
-      p95CompleteEvidenceLatencyMs: p95Comp,
+      completedPartial: list.filter((record) => record.status === "PARTIAL").length,
+      failedCount: list.filter((record) => record.status === "FAILED").length,
+      readyPercentage: list.length > 0 ? Math.round((ready / list.length) * 10_000) / 100 : 0,
+      medianSnapshotLatencyMs: percentile(snapshotLatencies, 0.5),
+      p95SnapshotLatencyMs: percentile(snapshotLatencies, 0.95),
+      medianCompleteEvidenceLatencyMs: percentile(completeLatencies, 0.5),
+      p95CompleteEvidenceLatencyMs: percentile(completeLatencies, 0.95),
       failureBreakdown,
     };
   }
 
-  private seedDefaultEvidence() {
-    const now = new Date();
-
-    // 1. Intrusion Alert P1
-    void this.enqueueEvidenceCapture({
-      alertId: "alert-intrusion-p1-001",
-      tenantId: "tenant-bank-01",
-      branchId: "branch-thrissur-14",
-      cameraId: "cam-vault-01",
-      alertType: "intrusion",
-      severity: "P1",
-      detectedAt: new Date(now.getTime() - 3600_000),
+  private async persistRemoteAsset(
+    record: AlertEvidenceRecord,
+    kind: AlertEvidenceKind,
+    filename: string,
+    defaultMimeType: string,
+    durationSeconds?: number,
+  ) {
+    if (!this.recordingClient) throw new Error("Recording-engine evidence client is not configured");
+    const response = await this.recordingClient.asset(record.alertId, kind);
+    if (!response.ok) throw new Error(`Recording-engine ${kind} request failed (${response.status})`);
+    const data = Buffer.from(await response.arrayBuffer());
+    if (data.length === 0) throw new Error(`Recording-engine ${kind} response was empty`);
+    const sha256 = EvidenceHashVerifierService.computeSha256(data);
+    const storageKey = this.storageService.formatStorageKey({
+      tenantId: record.tenantId,
+      branchId: record.branchId,
+      alertId: record.alertId,
+      filename,
+      date: record.detectedAt,
     });
+    return this.storageService.putAsset({
+      storageKey,
+      data,
+      mimeType: response.headers.get("content-type") ?? defaultMimeType,
+      type: kind === "snapshot" ? "SNAPSHOT" : "VIDEO_CLIP",
+      sha256,
+      durationSeconds,
+    });
+  }
+
+  private fail(record: AlertEvidenceRecord, code: AlertEvidenceRecord["failureCode"], reason: string, startTime: number) {
+    record.status = "FAILED";
+    record.failureCode = code;
+    record.failureReason = reason;
+    record.completedAt = new Date();
+    record.latencyMs = Date.now() - startTime;
+    this.evidenceRecords.set(record.alertId, record);
+    return record;
   }
 }
 
-export const evidenceCapturePipeline = new EvidenceCapturePipelineService();
+function percentile(values: number[], fraction: number): number {
+  if (values.length === 0) return 0;
+  return values[Math.min(values.length - 1, Math.floor(values.length * fraction))] ?? 0;
+}
+
+const recordingEvidenceClient = process.env.RECORDING_ENGINE_URL && process.env.RECORDING_ENGINE_SHARED_KEY
+  ? new HttpAlertEvidenceClient(process.env.RECORDING_ENGINE_URL, process.env.RECORDING_ENGINE_SHARED_KEY)
+  : undefined;
+
+export const evidenceCapturePipeline = new EvidenceCapturePipelineService(
+  evidencePolicyService,
+  evidenceStorageService,
+  recordingEvidenceClient,
+);
 export const evidenceCapturePipelineService = evidenceCapturePipeline;

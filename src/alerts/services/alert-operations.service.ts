@@ -1,4 +1,5 @@
 import type { Pool } from "pg";
+import { randomUUID } from "node:crypto";
 import {
   ALLOWED_ALERT_TRANSITIONS,
   type AlertAuditEvent,
@@ -59,7 +60,7 @@ export class AlertOperationsService {
     }
   }
 
-  async ingestEvent(rawEvent: RawSourceEvent, options?: { mockEvidenceFailure?: "RECORDER_OFFLINE" | "NO_RECORDING_FOUND" | "TIMEOUT" }): Promise<OperationalAlert> {
+  async ingestEvent(rawEvent: RawSourceEvent): Promise<OperationalAlert> {
     const candidate = this.normalizer.normalize(rawEvent);
 
     // 1. Check Deduplication & Suppression Window
@@ -88,7 +89,7 @@ export class AlertOperationsService {
 
     // 2. Create New Alert Instance
     const now = candidate.occurredAt;
-    const alertId = `alert-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    const alertId = `alert-${randomUUID()}`;
 
     // SLA calculation based on severity
     const responseMinutes = candidate.severity === "P1" ? 2 : candidate.severity === "P2" ? 5 : 15;
@@ -148,7 +149,6 @@ export class AlertOperationsService {
         branchId: candidate.branch.id,
         cameraId: candidate.camera?.id,
         occurredAt: now,
-        mockFailure: options?.mockEvidenceFailure,
       },
       (updatedEvidence) => {
         alert.evidence = updatedEvidence;
@@ -382,23 +382,7 @@ export class AlertOperationsService {
     const alert = this.alerts.get(alertId);
     if (!alert) throw new Error(`Alert ${alertId} not found`);
 
-    const sessionId = `live-session-${alertId}-${Date.now()}`;
-    const expiresAt = new Date(Date.now() + 15 * 60_000); // 15 mins
-    const playbackUrl = `/media/live/streams/${alert.camera?.id ?? "cam-01"}.webrtc`;
-
-    alert.evidence.liveStreamSessionId = sessionId;
-    alert.evidence.liveStreamPlaybackUrl = playbackUrl;
-
-    this.addAuditEvent(alertId, alert.tenantId, "EVIDENCE_VIEWED", actorId, "Operator", {
-      session: "LIVE_WEBRTC",
-    });
-
-    return {
-      sessionId,
-      protocol: "webrtc",
-      playbackUrl,
-      expiresAt,
-    };
+    throw new Error(`Live media session provider is not configured for alert ${alertId}`);
   }
 
   async getAlert(alertId: string): Promise<OperationalAlert | null> {
@@ -458,7 +442,7 @@ export class AlertOperationsService {
     metadata?: Record<string, unknown>,
   ) {
     const event: AlertAuditEvent = {
-      id: `audit-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      id: `audit-${randomUUID()}`,
       alertId,
       tenantId,
       action,

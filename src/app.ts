@@ -198,6 +198,7 @@ import { MemoryStore } from "./store.js";
 import { RuntimeGuard } from "./platform/runtime-guard.js";
 import type { EdgePresenceCacheContract } from "./platform/edge-presence-cache.js";
 import type { ManagedEdgeTunnelProvider } from "./platform/managed-edge-tunnel.js";
+import { isFreshEdgeAgent } from "./edge-agent/presence.js";
 
 declare module "fastify" {
   interface FastifyRequest {
@@ -1207,8 +1208,8 @@ export async function buildApp(options?: {
     }
     const selectedAgent = body.edgeAgentId
       ? agents.find((agent) => agent.id === body.edgeAgentId)
-      : agents.find((agent) => agent.status === "online");
-    if (!selectedAgent || selectedAgent.status !== "online") {
+      : agents.find(isFreshEdgeAgent);
+    if (!selectedAgent || !isFreshEdgeAgent(selectedAgent)) {
       return reply.code(409).send({
         error: "edge_agent_not_connected",
         message: "Connect a Branch Gateway or local scanner to the camera network before scanning.",
@@ -1278,8 +1279,8 @@ export async function buildApp(options?: {
     }
     const selectedAgent = body.edgeAgentId
       ? agents.find((agent) => agent.id === body.edgeAgentId)
-      : agents.find((agent) => agent.status === "online");
-    if (!selectedAgent || selectedAgent.status !== "online") {
+      : agents.find(isFreshEdgeAgent);
+    if (!selectedAgent || !isFreshEdgeAgent(selectedAgent)) {
       return reply.code(409).send({
         error: "edge_agent_not_connected",
         message: "Connect a Branch Gateway or local scanner to the camera network before scanning.",

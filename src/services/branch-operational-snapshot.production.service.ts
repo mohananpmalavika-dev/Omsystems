@@ -302,7 +302,8 @@ export class BranchOperationalSnapshotService {
       const health = mapHealth(telemetryStatus(item, policy));
       const state = recorderState(health);
       const reportedType = metricString(item, "type");
-      const type = (["DVR", "NVR", "Hybrid", "Server"] as const).find((candidate) => candidate.toLowerCase() === reportedType?.toLowerCase()) ?? "Unknown";
+      const type: "DVR" | "NVR" | "Hybrid" | "Server" | "Unknown" =
+        (["DVR", "NVR", "Hybrid", "Server"] as const).find((candidate) => candidate.toLowerCase() === reportedType?.toLowerCase()) ?? "Unknown";
       return {
         id: item.deviceId,
         name: metricString(item, "name") ?? item.deviceId,

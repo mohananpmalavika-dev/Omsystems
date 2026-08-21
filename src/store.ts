@@ -1,4 +1,5 @@
 import { createHash, randomBytes, randomUUID } from "node:crypto";
+import { isFreshEdgeAgent } from "./edge-agent/presence.js";
 import type { ProvisioningStageId } from "./provisioning/stages.js";
 import type {
   AccessGrant,
@@ -1519,7 +1520,16 @@ export class MemoryStore {
   async listEdgeAgentsByBranch(branchId: string) {
     return [...this.edgeAgents.values()].filter(
       (agent) => agent.branchId === branchId,
-    );
+    ).map((agent) => ({
+      ...agent,
+      status: agent.credentialStatus === "revoked"
+        ? "offline" as const
+        : agent.status === "pending"
+          ? "pending" as const
+          : isFreshEdgeAgent(agent)
+            ? "online" as const
+            : "offline" as const,
+    }));
   }
 
   async heartbeatEdgeAgent(id: string, version: string, publicMediaUrl?: string) {
