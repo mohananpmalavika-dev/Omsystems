@@ -32,18 +32,25 @@ export interface FaceEnrollmentConfig {
   imageStoragePath?: string;
 }
 
+export interface FaceDetector {
+  detect(imageData: Buffer, width: number, height: number): Promise<FaceDetection[]>;
+}
+
 export class FaceEnrollmentService {
   private db: Pool;
   private recognitionService: FaceRecognitionService;
   private config: FaceEnrollmentConfig;
+  private faceDetector?: FaceDetector;
 
   constructor(
     db: Pool,
     recognitionService: FaceRecognitionService,
     config?: Partial<FaceEnrollmentConfig>,
+    faceDetector?: FaceDetector,
   ) {
     this.db = db;
     this.recognitionService = recognitionService;
+    this.faceDetector = faceDetector;
     this.config = {
       maxImagesPerPerson: 10,
       minImagesPerPerson: 1,
@@ -261,26 +268,22 @@ export class FaceEnrollmentService {
           .ensureAlpha()
           .toBuffer({ resolveWithObject: true });
 
-        // Detect faces (we need a face detector here)
-        // For now, assume entire image is face - in production, integrate face detector
-        const mockDetection: FaceDetection = {
-          boundingBox: { x: 0.1, y: 0.1, width: 0.8, height: 0.8 },
-          landmarks: {
-            leftEye: { x: 0.35, y: 0.35 },
-            rightEye: { x: 0.65, y: 0.35 },
-            nose: { x: 0.5, y: 0.5 },
-            leftMouth: { x: 0.4, y: 0.7 },
-            rightMouth: { x: 0.6, y: 0.7 },
-          },
-          confidence: 0.95,
-        };
+        if (!this.faceDetector) {
+          results.push({ success: false, error: 'Face detector is not configured' });
+          continue;
+        }
+        const detections = await this.faceDetector.detect(rawBuffer.data, metadata.width, metadata.height);
+        if (detections.length !== 1) {
+          results.push({ success: false, error: detections.length === 0 ? 'No face detected' : 'Exactly one face must be present' });
+          continue;
+        }
 
         // Process face
         const result = await this.recognitionService.processFaceForEnrollment(
           rawBuffer.data,
           metadata.width,
           metadata.height,
-          mockDetection,
+          detections[0]!,
         );
 
         if (result.success) {

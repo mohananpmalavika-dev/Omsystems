@@ -380,7 +380,6 @@ export interface DeviceInventoryRecord {
 }
 
 export interface LiveSessionResponse {
-  demo?: boolean;
   sessionId?: string;
   cameraId: string;
   expiresAt?: string;

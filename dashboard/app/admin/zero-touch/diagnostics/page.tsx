@@ -21,81 +21,54 @@ import {
 } from "lucide-react";
 
 export default function ZeroTouchDiagnosticsPage() {
-  const [selectedBranch, setSelectedBranch] = useState("A005");
+  const [selectedBranch, setSelectedBranch] = useState("");
   const [diagnostics, setDiagnostics] = useState<any | null>(null);
+  const [branches, setBranches] = useState<Array<{ branchId: string; branchName: string }>>([]);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
 
   const fetchDiagnostics = async (branchId: string) => {
+    if (!branchId) return;
     setLoading(true);
+    setError(null);
     try {
       const res = await fetch(`/api/v1/zero-touch/diagnostics/${branchId}`);
       const data = await res.json();
-      if (data.success) {
-        setDiagnostics(data.data);
-      }
-    } catch {
-      // Mock fallback
-      setDiagnostics({
-        branchId,
-        agentId: `agent-${branchId.toLowerCase()}-gw1`,
-        generatedAt: new Date().toISOString(),
-        mTLSStatus: {
-          clientCertSerial: "5A:18:9B:4C:33:01",
-          san: `agent-${branchId.toLowerCase()}.kryptonvision.internal`,
-          thumbprint: "SHA256:7B8F9A01C4E2551029486103A8921104882194819048",
-          isValid: true,
-          expiresAt: new Date(Date.now() + 365 * 24 * 3600 * 1000).toISOString(),
-        },
-        networkDiagnostics: {
-          gatewayIp: "192.168.1.1",
-          detectedSubnets: ["192.168.1.0/24"],
-          onvifMulticastReachability: true,
-          arpTableEntries: 24,
-          dnsLatencyMs: 4.2,
-          packetLossPct: 0.01,
-        },
-        rawProbes: [
-          {
-            protocol: "ONVIF_WS_DISCOVERY",
-            targetIp: "239.255.255.250:3702",
-            requestPayload: '<?xml version="1.0" encoding="utf-8"?><soap:Envelope xmlns:soap="http://www.w3.org/2003/05/soap-envelope" xmlns:wsa="http://schemas.xmlsoap.org/ws/2004/08/addressing" xmlns:d="http://schemas.xmlsoap.org/ws/2005/04/discovery"><soap:Header><wsa:To>urn:schemas-xmlsoap-org:ws:2005:04:discovery</wsa:To><wsa:Action>http://schemas.xmlsoap.org/ws/2005/04/discovery/Probe</wsa:Action><wsa:MessageID>urn:uuid:7c8b28f0-32b0-4f6c-829d-9a84b0f924b1</wsa:MessageID></soap:Header><soap:Body><d:Probe><d:Types>dn:NetworkVideoTransmitter</d:Types></d:Probe></soap:Body></soap:Envelope>',
-            responsePayload: '<?xml version="1.0" encoding="utf-8"?><soap:Envelope xmlns:soap="http://www.w3.org/2003/05/soap-envelope" xmlns:d="http://schemas.xmlsoap.org/ws/2005/04/discovery"><soap:Body><d:ProbeMatches><d:ProbeMatch><d:XAddrs>http://192.168.1.10/onvif/device_service</d:XAddrs><d:Scopes>onvif://www.onvif.org/type/NetworkVideoTransmitter onvif://www.onvif.org/name/CP-UNR-416T2</d:Scopes></d:ProbeMatch></d:ProbeMatches></soap:Body></soap:Envelope>',
-            latencyMs: 18,
-            status: "SUCCESS_200",
-          },
-          {
-            protocol: "CPPLUS_CGI_CONFIG",
-            targetIp: "192.168.1.10:80",
-            requestPayload: "GET /cgi-bin/configManager.cgi?action=getConfig&name=ChannelTitle HTTP/1.1\r\nHost: 192.168.1.10\r\nAuthorization: Digest username=\"admin\"...",
-            responsePayload: "table.ChannelTitle[0].Name=Teller 1 (Cash Counter)\ntable.ChannelTitle[1].Name=Teller 2 (Cash Counter)\ntable.ChannelTitle[2].Name=Vault Strong Room Entry\ntable.ChannelTitle[3].Name=Public ATM Lobby",
-            latencyMs: 32,
-            status: "SUCCESS_200",
-          },
-          {
-            protocol: "RTSP_DESCRIBE_SDP",
-            targetIp: "192.168.1.10:554",
-            requestPayload: "DESCRIBE rtsp://192.168.1.10:554/cam/realmonitor?channel=1&subtype=0 RTSP/1.0\r\nCSeq: 2\r\nAccept: application/sdp",
-            responsePayload: "RTSP/1.0 200 OK\r\nCSeq: 2\r\nContent-Type: application/sdp\r\n\r\nv=0\r\no=- 1600000000 1600000000 IN IP4 192.168.1.10\r\ns=Media Presentation\r\nm=video 0 RTP/AVP 96\r\na=rtpmap:96 H264/90000\r\na=fmtp:96 packetization-mode=1;profile-level-id=4D4028",
-            latencyMs: 44,
-            status: "SUCCESS_200",
-          },
-        ],
-        agentLogs: [
-          `[INFO] [${new Date().toISOString()}] Agent daemon initialized on branch ${branchId}`,
-          `[INFO] [${new Date().toISOString()}] mTLS mutual handshake completed in 142ms`,
-          `[INFO] [${new Date().toISOString()}] Local network scan swept 254 IP addresses across 192.168.1.0/24`,
-          `[INFO] [${new Date().toISOString()}] Discovered 1x 16-ch CP PLUS NVR + 4x Dahua IPCs`,
-          `[INFO] [${new Date().toISOString()}] Stream pipeline healthy: 20/20 streams active`,
-        ],
-      });
+      if (!res.ok || !data.success) throw new Error(data.error || data.message || `Diagnostics request failed (${res.status})`);
+      setDiagnostics(data.data);
+    } catch (reason) {
+      setDiagnostics(null);
+      setError(reason instanceof Error ? reason.message : "Diagnostics are unavailable");
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchDiagnostics(selectedBranch);
+    let cancelled = false;
+    void fetch("/api/v1/zero-touch/fleet", { cache: "no-store" })
+      .then(async (response) => {
+        const body = await response.json();
+        if (!response.ok || !body.success) throw new Error(body.error || `Fleet request failed (${response.status})`);
+        return Array.isArray(body.data?.branches) ? body.data.branches : [];
+      })
+      .then((nextBranches) => {
+        if (cancelled) return;
+        const normalized = nextBranches
+          .filter((branch: any) => typeof branch?.branchId === "string")
+          .map((branch: any) => ({ branchId: branch.branchId, branchName: branch.branchName || branch.branchId }));
+        setBranches(normalized);
+        setSelectedBranch((current) => normalized.some((branch) => branch.branchId === current) ? current : normalized[0]?.branchId || "");
+      })
+      .catch((reason) => {
+        if (!cancelled) setError(reason instanceof Error ? reason.message : "Fleet inventory is unavailable");
+      });
+    return () => { cancelled = true; };
+  }, []);
+
+  useEffect(() => {
+    void fetchDiagnostics(selectedBranch);
   }, [selectedBranch]);
 
   const handleCopy = (text: string, idx: number) => {
@@ -133,9 +106,8 @@ export default function ZeroTouchDiagnosticsPage() {
               onChange={(e) => setSelectedBranch(e.target.value)}
               className="bg-slate-900 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-slate-200 font-mono focus:outline-none focus:border-indigo-500"
             >
-              <option value="A005">Branch A005 (Adithi Malavika)</option>
-              <option value="A006">Branch A006 (Mumbai BKC)</option>
-              <option value="A008">Branch A008 (Bengaluru Whitefield)</option>
+              <option value="">Select a branch</option>
+              {branches.map((branch) => <option key={branch.branchId} value={branch.branchId}>{branch.branchName} ({branch.branchId})</option>)}
             </select>
 
             <button
@@ -148,6 +120,8 @@ export default function ZeroTouchDiagnosticsPage() {
             </button>
           </div>
         </div>
+
+        {error && !diagnostics && <div className="rounded-lg border border-rose-500/30 bg-rose-950/20 p-4 text-sm text-rose-200">{error}</div>}
 
         {diagnostics && (
           <div className="space-y-6">

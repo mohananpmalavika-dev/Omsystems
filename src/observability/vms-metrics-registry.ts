@@ -289,62 +289,7 @@ export class VmsMetricsRegistry {
   );
 
   constructor() {
-    this.seedDefaultMetrics();
   }
-
-  /**
-   * Seeds production-like initial metrics across simulated 400 branches and media cluster
-   */
-  public seedDefaultMetrics(): void {
-    // 1. Seed Cameras
-    const branches = ["BR-MUM-01", "BR-MUM-02", "BR-BLR-01", "BR-BLR-02", "BR-CHN-01"];
-    for (const b of branches) {
-      for (let i = 1; i <= 4; i++) {
-        const camId = `CAM-${b}-${i.toString().padStart(2, "0")}`;
-        const isHealthy = !(b === "BR-MUM-02" && i === 3);
-
-        this.cameraOnline.set(isHealthy ? 1 : 0, { camera_id: camId, branch_id: b, tenant_id: "tenant-bank-01", vendor: "CP_PLUS" });
-        this.cameraStreamFps.set(isHealthy ? 25 : 0, { camera_id: camId, stream_type: "main" });
-        this.cameraBitrateKbps.set(isHealthy ? 3200 : 0, { camera_id: camId, stream_type: "main" });
-        this.cameraPacketLossPct.set(isHealthy ? 0.02 : 100, { camera_id: camId });
-
-        if (isHealthy) {
-          this.recordingSegmentsWritten.inc(1440, { camera_id: camId, storage_tier: "HOT_PRIMARY" });
-        } else {
-          this.recordingWriteFailures.inc(1, { camera_id: camId, storage_tier: "HOT_PRIMARY", reason: "STREAM_DISCONNECTED" });
-          this.recordingGapSeconds.set(180, { camera_id: camId, branch_id: b });
-        }
-      }
-    }
-
-    // 2. Seed Playback
-    this.playbackSessions.set(42, { tenant_id: "tenant-bank-01", client_type: "OPERATOR_DESKTOP" });
-    this.playbackSessions.set(18, { tenant_id: "tenant-bank-01", client_type: "MOBILE_PWA" });
-
-    // 3. Seed Media Nodes
-    const nodes = [
-      { id: "media-node-01", dc: "DC-MUMBAI-01", cpu: 38, gpu: 24, ingress: 320, egress: 410 },
-      { id: "media-node-02", dc: "DC-MUMBAI-01", cpu: 34, gpu: 21, ingress: 290, egress: 380 },
-      { id: "media-node-03", dc: "DC-HYDERABAD-02", cpu: 18, gpu: 8, ingress: 95, egress: 110 },
-    ];
-    for (const n of nodes) {
-      this.mediaNodeCpu.set(n.cpu, { node_id: n.id, failure_domain: n.dc });
-      this.mediaNodeGpu.set(n.gpu, { node_id: n.id });
-      this.mediaNodeBandwidthIngress.set(n.ingress, { node_id: n.id });
-      this.mediaNodeBandwidthEgress.set(n.egress, { node_id: n.id });
-    }
-
-    // 4. Seed Storage Pools
-    this.storageFreeBytes.set(180 * 1024 * 1024 * 1024 * 1024, { pool_id: "pool-san-01", storage_type: "SAN_BLOCK", tier: "HOT" });
-    this.storageTotalBytes.set(240 * 1024 * 1024 * 1024 * 1024, { pool_id: "pool-san-01", storage_type: "SAN_BLOCK", tier: "HOT" });
-
-    this.storageWriteLatency.observe(6.2, { pool_id: "pool-san-01", storage_type: "SAN_BLOCK" });
-    this.storageWriteLatency.observe(8.4, { pool_id: "pool-san-01", storage_type: "SAN_BLOCK" });
-    this.storageWriteLatency.observe(11.1, { pool_id: "pool-san-01", storage_type: "SAN_BLOCK" });
-
-    // 5. Seed Edge Buffers
-    this.edgeAgentBufferEvents.set(0, { agent_id: "agent-br-mum-01", branch_id: "BR-MUM-01" });
-    this.edgeAgentBufferEvents.set(14, { agent_id: "agent-br-blr-02", branch_id: "BR-BLR-02" });
   }
 
   /**

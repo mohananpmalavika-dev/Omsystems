@@ -89,8 +89,6 @@ services:
         value: 0.0.0.0
       - key: PORT
         value: 10000
-      - key: DASHBOARD_DEMO_MODE
-        value: "false"
       - key: NEXT_PUBLIC_API_BASE
         value: /api/control
       - key: CONTROL_PLANE_INTERNAL_URL

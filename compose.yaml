@@ -81,12 +81,10 @@ services:
       context: .
       dockerfile: dashboard/Dockerfile
       args:
-        DASHBOARD_DEMO_MODE: "false"
         CONTROL_PLANE_INTERNAL_URL: http://api:8080
         MEDIA_GATEWAY_INTERNAL_URL: http://media-gateway:8090
         DASHBOARD_DEV_USER_ID: ${DASHBOARD_DEV_USER_ID:-user-global-admin}
     environment:
-      DASHBOARD_DEMO_MODE: "false"
       CONTROL_PLANE_INTERNAL_URL: http://api:8080
       MEDIA_GATEWAY_INTERNAL_URL: http://media-gateway:8090
       DASHBOARD_DEV_USER_ID: ${DASHBOARD_DEV_USER_ID:-user-global-admin}

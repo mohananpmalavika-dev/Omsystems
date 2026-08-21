@@ -43,17 +43,18 @@ export async function registerZeroTouchRoutes(app: FastifyInstance) {
   app.post("/api/v1/zero-touch/branches/:branchId/enrollment", { config: { noAuth: true } }, async (request, reply) => {
     const { branchId } = request.params as { branchId: string };
     const branch = zeroTouchJobEngineService.getBranch(branchId);
-    const branchName = branch?.branchName || `Branch ${branchId}`;
+    if (!branch) return reply.code(404).send({ success: false, error: "branch_not_found" });
+    const branchName = branch.branchName;
 
     const body = z.object({
-      tenantId: z.string().default("tenant-bank-01"),
+      tenantId: z.string().trim().min(1),
       expiryMinutes: z.number().int().positive().default(15),
     }).parse(request.body || {});
 
     const publicBase = (request.headers["x-sentinel-public-api-base"] as string) ||
       process.env.CONTROL_PLANE_PUBLIC_URL ||
-      process.env.RENDER_EXTERNAL_URL ||
-      "https://sentinel-grid-monitoring-vhid.onrender.com";
+      process.env.RENDER_EXTERNAL_URL;
+    if (!publicBase) return reply.code(503).send({ success: false, error: "control_plane_public_url_required" });
 
     const pkg = zeroTouchEnrollmentService.generateEnrollmentPackage(
       branchId,
@@ -73,10 +74,10 @@ export async function registerZeroTouchRoutes(app: FastifyInstance) {
   app.post("/api/v1/zero-touch/enrollment/exchange", { config: { noAuth: true } }, async (request, reply) => {
     const body = z.object({
       token: z.string().min(5),
-      hostname: z.string().default("sg-edge-host"),
-      platform: z.enum(["win32", "linux", "docker"]).default("win32"),
-      macAddress: z.string().default("3C:EF:8C:00:11:22"),
-      csrPem: z.string().optional(),
+      hostname: z.string().trim().min(1),
+      platform: z.enum(["win32", "linux", "docker"]),
+      macAddress: z.string().trim().min(1),
+      csrPem: z.string().trim().min(1),
     }).parse(request.body);
 
     const result = zeroTouchEnrollmentService.exchangeToken(body.token, {
@@ -95,22 +96,10 @@ export async function registerZeroTouchRoutes(app: FastifyInstance) {
   // 5. Start Real Zero-Touch Provisioning Job
   app.post("/api/v1/zero-touch/branches/:branchId/provision", { config: { noAuth: true } }, async (request, reply) => {
     const { branchId } = request.params as { branchId: string };
-    const body = z.object({
-      agentId: z.string().optional(),
-      scannedSubnets: z.array(z.string()).default(["192.168.1.0/24"]),
-      createdBy: z.string().default("Security Operations Lead"),
-    }).parse(request.body || {});
-
-    const job = await zeroTouchJobEngineService.startProvisioningJob({
-      branchId,
-      agentId: body.agentId,
-      scannedSubnets: body.scannedSubnets,
-      createdBy: body.createdBy,
-    });
-
-    return reply.code(202).send({
-      success: true,
-      data: job,
+    return reply.code(410).send({
+      success: false,
+      error: "legacy_zero_touch_disabled",
+      message: "Use POST /v1/branches/:branchId/scan-jobs to queue a persisted scan for an enrolled edge agent.",
     });
   });
 
@@ -246,6 +235,7 @@ export async function registerZeroTouchRoutes(app: FastifyInstance) {
   app.get("/api/v1/zero-touch/diagnostics/:branchId", { config: { noAuth: true } }, async (request, reply) => {
     const { branchId } = request.params as { branchId: string };
     const report = zeroTouchJobEngineService.getDiagnostics(branchId);
+    if (!report) return reply.code(404).send({ success: false, error: "diagnostics_not_available" });
     return reply.code(200).send({
       success: true,
       data: report,
@@ -257,7 +247,7 @@ export async function registerZeroTouchRoutes(app: FastifyInstance) {
     const body = z.object({
       branchId: z.string(),
       branchName: z.string(),
-      tenantId: z.string().default("tenant-bank-01"),
+      tenantId: z.string().trim().min(1),
     }).parse(request.body);
 
     const pkg = zeroTouchEnrollmentService.generateEnrollmentPackage(body.branchId, body.branchName, body.tenantId, 15);
@@ -267,9 +257,10 @@ export async function registerZeroTouchRoutes(app: FastifyInstance) {
   app.post("/api/zero-touch/enrollment/exchange", { config: { noAuth: true } }, async (request, reply) => {
     const body = z.object({ token: z.string() }).parse(request.body);
     const result = zeroTouchEnrollmentService.exchangeToken(body.token, {
-      hostname: "sg-edge-host",
-      platform: "win32",
-      macAddress: "3C:EF:8C:00:11:22",
+      hostname: "legacy-client",
+      platform: "linux",
+      macAddress: "not-provided",
+      csrPem: "not-provided",
     });
     return reply.code(result.success ? 200 : 400).send(result);
   });

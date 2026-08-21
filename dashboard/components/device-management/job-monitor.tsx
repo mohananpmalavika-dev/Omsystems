@@ -45,9 +45,9 @@ export function JobMonitor({ deviceId, autoRefresh = true, className }: JobMonit
         limit: 10,
       });
       setJobs(response?.data || []);
-    } catch {
-      // Fallback dummy empty list
+    } catch (reason) {
       setJobs([]);
+      setError(reason instanceof Error ? reason.message : "Job queue is unavailable");
     }
   };
 
@@ -102,7 +102,7 @@ export function JobMonitor({ deviceId, autoRefresh = true, className }: JobMonit
 
       {jobs.length === 0 ? (
         <div className="p-4 bg-slate-950 border border-slate-800 rounded-lg text-slate-400 text-center">
-          No pending or active configuration jobs. All branch hardware settings are synchronized.
+          {error || "No pending or active configuration jobs returned by the control plane."}
         </div>
       ) : (
         <div className="space-y-2.5">

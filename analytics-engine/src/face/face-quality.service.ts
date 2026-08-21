@@ -158,7 +158,7 @@ export class FaceQualityService {
         reasons.push('OVEREXPOSED');
       }
 
-      if (imageQuality.occlusion > 0.3) {
+      if (imageQuality.occlusion !== undefined && imageQuality.occlusion > 0.3) {
         reasons.push('FACE_OCCLUDED');
       }
     }
@@ -229,19 +229,47 @@ export class FaceQualityService {
   ): {
     blur: number;
     brightness: number;
-    occlusion: number;
+    occlusion?: number;
   } {
-    // Placeholder implementation
-    // In production, this would analyze the actual image crop
-    // using techniques like:
-    // - Laplacian variance for blur detection
-    // - Histogram analysis for brightness
-    // - Edge detection for occlusion estimation
+    if (imageData.length < frameWidth * frameHeight * 4) {
+      return { blur: Number.POSITIVE_INFINITY, brightness: 0 };
+    }
 
+    const left = Math.max(0, Math.floor(bbox.x * frameWidth));
+    const top = Math.max(0, Math.floor(bbox.y * frameHeight));
+    const right = Math.min(frameWidth, Math.ceil((bbox.x + bbox.width) * frameWidth));
+    const bottom = Math.min(frameHeight, Math.ceil((bbox.y + bbox.height) * frameHeight));
+    const grayscale = (x: number, y: number) => {
+      const offset = (y * frameWidth + x) * 4;
+      return 0.2126 * imageData[offset]! + 0.7152 * imageData[offset + 1]! + 0.0722 * imageData[offset + 2]!;
+    };
+
+    let count = 0;
+    let sum = 0;
+    let sumSquares = 0;
+    let laplacianSum = 0;
+    let laplacianSquares = 0;
+    for (let y = top; y < bottom; y += 1) {
+      for (let x = left; x < right; x += 1) {
+        const value = grayscale(x, y);
+        sum += value;
+        sumSquares += value * value;
+        count += 1;
+        if (x > left && x < right - 1 && y > top && y < bottom - 1) {
+          const laplacian = grayscale(x - 1, y) + grayscale(x + 1, y) + grayscale(x, y - 1) + grayscale(x, y + 1) - 4 * value;
+          laplacianSum += laplacian;
+          laplacianSquares += laplacian * laplacian;
+        }
+      }
+    }
+    if (count === 0) return { blur: Number.POSITIVE_INFINITY, brightness: 0 };
+    const mean = sum / count;
+    const laplacianCount = Math.max(1, (right - left - 2) * (bottom - top - 2));
+    const laplacianMean = laplacianSum / laplacianCount;
+    const blur = Math.max(0, laplacianSquares / laplacianCount - laplacianMean * laplacianMean);
     return {
-      blur: 0, // Lower is better
-      brightness: 128, // 0-255
-      occlusion: 0, // 0-1
+      blur,
+      brightness: mean,
     };
   }
 

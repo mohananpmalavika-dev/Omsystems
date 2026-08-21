@@ -1,11 +1,9 @@
-import { demoBranches, demoCameras } from "./demo-data";
 import type { Branch, Camera, LiveSessionResponse, RecordingJob, RecordingSegment, TalkSessionResponse } from "./types";
 import { isBrowserDirectMediaUrl } from "./media-routing";
 
 const LIVE_START_TIMEOUT_MS = 8_000;
 
 export async function listBranches(employeeSession?: string): Promise<Branch[]> {
-  if (isDemoMode()) return demoBranches;
   const response = await controlFetch("/v1/branches", undefined, employeeSession);
   const body = await response.json() as { data: Branch[] };
   return body.data;
@@ -15,7 +13,6 @@ export async function listCameras(
   branchId: string,
   employeeSession?: string,
 ): Promise<Camera[]> {
-  if (isDemoMode()) return demoCameras(branchId);
   const response = await controlFetch(
     `/v1/branches/${encodeURIComponent(branchId)}/cameras`,
     undefined,
@@ -35,10 +32,6 @@ export async function startLive(
   cameraId: string;
   direct: { url: string; controlPlaneToken: string };
 }> {
-  if (isDemoMode()) {
-    return demoLiveSession(cameraId);
-  }
-
   try {
     const permission = await controlFetch(
       `/v1/cameras/${encodeURIComponent(cameraId)}/live-sessions`,
@@ -83,31 +76,16 @@ export async function startLive(
     }
     return await mediaResponse.json() as LiveSessionResponse;
   } catch (error) {
-    // Do not turn an unavailable camera into a fabricated live session. The
-    // browser needs the real error so it can show a retryable offline state.
+    // Preserve the upstream error so the UI can show a truthful retryable
+    // state instead of inventing a stream session.
     throw error;
   }
-}
-
-function demoLiveSession(cameraId: string): LiveSessionResponse {
-  const sessionId = `session-${Date.now()}-${cameraId}`;
-  return {
-    demo: true,
-    sessionId,
-    cameraId,
-    expiresAt: new Date(Date.now() + 600_000).toISOString(),
-    hls: {
-      url: `/api/media/streams/${encodeURIComponent(cameraId)}/index.m3u8`,
-      bearerToken: `token-${sessionId}`,
-    },
-  };
 }
 
 export async function getRecording(
   cameraId: string,
   employeeSession?: string,
 ): Promise<RecordingJob> {
-  if (isDemoMode()) return demoRecording(cameraId);
   return await (await controlFetch(
     `/v1/cameras/${encodeURIComponent(cameraId)}/recording`,
     undefined,
@@ -121,10 +99,6 @@ export async function updateRecording(
     Pick<RecordingJob, "mode" | "enabled">,
   employeeSession?: string,
 ): Promise<RecordingJob> {
-  if (isDemoMode()) return {
-    ...demoRecording(cameraId), ...job,
-    status: job.enabled ? "recording" : "disabled",
-  };
   return await (await controlFetch(`/v1/cameras/${encodeURIComponent(cameraId)}/recording`, {
     method: "PUT", body: JSON.stringify(job),
   }, employeeSession)).json() as RecordingJob;
@@ -134,28 +108,11 @@ export async function getRecordingSegment(
   segmentId: string,
   employeeSession?: string,
 ): Promise<RecordingSegment> {
-  if (isDemoMode()) throw new Error("recording_playback_unavailable_in_demo");
   return await (await controlFetch(
     `/v1/recording-segments/${encodeURIComponent(segmentId)}`,
     undefined,
     employeeSession,
   )).json() as RecordingSegment;
-}
-
-function demoRecording(cameraId: string): RecordingJob {
-  return {
-    cameraId, mode: "continuous", enabled: true, status: "recording",
-    primaryRecordingStorage: "recorder-local",
-    cloudArchivePolicy: "incident-evidence-only",
-    retentionDays: 180, postRollSeconds: 30, segmentDurationSeconds: 60,
-    hotRetentionDays: 30, warmRetentionDays: 60, coldRetentionDays: 90,
-    critical: false, backupRequired: false, automaticDeletionEnabled: true,
-    evidenceProtection: true, recordMainStream: true,
-  };
-}
-
-function isDemoMode() {
-  return runtimeEnv("DASHBOARD_DEMO_MODE", "false") === "true";
 }
 
 async function controlFetch(
@@ -205,7 +162,6 @@ export async function startTalk(
   cameraId: string;
   direct: { url: string; controlPlaneToken: string };
 }> {
-  if (isDemoMode()) throw new Error("talkback_unavailable_in_demo");
   const permission = await controlFetch(
     `/v1/cameras/${encodeURIComponent(cameraId)}/talk-sessions`,
     { method: "POST", body: "{}" },

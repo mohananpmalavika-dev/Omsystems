@@ -69,6 +69,7 @@ const config = z.object({
   STORAGE_NODE_TYPE: z.enum(["local-disk", "nfs", "smb", "s3", "cloud-archive", "san"]).default("local-disk"),
   STORAGE_NODE_PROTOCOLS: z.string().default("fs"),
   STORAGE_NODE_LOCATION: z.string().trim().optional(),
+  STORAGE_TENANT_ID: z.string().trim().min(1).optional(),
   STREAM_SECRETS_JSON: z.string().default("{}"),
   RETENTION_SWEEP_SECONDS: z.coerce.number().int().min(60).max(86_400).default(300),
   RTSP_IO_TIMEOUT_MS: z.coerce.number().int().min(1_000).max(300_000).default(15_000),
@@ -828,10 +829,11 @@ async function runWriteProbe() {
   const metrics = await storageAdapter.getMetrics();
   const nextMetrics = { ...metrics, lastWriteProbe: probe };
   const status: StorageStatus = probe.status === "failed" ? "critical" : metrics.status;
-  await controlPlane(`/internal/recording/storage-nodes/${encodeURIComponent(config.STORAGE_NODE_EXTERNAL_ID)}`, {
+  const tenantId = jobs.values().next().value?.tenantId ?? config.STORAGE_TENANT_ID;
+  if (tenantId) await controlPlane(`/internal/recording/storage-nodes/${encodeURIComponent(config.STORAGE_NODE_EXTERNAL_ID)}`, {
     method: "PUT",
     body: JSON.stringify({
-      tenantId: (jobs.values().next().value?.tenantId) ?? "unknown",
+      tenantId,
       name: config.STORAGE_NODE_NAME,
       supportedTiers: parseTiers(config.STORAGE_NODE_TIERS),
       capacityBytes: nextMetrics.capacityBytes,
@@ -852,41 +854,18 @@ async function runWriteProbe() {
     }),
   }).catch(logFailure);
 
-  if (probe.status === "failed") {
-    const dummyJob: ManagedJob = {
-      tenantId: (jobs.values().next().value?.tenantId) ?? "unknown",
-      branchId: "unknown",
-      cameraId: "",
-      connectionSecretRef: "none",
-      job: {
-        id: "",
-        mode: "continuous",
-        enabled: true,
-        status: "idle",
-        primaryRecordingStorage: "sentinel-local",
-        cloudArchivePolicy: "none",
-        retentionDays: 30,
-        segmentDurationSeconds: 60,
-        hotRetentionDays: 30,
-        warmRetentionDays: 60,
-        coldRetentionDays: 90,
-        critical: false,
-        backupRequired: false,
-        automaticDeletionEnabled: true,
-        evidenceProtection: true,
-        recordMainStream: true,
-        preRollSeconds: 0,
-        postRollSeconds: 0,
-        minMotionDurationSeconds: 0,
-        motionConfidenceThreshold: 0,
-        cooldownSeconds: 0,
-        maxEventDurationSeconds: 0,
-      },
-    };
-    await health(dummyJob, "storage_write_probe_failed", "critical",
-      "Storage write probe failed; mounted storage may not be writable", {
-        probe,
-      });
+  if (probe.status === "failed" && tenantId) {
+    await controlPlane("/internal/recording/health", {
+      method: "POST",
+      body: JSON.stringify({
+        tenantId,
+        storageNodeExternalId: config.STORAGE_NODE_EXTERNAL_ID,
+        eventType: "storage_write_probe_failed",
+        severity: "critical",
+        message: "Storage write probe failed; mounted storage may not be writable",
+        details: { probe },
+      }),
+    }, { enqueueOnFailure: true }).catch(logFailure);
   }
 }
 

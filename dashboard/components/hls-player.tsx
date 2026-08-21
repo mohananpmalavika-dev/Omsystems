@@ -8,7 +8,7 @@ const MAX_RECOVERY_ATTEMPTS = 3;
 const STALL_TIMEOUT_MS = 12_000;
 const RECOVERY_DELAY_MS = 750;
 
-type PlayerStatus = "idle" | "loading" | "live" | "reconnecting" | "error" | "demo";
+type PlayerStatus = "idle" | "loading" | "live" | "reconnecting" | "error";
 
 export function HlsPlayer({
   url,
@@ -17,7 +17,6 @@ export function HlsPlayer({
   cameraId,
   muted = true,
   volume = 1,
-  allowDemoFallback = false,
   onPlaybackError,
   onVideoElementChange,
 }: {
@@ -27,7 +26,6 @@ export function HlsPlayer({
   cameraId?: string;
   muted?: boolean;
   volume?: number;
-  allowDemoFallback?: boolean;
   onPlaybackError?: (reason?: string) => void;
   onVideoElementChange?: (videoElement: HTMLVideoElement | null) => void;
 }) {
@@ -74,8 +72,8 @@ export function HlsPlayer({
         hls = null;
       }
       setError(reason);
-      setStatus(allowDemoFallback ? "demo" : "error");
-      if (!allowDemoFallback) playbackErrorRef.current?.(reason);
+      setStatus("error");
+      playbackErrorRef.current?.(reason);
     };
 
     const markProgress = () => {
@@ -138,7 +136,7 @@ export function HlsPlayer({
     video.addEventListener("error", handleVideoError);
 
     if (!url) {
-      setStatus(allowDemoFallback ? "demo" : "idle");
+      setStatus("idle");
       return () => {
         disposed = true;
         video.removeEventListener("playing", markProgress);
@@ -224,7 +222,7 @@ export function HlsPlayer({
       video.removeAttribute("src");
       video.load();
     };
-  }, [allowDemoFallback, bearerToken, retryNonce, url]);
+  }, [bearerToken, retryNonce, url]);
 
   const retry = () => {
     setError(null);
@@ -255,9 +253,7 @@ export function HlsPlayer({
             {status === "loading" && <Loader2 className="animate-spin text-cyan-300" size={22} />}
             {status === "reconnecting" && <RotateCw className="animate-spin text-amber-300" size={22} />}
             {status === "error" && <AlertTriangle className="text-rose-300" size={22} />}
-            {status === "demo" ? (
-              <span className="text-xs font-medium text-amber-200">Demo preview, not a live camera feed</span>
-            ) : status === "idle" ? (
+            {status === "idle" ? (
               <span className="text-xs text-slate-400">Live feed not started</span>
             ) : (
               <span className="text-xs text-slate-300">{error ?? "Connecting to live feed..."}</span>

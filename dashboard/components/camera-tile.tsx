@@ -190,7 +190,6 @@ export function CameraTile({
               cameraName={camera.name}
               cameraId={camera.id}
               muted={isMuted}
-              allowDemoFallback={Boolean(session?.demo)}
               onPlaybackError={() => onPlaybackError?.("HLS playback failed")}
               onVideoElementChange={handleVideoElementChange}
             />

@@ -51,56 +51,8 @@ export function DeviceSelector({ branchId, value, onChange, className }: DeviceS
         }
       })
       .catch(err => {
-        // Provide graceful fallback
-        const fallbackDevices: Device[] = [
-          {
-            id: `dev-${branchId}-01`,
-            deviceId: `CAM-${branchId.toUpperCase()}-01`,
-            tenant: 'tenant-bank-01',
-            region: 'South Zone',
-            branch: branchId,
-            deviceType: 'IP_CAMERA',
-            manufacturer: 'Dahua Technology',
-            model: 'IPC-HFW5442E-ZE',
-            serialNumber: 'DH5442998101',
-            ipAddress: '192.168.1.101',
-            healthStatus: 'online',
-            lifecycleState: 'operational',
-            capabilities: ['onvif', 'rtsp', 'h265', 'ai-perimeter'],
-          },
-          {
-            id: `dev-${branchId}-02`,
-            deviceId: `CAM-${branchId.toUpperCase()}-02`,
-            tenant: 'tenant-bank-01',
-            region: 'South Zone',
-            branch: branchId,
-            deviceType: 'IP_CAMERA',
-            manufacturer: 'CP PLUS',
-            model: 'CP-UNR-416T2',
-            serialNumber: 'CP416T2991823',
-            ipAddress: '192.168.1.10',
-            healthStatus: 'online',
-            lifecycleState: 'operational',
-            capabilities: ['nvr-16ch', 'rtsp', 'onvif', 'storage'],
-          },
-          {
-            id: `dev-${branchId}-03`,
-            deviceId: `CAM-${branchId.toUpperCase()}-03`,
-            tenant: 'tenant-bank-01',
-            region: 'South Zone',
-            branch: branchId,
-            deviceType: 'IP_CAMERA',
-            manufacturer: 'Hikvision',
-            model: 'DS-2CD2386G2-ISU/SL',
-            serialNumber: 'HK238699104',
-            ipAddress: '192.168.1.102',
-            healthStatus: 'online',
-            lifecycleState: 'operational',
-            capabilities: ['onvif', 'rtsp', 'acusense', 'audio-alarm'],
-          },
-        ];
-        setDevices(fallbackDevices);
-        if (!value) onChange(fallbackDevices[0]);
+        setDevices([]);
+        setError(err instanceof Error ? err.message : 'Device inventory is unavailable');
       })
       .finally(() => setLoading(false));
   }, [branchId]);

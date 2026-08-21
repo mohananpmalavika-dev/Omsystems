@@ -319,7 +319,9 @@ export class AIAssistant extends BaseDetector {
     for (const [intentType, patterns] of Object.entries(this.intentPatterns)) {
       for (const pattern of patterns) {
         if (pattern.test(lowerQuery)) {
-          const confidence = 0.8 + Math.random() * 0.2; // Simulate confidence
+          // Rule-based confidence is deterministic; it must not claim a
+          // model-derived probability when no model was used.
+          const confidence = 0.8;
           if (confidence > maxConfidence) {
             maxConfidence = confidence;
             intent = intentType as IntentType;
@@ -440,54 +442,32 @@ export class AIAssistant extends BaseDetector {
       };
     }
     
-    const actionText = action === 'start' ? 'started' : 'stopped';
-    
-    return {
-      success: true,
-      message: `Camera ${camera} has been ${actionText}.`,
-      data: {
-        cameraId: camera,
-        action,
-        status: 'success'
-      },
-      followUp: [
-        `Would you like to see the live feed?`,
-        `Should I enable analytics on this camera?`
-      ]
-    };
+    const controller = this.modules.cameraControl;
+    const operation = action === 'start' ? controller?.start : action === 'stop' ? controller?.stop : undefined;
+    if (typeof operation !== 'function') {
+      return { success: false, message: 'Camera control is not configured for this assistant.', error: 'camera_control_unavailable' };
+    }
+    try {
+      const result = await operation.call(controller, camera);
+      return { success: true, message: `Camera ${camera} control command completed.`, data: result };
+    } catch (error) {
+      return { success: false, message: `Camera ${camera} control command failed.`, error: error instanceof Error ? error.message : String(error) };
+    }
   }
   
   /**
    * Handle system status queries
    */
   private async handleSystemStatus(parsed: ParsedQuery): Promise<AssistantResponse> {
-    // Mock system status (would query actual modules)
-    const status = {
-      overallHealth: 98,
-      activeCameras: 147,
-      totalCameras: 150,
-      activeIncidents: 3,
-      criticalIncidents: 1,
-      systemUptime: '45 days',
-      lastUpdated: new Date()
-    };
-    
-    const message = `System Status:
-- Overall Health: ${status.overallHealth}%
-- Active Cameras: ${status.activeCameras}/${status.totalCameras}
-- Active Incidents: ${status.activeIncidents} (${status.criticalIncidents} critical)
-- System Uptime: ${status.systemUptime}`;
-    
-    return {
-      success: true,
-      message,
-      data: status,
-      suggestions: [
-        'Show critical incidents',
-        'Which cameras are offline?',
-        'Generate system health report'
-      ]
-    };
+    const provider = this.modules.systemStatus;
+    if (!provider) return { success: false, message: 'System status is not configured for this assistant.', error: 'system_status_unavailable' };
+    try {
+      const status = typeof provider === 'function' ? await provider(parsed) : await provider.getStatus?.(parsed);
+      if (status === undefined) return { success: false, message: 'System status provider returned no data.', error: 'system_status_empty' };
+      return { success: true, message: 'System status retrieved from the live status provider.', data: status };
+    } catch (error) {
+      return { success: false, message: 'System status could not be retrieved.', error: error instanceof Error ? error.message : String(error) };
+    }
   }
   
   /**
@@ -517,31 +497,10 @@ export class AIAssistant extends BaseDetector {
     }
     
     try {
-      // Execute search (mock results for demonstration)
-      const results = {
-        totalResults: 12,
-        results: [
-          { cameraId: 'cam_001', timestamp: new Date(), confidence: 0.92 },
-          { cameraId: 'cam_005', timestamp: new Date(), confidence: 0.88 },
-          { cameraId: 'cam_012', timestamp: new Date(), confidence: 0.85 }
-        ]
-      };
-      
-      const message = `Found ${results.totalResults} matches for "${searchQuery}":\n` +
-        results.results.slice(0, 3).map(r => 
-          `- Camera ${r.cameraId} at ${r.timestamp.toLocaleTimeString()} (${Math.round(r.confidence * 100)}% confidence)`
-        ).join('\n');
-      
-      return {
-        success: true,
-        message,
-        data: results,
-        suggestions: [
-          'Show me the first result',
-          'Search in specific time range',
-          'Show all results'
-        ]
-      };
+      const searchProvider = this.modules.search as { search?: (query: Record<string, unknown>) => Promise<unknown> };
+      if (typeof searchProvider.search !== 'function') return { success: false, message: 'Search provider is not configured.', error: 'search_provider_unavailable' };
+      const results = await searchProvider.search({ query: searchQuery, parameters: parsed.parameters });
+      return { success: true, message: `Search completed for "${searchQuery}".`, data: results };
       
     } catch (error) {
       return {
@@ -564,34 +523,14 @@ export class AIAssistant extends BaseDetector {
       };
     }
     
-    // Mock investigation result
-    const investigation = {
-      subjectId: 'track_123',
-      cameras: ['cam_001', 'cam_003', 'cam_007', 'cam_012'],
-      timeline: [
-        { camera: 'cam_001', time: '10:30:15', action: 'Entered' },
-        { camera: 'cam_003', time: '10:32:40', action: 'Passed through' },
-        { camera: 'cam_007', time: '10:35:20', action: 'Stopped (2 min)' },
-        { camera: 'cam_012', time: '10:40:05', action: 'Exited' }
-      ]
-    };
-    
-    const message = `Investigation Results:\n` +
-      `Subject was seen on ${investigation.cameras.length} cameras:\n` +
-      investigation.timeline.map(t => 
-        `- ${t.time} at ${t.camera}: ${t.action}`
-      ).join('\n');
-    
-    return {
-      success: true,
-      message,
-      data: investigation,
-      suggestions: [
-        'Show journey on map',
-        'Export timeline',
-        'Find associated persons'
-      ]
-    };
+    const provider = this.modules.investigation as { investigate?: (query: ParsedQuery) => Promise<unknown> };
+    if (typeof provider.investigate !== 'function') return { success: false, message: 'Investigation provider is not configured.', error: 'investigation_provider_unavailable' };
+    try {
+      const result = await provider.investigate(parsed);
+      return { success: true, message: 'Investigation completed from live evidence.', data: result };
+    } catch (error) {
+      return { success: false, message: 'Investigation failed.', error: error instanceof Error ? error.message : String(error) };
+    }
   }
   
   /**
@@ -611,73 +550,29 @@ export class AIAssistant extends BaseDetector {
                       parsed.originalQuery.includes('monthly') ? 'monthly' :
                       'daily';
     
-    // Mock report generation
-    const report = {
-      type: reportType,
-      generated: new Date(),
-      summary: {
-        totalIncidents: 45,
-        criticalIncidents: 3,
-        resolvedIncidents: 42,
-        avgResponseTime: '4.2 minutes'
-      }
-    };
-    
-    const message = `${reportType.charAt(0).toUpperCase() + reportType.slice(1)} Report Generated:\n` +
-      `- Total Incidents: ${report.summary.totalIncidents}\n` +
-      `- Critical: ${report.summary.criticalIncidents}\n` +
-      `- Resolved: ${report.summary.resolvedIncidents}\n` +
-      `- Avg Response Time: ${report.summary.avgResponseTime}`;
-    
-    return {
-      success: true,
-      message,
-      data: report,
-      suggestions: [
-        'Export as PDF',
-        'Email this report',
-        'Generate compliance report'
-      ]
-    };
+    const provider = this.modules.reporting as { generate?: (request: Record<string, unknown>) => Promise<unknown> };
+    if (typeof provider.generate !== 'function') return { success: false, message: 'Reporting provider is not configured.', error: 'reporting_provider_unavailable' };
+    try {
+      const report = await provider.generate({ type: reportType, query: parsed.originalQuery });
+      return { success: true, message: `${reportType.charAt(0).toUpperCase() + reportType.slice(1)} report generated from live data.`, data: report };
+    } catch (error) {
+      return { success: false, message: 'Report generation failed.', error: error instanceof Error ? error.message : String(error) };
+    }
   }
   
   /**
    * Handle analytics queries
    */
   private async handleAnalytics(parsed: ParsedQuery): Promise<AssistantResponse> {
-    // Mock analytics data
-    const analytics = {
-      peopleCount: 1247,
-      vehicleCount: 342,
-      peakHour: '14:00',
-      occupancyRate: 67,
-      predictions: {
-        nextWeekIncidents: 'stable',
-        hardwareFailures: 0,
-        storageCapacity: 'adequate'
-      }
-    };
-    
-    const message = `Analytics Overview:\n` +
-      `- People Detected: ${analytics.peopleCount}\n` +
-      `- Vehicles Detected: ${analytics.vehicleCount}\n` +
-      `- Peak Hour: ${analytics.peakHour}\n` +
-      `- Occupancy Rate: ${analytics.occupancyRate}%\n\n` +
-      `Predictions:\n` +
-      `- Incident Trend: ${analytics.predictions.nextWeekIncidents}\n` +
-      `- Hardware Failures: ${analytics.predictions.hardwareFailures}\n` +
-      `- Storage: ${analytics.predictions.storageCapacity}`;
-    
-    return {
-      success: true,
-      message,
-      data: analytics,
-      suggestions: [
-        'Show detailed metrics',
-        'Predict for next month',
-        'Compare with last week'
-      ]
-    };
+    const provider = this.modules.analytics ?? this.modules.prediction;
+    const getAnalytics = typeof provider === 'function' ? provider : provider?.query ?? provider?.getAnalytics;
+    if (typeof getAnalytics !== 'function') return { success: false, message: 'Analytics provider is not configured.', error: 'analytics_provider_unavailable' };
+    try {
+      const analytics = await getAnalytics.call(provider, parsed);
+      return { success: true, message: 'Analytics retrieved from the live analytics provider.', data: analytics };
+    } catch (error) {
+      return { success: false, message: 'Analytics query failed.', error: error instanceof Error ? error.message : String(error) };
+    }
   }
   
   /**

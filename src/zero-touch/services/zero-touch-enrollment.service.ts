@@ -5,7 +5,7 @@
  */
 
 import { EventEmitter } from "node:events";
-import { createHash, randomBytes } from "node:crypto";
+import { randomBytes } from "node:crypto";
 import type { EnrollmentPackage } from "../domain/zero-touch.types.js";
 
 export class ZeroTouchEnrollmentService extends EventEmitter {
@@ -13,8 +13,7 @@ export class ZeroTouchEnrollmentService extends EventEmitter {
 
   constructor(
     private controlPlaneBaseUrl = process.env.CONTROL_PLANE_PUBLIC_URL ||
-      process.env.RENDER_EXTERNAL_URL ||
-      "https://sentinel-grid-monitoring-vhid.onrender.com",
+      process.env.RENDER_EXTERNAL_URL || "",
   ) {
     super();
   }
@@ -25,7 +24,7 @@ export class ZeroTouchEnrollmentService extends EventEmitter {
   public generateEnrollmentPackage(
     branchId: string,
     branchName: string,
-    tenantId = "tenant-bank-01",
+    tenantId: string,
     expiryMinutes = 15,
     customBaseUrl?: string,
   ): EnrollmentPackage {
@@ -33,6 +32,8 @@ export class ZeroTouchEnrollmentService extends EventEmitter {
     const token = `ENR-${cleanBranch}-${randomBytes(4).toString("hex").toUpperCase()}`;
     const expiresAt = new Date(Date.now() + expiryMinutes * 60 * 1000).toISOString();
     const controlPlaneUrl = customBaseUrl || this.controlPlaneBaseUrl;
+    if (!controlPlaneUrl) throw new Error("control_plane_public_url_required");
+    if (!tenantId.trim()) throw new Error("tenant_id_required");
 
     const windowsPowerShell = `powershell -NoProfile -ExecutionPolicy Bypass -Command "iwr -useb ${controlPlaneUrl}/api/v1/zero-touch/bootstrap/win?token=${token} | iex"`;
     const linuxBash = `curl -fsSL ${controlPlaneUrl}/api/v1/zero-touch/bootstrap/linux?token=${token} | sudo bash`;
@@ -67,7 +68,7 @@ export class ZeroTouchEnrollmentService extends EventEmitter {
   public generateEnrollmentToken(
     branchId: string,
     branchName: string,
-    tenantId = "tenant-bank-01",
+    tenantId: string,
     expiryHours = 24,
   ) {
     const pkg = this.generateEnrollmentPackage(branchId, branchName, tenantId, expiryHours * 60);
@@ -99,22 +100,7 @@ export class ZeroTouchEnrollmentService extends EventEmitter {
       macAddress: string;
       csrPem?: string;
     },
-  ): {
-    success: boolean;
-    error?: string;
-    agentId?: string;
-    branchId?: string;
-    mtlsCredentials?: {
-      clientCertPem: string;
-      caCertPem: string;
-      pinnedFingerprint: string;
-    };
-    scanProfile?: {
-      defaultSubnets: string[];
-      protocols: string[];
-      onvifPort: number;
-    };
-  } {
+  ): { success: boolean; error?: string; agentId?: string; branchId?: string; } {
     const pkg = this.packages.get(token);
     if (!pkg) {
       return { success: false, error: "Invalid or unrecognized enrollment token." };
@@ -132,62 +118,19 @@ export class ZeroTouchEnrollmentService extends EventEmitter {
       return { success: false, error: "Single-use enrollment token has already been consumed." };
     }
 
-    pkg.usedCount++;
-
-    const agentId = `agent-${pkg.branchId.toLowerCase()}-gw1`;
-    const fingerprint = createHash("sha256")
-      .update(`${agentId}:${pkg.branchId}:${agentInfo.macAddress}:${Date.now()}`)
-      .digest("hex")
-      .toUpperCase();
-
-    const clientCertPem = [
-      "-----BEGIN CERTIFICATE-----",
-      "MIICljCCAX4CCQDU3r6P/V9WWDANBgkqhkiG9w0BAQsFADBCMQswCQYDVQQGEwJJ",
-      "TjEUMBIGA1UECgwLU2VudGluZWxHcmlkMR0wGwYDVQQDDBRTZW50aW5lbCBJbnRl",
-      "cm5hbCBDQTAeFw0yNjA4MTcwMDAwMDBaFw0yNzA4MTcwMDAwMDBaMEMxCzAJBgNV",
-      `BAYTAklOMRUwEwYDVQQKDAxTZW50aW5lbEdyaWQxGDAWBgNVBAMMD${agentId}`,
-      "-----END CERTIFICATE-----",
-    ].join("\n");
-
-    const caCertPem = [
-      "-----BEGIN CERTIFICATE-----",
-      "MIICpDCCAYwCCQDU3r6P/V9WWEANBgkqhkiG9w0BAQsFADBCMQswCQYDVQQGEwJJ",
-      "TjEUMBIGA1UECgwLU2VudGluZWxHcmlkMR0wGwYDVQQDDBRTZW50aW5lbCBJbnRl",
-      "cm5hbCBDQTAeFw0yNjAxMDEwMDAwMDBaFw0zNjAxMDEwMDAwMDBaMEIxCzAJBgNV",
-      "-----END CERTIFICATE-----",
-    ].join("\n");
-
+    void agentInfo;
     return {
-      success: true,
-      agentId,
-      branchId: pkg.branchId,
-      mtlsCredentials: {
-        clientCertPem,
-        caCertPem,
-        pinnedFingerprint: `SHA256:${fingerprint.substring(0, 32)}`,
-      },
-      scanProfile: {
-        defaultSubnets: ["192.168.1.0/24", "192.168.2.0/24"],
-        protocols: ["ONVIF_WS_DISCOVERY", "DAHUA_CGI", "HIKVISION_ISAPI", "CPPLUS_PROPRIETARY", "ARP_SWEEP"],
-        onvifPort: 3702,
-      },
+      success: false,
+      error: "legacy_enrollment_disabled_use_edge_activation_api",
     };
   }
 
-  public getBranchStatus(branchId: string) {
-    return {
-      branchId,
-      branchName: `Branch ${branchId}`,
-      currentStage: "MONITORING_ACTIVE" as const,
-      stageProgressPct: 100,
-      elapsedSeconds: 74,
-      camerasDiscovered: 20,
-      camerasProvisioned: 20,
-    };
+  public getBranchStatus(_branchId: string) {
+    return undefined;
   }
 
   public updateBranchStage(_branchId: string, _stage: any, _progress: number) {
-    // No-op for backward compatibility
+    // Stage updates are persisted by the control-plane scan job.
   }
 
   public listBranchStatuses() {

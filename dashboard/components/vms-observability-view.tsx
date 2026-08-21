@@ -26,8 +26,7 @@ export function VmsObservabilityView() {
   const [metricsSnapshot, setMetricsSnapshot] = useState<any>(null);
   const [rawPrometheusText, setRawPrometheusText] = useState<string>("");
   const [loading, setLoading] = useState(true);
-  const [actionLoading, setActionLoading] = useState<string | null>(null);
-  const [toastMsg, setToastMsg] = useState<{ type: "success" | "error" | "info"; text: string } | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"visual" | "prometheus">("visual");
 
   const fetchMetrics = async () => {
@@ -46,21 +45,9 @@ export function VmsObservabilityView() {
         setRawPrometheusText(text);
       }
     } catch {
-      // Mock fallback during build
-      setMetricsSnapshot({
-        cameras: { totalMonitored: 20, onlineCount: 19, offlineCount: 1, averageFps: 25, averageBitrateKbps: 3200, averagePacketLossPct: 0.02 },
-        recording: { totalSegmentsWritten: 27360, totalWriteFailures: 1, activeGapSecondsTotal: 180 },
-        playback: { activeSessions: 60 },
-        mediaNodes: [
-          { nodeId: "media-node-01", failureDomain: "DC-MUMBAI-01", cpuPct: 38, gpuPct: 24, ingressMbps: 320, egressMbps: 410 },
-          { nodeId: "media-node-02", failureDomain: "DC-MUMBAI-01", cpuPct: 34, gpuPct: 21, ingressMbps: 290, egressMbps: 380 },
-          { nodeId: "media-node-03", failureDomain: "DC-HYDERABAD-02", cpuPct: 18, gpuPct: 8, ingressMbps: 95, egressMbps: 110 },
-        ],
-        storage: { freeTb: 180, totalTb: 240, usagePct: 25, p95WriteLatencyMs: 8.4 },
-      });
-      setRawPrometheusText(
-        `# HELP vms_camera_online Camera connectivity status (1 = Online, 0 = Offline)\n# TYPE vms_camera_online gauge\nvms_camera_online{camera_id="CAM-BR-MUM-01-01"} 1\n\n# HELP vms_recording_segments_written_total Total count of segments written\n# TYPE vms_recording_segments_written_total counter\nvms_recording_segments_written_total{storage_tier="HOT_PRIMARY"} 27360\n\n# HELP vms_storage_write_latency_ms Storage latency distribution\n# TYPE vms_storage_write_latency_ms histogram\nvms_storage_write_latency_ms_bucket{le="10"} 24\nvms_storage_write_latency_ms_count 28\nvms_storage_write_latency_ms_sum 235.2`,
-      );
+      setMetricsSnapshot(null);
+      setRawPrometheusText("");
+      setError("Observability data is unavailable");
     } finally {
       setLoading(false);
     }
@@ -71,36 +58,6 @@ export function VmsObservabilityView() {
     const interval = setInterval(fetchMetrics, 5000);
     return () => clearInterval(interval);
   }, []);
-
-  const handleSimulateMetric = async () => {
-    setActionLoading("simulate");
-    try {
-      const res = await fetch("/api/vms/observability/simulate-metric", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          metricName: "vms_recording_segments_written_total",
-          value: 120,
-          labels: { camera_id: "CAM-SIM-01", storage_tier: "HOT_PRIMARY" },
-        }),
-      });
-      const data = await res.json();
-      if (data.success) {
-        setToastMsg({
-          type: "success",
-          text: `📊 Injected +120 recording segment writes into Prometheus metrics registry.`,
-        });
-        fetchMetrics();
-      }
-    } catch {
-      setToastMsg({
-        type: "success",
-        text: `📊 Simulated metric update into Prometheus registry.`,
-      });
-    } finally {
-      setActionLoading(null);
-    }
-  };
 
   if (loading && !metricsSnapshot) {
     return (
@@ -115,27 +72,7 @@ export function VmsObservabilityView() {
 
   return (
     <div className="space-y-6">
-      {/* Toast Alert */}
-      {toastMsg && (
-        <div
-          className={`p-4 rounded-xl flex items-center justify-between text-sm shadow-lg border transition-all ${
-            toastMsg.type === "success"
-              ? "bg-emerald-950/80 border-emerald-500/40 text-emerald-200"
-              : "bg-rose-950/80 border-rose-500/40 text-rose-200"
-          }`}
-        >
-          <div className="flex items-center space-x-2">
-            <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
-            <span className="font-medium">{toastMsg.text}</span>
-          </div>
-          <button
-            onClick={() => setToastMsg(null)}
-            className="text-xs opacity-70 hover:opacity-100 uppercase tracking-wider ml-4"
-          >
-            Dismiss
-          </button>
-        </div>
-      )}
+      {error && <div className="rounded-lg border border-rose-500/30 bg-rose-950/20 p-3 text-sm text-rose-200">{error}</div>}
 
       {/* Observability Header & Tab Controls */}
       <div className="bg-slate-900/90 border border-slate-800 rounded-xl p-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -167,15 +104,6 @@ export function VmsObservabilityView() {
 
         <div className="flex items-center space-x-3">
           <button
-            onClick={handleSimulateMetric}
-            disabled={actionLoading === "simulate"}
-            className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-medium rounded-lg flex items-center transition-colors shadow"
-          >
-            <Zap className="w-3.5 h-3.5 mr-1.5 text-amber-300" />
-            {actionLoading === "simulate" ? "Simulating..." : "Inject Metric Simulation"}
-          </button>
-
-          <button
             onClick={fetchMetrics}
             className="p-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg text-slate-300"
             title="Refresh Metrics"
@@ -196,14 +124,14 @@ export function VmsObservabilityView() {
               </div>
               <div className="mt-2 flex items-baseline justify-between">
                 <div className="text-2xl font-bold text-slate-100 font-mono">
-                  {snap.cameras?.onlineCount ?? 19} / {snap.cameras?.totalMonitored ?? 20}
+                  {snap.cameras?.onlineCount ?? "—"} / {snap.cameras?.totalMonitored ?? "—"}
                 </div>
                 <span className="text-xs text-emerald-400 font-semibold font-mono">
-                  {snap.cameras?.averageFps ?? 25} FPS
+                  {snap.cameras?.averageFps ?? "—"} FPS
                 </span>
               </div>
               <p className="text-[11px] text-slate-400 mt-1 font-mono">
-                {snap.cameras?.averageBitrateKbps ?? 3200} kbps • {snap.cameras?.averagePacketLossPct ?? 0.02}% Loss
+                {snap.cameras?.averageBitrateKbps ?? "—"} kbps • {snap.cameras?.averagePacketLossPct ?? "—"}% Loss
               </p>
             </div>
 
@@ -214,12 +142,12 @@ export function VmsObservabilityView() {
               </div>
               <div className="mt-2 flex items-baseline justify-between">
                 <div className="text-2xl font-bold text-slate-100 font-mono">
-                  {snap.recording?.totalSegmentsWritten?.toLocaleString() ?? "27,360"}
+                  {snap.recording?.totalSegmentsWritten?.toLocaleString() ?? "—"}
                 </div>
                 <span className="text-xs text-emerald-400 font-semibold">0 Failures</span>
               </div>
               <p className="text-[11px] text-slate-400 mt-1 font-mono">
-                Active Gap: {snap.recording?.activeGapSecondsTotal ?? 0}s (Fenced)
+                Active Gap: {snap.recording?.activeGapSecondsTotal ?? "—"}s (Fenced)
               </p>
             </div>
 
@@ -235,7 +163,7 @@ export function VmsObservabilityView() {
                 <span className="text-xs text-indigo-400 font-semibold">3 Nodes</span>
               </div>
               <p className="text-[11px] text-slate-400 mt-1 font-mono">
-                {snap.playback?.activeSessions ?? 60} Concurrent Playback Sessions
+                {snap.playback?.activeSessions ?? "—"} Concurrent Playback Sessions
               </p>
             </div>
 
@@ -246,12 +174,12 @@ export function VmsObservabilityView() {
               </div>
               <div className="mt-2 flex items-baseline justify-between">
                 <div className="text-2xl font-bold text-slate-100 font-mono">
-                  {snap.storage?.p95WriteLatencyMs ?? 8.4} ms
+                  {snap.storage?.p95WriteLatencyMs ?? "—"} ms
                 </div>
                 <span className="text-xs text-emerald-400 font-semibold">P95 S.M.A.R.T</span>
               </div>
               <p className="text-[11px] text-slate-400 mt-1 font-mono">
-                {snap.storage?.freeTb ?? 180} TB Free / {snap.storage?.totalTb ?? 240} TB (25% Used)
+                {snap.storage?.freeTb ?? "—"} TB Free / {snap.storage?.totalTb ?? "—"} TB ({snap.storage?.usagePct ?? "—"}% Used)
               </p>
             </div>
           </div>

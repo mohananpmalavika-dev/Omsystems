@@ -37,6 +37,7 @@ export default function CompatibilityPage() {
   const [selectedRecorderId, setSelectedRecorderId] = useState<string | null>(null);
   const [isInspectorOpen, setIsInspectorOpen] = useState(false);
   const [search, setSearch] = useState("");
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     loadRecorders();
@@ -45,73 +46,25 @@ export default function CompatibilityPage() {
   async function loadRecorders() {
     try {
       setLoading(true);
+      setError(null);
       const res = await fetch("/api/control/v1/operational-health/recorders", { credentials: "include" });
-      if (res.ok) {
-        const json = await res.json();
-        const list = (json.recorders ?? []).map((r: any) => ({
-          id: r.id,
-          name: r.name,
-          vendor: r.vendor,
-          model: r.model,
-          branchName: r.branchName ?? "Main Branch",
-          status: r.status,
-          fingerprintConfidence: r.fingerprintConfidence ?? 0.94,
-          fingerprintStatus: r.fingerprintStatus ?? "CONFIRMED",
-          lastFingerprintedAt: r.lastFingerprintedAt ?? new Date().toISOString(),
-        }));
-        setRecorders(list);
-      } else {
-        // Mock fallback fleet for preview
-        setRecorders([
-          {
-            id: "rec-blr-cp-01",
-            name: "CP PLUS Branch NVR 01",
-            vendor: "cp-plus",
-            model: "CP-UNR-4K4322-V2",
-            branchName: "Bangalore MG Road",
-            status: "online",
-            fingerprintConfidence: 0.94,
-            fingerprintStatus: "CONFIRMED",
-            lastFingerprintedAt: new Date().toISOString(),
-          },
-          {
-            id: "rec-mum-cp-02",
-            name: "CP PLUS 16-Ch Hybrid DVR",
-            vendor: "cp-plus",
-            model: "CP-UVR-1601E1-CS",
-            branchName: "Mumbai Fort",
-            status: "online",
-            fingerprintConfidence: 0.88,
-            fingerprintStatus: "CONFIRMED",
-            lastFingerprintedAt: new Date().toISOString(),
-          },
-          {
-            id: "rec-del-hik-01",
-            name: "Hikvision NVR 01",
-            vendor: "hikvision",
-            model: "DS-7616NI-K2",
-            branchName: "Delhi Connaught Place",
-            status: "online",
-            fingerprintConfidence: 0.96,
-            fingerprintStatus: "CONFIRMED",
-            lastFingerprintedAt: new Date().toISOString(),
-          },
-        ]);
-      }
-    } catch {
-      setRecorders([
-        {
-          id: "rec-blr-cp-01",
-          name: "CP PLUS Branch NVR 01",
-          vendor: "cp-plus",
-          model: "CP-UNR-4K4322-V2",
-          branchName: "Bangalore MG Road",
-          status: "online",
-          fingerprintConfidence: 0.94,
-          fingerprintStatus: "CONFIRMED",
-          lastFingerprintedAt: new Date().toISOString(),
-        },
-      ]);
+      if (!res.ok) throw new Error(`Recorder inventory request failed (${res.status})`);
+      const json = await res.json();
+      const list = (json.recorders ?? []).map((r: any) => ({
+        id: r.id,
+        name: r.name,
+        vendor: r.vendor,
+        model: r.model,
+        branchName: r.branchName,
+        status: r.status,
+        fingerprintConfidence: r.fingerprintConfidence,
+        fingerprintStatus: r.fingerprintStatus,
+        lastFingerprintedAt: r.lastFingerprintedAt,
+      }));
+      setRecorders(list);
+    } catch (reason) {
+      setRecorders([]);
+      setError(reason instanceof Error ? reason.message : "Recorder inventory is unavailable");
     } finally {
       setLoading(false);
     }
@@ -139,6 +92,7 @@ export default function CompatibilityPage() {
           description="Evidence-driven device fingerprinting, multi-family API detection (ONVIF / Dahua CGI / ISAPI / RTSP), and capability matrices across enterprise DVR/NVRs."
           icon={Fingerprint}
         />
+        {error && <div className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">{error}</div>}
 
         {/* Navigation Tabs */}
         <div className="flex border-b border-slate-200 gap-6 text-sm font-medium">
@@ -224,7 +178,7 @@ export default function CompatibilityPage() {
                       <td className="p-4 font-medium text-slate-700">{recorder.branchName}</td>
                       <td className="p-4">
                         <span className="px-2.5 py-1 bg-emerald-100 text-emerald-800 rounded-full font-bold text-[10px] uppercase tracking-wider">
-                          {recorder.fingerprintStatus ?? "CONFIRMED"}
+                          {recorder.fingerprintStatus ?? "NOT_REPORTED"}
                         </span>
                       </td>
                       <td className="p-4">
@@ -232,11 +186,11 @@ export default function CompatibilityPage() {
                           <div className="w-16 bg-slate-200 rounded-full h-2 overflow-hidden">
                             <div
                               className="bg-emerald-500 h-2 rounded-full"
-                              style={{ width: `${Math.round((recorder.fingerprintConfidence ?? 0.94) * 100)}%` }}
+                              style={{ width: `${Math.round((recorder.fingerprintConfidence ?? 0) * 100)}%` }}
                             />
                           </div>
                           <span className="font-bold text-slate-800 text-[11px]">
-                            {Math.round((recorder.fingerprintConfidence ?? 0.94) * 100)}%
+                            {recorder.fingerprintConfidence == null ? "—" : `${Math.round(recorder.fingerprintConfidence * 100)}%`}
                           </span>
                         </div>
                       </td>
