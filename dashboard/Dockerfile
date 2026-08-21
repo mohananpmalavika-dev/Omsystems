@@ -14,6 +14,7 @@ ENV CONTROL_PLANE_INTERNAL_URL=$CONTROL_PLANE_INTERNAL_URL
 ENV MEDIA_GATEWAY_INTERNAL_URL=$MEDIA_GATEWAY_INTERNAL_URL
 ENV DASHBOARD_DEV_USER_ID=$DASHBOARD_DEV_USER_ID
 COPY dashboard ./dashboard
+COPY backend ./backend
 RUN --mount=type=cache,target=/root/.cache/next-swc \
     npm run build --workspace @sentinel/dashboard
 
