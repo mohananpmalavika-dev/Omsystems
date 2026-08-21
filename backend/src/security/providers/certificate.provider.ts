@@ -52,9 +52,7 @@ export class CertificateProvider implements ICertificateProvider {
   private readonly CERTIFICATE_GRACE_PERIOD_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
   private readonly TPM_REVALIDATION_MS = 24 * 60 * 60 * 1000; // 24 hours
 
-  constructor() {
-    this.initializeTrustedCAs();
-  }
+  constructor() {}
 
   /**
    * Verify certificate and TPM attestation
@@ -570,11 +568,8 @@ export class CertificateProvider implements ICertificateProvider {
   }
 
   private initializeTrustedCAs(): void {
-    // Add default trusted CAs
-    const defaultCAs = [
-      { issuer: 'CN=OmSystems CA,O=OmSystems,C=US', publicKey: 'mock-public-key-1' },
-      { issuer: 'CN=OmSystems Root CA,O=OmSystems,C=US', publicKey: 'mock-public-key-2' }
-    ];
+    // Trust anchors must be provisioned from the deployment's PKI.
+    const defaultCAs: Array<{ issuer: string; publicKey: string }> = [];
 
     defaultCAs.forEach(ca => {
       this.trustedCAs.set(ca.issuer, {

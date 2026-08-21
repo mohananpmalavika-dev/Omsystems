@@ -39,12 +39,8 @@ import { registerDistributedStateRoutes } from "./distributed-state/routes/distr
 import { registerReliablePtzRoutes } from "./ptz/routes/ptz.routes.js";
 import { registerMediaTokenRoutes } from "./media-auth/routes/media-token.routes.js";
 import { registerOfflineSyncRoutes } from "./offline-sync/routes/offline-sync.routes.js";
-import { registerRemoteOpsRoutes } from "./remote-ops/routes/remote-ops.routes.js";
 import { registerCentralMonitoringRoutes } from "./routes/central-monitoring.routes.js";
 import { registerOnDemandMediaRoutes } from "./routes/on-demand-media.routes.js";
-import { registerAiAlertsRoutes } from "./routes/ai-alerts.routes.js";
-import { registerAlertIncidentsRoutes } from "./routes/alert-incidents.routes.js";
-import { registerPerformanceBenchmarkRoutes } from "./routes/performance-benchmarks.routes.js";
 import { registerEdgeTelemetryRoutes } from "./routes/edge-telemetry.routes.js";
 import { registerMaintenanceWindowsRoutes } from "./routes/maintenance-windows.routes.js";
 import { registerUnifiedOperationsRoutes } from "./routes/unified-operations.routes.js";
@@ -108,11 +104,8 @@ import { registerProvisioningRoutes } from "./routes/provisioning.routes.js";
 import { registerStorageHealthRoutes } from "./routes/storage-health.routes.js";
 import { registerConnectivityHealthRoutes } from "./routes/connectivity-health.routes.js";
 import { registerAlertOperationsRoutes } from "./routes/alert-operations.routes.js";
-import { registerSlaReportRoutes } from "./routes/sla-reports.routes.js";
 import { registerClockMonitoringRoutes } from "./routes/clock-monitoring.routes.js";
 import { registerEdgeGatewayRoutes } from "./routes/edge-gateway.routes.js";
-import { registerEvidenceCaptureRoutes } from "./routes/evidence-capture.routes.js";
-import { registerDeduplicationRoutes } from "./routes/deduplication.routes.js";
 import { registerDigitalTwinHealthRoutes } from "./routes/digital-twin-health.routes.js";
 import { registerStaleHealthRoutes } from "./routes/stale-health.routes.js";
 import { registerSurveillancePolicyRoutes } from "./routes/surveillance-policy.routes.js";
@@ -140,7 +133,6 @@ import { registerClientMediaSchedulerRoutes } from "./routes/client-media-schedu
 import { registerAiQualityRoutes } from "./routes/ai-quality.routes.js";
 import { registerEnterpriseSocOperationsRoutes } from "./routes/enterprise-soc-operations.routes.js";
 import { registerEventNormalizationRoutes } from "./event-normalization/routes/event-normalization.routes.js";
-import { registerCompatibilityLabRoutes } from "./routes/compatibility-lab.routes.js";
 import { autoProvisionVerifiedCameras } from "./services/camera-auto-provision.js";
 import {
   EmptyFederationLocalSearchProvider,
@@ -2499,14 +2491,6 @@ export async function buildApp(options?: {
     app.log.error({ err }, 'failed to register offline sync routes');
   }
 
-  // Register Remote CCTV Infrastructure Operations & Technician Replacement routes
-  try {
-    await registerRemoteOpsRoutes(app);
-    app.log.info('Remote CCTV infrastructure operations routes registered');
-  } catch (err: unknown) {
-    app.log.error({ err }, 'failed to register remote ops routes');
-  }
-
   // Register Scalable Central Monitoring Station & Priority Work Queue routes
   try {
     await registerCentralMonitoringRoutes(app);
@@ -2537,30 +2521,6 @@ export async function buildApp(options?: {
     app.log.info('On-demand media and local video residency routes registered');
   } catch (err: unknown) {
     app.log.error({ err }, 'failed to register on-demand media routes');
-  }
-
-  // Register Normalized AI Alerts & Surveillance Event routes
-  try {
-    await registerAiAlertsRoutes(app);
-    app.log.info('Normalized AI alerts and surveillance event routes registered');
-  } catch (err: unknown) {
-    app.log.error({ err }, 'failed to register AI alerts routes');
-  }
-
-  // Register Alert Incidents & Storm Suppression routes
-  try {
-    await registerAlertIncidentsRoutes(app);
-    app.log.info('Alert incidents and storm suppression routes registered');
-  } catch (err: unknown) {
-    app.log.error({ err }, 'failed to register alert incidents routes');
-  }
-
-  // Register Capacity Benchmarks & SLO Performance routes
-  try {
-    await registerPerformanceBenchmarkRoutes(app);
-    app.log.info('Capacity benchmark and SLO performance routes registered');
-  } catch (err: unknown) {
-    app.log.error({ err }, 'failed to register performance benchmark routes');
   }
 
   // Register Admin Database & Table Management routes
@@ -2611,14 +2571,6 @@ export async function buildApp(options?: {
     app.log.error({ err }, 'failed to register real-time alert operations routes');
   }
 
-  // Register Historical SLA Metrics & Daily Health Aggregation routes
-  try {
-    await registerSlaReportRoutes(app, store);
-    app.log.info('Historical SLA reports and aggregation routes registered');
-  } catch (err: unknown) {
-    app.log.error({ err }, 'failed to register SLA reports routes');
-  }
-
   // Register Clock & Time-Drift Monitoring routes
   try {
     await registerClockMonitoringRoutes(app, store);
@@ -2633,22 +2585,6 @@ export async function buildApp(options?: {
     app.log.info('Edge Gateway protocol and media session routes registered');
   } catch (err: unknown) {
     app.log.error({ err }, 'failed to register edge gateway routes');
-  }
-
-  // Register Guaranteed Alert Evidence & Forensic Verification routes
-  try {
-    await registerEvidenceCaptureRoutes(app, store);
-    app.log.info('Guaranteed alert evidence capture routes registered');
-  } catch (err: unknown) {
-    app.log.error({ err }, 'failed to register evidence capture routes');
-  }
-
-  // Register AI Alert Deduplication & Temporal Aggregation routes
-  try {
-    await registerDeduplicationRoutes(app, store);
-    app.log.info('AI alert deduplication and aggregation routes registered');
-  } catch (err: unknown) {
-    app.log.error({ err }, 'failed to register alert deduplication routes');
   }
 
   // Register Digital Twin Branch Health & Root-Cause Analysis routes
@@ -2718,14 +2654,6 @@ export async function buildApp(options?: {
     app.log.info("Distributed Media Orchestration & Client Scheduler routes registered");
   } catch (err: unknown) {
     app.log.error({ err }, "failed to register media orchestration routes");
-  }
-
-  // Register Hardware Compatibility Lab routes
-  try {
-    await registerCompatibilityLabRoutes(app);
-    app.log.info("Hardware Compatibility Lab routes registered");
-  } catch (err: unknown) {
-    app.log.error({ err }, "failed to register compatibility lab routes");
   }
 
   // Register Stateful Incident Playbook Engine & Dynamic Operator SOP routes

@@ -86,7 +86,6 @@ export function EnhancedCameraGrid({
   // Initialize media orchestrator
   const mediaOrchestrator = useMediaOrchestrator({
     autoRegisterClient: true,
-    heartbeatIntervalMs: 30_000,
   });
 
   const {

@@ -13,14 +13,15 @@ import {
 } from '../domain/media-token.types.js';
 
 export class MediaTokenValidatorService {
-  private secretKey: string;
+  private secretKey: string | undefined;
   private revokedTokens = new Set<string>(); // In-memory blacklist of revoked JTIs
 
   constructor(secretKey?: string) {
-    this.secretKey = secretKey || process.env.MEDIA_TOKEN_SECRET || 'sentinel-media-secret-key-2026-v1';
+    this.secretKey = secretKey ?? process.env.MEDIA_TOKEN_SECRET;
   }
 
   setSecretKey(key: string): void {
+    if (!key.trim()) throw new Error('media_token_secret_required');
     this.secretKey = key;
   }
 
@@ -41,6 +42,9 @@ export class MediaTokenValidatorService {
     requiredPermission?: MediaAccessPermission
   ): MediaTokenValidationResult {
     try {
+      if (!this.secretKey) {
+        return { isValid: false, error: 'Media token secret is not configured', errorCode: 'INVALID_SIGNATURE' };
+      }
       const parts = token.split('.');
       if (parts.length !== 3) {
         return { isValid: false, error: 'Malformed JWT structure', errorCode: 'MALFORMED_TOKEN' };

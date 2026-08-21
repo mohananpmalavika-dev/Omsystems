@@ -13,7 +13,6 @@ import {
   SecurityVerdict,
   ThreatLevel
 } from './types';
-import crypto from 'crypto';
 
 interface IPRecord {
   ipAddress: string;
@@ -65,9 +64,7 @@ export class NetworkProvider implements INetworkProvider {
   private readonly MAX_LOCATION_HISTORY = 100;
   private readonly IMPOSSIBLE_TRAVEL_SPEED_KMH = 800; // Speed of commercial aircraft
 
-  constructor() {
-    this.initializeThreatIntelligence();
-  }
+  constructor() {}
 
   /**
    * Verify network trust
@@ -151,20 +148,22 @@ export class NetworkProvider implements INetworkProvider {
       });
     }
 
-    // 7. Get geolocation
+    // 7. Get geolocation only from an integrated provider.
     const location = this.getGeolocation(context.ipAddress);
-    
-    // 8. Check location trust
-    const locationTrust = await this.checkLocationTrust(
-      context.userId,
-      location,
-      context.ipAddress
-    );
+    const locationTrust = location
+      ? await this.checkLocationTrust(context.userId, location, context.ipAddress)
+      : {
+          country: 'Unknown',
+          countryCode: 'ZZ',
+          isKnownLocation: false,
+          impossibleTravel: false,
+        };
     evidence.locationTrust = locationTrust;
+    evidence.geolocationAvailable = Boolean(location);
 
-    if (!locationTrust.isKnownLocation) {
+    if (location && !locationTrust.isKnownLocation) {
       score += 25;
-      reasons.push(`Access from new location: ${location.city}, ${location.country}`);
+      reasons.push(`Access from new location: ${location.city ?? 'unknown city'}, ${location.country}`);
     }
 
     // 9. Detect impossible travel
@@ -207,8 +206,10 @@ export class NetworkProvider implements INetworkProvider {
       reasons.push('Access from datacenter IP');
     }
 
-    // 12. Log location
-    await this.logLocation(context.userId, location, context.ipAddress);
+    // 12. Log real location evidence only.
+    if (location) {
+      await this.logLocation(context.userId, location, context.ipAddress);
+    }
 
     // Determine verdict
     let verdict: SecurityVerdict;
@@ -546,25 +547,9 @@ export class NetworkProvider implements INetworkProvider {
   // Private Helper Methods
   // ============================================================================
 
-  private getGeolocation(ipAddress: string): LocationRecord['location'] {
-    // In production, use a geolocation service like MaxMind GeoIP2
-    // For now, return mock geolocation based on IP
-    
-    // Simple mock: derive from IP
-    const parts = ipAddress.split('.');
-    const hash = crypto.createHash('md5').update(ipAddress).digest('hex');
-    
-    // Mock latitude/longitude based on hash
-    const lat = (parseInt(hash.substring(0, 2), 16) / 255) * 180 - 90;
-    const lon = (parseInt(hash.substring(2, 4), 16) / 255) * 360 - 180;
-
-    return {
-      country: 'United States',
-      countryCode: 'US',
-      city: 'San Francisco',
-      latitude: lat,
-      longitude: lon
-    };
+  private getGeolocation(_ipAddress: string): LocationRecord['location'] | null {
+    // Do not fabricate coordinates until a verified GeoIP source is integrated.
+    return null;
   }
 
   private calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
@@ -609,9 +594,10 @@ export class NetworkProvider implements INetworkProvider {
   }
 
   private detectTor(ipAddress: string): boolean {
-    // In production, check against Tor exit node list
-    // For now, simple heuristic
-    return ipAddress.startsWith('185.') || ipAddress.startsWith('176.');
+    // Prefix heuristics are not a valid Tor signal. This is false until a
+    // synchronized exit-node feed is explicitly integrated.
+    void ipAddress;
+    return false;
   }
 
   private isDatacenterIP(ipAddress: string): boolean {
@@ -679,31 +665,16 @@ export class NetworkProvider implements INetworkProvider {
   }
 
   private initializeThreatIntelligence(): void {
-    // Add known malicious IPs
-    const knownThreats = [
-      '192.0.2.1',    // TEST-NET-1 (for testing)
-      '198.51.100.1', // TEST-NET-2
-      '203.0.113.1'   // TEST-NET-3
-    ];
+    // Production starts without embedded threat intelligence data.
+    const knownThreats: string[] = [];
 
     knownThreats.forEach(ip => this.threatList.add(ip));
 
-    // Add known VPN ranges
-    const vpnRanges = [
-      '10.8.0',      // Common OpenVPN range
-      '10.9.0',
-      '172.16.0'     // Private network often used by VPNs
-    ];
+    const vpnRanges: string[] = [];
 
     vpnRanges.forEach(range => this.vpnRanges.add(range));
 
-    // Add datacenter ranges
-    const datacenterRanges = [
-      '3.0.0',       // AWS
-      '54.0.0',      // AWS
-      '104.16.0',    // Cloudflare
-      '172.217.0'    // Google
-    ];
+    const datacenterRanges: string[] = [];
 
     datacenterRanges.forEach(range => this.datacenterRanges.add(range));
 

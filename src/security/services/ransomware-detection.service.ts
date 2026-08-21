@@ -122,6 +122,12 @@ export class RansomwareDetectionService extends EventEmitter implements IRansomw
     
     // Collect metrics over time period
     const metrics = await this.collectHistoricalMetrics(deviceId, 7); // 7 days
+    if (metrics.length === 0) {
+      // A baseline without observed telemetry would turn lack of data into a
+      // fabricated ransomware profile. Leave the device unbaselined instead.
+      this.emit('baseline:unavailable', { deviceId, reason: 'historical_telemetry_unavailable' });
+      return;
+    }
 
     const baseline: BehaviorBaseline = {
       deviceId,

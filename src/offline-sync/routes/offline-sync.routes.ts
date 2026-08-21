@@ -6,7 +6,6 @@ import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import { cloudSyncReplayer } from '../services/cloud-sync-replayer.service.js';
 import { localEdgeSurvivability } from '../services/local-edge-survivability.service.js';
-import { ConnectivityState } from '../domain/offline-sync.types.js';
 
 export async function registerOfflineSyncRoutes(app: FastifyInstance) {
   // 1. Ingest Sync Batch (Central Receiver)
@@ -48,14 +47,4 @@ export async function registerOfflineSyncRoutes(app: FastifyInstance) {
     return reply.send({ success: true, data: result });
   });
 
-  // 4. Simulate WAN Outage / Recovery (Testing & Chaos Engineering)
-  app.post('/v1/edge/offline/simulate-outage', async (request: FastifyRequest, reply: FastifyReply) => {
-    const body = z.object({
-      branchId: z.string(),
-      state: z.enum(['ONLINE', 'DEGRADED', 'OFFLINE', 'RECONNECTING', 'SYNCING']),
-    }).parse(request.body);
-
-    localEdgeSurvivability.setConnectivityState(body.state as ConnectivityState);
-    return reply.send({ success: true, message: `Branch ${body.branchId} connectivity set to ${body.state}` });
-  });
 }

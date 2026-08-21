@@ -159,6 +159,7 @@ export function HAClusterView() {
             {status.nodes.map((node, index) => {
               const nodeId = textValue(node.nodeId ?? node.id, `node-${index + 1}`);
               const nodeStatus = textValue(node.status, "UNKNOWN");
+              const nodeAddress = textValue(node.host ?? node.ipAddress, "");
               return (
                 <div key={nodeId} className="rounded-xl border border-slate-800 bg-slate-950/70 p-4">
                   <div className="flex items-center justify-between gap-3">
@@ -169,7 +170,7 @@ export function HAClusterView() {
                   </div>
                   <div className="mt-2 space-y-1 text-xs text-slate-400">
                     <div>Node ID: {nodeId}</div>
-                    {(node.host || node.ipAddress) && <div>Address: {textValue(node.host ?? node.ipAddress)}</div>}
+                    {nodeAddress && <div>Address: {nodeAddress}</div>}
                     {node.activeStreams !== undefined && <div>Active streams: {textValue(node.activeStreams)}</div>}
                     {node.capacityStreams !== undefined && <div>Capacity: {textValue(node.capacityStreams)}</div>}
                   </div>
@@ -201,21 +202,26 @@ export function HAClusterView() {
         ) : (
           <div className="mt-4 space-y-3">
             {status.recentEvents.map((event, index) => (
-              <div key={textValue(event.id ?? event.eventId, `event-${index + 1}`)} className="rounded-lg border border-slate-800 bg-slate-950/70 p-3">
-                <div className="text-sm font-semibold text-slate-200">
-                  {textValue(event.type ?? event.eventType, "Cluster event")}
-                </div>
-                <div className="mt-1 text-xs text-slate-500">
-                  {formatTimestamp(event.timestamp ?? event.createdAt)}
-                </div>
-                {(event.message || event.reason) && (
-                  <p className="mt-2 text-xs text-slate-400">{textValue(event.message ?? event.reason)}</p>
-                )}
-              </div>
+              <ClusterEventCard key={textValue(event.id ?? event.eventId, `event-${index + 1}`)} event={event} />
             ))}
           </div>
         )}
       </section>
+    </div>
+  );
+}
+
+function ClusterEventCard({ event }: { event: TelemetryRecord }) {
+  const message = textValue(event.message ?? event.reason, "");
+  return (
+    <div className="rounded-lg border border-slate-800 bg-slate-950/70 p-3">
+      <div className="text-sm font-semibold text-slate-200">
+        {textValue(event.type ?? event.eventType, "Cluster event")}
+      </div>
+      <div className="mt-1 text-xs text-slate-500">
+        {formatTimestamp(event.timestamp ?? event.createdAt)}
+      </div>
+      {message && <p className="mt-2 text-xs text-slate-400">{message}</p>}
     </div>
   );
 }

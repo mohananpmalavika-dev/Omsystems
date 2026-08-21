@@ -295,8 +295,9 @@ export class RiskEngine implements IRiskEngine {
     const recentPatterns = this.getRecentAccessPatterns(userId, 60 * 60 * 1000); // 1 hour
     profile.typicalRequestRate = recentPatterns.length;
 
-    // Update session duration (mock calculation)
-    profile.averageSessionDuration = 30 * 60 * 1000; // 30 minutes
+    // Session duration is not available from a single access event. Keep it
+    // explicitly unknown (0) until a session telemetry source is integrated.
+    profile.averageSessionDuration = 0;
 
     profile.lastUpdated = new Date();
 
@@ -353,8 +354,8 @@ export class RiskEngine implements IRiskEngine {
       normalLocations: [],
       normalDevices: [],
       normalResources: [],
-      averageSessionDuration: 30 * 60 * 1000, // 30 minutes default
-      typicalRequestRate: 10, // 10 requests per hour default
+      averageSessionDuration: 0,
+      typicalRequestRate: 0,
       lastUpdated: new Date()
     };
   }
@@ -563,7 +564,7 @@ export class RiskEngine implements IRiskEngine {
     const recentPatterns = this.getRecentAccessPatterns(context.userId, 60 * 60 * 1000); // 1 hour
 
     // Check request rate
-    if (recentPatterns.length > profile.typicalRequestRate * 2) {
+    if (profile.typicalRequestRate > 0 && recentPatterns.length > profile.typicalRequestRate * 2) {
       risk += 20;
     }
 
@@ -673,18 +674,22 @@ export class RiskEngine implements IRiskEngine {
       anomalyRate: 0
     };
 
-    // Calculate stats from recent access patterns
-    let totalScore = 0;
-    let totalAnomalies = 0;
+    const cutoff = Date.now() - 24 * 60 * 60 * 1000;
     let totalAccesses = 0;
+    let totalFailures = 0;
 
     for (const patterns of this.accessPatterns.values()) {
-      totalAccesses += patterns.length;
-      // Mock calculation for demo
+      const recent = patterns.filter((pattern) => pattern.timestamp.getTime() >= cutoff);
+      const failures = recent.filter((pattern) => !pattern.success).length;
+      totalAccesses += recent.length;
+      totalFailures += failures;
+      if (failures >= 3) stats.recentHighRiskEvents += 1;
     }
 
-    stats.averageRiskScore = totalAccesses > 0 ? 25 : 0;
-    stats.anomalyRate = totalAccesses > 0 ? totalAnomalies / totalAccesses : 0;
+    // The only aggregate score available without an external risk store is
+    // the observed failed-access rate; no default risk score is fabricated.
+    stats.averageRiskScore = totalAccesses > 0 ? Math.round((totalFailures / totalAccesses) * 100) : 0;
+    stats.anomalyRate = totalAccesses > 0 ? totalFailures / totalAccesses : 0;
 
     return stats;
   }
@@ -701,11 +706,14 @@ export class RiskEngine implements IRiskEngine {
     const profile = await this.getBehaviorProfile(userId);
     const recentPatterns = this.getRecentAccessPatterns(userId, 24 * 60 * 60 * 1000);
 
+    const failedAccesses = recentPatterns.filter((pattern) => !pattern.success).length;
     return {
       profile,
-      recentAnomalies: 0, // Would calculate from recent patterns
+      recentAnomalies: failedAccesses,
       recentAccessCount: recentPatterns.length,
-      averageRiskScore: 25 // Mock value
+      averageRiskScore: recentPatterns.length > 0
+        ? Math.round((failedAccesses / recentPatterns.length) * 100)
+        : 0,
     };
   }
 }

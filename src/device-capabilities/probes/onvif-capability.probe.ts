@@ -97,26 +97,8 @@ export class OnvifCapabilityProbe implements CapabilityProbe {
   // ============ PRIVATE METHODS ============
 
   private async getCapabilities(device: DeviceIdentity): Promise<any> {
-    // TODO: Implement actual ONVIF GetCapabilities call
-    // For now, return mock data
-    return {
-      media: {
-        streamingCapabilities: {
-          rtspStreaming: true,
-          rtp_rtsp_tcp: true,
-        },
-      },
-      ptz: device.vendor?.toLowerCase().includes("ptz")
-        ? {
-            eFlip: false,
-            reverse: false,
-          }
-        : undefined,
-      events: {
-        wsSubscriptionPolicySupport: true,
-      },
-      analytics: undefined,
-    };
+    void device;
+    throw new Error("onvif_capability_transport_not_configured");
   }
 
   private async checkProfileSupport(

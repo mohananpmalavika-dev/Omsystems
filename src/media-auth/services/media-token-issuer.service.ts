@@ -16,17 +16,18 @@ import {
 import { MediaPlaneRegistryService, mediaPlaneRegistry } from './media-plane-registry.service.js';
 
 export class MediaTokenIssuerService {
-  private secretKey: string;
+  private secretKey: string | undefined;
   private readonly DEFAULT_TTL_SECONDS = 300; // 5 minutes
 
   constructor(
     private readonly nodeRegistry: MediaPlaneRegistryService = mediaPlaneRegistry,
     secretKey?: string
   ) {
-    this.secretKey = secretKey || process.env.MEDIA_TOKEN_SECRET || 'sentinel-media-secret-key-2026-v1';
+    this.secretKey = secretKey ?? process.env.MEDIA_TOKEN_SECRET;
   }
 
   setSecretKey(key: string): void {
+    if (!key.trim()) throw new Error('media_token_secret_required');
     this.secretKey = key;
   }
 
@@ -72,6 +73,7 @@ export class MediaTokenIssuerService {
    * Encodes and signs a JWT token using HS256 HMAC.
    */
   private signJwt(claims: MediaTokenClaims): string {
+    if (!this.secretKey) throw new Error('media_token_secret_not_configured');
     const header = { alg: 'HS256', typ: 'JWT' };
     const encodedHeader = Buffer.from(JSON.stringify(header)).toString('base64url');
     const encodedPayload = Buffer.from(JSON.stringify(claims)).toString('base64url');
@@ -87,6 +89,12 @@ export class MediaTokenIssuerService {
    * Issues a signed Media Access Token to an authorized client.
    */
   issueMediaToken(request: IssueMediaTokenRequest): MediaTokenIssueResult {
+    if (!this.secretKey) {
+      return { success: false, error: 'MEDIA_TOKEN_SECRET_NOT_CONFIGURED' };
+    }
+    if (!request.tenantId) {
+      return { success: false, error: 'TENANT_ID_REQUIRED' };
+    }
     // 1. RBAC Permission Validation
     const isAuthorized = this.hasPermission(request.userPermissions, request.requestedPermission);
     if (!isAuthorized) {
@@ -118,7 +126,7 @@ export class MediaTokenIssuerService {
 
     const claims: MediaTokenClaims = {
       sub: request.userId,
-      tenantId: request.tenantId || 'TENANT-DEFAULT',
+      tenantId: request.tenantId,
       branchId: request.branchId,
       cameraId: request.cameraId,
       cameraName: request.cameraName,

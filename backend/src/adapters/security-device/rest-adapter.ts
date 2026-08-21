@@ -86,8 +86,8 @@ export class RestAdapter extends BaseSecurityDeviceAdapter {
       const baseUrl = device.metadata?.apiBaseUrl || 
                       `http://${device.ipAddress}:${device.port || 80}`;
 
-      // Test connection by calling health endpoint
-      const response = await this.makeRequest(device, 'GET', '/health', {}, { timeout: 5000 });
+      const endpoint = device.metadata?.healthEndpoint || this.apiConfig.endpoints?.health || '/health';
+      const response = await this.makeRequest(device, 'GET', endpoint, undefined, { timeout: 5000 });
 
       const connection = {
         deviceId: device.id,
@@ -130,21 +130,71 @@ export class RestAdapter extends BaseSecurityDeviceAdapter {
     data?: any,
     options?: { timeout?: number }
   ): Promise<{ status: number; data: any }> {
-    const baseUrl = device.metadata?.apiBaseUrl || 
-                    `http://${device.ipAddress}:${device.port || 80}`;
-    const url = `${baseUrl}${endpoint}`;
+    const config = this.resolveApiConfig(device);
+    const url = new URL(endpoint, normalizeApiBaseUrl(config.baseUrl ?? device.metadata?.apiBaseUrl, device));
+    if (!['http:', 'https:'].includes(url.protocol)) {
+      throw new Error(`unsupported_rest_protocol:${url.protocol}`);
+    }
 
-    // TODO: Implement actual HTTP request using fetch or axios
-    // - Handle authentication (basic, bearer, apikey)
-    // - Handle timeouts
-    // - Handle errors
-    // - Parse response
+    const headers = new Headers({ accept: 'application/json, text/plain;q=0.9, */*;q=0.1' });
+    this.applyAuthentication(headers, config);
+    const normalizedMethod = method.toUpperCase();
+    if (data !== undefined && !['GET', 'HEAD'].includes(normalizedMethod)) {
+      headers.set('content-type', 'application/json');
+    }
 
-    // For now, return mock response
-    return {
-      status: 200,
-      data: {},
-    };
+    const timeoutMs = options?.timeout ?? config.timeout ?? 10_000;
+    let response: Response;
+    try {
+      response = await fetch(url, {
+        method: normalizedMethod,
+        headers,
+        body: data !== undefined && !['GET', 'HEAD'].includes(normalizedMethod) ? JSON.stringify(data) : undefined,
+        signal: AbortSignal.timeout(timeoutMs),
+        redirect: 'error',
+      });
+    } catch (error) {
+      throw new Error(`rest_request_failed:${error instanceof Error ? error.message : String(error)}`);
+    }
+
+    const responseData = await readResponsePayload(response);
+    if (!response.ok) {
+      const detail = typeof responseData === 'string' ? responseData.slice(0, 256) : undefined;
+      throw new Error(`rest_request_rejected:${response.status}${detail ? `:${detail}` : ''}`);
+    }
+
+    return { status: response.status, data: responseData };
+  }
+
+  private resolveApiConfig(device: SecurityDevice): RestApiConfig {
+    const deviceConfig = device.metadata?.restApi;
+    if (deviceConfig !== undefined && (typeof deviceConfig !== 'object' || Array.isArray(deviceConfig))) {
+      throw new Error('invalid_rest_api_configuration');
+    }
+    return { ...this.apiConfig, ...(deviceConfig ?? {}) };
+  }
+
+  private applyAuthentication(headers: Headers, config: RestApiConfig): void {
+    switch (config.authType ?? 'none') {
+      case 'none':
+        return;
+      case 'basic':
+        if (!config.username || config.password === undefined) throw new Error('rest_basic_credentials_unavailable');
+        headers.set('authorization', `Basic ${Buffer.from(`${config.username}:${config.password}`).toString('base64')}`);
+        return;
+      case 'bearer':
+        if (!config.apiKey) throw new Error('rest_bearer_token_unavailable');
+        headers.set('authorization', `Bearer ${config.apiKey}`);
+        return;
+      case 'apikey':
+        if (!config.apiKey) throw new Error('rest_api_key_unavailable');
+        headers.set(config.apiKeyHeader || 'x-api-key', config.apiKey);
+        return;
+      case 'digest':
+        throw new Error('rest_digest_auth_requires_vendor_adapter');
+      default:
+        throw new Error('unsupported_rest_authentication');
+    }
   }
 
   /**
@@ -157,7 +207,7 @@ export class RestAdapter extends BaseSecurityDeviceAdapter {
 
     try {
       const startTime = Date.now();
-      const endpoint = device.metadata?.healthEndpoint || '/api/health';
+      const endpoint = device.metadata?.healthEndpoint || this.apiConfig.endpoints?.health || '/api/health';
       
       const response = await this.makeRequest(device, 'GET', endpoint);
       const responseTimeMs = Date.now() - startTime;
@@ -232,7 +282,7 @@ export class RestAdapter extends BaseSecurityDeviceAdapter {
     await this.getConnection(device);
 
     try {
-      const endpoint = device.metadata?.statusEndpoint || '/api/status';
+      const endpoint = device.metadata?.statusEndpoint || this.apiConfig.endpoints?.status || '/api/status';
       const response = await this.makeRequest(device, 'GET', endpoint);
 
       return {
@@ -289,17 +339,11 @@ export class RestAdapter extends BaseSecurityDeviceAdapter {
     await this.getConnection(device);
 
     try {
-      const endpoint = device.metadata?.eventsEndpoint || '/api/events';
-      const params: any = {};
-      
-      if (since) {
-        params.since = since.toISOString();
-      }
-      if (limit) {
-        params.limit = limit;
-      }
-
-      const response = await this.makeRequest(device, 'GET', endpoint);
+      const endpoint = device.metadata?.eventsEndpoint || this.apiConfig.endpoints?.events || '/api/events';
+      const params = new URLSearchParams();
+      if (since) params.set('since', since.toISOString());
+      if (limit !== undefined) params.set('limit', String(limit));
+      const response = await this.makeRequest(device, 'GET', `${endpoint}${params.size ? `${endpoint.includes('?') ? '&' : '?'}${params}` : ''}`);
       
       // Parse vendor-specific events
       return this.parseEventsResponse(device, response.data);
@@ -351,7 +395,7 @@ export class RestAdapter extends BaseSecurityDeviceAdapter {
     const startTime = Date.now();
 
     try {
-      const endpoint = device.metadata?.commandEndpoint || '/api/command';
+      const endpoint = device.metadata?.commandEndpoint || this.apiConfig.endpoints?.command || '/api/command';
       
       const response = await this.makeRequest(device, 'POST', endpoint, {
         command: command.command,
@@ -389,8 +433,8 @@ export class RestAdapter extends BaseSecurityDeviceAdapter {
       // Parse capabilities from API response
       return this.parseCapabilitiesResponse(response.data);
     } catch (error) {
-      // Return default capabilities if query fails
-      return ['VIEW', 'HEALTH_READ', 'STATUS_READ'];
+      // Fall back only to capabilities explicitly stored for this enrolled device.
+      return device.capabilities;
     }
   }
 
@@ -398,16 +442,8 @@ export class RestAdapter extends BaseSecurityDeviceAdapter {
    * Parse capabilities response
    */
   private parseCapabilitiesResponse(data: any): DeviceCapability[] {
-    const capabilities: DeviceCapability[] = ['VIEW', 'HEALTH_READ', 'STATUS_READ'];
-
-    if (data.capabilities) {
-      // Vendor provides capability list
-      data.capabilities.forEach((cap: string) => {
-        capabilities.push(cap as DeviceCapability);
-      });
-    }
-
-    return capabilities;
+    if (!data || !Array.isArray(data.capabilities)) return [];
+    return data.capabilities.filter((cap: unknown): cap is DeviceCapability => typeof cap === 'string') as DeviceCapability[];
   }
 
   /**
@@ -415,5 +451,22 @@ export class RestAdapter extends BaseSecurityDeviceAdapter {
    */
   protected async onDisconnect(device: SecurityDevice): Promise<void> {
     // No persistent connection to close for REST APIs
+  }
+}
+
+function normalizeApiBaseUrl(configuredBaseUrl: unknown, device: SecurityDevice): string {
+  if (typeof configuredBaseUrl === 'string' && configuredBaseUrl.trim()) return configuredBaseUrl.trim().replace(/\/$/, '') + '/';
+  if (!device.ipAddress) throw new Error('rest_device_address_unavailable');
+  return `http://${device.ipAddress}${device.port ? `:${device.port}` : ''}/`;
+}
+
+async function readResponsePayload(response: Response): Promise<unknown> {
+  if (response.status === 204) return null;
+  const text = await response.text();
+  if (!text) return null;
+  try {
+    return JSON.parse(text);
+  } catch {
+    return text;
   }
 }

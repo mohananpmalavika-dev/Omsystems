@@ -28,90 +28,9 @@ export class UnifiedTimelineService {
   private events: TimelineItem[] = [];
   private bookmarks: PlaybackBookmark[] = [];
 
-  constructor() {
-  }
-
-  private seedDefaultTimeline() {
-    const baseTime = new Date('2026-08-17T00:00:00.000Z').getTime();
-
-    // 1. Motion Bursts
-    this.events.push(
-      {
-        id: 'mot-01',
-        track: 'MOTION',
-        startTime: new Date(baseTime + 8 * 3600_000 + 31 * 60_000 + 22000).toISOString(), // 08:31:22
-        type: 'MOTION',
-        metadata: { durationMs: 3400 },
-      },
-      {
-        id: 'mot-02',
-        track: 'MOTION',
-        startTime: new Date(baseTime + 14 * 3600_000 + 23 * 60_000 + 42000).toISOString(), // 14:23:42
-        type: 'MOTION',
-        metadata: { durationMs: 7800 },
-      }
-    );
-
-    // 2. AI Detections (Person P, Vehicle V)
-    this.events.push(
-      {
-        id: 'ai-01',
-        track: 'AI',
-        startTime: new Date(baseTime + 8 * 3600_000 + 34 * 60_000 + 11000).toISOString(), // 08:34:11
-        type: 'PERSON',
-        label: 'Person in Corridor',
-        metadata: { confidence: 0.94 },
-      },
-      {
-        id: 'ai-02',
-        track: 'AI',
-        startTime: new Date(baseTime + 10 * 3600_000 + 42 * 60_000 + 17000).toISOString(), // 10:42:17
-        type: 'VEHICLE',
-        label: 'Vehicle at Gate',
-        metadata: { confidence: 0.98 },
-      },
-      {
-        id: 'ai-03',
-        track: 'AI',
-        startTime: new Date(baseTime + 14 * 3600_000 + 23 * 60_000 + 43000).toISOString(), // 14:23:43
-        type: 'PERSON',
-        label: 'Intruder at Vault Door',
-        metadata: { confidence: 0.99 },
-      }
-    );
-
-    // 3. Access Control (Badge B, Door D)
-    this.events.push({
-      id: 'acc-01',
-      track: 'ACCESS',
-      startTime: new Date(baseTime + 14 * 3600_000 + 21 * 60_000 + 8000).toISOString(), // 14:21:08
-      type: 'BADGE_SWIPE',
-      label: 'Badge Accepted (Officer Anand)',
-      metadata: { badgeId: 'EMP-9021', doorName: 'Vault Outer Gate', accessResult: 'GRANTED' },
-    });
-
-    // 4. Alerts (!)
-    this.events.push({
-      id: 'alt-01',
-      track: 'ALERT',
-      startTime: new Date(baseTime + 14 * 3600_000 + 23 * 60_000 + 45000).toISOString(), // 14:23:45
-      severity: 'CRITICAL',
-      type: 'INTRUSION_ALERT',
-      label: 'P1 Vault Perimeter Breach',
-      metadata: { incidentId: 'INC-81722' },
-    });
-
-    // 5. Bookmarks
-    this.bookmarks.push({
-      id: 'bm-01',
-      tenantId: 'BANK-001',
-      cameraId: 'CAM-14',
-      incidentId: 'INC-81722',
-      timestamp: new Date(baseTime + 14 * 3600_000 + 23 * 60_000 + 47000).toISOString(), // 14:23:47
-      title: 'Suspect enters vault door',
-      createdBy: 'investigator-anand',
-      createdAt: new Date().toISOString(),
-    });
+  /** Adds an event received from an authoritative integration. */
+  ingest(event: TimelineItem): void {
+    this.events.push(event);
   }
 
   addBookmark(bookmark: PlaybackBookmark): void {
@@ -128,49 +47,62 @@ export class UnifiedTimelineService {
   getTimeline(query: TimelineQueryInput): UnifiedTimelineResponse {
     const fromMs = new Date(query.from).getTime();
     const toMs = new Date(query.to).getTime();
+    if (!Number.isFinite(fromMs) || !Number.isFinite(toMs) || fromMs >= toMs) {
+      throw new Error('invalid_timeline_range');
+    }
     const durationHours = (toMs - fromMs) / 3600_000;
 
     const filteredEvents = this.events.filter((e) => {
       const eTime = new Date(e.startTime).getTime();
-      return eTime >= fromMs && eTime <= toMs;
+      return e.cameraId === query.cameraId && eTime >= fromMs && eTime <= toMs;
     });
 
-    const recording = [
-      { start: query.from, end: new Date(fromMs + 14 * 3600_000).toISOString() },
-      { start: new Date(fromMs + 14 * 3600_000 + 15000).toISOString(), end: query.to }, // 15s gap
-    ];
+    const recording = filteredEvents
+      .filter((e) => e.track === 'RECORDING' && typeof e.endTime === 'string')
+      .map((e) => ({ start: e.startTime, end: e.endTime! }))
+      .filter(({ start, end }) => new Date(end).getTime() > new Date(start).getTime());
 
     const motion = filteredEvents
-      .filter((e) => e.track === 'MOTION')
+      .filter((e) => e.track === 'MOTION' && typeof e.metadata?.durationMs === 'number')
       .map((e) => ({
         timestamp: e.startTime,
-        durationMs: (e.metadata?.durationMs as number) || 3000,
+        durationMs: e.metadata!.durationMs as number,
       }));
 
     const aiEvents = filteredEvents
-      .filter((e) => e.track === 'AI')
+      .filter((e) =>
+        e.track === 'AI' &&
+        (e.type === 'PERSON' || e.type === 'VEHICLE') &&
+        typeof e.metadata?.confidence === 'number' &&
+        typeof e.label === 'string',
+      )
       .map((e) => ({
         timestamp: e.startTime,
-        type: (e.type === 'VEHICLE' ? 'VEHICLE' : 'PERSON') as 'PERSON' | 'VEHICLE',
-        confidence: (e.metadata?.confidence as number) || 0.95,
-        label: e.label || e.type,
+        type: e.type as 'PERSON' | 'VEHICLE',
+        confidence: e.metadata!.confidence as number,
+        label: e.label!,
       }));
 
     const accessEvents = filteredEvents
-      .filter((e) => e.track === 'ACCESS')
+      .filter((e) =>
+        e.track === 'ACCESS' &&
+        typeof e.metadata?.badgeId === 'string' &&
+        typeof e.metadata?.doorName === 'string' &&
+        (e.metadata?.accessResult === 'GRANTED' || e.metadata?.accessResult === 'DENIED'),
+      )
       .map((e) => ({
         timestamp: e.startTime,
-        badgeId: (e.metadata?.badgeId as string) || 'EMP-001',
-        doorName: (e.metadata?.doorName as string) || 'Door',
-        accessResult: (e.metadata?.accessResult as 'GRANTED' | 'DENIED') || 'GRANTED',
+        badgeId: e.metadata!.badgeId as string,
+        doorName: e.metadata!.doorName as string,
+        accessResult: e.metadata!.accessResult as 'GRANTED' | 'DENIED',
       }));
 
     const alerts = filteredEvents
-      .filter((e) => e.track === 'ALERT')
+      .filter((e) => e.track === 'ALERT' && typeof e.severity === 'string' && typeof e.label === 'string')
       .map((e) => ({
         timestamp: e.startTime,
-        severity: e.severity || 'HIGH',
-        title: e.label || e.type,
+        severity: e.severity!,
+        title: e.label!,
         incidentId: e.metadata?.incidentId as string,
       }));
 
@@ -195,7 +127,11 @@ export class UnifiedTimelineService {
         buckets.push({
           bucketStart: new Date(bStart).toISOString(),
           bucketEnd: new Date(bEnd).toISOString(),
-          recordingSeconds: Math.round(bucketSpanMs / 1000),
+          recordingSeconds: Math.round(recording.reduce((total, segment) => {
+            const start = Math.max(bStart, new Date(segment.start).getTime());
+            const end = Math.min(bEnd, new Date(segment.end).getTime());
+            return total + Math.max(0, end - start);
+          }, 0) / 1000),
           motionCount: inBucket.filter((e) => e.track === 'MOTION').length,
           personCount: inBucket.filter((e) => e.track === 'AI' && e.type === 'PERSON').length,
           vehicleCount: inBucket.filter((e) => e.track === 'AI' && e.type === 'VEHICLE').length,

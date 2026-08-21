@@ -445,14 +445,7 @@ export class OperationalAlertService {
       }
     }
 
-    // Return mock alert structure
-    // In production, this would query operational_alerts table
-    return {
-      id: alertId,
-      status: "active" as AlertStatus,
-      severity: "critical",
-      branchId,
-    };
+    throw new Error("operational_alert_persistence_not_configured");
   }
 
   /**

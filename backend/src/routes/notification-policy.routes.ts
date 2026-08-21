@@ -113,13 +113,6 @@ const createRecipientGroupSchema = z.object({
   members: z.array(recipientMemberSchema).min(1),
 });
 
-const testNotificationSchema = z.object({
-  severity: alertSeveritySchema,
-  channels: z.array(notificationChannelSchema),
-  recipientGroupIds: z.array(z.string().uuid()),
-  customMessage: z.string().optional(),
-});
-
 // =====================================================
 // ROUTE HANDLER
 // =====================================================
@@ -349,56 +342,6 @@ export async function notificationPolicyRoutes(app: FastifyInstance) {
     return { data: publishedPolicy };
   });
 
-  /**
-   * Test notification policy
-   */
-  app.post('/v1/notification-policies/test', async (request, reply) => {
-    const input = testNotificationSchema.parse(request.body);
-
-    // Get recipient groups
-    const recipientGroups = await repository.getRecipientGroups(input.recipientGroupIds);
-
-    // Resolve recipients
-    const recipientsByChannel = await policyEngine.resolveRecipients(
-      recipientGroups,
-      input.channels
-    );
-
-    const results = [];
-
-    for (const [channel, recipients] of recipientsByChannel.entries()) {
-      for (const recipient of recipients) {
-        const destination = 
-          channel === 'email' ? recipient.email :
-          channel === 'sms' ? recipient.phone :
-          channel === 'voice' ? (recipient.voiceNumber || recipient.phone) :
-          recipient.userId || recipient.id;
-
-        if (!destination) continue;
-
-        results.push({
-          channel,
-          recipient: recipient.displayName,
-          destination: this.maskDestination(destination),
-          status: 'DELIVERED',
-          latencyMs: Math.floor(Math.random() * 2000) + 500,
-        });
-      }
-    }
-
-    logger.info('Test notification sent', {
-      tenantId: request.currentUser.tenantId,
-      severity: input.severity,
-      recipientCount: results.length,
-      sentBy: request.currentUser.email,
-    });
-
-    return {
-      success: true,
-      results,
-    };
-  });
-
   // =====================================================
   // RECIPIENT GROUPS
   // =====================================================
@@ -485,24 +428,4 @@ export async function notificationPolicyRoutes(app: FastifyInstance) {
     return { data: escalationStatus };
   });
 
-  // =====================================================
-  // HELPER METHODS
-  // =====================================================
-
-  function maskDestination(destination: string): string {
-    if (destination.includes('@')) {
-      const [local, domain] = destination.split('@');
-      return `${local.substring(0, 2)}***@${domain}`;
-    }
-
-    if (destination.startsWith('+')) {
-      return `${destination.substring(0, 3)} ******${destination.slice(-4)}`;
-    }
-
-    if (destination.length > 8) {
-      return `${destination.substring(0, 4)}****${destination.slice(-4)}`;
-    }
-
-    return '****';
-  }
 }

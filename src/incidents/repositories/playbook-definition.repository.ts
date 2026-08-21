@@ -3,9 +3,7 @@ import type { PlaybookDefinition } from "../domain/playbook.types.js";
 export class PlaybookDefinitionRepository {
   private readonly playbooks = new Map<string, PlaybookDefinition>();
 
-  constructor() {
-    this.seedDefaultPlaybooks();
-  }
+  constructor() {}
 
   private seedDefaultPlaybooks(): void {
     // 1. P1 Vault Intrusion Playbook (9-Step Enterprise Banking SOP)
@@ -277,11 +275,7 @@ export class PlaybookDefinitionRepository {
       }
     }
 
-    // Default fallback to vault intrusion if high severity
-    if (severity === "P1") {
-      return this.playbooks.get("vault-intrusion-p1") || null;
-    }
-    return this.playbooks.get("cash-counter-p2") || null;
+    return null;
   }
 
   async listAll(): Promise<PlaybookDefinition[]> {

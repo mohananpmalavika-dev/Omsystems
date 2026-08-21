@@ -166,42 +166,10 @@ export class SnmpAdapter extends BaseSecurityDeviceAdapter {
    */
   async connect(device: SecurityDevice): Promise<ConnectionResult> {
     this.validateDeviceConfig(device);
-
-    try {
-      // TODO: Create SNMP session
-      // Validate credentials (community string or SNMPv3 credentials)
-      // Query basic device information
-
-      const connection = {
-        deviceId: device.id,
-        ipAddress: device.ipAddress,
-        protocol: 'SNMPv2c', // or SNMPv3
-        community: this.config.snmpCommunity || 'public',
-        connectedAt: new Date(),
-      };
-
-      this.connections.set(device.id, connection);
-
-      return {
-        success: true,
-        deviceInfo: {
-          manufacturer: device.manufacturer || 'Unknown',
-          model: device.model || 'Unknown',
-          serialNumber: device.serialNumber,
-          firmwareVersion: device.firmwareVersion,
-          hardwareVersion: device.hardwareVersion,
-          macAddress: device.macAddress,
-          supportedProtocols: ['SNMP'],
-          metadata: {},
-        },
-        capabilities: ['HEALTH_READ', 'STATUS_READ', 'METRICS_READ'],
-      };
-    } catch (error) {
-      return {
-        success: false,
-        errorMessage: `Failed to connect to SNMP device: ${error}`,
-      };
-    }
+    return {
+      success: false,
+      errorMessage: "snmp_transport_not_configured",
+    };
   }
 
   /**

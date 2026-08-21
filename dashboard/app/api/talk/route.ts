@@ -20,7 +20,7 @@ export async function POST(request: NextRequest) {
 function publicTalkError(message: string) {
   for (const code of [
     "talkback_not_supported", "talkback_busy", "device_credentials_rejected",
-    "invalid_talk_session", "stream_secret_unavailable", "talkback_unavailable_in_demo",
+    "invalid_talk_session", "stream_secret_unavailable",
   ]) if (message.includes(code)) return code;
   if (message.includes("403")) return "forbidden";
   return "talkback_unavailable";

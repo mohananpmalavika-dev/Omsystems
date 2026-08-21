@@ -25,19 +25,4 @@ export async function registerVirtualGuardRoutes(
     return { success: true, message: "Virtual Guard configuration updated.", data: config };
   });
 
-  // Test Auto-Talkdown speaker broadcast
-  app.post("/v1/operations/virtual-guard/:branchId/test-talkdown", async (request) => {
-    const { branchId } = request.params as { branchId: string };
-    const body = (request.body as any) || {};
-    const result = await service.triggerNightIntrusionEvent(
-      branchId,
-      body.cameraId || "cam-1",
-      body.detectionType || "AFTER_HOURS_HUMAN_INTRUSION",
-    );
-    return {
-      success: true,
-      message: "Test Virtual Guard Talkdown event executed.",
-      data: result,
-    };
-  });
 }
