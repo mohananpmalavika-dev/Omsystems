@@ -7,33 +7,34 @@ import { cameraVerificationService } from "../camera-verification/services/camer
 const probeDriverSchema = z.object({
   recorderId: z.string(),
   branchId: z.string(),
-  vendor: z.enum(["CP_PLUS", "DAHUA", "HIKVISION", "ONVIF"]).default("CP_PLUS"),
-  host: z.string().default("192.168.1.100"),
-  port: z.number().default(80),
+  vendor: z.enum(["CP_PLUS", "DAHUA", "HIKVISION", "ONVIF"]),
+  host: z.string().ip(),
+  port: z.number().int().min(1).max(65535),
   targetRetentionDays: z.number().default(90),
 });
 
 const verifyCameraSchema = z.object({
   cameraId: z.string(),
   branchId: z.string(),
-  channelConnected: z.boolean().default(true),
-  signalLoss: z.boolean().default(false),
-  rtspReachable: z.boolean().default(true),
-  rtspLatencyMs: z.number().default(20),
-  decodable: z.boolean().default(true),
-  videoCodec: z.string().default("H264"),
-  fps: z.number().default(25),
-  width: z.number().default(1920),
-  height: z.number().default(1080),
-  frozenFrameDetected: z.boolean().default(false),
-  blackFrameDetected: z.boolean().default(false),
-  recordingNow: z.boolean().default(true),
+  channelConnected: z.boolean(),
+  signalLoss: z.boolean(),
+  rtspReachable: z.boolean(),
+  rtspLatencyMs: z.number().nonnegative(),
+  decodable: z.boolean(),
+  videoCodec: z.string().min(1),
+  fps: z.number().nonnegative(),
+  width: z.number().int().positive(),
+  height: z.number().int().positive(),
+  frozenFrameDetected: z.boolean(),
+  blackFrameDetected: z.boolean(),
+  recordingNow: z.boolean(),
 });
 
 export const registerP0ControlPlaneRoutes: FastifyPluginAsync = async (app: FastifyInstance) => {
   // 1. Get 400-Branch Mosaic Projections (Sub-millisecond Single-Query)
   app.get("/v1/mosaic/branches", async (request, reply) => {
-    const tenantId = (request.query as any)?.tenantId ?? "omsystems";
+    const tenantId = request.currentUser?.tenantId ?? (request.query as any)?.tenantId;
+    if (!tenantId) return reply.code(400).send({ error: "tenant_id_required" });
     const data = await branchMosaicService.getMosaicProjections(tenantId);
     return reply.code(200).send({
       success: true,

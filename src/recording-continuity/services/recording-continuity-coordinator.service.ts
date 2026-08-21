@@ -8,7 +8,6 @@ import { createHash, sign, generateKeyPairSync } from 'node:crypto';
 import {
   RecordingExpectation,
   RecordingExclusion,
-  DEFAULT_RECORDING_EXPECTATION,
 } from '../domain/recording-expectation.js';
 import { CoverageCalculator, RecordingCoverageDaily } from './coverage-calculator.js';
 import { SegmentVerifier, VerifiedSegmentDetail, VerificationLevel } from './segment-verifier.js';
@@ -90,15 +89,7 @@ export class RecordingContinuityCoordinatorService {
   // Ephemeral keypair for audit certificate signing
   private signingKeyPair = generateKeyPairSync('ed25519');
 
-  constructor() {
-    this.seedDefaultExpectations();
-  }
-
-  private seedDefaultExpectations() {
-    this.setExpectation(DEFAULT_RECORDING_EXPECTATION('cam-178-01', 'BANK-001', 'BR-118'));
-    this.setExpectation(DEFAULT_RECORDING_EXPECTATION('cam-178-08', 'BANK-001', 'BR-118'));
-    this.setExpectation(DEFAULT_RECORDING_EXPECTATION('cam-178-07', 'BANK-001', 'BR-118'));
-  }
+  constructor() {}
 
   setExpectation(expectation: RecordingExpectation): void {
     this.expectations.set(expectation.cameraId, expectation);
@@ -127,8 +118,10 @@ export class RecordingContinuityCoordinatorService {
    * 4. Media Integrity (Verified)
    */
   getLiveRecordingHealth(cameraId: string, now: Date = new Date()): CameraLiveRecordingHealth {
-    const expectation = this.expectations.get(cameraId) || DEFAULT_RECORDING_EXPECTATION(cameraId);
-    const lastMedia = this.lastMediaTimestamps.get(cameraId) || new Date(now.getTime() - 3200);
+    const expectation = this.expectations.get(cameraId);
+    if (!expectation) throw new Error(`recording_expectation_not_configured:${cameraId}`);
+    const lastMedia = this.lastMediaTimestamps.get(cameraId);
+    if (!lastMedia) throw new Error(`recording_telemetry_not_available:${cameraId}`);
 
     const lagSeconds = parseFloat(((now.getTime() - lastMedia.getTime()) / 1000).toFixed(2));
     const isRecordingActive = lagSeconds <= 45.0; // Segment duration (30s) + grace (15s)
@@ -161,9 +154,9 @@ export class RecordingContinuityCoordinatorService {
         largestGapSeconds: yesterdayCoverage.largestGapSeconds,
       },
       retention: {
-        availableDays: 89.4,
-        requiredDays: 90,
-        retentionCompliant: false, // 89.4 < 90
+        availableDays: 0,
+        requiredDays: 0,
+        retentionCompliant: false,
       },
       mediaIntegrity: {
         status: yesterdayCoverage.corruptSegmentCount === 0 ? 'VERIFIED' : 'COMPROMISED',
@@ -176,7 +169,8 @@ export class RecordingContinuityCoordinatorService {
    * Calculates high-precision daily coverage for a camera on a specific date.
    */
   calculateDailyCoverage(cameraId: string, dateStr: string): RecordingCoverageDaily {
-    const expectation = this.expectations.get(cameraId) || DEFAULT_RECORDING_EXPECTATION(cameraId);
+    const expectation = this.expectations.get(cameraId);
+    if (!expectation) throw new Error(`recording_expectation_not_configured:${cameraId}`);
 
     const dateStart = new Date(`${dateStr}T00:00:00.000Z`).getTime();
     const dateEnd = new Date(`${dateStr}T23:59:59.999Z`).getTime();
@@ -191,19 +185,7 @@ export class RecordingContinuityCoordinatorService {
         end: Math.min(dateEnd, e.endTime.getTime()),
       }));
 
-    const segments = this.cameraSegments.get(cameraId) || [
-      // Default sample: 86,398 recorded seconds out of 86,400s (2s gap)
-      {
-        start: new Date(dateStart),
-        end: new Date(dateStart + 43200_000), // First 12h
-        isCorrupt: false,
-      },
-      {
-        start: new Date(dateStart + 43200_000 + 2000), // 2-second gap
-        end: new Date(dateEnd),
-        isCorrupt: false,
-      },
-    ];
+    const segments = this.cameraSegments.get(cameraId) ?? [];
 
     return CoverageCalculator.calculateDailyCoverage({
       tenantId: expectation.tenantId,
@@ -221,7 +203,7 @@ export class RecordingContinuityCoordinatorService {
    */
   getBranchSummary(branchId: string): BranchContinuitySummary {
     const branchExpectations = Array.from(this.expectations.values()).filter((e) => e.branchId === branchId);
-    const cameraCount = branchExpectations.length || 1;
+    const cameraCount = branchExpectations.length;
 
     let totalExpected = 0;
     let totalRecorded = 0;
@@ -257,13 +239,13 @@ export class RecordingContinuityCoordinatorService {
 
     return {
       branchId,
-      tenantId: 'BANK-001',
+      tenantId: branchExpectations[0]?.tenantId ?? '',
       cameraCount,
       compliantCameraCount: compliantCount,
       warningCameraCount: warningCount,
       criticalCameraCount: criticalCount,
-      total24hExpectedSeconds: totalExpected || 86400 * cameraCount,
-      total24hRecordedSeconds: totalRecorded || 86398 * cameraCount,
+      total24hExpectedSeconds: totalExpected,
+      total24hRecordedSeconds: totalRecorded,
       overallCoveragePercent,
       totalGaps24h: totalGaps,
       largestGap24hSeconds: maxGap,

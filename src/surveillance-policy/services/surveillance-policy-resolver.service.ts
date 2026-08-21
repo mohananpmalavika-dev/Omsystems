@@ -13,9 +13,7 @@ export class SurveillancePolicyResolverService {
   private readonly policies = new Map<string, SurveillancePolicy>();
   private readonly assignments: SurveillancePolicyAssignment[] = [];
 
-  constructor() {
-    this.seedDefaultPolicies();
-  }
+  constructor() {}
 
   private seedDefaultPolicies() {
     const defaultPolicy: SurveillancePolicy = {
@@ -102,15 +100,12 @@ export class SurveillancePolicyResolverService {
     const tenantAssign = this.assignments.find(
       (a) => a.tenantId === tenantId && a.scopeType === "TENANT" && a.enabled,
     );
-    const basePolicy =
-      (tenantAssign?.policyId ? this.policies.get(tenantAssign.policyId) : undefined) ??
-      Array.from(this.policies.values())[0] ?? {
-        id: "policy-fallback",
-        tenantId,
-        ...BANK_STANDARD_TEMPLATE,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      };
+    const basePolicy = tenantAssign?.policyId
+      ? this.policies.get(tenantAssign.policyId)
+      : undefined;
+    if (!basePolicy) {
+      throw new Error(`surveillance_policy_not_configured_for_tenant:${tenantId}`);
+    }
 
     // Initialize effective accumulator with base tenant values
     const effective: Record<string, any> = {

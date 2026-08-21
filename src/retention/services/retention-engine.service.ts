@@ -60,9 +60,7 @@ export class RetentionEngineService {
   private legalHolds = new Map<string, LegalHold>();
   private cameraSegments = new Map<string, RetentionSegmentMetadata[]>();
 
-  constructor() {
-    this.seedDefaultState();
-  }
+  constructor() {}
 
   private seedDefaultState() {
     // Sample Legal Hold for Vault Case

@@ -228,14 +228,17 @@ export function DeviceManager() {
   }
 
   async function runDirectProbe() {
-    if (!probeIp.trim()) return;
+    if (!probeIp.trim() || !probeUsername.trim()) {
+      setError("Camera IP address and username are required for a real probe.");
+      return;
+    }
     setProbing(true);
     setError(undefined);
     try {
       const res = await cameraInventoryApi.probeDirect({
         ipAddress: probeIp.trim(),
         rtspPort: Number(probePort) || 554,
-        username: "admin",
+        username: probeUsername.trim(),
         password: probePassword,
       });
       setProbeResult(res);
@@ -257,31 +260,18 @@ export function DeviceManager() {
     try {
       await cameraInventoryApi.approveCamera(selectedBranch, {
         discoveryId: "",
-        name: `Trueview Robot (${probeResult.model || "T18061-W"})`,
+        name: probeResult.name || probeResult.model || `Camera ${probeIp.trim()}`,
         channel: 1,
         protocol: "rtsp",
         connectionTransport: "vpn",
         sourceType: "ip-camera",
-        manufacturer: "Trueview / TrueCloud",
-        model: probeResult.model || "T18061-W",
+        manufacturer: probeResult.vendor || probeResult.manufacturer,
+        model: probeResult.model,
         ipAddress: probeIp.trim(),
-        onvifPort: 80,
-        rtspPort: Number(probePort) || 554,
-        profiles: [{
-          name: "main",
-          codec: "H264",
-          width: 1920,
-          height: 1080,
-          role: "main",
-          frameRate: 15,
-          bitrateKbps: 2048,
-          preferredFor: ["recording", "live", "analytics"],
-        }],
-        capabilities: {
-          ptz: probeResult.capabilities?.ptz ?? true,
-          audio: probeResult.capabilities?.audio ?? true,
-          events: true,
-        },
+        ...(probeResult.onvifPort ? { onvifPort: Number(probeResult.onvifPort) } : {}),
+        ...(probeResult.rtspPort ? { rtspPort: Number(probeResult.rtspPort) } : { rtspPort: Number(probePort) }),
+        profiles: Array.isArray(probeResult.profiles) ? probeResult.profiles : [],
+        capabilities: probeResult.capabilities ?? {},
       });
       setShowDirectProbeModal(false);
       setNotice(`Camera at ${probeIp} successfully enrolled in ${activeBranch?.name}!`);
@@ -574,18 +564,18 @@ export function DeviceManager() {
     const mappedResults = rawResults.map((item: any) => ({
       ...item,
       id: item.discoveryId ?? item.id,
-      displayName: item.displayName ?? item.model ?? item.name ?? "Camera",
+      displayName: item.displayName ?? item.model ?? item.name ?? item.ipAddress ?? "Discovered camera",
       vendor: item.manufacturer ?? item.vendor ?? "Unknown",
       model: item.model ?? "Unknown",
-      ipAddress: item.ipAddress ?? item.ip ?? "Pending",
-      onvifPort: item.onvifPort ?? 80,
-      onvifSupport: item.onvifSupported ?? item.onvifSupport ?? true,
-      streamVerified: item.streamVerified ?? true,
-      credentialsRequired: item.credentialsRequired ?? false,
-      compatibility: item.compatibility ?? item.compatibilityStatus ?? "compatible",
-      duplicateStatus: item.duplicate ? "duplicate" : item.duplicateStatus ?? "unique",
+      ipAddress: item.ipAddress ?? item.ip ?? "",
+      onvifPort: item.onvifPort,
+      onvifSupport: item.onvifSupported === true || item.onvifSupport === true,
+      streamVerified: item.streamVerified === true,
+      credentialsRequired: item.credentialsRequired === true,
+      compatibility: item.compatibility ?? item.compatibilityStatus ?? "unknown",
+      duplicateStatus: item.duplicate ? "duplicate" : item.duplicateStatus ?? "unknown",
       discoveryMethod: item.discoveryMethod ?? "edge-agent-reported-inventory",
-      profiles: item.profiles ?? [{ name: "main", codec: "H264", width: 1920, height: 1080 }],
+      profiles: Array.isArray(item.profiles) ? item.profiles : [],
       statusReason: item.statusReason ?? null,
       edgeAgentId: item.edgeAgentId ?? fallbackEdgeAgentId ?? "",
     }));
@@ -634,30 +624,7 @@ export function DeviceManager() {
       await wait(1_000);
     }
 
-    // Auto-activate edge scanner online for this branch so scan progresses smoothly
-    try {
-      await provisioningApi.activateEdgeOnline(branchId);
-      const fallbackResp = await cameraInventoryApi.listGateways(branchId);
-      setGateways(fallbackResp.data);
-      const activeGw = fallbackResp.data.find(isGatewayReady) ?? {
-        id: `agent-${branchId.toLowerCase()}-auto`,
-        branchId,
-        name: `${activeBranch?.name ?? "Branch"} Edge Scanner`,
-        status: "online" as const,
-        version: "2.4.0",
-        lastHeartbeatAt: new Date().toISOString(),
-      };
-      return activeGw;
-    } catch {
-      return {
-        id: `agent-${branchId.toLowerCase()}-auto`,
-        branchId,
-        name: `${activeBranch?.name ?? "Branch"} Edge Scanner`,
-        status: "online" as const,
-        version: "2.4.0",
-        lastHeartbeatAt: new Date().toISOString(),
-      };
-    }
+    throw new Error("No online edge agent is registered for this branch. Install and start the branch scanner, then retry.");
   }
 
   async function startConnectedCameraScan(gateway: EdgeAgent) {
@@ -690,12 +657,14 @@ export function DeviceManager() {
     setNotice(undefined);
     try {
       const gateway = onlineGateway ?? await waitForWebsiteScanner(selectedBranch);
+      if (!gateway) throw new Error("No online edge agent is registered for this branch.");
       if (scanAbortedRef.current) return;
       try {
         await startConnectedCameraScan(gateway);
       } catch (reason) {
         if (!isScannerUnavailable(reason)) throw reason;
         const reconnectedGateway = await waitForWebsiteScanner(selectedBranch);
+        if (!reconnectedGateway) throw new Error("No online edge agent is registered for this branch.");
         if (scanAbortedRef.current) return;
         await startConnectedCameraScan(reconnectedGateway);
       }
@@ -1059,7 +1028,7 @@ export function DeviceManager() {
         capabilities: inventoryForm.capabilities.split(',').map((item) => item.trim()).filter(Boolean),
       };
       await deviceInventoryApi.create(payload);
-      setInventoryForm({ ...emptyInventoryForm, branch: selectedBranch, tenant: inventoryForm.tenant || "tenant-demo" });
+      setInventoryForm({ ...emptyInventoryForm, branch: selectedBranch, tenant: inventoryForm.tenant });
       await refreshBranch(selectedBranch);
       setNotice(`Inventory record ${payload.deviceId || "created"} was saved.`);
     } catch (reason) {
@@ -1404,15 +1373,6 @@ try {
           <p>One automatic scan checks the branch network, saved VPN routes, and managed tunnel access.</p>
         </div>
         <div className="device-toolbar-actions">
-          <button
-            className="secondary-button"
-            style={{ background: "rgba(16, 185, 129, 0.15)", color: "#34d399", borderColor: "#059669", fontWeight: 600 }}
-            onClick={() => downloadOneClickBatchFile(selectedBranch, activeBranch?.name ?? "Branch")}
-            disabled={!selectedBranch}
-            title="Download a 1-click double-clickable .BAT file for this branch"
-          >
-            <Download size={15} /> Download Auto-Setup (.BAT)
-          </button>
           {scanning ? (
             <button
               className="secondary-button"
@@ -1436,7 +1396,7 @@ try {
           >
             <Zap size={15} /> Activate Edge Online
           </button>
-          <button className="secondary-button" onClick={() => setShowDirectProbeModal(true)} title="Directly test and connect IP camera on local subnet (e.g. 192.168.29.196)">
+          <button className="secondary-button" onClick={() => setShowDirectProbeModal(true)} title="Directly test and connect an IP camera on the configured local subnet">
             <Wifi size={15} /> Direct IP Probe
           </button>
           <button className="secondary-button" onClick={openScannerInstaller} disabled={saving} title="Get 1-line commands or standalone installer">
@@ -2218,7 +2178,7 @@ try {
             </div>
             <div className="modal-body space-y-4">
               <p className="text-xs text-slate-500">
-                Directly probe any IP/Wi-Fi camera (Trueview, Hikvision, CP Plus, Dahua, ONVIF) on your local network.
+                Probe a camera on the branch network using its observed address and credentials.
               </p>
               
               <div className="space-y-3">
@@ -2228,7 +2188,7 @@ try {
                     id="probeIp"
                     value={probeIp}
                     onChange={(e) => setProbeIp(e.target.value)}
-                    placeholder="192.168.29.196"
+                    placeholder="Camera IP address"
                     required
                   />
                 </div>
@@ -2240,7 +2200,17 @@ try {
                       id="probePort"
                       value={probePort}
                       onChange={(e) => setProbePort(e.target.value)}
-                      placeholder="554"
+                      placeholder="RTSP port"
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label htmlFor="probeUsername">Camera username <span className="required">*</span></label>
+                    <input
+                      id="probeUsername"
+                      value={probeUsername}
+                      onChange={(e) => setProbeUsername(e.target.value)}
+                      placeholder="Camera username"
+                      required
                     />
                   </div>
                   <div className="form-group">
@@ -2260,7 +2230,7 @@ try {
                     type="button"
                     className="primary-button"
                     onClick={runDirectProbe}
-                    disabled={probing || !probeIp.trim()}
+                    disabled={probing || !probeIp.trim() || !probeUsername.trim()}
                   >
                     <Search size={14} /> {probing ? "Probing camera network..." : "Probe Camera"}
                   </button>

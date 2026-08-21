@@ -12,19 +12,23 @@ import {
 } from "../media/index.js";
 
 export async function registerOnDemandMediaRoutes(app: FastifyInstance) {
+  const required = (value: unknown, field: string): string => {
+    if (typeof value !== "string" || !value.trim()) throw new Error(`${field}_required`);
+    return value.trim();
+  };
   /**
    * POST /api/v1/media/live-sessions & /v1/media/live-sessions
    */
   const handleCreateLiveSession = async (request: FastifyRequest, reply: FastifyReply) => {
     const body = (request.body as any) || {};
     const session = await liveSessionService.createSession({
-      tenantId: body.tenantId || "bank-corp",
-      branchId: body.branchId || "branch-178",
-      cameraId: body.cameraId || "cam-178-01",
+      tenantId: required((request as any).currentUser?.tenantId ?? body.tenantId, "tenantId"),
+      branchId: required(body.branchId, "branchId"),
+      cameraId: required(body.cameraId, "cameraId"),
       cameraName: body.cameraName,
-      userId: body.userId || (request as any).currentUser?.id || "operator-admin",
-      purpose: body.purpose || "LIVE_VIEW",
-      quality: body.quality || "AUTO",
+      userId: required((request as any).currentUser?.id, "userId"),
+      purpose: required(body.purpose, "purpose"),
+      quality: required(body.quality, "quality"),
       sourceIp: request.ip,
     });
 
@@ -83,12 +87,12 @@ export async function registerOnDemandMediaRoutes(app: FastifyInstance) {
     const body = (request.body as any) || {};
     const now = new Date();
     const session = await playbackSessionService.createSession({
-      tenantId: body.tenantId || "bank-corp",
-      branchId: body.branchId || "branch-178",
-      cameraId: body.cameraId || "cam-178-01",
-      from: body.from ? new Date(body.from) : new Date(now.getTime() - 1800_000),
-      to: body.to ? new Date(body.to) : now,
-      userId: body.userId || (request as any).currentUser?.id || "operator-admin",
+      tenantId: required((request as any).currentUser?.tenantId ?? body.tenantId, "tenantId"),
+      branchId: required(body.branchId, "branchId"),
+      cameraId: required(body.cameraId, "cameraId"),
+      from: new Date(required(body.from, "from")),
+      to: new Date(required(body.to, "to")),
+      userId: required((request as any).currentUser?.id, "userId"),
       sourceIp: request.ip,
     });
 
@@ -105,13 +109,13 @@ export async function registerOnDemandMediaRoutes(app: FastifyInstance) {
     const body = (request.body as any) || {};
     const now = new Date();
     const exp = await evidenceExportService.createExport({
-      tenantId: body.tenantId || "bank-corp",
-      branchId: body.branchId || "branch-178",
-      cameraId: body.cameraId || "cam-178-01",
-      from: body.from ? new Date(body.from) : new Date(now.getTime() - 900_000),
-      to: body.to ? new Date(body.to) : now,
-      userId: body.userId || (request as any).currentUser?.id || "operator-admin",
-      reason: body.reason || "Incident evidence preservation",
+      tenantId: required((request as any).currentUser?.tenantId ?? body.tenantId, "tenantId"),
+      branchId: required(body.branchId, "branchId"),
+      cameraId: required(body.cameraId, "cameraId"),
+      from: new Date(required(body.from, "from")),
+      to: new Date(required(body.to, "to")),
+      userId: required((request as any).currentUser?.id, "userId"),
+      reason: required(body.reason, "reason"),
       sourceIp: request.ip,
     });
 

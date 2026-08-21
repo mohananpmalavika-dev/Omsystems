@@ -22,9 +22,7 @@ export class RecordingContinuityService {
   private cameraTelemetries: Map<string, TelemetryContext> = new Map();
   private continuityCache: Map<string, RecordingContinuity> = new Map();
 
-  constructor() {
-    this.seedDefaultBranchContinuity();
-  }
+  constructor() {}
 
   private seedDefaultBranchContinuity() {
     const now = new Date();

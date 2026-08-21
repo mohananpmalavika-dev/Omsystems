@@ -38,22 +38,11 @@ export async function registerBranchOperationalSnapshotRoutes(
     // 1. Unified Branch Operational Snapshot
     app.get(`${prefix}/branches/:branchId/operational-snapshot`, async (request, reply) => {
       const { branchId } = branchParams.parse(request.params);
-      const tenantId = request.currentUser?.tenantId ?? "tenant-default";
+      const tenantId = request.currentUser?.tenantId;
+      if (!tenantId) return reply.code(401).send({ error: "authenticated_tenant_required" });
 
       const snapshot = await service.getSnapshot(tenantId, branchId);
-      if (!snapshot) {
-        // Return structured default snapshot if branch not found in DB
-        const fallback = await service.getSnapshot(tenantId, "branch-178");
-        return reply.code(200).send({
-          success: true,
-          data: {
-            ...fallback,
-            branchId,
-            branchName: `Branch ${branchId.replace(/[^0-9]/g, "") || "178"} — Aluva`,
-            branchCode: `BR-${branchId.replace(/[^0-9]/g, "") || "178"}`,
-          },
-        });
-      }
+      if (!snapshot) return reply.code(404).send({ error: "branch_not_found" });
 
       return reply.code(200).send({ success: true, data: snapshot });
     });
@@ -62,7 +51,8 @@ export async function registerBranchOperationalSnapshotRoutes(
     const handleCameras = async (request: any, reply: any) => {
       const { branchId } = branchParams.parse(request.params);
       const query = request.query as { filter?: string; sort?: string };
-      const tenantId = request.currentUser?.tenantId ?? "tenant-default";
+      const tenantId = request.currentUser?.tenantId;
+      if (!tenantId) return reply.code(401).send({ error: "authenticated_tenant_required" });
 
       const snapshot = await service.getSnapshot(tenantId, branchId);
       let cameras = snapshot?.cameraList ?? [];
@@ -91,7 +81,8 @@ export async function registerBranchOperationalSnapshotRoutes(
     // 3. Branch Recorders
     const handleRecorders = async (request: any, reply: any) => {
       const { branchId } = branchParams.parse(request.params);
-      const tenantId = request.currentUser?.tenantId ?? "tenant-default";
+      const tenantId = request.currentUser?.tenantId;
+      if (!tenantId) return reply.code(401).send({ error: "authenticated_tenant_required" });
       const snapshot = await service.getSnapshot(tenantId, branchId);
 
       return reply.code(200).send({
@@ -111,7 +102,8 @@ export async function registerBranchOperationalSnapshotRoutes(
     // 4. Branch Storage
     const handleStorage = async (request: any, reply: any) => {
       const { branchId } = branchParams.parse(request.params);
-      const tenantId = request.currentUser?.tenantId ?? "tenant-default";
+      const tenantId = request.currentUser?.tenantId;
+      if (!tenantId) return reply.code(401).send({ error: "authenticated_tenant_required" });
       const snapshot = await service.getSnapshot(tenantId, branchId);
 
       return reply.code(200).send({

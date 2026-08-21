@@ -9,9 +9,7 @@ export class OrganizationalDirectoryService {
   private readonly shiftMembers: ShiftMember[] = [];
   private readonly onCallEntries: OnCallEntry[] = [];
 
-  constructor() {
-    this.seedDefaultAssignments();
-  }
+  constructor() {}
 
   async findRoleAssignments(params: {
     tenantId: string;

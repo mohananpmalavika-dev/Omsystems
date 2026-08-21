@@ -56,22 +56,12 @@ export async function registerPlaybookEngineRoutes(
   app.get("/v1/incidents/:id/workspace", async (request: FastifyRequest, reply: FastifyReply) => {
     const { id } = request.params as { id: string };
 
-    let incidentData: any = null;
-    if (store && typeof (store as any).getIncident === "function") {
-      incidentData = await (store as any).getIncident(id);
+    if (!store || typeof (store as any).getIncident !== "function") {
+      return reply.code(503).send({ error: "incident_store_unavailable" });
     }
-
-    const fallbackIncident = incidentData || {
-      id,
-      incidentNumber: `INC-${id.slice(0, 6).toUpperCase()}`,
-      title: "P1 Vault Intrusion Detected",
-      incidentType: "VAULT_INTRUSION",
-      severity: "P1",
-      status: "INVESTIGATING",
-      occurredAt: new Date().toISOString(),
-    };
-
-    const workspace = await engine.getIncidentWorkspace(fallbackIncident);
+    const incidentData = await (store as any).getIncident(id);
+    if (!incidentData) return reply.code(404).send({ error: "incident_not_found" });
+    const workspace = await engine.getIncidentWorkspace(incidentData);
     return { data: workspace };
   });
 
@@ -82,9 +72,9 @@ export async function registerPlaybookEngineRoutes(
 
     const instance = await engine.startPlaybook({
       id,
-      tenantId: (request as any).currentUser?.tenantId || "tenant-default",
-      incidentType: body.incidentType || "VAULT_INTRUSION",
-      severity: body.severity || "P1",
+      tenantId: (request as any).currentUser?.tenantId,
+      incidentType: body.incidentType,
+      severity: body.severity,
       title: body.title,
       branchId: body.branchId,
     });
@@ -95,7 +85,8 @@ export async function registerPlaybookEngineRoutes(
   // 3. Mark step IN_PROGRESS
   app.post("/v1/incidents/:id/playbook/steps/:stepId/start", async (request: FastifyRequest) => {
     const { id, stepId } = request.params as { id: string; stepId: string };
-    const user = (request as any).currentUser || { id: "usr-operator-1", displayName: "SOC Operator" };
+    const user = (request as any).currentUser;
+    if (!user) throw new Error("authenticated_operator_required");
 
     const instance = await engine.startStep(id, stepId, {
       userId: user.id,

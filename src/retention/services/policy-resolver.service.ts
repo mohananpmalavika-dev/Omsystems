@@ -25,9 +25,7 @@ export class PolicyResolverService {
   private groupPolicies = new Map<string, ExtendedRetentionPolicy>();
   private cameraOverrides = new Map<string, ExtendedRetentionPolicy>();
 
-  constructor() {
-    this.seedDefaultPolicies();
-  }
+  constructor() {}
 
   private seedDefaultPolicies() {
     // Tenant Default Policy: 90 Days
@@ -144,7 +142,7 @@ export class PolicyResolverService {
     }
     // 5. Tenant Default
     else {
-      resolvedPolicy = this.tenantPolicies.get(context.tenantId) || this.tenantPolicies.get('BANK-001');
+      resolvedPolicy = this.tenantPolicies.get(context.tenantId);
       source = 'TENANT';
     }
 
