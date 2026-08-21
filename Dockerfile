@@ -11,6 +11,12 @@ COPY root-cause-analysis-engine/ ./root-cause-analysis-engine/
 RUN npm ci --ignore-scripts
 RUN npm run build
 
+# Build edge-agent bundle for Linux downloads
+WORKDIR /app/edge-agent
+RUN npm ci --ignore-scripts
+RUN npm run bundle
+WORKDIR /app
+
 # Stage 2: Production
 FROM node:22-alpine AS runner
 WORKDIR /app
@@ -18,6 +24,9 @@ ENV NODE_ENV=production
 ENV PORT=8080
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/backend ./backend
+COPY --from=builder /app/edge-agent/build ./edge-agent/build
+COPY --from=builder /app/edge-agent/release ./edge-agent/release
+COPY --from=builder /app/edge-agent/package.json ./edge-agent/package.json
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/package.json ./package.json
 EXPOSE 8080

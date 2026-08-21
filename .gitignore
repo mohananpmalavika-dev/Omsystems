@@ -1,7 +1,6 @@
 node_modules/
 dist/
 edge-agent/build/
-edge-agent/release/
 edge-agent/vendor/
 .env
 coverage/
@@ -30,8 +29,9 @@ analytics-engine/models/**/*.part-*
 # Ignore generated branch activation keys
 edge-agent/installation-keys*.txt
 
-# Ignore all executable files
+# Ignore all executable files EXCEPT the edge-agent installer
 *.exe
+!edge-agent/release/edge-agent.exe
 
 # Ignore environment files (examples only checked into repo)
 .env*
