@@ -129,7 +129,10 @@ export interface CommandCenterSummary {
   cameras: {
     total: number;
     healthy: number;
+    working: number;
+    notWorking: number;
     offline: number;
+    degraded: number;
     recordingFailure: number;
     maintenance: number;
     unknown: number;
@@ -217,7 +220,13 @@ export interface BranchOperationalView {
   cameras: {
     total: number;
     healthy: number;
+    /** Cameras with an explicit online status. Kept alongside healthy for API compatibility. */
+    working: number;
+    /** Cameras whose status is not online (offline, degraded, or unknown). */
+    notWorking: number;
     offline: number;
+    degraded: number;
+    unknown: number;
     notRecording: number;
     maintenance: number;
   };

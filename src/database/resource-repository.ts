@@ -15,6 +15,8 @@ type ResourceRow = {
   node_type: NodeType;
   name: string;
   path: string;
+  is_sensitive?: boolean;
+  sensitivity_level?: "normal" | "restricted" | "highly_restricted";
 };
 
 function mapNode(row: ResourceRow): ResourceNode {
@@ -24,6 +26,8 @@ function mapNode(row: ResourceRow): ResourceNode {
     tenantId: row.tenant_id,
     type: row.node_type,
     name: row.name,
+    isSensitive: row.is_sensitive ?? false,
+    sensitivityLevel: row.sensitivity_level ?? "normal",
     path: row.path.split(".").map((part) => part.replaceAll("_", "-")),
   };
 }
@@ -102,7 +106,7 @@ export class ResourceRepository {
     }
     const result = await this.pool.query<ResourceRow>(
       `SELECT id::text, parent_id::text, tenant_id::text, node_type, name,
-              path::text
+              path::text, is_sensitive, sensitivity_level
        FROM resource_nodes WHERE id = $1`,
       [id],
     );
@@ -116,7 +120,7 @@ export class ResourceRepository {
     if (validIds.length === 0) return [];
     const result = await this.pool.query<ResourceRow>(
       `SELECT id::text, parent_id::text, tenant_id::text, node_type, name,
-             path::text
+             path::text, is_sensitive, sensitivity_level
        FROM resource_nodes WHERE id = ANY($1::uuid[])`,
       [validIds],
     );
@@ -176,6 +180,24 @@ export class ResourceRepository {
          AND g.action = $2
          AND g.tenant_id = target.tenant_id
          AND target.path <@ scope.path
+         AND (
+           g.effect = 'deny'
+           OR NOT EXISTS (
+             SELECT 1 FROM resource_nodes sensitive_scope
+             WHERE sensitive_scope.tenant_id = target.tenant_id
+               AND sensitive_scope.is_sensitive = true
+               AND target.path <@ sensitive_scope.path
+           )
+           OR scope.path <@ (
+             SELECT sensitive_scope.path
+             FROM resource_nodes sensitive_scope
+             WHERE sensitive_scope.tenant_id = target.tenant_id
+               AND sensitive_scope.is_sensitive = true
+               AND target.path <@ sensitive_scope.path
+             ORDER BY nlevel(sensitive_scope.path) DESC
+             LIMIT 1
+           )
+         )
          AND (g.valid_from IS NULL OR g.valid_from <= now())
          AND (g.valid_until IS NULL OR g.valid_until > now())
        ORDER BY CASE WHEN g.effect = 'deny' THEN 0 ELSE 1 END
@@ -217,7 +239,7 @@ export class ResourceRepository {
       const result = await this.pool.query<ResourceRow>(
         `SELECT DISTINCT target.id::text, target.parent_id::text,
                 target.tenant_id::text, target.node_type, target.name,
-                target.path::text
+                target.path::text, target.is_sensitive, target.sensitivity_level
          FROM resource_nodes target
          WHERE (target.tenant_id = $1 OR $1 = '00000000-0000-4000-8000-000000000000' OR target.tenant_id IS NOT NULL)
            AND ($2::resource_node_type IS NULL OR target.node_type = $2)
@@ -242,7 +264,7 @@ export class ResourceRepository {
     const result = await this.pool.query<ResourceRow>(
       `SELECT DISTINCT target.id::text, target.parent_id::text,
               target.tenant_id::text, target.node_type, target.name,
-              target.path::text
+              target.path::text, target.is_sensitive, target.sensitivity_level
        FROM resource_nodes target
        WHERE target.tenant_id = $1
          AND ($4::resource_node_type IS NULL OR target.node_type = $4)
@@ -262,6 +284,23 @@ export class ResourceRepository {
              AND grant_allow.action = $3
              AND grant_allow.effect = 'allow'
              AND target.path <@ allow_scope.path
+             AND (
+               NOT EXISTS (
+                 SELECT 1 FROM resource_nodes sensitive_scope
+                 WHERE sensitive_scope.tenant_id = target.tenant_id
+                   AND sensitive_scope.is_sensitive = true
+                   AND target.path <@ sensitive_scope.path
+               )
+               OR allow_scope.path <@ (
+                 SELECT sensitive_scope.path
+                 FROM resource_nodes sensitive_scope
+                 WHERE sensitive_scope.tenant_id = target.tenant_id
+                   AND sensitive_scope.is_sensitive = true
+                   AND target.path <@ sensitive_scope.path
+                 ORDER BY nlevel(sensitive_scope.path) DESC
+                 LIMIT 1
+               )
+             )
              AND (grant_allow.valid_from IS NULL OR grant_allow.valid_from <= now())
              AND (grant_allow.valid_until IS NULL OR grant_allow.valid_until > now())
          )

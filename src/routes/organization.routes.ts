@@ -18,6 +18,7 @@ const createNodeSchema = z.object({
     "branch",
     "building",
     "floor",
+    "location",
     "location-group",
     "camera-group",
   ]),
@@ -41,6 +42,8 @@ const createNodeSchema = z.object({
     })
     .optional(),
   metadata: z.record(z.unknown()).optional(),
+  isSensitive: z.boolean().optional(),
+  sensitivityLevel: z.enum(["normal", "restricted", "highly_restricted"]).optional(),
 });
 
 const updateNodeSchema = z.object({
@@ -65,6 +68,8 @@ const updateNodeSchema = z.object({
     .optional(),
   metadata: z.record(z.unknown()).optional(),
   isActive: z.boolean().optional(),
+  isSensitive: z.boolean().optional(),
+  sensitivityLevel: z.enum(["normal", "restricted", "highly_restricted"]).optional(),
 });
 
 const nodeIdSchema = z.object({ id: z.string().min(1) });
@@ -145,6 +150,7 @@ export async function registerOrganizationRoutes(
             "branch",
             "building",
             "floor",
+            "location",
             "location-group",
             "camera-group",
           ])
@@ -474,6 +480,8 @@ export async function registerOrganizationRoutes(
           "region",
           "area",
           "branch",
+          "floor",
+          "location",
           "camera-group",
         ]),
       })

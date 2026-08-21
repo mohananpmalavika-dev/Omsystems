@@ -30,7 +30,7 @@ export function camelRows<T = JsonRecord>(rows: JsonRecord[]): T[] {
 const organizationSelect = `
   SELECT id::text, tenant_id::text, parent_id::text, node_type AS type,
          name, code, description, address, contact_info, metadata, is_active,
-         path::text, created_at, updated_at
+         is_sensitive, sensitivity_level, path::text, created_at, updated_at
   FROM resource_nodes`;
 
 export class InfrastructureRepository {
@@ -483,6 +483,11 @@ export class InfrastructureRepository {
           ('area', 'branch', true, 1),
           ('branch', 'camera-group', true, 1),
           ('branch', 'camera', true, 2),
+          ('branch', 'floor', true, 3),
+          ('branch', 'location', true, 4),
+          ('floor', 'location', true, 1),
+          ('location', 'camera-group', true, 1),
+          ('location', 'camera', true, 2),
           ('camera-group', 'camera', true, 1)
         ON CONFLICT (parent_type, child_type) 
         DO UPDATE SET is_valid = EXCLUDED.is_valid, display_order = EXCLUDED.display_order;
@@ -513,7 +518,9 @@ export class InfrastructureRepository {
              (parent_node_type = 'zone' AND NEW.node_type::text IN ('region', 'area', 'branch')) OR
              (parent_node_type = 'region' AND NEW.node_type::text IN ('area', 'branch')) OR
              (parent_node_type = 'area' AND NEW.node_type::text = 'branch') OR
-             (parent_node_type = 'branch' AND NEW.node_type::text IN ('camera-group', 'camera')) OR
+             (parent_node_type = 'branch' AND NEW.node_type::text IN ('camera-group', 'camera', 'floor', 'location')) OR
+             (parent_node_type = 'floor' AND NEW.node_type::text = 'location') OR
+             (parent_node_type = 'location' AND NEW.node_type::text IN ('camera-group', 'camera')) OR
              (parent_node_type = 'camera-group' AND NEW.node_type::text = 'camera') THEN
             RETURN NEW;
           END IF;
@@ -547,11 +554,11 @@ export class InfrastructureRepository {
       const result = await this.pool.query(
         `INSERT INTO resource_nodes (
            id, tenant_id, parent_id, node_type, name, path, code, description,
-           address, contact_info, metadata
+           address, contact_info, metadata, is_sensitive, sensitivity_level
          )
          VALUES (
            $1::uuid, $2::uuid, $3::uuid, $4::resource_node_type, $5::text,
-           text2ltree($6), $7::text, $8::text, $9::jsonb, $10::jsonb, $11::jsonb
+           text2ltree($6), $7::text, $8::text, $9::jsonb, $10::jsonb, $11::jsonb, $12::boolean, $13::text
          )
          RETURNING id::text`,
         [
@@ -566,6 +573,8 @@ export class InfrastructureRepository {
           JSON.stringify(input.address ?? {}),
           JSON.stringify(input.contactInfo ?? {}),
           JSON.stringify(input.metadata ?? {}),
+          input.isSensitive ?? false,
+          input.sensitivityLevel ?? "normal",
         ],
       );
       if (!result.rows[0]) throw new Error("failed_to_create_node");
@@ -574,11 +583,11 @@ export class InfrastructureRepository {
       const result = await this.pool.query(
         `INSERT INTO resource_nodes (
            id, tenant_id, parent_id, node_type, name, path, code, description,
-           address, contact_info, metadata
+           address, contact_info, metadata, is_sensitive, sensitivity_level
          )
          VALUES (
            $1::uuid, $2::uuid, NULL, $3::resource_node_type, $4::text,
-           text2ltree($5), $6::text, $7::text, $8::jsonb, $9::jsonb, $10::jsonb
+           text2ltree($5), $6::text, $7::text, $8::jsonb, $9::jsonb, $10::jsonb, $11::boolean, $12::text
          )
          RETURNING id::text`,
         [
@@ -592,6 +601,8 @@ export class InfrastructureRepository {
           JSON.stringify(input.address ?? {}),
           JSON.stringify(input.contactInfo ?? {}),
           JSON.stringify(input.metadata ?? {}),
+          input.isSensitive ?? false,
+          input.sensitivityLevel ?? "normal",
         ],
       );
       if (!result.rows[0]) throw new Error("failed_to_create_node");
@@ -605,6 +616,7 @@ export class InfrastructureRepository {
       ["description", input.description], ["address", input.address, "jsonb"],
       ["contact_info", input.contactInfo, "jsonb"],
       ["metadata", input.metadata, "jsonb"], ["is_active", input.isActive],
+      ["is_sensitive", input.isSensitive], ["sensitivity_level", input.sensitivityLevel],
     ];
     const supplied = fields.filter(([, value]) => value !== undefined);
     if (supplied.length === 0) return this.getOrganizationNodeDetails(id);

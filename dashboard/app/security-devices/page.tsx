@@ -8,6 +8,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { 
   Shield, 
   Camera, 
@@ -45,6 +46,8 @@ interface DeviceTypeBreakdown {
 }
 
 export default function SecurityDeviceHubPage() {
+  const searchParams = useSearchParams();
+  const selectedCategory = searchParams.get('category') || 'all';
   const [stats, setStats] = useState<DeviceStats>({
     totalDevices: 0,
     onlineDevices: 0,
@@ -57,6 +60,19 @@ export default function SecurityDeviceHubPage() {
   const [deviceBreakdown, setDeviceBreakdown] = useState<DeviceTypeBreakdown[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+
+  const categoryTerms: Record<string, string[]> = {
+    video: ['camera', 'nvr', 'dvr'],
+    'access-control': ['access', 'door'],
+    intrusion: ['alarm', 'intrusion', 'motion', 'glass'],
+    emergency: ['panic', 'emergency', 'duress'],
+    'fire-safety': ['fire', 'smoke', 'heat'],
+    'vault-cash': ['vault', 'safe', 'cash', 'teller'],
+    atm: ['atm'],
+    'power-environment': ['ups', 'power', 'temperature', 'humidity', 'water'],
+  };
+
+  const visibleDeviceTypes = categoryTerms[selectedCategory];
 
   useEffect(() => {
     loadDashboardData();
@@ -230,7 +246,10 @@ export default function SecurityDeviceHubPage() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {deviceBreakdown
             .filter((device) =>
-              device.type.toLowerCase().includes(searchQuery.toLowerCase())
+              device.type.toLowerCase().includes(searchQuery.toLowerCase()) &&
+              (!visibleDeviceTypes || visibleDeviceTypes.some((term) =>
+                device.type.toLowerCase().includes(term)
+              ))
             )
             .map((device) => {
               const Icon = device.icon;

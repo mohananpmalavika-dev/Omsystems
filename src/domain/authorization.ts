@@ -15,6 +15,22 @@ function contains(scope: ResourceNode, resource: ResourceNode): boolean {
   return Array.isArray(resource.path) ? resource.path.includes(scope.id) : resource.id === scope.id || resource.parentId === scope.id;
 }
 
+function canScopeSensitiveResource(
+  scope: ResourceNode,
+  resource: ResourceNode,
+  nodesById: ReadonlyMap<string, ResourceNode>,
+): boolean {
+  let boundary: ResourceNode | undefined;
+  for (let index = resource.path.length - 1; index >= 0; index -= 1) {
+    const node = nodesById.get(resource.path[index]!);
+    if (node?.isSensitive) {
+      boundary = node;
+      break;
+    }
+  }
+  return !boundary || scope.path.includes(boundary.id);
+}
+
 /**
  * Evaluates grants using default-deny semantics. An applicable deny always wins.
  * Grants are tenant-bound and automatically apply to descendants of their scope.
@@ -48,7 +64,8 @@ export function authorize(
     return Boolean(
       scope &&
         scope.tenantId === user.tenantId &&
-        contains(scope, resource),
+        contains(scope, resource) &&
+        (grant.effect === "deny" || canScopeSensitiveResource(scope, resource, nodesById)),
     );
   });
 
@@ -73,11 +90,11 @@ export function authorize(
   // Check direct primaryOrgNodeId / branchId / scopeNodeId on user
   const directScopeId = (user as any).primaryOrgNodeId || (user as any).scopeNodeId || (user as any).branchId;
   if (directScopeId) {
-    if (directScopeId === resource.id) {
+    const directScope = nodesById.get(directScopeId);
+    if (directScope && canScopeSensitiveResource(directScope, resource, nodesById) && directScopeId === resource.id) {
       return { allowed: true, reason: "allowed_by_grant", matchingScopeId: directScopeId };
     }
-    const directScope = nodesById.get(directScopeId);
-    if (directScope && contains(directScope, resource)) {
+    if (directScope && canScopeSensitiveResource(directScope, resource, nodesById) && contains(directScope, resource)) {
       return { allowed: true, reason: "allowed_by_grant", matchingScopeId: directScopeId };
     }
   }
@@ -86,11 +103,11 @@ export function authorize(
   if (Array.isArray((user as any).organizations)) {
     for (const org of (user as any).organizations) {
       const orgNodeId = org.nodeId || org.id;
-      if (orgNodeId === resource.id) {
+      const orgScope = nodesById.get(orgNodeId);
+      if (orgScope && canScopeSensitiveResource(orgScope, resource, nodesById) && orgNodeId === resource.id) {
         return { allowed: true, reason: "allowed_by_grant", matchingScopeId: orgNodeId };
       }
-      const orgScope = nodesById.get(orgNodeId);
-      if (orgScope && contains(orgScope, resource)) {
+      if (orgScope && canScopeSensitiveResource(orgScope, resource, nodesById) && contains(orgScope, resource)) {
         return { allowed: true, reason: "allowed_by_grant", matchingScopeId: orgNodeId };
       }
     }

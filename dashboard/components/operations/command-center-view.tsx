@@ -42,16 +42,11 @@ import { StatusBadge } from "../ui/status-badge";
 import { FleetFilterBar } from "../ui/fleet-filter-bar";
 
 export function CommandCenterView() {
-  const [summary, setSummary] = useState<any>({
-    totalBranches: 500,
-    activeCameras: 8000,
-    healthyBranchesCount: 480,
-    atRiskBranchesCount: 20,
-    predictedFailuresCount: 4,
-    liveIncidents: [],
-  });
+  const [summary, setSummary] = useState<any | null>(null);
   const [branches, setBranches] = useState<any[]>([]);
+  const [hasBranchData, setHasBranchData] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedStatus, setSelectedStatus] = useState("ALL");
   const [selectedRegion, setSelectedRegion] = useState("ALL");
@@ -64,6 +59,7 @@ export function CommandCenterView() {
 
   const loadData = async () => {
     setLoading(true);
+    setLoadError(null);
     try {
       const [sumRes, branchRes] = await Promise.all([
         fetch("/api/control/v1/operations/command-center", { credentials: "include" }),
@@ -72,10 +68,19 @@ export function CommandCenterView() {
       const sumData = await sumRes.json().catch(() => ({}));
       const branchData = await branchRes.json().catch(() => ({}));
 
-      if (sumData?.success && sumData?.data) setSummary(sumData.data);
-      if (branchData?.success && Array.isArray(branchData?.data)) setBranches(branchData.data);
+      if (!sumRes.ok || !sumData?.success || !sumData?.data) {
+        throw new Error(sumData?.error || "Command Center summary is unavailable");
+      }
+      if (!branchRes.ok || !branchData?.success || !Array.isArray(branchData?.data)) {
+        throw new Error(branchData?.error || "Branch inventory is unavailable");
+      }
+
+      setSummary(sumData.data);
+      setBranches(branchData.data);
+      setHasBranchData(true);
     } catch (err) {
       console.error("Failed to load command center data:", err);
+      setLoadError(err instanceof Error ? err.message : "Unable to load live fleet telemetry");
     } finally {
       setLoading(false);
     }
@@ -87,13 +92,54 @@ export function CommandCenterView() {
     return () => clearInterval(interval);
   }, []);
 
-  const totalBranchesCount = branches.length > 0 ? branches.length : (summary?.branches?.total ?? 0);
-  const totalCamerasCount = (summary?.cameras?.total && summary.cameras.total > 0) 
-    ? summary.cameras.total 
-    : branches.reduce((acc, b) => acc + (b.cameras?.total || 0), 0);
-  const onlineCamerasCount = (summary?.cameras?.healthy && summary.cameras.healthy > 0)
-    ? summary.cameras.healthy
-    : branches.reduce((acc, b) => acc + (b.cameras?.healthy || 0), 0);
+  const cameraTotals = useMemo(() => {
+    if (!hasBranchData) {
+      const total = Number(summary?.cameras?.total ?? 0);
+      const working = Number(summary?.cameras?.working ?? summary?.cameras?.healthy ?? 0);
+      const offline = Number(summary?.cameras?.offline ?? 0);
+      const degraded = Number(summary?.cameras?.degraded ?? 0);
+      const unknown = Number(summary?.cameras?.unknown ?? Math.max(0, total - working - offline - degraded));
+      return {
+        total,
+        working: Math.min(Math.max(working, 0), total),
+        notWorking: Math.max(0, total - working),
+        offline,
+        degraded,
+        unknown,
+      };
+    }
+
+    return branches.reduce(
+      (totals, branch) => {
+        const total = Math.max(0, Number(branch.cameras?.total ?? 0));
+        const working = Math.min(Math.max(0, Number(branch.cameras?.working ?? branch.cameras?.healthy ?? 0)), total);
+        const offline = Math.min(Math.max(0, Number(branch.cameras?.offline ?? 0)), total);
+        const degraded = Math.min(Math.max(0, Number(branch.cameras?.degraded ?? 0)), total);
+        const unknown = Math.min(
+          Math.max(0, Number(branch.cameras?.unknown ?? Math.max(0, total - working - offline - degraded))),
+          total,
+        );
+        totals.total += total;
+        totals.working += working;
+        totals.notWorking += Math.max(0, total - working);
+        totals.offline += offline;
+        totals.degraded += degraded;
+        totals.unknown += unknown;
+        return totals;
+      },
+      { total: 0, working: 0, notWorking: 0, offline: 0, degraded: 0, unknown: 0 },
+    );
+  }, [branches, hasBranchData, summary]);
+
+  const totalBranchesCount = hasBranchData ? branches.length : Number(summary?.branches?.total ?? 0);
+  const healthyBranchesCount = hasBranchData
+    ? branches.filter((branch) => branch.operationalState === "HEALTHY").length
+    : Number(summary?.branches?.healthy ?? 0);
+  const atRiskBranchesCount = hasBranchData
+    ? branches.filter((branch) => ["HIGH", "MEDIUM"].includes(branch.risk?.level)).length
+    : Number(summary?.atRiskBranchesCount ?? 0);
+  const totalCamerasCount = cameraTotals.total;
+  const workingCamerasCount = cameraTotals.working;
 
   const filteredBranches = useMemo(() => {
     return branches.filter((b) => {
@@ -125,11 +171,11 @@ export function CommandCenterView() {
         setAskSentinelResponse("Zero predicted failures detected across fleet. All operational telemetry within normal envelope.");
       }
     } else if (q.includes("offline") || q.includes("camera")) {
-      const offline = branches.filter((b) => b.cameras?.offline > 0);
+      const offline = branches.filter((b) => (b.cameras?.notWorking ?? (b.cameras?.total ?? 0) - (b.cameras?.healthy ?? 0)) > 0);
       if (offline.length > 0) {
-        setAskSentinelResponse(`Found offline cameras across: ${offline.map((b) => `${b.name} (${b.cameras.offline} offline)`).join(", ")}.`);
+        setAskSentinelResponse(`Found cameras that are not working across: ${offline.map((b) => `${b.name} (${b.cameras.notWorking ?? ((b.cameras.total ?? 0) - (b.cameras.healthy ?? 0))} not working)`).join(", ")}.`);
       } else {
-        setAskSentinelResponse("All provisioned cameras are online and streaming.");
+        setAskSentinelResponse("All provisioned cameras are working and online.");
       }
     } else {
       setAskSentinelResponse(`Analyzing live fleet telemetry for "${askSentinelQuery}"... ${totalBranchesCount} branch(es) registered.`);
@@ -156,7 +202,8 @@ export function CommandCenterView() {
       "Region",
       "Health Score",
       "Operational Status",
-      "Cameras Online",
+      "Cameras Working",
+      "Cameras Not Working",
       "Cameras Total",
       "Recording Status",
       "Network Latency",
@@ -172,14 +219,15 @@ export function CommandCenterView() {
       `"${b.region || ""}"`,
       b.healthScore ?? 0,
       b.operationalState || "UNKNOWN",
-      b.cameras?.healthy ?? 0,
+      b.cameras?.working ?? b.cameras?.healthy ?? 0,
+      b.cameras?.notWorking ?? Math.max(0, (b.cameras?.total ?? 0) - (b.cameras?.healthy ?? 0)),
       b.cameras?.total ?? 0,
       `${b.recording?.recordingChannels ?? 0}/${b.recording?.totalChannels ?? 0}`,
       `${b.internet?.latencyMs ?? 0}ms`,
-      b.storage?.state || "UNKNOWN",
-      b.retention?.displayTag || "90d ✓",
-      `${b.risk?.level || "LOW"} (${b.risk?.probabilityPct || 0}%)`,
-      `${b.telemetry?.secondsAgo ?? 0}s ago`,
+      b.storage?.state ?? "UNKNOWN",
+      b.retention?.displayTag ?? (b.retention?.observedDays != null ? `${b.retention.observedDays}d` : "UNKNOWN"),
+      `${b.risk?.level ?? "UNKNOWN"} (${b.risk?.probabilityPct ?? 0}%)`,
+      b.telemetry?.secondsAgo != null ? `${b.telemetry.secondsAgo}s ago` : "NO TELEMETRY",
     ]);
 
     const csvContent = "data:text/csv;charset=utf-8," + [headers.join(","), ...rows.map((e) => e.join(","))].join("\n");
@@ -210,12 +258,12 @@ export function CommandCenterView() {
             </span>
             {totalBranchesCount > 0 && (
               <span className="text-xs text-slate-400 border-l border-slate-800 pl-3 hidden sm:inline">
-                Agent heartbeat: <strong className="text-slate-200">{summary?.agentHeartbeatSecondsAgo || 0}s ago</strong>
+                Agent heartbeat: <strong className="text-slate-200">{summary?.agentHeartbeatSecondsAgo != null ? `${summary.agentHeartbeatSecondsAgo}s ago` : "Unknown"}</strong>
               </span>
             )}
           </div>
           <p className="text-xs text-slate-400 mt-1">
-            {totalBranchesCount} {totalBranchesCount === 1 ? "Branch" : "Branches"} • {totalCamerasCount.toLocaleString()} {totalCamerasCount === 1 ? "Channel" : "Channels"} • Real-Time VMS Telemetry & Triage
+            {totalBranchesCount} {totalBranchesCount === 1 ? "Branch" : "Branches"} • {totalCamerasCount.toLocaleString()} {totalCamerasCount === 1 ? "Camera" : "Cameras"} • Real-Time VMS Telemetry & Triage
           </p>
         </div>
 
@@ -255,6 +303,12 @@ export function CommandCenterView() {
           </button>
         </div>
       </div>
+
+      {loadError && (
+        <div className="p-3 rounded-xl border border-rose-800/60 bg-rose-950/30 text-sm text-rose-200" role="alert">
+          Live fleet data could not be refreshed: {loadError}. Showing the last confirmed values.
+        </div>
+      )}
 
       {/* Global "Ask Sentinel" AI Command Bar */}
       <div className="p-3 bg-slate-900/90 border border-indigo-900/50 rounded-xl shadow-md">
@@ -340,10 +394,10 @@ export function CommandCenterView() {
             <Activity className="w-3.5 h-3.5 text-blue-400" />
           </div>
           <div className="text-2xl font-black text-white">
-            {totalCamerasCount === 0 ? "—" : `${summary?.recording?.healthyPct || 100}%`}
+            {totalCamerasCount === 0 ? "—" : `${summary?.recording?.healthyPct ?? 0}%`}
           </div>
           <div className="text-[11px] text-slate-400 font-medium">
-            {totalCamerasCount === 0 ? "0 Streams" : `${summary?.recording?.totalRecording || 0} Active Rec`}
+            {totalCamerasCount === 0 ? "0 Streams" : `${summary?.recording?.totalRecording ?? 0} Active Rec`}
           </div>
         </div>
 
@@ -354,10 +408,10 @@ export function CommandCenterView() {
             <AlertTriangle className="w-3.5 h-3.5 text-amber-400" />
           </div>
           <div className="text-2xl font-black text-amber-200">
-            {summary?.atRiskBranchesCount || 0}
+            {atRiskBranchesCount}
           </div>
           <div className="text-[11px] text-slate-400 font-medium">
-            {summary?.atRiskBranchesCount ? `${summary.atRiskBranchesCount} Warning` : "Zero Risk"}
+            {atRiskBranchesCount ? `${atRiskBranchesCount} Warning` : "Zero Risk"}
           </div>
         </div>
 
@@ -385,10 +439,10 @@ export function CommandCenterView() {
             <Building2 className="w-3.5 h-3.5 text-slate-400" />
           </div>
           <div className="text-2xl font-black text-white">
-            {summary?.branches?.healthy || 0} <span className="text-xs text-slate-500 font-normal">/ {totalBranchesCount}</span>
+            {healthyBranchesCount} <span className="text-xs text-slate-500 font-normal">/ {totalBranchesCount}</span>
           </div>
           <div className="text-[11px] text-slate-400 font-medium">
-            {totalBranchesCount === 0 ? "No Branches" : `${summary?.branches?.healthy || 0} Healthy`}
+            {totalBranchesCount === 0 ? "No Branches" : `${healthyBranchesCount} Healthy`}
           </div>
         </div>
 
@@ -399,10 +453,10 @@ export function CommandCenterView() {
             <Camera className="w-3.5 h-3.5 text-slate-400" />
           </div>
           <div className="text-2xl font-black text-white">
-            {onlineCamerasCount.toLocaleString()} <span className="text-xs text-slate-500 font-normal">/ {totalCamerasCount}</span>
+            {workingCamerasCount.toLocaleString()} <span className="text-xs text-slate-500 font-normal">/ {totalCamerasCount}</span>
           </div>
           <div className="text-[11px] text-slate-400 font-medium">
-            {totalCamerasCount === 0 ? "No Cameras" : `${onlineCamerasCount} Online`}
+            {totalCamerasCount === 0 ? "No Cameras" : `${workingCamerasCount} Working - ${cameraTotals.notWorking} Not working`}
           </div>
         </div>
 
@@ -413,10 +467,10 @@ export function CommandCenterView() {
             <Database className="w-3.5 h-3.5 text-slate-400" />
           </div>
           <div className="text-2xl font-black text-white">
-            {summary?.storage?.totalDisks === 0 ? "—" : `${summary?.storage?.healthyPct || 100}%`}
+            {Number(summary?.storage?.totalDisks ?? 0) === 0 ? "—" : `${summary?.storage?.healthyPct ?? 0}%`}
           </div>
           <div className="text-[11px] text-slate-400 font-medium">
-            {summary?.storage?.totalDisks === 0 ? "0 Disks" : `${summary?.storage?.healthy || 0} Healthy`}
+            {Number(summary?.storage?.totalDisks ?? 0) === 0 ? "0 Disks" : `${summary?.storage?.healthy ?? 0} Healthy`}
           </div>
         </div>
 
@@ -427,10 +481,10 @@ export function CommandCenterView() {
             <FileCheck2 className="w-3.5 h-3.5 text-cyan-400" />
           </div>
           <div className="text-2xl font-black text-white">
-            {totalBranchesCount === 0 ? "—" : `${summary?.retention?.compliancePct || 100}%`}
+            {totalBranchesCount === 0 ? "—" : `${summary?.retention?.compliancePct ?? 0}%`}
           </div>
           <div className="text-[11px] text-slate-400 font-medium">
-            {summary?.retention?.policyTag || "90d ✓"} Policy
+            {summary?.retention?.policyTag ?? "Policy unknown"} Policy
           </div>
         </div>
       </div>
@@ -666,11 +720,11 @@ export function CommandCenterView() {
                           ) : (
                             <div>
                               <div className="font-semibold text-slate-200">
-                                {b.cameras?.healthy || 0}/{b.cameras?.total || 0} Online
+                                {b.cameras?.working ?? b.cameras?.healthy ?? 0}/{b.cameras?.total ?? 0} Working
                               </div>
-                              {(b.cameras?.offline ?? 0) > 0 && (
+                              {(b.cameras?.notWorking ?? ((b.cameras?.total ?? 0) - (b.cameras?.healthy ?? 0))) > 0 && (
                                 <div className="text-rose-400 text-[11px]">
-                                  {b.cameras.offline} Offline
+                                  {b.cameras?.notWorking ?? ((b.cameras?.total ?? 0) - (b.cameras?.healthy ?? 0))} Not working
                                 </div>
                               )}
                             </div>
@@ -682,7 +736,7 @@ export function CommandCenterView() {
                             <span className="text-slate-500">—</span>
                           ) : (
                             <div className={b.recording?.status === "HEALTHY" ? "text-emerald-400 font-bold" : "text-amber-400 font-bold"}>
-                              {b.recording?.recordingChannels ?? (b.cameras.total - b.cameras.notRecording)}/{b.recording?.totalChannels ?? b.cameras.total} ✓
+                              {b.recording?.recordingChannels ?? Math.max(0, b.cameras.total - (b.cameras.notWorking ?? b.cameras.notRecording ?? 0))}/{b.recording?.totalChannels ?? b.cameras.total} ✓
                             </div>
                           )}
                         </td>
@@ -690,37 +744,45 @@ export function CommandCenterView() {
                         <td className="px-3 py-3">
                           <div className="flex items-center gap-1.5">
                             <Wifi className={`w-3.5 h-3.5 ${b.internet?.state === 'HEALTHY' ? 'text-emerald-400' : 'text-rose-400'}`} />
-                            <span>{b.internet?.mode || 'PRIMARY'} ({b.internet?.latencyMs || 0}ms)</span>
+                            <span>{b.internet?.mode ?? 'UNKNOWN'} ({b.internet?.latencyMs != null ? `${b.internet.latencyMs}ms` : '—'})</span>
                           </div>
                         </td>
 
                         <td className="px-3 py-3">
                           <span className="px-2 py-0.5 rounded text-[11px] font-semibold bg-emerald-950 text-emerald-300 border border-emerald-800">
-                            {b.storage?.state || "HEALTHY"}
+                            {b.storage?.state ?? "UNKNOWN"}
                           </span>
                         </td>
 
                         <td className="px-3 py-3">
                           <div className={b.retention?.compliant ? "text-emerald-400 font-semibold" : "text-rose-400 font-semibold"}>
-                            {b.retention?.displayTag || `${b.retention?.observedDays || 90}d ✓`}
+                            {b.retention?.displayTag ?? (b.retention?.observedDays != null ? `${b.retention.observedDays}d` : "UNKNOWN")}
                           </div>
                         </td>
 
                         <td className="px-3 py-3">
                           {b.risk?.level === "HIGH" ? (
                             <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-rose-950 text-rose-300 border border-rose-800 flex items-center gap-1 w-fit">
-                              🔴 {b.risk.probabilityPct}%
+                              HIGH {b.risk.probabilityPct ?? 0}%
+                            </span>
+                          ) : b.risk?.level === "MEDIUM" ? (
+                            <span className="px-2 py-0.5 rounded text-[11px] font-semibold bg-amber-950 text-amber-300 border border-amber-800 flex items-center gap-1 w-fit">
+                              MEDIUM {b.risk.probabilityPct ?? 0}%
+                            </span>
+                          ) : b.risk?.level === "LOW" ? (
+                            <span className="px-2 py-0.5 rounded text-[11px] font-semibold bg-emerald-950/60 text-emerald-300 border border-emerald-800/60 flex items-center gap-1 w-fit">
+                              LOW
                             </span>
                           ) : (
-                            <span className="px-2 py-0.5 rounded text-[11px] font-semibold bg-emerald-950/60 text-emerald-300 border border-emerald-800/60 flex items-center gap-1 w-fit">
-                              🟢 Low
+                            <span className="px-2 py-0.5 rounded text-[11px] font-semibold bg-slate-800 text-slate-400 border border-slate-700 flex items-center gap-1 w-fit">
+                              UNKNOWN
                             </span>
                           )}
                         </td>
 
                         <td className="px-3 py-3">
                           <span className="text-slate-400 font-mono text-[11px]">
-                            {b.telemetry?.secondsAgo || 0}s ago
+                            {b.telemetry?.secondsAgo != null ? `${b.telemetry.secondsAgo}s ago` : "No telemetry"}
                           </span>
                         </td>
 
@@ -785,7 +847,7 @@ export function CommandCenterView() {
             <div className="space-y-3">
               <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Subsystem Diagnostics</h3>
               <div className="p-3.5 rounded-lg bg-slate-950 border border-slate-800 text-xs">
-                Cameras: {selectedBranchWorkspace.cameras?.healthy ?? 0}/{selectedBranchWorkspace.cameras?.total ?? 0} Online
+                Cameras: {selectedBranchWorkspace.cameras?.working ?? selectedBranchWorkspace.cameras?.healthy ?? 0}/{selectedBranchWorkspace.cameras?.total ?? 0} Working · {selectedBranchWorkspace.cameras?.notWorking ?? Math.max(0, (selectedBranchWorkspace.cameras?.total ?? 0) - (selectedBranchWorkspace.cameras?.healthy ?? 0))} Not working
               </div>
               <div className="p-3.5 rounded-lg bg-slate-950 border border-slate-800 text-xs">
                 Recording: {selectedBranchWorkspace.recording?.recordingChannels ?? 0}/{selectedBranchWorkspace.recording?.totalChannels ?? 0} Channels

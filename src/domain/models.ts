@@ -56,6 +56,7 @@ export type NodeType =
   | "branch"
   | "building"
   | "floor"
+  | "location"
   | "location-group"
   | "camera-group"
   | "camera";
@@ -66,6 +67,8 @@ export interface ResourceNode {
   tenantId: string;
   type: NodeType;
   name: string;
+  isSensitive?: boolean;
+  sensitivityLevel?: "normal" | "restricted" | "highly_restricted";
   /** Ordered ancestor IDs, including this node. */
   path: string[];
 }

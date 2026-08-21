@@ -425,18 +425,6 @@ export function AdaptiveVideoWall() {
             })}
           </div>
         </div>
-      ) : cameras.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-slate-700 p-10 text-center text-sm text-slate-400">No authorized cameras are available for this account.</div>
-      ) : (
-        <EnhancedCameraGrid
-          cameras={cameras}
-          enableVirtualScrolling
-          enableGPUAcceleration
-          adaptiveLayout={false}
-          maxConcurrentStreams={36}
-          priorityCameraIds={priorityCameraIds}
-          onActiveStreamsChange={setActiveStreams}
-        />
       )}
     </section>
   );

@@ -26,7 +26,7 @@ import Link from 'next/link';
 interface DeviceIntegration {
   id: string;
   name: string;
-  integr ationType: string;
+  integrationType: string;
   protocol: string;
   connectionStatus: 'connected' | 'disconnected' | 'error';
   deviceCount: number;

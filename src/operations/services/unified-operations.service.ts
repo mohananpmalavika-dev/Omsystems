@@ -16,7 +16,7 @@ import {
 } from "../domain/command-center-summary.types.js";
 import { alertIncidentRepository } from "../../incidents/index.js";
 import { maintenanceWindowRepository } from "../../maintenance/index.js";
-import { hasExtendedInfrastructure, type ControlPlaneStore } from "../../control-plane-store.js";
+import type { ControlPlaneStore } from "../../control-plane-store.js";
 
 import type { User } from "../../domain/models.js";
 
@@ -38,7 +38,8 @@ export class UnifiedOperationsService {
     const unknownBranches = branches.filter((b) => b.operationalState === "UNKNOWN" || b.operationalState === "STALE").length;
 
     const totalCameras = branches.reduce((acc, b) => acc + (b.cameras?.total || 0), 0);
-    const healthyCameras = branches.reduce((acc, b) => acc + (b.cameras?.healthy || 0), 0);
+    const healthyCameras = branches.reduce((acc, b) => acc + (b.cameras?.working ?? b.cameras?.healthy ?? 0), 0);
+    const notWorkingCameras = branches.reduce((acc, b) => acc + (b.cameras?.notWorking ?? Math.max(0, (b.cameras?.total ?? 0) - (b.cameras?.healthy ?? 0))), 0);
     const offlineCameras = branches.reduce((acc, b) => acc + (b.cameras?.offline || 0), 0);
     const recordingFailureCameras = branches.reduce((acc, b) => acc + (b.cameras?.notRecording || 0), 0);
     const maintenanceCameras = branches.reduce((acc, b) => acc + (b.cameras?.maintenance || 0), 0);
@@ -229,10 +230,13 @@ export class UnifiedOperationsService {
       cameras: {
         total: totalCameras,
         healthy: healthyCameras,
+        working: healthyCameras,
+        notWorking: notWorkingCameras,
         offline: offlineCameras,
+        degraded: branches.reduce((acc, b) => acc + (b.cameras?.degraded || 0), 0),
+        unknown: branches.reduce((acc, b) => acc + (b.cameras?.unknown || 0), 0),
         recordingFailure: recordingFailureCameras,
         maintenance: maintenanceCameras,
-        unknown: 0,
         trendPct: 0,
       },
       recording: {
@@ -287,75 +291,47 @@ export class UnifiedOperationsService {
     if (store) {
       try {
         let nodes: any[] = [];
-        if (user && typeof store.listAccessibleNodes === "function") {
+        if (user) {
+          // An empty authorized result is meaningful. Do not replace it with an
+          // unscoped organization query or the dashboard would disclose branches
+          // to users who have no live-view access.
+          nodes = await store.listAccessibleNodes(user, "live:view", "branch");
+        } else if (typeof (store as any).listOrganizationNodes === "function") {
           try {
-            nodes = await store.listAccessibleNodes(user, "live:view", "branch");
+            nodes = await (store as any).listOrganizationNodes(tenantId, "branch", undefined, true);
           } catch {
             nodes = [];
           }
         }
-        if (!nodes || nodes.length === 0) {
-          if (typeof (store as any).listOrganizationNodes === "function") {
-            try {
-              nodes = await (store as any).listOrganizationNodes(tenantId, "branch", undefined, true);
-            } catch {
-              nodes = [];
-            }
-          }
-        }
-        if (!nodes || nodes.length === 0) {
-          if ((store as any).nodes instanceof Map) {
-            nodes = [...(store as any).nodes.values()].filter((n: any) => n.type === "branch");
-          }
-        }
-
-        // Apply strict location accessibility filtering if user is not super_admin
-        if (user && Array.isArray(nodes) && nodes.length > 0) {
-          const role = (user.role ?? "") as string;
-          const isSuperAdmin =
-            role === "super_admin" ||
-            role === "superadmin" ||
-            role === "company_admin" ||
-            user.username?.toLowerCase() === "mgdhanyamohan" ||
-            user.id === "00000000-0000-4000-8000-000000000001" ||
-            user.id === "user-global-admin";
-
-          if (!isSuperAdmin) {
-            nodes = nodes.filter((node) => {
-              const directScopeId = (user as any).primaryOrgNodeId || (user as any).scopeNodeId || (user as any).branchId;
-              if (directScopeId && (directScopeId === node.id || (node.path && node.path.includes(directScopeId)))) {
-                return true;
-              }
-              if (Array.isArray((user as any).organizations)) {
-                return (user as any).organizations.some((org: any) => {
-                  const orgId = org.nodeId || org.id;
-                  return orgId === node.id || (node.path && node.path.includes(orgId));
-                });
-              }
-              return false;
-            });
-          }
+        if (!user && (!nodes || nodes.length === 0) && (store as any).nodes instanceof Map) {
+          nodes = [...(store as any).nodes.values()].filter((n: any) => n.type === "branch");
         }
 
         if (Array.isArray(nodes) && nodes.length > 0) {
           const views: BranchOperationalView[] = [];
           for (const node of nodes) {
             let branchCameras: any[] = [];
-            if (typeof (store as any).listCamerasByBranchId === "function") {
+            if (user) {
+              // Camera access may be narrower than branch access (for example for
+              // sensitive locations), so count only cameras the user can view.
+              branchCameras = await store.listCamerasByBranch(user, node.id, "live:view");
+            } else if (typeof (store as any).listCamerasByBranchId === "function") {
               try {
                 branchCameras = await (store as any).listCamerasByBranchId(node.id);
               } catch {
                 branchCameras = [];
               }
             }
-            if ((!branchCameras || branchCameras.length === 0) && (store as any).cameras instanceof Map) {
+            // Never fall back to an unscoped camera map after an authorization-aware lookup.
+            if (!user && (!branchCameras || branchCameras.length === 0) && (store as any).cameras instanceof Map) {
               branchCameras = [...(store as any).cameras.values()].filter(
                 (c: any) => c.branchId === node.id || c.nodeId === node.id
               );
             }
 
-            // Also include any dynamically discovered cameras for this branch or active scanner
-            if ((store as any).discoveries instanceof Map) {
+            // Discovered devices are not approved camera inventory. Keep this legacy
+            // internal fallback limited to user-less reads used by local tooling.
+            if (!user && (store as any).discoveries instanceof Map) {
               const discovered = [...(store as any).discoveries.values()].filter(
                 (d: any) => d.branchId === node.id || (!d.branchId && (node.id === "A005" || nodes.indexOf(node) === 0))
               );
@@ -373,10 +349,19 @@ export class UnifiedOperationsService {
               }
             }
 
-            const total = branchCameras.length;
-            const healthy = branchCameras.filter((c: any) => c.status === "online" || !c.status).length;
-            const offline = branchCameras.filter((c: any) => c.status === "offline").length;
-            const notRecording = branchCameras.filter((c: any) => c.status === "degraded" || c.status === "alert").length;
+            // Only an explicit online status is working. Unknown/missing telemetry
+            // must not be counted as healthy.
+            const uniqueCameras = Array.from(
+              new Map(branchCameras.filter((camera: any) => camera?.id).map((camera: any) => [camera.id, camera])).values(),
+            );
+            const total = uniqueCameras.length;
+            const normalizedStatuses = uniqueCameras.map((camera: any) => String(camera.status ?? "unknown").toLowerCase());
+            const healthy = normalizedStatuses.filter((status) => status === "online").length;
+            const offline = normalizedStatuses.filter((status) => status === "offline").length;
+            const degraded = normalizedStatuses.filter((status) => status === "degraded" || status === "alert").length;
+            const unknown = normalizedStatuses.filter((status) => !["online", "offline", "degraded", "alert"].includes(status)).length;
+            const notWorking = Math.max(0, total - healthy);
+            const notRecording = notWorking;
 
             let operationalState: BranchOperationalView["operationalState"] = "HEALTHY";
             if (total === 0) {
@@ -387,8 +372,9 @@ export class UnifiedOperationsService {
               operationalState = "WARNING";
             }
 
-            const riskLevel = notRecording > 0 ? "HIGH" : offline > 0 ? "MEDIUM" : "LOW";
-            const riskProbability = notRecording > 0 ? 80 : offline > 0 ? 50 : 10;
+            const degradedOrUnknown = degraded + unknown;
+            const riskLevel = degradedOrUnknown > 0 ? "HIGH" : offline > 0 ? "MEDIUM" : "LOW";
+            const riskProbability = degradedOrUnknown > 0 ? 80 : offline > 0 ? 50 : 10;
 
             views.push({
               branchId: node.id,
@@ -401,7 +387,7 @@ export class UnifiedOperationsService {
                 level: riskLevel,
                 probabilityPct: total > 0 ? riskProbability : 0,
                 horizonHours: 48,
-                indicator: notRecording > 0 ? "Recording stream interruption" : offline > 0 ? "Camera offline" : undefined,
+                indicator: degradedOrUnknown > 0 ? "Camera health or telemetry degraded" : offline > 0 ? "Camera offline" : undefined,
               },
               internet: {
                 state: total === 0 ? "UNKNOWN" : operationalState === "OFFLINE" ? "OFFLINE" : "HEALTHY",
@@ -413,7 +399,11 @@ export class UnifiedOperationsService {
               cameras: {
                 total,
                 healthy,
+                working: healthy,
+                notWorking,
                 offline,
+                degraded,
+                unknown,
                 notRecording,
                 maintenance: 0,
               },
@@ -454,7 +444,10 @@ export class UnifiedOperationsService {
         }
       } catch (err) {
         console.error("Error in getFleetBranchSummaries:", err);
-        return [];
+        // Do not turn an inventory/authorization failure into a valid-looking
+        // empty fleet. Callers must be able to show an error instead of reporting
+        // zero branches or zero cameras as if that were real telemetry.
+        throw err;
       }
     }
 
