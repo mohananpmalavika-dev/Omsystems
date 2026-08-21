@@ -40,14 +40,26 @@ export class DistributedEventBus extends EventEmitter {
     this.namespace = config.namespace || 'oms';
     this.serverId = process.env.SERVER_ID || `server-${process.pid}`;
 
-    // Build Redis connection options
-    const redisUrl = config.redis.url || `redis://${config.redis.host || 'localhost'}:${config.redis.port || 6379}`;
+    // Build and normalize Redis connection options
+    let redisUrl = config.redis.url || `redis://${config.redis.host || 'localhost'}:${config.redis.port || 6379}`;
+    if (config.redis.url) {
+      try {
+        const parsed = new URL(config.redis.url);
+        // Stripping 'default' username allows universal compatibility with standalone & ACL auth
+        if (parsed.username === 'default') {
+          parsed.username = '';
+          redisUrl = parsed.toString();
+        }
+      } catch {
+        // Keep original if parsing fails
+      }
+    }
     
     const clientOptions: any = {
       url: redisUrl,
       socket: {
         reconnectStrategy: (retries: number) => {
-          if (retries > 5) {
+          if (retries > 3) {
             return new Error('Redis connection/auth failed. Stopping reconnect attempts.');
           }
           const delay = Math.min(retries * 100, 2000);

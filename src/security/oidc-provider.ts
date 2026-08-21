@@ -125,16 +125,26 @@ class RedisOIDCStateStore implements OIDCStateStore {
 }
 
 function createDefaultStateStore(): OIDCStateStore {
-  const redisUrl = process.env.REDIS_URL;
-  if (redisUrl) {
+  const rawRedisUrl = process.env.REDIS_URL;
+  if (rawRedisUrl) {
     try {
-      const client = new Redis(redisUrl, {
+      const parsed = new URL(rawRedisUrl);
+      const options: any = {
+        host: parsed.hostname,
+        port: parseInt(parsed.port || "6379", 10),
+        password: parsed.password ? decodeURIComponent(parsed.password) : undefined,
         enableOfflineQueue: false,
         maxRetriesPerRequest: 1,
         lazyConnect: false,
-      });
+        retryStrategy: () => null,
+      };
+      // Only set username if it is not 'default' (ensures compatibility with AUTH <password>)
+      if (parsed.username && parsed.username !== "default") {
+        options.username = decodeURIComponent(parsed.username);
+      }
+      const client = new Redis(options);
       client.on("error", (err) => {
-        console.warn("[OIDCProvider] Redis state store connection warning:", err.message);
+        console.warn("[OIDCProvider] Redis state store warning:", err.message);
       });
       return new RedisOIDCStateStore(client);
     } catch (err) {
