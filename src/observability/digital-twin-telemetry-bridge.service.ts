@@ -88,14 +88,14 @@ export class DigitalTwinTelemetryBridgeService extends EventEmitter {
   public pushDeviceTelemetry(telemetry: {
     cameraId: string;
     branchId: string;
-    tenantId?: string;
+    tenantId: string;
     vendor?: string;
     isOnline: boolean;
     fps?: number;
     bitrateKbps?: number;
     packetLossPct?: number;
   }): void {
-    const { cameraId, branchId, tenantId = "tenant-bank-01", vendor = "CP_PLUS", isOnline } = telemetry;
+    const { cameraId, branchId, tenantId, vendor, isOnline } = telemetry;
 
     vmsMetricsRegistry.cameraOnline.set(isOnline ? 1 : 0, { camera_id: cameraId, branch_id: branchId, tenant_id: tenantId, vendor });
     if (telemetry.fps !== undefined) {
