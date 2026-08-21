@@ -471,14 +471,25 @@ export async function registerEdgeAgentPackageRoutes(
         controlPlanePublicUrl: requireControlPlaneUrl(request, options.controlPlanePublicUrl),
       };
 
-      // Create a lightweight PowerShell bootstrap installer instead of the huge .exe
-      const bootstrapTemplate = await readFile(join(root, "installer", "bootstrap-installer.ps1"), "utf8");
-      const bootstrapScript = bootstrapTemplate
-        .replace("$ActivationCode,", `$ActivationCode = "${body.activationCode}",`)
-        .replace("$ControlPlaneUrl,", `$ControlPlaneUrl = "${packageOptions.controlPlanePublicUrl}",`)
-        .replace("$AgentName,", `$AgentName = "${body.agentName}",`)
-        .replace("$BranchId,", `$BranchId = "${branchId}",`)
-        .replace("$ActivationId", `$ActivationId = "${body.activationId}"`);
+      // Create a lightweight batch installer that works without PowerShell execution policy issues
+      const bootstrapTemplate = await readFile(join(root, "installer", "bootstrap-installer.bat"), "utf8");
+      
+      // Embed the activation parameters directly in the batch file
+      const bootstrapScript = `@echo off
+REM Sentinel Grid Edge Agent Bootstrap Installer
+REM Branch: ${branch.name}
+REM Activation ID: ${body.activationId}
+
+setlocal EnableDelayedExpansion
+
+REM Embedded activation parameters
+set "ActivationCode=${body.activationCode}"
+set "ControlPlaneUrl=${packageOptions.controlPlanePublicUrl}"
+set "AgentName=${body.agentName}"
+set "BranchId=${branchId}"
+set "ActivationId=${body.activationId}"
+
+${bootstrapTemplate.split('\n').slice(14).join('\n')}`; // Skip the first 14 lines (header and param parsing)
       
       const safeBranchName = branch.name.replace(/[^a-zA-Z0-9_-]/g, "-");
       await store.writeAudit({
@@ -488,12 +499,12 @@ export async function registerEdgeAgentPackageRoutes(
         resourceNodeId: branchId,
         outcome: "success",
         sourceIp: request.ip,
-        details: { activationId: body.activationId, version, platform: "windows", format: "bootstrap-powershell" },
+        details: { activationId: body.activationId, version, platform: "windows", format: "bootstrap-batch" },
       });
       
       reply.header("Cache-Control", "no-store, private");
       reply.header("Content-Type", "application/octet-stream");
-      reply.header("Content-Disposition", `attachment; filename="${safeBranchName}-installer.ps1"`);
+      reply.header("Content-Disposition", `attachment; filename="${safeBranchName}-installer.bat"`);
       return reply.send(bootstrapScript);
     } catch (error) {
       app.log.error({ err: error, branchId }, "Failed to build edge-agent installer from activation");
