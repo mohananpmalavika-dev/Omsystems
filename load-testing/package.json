@@ -1,0 +1,56 @@
+{
+  "name": "@sentinel/load-testing",
+  "version": "1.0.0",
+  "description": "Load testing and benchmarking framework for Sentinel platform capacity validation",
+  "type": "module",
+  "scripts": {
+    "test:control-plane": "tsx src/phase1-control-plane.ts",
+    "test:phase5": "tsx src/phase1-control-plane.ts",
+    "typecheck:phase5": "tsc --noEmit -p tsconfig.phase5.json",
+    "test:alerts:phase6": "tsx src/phase6-alert-stress.ts",
+    "typecheck:phase6": "tsc --noEmit -p tsconfig.phase6.json",
+    "test:events": "tsx src/phase2-events.ts",
+    "test:recording": "tsx src/phase3-recording.ts",
+    "test:failure": "tsx src/phase4-failure.ts",
+    "test:all": "tsx src/run-all-phases.ts",
+    "report:generate": "tsx src/reporting/generate-report.ts",
+    "report:validate": "tsx src/reporting/validate-results.ts",
+    "simulate:cameras": "tsx src/simulators/camera-simulator.ts",
+    "simulate:edge-agents": "tsx src/simulators/edge-agent-simulator.ts",
+    "simulate:events": "tsx src/simulators/event-generator.ts",
+    "monitor:setup": "cd monitoring && docker-compose up -d",
+    "monitor:stop": "cd monitoring && docker-compose down"
+  },
+  "dependencies": {
+    "@faker-js/faker": "^9.2.0",
+    "axios": "^1.7.9",
+    "chalk": "^5.4.1",
+    "cli-progress": "^3.12.0",
+    "csv-writer": "^1.6.0",
+    "dotenv": "^16.4.7",
+    "p-limit": "^6.1.0",
+    "prom-client": "^15.1.4",
+    "uuid": "^11.0.5",
+    "ws": "^8.18.0",
+    "yaml": "^2.7.0",
+    "yargs": "^17.7.2"
+  },
+  "devDependencies": {
+    "@types/cli-progress": "^3.11.6",
+    "@types/node": "^22.10.2",
+    "@types/uuid": "^10.0.0",
+    "@types/ws": "^8.5.13",
+    "@types/yargs": "^17.0.33",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2"
+  },
+  "keywords": [
+    "load-testing",
+    "benchmarking",
+    "performance",
+    "sentinel",
+    "vms"
+  ],
+  "author": "Sentinel Platform Team",
+  "license": "PROPRIETARY"
+}

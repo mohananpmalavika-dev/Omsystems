@@ -1,0 +1,72 @@
+╔════════════════════════════════════════════════════════╗
+║                                                        ║
+║        SENTINEL CAMERA SYSTEM - QUICK REFERENCE       ║
+║                                                        ║
+╚════════════════════════════════════════════════════════╝
+
+📱 DASHBOARD LINK
+   https://sentinel-grid-monitoring1.onrender.com
+
+📂 INSTALLATION LOCATION
+   C:\Program Files\Sentinel Grid\Edge Agent
+
+
+─────────────────────────────────────────────────────────
+
+🚀 QUICK START (First Time)
+
+   1. Run: SentinelGridInstaller-v0.1.0-windows.exe
+   2. Enter your location name  
+   3. Click "Next" and "Install"
+   4. Done!
+
+
+─────────────────────────────────────────────────────────
+
+🎥 ADD CAMERAS
+
+   → Dashboard → Click your location name
+   → Scroll to "My Cameras"
+   → Cameras appear automatically!
+
+
+─────────────────────────────────────────────────────────
+
+🔑 FIX CAMERA PASSWORD
+
+   If camera shows "Need Login":
+   
+   1. Click "Update Camera Credentials"
+   2. Try these passwords:
+      • (empty)
+      • admin
+      • 12345
+   3. Click "Apply Credentials"
+
+
+─────────────────────────────────────────────────────────
+
+🔧 RESTART THE SYSTEM
+
+   Windows Search → "Services"
+   → Find "Sentinel Grid Edge Agent"
+   → Right-click → Start
+
+
+─────────────────────────────────────────────────────────
+
+❌ UNINSTALL
+
+   Windows Settings → Apps → Apps & features
+   → Find "Sentinel Grid Edge Agent"
+   → Click "Uninstall"
+
+
+─────────────────────────────────────────────────────────
+
+📞 SUPPORT
+
+   Contact your IT support team
+
+
+═════════════════════════════════════════════════════════

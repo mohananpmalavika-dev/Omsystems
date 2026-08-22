@@ -1,0 +1,108 @@
+{
+  "name": "Sentinel Grid Mobile Command",
+  "short_name": "Mobile Command",
+  "description": "Real-time mobile operations center for Sentinel Grid surveillance platform",
+  "start_url": "/mobile",
+  "display": "standalone",
+  "background_color": "#020617",
+  "theme_color": "#dc2626",
+  "orientation": "portrait",
+  "scope": "/mobile",
+  "icons": [
+    {
+      "src": "/icons/sentinel-grid-icon-72.png",
+      "sizes": "72x72",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/sentinel-grid-icon-96.png",
+      "sizes": "96x96",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/sentinel-grid-icon-128.png",
+      "sizes": "128x128",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/sentinel-grid-icon-144.png",
+      "sizes": "144x144",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/sentinel-grid-icon-152.png",
+      "sizes": "152x152",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/sentinel-grid-icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icons/sentinel-grid-icon-384.png",
+      "sizes": "384x384",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/sentinel-grid-icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["productivity", "business", "security"],
+  "shortcuts": [
+    {
+      "name": "Critical Alerts",
+      "short_name": "P1 Alerts",
+      "description": "View critical P1 alerts",
+      "url": "/mobile?tab=alerts",
+      "icons": [
+        {
+          "src": "/icons/alert-shortcut.png",
+          "sizes": "96x96",
+          "type": "image/png"
+        }
+      ]
+    },
+    {
+      "name": "My Incidents",
+      "short_name": "Incidents",
+      "description": "View assigned incidents",
+      "url": "/mobile?tab=incidents",
+      "icons": [
+        {
+          "src": "/icons/incidents-shortcut.png",
+          "sizes": "96x96",
+          "type": "image/png"
+        }
+      ]
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "/screenshots/mobile-home.png",
+      "sizes": "540x720",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "Home dashboard with P1 alerts"
+    },
+    {
+      "src": "/screenshots/mobile-incident.png",
+      "sizes": "540x720",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "Incident detail view"
+    }
+  ],
+  "related_applications": [],
+  "prefer_related_applications": false
+}

@@ -1,0 +1,92 @@
+# Chaos Mesh Resource Stress Scenarios
+#
+# Simulates CPU, memory, and I/O stress to test system behavior
+# under resource exhaustion.
+
+apiVersion: chaos-mesh.org/v1alpha1
+kind: StressChaos
+metadata:
+  name: memory-stress-backend
+  namespace: vms-test
+spec:
+  mode: one
+  duration: "15m"
+  selector:
+    namespaces:
+      - vms-test
+    labelSelectors:
+      app: backend
+  stressors:
+    memory:
+      workers: 4
+      size: "2GB"  # Allocate 2GB per worker
+  scheduler:
+    cron: "@every 1h"
+
+---
+
+apiVersion: chaos-mesh.org/v1alpha1
+kind: StressChaos
+metadata:
+  name: cpu-stress-analytics
+  namespace: vms-test
+spec:
+  mode: one
+  duration: "20m"
+  selector:
+    namespaces:
+      - vms-test
+    labelSelectors:
+      app: analytics-engine
+  stressors:
+    cpu:
+      workers: 8
+      load: 80  # 80% CPU load
+  scheduler:
+    cron: "@every 2h"
+
+---
+
+apiVersion: chaos-mesh.org/v1alpha1
+kind: IOChaos
+metadata:
+  name: io-delay-database
+  namespace: vms-test
+spec:
+  action: latency
+  mode: one
+  duration: "10m"
+  selector:
+    namespaces:
+      - vms-test
+    labelSelectors:
+      app: postgres
+  volumePath: /var/lib/postgresql/data
+  path: "**/*"
+  delay: "500ms"
+  percent: 50
+  scheduler:
+    cron: "@every 3h"
+
+---
+
+# Disk fill scenario
+apiVersion: chaos-mesh.org/v1alpha1
+kind: IOChaos
+metadata:
+  name: disk-fill-recorder-storage
+  namespace: vms-test
+spec:
+  action: attrOverride
+  mode: one
+  duration: "5m"
+  selector:
+    namespaces:
+      - vms-test
+    labelSelectors:
+      app: storage-manager
+  volumePath: /recordings
+  path: "**/*"
+  attr:
+    size: 107374182400  # 100GB
+  percent: 100

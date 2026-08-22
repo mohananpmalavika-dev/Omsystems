@@ -1,0 +1,15 @@
+{
+  "devicePath": "192.168.1.10",
+  "telemetrySource": "real",
+  "smartStatus": "healthy",
+  "temperature": 42,
+  "reallocatedSectors": 0,
+  "pendingSectors": 0,
+  "uncorrectableSectors": 0,
+  "failureProbability": 10,
+  "raw": {
+    "vendor": "hikvision",
+    "source": "hikvision-storage",
+    "xml": "<?xml version=\"1.0\"?><CMSStorageList><hdd><id>1</id><name>WDC WD40PURX-64</name><capacity>4000GB</capacity><freeSpace>1200GB</freeSpace><status>ok</status><temperature>42</temperature><reallocatedSectors>0</reallocatedSectors><pendingSectors>0</pendingSectors><uncorrectableSectors>0</uncorrectableSectors></hdd></CMSStorageList>"
+  }
+}

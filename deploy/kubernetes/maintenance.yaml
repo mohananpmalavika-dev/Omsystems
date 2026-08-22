@@ -1,0 +1,32 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata: { name: postgres-backup }
+spec:
+  schedule: "15 1 * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      template:
+        spec:
+          restartPolicy: Never
+          automountServiceAccountToken: false
+          securityContext: { runAsNonRoot: true, runAsUser: 999, seccompProfile: { type: RuntimeDefault } }
+          containers:
+            - name: backup
+              image: postgres:17-alpine
+              command: ["sh", "-c"]
+              args: ["set -eu; stamp=$(date -u +%Y%m%dT%H%M%SZ); pg_dump --format=custom --file=/backups/sentinel-$stamp.dump \"$DATABASE_URL\"; sha256sum /backups/sentinel-$stamp.dump > /backups/sentinel-$stamp.dump.sha256; find /backups -type f -mtime +35 -delete"]
+              env: [{ name: DATABASE_URL, valueFrom: { secretKeyRef: { name: sentinel-runtime, key: database-url } } }]
+              volumeMounts: [{ name: backups, mountPath: /backups }]
+              securityContext: { allowPrivilegeEscalation: false, capabilities: { drop: ["ALL"] } }
+          volumes: [{ name: backups, persistentVolumeClaim: { claimName: sentinel-backups } }]
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata: { name: sentinel-backups }
+spec:
+  accessModes: [ReadWriteOnce]
+  resources: { requests: { storage: 250Gi } }

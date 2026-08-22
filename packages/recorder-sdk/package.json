@@ -1,0 +1,43 @@
+{
+  "name": "@omsystems/recorder-sdk",
+  "version": "1.0.0",
+  "description": "Canonical recorder driver SDK for unified DVR/NVR integration",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "test": "jest",
+    "lint": "eslint src/**/*.ts",
+    "type-check": "tsc --noEmit"
+  },
+  "keywords": [
+    "recorder",
+    "dvr",
+    "nvr",
+    "hikvision",
+    "dahua",
+    "cp-plus",
+    "onvif",
+    "surveillance",
+    "cctv"
+  ],
+  "author": "OmSystems",
+  "license": "PROPRIETARY",
+  "dependencies": {
+    "axios": "^1.6.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^5.3.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

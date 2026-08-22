@@ -1,0 +1,151 @@
+{
+  "pbtResults": {
+    "1. Write bug condition exploration test": {
+      "status": "failed",
+      "failingExample": "**Counterexample Found:**\nTest case: DELETE /v1/admin/cameras/cam-nonexistent-{timestamp}\nExpected: HTTP 404 with { error: \"camera_not_found\" }\nActual: HTTP 500 with { error: \"internal_error\" }\n\n**Root Cause Analysis:**\nThe route handler code at line 162 in `src/routes/admin-camera-management.routes.ts` calls `await store.db.connect()` OUTSIDE the try block. When database connection errors occur, they bypass the route's error handling and are caught by the global error handler in `app.ts` (line 1938), which returns HTTP 500 with \"internal_error\".\n\nEven though the route has proper 404 handling logic (lines 168-172) and constraint violation handling (lines 209-218), these are never reached because connection errors occur before entering the try block.\n\n**Test Results:**\n- Test 1 (DELETE endpoint): ❌ FAIL - Returns 500 instead of 404\n- Test 2 (POST endpoint): ❌ FAIL - Returns 500 instead of 404  \n- Test 3 (Constraint violation): Connection error prevented test execution\n- Test 4 (Missing tables): Connection error prevented test execution\n- Test 5 (Error sanitization): ✅ PASS\n- Test 6 (Property-based): ❌ FAIL - Returns 500 instead of 404\n\n**Bug Confirmed:** The tests successfully demonstrate that the bug exists. Non-existent cameras return HTTP 500 with \"internal_error\" instead of HTTP 404 with \"camera_not_found\".",
+      "lastRunTimestamp": 1785906399021
+    }
+  },
+  "executionHistory": {
+    "1. Write bug condition exploration test": [
+      {
+        "executionId": "497d10cf-ed7d-4e65-b252-429b68cec482",
+        "chatSessionId": "sess_1c8307c8-f017-4187-9dc6-f7aaeb757ac6",
+        "timestamp": 1785903952987
+      },
+      {
+        "executionId": "497d10cf-ed7d-4e65-b252-429b68cec482",
+        "chatSessionId": "sess_1c8307c8-f017-4187-9dc6-f7aaeb757ac6",
+        "timestamp": 1785903977285
+      },
+      {
+        "executionId": "b6ddc181-4f30-4267-9678-fba479cee1bf",
+        "chatSessionId": "sess_1c8307c8-f017-4187-9dc6-f7aaeb757ac6",
+        "timestamp": 1785904412522
+      },
+      {
+        "executionId": "b6ddc181-4f30-4267-9678-fba479cee1bf",
+        "chatSessionId": "sess_1c8307c8-f017-4187-9dc6-f7aaeb757ac6",
+        "timestamp": 1785904452052
+      },
+      {
+        "executionId": "00888f46-cff1-47f5-ba34-0de9063e814b",
+        "chatSessionId": "sess_1c8307c8-f017-4187-9dc6-f7aaeb757ac6",
+        "timestamp": 1785906512532
+      }
+    ],
+    "2. Write preservation property tests (BEFORE implementing fix)": [
+      {
+        "executionId": "497d10cf-ed7d-4e65-b252-429b68cec482",
+        "chatSessionId": "sess_1c8307c8-f017-4187-9dc6-f7aaeb757ac6",
+        "timestamp": 1785903953353
+      },
+      {
+        "executionId": "b6ddc181-4f30-4267-9678-fba479cee1bf",
+        "chatSessionId": "sess_1c8307c8-f017-4187-9dc6-f7aaeb757ac6",
+        "timestamp": 1785904414361
+      },
+      {
+        "executionId": "828f217a-3da4-4d60-a248-d7947ec88374",
+        "chatSessionId": "sess_1c8307c8-f017-4187-9dc6-f7aaeb757ac6",
+        "timestamp": 1785907830865
+      }
+    ],
+    "3.1 Add PostgreSQL error code detection utilities": [
+      {
+        "executionId": "497d10cf-ed7d-4e65-b252-429b68cec482",
+        "chatSessionId": "sess_1c8307c8-f017-4187-9dc6-f7aaeb757ac6",
+        "timestamp": 1785903953576
+      },
+      {
+        "executionId": "b6ddc181-4f30-4267-9678-fba479cee1bf",
+        "chatSessionId": "sess_1c8307c8-f017-4187-9dc6-f7aaeb757ac6",
+        "timestamp": 1785904416193
+      }
+    ],
+    "3.2 Enhance missing table detection in dependent cleanup loop": [
+      {
+        "executionId": "497d10cf-ed7d-4e65-b252-429b68cec482",
+        "chatSessionId": "sess_1c8307c8-f017-4187-9dc6-f7aaeb757ac6",
+        "timestamp": 1785903953846
+      },
+      {
+        "executionId": "b6ddc181-4f30-4267-9678-fba479cee1bf",
+        "chatSessionId": "sess_1c8307c8-f017-4187-9dc6-f7aaeb757ac6",
+        "timestamp": 1785904418724
+      }
+    ],
+    "3.3 Add constraint violation detection to catch blocks": [
+      {
+        "executionId": "497d10cf-ed7d-4e65-b252-429b68cec482",
+        "chatSessionId": "sess_1c8307c8-f017-4187-9dc6-f7aaeb757ac6",
+        "timestamp": 1785903954044
+      },
+      {
+        "executionId": "b6ddc181-4f30-4267-9678-fba479cee1bf",
+        "chatSessionId": "sess_1c8307c8-f017-4187-9dc6-f7aaeb757ac6",
+        "timestamp": 1785904420151
+      }
+    ],
+    "3.4 Sanitize error messages in responses": [
+      {
+        "executionId": "497d10cf-ed7d-4e65-b252-429b68cec482",
+        "chatSessionId": "sess_1c8307c8-f017-4187-9dc6-f7aaeb757ac6",
+        "timestamp": 1785903954395
+      },
+      {
+        "executionId": "b6ddc181-4f30-4267-9678-fba479cee1bf",
+        "chatSessionId": "sess_1c8307c8-f017-4187-9dc6-f7aaeb757ac6",
+        "timestamp": 1785904422505
+      }
+    ],
+    "3.5 Apply changes to both endpoints": [
+      {
+        "executionId": "497d10cf-ed7d-4e65-b252-429b68cec482",
+        "chatSessionId": "sess_1c8307c8-f017-4187-9dc6-f7aaeb757ac6",
+        "timestamp": 1785903954568
+      },
+      {
+        "executionId": "b6ddc181-4f30-4267-9678-fba479cee1bf",
+        "chatSessionId": "sess_1c8307c8-f017-4187-9dc6-f7aaeb757ac6",
+        "timestamp": 1785904423262
+      }
+    ],
+    "3.6 Verify bug condition exploration test now passes": [
+      {
+        "executionId": "497d10cf-ed7d-4e65-b252-429b68cec482",
+        "chatSessionId": "sess_1c8307c8-f017-4187-9dc6-f7aaeb757ac6",
+        "timestamp": 1785903954762
+      },
+      {
+        "executionId": "b6ddc181-4f30-4267-9678-fba479cee1bf",
+        "chatSessionId": "sess_1c8307c8-f017-4187-9dc6-f7aaeb757ac6",
+        "timestamp": 1785904424050
+      }
+    ],
+    "3.7 Verify preservation tests still pass": [
+      {
+        "executionId": "497d10cf-ed7d-4e65-b252-429b68cec482",
+        "chatSessionId": "sess_1c8307c8-f017-4187-9dc6-f7aaeb757ac6",
+        "timestamp": 1785903954926
+      },
+      {
+        "executionId": "b6ddc181-4f30-4267-9678-fba479cee1bf",
+        "chatSessionId": "sess_1c8307c8-f017-4187-9dc6-f7aaeb757ac6",
+        "timestamp": 1785904424341
+      }
+    ],
+    "4. Checkpoint - Ensure all tests pass": [
+      {
+        "executionId": "497d10cf-ed7d-4e65-b252-429b68cec482",
+        "chatSessionId": "sess_1c8307c8-f017-4187-9dc6-f7aaeb757ac6",
+        "timestamp": 1785903955219
+      },
+      {
+        "executionId": "b6ddc181-4f30-4267-9678-fba479cee1bf",
+        "chatSessionId": "sess_1c8307c8-f017-4187-9dc6-f7aaeb757ac6",
+        "timestamp": 1785904424741
+      }
+    ]
+  }
+}

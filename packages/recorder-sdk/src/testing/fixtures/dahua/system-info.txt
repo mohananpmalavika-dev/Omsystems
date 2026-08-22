@@ -1,0 +1,8 @@
+deviceType=NVR
+model=DHI-NVR5832-4KS2
+serialNumber=1234567890ABCDEF
+softwareVersion=4.001.0000000.0, Build Date: 2023-05-15
+hardwareVersion=1.00
+vendor=Dahua Technology Co., Ltd
+deviceClass=IPC
+macAddress=00:12:34:56:78:9A

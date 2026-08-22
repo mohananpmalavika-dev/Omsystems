@@ -1,0 +1,71 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "rootDir": ".",
+    "outDir": "dist",
+    "jsx": "react-jsx",
+
+    // STRICT MODE ENABLED
+    // Production code should be type-safe
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": false,
+
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "skipLibCheck": true,
+    "types": ["node"]
+  },
+  "include": [
+    "src/**/*.ts",
+    "src/**/*.d.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist",
+
+    // Test files have their own configuration
+    "**/*.test.ts",
+    "src/**/__tests__/*",
+    "src/**/__tests__/**/*",
+    "**/__tests__/*",
+    "**/__tests__/**/*",
+    "tests/**/*",
+    "test/**/*",
+
+    // Workspace projects have their own tsconfig
+    "backend/**/*",
+    "dashboard/**/*",
+    "edge-agent/**/*",
+    "media-gateway/**/*",
+    "recording-engine/**/*",
+    "analytics-engine/**/*",
+    "packages/**/*",
+
+    // Legacy or incomplete application areas that are not part of the active root build
+    "src/**/ui/**/*",
+    "src/middleware/**/*",
+    "src/routes/**/*",
+    "src/reporting/**/*",
+    "src/operational-health/**/*",
+    "src/security-commander/**/*",
+    "src/maintenance/**/*",
+    "src/mobile/**/*",
+    "src/integrations/**/*",
+    "src/**/legacy/**/*",
+
+    // Example files (not needed for production)
+    "**/*.example.ts",
+    "**/*.example.js",
+
+    // Event bus integration (optional dependency)
+    "src/security-commander/event-bus/**/*",
+
+    // Temporarily exclude stale legacy entries
+    "src/routes/*.disabled",
+    "src/maintenance/*.disabled"
+  ]
+}

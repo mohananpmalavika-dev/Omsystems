@@ -1,0 +1,14 @@
+{
+  "name": "frontend-face-recognition",
+  "description": "Additional dependencies for face recognition UI",
+  "dependencies": {
+    "react-dropzone": "^14.2.0",
+    "date-fns": "^2.30.0"
+  },
+  "devDependencies": {},
+  "notes": {
+    "installation": "Run: npm install react-dropzone date-fns",
+    "react-dropzone": "For drag-and-drop image upload in enrollment",
+    "date-fns": "For date formatting in event displays"
+  }
+}

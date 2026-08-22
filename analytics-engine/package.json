@@ -1,0 +1,40 @@
+{
+  "name": "@sentinel/analytics-engine",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run test/app.test.ts test/inference.test.ts test/specialty-inference.test.ts test/model-manager.test.ts",
+    "models:download": "tsx scripts/provision-models.ts",
+    "models:verify": "tsx scripts/verify-models.ts",
+    "test:watch": "vitest",
+    "setup-banking-demo": "tsx scripts/setup-banking-demo.ts"
+  },
+  "dependencies": {
+    "exceljs": "^4.4.0",
+    "express": "^4.21.2",
+    "fastify": "^5.2.1",
+    "onnxruntime-node": "^1.27.0",
+    "pdfkit": "^0.19.1",
+    "pg": "^8.22.0",
+    "prom-client": "^15.1.0",
+    "redis": "^6.2.0",
+    "sharp": "^0.34.5",
+    "ws": "^8.18.0",
+    "zod": "^3.24.2"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.21",
+    "@types/node": "^22.13.4",
+    "@types/pdfkit": "^0.17.6",
+    "@types/pg": "^8.20.0",
+    "@types/ws": "^8.5.13",
+    "dotenv": "^16.4.7",
+    "tsx": "^4.19.3",
+    "typescript": "^5.7.3",
+    "vitest": "^3.0.6"
+  }
+}

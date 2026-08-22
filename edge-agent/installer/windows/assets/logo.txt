@@ -1,0 +1,17 @@
+Placeholder for logo.ico
+
+To add your company logo:
+1. Create a 256x256 pixel icon file
+2. Save as logo.ico in this directory
+3. Rebuild the installer
+
+The installer will use this logo for:
+- Setup wizard header
+- Desktop shortcuts
+- Program menu icons
+- Uninstaller icon
+
+Free icon creation tools:
+- IcoFX: https://icofx.ro/
+- GIMP: https://www.gimp.org/
+- Online: https://www.favicon-generator.org/

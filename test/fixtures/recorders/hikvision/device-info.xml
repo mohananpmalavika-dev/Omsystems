@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<DeviceInfo version="2.0" xmlns="http://www.hikvision.com/networks/schemas/2012/04/01">
+  <deviceName>IP CAMERA / NVR</deviceName>
+  <deviceID>88888888-4444-4444-4444-121212121212</deviceID>
+  <model>DS-7616NI-I2/16P</model>
+  <serialNumber>DS-7616NI-I216P20260616CCRR998877665</serialNumber>
+  <macAddress>44:19:b6:aa:bb:cc</macAddress>
+  <firmwareVersion>V4.61.025 build 220905</firmwareVersion>
+  <encoderVersion>V7.3 build 200401</encoderVersion>
+  <deviceType>NVR</deviceType>
+  <telemetryPort>8000</telemetryPort>
+</DeviceInfo>

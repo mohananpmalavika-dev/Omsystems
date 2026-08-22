@@ -1,0 +1,41 @@
+node_modules/
+dist/
+edge-agent/build/
+edge-agent/vendor/
+.env
+coverage/
+.next/
+test-results/
+playwright-report/
+*.tsbuildinfo
+*.log
+.scanner-runtime/*secrets*.json
+.scanner-runtime/edge-agent-token.txt
+.scanner-runtime/*.enc
+.scanner-runtime/*.key
+.scanner-runtime/*-agent-home/
+edge-agent/data/stream-secrets.json
+edge-agent/data/offline-outbox.enc
+edge-agent/data/offline-outbox.key
+repopack-output*.txt
+test/hdd-health/config.json
+test/hdd-health/reports/
+test/internet-health/evidence*.json
+analytics-engine/models/**/*.onnx
+analytics-engine/models/**/*.part-*
+.idea/
+.vscode/
+
+# Ignore generated branch activation keys
+edge-agent/installation-keys*.txt
+
+# Ignore all executable files, including the Edge agent release binary
+*.exe
+edge-agent/release/edge-agent.exe
+
+# Ignore environment files (examples only checked into repo)
+.env*
+!.env.example
+
+# Deprecated components (Sprint 6 cleanup)
+.deprecated/

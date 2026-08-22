@@ -1,0 +1,113 @@
+========================================
+  SENTINEL CAMERA SYSTEM
+  Simple Setup Guide for Everyone
+========================================
+
+No technical knowledge needed! Just follow these 3 easy steps:
+
+
+STEP 1: Install the System
+---------------------------
+
+1. Download the installer: SentinelGridInstaller-v0.1.0-windows.exe
+   (Location: edge-agent\installer\windows\output\)
+
+2. Double-click the installer file
+
+3. Follow the simple setup wizard:
+   - Enter your branch/location name
+   - Click "Next" and "Install"
+
+4. Wait 2-3 minutes while it installs
+
+5. The system will start automatically
+
+✓ Done! The system is now running in the background.
+
+
+STEP 2: View Your Dashboard
+----------------------------
+
+Your dashboard opens automatically, or you can click the
+"Sentinel Dashboard" icon on your desktop anytime.
+
+Dashboard Link: https://sentinel-grid-monitoring-vhid.onrender.com
+
+What you'll see:
+• Your location (branch)
+• System health status
+• Camera list (will appear after Step 3)
+
+
+STEP 3: Add Cameras
+--------------------
+
+The system will automatically find cameras on your network!
+
+To add cameras:
+
+1. In your dashboard, click on your branch/location name
+2. Scroll down to see "My Cameras" section
+3. Cameras will appear here automatically
+
+If cameras show "Need Login":
+• Look for the blue section that says "Having trouble with camera passwords?"
+• Click "Update Camera Credentials" button
+• Try common passwords or let it test automatically
+• Click "Apply Credentials"
+
+✓ Done! Cameras should now start working.
+
+
+========================================
+TROUBLESHOOTING
+========================================
+
+Camera not showing?
+------------------
+• Make sure cameras are connected to the same network
+• Wait 2-3 minutes for auto-discovery
+• Check if cameras are powered on
+
+Camera says "Need Login"?
+------------------------
+• Click "Update Camera Credentials" button
+• Try these common passwords:
+  - Empty (no password)
+  - admin
+  - 12345
+  - 123456
+  - 888888
+• Or use the password from your camera manual
+
+System not starting?
+-------------------
+1. Open Windows Services (Windows search for "Services")
+2. Look for "Sentinel Grid Edge Agent"
+3. Right-click and select "Start"
+
+
+========================================
+NEED HELP?
+========================================
+
+Contact your system administrator or IT support team.
+
+Dashboard: https://sentinel-grid-monitoring-vhid.onrender.com
+
+
+========================================
+UNINSTALLING
+========================================
+
+If you need to remove the system:
+
+1. Open Windows Settings
+2. Go to "Apps" → "Apps & features"
+3. Find "Sentinel Grid Edge Agent"
+4. Click "Uninstall"
+
+
+========================================
+  That's it! Enjoy your camera system.
+========================================

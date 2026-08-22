@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<hddList version="2.0" xmlns="http://www.hikvision.com/networks/schemas/2012/04/01">
+  <hdd>
+    <id>1</id>
+    <hddName>SATA-1</hddName>
+    <hddType>local</hddType>
+    <status>OK</status>
+    <smartStatus>NORMAL</smartStatus>
+    <capacity>7630885</capacity>
+    <freeSpace>812450</freeSpace>
+    <property>RW</property>
+  </hdd>
+  <hdd>
+    <id>2</id>
+    <hddName>SATA-2</hddName>
+    <hddType>local</hddType>
+    <status>WARN</status>
+    <smartStatus>WARNING</smartStatus>
+    <capacity>7630885</capacity>
+    <freeSpace>650120</freeSpace>
+    <property>RW</property>
+  </hdd>
+</hddList>

@@ -1,0 +1,52 @@
+/**
+ * Capability Type Definitions for Frontend
+ */
+
+export type CapabilityState =
+  | "SUPPORTED"
+  | "UNSUPPORTED"
+  | "UNKNOWN"
+  | "UNAVAILABLE"
+  | "DEGRADED"
+  | "MISCONFIGURED";
+
+export type CapabilityKey =
+  | "video.liveVideo"
+  | "video.snapshots"
+  | "video.rtsp"
+  | "video.codecs.h264"
+  | "video.codecs.h265"
+  | "video.codecs.mjpeg"
+  | "recording.recording"
+  | "recording.playback"
+  | "recording.recordingSearch"
+  | "recording.export"
+  | "audio.audioInput"
+  | "audio.audioOutput"
+  | "audio.twoWayAudio"
+  | "ptz.ptz"
+  | "ptz.pan"
+  | "ptz.tilt"
+  | "ptz.zoom"
+  | "ptz.presets"
+  | "ptz.tours"
+  | "events.motionDetection"
+  | "events.lineCrossing"
+  | "events.intrusionDetection"
+  | "analytics.personDetection"
+  | "analytics.vehicleDetection"
+  | "analytics.faceMetadata"
+  | "analytics.licensePlateMetadata"
+  | "storage.onboardStorage"
+  | "storage.storageTelemetry"
+  | "network.rtsp"
+  | "network.onvif.core"
+  | "network.onvif.profileS"
+  | "network.onvif.profileT"
+  | "network.onvif.profileG"
+  | "network.snmp"
+  | "security.https"
+  | "security.secureBoot"
+  | "security.signedFirmware"
+  | "management.firmwareUpgrade"
+  | "management.remoteReboot";

@@ -1,0 +1,138 @@
+# Implementation Plan
+
+- [x] 1. Write bug condition exploration test
+  - **Property 1: Bug Condition** - Proper Error Status Codes
+  - **CRITICAL**: This test MUST FAIL on unfixed code - failure confirms the bug exists
+  - **DO NOT attempt to fix the test or the code when it fails**
+  - **NOTE**: This test encodes the expected behavior - it will validate the fix when it passes after implementation
+  - **GOAL**: Surface counterexamples that demonstrate the bug exists
+  - **Scoped PBT Approach**: For deterministic bugs, scope the property to the concrete failing cases to ensure reproducibility
+  - Test implementation details from Bug Condition in design:
+    - Missing Camera Test: Call DELETE with a non-existent camera ID and assert it returns 404 with error "camera_not_found" (currently returns 500)
+    - Constraint Violation Test: Create a scenario where a camera has protected dependent records, attempt deletion, and assert it returns 409 with error "deletion_constrained" (currently returns 500)
+    - Missing Table Test: Simulate a database schema where one dependent table is missing and assert deletion continues gracefully without transaction rollback
+    - Error Message Exposure Test: Trigger a database error and assert the response does not contain sensitive database information
+  - The test assertions should match the Expected Behavior Properties from design:
+    - For missing cameras: statusCode === 404, error === 'camera_not_found'
+    - For constraint violations: statusCode === 409, error === 'deletion_constrained'
+    - For missing tables: deletion continues without rollback failure
+    - For unexpected errors: statusCode === 500, message does not contain sensitive info
+  - Run test on UNFIXED code
+  - **EXPECTED OUTCOME**: Test FAILS (this is correct - it proves the bug exists)
+  - Document counterexamples found to understand root cause:
+    - All error scenarios return 500 instead of appropriate status codes
+    - Error messages may expose sensitive database information
+    - Missing tables may cause transaction failures
+  - Mark task complete when test is written, run, and failure is documented
+  - _Requirements: 2.2, 2.3, 2.4, 2.5_
+
+- [ ] 2. Write preservation property tests (BEFORE implementing fix)
+  - **Property 2: Preservation** - Successful Deletion Behavior
+  - **IMPORTANT**: Follow observation-first methodology
+  - Observe behavior on UNFIXED code for successful deletion scenarios:
+    - Simple Deletion: Delete a camera with no dependent records - observe it returns 204 and removes the camera
+    - Complex Deletion: Delete a camera with dependent records in multiple tables - observe all records are removed and 204 is returned
+    - Transaction Commit: Observe that successful deletions commit the transaction without orphaned records
+    - Connection Management: Observe that database connections are properly released in success cases
+  - Write property-based tests capturing observed behavior patterns from Preservation Requirements:
+    - Generate random valid camera IDs with various dependency configurations
+    - Assert deletions return 204 No Content
+    - Assert all dependent records (analytics_alerts, incident_cameras, recording_segments, etc.) are removed
+    - Assert resource_nodes entry is removed
+    - Assert transaction is committed properly
+    - Assert database connection is released
+  - Property-based testing generates many test cases for stronger guarantees
+  - Run tests on UNFIXED code
+  - **EXPECTED OUTCOME**: Tests PASS (this confirms baseline behavior to preserve)
+  - Mark task complete when tests are written, run, and passing on unfixed code
+  - _Requirements: 3.1, 3.3, 3.4, 3.5_
+
+- [ ] 3. Fix for camera deletion 500 error
+
+  - [ ] 3.1 Add PostgreSQL error code detection utilities
+    - Create utility functions to identify PostgreSQL error types
+    - Implement `isPgError(error)` type guard function
+    - Implement `isConstraintViolation(code)` function that checks for code.startsWith('23')
+    - Add constants for specific error codes: '23503' (foreign key), '23505' (unique), '42P01' (missing relation)
+    - _Bug_Condition: isBugCondition(input) from design - errors currently return generic 500_
+    - _Expected_Behavior: expectedBehavior(result) from design - should return specific status codes_
+    - _Preservation: Must not affect successful deletion flow_
+    - _Requirements: 2.2, 2.3, 2.4, 2.5, 3.1_
+
+  - [ ] 3.2 Enhance missing table detection in dependent cleanup loop
+    - Replace string matching `if (!String(err).includes('does not exist'))` with error code detection
+    - Use PostgreSQL error code '42P01' to detect missing relations
+    - Implement: `const isTableMissing = isPgError(err) && err.code === '42P01';`
+    - Ensure deletion continues gracefully when tables are missing
+    - _Bug_Condition: Missing tables currently cause transaction failures_
+    - _Expected_Behavior: Deletion should continue for existing tables_
+    - _Preservation: Must maintain same cleanup order for existing tables_
+    - _Requirements: 2.4, 3.4_
+
+  - [ ] 3.3 Add constraint violation detection to catch blocks
+    - Update catch blocks in both DELETE and POST endpoints
+    - Add constraint violation check before returning 500
+    - If constraint violation detected (code starts with '23'), return 409 with:
+      - error: 'deletion_constrained'
+      - message: 'Cannot delete camera due to database constraints'
+      - constraint: error.constraint || 'unknown'
+    - Log full error details with `app.log.error({ error, cameraId }, 'Camera deletion failed')`
+    - _Bug_Condition: Constraint violations currently return 500_
+    - _Expected_Behavior: Should return 409 Conflict with specific error_
+    - _Preservation: Must maintain rollback behavior_
+    - _Requirements: 2.3, 3.1_
+
+  - [ ] 3.4 Sanitize error messages in responses
+    - Remove sensitive database information from all error responses
+    - Return only user-friendly messages in HTTP responses
+    - Never expose connection strings, table schemas, or internal details
+    - For unexpected 500 errors, return: { error: 'camera_deletion_failed', message: 'An unexpected error occurred during deletion' }
+    - Keep full error logging with `app.log.error(error)` for debugging
+    - _Bug_Condition: Error messages currently expose sensitive information_
+    - _Expected_Behavior: Should return sanitized messages_
+    - _Preservation: Must maintain error logging for debugging_
+    - _Requirements: 2.5, 3.1_
+
+  - [ ] 3.5 Apply changes to both endpoints
+    - Update `app.delete('/v1/admin/cameras/:id')` handler
+    - Update `app.post('/v1/admin/cameras/delete')` handler
+    - Ensure both endpoints use the same error handling logic
+    - Verify transaction management (BEGIN/COMMIT/ROLLBACK) remains unchanged
+    - _Bug_Condition: Both endpoints have generic error handling_
+    - _Expected_Behavior: Both should return appropriate status codes_
+    - _Preservation: Must maintain all successful deletion behavior_
+    - _Requirements: 2.2, 2.3, 2.4, 2.5, 3.1, 3.3, 3.5_
+
+  - [ ] 3.6 Verify bug condition exploration test now passes
+    - **Property 1: Expected Behavior** - Proper Error Status Codes
+    - **IMPORTANT**: Re-run the SAME test from task 1 - do NOT write a new test
+    - The test from task 1 encodes the expected behavior
+    - When this test passes, it confirms the expected behavior is satisfied
+    - Run bug condition exploration test from step 1
+    - **EXPECTED OUTCOME**: Test PASSES (confirms bug is fixed)
+    - Verify:
+      - Missing camera returns 404 with 'camera_not_found'
+      - Constraint violations return 409 with 'deletion_constrained'
+      - Missing tables don't cause transaction failures
+      - Error messages don't expose sensitive information
+    - _Requirements: 2.2, 2.3, 2.4, 2.5_
+
+  - [ ] 3.7 Verify preservation tests still pass
+    - **Property 2: Preservation** - Successful Deletion Behavior
+    - **IMPORTANT**: Re-run the SAME tests from task 2 - do NOT write new tests
+    - Run preservation property tests from step 2
+    - **EXPECTED OUTCOME**: Tests PASS (confirms no regressions)
+    - Verify:
+      - Successful deletions still return 204 No Content
+      - All dependent records are still removed correctly
+      - Transactions still commit properly on success
+      - Database connections are still released properly
+    - Confirm all tests still pass after fix (no regressions)
+
+- [ ] 4. Checkpoint - Ensure all tests pass
+  - Run all unit tests to verify the fix works correctly
+  - Run all property-based tests to verify preservation guarantees
+  - Run integration tests if available to verify full deletion flow
+  - Verify no regressions in successful deletion scenarios
+  - Verify all error scenarios return appropriate status codes
+  - Ask the user if questions arise

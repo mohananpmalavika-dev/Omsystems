@@ -1,0 +1,133 @@
+services:
+  api:
+    build: .
+    environment:
+      HOST: 0.0.0.0
+      PORT: 8080
+      AUTH_MODE: development
+      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is required}
+      MEDIA_GATEWAY_SHARED_KEY: ${MEDIA_GATEWAY_SHARED_KEY:?MEDIA_GATEWAY_SHARED_KEY is required}
+      EDGE_BRIDGE_SHARED_KEY: ${EDGE_BRIDGE_SHARED_KEY:?EDGE_BRIDGE_SHARED_KEY is required}
+      RECORDING_ENGINE_URL: http://recording-engine:8091
+      RECORDING_ENGINE_SHARED_KEY: ${RECORDING_ENGINE_SHARED_KEY:?RECORDING_ENGINE_SHARED_KEY is required}
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  recording-engine:
+    build:
+      context: .
+      dockerfile: recording-engine/Dockerfile
+    environment:
+      HOST: 0.0.0.0
+      PORT: 8091
+      RECORDING_ENGINE_SHARED_KEY: ${RECORDING_ENGINE_SHARED_KEY:?RECORDING_ENGINE_SHARED_KEY is required}
+      ANALYTICS_ENGINE_SHARED_KEY: ${ANALYTICS_ENGINE_SHARED_KEY:?ANALYTICS_ENGINE_SHARED_KEY is required}
+      CONTROL_PLANE_URL: ${CONTROL_PLANE_URL:-http://api:8080}
+      RECORDING_ROOT: /recordings
+      STORAGE_NODE_EXTERNAL_ID: local-recorder-01
+      STORAGE_NODE_NAME: Local Recording Node
+      STORAGE_NODE_TIERS: hot,warm,cold
+      RETENTION_SWEEP_SECONDS: 300
+      RTSP_IO_TIMEOUT_MS: 15000
+      MIN_FREE_STORAGE_BYTES: 1073741824
+      EVIDENCE_CHECKSUM_ENABLED: "true"
+      STREAM_SECRETS_JSON: "${STREAM_SECRETS_JSON:-{}}"
+    volumes:
+      - sentinel-recordings:/recordings
+    depends_on:
+      - api
+
+  analytics-engine:
+    build:
+      context: .
+      dockerfile: analytics-engine/Dockerfile
+    environment:
+      HOST: 0.0.0.0
+      PORT: 8092
+      CONTROL_PLANE_URL: http://api:8080
+      ANALYTICS_ENGINE_SHARED_KEY: ${ANALYTICS_ENGINE_SHARED_KEY:?ANALYTICS_ENGINE_SHARED_KEY is required}
+      ANALYTICS_SOURCE_SHARED_KEY: ${ANALYTICS_SOURCE_SHARED_KEY:?ANALYTICS_SOURCE_SHARED_KEY is required}
+    ports:
+      - "8092:8092"
+    depends_on:
+      - api
+
+  media-gateway:
+    build:
+      context: .
+      dockerfile: media-gateway/Dockerfile
+    environment:
+      HOST: 0.0.0.0
+      PORT: 8090
+      CONTROL_PLANE_URL: ${CONTROL_PLANE_URL:-http://api:8080}
+      MEDIA_GATEWAY_SHARED_KEY: ${MEDIA_GATEWAY_SHARED_KEY:?MEDIA_GATEWAY_SHARED_KEY is required}
+      MEDIAMTX_API_URL: http://mediamtx:9997
+      PUBLIC_HLS_BASE_URL: ${PUBLIC_HLS_BASE_URL:-http://localhost:8888}
+      PUBLIC_WEBRTC_BASE_URL: ${PUBLIC_WEBRTC_BASE_URL:-http://localhost:8889}
+      MEDIA_ACCESS_TTL_SECONDS: 300
+      STREAM_SECRETS_JSON: "${STREAM_SECRETS_JSON:-{}}"
+      EDGE_BRIDGE_SHARED_KEY: ${EDGE_BRIDGE_SHARED_KEY:?EDGE_BRIDGE_SHARED_KEY is required}
+    ports:
+      - "8090:8090"
+    depends_on:
+      - api
+      - mediamtx
+
+  dashboard:
+    build:
+      context: .
+      dockerfile: dashboard/Dockerfile
+      args:
+        CONTROL_PLANE_INTERNAL_URL: http://api:8080
+        MEDIA_GATEWAY_INTERNAL_URL: http://media-gateway:8090
+        DASHBOARD_DEV_USER_ID: ${DASHBOARD_DEV_USER_ID:-user-global-admin}
+    environment:
+      CONTROL_PLANE_INTERNAL_URL: http://api:8080
+      MEDIA_GATEWAY_INTERNAL_URL: http://media-gateway:8090
+      DASHBOARD_DEV_USER_ID: ${DASHBOARD_DEV_USER_ID:-user-global-admin}
+      RECORDING_ENGINE_INTERNAL_URL: http://recording-engine:8091
+      RECORDING_ENGINE_SHARED_KEY: ${RECORDING_ENGINE_SHARED_KEY:?RECORDING_ENGINE_SHARED_KEY is required}
+      EDGE_BRIDGE_SHARED_KEY: ${EDGE_BRIDGE_SHARED_KEY:?EDGE_BRIDGE_SHARED_KEY is required}
+      DASHBOARD_ACCESS_USERNAME: ${DASHBOARD_ACCESS_USERNAME:-}
+      DASHBOARD_ACCESS_PASSWORD: ${DASHBOARD_ACCESS_PASSWORD:-}
+    ports:
+      - "3000:3000"
+    depends_on:
+      - api
+      - media-gateway
+
+  mediamtx:
+    # 1.18+ binds HLS child playlists to a cookie that account-less CDN
+    # tunnels do not reliably forward. Keep the final pre-session security
+    # release until production uses a named tunnel/CDN with cookie support.
+    image: bluenviron/mediamtx:1.17.1
+    volumes:
+      - ./media-gateway/mediamtx.yml:/mediamtx.yml:ro
+    ports:
+      - "8888:8888"
+      - "8889:8889"
+      - "8189:8189/udp"
+
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: sentinel
+      POSTGRES_USER: sentinel
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
+    ports:
+      - "5432:5432"
+    volumes:
+      - sentinel-postgres:/var/lib/postgresql/data
+      - ./database/migrations:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sentinel -d sentinel"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  sentinel-postgres:
+  sentinel-recordings:

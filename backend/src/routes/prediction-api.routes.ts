@@ -1,0 +1,1111 @@
+/**
+ * Prediction API Routes
+ * 
+ * RESTful APIs for predictive branch failure management:
+ * - Branch and device predictions
+ * - Imminent failure alerts
+ * - Risk-specific queries (retention, network, storage)
+ * - Prediction acknowledgment and work orders
+ * - Prediction feedback and accuracy metrics
+ */
+
+import { Router, Request, Response } from 'express';
+import { Pool } from 'pg';
+import { FailurePredictionEngine } from '../services/failure-prediction-engine.service.js';
+import { BranchRiskAggregationService } from '../services/branch-risk-aggregation.service.js';
+import { TelemetryFeatureExtractionService } from '../services/telemetry-feature-extraction.service.js';
+import { logger } from '../utils/logger.js';
+
+interface AuthRequest extends Request {
+  context?: {
+    tenantId: string;
+    userId?: string;
+    userScope?: {
+      branchIds?: string[];
+      regionIds?: string[];
+    };
+  };
+}
+
+export function createPredictionApiRoutes(pool: Pool): Router {
+  const router = Router();
+  const predictionEngine = new FailurePredictionEngine(pool);
+  const branchRiskService = new BranchRiskAggregationService(pool);
+  const featureService = new TelemetryFeatureExtractionService(pool);
+
+  /**
+   * GET /v1/predictions/branches
+   * Get predictions for all branches with filtering and pagination
+   */
+  router.get('/branches', async (req: AuthRequest, res: Response) => {
+    try {
+      const { tenantId, userScope } = req.context || {};
+      if (!tenantId) {
+        return res.status(401).json({ success: false, error: 'Unauthorized' });
+      }
+
+      const {
+        riskLevel,
+        predictionType,
+        timeWindow = '7',
+        limit = '100',
+        offset = '0'
+      } = req.query;
+
+      let query = `
+        SELECT 
+          fp.id,
+          fp.device_id,
+          fp.device_type,
+          fp.branch_node_id,
+          rn.name as branch_name,
+          fp.prediction_type,
+          fp.probability,
+          fp.confidence,
+          fp.risk_classification,
+          fp.expected_failure_from,
+          fp.expected_failure_to,
+          fp.predicted_impact,
+          fp.recommended_action,
+          fp.status,
+          fp.predicted_at,
+          EXTRACT(EPOCH FROM (fp.expected_failure_from - NOW())) / 3600 as hours_until_failure,
+          (SELECT COUNT(*) FROM prediction_evidence WHERE prediction_id = fp.id) as evidence_count
+        FROM failure_predictions fp
+        LEFT JOIN resource_nodes rn ON rn.id = fp.branch_node_id
+        WHERE fp.tenant_id = $1 
+          AND fp.status = 'active'
+          AND fp.expected_failure_to >= NOW() - INTERVAL '${timeWindow} days'
+      `;
+
+      const params: any[] = [tenantId];
+      let paramCount = 1;
+
+      if (riskLevel) {
+        paramCount++;
+        query += ` AND fp.risk_classification = $${paramCount}`;
+        params.push(riskLevel);
+      }
+
+      if (predictionType) {
+        paramCount++;
+        query += ` AND fp.prediction_type = $${paramCount}`;
+        params.push(predictionType);
+      }
+
+      if (userScope?.branchIds && userScope.branchIds.length > 0) {
+        paramCount++;
+        query += ` AND fp.branch_node_id = ANY($${paramCount})`;
+        params.push(userScope.branchIds);
+      }
+
+      query += ` ORDER BY fp.probability DESC, fp.expected_failure_from ASC`;
+      query += ` LIMIT $${paramCount + 1} OFFSET $${paramCount + 2}`;
+      params.push(parseInt(limit as string), parseInt(offset as string));
+
+      const result = await pool.query(query, params);
+
+      // Get total count
+      const countResult = await pool.query(
+        `SELECT COUNT(*) as total 
+        FROM failure_predictions 
+        WHERE tenant_id = $1 AND status = 'active'`,
+        [tenantId]
+      );
+
+      res.json({
+        success: true,
+        data: {
+          predictions: result.rows,
+          pagination: {
+            total: parseInt(countResult.rows[0].total),
+            limit: parseInt(limit as string),
+            offset: parseInt(offset as string)
+          }
+        }
+      });
+    } catch (error) {
+      logger.error('Error getting branch predictions', { error });
+      res.status(500).json({ success: false, error: 'Internal server error' });
+    }
+  });
+
+
+  /**
+   * GET /v1/predictions/branches/:branchId
+   * Get all predictions for a specific branch
+   */
+  router.get('/branches/:branchId', async (req: AuthRequest, res: Response) => {
+    try {
+      const { tenantId } = req.context || {};
+      const { branchId } = req.params;
+
+      if (!tenantId) {
+        return res.status(401).json({ success: false, error: 'Unauthorized' });
+      }
+
+      const predictions = await pool.query(
+        `SELECT 
+          fp.*,
+          (SELECT json_agg(pe) FROM prediction_evidence pe WHERE pe.prediction_id = fp.id) as evidence
+        FROM failure_predictions fp
+        WHERE fp.tenant_id = $1 
+          AND fp.branch_node_id = $2
+          AND fp.status = 'active'
+        ORDER BY fp.risk_classification DESC, fp.probability DESC`,
+        [tenantId, branchId]
+      );
+
+      // Get branch risk score
+      const riskScore = await branchRiskService.getLatestBranchRiskScore(tenantId, branchId);
+
+      res.json({
+        success: true,
+        data: {
+          branchId,
+          predictions: predictions.rows,
+          riskScore
+        }
+      });
+    } catch (error) {
+      logger.error('Error getting branch predictions', { error, branchId: req.params.branchId });
+      res.status(500).json({ success: false, error: 'Internal server error' });
+    }
+  });
+
+  /**
+   * GET /v1/predictions/branches/:branchId/risk-score
+   * Get latest branch risk score summary for a specific branch
+   */
+  router.get('/branches/:branchId/risk-score', async (req: AuthRequest, res: Response) => {
+    try {
+      const { tenantId } = req.context || {};
+      const { branchId } = req.params;
+
+      if (!tenantId) {
+        return res.status(401).json({ success: false, error: 'Unauthorized' });
+      }
+
+      const riskScore = await branchRiskService.getLatestBranchRiskScore(tenantId, branchId);
+      if (!riskScore) {
+        return res.status(404).json({ success: false, error: 'Branch risk score not available' });
+      }
+
+      const branchResult = await pool.query(
+        `SELECT name FROM resource_nodes WHERE id = $1 AND tenant_id = $2`,
+        [branchId, tenantId]
+      );
+
+      const branchName = branchResult.rows[0]?.name ?? null;
+
+      const componentRisks = [
+        {
+          component: 'recorder',
+          score: riskScore.componentScores.recorderRiskScore,
+          risk: riskScore.componentScores.recorderRiskScore >= 80 ? 'low_risk' : riskScore.componentScores.recorderRiskScore >= 60 ? 'moderate' : riskScore.componentScores.recorderRiskScore >= 40 ? 'high_risk' : 'critical_risk',
+          trend: 'stable',
+          weight: 0.3
+        },
+        {
+          component: 'storage',
+          score: riskScore.componentScores.storageRiskScore,
+          risk: riskScore.componentScores.storageRiskScore >= 80 ? 'low_risk' : riskScore.componentScores.storageRiskScore >= 60 ? 'moderate' : riskScore.componentScores.storageRiskScore >= 40 ? 'high_risk' : 'critical_risk',
+          trend: 'stable',
+          weight: 0.25
+        },
+        {
+          component: 'network',
+          score: riskScore.componentScores.networkRiskScore,
+          risk: riskScore.componentScores.networkRiskScore >= 80 ? 'low_risk' : riskScore.componentScores.networkRiskScore >= 60 ? 'moderate' : riskScore.componentScores.networkRiskScore >= 40 ? 'high_risk' : 'critical_risk',
+          trend: 'stable',
+          weight: 0.2
+        },
+        {
+          component: 'power',
+          score: riskScore.componentScores.powerRiskScore,
+          risk: riskScore.componentScores.powerRiskScore >= 80 ? 'low_risk' : riskScore.componentScores.powerRiskScore >= 60 ? 'moderate' : riskScore.componentScores.powerRiskScore >= 40 ? 'high_risk' : 'critical_risk',
+          trend: 'stable',
+          weight: 0.15
+        },
+        {
+          component: 'camera',
+          score: riskScore.componentScores.cameraRiskScore,
+          risk: riskScore.componentScores.cameraRiskScore >= 80 ? 'low_risk' : riskScore.componentScores.cameraRiskScore >= 60 ? 'moderate' : riskScore.componentScores.cameraRiskScore >= 40 ? 'high_risk' : 'critical_risk',
+          trend: 'stable',
+          weight: 0.05
+        },
+        {
+          component: 'compliance',
+          score: riskScore.componentScores.complianceRiskScore,
+          risk: riskScore.componentScores.complianceRiskScore >= 80 ? 'low_risk' : riskScore.componentScores.complianceRiskScore >= 60 ? 'moderate' : riskScore.componentScores.complianceRiskScore >= 40 ? 'high_risk' : 'critical_risk',
+          trend: 'stable',
+          weight: 0.05
+        }
+      ];
+
+      res.json({
+        success: true,
+        data: {
+          branchId,
+          branchName,
+          overallScore: riskScore.overallScore,
+          riskClassification: riskScore.overallClassification,
+          topRisks: riskScore.topRisks,
+          recommendations: riskScore.recommendedActions,
+          componentRisks,
+          lastUpdated: new Date().toISOString()
+        }
+      });
+    } catch (error) {
+      logger.error('Error getting branch risk score', { error, branchId: req.params.branchId });
+      res.status(500).json({ success: false, error: 'Internal server error' });
+    }
+  });
+
+  /**
+   * GET /v1/predictions/devices/:deviceId
+   * Get predictions for a specific device
+   */
+  router.get('/devices/:deviceId', async (req: AuthRequest, res: Response) => {
+    try {
+      const { tenantId } = req.context || {};
+      const { deviceId } = req.params;
+
+      if (!tenantId) {
+        return res.status(401).json({ success: false, error: 'Unauthorized' });
+      }
+
+      const predictions = await pool.query(
+        `SELECT 
+          fp.*,
+          rn.name as branch_name,
+          (SELECT json_agg(pe) FROM prediction_evidence pe WHERE pe.prediction_id = fp.id) as evidence
+        FROM failure_predictions fp
+        LEFT JOIN resource_nodes rn ON rn.id = fp.branch_node_id
+        WHERE fp.tenant_id = $1 
+          AND fp.device_id = $2
+          AND fp.status = 'active'
+        ORDER BY fp.predicted_at DESC`,
+        [tenantId, deviceId]
+      );
+
+      res.json({
+        success: true,
+        data: predictions.rows
+      });
+    } catch (error) {
+      logger.error('Error getting device predictions', { error, deviceId: req.params.deviceId });
+      res.status(500).json({ success: false, error: 'Internal server error' });
+    }
+  });
+
+  /**
+   * GET /v1/predictions/imminent
+   * Get predictions with failure expected within 24 hours
+   */
+  router.get('/imminent', async (req: AuthRequest, res: Response) => {
+    try {
+      const { tenantId, userScope } = req.context || {};
+      if (!tenantId) {
+        return res.status(401).json({ success: false, error: 'Unauthorized' });
+      }
+
+      let query = `
+        SELECT 
+          fp.*,
+          rn.name as branch_name,
+          EXTRACT(EPOCH FROM (fp.expected_failure_from - NOW())) / 3600 as hours_until_failure
+        FROM failure_predictions fp
+        LEFT JOIN resource_nodes rn ON rn.id = fp.branch_node_id
+        WHERE fp.tenant_id = $1 
+          AND fp.status = 'active'
+          AND fp.expected_failure_from <= NOW() + INTERVAL '24 hours'
+      `;
+
+      const params: any[] = [tenantId];
+
+      if (userScope?.branchIds && userScope.branchIds.length > 0) {
+        query += ` AND fp.branch_node_id = ANY($2)`;
+        params.push(userScope.branchIds);
+      }
+
+      query += ` ORDER BY fp.expected_failure_from ASC`;
+
+      const result = await pool.query(query, params);
+
+      res.json({
+        success: true,
+        data: {
+          count: result.rows.length,
+          predictions: result.rows
+        }
+      });
+    } catch (error) {
+      logger.error('Error getting imminent predictions', { error });
+      res.status(500).json({ success: false, error: 'Internal server error' });
+    }
+  });
+
+  /**
+   * GET /v1/predictions/retention-risk
+   * Get storage retention compliance predictions
+   */
+  router.get('/retention-risk', async (req: AuthRequest, res: Response) => {
+    try {
+      const { tenantId, userScope } = req.context || {};
+      if (!tenantId) {
+        return res.status(401).json({ success: false, error: 'Unauthorized' });
+      }
+
+      let query = `
+        SELECT 
+          fp.*,
+          rn.name as branch_name
+        FROM failure_predictions fp
+        LEFT JOIN resource_nodes rn ON rn.id = fp.branch_node_id
+        WHERE fp.tenant_id = $1 
+          AND fp.status = 'active'
+          AND fp.prediction_type = 'storage_retention_failure'
+      `;
+
+      const params: any[] = [tenantId];
+
+      if (userScope?.branchIds && userScope.branchIds.length > 0) {
+        query += ` AND fp.branch_node_id = ANY($2)`;
+        params.push(userScope.branchIds);
+      }
+
+      query += ` ORDER BY fp.probability DESC`;
+
+      const result = await pool.query(query, params);
+
+      res.json({
+        success: true,
+        data: result.rows
+      });
+    } catch (error) {
+      logger.error('Error getting retention risk predictions', { error });
+      res.status(500).json({ success: false, error: 'Internal server error' });
+    }
+  });
+
+
+  /**
+   * GET /v1/predictions/network-risk
+   * Get network connectivity predictions
+   */
+  router.get('/network-risk', async (req: AuthRequest, res: Response) => {
+    try {
+      const { tenantId, userScope } = req.context || {};
+      if (!tenantId) {
+        return res.status(401).json({ success: false, error: 'Unauthorized' });
+      }
+
+      let query = `
+        SELECT 
+          fp.*,
+          rn.name as branch_name
+        FROM failure_predictions fp
+        LEFT JOIN resource_nodes rn ON rn.id = fp.branch_node_id
+        WHERE fp.tenant_id = $1 
+          AND fp.status = 'active'
+          AND fp.prediction_type = 'network_failure'
+      `;
+
+      const params: any[] = [tenantId];
+
+      if (userScope?.branchIds && userScope.branchIds.length > 0) {
+        query += ` AND fp.branch_node_id = ANY($2)`;
+        params.push(userScope.branchIds);
+      }
+
+      query += ` ORDER BY fp.probability DESC`;
+
+      const result = await pool.query(query, params);
+
+      res.json({
+        success: true,
+        data: result.rows
+      });
+    } catch (error) {
+      logger.error('Error getting network risk predictions', { error });
+      res.status(500).json({ success: false, error: 'Internal server error' });
+    }
+  });
+
+  /**
+   * GET /v1/predictions/storage-risk
+   * Get disk and storage predictions
+   */
+  router.get('/storage-risk', async (req: AuthRequest, res: Response) => {
+    try {
+      const { tenantId, userScope } = req.context || {};
+      if (!tenantId) {
+        return res.status(401).json({ success: false, error: 'Unauthorized' });
+      }
+
+      let query = `
+        SELECT 
+          fp.*,
+          rn.name as branch_name
+        FROM failure_predictions fp
+        LEFT JOIN resource_nodes rn ON rn.id = fp.branch_node_id
+        WHERE fp.tenant_id = $1 
+          AND fp.status = 'active'
+          AND fp.prediction_type IN ('disk_failure', 'storage_retention_failure')
+      `;
+
+      const params: any[] = [tenantId];
+
+      if (userScope?.branchIds && userScope.branchIds.length > 0) {
+        query += ` AND fp.branch_node_id = ANY($2)`;
+        params.push(userScope.branchIds);
+      }
+
+      query += ` ORDER BY fp.probability DESC`;
+
+      const result = await pool.query(query, params);
+
+      res.json({
+        success: true,
+        data: result.rows
+      });
+    } catch (error) {
+      logger.error('Error getting storage risk predictions', { error });
+      res.status(500).json({ success: false, error: 'Internal server error' });
+    }
+  });
+
+  /**
+   * POST /v1/predictions/:predictionId/acknowledge
+   * Acknowledge a prediction
+   */
+  router.post('/:predictionId/acknowledge', async (req: AuthRequest, res: Response) => {
+    try {
+      const { tenantId, userId } = req.context || {};
+      const { predictionId } = req.params;
+
+      if (!tenantId || !userId) {
+        return res.status(401).json({ success: false, error: 'Unauthorized' });
+      }
+
+      await pool.query(
+        `UPDATE failure_predictions
+        SET status = 'acknowledged',
+            acknowledged_at = NOW(),
+            acknowledged_by = $1,
+            updated_at = NOW()
+        WHERE id = $2 AND tenant_id = $3`,
+        [userId, predictionId, tenantId]
+      );
+
+      res.json({
+        success: true,
+        message: 'Prediction acknowledged'
+      });
+    } catch (error) {
+      logger.error('Error acknowledging prediction', { error, predictionId: req.params.predictionId });
+      res.status(500).json({ success: false, error: 'Internal server error' });
+    }
+  });
+
+  /**
+   * POST /v1/predictions/:predictionId/create-work-order
+   * Create maintenance work order from prediction
+   */
+  router.post('/:predictionId/create-work-order', async (req: AuthRequest, res: Response) => {
+    try {
+      const { tenantId, userId } = req.context || {};
+      const { predictionId } = req.params;
+      const { scheduledAt, notes } = req.body;
+
+      if (!tenantId || !userId) {
+        return res.status(401).json({ success: false, error: 'Unauthorized' });
+      }
+
+      // Get prediction details
+      const prediction = await pool.query(
+        `SELECT * FROM failure_predictions WHERE id = $1 AND tenant_id = $2`,
+        [predictionId, tenantId]
+      );
+
+      if (prediction.rows.length === 0) {
+        return res.status(404).json({ success: false, error: 'Prediction not found' });
+      }
+
+      const pred = prediction.rows[0];
+
+      // Create maintenance intervention
+      const intervention = await pool.query(
+        `INSERT INTO maintenance_interventions (
+          tenant_id,
+          prediction_id,
+          intervention_type,
+          scheduled_at,
+          assigned_to,
+          action_taken,
+          notes
+        ) VALUES ($1, $2, 'preventive', $3, $4, $5, $6)
+        RETURNING id`,
+        [
+          tenantId,
+          predictionId,
+          scheduledAt || pred.expected_failure_from,
+          userId,
+          pred.recommended_action,
+          notes || `Work order created from prediction: ${pred.prediction_type}`
+        ]
+      );
+
+      // Update prediction status
+      await pool.query(
+        `UPDATE failure_predictions
+        SET status = 'acknowledged',
+            acknowledged_at = NOW(),
+            acknowledged_by = $1,
+            updated_at = NOW()
+        WHERE id = $2`,
+        [userId, predictionId]
+      );
+
+      res.json({
+        success: true,
+        data: {
+          interventionId: intervention.rows[0].id,
+          message: 'Work order created successfully'
+        }
+      });
+    } catch (error) {
+      logger.error('Error creating work order', { error, predictionId: req.params.predictionId });
+      res.status(500).json({ success: false, error: 'Internal server error' });
+    }
+  });
+
+
+  /**
+   * POST /v1/predictions/:predictionId/feedback
+   * Record prediction feedback
+   */
+  router.post('/:predictionId/feedback', async (req: AuthRequest, res: Response) => {
+    try {
+      const { tenantId, userId } = req.context || {};
+      const { predictionId } = req.params;
+      const { feedbackType, accuracyRating, usefulnessRating, comments } = req.body;
+
+      if (!tenantId || !userId) {
+        return res.status(401).json({ success: false, error: 'Unauthorized' });
+      }
+
+      await pool.query(
+        `INSERT INTO prediction_feedback (
+          prediction_id,
+          tenant_id,
+          provided_by,
+          feedback_type,
+          accuracy_rating,
+          usefulness_rating,
+          comments
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+        [predictionId, tenantId, userId, feedbackType, accuracyRating, usefulnessRating, comments]
+      );
+
+      res.json({
+        success: true,
+        message: 'Feedback recorded'
+      });
+    } catch (error) {
+      logger.error('Error recording feedback', { error, predictionId: req.params.predictionId });
+      res.status(500).json({ success: false, error: 'Internal server error' });
+    }
+  });
+
+  /**
+   * GET /v1/predictions/model-performance
+   * Get prediction accuracy metrics
+   */
+  router.get('/model-performance', async (req: AuthRequest, res: Response) => {
+    try {
+      const { tenantId } = req.context || {};
+      if (!tenantId) {
+        return res.status(401).json({ success: false, error: 'Unauthorized' });
+      }
+
+      const { days = '90', predictionType } = req.query;
+
+      let query = `
+        SELECT 
+          fp.prediction_type,
+          COUNT(fp.id) as total_predictions,
+          COUNT(po.id) FILTER (WHERE po.outcome = 'correct') as correct_predictions,
+          COUNT(po.id) FILTER (WHERE po.outcome = 'false_positive') as false_positives,
+          COUNT(po.id) FILTER (WHERE po.outcome = 'false_negative') as false_negatives,
+          COUNT(po.id) FILTER (WHERE po.outcome = 'prevented') as prevented_failures,
+          COUNT(po.id) FILTER (WHERE po.within_predicted_window = true) as within_window,
+          ROUND(AVG(po.prediction_lead_time_hours) FILTER (WHERE po.outcome = 'correct'), 2) as avg_lead_time_hours,
+          ROUND(
+            COUNT(po.id) FILTER (WHERE po.outcome = 'correct')::numeric / 
+            NULLIF(COUNT(po.id) FILTER (WHERE po.outcome IN ('correct', 'false_positive')), 0)::numeric,
+            4
+          ) as precision,
+          ROUND(
+            COUNT(po.id) FILTER (WHERE po.outcome = 'correct')::numeric / 
+            NULLIF(COUNT(po.id) FILTER (WHERE po.outcome IN ('correct', 'false_negative')), 0)::numeric,
+            4
+          ) as recall
+        FROM failure_predictions fp
+        LEFT JOIN prediction_outcomes po ON po.prediction_id = fp.id
+        WHERE fp.tenant_id = $1 
+          AND fp.predicted_at >= NOW() - INTERVAL '${days} days'
+      `;
+
+      const params: any[] = [tenantId];
+
+      if (predictionType) {
+        query += ` AND fp.prediction_type = $2`;
+        params.push(predictionType);
+      }
+
+      query += ` GROUP BY fp.prediction_type`;
+
+      const result = await pool.query(query, params);
+
+      // Get overall summary
+      const summary = await pool.query(
+        `SELECT 
+          COUNT(DISTINCT fp.id) as total_predictions,
+          COUNT(DISTINCT CASE WHEN fp.risk_classification IN ('critical_risk', 'imminent_failure') THEN fp.id END) as critical_predictions,
+          COUNT(DISTINCT po.id) FILTER (WHERE po.outcome = 'prevented') as prevented_failures,
+          COUNT(DISTINCT po.id) FILTER (WHERE po.outcome = 'correct') as accurate_predictions
+        FROM failure_predictions fp
+        LEFT JOIN prediction_outcomes po ON po.prediction_id = fp.id
+        WHERE fp.tenant_id = $1 
+          AND fp.predicted_at >= NOW() - INTERVAL '${days} days'`,
+        [tenantId]
+      );
+
+      res.json({
+        success: true,
+        data: {
+          summary: summary.rows[0],
+          byPredictionType: result.rows
+        }
+      });
+    } catch (error) {
+      logger.error('Error getting model performance', { error });
+      res.status(500).json({ success: false, error: 'Internal server error' });
+    }
+  });
+
+  /**
+   * GET /v1/predictions/model-performance/detailed
+   * Get comprehensive calibration metrics for all prediction types
+   */
+  router.get('/model-performance/detailed', async (req: AuthRequest, res: Response) => {
+    try {
+      const { tenantId } = req.context || {};
+      if (!tenantId) {
+        return res.status(401).json({ success: false, error: 'Unauthorized' });
+      }
+
+      const { days = '90' } = req.query;
+
+      const { PredictionCalibrationService } = await import('../services/prediction-calibration.service.js');
+      const calibrationService = new PredictionCalibrationService(pool);
+
+      const performanceData = await calibrationService.getAllPredictionPerformance(
+        parseInt(days as string),
+        tenantId
+      );
+
+      res.json({
+        success: true,
+        data: performanceData
+      });
+    } catch (error) {
+      logger.error('Error fetching detailed model performance', { error });
+      res.status(500).json({ success: false, error: 'Internal server error' });
+    }
+  });
+
+  /**
+   * GET /v1/predictions/model-performance/:predictionType/calibration
+   * Get calibration curve for a specific prediction type
+   */
+  router.get('/model-performance/:predictionType/calibration', async (req: AuthRequest, res: Response) => {
+    try {
+      const { tenantId } = req.context || {};
+      if (!tenantId) {
+        return res.status(401).json({ success: false, error: 'Unauthorized' });
+      }
+
+      const { predictionType } = req.params;
+      const { days = '90' } = req.query;
+
+      const { PredictionCalibrationService } = await import('../services/prediction-calibration.service.js');
+      const calibrationService = new PredictionCalibrationService(pool);
+
+      const calibrationCurve = await calibrationService.generateCalibrationCurve(
+        predictionType,
+        parseInt(days as string),
+        tenantId
+      );
+
+      res.json({
+        success: true,
+        data: calibrationCurve
+      });
+    } catch (error) {
+      logger.error('Error fetching calibration curve', { error, predictionType: req.params.predictionType });
+      res.status(500).json({ success: false, error: 'Internal server error' });
+    }
+  });
+
+  /**
+   * GET /v1/predictions/model-performance/degradation-check
+   * Check for model degradation issues
+   */
+  router.get('/model-performance/degradation-check', async (req: AuthRequest, res: Response) => {
+    try {
+      const { tenantId } = req.context || {};
+      if (!tenantId) {
+        return res.status(401).json({ success: false, error: 'Unauthorized' });
+      }
+
+      const { PredictionCalibrationService } = await import('../services/prediction-calibration.service.js');
+      const calibrationService = new PredictionCalibrationService(pool);
+
+      const issues = await calibrationService.detectModelDegradation(tenantId);
+
+      res.json({
+        success: true,
+        data: {
+          hasIssues: issues.length > 0,
+          issueCount: issues.length,
+          issues
+        }
+      });
+    } catch (error) {
+      logger.error('Error checking model degradation', { error });
+      res.status(500).json({ success: false, error: 'Internal server error' });
+    }
+  });
+
+  /**
+   * POST /v1/predictions/model-performance/threshold-recommendations
+   * Get recommended threshold adjustments based on outcomes
+   */
+  router.post('/model-performance/threshold-recommendations', async (req: AuthRequest, res: Response) => {
+    try {
+      const { tenantId } = req.context || {};
+      if (!tenantId) {
+        return res.status(401).json({ success: false, error: 'Unauthorized' });
+      }
+
+      const { predictionType } = req.body;
+
+      if (!predictionType) {
+        return res.status(400).json({
+          success: false,
+          error: 'predictionType is required'
+        });
+      }
+
+      const { PredictionCalibrationService } = await import('../services/prediction-calibration.service.js');
+      const calibrationService = new PredictionCalibrationService(pool);
+
+      const recommendations = await calibrationService.recommendThresholdAdjustments(
+        predictionType,
+        tenantId
+      );
+
+      res.json({
+        success: true,
+        data: recommendations
+      });
+    } catch (error) {
+      logger.error('Error generating threshold recommendations', { error });
+      res.status(500).json({ success: false, error: 'Internal server error' });
+    }
+  });
+
+  /**
+   * GET /v1/predictions/digital-twin/branches/:branchId/risk-indicators
+   * Get device risk indicators for Digital Twin visualization
+   */
+  router.get('/digital-twin/branches/:branchId/risk-indicators', async (req: AuthRequest, res: Response) => {
+    try {
+      const { tenantId } = req.context || {};
+      if (!tenantId) {
+        return res.status(401).json({ success: false, error: 'Unauthorized' });
+      }
+
+      const { branchId } = req.params;
+
+      const { DigitalTwinPredictionIntegration } = await import('../services/digital-twin-prediction-integration.service.js');
+      const dtIntegration = new DigitalTwinPredictionIntegration(pool);
+
+      const indicators = await dtIntegration.getBranchDeviceRiskIndicators(branchId, tenantId);
+
+      res.json({
+        success: true,
+        data: indicators
+      });
+    } catch (error) {
+      logger.error('Error fetching digital twin risk indicators', { error, branchId: req.params.branchId });
+      res.status(500).json({ success: false, error: 'Internal server error' });
+    }
+  });
+
+  /**
+   * GET /v1/predictions/digital-twin/devices/:deviceId/risk-indicator
+   * Get risk indicator for a specific device
+   */
+  router.get('/digital-twin/devices/:deviceId/risk-indicator', async (req: AuthRequest, res: Response) => {
+    try {
+      const { tenantId } = req.context || {};
+      if (!tenantId) {
+        return res.status(401).json({ success: false, error: 'Unauthorized' });
+      }
+
+      const { deviceId } = req.params;
+      const { branchId } = req.query;
+
+      if (!branchId) {
+        return res.status(400).json({ success: false, error: 'branchId query parameter required' });
+      }
+
+      const { DigitalTwinPredictionIntegration } = await import('../services/digital-twin-prediction-integration.service.js');
+      const dtIntegration = new DigitalTwinPredictionIntegration(pool);
+
+      const indicator = await dtIntegration.getDeviceRiskIndicator(deviceId, branchId as string, tenantId);
+
+      res.json({
+        success: true,
+        data: indicator
+      });
+    } catch (error) {
+      logger.error('Error fetching device risk indicator', { error, deviceId: req.params.deviceId });
+      res.status(500).json({ success: false, error: 'Internal server error' });
+    }
+  });
+
+  /**
+   * GET /v1/predictions/digital-twin/branches/:branchId/risk-overlay
+   * Get branch risk overlay for map visualization
+   */
+  router.get('/digital-twin/branches/:branchId/risk-overlay', async (req: AuthRequest, res: Response) => {
+    try {
+      const { tenantId } = req.context || {};
+      if (!tenantId) {
+        return res.status(401).json({ success: false, error: 'Unauthorized' });
+      }
+
+      const { branchId } = req.params;
+
+      const { DigitalTwinPredictionIntegration } = await import('../services/digital-twin-prediction-integration.service.js');
+      const dtIntegration = new DigitalTwinPredictionIntegration(pool);
+
+      const overlay = await dtIntegration.getBranchRiskOverlay(branchId, tenantId);
+
+      res.json({
+        success: true,
+        data: overlay
+      });
+    } catch (error) {
+      logger.error('Error fetching branch risk overlay', { error, branchId: req.params.branchId });
+      res.status(500).json({ success: false, error: 'Internal server error' });
+    }
+  });
+
+  /**
+   * POST /v1/predictions/ai-query
+   * Natural language query interface for predictions
+   */
+  router.post('/ai-query', async (req: AuthRequest, res: Response) => {
+    try {
+      const { tenantId, userScope } = req.context || {};
+      if (!tenantId) {
+        return res.status(401).json({ success: false, error: 'Unauthorized' });
+      }
+
+      const { question } = req.body;
+
+      if (!question) {
+        return res.status(400).json({
+          success: false,
+          error: 'question is required'
+        });
+      }
+
+      const { AiCommandCenterPredictionService } = await import('../services/ai-command-center-prediction.service.js');
+      const aiService = new AiCommandCenterPredictionService(pool);
+
+      const response = await aiService.handleNaturalLanguageQuery(
+        question,
+        tenantId,
+        userScope
+      );
+
+      res.json({
+        success: true,
+        data: response
+      });
+    } catch (error) {
+      logger.error('Error processing AI prediction query', { error, question: req.body.question });
+      res.status(500).json({ success: false, error: 'Internal server error' });
+    }
+  });
+
+  /**
+   * POST /v1/predictions/generate
+   * Manually trigger prediction generation
+   */
+  router.post('/generate', async (req: AuthRequest, res: Response) => {
+    try {
+      const { tenantId, userId } = req.context || {};
+      if (!tenantId) {
+        return res.status(401).json({ success: false, error: 'Unauthorized' });
+      }
+
+      // Create prediction run record
+      const runResult = await pool.query(
+        `INSERT INTO prediction_runs (tenant_id, run_type, status)
+        VALUES ($1, 'manual', 'running')
+        RETURNING id`,
+        [tenantId]
+      );
+
+      const runId = runResult.rows[0].id;
+
+      // Generate predictions (async)
+      setImmediate(async () => {
+        try {
+          const startTime = Date.now();
+          
+          // Extract features
+          await featureService.extractFeaturesForTenant(tenantId);
+          
+          // Generate predictions
+          const predictions = await predictionEngine.generatePredictions(tenantId);
+          
+          // Store predictions
+          for (const prediction of predictions) {
+            await storePrediction(pool, tenantId, prediction);
+          }
+          
+          // Calculate branch risk scores
+          await branchRiskService.calculateBranchRiskScores(tenantId);
+          
+          const executionTime = Date.now() - startTime;
+          
+          // Update run record
+          await pool.query(
+            `UPDATE prediction_runs
+            SET status = 'completed',
+                completed_at = NOW(),
+                predictions_generated = $1,
+                execution_time_ms = $2
+            WHERE id = $3`,
+            [predictions.length, executionTime, runId]
+          );
+        } catch (error) {
+          logger.error('Error in prediction generation', { error, runId });
+          await pool.query(
+            `UPDATE prediction_runs
+            SET status = 'failed',
+                completed_at = NOW(),
+                error_message = $1
+            WHERE id = $2`,
+            [error instanceof Error ? error.message : 'Unknown error', runId]
+          );
+        }
+      });
+
+      res.json({
+        success: true,
+        data: {
+          runId,
+          message: 'Prediction generation started'
+        }
+      });
+    } catch (error) {
+      logger.error('Error starting prediction generation', { error });
+      res.status(500).json({ success: false, error: 'Internal server error' });
+    }
+  });
+
+  return router;
+}
+
+/**
+ * Helper function to store prediction
+ */
+async function storePrediction(pool: Pool, tenantId: string, prediction: any): Promise<void> {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    // Insert prediction
+    const result = await client.query(
+      `INSERT INTO failure_predictions (
+        tenant_id, device_id, device_type, branch_node_id,
+        prediction_type, probability, confidence, risk_classification,
+        predicted_at, expected_failure_from, expected_failure_to, time_horizon_days,
+        predicted_impact, recommended_action, preventive_actions,
+        model_version, prediction_method, status
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW(), $9, $10, $11, $12, $13, $14, $15, $16, 'active')
+      RETURNING id`,
+      [
+        tenantId,
+        prediction.deviceId,
+        prediction.deviceType,
+        prediction.branchNodeId,
+        prediction.predictionType,
+        prediction.probability,
+        prediction.confidence,
+        prediction.riskClassification,
+        prediction.expectedFailureFrom,
+        prediction.expectedFailureTo,
+        prediction.timeHorizonDays,
+        JSON.stringify(prediction.predictedImpact),
+        prediction.recommendedAction,
+        prediction.preventiveActions,
+        prediction.modelVersion,
+        prediction.predictionMethod
+      ]
+    );
+
+    const predictionId = result.rows[0].id;
+
+    // Insert evidence
+    for (const evidence of prediction.evidence) {
+      await client.query(
+        `INSERT INTO prediction_evidence (
+          prediction_id, evidence_type, evidence_description,
+          metric_name, current_value, baseline_value, change_percentage,
+          trend_data, weight
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+        [
+          predictionId,
+          evidence.evidenceType,
+          evidence.evidenceDescription,
+          evidence.metricName,
+          evidence.currentValue,
+          evidence.baselineValue,
+          evidence.changePercentage,
+          evidence.trendData ? JSON.stringify(evidence.trendData) : null,
+          evidence.weight
+        ]
+      );
+    }
+
+    await client.query('COMMIT');
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+export default createPredictionApiRoutes;

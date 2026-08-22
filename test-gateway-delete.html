@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Gateway Delete</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+        }
+        .error { color: red; }
+        .success { color: green; }
+        pre {
+            background: #f4f4f4;
+            padding: 15px;
+            border-radius: 5px;
+            overflow-x: auto;
+        }
+        button {
+            background: #007bff;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        input {
+            width: 100%;
+            padding: 10px;
+            margin: 10px 0;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Gateway Delete Debugger</h1>
+    
+    <div>
+        <label>Gateway ID:</label>
+        <input type="text" id="gatewayId" value="6a323cc5-30d7-4764-9573-9421f3d9ca8d" />
+        
+        <label>Auth Token (from localStorage or paste here):</label>
+        <input type="text" id="token" placeholder="Will try to read from localStorage.token" />
+        
+        <button onclick="testDelete()">Test DELETE</button>
+    </div>
+    
+    <h2>Results:</h2>
+    <div id="results"></div>
+    
+    <script>
+        async function testDelete() {
+            const resultsDiv = document.getElementById('results');
+            const gatewayId = document.getElementById('gatewayId').value;
+            let token = document.getElementById('token').value;
+            
+            // Try to get token from localStorage if not provided
+            if (!token) {
+                token = localStorage.getItem('token') || 
+                        localStorage.getItem('sentinel_access') ||
+                        localStorage.getItem('auth_token');
+            }
+            
+            if (!token) {
+                resultsDiv.innerHTML = '<p class="error">❌ No auth token found. Please paste your token in the input field.</p>';
+                return;
+            }
+            
+            resultsDiv.innerHTML = '<p>⏳ Sending DELETE request...</p>';
+            
+            try {
+                const url = `https://sentinel-grid-monitoring1.onrender.com/api/admin/system/gateways/${gatewayId}`;
+                
+                console.log('DELETE URL:', url);
+                console.log('Token (first 20 chars):', token.substring(0, 20) + '...');
+                
+                const response = await fetch(url, {
+                    method: 'DELETE',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                console.log('Response status:', response.status);
+                console.log('Response headers:', [...response.headers.entries()]);
+                
+                let responseData;
+                const contentType = response.headers.get('content-type');
+                
+                if (contentType && contentType.includes('application/json')) {
+                    responseData = await response.json();
+                } else {
+                    responseData = await response.text();
+                }
+                
+                console.log('Response data:', responseData);
+                
+                let html = `
+                    <h3>Status: ${response.status} ${response.statusText}</h3>
+                    <h4>Response:</h4>
+                    <pre>${JSON.stringify(responseData, null, 2)}</pre>
+                `;
+                
+                if (response.status === 204) {
+                    html = '<p class="success">✅ SUCCESS! Gateway deleted (204 No Content)</p>' + html;
+                } else if (response.status === 404) {
+                    html = '<p class="error">❌ Gateway not found (404)</p>' + html;
+                } else if (response.status === 403) {
+                    html = '<p class="error">❌ Permission denied (403)</p>' + html;
+                } else if (response.status === 401) {
+                    html = '<p class="error">❌ Unauthorized (401) - Check your token</p>' + html;
+                } else if (response.status === 500) {
+                    html = '<p class="error">❌ Server Error (500)</p>' + html;
+                    
+                    if (responseData.message) {
+                        html += `<h4>Error Message:</h4><pre>${responseData.message}</pre>`;
+                    }
+                    if (responseData.details) {
+                        html += `<h4>Error Details:</h4><pre>${JSON.stringify(responseData.details, null, 2)}</pre>`;
+                    }
+                    if (responseData.details && responseData.details.stack) {
+                        html += `<h4>Stack Trace:</h4><pre>${responseData.details.stack}</pre>`;
+                    }
+                } else if (response.status === 501) {
+                    html = '<p class="error">❌ Not Implemented (501) - Deployment may not be complete yet</p>' + html;
+                } else {
+                    html = `<p class="error">❌ Unexpected status: ${response.status}</p>` + html;
+                }
+                
+                resultsDiv.innerHTML = html;
+                
+            } catch (error) {
+                console.error('Fetch error:', error);
+                resultsDiv.innerHTML = `
+                    <p class="error">❌ Fetch Error</p>
+                    <pre>${error.message}\n\n${error.stack}</pre>
+                `;
+            }
+        }
+        
+        // Auto-fill token on load
+        window.addEventListener('load', () => {
+            const token = localStorage.getItem('token') || 
+                         localStorage.getItem('sentinel_access') ||
+                         localStorage.getItem('auth_token');
+            if (token) {
+                document.getElementById('token').value = token.substring(0, 50) + '...';
+            }
+        });
+    </script>
+</body>
+</html>

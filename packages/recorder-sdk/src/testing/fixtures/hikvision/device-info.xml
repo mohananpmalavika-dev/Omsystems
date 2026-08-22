@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<DeviceInfo version="2.0" xmlns="http://www.hikvision.com/ver20/XMLSchema">
+  <deviceName>NVR</deviceName>
+  <deviceID>88888888-8888-8888-8888-888888888888</deviceID>
+  <model>DS-7616NI-K2</model>
+  <serialNumber>DS-7616NI-K220230101AAWRH12345678</serialNumber>
+  <macAddress>00:11:22:33:44:55</macAddress>
+  <firmwareVersion>V4.61.205 build 230420</firmwareVersion>
+  <firmwareReleasedDate>build 230420</firmwareReleasedDate>
+  <deviceType>NVR</deviceType>
+  <upTime>4567890</upTime>
+</DeviceInfo>

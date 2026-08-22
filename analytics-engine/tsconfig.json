@@ -1,0 +1,33 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "rootDir": "..",
+    "outDir": "dist",
+    "types": ["node"],
+    "skipLibCheck": true,
+    "noImplicitAny": false,
+    "strictNullChecks": false
+  },
+  "include": [
+    "src/**/*.ts",
+    "../src/events/**/*.ts",
+    "scripts/**/*.ts"
+  ],
+  "exclude": [
+    "src/**/__tests__/**/*.ts",
+    "src/**/*.test.ts",
+    "test/**/*.ts",
+    "../backend/**/*",
+    "../src/services/**/*",
+    "../src/routes/**/*",
+    "../src/middleware/**/*",
+    "src/analytics-integration-example.ts",
+    "src/detectors/enhanced-security-analytics.ts",
+    "src/banking/integration/**/*.ts",
+    "src/banking/banking-analytics-activation.ts",
+    "src/journey/**/*.ts",
+    "src/routes/journey-api.ts",
+    "src/**/*.example.ts",
+    "src/assistant/test-chatgpt.example.ts"
+  ]
+}

@@ -1,0 +1,16 @@
+table.ChannelTitle[0].Name=CAM01-Entrance
+table.ChannelTitle[1].Name=CAM02-Teller1
+table.ChannelTitle[2].Name=CAM03-Teller2
+table.ChannelTitle[3].Name=CAM04-Lobby
+table.ChannelTitle[4].Name=CAM05-ATM
+table.ChannelTitle[5].Name=CAM06-BackOffice
+table.ChannelTitle[6].Name=CAM07-CashVault
+table.ChannelTitle[7].Name=CAM08-ServerRoom
+table.ChannelTitle[8].Name=CAM09-PerimeterNorth
+table.ChannelTitle[9].Name=CAM10-PerimeterSouth
+table.ChannelTitle[10].Name=CAM11-Parking1
+table.ChannelTitle[11].Name=CAM12-Parking2
+table.ChannelTitle[12].Name=CAM13-EmergencyExit
+table.ChannelTitle[13].Name=CAM14-GuardPost
+table.ChannelTitle[14].Name=CAM15-Corridor
+table.ChannelTitle[15].Name=CAM16-RoofTop

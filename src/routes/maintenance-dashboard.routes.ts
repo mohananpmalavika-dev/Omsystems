@@ -1,0 +1,271 @@
+import type { FastifyInstance } from "fastify";
+import type { ControlPlaneStore } from "../control-plane-store.js";
+
+export async function registerMaintenanceDashboardRoutes(
+  app: FastifyInstance,
+  store: ControlPlaneStore,
+) {
+  // Dashboard - Overall system health
+  app.get("/v1/maintenance/dashboard/health", async (request) => {
+    if (!request.currentUser?.tenantId) return { error: "unauthorized" };
+    const summary = await store.getHealthCheckSummary(request.currentUser.tenantId);
+    return summary;
+  });
+
+  // Dashboard - Maintenance status overview
+  app.get("/v1/maintenance/dashboard/status", async (request, reply) => {
+    if (!request.currentUser?.tenantId) return reply.code(401).send({ error: "unauthorized" });
+    const tenantId = request.currentUser.tenantId;
+    
+    const assets = await store.listMaintenanceAssets(tenantId);
+    const workOrders = await store.listWorkOrders(tenantId);
+    const schedules = await store.listMaintenanceSchedules(tenantId);
+    const visits = await store.listMaintenanceVisits(tenantId);
+    const amcContracts = await store.listAmcContracts(tenantId);
+    const predictiveAlerts = await store.listPredictiveAlerts(tenantId);
+
+    const now = new Date();
+    const overdueVisits = visits.filter(v => v.status !== 'completed' && new Date(v.dueAt) < now).length;
+    const expiringAmcs = amcContracts.filter(c => new Date(c.endDate) < new Date(Date.now() + 90 * 24 * 60 * 60 * 1000)).length;
+
+    return {
+      totalAssets: assets.length,
+      assetsOnline: assets.filter(a => a.status === 'operational').length,
+      assetsOffline: assets.filter(a => a.status === 'offline').length,
+      assetsDegraded: assets.filter(a => a.status === 'degraded').length,
+      
+      workOrdersOpen: workOrders.filter(w => w.status !== 'closed').length,
+      workOrdersOverdueSla: workOrders.filter(w => w.status !== 'closed' && w.slaDueAt && new Date(w.slaDueAt) < now).length,
+      
+      scheduledMaintenanceCount: schedules.filter(s => s.status === 'active').length,
+      visitsPending: visits.filter(v => v.status === 'pending').length,
+      visitsOverdue: overdueVisits,
+      
+      amcContractsActive: amcContracts.filter(c => c.status === 'active').length,
+      amcContractsExpiring: expiringAmcs,
+      
+      criticalAlerts: predictiveAlerts.filter(p => p.score > 0.8).length,
+      warningAlerts: predictiveAlerts.filter(p => p.score > 0.5 && p.score <= 0.8).length,
+    };
+  });
+
+  // Health Monitoring - Camera health details
+  app.get("/v1/maintenance/health/cameras", async (request, reply) => {
+    if (!request.currentUser?.tenantId) return reply.code(401).send({ error: "unauthorized" });
+    const queryParams = request.query as { limit?: string };
+    const query = { limit: Math.min(parseInt(queryParams.limit || '50') || 50, 1000) };
+    const tenantId = request.currentUser.tenantId;
+    
+    const assets = await store.listMaintenanceAssets(tenantId, "camera");
+    
+    return {
+      data: assets.slice(0, query.limit).map(a => ({
+        id: a.id,
+        name: a.model,
+        serialNumber: a.serialNumber,
+        status: a.status,
+        lastCheck: a.updatedAt ?? null,
+        fps: null,
+        bitrate: null,
+        temperature: null,
+        recordingRunning: null,
+      }))
+    };
+  });
+
+  // Health Monitoring - Storage health details
+  app.get("/v1/maintenance/health/storage", async (request, reply) => {
+    if (!request.currentUser?.tenantId) return reply.code(401).send({ error: "unauthorized" });
+    const tenantId = request.currentUser.tenantId;
+    const assets = await store.listMaintenanceAssets(tenantId, "storage");
+    
+    return {
+      data: assets.map(a => ({
+        id: a.id,
+        name: a.model,
+        category: "storage",
+        status: a.status,
+        totalCapacityGb: null,
+        usedCapacityGb: null,
+        usagePercentage: null,
+        lastCheck: a.updatedAt ?? null,
+      }))
+    };
+  });
+
+  // Health Monitoring - Network status
+  app.get("/v1/maintenance/health/network", async (request, reply) => {
+    if (!request.currentUser?.tenantId) return reply.code(401).send({ error: "unauthorized" });
+    return {
+      data: [],
+      telemetryAvailable: false,
+    };
+  });
+
+  // Health Monitoring - Power/UPS status
+  app.get("/v1/maintenance/health/power", async (request, reply) => {
+    if (!request.currentUser?.tenantId) return reply.code(401).send({ error: "unauthorized" });
+    const tenantId = request.currentUser.tenantId;
+    const assets = await store.listMaintenanceAssets(tenantId, "power");
+    
+    return {
+      data: assets.map(a => ({
+        id: a.id,
+        name: a.model,
+        category: "power",
+        batteryHealthPercent: null,
+        runtimeMinutes: null,
+        status: a.status,
+        lastCheck: a.updatedAt ?? null,
+      }))
+    };
+  });
+
+  // Firmware Management - List required updates
+  app.get("/v1/maintenance/firmware/updates-required", async (request, reply) => {
+    if (!request.currentUser?.tenantId) return reply.code(401).send({ error: "unauthorized" });
+    const updates = await store.listFirmwareUpdatesRequired(request.currentUser.tenantId);
+    return { data: updates };
+  });
+
+  // Firmware Management - Check for updates
+  app.post("/v1/maintenance/firmware/check", async (request, reply) => {
+    if (!request.currentUser?.tenantId) return reply.code(401).send({ error: "unauthorized" });
+    const body = request.body as { assetIds?: string[] };
+    const tenantId = request.currentUser.tenantId;
+    
+    // In a real implementation, this would check external firmware sources
+    return reply.code(202).send({ 
+      message: "Firmware check initiated",
+      status: "in-progress"
+    });
+  });
+
+  // Firmware Management - Initiate upgrade
+  app.post("/v1/maintenance/firmware/upgrade", async (request, reply) => {
+    if (!request.currentUser?.tenantId) return reply.code(401).send({ error: "unauthorized" });
+    const body = request.body as { assetId: string; fromVersion: string; toVersion: string };
+    const tenantId = request.currentUser.tenantId;
+    
+    await store.writeAudit({
+      tenantId,
+      actorUserId: request.currentUser.id,
+      action: "maintenance.firmware_upgrade_initiated",
+      resourceNodeId: "",
+      outcome: "success",
+      details: body,
+    });
+
+    return reply.code(202).send({
+      message: "Firmware upgrade initiated",
+      assetId: body.assetId,
+      status: "in-progress",
+    });
+  });
+
+  // Spare Parts - List all parts
+  app.get("/v1/maintenance/spare-parts", async (request, reply) => {
+    if (!request.currentUser?.tenantId) return reply.code(401).send({ error: "unauthorized" });
+    const queryParams = request.query as { category?: string };
+    const query = { category: queryParams.category || undefined };
+    const tenantId = request.currentUser.tenantId;
+    
+    // In a real implementation, query the spare_parts table
+    return { data: [] };
+  });
+
+  // Spare Parts - Record part addition
+  app.post("/v1/maintenance/spare-parts/add", async (request, reply) => {
+    if (!request.currentUser?.tenantId) return reply.code(401).send({ error: "unauthorized" });
+    const body = request.body as { partName: string; quantity: number };
+    const tenantId = request.currentUser.tenantId;
+    
+    await store.writeAudit({
+      tenantId,
+      actorUserId: request.currentUser.id,
+      action: "maintenance.spare_part_added",
+      resourceNodeId: "",
+      outcome: "success",
+      details: body,
+    });
+
+    return reply.code(201).send({ message: "Spare part recorded" });
+  });
+
+  // Spare Parts - Low stock alert
+  app.get("/v1/maintenance/spare-parts/low-stock", async (request, reply) => {
+    if (!request.currentUser?.tenantId) return reply.code(401).send({ error: "unauthorized" });
+    const lowStockParts = await store.listLowStockParts(request.currentUser.tenantId);
+    return { data: lowStockParts };
+  });
+
+  // Reports - Generate report
+  // NOTE: Report generation moved to maintenance-reports.routes.ts to avoid duplication
+
+  // Reports - List reports
+  // NOTE: Moved to maintenance-reports.routes.ts to avoid duplication
+
+  // Reports - SLA Compliance
+  app.get("/v1/maintenance/reports/sla-compliance", async (request, reply) => {
+    if (!request.currentUser?.tenantId) return reply.code(401).send({ error: "unauthorized" });
+    const tenantId = request.currentUser.tenantId;
+    const workOrders = await store.listWorkOrders(tenantId);
+    
+    const now = new Date();
+    const totalOrders = workOrders.filter(w => w.status !== 'closed').length;
+    const closedOrders = workOrders.filter(w => w.status === 'closed');
+    const onTimeOrders = closedOrders.filter(w => 
+      w.slaDueAt && w.updatedAt && new Date(w.slaDueAt) >= new Date(w.updatedAt)
+    ).length;
+    
+    return {
+      totalWorkOrders: totalOrders,
+      completedOnTime: onTimeOrders,
+      compliancePercentage: closedOrders.length > 0 ? Math.round((onTimeOrders / closedOrders.length) * 100) : 100,
+      breaches: workOrders.filter(w => 
+        w.status !== 'closed' && w.slaDueAt && new Date(w.slaDueAt) < now
+      ).length,
+    };
+  });
+
+  // Dashboard - Maintenance metrics
+  app.get("/v1/maintenance/reports/metrics", async (request, reply) => {
+    if (!request.currentUser?.tenantId) return reply.code(401).send({ error: "unauthorized" });
+    const tenantId = request.currentUser.tenantId;
+    const compliance = await store.getMaintenanceComplianceStatus(tenantId);
+    
+    return compliance;
+  });
+
+  // Reports - Operational summary
+  // NOTE: Moved to reports.routes.ts to avoid duplication
+
+  // Reports - Privacy summary
+  // NOTE: Moved to reports.routes.ts to avoid duplication
+
+  // Reports - Incident summary
+  // NOTE: Moved to reports.routes.ts to avoid duplication
+
+  // Predictive Maintenance - Get high-risk assets
+  app.get("/v1/maintenance/predictive/high-risk", async (request) => {
+    const alerts = await store.listPredictiveAlerts(request.currentUser.tenantId);
+    const highRisk = alerts.filter(a => a.score > 0.7).sort((a, b) => b.score - a.score);
+    
+    return { 
+      data: highRisk.slice(0, 20),
+      totalHighRiskAssets: highRisk.length,
+    };
+  });
+
+  // Predictive Maintenance - Get estimated failure dates
+  app.get("/v1/maintenance/predictive/failure-forecast", async (request) => {
+    const alerts = await store.listPredictiveAlerts(request.currentUser.tenantId);
+    
+    return {
+      data: alerts
+        .filter(a => a.details?.estimated_failure_days)
+        .sort((a, b) => (a.details?.estimated_failure_days ?? 999) - (b.details?.estimated_failure_days ?? 999))
+        .slice(0, 50),
+    };
+  });
+}

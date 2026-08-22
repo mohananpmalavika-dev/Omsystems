@@ -1,0 +1,685 @@
+export type CameraStatus = "online" | "offline" | "degraded" | "unknown" | "alert";
+
+/**
+ * A stream profile advertised by the recorder, camera, or media gateway.
+ * The viewer uses these declared costs when deciding whether a stream can be
+ * decoded locally; it must not infer a main-stream profile in the browser.
+ */
+export interface CameraStreamProfile {
+  type: "MAIN" | "SUB" | "THUMBNAIL";
+  codec: "H264" | "H265" | "AV1" | "MJPEG" | "UNKNOWN";
+  width: number;
+  height: number;
+  fps: number;
+  estimatedBitrateKbps: number;
+  uri?: string;
+}
+
+export type BranchLifecycleStatus = 'ACTIVE' | 'DISABLED' | 'ARCHIVED';
+
+export interface Branch {
+  id: string;
+  name: string;
+  type: "branch";
+  cameraCount?: number;
+  onlineCount?: number;
+  
+  // Lifecycle management
+  lifecycleStatus?: BranchLifecycleStatus;
+  disabledAt?: string;
+  disabledBy?: string;
+  disableReason?: string;
+  reactivatedAt?: string;
+  reactivatedBy?: string;
+  reactivateReason?: string;
+  archivedAt?: string;
+  archivedBy?: string;
+  archiveReason?: string;
+  lifecycleVersion?: number;
+}
+
+export interface BranchLifecycleImpact {
+  branchId: string;
+  branchName: string;
+  currentStatus: BranchLifecycleStatus;
+  requestedStatus: BranchLifecycleStatus;
+  
+  impact: {
+    cameras: number;
+    recorders: number;
+    activeAlerts: number;
+    openIncidents: number;
+    scheduledJobs: number;
+    activeUsers: number;
+    descendantNodes: number;
+  };
+  
+  blockers: Array<{
+    code: string;
+    message: string;
+    count?: number;
+  }>;
+  
+  warnings: Array<{
+    code: string;
+    message: string;
+    details?: Record<string, unknown>;
+  }>;
+  
+  allowed: boolean;
+}
+
+export interface ComplianceFramework {
+  id: string;
+  tenantId: string;
+  name: string;
+  source?: string;
+  description?: string;
+  status?: string;
+  effectiveDate?: string;
+  reviewDate?: string;
+  createdBy?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface MaintenanceAsset {
+  id: string;
+  tenantId: string;
+  category: "camera" | "recorder" | "storage" | "network" | "power" | "accessory";
+  assetType: string;
+  serialNumber?: string;
+  make?: string;
+  model?: string;
+  firmwareVersion?: string;
+  warrantyExpiresAt?: string;
+  purchaseDate?: string;
+  installationDate?: string;
+  vendorId?: string;
+  branchNodeId?: string;
+  location?: string;
+  mountingHeight?: string;
+  status: "operational" | "degraded" | "maintenance_due" | "offline" | "retired";
+  notes?: string;
+  createdBy?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface WorkOrder {
+  id: string;
+  tenantId: string;
+  workOrderNumber: string;
+  assetId?: string;
+  branchNodeId?: string;
+  problem: string;
+  severity: "critical" | "high" | "medium" | "low";
+  technician?: string;
+  vendorId?: string;
+  slaDueAt?: string;
+  eta?: string;
+  parts?: string[];
+  cost?: number;
+  rootCause?: string;
+  actionTaken?: string;
+  verification?: string;
+  status: "open" | "assigned" | "in_progress" | "resolved" | "closed";
+  createdBy?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface MaintenanceVendor {
+  id: string;
+  tenantId: string;
+  name: string;
+  contact?: string;
+  email?: string;
+  phone?: string;
+  address?: string;
+  gstNumber?: string;
+  serviceCenters?: string[];
+  escalationMatrix?: Record<string, unknown>;
+  notes?: string;
+  createdBy?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AmcContract {
+  id: string;
+  tenantId: string;
+  contractNumber: string;
+  vendorId: string;
+  startDate: string;
+  endDate: string;
+  warranty?: string;
+  coverage?: string;
+  exclusions?: string;
+  paymentTerms?: string;
+  cost?: number;
+  renewal?: string;
+  sla?: string;
+  status: string;
+  notes?: string;
+  createdBy?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CompliancePolicy {
+  id: string;
+  tenantId: string;
+  frameworkId: string;
+  policyName: string;
+  policyBasis?: string;
+  entityType?: string;
+  locationType?: string;
+  cameraType?: string;
+  normalRetentionDays?: number;
+  hotStorageDays?: number;
+  warmStorageDays?: number;
+  coldStorageDays?: number;
+  backupRequired: boolean;
+  legalHoldOverride: boolean;
+  incidentRetentionDays?: number;
+  automaticDeletionEligibility: boolean;
+  approvalAuthority?: string;
+  effectiveDate?: string;
+  reviewDate?: string;
+  notes?: string;
+  createdBy?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type NotificationChannel = "dashboard" | "email" | "sms" | "voice" | "push" | "webhook";
+export type AlertSeverity = "P1" | "P2" | "P3" | "P4" | "P5";
+
+export interface RecipientGroupMember {
+  id?: string;
+  displayName: string;
+  email?: string;
+  phone?: string;
+  voiceNumber?: string;
+  preferredLanguage?: string;
+  enabled: boolean;
+}
+
+export interface RecipientGroup {
+  id: string;
+  name: string;
+  tenantId?: string;
+  members: RecipientGroupMember[];
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface AlertNotificationPolicySchedule {
+  name: string;
+  days: number[];
+  start: string;
+  end: string;
+  timezone: string;
+  recipients: Partial<Record<"sms" | "email" | "voice", string[]>>;
+}
+
+export interface NotificationRule {
+  channels: NotificationChannel[];
+  recipientGroupIds: string[];
+  templateId?: string;
+  requireAcknowledgement?: boolean;
+  repeatUntilAcknowledged?: boolean;
+}
+
+export interface NotificationPolicyMatrixEntry {
+  severity: AlertSeverity;
+  channels: NotificationChannel[];
+}
+
+export interface AlertNotificationPolicy {
+  tenantId: string;
+  recipientGroups: Partial<Record<"sms" | "email" | "voice", string[]>>;
+  onCallSchedules: AlertNotificationPolicySchedule[];
+  quietHours?: { start: string; end: string; timezone: string; enabled?: boolean; bypassSeverities?: AlertSeverity[] };
+  rateLimitPerMinute: number;
+  escalationAfterSeconds: Partial<Record<AlertSeverity, number>>;
+  smsTemplates?: Partial<Record<"P1" | "P2", string>>;
+  smsTemplateIds?: Partial<Record<"P1" | "P2", string>>;
+  policyVersion?: number;
+  status?: "draft" | "published";
+  recipientGroupsV2?: RecipientGroup[];
+  rules?: Partial<Record<AlertSeverity, NotificationRule>>;
+  matrix?: NotificationPolicyMatrixEntry[];
+  updatedAt: string;
+}
+
+export interface AlertNotificationPolicyInput {
+  recipientGroups: Partial<Record<"sms" | "email" | "voice", string[]>>;
+  onCallSchedules: AlertNotificationPolicySchedule[];
+  quietHours?: { start: string; end: string; timezone: string; enabled?: boolean; bypassSeverities?: AlertSeverity[] };
+  rateLimitPerMinute: number;
+  escalationAfterSeconds: Partial<Record<AlertSeverity, number>>;
+  smsTemplates?: Partial<Record<"P1" | "P2", string>>;
+  smsTemplateIds?: Partial<Record<"P1" | "P2", string>>;
+  policyVersion?: number;
+  status?: "draft" | "published";
+  recipientGroupsV2?: RecipientGroup[];
+  rules?: Partial<Record<AlertSeverity, NotificationRule>>;
+  matrix?: NotificationPolicyMatrixEntry[];
+}
+
+export interface ComplianceAssessment {
+  id: string;
+  tenantId: string;
+  frameworkId: string;
+  branchNodeId?: string;
+  assessmentPeriodStart?: string;
+  assessmentPeriodEnd?: string;
+  status: "compliant" | "exception" | "non-compliant" | "incomplete";
+  summary?: Record<string, unknown>;
+  evidence?: Record<string, unknown>;
+  createdBy?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ComplianceCertificate {
+  id: string;
+  assessmentId: string;
+  tenantId: string;
+  certificateNumber: string;
+  title: string;
+  status:
+    | "compliant"
+    | "compliant_with_exceptions"
+    | "provisionally_compliant"
+    | "non_compliant"
+    | "incomplete";
+  issuedBy?: string;
+  issuedAt?: string;
+  expiryDate?: string;
+  documentHash?: string;
+  signature?: string;
+  metadata?: Record<string, unknown>;
+  createdBy?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface Camera {
+  id: string;
+  name: string;
+  branchId: string;
+  branchName?: string;
+  vendor: "hikvision" | "cp-plus" | "other";
+  model: string;
+  status: CameraStatus;
+  channel: number;
+  sourceType?: "ip-camera" | "analog-dvr-channel" | "nvr-channel";
+  connectionTransport?: "vpn" | "cloudflare-tunnel" | "edge-gateway";
+  recorderId?: string;
+  recorderChannel?: number;
+  // Network identity — returned by the inventory API from approved discoveries
+  ipAddress?: string;
+  onvifPort?: number;
+  rtspPort?: number;
+  serialNumber?: string;
+  macAddress?: string;
+  onvifUuid?: string;
+  // Optional stream URLs (may be provided by backend or edge agent)
+  rtspUrl?: string;
+  subStreamUrl?: string;
+  /**
+   * Profiles supplied by the camera capability API. Legacy cameras without
+   * this data use conservative main/substream defaults in the wall scheduler.
+   */
+  streamProfiles?: CameraStreamProfile[];
+  capabilities: {
+    ptz: boolean;
+    audio: boolean;
+    events: boolean;
+    analytics?: string[];
+    talkback?: {
+      supported: boolean;
+      transport: "onvif-rtsp-backchannel" | "vendor-adapter" | "none" | "unknown";
+      codecs?: Array<"PCMA" | "PCMU" | "AAC" | "OPUS" | "unknown">;
+      sampleRates?: number[];
+      reason?: string;
+    };
+  };
+}
+
+export interface DeviceInventoryRecord {
+  id: string;
+  tenantId: string;
+  deviceId: string;
+  tenant: string;
+  region: string;
+  branch: string;
+  deviceType: string;
+  manufacturer: string;
+  model: string;
+  serialNumber?: string;
+  macAddress?: string;
+  ipAddress?: string;
+  firmwareVersion?: string;
+  onvifVersion?: string;
+  capabilities: string[];
+  credentialReference?: string;
+  installationDate?: string;
+  warranty?: string;
+  amcContract?: string;
+  healthStatus: string;
+  lastCommunication?: string;
+  configurationTemplate?: string;
+  riskClassification: string;
+  lifecycleState: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface LiveSessionResponse {
+  sessionId?: string;
+  cameraId: string;
+  expiresAt?: string;
+  hls?: {
+    url: string;
+    bearerToken: string;
+  };
+  webRtc?: {
+    whepUrl: string;
+    bearerToken: string;
+  };
+}
+
+export type RecordingMode = "continuous" | "motion" | "scheduled" | "event" | "manual";
+export type RecordingStatus = "recording" | "scheduled" | "idle" | "error" | "disabled" | "starting" | "degraded" | "interrupted" | "recovering";
+export interface RecordingScheduleWindow {
+  name?: string;
+  days: number[];
+  start: string;
+  end: string;
+  enabled?: boolean;
+}
+export interface RecordingScheduleException {
+  name?: string;
+  date: string;
+  start?: string;
+  end?: string;
+  enabled: boolean;
+  description?: string;
+}
+export interface RecordingSchedule {
+  timezone?: string;
+  windows: RecordingScheduleWindow[];
+  exceptions?: RecordingScheduleException[];
+}
+export interface RecordingJob {
+  id?: string;
+  cameraId: string;
+  mode: RecordingMode;
+  enabled: boolean;
+  status: RecordingStatus;
+  primaryRecordingStorage: "sentinel-local" | "recorder-local";
+  cloudArchivePolicy: "none" | "incident-evidence-only";
+  retentionDays: number;
+  postRollSeconds: number;
+  segmentDurationSeconds: number;
+  hotRetentionDays: number;
+  warmRetentionDays: number;
+  coldRetentionDays: number;
+  maxBitrateKbps?: number;
+  critical: boolean;
+  backupRequired: boolean;
+  automaticDeletionEnabled: boolean;
+  evidenceProtection: boolean;
+  recordMainStream: boolean;
+  schedule?: RecordingSchedule;
+  preRollSeconds?: number;
+  minMotionDurationSeconds?: number;
+  motionConfidenceThreshold?: number;
+  cooldownSeconds?: number;
+  maxEventDurationSeconds?: number;
+  storageNodeExternalId?: string;
+  triggerEventTypes?: string[];
+}
+
+export interface RecordingSegment {
+  id: string;
+  cameraId: string;
+  jobId: string;
+  startedAt: string;
+  endedAt: string;
+  storagePath: string;
+  sizeBytes: number;
+  storageNodeExternalId: string;
+  storageTier: "hot" | "warm" | "cold";
+  status: "ready" | "moving" | "deleted" | "error";
+  checksumSha256?: string;
+  codec?: string;
+  createdAt: string;
+}
+
+export type LiveBookmarkReason =
+  | "suspicious-activity"
+  | "cash-discrepancy"
+  | "unauthorized-entry"
+  | "customer-dispute"
+  | "equipment-failure"
+  | "safety-incident"
+  | "other";
+
+export interface LiveBookmark {
+  id: string;
+  cameraId: string;
+  operatorId: string;
+  bookmarkedAt: string;
+  reason: LiveBookmarkReason;
+  notes?: string;
+  priority: "low" | "medium" | "high" | "critical";
+  incidentId?: string;
+  recordingSegmentId?: string;
+  snapshotReference?: string;
+  createdAt: string;
+}
+
+export interface LiveIncident {
+  id: string;
+  cameraId: string;
+  createdBy: string;
+  title: string;
+  notes?: string;
+  priority: "P1" | "P2" | "P3" | "P4" | "P5";
+  status: "new" | "acknowledged" | "investigating" | "escalated" | "resolved" | "false-alarm";
+  occurredAt: string;
+  recordingFrom: string;
+  recordingTo: string;
+  preRollSeconds: number;
+  postRollSeconds: number;
+  bookmarkId: string;
+  legalHoldId: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface EdgeAgent {
+  id: string;
+  branchId: string;
+  name: string;
+  version: string;
+  status: "pending" | "online" | "offline";
+  lastSeenAt: string | null;
+  publicMediaUrl?: string;
+}
+
+export interface EdgeScanJob {
+  id: string;
+  branchId: string;
+  edgeAgentId: string;
+  scope?: "branch" | "device";
+  targetDiscoveryId?: string;
+  targetIpAddress?: string;
+  targetOnvifPort?: number;
+  status: "queued" | "running" | "completed" | "failed";
+  requestedAt: string;
+  startedAt: string | null;
+  completedAt: string | null;
+  resultCount: number;
+  provisionedCount: number;
+  credentialsRequiredCount: number;
+  pendingVerificationCount: number;
+  verifiedCount: number;
+  recorderCount: number;
+  timeSynchronizedCount: number;
+  timeDriftCount: number;
+  analyticsCompatibleCount: number;
+  duplicateCount: number;
+  credentialsSkippedAt: string | null;
+  error: string | null;
+}
+
+export interface TalkSessionResponse {
+  sessionId: string;
+  cameraId: string;
+  expiresAt: string;
+  adapter: string;
+  audio: {
+    url: string;
+    endUrl: string;
+    bearerToken: string;
+    contentType: "audio/L16;rate=8000;channels=1";
+    codec: "PCMA" | "PCMU";
+    sampleRate: 8000;
+  };
+}
+
+export type ProvisioningStepStatus =
+  | "pending" | "running" | "completed" | "warning" | "blocked" | "failed" | "skipped";
+
+export interface ProvisioningRun {
+  id: string;
+  branchId: string;
+  edgeAgentId?: string;
+  status: "not_started" | "queued" | "running" | "waiting_for_input" | "awaiting_evidence" | "blocked" | "failed" | "active";
+  currentStage: string;
+  completedUnits: number;
+  totalUnits: number;
+  progressPercent: number;
+  readyForActivation: boolean;
+  credentialsSkipped: boolean;
+  canSkipCredentialResolution: boolean;
+  startedAt?: string;
+  completedAt?: string;
+  steps: Array<{
+    id: string;
+    label: string;
+    status: ProvisioningStepStatus;
+    completedUnits: number;
+    totalUnits: number;
+    evidence: string;
+    errorCode?: string;
+    action?: "install-agent" | "provide-credentials" | "retry";
+    canSkip: boolean;
+    skippedAt?: string;
+  }>;
+  issues: Array<{
+    code: string;
+    severity: "warning" | "blocker";
+    resourceId: string;
+    message: string;
+    recommendedAction: string;
+  }>;
+  summary: {
+    agents: number;
+    agentsOnline: number;
+    discoveredDevices: number;
+    recorders: number;
+    importedChannels: number;
+    verifiedStreams: number;
+    credentialsRequired: number;
+    duplicateDevices: number;
+    timeSynchronized: number;
+    timeDrifted: number;
+    storageHealthy: number;
+    recordingsVerified: number;
+    analyticsCompatible: number;
+    analyticsAssigned: number;
+  };
+}
+
+export type AnalyticsDetectionType = string;
+export type AnalyticsSeverity = "P1" | "P2" | "P3" | "P4" | "P5";
+export type AnalyticsAlertStatus =
+  | "new" | "acknowledged" | "investigating" | "escalated"
+  | "resolved" | "false_alarm" | "suppressed";
+
+export interface AnalyticsRule {
+  id: string;
+  tenantId: string;
+  cameraId: string;
+  name: string;
+  detectionType: AnalyticsDetectionType;
+  enabled: boolean;
+  zone?: {
+    id: string;
+    name: string;
+    shape: "polygon" | "line";
+    points: Array<{ x: number; y: number }>;
+  };
+  schedule?: { days: number[]; start: string; end: string; timezone: string };
+  objectClasses: string[];
+  minConfidence: number;
+  minDurationSeconds: number;
+  direction: "any" | "a-to-b" | "b-to-a" | "enter" | "exit";
+  severity: AnalyticsSeverity;
+  cooldownSeconds: number;
+  recipients: string[];
+  escalateAfterSeconds?: number;
+  recordingPolicy: "none" | "event-recording" | "protect-window";
+  preRollSeconds: number;
+  postRollSeconds: number;
+  modelId?: string;
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AnalyticsAlert {
+  id: string;
+  tenantId: string;
+  cameraId: string;
+  ruleId: string;
+  eventId: string;
+  title: string;
+  description?: string;
+  severity: AnalyticsSeverity;
+  status: AnalyticsAlertStatus;
+  confidence: number;
+  objectClasses: string[];
+  modelVersion: string;
+  snapshotReference?: string;
+  clipReference?: string;
+  firstDetectedAt: string;
+  lastDetectedAt: string;
+  occurrenceCount: number;
+  incidentId?: string;
+  acknowledgedAt?: string;
+  falseAlarmReason?: string;
+  resolvedAt?: string;
+  assignedTo?: string;
+  assignedAt?: string;
+  slaDueAt?: string;
+  correlationKey?: string;
+  version: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AnalyticsAlertSummary {
+  total: number;
+  open: number;
+  new: number;
+  critical: number;
+  highPriority: number;
+}

@@ -1,0 +1,442 @@
+openapi: 3.1.0
+info:
+  title: Sentinel Grid Control Plane
+  version: 0.7.0-phase6
+  description: Authoritative Fastify contract including Phase 6 testing, deployment preflight, monitoring and operational acceptance controls.
+servers:
+  - url: /api/control
+    description: Dashboard BFF
+  - url: http://localhost:8080
+    description: Local control plane
+paths:
+  /health:
+    get:
+      operationId: getHealth
+      security: []
+      responses:
+        '200':
+          description: Service health
+  /ready:
+    get:
+      operationId: getReadiness
+      security: []
+      responses:
+        '200': { description: Process is ready and its configured database is reachable }
+        '503': { description: A required dependency is unavailable }
+  /metrics:
+    get:
+      operationId: getPrometheusMetrics
+      security: []
+      responses:
+        '200':
+          description: Process request, latency, in-flight and backpressure metrics
+          content:
+            text/plain: {}
+  /v1/me:
+    get:
+      operationId: getCurrentUser
+      responses:
+        '200': { description: Current authenticated user }
+        '401': { description: Unauthenticated }
+  /v1/branches:
+    get:
+      operationId: listBranches
+      parameters:
+        - in: query
+          name: action
+          schema: { type: string, default: 'live:view' }
+      responses:
+        '200': { description: Authorized branches }
+    post:
+      operationId: createBranch
+      responses:
+        '201': { description: Branch created }
+  /v1/branches/{branchId}/cameras:
+    parameters:
+      - $ref: '#/components/parameters/BranchId'
+    get:
+      operationId: listBranchCameras
+      responses:
+        '200': { description: Authorized cameras for a branch }
+    post:
+      operationId: createBranchCamera
+      responses:
+        '201': { description: Camera created }
+  /v1/cameras:
+    get:
+      operationId: listAuthorizedCamerasBulk
+      parameters:
+        - $ref: '#/components/parameters/Limit500'
+        - $ref: '#/components/parameters/Offset'
+        - in: query
+          name: branchId
+          schema: { type: string }
+        - in: query
+          name: search
+          schema: { type: string }
+      responses:
+        '200': { description: Paginated tenant-authorized cameras without an O(branches) browser request pattern }
+  /v1/cameras/{cameraId}/live-sessions:
+    post:
+      operationId: createLiveSession
+      parameters:
+        - $ref: '#/components/parameters/CameraId'
+      responses:
+        '201': { description: Short-lived authorized media session }
+  /v1/device-inventory:
+    get:
+      operationId: listDeviceInventory
+      responses:
+        '200': { description: Device inventory }
+    post:
+      operationId: createDeviceInventoryRecord
+      responses:
+        '201': { description: Device inventory record created }
+  /v1/device-inventory/{id}:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema: { type: string }
+    get:
+      operationId: getDeviceInventoryRecord
+      responses:
+        '200': { description: Device inventory record }
+        '404': { description: Not found }
+    patch:
+      operationId: updateDeviceInventoryRecord
+      responses:
+        '200': { description: Device inventory record updated }
+  /v1/maintenance/assets:
+    get:
+      operationId: listMaintenanceAssets
+      responses:
+        '200': { description: Maintenance assets }
+    post:
+      operationId: createMaintenanceAsset
+      responses:
+        '201': { description: Maintenance asset created }
+  /v1/analytics/alerts:
+    get:
+      operationId: listAnalyticsAlerts
+      responses:
+        '200': { description: Authorized analytics alerts }
+  /v1/analytics/alerts/{alertId}/acknowledge:
+    post:
+      operationId: acknowledgeAnalyticsAlert
+      parameters:
+        - $ref: '#/components/parameters/AlertId'
+      responses:
+        '200': { description: Alert acknowledged }
+  /v1/analytics/alerts/{alertId}/escalate:
+    post:
+      operationId: escalateAnalyticsAlert
+      parameters:
+        - $ref: '#/components/parameters/AlertId'
+      responses:
+        '200': { description: Alert escalated }
+  /v1/reports/summary/operations:
+    get:
+      operationId: getOperationsReportSummary
+      responses:
+        '200': { description: Active operations summary projection }
+  /v1/edge-agents/{edgeAgentId}/telemetry:
+    post:
+      operationId: ingestOperationalTelemetry
+      parameters:
+        - $ref: '#/components/parameters/EdgeAgentId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/OperationalTelemetryInput' }
+      responses:
+        '202': { description: Telemetry accepted }
+        '200': { description: Duplicate telemetry accepted idempotently }
+        '403': { description: Device or branch scope mismatch }
+  /v1/operations/health/summary:
+    get:
+      operationId: getOperationalHealthSummary
+      responses:
+        '200': { description: Tenant-scoped operational health totals }
+  /v1/operations/health/branches:
+    get:
+      operationId: listBranchHealth
+      parameters:
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Offset'
+      responses:
+        '200': { description: Paginated authorized branch health }
+  /v1/operations/health/branches/{branchId}:
+    get:
+      operationId: getBranchHealth
+      parameters:
+        - $ref: '#/components/parameters/BranchId'
+      responses:
+        '200': { description: Branch, component, camera, retention and edge-agent health }
+        '403': { description: Branch not authorized }
+  /v1/operations/health/cameras:
+    get:
+      operationId: listCameraHealth
+      parameters:
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Offset'
+      responses:
+        '200': { description: Paginated camera health with reason codes }
+  /v1/operations/health/retention:
+    get:
+      operationId: listRetentionVerification
+      responses:
+        '200': { description: Actual continuous playable retention evidence }
+  /v1/operations/health/policy:
+    get:
+      operationId: getOperationalHealthPolicy
+      responses:
+        '200': { description: Effective tenant or branch health policy }
+    put:
+      operationId: putOperationalHealthPolicy
+      responses:
+        '200': { description: Tenant or branch health policy persisted }
+        '403': { description: Policy management not authorized }
+  /v1/operations/alerts:
+    get:
+      operationId: listOperationalHealthAlerts
+      responses:
+        '200': { description: Active health and retention exceptions }
+  /v1/operations/events:
+    get:
+      operationId: streamOperationalHealthEvents
+      responses:
+        '200':
+          description: Authenticated tenant-scoped SSE stream with heartbeat comments
+          content:
+            text/event-stream: {}
+  /v1/video-wall/layouts:
+    get:
+      operationId: listVideoWallLayouts
+      responses:
+        '200': { description: Current user's saved video-wall layouts }
+    post:
+      operationId: createVideoWallLayout
+      responses:
+        '201': { description: Authorized per-user video-wall layout created }
+        '400': { description: Invalid or duplicate tile positions }
+        '403': { description: User cannot view a referenced camera }
+  /v1/alerts/command-center:
+    get:
+      operationId: listAlertCommandCenter
+      responses:
+        '200': { description: Authorized HO-wide alerts enriched with branch, camera, SLA, evidence and delivery audit }
+  /v1/alerts/events:
+    get:
+      operationId: streamAlertEvents
+      responses:
+        '200':
+          description: Authenticated tenant-scoped alert and notification SSE stream
+          content:
+            text/event-stream: {}
+  /v1/alerts/{alertId}/assign:
+    post:
+      operationId: assignAlert
+      parameters:
+        - $ref: '#/components/parameters/AlertId'
+      responses:
+        '200': { description: Alert assigned using optimistic concurrency }
+        '409': { description: Alert version conflict }
+  /v1/alerts/{alertId}/notifications:
+    get:
+      operationId: listAlertNotificationAttempts
+      parameters:
+        - $ref: '#/components/parameters/AlertId'
+      responses:
+        '200': { description: Provider attempts, IDs, receipts, errors and retry state }
+  /v1/alerts/notification-policy:
+    get:
+      operationId: getAlertNotificationPolicy
+      responses:
+        '200': { description: Recipient groups, on-call schedules, quiet hours, rate and escalation policy }
+    put:
+      operationId: putAlertNotificationPolicy
+      responses:
+        '200': { description: Notification policy persisted; fixed P1-P4 channel matrix returned }
+  /v1/reports/operational/schedules:
+    get:
+      operationId: listOperationalReportSchedules
+      responses:
+        '200': { description: Persistent schedules visible to the tenant }
+        '403': { description: Export permission required }
+    post:
+      operationId: createOperationalReportSchedule
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/OperationalReportScheduleInput' }
+      responses:
+        '201': { description: Daily schedule created with its next run time }
+        '403': { description: Export or branch permission required }
+  /v1/reports/operational/schedules/{id}:
+    parameters:
+      - $ref: '#/components/parameters/Id'
+    patch:
+      operationId: updateOperationalReportSchedule
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/OperationalReportScheduleInput' }
+      responses:
+        '200': { description: Schedule updated }
+        '404': { description: Schedule not found }
+    delete:
+      operationId: deleteOperationalReportSchedule
+      responses:
+        '204': { description: Schedule deleted }
+        '404': { description: Schedule not found }
+  /v1/reports/operational/runs:
+    get:
+      operationId: listOperationalReportRuns
+      parameters:
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200': { description: Run history with progress, artifacts and delivery attempts }
+    post:
+      operationId: createOperationalReportRun
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/OperationalReportRunInput' }
+      responses:
+        '202': { description: Report generation queued }
+        '403': { description: Export or branch permission required }
+  /v1/reports/operational/runs/{id}:
+    parameters:
+      - $ref: '#/components/parameters/Id'
+    get:
+      operationId: getOperationalReportRun
+      responses:
+        '200': { description: Run progress, reconciled summary, artifacts and delivery history }
+        '404': { description: Run not found }
+  /v1/reports/operational/artifacts/{id}/download:
+    parameters:
+      - $ref: '#/components/parameters/Id'
+      - in: query
+        name: expires
+        required: true
+        schema: { type: integer }
+      - in: query
+        name: token
+        required: true
+        schema: { type: string, minLength: 32 }
+    get:
+      operationId: downloadOperationalReportArtifact
+      responses:
+        '200': { description: Authorized CSV, XLSX or PDF artifact }
+        '403': { description: Signed link invalid or expired }
+        '404': { description: Artifact not found }
+components:
+  parameters:
+    Id:
+      in: path
+      name: id
+      required: true
+      schema: { type: string, format: uuid }
+    BranchId:
+      in: path
+      name: branchId
+      required: true
+      schema: { type: string }
+    CameraId:
+      in: path
+      name: cameraId
+      required: true
+      schema: { type: string }
+    AlertId:
+      in: path
+      name: alertId
+      required: true
+      schema: { type: string }
+    EdgeAgentId:
+      in: path
+      name: edgeAgentId
+      required: true
+      schema: { type: string }
+    Limit:
+      in: query
+      name: limit
+      schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+    Offset:
+      in: query
+      name: offset
+      schema: { type: integer, minimum: 0, default: 0 }
+    Limit500:
+      in: query
+      name: limit
+      schema: { type: integer, minimum: 1, maximum: 500, default: 200 }
+  schemas:
+    OperationalReportFilters:
+      type: object
+      properties:
+        region: { type: string, maxLength: 120 }
+        branchId: { type: string }
+        deviceStatus: { type: string, enum: [healthy, warning, critical, unknown] }
+        alertType: { type: string, maxLength: 120 }
+        severity: { type: string, enum: [P1, P2, P3, P4, P5] }
+        alertState: { type: string, maxLength: 50 }
+        from: { type: string, format: date-time }
+        to: { type: string, format: date-time }
+    OperationalReportRunInput:
+      type: object
+      required: [formats]
+      properties:
+        formats:
+          type: array
+          minItems: 1
+          maxItems: 3
+          uniqueItems: true
+          items: { type: string, enum: [csv, xlsx, pdf] }
+        recipients:
+          type: array
+          maxItems: 100
+          items: { type: string, format: email }
+        filters: { $ref: '#/components/schemas/OperationalReportFilters' }
+    OperationalReportScheduleInput:
+      allOf:
+        - $ref: '#/components/schemas/OperationalReportRunInput'
+        - type: object
+          required: [name, timezone, dailyAt]
+          properties:
+            name: { type: string, minLength: 2, maxLength: 160 }
+            timezone: { type: string, example: Asia/Kolkata }
+            dailyAt: { type: string, pattern: '^([01][0-9]|2[0-3]):[0-5][0-9]$' }
+            enabled: { type: boolean, default: true }
+    OperationalTelemetryInput:
+      type: object
+      required: [branchId, edgeAgentId, deviceType, deviceId, observedAt, source, quality, idempotencyKey, metrics]
+      properties:
+        branchId: { type: string }
+        edgeAgentId: { type: string }
+        deviceType:
+          type: string
+          enum: [branch, edge-agent, recorder, camera, disk, network, ups]
+        deviceId: { type: string, maxLength: 200 }
+        observedAt: { type: string, format: date-time }
+        source:
+          type: string
+          enum: [onvif, cp-plus-adapter, rtsp, system, recording-engine]
+        quality:
+          type: string
+          enum: [verified, estimated, unsupported, unavailable]
+        idempotencyKey: { type: string, maxLength: 200 }
+        metrics:
+          type: object
+          additionalProperties: { oneOf: [{ type: string }, { type: number }, { type: boolean }, { type: 'null' }] }
+        reasonCodes:
+          type: array
+          items: { type: string }
+  securitySchemes:
+    bearerSession:
+      type: http
+      scheme: bearer
+security:
+  - bearerSession: []

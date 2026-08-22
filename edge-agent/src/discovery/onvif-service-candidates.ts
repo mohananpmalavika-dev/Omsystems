@@ -1,0 +1,33 @@
+import type { DiscoveredOnvifEndpoint } from "./onvif-discovery.js";
+
+export function onvifServiceCandidates(endpoint: DiscoveredOnvifEndpoint) {
+  const candidates: string[] = [];
+  for (const address of endpoint.xaddrs) {
+    try {
+      const parsed = new URL(address);
+      if (["0.0.0.0", "127.0.0.1", "localhost", "::1"].includes(parsed.hostname)) {
+        parsed.hostname = endpoint.remoteAddress;
+      }
+      candidates.push(parsed.toString());
+      const alternate = new URL(parsed);
+      if (alternate.protocol === "http:") {
+        alternate.protocol = "https:";
+        if (!parsed.port || parsed.port === "80") alternate.port = "443";
+      } else if (alternate.protocol === "https:") {
+        alternate.protocol = "http:";
+        if (!parsed.port || parsed.port === "443") alternate.port = "80";
+      }
+      candidates.push(alternate.toString());
+    } catch {
+      continue;
+    }
+  }
+  for (const protocol of ["http", "https"]) {
+    candidates.push(`${protocol}://${hostForUrl(endpoint.remoteAddress)}/onvif/device_service`);
+  }
+  return [...new Set(candidates)].slice(0, 8);
+}
+
+function hostForUrl(host: string) {
+  return host.includes(":") && !host.startsWith("[") ? `[${host}]` : host;
+}

@@ -1,0 +1,15 @@
+{
+  "devicePath": "192.168.1.11",
+  "telemetrySource": "real",
+  "smartStatus": "critical",
+  "temperature": 45,
+  "reallocatedSectors": 25,
+  "pendingSectors": 3,
+  "uncorrectableSectors": 2,
+  "failureProbability": 90,
+  "raw": {
+    "vendor": "dahua",
+    "source": "dahua-system",
+    "text": "Storage.Disk[0].Type=HDD\nStorage.Disk[0].Capacity=4000000\nStorage.Disk[0].FreeSpace=1500000\nStorage.Disk[0].Status=Error\nStorage.Disk[0].temperature=45\nStorage.Disk[0].reallocated=25\nStorage.Disk[0].pending=3\nStorage.Disk[0].uncorrectable=2"
+  }
+}

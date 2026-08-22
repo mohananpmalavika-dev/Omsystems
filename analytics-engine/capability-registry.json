@@ -1,0 +1,228 @@
+{
+  "generatedAt": "2026-08-10T02:12:10.024+05:30",
+  "summary": {
+    "totalDetectors": 37,
+    "production": 0,
+    "integrated": 0,
+    "placeholder": 0,
+    "framework": 0
+  },
+  "detectors": [
+    {
+      "file": "base-detector.ts",
+      "id": "base-detector",
+      "status": "FRAMEWORK",
+      "evidence": "Exports BaseDetector, contracts and helpers; not a runnable detector",
+      "model": null,
+      "version": null,
+      "notes": "Framework contract used by other detectors"
+    },
+    {
+      "file": "face-detector.ts",
+      "id": "face",
+      "status": "INTEGRATED",
+      "evidence": "Imports configured-model-inference; calls loadObjectInference('face-detector') and loadFaceVectorInference('face-embedding'); falls back to normalized-observation mode when models absent",
+      "model": ["face-detector","face-embedding"],
+      "version": "1.0.0",
+      "notes": "Watchlist matching and enrollment TODOs — recognition optional"
+    },
+    {
+      "file": "vehicle-detector.ts",
+      "id": "vehicle",
+      "status": "INTEGRATED",
+      "evidence": "Uses getModelManager() and expects 'yolov8n' model (manifest). Falls back to external-ingestion mode when local model missing",
+      "model": ["yolov8n"],
+      "version": "2.0.0",
+      "notes": "Tracks vehicles and emits alerts; requires model artifacts to be PRODUCTION-ready"
+    },
+    {
+      "file": "anpr-detector.ts",
+      "id": "anpr",
+      "status": "INTEGRATED",
+      "evidence": "Loads 'anpr-detector' and 'anpr-recognizer' via configured-model-inference; falls back to normalized observations",
+      "model": ["anpr-detector","anpr-recognizer"],
+      "version": "1.0.0",
+      "notes": "OCR and watchlist features present; local models required for full capability"
+    },
+    {
+      "file": "object-detector.ts",
+      "id": "object",
+      "status": "INTEGRATED",
+      "evidence": "Imports inference/yolo-coco-inference and configured-model-inference; model-driven",
+      "model": ["yolov8n"],
+      "version": null,
+      "notes": "General object detector — relies on model manifest"
+    },
+    {
+      "file": "smoke-fire-detector.ts",
+      "id": "fire-smoke",
+      "status": "INTEGRATED",
+      "evidence": "Imports loadObjectInference('fire-smoke') — model defined in manifest",
+      "model": ["fire-smoke"],
+      "version": null,
+      "notes": "Safety detector; requires artifact provisioning"
+    },
+    {
+      "file": "helmet-detector.ts",
+      "id": "helmet",
+      "status": "INTEGRATED",
+      "evidence": "Imports loadObjectInference('helmet') — manifest entry present",
+      "model": ["helmet"],
+      "version": null,
+      "notes": "PPE detection — model-dependent"
+    },
+    {
+      "file": "person-detector.ts",
+      "id": "person",
+      "status": "INTEGRATED",
+      "evidence": "Imports YoloPersonInference and modelUnavailableReason — uses model pipeline",
+      "model": [],
+      "version": null,
+      "notes": "Person detector integrated with inference pipeline"
+    },
+    {
+      "file": "face-analytics.ts",
+      "id": "face-analytics",
+      "status": "INTEGRATED",
+      "evidence": "Imports unified-inference-pipeline; analytics wrapper around face detector",
+      "model": ["face-detector","face-embedding"],
+      "version": null,
+      "notes": "Analytics orchestrator — model-dependent in practice"
+    },
+    {
+      "file": "human-analytics.ts",
+      "id": "human-analytics",
+      "status": "INTEGRATED",
+      "evidence": "Imports unified-inference-pipeline; coordinates person/pose/attributes",
+      "model": [],
+      "version": null,
+      "notes": "Higher-level analytics that depend on underlying models"
+    },
+    {
+      "file": "safety-analytics.ts",
+      "id": "safety-analytics",
+      "status": "INTEGRATED",
+      "evidence": "Imports unified inference modules; aggregates safety detectors",
+      "model": [],
+      "version": null,
+      "notes": "Safety-focused analytics built on model pipeline"
+    },
+    {
+      "file": "behavior-detector.ts",
+      "id": "behavior",
+      "status": "INTEGRATED",
+      "evidence": "Calls unified-inference-pipeline for object detection and pose estimation (TODO: pose model); has algorithmic analysis",
+      "model": ["pose-estimator"],
+      "version": "1.0.0",
+      "notes": "Partially implemented pose/model usage — requires model deployment for full accuracy"
+    },
+    {
+      "file": "camera-health-detector.ts",
+      "id": "camera-health",
+      "status": "PRODUCTION",
+      "evidence": "Contains implemented brightness/time-based heuristics; no model imports; emits video-loss and tampering alerts",
+      "model": null,
+      "version": "1.0.0",
+      "notes": "Algorithmic, ready for production use"
+    },
+    {
+      "file": "dvr-channel-health-detector.ts",
+      "id": "dvr-channel-health",
+      "status": "PRODUCTION",
+      "evidence": "Health heuristics for DVR channels; not model-dependent",
+      "model": null,
+      "version": null,
+      "notes": "Operational detector for DVR/analog channels"
+    },
+    {
+      "file": "camera-aging-detector.ts",
+      "id": "camera-aging",
+      "status": "PRODUCTION",
+      "evidence": "Implements heuristics around camera metrics (aging), no ML imports",
+      "model": null,
+      "version": null,
+      "notes": "Operational monitoring detector"
+    },
+    {
+      "file": "analog-video-quality-detector.ts",
+      "id": "analog-video-quality",
+      "status": "PRODUCTION",
+      "evidence": "Quality heuristics for analog feeds (SNR, frames), no ML imports",
+      "model": null,
+      "version": null,
+      "notes": "Useful for 500+ branch deployments"
+    },
+    {
+      "file": "motion-detector.ts",
+      "id": "motion",
+      "status": "PRODUCTION",
+      "evidence": "Frame-diffing/motion heuristics (no model imports)",
+      "model": null,
+      "version": null,
+      "notes": "Classic motion detection — production-ready"
+    },
+    {
+      "file": "fall-detector.ts",
+      "id": "fall",
+      "status": "PRODUCTION",
+      "evidence": "Heuristic-based fall detection using bounding boxes/pose when available; limited pose dependency",
+      "model": null,
+      "version": null,
+      "notes": "May improve with pose model but workable now"
+    },
+    {
+      "file": "crowd-density-detector.ts",
+      "id": "crowd-density",
+      "status": "PRODUCTION",
+      "evidence": "Uses counting heuristics and zones; no direct model imports",
+      "model": null,
+      "version": null,
+      "notes": "Ready as a zone-level analytic"
+    },
+    {
+      "file": "queue-detector.ts",
+      "id": "queue",
+      "status": "PRODUCTION",
+      "evidence": "Queue-length heuristics, dwell time — no inference import",
+      "model": null,
+      "version": null,
+      "notes": "Operational for retail/branch use-cases"
+    },
+    {
+      "file": "tailgating-detector.ts",
+      "id": "tailgating",
+      "status": "INTEGRATED",
+      "evidence": "Often relies on reid/pose models; imports pipeline in some analytics files",
+      "model": ["person-reid","pose-estimator"],
+      "version": null,
+      "notes": "Partially model-dependent; may operate heuristically"
+    },
+    {
+      "file": "unattended-objects-detector.ts",
+      "id": "unattended-objects",
+      "status": "PRODUCTION",
+      "evidence": "Implements object persistence heuristics (leave/abandon), can work on normalized detections",
+      "model": null,
+      "version": null,
+      "notes": "Works with normalized detections and does not require local model for basic behavior"
+    },
+    {
+      "file": "heatmap-generator.ts",
+      "id": "heatmap",
+      "status": "PRODUCTION",
+      "evidence": "Aggregation algorithm from tracked positions, no model import",
+      "model": null,
+      "version": null,
+      "notes": "Analytics utility"
+    },
+    {
+      "file": "ai-*.ts",
+      "id": "ai-tools",
+      "status": "PLACEHOLDER",
+      "evidence": "AI orchestration/assistant modules present but largely scaffolding and TODOs",
+      "model": null,
+      "version": null,
+      "notes": "Treat AI orchestration modules as 'placeholder' until integrated with runtime services"
+    }
+  ]
+}

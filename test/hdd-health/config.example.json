@@ -1,0 +1,80 @@
+{
+  "recorders": [
+    {
+      "id": "hik-test-01",
+      "name": "Hikvision DS-7616NI-K2",
+      "vendor": "hikvision",
+      "model": "DS-7616NI-K2",
+      "expectedFirmware": "REPLACE_WITH_EXACT_REPORTED_FIRMWARE",
+      "host": "192.168.1.10",
+      "port": 80,
+      "username": "admin",
+      "password": "your_password_here",
+      "expectedDisks": 2,
+      "expectedChannels": 16,
+      "expectedRaidLevel": "not_configured",
+      "requireWriteVerification": true,
+      "expectedRetentionDays": 180,
+      "archiveRetention": {
+        "lookbackDays": 180,
+        "maxResults": 500000,
+        "continuityGapSeconds": 30,
+        "channels": [{ "cameraId": "REPLACE_WITH_CAMERA_ID_1", "channel": 1 }]
+      },
+      "notes": "Main office recorder"
+    },
+    {
+      "id": "dahua-test-01",
+      "name": "Dahua DHI-NVR5216-16P-4KS2E",
+      "vendor": "dahua",
+      "model": "DHI-NVR5216-16P-4KS2E",
+      "expectedFirmware": "REPLACE_WITH_EXACT_REPORTED_FIRMWARE",
+      "host": "192.168.1.11",
+      "port": 80,
+      "username": "admin",
+      "password": "your_password_here",
+      "expectedDisks": 4,
+      "expectedChannels": 16,
+      "expectedRaidLevel": "RAID5",
+      "requireWriteVerification": true,
+      "expectedRetentionDays": 180,
+      "archiveRetention": {
+        "lookbackDays": 180,
+        "maxResults": 500000,
+        "continuityGapSeconds": 30,
+        "channels": [{ "cameraId": "REPLACE_WITH_CAMERA_ID_1", "channel": 1 }]
+      },
+      "notes": "Branch office recorder"
+    },
+    {
+      "id": "cpplus-test-01",
+      "name": "CP PLUS CP-UNR-4K3604-P16",
+      "vendor": "cp-plus",
+      "model": "CP-UNR-4K3604-P16",
+      "expectedFirmware": "REPLACE_WITH_EXACT_REPORTED_FIRMWARE",
+      "host": "192.168.1.12",
+      "port": 37777,
+      "username": "admin",
+      "password": "your_password_here",
+      "expectedDisks": 4,
+      "expectedChannels": 16,
+      "expectedRaidLevel": "RAID5",
+      "requireWriteVerification": true,
+      "expectedRetentionDays": 180,
+      "archiveRetention": {
+        "lookbackDays": 180,
+        "maxResults": 500000,
+        "continuityGapSeconds": 30,
+        "channels": [{ "cameraId": "REPLACE_WITH_CAMERA_ID_1", "channel": 1 }]
+      },
+      "notes": "Warehouse recorder"
+    }
+  ],
+  "testSettings": {
+    "timeout": 10000,
+    "retries": 3,
+    "captureResponses": true,
+    "fixturesDir": "./test/hdd-health/fixtures",
+    "reportDir": "./test/hdd-health/reports"
+  }
+}

@@ -1,0 +1,40 @@
+import type { NextConfig } from "next";
+
+// In production (Vercel/Railway), set CONTROL_PLANE_URL to your Railway backend URL.
+// Locally defaults to http://localhost:8080.
+const apiBase = process.env.CONTROL_PLANE_URL?.replace(/\/$/, "") || "http://localhost:8080";
+
+// Vercel sets VERCEL=1 automatically — no standalone output needed there.
+const isVercel = process.env.VERCEL === "1";
+const isSitesBuild = process.env.SITES_BUILD === "true";
+
+const nextConfig: NextConfig = {
+  ...(!isVercel && !isSitesBuild ? { output: "standalone" as const } : {}),
+  poweredByHeader: false,
+  allowedDevOrigins: ["127.0.0.1"],
+  async headers() {
+    return [{
+      source: "/(.*)",
+      headers: [{ key: "Permissions-Policy", value: "microphone=(self), camera=(), geolocation=()" }],
+    }];
+  },
+  async rewrites() {
+    return [
+      {
+        source: "/api/v1/:path*",
+        destination: `${apiBase}/api/v1/:path*`,
+      },
+      {
+        source: "/v1/:path*",
+        destination: `${apiBase}/v1/:path*`,
+      },
+      {
+        source: "/internal/:path*",
+        destination: `${apiBase}/internal/:path*`,
+      },
+    ];
+  },
+};
+
+export default nextConfig;
+

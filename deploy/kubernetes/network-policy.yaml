@@ -1,0 +1,22 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: { name: default-deny }
+spec: { podSelector: {}, policyTypes: [Ingress, Egress] }
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: { name: control-plane-traffic }
+spec:
+  podSelector: { matchLabels: { app: control-plane } }
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        - namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: ingress-nginx } }
+      ports: [{ protocol: TCP, port: 8080 }]
+    - from:
+        - podSelector: { matchLabels: { sentinel-internal-client: "true" } }
+      ports: [{ protocol: TCP, port: 8080 }]
+  egress:
+    - to:
+        - namespaceSelector: {}
+      ports: [{ protocol: TCP, port: 5432 }, { protocol: TCP, port: 443 }, { protocol: UDP, port: 53 }, { protocol: TCP, port: 53 }]

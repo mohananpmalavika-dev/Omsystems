@@ -1,0 +1,174 @@
+# Sentinel Load Testing Configuration
+# Copy to config.yaml and customize for your environment
+
+# Test Environment
+environment: "staging"  # staging | production-like | test
+
+# Target Endpoints
+endpoints:
+  controlPlane: "http://localhost:4000"
+  analyticsEngine: "http://localhost:4001"
+  recordingEngine: "http://localhost:4002"
+  mediaGateway: "http://localhost:4003"
+  websocket: "ws://localhost:4000/ws"
+
+# Authentication
+auth:
+  apiKey: "test-api-key-change-in-production"
+  tenantId: "load-test-tenant-001"
+  sharedKeys:
+    analytics: "analytics-shared-key"
+    recording: "recording-shared-key"
+
+# Phase 1: Control Plane Configuration
+phase1:
+  branches: 400
+  cameras: 5000
+  edgeAgents: 400
+  concurrentDashboardUsers: 100
+  testDuration: "1h"
+  
+  heartbeat:
+    intervalSeconds: 30
+    jitterSeconds: 5
+  
+  statusUpdate:
+    intervalSeconds: 60
+    changePercentage: 5  # % of cameras changing state
+  
+  tenants:
+    count: 10
+    branchDistribution: [50, 75, 100, 125, 150]  # branches per tenant
+
+# Phase 2: Event & Incident Load Configuration
+phase2:
+  sustainedEventsPerSecond: 50
+  moderateEventsPerSecond: 100
+  burstEventsPerSecond: 500
+  burstDuration: "5m"
+  testDuration: "30m"
+  
+  eventDistribution:
+    motion: 40
+    person: 20
+    vehicle: 15
+    zoneIntrusion: 10
+    behavior: 10
+    critical: 5
+  
+  correlation:
+    multiCameraPercentage: 15  # % of events correlated across cameras
+    relatedEventWindow: "30s"
+    duplicateSuppressionWindow: "60s"
+
+# Phase 3: Recording Benchmark Configuration
+phase3:
+  progressive:
+    - stage: 1
+      streams: 50
+      duration: "1h"
+    - stage: 2
+      streams: 100
+      duration: "2h"
+    - stage: 3
+      streams: 250
+      duration: "4h"
+    - stage: 4
+      streams: 500
+      duration: "8h"
+    - stage: 5
+      streams: 1000
+      duration: "24h"
+  
+  streamProfiles:
+    - resolution: "1080p"
+      bitrate: "2Mbps"
+      fps: 25
+      percentage: 60
+    - resolution: "720p"
+      bitrate: "1Mbps"
+      fps: 15
+      percentage: 30
+    - resolution: "4K"
+      bitrate: "8Mbps"
+      fps: 30
+      percentage: 10
+  
+  testStreams:
+    # Use synthetic RTSP streams for testing
+    useSynthetic: true
+    syntheticSource: "rtsp://localhost:8554/test-stream"
+
+# Phase 4: Failure Testing Configuration
+phase4:
+  scenarios:
+    - name: "api-node-failure"
+      enabled: true
+      duration: "5m"
+    - name: "database-failover"
+      enabled: true
+      duration: "2m"
+    - name: "redis-restart"
+      enabled: true
+      duration: "1m"
+    - name: "branch-offline"
+      enabled: true
+      branches: 1
+      duration: "5m"
+    - name: "mass-reconnect"
+      enabled: true
+      branches: 100
+      duration: "30s"
+    - name: "network-latency"
+      enabled: true
+      latency: "500ms"
+      duration: "10m"
+    - name: "event-burst"
+      enabled: true
+      multiplier: 10
+      duration: "2m"
+
+# Metrics Collection
+metrics:
+  prometheusPort: 9090
+  exportInterval: 10  # seconds
+  retentionDays: 30
+  
+  thresholds:
+    apiResponseTimeP95: 500  # ms
+    apiResponseTimeP99: 1000  # ms
+    dbCpuUsage: 70  # %
+    dbMemoryUsage: 80  # %
+    heartbeatLossRate: 0.1  # %
+    eventQueueLag: 5  # seconds
+    recordingFailureRate: 0.5  # %
+
+# Reporting
+reporting:
+  outputDir: "./reports"
+  format: ["html", "json", "csv"]
+  includeCharts: true
+  screenshotDashboard: true
+  
+  notifications:
+    enabled: false
+    webhook: ""
+    email: []
+
+# Advanced Options
+advanced:
+  rampUpTime: "2m"  # Gradual load increase
+  coolDownTime: "1m"  # Between test phases
+  maxConcurrentRequests: 1000
+  requestTimeout: 30  # seconds
+  retryAttempts: 3
+  retryDelay: 1  # seconds
+  
+  # Resource limits
+  maxMemoryUsage: "4GB"
+  maxCpuCores: 4
+  
+  # Debug options
+  verbose: false
+  debugMode: false
+  saveRawData: true

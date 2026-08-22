@@ -1,0 +1,53 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: control-plane
+  labels: { release: prometheus }
+spec:
+  selector: { matchLabels: { app: control-plane } }
+  endpoints:
+    - { port: http, path: /metrics, interval: 15s, scrapeTimeout: 5s }
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: sentinel-control-plane-slos
+  labels: { release: prometheus }
+spec:
+  groups:
+    - name: sentinel.availability
+      rules:
+        - alert: SentinelControlPlaneDown
+          expr: up{service="control-plane"} == 0
+          for: 2m
+          labels: { severity: critical }
+          annotations: { summary: "Sentinel control-plane target is unavailable", runbook: "docs/PHASE_5_FIELD_RUNBOOK.md" }
+        - alert: SentinelApiErrorBudgetBurn
+          expr: sum(rate(sentinel_http_requests_total{status=~"5.."}[5m])) / clamp_min(sum(rate(sentinel_http_requests_total[5m])), 0.001) > 0.01
+          for: 10m
+          labels: { severity: critical }
+          annotations: { summary: "Control-plane 5xx rate exceeds 1%", runbook: "docs/PHASE_5_FIELD_RUNBOOK.md" }
+        - alert: SentinelApiP95High
+          expr: sentinel_http_latency_milliseconds{quantile="0.95"} > 500
+          for: 15m
+          labels: { severity: warning }
+          annotations: { summary: "Control-plane p95 exceeds 500 ms", runbook: "docs/PHASE_5_FIELD_RUNBOOK.md" }
+        - alert: SentinelApiP99High
+          expr: sentinel_http_latency_milliseconds{quantile="0.99"} > 1000
+          for: 10m
+          labels: { severity: critical }
+          annotations: { summary: "Control-plane p99 exceeds 1 second", runbook: "docs/PHASE_5_FIELD_RUNBOOK.md" }
+        - alert: SentinelBackpressureActive
+          expr: increase(sentinel_http_backpressure_rejections_total[5m]) > 0
+          for: 5m
+          labels: { severity: warning }
+          annotations: { summary: "Control-plane is rejecting requests under backpressure", runbook: "docs/PHASE_5_FIELD_RUNBOOK.md" }
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: sentinel-grafana-dashboard
+  labels: { grafana_dashboard: "1" }
+data:
+  sentinel-control-plane.json: |-
+    {"title":"Sentinel Control Plane SLOs","uid":"sentinel-control-plane","schemaVersion":39,"refresh":"15s","time":{"from":"now-6h","to":"now"},"panels":[{"type":"stat","title":"Targets Up","gridPos":{"x":0,"y":0,"w":6,"h":5},"targets":[{"expr":"sum(up{service=\"control-plane\"})"}]},{"type":"timeseries","title":"p95 / p99 latency (ms)","gridPos":{"x":6,"y":0,"w":12,"h":8},"targets":[{"expr":"sentinel_http_latency_milliseconds{quantile=~\"0.95|0.99\"}","legendFormat":"{{quantile}}"}]},{"type":"timeseries","title":"Request rate by status","gridPos":{"x":0,"y":8,"w":12,"h":8},"targets":[{"expr":"sum by (status) (rate(sentinel_http_requests_total[5m]))","legendFormat":"{{status}}"}]},{"type":"timeseries","title":"Backpressure rejections","gridPos":{"x":12,"y":8,"w":12,"h":8},"targets":[{"expr":"increase(sentinel_http_backpressure_rejections_total[5m])"}]}]}

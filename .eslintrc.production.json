@@ -1,0 +1,53 @@
+{
+  "extends": "./.eslintrc.json",
+  "env": {
+    "node": true,
+    "es2022": true
+  },
+  "rules": {
+    "no-console": ["error", { 
+      "allow": ["warn", "error"] 
+    }],
+    "@typescript-eslint/no-explicit-any": "error",
+    "@typescript-eslint/no-unsafe-assignment": "warn",
+    "@typescript-eslint/no-unsafe-member-access": "warn",
+    "@typescript-eslint/no-unsafe-call": "warn",
+    "@typescript-eslint/no-unsafe-return": "warn",
+    "no-warning-comments": ["warn", { 
+      "terms": ["TODO", "FIXME", "XXX", "HACK"],
+      "location": "start" 
+    }],
+    "prefer-const": "error",
+    "no-var": "error",
+    "no-unused-vars": "off",
+    "@typescript-eslint/no-unused-vars": ["error", {
+      "argsIgnorePattern": "^_",
+      "varsIgnorePattern": "^_"
+    }]
+  },
+  "overrides": [
+    {
+      "files": ["*.test.ts", "*.spec.ts", "**/__tests__/**"],
+      "rules": {
+        "no-console": "off",
+        "@typescript-eslint/no-explicit-any": "off",
+        "@typescript-eslint/no-unsafe-assignment": "off",
+        "@typescript-eslint/no-unsafe-member-access": "off",
+        "@typescript-eslint/no-unsafe-call": "off"
+      }
+    },
+    {
+      "files": ["scripts/**/*.ts", "scripts/**/*.js"],
+      "rules": {
+        "no-console": "off"
+      }
+    },
+    {
+      "files": ["**/*.md/*.ts", "**/*.md/*.js"],
+      "rules": {
+        "no-console": "off",
+        "@typescript-eslint/no-explicit-any": "off"
+      }
+    }
+  ]
+}

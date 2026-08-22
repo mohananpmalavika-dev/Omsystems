@@ -1,0 +1,4 @@
+{
+  "extends": "./tsconfig.json",
+  "include": ["src/phase1-control-plane.ts", "src/phase6-alert-stress.ts"]
+}

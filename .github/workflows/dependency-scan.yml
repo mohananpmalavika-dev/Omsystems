@@ -1,0 +1,321 @@
+name: Dependency Vulnerability Scan
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+  schedule:
+    # Run daily at 3 AM UTC
+    - cron: '0 3 * * *'
+  workflow_dispatch:
+
+jobs:
+  # NPM Audit
+  npm-audit:
+    name: NPM Security Audit
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '20.x'
+          cache: 'npm'
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: Run npm audit
+        run: npm audit --audit-level=moderate --json > npm-audit.json
+        continue-on-error: true
+      
+      - name: Upload audit results
+        uses: actions/upload-artifact@v3
+        with:
+          name: npm-audit
+          path: npm-audit.json
+      
+      - name: Check for critical vulnerabilities
+        run: |
+          CRITICAL=$(cat npm-audit.json | jq '.metadata.vulnerabilities.critical')
+          HIGH=$(cat npm-audit.json | jq '.metadata.vulnerabilities.high')
+          
+          echo "Critical vulnerabilities: $CRITICAL"
+          echo "High vulnerabilities: $HIGH"
+          
+          if [ "$CRITICAL" -gt 0 ]; then
+            echo "❌ Found $CRITICAL critical vulnerabilities!"
+            exit 1
+          fi
+          
+          if [ "$HIGH" -gt 5 ]; then
+            echo "⚠️ Found $HIGH high vulnerabilities (threshold: 5)"
+            exit 1
+          fi
+          
+          echo "✅ No critical vulnerabilities found"
+
+  # Snyk Scan
+  snyk-scan:
+    name: Snyk Security Scan
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Run Snyk to check for vulnerabilities
+        uses: snyk/actions/node@master
+        continue-on-error: true
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        with:
+          args: --severity-threshold=high --json-file-output=snyk-results.json
+      
+      - name: Upload Snyk results
+        uses: actions/upload-artifact@v3
+        with:
+          name: snyk-results
+          path: snyk-results.json
+      
+      - name: Upload to GitHub Code Scanning
+        uses: github/codeql-action/upload-sarif@v2
+        if: always()
+        with:
+          sarif_file: snyk-results.sarif
+
+  # OWASP Dependency Check
+  owasp-check:
+    name: OWASP Dependency Check
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Run OWASP Dependency Check
+        uses: dependency-check/Dependency-Check_Action@main
+        with:
+          project: 'OMSystems'
+          path: '.'
+          format: 'HTML'
+          out: 'reports'
+          args: >
+            --failOnCVSS 7
+            --enableRetired
+      
+      - name: Upload OWASP report
+        uses: actions/upload-artifact@v3
+        with:
+          name: owasp-report
+          path: reports/
+
+  # Trivy Scan
+  trivy-scan:
+    name: Trivy Vulnerability Scan
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+          severity: 'CRITICAL,HIGH'
+      
+      - name: Upload Trivy results to GitHub Security
+        uses: github/codeql-action/upload-sarif@v2
+        with:
+          sarif_file: 'trivy-results.sarif'
+      
+      - name: Run Trivy JSON report
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          format: 'json'
+          output: 'trivy-results.json'
+      
+      - name: Upload Trivy JSON
+        uses: actions/upload-artifact@v3
+        with:
+          name: trivy-results
+          path: trivy-results.json
+
+  # Generate SBOM
+  generate-sbom:
+    name: Generate SBOM
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '20.x'
+          cache: 'npm'
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: Generate CycloneDX SBOM
+        run: |
+          npm install -g @cyclonedx/cyclonedx-npm
+          cyclonedx-npm --output-file sbom-cyclonedx.json
+      
+      - name: Generate SPDX SBOM
+        run: |
+          npm install -g @microsoft/sbom-tool
+          sbom-tool generate -b . -bc . -pn OMSystems -pv 1.0.0 -ps OrgName -nsb https://omsystems.io
+      
+      - name: Upload SBOM artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: sbom
+          path: |
+            sbom-cyclonedx.json
+            _manifest/spdx_2.2/*.json
+      
+      - name: Attest SBOM
+        uses: actions/attest-sbom@v1
+        with:
+          subject-path: '.'
+          sbom-path: 'sbom-cyclonedx.json'
+
+  # License Check
+  license-check:
+    name: License Compliance Check
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '20.x'
+          cache: 'npm'
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: Check licenses
+        run: |
+          npm install -g license-checker
+          license-checker --json --out licenses.json
+          license-checker --summary
+      
+      - name: Check for forbidden licenses
+        run: |
+          FORBIDDEN="GPL-2.0,GPL-3.0,AGPL-3.0"
+          
+          if license-checker --production --onlyAllow "MIT;Apache-2.0;BSD-2-Clause;BSD-3-Clause;ISC" --failOn "$FORBIDDEN"; then
+            echo "✅ All licenses are compliant"
+          else
+            echo "❌ Found forbidden licenses"
+            exit 1
+          fi
+      
+      - name: Upload license report
+        uses: actions/upload-artifact@v3
+        with:
+          name: licenses
+          path: licenses.json
+
+  # CVE Database Update
+  cve-database:
+    name: Update CVE Database
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Download latest CVE data
+        run: |
+          mkdir -p cve-data
+          curl -o cve-data/nvd-cve-latest.json.gz \
+            https://nvd.nist.gov/feeds/json/cve/1.1/nvdcve-1.1-recent.json.gz
+          gunzip cve-data/nvd-cve-latest.json.gz
+      
+      - name: Parse and store CVEs
+        run: |
+          # Extract relevant CVEs affecting our dependencies
+          # This would integrate with your database
+          echo "CVE data downloaded and ready for processing"
+      
+      - name: Upload CVE data
+        uses: actions/upload-artifact@v3
+        with:
+          name: cve-data
+          path: cve-data/
+
+  # Aggregate Results
+  aggregate-results:
+    name: Aggregate Security Results
+    runs-on: ubuntu-latest
+    needs: [npm-audit, snyk-scan, owasp-check, trivy-scan, license-check]
+    if: always()
+    
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Download all artifacts
+        uses: actions/download-artifact@v3
+      
+      - name: Generate security report
+        run: |
+          echo "# Security Scan Results" > security-report.md
+          echo "" >> security-report.md
+          echo "## Summary" >> security-report.md
+          echo "- NPM Audit: ${{ needs.npm-audit.result }}" >> security-report.md
+          echo "- Snyk Scan: ${{ needs.snyk-scan.result }}" >> security-report.md
+          echo "- OWASP Check: ${{ needs.owasp-check.result }}" >> security-report.md
+          echo "- Trivy Scan: ${{ needs.trivy-scan.result }}" >> security-report.md
+          echo "- License Check: ${{ needs.license-check.result }}" >> security-report.md
+          
+          cat security-report.md >> $GITHUB_STEP_SUMMARY
+      
+      - name: Upload security report
+        uses: actions/upload-artifact@v3
+        with:
+          name: security-report
+          path: security-report.md
+      
+      - name: Create issue for vulnerabilities
+        if: |
+          needs.npm-audit.result == 'failure' ||
+          needs.snyk-scan.result == 'failure' ||
+          needs.owasp-check.result == 'failure' ||
+          needs.trivy-scan.result == 'failure'
+        uses: actions/github-script@v6
+        with:
+          script: |
+            github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: '🔒 Security Vulnerabilities Detected',
+              body: 'Automated security scan detected vulnerabilities. See workflow run for details.',
+              labels: ['security', 'urgent']
+            })
+
+  # Notify on Failure
+  notify-failure:
+    name: Notify Security Team
+    runs-on: ubuntu-latest
+    needs: [npm-audit, snyk-scan, owasp-check, trivy-scan]
+    if: |
+      failure() && 
+      (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop')
+    
+    steps:
+      - name: Send notification
+        run: |
+          echo "Security scan failed on ${{ github.ref }}"
+          echo "Workflow: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          # Add your notification logic here (Slack, email, etc.)

@@ -1,0 +1,8 @@
+table.General.DeviceType=CP-UNR-4K4322-V2
+table.General.HardwareVersion=1.00
+table.General.MachineName=CP PLUS
+table.General.Processor=ARM
+table.General.SerialNumber=9L02A8BPAP00178
+table.General.SoftwareVersion=4.001.0000000.1.R
+table.General.Vendor=CP PLUS
+table.General.ChannelNum=16

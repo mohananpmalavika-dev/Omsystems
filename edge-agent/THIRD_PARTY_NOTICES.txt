@@ -1,0 +1,21 @@
+Sentinel Grid Edge Agent - bundled runtime notices
+
+FFmpeg
+  Project: https://ffmpeg.org/
+  Windows build: https://github.com/BtbN/FFmpeg-Builds
+  Bundled variant: LGPL shared, FFmpeg 8.1 release branch
+  License information and corresponding source links are included inside the
+  downloaded FFmpeg archive and are available from the project/build URLs.
+
+MediaMTX
+  Project/source: https://github.com/bluenviron/mediamtx
+  Version: 1.17.1
+  License: MIT
+
+cloudflared
+  Project/source: https://github.com/cloudflare/cloudflared
+  Version: 2026.5.2
+  License: Apache License 2.0
+
+These programs remain separate executables launched by Sentinel Grid. Their
+respective licenses and copyright notices continue to apply.

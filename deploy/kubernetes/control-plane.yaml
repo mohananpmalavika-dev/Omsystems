@@ -1,0 +1,102 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: control-plane
+  labels: { app: control-plane }
+spec:
+  selector: { app: control-plane }
+  ports: [{ name: http, port: 8080, targetPort: http }]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: control-plane
+spec:
+  replicas: 3
+  revisionHistoryLimit: 5
+  strategy:
+    type: RollingUpdate
+    rollingUpdate: { maxUnavailable: 0, maxSurge: 1 }
+  selector:
+    matchLabels: { app: control-plane }
+  template:
+    metadata:
+      labels: { app: control-plane }
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+        prometheus.io/path: /metrics
+    spec:
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 45
+      securityContext: { runAsNonRoot: true, seccompProfile: { type: RuntimeDefault } }
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: DoNotSchedule
+          labelSelector: { matchLabels: { app: control-plane } }
+      containers:
+        - name: control-plane
+          image: sentinel/control-plane:phase5
+          imagePullPolicy: IfNotPresent
+          ports: [{ name: http, containerPort: 8080 }]
+          env:
+            - { name: NODE_ENV, value: production }
+            - { name: AUTH_MODE, value: oidc }
+            - { name: MAX_IN_FLIGHT_REQUESTS, value: "500" }
+            - { name: DB_POOL_MIN, value: "4" }
+            - { name: DB_POOL_MAX, value: "30" }
+            - { name: DATABASE_URL_FILE, value: /var/run/secrets/sentinel/database-url }
+            - { name: MEDIA_GATEWAY_SHARED_KEY_FILE, value: /var/run/secrets/sentinel/media-gateway-key }
+            - { name: REPORT_DOWNLOAD_SECRET_FILE, value: /var/run/secrets/sentinel/report-download-key }
+            - { name: REPORT_WORKER_SHARED_KEY_FILE, value: /var/run/secrets/sentinel/report-worker-key }
+          resources:
+            requests: { cpu: 500m, memory: 512Mi }
+            limits: { cpu: "2", memory: 2Gi }
+          readinessProbe: { httpGet: { path: /ready, port: http }, periodSeconds: 5, failureThreshold: 3 }
+          livenessProbe: { httpGet: { path: /health, port: http }, periodSeconds: 10, failureThreshold: 3 }
+          startupProbe: { httpGet: { path: /ready, port: http }, periodSeconds: 5, failureThreshold: 30 }
+          lifecycle: { preStop: { exec: { command: ["sh", "-c", "sleep 10"] } } }
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: ["ALL"] }
+          volumeMounts:
+            - { name: secrets, mountPath: /var/run/secrets/sentinel, readOnly: true }
+            - { name: reports, mountPath: /app/report-exports }
+            - { name: tmp, mountPath: /tmp }
+      volumes:
+        - name: secrets
+          secret: { secretName: sentinel-runtime }
+        - name: reports
+          persistentVolumeClaim: { claimName: sentinel-report-exports }
+        - name: tmp
+          emptyDir: { sizeLimit: 256Mi }
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata: { name: sentinel-report-exports }
+spec:
+  accessModes: [ReadWriteMany]
+  resources: { requests: { storage: 100Gi } }
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: control-plane
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/proxy-body-size: 10m
+    nginx.ingress.kubernetes.io/limit-rps: "200"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts: [surveillance.example.invalid]
+      secretName: sentinel-ingress-tls
+  rules:
+    - host: surveillance.example.invalid
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend: { service: { name: control-plane, port: { name: http } } }
