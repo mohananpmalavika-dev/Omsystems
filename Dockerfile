@@ -11,10 +11,11 @@ COPY root-cause-analysis-engine/ ./root-cause-analysis-engine/
 RUN npm ci
 RUN npm run build
 
-# Build edge-agent bundle for Linux downloads
+# Build the cross-platform edge-agent bundle and the activation-bound
+# Windows self-installer served by the control plane.
 WORKDIR /app/edge-agent
 RUN npm ci
-RUN npm run bundle
+RUN npm run build:exe
 WORKDIR /app
 
 # Stage 2: Production
@@ -34,6 +35,7 @@ RUN npm ci --omit=dev
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/backend ./backend
 COPY --from=builder /app/edge-agent/build ./edge-agent/build
+COPY --from=builder /app/edge-agent/release ./edge-agent/release
 COPY --from=builder /app/edge-agent/installer ./edge-agent/installer
 COPY --from=builder /app/edge-agent/package.json ./edge-agent/package.json
 
