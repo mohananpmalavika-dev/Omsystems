@@ -49,6 +49,37 @@ export interface CameraConfig {
   enabled: boolean;
 }
 
+/**
+ * Signals that indicate a usable stream has a delivery or image-quality
+ * failure.  Monochrome night-mode video and normal scene changes are kept as
+ * evidence, but are not failures: IR cameras commonly lose colour at night
+ * and a busy scene is not camera movement.
+ */
+export function shouldMarkCameraDegraded(input: {
+  expectedFps?: number | undefined;
+  expectedBitrate?: number | undefined;
+  fps: number | null;
+  bitrateKbps: number | null;
+  packetLoss: number | null;
+  imageFrozen?: boolean | undefined;
+  blackScreen?: boolean | undefined;
+  blueScreen?: boolean | undefined;
+  severeBlur?: boolean | undefined;
+  excessiveNoise?: boolean | undefined;
+  rollingInterference?: boolean | undefined;
+  brightnessFailure?: boolean | undefined;
+  obstructionSuspected?: boolean | undefined;
+}): boolean {
+  return Boolean(
+    (input.expectedFps && input.fps !== null && input.fps < input.expectedFps * 0.8) ||
+    (input.expectedBitrate && input.bitrateKbps !== null && input.bitrateKbps < input.expectedBitrate * 0.7) ||
+    (input.packetLoss !== null && input.packetLoss > 5) ||
+    input.imageFrozen || input.blackScreen || input.blueScreen || input.severeBlur ||
+    input.excessiveNoise || input.rollingInterference || input.brightnessFailure ||
+    input.obstructionSuspected,
+  );
+}
+
 export interface AutomaticCameraRecoveryRequest {
   cameraId: string;
   cameraName: string;
@@ -249,15 +280,21 @@ export class CameraHeartbeatService {
       if (frameHealth.obstructionSuspected) reasonCodes.push("camera_obstruction_suspected");
       if (frameHealth.cameraMovementSuspected) reasonCodes.push("camera_movement_suspected");
     }
-    const degraded = Boolean(
-      (camera.expectedFps && stream.fps !== null && stream.fps < camera.expectedFps * 0.8) ||
-      (camera.expectedBitrate && stream.bitrateKbps !== null && stream.bitrateKbps < camera.expectedBitrate * 0.7) ||
-      (packetLoss !== null && packetLoss > 5) ||
-      frameHealth?.imageFrozen || frameHealth?.blackScreen || frameHealth?.blueScreen ||
-      frameHealth?.severeBlur || frameHealth?.excessiveNoise || frameHealth?.rollingInterference ||
-      frameHealth?.colourLoss || frameHealth?.brightnessFailure || frameHealth?.obstructionSuspected ||
-      frameHealth?.cameraMovementSuspected,
-    );
+    const degraded = shouldMarkCameraDegraded({
+      expectedFps: camera.expectedFps,
+      expectedBitrate: camera.expectedBitrate,
+      fps: stream.fps,
+      bitrateKbps: stream.bitrateKbps,
+      packetLoss,
+      imageFrozen: frameHealth?.imageFrozen,
+      blackScreen: frameHealth?.blackScreen,
+      blueScreen: frameHealth?.blueScreen,
+      severeBlur: frameHealth?.severeBlur,
+      excessiveNoise: frameHealth?.excessiveNoise,
+      rollingInterference: frameHealth?.rollingInterference,
+      brightnessFailure: frameHealth?.brightnessFailure,
+      obstructionSuspected: frameHealth?.obstructionSuspected,
+    });
 
     return {
       cameraId: camera.id,

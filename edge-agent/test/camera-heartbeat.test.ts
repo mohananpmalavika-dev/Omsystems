@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   assessLumaFrame,
   CameraHeartbeatService,
+  shouldMarkCameraDegraded,
   type CameraConfig,
   type CameraHeartbeatData,
 } from "../src/monitoring/camera-heartbeat.js";
@@ -20,6 +21,23 @@ describe("camera frame health", () => {
   it("detects a genuinely dark decoded luminance frame", () => {
     expect(assessLumaFrame(undefined, Buffer.alloc(64 * 36, 4)).blackScreen).toBe(true);
     expect(assessLumaFrame(undefined, Buffer.alloc(64 * 36, 80)).blackScreen).toBe(false);
+  });
+
+  it("does not downgrade a healthy monochrome night stream", () => {
+    // Colour loss and scene movement are retained in telemetry as evidence,
+    // but neither proves a delivery or image failure. This keeps IR cameras
+    // online after dark while genuine image failures still degrade them.
+    expect(shouldMarkCameraDegraded({
+      fps: 25,
+      bitrateKbps: 1_024,
+      packetLoss: 0,
+    })).toBe(false);
+    expect(shouldMarkCameraDegraded({
+      fps: 25,
+      bitrateKbps: 1_024,
+      packetLoss: 0,
+      blackScreen: true,
+    })).toBe(true);
   });
 
   it("starts one local recovery after three consecutive offline heartbeats", async () => {
