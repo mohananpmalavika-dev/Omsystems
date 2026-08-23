@@ -33,10 +33,18 @@ export async function startLive(
   direct: { url: string; controlPlaneToken: string };
 }> {
   try {
+    // Keep live authorization aligned with the dashboard control proxy. When
+    // Render protects the dashboard with Basic Auth, there may be no employee
+    // session cookie even though the rest of the dashboard is authorized via
+    // its configured dashboard identity.
+    const dashboardUserId = employeeSession
+      ? undefined
+      : runtimeEnv("DASHBOARD_DEV_USER_ID", "user-global-admin");
     const permission = await controlFetch(
       `/v1/cameras/${encodeURIComponent(cameraId)}/live-sessions`,
       { method: "POST", body: "{}", signal: AbortSignal.timeout(LIVE_START_TIMEOUT_MS) },
       employeeSession,
+      dashboardUserId,
     );
     const controlSession = await permission.json() as {
       token?: string;
@@ -119,16 +127,17 @@ async function controlFetch(
   path: string,
   init?: RequestInit,
   employeeSession?: string,
+  fallbackUserId?: string,
 ) {
-  const developmentUserId = process.env.NODE_ENV !== "production"
+  const resolvedFallbackUserId = fallbackUserId ?? (process.env.NODE_ENV !== "production"
     ? runtimeEnv("DASHBOARD_DEV_USER_ID", "")
-    : "";
+    : "");
   const headers = {
     ...bridgeHeaders(),
     ...(employeeSession
       ? { authorization: `Bearer ${employeeSession}` }
-      : developmentUserId
-        ? { "x-user-id": developmentUserId }
+      : resolvedFallbackUserId
+        ? { "x-user-id": resolvedFallbackUserId }
         : {}),
     ...init?.headers,
   };
