@@ -286,7 +286,7 @@ export async function registerEdgeGatewayOperationsRoutes(
     const command = await store.createEdgeCommand({
       edgeAgentId: id,
       type: "update-credentials",
-      payload: { envelope },
+      payload: { envelope, target: { ipAddress: body.cameraIp } },
       requestedBy: request.currentUser.id,
     });
     await writeGatewayAudit(request, store, branchId, "edge_gateway.camera_credentials_requested", {
@@ -386,7 +386,12 @@ export async function registerEdgeGatewayOperationsRoutes(
     let activationError: string | undefined;
     if (completed.type === "update-credentials" && completed.status === "succeeded") {
       try {
-        activation = await autoProvisionVerifiedCameras(store, completed.branchId, { edgeAgentId: id });
+        const target = completed.payload.target as { ipAddress?: unknown } | undefined;
+        const targetIpAddress = typeof target?.ipAddress === "string" ? target.ipAddress : undefined;
+        activation = await autoProvisionVerifiedCameras(store, completed.branchId, {
+          edgeAgentId: id,
+          ...(targetIpAddress ? { ipAddresses: [targetIpAddress] } : {}),
+        });
       } catch (error) {
         activationError = error instanceof Error ? error.message : String(error);
       }

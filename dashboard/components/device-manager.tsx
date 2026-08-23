@@ -285,6 +285,8 @@ export function DeviceManager() {
   const [credentialActivation, setCredentialActivation] = useState<any>();
   const [activationUsername, setActivationUsername] = useState("");
   const [activationPassword, setActivationPassword] = useState("");
+  const [credentialVerificationStatus, setCredentialVerificationStatus] = useState<string>();
+  const [credentialVerificationError, setCredentialVerificationError] = useState<string>();
   const [showQRScanner, setShowQRScanner] = useState(false);
   const [registrationMode, setRegistrationMode] = useState<"automatic" | "manual" | "bulk">("automatic");
   const [selectedDiscoveryId, setSelectedDiscoveryId] = useState<string>();
@@ -680,7 +682,24 @@ export function DeviceManager() {
     setShowDiscoveredList(false);
     setActivationUsername("");
     setActivationPassword("");
+    setCredentialVerificationStatus(undefined);
+    setCredentialVerificationError(undefined);
     setError(undefined);
+  }
+
+  async function waitForCredentialCommand(commandId: string) {
+    if (!selectedBranch) throw new Error("Select a branch before verifying device credentials.");
+    const deadline = Date.now() + 180_000;
+    while (Date.now() < deadline) {
+      const response = await cameraInventoryApi.listGatewayCommands(selectedBranch);
+      const command = (response.data ?? []).find((item: any) => item.id === commandId);
+      if (command?.status === "succeeded") return command;
+      if (command?.status === "failed") {
+        throw new Error(command.error || "The branch scanner could not verify these credentials.");
+      }
+      await wait(1_500);
+    }
+    throw new Error("Credential verification timed out. Confirm the branch scanner remains online, then retry.");
   }
 
   async function openPendingCredentials() {
@@ -715,20 +734,20 @@ export function DeviceManager() {
     setSaving(true);
     setScanning(true);
     setError(undefined);
+    setCredentialVerificationError(undefined);
+    setCredentialVerificationStatus("Encrypting the login for this branch scanner…");
     try {
+      const targetName = credentialActivation.displayName || credentialActivation.model || "IP Camera";
+      const targetAgentId = credentialActivation.edgeAgentId;
+      const targetIpAddress = credentialActivation.ipAddress;
       const activation = await cameraInventoryApi.activateDiscovery(selectedBranch, credentialActivation.id, {
         username: activationUsername,
         password: activationPassword,
       });
       setActivationPassword("");
-      const targetName = credentialActivation.displayName || credentialActivation.model || "IP Camera";
-      const targetAgentId = credentialActivation.edgeAgentId;
-      const targetIpAddress = credentialActivation.ipAddress;
-      setCredentialActivation(undefined);
-
-      // Saving a password only queues a single-device probe. Do not approve
-      // or claim a live stream until the agent has returned fresh evidence.
-      await completeCameraScan(activation.scanId, targetAgentId);
+      setCredentialVerificationStatus("Waiting for the installed scanner to verify this device and enumerate its channels…");
+      await waitForCredentialCommand(activation.commandId);
+      setCredentialVerificationStatus("Verification completed. Loading the discovered channels…");
       const refreshed = await cameraInventoryApi.listDiscovered(selectedBranch);
       const refreshedDiscoveries = refreshed.data ?? [];
       const verifiedTargets = refreshedDiscoveries.filter((item: any) =>
@@ -746,28 +765,14 @@ export function DeviceManager() {
           item.edgeAgentId === targetAgentId && item.ipAddress === targetIpAddress && item.credentialsRequired
         );
         if (stillNeedsCredentials) setCredentialActivation(stillNeedsCredentials);
-        setNotice(`Credentials were saved for ${targetName}, but the device has not yet returned a verified stream. Check the login and device stream settings, then retry.`);
+        setCredentialVerificationStatus(undefined);
+        setCredentialVerificationError(`The scanner reached ${targetName}, but no authenticated video stream was returned. Check the username, password, RTSP service, and account permissions, then retry.`);
         return;
       }
-
-      const provisioning = await cameraInventoryApi.approveAllDiscovered(selectedBranch, {
-        discoveryIds: verifiedTargets.map((item: any) => item.id),
-        recordingMode: "continuous",
-        retentionDays: 180,
-        enableAnalytics: true,
-        enableAlerts: true,
-      }) as { summary: { provisioned: number; partial: number; failed: number }; results: AutoProvisionResult[] };
-      setAutoProvisionResults(provisioning.results ?? []);
-      for (const result of provisioning.results ?? []) {
-        if (result.status === "provisioned" || result.status === "partial") {
-          markDiscoveryReviewStatus(result.discoveryId, "approved");
-        }
-      }
-      const activatedCount = (provisioning.summary?.provisioned ?? 0) + (provisioning.summary?.partial ?? 0);
-      if (activatedCount === 0) {
-        throw new Error("Verified streams were discovered, but their camera records could not be activated.");
-      }
+      const activatedCount = verifiedTargets.length;
       setCredentialActivation(undefined);
+      setCredentialVerificationStatus(undefined);
+      setCredentialVerificationError(undefined);
       setNotice(verifiedTargets.length > 1
         ? `Credentials verified. ${activatedCount} recorder channels were added and connected to live monitoring.`
         : `Credentials verified and ${targetName} was connected to live monitoring.`);
@@ -776,11 +781,15 @@ export function DeviceManager() {
       if (isAgentUpdateRequired(reason)) {
         setCredentialActivation(undefined);
         setActivationPassword("");
+        setCredentialVerificationStatus(undefined);
+        setCredentialVerificationError(undefined);
         openScannerInstaller();
         setError("Repair the Sentinel Grid Scanner once before verifying credentials. This safety update guarantees that only the selected device is probed.");
         return;
       }
-      setError(messageOf(reason, "Unable to activate this device with the supplied credentials."));
+      setActivationPassword("");
+      setCredentialVerificationStatus(undefined);
+      setCredentialVerificationError(messageOf(reason, "Unable to activate this device with the supplied credentials."));
     } finally {
       setSaving(false);
       setScanning(false);
@@ -1885,7 +1894,7 @@ try {
       {credentialActivation && (
         <div className="modal-overlay">
           <div className="modal-container">
-            <div className="modal-header"><h2>Device login required</h2><button type="button" className="icon-button" onClick={() => { setCredentialActivation(undefined); setActivationPassword(""); }} disabled={saving}><X size={20} /></button></div>
+            <div className="modal-header"><h2>Device login required</h2><button type="button" className="icon-button" onClick={() => { setCredentialActivation(undefined); setActivationPassword(""); setCredentialVerificationStatus(undefined); setCredentialVerificationError(undefined); }} disabled={saving}><X size={20} /></button></div>
             <form className="modal-form" onSubmit={activateDiscoveredCamera}>
               <div className="form-info-banner credential-device-banner">
                 <Camera size={16} />
@@ -1902,12 +1911,12 @@ try {
                 onSelectCredential={(username, password) => {
                   setActivationUsername(username);
                   setActivationPassword(password);
-                  setNotice(`Credentials set to: ${username} / ${password || '(empty)'}. Click "Save & verify" to test.`);
+                  setNotice(`Credentials loaded for ${username}. Click "Save & verify" to test this device.`);
                 }}
               />
               
-              <div className="form-group"><label htmlFor="activationUsername">Username <span className="required">*</span></label><input id="activationUsername" value={activationUsername} onChange={(event) => setActivationUsername(event.target.value)} autoComplete="username" required /></div>
-              <div className="form-group"><label htmlFor="activationPassword">Password <span className="required">*</span></label><input id="activationPassword" type="password" value={activationPassword} onChange={(event) => setActivationPassword(event.target.value)} autoComplete="current-password" required /></div>
+              <div className="form-group"><label htmlFor="activationUsername">Username <span className="required">*</span></label><input id="activationUsername" value={activationUsername} onChange={(event) => setActivationUsername(event.target.value)} autoComplete="username" required disabled={saving} /></div>
+              <div className="form-group"><label htmlFor="activationPassword">Password <span className="required">*</span></label><input id="activationPassword" type="password" value={activationPassword} onChange={(event) => setActivationPassword(event.target.value)} autoComplete="current-password" required disabled={saving} /></div>
               
               <div className="qr-credential-options">
                 <p className="qr-help-text">Or extract credentials from camera QR code:</p>
@@ -1925,7 +1934,9 @@ try {
               </div>
 
               <p className="field-help">This login is saved only for this detected IP address. No broadcast discovery, subnet scan, or other camera probe will run.</p>
-              <div className="modal-actions"><button type="button" className="secondary-button" onClick={() => { setCredentialActivation(undefined); setActivationPassword(""); }} disabled={saving}>Cancel</button><button className="primary-button" disabled={saving || !activationUsername.trim() || !activationPassword}>{saving ? "Verifying this device…" : "Save & verify this device"}</button></div>
+              {credentialVerificationStatus && <div className="form-info-banner" role="status" aria-live="polite">{credentialVerificationStatus}</div>}
+              {credentialVerificationError && <div className="device-message error" role="alert"><AlertTriangle size={16} />{credentialVerificationError}</div>}
+              <div className="modal-actions"><button type="button" className="secondary-button" onClick={() => { setCredentialActivation(undefined); setActivationPassword(""); setCredentialVerificationStatus(undefined); setCredentialVerificationError(undefined); }} disabled={saving}>Cancel</button><button type="submit" className="primary-button" disabled={saving || !activationUsername.trim() || !activationPassword}>{saving ? "Verifying this device…" : "Save & verify this device"}</button></div>
             </form>
           </div>
         </div>

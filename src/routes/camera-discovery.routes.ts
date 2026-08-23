@@ -8,6 +8,7 @@ import {
   discoveryConnection,
   isRecorderBacked,
 } from "../services/camera-auto-provision.js";
+import { sealEdgeCommandPayload } from "../security/edge-command-envelope.js";
 
 const branchParams = z.object({ branchId: z.string().min(1) });
 const discoveryParams = z.object({ 
@@ -297,10 +298,6 @@ export async function registerCameraDiscoveryRoutes(
     if (!decision?.allowed) {
       return reply.code(403).send({ error: "forbidden", reason: decision?.reason ?? "no_matching_grant" });
     }
-    if (!pool) {
-      return reply.code(503).send({ error: "discovery_credentials_database_unavailable" });
-    }
-
     const discovered = (await store.listDiscoveredCameras(branchId))
       .find((item) => item.id === discoveryId);
     if (!discovered) {
@@ -324,41 +321,64 @@ export async function registerCameraDiscoveryRoutes(
       });
     }
 
-    const client = await pool.connect();
-    try {
-      await client.query("BEGIN");
-      await client.query(
-        `DELETE FROM camera_credentials
-         WHERE branch_id = $1 AND ip_address = $2 AND scope = 'host-specific'`,
-        [branchId, discovered.ipAddress],
-      );
-      await client.query(
-        `INSERT INTO camera_credentials
-           (branch_id, edge_agent_id, ip_address, username, password, scope)
-         VALUES ($1, $2, $3, $4, $5, 'host-specific')`,
-        [branchId, discovered.edgeAgentId, discovered.ipAddress, body.username, body.password],
-      );
-      await client.query(
-        `UPDATE camera_discoveries
-         SET credentials_required = false,
-             stream_verified = false,
-             rtsp_validated = false,
-             credentials_status = 'pending_verification'
-         WHERE id = $1 AND branch_node_id = $2`,
-        [discoveryId, branchId],
-      );
-      await client.query("COMMIT");
-    } catch (error) {
-      await client.query("ROLLBACK").catch(() => undefined);
-      throw error;
-    } finally {
-      client.release();
+    const commandPublicKey = await store.getEdgeAgentCommandPublicKey(discovered.edgeAgentId);
+    if (!commandPublicKey) {
+      return reply.code(409).send({
+        error: "gateway_secure_command_key_missing",
+        message: "Repair this legacy branch scanner once before sending device credentials.",
+      });
     }
 
-    const scan = await store.createEdgeScanJob(branchId, discovered.edgeAgentId, {
-      discoveryId: discovered.id,
-      ipAddress: discovered.ipAddress,
-      onvifPort: discovered.onvifPort,
+    // v0.1.10 still reads host-scoped RTSP credentials from this bootstrap
+    // table. Newer agents prefer their encrypted local vault, but retaining
+    // this compatibility write lets an already-installed scanner verify the
+    // device without requiring another download.
+    if (pool) {
+      const client = await pool.connect();
+      try {
+        await client.query("BEGIN");
+        await client.query(
+          `DELETE FROM camera_credentials
+           WHERE branch_id = $1 AND ip_address = $2 AND scope = 'host-specific'`,
+          [branchId, discovered.ipAddress],
+        );
+        await client.query(
+          `INSERT INTO camera_credentials
+             (branch_id, edge_agent_id, ip_address, username, password, scope)
+           VALUES ($1, $2, $3, $4, $5, 'host-specific')`,
+          [branchId, discovered.edgeAgentId, discovered.ipAddress, body.username, body.password],
+        );
+        await client.query(
+          `UPDATE camera_discoveries
+           SET stream_verified = false,
+               rtsp_validated = false,
+               credentials_status = 'pending_verification'
+           WHERE id = $1 AND branch_node_id = $2`,
+          [discoveryId, branchId],
+        );
+        await client.query("COMMIT");
+      } catch (error) {
+        await client.query("ROLLBACK").catch(() => undefined);
+        throw error;
+      } finally {
+        client.release();
+      }
+    }
+
+    const envelope = sealEdgeCommandPayload({
+      username: body.username,
+      password: body.password,
+      scope: { host: discovered.ipAddress },
+      issuedAt: new Date().toISOString(),
+    }, commandPublicKey);
+    const command = await store.createEdgeCommand({
+      edgeAgentId: discovered.edgeAgentId,
+      type: "update-credentials",
+      payload: {
+        envelope,
+        target: { discoveryId: discovered.id, ipAddress: discovered.ipAddress },
+      },
+      requestedBy: request.currentUser.id,
     });
 
     await store.writeAudit({
@@ -371,17 +391,18 @@ export async function registerCameraDiscoveryRoutes(
       details: {
         discoveryId,
         edgeAgentId: discovered.edgeAgentId,
+        commandId: command.id,
         credentialScope: "host-specific",
-        scanScope: "device",
+        delivery: "gateway-encrypted-command",
         targetIpAddress: discovered.ipAddress,
       },
     });
     return reply.code(202).send({
-      scanId: scan.id,
-      status: "queued",
+      commandId: command.id,
+      status: command.status,
       scope: "device",
       targetDiscoveryId: discovered.id,
-      message: "Credentials stored. The connected edge agent must complete the targeted verification before live streaming is enabled.",
+      message: "Credentials were encrypted for the connected edge agent. The dialog will remain open until this device has been verified.",
     });
   });
 

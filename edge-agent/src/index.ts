@@ -832,7 +832,10 @@ async function scanBranch(options: { persistStreamSecrets?: boolean; target?: De
         recorderMaxChannels: config.RECORDER_DISCOVERY_MAX_CHANNELS,
         username: "",
         password: "",
-        credentialsForHost: (host: string) => dbCredentialProvider.get(host).catch(() => undefined),
+        // Use the same resolver as ONVIF so credentials delivered through an
+        // encrypted update-credentials command are available to RTSP/DVR
+        // channel discovery immediately.
+        credentialsForHost: (host: string) => discoveryCredentials(host),
         hosts: knownHosts,
         excludeHosts: options.target
           ? (handledOnvifHosts.has(options.target.ipAddress) ? [options.target.ipAddress] : [])
