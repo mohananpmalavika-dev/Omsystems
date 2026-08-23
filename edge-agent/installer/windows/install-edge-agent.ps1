@@ -13,6 +13,21 @@ $SourceUninstaller = Join-Path $SourceDirectory "uninstall-edge-agent.ps1"
 $SourceDashboardLauncher = Join-Path $SourceDirectory "open-dashboard-scan.ps1"
 $SourceRuntimePackages = Join-Path $SourceDirectory "runtime-packages"
 
+# The self-extracting EXE launches this script in a separate elevated PowerShell
+# process. Preserve terminating errors there so an operator can read and act on
+# them instead of seeing a red flash followed by a closed console.
+trap {
+  $failureDetail = ([string]$_.Exception.Message) -replace '(?i)sgact_[A-Za-z0-9_-]+', 'sgact_[redacted]'
+  $failureLogPath = Join-Path $InstallDirectory "logs\edge-agent.log"
+  Write-Host ""
+  Write-Host "Sentinel Grid Edge Agent installation did not complete." -ForegroundColor Red
+  Write-Host $failureDetail -ForegroundColor Red
+  Write-Host "Log: $failureLogPath" -ForegroundColor Yellow
+  Write-Host "Download a fresh installer only when the message says the activation is invalid or expired." -ForegroundColor Yellow
+  try { [void](Read-Host "Press Enter to close this installer") } catch { }
+  exit 1
+}
+
 function Assert-Administrator {
   $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
   $principal = New-Object Security.Principal.WindowsPrincipal($identity)
@@ -222,9 +237,21 @@ if (Test-Path -LiteralPath $dashboardLauncher -PathType Leaf) {
 $connectivityHealthy = $true
 if (-not $SkipConnectivityCheck) {
   Write-Host "Authenticating with Sentinel Grid..." -ForegroundColor Cyan
-  & $Executable --config $ConfigPath --diagnose
-  if ($LASTEXITCODE -ne 0) {
+  $diagnosticOutput = @(& $Executable --config $ConfigPath --diagnose 2>&1)
+  $diagnosticExitCode = $LASTEXITCODE
+  if ($diagnosticExitCode -ne 0) {
     $connectivityHealthy = $false
+    $diagnosticDetail = ($diagnosticOutput | ForEach-Object { $_.ToString() }) -join [Environment]::NewLine
+    $terminalDiagnosticFailure = $null
+    if ($diagnosticDetail -match "activation_invalid_or_expired") {
+      $terminalDiagnosticFailure = "The one-time gateway activation is invalid, expired, or has already been used. Return to Sentinel Grid, create a new activation, and download a fresh installer."
+    } elseif ($diagnosticDetail -match "device_already_enrolled") {
+      $terminalDiagnosticFailure = "This computer is already enrolled with a different gateway identity. Use the Repair installer for that scanner, or remove its existing Sentinel Grid Edge Agent installation before enrolling it again."
+    }
+    if (-not [string]::IsNullOrWhiteSpace($diagnosticDetail)) {
+      $safeDiagnosticDetail = $diagnosticDetail -replace '(?i)sgact_[A-Za-z0-9_-]+', 'sgact_[redacted]'
+      Write-Warning "Initial Sentinel Grid authentication was not completed:`n$safeDiagnosticDetail"
+    }
     # Activation is transactional. A reused or expired Repair package must not
     # strand a previously working scanner without an identity. A successful
     # activation always writes both new files before --diagnose returns.
@@ -243,7 +270,8 @@ if (-not $SkipConnectivityCheck) {
       }
       Write-Warning "The new activation was not accepted. The previous encrypted scanner identity was restored. Download a fresh Repair package if the scanner remains offline."
     }
-    Write-Warning "Sentinel Grid is temporarily unreachable. The scanner is installed and its background task will keep retrying automatically."
+    if ($terminalDiagnosticFailure) { throw $terminalDiagnosticFailure }
+    Write-Warning "Sentinel Grid is temporarily unreachable. The scanner is installed and its background task will keep retrying automatically. Review $LogDirectory\edge-agent.log if it does not appear online after connectivity returns."
   }
 }
 

@@ -69,4 +69,17 @@ describe("Windows scanner installer resilience", () => {
     expect(source).toContain("-AllowStartIfOnBatteries");
     expect(source).toContain("-DontStopIfGoingOnBatteries");
   });
+
+  it("keeps activation and installation failures visible without exposing the one-time code", async () => {
+    const source = await readFile(
+      "edge-agent/installer/windows/install-edge-agent.ps1",
+      "utf8",
+    );
+
+    expect(source).toContain("Press Enter to close this installer");
+    expect(source).toContain("sgact_[redacted]");
+    expect(source).toContain("activation_invalid_or_expired");
+    expect(source).toContain("device_already_enrolled");
+    expect(source).toContain("background task will keep retrying automatically");
+  });
 });
