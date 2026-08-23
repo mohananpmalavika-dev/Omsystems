@@ -28,6 +28,23 @@ export function onvifServiceCandidates(endpoint: DiscoveredOnvifEndpoint) {
   return [...new Set(candidates)].slice(0, 8);
 }
 
+/**
+ * WS-Discovery advertises a device role before ONVIF authentication. Keep the
+ * result deliberately conservative: storage/recorder terms identify a
+ * recorder, while a transmitter is a camera. Other devices remain unknown
+ * until their authenticated device information is available.
+ */
+export function onvifEndpointRole(endpoint: DiscoveredOnvifEndpoint): "camera" | "recorder" | "unknown" {
+  const evidence = [...endpoint.types, ...endpoint.scopes].join(" ");
+  if (/\b(?:network[_-]?video[_-]?(?:storage|recorder)|digital[_-]?video[_-]?recorder|\b(?:dvr|nvr|xvr|uvr)\b)\b/i.test(evidence)) {
+    return "recorder";
+  }
+  if (/\bnetwork[_-]?video[_-]?(?:transmitter|encoder)|\bvideo[_-]?encoder\b/i.test(evidence)) {
+    return "camera";
+  }
+  return "unknown";
+}
+
 function hostForUrl(host: string) {
   return host.includes(":") && !host.startsWith("[") ? `[${host}]` : host;
 }

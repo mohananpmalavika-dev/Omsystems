@@ -2,9 +2,60 @@ import { describe, expect, it } from "vitest";
 import { buildApp } from "../src/app.js";
 import { MemoryStore } from "../src/store.js";
 
+const testTenantId = "00000000-0000-4000-8000-000000000001";
+
+function addTestBranch(store: MemoryStore) {
+  store.nodes.set("branch-blr-001", {
+    id: "branch-blr-001",
+    tenantId: testTenantId,
+    type: "branch",
+    name: "Discovery test branch",
+    path: ["branch-blr-001"],
+  } as any);
+}
+
 describe("enhanced device discovery", () => {
+  it("keeps authentication-required discoveries visible for credential entry", async () => {
+    const store = new MemoryStore();
+    addTestBranch(store);
+    const app = await buildApp({ logger: false, store });
+    const headers = { "x-user-id": "user-global-admin" };
+    const agent = await store.registerEdgeAgent("branch-blr-001", "gateway-test", "0.1.0");
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/branches/branch-blr-001/cameras/discovered",
+      headers,
+      payload: {
+        edgeAgentId: agent.id,
+        discoveryMethod: "onvif-ws-discovery",
+        vendor: "cp-plus",
+        manufacturer: "CP PLUS",
+        model: "Network DVR",
+        ipAddress: "192.168.10.26",
+        onvifPort: 80,
+        rtspPort: 554,
+        credentialsRequired: true,
+        streamVerified: false,
+        rtspValidated: false,
+        profiles: [{ name: "unverified", codec: "unknown", width: 1, height: 1 }],
+        capabilities: { ptz: false, audio: false, events: false },
+      },
+    });
+
+    expect(response.statusCode).toBe(202);
+    const [discovery] = await store.listDiscoveredCameras("branch-blr-001");
+    expect(discovery).toMatchObject({
+      ipAddress: "192.168.10.26",
+      credentialsRequired: true,
+      streamVerified: false,
+    });
+    await app.close();
+  });
+
   it("preserves ONVIF service coverage and capability test results", async () => {
     const store = new MemoryStore();
+    addTestBranch(store);
     const app = await buildApp({ logger: false, store });
     const headers = { "x-user-id": "user-global-admin" };
     const agent = await store.registerEdgeAgent("branch-blr-001", "gateway-test", "0.1.0");
@@ -67,6 +118,7 @@ describe("enhanced device discovery", () => {
 
   it("creates a device scan and exposes discovered results through scan endpoints", async () => {
     const store = new MemoryStore();
+    addTestBranch(store);
     const app = await buildApp({ logger: false, store });
     const headers = { "x-user-id": "user-global-admin" };
     const agent = await store.registerEdgeAgent("branch-blr-001", "gateway-test", "0.1.0");
@@ -128,6 +180,7 @@ describe("enhanced device discovery", () => {
 
   it("deduplicates discoveries using serial number and other identifiers", async () => {
     const store = new MemoryStore();
+    addTestBranch(store);
     const app = await buildApp({ logger: false, store });
     const headers = { "x-user-id": "user-global-admin" };
     const agent = await store.registerEdgeAgent("branch-blr-001", "gateway-test", "0.1.0");

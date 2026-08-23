@@ -517,7 +517,7 @@ export function DeviceManager() {
         const liveDiscovered = await cameraInventoryApi.listDiscovered(selectedBranch);
         if (liveDiscovered?.data?.length > 0) {
           setDiscoveredCameras(liveDiscovered.data);
-          if (Date.now() - startTime > 12_000) {
+          if (job.scope !== "device" && Date.now() - startTime > 12_000) {
             break;
           }
         }
@@ -719,14 +719,29 @@ export function DeviceManager() {
       setActivationPassword("");
       const targetId = credentialActivation.id;
       const targetName = credentialActivation.displayName || credentialActivation.model || "IP Camera";
+      const targetAgentId = credentialActivation.edgeAgentId;
       setCredentialActivation(undefined);
-      
+
+      // Saving a password only queues a single-device probe. Do not approve
+      // or claim a live stream until the agent has returned fresh evidence.
+      await completeCameraScan(activation.scanId, targetAgentId);
+      const refreshed = await cameraInventoryApi.listDiscovered(selectedBranch);
+      const verified = (refreshed.data ?? []).find((item: any) => item.id === targetId);
+      setDiscoveredCameras(refreshed.data ?? []);
+      updateDiscoveryReviewState(refreshed.data ?? []);
+      if (!verified?.streamVerified || verified.credentialsRequired) {
+        if (verified?.credentialsRequired) setCredentialActivation(verified);
+        setNotice(`Credentials were saved for ${targetName}, but the device has not yet returned a verified stream. Check the login and device stream settings, then retry.`);
+        return;
+      }
+
+      const verifiedName = verified.displayName || verified.model || targetName;
       await cameraInventoryApi.approveDiscovery(selectedBranch, targetId, {
-        name: targetName,
+        name: verifiedName,
+        protocol: verified.onvifSupport ? "onvif-t" : "rtsp",
       });
-      
       markDiscoveryReviewStatus(targetId, "approved");
-      setNotice(`Credentials verified and ${targetName} was approved.`);
+      setNotice(`Credentials verified and ${verifiedName} was approved.`);
       await refreshBranch(selectedBranch);
     } catch (reason) {
       if (isAgentUpdateRequired(reason)) {

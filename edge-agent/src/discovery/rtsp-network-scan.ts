@@ -29,6 +29,8 @@ export interface RtspScanOptions {
   password: string;
   credentialsForHost?: (host: string) => Promise<{ username: string; password: string } | undefined>;
   excludeHosts?: string[];
+  /** Targeted verification must never expand into a subnet scan. */
+  restrictToHosts?: boolean;
   recorderMaxChannels?: number;
 }
 
@@ -42,6 +44,7 @@ export interface RtspRecorderChannel {
 export interface UnverifiedRtspEndpoint {
   port: number;
   credentialsRequired: boolean;
+  credentialsRejected?: boolean;
   recorder?: HttpRecorderFingerprint;
 }
 
@@ -233,8 +236,10 @@ export async function discoverRtspDevices(
 ): Promise<number> {
   const configuredCidrs = options.cidrs?.filter(Boolean).map((cidr) => cidr.trim())
     ?? (options.cidr && options.cidr.trim() ? [options.cidr.trim()] : []);
-  const cidrList = [...new Set([...inferLocalCidrs(), ...configuredCidrs])];
-  if (cidrList.length === 0) {
+  const cidrList = options.restrictToHosts
+    ? []
+    : [...new Set([...inferLocalCidrs(), ...configuredCidrs])];
+  if (cidrList.length === 0 && (options.hosts?.length ?? 0) === 0) {
     logger.info("RTSP scan: no local network addresses found to scan");
     return 0;
   }
@@ -282,10 +287,12 @@ export async function discoverRtspDevices(
   }
 
   // 2. Automatically detect and exclude default gateway/router IP (e.g. Tenda, TP-Link router)
-  const detectedGateways = await detectDefaultGatewayIps();
-  for (const gw of detectedGateways) {
-    excludedHosts.add(gw);
-    logger.info("Excluding default network gateway/router from camera scan", { gateway: gw });
+  if (!options.restrictToHosts) {
+    const detectedGateways = await detectDefaultGatewayIps();
+    for (const gw of detectedGateways) {
+      excludedHosts.add(gw);
+      logger.info("Excluding default network gateway/router from camera scan", { gateway: gw });
+    }
   }
 
   for (const host of options.hosts ?? []) candidates.add(host);
@@ -313,6 +320,7 @@ export async function discoverRtspDevices(
 
     try {
       let unverifiedEndpoint: UnverifiedRtspEndpoint | undefined;
+      let recorderFingerprint: HttpRecorderFingerprint | undefined;
       const storedCredentials = await options.credentialsForHost?.(ip);
       const hostCreds = storedCredentials ? [storedCredentials, ...zeroTouchCreds] : zeroTouchCreds;
 
@@ -327,7 +335,7 @@ export async function discoverRtspDevices(
           return;
         }
 
-        const recorderFingerprint = await fingerprintHttpRecorder(ip, timeoutMs);
+        recorderFingerprint = await fingerprintHttpRecorder(ip, timeoutMs, globalThis.fetch, port);
         if (recorderFingerprint) {
           for (const cred of hostCreds) {
             const recorder = await discoverRtspRecorderChannels({
@@ -351,7 +359,14 @@ export async function discoverRtspDevices(
       for (const port of rtspStreamingPorts) {
         const reachable = await tryTcpConnect(ip, port, Math.max(500, Math.min(timeoutMs, 2500)));
         if (!reachable) continue;
-        unverifiedEndpoint ??= { port, credentialsRequired: false };
+        // A reachable RTSP service is real device evidence. If the operator
+        // has not supplied credentials, retain it as a visible discovery and
+        // ask for a host-specific login rather than dropping it.
+        unverifiedEndpoint ??= {
+          port,
+          credentialsRequired: hostCreds.length === 0,
+          ...(recorderFingerprint ? { recorder: recorderFingerprint } : {}),
+        };
 
         // Try multi-channel DVR / IP Camera candidate paths with zero-touch credentials
         for (const cred of hostCreds) {
@@ -372,6 +387,8 @@ export async function discoverRtspDevices(
               unverifiedEndpoint = {
                 ...(unverifiedEndpoint ?? { port }),
                 credentialsRequired: true,
+                credentialsRejected: true,
+                ...(recorderFingerprint ? { recorder: recorderFingerprint } : {}),
               };
             }
 
@@ -577,7 +594,11 @@ export function buildUnverifiedRtspDiscoveryPayload(input: {
     duplicateStatus: "unique",
     compatibilityStatus: "review-required",
     statusReason: input.endpoint.credentialsRequired
-      ? (recorder ? "recorder_credentials_required" : "rtsp_credentials_rejected")
+      ? (recorder
+        ? "recorder_credentials_required"
+        : input.endpoint.credentialsRejected
+          ? "rtsp_credentials_rejected"
+          : "rtsp_credentials_required")
       : "rtsp_stream_unverified",
     profiles: [{ name: "unverified", codec: "unknown", width: 1, height: 1 }],
     capabilities: { ptz: false, audio: false, events: false },

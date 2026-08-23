@@ -31,6 +31,16 @@ describe("automatic RTSP recorder discovery", () => {
     await expect(fingerprintHttpRecorder("192.168.29.43", 1_000, fetchImpl)).resolves.toBeUndefined();
   });
 
+  it("uses the discovered web port instead of assuming port 80", async () => {
+    const fetchImpl = vi.fn(async () => new Response(
+      "<html><head><title>Network Video Recorder</title></head></html>",
+      { status: 200 },
+    )) as unknown as typeof fetch;
+
+    await fingerprintHttpRecorder("192.168.29.171", 1_000, fetchImpl, 8080);
+    expect(fetchImpl).toHaveBeenCalledWith("http://192.168.29.171:8080/", expect.objectContaining({ method: "GET" }));
+  });
+
   it("enumerates every available CP PLUS DVR channel using the substream path", async () => {
     const probe = vi.fn(async (uri: string) => {
       const channel = Number(new URL(uri).searchParams.get("channel"));

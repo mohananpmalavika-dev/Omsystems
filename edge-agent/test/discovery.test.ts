@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { loadEdgeConfig } from "../src/config.js";
 import { parseProbeMatch } from "../src/discovery/onvif-discovery.js";
+import { onvifEndpointRole } from "../src/discovery/onvif-service-candidates.js";
 import {
   attachCredentials,
   redactStreamUri,
@@ -49,6 +50,23 @@ describe("ONVIF edge utilities", () => {
       xaddrs: ["http://192.168.10.20/onvif/device_service"],
       types: ["dn:NetworkVideoStorage"],
     });
+  });
+
+  it("uses ONVIF discovery evidence to distinguish recorders before login", () => {
+    expect(onvifEndpointRole({
+      endpointReference: null,
+      remoteAddress: "192.168.10.20",
+      xaddrs: ["http://192.168.10.20/onvif/device_service"],
+      scopes: [],
+      types: ["dn:NetworkVideoStorage"],
+    })).toBe("recorder");
+    expect(onvifEndpointRole({
+      endpointReference: null,
+      remoteAddress: "192.168.10.21",
+      xaddrs: ["http://192.168.10.21/onvif/device_service"],
+      scopes: [],
+      types: ["dn:NetworkVideoTransmitter"],
+    })).toBe("camera");
   });
 
   it("adds credentials only for the local probe and can redact them", () => {

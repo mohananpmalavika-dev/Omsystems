@@ -3,6 +3,17 @@ import { buildApp } from "../src/app.js";
 import { MemoryStore } from "../src/store.js";
 
 const headers = { "x-user-id": "user-global-admin" };
+const testTenantId = "00000000-0000-4000-8000-000000000001";
+
+function addTestBranch(store: MemoryStore) {
+  store.nodes.set("branch-blr-001", {
+    id: "branch-blr-001",
+    tenantId: testTenantId,
+    type: "branch",
+    name: "Credential verification test branch",
+    path: ["branch-blr-001"],
+  } as any);
+}
 
 function credentialPool() {
   const client = {
@@ -40,12 +51,12 @@ describe("targeted credential verification", () => {
   it("queues and returns only a single-device scan job", async () => {
     const store = new MemoryStore() as MemoryStore & { pool: ReturnType<typeof credentialPool> };
     store.pool = credentialPool();
+    addTestBranch(store);
+    const app = await buildApp({ logger: false, store });
     const agent = await store.registerEdgeAgent("branch-blr-001", "Targeted scanner", "0.1.7");
     await store.heartbeatEdgeAgent(agent.id, "0.1.7");
     const selected = await addDiscovery(store, agent.id, "192.168.29.171");
     await addDiscovery(store, agent.id, "192.168.29.46");
-    const app = await buildApp({ logger: false, store });
-
     const activated = await app.inject({
       method: "POST",
       url: `/v1/branches/branch-blr-001/cameras/discovered/${selected.id}/activate`,
@@ -58,6 +69,14 @@ describe("targeted credential verification", () => {
       scope: "device",
       targetDiscoveryId: selected.id,
     });
+    expect(store.pool.client.query).toHaveBeenCalledWith(
+      expect.stringContaining("credentials_status = 'pending_verification'"),
+      [selected.id, "branch-blr-001"],
+    );
+    expect(store.pool.client.query).not.toHaveBeenCalledWith(
+      expect.stringContaining("stream_verified = true"),
+      expect.anything(),
+    );
     const claimed = await store.claimEdgeScanJob(agent.id);
     expect(claimed).toMatchObject({
       scope: "device",
@@ -82,11 +101,11 @@ describe("targeted credential verification", () => {
   it("fails safely instead of letting an older scanner run a branch scan", async () => {
     const store = new MemoryStore() as MemoryStore & { pool: ReturnType<typeof credentialPool> };
     store.pool = credentialPool();
+    addTestBranch(store);
+    const app = await buildApp({ logger: false, store });
     const agent = await store.registerEdgeAgent("branch-blr-001", "Older scanner", "0.1.6");
     await store.heartbeatEdgeAgent(agent.id, "0.1.6");
     const selected = await addDiscovery(store, agent.id, "192.168.29.171");
-    const app = await buildApp({ logger: false, store });
-
     const activated = await app.inject({
       method: "POST",
       url: `/v1/branches/branch-blr-001/cameras/discovered/${selected.id}/activate`,

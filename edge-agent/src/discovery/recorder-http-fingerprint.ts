@@ -16,11 +16,12 @@ export async function fingerprintHttpRecorder(
   host: string,
   timeoutMs: number,
   fetchImpl: typeof fetch = fetch,
+  port = 80,
 ): Promise<HttpRecorderFingerprint | undefined> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), Math.max(500, Math.min(timeoutMs, 5_000)));
   try {
-    const response = await fetchImpl(`http://${hostForUrl(host)}/`, {
+    const response = await fetchImpl(`http://${hostForUrl(host)}${port === 80 ? "" : `:${port}`}/`, {
       method: "GET",
       redirect: "manual",
       signal: controller.signal,

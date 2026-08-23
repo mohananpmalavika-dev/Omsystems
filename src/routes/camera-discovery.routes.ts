@@ -154,6 +154,10 @@ export async function registerCameraDiscoveryRoutes(
         recorderId: item.recorderId || (item.sourceType === "analog-dvr-channel" ? `recorder-${(item.ipAddress || item.ip || "dvr").replace(/\./g, "-")}` : undefined),
         recorderChannel: item.recorderChannel ? Number(item.recorderChannel) : (item.channel ? Number(item.channel) : undefined),
         recorderSerialNumber: item.recorderSerialNumber,
+        // Keep the edge agent's authentication evidence intact. The dashboard
+        // uses this flag to offer a host-specific credential prompt instead of
+        // hiding an otherwise reachable device.
+        credentialsRequired: item.credentialsRequired === undefined ? undefined : Boolean(item.credentialsRequired),
         streamVerified: item.streamVerified === undefined ? undefined : Boolean(item.streamVerified),
         rtspValidated: item.rtspValidated === undefined ? undefined : Boolean(item.rtspValidated),
         ptzCapability: item.ptzCapability !== undefined ? Boolean(item.ptzCapability) : Boolean(item.capabilities?.ptz),
@@ -335,7 +339,10 @@ export async function registerCameraDiscoveryRoutes(
       );
       await client.query(
         `UPDATE discovered_cameras
-         SET credentials_required = false, stream_verified = true, credentials_status = 'verified'
+         SET credentials_required = false,
+             stream_verified = false,
+             rtsp_validated = false,
+             credentials_status = 'pending_verification'
          WHERE id = $1 AND branch_node_id = $2`,
         [discoveryId, branchId],
       );
@@ -368,7 +375,7 @@ export async function registerCameraDiscoveryRoutes(
         targetIpAddress: discovered.ipAddress,
       },
     });
-    return reply.code(200).send({
+    return reply.code(202).send({
       scanId: scan.id,
       status: "queued",
       scope: "device",

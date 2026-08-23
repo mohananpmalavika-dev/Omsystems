@@ -1,7 +1,8 @@
 import { loadEdgeConfig } from "./config.js";
 import { discoverOnvifDevices, type DiscoveredOnvifEndpoint } from "./discovery/onvif-discovery.js";
-import { onvifServiceCandidates } from "./discovery/onvif-service-candidates.js";
+import { onvifEndpointRole, onvifServiceCandidates } from "./discovery/onvif-service-candidates.js";
 import { createDeviceFingerprint } from "./discovery/device-fingerprint.js";
+import { fingerprintHttpRecorder } from "./discovery/recorder-http-fingerprint.js";
 import { discoverRtspDevices } from "./discovery/rtsp-network-scan.js";
 import { targetFromScanJob, targetedOnvifEndpoint, type DeviceScanTarget } from "./discovery/targeted-scan.js";
 import { attachCredentials, OnvifClient } from "./devices/onvif-client.js";
@@ -346,6 +347,7 @@ async function scanBranch(options: { persistStreamSecrets?: boolean; target?: De
     ? `Probing only device ${options.target.ipAddress}`
     : `Discovered ${endpoints.length} ONVIF endpoint(s)`);
   let submitted = 0;
+  const handledOnvifHosts = new Set<string>();
 
   for (const endpoint of endpoints) {
     const serviceUrls = onvifServiceCandidates(endpoint);
@@ -370,6 +372,7 @@ async function scanBranch(options: { persistStreamSecrets?: boolean; target?: De
       if (!client || !device) {
         throw new Error(`All ONVIF service candidates failed: ${inspectionFailures.join(" | ").slice(0, 1500)}`);
       }
+      handledOnvifHosts.add(endpoint.remoteAddress);
       const vendor = normalizeVendor(device.manufacturer);
       const discoveryKinds = [...endpoint.scopes, ...endpoint.types];
       const baseDiscoveryLayers: DiscoveryLayers = [
@@ -686,6 +689,16 @@ async function scanBranch(options: { persistStreamSecrets?: boolean; target?: De
       logger.error(`Failed to inspect ${endpoint.remoteAddress}`, { error: message });
       try {
         const parsedServiceUrl = new URL(serviceUrl);
+        const recorderFingerprint = parsedServiceUrl.protocol === "http:"
+          ? await fingerprintHttpRecorder(
+            endpoint.remoteAddress,
+            config.ONVIF_TIMEOUT_MS,
+            globalThis.fetch,
+            Number(parsedServiceUrl.port || 80),
+          )
+          : undefined;
+        const endpointRole = onvifEndpointRole(endpoint);
+        const isRecorder = Boolean(recorderFingerprint) || endpointRole === "recorder";
         const vendorFamily = identifyVendorFamily(...endpoint.scopes, ...endpoint.types);
         const vendorFallback = await probeVendorStream({
           host: endpoint.remoteAddress,
@@ -694,27 +707,46 @@ async function scanBranch(options: { persistStreamSecrets?: boolean; target?: De
           probe: (uri) => probeRtsp(uri, config.FFPROBE_PATH, config.ONVIF_TIMEOUT_MS),
         });
         const streamVerified = Boolean(vendorFallback.candidate && vendorFallback.probe.reachable);
+        const credentialsRequired = isCredentialFailure(message) || isCredentialFailure(vendorFallback.probe?.error);
         const deviceFingerprint = createDeviceFingerprint({ onvifEndpointReference: endpoint.endpointReference });
+        const detectedVendor = recorderFingerprint?.vendor ?? vendorFamily;
+        const submissionVendor = detectedVendor === "hikvision"
+          ? "hikvision"
+          : detectedVendor === "cp-plus"
+            ? "cp-plus"
+            : "other";
+        const manufacturer = recorderFingerprint?.manufacturer
+          ?? (isRecorder ? "ONVIF recorder" : vendorFamily === "generic" ? "ONVIF/RTSP" : vendorFamily);
+        const model = recorderFingerprint?.model
+          ?? (isRecorder ? "ONVIF network video recorder" : `Camera ${endpoint.remoteAddress}`);
         const discovery = await control.submitDiscovery(branchId, {
           edgeAgentId: agentId,
           discoveryMethod: "onvif-ws-discovery",
-          vendor: vendorFamily === "hikvision" ? "hikvision" : vendorFamily === "cp-plus" ? "cp-plus" : "other",
-          manufacturer: vendorFamily === "generic" ? "ONVIF/RTSP" : vendorFamily,
-          model: `Camera ${endpoint.remoteAddress}`,
-          displayName: `Camera ${endpoint.remoteAddress}`,
+          vendor: submissionVendor,
+          manufacturer,
+          model,
+          displayName: recorderFingerprint
+            ? `${recorderFingerprint.manufacturer} recorder ${endpoint.remoteAddress}`
+            : isRecorder
+              ? `Discovered recorder ${endpoint.remoteAddress}`
+              : `Camera ${endpoint.remoteAddress}`,
           ipAddress: endpoint.remoteAddress,
           ...(endpoint.endpointReference ? { onvifEndpointReference: endpoint.endpointReference } : {}),
           ...(deviceFingerprint ? { hardwareId: deviceFingerprint } : {}),
           onvifPort: Number(parsedServiceUrl.port || (parsedServiceUrl.protocol === "https:" ? 443 : 80)),
           rtspPort: 554,
           onvifSupport: true,
-          credentialsRequired: isCredentialFailure(message) || isCredentialFailure(vendorFallback.probe?.error),
+          credentialsRequired,
           streamVerified,
           rtspValidated: streamVerified,
           compatibility: streamVerified ? "compatible" : "review-required",
           duplicateStatus: "unique",
           compatibilityStatus: streamVerified ? "compatible" : "review-required",
-          statusReason: (streamVerified ? "onvif_failed_vendor_rtsp_verified" : message).slice(0, 200),
+          statusReason: (streamVerified
+            ? "onvif_failed_vendor_rtsp_verified"
+            : isRecorder && credentialsRequired
+              ? "recorder_credentials_required"
+              : message).slice(0, 200),
           profiles: [{
             name: vendorFallback.candidate ? `Vendor ${vendorFallback.candidate.role}` : "unverified",
             codec: discoveryCodec(vendorFallback.probe?.codec),
@@ -723,7 +755,7 @@ async function scanBranch(options: { persistStreamSecrets?: boolean; target?: De
           }],
           capabilities: { ptz: false, audio: false, events: false },
           discoveryLayers: [
-            { layer: "network-discovery", status: "passed", detail: "Camera host discovered on the branch network" },
+            { layer: "network-discovery", status: "passed", detail: `${isRecorder ? "Recorder" : "Camera"} host discovered on the branch network` },
             { layer: "onvif-discovery", status: "passed", detail: `${serviceUrls.length} ONVIF service candidate(s) were identified` },
             { layer: "onvif-authentication", status: "failed", detail: message.slice(0, 500) },
             { layer: "get-capabilities", status: "skipped", detail: "Skipped because ONVIF authentication did not complete" },
@@ -742,38 +774,43 @@ async function scanBranch(options: { persistStreamSecrets?: boolean; target?: De
             {
               layer: "fingerprint",
               status: deviceFingerprint ? "passed" : "failed",
-              detail: deviceFingerprint ? "Stable ONVIF UUID fingerprint generated" : "No stable hardware identity was advertised",
+              detail: recorderFingerprint
+                ? `${recorderFingerprint.manufacturer} recorder web application identified`
+                : deviceFingerprint
+                  ? "Stable ONVIF UUID fingerprint generated"
+                  : "No stable hardware identity was advertised",
             },
           ],
         });
         if (persistStreamSecrets && streamVerified && vendorFallback.candidate) {
           await secrets.set(`edge://${agentId}/${discovery.id}`, vendorFallback.candidate.uri);
         }
+        if (streamVerified) handledOnvifHosts.add(endpoint.remoteAddress);
         submitted += 1;
       } catch (submissionError) {
         logger.error(`Failed to report ${endpoint.remoteAddress}`, { error: submissionError instanceof Error ? submissionError.message : String(submissionError) });
       }
     }
   }
-  if (config.RTSP_SCAN_ENABLED && !options.target) {
+  if (config.RTSP_SCAN_ENABLED) {
     try {
       const ports = parseDiscoveryPorts(config.RTSP_SCAN_PORTS, "RTSP_SCAN_PORTS");
       const recorderHttpPorts = parseDiscoveryPorts(config.RECORDER_HTTP_PORTS, "RECORDER_HTTP_PORTS");
       const paths = String(config.RTSP_SCAN_PATHS).split(",").map((p) => p.trim()).filter(Boolean);
       const cidr = config.RTSP_SCAN_CIDR ? String(config.RTSP_SCAN_CIDR).trim() : undefined;
-      const vpnScanNetworks = cidr ? [] : await dbCredentialProvider.getVpnScanNetworks().catch((error) => {
+      const vpnScanNetworks = options.target || cidr ? [] : await dbCredentialProvider.getVpnScanNetworks().catch((error) => {
         logger.warn("Unable to load VPN scan networks from the control plane", {
           error: error instanceof Error ? error.message : String(error),
         });
         return [];
       });
-      const knownHosts = await dbCredentialProvider.getKnownHosts().catch((error) => {
+      const knownHosts = options.target ? [options.target.ipAddress] : await dbCredentialProvider.getKnownHosts().catch((error) => {
         logger.warn("Unable to load saved camera addresses from the control plane", {
           error: error instanceof Error ? error.message : String(error),
         });
         return [];
       });
-      const options = {
+      const rtspOptions = {
         ports,
         recorderHttpPorts,
         paths,
@@ -784,14 +821,17 @@ async function scanBranch(options: { persistStreamSecrets?: boolean; target?: De
         password: "",
         credentialsForHost: (host: string) => dbCredentialProvider.get(host).catch(() => undefined),
         hosts: knownHosts,
-        excludeHosts: endpoints.map((endpoint) => endpoint.remoteAddress),
+        excludeHosts: options.target
+          ? (handledOnvifHosts.has(options.target.ipAddress) ? [options.target.ipAddress] : [])
+          : endpoints.map((endpoint) => endpoint.remoteAddress),
+        restrictToHosts: Boolean(options.target),
       } satisfies Omit<import("./discovery/rtsp-network-scan.js").RtspScanOptions, "cidr" | "cidrs">;
       if (cidr) {
-        (options as import("./discovery/rtsp-network-scan.js").RtspScanOptions).cidr = cidr;
+        (rtspOptions as import("./discovery/rtsp-network-scan.js").RtspScanOptions).cidr = cidr;
       } else if (vpnScanNetworks.length > 0) {
-        (options as import("./discovery/rtsp-network-scan.js").RtspScanOptions).cidrs = vpnScanNetworks;
+        (rtspOptions as import("./discovery/rtsp-network-scan.js").RtspScanOptions).cidrs = vpnScanNetworks;
       }
-      const added = await discoverRtspDevices(branchId, agentId, options as import("./discovery/rtsp-network-scan.js").RtspScanOptions, control, secrets, persistStreamSecrets);
+      const added = await discoverRtspDevices(branchId, agentId, rtspOptions as import("./discovery/rtsp-network-scan.js").RtspScanOptions, control, secrets, persistStreamSecrets);
       submitted += added;
       logger.info("RTSP network scan completed", { discovered: added });
     } catch (error) {
