@@ -443,9 +443,7 @@ export class EdgeAgentRepository {
       // A decoded stream is authoritative evidence that the supplied login
       // worked. Never persist the contradictory "verified + login required"
       // state even when an older edge agent reports an earlier ONVIF 401.
-      const credentialsRequired = input.streamVerified === true
-        ? false
-        : input.credentialsRequired ?? null;
+      const credentialsRequired = normalizeDiscoveryCredentialsRequired(input);
       const result = await client.query<{
         id: string;
         discovered_at: Date;
@@ -676,4 +674,11 @@ function normalizeCameraDiscoveryMethod(method?: string): string {
   if (!method) return "edge-agent-reported-inventory";
   if (method === "rtsp-network-scan") return "configured-ip-range";
   return allowed.has(method) ? method : "edge-agent-reported-inventory";
+}
+
+export function normalizeDiscoveryCredentialsRequired(input: {
+  streamVerified?: boolean;
+  credentialsRequired?: boolean;
+}) {
+  return input.streamVerified === true ? false : input.credentialsRequired ?? null;
 }

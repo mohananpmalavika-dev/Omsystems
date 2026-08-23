@@ -39,6 +39,7 @@ const activateDiscoveryBody = z.object({
 
 const targetedVerificationMinimumAgentVersion = "0.1.7";
 const encryptedRtspVaultMinimumAgentVersion = "0.1.11";
+const recorderChannelVerificationMinimumAgentVersion = "0.1.12";
 
 /**
  * Lists pending ONVIF discoveries. Submission, approval, and camera inventory
@@ -319,6 +320,14 @@ export async function registerCameraDiscoveryRoutes(
         error: "edge_agent_update_required",
         minimumVersion: targetedVerificationMinimumAgentVersion,
         message: "Repair the Sentinel Grid Scanner before verifying credentials. Older scanners cannot guarantee a single-device probe.",
+      });
+    }
+    if (looksLikeRecorderDiscovery(discovered) &&
+        !supportsAgentVersion(agent.version, recorderChannelVerificationMinimumAgentVersion)) {
+      return reply.code(409).send({
+        error: "edge_agent_update_required",
+        minimumVersion: recorderChannelVerificationMinimumAgentVersion,
+        message: "Repair the Sentinel Grid Scanner before verifying this recorder so every DVR/NVR channel is enumerated.",
       });
     }
 
@@ -645,6 +654,23 @@ async function probeNetworkCamera(ip: string, port = 554, user = "admin", pass =
 
 function supportsTargetedVerification(version: string) {
   return supportsAgentVersion(version, targetedVerificationMinimumAgentVersion);
+}
+
+function looksLikeRecorderDiscovery(discovered: {
+  recorderId?: string;
+  sourceType?: string;
+  manufacturer?: string;
+  model?: string;
+  displayName?: string;
+}) {
+  return Boolean(discovered.recorderId) ||
+    discovered.sourceType === "analog-dvr-channel" ||
+    discovered.sourceType === "nvr-channel" ||
+    /\b(?:dvr|nvr|xvr|recorder)\b/i.test([
+      discovered.manufacturer,
+      discovered.model,
+      discovered.displayName,
+    ].filter(Boolean).join(" "));
 }
 
 function supportsAgentVersion(version: string, minimumVersion: string) {

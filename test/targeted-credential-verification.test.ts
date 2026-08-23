@@ -28,7 +28,12 @@ function credentialPool() {
   };
 }
 
-async function addDiscovery(store: MemoryStore, edgeAgentId: string, ipAddress: string) {
+async function addDiscovery(
+  store: MemoryStore,
+  edgeAgentId: string,
+  ipAddress: string,
+  overrides: Record<string, unknown> = {},
+) {
   return store.createDiscovery("branch-blr-001", {
     edgeAgentId,
     discoveryMethod: "onvif-ws-discovery",
@@ -45,6 +50,7 @@ async function addDiscovery(store: MemoryStore, edgeAgentId: string, ipAddress: 
     duplicateStatus: "unique",
     profiles: [{ name: "unverified", codec: "unknown", width: 1, height: 1 }],
     capabilities: { ptz: false, audio: false, events: false },
+    ...overrides,
   });
 }
 
@@ -137,6 +143,37 @@ describe("targeted credential verification", () => {
     });
     expect(store.pool.connect).not.toHaveBeenCalled();
     expect(await store.claimEdgeScanJob(agent.id)).toBeUndefined();
+
+    await app.close();
+  }, 20_000);
+
+  it("requires the channel-capable scanner before accepting recorder credentials", async () => {
+    const store = new MemoryStore() as MemoryStore & { pool: ReturnType<typeof credentialPool> };
+    store.pool = credentialPool();
+    addTestBranch(store);
+    const app = await buildApp({ logger: false, store });
+    const agent = await store.registerEdgeAgent("branch-blr-001", "Legacy recorder scanner", "0.1.10");
+    await store.heartbeatEdgeAgent(agent.id, "0.1.10");
+    const selected = await addDiscovery(store, agent.id, "192.168.29.171", {
+      vendor: "cp-plus",
+      manufacturer: "CP PLUS",
+      model: "CPPLUS DVR - Web View",
+    });
+
+    const activated = await app.inject({
+      method: "POST",
+      url: `/v1/branches/branch-blr-001/cameras/discovered/${selected.id}/activate`,
+      headers,
+      payload: { username: "admin", password: "password" },
+    });
+
+    expect(activated.statusCode).toBe(409);
+    expect(activated.json()).toMatchObject({
+      error: "edge_agent_update_required",
+      minimumVersion: "0.1.12",
+    });
+    expect(store.pool.connect).not.toHaveBeenCalled();
+    expect(await store.claimEdgeCommand(agent.id)).toBeUndefined();
 
     await app.close();
   }, 20_000);

@@ -286,7 +286,7 @@ describe("secure edge gateway operations", () => {
       .toMatchObject({ username: "operator", password: "top-secret", scope: { host: "192.168.1.20" } });
   });
 
-  it("delivers discovered-device credentials to the installed scanner and queues a v0.1.10 compatibility probe", async () => {
+  it("delivers recorder credentials only to the channel-capable installed scanner", async () => {
     const store = testStore();
     const app = await buildApp({ store });
     apps.push(app);
@@ -298,12 +298,12 @@ describe("secure edge gateway operations", () => {
       payload: {
         activationCode: activation.activationCode,
         deviceUuid: "44444444-4444-4444-8444-444444444444",
-        version: "0.1.10",
+        version: "0.1.12",
         commandPublicKey: publicKey.export({ type: "spki", format: "pem" }).toString(),
       },
     });
     const identity = enrolled.json();
-    await store.heartbeatEdgeAgent(identity.agentId, "0.1.10");
+    await store.heartbeatEdgeAgent(identity.agentId, "0.1.12");
     const discovery = await store.createDiscovery("branch-blr-001", {
       edgeAgentId: identity.agentId,
       discoveryMethod: "rtsp-network-scan",
@@ -330,7 +330,8 @@ describe("secure edge gateway operations", () => {
     });
 
     expect(queued.statusCode).toBe(202);
-    expect(queued.json()).toMatchObject({ commandId: expect.any(String), scanId: expect.any(String), scope: "device" });
+    expect(queued.json()).toMatchObject({ commandId: expect.any(String), scope: "device" });
+    expect(queued.json()).not.toHaveProperty("scanId");
     const claimed = await app.inject({
       method: "GET",
       url: `/v1/edge-agents/${identity.agentId}/commands/next`,
