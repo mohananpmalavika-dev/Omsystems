@@ -38,6 +38,17 @@ export async function startLiveFromBrowser(
   if (!authorization.ok) throw new Error(errorCode(body, "live_session_unavailable"));
   if (!isBrowserDirectLiveStart(body)) return body as LiveSessionResponse;
 
+  if (typeof window !== "undefined" && window.location.protocol === "https:") {
+    try {
+      if (new URL(body.direct.url).protocol !== "https:") {
+        throw new Error("local_media_gateway_requires_https");
+      }
+    } catch (error) {
+      if (error instanceof Error && error.message === "local_media_gateway_requires_https") throw error;
+      throw new Error("local_media_gateway_unavailable");
+    }
+  }
+
   let localResponse: Response;
   try {
     localResponse = await fetch(body.direct.url, {
@@ -48,7 +59,9 @@ export async function startLiveFromBrowser(
       signal,
     });
   } catch (error) {
-    throw timeoutError(error);
+    const normalized = timeoutError(error);
+    if (normalized !== error) throw normalized;
+    throw new Error("local_media_gateway_unavailable", { cause: error });
   }
   const localBody = await readJson(localResponse);
   if (!localResponse.ok) throw new Error(errorCode(localBody, "local_media_gateway_unavailable"));

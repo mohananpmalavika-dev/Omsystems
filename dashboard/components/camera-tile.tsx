@@ -30,6 +30,8 @@ function formatLiveError(reason: string) {
     media_gateway_failure: "The media gateway rejected the stream",
     media_gateway_unavailable: "The media gateway is unavailable",
     stream_secret_unavailable: "The camera stream source is not configured",
+    local_media_gateway_requires_https: "The camera gateway needs an HTTPS tunnel",
+    local_media_gateway_unavailable: "The local camera gateway is unreachable",
     "HLS playback failed": "The stream could not be played",
     "Live session timed out": "Live authorization timed out",
   };
@@ -214,7 +216,7 @@ export function CameraTile({
               className="live-video"
             />
           ) : (
-            <div className="camera-feed-placeholder">
+            <div className={`camera-feed-placeholder${liveError ? " has-error" : ""}`}>
               <span>{camera.status === "offline" ? "Camera offline" : liveError ? "Live feed unavailable" : "Live feed ready"}</span>
               {liveError && <small>{formatLiveError(liveError)}</small>}
             </div>

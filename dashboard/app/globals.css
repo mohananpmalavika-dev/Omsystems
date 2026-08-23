@@ -687,6 +687,7 @@ button { cursor: pointer; }
   padding: 16px; color: #9fb0c6; background: #071522 !important;
   text-align: center; font-size: 12px;
 }
+.camera-feed-placeholder.has-error { padding-bottom: 72px; }
 .camera-feed-placeholder small { color: #e7a9a9; font-size: 10px; }
 .camera-tile:fullscreen { width: 100vw; height: 100vh; border: 0; border-radius: 0; background: #071522; }
 .camera-tile:fullscreen .feed-stage { width: 100%; height: 100%; aspect-ratio: auto; background: #071522; }
