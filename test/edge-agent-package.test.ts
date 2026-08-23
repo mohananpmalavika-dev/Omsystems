@@ -36,6 +36,21 @@ function zipEntry(zip: Buffer, expectedName: string) {
   throw new Error(`ZIP entry not found: ${expectedName}`);
 }
 
+function testStore() {
+  const store = new MemoryStore();
+  // Test fixtures are deliberately explicit: the in-memory adapter starts
+  // empty so it can never present a fictional branch in a deployed runtime.
+  store.nodes.set("branch-blr-001", {
+    id: "branch-blr-001",
+    parentId: null,
+    tenantId: "test-tenant",
+    type: "branch",
+    name: "Bengaluru Branch 001",
+    path: ["branch-blr-001"],
+  });
+  return store;
+}
+
 describe("branch edge-agent package", () => {
   it("downloads one branch-specific Windows installer EXE with embedded configuration", async () => {
     const artifactRoot = await mkdtemp(join(tmpdir(), "sentinel-edge-package-"));
@@ -44,7 +59,7 @@ describe("branch edge-agent package", () => {
     await writeFile(join(artifactRoot, "package.json"), JSON.stringify({ version: "9.8.7" }));
     await writeFile(join(artifactRoot, "release", "edge-agent.exe"), Buffer.from("MZ-test-executable"));
 
-    const store = new MemoryStore();
+    const store = testStore();
     const agent = await store.registerEdgeAgent("branch-blr-001", "BLR Branch Edge", "9.8.7");
     const edgeKey = "k".repeat(43);
     const app = await buildApp({
@@ -91,7 +106,7 @@ describe("branch edge-agent package", () => {
     await writeFile(join(artifactRoot, "package.json"), JSON.stringify({ version: "9.8.7" }));
     await writeFile(join(artifactRoot, "release", "edge-agent.exe"), Buffer.from("MZ-test-executable"));
 
-    const store = new MemoryStore();
+    const store = testStore();
     const agent = await store.registerEdgeAgent("branch-blr-001", "Temporary scanner", "9.8.7");
     const app = await buildApp({
       store,
@@ -134,7 +149,7 @@ describe("branch edge-agent package", () => {
     await writeFile(join(artifactRoot, "package.json"), JSON.stringify({ version: "9.8.7" }));
     await writeFile(join(artifactRoot, "release", "edge-agent.exe"), Buffer.from("MZ-test-executable"));
 
-    const store = new MemoryStore();
+    const store = testStore();
     const activation = await store.createEdgeActivation({
       branchId: "branch-blr-001",
       agentName: "Bengaluru Scanner",
@@ -161,11 +176,15 @@ describe("branch edge-agent package", () => {
       });
 
       expect(response.statusCode).toBe(200);
+      expect(response.headers["content-type"]).toContain("application/vnd.microsoft.portable-executable");
       expect(response.headers["content-disposition"]).toContain("scanner-setup.exe");
+      expect(response.rawPayload.subarray(0, 2).toString()).toBe("MZ");
       const config = embeddedConfig(response.rawPayload);
       expect(config).toContain(`EDGE_ACTIVATION_CODE=${JSON.stringify(activationCode)}`);
       expect(config).toContain('EDGE_BRIDGE_SHARED_KEY=""');
       expect(config).toContain('EDGE_AGENT_NAME="Bengaluru Scanner"');
+      expect(config).toContain('AUTO_DISCOVERY_ENABLED="true"');
+      expect(config).toContain('RTSP_SCAN_PORTS="554,8554,5554,10554,37777,8000,34567"');
       expect(store.auditEvents.at(-1)?.action).toBe("edge_agent.installer_downloaded");
     } finally {
       await app.close();
@@ -179,7 +198,7 @@ describe("branch edge-agent package", () => {
     await writeFile(join(artifactRoot, "package.json"), JSON.stringify({ version: "9.8.7" }));
     await writeFile(join(artifactRoot, "release", "edge-agent.exe"), Buffer.from("MZ-test-executable"));
 
-    const store = new MemoryStore();
+    const store = testStore();
     const activation = await store.createEdgeActivation({
       branchId: "branch-blr-001",
       agentName: "Automatic Scanner",
@@ -219,7 +238,7 @@ describe("branch edge-agent package", () => {
     await writeFile(join(artifactRoot, "package.json"), JSON.stringify({ version: "9.8.7" }));
     await writeFile(join(artifactRoot, "release", "edge-agent.exe"), Buffer.from("MZ-test-executable"));
 
-    const store = new MemoryStore();
+    const store = testStore();
     const activation = await store.createEdgeActivation({
       branchId: "branch-blr-001",
       agentName: "Invalid Scanner",
@@ -257,7 +276,7 @@ describe("branch edge-agent package", () => {
     await writeFile(join(artifactRoot, "package.json"), JSON.stringify({ version: "9.8.7" }));
     await writeFile(join(artifactRoot, "release", "edge-agent.exe"), Buffer.from("MZ-test-executable"));
 
-    const store = new MemoryStore();
+    const store = testStore();
     const agent = await store.registerEdgeAgent("branch-blr-001", "Temporary scanner", "9.8.7");
     const app = await buildApp({
       store,
