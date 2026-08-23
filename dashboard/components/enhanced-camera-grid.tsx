@@ -154,6 +154,14 @@ export function EnhancedCameraGrid({
       priority: entry.priority,
     }]),
   ), [gridPositions]);
+  const visibleGridCameraIds = useMemo(() => {
+    const cameraIds = new Set<string>();
+    for (let position = visibleRange.start; position < visibleRange.end; position += 1) {
+      const entry = schedulerGridPositions.get(position);
+      if (entry) cameraIds.add(entry.cameraId);
+    }
+    return cameraIds;
+  }, [schedulerGridPositions, visibleRange]);
   const schedulerTileGeometry = useMemo(() => {
     const columns = Number(gridSize.split("x")[0]);
     const viewportWidth = containerRef.current?.clientWidth ??
@@ -167,6 +175,7 @@ export function EnhancedCameraGrid({
     snapshotUrls,
     capacity,
     budget,
+    isInitialized,
     activeDecoderCount,
     snapshotCount,
     attachVideoElement,
@@ -505,8 +514,13 @@ export function EnhancedCameraGrid({
   };
 
   useEffect(() => {
+    // The scheduler starts asynchronously. Do not tear down sessions created
+    // by the initial visible-tile batch while its first schedule is empty.
+    if (!isInitialized || schedule.size === 0) return;
+
     const desiredLive = new Map(
       Array.from(schedule.values())
+        .filter((scheduled) => visibleGridCameraIds.has(scheduled.cameraId))
         .filter((scheduled) => scheduled.mode === "MAIN_STREAM" || scheduled.mode === "SUB_STREAM")
         .map((scheduled) => [
           scheduled.cameraId,
@@ -515,6 +529,10 @@ export function EnhancedCameraGrid({
     );
 
     for (const [cameraId] of sessions) {
+      const scheduled = schedule.get(cameraId);
+      // Keep an explicitly authorized legacy session alive when the camera
+      // has no advertised profile for the capacity scheduler to select.
+      if (!scheduled || !scheduled.streamProfile) continue;
       const desiredStream = desiredLive.get(cameraId);
       if (desiredStream && activeStreamTypesRef.current.get(cameraId) === desiredStream) continue;
       activeStreamTypesRef.current.delete(cameraId);
@@ -533,11 +551,13 @@ export function EnhancedCameraGrid({
   }, [
     closeSession,
     handleStartLive,
+    isInitialized,
     loading,
     markPlaybackDeferred,
     schedule,
     sessions,
     updateStreamState,
+    visibleGridCameraIds,
   ]);
 
   const handleToggleRecording = async (cameraId: string) => {
