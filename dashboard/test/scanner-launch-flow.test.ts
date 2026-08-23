@@ -55,6 +55,9 @@ describe("website scanner launch flow", () => {
     expect(source).toContain("No broadcast discovery, subnet scan, or other camera probe will run.");
     expect(source).toContain('job.scope !== "device" && readyToProvision');
     expect(source).toContain("cameraInventoryApi.activateDiscovery");
+    expect(source).toContain("waitForCredentialCommand(activation.commandId)");
+    expect(source).toContain("credentialVerificationError");
+    expect(source).not.toContain("Credentials set to: ${username} / ${password");
   });
 
   it("keeps pending-camera data when another branch panel fails to load", async () => {

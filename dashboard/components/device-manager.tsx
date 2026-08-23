@@ -747,6 +747,10 @@ export function DeviceManager() {
       setActivationPassword("");
       setCredentialVerificationStatus("Waiting for the installed scanner to verify this device and enumerate its channels…");
       await waitForCredentialCommand(activation.commandId);
+      if (activation.scanId) {
+        setCredentialVerificationStatus("Refreshing this device with the verified login…");
+        await completeCameraScan(activation.scanId, targetAgentId);
+      }
       setCredentialVerificationStatus("Verification completed. Loading the discovered channels…");
       const refreshed = await cameraInventoryApi.listDiscovered(selectedBranch);
       const refreshedDiscoveries = refreshed.data ?? [];

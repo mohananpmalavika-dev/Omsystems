@@ -10,7 +10,7 @@ describe("secure edge gateway operations", () => {
   afterEach(async () => { await Promise.all(apps.splice(0).map((app) => app.close())); });
 
   it("consumes a one-time activation and authenticates with a unique revocable credential", async () => {
-    const store = new MemoryStore();
+    const store = testStore();
     const app = await buildApp({ store, controlPlanePublicUrl: "https://control.example" });
     apps.push(app);
     const activation = await createActivation(app);
@@ -61,7 +61,7 @@ describe("secure edge gateway operations", () => {
   });
 
   it("returns success after revocation even when ancillary cleanup fails", async () => {
-    const store = new MemoryStore();
+    const store = testStore();
     const app = await buildApp({ store });
     apps.push(app);
     const identity = await enroll(app, await createActivation(app));
@@ -91,7 +91,7 @@ describe("secure edge gateway operations", () => {
   });
 
   it("supports enrollment and gateway bootstrap while employee session auth is enabled", async () => {
-    const store = new MemoryStore();
+    const store = testStore();
     const activationCode = `sgact_${"a".repeat(48)}`;
     await store.createEdgeActivation({
       branchId: "branch-blr-001",
@@ -131,7 +131,7 @@ describe("secure edge gateway operations", () => {
   });
 
   it("provisions one managed tunnel and delivers its token only to the authenticated gateway", async () => {
-    const store = new MemoryStore();
+    const store = testStore();
     const tunnelProvider = {
       provision: vi.fn(async () => ({
         provider: "cloudflare" as const,
@@ -184,7 +184,7 @@ describe("secure edge gateway operations", () => {
   });
 
   it("delivers remote commands once and records their result", async () => {
-    const app = await buildApp({ store: new MemoryStore() });
+    const app = await buildApp({ store: testStore() });
     apps.push(app);
     const identity = await enroll(app, await createActivation(app));
     const created = await app.inject({
@@ -233,7 +233,7 @@ describe("secure edge gateway operations", () => {
   });
 
   it("queues camera recovery for the branch edge agent", async () => {
-    const app = await buildApp({ store: new MemoryStore() });
+    const app = await buildApp({ store: testStore() });
     apps.push(app);
     const identity = await enroll(app, await createActivation(app));
     const created = await app.inject({
@@ -246,7 +246,7 @@ describe("secure edge gateway operations", () => {
   });
 
   it("queues camera credentials as gateway-only ciphertext", async () => {
-    const app = await buildApp({ store: new MemoryStore() });
+    const app = await buildApp({ store: testStore() });
     apps.push(app);
     const activation = await createActivation(app);
     const { publicKey, privateKey } = generateKeyPairSync("rsa", { modulusLength: 2048 });
@@ -281,12 +281,71 @@ describe("secure edge gateway operations", () => {
     expect(claimed.body).not.toContain("top-secret");
     const command = claimed.json();
     expect(command.type).toBe("update-credentials");
+    expect(command.payload.target).toEqual({ ipAddress: "192.168.1.20" });
     expect(openSealedCommand(command.payload.envelope, privateKey.export({ type: "pkcs8", format: "pem" }).toString()))
       .toMatchObject({ username: "operator", password: "top-secret", scope: { host: "192.168.1.20" } });
   });
 
+  it("delivers discovered-device credentials to the installed scanner and queues a v0.1.10 compatibility probe", async () => {
+    const store = testStore();
+    const app = await buildApp({ store });
+    apps.push(app);
+    const activation = await createActivation(app);
+    const { publicKey, privateKey } = generateKeyPairSync("rsa", { modulusLength: 2048 });
+    const enrolled = await app.inject({
+      method: "POST",
+      url: "/v1/edge-enrollment/activate",
+      payload: {
+        activationCode: activation.activationCode,
+        deviceUuid: "44444444-4444-4444-8444-444444444444",
+        version: "0.1.10",
+        commandPublicKey: publicKey.export({ type: "spki", format: "pem" }).toString(),
+      },
+    });
+    const identity = enrolled.json();
+    await store.heartbeatEdgeAgent(identity.agentId, "0.1.10");
+    const discovery = await store.createDiscovery("branch-blr-001", {
+      edgeAgentId: identity.agentId,
+      discoveryMethod: "rtsp-network-scan",
+      vendor: "cp-plus",
+      manufacturer: "CP PLUS",
+      model: "CP PLUS DVR - Web View",
+      ipAddress: "192.168.29.171",
+      onvifPort: 80,
+      rtspPort: 554,
+      profiles: [],
+      capabilities: { ptz: false, audio: false, events: false },
+      sourceType: "nvr-channel",
+      streamVerified: false,
+      credentialsRequired: true,
+      duplicateStatus: "unique",
+      compatibilityStatus: "review-required",
+    });
+
+    const queued = await app.inject({
+      method: "POST",
+      url: `/v1/branches/branch-blr-001/cameras/discovered/${discovery.id}/activate`,
+      headers: { "x-user-id": "user-global-admin" },
+      payload: { username: "admin", password: "dvr-secret" },
+    });
+
+    expect(queued.statusCode).toBe(202);
+    expect(queued.json()).toMatchObject({ commandId: expect.any(String), scanId: expect.any(String), scope: "device" });
+    const claimed = await app.inject({
+      method: "GET",
+      url: `/v1/edge-agents/${identity.agentId}/commands/next`,
+      headers: { "x-edge-agent-token": identity.credential },
+    });
+    expect(claimed.body).not.toContain("dvr-secret");
+    expect(claimed.json().payload.target).toEqual({ discoveryId: discovery.id, ipAddress: "192.168.29.171" });
+    expect(openSealedCommand(
+      claimed.json().payload.envelope,
+      privateKey.export({ type: "pkcs8", format: "pem" }).toString(),
+    )).toMatchObject({ username: "admin", password: "dvr-secret", scope: { host: "192.168.29.171" } });
+  });
+
   it("automatically provisions verified streams when a credential command completes", async () => {
-    const store = new MemoryStore();
+    const store = testStore();
     const app = await buildApp({ store });
     apps.push(app);
     const identity = await enroll(app, await createActivation(app));
@@ -312,7 +371,7 @@ describe("secure edge gateway operations", () => {
     const command = await store.createEdgeCommand({
       edgeAgentId: identity.agentId,
       type: "update-credentials",
-      payload: {},
+      payload: { target: { ipAddress: "192.168.29.171" } },
       requestedBy: "user-global-admin",
     });
     await store.claimEdgeCommand(identity.agentId);
@@ -333,7 +392,7 @@ describe("secure edge gateway operations", () => {
     const { privateKey, publicKey } = generateKeyPairSync("ed25519");
     const privatePem = privateKey.export({ type: "pkcs8", format: "pem" }).toString();
     const publicPem = publicKey.export({ type: "spki", format: "pem" }).toString();
-    const app = await buildApp({ store: new MemoryStore(), edgeUpdateSigningPrivateKey: privatePem });
+    const app = await buildApp({ store: testStore(), edgeUpdateSigningPrivateKey: privatePem });
     apps.push(app);
     const identity = await enroll(app, await createActivation(app));
     const releaseResponse = await app.inject({
@@ -364,6 +423,40 @@ async function createActivation(app: Awaited<ReturnType<typeof buildApp>>) {
   });
   expect(response.statusCode).toBe(201);
   return response.json();
+}
+
+function testStore() {
+  const store = new MemoryStore();
+  store.nodes.set("company-1", {
+    id: "company-1",
+    parentId: null,
+    tenantId: "omsystems",
+    type: "company",
+    name: "Edge gateway test company",
+    path: ["company-1"],
+  });
+  store.nodes.set("branch-blr-001", {
+    id: "branch-blr-001",
+    parentId: "company-1",
+    tenantId: "omsystems",
+    type: "branch",
+    name: "Edge gateway test branch",
+    path: ["company-1", "branch-blr-001"],
+  });
+  store.users.set("user-global-admin", {
+    id: "user-global-admin",
+    displayName: "Test administrator",
+    tenantId: "omsystems",
+    role: "super_admin",
+    status: "active",
+  });
+  store.grants.push({
+    userId: "user-global-admin",
+    scopeNodeId: "company-1",
+    actions: ["device:configure"],
+    effect: "allow",
+  });
+  return store;
 }
 
 async function enroll(app: Awaited<ReturnType<typeof buildApp>>, activation: any) {

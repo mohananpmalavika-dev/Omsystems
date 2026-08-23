@@ -707,7 +707,7 @@ export const cameraInventoryApi = {
       { method: 'POST', body: JSON.stringify(data) }
     ),
   activateDiscovery: (branchId: string, discoveryId: string, data: { username: string; password: string }) =>
-    fetchApi<{ commandId: string; status: string; message: string }>(
+    fetchApi<{ commandId: string; scanId?: string; status: string; message: string }>(
       `/v1/branches/${encodeURIComponent(branchId)}/cameras/discovered/${encodeURIComponent(discoveryId)}/activate`,
       { method: 'POST', body: JSON.stringify(data) }
     ),

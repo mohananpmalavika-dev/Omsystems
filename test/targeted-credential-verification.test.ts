@@ -1,3 +1,4 @@
+import { generateKeyPairSync } from "node:crypto";
 import { describe, expect, it, vi } from "vitest";
 import { buildApp } from "../src/app.js";
 import { MemoryStore } from "../src/store.js";
@@ -48,12 +49,17 @@ async function addDiscovery(store: MemoryStore, edgeAgentId: string, ipAddress: 
 }
 
 describe("targeted credential verification", () => {
-  it("queues and returns only a single-device scan job", async () => {
+  it("queues encrypted credentials and only a single-device compatibility scan job", async () => {
     const store = new MemoryStore() as MemoryStore & { pool: ReturnType<typeof credentialPool> };
     store.pool = credentialPool();
     addTestBranch(store);
     const app = await buildApp({ logger: false, store });
     const agent = await store.registerEdgeAgent("branch-blr-001", "Targeted scanner", "0.1.7");
+    const { publicKey } = generateKeyPairSync("rsa", { modulusLength: 2048 });
+    (store as any).edgeCommandPublicKeys.set(
+      agent.id,
+      publicKey.export({ type: "spki", format: "pem" }).toString(),
+    );
     await store.heartbeatEdgeAgent(agent.id, "0.1.7");
     const selected = await addDiscovery(store, agent.id, "192.168.29.171");
     await addDiscovery(store, agent.id, "192.168.29.46");
@@ -66,9 +72,17 @@ describe("targeted credential verification", () => {
 
     expect(activated.statusCode).toBe(202);
     expect(activated.json()).toMatchObject({
+      commandId: expect.any(String),
+      scanId: expect.any(String),
       scope: "device",
       targetDiscoveryId: selected.id,
     });
+    const command = await store.claimEdgeCommand(agent.id);
+    expect(command).toMatchObject({
+      type: "update-credentials",
+      payload: { target: { discoveryId: selected.id, ipAddress: "192.168.29.171" } },
+    });
+    expect(JSON.stringify(command)).not.toContain("correct horse battery staple");
     expect(store.pool.client.query).toHaveBeenCalledWith(
       expect.stringContaining("credentials_status = 'pending_verification'"),
       [selected.id, "branch-blr-001"],

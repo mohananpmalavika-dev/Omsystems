@@ -38,6 +38,7 @@ const activateDiscoveryBody = z.object({
 });
 
 const targetedVerificationMinimumAgentVersion = "0.1.7";
+const encryptedRtspVaultMinimumAgentVersion = "0.1.11";
 
 /**
  * Lists pending ONVIF discoveries. Submission, approval, and camera inventory
@@ -380,6 +381,16 @@ export async function registerCameraDiscoveryRoutes(
       },
       requestedBy: request.currentUser.id,
     });
+    // v0.1.10's RTSP scanner needs its database credential cache invalidated
+    // after the encrypted command is received. A device-scoped follow-up job
+    // provides that bridge and is claimed immediately after the command.
+    const compatibilityScan = supportsAgentVersion(agent.version, encryptedRtspVaultMinimumAgentVersion)
+      ? undefined
+      : await store.createEdgeScanJob(branchId, discovered.edgeAgentId, {
+          discoveryId: discovered.id,
+          ipAddress: discovered.ipAddress,
+          onvifPort: discovered.onvifPort,
+        });
 
     await store.writeAudit({
       tenantId: branch.tenantId,
@@ -399,6 +410,7 @@ export async function registerCameraDiscoveryRoutes(
     });
     return reply.code(202).send({
       commandId: command.id,
+      ...(compatibilityScan ? { scanId: compatibilityScan.id } : {}),
       status: command.status,
       scope: "device",
       targetDiscoveryId: discovered.id,
@@ -633,8 +645,12 @@ async function probeNetworkCamera(ip: string, port = 554, user = "admin", pass =
 }
 
 function supportsTargetedVerification(version: string) {
+  return supportsAgentVersion(version, targetedVerificationMinimumAgentVersion);
+}
+
+function supportsAgentVersion(version: string, minimumVersion: string) {
   const current = version.match(/^(\d+)\.(\d+)\.(\d+)/)?.slice(1).map(Number);
-  const minimum = targetedVerificationMinimumAgentVersion.split(".").map(Number);
+  const minimum = minimumVersion.split(".").map(Number);
   if (!current || current.length !== 3) return false;
   for (let index = 0; index < minimum.length; index++) {
     if (current[index]! > minimum[index]!) return true;

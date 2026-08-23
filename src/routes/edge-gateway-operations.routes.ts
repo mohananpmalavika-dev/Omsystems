@@ -265,11 +265,18 @@ export async function registerEdgeGatewayOperationsRoutes(
     if (!(await requireDeviceAccess(request, reply, store, branchId))) return;
     const agent = (await store.listEdgeAgentsByBranch(branchId)).find((item) => item.id === id);
     if (!agent) return reply.code(404).send({ error: "edge_agent_not_found" });
-    const body = z.object({
+    const parsedBody = z.object({
       username: z.string().trim().min(1).max(128),
       password: z.string().max(1_024),
       cameraIp: z.string().ip(),
-    }).parse(request.body);
+    }).safeParse(request.body);
+    if (!parsedBody.success) {
+      return reply.code(400).send({
+        error: "invalid_camera_credential_request",
+        message: "A username, password, and one camera or recorder IP address are required.",
+      });
+    }
+    const body = parsedBody.data;
     const commandPublicKey = await store.getEdgeAgentCommandPublicKey(id);
     if (!commandPublicKey) {
       return reply.code(409).send({
