@@ -1437,6 +1437,7 @@ try {
       <ProvisioningRun
         branchId={selectedBranch}
         refreshing={scanning}
+        hasEnrolledAgent={gateways.length > 0}
         onStart={() => void scanCameras()}
         onInstallAgent={openScannerInstaller}
         onProvideCredentials={() => void openPendingCredentials()}

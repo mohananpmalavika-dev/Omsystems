@@ -5,9 +5,42 @@ import { MemoryStore } from "../src/store.js";
 
 const headers = { "x-user-id": "user-global-admin" };
 
+function addTestBranch(store: MemoryStore) {
+  store.nodes.set("company-1", {
+    id: "company-1",
+    parentId: null,
+    tenantId: "omsystems",
+    type: "company",
+    name: "Test company",
+    path: ["company-1"],
+  });
+  store.nodes.set("branch-blr-001", {
+    id: "branch-blr-001",
+    parentId: "company-1",
+    tenantId: "omsystems",
+    type: "branch",
+    name: "Test branch",
+    path: ["company-1", "branch-blr-001"],
+  });
+  store.users.set("user-global-admin", {
+    id: "user-global-admin",
+    displayName: "Test administrator",
+    tenantId: "omsystems",
+    role: "super_admin",
+    status: "active",
+  });
+  store.grants.push({
+    userId: "user-global-admin",
+    scopeNodeId: "company-1",
+    actions: ["device:configure"],
+    effect: "allow",
+  });
+}
+
 describe("zero-touch provisioning integration", () => {
   it("creates a durable edge run and reports actionable credential blockers", async () => {
     const store = new MemoryStore();
+    addTestBranch(store);
     const app = await buildApp({ logger: false, store });
     const agent = await store.registerEdgeAgent("branch-blr-001", "Provisioning edge", "0.1.6");
     await store.heartbeatEdgeAgent(agent.id, "0.1.6");
@@ -22,7 +55,7 @@ describe("zero-touch provisioning integration", () => {
     expect(started.json().run).toMatchObject({
       branchId: "branch-blr-001",
       status: "queued",
-      currentStage: "Network inventory",
+      currentStage: "ONVIF, subnet and recorder discovery",
     });
     const runId = started.json().run.id as string;
 
@@ -122,6 +155,79 @@ describe("zero-touch provisioning integration", () => {
 
     await app.close();
   }, 15_000);
+
+  it("starts only an enrolled local installation and never fabricates an online heartbeat", async () => {
+    const store = new MemoryStore();
+    addTestBranch(store);
+    const app = await buildApp({ logger: false, store });
+    const agent = await store.registerEdgeAgent("branch-blr-001", "Installed branch edge", "0.1.9");
+
+    const requested = await app.inject({
+      method: "POST",
+      url: "/v1/branches/branch-blr-001/activate-edge-online",
+      headers,
+    });
+    expect(requested.statusCode).toBe(202);
+    expect(requested.json()).toMatchObject({
+      success: false,
+      status: "start-required",
+      installRequired: false,
+      activationRequired: true,
+      agent: { id: agent.id },
+    });
+    expect(store.edgeAgents.get(agent.id)?.status).not.toBe("online");
+
+    const blocked = await app.inject({
+      method: "POST",
+      url: "/v1/branches/branch-blr-001/provisioning",
+      headers,
+      payload: { edgeAgentId: agent.id },
+    });
+    expect(blocked.statusCode).toBe(409);
+    expect(blocked.json()).toMatchObject({
+      error: "online_edge_agent_required",
+      installRequired: false,
+      activationRequired: true,
+    });
+    expect(store.edgeAgents.get(agent.id)?.status).not.toBe("online");
+
+    await store.heartbeatEdgeAgent(agent.id, "0.1.9");
+    const online = await app.inject({
+      method: "POST",
+      url: "/v1/branches/branch-blr-001/activate-edge-online",
+      headers,
+    });
+    expect(online.statusCode).toBe(200);
+    expect(online.json()).toMatchObject({
+      success: true,
+      status: "online",
+      installRequired: false,
+      activationRequired: false,
+    });
+
+    await app.close();
+  });
+
+  it("offers first installation only when the branch has no enrolled edge agent", async () => {
+    const store = new MemoryStore();
+    addTestBranch(store);
+    const app = await buildApp({ logger: false, store });
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/branches/branch-blr-001/activate-edge-online",
+      headers,
+    });
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      success: false,
+      status: "not-enrolled",
+      installRequired: true,
+      activationRequired: false,
+    });
+
+    await app.close();
+  });
 
   it("does not allow a completed function call to hide storage or recording blockers", () => {
     const now = new Date().toISOString();

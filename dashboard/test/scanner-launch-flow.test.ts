@@ -8,8 +8,8 @@ describe("website scanner launch flow", () => {
     expect(source).not.toContain("sentinel-grid-scanner://");
     expect(source).not.toContain("window.location.assign");
     expect(source).toContain("const scannerStartupTimeoutMs = 12_000");
-    expect(source).toContain("The installed Sentinel Grid Scanner is offline");
-    expect(source).toContain('"Repair scanner" : "Install scanner"');
+    expect(source).toContain("Installed but offline — select Repair scanner");
+    expect(source).toContain('gateways.length > 0 ? "Agent Commands" : "Install Scanner"');
   });
 
   it("asks the installed local edge to start after each successful login", async () => {
@@ -21,6 +21,18 @@ describe("website scanner launch flow", () => {
     expect(loginForm).toContain("resetLocalEdgeAutostart()");
     expect(autostart).toContain('launcher.src = "sentinel-grid-scanner://start"');
     expect(autostart).toContain("window.sessionStorage.setItem");
+  });
+
+  it("reuses the installed edge agent from the activation button before offering repair", async () => {
+    const provisioningRun = await readFile("dashboard/components/provisioning-run.tsx", "utf8");
+    const autostart = await readFile("dashboard/lib/local-edge-autostart.ts", "utf8");
+
+    expect(provisioningRun).toContain("requestInstalledEdgeStart()");
+    expect(provisioningRun).toContain("cameraInventoryApi.listGateways(branchId)");
+    expect(provisioningRun).toContain('res.status === "not-enrolled"');
+    expect(provisioningRun).toContain("Use Repair only if the installed task cannot start");
+    expect(provisioningRun).not.toContain("downloadInstallerFromActivation");
+    expect(autostart).toContain("export function requestInstalledEdgeStart()");
   });
 
   it("opens a login prompt for discovered devices that reject saved credentials", async () => {

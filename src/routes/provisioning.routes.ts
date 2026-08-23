@@ -32,20 +32,18 @@ export async function registerProvisioningRoutes(
     }
 
     const agents = await store.listEdgeAgentsByBranch(branchId);
-    let selected = edgeAgentId
-      ? agents.find((agent) => agent.id === edgeAgentId)
-      : agents.find((agent) => agent.status === "online") ?? agents[0];
-    if (selected && selected.status !== "online") {
-      selected = await store.heartbeatEdgeAgent(selected.id, selected.version || "1.4.2");
-    }
-
-    let agentForJob = selected;
+    const agentForJob = edgeAgentId
+      ? agents.find((agent) => agent.id === edgeAgentId && agent.status === "online")
+      : agents.find((agent) => agent.status === "online");
     if (!agentForJob) {
-      const created = await store.registerEdgeAgent(branchId, "Branch Gateway Edge-01", "1.4.2");
-      agentForJob = await store.heartbeatEdgeAgent(created.id, "1.4.2");
-    }
-    if (!agentForJob) {
-      throw new Error("Unable to establish an online edge agent for provisioning.");
+      return reply.code(409).send({
+        error: "online_edge_agent_required",
+        installRequired: agents.length === 0,
+        activationRequired: agents.length > 0,
+        message: agents.length === 0
+          ? "Install and enroll a branch edge agent before starting provisioning."
+          : "Start the installed branch edge agent and wait for its authenticated heartbeat before starting provisioning.",
+      });
     }
     const job = await store.createEdgeScanJob(branchId, agentForJob.id);
     await store.writeAudit({
@@ -235,14 +233,55 @@ export async function registerProvisioningRoutes(
 
   /**
    * POST /v1/branches/:branchId/activate-edge-online
-   * Instantly activates and marks the branch's Edge Gateway as online.
+   * Reports whether an enrolled installation can be started locally. The
+   * website invokes the installer-registered OS protocol and then waits for a
+   * real authenticated heartbeat; this endpoint never fabricates presence.
    */
   app.post("/v1/branches/:branchId/activate-edge-online", async (request, reply) => {
     const { branchId } = branchParams.parse(request.params);
-    return reply.code(410).send({
-      error: "remote_edge_activation_removed",
-      branchId,
-      message: "An edge agent becomes online only after the signed package starts and sends an authenticated heartbeat.",
+    if (!(await requireDeviceAccess(request, reply, store, branchId))) return;
+    const agents = await store.listEdgeAgentsByBranch(branchId);
+    const online = agents.find((agent) => agent.status === "online");
+    if (online) {
+      return reply.code(200).send({
+        success: true,
+        status: "online",
+        agent: online,
+        installRequired: false,
+        activationRequired: false,
+        message: `${online.name} is already online.`,
+      });
+    }
+
+    const enrolled = [...agents].sort((left, right) =>
+      Date.parse(right.lastSeenAt ?? "") - Date.parse(left.lastSeenAt ?? "")
+    )[0];
+    if (!enrolled) {
+      return reply.code(200).send({
+        success: false,
+        status: "not-enrolled",
+        installRequired: true,
+        activationRequired: false,
+        message: "No edge agent is enrolled for this branch.",
+      });
+    }
+
+    await store.writeAudit({
+      tenantId: request.currentUser.tenantId,
+      actorUserId: request.currentUser.id,
+      action: "edge_agent.local_start_requested",
+      resourceNodeId: branchId,
+      outcome: "success",
+      sourceIp: request.ip,
+      details: { edgeAgentId: enrolled.id, previousStatus: enrolled.status },
+    });
+    return reply.code(202).send({
+      success: false,
+      status: "start-required",
+      agent: enrolled,
+      installRequired: false,
+      activationRequired: true,
+      message: "Start request prepared. Waiting for the installed agent's authenticated heartbeat.",
     });
   });
 
