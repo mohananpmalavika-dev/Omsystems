@@ -3,7 +3,8 @@ import { discoverOnvifDevices, type DiscoveredOnvifEndpoint } from "./discovery/
 import { onvifEndpointRole, onvifServiceCandidates } from "./discovery/onvif-service-candidates.js";
 import { createDeviceFingerprint } from "./discovery/device-fingerprint.js";
 import { fingerprintHttpRecorder } from "./discovery/recorder-http-fingerprint.js";
-import { discoverRtspDevices } from "./discovery/rtsp-network-scan.js";
+import { discoverRtspDevices, recorderIdForHost } from "./discovery/rtsp-network-scan.js";
+import { fallbackCredentialsRequired, rtspOnvifExclusions } from "./discovery/onvif-fallback-policy.js";
 import { targetFromScanJob, targetedOnvifEndpoint, type DeviceScanTarget } from "./discovery/targeted-scan.js";
 import { attachCredentials, OnvifClient } from "./devices/onvif-client.js";
 import { compatibilityNotes, normalizeVendor } from "./devices/compatibility-registry.js";
@@ -358,6 +359,7 @@ async function scanBranch(options: { persistStreamSecrets?: boolean; target?: De
     : `Discovered ${endpoints.length} ONVIF endpoint(s)`);
   let submitted = 0;
   const handledOnvifHosts = new Set<string>();
+  const recorderFallbackHosts = new Set<string>();
 
   for (const endpoint of endpoints) {
     const serviceUrls = onvifServiceCandidates(endpoint);
@@ -656,7 +658,7 @@ async function scanBranch(options: { persistStreamSecrets?: boolean; target?: De
         ...(endpoint.endpointReference ? { onvifEndpointReference: endpoint.endpointReference } : {}),
         ...(deviceFingerprint ? { hardwareId: deviceFingerprint } : {}),
         displayName: `${device.manufacturer} ${device.model}`,
-        credentialsRequired: streamUriErrors.some(isCredentialFailure),
+        credentialsRequired: fallbackCredentialsRequired(streamVerified, streamUriErrors.some(isCredentialFailure)),
         streamVerified,
         rtspValidated: streamVerified,
         compatibility: streamVerified ? "compatible" : "review-required",
@@ -717,7 +719,10 @@ async function scanBranch(options: { persistStreamSecrets?: boolean; target?: De
           probe: (uri) => probeRtsp(uri, config.FFPROBE_PATH, config.ONVIF_TIMEOUT_MS),
         });
         const streamVerified = Boolean(vendorFallback.candidate && vendorFallback.probe.reachable);
-        const credentialsRequired = isCredentialFailure(message) || isCredentialFailure(vendorFallback.probe?.error);
+        const credentialsRequired = fallbackCredentialsRequired(
+          streamVerified,
+          isCredentialFailure(message) || isCredentialFailure(vendorFallback.probe?.error),
+        );
         const deviceFingerprint = createDeviceFingerprint({ onvifEndpointReference: endpoint.endpointReference });
         const detectedVendor = recorderFingerprint?.vendor ?? vendorFamily;
         const submissionVendor = detectedVendor === "hikvision"
@@ -741,6 +746,7 @@ async function scanBranch(options: { persistStreamSecrets?: boolean; target?: De
               ? `Discovered recorder ${endpoint.remoteAddress}`
               : `Camera ${endpoint.remoteAddress}`,
           ipAddress: endpoint.remoteAddress,
+          ...(isRecorder ? { recorderId: recorderIdForHost(endpoint.remoteAddress) } : {}),
           ...(endpoint.endpointReference ? { onvifEndpointReference: endpoint.endpointReference } : {}),
           ...(deviceFingerprint ? { hardwareId: deviceFingerprint } : {}),
           onvifPort: Number(parsedServiceUrl.port || (parsedServiceUrl.protocol === "https:" ? 443 : 80)),
@@ -795,6 +801,7 @@ async function scanBranch(options: { persistStreamSecrets?: boolean; target?: De
         if (persistStreamSecrets && streamVerified && vendorFallback.candidate) {
           await secrets.set(`edge://${agentId}/${discovery.id}`, vendorFallback.candidate.uri);
         }
+        if (isRecorder) recorderFallbackHosts.add(endpoint.remoteAddress);
         if (streamVerified) handledOnvifHosts.add(endpoint.remoteAddress);
         submitted += 1;
       } catch (submissionError) {
@@ -837,9 +844,12 @@ async function scanBranch(options: { persistStreamSecrets?: boolean; target?: De
         // channel discovery immediately.
         credentialsForHost: (host: string) => discoveryCredentials(host),
         hosts: knownHosts,
-        excludeHosts: options.target
-          ? (handledOnvifHosts.has(options.target.ipAddress) ? [options.target.ipAddress] : [])
-          : endpoints.map((endpoint) => endpoint.remoteAddress),
+        excludeHosts: rtspOnvifExclusions({
+          ...(options.target ? { targetIpAddress: options.target.ipAddress } : {}),
+          onvifHosts: endpoints.map((endpoint) => endpoint.remoteAddress),
+          handledOnvifHosts,
+          recorderFallbackHosts,
+        }),
         restrictToHosts: Boolean(options.target),
       } satisfies Omit<import("./discovery/rtsp-network-scan.js").RtspScanOptions, "cidr" | "cidrs">;
       if (cidr) {

@@ -440,6 +440,12 @@ export class EdgeAgentRepository {
         ...(input.discoveryLayers ?? []),
         { layer: "register" as const, status: "passed" as const, detail: "Control plane registration completed" },
       ];
+      // A decoded stream is authoritative evidence that the supplied login
+      // worked. Never persist the contradictory "verified + login required"
+      // state even when an older edge agent reports an earlier ONVIF 401.
+      const credentialsRequired = input.streamVerified === true
+        ? false
+        : input.credentialsRequired ?? null;
       const result = await client.query<{
         id: string;
         discovered_at: Date;
@@ -516,7 +522,7 @@ export class EdgeAgentRepository {
          input.recorderId ?? null, input.recorderChannel ?? 0,
          input.recorderSerialNumber ?? null, input.serialNumber ?? null,
          input.firmwareVersion ?? null, input.displayName ?? null,
-         input.credentialsRequired ?? null, input.streamVerified ?? null,
+         credentialsRequired, input.streamVerified ?? null,
          input.rtspValidated ?? null, input.compatibility ?? null,
          duplicateStatus, input.compatibilityStatus ?? null,
          input.hardwareId ?? null, existingAssociation, statusReason,
@@ -531,6 +537,7 @@ export class EdgeAgentRepository {
         deviceIdentityId: identity.deviceIdentityId,
         branchId,
         ...input,
+        ...(credentialsRequired !== null ? { credentialsRequired } : {}),
         ...(onvifUuid ? { onvifUuid } : {}),
         ...(duplicateStatus ? { duplicateStatus } : {}),
         ...(existingAssociation ? { existingDeviceAssociation: existingAssociation } : {}),

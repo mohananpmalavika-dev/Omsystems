@@ -770,7 +770,9 @@ export function DeviceManager() {
         );
         if (stillNeedsCredentials) setCredentialActivation(stillNeedsCredentials);
         setCredentialVerificationStatus(undefined);
-        setCredentialVerificationError(`The scanner reached ${targetName}, but no authenticated video stream was returned. Check the username, password, RTSP service, and account permissions, then retry.`);
+        setCredentialVerificationError(stillNeedsCredentials?.statusReason === "rtsp_credentials_rejected"
+          ? `Login rejected by ${targetName} at ${targetIpAddress}. Confirm that you selected the correct device and enter its exact DVR/camera username and password.`
+          : `The scanner reached ${targetName} at ${targetIpAddress}, but no authenticated video stream was returned. Check the username, password, RTSP service, and account permissions, then retry.`);
         return;
       }
       const activatedCount = verifiedTargets.length;

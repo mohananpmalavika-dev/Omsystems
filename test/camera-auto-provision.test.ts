@@ -54,4 +54,24 @@ describe("recorder credential discovery cleanup", () => {
 
     expect(supersededRecorderCredentialDiscoveryIds([placeholder])).toEqual([]);
   });
+
+  it("retires a verified recorder parent after its verified channels arrive", () => {
+    const recorderParent = discovery({
+      id: "recorder-parent",
+      recorderId: "recorder-1",
+      credentialsRequired: false,
+      streamVerified: true,
+    });
+    const verifiedChannel = discovery({
+      id: "channel-1",
+      recorderId: "recorder-1",
+      recorderChannel: 1,
+      sourceType: "analog-dvr-channel",
+      credentialsRequired: false,
+      streamVerified: true,
+    });
+
+    expect(supersededRecorderCredentialDiscoveryIds([recorderParent, verifiedChannel]))
+      .toEqual(["recorder-parent"]);
+  });
 });

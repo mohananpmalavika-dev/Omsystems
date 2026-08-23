@@ -132,7 +132,7 @@ export function supersededRecorderCredentialDiscoveryIds(
       item.streamVerified === true && item.credentialsRequired !== true)
     .map((item) => item.recorderId!));
   return discoveries
-    .filter((item) => item.credentialsRequired === true && item.recorderId &&
+    .filter((item) => item.recorderId &&
       item.recorderChannel === undefined && verifiedRecorderIds.has(item.recorderId))
     .map((item) => item.id);
 }
