@@ -12,6 +12,7 @@ import {
 type IdentityLink = {
   deviceIdentityId: string;
   cameraId?: string;
+  recorderPlaceholderUpgrade?: boolean;
 };
 
 type IdentityRow = {
@@ -179,6 +180,7 @@ export class DeviceIdentityRepository {
     }
 
     let match: { id: string; camera_id: string | null } | undefined;
+    let recorderPlaceholderUpgrade = false;
     if (claims.length > 0) {
       const result = await client.query<{ id: string; camera_id: string | null }>(
         `SELECT identity.id::text, identity.camera_id::text
@@ -195,6 +197,33 @@ export class DeviceIdentityRepository {
         [tenantId, claims.map((claim) => claim.type), claims.map((claim) => claim.value)],
       );
       match = result.rows[0];
+    }
+
+    // Older agents could approve a recorder's first RTSP path as one generic
+    // IP camera. Once authenticated channel evidence arrives, reuse that
+    // identity for channel 1 so the existing camera is upgraded in place and
+    // operators do not get a stale duplicate beside the recorder channels.
+    if (!match && observation.ipAddress && observation.channel === 1 &&
+      (observation.deviceType === "analog-dvr-channel" || observation.deviceType === "nvr-channel")) {
+      const result = await client.query<{ id: string; camera_id: string | null }>(
+        `SELECT identity.id::text, identity.camera_id::text
+         FROM device_identities identity
+         LEFT JOIN cameras camera ON camera.id = identity.camera_id
+         WHERE identity.tenant_id = $1::uuid
+           AND identity.branch_node_id = $2::uuid
+           AND identity.current_ip_address = $3::inet
+           AND identity.device_type = 'ip-camera'
+           AND (
+             COALESCE(identity.model, '') ~* '(dvr|nvr|xvr|uvr|recorder|multi[- ]?channel)'
+             OR COALESCE(camera.model, '') ~* '(dvr|nvr|xvr|uvr|recorder|multi[- ]?channel)'
+           )
+         ORDER BY (identity.camera_id IS NOT NULL) DESC, identity.last_seen_at DESC
+         LIMIT 1
+         FOR UPDATE OF identity`,
+        [tenantId, branchId, observation.ipAddress],
+      );
+      match = result.rows[0];
+      recorderPlaceholderUpgrade = Boolean(match);
     }
     // A previous scan may have created an IP-only identity before the scanner
     // learned a MAC address or hardware fingerprint. Enrich that identity
@@ -309,6 +338,7 @@ export class DeviceIdentityRepository {
     return {
       deviceIdentityId: identityId,
       ...(match?.camera_id ? { cameraId: match.camera_id } : {}),
+      ...(recorderPlaceholderUpgrade ? { recorderPlaceholderUpgrade: true } : {}),
     };
   }
 }

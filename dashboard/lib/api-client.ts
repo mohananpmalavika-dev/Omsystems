@@ -712,6 +712,7 @@ export const cameraInventoryApi = {
       { method: 'POST', body: JSON.stringify(data) }
     ),
   approveAllDiscovered: (branchId: string, data: {
+    discoveryIds?: string[];
     recordingMode?: 'continuous' | 'motion';
     retentionDays?: number;
     enableAnalytics?: boolean;

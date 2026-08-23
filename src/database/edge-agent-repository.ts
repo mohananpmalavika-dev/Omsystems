@@ -452,9 +452,13 @@ export class EdgeAgentRepository {
     try {
       await client.query("BEGIN");
       const identity = await this.deviceIdentities.resolveDiscovery(client, branchId, input);
-      const duplicateStatus = identity.cameraId ? "duplicate" : input.duplicateStatus ?? null;
+      const duplicateStatus = identity.recorderPlaceholderUpgrade
+        ? input.duplicateStatus ?? "unique"
+        : identity.cameraId ? "duplicate" : input.duplicateStatus ?? null;
       const existingAssociation = identity.cameraId ?? input.existingDeviceAssociation ?? null;
-      const statusReason = input.statusReason ?? (identity.cameraId ? "matched_existing_device_identity" : null);
+      const statusReason = identity.recorderPlaceholderUpgrade
+        ? "recorder_placeholder_upgrade"
+        : input.statusReason ?? (identity.cameraId ? "matched_existing_device_identity" : null);
       const onvifUuid = normalizeOnvifUuid(input.onvifUuid, input.onvifEndpointReference);
       const normalizedMac = normalizeMacAddress(input.macAddress)?.match(/.{2}/g)?.join(":") ?? null;
       const discoveryLayers = [
@@ -505,6 +509,7 @@ export class EdgeAgentRepository {
              capabilities = EXCLUDED.capabilities,
              source_type = EXCLUDED.source_type,
              recorder_id = EXCLUDED.recorder_id,
+             recorder_channel = EXCLUDED.recorder_channel,
              recorder_serial_number = EXCLUDED.recorder_serial_number,
              serial_number = EXCLUDED.serial_number,
              firmware_version = EXCLUDED.firmware_version,

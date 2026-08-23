@@ -1931,6 +1931,20 @@ export class MemoryStore {
     return job;
   }
 
+  private findRecorderPlaceholderIdentity(branchId: string, observation: DeviceIdentityObservation) {
+    if (!observation.ipAddress || observation.channel !== 1 ||
+      (observation.deviceType !== "analog-dvr-channel" && observation.deviceType !== "nvr-channel")) {
+      return undefined;
+    }
+    const recorderModel = /(dvr|nvr|xvr|uvr|recorder|multi[- ]?channel)/i;
+    return [...this.deviceIdentities.values()].find((candidate) => {
+      if (candidate.branchId !== branchId || candidate.deviceType !== "ip-camera" ||
+        candidate.currentIpAddress !== observation.ipAddress) return false;
+      const cameraModel = candidate.cameraId ? this.cameras.get(candidate.cameraId)?.model : undefined;
+      return recorderModel.test(candidate.model ?? "") || recorderModel.test(cameraModel ?? "");
+    });
+  }
+
   private resolveDeviceIdentity(branchId: string, observation: DeviceIdentityObservation) {
     const branch = this.nodes.get(branchId);
     if (!branch) throw new Error("invalid_branch");
@@ -1947,6 +1961,7 @@ export class MemoryStore {
         candidate.channel === observation.channel
       );
     }
+    identity ??= this.findRecorderPlaceholderIdentity(branchId, observation);
 
     const observedAt = new Date().toISOString();
     if (!identity) {
@@ -2035,7 +2050,10 @@ export class MemoryStore {
       ...(normalized.discoveryLayers ?? []),
       { layer: "register", status: "passed", detail: "Control plane registration completed" },
     ];
-    const identity = this.resolveDeviceIdentity(branchId, observationFromDiscovery(normalized));
+    const observation = observationFromDiscovery(normalized);
+    const recorderPlaceholder = this.findRecorderPlaceholderIdentity(branchId, observation);
+    const identity = this.resolveDeviceIdentity(branchId, observation);
+    const recorderPlaceholderUpgrade = recorderPlaceholder?.deviceId === identity.deviceId;
 
     const existing = [...this.discoveries.values()].find((item) => {
       const sameBranch = item.branchId === branchId;
@@ -2057,7 +2075,12 @@ export class MemoryStore {
       }
       Object.assign(existing, normalized, {
         deviceIdentityId: identity.deviceId,
-        ...(identity.cameraId ? {
+        status: "pending" as const,
+        ...(recorderPlaceholderUpgrade ? {
+          duplicateStatus: normalized.duplicateStatus ?? "unique" as const,
+          ...(identity.cameraId ? { existingDeviceAssociation: identity.cameraId } : {}),
+          statusReason: "recorder_placeholder_upgrade",
+        } : identity.cameraId ? {
           duplicateStatus: "duplicate" as const,
           existingDeviceAssociation: identity.cameraId,
           statusReason: normalized.statusReason ?? "matched_existing_device_identity",
@@ -2079,7 +2102,11 @@ export class MemoryStore {
       ...(normalized.streamVerified !== undefined ? { streamVerified: normalized.streamVerified } : {}),
       ...(normalized.compatibility ? { compatibility: normalized.compatibility } : {}),
       ...normalized,
-      ...(identity.cameraId ? {
+      ...(recorderPlaceholderUpgrade ? {
+        duplicateStatus: normalized.duplicateStatus ?? "unique",
+        ...(identity.cameraId ? { existingDeviceAssociation: identity.cameraId } : {}),
+        statusReason: "recorder_placeholder_upgrade",
+      } : identity.cameraId ? {
         duplicateStatus: "duplicate",
         existingDeviceAssociation: identity.cameraId,
         statusReason: normalized.statusReason ?? "matched_existing_device_identity",
@@ -2139,7 +2166,18 @@ export class MemoryStore {
       if (!existingCamera) throw new Error("identity_camera_not_found");
       Object.assign(existingCamera, clean({
         edgeAgentId: discovery.edgeAgentId,
+        vendor: discovery.vendor,
+        model: discovery.model,
+        channel: input.channel,
+        protocol: input.protocol,
+        profiles: structuredClone(discovery.profiles),
+        capabilities: structuredClone(discovery.capabilities),
+        connectionTransport: input.connectionTransport,
         ipAddress: input.ipAddress ?? discovery.ipAddress,
+        sourceType: input.sourceType ?? discovery.sourceType ?? "ip-camera",
+        recorderId: input.recorderId ?? discovery.recorderId,
+        recorderChannel: input.recorderChannel ?? discovery.recorderChannel,
+        recorderSerialNumber: input.recorderSerialNumber ?? discovery.recorderSerialNumber,
         serialNumber: input.serialNumber ?? discovery.serialNumber,
         macAddress: input.macAddress ?? discovery.macAddress,
         firmwareVersion: discovery.firmwareVersion,

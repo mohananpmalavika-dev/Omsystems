@@ -990,7 +990,7 @@ export async function buildApp(options?: {
         return reply.code(200).send({
           id,
           name: "Branch Edge Scanner",
-          version: body.version || "0.1.8",
+          version: body.version || "0.1.9",
           status: "online",
           lastSeenAt: new Date().toISOString(),
         });
@@ -1012,7 +1012,7 @@ export async function buildApp(options?: {
       return reply.code(200).send({
         id: (request.params as any)?.id || "edge-agent-default",
         status: "online",
-        version: "0.1.8",
+        version: "0.1.9",
         lastSeenAt: new Date().toISOString(),
       });
     }

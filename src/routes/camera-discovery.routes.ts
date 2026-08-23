@@ -24,6 +24,7 @@ const approveDiscoveryBody = z.object({
 });
 
 const approveAllBody = z.object({
+  discoveryIds: z.array(z.string().min(1)).min(1).max(256).optional(),
   recordingMode: z.enum(["continuous", "motion"]).optional(),
   retentionDays: z.number().int().min(1).max(3650).optional(),
   enableAnalytics: z.boolean().optional(),
@@ -227,7 +228,7 @@ export async function registerCameraDiscoveryRoutes(
       camera = await store.approveCamera(branchId, {
         discoveryId,
         name: body.name,
-        protocol: body.protocol ?? (discovered.recorderId ? "vendor-adapter" : "onvif-t"),
+        protocol: isRecorderBacked(discovered) ? "vendor-adapter" : body.protocol ?? "onvif-t",
         channel: body.channel ?? discovered.recorderChannel ?? 1,
         connectionSecretRef: body.connectionSecretRef ?? connection.connectionSecretRef,
         ...(connection.connectionTransport ? { connectionTransport: connection.connectionTransport } : {}),
@@ -252,7 +253,7 @@ export async function registerCameraDiscoveryRoutes(
         camera = await store.createCameraFromManualRegistration(branchId, {
           discoveryId,
           name: body.name,
-          protocol: body.protocol ?? (discovered.recorderId ? "vendor-adapter" : "onvif-t"),
+          protocol: isRecorderBacked(discovered) ? "vendor-adapter" : body.protocol ?? "onvif-t",
           channel: body.channel ?? discovered.recorderChannel ?? 1,
           connectionSecretRef: body.connectionSecretRef ?? connection.connectionSecretRef,
           ...(connection.connectionTransport ? { connectionTransport: connection.connectionTransport } : {}),
@@ -338,7 +339,7 @@ export async function registerCameraDiscoveryRoutes(
         [branchId, discovered.edgeAgentId, discovered.ipAddress, body.username, body.password],
       );
       await client.query(
-        `UPDATE discovered_cameras
+        `UPDATE camera_discoveries
          SET credentials_required = false,
              stream_verified = false,
              rtsp_validated = false,
@@ -403,6 +404,7 @@ export async function registerCameraDiscoveryRoutes(
     }
 
     const outcome = await autoProvisionVerifiedCameras(store, branchId, {
+      ...(body.discoveryIds ? { discoveryIds: body.discoveryIds } : {}),
       recordingMode: body.recordingMode ?? "continuous",
       retentionDays: body.retentionDays ?? 180,
       enableAnalytics: body.enableAnalytics ?? true,

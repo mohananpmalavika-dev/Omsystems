@@ -55,7 +55,7 @@ if (runtime.embeddedEnvironmentFile && (argv.length === 0 || hasArgument(argv, "
   process.exit(0);
 }
 if (hasArgument(argv, "--version")) {
-  process.stdout.write("Sentinel Grid Edge Agent 0.1.8\n");
+  process.stdout.write("Sentinel Grid Edge Agent 0.1.9\n");
   process.exit(0);
 }
 
@@ -817,6 +817,7 @@ async function scanBranch(options: { persistStreamSecrets?: boolean; target?: De
         ffprobePath: config.FFPROBE_PATH,
         timeoutMs: config.RTSP_SCAN_TIMEOUT_MS,
         concurrency: config.RTSP_SCAN_CONCURRENCY,
+        recorderMaxChannels: config.RECORDER_DISCOVERY_MAX_CHANNELS,
         username: "",
         password: "",
         credentialsForHost: (host: string) => dbCredentialProvider.get(host).catch(() => undefined),

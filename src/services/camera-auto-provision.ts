@@ -41,6 +41,7 @@ export interface CameraProvisionOutcome {
 interface CameraProvisionOptions {
   edgeAgentId?: string;
   ipAddresses?: readonly string[];
+  discoveryIds?: readonly string[];
   recordingMode?: "continuous" | "motion";
   retentionDays?: number;
   enableAnalytics?: boolean;
@@ -146,6 +147,7 @@ export async function autoProvisionVerifiedCameras(
 
   const discoveredForBranch = await store.listDiscoveredCameras(branchId);
   const allowedIpAddresses = options.ipAddresses ? new Set(options.ipAddresses) : undefined;
+  const allowedDiscoveryIds = options.discoveryIds ? new Set(options.discoveryIds) : undefined;
   const agentDiscoveries = discoveredForBranch.filter((discovered) =>
     (!options.edgeAgentId || discovered.edgeAgentId === options.edgeAgentId) &&
     (!allowedIpAddresses || allowedIpAddresses.has(discovered.ipAddress))
@@ -156,7 +158,8 @@ export async function autoProvisionVerifiedCameras(
   ));
   const scopedDiscoveries = agentDiscoveries.filter((discovered) =>
     discovered.status === "pending" &&
-    !supersededLoginIds.has(discovered.id)
+    !supersededLoginIds.has(discovered.id) &&
+    (!allowedDiscoveryIds || allowedDiscoveryIds.has(discovered.id))
   );
   const pendingDiscoveries = scopedDiscoveries.filter(compatibleUnique);
   const results: CameraProvisionResult[] = [];

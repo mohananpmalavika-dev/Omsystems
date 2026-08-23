@@ -8,6 +8,16 @@ import { MemoryStore } from "../src/store.js";
 
 const temporaryRoots: string[] = [];
 
+function addTestBranch(store: MemoryStore) {
+  store.nodes.set("branch-blr-001", {
+    id: "branch-blr-001",
+    tenantId: "00000000-0000-4000-8000-000000000001",
+    type: "branch",
+    name: "Bengaluru Branch 001",
+    path: ["branch-blr-001"],
+  } as any);
+}
+
 afterEach(async () => {
   await Promise.all(temporaryRoots.splice(0).map((path) => rm(path, { recursive: true, force: true })));
 });
@@ -45,6 +55,7 @@ describe("branch edge-agent package", () => {
     await writeFile(join(artifactRoot, "release", "edge-agent.exe"), Buffer.from("MZ-test-executable"));
 
     const store = new MemoryStore();
+    addTestBranch(store);
     const agent = await store.registerEdgeAgent("branch-blr-001", "BLR Branch Edge", "9.8.7");
     const edgeKey = "k".repeat(43);
     const app = await buildApp({
@@ -92,6 +103,7 @@ describe("branch edge-agent package", () => {
     await writeFile(join(artifactRoot, "release", "edge-agent.exe"), Buffer.from("MZ-test-executable"));
 
     const store = new MemoryStore();
+    addTestBranch(store);
     const agent = await store.registerEdgeAgent("branch-blr-001", "Temporary scanner", "9.8.7");
     const app = await buildApp({
       store,
@@ -135,6 +147,7 @@ describe("branch edge-agent package", () => {
     await writeFile(join(artifactRoot, "release", "edge-agent.exe"), Buffer.from("MZ-test-executable"));
 
     const store = new MemoryStore();
+    addTestBranch(store);
     const activation = await store.createEdgeActivation({
       branchId: "branch-blr-001",
       agentName: "Bengaluru Scanner",
@@ -180,6 +193,7 @@ describe("branch edge-agent package", () => {
     await writeFile(join(artifactRoot, "release", "edge-agent.exe"), Buffer.from("MZ-test-executable"));
 
     const store = new MemoryStore();
+    addTestBranch(store);
     const activation = await store.createEdgeActivation({
       branchId: "branch-blr-001",
       agentName: "Automatic Scanner",
@@ -220,6 +234,7 @@ describe("branch edge-agent package", () => {
     await writeFile(join(artifactRoot, "release", "edge-agent.exe"), Buffer.from("MZ-test-executable"));
 
     const store = new MemoryStore();
+    addTestBranch(store);
     const activation = await store.createEdgeActivation({
       branchId: "branch-blr-001",
       agentName: "Invalid Scanner",
@@ -258,6 +273,7 @@ describe("branch edge-agent package", () => {
     await writeFile(join(artifactRoot, "release", "edge-agent.exe"), Buffer.from("MZ-test-executable"));
 
     const store = new MemoryStore();
+    addTestBranch(store);
     const agent = await store.registerEdgeAgent("branch-blr-001", "Temporary scanner", "9.8.7");
     const app = await buildApp({
       store,

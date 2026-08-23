@@ -6,7 +6,7 @@ const schema = z.object({
   EDGE_AGENT_ID: z.preprocess((value) => value === "" ? undefined : value, z.string().min(1).optional()),
   EDGE_ACTIVATION_CODE: z.preprocess((value) => value === "" ? undefined : value, z.string().startsWith("sgact_").min(40).optional()),
   EDGE_AGENT_NAME: z.string().min(2),
-  EDGE_AGENT_VERSION: z.string().default("0.1.8"),
+  EDGE_AGENT_VERSION: z.string().default("0.1.9"),
   DEV_USER_ID: z.preprocess((value) => value === "" ? undefined : value, z.string().min(1).optional()),
   CAMERA_USERNAME: z.string().default(""),
   CAMERA_PASSWORD: z.string().default(""),
@@ -26,6 +26,9 @@ const schema = z.object({
   // Recorder web ports are separate from RTSP ports. They are used only to
   // identify a recorder before authenticated channel enumeration.
   RECORDER_HTTP_PORTS: z.string().default("80,8080,8899"),
+  // Upper safety bound for automatic DVR/NVR channel enumeration. Discovery
+  // stops earlier after consecutive empty channel batches.
+  RECORDER_DISCOVERY_MAX_CHANNELS: z.coerce.number().int().min(1).max(256).default(64),
   // Comma-separated list of common RTSP path suffixes to try
   RTSP_SCAN_PATHS: z.string().default("/,/stream,/h264,/live.sdp,/mpeg4,/Streaming/Channels/101,/cam/realmonitor?channel=1&subtype=1,/cam/realmonitor?channel=1&subtype=0"),
   // Concurrency for the active TCP/connect+probe scanner (kept low to protect home/SOHO routers)

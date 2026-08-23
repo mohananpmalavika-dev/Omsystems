@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   buildEdgeLiveGateway,
   extractQuickTunnelUrl,
+  mediaTunnelOrigin,
   resolvePrivateMediaGatewayUrl,
   resolveMediaTunnelMode,
   startEdgeMediaRuntimeIfAvailable,
@@ -35,6 +36,12 @@ describe("all-in-one edge live gateway", () => {
     expect(extractQuickTunnelUrl(
       "Your quick Tunnel is https://blue-tree.trycloudflare.com",
     )).toBe("https://blue-tree.trycloudflare.com");
+  });
+
+  it("connects the tunnel to loopback when the gateway listens on every interface", () => {
+    expect(mediaTunnelOrigin("0.0.0.0", 8090)).toBe("http://127.0.0.1:8090");
+    expect(mediaTunnelOrigin("::", 8090)).toBe("http://127.0.0.1:8090");
+    expect(mediaTunnelOrigin("192.168.29.10", 8090)).toBe("http://192.168.29.10:8090");
   });
 
   it("keeps discovery available when optional live media cannot start", async () => {

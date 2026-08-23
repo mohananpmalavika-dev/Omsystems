@@ -260,7 +260,7 @@ export async function startEdgeMediaRuntime(input: EdgeMediaRuntimeInput): Promi
         logger.warn("Managed media tunnel is not provisioned; using a protected temporary tunnel");
       }
       const started = await startQuickTunnel(config.CLOUDFLARED_PATH,
-        `http://${config.EDGE_LIVE_GATEWAY_HOST}:${config.EDGE_LIVE_GATEWAY_PORT}`, runtimeDirectory);
+        mediaTunnelOrigin(config.EDGE_LIVE_GATEWAY_HOST, config.EDGE_LIVE_GATEWAY_PORT), runtimeDirectory);
       tunnel = started.process;
       resolvedPublicUrl = started.publicUrl;
       logger.warn("Quick media tunnel is active; use a named tunnel for production", { publicUrl: resolvedPublicUrl });
@@ -301,6 +301,14 @@ export function resolveMediaTunnelMode(config: Pick<EdgeConfig,
     return "quick" as const;
   }
   return config.MEDIA_TUNNEL_MODE;
+}
+
+export function mediaTunnelOrigin(listenHost: string, port: number) {
+  const connectHost = listenHost === "0.0.0.0" || listenHost === "::" || listenHost === "[::]"
+    ? "127.0.0.1"
+    : listenHost;
+  const host = connectHost.includes(":") && !connectHost.startsWith("[") ? `[${connectHost}]` : connectHost;
+  return `http://${host}:${port}`;
 }
 
 export function resolvePrivateMediaGatewayUrl(

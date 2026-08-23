@@ -179,7 +179,7 @@ export async function discoverRtspRecorderChannels(input: {
   emptyBatchLimit?: number;
   probe(uri: string): Promise<Awaited<ReturnType<typeof probeRtsp>>>;
 }) {
-  const maxChannels = Math.max(1, Math.min(input.maxChannels ?? 32, 64));
+  const maxChannels = Math.max(1, Math.min(input.maxChannels ?? 64, 256));
   const batchSize = Math.max(1, Math.min(input.batchSize ?? 4, 8));
   const emptyBatchLimit = Math.max(1, input.emptyBatchLimit ?? 2);
   const channels: RtspRecorderChannel[] = [];
@@ -340,7 +340,7 @@ export async function discoverRtspDevices(
           for (const cred of hostCreds) {
             const recorder = await discoverRtspRecorderChannels({
               host: ip,
-              ports: [554, 8554, 8000, 37777],
+              ports: rtspStreamingPorts,
               vendor: recorderFingerprint.vendor,
               username: cred.username,
               password: cred.password,
@@ -348,7 +348,7 @@ export async function discoverRtspDevices(
               probe: (uri) => probeRtsp(uri, ffprobePath, timeoutMs),
             });
             if (recorder.channels.length > 0) {
-              await submitRecorderChannels(ip, port, recorderFingerprint, recorder.channels);
+              await submitRecorderChannels(ip, recorderFingerprint, recorder.channels);
               return;
             }
           }
@@ -397,19 +397,34 @@ export async function discoverRtspDevices(
               try {
                 const macAddress = await resolveNeighborMac(ip);
                 const hardwareId = createDeviceFingerprint(macAddress ? { macAddress } : {});
-                const isDvr = path.includes("channel=") || path.includes("Channels/");
+                const pathRecorder = recorderFingerprint ?? recorderFingerprintForRtspPath(path);
+                if (pathRecorder) {
+                  const recorder = await discoverRtspRecorderChannels({
+                    host: ip,
+                    ports: rtspStreamingPorts,
+                    vendor: pathRecorder.vendor,
+                    username: cred.username,
+                    password: cred.password,
+                    ...(options.recorderMaxChannels ? { maxChannels: options.recorderMaxChannels } : {}),
+                    probe: (candidateUri) => probeRtsp(candidateUri, ffprobePath, timeoutMs),
+                  });
+                  if (recorder.channels.length > 0) {
+                    await submitRecorderChannels(ip, pathRecorder, recorder.channels, macAddress);
+                    return;
+                  }
+                }
                 const payload = {
                   edgeAgentId: agentId,
                   discoveryMethod: "configured-ip-range",
                   vendor: "other",
                   manufacturer: "unknown",
-                  model: isDvr ? "DVR / NVR Multi-Channel" : "IP Camera",
+                  model: "IP Camera",
                   ipAddress: ip,
                   ...(macAddress ? { macAddress } : {}),
                   ...(hardwareId ? { hardwareId } : {}),
                   onvifPort: 80,
                   rtspPort: port,
-                  displayName: isDvr ? `Discovered DVR ${ip}` : `Discovered camera ${ip}`,
+                  displayName: `Discovered camera ${ip}`,
                   credentialsRequired: false,
                   streamVerified: true,
                   rtspValidated: true,
@@ -426,27 +441,6 @@ export async function discoverRtspDevices(
                     await secretsStore.set(`edge://${agentId}/${discovery.id}`, authed);
                   }
                   logger.info(`RTSP discovery: verified stream at ${ip}:${port}${path} -> discovery ${discovery.id}`);
-
-                  // If this is a multi-channel DVR, also discover additional channels automatically
-                  if (path.includes("channel=1")) {
-                    for (let ch = 2; ch <= 8; ch++) {
-                      const chPath = path.replace("channel=1", `channel=${ch}`);
-                      const chUri = authed.replace("channel=1", `channel=${ch}`);
-                      const chProbe = await probeRtsp(chUri, ffprobePath, timeoutMs).catch(() => ({ reachable: false }));
-                      if (chProbe.reachable) {
-                        const chPayload = {
-                          ...payload,
-                          displayName: `Discovered DVR ${ip} - Ch ${ch}`,
-                          profiles: [{ name: "main", codec: normalizeRtspDiscoveryCodec((chProbe as any).codec), width: (chProbe as any).width ?? 1920, height: (chProbe as any).height ?? 1080 }],
-                        };
-                        const chDiscovery = await control.submitDiscovery(branchId, chPayload);
-                        submittedCount += 1;
-                        if (persistStreamSecrets && secretsStore) {
-                          await secretsStore.set(`edge://${agentId}/${chDiscovery.id}`, chUri);
-                        }
-                      }
-                    }
-                  }
                   return;
                 } catch (submissionError) {
                   logger.error("RTSP discovery: failed to submit discovery", { error: submissionError instanceof Error ? submissionError.message : String(submissionError) });
@@ -478,14 +472,13 @@ export async function discoverRtspDevices(
 
   async function submitRecorderChannels(
     ip: string,
-    port: number,
     recorder: HttpRecorderFingerprint,
     channels: RtspRecorderChannel[],
+    resolvedMacAddress?: string,
   ) {
-    const macAddress = await resolveNeighborMac(ip);
-    const recorderFingerprint = createDeviceFingerprint(macAddress ? { macAddress } : {});
-    const recorderIdentity = recorderFingerprint ?? `${ip}:${port}`;
-    const recorderId = `recorder-${recorderIdentity}`.replace(/[^a-zA-Z0-9_.:-]/g, "-");
+    const macAddress = resolvedMacAddress ?? await resolveNeighborMac(ip);
+    const recorderId = recorderIdForHost(ip);
+    const rtspPort = rtspPortFromUri(channels[0]?.uri) ?? 554;
     for (const channel of channels) {
       const channelFingerprint = createDeviceFingerprint({
         ...(macAddress ? { macAddress } : {}),
@@ -501,7 +494,7 @@ export async function discoverRtspDevices(
         ...(macAddress ? { macAddress } : {}),
         ...(channelFingerprint ? { hardwareId: channelFingerprint } : {}),
         onvifPort: 80,
-        rtspPort: port,
+        rtspPort,
         displayName: `${recorder.manufacturer} DVR - Channel ${channel.sourceChannel}`,
         credentialsRequired: false,
         streamVerified: true,
@@ -548,7 +541,7 @@ export async function discoverRtspDevices(
         await secretsStore.set(`edge://${agentId}/${discovery.id}`, channel.uri);
       }
     }
-    logger.info(`RTSP recorder discovery: found ${channels.length} channel(s) at ${ip}:${port}`, {
+    logger.info(`RTSP recorder discovery: found ${channels.length} channel(s) at ${ip}:${rtspPort}`, {
       manufacturer: recorder.manufacturer,
       recorderId,
     });
@@ -572,10 +565,9 @@ export function buildUnverifiedRtspDiscoveryPayload(input: {
   const recorder = input.endpoint.recorder;
   return {
     edgeAgentId: input.agentId,
-    // Keep the unauthenticated placeholder compatible with older control
-    // planes and IP-only identities. Recorder/channel identities are created
-    // only after the operator supplies valid credentials and the streams can
-    // be enumerated.
+    // Keep the unauthenticated placeholder IP-scoped, while retaining a
+    // recorder group ID so it can be superseded cleanly after credentials
+    // unlock verified per-channel identities.
     discoveryMethod: "edge-agent-reported-inventory",
     vendor: recorderVendor(recorder?.vendor),
     manufacturer: recorder?.manufacturer ?? "Unknown",
@@ -602,7 +594,43 @@ export function buildUnverifiedRtspDiscoveryPayload(input: {
       : "rtsp_stream_unverified",
     profiles: [{ name: "unverified", codec: "unknown", width: 1, height: 1 }],
     capabilities: { ptz: false, audio: false, events: false },
+    ...(recorder ? { recorderId: recorderIdForHost(input.ipAddress) } : {}),
   };
+}
+
+export function recorderIdForHost(ipAddress: string) {
+  return `recorder-${ipAddress.trim().toLowerCase()}`.replace(/[^a-zA-Z0-9_.:-]/g, "-");
+}
+
+function rtspPortFromUri(uri: string | undefined) {
+  if (!uri) return undefined;
+  try {
+    const parsed = new URL(uri);
+    const port = parsed.port ? Number(parsed.port) : 554;
+    return Number.isInteger(port) && port >= 1 && port <= 65_535 ? port : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+export function recorderFingerprintForRtspPath(path: string): HttpRecorderFingerprint | undefined {
+  if (/\/cam\/realmonitor\?[^#]*\bchannel=\d+/i.test(path)) {
+    return {
+      vendor: "generic",
+      manufacturer: "RTSP",
+      model: "Multi-channel DVR",
+      sourceType: "analog-dvr-channel",
+    };
+  }
+  if (/\/Streaming\/Channels\/\d+/i.test(path) || /\/ch\d+\/(?:main|sub)\/av_stream/i.test(path)) {
+    return {
+      vendor: "generic",
+      manufacturer: "RTSP",
+      model: "Multi-channel recorder",
+      sourceType: "nvr-channel",
+    };
+  }
+  return undefined;
 }
 
 function recorderVendor(vendor: VendorStreamFamily | undefined): "hikvision" | "cp-plus" | "other" {

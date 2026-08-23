@@ -8,7 +8,7 @@ async function pushDiscovered() {
     const regRes = await fetch(`${baseUrl}/v1/branches/${branchId}/edge-agents/register`, {
       method: "POST",
       headers: { "Content-Type": "application/json", "x-user-id": "user-global-admin" },
-      body: JSON.stringify({ name: "Aditi Malavika Gateway Scanner", version: "0.1.8" }),
+      body: JSON.stringify({ name: "Aditi Malavika Gateway Scanner", version: "0.1.9" }),
     });
     console.log("Edge agent register status:", regRes.status);
     const data = await regRes.json();

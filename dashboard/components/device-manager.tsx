@@ -717,31 +717,56 @@ export function DeviceManager() {
         password: activationPassword,
       });
       setActivationPassword("");
-      const targetId = credentialActivation.id;
       const targetName = credentialActivation.displayName || credentialActivation.model || "IP Camera";
       const targetAgentId = credentialActivation.edgeAgentId;
+      const targetIpAddress = credentialActivation.ipAddress;
       setCredentialActivation(undefined);
 
       // Saving a password only queues a single-device probe. Do not approve
       // or claim a live stream until the agent has returned fresh evidence.
       await completeCameraScan(activation.scanId, targetAgentId);
       const refreshed = await cameraInventoryApi.listDiscovered(selectedBranch);
-      const verified = (refreshed.data ?? []).find((item: any) => item.id === targetId);
-      setDiscoveredCameras(refreshed.data ?? []);
-      updateDiscoveryReviewState(refreshed.data ?? []);
-      if (!verified?.streamVerified || verified.credentialsRequired) {
-        if (verified?.credentialsRequired) setCredentialActivation(verified);
+      const refreshedDiscoveries = refreshed.data ?? [];
+      const verifiedTargets = refreshedDiscoveries.filter((item: any) =>
+        item.edgeAgentId === targetAgentId &&
+        item.ipAddress === targetIpAddress &&
+        item.streamVerified === true &&
+        item.credentialsRequired !== true &&
+        item.duplicateStatus !== "duplicate" &&
+        (item.compatibilityStatus ?? item.compatibility) === "compatible"
+      );
+      setDiscoveredCameras(refreshedDiscoveries);
+      updateDiscoveryReviewState(refreshedDiscoveries);
+      if (verifiedTargets.length === 0) {
+        const stillNeedsCredentials = refreshedDiscoveries.find((item: any) =>
+          item.edgeAgentId === targetAgentId && item.ipAddress === targetIpAddress && item.credentialsRequired
+        );
+        if (stillNeedsCredentials) setCredentialActivation(stillNeedsCredentials);
         setNotice(`Credentials were saved for ${targetName}, but the device has not yet returned a verified stream. Check the login and device stream settings, then retry.`);
         return;
       }
 
-      const verifiedName = verified.displayName || verified.model || targetName;
-      await cameraInventoryApi.approveDiscovery(selectedBranch, targetId, {
-        name: verifiedName,
-        protocol: verified.onvifSupport ? "onvif-t" : "rtsp",
-      });
-      markDiscoveryReviewStatus(targetId, "approved");
-      setNotice(`Credentials verified and ${verifiedName} was approved.`);
+      const provisioning = await cameraInventoryApi.approveAllDiscovered(selectedBranch, {
+        discoveryIds: verifiedTargets.map((item: any) => item.id),
+        recordingMode: "continuous",
+        retentionDays: 180,
+        enableAnalytics: true,
+        enableAlerts: true,
+      }) as { summary: { provisioned: number; partial: number; failed: number }; results: AutoProvisionResult[] };
+      setAutoProvisionResults(provisioning.results ?? []);
+      for (const result of provisioning.results ?? []) {
+        if (result.status === "provisioned" || result.status === "partial") {
+          markDiscoveryReviewStatus(result.discoveryId, "approved");
+        }
+      }
+      const activatedCount = (provisioning.summary?.provisioned ?? 0) + (provisioning.summary?.partial ?? 0);
+      if (activatedCount === 0) {
+        throw new Error("Verified streams were discovered, but their camera records could not be activated.");
+      }
+      setCredentialActivation(undefined);
+      setNotice(verifiedTargets.length > 1
+        ? `Credentials verified. ${activatedCount} recorder channels were added and connected to live monitoring.`
+        : `Credentials verified and ${targetName} was connected to live monitoring.`);
       await refreshBranch(selectedBranch);
     } catch (reason) {
       if (isAgentUpdateRequired(reason)) {
@@ -779,7 +804,7 @@ export function DeviceManager() {
       const name = discovered.displayName || discovered.model || `${discovered.vendor || "IP"} Camera (${discovered.ipAddress})`;
       await cameraInventoryApi.approveDiscovery(selectedBranch, discovered.id, {
         name,
-        protocol: discovered.onvifSupport ? "onvif-t" : "rtsp",
+        protocol: discovered.recorderId ? "vendor-adapter" : discovered.onvifSupport ? "onvif-t" : "rtsp",
       });
       markDiscoveryReviewStatus(discovered.id, "approved");
       setPreviewDiscoveryId(undefined);

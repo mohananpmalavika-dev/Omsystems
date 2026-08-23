@@ -4,6 +4,8 @@ import {
   buildUnverifiedRtspDiscoveryPayload,
   discoverRtspRecorderChannels,
   normalizeRtspDiscoveryCodec,
+  recorderFingerprintForRtspPath,
+  recorderIdForHost,
 } from "../src/discovery/rtsp-network-scan.js";
 
 describe("automatic RTSP recorder discovery", () => {
@@ -97,6 +99,16 @@ describe("automatic RTSP recorder discovery", () => {
     expect(normalizeRtspDiscoveryCodec("h264")).toBe("H264");
   });
 
+  it("classifies channelized RTSP paths as recorders before creating camera inventory", () => {
+    expect(recorderFingerprintForRtspPath("/cam/realmonitor?channel=1&subtype=0")).toMatchObject({
+      sourceType: "analog-dvr-channel",
+    });
+    expect(recorderFingerprintForRtspPath("/Streaming/Channels/101")).toMatchObject({
+      sourceType: "nvr-channel",
+    });
+    expect(recorderFingerprintForRtspPath("/live.sdp")).toBeUndefined();
+  });
+
   it("reports the identified CP PLUS DVR when its login is rejected", () => {
     const payload = buildUnverifiedRtspDiscoveryPayload({
       agentId: "edge-1",
@@ -125,8 +137,8 @@ describe("automatic RTSP recorder discovery", () => {
       streamVerified: false,
       statusReason: "recorder_credentials_required",
       discoveryMethod: "edge-agent-reported-inventory",
+      recorderId: recorderIdForHost("192.168.29.171"),
     });
-    expect(payload).not.toHaveProperty("recorderId");
     expect(payload).not.toHaveProperty("hardwareId");
     expect(payload).not.toHaveProperty("macAddress");
   });

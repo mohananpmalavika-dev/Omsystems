@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { buildApp } from "../src/app.js";
 import { MemoryStore } from "../src/store.js";
+import { autoProvisionVerifiedCameras } from "../src/services/camera-auto-provision.js";
 
 const testTenantId = "00000000-0000-4000-8000-000000000001";
 
@@ -155,7 +156,6 @@ describe("enhanced device discovery", () => {
         manufacturer: "Hikvision",
         model: "DS-2CD-Test",
         ipAddress: "192.168.10.30",
-        manufacturer: "Hikvision",
         onvifPort: 80,
         rtspPort: 554,
         profiles: [{ name: "main", codec: "H264", width: 1920, height: 1080 }],
@@ -240,5 +240,102 @@ describe("enhanced device discovery", () => {
     expect(discoveries).toHaveLength(1);
     expect(discoveries[0].serialNumber).toBe("SN-100");
     expect(discoveries[0].discoveryMethod).toBe("onvif-ws-discovery");
+  });
+
+  it("upgrades a recorder placeholder into channel 1 and provisions every verified channel", async () => {
+    const store = new MemoryStore();
+    addTestBranch(store);
+    const branchId = "branch-blr-001";
+    const agent = await store.registerEdgeAgent(branchId, "gateway-test", "0.1.8");
+    const placeholder = await store.createDiscovery(branchId, {
+      edgeAgentId: agent.id,
+      discoveryMethod: "configured-ip-range",
+      vendor: "cp-plus",
+      manufacturer: "CP PLUS",
+      model: "DVR / NVR Multi-Channel",
+      ipAddress: "192.168.29.171",
+      onvifPort: 80,
+      rtspPort: 554,
+      credentialsRequired: false,
+      streamVerified: true,
+      rtspValidated: true,
+      compatibility: "compatible",
+      compatibilityStatus: "compatible",
+      duplicateStatus: "unique",
+      profiles: [{ name: "main", codec: "H264", width: 1920, height: 1080 }],
+      capabilities: { ptz: false, audio: true, events: false },
+    });
+    const originalCamera = await store.approveCamera(branchId, {
+      discoveryId: placeholder.id,
+      name: "Camera 192.168.29.171",
+      protocol: "rtsp",
+      channel: 1,
+      connectionSecretRef: `edge://${agent.id}/${placeholder.id}`,
+      connectionTransport: "edge-gateway",
+      sourceType: "ip-camera",
+      ipAddress: "192.168.29.171",
+    });
+    expect(originalCamera).toBeDefined();
+
+    const recorderBase = {
+      edgeAgentId: agent.id,
+      discoveryMethod: "nvr-dvr-channel-discovery" as const,
+      vendor: "cp-plus" as const,
+      manufacturer: "CP PLUS",
+      model: "CP PLUS DVR channel",
+      ipAddress: "192.168.29.171",
+      onvifPort: 80,
+      rtspPort: 554,
+      credentialsRequired: false,
+      streamVerified: true,
+      rtspValidated: true,
+      compatibility: "compatible" as const,
+      compatibilityStatus: "compatible" as const,
+      duplicateStatus: "unique" as const,
+      sourceType: "analog-dvr-channel" as const,
+      recorderId: "recorder-192.168.29.171",
+      profiles: [{ name: "sub", codec: "H264" as const, width: 640, height: 360 }],
+      capabilities: { ptz: false, audio: false, events: false },
+    };
+    const channelOne = await store.createDiscovery(branchId, {
+      ...recorderBase,
+      recorderChannel: 1,
+      hardwareId: "recorder-channel-1",
+      displayName: "CP PLUS DVR - Channel 1",
+    });
+    const channelTwo = await store.createDiscovery(branchId, {
+      ...recorderBase,
+      recorderChannel: 2,
+      hardwareId: "recorder-channel-2",
+      displayName: "CP PLUS DVR - Channel 2",
+    });
+
+    expect(channelOne.id).toBe(placeholder.id);
+    expect(channelOne).toMatchObject({
+      sourceType: "analog-dvr-channel",
+      recorderChannel: 1,
+      duplicateStatus: "unique",
+      statusReason: "recorder_placeholder_upgrade",
+      status: "pending",
+    });
+
+    const outcome = await autoProvisionVerifiedCameras(store, branchId, {
+      discoveryIds: [channelOne.id, channelTwo.id],
+      enableAnalytics: false,
+      enableAlerts: false,
+    });
+    expect(outcome.summary.provisioned).toBe(2);
+
+    const cameras = [...store.cameras.values()].filter((camera) => camera.branchId === branchId);
+    expect(cameras).toHaveLength(2);
+    const firstChannel = cameras.find((camera) => camera.recorderChannel === 1);
+    expect(firstChannel).toMatchObject({
+      id: originalCamera!.id,
+      sourceType: "analog-dvr-channel",
+      protocol: "vendor-adapter",
+      connectionSecretRef: `edge://${agent.id}/${channelOne.id}`,
+    });
+    expect(cameras.find((camera) => camera.recorderChannel === 2)?.connectionSecretRef)
+      .toBe(`edge://${agent.id}/${channelTwo.id}`);
   });
 });
