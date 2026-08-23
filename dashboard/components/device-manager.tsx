@@ -579,27 +579,10 @@ export function DeviceManager() {
     );
     const activationCandidate = mappedResults.find((camera) => camera.credentialsRequired);
     setCredentialActivation(activationCandidate);
-    const readyToProvision = mappedResults.some((camera) =>
-      camera.streamVerified && !camera.credentialsRequired &&
-      camera.duplicateStatus !== "duplicate" && camera.compatibility === "compatible",
-    );
-    let provisioned = job.provisionedCount ?? 0;
-    if (job.scope !== "device" && readyToProvision && provisioned === 0) {
-      const provisioning = await cameraInventoryApi.approveAllDiscovered(selectedBranch, {
-        recordingMode: "continuous",
-        retentionDays: 180,
-        enableAnalytics: true,
-        enableAlerts: true,
-      }) as { summary: { provisioned: number }; results: AutoProvisionResult[] };
-      provisioned = provisioning.summary.provisioned;
-      setAutoProvisionResults(provisioning.results);
-      for (const result of provisioning.results) {
-        if (result.status === "provisioned" || result.status === "partial") {
-          markDiscoveryReviewStatus(result.discoveryId, "approved");
-        }
-      }
-    }
-    if (provisioned > 0) await refreshBranch(selectedBranch);
+    // Discovery is intentionally separate from approval. The operator reviews
+    // every discovered IP camera or DVR channel in this module before it is
+    // added to active monitoring; scanning must never create cameras silently.
+    const provisioned = job.provisionedCount ?? 0;
     setShowDiscoveredList(false);
     return { found: job.resultCount || mappedResults.length, provisioned, credentialsRequired };
   }
@@ -623,7 +606,7 @@ export function DeviceManager() {
     // picks up the job via its heartbeat poll and we track the right scan ID.
     const job = await cameraInventoryApi.startScan(selectedBranch, gateway.id);
     const outcome = await completeCameraScan(job.id, gateway.id);
-    setNotice(`Camera scan completed. Found ${outcome.found} devices. ${outcome.provisioned} verified live streams were activated${outcome.credentialsRequired ? `; ${outcome.credentialsRequired} need credentials` : ``}.`);
+    setNotice(`Camera scan completed. Found ${outcome.found} devices. Review them in Device discovery; nothing is added until you approve it here${outcome.credentialsRequired ? `; ${outcome.credentialsRequired} need credentials` : ``}.`);
   }
 
   function openScannerInstaller() {

@@ -24,6 +24,18 @@ import { HlsPlayer } from "./hls-player";
 import { PtzControl } from "./ptz-control";
 import { HoldToTalkButton } from "./hold-to-talk-button";
 
+function formatLiveError(reason: string) {
+  const labels: Record<string, string> = {
+    invalid_live_session: "Live authorization expired",
+    media_gateway_failure: "The media gateway rejected the stream",
+    media_gateway_unavailable: "The media gateway is unavailable",
+    stream_secret_unavailable: "The camera stream source is not configured",
+    "HLS playback failed": "The stream could not be played",
+    "Live session timed out": "Live authorization timed out",
+  };
+  return labels[reason] ?? "Unable to start the live feed";
+}
+
 export function CameraTile({
   camera,
   session,
@@ -41,6 +53,7 @@ export function CameraTile({
   desiredPlaybackMode,
   degradationReason,
   snapshotUrl,
+  liveError,
   onVideoElementChange,
   onPlaybackError,
 }: {
@@ -60,6 +73,7 @@ export function CameraTile({
   desiredPlaybackMode?: CameraPlaybackMode;
   degradationReason?: DegradationReason;
   snapshotUrl?: string;
+  liveError?: string;
   onVideoElementChange?: (videoElement: HTMLVideoElement | null) => void;
   onPlaybackError?: (reason?: string) => void;
 }) {
@@ -200,8 +214,9 @@ export function CameraTile({
               className="live-video"
             />
           ) : (
-            <div className="grid h-full place-items-center bg-slate-950 px-4 text-center text-xs text-slate-400">
-              {camera.status === "offline" ? "Camera offline" : "Live feed ready"}
+            <div className="camera-feed-placeholder">
+              <span>{camera.status === "offline" ? "Camera offline" : liveError ? "Live feed unavailable" : "Live feed ready"}</span>
+              {liveError && <small>{formatLiveError(liveError)}</small>}
             </div>
           )}
         </div>
@@ -209,7 +224,7 @@ export function CameraTile({
         <div className="tile-topline">
           <span className={`status-pill ${camera.status}`}>
             <i />
-            {camera.status === "online" ? "Live" : camera.status}
+            {session?.hls ? "Live" : camera.status === "online" ? "Online" : camera.status}
           </span>
           <button className={`recording-pill ${recording?.enabled ? "active" : ""}`} onClick={onToggleRecording} disabled={recordingLoading} title={recording?.enabled ? "Stop recording" : "Start continuous recording"}>
             {recording?.enabled ? <CircleStop size={12} /> : <Radio size={12} />}

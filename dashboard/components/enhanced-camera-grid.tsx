@@ -105,6 +105,7 @@ export function EnhancedCameraGrid({
     new Map()
   );
   const [loading, setLoading] = useState<Set<string>>(new Set());
+  const [liveErrors, setLiveErrors] = useState<Map<string, string>>(new Map());
   const [showLayoutMenu, setShowLayoutMenu] = useState(false);
   const [layoutName, setLayoutName] = useState(initialLayout?.name || "");
   const [savedLayouts, setSavedLayouts] = useState<GridLayout[]>([]);
@@ -222,6 +223,12 @@ export function EnhancedCameraGrid({
     loadingRef.current.add(cameraId);
     activeLiveStartsRef.current += 1;
     setLoading(new Set(loadingRef.current));
+    setLiveErrors((current) => {
+      if (!current.has(cameraId)) return current;
+      const next = new Map(current);
+      next.delete(cameraId);
+      return next;
+    });
 
     const controller = new AbortController();
     liveStartControllersRef.current.set(cameraId, controller);
@@ -235,6 +242,12 @@ export function EnhancedCameraGrid({
       const session = await startLiveFromBrowser(cameraId, stream, controller.signal);
       sessionsRef.current.set(cameraId, session);
       setSessions(new Map(sessionsRef.current));
+      setLiveErrors((current) => {
+        if (!current.has(cameraId)) return current;
+        const next = new Map(current);
+        next.delete(cameraId);
+        return next;
+      });
       activeStreamTypesRef.current.set(cameraId, stream);
       markPlaybackActive(cameraId);
 
@@ -245,6 +258,7 @@ export function EnhancedCameraGrid({
     } catch (error) {
       console.warn("Live session startup failed for", cameraId, error);
       const reason = error instanceof Error ? error.message : "Unknown error";
+      setLiveErrors((current) => new Map(current).set(cameraId, reason));
       updateStreamState(cameraId, "ERROR", reason);
       reportPlaybackFailure(cameraId, reason);
     } finally {
@@ -1090,8 +1104,12 @@ export function EnhancedCameraGrid({
                   desiredPlaybackMode={scheduledCamera?.mode}
                   degradationReason={viewerReason}
                   snapshotUrl={snapshotUrls.get(camera.id)}
+                  liveError={liveErrors.get(camera.id)}
                   onVideoElementChange={(videoElement) => attachVideoElement(camera.id, videoElement)}
-                  onPlaybackError={(reason) => reportPlaybackFailure(camera.id, reason)}
+                  onPlaybackError={(reason) => {
+                    setLiveErrors((current) => new Map(current).set(camera.id, reason ?? "HLS playback failed"));
+                    reportPlaybackFailure(camera.id, reason);
+                  }}
                   index={i}
                   recording={recordings.get(camera.id)}
                   recordingLoading={loading.has(camera.id)}

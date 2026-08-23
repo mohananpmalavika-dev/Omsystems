@@ -53,7 +53,12 @@ describe("website scanner launch flow", () => {
     expect(source).toContain("Model:");
     expect(source).toContain("Type:");
     expect(source).toContain("No broadcast discovery, subnet scan, or other camera probe will run.");
-    expect(source).toContain('job.scope !== "device" && readyToProvision');
+    const scanCompletion = source.slice(
+      source.indexOf("async function completeCameraScan"),
+      source.indexOf("async function waitForWebsiteScanner"),
+    );
+    expect(scanCompletion).not.toContain("cameraInventoryApi.approveAllDiscovered");
+    expect(scanCompletion).toContain("Discovery is intentionally separate from approval");
     expect(source).toContain("cameraInventoryApi.activateDiscovery");
     expect(source).toContain("waitForCredentialCommand(activation.commandId)");
     expect(source).toContain("credentialVerificationError");

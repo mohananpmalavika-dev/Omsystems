@@ -40,6 +40,15 @@ describe("camera frame health", () => {
     })).toBe(true);
   });
 
+  it("does not treat a DVR that blocks ICMP as a degraded video stream", () => {
+    expect(shouldMarkCameraDegraded({
+      fps: 25,
+      bitrateKbps: 1_024,
+      // RTSP is decoding; a recorder may simply reject ping packets.
+      packetLoss: 100,
+    })).toBe(false);
+  });
+
   it("starts one local recovery after three consecutive offline heartbeats", async () => {
     const recover = vi.fn(async () => undefined);
     const service = new CameraHeartbeatService(

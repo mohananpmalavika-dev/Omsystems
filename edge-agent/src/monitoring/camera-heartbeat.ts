@@ -53,7 +53,9 @@ export interface CameraConfig {
  * Signals that indicate a usable stream has a delivery or image-quality
  * failure.  Monochrome night-mode video and normal scene changes are kept as
  * evidence, but are not failures: IR cameras commonly lose colour at night
- * and a busy scene is not camera movement.
+ * and a busy scene is not camera movement. ICMP loss is also evidence only:
+ * many DVRs intentionally do not answer ping while their RTSP streams remain
+ * healthy.
  */
 export function shouldMarkCameraDegraded(input: {
   expectedFps?: number | undefined;
@@ -73,7 +75,6 @@ export function shouldMarkCameraDegraded(input: {
   return Boolean(
     (input.expectedFps && input.fps !== null && input.fps < input.expectedFps * 0.8) ||
     (input.expectedBitrate && input.bitrateKbps !== null && input.bitrateKbps < input.expectedBitrate * 0.7) ||
-    (input.packetLoss !== null && input.packetLoss > 5) ||
     input.imageFrozen || input.blackScreen || input.blueScreen || input.severeBlur ||
     input.excessiveNoise || input.rollingInterference || input.brightnessFailure ||
     input.obstructionSuspected,
@@ -266,6 +267,7 @@ export class CameraHeartbeatService {
     if (stream.fps === null) reasonCodes.push("fps_unavailable");
     if (stream.bitrateKbps === null) reasonCodes.push("bitrate_unavailable");
     if (packetLoss === null) reasonCodes.push("packet_loss_unavailable");
+    else if (packetLoss > 5) reasonCodes.push("icmp_packet_loss_reported");
     if (!frameHealth) {
       reasonCodes.push("analog_signal_analysis_unavailable");
     } else {
