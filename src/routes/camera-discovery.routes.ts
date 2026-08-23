@@ -352,8 +352,7 @@ export async function registerCameraDiscoveryRoutes(
         await client.query(
           `UPDATE camera_discoveries
            SET stream_verified = false,
-               rtsp_validated = false,
-               credentials_status = 'pending_verification'
+               rtsp_validated = false
            WHERE id = $1 AND branch_node_id = $2`,
           [discoveryId, branchId],
         );

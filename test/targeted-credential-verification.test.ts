@@ -84,9 +84,12 @@ describe("targeted credential verification", () => {
     });
     expect(JSON.stringify(command)).not.toContain("correct horse battery staple");
     expect(store.pool.client.query).toHaveBeenCalledWith(
-      expect.stringContaining("credentials_status = 'pending_verification'"),
+      expect.stringContaining("rtsp_validated = false"),
       [selected.id, "branch-blr-001"],
     );
+    expect(store.pool.client.query.mock.calls.some(
+      ([sql]) => String(sql).includes("credentials_status"),
+    )).toBe(false);
     expect(store.pool.client.query).not.toHaveBeenCalledWith(
       expect.stringContaining("stream_verified = true"),
       expect.anything(),
