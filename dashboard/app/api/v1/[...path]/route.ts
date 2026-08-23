@@ -39,6 +39,17 @@ async function proxyApiV1Request(request: NextRequest, context: RouteContext) {
   headers.delete("cookie");
   headers.delete("content-length");
 
+  const employeeSession = request.cookies.get("sentinel_access")?.value ??
+    request.headers.get("x-sentinel-session");
+  if (employeeSession) {
+    headers.set("authorization", `Bearer ${employeeSession}`);
+  } else if (headers.get("authorization")?.toLowerCase().startsWith("basic ")) {
+    headers.delete("authorization");
+  }
+  if (!employeeSession) {
+    headers.set("x-user-id", process.env.DASHBOARD_DEV_USER_ID || "user-global-admin");
+  }
+
   const methodHasPotentialBody = request.method !== "GET" && request.method !== "HEAD";
   const requestBody = methodHasPotentialBody ? await request.text() : undefined;
   const willSendBody = typeof requestBody === "string" && requestBody.length > 0;

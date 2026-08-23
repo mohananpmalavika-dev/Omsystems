@@ -229,6 +229,30 @@ describe("zero-touch provisioning integration", () => {
     await app.close();
   });
 
+  it("keeps edge enrollment pending when an enrolled agent is offline", () => {
+    const projected = projectProvisioningRun({
+      branchId: "branch-1",
+      agents: [{
+        id: "agent-1", branchId: "branch-1", name: "edge", version: "1.0.0",
+        status: "offline",
+      }],
+      pendingDiscoveries: [],
+      importedCameraIds: [],
+      recordingJobs: [],
+      storageNodes: [],
+      analyticsCameraIds: [],
+      recentPlatformRecordingCameraIds: [],
+      telemetry: [],
+    });
+
+    expect(projected.steps.find((step) => step.id === "edge-enrollment")).toMatchObject({
+      status: "pending",
+      action: "install-agent",
+    });
+    expect(projected.summary.agentsOnline).toBe(0);
+    expect(projected.issues.map((issue) => issue.code)).toContain("EDGE_AGENT_OFFLINE");
+  });
+
   it("does not allow a completed function call to hide storage or recording blockers", () => {
     const now = new Date().toISOString();
     const projected = projectProvisioningRun({

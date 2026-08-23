@@ -4,7 +4,7 @@ import { ErrorBoundary } from "@/components/error-boundary";
 
 export const metadata = {
   title: "Zero-Touch Provisioning (ZTP) Control Plane | Sentinel Grid",
-  description: "Enterprise Brownfield Fleet Provisioning for 500+ Branches: mTLS device self-enrollment, autonomous LAN discovery, channel extraction, stream validation, and live monitoring",
+  description: "Provision branch edge agents, discover devices, validate video streams, and activate monitoring from one control plane.",
 };
 
 export default function ZeroTouchPage() {
@@ -17,7 +17,7 @@ export default function ZeroTouchPage() {
               Zero-Touch Provisioning Control Plane
             </h1>
             <p className="text-sm text-slate-400 mt-1">
-              Autonomous brownfield discovery and provisioning across 500+ bank branches. Zero manual camera IP configuration, mTLS mutual authentication, and live video pipeline validation.
+              Discover and provision branch devices through authenticated edge agents, with live validation and operator review.
             </p>
           </div>
           <ZeroTouchOnboardingView />

@@ -29,7 +29,6 @@ import {
   Eye,
   Plus,
   ShieldAlert,
-  Activity,
   Sliders,
   ExternalLink,
   SlidersHorizontal,
@@ -42,10 +41,8 @@ import {
 } from "lucide-react";
 import { FleetLoadingSkeleton } from "./loading-skeleton";
 import {
-  validateBranchForm,
   validateStatusFilter,
   sanitizeSearchQuery,
-  type BranchFormData,
 } from "@/lib/validation";
 import { trackEvent, trackError, trackApiCall, trackPerformance, trackSearch, cleanupAnalytics } from "@/lib/analytics";
 
@@ -106,7 +103,7 @@ const BranchRow = React.memo(({
         <div className="flex items-center space-x-1.5">
           <span className="w-2 h-2 rounded-full bg-emerald-400" />
           <span className="text-emerald-300 font-bold">Connected</span>
-          <span className="text-[10px] text-slate-500">({branch.agentVersion || "v2.4.0"})</span>
+          {branch.agentVersion && <span className="text-[10px] text-slate-500">({branch.agentVersion})</span>}
         </div>
       ) : branch.agentStatus === "OFFLINE" ? (
         <div className="flex items-center space-x-1.5">
@@ -190,15 +187,6 @@ const BranchRow = React.memo(({
               <Play className="w-3 h-3 mr-1 fill-current" />
               Provision
             </button>
-            {branch.totalCameras > 0 && (
-              <button
-                onClick={() => onReview(branch)}
-                className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded text-[11px] font-medium transition-all focus:outline-none focus:ring-2 focus:ring-slate-500/50"
-                aria-label={`Review ${branch.totalCameras} discovered devices for ${branch.branchName}`}
-              >
-                Review Devices
-              </button>
-            )}
           </>
         ) : (
           <button
@@ -223,6 +211,23 @@ interface ApiError {
   details?: unknown;
 }
 
+interface FleetSlaMetrics {
+  targetSlaSeconds: number;
+  lastProvisioningSeconds: number;
+  fleetAverageSeconds: number;
+  p50Seconds: number;
+  p95Seconds: number;
+  totalBranchesProvisioned: number;
+  activeProvisioningJobs: number;
+  slaAdherencePct: number;
+}
+
+const formatSeconds = (seconds: number | undefined) =>
+  seconds && seconds > 0 ? `${seconds.toFixed(1)}s` : "—";
+
+const formatPercent = (value: number, total: number) =>
+  total > 0 ? `${((value / total) * 100).toFixed(1)}%` : "—";
+
 // Helper to handle API errors
 function handleApiError(error: unknown): ApiError {
   if (error instanceof Error) {
@@ -236,16 +241,7 @@ function handleApiError(error: unknown): ApiError {
 
 export function ZeroTouchOnboardingView() {
   const [branches, setBranches] = useState<any[]>([]);
-  const [slaMetrics, setSlaMetrics] = useState<any>({
-    targetSlaSeconds: 90,
-    lastProvisioningSeconds: 74.6,
-    fleetAverageSeconds: 81.2,
-    p50Seconds: 74.6,
-    p95Seconds: 114.8,
-    totalBranchesProvisioned: 482,
-    activeProvisioningJobs: 1,
-    slaAdherencePct: 93.4,
-  });
+  const [slaMetrics, setSlaMetrics] = useState<FleetSlaMetrics | null>(null);
 
   const [searchQuery, setSearchQuery] = useState("");
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("");
@@ -282,7 +278,6 @@ export function ZeroTouchOnboardingView() {
   const [enrollModalBranch, setEnrollModalBranch] = useState<any | null>(null);
   const [reviewModalBranch, setReviewModalBranch] = useState<any | null>(null);
   const [newBranchModalOpen, setNewBranchModalOpen] = useState(false);
-
   // Provisioning Job Execution State
   const [activeJob, setActiveJob] = useState<any | null>(null);
   const [isJobRunning, setIsJobRunning] = useState(false);
@@ -297,7 +292,7 @@ export function ZeroTouchOnboardingView() {
   // Form states
   const [newBranchId, setNewBranchId] = useState("");
   const [newBranchName, setNewBranchName] = useState("");
-  const [newBranchRegion, setNewBranchRegion] = useState("South Zone");
+  const [newBranchRegion, setNewBranchRegion] = useState("");
   const [credPasswordKey, setCredPasswordKey] = useState("");
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
 
@@ -308,7 +303,7 @@ export function ZeroTouchOnboardingView() {
   }, []);
 
   const handleDownloadBatch = useCallback((branchId: string, branchName: string, psCommand?: string) => {
-    const origin = typeof window !== "undefined" ? window.location.origin : "https://sentinel-grid-monitoring-vhid.onrender.com";
+    const origin = typeof window !== "undefined" ? window.location.origin : "";
     const cleanBranchName = (branchName || "Branch").replace(/["\r\n]/g, "");
     const command = psCommand || `iwr -useb '${origin}/api/control/v1/branches/${branchId}/install.ps1' | iex`;
     const content = `<# :
@@ -357,12 +352,12 @@ Write-Host "================================================================" -F
     const a = document.createElement("a");
     const safeName = (branchName || "Branch").replace(/[^a-zA-Z0-9_-]/g, "_");
     a.href = url;
-    a.download = `Install_KryptonVision_${safeName}.bat`;
+    a.download = `Install_SentinelGrid_${safeName}.bat`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
-    setToastMsg({ type: "success", text: `1-Click installer "Install_KryptonVision_${safeName}.bat" downloaded! Just double-click to install.` });
+    setToastMsg({ type: "success", text: `Installer "Install_SentinelGrid_${safeName}.bat" downloaded.` });
   }, []);
 
   const fetchFleet = useCallback(async () => {
@@ -376,33 +371,40 @@ Write-Host "================================================================" -F
       abortControllerRef.current.abort();
     }
     
-    // Create new abort controller for this request
-    abortControllerRef.current = new AbortController();
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
     
     try {
       const res = await fetch("/api/v1/zero-touch/fleet", {
-        signal: abortControllerRef.current.signal,
+        signal: controller.signal,
+        cache: "no-store",
       });
       
       const duration = Date.now() - startTime;
       
       if (!res.ok) {
         trackApiCall("/api/v1/zero-touch/fleet", "GET", duration, false, res.status);
-        throw new Error(`Failed to fetch fleet data: ${res.status} ${res.statusText}`);
+        const message = res.status === 401
+          ? "Your session has expired. Sign in again to access branch provisioning."
+          : res.status === 403
+            ? "You do not have permission to view branch provisioning."
+            : `Fleet data is temporarily unavailable (${res.status}).`;
+        throw new Error(message);
       }
       
       const data = await res.json();
       
       if (data.success) {
-        setBranches(data.data.branches);
-        setSlaMetrics(data.data.slaMetrics);
+        setBranches(Array.isArray(data.data?.branches) ? data.data.branches : []);
+        setSlaMetrics(data.data?.slaMetrics ?? null);
+        setToastMsg(null);
         
         trackApiCall("/api/v1/zero-touch/fleet", "GET", duration, true, res.status);
         trackPerformance({
           name: "fleet_data_load",
           value: duration,
           unit: "ms",
-          metadata: { branchCount: data.data.branches.length },
+          metadata: { branchCount: Array.isArray(data.data?.branches) ? data.data.branches.length : 0 },
         });
       } else {
         trackApiCall("/api/v1/zero-touch/fleet", "GET", duration, false);
@@ -414,11 +416,10 @@ Write-Host "================================================================" -F
         return;
       }
       const apiError = handleApiError(err);
+      setBranches([]);
+      setSlaMetrics(null);
       setError(apiError);
-      setToastMsg({ 
-        type: "error", 
-        text: `Fleet data load failed: ${apiError.message}` 
-      });
+      setToastMsg(null);
       
       trackError({
         error: err as Error,
@@ -427,7 +428,9 @@ Write-Host "================================================================" -F
         metadata: { endpoint: "/api/v1/zero-touch/fleet" },
       });
     } finally {
-      setLoading(false);
+      if (abortControllerRef.current === controller) {
+        setLoading(false);
+      }
     }
   }, []);
 
@@ -461,6 +464,8 @@ Write-Host "================================================================" -F
     };
   }, [fetchFleet]);
 
+  /* Legacy branch creation was removed. Branches are managed in the organization hierarchy. */
+  /*
   const handleCreateBranch = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -554,7 +559,7 @@ Write-Host "================================================================" -F
         });
         setNewBranchId("");
         setNewBranchName("");
-        setNewBranchRegion("South Zone");
+        setNewBranchRegion("");
         setFormErrors({});
         
         trackApiCall("/api/v1/zero-touch/branches", "POST", duration, true, res.status);
@@ -593,6 +598,7 @@ Write-Host "================================================================" -F
       });
     }
   };
+  */
 
   const handleOpenEnrollment = async (branch: any) => {
     trackEvent({
@@ -659,46 +665,35 @@ Write-Host "================================================================" -F
       metadata: { branchName: branch.branchName },
     });
     
-    // Optimistic update: Update branch status immediately
-    setBranches((prev) =>
-      prev.map((b) =>
-        b.branchId === branch.branchId
-          ? { ...b, operationalStatus: "PROVISIONING", lastJobStatus: "DISCOVERING" }
-          : b
-      )
-    );
-
     try {
-      const res = await fetch(`/api/v1/zero-touch/branches/${branch.branchId}/provision`, {
+      const endpoint = `/api/control/v1/branches/${branch.branchId}/provisioning`;
+      const res = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          agentId: branch.agentId,
-          edgeAgentId: branch.agentId,
-        }),
+        body: JSON.stringify({ edgeAgentId: branch.agentId }),
       });
       
       const duration = Date.now() - startTime;
       
       if (!res.ok) {
         const errorData = await res.json().catch(() => ({}));
-        trackApiCall(`/api/v1/zero-touch/branches/${branch.branchId}/provision`, "POST", duration, false, res.status);
+        trackApiCall(endpoint, "POST", duration, false, res.status);
         throw new Error(errorData.error || `Provisioning dispatch failed: ${res.status}`);
       }
       
       const data = await res.json();
       
-      if (data.success) {
-        setActiveJob(data.data);
-        startSSEConnection(data.data.id, branch.branchId);
+      if (data.run) {
+        setActiveJob(data.run);
+        startPolling(data.run.id, branch.branchId);
         
-        trackApiCall(`/api/v1/zero-touch/branches/${branch.branchId}/provision`, "POST", duration, true, res.status);
+        trackApiCall(endpoint, "POST", duration, true, res.status);
         trackEvent({
           category: "provisioning",
           action: "job_created",
           label: branch.branchId,
           value: duration,
-          metadata: { jobId: data.data.id },
+          metadata: { jobId: data.run.id },
         });
       } else {
         throw new Error(data.error || "Failed to start provisioning job");
@@ -848,31 +843,23 @@ Write-Host "================================================================" -F
 
     const interval = setInterval(async () => {
       try {
-        const res = await fetch(`/api/v1/zero-touch/provisioning/jobs/${jobId}`);
+        const res = await fetch(`/api/control/v1/branches/${branchId}/provisioning/${jobId}`, { cache: "no-store" });
+        if (!res.ok) throw new Error(`Provisioning status unavailable (${res.status})`);
         const data = await res.json();
+        const run = data.run;
         
-        if (data.success) {
-          setActiveJob(data.data);
+        if (run) {
+          setActiveJob(run);
           
-          if (
-            data.data.status === "COMPLETED" ||
-            data.data.status === "PARTIALLY_READY" ||
-            data.data.status === "FAILED" ||
-            data.data.status === "CANCELLED"
-          ) {
+          if (run.completedAt || ["failed", "awaiting_evidence", "waiting_for_input", "blocked"].includes(run.status)) {
             clearInterval(interval);
             pollingIntervalRef.current = null;
             setIsJobRunning(false);
             fetchFleet();
             fetchDiscoveredDevices(branchId);
             setToastMsg({
-              type:
-                data.data.status === "COMPLETED"
-                  ? "success"
-                  : data.data.status === "PARTIALLY_READY"
-                  ? "info"
-                  : "error",
-              text: `Provisioning finished: ${data.data.status} (${data.data.registeredCameraCount} cameras registered)`,
+              type: run.status === "failed" || run.status === "blocked" ? "error" : "info",
+              text: `Provisioning updated: ${run.status.replaceAll("_", " ")}`,
             });
           }
         }
@@ -882,7 +869,7 @@ Write-Host "================================================================" -F
         pollingIntervalRef.current = null;
         setIsJobRunning(false);
       }
-    }, 400);
+    }, 1000);
 
     pollingIntervalRef.current = interval;
   }, [fetchFleet]);
@@ -971,6 +958,10 @@ Write-Host "================================================================" -F
     });
   }, [branches, debouncedSearchQuery, statusFilter]);
 
+  const totalBranches = branches.length;
+  const operationalBranches = branches.filter((branch) => branch.operationalStatus === "ACTIVE").length;
+  const partialBranches = branches.filter((branch) => branch.operationalStatus === "PARTIAL").length;
+
   return (
     <div className="space-y-6" role="main" aria-label="Zero-Touch Provisioning Control Plane">
       {/* Show loading skeleton on initial load */}
@@ -1050,36 +1041,33 @@ Write-Host "================================================================" -F
             aria-label="Fleet key performance indicators"
           >
         <div className="bg-slate-900/90 border border-slate-800 rounded-xl p-4 space-y-1">
-          <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Total Branch Fleet</span>
-          <div className="text-2xl font-extrabold text-slate-100">{slaMetrics.totalBranchesProvisioned}</div>
-          <div className="text-[11px] text-emerald-400 font-medium flex items-center">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 mr-1.5" />
-            500+ Multi-Tenant Scale
-          </div>
+          <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Accessible Branches</span>
+          <div className="text-2xl font-extrabold text-slate-100">{totalBranches}</div>
+          <div className="text-[11px] text-slate-400">Current access scope</div>
         </div>
 
         <div className="bg-slate-900/90 border border-slate-800 rounded-xl p-4 space-y-1">
           <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Operational Branches</span>
-          <div className="text-2xl font-extrabold text-emerald-400">448 <span className="text-xs font-normal text-slate-400">(92.9%)</span></div>
-          <div className="text-[11px] text-slate-400">Full 20-cam stream verified</div>
+          <div className="text-2xl font-extrabold text-emerald-400">{operationalBranches} <span className="text-xs font-normal text-slate-400">({formatPercent(operationalBranches, totalBranches)})</span></div>
+          <div className="text-[11px] text-slate-400">Based on current camera inventory</div>
         </div>
 
         <div className="bg-slate-900/90 border border-slate-800 rounded-xl p-4 space-y-1">
           <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Partial / Review Required</span>
-          <div className="text-2xl font-extrabold text-amber-400">24 <span className="text-xs font-normal text-slate-400">(5.0%)</span></div>
-          <div className="text-[11px] text-amber-400/80">Awaiting credentials / rotation</div>
+          <div className="text-2xl font-extrabold text-amber-400">{partialBranches} <span className="text-xs font-normal text-slate-400">({formatPercent(partialBranches, totalBranches)})</span></div>
+          <div className="text-[11px] text-slate-400">Awaiting validation or credentials</div>
         </div>
 
         <div className="bg-slate-900/90 border border-slate-800 rounded-xl p-4 space-y-1">
           <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Measured SLA (P95)</span>
-          <div className="text-2xl font-extrabold text-cyan-400">{slaMetrics.p95Seconds}s <span className="text-xs font-normal text-slate-400">P50: {slaMetrics.p50Seconds}s</span></div>
-          <div className="text-[11px] text-cyan-300 font-medium">Target SLA: &lt; {slaMetrics.targetSlaSeconds}s</div>
+          <div className="text-2xl font-extrabold text-cyan-400">{formatSeconds(slaMetrics?.p95Seconds)} <span className="text-xs font-normal text-slate-400">P50: {formatSeconds(slaMetrics?.p50Seconds)}</span></div>
+          <div className="text-[11px] text-cyan-300 font-medium">{slaMetrics ? `Target SLA: < ${slaMetrics.targetSlaSeconds}s` : "No completed runs"}</div>
         </div>
 
         <div className="bg-slate-900/90 border border-slate-800 rounded-xl p-4 space-y-1">
           <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">SLA Adherence Rate</span>
-          <div className="text-2xl font-extrabold text-indigo-300">{slaMetrics.slaAdherencePct}%</div>
-          <div className="text-[11px] text-slate-400">Last branch: {slaMetrics.lastProvisioningSeconds}s</div>
+          <div className="text-2xl font-extrabold text-indigo-300">{slaMetrics?.slaAdherencePct ? `${slaMetrics.slaAdherencePct}%` : "—"}</div>
+          <div className="text-[11px] text-slate-400">{formatSeconds(slaMetrics?.lastProvisioningSeconds)} last completed run</div>
         </div>
       </div>
 
@@ -1138,24 +1126,15 @@ Write-Host "================================================================" -F
 
         <div className="flex items-center space-x-2.5">
           <Link
-            href="/admin/zero-touch/diagnostics"
-            className="px-3 py-1.5 rounded-lg border border-slate-700 hover:bg-slate-800 text-slate-200 text-xs font-semibold flex items-center transition-all"
-          >
-            <Activity className="w-3.5 h-3.5 mr-1.5 text-indigo-400" />
-            Engineering Diagnostics
-          </Link>
-          <button
-            onClick={() => setNewBranchModalOpen(true)}
+            href="/admin/organization"
             className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-bold flex items-center shadow-lg shadow-indigo-950/40 transition-all focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
-            aria-label="Create new branch profile"
           >
-            <Plus className="w-3.5 h-3.5 mr-1.5" />
-            + New Branch Profile
-          </button>
+            Manage Branch Hierarchy
+          </Link>
         </div>
       </div>
 
-      {/* 500+ Branch Fleet Table */}
+      {/* Branch Fleet Table */}
       <div 
         className="bg-slate-900/90 border border-slate-800 rounded-xl overflow-hidden shadow-xl"
         role="region"
@@ -1191,7 +1170,19 @@ Write-Host "================================================================" -F
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800/60 text-slate-300 text-xs">
-              {filteredBranches.map((branch) => (
+              {filteredBranches.length === 0 ? (
+                <tr key="fleet-empty-state">
+                  <td colSpan={6} className="px-4 py-12 text-center">
+                    <Server className="mx-auto mb-3 h-8 w-8 text-slate-600" />
+                    <p className="font-semibold text-slate-300">
+                      {branches.length === 0 ? "No branches are available in this access scope" : "No branches match the current filters"}
+                    </p>
+                    <p className="mt-1 text-xs text-slate-500">
+                      {branches.length === 0 ? "Create or assign a branch in the organization hierarchy, then refresh this view." : "Clear the search or choose a different status filter."}
+                    </p>
+                  </td>
+                </tr>
+              ) : filteredBranches.map((branch) => (
                 <tr 
                   key={branch.branchId} 
                   className={`hover:bg-slate-800/40 transition-colors ${
@@ -1220,7 +1211,7 @@ Write-Host "================================================================" -F
                       <div className="flex items-center space-x-1.5">
                         <span className="w-2 h-2 rounded-full bg-emerald-400" />
                         <span className="text-emerald-300 font-bold">Connected</span>
-                        <span className="text-[10px] text-slate-500">({branch.agentVersion || "v2.4.0"})</span>
+                        {branch.agentVersion && <span className="text-[10px] text-slate-500">({branch.agentVersion})</span>}
                       </div>
                     ) : branch.agentStatus === "OFFLINE" ? (
                       <div className="flex items-center space-x-1.5">
@@ -1304,15 +1295,6 @@ Write-Host "================================================================" -F
                             <Play className="w-3 h-3 mr-1 fill-current" />
                             Provision
                           </button>
-                          {branch.totalCameras > 0 && (
-                            <button
-                              onClick={() => handleOpenReview(branch)}
-                              className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded text-[11px] font-medium transition-all focus:outline-none focus:ring-2 focus:ring-slate-500/50"
-                              aria-label={`Review ${branch.totalCameras} discovered devices for ${branch.branchName}`}
-                            >
-                              Review Devices
-                            </button>
-                          )}
                         </>
                       ) : (
                         <button
@@ -1678,7 +1660,7 @@ Write-Host "================================================================" -F
           aria-labelledby="new-branch-modal-title"
         >
           <form
-            onSubmit={handleCreateBranch}
+            onSubmit={(event) => event.preventDefault()}
             className="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl"
           >
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
@@ -1693,7 +1675,7 @@ Write-Host "================================================================" -F
                   setFormErrors({});
                   setNewBranchId("");
                   setNewBranchName("");
-                  setNewBranchRegion("South Zone");
+                  setNewBranchRegion("");
                 }}
                 className="p-1 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
                 aria-label="Close branch creation modal"
@@ -1807,10 +1789,7 @@ Write-Host "================================================================" -F
                   aria-invalid={!!formErrors.region}
                   aria-describedby={formErrors.region ? "region-error" : undefined}
                 >
-                  <option value="South Zone">South Zone</option>
-                  <option value="West Zone">West Zone</option>
-                  <option value="North Zone">North Zone</option>
-                  <option value="East Zone">East Zone</option>
+                  <option value="">Select a region</option>
                 </select>
                 {formErrors.region && (
                   <p id="region-error" className="mt-1 text-xs text-rose-400 flex items-center">
@@ -1829,7 +1808,7 @@ Write-Host "================================================================" -F
                   setFormErrors({});
                   setNewBranchId("");
                   setNewBranchName("");
-                  setNewBranchRegion("South Zone");
+                  setNewBranchRegion("");
                 }}
                 className="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-slate-500/50"
                 aria-label="Cancel branch creation"

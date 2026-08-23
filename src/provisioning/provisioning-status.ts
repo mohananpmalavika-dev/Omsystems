@@ -166,9 +166,7 @@ export function projectProvisioningRun(input: {
   recentPlatformRecordingCameraIds: string[];
   telemetry: OperationalTelemetryEnvelope[];
 }): ProvisioningRunView {
-  const onlineAgents = input.agents.length > 0
-    ? input.agents.map((agent) => ({ ...agent, status: "online" as const }))
-    : input.agents.filter((agent) => agent.status === "online");
+  const onlineAgents = input.agents.filter((agent) => agent.status === "online");
   const connectedCameraCount = input.connectedCameraCount ?? 0;
   const credentialsRequired = Math.max(
     input.job?.credentialsRequiredCount ?? 0,
@@ -275,13 +273,13 @@ export function projectProvisioningRun(input: {
     step("branch-registration", "Branch registration", "completed", 1, 1, "Branch inventory record exists"),
     step(
       "edge-enrollment", "Edge agent enrollment",
-      (onlineAgents.length > 0 || input.agents.length > 0) ? "completed" : "pending",
-      (onlineAgents.length > 0 || input.agents.length > 0) ? 1 : 0, 1,
-      (onlineAgents.length > 0 || input.agents.length > 0)
+      onlineAgents.length > 0 ? "completed" : "pending",
+      onlineAgents.length > 0 ? 1 : 0, 1,
+      onlineAgents.length > 0
         ? `${Math.max(1, input.agents.length)} edge agent(s) enrolled and active with branch-scoped identity`
         : "An online edge agent is required for private-network discovery",
-      (onlineAgents.length > 0 || input.agents.length > 0) ? undefined : "EDGE_AGENT_OFFLINE",
-      (onlineAgents.length > 0 || input.agents.length > 0) ? undefined : "install-agent",
+      onlineAgents.length > 0 ? undefined : "EDGE_AGENT_OFFLINE",
+      onlineAgents.length > 0 ? undefined : "install-agent",
     ),
     step(
       "network-inventory", "Network inventory",

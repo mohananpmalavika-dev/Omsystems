@@ -129,72 +129,17 @@ describe("ZeroTouchOnboardingView", () => {
     });
   });
 
-  describe("Branch Creation", () => {
-    it("should open create branch modal", async () => {
-      render(<ZeroTouchOnboardingView />);
-      
-      await waitFor(() => {
-        expect(screen.getByText("Test Branch")).toBeInTheDocument();
-      });
-      
-      const createButton = screen.getByRole("button", { name: /create new branch profile/i });
-      fireEvent.click(createButton);
-      
-      expect(screen.getByRole("dialog", { name: /register new branch profile/i })).toBeInTheDocument();
+  it("links branch management to the organization hierarchy", async () => {
+    render(<ZeroTouchOnboardingView />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Test Branch")).toBeInTheDocument();
     });
 
-    it("should validate branch form inputs", async () => {
-      render(<ZeroTouchOnboardingView />);
-      
-      await waitFor(() => {
-        expect(screen.getByText("Test Branch")).toBeInTheDocument();
-      });
-      
-      const createButton = screen.getByRole("button", { name: /create new branch profile/i });
-      fireEvent.click(createButton);
-      
-      const submitButton = screen.getByRole("button", { name: /submit and create branch/i });
-      fireEvent.click(submitButton);
-      
-      await waitFor(() => {
-        expect(screen.getByText(/branch id is required/i)).toBeInTheDocument();
-      });
-    });
-
-    it("should create branch with valid inputs", async () => {
-      (global.fetch as jest.Mock).mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ success: true, data: {} }),
-      });
-      
-      render(<ZeroTouchOnboardingView />);
-      
-      await waitFor(() => {
-        expect(screen.getByText("Test Branch")).toBeInTheDocument();
-      });
-      
-      const createButton = screen.getByRole("button", { name: /create new branch profile/i });
-      fireEvent.click(createButton);
-      
-      const branchIdInput = screen.getByLabelText(/branch id code/i);
-      const branchNameInput = screen.getByLabelText(/branch name/i);
-      
-      await userEvent.type(branchIdInput, "A010");
-      await userEvent.type(branchNameInput, "New Test Branch");
-      
-      const submitButton = screen.getByRole("button", { name: /submit and create branch/i });
-      fireEvent.click(submitButton);
-      
-      await waitFor(() => {
-        expect(global.fetch).toHaveBeenCalledWith(
-          "/api/v1/zero-touch/branches",
-          expect.objectContaining({
-            method: "POST",
-            body: expect.stringContaining("A010"),
-          })
-        );
-      });
-    });
+    expect(screen.getByRole("link", { name: /manage branch hierarchy/i })).toHaveAttribute(
+      "href",
+      "/admin/organization",
+    );
   });
 
   describe("Accessibility", () => {
@@ -216,10 +161,10 @@ describe("ZeroTouchOnboardingView", () => {
         expect(screen.getByText("Test Branch")).toBeInTheDocument();
       });
       
-      const createButton = screen.getByRole("button", { name: /create new branch profile/i });
-      createButton.focus();
+      const manageBranchesLink = screen.getByRole("link", { name: /manage branch hierarchy/i });
+      manageBranchesLink.focus();
       
-      expect(document.activeElement).toBe(createButton);
+      expect(document.activeElement).toBe(manageBranchesLink);
     });
   });
 

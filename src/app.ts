@@ -2479,7 +2479,7 @@ export async function buildApp(options?: {
     await registerAdaptiveStreamRoutes(app);
     await registerEdgeProductRoutes(app);
     await registerObservabilityRoutes(app);
-    await registerZeroTouchRoutes(app);
+    await registerZeroTouchRoutes(app, store);
     app.log.info('Morning digest, Virtual guard, QRT dispatch, HA Cluster, Edge Lifecycle, Mobile, Asset Lifecycle, Media Pipeline, Device Connectivity, HA Leases, Adaptive Stream, Edge Product, Prometheus Observability, and Zero-Touch Brownfield routes registered');
   } catch (err: unknown) {
     app.log.error({ err }, 'failed to register extended enterprise features');

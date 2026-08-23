@@ -6,19 +6,102 @@
 
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
+import type { ControlPlaneStore } from "../../control-plane-store.js";
 import { zeroTouchJobEngineService } from "../services/zero-touch-job-engine.service.js";
 import { zeroTouchEnrollmentService } from "../services/zero-touch-enrollment.service.js";
 import { zeroTouchDeviceReviewService } from "../services/zero-touch-device-review.service.js";
 
-export async function registerZeroTouchRoutes(app: FastifyInstance) {
+export async function registerZeroTouchRoutes(app: FastifyInstance, store: ControlPlaneStore) {
   // 1. Fleet Overview & SLA Metrics
-  app.get("/api/v1/zero-touch/fleet", async (_request, reply) => {
-    const branches = zeroTouchJobEngineService.listBranches();
-    const slaMetrics = zeroTouchJobEngineService.getFleetSlaMetrics();
+  app.get("/api/v1/zero-touch/fleet", async (request, reply) => {
+    const accessibleBranches = await store.listAccessibleNodes(request.currentUser, "device:configure", "branch");
+    const branchData = await Promise.all(accessibleBranches.map(async (branch) => {
+      const [agents, cameras, discoveries, latestJob, region] = await Promise.all([
+        store.listEdgeAgentsByBranch(branch.id),
+        store.listCamerasByBranch(request.currentUser, branch.id, "device:configure"),
+        store.listDiscoveredCameras(branch.id),
+        store.getLatestEdgeScanJob(branch.id),
+        resolveBranchRegion(store, branch),
+      ]);
+
+      const agent = agents.find((item) => item.status === "online") ?? agents[0];
+      const discoveredDeviceCount = Math.max(
+        latestJob?.resultCount ?? 0,
+        new Set(discoveries.map((item) => item.deviceIdentityId)).size,
+      );
+      const readinessScorePct = latestJob && latestJob.resultCount > 0
+        ? Math.round((latestJob.verifiedCount / latestJob.resultCount) * 100)
+        : cameras.length > 0
+          ? Math.round((cameras.filter((camera) => camera.status === "online").length / cameras.length) * 100)
+          : 0;
+      const provisioningInProgress = latestJob?.status === "queued" || latestJob?.status === "running";
+      const hasReviewItems = Boolean(
+        latestJob && (
+          latestJob.credentialsRequiredCount > 0 ||
+          latestJob.pendingVerificationCount > 0 ||
+          latestJob.verifiedCount < latestJob.resultCount
+        ),
+      );
+
+      return {
+        branchId: branch.id,
+        branchName: branch.name,
+        region,
+        agentStatus: agent?.status === "online"
+          ? "CONNECTED"
+          : agent?.status === "offline"
+            ? "OFFLINE"
+            : "NOT_ENROLLED",
+        agentId: agent?.id,
+        agentVersion: agent?.version,
+        lastHeartbeat: agent?.lastSeenAt ?? undefined,
+        totalDevices: discoveredDeviceCount,
+        totalCameras: cameras.length,
+        readinessScorePct: Math.max(0, Math.min(100, readinessScorePct)),
+        lastJobStatus: latestJob ? toLegacyProvisioningStatus(latestJob.status) : undefined,
+        lastJobId: latestJob?.id,
+        lastProvisionedAt: latestJob?.completedAt ?? undefined,
+        operationalStatus: provisioningInProgress
+          ? "PROVISIONING"
+          : latestJob?.status === "failed"
+            ? "FAILED"
+            : latestJob?.status === "completed" && hasReviewItems
+              ? "PARTIAL"
+              : cameras.length > 0
+                ? "ACTIVE"
+                : "UNENROLLED",
+      };
+    }));
+
+    const jobs = await Promise.all(accessibleBranches.map((branch) => store.getLatestEdgeScanJob(branch.id)));
+    const completedDurations = jobs
+      .map((job) => job && job.status === "completed" && job.startedAt && job.completedAt
+        ? Math.max(0, (Date.parse(job.completedAt) - Date.parse(job.startedAt)) / 1000)
+        : undefined)
+      .filter((duration): duration is number => Number.isFinite(duration))
+      .sort((left, right) => left - right);
+    const percentile = (ratio: number) => completedDurations.length === 0
+      ? 0
+      : Number(completedDurations[Math.min(completedDurations.length - 1, Math.floor(completedDurations.length * ratio))]!.toFixed(1));
+    const targetSlaSeconds = Number(process.env.ZTP_TARGET_SLA_SECONDS ?? "90");
+    const withinSla = completedDurations.filter((duration) => duration <= targetSlaSeconds).length;
+    const slaMetrics = {
+      targetSlaSeconds,
+      lastProvisioningSeconds: completedDurations.at(-1) ? Number(completedDurations.at(-1)!.toFixed(1)) : 0,
+      fleetAverageSeconds: completedDurations.length === 0
+        ? 0
+        : Number((completedDurations.reduce((sum, value) => sum + value, 0) / completedDurations.length).toFixed(1)),
+      p50Seconds: percentile(0.5),
+      p95Seconds: percentile(0.95),
+      totalBranchesProvisioned: jobs.filter((job) => job?.status === "completed").length,
+      activeProvisioningJobs: jobs.filter((job) => job?.status === "queued" || job?.status === "running").length,
+      slaAdherencePct: completedDurations.length === 0 ? 0 : Number(((withinSla / completedDurations.length) * 100).toFixed(1)),
+    };
+
     return reply.code(200).send({
       success: true,
       data: {
-        branches,
+        branches: branchData,
         slaMetrics,
       },
     });
@@ -36,12 +119,13 @@ export async function registerZeroTouchRoutes(app: FastifyInstance) {
   // 3. Generate Single-Use 15-Minute Enrollment Package
   app.post("/api/v1/zero-touch/branches/:branchId/enrollment", async (request, reply) => {
     const { branchId } = request.params as { branchId: string };
-    const branch = zeroTouchJobEngineService.getBranch(branchId);
-    if (!branch) return reply.code(404).send({ success: false, error: "branch_not_found" });
-    const branchName = branch.branchName;
+    const branch = await store.getNode(branchId);
+    if (!branch || branch.type !== "branch") return reply.code(404).send({ success: false, error: "branch_not_found" });
+    const access = await store.checkAccess(request.currentUser, "device:configure", branchId);
+    if (access && !access.allowed) return reply.code(403).send({ success: false, error: "forbidden" });
 
     const body = z.object({
-      tenantId: z.string().trim().min(1),
+      tenantId: z.string().trim().min(1).optional(),
       expiryMinutes: z.number().int().positive().default(15),
     }).parse(request.body || {});
 
@@ -52,8 +136,8 @@ export async function registerZeroTouchRoutes(app: FastifyInstance) {
 
     const pkg = zeroTouchEnrollmentService.generateEnrollmentPackage(
       branchId,
-      branchName,
-      body.tenantId,
+      branch.name,
+      body.tenantId ?? request.currentUser.tenantId,
       body.expiryMinutes,
       publicBase,
     );
@@ -252,4 +336,24 @@ export async function registerZeroTouchRoutes(app: FastifyInstance) {
       message: "Use the authenticated edge-agent activation flow.",
     });
   });
+}
+
+async function resolveBranchRegion(store: ControlPlaneStore, branch: { parentId: string | null }) {
+  let parentId = branch.parentId;
+  for (let depth = 0; parentId && depth < 20; depth += 1) {
+    const parent = await store.getNode(parentId);
+    if (!parent) break;
+    if (["region", "zone", "area"].includes(parent.type)) return parent.name;
+    parentId = parent.parentId;
+  }
+  return "";
+}
+
+function toLegacyProvisioningStatus(status: "queued" | "running" | "completed" | "failed") {
+  return {
+    queued: "QUEUED",
+    running: "DISCOVERING",
+    completed: "COMPLETED",
+    failed: "FAILED",
+  }[status];
 }
