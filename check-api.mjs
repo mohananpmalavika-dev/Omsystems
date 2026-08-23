@@ -6,6 +6,7 @@
 const API_URL = process.env.CONTROL_PLANE_PUBLIC_URL || 'http://localhost:3000';
 const USER_ID = 'user-global-admin'; // Development mode user
 
+
 console.log('\n🔍 CHECKING CAMERAS VIA API\n');
 console.log('API URL:', API_URL);
 console.log('═'.repeat(80));
