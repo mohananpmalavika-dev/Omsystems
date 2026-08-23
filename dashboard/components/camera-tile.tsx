@@ -32,6 +32,10 @@ function formatLiveError(reason: string) {
     stream_secret_unavailable: "The camera stream source is not configured",
     local_media_gateway_requires_https: "The camera gateway needs an HTTPS tunnel",
     local_media_gateway_unavailable: "The local camera gateway is unreachable",
+    live_session_unavailable: "Live authorization is unavailable",
+    live_session_timeout: "Live authorization timed out",
+    "Failed to fetch": "The live gateway could not be reached",
+    "TypeError: Failed to fetch": "The live gateway could not be reached",
     "HLS playback failed": "The stream could not be played",
     "Live session timed out": "Live authorization timed out",
   };
@@ -242,7 +246,7 @@ export function CameraTile({
         </div>
 
         {!session?.hls && camera.status !== "offline" && (
-          <button className="watch-button" onClick={onStart} disabled={loading}>
+          <button className={`watch-button${liveError ? " has-live-error" : ""}`} onClick={onStart} disabled={loading}>
             {loading ? (
               <LoaderCircle size={17} className="spin" />
             ) : (

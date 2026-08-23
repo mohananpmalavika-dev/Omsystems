@@ -5857,6 +5857,7 @@ button, a { -webkit-tap-highlight-color: transparent; }
     padding: 12px;
   }
 }
+.watch-button.has-live-error { top: calc(50% + 38px); }
 
 /* ===========================================================================
    Sentinel Grid visual refresh
