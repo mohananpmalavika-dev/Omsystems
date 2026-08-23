@@ -83,5 +83,7 @@ describe("Windows scanner installer resilience", () => {
     expect(source).toContain("activation_invalid_or_expired");
     expect(source).toContain("device_already_enrolled");
     expect(source).toContain("background task will keep retrying automatically");
+    expect(source).toContain('$previousErrorActionPreference = $ErrorActionPreference');
+    expect(source).toContain('$ErrorActionPreference = "Continue"');
   });
 });

@@ -240,8 +240,18 @@ if (Test-Path -LiteralPath $dashboardLauncher -PathType Leaf) {
 $connectivityHealthy = $true
 if (-not $SkipConnectivityCheck) {
   Write-Host "Authenticating with Sentinel Grid..." -ForegroundColor Cyan
-  $diagnosticOutput = @(& $Executable --config $ConfigPath --diagnose 2>&1)
-  $diagnosticExitCode = $LASTEXITCODE
+  # Windows PowerShell 5.1 turns a native process's stderr (including Node
+  # 18's harmless ExperimentalWarning) into a terminating NativeCommandError
+  # when ErrorActionPreference is Stop. Capture that stream for this command
+  # only; the native exit code remains the authoritative health result.
+  $previousErrorActionPreference = $ErrorActionPreference
+  try {
+    $ErrorActionPreference = "Continue"
+    $diagnosticOutput = @(& $Executable --config $ConfigPath --diagnose 2>&1)
+    $diagnosticExitCode = $LASTEXITCODE
+  } finally {
+    $ErrorActionPreference = $previousErrorActionPreference
+  }
   if ($diagnosticExitCode -ne 0) {
     $connectivityHealthy = $false
     $diagnosticDetail = ($diagnosticOutput | ForEach-Object { $_.ToString() }) -join [Environment]::NewLine
