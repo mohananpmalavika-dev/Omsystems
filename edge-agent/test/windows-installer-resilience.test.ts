@@ -68,6 +68,8 @@ describe("Windows scanner installer resilience", () => {
 
     expect(source).toContain("-AllowStartIfOnBatteries");
     expect(source).toContain("-DontStopIfGoingOnBatteries");
+    expect(source).toContain("-RestartInterval (New-TimeSpan -Minutes 1)");
+    expect(source).not.toContain("-RestartInterval (New-TimeSpan -Seconds 10)");
   });
 
   it("keeps activation and installation failures visible without exposing the one-time code", async () => {

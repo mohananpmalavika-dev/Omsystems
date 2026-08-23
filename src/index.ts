@@ -9,6 +9,10 @@ import { CloudflareTunnelManager } from "./platform/cloudflare-tunnel-manager.js
 import { getEventBus } from "./infrastructure/event-bus/event-bus.js";
 
 const config = loadConfig();
+// Render injects its public URL for every web service. Keep this as a runtime
+// fallback so branch agents never receive the dashboard's authenticated proxy
+// URL merely because a Blueprint self-reference has not been synced yet.
+const controlPlanePublicUrl = config.CONTROL_PLANE_PUBLIC_URL ?? process.env.RENDER_EXTERNAL_URL;
 
 // Log critical configuration for debugging startup issues
 console.log('🚀 Sentinel Grid Control Plane starting...');
@@ -71,8 +75,8 @@ const app = await buildApp({
   ...(edgePresenceCache ? { edgePresenceCache } : {}),
   ...(edgeTunnelProvider ? { edgeTunnelProvider } : {}),
   requireManagedEdgeTunnel: config.EDGE_MANAGED_TUNNEL_REQUIRED,
-  ...(config.CONTROL_PLANE_PUBLIC_URL
-    ? { controlPlanePublicUrl: config.CONTROL_PLANE_PUBLIC_URL }
+  ...(controlPlanePublicUrl
+    ? { controlPlanePublicUrl }
     : {}),
   mediaGatewaySharedKey: config.MEDIA_GATEWAY_SHARED_KEY,
   ...(config.RECORDING_ENGINE_URL && config.RECORDING_ENGINE_SHARED_KEY ? {
