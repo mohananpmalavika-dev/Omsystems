@@ -987,13 +987,7 @@ export async function buildApp(options?: {
       const publicMediaUrl = body.publicMediaUrl === "auto" ? undefined : body.publicMediaUrl;
       const agent = await store.heartbeatEdgeAgent(id, body.version!, publicMediaUrl);
       if (!agent) {
-        return reply.code(200).send({
-          id,
-          name: "Branch Edge Scanner",
-          version: body.version || "0.1.9",
-          status: "online",
-          lastSeenAt: new Date().toISOString(),
-        });
+        return reply.code(404).send({ error: "edge_agent_not_found" });
       }
       if (publicMediaUrl) {
         await store.updateEdgeManagedTunnelStatus(agent.branchId, "healthy").catch(() => undefined);
@@ -1009,12 +1003,7 @@ export async function buildApp(options?: {
       return agent;
     } catch (error: any) {
       request.log.error({ err: error }, "Failed to process edge agent heartbeat");
-      return reply.code(200).send({
-        id: (request.params as any)?.id || "edge-agent-default",
-        status: "online",
-        version: "0.1.9",
-        lastSeenAt: new Date().toISOString(),
-      });
+      return reply.code(503).send({ error: "edge_agent_heartbeat_failed" });
     }
   });
 

@@ -25,6 +25,8 @@ export interface RtspScanOptions {
   ffprobePath: string;
   timeoutMs: number;
   concurrency: number;
+  discoveryConcurrency?: number;
+  connectTimeoutMs?: number;
   username: string;
   password: string;
   credentialsForHost?: (host: string) => Promise<{ username: string; password: string } | undefined>;
@@ -260,6 +262,8 @@ export async function discoverRtspDevices(
   const ffprobePath = options.ffprobePath;
   const timeoutMs = Math.max(options.timeoutMs || 3000, 2500);
   const concurrency = Math.max(1, Math.min(options.concurrency || 4, 8));
+  const discoveryConcurrency = Math.max(1, Math.min(options.discoveryConcurrency || 32, 64));
+  const connectTimeoutMs = Math.max(100, Math.min(options.connectTimeoutMs || 750, 5_000));
   const username = options.username ?? "";
   const password = options.password ?? "";
 
@@ -304,8 +308,27 @@ export async function discoverRtspDevices(
   let submittedCount = 0;
 
   const hosts = [...candidates].filter((host) => !excludedHosts.has(host));
+  const discoveryPorts = uniqueValidPorts([...httpFingerprintPorts, ...rtspStreamingPorts]);
+  const reachableHosts: Array<{ ip: string; ports: Set<number> }> = [];
 
-  async function scanHost(ip: string) {
+  // First reduce the subnet to hosts that expose a configured camera or
+  // recorder port. Probing all configured ports concurrently avoids spending
+  // several seconds serially on every unused address in a /24.
+  await runWithConcurrency(hosts, discoveryConcurrency, async (ip) => {
+    const checks = await Promise.all(discoveryPorts.map(async (port) => ({
+      port,
+      reachable: await tryTcpConnect(ip, port, connectTimeoutMs),
+    })));
+    const openPorts = checks.filter((check) => check.reachable).map((check) => check.port);
+    if (openPorts.length > 0) reachableHosts.push({ ip, ports: new Set(openPorts) });
+  });
+  logger.info("RTSP candidate scan completed", {
+    addressesChecked: hosts.length,
+    reachableHosts: reachableHosts.length,
+  });
+
+  async function scanHost(candidate: { ip: string; ports: Set<number> }) {
+    const { ip, ports: reachablePorts } = candidate;
     // Add small pacing delay to protect home/SOHO routers from connection saturation
     await new Promise((r) => setTimeout(r, 20));
 
@@ -326,8 +349,7 @@ export async function discoverRtspDevices(
 
       // 1. Check HTTP recorder fingerprint on web ports (with router protection)
       for (const port of httpFingerprintPorts) {
-        const httpReachable = await tryTcpConnect(ip, port, 1500);
-        if (!httpReachable) continue;
+        if (!reachablePorts.has(port)) continue;
 
         const isRouter = await isRouterHost(ip, 1500);
         if (isRouter) {
@@ -357,8 +379,7 @@ export async function discoverRtspDevices(
 
       // 2. Probe dedicated RTSP streaming ports
       for (const port of rtspStreamingPorts) {
-        const reachable = await tryTcpConnect(ip, port, Math.max(500, Math.min(timeoutMs, 2500)));
-        if (!reachable) continue;
+        if (!reachablePorts.has(port)) continue;
         // A reachable RTSP service is real device evidence. If the operator
         // has not supplied credentials, retain it as a visible discovery and
         // ask for a host-specific login rather than dropping it.
@@ -435,16 +456,15 @@ export async function discoverRtspDevices(
                   capabilities: { ptz: false, audio: true, events: true },
                   discoveryLayers: rtspDiscoveryLayers(true, Boolean(hardwareId)),
                 };
-                  const discovery = await control.submitDiscovery(branchId, payload);
-                  submittedCount += 1;
-                  if (persistStreamSecrets && secretsStore) {
-                    await secretsStore.set(`edge://${agentId}/${discovery.id}`, authed);
-                  }
-                  logger.info(`RTSP discovery: verified stream at ${ip}:${port}${path} -> discovery ${discovery.id}`);
-                  return;
-                } catch (submissionError) {
-                  logger.error("RTSP discovery: failed to submit discovery", { error: submissionError instanceof Error ? submissionError.message : String(submissionError) });
+                const discovery = await control.submitDiscovery(branchId, payload);
+                submittedCount += 1;
+                if (persistStreamSecrets && secretsStore) {
+                  await secretsStore.set(`edge://${agentId}/${discovery.id}`, authed);
                 }
+                logger.info(`RTSP discovery: verified stream at ${ip}:${port}${path} -> discovery ${discovery.id}`);
+                return;
+              } catch (submissionError) {
+                logger.error("RTSP discovery: failed to submit discovery", { error: submissionError instanceof Error ? submissionError.message : String(submissionError) });
               }
             }
             if (foundWorkingCred) break;
@@ -464,7 +484,9 @@ export async function discoverRtspDevices(
           logger.info(`RTSP discovery: unverified device at ${ip}:${unverifiedEndpoint.port} -> discovery ${discovery.id}`, {
             credentialsRequired: unverifiedEndpoint.credentialsRequired,
           });
+          return;
         }
+      }
       } catch (error) {
         logger.debug("RTSP scan host failed", { host: ip, error: error instanceof Error ? error.message : String(error) });
       }
@@ -547,7 +569,7 @@ export async function discoverRtspDevices(
     });
   }
 
-  await runWithConcurrency(hosts, concurrency, scanHost);
+  await runWithConcurrency(reachableHosts, concurrency, scanHost);
   return submittedCount;
 }
 

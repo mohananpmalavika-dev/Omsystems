@@ -25,12 +25,13 @@ describe("device-scoped scan jobs", () => {
     });
   });
 
-  it("does not run broadcast discovery or subnet RTSP scanning for a target", async () => {
+  it("does not run broadcast discovery or expand RTSP scanning beyond a target", async () => {
     const raw = await readFile("edge-agent/src/index.ts", "utf8");
     const source = raw.replace(/\r\n/g, "\n");
 
     expect(source).toContain("if (options.target) {\n    endpoints = [targetedOnvifEndpoint(options.target)]");
-    expect(source).toContain("config.RTSP_SCAN_ENABLED && !options.target");
+    expect(source).toContain("const knownHosts = options.target ? [options.target.ipAddress]");
+    expect(source).toContain("restrictToHosts: Boolean(options.target)");
     expect(source).toContain("scanBranch(target ? { target } : {})");
   });
 });

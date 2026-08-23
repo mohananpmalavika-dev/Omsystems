@@ -525,6 +525,10 @@ export function DeviceManager() {
       job = await cameraInventoryApi.getScan(selectedBranch, scanId).catch(() => job) as EdgeScanJob;
     }
 
+    if (job.status === "queued" || job.status === "running") {
+      throw new Error("The branch scan timed out before the edge agent completed it. Confirm the scanner remains online, then retry.");
+    }
+
     if (job.status === "failed") {
       const liveDiscovered = await cameraInventoryApi.listDiscovered(selectedBranch).catch(() => ({ data: [] }));
       if (!liveDiscovered?.data?.length) {

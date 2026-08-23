@@ -39,6 +39,7 @@ import {
 import { identifyVendorFamily, probeVendorStream } from "./devices/vendor-stream-adapter.js";
 import type { RecorderConfig } from "./monitoring/recorder-probe.js";
 import { recoverCamera } from "./recovery/camera-recovery.js";
+import { startAgentPresenceHeartbeat } from "./runtime/agent-presence.js";
 
 async function main() {
 const argv = process.argv.slice(2);
@@ -55,7 +56,7 @@ if (runtime.embeddedEnvironmentFile && (argv.length === 0 || hasArgument(argv, "
   process.exit(0);
 }
 if (hasArgument(argv, "--version")) {
-  process.stdout.write("Sentinel Grid Edge Agent 0.1.9\n");
+  process.stdout.write("Sentinel Grid Edge Agent 0.1.10\n");
   process.exit(0);
 }
 
@@ -218,11 +219,11 @@ const cameraHeartbeat = initializeCameraHeartbeat(
   (payload) => control.submitAnalyticsFrame(agentId, payload),
 );
 let lastCameraConfigSyncAt = 0;
-let lastDiscoveryAt = 0;
+// Defer the scheduled full-LAN scan until the agent has had a chance to claim
+// any operator-requested work. A scan button click must not wait behind a
+// second, implicit startup scan.
+let lastDiscoveryAt = Date.now();
 await syncCameraHeartbeatConfig();
-if (config.AUTO_DISCOVERY_ENABLED) {
-  await runAutomaticDiscovery();
-}
 cameraHeartbeat.start(config.CAMERA_HEARTBEAT_INTERVAL_MS);
 if (config.EDGE_MEDIA_SHARED_KEY) {
   await startSecretProvider({
@@ -236,6 +237,13 @@ if (config.EDGE_MEDIA_SHARED_KEY) {
 
 logger.info(`Edge agent ${agentId} registered; waiting for branch commands`, { branchId, version: config.EDGE_AGENT_VERSION });
 await heartbeatAndReport();
+const presenceHeartbeat = startAgentPresenceHeartbeat({
+  intervalMs: config.EDGE_HEARTBEAT_INTERVAL_MS,
+  heartbeat: () => control.heartbeat(agentId, config.EDGE_AGENT_VERSION, edgeMediaRuntime?.publicUrl),
+  onError: (error) => logger.warn("Edge presence heartbeat failed", {
+    error: error instanceof Error ? error.message : String(error),
+  }),
+});
 
 let stopping = false;
 process.once("SIGINT", () => { stopping = true; });
@@ -246,9 +254,6 @@ while (!stopping) {
     await heartbeatAndReport();
     const replay = await control.flushOutbox();
     if (replay.delivered > 0) logger.info("Replayed offline telemetry", replay);
-    if (config.AUTO_DISCOVERY_ENABLED && Date.now() - lastDiscoveryAt >= config.AUTO_DISCOVERY_INTERVAL_MS) {
-      await runAutomaticDiscovery();
-    }
     const command = await control.claimCommand(agentId);
     if (command) {
       try {
@@ -288,6 +293,10 @@ while (!stopping) {
         });
       }
     }
+    if (!command && !job && config.AUTO_DISCOVERY_ENABLED &&
+        Date.now() - lastDiscoveryAt >= config.AUTO_DISCOVERY_INTERVAL_MS) {
+      await runAutomaticDiscovery();
+    }
   } catch (error) {
     logger.error("Edge command poll failed", { error: error instanceof Error ? error.message : String(error) });
   }
@@ -295,6 +304,7 @@ while (!stopping) {
 }
 
 cameraHeartbeat.stop();
+await presenceHeartbeat.stop();
 await edgeMediaRuntime?.stop();
 
 async function discoveryCredentials(host: string) {
@@ -817,6 +827,8 @@ async function scanBranch(options: { persistStreamSecrets?: boolean; target?: De
         ffprobePath: config.FFPROBE_PATH,
         timeoutMs: config.RTSP_SCAN_TIMEOUT_MS,
         concurrency: config.RTSP_SCAN_CONCURRENCY,
+        discoveryConcurrency: config.RTSP_DISCOVERY_CONCURRENCY,
+        connectTimeoutMs: config.RTSP_DISCOVERY_CONNECT_TIMEOUT_MS,
         recorderMaxChannels: config.RECORDER_DISCOVERY_MAX_CHANNELS,
         username: "",
         password: "",

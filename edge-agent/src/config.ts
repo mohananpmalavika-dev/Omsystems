@@ -6,7 +6,8 @@ const schema = z.object({
   EDGE_AGENT_ID: z.preprocess((value) => value === "" ? undefined : value, z.string().min(1).optional()),
   EDGE_ACTIVATION_CODE: z.preprocess((value) => value === "" ? undefined : value, z.string().startsWith("sgact_").min(40).optional()),
   EDGE_AGENT_NAME: z.string().min(2),
-  EDGE_AGENT_VERSION: z.string().default("0.1.9"),
+  EDGE_AGENT_VERSION: z.string().default("0.1.10"),
+  EDGE_HEARTBEAT_INTERVAL_MS: z.coerce.number().int().min(5_000).max(60_000).default(15_000),
   DEV_USER_ID: z.preprocess((value) => value === "" ? undefined : value, z.string().min(1).optional()),
   CAMERA_USERNAME: z.string().default(""),
   CAMERA_PASSWORD: z.string().default(""),
@@ -33,6 +34,9 @@ const schema = z.object({
   RTSP_SCAN_PATHS: z.string().default("/,/stream,/h264,/live.sdp,/mpeg4,/Streaming/Channels/101,/cam/realmonitor?channel=1&subtype=1,/cam/realmonitor?channel=1&subtype=0"),
   // Concurrency for the active TCP/connect+probe scanner (kept low to protect home/SOHO routers)
   RTSP_SCAN_CONCURRENCY: z.coerce.number().int().min(1).max(50).default(4),
+  // Fast TCP candidate filtering runs before expensive recorder/stream probes.
+  RTSP_DISCOVERY_CONCURRENCY: z.coerce.number().int().min(1).max(64).default(32),
+  RTSP_DISCOVERY_CONNECT_TIMEOUT_MS: z.coerce.number().int().min(100).max(5_000).default(750),
   // Timeout for individual RTSP probe/connect attempts (ms)
   RTSP_SCAN_TIMEOUT_MS: z.coerce.number().int().min(250).max(10_000).default(3000),
   LIVE_MEDIA_ENABLED: z.enum(["true", "false"]).default("false").transform((value) => value === "true"),
