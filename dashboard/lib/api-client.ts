@@ -1068,7 +1068,14 @@ export const provisioningApi = {
       { method: "POST", body: "{}" },
     ),
   activateEdgeOnline: (branchId: string) =>
-    fetchApi<{ success: boolean; agent: any; message: string }>(
+    fetchApi<{
+      success: boolean;
+      status: "online" | "start-required" | "not-enrolled";
+      agent?: { id: string; name: string; status: "pending" | "online" | "offline"; version: string };
+      installRequired: boolean;
+      activationRequired: boolean;
+      message: string;
+    }>(
       `/v1/branches/${encodeURIComponent(branchId)}/activate-edge-online`,
       { method: "POST", body: "{}" },
     ),

@@ -47,7 +47,10 @@ describe("Windows scanner installer resilience", () => {
 
     expect(source).toContain('$installedTask = Get-ScheduledTask -TaskName $TaskName');
     expect(source).toContain('$connectivityHealthy -and $state -ne "Running"');
-    expect(source).toContain("startup task did not remain running");
+    expect(source).toContain('$startupTimeoutSeconds = 60');
+    expect(source).toContain('while ((Get-Date) -lt $startupDeadline)');
+    expect(source).toContain("did not enter Running within");
+    expect(source).not.toContain("Start-Sleep -Seconds 5");
   });
 
   it("writes Windows dependency paths without dotenv escape corruption", async () => {

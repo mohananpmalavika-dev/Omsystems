@@ -14,8 +14,11 @@ import {
   Zap,
 } from "lucide-react";
 import { useEffect, useState } from "react";
-import { provisioningApi } from "@/lib/api-client";
+import { cameraInventoryApi, provisioningApi } from "@/lib/api-client";
+import { requestInstalledEdgeStart } from "@/lib/local-edge-autostart";
 import type { ProvisioningRun as ProvisioningRunModel, ProvisioningStepStatus } from "@/lib/types";
+
+const edgeActivationTimeoutMs = 15_000;
 
 export function ProvisioningRun({
   branchId,
@@ -24,6 +27,7 @@ export function ProvisioningRun({
   onInstallAgent,
   onProvideCredentials,
   onChanged,
+  hasEnrolledAgent,
 }: {
   branchId: string;
   refreshing?: boolean;
@@ -31,6 +35,7 @@ export function ProvisioningRun({
   onInstallAgent: () => void;
   onProvideCredentials: () => void;
   onChanged?: () => void;
+  hasEnrolledAgent: boolean;
 }) {
   const [run, setRun] = useState<ProvisioningRunModel>();
   const [error, setError] = useState<string>();
@@ -79,11 +84,43 @@ export function ProvisioningRun({
     setActivatingEdge(true);
     setError(undefined);
     setNotice(undefined);
+
+    // This custom protocol is installed with the Windows edge agent. Invoke it
+    // directly from the click event so the browser can ask the operator for
+    // permission to start the existing scheduled task. It never downloads or
+    // changes the branch enrollment.
+    if (hasEnrolledAgent) requestInstalledEdgeStart();
+
     try {
       const res = await provisioningApi.activateEdgeOnline(branchId);
-      setNotice(res.message || "Branch Edge Gateway is now online and active.");
-      await load();
-      onChanged?.();
+      if (res.status === "not-enrolled" || res.installRequired) {
+        setNotice("No edge agent is enrolled for this branch. Use Install Branch Gateway to perform the first installation.");
+        onInstallAgent();
+        return;
+      }
+      if (res.status === "online") {
+        setNotice(res.message || "The installed branch edge agent is already online.");
+        await load();
+        onChanged?.();
+        return;
+      }
+
+      const deadline = Date.now() + edgeActivationTimeoutMs;
+      while (Date.now() < deadline) {
+        const gateways = await cameraInventoryApi.listGateways(branchId);
+        const online = gateways.data.find((agent: any) =>
+          agent.id === res.agent?.id && agent.status === "online"
+        );
+        if (online) {
+          setNotice(`${online.name || "The installed edge agent"} started and authenticated successfully.`);
+          await load();
+          onChanged?.();
+          return;
+        }
+        await new Promise((resolve) => window.setTimeout(resolve, 1_000));
+      }
+
+      throw new Error("The installed Sentinel Grid Edge Agent did not come online. Approve the browser's Open Sentinel Grid Scanner prompt, then retry. Use Repair only if the installed task cannot start.");
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Failed to activate Edge Agent online.");
     } finally {
@@ -186,7 +223,7 @@ export function ProvisioningRun({
           </div>
         </div>
         <div className="ztp-actions">
-          {/* Quick 1-Click Activate Edge Online Action */}
+          {/* Starts an existing local installation and waits for a real authenticated heartbeat. */}
           {isEdgeOffline ? (
             <button
               className="primary-button"

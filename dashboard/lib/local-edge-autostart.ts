@@ -8,6 +8,15 @@ export function resetLocalEdgeAutostart() {
   }
 }
 
+export function requestInstalledEdgeStart() {
+  const launcher = document.createElement("iframe");
+  launcher.setAttribute("aria-hidden", "true");
+  launcher.style.display = "none";
+  launcher.src = "sentinel-grid-scanner://start";
+  document.body.appendChild(launcher);
+  window.setTimeout(() => launcher.remove(), 1_000);
+}
+
 export function requestLocalEdgeAutostart() {
   try {
     if (window.sessionStorage.getItem(autostartKey)) return;
@@ -16,10 +25,5 @@ export function requestLocalEdgeAutostart() {
     return;
   }
 
-  const launcher = document.createElement("iframe");
-  launcher.setAttribute("aria-hidden", "true");
-  launcher.style.display = "none";
-  launcher.src = "sentinel-grid-scanner://start";
-  document.body.appendChild(launcher);
-  window.setTimeout(() => launcher.remove(), 1_000);
+  requestInstalledEdgeStart();
 }

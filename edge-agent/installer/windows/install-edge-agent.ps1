@@ -289,8 +289,19 @@ if (-not $SkipConnectivityCheck) {
 }
 
 Start-ScheduledTask -TaskName $TaskName
-Start-Sleep -Seconds 5
-$installedTask = Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
+$startupTimeoutSeconds = 60
+$startupDeadline = (Get-Date).AddSeconds($startupTimeoutSeconds)
+$installedTask = $null
+do {
+  $installedTask = Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
+  # Start-ScheduledTask is asynchronous. A task can legitimately remain in
+  # Queued/Ready while Windows starts the packaged executable (especially
+  # while a previous repair instance is shutting down). Do not report a
+  # failure until the task has had enough time to enter Running.
+  if ($installedTask -and [string]$installedTask.State -eq "Running") { break }
+  Start-Sleep -Seconds 1
+} while ((Get-Date) -lt $startupDeadline)
+
 if (-not $installedTask) {
   throw "The Sentinel Grid startup task was not created. Run this Repair package again from an Administrator PowerShell window."
 }
@@ -298,7 +309,7 @@ $state = $installedTask.State
 if ($connectivityHealthy -and $state -ne "Running") {
   $taskInfo = Get-ScheduledTaskInfo -TaskName $TaskName -ErrorAction SilentlyContinue
   $lastResult = if ($taskInfo) { $taskInfo.LastTaskResult } else { "unknown" }
-  throw "The Sentinel Grid startup task did not remain running (state: $state, result: $lastResult). Check $LogDirectory\edge-agent.log and run Repair scanner again."
+  throw "The Sentinel Grid startup task did not enter Running within $startupTimeoutSeconds seconds (state: $state, result: $lastResult). Check $LogDirectory\edge-agent.log and run Repair scanner again."
 }
 
 if ($connectivityHealthy) {
