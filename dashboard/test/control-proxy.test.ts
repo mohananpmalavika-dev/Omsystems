@@ -250,7 +250,7 @@ describe("dashboard control-plane BFF", () => {
           method: "POST",
           headers: {
             "content-type": "application/json",
-            "x-forwarded-host": "sentinel-grid-monitoring1.onrender.com",
+            "x-forwarded-host": "sentinel-grid-monitoring-s38w.onrender.com",
             "x-forwarded-proto": "https",
           },
           body: JSON.stringify({

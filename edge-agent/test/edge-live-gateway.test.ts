@@ -1,8 +1,10 @@
 import { afterEach, describe, expect, it } from "vitest";
+import { EventEmitter } from "node:events";
 import {
   buildEdgeLiveGateway,
   extractQuickTunnelUrl,
   mediaTunnelOrigin,
+  QuickTunnelSupervisor,
   resolvePrivateMediaGatewayUrl,
   resolveMediaTunnelMode,
   startEdgeMediaRuntimeIfAvailable,
@@ -42,6 +44,38 @@ describe("all-in-one edge live gateway", () => {
     expect(mediaTunnelOrigin("0.0.0.0", 8090)).toBe("http://127.0.0.1:8090");
     expect(mediaTunnelOrigin("::", 8090)).toBe("http://127.0.0.1:8090");
     expect(mediaTunnelOrigin("192.168.29.10", 8090)).toBe("http://192.168.29.10:8090");
+  });
+
+  it("keeps a quick tunnel alive across connector restarts and advertises the replacement URL", async () => {
+    const advertised: Array<string | undefined> = [];
+    const children: EventEmitter[] = [];
+    let starts = 0;
+    const supervisor = new QuickTunnelSupervisor({
+      retryDelayMs: 1,
+      onPublicUrl: (url) => advertised.push(url),
+      start: async () => {
+        starts += 1;
+        const child = new EventEmitter() as EventEmitter & { kill(): boolean };
+        child.kill = () => true;
+        children.push(child);
+        return {
+          process: child as any,
+          publicUrl: `https://quick-${starts}.trycloudflare.com`,
+        };
+      },
+    });
+
+    await expect(supervisor.start()).resolves.toBe("https://quick-1.trycloudflare.com");
+    children[0]!.emit("exit", 1, null);
+    await new Promise((resolve) => setTimeout(resolve, 10));
+
+    expect(starts).toBe(2);
+    expect(advertised).toEqual([
+      "https://quick-1.trycloudflare.com",
+      undefined,
+      "https://quick-2.trycloudflare.com",
+    ]);
+    supervisor.stop();
   });
 
   it("keeps discovery available when optional live media cannot start", async () => {

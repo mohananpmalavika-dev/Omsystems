@@ -32,7 +32,7 @@ export interface EdgeMediaRuntimeInput {
   secrets: LocalStreamSecretStore;
 }
 
-type QuickTunnelChild = Pick<ChildProcessWithoutNullStreams, "kill" | "once">;
+export type QuickTunnelChild = Pick<ChildProcessWithoutNullStreams, "kill" | "once">;
 
 export interface QuickTunnelSupervisorOptions {
   start: () => Promise<{ process: QuickTunnelChild; publicUrl: string }>;
