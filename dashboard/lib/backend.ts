@@ -83,7 +83,7 @@ export async function startLive(
     const localMediaGatewayUrl = configuredLocalMediaGatewayUrl ??
       (!publicMediaGatewayUrl ? advertisedLocalGatewayUrl : undefined);
 
-    const isProduction = runtimeEnv("NODE_ENV") === "production";
+    const isProduction = runtimeEnv("NODE_ENV", "development") === "production";
     if (localMediaGatewayUrl && (!isProduction || isHttpsUrl(localMediaGatewayUrl))) {
       const direct: DirectLiveGateway = {
         url: new URL("/v1/live/start", normalizeHttpOrigin(localMediaGatewayUrl)).toString(),
@@ -219,7 +219,7 @@ async function controlFetch(
   return response;
 }
 
-function runtimeEnv(name: string | string[], fallback: string) {
+function runtimeEnv(name: string | string[], fallback = "") {
   if (Array.isArray(name)) {
     for (const key of name) {
       const value = Reflect.get(process.env, key) as string | undefined;
@@ -317,7 +317,7 @@ export async function startTalk(
   const controlSession = await permission.json() as { token: string; mediaGatewayUrl?: string };
   const mediaGatewayUrl = controlSession.mediaGatewayUrl ??
     runtimeEnv("MEDIA_GATEWAY_INTERNAL_URL", "http://localhost:8090");
-  const isProduction = runtimeEnv("NODE_ENV") === "production";
+  const isProduction = runtimeEnv("NODE_ENV", "development") === "production";
   if (controlSession.mediaGatewayUrl && isBrowserDirectMediaUrl(mediaGatewayUrl) && (!isProduction || isHttpsUrl(mediaGatewayUrl))) {
     return {
       cameraId,
