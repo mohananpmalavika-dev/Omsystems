@@ -12,7 +12,7 @@ interface BrowserDirectLiveStart {
   }>;
 }
 
-const LIVE_START_TIMEOUT_MS = 8_000;
+const LIVE_START_TIMEOUT_MS = 30_000;
 
 export async function startLiveFromBrowser(
   cameraId: string,

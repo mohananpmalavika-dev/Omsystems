@@ -1,7 +1,9 @@
 import type { Branch, Camera, LiveSessionResponse, RecordingJob, RecordingSegment, TalkSessionResponse } from "./types";
 import { isBrowserDirectMediaUrl } from "./media-routing";
 
-const LIVE_START_TIMEOUT_MS = 8_000;
+// Render -> public tunnel -> local media gateway can take longer than a
+// normal API request while the tunnel wakes up or the camera path is created.
+const LIVE_START_TIMEOUT_MS = 30_000;
 
 type DirectLiveGateway = {
   url: string;

@@ -64,7 +64,7 @@ interface VisibleRange {
 }
 
 const MAX_PARALLEL_LIVE_STARTS = 2;
-const LIVE_START_TIMEOUT_MS = 8_000;
+const LIVE_START_TIMEOUT_MS = 30_000;
 
 export function EnhancedCameraGrid({
   cameras,
