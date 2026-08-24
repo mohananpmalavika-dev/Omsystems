@@ -239,12 +239,22 @@ export async function startEdgeMediaRuntime(input: EdgeMediaRuntimeInput): Promi
     config.PUBLIC_MEDIA_GATEWAY_URL,
     config.EDGE_LIVE_GATEWAY_PORT,
   );
+  const currentPublicUrl = () => {
+    if (config.PUBLIC_MEDIA_GATEWAY_URL === "auto" && tunnelMode === "disabled") {
+      try {
+        resolvedPublicUrl = resolvePrivateMediaGatewayUrl("auto", config.EDGE_LIVE_GATEWAY_PORT);
+      } catch {
+        // Keep the last known URL until the network becomes available again.
+      }
+    }
+    return resolvedPublicUrl;
+  };
   const liveGateway = buildEdgeLiveGateway({
     consumer: { consume: (token) => input.gateway.consumeLiveSession(input.agentId, token) },
     router,
     resolveSecret: (reference) => input.secrets.get(reference),
     ...(config.EDGE_BRIDGE_SHARED_KEY ? { edgeBridgeSharedKey: config.EDGE_BRIDGE_SHARED_KEY } : {}),
-    publicBaseUrl: () => resolvedPublicUrl,
+    publicBaseUrl: currentPublicUrl,
     mediaMtxHlsUrl: config.MEDIAMTX_HLS_URL,
     accessTtlMs: config.MEDIA_ACCESS_TTL_SECONDS * 1_000,
     onTalkComplete: async (completion) => {
@@ -286,7 +296,7 @@ export async function startEdgeMediaRuntime(input: EdgeMediaRuntimeInput): Promi
   }
 
   return {
-    publicUrl: resolvedPublicUrl,
+    get publicUrl() { return currentPublicUrl(); },
     async stop() { tunnel?.kill(); await liveGateway.close().catch(() => undefined); mediaMtx?.kill(); },
   };
 }

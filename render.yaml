@@ -109,6 +109,17 @@ services:
           type: web
           name: sentinel-grid-media-gateway
           property: hostport
+      # Optional branch-local/VPN gateway. The dashboard selects this on
+      # reachable HTTP pages and falls back to the public HTTPS gateway.
+      - key: MEDIA_GATEWAY_LOCAL_URL
+        sync: false
+      # Optional public HTTPS tunnel for browsers outside the branch VPN.
+      - key: MEDIA_GATEWAY_PUBLIC_URL
+        value: https://apnic-deserve-evans-yarn.trycloudflare.com
+      # Optional JSON map for branch-specific tunnels, keyed by local gateway
+      # origin, for example {"http://branch-a-gateway.internal:8090":"https://branch-a.example.com"}.
+      - key: MEDIA_GATEWAY_PUBLIC_URLS
+        sync: false
       - key: RECORDING_ENGINE_INTERNAL_URL
         fromService:
           type: pserv
