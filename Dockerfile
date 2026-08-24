@@ -4,6 +4,8 @@ WORKDIR /app
 COPY package.json package-lock.json tsconfig.json ./
 COPY src/ ./src/
 COPY backend/ ./backend/
+COPY database/migrations/ ./database/migrations/
+COPY scripts/run-migrations.mjs ./scripts/run-migrations.mjs
 COPY packages/ ./packages/
 COPY analytics-engine/ ./analytics-engine/
 COPY edge-agent/ ./edge-agent/
@@ -34,6 +36,8 @@ RUN npm ci --omit=dev
 # Copy built application
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/backend ./backend
+COPY --from=builder /app/database/migrations ./database/migrations
+COPY --from=builder /app/scripts/run-migrations.mjs ./scripts/run-migrations.mjs
 COPY --from=builder /app/edge-agent/build ./edge-agent/build
 COPY --from=builder /app/edge-agent/release ./edge-agent/release
 COPY --from=builder /app/edge-agent/installer ./edge-agent/installer
@@ -42,4 +46,4 @@ COPY --from=builder /app/edge-agent/package.json ./edge-agent/package.json
 EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
   CMD wget -qO- http://localhost:8080/health || exit 1
-CMD ["node", "dist/src/index.js"]
+CMD ["sh", "-c", "node scripts/run-migrations.mjs && node dist/src/index.js"]
