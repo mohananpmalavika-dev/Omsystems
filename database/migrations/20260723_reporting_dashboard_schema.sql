@@ -21,8 +21,8 @@ CREATE TABLE IF NOT EXISTS dashboard_definitions (
   UNIQUE(tenant_id, slug)
 );
 
-CREATE INDEX idx_dashboard_definitions_tenant ON dashboard_definitions(tenant_id);
-CREATE INDEX idx_dashboard_definitions_role ON dashboard_definitions(target_role);
+CREATE INDEX IF NOT EXISTS idx_dashboard_definitions_tenant ON dashboard_definitions(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_dashboard_definitions_role ON dashboard_definitions(target_role);
 
 -- ============================================
 -- Dashboard Widgets
@@ -43,8 +43,8 @@ CREATE TABLE IF NOT EXISTS dashboard_widgets (
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE INDEX idx_dashboard_widgets_dashboard ON dashboard_widgets(dashboard_id);
-CREATE INDEX idx_dashboard_widgets_type ON dashboard_widgets(widget_type);
+CREATE INDEX IF NOT EXISTS idx_dashboard_widgets_dashboard ON dashboard_widgets(dashboard_id);
+CREATE INDEX IF NOT EXISTS idx_dashboard_widgets_type ON dashboard_widgets(widget_type);
 
 -- ============================================
 -- Dashboard User Preferences
@@ -61,7 +61,7 @@ CREATE TABLE IF NOT EXISTS dashboard_user_preferences (
   UNIQUE(user_id, dashboard_id)
 );
 
-CREATE INDEX idx_dashboard_user_prefs_user ON dashboard_user_preferences(user_id);
+CREATE INDEX IF NOT EXISTS idx_dashboard_user_prefs_user ON dashboard_user_preferences(user_id);
 
 -- ============================================
 -- Dashboard Snapshots (for historical comparison)
@@ -75,8 +75,8 @@ CREATE TABLE IF NOT EXISTS dashboard_snapshots (
   created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE INDEX idx_dashboard_snapshots_tenant_date ON dashboard_snapshots(tenant_id, snapshot_date DESC);
-CREATE INDEX idx_dashboard_snapshots_dashboard ON dashboard_snapshots(dashboard_id);
+CREATE INDEX IF NOT EXISTS idx_dashboard_snapshots_tenant_date ON dashboard_snapshots(tenant_id, snapshot_date DESC);
+CREATE INDEX IF NOT EXISTS idx_dashboard_snapshots_dashboard ON dashboard_snapshots(dashboard_id);
 
 -- ============================================
 -- Report Definitions
@@ -99,9 +99,9 @@ CREATE TABLE IF NOT EXISTS report_definitions (
   UNIQUE(tenant_id, slug)
 );
 
-CREATE INDEX idx_report_definitions_tenant ON report_definitions(tenant_id);
-CREATE INDEX idx_report_definitions_type ON report_definitions(report_type);
-CREATE INDEX idx_report_definitions_category ON report_definitions(category);
+CREATE INDEX IF NOT EXISTS idx_report_definitions_tenant ON report_definitions(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_report_definitions_type ON report_definitions(report_type);
+CREATE INDEX IF NOT EXISTS idx_report_definitions_category ON report_definitions(category);
 
 -- ============================================
 -- Report Filters
@@ -117,7 +117,7 @@ CREATE TABLE IF NOT EXISTS report_filters (
   created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE INDEX idx_report_filters_definition ON report_filters(report_definition_id);
+CREATE INDEX IF NOT EXISTS idx_report_filters_definition ON report_filters(report_definition_id);
 
 -- ============================================
 -- Report Schedules
@@ -141,8 +141,8 @@ CREATE TABLE IF NOT EXISTS report_schedules (
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE INDEX idx_report_schedules_tenant ON report_schedules(tenant_id);
-CREATE INDEX idx_report_schedules_next_run ON report_schedules(next_run_at) WHERE is_active = true;
+CREATE INDEX IF NOT EXISTS idx_report_schedules_tenant ON report_schedules(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_report_schedules_next_run ON report_schedules(next_run_at) WHERE is_active = true;
 
 -- ============================================
 -- Report Runs (Execution History)
@@ -166,10 +166,10 @@ CREATE TABLE IF NOT EXISTS report_runs (
   created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE INDEX idx_report_runs_tenant ON report_runs(tenant_id);
-CREATE INDEX idx_report_runs_definition ON report_runs(report_definition_id);
-CREATE INDEX idx_report_runs_status ON report_runs(status);
-CREATE INDEX idx_report_runs_created ON report_runs(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_report_runs_tenant ON report_runs(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_report_runs_definition ON report_runs(report_definition_id);
+CREATE INDEX IF NOT EXISTS idx_report_runs_status ON report_runs(status);
+CREATE INDEX IF NOT EXISTS idx_report_runs_created ON report_runs(created_at DESC);
 
 -- ============================================
 -- Report Exports (Download/Share Tracking)
@@ -195,10 +195,10 @@ CREATE TABLE IF NOT EXISTS report_exports (
   created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE INDEX idx_report_exports_tenant ON report_exports(tenant_id);
-CREATE INDEX idx_report_exports_run ON report_exports(report_run_id);
-CREATE INDEX idx_report_exports_user ON report_exports(user_id);
-CREATE INDEX idx_report_exports_created ON report_exports(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_report_exports_tenant ON report_exports(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_report_exports_run ON report_exports(report_run_id);
+CREATE INDEX IF NOT EXISTS idx_report_exports_user ON report_exports(user_id);
+CREATE INDEX IF NOT EXISTS idx_report_exports_created ON report_exports(created_at DESC);
 
 -- ============================================
 -- Camera Health Daily Summary
@@ -224,9 +224,9 @@ CREATE TABLE IF NOT EXISTS camera_health_daily (
   UNIQUE(camera_id, summary_date)
 );
 
-CREATE INDEX idx_camera_health_daily_tenant_date ON camera_health_daily(tenant_id, summary_date DESC);
-CREATE INDEX idx_camera_health_daily_camera ON camera_health_daily(camera_id, summary_date DESC);
-CREATE INDEX idx_camera_health_daily_branch ON camera_health_daily(branch_node_id, summary_date DESC);
+CREATE INDEX IF NOT EXISTS idx_camera_health_daily_tenant_date ON camera_health_daily(tenant_id, summary_date DESC);
+CREATE INDEX IF NOT EXISTS idx_camera_health_daily_camera ON camera_health_daily(camera_id, summary_date DESC);
+CREATE INDEX IF NOT EXISTS idx_camera_health_daily_branch ON camera_health_daily(branch_node_id, summary_date DESC);
 
 -- ============================================
 -- Recording Status Daily Summary
@@ -251,9 +251,9 @@ CREATE TABLE IF NOT EXISTS recording_status_daily (
   UNIQUE(camera_id, summary_date)
 );
 
-CREATE INDEX idx_recording_daily_tenant_date ON recording_status_daily(tenant_id, summary_date DESC);
-CREATE INDEX idx_recording_daily_camera ON recording_status_daily(camera_id, summary_date DESC);
-CREATE INDEX idx_recording_daily_branch ON recording_status_daily(branch_node_id, summary_date DESC);
+CREATE INDEX IF NOT EXISTS idx_recording_daily_tenant_date ON recording_status_daily(tenant_id, summary_date DESC);
+CREATE INDEX IF NOT EXISTS idx_recording_daily_camera ON recording_status_daily(camera_id, summary_date DESC);
+CREATE INDEX IF NOT EXISTS idx_recording_daily_branch ON recording_status_daily(branch_node_id, summary_date DESC);
 
 -- ============================================
 -- Recording Gap Summary (for detailed gap tracking)
@@ -272,9 +272,9 @@ CREATE TABLE IF NOT EXISTS recording_gap_summary (
   created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE INDEX idx_recording_gaps_tenant ON recording_gap_summary(tenant_id);
-CREATE INDEX idx_recording_gaps_camera ON recording_gap_summary(camera_id, gap_start DESC);
-CREATE INDEX idx_recording_gaps_date ON recording_gap_summary(gap_start DESC);
+CREATE INDEX IF NOT EXISTS idx_recording_gaps_tenant ON recording_gap_summary(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_recording_gaps_camera ON recording_gap_summary(camera_id, gap_start DESC);
+CREATE INDEX IF NOT EXISTS idx_recording_gaps_date ON recording_gap_summary(gap_start DESC);
 
 -- ============================================
 -- Storage Capacity Snapshots
@@ -299,9 +299,9 @@ CREATE TABLE IF NOT EXISTS storage_capacity_snapshots (
   created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE INDEX idx_storage_snapshots_tenant_time ON storage_capacity_snapshots(tenant_id, snapshot_time DESC);
-CREATE INDEX idx_storage_snapshots_node ON storage_capacity_snapshots(storage_node_id, snapshot_time DESC);
-CREATE INDEX idx_storage_snapshots_branch ON storage_capacity_snapshots(branch_node_id, snapshot_time DESC);
+CREATE INDEX IF NOT EXISTS idx_storage_snapshots_tenant_time ON storage_capacity_snapshots(tenant_id, snapshot_time DESC);
+CREATE INDEX IF NOT EXISTS idx_storage_snapshots_node ON storage_capacity_snapshots(storage_node_id, snapshot_time DESC);
+CREATE INDEX IF NOT EXISTS idx_storage_snapshots_branch ON storage_capacity_snapshots(branch_node_id, snapshot_time DESC);
 
 -- ============================================
 -- Storage Forecasts
@@ -319,7 +319,7 @@ CREATE TABLE IF NOT EXISTS storage_forecasts (
   UNIQUE(storage_node_id, forecast_date)
 );
 
-CREATE INDEX idx_storage_forecasts_node ON storage_forecasts(storage_node_id, forecast_date DESC);
+CREATE INDEX IF NOT EXISTS idx_storage_forecasts_node ON storage_forecasts(storage_node_id, forecast_date DESC);
 
 -- ============================================
 -- Incident Metrics Daily
@@ -344,8 +344,8 @@ CREATE TABLE IF NOT EXISTS incident_metrics_daily (
   UNIQUE(tenant_id, branch_node_id, summary_date)
 );
 
-CREATE INDEX idx_incident_metrics_tenant_date ON incident_metrics_daily(tenant_id, summary_date DESC);
-CREATE INDEX idx_incident_metrics_branch ON incident_metrics_daily(branch_node_id, summary_date DESC);
+CREATE INDEX IF NOT EXISTS idx_incident_metrics_tenant_date ON incident_metrics_daily(tenant_id, summary_date DESC);
+CREATE INDEX IF NOT EXISTS idx_incident_metrics_branch ON incident_metrics_daily(branch_node_id, summary_date DESC);
 
 -- ============================================
 -- Alert Metrics Daily
@@ -371,8 +371,8 @@ CREATE TABLE IF NOT EXISTS alert_metrics_daily (
   UNIQUE(tenant_id, branch_node_id, summary_date)
 );
 
-CREATE INDEX idx_alert_metrics_tenant_date ON alert_metrics_daily(tenant_id, summary_date DESC);
-CREATE INDEX idx_alert_metrics_branch ON alert_metrics_daily(branch_node_id, summary_date DESC);
+CREATE INDEX IF NOT EXISTS idx_alert_metrics_tenant_date ON alert_metrics_daily(tenant_id, summary_date DESC);
+CREATE INDEX IF NOT EXISTS idx_alert_metrics_branch ON alert_metrics_daily(branch_node_id, summary_date DESC);
 
 -- ============================================
 -- Maintenance Metrics Daily
@@ -397,8 +397,8 @@ CREATE TABLE IF NOT EXISTS maintenance_metrics_daily (
   UNIQUE(tenant_id, branch_node_id, summary_date)
 );
 
-CREATE INDEX idx_maintenance_metrics_tenant_date ON maintenance_metrics_daily(tenant_id, summary_date DESC);
-CREATE INDEX idx_maintenance_metrics_branch ON maintenance_metrics_daily(branch_node_id, summary_date DESC);
+CREATE INDEX IF NOT EXISTS idx_maintenance_metrics_tenant_date ON maintenance_metrics_daily(tenant_id, summary_date DESC);
+CREATE INDEX IF NOT EXISTS idx_maintenance_metrics_branch ON maintenance_metrics_daily(branch_node_id, summary_date DESC);
 
 -- ============================================
 -- Downtime Events
@@ -424,10 +424,10 @@ CREATE TABLE IF NOT EXISTS downtime_events (
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE INDEX idx_downtime_events_tenant ON downtime_events(tenant_id);
-CREATE INDEX idx_downtime_events_asset ON downtime_events(asset_id, downtime_start DESC);
-CREATE INDEX idx_downtime_events_branch ON downtime_events(branch_node_id, downtime_start DESC);
-CREATE INDEX idx_downtime_events_start ON downtime_events(downtime_start DESC);
+CREATE INDEX IF NOT EXISTS idx_downtime_events_tenant ON downtime_events(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_downtime_events_asset ON downtime_events(asset_id, downtime_start DESC);
+CREATE INDEX IF NOT EXISTS idx_downtime_events_branch ON downtime_events(branch_node_id, downtime_start DESC);
+CREATE INDEX IF NOT EXISTS idx_downtime_events_start ON downtime_events(downtime_start DESC);
 
 -- ============================================
 -- Downtime Metrics Daily
@@ -449,8 +449,8 @@ CREATE TABLE IF NOT EXISTS downtime_metrics_daily (
   UNIQUE(tenant_id, branch_node_id, asset_type, summary_date)
 );
 
-CREATE INDEX idx_downtime_metrics_tenant_date ON downtime_metrics_daily(tenant_id, summary_date DESC);
-CREATE INDEX idx_downtime_metrics_branch ON downtime_metrics_daily(branch_node_id, summary_date DESC);
+CREATE INDEX IF NOT EXISTS idx_downtime_metrics_tenant_date ON downtime_metrics_daily(tenant_id, summary_date DESC);
+CREATE INDEX IF NOT EXISTS idx_downtime_metrics_branch ON downtime_metrics_daily(branch_node_id, summary_date DESC);
 
 -- ============================================
 -- System Health Scores
@@ -473,8 +473,8 @@ CREATE TABLE IF NOT EXISTS system_health_scores (
   created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE INDEX idx_health_scores_tenant_time ON system_health_scores(tenant_id, score_time DESC);
-CREATE INDEX idx_health_scores_branch ON system_health_scores(branch_node_id, score_time DESC);
+CREATE INDEX IF NOT EXISTS idx_health_scores_tenant_time ON system_health_scores(tenant_id, score_time DESC);
+CREATE INDEX IF NOT EXISTS idx_health_scores_branch ON system_health_scores(branch_node_id, score_time DESC);
 
 -- ============================================
 -- System Health Components (detailed breakdown)
@@ -491,7 +491,7 @@ CREATE TABLE IF NOT EXISTS system_health_components (
   created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE INDEX idx_health_components_score ON system_health_components(health_score_id);
+CREATE INDEX IF NOT EXISTS idx_health_components_score ON system_health_components(health_score_id);
 
 -- ============================================
 -- Metric Thresholds (configurable thresholds)
@@ -513,8 +513,8 @@ CREATE TABLE IF NOT EXISTS metric_thresholds (
   UNIQUE(tenant_id, metric_name, applies_to, scope_id)
 );
 
-CREATE INDEX idx_metric_thresholds_tenant ON metric_thresholds(tenant_id);
-CREATE INDEX idx_metric_thresholds_type ON metric_thresholds(metric_type);
+CREATE INDEX IF NOT EXISTS idx_metric_thresholds_tenant ON metric_thresholds(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_metric_thresholds_type ON metric_thresholds(metric_type);
 
 -- ============================================
 -- Metric Anomalies (detected unusual patterns)
@@ -539,9 +539,9 @@ CREATE TABLE IF NOT EXISTS metric_anomalies (
   created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE INDEX idx_anomalies_tenant_detected ON metric_anomalies(tenant_id, detected_at DESC);
-CREATE INDEX idx_anomalies_status ON metric_anomalies(investigation_status);
-CREATE INDEX idx_anomalies_entity ON metric_anomalies(affected_entity_type, affected_entity_id);
+CREATE INDEX IF NOT EXISTS idx_anomalies_tenant_detected ON metric_anomalies(tenant_id, detected_at DESC);
+CREATE INDEX IF NOT EXISTS idx_anomalies_status ON metric_anomalies(investigation_status);
+CREATE INDEX IF NOT EXISTS idx_anomalies_entity ON metric_anomalies(affected_entity_type, affected_entity_id);
 
 -- ============================================
 -- Footage Retrieval Log (audit trail for video access)
@@ -569,7 +569,8 @@ CREATE TABLE IF NOT EXISTS footage_retrieval_log (
   created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE INDEX idx_footage_log_tenant ON footage_retrieval_log(tenant_id, created_at DESC);
-CREATE INDEX idx_footage_log_user ON footage_retrieval_log(user_id, created_at DESC);
-CREATE INDEX idx_footage_log_camera ON footage_retrieval_log(camera_id, created_at DESC);
-CREATE INDEX idx_footage_log_incident ON footage_retrieval_log(incident_id);
+CREATE INDEX IF NOT EXISTS idx_footage_log_tenant ON footage_retrieval_log(tenant_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_footage_log_user ON footage_retrieval_log(user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_footage_log_camera ON footage_retrieval_log(camera_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_footage_log_incident ON footage_retrieval_log(incident_id);
+
