@@ -344,8 +344,8 @@ export class PostgresStore
   async getEdgeAgent(id: string) {
     return this.agents.get(id);
   }
-  async heartbeatEdgeAgent(id: string, version: string, publicMediaUrl?: string) {
-    return this.agents.heartbeat(id, version, publicMediaUrl);
+  async heartbeatEdgeAgent(id: string, version: string, publicMediaUrl?: string, localMediaUrl?: string) {
+    return this.agents.heartbeat(id, version, publicMediaUrl, localMediaUrl);
   }
   async createEdgeActivation(input: Parameters<EdgeOperationsRepository["createActivation"]>[0]) {
     return this.edgeOperations.createActivation(input);

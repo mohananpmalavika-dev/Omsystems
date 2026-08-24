@@ -14,6 +14,7 @@ type AgentRow = {
   status: EdgeAgent["status"];
   last_seen_at: Date | null;
   public_media_url: string | null;
+  local_media_url: string | null;
   device_uuid: string | null;
   credential_issued_at: Date | null;
   credential_revoked_at: Date | null;
@@ -28,6 +29,7 @@ function mapAgent(row: AgentRow): EdgeAgent {
     status: row.status,
     lastSeenAt: row.last_seen_at?.toISOString() ?? null,
     ...(row.public_media_url ? { publicMediaUrl: row.public_media_url } : {}),
+    ...(row.local_media_url ? { localMediaUrl: row.local_media_url } : {}),
     ...(row.device_uuid ? { deviceUuid: row.device_uuid } : {}),
     credentialStatus: row.credential_revoked_at ? "revoked" : row.credential_issued_at ? "active" : "not-enrolled",
     ...(row.credential_issued_at ? { credentialIssuedAt: row.credential_issued_at.toISOString() } : {}),
@@ -116,7 +118,7 @@ export class EdgeAgentRepository {
        FROM resource_nodes
        WHERE id = $1 AND node_type = 'branch'
        RETURNING id::text, branch_node_id::text, name, version, status,
-                 last_seen_at, public_media_url, device_uuid,
+                 last_seen_at, public_media_url, local_media_url, device_uuid,
                  credential_issued_at, credential_revoked_at`,
       [branchId, name, version],
     );
@@ -131,7 +133,7 @@ export class EdgeAgentRepository {
           `INSERT INTO edge_agents (tenant_id, branch_node_id, name, version)
            VALUES ($1, $2, $3, $4)
            RETURNING id::text, branch_node_id::text, name, version, status,
-                     last_seen_at, public_media_url, device_uuid,
+                     last_seen_at, public_media_url, local_media_url, device_uuid,
                      credential_issued_at, credential_revoked_at`,
           [fallbackNode.rows[0].tenant_id, fallbackNode.rows[0].id, name, version],
         );
@@ -147,7 +149,7 @@ export class EdgeAgentRepository {
           `INSERT INTO edge_agents (tenant_id, branch_node_id, name, version)
            VALUES ($1, $2, $3, $4)
            RETURNING id::text, branch_node_id::text, name, version, status,
-                     last_seen_at, public_media_url, device_uuid,
+                     last_seen_at, public_media_url, local_media_url, device_uuid,
                      credential_issued_at, credential_revoked_at`,
           [defaultTenant, branchId, name, version],
         );
@@ -163,7 +165,7 @@ export class EdgeAgentRepository {
       `SELECT id::text, branch_node_id::text, name, version,
                ${edgeAgentStatusSql()} AS status,
                last_seen_at,
-              public_media_url, device_uuid,
+              public_media_url, local_media_url, device_uuid,
               credential_issued_at, credential_revoked_at
        FROM edge_agents
        WHERE branch_node_id = $1
@@ -178,7 +180,7 @@ export class EdgeAgentRepository {
       `SELECT e.id::text, e.branch_node_id::text, e.name, e.version,
                ${edgeAgentStatusSql("e")} AS status,
                e.last_seen_at,
-              e.public_media_url, e.device_uuid,
+              e.public_media_url, e.local_media_url, e.device_uuid,
               e.credential_issued_at, e.credential_revoked_at
        FROM edge_agents e
        JOIN resource_nodes n ON e.branch_node_id = n.id
@@ -194,7 +196,7 @@ export class EdgeAgentRepository {
       `SELECT id::text, branch_node_id::text, name, version,
                ${edgeAgentStatusSql()} AS status,
                last_seen_at,
-              public_media_url, device_uuid,
+              public_media_url, local_media_url, device_uuid,
               credential_issued_at, credential_revoked_at
        FROM edge_agents WHERE id = $1`,
       [id],
@@ -202,16 +204,17 @@ export class EdgeAgentRepository {
     return result.rows[0] ? mapAgent(result.rows[0]) : undefined;
   }
 
-  async heartbeat(id: string, version: string, publicMediaUrl?: string, branchId?: string) {
+  async heartbeat(id: string, version: string, publicMediaUrl?: string, localMediaUrl?: string, branchId?: string) {
     const result = await this.pool.query<AgentRow>(
       `UPDATE edge_agents
        SET version = $2, status = 'online', last_seen_at = now(),
-           public_media_url = COALESCE($3, public_media_url)
+           public_media_url = COALESCE($3, public_media_url),
+           local_media_url = COALESCE($4, local_media_url)
        WHERE id = $1
        RETURNING id::text, branch_node_id::text, name, version, status,
-                 last_seen_at, public_media_url, device_uuid,
+                 last_seen_at, public_media_url, local_media_url, device_uuid,
                  credential_issued_at, credential_revoked_at`,
-      [id, version, publicMediaUrl ?? null],
+      [id, version, publicMediaUrl ?? null, localMediaUrl ?? null],
     );
 
     return result.rows[0] ? mapAgent(result.rows[0]) : undefined;

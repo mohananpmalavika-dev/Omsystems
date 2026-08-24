@@ -4,6 +4,8 @@ import { startLive } from "../lib/backend";
 const originalDemoMode = process.env.DASHBOARD_DEMO_MODE;
 const originalControlUrl = process.env.CONTROL_PLANE_INTERNAL_URL;
 const originalMediaUrl = process.env.MEDIA_GATEWAY_INTERNAL_URL;
+const originalLocalMediaUrl = process.env.MEDIA_GATEWAY_LOCAL_URL;
+const originalPublicMediaUrl = process.env.MEDIA_GATEWAY_PUBLIC_URL;
 const originalDevUser = process.env.DASHBOARD_DEV_USER_ID;
 
 afterEach(() => {
@@ -11,6 +13,8 @@ afterEach(() => {
   restore("DASHBOARD_DEMO_MODE", originalDemoMode);
   restore("CONTROL_PLANE_INTERNAL_URL", originalControlUrl);
   restore("MEDIA_GATEWAY_INTERNAL_URL", originalMediaUrl);
+  restore("MEDIA_GATEWAY_LOCAL_URL", originalLocalMediaUrl);
+  restore("MEDIA_GATEWAY_PUBLIC_URL", originalPublicMediaUrl);
   restore("DASHBOARD_DEV_USER_ID", originalDevUser);
 });
 
@@ -53,6 +57,62 @@ describe("dashboard live session startup", () => {
     }));
 
     await expect(startLive("camera-1")).rejects.toThrow("stream_secret_unavailable");
+  });
+
+  it("prefers the branch-local gateway when the control plane advertises a public tunnel", async () => {
+    process.env.DASHBOARD_DEMO_MODE = "false";
+    process.env.CONTROL_PLANE_INTERNAL_URL = "http://control.internal:8080";
+    process.env.MEDIA_GATEWAY_LOCAL_URL = "http://192.168.29.101:8090";
+    process.env.MEDIA_GATEWAY_PUBLIC_URL = "https://public.example";
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("control.internal")) {
+        return Response.json({
+          token: "t".repeat(43),
+          mediaGatewayUrl: "https://expired-tunnel.example",
+        }, { status: 201 });
+      }
+      return Response.json({
+        cameraId: "camera-1",
+        hls: { url: "http://192.168.29.101:8888/live/camera-1/index.m3u8", bearerToken: "stream-token" },
+      }, { status: 201 });
+    }));
+
+    await expect(startLive("camera-1")).resolves.toMatchObject({
+      direct: {
+        url: "http://192.168.29.101:8090/v1/live/start",
+      },
+      directFallbacks: [{
+        url: "https://public.example/v1/live/start",
+      }],
+    });
+  });
+
+  it("uses the edge-advertised local gateway without a hardcoded dashboard IP", async () => {
+    process.env.DASHBOARD_DEMO_MODE = "false";
+    process.env.CONTROL_PLANE_INTERNAL_URL = "http://control.internal:8080";
+    delete process.env.MEDIA_GATEWAY_LOCAL_URL;
+    process.env.MEDIA_GATEWAY_PUBLIC_URL = "https://public.example";
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("control.internal")) {
+        return Response.json({
+          token: "t".repeat(43),
+          mediaGatewayUrl: "https://public.example",
+          localMediaGatewayUrl: "http://192.168.29.101:8090",
+        }, { status: 201 });
+      }
+      return Response.json({
+        cameraId: "camera-1",
+        hls: { url: "http://192.168.29.101:8888/live/camera-1/index.m3u8", bearerToken: "stream-token" },
+      }, { status: 201 });
+    }));
+
+    await expect(startLive("camera-1")).resolves.toMatchObject({
+      direct: {
+        url: "http://192.168.29.101:8090/v1/live/start",
+      },
+    });
   });
 });
 

@@ -573,6 +573,7 @@ export interface EdgeAgent {
   status: "pending" | "online" | "offline";
   lastSeenAt: string | null;
   publicMediaUrl?: string;
+  localMediaUrl?: string;
   deviceUuid?: string;
   credentialStatus?: "not-enrolled" | "active" | "revoked";
   credentialIssuedAt?: string;
@@ -812,6 +813,7 @@ export interface LiveSession {
   token: string;
   expiresAt: string;
   mediaGatewayUrl?: string;
+  localMediaGatewayUrl?: string;
   purpose?: "view" | "talk";
 }
 

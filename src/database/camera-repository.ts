@@ -652,8 +652,11 @@ export class CameraRepository {
        VALUES ($1, $2, $3, $4, $5, $6)`,
       [id, cameraId, userId, tokenHash, expiresAt, purpose],
     );
-    const route = await this.pool.query<{ public_media_url: string | null }>(
-      `SELECT agent.public_media_url
+    const route = await this.pool.query<{
+      public_media_url: string | null;
+      local_media_url: string | null;
+    }>(
+      `SELECT agent.public_media_url, agent.local_media_url
        FROM cameras camera
        LEFT JOIN edge_agents agent ON agent.id = camera.edge_agent_id
        WHERE camera.id = $1
@@ -661,6 +664,7 @@ export class CameraRepository {
       [cameraId],
     );
     const mediaGatewayUrl = route.rows[0]?.public_media_url ?? undefined;
+    const localMediaGatewayUrl = route.rows[0]?.local_media_url ?? undefined;
     return {
       id,
       cameraId,
@@ -669,6 +673,7 @@ export class CameraRepository {
       expiresAt: expiresAt.toISOString(),
       purpose,
       ...(mediaGatewayUrl ? { mediaGatewayUrl } : {}),
+      ...(localMediaGatewayUrl ? { localMediaGatewayUrl } : {}),
     };
   }
 

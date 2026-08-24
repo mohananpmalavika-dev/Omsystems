@@ -225,7 +225,7 @@ export class GatewayClient {
     );
   }
 
-  async heartbeat(id: string, version: string, publicMediaUrl?: string) {
+  async heartbeat(id: string, version: string, publicMediaUrl?: string, localMediaUrl?: string) {
     return this.request(
       `/v1/edge-agents/${encodeURIComponent(id)}/heartbeat`,
       {
@@ -233,6 +233,7 @@ export class GatewayClient {
         body: JSON.stringify({
           version,
           ...(publicMediaUrl ? { publicMediaUrl } : {}),
+          ...(localMediaUrl ? { localMediaUrl } : {}),
         }),
       },
     );

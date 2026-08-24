@@ -1532,7 +1532,7 @@ export class MemoryStore {
     }));
   }
 
-  async heartbeatEdgeAgent(id: string, version: string, publicMediaUrl?: string) {
+  async heartbeatEdgeAgent(id: string, version: string, publicMediaUrl?: string, localMediaUrl?: string) {
     const agent = this.edgeAgents.get(id);
     if (!agent) return undefined;
     Object.assign(agent, {
@@ -1540,6 +1540,7 @@ export class MemoryStore {
       status: "online" as const,
       lastSeenAt: new Date().toISOString(),
       ...(publicMediaUrl ? { publicMediaUrl } : {}),
+      ...(localMediaUrl ? { localMediaUrl } : {}),
     });
     return agent;
   }
@@ -2384,12 +2385,16 @@ export class MemoryStore {
     const mediaGatewayUrl = camera?.edgeAgentId
       ? this.edgeAgents.get(camera.edgeAgentId)?.publicMediaUrl
       : undefined;
+    const localMediaGatewayUrl = camera?.edgeAgentId
+      ? this.edgeAgents.get(camera.edgeAgentId)?.localMediaUrl
+      : undefined;
     const session = {
       id: randomUUID(), cameraId, userId,
       token: randomBytes(32).toString("base64url"),
       expiresAt: new Date(Date.now() + 60_000).toISOString(),
       purpose,
       ...(mediaGatewayUrl ? { mediaGatewayUrl } : {}),
+      ...(localMediaGatewayUrl ? { localMediaGatewayUrl } : {}),
     };
     this.liveSessions.set(session.id, {
       ...session,

@@ -87,7 +87,7 @@ export class EdgeOperationsRepository {
             credential_hash, credential_issued_at, command_public_key)
          VALUES ($1, $2, $3, $4, 'pending', $5, decode($6, 'hex'), now(), $7)
          RETURNING id::text, branch_node_id::text, name, version, status,
-                   last_seen_at, public_media_url, device_uuid,
+                   last_seen_at, public_media_url, local_media_url, device_uuid,
                    credential_issued_at, credential_revoked_at`,
         [token.tenant_id, token.branch_node_id, token.agent_name, input.version, input.deviceUuid, input.credentialHash, input.commandPublicKey ?? null],
       );
@@ -128,7 +128,7 @@ export class EdgeOperationsRepository {
       `UPDATE edge_agents SET credential_revoked_at = now(), status = 'offline'
        WHERE id = $1
        RETURNING id::text, branch_node_id::text, name, version, status,
-                 last_seen_at, public_media_url, device_uuid,
+                 last_seen_at, public_media_url, local_media_url, device_uuid,
                  credential_issued_at, credential_revoked_at`,
       [id],
     );
@@ -277,6 +277,7 @@ function mapAgent(row: any): EdgeAgent {
     id: String(row.id), branchId: String(row.branch_node_id), name: row.name, version: row.version,
     status: row.status, lastSeenAt: iso(row.last_seen_at),
     ...(row.public_media_url ? { publicMediaUrl: row.public_media_url } : {}),
+    ...(row.local_media_url ? { localMediaUrl: row.local_media_url } : {}),
     ...(row.device_uuid ? { deviceUuid: row.device_uuid } : {}),
     credentialStatus: row.credential_revoked_at ? "revoked" : row.credential_issued_at ? "active" : "not-enrolled",
     ...(row.credential_issued_at ? { credentialIssuedAt: iso(row.credential_issued_at)! } : {}),

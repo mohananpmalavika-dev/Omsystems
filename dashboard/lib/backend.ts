@@ -57,6 +57,7 @@ export async function startLive(
     const controlSession = await permission.json() as {
       token?: string;
       mediaGatewayUrl?: string;
+      localMediaGatewayUrl?: string;
     };
 
     if (!controlSession.token) {
@@ -64,11 +65,21 @@ export async function startLive(
     }
 
     const sessionMediaGatewayUrl = controlSession.mediaGatewayUrl;
-    const localMediaGatewayUrl = sessionMediaGatewayUrl
-      ? (isBrowserDirectMediaUrl(sessionMediaGatewayUrl) ? sessionMediaGatewayUrl : undefined)
-      : resolveConfiguredLocalMediaGatewayUrl();
+    const advertisedLocalMediaGatewayUrl = controlSession.localMediaGatewayUrl;
+    // Prefer the dashboard's explicitly configured branch-local/VPN gateway
+    // even when the control plane still advertises a public tunnel URL. This
+    // is important when operators are on the branch network and the temporary
+    // public tunnel has expired or changed its hostname.
+    const configuredLocalMediaGatewayUrl = resolveConfiguredLocalMediaGatewayUrl();
+    const localMediaGatewayUrl = configuredLocalMediaGatewayUrl ??
+      (advertisedLocalMediaGatewayUrl && isBrowserDirectMediaUrl(advertisedLocalMediaGatewayUrl)
+        ? advertisedLocalMediaGatewayUrl
+        : undefined) ??
+      (sessionMediaGatewayUrl && isBrowserDirectMediaUrl(sessionMediaGatewayUrl)
+        ? sessionMediaGatewayUrl
+        : undefined);
     const publicMediaGatewayUrl = resolveConfiguredPublicMediaGatewayUrl(
-      localMediaGatewayUrl ?? sessionMediaGatewayUrl,
+      sessionMediaGatewayUrl ?? localMediaGatewayUrl,
     );
 
     if (localMediaGatewayUrl) {

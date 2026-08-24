@@ -983,9 +983,11 @@ export async function buildApp(options?: {
       const body = z.object({
         version: z.string().min(1).max(40),
         publicMediaUrl: z.union([z.literal("auto"), z.string().url()]).optional(),
+        localMediaUrl: z.union([z.literal("auto"), z.string().url()]).optional(),
       }).parse(request.body);
       const publicMediaUrl = body.publicMediaUrl === "auto" ? undefined : body.publicMediaUrl;
-      const agent = await store.heartbeatEdgeAgent(id, body.version!, publicMediaUrl);
+      const localMediaUrl = body.localMediaUrl === "auto" ? undefined : body.localMediaUrl;
+      const agent = await store.heartbeatEdgeAgent(id, body.version!, publicMediaUrl, localMediaUrl);
       if (!agent) {
         return reply.code(404).send({ error: "edge_agent_not_found" });
       }

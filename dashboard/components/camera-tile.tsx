@@ -245,7 +245,7 @@ export function CameraTile({
           </span>
         </div>
 
-        {!session?.hls && camera.status !== "offline" && (
+        {!session?.hls && (
           <button className={`watch-button${liveError ? " has-live-error" : ""}`} onClick={onStart} disabled={loading}>
             {loading ? (
               <LoaderCircle size={17} className="spin" />

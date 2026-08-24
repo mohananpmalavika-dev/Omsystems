@@ -170,7 +170,12 @@ if (hasArgument(argv, "--diagnose")) {
   const advertisedMediaUrl = config.LIVE_MEDIA_ENABLED
     ? resolvePrivateMediaGatewayUrl(config.PUBLIC_MEDIA_GATEWAY_URL, config.EDGE_LIVE_GATEWAY_PORT)
     : undefined;
-  await control.heartbeat(agentId, config.EDGE_AGENT_VERSION, advertisedMediaUrl);
+  await control.heartbeat(
+    agentId,
+    config.EDGE_AGENT_VERSION,
+    advertisedMediaUrl,
+    resolveLocalMediaUrl(),
+  );
   process.stdout.write(`Connected to ${config.CONTROL_PLANE_URL} as edge agent ${agentId}.\n`);
   process.exit(0);
 }
@@ -240,7 +245,12 @@ logger.info(`Edge agent ${agentId} registered; waiting for branch commands`, { b
 await heartbeatAndReport();
 const presenceHeartbeat = startAgentPresenceHeartbeat({
   intervalMs: config.EDGE_HEARTBEAT_INTERVAL_MS,
-  heartbeat: () => control.heartbeat(agentId, config.EDGE_AGENT_VERSION, edgeMediaRuntime?.publicUrl),
+  heartbeat: () => control.heartbeat(
+    agentId,
+    config.EDGE_AGENT_VERSION,
+    edgeMediaRuntime?.publicUrl,
+    resolveLocalMediaUrl(),
+  ),
   onError: (error) => logger.warn("Edge presence heartbeat failed", {
     error: error instanceof Error ? error.message : String(error),
   }),
@@ -919,7 +929,12 @@ function delay(milliseconds: number) {
 
 async function heartbeatAndReport() {
   const startedAt = Date.now();
-  await control.heartbeat(agentId, config.EDGE_AGENT_VERSION, edgeMediaRuntime?.publicUrl);
+  await control.heartbeat(
+    agentId,
+    config.EDGE_AGENT_VERSION,
+    edgeMediaRuntime?.publicUrl,
+    resolveLocalMediaUrl(),
+  );
   if (Date.now() - lastCameraConfigSyncAt >= config.CAMERA_CONFIG_REFRESH_MS) {
     await syncCameraHeartbeatConfig().catch((error) => {
       logger.error("Camera monitoring configuration refresh failed", { error: error instanceof Error ? error.message : String(error) });
@@ -1002,6 +1017,15 @@ async function heartbeatAndReport() {
       return submissions;
     }),
   ]);
+}
+
+function resolveLocalMediaUrl() {
+  if (!config.LIVE_MEDIA_ENABLED) return undefined;
+  try {
+    return resolvePrivateMediaGatewayUrl("auto", config.EDGE_LIVE_GATEWAY_PORT);
+  } catch {
+    return undefined;
+  }
 }
 
 async function syncCameraHeartbeatConfig() {

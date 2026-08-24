@@ -586,6 +586,7 @@ export interface ControlPlaneStore {
     id: string,
     version: string,
     publicMediaUrl?: string,
+    localMediaUrl?: string,
   ): Promise<EdgeAgent | undefined>;
   createEdgeActivation(input: {
     branchId: string; agentName: string; createdBy: string; expiresAt: string; tokenHash: string;
