@@ -61,7 +61,6 @@ export class SecurityDeviceDiscoveryService extends BackendSecurityDeviceDiscove
 		const result = await super.getDiscoveredDevices(this.tenantId, {
 			jobId,
 			enrollmentStatus: status,
-			limit: 100,
 		});
 
 		return result.devices;

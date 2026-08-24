@@ -38,6 +38,22 @@ export interface DiscoveryJob {
   createdBy: string;
 }
 
+export function normalizeDiscoveryEnrollmentStatus(status?: string): string | undefined {
+  const normalized = status?.trim().toUpperCase();
+
+  if (!normalized) return undefined;
+  if (normalized === 'PENDING') return 'PENDING_REVIEW';
+
+  return normalized;
+}
+
+type MappedDiscoveredDevice = DiscoveredDevice & {
+  id: string;
+  jobId?: string;
+  enrollmentStatus?: string;
+  enrolledDeviceId?: string | null;
+};
+
 export class SecurityDeviceDiscoveryService {
   constructor(private readonly pool: Pool) {}
 
@@ -196,15 +212,25 @@ export class SecurityDeviceDiscoveryService {
     device: DiscoveredDevice
   ): Promise<void> {
     await this.pool.query(
-      `INSERT INTO security_discovered_devices (
+      `WITH updated AS (
+        UPDATE security_discovered_devices
+        SET discovery_job_id = $3,
+            discovered_at = NOW(),
+            confidence = GREATEST($15, confidence)
+        WHERE tenant_id = $1
+          AND branch_id IS NOT DISTINCT FROM $2
+          AND ip_address = $4
+        RETURNING id
+      )
+      INSERT INTO security_discovered_devices (
         tenant_id, branch_id, discovery_job_id,
         ip_address, mac_address, port, device_type,
         manufacturer, model, serial_number, firmware_version, protocol,
         capabilities, metadata, confidence, enrollment_status
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
-      ON CONFLICT (ip_address) DO UPDATE
-      SET discovered_at = NOW(),
-          confidence = GREATEST(EXCLUDED.confidence, security_discovered_devices.confidence)`,
+      )
+      SELECT $1, $2, $3, $4, $5, $6, $7, $8,
+             $9, $10, $11, $12, $13, $14, $15, $16
+      WHERE NOT EXISTS (SELECT 1 FROM updated)`,
       [
         tenantId,
         branchId,
@@ -312,40 +338,67 @@ export class SecurityDeviceDiscoveryService {
       offset?: number;
     }
   ): Promise<{ devices: DiscoveredDevice[]; total: number }> {
-    let query = `
-      SELECT * FROM security_discovered_devices
-      WHERE tenant_id = $1
+    const fromClause = `
+      FROM security_discovered_devices d
+      WHERE d.tenant_id = $1
+        AND (
+          d.enrollment_status <> 'ENROLLED'
+          OR d.enrolled_device_id IS NULL
+        )
+        AND NOT EXISTS (
+          SELECT 1
+          FROM security_devices s
+          WHERE s.tenant_id = d.tenant_id
+            AND (d.branch_id IS NULL OR s.branch_id = d.branch_id)
+            AND (
+              (d.ip_address IS NOT NULL AND s.ip_address IS NOT NULL AND s.ip_address = d.ip_address)
+              OR (
+                d.mac_address IS NOT NULL
+                AND s.mac_address IS NOT NULL
+                AND LOWER(s.mac_address::text) = LOWER(d.mac_address::text)
+              )
+              OR (
+                d.serial_number IS NOT NULL
+                AND s.serial_number IS NOT NULL
+                AND NULLIF(BTRIM(s.serial_number), '') IS NOT NULL
+                AND NULLIF(BTRIM(d.serial_number), '') IS NOT NULL
+                AND LOWER(BTRIM(s.serial_number)) = LOWER(BTRIM(d.serial_number))
+              )
+            )
+        )
     `;
+    let whereClause = fromClause;
     const params: any[] = [tenantId];
     let paramIndex = 2;
 
     if (filters.branchId) {
-      query += ` AND branch_id = $${paramIndex}`;
+      whereClause += ` AND d.branch_id = $${paramIndex}`;
       params.push(filters.branchId);
       paramIndex++;
     }
 
     if (filters.jobId) {
-      query += ` AND discovery_job_id = $${paramIndex}`;
+      whereClause += ` AND d.discovery_job_id = $${paramIndex}`;
       params.push(filters.jobId);
       paramIndex++;
     }
 
-    if (filters.enrollmentStatus) {
-      query += ` AND enrollment_status = $${paramIndex}`;
-      params.push(filters.enrollmentStatus);
+    const enrollmentStatus = normalizeDiscoveryEnrollmentStatus(filters.enrollmentStatus);
+    if (enrollmentStatus) {
+      whereClause += ` AND d.enrollment_status = $${paramIndex}`;
+      params.push(enrollmentStatus);
       paramIndex++;
     }
 
     // Get total count
     const countResult = await this.pool.query(
-      query.replace('SELECT *', 'SELECT COUNT(*)'),
+      `SELECT COUNT(*) ${whereClause}`,
       params
     );
     const total = parseInt(countResult.rows[0].count);
 
     // Add sorting and pagination
-    query += ` ORDER BY discovered_at DESC`;
+    let query = `SELECT d.* ${whereClause} ORDER BY d.discovered_at DESC`;
 
     if (filters.limit) {
       query += ` LIMIT $${paramIndex}`;
@@ -360,9 +413,13 @@ export class SecurityDeviceDiscoveryService {
 
     const result = await this.pool.query(query, params);
 
+    const devices = this.deduplicateDiscoveredDevices(
+      result.rows.map(this.mapDiscoveredDevice)
+    );
+
     return {
-      devices: result.rows.map(this.mapDiscoveredDevice),
-      total,
+      devices,
+      total: Math.min(total, devices.length),
     };
   }
 
@@ -536,9 +593,10 @@ export class SecurityDeviceDiscoveryService {
   /**
    * Map database row to DiscoveredDevice
    */
-  private mapDiscoveredDevice(row: any): DiscoveredDevice & { id: string } {
+  private mapDiscoveredDevice(row: any): MappedDiscoveredDevice {
     return {
       id: row.id,
+      jobId: row.discovery_job_id,
       ipAddress: row.ip_address,
       macAddress: row.mac_address,
       port: row.port,
@@ -552,7 +610,31 @@ export class SecurityDeviceDiscoveryService {
       metadata: row.metadata || {},
       discoveredAt: row.discovered_at,
       confidence: parseFloat(row.confidence),
+      enrollmentStatus: row.enrollment_status,
+      enrolledDeviceId: row.enrolled_device_id,
     };
+  }
+
+  private deduplicateDiscoveredDevices(
+    devices: MappedDiscoveredDevice[]
+  ): MappedDiscoveredDevice[] {
+    const seenIdentities = new Set<string>();
+    const uniqueDevices: MappedDiscoveredDevice[] = [];
+
+    for (const device of devices) {
+      const identities = [
+        device.ipAddress && `ip:${device.ipAddress.trim().toLowerCase()}`,
+        device.macAddress && `mac:${device.macAddress.trim().toLowerCase()}`,
+        device.serialNumber && `serial:${device.serialNumber.trim().toLowerCase()}`,
+      ].filter((identity): identity is string => Boolean(identity));
+
+      if (identities.some((identity) => seenIdentities.has(identity))) continue;
+
+      identities.forEach((identity) => seenIdentities.add(identity));
+      uniqueDevices.push(device);
+    }
+
+    return uniqueDevices;
   }
 }
 
