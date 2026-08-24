@@ -3,7 +3,10 @@
 import pg from 'pg';
 const { Client } = pg;
 
-const DATABASE_URL = 'postgresql://aditivision_4gc4_user:vVZ8yzf7dRV7VIyOeQ6MmSQR9nHMifqa@dpg-da37mgbncjis73c09tpg-a.oregon-postgres.render.com/aditivision_4gc4';
+const DATABASE_URL = process.env.DATABASE_URL?.trim();
+if (!DATABASE_URL) {
+  throw new Error('DATABASE_URL environment variable is required');
+}
 
 async function checkStatus() {
   const client = new Client({

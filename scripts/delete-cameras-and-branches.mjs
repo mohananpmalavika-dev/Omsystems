@@ -3,7 +3,10 @@
 import pg from 'pg';
 const { Client } = pg;
 
-const DATABASE_URL = 'postgresql://kryptonvision_user:ry2YSQcPnOAziW1gAced7evUvspT4yFQ@dpg-da60sfijobas7386h0vg-a.virginia-postgres.render.com/kryptonvision';
+const DATABASE_URL = process.env.DATABASE_URL?.trim();
+if (!DATABASE_URL) {
+  throw new Error('DATABASE_URL environment variable is required');
+}
 
 async function deleteCamerasAndBranches() {
   const client = new Client({
