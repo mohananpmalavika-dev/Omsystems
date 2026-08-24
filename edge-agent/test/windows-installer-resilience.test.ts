@@ -57,6 +57,22 @@ describe("Windows scanner installer resilience", () => {
     expect(source).toContain("continuing the repair without re-enrollment");
   });
 
+  it("drains the installed agent process tree before replacing runtime files", async () => {
+    const source = await readFile(
+      "edge-agent/installer/windows/install-edge-agent.ps1",
+      "utf8",
+    );
+    const stopTask = source.indexOf("Stop-ScheduledTask -TaskName $TaskName");
+    const drainProcesses = source.indexOf("Stop-InstalledAgentProcesses $InstallDirectory");
+    const copyExecutable = source.indexOf("Copy-Item -LiteralPath $SourceExecutable -Destination $Executable -Force");
+
+    expect(source).toContain("[IO.Path]::GetFullPath($processPath).StartsWith($fullRoot");
+    expect(source).toContain("Stop-Process -Id $process.Id -Force");
+    expect(stopTask).toBeGreaterThan(-1);
+    expect(drainProcesses).toBeGreaterThan(stopTask);
+    expect(copyExecutable).toBeGreaterThan(drainProcesses);
+  });
+
   it("verifies that a connected scanner remains running after installation", async () => {
     const source = await readFile(
       "edge-agent/installer/windows/install-edge-agent.ps1",

@@ -78,6 +78,45 @@ function Read-RequiredSecret([string]$Prompt, [int]$MinimumLength) {
   }
 }
 
+function Get-InstalledAgentProcesses([string]$Root) {
+  $fullRoot = [IO.Path]::GetFullPath($Root).TrimEnd('\') + '\'
+  return @(
+    Get-Process -ErrorAction SilentlyContinue | Where-Object {
+      try {
+        $processPath = $_.Path
+        -not [string]::IsNullOrWhiteSpace($processPath) -and
+          [IO.Path]::GetFullPath($processPath).StartsWith($fullRoot, [StringComparison]::OrdinalIgnoreCase)
+      } catch {
+        $false
+      }
+    }
+  )
+}
+
+function Stop-InstalledAgentProcesses([string]$Root) {
+  # Task Scheduler returns before the agent and its media children always exit.
+  # Wait for a graceful shutdown before replacing any in-use EXE or runtime file.
+  $gracefulDeadline = (Get-Date).AddSeconds(20)
+  do {
+    $running = @(Get-InstalledAgentProcesses $Root)
+    if ($running.Count -eq 0) { return }
+    Start-Sleep -Milliseconds 250
+  } while ((Get-Date) -lt $gracefulDeadline)
+
+  foreach ($process in $running) {
+    Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
+  }
+
+  $forcedDeadline = (Get-Date).AddSeconds(10)
+  do {
+    $running = @(Get-InstalledAgentProcesses $Root)
+    if ($running.Count -eq 0) { return }
+    Start-Sleep -Milliseconds 250
+  } while ((Get-Date) -lt $forcedDeadline)
+
+  throw "The existing Sentinel Grid Edge Agent processes did not stop. Close any running scanner window and retry the installer."
+}
+
 Assert-Administrator
 if (-not (Test-Path -LiteralPath $SourceExecutable -PathType Leaf)) { throw "The all-in-one installer could not extract edge-agent.exe." }
 if (-not (Test-Path -LiteralPath $SourceConfig -PathType Leaf)) { throw "The all-in-one installer could not extract its branch configuration." }
@@ -93,6 +132,7 @@ $existingTask = Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyConti
 if ($existingTask) {
   Stop-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
 }
+Stop-InstalledAgentProcesses $InstallDirectory
 Copy-Item -LiteralPath $SourceExecutable -Destination $Executable -Force
 Copy-Item -LiteralPath $SourceConfig -Destination $ConfigPath -Force
 if (Test-Path -LiteralPath $SourceUninstaller -PathType Leaf) {
