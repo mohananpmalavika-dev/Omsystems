@@ -79,7 +79,7 @@ export default function DiagnosticsPage() {
         diagnostics.push({
           name: "Control Plane URL",
           status: "error",
-          message: "CONTROL_PLANE_URL not configured",
+          message: "CONTROL_PLANE_URL or CONTROL_PLANE_INTERNAL_URL not configured",
           details: "Backend cannot connect to control plane API",
         });
       }

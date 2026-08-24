@@ -38,9 +38,11 @@ export async function GET(request: NextRequest) {
         : "none",
     },
     environment: {
-      controlPlaneUrl: process.env.CONTROL_PLANE_URL || "NOT_SET",
+      controlPlaneUrl: process.env.CONTROL_PLANE_URL || process.env.CONTROL_PLANE_INTERNAL_URL || "NOT_SET",
       mediaGatewayUrl: process.env.MEDIA_GATEWAY_INTERNAL_URL || "NOT_SET",
       dashboardUserId: process.env.DASHBOARD_DEV_USER_ID || "NOT_SET",
+      hasControlPlane: Boolean(process.env.CONTROL_PLANE_URL || process.env.CONTROL_PLANE_INTERNAL_URL),
+      hasMediaGateway: Boolean(process.env.MEDIA_GATEWAY_INTERNAL_URL),
     },
     timestamp: new Date().toISOString(),
   });
