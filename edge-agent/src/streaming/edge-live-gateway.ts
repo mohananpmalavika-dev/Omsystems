@@ -48,6 +48,7 @@ export interface QuickTunnelSupervisorOptions {
  */
 export class QuickTunnelSupervisor {
   private child: QuickTunnelChild | undefined;
+  private publicUrl: string | undefined;
   private retryTimer: NodeJS.Timeout | undefined;
   private stopped = false;
 
@@ -63,6 +64,18 @@ export class QuickTunnelSupervisor {
     this.retryTimer = undefined;
     this.child?.kill();
     this.child = undefined;
+    this.publicUrl = undefined;
+  }
+
+  rotateIfCurrent(publicUrl: string) {
+    if (this.stopped || this.publicUrl !== publicUrl || !this.child) return false;
+    const child = this.child;
+    this.child = undefined;
+    this.publicUrl = undefined;
+    this.options.onPublicUrl(undefined);
+    child.kill();
+    this.scheduleRestart();
+    return true;
   }
 
   private async launch(): Promise<string | undefined> {
@@ -74,10 +87,12 @@ export class QuickTunnelSupervisor {
         return undefined;
       }
       this.child = started.process;
+      this.publicUrl = started.publicUrl;
       this.options.onPublicUrl(started.publicUrl);
       started.process.once("exit", () => {
         if (this.child !== started.process) return;
         this.child = undefined;
+        this.publicUrl = undefined;
         if (this.stopped) return;
         this.options.onPublicUrl(undefined);
         this.scheduleRestart();
@@ -354,14 +369,19 @@ export async function startEdgeMediaRuntime(input: EdgeMediaRuntimeInput): Promi
           resolvedPublicUrl = publicUrl;
           logger.warn("Quick media tunnel is active; use a named tunnel for production", { publicUrl });
           // A new trycloudflare hostname commonly needs more than 30 seconds to
-          // propagate. This check is diagnostic only: killing a registered
-          // connector on a short DNS timeout creates a permanent LAN-only loop.
+          // propagate. Give it a generous window, then rotate a hostname that
+          // never became reachable instead of advertising a dead URL forever.
           void waitForPublicGateway(new URL("/health", publicUrl), 120_000)
             .then(() => logger.info("Edge live media is publicly reachable", { publicUrl, tunnelMode }))
-            .catch((error) => logger.warn("Quick tunnel is still propagating; keeping the connector active", {
-              error: error instanceof Error ? error.message : String(error),
-              publicUrl,
-            }));
+            .catch((error) => {
+              const rotated = quickTunnel?.rotateIfCurrent(publicUrl) ?? false;
+              logger.warn(rotated
+                ? "Quick tunnel did not become reachable; rotating the connector"
+                : "Superseded quick tunnel did not become reachable", {
+                error: error instanceof Error ? error.message : String(error),
+                publicUrl,
+              });
+            });
         },
       });
       const publicUrl = await quickTunnel.start();
@@ -529,12 +549,7 @@ function startManagedProcess(name: string, executable: string, args: string[], c
 }
 
 async function startQuickTunnel(executable: string, origin: string, cwd: string) {
-  const child = startManagedProcess("Cloudflare Tunnel", executable, [
-    "tunnel",
-    "--edge-ip-version", "4",
-    "--no-autoupdate",
-    "--url", origin,
-  ], cwd);
+  const child = startManagedProcess("Cloudflare Tunnel", executable, quickTunnelArgs(origin), cwd);
   try {
     const publicUrl = await new Promise<string>((resolve, reject) => {
       const timeout = setTimeout(() => reject(new Error("Cloudflare quick tunnel did not provide a URL within 30 seconds")), 30_000);
@@ -553,6 +568,18 @@ async function startQuickTunnel(executable: string, origin: string, cwd: string)
     child.kill();
     throw error;
   }
+}
+
+export function quickTunnelArgs(origin: string) {
+  return [
+    "tunnel",
+    // HTTP/2 uses TCP 7844 and remains stable on networks where UDP/QUIC is
+    // intermittently blocked (a common ISP/router failure mode on Windows).
+    "--protocol", "http2",
+    "--edge-ip-version", "4",
+    "--no-autoupdate",
+    "--url", origin,
+  ];
 }
 
 export function extractQuickTunnelUrl(output: string) {

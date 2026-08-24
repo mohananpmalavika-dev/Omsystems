@@ -4,6 +4,7 @@ import {
   buildEdgeLiveGateway,
   extractQuickTunnelUrl,
   mediaTunnelOrigin,
+  quickTunnelArgs,
   QuickTunnelSupervisor,
   resolvePrivateMediaGatewayUrl,
   resolveMediaTunnelMode,
@@ -46,6 +47,16 @@ describe("all-in-one edge live gateway", () => {
     expect(mediaTunnelOrigin("192.168.29.10", 8090)).toBe("http://192.168.29.10:8090");
   });
 
+  it("uses the TCP-based Cloudflare transport for networks with unreliable UDP", () => {
+    expect(quickTunnelArgs("http://127.0.0.1:8090")).toEqual([
+      "tunnel",
+      "--protocol", "http2",
+      "--edge-ip-version", "4",
+      "--no-autoupdate",
+      "--url", "http://127.0.0.1:8090",
+    ]);
+  });
+
   it("keeps a quick tunnel alive across connector restarts and advertises the replacement URL", async () => {
     const advertised: Array<string | undefined> = [];
     const children: EventEmitter[] = [];
@@ -74,6 +85,39 @@ describe("all-in-one edge live gateway", () => {
       "https://quick-1.trycloudflare.com",
       undefined,
       "https://quick-2.trycloudflare.com",
+    ]);
+    supervisor.stop();
+  });
+
+  it("rotates a quick-tunnel hostname that never becomes reachable", async () => {
+    const advertised: Array<string | undefined> = [];
+    let starts = 0;
+    let kills = 0;
+    const supervisor = new QuickTunnelSupervisor({
+      retryDelayMs: 1,
+      onPublicUrl: (url) => advertised.push(url),
+      start: async () => {
+        starts += 1;
+        const child = new EventEmitter() as EventEmitter & { kill(): boolean };
+        child.kill = () => { kills += 1; return true; };
+        return {
+          process: child as any,
+          publicUrl: `https://rotate-${starts}.trycloudflare.com`,
+        };
+      },
+    });
+
+    await supervisor.start();
+    expect(supervisor.rotateIfCurrent("https://stale.trycloudflare.com")).toBe(false);
+    expect(supervisor.rotateIfCurrent("https://rotate-1.trycloudflare.com")).toBe(true);
+    await new Promise((resolve) => setTimeout(resolve, 10));
+
+    expect(kills).toBe(1);
+    expect(starts).toBe(2);
+    expect(advertised).toEqual([
+      "https://rotate-1.trycloudflare.com",
+      undefined,
+      "https://rotate-2.trycloudflare.com",
     ]);
     supervisor.stop();
   });
