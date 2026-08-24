@@ -106,8 +106,8 @@ In Render dashboard:
 ### Step 3: Manual Health Check
 
 Try accessing these URLs directly:
-- https://sentinel-grid-monitoring1.onrender.com/health (basic health)
-- https://sentinel-grid-monitoring1.onrender.com/ready (requires DB)
+ - https://sentinel-grid-monitoring-s38w.onrender.com/health (basic health)
+ - https://sentinel-grid-monitoring-s38w.onrender.com/ready (requires DB)
 
 If `/health` works but `/ready` fails → Database connection issue
 

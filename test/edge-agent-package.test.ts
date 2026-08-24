@@ -47,6 +47,27 @@ function zipEntry(zip: Buffer, expectedName: string) {
 }
 
 describe("branch edge-agent package", () => {
+  it("serves an immutable application-only update artifact", async () => {
+    const artifactRoot = await mkdtemp(join(tmpdir(), "sentinel-edge-update-artifact-"));
+    temporaryRoots.push(artifactRoot);
+    await mkdir(join(artifactRoot, "release", "updates", "9.8.7"), { recursive: true });
+    await writeFile(join(artifactRoot, "package.json"), JSON.stringify({ version: "9.8.7" }));
+    await writeFile(join(artifactRoot, "release", "updates", "9.8.7", "edge-agent.bundle"), "patch-only");
+    const app = await buildApp({ store: new MemoryStore(), edgeAgentArtifactRoot: artifactRoot });
+    try {
+      const response = await app.inject({
+        method: "GET",
+        url: "/v1/edge-updates/artifacts/9.8.7/edge-agent.bundle",
+      });
+      expect(response.statusCode).toBe(200);
+      expect(response.body).toBe("patch-only");
+      expect(response.headers["cache-control"]).toContain("immutable");
+      expect(response.headers["content-disposition"]).toContain("edge-agent-9.8.7.bundle");
+    } finally {
+      await app.close();
+    }
+  });
+
   it("downloads one branch-specific Windows installer EXE with embedded configuration", async () => {
     const artifactRoot = await mkdtemp(join(tmpdir(), "sentinel-edge-package-"));
     temporaryRoots.push(artifactRoot);

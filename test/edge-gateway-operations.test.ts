@@ -1,4 +1,7 @@
 import { createHash, generateKeyPairSync } from "node:crypto";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { buildApp } from "../src/app.js";
 import { MemoryStore } from "../src/store.js";
@@ -7,7 +10,11 @@ import { openSealedCommand } from "../edge-agent/src/security/camera-credential-
 
 describe("secure edge gateway operations", () => {
   const apps: Array<Awaited<ReturnType<typeof buildApp>>> = [];
-  afterEach(async () => { await Promise.all(apps.splice(0).map((app) => app.close())); });
+  const temporaryRoots: string[] = [];
+  afterEach(async () => {
+    await Promise.all(apps.splice(0).map((app) => app.close()));
+    await Promise.all(temporaryRoots.splice(0).map((path) => rm(path, { recursive: true, force: true })));
+  });
 
   it("consumes a one-time activation and authenticates with a unique revocable credential", async () => {
     const store = testStore();
@@ -393,9 +400,19 @@ describe("secure edge gateway operations", () => {
     const { privateKey, publicKey } = generateKeyPairSync("ed25519");
     const privatePem = privateKey.export({ type: "pkcs8", format: "pem" }).toString();
     const publicPem = publicKey.export({ type: "spki", format: "pem" }).toString();
-    const app = await buildApp({ store: testStore(), edgeUpdateSigningPrivateKey: privatePem });
+    const store = testStore();
+    const app = await buildApp({ store, edgeUpdateSigningPrivateKey: privatePem });
     apps.push(app);
     const identity = await enroll(app, await createActivation(app));
+    await store.heartbeatEdgeAgent(identity.agentId, "1.1.0");
+    const unavailable = await app.inject({
+      method: "POST",
+      url: `/v1/branches/branch-blr-001/edge-agents/${identity.agentId}/commands`,
+      headers: { "x-user-id": "user-global-admin" },
+      payload: { type: "apply-update", payload: {} },
+    });
+    expect(unavailable.statusCode).toBe(409);
+    expect(unavailable.json()).toMatchObject({ error: "edge_update_not_available" });
     const releaseResponse = await app.inject({
       method: "POST", url: "/v1/edge-updates/releases",
       headers: { "x-user-id": "user-global-admin" },
@@ -413,6 +430,58 @@ describe("secure edge gateway operations", () => {
       headers: { "x-edge-agent-token": identity.credential },
     });
     expect(assigned.json()).toMatchObject({ version: "1.2.3", signature: release.signature });
+
+    const queued = await app.inject({
+      method: "POST",
+      url: `/v1/branches/branch-blr-001/edge-agents/${identity.agentId}/commands`,
+      headers: { "x-user-id": "user-global-admin" },
+      payload: { type: "apply-update", payload: {} },
+    });
+    expect(queued.statusCode).toBe(202);
+    expect(queued.json()).toMatchObject({ type: "apply-update", status: "queued" });
+  });
+
+  it("publishes the packaged application patch on demand without a full installer", async () => {
+    const artifactRoot = await mkdtemp(join(tmpdir(), "sentinel-packaged-edge-update-"));
+    temporaryRoots.push(artifactRoot);
+    await mkdir(join(artifactRoot, "release", "updates", "1.2.0"), { recursive: true });
+    await writeFile(join(artifactRoot, "package.json"), JSON.stringify({ version: "1.2.0" }));
+    await writeFile(join(artifactRoot, "release", "updates", "1.2.0", "edge-agent.bundle"), "patch-only");
+    const { privateKey, publicKey } = generateKeyPairSync("ed25519");
+    const privatePem = privateKey.export({ type: "pkcs8", format: "pem" }).toString();
+    const publicPem = publicKey.export({ type: "spki", format: "pem" }).toString();
+    const store = testStore();
+    const app = await buildApp({
+      store,
+      edgeAgentArtifactRoot: artifactRoot,
+      edgeUpdateSigningPrivateKey: privatePem,
+      controlPlanePublicUrl: "https://control.example.com",
+    });
+    apps.push(app);
+    const identity = await enroll(app, await createActivation(app));
+    await store.heartbeatEdgeAgent(identity.agentId, "1.1.0");
+
+    const update = await app.inject({
+      method: "GET",
+      url: `/v1/edge-agents/${identity.agentId}/updates/next?version=1.1.0`,
+      headers: { "x-edge-agent-token": identity.credential },
+    });
+    expect(update.statusCode).toBe(200);
+    expect(update.json()).toMatchObject({
+      version: "1.2.0",
+      artifactUrl: "https://control.example.com/v1/edge-updates/artifacts/1.2.0/edge-agent.bundle",
+      sha256: createHash("sha256").update("patch-only").digest("hex"),
+    });
+    expect(verifyEdgeUpdateManifest(update.json(), update.json().signature, publicPem)).toBe(true);
+
+    const queued = await app.inject({
+      method: "POST",
+      url: `/v1/branches/branch-blr-001/edge-agents/${identity.agentId}/commands`,
+      headers: { "x-user-id": "user-global-admin" },
+      payload: { type: "apply-update", payload: {} },
+    });
+    expect(queued.statusCode).toBe(202);
+    expect(queued.json()).toMatchObject({ type: "apply-update" });
   });
 });
 

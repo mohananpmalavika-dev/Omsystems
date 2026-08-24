@@ -23,6 +23,9 @@ const packageQuery = z.object({
   platform: z.enum(["windows", "linux"]).default("windows"),
   mode: z.enum(["install", "scan-once"]).default("install"),
 });
+const updateArtifactParams = z.object({
+  version: z.string().regex(/^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$/),
+});
 const embeddedConfigMarker = Buffer.from("SENTINEL_EDGE_CONFIG_V1", "ascii");
 const publicApiBaseHeader = "x-sentinel-public-api-base";
 
@@ -401,6 +404,30 @@ export async function registerEdgeAgentPackageRoutes(
       return reply.send(bundle);
     } catch (error) {
       return reply.code(404).send({ error: "edge_agent_bundle_not_found" });
+    }
+  });
+
+  // Public, immutable application-only update payload. Authenticity is not
+  // delegated to transport: enrolled agents verify the signed manifest and
+  // SHA-256 before this bundle can become active.
+  app.get("/v1/edge-updates/artifacts/:version/edge-agent.bundle", {
+    config: { noAuth: true },
+  }, async (request, reply) => {
+    const { version } = updateArtifactParams.parse(request.params);
+    const root = await findEdgeAgentRoot(options.artifactRoot);
+    if (!root) return reply.code(404).send({ error: "edge_update_artifact_not_found" });
+    const artifactPath = join(root, "release", "updates", version, "edge-agent.bundle");
+    try {
+      const metadata = await stat(artifactPath);
+      if (!metadata.isFile() || metadata.size <= 0) throw new Error("not a file");
+      reply.header("Cache-Control", "public, max-age=31536000, immutable");
+      reply.header("Content-Type", "application/octet-stream");
+      reply.header("Content-Length", String(metadata.size));
+      reply.header("X-Content-Type-Options", "nosniff");
+      reply.header("Content-Disposition", `attachment; filename="edge-agent-${version}.bundle"`);
+      return reply.send(createReadStream(artifactPath));
+    } catch {
+      return reply.code(404).send({ error: "edge_update_artifact_not_found" });
     }
   });
 

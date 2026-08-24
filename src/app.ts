@@ -624,6 +624,7 @@ export async function buildApp(options?: {
       request.url.startsWith("/internal/alerts/")
       || request.url.startsWith("/internal/federation/")
       || request.url.startsWith("/internal/reports/")
+      || request.url.startsWith("/v1/edge-updates/artifacts/")
     ) return;
 
     const edgeAgentIngressRoute = isEdgeAgentIngressRoute(request.method, request.url);
@@ -2079,6 +2080,7 @@ export async function buildApp(options?: {
   await registerEdgeGatewayOperationsRoutes(app, store, {
     controlPlanePublicUrl: options?.controlPlanePublicUrl ?? process.env.CONTROL_PLANE_PUBLIC_URL,
     updateSigningPrivateKey: options?.edgeUpdateSigningPrivateKey ?? process.env.EDGE_UPDATE_SIGNING_PRIVATE_KEY,
+    artifactRoot: options?.edgeAgentArtifactRoot,
     tunnelProvider: options?.edgeTunnelProvider,
     requireManagedTunnel: options?.requireManagedEdgeTunnel,
   });

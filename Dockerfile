@@ -18,6 +18,7 @@ RUN npm run build
 WORKDIR /app/edge-agent
 RUN npm ci
 RUN npm run build:exe
+RUN npm run bundle:delta
 WORKDIR /app
 
 # Stage 2: Production

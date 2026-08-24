@@ -243,7 +243,7 @@ stream.on('end', () => console.log(hash.digest('hex')));
 curl https://kryptonvision-analytics-engine-6woo.onrender.com/health | jq '.aiState'
 
 # Full health check
-curl https://sentinel-grid-analytics-engine-6woo.onrender.com/health | jq
+ curl https://sentinel-grid-analytics-engine-682g.onrender.com/health | jq
 
 # Per-camera status (requires authentication)
 curl -H "x-analytics-source-key: YOUR_KEY" \

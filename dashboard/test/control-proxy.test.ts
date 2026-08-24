@@ -265,7 +265,7 @@ describe("dashboard control-plane BFF", () => {
 
     const headers = new Headers(upstream.mock.calls[0]?.[1]?.headers);
     expect(headers.get("x-sentinel-public-api-base")).toBe(
-      "https://sentinel-grid-monitoring1.onrender.com/api/control",
+       "https://sentinel-grid-monitoring-s38w.onrender.com/api/control",
     );
   });
 

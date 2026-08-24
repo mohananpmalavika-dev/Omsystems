@@ -27,8 +27,15 @@ import {
 import { inspectBundledWindowsRuntime, launchWindowsSelfInstaller } from "./windows/self-installer.js";
 import { DeviceIdentityStore } from "./security/device-identity.js";
 import { EncryptedOutbox } from "./offline/encrypted-outbox.js";
-import { stageSignedUpdate } from "./updates/signed-update.js";
+import {
+  activateSignedUpdate,
+  rejectActiveSignedUpdate,
+  resolveActiveSignedUpdate,
+  stageSignedUpdate,
+} from "./updates/signed-update.js";
 import { readFile } from "node:fs/promises";
+import { createRequire } from "node:module";
+import { join } from "node:path";
 import { CameraCredentialVault, openSealedCommand, type SealedCommandEnvelope } from "./security/camera-credential-vault.js";
 import { DatabaseCredentialProvider } from "./security/database-credential-provider.js";
 import { acquireSingleInstanceLock } from "./security/instance-lock.js";
@@ -42,7 +49,7 @@ import type { RecorderConfig } from "./monitoring/recorder-probe.js";
 import { recoverCamera } from "./recovery/camera-recovery.js";
 import { startAgentPresenceHeartbeat } from "./runtime/agent-presence.js";
 
-async function main() {
+export async function runEdgeAgent() {
 const argv = process.argv.slice(2);
 const scanOnce = hasArgument(argv, "--scan-once");
 const isDiagnostic = hasArgument(argv, "--diagnose") || hasArgument(argv, "--check-config") || hasArgument(argv, "--version") || hasArgument(argv, "--verify-bundle");
@@ -57,8 +64,28 @@ if (runtime.embeddedEnvironmentFile && (argv.length === 0 || hasArgument(argv, "
   process.exit(0);
 }
 if (hasArgument(argv, "--version")) {
-  process.stdout.write("Sentinel Grid Edge Agent 0.1.10\n");
+  process.stdout.write("Sentinel Grid Edge Agent 0.1.16\n");
   process.exit(0);
+}
+
+const config = loadConfigOrExit();
+if (!scanOnce && !isDiagnostic && process.env.SENTINEL_EDGE_PATCH_RUNTIME !== "1") {
+  const patchIdentity = await new DeviceIdentityStore(
+    config.EDGE_IDENTITY_PATH,
+    config.EDGE_IDENTITY_KEY_PATH,
+  ).load();
+  const patchPublicKey = patchIdentity?.updatePublicKey ?? config.EDGE_UPDATE_PUBLIC_KEY;
+  if (patchPublicKey) {
+    const activePatch = await resolveActiveSignedUpdate(
+      config.EDGE_UPDATE_STAGING_PATH,
+      patchPublicKey,
+      config.EDGE_AGENT_VERSION,
+    );
+    if (activePatch) {
+      await runActivePatch(activePatch, config.EDGE_UPDATE_STAGING_PATH);
+      return;
+    }
+  }
 }
 
 if (!scanOnce && !isDiagnostic) {
@@ -69,8 +96,6 @@ if (!scanOnce && !isDiagnostic) {
     process.exit(0);
   }
 }
-
-const config = loadConfigOrExit();
 process.env.EDGE_LOG_PATH = config.EDGE_LOG_PATH;
 if (hasArgument(argv, "--check-config")) {
   process.stdout.write(`${JSON.stringify({
@@ -1171,7 +1196,11 @@ async function executeEdgeCommand(type: string, payload: Record<string, unknown>
       const publicKey = identity?.updatePublicKey ?? config.EDGE_UPDATE_PUBLIC_KEY;
       if (!publicKey) throw new Error("edge_update_public_key_unavailable");
       const staged = await stageSignedUpdate(release, publicKey, config.EDGE_UPDATE_STAGING_PATH);
-      return { result: { ...staged, status: "verified_and_staged", supervisorActivationRequired: true } };
+      await activateSignedUpdate(release, staged, config.EDGE_UPDATE_STAGING_PATH);
+      return {
+        result: { ...staged, status: "verified_and_activated", applicationPatchOnly: true },
+        restartAgent: true,
+      };
     }
     default:
       throw new Error("unsupported_edge_command");
@@ -1295,7 +1324,49 @@ function loadConfigOrExit() {
 }
 }
 
-void main().catch((error) => {
+async function runActivePatch(
+  patch: { version: string; artifactPath: string; releaseId: string },
+  stagingRoot: string,
+) {
+  const previousImportOnly = process.env.SENTINEL_EDGE_IMPORT_ONLY;
+  process.env.SENTINEL_EDGE_IMPORT_ONLY = "1";
+  let loaded: unknown;
+  try {
+    const require = createRequire(join(process.cwd(), "edge-patch-loader.cjs"));
+    loaded = require(patch.artifactPath) as unknown;
+  } catch (error) {
+    await rejectActiveSignedUpdate(stagingRoot, "load-failed");
+    throw error;
+  } finally {
+    if (previousImportOnly === undefined) delete process.env.SENTINEL_EDGE_IMPORT_ONLY;
+    else process.env.SENTINEL_EDGE_IMPORT_ONLY = previousImportOnly;
+  }
+  const module = loaded as {
+    runEdgeAgent?: () => Promise<void>;
+    default?: { runEdgeAgent?: () => Promise<void> };
+  };
+  const run = module.runEdgeAgent ?? module.default?.runEdgeAgent;
+  if (typeof run !== "function") {
+    await rejectActiveSignedUpdate(stagingRoot, "entrypoint-missing");
+    throw new Error("edge_update_entrypoint_missing");
+  }
+  process.env.SENTINEL_EDGE_PATCH_RUNTIME = "1";
+  process.env.EDGE_AGENT_VERSION = patch.version;
+  logger.info("Starting verified application-only edge patch", {
+    releaseId: patch.releaseId,
+    version: patch.version,
+  });
+  try {
+    await run();
+  } catch (error) {
+    await rejectActiveSignedUpdate(stagingRoot, "runtime-failed");
+    throw error;
+  }
+}
+
+const importedAsApplicationPatch = typeof require !== "undefined" &&
+  typeof module !== "undefined" && require.main !== module;
+if (!importedAsApplicationPatch && process.env.SENTINEL_EDGE_IMPORT_ONLY !== "1") void runEdgeAgent().catch((error) => {
   const message = error instanceof Error ? error.message : String(error);
   logger.error("Edge agent stopped after an unrecoverable startup error", { error: message });
   process.stderr.write(`Edge agent failed to start: ${message}\n`);

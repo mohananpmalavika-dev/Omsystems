@@ -141,7 +141,7 @@ NODE_ENV: production
 
 ```bash
 # Full health report
-curl https://sentinel-grid-analytics-engine-6woo.onrender.com/health | jq
+ curl https://sentinel-grid-analytics-engine-682g.onrender.com/health | jq
 
 # Just AI state
 curl https://kryptonvision-analytics-engine-6woo.onrender.com/health | jq '.aiState'
@@ -150,7 +150,7 @@ curl https://kryptonvision-analytics-engine-6woo.onrender.com/health | jq '.aiSt
 curl https://kryptonvision-analytics-engine-u2sf.onrender.com/health | jq '.pipeline.models'
 
 # Active detectors
-curl https://sentinel-grid-analytics-engine-u2sf.onrender.com/health | jq '.pipeline.detectors | with_entries(select(.value.status == "healthy"))'
+ curl https://sentinel-grid-analytics-engine-682g.onrender.com/health | jq '.pipeline.detectors | with_entries(select(.value.status == "healthy"))'
 ```
 
 ## Documentation

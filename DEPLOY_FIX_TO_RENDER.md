@@ -26,7 +26,7 @@ The diagnostics page shows "Not Found" because Render hasn't deployed the latest
    - Status will change to "Live"
 
 5. **Test:**
-   - Visit: `https://sentinel-grid-monitoring-b54t.onrender.com/diagnostics`
+    - Visit: `https://sentinel-grid-monitoring-s38w.onrender.com/diagnostics`
    - Should now show the diagnostics page instead of "Not Found"
 
 ### Option 2: Push a New Commit (Automatic Deploy)
@@ -67,17 +67,17 @@ curl -X POST "https://api.render.com/deploy/srv-YOUR-SERVICE-ID?key=YOUR-KEY"
 ## Testing After Deployment
 
 ### 1. Test Diagnostics Page
-Visit: `https://sentinel-grid-monitoring-b54t.onrender.com/diagnostics`
+Visit: `https://sentinel-grid-monitoring-s38w.onrender.com/diagnostics`
 
 **Expected:** Full diagnostics page with system checks
 
 ### 2. Test Debug Endpoint
-Visit: `https://sentinel-grid-monitoring-b54t.onrender.com/api/live/debug`
+Visit: `https://sentinel-grid-monitoring-s38w.onrender.com/api/live/debug`
 
 **Expected:** JSON response with authentication and environment info
 
 ### 3. Test Video Wall
-Visit: `https://sentinel-grid-monitoring-b54t.onrender.com/operations/video-wall`
+Visit: `https://sentinel-grid-monitoring-s38w.onrender.com/operations/video-wall`
 
 **Expected:** 
 - Yellow banner if not logged in

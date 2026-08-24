@@ -5,7 +5,7 @@
 ╚════════════════════════════════════════════════════════╝
 
 📱 DASHBOARD LINK
-   https://sentinel-grid-monitoring1.onrender.com
+   https://sentinel-grid-monitoring-s38w.onrender.com
 
 📂 INSTALLATION LOCATION
    C:\Program Files\Sentinel Grid\Edge Agent

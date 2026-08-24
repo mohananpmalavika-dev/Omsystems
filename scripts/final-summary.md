@@ -8,7 +8,7 @@
 ✅ Account unlocked (login_attempts: 0)
 
 ## The Problem
-The Render backend at `https://sentinel-grid-control-plane-nqc0.onrender.com` is returning 401 "invalid_credentials" even though the database we're testing has the correct user.
+The Render backend at `https://sentinel-grid-control-plane-zcli.onrender.com` is returning 401 "invalid_credentials" even though the database we're testing has the correct user.
 
 ## Root Cause
 **The Render deployment is connected to a DIFFERENT database** than the one we've been configuring.

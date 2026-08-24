@@ -448,6 +448,7 @@ export function DeviceManager() {
 
   const activeBranch = branches.find((branch) => branch.id === selectedBranch);
   const onlineGateway = gateways.find(isGatewayReady);
+  const patchCapableGateway = onlineGateway && supportsPatchUpdates(onlineGateway.version) ? onlineGateway : undefined;
   const discoveryQueueItems = useMemo(() => discoveredCameras.map((camera) => {
     const reviewStatus = discoveryReviewState[camera.id]?.reviewStatus ?? (camera.duplicateStatus === "duplicate" ? "duplicate" : camera.duplicateStatus === "review-required" ? "review-required" : (camera.status === "approved" ? "approved" : "pending"));
     return {
@@ -1117,14 +1118,16 @@ export function DeviceManager() {
 
   async function issueGatewayCommand(
     gateway: EdgeAgent,
-    type: "rediscover" | "restart-media" | "collect-logs",
+    type: "rediscover" | "restart-media" | "collect-logs" | "apply-update",
   ) {
     if (!selectedBranch) return;
     setSaving(true);
     setError(undefined);
     try {
       const command = await cameraInventoryApi.sendGatewayCommand(selectedBranch, gateway.id, { type });
-      setNotice(`${type.replaceAll("-", " ")} queued for ${gateway.name}. Command ${String(command.id).slice(0, 8)} is fully audited.`);
+      setNotice(type === "apply-update"
+        ? `Lightweight patch queued for ${gateway.name}. The scanner will download only the signed application changes, restart, and keep its existing media runtime and configuration.`
+        : `${type.replaceAll("-", " ")} queued for ${gateway.name}. Command ${String(command.id).slice(0, 8)} is fully audited.`);
     } catch (reason) {
       setError(messageOf(reason, "Gateway command could not be queued."));
     } finally {
@@ -1645,6 +1648,12 @@ try {
                       <button type="button" title="Rediscover cameras and recorders" disabled={saving || gateway.status !== "online"} onClick={() => void issueGatewayCommand(gateway, "rediscover")}><Network size={13}/></button>
                       <button type="button" title="Collect redacted diagnostics" disabled={saving || gateway.status !== "online"} onClick={() => void issueGatewayCommand(gateway, "collect-logs")}><Activity size={13}/></button>
                       <button type="button" title="Restart the branch media service" disabled={saving || gateway.status !== "online"} onClick={() => void issueGatewayCommand(gateway, "restart-media")}><RefreshCw size={13}/></button>
+                      <button
+                        type="button"
+                        title={supportsPatchUpdates(gateway.version) ? "Install latest lightweight patch only" : "Install the v0.1.16 full Repair package once to enable patch-only updates"}
+                        disabled={saving || gateway.status !== "online" || !supportsPatchUpdates(gateway.version)}
+                        onClick={() => void issueGatewayCommand(gateway, "apply-update")}
+                      ><Download size={13}/></button>
                     </>
                   )}
                 </div>
@@ -1954,15 +1963,49 @@ try {
                 </div>
               </div>
 
-              {/* Download Package - Single Option */}
+              {patchCapableGateway ? (
+                <div className="space-y-3 rounded-xl border border-emerald-500/30 bg-emerald-950/20 p-4">
+                  <div className="flex items-center gap-2">
+                    <Download size={16} className="text-emerald-400" />
+                    <h3 className="text-sm font-semibold text-slate-100">Update installed scanner — patch only</h3>
+                  </div>
+                  <p className="text-xs text-slate-300">
+                    Downloads only the signed application changes. Existing FFmpeg, MediaMTX, Cloudflared, configuration, identity, and camera credentials stay in place.
+                  </p>
+                  <button
+                    type="button"
+                    className="primary-button"
+                    onClick={() => void issueGatewayCommand(patchCapableGateway, "apply-update")}
+                    disabled={saving}
+                  >
+                    <Download size={14} /> {saving ? "Queuing patch…" : "Download & install patch only"}
+                  </button>
+                </div>
+              ) : gateways.length > 0 ? (
+                <div className="form-info-banner">
+                  <AlertTriangle size={16} />
+                  <div>
+                    <strong>{onlineGateway ? "One-time patch base update required" : "Patch update needs the scanner online"}</strong>
+                    <div className="text-xs mt-0.5 text-slate-300">
+                      {onlineGateway
+                        ? "Install the v0.1.16 full Repair package once. Every later application release can use the small patch-only option."
+                        : "Use the full Repair installer below only when the existing scanner cannot connect."}
+                    </div>
+                  </div>
+                </div>
+              ) : null}
+
+              {/* Full installer remains the first-install and offline-repair fallback. */}
               <div className="space-y-4">
                 <div className="flex items-center gap-2 pb-3 border-b border-slate-700/60">
                   <Download size={16} className="text-blue-400" />
-                  <h3 className="text-sm font-semibold text-slate-200">Download Standalone Installer Package</h3>
+                  <h3 className="text-sm font-semibold text-slate-200">{gateways.length > 0 ? "Full Repair Installer" : "Download Standalone Installer Package"}</h3>
                 </div>
 
                 <p className="text-xs text-slate-300">
-                  Download the pre-configured installer for <strong>{activeBranch?.name ?? "Branch"}</strong>. Run the downloaded EXE on the target branch computer to install and configure the edge agent.
+                  {gateways.length > 0
+                    ? <>Use this only for offline repair or runtime changes. It downloads the complete package again for <strong>{activeBranch?.name ?? "Branch"}</strong>.</>
+                    : <>Download the pre-configured installer for <strong>{activeBranch?.name ?? "Branch"}</strong>. Run the downloaded EXE on the target branch computer to install and configure the edge agent.</>}
                 </p>
                 <div className="pt-2">
                   {!gatewayActivation ? (
@@ -2404,6 +2447,16 @@ function isGatewayReady(gateway: EdgeAgent) {
   if (gateway.status !== "online" || !gateway.lastSeenAt) return false;
   const lastSeenAt = Date.parse(gateway.lastSeenAt);
   return Number.isFinite(lastSeenAt) && Date.now() - lastSeenAt <= 90_000;
+}
+
+function supportsPatchUpdates(version: string) {
+  const parts = version.split(/[.+-]/, 3).map((part) => Number.parseInt(part, 10) || 0);
+  const minimum = [0, 1, 16];
+  for (let index = 0; index < minimum.length; index += 1) {
+    const difference = (parts[index] ?? 0) - (minimum[index] ?? 0);
+    if (difference !== 0) return difference > 0;
+  }
+  return true;
 }
 
 function isScannerUnavailable(reason: unknown) {

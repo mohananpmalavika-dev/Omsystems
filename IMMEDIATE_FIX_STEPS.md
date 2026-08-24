@@ -14,7 +14,7 @@ One or more of these issues:
 
 ### Step 1: Run Diagnostics (2 minutes)
 
-Visit: `https://sentinel-grid-monitoring-b54t.onrender.com/diagnostics`
+Visit: `https://sentinel-grid-monitoring-s38w.onrender.com/diagnostics`
 
 This will show you exactly what's wrong:
 - ✅ Green = Working

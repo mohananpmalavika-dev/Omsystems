@@ -1,7 +1,11 @@
 import { createHash, randomBytes } from "node:crypto";
+import { readFile, stat } from "node:fs/promises";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 import type { ControlPlaneStore } from "../control-plane-store.js";
+import type { EdgeUpdateRelease } from "../domain/models.js";
 import { edgeUpdatePublicKey, signEdgeUpdateManifest } from "../security/edge-update-signing.js";
 import { sealEdgeCommandPayload } from "../security/edge-command-envelope.js";
 import type { ManagedEdgeTunnelProvider } from "../platform/managed-edge-tunnel.js";
@@ -18,6 +22,7 @@ const commandTypes = [
   "rediscover", "restart-media", "restart-agent", "probe-camera",
   "recover-camera", "probe-recorder", "collect-logs", "apply-update",
 ] as const;
+const patchRuntimeMinimumVersion = "0.1.16";
 
 export async function registerEdgeGatewayOperationsRoutes(
   app: FastifyInstance,
@@ -25,10 +30,16 @@ export async function registerEdgeGatewayOperationsRoutes(
   options: {
     controlPlanePublicUrl?: string;
     updateSigningPrivateKey?: string;
+    artifactRoot?: string;
     tunnelProvider?: ManagedEdgeTunnelProvider;
     requireManagedTunnel?: boolean;
   } = {},
 ) {
+  const updateForAgent = async (edgeAgentId: string, currentVersion: string) => {
+    const assigned = await store.getEdgeUpdateReleaseForAgent(edgeAgentId, currentVersion);
+    if (assigned && compareVersions(assigned.version, currentVersion) > 0) return assigned;
+    return packagedEdgeUpdate(options, currentVersion);
+  };
   app.post("/v1/branches/:branchId/edge-activations", async (request, reply) => {
     const { branchId } = z.object({ branchId: z.string().min(1) }).parse(request.params);
     if (!(await requireDeviceAccess(request, reply, store, branchId))) return;
@@ -323,6 +334,21 @@ export async function registerEdgeGatewayOperationsRoutes(
     if (Buffer.byteLength(JSON.stringify(body.payload)) > 16_384) {
       return reply.code(413).send({ error: "command_payload_too_large" });
     }
+    if (body.type === "apply-update") {
+      if (compareVersions(agent.version, patchRuntimeMinimumVersion) < 0) {
+        return reply.code(409).send({
+          error: "edge_patch_base_required",
+          message: `Install the v${patchRuntimeMinimumVersion} full Repair package once. Later releases can use patch-only updates.`,
+        });
+      }
+      const release = await updateForAgent(id, agent.version);
+      if (!release) {
+        return reply.code(409).send({
+          error: "edge_update_not_available",
+          message: `No application patch is available for scanner v${agent.version}.`,
+        });
+      }
+    }
     const command = await store.createEdgeCommand({
       edgeAgentId: id, type: body.type, payload: body.payload, requestedBy: request.currentUser.id,
     });
@@ -457,8 +483,73 @@ export async function registerEdgeGatewayOperationsRoutes(
   app.get("/v1/edge-agents/:id/updates/next", async (request) => {
     const { id } = agentParams.parse(request.params);
     const { version } = z.object({ version: z.string().min(1).max(40) }).parse(request.query);
-    return await store.getEdgeUpdateReleaseForAgent(id, version) ?? null;
+    return await updateForAgent(id, version) ?? null;
   });
+}
+
+async function packagedEdgeUpdate(
+  options: { controlPlanePublicUrl?: string; updateSigningPrivateKey?: string; artifactRoot?: string },
+  currentVersion: string,
+): Promise<EdgeUpdateRelease | undefined> {
+  if (!options.controlPlanePublicUrl || !options.updateSigningPrivateKey) return undefined;
+  const root = await findEdgeAgentRoot(options.artifactRoot);
+  if (!root) return undefined;
+  try {
+    const packageJson = JSON.parse(await readFile(join(root, "package.json"), "utf8")) as { version?: string };
+    const version = packageJson.version;
+    if (!version || compareVersions(version, currentVersion) <= 0) return undefined;
+    const artifactPath = join(root, "release", "updates", version, "edge-agent.bundle");
+    const [artifact, metadata] = await Promise.all([readFile(artifactPath), stat(artifactPath)]);
+    if (!metadata.isFile() || artifact.length <= 0) return undefined;
+    const sha256 = createHash("sha256").update(artifact).digest("hex");
+    const baseUrl = options.controlPlanePublicUrl.replace(/\/+$/, "");
+    const artifactUrl = `${baseUrl}/v1/edge-updates/artifacts/${encodeURIComponent(version)}/edge-agent.bundle`;
+    const notes = `Sentinel Grid Edge Agent application patch v${version}`;
+    const signature = signEdgeUpdateManifest({ version, artifactUrl, sha256, notes }, options.updateSigningPrivateKey);
+    return {
+      id: `packaged-${version}-${sha256.slice(0, 12)}`,
+      version,
+      artifactUrl,
+      sha256,
+      signature,
+      notes,
+      rolloutPercentage: 100,
+      enabled: true,
+      createdBy: "packaged-release",
+      createdAt: metadata.mtime.toISOString(),
+    };
+  } catch {
+    return undefined;
+  }
+}
+
+async function findEdgeAgentRoot(preferredRoot?: string) {
+  const routeDirectory = dirname(fileURLToPath(import.meta.url));
+  const candidates = [
+    ...(preferredRoot ? [preferredRoot] : []),
+    join(process.cwd(), "edge-agent"),
+    join(routeDirectory, "..", "..", "edge-agent"),
+    join(routeDirectory, "..", "..", "..", "edge-agent"),
+  ];
+  for (const candidate of candidates) {
+    try {
+      if ((await stat(join(candidate, "package.json"))).isFile()) return candidate;
+    } catch {
+      // Try the next source or production layout.
+    }
+  }
+  return undefined;
+}
+
+function compareVersions(left: string, right: string) {
+  const parse = (value: string) => value.split(/[.+-]/, 3).map((part) => Number.parseInt(part, 10) || 0);
+  const leftParts = parse(left);
+  const rightParts = parse(right);
+  for (let index = 0; index < 3; index += 1) {
+    const difference = (leftParts[index] ?? 0) - (rightParts[index] ?? 0);
+    if (difference !== 0) return difference;
+  }
+  return left.localeCompare(right);
 }
 
 function hashSecret(value: string) {
