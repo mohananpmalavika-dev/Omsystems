@@ -66,38 +66,29 @@ export async function startLive(
 
     const sessionMediaGatewayUrl = controlSession.mediaGatewayUrl;
     const advertisedLocalMediaGatewayUrl = controlSession.localMediaGatewayUrl;
-    // Prefer the dashboard's explicitly configured branch-local/VPN gateway
-    // even when the control plane still advertises a public tunnel URL. This
-    // is important when operators are on the branch network and the temporary
-    // public tunnel has expired or changed its hostname.
+    // An explicitly configured local/VPN gateway is an operator choice. An
+    // edge-advertised LAN address is only a fallback: the dashboard may be
+    // hosted on Render, where the browser cannot reach the branch network.
     const configuredLocalMediaGatewayUrl = resolveConfiguredLocalMediaGatewayUrl();
-    const localMediaGatewayUrl = configuredLocalMediaGatewayUrl ??
-      (advertisedLocalMediaGatewayUrl && isBrowserDirectMediaUrl(advertisedLocalMediaGatewayUrl)
-        ? advertisedLocalMediaGatewayUrl
-        : undefined) ??
-      (sessionMediaGatewayUrl && isBrowserDirectMediaUrl(sessionMediaGatewayUrl)
-        ? sessionMediaGatewayUrl
-        : undefined);
+    const advertisedLocalGatewayUrl = advertisedLocalMediaGatewayUrl &&
+      isBrowserDirectMediaUrl(advertisedLocalMediaGatewayUrl)
+      ? advertisedLocalMediaGatewayUrl
+      : undefined;
     const publicMediaGatewayUrl = resolveConfiguredPublicMediaGatewayUrl(
-      sessionMediaGatewayUrl ?? localMediaGatewayUrl,
+      sessionMediaGatewayUrl,
     );
+    const localMediaGatewayUrl = configuredLocalMediaGatewayUrl ??
+      (!publicMediaGatewayUrl ? advertisedLocalGatewayUrl : undefined);
 
     if (localMediaGatewayUrl) {
       const direct: DirectLiveGateway = {
         url: new URL("/v1/live/start", normalizeHttpOrigin(localMediaGatewayUrl)).toString(),
         controlPlaneToken: controlSession.token,
       };
-      const directFallbacks = publicMediaGatewayUrl && publicMediaGatewayUrl !== localMediaGatewayUrl
-        ? [{
-          url: new URL("/v1/live/start", normalizeHttpOrigin(publicMediaGatewayUrl)).toString(),
-          controlPlaneToken: controlSession.token,
-        }]
-        : undefined;
-      return { cameraId, direct, ...(directFallbacks ? { directFallbacks } : {}) };
+      return { cameraId, direct };
     }
 
-    const mediaGatewayUrl = publicMediaGatewayUrl ??
-      controlSession.mediaGatewayUrl ??
+    const mediaGatewayUrl = controlSession.mediaGatewayUrl ??
       runtimeEnv("MEDIA_GATEWAY_INTERNAL_URL", "http://localhost:8090");
 
     const mediaResponse = await fetch(

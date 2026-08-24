@@ -82,13 +82,10 @@ describe("dashboard live session startup", () => {
       direct: {
         url: "http://192.168.29.101:8090/v1/live/start",
       },
-      directFallbacks: [{
-        url: "https://public.example/v1/live/start",
-      }],
     });
   });
 
-  it("uses the edge-advertised local gateway without a hardcoded dashboard IP", async () => {
+  it("uses the public gateway server-side when an edge LAN gateway is also advertised", async () => {
     process.env.DASHBOARD_DEMO_MODE = "false";
     process.env.CONTROL_PLANE_INTERNAL_URL = "http://control.internal:8080";
     delete process.env.MEDIA_GATEWAY_LOCAL_URL;
@@ -109,9 +106,8 @@ describe("dashboard live session startup", () => {
     }));
 
     await expect(startLive("camera-1")).resolves.toMatchObject({
-      direct: {
-        url: "http://192.168.29.101:8090/v1/live/start",
-      },
+      cameraId: "camera-1",
+      hls: { url: "https://public.example/live/camera-1/index.m3u8" },
     });
   });
 });
