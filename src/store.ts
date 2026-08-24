@@ -269,6 +269,7 @@ const seedCameras: Camera[] = [
     model: "DS-2CD2143G0-I",
     status: "online",
     channel: 1,
+    protocol: "onvif-t",
     profiles: [
       { name: "main", codec: "H264", width: 1920, height: 1080, role: "main" },
       { name: "sub", codec: "H264", width: 640, height: 360, role: "sub" },
