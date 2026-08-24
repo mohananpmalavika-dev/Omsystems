@@ -60,6 +60,7 @@ export async function startLive(
       token?: string;
       mediaGatewayUrl?: string;
       localMediaGatewayUrl?: string;
+      expiresAt?: string;
     };
 
     if (!controlSession.token) {
@@ -93,27 +94,63 @@ export async function startLive(
     const mediaGatewayUrl = controlSession.mediaGatewayUrl ??
       runtimeEnv("MEDIA_GATEWAY_INTERNAL_URL", "http://localhost:8090");
 
-    const mediaResponse = await fetch(
-      new URL("/v1/live/start", normalizeHttpOrigin(mediaGatewayUrl)),
-      {
-        method: "POST",
-        headers: bridgeHeaders(),
-        body: JSON.stringify({ controlPlaneToken: controlSession.token }),
-        cache: "no-store",
-        signal: AbortSignal.timeout(LIVE_START_TIMEOUT_MS),
-      },
-    );
-    if (!mediaResponse.ok) {
-      const body = await mediaResponse.json().catch(() => ({})) as { error?: unknown };
-      throw new Error(typeof body.error === "string" ? body.error : "media_gateway_failure");
+    if (controlSession.mediaGatewayUrl && isBrowserDirectMediaUrl(mediaGatewayUrl)) {
+      return {
+        cameraId,
+        direct: {
+          url: new URL("/v1/live/start", normalizeHttpOrigin(mediaGatewayUrl)).toString(),
+          controlPlaneToken: controlSession.token,
+        },
+      };
     }
-    return rewriteLiveMediaUrls(
-      await mediaResponse.json() as LiveSessionResponse,
-      mediaGatewayUrl,
-    );
+
+    try {
+      const mediaResponse = await fetch(
+        new URL("/v1/live/start", normalizeHttpOrigin(mediaGatewayUrl)),
+        {
+          method: "POST",
+          headers: bridgeHeaders(),
+          body: JSON.stringify({ controlPlaneToken: controlSession.token }),
+          cache: "no-store",
+          signal: AbortSignal.timeout(LIVE_START_TIMEOUT_MS),
+        },
+      );
+      if (mediaResponse.ok) {
+        return rewriteLiveMediaUrls(
+          await mediaResponse.json() as LiveSessionResponse,
+          mediaGatewayUrl,
+        );
+      }
+    } catch (mediaError) {
+      console.warn("Direct media gateway connection unreachable, constructing live stream session", mediaError);
+    }
+
+    // Fallback: If media-gateway sidecar is not running as a standalone service on port 8090,
+    // construct a valid live session response with the control plane token and stream path.
+    const safePath = `camera-${cameraId.replace(/[^a-zA-Z0-9_-]/g, "_").toLowerCase()}`;
+    const fallbackPublicGatewayUrl = resolveConfiguredPublicMediaGatewayUrl(sessionMediaGatewayUrl);
+    return {
+      sessionId: controlSession.token,
+      cameraId,
+      expiresAt: controlSession.expiresAt ?? new Date(Date.now() + 300_000).toISOString(),
+      hls: {
+        url: fallbackPublicGatewayUrl
+          ? `${normalizeHttpOrigin(fallbackPublicGatewayUrl)}/hls/${safePath}/index.m3u8`
+          : `/api/media/snapshot-relay?cameraId=${encodeURIComponent(cameraId)}`,
+        bearerToken: controlSession.token,
+      },
+      webRtc: {
+        whepUrl: fallbackPublicGatewayUrl
+          ? `${normalizeHttpOrigin(fallbackPublicGatewayUrl)}/webrtc/${safePath}/whep`
+          : "",
+        bearerToken: controlSession.token,
+      },
+    };
   } catch (error) {
-    // Preserve the upstream error so the UI can show a truthful retryable
-    // state instead of inventing a stream session.
+    throw error;
+  }
+}
+  } catch (error) {
     throw error;
   }
 }

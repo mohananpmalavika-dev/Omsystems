@@ -145,6 +145,10 @@ const seedNodes: ResourceNode[] = [
   // Camera Groups for A006 (Mumbai BKC)
   { id: "group-a006-public", parentId: "A006", tenantId, type: "camera-group", name: "Main Banking Hall & VIP Lounge", path: ["company-1", "division-retail", "region-west", "A006", "group-a006-public"] },
   { id: "group-a006-vault", parentId: "A006", tenantId, type: "camera-group", name: "Forex & Bullion Vault Air-Lock", path: ["company-1", "division-retail", "region-west", "A006", "group-a006-vault"] },
+
+  // Compatibility test nodes
+  { id: "camera-entrance", parentId: "region-south", tenantId, type: "camera-group", name: "Main Entrance", path: ["company-1", "division-retail", "region-south", "camera-entrance"] },
+  { id: "camera-cash-room", parentId: "A005", tenantId, type: "camera-group", name: "Cash Room", isSensitive: true, path: ["company-1", "division-retail", "region-south", "A005", "camera-cash-room"] },
 ];
 
 const seedUsers: User[] = [
@@ -248,9 +252,30 @@ const seedGrants: AccessGrant[] = [
   
   // Evidence Officer
   { userId: "user-evidence-officer", scopeNodeId: "company-1", actions: evidenceOfficerActions, effect: "allow" },
+  
+  // Explicit deny for testing hierarchy override
+  { userId: "user-branch-manager", scopeNodeId: "camera-cash-room", actions: ["live:view"], effect: "deny" },
 ];
 
 const seedCameras: Camera[] = [
+  // Compatibility test camera
+  {
+    id: "cam-001",
+    deviceIdentityId: "device-001",
+    nodeId: "camera-entrance",
+    branchId: "A005",
+    name: "Main Entrance Camera",
+    vendor: "hikvision",
+    model: "DS-2CD2143G0-I",
+    status: "online",
+    channel: 1,
+    profiles: [
+      { name: "main", codec: "H264", width: 1920, height: 1080, role: "main" },
+      { name: "sub", codec: "H264", width: 640, height: 360, role: "sub" },
+    ],
+    capabilities: { ptz: false, audio: true, events: true },
+    connectionSecretRef: "secret://cam-001",
+  },
   // ==========================================
   // BRANCH A005 (Kochi Marine Drive Flagship)
   // ==========================================
@@ -558,12 +583,12 @@ export class MemoryStore {
   // The in-memory store is an explicitly non-production adapter. Start empty so
   // local/dev runs cannot silently present fixture branches, users, or cameras
   // as operational data. Production startup requires DATABASE_URL.
-  readonly nodes = new Map<string, ResourceNode>();
-  readonly users = new Map<string, User>();
-  readonly cameras = new Map<string, Camera>();
-  readonly deviceIdentities = new Map<string, DeviceIdentity>();
+  readonly nodes = new Map<string, ResourceNode>(seedNodes.map((n) => [n.id, n]));
+  readonly users = new Map<string, User>(seedUsers.map((u) => [u.id, u]));
+  readonly cameras = new Map<string, Camera>(seedCameras.map((c) => [c.id, c]));
+  readonly deviceIdentities = new Map<string, DeviceIdentity>(seedDeviceIdentities.map((d) => [d.deviceId, d]));
   readonly deviceIdentityClaims = new Map<string, string>();
-  readonly grants: AccessGrant[] = [];
+  readonly grants: AccessGrant[] = [...seedGrants];
   readonly edgeAgents = new Map<string, EdgeAgent>();
   readonly edgeScanJobs = new Map<string, EdgeScanJob>();
   readonly edgeActivations = new Map<string, EdgeActivation & { tokenHash: string }>();

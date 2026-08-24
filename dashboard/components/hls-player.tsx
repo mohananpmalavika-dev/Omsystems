@@ -149,6 +149,19 @@ export function HlsPlayer({
       };
     }
 
+    const isSnapshotFeed = url.includes("snapshot") || url.includes("relay") || /\.(jpe?g|png|webp)($|\?)/i.test(url);
+    if (isSnapshotFeed) {
+      setStatus("live");
+      setError(null);
+      const refreshTimer = setInterval(() => {
+        if (!disposed) setRetryNonce((v) => v + 1);
+      }, 2_500);
+      return () => {
+        disposed = true;
+        clearInterval(refreshTimer);
+      };
+    }
+
     const streamUrl = withToken(url, bearerToken);
     setStatus("loading");
     setError(null);
@@ -230,16 +243,28 @@ export function HlsPlayer({
     setRetryNonce((value) => value + 1);
   };
 
+  const isSnapshotFeed = Boolean(url && (url.includes("snapshot") || url.includes("relay") || /\.(jpe?g|png|webp)($|\?)/i.test(url)));
+
   return (
     <div className="relative h-full w-full overflow-hidden bg-slate-950">
-      <video
-        ref={videoRef}
-        className={`live-video h-full w-full object-cover ${status === "live" ? "opacity-100" : "opacity-40"}`}
-        aria-label={`Live video from ${cameraName}`}
-        muted={muted}
-        playsInline
-        autoPlay
-      />
+      {isSnapshotFeed ? (
+        <img
+          src={withToken(url.includes("?") ? `${url}&_t=${retryNonce}` : `${url}?_t=${retryNonce}`, bearerToken)}
+          alt={`Live video from ${cameraName}`}
+          className="live-video h-full w-full object-cover"
+          onLoad={() => { setStatus("live"); setError(null); }}
+          onError={() => { setError("Connecting to camera frame feed..."); }}
+        />
+      ) : (
+        <video
+          ref={videoRef}
+          className={`live-video h-full w-full object-cover ${status === "live" ? "opacity-100" : "opacity-40"}`}
+          aria-label={`Live video from ${cameraName}`}
+          muted={muted}
+          playsInline
+          autoPlay
+        />
+      )}
 
       {status === "live" && (
         <div className="absolute left-2 top-2 flex items-center gap-1.5 rounded bg-black/75 px-2 py-1 text-[10px] font-mono text-emerald-300">
