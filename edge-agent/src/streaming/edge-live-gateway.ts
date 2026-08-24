@@ -414,7 +414,9 @@ authHTTPExclude:
   - action: pprof
 hls: yes
 hlsAddress: 127.0.0.1:8888
-hlsVariant: lowLatency
+# Standard HLS is more reliable through the Cloudflare tunnel than LL-HLS
+# blocking playlist/partial-segment requests.
+hlsVariant: mpegts
 hlsAllowOrigins: ['*']
 rtsp: no
 rtmp: no

@@ -105,8 +105,9 @@ export async function startLive(
       };
     }
 
+    let mediaResponse: Response;
     try {
-      const mediaResponse = await fetch(
+      mediaResponse = await fetch(
         new URL("/v1/live/start", normalizeHttpOrigin(mediaGatewayUrl)),
         {
           method: "POST",
@@ -116,37 +117,19 @@ export async function startLive(
           signal: AbortSignal.timeout(LIVE_START_TIMEOUT_MS),
         },
       );
-      if (mediaResponse.ok) {
-        return rewriteLiveMediaUrls(
-          await mediaResponse.json() as LiveSessionResponse,
-          mediaGatewayUrl,
-        );
-      }
-    } catch (mediaError) {
-      console.warn("Direct media gateway connection unreachable, constructing live stream session", mediaError);
+    } catch (error) {
+      throw new Error("media_gateway_unavailable", { cause: error });
     }
 
-    // Fallback: If media-gateway sidecar is not running as a standalone service on port 8090,
-    // construct a valid live session response with the control plane token and stream path.
-    const safePath = `camera-${cameraId.replace(/[^a-zA-Z0-9_-]/g, "_").toLowerCase()}`;
-    const fallbackPublicGatewayUrl = resolveConfiguredPublicMediaGatewayUrl(sessionMediaGatewayUrl);
-    return {
-      sessionId: controlSession.token,
-      cameraId,
-      expiresAt: controlSession.expiresAt ?? new Date(Date.now() + 300_000).toISOString(),
-      hls: {
-        url: fallbackPublicGatewayUrl
-          ? `${normalizeHttpOrigin(fallbackPublicGatewayUrl)}/hls/${safePath}/index.m3u8`
-          : `/api/media/snapshot-relay?cameraId=${encodeURIComponent(cameraId)}`,
-        bearerToken: controlSession.token,
-      },
-      webRtc: {
-        whepUrl: fallbackPublicGatewayUrl
-          ? `${normalizeHttpOrigin(fallbackPublicGatewayUrl)}/webrtc/${safePath}/whep`
-          : "",
-        bearerToken: controlSession.token,
-      },
-    };
+    if (!mediaResponse.ok) {
+      const body = await mediaResponse.json().catch(() => ({})) as { error?: unknown };
+      throw new Error(typeof body.error === "string" ? body.error : "media_gateway_failure");
+    }
+
+    return rewriteLiveMediaUrls(
+      await mediaResponse.json() as LiveSessionResponse,
+      mediaGatewayUrl,
+    );
   } catch (error) {
     throw error;
   }

@@ -12,7 +12,9 @@ authHTTPExclude:
 
 hls: yes
 hlsAddress: :8888
-hlsVariant: lowLatency
+# Standard HLS is more reliable through the Cloudflare tunnel than LL-HLS
+# blocking playlist/partial-segment requests.
+hlsVariant: mpegts
 hlsAllowOrigins: ['*']
 
 webrtc: no
@@ -23,4 +25,3 @@ pathDefaults:
   sourceOnDemandCloseAfter: 10s
 
 paths: {}
-

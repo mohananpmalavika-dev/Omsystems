@@ -175,10 +175,14 @@ export function HlsPlayer({
     if (Hls.isSupported()) {
       try {
         hls = new Hls({
-          lowLatencyMode: true,
-          backBufferLength: 10,
-          maxBufferLength: 12,
-          liveSyncDurationCount: 3,
+          // The public feed crosses a tunnel; a normal buffered HLS window
+          // avoids LL-HLS partial-playlist stalls on that path.
+          lowLatencyMode: false,
+          backBufferLength: 30,
+          maxBufferLength: 30,
+          liveSyncDurationCount: 4,
+          liveMaxLatencyDurationCount: 10,
+          maxLiveSyncPlaybackRate: 1.2,
           xhrSetup: (xhr, requestUrl) => {
             xhr.withCredentials = true;
             if (bearerToken) {
