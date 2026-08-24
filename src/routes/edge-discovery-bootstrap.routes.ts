@@ -28,7 +28,7 @@ export async function registerEdgeDiscoveryBootstrapRoutes(
     const result = await pool.query<{
       ip_address: string | null;
       username: string;
-      password: string;
+      password: string | null;
       updated_at: Date;
     }>(
       `SELECT ip_address, username, password, updated_at
@@ -52,7 +52,7 @@ export async function registerEdgeDiscoveryBootstrapRoutes(
       credentials: result.rows.map((credential) => ({
         host: credential.ip_address ?? undefined,
         username: credential.username,
-        password: credential.password,
+        password: credential.password ?? "",
         updatedAt: credential.updated_at.toISOString(),
       })),
       vpnScanNetworks: connectivity?.vpnRemoteNetworks ?? [],

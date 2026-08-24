@@ -267,13 +267,13 @@ export async function registerEdgeGatewayOperationsRoutes(
     if (!agent) return reply.code(404).send({ error: "edge_agent_not_found" });
     const parsedBody = z.object({
       username: z.string().trim().min(1).max(128),
-      password: z.string().max(1_024),
+      password: z.string().max(1_024).nullable().transform((value) => value ?? ""),
       cameraIp: z.string().ip(),
     }).safeParse(request.body);
     if (!parsedBody.success) {
       return reply.code(400).send({
         error: "invalid_camera_credential_request",
-        message: "A username, password, and one camera or recorder IP address are required.",
+        message: "A username and one camera or recorder IP address are required; password may be null for passwordless devices.",
       });
     }
     const body = parsedBody.data;

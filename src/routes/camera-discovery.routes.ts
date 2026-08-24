@@ -34,7 +34,10 @@ const approveAllBody = z.object({
 
 const activateDiscoveryBody = z.object({
   username: z.string().trim().min(1).max(128),
-  password: z.string().min(1).max(1_024),
+  // A number of cameras/DVRs use an account with no password. Keep the
+  // internal credential contract string-based, but accept JSON null from
+  // discovery clients and normalize it before storage/encryption.
+  password: z.string().max(1_024).nullable().transform((value) => value ?? ""),
 });
 
 const targetedVerificationMinimumAgentVersion = "0.1.7";
@@ -520,7 +523,7 @@ export async function registerCameraDiscoveryRoutes(
       ipAddress: z.string().min(1),
       rtspPort: z.number().int().positive(),
       username: z.string().min(1),
-      password: z.string().min(1),
+      password: z.string().max(1_024).nullable().transform((value) => value ?? ""),
     }).parse(request.body);
 
     const result = await probeNetworkCamera(body.ipAddress, body.rtspPort, body.username, body.password);

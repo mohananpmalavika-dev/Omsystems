@@ -168,7 +168,7 @@ export interface EdgeUpdateRelease {
 }
 
 export interface DiscoveryBootstrap {
-  credentials: Array<{ host?: string; username: string; password: string; updatedAt: string }>;
+  credentials: Array<{ host?: string; username: string; password: string | null; updatedAt: string }>;
   vpnScanNetworks: string[];
   transport: "vpn" | "cloudflare-tunnel" | null;
 }

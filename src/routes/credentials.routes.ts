@@ -98,16 +98,17 @@ export async function registerCredentialsRoutes(app: FastifyInstance, pool: Pool
       edge_agent_id?: string;
       ip_address?: string;
       username: string;
-      password: string;
+      password: string | null;
     };
   }>("/api/credentials", async (request, reply) => {
     const { branch_id, edge_agent_id, ip_address, username, password } = request.body;
 
-    if (!branch_id || !username || !password) {
+    if (!branch_id || !username || password === undefined) {
       return reply.code(400).send({
         error: "branch_id, username, and password are required",
       });
     }
+    const normalizedPassword = password ?? "";
 
     const result = await pool.query(
       `INSERT INTO camera_credentials 
@@ -120,7 +121,7 @@ export async function registerCredentialsRoutes(app: FastifyInstance, pool: Pool
         edge_agent_id || null,
         ip_address || null,
         username,
-        password,
+        normalizedPassword,
         ip_address ? "host-specific" : "default",
       ]
     );
@@ -136,7 +137,7 @@ export async function registerCredentialsRoutes(app: FastifyInstance, pool: Pool
     Params: { id: string };
     Body: {
       username?: string;
-      password?: string;
+      password?: string | null;
       ip_address?: string;
     };
   }>("/api/credentials/:id", async (request, reply) => {
@@ -151,9 +152,9 @@ export async function registerCredentialsRoutes(app: FastifyInstance, pool: Pool
       updates.push(`username = $${paramIndex++}`);
       values.push(username);
     }
-    if (password) {
+    if (Object.prototype.hasOwnProperty.call(request.body, "password")) {
       updates.push(`password = $${paramIndex++}`);
-      values.push(password);
+      values.push(password ?? "");
     }
     if (ip_address !== undefined) {
       updates.push(`ip_address = $${paramIndex++}`);
@@ -217,7 +218,7 @@ export async function registerCredentialsRoutes(app: FastifyInstance, pool: Pool
         edge_agent_id?: string;
         ip_address?: string;
         username: string;
-        password: string;
+        password: string | null;
         location_name?: string;
       }>;
     };
@@ -258,7 +259,7 @@ export async function registerCredentialsRoutes(app: FastifyInstance, pool: Pool
             cred.edge_agent_id || null,
             cred.ip_address || null,
             cred.username,
-            cred.password,
+            cred.password ?? "",
             cred.ip_address ? "host-specific" : "default",
           ]
         );

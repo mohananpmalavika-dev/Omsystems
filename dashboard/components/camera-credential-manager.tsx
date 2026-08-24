@@ -97,7 +97,7 @@ export function CameraCredentialManager({
 
             <div className="space-y-5 px-6 py-6">
               <div className="rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm leading-5 text-blue-900">
-                The password is encrypted for this gateway before it enters the command queue. Sentinel Grid never stores a readable copy in the cloud.
+                The password is optional for passwordless devices and is encrypted for this gateway before it enters the command queue. Sentinel Grid never stores a readable copy in the cloud.
               </div>
 
               <label className="block text-sm font-semibold text-slate-800">
@@ -114,7 +114,7 @@ export function CameraCredentialManager({
                 <label className="block text-sm font-semibold text-slate-800">
                   Password
                   <span className="relative mt-2 block">
-                    <input required maxLength={1024} type={showPassword ? "text" : "password"} autoComplete="new-password" value={password} onChange={(event) => setPassword(event.target.value)} className="w-full rounded-lg border border-slate-300 px-3 py-2.5 pr-10 font-normal outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100" />
+                    <input maxLength={1024} type={showPassword ? "text" : "password"} autoComplete="new-password" value={password} onChange={(event) => setPassword(event.target.value)} className="w-full rounded-lg border border-slate-300 px-3 py-2.5 pr-10 font-normal outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100" />
                     <button type="button" onClick={() => setShowPassword((value) => !value)} aria-label={showPassword ? "Hide password" : "Show password"} className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-slate-500 hover:bg-slate-100">{showPassword ? <EyeOff size={17} /> : <Eye size={17} />}</button>
                   </span>
                 </label>
@@ -130,7 +130,7 @@ export function CameraCredentialManager({
 
             <footer className="flex justify-end gap-3 border-t border-slate-200 bg-slate-50 px-6 py-4">
               <button type="button" onClick={close} className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-white">Close</button>
-              <button type="submit" disabled={saving || !username.trim() || !password || !cameraIp.trim()} className="inline-flex min-w-36 items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50">
+              <button type="submit" disabled={saving || !username.trim() || !cameraIp.trim()} className="inline-flex min-w-36 items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50">
                 {saving ? <Loader2 className="animate-spin" size={17} /> : <LockKeyhole size={17} />}
                 {saving ? "Encrypting…" : "Encrypt & queue"}
               </button>

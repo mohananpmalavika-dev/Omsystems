@@ -573,7 +573,7 @@ export const cameraInventoryApi = {
       method: 'POST',
       body: JSON.stringify({ qrData, branchId }),
     }),
-  probeDirect: (data: { ipAddress: string; rtspPort?: number; username?: string; password?: string }) =>
+  probeDirect: (data: { ipAddress: string; rtspPort?: number; username?: string; password?: string | null }) =>
     fetchApi<{
       online: boolean;
       ipAddress: string;
@@ -706,7 +706,7 @@ export const cameraInventoryApi = {
       `/v1/branches/${encodeURIComponent(branchId)}/cameras/discovered/${encodeURIComponent(discoveryId)}/approve`,
       { method: 'POST', body: JSON.stringify(data) }
     ),
-  activateDiscovery: (branchId: string, discoveryId: string, data: { username: string; password: string }) =>
+  activateDiscovery: (branchId: string, discoveryId: string, data: { username: string; password: string | null }) =>
     fetchApi<{ commandId: string; scanId?: string; status: string; message: string }>(
       `/v1/branches/${encodeURIComponent(branchId)}/cameras/discovered/${encodeURIComponent(discoveryId)}/activate`,
       { method: 'POST', body: JSON.stringify(data) }

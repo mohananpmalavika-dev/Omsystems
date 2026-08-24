@@ -1905,7 +1905,7 @@ try {
               />
               
               <div className="form-group"><label htmlFor="activationUsername">Username <span className="required">*</span></label><input id="activationUsername" value={activationUsername} onChange={(event) => setActivationUsername(event.target.value)} autoComplete="username" required disabled={saving} /></div>
-              <div className="form-group"><label htmlFor="activationPassword">Password <span className="required">*</span></label><input id="activationPassword" type="password" value={activationPassword} onChange={(event) => setActivationPassword(event.target.value)} autoComplete="current-password" required disabled={saving} /></div>
+              <div className="form-group"><label htmlFor="activationPassword">Password <span className="optional">(optional)</span></label><input id="activationPassword" type="password" value={activationPassword} onChange={(event) => setActivationPassword(event.target.value)} autoComplete="current-password" disabled={saving} /><small className="field-help">Leave blank for passwordless cameras or DVR accounts.</small></div>
               
               <div className="qr-credential-options">
                 <p className="qr-help-text">Or extract credentials from camera QR code:</p>
@@ -1925,7 +1925,7 @@ try {
               <p className="field-help">This login is saved only for this detected IP address. No broadcast discovery, subnet scan, or other camera probe will run.</p>
               {credentialVerificationStatus && <div className="form-info-banner" role="status" aria-live="polite">{credentialVerificationStatus}</div>}
               {credentialVerificationError && <div className="device-message error" role="alert"><AlertTriangle size={16} />{credentialVerificationError}</div>}
-              <div className="modal-actions"><button type="button" className="secondary-button" onClick={() => { setCredentialActivation(undefined); setActivationPassword(""); setCredentialVerificationStatus(undefined); setCredentialVerificationError(undefined); }} disabled={saving}>Cancel</button><button type="submit" className="primary-button" disabled={saving || !activationUsername.trim() || !activationPassword}>{saving ? "Verifying this device…" : "Save & verify this device"}</button></div>
+              <div className="modal-actions"><button type="button" className="secondary-button" onClick={() => { setCredentialActivation(undefined); setActivationPassword(""); setCredentialVerificationStatus(undefined); setCredentialVerificationError(undefined); }} disabled={saving}>Cancel</button><button type="submit" className="primary-button" disabled={saving || !activationUsername.trim()}>{saving ? "Verifying this device…" : "Save & verify this device"}</button></div>
             </form>
           </div>
         </div>

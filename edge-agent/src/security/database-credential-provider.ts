@@ -6,7 +6,7 @@ export interface CameraCredential {
 
 interface DiscoveryBootstrapClient {
   getDiscoveryBootstrap(agentId: string): Promise<{
-    credentials: Array<{ host?: string; username: string; password: string; updatedAt: string }>;
+    credentials: Array<{ host?: string; username: string; password: string | null; updatedAt: string }>;
     vpnScanNetworks: string[];
   }>;
 }
@@ -56,7 +56,7 @@ export class DatabaseCredentialProvider {
       if (!item.host) continue;
       const credential: CameraCredential = {
         username: item.username,
-        password: item.password,
+        password: item.password ?? "",
         updatedAt: item.updatedAt,
       };
       this.cache.set(`host:${item.host}`, credential);

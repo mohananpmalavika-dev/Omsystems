@@ -7,12 +7,33 @@ const headers = { "x-user-id": "user-global-admin" };
 const testTenantId = "00000000-0000-4000-8000-000000000001";
 
 function addTestBranch(store: MemoryStore) {
+  store.nodes.set("company-blr-001", {
+    id: "company-blr-001",
+    tenantId: testTenantId,
+    type: "company",
+    name: "Credential verification test company",
+    path: ["company-blr-001"],
+  } as any);
   store.nodes.set("branch-blr-001", {
     id: "branch-blr-001",
+    parentId: "company-blr-001",
     tenantId: testTenantId,
     type: "branch",
     name: "Credential verification test branch",
-    path: ["branch-blr-001"],
+    path: ["company-blr-001", "branch-blr-001"],
+  } as any);
+  store.users.set("user-global-admin", {
+    id: "user-global-admin",
+    displayName: "Credential verification administrator",
+    tenantId: testTenantId,
+    role: "super_admin",
+    status: "active",
+  } as any);
+  store.grants.push({
+    userId: "user-global-admin",
+    scopeNodeId: "company-blr-001",
+    actions: ["device:configure"],
+    effect: "allow",
   } as any);
 }
 
@@ -117,6 +138,36 @@ describe("targeted credential verification", () => {
     expect(results.statusCode).toBe(200);
     expect(results.json().data).toHaveLength(1);
     expect(results.json().data[0].ipAddress).toBe("192.168.29.171");
+
+    await app.close();
+  }, 20_000);
+
+  it("accepts a null password for passwordless cameras and stores it as empty", async () => {
+    const store = new MemoryStore() as MemoryStore & { pool: ReturnType<typeof credentialPool> };
+    store.pool = credentialPool();
+    addTestBranch(store);
+    const app = await buildApp({ logger: false, store });
+    const agent = await store.registerEdgeAgent("branch-blr-001", "Passwordless scanner", "0.1.7");
+    const { publicKey } = generateKeyPairSync("rsa", { modulusLength: 2048 });
+    (store as any).edgeCommandPublicKeys.set(
+      agent.id,
+      publicKey.export({ type: "spki", format: "pem" }).toString(),
+    );
+    await store.heartbeatEdgeAgent(agent.id, "0.1.7");
+    const selected = await addDiscovery(store, agent.id, "192.168.29.172");
+
+    const activated = await app.inject({
+      method: "POST",
+      url: `/v1/branches/branch-blr-001/cameras/discovered/${selected.id}/activate`,
+      headers,
+      payload: { username: "admin", password: null },
+    });
+
+    expect(activated.statusCode).toBe(202);
+    expect(store.pool.client.query.mock.calls.some(
+      ([sql, values]) => String(sql).includes("INSERT INTO camera_credentials") &&
+        Array.isArray(values) && values[4] === "",
+    )).toBe(true);
 
     await app.close();
   }, 20_000);
