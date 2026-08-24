@@ -39,6 +39,24 @@ describe("Windows scanner installer resilience", () => {
     expect(source).toContain("The previous encrypted scanner identity was restored");
   });
 
+  it("accepts an already-used installer when its restored identity is still valid", async () => {
+    const source = await readFile(
+      "edge-agent/installer/windows/install-edge-agent.ps1",
+      "utf8",
+    );
+    const restoreIdentity = source.indexOf("$restoredPreviousIdentity = $true");
+    const retryDiagnostic = source.indexOf("$restoredDiagnosticOutput = @(& $Executable --config $ConfigPath --diagnose 2>&1)");
+    const clearTerminalFailure = source.indexOf("$terminalDiagnosticFailure = $null", retryDiagnostic);
+    const startTask = source.indexOf("Start-ScheduledTask -TaskName $TaskName", retryDiagnostic);
+
+    expect(source).toContain("$activationWasInvalid -and $restoredPreviousIdentity");
+    expect(restoreIdentity).toBeGreaterThan(-1);
+    expect(retryDiagnostic).toBeGreaterThan(restoreIdentity);
+    expect(clearTerminalFailure).toBeGreaterThan(retryDiagnostic);
+    expect(startTask).toBeGreaterThan(clearTerminalFailure);
+    expect(source).toContain("continuing the repair without re-enrollment");
+  });
+
   it("verifies that a connected scanner remains running after installation", async () => {
     const source = await readFile(
       "edge-agent/installer/windows/install-edge-agent.ps1",

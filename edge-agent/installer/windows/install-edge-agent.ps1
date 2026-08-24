@@ -256,7 +256,8 @@ if (-not $SkipConnectivityCheck) {
     $connectivityHealthy = $false
     $diagnosticDetail = ($diagnosticOutput | ForEach-Object { $_.ToString() }) -join [Environment]::NewLine
     $terminalDiagnosticFailure = $null
-    if ($diagnosticDetail -match "activation_invalid_or_expired") {
+    $activationWasInvalid = $diagnosticDetail -match "activation_invalid_or_expired"
+    if ($activationWasInvalid) {
       $terminalDiagnosticFailure = "The one-time gateway activation is invalid, expired, or has already been used. Return to Sentinel Grid, create a new activation, and download a fresh installer."
     } elseif ($diagnosticDetail -match "device_already_enrolled") {
       $terminalDiagnosticFailure = "This computer is already enrolled with a different gateway identity. Use the Repair installer for that scanner, or remove its existing Sentinel Grid Edge Agent installation before enrolling it again."
@@ -269,6 +270,7 @@ if (-not $SkipConnectivityCheck) {
     # strand a previously working scanner without an identity. A successful
     # activation always writes both new files before --diagnose returns.
     $newIdentityFiles = @($identityFiles | Where-Object { Test-Path -LiteralPath $_ -PathType Leaf })
+    $restoredPreviousIdentity = $false
     if ($identityArchiveDirectory -and $newIdentityFiles.Count -lt $identityFiles.Count) {
       $failedIdentityDirectory = Join-Path $identityArchiveDirectory "failed-reactivation"
       New-Item -ItemType Directory -Path $failedIdentityDirectory -Force | Out-Null
@@ -281,10 +283,34 @@ if (-not $SkipConnectivityCheck) {
           Move-Item -LiteralPath $archivedIdentityFile -Destination $identityFile -Force
         }
       }
+      $restoredPreviousIdentity = $true
       Write-Warning "The new activation was not accepted. The previous encrypted scanner identity was restored. Download a fresh Repair package if the scanner remains offline."
     }
+    # Re-running the exact same self-installing package is safe and should be
+    # idempotent. Its one-time activation has already been consumed, but the
+    # identity created by the first run can still be valid. Verify the restored
+    # credential once before deciding that installation failed; this also makes
+    # sure a revoked identity never masks a genuinely invalid activation.
+    if ($activationWasInvalid -and $restoredPreviousIdentity) {
+      Write-Host "Checking the restored scanner identity..." -ForegroundColor Cyan
+      $previousErrorActionPreference = $ErrorActionPreference
+      try {
+        $ErrorActionPreference = "Continue"
+        $restoredDiagnosticOutput = @(& $Executable --config $ConfigPath --diagnose 2>&1)
+        $restoredDiagnosticExitCode = $LASTEXITCODE
+      } finally {
+        $ErrorActionPreference = $previousErrorActionPreference
+      }
+      if ($restoredDiagnosticExitCode -eq 0) {
+        $connectivityHealthy = $true
+        $terminalDiagnosticFailure = $null
+        Write-Host "The installer was already activated on this computer. The existing scanner identity is valid; continuing the repair without re-enrollment." -ForegroundColor Green
+      }
+    }
     if ($terminalDiagnosticFailure) { throw $terminalDiagnosticFailure }
-    Write-Warning "Sentinel Grid is temporarily unreachable. The scanner is installed and its background task will keep retrying automatically. Review $LogDirectory\edge-agent.log if it does not appear online after connectivity returns."
+    if (-not $connectivityHealthy) {
+      Write-Warning "Sentinel Grid is temporarily unreachable. The scanner is installed and its background task will keep retrying automatically. Review $LogDirectory\edge-agent.log if it does not appear online after connectivity returns."
+    }
   }
 }
 

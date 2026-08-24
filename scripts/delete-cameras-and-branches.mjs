@@ -3,7 +3,7 @@
 import pg from 'pg';
 const { Client } = pg;
 
-const DATABASE_URL = 'postgresql://aditivision_4gc4_user:vVZ8yzf7dRV7VIyOeQ6MmSQR9nHMifqa@dpg-da37mgbncjis73c09tpg-a.oregon-postgres.render.com/aditivision_4gc4';
+const DATABASE_URL = 'postgresql://kryptonvision_user:ry2YSQcPnOAziW1gAced7evUvspT4yFQ@dpg-da60sfijobas7386h0vg-a.virginia-postgres.render.com/kryptonvision';
 
 async function deleteCamerasAndBranches() {
   const client = new Client({
