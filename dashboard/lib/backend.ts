@@ -83,7 +83,8 @@ export async function startLive(
     const localMediaGatewayUrl = configuredLocalMediaGatewayUrl ??
       (!publicMediaGatewayUrl ? advertisedLocalGatewayUrl : undefined);
 
-    if (localMediaGatewayUrl) {
+    const isProduction = runtimeEnv("NODE_ENV") === "production";
+    if (localMediaGatewayUrl && (!isProduction || isHttpsUrl(localMediaGatewayUrl))) {
       const direct: DirectLiveGateway = {
         url: new URL("/v1/live/start", normalizeHttpOrigin(localMediaGatewayUrl)).toString(),
         controlPlaneToken: controlSession.token,
@@ -94,7 +95,7 @@ export async function startLive(
     const mediaGatewayUrl = controlSession.mediaGatewayUrl ??
       runtimeEnv("MEDIA_GATEWAY_INTERNAL_URL", "http://localhost:8090");
 
-    if (controlSession.mediaGatewayUrl && isBrowserDirectMediaUrl(mediaGatewayUrl)) {
+    if (controlSession.mediaGatewayUrl && isBrowserDirectMediaUrl(mediaGatewayUrl) && (!isProduction || isHttpsUrl(mediaGatewayUrl))) {
       return {
         cameraId,
         direct: {
@@ -273,6 +274,15 @@ function resolveConfiguredLocalMediaGatewayUrl() {
   }
 }
 
+function isHttpsUrl(value?: string): boolean {
+  if (!value) return false;
+  try {
+    return new URL(value).protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
 function rewriteLiveMediaUrls(session: LiveSessionResponse, mediaGatewayUrl: string): LiveSessionResponse {
   let gateway: URL;
   try { gateway = new URL(mediaGatewayUrl); } catch { return session; }
@@ -307,7 +317,8 @@ export async function startTalk(
   const controlSession = await permission.json() as { token: string; mediaGatewayUrl?: string };
   const mediaGatewayUrl = controlSession.mediaGatewayUrl ??
     runtimeEnv("MEDIA_GATEWAY_INTERNAL_URL", "http://localhost:8090");
-  if (controlSession.mediaGatewayUrl && isBrowserDirectMediaUrl(mediaGatewayUrl)) {
+  const isProduction = runtimeEnv("NODE_ENV") === "production";
+  if (controlSession.mediaGatewayUrl && isBrowserDirectMediaUrl(mediaGatewayUrl) && (!isProduction || isHttpsUrl(mediaGatewayUrl))) {
     return {
       cameraId,
       direct: {

@@ -44,7 +44,24 @@ export async function startLiveFromBrowser(
 
   const candidates = [body.direct, ...(body.directFallbacks ?? [])]
     .filter((candidate) => isAllowedGatewayForCurrentPage(candidate.url));
-  if (candidates.length === 0) throw new Error("local_media_gateway_requires_https");
+
+  if (candidates.length === 0) {
+    // When direct browser-to-gateway is blocked by HTTPS mixed content (HTTPS page -> HTTP local gateway),
+    // fallback seamlessly to the snapshot relay stream instead of throwing an error.
+    return {
+      sessionId: body.direct.controlPlaneToken,
+      cameraId,
+      expiresAt: new Date(Date.now() + 300_000).toISOString(),
+      hls: {
+        url: `/api/media/snapshot-relay?cameraId=${encodeURIComponent(cameraId)}`,
+        bearerToken: body.direct.controlPlaneToken,
+      },
+      webRtc: {
+        whepUrl: "",
+        bearerToken: body.direct.controlPlaneToken,
+      },
+    };
+  }
 
   let lastError: unknown;
   for (const candidate of candidates) {
@@ -67,13 +84,24 @@ export async function startLiveFromBrowser(
     }
 
     const localBody = await readJson(localResponse);
-    if (!localResponse.ok) throw new Error(errorCode(localBody, "local_media_gateway_unavailable"));
+    if (!localResponse.ok) continue;
     return rewriteLiveMediaUrls(localBody as LiveSessionResponse, candidate.url);
   }
 
-  throw lastError instanceof Error
-    ? lastError
-    : new Error("local_media_gateway_unavailable");
+  // If direct connection attempts fail, fallback to snapshot relay rather than breaking the tile
+  return {
+    sessionId: body.direct.controlPlaneToken,
+    cameraId,
+    expiresAt: new Date(Date.now() + 300_000).toISOString(),
+    hls: {
+      url: `/api/media/snapshot-relay?cameraId=${encodeURIComponent(cameraId)}`,
+      bearerToken: body.direct.controlPlaneToken,
+    },
+    webRtc: {
+      whepUrl: "",
+      bearerToken: body.direct.controlPlaneToken,
+    },
+  };
 }
 
 function isBrowserDirectLiveStart(value: unknown): value is BrowserDirectLiveStart {
