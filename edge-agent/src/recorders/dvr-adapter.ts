@@ -198,7 +198,7 @@ export function recorderAdapterVendor(manufacturer: string): RecorderAdapterVend
   const normalized = manufacturer.toLowerCase();
   if (/hikvision|hik vision/.test(normalized)) return "hikvision";
   if (/dahua/.test(normalized)) return "dahua";
-  if (/cp[\s-]*plus/.test(normalized)) return "cp-plus";
+  if (/cp[\s_-]*plus/.test(normalized)) return "cp-plus";
   if (/uniview|unv\b/.test(normalized)) return "uniview";
   if (/\btvt\b/.test(normalized)) return "tvt";
   if (/prama/.test(normalized)) return "prama";

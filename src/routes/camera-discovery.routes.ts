@@ -113,7 +113,14 @@ export async function registerCameraDiscoveryRoutes(
         continue;
       }
 
-      const rawVendor = (item.vendor || item.manufacturer || item.model || item.type || "").toLowerCase();
+      // Some older scanners report vendor="other" while the device identity
+      // still contains the real manufacturer (for example CPPLUS without a
+      // space). Include every available hint so the control plane can recover
+      // the vendor instead of persisting a generic classification.
+      const rawVendor = [item.vendor, item.manufacturer, item.model, item.type]
+        .filter(isPresent)
+        .join(" ")
+        .toLowerCase();
       const vendor: "cp-plus" | "dahua" | "hikvision" | "axis" | "hanwha" | "uniview" | "other" = 
         rawVendor.includes("cp") ? "cp-plus" :
         rawVendor.includes("dahua") ? "dahua" :

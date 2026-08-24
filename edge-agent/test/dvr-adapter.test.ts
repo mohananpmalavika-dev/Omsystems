@@ -81,6 +81,7 @@ describe("universal DVR channel adapter", () => {
   it("identifies recorder vendors, source types and common channel URI formats", () => {
     expect(recorderAdapterVendor("Dahua Technology")).toBe("dahua");
     expect(recorderAdapterVendor("CP-PLUS")).toBe("cp-plus");
+    expect(recorderAdapterVendor("CPPLUS")).toBe("cp-plus");
     expect(recorderChannelSource("Enterprise NVR")).toBe("nvr-channel");
     expect(recorderChannelNumber(
       { token: "unknown", name: "unknown" },

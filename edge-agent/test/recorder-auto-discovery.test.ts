@@ -24,6 +24,18 @@ describe("automatic RTSP recorder discovery", () => {
     expect(fetchImpl).toHaveBeenCalledWith("http://192.168.29.171/", expect.objectContaining({ method: "GET" }));
   });
 
+  it("recognizes a compact CPPLUS recorder banner while keeping IPC pages out", async () => {
+    const fetchImpl = vi.fn(async () => new Response(
+      "<html><head><title>CPPLUS</title></head><body>Embedded recorder login</body></html>",
+      { status: 200 },
+    )) as unknown as typeof fetch;
+
+    await expect(fingerprintHttpRecorder("192.168.29.172", 1_000, fetchImpl)).resolves.toMatchObject({
+      vendor: "cp-plus",
+      manufacturer: "CP PLUS",
+    });
+  });
+
   it("does not classify a CP PLUS IP-camera page as a recorder", async () => {
     const fetchImpl = vi.fn(async () => new Response(
       "<html><head><title>CPPLUS IPC - Web View</title></head></html>",

@@ -22,7 +22,7 @@ export function identifyVendorFamily(...hints: Array<string | undefined>) {
   const value = hints.filter(Boolean).join(" ").toLowerCase();
   if (/hikvision|hik vision|prama/.test(value)) return "hikvision" as const;
   if (/dahua/.test(value)) return "dahua" as const;
-  if (/cp[\s-]*plus|secureye/.test(value)) return "cp-plus" as const;
+  if (/cp[\s_-]*plus|secureye/.test(value)) return "cp-plus" as const;
   if (/uniview|\bunv\b/.test(value)) return "uniview" as const;
   if (/axis/.test(value)) return "axis" as const;
   if (/\btvt\b|tiandy|matrix|honeywell/.test(value)) return "tvt" as const;

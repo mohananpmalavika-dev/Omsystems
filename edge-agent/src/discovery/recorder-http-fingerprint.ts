@@ -86,7 +86,12 @@ export async function isRouterHost(
 }
 
 function looksLikeRecorder(value: string) {
-  return /\b(?:dvr|xvr|nvr|uvr|digital video recorder|network video recorder|network video storage)\b/i.test(value);
+  const hasCameraOnlyMarker = /\b(?:ipc|ip\s*camera|network\s*camera)\b/i.test(value)
+    && !/\b(?:dvr|xvr|nvr|uvr|digital video recorder|network video recorder|network video storage)\b/i.test(value);
+  if (hasCameraOnlyMarker) return false;
+
+  return /\b(?:dvr|xvr|nvr|uvr|digital video recorder|network video recorder|network video storage)\b/i.test(value)
+    || /cp[\s_-]*plus/i.test(value);
 }
 
 function manufacturerFor(vendor: VendorStreamFamily, evidence: string) {
@@ -95,8 +100,8 @@ function manufacturerFor(vendor: VendorStreamFamily, evidence: string) {
   if (vendor === "hikvision") return "Hikvision";
   if (vendor === "uniview") return "Uniview";
   if (vendor === "tvt") return "TVT";
-  const named = evidence.match(/\b(CP\s*PLUS|Dahua|Hikvision|Uniview|TVT|Secureye|Prama|Tiandy|Matrix|Honeywell)\b/i)?.[1];
-  return named?.replace(/cp\s*plus/i, "CP PLUS") ?? "Network DVR/NVR";
+  const named = evidence.match(/\b(CP\s*[-_]*\s*PLUS|Dahua|Hikvision|Uniview|TVT|Secureye|Prama|Tiandy|Matrix|Honeywell)\b/i)?.[1];
+  return named?.replace(/cp\s*[-_]*\s*plus/i, "CP PLUS") ?? "Network DVR/NVR";
 }
 
 function decodeHtml(value: string) {

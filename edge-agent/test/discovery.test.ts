@@ -90,6 +90,7 @@ describe("ONVIF edge utilities", () => {
   it("normalizes the supported pilot brands", () => {
     expect(normalizeVendor("HIKVISION")).toBe("hikvision");
     expect(normalizeVendor("CP Plus")).toBe("cp-plus");
+    expect(normalizeVendor("CPPLUS")).toBe("cp-plus");
   });
 
   it("uses real local subnet masks and safely expands camera CIDRs", () => {

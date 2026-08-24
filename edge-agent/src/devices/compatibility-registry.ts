@@ -39,7 +39,7 @@ export function findCapabilityProfile(vendor: SupportedVendor, _model: string, _
 export function normalizeVendor(manufacturer: string): SupportedVendor {
   const value = manufacturer.trim().toLowerCase();
   if (value.includes("hikvision")) return "hikvision";
-  if (value.includes("cp plus") || value.includes("cp-plus")) return "cp-plus";
+  if (/cp[\s_-]*plus/.test(value)) return "cp-plus";
   return "other";
 }
 
