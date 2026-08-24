@@ -41,7 +41,11 @@ const activateDiscoveryBody = z.object({
 });
 
 const targetedVerificationMinimumAgentVersion = "0.1.7";
-const encryptedRtspVaultMinimumAgentVersion = "0.1.11";
+// v0.1.15 invalidates the scanner's cached database credentials before it
+// performs the targeted verification scan. Older agents receive a follow-up
+// scan job so an existing installation can still verify the newly submitted
+// login after the encrypted command is processed.
+const encryptedRtspVaultMinimumAgentVersion = "0.1.15";
 const recorderChannelVerificationMinimumAgentVersion = "0.1.12";
 
 /**
@@ -399,9 +403,9 @@ export async function registerCameraDiscoveryRoutes(
       },
       requestedBy: request.currentUser.id,
     });
-    // v0.1.10's RTSP scanner needs its database credential cache invalidated
-    // after the encrypted command is received. A device-scoped follow-up job
-    // provides that bridge and is claimed immediately after the command.
+    // Older scanners need a device-scoped follow-up job because they can
+    // finish the encrypted command before refreshing their database
+    // credential cache. The job is claimed immediately after the command.
     const compatibilityScan = supportsAgentVersion(agent.version, encryptedRtspVaultMinimumAgentVersion)
       ? undefined
       : await store.createEdgeScanJob(branchId, discovered.edgeAgentId, {

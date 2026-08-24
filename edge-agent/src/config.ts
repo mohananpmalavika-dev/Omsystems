@@ -6,7 +6,7 @@ const schema = z.object({
   EDGE_AGENT_ID: z.preprocess((value) => value === "" ? undefined : value, z.string().min(1).optional()),
   EDGE_ACTIVATION_CODE: z.preprocess((value) => value === "" ? undefined : value, z.string().startsWith("sgact_").min(40).optional()),
   EDGE_AGENT_NAME: z.string().min(2),
-  EDGE_AGENT_VERSION: z.string().default("0.1.14"),
+  EDGE_AGENT_VERSION: z.string().default("0.1.15"),
   EDGE_HEARTBEAT_INTERVAL_MS: z.coerce.number().int().min(5_000).max(60_000).default(15_000),
   DEV_USER_ID: z.preprocess((value) => value === "" ? undefined : value, z.string().min(1).optional()),
   CAMERA_USERNAME: z.string().default(""),

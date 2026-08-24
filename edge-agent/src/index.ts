@@ -1157,6 +1157,11 @@ async function executeEdgeCommand(type: string, payload: Record<string, unknown>
         password: decrypted.password,
         host: decrypted.scope.host,
       });
+      // The targeted scan must use the credentials from this command. The
+      // database provider may still contain the previous host credential from
+      // an earlier automatic discovery cycle, so invalidate it before the
+      // immediate verification scan falls back to the local vault.
+      dbCredentialProvider.invalidate();
       const discovered = await scanBranch({ target: { ipAddress: decrypted.scope.host } });
       return { result: { ...saved, rediscovered: discovered } };
     }
