@@ -2,15 +2,21 @@ import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { startLive } from "@/lib/backend";
+import { getLiveSessionToken } from "@/lib/live-auth";
 
 export const dynamic = "force-dynamic";
 
 export async function POST(request: NextRequest) {
   try {
-    const sessionToken =
-      request.cookies.get("sentinel_access")?.value ||
-      request.headers.get("x-sentinel-session") ||
-      request.headers.get("authorization")?.replace(/^Bearer\s+/i, "");
+    // Render's dashboard Basic Auth protects the Next.js app, but it is not
+    // an employee session for the control plane. Only an explicit bearer
+    // token should be forwarded; otherwise startLive() uses the configured
+    // dashboard user.
+    const sessionToken = getLiveSessionToken({
+      cookieToken: request.cookies.get("sentinel_access")?.value,
+      sentinelSession: request.headers.get("x-sentinel-session"),
+      authorization: request.headers.get("authorization"),
+    });
 
     const body = z.object({
       cameraId: z.string().min(1),

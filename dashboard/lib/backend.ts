@@ -205,18 +205,12 @@ function runtimeEnv(name: string | string[], fallback: string) {
 }
 
 function resolveConfiguredPublicMediaGatewayUrl(sourceGatewayUrl?: string) {
-  if (sourceGatewayUrl) {
-    try {
-      if (new URL(sourceGatewayUrl).protocol === "https:") return sourceGatewayUrl;
-    } catch {
-      // Continue with the configured fallback URLs.
-    }
-  }
   const mappedUrl = resolveMappedPublicMediaGatewayUrl(sourceGatewayUrl);
   if (mappedUrl) return mappedUrl;
 
   const candidates = [
     runtimeEnv("MEDIA_GATEWAY_PUBLIC_URL", ""),
+    sourceGatewayUrl ?? "",
     runtimeEnv("MEDIA_GATEWAY_INTERNAL_URL", ""),
   ];
   return candidates.find((candidate) => {
