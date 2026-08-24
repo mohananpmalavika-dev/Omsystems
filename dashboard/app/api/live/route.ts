@@ -2,7 +2,7 @@ import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { startLive } from "@/lib/backend";
-import { getLiveSessionToken } from "@/lib/live-auth";
+import { getLiveSessionToken, isDashboardBasicAuth } from "@/lib/live-auth";
 
 export const dynamic = "force-dynamic";
 
@@ -12,11 +12,14 @@ export async function POST(request: NextRequest) {
     // an employee session for the control plane. Only an explicit bearer
     // token should be forwarded; otherwise startLive() uses the configured
     // dashboard user.
-    const sessionToken = getLiveSessionToken({
-      cookieToken: request.cookies.get("sentinel_access")?.value,
-      sentinelSession: request.headers.get("x-sentinel-session"),
-      authorization: request.headers.get("authorization"),
-    });
+    const authorization = request.headers.get("authorization");
+    const sessionToken = isDashboardBasicAuth(authorization)
+      ? undefined
+      : getLiveSessionToken({
+          cookieToken: request.cookies.get("sentinel_access")?.value,
+          sentinelSession: request.headers.get("x-sentinel-session"),
+          authorization,
+        });
 
     const body = z.object({
       cameraId: z.string().min(1),
@@ -49,10 +52,24 @@ export async function POST(request: NextRequest) {
 
 function publicLiveError(error: unknown) {
   const code = error instanceof Error ? error.message : "";
-  return new Set([
+  const knownCodes = new Set([
     "invalid_live_session",
     "media_gateway_failure",
     "media_gateway_unavailable",
     "stream_secret_unavailable",
-  ]).has(code) ? code : "live_session_unavailable";
+    "forbidden",
+    "approval_required",
+    "camera_not_found",
+    "resource_not_found",
+    "control_plane_unavailable",
+    "edge_agent_not_found",
+    "invalid_bridge_identity",
+    "internal_error",
+  ]);
+
+  if (knownCodes.has(code)) return code;
+  const status = code.match(/^Control plane returned (\d{3})$/)?.[1];
+  if (status === "401" || status === "403") return "forbidden";
+  if (status && status.startsWith("5")) return "control_plane_unavailable";
+  return "live_session_unavailable";
 }

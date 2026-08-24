@@ -1,3 +1,7 @@
+export function isDashboardBasicAuth(authorization?: string | null) {
+  return authorization?.toLowerCase().startsWith("basic ") === true;
+}
+
 export function getLiveSessionToken(input: {
   cookieToken?: string;
   sentinelSession?: string | null;
