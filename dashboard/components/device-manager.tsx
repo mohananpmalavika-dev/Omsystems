@@ -25,6 +25,7 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { cameraInventoryApi, deviceInventoryApi } from "@/lib/api-client";
+import { expandDirectProbeTargets } from "@/lib/direct-ip-probe";
 import { discoveryDeviceTypeLabel, discoveryModelLabel } from "@/lib/discovery-display";
 import { BranchConnectivityPanel } from "@/components/branch-connectivity-panel";
 import { ProvisioningRun } from "@/components/provisioning-run";
@@ -153,6 +154,26 @@ type GatewayActivation = {
   };
 };
 
+type DirectProbeResult = {
+  online: boolean;
+  ipAddress: string;
+  rtspPort?: number;
+  server?: string;
+  vendor?: string;
+  manufacturer?: string;
+  name?: string;
+  model?: string;
+  onvifPort?: number;
+  authenticated?: boolean;
+  authRequired?: boolean;
+  authType?: string;
+  error?: string;
+  streamUrl?: string;
+  substreamUrl?: string;
+  profiles?: any[];
+  capabilities?: { ptz: boolean; audio: boolean; motion: boolean };
+};
+
 const emptyInventoryForm: DeviceInventoryForm = {
   deviceId: "",
   tenant: "",
@@ -210,12 +231,15 @@ export function DeviceManager() {
   const [showDirectProbeModal, setShowDirectProbeModal] = useState(false);
   const [copiedCommand, setCopiedCommand] = useState<string | null>(null);
   const [activePlatformTab, setActivePlatformTab] = useState<"powershell" | "bash" | "download">("download");
+  const [probeTargetMode, setProbeTargetMode] = useState<"single" | "range">("single");
+  const [probeCredentialMode, setProbeCredentialMode] = useState<"same" | "different">("same");
   const [probeIp, setProbeIp] = useState("");
   const [probePort, setProbePort] = useState("");
   const [probeUsername, setProbeUsername] = useState("");
   const [probePassword, setProbePassword] = useState("");
   const [probing, setProbing] = useState(false);
-  const [probeResult, setProbeResult] = useState<any>(null);
+  const [probeResult, setProbeResult] = useState<DirectProbeResult | null>(null);
+  const [probeResults, setProbeResults] = useState<DirectProbeResult[]>([]);
   const scanAbortedRef = useRef(false);
 
   function stopScanning() {
@@ -225,29 +249,141 @@ export function DeviceManager() {
     setNotice("Camera scanning was stopped.");
   }
 
+  async function publishDirectProbeDiscoveries(results: DirectProbeResult[]) {
+    if (!selectedBranch) throw new Error("Select a branch before sending devices to discovery.");
+    const gateway = onlineGateway ?? gateways[0];
+    if (!gateway) {
+      throw new Error("A Branch Gateway or local scanner is required to place devices in Device discovery.");
+    }
+
+    const devices = results.filter((result) => result.online).map((result) => ({
+      edgeAgentId: gateway.id,
+      discoveryMethod: "direct-ip-range-probe",
+      vendor: result.vendor || "other",
+      manufacturer: result.vendor || "Unknown",
+      model: result.model || `Camera ${result.ipAddress}`,
+      ipAddress: result.ipAddress,
+      onvifPort: 80,
+      rtspPort: result.rtspPort || Number(probePort) || 554,
+      sourceType: "ip-camera",
+      credentialsRequired: result.authenticated !== true,
+      streamVerified: result.authenticated === true,
+      rtspValidated: result.authenticated === true,
+      compatibilityStatus: "unknown",
+      statusReason: result.authenticated === true ? "direct_probe_verified" : "direct_probe_credentials_required",
+      capabilities: {
+        ptz: Boolean(result.capabilities?.ptz),
+        audio: Boolean(result.capabilities?.audio),
+        events: Boolean(result.capabilities?.motion),
+      },
+      profiles: [],
+    }));
+
+    if (devices.length === 0) return 0;
+    await cameraInventoryApi.submitDiscovery(selectedBranch, { edgeAgentId: gateway.id, devices });
+    return devices.length;
+  }
+
+  async function enrollDirectProbeResults(results: DirectProbeResult[]) {
+    if (!selectedBranch) throw new Error("Select a branch before enrolling cameras.");
+    let enrolled = 0;
+    for (const result of results) {
+      if (!result.online || result.authenticated === false) continue;
+      try {
+        await cameraInventoryApi.approveCamera(selectedBranch, {
+          discoveryId: "",
+          name: result.model || `Camera ${result.ipAddress}`,
+          channel: 1,
+          protocol: "rtsp",
+          connectionTransport: "vpn",
+          sourceType: "ip-camera",
+          manufacturer: result.vendor,
+          model: result.model,
+          ipAddress: result.ipAddress,
+          rtspPort: result.rtspPort || Number(probePort) || 554,
+          profiles: [],
+          capabilities: result.capabilities ?? {},
+        });
+        enrolled += 1;
+      } catch {
+        // Keep probing the rest of the range. The failed address is reported below.
+      }
+    }
+    return enrolled;
+  }
+
   async function runDirectProbe() {
-    if (!probeIp.trim() || !probeUsername.trim()) {
-      setError("Camera IP address and username are required for a real probe.");
+    setError(undefined);
+    setNotice(undefined);
+    setProbeResult(null);
+    setProbeResults([]);
+    let targets: string[];
+    try {
+      targets = expandDirectProbeTargets(probeIp, probeTargetMode);
+    } catch (err: any) {
+      setError(err.message || "Enter a valid IP address or range.");
       return;
     }
+
+    const sharedCredentials = probeTargetMode === "single" || probeCredentialMode === "same";
+    if (sharedCredentials && !probeUsername.trim()) {
+      setError("Enter the username used by the camera.");
+      return;
+    }
+
     setProbing(true);
-    setError(undefined);
     try {
-      const res = await cameraInventoryApi.probeDirect({
-        ipAddress: probeIp.trim(),
-        rtspPort: Number(probePort) || 554,
-        username: probeUsername.trim(),
-        password: probePassword,
-      });
-      setProbeResult(res);
-      if (res.online) {
-        setNotice(`Camera at ${probeIp} responded (${res.server || "RTSP"}).`);
-      } else {
-        setError(`Camera at ${probeIp} is unreachable: ${res.error || "Connection error"}`);
+      const port = Number(probePort) || 554;
+      const username = sharedCredentials ? probeUsername.trim() : undefined;
+      const password = sharedCredentials ? probePassword : "";
+      const response = targets.length === 1 && probeTargetMode === "single"
+        ? { results: [await cameraInventoryApi.probeDirect({ ipAddress: targets[0]!, rtspPort: port, username, password })] }
+        : await cameraInventoryApi.probeDirectRange({ ipAddresses: targets, rtspPort: port, username, password });
+      const results = response.results as DirectProbeResult[];
+      setProbeResults(results);
+
+      if (probeTargetMode === "single") {
+        const result = results[0] ?? { online: false, ipAddress: targets[0]!, error: "No probe result returned" };
+        setProbeResult(result);
+        if (result.online) {
+          setNotice(`Camera at ${result.ipAddress} responded (${result.server || "RTSP"}).`);
+        } else {
+          setError(`Camera at ${result.ipAddress} is unreachable: ${result.error || "Connection error"}`);
+        }
+        return;
       }
+
+      const reachable = results.filter((result) => result.online);
+      const verified = reachable.filter((result) => result.authenticated === true);
+      const needsIndividualCredentials = reachable.filter((result) => result.authenticated !== true);
+      let enrolled = 0;
+      let discoveryCount = 0;
+
+      if (probeCredentialMode === "same") {
+        setSaving(true);
+        enrolled = await enrollDirectProbeResults(verified);
+        setSaving(false);
+      }
+
+      const discoveryTargets = probeCredentialMode === "different" ? reachable : needsIndividualCredentials;
+      if (discoveryTargets.length > 0) {
+        discoveryCount = await publishDirectProbeDiscoveries(discoveryTargets);
+        await refreshBranch(selectedBranch);
+        setShowDirectProbeModal(false);
+        setShowDiscoveredList(true);
+      }
+
+      const offline = results.length - reachable.length;
+      setNotice(
+        `Range probe finished: ${reachable.length} reachable, ${enrolled} added to the camera list` +
+        `${discoveryCount ? `, ${discoveryCount} sent to Device discovery` : ""}` +
+        `${offline ? `, ${offline} unreachable` : ""}.`,
+      );
+      if (enrolled > 0) await refreshBranch(selectedBranch);
     } catch (err: any) {
-      setError(err.message || "Failed to probe camera");
+      setError(err.message || "Failed to probe the IP range.");
     } finally {
+      setSaving(false);
       setProbing(false);
     }
   }
@@ -2092,19 +2228,38 @@ try {
             </div>
             <div className="modal-body space-y-4">
               <p className="text-xs text-slate-500">
-                Probe a camera on the branch network using its observed address and credentials.
+                Probe one camera or a bounded IPv4 range on the branch network. Shared credentials add verified cameras to the active camera list; per-device credentials go to Device discovery.
               </p>
               
               <div className="space-y-3">
+                <div className="form-row">
+                  <div className="form-group">
+                    <label htmlFor="probeTargetMode">Probe target</label>
+                    <select id="probeTargetMode" value={probeTargetMode} onChange={(e) => { setProbeTargetMode(e.target.value as "single" | "range"); setProbeResult(null); setProbeResults([]); }}>
+                      <option value="single">Single IP address</option>
+                      <option value="range">IP range or CIDR</option>
+                    </select>
+                  </div>
+                  {probeTargetMode === "range" ? (
+                    <div className="form-group">
+                      <label htmlFor="probeCredentialMode">Credential handling</label>
+                      <select id="probeCredentialMode" value={probeCredentialMode} onChange={(e) => setProbeCredentialMode(e.target.value as "same" | "different")}>
+                        <option value="same">Same login for every camera</option>
+                        <option value="different">Different logins — use Device discovery</option>
+                      </select>
+                    </div>
+                  ) : null}
+                </div>
                 <div className="form-group">
-                  <label htmlFor="probeIp">Camera Local IP Address <span className="required">*</span></label>
+                  <label htmlFor="probeIp">{probeTargetMode === "range" ? "Camera IP range" : "Camera Local IP Address"} <span className="required">*</span></label>
                   <input
                     id="probeIp"
                     value={probeIp}
                     onChange={(e) => setProbeIp(e.target.value)}
-                    placeholder="Camera IP address"
+                    placeholder={probeTargetMode === "range" ? "192.168.1.20-192.168.1.40 or 192.168.1.0/24" : "Camera IP address"}
                     required
                   />
+                  {probeTargetMode === "range" ? <small className="field-help">Maximum 256 addresses per probe.</small> : null}
                 </div>
 
                 <div className="form-row">
@@ -2118,13 +2273,14 @@ try {
                     />
                   </div>
                   <div className="form-group">
-                    <label htmlFor="probeUsername">Camera username <span className="required">*</span></label>
+                    <label htmlFor="probeUsername">Camera username {probeCredentialMode === "same" || probeTargetMode === "single" ? <span className="required">*</span> : null}</label>
                     <input
                       id="probeUsername"
                       value={probeUsername}
                       onChange={(e) => setProbeUsername(e.target.value)}
-                      placeholder="Camera username"
-                      required
+                      placeholder={probeCredentialMode === "different" && probeTargetMode === "range" ? "Entered per device in discovery" : "Camera username"}
+                      disabled={probeCredentialMode === "different" && probeTargetMode === "range"}
+                      required={probeCredentialMode === "same" || probeTargetMode === "single"}
                     />
                   </div>
                   <div className="form-group">
@@ -2135,21 +2291,41 @@ try {
                       value={probePassword}
                       onChange={(e) => setProbePassword(e.target.value)}
                       placeholder="Enter password (or TrueCloud login password)"
+                      disabled={probeCredentialMode === "different" && probeTargetMode === "range"}
                     />
                   </div>
                 </div>
+                {probeTargetMode === "range" && probeCredentialMode === "different" ? <p className="field-help">The range is checked without a shared login. Reachable cameras are added to Device discovery so each address can be verified with its own credentials.</p> : null}
 
                 <div className="modal-actions">
                   <button
                     type="button"
                     className="primary-button"
                     onClick={runDirectProbe}
-                    disabled={probing || !probeIp.trim() || !probeUsername.trim()}
+                    disabled={probing || !probeIp.trim() || ((probeCredentialMode === "same" || probeTargetMode === "single") && !probeUsername.trim())}
                   >
-                    <Search size={14} /> {probing ? "Probing camera network..." : "Probe Camera"}
+                    <Search size={14} /> {probing ? "Probing camera network..." : probeTargetMode === "range" ? "Probe IP range" : "Probe Camera"}
                   </button>
                 </div>
               </div>
+
+              {probeTargetMode === "range" && probeResults.length > 0 && (
+                <div className="p-4 rounded-xl border border-blue-500/30 bg-blue-500/10 space-y-2 mt-4 text-xs">
+                  <div className="flex items-center justify-between">
+                    <strong>Range results</strong>
+                    <span>{probeResults.filter((result) => result.online).length} reachable / {probeResults.length} checked</span>
+                  </div>
+                  <div className="space-y-1 max-h-64 overflow-y-auto">
+                    {probeResults.map((result) => (
+                      <div className="flex items-center justify-between gap-3 border-b border-blue-500/10 py-1 last:border-0" key={result.ipAddress}>
+                        <span className="font-mono">{result.ipAddress}</span>
+                        <span>{result.online ? result.authenticated === true ? "✅ Login verified" : "⚠️ Login required" : `🔴 ${result.error || "Unreachable"}`}</span>
+                      </div>
+                    ))}
+                  </div>
+                  {probeCredentialMode === "different" ? <p className="field-help">Reachable addresses have been added to Device discovery for individual credential verification.</p> : <p className="field-help">Cameras verified with the shared login are being added to the active camera list. Any camera that rejected it is shown in Device discovery.</p>}
+                </div>
+              )}
 
               {probeResult && (
                 <div className="p-4 rounded-xl border border-blue-500/30 bg-blue-500/10 space-y-2 mt-4 text-xs">

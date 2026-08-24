@@ -57,14 +57,21 @@ export function expandDirectProbeTargets(
     const hostBits = 32 - prefix;
     const size = 2 ** hostBits;
     const mask = prefix === 0 ? 0 : (MAX_IPV4 << hostBits) >>> 0;
-    return expandInclusiveRange(base & mask, (base & mask) + size - 1, maxTargets);
+    const networkStart = (base & mask) >>> 0;
+    return expandInclusiveRange(networkStart, networkStart + size - 1, maxTargets);
   }
 
   if (value.includes("-")) {
     const parts = value.split("-").map((part) => part.trim());
     if (parts.length !== 2) throw new Error("Enter an IP range like 192.168.1.20-192.168.1.40.");
     const start = ipv4ToNumber(parts[0] ?? "");
-    const end = ipv4ToNumber(parts[1] ?? "");
+    const end = ipv4ToNumber(parts[1] ?? "") ?? (() => {
+      const startParts = (parts[0] ?? "").split(".");
+      const shortEnd = parts[1] ?? "";
+      return startParts.length === 4 && /^\d+$/.test(shortEnd)
+        ? ipv4ToNumber(`${startParts.slice(0, 3).join(".")}.${shortEnd}`)
+        : undefined;
+    })();
     if (start === undefined || end === undefined) {
       throw new Error("Enter valid IPv4 addresses at both ends of the range.");
     }
@@ -74,4 +81,3 @@ export function expandDirectProbeTargets(
   if (ipv4ToNumber(value) === undefined) throw new Error("Enter a valid IPv4 address or range.");
   return [value];
 }
-

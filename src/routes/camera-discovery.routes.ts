@@ -518,6 +518,23 @@ export async function registerCameraDiscoveryRoutes(
     return { success: true, message: "Display name updated" };
   });
 
+  app.post("/v1/cameras/probe-direct/range", async (request, reply) => {
+    const body = z.object({
+      ipAddresses: z.array(z.string().min(1)).min(1).max(256),
+      rtspPort: z.number().int().positive().max(65_535).default(554),
+      username: z.string().max(256).optional().default("admin"),
+      password: z.string().max(1_024).nullable().transform((value) => value ?? "").default(""),
+    }).parse(request.body);
+
+    const results = await probeNetworkCameras(body.ipAddresses, body.rtspPort, body.username, body.password);
+    return {
+      results,
+      scanned: results.length,
+      online: results.filter((result) => result.online).length,
+      authenticated: results.filter((result) => result.authenticated === true).length,
+    };
+  });
+
   app.post("/v1/cameras/probe-direct", async (request, reply) => {
     const body = z.object({
       ipAddress: z.string().min(1),
@@ -552,8 +569,24 @@ export async function registerCameraDiscoveryRoutes(
 import net from "node:net";
 import crypto from "node:crypto";
 
-async function probeNetworkCamera(ip: string, port = 554, user = "admin", pass = "") {
-  return new Promise((resolve) => {
+type DirectProbeResult = {
+  online: boolean;
+  ipAddress: string;
+  rtspPort?: number;
+  server?: string;
+  vendor?: string;
+  model?: string;
+  authenticated?: boolean;
+  authRequired?: boolean;
+  authType?: string;
+  error?: string;
+  streamUrl?: string;
+  substreamUrl?: string;
+  capabilities?: { ptz: boolean; audio: boolean; motion: boolean };
+};
+
+async function probeNetworkCamera(ip: string, port = 554, user = "admin", pass = ""): Promise<DirectProbeResult> {
+  return new Promise<DirectProbeResult>((resolve) => {
     const socket = new net.Socket();
     socket.setTimeout(3500);
     const uri = `rtsp://${ip}:${port}/stream1`;
@@ -660,6 +693,22 @@ async function probeNetworkCamera(ip: string, port = 554, user = "admin", pass =
       resolve({ online: false, ipAddress: ip, error: "Connection timed out" });
     });
   });
+}
+
+async function probeNetworkCameras(ipAddresses: string[], port: number, user: string, pass: string) {
+  const results: DirectProbeResult[] = [];
+  let nextIndex = 0;
+  const worker = async () => {
+    while (nextIndex < ipAddresses.length) {
+      const index = nextIndex++;
+      const ipAddress = ipAddresses[index];
+      if (!ipAddress) continue;
+      results[index] = await probeNetworkCamera(ipAddress, port, user, pass);
+    }
+  };
+
+  await Promise.all(Array.from({ length: Math.min(16, ipAddresses.length) }, () => worker()));
+  return results.filter(Boolean);
 }
 
 function supportsTargetedVerification(version: string) {
