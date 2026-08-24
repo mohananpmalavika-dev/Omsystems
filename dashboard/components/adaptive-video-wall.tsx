@@ -25,15 +25,36 @@ export function AdaptiveVideoWall() {
         cache: "no-store",
         signal,
       });
-      const body = await response.json().catch(() => ({})) as { data?: unknown; error?: unknown; message?: unknown };
+      
       if (!response.ok) {
-        throw new Error(typeof body.message === "string" ? body.message : typeof body.error === "string" ? body.error : `Camera inventory request failed (${response.status})`);
+        const body = await response.json().catch(() => ({})) as { data?: unknown; error?: unknown; message?: unknown };
+        const errorMsg = typeof body.message === "string" ? body.message : typeof body.error === "string" ? body.error : "Camera inventory request failed";
+        
+        // Provide specific error messages based on status code
+        if (response.status === 401 || response.status === 403) {
+          throw new Error("Authentication required. Please log in to view cameras.");
+        } else if (response.status === 502 || response.status === 503) {
+          throw new Error("Control plane service is unavailable. Please check your backend configuration.");
+        } else if (response.status === 404) {
+          throw new Error("Camera API endpoint not found. Please verify your installation.");
+        } else {
+          throw new Error(`${errorMsg} (HTTP ${response.status})`);
+        }
       }
-      setCameras(Array.isArray(body.data) ? body.data as Camera[] : []);
+      
+      const body = await response.json().catch(() => ({})) as { data?: unknown; error?: unknown; message?: unknown };
+      const camerasData = Array.isArray(body.data) ? body.data as Camera[] : Array.isArray(body) ? body as Camera[] : [];
+      setCameras(camerasData);
+      
+      if (camerasData.length === 0) {
+        console.warn("No cameras returned from API");
+      }
     } catch (reason) {
       if (reason instanceof DOMException && reason.name === "AbortError") return;
       setCameras([]);
-      setError(reason instanceof Error ? reason.message : "Camera inventory is unavailable");
+      const errorMessage = reason instanceof Error ? reason.message : "Camera inventory is unavailable";
+      setError(errorMessage);
+      console.error("Failed to load cameras:", errorMessage, reason);
     } finally {
       setLoading(false);
     }
