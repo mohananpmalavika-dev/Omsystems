@@ -150,10 +150,6 @@ export async function startLive(
     throw error;
   }
 }
-  } catch (error) {
-    throw error;
-  }
-}
 
 export async function getRecording(
   cameraId: string,
