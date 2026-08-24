@@ -32,6 +32,79 @@ export interface EdgeMediaRuntimeInput {
   secrets: LocalStreamSecretStore;
 }
 
+type QuickTunnelChild = Pick<ChildProcessWithoutNullStreams, "kill" | "once">;
+
+export interface QuickTunnelSupervisorOptions {
+  start: () => Promise<{ process: QuickTunnelChild; publicUrl: string }>;
+  onPublicUrl: (publicUrl: string | undefined) => void;
+  retryDelayMs?: number;
+}
+
+/**
+ * Quick-tunnel hostnames are temporary and the connector can be interrupted by
+ * an ISP change or a Cloudflare edge reconnect. Keep the tunnel supervised so
+ * the next heartbeat always advertises the newest hostname instead of leaving
+ * a dead URL in the control plane until the whole agent is restarted.
+ */
+export class QuickTunnelSupervisor {
+  private child: QuickTunnelChild | undefined;
+  private retryTimer: NodeJS.Timeout | undefined;
+  private stopped = false;
+
+  constructor(private readonly options: QuickTunnelSupervisorOptions) {}
+
+  async start() {
+    return await this.launch();
+  }
+
+  stop() {
+    this.stopped = true;
+    if (this.retryTimer) clearTimeout(this.retryTimer);
+    this.retryTimer = undefined;
+    this.child?.kill();
+    this.child = undefined;
+  }
+
+  private async launch(): Promise<string | undefined> {
+    if (this.stopped) return undefined;
+    try {
+      const started = await this.options.start();
+      if (this.stopped) {
+        started.process.kill();
+        return undefined;
+      }
+      this.child = started.process;
+      this.options.onPublicUrl(started.publicUrl);
+      started.process.once("exit", () => {
+        if (this.child !== started.process) return;
+        this.child = undefined;
+        if (this.stopped) return;
+        this.options.onPublicUrl(undefined);
+        this.scheduleRestart();
+      });
+      return started.publicUrl;
+    } catch (error) {
+      if (!this.stopped) {
+        this.options.onPublicUrl(undefined);
+        this.scheduleRestart();
+      }
+      logger.warn("Temporary media tunnel startup failed; retry scheduled", {
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return undefined;
+    }
+  }
+
+  private scheduleRestart() {
+    if (this.stopped || this.retryTimer) return;
+    this.retryTimer = setTimeout(() => {
+      this.retryTimer = undefined;
+      void this.launch();
+    }, this.options.retryDelayMs ?? 5_000);
+    this.retryTimer.unref();
+  }
+}
+
 interface LiveGatewayOptions {
   consumer: LiveSessionConsumer;
   router: MediaRouter;
@@ -264,40 +337,57 @@ export async function startEdgeMediaRuntime(input: EdgeMediaRuntimeInput): Promi
   await liveGateway.listen({ host: config.EDGE_LIVE_GATEWAY_HOST, port: config.EDGE_LIVE_GATEWAY_PORT });
 
   let tunnel: ChildProcessWithoutNullStreams | undefined;
+  let quickTunnel: QuickTunnelSupervisor | undefined;
   try {
     if (tunnelMode === "quick") {
       if (config.MEDIA_TUNNEL_MODE === "named") {
         logger.warn("Managed media tunnel is not provisioned; using a protected temporary tunnel");
       }
-      const started = await startQuickTunnel(config.CLOUDFLARED_PATH,
-        mediaTunnelOrigin(config.EDGE_LIVE_GATEWAY_HOST, config.EDGE_LIVE_GATEWAY_PORT), runtimeDirectory);
-      tunnel = started.process;
-      resolvedPublicUrl = started.publicUrl;
-      logger.warn("Quick media tunnel is active; use a named tunnel for production", { publicUrl: resolvedPublicUrl });
+      quickTunnel = new QuickTunnelSupervisor({
+        start: () => startQuickTunnel(config.CLOUDFLARED_PATH,
+          mediaTunnelOrigin(config.EDGE_LIVE_GATEWAY_HOST, config.EDGE_LIVE_GATEWAY_PORT), runtimeDirectory),
+        onPublicUrl: (publicUrl) => {
+          if (!publicUrl) {
+            resolvedPublicUrl = resolvePrivateMediaGatewayUrl("auto", config.EDGE_LIVE_GATEWAY_PORT);
+            return;
+          }
+          resolvedPublicUrl = publicUrl;
+          logger.warn("Quick media tunnel is active; use a named tunnel for production", { publicUrl });
+          // A new trycloudflare hostname commonly needs more than 30 seconds to
+          // propagate. This check is diagnostic only: killing a registered
+          // connector on a short DNS timeout creates a permanent LAN-only loop.
+          void waitForPublicGateway(new URL("/health", publicUrl), 120_000)
+            .then(() => logger.info("Edge live media is publicly reachable", { publicUrl, tunnelMode }))
+            .catch((error) => logger.warn("Quick tunnel is still propagating; keeping the connector active", {
+              error: error instanceof Error ? error.message : String(error),
+              publicUrl,
+            }));
+        },
+      });
+      const publicUrl = await quickTunnel.start();
+      if (!publicUrl) {
+        logger.warn("Temporary internet tunnel is unavailable; LAN/VPN live media remains active and tunnel retries will continue", {
+          privateUrl: resolvedPublicUrl,
+        });
+      }
     } else if (tunnelMode === "named") {
       tunnel = startNamedTunnel(config.CLOUDFLARED_PATH, config.CLOUDFLARED_TUNNEL_TOKEN!, runtimeDirectory);
       resolvedPublicUrl = config.PUBLIC_MEDIA_GATEWAY_URL!;
-    }
-    if (!resolvedPublicUrl) throw new Error("No public media gateway URL was established");
-    await waitForPublicGateway(new URL("/health", resolvedPublicUrl), 30_000);
-    logger.info("Edge live media is reachable", { publicUrl: resolvedPublicUrl, tunnelMode });
-  } catch (error) {
-    tunnel?.kill();
-    if (tunnelMode === "quick" && config.PUBLIC_MEDIA_GATEWAY_URL === "auto") {
-      tunnel = undefined;
-      resolvedPublicUrl = resolvePrivateMediaGatewayUrl("auto", config.EDGE_LIVE_GATEWAY_PORT);
-      logger.warn("Temporary internet tunnel unavailable; keeping LAN/VPN live media active", {
-        error: error instanceof Error ? error.message : String(error),
-        privateUrl: resolvedPublicUrl,
-      });
+      await waitForPublicGateway(new URL("/health", resolvedPublicUrl), 30_000);
+      logger.info("Edge live media is reachable", { publicUrl: resolvedPublicUrl, tunnelMode });
     } else {
-      await liveGateway.close(); mediaMtx?.kill(); throw error;
+      if (!resolvedPublicUrl) throw new Error("No public media gateway URL was established");
+      await waitForPublicGateway(new URL("/health", resolvedPublicUrl), 30_000);
+      logger.info("Edge live media is reachable", { publicUrl: resolvedPublicUrl, tunnelMode });
     }
+  } catch (error) {
+    quickTunnel?.stop(); tunnel?.kill();
+    await liveGateway.close(); mediaMtx?.kill(); throw error;
   }
 
   return {
     get publicUrl() { return currentPublicUrl(); },
-    async stop() { tunnel?.kill(); await liveGateway.close().catch(() => undefined); mediaMtx?.kill(); },
+    async stop() { quickTunnel?.stop(); tunnel?.kill(); await liveGateway.close().catch(() => undefined); mediaMtx?.kill(); },
   };
 }
 
@@ -445,19 +535,24 @@ async function startQuickTunnel(executable: string, origin: string, cwd: string)
     "--no-autoupdate",
     "--url", origin,
   ], cwd);
-  const publicUrl = await new Promise<string>((resolve, reject) => {
-    const timeout = setTimeout(() => reject(new Error("Cloudflare quick tunnel did not provide a URL within 30 seconds")), 30_000);
-    let output = "";
-    const inspect = (chunk: Buffer) => {
-      output = `${output}${chunk.toString("utf8")}`.slice(-8_192);
-      const publicUrl = extractQuickTunnelUrl(output);
-      if (publicUrl) { clearTimeout(timeout); resolve(publicUrl); }
-    };
-    child.stdout.on("data", inspect); child.stderr.on("data", inspect);
-    child.once("error", (error) => { clearTimeout(timeout); reject(error); });
-    child.once("exit", (code) => { clearTimeout(timeout); reject(new Error(`Cloudflare quick tunnel exited (${code})`)); });
-  });
-  return { process: child, publicUrl };
+  try {
+    const publicUrl = await new Promise<string>((resolve, reject) => {
+      const timeout = setTimeout(() => reject(new Error("Cloudflare quick tunnel did not provide a URL within 30 seconds")), 30_000);
+      let output = "";
+      const inspect = (chunk: Buffer) => {
+        output = `${output}${chunk.toString("utf8")}`.slice(-8_192);
+        const publicUrl = extractQuickTunnelUrl(output);
+        if (publicUrl) { clearTimeout(timeout); resolve(publicUrl); }
+      };
+      child.stdout.on("data", inspect); child.stderr.on("data", inspect);
+      child.once("error", (error) => { clearTimeout(timeout); reject(error); });
+      child.once("exit", (code) => { clearTimeout(timeout); reject(new Error(`Cloudflare quick tunnel exited (${code})`)); });
+    });
+    return { process: child, publicUrl };
+  } catch (error) {
+    child.kill();
+    throw error;
+  }
 }
 
 export function extractQuickTunnelUrl(output: string) {
