@@ -75,7 +75,7 @@ Write-Log "Installer path: $InstallerPath" "INFO"
 
 # Check control plane availability
 Write-Log "Checking control plane availability..." "INFO"
-$controlPlaneUrl = "https://sentinel-grid-control-plane-ocn1.onrender.com"
+$controlPlaneUrl = "https://sentinel-grid-control-plane-zcli.onrender.com"
 
 try {
     $response = Invoke-WebRequest -Uri "$controlPlaneUrl/health" -TimeoutSec 10 -UseBasicParsing -ErrorAction Stop

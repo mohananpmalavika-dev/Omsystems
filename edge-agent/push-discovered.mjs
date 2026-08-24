@@ -1,7 +1,7 @@
 async function pushDiscovered() {
   const branchId = "5f7cf420-7a56-4ef1-8a12-d45d8bbc5cd3";
   const agentId = "03f18514-ea61-41ab-a5f6-1cf96eb0f9c8";
-  const baseUrl = "https://sentinel-grid-monitoring-vhid.onrender.com/api/control";
+  const baseUrl = "https://sentinel-grid-monitoring-s38w.onrender.com/api/control";
 
   let actualAgentId = agentId;
   try {

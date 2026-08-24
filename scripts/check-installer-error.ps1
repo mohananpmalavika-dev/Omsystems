@@ -264,7 +264,7 @@ $recommendations += @{
 $recommendations += @{
     Priority = 4
     Issue = "Invalid or expired activation code"
-    Solution = "Generate new activation code at: https://sentinel-grid-monitoring-vhid.onrender.com/admin/branch-onboarding"
+    Solution = "Generate new activation code at: https://sentinel-grid-monitoring-s38w.onrender.com/admin/branch-onboarding"
 }
 
 $recommendations += @{

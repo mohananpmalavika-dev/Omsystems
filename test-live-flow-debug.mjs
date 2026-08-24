@@ -1,5 +1,5 @@
 // Test the complete live streaming flow with debug info
-const CONTROL_PLANE_URL = "https://sentinel-grid-control-plane-nqc0.onrender.com";
+const CONTROL_PLANE_URL = "https://sentinel-grid-control-plane-zcli.onrender.com";
 const EDGE_BRIDGE_KEY = process.env.EDGE_BRIDGE_SHARED_KEY ?? "";
 const CAMERA_ID = "e3d027f8-9c42-4c8b-bbf2-39c91eb756fb"; // Your camera ID
 const SESSION_TOKEN = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiIwMDAwMDAwMC0wMDAwLTQwMDAtODAwMC0wMDAwMDAwMDAwMDEiLCJyb2xlIjoiZ2xvYmFsX2FkbWluIiwiaWF0IjoxNzM4NDMyNzQ5fQ.v7s1KXP_E1WmOOL7zCJVx3Aw4dxiW5XMCeQzRBTfCmc"; // Your session token

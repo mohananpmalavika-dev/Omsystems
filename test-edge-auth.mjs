@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises';
 import 'dotenv/config';
 
 const CONTROL_PLANE_URL = process.env.CONTROL_PLANE_INTERNAL_URL || 
-  'https://sentinel-grid-monitoring-b54f.onrender.com';
+  'https://sentinel-grid-monitoring-s38w.onrender.com';
 
 async function testEdgeAuth() {
   try {

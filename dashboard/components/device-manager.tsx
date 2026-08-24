@@ -1165,7 +1165,7 @@ export function DeviceManager() {
   }
 
   function downloadOneClickBatchFile(branchId: string, branchName: string) {
-    const origin = typeof window !== "undefined" ? window.location.origin : "https://sentinel-grid-monitoring-b54f.onrender.com";
+    const origin = typeof window !== "undefined" ? window.location.origin : "https://sentinel-grid-monitoring-s38w.onrender.com";
     const cleanBranchName = (branchName || "Branch").replace(/["\r\n]/g, "");
     const safeBranchName = (branchName || "Branch").replace(/[`"'\r\n]/g, "");
     const content = `<# :

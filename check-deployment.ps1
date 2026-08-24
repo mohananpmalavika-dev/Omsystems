@@ -1,7 +1,7 @@
 # Check if the new endpoint is deployed
 # Run this script every minute to see when deployment completes
 
-$url = "https://sentinel-grid-monitoring1.onrender.com/api/admin/system/gateways/test-id"
+$url = "https://sentinel-grid-monitoring-s38w.onrender.com/api/admin/system/gateways/test-id"
 $token = "YOUR_AUTH_TOKEN_HERE"  # Replace with your actual token
 
 Write-Host "Checking if gateway DELETE endpoint is deployed..." -ForegroundColor Cyan

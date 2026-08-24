@@ -4,7 +4,7 @@
  * Test Control Plane Authentication
  */
 
-const CONTROL_PLANE_URL = 'https://sentinel-grid-control-plane-nqc0.onrender.com';
+const CONTROL_PLANE_URL = 'https://sentinel-grid-control-plane-zcli.onrender.com';
 const SHARED_KEY = process.env.EDGE_BRIDGE_SHARED_KEY || '';
 if (!SHARED_KEY) {
   console.warn('⚠️  EDGE_BRIDGE_SHARED_KEY is not set in the environment — tests will likely fail.');

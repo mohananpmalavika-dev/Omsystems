@@ -4,7 +4,7 @@
  * Usage: node scripts/test-render-health.mjs [service-url]
  */
 
-const BASE_URL = process.argv[2] || 'https://sentinel-grid-monitoring1.onrender.com';
+const BASE_URL = process.argv[2] || 'https://sentinel-grid-monitoring-s38w.onrender.com';
 
 const colors = {
   green: '\x1b[32m',

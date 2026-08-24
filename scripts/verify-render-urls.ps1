@@ -20,28 +20,28 @@ $ErrorActionPreference = "Continue"
 $services = @(
     @{
         Name = "Dashboard"
-        Url = "https://sentinel-grid-monitoring-vhid.onrender.com"
+        Url = "https://sentinel-grid-monitoring-s38w.onrender.com"
         HealthPath = "/health"
         Priority = 1
         Description = "Main web dashboard and API proxy"
     },
     @{
         Name = "Control Plane"
-        Url = "https://sentinel-grid-control-plane-ocn1.onrender.com"
+        Url = "https://sentinel-grid-control-plane-zcli.onrender.com"
         HealthPath = "/health"
         Priority = 2
         Description = "Core backend API and database"
     },
     @{
         Name = "Analytics Engine"
-        Url = "https://sentinel-grid-analytics-engine-j0py.onrender.com"
+        Url = "https://sentinel-grid-analytics-engine-682g.onrender.com"
         HealthPath = "/health"
         Priority = 3
         Description = "AI/ML analytics and video processing"
     },
     @{
         Name = "Media Gateway"
-        Url = "https://sentinel-grid-media-gateway-04ae.onrender.com"
+        Url = "https://sentinel-grid-media-gateway-ogqi.onrender.com"
         HealthPath = "/health"
         Priority = 4
         Description = "Live video streaming and HLS"

@@ -1,5 +1,5 @@
 // Test live streaming exactly as Render dashboard does it
-const CONTROL_PLANE_URL = "https://sentinel-grid-control-plane-nqc0.onrender.com";
+const CONTROL_PLANE_URL = "https://sentinel-grid-control-plane-zcli.onrender.com";
 const EDGE_BRIDGE_KEY = process.env.EDGE_BRIDGE_SHARED_KEY ?? "";
 const MEDIA_GATEWAY_URL = "https://apnic-deserve-evans-yarn.trycloudflare.com";
 const CAMERA_ID = "e3d027f8-9c42-4c8b-bbf2-39c91eb756fb";

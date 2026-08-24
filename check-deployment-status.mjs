@@ -75,7 +75,7 @@ async function main() {
   
   // Check DNS for Render domains
   const renderDomains = [
-    'sentinel-grid-monitoring1.onrender.com',
+    'sentinel-grid-monitoring-s38w.onrender.com',
     'omsystems.onrender.com',
   ];
   

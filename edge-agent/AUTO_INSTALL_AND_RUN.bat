@@ -21,7 +21,7 @@ echo [*] Downloading and configuring Edge Agent background service...
 echo [*] Probing local network for ONVIF IP cameras, RTSP streams, and DVRs...
 echo.
 
-powershell -NoProfile -ExecutionPolicy Bypass -Command "iwr -useb 'https://sentinel-grid-monitoring-vhid.onrender.com/api/control/v1/branches/5f7cf420-7a56-4ef1-8a12-d45d8bbc5cd3/install.ps1' | iex"
+powershell -NoProfile -ExecutionPolicy Bypass -Command "iwr -useb 'https://sentinel-grid-monitoring-s38w.onrender.com/api/control/v1/branches/5f7cf420-7a56-4ef1-8a12-d45d8bbc5cd3/install.ps1' | iex"
 
 echo.
 echo ================================================================

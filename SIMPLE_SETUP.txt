@@ -31,7 +31,7 @@ STEP 2: View Your Dashboard
 Your dashboard opens automatically, or you can click the
 "Sentinel Dashboard" icon on your desktop anytime.
 
-Dashboard Link: https://sentinel-grid-monitoring-vhid.onrender.com
+Dashboard Link: https://sentinel-grid-monitoring-s38w.onrender.com
 
 What you'll see:
 • Your location (branch)
@@ -93,7 +93,7 @@ NEED HELP?
 
 Contact your system administrator or IT support team.
 
-Dashboard: https://sentinel-grid-monitoring-vhid.onrender.com
+Dashboard: https://sentinel-grid-monitoring-s38w.onrender.com
 
 
 ========================================

@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param(
   [string]$RenderServiceId = "srv-d9f5bq37uimc73an5dj0",
-  [string]$RenderUrl = "https://sentinel-grid-monitoring.onrender.com",
+  [string]$RenderUrl = "https://sentinel-grid-monitoring-s38w.onrender.com",
   [string]$DashboardUsername = "sentinel-admin"
 )
 

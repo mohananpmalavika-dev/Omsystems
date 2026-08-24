@@ -208,7 +208,7 @@ if ($installExitCode -eq 0) {
     Write-Host ""
     Write-Host "Next Steps:" -ForegroundColor Cyan
     Write-Host "1. Check logs: Get-Content 'C:\Program Files\Sentinel Grid\Edge Agent\logs\edge-agent.log' -Tail 20" -ForegroundColor Gray
-    Write-Host "2. Open dashboard: https://sentinel-grid-monitoring-vhid.onrender.com" -ForegroundColor Gray
+    Write-Host "2. Open dashboard: https://sentinel-grid-monitoring-s38w.onrender.com" -ForegroundColor Gray
     Write-Host "3. Check edge agents section - should show 'Online'" -ForegroundColor Gray
     Write-Host "4. Check cameras section - should show discovered cameras" -ForegroundColor Gray
     Write-Host "5. Approve cameras and test live video" -ForegroundColor Gray

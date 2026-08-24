@@ -1,7 +1,7 @@
 // Test media gateway connection
-const MEDIA_GATEWAY_URL = "https://sentinel-grid-media-gateway1.onrender.com";
+const MEDIA_GATEWAY_URL = "https://sentinel-grid-media-gateway-ogqi.onrender.com";
 const EDGE_BRIDGE_SHARED_KEY = process.env.EDGE_BRIDGE_SHARED_KEY ?? "";
-const CONTROL_PLANE_URL = "https://sentinel-grid-control-plane-nqc0.onrender.com";
+const CONTROL_PLANE_URL = "https://sentinel-grid-control-plane-zcli.onrender.com";
 
 // First, get a live session token from control plane
 async function testMediaGateway() {

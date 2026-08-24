@@ -1,6 +1,6 @@
 // Test live session creation flow
-const CONTROL_PLANE_URL = "https://sentinel-grid-control-plane-nqc0.onrender.com";
-const MEDIA_GATEWAY_URL = "https://sentinel-grid-media-gateway1.onrender.com";
+const CONTROL_PLANE_URL = "https://sentinel-grid-control-plane-zcli.onrender.com";
+const MEDIA_GATEWAY_URL = "https://sentinel-grid-media-gateway-ogqi.onrender.com";
 const EDGE_BRIDGE_KEY = process.env.EDGE_BRIDGE_SHARED_KEY ?? "";
 const CAMERA_ID = "your-camera-id"; // Replace with actual camera ID
 const USER_ID = "00000000-0000-4000-8000-000000000001";

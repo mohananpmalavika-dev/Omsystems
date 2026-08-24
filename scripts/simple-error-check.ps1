@@ -105,7 +105,7 @@ if ($freeGB -lt 1) {
 # 6. Check control plane
 Write-Host "`n6. Checking Control Plane Connection..." -ForegroundColor Yellow
 try {
-    $response = Invoke-WebRequest -Uri "https://sentinel-grid-control-plane-ocn1.onrender.com/health" -TimeoutSec 10 -UseBasicParsing
+    $response = Invoke-WebRequest -Uri "https://sentinel-grid-control-plane-zcli.onrender.com/health" -TimeoutSec 10 -UseBasicParsing
     Write-Host "   [OK] Control plane is reachable" -ForegroundColor Green
 } catch {
     Write-Host "   [ERROR] Cannot reach control plane" -ForegroundColor Red

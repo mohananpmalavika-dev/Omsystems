@@ -4,7 +4,7 @@ import { DeviceIdentityStore } from "../edge-agent/src/security/device-identity.
 import { GatewayClient } from "../edge-agent/src/registration/gateway-client.js";
 
 const archiveRoot = "C:/Program Files/KryptonVision/Edge Agent/data/identity-archive";
-const controlPlaneUrl = "https://kryptonvision-control-plane-ocn1.onrender.com";
+const controlPlaneUrl = "https://sentinel-grid-control-plane-zcli.onrender.com";
 const directories = (await readdir(archiveRoot, { withFileTypes: true }))
   .filter((entry) => entry.isDirectory())
   .map((entry) => entry.name)

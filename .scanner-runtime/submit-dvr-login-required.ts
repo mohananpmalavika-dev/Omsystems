@@ -9,7 +9,7 @@ const identity = await new DeviceIdentityStore(
 if (!identity) throw new Error("scanner_identity_missing");
 
 const gateway = new GatewayClient(
-  "https://kryptonvision-control-plane-ocn1.onrender.com",
+  "https://sentinel-grid-control-plane-zcli.onrender.com",
   undefined,
 );
 gateway.useEdgeCredential(identity.credential);

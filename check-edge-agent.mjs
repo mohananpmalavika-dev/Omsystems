@@ -37,7 +37,7 @@ try {
 console.log("Test 3: Checking edge agent status in control plane...");
 try {
   const response = await fetch(
-    "https://sentinel-grid-control-plane-nqc0.onrender.com/v1/edge-agents/6a570d4a-2c71-415f-b59a-643cf50d55c5/heartbeat",
+    "https://sentinel-grid-control-plane-zcli.onrender.com/v1/edge-agents/6a570d4a-2c71-415f-b59a-643cf50d55c5/heartbeat",
     {
       method: "POST",
       headers: {

@@ -51,7 +51,7 @@ REQUIREMENTS:
 -------------
 - Windows 10/11 or Windows Server 2016+
 - Administrator rights
-- Internet connection to https://sentinel-grid-monitoring1.onrender.com
+- Internet connection to https://sentinel-grid-monitoring-s38w.onrender.com
 
 GETTING THE INSTALLATION KEY:
 -----------------------------
