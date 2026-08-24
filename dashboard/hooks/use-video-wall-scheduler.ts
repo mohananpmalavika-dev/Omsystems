@@ -106,7 +106,7 @@ export function useVideoWallScheduler(
     rotationEnabled = true,
     tileGeometry = { width: 640, height: 360 },
     enableSnapshots = true,
-    snapshotBaseUrl = "/api/cameras",
+    snapshotBaseUrl = "/api/media/snapshot-relay",
     onScheduleChange,
     onCapacityChange,
   } = options;

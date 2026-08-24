@@ -132,6 +132,7 @@ export class ResourceRepository {
     action: Action,
     resourceNodeId: string,
   ): Promise<AuthorizationDecision | undefined> {
+    if (!user) return undefined;
     const role = (user.role ?? "") as string;
     const isSuperAdmin =
       role === "super_admin" ||

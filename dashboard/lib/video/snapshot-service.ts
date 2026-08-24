@@ -155,7 +155,9 @@ export class SnapshotService {
   ): Promise<void> {
     try {
       const baseUrl = this.baseUrl.replace(/\/$/, "");
-      const url = `${baseUrl}/${encodeURIComponent(cameraId)}/snapshot?t=${Date.now()}`;
+      const url = baseUrl.includes("snapshot-relay")
+        ? `${baseUrl}?cameraId=${encodeURIComponent(cameraId)}&t=${Date.now()}`
+        : `${baseUrl}/${encodeURIComponent(cameraId)}/snapshot?t=${Date.now()}`;
       
       const response = await fetch(url, {
         method: 'GET',

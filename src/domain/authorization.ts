@@ -42,6 +42,9 @@ export function authorize(
   nodesById: ReadonlyMap<string, ResourceNode>,
   grants: readonly AccessGrant[],
 ): AuthorizationDecision {
+  if (!user) {
+    return { allowed: false, reason: "no_matching_grant" };
+  }
   const role = (user.role ?? "") as string;
   const isSuperAdmin =
     role === "super_admin" ||
