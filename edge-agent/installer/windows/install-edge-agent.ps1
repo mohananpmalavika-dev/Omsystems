@@ -12,11 +12,18 @@ $SourceConfig = Join-Path $SourceDirectory "config\edge-agent.env"
 $SourceUninstaller = Join-Path $SourceDirectory "uninstall-edge-agent.ps1"
 $SourceDashboardLauncher = Join-Path $SourceDirectory "open-dashboard-scan.ps1"
 $SourceRuntimePackages = Join-Path $SourceDirectory "runtime-packages"
+$RestoreExistingTaskOnFailure = $false
 
 # The self-extracting EXE launches this script in a separate elevated PowerShell
 # process. Preserve terminating errors there so an operator can read and act on
 # them instead of seeing a red flash followed by a closed console.
 trap {
+  if ($RestoreExistingTaskOnFailure) {
+    try {
+      Enable-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue | Out-Null
+      Start-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
+    } catch { }
+  }
   $failureDetail = ([string]$_.Exception.Message) -replace '(?i)sgact_[A-Za-z0-9_-]+', 'sgact_[redacted]'
   $failureLogPath = Join-Path $InstallDirectory "logs\edge-agent.log"
   Write-Host ""
@@ -130,6 +137,8 @@ $DataDirectory = Join-Path $InstallDirectory "data"
 New-Item -ItemType Directory -Path $InstallDirectory, $ConfigDirectory, $LogDirectory, $DataDirectory -Force | Out-Null
 $existingTask = Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
 if ($existingTask) {
+  Disable-ScheduledTask -TaskName $TaskName -ErrorAction Stop | Out-Null
+  $RestoreExistingTaskOnFailure = $true
   Stop-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
 }
 Stop-InstalledAgentProcesses $InstallDirectory
@@ -377,6 +386,7 @@ if ($connectivityHealthy -and $state -ne "Running") {
   $lastResult = if ($taskInfo) { $taskInfo.LastTaskResult } else { "unknown" }
   throw "The Sentinel Grid startup task did not enter Running within $startupTimeoutSeconds seconds (state: $state, result: $lastResult). Check $LogDirectory\edge-agent.log and run Repair scanner again."
 }
+$RestoreExistingTaskOnFailure = $false
 
 if ($connectivityHealthy) {
   Write-Host "Sentinel Grid Edge Agent installed and connected successfully." -ForegroundColor Green

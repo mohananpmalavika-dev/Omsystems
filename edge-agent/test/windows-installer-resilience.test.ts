@@ -73,6 +73,23 @@ describe("Windows scanner installer resilience", () => {
     expect(copyExecutable).toBeGreaterThan(drainProcesses);
   });
 
+  it("prevents the old scheduled task from restarting during repair and rolls it back on failure", async () => {
+    const source = await readFile(
+      "edge-agent/installer/windows/install-edge-agent.ps1",
+      "utf8",
+    );
+    const disableTask = source.indexOf("Disable-ScheduledTask -TaskName $TaskName");
+    const drainProcesses = source.indexOf("Stop-InstalledAgentProcesses $InstallDirectory");
+    const enableOnFailure = source.indexOf("Enable-ScheduledTask -TaskName $TaskName");
+
+    expect(source).toContain("$RestoreExistingTaskOnFailure = $true");
+    expect(source).toContain("$RestoreExistingTaskOnFailure = $false");
+    expect(disableTask).toBeGreaterThan(-1);
+    expect(drainProcesses).toBeGreaterThan(disableTask);
+    expect(enableOnFailure).toBeGreaterThan(-1);
+    expect(source.indexOf("Start-ScheduledTask -TaskName $TaskName", enableOnFailure)).toBeGreaterThan(enableOnFailure);
+  });
+
   it("verifies that a connected scanner remains running after installation", async () => {
     const source = await readFile(
       "edge-agent/installer/windows/install-edge-agent.ps1",
