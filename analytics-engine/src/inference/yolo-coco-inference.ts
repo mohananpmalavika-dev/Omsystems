@@ -1,8 +1,12 @@
 import type { InferenceSession } from "onnxruntime-node";
 import type { DetectionFrame, InferenceObject } from "../detectors/base-detector.js";
-import { YoloDetectionInference } from "./yolo-detection-inference.js";
+import {
+  YoloDetectionInference,
+  type YoloDecoder,
+  type YoloPreprocessor,
+} from "./yolo-detection-inference.js";
 
-/** COCO labels emitted by the stock Ultralytics YOLOv8 ONNX export. */
+/** Standard COCO label order shared by the supported YOLO ONNX exports. */
 export const COCO_LABELS = [
   "person", "bicycle", "car", "motorcycle", "airplane", "bus", "train", "truck", "boat", "traffic light",
   "fire hydrant", "stop sign", "parking meter", "bench", "bird", "cat", "dog", "horse", "sheep", "cow",
@@ -17,10 +21,23 @@ export const COCO_LABELS = [
 export class YoloCocoInference {
   private readonly inference: YoloDetectionInference;
 
-  constructor(session: InferenceSession, confidenceThreshold = 0.5, iouThreshold = 0.45) {
+  constructor(
+    session: InferenceSession,
+    confidenceThreshold = 0.5,
+    iouThreshold = 0.45,
+    model: {
+      decoder?: YoloDecoder;
+      preprocessor?: YoloPreprocessor;
+      inputWidth?: number;
+      inputHeight?: number;
+    } = {},
+  ) {
     this.inference = new YoloDetectionInference(session, {
       labels: COCO_LABELS,
-      decoder: "yolov8",
+      decoder: model.decoder ?? "yolov8",
+      preprocessor: model.preprocessor,
+      inputWidth: model.inputWidth,
+      inputHeight: model.inputHeight,
       confidenceThreshold,
       iouThreshold,
     });

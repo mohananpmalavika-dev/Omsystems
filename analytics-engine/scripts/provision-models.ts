@@ -10,6 +10,7 @@ interface Artifact {
   id: string;
   path: string;
   pathEnvironment?: string;
+  sourceUrl?: string;
   sourceUrlEnvironment?: string;
   sha256?: string;
   sha256Environment?: string;
@@ -55,7 +56,7 @@ async function provision(model: Artifact) {
   const configuredPath = model.pathEnvironment ? process.env[model.pathEnvironment]?.trim() : undefined;
   const destination = path.resolve(configuredPath || path.join(modelsDirectory, model.path));
   const sourceEnvironment = model.sourceUrlEnvironment;
-  const sourceUrl = sourceEnvironment ? process.env[sourceEnvironment]?.trim() : undefined;
+  const sourceUrl = (sourceEnvironment ? process.env[sourceEnvironment]?.trim() : undefined) || model.sourceUrl;
   const expectedHash = (model.sha256Environment ? process.env[model.sha256Environment]?.trim() : model.sha256)?.toLowerCase();
   if (!expectedHash || !/^[a-f0-9]{64}$/.test(expectedHash)) {
     throw new Error(`set ${model.sha256Environment ?? "a manifest sha256"} to the audited artifact SHA-256`);

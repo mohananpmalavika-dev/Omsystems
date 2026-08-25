@@ -1,5 +1,5 @@
 /**
- * Core object detector. A local YOLOv8 ONNX session is used when provisioned;
+ * Core object detector. A local, manifest-configured ONNX session is used when provisioned;
  * normalized observations from an edge/open-model worker remain a supported
  * fallback for installations that intentionally run models elsewhere.
  */
@@ -14,7 +14,7 @@ import {
 } from "./base-detector.js";
 import { getModelManager } from "../model-manager.js";
 import { YoloCocoInference } from "../inference/yolo-coco-inference.js";
-import { modelUnavailableReason } from "../inference/configured-model-inference.js";
+import { modelUnavailableReason, yoloModelOptions } from "../inference/configured-model-inference.js";
 
 interface ObjectDetectorConfig {
   confidenceThreshold: number;
@@ -61,14 +61,16 @@ export class ObjectDetector extends BaseDetector {
     try {
       const manager = getModelManager();
       if (!manager.isModelAvailable("yolov8n")) throw new Error(modelUnavailableReason("yolov8n"));
+      const modelConfig = manager.getModelConfig("yolov8n");
       const model = await manager.getModel("yolov8n");
       this.inference = new YoloCocoInference(
         model,
         this.config.confidenceThreshold,
         this.config.nmsThreshold,
+        yoloModelOptions(modelConfig),
       );
       this.modelLoadError = undefined;
-      console.log("Object detector loaded YOLOv8 ONNX model");
+      console.log(`Object detector loaded ${modelConfig?.name ?? "configured open-source ONNX model"}`);
     } catch (error) {
       this.inference = null;
       this.modelLoadError = error instanceof Error ? error.message : String(error);
@@ -100,7 +102,7 @@ export class ObjectDetector extends BaseDetector {
       objects,
       metadata: {
         count: objects.length,
-        source: fromNormalizedObservation ? "normalized-observation" : "local-yolov8-onnx",
+        source: fromNormalizedObservation ? "normalized-observation" : "local-open-onnx",
       },
       requiresAlert: false,
     }];
@@ -118,9 +120,9 @@ export class ObjectDetector extends BaseDetector {
     if (!this.inference) {
       return {
         status: "degraded" as const,
-        details: `External normalized detections only; local YOLOv8 unavailable: ${this.modelLoadError ?? "model not provisioned"}`,
+        details: `External normalized detections only; local ONNX model unavailable: ${this.modelLoadError ?? "model not provisioned"}`,
       };
     }
-    return { status: "healthy" as const, details: "Local YOLOv8 ONNX inference active" };
+    return { status: "healthy" as const, details: "Local open-source ONNX inference active" };
   }
 }

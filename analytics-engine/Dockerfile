@@ -29,6 +29,12 @@ COPY backend/src backend/src
 # Copy analytics-engine source
 COPY analytics-engine/src analytics-engine/src
 COPY analytics-engine/models/manifest.json analytics-engine/models/manifest.json
+COPY analytics-engine/scripts analytics-engine/scripts
+COPY analytics-engine/THIRD_PARTY_MODELS.md analytics-engine/THIRD_PARTY_MODELS.md
+
+# Provision audited open-license CPU models at build time. Every download is
+# checksum-verified by the repository script; no paid inference API is used.
+RUN ANALYTICS_MODEL_LICENSES_ACCEPTED=true npm run models:download --workspace @sentinel/analytics-engine -- yolov8n face-detector face-embedding anpr-detector anpr-recognizer
 
 # Build TypeScript
 RUN npm run build --workspace @sentinel/analytics-engine
@@ -55,14 +61,11 @@ COPY --from=build --chown=analytics:analytics /workspace/analytics-engine/dist .
 COPY --from=build --chown=analytics:analytics /workspace/node_modules ./node_modules
 RUN test -f /app/dist/analytics-engine/src/index.js
 
-# Create models directory for ML models
-RUN mkdir -p /app/models && chown analytics:analytics /app/models
-COPY --from=build --chown=analytics:analytics /workspace/analytics-engine/models/manifest.json /app/models/manifest.json
+# Copy the manifest and checksum-verified open model provisioned in the build stage.
+COPY --from=build --chown=analytics:analytics /workspace/analytics-engine/models /app/models
+COPY --from=build --chown=analytics:analytics /workspace/analytics-engine/THIRD_PARTY_MODELS.md /app/THIRD_PARTY_MODELS.md
 ENV MODELS_DIR=/app/models
-# The image contains only the model manifest. Keep normalized edge-observation
-# ingestion available until an operator mounts verified ONNX artifacts and
-# explicitly opts into strict local-inference readiness at runtime.
-ENV ANALYTICS_REQUIRE_MODELS=false
+ENV ANALYTICS_REQUIRE_MODELS=true
 
 # Switch to non-root user
 USER analytics

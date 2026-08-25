@@ -3,6 +3,8 @@ import type { DetectionFrame, InferenceObject } from "../detectors/base-detector
 import { getModelManager, type ModelConfig } from "../model-manager.js";
 import { COCO_LABELS } from "./yolo-coco-inference.js";
 import { YoloDetectionInference } from "./yolo-detection-inference.js";
+import type { YoloDecoder, YoloPreprocessor } from "./yolo-detection-inference.js";
+import { LpdYuNetInference, YuNetFaceInference } from "./opencv-specialty-inference.js";
 import { 
   CtcTextInference, 
   FaceEmbeddingInference,
@@ -22,6 +24,7 @@ export interface PlateTextInference {
   run(
     frame: DetectionFrame,
     box: { x: number; y: number; width: number; height: number },
+    corners?: Array<{ x: number; y: number }>,
   ): Promise<{ text: string; confidence: number; characters: Array<{ char: string; confidence: number }> }>;
 }
 
@@ -29,6 +32,7 @@ export interface FaceVectorInference {
   run(
     frame: DetectionFrame,
     box: { x: number; y: number; width: number; height: number },
+    landmarks?: Array<{ x: number; y: number }>,
   ): Promise<number[]>;
 }
 
@@ -64,13 +68,43 @@ export async function loadObjectInference(modelId: string, confidenceThreshold: 
   if (!manager.isModelAvailable(modelId)) throw new Error(modelUnavailableReason(modelId));
   const session = await manager.getModel(modelId) as InferenceSession;
   const dimensions = inputDimensions(config);
+  if (config.decoder === "yunet-face") {
+    return new YuNetFaceInference(session, confidenceThreshold, 0.3, dimensions.width, dimensions.height);
+  }
+  if (config.decoder === "lpd-yunet") {
+    return new LpdYuNetInference(session, confidenceThreshold, 0.3, dimensions.width, dimensions.height);
+  }
   return new YoloDetectionInference(session, {
     labels: config.labelSet === "coco" ? COCO_LABELS : config.labels ?? [],
-    decoder: config.decoder,
+    ...yoloModelOptions(config),
     confidenceThreshold,
     inputWidth: dimensions.width,
     inputHeight: dimensions.height,
   });
+}
+
+/**
+ * The model manifest also describes specialty ONNX models. Keep generic YOLO
+ * callers deliberately constrained to the layouts they understand.
+ */
+export function yoloModelOptions(config?: ModelConfig): {
+  decoder?: YoloDecoder;
+  preprocessor?: YoloPreprocessor;
+  inputWidth?: number;
+  inputHeight?: number;
+} {
+  const decoder = config?.decoder;
+  const preprocessor = config?.preprocessor;
+  return {
+    decoder: decoder === "yolov8" || decoder === "yolov5" || decoder === "yolox" || decoder === "xyxy"
+      ? decoder
+      : undefined,
+    preprocessor: preprocessor === "rgb-normalized-stretch" || preprocessor === "yolox-letterbox-bgr"
+      ? preprocessor
+      : undefined,
+    inputWidth: config?.inputShape?.[3],
+    inputHeight: config?.inputShape?.[2],
+  };
 }
 
 export async function loadPlateTextInference(modelId: string): Promise<PlateTextInference> {
@@ -87,6 +121,7 @@ export async function loadPlateTextInference(modelId: string): Promise<PlateText
     config.blankIndex ?? 0,
     dimensions.width,
     dimensions.height,
+    config.inputShape?.[1] ?? 3,
   );
 }
 

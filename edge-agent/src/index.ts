@@ -255,7 +255,7 @@ let lastCameraConfigSyncAt = 0;
 // second, implicit startup scan.
 let lastDiscoveryAt = Date.now();
 await syncCameraHeartbeatConfig();
-cameraHeartbeat.start(config.CAMERA_HEARTBEAT_INTERVAL_MS);
+cameraHeartbeat.start(config.CAMERA_HEARTBEAT_INTERVAL_MS, config.CAMERA_ANALYTICS_INTERVAL_MS);
 if (config.EDGE_MEDIA_SHARED_KEY) {
   await startSecretProvider({
     store: secrets,
@@ -1062,6 +1062,7 @@ async function syncCameraHeartbeatConfig() {
       name: camera.name,
       ...(rtspUrl ? { rtspUrl } : {}),
       enabled: true,
+      analyticsEnabled: camera.analyticsEnabled ?? true,
     };
   }));
   const channelsByRecorder = new Map<string, Array<{ cameraId: string; channel: number }>>();

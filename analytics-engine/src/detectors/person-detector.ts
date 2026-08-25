@@ -6,8 +6,8 @@
 import { randomUUID } from "node:crypto";
 import { BaseDetector, calculateIoU, type DetectionFrame, type DetectionResult, getInferenceObjects, hasInferenceObjects } from "./base-detector.js";
 import { getModelManager } from "../model-manager.js";
-import { YoloPersonInference } from "../inference/yolo-person-inference.js";
-import { modelUnavailableReason } from "../inference/configured-model-inference.js";
+import { YoloCocoInference } from "../inference/yolo-coco-inference.js";
+import { modelUnavailableReason, yoloModelOptions } from "../inference/configured-model-inference.js";
 import { TrackingEventBus, buildTrackingObservations, type FrameContext } from "../tracking/index.js";
 
 export interface PersonTrack {
@@ -24,7 +24,7 @@ export interface PersonTrack {
 export class PersonDetector extends BaseDetector {
   private tracks = new Map<string, PersonTrack>();
   private isModelLoaded = false;
-  private inference: YoloPersonInference | null = null;
+  private inference: YoloCocoInference | null = null;
   private trackingBus: TrackingEventBus | null = null;
   
   // Configuration
@@ -49,9 +49,15 @@ export class PersonDetector extends BaseDetector {
     try {
       const manager = getModelManager();
       if (!manager.isModelAvailable("yolov8n")) throw new Error(modelUnavailableReason("yolov8n"));
-      this.inference = new YoloPersonInference(await manager.getModel("yolov8n"));
+      const modelConfig = manager.getModelConfig("yolov8n");
+      this.inference = new YoloCocoInference(
+        await manager.getModel("yolov8n"),
+        this.MIN_CONFIDENCE,
+        0.45,
+        yoloModelOptions(modelConfig),
+      );
       this.isModelLoaded = true;
-      console.log("Person detector loaded yolov8n ONNX model");
+      console.log(`Person detector loaded ${modelConfig?.name ?? "configured open-source ONNX model"}`);
     } catch (error) {
       this.isModelLoaded = false;
       console.warn("Person detector running in external-ingestion mode:", error instanceof Error ? error.message : error);
@@ -138,7 +144,7 @@ export class PersonDetector extends BaseDetector {
     // An explicit empty list is the result of the shared object pass, not a
     // request to run a second YOLO inference for this frame.
     if (hasInferenceObjects(frame) || !this.inference) return external;
-    return this.inference.run(frame);
+    return (await this.inference.run(frame)).filter((item) => item.label === "person");
   }
 
   /**

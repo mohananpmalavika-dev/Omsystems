@@ -123,6 +123,7 @@ describe("Windows scanner installer resilience", () => {
     expect(source).toContain("-AllowStartIfOnBatteries");
     expect(source).toContain("-DontStopIfGoingOnBatteries");
     expect(source).toContain("-RestartInterval (New-TimeSpan -Minutes 1)");
+    expect(source).toContain("-MultipleInstances IgnoreNew");
     expect(source).not.toContain("-RestartInterval (New-TimeSpan -Seconds 10)");
   });
 

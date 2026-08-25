@@ -28,11 +28,11 @@ export interface ModelConfig {
   useGPU?: boolean;
   inputShape?: number[];
   outputShape?: number[];
-  preprocessor?: string;
+  preprocessor?: 'rgb-normalized-stretch' | 'yolox-letterbox-bgr' | 'opencv-bgr-stretch' | 'opencv-crnn-gray' | 'sface-rgb-align' | 'paddleclas-imagenet';
   postprocessor?: string;
   required?: boolean;
-  task?: 'object-detection' | 'face-embedding' | 'ctc-text-recognition' | 'person-reid' | 'vehicle-reid' | 'pose-estimation' | 'attribute-estimation';
-  decoder?: 'yolov8' | 'yolov5' | 'xyxy';
+  task?: 'object-detection' | 'face-embedding' | 'ctc-text-recognition' | 'person-reid' | 'vehicle-reid' | 'pose-estimation' | 'attribute-estimation' | 'helmet-classification';
+  decoder?: 'yolov8' | 'yolov5' | 'yolox' | 'xyxy' | 'yunet-face' | 'lpd-yunet';
   labelSet?: 'coco';
   labels?: string[];
   alphabet?: string[];
@@ -40,7 +40,10 @@ export interface ModelConfig {
   pathEnvironment?: string;
   sha256?: string;
   sha256Environment?: string;
+  sourceUrl?: string;
   sourceUrlEnvironment?: string;
+  license?: string;
+  sourceProject?: string;
 }
 
 export type ModelAvailabilityStatus = 'loaded' | 'available' | 'missing' | 'invalid';
@@ -333,8 +336,8 @@ export class ModelManager {
     const primary = path.join(this.options.modelsDirectory, configuredPath);
     if (fs.existsSync(primary)) return primary;
 
-    // Support the pre-existing flat /models/yolov8n.onnx layout while the
-    // documented bootstrap layout uses /models/detection/yolov8n.onnx.
+    // Support pre-existing flat model mounts while the current manifest uses
+    // a task-specific subdirectory (for example detection/yolox_tiny.onnx).
     const legacy = path.join(this.options.modelsDirectory, path.basename(configuredPath));
     return fs.existsSync(legacy) ? legacy : primary;
   }
@@ -492,7 +495,7 @@ export class ModelManager {
 
     // Default estimates by model type (in bytes)
     const defaults: Record<string, number> = {
-      'yolov8n': 6 * 1024 * 1024,      // ~6 MB
+      'yolov8n': 20 * 1024 * 1024,     // compatibility id; YOLOX Tiny is ~20 MB
       'deepsort': 15 * 1024 * 1024,    // ~15 MB
       'osnet': 25 * 1024 * 1024,       // ~25 MB
       'retinaface': 30 * 1024 * 1024,  // ~30 MB

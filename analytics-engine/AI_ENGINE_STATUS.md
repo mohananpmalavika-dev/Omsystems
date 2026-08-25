@@ -1,5 +1,11 @@
 # AI Engine Status - Quick Reference
 
+> Historical live-service snapshot from before the free-model packaging
+> change. The repository now provisions checksum-pinned YOLOX Tiny and requires
+> that core model for readiness. The live URL will keep reporting its old state
+> until the updated root `render.yaml` deployment completes; see
+> `THIRD_PARTY_MODELS.md` for the current artifact contract.
+
 ## Current Deployment
 
 **Service URL:** https://kryptonvision-analytics-engine-6woo.onrender.com  

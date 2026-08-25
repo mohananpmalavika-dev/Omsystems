@@ -132,7 +132,7 @@ Write-Host "ENABLE_CAMERA_TYPE_CLASSIFIER=true"
 Write-Host "ENABLE_DVR_CHANNEL_HEALTH=true"
 Write-Host ""
 Write-Host "# Model Configuration" -ForegroundColor Yellow
-Write-Host "ANALYTICS_REQUIRE_MODELS=false"
+Write-Host "ANALYTICS_REQUIRE_MODELS=true"
 Write-Host "MODEL_CACHE_SIZE_MB=2048"
 Write-Host ""
 
@@ -164,7 +164,7 @@ Write-Host "   b. Click 'New +' → 'Web Service'"
 Write-Host "   c. Connect your GitHub repository"
 Write-Host "   d. Select branch and configure:"
 Write-Host "      - Root Directory: analytics-engine" -ForegroundColor Cyan
-Write-Host "      - Build Command: npm install && npm run build" -ForegroundColor Cyan
+Write-Host "      - Build Command: npm install && ANALYTICS_MODEL_LICENSES_ACCEPTED=true npm run models:download -- yolov8n && npm run build" -ForegroundColor Cyan
 Write-Host "      - Start Command: npm start" -ForegroundColor Cyan
 Write-Host "   e. Add environment variables from above"
 Write-Host "   f. Click 'Create Web Service'"

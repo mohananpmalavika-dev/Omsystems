@@ -27,7 +27,7 @@ services:
       ENABLE_METRICS: "true"
       
       # Model paths (mount local models)
-      YOLO_MODEL_PATH: "/app/models/yolov8n.onnx"
+      YOLO_MODEL_PATH: "/app/models/detection/yolox_tiny.onnx"
       
       # Relaxed thresholds for development
       PERSON_CONFIDENCE_THRESHOLD: "0.4"

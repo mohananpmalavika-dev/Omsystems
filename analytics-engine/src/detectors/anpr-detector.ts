@@ -285,7 +285,7 @@ export class ANPRDetector extends BaseDetector {
       ? (await this.detectionModel!.run(frame)).filter((item) => item.label === "license-plate")
       : [];
     const localReadings = await Promise.all(localPlates.map(async (item) => {
-      const recognition = await this.ocrModel!.run(frame, item.boundingBox);
+      const recognition = await this.ocrModel!.run(frame, item.boundingBox, readPlateCorners(item.attributes?.corners));
       const text = recognition.text.replace(/[^a-zA-Z0-9]/g, "").toUpperCase();
       const characterWidth = text.length > 0 ? 1 / text.length : 1;
       return {
@@ -445,4 +445,18 @@ export class ANPRDetector extends BaseDetector {
       },
     };
   }
+}
+
+function readPlateCorners(value: unknown): Array<{ x: number; y: number }> | undefined {
+  if (!Array.isArray(value) || value.length !== 4) return undefined;
+  const corners = value.map((point) => {
+    if (!point || typeof point !== "object") return null;
+    const item = point as Record<string, unknown>;
+    return typeof item.x === "number" && typeof item.y === "number"
+      ? { x: item.x, y: item.y }
+      : null;
+  });
+  return corners.some((corner) => corner === null)
+    ? undefined
+    : corners as Array<{ x: number; y: number }>;
 }

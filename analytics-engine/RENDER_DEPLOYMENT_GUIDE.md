@@ -1,6 +1,12 @@
 # Render Deployment Guide - Analytics Engine
 
-## Current Status
+> This document describes the older standalone/manual Render workflow. The
+> authoritative repository-root `render.yaml` now builds the analytics Docker
+> image with the audited Apache-2.0 YOLOX Tiny artifact and
+> `ANALYTICS_REQUIRE_MODELS=true`; no model-hosting service or paid AI API is
+> required for core object/person/vehicle inference.
+
+## Historical Status
 
 **Service URL:** https://kryptonvision-analytics-engine-6woo.onrender.com
 

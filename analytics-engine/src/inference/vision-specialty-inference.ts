@@ -14,26 +14,36 @@ export class CtcTextInference {
     private readonly session: InferenceSession,
     private readonly alphabet: readonly string[],
     private readonly blankIndex = 0,
-    private readonly inputWidth = 168,
-    private readonly inputHeight = 48,
+    private readonly inputWidth = 100,
+    private readonly inputHeight = 32,
+    private readonly inputChannels = 1,
   ) {
     if (alphabet.length < 2) throw new Error("CTC alphabet must include a blank and at least one character");
+    if (inputChannels !== 1 && inputChannels !== 3) throw new Error("CTC input must have one or three channels");
   }
 
-  async run(frame: DetectionFrame, box: { x: number; y: number; width: number; height: number }): Promise<TextRecognition> {
-    const crop = cropRgb24(frame, box);
+  async run(
+    frame: DetectionFrame,
+    box: { x: number; y: number; width: number; height: number },
+    corners?: Array<{ x: number; y: number }>,
+  ): Promise<TextRecognition> {
+    const crop = corners && isQuadrilateral(corners)
+      ? rectifyRgb24(frame, corners, this.inputWidth, this.inputHeight)
+      : cropRgb24(frame, box);
     const inputName = this.session.inputNames[0];
     if (!inputName) throw new Error("OCR model has no input tensor");
-    const chw = resizeRgb24ToChw(
-      crop.imageData,
-      crop.width,
-      crop.height,
-      this.inputWidth,
-      this.inputHeight,
-      (value) => (value / 127.5) - 1,
-    );
+    const chw = this.inputChannels === 1
+      ? resizeRgb24ToGrayChw(crop.imageData, crop.width, crop.height, this.inputWidth, this.inputHeight)
+      : resizeRgb24ToChw(
+        crop.imageData,
+        crop.width,
+        crop.height,
+        this.inputWidth,
+        this.inputHeight,
+        (value) => (value / 127.5) - 1,
+      );
     const outputs = await this.session.run({
-      [inputName]: new Tensor("float32", chw, [1, 3, this.inputHeight, this.inputWidth]),
+      [inputName]: new Tensor("float32", chw, [1, this.inputChannels, this.inputHeight, this.inputWidth]),
     });
     const outputName = this.session.outputNames[0];
     const output = outputName ? outputs[outputName] : Object.values(outputs)[0];
@@ -80,8 +90,14 @@ export class FaceEmbeddingInference {
     private readonly inputHeight = 112,
   ) {}
 
-  async run(frame: DetectionFrame, box: { x: number; y: number; width: number; height: number }): Promise<number[]> {
-    const crop = cropRgb24(frame, box);
+  async run(
+    frame: DetectionFrame,
+    box: { x: number; y: number; width: number; height: number },
+    landmarks?: Array<{ x: number; y: number }>,
+  ): Promise<number[]> {
+    const crop = landmarks && isFaceLandmarkSet(landmarks)
+      ? alignFaceRgb24(frame, landmarks, this.inputWidth, this.inputHeight)
+      : cropRgb24(frame, box);
     const inputName = this.session.inputNames[0];
     if (!inputName) throw new Error("Face embedding model has no input tensor");
     const chw = resizeRgb24ToChw(
@@ -90,7 +106,7 @@ export class FaceEmbeddingInference {
       crop.height,
       this.inputWidth,
       this.inputHeight,
-      (value) => (value - 127.5) / 128,
+      (value) => value,
     );
     const outputs = await this.session.run({
       [inputName]: new Tensor("float32", chw, [1, 3, this.inputHeight, this.inputWidth]),
@@ -122,6 +138,200 @@ export function cropRgb24(
     frame.imageData.copy(imageData, row * width * 3, sourceStart, sourceStart + width * 3);
   }
   return { ...frame, imageData, width, height };
+}
+
+/** OpenCV CRNN expects a grayscale 100x32 plate tensor normalized to [-1, 1]. */
+function resizeRgb24ToGrayChw(
+  source: Buffer,
+  sourceWidth: number,
+  sourceHeight: number,
+  targetWidth: number,
+  targetHeight: number,
+): Float32Array {
+  const output = new Float32Array(targetWidth * targetHeight);
+  for (let y = 0; y < targetHeight; y += 1) {
+    const sourceY = Math.min(sourceHeight - 1, Math.floor((y * sourceHeight) / targetHeight));
+    for (let x = 0; x < targetWidth; x += 1) {
+      const sourceX = Math.min(sourceWidth - 1, Math.floor((x * sourceWidth) / targetWidth));
+      const offset = ((sourceY * sourceWidth) + sourceX) * 3;
+      const gray = (0.299 * source[offset]!) + (0.587 * source[offset + 1]!) + (0.114 * source[offset + 2]!);
+      output[(y * targetWidth) + x] = (gray / 127.5) - 1;
+    }
+  }
+  return output;
+}
+
+function isFaceLandmarkSet(value: Array<{ x: number; y: number }>): boolean {
+  return value.length === 5 && value.every((point) => (
+    Number.isFinite(point.x) && Number.isFinite(point.y) &&
+    point.x >= 0 && point.x <= 1 && point.y >= 0 && point.y <= 1
+  ));
+}
+
+/** Reproduces OpenCV FaceRecognizerSF's five-point similarity alignment. */
+function alignFaceRgb24(
+  frame: DetectionFrame,
+  landmarks: Array<{ x: number; y: number }>,
+  width: number,
+  height: number,
+): DetectionFrame {
+  const source = landmarks.map((point) => ({ x: point.x * frame.width, y: point.y * frame.height }));
+  const scaleX = width / 112;
+  const scaleY = height / 112;
+  const target = [
+    { x: 38.2946 * scaleX, y: 51.6963 * scaleY },
+    { x: 73.5318 * scaleX, y: 51.5014 * scaleY },
+    { x: 56.0252 * scaleX, y: 71.7366 * scaleY },
+    { x: 41.5493 * scaleX, y: 92.3655 * scaleY },
+    { x: 70.7299 * scaleX, y: 92.2041 * scaleY },
+  ];
+  const transform = solveSimilarityTransform(source, target);
+  if (!transform) return cropRgb24(frame, boundsOfCorners(landmarks));
+  const imageData = Buffer.alloc(width * height * 3);
+  const determinant = (transform.a * transform.a) + (transform.b * transform.b);
+  if (determinant < 1e-8) return cropRgb24(frame, boundsOfCorners(landmarks));
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      const adjustedX = x - transform.tx;
+      const adjustedY = y - transform.ty;
+      const sourceX = ((transform.a * adjustedX) + (transform.b * adjustedY)) / determinant;
+      const sourceY = ((-transform.b * adjustedX) + (transform.a * adjustedY)) / determinant;
+      sampleRgb24(frame, sourceX, sourceY, imageData, ((y * width) + x) * 3);
+    }
+  }
+  return { ...frame, imageData, width, height };
+}
+
+function solveSimilarityTransform(
+  source: Array<{ x: number; y: number }>,
+  target: Array<{ x: number; y: number }>,
+): { a: number; b: number; tx: number; ty: number } | null {
+  const normal = Array.from({ length: 4 }, () => Array(5).fill(0) as number[]);
+  const addEquation = (coefficients: number[], result: number) => {
+    for (let row = 0; row < 4; row += 1) {
+      for (let column = 0; column < 4; column += 1) normal[row]![column] += coefficients[row]! * coefficients[column]!;
+      normal[row]![4] += coefficients[row]! * result;
+    }
+  };
+  for (let index = 0; index < source.length; index += 1) {
+    const point = source[index]!;
+    const destination = target[index]!;
+    addEquation([point.x, -point.y, 1, 0], destination.x);
+    addEquation([point.y, point.x, 0, 1], destination.y);
+  }
+  const solved = solveLinearSystem(normal);
+  return solved ? { a: solved[0]!, b: solved[1]!, tx: solved[2]!, ty: solved[3]! } : null;
+}
+
+function isQuadrilateral(value: Array<{ x: number; y: number }>): boolean {
+  return value.length === 4 && value.every((point) => (
+    Number.isFinite(point.x) && Number.isFinite(point.y) &&
+    point.x >= 0 && point.x <= 1 && point.y >= 0 && point.y <= 1
+  ));
+}
+
+/**
+ * Rectifies the four corners emitted by LPD-YuNet into the CRNN's canonical
+ * rectangle. Corner order matches the official OpenCV Zoo adapter:
+ * bottom-left, top-left, top-right, bottom-right.
+ */
+function rectifyRgb24(
+  frame: DetectionFrame,
+  corners: Array<{ x: number; y: number }>,
+  width: number,
+  height: number,
+): DetectionFrame {
+  const source = corners.map((point) => ({ x: point.x * frame.width, y: point.y * frame.height }));
+  const target = [
+    { x: 0, y: height - 1 }, { x: 0, y: 0 },
+    { x: width - 1, y: 0 }, { x: width - 1, y: height - 1 },
+  ];
+  const homography = solveHomography(target, source);
+  if (!homography) return cropRgb24(frame, boundsOfCorners(corners));
+  const imageData = Buffer.alloc(width * height * 3);
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      const denominator = (homography[6]! * x) + (homography[7]! * y) + 1;
+      if (!Number.isFinite(denominator) || Math.abs(denominator) < 1e-8) continue;
+      const sourceX = ((homography[0]! * x) + (homography[1]! * y) + homography[2]!) / denominator;
+      const sourceY = ((homography[3]! * x) + (homography[4]! * y) + homography[5]!) / denominator;
+      sampleRgb24(frame, sourceX, sourceY, imageData, ((y * width) + x) * 3);
+    }
+  }
+  return { ...frame, imageData, width, height };
+}
+
+function boundsOfCorners(corners: Array<{ x: number; y: number }>) {
+  const minX = Math.min(...corners.map((point) => point.x));
+  const minY = Math.min(...corners.map((point) => point.y));
+  const maxX = Math.max(...corners.map((point) => point.x));
+  const maxY = Math.max(...corners.map((point) => point.y));
+  return { x: minX, y: minY, width: Math.max(0.0001, maxX - minX), height: Math.max(0.0001, maxY - minY) };
+}
+
+function solveHomography(
+  from: Array<{ x: number; y: number }>,
+  to: Array<{ x: number; y: number }>,
+): number[] | null {
+  const matrix: number[][] = [];
+  for (let index = 0; index < 4; index += 1) {
+    const { x: u, y: v } = from[index]!;
+    const { x, y } = to[index]!;
+    matrix.push([u, v, 1, 0, 0, 0, -u * x, -v * x, x]);
+    matrix.push([0, 0, 0, u, v, 1, -u * y, -v * y, y]);
+  }
+  for (let column = 0; column < 8; column += 1) {
+    let pivot = column;
+    for (let row = column + 1; row < 8; row += 1) {
+      if (Math.abs(matrix[row]![column]!) > Math.abs(matrix[pivot]![column]!)) pivot = row;
+    }
+    if (Math.abs(matrix[pivot]![column]!) < 1e-8) return null;
+    [matrix[column], matrix[pivot]] = [matrix[pivot]!, matrix[column]!];
+    const divisor = matrix[column]![column]!;
+    for (let cell = column; cell <= 8; cell += 1) matrix[column]![cell] /= divisor;
+    for (let row = 0; row < 8; row += 1) {
+      if (row === column) continue;
+      const factor = matrix[row]![column]!;
+      for (let cell = column; cell <= 8; cell += 1) matrix[row]![cell] -= factor * matrix[column]![cell]!;
+    }
+  }
+  return matrix.map((row) => row[8]!).concat(1);
+}
+
+function solveLinearSystem(matrix: number[][]): number[] | null {
+  const size = matrix.length;
+  for (let column = 0; column < size; column += 1) {
+    let pivot = column;
+    for (let row = column + 1; row < size; row += 1) {
+      if (Math.abs(matrix[row]![column]!) > Math.abs(matrix[pivot]![column]!)) pivot = row;
+    }
+    if (Math.abs(matrix[pivot]![column]!) < 1e-8) return null;
+    [matrix[column], matrix[pivot]] = [matrix[pivot]!, matrix[column]!];
+    const divisor = matrix[column]![column]!;
+    for (let cell = column; cell <= size; cell += 1) matrix[column]![cell] = matrix[column]![cell]! / divisor;
+    for (let row = 0; row < size; row += 1) {
+      if (row === column) continue;
+      const factor = matrix[row]![column]!;
+      for (let cell = column; cell <= size; cell += 1) matrix[row]![cell] = matrix[row]![cell]! - (factor * matrix[column]![cell]!);
+    }
+  }
+  return matrix.map((row) => row[size]!);
+}
+
+function sampleRgb24(frame: DetectionFrame, x: number, y: number, target: Buffer, targetOffset: number) {
+  if (x < 0 || y < 0 || x > frame.width - 1 || y > frame.height - 1) return;
+  const x0 = Math.floor(x);
+  const y0 = Math.floor(y);
+  const x1 = Math.min(frame.width - 1, x0 + 1);
+  const y1 = Math.min(frame.height - 1, y0 + 1);
+  const wx = x - x0;
+  const wy = y - y0;
+  for (let channel = 0; channel < 3; channel += 1) {
+    const pixel = (px: number, py: number) => frame.imageData[((py * frame.width + px) * 3) + channel]!;
+    const top = (pixel(x0, y0) * (1 - wx)) + (pixel(x1, y0) * wx);
+    const bottom = (pixel(x0, y1) * (1 - wx)) + (pixel(x1, y1) * wx);
+    target[targetOffset + channel] = Math.round((top * (1 - wy)) + (bottom * wy));
+  }
 }
 
 function requireFloatTensor(value: OnnxValue, name: string) {

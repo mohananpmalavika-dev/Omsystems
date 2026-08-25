@@ -314,8 +314,8 @@ export class AnalyticsPipeline {
       // Step 5: Run person detection with tracking if scheduled
       if (schedule.modelsToRun.includes('yolov8n') || this.needsPersonDetection(rules)) {
         const personResults = await this.personDetector.detect(inferenceFrame);
+        persons = personResults.flatMap((result) => result.objects);
         for (const result of personResults) {
-          persons = persons.concat(result.objects);
           if (this.matchesAnyRule(result.detectionType, rules)) {
             events.push(this.createEvent(frame, result));
           }
@@ -325,8 +325,8 @@ export class AnalyticsPipeline {
       // Step 6: Run vehicle detection with tracking if scheduled
       if (schedule.modelsToRun.includes('yolov8n') || this.needsVehicleDetection(rules)) {
         const vehicleResults = await this.vehicleDetector.detect(inferenceFrame);
+        vehicles = vehicleResults.flatMap((result) => result.objects);
         for (const result of vehicleResults) {
-          vehicles = vehicles.concat(result.objects);
           if (this.matchesAnyRule(result.detectionType, rules)) {
             events.push(this.createEvent(frame, result));
           }

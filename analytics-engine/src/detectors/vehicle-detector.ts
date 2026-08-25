@@ -7,7 +7,7 @@ import { randomUUID } from "node:crypto";
 import { BaseDetector, calculateIoU, type DetectionFrame, type DetectionResult, getInferenceObjects, hasInferenceObjects } from "./base-detector.js";
 import { getModelManager } from "../model-manager.js";
 import { YoloCocoInference } from "../inference/yolo-coco-inference.js";
-import { modelUnavailableReason } from "../inference/configured-model-inference.js";
+import { modelUnavailableReason, yoloModelOptions } from "../inference/configured-model-inference.js";
 import { TrackingEventBus, buildTrackingObservations, type FrameContext } from "../tracking/index.js";
 
 export type VehicleType = "car" | "motorcycle" | "bus" | "truck" | "bicycle" | "auto-rickshaw";
@@ -50,10 +50,16 @@ export class VehicleDetector extends BaseDetector {
     try {
       const manager = getModelManager();
       if (!manager.isModelAvailable("yolov8n")) throw new Error(modelUnavailableReason("yolov8n"));
-      this.inference = new YoloCocoInference(await manager.getModel("yolov8n"), this.MIN_CONFIDENCE);
+      const modelConfig = manager.getModelConfig("yolov8n");
+      this.inference = new YoloCocoInference(
+        await manager.getModel("yolov8n"),
+        this.MIN_CONFIDENCE,
+        0.45,
+        yoloModelOptions(modelConfig),
+      );
       this.isModelLoaded = true;
       this.modelLoadError = undefined;
-      console.log("Vehicle detector loaded shared YOLOv8 ONNX model");
+      console.log(`Vehicle detector loaded shared ${modelConfig?.name ?? "open-source ONNX model"}`);
     } catch (error) {
       this.inference = null;
       this.isModelLoaded = false;
@@ -329,7 +335,7 @@ export class VehicleDetector extends BaseDetector {
     return {
       status: this.isModelLoaded ? ("healthy" as const) : ("degraded" as const),
       details: this.isModelLoaded
-        ? `Local YOLOv8 ONNX inference active; ${this.tracks.size} active vehicle tracks`
+        ? `Local open-source ONNX inference active; ${this.tracks.size} active vehicle tracks`
         : `External normalized detections only; ${this.tracks.size} active vehicle tracks. ${this.modelLoadError ?? "Local model not provisioned"}`,
     };
   }

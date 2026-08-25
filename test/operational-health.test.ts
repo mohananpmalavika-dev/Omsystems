@@ -90,6 +90,7 @@ describe("Phase 1 operational health", () => {
       name: "Front door",
       profiles: [{ name: "main", codec: "H264", width: 1920, height: 1080 }],
       connectionSecretRef: `edge://${agentId}/${discovery.id}`,
+      analyticsEnabled: false,
     }]);
   });
 

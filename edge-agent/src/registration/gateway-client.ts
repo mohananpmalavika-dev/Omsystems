@@ -108,6 +108,7 @@ export interface MonitoringCamera {
   id: string;
   name: string;
   connectionSecretRef: string;
+  analyticsEnabled?: boolean;
   profiles: Array<{
     name: string;
     codec: "H264" | "H265" | "MJPEG" | "unknown";

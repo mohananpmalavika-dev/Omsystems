@@ -1,7 +1,8 @@
 import { Tensor, type InferenceSession, type OnnxValue } from "onnxruntime-node";
 import type { DetectionFrame, InferenceObject } from "../detectors/base-detector.js";
 
-export type YoloDecoder = "yolov8" | "yolov5" | "xyxy";
+export type YoloDecoder = "yolov8" | "yolov5" | "yolox" | "xyxy";
+export type YoloPreprocessor = "rgb-normalized-stretch" | "yolox-letterbox-bgr";
 
 export interface YoloDetectionOptions {
   labels: readonly string[];
@@ -10,6 +11,7 @@ export interface YoloDetectionOptions {
   iouThreshold?: number;
   inputWidth?: number;
   inputHeight?: number;
+  preprocessor?: YoloPreprocessor;
 }
 
 /**
@@ -36,18 +38,23 @@ export class YoloDetectionInference {
   async run(frame: DetectionFrame): Promise<InferenceObject[]> {
     assertRgb24(frame);
     const { width, height } = this.inputDimensions(frame);
-    const chw = resizeRgb24ToChw(frame.imageData, frame.width, frame.height, width, height);
+    const yoloxInput = this.decoder === "yolox" || this.options.preprocessor === "yolox-letterbox-bgr";
+    const prepared = yoloxInput
+      ? resizeRgb24ToYoloxChw(frame.imageData, frame.width, frame.height, width, height)
+      : { tensor: resizeRgb24ToChw(frame.imageData, frame.width, frame.height, width, height), scale: 1 };
     const inputName = this.session.inputNames[0];
     if (!inputName) throw new Error("YOLO model has no input tensor");
     const outputs = await this.session.run({
-      [inputName]: new Tensor("float32", chw, [1, 3, height, width]),
+      [inputName]: new Tensor("float32", prepared.tensor, [1, 3, height, width]),
     });
     const outputName = this.session.outputNames[0];
     const output = outputName ? outputs[outputName] : Object.values(outputs)[0];
     if (!output) throw new Error("YOLO model produced no output tensor");
     const candidates = this.decoder === "xyxy"
       ? this.decodeXyxy(output, width, height)
-      : this.decodeRaw(output, width, height);
+      : this.decoder === "yolox"
+        ? this.decodeYolox(output, width, height, frame.width, frame.height, prepared.scale)
+        : this.decodeRaw(output, width, height);
     return nonMaximumSuppression(candidates, this.iouThreshold);
   }
 
@@ -138,6 +145,70 @@ export class YoloDetectionInference {
     }
     return candidates;
   }
+
+  /** Decode the official Megvii YOLOX ONNX layout: [1, boxes, 5 + classes]. */
+  private decodeYolox(
+    output: OnnxValue,
+    inputWidth: number,
+    inputHeight: number,
+    frameWidth: number,
+    frameHeight: number,
+    scale: number,
+  ): InferenceObject[] {
+    const tensor = floatTensor(output, "YOLOX");
+    const dims = tensor.dims.map(Number);
+    if (dims.length !== 3 || dims[0] !== 1) {
+      throw new Error(`Unsupported YOLOX output shape: ${dims.join("x")}`);
+    }
+    const expectedFeatures = 5 + this.options.labels.length;
+    const featureFirst = orientation(dims[1]!, dims[2]!, expectedFeatures);
+    const features = featureFirst ? dims[1]! : dims[2]!;
+    const detections = featureFirst ? dims[2]! : dims[1]!;
+    if (features < expectedFeatures) {
+      throw new Error(`Unsupported YOLOX feature count: ${features}; expected at least ${expectedFeatures}`);
+    }
+    const grid = yoloxGrid(inputWidth, inputHeight);
+    if (detections !== grid.length) {
+      throw new Error(`Unsupported YOLOX candidate count: ${detections}; expected ${grid.length} for ${inputWidth}x${inputHeight}`);
+    }
+    const data = tensor.data as Float32Array;
+    const at = (detection: number, feature: number) => featureFirst
+      ? data[(feature * detections) + detection]!
+      : data[(detection * features) + feature]!;
+    const candidates: InferenceObject[] = [];
+
+    for (let index = 0; index < detections; index += 1) {
+      let classIndex = -1;
+      let classScore = Number.NEGATIVE_INFINITY;
+      for (let offset = 0; offset < this.options.labels.length; offset += 1) {
+        const score = at(index, 5 + offset);
+        if (score > classScore) {
+          classScore = score;
+          classIndex = offset;
+        }
+      }
+      const confidence = at(index, 4) * classScore;
+      if (classIndex < 0 || !Number.isFinite(confidence) || confidence < this.confidenceThreshold) continue;
+      const cell = grid[index]!;
+      const centerX = (at(index, 0) + cell.x) * cell.stride;
+      const centerY = (at(index, 1) + cell.y) * cell.stride;
+      const boxWidth = Math.exp(at(index, 2)) * cell.stride;
+      const boxHeight = Math.exp(at(index, 3)) * cell.stride;
+      candidates.push({
+        label: this.options.labels[classIndex]!,
+        confidence,
+        boundingBox: normalizeBox(
+          (centerX - boxWidth / 2) / scale,
+          (centerY - boxHeight / 2) / scale,
+          boxWidth / scale,
+          boxHeight / scale,
+          frameWidth,
+          frameHeight,
+        ),
+      });
+    }
+    return candidates;
+  }
 }
 
 function assertRgb24(frame: DetectionFrame) {
@@ -169,6 +240,74 @@ export function resizeRgb24ToChw(
     }
   }
   return output;
+}
+
+/**
+ * Official YOLOX preprocessing: preserve aspect ratio, pad on the bottom/right
+ * with 114, keep raw 0..255 values, and convert the edge RGB24 frame to the
+ * BGR channel order used by OpenCV-trained exports.
+ */
+export function resizeRgb24ToYoloxChw(
+  source: Buffer,
+  sourceWidth: number,
+  sourceHeight: number,
+  targetWidth: number,
+  targetHeight: number,
+): { tensor: Float32Array; scale: number } {
+  const scale = Math.min(targetWidth / sourceWidth, targetHeight / sourceHeight);
+  const resizedWidth = Math.max(1, Math.min(targetWidth, Math.floor(sourceWidth * scale)));
+  const resizedHeight = Math.max(1, Math.min(targetHeight, Math.floor(sourceHeight * scale)));
+  const plane = targetWidth * targetHeight;
+  const tensor = new Float32Array(plane * 3);
+  tensor.fill(114);
+
+  for (let y = 0; y < resizedHeight; y += 1) {
+    const sourceY = ((y + 0.5) / scale) - 0.5;
+    const y0 = Math.max(0, Math.min(sourceHeight - 1, Math.floor(sourceY)));
+    const y1 = Math.max(0, Math.min(sourceHeight - 1, y0 + 1));
+    const yWeight = Math.max(0, Math.min(1, sourceY - y0));
+    for (let x = 0; x < resizedWidth; x += 1) {
+      const sourceX = ((x + 0.5) / scale) - 0.5;
+      const x0 = Math.max(0, Math.min(sourceWidth - 1, Math.floor(sourceX)));
+      const x1 = Math.max(0, Math.min(sourceWidth - 1, x0 + 1));
+      const xWeight = Math.max(0, Math.min(1, sourceX - x0));
+      const outputOffset = (y * targetWidth) + x;
+      // BGR output planes from an RGB24 source.
+      tensor[outputOffset] = bilinearRgbChannel(source, sourceWidth, x0, x1, y0, y1, xWeight, yWeight, 2);
+      tensor[plane + outputOffset] = bilinearRgbChannel(source, sourceWidth, x0, x1, y0, y1, xWeight, yWeight, 1);
+      tensor[(2 * plane) + outputOffset] = bilinearRgbChannel(source, sourceWidth, x0, x1, y0, y1, xWeight, yWeight, 0);
+    }
+  }
+  return { tensor, scale };
+}
+
+function bilinearRgbChannel(
+  source: Buffer,
+  sourceWidth: number,
+  x0: number,
+  x1: number,
+  y0: number,
+  y1: number,
+  xWeight: number,
+  yWeight: number,
+  channel: number,
+) {
+  const value = (x: number, y: number) => source[(((y * sourceWidth) + x) * 3) + channel]!;
+  const top = value(x0, y0) * (1 - xWeight) + value(x1, y0) * xWeight;
+  const bottom = value(x0, y1) * (1 - xWeight) + value(x1, y1) * xWeight;
+  return top * (1 - yWeight) + bottom * yWeight;
+}
+
+function yoloxGrid(width: number, height: number) {
+  const grid: Array<{ x: number; y: number; stride: number }> = [];
+  for (const stride of [8, 16, 32]) {
+    const columns = Math.floor(width / stride);
+    const rows = Math.floor(height / stride);
+    for (let y = 0; y < rows; y += 1) {
+      for (let x = 0; x < columns; x += 1) grid.push({ x, y, stride });
+    }
+  }
+  return grid;
 }
 
 function numericDimension(value: number | string | undefined) {

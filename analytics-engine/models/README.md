@@ -1,28 +1,34 @@
 # Analytics model artifacts
 
-`manifest.json` is the runtime contract. ONNX weights are deployment artifacts and are intentionally excluded from Git because their licenses, provenance and checksums differ by deployment.
+`manifest.json` is the runtime contract. The production Docker build downloads
+the required model directly from its reviewed upstream source, verifies its
+fixed SHA-256, and copies it into the runtime image. ONNX weights remain
+excluded from Git.
 
 ## Required runtime set
 
-| Model ID | Path | Contract |
+| Model ID | Runtime path | Contract |
 | --- | --- | --- |
-| `yolov8n` | `detection/yolov8n.onnx` | YOLOv8 COCO `[1,84,N]` or `[1,N,84]` |
-| `fire-smoke` | `safety/fire-smoke.onnx` | YOLOv8 classes `fire, smoke` |
-| `helmet` | `safety/helmet.onnx` | YOLOv8 classes `helmet, head` |
-| `face-detector` | `face/face-detector.onnx` | YOLOv8 class `face` |
-| `anpr-detector` | `vehicle/license-plate-detector.onnx` | YOLOv8 class `license-plate` |
-| `anpr-recognizer` | `vehicle/license-plate-recognizer.onnx` | CTC logits using the manifest alphabet |
+| `yolov8n` (compatibility ID) | `detection/yolox_tiny.onnx` | Official YOLOX Tiny COCO `[1,3549,85]`, BGR letterbox `1x3x416x416` |
+| `face-detector` | `face/face-detector.onnx` | OpenCV Zoo YuNet, native 12-output face/landmark decoder, BGR `1x3x640x640` |
+| `face-embedding` | `face/face-embedding.onnx` | OpenCV Zoo SFace INT8, five-point aligned RGB `1x3x112x112` |
+| `anpr-detector` | `vehicle/license-plate-detector.onnx` | OpenCV Zoo LPD-YuNet, native corner decoder, BGR `1x3x240x320` |
+| `anpr-recognizer` | `vehicle/license-plate-recognizer.onnx` | OpenCV Zoo CRNN INT8, rectified grayscale `1x1x32x100` |
 
-`face-embedding` is optional unless face recognition/watchlists are enabled. It must accept an RGB `1x3x112x112` tensor and return one float embedding.
+Fire/smoke, helmet/head, pose, attributes and re-identification models remain
+optional. They are not reported as ready unless an operator supplies reviewed
+artifacts matching the manifest contract. Helmet compliance is deliberately
+degraded until its official PaddleClas source has a reproducibly converted and
+checksum-pinned ONNX artifact.
 
 The YOLO adapter also supports `yolov5` objectness output and post-NMS `xyxy` rows when the manifest `decoder` is changed. Bounding boxes are normalized before they enter rules, alerts or tracking.
 
 ## Provisioning
 
-Weights must come from an approved internal artifact store or a reviewed upstream source. For each model, configure the URL and SHA-256 variables shown in `.env.example`, acknowledge the model licenses, and run:
+Review `../THIRD_PARTY_MODELS.md`, acknowledge the model license, and run:
 
 ```bash
-ANALYTICS_MODEL_LICENSES_ACCEPTED=true npm run models:download
+ANALYTICS_MODEL_LICENSES_ACCEPTED=true npm run models:download -- yolov8n face-detector face-embedding anpr-detector anpr-recognizer
 npm run models:verify
 ```
 

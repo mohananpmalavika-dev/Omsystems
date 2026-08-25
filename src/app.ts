@@ -1096,12 +1096,17 @@ export async function buildApp(options?: {
     );
     if (!agent) return reply.code(404).send({ error: "edge_agent_not_found" });
     const cameras = await store.listCamerasByEdgeAgent(id);
+    const analyticsEnabledByCamera = new Map(await Promise.all(cameras.map(async (camera) => [
+      camera.id,
+      (await store.listAnalyticsRules(camera.id)).some((rule) => rule.enabled),
+    ] as const)));
     return {
       data: cameras.map((camera) => ({
         id: camera.id,
         name: camera.name,
         profiles: camera.profiles,
         connectionSecretRef: camera.connectionSecretRef,
+        analyticsEnabled: analyticsEnabledByCamera.get(camera.id) === true,
         ...(camera.sourceType && camera.sourceType !== "ip-camera" ? { sourceType: camera.sourceType } : {}),
         ...(camera.recorderId ? { recorderId: camera.recorderId } : {}),
         ...(camera.recorderChannel ? { recorderChannel: camera.recorderChannel } : {}),

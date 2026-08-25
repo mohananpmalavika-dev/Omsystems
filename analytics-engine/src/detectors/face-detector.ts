@@ -310,8 +310,12 @@ export class FaceDetector extends BaseDetector {
     ];
     return Promise.all(observations.map(async (item) => {
       const embedding = item.attributes?.embedding;
+      const landmarks = readLandmarks(item.attributes?.landmarks);
+      const landmarkPoints = landmarks
+        ? [landmarks.leftEye, landmarks.rightEye, landmarks.nose, landmarks.leftMouth, landmarks.rightMouth]
+        : undefined;
       const localEmbedding = runLocal && this.config.recognitionEnabled && this.recognitionModel
-        ? await this.recognitionModel.run(frame, item.boundingBox)
+        ? await this.recognitionModel.run(frame, item.boundingBox, landmarkPoints)
         : undefined;
       return {
         confidence: item.confidence,
@@ -323,9 +327,9 @@ export class FaceDetector extends BaseDetector {
         },
         trackId: item.trackId,
         ...(localEmbedding
-          ? { features: { embedding: localEmbedding, quality: item.confidence } }
+          ? { features: { embedding: localEmbedding, landmarks, quality: item.confidence } }
           : Array.isArray(embedding) && embedding.every((value) => typeof value === "number")
-          ? { features: { embedding: embedding as number[], quality: typeof item.attributes?.quality === "number" ? item.attributes.quality : undefined } }
+          ? { features: { embedding: embedding as number[], landmarks, quality: typeof item.attributes?.quality === "number" ? item.attributes.quality : undefined } }
           : {}),
       };
     }));
@@ -405,4 +409,18 @@ export class FaceDetector extends BaseDetector {
       },
     };
   }
+}
+
+function readLandmarks(value: unknown): FaceFeatures["landmarks"] | undefined {
+  if (!Array.isArray(value) || value.length !== 5) return undefined;
+  const points = value.map((point) => {
+    if (!point || typeof point !== "object") return null;
+    const item = point as Record<string, unknown>;
+    return typeof item.x === "number" && typeof item.y === "number"
+      ? { x: item.x, y: item.y }
+      : null;
+  });
+  if (points.some((point) => point === null)) return undefined;
+  const [leftEye, rightEye, nose, leftMouth, rightMouth] = points as Array<{ x: number; y: number }>;
+  return { leftEye, rightEye, nose, leftMouth, rightMouth };
 }

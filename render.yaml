@@ -249,7 +249,7 @@ services:
           name: sentinel-grid-control-plane
           envVarKey: ANALYTICS_SOURCE_SHARED_KEY
       - key: ANALYTICS_REQUIRE_MODELS
-        value: "false"
+        value: "true"
       - key: LOG_TO_FILE
         value: "false"
 

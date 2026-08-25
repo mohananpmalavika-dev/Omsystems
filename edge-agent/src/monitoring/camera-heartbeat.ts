@@ -47,6 +47,8 @@ export interface CameraConfig {
   expectedFps?: number;
   expectedBitrate?: number;
   enabled: boolean;
+  /** High-frequency frame delivery is enabled only when the camera has an active AI rule. */
+  analyticsEnabled?: boolean;
 }
 
 /**
@@ -116,6 +118,9 @@ export class CameraHeartbeatService {
   private readonly recoveryInProgress = new Set<string>();
   private readonly recoveryCooldowns = new Map<string, number>();
   private heartbeatInterval: NodeJS.Timeout | null = null;
+  private analyticsInterval: NodeJS.Timeout | null = null;
+  private heartbeatCycleRunning = false;
+  private analyticsCycleRunning = false;
   private isRunning = false;
 
   constructor(
@@ -141,27 +146,75 @@ export class CameraHeartbeatService {
     logger.info(`Synchronized ${cameras.length} camera(s) for heartbeat monitoring`);
   }
 
-  start(intervalMs = 30_000): void {
+  start(intervalMs = 30_000, analyticsIntervalMs = 2_000): void {
     if (this.isRunning) return;
     this.isRunning = true;
     this.sendAllHeartbeats().catch((error: unknown) => logger.error("Failed to send initial camera heartbeats", { error }));
     this.heartbeatInterval = setInterval(() => {
       this.sendAllHeartbeats().catch((error: unknown) => logger.error("Failed to send camera heartbeats", { error }));
     }, intervalMs);
+    if (this.analyticsFrameSender) {
+      this.analyticsInterval = setInterval(() => {
+        this.sendAllAnalyticsFrames().catch((error: unknown) => logger.error("Failed to send analytics frames", { error }));
+      }, analyticsIntervalMs);
+    }
   }
 
   stop(): void {
     this.isRunning = false;
     if (this.heartbeatInterval) clearInterval(this.heartbeatInterval);
+    if (this.analyticsInterval) clearInterval(this.analyticsInterval);
     this.heartbeatInterval = null;
+    this.analyticsInterval = null;
   }
 
   private async sendAllHeartbeats(): Promise<void> {
-    const cameras = [...this.cameras.values()].filter((camera) => camera.enabled);
-    const batchSize = 5;
-    for (let index = 0; index < cameras.length; index += batchSize) {
-      await Promise.allSettled(cameras.slice(index, index + batchSize).map((camera) => this.sendHeartbeat(camera)));
+    if (this.heartbeatCycleRunning) {
+      logger.warn("Skipping overlapping camera heartbeat cycle");
+      return;
     }
+    this.heartbeatCycleRunning = true;
+    try {
+      const cameras = [...this.cameras.values()].filter((camera) => camera.enabled);
+      const batchSize = 5;
+      for (let index = 0; index < cameras.length; index += batchSize) {
+        await Promise.allSettled(cameras.slice(index, index + batchSize).map((camera) => this.sendHeartbeat(camera)));
+      }
+    } finally {
+      this.heartbeatCycleRunning = false;
+    }
+  }
+
+  private async sendAllAnalyticsFrames(): Promise<void> {
+    if (this.analyticsCycleRunning) {
+      logger.warn("Skipping overlapping analytics frame cycle");
+      return;
+    }
+    this.analyticsCycleRunning = true;
+    try {
+      const cameras = [...this.cameras.values()].filter((camera) =>
+        camera.enabled && camera.analyticsEnabled !== false && Boolean(camera.rtspUrl),
+      );
+      // FFmpeg process startup is CPU intensive. Two concurrent captures keep
+      // inference fresh without allowing a large branch to exhaust the host.
+      const batchSize = 2;
+      for (let index = 0; index < cameras.length; index += batchSize) {
+        await Promise.allSettled(cameras.slice(index, index + batchSize).map((camera) => this.captureAnalyticsFrame(camera)));
+      }
+    } finally {
+      this.analyticsCycleRunning = false;
+    }
+  }
+
+  private async captureAnalyticsFrame(camera: CameraConfig): Promise<void> {
+    const width = 320;
+    const height = 180;
+    const frame = await captureRtspRgbFrame(camera.rtspUrl!, this.ffmpegPath, 10_000, width, height);
+    if (!frame) {
+      logger.warn("Analytics frame capture unavailable", { cameraId: camera.id });
+      return;
+    }
+    await this.deliverAnalyticsFrame(camera.id, frame, width, height, "edge-rtsp-scheduled");
   }
 
   private async sendHeartbeat(camera: CameraConfig): Promise<void> {
@@ -249,18 +302,10 @@ export class CameraHeartbeatService {
       ? assessAnalogRgbFrame(this.frameStates.get(camera.id), frame, analyticsWidth, analyticsHeight)
       : null;
     if (frameHealth) this.frameStates.set(camera.id, frameHealth.state);
-    if (frame && this.analyticsFrameSender) {
-      await this.analyticsFrameSender({
-        cameraId: camera.id,
-        capturedAt: new Date().toISOString(),
-        width: analyticsWidth,
-        height: analyticsHeight,
-        imageBase64: frame.toString("base64"),
-        metadata: { source: "edge-rtsp", edgeAgentId: this.edgeAgentId },
-      }).catch((error: unknown) => logger.warn("Analytics frame delivery failed", {
-        cameraId: camera.id,
-        error: error instanceof Error ? error.message : String(error),
-      }));
+    if (frame && this.analyticsFrameSender && camera.analyticsEnabled !== false) {
+      // Camera health must not wait behind cloud inference. The scheduled
+      // analytics loop provides backpressure and this sample is best effort.
+      void this.deliverAnalyticsFrame(camera.id, frame, analyticsWidth, analyticsHeight, "edge-rtsp-health");
     }
 
     const reasonCodes: string[] = [];
@@ -394,9 +439,37 @@ export class CameraHeartbeatService {
     if (!response.ok) throw new Error(`HTTP ${response.status}: ${await response.text()}`);
   }
 
+  private async deliverAnalyticsFrame(
+    cameraId: string,
+    frame: Buffer,
+    width: number,
+    height: number,
+    source: string,
+  ): Promise<void> {
+    if (!this.analyticsFrameSender) return;
+    await this.analyticsFrameSender({
+      cameraId,
+      capturedAt: new Date().toISOString(),
+      width,
+      height,
+      imageBase64: frame.toString("base64"),
+      metadata: { source, edgeAgentId: this.edgeAgentId },
+    }).catch((error: unknown) => logger.warn("Analytics frame delivery failed", {
+      cameraId,
+      error: error instanceof Error ? error.message : String(error),
+    }));
+  }
+
   getStats() {
     const cameras = [...this.cameras.values()];
-    return { totalCameras: cameras.length, enabledCameras: cameras.filter((camera) => camera.enabled).length, isRunning: this.isRunning };
+    return {
+      totalCameras: cameras.length,
+      enabledCameras: cameras.filter((camera) => camera.enabled).length,
+      analyticsCameras: cameras.filter((camera) => camera.enabled && camera.analyticsEnabled !== false).length,
+      heartbeatCycleRunning: this.heartbeatCycleRunning,
+      analyticsCycleRunning: this.analyticsCycleRunning,
+      isRunning: this.isRunning,
+    };
   }
 }
 

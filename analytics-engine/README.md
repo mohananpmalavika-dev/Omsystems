@@ -766,9 +766,15 @@ Response:
 
 ### Required Models
 
-The required paths and tensor contracts are defined by `models/manifest.json`: COCO, fire/smoke, helmet/head, face, plate detection and plate CTC recognition. Model binaries are deployment artifacts and must be provisioned from an approved source with an audited SHA-256.
+The production image provisions the official Apache-2.0 YOLOX Tiny COCO ONNX
+artifact defined by `models/manifest.json`. The download is pinned to an
+audited SHA-256 and inference runs locally through ONNX Runtime without a paid
+AI API. See `THIRD_PARTY_MODELS.md` for source and license details.
 
-Run `npm run models:download` to provision configured artifacts and `npm run models:verify` to open every required model with ONNX Runtime. See `models/README.md` for the exact contract and field-validation limits.
+For local development, review the notice and run
+`ANALYTICS_MODEL_LICENSES_ACCEPTED=true npm run models:download -- yolov8n`.
+Specialty fire/smoke, PPE, face and ANPR artifacts are optional and remain
+visibly degraded until independently reviewed models are supplied.
 
 ### Model Loading Example
 
@@ -777,11 +783,11 @@ import * as ort from 'onnxruntime-node';
 
 // Load model
 const session = await ort.InferenceSession.create(
-  process.env.YOLO_MODEL_PATH || './models/yolov8n.onnx'
+  process.env.YOLO_MODEL_PATH || './models/detection/yolox_tiny.onnx'
 );
 
 // Preprocess frame
-const tensor = preprocessImage(imageBuffer, 640, 640);
+const tensor = preprocessYoloxImage(imageBuffer, 416, 416);
 
 // Run inference
 const results = await session.run({ images: tensor });

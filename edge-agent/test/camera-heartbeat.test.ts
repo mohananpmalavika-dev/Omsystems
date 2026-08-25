@@ -94,4 +94,36 @@ describe("camera frame health", () => {
     }));
     expect(recover).toHaveBeenCalledOnce();
   });
+
+  it("captures scheduled AI frames only for enabled cameras with active rules and local streams", async () => {
+    const sendAnalyticsFrame = vi.fn(async () => undefined);
+    const service = new CameraHeartbeatService(
+      "http://control.example",
+      "branch-1",
+      "agent-1",
+      undefined,
+      "ffprobe",
+      "ffmpeg",
+      undefined,
+      undefined,
+      undefined,
+      sendAnalyticsFrame,
+    );
+    service.replaceCameras([
+      { id: "active", name: "Active AI", rtspUrl: "rtsp://camera/active", enabled: true, analyticsEnabled: true },
+      { id: "no-rule", name: "No AI rule", rtspUrl: "rtsp://camera/no-rule", enabled: true, analyticsEnabled: false },
+      { id: "no-secret", name: "No local secret", enabled: true, analyticsEnabled: true },
+      { id: "disabled", name: "Disabled", rtspUrl: "rtsp://camera/disabled", enabled: false, analyticsEnabled: true },
+    ]);
+
+    const internals = service as unknown as {
+      captureAnalyticsFrame: ReturnType<typeof vi.fn>;
+      sendAllAnalyticsFrames(): Promise<void>;
+    };
+    internals.captureAnalyticsFrame = vi.fn(async () => undefined);
+    await internals.sendAllAnalyticsFrames();
+
+    expect(internals.captureAnalyticsFrame).toHaveBeenCalledOnce();
+    expect(internals.captureAnalyticsFrame).toHaveBeenCalledWith(expect.objectContaining({ id: "active" }));
+  });
 });
