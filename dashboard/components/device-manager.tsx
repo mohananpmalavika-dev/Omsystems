@@ -241,6 +241,7 @@ export function DeviceManager() {
   const [probeResult, setProbeResult] = useState<DirectProbeResult | null>(null);
   const [probeResults, setProbeResults] = useState<DirectProbeResult[]>([]);
   const scanAbortedRef = useRef(false);
+  const credentialDeepLinkHandledRef = useRef(false);
 
   function stopScanning() {
     scanAbortedRef.current = true;
@@ -807,6 +808,44 @@ export function DeviceManager() {
     setError(undefined);
   }
 
+  function openActiveCameraCredentialUpdate(camera: CameraRecord) {
+    if (!camera.ipAddress) {
+      setError(`No IP address is saved for ${camera.name}. Re-add or rediscover this camera before updating its login.`);
+      return;
+    }
+    const gateway = gateways.find((item) => item.id === camera.edgeAgentId && isGatewayReady(item)) ?? onlineGateway;
+    if (!gateway) {
+      setError("An online Branch Gateway is required to save and verify a camera login.");
+      return;
+    }
+    openCredentialActivation({
+      ...camera,
+      displayName: camera.name,
+      edgeAgentId: gateway.id,
+      existingCamera: true,
+    });
+  }
+
+  useEffect(() => {
+    if (credentialDeepLinkHandledRef.current || loading || !selectedBranch) return;
+
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("action") !== "camera-login") return;
+    const cameraId = params.get("cameraId");
+    if (!cameraId) return;
+
+    const camera = cameras.find((item) => item.id === cameraId);
+    if (!camera) return;
+
+    credentialDeepLinkHandledRef.current = true;
+    openActiveCameraCredentialUpdate(camera);
+
+    const cleanUrl = new URL(window.location.href);
+    cleanUrl.searchParams.delete("action");
+    cleanUrl.searchParams.delete("cameraId");
+    window.history.replaceState(window.history.state, "", `${cleanUrl.pathname}${cleanUrl.search}${cleanUrl.hash}`);
+  }, [cameras, loading, selectedBranch]);
+
   async function waitForCredentialCommand(commandId: string) {
     if (!selectedBranch) throw new Error("Select a branch before verifying device credentials.");
     const deadline = Date.now() + 180_000;
@@ -860,6 +899,26 @@ export function DeviceManager() {
       const targetName = credentialActivation.displayName || credentialActivation.model || "IP Camera";
       const targetAgentId = credentialActivation.edgeAgentId;
       const targetIpAddress = credentialActivation.ipAddress;
+      if (!targetAgentId || !targetIpAddress) {
+        throw new Error("The selected device is missing its gateway or IP address.");
+      }
+      if (credentialActivation.existingCamera) {
+        const activation = await cameraInventoryApi.updateGatewayCameraCredentials(selectedBranch, targetAgentId, {
+          username: activationUsername,
+          password: activationPassword || null,
+          cameraIp: targetIpAddress,
+        });
+        setActivationPassword("");
+        setCredentialVerificationStatus("Waiting for the installed scanner to verify this device and refresh its stream route…");
+        await waitForCredentialCommand(activation.commandId);
+        setCredentialActivation(undefined);
+        setCredentialVerificationStatus(undefined);
+        setCredentialVerificationError(undefined);
+        setNotice(`Credentials verified for ${targetName}. The branch gateway refreshed its stream route; try Live View again.`);
+        await refreshBranch(selectedBranch);
+        return;
+      }
+
       const activation = await cameraInventoryApi.activateDiscovery(selectedBranch, credentialActivation.id, {
         username: activationUsername,
         password: activationPassword,
@@ -1671,6 +1730,15 @@ try {
                 <span className="camera-device-icon"><Camera size={15} /></span>
                 <div><strong>{camera.name}</strong><small>{camera.sourceType === "analog-dvr-channel" ? `Analog via DVR ${camera.recorderId ?? ""} · channel ${camera.recorderChannel ?? camera.channel}` : camera.sourceType === "nvr-channel" ? `NVR ${camera.recorderId ?? ""} · channel ${camera.recorderChannel ?? camera.channel}` : `${camera.vendor} · ${camera.model} · channel ${camera.channel}`}</small></div>
                 <span className={`inventory-status ${camera.status}`}>{camera.status}</span>
+                <button
+                  type="button"
+                  className="secondary-button"
+                  onClick={() => openActiveCameraCredentialUpdate(camera)}
+                  disabled={saving || !camera.ipAddress}
+                  title={camera.ipAddress ? "Update login and verify this active camera" : "This camera has no saved IP address"}
+                >
+                  Update login
+                </button>
               </article>
             ))}
           </section>
@@ -2069,7 +2137,9 @@ try {
                 <div className="credential-device-summary">
                   <strong>{credentialActivation.displayName || credentialActivation.model || "Detected device"}</strong>
                   <span><b>IP address:</b> {credentialActivation.ipAddress} · <b>Model:</b> {discoveryModelLabel(credentialActivation)} · <b>Type:</b> {discoveryDeviceTypeLabel(credentialActivation)}</span>
-                  <small>Its saved login did not match. Enter the device username and password; Sentinel Grid will probe only this IP address and discover channels belonging to this device.</small>
+                  <small>{credentialActivation.existingCamera
+                    ? "Update the login for this active camera. Sentinel Grid will encrypt it for this gateway only, re-verify this IP address, and refresh its live-stream route."
+                    : "Its saved login did not match. Enter the device username and password; Sentinel Grid will probe only this IP address and discover channels belonging to this device."}</small>
                 </div>
               </div>
               

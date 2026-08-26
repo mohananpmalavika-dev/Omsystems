@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import {
   BookmarkPlus,
   Camera as CameraIcon,
@@ -231,6 +232,14 @@ export function CameraTile({
             <div className={`camera-feed-placeholder${liveError ? " has-error" : ""}`}>
               <span>{camera.status === "offline" ? "Camera offline" : liveError ? "Live feed unavailable" : "Live feed ready"}</span>
               {liveError && <small>{formatLiveError(liveError)}</small>}
+              {liveError && (
+                <Link
+                  className="camera-login-link"
+                  href={`/admin/branch-onboarding?branchId=${encodeURIComponent(camera.branchId)}&cameraId=${encodeURIComponent(camera.id)}&action=camera-login`}
+                >
+                  Update camera login
+                </Link>
+              )}
             </div>
           )}
         </div>

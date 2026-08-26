@@ -312,6 +312,8 @@ export interface Camera {
   name: string;
   branchId: string;
   branchName?: string;
+  /** Gateway that owns the local stream secret, when the camera is edge-managed. */
+  edgeAgentId?: string;
   vendor: "hikvision" | "cp-plus" | "other";
   model: string;
   status: CameraStatus;
