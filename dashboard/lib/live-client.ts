@@ -19,6 +19,34 @@ export async function startLiveFromBrowser(
   profile: "main" | "sub" = "sub",
   signal: AbortSignal = AbortSignal.timeout(LIVE_START_TIMEOUT_MS),
 ): Promise<LiveSessionResponse> {
+  const authorization = await requestLiveAuthorization(cameraId, profile, "auto", signal);
+  if (!isBrowserDirectLiveStart(authorization)) return authorization;
+
+  const direct = await startDirectSession(authorization, signal);
+  if (direct) return direct;
+
+  // A private branch address is reachable only from an operator on that
+  // branch LAN/VPN. Ask for a new, single-use session before trying the
+  // branch's public/named-tunnel route from outside that private network.
+  try {
+    const publicRoute = await requestLiveAuthorization(cameraId, profile, "public", signal);
+    if (!isBrowserDirectLiveStart(publicRoute)) return publicRoute;
+    const publicDirect = await startDirectSession(publicRoute, signal);
+    if (publicDirect) return publicDirect;
+  } catch {
+    // Preserve the existing snapshot-relay fallback below. It provides a
+    // useful degraded tile when neither local nor public media is reachable.
+  }
+
+  return snapshotRelay(cameraId, authorization.direct.controlPlaneToken);
+}
+
+async function requestLiveAuthorization(
+  cameraId: string,
+  profile: "main" | "sub",
+  routePreference: "auto" | "public",
+  signal: AbortSignal,
+): Promise<LiveSessionResponse | BrowserDirectLiveStart> {
   const token = typeof window !== "undefined" ? localStorage.getItem("accessToken") : null;
   const headers: Record<string, string> = { "content-type": "application/json" };
   if (token) {
@@ -26,44 +54,34 @@ export async function startLiveFromBrowser(
     headers["authorization"] = `Bearer ${token}`;
   }
 
-  let authorization: Response;
+  let response: Response;
   try {
-    authorization = await fetch("/api/live", {
+    response = await fetch("/api/live", {
       method: "POST",
       headers,
       credentials: "include",
-      body: JSON.stringify({ cameraId, profile }),
+      body: JSON.stringify({ cameraId, profile, routePreference }),
       signal,
     });
   } catch (error) {
     throw timeoutError(error);
   }
-  const body = await readJson(authorization);
-  if (!authorization.ok) throw new Error(errorCode(body, "live_session_unavailable"));
-  if (!isBrowserDirectLiveStart(body)) return body as LiveSessionResponse;
+  const body = await readJson(response);
+  if (!response.ok) throw new Error(errorCode(body, "live_session_unavailable"));
+  return body as LiveSessionResponse | BrowserDirectLiveStart;
+}
 
-  const candidates = [body.direct, ...(body.directFallbacks ?? [])]
+async function startDirectSession(
+  authorization: BrowserDirectLiveStart,
+  signal: AbortSignal,
+): Promise<LiveSessionResponse | undefined> {
+  const candidates = [authorization.direct, ...(authorization.directFallbacks ?? [])]
     .filter((candidate) => isAllowedGatewayForCurrentPage(candidate.url));
 
   if (candidates.length === 0) {
-    // When direct browser-to-gateway is blocked by HTTPS mixed content (HTTPS page -> HTTP local gateway),
-    // fallback seamlessly to the snapshot relay stream instead of throwing an error.
-    return {
-      sessionId: body.direct.controlPlaneToken,
-      cameraId,
-      expiresAt: new Date(Date.now() + 300_000).toISOString(),
-      hls: {
-        url: `/api/media/snapshot-relay?cameraId=${encodeURIComponent(cameraId)}`,
-        bearerToken: body.direct.controlPlaneToken,
-      },
-      webRtc: {
-        whepUrl: "",
-        bearerToken: body.direct.controlPlaneToken,
-      },
-    };
+    return undefined;
   }
 
-  let lastError: unknown;
   for (const candidate of candidates) {
     let localResponse: Response;
     try {
@@ -77,9 +95,6 @@ export async function startLiveFromBrowser(
     } catch (error) {
       const normalized = timeoutError(error);
       if (normalized instanceof Error && normalized.message === "live_session_timeout") throw normalized;
-      lastError = normalized === error
-        ? new Error("local_media_gateway_unavailable", { cause: error })
-        : normalized;
       continue;
     }
 
@@ -87,19 +102,21 @@ export async function startLiveFromBrowser(
     if (!localResponse.ok) continue;
     return rewriteLiveMediaUrls(localBody as LiveSessionResponse, candidate.url);
   }
+  return undefined;
+}
 
-  // If direct connection attempts fail, fallback to snapshot relay rather than breaking the tile
+function snapshotRelay(cameraId: string, controlPlaneToken: string): LiveSessionResponse {
   return {
-    sessionId: body.direct.controlPlaneToken,
+    sessionId: controlPlaneToken,
     cameraId,
     expiresAt: new Date(Date.now() + 300_000).toISOString(),
     hls: {
       url: `/api/media/snapshot-relay?cameraId=${encodeURIComponent(cameraId)}`,
-      bearerToken: body.direct.controlPlaneToken,
+      bearerToken: controlPlaneToken,
     },
     webRtc: {
       whepUrl: "",
-      bearerToken: body.direct.controlPlaneToken,
+      bearerToken: controlPlaneToken,
     },
   };
 }

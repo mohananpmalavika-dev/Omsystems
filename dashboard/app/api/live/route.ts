@@ -24,6 +24,7 @@ export async function POST(request: NextRequest) {
     const body = z.object({
       cameraId: z.string().min(1),
       profile: z.enum(["main", "sub"]).default("sub"),
+      routePreference: z.enum(["auto", "public"]).default("auto"),
     }).parse(
       await request.json(),
     );
@@ -31,6 +32,7 @@ export async function POST(request: NextRequest) {
     const result = await startLive(
       body.cameraId,
       sessionToken ?? undefined,
+      body.routePreference,
     );
 
     return NextResponse.json(result, { status: 201 });

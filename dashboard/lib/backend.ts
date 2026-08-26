@@ -16,6 +16,8 @@ type DirectLiveStart = {
   directFallbacks?: DirectLiveGateway[];
 };
 
+export type LiveRoutePreference = "auto" | "public";
+
 export async function listBranches(employeeSession?: string): Promise<Branch[]> {
   const response = await controlFetch("/v1/branches", undefined, employeeSession);
   const body = await response.json() as { data: Branch[] };
@@ -41,6 +43,7 @@ export async function listCameras(
 export async function startLive(
   cameraId: string,
   employeeSession?: string,
+  routePreference: LiveRoutePreference = "auto",
 ): Promise<LiveSessionResponse | DirectLiveStart> {
   try {
     // Keep live authorization aligned with the dashboard control proxy. When
@@ -69,9 +72,10 @@ export async function startLive(
 
     const sessionMediaGatewayUrl = controlSession.mediaGatewayUrl;
     const advertisedLocalMediaGatewayUrl = controlSession.localMediaGatewayUrl;
-    // An explicitly configured local/VPN gateway is an operator choice. An
-    // edge-advertised LAN address is only a fallback: the dashboard may be
-    // hosted on Render, where the browser cannot reach the branch network.
+    // The browser, not a hosted dashboard server, is the only component that
+    // can know whether it is currently on a branch VPN/LAN. Prefer its direct
+    // per-camera route first, then let the caller request a fresh public
+    // tunnel session if the browser cannot reach that private address.
     const configuredLocalMediaGatewayUrl = resolveConfiguredLocalMediaGatewayUrl();
     const advertisedLocalGatewayUrl = advertisedLocalMediaGatewayUrl &&
       isBrowserDirectMediaUrl(advertisedLocalMediaGatewayUrl)
@@ -89,12 +93,10 @@ export async function startLive(
       ? sessionMediaGatewayUrl
       : undefined;
     const localMediaGatewayUrl = configuredLocalMediaGatewayUrl ??
-      (!publicMediaGatewayUrl
-        ? advertisedLocalGatewayUrl ?? legacyLocalGatewayUrl
-        : undefined);
+      advertisedLocalGatewayUrl ?? legacyLocalGatewayUrl;
 
     const isProduction = runtimeEnv("NODE_ENV", "development") === "production";
-    if (localMediaGatewayUrl) {
+    if (routePreference === "auto" && localMediaGatewayUrl) {
       // A branch agent advertises its private LAN/VPN address on every
       // heartbeat. Never try that address from the hosted dashboard server:
       // only the operator's browser may be on that private network. The
@@ -111,7 +113,8 @@ export async function startLive(
     const mediaGatewayUrl = controlSession.mediaGatewayUrl ??
       runtimeEnv("MEDIA_GATEWAY_INTERNAL_URL", "http://localhost:8090");
 
-    if (controlSession.mediaGatewayUrl && isBrowserDirectMediaUrl(mediaGatewayUrl) && (!isProduction || isHttpsUrl(mediaGatewayUrl))) {
+    if (routePreference === "auto" && controlSession.mediaGatewayUrl &&
+        isBrowserDirectMediaUrl(mediaGatewayUrl) && (!isProduction || isHttpsUrl(mediaGatewayUrl))) {
       return {
         cameraId,
         direct: {
