@@ -110,11 +110,15 @@ export function defaultRecordingJob(
   };
 }
 
-function cameraProtocol(discovered: DiscoveredCamera) {
-  if (isRecorderBacked(discovered)) return "vendor-adapter" as const;
-  if (discovered.onvifSupport === false || discovered.discoveryMethod === "rtsp-network-scan") {
+export function selectCameraProtocol(discovered: DiscoveredCamera) {
+  // Prefer open protocols for every camera and recorder channel. A vendor
+  // adapter is only the final legacy fallback, not the default integration
+  // path, so a new brand/model can be enrolled without code changes.
+  if (discovered.onvifSupport === true) return "onvif-t" as const;
+  if (discovered.rtspValidated || discovered.onvifSupport === false || discovered.discoveryMethod === "rtsp-network-scan") {
     return "rtsp" as const;
   }
+  if (isRecorderBacked(discovered)) return "vendor-adapter" as const;
   return "onvif-t" as const;
 }
 
@@ -203,7 +207,7 @@ export async function autoProvisionVerifiedCameras(
       let camera = await store.approveCamera(branchId, {
         discoveryId: discovered.id,
         name,
-        protocol: cameraProtocol(discovered),
+        protocol: selectCameraProtocol(discovered),
         channel: discovered.recorderChannel ?? 1,
         connectionSecretRef: sourceConnection.connectionSecretRef,
         ...(sourceConnection.connectionTransport ? { connectionTransport: sourceConnection.connectionTransport } : {}),
@@ -225,7 +229,7 @@ export async function autoProvisionVerifiedCameras(
         camera = await store.createCameraFromManualRegistration(branchId, {
           discoveryId: discovered.id,
           name,
-          protocol: cameraProtocol(discovered),
+          protocol: selectCameraProtocol(discovered),
           channel: discovered.recorderChannel ?? 1,
           connectionSecretRef: sourceConnection.connectionSecretRef,
           ...(sourceConnection.connectionTransport ? { connectionTransport: sourceConnection.connectionTransport } : {}),

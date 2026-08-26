@@ -94,7 +94,11 @@ export class RecorderDriverRegistry {
     }
 
     const detection = await this.detector.detect(endpoint, credentials, options);
-    const driver = this.getDriver(detection.protocol);
+    // Detection must never make an otherwise reachable recorder unusable.
+    // Unknown brands and white-label models can still expose a standards-based
+    // RTSP stream, so use the generic driver whenever no specialised protocol
+    // driver has been registered.
+    const driver = this.get(detection.protocol) ?? this.getDriver("generic-rtsp");
     return { driver, detection };
   }
 

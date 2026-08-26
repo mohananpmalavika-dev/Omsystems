@@ -41,7 +41,7 @@ import type {
 
 type CameraForm = {
   name: string;
-  vendor: "hikvision" | "cp-plus" | "other";
+  vendor: string;
   model: string;
   ipAddress: string;
   onvifPort: string;
@@ -1220,8 +1220,8 @@ export function DeviceManager() {
             recorderChannel: Number(cameraForm.recorderChannel),
             recorderSerialNumber: cameraForm.recorderSerialNumber || undefined,
           } : {}),
-          manufacturer: discoveryManufacturer || cameraForm.vendor,
-          model: cameraForm.model,
+          manufacturer: discoveryManufacturer.trim() || cameraForm.vendor.trim() || "Unknown",
+          model: cameraForm.model.trim() || "Generic ONVIF / RTSP camera",
           serialNumber: discoverySerialNumber || undefined,
           ipAddress: cameraForm.ipAddress,
           onvifPort: Number(cameraForm.onvifPort),
@@ -1244,9 +1244,9 @@ export function DeviceManager() {
         const discovery = await cameraInventoryApi.submitDiscovery(selectedBranch, {
           edgeAgentId: cameraForm.edgeAgentId,
           discoveryMethod,
-          vendor: cameraForm.vendor,
-          manufacturer: discoveryManufacturer || cameraForm.vendor,
-          model: cameraForm.model,
+          vendor: cameraForm.vendor.trim() || "other",
+          manufacturer: discoveryManufacturer.trim() || cameraForm.vendor.trim() || "Unknown",
+          model: cameraForm.model.trim() || "Generic ONVIF / RTSP camera",
           ipAddress: cameraForm.ipAddress,
           macAddress: discoveryMacAddress || undefined,
           serialNumber: discoverySerialNumber || undefined,
@@ -2191,10 +2191,10 @@ try {
           <div className="modal-container modal-large">
             <div className="modal-header"><h2>Add camera to {activeBranch?.name}</h2><button className="icon-button" onClick={() => setShowCameraForm(false)}><X size={20} /></button></div>
             <form className="modal-form" onSubmit={addCamera}>
-              <div className="form-info-banner"><Router size={16} />Use the camera’s private branch-network address. Do not enter its password in this form.</div>
+              <div className="form-info-banner"><Router size={16} />Standard ONVIF/RTSP is the default for every brand and model. The brand and model fields are inventory details only; do not enter the camera password here.</div>
               <div className="form-section"><h3>Registration method</h3><div className="form-row">
                 <div className="form-group"><label htmlFor="registrationMode">Method</label><select id="registrationMode" value={registrationMode} onChange={(event) => setRegistrationMode(event.target.value as "automatic" | "manual" | "bulk")}><option value="automatic">Automatic registration</option><option value="manual">Manual registration</option><option value="bulk">Bulk CSV import</option></select></div>
-              </div><p className="field-help">Automatic uses discovery and approval, manual supports legacy or vendor-specific streams, and bulk accepts branch code, camera name, IP, port, manufacturer, model, serial, stream profile, and secret reference.</p></div>
+              </div><p className="field-help">Automatic uses discovery and approval. Manual and bulk onboarding work with any ONVIF or RTSP camera/NVR; vendor adapters are only for functions that are not exposed by the standards.</p></div>
               {registrationMode === "bulk" ? (
                 <div className="form-section"><h3>Bulk CSV import</h3><div className="form-group"><label htmlFor="bulkCsv">CSV rows</label><textarea id="bulkCsv" rows={8} value={bulkCsv} onChange={(event) => setBulkCsv(event.target.value)} placeholder="branchCode,cameraName,ip,port,manufacturer,model,serial,streamProfile,secretReference" required /></div></div>
               ) : (
@@ -2206,8 +2206,8 @@ try {
 
               <div className="form-section"><h3>Camera identity</h3><div className="form-row">
                 <div className="form-group"><label htmlFor="cameraName">Camera name <span className="required">*</span></label><input id="cameraName" value={cameraForm.name} onChange={(event) => setCameraForm((form) => ({ ...form, name: event.target.value }))} minLength={2} required placeholder="Main entrance" /></div>
-                <div className="form-group"><label htmlFor="cameraModel">Model <span className="required">*</span></label><input id="cameraModel" value={cameraForm.model} onChange={(event) => setCameraForm((form) => ({ ...form, model: event.target.value }))} required placeholder="DS-2CD2143G2" /></div>
-                <div className="form-group"><label htmlFor="cameraVendor">Brand</label><select id="cameraVendor" value={cameraForm.vendor} onChange={(event) => setCameraForm((form) => ({ ...form, vendor: event.target.value as CameraForm["vendor"] }))}><option value="hikvision">Hikvision</option><option value="cp-plus">CP Plus</option><option value="other">Other / ONVIF</option></select></div>
+                <div className="form-group"><label htmlFor="cameraModel">Model</label><input id="cameraModel" value={cameraForm.model} onChange={(event) => setCameraForm((form) => ({ ...form, model: event.target.value }))} placeholder="Optional — auto / unknown is supported" /></div>
+                <div className="form-group"><label htmlFor="cameraVendor">Brand</label><input id="cameraVendor" value={cameraForm.vendor} onChange={(event) => setCameraForm((form) => ({ ...form, vendor: event.target.value }))} placeholder="Optional — e.g. Hikvision, CP Plus, Dahua" /></div>
                 <div className="form-group"><label htmlFor="cameraChannel">Channel</label><input id="cameraChannel" type="number" min="1" value={cameraForm.channel} onChange={(event) => setCameraForm((form) => ({ ...form, channel: event.target.value }))} required /></div>
               </div></div>
 
@@ -2234,9 +2234,9 @@ try {
 
               <div className="form-section"><h3>Connection and camera type</h3><div className="form-row">
                 <div className="form-group"><label htmlFor="cameraTransport">Branch connection</label><select id="cameraTransport" value={cameraForm.connectionTransport} onChange={(event) => setCameraForm((form) => ({ ...form, connectionTransport: event.target.value as CameraForm["connectionTransport"] }))}><option value="vpn">Existing branch VPN</option><option value="cloudflare-tunnel">Managed Cloudflare Tunnel</option></select></div>
-                <div className="form-group"><label htmlFor="cameraSourceType">Camera type</label><select id="cameraSourceType" value={cameraForm.sourceType} onChange={(event) => setCameraForm((form) => { const recorderBacked = event.target.value !== "ip-camera"; return { ...form, sourceType: event.target.value as CameraForm["sourceType"], protocol: recorderBacked ? "vendor-adapter" : form.protocol, streamRole: recorderBacked ? "sub" : "main", width: recorderBacked ? "640" : "1920", height: recorderBacked ? "360" : "1080", frameRate: recorderBacked ? "5" : "15", bitrateKbps: recorderBacked ? "256" : "2048" }; })}><option value="ip-camera">IP camera</option><option value="analog-dvr-channel">Analog camera through DVR</option><option value="nvr-channel">IP camera through NVR</option></select></div>
+                <div className="form-group"><label htmlFor="cameraSourceType">Camera type</label><select id="cameraSourceType" value={cameraForm.sourceType} onChange={(event) => setCameraForm((form) => { const recorderBacked = event.target.value !== "ip-camera"; return { ...form, sourceType: event.target.value as CameraForm["sourceType"], protocol: recorderBacked ? "onvif-t" : form.protocol, streamRole: recorderBacked ? "sub" : "main", width: recorderBacked ? "640" : "1920", height: recorderBacked ? "360" : "1080", frameRate: recorderBacked ? "5" : "15", bitrateKbps: recorderBacked ? "256" : "2048" }; })}><option value="ip-camera">IP camera</option><option value="analog-dvr-channel">Analog camera through DVR</option><option value="nvr-channel">IP camera through NVR</option></select></div>
                 <div className="form-group"><label htmlFor="cameraIp">Private IP address <span className="required">*</span></label><input id="cameraIp" value={cameraForm.ipAddress} onChange={(event) => setCameraForm((form) => ({ ...form, ipAddress: event.target.value }))} required placeholder="192.168.1.20" /></div>
-                <div className="form-group"><label htmlFor="cameraProtocol">Protocol</label><select id="cameraProtocol" value={cameraForm.protocol} onChange={(event) => setCameraForm((form) => ({ ...form, protocol: event.target.value as CameraForm["protocol"] }))}><option value="onvif-t">ONVIF Profile T</option><option value="onvif-s">ONVIF Profile S</option><option value="rtsp">RTSP</option><option value="vendor-adapter">Vendor adapter</option></select></div>
+                <div className="form-group"><label htmlFor="cameraProtocol">Protocol</label><select id="cameraProtocol" value={cameraForm.protocol} onChange={(event) => setCameraForm((form) => ({ ...form, protocol: event.target.value as CameraForm["protocol"] }))}><option value="onvif-t">Standard ONVIF Profile T (preferred)</option><option value="onvif-s">Standard ONVIF Profile S</option><option value="rtsp">Standard RTSP stream</option><option value="vendor-adapter">Vendor adapter (only if standard protocol is unavailable)</option></select></div>
                 <div className="form-group"><label htmlFor="onvifPort">ONVIF port</label><input id="onvifPort" type="number" min="1" max="65535" value={cameraForm.onvifPort} onChange={(event) => setCameraForm((form) => ({ ...form, onvifPort: event.target.value }))} required /></div>
                 <div className="form-group"><label htmlFor="rtspPort">RTSP port</label><input id="rtspPort" type="number" min="1" max="65535" value={cameraForm.rtspPort} onChange={(event) => setCameraForm((form) => ({ ...form, rtspPort: event.target.value }))} required /></div>
               </div>

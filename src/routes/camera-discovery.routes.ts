@@ -245,7 +245,18 @@ export async function registerCameraDiscoveryRoutes(
       camera = await store.approveCamera(branchId, {
         discoveryId,
         name: body.name,
-        protocol: isRecorderBacked(discovered) ? "vendor-adapter" : body.protocol ?? "onvif-t",
+        // A recorder channel is not automatically tied to its vendor API.
+        // Keep its ONVIF/RTSP evidence usable across OEM models and reserve
+        // the vendor adapter for a legacy source with neither standard path.
+        protocol: body.protocol ?? (
+          discovered.onvifSupport === true
+            ? "onvif-t"
+            : discovered.rtspValidated || discovered.onvifSupport === false
+              ? "rtsp"
+              : isRecorderBacked(discovered)
+                ? "vendor-adapter"
+                : "onvif-t"
+        ),
         channel: body.channel ?? discovered.recorderChannel ?? 1,
         connectionSecretRef: body.connectionSecretRef ?? connection.connectionSecretRef,
         ...(connection.connectionTransport ? { connectionTransport: connection.connectionTransport } : {}),
@@ -270,7 +281,15 @@ export async function registerCameraDiscoveryRoutes(
         camera = await store.createCameraFromManualRegistration(branchId, {
           discoveryId,
           name: body.name,
-          protocol: isRecorderBacked(discovered) ? "vendor-adapter" : body.protocol ?? "onvif-t",
+          protocol: body.protocol ?? (
+            discovered.onvifSupport === true
+              ? "onvif-t"
+              : discovered.rtspValidated || discovered.onvifSupport === false
+                ? "rtsp"
+                : isRecorderBacked(discovered)
+                  ? "vendor-adapter"
+                  : "onvif-t"
+          ),
           channel: body.channel ?? discovered.recorderChannel ?? 1,
           connectionSecretRef: body.connectionSecretRef ?? connection.connectionSecretRef,
           ...(connection.connectionTransport ? { connectionTransport: connection.connectionTransport } : {}),

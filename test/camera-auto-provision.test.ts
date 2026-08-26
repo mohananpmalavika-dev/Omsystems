@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import type { DiscoveredCamera } from "../src/domain/models.js";
-import { supersededRecorderCredentialDiscoveryIds } from "../src/services/camera-auto-provision.js";
+import {
+  selectCameraProtocol,
+  supersededRecorderCredentialDiscoveryIds,
+} from "../src/services/camera-auto-provision.js";
 
 function discovery(overrides: Partial<DiscoveredCamera>): DiscoveredCamera {
   return {
@@ -73,5 +76,41 @@ describe("recorder credential discovery cleanup", () => {
 
     expect(supersededRecorderCredentialDiscoveryIds([recorderParent, verifiedChannel]))
       .toEqual(["recorder-parent"]);
+  });
+});
+
+describe("vendor-neutral camera protocol selection", () => {
+  it("uses ONVIF first for a recorder channel from an unknown model", () => {
+    expect(selectCameraProtocol(discovery({
+      vendor: "other",
+      manufacturer: "White-label OEM",
+      model: "Unknown NVR",
+      discoveryMethod: "nvr-dvr-channel-discovery",
+      sourceType: "nvr-channel",
+      recorderId: "recorder-1",
+      recorderChannel: 1,
+      onvifSupport: true,
+    }))).toBe("onvif-t");
+  });
+
+  it("uses verified RTSP when ONVIF is unavailable", () => {
+    expect(selectCameraProtocol(discovery({
+      vendor: "other",
+      manufacturer: "New vendor",
+      model: "Unlisted camera",
+      onvifSupport: false,
+      rtspValidated: true,
+    }))).toBe("rtsp");
+  });
+
+  it("keeps the vendor adapter as a last resort for legacy recorder channels", () => {
+    expect(selectCameraProtocol(discovery({
+      discoveryMethod: "vendor-api-discovery",
+      sourceType: "analog-dvr-channel",
+      recorderId: "legacy-recorder",
+      recorderChannel: 1,
+      onvifSupport: undefined,
+      rtspValidated: false,
+    }))).toBe("vendor-adapter");
   });
 });
