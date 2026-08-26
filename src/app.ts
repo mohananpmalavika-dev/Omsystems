@@ -1432,8 +1432,8 @@ export async function buildApp(options?: {
       return reply.code(400).send({ error: "camera_address_outside_configured_vpn_networks" });
     }
     const recorderBacked = parsed.sourceType === "analog-dvr-channel" || parsed.sourceType === "nvr-channel";
-    if (recorderBacked && (!parsed.recorderId || !parsed.recorderChannel || parsed.protocol !== "vendor-adapter")) {
-      return reply.code(400).send({ error: "recorder_channel_requires_recorder_id_channel_and_vendor_adapter" });
+    if (recorderBacked && (!parsed.recorderId || !parsed.recorderChannel)) {
+      return reply.code(400).send({ error: "recorder_channel_requires_recorder_id_and_channel" });
     }
     const connectionSecretRef = parsed.connectionSecretRef ?? (connectionTransport === "vpn"
       ? vpnSecretReference(branchId, parsed.sourceType, parsed.ipAddress!, parsed.recorderId, parsed.recorderChannel)

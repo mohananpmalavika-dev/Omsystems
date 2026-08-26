@@ -509,6 +509,7 @@ export class EdgeAgentRepository {
              discovery_layers = EXCLUDED.discovery_layers,
              status = CASE
                WHEN camera_discoveries.status = 'rejected' THEN camera_discoveries.status
+               WHEN camera_discoveries.status = 'approved' THEN camera_discoveries.status
                ELSE 'pending'::discovery_status
              END,
              discovered_at = now()

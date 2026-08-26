@@ -556,7 +556,7 @@ export const deviceManagementApi = {
 export const cameraInventoryApi = {
   listBranches: (action: 'live:view' | 'device:configure' | 'analytics:view' = 'live:view') =>
     fetchApi<{ data: any[] }>(`/v1/branches?action=${encodeURIComponent(action)}`),
-  listByBranch: (branchId: string, action: 'live:view' | 'analytics:view' = 'live:view') =>
+  listByBranch: (branchId: string, action: 'live:view' | 'analytics:view' | 'device:configure' = 'live:view') =>
     fetchApi<{ data: any[] }>(
       `/v1/branches/${encodeURIComponent(branchId)}/cameras?action=${encodeURIComponent(action)}`
     ),
@@ -573,7 +573,7 @@ export const cameraInventoryApi = {
       method: 'POST',
       body: JSON.stringify({ qrData, branchId }),
     }),
-  probeDirect: (data: { ipAddress: string; rtspPort?: number; username?: string; password?: string | null }) =>
+  probeDirect: (branchId: string, data: { ipAddress: string; rtspPort?: number; username?: string; password?: string | null }) =>
     fetchApi<{
       online: boolean;
       ipAddress: string;
@@ -590,9 +590,9 @@ export const cameraInventoryApi = {
       capabilities?: { ptz: boolean; audio: boolean; motion: boolean };
     }>('/v1/cameras/probe-direct', {
       method: 'POST',
-      body: JSON.stringify(data),
+      body: JSON.stringify({ ...data, branchId }),
     }),
-  probeDirectRange: (data: { ipAddresses: string[]; rtspPort?: number; username?: string; password?: string | null }) =>
+  probeDirectRange: (branchId: string, data: { ipAddresses: string[]; rtspPort?: number; username?: string; password?: string | null }) =>
     fetchApi<{
       results: Array<{
         online: boolean;
@@ -614,7 +614,7 @@ export const cameraInventoryApi = {
       authenticated: number;
     }>('/v1/cameras/probe-direct/range', {
       method: 'POST',
-      body: JSON.stringify(data),
+      body: JSON.stringify({ ...data, branchId }),
     }),
   listDiscovered: (branchId: string) =>
     fetchApi<{ data: any[] }>(

@@ -2102,7 +2102,9 @@ export class MemoryStore {
       }
       Object.assign(existing, normalized, {
         deviceIdentityId: identity.deviceId,
-        status: "pending" as const,
+        // A routine rescan of an already-approved physical identity updates
+        // its address/firmware evidence without reopening duplicate approval.
+        status: existing.status === "approved" ? "approved" as const : "pending" as const,
         ...(recorderPlaceholderUpgrade ? {
           duplicateStatus: normalized.duplicateStatus ?? "unique" as const,
           ...(identity.cameraId ? { existingDeviceAssociation: identity.cameraId } : {}),

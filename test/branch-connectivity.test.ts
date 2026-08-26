@@ -60,7 +60,7 @@ describe("branch VPN and tunnel connectivity", () => {
     const analogChannel = await app.inject({
       method: "POST", url: `/v1/branches/${branchId}/cameras`, headers,
       payload: {
-        name: "VPN vault analog channel", channel: 4, protocol: "vendor-adapter",
+        name: "VPN vault analog channel", channel: 4, protocol: "onvif-t",
         manufacturer: "CP Plus", model: "XVR", ipAddress: "10.42.5.10",
         sourceType: "analog-dvr-channel", recorderId: "dvr-vault-01", recorderChannel: 4,
         streamProfile: "sub",
@@ -73,7 +73,7 @@ describe("branch VPN and tunnel connectivity", () => {
     expect(analogChannel.statusCode).toBe(201);
     expect(analogChannel.json()).toMatchObject({
       sourceType: "analog-dvr-channel", recorderId: "dvr-vault-01", recorderChannel: 4,
-      connectionTransport: "vpn",
+      connectionTransport: "vpn", protocol: "onvif-t",
     });
     const analogStored = await store.getCamera(analogChannel.json().id);
     expect(analogStored?.connectionSecretRef).toBe(`vpn://${branchId}/recorder/dvr-vault-01/channel/4`);
@@ -140,7 +140,7 @@ describe("branch VPN and tunnel connectivity", () => {
         managedTunnel: null,
         internetMode: "temporary-test",
         scannerRefreshQueued: 1,
-        message: expect.stringContaining("version 0.1.6"),
+        message: expect.stringContaining("version 0.1.7"),
       });
       expect(await temporaryStore.listEdgeCommands(branchId)).toEqual([
         expect.objectContaining({ edgeAgentId: agent.id, type: "restart-media", status: "queued" }),

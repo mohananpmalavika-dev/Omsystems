@@ -43,7 +43,7 @@ describe("analog camera channels behind DVRs", () => {
     expect(camera).toMatchObject({
       name: "Vault",
       channel: 4,
-      protocol: "vendor-adapter",
+      protocol: "rtsp",
       sourceType: "analog-dvr-channel",
       recorderId: "recorder-branch-01",
       recorderChannel: 4,

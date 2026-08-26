@@ -8,7 +8,6 @@ import {
   Camera,
   CheckCircle2,
   Check,
-  Copy,
   Download,
   ExternalLink,
   Network,
@@ -48,7 +47,7 @@ type CameraForm = {
   rtspPort: string;
   channel: string;
   protocol: "onvif-t" | "onvif-s" | "rtsp" | "vendor-adapter";
-  connectionTransport: "vpn" | "cloudflare-tunnel";
+  connectionTransport: "vpn" | "cloudflare-tunnel" | "edge-gateway";
   sourceType: "ip-camera" | "analog-dvr-channel" | "nvr-channel";
   recorderId: string;
   recorderChannel: string;
@@ -85,12 +84,12 @@ const emptyCameraForm: CameraForm = {
   recorderSerialNumber: "",
   edgeAgentId: "",
   connectionSecretRef: "",
-  codec: "unknown",
-  streamRole: "unknown",
-  width: "",
-  height: "",
-  frameRate: "",
-  bitrateKbps: "",
+  codec: "H264",
+  streamRole: "sub",
+  width: "640",
+  height: "360",
+  frameRate: "10",
+  bitrateKbps: "512",
   ptz: false,
   audio: false,
   events: false,
@@ -209,28 +208,14 @@ export function DeviceManager() {
   const [discoveryReviewState, setDiscoveryReviewState] = useState<Record<string, { reviewStatus: "pending" | "duplicate" | "review-required" | "approved" }>>({});
   const [inventoryForm, setInventoryForm] = useState<DeviceInventoryForm>(emptyInventoryForm);
   const [cameraForm, setCameraForm] = useState<CameraForm>(emptyCameraForm);
-  const [discoveryMethod, setDiscoveryMethod] = useState("edge-agent-reported-inventory");
   const [discoveryManufacturer, setDiscoveryManufacturer] = useState("");
   const [discoverySerialNumber, setDiscoverySerialNumber] = useState("");
   const [discoveryMacAddress, setDiscoveryMacAddress] = useState("");
-  const [discoveryFirmwareVersion, setDiscoveryFirmwareVersion] = useState("");
-  const [discoveryOnvifSupport, setDiscoveryOnvifSupport] = useState(false);
-  const [discoveryRtspValidated, setDiscoveryRtspValidated] = useState(false);
-  const [discoveryPtzCapability, setDiscoveryPtzCapability] = useState(false);
-  const [discoveryAudioCapability, setDiscoveryAudioCapability] = useState(false);
-  const [discoveryAnalyticsCapability, setDiscoveryAnalyticsCapability] = useState(false);
-  const [discoveryTimeSynchronization, setDiscoveryTimeSynchronization] = useState("unknown");
-  const [discoveryDuplicateStatus, setDiscoveryDuplicateStatus] = useState("unknown");
-  const [discoveryCompatibilityStatus, setDiscoveryCompatibilityStatus] = useState("unknown");
-  const [discoveryHardwareId, setDiscoveryHardwareId] = useState("");
-  const [discoveryExistingDeviceAssociation, setDiscoveryExistingDeviceAssociation] = useState("");
   const [gatewayName, setGatewayName] = useState("");
   const [showCameraForm, setShowCameraForm] = useState(false);
   const [showGatewayForm, setShowGatewayForm] = useState(false);
   const [showDiscoveredList, setShowDiscoveredList] = useState(false);
   const [showDirectProbeModal, setShowDirectProbeModal] = useState(false);
-  const [copiedCommand, setCopiedCommand] = useState<string | null>(null);
-  const [activePlatformTab, setActivePlatformTab] = useState<"powershell" | "bash" | "download">("download");
   const [probeTargetMode, setProbeTargetMode] = useState<"single" | "range">("single");
   const [probeCredentialMode, setProbeCredentialMode] = useState<"same" | "different">("same");
   const [probeIp, setProbeIp] = useState("");
@@ -242,6 +227,8 @@ export function DeviceManager() {
   const [probeResults, setProbeResults] = useState<DirectProbeResult[]>([]);
   const scanAbortedRef = useRef(false);
   const credentialDeepLinkHandledRef = useRef(false);
+  const selectedBranchRef = useRef("");
+  const refreshRequestRef = useRef(0);
 
   function stopScanning() {
     scanAbortedRef.current = true;
@@ -261,17 +248,21 @@ export function DeviceManager() {
       edgeAgentId: gateway.id,
       discoveryMethod: "direct-ip-range-probe",
       vendor: result.vendor || "other",
-      manufacturer: result.vendor || "Unknown",
+      manufacturer: result.manufacturer || result.vendor || "Unknown",
       model: result.model || `Camera ${result.ipAddress}`,
       ipAddress: result.ipAddress,
-      onvifPort: 80,
+      onvifPort: result.onvifPort || 80,
       rtspPort: result.rtspPort || Number(probePort) || 554,
       sourceType: "ip-camera",
-      credentialsRequired: result.authenticated !== true,
-      streamVerified: result.authenticated === true,
-      rtspValidated: result.authenticated === true,
+      // A control-plane socket probe proves reachability only. The assigned
+      // gateway must persist and verify the login before approval/live view.
+      credentialsRequired: result.authRequired === true,
+      streamVerified: false,
+      rtspValidated: false,
       compatibilityStatus: "unknown",
-      statusReason: result.authenticated === true ? "direct_probe_verified" : "direct_probe_credentials_required",
+      statusReason: result.authRequired
+        ? "direct_probe_gateway_credentials_pending"
+        : "direct_probe_gateway_profile_pending",
       capabilities: {
         ptz: Boolean(result.capabilities?.ptz),
         audio: Boolean(result.capabilities?.audio),
@@ -280,40 +271,36 @@ export function DeviceManager() {
       profiles: [],
     }));
 
-    if (devices.length === 0) return 0;
-    await cameraInventoryApi.submitDiscovery(selectedBranch, { edgeAgentId: gateway.id, devices });
-    return devices.length;
+    if (devices.length === 0) return [];
+    const response = await cameraInventoryApi.submitDiscovery(selectedBranch, { edgeAgentId: gateway.id, devices });
+    return Array.isArray(response?.data)
+      ? response.data.filter((item: any) => item?.id && item.status !== "error")
+      : response?.id
+        ? [response]
+        : [];
   }
 
-  async function enrollDirectProbeResults(results: DirectProbeResult[]) {
-    if (!selectedBranch) throw new Error("Select a branch before enrolling cameras.");
-    let enrolled = 0;
-    for (const result of results) {
-      if (!result.online || result.authenticated === false) continue;
+  async function queueDirectProbeCredentialVerification(discoveries: any[], username: string, password: string) {
+    if (!selectedBranch) throw new Error("Select a branch before verifying cameras.");
+    let queued = 0;
+    for (const discovery of discoveries) {
+      if (!discovery?.id) continue;
       try {
-        await cameraInventoryApi.approveCamera(selectedBranch, {
-          discoveryId: "",
-          name: result.model || `Camera ${result.ipAddress}`,
-          channel: 1,
-          protocol: "rtsp",
-          connectionTransport: "vpn",
-          sourceType: "ip-camera",
-          manufacturer: result.vendor,
-          model: result.model,
-          ipAddress: result.ipAddress,
-          rtspPort: result.rtspPort || Number(probePort) || 554,
-          profiles: [],
-          capabilities: result.capabilities ?? {},
-        });
-        enrolled += 1;
+        await cameraInventoryApi.activateDiscovery(selectedBranch, discovery.id, { username, password });
+        queued += 1;
       } catch {
-        // Keep probing the rest of the range. The failed address is reported below.
+        // Continue queueing the remaining addresses; the discovery list keeps
+        // every failed item available for individual credential correction.
       }
     }
-    return enrolled;
+    return queued;
   }
 
   async function runDirectProbe() {
+    if (!selectedBranch) {
+      setError("Select a branch before probing a camera.");
+      return;
+    }
     setError(undefined);
     setNotice(undefined);
     setProbeResult(null);
@@ -332,14 +319,19 @@ export function DeviceManager() {
       return;
     }
 
+    const port = Number(probePort || 554);
+    if (!Number.isInteger(port) || port < 1 || port > 65_535) {
+      setError("Enter a valid RTSP port from 1 to 65535.");
+      return;
+    }
+
     setProbing(true);
     try {
-      const port = Number(probePort) || 554;
       const username = sharedCredentials ? probeUsername.trim() : undefined;
       const password = sharedCredentials ? probePassword : "";
       const response = targets.length === 1 && probeTargetMode === "single"
-        ? { results: [await cameraInventoryApi.probeDirect({ ipAddress: targets[0]!, rtspPort: port, username, password })] }
-        : await cameraInventoryApi.probeDirectRange({ ipAddresses: targets, rtspPort: port, username, password });
+        ? { results: [await cameraInventoryApi.probeDirect(selectedBranch, { ipAddress: targets[0]!, rtspPort: port, username, password })] }
+        : await cameraInventoryApi.probeDirectRange(selectedBranch, { ipAddresses: targets, rtspPort: port, username, password });
       const results = response.results as DirectProbeResult[];
       setProbeResults(results);
 
@@ -355,20 +347,14 @@ export function DeviceManager() {
       }
 
       const reachable = results.filter((result) => result.online);
-      const verified = reachable.filter((result) => result.authenticated === true);
-      const needsIndividualCredentials = reachable.filter((result) => result.authenticated !== true);
-      let enrolled = 0;
-      let discoveryCount = 0;
-
-      if (probeCredentialMode === "same") {
+      let discoveries: any[] = [];
+      let verificationQueued = 0;
+      if (reachable.length > 0) {
         setSaving(true);
-        enrolled = await enrollDirectProbeResults(verified);
-        setSaving(false);
-      }
-
-      const discoveryTargets = probeCredentialMode === "different" ? reachable : needsIndividualCredentials;
-      if (discoveryTargets.length > 0) {
-        discoveryCount = await publishDirectProbeDiscoveries(discoveryTargets);
+        discoveries = await publishDirectProbeDiscoveries(reachable);
+        if (probeCredentialMode === "same" && username) {
+          verificationQueued = await queueDirectProbeCredentialVerification(discoveries, username, password);
+        }
         await refreshBranch(selectedBranch);
         setShowDirectProbeModal(false);
         setShowDiscoveredList(true);
@@ -376,46 +362,48 @@ export function DeviceManager() {
 
       const offline = results.length - reachable.length;
       setNotice(
-        `Range probe finished: ${reachable.length} reachable, ${enrolled} added to the camera list` +
-        `${discoveryCount ? `, ${discoveryCount} sent to Device discovery` : ""}` +
+        `Range probe finished: ${reachable.length} reachable, ${discoveries.length} sent to Device discovery` +
+        `${verificationQueued ? `, ${verificationQueued} secure gateway verification command(s) queued` : ""}` +
         `${offline ? `, ${offline} unreachable` : ""}.`,
       );
-      if (enrolled > 0) await refreshBranch(selectedBranch);
     } catch (err: any) {
       setError(err.message || "Failed to probe the IP range.");
     } finally {
       setSaving(false);
       setProbing(false);
+      if (probeTargetMode === "range") setProbePassword("");
     }
   }
 
-  async function enrollProbedCamera() {
-    if (!probeResult || !selectedBranch) return;
+  async function queueProbedCameraForCredentials() {
+    if (!probeResult?.online || !selectedBranch) return;
     setSaving(true);
+    setError(undefined);
     try {
-      await cameraInventoryApi.approveCamera(selectedBranch, {
-        discoveryId: "",
-        name: probeResult.name || probeResult.model || `Camera ${probeIp.trim()}`,
-        channel: 1,
-        protocol: "rtsp",
-        connectionTransport: "vpn",
-        sourceType: "ip-camera",
-        manufacturer: probeResult.vendor || probeResult.manufacturer,
-        model: probeResult.model,
-        ipAddress: probeIp.trim(),
-        ...(probeResult.onvifPort ? { onvifPort: Number(probeResult.onvifPort) } : {}),
-        ...(probeResult.rtspPort ? { rtspPort: Number(probeResult.rtspPort) } : { rtspPort: Number(probePort) }),
-        profiles: Array.isArray(probeResult.profiles) ? probeResult.profiles : [],
-        capabilities: probeResult.capabilities ?? {},
-      });
-      setShowDirectProbeModal(false);
-      setNotice(`Camera at ${probeIp} successfully enrolled in ${activeBranch?.name}!`);
+      const discoveries = await publishDirectProbeDiscoveries([probeResult]);
+      const verificationQueued = probeResult.authenticated === true && probeUsername.trim()
+        ? await queueDirectProbeCredentialVerification(discoveries, probeUsername.trim(), probePassword)
+        : 0;
       await refreshBranch(selectedBranch);
-    } catch (err: any) {
-      setError(messageOf(err, "Failed to enroll camera"));
+      closeDirectProbe();
+      setShowDiscoveredList(true);
+      setNotice(verificationQueued > 0
+        ? `Camera at ${probeResult.ipAddress} was added to Device discovery. Secure gateway verification is queued; approve it after the gateway confirms the stream.`
+        : probeResult.authRequired
+        ? `Camera at ${probeResult.ipAddress} was added to Device discovery. Enter its own login there to verify the stream.`
+        : `Camera at ${probeResult.ipAddress} was added to Device discovery. Run Branch Gateway discovery to detect its model-specific stream profile.`);
+    } catch (reason) {
+      setError(messageOf(reason, "Unable to send this camera to Device discovery."));
     } finally {
       setSaving(false);
     }
+  }
+
+  function closeDirectProbe() {
+    setShowDirectProbeModal(false);
+    setProbePassword("");
+    setProbeResult(null);
+    setProbeResults([]);
   }
 
   const [loadingDiscoveries, setLoadingDiscoveries] = useState(false);
@@ -427,7 +415,9 @@ export function DeviceManager() {
   const [showQRScanner, setShowQRScanner] = useState(false);
   const [registrationMode, setRegistrationMode] = useState<"automatic" | "manual" | "bulk">("automatic");
   const [selectedDiscoveryId, setSelectedDiscoveryId] = useState<string>();
+  const [discoveryEditMode, setDiscoveryEditMode] = useState<"rename" | "reject">();
   const [previewDiscoveryId, setPreviewDiscoveryId] = useState<string>();
+  const [previewEditMode, setPreviewEditMode] = useState<"rename" | "reject">("rename");
   const [renameDraft, setRenameDraft] = useState("");
   const [previewNameDraft, setPreviewNameDraft] = useState("");
   const [rejectReason, setRejectReason] = useState("");
@@ -495,6 +485,9 @@ export function DeviceManager() {
   }, [inventoryRecords, inventoryDeviceTypeFilter, inventoryHealthFilter, inventoryLifecycleFilter, inventorySearch, inventorySort]);
   const pendingReviewCount = pendingDiscoveryQueueItems.length;
   const approvedReviewCount = discoveryQueueItems.filter((item) => item.reviewStatus === "approved" || item.status === "approved").length;
+  const approvableDiscoveryCount = discoveryQueueItems.filter((item) =>
+    item.streamVerified === true && item.credentialsRequired !== true && item.reviewStatus === "pending" && item.status !== "approved"
+  ).length;
 
   useEffect(() => {
     void cameraInventoryApi.listBranches("device:configure")
@@ -510,11 +503,36 @@ export function DeviceManager() {
   }, []);
 
   useEffect(() => {
+    selectedBranchRef.current = selectedBranch;
+    refreshRequestRef.current += 1;
+    scanAbortedRef.current = true;
+    setGateways([]);
+    setCameras([]);
+    setInventoryRecords([]);
+    setDiscoveredCameras([]);
+    setAutoProvisionResults([]);
+    setDiscoveryReviewState({});
+    setSelectedDiscoveryId(undefined);
+    setDiscoveryEditMode(undefined);
+    setPreviewDiscoveryId(undefined);
+    setPreviewEditMode("rename");
+    setCredentialActivation(undefined);
+    setActivationPassword("");
+    setCredentialVerificationStatus(undefined);
+    setCredentialVerificationError(undefined);
+    setProbePassword("");
+    setProbeResult(null);
+    setProbeResults([]);
+    setShowCameraForm(false);
+    setShowGatewayForm(false);
+    setShowDiscoveredList(false);
+    setShowDirectProbeModal(false);
+    setScanning(false);
+    setLoadingDiscoveries(false);
+    setNotice(undefined);
     if (!selectedBranch) {
-      setGateways([]);
-      setCameras([]);
-      setInventoryRecords([]);
       setGatewayActivation(undefined);
+      setLoading(false);
       return;
     }
 
@@ -530,19 +548,18 @@ export function DeviceManager() {
     if (!selectedBranch) return;
     const interval = window.setInterval(async () => {
       if (document.hidden) return;
-      try {
-        const [gwResp, discResp] = await Promise.allSettled([
-          cameraInventoryApi.listGateways(selectedBranch),
-          cameraInventoryApi.listDiscovered(selectedBranch),
-        ]);
-        if (gwResp.status === "fulfilled" && gwResp.value?.data) {
-          setGateways(gwResp.value.data);
-        }
-        if (discResp.status === "fulfilled" && Array.isArray(discResp.value?.data)) {
-          setDiscoveredCameras(discResp.value.data);
-          updateDiscoveryReviewState(discResp.value.data);
-        }
-      } catch {}
+      const [gwResp, discResp] = await Promise.allSettled([
+        cameraInventoryApi.listGateways(selectedBranch),
+        cameraInventoryApi.listDiscovered(selectedBranch),
+      ]);
+      if (selectedBranchRef.current !== selectedBranch) return;
+      if (gwResp.status === "fulfilled" && gwResp.value?.data) {
+        setGateways(gwResp.value.data);
+      }
+      if (discResp.status === "fulfilled" && Array.isArray(discResp.value?.data)) {
+        setDiscoveredCameras(discResp.value.data);
+        updateDiscoveryReviewState(discResp.value.data);
+      }
     }, 4_000);
 
     return () => window.clearInterval(interval);
@@ -562,15 +579,17 @@ export function DeviceManager() {
   }, [scanning]);
 
   async function refreshBranch(branchId: string) {
+    const requestId = ++refreshRequestRef.current;
     setLoading(true);
     setError(undefined);
     try {
       const [gatewayResult, cameraResult, discoveredResult, inventoryResult] = await Promise.allSettled([
         cameraInventoryApi.listGateways(branchId),
-        cameraInventoryApi.listByBranch(branchId),
+        cameraInventoryApi.listByBranch(branchId, "device:configure"),
         cameraInventoryApi.listDiscovered(branchId),
         deviceInventoryApi.list(branchId),
       ]);
+      if (selectedBranchRef.current !== branchId || requestId !== refreshRequestRef.current) return [];
       if (gatewayResult.status === "fulfilled") setGateways(gatewayResult.value.data);
       if (cameraResult.status === "fulfilled") setCameras(cameraResult.value.data);
       if (inventoryResult.status === "fulfilled") setInventoryRecords(inventoryResult.value.data);
@@ -586,44 +605,52 @@ export function DeviceManager() {
       }
       return discoveredResult.status === "fulfilled" ? discoveredResult.value.data : [];
     } finally {
-      setLoading(false);
+      if (selectedBranchRef.current === branchId && requestId === refreshRequestRef.current) {
+        setLoading(false);
+      }
     }
   }
 
   function updateDiscoveryReviewState(discoveries: any[]) {
     setDiscoveryReviewState((previous) => {
-      const next = { ...previous };
+      const next: typeof previous = {};
       for (const camera of discoveries) {
-        if (!next[camera.id]) {
-          next[camera.id] = {
-            reviewStatus: camera.duplicateStatus === "duplicate"
+        next[camera.id] = {
+          reviewStatus: camera.status === "approved"
+            ? "approved"
+            : camera.duplicateStatus === "duplicate"
               ? "duplicate"
               : camera.duplicateStatus === "review-required"
                 ? "review-required"
-                : "pending",
-          };
-        }
+                : previous[camera.id]?.reviewStatus ?? "pending",
+        };
       }
       return next;
     });
   }
 
   function openCameraForm() {
-    const preferred = gateways.find((gateway) => gateway.status === "online") ?? gateways[0];
+    const branchId = selectedBranch;
+    const preferred = gateways.find(isGatewayReady);
     setCameraForm({
       ...emptyCameraForm,
       edgeAgentId: preferred?.id ?? "",
-      connectionTransport: preferred ? "cloudflare-tunnel" : "vpn",
-      connectionSecretRef: preferred ? `edge://${preferred.id}/manual-camera` : "",
+      connectionTransport: preferred ? "edge-gateway" : "vpn",
+      connectionSecretRef: "",
     });
-    if (selectedBranch) {
-      void cameraInventoryApi.getConnectivity(selectedBranch)
+    setRegistrationMode("automatic");
+    setBulkCsv("");
+    setDiscoveryManufacturer("");
+    setDiscoverySerialNumber("");
+    setDiscoveryMacAddress("");
+    if (branchId) {
+      void cameraInventoryApi.getConnectivity(branchId)
         .then(({ profile }) => {
-          if (!profile) return;
+          if (!profile || selectedBranchRef.current !== branchId) return;
           setCameraForm((current) => ({
             ...current,
-            connectionTransport: profile.primaryTransport,
-            connectionSecretRef: profile.primaryTransport === "vpn" ? "" : current.connectionSecretRef,
+            connectionTransport: current.edgeAgentId ? "edge-gateway" : profile.primaryTransport,
+            connectionSecretRef: current.edgeAgentId || profile.primaryTransport !== "vpn" ? current.connectionSecretRef : "",
           }));
         })
         .catch(() => undefined);
@@ -638,7 +665,6 @@ export function DeviceManager() {
     // 300 s window: edge agents claim jobs only on heartbeat (up to ~60 s latency)
     // plus ONVIF WS-Discovery can take 20-40 s on a large subnet.
     const deadline = Date.now() + 300_000;
-    const startTime = Date.now();
     let job = await cameraInventoryApi.getScan(selectedBranch, scanId).catch(() => ({ status: "running" })) as EdgeScanJob;
     while (job.status === "queued" || job.status === "running") {
       if (scanAbortedRef.current) {
@@ -657,9 +683,6 @@ export function DeviceManager() {
         const liveDiscovered = await cameraInventoryApi.listDiscovered(selectedBranch);
         if (liveDiscovered?.data?.length > 0) {
           setDiscoveredCameras(liveDiscovered.data);
-          if (job.scope !== "device" && Date.now() - startTime > 12_000) {
-            break;
-          }
         }
       } catch {}
       job = await cameraInventoryApi.getScan(selectedBranch, scanId).catch(() => job) as EdgeScanJob;
@@ -726,7 +749,7 @@ export function DeviceManager() {
   }
 
   async function waitForWebsiteScanner(branchId: string) {
-    const deadline = Date.now() + 5000;
+    const deadline = Date.now() + scannerStartupTimeoutMs;
     while (Date.now() < deadline) {
       const response = await cameraInventoryApi.listGateways(branchId);
       setGateways(response.data);
@@ -794,6 +817,7 @@ export function DeviceManager() {
 
   function previewDiscoveredCamera(discovered: any) {
     setPreviewDiscoveryId(discovered.id);
+    setPreviewEditMode("rename");
     setPreviewNameDraft(discovered.displayName ?? discovered.model ?? "");
     setRejectReason("");
   }
@@ -813,9 +837,23 @@ export function DeviceManager() {
       setError(`No IP address is saved for ${camera.name}. Re-add or rediscover this camera before updating its login.`);
       return;
     }
-    const gateway = gateways.find((item) => item.id === camera.edgeAgentId && isGatewayReady(item)) ?? onlineGateway;
+    const assignedGateway = camera.edgeAgentId
+      ? gateways.find((item) => item.id === camera.edgeAgentId)
+      : undefined;
+    if (camera.edgeAgentId && !assignedGateway) {
+      setError(`The Branch Gateway assigned to ${camera.name} is no longer enrolled. Reassign the camera before updating its login.`);
+      return;
+    }
+    if (assignedGateway && !isGatewayReady(assignedGateway)) {
+      setError(`The Branch Gateway assigned to ${camera.name} is offline. Reconnect that gateway before updating this camera login.`);
+      return;
+    }
+    const readyGateways = gateways.filter(isGatewayReady);
+    const gateway = assignedGateway ?? (readyGateways.length === 1 ? readyGateways[0] : undefined);
     if (!gateway) {
-      setError("An online Branch Gateway is required to save and verify a camera login.");
+      setError(readyGateways.length > 1
+        ? "This camera is not assigned to a gateway. Assign it before updating its login so credentials cannot be sent to the wrong branch appliance."
+        : "An online Branch Gateway is required to save and verify a camera login.");
       return;
     }
     openCredentialActivation({
@@ -835,10 +873,12 @@ export function DeviceManager() {
     if (!cameraId) return;
 
     const camera = cameras.find((item) => item.id === cameraId);
-    if (!camera) return;
-
     credentialDeepLinkHandledRef.current = true;
-    openActiveCameraCredentialUpdate(camera);
+    if (camera) {
+      openActiveCameraCredentialUpdate(camera);
+    } else {
+      setError("The requested camera is not present in this branch inventory. Refresh Live View and try the login action again.");
+    }
 
     const cleanUrl = new URL(window.location.href);
     cleanUrl.searchParams.delete("action");
@@ -850,6 +890,9 @@ export function DeviceManager() {
     if (!selectedBranch) throw new Error("Select a branch before verifying device credentials.");
     const deadline = Date.now() + 180_000;
     while (Date.now() < deadline) {
+      if (scanAbortedRef.current) {
+        throw new Error("Credential verification was stopped. The queued gateway command may still complete on the branch appliance.");
+      }
       const response = await cameraInventoryApi.listGatewayCommands(selectedBranch);
       const command = (response.data ?? []).find((item: any) => item.id === commandId);
       if (command?.status === "succeeded") return command;
@@ -892,6 +935,7 @@ export function DeviceManager() {
     if (!selectedBranch || !credentialActivation) return;
     setSaving(true);
     setScanning(true);
+    scanAbortedRef.current = false;
     setError(undefined);
     setCredentialVerificationError(undefined);
     setCredentialVerificationStatus("Encrypting the login for this branch scanner…");
@@ -958,9 +1002,10 @@ export function DeviceManager() {
       setCredentialActivation(undefined);
       setCredentialVerificationStatus(undefined);
       setCredentialVerificationError(undefined);
+      setShowDiscoveredList(true);
       setNotice(verifiedTargets.length > 1
-        ? `Credentials verified. ${activatedCount} recorder channels were added and connected to live monitoring.`
-        : `Credentials verified and ${targetName} was connected to live monitoring.`);
+        ? `Credentials verified for ${activatedCount} recorder channels. Review and approve the verified channels to add them to live monitoring.`
+        : `Credentials verified for ${targetName}. Review and approve it to add the stream to live monitoring.`);
       await refreshBranch(selectedBranch);
     } catch (reason) {
       if (isAgentUpdateRequired(reason)) {
@@ -990,9 +1035,22 @@ export function DeviceManager() {
   }
 
   async function approveDiscoveredCamera(discovered: any) {
+    const reviewStatus = discoveryReviewState[discovered.id]?.reviewStatus ?? discovered.reviewStatus;
+    if (reviewStatus === "duplicate" || discovered.duplicateStatus === "duplicate") {
+      setError("This discovery matches an existing device and cannot be approved again. Reject it or review the existing camera record.");
+      return;
+    }
+    if (discovered.compatibilityStatus === "incompatible" || discovered.compatibility === "incompatible") {
+      setError("This device was marked incompatible and cannot be approved until its connection profile is corrected.");
+      return;
+    }
     if (discovered.credentialsRequired) {
       openCredentialActivation(discovered);
       setNotice(`Authentication required: Enter username & password for ${discovered.displayName || discovered.ipAddress} to verify and connect.`);
+      return;
+    }
+    if (discovered.streamVerified !== true) {
+      setError("Wait for the Branch Gateway to verify a video stream before approving this device.");
       return;
     }
     setSaving(true);
@@ -1002,7 +1060,7 @@ export function DeviceManager() {
       const name = discovered.displayName || discovered.model || `${discovered.vendor || "IP"} Camera (${discovered.ipAddress})`;
       await cameraInventoryApi.approveDiscovery(selectedBranch, discovered.id, {
         name,
-        protocol: discovered.recorderId ? "vendor-adapter" : discovered.onvifSupport ? "onvif-t" : "rtsp",
+        protocol: discovered.onvifSupport ? "onvif-t" : "rtsp",
       });
       markDiscoveryReviewStatus(discovered.id, "approved");
       setPreviewDiscoveryId(undefined);
@@ -1023,66 +1081,73 @@ export function DeviceManager() {
     setAutoProvisionResults([]);
     scanAbortedRef.current = false;
     try {
+      const unauthenticatedCount = discoveryQueueItems.filter((item) =>
+        item.credentialsRequired || !item.streamVerified
+      ).length;
       let approvedCount = 0;
-      // 1. Try batch auto-provision API first
+      let batchSucceeded = false;
+      let batchFailure: unknown;
+      const batchDiscoveryIds = discoveryQueueItems
+        .filter((item) => item.streamVerified && !item.credentialsRequired && item.reviewStatus === "pending")
+        .map((item) => item.id);
+
       try {
+        if (batchDiscoveryIds.length === 0) {
+          batchSucceeded = true;
+        } else {
         const response = await cameraInventoryApi.approveAllDiscovered(selectedBranch, {
+          discoveryIds: batchDiscoveryIds,
           recordingMode: "continuous",
           retentionDays: 180,
           enableAnalytics: true,
           enableAlerts: true,
         }) as { summary: { provisioned: number; partial: number; needsAttention: number; failed: number }; results: AutoProvisionResult[] };
+        batchSucceeded = true;
         if (response?.results) setAutoProvisionResults(response.results);
-        approvedCount = response?.summary?.provisioned ?? 0;
+        approvedCount = (response?.summary?.provisioned ?? 0) + (response?.summary?.partial ?? 0);
         for (const result of response?.results ?? []) {
           if (result.status === "provisioned" || result.status === "partial") {
             markDiscoveryReviewStatus(result.discoveryId, "approved");
           }
         }
-      } catch {}
-
-      // 2. Iterate and approve ONLY verified cameras with valid credentials
-      let unauthenticatedCount = 0;
-      for (const item of discoveryQueueItems) {
-        if (scanAbortedRef.current) break;
-        if (item.credentialsRequired || !item.streamVerified) {
-          unauthenticatedCount++;
-          continue;
         }
-        if (item.reviewStatus !== "approved") {
+      } catch (reason) {
+        batchFailure = reason;
+      }
+
+      // Compatibility fallback for control planes that do not expose the
+      // atomic batch endpoint. Never run this after a successful batch, or a
+      // camera may be created twice from stale client state.
+      if (!batchSucceeded) {
+        const fallbackErrors: string[] = [];
+        for (const item of discoveryQueueItems) {
+          if (scanAbortedRef.current) break;
+          if (item.credentialsRequired || !item.streamVerified || item.reviewStatus !== "pending") continue;
           const name = item.displayName || item.model || `${item.vendor || "IP"} Camera (${item.ipAddress})`;
           try {
             await cameraInventoryApi.approveDiscovery(selectedBranch, item.id, { name });
             markDiscoveryReviewStatus(item.id, "approved");
             approvedCount++;
-          } catch {
-            try {
-              await cameraInventoryApi.createCamera(selectedBranch, {
-                name,
-                vendor: item.vendor || item.manufacturer || "other",
-                model: item.model || "IP Camera",
-                channel: item.recorderChannel ?? 1,
-                protocol: item.onvifSupport ? "onvif-t" : "rtsp",
-                ipAddress: item.ipAddress,
-                macAddress: item.macAddress,
-                serialNumber: item.serialNumber,
-                connectionSecretRef: `edge://${item.edgeAgentId || ""}/${item.id}`,
-                connectionTransport: "edge-gateway",
-                sourceType: item.sourceType || "ip-camera",
-              });
-              markDiscoveryReviewStatus(item.id, "approved");
-              approvedCount++;
-            } catch {}
+          } catch (reason) {
+            fallbackErrors.push(`${name}: ${messageOf(reason, "approval failed")}`);
           }
+        }
+        if (approvedCount === 0 && fallbackErrors.length > 0) {
+          throw new Error(`${messageOf(batchFailure, "Batch provisioning failed")} ${fallbackErrors[0]}`.trim());
         }
       }
 
+      if (scanAbortedRef.current) {
+        setNotice("Provisioning was stopped. Refreshing the branch to show operations that completed before cancellation.");
+      } else
       if (approvedCount > 0 && unauthenticatedCount > 0) {
         setNotice(`${approvedCount} verified cameras approved and added to active camera list. ${unauthenticatedCount} device(s) require login credentials before they can be added.`);
       } else if (approvedCount > 0) {
         setNotice(`${approvedCount} verified cameras approved and moved to active camera inventory.`);
       } else if (unauthenticatedCount > 0) {
         setNotice(`${unauthenticatedCount} camera(s) require login credentials. Click 'Enter login & password' on each camera to verify.`);
+      } else if (approvedCount === 0) {
+        setNotice("No verified pending cameras were available to approve.");
       }
       await refreshBranch(selectedBranch);
     } catch (reason) {
@@ -1100,6 +1165,7 @@ export function DeviceManager() {
       setRenameDraft("");
       setPreviewNameDraft("");
       setSelectedDiscoveryId(undefined);
+      setDiscoveryEditMode(undefined);
       setPreviewDiscoveryId(undefined);
       setNotice("Discovery name updated.");
       await refreshBranch(selectedBranch);
@@ -1117,6 +1183,7 @@ export function DeviceManager() {
       await cameraInventoryApi.rejectDiscovery(selectedBranch, discoveryId, { reason });
       setRejectReason("");
       setSelectedDiscoveryId(undefined);
+      setDiscoveryEditMode(undefined);
       setPreviewDiscoveryId(undefined);
       setNotice("Device was rejected and will stay suppressed on future scans.");
       await refreshBranch(selectedBranch);
@@ -1217,10 +1284,7 @@ export function DeviceManager() {
         `Status will update automatically.`
       );
       
-      // Refresh the branch data after a short delay
-      setTimeout(() => {
-        void refreshBranch(selectedBranch);
-      }, 2000);
+      await refreshBranch(selectedBranch);
     } catch (reason) {
       setError(messageOf(reason, "Edge Agent reconnection failed."));
     } finally {
@@ -1256,6 +1320,20 @@ export function DeviceManager() {
     setSaving(true);
     setError(undefined);
     try {
+      if (registrationMode === "automatic") {
+        const gateway = gateways.find((item) => item.id === cameraForm.edgeAgentId);
+        if (!gateway || !isGatewayReady(gateway)) {
+          throw new Error("Select an online Branch Gateway before starting automatic discovery.");
+        }
+        scanAbortedRef.current = false;
+        setScanning(true);
+        setShowCameraForm(false);
+        await startConnectedCameraScan(gateway);
+        await refreshBranch(selectedBranch);
+        setShowDiscoveredList(true);
+        return;
+      }
+
       if (registrationMode === "bulk") {
         await cameraInventoryApi.bulkImport(selectedBranch, bulkCsv);
         setShowCameraForm(false);
@@ -1265,93 +1343,30 @@ export function DeviceManager() {
         return;
       }
 
-      if (registrationMode === "manual") {
-        await cameraInventoryApi.approveCamera(selectedBranch, {
-          discoveryId: "",
-          name: cameraForm.name,
-          channel: Number(cameraForm.channel),
-          protocol: cameraForm.protocol,
-          connectionTransport: cameraForm.connectionTransport,
-          sourceType: cameraForm.sourceType,
-          ...(cameraForm.connectionSecretRef.trim() ? { connectionSecretRef: cameraForm.connectionSecretRef.trim() } : {}),
-          ...(cameraForm.sourceType !== "ip-camera" ? {
-            recorderId: cameraForm.recorderId,
-            recorderChannel: Number(cameraForm.recorderChannel),
-            recorderSerialNumber: cameraForm.recorderSerialNumber || undefined,
-          } : {}),
-          manufacturer: discoveryManufacturer.trim() || cameraForm.vendor.trim() || "Unknown",
-          model: cameraForm.model.trim() || "Generic ONVIF / RTSP camera",
-          serialNumber: discoverySerialNumber || undefined,
-          ipAddress: cameraForm.ipAddress,
-          onvifPort: Number(cameraForm.onvifPort),
-          rtspPort: Number(cameraForm.rtspPort),
-          streamProfile: cameraForm.streamRole,
-          profile: {
-            name: cameraForm.streamRole,
-            role: cameraForm.streamRole,
-            codec: cameraForm.codec,
-            width: Number(cameraForm.width),
-            height: Number(cameraForm.height),
-            frameRate: Number(cameraForm.frameRate),
-            bitrateKbps: Number(cameraForm.bitrateKbps),
-            preferredFor: cameraForm.sourceType === "ip-camera"
-              ? ["recording", "live", "analytics"]
-              : ["live", "analytics"],
-          },
-        });
-      } else {
-        const discovery = await cameraInventoryApi.submitDiscovery(selectedBranch, {
-          edgeAgentId: cameraForm.edgeAgentId,
-          discoveryMethod,
-          vendor: cameraForm.vendor.trim() || "other",
-          manufacturer: discoveryManufacturer.trim() || cameraForm.vendor.trim() || "Unknown",
-          model: cameraForm.model.trim() || "Generic ONVIF / RTSP camera",
-          ipAddress: cameraForm.ipAddress,
-          macAddress: discoveryMacAddress || undefined,
-          serialNumber: discoverySerialNumber || undefined,
-          firmwareVersion: discoveryFirmwareVersion || undefined,
-          onvifSupport: discoveryOnvifSupport,
-          rtspValidated: discoveryRtspValidated,
-          ptzCapability: discoveryPtzCapability || cameraForm.ptz,
-          audioCapability: discoveryAudioCapability || cameraForm.audio,
-          analyticsCapability: discoveryAnalyticsCapability || cameraForm.events,
-          timeSynchronization: discoveryTimeSynchronization,
-          duplicateStatus: discoveryDuplicateStatus,
-          compatibilityStatus: discoveryCompatibilityStatus,
-          hardwareId: discoveryHardwareId || undefined,
-          existingDeviceAssociation: discoveryExistingDeviceAssociation || undefined,
-          sourceType: cameraForm.sourceType,
-          ...(cameraForm.sourceType !== "ip-camera" ? {
-            recorderId: cameraForm.recorderId,
-            recorderChannel: Number(cameraForm.recorderChannel),
-            recorderSerialNumber: cameraForm.recorderSerialNumber || undefined,
-          } : {}),
-          onvifPort: Number(cameraForm.onvifPort),
-          rtspPort: Number(cameraForm.rtspPort),
-          profiles: [{
-            name: cameraForm.streamRole,
-            codec: cameraForm.codec,
-            width: Number(cameraForm.width),
-            height: Number(cameraForm.height),
-            role: cameraForm.streamRole,
-            frameRate: Number(cameraForm.frameRate),
-            bitrateKbps: Number(cameraForm.bitrateKbps),
-            preferredFor: cameraForm.sourceType === "ip-camera"
-              ? ["recording", "live", "analytics"]
-              : ["live", "analytics"],
-          }],
-          capabilities: {
-            ptz: cameraForm.ptz,
-            audio: cameraForm.audio,
-            events: cameraForm.events,
-          },
-        });
-        await cameraInventoryApi.approveDiscovery(selectedBranch, discovery.id, {
-          name: cameraForm.name,
-          channel: Number(cameraForm.channel),
-          protocol: cameraForm.protocol,
-        });
-      }
+      const streamProfile = cameraProfilePayload(cameraForm);
+      await cameraInventoryApi.approveCamera(selectedBranch, {
+        discoveryId: "",
+        name: cameraForm.name,
+        channel: Number(cameraForm.channel),
+        protocol: cameraForm.protocol,
+        connectionTransport: cameraForm.connectionTransport,
+        sourceType: cameraForm.sourceType,
+        ...(cameraForm.connectionSecretRef.trim() ? { connectionSecretRef: cameraForm.connectionSecretRef.trim() } : {}),
+        ...(cameraForm.sourceType !== "ip-camera" ? {
+          recorderId: cameraForm.recorderId,
+          recorderChannel: Number(cameraForm.recorderChannel),
+          recorderSerialNumber: cameraForm.recorderSerialNumber || undefined,
+        } : {}),
+        manufacturer: discoveryManufacturer.trim() || cameraForm.vendor.trim() || "Unknown",
+        model: cameraForm.model.trim() || "Generic ONVIF / RTSP camera",
+        serialNumber: discoverySerialNumber || undefined,
+        macAddress: discoveryMacAddress || undefined,
+        ipAddress: cameraForm.ipAddress,
+        onvifPort: Number(cameraForm.onvifPort),
+        rtspPort: Number(cameraForm.rtspPort),
+        ...(cameraForm.streamRole !== "unknown" ? { streamProfile: cameraForm.streamRole } : {}),
+        ...(streamProfile ? { profile: streamProfile } : {}),
+      });
       setShowCameraForm(false);
       setNotice(`${cameraForm.name} was added to ${activeBranch?.name ?? "the branch"}.`);
       await refreshBranch(selectedBranch);
@@ -1359,222 +1374,8 @@ export function DeviceManager() {
       setError(messageOf(reason, "Camera onboarding failed."));
     } finally {
       setSaving(false);
+      if (registrationMode === "automatic") setScanning(false);
     }
-  }
-
-  function downloadOneClickBatchFile(branchId: string, branchName: string) {
-    const origin = typeof window !== "undefined" ? window.location.origin : "https://sentinel-grid-monitoring-s38w.onrender.com";
-    const cleanBranchName = (branchName || "Branch").replace(/["\r\n]/g, "");
-    const safeBranchName = (branchName || "Branch").replace(/[`"'\r\n]/g, "");
-    const content = `<# :
-@echo off
-setlocal
-title Sentinel Grid CCTV Edge Agent - 1-Click Auto Setup
-color 0B
-cls
-powershell -NoProfile -ExecutionPolicy Bypass -Command "[ScriptBlock]::Create([IO.File]::ReadAllText('%~f0')).Invoke()"
-echo.
-echo ==============================================================================
-echo  Sentinel Grid Edge Process Terminated.
-echo ==============================================================================
-pause
-goto :eof
-#>
-
-$ErrorActionPreference = 'Continue'
-try {
-  [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]'Tls12'
-} catch {}
-
-$cleanBranchName = "${cleanBranchName.replace(/["\\]/g, '\\$&')}"
-$branchId = "${branchId}"
-$controlPlaneUrl = "${origin}"
-$apiBase = if ($controlPlaneUrl -match '/api/control/?$') { "$($controlPlaneUrl.TrimEnd('/'))/v1" } else { "$($controlPlaneUrl.TrimEnd('/'))/api/control/v1" }
-
-Write-Host "==============================================================================" -ForegroundColor Cyan
-Write-Host "          SENTINEL GRID CCTV SECURITY - 1-CLICK EDGE AUTO SETUP" -ForegroundColor Cyan
-Write-Host "==============================================================================" -ForegroundColor Cyan
-Write-Host " Target Branch  : $cleanBranchName ($branchId)" -ForegroundColor White
-Write-Host " Control Plane  : $controlPlaneUrl" -ForegroundColor White
-Write-Host "==============================================================================" -ForegroundColor Cyan
-Write-Host ""
-Write-Host " [*] Initializing Sentinel Grid Discovery Engine..." -ForegroundColor Yellow
-Write-Host " [*] Checking PowerShell execution environment..." -ForegroundColor Yellow
-Write-Host ""
-
-try {
-  Write-Host " [*] [1/4] Registering Edge Agent with Cloud Control Plane..." -ForegroundColor Cyan
-  $regPayload = @{ name = "$env:COMPUTERNAME Scanner"; version = '2.4.0' } | ConvertTo-Json
-  $agentId = 'agent-' + $branchId.ToLower() + '-' + [guid]::NewGuid().ToString().Substring(0, 8)
-  try {
-    $regResp = Invoke-RestMethod -Uri "$apiBase/branches/$branchId/edge-agents/register" -Method Post -Body $regPayload -ContentType 'application/json' -TimeoutSec 15
-    if ($regResp.id) { $agentId = $regResp.id }
-  } catch {
-    Write-Host "  [!] Edge agent initialized: $agentId" -ForegroundColor Yellow
-  }
-  Write-Host " [+] Registered Edge Agent: $agentId [ONLINE]" -ForegroundColor Green
-  Write-Host ""
-
-  Write-Host " [*] [2/4] Detecting Local Network & Probing CCTV Devices..." -ForegroundColor Cyan
-  $localIP = '192.168.1.100'
-  try {
-    $ipObj = Get-NetIPAddress -AddressFamily IPv4 | Where-Object { 
-      $_.InterfaceAlias -notmatch 'Loopback|vEthernet|WSL|Hyper-V|VirtualBox|VMware|Docker|Tailscale|ZeroTier|Npcap' -and 
-      $_.IPAddress -notmatch '^(169\.254|127\.)' 
-    } | Sort-Object -Property InterfaceIndex | Select-Object -First 1
-    if ($ipObj) { $localIP = $ipObj.IPAddress }
-  } catch {}
-  if ($localIP -eq '192.168.1.100') {
-    try {
-      $ipObj2 = Get-NetIPAddress -AddressFamily IPv4 | Where-Object { $_.InterfaceAlias -notmatch 'Loopback' -and $_.IPAddress -notmatch '^(169\.254|127\.)' } | Select-Object -First 1
-      if ($ipObj2) { $localIP = $ipObj2.IPAddress }
-    } catch {}
-  }
-  $subnetPrefix = ($localIP -split '\\.')[0..2] -join '.'
-  Write-Host " [+] Local LAN Subnet detected: $subnetPrefix.0/24 (Gateway: $subnetPrefix.1)" -ForegroundColor Green
-
-  $discoveredDevices = @()
-  1..8 | ForEach-Object {
-    $ch = $_
-    $discoveredDevices += @{
-      ipAddress = "$subnetPrefix.171"
-      model = "CP PLUS 16CH UVR HD DVR - Channel $ch"
-      type = "CP PLUS UVR HD DVR - Channel $ch"
-      channel = $ch
-      recorderChannel = $ch
-      sourceType = 'analog-dvr-channel'
-      recorderId = 'recorder-cpplus-dvr-171'
-      recorderSerialNumber = 'CP-UVR-0801E1V-I'
-      port = 554
-      rtspPort = 554
-      onvifPort = 80
-      vendor = 'cp-plus'
-      manufacturer = 'CP PLUS'
-      streamVerified = $true
-      displayName = "CP PLUS DVR Ch $ch ($subnetPrefix.171)"
-      edgeAgentId = $agentId
-    }
-  }
-  $discoveredDevices += @{
-    ipAddress = "$subnetPrefix.58"
-    model = 'Dahua 4K ONVIF IP Dome Camera'
-    type = 'ONVIF IP Dome Camera'
-    channel = 1
-    sourceType = 'ip-camera'
-    port = 554
-    rtspPort = 554
-    onvifPort = 80
-    vendor = 'dahua'
-    manufacturer = 'Dahua Technology'
-    streamVerified = $true
-    displayName = "Dahua 4K Dome ($subnetPrefix.58)"
-    edgeAgentId = $agentId
-  }
-
-  # Dynamically discover any other active IP cameras / ONVIF devices on the local subnet
-  try {
-    $activeIps = @()
-    $arpLines = (arp -a) -split '\\r?\\n'
-    foreach ($line in $arpLines) {
-      if ($line -match "($subnetPrefix\\.\\d+)\\s+([0-9a-fA-F-]{17})") {
-        $ip = $matches[1]
-        if ($ip -ne "$subnetPrefix.1" -and $ip -ne $localIP -and $ip -ne "$subnetPrefix.255" -and -not ($activeIps -contains $ip)) {
-          $activeIps += $ip
-        }
-      }
-    }
-    foreach ($candidateIp in ($activeIps | Select-Object -Unique)) {
-      if ($candidateIp -eq "$subnetPrefix.171" -or $candidateIp -eq "$subnetPrefix.58") { continue }
-      $openPort = $null
-      foreach ($p in @(554, 80, 8080, 8000, 8899, 37777, 5000)) {
-        try {
-          $tcp = New-Object System.Net.Sockets.TcpClient
-          $iar = $tcp.BeginConnect($candidateIp, $p, $null, $null)
-          if ($iar.AsyncWaitHandle.WaitOne(300, $false) -and $tcp.Connected) {
-            $openPort = $p
-            $tcp.EndConnect($iar)
-            $tcp.Close()
-            break
-          }
-          $tcp.Close()
-        } catch {}
-      }
-      if ($openPort) {
-        $discoveredDevices += @{
-          ipAddress = $candidateIp
-          model = "Network IP Camera ($candidateIp)"
-          type = "ONVIF IP Camera"
-          channel = 1
-          sourceType = 'ip-camera'
-          port = $openPort
-          rtspPort = if ($openPort -eq 554) { 554 } else { 554 }
-          onvifPort = if ($openPort -eq 554) { 80 } else { $openPort }
-          vendor = 'other'
-          manufacturer = 'Generic ONVIF'
-          streamVerified = $true
-          displayName = "IP Camera ($candidateIp)"
-          edgeAgentId = $agentId
-        }
-      }
-    }
-  } catch {}
-  Write-Host " [+] Discovered $($discoveredDevices.Count) appliances across local network!" -ForegroundColor Green
-  Write-Host ""
-
-  Write-Host " [*] [3/4] Syncing Discovered Cameras with Cloud Control Plane..." -ForegroundColor Cyan
-  $syncPayload = @{ branchId = $branchId; edgeAgentId = $agentId; devices = $discoveredDevices } | ConvertTo-Json -Depth 5
-  try {
-    $syncResp = Invoke-RestMethod -Uri "$apiBase/branches/$branchId/cameras/discovered" -Method Post -Body $syncPayload -ContentType 'application/json' -TimeoutSec 15
-    Write-Host " [+] Sync complete: $($discoveredDevices.Count) devices populated in Branch Wizard!" -ForegroundColor Green
-  } catch {
-    Write-Host "  [!] Batch sync notice: $($_.Exception.Message). Syncing devices individually..." -ForegroundColor Yellow
-    foreach ($dev in $discoveredDevices) {
-      try {
-        $devJson = $dev | ConvertTo-Json
-        Invoke-RestMethod -Uri "$apiBase/branches/$branchId/cameras/discovered" -Method Post -Body $devJson -ContentType 'application/json' -TimeoutSec 5 | Out-Null
-      } catch {}
-    }
-    Write-Host " [+] Individual device registration complete!" -ForegroundColor Green
-  }
-
-  Write-Host ""
-  Write-Host "==============================================================================" -ForegroundColor Green
-  Write-Host " SUCCESS: Sentinel Grid Edge Agent is ACTIVE and SYNCED!" -ForegroundColor Green
-  Write-Host " Return to your browser: The Branch Onboarding Wizard has updated." -ForegroundColor Green
-  Write-Host " Live heartbeat loop is active. Keep this window open in background." -ForegroundColor Green
-  Write-Host "==============================================================================" -ForegroundColor Green
-  Write-Host ""
-
-  $hbPayload = @{ version = '2.4.0'; status = 'online' } | ConvertTo-Json
-  $hbCount = 0
-  while ($true) {
-    Start-Sleep -Seconds 15
-    $hbCount++
-    try {
-      Invoke-RestMethod -Uri "$apiBase/edge-agents/$agentId/heartbeat" -Method Post -Body $hbPayload -ContentType 'application/json' -TimeoutSec 5 | Out-Null
-      Write-Host "  [Heartbeat #$hbCount] Edge agent status: HEALTHY (ping acknowledged at $((Get-Date).ToString('HH:mm:ss')))" -ForegroundColor Gray
-    } catch {
-      Write-Host "  [Heartbeat #$hbCount] Edge heartbeat ping sent at $((Get-Date).ToString('HH:mm:ss'))" -ForegroundColor DarkGray
-    }
-  }
-} catch {
-  Write-Host ""
-  Write-Host (" [!] ERROR: " + $_.Exception.Message) -ForegroundColor Red
-  Write-Host ""
-  Write-Host (" Troubleshooting: Verify network connection to " + $controlPlaneUrl) -ForegroundColor Yellow
-}
-`;
-    const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    const safeName = (branchName || "Branch").replace(/[^a-zA-Z0-9_-]/g, "_");
-    a.href = url;
-    a.download = `Install_KryptonVision_${safeName}.bat`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-    setNotice(`1-Click installer "Install_KryptonVision_${safeName}.bat" downloaded! Just double-click to run.`);
   }
 
   return (
@@ -1587,22 +1388,25 @@ try {
         <div className="device-toolbar-actions">
           {scanning ? (
             <button
-              className="secondary-button"
-              style={{ background: "rgba(239, 68, 68, 0.25)", color: "#f87171", borderColor: "#dc2626", fontWeight: 700 }}
+              type="button"
+              className="secondary-button scan-stop-button"
               onClick={stopScanning}
               title="Stop the current camera scan"
             >
-              <Square size={14} fill="#f87171" /> Stop scan
+              <Square size={14} fill="currentColor" /> Stop scan
             </button>
           ) : (
-            <button className="primary-button" onClick={() => void scanCameras()} disabled={!selectedBranch || saving} title="Automatically search local network, VPN routes, and the managed tunnel">
+            <button type="button" className="primary-button" onClick={() => void scanCameras()} disabled={!selectedBranch || saving} title="Automatically search local network, VPN routes, and the managed tunnel">
               <Search size={15} /> Scan cameras
             </button>
           )}
-          <button className="secondary-button" onClick={() => setShowDirectProbeModal(true)} title="Directly test and connect an IP camera on the configured local subnet">
+          <button type="button" className="secondary-button" onClick={() => setShowDirectProbeModal(true)} disabled={!selectedBranch || saving} title="Directly test and connect an IP camera on the configured local subnet">
             <Wifi size={15} /> Direct IP Probe
           </button>
-          <button className="secondary-button" onClick={openScannerInstaller} disabled={saving} title="Get 1-line commands or standalone installer">
+          <button className="secondary-button" type="button" onClick={() => void refreshBranch(selectedBranch)} disabled={!selectedBranch || loading} title="Refresh this branch inventory">
+            <RefreshCw size={15} className={loading ? "spin" : undefined} /> Refresh
+          </button>
+          <button type="button" className="secondary-button" onClick={openScannerInstaller} disabled={saving || !selectedBranch} title="Get 1-line commands or standalone installer">
             <Terminal size={15} /> {gateways.length > 0 ? "Agent Commands" : "Install Scanner"}
           </button>
         </div>
@@ -1615,8 +1419,8 @@ try {
         ) : null}
       </div>
 
-      {error && <div className="device-message error"><AlertTriangle size={16} />{error}</div>}
-      {notice && <div className="device-message success"><CheckCircle2 size={16} />{notice}<button onClick={() => setNotice(undefined)}><X size={14} /></button></div>}
+      {error && <div className="device-message error" role="alert"><AlertTriangle size={16} /><span>{error}</span><button type="button" aria-label="Dismiss error" onClick={() => setError(undefined)}><X size={14} /></button></div>}
+      {notice && <div className="device-message success" role="status"><CheckCircle2 size={16} /><span>{notice}</span><button type="button" aria-label="Dismiss message" onClick={() => setNotice(undefined)}><X size={14} /></button></div>}
 
       <div className="remote-camera-note">
         <Network size={19} />
@@ -1628,7 +1432,8 @@ try {
 
       <div className="device-scope">
         <label htmlFor="device-branch">Branch location</label>
-        <select id="device-branch" value={selectedBranch} onChange={(event) => setSelectedBranch(event.target.value)}>
+        <select id="device-branch" value={selectedBranch} onChange={(event) => setSelectedBranch(event.target.value)} disabled={loading && branches.length === 0}>
+          {branches.length === 0 ? <option value="">{loading ? "Loading branches…" : "No configurable branches"}</option> : null}
           {branches.map((branch) => <option key={branch.id} value={branch.id}>{branch.name}</option>)}
         </select>
         {branches.length === 0 && !loading && <span>You do not have device configuration permission for any branch.</span>}
@@ -1649,13 +1454,13 @@ try {
         <div className="device-advanced-content">
           <p>Only use this when installing a gateway, changing VPN or tunnel settings, or adding a device manually.</p>
           <div className="device-advanced-actions">
-            <button className="secondary-button" onClick={() => {
+            <button type="button" className="secondary-button" onClick={() => {
               setGatewayActivation(undefined);
               setShowGatewayForm(true);
             }} disabled={!selectedBranch}>
               <Download size={15} /> Install scanner on this PC
             </button>
-            <button className="secondary-button" onClick={openCameraForm} disabled={!selectedBranch}>
+            <button type="button" className="secondary-button" onClick={openCameraForm} disabled={!selectedBranch}>
               <Plus size={15} /> Add camera manually
             </button>
           </div>
@@ -1663,54 +1468,59 @@ try {
         </div>
       </details>
 
-      {loading ? <div className="loading-state"><Activity className="spin" />Loading branch devices…</div> : (
+      {loading && gateways.length === 0 && cameras.length === 0 && discoveredCameras.length === 0 && inventoryRecords.length === 0 ? <div className="loading-state"><Activity className="spin" />Loading branch devices…</div> : (
         <div className="device-columns">
           <section className="device-card">
             <div className="device-card-heading"><Router size={18} /><div><h3>Branch Gateway status</h3><p>{gateways.length} appliance{gateways.length !== 1 ? "s" : ""} enrolled</p></div></div>
             {gateways.length === 0 ? (
               <div className="device-empty"><Router size={25} /><strong>No Branch Gateway enrolled</strong><span>That is expected for VPN-direct branches. Enroll one only for tunnel-based discovery and local proxying.</span></div>
-            ) : gateways.map((gateway) => (
-              <article className="gateway-row" key={gateway.id}>
-                <span className={`gateway-state ${gateway.status}`}><i /></span>
+            ) : gateways.map((gateway) => {
+              const gatewayReady = isGatewayReady(gateway);
+              const displayStatus = gateway.status === "pending" ? "pending" : gatewayReady ? "online" : "offline";
+              return <article className="gateway-row" key={gateway.id}>
+                <span className={`gateway-state ${displayStatus}`} aria-label={`Gateway ${displayStatus}`}><i /></span>
                 <div>
                   <strong>{gateway.name}</strong>
                   <small>
-                    {gateway.status === "online" ? "Online · camera and recorder monitoring active" :
-                     gateway.status === "offline" ? "Offline · central action required" :
+                    {gatewayReady ? "Online · camera and recorder monitoring active" :
+                     gateway.status !== "pending" ? "Offline or stale · central action required" :
                      "Awaiting first appliance connection"} · v{gateway.version}
                   </small>
                 </div>
                 <div className="gateway-actions" aria-label={`Remote actions for ${gateway.name}`}>
-                  {gateway.status === "offline" ? (
+                  {!gatewayReady && gateway.status !== "pending" ? (
                     <>
                       <button 
                         type="button" 
                         title="Reconnect Edge Agent" 
+                        aria-label={`Reconnect ${gateway.name}`}
                         disabled={saving}
                         onClick={() => void handleReconnectGateway(gateway.id, false)}
-                        style={{ backgroundColor: '#dc2626', color: 'white', padding: '4px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: 600 }}
+                        className="gateway-action-text danger"
                       >
                         <RefreshCw size={13}/> Reconnect
                       </button>
                       <button 
                         type="button" 
                         title="Reconnect Edge Agent and restore all cameras" 
+                        aria-label={`Reconnect ${gateway.name} and restore cameras`}
                         disabled={saving}
                         onClick={() => void handleReconnectGateway(gateway.id, true)}
-                        style={{ backgroundColor: '#b91c1c', color: 'white', padding: '4px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: 600 }}
+                        className="gateway-action-text danger strong"
                       >
                         <RefreshCw size={13}/> + Cameras
                       </button>
                     </>
                   ) : (
                     <>
-                      <button type="button" title="Rediscover cameras and recorders" disabled={saving || gateway.status !== "online"} onClick={() => void issueGatewayCommand(gateway, "rediscover")}><Network size={13}/></button>
-                      <button type="button" title="Collect redacted diagnostics" disabled={saving || gateway.status !== "online"} onClick={() => void issueGatewayCommand(gateway, "collect-logs")}><Activity size={13}/></button>
-                      <button type="button" title="Restart the branch media service" disabled={saving || gateway.status !== "online"} onClick={() => void issueGatewayCommand(gateway, "restart-media")}><RefreshCw size={13}/></button>
+                      <button type="button" aria-label={`Rediscover devices using ${gateway.name}`} title="Rediscover cameras and recorders" disabled={saving || !gatewayReady} onClick={() => void issueGatewayCommand(gateway, "rediscover")}><Network size={13}/></button>
+                      <button type="button" aria-label={`Collect diagnostics from ${gateway.name}`} title="Collect redacted diagnostics" disabled={saving || !gatewayReady} onClick={() => void issueGatewayCommand(gateway, "collect-logs")}><Activity size={13}/></button>
+                      <button type="button" aria-label={`Restart media on ${gateway.name}`} title="Restart the branch media service" disabled={saving || !gatewayReady} onClick={() => void issueGatewayCommand(gateway, "restart-media")}><RefreshCw size={13}/></button>
                       <button
                         type="button"
+                        aria-label={`Update ${gateway.name}`}
                         title={supportsPatchUpdates(gateway.version) ? "Install latest lightweight patch only" : "Install the v0.1.16 full Repair package once to enable patch-only updates"}
-                        disabled={saving || gateway.status !== "online" || !supportsPatchUpdates(gateway.version)}
+                        disabled={saving || !gatewayReady || !supportsPatchUpdates(gateway.version)}
                         onClick={() => void issueGatewayCommand(gateway, "apply-update")}
                       ><Download size={13}/></button>
                     </>
@@ -1718,7 +1528,7 @@ try {
                 </div>
                 <code title={gateway.id}>{gateway.id.slice(0, 8)}</code>
               </article>
-            ))}
+            })}
           </section>
 
           <section className="device-card">
@@ -1775,14 +1585,15 @@ try {
               {scanning ? "Scanning…" : lastScanAt ? "Last scan ready" : "Awaiting scan"}
             </span>
             {lastScanAt ? <span className="scan-time">{new Date(lastScanAt).toLocaleString()}</span> : null}
-            <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
-              {pendingReviewCount > 0 ? (
+            <div className="discovery-primary-actions">
+              {approvableDiscoveryCount > 0 ? (
                 <button type="button" className="primary-button" onClick={() => void approveAllDiscovered()} disabled={saving || scanning}>
-                  {saving ? "Provisioning…" : `Approve all & start (${pendingReviewCount})`}
+                  {saving ? "Provisioning…" : `Approve verified (${approvableDiscoveryCount})`}
                 </button>
               ) : null}
+              {pendingReviewCount > 0 && approvableDiscoveryCount === 0 ? <span className="credential-pending-note">{pendingReviewCount} need review or login</span> : null}
               {(saving || scanning) && (
-                <button type="button" className="secondary-button" onClick={handleStopOperation} style={{ borderColor: "#ef4444", color: "#ef4444", fontWeight: 700, padding: "6px 12px" }}>
+                <button type="button" className="secondary-button danger-button" onClick={handleStopOperation}>
                   ⛔ Stop / Cancel
                 </button>
               )}
@@ -1837,30 +1648,32 @@ try {
                     {item.onvifServices?.length ? <p className="discovery-footnote">Services: {item.onvifServices.join(", ")}</p> : null}
                   </div>
                   <div className="discovery-card-actions">
-                    {item.credentialsRequired ? (
+                    {item.reviewStatus === "duplicate" ? (
+                      <button type="button" className="secondary-button" disabled title="This discovery matches an existing camera">
+                        Duplicate — approval blocked
+                      </button>
+                    ) : item.credentialsRequired ? (
                       <button
                         type="button"
-                        className="primary-button"
-                        style={{ backgroundColor: "#d97706", borderColor: "#b45309", fontWeight: 700 }}
+                        className="primary-button credential-action-button"
                         onClick={() => openCredentialActivation(item)}
                         disabled={saving || scanning}
                       >
                         🔑 Enter Username & Password to Verify
                       </button>
                     ) : (
-                      <button type="button" className="primary-button" onClick={() => void approveDiscoveredCamera(item)} disabled={saving}>
-                        ⚡ Approve & Add to Camera List
+                      <button type="button" className="primary-button" onClick={() => void approveDiscoveredCamera(item)} disabled={saving || !item.streamVerified} title={item.streamVerified ? "Approve this verified stream" : "Waiting for Branch Gateway stream verification"}>
+                        {item.streamVerified ? "⚡ Approve & Add to Camera List" : "Awaiting gateway verification"}
                       </button>
                     )}
-                    <button type="button" className="secondary-button" onClick={() => { setSelectedDiscoveryId(item.id); setRenameDraft(item.displayName ?? item.model ?? ""); setRejectReason(""); }}>Rename</button>
-                    <button type="button" className="secondary-button" onClick={() => { setSelectedDiscoveryId(item.id); setRenameDraft(item.displayName ?? item.model ?? ""); setRejectReason(""); }}>Reject</button>
+                    <button type="button" className="secondary-button" onClick={() => { setSelectedDiscoveryId(item.id); setDiscoveryEditMode("rename"); setRenameDraft(item.displayName ?? item.model ?? ""); setRejectReason(""); }}>Rename</button>
+                    <button type="button" className="secondary-button" onClick={() => { setSelectedDiscoveryId(item.id); setDiscoveryEditMode("reject"); setRejectReason(""); }}>Reject</button>
                   </div>
                   {selectedDiscoveryId === item.id && (
                     <div className="discovery-inline-editor">
-                      <input value={renameDraft} onChange={(event) => setRenameDraft(event.target.value)} placeholder="Display name" />
-                      <button type="button" className="primary-button" onClick={() => void renameDiscoveredCamera(item.id, renameDraft)} disabled={saving || !renameDraft.trim()}>Save name</button>
-                      <input value={rejectReason} onChange={(event) => setRejectReason(event.target.value)} placeholder="Reject reason" />
-                      <button type="button" className="secondary-button" onClick={() => void rejectDiscoveredCamera(item.id, rejectReason)} disabled={saving}>Reject device</button>
+                      {discoveryEditMode === "rename" ? <><input aria-label="Camera display name" value={renameDraft} onChange={(event) => setRenameDraft(event.target.value)} placeholder="Display name" /><button type="button" className="primary-button" onClick={() => void renameDiscoveredCamera(item.id, renameDraft)} disabled={saving || !renameDraft.trim()}>Save name</button></> : null}
+                      {discoveryEditMode === "reject" ? <><input aria-label="Device rejection reason" value={rejectReason} onChange={(event) => setRejectReason(event.target.value)} placeholder="Reason for rejection" /><button type="button" className="secondary-button" onClick={() => void rejectDiscoveredCamera(item.id, rejectReason)} disabled={saving || !rejectReason.trim()}>Reject device</button></> : null}
+                      <button type="button" className="secondary-button" onClick={() => { setSelectedDiscoveryId(undefined); setDiscoveryEditMode(undefined); }}>Cancel</button>
                     </div>
                   )}
                 </article>
@@ -1898,25 +1711,25 @@ try {
           <div className="form-section"><h3>Operational and lifecycle</h3><div className="form-row">
             <div className="form-group"><label htmlFor="inventoryCapabilities">Capabilities</label><input id="inventoryCapabilities" value={inventoryForm.capabilities} onChange={(event) => setInventoryForm((form) => ({ ...form, capabilities: event.target.value }))} placeholder="ptz,audio,motion" /></div>
             <div className="form-group"><label htmlFor="inventoryCredential">Credential reference</label><input id="inventoryCredential" value={inventoryForm.credentialReference} onChange={(event) => setInventoryForm((form) => ({ ...form, credentialReference: event.target.value }))} /></div>
-            <div className="form-group"><label htmlFor="inventoryInstallation">Installation date</label><input id="inventoryInstallation" value={inventoryForm.installationDate} onChange={(event) => setInventoryForm((form) => ({ ...form, installationDate: event.target.value }))} /></div>
+            <div className="form-group"><label htmlFor="inventoryInstallation">Installation date</label><input id="inventoryInstallation" type="date" value={inventoryForm.installationDate} onChange={(event) => setInventoryForm((form) => ({ ...form, installationDate: event.target.value }))} /></div>
             <div className="form-group"><label htmlFor="inventoryWarranty">Warranty</label><input id="inventoryWarranty" value={inventoryForm.warranty} onChange={(event) => setInventoryForm((form) => ({ ...form, warranty: event.target.value }))} /></div>
           </div><div className="form-row">
             <div className="form-group"><label htmlFor="inventoryAmc">AMC contract</label><input id="inventoryAmc" value={inventoryForm.amcContract} onChange={(event) => setInventoryForm((form) => ({ ...form, amcContract: event.target.value }))} /></div>
-            <div className="form-group"><label htmlFor="inventoryHealth">Health status</label><input id="inventoryHealth" value={inventoryForm.healthStatus} onChange={(event) => setInventoryForm((form) => ({ ...form, healthStatus: event.target.value }))} /></div>
-            <div className="form-group"><label htmlFor="inventoryLastCommunication">Last communication</label><input id="inventoryLastCommunication" value={inventoryForm.lastCommunication} onChange={(event) => setInventoryForm((form) => ({ ...form, lastCommunication: event.target.value }))} /></div>
+            <div className="form-group"><label htmlFor="inventoryHealth">Health status</label><select id="inventoryHealth" value={inventoryForm.healthStatus} onChange={(event) => setInventoryForm((form) => ({ ...form, healthStatus: event.target.value }))}><option value="unknown">Unknown</option><option value="healthy">Healthy</option><option value="warning">Warning</option><option value="critical">Critical</option></select></div>
+            <div className="form-group"><label htmlFor="inventoryLastCommunication">Last communication</label><input id="inventoryLastCommunication" type="datetime-local" value={inventoryForm.lastCommunication} onChange={(event) => setInventoryForm((form) => ({ ...form, lastCommunication: event.target.value }))} /></div>
             <div className="form-group"><label htmlFor="inventoryTemplate">Configuration template</label><input id="inventoryTemplate" value={inventoryForm.configurationTemplate} onChange={(event) => setInventoryForm((form) => ({ ...form, configurationTemplate: event.target.value }))} /></div>
           </div><div className="form-row">
-            <div className="form-group"><label htmlFor="inventoryRisk">Risk classification</label><input id="inventoryRisk" value={inventoryForm.riskClassification} onChange={(event) => setInventoryForm((form) => ({ ...form, riskClassification: event.target.value }))} /></div>
+            <div className="form-group"><label htmlFor="inventoryRisk">Risk classification</label><select id="inventoryRisk" value={inventoryForm.riskClassification} onChange={(event) => setInventoryForm((form) => ({ ...form, riskClassification: event.target.value }))}><option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option><option value="critical">Critical</option></select></div>
             <div className="form-group"><label htmlFor="inventoryLifecycle">Lifecycle state</label><select id="inventoryLifecycle" value={inventoryForm.lifecycleState} onChange={(event) => setInventoryForm((form) => ({ ...form, lifecycleState: event.target.value }))}><option value="discovered">Discovered</option><option value="pending-approval">Pending approval</option><option value="approved">Approved</option><option value="configured">Configured</option><option value="operational">Operational</option><option value="maintenance">Maintenance</option><option value="suspended">Suspended</option><option value="decommissioned">Decommissioned</option></select></div>
           </div></div>
           <div className="modal-actions"><button type="submit" className="primary-button" disabled={saving}>{saving ? "Saving…" : "Save inventory record"}</button></div>
         </form>
 
-        <div className="form-section" style={{ marginTop: "1rem" }}>
+        <div className="form-section inventory-search-section">
           <div className="form-row">
             <div className="form-group">
               <label htmlFor="inventorySearch">Search inventory</label>
-              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+              <div className="inventory-search-control">
                 <Search size={16} />
                 <input id="inventorySearch" value={inventorySearch} onChange={(event) => setInventorySearch(event.target.value)} placeholder="Search by ID, model, IP, serial, or tag" />
               </div>
@@ -1996,7 +1809,7 @@ try {
               <small>{record.deviceType} · {record.manufacturer} {record.model}</small>
               <small>{record.region} / {record.branch} · {record.ipAddress || "No IP"}</small>
             </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: "0.35rem", alignItems: "flex-end" }}>
+            <div className="inventory-status-stack">
               <span className={`inventory-status ${record.healthStatus}`}>{record.healthStatus}</span>
               <span className="inventory-status">{record.lifecycleState}</span>
             </div>
@@ -2007,15 +1820,15 @@ try {
 
       {showGatewayForm && (
         <div className="modal-overlay">
-          <div className="modal-container modal-large">
+          <div className="modal-container modal-large" role="dialog" aria-modal="true" aria-labelledby="gateway-modal-title">
             <div className="modal-header">
               <div>
-                <h2>{gateways.length > 0 ? "Repair / Connect Edge Agent" : "Deploy Sentinel Grid Edge Agent"}</h2>
+                <h2 id="gateway-modal-title">{gateways.length > 0 ? "Repair / Connect Edge Agent" : "Deploy Sentinel Grid Edge Agent"}</h2>
                 <p className="text-xs text-slate-400 mt-0.5">
                   Target Branch: <strong>{activeBranch?.name ?? "Selected Branch"}</strong> ({selectedBranch})
                 </p>
               </div>
-              <button className="icon-button" onClick={() => setShowGatewayForm(false)}>
+              <button type="button" className="icon-button" aria-label="Close gateway setup" onClick={() => setShowGatewayForm(false)}>
                 <X size={20} />
               </button>
             </div>
@@ -2129,8 +1942,8 @@ try {
       )}
       {credentialActivation && (
         <div className="modal-overlay">
-          <div className="modal-container">
-            <div className="modal-header"><h2>Device login required</h2><button type="button" className="icon-button" onClick={() => { setCredentialActivation(undefined); setActivationPassword(""); setCredentialVerificationStatus(undefined); setCredentialVerificationError(undefined); }} disabled={saving}><X size={20} /></button></div>
+          <div className="modal-container" role="dialog" aria-modal="true" aria-labelledby="credential-modal-title">
+            <div className="modal-header"><h2 id="credential-modal-title">{credentialActivation.existingCamera ? "Update camera login" : "Device login required"}</h2><button type="button" className="icon-button" aria-label="Close device login" onClick={() => { setCredentialActivation(undefined); setActivationPassword(""); setCredentialVerificationStatus(undefined); setCredentialVerificationError(undefined); }} disabled={saving}><X size={20} /></button></div>
             <form className="modal-form" onSubmit={activateDiscoveredCamera}>
               <div className="form-info-banner credential-device-banner">
                 <Camera size={16} />
@@ -2181,8 +1994,8 @@ try {
       )}
       {showDiscoveredList && (
         <div className="modal-overlay">
-          <div className="modal-container">
-            <div className="modal-header"><h2>Cameras found at {activeBranch?.name}</h2><button className="icon-button" onClick={() => setShowDiscoveredList(false)}><X size={20} /></button></div>
+          <div className="modal-container" role="dialog" aria-modal="true" aria-labelledby="discovered-modal-title">
+            <div className="modal-header"><h2 id="discovered-modal-title">Cameras found at {activeBranch?.name}</h2><button type="button" className="icon-button" aria-label="Close discovered cameras" onClick={() => setShowDiscoveredList(false)}><X size={20} /></button></div>
             <div className="modal-body">
               {autoProvisionResults.length > 0 && (
                 <div className="auto-provision-results">
@@ -2216,27 +2029,30 @@ try {
                           <small>IP address: {camera.ipAddress} · Model: {discoveryModelLabel(camera)} · Type: {discoveryDeviceTypeLabel(camera)}</small>
                           <small>{camera.vendor} · {camera.discoveryMethod ?? "discovery"} · ONVIF port {camera.onvifPort}</small>
                           <small>{camera.serialNumber ? `SN ${camera.serialNumber}` : "Serial pending"} · {camera.macAddress ?? "MAC pending"}</small>
-                          <small className="profiles">{camera.profiles.map((p: any) => `${p.codec} ${p.width}x${p.height}`).join(", ")}</small>
+                          <small className="profiles">{Array.isArray(camera.profiles) && camera.profiles.length > 0 ? camera.profiles.map((p: any) => `${p.codec || "Auto"} ${p.width || "?"}x${p.height || "?"}`).join(", ") : "Profile data pending"}</small>
                         </div>
                         <div className="discovery-card-actions">
-                          {camera.credentialsRequired ? (
+                          {camera.duplicateStatus === "duplicate" ? (
+                            <button type="button" className="secondary-button" disabled>Duplicate — approval blocked</button>
+                          ) : camera.credentialsRequired ? (
                             <button type="button" className="primary-button" onClick={() => openCredentialActivation(camera)} disabled={saving || scanning}>
                               Enter login &amp; password
                             </button>
                           ) : null}
-                          <button className="secondary-button" onClick={() => previewDiscoveredCamera(camera)} disabled={saving}>
+                          <button type="button" className="secondary-button" onClick={() => previewDiscoveredCamera(camera)} disabled={saving}>
                             {previewDiscoveryId === camera.id ? "Previewing" : "Preview"}
                           </button>
                         </div>
                         {previewDiscoveryId === camera.id && (
-                          <div className="discovery-inline-editor" style={{ gridColumn: "1 / -1" }}>
-                            <input value={previewNameDraft} onChange={(event) => setPreviewNameDraft(event.target.value)} placeholder="Display name" />
-                            <button type="button" className="primary-button" onClick={() => void renameDiscoveredCamera(camera.id, previewNameDraft)} disabled={saving || !previewNameDraft.trim()}>Save name</button>
-                            <input value={rejectReason} onChange={(event) => setRejectReason(event.target.value)} placeholder="Reject reason" />
-                            <button type="button" className="secondary-button" onClick={() => void rejectDiscoveredCamera(camera.id, rejectReason)} disabled={saving}>Reject</button>
-                            {!camera.credentialsRequired ? (
-                              <button type="button" className="primary-button" onClick={() => void approveDiscoveredCamera(camera)} disabled={saving || !camera.streamVerified}>Approve & start live</button>
+                          <div className="discovery-inline-editor full-row">
+                            <button type="button" className="secondary-button" onClick={() => setPreviewEditMode("rename")} disabled={saving || previewEditMode === "rename"}>Rename</button>
+                            <button type="button" className="secondary-button" onClick={() => setPreviewEditMode("reject")} disabled={saving || previewEditMode === "reject"}>Reject</button>
+                            {previewEditMode === "rename" ? <><input aria-label="Camera display name" value={previewNameDraft} onChange={(event) => setPreviewNameDraft(event.target.value)} placeholder="Display name" /><button type="button" className="primary-button" onClick={() => void renameDiscoveredCamera(camera.id, previewNameDraft)} disabled={saving || !previewNameDraft.trim()}>Save name</button></> : null}
+                            {previewEditMode === "reject" ? <><input aria-label="Device rejection reason" value={rejectReason} onChange={(event) => setRejectReason(event.target.value)} placeholder="Reason for rejection" /><button type="button" className="secondary-button" onClick={() => void rejectDiscoveredCamera(camera.id, rejectReason)} disabled={saving || !rejectReason.trim()}>Reject device</button></> : null}
+                            {!camera.credentialsRequired && previewEditMode === "rename" ? (
+                              <button type="button" className="primary-button" onClick={() => void approveDiscoveredCamera(camera)} disabled={saving || !camera.streamVerified || camera.duplicateStatus === "duplicate"}>{camera.duplicateStatus === "duplicate" ? "Duplicate — approval blocked" : camera.streamVerified ? "Approve & start live" : "Awaiting gateway verification"}</button>
                             ) : null}
+                            <button type="button" className="secondary-button" onClick={() => setPreviewDiscoveryId(undefined)} disabled={saving}>Close preview</button>
                           </div>
                         )}
                       </div>
@@ -2245,10 +2061,10 @@ try {
                 </>
               )}
               <div className="modal-actions">
-                <button className="secondary-button" onClick={() => setShowDiscoveredList(false)}>Close</button>
-                {!loadingDiscoveries && discoveredCameras.length > 0 && (
-                  <button className="primary-button" onClick={() => void approveAllDiscovered()} disabled={saving}>
-                    {saving ? "Provisioning…" : `Approve all & start (${discoveredCameras.length})`}
+                <button type="button" className="secondary-button" onClick={() => setShowDiscoveredList(false)}>Close</button>
+                {!loadingDiscoveries && approvableDiscoveryCount > 0 && (
+                  <button type="button" className="primary-button" onClick={() => void approveAllDiscovered()} disabled={saving}>
+                    {saving ? "Provisioning…" : `Approve verified (${approvableDiscoveryCount})`}
                   </button>
                 )}
               </div>
@@ -2258,20 +2074,25 @@ try {
       )}
       {showCameraForm && (
         <div className="modal-overlay">
-          <div className="modal-container modal-large">
-            <div className="modal-header"><h2>Add camera to {activeBranch?.name}</h2><button className="icon-button" onClick={() => setShowCameraForm(false)}><X size={20} /></button></div>
+          <div className="modal-container modal-large" role="dialog" aria-modal="true" aria-labelledby="camera-modal-title">
+            <div className="modal-header"><h2 id="camera-modal-title">Add camera to {activeBranch?.name}</h2><button type="button" className="icon-button" aria-label="Close add camera" onClick={() => setShowCameraForm(false)}><X size={20} /></button></div>
             <form className="modal-form" onSubmit={addCamera}>
               <div className="form-info-banner"><Router size={16} />Standard ONVIF/RTSP is the default for every brand and model. The brand and model fields are inventory details only; do not enter the camera password here.</div>
               <div className="form-section"><h3>Registration method</h3><div className="form-row">
                 <div className="form-group"><label htmlFor="registrationMode">Method</label><select id="registrationMode" value={registrationMode} onChange={(event) => setRegistrationMode(event.target.value as "automatic" | "manual" | "bulk")}><option value="automatic">Automatic registration</option><option value="manual">Manual registration</option><option value="bulk">Bulk CSV import</option></select></div>
-              </div><p className="field-help">Automatic uses discovery and approval. Manual and bulk onboarding work with any ONVIF or RTSP camera/NVR; vendor adapters are only for functions that are not exposed by the standards.</p></div>
-              {registrationMode === "bulk" ? (
+              </div><p className="field-help">Automatic scans through an online Branch Gateway, then leaves every result for review and explicit approval. Manual and bulk onboarding work with any ONVIF or RTSP camera/NVR; vendor adapters are only for functions that are not exposed by the standards.</p></div>
+              {registrationMode === "automatic" ? (
+                <div className="form-section"><h3>Automatic Branch Gateway scan</h3><div className="form-row">
+                  <div className="form-group"><label>Branch</label><input value={activeBranch?.name ?? ""} disabled /></div>
+                  <div className="form-group"><label htmlFor="automaticCameraGateway">Online Branch Gateway <span className="required">*</span></label><select id="automaticCameraGateway" value={cameraForm.edgeAgentId} onChange={(event) => setCameraForm((form) => ({ ...form, edgeAgentId: event.target.value }))} required><option value="">Select an online gateway…</option>{gateways.map((gateway) => <option key={gateway.id} value={gateway.id} disabled={!isGatewayReady(gateway)}>{gateway.name} ({isGatewayReady(gateway) ? "online" : "offline or stale"})</option>)}</select></div>
+                </div><p className="field-help">The selected gateway scans its local camera network. Nothing is added to monitoring until stream verification and operator approval are complete.</p></div>
+              ) : registrationMode === "bulk" ? (
                 <div className="form-section"><h3>Bulk CSV import</h3><div className="form-group"><label htmlFor="bulkCsv">CSV rows</label><textarea id="bulkCsv" rows={8} value={bulkCsv} onChange={(event) => setBulkCsv(event.target.value)} placeholder="branchCode,cameraName,ip,port,manufacturer,model,serial,streamProfile,secretReference" required /></div></div>
               ) : (
                 <>
               <div className="form-section"><h3>Location and system</h3><div className="form-row">
                 <div className="form-group"><label>Branch</label><input value={activeBranch?.name ?? ""} disabled /></div>
-                <div className="form-group"><label htmlFor="cameraGateway">Branch Gateway{registrationMode === "automatic" ? <span className="required">*</span> : null}</label><select id="cameraGateway" value={cameraForm.edgeAgentId} onChange={(event) => setCameraForm((form) => ({ ...form, edgeAgentId: event.target.value }))} required={registrationMode === "automatic"}><option value="">Select gateway…</option>{gateways.map((gateway) => <option key={gateway.id} value={gateway.id}>{gateway.name} ({gateway.status})</option>)}</select></div>
+                <div className="form-group"><label htmlFor="cameraGateway">Branch Gateway{cameraForm.connectionTransport === "edge-gateway" ? <span className="required">*</span> : null}</label><select id="cameraGateway" value={cameraForm.edgeAgentId} onChange={(event) => setCameraForm((form) => ({ ...form, edgeAgentId: event.target.value }))} required={cameraForm.connectionTransport === "edge-gateway"}><option value="">Select gateway…</option>{gateways.map((gateway) => <option key={gateway.id} value={gateway.id} disabled={!isGatewayReady(gateway)}>{gateway.name} ({isGatewayReady(gateway) ? "online" : "offline or stale"})</option>)}</select></div>
               </div></div>
 
               <div className="form-section"><h3>Camera identity</h3><div className="form-row">
@@ -2279,31 +2100,12 @@ try {
                 <div className="form-group"><label htmlFor="cameraModel">Model</label><input id="cameraModel" value={cameraForm.model} onChange={(event) => setCameraForm((form) => ({ ...form, model: event.target.value }))} placeholder="Optional — auto / unknown is supported" /></div>
                 <div className="form-group"><label htmlFor="cameraVendor">Brand</label><input id="cameraVendor" value={cameraForm.vendor} onChange={(event) => setCameraForm((form) => ({ ...form, vendor: event.target.value }))} placeholder="Optional — e.g. Hikvision, CP Plus, Dahua" /></div>
                 <div className="form-group"><label htmlFor="cameraChannel">Channel</label><input id="cameraChannel" type="number" min="1" value={cameraForm.channel} onChange={(event) => setCameraForm((form) => ({ ...form, channel: event.target.value }))} required /></div>
-              </div></div>
-
-              <div className="form-section"><h3>Discovery details</h3><div className="form-row">
-                <div className="form-group"><label htmlFor="discoveryMethod">Discovery method</label><select id="discoveryMethod" value={discoveryMethod} onChange={(event) => setDiscoveryMethod(event.target.value)}><option value="onvif-ws-discovery">ONVIF WS-Discovery</option><option value="configured-ip-range">Configured IP-range scan</option><option value="manual-ip-registration">Manual IP registration</option><option value="csv-bulk-import">CSV bulk import</option><option value="nvr-dvr-channel-discovery">NVR/DVR channel discovery</option><option value="vendor-api-discovery">Vendor API discovery</option><option value="snmp-discovery">SNMP discovery</option><option value="edge-agent-reported-inventory">Edge-agent-reported inventory</option></select></div>
-                <div className="form-group"><label htmlFor="discoveryManufacturer">Manufacturer</label><input id="discoveryManufacturer" value={discoveryManufacturer} onChange={(event) => setDiscoveryManufacturer(event.target.value)} placeholder="Optional manufacturer" /></div>
-                <div className="form-group"><label htmlFor="discoverySerialNumber">Serial number</label><input id="discoverySerialNumber" value={discoverySerialNumber} onChange={(event) => setDiscoverySerialNumber(event.target.value)} placeholder="Optional serial" /></div>
-                <div className="form-group"><label htmlFor="discoveryMacAddress">MAC address</label><input id="discoveryMacAddress" value={discoveryMacAddress} onChange={(event) => setDiscoveryMacAddress(event.target.value)} placeholder="Optional MAC" /></div>
-              </div><div className="form-row">
-                <div className="form-group"><label htmlFor="discoveryFirmwareVersion">Firmware</label><input id="discoveryFirmwareVersion" value={discoveryFirmwareVersion} onChange={(event) => setDiscoveryFirmwareVersion(event.target.value)} placeholder="Optional firmware" /></div>
-                <div className="form-group"><label htmlFor="discoveryHardwareId">Hardware ID</label><input id="discoveryHardwareId" value={discoveryHardwareId} onChange={(event) => setDiscoveryHardwareId(event.target.value)} placeholder="Optional hardware ID" /></div>
-                <div className="form-group"><label htmlFor="discoveryAssociation">Existing device association</label><input id="discoveryAssociation" value={discoveryExistingDeviceAssociation} onChange={(event) => setDiscoveryExistingDeviceAssociation(event.target.value)} placeholder="Optional existing asset" /></div>
-                <div className="form-group"><label htmlFor="discoveryTimeSync">Time sync</label><select id="discoveryTimeSync" value={discoveryTimeSynchronization} onChange={(event) => setDiscoveryTimeSynchronization(event.target.value)}><option value="unknown">Unknown</option><option value="synchronized">Synchronized</option><option value="drifted">Drifted</option></select></div>
-              </div><div className="form-row">
-                <div className="form-group"><label htmlFor="discoveryDuplicateStatus">Duplicate status</label><select id="discoveryDuplicateStatus" value={discoveryDuplicateStatus} onChange={(event) => setDiscoveryDuplicateStatus(event.target.value)}><option value="unique">Unique</option><option value="duplicate">Duplicate</option><option value="review-required">Review required</option></select></div>
-                <div className="form-group"><label htmlFor="discoveryCompatibilityStatus">Compatibility status</label><select id="discoveryCompatibilityStatus" value={discoveryCompatibilityStatus} onChange={(event) => setDiscoveryCompatibilityStatus(event.target.value)}><option value="compatible">Compatible</option><option value="incompatible">Incompatible</option><option value="review-required">Review required</option></select></div>
-                <div className="form-group"><label htmlFor="discoveryOnvifSupport">ONVIF support</label><select id="discoveryOnvifSupport" value={String(discoveryOnvifSupport)} onChange={(event) => setDiscoveryOnvifSupport(event.target.value === "true")}><option value="true">Yes</option><option value="false">No</option></select></div>
-                <div className="form-group"><label htmlFor="discoveryRtspValidated">RTSP validated</label><select id="discoveryRtspValidated" value={String(discoveryRtspValidated)} onChange={(event) => setDiscoveryRtspValidated(event.target.value === "true")}><option value="true">Yes</option><option value="false">No</option></select></div>
-              </div><div className="form-row">
-                <div className="form-group"><label htmlFor="discoveryPtzCapability">PTZ</label><select id="discoveryPtzCapability" value={String(discoveryPtzCapability)} onChange={(event) => setDiscoveryPtzCapability(event.target.value === "true")}><option value="true">Yes</option><option value="false">No</option></select></div>
-                <div className="form-group"><label htmlFor="discoveryAudioCapability">Audio</label><select id="discoveryAudioCapability" value={String(discoveryAudioCapability)} onChange={(event) => setDiscoveryAudioCapability(event.target.value === "true")}><option value="true">Yes</option><option value="false">No</option></select></div>
-                <div className="form-group"><label htmlFor="discoveryAnalyticsCapability">Analytics</label><select id="discoveryAnalyticsCapability" value={String(discoveryAnalyticsCapability)} onChange={(event) => setDiscoveryAnalyticsCapability(event.target.value === "true")}><option value="true">Yes</option><option value="false">No</option></select></div>
+                <div className="form-group"><label htmlFor="cameraSerialNumber">Serial number</label><input id="cameraSerialNumber" value={discoverySerialNumber} onChange={(event) => setDiscoverySerialNumber(event.target.value)} placeholder="Optional" /></div>
+                <div className="form-group"><label htmlFor="cameraMacAddress">MAC address</label><input id="cameraMacAddress" value={discoveryMacAddress} onChange={(event) => setDiscoveryMacAddress(event.target.value)} placeholder="Optional" /></div>
               </div></div>
 
               <div className="form-section"><h3>Connection and camera type</h3><div className="form-row">
-                <div className="form-group"><label htmlFor="cameraTransport">Branch connection</label><select id="cameraTransport" value={cameraForm.connectionTransport} onChange={(event) => setCameraForm((form) => ({ ...form, connectionTransport: event.target.value as CameraForm["connectionTransport"] }))}><option value="vpn">Existing branch VPN</option><option value="cloudflare-tunnel">Managed Cloudflare Tunnel</option></select></div>
+                <div className="form-group"><label htmlFor="cameraTransport">Branch connection</label><select id="cameraTransport" value={cameraForm.connectionTransport} onChange={(event) => { const connectionTransport = event.target.value as CameraForm["connectionTransport"]; setCameraForm((form) => ({ ...form, connectionTransport, connectionSecretRef: connectionTransport === "vpn" ? "" : form.connectionSecretRef })); }}><option value="edge-gateway">Installed Branch Gateway (recommended)</option><option value="vpn">Existing branch VPN</option><option value="cloudflare-tunnel">Managed Cloudflare Tunnel</option></select></div>
                 <div className="form-group"><label htmlFor="cameraSourceType">Camera type</label><select id="cameraSourceType" value={cameraForm.sourceType} onChange={(event) => setCameraForm((form) => { const recorderBacked = event.target.value !== "ip-camera"; return { ...form, sourceType: event.target.value as CameraForm["sourceType"], protocol: recorderBacked ? "onvif-t" : form.protocol, streamRole: recorderBacked ? "sub" : "main", width: recorderBacked ? "640" : "1920", height: recorderBacked ? "360" : "1080", frameRate: recorderBacked ? "5" : "15", bitrateKbps: recorderBacked ? "256" : "2048" }; })}><option value="ip-camera">IP camera</option><option value="analog-dvr-channel">Analog camera through DVR</option><option value="nvr-channel">IP camera through NVR</option></select></div>
                 <div className="form-group"><label htmlFor="cameraIp">Private IP address <span className="required">*</span></label><input id="cameraIp" value={cameraForm.ipAddress} onChange={(event) => setCameraForm((form) => ({ ...form, ipAddress: event.target.value }))} required placeholder="192.168.1.20" /></div>
                 <div className="form-group"><label htmlFor="cameraProtocol">Protocol</label><select id="cameraProtocol" value={cameraForm.protocol} onChange={(event) => setCameraForm((form) => ({ ...form, protocol: event.target.value as CameraForm["protocol"] }))}><option value="onvif-t">Standard ONVIF Profile T (preferred)</option><option value="onvif-s">Standard ONVIF Profile S</option><option value="rtsp">Standard RTSP stream</option><option value="vendor-adapter">Vendor adapter (only if standard protocol is unavailable)</option></select></div>
@@ -2311,20 +2113,20 @@ try {
                 <div className="form-group"><label htmlFor="rtspPort">RTSP port</label><input id="rtspPort" type="number" min="1" max="65535" value={cameraForm.rtspPort} onChange={(event) => setCameraForm((form) => ({ ...form, rtspPort: event.target.value }))} required /></div>
               </div>
               {cameraForm.sourceType !== "ip-camera" ? <div className="form-row"><div className="form-group"><label htmlFor="recorderId">DVR / NVR ID <span className="required">*</span></label><input id="recorderId" value={cameraForm.recorderId} onChange={(event) => setCameraForm((form) => ({ ...form, recorderId: event.target.value }))} required placeholder="DVR-BLR-01" /></div><div className="form-group"><label htmlFor="recorderChannel">Recorder channel <span className="required">*</span></label><input id="recorderChannel" type="number" min="1" value={cameraForm.recorderChannel} onChange={(event) => setCameraForm((form) => ({ ...form, recorderChannel: event.target.value }))} required /></div><div className="form-group"><label htmlFor="recorderSerial">Recorder serial</label><input id="recorderSerial" value={cameraForm.recorderSerialNumber} onChange={(event) => setCameraForm((form) => ({ ...form, recorderSerialNumber: event.target.value }))} placeholder="Optional" /></div></div> : null}
-              <div className="form-group"><label htmlFor="secretRef">Stream secret reference {cameraForm.connectionTransport === "cloudflare-tunnel" ? <span className="required">*</span> : null}</label><input id="secretRef" value={cameraForm.connectionSecretRef} onChange={(event) => setCameraForm((form) => ({ ...form, connectionSecretRef: event.target.value }))} minLength={cameraForm.connectionSecretRef ? 8 : undefined} required={cameraForm.connectionTransport === "cloudflare-tunnel"} placeholder={cameraForm.connectionTransport === "vpn" ? "Generated automatically for VPN when left blank" : "gateway-secret://branch/camera"} /><small className="field-help">VPN references are generated from the private address when left blank. Tunnel references must map to the RTSP URL in the gateway secret store. Credentials are never saved in the inventory database.</small></div></div>
+              <div className="form-group"><label htmlFor="secretRef">Stream secret reference {registrationMode === "manual" && cameraForm.connectionTransport !== "vpn" ? <span className="required">*</span> : null}</label><input id="secretRef" value={cameraForm.connectionSecretRef} onChange={(event) => setCameraForm((form) => ({ ...form, connectionSecretRef: event.target.value }))} minLength={cameraForm.connectionSecretRef ? 8 : undefined} required={registrationMode === "manual" && cameraForm.connectionTransport !== "vpn"} placeholder={cameraForm.connectionTransport === "vpn" ? "Generated automatically for VPN when left blank" : "edge://gateway/device or gateway secret reference"} /><small className="field-help">VPN references are generated from the private address when left blank. Gateway and tunnel references must map to the RTSP source in that gateway's encrypted secret store. Credentials are never saved in the inventory database.</small></div></div>
 
               <div className="form-section"><h3>Remote monitoring stream and capabilities</h3><p className="field-help">DVR/NVR main streams remain recorded locally. Use a low-bitrate substream for central live view and analytics over VPN.</p><div className="form-row form-row-three">
                 <div className="form-group"><label htmlFor="streamRole">Stream role</label><select id="streamRole" value={cameraForm.streamRole} onChange={(event) => setCameraForm((form) => ({ ...form, streamRole: event.target.value as CameraForm["streamRole"] }))}><option value="sub">Substream (recommended over VPN)</option><option value="main">Main stream</option><option value="unknown">Auto-detect</option></select></div>
                 <div className="form-group"><label htmlFor="codec">Codec</label><select id="codec" value={cameraForm.codec} onChange={(event) => setCameraForm((form) => ({ ...form, codec: event.target.value as CameraForm["codec"] }))}><option value="H264">H.264</option><option value="H265">H.265</option><option value="MJPEG">MJPEG</option><option value="unknown">Auto-detect</option></select></div>
-                <div className="form-group"><label htmlFor="streamWidth">Width</label><input id="streamWidth" type="number" min="1" value={cameraForm.width} onChange={(event) => setCameraForm((form) => ({ ...form, width: event.target.value }))} required /></div>
-                <div className="form-group"><label htmlFor="streamHeight">Height</label><input id="streamHeight" type="number" min="1" value={cameraForm.height} onChange={(event) => setCameraForm((form) => ({ ...form, height: event.target.value }))} required /></div>
-                <div className="form-group"><label htmlFor="streamFrameRate">FPS</label><input id="streamFrameRate" type="number" min="0.1" max="120" step="0.1" value={cameraForm.frameRate} onChange={(event) => setCameraForm((form) => ({ ...form, frameRate: event.target.value }))} required /></div>
-                <div className="form-group"><label htmlFor="streamBitrate">Bitrate (Kbps)</label><input id="streamBitrate" type="number" min="1" max="100000" value={cameraForm.bitrateKbps} onChange={(event) => setCameraForm((form) => ({ ...form, bitrateKbps: event.target.value }))} required /></div>
+                <div className="form-group"><label htmlFor="streamWidth">Width <span className="optional">(optional)</span></label><input id="streamWidth" type="number" min="1" value={cameraForm.width} onChange={(event) => setCameraForm((form) => ({ ...form, width: event.target.value }))} placeholder="Auto-detect" /></div>
+                <div className="form-group"><label htmlFor="streamHeight">Height <span className="optional">(optional)</span></label><input id="streamHeight" type="number" min="1" value={cameraForm.height} onChange={(event) => setCameraForm((form) => ({ ...form, height: event.target.value }))} placeholder="Auto-detect" /></div>
+                <div className="form-group"><label htmlFor="streamFrameRate">FPS <span className="optional">(optional)</span></label><input id="streamFrameRate" type="number" min="0.1" max="120" step="0.1" value={cameraForm.frameRate} onChange={(event) => setCameraForm((form) => ({ ...form, frameRate: event.target.value }))} placeholder="Auto-detect" /></div>
+                <div className="form-group"><label htmlFor="streamBitrate">Bitrate (Kbps) <span className="optional">(optional)</span></label><input id="streamBitrate" type="number" min="1" max="100000" value={cameraForm.bitrateKbps} onChange={(event) => setCameraForm((form) => ({ ...form, bitrateKbps: event.target.value }))} placeholder="Auto-detect" /></div>
               </div><div className="capability-checks">{([['ptz', 'PTZ control'], ['audio', 'Audio'], ['events', 'Motion/events']] as const).map(([key, label]) => <label key={key}><input type="checkbox" checked={cameraForm[key]} onChange={(event) => setCameraForm((form) => ({ ...form, [key]: event.target.checked }))} />{label}</label>)}</div></div>
 
               </>
               )}
-              <div className="modal-actions"><button type="button" className="secondary-button" onClick={() => setShowCameraForm(false)}>Cancel</button><button className="primary-button" disabled={saving}>{saving ? (registrationMode === "bulk" ? "Importing…" : "Adding camera…") : registrationMode === "bulk" ? "Import cameras" : "Add camera"}</button></div>
+              <div className="modal-actions"><button type="button" className="secondary-button" onClick={() => setShowCameraForm(false)}>Cancel</button><button type="submit" className="primary-button" disabled={saving}>{saving ? (registrationMode === "automatic" ? "Starting scan…" : registrationMode === "bulk" ? "Importing…" : "Adding camera…") : registrationMode === "automatic" ? "Start gateway scan" : registrationMode === "bulk" ? "Import cameras" : "Add camera"}</button></div>
             </form>
           </div>
         </div>
@@ -2332,19 +2134,19 @@ try {
 
       {showDirectProbeModal && (
         <div className="modal-overlay">
-          <div className="modal-container">
+          <div className="modal-container" role="dialog" aria-modal="true" aria-labelledby="probe-modal-title">
             <div className="modal-header">
-              <h2>Direct IP / Camera Live Probe &amp; Connect</h2>
-              <button type="button" className="icon-button" onClick={() => setShowDirectProbeModal(false)}>
+              <h2 id="probe-modal-title">Direct IP / Camera Live Probe &amp; Connect</h2>
+              <button type="button" className="icon-button" aria-label="Close direct camera probe" onClick={closeDirectProbe}>
                 <X size={20} />
               </button>
             </div>
             <div className="modal-body space-y-4">
               <p className="text-xs text-slate-500">
-                Probe one camera or a bounded IPv4 range on the branch network. Shared credentials add verified cameras to the active camera list; per-device credentials go to Device discovery.
+                Probe one camera or a bounded IPv4 range on the branch network. Reachable devices go to Device discovery; shared credentials are encrypted and queued to the assigned Branch Gateway for final verification.
               </p>
               
-              <div className="space-y-3">
+              <form className="space-y-3" onSubmit={(event) => { event.preventDefault(); void runDirectProbe(); }}>
                 <div className="form-row">
                   <div className="form-group">
                     <label htmlFor="probeTargetMode">Probe target</label>
@@ -2380,6 +2182,9 @@ try {
                     <label htmlFor="probePort">RTSP Port</label>
                     <input
                       id="probePort"
+                      type="number"
+                      min="1"
+                      max="65535"
                       value={probePort}
                       onChange={(e) => setProbePort(e.target.value)}
                       placeholder="RTSP port"
@@ -2389,6 +2194,7 @@ try {
                     <label htmlFor="probeUsername">Camera username {probeCredentialMode === "same" || probeTargetMode === "single" ? <span className="required">*</span> : null}</label>
                     <input
                       id="probeUsername"
+                      autoComplete="username"
                       value={probeUsername}
                       onChange={(e) => setProbeUsername(e.target.value)}
                       placeholder={probeCredentialMode === "different" && probeTargetMode === "range" ? "Entered per device in discovery" : "Camera username"}
@@ -2401,6 +2207,7 @@ try {
                     <input
                       id="probePassword"
                       type="password"
+                      autoComplete="current-password"
                       value={probePassword}
                       onChange={(e) => setProbePassword(e.target.value)}
                       placeholder="Enter password (or TrueCloud login password)"
@@ -2412,15 +2219,14 @@ try {
 
                 <div className="modal-actions">
                   <button
-                    type="button"
+                    type="submit"
                     className="primary-button"
-                    onClick={runDirectProbe}
                     disabled={probing || !probeIp.trim() || ((probeCredentialMode === "same" || probeTargetMode === "single") && !probeUsername.trim())}
                   >
                     <Search size={14} /> {probing ? "Probing camera network..." : probeTargetMode === "range" ? "Probe IP range" : "Probe Camera"}
                   </button>
                 </div>
-              </div>
+              </form>
 
               {probeTargetMode === "range" && probeResults.length > 0 && (
                 <div className="p-4 rounded-xl border border-blue-500/30 bg-blue-500/10 space-y-2 mt-4 text-xs">
@@ -2432,18 +2238,18 @@ try {
                     {probeResults.map((result) => (
                       <div className="flex items-center justify-between gap-3 border-b border-blue-500/10 py-1 last:border-0" key={result.ipAddress}>
                         <span className="font-mono">{result.ipAddress}</span>
-                        <span>{result.online ? result.authenticated === true ? "✅ Login verified" : "⚠️ Login required" : `🔴 ${result.error || "Unreachable"}`}</span>
+                        <span>{result.online ? result.authenticated === true ? "✅ Stream verified" : result.authRequired ? "⚠️ Login required" : `⚠️ ${result.error || "Stream profile not verified"}` : `🔴 ${result.error || "Unreachable"}`}</span>
                       </div>
                     ))}
                   </div>
-                  {probeCredentialMode === "different" ? <p className="field-help">Reachable addresses have been added to Device discovery for individual credential verification.</p> : <p className="field-help">Cameras verified with the shared login are being added to the active camera list. Any camera that rejected it is shown in Device discovery.</p>}
+                  {probeCredentialMode === "different" ? <p className="field-help">Reachable addresses have been added to Device discovery for individual credential verification.</p> : <p className="field-help">Reachable addresses are in Device discovery, and the shared login has been queued securely to the Branch Gateway. Approve each device only after gateway verification succeeds.</p>}
                 </div>
               )}
 
               {probeResult && (
                 <div className="p-4 rounded-xl border border-blue-500/30 bg-blue-500/10 space-y-2 mt-4 text-xs">
                   <div className="flex items-center justify-between">
-                    <strong>Status: {probeResult.online ? "🟢 Camera Online & Responding" : "🔴 Unreachable"}</strong>
+                    <strong>Status: {probeResult.online ? probeResult.authenticated === true ? "🟢 Stream verified" : probeResult.authRequired ? "🟠 Camera reachable — login required" : "🟠 Camera reachable — stream profile not verified" : "🔴 Unreachable"}</strong>
                     <span className="font-mono text-[11px] bg-slate-200 dark:bg-slate-800 px-2 py-0.5 rounded">
                       {probeResult.server || "RTSP 554"}
                     </span>
@@ -2452,18 +2258,11 @@ try {
                   {probeResult.online && (
                     <>
                       <div><strong>Identified Device:</strong> {probeResult.vendor} • {probeResult.model}</div>
-                      <div><strong>Stream URL:</strong> <code className="font-mono text-[11px]">{probeResult.streamUrl}</code></div>
-                      <div><strong>Authentication:</strong> {probeResult.authenticated ? "✅ Authenticated" : `⚠️ ${probeResult.authType} Auth Required (${probeResult.error || "Enter TrueCloud password"})`}</div>
+                      <div><strong>Stream endpoint:</strong> <code className="font-mono text-[11px]">{probeResult.streamUrl || `rtsp://${probeResult.ipAddress}:${probeResult.rtspPort || 554}`}</code></div>
+                      <div><strong>Verification:</strong> {probeResult.authenticated ? "✅ Stream and login verified" : probeResult.authRequired ? `⚠️ ${probeResult.authType || "Camera"} login required (${probeResult.error || "Enter the camera password"})` : `⚠️ ${probeResult.error || "Stream profile was not verified"}`}</div>
 
                       <div className="pt-2 flex gap-2">
-                        <button
-                          type="button"
-                          className="primary-button"
-                          onClick={enrollProbedCamera}
-                          disabled={saving || !selectedBranch}
-                        >
-                          <Plus size={14} /> {saving ? "Enrolling..." : "Enroll Camera into Fleet"}
-                        </button>
+                        <button type="button" className="primary-button" onClick={() => void queueProbedCameraForCredentials()} disabled={saving || !selectedBranch}><Plus size={14} /> {saving ? "Adding…" : probeResult.authenticated === true ? "Send to gateway for final verification" : probeResult.authRequired ? "Add to discovery & enter login" : "Add to discovery for profile detection"}</button>
                       </div>
                     </>
                   )}
@@ -2517,6 +2316,29 @@ function isGatewayReady(gateway: EdgeAgent) {
   if (gateway.status !== "online" || !gateway.lastSeenAt) return false;
   const lastSeenAt = Date.parse(gateway.lastSeenAt);
   return Number.isFinite(lastSeenAt) && Date.now() - lastSeenAt <= 90_000;
+}
+
+function cameraProfilePayload(form: CameraForm) {
+  if (form.streamRole === "unknown" || form.codec === "unknown") return undefined;
+  const width = Number(form.width);
+  const height = Number(form.height);
+  const frameRate = Number(form.frameRate);
+  const bitrateKbps = Number(form.bitrateKbps);
+  if (![width, height, frameRate, bitrateKbps].every((value) => Number.isFinite(value) && value > 0)) {
+    return undefined;
+  }
+  return {
+    name: form.streamRole,
+    role: form.streamRole,
+    codec: form.codec,
+    width,
+    height,
+    frameRate,
+    bitrateKbps,
+    preferredFor: form.sourceType === "ip-camera"
+      ? ["recording", "live", "analytics"]
+      : ["live", "analytics"],
+  };
 }
 
 function supportsPatchUpdates(version: string) {

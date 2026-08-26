@@ -93,6 +93,12 @@ export async function registerCameraDiscoveryRoutes(
 
   app.post("/v1/branches/:branchId/cameras/discovered", async (request, reply) => {
     const { branchId } = branchParams.parse(request.params);
+    const branch = await store.getNode(branchId);
+    if (!branch || branch.type !== "branch") return reply.code(404).send({ error: "branch_not_found" });
+    if (!request.edgeAgentAuthenticated) {
+      const access = await store.checkAccess(request.currentUser, "device:configure", branchId);
+      if (!access?.allowed) return reply.code(403).send({ error: "forbidden", reason: access?.reason ?? "no_matching_grant" });
+    }
     const body = request.body as any;
     if (!body || (typeof body !== "object")) {
       return reply.code(400).send({ error: "discovery_payload_required" });
@@ -117,6 +123,10 @@ export async function registerCameraDiscoveryRoutes(
       const itemAgentId = isPresent(item.edgeAgentId) ? item.edgeAgentId : resolvedEdgeAgentId;
       if (!itemAgentId || !branchAgents.some((agent) => agent.id === itemAgentId)) {
         results.push({ status: "error", error: "discovery_edge_agent_required" });
+        continue;
+      }
+      if (request.edgeAgentAuthenticated && request.edgeAgentId !== itemAgentId) {
+        results.push({ status: "error", error: "discovery_edge_agent_identity_mismatch" });
         continue;
       }
 
@@ -150,6 +160,20 @@ export async function registerCameraDiscoveryRoutes(
       const capabilities = item.capabilities && typeof item.capabilities === "object"
         ? item.capabilities
         : { ptz: false, audio: false, events: false };
+      const allowedDiscoveryLayers = new Set([
+        "network-discovery", "onvif-discovery", "onvif-authentication", "get-capabilities",
+        "get-profiles", "get-stream-uri", "rtsp-verification", "vendor-adapter", "fingerprint", "register",
+      ]);
+      const allowedLayerStatuses = new Set(["passed", "failed", "fallback", "skipped"]);
+      const discoveryLayers = Array.isArray(item.discoveryLayers)
+        ? item.discoveryLayers.slice(0, 20).filter((layer: any) =>
+          layer && allowedDiscoveryLayers.has(layer.layer) && allowedLayerStatuses.has(layer.status)
+        ).map((layer: any) => ({
+          layer: layer.layer,
+          status: layer.status,
+          detail: String(layer.detail ?? "").slice(0, 1_000),
+        }))
+        : undefined;
 
       const normalized = {
         edgeAgentId: itemAgentId,
@@ -165,6 +189,7 @@ export async function registerCameraDiscoveryRoutes(
         rtspPort,
         onvifServices: item.onvifServices,
         onvifCapabilityTests: item.onvifCapabilityTests,
+        discoveryLayers,
         mediaProfiles: profiles,
         onvifEndpointReference: item.onvifEndpointReference,
         onvifUuid: item.onvifUuid,
@@ -237,6 +262,18 @@ export async function registerCameraDiscoveryRoutes(
     const discovered = discoveries.find((item) => item.id === discoveryId);
     if (!discovered) {
       return reply.code(404).send({ error: "discovery_not_found" });
+    }
+    if (discovered.duplicateStatus === "duplicate") {
+      return reply.code(409).send({ error: "duplicate_discovery_cannot_be_approved" });
+    }
+    if (discovered.compatibilityStatus === "incompatible") {
+      return reply.code(409).send({ error: "incompatible_discovery_cannot_be_approved" });
+    }
+    if (discovered.credentialsRequired === true) {
+      return reply.code(409).send({ error: "camera_credentials_must_be_verified_before_approval" });
+    }
+    if (discovered.streamVerified !== true) {
+      return reply.code(409).send({ error: "camera_stream_must_be_verified_before_approval" });
     }
 
     const connection = await discoveryConnection(store, branchId, discovered);
@@ -543,11 +580,19 @@ export async function registerCameraDiscoveryRoutes(
 
   app.post("/v1/cameras/probe-direct/range", async (request, reply) => {
     const body = z.object({
-      ipAddresses: z.array(z.string().min(1)).min(1).max(256),
+      branchId: z.string().min(1),
+      ipAddresses: z.array(z.string().ip({ version: "v4" })).min(1).max(256),
       rtspPort: z.number().int().positive().max(65_535).default(554),
       username: z.string().max(256).optional().default("admin"),
       password: z.string().max(1_024).nullable().transform((value) => value ?? "").default(""),
     }).parse(request.body);
+    const branch = await store.getNode(body.branchId);
+    if (!branch || branch.type !== "branch") return reply.code(404).send({ error: "branch_not_found" });
+    const access = await store.checkAccess(request.currentUser, "device:configure", body.branchId);
+    if (!access?.allowed) return reply.code(403).send({ error: "forbidden", reason: access?.reason ?? "no_matching_grant" });
+    if (body.ipAddresses.some((address) => !isPrivateProbeAddress(address))) {
+      return reply.code(400).send({ error: "direct_probe_requires_private_or_vpn_address" });
+    }
 
     const results = await probeNetworkCameras(body.ipAddresses, body.rtspPort, body.username, body.password);
     return {
@@ -560,11 +605,19 @@ export async function registerCameraDiscoveryRoutes(
 
   app.post("/v1/cameras/probe-direct", async (request, reply) => {
     const body = z.object({
-      ipAddress: z.string().min(1),
+      branchId: z.string().min(1),
+      ipAddress: z.string().ip({ version: "v4" }),
       rtspPort: z.number().int().positive(),
       username: z.string().min(1),
       password: z.string().max(1_024).nullable().transform((value) => value ?? ""),
     }).parse(request.body);
+    const branch = await store.getNode(body.branchId);
+    if (!branch || branch.type !== "branch") return reply.code(404).send({ error: "branch_not_found" });
+    const access = await store.checkAccess(request.currentUser, "device:configure", body.branchId);
+    if (!access?.allowed) return reply.code(403).send({ error: "forbidden", reason: access?.reason ?? "no_matching_grant" });
+    if (!isPrivateProbeAddress(body.ipAddress)) {
+      return reply.code(400).send({ error: "direct_probe_requires_private_or_vpn_address" });
+    }
 
     const result = await probeNetworkCamera(body.ipAddress, body.rtspPort, body.username, body.password);
     return result;
@@ -608,7 +661,7 @@ type DirectProbeResult = {
   capabilities?: { ptz: boolean; audio: boolean; motion: boolean };
 };
 
-async function probeNetworkCamera(ip: string, port = 554, user = "admin", pass = ""): Promise<DirectProbeResult> {
+export async function probeNetworkCamera(ip: string, port = 554, user = "admin", pass = ""): Promise<DirectProbeResult> {
   return new Promise<DirectProbeResult>((resolve) => {
     const socket = new net.Socket();
     socket.setTimeout(3500);
@@ -617,105 +670,166 @@ async function probeNetworkCamera(ip: string, port = 554, user = "admin", pass =
     let serverBanner = "Standard RTSP";
     let isHappytime = false;
     let authType = "None";
-    let authenticated = false;
-    let nonce = "";
+    let authRequired = false;
+    let authAttempted = false;
+    let settled = false;
+    let buffer = "";
 
-    socket.connect(port, ip, () => {
-      socket.write(`OPTIONS ${uri} RTSP/1.0\r\nCSeq: 1\r\nUser-Agent: SentinelGrid/2.0\r\n\r\n`);
+    const finish = (result: DirectProbeResult) => {
+      if (settled) return;
+      settled = true;
+      socket.destroy();
+      resolve(result);
+    };
+
+    const deviceResult = (result: Partial<DirectProbeResult>): DirectProbeResult => ({
+      online: true,
+      ipAddress: ip,
+      rtspPort: port,
+      server: serverBanner,
+      vendor: isHappytime ? "Trueview / TrueCloud" : "ONVIF / RTSP Device",
+      model: isHappytime ? "T18061-W (3MP Wi-Fi Robot)" : "Generic IP Camera",
+      authRequired,
+      authType,
+      streamUrl: `rtsp://${ip}:${port}/stream1`,
+      substreamUrl: `rtsp://${ip}:${port}/stream2`,
+      capabilities: { ptz: isHappytime, audio: true, motion: true },
+      ...result,
     });
 
-    let buffer = "";
+    const sendDescribe = (sequence: number, authorization?: string) => {
+      socket.write([
+        `DESCRIBE ${uri} RTSP/1.0`,
+        `CSeq: ${sequence}`,
+        "User-Agent: SentinelGrid/2.0",
+        "Accept: application/sdp",
+        ...(authorization ? [`Authorization: ${authorization}`] : []),
+        "",
+        "",
+      ].join("\r\n"));
+    };
+
+    socket.connect(port, ip, () => {
+      sendDescribe(1);
+    });
+
     socket.on("data", (data) => {
       buffer += data.toString();
-
-      if (buffer.includes("Server:")) {
-        const serverLine = buffer.split("\r\n").find((l) => l.toLowerCase().startsWith("server:"));
-        if (serverLine) {
-          serverBanner = serverLine.slice(7).trim();
-          if (serverBanner.toLowerCase().includes("happytime")) isHappytime = true;
+      while (!settled) {
+        const headerEnd = buffer.indexOf("\r\n\r\n");
+        if (headerEnd < 0) return;
+        const headerBlock = buffer.slice(0, headerEnd);
+        const lines = headerBlock.split("\r\n");
+        const statusMatch = lines[0]?.match(/^RTSP\/1\.0\s+(\d{3})/i);
+        if (!statusMatch) {
+          finish({ online: false, ipAddress: ip, error: "Invalid RTSP response" });
+          return;
         }
-      }
+        const headers = new Map<string, string>();
+        for (const line of lines.slice(1)) {
+          const separator = line.indexOf(":");
+          if (separator > 0) headers.set(line.slice(0, separator).trim().toLowerCase(), line.slice(separator + 1).trim());
+        }
+        const contentLength = Number(headers.get("content-length") ?? 0);
+        const responseLength = headerEnd + 4 + (Number.isFinite(contentLength) && contentLength > 0 ? contentLength : 0);
+        if (buffer.length < responseLength) return;
+        buffer = buffer.slice(responseLength);
 
-      if (buffer.includes("401 Unauthorized") && !nonce) {
-        const authLine = buffer.split("\r\n").find((l) => l.toLowerCase().startsWith("www-authenticate:"));
-        if (authLine) {
-          authType = authLine.toLowerCase().includes("digest") ? "Digest" : "Basic";
-          const match = authLine.match(/nonce="?([^",\r\n]+)"?/i);
-          nonce = match?.[1] || "";
-
-          if (pass) {
-            // Compute digest
-            const realm = "happytimesoft";
-            const ha1 = crypto.createHash("md5").update(`${user}:${realm}:${pass}`).digest("hex");
-            const ha2 = crypto.createHash("md5").update(`DESCRIBE:${uri}`).digest("hex");
-            const response = crypto.createHash("md5").update(`${ha1}:${nonce}:${ha2}`).digest("hex");
-            const digest = `Digest username="${user}", realm="${realm}", nonce="${nonce}", uri="${uri}", response="${response}"`;
-            socket.write(`DESCRIBE ${uri} RTSP/1.0\r\nCSeq: 2\r\nUser-Agent: SentinelGrid/2.0\r\nAuthorization: ${digest}\r\nAccept: application/sdp\r\n\r\n`);
-          } else {
-            socket.destroy();
-            resolve({
-              online: true,
-              ipAddress: ip,
-              rtspPort: port,
-              server: serverBanner,
-              vendor: isHappytime ? "Trueview / TrueCloud" : "ONVIF / RTSP Device",
-              model: isHappytime ? "T18061-W (3MP Wi-Fi Robot)" : "Generic IP Camera",
-              authenticated: false,
-              authRequired: true,
-              authType,
-              streamUrl: `rtsp://${user}:<PASSWORD>@${ip}:${port}/stream1`,
-              substreamUrl: `rtsp://${user}:<PASSWORD>@${ip}:${port}/stream2`,
-              capabilities: { ptz: isHappytime, audio: true, motion: true },
-            });
+        const server = headers.get("server");
+        if (server) {
+          serverBanner = server;
+          isHappytime = server.toLowerCase().includes("happytime");
+        }
+        const status = Number(statusMatch[1]);
+        if (status === 200) {
+          finish(deviceResult({ authenticated: true }));
+          return;
+        }
+        if (status === 401) {
+          authRequired = true;
+          if (authAttempted) {
+            finish(deviceResult({ authenticated: false, error: "Invalid camera username or password" }));
+            return;
           }
+          const challenge = headers.get("www-authenticate") ?? "";
+          authType = /^digest\b/i.test(challenge) ? "Digest" : /^basic\b/i.test(challenge) ? "Basic" : "Unsupported";
+          const authorization = buildRtspAuthorization(challenge, user, pass, "DESCRIBE", uri);
+          if (!authorization) {
+            finish(deviceResult({ authenticated: false, error: challenge ? "Camera uses an unsupported RTSP authentication challenge" : "Camera login is required" }));
+            return;
+          }
+          authAttempted = true;
+          sendDescribe(2, authorization);
+          continue;
         }
-      } else if (buffer.includes("RTSP/1.0 200 OK")) {
-        authenticated = true;
-        socket.destroy();
-        resolve({
-          online: true,
-          ipAddress: ip,
-          rtspPort: port,
-          server: serverBanner,
-          vendor: isHappytime ? "Trueview / TrueCloud" : "ONVIF / RTSP Device",
-          model: isHappytime ? "T18061-W (3MP Wi-Fi Robot)" : "Generic IP Camera",
-          authenticated: true,
-          authRequired: true,
-          authType,
-          streamUrl: `rtsp://${user}:${pass}@${ip}:${port}/stream1`,
-          substreamUrl: `rtsp://${user}:${pass}@${ip}:${port}/stream2`,
-          capabilities: { ptz: isHappytime, audio: true, motion: true },
-        });
-      } else if (buffer.includes("CSeq: 2") && buffer.includes("401 Unauthorized")) {
-        socket.destroy();
-        resolve({
-          online: true,
-          ipAddress: ip,
-          rtspPort: port,
-          server: serverBanner,
-          vendor: isHappytime ? "Trueview / TrueCloud" : "ONVIF / RTSP Device",
-          model: isHappytime ? "T18061-W (3MP Wi-Fi Robot)" : "Generic IP Camera",
+        if (status === 403) {
+          authRequired = true;
+          finish(deviceResult({ authenticated: false, error: "Camera rejected this login" }));
+          return;
+        }
+        finish(deviceResult({
           authenticated: false,
-          authRequired: true,
-          authType,
-          error: "Invalid password provided",
-          streamUrl: `rtsp://${user}:<PASSWORD>@${ip}:${port}/stream1`,
-          substreamUrl: `rtsp://${user}:<PASSWORD>@${ip}:${port}/stream2`,
-          capabilities: { ptz: isHappytime, audio: true, motion: true },
-        });
+          error: status === 404
+            ? "RTSP service responded, but this stream path was not found. Use Branch Gateway discovery to detect the model-specific profile."
+            : `RTSP service returned status ${status}`,
+        }));
+        return;
       }
     });
 
     socket.on("error", (err) => {
-      socket.destroy();
-      resolve({ online: false, ipAddress: ip, error: err.message });
+      finish({ online: false, ipAddress: ip, error: err.message });
     });
 
     socket.on("timeout", () => {
-      socket.destroy();
-      resolve({ online: false, ipAddress: ip, error: "Connection timed out" });
+      finish({ online: false, ipAddress: ip, error: "Connection timed out" });
+    });
+
+    socket.on("close", () => {
+      if (!settled) finish({ online: false, ipAddress: ip, error: "RTSP service closed the connection before verification" });
     });
   });
+}
+
+function buildRtspAuthorization(challenge: string, user: string, pass: string, method: string, uri: string) {
+  if (/^basic\b/i.test(challenge)) {
+    return `Basic ${Buffer.from(`${user}:${pass}`).toString("base64")}`;
+  }
+  if (!/^digest\b/i.test(challenge)) return undefined;
+
+  const parameter = (name: string) => {
+    const match = challenge.match(new RegExp(`${name}\\s*=\\s*(?:"([^"]*)"|([^,\\s]+))`, "i"));
+    return match?.[1] ?? match?.[2];
+  };
+  const realm = parameter("realm");
+  const nonce = parameter("nonce");
+  if (!realm || !nonce) return undefined;
+  const algorithm = (parameter("algorithm") ?? "MD5").toUpperCase();
+  if (algorithm !== "MD5" && algorithm !== "MD5-SESS") return undefined;
+
+  const qopOptions = (parameter("qop") ?? "").split(",").map((value) => value.trim().toLowerCase());
+  const qop = qopOptions.includes("auth") ? "auth" : undefined;
+  const nonceCount = "00000001";
+  const cnonce = crypto.randomBytes(8).toString("hex");
+  const md5 = (value: string) => crypto.createHash("md5").update(value).digest("hex");
+  const initialHa1 = md5(`${user}:${realm}:${pass}`);
+  const ha1 = algorithm === "MD5-SESS" ? md5(`${initialHa1}:${nonce}:${cnonce}`) : initialHa1;
+  const ha2 = md5(`${method}:${uri}`);
+  const response = qop
+    ? md5(`${ha1}:${nonce}:${nonceCount}:${cnonce}:${qop}:${ha2}`)
+    : md5(`${ha1}:${nonce}:${ha2}`);
+  const quote = (value: string) => value.replaceAll("\\", "\\\\").replaceAll('"', '\\"');
+  const opaque = parameter("opaque");
+  return [
+    `Digest username="${quote(user)}"`,
+    `realm="${quote(realm)}"`,
+    `nonce="${quote(nonce)}"`,
+    `uri="${quote(uri)}"`,
+    `response="${response}"`,
+    `algorithm=${algorithm}`,
+    ...(opaque ? [`opaque="${quote(opaque)}"`] : []),
+    ...(qop ? [`qop=${qop}`, `nc=${nonceCount}`, `cnonce="${cnonce}"`] : algorithm === "MD5-SESS" ? [`cnonce="${cnonce}"`] : []),
+  ].join(", ");
 }
 
 async function probeNetworkCameras(ipAddresses: string[], port: number, user: string, pass: string) {
@@ -732,6 +846,16 @@ async function probeNetworkCameras(ipAddresses: string[], port: number, user: st
 
   await Promise.all(Array.from({ length: Math.min(16, ipAddresses.length) }, () => worker()));
   return results.filter(Boolean);
+}
+
+function isPrivateProbeAddress(value: string) {
+  const parts = value.split(".");
+  const first = Number(parts[0]);
+  const second = Number(parts[1]);
+  return first === 10 ||
+    (first === 172 && second >= 16 && second <= 31) ||
+    (first === 192 && second === 168) ||
+    (first === 100 && second >= 64 && second <= 127);
 }
 
 function supportsTargetedVerification(version: string) {

@@ -1186,6 +1186,7 @@ select, textarea { font: inherit; }
 .device-advanced-content > p { margin: 0; color: #718096; font-size: 9px; line-height: 1.45; }
 .device-advanced-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .device-message { gap: 8px; padding: 10px 12px; border-radius: 9px; font-size: 10px; }
+.device-message > span { min-width: 0; flex: 1; }
 .device-message.error { color: #a83e45; background: #ffeded; }
 .device-message.success { color: #157455; background: #e8f8f2; }
 .device-message button { margin-left: auto; display: grid; place-items: center; border: 0; color: inherit; background: transparent; }
@@ -1246,11 +1247,15 @@ select, textarea { font: inherit; }
 .gateway-actions button { width: 25px; height: 25px; display: grid; place-items: center; border: 1px solid #dce4ef; border-radius: 7px; color: #315f9d; background: #f7faff; cursor: pointer; }
 .gateway-actions button:hover { border-color: #9bbcf0; background: #edf5ff; }
 .gateway-actions button:disabled { cursor: not-allowed; opacity: .35; }
+.gateway-actions .gateway-action-text { width: auto; min-width: 0; padding: 4px 8px; display: inline-flex; gap: 4px; color: white; border-color: #b91c1c; background: #dc2626; font-size: 9px; font-weight: 700; white-space: nowrap; }
+.gateway-actions .gateway-action-text.strong { background: #b91c1c; }
+.gateway-actions .gateway-action-text:hover { color: white; border-color: #991b1b; background: #b91c1c; }
 .gateway-state { width: 20px; height: 20px; display: grid; place-items: center; border-radius: 6px; background: #edf1f6; }
 .gateway-state i { width: 6px; height: 6px; border-radius: 50%; background: #9ba5b3; }
 .gateway-state.online i { background: #2cbc86; box-shadow: 0 0 0 3px rgba(44,188,134,.13); }
 .gateway-state.pending i { background: #e2a33d; }
 .camera-device-icon { width: 29px; height: 29px; display: grid; place-items: center; color: #3477db; border-radius: 8px; background: #eaf2ff; }
+.camera-inventory-row > button { flex: 0 0 auto; white-space: nowrap; }
 .inventory-status { padding: 4px 7px; color: #647287; border-radius: 8px; background: #edf1f5; font-size: 8px; text-transform: capitalize; }
 .inventory-status.online { color: #15855f; background: #e6f7f1; }
 .inventory-status.offline { color: #bc4148; background: #ffebed; }
@@ -1443,6 +1448,14 @@ select, textarea { font: inherit; }
   to { opacity: 1; transform: translateY(0); }
 }
 .discovery-status-actions { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; position: relative; z-index: 2; }
+.discovery-primary-actions { display: flex; align-items: center; gap: 8px; }
+.credential-pending-note { color: #9a5b08; font-size: 9px; font-weight: 650; }
+.danger-button { padding: 6px 12px; color: #c53b48; border-color: #e9a7ad; font-weight: 700; }
+.danger-button:hover { color: #a82f3a; border-color: #d86a75; background: #fff2f3; }
+.scan-stop-button { color: #c53b48; border-color: #e9a7ad; background: #fff2f3; font-weight: 700; }
+.scan-stop-button:hover { color: #a82f3a; border-color: #d86a75; background: #ffe6e8; }
+.credential-action-button { background: #d97706; border-color: #b45309; font-weight: 700; }
+.credential-action-button:hover { background: #b45309; border-color: #92400e; }
 .scan-pill {
   display: inline-flex; align-items: center; gap: 6px; padding: 5px 8px; border-radius: 999px;
   background: #edf3fb; color: #5b6d83; font-size: 8px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em;
@@ -1510,10 +1523,15 @@ select, textarea { font: inherit; }
 .discovery-footnote { margin: 0; color: #6d7889; font-size: 9px; line-height: 1.45; }
 .discovery-card-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .discovery-card-actions button { min-width: 92px; }
-.discovery-inline-editor { display: grid; grid-template-columns: minmax(0,1fr) auto minmax(0,1fr) auto; gap: 8px; align-items: center; }
+.discovery-inline-editor { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.discovery-inline-editor.full-row { grid-column: 1 / -1; }
 .discovery-inline-editor input {
-  min-height: 35px; padding: 0 9px; border: 1px solid #dde4ee; border-radius: 7px; background: white; font-size: 10px;
+  min-width: 180px; min-height: 35px; flex: 1 1 220px; padding: 0 9px; border: 1px solid #dde4ee; border-radius: 7px; background: white; font-size: 10px;
 }
+.inventory-search-section { margin-top: 1rem; }
+.inventory-search-control { display: flex; align-items: center; gap: 0.5rem; }
+.inventory-search-control input { flex: 1; min-width: 0; }
+.inventory-status-stack { display: flex; flex-direction: column; gap: 0.35rem; align-items: flex-end; }
 .discovery-badge-stack { display: flex; flex-direction: column; align-items: flex-end; gap: 5px; }
 .review-pill {
   display: inline-flex; align-items: center; padding: 3px 7px; border-radius: 999px;
@@ -1541,6 +1559,19 @@ select, textarea { font: inherit; }
   .connectivity-option-grid, .connectivity-fields { grid-template-columns: 1fr; }
   .branch-connectivity-heading { flex-wrap: wrap; }
   .device-columns, .form-row.form-row-three { grid-template-columns: 1fr; }
+  .gateway-row, .camera-inventory-row { align-items: flex-start; flex-wrap: wrap; padding: 9px 0; }
+  .gateway-row > div:not(.gateway-actions), .camera-inventory-row > div { min-width: calc(100% - 42px); }
+  .gateway-row > .gateway-actions { width: 100%; flex: 1 0 100%; flex-wrap: wrap; padding-left: 29px; }
+  .gateway-row code { margin-left: auto; }
+  .camera-inventory-row > button { margin-left: 38px; }
+  .discovery-status-panel { align-items: stretch; flex-direction: column; }
+  .discovery-status-actions { align-items: flex-start; }
+  .discovery-status-metrics { width: 100%; }
+  .discovery-status-metrics > div { min-width: 0; flex: 1; }
+  .discovery-details-grid { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .discovery-camera-head { flex-direction: column; }
+  .discovery-badge-stack { align-items: flex-start; flex-direction: row; flex-wrap: wrap; }
+  .discovery-primary-actions { align-items: flex-start; flex-direction: column; }
   .incident-row { align-items: flex-start; flex-wrap: wrap; }
   .incident-copy { min-width: calc(100% - 50px); }
   .evidence-hold { margin-left: 41px; }
