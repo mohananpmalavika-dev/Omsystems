@@ -31,6 +31,7 @@ describe("website scanner launch flow", () => {
     expect(provisioningRun).toContain("requestInstalledEdgeStart()");
     expect(provisioningRun).toContain("cameraInventoryApi.listGateways(branchId)");
     expect(provisioningRun).toContain('res.status === "not-enrolled"');
+    expect(provisioningRun).toContain("Enable installed gateway");
     expect(provisioningRun).toContain("Use Repair only if the installed task cannot start");
     expect(provisioningRun).not.toContain("downloadInstallerFromActivation");
     expect(autostart).toContain("export function requestInstalledEdgeStart()");

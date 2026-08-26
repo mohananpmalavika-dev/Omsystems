@@ -224,16 +224,22 @@ export function ProvisioningRun({
         </div>
         <div className="ztp-actions">
           {/* Starts an existing local installation and waits for a real authenticated heartbeat. */}
-          {isEdgeOffline ? (
+          {hasEnrolledAgent ? (
             <button
               className="primary-button"
               style={{ background: "#10b981", borderColor: "#059669" }}
               disabled={activatingEdge}
               onClick={() => void activateEdgeOnline()}
-              title="Bring Edge Agent online immediately for this branch"
+              title={isEdgeOffline
+                ? "Bring the installed Edge Agent online immediately for this branch"
+                : "Check that the installed Edge Agent is online for this branch"}
             >
               {activatingEdge ? <Loader2 className="spin" size={14} /> : <Zap size={14} />}
-              <span>{activatingEdge ? "Activating..." : "Activate Edge Online"}</span>
+              <span>{activatingEdge
+                ? "Enabling..."
+                : isEdgeOffline
+                  ? "Enable installed gateway"
+                  : "Check installed gateway"}</span>
             </button>
           ) : null}
 
