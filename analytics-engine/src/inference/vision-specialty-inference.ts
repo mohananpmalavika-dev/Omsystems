@@ -122,6 +122,64 @@ export class FaceEmbeddingInference {
   }
 }
 
+export interface HelmetClassification {
+  wearingHelmet: boolean;
+  confidence: number;
+  wearingHelmetConfidence: number;
+  unwearingHelmetConfidence: number;
+}
+
+/**
+ * Runs PaddleClas PULC's two-class safety-helmet model on a rider's upper
+ * body/head crop. The official class order is wearing_helmet, then
+ * unwearing_helmet; outputs may be logits or already-normalized scores.
+ */
+export class HelmetClassificationInference {
+  constructor(
+    private readonly session: InferenceSession,
+    private readonly inputWidth = 224,
+    private readonly inputHeight = 224,
+  ) {}
+
+  async run(
+    frame: DetectionFrame,
+    box: { x: number; y: number; width: number; height: number },
+  ): Promise<HelmetClassification> {
+    const crop = cropRgb24(frame, box);
+    const inputName = this.session.inputNames[0];
+    if (!inputName) throw new Error("Safety-helmet model has no input tensor");
+    const mean = [0.485, 0.456, 0.406];
+    const standardDeviation = [0.229, 0.224, 0.225];
+    const chw = resizeRgb24ToChw(
+      crop.imageData,
+      crop.width,
+      crop.height,
+      this.inputWidth,
+      this.inputHeight,
+      (value, channel) => ((value / 255) - mean[channel]!) / standardDeviation[channel]!,
+    );
+    const outputs = await this.session.run({
+      [inputName]: new Tensor("float32", chw, [1, 3, this.inputHeight, this.inputWidth]),
+    });
+    const outputName = this.session.outputNames[0];
+    const output = outputName ? outputs[outputName] : Object.values(outputs)[0];
+    if (!output) throw new Error("Safety-helmet model produced no output tensor");
+    const tensor = requireFloatTensor(output, "Safety-helmet classification");
+    const scores = Array.from(tensor.data as Float32Array);
+    if (scores.length !== 2) {
+      throw new Error(`Safety-helmet model must produce two class scores; received ${scores.length}`);
+    }
+    const [wearingHelmetConfidence, unwearingHelmetConfidence] = classifierProbabilities(scores);
+    const wearingHelmet = wearingHelmetConfidence >= unwearingHelmetConfidence;
+    return {
+      wearingHelmet,
+      confidence: wearingHelmet ? wearingHelmetConfidence : unwearingHelmetConfidence,
+      wearingHelmetConfidence,
+      unwearingHelmetConfidence,
+    };
+  }
+}
+
 export function cropRgb24(
   frame: DetectionFrame,
   box: { x: number; y: number; width: number; height: number },
@@ -362,6 +420,17 @@ function softmaxConfidence(scores: number[], selected: number) {
   const exponentials = scores.map((score) => Math.exp(score - maximum));
   const denominator = exponentials.reduce((sum, value) => sum + value, 0);
   return denominator > 0 ? exponentials[selected]! / denominator : 0;
+}
+
+function classifierProbabilities(scores: number[]): [number, number] {
+  const total = scores.reduce((sum, score) => sum + score, 0);
+  if (scores.every((score) => score >= 0 && score <= 1) && Math.abs(total - 1) < 0.001) {
+    return [scores[0]!, scores[1]!];
+  }
+  const maximum = Math.max(...scores);
+  const exponentials = scores.map((score) => Math.exp(score - maximum));
+  const denominator = exponentials[0]! + exponentials[1]!;
+  return [exponentials[0]! / denominator, exponentials[1]! / denominator];
 }
 
 /**

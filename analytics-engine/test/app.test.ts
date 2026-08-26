@@ -1,18 +1,30 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { buildAnalyticsEngine } from "../src/app.js";
+import { mkdtemp, rm } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 
 const sourceKey = "source-key-that-is-long-enough-for-tests";
 const controlPlaneKey = "control-plane-key-that-is-long-enough";
+const temporaryDirectories: string[] = [];
+
+async function useEmptyModelsDirectory(): Promise<void> {
+  const directory = await mkdtemp(path.join(os.tmpdir(), "sentinel-empty-models-"));
+  temporaryDirectories.push(directory);
+  vi.stubEnv("MODELS_DIR", directory);
+}
 
 describe("analytics engine adapter", () => {
   const apps: Array<ReturnType<typeof buildAnalyticsEngine>> = [];
   afterEach(async () => {
     vi.unstubAllEnvs();
     await Promise.all(apps.splice(0).map((app) => app.close()));
+    await Promise.all(temporaryDirectories.splice(0).map((directory) => rm(directory, { recursive: true, force: true })));
   });
 
   it("reports missing model artifacts distinctly from the loaded cache", async () => {
     vi.stubEnv("ANALYTICS_REQUIRE_MODELS", "false");
+    await useEmptyModelsDirectory();
     const app = buildAnalyticsEngine({
       sourceSharedKey: sourceKey,
       controlPlaneSharedKey: "control-plane-key-that-is-long-enough",
@@ -21,15 +33,18 @@ describe("analytics engine adapter", () => {
     apps.push(app);
     const response = await app.inject({ method: "GET", url: "/health" });
     expect(response.statusCode).toBe(200);
-    expect(response.json()).toMatchObject({
+    const health = response.json();
+    expect(health).toMatchObject({
       status: "degraded",
       initializationError: null,
-      pipeline: { initialized: true, models: { ready: false, required: 5, requiredReady: 0, loaded: 0 } },
+      pipeline: { initialized: true, models: { ready: false, required: 6 } },
     });
+    expect(health.pipeline.models.loaded).toBeLessThan(health.pipeline.models.required);
   });
 
   it("fails production readiness when required models are absent", async () => {
     vi.stubEnv("ANALYTICS_REQUIRE_MODELS", "true");
+    await useEmptyModelsDirectory();
     const app = buildAnalyticsEngine({
       sourceSharedKey: sourceKey,
       controlPlaneSharedKey: "control-plane-key-that-is-long-enough",

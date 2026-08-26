@@ -1,3 +1,27 @@
+# Reproducibly convert the official Apache-2.0 PaddleClas PULC safety-helmet
+# inference export before the Node build. The converter image is discarded, so
+# Paddle is never part of the runtime image.
+FROM python:3.10-slim AS helmet-model
+
+WORKDIR /build
+ENV PIP_DISABLE_PIP_VERSION_CHECK=1
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates curl libgomp1 tar \
+    && rm -rf /var/lib/apt/lists/*
+RUN curl --fail --location --retry 3 --output safety_helmet_infer.tar \
+      https://paddleclas.bj.bcebos.com/models/PULC/safety_helmet_infer.tar \
+    && echo "6e7cff9c4e3f3966b1d964c7f27c47577d9b31d725a4c8b625e68cb9affdcaa7  safety_helmet_infer.tar" | sha256sum --check \
+    && tar -xf safety_helmet_infer.tar \
+    && python -m pip install --no-cache-dir paddlepaddle==2.6.2 paddle2onnx==1.2.6 six==1.16.0 \
+    && paddle2onnx \
+      --model_dir /build/safety_helmet_infer \
+      --model_filename inference.pdmodel \
+      --params_filename inference.pdiparams \
+      --save_file /build/helmet.onnx \
+      --opset_version 11 \
+      --enable_onnx_checker True \
+    && echo "8c87834e2fde4eb29723483cdecedf78c231cf7e6da9913cf8227ba542b3f31f  helmet.onnx" | sha256sum --check
+
 # Multi-stage build for analytics engine
 FROM node:22-bookworm-slim AS build
 
@@ -31,6 +55,7 @@ COPY analytics-engine/src analytics-engine/src
 COPY analytics-engine/models/manifest.json analytics-engine/models/manifest.json
 COPY analytics-engine/scripts analytics-engine/scripts
 COPY analytics-engine/THIRD_PARTY_MODELS.md analytics-engine/THIRD_PARTY_MODELS.md
+COPY --from=helmet-model /build/helmet.onnx analytics-engine/models/safety/helmet.onnx
 
 # Provision audited open-license CPU models at build time. Every download is
 # checksum-verified by the repository script; no paid inference API is used.

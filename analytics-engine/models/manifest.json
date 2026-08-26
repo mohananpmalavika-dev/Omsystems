@@ -39,19 +39,20 @@
     },
     {
       "id": "helmet",
-      "name": "Helmet and head detector",
+      "name": "PaddleClas PULC safety-helmet classifier",
       "path": "safety/helmet.onnx",
       "pathEnvironment": "HELMET_MODEL_PATH",
-      "sourceUrlEnvironment": "HELMET_MODEL_URL",
-      "sha256Environment": "HELMET_MODEL_SHA256",
+      "sha256": "8c87834e2fde4eb29723483cdecedf78c231cf7e6da9913cf8227ba542b3f31f",
+      "license": "Apache-2.0",
+      "sourceProject": "https://github.com/PaddlePaddle/PaddleClas/blob/release/2.6/docs/en/PULC/PULC_safety_helmet_en.md",
       "type": "onnx",
       "priority": "high",
-      "required": false,
+      "required": true,
       "useGPU": true,
-      "task": "object-detection",
-      "decoder": "yolov8",
-      "labels": ["helmet", "head"],
-      "inputShape": [1, 3, 640, 640]
+      "task": "helmet-classification",
+      "preprocessor": "paddleclas-imagenet",
+      "labels": ["wearing_helmet", "unwearing_helmet"],
+      "inputShape": [1, 3, 224, 224]
     },
     {
       "id": "face-detector",

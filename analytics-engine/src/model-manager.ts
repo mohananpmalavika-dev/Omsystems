@@ -818,6 +818,8 @@ export class ModelManager {
 }
 
 function defaultModelsDirectory(): string {
+  const configured = process.env.MODELS_DIR?.trim();
+  if (configured) return path.resolve(configured);
   const moduleDirectory = path.dirname(fileURLToPath(import.meta.url));
   const candidates = [
     path.resolve(process.cwd(), 'models'),
@@ -907,6 +909,17 @@ export function getModelManager(options?: ModelManagerOptions): ModelManager {
     modelManagerInstance = new ModelManager(options);
   }
   return modelManagerInstance;
+}
+
+/**
+ * Release the process-wide manager after an analytics pipeline shuts down.
+ * This lets a subsequent pipeline use a new model directory/configuration
+ * instead of retaining stale sessions from the previous one.
+ */
+export async function resetModelManager(): Promise<void> {
+  const manager = modelManagerInstance;
+  modelManagerInstance = null;
+  if (manager?.isReady()) await manager.shutdown();
 }
 
 /**

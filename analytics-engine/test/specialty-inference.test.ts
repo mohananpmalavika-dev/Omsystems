@@ -39,6 +39,26 @@ describe("local specialty model adapters", () => {
     expect(detector.getHealth().status).toBe("healthy");
   });
 
+  it("classifies a rider head crop with the local safety-helmet model", async () => {
+    const run = async () => ({
+      wearingHelmet: false,
+      confidence: 0.93,
+      wearingHelmetConfidence: 0.07,
+      unwearingHelmetConfidence: 0.93,
+    });
+    const detector = new HelmetDetector(null, 0.7, { run });
+    await detector.initialize();
+    const results = await detector.detect(frame([
+      object("person", 0.95, { x: 0.1, y: 0.1, width: 0.4, height: 0.8 }),
+      object("motorcycle", 0.91, { x: 0.1, y: 0.45, width: 0.5, height: 0.45 }),
+    ]));
+
+    expect(results).toEqual(expect.arrayContaining([
+      expect.objectContaining({ detectionType: "no-helmet", confidence: expect.closeTo(0.93) }),
+    ]));
+    expect(detector.getHealth().status).toBe("healthy");
+  });
+
   it("runs local face detection and embedding watchlist matching", async () => {
     const detector = new FaceDetector(
       { recognitionEnabled: true, detectionConfidence: 0.5 },

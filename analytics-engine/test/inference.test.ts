@@ -4,7 +4,7 @@ import { YoloPersonInference } from "../src/inference/yolo-person-inference.js";
 import { YoloCocoInference } from "../src/inference/yolo-coco-inference.js";
 import { FfmpegFrameExtractor } from "../src/frame-extractor.js";
 import { YoloDetectionInference } from "../src/inference/yolo-detection-inference.js";
-import { CtcTextInference } from "../src/inference/vision-specialty-inference.js";
+import { CtcTextInference, HelmetClassificationInference } from "../src/inference/vision-specialty-inference.js";
 import { LpdYuNetInference, YuNetFaceInference } from "../src/inference/opencv-specialty-inference.js";
 
 describe("local analytics foundations", () => {
@@ -203,5 +203,20 @@ describe("local analytics foundations", () => {
     expect(detections[0]).toMatchObject({ label: "license-plate", confidence: expect.closeTo(0.9) });
     expect((detections[0]!.attributes?.corners as Array<unknown>)).toHaveLength(4);
     expect(detections[0]!.boundingBox.width).toBeGreaterThan(0);
+  });
+
+  it("runs the local two-class safety-helmet classifier on an upper-body crop", async () => {
+    const run = vi.fn(async () => ({
+      output: new Tensor("float32", new Float32Array([0.08, 0.92]), [1, 2]),
+    }));
+    const inference = new HelmetClassificationInference({ inputNames: ["input"], outputNames: ["output"], run } as never);
+    const result = await inference.run({
+      cameraId: "camera-helmet", tenantId: "tenant-1", timestamp: new Date(),
+      imageData: Buffer.alloc(16 * 16 * 3, 127), width: 16, height: 16,
+    }, { x: 0, y: 0, width: 1, height: 0.5 });
+
+    const feed = run.mock.calls[0]![0] as Record<string, Tensor>;
+    expect(feed.input?.dims).toEqual([1, 3, 224, 224]);
+    expect(result).toMatchObject({ wearingHelmet: false, confidence: expect.closeTo(0.92) });
   });
 });

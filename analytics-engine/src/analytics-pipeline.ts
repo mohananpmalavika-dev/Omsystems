@@ -39,7 +39,7 @@ import { AnalogVideoQualityDetector } from "./detectors/analog-video-quality-det
 import { CameraAgingDetector } from "./detectors/camera-aging-detector.js";
 import { CameraTypeClassifier } from "./detectors/camera-type-classifier.js";
 import { DVRChannelHealthDetector } from "./detectors/dvr-channel-health-detector.js";
-import { getModelManager } from "./model-manager.js";
+import { getModelManager, resetModelManager } from "./model-manager.js";
 import { getConditionalScheduler, type ConditionalScheduler } from "./inference/conditional-scheduler.js";
 
 export interface AnalyticsRule {
@@ -683,6 +683,7 @@ export class AnalyticsPipeline {
     for (const detector of this.detectors) {
       await detector.cleanup();
     }
+    await resetModelManager();
     this.isInitialized = false;
     this.initializationErrors.clear();
     this.rulesCache.clear();

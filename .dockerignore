@@ -4,6 +4,7 @@
 **/coverage
 **/test-results
 **/playwright-report
+.model-work
 .git
 .env
 *.log

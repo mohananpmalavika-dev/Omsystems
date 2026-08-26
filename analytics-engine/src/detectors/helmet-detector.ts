@@ -5,7 +5,12 @@
  */
 
 import { BaseDetector, type DetectionFrame, type DetectionResult, calculateIoU, getInferenceObjects, shouldRunLocalSpecialtyInference } from "./base-detector.js";
-import { loadObjectInference, modelUnavailableReason, type ObjectFrameInference } from "../inference/configured-model-inference.js";
+import {
+  loadHelmetClassificationInference,
+  modelUnavailableReason,
+  type HelmetClassificationFrameInference,
+  type ObjectFrameInference,
+} from "../inference/configured-model-inference.js";
 
 export interface HelmetDetection {
   personBoundingBox: { x: number; y: number; width: number; height: number };
@@ -18,22 +23,30 @@ export interface HelmetDetection {
 export class HelmetDetector extends BaseDetector {
   private isModelLoaded = false;
   private inference: ObjectFrameInference | null;
+  private classifier: HelmetClassificationFrameInference | null;
   private modelLoadError: string | null = null;
   private readonly MIN_CONFIDENCE: number;
   private readonly HEAD_REGION_OVERLAP_THRESHOLD = 0.6;
 
-  constructor(inference: ObjectFrameInference | null = null, confidenceThreshold = 0.7) {
+  constructor(
+    inference: ObjectFrameInference | null = null,
+    confidenceThreshold = 0.7,
+    classifier: HelmetClassificationFrameInference | null = null,
+  ) {
     super("helmet", "1.0.0");
     this.inference = inference;
+    this.classifier = classifier;
     this.MIN_CONFIDENCE = confidenceThreshold;
   }
 
   async initialize(): Promise<void> {
     try {
-      this.inference ??= await loadObjectInference("helmet", this.MIN_CONFIDENCE);
+      if (!this.inference && !this.classifier) {
+        this.classifier = await loadHelmetClassificationInference("helmet");
+      }
       this.isModelLoaded = true;
       this.modelLoadError = null;
-      console.log("Helmet detector loaded local ONNX model");
+      console.log("Helmet detector loaded local ONNX safety-helmet classifier");
     } catch (error) {
       this.inference = null;
       this.isModelLoaded = false;
@@ -91,7 +104,8 @@ export class HelmetDetector extends BaseDetector {
    * Detect helmets in frame
    */
   private async detectHelmetsInFrame(frame: DetectionFrame): Promise<HelmetDetection[]> {
-    const local = shouldRunLocalSpecialtyInference(frame) && this.inference
+    const runLocal = shouldRunLocalSpecialtyInference(frame);
+    const local = runLocal && this.inference
       ? await this.inference.run(frame)
       : [];
     const observations = [...getInferenceObjects(frame), ...local];
@@ -106,8 +120,11 @@ export class HelmetDetector extends BaseDetector {
 
     // A missing helmet alone is not a violation: a high-confidence head
     // observation is required before reporting a rider as unprotected.
-    return this.matchPersonsToVehicles(persons, vehicles)
-      .map((match) => this.checkHelmetCompliance(match, helmets, heads));
+    return Promise.all(this.matchPersonsToVehicles(persons, vehicles)
+      .map(async (match) => {
+        if (runLocal && this.classifier) return this.classifyHelmetCompliance(frame, match);
+        return this.checkHelmetCompliance(match, helmets, heads);
+      }));
   }
 
   /**
@@ -144,12 +161,7 @@ export class HelmetDetector extends BaseDetector {
   ): HelmetDetection {
     // Find head in upper portion of person bounding box
     const personBox = match.person.boundingBox;
-    const headRegion = {
-      x: personBox.x,
-      y: personBox.y,
-      width: personBox.width,
-      height: personBox.height * 0.3, // Top 30% of person box
-    };
+    const headRegion = this.headRegion(personBox);
 
     // Find helmets near the head region
     let helmetDetected = false;
@@ -199,6 +211,33 @@ export class HelmetDetector extends BaseDetector {
     };
   }
 
+  private async classifyHelmetCompliance(
+    frame: DetectionFrame,
+    match: { person: any; vehicle: any },
+  ): Promise<HelmetDetection> {
+    const personBox = match.person.boundingBox;
+    const classification = await this.classifier!.run(frame, this.headRegion(personBox));
+    const riskLevel = classification.confidence < this.MIN_CONFIDENCE
+      ? "uncertain"
+      : classification.wearingHelmet ? "compliant" : "violation";
+    return {
+      personBoundingBox: personBox,
+      helmetDetected: classification.wearingHelmet,
+      confidence: classification.confidence,
+      vehicleType: match.vehicle.label as HelmetDetection["vehicleType"],
+      riskLevel,
+    };
+  }
+
+  private headRegion(personBox: { x: number; y: number; width: number; height: number }) {
+    return {
+      x: personBox.x + (personBox.width * 0.1),
+      y: personBox.y,
+      width: personBox.width * 0.8,
+      height: personBox.height * 0.35,
+    };
+  }
+
   private calculateAverageConfidence(detections: HelmetDetection[]): number {
     if (detections.length === 0) return 0;
     const sum = detections.reduce((acc, d) => acc + d.confidence, 0);
@@ -207,6 +246,7 @@ export class HelmetDetector extends BaseDetector {
 
   async cleanup(): Promise<void> {
     this.inference = null;
+    this.classifier = null;
     this.isModelLoaded = false;
     console.log("Helmet detector cleaned up");
   }
@@ -215,8 +255,8 @@ export class HelmetDetector extends BaseDetector {
     return {
       status: this.isModelLoaded ? ("healthy" as const) : ("degraded" as const),
       details: this.isModelLoaded
-        ? "Local helmet model active"
-        : `Awaiting helmet/head model; normalized observations remain supported. ${this.modelLoadError ?? "Model unavailable"}`,
+        ? "Local PaddleClas safety-helmet classifier active"
+        : `Awaiting local safety-helmet classifier; normalized observations remain supported. ${this.modelLoadError ?? "Model unavailable"}`,
     };
   }
 }

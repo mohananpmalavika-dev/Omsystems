@@ -1,174 +1,57 @@
-# AI Engine Status - Quick Reference
+# Analytics AI status
 
-> Historical live-service snapshot from before the free-model packaging
-> change. The repository now provisions checksum-pinned YOLOX Tiny and requires
-> that core model for readiness. The live URL will keep reporting its old state
-> until the updated root `render.yaml` deployment completes; see
-> `THIRD_PARTY_MODELS.md` for the current artifact contract.
+## Current source contract
 
-## Current Deployment
+The analytics image performs local CPU inference only. It does not call a paid
+AI API or require a model-hosting account.
 
-**Service URL:** https://kryptonvision-analytics-engine-6woo.onrender.com  
-**Current State:** 🟡 **AI_DEGRADED** (Functional but no local inference)  
-**Date Checked:** 2026-08-20
+The production Docker build packages and checksum-verifies these required
+models:
 
-## What's Working ✅
+| Capability | Model |
+| --- | --- |
+| Person, vehicle and generic-object detection | YOLOX Tiny |
+| Motorcycle-rider helmet compliance | PaddleClas PULC safety-helmet classifier |
+| Face detection | OpenCV Zoo YuNet |
+| Face embedding | OpenCV Zoo SFace INT8 |
+| License-plate detection | OpenCV Zoo LPD-YuNet |
+| License-plate OCR | OpenCV Zoo CRNN English INT8 |
 
-- Service is online and responding
-- Health endpoint accessible: `/health`
-- Can accept external detections: `POST /internal/detections`
-- Can accept normalized frames: `POST /internal/frames`
-- Pipeline initialized successfully
-- Motion, zone, and camera health detectors operational
-- Queue, heatmap, and tracking systems working
-- Analog camera quality/aging analytics active
+Helmet detection is classification of the head/upper-body crop associated with
+a rider. The official PaddleClas archive is downloaded and converted to ONNX in
+the Docker build stage; Paddle and the converter are not present in the runtime
+image.
 
-## What's Missing ❌
+The exact model sources, versions, hashes and licenses are in
+[`THIRD_PARTY_MODELS.md`](./THIRD_PARTY_MODELS.md) and
+[`models/manifest.json`](./models/manifest.json).
 
-**6 Required ONNX Models Not Found:**
+## Readiness
 
-| Model | Purpose | Path |
-|-------|---------|------|
-| yolov8n | General object detection (person, vehicle, etc.) | `/app/models/detection/yolov8n.onnx` |
-| fire-smoke | Fire and smoke detection | `/app/models/safety/fire-smoke.onnx` |
-| helmet | Helmet and head detection | `/app/models/safety/helmet.onnx` |
-| face-detector | Face detection | `/app/models/face/face-detector.onnx` |
-| anpr-detector | License plate detection | `/app/models/vehicle/license-plate-detector.onnx` |
-| anpr-recognizer | License plate OCR | `/app/models/vehicle/license-plate-recognizer.onnx` |
+`ANALYTICS_REQUIRE_MODELS=true` is set both by the Docker image and in
+`render.yaml`. The service reports readiness only after all six required local
+models load successfully. Optional fire/smoke, pose, attribute and re-ID models
+do not block readiness.
 
-## Understanding the Status
-
-### AI States Explained
-
-| Status | What It Means | Your Service |
-|--------|---------------|--------------|
-| **AI_OPERATIONAL** | All models loaded, full local inference | ❌ Not yet |
-| **AI_DEGRADED** | Service working but models missing | ✅ Current state |
-| **AI_UNAVAILABLE** | Pipeline initialization failed | ❌ Not applicable |
-
-**Degraded mode is intentional** - your service is configured to work without models by accepting external detections.
-
-## Quick Health Check
+Use these checks after a build or deploy:
 
 ```bash
-# Check overall status
-curl https://kryptonvision-analytics-engine-6woo.onrender.com/health | jq '.aiState'
-
-# Expected output: "AI_DEGRADED"
+npm run models:verify --workspace @sentinel/analytics-engine
+npm test --workspace @sentinel/analytics-engine
+curl https://<analytics-host>/health | jq '.aiState, .pipeline.models'
 ```
 
-## How to Make It Fully Operational
+`AI_OPERATIONAL` means every required model loaded. `AI_DEGRADED` after a
+deploy means the deployed image, not this source checkout, needs inspection in
+its build or runtime logs.
 
-### Quick Answer
-You need to either:
+## Deployment
 
-**Option 1:** Deploy ONNX model files to Render (see RENDER_DEPLOYMENT_GUIDE.md)  
-**Option 2:** Continue using external inference workers (current setup, no changes needed)
+Render builds `analytics-engine/Dockerfile` from the repository root. Do not
+configure `*_MODEL_URL` or `*_MODEL_SHA256` variables for YOLOX, helmet, face,
+or ANPR: their immutable sources and hashes are already pinned in the manifest
+and the image build provisions them. No external inference service is needed
+for these features.
 
-### Which Option Should You Choose?
-
-**Use Option 1 (Deploy Models) if:**
-- You need local frame analysis
-- You have ONNX model files ready
-- You want standalone operation
-- You have model hosting (S3, etc.)
-
-**Use Option 2 (External Inference) if:**
-- You're testing or developing
-- Models aren't ready yet
-- You have edge workers doing inference
-- You want to keep costs low
-
-## Current Configuration
-
-```yaml
-# From render.yaml
-ANALYTICS_REQUIRE_MODELS: false  # Allows degraded state
-ENABLE_GPU_ACCELERATION: false
-PORT: 3000
-NODE_ENV: production
-
-# Models would need to be downloaded from:
-# - Environment variables: *_MODEL_URL
-# - Verified with: *_MODEL_SHA256
-```
-
-## Next Steps (If Deploying Models)
-
-1. **Get Model Files** (with licenses)
-   - Train custom models OR
-   - Use public models (review licenses) OR
-   - Purchase commercial models
-
-2. **Upload to Secure Storage**
-   - AWS S3, Google Cloud Storage, Azure Blob, etc.
-   - Must be HTTPS accessible
-
-3. **Configure Render Environment**
-   - Add `*_MODEL_URL` variables
-   - Add `*_MODEL_SHA256` checksums
-   - Set `ANALYTICS_MODEL_LICENSES_ACCEPTED=true`
-   - Set `ANALYTICS_REQUIRE_MODELS=true`
-
-4. **Update Build Command**
-   ```bash
-   npm install && npm run models:download && npm run build
-   ```
-
-5. **Deploy & Verify**
-   ```bash
-   curl https://kryptonvision-analytics-engine-6woo.onrender.com/health | jq '.aiState'
-   # Should return: "AI_OPERATIONAL"
-   ```
-
-## Important Notes
-
-⚠️ **The service is NOT broken** - it's working as designed in external inference mode
-
-⚠️ **Don't panic about "degraded"** - it's a valid operational state when models aren't needed
-
-⚠️ **Authentication required** - Most endpoints need `x-analytics-source-key` header (except `/health`)
-
-## Troubleshooting
-
-### Issue: Can't access the service
-**Check:** Are you trying to access authenticated endpoints?  
-**Solution:** Use `/health` endpoint or provide `x-analytics-source-key` header
-
-### Issue: Want to test with local models
-**Check:** See RENDER_DEPLOYMENT_GUIDE.md  
-**Solution:** Follow model deployment steps
-
-### Issue: Need to verify what's working
-**Check:** Review `/health` endpoint JSON  
-**Solution:** Look at `pipeline.detectors` for detailed status of each component
-
-## Monitoring Commands
-
-```bash
-# Full health report
- curl https://sentinel-grid-analytics-engine-682g.onrender.com/health | jq
-
-# Just AI state
-curl https://kryptonvision-analytics-engine-6woo.onrender.com/health | jq '.aiState'
-
-# Model status
-curl https://kryptonvision-analytics-engine-u2sf.onrender.com/health | jq '.pipeline.models'
-
-# Active detectors
- curl https://sentinel-grid-analytics-engine-682g.onrender.com/health | jq '.pipeline.detectors | with_entries(select(.value.status == "healthy"))'
-```
-
-## Documentation
-
-- 📘 **Full Deployment Guide:** [RENDER_DEPLOYMENT_GUIDE.md](./RENDER_DEPLOYMENT_GUIDE.md)
-- 📋 **Model Manifest:** [models/manifest.json](./models/manifest.json)
-- 📝 **Model Documentation:** [models/README.md](./models/README.md)
-- ⚙️ **Environment Variables:** [.env.example](./.env.example)
-- 🔧 **Provisioning Script:** [scripts/provision-models.ts](./scripts/provision-models.ts)
-
----
-
-**Last Updated:** 2026-08-15  
-**Service Version:** 0.1.0  
-**Deployment:** Render (Oregon region)
+The older live-service status and manual model-hosting instructions were
+retired with this local-model packaging change.

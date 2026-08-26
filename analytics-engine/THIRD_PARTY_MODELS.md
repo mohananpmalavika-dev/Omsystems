@@ -49,9 +49,15 @@ trained on Chinese plates, so Indian-camera validation is mandatory.
 
 ## Helmet compliance
 
-The configured helmet/head adapter accepts a locally supplied, reviewed ONNX
-artifact and never substitutes a paid cloud model. The selected source is the
-Apache-2.0 PaddleClas PULC safety-helmet model; its official Paddle inference
-archive must be converted and checksum-pinned before it is made required.
-Until that artifact is provisioned, helmet health remains degraded rather than
-creating no-helmet alerts from guesswork.
+- Classifier: PaddleClas PULC `safety_helmet_infer`
+- Upstream: https://github.com/PaddlePaddle/PaddleClas/blob/release/2.6/docs/en/PULC/PULC_safety_helmet_en.md
+- License: Apache License 2.0
+- Source archive SHA-256: `6e7cff9c4e3f3966b1d964c7f27c47577d9b31d725a4c8b625e68cb9affdcaa7`
+- Converted ONNX SHA-256: `8c87834e2fde4eb29723483cdecedf78c231cf7e6da9913cf8227ba542b3f31f`
+
+The Docker build converts the pinned official Paddle inference archive with
+Paddle2ONNX 1.2.6, verifies both hashes, and runs the resulting classifier
+locally. It receives the upper-body/head crop of a YOLOX-detected rider and
+returns either `wearing_helmet` or `unwearing_helmet`; it does not use a paid
+cloud service. Production validation on representative cameras is still
+required before using violation alerts operationally.

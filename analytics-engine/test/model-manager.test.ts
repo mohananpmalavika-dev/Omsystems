@@ -18,7 +18,7 @@ describe("model provisioning contract", () => {
     const manager = new ModelManager({ modelsDirectory, modelLoader: loader, enableGPU: false, startCleanupTimer: false });
     await manager.initialize();
     const configs = manager.getAllConfigs().filter((config) => config.required);
-    expect(configs).toHaveLength(5);
+    expect(configs).toHaveLength(6);
     for (const config of configs) {
       // This unit test exercises discovery/cache behavior; checksum validation
       // is covered by the production manifest/provisioning contract.
@@ -42,7 +42,7 @@ describe("model provisioning contract", () => {
     temporaryDirectories.push(modelsDirectory);
     const manager = new ModelManager({ modelsDirectory, enableGPU: false, startCleanupTimer: false });
     await manager.initialize();
-    expect(manager.getProvisioningSummary()).toMatchObject({ ready: false, required: 5, requiredReady: 0, loaded: 0 });
+    expect(manager.getProvisioningSummary()).toMatchObject({ ready: false, required: 6, requiredReady: 0, loaded: 0 });
     await manager.shutdown();
   });
 });

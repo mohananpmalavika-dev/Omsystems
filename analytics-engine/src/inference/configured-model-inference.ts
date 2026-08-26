@@ -8,6 +8,7 @@ import { LpdYuNetInference, YuNetFaceInference } from "./opencv-specialty-infere
 import { 
   CtcTextInference, 
   FaceEmbeddingInference,
+  HelmetClassificationInference,
   PersonReIdInference,
   VehicleReIdInference,
   PersonAttributeInference,
@@ -59,6 +60,18 @@ export interface AttributeInference {
     frame: DetectionFrame,
     box: { x: number; y: number; width: number; height: number },
   ): Promise<PersonAttributes>;
+}
+
+export interface HelmetClassificationFrameInference {
+  run(
+    frame: DetectionFrame,
+    box: { x: number; y: number; width: number; height: number },
+  ): Promise<{
+    wearingHelmet: boolean;
+    confidence: number;
+    wearingHelmetConfidence: number;
+    unwearingHelmetConfidence: number;
+  }>;
 }
 
 export async function loadObjectInference(modelId: string, confidenceThreshold: number): Promise<ObjectFrameInference> {
@@ -132,6 +145,21 @@ export async function loadFaceVectorInference(modelId: string): Promise<FaceVect
   if (!manager.isModelAvailable(modelId)) throw new Error(modelUnavailableReason(modelId));
   const dimensions = inputDimensions(config);
   return new FaceEmbeddingInference(
+    await manager.getModel(modelId) as InferenceSession,
+    dimensions.width,
+    dimensions.height,
+  );
+}
+
+export async function loadHelmetClassificationInference(modelId: string): Promise<HelmetClassificationFrameInference> {
+  const manager = getModelManager();
+  const config = requiredConfig(modelId);
+  if (config.task !== "helmet-classification") {
+    throw new Error(`Model ${modelId} is not configured for helmet classification`);
+  }
+  if (!manager.isModelAvailable(modelId)) throw new Error(modelUnavailableReason(modelId));
+  const dimensions = inputDimensions(config);
+  return new HelmetClassificationInference(
     await manager.getModel(modelId) as InferenceSession,
     dimensions.width,
     dimensions.height,

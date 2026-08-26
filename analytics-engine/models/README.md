@@ -14,12 +14,11 @@ excluded from Git.
 | `face-embedding` | `face/face-embedding.onnx` | OpenCV Zoo SFace INT8, five-point aligned RGB `1x3x112x112` |
 | `anpr-detector` | `vehicle/license-plate-detector.onnx` | OpenCV Zoo LPD-YuNet, native corner decoder, BGR `1x3x240x320` |
 | `anpr-recognizer` | `vehicle/license-plate-recognizer.onnx` | OpenCV Zoo CRNN INT8, rectified grayscale `1x1x32x100` |
+| `helmet` | `safety/helmet.onnx` | PaddleClas PULC safety-helmet classifier, ImageNet-normalized RGB `1x3x224x224` |
 
-Fire/smoke, helmet/head, pose, attributes and re-identification models remain
-optional. They are not reported as ready unless an operator supplies reviewed
-artifacts matching the manifest contract. Helmet compliance is deliberately
-degraded until its official PaddleClas source has a reproducibly converted and
-checksum-pinned ONNX artifact.
+Fire/smoke, pose, attributes and re-identification models remain optional.
+The image build makes helmet classification required: it reproducibly converts
+the pinned official PaddleClas archive to its checksum-pinned ONNX artifact.
 
 The YOLO adapter also supports `yolov5` objectness output and post-NMS `xyxy` rows when the manifest `decoder` is changed. Bounding boxes are normalized before they enter rules, alerts or tracking.
 
@@ -31,6 +30,11 @@ Review `../THIRD_PARTY_MODELS.md`, acknowledge the model license, and run:
 ANALYTICS_MODEL_LICENSES_ACCEPTED=true npm run models:download -- yolov8n face-detector face-embedding anpr-detector anpr-recognizer
 npm run models:verify
 ```
+
+The helmet model is built from its signed source archive only in the Docker
+conversion stage, then copied into the final image. It is intentionally not a
+generic `models:download` target because the audited upstream supplies Paddle
+inference files rather than a direct ONNX artifact.
 
 Provisioning uses HTTPS, downloads to a temporary file, verifies SHA-256, and only then moves the artifact into place. `models:verify` opens every required model with ONNX Runtime; it fails if a file is missing, corrupt, has the wrong checksum, or cannot be loaded.
 
