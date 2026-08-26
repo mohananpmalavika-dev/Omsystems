@@ -8,7 +8,7 @@ import type { Pool } from 'pg';
 import type { ControlPlaneStore } from '../control-plane-store.js';
 import { IntegrationManager } from '../integrations/integration-manager.js';
 import { getConnectorMetadata, registerAllConnectors } from '../integrations/connectors/index.js';
-import type { IntegrationCategory, IntegrationEventType, IntegrationType } from '../integrations/types.js';
+import type { IntegrationCategory, IntegrationConfig, IntegrationEventType, IntegrationType } from '../integrations/types.js';
 
 const retrySchema = z.object({
   maxRetries: z.number().int().min(0).max(10),
@@ -41,6 +41,23 @@ const eventSchema = z.object({
   sourceSystem: z.string().min(1).max(100).default('sentinel-api'),
   sourceIp: z.string().ip().optional(),
 });
+
+function normalizeRetryConfig(value: z.infer<typeof retrySchema> | undefined): IntegrationConfig['retryConfig'] {
+  if (!value) return undefined;
+  return {
+    maxRetries: value.maxRetries!,
+    retryDelayMs: value.retryDelayMs!,
+    backoffMultiplier: value.backoffMultiplier!,
+  };
+}
+
+function normalizeRateLimitConfig(value: z.infer<typeof rateLimitSchema> | undefined): IntegrationConfig['rateLimitConfig'] {
+  if (!value) return undefined;
+  return {
+    maxRequestsPerMinute: value.maxRequestsPerMinute!,
+    burstSize: value.burstSize!,
+  };
+}
 
 function authenticate(request: FastifyRequest, reply: FastifyReply) {
   if (!request.currentUser) {
@@ -144,6 +161,8 @@ export async function registerIntegrationRoutes(app: FastifyInstance, store: Con
     const service = requireManager(manager, reply);
     if (!user || !service) return;
     const body = createSchema.parse(request.body);
+    const retryConfig = normalizeRetryConfig(body.retryConfig);
+    const rateLimitConfig = normalizeRateLimitConfig(body.rateLimitConfig);
     try {
       const created = await service.createIntegration({
         tenantId: user.tenantId,
@@ -155,8 +174,8 @@ export async function registerIntegrationRoutes(app: FastifyInstance, store: Con
         config: body.config,
         credentials: body.credentials,
         subscribedEvents: body.subscribedEvents as IntegrationEventType[],
-        ...(body.retryConfig ? { retryConfig: body.retryConfig } : {}),
-        ...(body.rateLimitConfig ? { rateLimitConfig: body.rateLimitConfig } : {}),
+        ...(retryConfig ? { retryConfig } : {}),
+        ...(rateLimitConfig ? { rateLimitConfig } : {}),
       });
       return reply.code(201).send(sanitize(created));
     } catch (error) {
@@ -174,10 +193,15 @@ export async function registerIntegrationRoutes(app: FastifyInstance, store: Con
     const current = await ownedIntegration(service, request.params.id, user.tenantId);
     if (!current) return reply.code(404).send({ error: 'integration_not_found' });
     const body = updateSchema.parse(request.body);
+    const { retryConfig: rawRetryConfig, rateLimitConfig: rawRateLimitConfig, ...updates } = body;
+    const retryConfig = normalizeRetryConfig(rawRetryConfig);
+    const rateLimitConfig = normalizeRateLimitConfig(rawRateLimitConfig);
     const updated = await service.updateIntegration(current.id, {
-      ...body,
+      ...updates,
       subscribedEvents: body.subscribedEvents as IntegrationEventType[] | undefined,
       status: body.enabled === undefined ? current.status : body.enabled ? 'active' : 'inactive',
+      ...(retryConfig ? { retryConfig } : {}),
+      ...(rateLimitConfig ? { rateLimitConfig } : {}),
     });
     return sanitize(updated);
   });

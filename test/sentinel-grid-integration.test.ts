@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { operationalMapService } from '../src/operations/services/operational-map.service.js';
 import { clockMonitoringService } from '../src/clock-monitoring/services/clock-monitoring.service.js';
-import { fleetRolloutControllerService } from '../src/config-management/services/fleet-rollout-controller.service.js';
+import { FleetRolloutControllerService } from '../src/config-management/services/fleet-rollout-controller.service.js';
 import { signedConfigService } from '../src/config-management/services/signed-config.service.js';
 import { forensicEvidencePackageService } from '../src/evidence/services/forensic-evidence-package.service.js';
 import { privacyDecisionService } from '../src/privacy/services/privacy-decision.service.js';
@@ -192,9 +192,14 @@ describe('SENTINEL GRID / BANK VMS: End-to-End Enterprise Architecture Verificat
     });
     const signedManifest = await signedConfigService.signVersion(approvedVersion.id);
 
-    const rollout = await fleetRolloutControllerService.createRollout({
+    const rolloutController = new FleetRolloutControllerService({
+      deploy: async () => undefined,
+      rollback: async () => undefined,
+    });
+    const rollout = await rolloutController.createRollout({
       tenantId: 'BANK-001',
       configVersionId: approvedVersion.id,
+      branchIds: Array.from({ length: 400 }, (_, index) => `BR-${String(index + 1).padStart(3, '0')}`),
       createdBy: 'sec-lead-approver',
     });
     expect(rollout.stages.length).toBe(4);

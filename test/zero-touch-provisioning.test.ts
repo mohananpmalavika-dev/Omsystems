@@ -234,7 +234,7 @@ describe("zero-touch provisioning integration", () => {
       branchId: "branch-1",
       agents: [{
         id: "agent-1", branchId: "branch-1", name: "edge", version: "1.0.0",
-        status: "offline",
+        status: "offline", lastSeenAt: null,
       }],
       pendingDiscoveries: [],
       importedCameraIds: [],

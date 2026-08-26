@@ -4,6 +4,7 @@ import { signedConfigService, SignedConfigService } from '../services/signed-con
 import { fleetRolloutControllerService } from '../services/fleet-rollout-controller.service.js';
 import { configReconciliationService } from '../services/config-reconciliation.service.js';
 import { branchConfigurationAgentService } from '../services/branch-configuration-agent.service.js';
+import type { BranchConfiguration } from '../domain/signed-config.types.js';
 
 const cameraSchema = z.object({
   id: z.string().min(1),
@@ -92,7 +93,7 @@ export async function registerSignedConfigRoutes(
       {
         tenantId: request.currentUser.tenantId,
         version: body.version,
-        config: body.config as any,
+        config: body.config as BranchConfiguration,
         changeReason: body.changeReason,
         ticketId: body.ticketId,
         parentVersionId: body.parentVersionId,
@@ -306,7 +307,10 @@ export async function registerSignedConfigRoutes(
       return reply.code(404).send({ success: false, error: 'Rollout not found' });
     }
     try {
-      const assignment = fleetRolloutControllerService.recordBranchResult(id, branchId, body);
+      const assignment = fleetRolloutControllerService.recordBranchResult(id, branchId, {
+        status: body.status!,
+        ...(body.error ? { error: body.error } : {}),
+      });
       return reply.send({ success: true, data: assignment });
     } catch (err: any) {
       return reply.code(400).send({ success: false, error: err.message });
@@ -344,7 +348,7 @@ export async function registerSignedConfigRoutes(
       appliedVersion: body.appliedVersion,
       appliedPackageSha256: body.appliedPackageSha256,
       gatewayVersion: body.gatewayVersion,
-      actualConfig: body.actualConfig,
+      actualConfig: body.actualConfig as BranchConfiguration,
     });
 
     return { success: true, data: report };
