@@ -51,6 +51,15 @@ function formatLiveError(reason: string) {
   return labels[reason] ?? "Unable to start the live feed";
 }
 
+function shouldOfferCredentialUpdate(reason?: string) {
+  if (!reason) return false;
+  const normalized = reason.toLowerCase();
+  return normalized === "stream_secret_unavailable" ||
+    normalized.includes("credential") ||
+    normalized.includes("authentication failed") ||
+    normalized.includes("unauthorized camera");
+}
+
 export function CameraTile({
   camera,
   session,
@@ -79,11 +88,11 @@ export function CameraTile({
   index: number;
   recording?: RecordingJob;
   recordingLoading?: boolean;
-  onToggleRecording: () => void;
-  onChangeRecordingMode: (mode: RecordingMode) => void;
+  onToggleRecording?: () => void;
+  onChangeRecordingMode?: (mode: RecordingMode) => void;
   onUpdateRecording?: (cameraId: string, update: Partial<Omit<RecordingJob, "id" | "cameraId" | "status">>) => void;
-  onBookmark: () => void;
-  onCreateIncident: () => void;
+  onBookmark?: () => void;
+  onCreateIncident?: () => void;
   playbackMode?: CameraPlaybackMode;
   desiredPlaybackMode?: CameraPlaybackMode;
   degradationReason?: DegradationReason;
@@ -117,7 +126,9 @@ export function CameraTile({
       ? "snapshot refresh"
       : desiredPlaybackMode === "ROTATING"
         ? "rotation queue"
-        : null;
+      : null;
+  const canPlayLive = isActive && Boolean(session?.hls);
+  const showCredentialUpdate = shouldOfferCredentialUpdate(liveError);
 
   const scheduleDayOptions = [
     { label: "Sun", value: 0 },
@@ -232,7 +243,7 @@ export function CameraTile({
             <div className={`camera-feed-placeholder${liveError ? " has-error" : ""}`}>
               <span>{camera.status === "offline" ? "Camera offline" : liveError ? "Live feed unavailable" : "Live feed ready"}</span>
               {liveError && <small>{formatLiveError(liveError)}</small>}
-              {liveError && (
+              {showCredentialUpdate && (
                 <Link
                   className="camera-login-link"
                   href={`/admin/branch-onboarding?branchId=${encodeURIComponent(camera.branchId)}&cameraId=${encodeURIComponent(camera.id)}&action=camera-login`}
@@ -249,78 +260,81 @@ export function CameraTile({
             <i />
             {session?.hls ? "Live" : camera.status === "online" ? "Online" : camera.status}
           </span>
-          <button className={`recording-pill ${recording?.enabled ? "active" : ""}`} onClick={onToggleRecording} disabled={recordingLoading} title={recording?.enabled ? "Stop recording" : "Start continuous recording"}>
-            {recording?.enabled ? <CircleStop size={12} /> : <Radio size={12} />}
-            {recordingLoading ? "…" : recording?.enabled ? "REC" : "REC OFF"}
-          </button>
-          <span className="tile-time">
-            {new Date().toLocaleTimeString([], {
-              hour: "2-digit",
-              minute: "2-digit",
-              second: "2-digit",
-            })}
-          </span>
+          {onToggleRecording && (
+            <button type="button" className={`recording-pill ${recording?.enabled ? "active" : ""}`} onClick={onToggleRecording} disabled={recordingLoading} title={recording?.enabled ? "Stop recording" : "Start continuous recording"}>
+              {recording?.enabled ? <CircleStop size={12} /> : <Radio size={12} />}
+              {recordingLoading ? "…" : recording?.enabled ? "REC" : "REC OFF"}
+            </button>
+          )}
         </div>
 
         {!session?.hls && (
-          <button className={`watch-button${liveError ? " has-live-error" : ""}`} onClick={onStart} disabled={loading}>
+          <button type="button" className={`watch-button${liveError ? " has-live-error" : ""}`} onClick={onStart} disabled={loading || !isActive}>
             {loading ? (
               <LoaderCircle size={17} className="spin" />
             ) : (
               <Radio size={17} />
             )}
-            {loading ? "Authorizing…" : "Watch live"}
+            {loading ? "Authorizing…" : !isActive ? "Camera offline" : liveError ? "Retry live" : "Watch live"}
           </button>
         )}
-        {!isActive && deferredDescription && (
+        {!session?.hls && deferredDescription && (
           <span className="viewer-playback-status" title={`Viewer state: ${deferredDescription}`}>
             {playbackMode === "SUSPENDED" ? `Live deferred: ${deferredDescription}` : deferredDescription}
           </span>
         )}
 
         <div className="tile-actions">
-          <button aria-label="Bookmark live video" title="Bookmark live video" onClick={onBookmark} disabled={!isActive}>
-            <BookmarkPlus size={15} />
-          </button>
-          <button aria-label="Create incident" title="Create incident and protect recording" onClick={onCreateIncident} disabled={!isActive}>
-            <Siren size={15} />
-          </button>
+          {onBookmark && (
+            <button type="button" aria-label="Bookmark live video" title="Bookmark live video" onClick={onBookmark} disabled={!canPlayLive}>
+              <BookmarkPlus size={15} />
+            </button>
+          )}
+          {onCreateIncident && (
+            <button type="button" aria-label="Create incident" title="Create incident and protect recording" onClick={onCreateIncident} disabled={!canPlayLive}>
+              <Siren size={15} />
+            </button>
+          )}
           <button
+            type="button"
             aria-label={isMuted ? "Unmute audio (Listen to camera)" : "Mute camera audio"}
             title={isMuted ? "Click to hear live audio from camera" : "Mute camera audio (Listening)"}
             className={!isMuted ? "audio-listening-active text-emerald-400" : ""}
             onClick={() => setIsMuted(!isMuted)}
-            disabled={!isActive}
+            disabled={!canPlayLive}
           >
             {isMuted ? <VolumeX size={15} /> : <Volume2 size={15} className="text-emerald-400" />}
           </button>
           <HoldToTalkButton
             cameraId={camera.id}
-            disabled={!isActive || camera.status === "offline"}
+            disabled={!canPlayLive}
             unsupportedReason={camera.capabilities?.talkback?.supported === false
               ? camera.capabilities.talkback.reason ?? "two-way audio is not supported"
               : undefined}
           />
           {camera.capabilities.ptz && (
-            <button aria-label="PTZ controls" title="PTZ controls" onClick={() => setShowPtzControl(!showPtzControl)} disabled={!isActive}>
+            <button type="button" aria-label="PTZ controls" title="PTZ controls" onClick={() => setShowPtzControl(!showPtzControl)} disabled={!canPlayLive}>
               <Move3D size={15} />
             </button>
           )}
-          <button aria-label="Recording settings" title="Recording settings" onClick={openRecordingSettings}>
-            <SlidersHorizontal size={15} />
-          </button>
+          {onUpdateRecording && (
+            <button type="button" aria-label="Recording settings" title="Recording settings" onClick={openRecordingSettings}>
+              <SlidersHorizontal size={15} />
+            </button>
+          )}
           <button
+            type="button"
             aria-label="Open fullscreen"
             title="Open fullscreen"
             onClick={() => void tileRef.current?.requestFullscreen()}
           >
             <Maximize2 size={15} />
           </button>
-          <button aria-label="Zoom out" title="Zoom out" onClick={() => setZoom((value) => Math.max(1, Number((value - 0.25).toFixed(2))))} disabled={zoom === 1}><ZoomOut size={15} /></button>
-          <button aria-label="Zoom in" title="Zoom in" onClick={() => setZoom((value) => Math.min(3, Number((value + 0.25).toFixed(2))))}><ZoomIn size={15} /></button>
-          <button aria-label="Take snapshot" title="Take snapshot" onClick={takeSnapshot} disabled={!session?.hls}><SnapshotIcon size={15} /></button>
+          <button type="button" aria-label="Zoom out" title="Zoom out" onClick={() => setZoom((value) => Math.max(1, Number((value - 0.25).toFixed(2))))} disabled={zoom === 1}><ZoomOut size={15} /></button>
+          <button type="button" aria-label="Zoom in" title="Zoom in" onClick={() => setZoom((value) => Math.min(3, Number((value + 0.25).toFixed(2))))}><ZoomIn size={15} /></button>
+          <button type="button" aria-label="Take snapshot" title="Take snapshot" onClick={takeSnapshot} disabled={!session?.hls}><SnapshotIcon size={15} /></button>
         </div>
-        {zoom > 1 && <button className="zoom-reset" onClick={() => setZoom(1)}>Zoom {Math.round(zoom * 100)}% · Reset</button>}
+        {zoom > 1 && <button type="button" className="zoom-reset" onClick={() => setZoom(1)}>Zoom {Math.round(zoom * 100)}% · Reset</button>}
         {showPtzControl && isActive && session?.sessionId && (
           <div className="ptz-overlay">
             <PtzControl
@@ -336,7 +350,7 @@ export function CameraTile({
           <div className="modal-container recording-settings-modal">
             <div className="modal-header">
               <h2>Recording settings</h2>
-              <button className="icon-button" onClick={closeRecordingSettings} aria-label="Close recording settings">×</button>
+              <button type="button" className="icon-button" onClick={closeRecordingSettings} aria-label="Close recording settings">×</button>
             </div>
             <div className="modal-form">
               <div className="form-group">
@@ -479,9 +493,11 @@ export function CameraTile({
           <Expand size={13} />
           CH {String(camera.channel).padStart(2, "0")}
         </div>
-        <select className="recording-mode" aria-label={`${camera.name} recording mode`} value={recording?.mode ?? "continuous"} onChange={(event) => onChangeRecordingMode(event.target.value as RecordingMode)} disabled={recordingLoading}>
-          <option value="continuous">24/7</option><option value="motion">Motion</option><option value="scheduled">Schedule</option><option value="event">Event</option><option value="manual">Manual</option>
-        </select>
+        {onChangeRecordingMode && (
+          <select className="recording-mode" aria-label={`${camera.name} recording mode`} value={recording?.mode ?? "continuous"} onChange={(event) => onChangeRecordingMode(event.target.value as RecordingMode)} disabled={recordingLoading}>
+            <option value="continuous">24/7</option><option value="motion">Motion</option><option value="scheduled">Schedule</option><option value="event">Event</option><option value="manual">Manual</option>
+          </select>
+        )}
       </footer>
     </article>
   );

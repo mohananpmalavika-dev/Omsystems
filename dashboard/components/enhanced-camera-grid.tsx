@@ -2,22 +2,14 @@
 
 import { useCallback, useEffect, useState, useRef, useMemo } from "react";
 import {
-  Grid2X2,
-  Grid3X3,
-  Maximize,
   Save,
   Settings,
-  Square,
   Layout,
   Plus,
-  Monitor,
-  Layers,
-  Zap,
   RotateCw,
 } from "lucide-react";
 import { CameraTile } from "./camera-tile";
 import {
-  DECODER_CAPACITY_OPTIONS,
   clampDecoderLimit,
   createDefaultGridAssignments,
   getDecoderCapacityOptions,
@@ -26,7 +18,7 @@ import { useDecoderBudgetManager } from "./decoderBudgetManager";
 import { useMediaOrchestrator } from "@/hooks/use-media-orchestrator";
 import { VisibilityTracker } from "./visibility-tracker";
 import { TileStateIndicator } from "./tile-state-indicator";
-import type { Camera, LiveSessionResponse, RecordingJob, RecordingMode } from "@/lib/types";
+import type { Camera, LiveSessionResponse } from "@/lib/types";
 import type { TileStreamState, PresentationMode } from "@/lib/media-types";
 import { startLiveFromBrowser } from "@/lib/live-client";
 import { useVideoWallScheduler } from "@/hooks/use-video-wall-scheduler";
@@ -65,6 +57,7 @@ interface VisibleRange {
 
 const MAX_PARALLEL_LIVE_STARTS = 2;
 const LIVE_START_TIMEOUT_MS = 30_000;
+const SAVED_LAYOUTS_STORAGE_KEY = "sentinel.video-wall.layouts.v1";
 
 export function EnhancedCameraGrid({
   cameras,
@@ -101,14 +94,12 @@ export function EnhancedCameraGrid({
   const [sessions, setSessions] = useState<Map<string, LiveSessionResponse>>(
     new Map()
   );
-  const [recordings, setRecordings] = useState<Map<string, RecordingJob>>(
-    new Map()
-  );
   const [loading, setLoading] = useState<Set<string>>(new Set());
   const [liveErrors, setLiveErrors] = useState<Map<string, string>>(new Map());
   const [showLayoutMenu, setShowLayoutMenu] = useState(false);
   const [layoutName, setLayoutName] = useState(initialLayout?.name || "");
   const [savedLayouts, setSavedLayouts] = useState<GridLayout[]>([]);
+  const [layoutFeedback, setLayoutFeedback] = useState<{ kind: "success" | "error"; message: string } | null>(null);
   const [visibleRange, setVisibleRange] = useState<VisibleRange>({ start: 0, end: 50 });
   const [sequencing, setSequencing] = useState(true);
   const [operatorSelectedCameraId, setOperatorSelectedCameraId] = useState<string | null>(null);
@@ -303,12 +294,13 @@ export function EnhancedCameraGrid({
         sessionsRef.current.delete(cameraId);
         activeStreamTypesRef.current.delete(cameraId);
         setSessions(new Map(sessionsRef.current));
+        void closeSession(cameraId);
         void handleStartLive(cameraId, stream);
       }, delay)];
     });
 
     return () => timers.forEach((timer) => window.clearTimeout(timer));
-  }, [handleStartLive, sessions]);
+  }, [closeSession, handleStartLive, sessions]);
 
   const handleRequestLive = useCallback((cameraId: string) => {
     setOperatorSelectedCameraId(cameraId);
@@ -410,6 +402,41 @@ export function EnhancedCameraGrid({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cameras, totalPositions]);
 
+  // Inventory polling returns fresh camera objects. Keep assigned tiles in
+  // sync with current status/capabilities, and remove sessions for cameras
+  // that are no longer authorized for this operator.
+  useEffect(() => {
+    if (!initialLayoutApplied.current) return;
+    const camerasById = new Map(cameras.map((camera) => [camera.id, camera]));
+    setGridPositions((current) => {
+      let changed = false;
+      const next = new Map(current);
+      for (const [position, entry] of current) {
+        const camera = camerasById.get(entry.camera.id);
+        if (!camera) {
+          next.delete(position);
+          changed = true;
+        } else if (camera !== entry.camera) {
+          next.set(position, { ...entry, camera });
+          changed = true;
+        }
+      }
+      return changed ? next : current;
+    });
+
+    let sessionsChanged = false;
+    for (const cameraId of sessionsRef.current.keys()) {
+      if (camerasById.has(cameraId)) continue;
+      liveStartControllersRef.current.get(cameraId)?.abort();
+      pendingLiveStartsRef.current.delete(cameraId);
+      sessionsRef.current.delete(cameraId);
+      activeStreamTypesRef.current.delete(cameraId);
+      sessionsChanged = true;
+      void closeSession(cameraId);
+    }
+    if (sessionsChanged) setSessions(new Map(sessionsRef.current));
+  }, [cameras, closeSession]);
+
   // Adaptive layout: prioritize cameras with alerts
   useEffect(() => {
     if (!adaptiveLayout) return;
@@ -418,12 +445,13 @@ export function EnhancedCameraGrid({
       const newPositions = new Map(gridPositions);
       let changed = false;
 
-      // Sort cameras by priority (status: offline > alerts > normal)
+      // Keep alerting cameras first. Offline cameras stay last because they
+      // cannot provide a useful live view.
       const sortedEntries = Array.from(newPositions.entries()).sort((a, b) => {
-        const priorityA = a[1].camera.status === "offline" ? 3 : 
-                         a[1].camera.status === "alert" ? 2 : 1;
-        const priorityB = b[1].camera.status === "offline" ? 3 : 
-                         b[1].camera.status === "alert" ? 2 : 1;
+        const priorityA = a[1].camera.status === "offline" ? 0 :
+                         a[1].camera.status === "alert" ? 3 : 1;
+        const priorityB = b[1].camera.status === "offline" ? 0 :
+                         b[1].camera.status === "alert" ? 3 : 1;
         return priorityB - priorityA;
       });
 
@@ -574,135 +602,26 @@ export function EnhancedCameraGrid({
     visibleGridCameraIds,
   ]);
 
-  const handleToggleRecording = async (cameraId: string) => {
-    const camera = cameras.find((item) => item.id === cameraId);
-    const recorderBacked = Boolean(camera?.recorderId) || camera?.sourceType === "analog-dvr-channel" ||
-      camera?.sourceType === "nvr-channel";
-    const currentJob = recordings.get(cameraId) ?? {
-      cameraId,
-      mode: "continuous" as const,
-      enabled: false,
-      status: "disabled" as const,
-      primaryRecordingStorage: recorderBacked ? "recorder-local" as const : "sentinel-local" as const,
-      cloudArchivePolicy: recorderBacked ? "incident-evidence-only" as const : "none" as const,
-      retentionDays: 180,
-      postRollSeconds: 30,
-      segmentDurationSeconds: 60,
-      hotRetentionDays: 30,
-      warmRetentionDays: 60,
-      coldRetentionDays: 90,
-      critical: false,
-      backupRequired: false,
-      automaticDeletionEnabled: true,
-      evidenceProtection: true,
-      recordMainStream: true,
-      preRollSeconds: 30,
-      minMotionDurationSeconds: 0,
-      motionConfidenceThreshold: 0,
-      cooldownSeconds: 60,
-      maxEventDurationSeconds: 0,
-    };
-    const {
-      cameraId: _cameraId,
-      id: _id,
-      status: _status,
-      ...payload
-    } = currentJob;
-    const update = {
-      ...payload,
-      enabled: !currentJob.enabled,
-    };
-
+  const loadSavedLayouts = () => {
     try {
-      const response = await fetch(`/api/recording/${cameraId}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify(update),
-      });
-
-      if (response.ok) {
-        const job = await response.json();
-        setRecordings((prev) => new Map(prev).set(cameraId, job));
-      }
-    } catch (error) {
-      console.error("Recording toggle error:", error);
-    }
-  };
-
-  const handleChangeRecordingMode = async (cameraId: string, mode: RecordingMode) => {
-    const currentJob = recordings.get(cameraId);
-    const update: Record<string, unknown> = {
-      mode,
-      enabled: currentJob?.enabled ?? false,
-      preRollSeconds: currentJob?.preRollSeconds ?? 30,
-      postRollSeconds: currentJob?.postRollSeconds ?? 30,
-      minMotionDurationSeconds: currentJob?.minMotionDurationSeconds ?? 0,
-      motionConfidenceThreshold: currentJob?.motionConfidenceThreshold ?? 0,
-      cooldownSeconds: currentJob?.cooldownSeconds ?? 60,
-      maxEventDurationSeconds: currentJob?.maxEventDurationSeconds ?? 0,
-      triggerEventTypes: currentJob?.triggerEventTypes,
-    };
-
-    if (mode === "scheduled") {
-      update.schedule = currentJob?.schedule ?? { days: [1, 2, 3, 4, 5], start: "09:00", end: "18:00", timezone: "UTC" };
-    }
-
-    try {
-      const response = await fetch(`/api/recording/${cameraId}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify(update),
-      });
-
-      if (response.ok) {
-        const job = await response.json();
-        setRecordings((prev) => new Map(prev).set(cameraId, job));
-      }
-    } catch (error) {
-      console.error("Recording mode change error:", error);
-    }
-  };
-
-  const handleUpdateRecording = async (cameraId: string, update: Partial<Omit<RecordingJob, "id" | "cameraId" | "status">>) => {
-    try {
-      const response = await fetch(`/api/recording/${cameraId}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify(update),
-      });
-
-      if (response.ok) {
-        const job = await response.json();
-        setRecordings((prev) => new Map(prev).set(cameraId, job));
-      }
-    } catch (error) {
-      console.error("Recording update error:", error);
-    }
-  };
-
-  const loadSavedLayouts = async () => {
-    try {
-      const response = await fetch("/api/control/v1/video-wall/layouts", {
-        credentials: "include",
-      });
-      if (response.ok) {
-        const body = await response.json();
-        setSavedLayouts((body.data ?? []).map((layout: GridLayout & { cameraPositions?: GridLayout["positions"] }) => ({
-          ...layout,
-          positions: layout.positions ?? layout.cameraPositions ?? [],
-        })));
-      }
+      const savedValue = window.localStorage.getItem(SAVED_LAYOUTS_STORAGE_KEY);
+      if (!savedValue) return;
+      const parsed = JSON.parse(savedValue) as unknown;
+      if (!Array.isArray(parsed)) return;
+      setSavedLayouts(parsed.filter((layout): layout is GridLayout => Boolean(
+        layout && typeof layout === "object" &&
+        typeof (layout as GridLayout).name === "string" &&
+        typeof (layout as GridLayout).gridSize === "string" &&
+        Array.isArray((layout as GridLayout).positions),
+      )));
     } catch (error) {
       console.error("Failed to load layouts:", error);
     }
   };
 
-  const handleSaveLayout = useCallback(async () => {
+  const handleSaveLayout = useCallback(() => {
     if (!layoutName.trim()) {
-      alert("Please enter a layout name");
+      setLayoutFeedback({ kind: "error", message: "Enter a layout name before saving." });
       return;
     }
 
@@ -718,38 +637,24 @@ export function EnhancedCameraGrid({
       ),
     };
 
+    setLayoutFeedback(null);
     try {
-      const response = await fetch("/api/control/v1/video-wall/layouts", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({
-          name: layout.name,
-          gridSize: layout.gridSize,
-          cameraPositions: layout.positions,
-        }),
-      });
-
-      if (response.ok) {
-        const savedLayout = await response.json() as GridLayout & {
-          cameraPositions?: GridLayout["positions"];
-        };
-        setSavedLayouts((prev) => [...prev, {
-          ...savedLayout,
-          positions: savedLayout.positions ?? savedLayout.cameraPositions ?? [],
-        }]);
-        setShowLayoutMenu(false);
-        setLayoutName("");
-        onLayoutChange?.(layout);
-      } else {
-        const error = await response.json();
-        alert(`Failed to save layout: ${error.error}`);
-      }
+      const savedLayout = { ...layout, id: crypto.randomUUID() };
+      const nextLayouts = [
+        savedLayout,
+        ...savedLayouts.filter((item) => item.name.toLowerCase() !== savedLayout.name.toLowerCase()),
+      ];
+      window.localStorage.setItem(SAVED_LAYOUTS_STORAGE_KEY, JSON.stringify(nextLayouts));
+      setSavedLayouts(nextLayouts);
+      setShowLayoutMenu(false);
+      setLayoutName("");
+      setLayoutFeedback({ kind: "success", message: `Saved “${layout.name}” on this workstation.` });
+      onLayoutChange?.(layout);
     } catch (error) {
       console.error("Failed to save layout:", error);
-      alert("Failed to save layout");
+      setLayoutFeedback({ kind: "error", message: "This browser could not store the layout." });
     }
-  }, [layoutName, gridSize, gridPositions, onLayoutChange]);
+  }, [layoutName, gridSize, gridPositions, onLayoutChange, savedLayouts]);
 
   const handleLoadLayout = (layout: GridLayout) => {
     setGridSize(layout.gridSize);
@@ -763,22 +668,11 @@ export function EnhancedCameraGrid({
       }
     });
     setGridPositions(posMap);
+    setLayoutFeedback({ kind: "success", message: `Loaded “${layout.name}”.` });
   };
 
-  const gridColumns = {
-    "1x1": "grid-cols-1",
-    "2x2": "grid-cols-2",
-    "3x3": "grid-cols-3",
-    "4x4": "grid-cols-4",
-    "5x5": "grid-cols-5",
-    "6x6": "grid-cols-6",
-    "7x7": "grid-cols-7",
-    "8x8": "grid-cols-8",
-    "9x9": "grid-cols-9",
-    "10x10": "grid-cols-10",
-    "11x11": "grid-cols-11",
-    "12x12": "grid-cols-12",
-  };
+  const gridColumnCount = Number(gridSize.split("x")[0]);
+  const minimumTileWidth = gridColumnCount <= 2 ? 260 : gridColumnCount <= 4 ? 200 : gridColumnCount <= 6 ? 150 : 112;
 
   // Virtual scrolling: only render visible tiles
   const visibleTiles = useMemo(() => {
@@ -794,96 +688,17 @@ export function EnhancedCameraGrid({
   return (
     <div className="camera-grid-container">
       <div className="grid-toolbar">
-        <div className="grid-size-selector">
-          <button
-            className={gridSize === "1x1" ? "active" : ""}
-            onClick={() => handleGridSizeChange("1x1")}
-            title="1 camera"
-          >
-            <Square size={18} />
-          </button>
-          <button
-            className={gridSize === "2x2" ? "active" : ""}
-            onClick={() => handleGridSizeChange("2x2")}
-            title="4 cameras (2×2)"
-          >
-            <Grid2X2 size={18} />
-          </button>
-          <button
-            className={gridSize === "3x3" ? "active" : ""}
-            onClick={() => handleGridSizeChange("3x3")}
-            title="9 cameras (3×3)"
-          >
-            <Grid3X3 size={18} />
-          </button>
-          <button
-            className={gridSize === "4x4" ? "active" : ""}
-            onClick={() => handleGridSizeChange("4x4")}
-            title="16 cameras (4×4)"
-          >
-            4×4
-          </button>
-          <button
-            className={gridSize === "5x5" ? "active" : ""}
-            onClick={() => handleGridSizeChange("5x5")}
-            title="25 cameras (5×5)"
-          >
-            5×5
-          </button>
-          <button
-            className={gridSize === "6x6" ? "active" : ""}
-            onClick={() => handleGridSizeChange("6x6")}
-            title="36 cameras (6×6)"
-          >
-            6×6
-          </button>
-          <button
-            className={gridSize === "7x7" ? "active" : ""}
-            onClick={() => handleGridSizeChange("7x7")}
-            title="49 cameras (7×7)"
-          >
-            7×7
-          </button>
-          <button
-            className={gridSize === "8x8" ? "active" : ""}
-            onClick={() => handleGridSizeChange("8x8")}
-            title="64 cameras (8×8)"
-          >
-            8×8
-          </button>
-          <button
-            className={gridSize === "9x9" ? "active" : ""}
-            onClick={() => handleGridSizeChange("9x9")}
-            title="81 cameras (9×9)"
-          >
-            9×9
-          </button>
-          <button
-            className={gridSize === "10x10" ? "active" : ""}
-            onClick={() => handleGridSizeChange("10x10")}
-            title="100 cameras (10×10)"
-          >
-            10×10
-          </button>
-          <button
-            className={gridSize === "11x11" ? "active" : ""}
-            onClick={() => handleGridSizeChange("11x11")}
-            title="121 cameras (11×11)"
-          >
-            11×11
-          </button>
-          <button
-            className={gridSize === "12x12" ? "active" : ""}
-            onClick={() => handleGridSizeChange("12x12")}
-            title="144 cameras (12×12)"
-          >
-            12×12
-          </button>
-        </div>
-
         <div className="grid-actions">
-          <label className="capacity-control" title="Maximum independent browser decoders on this workstation">
-            Decoder capacity
+          <label className="toolbar-control">
+            Grid
+            <select value={gridSize} onChange={(event) => handleGridSizeChange(event.target.value as GridSize)}>
+              {(Object.keys(gridSizeMap) as GridSize[]).map((size) => (
+                <option key={size} value={size}>{size} · {gridSizeMap[size]} cameras</option>
+              ))}
+            </select>
+          </label>
+          <label className="toolbar-control" title="Maximum independent browser decoders on this workstation">
+            Live capacity
             <select
               value={decoderLimit}
               disabled={decoderCapacityOptions.length === 1}
@@ -894,84 +709,53 @@ export function EnhancedCameraGrid({
             >
               {decoderCapacityOptions.map((option) => (
                 <option key={option} value={option}>
-                  {option} — {option === 16 ? "standard" : option === 25 ? "enhanced" : option === 36 ? "recommended" : "certified workstation"}
+                  {option} streams
                 </option>
               ))}
             </select>
           </label>
-          <span className="capacity-control" title="Grid positions may exceed the live-stream decoder cap">
-            {totalPositions} channels · {decoderLimit} live max
-          </span>
-
-          <span className="capacity-control" title="Unlimited branch/device enrollment with dynamically scalable live-monitoring capacity">
-            <strong>Unlimited enrollment · Dynamic live capacity</strong>
-          </span>
-          
-          {capacity && (
-            <span className="capacity-control" title="Viewer capacity recommendation">
-              Live {activeDecoderCount}/{budget?.decoderBudget ?? capacity.recommendedDecoderLimit} · {snapshotCount} snapshots
-            </span>
-          )}
-          {budget && (
-            <span className="capacity-control" title="Resource-aware viewer budget">
-              {budget.bitrateUsageMbps.toFixed(1)}/{budget.bitrateBudgetMbps} Mbps · {(budget.pixelsPerSecondUsage / 1_000_000).toFixed(0)}/{(budget.pixelsPerSecondBudget / 1_000_000).toFixed(0)} MP/s
-            </span>
-          )}
-
           <button
+            type="button"
             className={`btn-secondary ${sequencing ? "active-control" : ""}`}
             onClick={() => setSequencing((current) => !current)}
             title="Rotate cameras every 15 seconds when assigned channels exceed decoder capacity"
+            aria-pressed={sequencing}
           >
             <RotateCw size={16} />
             Sequence {sequencing ? "on" : "off"}
           </button>
-          <div className="performance-indicators">
-            <span className="performance-badge decoder-badge">
-              {activeDecoderCount}/{budget?.decoderBudget ?? decoderLimit} live
-            </span>
-            {enableVirtualScrolling && totalPositions > 36 && (
-              <span className="performance-badge">
-                <Zap size={14} />
-                Virtual Scrolling
-              </span>
-            )}
-            {enableGPUAcceleration && (
-              <span className="performance-badge">
-                <Layers size={14} />
-                GPU Accelerated
-              </span>
-            )}
-            {adaptiveLayout && (
-              <span className="performance-badge">
-                <Monitor size={14} />
-                Adaptive
-              </span>
-            )}
-          </div>
-
+          <span className="viewer-summary" title="Live decoders and snapshot fallbacks currently used by this wall">
+            {activeDecoderCount}/{budget?.decoderBudget ?? capacity?.recommendedDecoderLimit ?? decoderLimit} live
+            {snapshotCount > 0 ? ` · ${snapshotCount} snapshots` : ""}
+          </span>
           {savedLayouts.length > 0 && (
-            <div className="saved-layouts-dropdown">
-              <button className="btn-secondary">
-                <Layout size={16} />
-                Load Layout ({savedLayouts.length})
-              </button>
-              <div className="dropdown-menu">
-                {savedLayouts.map((layout) => (
-                  <button
-                    key={layout.id}
-                    onClick={() => handleLoadLayout(layout)}
-                    className="dropdown-item"
-                  >
+            <label className="toolbar-control">
+              <span><Layout size={14} /> Saved layout</span>
+              <select
+                value=""
+                onChange={(event) => {
+                  if (event.target.value === "") return;
+                  const selectedLayout = savedLayouts[Number(event.target.value)];
+                  if (selectedLayout) handleLoadLayout(selectedLayout);
+                }}
+              >
+                <option value="">Choose…</option>
+                {savedLayouts.map((layout, index) => (
+                  <option key={layout.id ?? `${layout.name}-${layout.gridSize}-${index}`} value={index}>
                     {layout.name} ({layout.gridSize})
-                  </button>
+                  </option>
                 ))}
-              </div>
-            </div>
+              </select>
+            </label>
           )}
           <button
+            type="button"
             className="btn-secondary"
-            onClick={() => setShowLayoutMenu(!showLayoutMenu)}
+            onClick={() => {
+              setShowLayoutMenu((current) => !current);
+              setLayoutFeedback(null);
+            }}
+            aria-expanded={showLayoutMenu}
           >
             <Save size={16} />
             Save Layout
@@ -981,18 +765,26 @@ export function EnhancedCameraGrid({
 
       {showLayoutMenu && (
         <div className="layout-save-panel">
+          <label htmlFor="layout-name">Layout name</label>
           <input
+            id="layout-name"
             type="text"
-            placeholder="Layout name (e.g., 'Main Entrance View')"
+            placeholder="For example, Main entrances"
             value={layoutName}
-            onChange={(e) => setLayoutName(e.target.value)}
+            onChange={(e) => {
+              setLayoutName(e.target.value);
+              setLayoutFeedback(null);
+            }}
             className="layout-name-input"
+            maxLength={80}
+            autoFocus
           />
-          <button className="btn-primary" onClick={handleSaveLayout}>
+          <button type="button" className="btn-primary" onClick={handleSaveLayout}>
             <Plus size={16} />
             Save
           </button>
           <button
+            type="button"
             className="btn-secondary"
             onClick={() => setShowLayoutMenu(false)}
           >
@@ -1000,11 +792,17 @@ export function EnhancedCameraGrid({
           </button>
         </div>
       )}
+      {layoutFeedback && (
+        <div className={`layout-feedback ${layoutFeedback.kind}`} role="status">
+          {layoutFeedback.message}
+        </div>
+      )}
 
       <div 
         ref={containerRef}
-        className={`camera-grid ${gridColumns[gridSize]} ${gpuAccelClass}`}
+        className={`camera-grid ${gpuAccelClass}`}
         style={{
+          gridTemplateColumns: `repeat(${gridColumnCount}, minmax(${minimumTileWidth}px, 1fr))`,
           gridTemplateRows: enableVirtualScrolling && totalPositions > 36 
             ? `repeat(${Math.ceil(totalPositions / parseInt(gridSize.split('x')[0]))}, minmax(0, 1fr))`
             : undefined
@@ -1025,6 +823,7 @@ export function EnhancedCameraGrid({
                 <Settings size={24} className="opacity-30" />
                 <select
                   className="camera-selector"
+                  aria-label={`Camera for wall position ${i + 1}`}
                   onChange={(e) => {
                     const selectedCamera = cameras.find(
                       (c) => c.id === e.target.value
@@ -1081,6 +880,7 @@ export function EnhancedCameraGrid({
                     compact
                   />
                   <button
+                    type="button"
                     className="stream-toggle"
                     onClick={() => handleStreamToggle(i)}
                     title={`Switch to ${entry.stream === "main" ? "sub" : "main"} stream`}
@@ -1088,9 +888,11 @@ export function EnhancedCameraGrid({
                     {entry.stream === "main" ? "MAIN" : "SUB"}
                   </button>
                   <button
+                    type="button"
                     className="remove-camera"
                     onClick={() => handleCameraAssign(i, null)}
-                    title="Remove camera"
+                    title={`Remove ${camera.name} from the wall`}
+                    aria-label={`Remove ${camera.name} from the wall`}
                   >
                     ×
                   </button>
@@ -1111,17 +913,6 @@ export function EnhancedCameraGrid({
                     reportPlaybackFailure(camera.id, reason);
                   }}
                   index={i}
-                  recording={recordings.get(camera.id)}
-                  recordingLoading={loading.has(camera.id)}
-                  onToggleRecording={() => handleToggleRecording(camera.id)}
-                  onChangeRecordingMode={(mode) => handleChangeRecordingMode(camera.id, mode)}
-                  onUpdateRecording={handleUpdateRecording}
-                  onBookmark={async () => {
-                    // Handle bookmark
-                  }}
-                  onCreateIncident={async () => {
-                    // Handle incident creation
-                  }}
                 />
               </div>
             </VisibilityTracker>
@@ -1144,40 +935,10 @@ export function EnhancedCameraGrid({
           padding: 12px 16px;
           background: white;
           border-radius: 8px;
-          box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+          border: 1px solid #e2e8f0;
+          box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
           flex-wrap: wrap;
           gap: 12px;
-        }
-
-        .grid-size-selector {
-          display: flex;
-          gap: 8px;
-          flex-wrap: wrap;
-        }
-
-        .grid-size-selector button {
-          padding: 8px 12px;
-          border: 1px solid #e5e7eb;
-          border-radius: 6px;
-          background: white;
-          cursor: pointer;
-          display: flex;
-          align-items: center;
-          gap: 4px;
-          font-size: 13px;
-          font-weight: 500;
-          transition: all 0.2s;
-        }
-
-        .grid-size-selector button:hover {
-          background: #f3f4f6;
-          border-color: #3b82f6;
-        }
-
-        .grid-size-selector button.active {
-          background: #3b82f6;
-          color: white;
-          border-color: #3b82f6;
         }
 
         .grid-actions {
@@ -1187,7 +948,7 @@ export function EnhancedCameraGrid({
           flex-wrap: wrap;
         }
 
-        .capacity-control {
+        .toolbar-control {
           display: flex;
           align-items: center;
           gap: 7px;
@@ -1196,7 +957,13 @@ export function EnhancedCameraGrid({
           font-weight: 700;
         }
 
-        .capacity-control select {
+        .toolbar-control > span {
+          display: inline-flex;
+          align-items: center;
+          gap: 5px;
+        }
+
+        .toolbar-control select {
           min-height: 34px;
           padding: 0 28px 0 9px;
           border: 1px solid #cbd5e1;
@@ -1206,75 +973,21 @@ export function EnhancedCameraGrid({
           font-size: 12px;
         }
 
+        .viewer-summary {
+          padding: 6px 10px;
+          border: 1px solid #bfdbfe;
+          border-radius: 999px;
+          background: #eff6ff;
+          color: #1d4ed8;
+          font-size: 11px;
+          font-weight: 700;
+          white-space: nowrap;
+        }
+
         .active-control {
           border-color: #2563eb;
           background: #eff6ff;
           color: #1d4ed8;
-        }
-
-        .performance-indicators {
-          display: flex;
-          gap: 6px;
-          flex-wrap: wrap;
-        }
-
-        .performance-badge {
-          display: flex;
-          align-items: center;
-          gap: 4px;
-          padding: 4px 10px;
-          background: #ecfdf5;
-          border: 1px solid #10b981;
-          border-radius: 999px;
-          font-size: 11px;
-          font-weight: 600;
-          color: #047857;
-        }
-
-        .decoder-badge {
-          border-color: #60a5fa;
-          background: #eff6ff;
-          color: #1d4ed8;
-        }
-
-        .saved-layouts-dropdown {
-          position: relative;
-        }
-
-        .saved-layouts-dropdown:hover .dropdown-menu {
-          display: block;
-        }
-
-        .dropdown-menu {
-          display: none;
-          position: absolute;
-          top: 100%;
-          right: 0;
-          margin-top: 4px;
-          background: white;
-          border: 1px solid #e5e7eb;
-          border-radius: 6px;
-          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-          min-width: 200px;
-          max-height: 300px;
-          overflow-y: auto;
-          z-index: 100;
-        }
-
-        .dropdown-item {
-          display: block;
-          width: 100%;
-          padding: 10px 16px;
-          text-align: left;
-          border: none;
-          background: white;
-          cursor: pointer;
-          font-size: 14px;
-          transition: background 0.2s;
-        }
-
-        .dropdown-item:hover {
-          background: #f3f4f6;
         }
 
         .btn-primary,
@@ -1301,6 +1014,12 @@ export function EnhancedCameraGrid({
           background: #2563eb;
         }
 
+        .btn-primary:disabled,
+        .btn-secondary:disabled {
+          opacity: 0.6;
+          cursor: wait;
+        }
+
         .btn-secondary {
           background: white;
           color: #374151;
@@ -1320,12 +1039,39 @@ export function EnhancedCameraGrid({
           align-items: center;
         }
 
+        .layout-save-panel label {
+          color: #475569;
+          font-size: 12px;
+          font-weight: 700;
+        }
+
         .layout-name-input {
           flex: 1;
           padding: 8px 12px;
           border: 1px solid #d1d5db;
           border-radius: 6px;
           font-size: 14px;
+        }
+
+        .layout-feedback {
+          margin-top: -8px;
+          padding: 8px 11px;
+          border: 1px solid;
+          border-radius: 7px;
+          font-size: 12px;
+          font-weight: 600;
+        }
+
+        .layout-feedback.success {
+          color: #047857;
+          border-color: #a7f3d0;
+          background: #ecfdf5;
+        }
+
+        .layout-feedback.error {
+          color: #b91c1c;
+          border-color: #fecaca;
+          background: #fef2f2;
         }
 
         .camera-grid {
@@ -1341,19 +1087,6 @@ export function EnhancedCameraGrid({
           will-change: transform;
           backface-visibility: hidden;
         }
-
-        .grid-cols-1 { grid-template-columns: 1fr; }
-        .grid-cols-2 { grid-template-columns: repeat(2, 1fr); }
-        .grid-cols-3 { grid-template-columns: repeat(3, 1fr); }
-        .grid-cols-4 { grid-template-columns: repeat(4, 1fr); }
-        .grid-cols-5 { grid-template-columns: repeat(5, 1fr); }
-        .grid-cols-6 { grid-template-columns: repeat(6, 1fr); }
-        .grid-cols-7 { grid-template-columns: repeat(7, 1fr); }
-        .grid-cols-8 { grid-template-columns: repeat(8, 1fr); }
-        .grid-cols-9 { grid-template-columns: repeat(9, 1fr); }
-        .grid-cols-10 { grid-template-columns: repeat(10, 1fr); }
-        .grid-cols-11 { grid-template-columns: repeat(11, 1fr); }
-        .grid-cols-12 { grid-template-columns: repeat(12, 1fr); }
 
         .grid-empty-slot {
           aspect-ratio: 16/9;
@@ -1437,6 +1170,16 @@ export function EnhancedCameraGrid({
 
         .opacity-30 {
           opacity: 0.3;
+        }
+
+        @media (max-width: 760px) {
+          .grid-toolbar { align-items: stretch; padding: 10px; }
+          .grid-actions { width: 100%; align-items: stretch; }
+          .toolbar-control { flex: 1 1 150px; align-items: flex-start; flex-direction: column; }
+          .toolbar-control select { width: 100%; }
+          .viewer-summary { align-self: center; }
+          .layout-save-panel { align-items: stretch; flex-direction: column; }
+          .layout-name-input { min-height: 38px; }
         }
       `}</style>
     </div>

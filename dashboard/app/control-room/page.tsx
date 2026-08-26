@@ -1,27 +1,30 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import Link from "next/link";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  Activity,
   AlertTriangle,
+  Bell,
   Camera,
   Clock,
-  Grid3X3,
   HardDrive,
   Play,
-  Users,
-  Activity,
-  Bell,
+  RefreshCw,
+  Video,
 } from "lucide-react";
 import { EnhancedCameraGrid, type GridLayout } from "@/components/enhanced-camera-grid";
-import { ShiftHandoverPanel } from "@/components/shift-handover";
 import type { Camera as CameraType } from "@/lib/types";
-import { endControlRoomActivity, startControlRoomActivity, trackControlRoomCameraSwitch } from "@/lib/control-room-tracker";
+import {
+  endControlRoomActivity,
+  startControlRoomActivity,
+  trackControlRoomCameraSwitch,
+} from "@/lib/control-room-tracker";
 
 interface ControlRoomStats {
   totalCameras: number;
   onlineCameras: number;
   offlineCameras: number;
-  activeStreams: number;
   openIncidents: number;
   unacknowledgedAlerts: number;
   recordingCameras: number;
@@ -35,26 +38,32 @@ interface ControlRoomStats {
   };
 }
 
+type DataSection = "cameras" | "health" | "alerts";
+type DataMode = "live" | "partial" | "unavailable";
+type UserTier = "basic" | "standard" | "premium" | "enterprise";
 
-export const getMaxConcurrentStreams = (userTier: "basic" | "standard" | "premium" | "enterprise" = "standard") => {
-  const limits = {
-    basic: 16,     // 16 streams @ 2 Mbps each = 32 Mbps
-    standard: 32,  // 32 streams = 64 Mbps
-    premium: 64,   // 64 streams = 128 Mbps
-    enterprise: 144, // 144 streams (12×12 grid) = 288 Mbps
+export const getMaxConcurrentStreams = (userTier: UserTier = "standard") => {
+  const limits: Record<UserTier, number> = {
+    basic: 16,
+    standard: 32,
+    premium: 64,
+    enterprise: 144,
   };
   return limits[userTier];
 };
 
-export const CONTROL_ROOM_MAX_CONCURRENT_STREAMS = getMaxConcurrentStreams(
-  (process.env.NEXT_PUBLIC_USER_TIER as any) || "standard"
-);
+const configuredTier = process.env.NEXT_PUBLIC_USER_TIER;
+const controlRoomTier: UserTier = configuredTier === "basic" || configuredTier === "premium" ||
+  configuredTier === "enterprise" || configuredTier === "standard"
+  ? configuredTier
+  : "standard";
+
+export const CONTROL_ROOM_MAX_CONCURRENT_STREAMS = getMaxConcurrentStreams(controlRoomTier);
 
 const DEFAULT_EMPTY_STATS: ControlRoomStats = {
   totalCameras: 0,
   onlineCameras: 0,
   offlineCameras: 0,
-  activeStreams: 0,
   openIncidents: 0,
   unacknowledgedAlerts: 0,
   recordingCameras: 0,
@@ -78,56 +87,227 @@ const getInitialLayout = (allCameras: CameraType[]): GridLayout => ({
   })),
 });
 
+function getAuthHeaders(): HeadersInit {
+  const token = typeof window !== "undefined" ? localStorage.getItem("accessToken") : null;
+  return token ? { "x-sentinel-session": token } : {};
+}
+
+async function requestJson(url: string, signal: AbortSignal): Promise<unknown> {
+  const response = await fetch(url, {
+    headers: getAuthHeaders(),
+    credentials: "include",
+    cache: "no-store",
+    signal,
+  });
+  if (!response.ok) {
+    const body = await response.json().catch(() => null) as { message?: string; error?: string } | null;
+    throw new Error(body?.message || body?.error || `Request failed (${response.status})`);
+  }
+  return response.json();
+}
+
+function parseCameras(body: unknown): CameraType[] {
+  if (Array.isArray(body)) return body as CameraType[];
+  if (!body || typeof body !== "object") return [];
+  const data = (body as { data?: unknown }).data;
+  return Array.isArray(data) ? data as CameraType[] : [];
+}
+
+function parsePriorityCameraIds(body: unknown): string[] {
+  if (!body || typeof body !== "object") return [];
+  const responseBody = body as { data?: unknown; alerts?: unknown };
+  const nestedData = responseBody.data && typeof responseBody.data === "object"
+    ? (responseBody.data as { alerts?: unknown }).alerts
+    : undefined;
+  const alerts = Array.isArray(responseBody.data)
+    ? responseBody.data
+    : Array.isArray(nestedData)
+      ? nestedData
+      : Array.isArray(responseBody.alerts)
+        ? responseBody.alerts
+        : [];
+
+  return Array.from(new Set(alerts
+    .filter((alert): alert is { severity?: string; status?: string; cameraId?: string } =>
+      Boolean(alert && typeof alert === "object"))
+    .filter((alert) =>
+      ["critical", "high", "p1", "p2"].includes(String(alert.severity).toLowerCase()) &&
+      String(alert.status).toLowerCase() !== "resolved")
+    .map((alert) => alert.cameraId)
+    .filter((cameraId): cameraId is string => typeof cameraId === "string" && cameraId.length > 0)));
+}
+
+function parseStats(body: unknown): ControlRoomStats {
+  const responseBody = body && typeof body === "object" ? body as Record<string, unknown> : {};
+  const data = responseBody.data && typeof responseBody.data === "object"
+    ? responseBody.data as Record<string, unknown>
+    : responseBody;
+  const storageSummary = data.storageSummary && typeof data.storageSummary === "object"
+    ? data.storageSummary as Record<string, unknown>
+    : {};
+  const storageSummaryLegacy = data.storage_summary && typeof data.storage_summary === "object"
+    ? data.storage_summary as Record<string, unknown>
+    : {};
+
+  return {
+    totalCameras: Number(data.totalCameras ?? data.total_cameras ?? 0),
+    onlineCameras: Number(data.camerasOnline ?? data.cameras_online ?? 0),
+    offlineCameras: Number(data.camerasOffline ?? data.cameras_offline ?? 0),
+    openIncidents: Number(data.openIncidents ?? data.open_incidents ?? 0),
+    unacknowledgedAlerts: Number(data.unacknowledgedAlerts ?? data.unacknowledged_alerts ?? 0),
+    recordingCameras: Number(data.camerasRecording ?? data.cameras_recording ?? 0),
+    storageUsagePercent: Number(data.storageUsagePercent ?? data.storage_usage_percent ?? 0),
+    storageSummary: {
+      totalCount: Number(storageSummary.totalCount ?? storageSummaryLegacy.total_count ?? 0),
+      warningCount: Number(storageSummary.warningCount ?? storageSummaryLegacy.warning_count ?? 0),
+      smartIssueCount: Number(storageSummary.smartIssueCount ?? storageSummaryLegacy.smart_issue_count ?? 0),
+      raidIssueCount: Number(storageSummary.raidIssueCount ?? storageSummaryLegacy.raid_issue_count ?? 0),
+      writeProbeFailureCount: Number(storageSummary.writeProbeFailureCount ?? storageSummaryLegacy.write_probe_failure_count ?? 0),
+    },
+  };
+}
+
+function formatFailedSections(sections: DataSection[]) {
+  const labels: Record<DataSection, string> = {
+    cameras: "camera inventory",
+    health: "health summary",
+    alerts: "priority alerts",
+  };
+  return sections.map((section) => labels[section]).join(", ");
+}
+
 export default function ControlRoomPage() {
   const [cameras, setCameras] = useState<CameraType[]>([]);
   const [priorityCameraIds, setPriorityCameraIds] = useState<string[]>([]);
   const [stats, setStats] = useState<ControlRoomStats>(DEFAULT_EMPTY_STATS);
-  const [liveDataMode, setLiveDataMode] = useState<"live" | "unavailable">("live");
-  const [activeView, setActiveView] = useState<"grid" | "handover">("grid");
+  const [activeStreams, setActiveStreams] = useState(0);
+  const [dataMode, setDataMode] = useState<DataMode>("live");
+  const [failedSections, setFailedSections] = useState<DataSection[]>([]);
+  const [cameraDataState, setCameraDataState] = useState<"pending" | "ready" | "error">("pending");
+  const [healthDataReady, setHealthDataReady] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [initialLayout, setInitialLayout] = useState<GridLayout | undefined>();
+  const [refreshing, setRefreshing] = useState(false);
+  const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null);
+  const [now, setNow] = useState(() => new Date());
   const [monitoredCameraIds, setMonitoredCameraIds] = useState<string[]>([]);
   const monitoredCameraSignatureRef = useRef("");
-  const monitoredCameraSet = new Set(monitoredCameraIds);
-  const monitoredCameras = cameras.filter((camera) => monitoredCameraSet.has(camera.id));
-  const monitoringSignature = monitoredCameras
+  const monitoredCamerasRef = useRef<CameraType[]>([]);
+  const requestSequenceRef = useRef(0);
+  const requestControllerRef = useRef<AbortController | null>(null);
+
+  const initialLayout = useMemo(() => getInitialLayout(cameras), [cameras]);
+  const monitoredCameras = useMemo(() => {
+    const monitoredCameraSet = new Set(monitoredCameraIds);
+    return cameras.filter((camera) => monitoredCameraSet.has(camera.id));
+  }, [cameras, monitoredCameraIds]);
+  const monitoringSignature = useMemo(() => monitoredCameras
     .map((camera) => `${camera.id}:${camera.branchId}:${camera.branchName ?? ""}`)
     .sort()
-    .join("|");
-  const handleActiveStreamsChange = useCallback((activeStreams: number) => {
-    setStats((current) => current.activeStreams === activeStreams ? current : { ...current, activeStreams });
+    .join("|"), [monitoredCameras]);
+  const inventoryStats = useMemo(() => ({
+    total: cameras.length,
+    online: cameras.filter((camera) => camera.status !== "offline").length,
+  }), [cameras]);
+  const healthHasInventory = healthDataReady && (stats.totalCameras > 0 || cameras.length === 0);
+  const displayedCameraTotal = healthHasInventory ? stats.totalCameras : inventoryStats.total;
+  const displayedOnlineCameras = healthHasInventory ? stats.onlineCameras : inventoryStats.online;
+  const storageIssueCount = stats.storageSummary.warningCount + stats.storageSummary.smartIssueCount +
+    stats.storageSummary.raidIssueCount + stats.storageSummary.writeProbeFailureCount;
+
+  useEffect(() => {
+    monitoredCamerasRef.current = monitoredCameras;
+  }, [monitoredCameras]);
+
+  const loadData = useCallback(async (initial = false) => {
+    const requestSequence = ++requestSequenceRef.current;
+    requestControllerRef.current?.abort();
+    const controller = new AbortController();
+    requestControllerRef.current = controller;
+
+    if (initial) setLoading(true);
+    else setRefreshing(true);
+
+    try {
+      const [cameraResult, statsResult, priorityResult] = await Promise.allSettled([
+        requestJson("/api/control/v1/cameras?limit=500&action=live%3Aview", controller.signal),
+        requestJson("/api/control/v1/operations/health/summary", controller.signal),
+        requestJson("/api/control/v1/alerts/alert-center?limit=200", controller.signal),
+      ]);
+      if (requestSequence !== requestSequenceRef.current) return;
+
+      const failed: DataSection[] = [];
+      if (cameraResult.status === "fulfilled") {
+        setCameras(parseCameras(cameraResult.value));
+        setCameraDataState("ready");
+      } else {
+        failed.push("cameras");
+        setCameraDataState("error");
+      }
+
+      if (statsResult.status === "fulfilled") {
+        setStats(parseStats(statsResult.value));
+        setHealthDataReady(true);
+      } else {
+        failed.push("health");
+      }
+
+      if (priorityResult.status === "fulfilled") {
+        setPriorityCameraIds(parsePriorityCameraIds(priorityResult.value));
+      } else {
+        failed.push("alerts");
+      }
+
+      setFailedSections(failed);
+      setDataMode(failed.length === 0 ? "live" : failed.length === 3 ? "unavailable" : "partial");
+      if (failed.length < 3) setLastUpdatedAt(new Date());
+    } finally {
+      if (requestSequence === requestSequenceRef.current) {
+        setLoading(false);
+        setRefreshing(false);
+      }
+    }
   }, []);
 
   useEffect(() => {
-    loadData();
-    const interval = setInterval(loadData, 30000); // Refresh every 30s
-    return () => clearInterval(interval);
-  }, []);
+    void loadData(true);
+    const refreshTimer = window.setInterval(() => {
+      if (document.visibilityState === "visible") void loadData();
+    }, 30_000);
+    const clockTimer = window.setInterval(() => setNow(new Date()), 1_000);
+    return () => {
+      window.clearInterval(refreshTimer);
+      window.clearInterval(clockTimer);
+      requestSequenceRef.current += 1;
+      requestControllerRef.current?.abort();
+    };
+  }, [loadData]);
+
   const handleMonitoredCamerasChange = useCallback((cameraIds: string[]) => {
-    const signature = cameraIds.join('|');
+    const signature = cameraIds.join("|");
     if (monitoredCameraSignatureRef.current && monitoredCameraSignatureRef.current !== signature) {
       trackControlRoomCameraSwitch();
     }
     monitoredCameraSignatureRef.current = signature;
-    setMonitoredCameraIds((current) => current.join('|') === signature ? current : cameraIds);
+    setMonitoredCameraIds((current) => current.join("|") === signature ? current : cameraIds);
   }, []);
 
   useEffect(() => {
     if (loading || !monitoringSignature) return;
 
+    const activityCameras = monitoredCamerasRef.current;
     const branchMap = new Map<string, string>();
-    for (const camera of monitoredCameras) {
+    for (const camera of activityCameras) {
       if (camera.branchId) branchMap.set(camera.branchId, camera.branchName || camera.branchId);
     }
     const branchIds = [...branchMap.keys()];
     const branchNames = [...branchMap.values()];
-    
+
     void startControlRoomActivity(
       branchIds.length === 1 ? "single_branch" : "multi_branch",
       branchIds.length === 1 ? branchIds[0] : undefined,
       undefined,
       undefined,
-      monitoredCameras.map((camera) => camera.id),
+      activityCameras.map((camera) => camera.id),
       branchIds,
       branchNames,
       "live",
@@ -136,597 +316,174 @@ export default function ControlRoomPage() {
     return () => {
       void endControlRoomActivity().catch(() => null);
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loading, monitoringSignature]);
-
-  const loadData = async () => {
-    try {
-      const [cameraResult, statsResult, priorityResult] = await Promise.allSettled([
-        loadCameras(),
-        loadStats(),
-        loadPriorityAlerts(),
-      ]);
-
-      const hasLiveData = cameraResult.status === "fulfilled" && cameraResult.value
-        || statsResult.status === "fulfilled" && statsResult.value
-        || priorityResult.status === "fulfilled" && priorityResult.value;
-
-      setLiveDataMode(hasLiveData ? "live" : "unavailable");
-    } catch (error) {
-      console.error("Failed to load control room data:", error);
-      setLiveDataMode("unavailable");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const getAuthHeaders = (): HeadersInit => {
-    const token = typeof window !== "undefined" ? localStorage.getItem("accessToken") : null;
-    const headers: Record<string, string> = { "Content-Type": "application/json" };
-    if (token) {
-      headers["Authorization"] = `Bearer ${token}`;
-      headers["x-sentinel-session"] = token;
-    }
-    return headers;
-  };
-
-  const loadPriorityAlerts = async (): Promise<boolean> => {
-    try {
-      const response = await fetch("/api/control/v1/alerts/alert-center?limit=200", {
-        headers: getAuthHeaders(),
-        credentials: "include",
-      });
-      if (!response.ok) {
-        setPriorityCameraIds([]);
-        return false;
-      }
-      const body = await response.json();
-      const alerts = Array.isArray(body.data) ? body.data : body.data?.alerts ?? body.alerts ?? [];
-      const livePriorityIds = Array.from(new Set<string>(alerts
-        .filter((alert: { severity?: string; status?: string }) =>
-          ["critical", "high", "p1", "p2"].includes(String(alert.severity).toLowerCase()) && alert.status !== "resolved")
-        .map((alert: { cameraId?: string }) => alert.cameraId)
-        .filter((cameraId: unknown): cameraId is string => typeof cameraId === "string")));
-
-      setPriorityCameraIds(livePriorityIds);
-      return livePriorityIds.length > 0;
-    } catch (error) {
-      console.error("Failed to load priority alerts:", error);
-      setPriorityCameraIds([]);
-      return false;
-    }
-  };
-
-  const loadCameras = async (): Promise<boolean> => {
-    try {
-      const response = await fetch("/api/control/v1/cameras?limit=500&action=live%3Aview", {
-        headers: getAuthHeaders(),
-        credentials: "include",
-      });
-
-      if (!response.ok) {
-        setCameras([]);
-        setInitialLayout(undefined);
-        return false;
-      }
-
-      const body = await response.json();
-      const allCameras = (body.data ?? []) as CameraType[];
-      setCameras(allCameras);
-      if (allCameras.length > 0) {
-        setInitialLayout((current) => current ?? getInitialLayout(allCameras));
-      } else {
-        setInitialLayout(undefined);
-      }
-      return allCameras.length > 0;
-    } catch (error) {
-      console.error("Failed to load cameras:", error);
-      setCameras([]);
-      setInitialLayout(undefined);
-      return false;
-    }
-  };
-
-  const loadStats = async (): Promise<boolean> => {
-    try {
-      const response = await fetch("/api/control/v1/operations/health/summary", {
-        headers: getAuthHeaders(),
-        credentials: "include",
-      });
-
-      if (!response.ok) {
-        setStats(DEFAULT_EMPTY_STATS);
-        return false;
-      }
-
-      const body = await response.json();
-      const data = body.data ?? body;
-      const nextStats: ControlRoomStats = {
-        totalCameras: Number(data.totalCameras ?? data.total_cameras ?? 0),
-        onlineCameras: Number(data.camerasOnline ?? data.cameras_online ?? 0),
-        offlineCameras: Number(data.camerasOffline ?? data.cameras_offline ?? 0),
-        activeStreams: Number(data.activeStreams ?? data.active_streams ?? 0),
-        openIncidents: Number(data.openIncidents ?? data.open_incidents ?? 0),
-        unacknowledgedAlerts: Number(data.unacknowledgedAlerts ?? data.unacknowledged_alerts ?? 0),
-        recordingCameras: Number(data.camerasRecording ?? data.cameras_recording ?? 0),
-        storageUsagePercent: Number(data.storageUsagePercent ?? data.storage_usage_percent ?? 0),
-        storageSummary: {
-          totalCount: Number(data.storageSummary?.totalCount ?? data.storage_summary?.total_count ?? 0),
-          warningCount: Number(data.storageSummary?.warningCount ?? data.storage_summary?.warning_count ?? 0),
-          smartIssueCount: Number(data.storageSummary?.smartIssueCount ?? data.storage_summary?.smart_issue_count ?? 0),
-          raidIssueCount: Number(data.storageSummary?.raidIssueCount ?? data.storage_summary?.raid_issue_count ?? 0),
-          writeProbeFailureCount: Number(data.storageSummary?.writeProbeFailureCount ?? data.storage_summary?.write_probe_failure_count ?? 0),
-        },
-      };
-
-      setStats(nextStats);
-      return nextStats.totalCameras > 0 || nextStats.onlineCameras > 0;
-    } catch (error) {
-      console.error("Failed to load stats:", error);
-      setStats(DEFAULT_EMPTY_STATS);
-      return false;
-    }
-  };
 
   if (loading) {
     return (
-      <div className="control-room-loading">
-        <div className="spinner" />
-        <p>Loading Control Room...</p>
+      <div className="control-room-loading" role="status">
+        <RefreshCw size={34} className="spin" />
+        <p>Loading live video wall…</p>
+        <style jsx>{`
+          .control-room-loading { min-height: 70vh; display: grid; place-content: center; justify-items: center; gap: 12px; color: #475569; }
+          .control-room-loading p { margin: 0; font-size: 14px; font-weight: 600; }
+          .spin { animation: spin 0.9s linear infinite; color: #2563eb; }
+          @keyframes spin { to { transform: rotate(360deg); } }
+        `}</style>
       </div>
     );
   }
 
   return (
-    <div className="control-room">
-      {liveDataMode === "unavailable" ? (
-        <div className="control-room-offline-banner" role="status">
-          Live operations data is unavailable. No offline or generated camera data is being displayed.
-        </div>
-      ) : null}
-
+    <main className="control-room">
       <header className="control-room-header">
         <div className="header-title">
-          <Activity size={32} />
+          <Video size={28} aria-hidden="true" />
           <div>
-            <h1>Control Room</h1>
-            <p>24/7 Live Monitoring Operations</p>
+            <h1>Live Video Wall</h1>
+            <p>Monitor authorized cameras across all branches</p>
           </div>
         </div>
-
-        <div className="header-time">
-          <Clock size={20} />
-          <span>{new Date().toLocaleString()}</span>
+        <div className="header-actions">
+          <span className={`data-status ${dataMode}`}>
+            <i />
+            {dataMode === "live" ? "Live data" : dataMode === "partial" ? "Partially connected" : "Data unavailable"}
+          </span>
+          <time className="header-time" dateTime={now.toISOString()}>
+            <Clock size={16} aria-hidden="true" />
+            {now.toLocaleString()}
+          </time>
+          <button type="button" className="refresh-button" onClick={() => void loadData()} disabled={refreshing}>
+            <RefreshCw size={16} className={refreshing ? "spin" : ""} aria-hidden="true" />
+            {refreshing ? "Refreshing" : "Refresh"}
+          </button>
         </div>
       </header>
 
-      <div className="stats-bar">
+      {failedSections.length > 0 && (
+        <div className={`data-banner ${dataMode}`} role="status" aria-live="polite">
+          <AlertTriangle size={16} aria-hidden="true" />
+          <span>
+            {dataMode === "unavailable"
+              ? "Live operations services are unavailable. Last known data is kept on screen."
+              : `Could not refresh ${formatFailedSections(failedSections)}. Other live data is still updating.`}
+          </span>
+          {lastUpdatedAt && <small>Last update {lastUpdatedAt.toLocaleTimeString()}</small>}
+        </div>
+      )}
+
+      <section className="stats-bar" aria-label="Live monitoring summary">
         <div className="stat-card">
-          <Camera size={24} className="stat-icon" />
-          <div className="stat-content">
-            <div className="stat-value">{stats.onlineCameras}/{stats.totalCameras}</div>
-            <div className="stat-label">Cameras Online</div>
-          </div>
+          <Camera size={21} className="stat-icon" aria-hidden="true" />
+          <div><strong>{displayedOnlineCameras}/{displayedCameraTotal}</strong><span>Cameras online</span></div>
         </div>
-
         <div className="stat-card">
-          <Play size={24} className="stat-icon text-green" />
-          <div className="stat-content">
-            <div className="stat-value">{stats.activeStreams}</div>
-            <div className="stat-label">Active Streams</div>
-          </div>
+          <Play size={21} className="stat-icon green" aria-hidden="true" />
+          <div><strong>{activeStreams}</strong><span>Wall streams</span></div>
         </div>
-
         <div className="stat-card">
-          <AlertTriangle size={24} className="stat-icon text-red" />
-          <div className="stat-content">
-            <div className="stat-value">{stats.openIncidents}</div>
-            <div className="stat-label">Open Incidents</div>
-          </div>
+          <Activity size={21} className="stat-icon purple" aria-hidden="true" />
+          <div><strong>{stats.recordingCameras}</strong><span>Recording</span></div>
         </div>
-
         <div className="stat-card">
-          <Bell size={24} className="stat-icon text-yellow" />
-          <div className="stat-content">
-            <div className="stat-value">{stats.unacknowledgedAlerts}</div>
-            <div className="stat-label">Unack. Alerts</div>
-          </div>
+          <AlertTriangle size={21} className="stat-icon red" aria-hidden="true" />
+          <div><strong>{stats.openIncidents}</strong><span>Open incidents</span></div>
         </div>
-
         <div className="stat-card">
-          <HardDrive size={24} className="stat-icon text-blue" />
-          <div className="stat-content">
-            <div className="stat-value">{stats.storageUsagePercent}%</div>
-            <div className="stat-label">Storage Used</div>
-          </div>
+          <Bell size={21} className="stat-icon amber" aria-hidden="true" />
+          <div><strong>{stats.unacknowledgedAlerts}</strong><span>Unacknowledged</span></div>
         </div>
-
-        <div className="stat-card storage-health-card">
-          <HardDrive size={24} className="stat-icon text-purple" />
-          <div className="stat-content">
-            <div className="stat-value">{stats.storageSummary.totalCount}</div>
-            <div className="stat-label">Storage Nodes</div>
-            <div className="storage-health-details">
-              <span className={`health-pill ${stats.storageSummary.warningCount ? "warning-pill" : "ok-pill"}`}>
-                {stats.storageSummary.warningCount} warnings
-              </span>
-              <span className={`health-pill ${stats.storageSummary.smartIssueCount ? "critical-pill" : "ok-pill"}`}>
-                {stats.storageSummary.smartIssueCount} SMART
-              </span>
-              <span className={`health-pill ${stats.storageSummary.raidIssueCount ? "critical-pill" : "ok-pill"}`}>
-                {stats.storageSummary.raidIssueCount} RAID
-              </span>
-              <span className={`health-pill ${stats.storageSummary.writeProbeFailureCount ? "critical-pill" : "ok-pill"}`}>
-                {stats.storageSummary.writeProbeFailureCount} probe fail
-              </span>
-            </div>
-          </div>
+        <div className="stat-card">
+          <HardDrive size={21} className="stat-icon blue" aria-hidden="true" />
+          <div><strong>{stats.storageUsagePercent}%</strong><span>Storage used</span></div>
         </div>
-      </div>
+      </section>
 
-      <div className="control-room-nav">
-        <button
-          className={`nav-button ${activeView === "grid" ? "active" : ""}`}
-          onClick={() => setActiveView("grid")}
-        >
-          <Grid3X3 size={20} />
-          Video Wall
-        </button>
-        <button
-          className={`nav-button ${activeView === "handover" ? "active" : ""}`}
-          onClick={() => setActiveView("handover")}
-        >
-          <Users size={20} />
-          Shift Handover
-        </button>
-      </div>
+      {storageIssueCount > 0 && (
+        <div className="storage-warning" role="status">
+          <HardDrive size={16} aria-hidden="true" />
+          <strong>{storageIssueCount} storage issue{storageIssueCount === 1 ? "" : "s"}</strong>
+          <span>
+            {stats.storageSummary.warningCount} warning · {stats.storageSummary.smartIssueCount} SMART · {stats.storageSummary.raidIssueCount} RAID · {stats.storageSummary.writeProbeFailureCount} write probe
+          </span>
+        </div>
+      )}
 
-      <div className="control-room-content">
-        {activeView === "grid" ? (
-          cameras.length === 0 ? (
-            <div className="empty-control-room-card">
-              <div className="empty-icon-wrap">
-                <Camera size={44} className="empty-icon" />
-              </div>
-              <h3 className="empty-title">No Cameras Registered Yet</h3>
-              <p className="empty-desc">
-                There are currently no active cameras in the database. Onboard a new branch or discover devices to start monitoring live video streams.
-              </p>
-              <div className="empty-actions">
-                <a href="/admin/branch-onboarding" className="btn-action-primary">
-                  + Onboard Branch
-                </a>
-                <a href="/admin/database" className="btn-action-secondary">
-                  Database & Device Manager
-                </a>
-              </div>
-            </div>
-          ) : (
-            <EnhancedCameraGrid
-              cameras={cameras}
-              initialLayout={initialLayout}
-              maxConcurrentStreams={CONTROL_ROOM_MAX_CONCURRENT_STREAMS}
-              priorityCameraIds={priorityCameraIds}
-              enableVirtualScrolling
-              enableGPUAcceleration
-              onActiveStreamsChange={handleActiveStreamsChange}
-              onMonitoredCamerasChange={handleMonitoredCamerasChange}
-              onLayoutChange={(layout) => {
-                console.log("Layout saved:", layout);
-              }}
-            />
-          )
+      <section className="control-room-content" aria-label="Camera wall">
+        {cameras.length > 0 ? (
+          <EnhancedCameraGrid
+            cameras={cameras}
+            initialLayout={initialLayout}
+            maxConcurrentStreams={CONTROL_ROOM_MAX_CONCURRENT_STREAMS}
+            priorityCameraIds={priorityCameraIds}
+            enableVirtualScrolling={false}
+            enableGPUAcceleration
+            onActiveStreamsChange={setActiveStreams}
+            onMonitoredCamerasChange={handleMonitoredCamerasChange}
+          />
+        ) : cameraDataState === "error" ? (
+          <div className="empty-control-room-card">
+            <div className="empty-icon-wrap error"><AlertTriangle size={38} /></div>
+            <h2>Camera inventory is unavailable</h2>
+            <p>The wall could not load its authorized camera list. Check the control plane connection and try again.</p>
+            <button type="button" className="primary-action" onClick={() => void loadData()} disabled={refreshing}>
+              <RefreshCw size={16} className={refreshing ? "spin" : ""} /> Try again
+            </button>
+          </div>
         ) : (
-          <ShiftHandoverPanel />
+          <div className="empty-control-room-card">
+            <div className="empty-icon-wrap"><Camera size={38} /></div>
+            <h2>No authorized cameras</h2>
+            <p>Onboard a branch and approve its discovered cameras to start live monitoring.</p>
+            <Link href="/admin/branch-onboarding" className="primary-action">Onboard branch</Link>
+          </div>
         )}
-      </div>
+      </section>
 
       <style jsx>{`
-        .control-room {
-          min-height: 100vh;
-          background: #f3f4f6;
-          display: flex;
-          flex-direction: column;
-        }
-
-        .empty-control-room-card {
-          background: white;
-          border: 1px solid #e5e7eb;
-          border-radius: 16px;
-          padding: 64px 32px;
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          justify-content: center;
-          text-align: center;
-          max-width: 560px;
-          margin: 40px auto;
-          box-shadow: 0 4px 20px rgba(0, 0, 0, 0.04);
-        }
-
-        .empty-icon-wrap {
-          width: 80px;
-          height: 80px;
-          border-radius: 50%;
-          background: #eff6ff;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          margin-bottom: 20px;
-          color: #3b82f6;
-        }
-
-        .empty-title {
-          font-size: 20px;
-          font-weight: 700;
-          color: #1e293b;
-          margin: 0 0 8px 0;
-        }
-
-        .empty-desc {
-          font-size: 14px;
-          color: #64748b;
-          margin: 0 0 24px 0;
-          line-height: 1.5;
-        }
-
-        .empty-actions {
-          display: flex;
-          gap: 12px;
-          flex-wrap: wrap;
-          justify-content: center;
-        }
-
-        .btn-action-primary {
-          display: inline-flex;
-          align-items: center;
-          padding: 10px 20px;
-          background: #2563eb;
-          color: white;
-          border-radius: 8px;
-          font-weight: 600;
-          font-size: 14px;
-          text-decoration: none;
-          transition: background 0.2s;
-        }
-
-        .btn-action-primary:hover {
-          background: #1d4ed8;
-        }
-
-        .btn-action-secondary {
-          display: inline-flex;
-          align-items: center;
-          padding: 10px 20px;
-          background: #f1f5f9;
-          color: #334155;
-          border: 1px solid #cbd5e1;
-          border-radius: 8px;
-          font-weight: 600;
-          font-size: 14px;
-          text-decoration: none;
-          transition: background 0.2s;
-        }
-
-        .btn-action-secondary:hover {
-          background: #e2e8f0;
-        }
-
-        .control-room-offline-banner {
-          padding: 10px 16px;
-          background: rgba(245, 158, 11, 0.12);
-          border-bottom: 1px solid rgba(245, 158, 11, 0.2);
-          color: #7c4b00;
-          font-size: 12px;
-          font-weight: 600;
-          text-align: center;
-        }
-
-        .control-room-loading {
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          justify-content: center;
-          min-height: 100vh;
-          gap: 16px;
-        }
-
-        .spinner {
-          width: 40px;
-          height: 40px;
-          border: 4px solid #e5e7eb;
-          border-top-color: #3b82f6;
-          border-radius: 50%;
-          animation: spin 1s linear infinite;
-        }
-
-        @keyframes spin {
-          to {
-            transform: rotate(360deg);
-          }
-        }
-
-        .control-room-header {
-          background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%);
-          color: white;
-          padding: 24px 32px;
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-        }
-
-        .header-title {
-          display: flex;
-          align-items: center;
-          gap: 16px;
-        }
-
-        .header-title h1 {
-          margin: 0;
-          font-size: 28px;
-          font-weight: 700;
-        }
-
-        .header-title p {
-          margin: 4px 0 0 0;
-          font-size: 14px;
-          opacity: 0.9;
-        }
-
-        .header-time {
-          display: flex;
-          align-items: center;
-          gap: 8px;
-          font-size: 16px;
-          font-weight: 500;
-        }
-
-        .stats-bar {
-          display: grid;
-          grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-          gap: 12px;
-          padding: 20px 28px;
-          background: white;
-          border-bottom: 1px solid #e5e7eb;
-        }
-
-        .stat-card {
-          display: flex;
-          align-items: flex-start;
-          gap: 12px;
-          padding: 14px;
-          background: #f9fafb;
-          border-radius: 12px;
-          transition: all 0.2s;
-        }
-
-        .stat-card:hover {
-          background: #f3f4f6;
-          transform: translateY(-2px);
-          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-        }
-
-        .stat-icon {
-          color: #6b7280;
-        }
-
-        .stat-icon.text-green {
-          color: #10b981;
-        }
-
-        .stat-icon.text-red {
-          color: #ef4444;
-        }
-
-        .stat-icon.text-yellow {
-          color: #f59e0b;
-        }
-
-        .stat-icon.text-blue {
-          color: #3b82f6;
-        }
-
-        .stat-content {
-          display: flex;
-          flex-direction: column;
-          gap: 3px;
-          min-width: 0;
-        }
-
-        .stat-value {
-          font-size: 22px;
-          font-weight: 700;
-          color: #111827;
-          line-height: 1.1;
-        }
-
-        .stat-label {
-          font-size: 12px;
-          color: #6b7280;
-          font-weight: 500;
-        }
-
-        .storage-health-details {
-          display: flex;
-          flex-wrap: wrap;
-          gap: 6px;
-          margin-top: 8px;
-        }
-
-        .health-pill {
-          display: inline-flex;
-          align-items: center;
-          justify-content: center;
-          padding: 4px 8px;
-          border-radius: 999px;
-          font-size: 11px;
-          font-weight: 600;
-          min-width: fit-content;
-        }
-
-        .health-pill.ok-pill {
-          background: rgba(16, 185, 129, 0.12);
-          color: #047857;
-        }
-
-        .health-pill.warning-pill {
-          background: rgba(245, 158, 11, 0.14);
-          color: #b45309;
-        }
-
-        .health-pill.critical-pill {
-          background: rgba(239, 68, 68, 0.12);
-          color: #991b1b;
-        }
-
-        .storage-health-card {
-          background: #eef2ff;
-          border: 1px solid #c7d2fe;
-          align-items: center;
-        }
-
-        .control-room-nav {
-          display: flex;
-          gap: 8px;
-          padding: 16px 32px;
-          background: white;
-          border-bottom: 1px solid #e5e7eb;
-        }
-
-        .nav-button {
-          padding: 12px 24px;
-          border: 2px solid #e5e7eb;
-          border-radius: 8px;
-          background: white;
-          cursor: pointer;
-          display: flex;
-          align-items: center;
-          gap: 8px;
-          font-size: 15px;
-          font-weight: 600;
-          color: #6b7280;
-          transition: all 0.2s;
-        }
-
-        .nav-button:hover {
-          background: #f9fafb;
-          border-color: #3b82f6;
-          color: #3b82f6;
-        }
-
-        .nav-button.active {
-          background: #3b82f6;
-          color: white;
-          border-color: #3b82f6;
-        }
-
-        .control-room-content {
-          flex: 1;
-          padding: 24px 32px;
-          overflow: auto;
+        .control-room { min-height: 100vh; background: #f1f5f9; display: flex; flex-direction: column; color: #0f172a; }
+        .control-room-header { padding: 18px 24px; color: white; background: linear-gradient(135deg, #172554, #1d4ed8); display: flex; align-items: center; justify-content: space-between; gap: 20px; }
+        .header-title { display: flex; align-items: center; gap: 12px; min-width: 240px; }
+        .header-title h1 { margin: 0; font-size: 24px; line-height: 1.2; }
+        .header-title p { margin: 3px 0 0; color: #dbeafe; font-size: 13px; }
+        .header-actions { display: flex; align-items: center; justify-content: flex-end; gap: 10px; flex-wrap: wrap; }
+        .data-status, .header-time { display: inline-flex; align-items: center; gap: 7px; padding: 7px 10px; border: 1px solid rgba(255,255,255,.22); border-radius: 999px; background: rgba(15,23,42,.24); font-size: 12px; font-weight: 650; white-space: nowrap; }
+        .data-status i { width: 7px; height: 7px; border-radius: 50%; background: #4ade80; box-shadow: 0 0 0 3px rgba(74,222,128,.18); }
+        .data-status.partial i { background: #fbbf24; box-shadow: 0 0 0 3px rgba(251,191,36,.2); }
+        .data-status.unavailable i { background: #f87171; box-shadow: 0 0 0 3px rgba(248,113,113,.2); }
+        .refresh-button, .primary-action { border: 0; border-radius: 8px; background: white; color: #1d4ed8; display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 36px; padding: 0 13px; font-weight: 700; cursor: pointer; text-decoration: none; }
+        .refresh-button:disabled, .primary-action:disabled { opacity: .65; cursor: wait; }
+        .data-banner { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 9px 16px; background: #fffbeb; border-bottom: 1px solid #fde68a; color: #92400e; font-size: 12px; }
+        .data-banner.unavailable { background: #fef2f2; border-color: #fecaca; color: #991b1b; }
+        .data-banner small { margin-left: 6px; opacity: .8; }
+        .stats-bar { display: grid; grid-template-columns: repeat(6, minmax(120px, 1fr)); gap: 10px; padding: 14px 24px; background: white; border-bottom: 1px solid #e2e8f0; }
+        .stat-card { min-width: 0; display: flex; align-items: center; gap: 10px; padding: 11px 12px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; }
+        .stat-card div { display: flex; min-width: 0; flex-direction: column; }
+        .stat-card strong { font-size: 19px; line-height: 1.15; }
+        .stat-card span { overflow: hidden; color: #64748b; font-size: 11px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+        .stat-icon { flex: 0 0 auto; color: #475569; }
+        .stat-icon.green { color: #059669; } .stat-icon.red { color: #dc2626; } .stat-icon.amber { color: #d97706; } .stat-icon.blue { color: #2563eb; } .stat-icon.purple { color: #7c3aed; }
+        .storage-warning { margin: 12px 24px 0; padding: 9px 12px; display: flex; align-items: center; gap: 8px; border: 1px solid #fed7aa; border-radius: 8px; background: #fff7ed; color: #9a3412; font-size: 12px; }
+        .storage-warning span { color: #7c2d12; }
+        .control-room-content { flex: 1; min-height: 0; padding: 16px 24px 24px; }
+        .empty-control-room-card { max-width: 520px; margin: 48px auto; padding: 46px 30px; display: flex; flex-direction: column; align-items: center; text-align: center; background: white; border: 1px solid #e2e8f0; border-radius: 16px; box-shadow: 0 8px 24px rgba(15,23,42,.05); }
+        .empty-icon-wrap { width: 68px; height: 68px; margin-bottom: 16px; display: grid; place-items: center; border-radius: 50%; background: #eff6ff; color: #2563eb; }
+        .empty-icon-wrap.error { background: #fef2f2; color: #dc2626; }
+        .empty-control-room-card h2 { margin: 0 0 8px; font-size: 20px; }
+        .empty-control-room-card p { max-width: 430px; margin: 0 0 20px; color: #64748b; font-size: 14px; line-height: 1.55; }
+        .primary-action { min-height: 40px; padding: 0 18px; color: white; background: #2563eb; }
+        .spin { animation: spin .9s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        @media (max-width: 1100px) { .stats-bar { grid-template-columns: repeat(3, 1fr); } }
+        @media (max-width: 720px) {
+          .control-room-header { align-items: flex-start; padding: 15px 16px; flex-direction: column; }
+          .header-actions { width: 100%; justify-content: flex-start; }
+          .header-time { display: none; }
+          .stats-bar { grid-template-columns: repeat(2, 1fr); padding: 12px 16px; }
+          .data-banner { align-items: flex-start; justify-content: flex-start; flex-wrap: wrap; }
+          .storage-warning { margin: 10px 16px 0; align-items: flex-start; flex-wrap: wrap; }
+          .control-room-content { padding: 12px 16px 18px; }
         }
       `}</style>
-    </div>
+    </main>
   );
 }

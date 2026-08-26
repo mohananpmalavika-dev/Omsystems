@@ -32,6 +32,10 @@ export async function GET(request: NextRequest) {
 
     const headers = new Headers(request.headers);
     headers.delete("host");
+    headers.delete("content-length");
+    const employeeSession = request.cookies.get("sentinel_access")?.value ??
+      request.headers.get("x-sentinel-session");
+    if (employeeSession) headers.set("authorization", `Bearer ${employeeSession}`);
     const response = await fetch(upstream.toString(), {
       method: request.method,
       headers,
