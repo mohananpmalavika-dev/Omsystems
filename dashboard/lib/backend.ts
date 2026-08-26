@@ -84,7 +84,13 @@ export async function startLive(
       (!publicMediaGatewayUrl ? advertisedLocalGatewayUrl : undefined);
 
     const isProduction = runtimeEnv("NODE_ENV", "development") === "production";
-    if (localMediaGatewayUrl && (!isProduction || isHttpsUrl(localMediaGatewayUrl))) {
+    if (localMediaGatewayUrl) {
+      // A branch agent advertises its private LAN/VPN address on every
+      // heartbeat. Never try that address from the hosted dashboard server:
+      // only the operator's browser may be on that private network. The
+      // browser client applies the page's HTTPS/mixed-content policy before
+      // connecting, so an HTTP gateway remains usable from an HTTP local/VPN
+      // dashboard and a trusted HTTPS gateway remains usable in production.
       const direct: DirectLiveGateway = {
         url: new URL("/v1/live/start", normalizeHttpOrigin(localMediaGatewayUrl)).toString(),
         controlPlaneToken: controlSession.token,

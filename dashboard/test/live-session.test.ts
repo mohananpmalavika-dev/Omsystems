@@ -7,6 +7,7 @@ const originalMediaUrl = process.env.MEDIA_GATEWAY_INTERNAL_URL;
 const originalLocalMediaUrl = process.env.MEDIA_GATEWAY_LOCAL_URL;
 const originalPublicMediaUrl = process.env.MEDIA_GATEWAY_PUBLIC_URL;
 const originalDevUser = process.env.DASHBOARD_DEV_USER_ID;
+const originalNodeEnv = process.env.NODE_ENV;
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -16,6 +17,7 @@ afterEach(() => {
   restore("MEDIA_GATEWAY_LOCAL_URL", originalLocalMediaUrl);
   restore("MEDIA_GATEWAY_PUBLIC_URL", originalPublicMediaUrl);
   restore("DASHBOARD_DEV_USER_ID", originalDevUser);
+  restore("NODE_ENV", originalNodeEnv);
 });
 
 describe("dashboard live session startup", () => {
@@ -81,6 +83,29 @@ describe("dashboard live session startup", () => {
     await expect(startLive("camera-1")).resolves.toMatchObject({
       direct: {
         url: "http://192.168.29.101:8090/v1/live/start",
+      },
+    });
+  });
+
+  it("returns the edge-advertised LAN gateway to a VPN or local-network browser when no tunnel is available", async () => {
+    process.env.NODE_ENV = "production";
+    process.env.DASHBOARD_DEMO_MODE = "false";
+    process.env.CONTROL_PLANE_INTERNAL_URL = "http://control.internal:8080";
+    delete process.env.MEDIA_GATEWAY_LOCAL_URL;
+    delete process.env.MEDIA_GATEWAY_PUBLIC_URL;
+    delete process.env.MEDIA_GATEWAY_INTERNAL_URL;
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      expect(String(input)).toContain("control.internal");
+      return Response.json({
+        token: "t".repeat(43),
+        localMediaGatewayUrl: "http://10.42.0.15:8090",
+      }, { status: 201 });
+    }));
+
+    await expect(startLive("camera-1")).resolves.toMatchObject({
+      cameraId: "camera-1",
+      direct: {
+        url: "http://10.42.0.15:8090/v1/live/start",
       },
     });
   });
