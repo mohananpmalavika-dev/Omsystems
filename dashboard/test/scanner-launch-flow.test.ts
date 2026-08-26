@@ -19,6 +19,7 @@ describe("website scanner launch flow", () => {
 
     expect(sessionProvider).toContain("requestLocalEdgeAutostart()");
     expect(loginForm).toContain("resetLocalEdgeAutostart()");
+    expect(loginForm).toContain("requestLocalEdgeAutostart()");
     expect(autostart).toContain('launcher.src = "sentinel-grid-scanner://start"');
     expect(autostart).toContain("window.sessionStorage.setItem");
   });

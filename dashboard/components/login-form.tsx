@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { Eye, EyeOff, ShieldCheck, AlertCircle, Info, QrCode, Camera, RotateCcw } from "lucide-react";
 import QRCode from "qrcode";
 import { authApi, organizationApi } from "@/lib/api-client";
-import { resetLocalEdgeAutostart } from "@/lib/local-edge-autostart";
+import { requestLocalEdgeAutostart, resetLocalEdgeAutostart } from "@/lib/local-edge-autostart";
 import { useRouter, useSearchParams } from "next/navigation";
 
 import { ThemeProvider } from "@/components/ui/theme-provider";
@@ -145,7 +145,11 @@ function LoginFormInner({ onSuccess }: LoginFormProps) {
         return;
       }
 
+      // Start the installed branch gateway as soon as authentication succeeds.
+      // The session provider repeats this after navigation as a fallback, but
+      // starting here keeps the local Windows protocol tied to the login flow.
       resetLocalEdgeAutostart();
+      requestLocalEdgeAutostart();
       if (onSuccess) {
         onSuccess();
       } else {
@@ -243,6 +247,7 @@ function LoginFormInner({ onSuccess }: LoginFormProps) {
 
       setMustChangePassword(false);
       resetLocalEdgeAutostart();
+      requestLocalEdgeAutostart();
       if (onSuccess) {
         onSuccess();
       } else {
