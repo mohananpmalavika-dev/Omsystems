@@ -110,6 +110,31 @@ describe("dashboard live session startup", () => {
     });
   });
 
+  it("uses a private legacy mediaGatewayUrl as the browser-local fallback", async () => {
+    process.env.NODE_ENV = "production";
+    process.env.DASHBOARD_DEMO_MODE = "false";
+    process.env.CONTROL_PLANE_INTERNAL_URL = "http://control.internal:8080";
+    delete process.env.MEDIA_GATEWAY_LOCAL_URL;
+    delete process.env.MEDIA_GATEWAY_PUBLIC_URL;
+    delete process.env.MEDIA_GATEWAY_INTERNAL_URL;
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      expect(String(input)).toContain("control.internal");
+      return Response.json({
+        token: "t".repeat(43),
+        mediaGatewayUrl: "http://192.168.50.10:8090",
+      }, { status: 201 });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(startLive("camera-1")).resolves.toMatchObject({
+      cameraId: "camera-1",
+      direct: {
+        url: "http://192.168.50.10:8090/v1/live/start",
+      },
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
   it("uses the public gateway server-side when an edge LAN gateway is also advertised", async () => {
     process.env.DASHBOARD_DEMO_MODE = "false";
     process.env.CONTROL_PLANE_INTERNAL_URL = "http://control.internal:8080";

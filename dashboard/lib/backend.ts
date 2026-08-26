@@ -80,8 +80,18 @@ export async function startLive(
     const publicMediaGatewayUrl = resolveConfiguredPublicMediaGatewayUrl(
       sessionMediaGatewayUrl,
     );
+    // Older enrolled agents reported their LAN/VPN URL in mediaGatewayUrl
+    // before localMediaGatewayUrl was introduced. Treat that address as a
+    // browser-direct candidate too; a hosted dashboard must never try to
+    // fetch a branch-private IP itself.
+    const legacyLocalGatewayUrl = sessionMediaGatewayUrl &&
+      isBrowserDirectMediaUrl(sessionMediaGatewayUrl)
+      ? sessionMediaGatewayUrl
+      : undefined;
     const localMediaGatewayUrl = configuredLocalMediaGatewayUrl ??
-      (!publicMediaGatewayUrl ? advertisedLocalGatewayUrl : undefined);
+      (!publicMediaGatewayUrl
+        ? advertisedLocalGatewayUrl ?? legacyLocalGatewayUrl
+        : undefined);
 
     const isProduction = runtimeEnv("NODE_ENV", "development") === "production";
     if (localMediaGatewayUrl) {
