@@ -552,6 +552,28 @@ export class CameraLeaseManager {
     }
   }
 
+  /**
+   * Validates fencing token for media & recording writes.
+   * If current epoch in Redis > leaseEpoch or lease has expired or owned by another node, rejects write.
+   */
+  async validateFencingToken(
+    cameraId: string,
+    ownerNodeId: string,
+    leaseEpoch: number,
+  ): Promise<{ valid: boolean; currentEpoch?: number; activeOwner?: string; reason?: string }> {
+    const lease = await this.getCameraLease(cameraId);
+    if (!lease) {
+      return { valid: false, reason: "lease_expired" };
+    }
+    if (lease.ownerId !== ownerNodeId) {
+      return { valid: false, activeOwner: lease.ownerId, currentEpoch: lease.epoch, reason: "ownership_lost" };
+    }
+    if (lease.epoch !== leaseEpoch) {
+      return { valid: false, activeOwner: lease.ownerId, currentEpoch: lease.epoch, reason: "fencing_epoch_stale" };
+    }
+    return { valid: true, currentEpoch: lease.epoch, activeOwner: lease.ownerId };
+  }
+
   private getLeaseKey(cameraId: string): string {
     return `sentinel:camera:lease:${cameraId}`;
   }
